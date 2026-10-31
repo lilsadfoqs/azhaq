@@ -2,7 +2,9 @@ package fuzz
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -550,4 +552,53 @@ func mustSender(t *testing.T, o HTTPOptions) Sender {
 		t.Fatal(err)
 	}
 	return s
+}
+
+// flightStub is a sender that fails its first request and a target whose
+// preflight page has a new token each time.
+type flightStub struct {
+	mu     sync.Mutex
+	bodies []string
+	pages  int
+}
+
+func (f *flightStub) Send(_ context.Context, req *Request, _ bool) (*Response, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.bodies = append(f.bodies, req.Data)
+	if len(f.bodies) == 1 {
+		return nil, errors.New("connection reset")
+	}
+	return &Response{Status: 200, Header: http.Header{}, Request: req}, nil
+}
+
+func (f *flightStub) Exchange(_ context.Context, hr *http.Request) (*http.Response, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.pages++
+	return &http.Response{StatusCode: 200, Header: http.Header{}, Request: hr,
+		Body: io.NopCloser(strings.NewReader(fmt.Sprintf(`<input name="t" value="tok%d">`, f.pages)))}, nil
+}
+
+// A request asked again after a failure is the one that was asked, with the
+// new token of its new preflight: not the first try's, whose token is spent.
+func TestRetryAfterAFailureCarriesTheNewPreflightsToken(t *testing.T) {
+	stub := &flightStub{}
+	fl := &Flights{Pre: []FlightStep{{File: "pre.req", Vars: []FlightVar{{Name: "TOKEN", Source: "form", Key: "t"}},
+		req: flightRequest{method: "GET", path: "/login", headers: map[string]string{}}}}}
+	tmpl, _ := NewTemplate("POST", "http://h.test/login", "pw=FUZZ&t=TOKEN", nil, nil)
+	s, err := WithFlights(stub, fl, tmpl, []string{"FUZZ"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := tmpl.Expand(map[string]string{"FUZZ": "admin"})
+	set := NewSet([]string{"FUZZ"})
+	set.AddMatcher("status", "200")
+	e := &engine{cfg: Config{Sender: s, Set: set, Progress: &Progress{}}}
+	if _, err := e.send(context.Background(), &req); err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"pw=admin&t=tok1", "pw=admin&t=tok2"}; !reflect.DeepEqual(stub.bodies, want) {
+		t.Fatalf("bodies sent %q, want %q", stub.bodies, want)
+	}
 }

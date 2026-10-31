@@ -307,11 +307,21 @@ func (f *flightSender) fail(err error) {
 	}
 }
 
-func (f *flightSender) Send(ctx context.Context, req *Request, keepBody bool) (*Response, error) {
+func (f *flightSender) Send(ctx context.Context, req *Request, keepBody bool) (resp *Response, err error) {
 	var applied map[string]string
 	var jar cookieJar
 	var l *lane
+	var orig Request
+	defer func() {
+		// A request that failed is asked again as it was given, not with the
+		// token its first try spent.
+		if err != nil && orig.Headers != nil {
+			*req = orig
+		}
+	}()
 	if len(f.fl.Pre) > 0 {
+		orig = *req
+		orig.Headers = append([]Header{}, req.Headers...)
 		var vars map[string]string
 		var release func()
 		var err error
@@ -330,7 +340,7 @@ func (f *flightSender) Send(ctx context.Context, req *Request, keepBody bool) (*
 		}
 		applyCookies(req, jar)
 	}
-	resp, err := f.Sender.Send(ctx, req, keepBody)
+	resp, err = f.Sender.Send(ctx, req, keepBody)
 	if err == nil && len(f.fl.Post) > 0 {
 		_, pj, perr := f.chain(ctx, f.fl.Post, applied, jar)
 		if perr != nil {
