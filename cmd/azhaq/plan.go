@@ -91,6 +91,7 @@ type sendLimits struct {
 	submitForms  bool
 	dirs         bool
 	params       bool
+	noThirdParty bool   // -sources none
 	paramsBody   string // POST, JSON or XML when -params sends names in a body
 	tcpPorts     int    // ports asked on each address (-ports)
 	udpPorts     int    // UDP ports asked on each address (-ports-udp)
@@ -176,6 +177,14 @@ func planSends(b engine.Budgets, send sendLimits) (gets, others []string) {
 }
 
 func buildPlan(cat *catalog.Catalog, seeds []types.Seed, b engine.Budgets, paths []string, limits map[string]string, send sendLimits, rep *report) runPlan {
+	p := planFor(cat, seeds, b, paths, limits, send, rep)
+	if send.noThirdParty {
+		p.Sends = append([]string{"-sources none: no third party is asked (no subdomain source, archive, RDAP, RIPEstat or search engine); only the resolvers and the targets get requests"}, p.Sends...)
+	}
+	return p
+}
+
+func planFor(cat *catalog.Catalog, seeds []types.Seed, b engine.Budgets, paths []string, limits map[string]string, send sendLimits, rep *report) runPlan {
 	p := runPlan{Collectors: map[string]string{}, Limits: limits, Skipped: rep.Skipped}
 	p.Requests = planRequests{Sources: map[string]int{}, Cap: send.max, scoped: !b.Scope.Empty()}
 	if send.max > 0 {

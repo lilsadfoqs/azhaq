@@ -70,6 +70,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 
 - `source_queries` counts one query for each source asked. A source may page through its answer, so a query can take more than one request.
 - None of the built-in collectors is in `source_queries_not_counted`. A connector may be.
+- With `-sources none` no collector that asks a third party is in the plan (`azhaq-subdomains`, `azhaq-urls`, `azhaq-rdap`, `azhaq-search`), `source_queries` is none, and `sends` begins with a line that says no third party is asked.
 - `found_domains_asked` is about domains found on the way. They are asked about inside the scope. Without a scope, they are asked about within `-depth` and `-max-items`.
 
 ### The requests to the targets are a bound
@@ -140,7 +141,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 
 | Flag | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `-sources` | string |  | subdomain sources to run, comma-separated (default: the default set; none: no source, for a DNS-only run) |
+| `-sources` | string |  | subdomain sources to run, comma-separated (default: the default set; none: no source, and no archive, RDAP, search engine or RIPEstat lookup either: only the resolvers and the targets are asked) |
 | `-all-sources` | bool |  | also run slower subdomain sources outside the default set |
 | `-exclude-sources` | string |  | subdomain sources never to run, comma-separated |
 | `-providers` | string |  | API keys per source, YAML (default ~/.config/azhaq/providers.yaml, else subfinder's provider-config.yaml) |

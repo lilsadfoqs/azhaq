@@ -417,6 +417,10 @@ var coreSources = map[string]bool{}
 // asked about, not when it is the domain of a URL being mapped.
 var thirdParty = map[string]bool{"azhaq-subdomains": true, "azhaq-urls": true, "azhaq-rdap": true, "azhaq-search": true, "azhaq-asn": true}
 
+// IsThirdParty says the collector asks others about a domain or an address
+// (subdomain sources, archives, RDAP, search engines, RIPEstat).
+func IsThirdParty(collector string) bool { return thirdParty[collector] }
+
 // ownDomain: target is a domain the user named (-domain, subs -d), or
 // under one.
 func ownDomain(target string, seeds []types.Seed) bool {

@@ -31,7 +31,7 @@ azhaq run -url https://app.example.com/ -browser -login https://app.example.com/
 3. Follows what it finds in waves, as far as `-depth` allows. `-permute` still varies the names `-dns-brute` found, whatever `-depth` is: DNS answered them, and a variation asks DNS only. A name found past `-depth` and not resolved is not varied, and a note says how many.
 4. Asks each web service for the built-in paths unless `-no-paths` says not to ([Path checks](#path-checks-stop-at-their-answer)).
 5. Requests every GET URL it finds in scope. It cannot know what a GET does on the server, so no name keeps a URL out. Writes go only with their flags, and `-deny-path REGEX` keeps paths out (they get the coverage `skipped`).
-6. Sends nothing to a host outside the scope, Chrome's requests included. `-passive` sends nothing to the targets at all.
+6. Sends nothing to a host outside the scope, Chrome's requests included. `-passive` sends nothing to the targets at all. `-sources none` asks no third party at all: no subdomain source, archive, RDAP, RIPEstat or search engine. Only the resolvers and the targets get requests, and `azhaq plan` says so. `-urls-sources`, `-urls-archive` and `-asn` ask a third party, so with `-sources none` they are a usage error.
 7. Prints the ranked map when it ends and the summary on stderr.
 
 `-url`, `-domain`, `-cidr` and `-asn` repeat, and each value is a seed. `-list`, `-in` and `-org` take one value: a second, different one is a usage error (exit 2), never the last one kept silently. The same holds for `-l` and `-dL` of the commands that read targets from a file.
@@ -330,7 +330,7 @@ Examples of what `notes` holds for a run:
 
 | Flag | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `-sources` | string |  | subdomain sources to run, comma-separated (default: the default set; none: no source, for a DNS-only run) |
+| `-sources` | string |  | subdomain sources to run, comma-separated (default: the default set; none: no source, and no archive, RDAP, search engine or RIPEstat lookup either: only the resolvers and the targets are asked) |
 | `-all-sources` | bool |  | also run slower subdomain sources outside the default set |
 | `-exclude-sources` | string |  | subdomain sources never to run, comma-separated |
 | `-providers` | string |  | API keys per source, YAML (default ~/.config/azhaq/providers.yaml, else subfinder's provider-config.yaml) |

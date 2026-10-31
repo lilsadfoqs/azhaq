@@ -241,7 +241,7 @@ On tesla.com, `subs -live -dns-rate 10` with two resolvers took 161 s and listed
 | `-w` | string |  | also resolve WORD.domain for each word in this file, like puredns bruteforce (active DNS; the names found are live) |
 | `-permute` | bool |  | also resolve variations of the names found (api → api-dev, api2, dev.api), like alterx \| dnsx (active DNS) |
 | `-all-sources` | bool |  | also run slower subdomain sources outside the default set |
-| `-sources` | string |  | subdomain sources to run, comma-separated (default: the default set; none: no source, for a DNS-only run) |
+| `-sources` | string |  | subdomain sources to run, comma-separated (default: the default set; none: no source, and no archive, RDAP, search engine or RIPEstat lookup either: only the resolvers and the targets are asked) |
 | `-m` | string, repeatable |  | only names matching these (comma list or file; * matches anything), as subfinder -m |
 | `-providers` | string |  | API keys per source, YAML (default ~/.config/azhaq/providers.yaml, else subfinder's provider-config.yaml) |
 

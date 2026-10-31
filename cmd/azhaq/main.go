@@ -306,7 +306,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	fillForms := fs.Bool("fill-forms", false, "ask the action of each GET form with neutral values in its fields (a search box gets a word): one GET request per form; a form that posts is not sent unless -submit-forms; crawl does this by default (-no-form-fill turns it off)")
 	pathClimb := fs.Bool("path-climb", false, "also list and ask the parent directories of each link a page names (/a/b/c: /a/b/ and /a/)")
 	submitForms := fs.Bool("submit-forms", false, "also submit POST forms with neutral values (crawl): CHANGES DATA on the target, each submission counts as a request and is in the ledger, the summary says how many; held to -allow, -deny and the crawl's scope")
-	sourcesList := fs.String("sources", "", "subdomain sources to run, comma-separated (default: the default set; none: no source, for a DNS-only run)")
+	sourcesList := fs.String("sources", "", "subdomain sources to run, comma-separated (default: the default set; none: no source, and no archive, RDAP, search engine or RIPEstat lookup either: only the resolvers and the targets are asked)")
 	excludeSources := fs.String("exclude-sources", "", "subdomain sources never to run, comma-separated")
 	allSources := fs.Bool("all-sources", false, "also run slower subdomain sources outside the default set")
 	noHistory := fs.Bool("no-history", false, "do not read or write the name history (names earlier runs found, kept under $AZHAQ_DATA_DIR, else ~/.local/share/azhaq; with -live each is checked by DNS in the run)")
@@ -950,6 +950,18 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		}
 		rep.Notes = append(rep.Notes, msg)
 	}
+	if *sourcesList == "none" {
+		var conflict error
+		asks := map[string]string{"urls-sources": "an archive", "urls-archive": "an archive", "asn": "RIPEstat"}
+		fs.Visit(func(f *flag.Flag) {
+			if what, ok := asks[f.Name]; ok && conflict == nil {
+				conflict = usagef("-sources none asks no third party, and -%s asks %s: give one of them", f.Name, what)
+			}
+		})
+		if conflict != nil {
+			return conflict
+		}
+	}
 	rates, err := parseSourceRates(*sourceRates)
 	if err != nil {
 		return usagef("-source-rates: %v", err)
@@ -1007,6 +1019,16 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		}
 	}
 	collectors.Register(cat, opts)
+	if *sourcesList == "none" {
+		// No passive source means no third party at all: the archives, RDAP, search
+		// engines and RIPEstat are as much a source as crt.sh. Only the resolvers
+		// and the targets are asked.
+		for _, n := range cat.Names() {
+			if engine.IsThirdParty(n) {
+				budgets.Skip[n] = true
+			}
+		}
+	}
 	if *probe {
 		budgets.MaxDepth = 1 // the listed targets only: no CNAME or redirect targets
 		if spec != nil && (spec.TLSProbe || spec.CSPProbe) {
@@ -1020,7 +1042,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	}
 	if out.plan {
 		paths := append(append([]string{}, pathscol.DefaultWordlist...), opts.Paths...)
-		send := sendLimits{max: *maxRequests, by: "-max-requests", noFavicon: *noFavicon, chrome: *shots != "" || *render, chromeWrites: *browserWrites,
+		send := sendLimits{noThirdParty: *sourcesList == "none", max: *maxRequests, by: "-max-requests", noFavicon: *noFavicon, chrome: *shots != "" || *render, chromeWrites: *browserWrites,
 			interact: *interact, dirs: *dirsFile != "", params: *paramsFile != "", login: *login, loginUser: *loginUser, graphql: *graphql, submitForms: *submitForms,
 			portsOn: len(portsOn) > 0, portDetect: portCfg.Detect, portPayload: len(portCfg.Payload) > 0, portDiscover: portCfg.Discover}
 		if m := strings.ToUpper(*paramsMethod); *paramsFile != "" && m != "GET" {
