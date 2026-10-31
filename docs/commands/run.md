@@ -34,6 +34,8 @@ azhaq run -url https://app.example.com/ -browser -login https://app.example.com/
 6. Sends nothing to a host outside the scope, Chrome's requests included. `-passive` sends nothing to the targets at all. `-sources none` asks no third party at all: no subdomain source, archive, RDAP, RIPEstat or search engine. Only the resolvers and the targets get requests, and `azhaq plan` says so. `-urls-sources`, `-urls-archive` and `-asn` ask a third party, so with `-sources none` they are a usage error.
 7. Prints the ranked map when it ends and the summary on stderr.
 
+`-probe` turns off every collector but DNS and HTTP: the crawl, scripts, path checks, TLS and the third-party sources, at depth 1. A flag that asks for a collector by name still runs it: `-dirs`, `-params`, `-ports`, `-ports-udp`, `-screenshots`, `-browser`, `-dns-brute`, `-permute` and `-graphql`. A flag that only a collector `-probe` turns off reads (`-fill-forms`, `-submit-forms`, `-path-climb`, `-known-files`) is a usage error that names both, never a flag that is dropped.
+
 `-url`, `-domain`, `-cidr` and `-asn` repeat, and each value is a seed. `-list`, `-in` and `-org` take one value: a second, different one is a usage error (exit 2), never the last one kept silently. The same holds for `-l` and `-dL` of the commands that read targets from a file.
 
 [What azhaq sends](../CONCEPTS.md#what-azhaq-sends) lists every request by kind. `azhaq plan` prints what a run would do and send before anything goes out.
@@ -292,7 +294,7 @@ Examples of what `notes` holds for a run:
 
 | Flag | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `-probe` | bool |  | resolve and fetch each target once, print one line per web service, no crawl or enumeration |
+| `-probe` | bool |  | resolve and fetch each target once, print one line per web service: no crawl, scripts, path checks, TLS, subdomain or archive sources, and depth 1; a flag that asks for a collector (-dirs, -params, -ports, -ports-udp, -screenshots, -browser, -dns-brute, -permute, -graphql) still runs it, and a flag for what -probe turns off (-fill-forms, -submit-forms, -path-climb, -known-files) is a usage error |
 | `-passive` | bool |  | skip HTTP/crawl/JS/paths/TLS (no handshake to the target) |
 | `-skip` | string |  | collectors not to run, comma-separated (see azhaq plan) |
 | `-dirs` | string |  | guess paths on each web service from this wordlist, or @common for the built-in one (active; the targets given are the scope unless -allow) |

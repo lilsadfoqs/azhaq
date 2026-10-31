@@ -238,7 +238,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	maxIPs := fs.Int("max-ips", 4096, "addresses expanded from -asn and -cidr prefixes, for the whole run")
 	scopeSpec := fs.String("scope", "", "a program's scope: a file (HackerOne CSV, bounty-targets JSON, Burp options, lines) or hackerone, bugcrowd, intigriti, yeswehack")
 	program := fs.String("program", "", "the program to take from a -scope list (handle, name or URL)")
-	probe := fs.Bool("probe", false, "resolve and fetch each target once, print one line per web service, no crawl or enumeration")
+	probe := fs.Bool("probe", false, "resolve and fetch each target once, print one line per web service: no crawl, scripts, path checks, TLS, subdomain or archive sources, and depth 1; a flag that asks for a collector (-dirs, -params, -ports, -ports-udp, -screenshots, -browser, -dns-brute, -permute, -graphql) still runs it, and a flag for what -probe turns off (-fill-forms, -submit-forms, -path-climb, -known-files) is a usage error")
 	noTech := fs.Bool("no-tech", false, "skip technology fingerprints (saves about 30 MB of memory)")
 	noFavicon := fs.Bool("no-favicon", false, "do not hash the favicon of front pages (one or two requests less per web service)")
 	urlsOut := fs.String("urls", "", "write every archived URL of the run's domains to this file, one per line")
@@ -1034,10 +1034,27 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		if spec != nil && (spec.TLSProbe || spec.CSPProbe) {
 			budgets.MaxDepth = 4 // and the names their certificates or policies give
 		}
+		// What the command line asks for by name runs: a flag is never dropped.
+		asked := map[string]bool{
+			"azhaq-dirs": *dirsFile != "", "azhaq-params": *paramsFile != "", "azhaq-ports": *portsSpec != "" || *portsUDP != "",
+			"azhaq-shots": *shots != "", "azhaq-render": *render, "azhaq-dns-brute": *bruteFile != "", "azhaq-permute": *permute,
+			"azhaq-graphql": *graphql, "azhaq-graphql-schema": *graphql,
+		}
 		for _, n := range cat.Names() {
-			if n != "azhaq-dns" && n != "azhaq-http" && !(n == "azhaq-shots" && *shots != "" && spec != nil) {
+			if n != "azhaq-dns" && n != "azhaq-http" && !asked[n] {
 				budgets.Skip[n] = true
 			}
+		}
+		// A flag only a collector -probe leaves out reads has nothing to act on.
+		off := map[string]string{"fill-forms": "the crawl", "submit-forms": "the crawl", "path-climb": "the crawl", "known-files": "the path checks"}
+		var conflict error
+		fs.Visit(func(f *flag.Flag) {
+			if what, ok := off[f.Name]; ok && conflict == nil && f.Value.String() != "" && f.Value.String() != "false" {
+				conflict = usagef("-probe turns off %s, and -%s is for it: give one of them", what, f.Name)
+			}
+		})
+		if conflict != nil {
+			return conflict
 		}
 	}
 	if out.plan {

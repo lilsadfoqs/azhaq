@@ -103,7 +103,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 
 | Flag | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `-probe` | bool |  | resolve and fetch each target once, print one line per web service, no crawl or enumeration |
+| `-probe` | bool |  | resolve and fetch each target once, print one line per web service: no crawl, scripts, path checks, TLS, subdomain or archive sources, and depth 1; a flag that asks for a collector (-dirs, -params, -ports, -ports-udp, -screenshots, -browser, -dns-brute, -permute, -graphql) still runs it, and a flag for what -probe turns off (-fill-forms, -submit-forms, -path-climb, -known-files) is a usage error |
 | `-passive` | bool |  | skip HTTP/crawl/JS/paths/TLS (no handshake to the target) |
 | `-skip` | string |  | collectors not to run, comma-separated (see azhaq plan) |
 | `-dirs` | string |  | guess paths on each web service from this wordlist, or @common for the built-in one (active; the targets given are the scope unless -allow) |
