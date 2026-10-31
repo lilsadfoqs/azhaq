@@ -28,6 +28,14 @@ const maxProbeDirs = 24
 
 var probeToken = RandomName()
 
+// probeDepth, when above zero, is how many directory levels get a baseline of
+// their own: a deeper directory is compared with the nearest one above it.
+var probeDepth atomic.Int32
+
+// SetProbeDepth limits the baseline requests to the root and the directories
+// n levels down (1: /api/ and /rest/, not /rest/user/); 0 asks every directory.
+func SetProbeDepth(n int) { probeDepth.Store(int32(max(n, 0))) }
+
 var (
 	probeMu   sync.Mutex
 	baselines = map[string]*baseline{} // origin + dir
@@ -160,6 +168,9 @@ func FinalCatchAll(ctx context.Context, c *http.Client, res Result) bool {
 }
 
 func baselineFor(ctx context.Context, c *http.Client, origin, dir string) *baseline {
+	for d := int(probeDepth.Load()); d > 0 && strings.Count(dir, "/") > d+1; {
+		dir = parentDir(dir)
+	}
 	probeMu.Lock()
 	key := origin + dir
 	b, ok := baselines[key]

@@ -185,6 +185,12 @@ func cmdCrawl(args []string) error {
 		answerTap = answers.tap
 		defer func() { answerTap = nil }()
 	}
+	if !*sweep {
+		// A crawler asks what a crawler asks: the baseline of the root and of
+		// each top-level directory, not one more for every directory below.
+		fetch.SetProbeDepth(1)
+		defer fetch.SetProbeDepth(0)
+	}
 	st, done, err := runPreset(&c, append(run, given()...), rep, nil)
 	if err != nil {
 		return err

@@ -263,7 +263,7 @@ Behaviour, fields and edge cases: [`azhaq crawl`](commands/crawl.md).
 - A page with many query variants, such as `/item?id=N`, is asked for every URL, as katana does. `-per-template N` limits it (the rest are listed) and `-iqp` asks one for each path.
 - `crawl` asks only what a crawler asks. `-sweep` adds the 32 built-in path checks and the source map next to each script, as `run` does. The checks cover `robots.txt`, sitemaps, API descriptions, `.git/HEAD`, `admin` and more.
 - **Time at a low `-rate`.** The number of requests sets the time. On Juice Shop at `-rate 5`, azhaq sends 91 requests in 21 s. katana `-jc -jsl -d 3 -rl 5` sends about 80 in 17 s.
-- The extra azhaq requests are the API routes katana does not find, such as `/rest/…` and `/api/…`: about 60 more endpoints. They also include one check per directory that tells a real answer from the page the app gives every unknown path.
+- The extra azhaq requests are the API routes katana does not find, such as `/rest/…` and `/api/…`: about 60 more endpoints. They also include one check for the root and each top-level directory (`/api/`, `/rest/`) that tells a real answer from the page the app gives every unknown path. `-sweep` checks every directory.
 - Unpaced, azhaq is faster: 8.5 s against 14.3 s.
 - Routes a script calls with POST are listed, as katana lists them, but a GET of one may answer 404 or 405. `-json` has their `methods`. `-ot '{{method}} {{url}}'` prints them in plain output.
 - `-json` is azhaq's, not katana's. The map keeps how each URL is known: `called`, `described`, `linked`, `archived` or `guessed`. `azhaq show -db FILE URL` prints the line of the script that names it.

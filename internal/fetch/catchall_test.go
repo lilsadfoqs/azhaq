@@ -187,3 +187,35 @@ func TestCatchAllRootShellAsksOneBaseline(t *testing.T) {
 		t.Error("/rest/nothing: its directory's error page is its catch-all")
 	}
 }
+
+// With a probe depth of 1 a directory below /rest/ is compared with /rest/'s
+// baseline: one request for both, and the same verdicts.
+func TestCatchAllProbeDepthSharesTheBaselineAbove(t *testing.T) {
+	Reset()
+	SetProbeDepth(1)
+	t.Cleanup(func() { SetProbeDepth(0) })
+	var probes atomic.Int32
+	mux := http.NewServeMux()
+	mux.HandleFunc("/rest/user/whoami", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"user":{}}`))
+	})
+	mux.HandleFunc("/rest/", func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, ProbeToken()) {
+			probes.Add(1)
+		}
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = fmt.Fprintf(w, "Error: Unexpected path: %s", r.URL.Path)
+	})
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+
+	if catchAll(t, srv, "/rest/user/whoami") {
+		t.Error("/rest/user/whoami: a page of its own reported as the generic answer")
+	}
+	if !catchAll(t, srv, "/rest/user/nothing") || !catchAll(t, srv, "/rest/admin/nothing") {
+		t.Error("an unknown path under /rest/: want catch-all")
+	}
+	if n := probes.Load(); n != 1 {
+		t.Errorf("%d baseline requests, want 1 (/rest/'s)", n)
+	}
+}

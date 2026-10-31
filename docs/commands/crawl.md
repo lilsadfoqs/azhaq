@@ -29,9 +29,10 @@ azhaq crawl -u https://app.example.com/ -json -rejected
 1. Starts from the URLs you give and follows links to the depth `-d`: 3 link levels below the start URL by default, as katana does.
 2. Reads forms, scripts and API descriptions for more URLs and routes. Library scripts are not read for routes.
 3. Asks only what a crawler does. The built-in path checks of `run` are off unless you add `-sweep`. `-kf all`, `-kf robotstxt` or `-kf sitemapxml` asks each web service only for its `robots.txt` and sitemaps and reads every entry.
-4. Lists every page it asked and every URL it found, each distinct URL once.
-5. Lists routes that scripts call with POST, PUT or another method. Their GET may answer 404 or 405.
-6. Never drops links without a word. When a limit stops the crawl, it exits 4 and `azhaq resume` continues it.
+4. Tells the page every unknown path gets from a real page with one request for a path that does not exist at the root and in each top-level directory (`/api/`, `/rest/`), not in every directory: `/rest/user/` is compared with the answer of `/rest/`. A directory below the first level whose own answer to an unknown path differs from the one above it then has its generic answers listed as `visited` where they would be `catchall`. `-sweep` asks every directory, as `run` does (up to 24 per origin). katana asks none.
+5. Lists every page it asked and every URL it found, each distinct URL once.
+6. Lists routes that scripts call with POST, PUT or another method. Their GET may answer 404 or 405.
+7. Never drops links without a word. When a limit stops the crawl, it exits 4 and `azhaq resume` continues it.
 
 ## Output
 
