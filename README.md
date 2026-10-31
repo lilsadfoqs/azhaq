@@ -249,46 +249,46 @@ The tools run azhaq itself and return its summary and rows. The scope, the budge
 Every comparison runs twice, as a reviewer runs it: with the default flags of both tools, and politely. `go run ./bench -profile default|polite|both` picks. The record keeps the old shares and ratios too.
 
 <!-- bench:begin -->
-Latest run (2026-10-31, v0.10.1, commit 1b1edea; profile: both; 188 of 193 checks pass). **Default** is the default flags of both tools; **polite** is `-rate 5` (HTTP; `probe -rl`, as httpx counts), `-dns-rate 10` (DNS; `dns -rl`, as dnsx counts) and `-rate 100` (ports), with the reference tool at the same rate. A result counts only when something other than azhaq confirms it, and a row is a win only when azhaq has at least the reference's results in at most 1.05 times its time. The record, with every check and the commands, is `bench/history/*.json`.
+Latest run (2026-10-31, v0.11.0, commit a66efd0; profile: both; 189 of 192 checks pass). **Default** is the default flags of both tools; **polite** is `-rate 5` (HTTP; `probe -rl`, as httpx counts), `-dns-rate 10` (DNS; `dns -rl`, as dnsx counts) and `-rate 100` (ports), with the reference tool at the same rate. A result counts only when something other than azhaq confirms it, and a row is a win only when azhaq has at least the reference's results in at most 1.05 times its time. The record, with every check and the commands, is `bench/history/*.json`.
 
 | Job | Replaces | Profile | Azhaq | Reference |
 | --- | --- | --- | --- | --- |
-| Live subdomains, 3 domains, no keys (names that resolve at a third resolver) | subfinder + dnsx | default | 510 live in 86 s | 433 live in 148 s (19 only it found) |
-| Historical URLs, vulnweb.com | gau | default | 144, including 140 of gau's 150, in 17 s | 150 in 67 s |
-| DNS brute force, 5000 words, the DNS lab | dnsx | default | 9 confirmed in 0.1 s | 9 in 0.6 s |
+| Live subdomains, 3 domains, no keys (names that resolve at a third resolver) | subfinder + dnsx | default | 567 live in 53 s | 418 live in 146 s (22 only it found) |
+| Historical URLs, vulnweb.com | gau | default | 143, including 139 of gau's 149, in 13 s | 149 in 96 s |
+| DNS brute force, 5000 words, the DNS lab | dnsx | default | 9 confirmed in 0.2 s | 9 in 0.7 s |
 | Wildcard zone, 3 real names of 50 | dnsx | default | 3 found, 0 fake | 50 without `-wd` |
-| Record types (9) of 32 names on a zone the bench serves | dnsx | default | 12 answers right in 0.0 s, 290 queries | 12 in 0.4 s, 523 queries |
-| Probing 107 hosts (the local apps and 100 local servers) | httpx | default | 107 answered, 107 confirmed; status, title and tech agree on 106 of 107 shared; 0.9 s | 107 answered, 107 confirmed; 1.4 s |
-| Known routes of juice-shop, the whole map (`azhaq run`) | katana `-jc -jsl` | default | 70/77 in 2.6 s | 1/77 in 14 s |
-| Known routes of juice-shop, the crawler alone (`azhaq crawl`, katana's depth) | katana `-jc -jsl` | default | 53/77 in 2.1 s | 1/77 in 14 s |
-| Known routes of vampi, the whole map (`azhaq run`) | katana `-jc -jsl` | default | 12/12 in 0.3 s | 1/12 in 10 s |
-| Known routes of vampi, the crawler alone (`azhaq crawl`, katana's depth) | katana `-jc -jsl` | default | 1/12 in 0.2 s | 1/12 in 10 s |
-| Known routes of ginandjuice.shop, the whole map (`azhaq run`) | katana `-jc -jsl` | default | 3/3 in 20 s | 2/3 in 21 s |
-| Known routes of ginandjuice.shop, the crawler alone (`azhaq crawl`, katana's depth) | katana `-jc -jsl` | default | 2/3 in 10 s | 2/3 in 21 s |
-| Paths, 4750 words, Juice Shop and VAmPI | ffuf `-ac` | default | 22 hits, 2 false positives, 25 s | 22 hits, 2 false positives, 24 s |
-| Fuzzing, 4750 words, Juice Shop and VAmPI, 4 runs | ffuf | default | 44 hits (40 confirmed), 50 s; JSON report equal on 2 of 2 | 44 hits (40 confirmed), 48 s |
-| Parameters, 8 planted, 7 pages | arjun | default | 8 right, 0 wrong, 1.5 s | 8 right, 0 wrong, 5.4 s |
-| Open ports, scanme.nmap.org top-1000 | `naabu -scan-type c` | default | 3 confirmed in 1.8 s | 3 confirmed in 5.8 s |
-| Open ports, 127.0.0.1 1-65535 | `naabu -scan-type c` | default | 9 confirmed in 4.7 s | 9 confirmed in 133 s |
-| Open ports, 127.0.0.0/28 (the bench's own listeners) | `naabu -scan-type c` | default | 4 confirmed in 0.1 s | 4 confirmed in 2.4 s |
-| Services named right on 15 lab ports | nmap `-sV` | default | 14, 13 with a product, 2.8 s | 12, 11 with a product, 142 s |
-| Screenshots, 8 targets (not blank) | gowitness | default | 8 in 6.1 s | 6 in 64 s |
+| Record types (9) of 32 names on a zone the bench serves | dnsx | default | 12 answers right in 0.0 s, 290 queries | 12 in 0.5 s, 523 queries |
+| Probing 107 hosts (the local apps and 100 local servers) | httpx | default | 107 answered, 103 confirmed; status, title and tech agree on 102 of 103 shared; 0.8 s | 103 answered, 103 confirmed; 1.4 s |
+| Known routes of juice-shop, the whole map (`azhaq run`) | katana `-jc -jsl` | default | 70/77 in 3.7 s | 1/77 in 15 s |
+| Known routes of juice-shop, the crawler alone (`azhaq crawl`, katana's depth) | katana `-jc -jsl` | default | 53/77 in 3.0 s | 1/77 in 15 s |
+| Known routes of vampi, the whole map (`azhaq run`) | katana `-jc -jsl` | default | 12/12 in 0.4 s | 1/12 in 11 s |
+| Known routes of vampi, the crawler alone (`azhaq crawl`, katana's depth) | katana `-jc -jsl` | default | 1/12 in 0.2 s | 1/12 in 11 s |
+| Known routes of ginandjuice.shop, the whole map (`azhaq run`) | katana `-jc -jsl` | default | 3/3 in 24 s | 2/3 in 21 s |
+| Known routes of ginandjuice.shop, the crawler alone (`azhaq crawl`, katana's depth) | katana `-jc -jsl` | default | 2/3 in 11 s | 2/3 in 21 s |
+| Paths, 4750 words, Juice Shop and VAmPI | ffuf `-ac` | default | 22 hits, 2 false positives, 19 s | 22 hits, 2 false positives, 19 s |
+| Fuzzing, 4750 words, Juice Shop and VAmPI, 4 runs | ffuf | default | 44 hits (40 confirmed), 51 s; JSON report equal on 2 of 2 | 44 hits (40 confirmed), 50 s |
+| Parameters, 8 planted, 7 pages | arjun | default | 8 right, 0 wrong, 0.9 s | 8 right, 0 wrong, 4.2 s |
+| Open ports, scanme.nmap.org top-1000 | `naabu -scan-type c` | default | 3 confirmed in 2.1 s | 3 confirmed in 6.7 s |
+| Open ports, 127.0.0.1 1-65535 | `naabu -scan-type c` | default | 1 confirmed in 1.1 s | 1 confirmed in 134 s |
+| Open ports, 127.0.0.0/28 (the bench's own listeners) | `naabu -scan-type c` | default | 4 confirmed in 0.1 s | 4 confirmed in 2.5 s |
+| Services named right on 15 lab ports | nmap `-sV` | default | 15, 13 with a product, 2.8 s | 12, 11 with a product, 145 s |
+| Screenshots, 8 targets (not blank) | gowitness | default | 8 in 6.3 s | 6 in 64 s |
 | Notifications, 6 messages to 2 providers, as the stub received them | notify | default | 6 in 5.0 s | 6 in 5.0 s |
-| Live subdomains, 2 domains, no keys (names that resolve at a third resolver) | subfinder + dnsx | polite | 20 live in 65 s | 18 live in 128 s (0 only it found) |
-| Historical URLs, vulnweb.com | gau | polite | 144, including 140 of gau's 150, in 17 s | 150 in 45 s |
-| DNS brute force, 310 words, the DNS lab | dnsx | polite | 9 confirmed in 29 s | 9 in 31 s |
+| Live subdomains, 2 domains, no keys (names that resolve at a third resolver) | subfinder + dnsx | polite | 20 live in 115 s | 19 live in 160 s (1 only it found) |
+| Historical URLs, vulnweb.com | gau | polite | 143, including 139 of gau's 149, in 11 s | 149 in 50 s |
+| DNS brute force, 310 words, the DNS lab | dnsx | polite | 9 confirmed in 29 s | 9 in 30 s |
 | Record types (9) of 32 names on a zone the bench serves | dnsx | polite | 12 answers right in 3.0 s, 290 queries | 12 in 3.4 s, 523 queries |
-| Probing 107 hosts (the local apps and 100 local servers) | httpx | polite | 107 answered, 107 confirmed; status, title and tech agree on 106 of 107 shared; 21 s | 107 answered, 107 confirmed; 22 s |
+| Probing 107 hosts (the local apps and 100 local servers) | httpx | polite | 107 answered, 103 confirmed; status, title and tech agree on 102 of 103 shared; 21 s | 103 answered, 103 confirmed; 23 s |
 | Known routes of juice-shop, the crawler alone (`azhaq crawl`, katana's depth) | katana `-jc -jsl` | polite | 53/77 in 17 s | 1/77 in 17 s |
-| Known routes of vampi, the crawler alone (`azhaq crawl`, katana's depth) | katana `-jc -jsl` | polite | 1/12 in 0.1 s | 1/12 in 10 s |
-| Known routes of ginandjuice.shop, the crawler alone (`azhaq crawl`, katana's depth) | katana `-jc -jsl` | polite | 2/3 in 10 s | 2/3 in 21 s |
+| Known routes of vampi, the crawler alone (`azhaq crawl`, katana's depth) | katana `-jc -jsl` | polite | 1/12 in 0.2 s | 1/12 in 11 s |
+| Known routes of ginandjuice.shop, the crawler alone (`azhaq crawl`, katana's depth) | katana `-jc -jsl` | polite | 2/3 in 11 s | 2/3 in 21 s |
 | Paths, 257 words, Juice Shop and VAmPI | ffuf `-ac` | polite | 13 hits, 0 false positives, 104 s | 13 hits, 0 false positives, 103 s |
 | Fuzzing, 257 words, Juice Shop and VAmPI, 2 runs | ffuf | polite | 13 hits (13 confirmed), 105 s | 13 hits (13 confirmed), 103 s |
-| Parameters, 8 planted, 3 pages | arjun | polite | 8 right, 0 wrong, 51 s | 8 right, 0 wrong, 44 s |
+| Parameters, 8 planted, 3 pages | arjun | polite | 8 right, 0 wrong, 37 s | 8 right, 0 wrong, 44 s |
 | Open ports, scanme.nmap.org top-1000 | `naabu -scan-type c` | polite | 3 confirmed in 10 s | 3 confirmed in 62 s |
-| Open ports, 127.0.0.1 top-1000 | `naabu -scan-type c` | polite | 6 confirmed in 10 s | 6 confirmed in 31 s |
-| Open ports, 127.0.0.0/28 (the bench's own listeners) | `naabu -scan-type c` | polite | 4 confirmed in 1.0 s | 4 confirmed in 4.4 s |
-| Services named right on 15 lab ports | nmap `-sV` | polite | 15, 13 with a product, 2.9 s | 13, 12 with a product, 143 s |
+| Open ports, 127.0.0.1 top-1000 | `naabu -scan-type c` | polite | 2 confirmed in 10.0 s | 2 confirmed in 32 s |
+| Open ports, 127.0.0.0/28 (the bench's own listeners) | `naabu -scan-type c` | polite | 4 confirmed in 0.9 s | 4 confirmed in 4.5 s |
+| Services named right on 15 lab ports | nmap `-sV` | polite | 15, 13 with a product, 2.9 s | 13, 12 with a product, 142 s |
 | Screenshots, 4 targets (not blank) (gowitness has no rate option and ran at full speed: the times are not compared) | gowitness | polite | 4 in 13 s | 4 in 4.7 s |
 | Notifications, 6 messages to 2 providers, as the stub received them | notify | polite | 6 in 1.0 s | 6 in 1.0 s |
 <!-- bench:end -->
