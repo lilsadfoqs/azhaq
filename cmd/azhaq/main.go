@@ -314,7 +314,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	sourceRate := fs.Float64("source-rate", 0, "requests per second to each subdomain source, as subfinder -rl (0: each source's own pace); a source's lower own pace stays")
 	sourceRates := fs.String("source-rates", "", "pace single subdomain sources, as subfinder -rls: name=N/unit, comma-separated, unit s, m or h (hackertarget=10/m,crtsh=1/s)")
 	maxResults := fs.Int("max-results", 0, "most names one paging subdomain source gives (0: no cap), as subfinder -mr")
-	maxTime := fs.Duration("max-time", 0, "wait this long for all subdomain sources of a domain, then go on with what they gave (0: -source-timeout and a short grace bound the wait), as subfinder -max-time")
+	maxTime := fs.Duration("max-time", 0, "wait this long for all subdomain sources of a domain, then go on with what they gave, also when subdomain.center is still asking and checking its guesses (0: -source-timeout and a short grace bound the wait, but not that source's DNS checks, which -dns-rate paces), as subfinder -max-time")
 	maxBody := fs.Int64("max-body", 0, "largest response body read from a subdomain source, in bytes (default 33554432), as subfinder -rsr")
 	sourceProxy := fs.String("source-proxy", "", "send every subdomain source request through this proxy URL, as subfinder -proxy (else HTTP_PROXY and HTTPS_PROXY)")
 	providersFile := fs.String("providers", "", "API keys per source, YAML (default ~/.config/azhaq/providers.yaml, else subfinder's provider-config.yaml)")

@@ -352,28 +352,44 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 	// late is what the sources still running are marked with; cut says the
 	// run, not a source's bound, stopped the wait: the result is partial.
 	late, cut := errSource, false
+	cutWhy := types.CutShort // what stopped the wait, for the names left unchecked
+	maxTime := fmt.Sprintf("stopped by -max-time %s", c.opts.MaxTime)
 	select {
 	case <-fetched:
 	case <-ctx.Done():
 	case <-timer.C:
 		late, cut = errLate, errLate != errSource
+		if cut && c.opts.MaxTime > 0 && c.opts.MaxTime == wait {
+			cutWhy = maxTime
+		}
 	}
 	// The sources that resolve their guesses are waited for until the run
 	// must stop, less the time to emit what was gathered.
 	sampleLate := errors.New(types.CutShort)
 	if ctx.Err() == nil {
-		var stop <-chan time.Time
+		var stop, maxStop <-chan time.Time
 		if dl, ok := ctx.Deadline(); ok {
 			left := time.Until(dl)
 			t := time.NewTimer(max(left-min(emitGrace, left/4), 0))
 			defer t.Stop()
 			stop = t.C
 		}
+		// -max-time ends this wait too: a sampled source's rounds and the
+		// DNS checks of its guesses run on, paced by -dns-rate, past any
+		// bound but the user's.
+		if mt := c.opts.MaxTime; mt > 0 {
+			t := time.NewTimer(max(mt-time.Since(t0), 0))
+			defer t.Stop()
+			maxStop = t.C
+		}
 		select {
 		case <-sampled:
 		case <-ctx.Done():
 		case <-stop:
 			cut = true
+		case <-maxStop:
+			cut, cutWhy = true, maxTime
+			sampleLate = fmt.Errorf("no answer in %s (-max-time)", c.opts.MaxTime)
 		}
 	}
 	if ctx.Err() != nil {
@@ -474,7 +490,7 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		status[name] = map[string]any{"skipped": why}
 	}
 	union := len(names)
-	names, foundBy, st := c.settle(ctx, domain, run, names, foundBy, status, cut, chk)
+	names, foundBy, st := c.settle(ctx, domain, run, names, foundBy, status, cut, cutWhy, chk)
 	sort.Strings(names)
 	for _, by := range foundBy {
 		sort.Strings(by)
@@ -566,7 +582,7 @@ type settled struct {
 // not resolve, lists the ones it could not check, and notes in each such
 // source's status how many it kept. Names a source's rounds already had
 // checked are not asked again.
-func (c *Collector) settle(ctx context.Context, domain string, run []source, names []string, foundBy map[string][]string, status map[string]any, cut bool, chk *checker) ([]string, map[string][]string, settled) {
+func (c *Collector) settle(ctx context.Context, domain string, run []source, names []string, foundBy map[string][]string, status map[string]any, cut bool, cutWhy string, chk *checker) ([]string, map[string][]string, settled) {
 	st := settled{skip: map[string]bool{}}
 	padding := map[string]bool{}
 	for _, s := range run {
@@ -630,7 +646,10 @@ func (c *Collector) settle(ctx context.Context, domain string, run []source, nam
 			took += time.Since(start)
 			st.asked = chk.asked
 		} else if len(more) > 0 {
-			why = types.CutShort
+			why = cutWhy
+			if !cut {
+				why = types.CutShort // the deadline came near
+			}
 		}
 	} else {
 		why = "not asked: no -live"

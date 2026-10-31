@@ -25,6 +25,7 @@ type checkerKey struct{}
 // asking the source.
 type checker struct {
 	ctx    context.Context
+	stop   context.CancelFunc // ends the lookups of the rounds when Run stops waiting
 	domain string
 	verify func(ctx context.Context, domain string, names []string) (live, failed []string)
 	hint   func(names []string) // live names go on to DNS at once
@@ -41,7 +42,8 @@ type checker struct {
 }
 
 func newChecker(ctx context.Context, domain string, verify func(context.Context, string, []string) ([]string, []string), hint func([]string)) *checker {
-	return &checker{ctx: ctx, domain: domain, verify: verify, hint: hint, state: map[string]int8{}, known: map[string]bool{}}
+	ctx, stop := context.WithCancel(ctx)
+	return &checker{ctx: ctx, stop: stop, domain: domain, verify: verify, hint: hint, state: map[string]int8{}, known: map[string]bool{}}
 }
 
 // know records names a real source gave: they are resolved with the rest
@@ -64,6 +66,7 @@ func (k *checker) close() {
 	k.mu.Lock()
 	k.closed = true
 	k.mu.Unlock()
+	k.stop() // a round still being looked up stops using the resolvers
 }
 
 // check resolves the names it has not checked, bar the ones a real source

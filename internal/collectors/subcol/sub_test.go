@@ -615,3 +615,49 @@ func TestSampledOverlapsTheCallWithTheCheck(t *testing.T) {
 		t.Errorf("five rounds took %s: the next call waited for the check", took)
 	}
 }
+
+// -max-time ends the wait for every source: one that never answers, and a
+// sampled source whose rounds keep adding live names. What was gathered is
+// kept and listed, and the sources cut say why.
+func TestMaxTimeEndsASampledSourceAndOneThatNeverAnswers(t *testing.T) {
+	release := make(chan struct{})
+	defer close(release)
+	hang := source{name: "hang", deflt: true, collect: func(context.Context, string, []string, *subscraping.Session) ([]string, error) {
+		<-release // ignores the context, as a source can
+		return nil, nil
+	}}
+	var mu sync.Mutex
+	round := 0
+	pad := sampled(verified(source{name: "pad", deflt: true, collect: func(context.Context, string, []string, *subscraping.Session) ([]string, error) {
+		mu.Lock()
+		defer mu.Unlock()
+		round++
+		return []string{"r" + string(rune('a'+round)) + ".example.org"}, nil
+	}}))
+	c := collector(Options{SourceTimeout: 30 * time.Second, MaxTime: 300 * time.Millisecond, NoHistory: true,
+		Verify: func(ctx context.Context, _ string, names []string) ([]string, []string) {
+			select { // a lookup that takes long, as a paced resolver does
+			case <-time.After(400 * time.Millisecond):
+				return names, nil
+			case <-ctx.Done():
+				return nil, names
+			}
+		}}, hang, pad, fake("real", noKey, true, []string{"www.example.org"}, nil))
+	t0 := time.Now()
+	payload, _ := run(t, c, context.Background())
+	if d := time.Since(t0); d > 2*time.Second {
+		t.Errorf("-max-time 300ms: the run took %s", d)
+	}
+	if payload["partial"] != true {
+		t.Errorf("not marked partial: %v", payload)
+	}
+	srcs := payload["sources"].(map[string]any)
+	for _, name := range []string{"hang", "pad"} {
+		if e, _ := srcs[name].(map[string]any)["error"].(string); !strings.Contains(e, "-max-time") {
+			t.Errorf("%s: error %q does not name -max-time", name, e)
+		}
+	}
+	if got := strings.Join(strs(payload["names"]), ","); !strings.Contains(got, "www.example.org") {
+		t.Errorf("names %s", got)
+	}
+}

@@ -215,6 +215,7 @@ coverage: the independent sources hold about 1609 names; this run has 1400 of th
 - subdomain.center answers a random 500 names per call, most of them made up.
 - Without a key it is asked again only while its last round gave a name that resolves and no other source had.
 - The next round is asked while the last round's new names are looked up, so a round costs the longer of the two. When a round adds no live name, the call already made ahead is dropped, and the source's `calls` counts it. No name is looked up twice.
+- `-max-time` ends the wait for it too: the names it gave by then are kept, listed as not checked when their lookup was cut, and its row says `-max-time` stopped it. `-source-timeout` bounds each of its calls and, with them, half the time it spends asking; the lookups of its guesses are paced by `-dns-rate`, not by `-source-timeout`.
 - With `-dns-rate` the guesses may cost at most half what the real names reported cost, and not less than 1,000.
 - A live name has an address, directly or through its CNAME chain. A chain that ends without one is a takeover candidate, not a live name.
 - Answers too big for 512 bytes, such as a long CNAME chain, arrive with EDNS0, or over TCP when a server truncates them.
@@ -252,7 +253,7 @@ On tesla.com, `subs -live -dns-rate 10` with two resolvers took 161 s and listed
 | `-source-rate` | float |  | requests per second to each subdomain source, as subfinder -rl (0: each source's own pace); a source's lower own pace stays |
 | `-source-rates` | string |  | pace single subdomain sources, as subfinder -rls: name=N/unit, comma-separated, unit s, m or h (hackertarget=10/m,crtsh=1/s) |
 | `-source-timeout` | duration | `30s` | give each subdomain source this long, 30s as subfinder does; a slower one (crt.sh) is abandoned, listed as failed, and the names the others gave are kept; -source-timeout 60s or more waits for crt.sh on a large domain (not -timeout, the run's bound) |
-| `-max-time` | duration |  | wait this long for all subdomain sources of a domain, then go on with what they gave (0: -source-timeout and a short grace bound the wait), as subfinder -max-time |
+| `-max-time` | duration |  | wait this long for all subdomain sources of a domain, then go on with what they gave, also when subdomain.center is still asking and checking its guesses (0: -source-timeout and a short grace bound the wait, but not that source's DNS checks, which -dns-rate paces), as subfinder -max-time |
 | `-max-body` | int |  | largest response body read from a subdomain source, in bytes (default 33554432), as subfinder -rsr |
 | `-max-results` | int |  | most names one paging subdomain source gives (0: no cap), as subfinder -mr |
 | `-max-names` | int |  | most names kept per domain, and looked up with -live (default 200000) |
