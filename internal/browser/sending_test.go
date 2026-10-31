@@ -15,6 +15,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/chromedp/cdproto/network"
+
 	"github.com/trannghiach/azhaq/internal/egress"
 	"github.com/trannghiach/azhaq/internal/fetch"
 	"github.com/trannghiach/azhaq/internal/ledger"
@@ -370,5 +372,28 @@ func TestBuiltInPagesAreNotCounted(t *testing.T) {
 	}
 	if n := egress.Sent(); n != int64(len(own.got())) {
 		t.Errorf("counted %d requests, the server got %d", n, len(own.got()))
+	}
+}
+
+// A request let go is counted and held back from the progress count until
+// it is seen leaving; one Chrome answers from its cache goes back out of
+// both, so the count a progress line shows never goes down.
+func TestLetGoRequestIsNotDepartedUntilSeenLeaving(t *testing.T) {
+	egress.Reset()
+	defer egress.Reset()
+	b := &Browser{}
+	for _, id := range []network.RequestID{"1", "2"} {
+		if err := egress.Take(); err != nil {
+			t.Fatal(err)
+		}
+		b.sending(id, letGo{ctx: context.Background(), method: "GET", url: "http://x.test/" + string(id)})
+	}
+	if egress.Sent() != 2 || egress.Departed() != 0 {
+		t.Fatalf("let go: sent %d, departed %d, want 2 and 0", egress.Sent(), egress.Departed())
+	}
+	b.sentOff("1")
+	b.fromCache("2")
+	if egress.Sent() != 1 || egress.Departed() != 1 {
+		t.Errorf("one left, one from the cache: sent %d, departed %d, want 1 and 1", egress.Sent(), egress.Departed())
 	}
 }

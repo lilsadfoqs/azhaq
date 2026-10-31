@@ -34,7 +34,7 @@ A command that is still working after 10 seconds says so every 10 seconds. A run
 azhaq: 1m30s, 62 requests sent (1/s), 38 tasks left; -max-requests 80 ends it in about 18 s
 ```
 
-- The pace is that of the last interval.
+- `requests` counts what has left: a request counted and still waiting for the pace, or that Chrome did not send after all, is not in it, and the number never goes down. The pace is that of the last interval.
 - The tasks are those known so far.
 - The end is the sooner of the request cap and `-timeout`.
 - With `-json`, the line is an object:

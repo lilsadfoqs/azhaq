@@ -45,6 +45,7 @@ type Policy struct {
 
 	maxReq atomic.Int64
 	sent   atomic.Int64
+	held   atomic.Int64 // counted, and not yet known to have left (waiting for the pace, let go in Chrome)
 
 	paceMu sync.Mutex
 	pace   *rate.Limiter
@@ -110,6 +111,7 @@ func (p *Policy) Reset() {
 	p.mu.Unlock()
 	p.maxReq.Store(0)
 	p.sent.Store(0)
+	p.held.Store(0)
 	p.SetRate(0)
 }
 

@@ -201,3 +201,37 @@ func TestRunProgressOnStderrOnly(t *testing.T) {
 		t.Errorf("text progress missing:\n%s", errOut)
 	}
 }
+
+// A request given back after a line was printed does not take the count
+// down or the rate below zero.
+func TestProgressCountNeverGoesBack(t *testing.T) {
+	defer func(d time.Duration) { stderrProgressEvery = d }(stderrProgressEvery)
+	stderrProgressEvery = 20 * time.Millisecond
+	counts := []int64{18, 53, 56, 47, 45}
+	var i atomic.Int64
+	snap := func() progressSnap {
+		n := int(i.Add(1)) - 1
+		return progressSnap{At: time.Duration(n+1) * 10 * time.Second, Sent: counts[min(n, len(counts)-1)], Left: -1}
+	}
+	var buf lockedBuf
+	stop := startProgress(context.Background(), progressCfg{JSON: true}, &buf, snap)
+	deadline := time.Now().Add(2 * time.Second)
+	for len(buf.lines()) < len(counts) && time.Now().Before(deadline) {
+		time.Sleep(5 * time.Millisecond)
+	}
+	stop()
+	var last float64
+	for _, l := range buf.lines() {
+		var o struct {
+			Requests int64   `json:"requests"`
+			Rate     float64 `json:"requests_per_second"`
+		}
+		if err := json.Unmarshal([]byte(l), &o); err != nil {
+			t.Fatal(err)
+		}
+		if float64(o.Requests) < last || o.Rate < 0 {
+			t.Errorf("requests %d after %v, rate %v: %s", o.Requests, last, o.Rate, l)
+		}
+		last = float64(o.Requests)
+	}
+}

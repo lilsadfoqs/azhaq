@@ -499,7 +499,7 @@ func cmdFuzz(args []string) error {
 	default:
 		pc := progressCfg{JSON: c.json, Cap: egress.MaxRequests(), CapBy: "-max-requests", Timeout: time.Duration(*maxtime * float64(time.Second))}
 		defer startProgress(ctx, pc, os.Stderr, func() progressSnap {
-			return progressSnap{At: time.Since(t0), Sent: egress.Sent(), Left: -1}
+			return progressSnap{At: time.Since(t0), Sent: egress.Departed(), Left: -1}
 		})()
 	}
 	st := fuzz.Run(ctx, cfg)

@@ -93,3 +93,41 @@ func TestSpendIsSafeUnderConcurrency(t *testing.T) {
 		t.Errorf("%d allowed, %d counted, want 50", n, Sent())
 	}
 }
+
+func TestDepartedLeavesOutWhatWaitsForThePace(t *testing.T) {
+	Reset()
+	defer Reset()
+	SetRate(5) // a burst of 1, then one every 200 ms
+	ctx := context.Background()
+	if err := Spend(ctx); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan struct{})
+	go func() { _ = Spend(ctx); close(done) }()
+	deadline := time.Now().Add(time.Second)
+	for Sent() < 2 && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if Sent() != 2 || Departed() != 1 {
+		t.Errorf("the second is counted and waiting: sent %d, departed %d, want 2 and 1", Sent(), Departed())
+	}
+	<-done
+	if Departed() != 2 {
+		t.Errorf("departed %d once it went, want 2", Departed())
+	}
+}
+
+func TestDepartedKeepsAHeldRequestOutUntilItLeaves(t *testing.T) {
+	Reset()
+	defer Reset()
+	if Take() != nil {
+		t.Fatal("take")
+	}
+	Hold(1)
+	Refund() // answered from the cache: counted back, never left
+	Release(1)
+	Release(1) // more than was held: no negative
+	if Sent() != 0 || Departed() != 0 {
+		t.Errorf("sent %d, departed %d, want 0", Sent(), Departed())
+	}
+}

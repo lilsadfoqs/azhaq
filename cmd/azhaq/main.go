@@ -1142,7 +1142,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		}
 		t0 := time.Now()
 		stopTicker = startProgress(ctx, cfg, os.Stderr, func() progressSnap {
-			return progressSnap{At: time.Since(t0), Sent: egress.Sent(), Done: st.TasksDone(), Left: st.TasksLeft()}
+			return progressSnap{At: time.Since(t0), Sent: egress.Departed(), Done: st.TasksDone(), Left: st.TasksLeft()}
 		})
 	}
 	defer stopTicker()

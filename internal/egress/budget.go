@@ -116,6 +116,10 @@ func (p *Policy) Pace(ctx context.Context) error {
 	p.paceMu.Lock()
 	lim := p.pace
 	p.paceMu.Unlock()
+	if lim != nil {
+		p.held.Add(1) // counted, and waiting for its turn: not sent yet
+		defer p.held.Add(-1)
+	}
 	wake := p.killWake()
 	if lim != nil {
 		wctx, stop := ctx, func() {}
@@ -251,6 +255,26 @@ func (p *Policy) Spent() bool {
 // Sent is how many requests the run has sent to its targets.
 func (p *Policy) Sent() int64 { return p.sent.Load() }
 
+// Hold notes n requests counted and not yet known to have left (one Chrome
+// was let send); Release says they left or were given back. Departed does
+// not count them.
+func (p *Policy) Hold(n int) { p.held.Add(int64(n)) }
+
+// Release is Hold's end.
+func (p *Policy) Release(n int) {
+	for {
+		h := p.held.Load()
+		if p.held.CompareAndSwap(h, max(h-int64(n), 0)) {
+			return
+		}
+	}
+}
+
+// Departed is Sent without the requests still waiting for the pace or not
+// yet seen leaving Chrome: what a progress line reports, which never goes
+// back when one of those is given back.
+func (p *Policy) Departed() int64 { return max(p.sent.Load()-p.held.Load(), 0) }
+
 // Package-level forms for the policy in use.
 
 func SetMaxRequests(n int64)                             { Current().SetMaxRequests(n) }
@@ -266,3 +290,6 @@ func Refund()                                            { Current().Refund() }
 func Count(n int)                                        { Current().Count(n) }
 func Spent() bool                                        { return Current().Spent() }
 func Sent() int64                                        { return Current().Sent() }
+func Hold(n int)                                         { Current().Hold(n) }
+func Release(n int)                                      { Current().Release(n) }
+func Departed() int64                                    { return Current().Departed() }

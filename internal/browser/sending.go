@@ -32,6 +32,9 @@ func (b *Browser) sending(id network.RequestID, g letGo) {
 	if b.out == nil {
 		b.out = map[network.RequestID]letGo{}
 	}
+	if _, ok := b.out[id]; !ok {
+		egress.Hold(1) // counted, not yet seen leaving
+	}
 	b.out[id] = g
 }
 
@@ -51,7 +54,9 @@ func (b *Browser) pausedAgain(id network.RequestID, raw string) {
 	case !ok:
 	case g.url == raw:
 		egress.Refund()
+		egress.Release(1)
 	default:
+		egress.Release(1)
 		ledger.ChromeAt(g.ctx, g.method, g.url, g.at)
 	}
 }
@@ -63,7 +68,9 @@ func (b *Browser) sentOff(id network.RequestID) {
 	b.sendMu.Lock()
 	g, ok := b.out[id]
 	delete(b.out, id)
-	if !ok {
+	if ok {
+		egress.Release(1)
+	} else {
 		if g, ok = b.cached[id]; ok {
 			delete(b.cached, id)
 			egress.Count(1)
@@ -91,6 +98,7 @@ func (b *Browser) fromCache(id network.RequestID) {
 	}
 	b.cached[id] = g
 	egress.Refund()
+	egress.Release(1)
 }
 
 // unheard lists what was let go for t (nil: for any page) and not heard
@@ -110,6 +118,7 @@ func (b *Browser) unheard(t *tab) {
 		}
 	}
 	b.sendMu.Unlock()
+	egress.Release(len(left))
 	for _, g := range left {
 		ledger.ChromeAt(g.ctx, g.method, g.url, g.at)
 	}

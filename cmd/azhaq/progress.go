@@ -20,7 +20,7 @@ var stderrProgressEvery = 10 * time.Second
 // progressSnap is what a progress line reports at one moment.
 type progressSnap struct {
 	At   time.Duration // since the command began
-	Sent int64         // requests sent to the targets
+	Sent int64         // requests sent to the targets (never fewer than the line before)
 	Done int           // tasks done
 	Left int           // tasks known and not done; -1: not counted
 }
@@ -163,6 +163,7 @@ func startProgress(ctx context.Context, cfg progressCfg, w io.Writer, snap func(
 				return
 			case <-t.C:
 				cur := snap()
+				cur.Sent = max(cur.Sent, prev.Sent) // one given back is not taken off what was said
 				if cfg.JSON {
 					raw, _ := json.Marshal(cfg.object(prev, cur))
 					fmt.Fprintf(w, "%s\n", raw)
