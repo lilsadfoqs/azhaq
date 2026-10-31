@@ -129,7 +129,8 @@ type scheduler struct {
 	ran, originRan, reserve int
 	names                   int // seeds handed to batch collectors
 	inflight                int
-	beyond                  []types.Seed // hints past MaxDepth
+	beyond                  []types.Seed    // hints past MaxDepth
+	atLimit                 map[string]bool // names past MaxDepth that DNS-only collectors ran on
 	results                 chan finished
 
 	// The frontier as the store records it (see store.Task): tasks
@@ -291,6 +292,7 @@ func (s *scheduler) add(raw types.Seed, depth int, hint bool) {
 	}
 	if depth >= s.b.MaxDepth {
 		s.beyond = append(s.beyond, seed)
+		s.atDepthLimit(seed, depth, k)
 		return
 	}
 	s.seen[k] = true
@@ -323,6 +325,27 @@ func (s *scheduler) add(raw types.Seed, depth int, hint bool) {
 			s.parked[pk] = append(s.parked[pk], t)
 			continue
 		}
+		s.enqueue(t)
+	}
+}
+
+// atDepthLimit runs the collectors that ask DNS only on a name an active
+// technique found and resolved, so -permute varies what -dns-brute found
+// whatever -depth says. Other work on the name stays past the limit.
+func (s *scheduler) atDepthLimit(seed types.Seed, depth int, k string) {
+	if seed.Type != types.TypeHostname || seed.Keys[types.LiveKey] == "" || s.atLimit[k] {
+		return
+	}
+	for _, col := range s.e.Cat.Where(seed.Type) {
+		if !catalog.InfoOf(col).AtLimit || !s.allowed(col, seed) {
+			continue
+		}
+		if s.atLimit == nil {
+			s.atLimit = map[string]bool{}
+		}
+		s.atLimit[k] = true
+		t := task{col: col.Name(), seed: seed, depth: depth, prio: 1}
+		s.record(t)
 		s.enqueue(t)
 	}
 }

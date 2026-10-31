@@ -1199,6 +1199,11 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		}
 	}
 	fillReport(rep, path, seeds, ents, obs, rows)
+	if *permute {
+		if n := unvaried(leftover); n > 0 {
+			rep.Notes = append(rep.Notes, fmt.Sprintf("-permute did not vary %d names found past -depth %d: they were not resolved in this run (-depth %d reaches them)", n, budgets.MaxDepth, budgets.MaxDepth+1))
+		}
+	}
 	if err := fetch.SessionLost(); err != nil {
 		// Said once, as a failure of its own: exit 3, never a quiet anonymous run.
 		if !slices.ContainsFunc(rep.Failed, func(f engine.Failure) bool { return strings.HasPrefix(f.Error, "the session ended") }) {
@@ -1295,6 +1300,19 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		}
 	}
 	return nil
+}
+
+// unvaried counts the names a run found past -depth that -permute did not
+// vary: those a guessing technique resolved are varied whatever -depth says.
+func unvaried(left []types.Seed) int {
+	n := 0
+	for _, s := range left {
+		if s.Type == types.TypeHostname && s.Keys[types.LiveKey] == "" && s.Keys[types.ViaKey] != types.ViaPermute &&
+			normalize.RegistrableDomain(s.Key()) != s.Key() {
+			n++
+		}
+	}
+	return n
 }
 
 const runIndexFile = ".azhaq-index"

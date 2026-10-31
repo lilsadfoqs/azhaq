@@ -65,9 +65,13 @@ func (b *Brute) Run(ctx context.Context, seed types.Seed, emit func(types.Observ
 	answers := resolveFound(ctx, b.Pool, b.Wild, domain, names, b.Workers)
 	found := nameList(answers)
 	wild := b.Wild.Zone(ctx, domain)
-	return report(ctx, emit, BruteName, domain, map[string]any{
+	meta, err := report(ctx, emit, BruteName, domain, map[string]any{
 		"domain": domain, "names": found, "answers": answerList(answers), "count": len(found), "tried": len(names), "wildcard_zone": wild,
 	}, found)
+	for _, h := range meta.NextHints {
+		h.Keys[types.LiveKey] = "1"
+	}
+	return meta, err
 }
 
 // Permute resolves variations of each live hostname it is given: numbers
@@ -126,7 +130,7 @@ func (p *Permute) Name() string { return PermuteName }
 
 // Info: active, and only for names DNS found alive.
 func (p *Permute) Info() catalog.Info {
-	return catalog.Info{Kind: catalog.Active, Flag: "permute", After: "azhaq-dns"}
+	return catalog.Info{Kind: catalog.Active, Flag: "permute", After: "azhaq-dns", AtLimit: true}
 }
 
 func (p *Permute) Inputs() []types.SeedType { return []types.SeedType{types.TypeHostname} }

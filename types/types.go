@@ -70,6 +70,10 @@ const (
 	ViaPermute = "permute"
 )
 
+// LiveKey on a hostname hint says an active DNS technique (-dns-brute)
+// answered it, so DNS-only work may use it where -depth leaves no wave.
+const LiveKey = "live"
+
 // Derived reports whether the engine derived s from another seed.
 func (s Seed) Derived() bool { return s.Keys[DerivedKey] != "" }
 

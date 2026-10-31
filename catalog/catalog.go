@@ -54,6 +54,10 @@ type Info struct {
 	// not among the URLs asked again when the session ended (sweeps, Chrome):
 	// its tasks that ran since the last good check run again.
 	Redo bool
+	// AtLimit lets the collector run on a hostname an active DNS technique
+	// found (types.LiveKey) even when -depth leaves no wave for it: it asks
+	// DNS only, and the names are known to exist.
+	AtLimit bool
 }
 
 // Claim, when set, records owner as the one collector run that does a
