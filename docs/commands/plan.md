@@ -27,7 +27,7 @@ azhaq plan -scope bugcrowd -program tesla -dirs words.txt
 1. The collectors that would run on each seed.
 2. The seeds left out of scope.
 3. The active techniques you asked for.
-4. What is sent to the targets: the GET requests for pages, and besides them each port scan, UDP probe, POST body and sign-in that is planned.
+4. What is sent to the targets: the GET requests for pages, and besides them each port scan, UDP probe, POST body, sign-in and Chrome load (`-screenshots`, `-browser`) that is planned. Every flag of `run` that asks for a collector is named here or under the active techniques.
 5. The third-party source queries, counted.
 6. A bound on the requests to the targets: what each web service costs, and the cap.
 

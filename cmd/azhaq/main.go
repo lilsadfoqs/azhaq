@@ -797,6 +797,9 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 			led.holdWrites(st, *resumeRun)
 		}
 	}
+	if (*shots != "" || *render) && out.plan {
+		opts.Browser = &browser.Browser{} // never started: the collectors that need Chrome are listed
+	}
 	if (*shots != "" || *render) && !out.plan {
 		if *chromePath != "" {
 			if st, err := os.Stat(*chromePath); err != nil || st.IsDir() {
@@ -1060,7 +1063,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	}
 	if out.plan {
 		paths := append(append([]string{}, pathscol.DefaultWordlist...), opts.Paths...)
-		send := sendLimits{noThirdParty: *sourcesList == "none", max: *maxRequests, by: "-max-requests", noFavicon: *noFavicon, chrome: *shots != "" || *render, chromeWrites: *browserWrites,
+		send := sendLimits{noThirdParty: *sourcesList == "none", max: *maxRequests, by: "-max-requests", noFavicon: *noFavicon, chrome: *shots != "" || *render, shots: *shots, render: *render, chromeWrites: *browserWrites,
 			interact: *interact, dirs: *dirsFile != "", params: *paramsFile != "", login: *login, loginUser: *loginUser, graphql: *graphql, submitForms: *submitForms,
 			portsOn: len(portsOn) > 0, portDetect: portCfg.Detect, portPayload: len(portCfg.Payload) > 0, portDiscover: portCfg.Discover}
 		if m := strings.ToUpper(*paramsMethod); *paramsFile != "" && m != "GET" {

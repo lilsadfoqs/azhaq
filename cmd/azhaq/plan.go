@@ -82,9 +82,11 @@ type sendLimits struct {
 	max          int64  // requests at most; 0: no cap
 	by           string // the option that set max
 	noFavicon    bool
-	chrome       bool // -browser or -screenshots
-	chromeWrites bool // -browser-writes
-	interact     bool // -interact
+	chrome       bool   // -browser or -screenshots
+	shots        string // -screenshots: the directory the pictures go to
+	render       bool   // -browser
+	chromeWrites bool   // -browser-writes
+	interact     bool   // -interact
 	login        string
 	loginUser    string
 	graphql      bool
@@ -143,6 +145,12 @@ func planSends(b engine.Budgets, send sendLimits) (gets, others []string) {
 	}
 	if b.Active["ports"] && send.udpPorts > 0 {
 		*out = append(*out, fmt.Sprintf("UDP datagrams to %s of each address (-ports-udp): the harmless request of the protocol the port usually carries, and, for a port that stays silent, each other request its protocol has (a port with no known protocol: a DNS query, an SNMP get with community public, memcached's version, an empty datagram)", plural(send.udpPorts, "port")))
+	}
+	if send.shots != "" {
+		*out = append(*out, fmt.Sprintf("Chrome loads the front page of each web service and saves a screenshot in %s (-screenshots, azhaq-shots): it also requests the page's scripts, styles and images, so a page costs more than one GET", send.shots))
+	}
+	if send.render {
+		*out = append(*out, "Chrome loads each page found and reads the links its scripts draw (-browser, azhaq-render): every page costs a GET and the requests its scripts, styles and images make")
 	}
 	if send.graphql {
 		*out = append(*out, "POST requests with a GraphQL introspection query to the GraphQL endpoints found (-graphql): they read the schema and change nothing")
