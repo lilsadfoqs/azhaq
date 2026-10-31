@@ -146,6 +146,8 @@ The names are read from `fetch`, `XMLHttpRequest` (`send`), axios and jQuery cal
   - Telegram: `parse_mode`, `thread` and `preview=yes`.
 - Every delivery, to a webhook or a provider, goes through notify's sender. A 429, a 5xx or a failed connection is tried up to three times, `Retry-After` is honoured up to a minute, and another 4xx is not tried again: see [Delivery and retries](notify.md#delivery-and-retries).
 - A delivery that failed is printed on stderr as `azhaq watch: POST https://host/…: reason`, never with the URL. See [notify](notify.md#secrets).
+- Every notification request is in the ledger and counted. The run has sealed its ledger by the time the change set is known, so the requests go to the workspace's ledger (`DB.ledger.jsonl`, or the file the run's `-ledger` names) after that seal, and `watch` seals it again. Each try of each delivery is a line of class `source`, listed by the webhook's scheme and host (`https://hooks.example.com/…`), never its path or query. An SMTP delivery is one `tcp` line to the mail server. With `-ledger off` after `--` nothing is kept, and the requests are still counted.
+- After the notifications `watch` prints a summary of its own: `results` is the number of notification requests, which is the number of lines the ledger got and the number a receiver counts, and `notes` names the ledger and its new seal. The run's summary, printed before it, counts the run's requests to its targets, and its note about the ledger stops at the run's own seal.
 
 ## Flags
 

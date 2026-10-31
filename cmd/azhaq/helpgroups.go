@@ -296,7 +296,7 @@ var helpSpecs = map[string]helpSpec{
 	},
 	"notify": {
 		groups: []helpGroup{
-			{"", `provider-config proxy delay rate-limit bulk id json silent`},
+			{"", `provider-config proxy delay rate-limit bulk id json silent ledger`},
 		},
 		hidden: map[string]string{
 			"compat:notify": `

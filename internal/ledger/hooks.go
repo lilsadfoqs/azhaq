@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -26,6 +27,20 @@ func WithCollector(ctx context.Context, name string) context.Context {
 	return context.WithValue(ctx, collectorKey{}, name)
 }
 
+type opaqueKey struct{}
+
+// WithOpaqueTarget marks ctx so that the requests made with it are
+// recorded by their scheme and host only, never their path, query or user:
+// a webhook's URL is a secret.
+func WithOpaqueTarget(ctx context.Context) context.Context {
+	return context.WithValue(ctx, opaqueKey{}, true)
+}
+
+func opaque(ctx context.Context) bool {
+	ok, _ := ctx.Value(opaqueKey{}).(bool)
+	return ok
+}
+
 func collectorOf(ctx context.Context) string {
 	if ctx == nil {
 		return ""
@@ -34,14 +49,37 @@ func collectorOf(ctx context.Context) string {
 	return s
 }
 
+var sentByClass [4]atomic.Int64
+
+func counter(class string) *atomic.Int64 {
+	switch class {
+	case ClassSource:
+		return &sentByClass[1]
+	case ClassDNS:
+		return &sentByClass[2]
+	case ClassOwn:
+		return &sentByClass[3]
+	}
+	return &sentByClass[0]
+}
+
+// Sent is how many requests and connections of class (ClassSource, ...) the
+// process has handed to the ledger's hooks, recorded or not: what a summary
+// says about them is what the ledger would list.
+func Sent(class string) int64 { return counter(class).Load() }
+
 // HTTP records req, about to be sent to a target. It is a no-op without a
 // ledger.
 func HTTP(req *http.Request) { HTTPAs(ClassTarget, req) }
 
 // HTTPAs is HTTP for a request of another class.
 func HTTPAs(class string, req *http.Request) {
+	if req == nil || req.URL == nil {
+		return
+	}
+	counter(class).Add(1)
 	l := Active()
-	if l == nil || req == nil || req.URL == nil {
+	if l == nil {
 		return
 	}
 	method := req.Method
@@ -53,7 +91,11 @@ func HTTPAs(class string, req *http.Request) {
 	if vhost == req.URL.Host || vhost == host {
 		vhost = ""
 	}
-	e := Entry{Kind: "http", Class: class, Method: method, Target: req.URL.Redacted(), Host: host, VHost: vhost,
+	target := req.URL.Redacted()
+	if opaque(req.Context()) {
+		target = req.URL.Scheme + "://" + req.URL.Host + "/…"
+	}
+	e := Entry{Kind: "http", Class: class, Method: method, Target: target, Host: host, VHost: vhost,
 		Body: bodySum(req), Collector: collectorOf(req.Context())}
 	if class == ClassTarget {
 		e.Rule = l.rule(host)
@@ -115,6 +157,7 @@ func TCP(ctx context.Context, host, addr string) { TCPAs(ctx, ClassTarget, host,
 
 // TCPAs is TCP for a connection of another class.
 func TCPAs(ctx context.Context, class, host, addr string) {
+	counter(class).Add(1)
 	l := Active()
 	if l == nil {
 		return

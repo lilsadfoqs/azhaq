@@ -9,7 +9,10 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
+
+	"github.com/trannghiach/azhaq/internal/ledger"
 )
 
 // capture runs f with stdout going to a pipe and returns what it wrote.
@@ -101,5 +104,61 @@ func TestWatchReportsOnlyWhatChanged(t *testing.T) {
 	defer mu.Unlock()
 	if len(hooks) != 2 || !strings.Contains(hooks[0], "+ 1 URLs") || !strings.Contains(hooks[1], "- 1 URLs gone") {
 		t.Errorf("webhook calls %q (the baseline and the unchanged run must not notify)", hooks)
+	}
+}
+
+// A notification is a request to a third party: the receiver's count is the
+// ledger's notification lines is the watch summary's, and the webhook's path
+// and query, which are its secret, are in none of them.
+func TestWatchNotificationsAreInTheLedgerAndTheSummary(t *testing.T) {
+	site := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("<html><title>site</title></html>"))
+	}))
+	defer site.Close()
+	for _, status := range []int{200, 500} { // 500: three tries, each its own line
+		var got atomic.Int32
+		hook := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			got.Add(1)
+			w.WriteHeader(status)
+		}))
+		db := filepath.Join(t.TempDir(), "ws.db")
+		url := hook.URL + "/hook/secret-path?token=not-for-output"
+		_, errOut, err := captureBoth(t, func() error {
+			return cmdWatch([]string{"-db", db, "-json", "-always", "-notify", url, "-notify-rate", "0", "--", "-url", site.URL + "/", "-probe", "-no-paths", "-depth", "0"})
+		})
+		hook.Close()
+		if status == 200 && err != nil || status == 500 && exitCode(err) != exitPartial {
+			t.Fatalf("status %d: %v", status, err)
+		}
+		rep := lastReport(t, errOut)
+		if rep.Command != "watch" || rep.Results != int(got.Load()) || got.Load() == 0 {
+			t.Errorf("status %d: the receiver got %d requests, the watch summary says %d (%s)", status, got.Load(), rep.Results, rep.Command)
+		}
+		var notes int
+		var hosts string
+		if err := ledger.Read(db+".ledger.jsonl", func(e ledger.Entry) error {
+			if e.Class == ledger.ClassSource && e.Kind == "http" && e.Method == "POST" {
+				notes++
+				hosts += e.Target
+			}
+			return nil
+		}); err != nil {
+			t.Fatal(err)
+		}
+		if notes != int(got.Load()) {
+			t.Errorf("status %d: the receiver got %d requests, the ledger lists %d", status, got.Load(), notes)
+		}
+		if strings.Contains(hosts, "secret-path") || strings.Contains(hosts, "not-for-output") || !strings.Contains(hosts, strings.TrimPrefix(hook.URL, "http://")+"/…") {
+			t.Errorf("status %d: the ledger names the webhook as %q", status, hosts)
+		}
+		if raw, _ := os.ReadFile(db + ".ledger.jsonl"); strings.Contains(string(raw), "not-for-output") {
+			t.Errorf("status %d: the token is in the ledger", status)
+		}
+		if c, err := ledger.Verify(db + ".ledger.jsonl"); err != nil || c.Unsealed != 0 {
+			t.Errorf("status %d: the ledger does not verify as sealed: %+v %v", status, c, err)
+		}
+		if status == 500 && got.Load() != 3 {
+			t.Errorf("a failing webhook was tried %d times, want 3", got.Load())
+		}
 	}
 }

@@ -93,7 +93,11 @@ func cmdWatch(args []string) error {
 		// The first run is the baseline, not a change: -always sends it too.
 		lost := false
 		if (ch.any() && !ch.Baseline) || *always {
-			for _, msg := range nt.send(ctx, ch) {
+			lostMsgs, err := nt.sendRecorded(ctx, ch, runArgs, *db, *jsonOut)
+			if err != nil {
+				return err
+			}
+			for _, msg := range lostMsgs {
 				fmt.Fprintf(os.Stderr, "azhaq watch: %s\n", msg)
 				lost = true
 			}

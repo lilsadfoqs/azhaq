@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/trannghiach/azhaq/internal/egress"
+	"github.com/trannghiach/azhaq/internal/ledger"
 )
 
 // SMTPOptions are notify's smtp entry. smtp_cc lists the recipients, as it
@@ -87,6 +88,7 @@ func sendMail(ctx context.Context, o *SMTPOptions, text string) error {
 	if err != nil {
 		host, port = o.Server, "25"
 	}
+	ctx = ledger.WithCollector(ctx, "azhaq-notify")
 	var conn net.Conn
 	if port == "465" {
 		conn, err = egress.DialSourceTLS(ctx, net.JoinHostPort(host, port), &tls.Config{ServerName: host})

@@ -126,6 +126,26 @@ func startLedger(ledgerFlag, killFlag, db string, scratch bool, rules scope.Rule
 	return r, nil
 }
 
+// startSideLedger opens the ledger for what a command sends outside a run:
+// a watch's notifications go to the workspace's, after the run's seal, and
+// notify's to the file -ledger names. ledgerFlag "off", or neither a flag nor
+// a workspace, is no ledger (nil, which close and the rest take).
+func startSideLedger(ledgerFlag, db string) (*runLedger, error) {
+	path := ledgerFlag
+	if path == "" && db != "" {
+		path = db + ".ledger.jsonl"
+	}
+	if path == "" || path == "off" || ledger.Active() != nil {
+		return nil, nil
+	}
+	l, err := ledger.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	ledger.Use(l)
+	return &runLedger{stopKill: func() {}, l: l, owned: true, from: l.Count()}, nil
+}
+
 // rolesLedger opens one ledger in dir for everything azhaq roles sends: the
 // run of each role, which finds it in use, and the requests between them.
 // It returns the func that closes it, and rearm, which watches roles.stop

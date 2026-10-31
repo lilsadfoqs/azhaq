@@ -17,6 +17,7 @@ import (
 	"golang.org/x/time/rate"
 
 	"github.com/trannghiach/azhaq/internal/egress"
+	"github.com/trannghiach/azhaq/internal/ledger"
 )
 
 // Client posts every notification: one pace, one retry policy, one place
@@ -177,6 +178,8 @@ func (c *Client) Do(ctx context.Context, build func() (*http.Request, error), ac
 func (c *Client) once(ctx context.Context, req *http.Request, accept func(int) bool) (res Result, err error, retryAfter time.Duration) {
 	ctx, cancel := context.WithTimeout(ctx, orDefault(c.Timeout, 30*time.Second))
 	defer cancel()
+	// The ledger lists the host, never the webhook's path or query.
+	ctx = ledger.WithCollector(ledger.WithOpaqueTarget(ctx), "azhaq-notify")
 	resp, err := c.http().Do(req.WithContext(ctx))
 	if err != nil {
 		var ue *url.Error

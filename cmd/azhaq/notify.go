@@ -16,6 +16,7 @@ import (
 	"go.yaml.in/yaml/v3"
 
 	"github.com/trannghiach/azhaq/engine"
+	"github.com/trannghiach/azhaq/internal/ledger"
 	"github.com/trannghiach/azhaq/internal/notify"
 )
 
@@ -59,6 +60,11 @@ func cmdNotify(args []string) error {
 		client.Verbose = func(s string) { fmt.Fprintf(os.Stderr, "azhaq notify: %s\n", s) }
 	}
 
+	led, err := startSideLedger(o.ledger, "")
+	if err != nil {
+		return err
+	}
+	sentBefore := ledger.Sent(ledger.ClassSource)
 	rep := newReport("notify")
 	rep.what = "messages"
 	rep.Counts = map[string]int{}
@@ -121,6 +127,11 @@ func cmdNotify(args []string) error {
 	if rep.Counts["retried"] == 0 {
 		delete(rep.Counts, "retried")
 	}
+	// What the ledger lists for the run: every try of every delivery.
+	if n := int(ledger.Sent(ledger.ClassSource) - sentBefore); n > 0 {
+		rep.Counts["requests sent"] = n
+	}
+	led.close(rep)
 	if len(rep.Counts) == 0 {
 		rep.Counts = nil
 	}
@@ -150,6 +161,7 @@ func containsStr(xs []string, x string) bool {
 // notifyOpts are notify's flags, under notify's names and its short ones.
 type notifyOpts struct {
 	config, providerConfig, data, msgFormat, proxy string
+	ledger                                         string
 	providers, ids                                 stringsFlag
 	rate, charLimit                                int
 	delay                                          float64
@@ -189,6 +201,7 @@ func (o *notifyOpts) register(fs *flag.FlagSet) {
 	boolean(&o.version, "version", "", "print the version")
 	boolean(&o.noColor, "no-color", "nc", "accepted and ignored: azhaq prints no colour")
 	boolean(&o.duc, "disable-update-check", "duc", "accepted and ignored: azhaq never checks for updates")
+	str(&o.ledger, "ledger", "", "write every request the deliveries make to this ledger file, a chain of hashes that azhaq ledger -verify checks (a webhook is listed by its host, never its path or query; default none, off: none)")
 	str(&o.proxy, "proxy", "", "HTTP or SOCKS5 proxy URL for the notification requests (default: the environment's); certificates are verified")
 	fs.BoolVar(&o.json, "json", false, "one JSON object per message on standard output, the summary as JSON on standard error")
 }
@@ -410,6 +423,44 @@ func newNotifier(hooks []string, config string, providers, ids []string, format 
 		}
 	}
 	return n, nil
+}
+
+// sendRecorded is send with its requests in the workspace's ledger (the run's
+// own, after its seal, sealed again) and counted in a summary of its own: a
+// notification is a request to a third party, and the run's summary was
+// printed before it was made. runArgs are the run's flags, which may move or
+// turn off the ledger.
+func (n *notifier) sendRecorded(ctx context.Context, ch changes, runArgs []string, db string, asJSON bool) ([]string, error) {
+	if n.client == nil {
+		return nil, nil
+	}
+	ledgerFlag, _ := flagValue(runArgs, "ledger")
+	led, err := startSideLedger(ledgerFlag, db)
+	if err != nil {
+		return nil, err
+	}
+	rep := newReport("watch")
+	rep.DB = db
+	before := ledger.Sent(ledger.ClassSource)
+	lost := n.send(ctx, ch)
+	sent := int(ledger.Sent(ledger.ClassSource) - before)
+	rep.what = "notification requests"
+	if sent == 1 {
+		rep.what = "notification request"
+	}
+	rep.Results = sent
+	if len(lost) > 0 {
+		rep.Counts = map[string]int{"deliveries failed": len(lost)}
+	}
+	led.close(rep)
+	rep.settle() // a lost delivery is named on its own line, and sets watch's exit
+	if asJSON {
+		raw, _ := json.Marshal(rep)
+		fmt.Fprintf(os.Stderr, "%s\n", raw)
+	} else {
+		rep.print(os.Stderr)
+	}
+	return lost, nil
 }
 
 // send delivers ch and returns a line for each delivery that failed; no

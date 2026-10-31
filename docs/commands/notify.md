@@ -42,7 +42,7 @@ Plain output is the message text as sent, one message per line. With `-json` it 
 | `sent` | The entries it reached: `provider` and `id` of each. |
 | `failed` | The entries it did not reach: `provider`, `id` and `error`. |
 
-The summary on stderr names every provider entry that a message did not reach. `counts` has `delivered` and, when any message needed more tries, `retried`.
+The summary on stderr names every provider entry that a message did not reach. `counts` has `delivered`, `requests sent` (every try of every delivery, the number of lines `-ledger` lists) and, when any message needed more tries, `retried`.
 
 ## Summary and exit codes
 
@@ -146,6 +146,7 @@ These rules hold for every message azhaq sends, `azhaq watch`'s included.
 - Any other 4xx is not tried again. A redirect to another host is not followed.
 - Certificates are verified, also through `-proxy`. azhaq checks for no updates.
 - A message longer than a service takes is sent in parts, not cut.
+- With `-ledger FILE`, every request is a line of that [ledger](../OUTPUT.md#the-ledger): class `source`, a try of a delivery each, the webhook by its scheme and host only. An SMTP delivery is one `tcp` line to the mail server. Without `-ledger` nothing is kept: `notify` has no workspace to keep a ledger beside. `azhaq watch` records its notifications in its workspace's ledger (see [watch](watch.md#notifications)).
 - Failures are never silent. The summary lists each provider and the ids of its entries that did not get a message, with the reason.
 
 ```
@@ -154,7 +155,7 @@ custom failed: POST http://host/…: 500 … (after 3 tries) ×4 (id ops)
 
 ### Secrets
 
-- A webhook URL is a secret. azhaq never prints it.
+- A webhook URL is a secret. azhaq never prints it, and the ledger lists it by its host.
 - No error holds a URL's path or query, or a token, key, password or header value of the config, even if the server repeats it. An error from a hook names the host and what went wrong.
 - A provider config keeps its tokens in the file. A word that starts with `$` in it is replaced by that environment variable.
 - `watch` keeps URLs off the command line too, where `ps` shows them to every user: `-notify @FILE` and `AZHAQ_NOTIFY` (see [watch](watch.md#notifications)).
@@ -172,6 +173,7 @@ custom failed: POST http://host/…: 500 … (after 3 tries) ×4 (id ops)
 | `-id` | string, repeatable |  | send only to the configured entries with this id (repeatable or comma-separated) |
 | `-json` | bool |  | one JSON object per message on standard output, the summary as JSON on standard error |
 | `-silent` | bool |  | no summary unless something failed |
+| `-ledger` | string |  | write every request the deliveries make to this ledger file, a chain of hashes that azhaq ledger -verify checks (a webhook is listed by its host, never its path or query; default none, off: none) |
 
 <details>
 <summary>Flags familiar from notify, other names and flags accepted with no effect (19)</summary>

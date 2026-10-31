@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/trannghiach/azhaq/internal/ledger"
 )
 
 // captureAll runs f with standard output and error going to pipes.
@@ -225,5 +227,44 @@ func TestHooksFromFileAndEnvironment(t *testing.T) {
 	}
 	if _, err := hooksFrom([]string{"@/nonexistent/hooks"}, ""); exitCode(err) != exitUsage || strings.Contains(err.Error(), "https") {
 		t.Errorf("%v", err)
+	}
+}
+
+// With -ledger every try of every delivery is a line in the file, listed by
+// the webhook's host and no more of its URL, and the summary counts the same.
+func TestNotifyLedgerListsEveryRequestItSent(t *testing.T) {
+	rec := &recorder{}
+	srv := rec.server(500) // three tries for each of two messages
+	defer srv.Close()
+	cfg := writeTemp(t, "pc.yaml", "custom:\n  - id: c\n    custom_webhook_url: "+srv.URL+"/in/secret-token\n    custom_method: POST\n")
+	in := writeTemp(t, "in.txt", "aaa\nbbb\n")
+	l := filepath.Join(t.TempDir(), "n.ledger.jsonl")
+	_, errOut, err := captureAll(t, func() error {
+		return cmdNotify([]string{"-pc", cfg, "-i", in, "-rl", "0", "-ledger", l, "-json"})
+	})
+	if exitCode(err) != exitPartial {
+		t.Fatalf("exit %d: %v", exitCode(err), err)
+	}
+	var sum report
+	if err := json.Unmarshal([]byte(strings.TrimSpace(errOut)), &sum); err != nil {
+		t.Fatalf("%q: %v", errOut, err)
+	}
+	var lines int
+	if err := ledger.Read(l, func(e ledger.Entry) error {
+		if e.Class == ledger.ClassSource && e.Method == "POST" && e.Target == srv.URL+"/…" {
+			lines++
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if got := len(rec.bodies); got != 6 || lines != got || sum.Counts["requests sent"] != got {
+		t.Errorf("the receiver got %d requests, the ledger lists %d, the summary says %d", got, lines, sum.Counts["requests sent"])
+	}
+	if raw, _ := os.ReadFile(l); strings.Contains(string(raw), "secret-token") {
+		t.Error("the webhook's path is in the ledger")
+	}
+	if c, err := ledger.Verify(l); err != nil || c.Unsealed != 0 || c.Seals != 1 {
+		t.Errorf("ledger: %+v %v", c, err)
 	}
 }
