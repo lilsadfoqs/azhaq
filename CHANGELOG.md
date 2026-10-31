@@ -88,6 +88,7 @@
 - `run -probe` prints every row the summary counts: the paths a `-dirs` or `-paths` sweep found were in the database and the summary but missing from stdout.
 - A `host:port` that fell back to plain HTTP has its answer on the URL that answered, not on the https guess with the http URL left as a `hint`.
 - `plan` lists the work of `-screenshots` and `-browser` (the collectors, Chrome loading the page and its subresources, where the pictures go); a test checks that every collector flag of `run` appears in the plan.
+- `subs -live` and every command that resolves many names: names a public resolver dropped under load (it answered some and timed out the rest) are asked again in the slower second pass; before, a first pass where more than half failed was taken for dead resolvers, and on a large domain hundreds of live names were left out as `no answer`.
 
 ## v0.10.1
 
