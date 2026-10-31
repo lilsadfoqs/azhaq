@@ -65,8 +65,8 @@ The map has one row per entity, best first: the target's own pages and APIs, the
 
 | Field | Meaning |
 | --- | --- |
-| `type` | `URL`, `Hostname`, `Domain`, `IPAddress`, `Organization`, … |
-| `key` | The URL, name or address. For a folded page, its `{n}` template. |
+| `type` | `URL`, `Hostname`, `Domain`, `IPAddress`, `Port`, `Organization`, … |
+| `key` | The URL, name or address. For a port, `host:port/tcp` (`/udp`). For a folded page, its `{n}` template. |
 | `scope` | `target`: what you asked about. `fanout`: found on the way (other hosts, CNAME targets). |
 | `coverage` (URLs) | What azhaq did with the URL: `visited`, `catchall`, `error`, `gone`, `hint`, `skipped` or `capped`. See [Coverage](#coverage). |
 | `evidence` (URLs) | How azhaq knows the row: the strongest level of its sources, from `answered` to `given`. See [Evidence](#evidence). |
@@ -78,6 +78,7 @@ The map has one row per entity, best first: the target's own pages and APIs, the
 | `first_seen` | When the workspace first saw the entity. |
 | `guard` | What a client route's router checks before it draws the view. See [Client routes](#client-routes). |
 | `protocol`, `namespace` | `protocol` is `socket.io` for a socket.io endpoint; `namespace` is its namespace, when the app names one. See [WebSockets](#websockets). |
+| `service`, `product`, `version` | A port's row (`-ports`, `-ports-udp`): what answered on it, as `azhaq ports` prints it. `role` is `service`; `proof` has the state (`open`, `open\|filtered`), `tls` and the title or banner when no product was named. |
 | `status`, `title` | The URL's own answer: the first hop of a redirect. See [Redirects](#redirects). |
 | `methods`, `params` | From API descriptions and call sites in scripts. See [Methods and parameters](#methods-and-parameters). |
 | `ops` | Each operation on the route: `method`, `query`, `path`, `header`, `body`, `body_type`, `auth`, `summary`, `operation_id`, `source`. See [Operations](#operations). |
@@ -92,7 +93,8 @@ The map has one row per entity, best first: the target's own pages and APIs, the
 
 The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.md#the-summary) and [exit codes](../OUTPUT.md#exit-codes). Two things are specific to `run`:
 
-- The summary counts `client routes` and `websockets` apart from `URLs`.
+- The summary counts `client routes` and `websockets` apart from `URLs`, and `ports` for the open ports that have a row.
+- A target given with no port (a name or an address) is asked on 443, then 80, or on `-web-ports`. A guess nothing listens on, refused, is a note (`no web service on 443 or 80`), not a failure; a `-web-ports` port that refuses is one.
 - It counts the path checks it skipped, as a note ([Path checks](#path-checks-stop-at-their-answer)).
 
 ## Details
@@ -312,7 +314,7 @@ Examples of what `notes` holds for a run:
 | `-path-climb` | bool |  | also list and ask the parent directories of each link a page names (/a/b/c: /a/b/ and /a/) |
 | `-fill-forms` | bool |  | ask the action of each GET form with neutral values in its fields (a search box gets a word): one GET request per form; a form that posts is not sent unless -submit-forms; crawl does this by default (-no-form-fill turns it off) |
 | `-per-template` | int |  | URLs of one template (/product?id={n}) to request; the rest are listed (default: all) |
-| `-web-ports` | string |  | ports to probe on each hostname, comma-separated (default: 443, falling back to 80) |
+| `-web-ports` | string |  | ports to probe on each hostname or address of the list, comma-separated (default: 443, falling back to 80; a target given with no port and nothing there is a note, not a failure) |
 | `-web-scheme` | string |  | try a name or an address over this scheme only, http or https (default: https, then http) |
 | `-no-favicon` | bool |  | do not hash the favicon of front pages (one or two requests less per web service) |
 | `-no-tech` | bool |  | skip technology fingerprints (saves about 30 MB of memory) |

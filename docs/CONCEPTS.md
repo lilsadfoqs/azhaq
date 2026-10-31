@@ -20,7 +20,7 @@ URL http://localhost:3000/rest/2fa/verify  target  hint  api  POST
 
 | Part | Here | Meaning |
 | --- | --- | --- |
-| type | `URL` | What the row is: `URL`, `Hostname`, `Domain`, `IPAddress`, … |
+| type | `URL` | What the row is: `URL`, `Hostname`, `Domain`, `IPAddress`, `Port`, … |
 | key | `http://localhost:3000/rest/2fa/verify` | The URL, name or address. A template such as `/api/Users/{id}` stands for URLs that differ by an identifier. |
 | scope | `target` | `target` is what you asked about. `fanout` was found on the way. |
 | coverage | `hint` | What azhaq did with the URL: see [Coverage](#coverage-what-azhaq-did-with-a-url). |

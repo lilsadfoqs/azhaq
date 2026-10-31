@@ -261,7 +261,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	var urlsArchive stringsFlag
 	fs.Var(&urlsArchive, "urls-archive", "ask NAME's archive at this address instead of its own, as NAME=URL (a mirror or a test server; repeatable)")
 	urlsRaw := fs.Bool("urls-raw", false, "print the archived URLs exactly as the archives gave them: no normalising, junk filter or deduplication")
-	webPorts := fs.String("web-ports", "", "ports to probe on each hostname, comma-separated (default: 443, falling back to 80)")
+	webPorts := fs.String("web-ports", "", "ports to probe on each hostname or address of the list, comma-separated (default: 443, falling back to 80; a target given with no port and nothing there is a note, not a failure)")
 	factsPath := fs.String("facts", "", "JSONL connector facts to ingest before native collectors")
 	execCmd := fs.String("exec", "", "connector command (seeds on stdin, facts on stdout)")
 	dbPath := fs.String("db", "", "the workspace, a SQLite file (default: a new azhaq-TIME-PID.db in the current directory, or $AZHAQ_DB; query, show and export read it afterwards)")
@@ -603,6 +603,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	if err != nil {
 		return usageErr{err}
 	}
+	seeds = bareAddressPorts(seeds, ports)
 
 	// A URL the user gave with a path is swept from that path (-dirs).
 	for _, sd := range seeds {
@@ -1227,6 +1228,11 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	case *probe:
 		for _, r := range engine.ProbeRows(obs) {
 			fmt.Println(r.Line())
+		}
+		for _, r := range rows {
+			if r.Entity.Type == types.TypePort {
+				fmt.Println(r.Line())
+			}
 		}
 	default:
 		printMap(rows)
@@ -1996,7 +2002,11 @@ func listSeed(line string) (types.Seed, error) {
 		host, port = strings.Trim(line, "[]"), ""
 	}
 	if ip := net.ParseIP(host); ip == nil && port == "" {
-		return types.Seed{Type: types.TypeHostname, Keys: map[string]string{"fqdn": normalize.Hostname(host)}}, nil
+		keys := map[string]string{"fqdn": normalize.Hostname(host)}
+		if !probeSeeding {
+			keys[types.BareKey] = "1"
+		}
+		return types.Seed{Type: types.TypeHostname, Keys: keys}, nil
 	}
 	hp := host
 	if net.ParseIP(host) != nil && strings.Contains(host, ":") {
@@ -2015,7 +2025,38 @@ func listSeed(line string) (types.Seed, error) {
 		// As httpx: plain HTTP first on 8080 and the ports above 1024.
 		return types.Seed{Type: types.TypeURL, Keys: map[string]string{"url": "http://" + hp + "/", httpcol.FallbackKey: "https"}}, nil
 	}
-	return types.Seed{Type: types.TypeURL, Keys: map[string]string{"url": "https://" + hp + "/", httpcol.FallbackKey: "http"}}, nil
+	keys := map[string]string{"url": "https://" + hp + "/", httpcol.FallbackKey: "http"}
+	if port == "" && !probeSeeding {
+		keys[types.BareKey] = "1" // a bare address: 443 then 80 is a guess
+	}
+	return types.Seed{Type: types.TypeURL, Keys: keys}, nil
+}
+
+// bareAddressPorts gives a bare address of the list (no port) one seed per
+// -web-ports port, as if each were written host:port, so the ports asked are
+// the ones given, not 443 and 80.
+func bareAddressPorts(seeds []types.Seed, ports []int) []types.Seed {
+	if len(ports) == 0 {
+		return seeds
+	}
+	var out []types.Seed
+	for _, s := range seeds {
+		if s.Type != types.TypeURL || s.Keys[types.BareKey] == "" {
+			out = append(out, s)
+			continue
+		}
+		u, err := url.Parse(s.Keys["url"])
+		if err != nil {
+			out = append(out, s)
+			continue
+		}
+		for _, p := range ports {
+			if n, err := listSeed(net.JoinHostPort(u.Hostname(), strconv.Itoa(p))); err == nil {
+				out = append(out, n)
+			}
+		}
+	}
+	return out
 }
 
 func parsePorts(raw string) ([]int, error) {

@@ -121,6 +121,7 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 	var lastErr error
 	answered := false
 	answeredURL := ""
+	refused := true // every request that failed was refused: the host is up
 	// Each group is one service (a port); its URLs are tried in order and
 	// the first that answers stands for it.
 	variants := c.variants(groups0(groups))
@@ -139,6 +140,7 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 			obs, hint, _, err := c.fetch(ctx, raw, variants[0])
 			if err != nil {
 				lastErr = err
+				refused = refused && neterr.Refused(err)
 				continue
 			}
 			if c.Spec != nil && gi == 0 && len(group) > 1 && strings.HasPrefix(raw, "http://") && statusOf(obs) == http.StatusBadRequest {
@@ -158,7 +160,11 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 			// Probe answers each input in a row of its own, so two inputs
 			// that reach one URL (a name and its URL) both report it.
 			once := c.Spec == nil
-			if seed.Type == types.TypeURL {
+			// The scheme a host:port fell back to goes on as its own URL (below):
+			// that URL's task reports it again, on the URL's own row.
+			u, uerr := normalize.URL(seed.Keys["url"])
+			fellBack := c.Spec == nil && seed.Type == types.TypeURL && seed.Keys[FallbackKey] != "" && uerr == nil && raw != u && len(groups) == 1
+			if seed.Type == types.TypeURL && !fellBack {
 				if _, dup := c.ownURL.LoadOrStore(obs.Source, true); dup && once {
 					break
 				}
@@ -201,6 +207,10 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		// page that exists.
 		if u, err := normalize.URL(seed.Keys["url"]); err == nil && answeredURL != "" && answeredURL != u {
 			meta.Drop = true
+			raw, _ := json.Marshal(map[string]any{"answered_at": answeredURL})
+			if err := emit(types.Observation{Collector: Name, Source: u, Kind: "dropped", Payload: raw, Confidence: 0.9, ObservedAt: time.Now().UTC()}); err != nil {
+				return meta, err
+			}
 			hint := types.Seed{Type: types.TypeURL, Keys: map[string]string{"url": answeredURL, types.SameTargetKey: "1"}}
 			if seed.Keys[types.StartKey] != "" {
 				hint.Keys[types.StartKey] = "1" // a sweep goes on from the path the user gave
@@ -212,6 +222,14 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		meta.Drop = true // nothing to crawl or read
 	}
 	if meta.EmitCount == 0 && !answered && lastErr != nil {
+		if c.guessed(seed) && refused {
+			// A bare name or address: 443 and 80 were a guess, and nothing
+			// listens there. The run says so in a note.
+			raw, _ := json.Marshal(map[string]any{"host": normalize.HostFromURL(groups0(groups)), "ports": "443 or 80"})
+			err := emit(types.Observation{Collector: Name, Source: groups0(groups), Kind: "noweb", Payload: raw, Confidence: 0.9, ObservedAt: time.Now().UTC()})
+			meta.EmitCount++
+			return meta, err
+		}
 		if neterr.Quiet(lastErr) {
 			return types.RunMeta{Status: types.StatusOK}, nil
 		}
@@ -220,6 +238,12 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		return meta, lastErr
 	}
 	return meta, nil
+}
+
+// guessed: the seed is a name or address given with no port, and no
+// -web-ports says where to look, so the ports tried are a guess.
+func (c *Collector) guessed(seed types.Seed) bool {
+	return seed.Keys[types.BareKey] != "" && c.Spec == nil && len(c.Ports) == 0
 }
 
 // FallbackKey on a URL seed asks for the same URL over plain HTTP when the

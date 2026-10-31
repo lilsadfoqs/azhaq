@@ -44,6 +44,9 @@ type MapEntry struct {
 	// What a 5xx the run got says less of than it looks: "500 without
 	// input" when the route takes names and the request carried none.
 	Answer string `json:"answer,omitempty"`
+
+	// A port row: what answered on it, as the port scan named it.
+	Service, Product, Version string
 }
 
 // ProofScriptsOnly ends the proof of a route only scripts name, with no call to go by.
@@ -121,6 +124,9 @@ func BuildMap(ents []types.Entity, seeds []types.Seed, obs []types.StoredObserva
 			Proof:    proofOf(e, rows),
 		}
 		if e.Type == types.TypeURL {
+			if !fetched(rows) && (hasKind(byEnt[e.ID], KindNoWeb) || hasKind(byEnt[e.ID], "dropped")) {
+				continue // a guessed scheme or port with no service: the URL that answered is the row, or the run's note says none did
+			}
 			if foldedHTTP(e.Key, m.Coverage, secured) {
 				continue // its https URL is the row
 			}
@@ -201,6 +207,7 @@ func BuildMap(ents []types.Entity, seeds []types.Seed, obs []types.StoredObserva
 			}
 		}
 		out = append(out, m)
+		out = append(out, portRows(e, m.Scope, byEnt[e.ID])...)
 	}
 	sort.SliceStable(out, func(i, j int) bool {
 		ri, rj := mapRank(out[i], hosts, domains, ips), mapRank(out[j], hosts, domains, ips)
@@ -613,8 +620,8 @@ func mapRank(m MapEntry, hosts, domains, ips map[string]bool) int {
 			return 7
 		}
 		return 8
-	case types.TypeIPAddress:
-		return 8 // addresses follow the names that resolve to them
+	case types.TypeIPAddress, types.TypePort:
+		return 8 // addresses follow the names that resolve to them, ports their address
 	case types.TypeDomain:
 		if domains[e.Key] {
 			return 1

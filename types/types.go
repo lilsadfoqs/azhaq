@@ -23,6 +23,9 @@ const (
 	TypeEmail        SeedType = "Email"
 	TypeCloudAccount SeedType = "CloudAccount"
 	TypeApplication  SeedType = "Application"
+	// TypePort is a row of the map for an open port, made from a port
+	// scan's answer; it is never a seed.
+	TypePort SeedType = "Port"
 )
 
 type Seed struct {
@@ -49,6 +52,11 @@ const RedirectKey = "redirect"
 // a collector that tries a name on both schemes can leave it out when the
 // URL is the service the user named.
 const FromURLKey = "from_url"
+
+// BareKey marks a target the user gave with no port (a name or an address):
+// its web ports are a guess, so a guess nothing answers is a note, not a
+// failure.
+const BareKey = "bare"
 
 // StartKey marks a URL seed the user gave, as against one a collector
 // found: a path sweep starts from the path of the first, not the second.

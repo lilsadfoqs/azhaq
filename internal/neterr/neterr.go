@@ -95,6 +95,10 @@ func UnknownHost(err error) bool {
 	return strings.Contains(err.Error(), "no such host")
 }
 
+// Refused: the host answered the connect with a refusal, so it is up and
+// nothing listens on that port.
+func Refused(err error) bool { return errors.Is(err, syscall.ECONNREFUSED) }
+
 // Unanswered: the origin gave no answer at all (a connect refused or
 // without a route, a timeout), as opposed to an answer that was not
 // wanted, or a request the run chose not to send or gave up on.

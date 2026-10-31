@@ -294,6 +294,9 @@ func fillReport(rep *report, path string, seeds []types.Seed, ents []types.Entit
 	rep.Unreachable = engine.Unreachable(seeds, ents, obs)
 	rep.Notes = append(rep.Notes, engine.Notes(obs)...)
 	rep.Notes = append(rep.Notes, portcol.Notes(obs)...)
+	if n := engine.NoWebNote(obs); n != "" {
+		rep.Notes = append(rep.Notes, n)
+	}
 	rep.Notes = append(rep.Notes, portcol.StoppedNotes()...)
 	rep.Notes = append(rep.Notes, engine.GraphQLNotes(obs)...)
 	rep.Notes = append(rep.Notes, pathscol.Notes(obs)...)
@@ -330,6 +333,8 @@ func fillReport(rep *report, path string, seeds []types.Seed, ents []types.Entit
 			if r.Role != "dead" && r.Role != "wildcard" {
 				counts["hostnames"]++
 			}
+		case types.TypePort:
+			counts["ports"]++
 		}
 	}
 	for k, v := range counts {
@@ -377,6 +382,9 @@ func mapRowJSON(r engine.MapEntry) map[string]any {
 	set("evidence", r.Evidence, r.Evidence != "")
 	set("evidence_from", r.EvidenceFrom, len(r.EvidenceFrom) > 0)
 	set("title", r.Title, r.Title != "")
+	set("service", r.Service, r.Service != "")
+	set("product", r.Product, r.Product != "")
+	set("version", r.Version, r.Version != "")
 	set("methods", r.Methods, len(r.Methods) > 0)
 	set("params", r.Params, len(r.Params) > 0)
 	set("body", r.Body, len(r.Body) > 0)

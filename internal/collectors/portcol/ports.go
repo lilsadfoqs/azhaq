@@ -319,6 +319,7 @@ func hintsOf(host string, open []portscan.Open) []types.Seed {
 		case "http", "https": // the probe found out which
 			keys = map[string]string{"url": o.Service + "://" + hp + "/"}
 		}
+		keys[types.SameTargetKey] = "1" // a port of the target itself, not a step away from it
 		out = append(out, types.Seed{Type: types.TypeURL, Keys: keys})
 	}
 	return out
