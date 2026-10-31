@@ -553,11 +553,14 @@ func (p *Pool) query(ctx context.Context, q *dns.Msg, avoid string) (*dns.Msg, s
 	var lastMsg *dns.Msg         // the last SERVFAIL or REFUSED, returned with the error
 	servfail := map[string]int{} // resolver → attempts it answered SERVFAIL
 	ch := make(chan reply, p.retries+1)
-	waiting := map[int]string{} // attempts sent and not answered, by number
+	waiting := map[int]string{}         // attempts sent and not answered, by number
+	sent := make(chan int, p.retries+1) // attempts that left the pace
+	shift := 0                          // how many times the latest attempt's hedge delay doubles
 	launched := 0
-	launch := func() {
+	launch := func(doubled int) {
 		n, server := launched, p.pick(launched, avoid)
 		launched++
+		shift = doubled
 		waiting[n] = server
 		m := q
 		if n > 0 {
@@ -568,6 +571,7 @@ func (p *Pool) query(ctx context.Context, q *dns.Msg, avoid string) (*dns.Msg, s
 			if err := p.limit.Wait(qctx, server); err != nil {
 				r.err, r.paced = err, true
 			} else {
+				sent <- n
 				t0 := time.Now()
 				r.in, r.err = p.exchange(qctx, m, server)
 				if r.err == nil {
@@ -577,15 +581,22 @@ func (p *Pool) query(ctx context.Context, q *dns.Msg, avoid string) (*dns.Msg, s
 			ch <- r
 		}()
 	}
-	hedge := time.NewTimer(p.hedgeDelay())
+	// A query is late from when it is sent: time spent waiting for the pace
+	// is not, and a hedge sent then would only take another paced slot.
+	hedge := time.NewTimer(time.Hour)
+	hedge.Stop()
 	defer hedge.Stop()
-	launch()
+	launch(0)
 	for len(waiting) > 0 {
 		select {
+		case n := <-sent:
+			if n == launched-1 && launched <= p.retries {
+				hedge.Reset(p.hedgeDelay() << shift)
+			}
+			continue
 		case <-hedge.C:
 			if launched <= p.retries {
-				launch()
-				hedge.Reset(p.hedgeDelay() << (launched - 1)) // each later one waits longer: losses come in bursts
+				launch(launched) // each later one waits longer: losses come in bursts
 			}
 			continue
 		case r := <-ch:
@@ -616,8 +627,8 @@ func (p *Pool) query(ctx context.Context, q *dns.Msg, avoid string) (*dns.Msg, s
 			}
 		}
 		if len(waiting) == 0 && launched <= p.retries {
-			launch()
-			hedge.Reset(p.hedgeDelay())
+			hedge.Stop()
+			launch(0)
 		}
 	}
 	n := 0

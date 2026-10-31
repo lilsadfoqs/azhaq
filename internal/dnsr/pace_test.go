@@ -219,3 +219,50 @@ func TestHedgingKeepsTheAttemptCount(t *testing.T) {
 		t.Errorf("%d queries sent for one name, want 3 (2 retries)", n)
 	}
 }
+
+// Under a pace a query waits for its slot before it is sent; that wait is
+// not lateness. Names that answer at once are asked once each, and the run
+// takes what the pace says (600 queries at 200 a second: 3 s), not longer
+// because hedges spent slots.
+func TestPacedQueriesAreNotHedgedWhileTheyWaitForASlot(t *testing.T) {
+	p := New(Options{Resolvers: []string{"192.0.2.1:53"}, PerSecond: 200, Burst: 1, Timeout: 2 * time.Second})
+	var asked atomic.Int32
+	p.Exchange = slowLive(time.Millisecond, &asked)
+	t0 := time.Now()
+	out := p.ResolveMany(context.Background(), names(600), 128)
+	took := time.Since(t0)
+	for _, a := range out {
+		if a.Status != StatusOK {
+			t.Fatalf("%s: %s %s", a.Name, a.Status, a.Err)
+		}
+	}
+	if n := asked.Load(); n != 600 {
+		t.Errorf("%d queries for 600 names that answer at once, want 600", n)
+	}
+	if took > 3600*time.Millisecond {
+		t.Errorf("600 queries at 200 a second took %s, want about 3 s", took)
+	}
+}
+
+// A query that was sent and is late is still asked again under a pace: that
+// slot would be spent on the retry anyway, a second sooner.
+func TestPacedLostQueryIsStillAskedAgainEarly(t *testing.T) {
+	p := New(Options{Resolvers: []string{"192.0.2.1:53", "192.0.2.2:53"}, PerSecond: 20, Timeout: 2 * time.Second})
+	var asked atomic.Int32
+	p.Exchange = func(ctx context.Context, q *dns.Msg, server string) (*dns.Msg, error) {
+		if asked.Add(1) == 1 {
+			<-ctx.Done()
+			return nil, ctx.Err()
+		}
+		m := new(dns.Msg)
+		m.SetReply(q)
+		rr, _ := dns.NewRR(q.Question[0].Name + " 60 IN A 192.0.2.7")
+		m.Answer = append(m.Answer, rr)
+		return m, nil
+	}
+	t0 := time.Now()
+	a := p.Resolve(context.Background(), "lost.example.org")
+	if a.Status != StatusOK || time.Since(t0) > time.Second {
+		t.Errorf("status %s after %s", a.Status, time.Since(t0))
+	}
+}
