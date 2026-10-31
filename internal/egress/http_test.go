@@ -274,3 +274,78 @@ func TestDialTargetUsesTheRunsResolverAndTheScope(t *testing.T) {
 	}
 	c.Close()
 }
+
+// redirecting answers /a with a redirect to /b, /b with one to /c.
+func redirecting(t *testing.T) (*httptest.Server, *atomic.Int32) {
+	t.Helper()
+	var n atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n.Add(1)
+		switch r.URL.Path {
+		case "/a":
+			http.Redirect(w, r, "/b", http.StatusFound)
+		case "/b":
+			http.Redirect(w, r, "/c", http.StatusFound)
+		case "/out":
+			http.Redirect(w, r, "http://outside.test/", http.StatusFound)
+		default:
+			fmt.Fprint(w, "ok")
+		}
+	}))
+	t.Cleanup(srv.Close)
+	return srv, &n
+}
+
+func TestFollowedRedirectHopsAreCountedAndRecorded(t *testing.T) {
+	Reset()
+	defer Reset()
+	entries := withLedger(t)
+	srv, hits := redirecting(t)
+	c := TargetClient(TargetOptions{Follow: true})
+	if err := Spend(context.Background()); err != nil { // the sender counts the first request
+		t.Fatal(err)
+	}
+	if err := get(c, srv.URL+"/a"); err != nil {
+		t.Fatal(err)
+	}
+	if got := entries(); hits.Load() != 3 || Sent() != 3 || len(got) != 3 {
+		t.Fatalf("server %d, counted %d, ledger %v: want 3 each", hits.Load(), Sent(), got)
+	}
+}
+
+func TestBudgetStopsAFollowedRedirect(t *testing.T) {
+	for _, n := range []int64{1, 2, 3} {
+		Reset()
+		SetMaxRequests(n)
+		srv, hits := redirecting(t)
+		c := TargetClient(TargetOptions{Follow: true})
+		if err := Spend(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		err := get(c, srv.URL+"/a")
+		if n < 3 && !errors.Is(err, neterr.ErrBudget) {
+			t.Errorf("budget %d: error %v, want the budget's", n, err)
+		}
+		if hits.Load() != int32(n) || Sent() != n {
+			t.Errorf("budget %d: server %d, counted %d", n, hits.Load(), Sent())
+		}
+	}
+	Reset()
+}
+
+func TestRefusedRedirectHopIsNotCounted(t *testing.T) {
+	Reset()
+	defer Reset()
+	srv, hits := redirecting(t)
+	SetScope(func(h string) bool { return h == "127.0.0.1" })
+	c := TargetClient(TargetOptions{Follow: true})
+	if err := Spend(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if err := get(c, srv.URL+"/out"); !errors.Is(err, neterr.ErrOutOfScope) {
+		t.Fatalf("error %v, want out of scope", err)
+	}
+	if hits.Load() != 1 || Sent() != 1 {
+		t.Errorf("server %d, counted %d, want 1 each", hits.Load(), Sent())
+	}
+}

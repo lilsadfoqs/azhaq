@@ -158,7 +158,7 @@ A run with a session (`-login`, `-cookie`, `-header` carrying a token) sends it 
 
 Three controls bound what a run sends. They hold for every request to a target, Chrome's included.
 
-- **Budget.** `-max-requests` is how many requests to targets a run may send. Port connects and UDP datagrams count too. `0` means no cap.
+- **Budget.** `-max-requests` is how many requests to targets a run may send. Port connects and UDP datagrams count too, and so does each redirect a command follows (`fuzz -r`, `probe -fr`): the budget can stop a run before a hop it does not cover. `0` means no cap.
 - **Pace.** `-rate` is requests per second to targets, over all hosts. Chrome's requests count too.
 - **Kill switch.** `-kill-file PATH` names a file that stops all sending when it exists. The default is `DB.stop`.
 

@@ -47,16 +47,29 @@ func newGuarded(class Class, base *http.Transport, sni string) *guarded {
 }
 
 func (g *guarded) RoundTrip(req *http.Request) (*http.Response, error) {
-	if err := g.check(req); err != nil {
-		if req.Body != nil {
-			req.Body.Close()
-		}
-		if g.class == Target {
-			Refund() // counted by its sender, never sent
-		}
+	if err := g.admit(req); err != nil {
 		return nil, err
 	}
 	return g.rt.RoundTrip(req)
+}
+
+// admit holds req to the checks of its class and closes its body when it
+// is refused. A request to a target is counted by its sender, except a
+// redirect hop the client follows (req.Response is the answer that sent
+// it): nobody counted that, so it is counted and paced here, and the
+// budget can refuse it.
+func (g *guarded) admit(req *http.Request) error {
+	hop := g.class == Target && req.Response != nil
+	err := g.check(req)
+	if err == nil && hop {
+		err = Spend(req.Context())
+	} else if err != nil && g.class == Target && !hop {
+		Refund() // counted by its sender, never sent
+	}
+	if err != nil && req.Body != nil {
+		req.Body.Close()
+	}
+	return err
 }
 
 // check is what a request is held to before it leaves: the kill file
@@ -224,13 +237,7 @@ type foreign struct {
 }
 
 func (f *foreign) RoundTrip(req *http.Request) (*http.Response, error) {
-	if err := f.g.check(req); err != nil {
-		if req.Body != nil {
-			req.Body.Close()
-		}
-		if f.g.class == Target {
-			Refund()
-		}
+	if err := f.g.admit(req); err != nil {
 		return nil, err
 	}
 	return f.rt.RoundTrip(req)

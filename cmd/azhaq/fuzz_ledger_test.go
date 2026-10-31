@@ -181,3 +181,44 @@ func TestFuzzFlightsLedgerAndCountEqualCountproxy(t *testing.T) {
 		t.Errorf("countproxy saw %d requests, the summary says %d, the ledger holds %d", got, rep.Requests, ledgerHTTP(t, ledgerPath))
 	}
 }
+
+// A redirect hop the run follows (-r) is a request: it is in the budget, the
+// summary and the ledger, as it is at the proxy.
+func TestFuzzFollowedRedirectIsCountedAndCapped(t *testing.T) {
+	target := loginTarget(t)
+	var hits atomic.Int32
+	fwd := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		out, _ := http.NewRequest(r.Method, r.URL.String(), r.Body)
+		out.Header = r.Header.Clone()
+		resp, err := fwd.Do(out)
+		if err != nil {
+			http.Error(w, err.Error(), 502)
+			return
+		}
+		defer resp.Body.Close()
+		for k, v := range resp.Header {
+			w.Header()[k] = v
+		}
+		w.WriteHeader(resp.StatusCode)
+		io.Copy(w, resp.Body)
+	}))
+	defer proxy.Close()
+	run := func(max string) (report, string, error) {
+		ledgerPath := filepath.Join(t.TempDir(), "l.jsonl")
+		_, rep, err := fuzzRows(t, "-u", target.URL+"/FUZZ", "-X", "POST", "-d", "password=pw7&user_token=x", "-w", wlist(t, "login"), "-r", "-ac=false",
+			"-x", proxy.URL, "-ledger", ledgerPath, "-max-requests", max)
+		return rep, ledgerPath, err
+	}
+	hits.Store(0)
+	rep, lp, err := run("0")
+	if err != nil || hits.Load() != 2 || rep.Requests != 2 || ledgerHTTP(t, lp) != 2 {
+		t.Errorf("proxy %d, summary %d, ledger %d, err %v: want 2 each", hits.Load(), rep.Requests, ledgerHTTP(t, lp), err)
+	}
+	hits.Store(0)
+	rep, lp, err = run("1")
+	if exitCode(err) != exitLimit || hits.Load() != 1 || rep.Requests != 1 || ledgerHTTP(t, lp) != 1 {
+		t.Errorf("budget 1: exit %d, proxy %d, summary %d, ledger %d: want 1 each", exitCode(err), hits.Load(), rep.Requests, ledgerHTTP(t, lp))
+	}
+}
