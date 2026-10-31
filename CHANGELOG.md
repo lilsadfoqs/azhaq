@@ -24,6 +24,9 @@
 - A DNS query that is late is no longer waited out for the whole 2 s timeout (`subs -live`, `dns` and every command that resolves): the next attempt is sent beside it once it is later than 1.5 times what 19 in 20 answers took (250 ms at least, half the timeout at most), the first answer wins, and the attempts in all stay as many as before. With 20 percent of queries lost, 1800 names took 5.9 s where they took 18.2 s.
 - The ledger note in a run's summary names what was recorded by class (`ledger: 215 recorded in FILE: 214 to targets (210 requests, 4 connections), 1 DNS query, sealed …`), where it said `215 requests`; the lines to targets are what `requests` counts, port connects included, and a note gives both numbers if they ever differ.
 - `-list`, `-in` and `-org` of `run`, and `-l` and `-dL` of the commands that read a target file, refuse a second, different value with a usage error (exit 2) instead of keeping the last.
+- `run -sources none` asks no third party: no subdomain source, archive, RDAP, RIPEstat or search engine, only the resolvers and the targets, and `plan` says so (`source queries: none`). `-urls-sources`, `-urls-archive` and `-asn` with it are a usage error. Before, it still sent `GET https://rdap.org/domain/NAME`.
+- `run -probe` runs the collectors a flag asks for (`-dirs`, `-params`, `-ports`, `-ports-udp`, `-screenshots`, `-browser`, `-dns-brute`, `-permute`, `-graphql`) instead of dropping them with exit 0 and no note; flags only a collector `-probe` turns off reads are a usage error naming both flags.
+- `crawl` asks the catch-all check (a path that does not exist) for the root and each top-level directory, not for every directory below, so at a low `-rate` it no longer spends up to 24 requests katana does not. A deeper directory with an unknown-path answer of its own then lists those answers as `visited`; `-sweep` asks every directory, as `run` does.
 
 ### Added
 
@@ -72,6 +75,11 @@
 - `crawl -browser -interact` behind a slow `-proxy` (or on a loaded machine) mapped only what the static pass found, clicked nothing and left the `-interact:` note out, exit 0, because an app brought up late had drawn nothing when the page was read. A page read now waits until none of its requests is out (up to 5 s more), a page with nothing to click is looked at again while it draws, and `-interact` always gives its note.
 - `crawl` maps the page a link redirects to at the link's own depth: `/my-account` redirecting to `/login` lists `/login` at `-d 1`, as katana does; before, the redirect's destination counted as one more step of `-depth` and was left out although the redirect had fetched it.
 - `run -dirs` rows are `visited` (or `gone`, or what their status makes them) with their status when no limit was hit; before, every hit was `capped` with no status.
+- Every command that sends through egress records a request in the ledger, and counts it, when it gets its first live connection, not before: one written to a pooled connection the server had closed (a proxy that drops idle connections) was in the ledger and the summary but never reached the server (`fuzz` with flights counted 11 where a counting proxy saw 10). A connection found closed is not written to, and a request that fails on one the server closed unseen is sent again once on a new connection and stays one line.
+- `fuzz -preflight`: a request retried after a failure carries the new preflight's token; before, the retry was sent with the token already spent.
+- `watch -notify`, `-notify-config` and `notify`: every notification request is in a ledger and counted. `watch` appends them to the workspace's ledger after the run's seal and seals it again, and prints a summary of its own; each try is a `source` line naming the webhook's host only. `notify` has `-ledger FILE`. Before, a webhook POST was in neither the ledger nor any count.
+- DNS under a pace is no slower for the attempts sent beside a late one: one is sent only once the first has left the pace and is late, so under `-dns-rate` no name spends a second paced slot while it waits.
+- `run -permute` varies the names `-dns-brute` found whatever `-depth` is (at `-depth 1` it varied none and exited 0 with no word), and says how many names past `-depth` it could not vary because they were not resolved.
 
 ## v0.10.1
 
