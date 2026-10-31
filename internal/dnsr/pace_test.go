@@ -116,7 +116,7 @@ func TestFailedAnswerNamesTheResolver(t *testing.T) {
 // Resolvers that answer nothing are found out in one pass: asking every
 // name again at a quarter of the speed would take minutes more for the same
 // failures. The names say they got no answer.
-func TestResolveManyDoesNotRepeatAPassThatMostlyFailed(t *testing.T) {
+func TestResolveManyDoesNotRepeatAPassWithNoAnswer(t *testing.T) {
 	p := New(Options{Timeout: 30 * time.Millisecond})
 	var asked atomic.Int32
 	p.Exchange = func(ctx context.Context, q *dns.Msg, _ string) (*dns.Msg, error) {
@@ -264,5 +264,32 @@ func TestPacedLostQueryIsStillAskedAgainEarly(t *testing.T) {
 	a := p.Resolve(context.Background(), "lost.example.org")
 	if a.Status != StatusOK || time.Since(t0) > time.Second {
 		t.Errorf("status %s after %s", a.Status, time.Since(t0))
+	}
+}
+
+// A resolver that answers some queries and drops what is over its limit (as
+// public resolvers do to a busy client) is loaded, not down: the names it
+// dropped get the slower second pass and are answered.
+func TestResolveManyAsksAgainWhatALoadedResolverDropped(t *testing.T) {
+	p := New(Options{Timeout: 40 * time.Millisecond, Attempts: 1})
+	var inflight atomic.Int32
+	p.Exchange = func(ctx context.Context, q *dns.Msg, _ string) (*dns.Msg, error) {
+		defer inflight.Add(-1)
+		if inflight.Add(1) > 40 {
+			<-ctx.Done() // over the limit: dropped
+			return nil, errors.New("read udp: i/o timeout")
+		}
+		time.Sleep(5 * time.Millisecond)
+		m := new(dns.Msg)
+		m.SetReply(q)
+		rr, _ := dns.NewRR(q.Question[0].Name + " 60 IN A 192.0.2.7")
+		m.Answer = append(m.Answer, rr)
+		return m, nil
+	}
+	out := p.ResolveMany(context.Background(), names(400), 128)
+	for _, a := range out {
+		if a.Status == StatusFailed || a.Status == StatusBroken {
+			t.Fatalf("a name a loaded resolver dropped was not asked again: %+v", a)
+		}
 	}
 }

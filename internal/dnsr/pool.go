@@ -330,8 +330,8 @@ func (p *Pool) ResolveBoth(ctx context.Context, name string) Answer {
 	return a
 }
 
-// minForPass is how many names a batch needs before a mostly failed first
-// pass is taken for dead resolvers.
+// minForPass is how many names a batch needs before a first pass with no
+// answer at all is taken for dead resolvers.
 const minForPass = 16
 
 // ResolveMany resolves names with up to workers queries in flight and
@@ -351,9 +351,12 @@ func (p *Pool) ResolveMany(ctx context.Context, names []string, workers int) []A
 			at = append(at, i)
 		}
 	}
-	// When most names failed the resolvers are down, not loaded: a second
-	// pass at a quarter of the speed would cost minutes and fail alike.
-	if len(names) >= minForPass && len(again)*2 > len(names) {
+	// When no name got an answer the resolvers are down, not loaded: a
+	// second pass at a quarter of the speed would cost minutes and fail
+	// alike. A resolver that answered some and dropped the rest is loaded
+	// (public resolvers limit a busy client), and the slower pass is what
+	// gets the rest.
+	if len(names) >= minForPass && len(again) == len(names) {
 		again, at = nil, nil
 	}
 	for _, n := range again {
