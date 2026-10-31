@@ -193,6 +193,7 @@ A line has:
 - `source` lines are `http` or `tcp`, with no `rule`: the scope holds targets, not the third parties asked about them.
 - `chrome`: a request Chrome sent, listed once it left. One that Chrome dropped before sending is not listed, and not counted.
 - A Chrome WebSocket handshake is `ws://host:port/path?query`, and `wss://host:port` inside TLS.
+- An `http` line is written when the request has a live connection, and a request is one line however many connections it took. One that fails to connect (refused, timed out) is a line too. A pooled connection the server had closed is not written to; a request that fails on one the server closed unseen is sent again once on a new connection, and is still one line. So the lines to targets equal the requests a proxy in front of them counts.
 - `seal`: the end of a run, with no target.
 - A password in a `target` URL's user info is masked.
 

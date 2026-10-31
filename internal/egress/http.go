@@ -26,12 +26,22 @@ type guarded struct {
 	rt    http.RoundTripper
 }
 
+// wrapLedger records rt's requests as class's, and keeps them off
+// connections the other end has closed.
+func wrapLedger(class Class, rt http.RoundTripper) http.RoundTripper {
+	out := ledger.WrapAs(string(class), rt)
+	if t, ok := out.(*ledger.Transport); ok && t.Dead == nil {
+		t.Dead = connDead
+	}
+	return out
+}
+
 func newGuarded(class Class, base *http.Transport, sni string) *guarded {
 	g := &guarded{class: class, base: base, sni: sni}
 	if class == Own || class == DNS {
 		g.rt = base // the user's own, or a DNS query the exchanger records itself
 	} else {
-		g.rt = ledger.WrapAs(string(class), base)
+		g.rt = wrapLedger(class, base)
 	}
 	return g
 }
@@ -201,7 +211,7 @@ func from(class Class, c *http.Client) *http.Client {
 	case nil:
 		cp.Transport = newGuarded(class, http.DefaultTransport.(*http.Transport), "")
 	default:
-		cp.Transport = &foreign{rt: ledger.WrapAs(string(class), t), g: newGuarded(class, &http.Transport{}, "")}
+		cp.Transport = &foreign{rt: wrapLedger(class, t), g: newGuarded(class, &http.Transport{}, "")}
 	}
 	return &cp
 }
@@ -337,7 +347,7 @@ func H2Client(timeout time.Duration) *http.Client {
 			return tc, nil
 		},
 	}
-	return &http.Client{Timeout: timeout, Transport: &foreign{rt: ledger.WrapAs(string(Target), tr), g: newGuarded(Target, &http.Transport{}, "")}}
+	return &http.Client{Timeout: timeout, Transport: &foreign{rt: wrapLedger(Target, tr), g: newGuarded(Target, &http.Transport{}, "")}}
 }
 
 // CloseIdleConnections passes on to the transport under it.

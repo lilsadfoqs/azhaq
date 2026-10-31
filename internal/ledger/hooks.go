@@ -8,7 +8,11 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/http/httptrace"
 	"net/url"
+	"strings"
+	"sync"
+	"syscall"
 	"time"
 
 	"github.com/trannghiach/azhaq/internal/neterr"
@@ -142,13 +146,21 @@ func DNS(ctx context.Context, name, qtype, server string) {
 	l.Record(Entry{Kind: "dns", Class: ClassDNS, Method: qtype, Target: server, Host: name, Rule: l.rule(name), Collector: collectorOf(ctx)})
 }
 
-// Transport records each request before it goes to Base, so a request
-// that fails still appears. Class is what the requests are sent to
-// (ClassTarget when empty); only a target's are held by -deny-path and by
-// the writes a killed run sent.
+// Transport records each request as it is written to its connection, and
+// one that fails to get a connection after it, so a request that fails
+// still appears and one that never left does not. Class is what the
+// requests are sent to (ClassTarget when empty); only a target's are held
+// by -deny-path and by the writes a killed run sent.
 type Transport struct {
 	Base  http.RoundTripper
 	Class string
+	// Dead, when set, says a pooled connection was closed by its other end:
+	// the request is not written to it, and is not recorded for it. The
+	// transport takes another connection.
+	Dead func(net.Conn) bool
+
+	freshOnce sync.Once
+	freshRT   http.RoundTripper
 }
 
 func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -176,8 +188,78 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 		}
 		return nil, neterr.ErrNotRepeated
 	}
-	HTTPAs(class, req)
-	return t.base().RoundTrip(req)
+	var once sync.Once
+	record := func() { once.Do(func() { HTTPAs(class, req) }) }
+	for try := 0; ; try++ {
+		var reused, skipped, answered bool
+		trace := &httptrace.ClientTrace{
+			GotConn: func(info httptrace.GotConnInfo) {
+				reused = info.Reused
+				if info.Reused && t.Dead != nil && info.Conn != nil && t.Dead(info.Conn) {
+					// Closed under the pool: nothing is written to it.
+					skipped = true
+					info.Conn.Close()
+					return
+				}
+				record() // the first live connection: later ones are a replay of it
+			},
+			GotFirstResponseByte: func() { answered = true },
+		}
+		sent := req.WithContext(httptrace.WithClientTrace(req.Context(), trace))
+		if try > 0 && req.GetBody != nil {
+			body, err := req.GetBody()
+			if err != nil {
+				return nil, err
+			}
+			sent.Body = body
+		}
+		rt := t.base()
+		if try > 0 {
+			rt = t.fresh()
+		}
+		resp, err := rt.RoundTrip(sent)
+		// A pooled connection the server closed and nobody saw close: the request
+		// went nowhere (the transport replays only a read, and fails a write it
+		// cannot tell from one that was answered). It is made again, on another
+		// connection, and is one request: the server read it once, the ledger and
+		// the count hold it once.
+		if err != nil && try < maxReplays && reused && (skipped || !answered && closedByPeer(err)) && req.Context().Err() == nil &&
+			(req.Body == nil || req.Body == http.NoBody || req.GetBody != nil) {
+			continue
+		}
+		record() // no connection was reached (refused, timed out), or the transport reports none
+		if resp != nil && resp.Request == sent {
+			resp.Request = req
+		}
+		return resp, err
+	}
+}
+
+// maxReplays is how many times a request is made again after a pooled
+// connection turned out closed: the replay is on a connection of its own,
+// which cannot be one of those.
+const maxReplays = 1
+
+// fresh is Base, with no connection kept: what a replay is sent with.
+func (t *Transport) fresh() http.RoundTripper {
+	t.freshOnce.Do(func() {
+		t.freshRT = t.base()
+		if tr, ok := t.base().(*http.Transport); ok {
+			c := tr.Clone()
+			c.DisableKeepAlives = true
+			t.freshRT = c
+		}
+	})
+	return t.freshRT
+}
+
+// closedByPeer says err is what a request gets from a connection the other
+// end had already closed.
+func closedByPeer(err error) bool {
+	if errors.Is(err, io.EOF) || errors.Is(err, syscall.ECONNRESET) || errors.Is(err, syscall.EPIPE) {
+		return true
+	}
+	return strings.Contains(err.Error(), "server closed idle connection")
 }
 
 func (t *Transport) base() http.RoundTripper {
