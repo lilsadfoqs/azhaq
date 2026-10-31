@@ -27,6 +27,7 @@
 - `run -sources none` asks no third party: no subdomain source, archive, RDAP, RIPEstat or search engine, only the resolvers and the targets, and `plan` says so (`source queries: none`). `-urls-sources`, `-urls-archive` and `-asn` with it are a usage error. Before, it still sent `GET https://rdap.org/domain/NAME`.
 - `run -probe` runs the collectors a flag asks for (`-dirs`, `-params`, `-ports`, `-ports-udp`, `-screenshots`, `-browser`, `-dns-brute`, `-permute`, `-graphql`) instead of dropping them with exit 0 and no note; flags only a collector `-probe` turns off reads are a usage error naming both flags.
 - `crawl` asks the catch-all check (a path that does not exist) for the root and each top-level directory, not for every directory below, so at a low `-rate` it no longer spends up to 24 requests katana does not. A deeper directory with an unknown-path answer of its own then lists those answers as `visited`; `-sweep` asks every directory, as `run` does.
+- `run -list` with a bare name or address no longer exits 3 when the guessed 443 and 80 refuse: it is a note ("no web service on 443 or 80"); a `-web-ports` port that refuses is still a failure. `-web-ports` now applies to a bare address of the list.
 
 ### Added
 
@@ -37,6 +38,7 @@
 - `crawl`'s summary counts `requested`, `answered`, `not requested`, `templates`, `assets` and `rejected strings`, and the crawl page says which rows plain and `-silent` output prints.
 - Three recipes (subdomain variations, routes only a click shows, a form with a CSRF token), each command line run by a test. `docs/CONCEPTS.md` has a Sessions section.
 - `fuzz` counts the answers it got and how many were 403 or 419.
+- `run -ports` gives each open port a map row (`Port`, `host:port/tcp`, with service, product and version, as `ports` shows them); `query`, the exports and MCP carry them, and the summary counts `ports`. `-probe` probes the web services found on open ports.
 
 ### Removed
 
@@ -80,6 +82,12 @@
 - `watch -notify`, `-notify-config` and `notify`: every notification request is in a ledger and counted. `watch` appends them to the workspace's ledger after the run's seal and seals it again, and prints a summary of its own; each try is a `source` line naming the webhook's host only. `notify` has `-ledger FILE`. Before, a webhook POST was in neither the ledger nor any count.
 - DNS under a pace is no slower for the attempts sent beside a late one: one is sent only once the first has left the pace and is late, so under `-dns-rate` no name spends a second paced slot while it waits.
 - `run -permute` varies the names `-dns-brute` found whatever `-depth` is (at `-depth 1` it varied none and exited 0 with no word), and says how many names past `-depth` it could not vary because they were not resolved.
+- A redirect that a command follows is a request: `fuzz -r` and every other client that follows redirects count each hop against `-max-requests` and `-rate`, in `requests` and in the ledger, and the run stops with exit 4 before a hop the budget does not cover (`-max-requests 1` sent two requests and said one).
+- Progress lines count what has left: a request waiting for the `-rate` pace or one Chrome did not send after all is not in `requests`, so `shots`' progress no longer ran ahead of the summary, fell back or gave a negative rate.
+- `subs -live -max-time` ends the wait for subdomain.center as well: its rounds and the DNS checks of its guesses no longer keep the run going past the bound; the names gathered by then are kept and those not checked are listed.
+- `run -probe` prints every row the summary counts: the paths a `-dirs` or `-paths` sweep found were in the database and the summary but missing from stdout.
+- A `host:port` that fell back to plain HTTP has its answer on the URL that answered, not on the https guess with the http URL left as a `hint`.
+- `plan` lists the work of `-screenshots` and `-browser` (the collectors, Chrome loading the page and its subresources, where the pictures go); a test checks that every collector flag of `run` appears in the plan.
 
 ## v0.10.1
 
