@@ -470,7 +470,7 @@ For each answer it stores these fields, besides status, title and headers:
 
 #### `-probe`
 
-`-probe` keeps a run to this: only `azhaq-dns` and `azhaq-http` run, on the listed targets and nothing they lead to. The output is one line per web service instead of the map.
+`-probe` keeps a run to this: only `azhaq-dns` and `azhaq-http` run, on the listed targets and nothing they lead to. The output is one line per web service (and per path a `-dirs` sweep answered) instead of the map.
 
 #### `azhaq probe`
 

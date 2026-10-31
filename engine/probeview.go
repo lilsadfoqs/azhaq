@@ -69,10 +69,12 @@ func ProbeRows(obs []types.StoredObservation) []ProbeRow {
 // ProbeRowOf reads one HTTP answer, without the CDN (it comes from DNS):
 // azhaq-http's, or one taken in with ingest from httpx, katana or ffuf.
 // Any collector's application observation is an answer, as the map reads
-// them; failures and skips have kinds of their own.
+// them; failures and skips have kinds of their own. A path a -dirs or
+// -paths sweep asked and got an answer to is one too (its kind is "url").
 func ProbeRowOf(o types.Observation) (ProbeRow, bool) {
 	var r ProbeRow
-	if o.Kind != "application" || json.Unmarshal(o.Payload, &r) != nil || r.URL == "" || r.Status == 0 {
+	swept := o.Kind == "url" && (o.Collector == "azhaq-dirs" || o.Collector == "azhaq-paths")
+	if o.Kind != "application" && !swept || json.Unmarshal(o.Payload, &r) != nil || r.URL == "" || r.Status == 0 {
 		return ProbeRow{}, false
 	}
 	// httpx writes https://host with no path: the same service as
