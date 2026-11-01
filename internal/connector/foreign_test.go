@@ -218,3 +218,21 @@ func TestReadNaabuAddressOnly(t *testing.T) {
 		t.Errorf("entity %s %s", typ, key)
 	}
 }
+
+// A naabu udp line is a udp port, not an open tcp one.
+func TestReadNaabuUDP(t *testing.T) {
+	facts, _, err := ReadAny([]byte(`{"ip":"127.0.0.1","port":53,"protocol":"udp"}`))
+	if err != nil || len(facts) != 1 {
+		t.Fatalf("%v %d", err, len(facts))
+	}
+	var p struct {
+		Open []string
+		UDP  []struct {
+			Port  int
+			State string
+		} `json:"udp_services"`
+	}
+	if err := json.Unmarshal(facts[0].Payload, &p); err != nil || len(p.Open) != 0 || len(p.UDP) != 1 || p.UDP[0].Port != 53 || p.UDP[0].State != "open" {
+		t.Errorf("payload %s", facts[0].Payload)
+	}
+}

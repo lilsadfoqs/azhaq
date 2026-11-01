@@ -237,6 +237,32 @@ func TestMapJoinsThePortsOfImportedRows(t *testing.T) {
 	}
 }
 
+// An imported scan's ports are rows like azhaq's own: a line each, the
+// repeats folded, and an azhaq scan of the same port says what answered.
+func TestMapMakesPortRowsOfImportedScans(t *testing.T) {
+	ents := []types.Entity{{ID: "a", Type: types.TypeIPAddress, Key: "127.0.0.1"}}
+	naabu := func(port, proto string) types.StoredObservation {
+		payload := `{"host":"127.0.0.1","ip":"127.0.0.1","open":["` + port + `"],"services":[{"port":` + port + `}],"via":"naabu"}`
+		if proto == "udp" {
+			payload = `{"host":"127.0.0.1","ip":"127.0.0.1","services":[],"udp_services":[{"port":` + port + `,"state":"open"}],"via":"naabu"}`
+		}
+		return types.StoredObservation{EntityID: "a", Observation: types.Observation{Collector: "naabu", Kind: "ports", Payload: json.RawMessage(payload)}}
+	}
+	own := types.StoredObservation{EntityID: "a", Observation: types.Observation{Collector: "azhaq-ports", Kind: "ports", Payload: json.RawMessage(
+		`{"host":"127.0.0.1","ip":"127.0.0.1","services":[{"port":22,"service":"ssh"}]}`)}}
+	obs := []types.StoredObservation{naabu("22", "tcp"), naabu("8080", "tcp"), naabu("22", "tcp"), naabu("53", "udp"), own}
+	var got []string
+	for _, r := range engine.BuildMap(ents, nil, obs, nil, false) {
+		if r.Entity.Type == types.TypePort {
+			got = append(got, r.Entity.Key+" "+r.State+" "+r.Service)
+		}
+	}
+	want := []string{"127.0.0.1:22/tcp open ssh", "127.0.0.1:53/udp open ", "127.0.0.1:8080/tcp open "}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("port rows %q, want %q", got, want)
+	}
+}
+
 // A prefix's scan and the scan of an address in it list the same port: the
 // map has one row for each host, port and protocol, and its state is a field.
 func TestMapListsAPortOnceWithItsState(t *testing.T) {

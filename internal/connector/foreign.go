@@ -158,6 +158,11 @@ func lineFacts(raw []byte, m map[string]any, exported map[string][2]string) ([]F
 			host = ip
 		}
 		payload := map[string]any{"host": host, "ip": ip, "open": []string{port}, "services": []map[string]any{{"port": m["port"]}}, "via": "naabu"}
+		if str("protocol") == "udp" {
+			delete(payload, "open")
+			payload["services"] = []map[string]any{}
+			payload["udp_services"] = []map[string]any{{"port": m["port"], "state": "open"}}
+		}
 		return []Fact{observation(hostSeed(host), "naabu", "ports", payload)}, FormatNaabu, nil
 	case has("host") && (has("a") || has("aaaa") || has("cname")) && !has("url"):
 		host := str("host")

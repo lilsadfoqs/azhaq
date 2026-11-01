@@ -91,7 +91,7 @@ A line that is not valid JSON, or has an unknown `kind`, is rejected with `line 
 - Azhaq's own `export`: entities and their observations come back, and edges are rebuilt from the observations;
 - plain lines of URLs, hostnames and addresses.
 
-Each line is read by its fields, and the summary counts the lines of each format. Into a workspace, the facts join its newest run.
+Each line is read by its fields, and the summary counts the lines of each format. A naabu line adds an open port to the map, a `Port` row as `ports` makes it. Into a workspace, the facts join its newest run.
 
 ```
 subfinder -d example.com -json | azhaq ingest - -db example.db

@@ -15,7 +15,9 @@ import (
 
 // portRows are the open ports a port scan of e's address found, one row
 // each with what answered: the newest scan of each address stands, since a
-// scan a limit stopped is followed by the one that finishes it.
+// scan a limit stopped is followed by the one that finishes it. The ports an
+// imported scan (naabu writes one line per port) names are rows too, those
+// of azhaq's own scan first, since they say what answered.
 func portRows(e types.Entity, scope string, obs []types.StoredObservation) []MapEntry {
 	type scan struct {
 		host string
@@ -24,9 +26,10 @@ func portRows(e types.Entity, scope string, obs []types.StoredObservation) []Map
 		udp  []portscan.UDPPort
 	}
 	newest := map[string]scan{}
+	imported := map[string]scan{}
 	var order []string
 	for _, o := range obs {
-		if o.Collector != "azhaq-ports" || o.Kind != "ports" {
+		if o.Kind != "ports" {
 			continue
 		}
 		var p struct {
@@ -43,12 +46,26 @@ func portRows(e types.Entity, scope string, obs []types.StoredObservation) []Map
 		if id == "" {
 			id = p.Host
 		}
-		if _, ok := newest[id]; !ok {
+		_, haveOwn := newest[id]
+		_, haveImported := imported[id]
+		if !haveOwn && !haveImported {
 			order = append(order, id)
 		}
 		host := p.Host
 		if host == "" {
 			host = p.IP
+		}
+		if o.Collector != "azhaq-ports" {
+			// Each imported line adds its ports to the address's.
+			s := imported[id]
+			if !haveImported || o.ObservedAt.After(s.at) {
+				s.at = o.ObservedAt
+			}
+			s.host = host
+			s.tcp = append(s.tcp, p.Services...)
+			s.udp = append(s.udp, p.UDP...)
+			imported[id] = s
+			continue
 		}
 		newest[id] = scan{host: host, at: o.ObservedAt, tcp: p.Services, udp: p.UDP}
 	}
@@ -56,7 +73,7 @@ func portRows(e types.Entity, scope string, obs []types.StoredObservation) []Map
 	seen := map[string]bool{}
 	add := func(host string, port int, proto, state, service, product, version string, at time.Time, proof []string) {
 		key := net.JoinHostPort(host, strconv.Itoa(port)) + "/" + proto
-		if seen[key] {
+		if port <= 0 || seen[key] {
 			return
 		}
 		seen[key] = true
@@ -68,7 +85,14 @@ func portRows(e types.Entity, scope string, obs []types.StoredObservation) []Map
 	}
 	for _, id := range order {
 		s := newest[id]
-		sort.Slice(s.tcp, func(i, j int) bool { return s.tcp[i].Port < s.tcp[j].Port })
+		if im, ok := imported[id]; ok {
+			if s.host == "" {
+				s.host, s.at = im.host, im.at
+			}
+			s.tcp = append(s.tcp[:len(s.tcp):len(s.tcp)], im.tcp...)
+			s.udp = append(s.udp[:len(s.udp):len(s.udp)], im.udp...)
+		}
+		sort.SliceStable(s.tcp, func(i, j int) bool { return s.tcp[i].Port < s.tcp[j].Port })
 		for _, o := range s.tcp {
 			add(s.host, o.Port, "tcp", "open", o.Service, o.Product, o.Version, s.at, portProof("open", o.Service, o.Product, o.Version, o.TLS, o.Title, o.Banner))
 		}
