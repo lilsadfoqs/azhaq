@@ -32,6 +32,7 @@ func captureAll(t *testing.T, f func() error) (stdout, stderr string, err error)
 	outW.Close()
 	errW.Close()
 	r := <-done
+	checkSummaryOf(t, r[1], err)
 	return r[0], r[1], err
 }
 

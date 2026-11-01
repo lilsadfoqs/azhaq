@@ -104,6 +104,7 @@ func runContract(t *testing.T, args ...string) (stdout string, rep report, code 
 	code = exitCode(err)
 	rep = lastReport(t, errOut)
 	checkInvariants(t, strings.Join(args, " "), out, rep, code)
+	checkRun(t, args, out, errOut, code)
 	return out, rep, code
 }
 
@@ -513,6 +514,7 @@ func TestContractSettleKeepsTheInvariants(t *testing.T) {
 			t.Errorf("%s: exit %d, want %d", c.name, exitCode(err), c.exit)
 		}
 		checkInvariants(t, c.name, out, *rep, rep.Exit)
+		checkFailureRule(t, c.name, *rep, rep.Exit)
 	}
 }
 
