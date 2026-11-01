@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -666,5 +667,39 @@ func TestConfidence(t *testing.T) {
 		if got := confidenceOf(c.in); got != c.want {
 			t.Errorf("%+v: %s, want %s", c.in, got, c.want)
 		}
+	}
+}
+
+// -replay-max counts every request the replay sends, a redirect's hops
+// included: the target sees no more than the budget, the count is what it
+// saw, and the URLs left are named, not dropped without a word.
+func TestReplayMaxCountsRedirectHops(t *testing.T) {
+	var mu sync.Mutex
+	hits := 0
+	site := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		hits++
+		mu.Unlock()
+		if strings.HasPrefix(r.URL.Path, "/o/") {
+			http.Redirect(w, r, "/final"+strings.TrimPrefix(r.URL.Path, "/o"), http.StatusFound)
+			return
+		}
+		fmt.Fprintf(w, `{"path":%q}`, r.URL.Path)
+	}))
+	defer site.Close()
+	roles := []role{{name: "bob", headers: []string{"Authorization: t"}, session: http.Header{"Authorization": {"t"}}}}
+	answers := map[string]map[string]answer{"bob": {}}
+	found := map[string][]string{}
+	for i := 1; i <= 6; i++ {
+		found[fmt.Sprintf("%s/o/%d", site.URL, i)] = []string{"alice"}
+	}
+	sent, err := replayAll(roles, answers, found, nil, map[string]bool{"127.0.0.1": true}, 0, 8, nil)
+	mu.Lock()
+	defer mu.Unlock()
+	if hits > 8 || sent != hits {
+		t.Errorf("the target saw %d requests, the replay counted %d, the budget is 8", hits, sent)
+	}
+	if !errors.Is(err, errReplayMax) || !strings.Contains(err.Error(), "was not asked 2 URLs") {
+		t.Errorf("the URLs left are not named: %v", err)
 	}
 }

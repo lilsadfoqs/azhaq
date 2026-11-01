@@ -931,6 +931,9 @@ func replayAll(roles []role, answers map[string]map[string]answer, found map[str
 		if err := rr.run(todo); err != nil {
 			return sent, err
 		}
+		if rr.unasked > 0 && stopped == nil {
+			stopped = fmt.Errorf("%w: stopped after -replay-max %d requests (a redirect's hops count); role %s was not asked %s (raise -replay-max to compare them)", errReplayMax, budget, r.name, plural(rr.unasked, "URL"))
+		}
 	}
 	return sent, stopped
 }

@@ -329,7 +329,7 @@ The replay asks objects in this order:
 3. what the runs reached
 4. other objects
 
-It takes a URL only while `-replay-max` holds every role's request for it.
+It takes a URL only while `-replay-max` holds every role's request for it. Every request counts, each hop of a redirect included, as the summary's `requests` does: a URL that redirects costs two or more. A URL's answer may follow redirects the plan could not know of, so the replay stops when the budget is spent, exits 4 and names how many URLs the role was not asked.
 
 ### Who owns an object
 
