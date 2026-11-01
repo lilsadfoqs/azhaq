@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/trannghiach/azhaq/catalog"
+	"github.com/trannghiach/azhaq/internal/collectors/asncol"
 	"github.com/trannghiach/azhaq/internal/collectors/httpcol"
 	"github.com/trannghiach/azhaq/internal/dnsr"
 	"github.com/trannghiach/azhaq/internal/egress"
@@ -78,6 +79,7 @@ type Collector struct {
 	maxIP int              // addresses scanned per name
 
 	udpByIP map[string]*udpScan
+	ranged  map[string]bool // addresses a range scan handed on as it found them
 }
 
 type scan struct {
@@ -110,6 +112,18 @@ func (c *Collector) Name() string { return Name }
 // -allow, and waits for DNS so dead names are not scanned.
 func (c *Collector) Info() catalog.Info {
 	return catalog.Info{Kind: catalog.Active, Flag: "ports", After: "azhaq-dns"}
+}
+
+// Skip: the seed of an address a range scan has handed on is that scan's own,
+// its row and its web ports already given; running it would only wait for
+// the address to be scanned through.
+func (c *Collector) Skip(seed types.Seed) bool {
+	if seed.Type != types.TypeIPAddress || seed.Keys["from"] != asncol.FromPrefix {
+		return false
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.ranged[normalize.Hostname(seed.Key())]
 }
 
 func (c *Collector) Inputs() []types.SeedType {
@@ -200,6 +214,12 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		}
 	}
 	meta := types.RunMeta{Status: types.StatusOK}
+	var sent handed
+	found := func(o portscan.Open) {
+		if catalog.Hint(ctx) {
+			sent.hand(ctx, hintsOf(host, []portscan.Open{o}))
+		}
+	}
 	for _, ip := range ips {
 		ports := c.portsOf(host)
 		name := edgeName
@@ -216,9 +236,9 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		var s *scan
 		var err error
 		if c.Discover == DiscoverOff {
-			s, err = c.scanOnce(ctx, host, ip, ports)
+			s, err = c.scanOnce(ctx, host, ip, ports, found)
 		} else {
-			s, err = c.discoverOnce(ctx, host, ip, ports)
+			s, err = c.discoverOnce(ctx, host, ip, ports, found)
 		}
 		if err != nil && ctx.Err() != nil {
 			return types.RunMeta{Status: types.StatusCancelled}, err
@@ -266,7 +286,7 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 			return meta, err
 		}
 		meta.EmitCount++
-		meta.NextHints = append(meta.NextHints, hintsOf(host, s.open)...)
+		meta.NextHints = append(meta.NextHints, sent.hand(ctx, hintsOf(host, s.open))...)
 	}
 	return meta, nil
 }
@@ -323,6 +343,34 @@ func hintsOf(host string, open []portscan.Open) []types.Seed {
 		out = append(out, types.Seed{Type: types.TypeURL, Keys: keys})
 	}
 	return out
+}
+
+// handed is the seeds a scan has given the scheduler, each once.
+type handed struct {
+	mu   sync.Mutex
+	seen map[string]bool
+}
+
+// hand gives the scheduler the seeds it has not had yet while the scan is
+// still running, so a web port found early is probed at once, not when the
+// sweep ends. Without a scheduler listening they come back, for RunMeta.NextHints.
+func (h *handed) hand(ctx context.Context, seeds []types.Seed) []types.Seed {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.seen == nil {
+		h.seen = map[string]bool{}
+	}
+	var fresh []types.Seed
+	for _, s := range seeds {
+		if k := string(s.Type) + "\x00" + s.Key(); !h.seen[k] {
+			h.seen[k] = true
+			fresh = append(fresh, s)
+		}
+	}
+	if len(fresh) == 0 || catalog.Hint(ctx, fresh...) {
+		return nil
+	}
+	return fresh
 }
 
 // unroutedKey lists, in a name's rows, its IPv6 addresses this machine
@@ -524,9 +572,9 @@ func portList(ports []int, n int) string {
 const maxListed = 64
 
 // scanOnce asks an address's ports, once however many names point to it.
-func (c *Collector) scanOnce(ctx context.Context, host, ip string, ports []int) (*scan, error) {
+func (c *Collector) scanOnce(ctx context.Context, host, ip string, ports []int, found func(portscan.Open)) (*scan, error) {
 	return c.once(ctx, host, ip, func() *scan {
-		r, err := c.Scanner.ScanEach(ctx, host, ip, ports)
+		r, err := c.Scanner.ScanEachFn(ctx, host, ip, ports, found)
 		return &scan{open: r.Open, silent: r.Silent, unprobed: r.Unprobed, up: true, capped: r.Threshold, asked: r.Asked, err: err}
 	}, func(s *scan) (*scan, error) {
 		open, err := c.askAgain(ctx, host, ip, s.open)
@@ -536,13 +584,13 @@ func (c *Collector) scanOnce(ctx context.Context, host, ip string, ports []int) 
 
 // discoverOnce is scanOnce for a scan that first asks whether the address
 // is up, and stops there when told to (-sn).
-func (c *Collector) discoverOnce(ctx context.Context, host, ip string, ports []int) (*scan, error) {
+func (c *Collector) discoverOnce(ctx context.Context, host, ip string, ports []int, found func(portscan.Open)) (*scan, error) {
 	return c.once(ctx, host, ip, func() *scan {
 		up, err := c.Scanner.Up(ctx, host, ip)
 		if err != nil || !up || c.Discover == DiscoverOnly {
 			return &scan{up: up, err: err}
 		}
-		r, err := c.Scanner.ScanEach(ctx, host, ip, ports)
+		r, err := c.Scanner.ScanEachFn(ctx, host, ip, ports, found)
 		return &scan{open: r.Open, silent: r.Silent, unprobed: r.Unprobed, up: true, capped: r.Threshold, err: err}
 	}, func(s *scan) (*scan, error) {
 		if !s.up || c.Discover == DiscoverOnly {

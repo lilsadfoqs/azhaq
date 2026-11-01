@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/trannghiach/azhaq/catalog"
 	"github.com/trannghiach/azhaq/internal/collectors/asncol"
 	"github.com/trannghiach/azhaq/internal/egress"
 	"github.com/trannghiach/azhaq/internal/fingerprint"
@@ -85,6 +86,7 @@ func (c *Collector) runPrefix(ctx context.Context, seed types.Seed, emit func(ty
 		ip     string
 		err    error
 		follow bool // something answered: the address goes on to the other collectors
+		sent   *handed
 	}
 	workers := c.Workers
 	if workers <= 0 {
@@ -128,8 +130,8 @@ func (c *Collector) runPrefix(ctx context.Context, seed types.Seed, emit func(ty
 		}
 		meta.EmitCount++
 		if res.follow {
-			meta.NextHints = append(meta.NextHints, types.Seed{Type: types.TypeIPAddress, Keys: map[string]string{"ip": res.ip, "from": asncol.FromPrefix}})
-			meta.NextHints = append(meta.NextHints, hintsOf(res.ip, res.open)...)
+			// What the address's first open port did not already hand on.
+			meta.NextHints = append(meta.NextHints, res.sent.hand(ctx, append([]types.Seed{ipSeed(res.ip)}, hintsOf(res.ip, res.open)...))...)
 		}
 	}
 	for _, a := range addrs {
@@ -169,13 +171,14 @@ func (c *Collector) runPrefix(ctx context.Context, seed types.Seed, emit func(ty
 			}
 			s := &scan{up: true}
 			var uerr error
+			early := &earlyAddr{c: c, ctx: ctx, ip: ip}
 			switch {
 			case c.Discover != DiscoverOff:
 				if s.up, s.err = c.Scanner.Up(ctx, ip, ip); s.err == nil && s.up && c.Discover == DiscoverFirst {
-					s = c.scanRange(ctx, ip, ports)
+					s = c.scanRange(ctx, ip, ports, early.found)
 				}
 			default:
-				s = c.scanRange(ctx, ip, ports)
+				s = c.scanRange(ctx, ip, ports, early.found)
 			}
 			if s.err != nil {
 				res := result{err: s.err}
@@ -249,7 +252,7 @@ func (c *Collector) runPrefix(ctx context.Context, seed types.Seed, emit func(ty
 				// The address seed that follows finds its scan done.
 				c.remember(ip, s, udp, len(c.UDPPorts) > 0 && !edge && s.up && c.Discover != DiscoverOnly)
 			}
-			record(result{row: row, open: s.open, ip: ip, follow: follow})
+			record(result{row: row, open: s.open, ip: ip, follow: follow, sent: &early.sent})
 		}(a)
 	}
 	wg.Wait()
@@ -283,9 +286,42 @@ func (c *Collector) runPrefix(ctx context.Context, seed types.Seed, emit func(ty
 }
 
 // scanRange asks one address of a range its ports.
-func (c *Collector) scanRange(ctx context.Context, ip string, ports []int) *scan {
-	r, err := c.Scanner.ScanEach(ctx, ip, ip, ports)
+func (c *Collector) scanRange(ctx context.Context, ip string, ports []int, found func(portscan.Open)) *scan {
+	r, err := c.Scanner.ScanEachFn(ctx, ip, ip, ports, found)
 	return &scan{open: r.Open, silent: r.Silent, up: true, capped: r.Threshold, asked: r.Asked, err: err}
+}
+
+// earlyAddr hands one address of a range to the scheduler at its first open
+// port, not when the block of 256 addresses ends: the address's own seed
+// (its web, TLS and screenshot work) and each web port as it is named, so a
+// sweep of minutes has web results from its first minute.
+type earlyAddr struct {
+	c    *Collector
+	ctx  context.Context
+	ip   string
+	sent handed
+	once sync.Once
+}
+
+func ipSeed(ip string) types.Seed {
+	return types.Seed{Type: types.TypeIPAddress, Keys: map[string]string{"ip": ip, "from": asncol.FromPrefix}}
+}
+
+func (e *earlyAddr) found(o portscan.Open) {
+	if !catalog.Hint(e.ctx) {
+		return // nothing listens: the hints come with the block's result
+	}
+	e.once.Do(func() {
+		// Claimed first, so the seed finds the scan taken and does not start one.
+		e.c.mu.Lock()
+		if e.c.ranged == nil {
+			e.c.ranged = map[string]bool{}
+		}
+		e.c.ranged[e.ip] = true
+		e.c.mu.Unlock()
+		e.sent.hand(e.ctx, []types.Seed{ipSeed(e.ip)})
+	})
+	e.sent.hand(e.ctx, hintsOf(e.ip, []portscan.Open{o}))
 }
 
 // remember keeps the scan of an address that answered, so the seed that

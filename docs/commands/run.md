@@ -27,7 +27,7 @@ azhaq run -url https://app.example.com/ -browser -login https://app.example.com/
 ## What it does
 
 1. Takes your seeds: a URL, a domain, a list, a program's scope, an AS number, an address range, or a seeds file.
-2. Resolves names, probes web services, crawls pages and scripts, and reads API descriptions.
+2. Resolves names, probes web services, crawls pages and scripts, and reads API descriptions. With `-ports` or `-cidr`, an address is handed to the web stage at its first open port and each web port as it is named, so a sweep of minutes has web results from its first minute.
 3. Follows what it finds in waves, as far as `-depth` allows. `-permute` still varies the names `-dns-brute` found, whatever `-depth` is: DNS answered them, and a variation asks DNS only. A name found past `-depth` and not resolved is not varied, and a note says how many.
 4. Asks each web service for the built-in paths unless `-no-paths` says not to ([Path checks](#path-checks-stop-at-their-answer)).
 5. Requests every GET URL it finds in scope. It cannot know what a GET does on the server, so no name keeps a URL out. Writes go only with their flags, and `-deny-path REGEX` keeps paths out (they get the coverage `skipped`).
