@@ -28,7 +28,7 @@ azhaq subs -ls -json
 
 1. Takes domains from `-d`, `-dL` or stdin. `-d` takes a comma list, a URL, or a name with a trailing dot or `*.`. An IP address given as a domain is left out, with a note.
 2. Asks each passive source for names below the domain. The name history of earlier runs is read as one more source.
-3. With `-live`, looks the names up in DNS and keeps those that resolve, with wildcard answers left out. Without `-live` nothing is looked up.
+3. With `-live`, looks the names up in DNS and keeps those that resolve, with wildcard answers left out. Without `-live` nothing is looked up, and the names only subdomain.center guessed are held back, not printed: no source asserted them and no lookup confirmed them. `-guesses` prints them too.
 4. With `-w WORDS` or `-permute`, also resolves guesses. That is active DNS, and the names found are live.
 5. Prints each name once, then the summary with its counts and a coverage estimate.
 
@@ -48,7 +48,7 @@ Plain output is one name per line, as subfinder prints it. The domain you give i
 | `input` | The domain you gave. |
 | `source` | The first source that gave the name. |
 | `sources` | Every source that gave it, with the special values below. |
-| `unverified` | `true` on a name no DNS lookup checked: one only subdomain.center guessed, or one only the name history held. See [Name history](#name-history). |
+| `unverified` | `true` on a name no DNS lookup checked: one only the name history held, or with `-guesses` one only subdomain.center guessed. See [Name history](#name-history) and [Guesses](#guesses). |
 | `wildcard_certificate` | `true` on a name a certificate gave as `*.name`. |
 | `a`, `aaaa` | With `-live`, the addresses, also those the name's CNAME chain ends in. |
 | `cname` | With `-live`, the chain. |
@@ -131,7 +131,8 @@ The counts also say what became of the names, so a reader can add them up:
 | `CNAME only` | With `-live`: printed names whose CNAME chain ends without an address. They are in `results` and not taken away from it. The takeover candidates among them are in `takeover`. |
 | `found as CNAME targets`, `found by guessing` | Live names no source gave: another name's CNAME target in scope, and the names of `-w` and `-permute`. |
 | `asked by guessing` | The names `-w` and `-permute` asked that no source gave. `found by guessing` is what is left of them after `did not resolve` and `left out by -m/-f`. |
-| `unverified` | Printed names no DNS lookup checked, without `-live`: names only subdomain.center guessed, and names only the name history held, which no source gave this run. |
+| `guesses held back` | Without `-live` and `-guesses`: names only subdomain.center guessed, which no source asserted and nothing looked up. They are not printed. See [Guesses](#guesses). |
+| `unverified` | Printed names no DNS lookup checked, without `-live`: names only the name history held, which no source gave this run, and with `-guesses` the guesses. |
 | `not checked` | With `-live`: guessed or history names the resolvers failed on, or the run ended before it checked, left out. `azhaq resume` checks them. |
 | `no answer` | With `-live`: names every resolver failed on, left out. A note says which resolver and why. The run ends with exit 3. |
 | `not asked` | With `-live`: names the run stopped before DNS answered them (the answered ones are kept). `azhaq resume` asks them. |
@@ -144,7 +145,7 @@ The counts also say what became of the names, so a reader can add them up:
 
 The number of results is `from sources`, less some counts and plus others:
 
-- Less: `the domain itself`, `did not resolve`, `not checked`, `no answer`, `not asked`, `left out by -m/-f`, `listed under another domain` and `cut by -max-names`.
+- Less: `the domain itself`, `did not resolve`, `guesses held back`, `not checked`, `no answer`, `not asked`, `left out by -m/-f`, `listed under another domain` and `cut by -max-names`.
 - Plus: `found as CNAME targets` and `asked by guessing` (the guesses that did not resolve are in `did not resolve`).
 
 The run prints the sum as a note:
@@ -154,6 +155,14 @@ count: 2638 from the sources − 2093 did not resolve − 1 not checked + 10 fou
 ```
 
 With `-w`, the guesses are in it: `count: 0 from the sources + 14 asked by guessing − 2 did not resolve = 12 printed`.
+
+### Guesses
+subdomain.center answers a random sample of about 500 names per call, nearly all of them made up. A name only it gave is a guess: no source asserted it.
+
+- Without `-live` nothing is looked up, so such a name is held back: it is not printed, counted as `guesses held back`, and a note says how many and how to see them. A name another source gave, or one the name history holds, is not a guess and is printed.
+- `-guesses` prints them too, with `"unverified": true` in `-json`. It cannot go with `-live`, which looks them up and prints the ones that resolve.
+- With `-live` the guesses are looked up at `-dns-rate`. One sample of them is always checked, as `subfinder | dnsx` checks every name subfinder gives. More samples are taken only while the last one had a new name that resolves, and the guesses checked are fewer than half the names the real sources gave. The source's row says why it stopped in `sampling_stopped`, and a note names a stop that was a bound: `subdomain.center: asked for 1 sample of its guesses and stopped: …`. A later run takes more samples; the name history keeps the names that resolved.
+- Names that could not be checked (the resolvers failed, or the run ended first) are counted as `not checked` and left out; `azhaq resume` checks them.
 
 ### Per-source status
 The workspace keeps a status for each source, shown by `azhaq show` and held in the `sources` payload of an `azhaq-subdomains` observation:
@@ -182,7 +191,7 @@ Passive sources answer differently each run. subdomain.center, for one, returns 
 - At most 200,000 names are kept per domain. The ones unseen the longest go first.
 - The next run asks this file as a source called `history`.
 - With `-live`, a stored name counts only if it resolves now, and not to a wildcard. Stale names drop out, and a name a source missed this time comes back.
-- Without `-live` no DNS lookup is made. A stored name that no source gave this run is listed with `"unverified": true`, and its `source` is `history`.
+- Without `-live` no DNS lookup is made. A stored name that no source gave this run is listed with `"unverified": true`, and its `source` is `history`. The names are stored only once a source gave them or DNS confirmed them, so they are not guesses.
 - A stored name that a source gave again is not flagged: its `source` is that source, and `history` comes last in `sources`. Every name a run kept is stored, so flagging them all would flag nearly every name after the first run.
 - `-no-history` neither reads nor writes the file. A file that cannot be written is a note: `name history not saved: …`.
 
@@ -241,7 +250,8 @@ On tesla.com, `subs -live -dns-rate 10` with two resolvers took 161 s and listed
 
 | Flag | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `-live` | bool |  | only names that resolve (wildcard answers left out); without it nothing is looked up, and the names only subdomain.center guessed or only the name history held are listed unverified |
+| `-live` | bool |  | only names that resolve (wildcard answers left out); without it nothing is looked up, the names only subdomain.center guessed are held back (see -guesses) and the ones only the name history held are listed unverified |
+| `-guesses` | bool |  | also print the names only subdomain.center guessed, which no source asserted and no lookup checked (-json marks them "unverified": true); not with -live, which looks them up |
 | `-w` | string |  | also resolve WORD.domain for each word in this file, like puredns bruteforce (active DNS; the names found are live) |
 | `-permute` | bool |  | also resolve variations of the names found (api → api-dev, api2, dev.api), like alterx \| dnsx (active DNS) |
 | `-all-sources` | bool |  | also run slower subdomain sources outside the default set |

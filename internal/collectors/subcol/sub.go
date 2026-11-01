@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -509,6 +510,10 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		sort.Strings(st.unverified)
 		payload["unverified"] = st.unverified
 	}
+	if len(st.guesses) > 0 {
+		sort.Strings(st.guesses)
+		payload["guesses"] = st.guesses
+	}
 	if st.asked > 0 {
 		payload["checked"] = st.asked
 	}
@@ -576,6 +581,7 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 type settled struct {
 	dropped    int             // did not resolve: left out
 	unverified []string        // not checked: listed, flagged
+	guesses    []string        // of those, the names only a padding source gave: no source asserted them
 	asked      int             // names sent to the resolvers, in all
 	skip       map[string]bool // not stored in the history: never seen to resolve
 }
@@ -670,6 +676,10 @@ func (c *Collector) settle(ctx context.Context, domain string, run []source, nam
 		default:
 			st.unverified = append(st.unverified, n)
 			st.skip[n] = true
+			if !slices.Contains(foundBy[n], historyName) {
+				// The history only holds names a source gave or DNS confirmed.
+				st.guesses = append(st.guesses, n)
+			}
 		}
 	}
 	st.dropped = len(drop)

@@ -64,9 +64,9 @@ func TestSubsLiveCountsAddUp(t *testing.T) {
 	}
 }
 
-// Without -live a guess is not looked up: it is listed, unverified, and
-// counted; the names add up here too.
-func TestSubsWithoutLiveListsGuessesUnverified(t *testing.T) {
+// Without -live a guess is not looked up and no source asserted it: it is
+// held back and counted, not printed, and the names add up here too.
+func TestSubsWithoutLiveHoldsGuessesBack(t *testing.T) {
 	t.Chdir(t.TempDir())
 	defer subcol.UseTestSources(
 		subcol.TestSource{Name: "s", Default: true, Names: []string{"www.example.org"}},
@@ -76,17 +76,55 @@ func TestSubsWithoutLiveListsGuessesUnverified(t *testing.T) {
 	if code != exitOK {
 		t.Fatalf("exit %d %+v", code, rep)
 	}
-	rows := jsonRows(t, out)
 	got := map[string]bool{}
-	for _, r := range rows {
+	for _, r := range jsonRows(t, out) {
+		got[r["host"].(string)] = r["unverified"] == true
+	}
+	if want := map[string]bool{"www.example.org": false}; !reflect.DeepEqual(got, want) {
+		t.Errorf("rows %v, want %v", got, want)
+	}
+	c := rep.Counts
+	if c["guesses held back"] != 2 || c["unverified"] != 0 || c["from sources"] != 3 || rep.Results != 1 {
+		t.Errorf("counts %v results %d", c, rep.Results)
+	}
+	if c["from sources"]-c["guesses held back"] != rep.Results {
+		t.Errorf("the counts do not add up to the %d printed: %v", rep.Results, c)
+	}
+	var said, summed bool
+	for _, n := range rep.Notes {
+		said = said || strings.Contains(n, "2 names are held back") && strings.Contains(n, "-guesses prints them") && strings.Contains(n, "-live")
+		summed = summed || strings.HasPrefix(n, "count: 3 from the sources − 2 guesses held back (-guesses prints them) = 1 printed")
+	}
+	if !said || !summed {
+		t.Errorf("notes %q", rep.Notes)
+	}
+}
+
+// -guesses prints the held-back names, marked unverified; -live looks them
+// up instead, so the two do not go together.
+func TestSubsGuessesFlagPrintsThemUnverified(t *testing.T) {
+	t.Chdir(t.TempDir())
+	defer subcol.UseTestSources(
+		subcol.TestSource{Name: "s", Default: true, Names: []string{"www.example.org"}},
+		subcol.TestSource{Name: "pad", Default: true, Padding: true, Names: []string{"guess1.example.org", "guess2.example.org", "www.example.org"}},
+	)()
+	out, rep, code := runContract(t, "subs", "-d", "example.org", "-no-history", "-guesses")
+	if code != exitOK {
+		t.Fatalf("exit %d %+v", code, rep)
+	}
+	got := map[string]bool{}
+	for _, r := range jsonRows(t, out) {
 		got[r["host"].(string)] = r["unverified"] == true
 	}
 	want := map[string]bool{"www.example.org": false, "guess1.example.org": true, "guess2.example.org": true}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("rows %v, want %v", got, want)
 	}
-	if rep.Counts["unverified"] != 2 || rep.Counts["from sources"] != 3 || rep.Results != 3 {
+	if rep.Counts["unverified"] != 2 || rep.Counts["guesses held back"] != 0 || rep.Counts["from sources"] != 3 || rep.Results != 3 {
 		t.Errorf("counts %v results %d", rep.Counts, rep.Results)
+	}
+	if _, _, code := runContract(t, "subs", "-d", "example.org", "-no-history", "-guesses", "-live"); code != exitUsage {
+		t.Errorf("-guesses -live: exit %d, want %d", code, exitUsage)
 	}
 }
 
