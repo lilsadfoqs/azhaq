@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/lilsadfoqs/azhaq/internal/collectors/dirscol"
@@ -424,5 +425,61 @@ func TestDirsResumePrintsAsDirs(t *testing.T) {
 	got := urls(first + second)
 	if fmt.Sprint(got) != fmt.Sprint(urls(want)) {
 		t.Errorf("the two runs printed\n%v\none run printed\n%v", got, urls(want))
+	}
+}
+
+// A catch-all page that is a different size, word count and line count on
+// each request: calibration tells it by what the page is, holds the answers
+// back, and says how many. One path that answers its own page is listed.
+func TestDirsHoldsACatchAllPageThatChangesEachTime(t *testing.T) {
+	var n atomic.Int64
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		title := "Console"
+		if r.URL.Path == "/admin" {
+			title = "Admin console"
+		}
+		k := int(n.Add(1))
+		fmt.Fprint(w, "<html><title>"+title+"</title><body>\n")
+		for i := 0; i < 20+k%37; i++ {
+			for j := 0; j < 3+(i*k)%9; j++ {
+				fmt.Fprintf(w, "w%d ", k*1009+i*31+j*7)
+			}
+			fmt.Fprint(w, "\n")
+		}
+		fmt.Fprint(w, "</body></html>")
+	}))
+	t.Cleanup(srv.Close)
+	words := wlist(t, "www", "mail", "dev", "stage", "ns", "api", "admin", "vpn")
+	out, errOut, err := captureBoth(t, func() error { return cmdDirs([]string{"-u", srv.URL + "/", "-w", words, "-silent"}) })
+	if err != nil {
+		t.Fatalf("%v\n%s", err, errOut)
+	}
+	if strings.TrimSpace(out) != srv.URL+"/admin" {
+		t.Errorf("want only the path with a page of its own: %q", out)
+	}
+	_, errOut, err = captureBoth(t, func() error { return cmdDirs([]string{"-u", srv.URL + "/", "-w", words, "-json"}) })
+	rep := lastReport(t, errOut)
+	if err != nil || rep.Results != 1 || !strings.Contains(strings.Join(rep.Notes, "\n"), "7 paths answered with the page that names that cannot exist get") {
+		t.Errorf("summary %+v (%v)", rep, err)
+	}
+}
+
+// Answers that share nothing calibration can read are not a calibrated list:
+// the summary says the wildcard answers are listed, and the exit is 3.
+func TestDirsThatCannotCalibrateIsNotExit0(t *testing.T) {
+	var n atomic.Int64
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		k := n.Add(1)
+		for i := int64(0); i <= k%7; i++ {
+			fmt.Fprintf(w, "q%d z%d\n", k*13+i, k*7+i)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	out, errOut, err := captureBoth(t, func() error {
+		return cmdDirs([]string{"-u", srv.URL + "/", "-w", wlist(t, "a1", "b2", "c3"), "-json"})
+	})
+	rep := lastReport(t, errOut)
+	if exitCode(err) != exitPartial || rep.Exit != exitPartial || !strings.Contains(strings.Join(rep.Notes, "\n"), "calibration could filter nothing") {
+		t.Errorf("exit %d (%v), summary %+v, out %q", rep.Exit, err, rep, out)
 	}
 }

@@ -525,6 +525,12 @@ func cmdFuzz(args []string) error {
 	if len(st.Filters) > 0 {
 		rep.Notes = append(rep.Notes, "auto-calibration filtered out answers with "+strings.Join(st.Filters, ", "))
 	}
+	if st.Held > 0 {
+		rep.Notes = append(rep.Notes, fmt.Sprintf("%d answers looked like the page that names that cannot exist get (the same status, title and words, though no size, word count or line count is shared) and were held back, not listed (-ac=false lists them)", st.Held))
+	}
+	if st.Unfiltered {
+		rep.warned = true // the matches may hold wildcard answers: not a result to take as calibrated
+	}
 	rep.Notes = append(rep.Notes, notes...)
 	rep.Notes = appendUnique(rep.Notes, st.Notes...)
 	if len(st.Timeouts) > 0 {

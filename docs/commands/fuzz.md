@@ -71,6 +71,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 - A report that cannot be written is a `failed` entry, not a silent loss. The exit code is 3. The place is tested before the first request.
 - A note counts the preflight and postflight requests sent: they are in the request total. One that failed is a `failed` entry, `preflight/postflight failed: …`, and the exit code is 3.
 - With calibration on, a note says what it filtered: `auto-calibration filtered out answers with size 1234`.
+- Calibration that could filter nothing is exit 3, not 0: see [A catch-all page that changes each time](#a-catch-all-page-that-changes-each-time).
 - The summary also counts the requests the scope held back and the copies `-replay-proxy` sent: see [Scope, budget and pace](#scope-budget-and-pace).
 
 ## Details
@@ -146,6 +147,12 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 - `-rate` paces its guesses like any request, and `-max-requests` counts them. ffuf's are unpaced and not counted.
 - The default strategy asks 6 guesses: `admin…`, `.htaccess…` and a random name, each at two lengths. At `-rate 5` they take about a second.
 - At `-rate 5` a sweep takes about (guesses ÷ 5) seconds longer than ffuf's, and stays within your rate.
+
+### A catch-all page that changes each time
+- ffuf's calibration filters one exact size, word count or line count that all its answers share. When the page changes on every request (a nonce, a counter, a build stamp) they share none, and ffuf lists every word, a virtual host or a path alike.
+- `fuzz` then reads what the page is from the answers of one status: the title they all have, the tag names they use and the words they all show. A match of that status with the same title, only those tags and at least 80% of those words is held back, and the summary counts them: `7 answers looked like the page that names that cannot exist get … and were held back, not listed (-ac=false lists them)`. A host or path that answers a page of its own is listed.
+- The page needs a title all answers share or at least 3 shared words. Without them calibration filters nothing: the summary says `auto-calibration: … set no filter and the wildcard answers are listed with the matches` and the exit is 3, because the list may hold wildcard answers.
+- With `-ac` on, answers are read into memory until calibration is done (and for the whole run with `-ach`, or when a page shape was learned), where ffuf only counts them.
 
 ### Matching and wordlists
 - The default matcher is `-mc 200-299,301,302,307,401,403,405,500`, unless `-ms`, `-mw`, `-ml`, `-mr` or `-mt` is given alone, as in ffuf.

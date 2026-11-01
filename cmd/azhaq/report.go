@@ -11,6 +11,7 @@ import (
 
 	"github.com/lilsadfoqs/azhaq/engine"
 	"github.com/lilsadfoqs/azhaq/internal/browser"
+	"github.com/lilsadfoqs/azhaq/internal/collectors/dirscol"
 	"github.com/lilsadfoqs/azhaq/internal/collectors/pathscol"
 	"github.com/lilsadfoqs/azhaq/internal/collectors/portcol"
 	"github.com/lilsadfoqs/azhaq/internal/collectors/subcol"
@@ -301,6 +302,10 @@ func fillReport(rep *report, path string, seeds []types.Seed, ents []types.Entit
 	rep.Notes = append(rep.Notes, portcol.StoppedNotes()...)
 	rep.Notes = append(rep.Notes, engine.GraphQLNotes(obs)...)
 	rep.Notes = append(rep.Notes, pathscol.Notes(obs)...)
+	if notes, loose := dirscol.Notes(obs); len(notes) > 0 {
+		rep.Notes = append(rep.Notes, notes...)
+		rep.warned = rep.warned || loose // wildcard answers among the paths: not a calibrated list
+	}
 	rep.Notes = append(rep.Notes, fetch.Notes()...)
 	if partialShots(obs) {
 		rep.warned = true // a picture short of its page is not a result to take as whole
