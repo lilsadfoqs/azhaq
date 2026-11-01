@@ -154,6 +154,13 @@ found in
 - `azhaq query -fields key,evidence,evidence_from` shows the level. `azhaq query -evidence answered,described` keeps the rows with those levels.
 - `answer` is `500 without input` for a 5xx that azhaq's plain request got from a route that takes names, in the query or the body. The request sent none of them.
 
+### Saved responses
+
+- `-sr` writes each answer a target gave to `-srd DIR` (`azhaq_response`) as `HOST/SHA1.txt`, the layout of `azhaq crawl -sr`, with an `index.txt`. It is off by default.
+- A file holds the URL, the request line, the status line, the headers and the body as azhaq read it, so `-max-response-size` bounds it. `-ob` leaves the body out.
+- The workspace remembers the directory. `azhaq query -fields key,status,title,response_file` gives the path of each URL row's file. A URL that was not asked, or was answered from a run before `-sr`, has none.
+- `azhaq probe -sr` stores in the layout `httpx -sr` has (`DIR/response/HOST/SHA1.txt`) and names the file in `stored_response_path`.
+
 ### Roles of a URL
 
 - `manifest` is a bundler's build manifest: Vite's `.vite/manifest.json`, Create React App's `asset-manifest.json`, Angular's `ngsw.json`, Nuxt's build meta.
@@ -421,11 +428,13 @@ Examples of what `notes` holds for a run:
 | `-quiet` | bool |  | print no map and no progress lines (a line every 10 s while the run works), only the summary (on stderr) |
 | `-v` | bool |  | print a line for every finished task, not only failures |
 | `-stream` | bool |  | also print each name, service, URL and open port as it is found (found lines, before the ranked map) |
+| `-sr` | bool |  | also write each answer a target gave, headers and body as read, to the -srd directory as DIR/HOST/SHA1.txt with an index.txt (katana's -sr); query -fields response_file says where a row's is |
+| `-srd` | string | `azhaq_response` | directory for -sr |
 | `-fail-on-errors` | bool |  | exit 3 on every failure: also fan-out (a source for the domain of a URL) and a source that failed while others answered |
 | `-fail-on-capped` | bool |  | exit 4 also when the run hit -depth with hints left |
 
 <details>
-<summary>Flags accepted with no effect and rarely used flags (76)</summary>
+<summary>Flags accepted with no effect and rarely used flags (77)</summary>
 
 | Flag | Type | Default | Meaning | Kind |
 | --- | --- | --- | --- | --- |
@@ -446,6 +455,7 @@ Examples of what `notes` holds for a run:
 | `-dirs-rate` | float |  | path guesses per second per host (0: no limit but -dirs-threads, as ffuf) | rarely needed |
 | `-dirs-threads` | int | `40` | path guesses in flight per service (as ffuf) | rarely needed |
 | `-facts` | string |  | JSONL connector facts to ingest before native collectors | rarely needed |
+| `-ob` | bool |  | with -sr: write the status line and headers only | rarely needed |
 | `-obs` | bool |  | also print the observation log | rarely needed |
 | `-params-chunk` | int |  | names per parameter request at most (0: 500, and about 7.6 KB in a query; fewer where the server refuses a long query) | rarely needed |
 | `-params-delay` | duration |  | wait before each parameter request, one at a time (arjun -d) | rarely needed |

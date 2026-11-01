@@ -33,11 +33,12 @@ var helpSpecs = map[string]helpSpec{
 			{"Scope and safety", `allow deny deny-path kill-file ledger seal-to submit-forms browser-writes params-writes`},
 			{"Pace and limits", `rate host-rate host-parallel parallel delay backoff retry request-timeout timeout max-requests max-host-requests daily-requests max-items max-names max-ips max-response-size depth`},
 			{"Session", `cookie cookie-jar header login login-user login-pass proxy`},
-			{"Output", `db json quiet v stream fail-on-errors fail-on-capped`},
+			{"Output", `db json quiet v stream sr srd fail-on-errors fail-on-capped`},
 		},
 		hidden: map[string]string{
 			"accepted": `port-cdn-full`,
 			"rare": `
+				ob
 				port-exclude-cdn serve worker-token dirs-ac dirs-depth dirs-ext dirs-fc dirs-fl dirs-fr dirs-fs dirs-fw dirs-mc dirs-ml dirs-mr dirs-ms
 				dirs-mw dirs-rate dirs-threads facts obs params-chunk params-delay params-include params-method
 				params-per-host params-rate params-stable params-targets params-threads params-timeout
