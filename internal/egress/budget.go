@@ -255,6 +255,11 @@ func (p *Policy) Spent() bool {
 // Sent is how many requests the run has sent to its targets.
 func (p *Policy) Sent() int64 { return p.sent.Load() }
 
+// Total is how many requests the process has sent to its targets since it
+// started, over every Reset: a command that resets between its parts (roles
+// does) reads what it sent from the difference of two.
+func (p *Policy) Total() int64 { return p.gone.Load() + p.sent.Load() }
+
 // Hold notes n requests counted and not yet known to have left (one Chrome
 // was let send); Release says they left or were given back. Departed does
 // not count them.
@@ -290,6 +295,7 @@ func Refund()                                            { Current().Refund() }
 func Count(n int)                                        { Current().Count(n) }
 func Spent() bool                                        { return Current().Spent() }
 func Sent() int64                                        { return Current().Sent() }
+func Total() int64                                       { return Current().Total() }
 func Hold(n int)                                         { Current().Hold(n) }
 func Release(n int)                                      { Current().Release(n) }
 func Departed() int64                                    { return Current().Departed() }

@@ -21,7 +21,7 @@ import (
 
 const (
 	ledgerHelp   = "write every request, connection and DNS query the run sends (to targets, third-party sources and resolvers) to this file, a chain of hashes that azhaq ledger -verify checks (default DB.ledger.jsonl next to the workspace; off: none; with a temporary database, only when given)"
-	killFileHelp = "stop all sending, at once, when this file exists, and exit 4; azhaq resume works once it is removed (default DB.stop)"
+	killFileHelp = "stop all sending when this file exists, so that no request starts after it, and exit 4; azhaq resume works once it is removed (default DB.stop)"
 	sealToHelp   = "when the run ends, append the ledger's seal as one JSON line ({\"time\",\"ledger\",\"seal\",\"entries\"}) to this file, or POST it to this URL: kept where the run's own files are not, so azhaq ledger -verify -seal can tell the ledger from one with lines removed and the rest re-chained to look intact"
 )
 
