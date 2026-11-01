@@ -241,7 +241,7 @@ These controls hold for everything azhaq sends to a target. [Concepts](docs/CONC
 claude mcp add azhaq -- azhaq mcp -allow example.com -max-requests 5000 -rate 5
 ```
 
-The tools run azhaq itself and return its summary and rows. The scope, the budget for all calls together and the pace are fixed at start, and no tool argument can widen them. An argument the schema does not take is refused. Without `-allow` or `-scope` the server does not start, unless `-unlocked` says so. Results are bounded, and exports come in pages that each parse alone: see [docs/MCP.md](docs/MCP.md).
+The tools run azhaq itself and return its summary and rows. The scope, the budget for all calls together, the pace and the resolvers and sources (`-resolvers`, `-sources none`) are fixed at start, and no tool argument can widen them. An argument the schema does not take is refused. Without `-allow` or `-scope` the server does not start, unless `-unlocked` says so. Results are bounded, and exports come in pages that each parse alone: see [docs/MCP.md](docs/MCP.md).
 
 ## Benchmark
 

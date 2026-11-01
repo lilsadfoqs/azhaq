@@ -86,7 +86,7 @@ func mcpTools() []map[string]any {
 	}
 	return []map[string]any{
 		{"name": "azhaq_scope", "title": "Scope and budget",
-			"description": "What this server may touch (the scope fixed at start), its request budget and how much of it is used. Call it first on a program.",
+			"description": "What this server may touch (the scope fixed at start), the run options fixed with it (resolvers, sources, skipped collectors, takeover check: run_options), its request budget and how much of it is used. Call it first on a program.",
 			"inputSchema": obj(map[string]any{}), "annotations": annotations(true, false, "Scope and budget")},
 		{"name": "azhaq_plan", "title": "Plan a run",
 			"description": "What azhaq_map would take, leave out of the scope (and why), run and send for these targets, without sending anything: collectors per target, built-in paths, active techniques, limits.",
@@ -99,7 +99,7 @@ func mcpTools() []map[string]any {
 			"inputSchema": obj(map[string]any{"workspace": pWorkspace, "headers": pHeaders, "login": pLogin, "timeout_seconds": pTimeout, "limit": pLimit}),
 			"annotations": annotations(false, true, "Resume a run")},
 		{"name": "azhaq_subdomains", "title": "Find subdomains",
-			"description": "Subdomains of domains from passive sources (certificate transparency, archives, DNS datasets), each with the sources that gave it; with live, only names that resolve (wildcard answers left out). Nothing is sent to the targets.",
+			"description": "Subdomains of domains from passive sources (certificate transparency, archives, DNS datasets), each with the sources that gave it; with live, only names that resolve (wildcard answers left out). Nothing is sent to the targets. Not available when the server was started with -sources none.",
 			"inputSchema": obj(map[string]any{"domain": strs1("domains such as example.com"), "live": prop("boolean", "only names that resolve"),
 				"workspace": prop("string", "also keep the names in this workspace (a database in the server's directory), to map or query later; none by default"), "limit": pLimit}, "domain"),
 			"annotations": annotations(true, true, "Find subdomains")},
