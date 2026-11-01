@@ -309,3 +309,35 @@ func TestCatchAllNotesNameTheOrigin(t *testing.T) {
 		t.Errorf("notes %q", got)
 	}
 }
+
+// Names that point to one address are one endpoint: a port is one row,
+// keyed by the address, with the names on it, however many entities
+// recorded a scan of it.
+func TestMapCountsAnEndpointOnceWhateverNamesPointToIt(t *testing.T) {
+	ents := []types.Entity{
+		{ID: "a", Type: types.TypeHostname, Key: "a.example.test", FirstSeen: time.Unix(100, 0)},
+		{ID: "b", Type: types.TypeHostname, Key: "b.example.test", FirstSeen: time.Unix(110, 0)},
+		{ID: "ip", Type: types.TypeIPAddress, Key: "127.0.0.7", FirstSeen: time.Unix(120, 0)},
+	}
+	scan := func(ent string, at int64, host string) types.StoredObservation {
+		payload := `{"host":"` + host + `","ip":"127.0.0.7","services":[{"port":80,"service":"http"},{"port":22,"service":"ssh"}]}`
+		return types.StoredObservation{EntityID: ent, Observation: types.Observation{Collector: "azhaq-ports", Kind: "ports", ObservedAt: time.Unix(at, 0), Payload: json.RawMessage(payload)}}
+	}
+	obs := []types.StoredObservation{scan("a", 100, "a.example.test"), scan("b", 110, "b.example.test"), scan("ip", 120, "127.0.0.7")}
+	got := map[string][]string{}
+	for _, r := range engine.BuildMap(ents, nil, obs, nil, false) {
+		if r.Entity.Type == types.TypePort {
+			if _, dup := got[r.Entity.Key]; dup {
+				t.Errorf("%s is listed twice", r.Entity.Key)
+			}
+			got[r.Entity.Key] = r.Names
+		}
+	}
+	want := map[string][]string{
+		"127.0.0.7:22/tcp": {"a.example.test", "b.example.test"},
+		"127.0.0.7:80/tcp": {"a.example.test", "b.example.test"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("port rows %v, want %v", got, want)
+	}
+}

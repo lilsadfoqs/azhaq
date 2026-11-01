@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -35,6 +36,7 @@ type runLedger struct {
 	stopKill func()
 	sealTo   string
 	writes   []ledger.Entry // writes of a killed run that a resume does not send again
+	stages   string         // what this run's requests to targets went to, by collector
 }
 
 // unsentKey holds, in a workspace, the writes a killed run sent whose
@@ -195,6 +197,9 @@ func (r *runLedger) close(rep *report) {
 	if r.from > 0 {
 		rep.Notes = append(rep.Notes, fmt.Sprintf("ledger: %s holds %d lines in all, the lines of the runs before this one included", path, r.l.Count()))
 	}
+	if r.stages != "" && egress.MaxRequests() > 0 {
+		rep.Notes = append(rep.Notes, fmt.Sprintf("request budget %d, spent by stage: %s", egress.MaxRequests(), r.stages))
+	}
 	if targets != int(rep.Requests) {
 		rep.Notes = append(rep.Notes, fmt.Sprintf("the summary counts %d requests to targets and the ledger lists %d lines to them (azhaq ledger -summary %s lists them by kind)", rep.Requests, targets, path))
 	}
@@ -210,6 +215,7 @@ func (r *runLedger) close(rep *report) {
 // went to targets: the number the summary's requests is checked against.
 func (r *runLedger) recorded(path string) (what string, targets int) {
 	var reqs, conns, sources, dns, own, all int
+	spent := map[string]*stageSpend{}
 	err := ledger.Read(path, func(e ledger.Entry) error {
 		if e.Seq <= r.from || e.Kind == ledger.KindSeal {
 			return nil
@@ -228,9 +234,18 @@ func (r *runLedger) recorded(path string) (what string, targets int) {
 			} else {
 				reqs++
 			}
+			name := strings.TrimPrefix(e.Collector, "azhaq-")
+			if name == "" {
+				name = "other"
+			}
+			if spent[name] == nil {
+				spent[name] = &stageSpend{}
+			}
+			spent[name].add(e.Kind)
 		}
 		return nil
 	})
+	r.stages = stagesLine(spent)
 	if err != nil {
 		return "recorded in %s, not counted (" + strings.ReplaceAll(err.Error(), "%", "%%") + ")", int(r.l.Count() - r.from)
 	}
@@ -291,4 +306,53 @@ func sendSeal(dest, ledgerPath, seal string, entries int) error {
 	defer f.Close()
 	_, err = f.Write(append(raw, '\n'))
 	return err
+}
+
+// stageSpend counts what one collector sent to targets, by kind.
+type stageSpend struct{ tcp, udp, other int }
+
+func (s *stageSpend) add(kind string) {
+	switch kind {
+	case "tcp":
+		s.tcp++
+	case "udp":
+		s.udp++
+	default:
+		s.other++
+	}
+}
+
+// stagesLine says what each collector sent to targets, most first: the
+// ports stage in connections and datagrams, the others in requests.
+func stagesLine(spent map[string]*stageSpend) string {
+	type stage struct {
+		name string
+		n    int
+		what string
+	}
+	var out []stage
+	for name, s := range spent {
+		var parts []string
+		if s.tcp > 0 {
+			parts = append(parts, nOf(s.tcp, "TCP connection", "TCP connections"))
+		}
+		if s.udp > 0 {
+			parts = append(parts, nOf(s.udp, "UDP datagram", "UDP datagrams"))
+		}
+		if s.other > 0 {
+			parts = append(parts, nOf(s.other, "request", "requests"))
+		}
+		out = append(out, stage{name, s.tcp + s.udp + s.other, strings.Join(parts, ", ")})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].n != out[j].n {
+			return out[i].n > out[j].n
+		}
+		return out[i].name < out[j].name
+	})
+	var parts []string
+	for _, st := range out {
+		parts = append(parts, st.name+" "+st.what)
+	}
+	return strings.Join(parts, "; ")
 }

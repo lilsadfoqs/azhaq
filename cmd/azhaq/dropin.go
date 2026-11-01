@@ -1349,6 +1349,29 @@ func guessCheck(domain string, srcs map[string]any) string {
 		domain, checked, strings.Join(names, ", "), sec, strings.Join(names, ","))
 }
 
+// samplingNote says when a source that answers a random sample per call
+// (subdomain.center) was not asked again because of a bound, not because
+// it had nothing more: how many samples were left untaken, and the flag
+// that takes them.
+func samplingNote(domain string, srcs map[string]any) string {
+	var out []string
+	for _, name := range slices.Sorted(maps.Keys(srcs)) {
+		row, _ := srcs[name].(map[string]any)
+		if row["sampling_bounded"] != true {
+			continue
+		}
+		rounds, _ := row["rounds"].([]any)
+		left := intOf(row["sample_ceiling"]) - len(rounds)
+		more := "-guess-samples N takes up to N samples while each finds a new name that resolves, with no time budget"
+		if left > 0 {
+			more = fmt.Sprintf("up to %s left untaken; %s", plural(left, "more sample"), more)
+		}
+		out = append(out, fmt.Sprintf("%s: %s was asked for %s of its guesses (the first is what subfinder | dnsx checks) and not again: %v; %s",
+			domain, name, plural(len(rounds), "sample"), row["sampling_stopped"], more))
+	}
+	return strings.Join(out, "\n")
+}
+
 // sourceDetail is subs -v's line per domain: each source's names, time,
 // calls when it was asked more than once, and error.
 func sourceDetail(domain string, srcs map[string]any) string {

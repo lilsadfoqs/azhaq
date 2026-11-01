@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -173,6 +174,16 @@ func TestDirsFilterKeepsCalibration(t *testing.T) {
 	}
 }
 
+// isWord says a path is one of the words w0 to w49 of the sweep.
+func isWord(p string) bool {
+	rest, ok := strings.CutPrefix(p, "/w")
+	if !ok || rest == "" {
+		return false
+	}
+	_, err := strconv.Atoi(rest)
+	return err == nil
+}
+
 // A -timeout that ends a sweep is a stop, not a finish: exit 4, the words
 // not asked are left, and resume asks exactly those.
 func TestDirsTimeoutStopsAndResumeFinishes(t *testing.T) {
@@ -182,7 +193,8 @@ func TestDirsTimeoutStopsAndResumeFinishes(t *testing.T) {
 		mu.Lock()
 		seen[r.URL.Path]++
 		mu.Unlock()
-		if strings.HasPrefix(r.URL.Path, "/w") && strings.HasSuffix(r.URL.Path, "0") {
+		// Only the sweep's words: a calibration name is never "w", digits and a 0.
+		if isWord(r.URL.Path) && strings.HasSuffix(r.URL.Path, "0") {
 			fmt.Fprint(w, "found "+r.URL.Path)
 			return
 		}
@@ -251,6 +263,20 @@ func TestDirsTimeoutStopsAndResumeFinishes(t *testing.T) {
 		if seen["/"+w] != 1 {
 			t.Errorf("/%s asked %d times", w, seen["/"+w])
 		}
+	}
+	// The calibration names of the stopped sweep are the resume's: each is
+	// asked once between them, and the resume judges by the same answers.
+	probes := 0
+	for p, n := range seen {
+		if p != "/" && !isWord(p) {
+			probes++
+			if n != 1 {
+				t.Errorf("calibration path %s asked %d times", p, n)
+			}
+		}
+	}
+	if probes != 4 {
+		t.Errorf("%d calibration paths asked, want the 4 of one calibration: %v", probes, seen)
 	}
 	mu.Unlock()
 	// The stopped run's hits and the resume's together are one run's.

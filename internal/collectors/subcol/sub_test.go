@@ -532,37 +532,73 @@ func TestSampledRowCountsCalls(t *testing.T) {
 	}
 }
 
-// With a DNS pace the guesses may cost what the real names did and no less
-// than guessFloor; without one only the time bounds them. Each round's
-// numbers are in the source's row.
-func TestSampledGuessBudgetFollowsThePace(t *testing.T) {
-	round := 0
-	mk := func() source {
-		round = 0
-		return sampled(verified(source{name: "pad", deflt: true, collect: func(context.Context, string, []string, *subscraping.Session) ([]string, error) {
+// The first sample of guesses is always checked in full, at any speed: it is
+// what subfinder | dnsx checks. Another is taken only while the last had a
+// new name that resolves and it fits what is left of the budget, measured by
+// what the last one cost; -guess-samples takes up to N with no budget. The
+// row says why it stopped.
+func TestSampledFirstSampleThenWithinTheBudget(t *testing.T) {
+	old := sampleBudget
+	defer func() { sampleBudget = old }()
+	for _, tc := range []struct {
+		name     string
+		perName  time.Duration // what a lookup takes
+		budget   time.Duration
+		samples  int // -guess-samples
+		min, max int // samples taken
+		stopped  string
+	}{
+		{"a sample costs more than the budget", time.Millisecond, 50 * time.Millisecond, 0, 1, 1, stopBudget},
+		{"samples fit the budget a while", time.Millisecond, 350 * time.Millisecond, 0, 3, 5, stopBudget},
+		{"fast lookups reach the ceiling", 0, time.Minute, 0, sampleRounds, sampleRounds, stopRounds},
+		{"-guess-samples has no budget", time.Millisecond, time.Millisecond, 3, 3, 3, stopRounds},
+		{"-guess-samples 1", 0, time.Minute, 1, 1, 1, stopRounds},
+		{"-guess-samples above the default ceiling", 0, time.Millisecond, sampleRounds + 3, sampleRounds + 3, sampleRounds + 3, stopRounds},
+	} {
+		sampleBudget = tc.budget
+		var mu sync.Mutex
+		round := 0
+		pad := sampled(verified(source{name: "pad", deflt: true, collect: func(context.Context, string, []string, *subscraping.Session) ([]string, error) {
+			mu.Lock()
 			round++
-			names := make([]string, 500)
+			r := round
+			mu.Unlock()
+			names := make([]string, 100)
 			for i := range names {
-				names[i] = "g" + strings.Repeat("x", round) + string(rune('a'+i%26)) + string(rune('a'+i/26%26)) + ".example.org"
+				names[i] = "g" + strings.Repeat("x", r) + string(rune('a'+i%26)) + string(rune('a'+i/26%26)) + ".example.org"
 			}
 			return names, nil
 		}}))
-	}
-	for _, tc := range []struct {
-		paced  bool
-		rounds int
-	}{{true, 2}, {false, 12}} {
-		c := collector(Options{SourceTimeout: 5 * time.Second, NoHistory: true, DNSPaced: tc.paced, Verify: allLive}, mk(), fake("real", noKey, true, []string{"www.example.org"}, nil))
+		sent := map[string]int{}
+		verify := func(_ context.Context, _ string, names []string) ([]string, []string) {
+			time.Sleep(time.Duration(len(names)) * tc.perName)
+			mu.Lock()
+			defer mu.Unlock()
+			for _, n := range names {
+				sent[n]++
+			}
+			return names, nil // every guess resolves: only a bound stops it
+		}
+		c := collector(Options{SourceTimeout: 5 * time.Second, NoHistory: true, GuessSamples: tc.samples, Verify: verify}, pad, fake("real", noKey, true, []string{"www.example.org"}, nil))
 		payload, _ := run(t, c, context.Background())
 		row := payload["sources"].(map[string]any)["pad"].(map[string]any)
-		// The next call is made while a round is looked up: the one that
-		// follows the last round is a call made ahead, and not used.
 		st := row["rounds"].([]any)
-		if got := int(row["calls"].(float64)); len(st) != tc.rounds || got < tc.rounds || got > tc.rounds+1 {
-			t.Errorf("paced %v: %d rounds and %d calls, want %d rounds (%v)", tc.paced, len(st), got, tc.rounds, row)
+		if len(st) < tc.min || len(st) > tc.max {
+			t.Errorf("%s: %d samples checked, want %d to %d (%v)", tc.name, len(st), tc.min, tc.max, row)
 		}
-		if first := st[0].(map[string]any); first["names"] != float64(500) || first["looked_up"] != float64(500) || first["new_live"] != float64(500) {
-			t.Errorf("round stats %v", st)
+		if first := st[0].(map[string]any); first["looked_up"] != float64(100) {
+			t.Errorf("%s: the first sample was not checked in full: %v", tc.name, first)
+		}
+		if len(sent) != 100*len(st) {
+			t.Errorf("%s: %d guesses looked up for %d samples", tc.name, len(sent), len(st))
+		}
+		for n, k := range sent {
+			if k != 1 {
+				t.Errorf("%s: %s looked up %d times", tc.name, n, k)
+			}
+		}
+		if got, _ := row["sampling_stopped"].(string); got != tc.stopped || row["sampling_bounded"] != true || int(row["sample_ceiling"].(float64)) != sampleCeiling(tc.samples) {
+			t.Errorf("%s: stopped %q bounded %v ceiling %v", tc.name, got, row["sampling_bounded"], row["sample_ceiling"])
 		}
 	}
 }

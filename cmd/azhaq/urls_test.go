@@ -376,6 +376,42 @@ func TestURLsSaysHowManyWereDroppedAsJunk(t *testing.T) {
 	}
 }
 
+// -fp keeps one URL for each host and path, and the archive's fuzzing
+// keywords and pasted request lines are not paths: they are dropped as
+// junk, counted, while the real paths stay.
+func TestURLsFPDropsFuzzingPlaceholders(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"has_next":false,"url_list":[`+
+			`{"url":"http://example.org/admin/"},`+
+			`{"url":"http://example.org/FUZZ"},`+
+			`{"url":"http://example.org/FUZZ/FUZ2Z"},`+
+			`{"url":"http://example.org/HTTP/1.1"},`+
+			`{"url":"http://example.org/{payload}/admin/testing"},`+
+			`{"url":"http://example.org/users/{id}"},`+
+			`{"url":"http://example.org/docs/http/1.1"}]}`)
+	}))
+	defer srv.Close()
+	args := []string{"-d", "example.org", "-providers", "otx", "-urls-pause", "0", "-archive", "otx=" + srv.URL, "-fp"}
+	lines, errOut, err := urlsRun(t, args...)
+	if err != nil {
+		t.Fatalf("%v\n%s", err, errOut)
+	}
+	got := strings.Join(lines, " ")
+	for _, bad := range []string{"FUZZ", "HTTP/1.1", "{payload}", "%7Bpayload"} {
+		if strings.Contains(got, bad) {
+			t.Errorf("%s kept: %v", bad, lines)
+		}
+	}
+	for _, p := range []string{"example.org/admin/", "example.org/users/", "example.org/docs/http/1.1"} {
+		if !strings.Contains(got, p) {
+			t.Errorf("%s dropped: %v", p, lines)
+		}
+	}
+	if len(lines) != 3 || !strings.Contains(errOut, "4 URLs dropped as junk (4 fuzzing placeholder or request-line fragment; -raw keeps them)") {
+		t.Errorf("%d lines %v\n%s", len(lines), lines, errOut)
+	}
+}
+
 // The summary's requests count is what reached the targets, and urls sends
 // none; the archives' own requests, retries included, are in the sources
 // block and in a note.

@@ -268,7 +268,7 @@ func cmdPorts(args []string) error {
 	} else if len(udpPorts) == 0 || *sn {
 		tcp = "top-100"
 	}
-	run := []string{"-list", path, "-max-items", "1000000000", "-passive", "-depth", "0", "-skip", skipAllBut("azhaq-ports"), "-ports", tcp}
+	run := []string{"-list", path, "-passive", "-depth", "0", "-skip", skipAllBut("azhaq-ports"), "-ports", tcp}
 	if len(udpPorts) > 0 {
 		run = append(run, "-ports-udp", portscan.Spec(udpPorts))
 	}

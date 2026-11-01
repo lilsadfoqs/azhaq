@@ -79,6 +79,23 @@ func RandomName() string {
 	return string(out)
 }
 
+// ProbeName is a name like RandomName that is the same for the same salt
+// within a run, and a run's resume (it has the run's probe token): a sweep's
+// calibration asks for the names the stopped run asked, so its answers are
+// the kept ones and both halves of the sweep are judged by one calibration.
+func ProbeName(salt string) string {
+	sum := sha256.Sum256([]byte(ProbeToken() + "\x00" + salt))
+	const letters = "abcdefghijklmnopqrstuvwxyz"
+	const alnum = letters + "0123456789"
+	n := 10 + int(sum[0])%5
+	out := make([]byte, n)
+	out[0] = letters[int(sum[1])%len(letters)]
+	for i := 1; i < n; i++ {
+		out[i] = alnum[int(sum[i+1])%len(alnum)]
+	}
+	return string(out)
+}
+
 // SetProbeToken makes the catch-all checks ask for name: a resumed run
 // asks for the same paths as the run it continues, whose answers it kept.
 func SetProbeToken(name string) {

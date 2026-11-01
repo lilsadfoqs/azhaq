@@ -5,7 +5,13 @@
 ### Changed
 
 - Every failure now exits 3: a source that failed while others answered for the same domain (`partial`), a fan-out failure and a degraded `subs` run no longer exit 0. The summary still lists what failed and why. `-fail-on-errors` is accepted and is the default, and no flag turns a failure back into exit 0. Ports nmap did not name a web service that give no page are counted in a note, not listed as failures.
+- No default cap on the tasks a run starts (it was 2,048, and katana and httpx have none); `-max-items` and `-max-names` hold for each run, so a resume at the same cap goes on, and `-max-names` defaults to 200,000. The summary names the limit that held work back with its flag, `-depth` leftovers are counted in a note, and `resume -depth N` asks them.
+- A port is one row per address, port and protocol, however many names point to the address; the names are on the row (`names` in `-json` and `query -fields`), and the summary and query counts no longer grow with aliases. The `ports` command's own rows are unchanged.
+- `-skip` takes `ports`, `urls`, `subs` (with or without `azhaq-`), and an unknown name is a usage error; before, those names matched no collector and skipped nothing.
 - `crawl` lists the routes it observed by default. Routes with a parameter, views, routes called with another method (`hint`) and strings only named in scripts (`named`) are listed with `-hints`; `-json` marks each row's `class`, and the summary counts the three classes apart.
+- `subs` without `-live` no longer prints the names only subdomain.center guessed: they are held back and counted as `guesses held back`, and `-guesses` prints them (marked `unverified` in `-json`). `-live` looks them up as before; `-guesses` with `-live` is a usage error.
+- `subs -live` checks the first sample of subdomain.center's guesses in full at any `-dns-rate`, as `subfinder | dnsx` does with the one answer subfinder takes; a guess costs one query. Further samples are taken while the last found a new name that resolves, up to 12, if they fit a 20 s budget that starts after the first. `-guess-samples N` takes up to N samples with no time budget. The row says why sampling stopped (`sampling_stopped`), and a note says how many samples were left untaken and names the flag.
+- The `subs` coverage note says first that it is what the independent sources know, not every name that exists, prints no percentage, and counts the names outside the pool apart. The JSON `coverage.share` is unchanged.
 
 ### Fixed
 
@@ -15,12 +21,21 @@
 - A route that streams events for ever (`text/event-stream`, `multipart/x-mixed-replace`) is answered with its status, headers and the first 64 KiB or 2 seconds of its body, not held until the timeout.
 - `ports` (and any run that scans a range) gave its Port rows `scope: fanout`, so `query -scope target` and the MCP `azhaq_query` listed none of them; a range seed now makes its own entity the target.
 - `export -format graphml` named a URL the run's scope had refused (a link to another port); it now leaves those out, as the other formats do.
+- `resume` honours `-skip`, `-passive` and an active technique's missing flag on the tasks the stopped run kept (they end, and a note counts them), and `-skip` on a resume adds to the stored one.
+- `resume` of a range scan asks only the addresses a stopped block had not finished: a resume of a /24 swept in full repeated ~182,000 connects.
+- A refused 443/80 of a name met on the way (the host of a URL with its own port, a name a source found) is the "no web service" note, and a refused certificate read is no certificate, not a failed target. A URL or `-web-ports` port you gave that refuses is still one failed target, and the rest of the run is mapped.
+- A `-max-requests` smaller than the port sweep keeps what mapping each web service found open takes (the number `plan` gives), so the services found are mapped; the summary says how the budget went by stage.
+- A resumed `dirs` sweep asks the same calibration names as the stopped one and reuses their answers, so both halves are judged by one calibration and the resume sends none again.
 - `probe` keeps every `Server` line of an answer, as httpx's `webserver` does: a proxy or gateway that adds its own line no longer hides the product behind it.
 - `params` no longer reports a name on a size, line or body change alone when the page varies by itself: such a name is checked against four names no page reads, and what that check sees widens the noise for the names that follow.
 - `hunt` ranks sign-in, sign-up and reset pages at 10 (still listed). An input that at least 5 pages and 40% of an origin's fetched pages carry (a search box in every header, 77 of the top 100 rows in the v0.12 evidence) is one row for each origin and name, on the page it was first seen on, with its page count and `template` in `-json`; the pages that only carry it no longer rank for it.
 - `roles` says before it sends which field each write canary sets and why the others are left, and says when no field qualifies. `-replay-writes-field NAME` names a field you accept the risk of setting; either canary flag without what it needs is a usage error.
 - `roles.db` keeps a row for each owner of a route: two roles' POSTs to one collection are two rows, `roles show` prints both (`-owner` picks one) and `report` writes each. An older `roles.db` is read as it is.
 - `-replay-max` counts every redirect hop, as the summary's requests do, and names the URLs the budget left unasked (exit 4).
+- `urls` drops fuzzing placeholders (`/FUZZ`, `/FUZZ/FUZ2Z`, `/{payload}/…`) and pasted request lines (`/HTTP/1.1`) as junk, counted by reason; `-raw` keeps them. Crawl and script extraction share the rule.
+- `subs` no longer retries crt.sh's JSON API once every other source has answered with names and crt.sh alone is left, as subfinder asks it once; the retries still run while others are running or none has given names.
+- A generated name (a guess, `-w`, `-permute`) that answers NOERROR with no address and no CNAME is no longer confirmed at a second resolver (2 queries instead of 3), and a zone whose first wildcard probe answers NXDOMAIN gets one probe instead of two.
+- The install notes say `install.sh` is `scripts/install.sh`, downloaded first or run through the pipe.
 
 ## v0.12.1
 

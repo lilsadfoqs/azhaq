@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -97,9 +98,11 @@ type Options struct {
 	MaxBody int64
 	// MaxNames caps the names kept per domain (-max-names).
 	MaxNames int
-	// DNSPaced says the resolvers have a rate (-dns-rate): checking guesses
-	// costs time, so the guessing is bounded by what the real names cost.
-	DNSPaced bool
+	// GuessSamples is how many samples of a sampled source's guesses are
+	// taken at most, while each finds a new name that resolves, with no time
+	// budget (-guess-samples). 0: the first sample, then more inside
+	// sampleBudget, up to sampleRounds.
+	GuessSamples int
 	// Recursive runs only the sources that handle subdomains of a subdomain.
 	Recursive bool
 	// Proxy sends every source request through this URL (-proxy).
@@ -282,13 +285,14 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 	var chk *checker
 	if c.opts.Verify != nil && !c.opts.NoCheck {
 		chk = newChecker(ctx, domain, c.opts.Verify, h.pass)
-		chk.paced = c.opts.DNSPaced
 	}
 	var cancels []context.CancelFunc
 	var wgFetch, wgSample sync.WaitGroup
 	var mu sync.Mutex // results, reported
 	reported := make([]bool, len(run))
 	closed := false
+	hold := &holdState{}
+	hold.pending.Store(int32(len(run)))
 	for i, s := range run {
 		var sctx context.Context
 		var cancel context.CancelFunc
@@ -308,6 +312,8 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		sctx = withThrottle(sctx, &throttles[i])
 		sctx = context.WithValue(sctx, noteKey{}, &notes[i])
 		sctx = context.WithValue(sctx, answerKey{}, &answers[i])
+		sctx = context.WithValue(sctx, holdKey{}, hold)
+		sctx = context.WithValue(sctx, samplesKey{}, c.opts.GuessSamples)
 		if chk != nil {
 			sctx = context.WithValue(sctx, checkerKey{}, chk)
 		}
@@ -338,6 +344,10 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 				reported[i] = true
 			}
 			mu.Unlock()
+			if err == nil && len(names) > 0 {
+				hold.gave.Add(1)
+			}
+			hold.pending.Add(-1)
 			if !s.verify {
 				chk.know(cleaned(names, domain))
 				h.pass(names) // a padding source's names wait for their check
@@ -478,6 +488,15 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		if st := rounds[i].statSnapshot(); len(st) > 0 {
 			row["rounds"] = st
 		}
+		if s.sampler && len(rounds[i].statSnapshot()) > 0 {
+			row["sample_ceiling"] = sampleCeiling(c.opts.GuessSamples)
+		}
+		if why := rounds[i].stopped(); why != "" {
+			row["sampling_stopped"] = why
+			if boundedStop(why) {
+				row["sampling_bounded"] = true
+			}
+		}
 		throttles[i].fields(row)
 		if n := notes[i].get(); n != "" {
 			row["partial"] = n
@@ -508,6 +527,10 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 	if len(st.unverified) > 0 {
 		sort.Strings(st.unverified)
 		payload["unverified"] = st.unverified
+	}
+	if len(st.guesses) > 0 {
+		sort.Strings(st.guesses)
+		payload["guesses"] = st.guesses
 	}
 	if st.asked > 0 {
 		payload["checked"] = st.asked
@@ -576,6 +599,7 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 type settled struct {
 	dropped    int             // did not resolve: left out
 	unverified []string        // not checked: listed, flagged
+	guesses    []string        // of those, the names only a padding source gave: no source asserted them
 	asked      int             // names sent to the resolvers, in all
 	skip       map[string]bool // not stored in the history: never seen to resolve
 }
@@ -670,6 +694,10 @@ func (c *Collector) settle(ctx context.Context, domain string, run []source, nam
 		default:
 			st.unverified = append(st.unverified, n)
 			st.skip[n] = true
+			if !slices.Contains(foundBy[n], historyName) {
+				// The history only holds names a source gave or DNS confirmed.
+				st.guesses = append(st.guesses, n)
+			}
 		}
 	}
 	st.dropped = len(drop)

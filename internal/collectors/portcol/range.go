@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/lilsadfoqs/azhaq/internal/guard"
+	"maps"
 	"net"
 	"net/netip"
+	"slices"
 	"sort"
 	"sync"
 	"time"
@@ -81,6 +83,14 @@ func (c *Collector) runPrefix(ctx context.Context, seed types.Seed, emit func(ty
 	for a := pf.Addr(); a.IsValid() && pf.Contains(a); a = a.Next() {
 		addrs = append(addrs, a)
 	}
+	// A block a limit stopped goes on with the addresses it had not finished.
+	sweep := c.Swept[pf.String()]
+	swept := map[int]bool{}
+	for _, n := range sweep.Done {
+		swept[n] = true
+	}
+	finished := map[int]bool{} // the places of the addresses this run and the stopped one finished
+	maps.Copy(finished, swept)
 	type result struct {
 		row    map[string]any
 		open   []portscan.Open
@@ -105,12 +115,21 @@ func (c *Collector) runPrefix(ctx context.Context, seed types.Seed, emit func(ty
 		udpFilt   int // open|filtered ports of addresses that answered nothing else, not listed
 		udpSilent int // those addresses
 		withOpen  int
-		portsOut  int // ports left out because -allow names their host with other ports only
-		portsAddr int // the addresses they were on
-		asked     int // addresses scanned wholly or in part, for a range a limit stopped
+		portsOut  int          // ports left out because -allow names their host with other ports only
+		portsAddr int          // the addresses they were on
+		asked     = len(swept) // addresses scanned wholly or in part, for a range a limit stopped
 		// The closed UDP ports of addresses that have no row, and those addresses.
 		udpRefused, udpRefusing int
 	)
+	down, out, filtAddrs, edgeAddrs = sweep.Counts["down"], sweep.Counts["outside_scope"], sweep.Counts["filtered_addresses"], sweep.Counts["cdn_addresses"]
+	udpFilt, udpSilent, withOpen = sweep.Counts["udp_silent_ports"], sweep.Counts["udp_silent_addresses"], sweep.Counts["with_open"]
+	portsOut, portsAddr = sweep.Counts[outScopeKey], sweep.Counts[outScopeKey+"_addresses"]
+	udpRefused, udpRefusing = sweep.Counts["udp_closed_n"], sweep.Counts["udp_closed_a"]
+	counts := func() map[string]any {
+		return map[string]any{"with_open": withOpen, "down": down, "outside_scope": out, "filtered_addresses": filtAddrs,
+			"cdn_addresses": edgeAddrs, "udp_silent_ports": udpFilt, "udp_silent_addresses": udpSilent,
+			"udp_closed_n": udpRefused, "udp_closed_a": udpRefusing, outScopeKey: portsOut, outScopeKey + "_addresses": portsAddr}
+	}
 	// One address given is not a sweep: it is asked about, so its silent
 	// UDP ports are rows. In a range, an address that answered nothing at
 	// all (down, or dropping UDP) would be a screenful of them.
@@ -137,7 +156,10 @@ func (c *Collector) runPrefix(ctx context.Context, seed types.Seed, emit func(ty
 			meta.NextHints = append(meta.NextHints, res.sent.hand(ctx, append([]types.Seed{ipSeed(res.ip)}, hintsOf(res.ip, res.open)...))...)
 		}
 	}
-	for _, a := range addrs {
+	for at, a := range addrs {
+		if swept[at+1] {
+			continue
+		}
 		if ctx.Err() != nil {
 			break
 		}
@@ -149,14 +171,20 @@ func (c *Collector) runPrefix(ctx context.Context, seed types.Seed, emit func(ty
 		}
 		wg.Add(1)
 		sem <- struct{}{}
-		go func(a netip.Addr) {
+		go func(a netip.Addr, place int) {
 			defer guard.Recover(ctx)
 			defer wg.Done()
 			defer func() { <-sem }()
 			ip := a.String()
+			done := func() {
+				mu.Lock()
+				finished[place] = true
+				mu.Unlock()
+			}
 			if !egress.Allows(ip) {
 				mu.Lock()
 				out++
+				finished[place] = true
 				mu.Unlock()
 				return
 			}
@@ -254,6 +282,7 @@ func (c *Collector) runPrefix(ctx context.Context, seed types.Seed, emit func(ty
 					portsAddr++
 					mu.Unlock()
 				}
+				done()
 				return
 			}
 			row := c.row(ip, ip, ports, s, edgeName, edge)
@@ -269,8 +298,9 @@ func (c *Collector) runPrefix(ctx context.Context, seed types.Seed, emit func(ty
 				// The address seed that follows finds its scan done.
 				c.remember(ip, s, udp, len(c.UDPPorts) > 0 && !edge && s.up && c.Discover != DiscoverOnly)
 			}
+			done()
 			record(result{row: row, open: s.open, ip: ip, follow: follow, sent: &early.sent})
-		}(a)
+		}(a, at+1)
 	}
 	wg.Wait()
 	if err := ctx.Err(); err != nil {
@@ -282,19 +312,22 @@ func (c *Collector) runPrefix(ctx context.Context, seed types.Seed, emit func(ty
 	if stopped(first) {
 		// The rows of the addresses it reached are kept; this row says how
 		// many that was, as the finished range's does for all of them.
-		raw, _ := json.Marshal(map[string]any{"range": true, "prefix": pf.String(), "addresses": asked, "stopped": true, "open": []int{}})
+		// What the block finished goes in the row, so that a resume does not ask it again.
+		row := counts()
+		row["range"], row["prefix"], row["addresses"], row["stopped"], row["open"] = true, pf.String(), asked, true, []int{}
+		row[SweptKey] = portscan.Compact(slices.Collect(maps.Keys(finished)))
+		raw, _ := json.Marshal(row)
 		_ = emit(types.Observation{Collector: Name, Source: "tcp", Kind: "ports", Payload: raw, Confidence: 0.95, ObservedAt: time.Now().UTC(), Keep: true})
 		return types.RunMeta{Status: types.StatusCapped, EmitCount: meta.EmitCount}, first
 	}
 	if first != nil {
 		return types.RunMeta{Status: types.StatusError, Error: first.Error()}, nil
 	}
-	rng := map[string]any{"range": true, "prefix": pf.String(), "addresses": len(addrs) - out, "with_open": withOpen,
-		"scanned": len(c.portsOf("")), "down": down, "outside_scope": out, "filtered_addresses": filtAddrs,
-		"cdn_addresses": edgeAddrs, "udp_silent_ports": udpFilt, "udp_silent_addresses": udpSilent,
-		"udp_closed_n": udpRefused, "udp_closed_a": udpRefusing, "open": []int{}}
-	if portsOut > 0 {
-		rng[outScopeKey], rng[outScopeKey+"_addresses"] = portsOut, portsAddr
+	rng := counts()
+	rng["range"], rng["prefix"], rng["addresses"], rng["scanned"], rng["open"] = true, pf.String(), len(addrs)-out, len(c.portsOf("")), []int{}
+	if portsOut == 0 {
+		delete(rng, outScopeKey)
+		delete(rng, outScopeKey+"_addresses")
 	}
 	raw, _ := json.Marshal(rng)
 	if err := emit(types.Observation{Collector: Name, Source: "tcp", Kind: "ports", Payload: raw, Confidence: 0.95, ObservedAt: time.Now().UTC()}); err != nil {
@@ -328,6 +361,7 @@ func ipSeed(ip string) types.Seed {
 }
 
 func (e *earlyAddr) found(o portscan.Open) {
+	e.c.reserveWeb(e.ip, o)
 	if !catalog.Hint(e.ctx) {
 		return // nothing listens: the hints come with the block's result
 	}

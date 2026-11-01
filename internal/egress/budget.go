@@ -90,6 +90,7 @@ func (p *Policy) SpendCounted(ctx context.Context, paced bool) error {
 			break
 		}
 	}
+	p.useReserve()
 	if w != nil {
 		w.used.Add(1)
 	}
@@ -231,6 +232,42 @@ func (p *Policy) Take() error {
 	}
 }
 
+// Reserve sets aside n more requests of the budget for web work already
+// known to be coming: a service a port sweep found open and named web. A
+// sweep (TakeSweep) leaves them unspent, and each request a web task sends
+// uses one of them up, so that a budget smaller than the sweep still maps
+// the services found. Without a budget it holds nothing back.
+func (p *Policy) Reserve(n int64) { p.reserve.Add(n) }
+
+// Reserved is what Reserve set aside and web requests have not yet used.
+func (p *Policy) Reserved() int64 { return p.reserve.Load() }
+
+func (p *Policy) useReserve() {
+	for {
+		r := p.reserve.Load()
+		if r <= 0 || p.reserve.CompareAndSwap(r, r-1) {
+			return
+		}
+	}
+}
+
+// TakeSweep is Take for the connections of a port sweep: it refuses what
+// the reserve holds for web work (Reserve), with neterr.ErrBudget.
+func (p *Policy) TakeSweep() error {
+	if err := p.Killed(); err != nil {
+		return err
+	}
+	for {
+		n := p.sent.Load()
+		if m := p.maxReq.Load(); m > 0 && n+p.reserve.Load() >= m {
+			return neterr.ErrBudget
+		}
+		if p.sent.CompareAndSwap(n, n+1) {
+			return nil
+		}
+	}
+}
+
 // Refund gives back one request counted with Take or Spend that was not
 // sent after all (the page closed while it waited for the pace).
 func (p *Policy) Refund() {
@@ -291,6 +328,9 @@ func SpendUnpaced(ctx context.Context) error             { return Current().Spen
 func SpendCounted(ctx context.Context, paced bool) error { return Current().SpendCounted(ctx, paced) }
 func Pace(ctx context.Context) error                     { return Current().Pace(ctx) }
 func Take() error                                        { return Current().Take() }
+func TakeSweep() error                                   { return Current().TakeSweep() }
+func Reserve(n int64)                                    { Current().Reserve(n) }
+func Reserved() int64                                    { return Current().Reserved() }
 func Refund()                                            { Current().Refund() }
 func Count(n int)                                        { Current().Count(n) }
 func Spent() bool                                        { return Current().Spent() }

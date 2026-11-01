@@ -130,7 +130,36 @@ const (
 	JunkMalformed   = "malformed link (wildcard, quote, bracket, ellipsis)"
 	JunkSentence    = "link cut at the end of its sentence"
 	JunkNotURL      = "not a URL"
+	JunkTemplate    = "fuzzing placeholder or request-line fragment"
 )
+
+// fuzzSegment is a path segment a fuzzer's wordlist keyword left in an
+// archive: ffuf's FUZZ and FUZ2Z (capitals; /fuzz in lower case is a
+// word), and the {payload} and {FUZZ} slots of a scan template. An
+// OpenAPI slot such as {id} is a route and stays.
+var fuzzSegment = lazyRE(`^(?:FUZ\d*Z|\{(?:payloads?|FUZ\d*Z|fuzz)\})(?:\.\w{1,5})?$`)
+
+// requestLine is the protocol a request line ends with, read as a path:
+// /HTTP/1.1, or /index.php HTTP/1.1 (the space is kept as %20).
+var requestLine = lazyRE(`(?:^|/|\s)HTTP/1\.[01]$`)
+
+// templateJunk reports a path that is a fuzzing keyword or a pasted
+// request line, not a page.
+func templateJunk(escaped string) bool {
+	p := escaped
+	if d, err := url.PathUnescape(escaped); err == nil {
+		p = d
+	}
+	if requestLine.MatchString(p) {
+		return true
+	}
+	for _, seg := range strings.Split(p, "/") {
+		if fuzzSegment.MatchString(seg) {
+			return true
+		}
+	}
+	return false
+}
 
 // JunkReason says why JunkURL takes raw for junk, one of the Junk
 // constants; "" when it is not.
@@ -146,6 +175,9 @@ func JunkReason(raw string) string {
 		return JunkListing
 	}
 	p := u.EscapedPath()
+	if templateJunk(p) {
+		return JunkTemplate
+	}
 	lp := strings.ToLower(p)
 	for _, seg := range strings.Split(lp, "/") {
 		switch seg {

@@ -219,3 +219,21 @@ func TestCatchAllProbeDepthSharesTheBaselineAbove(t *testing.T) {
 		t.Errorf("%d baseline requests, want 1 (/rest/'s)", n)
 	}
 }
+
+// A probe name is the same for the same salt within a run and differs
+// between salts, and a resume (the run's probe token) gets the same names.
+func TestProbeNameIsStableWithinARun(t *testing.T) {
+	defer SetProbeToken(ProbeToken())
+	SetProbeToken("run1token")
+	a, b := ProbeName("dirs 0"), ProbeName("dirs 1")
+	if a == b || a != ProbeName("dirs 0") {
+		t.Errorf("names %q %q", a, b)
+	}
+	if len(a) < 10 || len(a) > 14 || a[0] < 'a' || a[0] > 'z' {
+		t.Errorf("name %q is not 10 to 14 characters starting with a letter", a)
+	}
+	SetProbeToken("run2token")
+	if ProbeName("dirs 0") == a {
+		t.Error("another run asked the same name")
+	}
+}

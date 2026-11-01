@@ -146,6 +146,9 @@ type Scanner struct {
 	// included; an error stops the scan and is returned (the run's
 	// request budget is spent).
 	Take func() error
+	// Opened, when set, hears of each port that accepted a connection, before
+	// the port is asked what it is.
+	Opened func(ip string, port int)
 	// UserAgent goes on the HTTP probe: a CDN's bot manager may hold a
 	// request without a browser's open.
 	UserAgent string
@@ -477,6 +480,9 @@ func (s *Scanner) probe(ctx context.Context, host, ip string, port int) (Open, p
 		return Open{}, portClosed
 	}
 	o := Open{Port: port}
+	if s.Opened != nil {
+		s.Opened(ip, port)
+	}
 	if s.Detect != DetectNone && s.Banner > 0 {
 		if len(s.Payload) > 0 {
 			_ = conn.SetWriteDeadline(time.Now().Add(s.Timeout))

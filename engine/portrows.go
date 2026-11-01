@@ -3,6 +3,7 @@ package engine
 import (
 	"encoding/json"
 	"net"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -21,12 +22,14 @@ import (
 func portRows(e types.Entity, scope string, obs []types.StoredObservation) []MapEntry {
 	type scan struct {
 		host string
+		ip   string
 		at   time.Time
 		tcp  []portscan.Open
 		udp  []portscan.UDPPort
 	}
 	newest := map[string]scan{}
 	imported := map[string]scan{}
+	names := map[string][]string{} // by address: the names it was scanned under
 	var order []string
 	for _, o := range obs {
 		if o.Kind != "ports" {
@@ -55,24 +58,33 @@ func portRows(e types.Entity, scope string, obs []types.StoredObservation) []Map
 		if host == "" {
 			host = p.IP
 		}
+		if host != "" && host != p.IP {
+			names[id] = addName(names[id], host)
+		}
 		if o.Collector != "azhaq-ports" {
 			// Each imported line adds its ports to the address's.
 			s := imported[id]
 			if !haveImported || o.ObservedAt.After(s.at) {
 				s.at = o.ObservedAt
 			}
-			s.host = host
+			s.host, s.ip = host, p.IP
 			s.tcp = append(s.tcp, p.Services...)
 			s.udp = append(s.udp, p.UDP...)
 			imported[id] = s
 			continue
 		}
-		newest[id] = scan{host: host, at: o.ObservedAt, tcp: p.Services, udp: p.UDP}
+		newest[id] = scan{host: host, ip: p.IP, at: o.ObservedAt, tcp: p.Services, udp: p.UDP}
 	}
 	var out []MapEntry
 	seen := map[string]bool{}
-	add := func(host string, port int, proto, state, service, product, version string, at time.Time, proof []string) {
-		key := net.JoinHostPort(host, strconv.Itoa(port)) + "/" + proto
+	add := func(id string, s scan, port int, proto, state, service, product, version string, proof []string) {
+		// An endpoint is its address, however many names point to it: the
+		// names are on the row.
+		addr := s.ip
+		if addr == "" {
+			addr = s.host
+		}
+		key := net.JoinHostPort(addr, strconv.Itoa(port)) + "/" + proto
 		if port <= 0 || seen[key] {
 			return
 		}
@@ -80,24 +92,24 @@ func portRows(e types.Entity, scope string, obs []types.StoredObservation) []Map
 		out = append(out, MapEntry{
 			Entity: types.Entity{ID: store.EntityID(types.TypePort, key), Type: types.TypePort, Key: key, FirstSeen: e.FirstSeen, LastSeen: e.LastSeen},
 			Scope:  scope, Role: "service", Service: service, Product: product, Version: version,
-			State: state, Proof: strings.Join(proof, " "), at: at,
+			State: state, Proof: strings.Join(proof, " "), at: s.at, Names: slices.Sorted(slices.Values(names[id])),
 		})
 	}
 	for _, id := range order {
 		s := newest[id]
 		if im, ok := imported[id]; ok {
 			if s.host == "" {
-				s.host, s.at = im.host, im.at
+				s.host, s.ip, s.at = im.host, im.ip, im.at
 			}
 			s.tcp = append(s.tcp[:len(s.tcp):len(s.tcp)], im.tcp...)
 			s.udp = append(s.udp[:len(s.udp):len(s.udp)], im.udp...)
 		}
 		sort.SliceStable(s.tcp, func(i, j int) bool { return s.tcp[i].Port < s.tcp[j].Port })
 		for _, o := range s.tcp {
-			add(s.host, o.Port, "tcp", "open", o.Service, o.Product, o.Version, s.at, portProof("open", o.Service, o.Product, o.Version, o.TLS, o.Title, o.Banner))
+			add(id, s, o.Port, "tcp", "open", o.Service, o.Product, o.Version, portProof("open", o.Service, o.Product, o.Version, o.TLS, o.Title, o.Banner))
 		}
 		for _, u := range s.udp {
-			add(s.host, u.Port, "udp", u.State, u.Service, u.Product, u.Version, s.at, portProof(u.State, u.Service, u.Product, u.Version, false, "", u.Banner))
+			add(id, s, u.Port, "udp", u.State, u.Service, u.Product, u.Version, portProof(u.State, u.Service, u.Product, u.Version, false, "", u.Banner))
 		}
 	}
 	return out
@@ -147,10 +159,15 @@ func addPortRows(out []MapEntry, at map[string]int, rows []MapEntry) []MapEntry 
 		if r.Scope == "target" {
 			scope = r.Scope
 		}
+		names := old.Names
+		for _, n := range r.Names {
+			names = addName(slices.Clone(names), n)
+		}
+		slices.Sort(names)
 		if (r.State == "open" && old.State != "open") || (r.at.After(old.at) && (old.State != "open" || r.State == "open")) {
 			old = r
 		}
-		old.Entity.FirstSeen, old.Entity.LastSeen, old.Scope = first, last, scope
+		old.Entity.FirstSeen, old.Entity.LastSeen, old.Scope, old.Names = first, last, scope, names
 		out[i] = old
 	}
 	return out

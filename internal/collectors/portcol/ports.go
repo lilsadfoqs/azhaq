@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/netip"
 	"slices"
 	"sort"
 	"strconv"
@@ -73,6 +74,9 @@ type Collector struct {
 	PortsFor map[string][]int
 	// Workers is how many addresses of a range are asked at once; 0 is 64.
 	Workers int
+	// WebCost is how many requests the budget keeps for mapping each web
+	// service the scan finds open (egress.Reserve); zero keeps none.
+	WebCost int
 
 	mu    sync.Mutex
 	byIP  map[string]*scan // one scan per address, however many names point to it
@@ -80,6 +84,12 @@ type Collector struct {
 
 	udpByIP map[string]*udpScan
 	ranged  map[string]bool // addresses a range scan handed on as it found them
+	held    map[string]bool // endpoints whose web mapping the budget has a reserve for
+
+	// Swept holds, by prefix, the blocks a limit stopped: the addresses of
+	// those the run had finished are not asked again (azhaq resume).
+	Swept   map[string]Sweep
+	sweptIP map[string]bool
 }
 
 type scan struct {
@@ -95,8 +105,50 @@ type scan struct {
 }
 
 func New(pool *dnsr.Pool, ports []int, rate float64) *Collector {
-	return &Collector{Pool: pool, Ports: ports, Scanner: &portscan.Scanner{Rate: rate, Take: egress.Take, UserAgent: fetch.UserAgent},
+	c := &Collector{Pool: pool, Ports: ports, Scanner: &portscan.Scanner{Rate: rate, Take: egress.TakeSweep, UserAgent: fetch.UserAgent},
 		byIP: map[string]*scan{}, maxIP: 2}
+	c.Scanner.Opened = c.holdWeb
+	return c
+}
+
+// holdWeb sets aside the requests that mapping a web service needs
+// (egress.Reserve) the moment a port accepts a connection, once for each
+// address and port: a sweep that would spend the whole budget leaves them,
+// though the port is not yet named. A port that proves no web service gives
+// them back (reserveWeb).
+func (c *Collector) holdWeb(ip string, port int) {
+	if c.WebCost <= 0 {
+		return
+	}
+	key := net.JoinHostPort(ip, strconv.Itoa(port))
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.held == nil {
+		c.held = map[string]bool{}
+	}
+	if !c.held[key] {
+		c.held[key] = true
+		egress.Reserve(int64(c.WebCost))
+	}
+}
+
+// reserveWeb keeps the reserve of a port named a web service, and gives back
+// that of any other: its one probe is paid from the budget as any request is.
+func (c *Collector) reserveWeb(ip string, o portscan.Open) {
+	if c.WebCost <= 0 {
+		return
+	}
+	if svc := strings.TrimSuffix(o.Service, "?"); svc == "http" || svc == "https" {
+		return
+	}
+	key := net.JoinHostPort(ip, strconv.Itoa(o.Port))
+	c.mu.Lock()
+	held := c.held[key]
+	c.held[key] = false
+	c.mu.Unlock()
+	if held {
+		egress.Reserve(-int64(c.WebCost))
+	}
 }
 
 func (c *Collector) routable() bool {
@@ -123,7 +175,8 @@ func (c *Collector) Skip(seed types.Seed) bool {
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return c.ranged[normalize.Hostname(seed.Key())]
+	ip := normalize.Hostname(seed.Key())
+	return c.ranged[ip] || c.sweptIP[ip]
 }
 
 func (c *Collector) Inputs() []types.SeedType {
@@ -221,6 +274,10 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		}
 	}
 	for _, ip := range ips {
+		found := func(o portscan.Open) {
+			c.reserveWeb(ip, o)
+			found(o)
+		}
 		ports := c.portsOf(host)
 		name := edgeName
 		edge := name != ""
@@ -438,14 +495,20 @@ func Notes(obs []types.StoredObservation) []string {
 	// A row of a scan a limit stopped is read only while nothing came
 	// after it: the row that finishes the scan says it all.
 	newest := map[string]int{}
+	lastRange := map[string]int{} // by prefix: the stopped block's row counts until the one after it
 	for i, o := range obs {
 		if o.Collector == Name {
 			var id struct {
-				Host string `json:"host"`
-				IP   string `json:"ip"`
+				Host   string `json:"host"`
+				IP     string `json:"ip"`
+				Range  bool   `json:"range"`
+				Prefix string `json:"prefix"`
 			}
 			if json.Unmarshal(o.Payload, &id) == nil {
 				newest[id.Host+"\x00"+id.IP] = i
+				if id.Range {
+					lastRange[id.Prefix] = i
+				}
 			}
 		}
 	}
@@ -473,6 +536,7 @@ func Notes(obs []types.StoredObservation) []string {
 			Note       string   `json:"note"`
 			Up         *bool    `json:"up"`
 			Range      bool     `json:"range"`
+			Stopped    bool     `json:"stopped"`
 			Prefix     string   `json:"prefix"`
 			Addresses  int      `json:"addresses"`
 			Down       int      `json:"down"`
@@ -485,6 +549,9 @@ func Notes(obs []types.StoredObservation) []string {
 			PortsOutA  int      `json:"ports_outside_scope_addresses"`
 		}
 		if json.Unmarshal(o.Payload, &p) != nil || p.Partial && newest[p.Host+"\x00"+p.IP] != i {
+			continue
+		}
+		if p.Range && p.Stopped && lastRange[p.Prefix] != i {
 			continue
 		}
 		if p.Range {
@@ -744,6 +811,75 @@ const (
 	PartialKey = "partial"
 	AskedKey   = "asked_ports"
 )
+
+// SweptKey is the place, in its block, of each address a stopped range scan
+// finished (1-200,203), which azhaq resume does not ask again.
+const SweptKey = "swept"
+
+// Sweep is what a stopped scan of a block of addresses had finished: the
+// places of the addresses, and the counts its row kept.
+type Sweep struct {
+	Done   []int
+	Counts map[string]int
+}
+
+// Swept reads, from the rows a run wrote since it began, the blocks a limit
+// stopped, by prefix. A block whose scan ended after is not among them.
+func Swept(obs []types.StoredObservation, since time.Time) map[string]Sweep {
+	out := map[string]Sweep{}
+	for _, o := range obs {
+		if o.Collector != Name || o.Kind != "ports" || o.ObservedAt.Before(since) {
+			continue
+		}
+		var row map[string]any
+		if json.Unmarshal(o.Payload, &row) != nil || row["range"] != true {
+			continue
+		}
+		prefix, _ := row["prefix"].(string)
+		if row["stopped"] != true {
+			delete(out, prefix)
+			continue
+		}
+		spec, _ := row[SweptKey].(string)
+		done, err := portscan.Ports(spec)
+		if prefix == "" || err != nil {
+			continue
+		}
+		counts := map[string]int{}
+		for k, v := range row {
+			if n, ok := v.(float64); ok {
+				counts[k] = int(n)
+			}
+		}
+		out[prefix] = Sweep{Done: done, Counts: counts}
+	}
+	return out
+}
+
+// sweptAddrs are the addresses of the blocks a limit stopped that the run
+// had finished.
+func sweptAddrs(swept map[string]Sweep) map[string]bool {
+	out := map[string]bool{}
+	for prefix, sw := range swept {
+		pf, err := netip.ParsePrefix(prefix)
+		if err != nil {
+			continue
+		}
+		pf = pf.Masked()
+		done := map[int]bool{}
+		for _, n := range sw.Done {
+			done[n] = true
+		}
+		n := 1
+		for a := pf.Addr(); a.IsValid() && pf.Contains(a); a = a.Next() {
+			if done[n] {
+				out[a.String()] = true
+			}
+			n++
+		}
+	}
+	return out
+}
 
 // Prior is what a stopped scan of an address found and asked.
 type Prior struct {

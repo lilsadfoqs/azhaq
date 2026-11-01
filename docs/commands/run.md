@@ -66,7 +66,7 @@ The map has one row per entity, best first: the target's own pages and APIs, the
 | Field | Meaning |
 | --- | --- |
 | `type` | `URL`, `Hostname`, `Domain`, `IPAddress`, `Port`, `Organization`, … |
-| `key` | The URL, name or address. For a port, `host:port/tcp` (`/udp`). For a folded page, its `{n}` template. |
+| `key` | The URL, name or address. For a port, `address:port/tcp` (`/udp`): one row for each endpoint, however many names point to the address. For a folded page, its `{n}` template. |
 | `scope` | `target`: what you asked about. `fanout`: found on the way (other hosts, CNAME targets). |
 | `coverage` (URLs) | What azhaq did with the URL: `visited`, `catchall`, `error`, `gone`, `hint`, `skipped` or `capped`. See [Coverage](#coverage). |
 | `evidence` (URLs) | How azhaq knows the row: the strongest level of its sources, from `answered` to `given`. See [Evidence](#evidence). |
@@ -74,6 +74,7 @@ The map has one row per entity, best first: the target's own pages and APIs, the
 | `answer` (URLs) | Set when the status says less than it looks, such as `500 without input`. See [Evidence](#evidence). |
 | `role` (URLs) | What the URL is: `app` (a front page), `auth` (401), `forbidden` (403), `api`, `page`, `script`, `asset`, `sourcemap`, `manifest`, `client-route`, `websocket`. |
 | `role` (names) | The status of a name: `live`, `sibling`, `unresolved`, `dead` or `wildcard`. [CONCEPTS](../CONCEPTS.md#names) defines them. |
+| `names` (ports) | The names that point to the port's address, sorted; the row's key is the address. |
 | `proof` | Why the row is as it is, in one line: `status=401 …`, `guard=canActivate`. |
 | `first_seen` | When the workspace first saw the entity. |
 | `guard` | What a client route's router checks before it draws the view. See [Client routes](#client-routes). |
@@ -94,7 +95,8 @@ The map has one row per entity, best first: the target's own pages and APIs, the
 The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.md#the-summary) and [exit codes](../OUTPUT.md#exit-codes). Two things are specific to `run`:
 
 - The summary counts `client routes` and `websockets` apart from `URLs`, `ports` for the open ports that have a row and `open|filtered ports` for the UDP ports that neither answered nor were refused, never counted as open. A port is one row for each host, port and protocol, however many scans listed it.
-- A target given with no port (a name or an address) is asked on 443, then 80, or on `-web-ports`. A guess nothing listens on, refused, is a note (`no web service on 443 or 80`), not a failure; a `-web-ports` port that refuses is one.
+- Under `-max-requests`, a port sweep leaves the requests that mapping each web service it found open needs (about N per service, as `plan` says), so a budget smaller than the sweep still maps the services found; the summary's notes say how the budget went by stage (`request budget N, spent by stage: ports …`).
+- A target given with no port (a name or an address) is asked on 443, then 80, or on `-web-ports`. So is the name of a URL given with its own port, and a name found on the way. A guess nothing listens on, refused, is a note (`no web service on 443 or 80`), not a failure, and so is a refused connection on 443 to read a name's certificate; a `-web-ports` port that refuses is one, and so is a URL given that refuses. A refused URL is one failed target: the other targets of the run are mapped as usual and the exit code is 3.
 - A port the scan found open that answers the HTTP stage with something other than HTTP (an FTP or SSH banner) is a service, not a failed target: it keeps its `Port` row and the run names it in a note (`open, but not a web service`). Its plain-HTTP request is its only one when the reply is not TLS either. A web server that resets, times out or closes without answering is still a failure.
 - It counts the path checks it skipped, as a note ([Path checks](#path-checks-stop-at-their-answer)).
 
@@ -120,7 +122,7 @@ found in
 
 - With `-stream`, `run` prints each URL, name that resolves, address and open port as it is found. They come before the map.
 - One line for each key the map has a row for: a URL found by the crawl and answered later, or the front page found twice, prints once, as the first way it was found (its status is in the map). The address of an IP host is a row and a line too (`found  address 127.0.0.1`).
-- Not streamed: names that do not resolve, which the map folds into a summary row. An open-ports line is one line for a host and stands for its port rows (`host:port/tcp`); the same host's ports print again only when a later scan finds others.
+- Not streamed: names that do not resolve, which the map folds into a summary row. An open-ports line is one line for a host and stands for its port rows (`address:port/tcp`); the same host's ports print again only when a later scan finds others.
 - An answer line looks like `found  answer http://app/openapi.json  [200]`. An answer that is the page every unknown path gets ends with `(catch-all: the page any unknown path gets)`.
 - With `-json`, each is an object with `"type":"found"` and these fields:
 
@@ -302,7 +304,7 @@ Examples of what `notes` holds for a run:
 | --- | --- | --- | --- |
 | `-probe` | bool |  | resolve and fetch each target once, print one line per web service and per path -dirs found: no crawl, scripts, path checks, TLS, subdomain or archive sources, and depth 1; a flag that asks for a collector (-dirs, -params, -ports, -ports-udp, -screenshots, -browser, -dns-brute, -permute, -graphql) still runs it, and a flag for what -probe turns off (-fill-forms, -submit-forms, -path-climb, -known-files) is a usage error |
 | `-passive` | bool |  | skip HTTP/crawl/JS/paths/TLS (no handshake to the target) |
-| `-skip` | string |  | collectors not to run, comma-separated (see azhaq plan) |
+| `-skip` | string |  | collectors not to run, comma-separated: azhaq-ports or ports, subs for the subdomain collector (azhaq plan lists them); a name that is none is an error; azhaq resume leaves out the tasks the run kept for them |
 | `-dirs` | string |  | guess paths on each web service from this wordlist, or @common for the built-in one (active; the targets given are the scope unless -allow) |
 | `-params` | string |  | find query parameters pages read, from this wordlist or small, medium or large for a built-in one (active; the targets given are the scope unless -allow) |
 | `-ports` | string |  | scan TCP ports: top-100, top-1000, full or a list of ports, ranges and these names, such as 22,80,8000-8100 or top-100,8888 (active; the targets given are the scope unless -allow) |
@@ -400,8 +402,8 @@ Examples of what `notes` holds for a run:
 | `-max-requests` | int |  | requests to targets this run may send (0: no cap); the work left over is for azhaq resume |
 | `-max-host-requests` | int |  | requests one host may be sent (0: no cap); the rest of its work is left for azhaq resume |
 | `-daily-requests` | int |  | requests a day to the program's targets (-program, else this run's targets), counted over the runs in -db |
-| `-max-items` | int |  | max collector invocations (default 2048) |
-| `-max-names` | int |  | max hostnames resolved (default 20000) |
+| `-max-items` | int |  | most collector tasks (a name, a URL, an address each, per collector) this run starts (default: no cap, katana's and httpx's); the work left is for azhaq resume, which starts as many more |
+| `-max-names` | int |  | most hostnames this run resolves (default 200000, as many as subs keeps for a domain); the names left are for azhaq resume |
 | `-max-ips` | int | `4096` | addresses expanded from -asn and -cidr prefixes, for the whole run |
 | `-max-response-size` | int |  | bytes read of a page or document (default 2097152; scripts and JSON get 16 MiB) |
 | `-depth` | int | `4` | max fan-out waves (0 = seed wave only, not unlimited) |

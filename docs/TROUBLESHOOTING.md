@@ -381,10 +381,7 @@ azhaq keeps the names it found in `names/DOMAIN.json`. The file is under `$AZHAQ
 
 ### `subs` lists names with `"unverified": true`
 
-**Why:** Without `-live`, `subs` does not look names up in DNS. Two kinds of name are then listed, flagged, and counted in `unverified`:
-
-- names that only subdomain.center guessed, because most of its answer is made up;
-- names that only the name history held. No source gave them this run. A name a source gave again is not flagged.
+**Why:** Without `-live`, `subs` does not look names up in DNS. A name that only the name history held, which no source gave this run, is listed, flagged and counted in `unverified`; a name a source gave again is not flagged. Names that only subdomain.center guessed are not listed at all, because most of its answer is made up: they are counted as `guesses held back`. With `-guesses` they are listed too, flagged the same way.
 
 **Fix:** `-live` checks them and leaves out what does not resolve.
 
