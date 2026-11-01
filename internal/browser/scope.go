@@ -563,6 +563,20 @@ func (b *Browser) prepay(frame cdp.FrameID, on bool) {
 	b.paid[frame] = true
 }
 
+// unpay ends the mark prepay left and says whether it was still there: the
+// page's document request never came (frame "" is a page whose tab never
+// opened), so what its caller counted for it was never sent.
+func (b *Browser) unpay(frame cdp.FrameID) bool {
+	if frame == "" {
+		return true
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	was := b.paid[frame]
+	delete(b.paid, frame)
+	return was
+}
+
 func (b *Browser) popup(id cdp.FrameID) {
 	b.refMu.Lock()
 	defer b.refMu.Unlock()

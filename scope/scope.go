@@ -484,15 +484,26 @@ func NamesHost(name string) bool {
 // (X-Forwarded-Host: a.test, b.test) names each, and a port is dropped.
 func HeaderHosts(value string) []string {
 	var out []string
+	for _, a := range HeaderAddrs(value) {
+		out = append(out, a[0])
+	}
+	return out
+}
+
+// HeaderAddrs are the host and the port ("" when none is named) of each
+// address the value of a host-naming header names.
+func HeaderAddrs(value string) [][2]string {
+	var out [][2]string
 	for _, v := range strings.Split(value, ",") {
 		v = strings.TrimSpace(v)
 		if v == "" {
 			continue
 		}
-		if h, _, err := net.SplitHostPort(v); err == nil {
-			v = h
+		port := ""
+		if h, p, err := net.SplitHostPort(v); err == nil {
+			v, port = h, normPort(p)
 		}
-		out = append(out, strings.Trim(v, "[]"))
+		out = append(out, [2]string{strings.Trim(v, "[]"), port})
 	}
 	return out
 }
@@ -504,18 +515,20 @@ func (r Rules) HeaderOutside(name, value string) string {
 	if r.Empty() {
 		return ""
 	}
-	return HeaderOutsideBy(r.Allows, name, value)
+	return HeaderOutsideBy(r.AllowsAddr, name, value)
 }
 
-// HeaderOutsideBy is HeaderOutside for any test of a host: the one place a
-// header that names a host is held to a scope.
-func HeaderOutsideBy(allows func(host string) bool, name, value string) string {
+// HeaderOutsideBy is HeaderOutside for any test of a host and port (a port
+// "" asks about the host alone): the one place a header that names a host is
+// held to a scope. A port the header names is held to an -allow entry's port
+// as a URL's is.
+func HeaderOutsideBy(allows func(host, port string) bool, name, value string) string {
 	if allows == nil || !NamesHost(name) {
 		return ""
 	}
-	for _, h := range HeaderHosts(value) {
-		if !allows(h) {
-			return h
+	for _, a := range HeaderAddrs(value) {
+		if !allows(a[0], a[1]) {
+			return a[0]
 		}
 	}
 	return ""

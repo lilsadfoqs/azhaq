@@ -69,3 +69,30 @@ func TestInteractAddsToTheCrawlWhenAClickLeavesTheScope(t *testing.T) {
 		t.Errorf("the summary's -interact note is missing or counts too few clicks:\n%s", errOut)
 	}
 }
+
+// The summary's request count and the ledger's lines are one number for a
+// crawl that clicks, with no note saying they differ.
+func TestInteractSummaryAndLedgerAgree(t *testing.T) {
+	if _, err := browser.Find(); err != nil {
+		t.Skip(err)
+	}
+	srv := offsiteLinkServer()
+	defer srv.Close()
+	t.Chdir(t.TempDir())
+	_, errOut, code := cli(t, "crawl", "-u", srv.URL+"/", "-browser", "-interact", "-allow", "127.0.0.1", "-json", "-db", "c.db")
+	if code != exitOK {
+		t.Fatalf("exit %d\n%s", code, errOut)
+	}
+	rep := lastReport(t, errOut)
+	want := fmt.Sprintf("%d to targets (%d requests,", rep.Requests, rep.Requests)
+	var noted bool
+	for _, n := range rep.Notes {
+		if strings.Contains(n, "the summary counts") {
+			t.Errorf("the summary and the ledger differ: %s", n)
+		}
+		noted = noted || strings.Contains(n, want)
+	}
+	if !noted {
+		t.Errorf("no ledger note holds %q: %q", want, rep.Notes)
+	}
+}

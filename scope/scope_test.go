@@ -171,6 +171,26 @@ func TestHeaderOutside(t *testing.T) {
 	}
 }
 
+// A header that names a port is held to the entry's port as a URL is; one
+// that names none is judged by the host.
+func TestHeaderOutsidePort(t *testing.T) {
+	r := Rules{Allow: []string{"127.0.0.1:3001", "any.test", "ports.test:80"}}.Compile()
+	for _, c := range []struct{ name, value, out string }{
+		{"Host", "127.0.0.1:3001", ""},
+		{"Host", "127.0.0.1", ""},
+		{"Host", "127.0.0.1:5002", "127.0.0.1"},
+		{"x-forwarded-host", "any.test:8443", ""},
+		{"X-Forwarded-Host", "127.0.0.1:3001, 127.0.0.1:5002", "127.0.0.1"},
+		{"Host", "ports.test:80", ""},
+		{"Host", "ports.test:81", "ports.test"},
+		{"Host", "[::1]:3001", "::1"},
+	} {
+		if got := r.HeaderOutside(c.name, c.value); got != c.out {
+			t.Errorf("%s: %s: %q, want %q", c.name, c.value, got, c.out)
+		}
+	}
+}
+
 // An allow entry with a port allows that host on that port only; one
 // without allows every port. A deny entry keeps the host out on every port.
 func TestAllowPortHoldsTheConnectionToThatPort(t *testing.T) {

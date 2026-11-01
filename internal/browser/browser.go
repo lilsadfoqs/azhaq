@@ -311,6 +311,15 @@ func (b *Browser) Load(ctx context.Context, rawURL string, shot bool) (Page, err
 	if err := b.start(); err != nil {
 		return Page{}, err
 	}
+	// The caller counted the page: when no document request of it was ever
+	// let go (refused, or the tab never opened), nothing was sent, and the
+	// count is given back.
+	var mainFrame cdp.FrameID
+	defer func() {
+		if b.unpay(mainFrame) {
+			egress.Refund()
+		}
+	}()
 	b.visit(rawURL)
 	if err := b.gate.enter(ctx, b.Tabs, b.Timeout); err != nil {
 		return Page{}, err
@@ -369,7 +378,7 @@ func (b *Browser) Load(ctx context.Context, rawURL string, shot bool) (Page, err
 		return p, err
 	}
 	b.prepay(main, true)
-	defer b.prepay(main, false)
+	mainFrame = main
 	if len(b.Header) > 0 {
 		if _, err := chromedp.Call(tab, network.SetExtraHTTPHeaders, network.SetExtraHTTPHeadersParams{Headers: network.Headers(b.Header)}); err != nil {
 			return p, err

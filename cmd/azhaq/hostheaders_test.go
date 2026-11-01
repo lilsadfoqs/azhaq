@@ -94,6 +94,58 @@ func TestHostHeaderOutsideScopeIsRefusedByEveryCommand(t *testing.T) {
 	fetch.Reset()
 }
 
+// A header that names the allowed host on another port is refused like one
+// that names another host: exit 2, nothing sent, not even to a proxy.
+func TestHostHeaderOtherPortIsRefusedByEveryCommand(t *testing.T) {
+	srv, n, _, _ := hostSeen(t)
+	port := strings.TrimPrefix(srv.URL, "http://127.0.0.1:")
+	other := "127.0.0.1:" + port + "9" // a port no -allow entry names
+	var viaProxy atomic.Int64
+	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { viaProxy.Add(1) }))
+	defer proxy.Close()
+	words := wlist(t, "a", "b")
+	lock := []string{"-allow", "127.0.0.1:" + port}
+	cases := []struct {
+		name string
+		run  func([]string) error
+		args []string
+	}{
+		{"fuzz through a proxy", cmdFuzz, append([]string{"-u", srv.URL + "/FUZZ", "-H", "Host: " + other, "-w", words, "-proxy", proxy.URL}, lock...)},
+		{"fuzz X-Forwarded-Host", cmdFuzz, append([]string{"-u", srv.URL + "/FUZZ", "-H", "X-Forwarded-Host: " + other, "-w", words}, lock...)},
+		{"dirs", cmdDirs, append([]string{"-u", srv.URL + "/", "-H", "Host: " + other, "-w", words}, lock...)},
+		{"params", cmdParams, append([]string{"-u", srv.URL + "/", "-H", "X-Host: " + other, "-w", words}, lock...)},
+		{"probe", cmdProbe, append([]string{"-u", srv.URL + "/", "-H", "Host: " + other}, lock...)},
+		{"crawl", cmdCrawl, append([]string{"-u", srv.URL + "/", "-H", "X-Original-Host: " + other}, lock...)},
+		{"roles -role", cmdRoles, append([]string{"-dir", t.TempDir(), "-role", "anon", "-role", "bob=Host: " + other, "--", "-url", srv.URL + "/"}, lock...)},
+	}
+	for _, c := range cases {
+		fetch.Reset()
+		n.Store(0)
+		_, _, err := captureBoth(t, func() error { return c.run(c.args) })
+		if exitCode(err) != exitUsage || err == nil || !strings.Contains(err.Error(), other) {
+			t.Errorf("%s: exit %d, %v", c.name, exitCode(err), err)
+		}
+		if n.Load() != 0 || viaProxy.Load() != 0 {
+			t.Errorf("%s: %d requests reached the server, %d the proxy", c.name, n.Load(), viaProxy.Load())
+		}
+	}
+	// The allowed port in the header goes through.
+	fetch.Reset()
+	if _, _, err := captureBoth(t, func() error {
+		return cmdFuzz(append([]string{"-u", srv.URL + "/FUZZ", "-H", "Host: 127.0.0.1:" + port, "-w", words, "-json"}, lock...))
+	}); err != nil || n.Load() == 0 {
+		t.Errorf("the allowed port: %v, %d requests", err, n.Load())
+	}
+	// A keyword in the header: the input that names the other port is not sent.
+	fetch.Reset()
+	n.Store(0)
+	rows, rep, err := fuzzRows(t, append([]string{"-u", srv.URL + "/", "-H", "Host: FUZZ", "-w", wlist(t, "127.0.0.1:"+port, other), "-mc", "all"}, lock...)...)
+	if err != nil || n.Load() != 1 || len(rows) != 1 || len(rep.Skipped) == 0 {
+		t.Errorf("%v: %d requests, rows %q, summary %+v", err, n.Load(), rows, rep)
+	}
+	fetch.Reset()
+}
+
 // With no -allow, -deny or -scope, a host a header on the command line names
 // joins the targets: it is sent, as ffuf sends a known vhost to an address.
 func TestHostHeaderNamedOnTheCommandLineJoinsTheTargets(t *testing.T) {

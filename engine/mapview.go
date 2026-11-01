@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/trannghiach/azhaq/internal/neterr"
 	"github.com/trannghiach/azhaq/internal/normalize"
 	"github.com/trannghiach/azhaq/internal/webextract"
 	"github.com/trannghiach/azhaq/types"
@@ -120,6 +121,9 @@ func BuildMap(ents []types.Entity, seeds []types.Seed, obs []types.StoredObserva
 	out := make([]MapEntry, 0, len(ents))
 	portAt := map[string]int{}
 	for _, e := range ents {
+		if e.Type == types.TypeURL && outsideByPort(byEnt[e.ID]) {
+			continue // outside the scope: the summary lists it as skipped, no row says it was found
+		}
 		rows := ownObs(e, byEnt[e.ID])
 		if e.Type == types.TypeURL {
 			rows = append(rows, probes[e.Key]...)
@@ -231,6 +235,23 @@ func BuildMap(ents []types.Entity, seeds []types.Seed, obs []types.StoredObserva
 		return out[i].Entity.Key < out[j].Entity.Key
 	})
 	return out
+}
+
+// outsideByPort says a URL was left out because -allow lists its host with
+// another port only: outside the scope, as a URL on another host is.
+func outsideByPort(obs []types.StoredObservation) bool {
+	for _, o := range obs {
+		if o.Kind != "skipped" {
+			continue
+		}
+		var p struct {
+			Skipped string `json:"skipped"`
+		}
+		if json.Unmarshal(o.Payload, &p) == nil && p.Skipped == neterr.OutOfPortReason {
+			return true
+		}
+	}
+	return false
 }
 
 // answerOf is the status and title a URL answered with: a real page

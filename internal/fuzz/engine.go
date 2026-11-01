@@ -65,7 +65,11 @@ type Config struct {
 	// is not is not sent. The hosts its Host-naming headers name count too,
 	// except the headers in OpenHeaders (lower-case names): the user typed
 	// them, with no scope rule, so what they name is what was authorized.
-	Allow       func(host string) bool
+	Allow func(host string) bool
+	// AllowAddr is Allow that also holds a port: an -allow entry written
+	// HOST:PORT allows that port only, in the URL and in a header. It
+	// replaces Allow when set.
+	AllowAddr   func(host, port string) bool
 	OpenHeaders map[string]bool
 	// DenyPath, when set, returns the user's -deny-path rule a request's
 	// URL matches, or "": that request is not sent.
@@ -790,7 +794,11 @@ func (e *engine) denied(req *Request) bool {
 // inScope says whether req may be sent: its URL's host and every host a
 // Host-naming header of it names (a front end routes by those) pass Allow.
 func (e *engine) inScope(req *Request) bool {
-	return InScope(e.cfg.Allow, req, e.cfg.OpenHeaders)
+	allow := e.cfg.AllowAddr
+	if allow == nil && e.cfg.Allow != nil {
+		allow = func(host, _ string) bool { return e.cfg.Allow(host) }
+	}
+	return InScopeAddr(allow, req, e.cfg.OpenHeaders)
 }
 
 // InScope is that check for any sender of a request: allow nil lets all
@@ -799,7 +807,19 @@ func InScope(allow func(string) bool, req *Request, open map[string]bool) bool {
 	if allow == nil {
 		return true
 	}
-	if !allow(hostOf(req.URL)) {
+	return InScopeAddr(func(host, _ string) bool { return allow(host) }, req, open)
+}
+
+// InScopeAddr is InScope for a scope that holds a port too.
+func InScopeAddr(allow func(host, port string) bool, req *Request, open map[string]bool) bool {
+	if allow == nil {
+		return true
+	}
+	host, port := "", ""
+	if u, err := url.Parse(req.URL); err == nil {
+		host, port = u.Hostname(), scope.URLPort(u)
+	}
+	if !allow(host, port) {
 		return false
 	}
 	for _, h := range req.Headers {

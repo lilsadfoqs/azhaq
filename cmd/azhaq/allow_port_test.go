@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -216,5 +217,42 @@ func TestRunAllowWithAPortSaysHowToNameTheTarget(t *testing.T) {
 	_, errOut, code := cli(t, "run", "-list", list, "-allow", "127.0.0.1:9", "-sources", "none", "-db", filepath.Join(t.TempDir(), "x.db"), "-json")
 	if code != exitUsage || !strings.Contains(errOut, "an -allow entry lists a host with a port: name the target with it") {
 		t.Errorf("exit %d: %s", code, errOut)
+	}
+}
+
+// A URL on another port of the host is outside the scope: no row of the
+// results (crawl text and -json, the run's map), told only in the summary's
+// skipped list, and by crawl -do among the links left outside.
+func TestUrlsOnAnotherPortAreNotResults(t *testing.T) {
+	a, b, bHits := twoPorts(t)
+	port := ":" + srvPort(t, b)
+	allow := "127.0.0.1:" + srvPort(t, a)
+	// A URL as a row names it (a line, or a url, key or endpoint field), not the script text that mentions it.
+	row := regexp.MustCompile(`(^|\s|"(url|key|endpoint)":")http://127\.0\.0\.1` + port)
+	for _, c := range []struct {
+		name string
+		args []string
+	}{
+		{"crawl", []string{"crawl", "-u", a.URL + "/", "-allow", allow}},
+		{"crawl -json", []string{"crawl", "-u", a.URL + "/", "-allow", allow, "-json"}},
+		{"crawl -jsonl", []string{"crawl", "-u", a.URL + "/", "-allow", allow, "-jsonl"}},
+		{"run", []string{"run", "-url", a.URL + "/", "-allow", allow, "-sources", "none", "-db", filepath.Join(t.TempDir(), "r.db")}},
+		{"run -json", []string{"run", "-url", a.URL + "/", "-allow", allow, "-sources", "none", "-json", "-db", filepath.Join(t.TempDir(), "rj.db")}},
+		{"run -stream -json", []string{"run", "-url", a.URL + "/", "-allow", allow, "-sources", "none", "-stream", "-json", "-db", filepath.Join(t.TempDir(), "rs.db")}},
+	} {
+		out, errOut, _ := cli(t, c.args...)
+		if row.MatchString(out) {
+			t.Errorf("%s: a URL of the other port is on stdout:\n%s", c.name, out)
+		}
+		if !strings.Contains(errOut, port) {
+			t.Errorf("%s: the summary does not name the URL left out:\n%s", c.name, errOut)
+		}
+	}
+	out, _, _ := cli(t, "crawl", "-u", a.URL+"/", "-allow", allow, "-do")
+	if !strings.Contains(out, port) {
+		t.Errorf("-do does not list the link left outside the scope:\n%s", out)
+	}
+	if bHits.Load() != 0 {
+		t.Errorf("the other port got %d requests", bHits.Load())
 	}
 }

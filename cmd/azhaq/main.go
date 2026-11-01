@@ -2471,7 +2471,10 @@ func hostHeadersFrom(what string, h http.Header, rules scope.Rules) error {
 	sort.Strings(keys)
 	for _, k := range keys {
 		for _, v := range h[k] {
-			if rules.HeaderOutside(k, v) != "" {
+			if h := rules.HeaderOutside(k, v); h != "" {
+				if rules.Allows(h) {
+					return usagef("%s %s: %s names a port the scope leaves out for %s: -allow lists it with another port only (HOST:PORT allows that port; HOST alone, every port); leave the port out or allow it", what, k, v, h)
+				}
 				return usagef("%s %s: %s names a host outside the scope: a front end that routes by it serves that host; leave the header out, or name the host in the scope (-allow)", what, k, v)
 			}
 		}

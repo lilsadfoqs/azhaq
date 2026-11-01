@@ -8,6 +8,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -355,6 +356,28 @@ func (s histScope) has(raw string) bool {
 		return false
 	}
 	return s.origins[histOrigin(raw)] || s.hosts[normalize.Hostname(u.Hostname())]
+}
+
+// allowEntries are the origins the histories' target is on as -allow entries:
+// host, with the port when the origin names one. The hosts of the run's -allow
+// are not here: they would drop the port of an entry written HOST:PORT.
+func (s histScope) allowEntries() []string {
+	set := map[string]bool{}
+	for o := range s.origins {
+		if u, err := url.Parse(o); err == nil {
+			e := normalize.Hostname(u.Hostname())
+			if u.Port() != "" {
+				e = net.JoinHostPort(e, u.Port())
+			}
+			set[e] = true
+		}
+	}
+	out := make([]string, 0, len(set))
+	for e := range set {
+		out = append(out, e)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // hostnames are the hosts the target is on.

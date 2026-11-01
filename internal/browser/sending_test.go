@@ -397,3 +397,67 @@ func TestLetGoRequestIsNotDepartedUntilSeenLeaving(t *testing.T) {
 		t.Errorf("one left, one from the cache: sent %d, departed %d, want 1 and 1", egress.Sent(), egress.Departed())
 	}
 }
+
+// A page its caller counted that is refused before it is requested (a
+// -deny-path rule) was never sent: the count goes back.
+func TestRefusedPageGivesItsCountBack(t *testing.T) {
+	b := startChrome(t)
+	own := newRecorder(func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, "<html>x</html>") })
+	defer own.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	fetch.Reset()
+	egress.SetScope(func(h string) bool { return h == "127.0.0.1" })
+	egress.SetDenyPath(func(raw string) string {
+		if strings.Contains(raw, "/private") {
+			return "private"
+		}
+		return ""
+	})
+	_ = egress.Spend(ctx) // the page, which Load's caller counts
+	_, _ = b.Load(ctx, own.URL+"/private", false)
+	if n, got := egress.Sent(), len(own.got()); n != 0 || got != 0 {
+		t.Errorf("counted %d requests, the server got %d: a page nobody requested was counted", n, got)
+	}
+}
+
+// Clicking a page counts what the server got and the ledger lists the same.
+func TestClickedPageIsCountedAsTheLedgerHasIt(t *testing.T) {
+	b := startChrome(t)
+	b.Interact = 6
+	own := newRecorder(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/" {
+			w.Header().Set("Content-Type", "text/html")
+			fmt.Fprint(w, `<html><body><button onclick="fetch('/api/one')">One</button>
+<button onclick="fetch('/api/two').then(r => r.json()).then(() => fetch('/api/three'))">Two</button>
+<a href="/about">About</a><script>fetch('/api/boot')</script></body></html>`)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"ok":true}`)
+	})
+	defer own.Close()
+	path := filepath.Join(t.TempDir(), "l.jsonl")
+	l, err := ledger.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ledger.Use(l)
+	defer ledger.Use(nil)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	fetch.Reset()
+	egress.SetScope(func(h string) bool { return h == "127.0.0.1" })
+	_ = egress.Spend(ctx)
+	if _, err := b.Load(ctx, own.URL+"/", false); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(time.Second)
+	b.Close()
+	l.Close()
+	lines := 0
+	_ = ledger.Read(path, func(e ledger.Entry) error { lines++; return nil })
+	if n := egress.Sent(); n != int64(lines) || lines != len(own.got()) {
+		t.Errorf("counted %d, the ledger lists %d, the server got %d: %v", n, lines, len(own.got()), own.got())
+	}
+}

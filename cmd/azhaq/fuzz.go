@@ -375,7 +375,7 @@ func cmdFuzz(args []string) error {
 		Template: tmpl, Lists: kept, Mode: md, Set: set, Threads: *threads, Sender: sender,
 		Calibrate: calibrate, CalKeyword: *ack, CalGroups: calGroups, Recursion: *recursion, Depth: *depth, Strategy: *strategy,
 		MaxTimeJob: time.Duration(*maxtimeJob * float64(time.Second)), DelayMin: dmin, DelayMax: dmax,
-		StopOn403: *sf || *sa, StopOnAll: *sa, Allow: rules.Allows, DenyPath: rules.DeniedPath, OpenHeaders: openHeaders, OriginTrips: trips, TripOnAnyError: anyErr, Start: *start,
+		StopOn403: *sf || *sa, StopOnAll: *sa, Allow: rules.Allows, AllowAddr: rules.AllowsAddr, DenyPath: rules.DeniedPath, OpenHeaders: openHeaders, OriginTrips: trips, TripOnAnyError: anyErr, Start: *start,
 		Progress: new(fuzz.Progress),
 	}
 	cfg.Skip, cfg.SkipTotal = takeFuzzSkip(tmpl)

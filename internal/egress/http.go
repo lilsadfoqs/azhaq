@@ -50,7 +50,45 @@ func (g *guarded) RoundTrip(req *http.Request) (*http.Response, error) {
 	if err := g.admit(req); err != nil {
 		return nil, err
 	}
-	return g.rt.RoundTrip(req)
+	out := keepTargetInRequestLine(g.base, req)
+	resp, err := g.rt.RoundTrip(out)
+	if resp != nil && out != req {
+		resp.Request = req
+	}
+	return resp, err
+}
+
+// keepTargetInRequestLine is req, changed when it goes to an HTTP proxy in
+// absolute form: Go writes that request line with the Host header's authority,
+// so a Host that differs from the URL's would send the proxy to another host
+// or port. The request line then names the URL's authority and the Host header
+// stays as set. A -raw path (Opaque) loses its absolute form the same way.
+func keepTargetInRequestLine(base *http.Transport, req *http.Request) *http.Request {
+	u := req.URL
+	if base == nil || base.Proxy == nil || u == nil || u.Scheme != "http" || u.Host == "" {
+		return req
+	}
+	opaque := u.Opaque
+	switch {
+	case opaque == "":
+		if req.Host == "" || strings.EqualFold(req.Host, u.Host) {
+			return req
+		}
+		opaque = u.EscapedPath()
+		if opaque == "" {
+			opaque = "/"
+		}
+	case strings.HasPrefix(opaque, "//") || !strings.HasPrefix(opaque, "/"):
+		return req
+	}
+	if p, err := base.Proxy(req); err != nil || p == nil || (p.Scheme != "http" && p.Scheme != "https") {
+		return req
+	}
+	out := *req
+	cu := *u
+	cu.Opaque = "//" + u.Host + opaque
+	out.URL = &cu
+	return &out
 }
 
 // admit holds req to the checks of its class and closes its body when it
@@ -102,9 +140,10 @@ func (p *Policy) checkRequest(req *http.Request, sni string) error {
 			return err
 		}
 	}
+	addr := p.ScopeAddr()
 	if req.Host != "" && !open["host"] {
-		if h := hostOnly(req.Host); h != "" && !allow(h) {
-			return neterr.ErrOutOfScope
+		if h, port := hostPortOf(req.Host); h != "" && !addr(h, port) {
+			return p.outOf(h)
 		}
 	}
 	for name, vs := range req.Header {
@@ -112,8 +151,8 @@ func (p *Policy) checkRequest(req *http.Request, sni string) error {
 			continue
 		}
 		for _, v := range vs {
-			if scope.HeaderOutsideBy(allow, name, v) != "" {
-				return neterr.ErrOutOfScope
+			if h := scope.HeaderOutsideBy(addr, name, v); h != "" {
+				return p.outOf(h)
 			}
 		}
 	}
@@ -123,11 +162,21 @@ func (p *Policy) checkRequest(req *http.Request, sni string) error {
 	return nil
 }
 
-func hostOnly(hostport string) string {
-	if h, _, err := net.SplitHostPort(hostport); err == nil {
-		return strings.Trim(h, "[]")
+// outOf is why a host a header names is refused: its port when the host is in
+// scope on another, else the scope.
+func (p *Policy) outOf(host string) error {
+	if p.Allows(host) {
+		return neterr.ErrOutOfPort
 	}
-	return strings.Trim(hostport, "[]")
+	return neterr.ErrOutOfScope
+}
+
+// hostPortOf splits a Host header's value; the port is "" when it names none.
+func hostPortOf(hostport string) (host, port string) {
+	if h, p, err := net.SplitHostPort(hostport); err == nil {
+		return strings.Trim(h, "[]"), p
+	}
+	return strings.Trim(hostport, "[]"), ""
 }
 
 // CloseIdleConnections passes on to the transport, as http.Client looks for it.

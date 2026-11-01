@@ -65,6 +65,7 @@ The command could not do its job: a database it cannot open, or Chrome missing f
 
 - The targets are all outside the scope given: `every target is outside the scope (2 left out): 127.0.0.2, 127.0.0.3`. The message names them. A range that no allow rule touches counts. `ports` and `dns` say it too.
 - A header names a host (`Host`, `X-Forwarded-Host`, `X-Host`, `X-Original-Host`) outside a scope rule. For example `-H 'Host: secret.lab'` with `-deny secret.lab`, or a request file's or import's header whose host is not a target. See [Hosts named in headers](CONCEPTS.md#hosts-named-in-headers).
+- A flag that takes a value is followed by another flag of the command: `-screenshots -max-requests 50` would take `-max-requests` for the directory. Give the value, or join the flag and a value that starts with a dash with an equals sign.
 - Nothing was sent.
 
 ### Exit 3

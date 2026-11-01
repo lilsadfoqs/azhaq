@@ -71,7 +71,7 @@ func rolesScope(runArgs []string, sc histScope, allows []string) (scope.Rules, e
 	if len(allow) == 0 {
 		allow = urlHosts(runArgs)
 	}
-	allow = append(allow, sc.hostnames()...)
+	allow = append(allow, sc.allowEntries()...)
 	for _, a := range allows {
 		allow = append(allow, strings.TrimSpace(a))
 	}

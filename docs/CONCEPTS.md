@@ -143,6 +143,7 @@ A header that names a host is held to the scope too, because a front end routes 
 
 - With no `-allow`, `-deny` or `-scope`, a host you name in a header joins the targets you named.
 - With a rule, a header that names a host outside it is refused before anything is sent. The command exits 2.
+- A header that names a port is held to the rule's port like a URL: with `-allow 127.0.0.1:3001`, `Host: 127.0.0.1:5002` is refused and `Host: 127.0.0.1:3001` is sent. A header with no port is judged by its host.
 - A request file, an import (`params -i`), a `-vi` line and a `-role-cmd` bring headers you did not type. They are held to the targets.
 
 ## Sessions
@@ -186,6 +187,7 @@ One rule holds for every command that sends HTTP to a target: `run`, `crawl`, `p
 
 - `-proxy URL` (an `http://`, `https://` or `socks5://` URL; `fuzz` also takes `-x`) sends every request of the command through it. The proxy sees each one, and the ledger counts the same.
 - `-proxy` sends everything through the proxy, loopback targets (`127.0.0.1`, `localhost`, `::1`) included: that is how to put a local lab in Burp.
+- Through an HTTP proxy a plain-HTTP request names its URL in the request line (`GET http://127.0.0.1:3001/path`) and sends a `Host` header you set as you set it, as curl does. The proxy connects to the URL's host, never to the one the `Host` header names.
 - Without `-proxy`, the environment's `HTTP_PROXY`, `HTTPS_PROXY` and `NO_PROXY` apply by Go's rule, as in ffuf, httpx and katana: a loopback target always stays direct, so a company proxy in the environment never gets your local labs.
 - `azhaq mcp` has no `-proxy`: its commands read the environment the server starts with.
 - Not target requests, so not covered: `subs -proxy` and `-source-proxy` (the name sources), `urls -proxy` (the archives), `notify -proxy`, `dns -proxy` and `ports -proxy` (SOCKS5 for DNS and for connects).
