@@ -7,7 +7,7 @@ Do not read azhaq's Go source and do not review diffs: judge only by behaviour, 
 - Binary: /home/runner/hunt/bin/azhaq, built from the commit under test. `help`, `help COMMAND`, `docs` and `docs migrating` describe everything.
 - Work only in your own folder, /home/runner/hunt/AREA/, where AREA is given below.
 - Reference tools, ready to run, in /home/runner/ref/bin/: subfinder, dnsx, httpx, katana, ffuf, gau, naabu, gowitness, notify, jsluice and arjun. nmap is installed (`nmap`); run it without sudo (`-sT -sV`).
-- Independent request log: `python3 -I /home/runner/work/azhaq/azhaq/bench/truth/ledger/countproxy.py LISTEN_PORT TARGET_PORT LOG.jsonl` is a reverse proxy that logs every request as it arrives (method, and path with query). Run it in the background on a free port, put it in front of a lab app, and point azhaq at the proxy port. Do not edit it.
+- Independent request log: `python3 -I /home/runner/work/azhaq/azhaq/bench/truth/ledger/countproxy.py LISTEN_PORT TARGET_PORT LOG.jsonl` is a reverse proxy that logs every request as it arrives (method, and path with query). Run it in the background on a free port, put it in front of a lab app, and point azhaq at the proxy port. It also works as `-proxy` (it sends the origin the path, as a forward proxy does). Do not edit it.
 - This machine is yours alone: no other reviewer shares the labs.
 
 ## Allowed targets (hard rules)

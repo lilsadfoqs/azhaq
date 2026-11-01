@@ -3,6 +3,7 @@ package browser
 import (
 	"encoding/json"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -254,6 +255,52 @@ func (r *pageLog) addConsole(kind, value string) {
 	if len(r.rec.Console) < maxConsole {
 		r.rec.Console = append(r.rec.Console, ConsoleLn{Type: kind, Value: value})
 	}
+}
+
+// ScriptFault is a script of a page that did not load as code.
+type ScriptFault struct {
+	URL string `json:"url"`
+	Why string `json:"why"`
+}
+
+// ScriptFaults lists the page's scripts that did not load as code: the
+// network failed them, the server answered an error, or it answered an HTML
+// page (the app's shell for a script's address), which Chrome does not run.
+// A page whose scripts fail draws nothing and calls nothing.
+func (r Record) ScriptFaults() []ScriptFault {
+	var out []ScriptFault
+	for _, e := range r.Network {
+		if e.rt != network.ResourceTypeScript || e.blocked {
+			continue
+		}
+		why := ""
+		switch {
+		case e.Error != "":
+			why = e.Error
+		case e.Status >= 400:
+			why = "answered " + strconv.Itoa(e.Status)
+		case strings.HasPrefix(strings.ToLower(e.MIME), "text/html"):
+			why = "answered a page (" + e.MIME + "), not JavaScript"
+		}
+		if why != "" {
+			out = append(out, ScriptFault{URL: e.URL, Why: why})
+		}
+	}
+	return out
+}
+
+// Threw is the first error a script of the page threw, shortened, or "".
+func (r Record) Threw() string {
+	for _, c := range r.Console {
+		if c.Type == "exception" {
+			v, _, _ := strings.Cut(c.Value, "\n")
+			if len(v) > 200 {
+				v = v[:200]
+			}
+			return v
+		}
+	}
+	return ""
 }
 
 // snapshot is the record so far, and how many of the requests that make a
