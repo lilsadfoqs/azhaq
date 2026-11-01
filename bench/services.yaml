@@ -47,7 +47,10 @@ services:
   ftp:
     image: delfer/alpine-ftp-server:latest
     container_name: azq-svc-ftp
-    environment: {USERS: "azq|azq-lab-only"}
+    # The image's default home /ftp/NAME needs /ftp, which the image stopped
+    # creating when it dropped its volume (adduser then fails and vsftpd never
+    # starts); USERS takes a folder as its third field.
+    environment: {USERS: "azq|azq-lab-only|/home/azq"}
     ports: ["127.0.0.1:10021:21"]
   mail:
     image: axllent/mailpit:v1.20

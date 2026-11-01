@@ -4,11 +4,13 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/miekg/dns"
+	"go.yaml.in/yaml/v3"
 )
 
 // lab starts a listener that runs fn on each connection; it returns the port.
@@ -172,5 +174,29 @@ func TestDaemonLogsNameTheContainer(t *testing.T) {
 	docker = func(...string) (string, error) { return "", fmt.Errorf("no docker") }
 	if got := daemonLogs([]int{10021}); !strings.Contains(got, "no docker") {
 		t.Errorf("without docker: %q", got)
+	}
+}
+
+// delfer/alpine-ftp-server builds a user's home with adduser, which fails
+// when the home's parent does not exist: the image no longer creates /ftp,
+// so the lab names a folder under /home (the image's README form
+// name|password|folder).
+func TestFTPLabUserHasAHomeThatExists(t *testing.T) {
+	raw, err := os.ReadFile("services.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cfg struct {
+		Services map[string]struct {
+			Environment map[string]string `yaml:"environment"`
+		} `yaml:"services"`
+	}
+	if err := yaml.Unmarshal(raw, &cfg); err != nil {
+		t.Fatal(err)
+	}
+	users := cfg.Services["ftp"].Environment["USERS"]
+	f := strings.Split(users, "|")
+	if len(f) < 3 || !strings.HasPrefix(f[2], "/home/") {
+		t.Errorf("USERS %q: the third field must be a folder under /home", users)
 	}
 }
