@@ -22,6 +22,7 @@
 
 ### Fixed
 
+- A worker no longer waits a minute and ends with a lost-run error when the run finishes between two of its claims: three refused connections in a row end it as an ended run.
 - `subs` with `-max-time` read the name checker's count and time while a sampled source it had cut short could still be writing them (a data race, seen with `-race`).
 - `params` keeps what a spent `-max-requests` established: the page's row carries the names found so far and a note says how many names were judged; exit stays 4 and `azhaq resume` searches the page again.
 - `query -type Port` printed each host/port pair twice (a prefix's scan and the scan of an address in it each made a row). A port is now one row for each host, port and protocol, with a `state` field (`open` or `open|filtered`). The summaries of `run`, `query` and `ports` count `open` ports and `open|filtered` ports apart, so a silent UDP port is never counted as open.
