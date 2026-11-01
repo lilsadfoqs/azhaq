@@ -188,6 +188,13 @@ func TestJunkReason(t *testing.T) {
 		"http://example.org/reports/...":                      JunkMalformed,
 		"http://example.org/.../x":                            JunkMalformed,
 		"http://example.org/reports/abc...":                   JunkMalformed,
+		"http://example.org/FUZZ":                             JunkTemplate,
+		"http://example.org/FUZZ/FUZ2Z":                       JunkTemplate,
+		"http://example.org/admin/FUZZ.php":                   JunkTemplate,
+		"http://example.org/HTTP/1.1":                         JunkTemplate,
+		"http://example.org/index.php%20HTTP/1.1":             JunkTemplate,
+		"http://example.org/{payload}/admin/testing":          JunkTemplate,
+		"http://example.org/%7Bpayload%7D/admin/testing":      JunkTemplate,
 		"http://example.org/v1.2/a.b":                         "",
 		"http://example.org/login.php":                        "",
 		"http://example.org/products/nessus":                  "",
@@ -249,6 +256,26 @@ func TestJunkURLScannerProbeQueries(t *testing.T) {
 	} {
 		if got := JunkReason(raw); got != "" {
 			t.Errorf("JunkReason(%s) = %q, want none", raw, got)
+		}
+	}
+}
+
+// Real paths close to the fuzzing and request-line junk stay.
+func TestJunkTemplateKeepsRealPaths(t *testing.T) {
+	for _, raw := range []string{
+		"http://a.test/fuzz",
+		"http://a.test/fuzzing/FUZZY",
+		"http://a.test/docs/http/1.1",
+		"http://a.test/docs/HTTP/2",
+		"http://a.test/HTTP/Status",
+		"http://a.test/users/{id}",
+		"http://a.test/api/{version}/orders",
+		"http://a.test/payload/admin",
+		"http://a.test/payloads",
+		"http://a.test/FUZZ-list.txt",
+	} {
+		if why := JunkReason(raw); why != "" {
+			t.Errorf("JunkReason(%s) = %q", raw, why)
 		}
 	}
 }
