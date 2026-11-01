@@ -19,7 +19,7 @@ pids+=($!)
 for pid in "${pids[@]}"; do
   wait "$pid" || { echo "labs.sh: an image did not pull" >&2; exit 1; }
 done
-docker run -d --name azq-juice -p 127.0.0.1:3001:3000 -e NODE_OPTIONS=--max-old-space-size=4096 bkimminich/juice-shop
+docker run -d --name azq-juice -p 127.0.0.1:3001:3000 -e NODE_OPTIONS=--max-old-space-size=4096 bkimminich/juice-shop:v20.3.0@sha256:cea5a4af4aacee498c491491af0408934ec81d004035c0a02ef3e54395e3bf27
 docker run -d --name azq-vampi -p 127.0.0.1:5002:5000 -e vulnerable=1 -e tokentimetolive=3600 erev0s/vampi
 docker run -d --name azq-dvga -p 127.0.0.1:5013:5013 -e WEB_HOST=0.0.0.0 dolevf/dvga:latest
 docker run -d --name azq-dvna -p 127.0.0.1:5020:9090 appsecco/dvna:sqlite

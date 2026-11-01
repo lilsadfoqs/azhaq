@@ -227,3 +227,17 @@ func TestBarFailsWhenTheReferenceDidNotRun(t *testing.T) {
 		t.Errorf("vsTool %q", got)
 	}
 }
+
+// The known-routes rows name the build of the app image the truth is of.
+func TestKnownRoutesRowNamesTheAppBuild(t *testing.T) {
+	if got := appBuild("juice-shop"); got != "v20.3.0" {
+		t.Errorf("juice-shop build %q, want the tag of bench/compose.yaml", got)
+	}
+	if got := appBuild("vampi"); got != "" {
+		t.Errorf("vampi is pinned by digest to latest, no release to name: %q", got)
+	}
+	ps := &profileSet{Apps: []appResult{{Name: "juice-shop", Azhaq: toolScore{Truth: 70, TruthOf: 77}, Katana: toolScore{Truth: 1, TruthOf: 77}}}}
+	if rows := tableRows(ps); len(rows) != 1 || !strings.Contains(rows[0].job, "juice-shop v20.3.0") {
+		t.Errorf("rows %+v", rows)
+	}
+}

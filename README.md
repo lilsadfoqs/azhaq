@@ -45,7 +45,7 @@ The drop-in commands take your tools' flags and print their JSON field names. [d
 
 ## What it adds
 
-- **Routes other crawlers miss.** On OWASP Juice Shop azhaq finds 70 of the 77 routes the server defines that its frontend calls. It lists their methods and body fields, and names the script line that calls each. katana with its jsluice parser (`-jc -jsl`) lists 1. Grepping the scripts it fetched for quoted paths gives 37, as bare strings. It also saves reading bundles by hand.
+- **Routes other crawlers miss.** On OWASP Juice Shop v20.3.0, started fresh, azhaq finds 70 of the 77 routes the server defines that its frontend calls. It lists their methods and body fields, and names the script line that calls each. katana with its jsluice parser (`-jc -jsl`) lists 1. Grepping the scripts it fetched for quoted paths gives 37, as bare strings. It also saves reading bundles by hand.
 - **Access control with evidence.** [`azhaq roles`](docs/commands/roles.md) signs in as each of your accounts, reuses each session against the others, and reports `[bob reads alice's object]` with why the object is alice's. It stands in for Autorize and for diffing Burp histories. `-replay-writes` extends this to writes.
 - **Where to look first.** [`azhaq hunt`](docs/commands/hunt.md) ranks the mapped routes, hosts and files, each with the reasons for its score and the command to run next.
 - **The API routes a deploy added.** [`azhaq watch`](docs/commands/watch.md) compares the routes scripts call from one run to the next and ties each change to the script that calls it. It stands in for cron and diff.
@@ -99,7 +99,7 @@ sha256sum --ignore-missing -c checksums.txt
 
 Only scan systems you are allowed to test.
 
-- `localhost:3000` and `localhost:5000` are lab containers: `docker run -p 3000:3000 bkimminich/juice-shop` and `docker run -p 5000:5000 erev0s/vampi`.
+- `localhost:3000` and `localhost:5000` are lab containers: `docker run --rm -p 3000:3000 bkimminich/juice-shop:v20.3.0` and `docker run --rm -p 5000:5000 erev0s/vampi`. Start Juice Shop fresh: a used one (registered users, baskets, feedback) answers other rows, and the benchmark's 70 of 77 known routes are for v20.3.0 started fresh, with no flag but `-url` and `-db`.
 - `$TA` and `$TB` hold two accounts' tokens. `alice.har` and `alice.xml` are those accounts' saved browsing.
 - `-program` names a program in the platform's public list: `tesla` on Bugcrowd, `security` on HackerOne. `acme` in other examples stands for yours.
 
@@ -118,6 +118,8 @@ azhaq run: 190 map rows (119 URLs, 71 api, 43 client routes, 11 auth, 8 forbidde
   next: azhaq query -db juice.db -role auth,forbidden   (what needs a session)
   next: azhaq export -db juice.db -format openapi > api.json   (for Burp, Postman, ZAP)
 ```
+
+The rows and counts are an example, not a measurement: they change with the app's build and state and with the flags. The number measured for the pinned build, a fresh `bkimminich/juice-shop:v20.3.0` and `azhaq run -url URL -db DB` with no other flag, is the 70 of 77 known routes in the [benchmark table](#benchmark); `go run ./bench -only apps -profile default` reproduces it (it needs Docker and a C compiler: [bench/README.md](bench/README.md)).
 
 ### Compare two accounts
 
@@ -264,8 +266,8 @@ Latest run (2026-11-01, v0.13.0, commit 01c3557; profile: both; 195 of 196 check
 | Wildcard zone, 3 real names of 50 | dnsx | default | 3 found, 0 fake | 50 without `-wd` |
 | Record types (9) of 32 names on a zone the bench serves | dnsx | default | 12 answers right in 0.0 s, 0 MB, 289 queries | 12 in 0.6 s, 44 MB, 523 queries |
 | Probing 107 hosts (the local apps and 100 local servers) | httpx | default | 107 answered, 105 confirmed; status, title and tech agree on 104 of 105 shared; 0.9 s, 75 MB | 105 answered, 105 confirmed; 1.7 s, 225 MB |
-| Known routes of juice-shop, the whole map (`azhaq run`) | katana `-jc -jsl` | default | 70/77 in 2.1 s, 90 MB | 1/77 in 14 s, 931 MB |
-| Known routes of juice-shop, the crawler alone (`azhaq crawl`, katana's depth) | katana `-jc -jsl` | default | 53/77 in 1.7 s, 81 MB | 1/77 in 14 s, 1423 MB |
+| Known routes of juice-shop v20.3.0, the whole map (`azhaq run`) | katana `-jc -jsl` | default | 70/77 in 2.1 s, 90 MB | 1/77 in 14 s, 931 MB |
+| Known routes of juice-shop v20.3.0, the crawler alone (`azhaq crawl`, katana's depth) | katana `-jc -jsl` | default | 53/77 in 1.7 s, 81 MB | 1/77 in 14 s, 1423 MB |
 | Known routes of vampi, the whole map (`azhaq run`) | katana `-jc -jsl` | default | 12/12 in 0.2 s, 62 MB | 1/12 in 11 s, 49 MB |
 | Known routes of vampi, the crawler alone (`azhaq crawl`, katana's depth) | katana `-jc -jsl` | default | 1/12 in 0.1 s, 58 MB | 1/12 in 10 s, 49 MB |
 | Known routes of ginandjuice.shop, the whole map (`azhaq run`) | katana `-jc -jsl` | default | 3/3 in 28 s, 92 MB | 2/3 in 21 s, 802 MB |
@@ -284,7 +286,7 @@ Latest run (2026-11-01, v0.13.0, commit 01c3557; profile: both; 195 of 196 check
 | DNS brute force, 310 words, the DNS lab | dnsx | polite | 9 confirmed in 29 s, 29 MB | 9 in 31 s, 43 MB |
 | Record types (9) of 32 names on a zone the bench serves | dnsx | polite | 12 answers right in 3.0 s, 28 MB, 289 queries | 12 in 3.6 s, 44 MB, 523 queries |
 | Probing 107 hosts (the local apps and 100 local servers) | httpx | polite | 107 answered, 105 confirmed; status, title and tech agree on 104 of 105 shared; 21 s, 72 MB | 105 answered, 105 confirmed; 22 s, 219 MB |
-| Known routes of juice-shop, the crawler alone (`azhaq crawl`, katana's depth) | katana `-jc -jsl` | polite | 53/77 in 17 s, 81 MB | 1/77 in 17 s, 1664 MB |
+| Known routes of juice-shop v20.3.0, the crawler alone (`azhaq crawl`, katana's depth) | katana `-jc -jsl` | polite | 53/77 in 17 s, 81 MB | 1/77 in 17 s, 1664 MB |
 | Known routes of vampi, the crawler alone (`azhaq crawl`, katana's depth) | katana `-jc -jsl` | polite | 1/12 in 0.2 s, 57 MB | 1/12 in 10 s, 49 MB |
 | Known routes of ginandjuice.shop, the crawler alone (`azhaq crawl`, katana's depth) | katana `-jc -jsl` | polite | 2/3 in 10 s, 82 MB | 2/3 in 21 s, 734 MB |
 | Paths, 257 words, Juice Shop and VAmPI | ffuf `-ac` | polite | 13 hits, 0 false positives, 104 s, 33 MB | 13 hits, 0 false positives, 103 s, 19 MB |
