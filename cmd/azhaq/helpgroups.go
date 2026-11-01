@@ -14,6 +14,9 @@ type helpSpec struct {
 	hidden map[string]string // reason -> space-separated flag names
 }
 
+// planOnly are the flags plan has and run has not, shown after run's table.
+var planOnly = helpGroup{"Plan only", `axfr`}
+
 // The one table behind every command's -h, -h all, help -json and flag table
 // of its docs page: each flag is in a task group (shown) or hidden for a
 // reason, never both, and a test holds the table to the real flags.
@@ -21,12 +24,12 @@ type helpSpec struct {
 // A hidden flag's reason is compat:TOOL (that tool's name for it, kept so its
 // command lines run), alias (another name of a flag), accepted (read for a
 // tool's command lines, no effect of its own) or rare (kept, rarely needed).
-// plan takes run's entry.
+// plan takes run's entry, with planOnly after it.
 var helpSpecs = map[string]helpSpec{
 	"run": {
 		groups: []helpGroup{
 			{"Targets and input", `url domain list in asn cidr org scope program exec demo`},
-			{"What to ask", `probe passive skip dirs params ports ports-on ports-udp dns-brute permute graphql graphql-wordlist known-files paths no-paths path-climb fill-forms per-template web-ports web-scheme no-favicon no-tech no-map-guess no-follow`},
+			{"What to ask", `probe passive skip dirs params ports ports-on ports-udp dns-brute permute no-takeover graphql graphql-wordlist known-files paths no-paths path-climb fill-forms per-template web-ports web-scheme no-favicon no-tech no-map-guess no-follow`},
 			{"Crawl scope", `crawl-scope crawl-any-host crawl-in crawl-out`},
 			{"Names and sources", `sources all-sources exclude-sources providers resolvers dns-rate source-proxy source-rate source-rates source-timeout max-time max-body max-results urls-timeout no-history`},
 			{"Browser", `browser interact interact-clicks screenshots chrome chrome-profile chrome-proxy tabs unsafe-ports`},
@@ -99,7 +102,7 @@ var helpSpecs = map[string]helpSpec{
 		groups: []helpGroup{
 			{"Targets and input", `d l w start`},
 			{"Record types", `a aaaa cname ns txt srv ptr mx soa caa any axfr all e`},
-			{"What to ask", `no-wildcard`},
+			{"What to ask", `no-wildcard no-takeover`},
 			{"Answer format and filters", `resp resp-only rcode response-type-filter`},
 			{"Scope and safety", `allow deny scope program ledger`},
 			{"Pace and limits", `rl t dns-rate retry timeout maxtime`},

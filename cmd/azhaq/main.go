@@ -47,6 +47,7 @@ import (
 	"github.com/trannghiach/azhaq/internal/dnsr"
 	"github.com/trannghiach/azhaq/internal/fetch"
 	"github.com/trannghiach/azhaq/internal/fuzz"
+	"github.com/trannghiach/azhaq/internal/neterr"
 	"github.com/trannghiach/azhaq/internal/normalize"
 	"github.com/trannghiach/azhaq/internal/portscan"
 	"github.com/trannghiach/azhaq/internal/timing"
@@ -182,6 +183,7 @@ func resumeHint(db string, cut, signedIn bool, user string) string {
 // so nothing is kept for azhaq resume.
 type runOut struct {
 	json, quiet, embedded, plan, scratch bool
+	axfr                                 bool // plan: also the zone transfers of dns -axfr
 	// progress is how a drop-in wants the lines of a long run: "json" for
 	// its -json, which hushes the run itself; empty, as run's own flags say.
 	progress string
@@ -239,6 +241,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	scopeSpec := fs.String("scope", "", "a program's scope: a file (HackerOne CSV, bounty-targets JSON, Burp options, lines) or hackerone, bugcrowd, intigriti, yeswehack")
 	program := fs.String("program", "", "the program to take from a -scope list (handle, name or URL)")
 	probe := fs.Bool("probe", false, "resolve and fetch each target once, print one line per web service and per path -dirs found: no crawl, scripts, path checks, TLS, subdomain or archive sources, and depth 1; a flag that asks for a collector (-dirs, -params, -ports, -ports-udp, -screenshots, -browser, -dns-brute, -permute, -graphql) still runs it, and a flag for what -probe turns off (-fill-forms, -submit-forms, -path-climb, -known-files) is a usage error")
+	noTakeover := fs.Bool("no-takeover", false, "do not check CNAMEs for a takeover: no question is asked about the domain of a CNAME target, in scope or not")
 	noTech := fs.Bool("no-tech", false, "skip technology fingerprints (saves about 30 MB of memory)")
 	noFavicon := fs.Bool("no-favicon", false, "do not hash the favicon of front pages (one or two requests less per web service)")
 	urlsOut := fs.String("urls", "", "write every archived URL of the run's domains to this file, one per line")
@@ -321,7 +324,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	maxBody := fs.Int64("max-body", 0, "largest response body read from a subdomain source, in bytes (default 33554432), as subfinder -rsr")
 	sourceProxy := fs.String("source-proxy", "", "send every subdomain source request through this proxy URL, as subfinder -proxy (else HTTP_PROXY and HTTPS_PROXY)")
 	providersFile := fs.String("providers", "", "API keys per source, YAML (default ~/.config/azhaq/providers.yaml, else subfinder's provider-config.yaml)")
-	resolversFile := fs.String("resolvers", "", "DNS resolvers: a file with one per line, or a comma list; each is ADDR, ADDR:PORT or udp:, tcp:, dot:, doh:URL[:get] and then the address (default: public resolvers)")
+	resolversFile := fs.String("resolvers", "", "DNS resolvers: a file with one per line, or a comma list; each is ADDR, ADDR:PORT or udp:, tcp:, dot:, doh:URL[:get] and then the address (default: public resolvers). Named resolvers answer every name, special-use ones (.test, .local, localhost) included; the system resolver is never asked")
 	dnsRate := fs.Float64("dns-rate", 0, "DNS queries per second per resolver (0: no pace but the queries in flight, as dnsx)")
 	bruteFile := fs.String("dns-brute", "", "resolve WORD.domain for each word in this file (active; the targets given are the scope unless -allow)")
 	permute := fs.Bool("permute", false, "resolve variations of found names (active; the targets given are the scope unless -allow)")
@@ -385,7 +388,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	fs.Var(&cookies, "cookie", "Cookie name=value (repeatable; sent as one Cookie header)")
 	fs.Var(&headers, "header", "extra request header K: V (repeatable)")
 	fs.Var(&headers, "H", "same as -header")
-	fs.Var(&allow, "allow", "a domain, host or address range the run may touch; with any -allow, nothing else is requested (repeatable)")
+	fs.Var(&allow, "allow", "a domain, host or address range the run may touch; HOST:PORT allows that host on that port only; with any -allow, nothing else is requested (repeatable)")
 	fs.Var(&deny, "deny", "a domain, host or address range the run must not touch, even when given as a target (repeatable)")
 	fs.Var(&denyPath, "deny-path", "a regular expression on a URL's path and query: a URL it matches is never requested, by any collector or Chrome, and is listed as not requested (repeatable; azhaq decides nothing by itself)")
 	if err := parse(fs, args); err != nil {
@@ -593,11 +596,16 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		// as a target: it is listed in the summary instead.
 		kept := seeds[:0]
 		var outside []string // the targets no address of can pass, as given
+		viaPort := false     // some are outside only for their port
 		reachable := 0
 		for _, s := range seeds {
 			switch {
 			case !rules.AllowsSeed(s):
-				rep.Skipped = append(rep.Skipped, engine.Skip{Target: s.Key(), Reason: "outside the scope"})
+				reason := "outside the scope"
+				if u, err := url.Parse(s.Key()); err == nil && s.Type == types.TypeURL && rules.OnlyOtherPort(u.Hostname(), scope.URLPort(u)) {
+					reason, viaPort = neterr.OutOfPortReason, true
+				}
+				rep.Skipped = append(rep.Skipped, engine.Skip{Target: s.Key(), Reason: reason})
 				outside = append(outside, s.Key())
 			case seedOutsideRange(rules, s):
 				// Kept: its addresses are each refused and counted in the summary.
@@ -610,6 +618,9 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		}
 		seeds = kept
 		if reachable == 0 && *factsPath == "" && *execCmd == "" && *workerOf == "" && !*demo {
+			if viaPort {
+				return outsideScope(outside, " (an -allow entry lists a host with a port: name the target with it, such as -url http://HOST:PORT/)")
+			}
 			return outsideScope(outside)
 		}
 	}
@@ -722,6 +733,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	}
 	if !budgets.Scope.Empty() {
 		egress.SetScope(budgets.Scope.Allows)
+		egress.SetScopeAddr(budgets.Scope.AllowsAddr)
 	}
 	if len(budgets.Scope.DenyPath) > 0 {
 		egress.SetDenyPath(budgets.Scope.DeniedPath)
@@ -803,7 +815,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	if *webScheme != "" && *webScheme != "http" && *webScheme != "https" {
 		return usagef("-web-scheme is http or https, got %q", *webScheme)
 	}
-	opts := collectors.Options{Client: client, HTTP: spec, WebPorts: ports, WebScheme: *webScheme, NoTech: *noTech, NoFavicon: *noFavicon, Probe: *probe, PortRate: *portRate, MaxIPs: *maxIPs, Shots: *shots, Render: *render, KnownFiles: *knownFiles, FillForms: *fillForms, NoMapGuess: *noMapGuess, SubmitForms: *submitForms, PathClimb: *pathClimb}
+	opts := collectors.Options{Client: client, HTTP: spec, WebPorts: ports, WebScheme: *webScheme, NoTech: *noTech, NoTakeover: *noTakeover, NoFavicon: *noFavicon, Probe: *probe, PortRate: *portRate, MaxIPs: *maxIPs, Shots: *shots, Render: *render, KnownFiles: *knownFiles, FillForms: *fillForms, NoMapGuess: *noMapGuess, SubmitForms: *submitForms, PathClimb: *pathClimb}
 	opts.ShotHTML = *shotHTML
 	if *browserWrites && *shots == "" && !*render {
 		return usagef("-browser-writes lets the pages Chrome loads send writes: give it with -browser or -screenshots")
@@ -958,6 +970,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	probePool = opts.DNS
 	// HTTP connects to the addresses azhaq-dns found: one answer per name.
 	egress.SetResolver(func(ctx context.Context, host string) []string { return opts.DNS.ResolveBoth(ctx, host).IPs() })
+	egress.SetResolverOnly(len(resolvers) > 0) // named resolvers answer every name: a failure is not retried on the system's
 	if *bruteFile != "" {
 		if opts.BruteWords, err = loadLines(*bruteFile); err != nil {
 			return err
@@ -1097,6 +1110,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 			send.paramsBody = m
 		}
 		send.tcpPorts, send.udpPorts = len(opts.Ports), len(opts.UDPPorts)
+		send.axfr, send.resolvers = out.axfr, resolvers
 		if *daily > 0 && (send.max == 0 || *daily < send.max) {
 			// A plan reads no database: what today's runs spent is not
 			// taken off.
@@ -1274,6 +1288,9 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		}
 	}
 	fillReport(rep, path, seeds, ents, obs, rows)
+	if n := opts.DNS.TakeoverNote("-no-takeover"); n != "" {
+		rep.Notes = append(rep.Notes, n)
+	}
 	if *permute {
 		if n := unvaried(leftover); n > 0 {
 			rep.Notes = append(rep.Notes, fmt.Sprintf("-permute did not vary %d names found past -depth %d: they were not resolved in this run (-depth %d reaches them)", n, budgets.MaxDepth, budgets.MaxDepth+1))

@@ -8,7 +8,7 @@ Show what a run would do and send, without sending anything.
 azhaq plan (-url URL | -domain D | -list FILE | -scope … -program P) [run flags]
 ```
 
-`plan` takes the flags of [`run`](run.md#flags).
+`plan` takes the flags of [`run`](run.md#flags), and `-axfr`, which also lists the zone transfers [`dns -axfr`](dns.md#zone-transfer) would try for the domain and host targets.
 
 ## Examples
 
@@ -45,6 +45,7 @@ Plain text prints the same parts, one block each. `-json` prints one object.
 | `limits` | The options that bound the run. |
 | `sends` | What goes to the targets, one line for each kind. |
 | `requests` | What is known of the requests before any is sent. See below. |
+| `axfr` | With `-axfr`: for each domain and host target, the lookups that find its name servers and the connections the transfer makes. The name servers' addresses are not known before they are looked up, so the plan says how they are chosen: under a scope, only an address it allows is asked. |
 
 `requests` has these fields:
 
@@ -113,6 +114,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 | `-ports-udp` | string |  | ask UDP ports (active): top (about 25 common ones), full or a list of ports, ranges and these names, such as 53,123,161,1-1024 or top,5354; a reply is open, an ICMP unreachable closed, neither open\|filtered (-ports none: UDP only) |
 | `-dns-brute` | string |  | resolve WORD.domain for each word in this file (active; the targets given are the scope unless -allow) |
 | `-permute` | bool |  | resolve variations of found names (active; the targets given are the scope unless -allow) |
+| `-no-takeover` | bool |  | do not check CNAMEs for a takeover: no question is asked about the domain of a CNAME target, in scope or not |
 | `-graphql` | bool |  | read the schema of GraphQL endpoints with an introspection query (active; the targets given are the scope unless -allow) |
 | `-graphql-wordlist` | string |  | extra probe words (one per line), tried and recombined with the built-in ones when a GraphQL endpoint's introspection is off and its schema has to be recovered from validation errors |
 | `-known-files` | string |  | ask each web service only for its robots.txt and sitemaps and read every entry (all, robotstxt or sitemapxml); replaces the 51 built-in paths |
@@ -145,7 +147,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 | `-all-sources` | bool |  | also run slower subdomain sources outside the default set |
 | `-exclude-sources` | string |  | subdomain sources never to run, comma-separated |
 | `-providers` | string |  | API keys per source, YAML (default ~/.config/azhaq/providers.yaml, else subfinder's provider-config.yaml) |
-| `-resolvers` | string |  | DNS resolvers: a file with one per line, or a comma list; each is ADDR, ADDR:PORT or udp:, tcp:, dot:, doh:URL[:get] and then the address (default: public resolvers) |
+| `-resolvers` | string |  | DNS resolvers: a file with one per line, or a comma list; each is ADDR, ADDR:PORT or udp:, tcp:, dot:, doh:URL[:get] and then the address (default: public resolvers). Named resolvers answer every name, special-use ones (.test, .local, localhost) included; the system resolver is never asked |
 | `-dns-rate` | float |  | DNS queries per second per resolver (0: no pace but the queries in flight, as dnsx) |
 | `-source-proxy` | string |  | send every subdomain source request through this proxy URL, as subfinder -proxy (else HTTP_PROXY and HTTPS_PROXY) |
 | `-source-rate` | float |  | requests per second to each subdomain source, as subfinder -rl (0: each source's own pace); a source's lower own pace stays |
@@ -175,7 +177,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 
 | Flag | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `-allow` | string, repeatable |  | a domain, host or address range the run may touch; with any -allow, nothing else is requested |
+| `-allow` | string, repeatable |  | a domain, host or address range the run may touch; HOST:PORT allows that host on that port only; with any -allow, nothing else is requested |
 | `-deny` | string, repeatable |  | a domain, host or address range the run must not touch, even when given as a target |
 | `-deny-path` | string, repeatable |  | a regular expression on a URL's path and query: a URL it matches is never requested, by any collector or Chrome, and is listed as not requested (repeatable; azhaq decides nothing by itself) |
 | `-kill-file` | string |  | stop all sending, at once, when this file exists, and exit 4; azhaq resume works once it is removed (default DB.stop) |
@@ -232,6 +234,12 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 | `-srd` | string | `azhaq_response` | directory for -sr |
 | `-fail-on-errors` | bool |  | exit 3 on every failure: also fan-out (a source for the domain of a URL) and a source that failed while others answered |
 | `-fail-on-capped` | bool |  | exit 4 also when the run hit -depth with hints left |
+
+**Plan only**
+
+| Flag | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `-axfr` | bool |  | also plan the zone transfers azhaq dns -axfr would try for the domain and host targets: the name servers' lookups, and which name servers the scope would let it ask |
 
 <details>
 <summary>Other names, flags accepted with no effect and rarely used flags (78)</summary>

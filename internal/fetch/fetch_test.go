@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -451,5 +452,37 @@ func TestKillEndsTheWaitForThePace(t *testing.T) {
 	}
 	if egress.Sent() != 1 {
 		t.Errorf("counted %d, want 1 (the one that waited was not sent)", egress.Sent())
+	}
+}
+
+// -allow 127.0.0.1:PORT holds a request, and a redirect, to that port: the
+// same host on another port is not requested, and the reason says so.
+func TestScopeHoldsThePortOfARequestAndARedirect(t *testing.T) {
+	Reset()
+	defer Reset()
+	var other atomic.Int32
+	out := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { other.Add(1) }))
+	defer out.Close()
+	in := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, out.URL+"/sso", http.StatusFound)
+	}))
+	defer in.Close()
+	u, _ := url.Parse(in.URL)
+	rules := scope.Rules{Allow: []string{"127.0.0.1:" + u.Port()}}.Compile()
+	egress.SetScope(rules.Allows)
+	egress.SetScopeAddr(rules.AllowsAddr)
+	res, _, err := Do(context.Background(), in.Client(), in.URL+"/login")
+	if err != nil || len(res.Hops) != 1 || res.Hops[0].Status != http.StatusFound {
+		t.Fatalf("hops %+v err %v", res.Hops, err)
+	}
+	_, _, err = Do(context.Background(), out.Client(), out.URL+"/x")
+	if !errors.Is(err, neterr.ErrOutOfPort) || !errors.Is(err, neterr.ErrOutOfScope) {
+		t.Fatalf("another port: %v", err)
+	}
+	if _, err := SubmitForm(context.Background(), out.Client(), out.URL+"/form", "a=1"); !errors.Is(err, neterr.ErrOutOfPort) {
+		t.Fatalf("a form to another port: %v", err)
+	}
+	if n := other.Load(); n != 0 {
+		t.Errorf("%d requests reached the other port", n)
 	}
 }

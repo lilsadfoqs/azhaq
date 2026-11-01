@@ -212,7 +212,7 @@ These filters limit what is printed, not what is crawled.
 
 | Flag | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `-allow` | string, repeatable |  | a domain, host or address range the run may touch; with any -allow, nothing else is requested |
+| `-allow` | string, repeatable |  | a domain, host or address range the run may touch; HOST:PORT allows that host on that port only; with any -allow, nothing else is requested |
 | `-deny` | string, repeatable |  | a domain, host or address range the run must not touch, even when given as a target |
 | `-deny-path` | string, repeatable |  | a regular expression on a URL's path and query: a URL it matches is never requested, by any collector or Chrome, and is listed as not requested (repeatable; azhaq decides nothing by itself) |
 | `-kill-file` | string |  | stop all sending, at once, when this file exists, and exit 4; azhaq resume works once it is removed (default DB.stop) |
@@ -250,7 +250,7 @@ These filters limit what is printed, not what is crawled.
 | `-login-user` | string |  | user name or email for -login |
 | `-login-pass` | string |  | password for -login (default $AZHAQ_LOGIN_PASS) |
 | `-proxy` | string |  | send requests to targets through this proxy (http://, https:// or socks5://); Chrome too (default: $HTTP_PROXY, $HTTPS_PROXY) |
-| `-resolvers` | string |  | DNS resolvers: a file with one per line, or a comma list; each is ADDR, ADDR:PORT or udp:, tcp:, dot:, doh:URL[:get] and then the address (default: public resolvers) |
+| `-resolvers` | string |  | DNS resolvers: a file with one per line, or a comma list; each is ADDR, ADDR:PORT or udp:, tcp:, dot:, doh:URL[:get] and then the address (default: public resolvers). Named resolvers answer every name, special-use ones (.test, .local, localhost) included; the system resolver is never asked |
 
 **Output**
 
@@ -297,7 +297,7 @@ These filters limit what is printed, not what is crawled.
 | `-j` | bool |  | same as -jsonl | other name |
 | `-p` | int |  | work items in flight (default 16) | other name |
 | `-pc` | bool |  | same as -path-climb (katana's -pc) | other name |
-| `-r` | string |  | DNS resolvers: a file with one per line, or a comma list; each is ADDR, ADDR:PORT or udp:, tcp:, dot:, doh:URL[:get] and then the address (default: public resolvers) | other name |
+| `-r` | string |  | DNS resolvers: a file with one per line, or a comma list; each is ADDR, ADDR:PORT or udp:, tcp:, dot:, doh:URL[:get] and then the address (default: public resolvers). Named resolvers answer every name, special-use ones (.test, .local, localhost) included; the system resolver is never asked | other name |
 | `-rate` | float |  | requests per second to targets, over all hosts (0: no pace) | other name |
 | `-timeout` | duration |  | stop after this long and keep what was found; azhaq resume continues (0: no limit) | other name |
 | `-duc` | bool |  | accepted for katana's command lines; azhaq always reads scripts, forms and technologies | accepted, no effect |

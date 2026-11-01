@@ -237,7 +237,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 
 | Flag | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `-allow` | string, repeatable |  | a domain, host or address range the run may touch (repeatable); default: the host of -u |
+| `-allow` | string, repeatable |  | a domain, host or address range the run may touch; HOST:PORT allows that host on that port only (repeatable); default: the host of -u |
 | `-deny` | string, repeatable |  | a domain, host or address range the run must not touch |
 | `-deny-path` | string, repeatable |  | a regular expression on a URL's path and query: an input whose URL it matches is never sent, and is listed as not requested |
 | `-kill-file` | string |  | stop all sending, at once, when this file exists, and exit 4; azhaq resume works once it is removed (default DB.stop) |

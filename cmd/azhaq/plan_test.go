@@ -190,3 +190,23 @@ func TestPlanSendsNameWhatIsPlanned(t *testing.T) {
 		t.Errorf("-passive -ports says no request goes to the targets: %+v", r)
 	}
 }
+
+// plan -axfr lists the zone transfers dns -axfr would try, and what the scope
+// leaves out of them, without sending anything.
+func TestPlanListsZoneTransfers(t *testing.T) {
+	p := planJSON(t, "-domain", "lab.test", "-url", "https://app.lab.test/", "-allow", "lab.test", "-resolvers", "127.0.0.1:5302", "-sources", "none", "-axfr")
+	if len(p.AXFR) != 2 || p.AXFR[0].Zone != "lab.test" || p.AXFR[1].Zone != "app.lab.test" {
+		t.Fatalf("the transfers: %+v", p.AXFR)
+	}
+	x := p.AXFR[0]
+	if !strings.Contains(x.Lookups, "NS of lab.test") || !strings.Contains(x.Transfer, "if the scope allows it") || len(x.Resolvers) != 1 || x.Resolvers[0] != "127.0.0.1:5302" {
+		t.Errorf("a transfer: %+v", x)
+	}
+	if !strings.Contains(strings.Join(p.Sends, "\n"), "is not contacted: the summary names it, and adding the address to -allow allows the transfer") {
+		t.Errorf("sends: %q", p.Sends)
+	}
+	// Without the flag the plan says nothing of transfers.
+	if q := planJSON(t, "-domain", "lab.test", "-sources", "none"); len(q.AXFR) != 0 {
+		t.Errorf("a transfer planned without -axfr: %+v", q.AXFR)
+	}
+}

@@ -113,10 +113,11 @@ type Browser struct {
 	cached map[network.RequestID]letGo // let send, answered from Chrome's cache
 
 	mu      sync.Mutex
-	session map[string]string    // sessionStorage a login left, for every tab
-	sites   map[string]bool      // without a scope: the sites of the pages Chrome was pointed at
-	allow   func(string) bool    // the run's scope when Chrome started (the egress scope), or nil
-	paid    map[cdp.FrameID]bool // tabs whose page their caller counted
+	session map[string]string            // sessionStorage a login left, for every tab
+	sites   map[string]bool              // without a scope: the sites of the pages Chrome was pointed at
+	allow   func(string) bool            // the run's scope when Chrome started (the egress scope), or nil
+	addr    func(host, port string) bool // the same for a connection to a port, or nil
+	paid    map[cdp.FrameID]bool         // tabs whose page their caller counted
 
 	refMu    sync.Mutex
 	tabs     map[cdp.FrameID]*tab // open pages, by each frame they are known to have
@@ -155,7 +156,7 @@ func (b *Browser) start() error {
 		// The scope this Chrome is held to, as the run set it when Chrome
 		// started: a later fetch.Reset (a run ending, a test) does not move
 		// it under requests still being decided.
-		b.allow = egress.Current().Scope()
+		b.allow, b.addr = egress.Current().Scope(), egress.Current().ScopeAddr()
 		if b.guard, err = egress.NewChromeGuard(b.allowedHost); err != nil {
 			b.err = fmt.Errorf("starting Chrome: %w", err)
 			return

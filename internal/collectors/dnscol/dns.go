@@ -35,6 +35,9 @@ type Collector struct {
 	// asks the names it was given, and those its certificates and policies
 	// name), and an apex is not asked for MX, TXT and NS.
 	NoHints bool
+	// NoTakeover leaves out the takeover check, and with it the question
+	// about a CNAME target's domain.
+	NoTakeover bool
 }
 
 // New returns a collector on pool, or on the default resolvers when nil.
@@ -141,7 +144,7 @@ func (c *Collector) describe(ctx context.Context, host string, a dnsr.Answer, pa
 			meta.NextHints = append(meta.NextHints, types.Seed{Type: types.TypeHostname, Keys: map[string]string{"fqdn": cn}})
 		}
 	}
-	if len(a.CNAME) > 0 && (a.Status == dnsr.StatusNXDomain || a.Status == dnsr.StatusCNAME) {
+	if len(a.CNAME) > 0 && !c.NoTakeover && (a.Status == dnsr.StatusNXDomain || a.Status == dnsr.StatusCNAME) {
 		target := a.CNAME[len(a.CNAME)-1]
 		gone := a.Status == dnsr.StatusNXDomain
 		registered := true

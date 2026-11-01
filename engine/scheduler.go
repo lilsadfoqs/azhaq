@@ -69,7 +69,8 @@ func (e *Engine) RunLocal(ctx context.Context, seeds []types.Seed, b Budgets) er
 		catalog.Claim = e.Store.Claim
 		defer func() { catalog.Claim = nil }()
 		egress.SetOnDenied(e.noteDenied)
-		defer func() { egress.SetOnDenied(nil) }()
+		egress.SetOnPortSkip(e.notePortSkip)
+		defer func() { egress.SetOnDenied(nil); egress.SetOnPortSkip(nil) }()
 	}
 	if b.Resume && e.Store != nil {
 		if err := s.restore(); err != nil {
@@ -270,6 +271,9 @@ func (s *scheduler) add(raw types.Seed, depth int, hint bool) {
 		return
 	}
 	if hint && !s.b.Scope.AllowsSeed(seed) {
+		if seed.Type == types.TypeURL {
+			egress.NotePortSkip(seed.Key())
+		}
 		return
 	}
 	if hint {

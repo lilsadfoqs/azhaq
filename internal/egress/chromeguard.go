@@ -186,9 +186,15 @@ func (g *ChromeGuard) handle(c net.Conn) {
 		reply(socksNoCommand)
 		return
 	}
-	addr := net.JoinHostPort(host, strconv.Itoa(int(binary.BigEndian.Uint16(port))))
+	portNum := strconv.Itoa(int(binary.BigEndian.Uint16(port)))
+	addr := net.JoinHostPort(host, portNum)
 	if !g.allowed(host) {
 		g.refuse(host)
+		reply(socksNotAllowed)
+		return
+	}
+	if Current().CheckAddr(host, portNum) != nil { // -allow HOST:PORT allows that port only
+		g.refuse(addr)
 		reply(socksNotAllowed)
 		return
 	}

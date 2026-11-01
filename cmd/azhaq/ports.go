@@ -93,7 +93,7 @@ func cmdPorts(args []string) error {
 	udpSpec := fs.String("pu", "", "UDP ports to ask: top, full or a list of ports, ranges and these names, such as 53,123,1-1024 or top,5354 (implies -udp; without -p, -tp or -pf no TCP port is asked)")
 	exclHosts := fs.String("eh", "", "hosts, addresses or ranges not to scan, comma-separated (same as -deny)")
 	exclFile := fs.String("ef", "", "file of hosts, addresses and ranges not to scan")
-	resolvers := fs.String("resolvers", "", "DNS resolvers: a list such as 1.1.1.1,8.8.8.8:53 or a file, one a line (default: public resolvers)")
+	resolvers := fs.String("resolvers", "", "DNS resolvers: a list such as 1.1.1.1,8.8.8.8:53 or a file, one a line (default: public resolvers); named ones answer every name, and the system resolver is never asked")
 	fs.StringVar(resolvers, "r", "", "same as -resolvers")
 	ipv := fs.String("iv", "", "the address families of a name to scan: 4 or 6 (default both)")
 	allIPs := fs.Bool("sa", false, "scan every address of a name, not the first two of each family")

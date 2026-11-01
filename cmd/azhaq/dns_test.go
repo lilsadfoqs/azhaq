@@ -530,7 +530,7 @@ func TestDNSTransferIsHeldToTheScope(t *testing.T) {
 		t.Errorf("the name server that did not answer is not said: %v", rep.Notes)
 	}
 	// denied, it is not asked, and the summary says so
-	_, rep, _ = dnsOut(t, "-d", "lab.zz", "-r", lab.addr, "-axfr", "-j", "-timeout", "300ms", "-allow", "lab.zz", "-deny", "127.0.0.1")
+	_, rep, _ = dnsOut(t, "-d", "lab.zz", "-r", lab.addr, "-axfr", "-j", "-timeout", "300ms", "-allow", "lab.zz", "-allow", "127.0.0.1", "-deny", "127.0.0.1")
 	n := strings.Join(rep.Notes, "\n")
 	if !strings.Contains(n, "outside the scope not asked") || strings.Contains(n, "127.0.0.1:53 did not transfer") {
 		t.Errorf("%v", rep.Notes)
@@ -553,7 +553,7 @@ func TestDNSAXFRJSONAndTextAskTheSameServers(t *testing.T) {
 	labZone["lab.zz."] = []string{"NS ns.lab.zz.", "SOA ns.lab.zz. h.lab.zz. 5 1 2 3 4"}
 	labZoneMu.Unlock()
 	t.Cleanup(func() { labZoneMu.Lock(); labZone["lab.zz."] = old; labZoneMu.Unlock() })
-	args := []string{"-d", "lab.zz", "-r", lab.addr, "-axfr", "-allow", "lab.zz", "-timeout", "300ms"}
+	args := []string{"-d", "lab.zz", "-r", lab.addr, "-axfr", "-allow", "lab.zz", "-allow", "127.0.0.1", "-timeout", "300ms"}
 	ls, jrep, code := dnsOut(t, append(args, "-json")...)
 	r := dnsRows(t, ls)["lab.zz"]
 	axfr, _ := r["axfr"].(map[string]any)
@@ -569,7 +569,7 @@ func TestDNSAXFRJSONAndTextAskTheSameServers(t *testing.T) {
 	}
 	// The lab refuses the zone of another name: every server fails.
 	for _, form := range []string{"-json", "-resp"} {
-		_, rep, code := dnsOut(t, "-d", "www.lab.zz", "-r", lab.addr, "-axfr", "-allow", "lab.zz", "-timeout", "300ms", form)
+		_, rep, code := dnsOut(t, "-d", "www.lab.zz", "-r", lab.addr, "-axfr", "-allow", "lab.zz", "-allow", "127.0.0.1", "-timeout", "300ms", form)
 		if code != exitPartial {
 			t.Errorf("%s: exit %d, want %d", form, code, exitPartial)
 		}
@@ -703,5 +703,121 @@ func TestDNSWordlistJSONPrintsOnlyTheAskedRecord(t *testing.T) {
 	ls, rep, _ = dnsOut(t, "-d", "lab.zz", "-w", w, "-r", lab.addr, "-json", "-rcode", "nxdomain")
 	if r := dnsRows(t, ls); len(r) != 1 || r["zzz.lab.zz"] == nil || rep.Results != 1 {
 		t.Errorf("-rcode: %v %+v", ls, rep.Counts)
+	}
+}
+
+// The zone's name server is in the scope by its name and at an address
+// outside it: with a scope given, that address is not contacted. The summary
+// names the server and says what allows the transfer; adding the address to
+// -allow asks it, and without any scope the name given holds, as before.
+func TestDNSTransferStaysInTheScopeByAddress(t *testing.T) {
+	t.Chdir(t.TempDir())
+	lab := startLab(t)
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	var accepted atomic.Int64
+	go func() {
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			accepted.Add(1)
+			c.Close()
+		}
+	}()
+	_, port, _ := net.SplitHostPort(ln.Addr().String())
+	old := axfrPort
+	axfrPort = port
+	t.Cleanup(func() { axfrPort = old })
+
+	// -allow names the zone, not the name server's address.
+	_, rep, _ := dnsOut(t, "-d", "lab.zz", "-r", lab.addr, "-axfr", "-j", "-timeout", "300ms", "-allow", "lab.zz")
+	n := strings.Join(rep.Notes, "\n")
+	if accepted.Load() != 0 {
+		t.Fatalf("the name server was contacted %d times at an address outside the scope", accepted.Load())
+	}
+	if !strings.Contains(n, "-axfr lab.zz: name servers outside the scope not asked: ns.lab.zz (127.0.0.1) (add the address to -allow to ask it)") {
+		t.Errorf("the skipped server is not said: %v", rep.Notes)
+	}
+	// Adding the address to the scope allows the transfer.
+	dnsOut(t, "-d", "lab.zz", "-r", lab.addr, "-axfr", "-j", "-timeout", "300ms", "-allow", "lab.zz", "-allow", "127.0.0.1:"+port)
+	if accepted.Load() == 0 {
+		t.Errorf("the name server was not asked once its address was allowed")
+	}
+	// An address allowed on another port is not the transfer's port.
+	before := accepted.Load()
+	dnsOut(t, "-d", "lab.zz", "-r", lab.addr, "-axfr", "-j", "-timeout", "300ms", "-allow", "lab.zz", "-allow", "127.0.0.1:1")
+	if accepted.Load() != before {
+		t.Errorf("an address allowed on another port was asked")
+	}
+	// No scope: the name given holds, as it did.
+	before = accepted.Load()
+	dnsOut(t, "-d", "lab.zz", "-r", lab.addr, "-axfr", "-j", "-timeout", "300ms")
+	if accepted.Load() == before {
+		t.Errorf("without a scope the zone's name server was not asked")
+	}
+}
+
+// serveDanglingSOA answers dangling.lab.zz with a CNAME to a name under a
+// registrable domain that does not exist, and counts what it is asked, the SOA questions apart.
+func serveDanglingSOA(t *testing.T, asked, soa *atomic.Int64) string {
+	t.Helper()
+	pc, err := net.ListenPacket("udp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := &dns.Server{PacketConn: pc, Handler: dns.HandlerFunc(func(w dns.ResponseWriter, r *dns.Msg) {
+		asked.Add(1)
+		m := new(dns.Msg)
+		m.SetReply(r)
+		q := r.Question[0]
+		if q.Qtype == dns.TypeSOA {
+			soa.Add(1)
+		}
+		name := strings.ToLower(q.Name)
+		if name == "dangling.lab.zz." && q.Qtype == dns.TypeA {
+			rr, _ := dns.NewRR("dangling.lab.zz. 60 IN CNAME app.gone-co.com.")
+			m.Answer = append(m.Answer, rr)
+		}
+		m.Rcode = dns.RcodeNameError
+		_ = w.WriteMsg(m)
+	})}
+	go srv.ActivateAndServe()
+	t.Cleanup(func() { srv.Shutdown() })
+	return pc.LocalAddr().String()
+}
+
+// The takeover check asks the user's resolver whether a CNAME target's
+// domain exists. That question about a domain outside the scope is counted
+// in the summary, with the flag that turns the check off; the flag stops it.
+func TestDNSCountsTakeoverQuestionsOutsideTheScope(t *testing.T) {
+	t.Chdir(t.TempDir())
+	var asked, soa atomic.Int64
+	addr := serveDanglingSOA(t, &asked, &soa)
+	_, rep, _ := dnsOut(t, "-d", "dangling.lab.zz", "-r", addr, "-a", "-j", "-allow", "lab.zz")
+	n := strings.Join(rep.Notes, "\n")
+	if !strings.Contains(n, "asked the resolver about 1 CNAME target outside the scope for the takeover check (gone-co.com): -no-takeover turns the check off") {
+		t.Errorf("the question outside the scope is not counted: %v", rep.Notes)
+	}
+	if len(rep.Takeover) != 1 {
+		t.Errorf("the dangling CNAME is not a finding: %+v", rep.Takeover)
+	}
+	// Inside the scope, or with no scope, there is nothing to say.
+	_, rep, _ = dnsOut(t, "-d", "dangling.lab.zz", "-r", addr, "-a", "-j", "-allow", "lab.zz", "-allow", "gone-co.com")
+	if strings.Contains(strings.Join(rep.Notes, "\n"), "takeover check") {
+		t.Errorf("a target inside the scope is noted: %v", rep.Notes)
+	}
+	// -no-takeover asks nothing about the target.
+	before := soa.Load()
+	_, rep, _ = dnsOut(t, "-d", "dangling.lab.zz", "-r", addr, "-a", "-j", "-allow", "lab.zz", "-no-takeover")
+	if len(rep.Takeover) != 0 || strings.Contains(strings.Join(rep.Notes, "\n"), "takeover check") {
+		t.Errorf("-no-takeover still checked: %+v %v", rep.Takeover, rep.Notes)
+	}
+	if got := soa.Load() - before; got != 0 {
+		t.Errorf("-no-takeover asked %d registration questions", got)
 	}
 }

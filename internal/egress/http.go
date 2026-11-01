@@ -97,8 +97,10 @@ func (p *Policy) checkRequest(req *http.Request, sni string) error {
 	if allow == nil || req.URL == nil {
 		return nil
 	}
-	if h := req.URL.Hostname(); h != "" && !allow(h) {
-		return neterr.ErrOutOfScope
+	if h := req.URL.Hostname(); h != "" {
+		if err := p.CheckAddr(h, scope.URLPort(req.URL)); err != nil {
+			return err
+		}
 	}
 	if req.Host != "" && !open["host"] {
 		if h := hostOnly(req.Host); h != "" && !allow(h) {

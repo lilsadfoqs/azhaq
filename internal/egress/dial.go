@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/trannghiach/azhaq/internal/ledger"
-	"github.com/trannghiach/azhaq/internal/neterr"
 )
 
 // DialTarget connects to a target as the run's HTTP client does: a name
@@ -17,8 +16,10 @@ import (
 // the machine has a route and IPv4 after a short head start (RFC 8305).
 // It refuses once the kill file exists and for a host outside the scope.
 func DialTarget(ctx context.Context, network, addr string) (net.Conn, error) {
-	if host, _, err := net.SplitHostPort(addr); err == nil && !Current().Allows(host) {
-		return nil, neterr.ErrOutOfScope
+	if host, port, err := net.SplitHostPort(addr); err == nil {
+		if err := Current().CheckAddr(host, port); err != nil {
+			return nil, err
+		}
 	}
 	return dialThrough(ctx, network, addr)
 }
@@ -85,13 +86,20 @@ func pinnedDial(ip string) func(ctx context.Context, network, addr string) (net.
 // answer, the way the system would. Some edges answer only one family
 // from a given network.
 func dialResolved(ctx context.Context, p *Policy, network, addr string) (net.Conn, error) {
-	d := &net.Dialer{Timeout: 5 * time.Second}
+	return dialResolvedWith(ctx, p, &net.Dialer{Timeout: 5 * time.Second}, network, addr)
+}
+
+// dialResolvedWith is dialResolved with the caller's dialer.
+func dialResolvedWith(ctx context.Context, p *Policy, d *net.Dialer, network, addr string) (net.Conn, error) {
 	host, port, err := net.SplitHostPort(addr)
 	if err != nil || net.ParseIP(host) != nil {
 		return d.DialContext(ctx, network, addr)
 	}
 	ips := p.Resolve(ctx, host)
 	if len(ips) == 0 {
+		if p.resolverOnly() {
+			return dialLoopbackName(ctx, d, network, host, port)
+		}
 		return d.DialContext(ctx, network, addr) // /etc/hosts, special-use names
 	}
 	var v4, v6 []string
@@ -112,6 +120,17 @@ func dialResolved(ctx context.Context, p *Policy, network, addr string) (net.Con
 		primary, fallback = fallback, nil
 	}
 	return dialEither(ctx, d, network, port, primary, fallback)
+}
+
+// dialLoopbackName is the dial of a name the user's resolvers have no
+// address for: localhost is loopback by RFC 6761 and needs no lookup (a
+// proxy on localhost), any other name is unresolved, and the system's
+// resolver is not asked.
+func dialLoopbackName(ctx context.Context, d *net.Dialer, network, host, port string) (net.Conn, error) {
+	if h := strings.TrimSuffix(strings.ToLower(host), "."); h == "localhost" || strings.HasSuffix(h, ".localhost") {
+		return dialEither(ctx, d, network, port, []string{"127.0.0.1"}, []string{"::1"})
+	}
+	return nil, &net.DNSError{Err: "no address from the resolvers given with -resolvers (the system's resolver is not asked)", Name: host, IsNotFound: true}
 }
 
 // fallbackDelay is the head start of the preferred address family.

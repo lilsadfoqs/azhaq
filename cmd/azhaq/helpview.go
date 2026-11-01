@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"io"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -30,20 +31,26 @@ type parsedGroup struct {
 
 var specCache sync.Map // command name -> *parsedSpec
 
-// specOf is the help table entry of a command; plan takes run's.
+// specOf is the help table entry of a command; plan takes run's, and its own
+// flags after it (planOnly).
 func specOf(name string) (*parsedSpec, bool) {
-	if name == "plan" {
-		name = "run"
-	}
 	if v, ok := specCache.Load(name); ok {
 		return v.(*parsedSpec), true
 	}
-	raw, ok := helpSpecs[name]
+	key := name
+	if name == "plan" {
+		key = "run"
+	}
+	raw, ok := helpSpecs[key]
 	if !ok {
 		return nil, false
 	}
+	groups := raw.groups
+	if name == "plan" {
+		groups = append(slices.Clone(groups), planOnly)
+	}
 	ps := &parsedSpec{hidden: map[string]string{}}
-	for _, g := range raw.groups {
+	for _, g := range groups {
 		ps.groups = append(ps.groups, parsedGroup{g.title, strings.Fields(g.flags)})
 	}
 	for why, names := range raw.hidden {

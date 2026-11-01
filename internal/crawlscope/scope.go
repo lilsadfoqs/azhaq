@@ -98,7 +98,8 @@ func Within(page, link string) bool {
 	if err != nil || lu.Hostname() == "" {
 		return false
 	}
-	if !egress.Allows(lu.Hostname()) {
+	if !egress.AllowsURL(link) {
+		egress.NotePortSkip(link)
 		return false
 	}
 	if !c.Any && !c.hostOK(page, lu.Hostname()) {

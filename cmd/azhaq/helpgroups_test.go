@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -68,8 +69,8 @@ func TestHelpTableHoldsEveryFlagOnce(t *testing.T) {
 	}
 	for _, n := range flagNames(flagsOf("plan")) {
 		plan[n] = true
-		if !run[n] {
-			t.Errorf("plan has -%s, which run lacks, and the table of plan is run's", n)
+		if !run[n] && !slices.Contains(strings.Fields(planOnly.flags), n) {
+			t.Errorf("plan has -%s, which run lacks and planOnly does not list", n)
 		}
 	}
 	for n := range run {

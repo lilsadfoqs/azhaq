@@ -50,8 +50,9 @@ func TestRuleForms(t *testing.T) {
 	}
 }
 
-// A port copied into -allow/-deny (from a URL's authority) is ignored:
-// scope is matched by host. A bare IPv6 address keeps its colons.
+// A port copied into -allow/-deny (from a URL's authority) does not change
+// which hosts are in scope (Allows); AllowsAddr is what holds a connection to
+// the port. A bare IPv6 address keeps its colons.
 func TestRulePortStripped(t *testing.T) {
 	r := Rules{
 		Allow: []string{"127.0.0.1:5013", "app.example.com:8443", "[2001:db8::1]:443"},
@@ -167,5 +168,66 @@ func TestHeaderOutside(t *testing.T) {
 	}
 	if (Rules{}).HeaderOutside("Host", "anything.test") != "" {
 		t.Error("no rules: nothing is outside")
+	}
+}
+
+// An allow entry with a port allows that host on that port only; one
+// without allows every port. A deny entry keeps the host out on every port.
+func TestAllowPortHoldsTheConnectionToThatPort(t *testing.T) {
+	r := Rules{
+		Allow: []string{"127.0.0.1:3001", "app.example.com:8443", "[2001:db8::1]:443", "open.example.com", "10.0.0.0/24", "=exact.test:81"},
+		Deny:  []string{"admin.example.com:8080"},
+	}
+	for _, rr := range []Rules{r, r.Compile()} {
+		for _, c := range []struct {
+			host, port string
+			want       bool
+		}{
+			{"127.0.0.1", "3001", true}, {"127.0.0.1", "3000", false}, {"127.0.0.1", "4200", false}, {"127.0.0.1", "03001", true},
+			{"app.example.com", "8443", true}, {"app.example.com", "443", false}, {"x.app.example.com", "8443", true}, {"x.app.example.com", "80", false},
+			{"2001:db8::1", "443", true}, {"2001:db8::1", "80", false},
+			{"open.example.com", "1", true}, {"open.example.com", "65535", true}, {"a.open.example.com", "9090", true},
+			{"10.0.0.7", "22", true}, {"10.0.1.7", "22", false},
+			{"exact.test", "81", true}, {"exact.test", "80", false}, {"a.exact.test", "81", false},
+			{"admin.example.com", "8080", false}, {"admin.example.com", "80", false},
+			{"other.test", "80", false},
+			{"127.0.0.1", "", true}, // no port to judge: the host alone
+		} {
+			if got := rr.AllowsAddr(c.host, c.port); got != c.want {
+				t.Errorf("AllowsAddr(%q, %q) = %v, want %v", c.host, c.port, got, c.want)
+			}
+		}
+		// The host alone is in scope wherever an entry names it: a lookup, a
+		// subdomain, a seed.
+		for _, h := range []string{"127.0.0.1", "app.example.com", "open.example.com", "exact.test"} {
+			if !rr.Allows(h) {
+				t.Errorf("Allows(%q) is false", h)
+			}
+		}
+	}
+	if !r.OnlyOtherPort("127.0.0.1", "3000") || r.OnlyOtherPort("127.0.0.1", "3001") || r.OnlyOtherPort("other.test", "3000") {
+		t.Error("OnlyOtherPort names a host that is in scope on another port, and no other")
+	}
+}
+
+// A URL's port is the one it names, else its scheme's.
+func TestAllowsURLUsesThePortOfTheURL(t *testing.T) {
+	r := Rules{Allow: []string{"127.0.0.1:3001", "web.test:443", "plain.test"}}.Compile()
+	for raw, want := range map[string]bool{
+		"http://127.0.0.1:3001/a": true, "http://127.0.0.1:3000/": false, "http://127.0.0.1/": false, "http://127.0.0.1:4200/x": false,
+		"https://web.test/": true, "https://web.test:443/": true, "http://web.test/": false, "https://web.test:8443/": false,
+		"http://plain.test:9/": true, "wss://web.test/socket": true, "ws://web.test/socket": false,
+		"/relative": true, "not a url ://": true,
+	} {
+		if got := r.AllowsURL(raw); got != want {
+			t.Errorf("AllowsURL(%q) = %v, want %v", raw, got, want)
+		}
+	}
+	// A discovered URL is a seed: the port decides whether it is one.
+	if r.AllowsSeed(types.Seed{Type: types.TypeURL, Keys: map[string]string{"url": "http://127.0.0.1:3000/"}}) {
+		t.Error("a URL on another port is in scope as a seed")
+	}
+	if !r.AllowsSeed(types.Seed{Type: types.TypeHostname, Keys: map[string]string{"fqdn": "web.test"}}) {
+		t.Error("a host named by an entry with a port is a seed")
 	}
 }

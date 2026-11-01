@@ -113,7 +113,8 @@ The summary also lists failures per kind of error, and takeover candidates: a CN
 
 ### Zone transfer
 - `-axfr` asks the zone's name servers on port 53 first, then each `-r` resolver at its own port, over TCP, as dnsx does. Text and `-json` ask the same servers.
-- A name server outside the scope is not asked, and the summary says so.
+- With `-allow`, `-scope` or `-deny` given, a name server is asked only at an address the scope allows: its name being in the scope does not vouch for where it points. A name server whose address is outside is not contacted. The summary names it, and adding its address to `-allow` allows the transfer. Without any scope flag, the name given is the scope, as before.
+- `azhaq plan -axfr` lists these connections before anything is sent.
 - `-json` gives the name's row with `axfr`: its `chain` holds one entry for each server that transferred the zone. An `axfr` with no `chain` says the transfer was tried and no server gave it.
 - A note names each server that did not transfer the zone.
 - When no server transferred it, the summary lists `-axfr: no server transferred the zone` under `failed` and the exit code is 3: the technique was asked for and gave nothing.
@@ -166,7 +167,7 @@ The summary also lists failures per kind of error, and takeover candidates: a CN
 | `-soa` | bool |  | ask SOA records and print the names that have one |
 | `-caa` | bool |  | ask CAA records and print the names that have one |
 | `-any` | bool |  | ask ANY records and print the names that have one |
-| `-axfr` | bool |  | ask each name server of the name, and the -resolvers you gave, for the whole zone over TCP (active; the name servers must be in scope: -allow, -scope) |
+| `-axfr` | bool |  | ask each name server of the name, and the -resolvers you gave, for the whole zone over TCP (active; a name server is asked at an address the scope allows: -allow, -scope) |
 | `-all` | bool |  | ask every type but AXFR and print the records (-resp); an address gets only PTR |
 | `-e` | string, repeatable |  | types not to ask with -all, comma-separated |
 
@@ -175,6 +176,7 @@ The summary also lists failures per kind of error, and takeover candidates: a CN
 | Flag | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `-no-wildcard` | bool |  | print names even when they only resolve because their zone has a wildcard |
+| `-no-takeover` | bool |  | do not check CNAMEs for a takeover: no question is asked about the domain of a CNAME target, in scope or not |
 
 **Answer format and filters**
 
@@ -189,7 +191,7 @@ The summary also lists failures per kind of error, and takeover candidates: a CN
 
 | Flag | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `-allow` | string, repeatable |  | a domain, host or address range the run may touch; with any -allow, nothing else is requested |
+| `-allow` | string, repeatable |  | a domain, host or address range the run may touch; HOST:PORT allows that host on that port only; with any -allow, nothing else is requested |
 | `-deny` | string, repeatable |  | a domain, host or address range the run must not touch, even when given as a target |
 | `-scope` | string |  | a program's scope: a file (HackerOne CSV, bounty-targets JSON, Burp options, lines) or hackerone, bugcrowd, intigriti, yeswehack |
 | `-program` | string |  | the program to take from a -scope list (handle, name or URL) |
@@ -210,7 +212,7 @@ The summary also lists failures per kind of error, and takeover candidates: a CN
 
 | Flag | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `-resolvers` | string |  | DNS resolvers: a file with one per line, or a comma list; each is ADDR, ADDR:PORT or udp:, tcp:, dot:, doh:URL[:get] and then the address (default: public resolvers) |
+| `-resolvers` | string |  | DNS resolvers: a file with one per line, or a comma list; each is ADDR, ADDR:PORT or udp:, tcp:, dot:, doh:URL[:get] and then the address (default: public resolvers). Named resolvers answer every name, special-use ones (.test, .local, localhost) included; the system resolver is never asked |
 | `-proxy` | string |  | send DNS through this socks5 proxy (socks5://host:port), over TCP |
 
 **Output**

@@ -23,6 +23,7 @@ import (
 	"github.com/trannghiach/azhaq/internal/fetch"
 	"github.com/trannghiach/azhaq/internal/ledger"
 	"github.com/trannghiach/azhaq/internal/webextract"
+	"github.com/trannghiach/azhaq/scope"
 )
 
 // Chrome is held to where plain HTTP may go: every request a page, a frame
@@ -150,7 +151,11 @@ func (b *Browser) allowed(raw string) bool {
 	}
 	switch u.Scheme {
 	case "http", "https", "ws", "wss":
-		return b.allowedHost(u.Hostname())
+		if !b.allowedHost(u.Hostname()) {
+			return false
+		}
+		// -allow HOST:PORT allows that port only.
+		return b.addr == nil || b.addr(u.Hostname(), scope.URLPort(u))
 	}
 	return true // data:, blob:, about:, chrome: nothing leaves the machine
 }
