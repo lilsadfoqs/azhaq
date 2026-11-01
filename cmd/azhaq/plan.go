@@ -29,11 +29,12 @@ func cmdPlan(args []string) error {
 		}
 	})
 	given := inherit(fs, names...)
+	axfr := fs.Bool("axfr", false, "also plan the zone transfers azhaq dns -axfr would try for the domain and host targets: the name servers' lookups, and which name servers the scope would let it ask")
 	if err := parse(fs, args); err != nil {
 		return err
 	}
 	rep := newReport("plan")
-	out := runOut{embedded: true, plan: true}
+	out := runOut{embedded: true, plan: true, axfr: *axfr}
 	if err := mapTarget(given(), rep, &out); err != nil {
 		return err
 	}
@@ -50,6 +51,17 @@ type runPlan struct {
 	Limits     map[string]string `json:"limits"`
 	Sends      []string          `json:"sends"`
 	Requests   planRequests      `json:"requests"`
+	AXFR       []planAXFR        `json:"axfr,omitempty"` // -axfr: the zone transfers dns -axfr would try
+}
+
+// planAXFR is the zone transfer of one name, as dns -axfr would go about it.
+// The name servers' addresses are not known before they are looked up, so the
+// plan says how they are chosen; the resolvers named are known.
+type planAXFR struct {
+	Zone      string   `json:"zone"`
+	Lookups   string   `json:"lookups"`             // the DNS queries that find the name servers
+	Transfer  string   `json:"transfer"`            // the connections it makes, and the ones it does not
+	Resolvers []string `json:"resolvers,omitempty"` // the resolvers named: each is asked for the zone as well
 }
 
 type planTarget struct {
@@ -101,6 +113,8 @@ type sendLimits struct {
 	portDetect   portscan.Detect
 	portPayload  bool
 	portDiscover portcol.Discovery
+	axfr         bool     // -axfr: plan the zone transfers of dns -axfr too
+	resolvers    []string // the resolvers named (-resolvers)
 }
 
 // planSends are the lines on what a run sends besides the GET requests for
@@ -186,10 +200,54 @@ func planSends(b engine.Budgets, send sendLimits) (gets, others []string) {
 
 func buildPlan(cat *catalog.Catalog, seeds []types.Seed, b engine.Budgets, paths []string, limits map[string]string, send sendLimits, rep *report) runPlan {
 	p := planFor(cat, seeds, b, paths, limits, send, rep)
+	if send.axfr {
+		p.AXFR, p.Sends = planTransfers(seeds, b, send.resolvers), append(p.Sends, "-axfr (azhaq dns): "+axfrSummary(b))
+	}
 	if send.noThirdParty {
 		p.Sends = append([]string{"-sources none: no third party is asked (no subdomain source, archive, RDAP, RIPEstat or search engine); only the resolvers and the targets get requests"}, p.Sends...)
 	}
 	return p
+}
+
+// axfrSummary says, for a plan's sends, which connections a zone transfer makes.
+func axfrSummary(b engine.Budgets) string {
+	const asks = "a zone transfer over TCP port 53 to the address of each name server of a domain or host target and to each resolver named; the name servers are found by NS and A queries to the resolvers"
+	if b.Scope.Empty() {
+		return asks + ". No -allow or -scope is given: a name server is asked when its name is under the target's"
+	}
+	return asks + ". A name server whose address the scope does not allow (-allow, -scope, -deny; the address, not its name) is not contacted: the summary names it, and adding the address to -allow allows the transfer"
+}
+
+// planTransfers lists the zone transfers dns -axfr would try for the names
+// among the targets, in the order given.
+func planTransfers(seeds []types.Seed, b engine.Budgets, resolvers []string) []planAXFR {
+	via := "the resolvers given"
+	if len(resolvers) == 0 {
+		via = "the default public resolvers"
+	}
+	transfer := "TCP port 53 of each name server's address, if the scope allows it (that name server is listed in the summary, not contacted)"
+	if b.Scope.Empty() {
+		transfer = "TCP port 53 of each name server whose name is under the zone's"
+	}
+	seen := map[string]bool{}
+	var out []planAXFR
+	for _, s := range engine.ExpandSeeds(seeds) {
+		if s.Type != types.TypeDomain && s.Type != types.TypeHostname {
+			continue
+		}
+		name := s.Key()
+		if seen[name] {
+			continue
+		}
+		seen[name] = true
+		out = append(out, planAXFR{
+			Zone:      name,
+			Lookups:   "NS of " + name + ", then A of each name server, asked of " + via,
+			Transfer:  transfer,
+			Resolvers: append([]string(nil), resolvers...),
+		})
+	}
+	return out
 }
 
 func planFor(cat *catalog.Catalog, seeds []types.Seed, b engine.Budgets, paths []string, limits map[string]string, send sendLimits, rep *report) runPlan {
@@ -308,6 +366,16 @@ func printPlan(p runPlan, asJSON bool) error {
 	fmt.Printf("targets (%d)\n", len(p.Targets))
 	for _, t := range p.Targets {
 		fmt.Printf("  %s %s: %s\n", t.Type, t.Key, strings.Join(t.Collectors, " "))
+	}
+	if len(p.AXFR) > 0 {
+		fmt.Printf("zone transfers (%d, -axfr)\n", len(p.AXFR))
+		for _, x := range p.AXFR {
+			fmt.Printf("  %s: %s; then %s", x.Zone, x.Lookups, x.Transfer)
+			if len(x.Resolvers) > 0 {
+				fmt.Printf("; also each resolver named: %s", strings.Join(x.Resolvers, ", "))
+			}
+			fmt.Println()
+		}
 	}
 	if len(p.Skipped) > 0 {
 		fmt.Printf("left out (%d)\n", len(p.Skipped))

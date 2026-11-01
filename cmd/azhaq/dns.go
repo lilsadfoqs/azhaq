@@ -107,7 +107,7 @@ func cmdDNS(args []string) error {
 		}
 		kinds[i] = fs.Bool(k.flag, false, usage)
 	}
-	axfr := fs.Bool("axfr", false, "ask each name server of the name, and the -resolvers you gave, for the whole zone over TCP (active; the name servers must be in scope: -allow, -scope)")
+	axfr := fs.Bool("axfr", false, "ask each name server of the name, and the -resolvers you gave, for the whole zone over TCP (active; a name server is asked at an address the scope allows: -allow, -scope)")
 	all := fs.Bool("all", false, "ask every type but AXFR and print the records (-resp); an address gets only PTR")
 	alias("all", "recon", "same as -all")
 	var exclude stringsFlag
@@ -1238,9 +1238,13 @@ func (r *dnsRun) hasAny(d *dnsr.Data, kinds []string) bool {
 	return false
 }
 
+// axfrPort is the port zone transfers go to (a variable for the tests).
+var axfrPort = "53"
+
 // transfer asks the name servers of host, and the resolvers the user gave,
-// for the zone. A server outside the scope is not asked, and a server that
-// refuses is noted.
+// for the zone. With a scope given, a name server is asked only at an address
+// the scope allows (a name in the scope does not vouch for where it points);
+// one outside it is listed and not contacted. A server that refuses is noted.
 func (r *dnsRun) transfer(ctx context.Context, host string, d *dnsr.Data) {
 	rules := r.cf.rules
 	if !r.cf.scoped {
@@ -1260,17 +1264,19 @@ func (r *dnsRun) transfer(ctx context.Context, host string, d *dnsr.Data) {
 	for _, n := range ns.NS {
 		a := r.pool.Lookup(ctx, n, dnsr.LookupOptions{Types: []uint16{dns.TypeA}})
 		for _, ip := range a.A {
-			// A server is in scope by its name or by its address, and a deny
-			// rule on either keeps it out.
-			if !(rules.Allows(n) || rules.Allows(ip)) || !denies.Allows(n) || !denies.Allows(ip) {
+			in := rules.Allows(n) || rules.Allows(ip)
+			if r.cf.scoped {
+				in = rules.AllowsAddr(ip, axfrPort)
+			}
+			if !in || !denies.Allows(n) || !denies.Allows(ip) {
 				out = append(out, n+" ("+ip+")")
 				continue
 			}
-			add(net.JoinHostPort(ip, "53"), n)
+			add(net.JoinHostPort(ip, axfrPort), n)
 		}
 	}
 	if len(out) > 0 {
-		r.noteAXFR(fmt.Sprintf("-axfr %s: name servers outside the scope not asked: %s (-allow them to ask)", host, strings.Join(out, ", ")))
+		r.noteAXFR(fmt.Sprintf("-axfr %s: name servers outside the scope not asked: %s (add the address to -allow to ask it)", host, strings.Join(out, ", ")))
 	}
 	for _, key := range r.resolvers {
 		// The resolvers the user named are theirs to ask.

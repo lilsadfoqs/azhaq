@@ -113,7 +113,8 @@ The summary also lists failures per kind of error, and takeover candidates: a CN
 
 ### Zone transfer
 - `-axfr` asks the zone's name servers on port 53 first, then each `-r` resolver at its own port, over TCP, as dnsx does. Text and `-json` ask the same servers.
-- A name server outside the scope is not asked, and the summary says so.
+- With `-allow`, `-scope` or `-deny` given, a name server is asked only at an address the scope allows: its name being in the scope does not vouch for where it points. A name server whose address is outside is not contacted. The summary names it, and adding its address to `-allow` allows the transfer. Without any scope flag, the name given is the scope, as before.
+- `azhaq plan -axfr` lists these connections before anything is sent.
 - `-json` gives the name's row with `axfr`: its `chain` holds one entry for each server that transferred the zone. An `axfr` with no `chain` says the transfer was tried and no server gave it.
 - A note names each server that did not transfer the zone.
 - When no server transferred it, the summary lists `-axfr: no server transferred the zone` under `failed` and the exit code is 3: the technique was asked for and gave nothing.
@@ -166,7 +167,7 @@ The summary also lists failures per kind of error, and takeover candidates: a CN
 | `-soa` | bool |  | ask SOA records and print the names that have one |
 | `-caa` | bool |  | ask CAA records and print the names that have one |
 | `-any` | bool |  | ask ANY records and print the names that have one |
-| `-axfr` | bool |  | ask each name server of the name, and the -resolvers you gave, for the whole zone over TCP (active; the name servers must be in scope: -allow, -scope) |
+| `-axfr` | bool |  | ask each name server of the name, and the -resolvers you gave, for the whole zone over TCP (active; a name server is asked at an address the scope allows: -allow, -scope) |
 | `-all` | bool |  | ask every type but AXFR and print the records (-resp); an address gets only PTR |
 | `-e` | string, repeatable |  | types not to ask with -all, comma-separated |
 

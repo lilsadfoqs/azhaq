@@ -183,6 +183,7 @@ func resumeHint(db string, cut, signedIn bool, user string) string {
 // so nothing is kept for azhaq resume.
 type runOut struct {
 	json, quiet, embedded, plan, scratch bool
+	axfr                                 bool // plan: also the zone transfers of dns -axfr
 	// progress is how a drop-in wants the lines of a long run: "json" for
 	// its -json, which hushes the run itself; empty, as run's own flags say.
 	progress string
@@ -1081,6 +1082,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 			send.paramsBody = m
 		}
 		send.tcpPorts, send.udpPorts = len(opts.Ports), len(opts.UDPPorts)
+		send.axfr, send.resolvers = out.axfr, resolvers
 		if *daily > 0 && (send.max == 0 || *daily < send.max) {
 			// A plan reads no database: what today's runs spent is not
 			// taken off.

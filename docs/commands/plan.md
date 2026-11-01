@@ -8,7 +8,7 @@ Show what a run would do and send, without sending anything.
 azhaq plan (-url URL | -domain D | -list FILE | -scope … -program P) [run flags]
 ```
 
-`plan` takes the flags of [`run`](run.md#flags).
+`plan` takes the flags of [`run`](run.md#flags), and `-axfr`, which also lists the zone transfers [`dns -axfr`](dns.md#zone-transfer) would try for the domain and host targets.
 
 ## Examples
 
@@ -45,6 +45,7 @@ Plain text prints the same parts, one block each. `-json` prints one object.
 | `limits` | The options that bound the run. |
 | `sends` | What goes to the targets, one line for each kind. |
 | `requests` | What is known of the requests before any is sent. See below. |
+| `axfr` | With `-axfr`: for each domain and host target, the lookups that find its name servers and the connections the transfer makes. The name servers' addresses are not known before they are looked up, so the plan says how they are chosen: under a scope, only an address it allows is asked. |
 
 `requests` has these fields:
 
@@ -230,6 +231,12 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 | `-stream` | bool |  | also print each name, service, URL and open port as it is found (found lines, before the ranked map) |
 | `-fail-on-errors` | bool |  | exit 3 on every failure: also fan-out (a source for the domain of a URL) and a source that failed while others answered |
 | `-fail-on-capped` | bool |  | exit 4 also when the run hit -depth with hints left |
+
+**Other**
+
+| Flag | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `-axfr` | bool |  | also plan the zone transfers azhaq dns -axfr would try for the domain and host targets: the name servers' lookups, and which name servers the scope would let it ask |
 
 <details>
 <summary>Flags accepted with no effect and rarely used flags (76)</summary>
