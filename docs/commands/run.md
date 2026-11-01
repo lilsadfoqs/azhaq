@@ -88,7 +88,7 @@ The map has one row per entity, best first: the target's own pages and APIs, the
 | `found_in` | Up to three places where scripts name the route, calls first. See [found_in](#found_in). |
 | `watch` | Names worth trying first, by what each says it takes: `returnUrl (redirect)`, `url (url)`, `file (file)`, `cmd (command)`, `isAdmin (debug)`, `userId (id)`, `callback (callback)`. |
 | `folded` | On a summary row of names: how many dead, wildcard or unresolved names it holds. |
-| `template`, `count`, `not_asked` | A page that differs only by an ID is folded: its `{n}` template, how many URLs it holds, how many were not requested. See [Templates](#templates). |
+| `template`, `count`, `not_asked`, `capped` | A page that differs only by an ID is folded: its `{n}` template, how many URLs it holds, how many were not requested, and how many of those a limit kept from being asked (`coverage: capped`). See [Templates](#templates). |
 
 ## Summary and exit codes
 
@@ -242,7 +242,7 @@ A client route is a view that a single-page app's router draws.
 ### Templates
 
 - Pages that differ only by an ID are folded: `/product?id={n}`.
-- `count` is the number of URLs folded. `not_asked` is how many of them were found and not requested.
+- `count` is the number of URLs folded. `not_asked` is how many of them were found and not requested. `capped` is how many of those a limit (`-depth`, a budget) kept from being asked. The row's own `coverage` is that of its first URL, so `azhaq query -coverage capped` also returns a templated row that holds a capped URL.
 - Pages of one route that differ in which ID-like names they carry are one row: `/product?id={n}` and `/product?id={n}&store={n}`. Its `params` lists every name.
 - A query value that names a page, such as `index.jsp?content=about.htm` or `view=grid`, is not an ID. Each is a page of its own.
 - Every URL of a template is requested, as `crawl` and katana do. `-per-template N` limits it to N; the others are listed with `coverage: hint`.

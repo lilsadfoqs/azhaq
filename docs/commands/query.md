@@ -70,7 +70,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 
 | Flag | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `-coverage` | string |  | coverage, comma-separated: visited, catchall, error, gone, hint, skipped, capped |
+| `-coverage` | string |  | coverage, comma-separated: visited, catchall, error, gone, hint, skipped, capped (a templated row holding a capped URL matches capped) |
 | `-evidence` | string |  | how the route is known, comma-separated: answered, browser, described, called, linked, archived, guessed, given |
 | `-failed` | bool |  | list every target whose work failed (timeouts, refusals, a source's errors): the list to retry |
 | `-host` | string |  | entities on this host or under this domain |

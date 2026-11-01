@@ -456,6 +456,7 @@ func mapRowJSON(r engine.MapEntry) map[string]any {
 	set("template", r.Template, r.Template != "")
 	set("count", r.Count, r.Count > 1)
 	set("not_asked", r.NotAsked, r.NotAsked > 0)
+	set("capped", r.Capped, r.Capped > 0)
 	set("folded", r.Folded, r.Folded > 0)
 	set("proof", r.Proof, r.Proof != "")
 	set("first_seen", r.Entity.FirstSeen.UTC().Format(time.RFC3339), !r.Entity.FirstSeen.IsZero())
