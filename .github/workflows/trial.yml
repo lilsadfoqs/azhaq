@@ -156,7 +156,11 @@ jobs:
           sudo setcap cap_net_bind_service=+ep /usr/local/sbin/dnsd
           getcap /usr/local/sbin/dnsd | grep -q cap_net_bind_service
           .github/ci/range/fetch-vulhub.sh "$RUNNER_TEMP/vulhub" > /dev/null 2>&1
-          python3 .github/ci/range/build.py "$seed" --out "$range" --count 1
+          # The pool is public: its entry goes through the same keyed hash as
+          # research's draw, so the estate behind a name stays secret, and a
+          # gate and its baseline still build the same one.
+          estate=$(printf '%s' "$seed" | openssl dgst -sha256 -hmac "${CODEX_AUTH_KEY:-none}" | sed 's/.* //')
+          python3 .github/ci/range/build.py "$estate" --out "$range" --count 1
           python3 .github/ci/range/up.py "$range" --vulhub "$RUNNER_TEMP/vulhub" --labdns /usr/local/sbin/dnsd --run-as nobody
           age -r "$AGE_RECIPIENT" -o "$HOME/ci/key.json.age" "$range/key.json"
           cp "$range/vars.json" "$HOME/ci/vars.json"
@@ -371,7 +375,11 @@ jobs:
           sudo setcap cap_net_bind_service=+ep /usr/local/sbin/dnsd
           getcap /usr/local/sbin/dnsd | grep -q cap_net_bind_service
           .github/ci/range/fetch-vulhub.sh "$RUNNER_TEMP/vulhub" > /dev/null 2>&1
-          python3 .github/ci/range/build.py "$seed" --out "$range" --count 1
+          # The pool is public: its entry goes through the same keyed hash as
+          # research's draw, so the estate behind a name stays secret, and a
+          # gate and its baseline still build the same one.
+          estate=$(printf '%s' "$seed" | openssl dgst -sha256 -hmac "${CODEX_AUTH_KEY:-none}" | sed 's/.* //')
+          python3 .github/ci/range/build.py "$estate" --out "$range" --count 1
           python3 .github/ci/range/up.py "$range" --vulhub "$RUNNER_TEMP/vulhub" --labdns /usr/local/sbin/dnsd --run-as nobody
           age -r "$AGE_RECIPIENT" -o "$HOME/ci/key.json.age" "$range/key.json"
           cp "$range/vars.json" "$HOME/ci/vars.json"
