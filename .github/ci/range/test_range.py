@@ -775,6 +775,19 @@ class Grade(unittest.TestCase):
         with open(os.path.join(self.d, name), "w") as f:
             f.write(text)
 
+    def test_a_later_cve_lead_makes_the_match_strong(self):
+        t0 = 1_800_000_000
+        iso = lambda t: time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t))  # noqa: E731
+        self.write("phases.log", "phase 1 start %s\nphase 1 end %s\n" % (iso(t0), iso(t0 + 5400)))
+        first = {"phase": 1, "time": iso(t0 + 100), "host": "ci.one.test", "port": 8080, "product": "Jenkins 2.138", "title": "Jenkins API open"}
+        later = {"phase": 1, "time": iso(t0 + 900), "host": "ci.one.test", "port": 8080, "product": "Jenkins 2.138", "cve": "CVE-2018-1000861", "title": "Jenkins RCE"}
+        self.write("leads.jsonl", json.dumps(first) + "\n" + json.dumps(later) + "\n")
+        p1 = grade.grade(mkkey(), self.d)["phases"][0]
+        self.assertEqual(p1["vulns"]["identified"], 1)
+        self.assertEqual(p1["vulns"]["strong"], 1)
+        self.assertEqual(p1["vulns"]["found"][0]["seconds"], 100)
+        self.assertEqual(p1["leads"]["duplicates"], 1)
+
     def test_grades_a_run(self):
         t0 = 1_800_000_000
         iso = lambda t: time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t))  # noqa: E731

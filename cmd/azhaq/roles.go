@@ -105,6 +105,7 @@ type roleRow struct {
 	Evidence   string   `json:"evidence,omitempty"`
 	Confidence string   `json:"confidence,omitempty"`
 	Dir        string   `json:"dir,omitempty"`       // the -dir of the run, as an absolute path: where roles show and report find the answers
+	Failed     []string `json:"failed,omitempty"`    // a write row's requests that got no answer (a write, or the owner's object read back), and why
 	Control    *control `json:"control,omitempty"`   // what the readers got for a made-up identifier on the same route
 	BothWays   bool     `json:"both_ways,omitempty"` // the owner reads one of its reader's objects on the same route too
 	// SessionSuspect: an answer was asked after its role's session last
@@ -410,9 +411,14 @@ func cmdRoles(args []string) error {
 			hosts = append(hosts, sc.hostnames()...)
 			urls, _ := h.gets(sc, hostSet(hosts))
 			histURLs = append(histURLs, urls...)
-			n, err := readHistoryURLs(roles[i], urls, got, raw, s, hostSet(hosts), rate, max(0, *replayMax-replayed))
+			failed := askFailures{}
+			n, err := readHistoryURLs(roles[i], urls, got, raw, s, hostSet(hosts), rate, max(0, *replayMax-replayed), failed)
 			replayed += n
 			noteCap(rep, "history", err)
+			if len(failed) > 0 {
+				rep.warned = true
+				rep.Notes = append(rep.Notes, fmt.Sprintf("role %s: %s of its history got no answer, so it is missing from the comparison: %s", r.name, plural(len(failed), "page"), failed.reasons()))
+			}
 		}
 		answers[r.name], seen[r.name] = got, s
 		for t := range s.templates {
@@ -475,6 +481,7 @@ func cmdRoles(args []string) error {
 			lines, err := cmdHeaders(r)
 			if err != nil {
 				rep.Notes = append(rep.Notes, "replay: "+err.Error()+"; it sends the token the role's run started with")
+				rep.warned = true // that token may be dead: the replay's answers may be a visitor's
 				continue
 			}
 			if roles[i].session == nil {
@@ -495,6 +502,7 @@ func cmdRoles(args []string) error {
 		n, err := replayAll(roles, answers, found, rank, own, rate, *replayMax, watch)
 		replayed = n
 		rep.Notes = append(rep.Notes, watch.notes...)
+		rep.warned = rep.warned || watch.failed
 		noteCap(rep, "replay", err)
 	}
 	// A 200 "Access denied" page is a refusal: each origin's, as the
@@ -521,6 +529,9 @@ func cmdRoles(args []string) error {
 		fetch.Reset()
 		replayed += n
 		noteCap(rep, "controls", err)
+		cn, hard := controlNotes(rows)
+		rep.Notes = append(rep.Notes, cn...)
+		rep.warned = rep.warned || hard
 		rep.Notes = append(rep.Notes, bothWays(rows)...)
 		sortRows(rows)
 	}
@@ -563,6 +574,9 @@ func cmdRoles(args []string) error {
 			wrows, n, err = replayWrites(roles, reqs, answers, own, rate, max(0, *replayMax-replayed), *writesCanary, canaryFields...)
 			replayed += n
 			noteCap(rep, "write replay", err)
+			wn, failed := writeNotes(wrows)
+			rep.Notes = append(rep.Notes, wn...)
+			rep.warned = rep.warned || failed
 		}
 		if len(reqs) == 0 {
 			rep.Notes = append(rep.Notes, "-replay-writes: no write to replay (no -har or -burp write of the methods named, and no PUT, PATCH or DELETE on a route with a role's own object)")
@@ -833,7 +847,7 @@ func size(n int) string {
 var errReplayMax = errors.New("replay stopped by -replay-max")
 
 // noteCap records a replay stage's error as a note, and when it is a
-// -replay-max cap marks the run stopped by a limit (exit 4) so a clean
+// -replay-max cap or an interrupt marks the run stopped (exit 4) so a clean
 // exit 0 does not hide an access-control comparison that was cut short.
 func noteCap(rep *report, prefix string, err error) {
 	if err == nil {
@@ -843,6 +857,60 @@ func noteCap(rep *report, prefix string, err error) {
 	if errors.Is(err, errReplayMax) && rep.Stopped == "" {
 		rep.Stopped = err.Error()
 	}
+	if errors.Is(err, context.Canceled) && rep.Stopped == "" {
+		rep.Stopped = "interrupted: the " + prefix + " stopped with requests left; the rows are what was compared before it"
+	}
+}
+
+// noAnswer: err is a request that should have been answered and was not
+// (a refused connect, a timeout, a scope refusal), not one azhaq chose not
+// to send (a -deny-path rule, a kill file, a spent budget, Ctrl-C).
+func noAnswer(err error) bool {
+	return err != nil && !errors.Is(err, neterr.ErrDenied) && !errors.Is(err, neterr.ErrBudget) && !errors.Is(err, context.Canceled)
+}
+
+// failWhy is err in a few words: the transport's own error, without the
+// URL the request carried.
+func failWhy(err error) string {
+	var ue *url.Error
+	if errors.As(err, &ue) {
+		return ue.Err.Error()
+	}
+	return err.Error()
+}
+
+// distinctReasons lists up to three of reasons, each once, and counts the rest.
+func distinctReasons(reasons []string) string {
+	var out []string
+	for _, r := range reasons {
+		if !slices.Contains(out, r) {
+			out = append(out, r)
+		}
+	}
+	if len(out) > 3 {
+		return strings.Join(out[:3], "; ") + fmt.Sprintf("; and %d more", len(out)-3)
+	}
+	return strings.Join(out, "; ")
+}
+
+// askFailures are the requests of one stage that got no answer, by URL,
+// with why.
+type askFailures map[string]string
+
+// add records the request for u, when err is a failure to be answered.
+func (f askFailures) add(u string, err error) {
+	if noAnswer(err) {
+		f[u] = failWhy(err)
+	}
+}
+
+func (f askFailures) reasons() string {
+	var rs []string
+	for u := range f {
+		rs = append(rs, f[u])
+	}
+	sort.Strings(rs)
+	return distinctReasons(rs)
 }
 
 // replayAll asks each URL some role reached, and each object URL made
@@ -1513,7 +1581,10 @@ func endpointAnswers(db string) (map[string]answer, map[string]string, []string,
 			raw[u] = p.URL
 		}
 	}
-	seeds, _ := st.LoadSeeds()
+	seeds, err := st.LoadSeeds()
+	if err != nil {
+		return nil, nil, nil, seen, err
+	}
 	var hosts []string
 	for _, s := range seeds {
 		s = normalize.Seed(s)

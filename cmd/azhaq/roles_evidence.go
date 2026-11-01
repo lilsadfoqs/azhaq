@@ -382,6 +382,9 @@ func readEvidence(row roleRow) string {
 		}
 		parts = append(parts, line)
 	}
+	if c := row.Control; c != nil && len(c.Failed) > 0 {
+		parts = append(parts, "the control (a made-up "+c.Value+") could not be asked, "+strings.Join(c.Failed, ", ")+": the route is not checked for answering any identifier")
+	}
 	if len(row.mutual) > 0 {
 		parts = append(parts, "both ways: "+row.Owner+" reads "+strings.Join(row.mutual, " and ")+"'s too")
 	}
@@ -406,6 +409,9 @@ func writeEvidence(row roleRow) string {
 	s := strings.Join(let, ", ")
 	if a, ok := row.Answers[row.Owner]; ok && a.Status != 0 {
 		s += ", as " + row.Owner + " did (" + answerCell(a) + ")"
+	}
+	if len(row.Failed) > 0 {
+		s += "; no answer: " + strings.Join(row.Failed, ", ")
 	}
 	return s + "; " + row.OwnerBy
 }

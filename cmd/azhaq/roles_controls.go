@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math/rand/v2"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/lilsadfoqs/azhaq/internal/egress"
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
+	"github.com/lilsadfoqs/azhaq/internal/neterr"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
 )
 
@@ -33,15 +35,20 @@ func init() { verdictOrder[verdictAnyID] = 2 }
 type control struct {
 	URL     string            `json:"url"`
 	Value   string            `json:"value"`
-	Answers map[string]answer `json:"answers"`         // each reader's
-	Alike   []string          `json:"alike,omitempty"` // the readers it answered as a real object
+	Answers map[string]answer `json:"answers"`          // each reader's
+	Alike   []string          `json:"alike,omitempty"`  // the readers it answered as a real object
+	Failed  []string          `json:"failed,omitempty"` // the readers whose request got no answer, and why: the route is not checked for them
+
+	quiet int // of Failed, the requests a -deny-path rule kept out: the user's rule, not a failure
 }
 
 // askControls asks each cross read's readers for a made-up identifier on
 // its route, at most budget requests. A row whose route answered every
 // reader's made-up identifier alike answers any identifier; a reader it
 // answered alike beside one it did not is no longer one of its readers.
-// A reader is asked once per route and shape of identifier.
+// A reader is asked once per route and shape of identifier. A request that
+// got no answer is on the row (control.failed), and controlNotes says so
+// in the summary.
 func askControls(roles []role, rows []roleRow, own map[string]bool, pages []refusalPage, refusal *regexp.Regexp, budget int) (int, error) {
 	byName := map[string]role{}
 	for _, r := range roles {
@@ -50,6 +57,7 @@ func askControls(roles []role, rows []roleRow, own map[string]bool, pages []refu
 	ctx := context.Background()
 	fakes := map[string]string{} // route and shape → the made-up value
 	asked := map[string]answer{} // URL and reader → its answer
+	failed := map[string]error{} // URL and reader → why it got none
 	held := map[string][]byte{}  // URL and reader → its body
 	sent := 0
 	for i := range rows {
@@ -70,6 +78,10 @@ func askControls(roles []role, rows []roleRow, own map[string]bool, pages []refu
 		c := &control{URL: fu, Value: fake, Answers: map[string]answer{}}
 		for _, n := range row.Readers {
 			k := fu + "\x00" + n
+			if err, ok := failed[k]; ok {
+				c.fail(n, err)
+				continue
+			}
 			a, ok := asked[k]
 			if !ok {
 				if sent >= budget {
@@ -80,6 +92,12 @@ func askControls(roles []role, rows []roleRow, own map[string]bool, pages []refu
 				a, body, err = askFresh(ctx, byName[n].session, fu, own)
 				sent++
 				if err != nil {
+					// A kill file or a spent budget ends the run (exit 4) and
+					// is said there; the rest is a request that failed.
+					if !errors.Is(err, neterr.ErrBudget) {
+						failed[k] = err
+						c.fail(n, err)
+					}
 					continue
 				}
 				if ok2xx(a.Status) && (matchesPage(fu, a, pages) || refusal != nil && refusal.Match(body)) {
@@ -92,7 +110,7 @@ func askControls(roles []role, rows []roleRow, own map[string]bool, pages []refu
 				c.Alike = append(c.Alike, n)
 			}
 		}
-		if len(c.Answers) == 0 {
+		if len(c.Answers) == 0 && len(c.Failed) == 0 {
 			continue
 		}
 		row.Control = c
@@ -104,6 +122,45 @@ func askControls(roles []role, rows []roleRow, own map[string]bool, pages []refu
 		}
 	}
 	return sent, nil
+}
+
+// fail notes that reader's request got no answer.
+func (c *control) fail(reader string, err error) {
+	c.Failed = append(c.Failed, reader+": "+failWhy(err))
+	if errors.Is(err, neterr.ErrDenied) {
+		c.quiet++
+	}
+}
+
+// controlNotes says in the summary how many cross reads were not checked
+// with a made-up identifier because a request failed, and why; hard is
+// true when one failed for a reason that is not a -deny-path rule, which
+// makes the run exit 3.
+func controlNotes(rows []roleRow) (notes []string, hard bool) {
+	var failed, denied int
+	var reasons []string
+	for _, row := range rows {
+		c := row.Control
+		if c == nil || len(c.Failed) == 0 {
+			continue
+		}
+		if len(c.Failed) == c.quiet {
+			denied++
+			continue
+		}
+		failed++
+		for _, f := range c.Failed {
+			_, why, _ := strings.Cut(f, ": ")
+			reasons = append(reasons, why)
+		}
+	}
+	if failed > 0 {
+		notes = append(notes, fmt.Sprintf("%s not checked with a made-up identifier: the request failed: %s", plural(failed, "cross read"), distinctReasons(reasons)))
+	}
+	if denied > 0 {
+		notes = append(notes, fmt.Sprintf("%s not checked with a made-up identifier: a -deny-path rule keeps its route out", plural(denied, "cross read")))
+	}
+	return notes, failed > 0
 }
 
 // answersAnything: the made-up identifier's answer is read as a real
@@ -255,7 +312,10 @@ func askFresh(ctx context.Context, h http.Header, u string, own map[string]bool)
 		return answer{}, nil, err
 	}
 	defer resp.Body.Close()
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, int64(fetch.MaxBody)))
+	body, err := io.ReadAll(io.LimitReader(resp.Body, int64(fetch.MaxBody)))
+	if err != nil {
+		return answer{}, nil, fmt.Errorf("the answer was cut: %w", err)
+	}
 	ctype := resp.Header.Get("Content-Type")
 	a, _ := readAnswer(resp.StatusCode, body, ctype)
 	if resp.StatusCode >= 300 && resp.StatusCode < 400 {
