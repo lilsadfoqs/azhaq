@@ -353,10 +353,10 @@ func TestReportWritesUpACreateInAnotherRolesCollection(t *testing.T) {
 		t.Fatal(err)
 	}
 	files, _ := filepath.Glob(filepath.Join(out, "*.json"))
-	// Both owners' creates share one URL and method, which roles.db keys
-	// a row by: one report for the route.
-	if len(files) != 1 {
-		t.Fatalf("want one report for the route, got %v", files)
+	// Both owners' creates share one URL and method: roles.db keeps a row
+	// for each owner, and each is written up.
+	if len(files) != 2 {
+		t.Fatalf("want a report for each owner's create, got %v", files)
 	}
 	var docs []reportDoc
 	for _, f := range files {
@@ -385,9 +385,15 @@ func TestReportWritesUpACreateInAnotherRolesCollection(t *testing.T) {
 			t.Errorf("evidence kinds %v", kinds)
 		}
 	}
-	// One row by -url and -method, the report on standard output.
+	// Both rows by -url and -method: a report each, in the directory.
+	if out, _, err := captureBoth(t, func() error {
+		return cmdReport([]string{"-dir", dir, "-url", srv.URL + "/books/v1", "-method", "POST", "-o", filepath.Join(dir, "both") + "/"})
+	}); err != nil || !strings.Contains(out, "2 reports") {
+		t.Fatalf("both owners' creates by -url: %v\n%s", err, out)
+	}
+	// One row by -url, -method and -owner, the report on standard output.
 	rep, _, err := captureBoth(t, func() error {
-		return cmdReport([]string{"-dir", dir, "-url", srv.URL + "/books/v1", "-method", "POST"})
+		return cmdReport([]string{"-dir", dir, "-url", srv.URL + "/books/v1", "-method", "POST", "-owner", "alice"})
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -396,5 +402,40 @@ func TestReportWritesUpACreateInAnotherRolesCollection(t *testing.T) {
 		if !strings.Contains(rep, want) {
 			t.Errorf("the report lacks %q:\n%s", want, rep)
 		}
+	}
+}
+
+// Two owners' creates in one collection are two rows: roles show prints
+// both, or one with -owner, and says which owner when it prints several.
+func TestRolesShowTwoOwnersOfOneRoute(t *testing.T) {
+	dir := t.TempDir()
+	ev, err := store.OpenEvidence(filepath.Join(dir, evidenceFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	const u = "https://shop.example.test/books"
+	mk := func(owner, reader string) store.EvidenceRow {
+		er := evRow(t, roleRow{URL: u, Method: "POST", Owner: owner, Readers: []string{reader}, Verdict: verdictWriteCreate, Answers: map[string]answer{}},
+			ans(reader, "answer", u, 200, `{"by":"`+reader+`"}`, "curl -X POST '"+u+"'"))
+		er.Owner = owner
+		return er
+	}
+	if err := ev.Save([]string{"alice", "bob"}, []store.EvidenceRow{mk("alice", "bob"), mk("bob", "alice")}); err != nil {
+		t.Fatal(err)
+	}
+	ev.Close()
+	out, err := captureStdout(t, func() error { return cmdRolesShow([]string{"-dir", dir, u, "-method", "post"}) })
+	if err != nil || !strings.Contains(out, "owner alice") || !strings.Contains(out, "owner bob") {
+		t.Fatalf("both owners are shown: %v\n%s", err, out)
+	}
+	out, err = captureStdout(t, func() error { return cmdRolesShow([]string{"-dir", dir, u, "-method", "post", "-owner", "bob"}) })
+	if err != nil || strings.Contains(out, "owner alice") || !strings.Contains(out, "POST "+u) {
+		t.Fatalf("one owner: %v\n%s", err, out)
+	}
+	if err := cmdRolesShow([]string{"-dir", dir, u, "-method", "post", "-owner", "carol"}); err == nil {
+		t.Error("an owner with no row is an error")
+	}
+	if err := cmdRolesShow([]string{"-dir", dir, u, "-method", "post", "-body", "bob"}); err == nil || exitCode(err) != exitUsage {
+		t.Errorf("-body over two owners is a usage error: %v", err)
 	}
 }

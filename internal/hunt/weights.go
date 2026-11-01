@@ -48,6 +48,16 @@ const (
 	serverErrorSQL       = 50 // SQL error text
 )
 
+// signInWeight is what a sign-in, sign-up or password reset page weighs,
+// and the most a data word beside it (/user/login, /reset_password) adds.
+// Every application has them: an asset to note and find again, not a
+// weakness by itself. An API route of the same words (it takes credentials
+// from a script) keeps the weight of path-auth.
+const signInWeight = 10
+
+// signInWords are the path words of those pages.
+var signInWords = map[string]bool{"login": true, "signin": true, "signon": true, "logon": true, "reset": true, "forgot": true, "recover": true, "register": true, "signup": true}
+
 const (
 	takeoverStrong  = 90
 	graphqlStrong   = 45
@@ -95,7 +105,8 @@ func init() {
 		words  string
 	}{
 		{"path-admin", 40, "admin administrator administration internal console actuator manager"},
-		// who may do what: sign in, tokens, resetting a password
+		// who may do what: sign in, tokens, resetting a password; a sign-in
+		// page weighs less than its API (see signInWords)
 		{"path-auth", 45, "login signin signon logon auth authenticate authentication authorize oauth oauth2 sso saml token reset forgot recover register signup mfa 2fa otp"},
 		// what a query or a filter feeds into a database
 		{"path-search", 35, "search find filter query lookup autocomplete suggest"},

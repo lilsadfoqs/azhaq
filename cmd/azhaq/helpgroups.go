@@ -63,7 +63,7 @@ var helpSpecs = map[string]helpSpec{
 	"roles": {
 		groups: []helpGroup{
 			{"Sessions", `role role-cmd role-login login har burp no-anon canary canary-every`},
-			{"What to replay", `replay replay-max replay-writes replay-writes-canary dry-writes id refusal allow all`},
+			{"What to replay", `replay replay-max replay-writes replay-writes-canary replay-writes-field dry-writes id refusal allow all`},
 			{"Pace and network", `rate proxy`},
 			{"Output", `dir json`},
 		},
@@ -75,7 +75,7 @@ var helpSpecs = map[string]helpSpec{
 	},
 	"report": {
 		groups: []helpGroup{
-			{"", `dir url method format o redact`},
+			{"", `dir url method owner format o redact`},
 		},
 	},
 	"subs": {
@@ -164,7 +164,7 @@ var helpSpecs = map[string]helpSpec{
 		groups: []helpGroup{
 			{"Targets and input", `u l scope program`},
 			{"What to ask", `d paths sweep no-form-fill per-template no-follow no-map-guess browser interact interact-clicks fs kf`},
-			{"What to list", `assets no-catchall rejected em ndef do`},
+			{"What to list", `assets hints no-catchall rejected em ndef do`},
 			{"Scope and safety", `allow deny deny-path kill-file ledger submit-forms browser-writes`},
 			{"Pace and limits", `rl delay backoff retry host-rate hrl host-parallel parallel request-timeout ct max-requests max-host-requests max-items max-response-size`},
 			{"Session and network", `H cookie cookie-jar login login-user login-pass proxy resolvers`},

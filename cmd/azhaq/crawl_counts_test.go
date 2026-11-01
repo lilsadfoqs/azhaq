@@ -41,10 +41,11 @@ var a = "text/plain", b = "application/json", c = "5 items", d = "foo/bar baz";
 // not requested, the templates, the assets and the strings kept out.
 func TestCrawlSummaryCountsEachKindOfRow(t *testing.T) {
 	srv := kindsSite(t)
-	_, errOut := crawlOut(t, srv, "-json", "-assets")
+	_, errOut := crawlOut(t, srv, "-json", "-assets", "-hints")
 	sum := sumMap(t, errOut)
 	counts, _ := sum["counts"].(map[string]any)
-	want := map[string]float64{"requested": 4, "answered": 4, "not requested": 1, "templates": 1, "assets": 1, "rejected strings": 1}
+	want := map[string]float64{"requested": 4, "answered": 4, "not requested": 1, "templates": 1, "assets": 1, "rejected strings": 1,
+		"observed routes": 4, "hint routes": 2}
 	for k, v := range want {
 		if counts[k] != v {
 			t.Errorf("%s = %v, want %v (counts %v)", k, counts[k], v, counts)

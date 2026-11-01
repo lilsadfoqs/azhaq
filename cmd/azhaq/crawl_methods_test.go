@@ -60,7 +60,10 @@ func crawlOut(t *testing.T, srv *httptest.Server, args ...string) (string, strin
 // -json rows carry methods.
 func TestCrawlShowsTheMethodOfScriptCalledRoutes(t *testing.T) {
 	srv := postRoutesSite(t)
-	plain, errOut := crawlOut(t, srv)
+	if def, errOut := crawlOut(t, srv); strings.Contains(def, "/snippets/fixes") || !strings.Contains(errOut, "3 hints and 0 named URLs were left out of the list (-hints lists them") {
+		t.Errorf("the default list holds the routes scripts call, or the summary does not say they were left out:\n%s\n%s", def, errOut)
+	}
+	plain, errOut := crawlOut(t, srv, "-hints")
 	for _, p := range []string{"/snippets/fixes", "/logger", "/catalog/subscribe"} {
 		if !strings.Contains(plain, srv.URL+p+"\n") {
 			t.Errorf("plain crawl does not list %s:\n%s", p, plain)
@@ -72,7 +75,7 @@ func TestCrawlShowsTheMethodOfScriptCalledRoutes(t *testing.T) {
 		t.Errorf("the summary does not say that plain output lists routes with other methods:\n%s", errOut)
 	}
 
-	withMethod, _ := crawlOut(t, srv, "-ot", "{{method}} {{url}}")
+	withMethod, _ := crawlOut(t, srv, "-hints", "-ot", "{{method}} {{url}}")
 	lines := map[string]bool{}
 	for _, l := range strings.Split(strings.TrimSpace(withMethod), "\n") {
 		lines[strings.TrimPrefix(l, "")] = true
@@ -87,13 +90,13 @@ func TestCrawlShowsTheMethodOfScriptCalledRoutes(t *testing.T) {
 		}
 	}
 
-	fields, _ := crawlOut(t, srv, "-f", "method,path", "-mr", "/logger")
+	fields, _ := crawlOut(t, srv, "-hints", "-f", "method,path", "-mr", "/logger")
 	if strings.TrimSpace(fields) != "POST\n/logger" {
 		t.Errorf("-f method,path for /logger: %q", fields)
 	}
 
 	dir := t.TempDir()
-	crawlOut(t, srv, "-sf", "method", "-sfd", dir)
+	crawlOut(t, srv, "-hints", "-sf", "method", "-sfd", dir)
 	files, _ := filepath.Glob(filepath.Join(dir, "*_method.txt"))
 	if len(files) != 1 {
 		t.Fatalf("-sf method wrote %v", files)
@@ -102,8 +105,16 @@ func TestCrawlShowsTheMethodOfScriptCalledRoutes(t *testing.T) {
 		t.Errorf("-sf method file: %q", b)
 	}
 
-	rows := urlRows(t, func() string { out, _ := crawlOut(t, srv, "-json"); return out }())
+	rows := urlRows(t, func() string { out, _ := crawlOut(t, srv, "-json", "-hints"); return out }())
 	if m, _ := rows[srv.URL+"/snippets/fixes"]["methods"].([]any); len(m) != 1 || m[0] != "POST" {
 		t.Errorf("-json methods of /snippets/fixes: %v", rows[srv.URL+"/snippets/fixes"])
+	}
+	if rows[srv.URL+"/snippets/fixes"]["class"] != "hint" || rows[srv.URL+"/about"]["class"] != "observed" {
+		t.Errorf("-json marks each row's class: %v, %v", rows[srv.URL+"/snippets/fixes"], rows[srv.URL+"/about"])
+	}
+	for u := range urlRows(t, func() string { out, _ := crawlOut(t, srv, "-json"); return out }()) {
+		if strings.HasSuffix(u, "/snippets/fixes") {
+			t.Errorf("-json lists a hint without -hints: %s", u)
+		}
 	}
 }

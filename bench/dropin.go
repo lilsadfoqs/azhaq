@@ -41,7 +41,7 @@ func benchDropin(crapi bool) *dropinRow {
 	// crawl, like katana: Juice Shop's known routes.
 	// -json: the routes with parameters (/api/Cards/{id}) are there too;
 	// the plain list holds only URLs that can be requested.
-	out, _ := run("dropin", 10*time.Minute, dir, azhaq, "crawl", "-json", "-silent", "-u", juiceURL)
+	out, _ := run("dropin", 10*time.Minute, dir, azhaq, "crawl", "-json", "-hints", "-silent", "-u", juiceURL)
 	truth := readTruth("bench/truth/juice-shop-v20.3.0-routes.txt")
 	// A crawler asks what pages and scripts name; the truth also holds routes
 	// that only the full map reaches (the id form of a collection the frontend

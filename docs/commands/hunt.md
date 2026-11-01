@@ -56,6 +56,7 @@ $ azhaq hunt -db app.db
 | `type` | `URL` or `Hostname`. |
 | `reasons` | An array of `{signal, detail}`, one per signal. |
 | `next` | The command to run next. [The next command](#the-next-command) says how it is chosen. |
+| `template` | Only on the row of an input the pages of an origin carry in common: `{"input", "pages", "of"}`, the input and how many of the origin's fetched pages carry it. |
 
 ### Signals
 
@@ -93,6 +94,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 - A row with no signal of its own is left out.
 - A row whose only signal is `new` never ranks.
 - Static assets, scripts, catch-all pages and pages that are gone are never rows.
+- An input name that most pages of an origin carry belongs to the site's template, such as a search box or a sign-in form in every page's header. The rule: at least 5 of the origin's fetched pages carry the name, and at least 40% of them. The numbers come from the v0.12 hunter evidence, where one search box was 77 of the top 100 rows. The pages that only carry it have no signal for it and are left out. The input is not lost, since it can be the injection point: it is one row for each origin and name, on the page it was first seen on, with a reason such as `input q on 312 of 340 pages of http://host:8080 (the site's template)`, ranked by its own signals like any other input. Its `-json` row has `template: {input, pages, of}`. A route that takes the name in its own query keeps it as its own signal.
 
 ### Score and order
 
@@ -151,7 +153,7 @@ A 5xx is a lead, not a finding. Its weight depends on what shows beside it:
 
 ### Words in paths
 
-- `path-auth`: a word that says the route signs in or issues a session, such as `login`, `signin`, `auth`, `oauth`, `sso`, `token`, `reset`, `forgot`, `register`, `2fa`. Weight 45.
+- `path-auth`: a word that says the route signs in or issues a session, such as `login`, `signin`, `auth`, `oauth`, `sso`, `token`, `reset`, `forgot`, `register`, `2fa`. Weight 45. A sign-in, sign-up or password reset page (`login`, `signin`, `signon`, `logon`, `reset`, `forgot`, `recover`, `register`, `signup`; a route that is not an API) is an asset to note, not a weakness by itself: it weighs 10, and a data word beside it (`/user/login`, `/reset_password`) adds at most 10. It stays in the list, low. An API route with the same words, and `auth`, `oauth`, `sso`, `saml`, `token`, `mfa`, `2fa`, keep 45.
 - `path-search`: a word that says the route searches or filters: `search`, `find`, `filter`, `query`, `lookup`. Weight 35.
 - A route that a script or a description gives methods for counts in full, even when it was not asked.
 - A named route that nobody calls weighs half.
