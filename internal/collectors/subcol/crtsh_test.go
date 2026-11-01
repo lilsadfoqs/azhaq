@@ -248,7 +248,7 @@ func TestCrtshFullPageRestFallsBack(t *testing.T) {
 // A database that does not answer the limited query leaves most of the
 // source's time to the JSON API: the query is cut at a quarter of it.
 func TestCrtshSlowDatabaseLeavesTimeForJSON(t *testing.T) {
-	var qdl time.Time
+	qdls := make(chan time.Time, 1) // the query is left running: its deadline comes back on a channel
 	var jsonLeft time.Duration
 	c := New(Options{Client: &http.Client{Transport: rtFunc(func(r *http.Request) (*http.Response, error) {
 		dl, _ := r.Context().Deadline()
@@ -258,7 +258,8 @@ func TestCrtshSlowDatabaseLeavesTimeForJSON(t *testing.T) {
 	sess := &subscraping.Session{Client: c.opts.Client, RequestLimiter: c.limiter, Timeout: 5}
 	old := crtshQuery
 	crtshQuery = func(ctx context.Context, _ string, _ *url.URL, _ time.Duration, _ int) ([]string, int, error) {
-		qdl, _ = ctx.Deadline()
+		dl, _ := ctx.Deadline()
+		qdls <- dl
 		<-ctx.Done() // never answers
 		return nil, 0, ctx.Err()
 	}
@@ -270,7 +271,7 @@ func TestCrtshSlowDatabaseLeavesTimeForJSON(t *testing.T) {
 	if err != nil || len(names) == 0 || names[0] != "j.example.org" {
 		t.Fatalf("names %v, err %v", names, err)
 	}
-	if took := qdl.Sub(start); took > 2500*time.Millisecond {
+	if took := (<-qdls).Sub(start); took > 2500*time.Millisecond {
 		t.Errorf("the limited query was given %s of 8 s", took)
 	}
 	if jsonLeft < 5*time.Second {
@@ -472,5 +473,36 @@ func TestCrtshRetriesDoNotHoldTheRun(t *testing.T) {
 		if e, _ := payload["sources"].(map[string]any)["crtsh"].(map[string]any)["error"].(string); e == "" {
 			t.Errorf("%s: crt.sh's failure is not in its row: %v", tc.name, payload["sources"])
 		}
+	}
+}
+
+// A database driver that does not give up when its context ends (it waits
+// for the server) holds the source for the whole -source-timeout and the JSON
+// API is never asked. The attempt is left behind at its budget, a quarter of
+// the source's time, and the JSON API answers in what remains.
+func TestCrtshDatabaseThatNeverReturnsIsLeftAtItsBudget(t *testing.T) {
+	oldQuery := crtshQuery
+	release := make(chan struct{})
+	crtshQuery = func(context.Context, string, *url.URL, time.Duration, int) ([]string, int, error) {
+		<-release // ignores its context, as a stuck driver does
+		return nil, 0, nil
+	}
+	defer func() { close(release); crtshQuery = oldQuery }()
+	var asked atomic.Int32
+	client := &http.Client{Transport: rtFunc(func(r *http.Request) (*http.Response, error) {
+		asked.Add(1)
+		body := `[{"common_name":"api.example.org","name_value":"api.example.org"}]`
+		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(body)), Request: r, Header: http.Header{}}, nil
+	})}
+	c := collector(Options{Client: client, NoHistory: true, SourceTimeout: 8 * time.Second}, crtshSource())
+	t0 := time.Now()
+	payload, _ := run(t, c, context.Background())
+	took := time.Since(t0)
+	if got := strs(payload["names"]); !slices.Equal(got, []string{"api.example.org"}) || asked.Load() != 1 {
+		t.Errorf("names %v, JSON API asked %d times", got, asked.Load())
+	}
+	// The budget is a quarter of 8 s; without it the run took the 8 s and 2 s of grace.
+	if took > 3500*time.Millisecond {
+		t.Errorf("the run took %s: the database held the source", took)
 	}
 }

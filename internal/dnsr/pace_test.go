@@ -269,10 +269,11 @@ func TestPacedQueriesAreNotHedgedWhileTheyWaitForASlot(t *testing.T) {
 	}
 }
 
-// A query that was sent and is late is still asked again under a pace: that
-// slot would be spent on the retry anyway, a second sooner.
-func TestPacedLostQueryIsStillAskedAgainEarly(t *testing.T) {
-	p := New(Options{Resolvers: []string{"192.0.2.1:53", "192.0.2.2:53"}, PerSecond: 20, Timeout: 2 * time.Second})
+// Under a pace a lost query is asked again when its timeout is up, as dnsx
+// asks again: an attempt beside it would spend a slot of the user's rate on
+// every answer that is merely slow.
+func TestPacedLostQueryIsAskedAgainAfterTheTimeout(t *testing.T) {
+	p := New(Options{Resolvers: []string{"192.0.2.1:53", "192.0.2.2:53"}, PerSecond: 20, Timeout: time.Second})
 	var asked atomic.Int32
 	p.Exchange = func(ctx context.Context, q *dns.Msg, server string) (*dns.Msg, error) {
 		if asked.Add(1) == 1 {
@@ -287,8 +288,25 @@ func TestPacedLostQueryIsStillAskedAgainEarly(t *testing.T) {
 	}
 	t0 := time.Now()
 	a := p.Resolve(context.Background(), "lost.example.org")
-	if a.Status != StatusOK || time.Since(t0) > time.Second {
-		t.Errorf("status %s after %s", a.Status, time.Since(t0))
+	if took := time.Since(t0); a.Status != StatusOK || took < time.Second || asked.Load() != 2 {
+		t.Errorf("status %s after %s, %d queries; want ok after the 1 s timeout, 2 queries", a.Status, took, asked.Load())
+	}
+}
+
+// Answers that take longer than a hedge delay but come within the timeout
+// are asked once each under a pace: 100 names that answer in 600 ms cost 100
+// queries, where a hedge at 250 ms made it 2 or 3 each.
+func TestPacedSlowAnswersAreNotAskedTwice(t *testing.T) {
+	p := New(Options{Resolvers: []string{"192.0.2.1:53", "192.0.2.2:53"}, PerSecond: 200, Timeout: 3 * time.Second})
+	var asked atomic.Int32
+	p.Exchange = slowLive(600*time.Millisecond, &asked)
+	for _, a := range p.ResolveMany(context.Background(), names(100), 128) {
+		if a.Status != StatusOK {
+			t.Fatalf("%s: %s %s", a.Name, a.Status, a.Err)
+		}
+	}
+	if n := asked.Load(); n != 100 {
+		t.Errorf("%d queries for 100 slow names, want 100", n)
 	}
 }
 

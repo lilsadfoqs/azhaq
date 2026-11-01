@@ -232,7 +232,9 @@ coverage: what the independent sources know, not every name that exists. Their p
 - Without a key it is asked again only while its last round gave a name that resolves and no other source had.
 - The next round is asked while the last round's new names are looked up, so a round costs the longer of the two. When a round adds no live name, the call already made ahead is dropped, and the source's `calls` counts it. No name is looked up twice.
 - `-max-time` ends the wait for it too: the names it gave by then are kept, listed as not checked when their lookup was cut, and its row says `-max-time` stopped it. `-source-timeout` bounds each of its calls and, with them, half the time it spends asking; the lookups of its guesses are paced by `-dns-rate`, not by `-source-timeout`.
-- With `-dns-rate` the guesses may cost at most half what the real names reported cost, and not less than 1,000.
+- How many samples are taken is in [Guesses](#guesses).
+- A lookup waits 3 s for an answer, as dnsx does, and is asked again on another resolver when it times out, up to 3 attempts. Without `-dns-rate` a late attempt is also hedged: another is sent beside it and the first answer wins. With `-dns-rate` nothing is hedged, because a hedge spends a slot of your rate on every answer that is merely slow: a zone that answers in 1.2 s cost 1.5 queries a guess hedged, 1 not.
+- crt.sh's database is asked for a quarter of `-source-timeout` and then left, whether or not the driver gives up: a connection that hangs holds the source for the quarter, not for the whole timeout, and the JSON API gets the rest.
 - A name is live when DNS has a record for it: an address, directly or through its CNAME chain, or a CNAME whose chain ends without one (marked `cname_only`).
 - Answers too big for 512 bytes, such as a long CNAME chain, arrive with EDNS0, or over TCP when a server truncates them.
 - Without `-live` nothing is looked up. The guesses are listed with `"unverified": true`, and the summary counts them.

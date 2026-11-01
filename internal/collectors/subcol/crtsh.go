@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/lilsadfoqs/azhaq/internal/egress"
+	"github.com/lilsadfoqs/azhaq/internal/guard"
 )
 
 // crtshStatement is subfinder's lookup; crtshLimit is its "LIMIT 10000"
@@ -57,7 +58,29 @@ func crtshDatabase(ctx context.Context, domain string, client *http.Client, shar
 	qctx, cancel := context.WithTimeout(ctx, budget)
 	defer cancel()
 	countCall(ctx)
-	return crtshQuery(qctx, domain, via, budget, limit)
+	// The driver may not give up when its context ends (lib/pq waits for the
+	// server's answer to its cancel request, and crt.sh's pooler can sit on
+	// it): the attempt is left behind at its budget, so the JSON API gets
+	// the time that remains.
+	type result struct {
+		names []string
+		rows  int
+		err   error
+	}
+	done := make(chan result, 1)
+	query := crtshQuery // the goroutine may outlive this call
+	go func() {
+		defer guard.Recover(ctx)
+		var r result
+		r.names, r.rows, r.err = query(qctx, domain, via, budget, limit)
+		done <- r
+	}()
+	select {
+	case r := <-done:
+		return r.names, r.rows, r.err
+	case <-qctx.Done():
+		return nil, 0, fmt.Errorf("no answer in %s", budget.Round(time.Second))
+	}
 }
 
 // crtshProxy is the SOCKS5 proxy the source requests go through, nil for

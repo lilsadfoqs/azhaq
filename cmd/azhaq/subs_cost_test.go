@@ -319,3 +319,22 @@ func TestSubsGuessSamplesFlag(t *testing.T) {
 		t.Errorf("-guess-samples -1: exit %d, want %d", code, exitUsage)
 	}
 }
+
+// Resolvers that take a second or more to answer (a slow zone) are asked
+// once per name under a pace, and answers up to 3 s are waited for, as dnsx
+// waits: an attempt hedged beside every slow answer spent two or three
+// slots of the rate on it, and a name that took 2.5 s failed at the 2 s
+// timeout.
+func TestSubsLiveSlowAnswersCostOneQueryAName(t *testing.T) {
+	if testing.Short() {
+		t.Skip("takes 27 s")
+	}
+	for _, lat := range []time.Duration{1200 * time.Millisecond, 2500 * time.Millisecond} {
+		z := &countingZone{a: map[string]string{}, byType: map[string]int{}, byName: map[string]int{}, nodata: map[string]bool{}, perQuery: lat}
+		perReal, perGuess, total, took, rows := costOf(t, z, "-dns-rate", "100")
+		t.Logf("answers in %s: %d queries in %s, %d printed; per real name %.2f, per guess %.2f", lat, total, took.Round(100*time.Millisecond), rows, perReal, perGuess)
+		if perGuess > 1.0 || perReal > 2.0 || rows != 12 {
+			t.Errorf("answers in %s: %.2f queries a guess, %.2f a real name, %d printed (want 1.0, 2.0, 12)", lat, perGuess, perReal, rows)
+		}
+	}
+}
