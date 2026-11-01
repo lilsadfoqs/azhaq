@@ -193,7 +193,7 @@ Behaviour, fields and edge cases: [`azhaq probe`](commands/probe.md).
 
 - `probe` follows no redirect unless given `-fr`, as httpx does. A row's status, title and length are one answer's. `run` and `crawl` follow redirects inside the site.
 - **Pace.** `-rl` counts services a second, as httpx does. A target's first request waits its turn. Its favicon, redirects and second scheme do not. `-rate N` paces every request instead. The default is no pace; httpx's is 150.
-- A target with no answer is a row with `failed: true`, and `-probe` prints `[FAILED]` for it. The summary counts them.
+- A target with no answer is a row with `failed: true`, and `-probe` prints `[FAILED]` for it. With `-p` (or `-path`) every port (path) of every input ends as a row of its own, a failed one named by the scheme asked last and its error, as in httpx; the summary counts them and names each failed URL once.
 - A name that resolves only because its zone has a wildcard is probed, not dropped, so a list of real hosts is not thinned.
 - `-p` replaces the port of an input, as httpx does: `-l 127.0.0.1:3001 -p 5002` asks port 5002 only, and `input` stays the line as given. A URL with a path keeps its path and its own scheme on the new port, where httpx asks both schemes. Without `-p`, an input asks its own port.
 - A bare `host:port` is asked over plain HTTP first on 8080 and on ports above 1024. It is asked over TLS when the plain request is answered 400.

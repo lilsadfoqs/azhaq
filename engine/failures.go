@@ -121,6 +121,9 @@ func eachFailure(ents []types.Entity, obs []types.StoredObservation, add func(co
 			if msg == "" || strings.HasPrefix(msg, "not requested:") {
 				continue // a choice, listed by Skips
 			}
+			if u, _ := p["url"].(string); u != "" {
+				target = u // one port or path of a seed that gave no answer
+			}
 			add(o.Collector, "", msg, target)
 			continue
 		}

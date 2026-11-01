@@ -524,18 +524,22 @@ func cmdProbe(args []string) error {
 		return err
 	}
 	out := &probeOut{w: w, c: &c, pf: &pf, set: set, spec: spec, cdn: map[string][2]string{}, cnames: map[string][]string{},
-		seen: map[string]bool{}, shots: map[string]map[string]any{}, input: map[string][]string{}, answered: map[string]bool{}, sent: map[string]int{}}
+		seen: map[string]bool{}, shots: map[string]map[string]any{}, input: map[string][]string{}, answered: map[string]bool{}, answeredKey: map[string]bool{}, units: map[string][]probeUnit{}, sent: map[string]int{}}
 	out.displays = pf.displayed()
 	// httpx's input field is the line as given, not the URL it became.
 	probeSeeding = true
 	for _, t := range targets {
 		out.order = append(out.order, t.given)
 		for _, l := range t.lines {
+			u := probeUnit{line: l}
 			if s, err := listSeed(l); err == nil {
-				if k := normalize.Seed(s).Key(); !slices.Contains(out.input[k], t.given) {
+				k := normalize.Seed(s).Key()
+				u.key = k
+				if !slices.Contains(out.input[k], t.given) {
 					out.input[k] = append(out.input[k], t.given)
 				}
 			}
+			out.units[t.given] = append(out.units[t.given], u)
 		}
 	}
 	probeSeeding = false
@@ -646,10 +650,22 @@ func (o *probeOut) settle(rep *report, st *store.Store, fs *flag.FlagSet) {
 	for _, sk := range rep.Skipped {
 		skipped[sk.Target] = sk.Reason
 	}
-	keys := map[string][]string{}
-	for key, ins := range o.input {
-		for _, in := range ins {
-			keys[in] = append(keys[in], key)
+	// The ports and paths of one seed that gave no answer, each with its error.
+	type asked struct{ url, why string }
+	unanswered := map[string][]asked{} // seed key → them
+	entKey := map[string]string{}
+	for _, e := range ents {
+		entKey[e.ID] = e.Key
+	}
+	for _, ob := range obs {
+		if ob.Collector != "azhaq-http" || ob.Kind != "error" {
+			continue
+		}
+		m := payloadOf(ob.Observation)
+		u, _ := m["url"].(string)
+		msg, _ := m["error"].(string)
+		if u != "" && msg != "" {
+			unanswered[entKey[ob.EntityID]] = append(unanswered[entKey[ob.EntityID]], asked{u, engine.ShortError(msg)})
 		}
 	}
 	accounted := map[string]bool{}
@@ -679,39 +695,47 @@ func (o *probeOut) settle(rep *report, st *store.Store, fs *flag.FlagSet) {
 	var gaps []string
 	noAnswer, notAsked := 0, 0
 	for _, in := range order {
-		if o.answered[in] {
-			continue
+		units := o.units[in]
+		if len(units) == 0 {
+			units = []probeUnit{{line: in}} // a name a certificate or a policy led to
 		}
-		why := ""
-		for _, k := range keys[in] {
-			if why == "" {
-				why = failed[k]
+		for _, u := range units {
+			k := u.key
+			answered := o.answeredKey[k] || len(units) == 1 && o.answered[in]
+			// A port or path of the seed that gave no answer is a row of its own.
+			for _, a := range unanswered[k] {
+				o.failedRow(in, a.url, a.why)
+				noAnswer++
 			}
-			if why == "" {
+			if answered || len(unanswered[k]) > 0 {
+				continue
+			}
+			why := failed[k]
+			if why == "" && k != "" {
 				why = dnsErr[normalize.HostFromURL(k)]
 			}
 			if why == "" {
 				why = skipped[k]
 			}
-		}
-		if why == "" {
-			why = dnsErr[in]
-		}
-		if why == "" && rep.Stopped != "" {
-			notAsked++ // the run stopped before it came to this target: azhaq resume asks it
-			continue
-		}
-		if why == "" {
-			why = "no answer"
-			if !accounted[in] && !accounted[normalize.HostFromURL(in)] {
-				gaps = append(gaps, in)
+			if why == "" {
+				why = dnsErr[in]
 			}
+			if why == "" && rep.Stopped != "" {
+				notAsked++ // the run stopped before it came to this target: azhaq resume asks it
+				continue
+			}
+			if why == "" {
+				why = "no answer"
+				if !accounted[in] && !accounted[k] && (len(units) > 1 || !accounted[normalize.HostFromURL(in)]) {
+					gaps = append(gaps, u.line)
+				}
+			}
+			if why == "outside the scope" {
+				continue // not sent by choice: the summary's skipped list names it, as no failure
+			}
+			o.failedRow(in, u.line, why)
+			noAnswer++
 		}
-		if why == "outside the scope" {
-			continue // not sent by choice: the summary's skipped list names it, as no failure
-		}
-		o.failedRow(in, why)
-		noAnswer++
 	}
 	if len(gaps) > 0 {
 		rep.Failed = append(rep.Failed, engine.Failure{Collector: "azhaq-http", Error: "no answer and no failure recorded", Retryable: true, Count: len(gaps), Targets: gaps})
@@ -765,12 +789,14 @@ func (o *probeOut) settle(rep *report, st *store.Store, fs *flag.FlagSet) {
 // has it: the one asked last (see lastTried), not the first guess.
 func (o *probeOut) nameLastTried(rep *report) {
 	last := map[string]string{}
-	for key, ins := range o.input {
-		if len(ins) != 1 || strings.Contains(ins[0], "://") || !strings.HasPrefix(key, "http") {
-			continue
-		}
-		if u, err := normalize.URL(o.lastTried(ins[0])); err == nil && u != key {
-			last[key] = u
+	for _, units := range o.units {
+		for _, u := range units {
+			if strings.Contains(u.line, "://") || !strings.HasPrefix(u.key, "http") {
+				continue
+			}
+			if l, err := normalize.URL(o.lastTried(u.line)); err == nil && l != u.key {
+				last[u.key] = l
+			}
 		}
 	}
 	swap := func(t string) string {

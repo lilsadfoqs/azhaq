@@ -125,10 +125,13 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 	// Each group is one service (a port); its URLs are tried in order and
 	// the first that answers stands for it.
 	variants := c.variants(groups0(groups))
+	var unanswered []groupFailure
 	for _, group := range groups {
 		if err := c.turn(ctx); err != nil {
 			return types.RunMeta{Status: types.StatusCancelled}, err
 		}
+		var gf groupFailure
+		gAnswered := false
 		for gi, raw := range group {
 			if ctx.Err() != nil {
 				return meta, ctx.Err()
@@ -140,6 +143,7 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 			obs, hint, _, err := c.fetch(ctx, raw, variants[0])
 			if err != nil {
 				lastErr = err
+				gf = groupFailure{url: raw, err: err}
 				refused = refused && neterr.Refused(err)
 				continue
 			}
@@ -150,7 +154,7 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 					raw, obs, hint = group[1], o2, h2
 				}
 			}
-			answered = true
+			answered, gAnswered = true, true
 			answeredURL = raw
 			// An answer is reported once per URL by a URL's own task, which
 			// the map row of that URL reads; a name's task reports it when no
@@ -200,6 +204,23 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 			}
 			break
 		}
+		if !gAnswered && gf.err != nil && !neterr.Quiet(gf.err) {
+			unanswered = append(unanswered, gf)
+		}
+	}
+	// Probe names each port or path that gave no answer, with its own error:
+	// the seed's one error would speak for the last of them only.
+	if c.Spec != nil && len(groups) > 1 && len(unanswered) > 0 {
+		for _, f := range unanswered {
+			raw, _ := json.Marshal(map[string]string{"error": f.err.Error(), "url": f.url})
+			err := emit(types.Observation{Collector: Name, Source: f.url, Kind: "error", Payload: raw, ObservedAt: time.Now().UTC()})
+			if err != nil {
+				return meta, err
+			}
+		}
+		if !answered {
+			return meta, nil
+		}
 	}
 	if seed.Type == types.TypeURL && seed.Keys[FallbackKey] != "" && len(groups) == 1 && c.Spec == nil {
 		// Input like host:port: the scheme that answered goes on as its own
@@ -238,6 +259,12 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		return meta, lastErr
 	}
 	return meta, nil
+}
+
+// groupFailure is the last URL of a group that gave no answer and why.
+type groupFailure struct {
+	url string
+	err error
 }
 
 // guessed: the seed is a name or address given with no port, and no

@@ -43,25 +43,34 @@ type probeOut struct {
 	set  *probefilter.Set
 	spec *httpcol.Spec
 
-	mu       sync.Mutex
-	cdn      map[string][2]string
-	cnames   map[string][]string
-	seen     map[string]bool
-	input    map[string][]string // seed key → the targets as given (two lines can be one seed)
-	order    []string            // the targets as given, in order
-	answered map[string]bool     // target as given → a row was printed or dropped by a filter
-	dropped  int                 // rows a matcher or filter left out
-	condErr  error               // the first condition that could not be evaluated
-	condErrs int
-	sums     []uint64       // simhashes of the rows printed, for -fd
-	sent     map[string]int // methods other than GET sent, rows answered
-	cut      int            // redirects not followed because they leave the site
-	asns     sync.Map       // address → *asnInfo
-	extra    []rowSink      // -oa
-	store    *respStore
-	held     []heldRow                 // rows kept until the run ends (-ss)
-	shots    map[string]map[string]any // screenshots by URL
-	displays bool                      // a display flag was given
+	mu          sync.Mutex
+	cdn         map[string][2]string
+	cnames      map[string][]string
+	seen        map[string]bool
+	input       map[string][]string    // seed key → the targets as given (two lines can be one seed)
+	order       []string               // the targets as given, in order
+	answered    map[string]bool        // target as given → a row was printed or dropped by a filter
+	units       map[string][]probeUnit // target as given → the lines it became, in order
+	answeredKey map[string]bool        // seed key → a row was printed or dropped by a filter
+	dropped     int                    // rows a matcher or filter left out
+	condErr     error                  // the first condition that could not be evaluated
+	condErrs    int
+	sums        []uint64       // simhashes of the rows printed, for -fd
+	sent        map[string]int // methods other than GET sent, rows answered
+	cut         int            // redirects not followed because they leave the site
+	asns        sync.Map       // address → *asnInfo
+	extra       []rowSink      // -oa
+	store       *respStore
+	held        []heldRow                 // rows kept until the run ends (-ss)
+	shots       map[string]map[string]any // screenshots by URL
+	displays    bool                      // a display flag was given
+}
+
+// probeUnit is one line a target became (an address on one port): it ends
+// as a row of its own, answered or failed.
+type probeUnit struct {
+	line string
+	key  string // the key of the line's seed
 }
 
 type heldRow struct {
@@ -139,6 +148,7 @@ func (p *probeOut) see(ent types.Entity, o types.Observation) {
 			row := p.row(r, m, in, addrs, cn, ev)
 			p.mu.Lock()
 			p.answered[in] = true
+			p.answeredKey[ent.Key] = true
 			p.mu.Unlock()
 			if !p.keep(row, r, ev) {
 				continue
@@ -564,14 +574,15 @@ func (p *probeOut) lastTried(input string) string {
 	return group[len(group)-1]
 }
 
-// failedRow is the row of a target that got no answer.
-func (p *probeOut) failedRow(input, why string) {
-	u := input
+// failedRow is the row of a target that got no answer; line is what was
+// asked of it (the input itself, or one of the lines it became).
+func (p *probeOut) failedRow(input, line, why string) {
+	u := line
 	if !strings.Contains(u, "://") {
-		u = p.lastTried(input)
+		u = p.lastTried(line)
 	}
 	shown := strings.TrimSuffix(u, "/")
-	if strings.Contains(input, "://") {
+	if line == input && strings.Contains(input, "://") {
 		shown = strings.TrimSpace(input) // a URL input is printed as given
 	}
 	row := map[string]any{
