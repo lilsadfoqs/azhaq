@@ -137,7 +137,7 @@ def fence(ctx, key, plan):
     return True
 
 
-def run(ctx, plan, key, labdns, run_as, workers=4):
+def run(ctx, plan, key, labdns, run_as, workers=8):
     envs = plan["envs"]
     with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as ex:
         started = list(ex.map(lambda e: start_env(ctx, e), envs))
