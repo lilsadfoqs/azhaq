@@ -36,9 +36,6 @@ type checker struct {
 	closed bool            // Run has stopped waiting: nothing more is asked
 	asked  int             // names sent to the resolvers
 	took   time.Duration   // time spent in them
-	// paced: DNS has a -dns-rate, so a guess costs time and guessing is
-	// bounded by what the real names cost.
-	paced bool
 }
 
 func newChecker(ctx context.Context, domain string, verify func(context.Context, string, []string) ([]string, []string), hint func([]string)) *checker {
@@ -175,15 +172,4 @@ func (k *checker) totals() (int, time.Duration) {
 	k.mu.Lock()
 	defer k.mu.Unlock()
 	return k.asked, k.took
-}
-
-// room says whether another round of guesses may be checked. With no DNS
-// pace it always may (the run's time is the bound). With one, the first
-// round is always checked, as subfinder | dnsx checks every name subfinder
-// gives, and the next ones only while the guesses checked are fewer than
-// half the names the real sources gave: they cost what those did, at most.
-func (k *checker) room() bool {
-	k.mu.Lock()
-	defer k.mu.Unlock()
-	return !k.paced || k.asked < len(k.known)/2
 }

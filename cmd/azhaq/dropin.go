@@ -1351,7 +1351,8 @@ func guessCheck(domain string, srcs map[string]any) string {
 
 // samplingNote says when a source that answers a random sample per call
 // (subdomain.center) was not asked again because of a bound, not because
-// it had nothing more: the names of the samples not taken are not looked up.
+// it had nothing more: how many samples were left untaken, and the flag
+// that takes them.
 func samplingNote(domain string, srcs map[string]any) string {
 	var out []string
 	for _, name := range slices.Sorted(maps.Keys(srcs)) {
@@ -1360,8 +1361,13 @@ func samplingNote(domain string, srcs map[string]any) string {
 			continue
 		}
 		rounds, _ := row["rounds"].([]any)
-		out = append(out, fmt.Sprintf("%s: %s was asked for %s of its guesses and not again: %v; names in the samples left untaken were not looked up, a later run takes more and the name history keeps the ones that resolved",
-			domain, name, plural(len(rounds), "sample"), row["sampling_stopped"]))
+		left := intOf(row["sample_ceiling"]) - len(rounds)
+		more := "-guess-samples N takes up to N samples while each finds a new name that resolves, with no time budget"
+		if left > 0 {
+			more = fmt.Sprintf("up to %s left untaken; %s", plural(left, "more sample"), more)
+		}
+		out = append(out, fmt.Sprintf("%s: %s was asked for %s of its guesses (the first is what subfinder | dnsx checks) and not again: %v; %s",
+			domain, name, plural(len(rounds), "sample"), row["sampling_stopped"], more))
 	}
 	return strings.Join(out, "\n")
 }

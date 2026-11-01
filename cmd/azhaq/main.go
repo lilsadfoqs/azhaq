@@ -1010,7 +1010,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		return usagef("-source-rate, -max-results, -max-time and -max-body are not negative")
 	}
 	opts.Subdomains = subcol.Options{Keys: keys, Only: splitList(*sourcesList), Exclude: splitList(*excludeSources), All: *allSources, NoHistory: *noHistory, SourceTimeout: *sourceTimeout,
-		SourceRate: *sourceRate, SourceRates: rates, MaxResults: *maxResults, MaxTime: *maxTime, MaxBody: *maxBody, MaxNames: *maxNames, NoCheck: subsMode.NoCheck, DNSPaced: *dnsRate > 0, Recursive: subsMode.Recursive, Proxy: *sourceProxy}
+		SourceRate: *sourceRate, SourceRates: rates, MaxResults: *maxResults, MaxTime: *maxTime, MaxBody: *maxBody, MaxNames: *maxNames, NoCheck: subsMode.NoCheck, GuessSamples: subsMode.GuessSamples, Recursive: subsMode.Recursive, Proxy: *sourceProxy}
 	urlKeys := maps.Clone(keys)
 	if urlKeys == nil {
 		urlKeys = map[string][]string{}

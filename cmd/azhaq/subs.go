@@ -20,8 +20,10 @@ import (
 
 // subsMode is what subs tells the run it starts.
 var subsMode struct {
-	NoCheck   bool // names only guessed or only remembered are listed unverified, not looked up
-	Recursive bool // only the sources that handle subdomains of subdomains
+	NoCheck bool // names only guessed or only remembered are listed unverified, not looked up
+	// GuessSamples is -guess-samples: the most samples of guesses taken, with no time budget.
+	GuessSamples int
+	Recursive    bool // only the sources that handle subdomains of subdomains
 }
 
 // subsOut writes the names subs prints: text, subfinder's host,[sources] and
@@ -127,6 +129,7 @@ func cmdSubs(args []string) error {
 	guesses := fs.Bool("guesses", false, "also print the names only subdomain.center guessed, which no source asserted and no lookup checked (-json marks them \"unverified\": true); not with -live, which looks them up")
 	nW := fs.Bool("nW", false, "same as -live (subfinder's name)")
 	words := fs.String("w", "", "also resolve WORD.domain for each word in this file, like puredns bruteforce (active DNS; the names found are live)")
+	guessSamples := fs.Int("guess-samples", 0, fmt.Sprintf("with -live, take up to N samples of subdomain.center's guesses while each has a new name that resolves, with no time budget (default: the first sample, which is what subfinder | dnsx checks, then more for %s at most, up to %d)", subcol.SampleBudget(), subcol.SampleRounds()))
 	permute := fs.Bool("permute", false, "also resolve variations of the names found (api → api-dev, api2, dev.api), like alterx | dnsx (active DNS)")
 	oJ := fs.Bool("oJ", false, "same as -json (subfinder's name)")
 	ls := fs.Bool("ls", false, "list the sources and exit: name, then * if a key is required and ~ if one improves the answer; with -json one object each (name, default, recursive, keyRequirement)")
@@ -161,6 +164,9 @@ func cmdSubs(args []string) error {
 	}
 	if *guesses && (*live || *nW) {
 		return usagef("-guesses prints names that no lookup checked, and -live looks them up and keeps the ones that resolve: use one of them")
+	}
+	if *guessSamples < 0 {
+		return usagef("-guess-samples is not negative")
 	}
 	if *oI && !(*live || *nW) {
 		return usagef("-oI prints the address, so it needs -live (or -nW)")
@@ -224,7 +230,7 @@ func cmdSubs(args []string) error {
 		// A big zone is not cut at the run's default of 20,000 names looked up.
 		extra = append(extra, "-max-names="+fmt.Sprint(subcol.DefaultMaxNames))
 	}
-	subsMode.NoCheck, subsMode.Recursive = !*live && !active, *recursive
+	subsMode.NoCheck, subsMode.Recursive, subsMode.GuessSamples = !*live && !active, *recursive, *guessSamples
 	// The output is opened before anything is sent: a bad -o is not found out
 	// after the run. Without -live a domain's names are printed when its
 	// sources have answered, as subfinder prints a domain when it ends.
@@ -401,7 +407,7 @@ func cmdSubs(args []string) error {
 		}
 	}
 	st, done, err := runPreset(&c, append(run, extra...), rep, observe)
-	subsMode.NoCheck, subsMode.Recursive = false, false
+	subsMode.NoCheck, subsMode.Recursive, subsMode.GuessSamples = false, false, 0
 	if err != nil {
 		w.close()
 		return err

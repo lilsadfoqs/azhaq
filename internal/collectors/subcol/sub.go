@@ -98,9 +98,11 @@ type Options struct {
 	MaxBody int64
 	// MaxNames caps the names kept per domain (-max-names).
 	MaxNames int
-	// DNSPaced says the resolvers have a rate (-dns-rate): checking guesses
-	// costs time, so the guessing is bounded by what the real names cost.
-	DNSPaced bool
+	// GuessSamples is how many samples of a sampled source's guesses are
+	// taken at most, while each finds a new name that resolves, with no time
+	// budget (-guess-samples). 0: the first sample, then more inside
+	// sampleBudget, up to sampleRounds.
+	GuessSamples int
 	// Recursive runs only the sources that handle subdomains of a subdomain.
 	Recursive bool
 	// Proxy sends every source request through this URL (-proxy).
@@ -283,7 +285,6 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 	var chk *checker
 	if c.opts.Verify != nil && !c.opts.NoCheck {
 		chk = newChecker(ctx, domain, c.opts.Verify, h.pass)
-		chk.paced = c.opts.DNSPaced
 	}
 	var cancels []context.CancelFunc
 	var wgFetch, wgSample sync.WaitGroup
@@ -312,6 +313,7 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		sctx = context.WithValue(sctx, noteKey{}, &notes[i])
 		sctx = context.WithValue(sctx, answerKey{}, &answers[i])
 		sctx = context.WithValue(sctx, holdKey{}, hold)
+		sctx = context.WithValue(sctx, samplesKey{}, c.opts.GuessSamples)
 		if chk != nil {
 			sctx = context.WithValue(sctx, checkerKey{}, chk)
 		}
@@ -485,6 +487,9 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		}
 		if st := rounds[i].statSnapshot(); len(st) > 0 {
 			row["rounds"] = st
+		}
+		if s.sampler && len(rounds[i].statSnapshot()) > 0 {
+			row["sample_ceiling"] = sampleCeiling(c.opts.GuessSamples)
 		}
 		if why := rounds[i].stopped(); why != "" {
 			row["sampling_stopped"] = why

@@ -161,7 +161,10 @@ subdomain.center answers a random sample of about 500 names per call, nearly all
 
 - Without `-live` nothing is looked up, so such a name is held back: it is not printed, counted as `guesses held back`, and a note says how many and how to see them. A name another source gave, or one the name history holds, is not a guess and is printed.
 - `-guesses` prints them too, with `"unverified": true` in `-json`. It cannot go with `-live`, which looks them up and prints the ones that resolve.
-- With `-live` the guesses are looked up at `-dns-rate`. One sample of them is always checked, as `subfinder | dnsx` checks every name subfinder gives. More samples are taken only while the last one had a new name that resolves, and the guesses checked are fewer than half the names the real sources gave. The source's row says why it stopped in `sampling_stopped`, and a note names a stop that was a bound: `subdomain.center: asked for 1 sample of its guesses and stopped: …`. A later run takes more samples; the name history keeps the names that resolved.
+- With `-live` every guess of a sample is looked up at `-dns-rate`, as `subfinder | dnsx` looks up every name it is given: your rate is the bound on the cost. A guess costs one query, an A, as a brute-force word does: an NXDOMAIN is taken at its word with no second resolver and no AAAA, and a name that answers with no address (an empty non-terminal) costs an A and an AAAA. A name a source gave costs a second resolver's opinion too when you give two resolvers. A zone is probed for a wildcard only when a guess in it resolves, once, with one query when it answers NXDOMAIN.
+- The first sample is always checked in full, at any rate: it is what `subfinder | dnsx` checks. A further sample is taken while the last had a new name that resolves, up to 12, and only if it fits the 20 s left of the budget for further samples. The budget starts when the first sample has been checked, and a sample is expected to cost what the last one did, so at a polite `-dns-rate` the first sample can be all there is time for.
+- `-guess-samples N` goes further: up to N samples while each finds a new name that resolves, with no time budget, and N may be above 12. `-guess-samples 1` takes the first only.
+- The source's row says why it stopped in `sampling_stopped` (`sampling_bounded` is `true` for a bound), with `sample_ceiling`. A note names a stop that was a bound, says how many samples were left untaken and names the flag: `subdomain.center was asked for 1 sample of its guesses … and not again: another sample would not fit the 20 s budget …; up to 11 more samples left untaken; -guess-samples N takes up to N …`. The name history keeps the names that resolved for the next run.
 - Names that could not be checked (the resolvers failed, or the run ended first) are counted as `not checked` and left out; `azhaq resume` checks them.
 
 ### Per-source status
@@ -179,7 +182,7 @@ The workspace keeps a status for each source, shown by `azhaq show` and held in 
 | `rate_limited` | Set with `retried_429`, `waited_seconds`, `retry_after_seconds` and `gave_up_429` when the source answered 429. |
 | `rounds` | For subdomain.center, per call: names given, how many were new, looked up, and resolved with no other source having them, and the seconds. |
 | `kept`, `dropped_unresolved`, `unverified`, `checked_seconds` | From `-live` runs, for the sources whose names are checked. |
-| `sampling_stopped` | For subdomain.center: why it stopped asking for more samples. `sampling_bounded` is `true` when the reason was a bound (the guesses checked reached half the real names, or its time was used), not that nothing more was to be had. |
+| `sampling_stopped` | For subdomain.center: why it stopped asking for more samples. `sampling_bounded` is `true` when the reason was a bound (the most samples, the budget for further samples, or its time), not that nothing more was to be had; `sample_ceiling` is the most samples it could take. |
 | `"default": false` | The source ran only because of `-all-sources`. |
 
 A source that answered 429 is asked again after its `Retry-After`, up to three times and 30 s each. One that asks for longer, or keeps refusing, is not waited for.
@@ -253,6 +256,7 @@ On tesla.com, `subs -live -dns-rate 10` with two resolvers took 161 s and listed
 | --- | --- | --- | --- |
 | `-live` | bool |  | only names that resolve (wildcard answers left out); without it nothing is looked up, the names only subdomain.center guessed are held back (see -guesses) and the ones only the name history held are listed unverified |
 | `-guesses` | bool |  | also print the names only subdomain.center guessed, which no source asserted and no lookup checked (-json marks them "unverified": true); not with -live, which looks them up |
+| `-guess-samples` | int |  | with -live, take up to N samples of subdomain.center's guesses while each has a new name that resolves, with no time budget (default: the first sample, which is what subfinder \| dnsx checks, then more for 20s at most, up to 12) |
 | `-w` | string |  | also resolve WORD.domain for each word in this file, like puredns bruteforce (active DNS; the names found are live) |
 | `-permute` | bool |  | also resolve variations of the names found (api → api-dev, api2, dev.api), like alterx \| dnsx (active DNS) |
 | `-all-sources` | bool |  | also run slower subdomain sources outside the default set |
