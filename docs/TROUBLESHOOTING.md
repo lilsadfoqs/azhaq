@@ -48,7 +48,7 @@ Entries are grouped by what you were doing:
 **Why:** A request ended the session of a signed-in run: a logout link, or an expiry. azhaq noticed because its check page, the one that answers differently with the session and without it, no longer answered as it did.
 
 - With `-login`, the run signs in again, asks again the pages requested since the last good check, and says so in a note: `the session ended after /logout was requested; signed in again; 37 requests asked again`.
-- With `-cookie` or `-header` it cannot sign in again. It refuses every later request, lists `azhaq-session` as a failure and exits 3, so nothing after the loss is mistaken for an anonymous answer.
+- With `-cookie` or `-header` it cannot sign in again. From the check that finds the loss it refuses every later request, lists `azhaq-session` as a failure and exits 3. The failure counts the requests answered without the session before the check (none but those in flight when an answer looked like the end; up to 50 when none did), so those answers are not mistaken for the session's.
 
 **Fix:** Give a fresh session and `azhaq resume -db W`, or keep the URL that ends it out with `-deny-path`. [Sessions](CONCEPTS.md#sessions) has the rules.
 
