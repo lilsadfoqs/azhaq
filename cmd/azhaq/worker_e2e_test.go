@@ -21,6 +21,14 @@ import (
 // rule or a session the run does not send it is not there.
 func serveWithWorker(t *testing.T, runArgs ...string) (runErr, workerErr string, code int) {
 	t.Helper()
+	return serveWithWorkerJoined(t, nil, runArgs...)
+}
+
+// serveWithWorkerJoined is serveWithWorker that calls joined once the worker
+// has joined the run, for a site that holds its answers until then: a run
+// that ends before a slow worker has started shows nothing of the worker.
+func serveWithWorkerJoined(t *testing.T, joined func(), runArgs ...string) (runErr, workerErr string, code int) {
+	t.Helper()
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -53,6 +61,14 @@ func serveWithWorker(t *testing.T, runArgs ...string) (runErr, workerErr string,
 	wrk.Stderr = &wrkErr
 	if err := wrk.Start(); err != nil {
 		t.Fatal(err)
+	}
+	if joined != nil {
+		go func() {
+			for i := 0; i < 2400 && !strings.Contains(wrkErr.String(), "joined "); i++ {
+				time.Sleep(25 * time.Millisecond)
+			}
+			joined()
+		}()
 	}
 	done := make(chan error, 1)
 	go func() { done <- srv.Wait() }()
@@ -107,12 +123,15 @@ func TestWorkerHoldsDenyPathAndReportsIt(t *testing.T) {
 	var mu sync.Mutex
 	var seen []string
 	var sites []*httptest.Server
+	joined := make(chan struct{}) // the sites answer once the worker is in
+	var once sync.Once
 	for i := 0; i < 6; i++ {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			mu.Lock()
 			seen = append(seen, r.Host+r.URL.Path)
 			mu.Unlock()
 			if r.URL.Path == "/" {
+				<-joined
 				time.Sleep(400 * time.Millisecond) // the run's own slot is busy; the worker takes the others
 				w.Header().Set("Content-Type", "text/html")
 				fmt.Fprint(w, `<title>home</title>`)
@@ -132,7 +151,8 @@ func TestWorkerHoldsDenyPathAndReportsIt(t *testing.T) {
 	if err := os.WriteFile(file, []byte(strings.Join(list, "\n")+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	runErr, workerErr, code := serveWithWorker(t, "-list", file, "-allow", "127.0.0.1", "-deny-path", rule)
+	runErr, workerErr, code := serveWithWorkerJoined(t, func() { once.Do(func() { close(joined) }) },
+		"-list", file, "-allow", "127.0.0.1", "-deny-path", rule)
 	if code != exitOK && code != exitPartial {
 		t.Fatalf("exit %d\n%s", code, runErr)
 	}
