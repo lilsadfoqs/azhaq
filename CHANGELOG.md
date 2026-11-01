@@ -8,6 +8,10 @@
 - `-H` and `-header` are one flag on every command: `run` and `plan` take `-H`, and `probe`, `crawl`, `dirs`, `params`, `shots` and `fuzz` take `-header`; a secret header given either way is kept out of what resume stores.
 - `run` takes `-sr`, `-srd` and `-ob` (the layout of `crawl -sr`: `DIR/HOST/SHA1.txt` with an `index.txt`, bounded by `-max-response-size`, off by default), and `query` has a `response_file` field with the path of a URL row's stored response.
 - A root seed now reads API descriptions and GraphQL endpoints at well-known paths at any `-depth`, from 19 more framework locations (`v3/api-docs.yaml`, `swagger/doc.json`, `api-json`, `api/graphql`, …); the row's proof says which URL exposed it (`exposed_by`). A GraphQL endpoint that refuses the GET (405, a 500 that says POST only) is named, and with `-graphql` its schema is read by a POST introspection.
+- `dirs` takes `-proxy`, and `fuzz` takes `-proxy` as an alias of `-x`; `-proxy` sends every request through the proxy, loopback targets included. The environment's `HTTP_PROXY`/`HTTPS_PROXY` keep Go's rule (a loopback target stays direct), now stated in the docs.
+- `roles -replay-writes` lists `creates in another role's collection` by default, not only with `-all`.
+- `ports` help and docs say `-rate` is a ceiling and `-min-rate` is nmap's floor (a loopback scan is unpaced by default: 20000 ports in 0.3 s with `-detect none`).
+- `crawl`'s summary says what the GETs of routes scripts call with another method answered; the crawl page lists the kinds of request a crawl sends and what `-backoff` costs on a 503.
 
 ### Added
 
@@ -18,6 +22,7 @@
 
 ### Fixed
 
+- `params` keeps what a spent `-max-requests` established: the page's row carries the names found so far and a note says how many names were judged; exit stays 4 and `azhaq resume` searches the page again.
 - `query -type Port` printed each host/port pair twice (a prefix's scan and the scan of an address in it each made a row). A port is now one row for each host, port and protocol, with a `state` field (`open` or `open|filtered`). The summaries of `run`, `query` and `ports` count `open` ports and `open|filtered` ports apart, so a silent UDP port is never counted as open.
 - A streamed answer that is the page every unknown path gets (an app shell) ends with `(catch-all: the page any unknown path gets)`, and has `"catchall": true` with `-json`. The summary names each origin that answered three or more URLs that way and, for a bare address, says to ask again with the name (`-H 'Host: NAME'`).
 - `hunt` no longer lists a CSS module's class name (`tokensUsage: "_tokensUsage_dypaw_41"`) or a value that repeats its own name as a generic secret. Each candidate shows its name, the value redacted, the rule that listed it and its entropy; `export -format secrets` adds the name and rule columns.
