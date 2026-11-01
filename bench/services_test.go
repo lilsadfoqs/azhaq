@@ -149,27 +149,28 @@ func TestWaitServingWaitsForTheDaemons(t *testing.T) {
 	}
 }
 
-// A daemon that never served leaves its container's last log lines in the check.
+// A daemon that never served leaves its container's last log lines in the
+// check, also when the container exited and docker ps shows no port for it.
 func TestDaemonLogsNameTheContainer(t *testing.T) {
 	old := docker
 	defer func() { docker = old }()
 	docker = func(args ...string) (string, error) {
 		switch args[0] {
 		case "ps":
-			return "azq-svc-ftp Up 4 minutes", nil
+			return "azq-svc-ftp|Exited (1) 3 minutes ago|\nazq-svc-mail|Up 4 minutes|127.0.0.1:10025->1025/tcp", nil
 		case "logs":
 			return "vsftpd: bind failed\nexiting", nil
 		}
 		return "", nil
 	}
 	got := daemonLogs([]int{10021})
-	for _, want := range []string{"10021: azq-svc-ftp Up 4 minutes", "vsftpd: bind failed ; exiting"} {
+	for _, want := range []string{"10021 azq-svc-ftp (Exited (1) 3 minutes ago)", "vsftpd: bind failed ; exiting", "azq-svc-mail Up 4 minutes"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("%q lacks %q", got, want)
 		}
 	}
 	docker = func(...string) (string, error) { return "", fmt.Errorf("no docker") }
-	if got := daemonLogs([]int{10021}); got != "" {
+	if got := daemonLogs([]int{10021}); !strings.Contains(got, "no docker") {
 		t.Errorf("without docker: %q", got)
 	}
 }
