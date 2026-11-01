@@ -51,6 +51,12 @@ services:
     # creating when it dropped its volume (adduser then fails and vsftpd never
     # starts); USERS takes a folder as its third field.
     environment: {USERS: "azq|azq-lab-only|/home/azq"}
+    # The image's own start backgrounds vsftpd and has pidproxy watch the pid
+    # `pgrep vsftpd | tail -n 1` found; when that is a short-lived process the
+    # container exits with "process has died" and the port never serves. The
+    # image runs a command given instead (after creating USERS): vsftpd in
+    # the foreground, the last option winning over background=YES in the file.
+    command: ["vsftpd", "-opasv_min_port=21000", "-opasv_max_port=21010", "/etc/vsftpd/vsftpd.conf", "-obackground=NO"]
     ports: ["127.0.0.1:10021:21"]
   mail:
     image: axllent/mailpit:v1.20
