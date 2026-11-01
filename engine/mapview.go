@@ -136,7 +136,7 @@ func BuildMap(ents []types.Entity, seeds []types.Seed, obs []types.StoredObserva
 			Proof:    proofOf(e, rows),
 		}
 		if e.Type == types.TypeURL {
-			if !fetched(rows) && (hasKind(byEnt[e.ID], KindNoWeb) || hasKind(byEnt[e.ID], "dropped")) {
+			if !fetched(rows) && (hasKind(byEnt[e.ID], KindNoWeb) || hasKind(byEnt[e.ID], KindNotHTTP) || hasKind(byEnt[e.ID], "dropped")) {
 				continue // a guessed scheme or port with no service: the URL that answered is the row, or the run's note says none did
 			}
 			if foldedHTTP(e.Key, m.Coverage, secured) {

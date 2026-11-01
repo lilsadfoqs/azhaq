@@ -344,9 +344,14 @@ func hintsOf(host string, open []portscan.Open) []types.Seed {
 		}
 		hp := net.JoinHostPort(host, strconv.Itoa(o.Port))
 		keys := map[string]string{"url": "https://" + hp + "/", httpcol.FallbackKey: "http"}
-		switch o.Service {
-		case "http", "https": // the probe found out which
+		switch {
+		case o.Service == "http" || o.Service == "https": // the probe found out which
 			keys = map[string]string{"url": o.Service + "://" + hp + "/"}
+		case o.Service == "" && httpcol.HTTPFirst(o.Port):
+			// Not probed: plain HTTP first, as httpx does. A web port there is
+			// mostly plain, so the first request answers; a TLS port answers 400
+			// and is asked again over TLS.
+			keys = map[string]string{"url": "http://" + hp + "/", httpcol.FallbackKey: "https"}
 		}
 		keys[types.SameTargetKey] = "1" // a port of the target itself, not a step away from it
 		out = append(out, types.Seed{Type: types.TypeURL, Keys: keys})

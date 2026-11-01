@@ -303,6 +303,9 @@ func fillReport(rep *report, path string, seeds []types.Seed, ents []types.Entit
 	if n := engine.NoWebNote(obs); n != "" {
 		rep.Notes = append(rep.Notes, n)
 	}
+	if n := engine.NotHTTPNote(obs); n != "" {
+		rep.Notes = append(rep.Notes, n)
+	}
 	rep.Notes = append(rep.Notes, engine.CatchAllNotes(rows)...)
 	rep.Notes = append(rep.Notes, portcol.StoppedNotes()...)
 	rep.Notes = append(rep.Notes, engine.GraphQLNotes(obs)...)

@@ -2,6 +2,7 @@ package neterr
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"net"
@@ -126,4 +127,34 @@ func Unanswered(err error) bool {
 		}
 	}
 	return false
+}
+
+// NotHTTP: the peer answered, and what it sent is not HTTP (an FTP or SSH
+// banner, binary bytes) or, to a TLS handshake, not TLS. The port is open
+// and speaks something else; that is not a failure of the request.
+func NotHTTP(err error) bool {
+	if err == nil {
+		return false
+	}
+	var rec tls.RecordHeaderError
+	if errors.As(err, &rec) {
+		return true
+	}
+	s := err.Error()
+	return strings.Contains(s, "malformed HTTP") || // status line or response
+		strings.Contains(s, "readLoopPeekFailLocked") || // bytes before any request
+		strings.Contains(s, "first record does not look like a TLS handshake") ||
+		strings.Contains(s, "tls: oversized record")
+}
+
+// NotTLS: err came from a plain-HTTP request, and the peer's reply is not
+// HTTP and does not look like a TLS record either, so a TLS handshake has
+// nothing to answer on that port. A TLS server that is sent plain text
+// replies with an alert record (0x15 or 0x16, then 0x03), or closes.
+func NotTLS(err error) bool {
+	if !NotHTTP(err) {
+		return false
+	}
+	s := err.Error()
+	return !strings.Contains(s, `\x15\x03`) && !strings.Contains(s, `\x16\x03`)
 }

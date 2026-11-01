@@ -95,6 +95,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 
 - The summary counts `client routes` and `websockets` apart from `URLs`, `ports` for the open ports that have a row and `open|filtered ports` for the UDP ports that neither answered nor were refused, never counted as open. A port is one row for each host, port and protocol, however many scans listed it.
 - A target given with no port (a name or an address) is asked on 443, then 80, or on `-web-ports`. A guess nothing listens on, refused, is a note (`no web service on 443 or 80`), not a failure; a `-web-ports` port that refuses is one.
+- A port the scan found open that answers the HTTP stage with something other than HTTP (an FTP or SSH banner) is a service, not a failed target: it keeps its `Port` row and the run names it in a note (`open, but not a web service`). Its plain-HTTP request is its only one when the reply is not TLS either. A web server that resets, times out or closes without answering is still a failure.
 - It counts the path checks it skipped, as a note ([Path checks](#path-checks-stop-at-their-answer)).
 
 ## Details

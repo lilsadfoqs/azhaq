@@ -132,6 +132,7 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		}
 		var gf groupFailure
 		gAnswered := false
+		notHTTP, refusedN := 0, 0 // URLs of the group answered with something that is not HTTP, or refused
 		for gi, raw := range group {
 			if ctx.Err() != nil {
 				return meta, ctx.Err()
@@ -140,14 +141,27 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 				lastErr = fmt.Errorf("not requested: %s", why)
 				continue
 			}
-			obs, hint, _, err := c.fetch(ctx, raw, variants[0])
+			obs, hint, _, err := c.fetchFirst(ctx, raw, variants[0], gi == 0 && len(group) > 1 && strings.HasPrefix(raw, "http://"))
+			if err != nil && c.Spec == nil && len(group) > 1 && neterr.NotHTTP(err) {
+				// Neither scheme was asked for: the port speaks something else.
+				refused = false
+				notHTTP++
+				if gi == 0 && strings.HasPrefix(raw, "http://") && samePort(raw, group[1]) && neterr.NotTLS(err) {
+					notHTTP = len(group) // plain text that is not TLS: a handshake has nothing to answer
+					break
+				}
+				continue
+			}
 			if err != nil {
 				lastErr = err
 				gf = groupFailure{url: raw, err: err}
 				refused = refused && neterr.Refused(err)
+				if neterr.Refused(err) {
+					refusedN++
+				}
 				continue
 			}
-			if c.Spec != nil && gi == 0 && len(group) > 1 && strings.HasPrefix(raw, "http://") && statusOf(obs) == http.StatusBadRequest {
+			if gi == 0 && len(group) > 1 && strings.HasPrefix(raw, "http://") && statusOf(obs) == http.StatusBadRequest {
 				// A plain request to a TLS port is answered 400: ask again over
 				// TLS, as httpx does, and keep the 400 when that does not answer.
 				if o2, h2, _, err := c.fetch(ctx, group[1], variants[0]); err == nil {
@@ -204,6 +218,14 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 			}
 			break
 		}
+		if !gAnswered && notHTTP > 0 && notHTTP+refusedN == len(group) {
+			raw, _ := json.Marshal(map[string]any{"url": group[0], "host": normalize.HostFromURL(group[0]), "port": portOf(group[0])})
+			if err := emit(types.Observation{Collector: Name, Source: group[0], Kind: KindNotHTTP, Payload: raw, Confidence: 0.9, ObservedAt: time.Now().UTC()}); err != nil {
+				return meta, err
+			}
+			meta.EmitCount++
+			continue
+		}
 		if !gAnswered && gf.err != nil && !neterr.Quiet(gf.err) {
 			unanswered = append(unanswered, gf)
 		}
@@ -259,6 +281,33 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		return meta, lastErr
 	}
 	return meta, nil
+}
+
+// KindNotHTTP is the observation of a port that answered something other
+// than HTTP (an FTP or SSH banner): it is open, and not a web service, which
+// is an answer, not a failure.
+const KindNotHTTP = "nothttp"
+
+// samePort: both URLs ask the same host and port.
+func samePort(a, b string) bool {
+	ua, ea := url.Parse(a)
+	ub, eb := url.Parse(b)
+	return ea == nil && eb == nil && ua.Hostname() == ub.Hostname() && portOf(a) == portOf(b)
+}
+
+// portOf is the port of a URL, its scheme's default when it names none.
+func portOf(raw string) int {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return 0
+	}
+	if p, err := strconv.Atoi(u.Port()); err == nil {
+		return p
+	}
+	if u.Scheme == "http" {
+		return 80
+	}
+	return 443
 }
 
 // groupFailure is the last URL of a group that gave no answer and why.
@@ -412,7 +461,7 @@ func (c *Collector) baseTargets(seed types.Seed) [][]string {
 		if err != nil {
 			return nil
 		}
-		if p, err := url.Parse(u); err == nil && c.Spec != nil {
+		if p, err := url.Parse(u); err == nil {
 			if seed.Keys[FallbackKey] == "https" && p.Scheme == "http" {
 				p.Scheme = "https"
 				if p.Port() == "" {
@@ -645,6 +694,13 @@ func statusOf(o types.Observation) int {
 }
 
 func (c *Collector) fetch(ctx context.Context, raw string, rq *fetch.Req) (types.Observation, types.Seed, bool, error) {
+	return c.fetchFirst(ctx, raw, rq, false)
+}
+
+// fetchFirst is fetch; with first set, a 400 answer is returned without the
+// catch-all check and the favicon: the port may be TLS, and the answer is
+// replaced by the one over TLS.
+func (c *Collector) fetchFirst(ctx context.Context, raw string, rq *fetch.Req, first bool) (types.Observation, types.Seed, bool, error) {
 	res, cached, err := fetch.DoReq(ctx, c.Client, raw, rq)
 	if err != nil {
 		return types.Observation{}, types.Seed{}, cached, err
@@ -676,12 +732,13 @@ func (c *Collector) fetch(ctx context.Context, raw string, rq *fetch.Req) (types
 	dres := res
 	dres.Body = data
 	row := describe(reqURL, final, dres, title, c.NoTech, c.Spec != nil)
-	catchAll := !c.Probe && fetch.CatchAll(ctx, c.Client, res)
+	bare := first && res.Status == http.StatusBadRequest
+	catchAll := !c.Probe && !bare && fetch.CatchAll(ctx, c.Client, res)
 	if catchAll {
 		// Same answer as a path that does not exist: not a page of its own.
 		row["catchall"] = true
 	}
-	if !c.NoFavicon && !catchAll && (isRoot(reqURL) || isRoot(final)) {
+	if !c.NoFavicon && !catchAll && !bare && (isRoot(reqURL) || isRoot(final)) {
 		if hash, from, icon := c.favicon(ctx, final, res); hash != "" {
 			row["favicon"] = hash
 			row["favicon_url"] = from
