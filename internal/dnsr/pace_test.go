@@ -202,6 +202,31 @@ func TestSlowFirstAnswerBeatsItsHedge(t *testing.T) {
 	}
 }
 
+// An attempt packs its query while the next one is made beside it: each has
+// its own copy (with -race, a shared one is a data race).
+func TestAttemptsBesideEachOtherHaveTheirOwnQuery(t *testing.T) {
+	p := New(Options{Resolvers: []string{"192.0.2.1:53", "192.0.2.2:53"}, Timeout: 2 * time.Second})
+	var asked atomic.Int32
+	p.Exchange = func(ctx context.Context, q *dns.Msg, server string) (*dns.Msg, error) {
+		if asked.Add(1)%2 == 1 {
+			for ctx.Err() == nil { // lost, and packed again as a real exchange packs what it sends
+				_, _ = q.Pack()
+			}
+			return nil, ctx.Err()
+		}
+		m := new(dns.Msg)
+		m.SetReply(q)
+		rr, _ := dns.NewRR(q.Question[0].Name + " 60 IN A 192.0.2.7")
+		m.Answer = append(m.Answer, rr)
+		return m, nil
+	}
+	for _, name := range []string{"a.example.org", "b.example.org", "c.example.org"} {
+		if a := p.Resolve(context.Background(), name); a.Status != StatusOK {
+			t.Fatalf("%s: status %s (%s)", name, a.Status, a.Err)
+		}
+	}
+}
+
 // Every attempt of a name fails: the pool tries once each (Retries+1) and says so.
 func TestHedgingKeepsTheAttemptCount(t *testing.T) {
 	p := New(Options{Resolvers: []string{"192.0.2.1:53", "192.0.2.2:53"}, Timeout: time.Second})

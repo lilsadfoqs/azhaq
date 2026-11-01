@@ -567,10 +567,7 @@ func (p *Pool) query(ctx context.Context, q *dns.Msg, avoid string) (*dns.Msg, s
 		launched++
 		shift = doubled
 		waiting[n] = server
-		m := q
-		if n > 0 {
-			m = q.Copy() // attempts run side by side
-		}
+		m := q.Copy() // packing writes the message: no two attempts share one
 		go func() {
 			defer guard.Recover(ctx)
 			r := reply{attempt: n, server: server}
