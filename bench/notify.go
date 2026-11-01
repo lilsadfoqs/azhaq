@@ -24,6 +24,7 @@ type notifyRow struct {
 	NotifyOK   int     `json:"notify_confirmed"`
 	AzhaqSecs  float64 `json:"azhaq_seconds"`
 	NotifySecs float64 `json:"notify_seconds"`
+	memPair
 	SameBodies bool    `json:"same_bodies"`
 	TokenLeak  bool    `json:"token_leak"`
 }
@@ -147,6 +148,7 @@ func benchNotify() *notifyRow {
 	row.AzhaqOK, azBodies = count("/azhaq")
 	_, nm := timedArgs("notify", 10*time.Minute, dir, ref("notify"), func(int) []string { return na })
 	row.NotifySecs = nm.Seconds
+	row.set(am, nm)
 	row.NotifyOK, nBodies = count("/notify")
 	if row.NotifyOK == 0 && refGone["notify"] == "" {
 		// Started and sent nothing to the stub: no reference to compare with.
@@ -161,7 +163,7 @@ func benchNotify() *notifyRow {
 	row.SameBodies = len(azBodies) > 0 && strings.Join(azBodies, "\n") == strings.Join(nBodies, "\n")
 	cmds := cmdLine(azhaq, aa...) + " vs " + cmdLine("notify", na...)
 	barOne("notify", row.AzhaqOK, row.NotifyOK, row.AzhaqSecs, row.NotifySecs, "the stub's own log (a request with the message in its body, per provider)", cmds,
-		fmt.Sprintf("%d messages to 2 providers; distinct requests at the stub: azhaq %d, notify %d %s", row.Messages, len(azBodies), len(nBodies), azErr(am)))
+		fmt.Sprintf("%d messages to 2 providers; distinct requests at the stub: azhaq %d, notify %d; %s%s", row.Messages, len(azBodies), len(nBodies), ratios(row.AzhaqSecs, row.NotifySecs, row.memPair), azErr(am)))
 	if !polite() {
 		detail := fmt.Sprintf("azhaq %s | notify %s", clip(strings.Join(azBodies, " ; "), 300), clip(strings.Join(nBodies, " ; "), 300))
 		if why := refGone["notify"]; why != "" {

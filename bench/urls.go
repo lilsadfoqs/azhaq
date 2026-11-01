@@ -25,6 +25,7 @@ type urlsRow struct {
 	Shared    int      `json:"shared"`
 	AzhaqSecs float64  `json:"azhaq_seconds"`
 	GauSecs   float64  `json:"gau_seconds"`
+	memPair
 	GauOnly   []string `json:"gau_only,omitempty"` // not in azhaq's list: the old bar's loss
 	// Dropped is what azhaq's -raw run holds as junk, by reason; GauJunk
 	// the URLs of GauOnly among it, and Missing the rest of GauOnly.
@@ -54,6 +55,7 @@ func benchURLs() *urlsRow {
 	gau := urlSet(gOut, urlsDomain)
 	row.Azhaq, row.Gau, row.Shared = len(azURLs), len(gau), overlap(gau, azURLs)
 	row.AzhaqSecs, row.GauSecs = ar.seconds, gm.Seconds
+	row.memPair = memPair{ar.rssMB, gm.RSSMB}
 	for u := range gau {
 		if !azURLs[u] {
 			row.GauOnly = append(row.GauOnly, u)
@@ -75,7 +77,7 @@ func benchURLs() *urlsRow {
 	}
 	cmds := cmdLine(azhaq, aa...) + " vs " + cmdLine("gau", ga...)
 	note := fmt.Sprintf("azhaq %d listed, %d dropped as junk (%s), gau %d, missing %d %v; %s; %s%s", row.Azhaq, dropped, reasonList(row.Dropped), row.Gau, len(row.Missing),
-		clipList(row.Missing, 4), share(row.Shared, row.Gau), ratio(row.AzhaqSecs, row.GauSecs), azErr(runMeasureOf(ar)))
+		clipList(row.Missing, 4), share(row.Shared, row.Gau), ratios(row.AzhaqSecs, row.GauSecs, row.memPair), azErr(runMeasureOf(ar)))
 	barOne("urls "+urlsDomain, row.Azhaq+dropped, row.Gau, row.AzhaqSecs, row.GauSecs, "being on the domain and not a static asset, azhaq's list and the URLs it dropped as junk together (the archives refuse this machine, so no other source is asked)", cmds, note)
 	addCheck("urls "+urlsDomain+": every URL gau lists is in azhaq's list or dropped as junk with a reason", len(row.Missing) == 0 && row.Gau > 0,
 		"azhaq %d listed, %d dropped as junk (%s), gau %d, missing %d %v", row.Azhaq, dropped, reasonList(row.Dropped), row.Gau, len(row.Missing), clipList(row.Missing, 5))

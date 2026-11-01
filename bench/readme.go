@@ -49,53 +49,55 @@ func tableRows(ps *profileSet) []tableRow {
 	var rows []tableRow
 	if len(ps.Domains) > 0 {
 		var aOK, rOK, gaps int
-		var aT, rT float64
+		var aT, rT, aM, rM float64
 		for _, d := range ps.Domains {
 			aOK, rOK, gaps = aOK+d.AzhaqLive, rOK+d.SubfinderLive, gaps+len(d.Gaps)
 			aT, rT = aT+d.AzhaqSeconds, rT+d.RefSeconds
+			aM, rM = max(aM, d.AzhaqRSS), max(rM, d.RefRSS)
 		}
 		rows = append(rows, tableRow{fmt.Sprintf("Live subdomains, %d domains, no keys (names that resolve at a third resolver)", len(ps.Domains)), "subfinder + dnsx",
-			fmt.Sprintf("%d live in %s", aOK, secs(aT)), fmt.Sprintf("%d live in %s (%d only it found)", rOK, secs(rT), gaps)})
+			fmt.Sprintf("%d live in %s%s", aOK, secs(aT), mb(aM)), fmt.Sprintf("%d live in %s%s (%d only it found)", rOK, secs(rT), mb(rM), gaps)})
 	}
 	if u := ps.URLs; u != nil {
-		rows = append(rows, tableRow{"Historical URLs, " + u.Domain, "gau", fmt.Sprintf("%d, including %d of gau's %d, in %s", u.Azhaq, u.Shared, u.Gau, secs(u.AzhaqSecs)), fmt.Sprintf("%d in %s", u.Gau, secs(u.GauSecs))})
+		rows = append(rows, tableRow{"Historical URLs, " + u.Domain, "gau", fmt.Sprintf("%d, including %d of gau's %d, in %s%s", u.Azhaq, u.Shared, u.Gau, secs(u.AzhaqSecs), mb(u.AzhaqRSS)), fmt.Sprintf("%d in %s%s", u.Gau, secs(u.GauSecs), mb(u.RefRSS))})
 	}
 	if b := ps.Brute; b != nil {
-		rows = append(rows, tableRow{fmt.Sprintf("DNS brute force, %d words, the DNS lab", b.Words), "dnsx", fmt.Sprintf("%d confirmed in %s", b.AzhaqOK, secs(b.AzhaqSeconds)), fmt.Sprintf("%d in %s", b.DnsxOK, secs(b.DnsxSeconds))})
+		rows = append(rows, tableRow{fmt.Sprintf("DNS brute force, %d words, the DNS lab", b.Words), "dnsx", fmt.Sprintf("%d confirmed in %s%s", b.AzhaqOK, secs(b.AzhaqSeconds), mb(b.AzhaqRSS)), fmt.Sprintf("%d in %s%s", b.DnsxOK, secs(b.DnsxSeconds), mb(b.RefRSS))})
 		if b.WildcardWords > 0 {
 			rows = append(rows, tableRow{fmt.Sprintf("Wildcard zone, %d real names of %d", b.WildcardReal, b.WildcardWords), "dnsx", fmt.Sprintf("%d found, %d fake", b.WildcardAzhaq-b.WildcardFake, b.WildcardFake), fmt.Sprintf("%d without `-wd`", b.WildcardNoWild)})
 		}
 	}
 	if d := ps.DNS; d != nil {
-		rows = append(rows, tableRow{fmt.Sprintf("Record types (9) of %d names on a zone the bench serves", d.Names), "dnsx", fmt.Sprintf("%d answers right in %s, %d queries", d.AzhaqOK, secs(d.AzhaqSecs), d.AzhaqQ), fmt.Sprintf("%d in %s, %d queries", d.DnsxOK, secs(d.DnsxSecs), d.DnsxQ)})
+		rows = append(rows, tableRow{fmt.Sprintf("Record types (9) of %d names on a zone the bench serves", d.Names), "dnsx", fmt.Sprintf("%d answers right in %s%s, %d queries", d.AzhaqOK, secs(d.AzhaqSecs), mb(d.AzhaqRSS), d.AzhaqQ), fmt.Sprintf("%d in %s%s, %d queries", d.DnsxOK, secs(d.DnsxSecs), mb(d.RefRSS), d.DnsxQ)})
 	}
 	if p := ps.Probe; p != nil {
-		rows = append(rows, tableRow{fmt.Sprintf("Probing %d hosts (the local apps and 100 local servers)", p.Hosts), "httpx", fmt.Sprintf("%d answered, %d confirmed; status, title and tech agree on %d of %d shared; %s", p.AzhaqAnswered, p.AzhaqOK, p.All, p.Shared, secs(p.AzhaqSeconds)),
-			fmt.Sprintf("%d answered, %d confirmed; %s", p.HttpxAnswered, p.HttpxOK, secs(p.HttpxSeconds))})
+		rows = append(rows, tableRow{fmt.Sprintf("Probing %d hosts (the local apps and 100 local servers)", p.Hosts), "httpx", fmt.Sprintf("%d answered, %d confirmed; status, title and tech agree on %d of %d shared; %s", p.AzhaqAnswered, p.AzhaqOK, p.All, p.Shared, secs(p.AzhaqSeconds)+mb(p.AzhaqRSS)),
+			fmt.Sprintf("%d answered, %d confirmed; %s", p.HttpxAnswered, p.HttpxOK, secs(p.HttpxSeconds)+mb(p.RefRSS))})
 	}
 	for _, a := range ps.Apps {
 		// Two measures that must not be read as one: the whole map, and the crawler alone.
 		if a.Azhaq.TruthOf > 0 && a.Katana.TruthOf > 0 {
-			rows = append(rows, tableRow{"Known routes of " + a.Name + ", the whole map (`azhaq run`)", "katana `-jc -jsl`", fmt.Sprintf("%d/%d in %s", a.Azhaq.Truth, a.Azhaq.TruthOf, secs(a.Azhaq.Seconds)),
-				fmt.Sprintf("%d/%d in %s", a.Katana.Truth, a.Katana.TruthOf, secs(a.Katana.Seconds))})
+			rows = append(rows, tableRow{"Known routes of " + a.Name + ", the whole map (`azhaq run`)", "katana `-jc -jsl`", fmt.Sprintf("%d/%d in %s%s", a.Azhaq.Truth, a.Azhaq.TruthOf, secs(a.Azhaq.Seconds), mb(a.Azhaq.RSSMB)),
+				fmt.Sprintf("%d/%d in %s%s", a.Katana.Truth, a.Katana.TruthOf, secs(a.Katana.Seconds), mb(a.Katana.RSSMB))})
 		}
 		if a.Crawl != nil && a.CrawlKatana != nil {
-			rows = append(rows, tableRow{"Known routes of " + a.Name + ", the crawler alone (`azhaq crawl`, katana's depth)", "katana `-jc -jsl`", fmt.Sprintf("%d/%d in %s", a.Crawl.Truth, a.Crawl.TruthOf, secs(a.Crawl.Seconds)),
-				fmt.Sprintf("%d/%d in %s", a.CrawlKatana.Truth, a.CrawlKatana.TruthOf, secs(a.CrawlKatana.Seconds))})
+			rows = append(rows, tableRow{"Known routes of " + a.Name + ", the crawler alone (`azhaq crawl`, katana's depth)", "katana `-jc -jsl`", fmt.Sprintf("%d/%d in %s%s", a.Crawl.Truth, a.Crawl.TruthOf, secs(a.Crawl.Seconds), mb(a.Crawl.RSSMB)),
+				fmt.Sprintf("%d/%d in %s%s", a.CrawlKatana.Truth, a.CrawlKatana.TruthOf, secs(a.CrawlKatana.Seconds), mb(a.CrawlKatana.RSSMB))})
 		}
 	}
 	if d := ps.Dirs; d != nil {
-		rows = append(rows, tableRow{fmt.Sprintf("Paths, %d words, Juice Shop and VAmPI", d.Words), "ffuf `-ac`", fmt.Sprintf("%d hits, %d false positives, %s", d.AzhaqHits, d.AzhaqFalse, secs(d.AzhaqSecs)), fmt.Sprintf("%d hits, %d false positives, %s", d.FfufHits, d.FfufFalse, secs(d.FfufSecs))})
+		rows = append(rows, tableRow{fmt.Sprintf("Paths, %d words, Juice Shop and VAmPI", d.Words), "ffuf `-ac`", fmt.Sprintf("%d hits, %d false positives, %s%s", d.AzhaqHits, d.AzhaqFalse, secs(d.AzhaqSecs), mb(d.AzhaqRSS)), fmt.Sprintf("%d hits, %d false positives, %s%s", d.FfufHits, d.FfufFalse, secs(d.FfufSecs), mb(d.RefRSS))})
 		if d.AppDowns > 0 {
 			rows[len(rows)-1].job += fmt.Sprintf(" (an app went down %d times during the sweep: not a measure)", d.AppDowns)
 		}
 	}
 	if f := ps.Fuzz; f != nil {
 		var aH, fH, aOK, fOK int
-		var aT, fT float64
+		var aT, fT, aM, fM float64
 		eq, n := 0, 0
 		for _, l := range f.Legs {
 			aH, fH, aOK, fOK, aT, fT = aH+l.AzhaqHits, fH+l.FfufHits, aOK+l.AzhaqOK, fOK+l.FfufOK, aT+l.AzhaqSecs, fT+l.FfufSecs
+			aM, fM = max(aM, l.AzhaqRSS), max(fM, l.RefRSS)
 			if l.ReportEqual != nil {
 				n++
 				if *l.ReportEqual {
@@ -107,30 +109,30 @@ func tableRows(ps *profileSet) []tableRow {
 		if n > 0 {
 			rep = fmt.Sprintf("; JSON report equal on %d of %d", eq, n)
 		}
-		rows = append(rows, tableRow{fmt.Sprintf("Fuzzing, %d words, Juice Shop and VAmPI, %d runs", f.Words, len(f.Legs)), "ffuf", fmt.Sprintf("%d hits (%d confirmed), %s%s", aH, aOK, secs(aT), rep), fmt.Sprintf("%d hits (%d confirmed), %s", fH, fOK, secs(fT))})
+		rows = append(rows, tableRow{fmt.Sprintf("Fuzzing, %d words, Juice Shop and VAmPI, %d runs", f.Words, len(f.Legs)), "ffuf", fmt.Sprintf("%d hits (%d confirmed), %s%s%s", aH, aOK, secs(aT), mb(aM), rep), fmt.Sprintf("%d hits (%d confirmed), %s%s", fH, fOK, secs(fT), mb(fM))})
 		if f.AppDowns > 0 {
 			rows[len(rows)-1].job += fmt.Sprintf(" (an app went down %d times during the sweeps: not a measure)", f.AppDowns)
 		}
 	}
 	if p := ps.Params; p != nil {
-		rows = append(rows, tableRow{fmt.Sprintf("Parameters, %d planted, %d pages", p.PlantedTruth, len(p.Pages)), "arjun", fmt.Sprintf("%d right, %d wrong, %s", p.AzhaqPlanted, p.AzhaqWrong, secs(p.AzhaqSecs)), fmt.Sprintf("%d right, %d wrong, %s", p.ArjunPlanted, p.ArjunWrong, secs(p.ArjunSecs))})
+		rows = append(rows, tableRow{fmt.Sprintf("Parameters, %d planted, %d pages", p.PlantedTruth, len(p.Pages)), "arjun", fmt.Sprintf("%d right, %d wrong, %s%s", p.AzhaqPlanted, p.AzhaqWrong, secs(p.AzhaqSecs), mb(p.AzhaqRSS)), fmt.Sprintf("%d right, %d wrong, %s%s", p.ArjunPlanted, p.ArjunWrong, secs(p.ArjunSecs), mb(p.RefRSS))})
 	}
 	if p := ps.Ports; p != nil {
 		for _, l := range p.Legs {
-			rows = append(rows, tableRow{"Open ports, " + l.Target + " " + portsLabel(l.Ports), "`naabu -scan-type c`", fmt.Sprintf("%d confirmed in %s", l.AzhaqOK, secs(l.AzhaqSecs)), fmt.Sprintf("%d confirmed in %s", l.NaabuOK, secs(l.NaabuSecs))})
+			rows = append(rows, tableRow{"Open ports, " + l.Target + " " + portsLabel(l.Ports), "`naabu -scan-type c`", fmt.Sprintf("%d confirmed in %s%s", l.AzhaqOK, secs(l.AzhaqSecs), mb(l.AzhaqRSS)), fmt.Sprintf("%d confirmed in %s%s", l.NaabuOK, secs(l.NaabuSecs), mb(l.RefRSS))})
 		}
 	}
 	if s := ps.Services; s != nil {
-		rows = append(rows, tableRow{fmt.Sprintf("Services named right on %d lab ports", s.Ports), "nmap `-sV`", fmt.Sprintf("%d, %d with a product, %s", s.AzhaqNamed, s.AzhaqVer, secs(s.AzhaqSecs)), fmt.Sprintf("%d, %d with a product, %s", s.NmapNamed, s.NmapVer, secs(s.NmapSecs))})
+		rows = append(rows, tableRow{fmt.Sprintf("Services named right on %d lab ports", s.Ports), "nmap `-sV`", fmt.Sprintf("%d, %d with a product, %s%s", s.AzhaqNamed, s.AzhaqVer, secs(s.AzhaqSecs), mb(s.AzhaqRSS)), fmt.Sprintf("%d, %d with a product, %s%s", s.NmapNamed, s.NmapVer, secs(s.NmapSecs), mb(s.RefRSS))})
 	}
 	if s := ps.Shots; s != nil {
-		rows = append(rows, tableRow{fmt.Sprintf("Screenshots, %d targets (not blank)", s.Targets), "gowitness", fmt.Sprintf("%d in %s", s.AzhaqOK, secs(s.AzhaqSeconds)), fmt.Sprintf("%d in %s", s.GowitnessOK, secs(s.GowitnessSecs))})
+		rows = append(rows, tableRow{fmt.Sprintf("Screenshots, %d targets (not blank)", s.Targets), "gowitness", fmt.Sprintf("%d in %s%s", s.AzhaqOK, secs(s.AzhaqSeconds), mb(s.AzhaqRSS)), fmt.Sprintf("%d in %s%s", s.GowitnessOK, secs(s.GowitnessSecs), mb(s.RefRSS))})
 		if s.Unpaced {
 			rows[len(rows)-1].job += " (gowitness has no rate option and ran at full speed: the times are not compared)"
 		}
 	}
 	if n := ps.Notify; n != nil {
-		rows = append(rows, tableRow{fmt.Sprintf("Notifications, %d messages to 2 providers, as the stub received them", n.Messages), "notify", fmt.Sprintf("%d in %s", n.AzhaqOK, secs(n.AzhaqSecs)), fmt.Sprintf("%d in %s", n.NotifyOK, secs(n.NotifySecs))})
+		rows = append(rows, tableRow{fmt.Sprintf("Notifications, %d messages to 2 providers, as the stub received them", n.Messages), "notify", fmt.Sprintf("%d in %s%s", n.AzhaqOK, secs(n.AzhaqSecs), mb(n.AzhaqRSS)), fmt.Sprintf("%d in %s%s", n.NotifyOK, secs(n.NotifySecs), mb(n.RefRSS))})
 	}
 	return rows
 }
@@ -145,7 +147,7 @@ func readmeBlock(r *record, version string) string {
 		}
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "Latest run (%s, v%s, commit %s; profile: %s; %d of %d checks pass). **Default** is the default flags of both tools; **polite** is `-rate %s` (HTTP; `probe -rl`, as httpx counts), `-dns-rate %s` (DNS; `dns -rl`, as dnsx counts) and `-rate %s` (ports), with the reference tool at the same rate. A result counts only when something other than azhaq confirms it, and a row is a win only when azhaq has at least the reference's results in at most 1.05 times its time. The record, with every check and the commands, is `bench/history/*.json`.\n\n",
+	fmt.Fprintf(&b, "Latest run (%s, v%s, commit %s; profile: %s; %d of %d checks pass). **Default** is the default flags of both tools; **polite** is `-rate %s` (HTTP; `probe -rl`, as httpx counts), `-dns-rate %s` (DNS; `dns -rl`, as dnsx counts) and `-rate %s` (ports), with the reference tool at the same rate. A result counts only when something other than azhaq confirms it, and a row is a win only when azhaq has at least the reference's results in at most 1.05 times its time. Each cell gives the wall time and the peak memory of the run (the median of three runs when one takes under 20 s), and the record keeps the memory ratio beside the time ratio. The record, with every check and the commands, is `bench/history/*.json`.\n\n",
 		day, version, r.Commit, r.Profile, pass, len(r.Checks), politeHTTP, politeDNS, politePort)
 	b.WriteString("| Job | Replaces | Profile | Azhaq | Reference |\n| --- | --- | --- | --- | --- |\n")
 	for _, set := range []struct {

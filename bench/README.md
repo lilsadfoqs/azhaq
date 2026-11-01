@@ -52,6 +52,7 @@ Each comparison row is two checks.
 
 - **Results**: azhaq's results are at least the reference's, counting only results that something other than azhaq confirms: a server's own log, a second resolver, `ss -ltn`, the app's own routes or planted parameters, a GET to the host itself. Not 95%.
 - **Time**: azhaq's time is at most 1.05 times the reference's: the median of three runs when the first took under 20 s, one run above; for `dirs` and `fuzz` the two tools' runs alternate (azhaq, ffuf, azhaq, ffuf, …), so a target that slows down or speeds up as the bench goes on costs both the same. A run of azhaq that failed (a flag or a command a stream has not delivered) is no time to compare, and fails the check.
+- **Memory**: the peak resident size of each run is taken the same way (the median of the runs a time uses; for rows over several apps or pages, the largest). Every row keeps `azhaq_rss_mb` and `reference_rss_mb` in the record, the check's detail says "memory ×N of the reference" beside "time ×N", and the README's table and the report give the peak beside the time. It is shown and recorded, not a bar.
 
 Every check names the exact commands, so a reviewer can run them again. The record still has the old numbers (shares of the reference's results, ratios of times).
 

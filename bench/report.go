@@ -114,7 +114,7 @@ func printSet(w *tabwriter.Writer, title string, ps *profileSet) {
 	if len(ps.Domains) > 0 {
 		fmt.Fprintf(w, "\n%s: subs -live\tazhaq live (confirmed)\tazhaq s\tsubfinder | dnsx live (confirmed)\ttime s\tboth\tgaps\n", title)
 		for _, d := range ps.Domains {
-			fmt.Fprintf(w, "%s\t%d\t%.0f\t%d\t%.0f\t%d\t%d\n", d.Domain, d.AzhaqLive, d.AzhaqSeconds, d.SubfinderLive, d.RefSeconds, d.SharedLive, len(d.Gaps))
+			fmt.Fprintf(w, "%s\t%d\t%.0f%s\t%d\t%.0f%s\t%d\t%d\n", d.Domain, d.AzhaqLive, d.AzhaqSeconds, mem(d.AzhaqRSS), d.SubfinderLive, d.RefSeconds, mem(d.RefRSS), d.SharedLive, len(d.Gaps))
 		}
 		fmt.Fprintln(w, "sources\tsubdomain sources")
 		for _, d := range ps.Domains {
@@ -123,27 +123,27 @@ func printSet(w *tabwriter.Writer, title string, ps *profileSet) {
 	}
 	if u := ps.URLs; u != nil {
 		fmt.Fprintf(w, "\n%s: urls (%s)\tazhaq\tgau\tgau's in azhaq\tazhaq s\tgau s\n", title, u.Domain)
-		fmt.Fprintf(w, "URLs\t%d\t%d\t%d\t%.0f\t%.0f\n", u.Azhaq, u.Gau, u.Shared, u.AzhaqSecs, u.GauSecs)
+		fmt.Fprintf(w, "URLs\t%d\t%d\t%d\t%.0f%s\t%.0f%s\n", u.Azhaq, u.Gau, u.Shared, u.AzhaqSecs, mem(u.AzhaqRSS), u.GauSecs, mem(u.RefRSS))
 	}
 	if b := ps.Brute; b != nil {
 		fmt.Fprintf(w, "\n%s: DNS brute force (%s)\tazhaq\tdnsx\tshared\tazhaq time\tdnsx time\n", title, b.Domain)
-		fmt.Fprintf(w, "%d words\t%d\t%d\t%d\t%.1fs\t%.1fs\n", b.Words, b.AzhaqFound, b.DnsxFound, b.Shared, b.AzhaqSeconds, b.DnsxSeconds)
+		fmt.Fprintf(w, "%d words\t%d\t%d\t%d\t%.1fs%s\t%.1fs%s\n", b.Words, b.AzhaqFound, b.DnsxFound, b.Shared, b.AzhaqSeconds, mem(b.AzhaqRSS), b.DnsxSeconds, mem(b.RefRSS))
 		if b.WildcardWords > 0 {
 			fmt.Fprintf(w, "wildcard zone, %d words, %d real\t%d found, %d fake\t%d unfiltered\t\t\t\n", b.WildcardWords, b.WildcardReal, b.WildcardAzhaq, b.WildcardFake, b.WildcardNoWild)
 		}
 	}
 	if d := ps.DNS; d != nil {
 		fmt.Fprintf(w, "\n%s: dns record types\tazhaq\tdnsx\tazhaq time\tdnsx time\tqueries azhaq/dnsx\n", title)
-		fmt.Fprintf(w, "%d names\t%d\t%d\t%.1fs\t%.1fs\t%d / %d\n", d.Names, d.AzhaqOK, d.DnsxOK, d.AzhaqSecs, d.DnsxSecs, d.AzhaqQ, d.DnsxQ)
+		fmt.Fprintf(w, "%d names\t%d\t%d\t%.1fs%s\t%.1fs%s\t%d / %d\n", d.Names, d.AzhaqOK, d.DnsxOK, d.AzhaqSecs, mem(d.AzhaqRSS), d.DnsxSecs, mem(d.RefRSS), d.AzhaqQ, d.DnsxQ)
 	}
 	if p := ps.Probe; p != nil {
 		fmt.Fprintf(w, "\n%s: probe (%d hosts)\tanswered (confirmed)\tshared\tstatus\ttitle\ttech\tall\tfavicon\tcdn\ttime\n", title, p.Hosts)
-		fmt.Fprintf(w, "azhaq\t%d (%d)\t%d\t%d\t%d\t%d\t%d\t%d/%d\t%d/%d\t%.1fs\n", p.AzhaqAnswered, p.AzhaqOK, p.Shared, p.Status, p.Title, p.Tech, p.All, p.FaviconAgree, p.FaviconBoth, p.CDNAgree, p.CDNHttpx, p.AzhaqSeconds)
-		fmt.Fprintf(w, "httpx\t%d (%d)\t\t\t\t\t\t\t\t%.1fs\n", p.HttpxAnswered, p.HttpxOK, p.HttpxSeconds)
+		fmt.Fprintf(w, "azhaq\t%d (%d)\t%d\t%d\t%d\t%d\t%d\t%d/%d\t%d/%d\t%.1fs%s\n", p.AzhaqAnswered, p.AzhaqOK, p.Shared, p.Status, p.Title, p.Tech, p.All, p.FaviconAgree, p.FaviconBoth, p.CDNAgree, p.CDNHttpx, p.AzhaqSeconds, mem(p.AzhaqRSS))
+		fmt.Fprintf(w, "httpx\t%d (%d)\t\t\t\t\t\t\t\t%.1fs%s\n", p.HttpxAnswered, p.HttpxOK, p.HttpxSeconds, mem(p.RefRSS))
 	}
 	if d := ps.Dirs; d != nil {
 		fmt.Fprintf(w, "\n%s: paths (%d words, %d apps)\tazhaq\tffuf -ac\tshared\tfalse positives\ttime\n", title, d.Words, len(d.Apps))
-		fmt.Fprintf(w, "hits\t%d\t%d\t%d\t%d / %d\t%.1fs / %.1fs\n", d.AzhaqHits, d.FfufHits, d.Shared, d.AzhaqFalse, d.FfufFalse, d.AzhaqSecs, d.FfufSecs)
+		fmt.Fprintf(w, "hits\t%d\t%d\t%d\t%d / %d\t%.1fs%s / %.1fs%s\n", d.AzhaqHits, d.FfufHits, d.Shared, d.AzhaqFalse, d.FfufFalse, d.AzhaqSecs, mem(d.AzhaqRSS), d.FfufSecs, mem(d.RefRSS))
 	}
 	if f := ps.Fuzz; f != nil {
 		fmt.Fprintf(w, "\n%s: fuzz (%d words)\tazhaq hits (confirmed)\tffuf hits (confirmed)\tshared\tazhaq s\tffuf s\tJSON report equal\n", title, f.Words)
@@ -152,34 +152,42 @@ func printSet(w *tabwriter.Writer, title string, ps *profileSet) {
 			if l.ReportEqual != nil {
 				eq = fmt.Sprint(*l.ReportEqual)
 			}
-			fmt.Fprintf(w, "%s %s\t%d (%d)\t%d (%d)\t%d\t%.1f\t%.1f\t%s\n", l.App, l.Variant, l.AzhaqHits, l.AzhaqOK, l.FfufHits, l.FfufOK, l.Shared, l.AzhaqSecs, l.FfufSecs, eq)
+			fmt.Fprintf(w, "%s %s\t%d (%d)\t%d (%d)\t%d\t%.1f%s\t%.1f%s\t%s\n", l.App, l.Variant, l.AzhaqHits, l.AzhaqOK, l.FfufHits, l.FfufOK, l.Shared, l.AzhaqSecs, mem(l.AzhaqRSS), l.FfufSecs, mem(l.RefRSS), eq)
 		}
 	}
 	if p := ps.Params; p != nil {
 		fmt.Fprintf(w, "\n%s: parameters (%d pages, %d names)\tazhaq\tarjun\tshared\ttime\n", title, len(p.Pages), p.Words)
-		fmt.Fprintf(w, "found\t%d\t%d\t%d\t%.1fs / %.1fs\n", len(p.Azhaq), len(p.Arjun), p.Shared, p.AzhaqSecs, p.ArjunSecs)
+		fmt.Fprintf(w, "found\t%d\t%d\t%d\t%.1fs%s / %.1fs%s\n", len(p.Azhaq), len(p.Arjun), p.Shared, p.AzhaqSecs, mem(p.AzhaqRSS), p.ArjunSecs, mem(p.RefRSS))
 		fmt.Fprintf(w, "planted truth (%d)\t%d right, %d wrong\t%d right, %d wrong\t\t\n", p.PlantedTruth, p.AzhaqPlanted, p.AzhaqWrong, p.ArjunPlanted, p.ArjunWrong)
 	}
 	if p := ps.Ports; p != nil {
 		fmt.Fprintf(w, "\n%s: ports (connect)\tazhaq\tnaabu\tconfirmed azhaq / naabu\tazhaq time\tnaabu time\n", title)
 		for _, l := range p.Legs {
-			fmt.Fprintf(w, "%s %s\t%d\t%d\t%d / %d\t%.1fs\t%.1fs\n", l.Target, l.Ports, l.Azhaq, l.Naabu, l.AzhaqOK, l.NaabuOK, l.AzhaqSecs, l.NaabuSecs)
+			fmt.Fprintf(w, "%s %s\t%d\t%d\t%d / %d\t%.1fs%s\t%.1fs%s\n", l.Target, l.Ports, l.Azhaq, l.Naabu, l.AzhaqOK, l.NaabuOK, l.AzhaqSecs, mem(l.AzhaqRSS), l.NaabuSecs, mem(l.RefRSS))
 		}
 	}
 	if s := ps.Services; s != nil {
 		fmt.Fprintf(w, "\n%s: services (%d lab ports)\tazhaq\tnmap -sV\tazhaq time\tnmap time\n", title, s.Ports)
-		fmt.Fprintf(w, "named right\t%d\t%d\t%.1fs\t%.1fs\n", s.AzhaqNamed, s.NmapNamed, s.AzhaqSecs, s.NmapSecs)
+		fmt.Fprintf(w, "named right\t%d\t%d\t%.1fs%s\t%.1fs%s\n", s.AzhaqNamed, s.NmapNamed, s.AzhaqSecs, mem(s.AzhaqRSS), s.NmapSecs, mem(s.RefRSS))
 		fmt.Fprintf(w, "with product and version\t%d\t%d\t\t\n", s.AzhaqVer, s.NmapVer)
 	}
 	if s := ps.Shots; s != nil {
 		fmt.Fprintf(w, "\n%s: screenshots (%d targets)\tazhaq\tgowitness\tazhaq time\tgowitness time\n", title, s.Targets)
-		fmt.Fprintf(w, "not blank\t%d\t%d\t%.1fs\t%.1fs\n", s.AzhaqOK, s.GowitnessOK, s.AzhaqSeconds, s.GowitnessSecs)
+		fmt.Fprintf(w, "not blank\t%d\t%d\t%.1fs%s\t%.1fs%s\n", s.AzhaqOK, s.GowitnessOK, s.AzhaqSeconds, mem(s.AzhaqRSS), s.GowitnessSecs, mem(s.RefRSS))
 	}
 	if n := ps.Notify; n != nil {
 		fmt.Fprintf(w, "\n%s: notify (%d messages, 2 providers)\tazhaq\tnotify\tazhaq time\tnotify time\n", title, n.Messages)
-		fmt.Fprintf(w, "received at the stub\t%d\t%d\t%.1fs\t%.1fs\n", n.AzhaqOK, n.NotifyOK, n.AzhaqSecs, n.NotifySecs)
+		fmt.Fprintf(w, "received at the stub\t%d\t%d\t%.1fs%s\t%.1fs%s\n", n.AzhaqOK, n.NotifyOK, n.AzhaqSecs, mem(n.AzhaqRSS), n.NotifySecs, mem(n.RefRSS))
 	}
 	w.Flush()
+}
+
+// mem is a peak for a report cell, " 80MB", or nothing when it was not measured.
+func mem(v float64) string {
+	if v <= 0 {
+		return ""
+	}
+	return fmt.Sprintf(" %.0fMB", v)
 }
 
 func known(s toolScore) string {

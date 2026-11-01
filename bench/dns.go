@@ -24,6 +24,7 @@ type dnsRow struct {
 	DnsxOK     int      `json:"dnsx_confirmed"`
 	AzhaqSecs  float64  `json:"azhaq_seconds"`
 	DnsxSecs   float64  `json:"dnsx_seconds"`
+	memPair
 	AzhaqQ     int      `json:"azhaq_queries"`
 	DnsxQ      int      `json:"dnsx_queries"`
 	AzhaqPeak  int      `json:"azhaq_peak_per_second"`
@@ -230,6 +231,7 @@ func benchDNS() *dnsRow {
 	out, dm, dq, dp := counted(append([]string{ref("dnsx")}, da...))
 	row.DnsxQ, row.DnsxPeak = dq, dp
 	row.DnsxSecs = dm.Seconds
+	row.set(am, dm)
 	dx := normalizeDNSJSON(out)
 	// (host, type) pairs the zone holds that a tool printed values for.
 	count := func(m map[string]map[string][]string) int {
@@ -260,7 +262,7 @@ func benchDNS() *dnsRow {
 	}
 	sort.Strings(row.FieldDiffs)
 	barOne("dns record types", row.AzhaqOK, row.DnsxOK, row.AzhaqSecs, row.DnsxSecs, "the zone the bench serves (a name and type it holds)", cmds,
-		fmt.Sprintf("%d names, 9 types; queries received azhaq %d, dnsx %d; %s%s", row.Names, row.AzhaqQ, row.DnsxQ, ratio(row.AzhaqSecs, row.DnsxSecs), azErr(am)))
+		fmt.Sprintf("%d names, 9 types; queries received azhaq %d, dnsx %d; %s%s", row.Names, row.AzhaqQ, row.DnsxQ, ratios(row.AzhaqSecs, row.DnsxSecs, row.memPair), azErr(am)))
 	addCheck("dns record types: azhaq's JSON values equal dnsx's", len(row.FieldDiffs) == 0 && len(az) > 0, "%d differences %v", len(row.FieldDiffs), clipList(row.FieldDiffs, 4))
 	if polite() {
 		// The pace is counted where the queries arrive: no second takes more than the rate and a little for a retry.
@@ -291,7 +293,7 @@ func benchDNS() *dnsRow {
 		}
 	}
 	barOne("dns -ptr", okA, okD, pam.Seconds, pdm.Seconds, "the zone's PTR records", cmdLine(azhaq, pa...)+" vs "+cmdLine("dnsx", pd...),
-		fmt.Sprintf("azhaq %v, dnsx %v%s", sortedKeys(pz), sortedKeys(px), azErr(pam)))
+		fmt.Sprintf("azhaq %v, dnsx %v; %s%s", sortedKeys(pz), sortedKeys(px), ratios(pam.Seconds, pdm.Seconds, memPair{pam.RSSMB, pdm.RSSMB}), azErr(pam)))
 
 	return row
 }

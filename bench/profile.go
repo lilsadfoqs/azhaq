@@ -89,7 +89,7 @@ func timedArgs(target string, timeout time.Duration, dir, name string, mk func(i
 	if m.Error != "" && !benignExit(m.Error) || m.Seconds >= slowRun {
 		return out, m
 	}
-	secs := []float64{m.Seconds}
+	secs, rss := []float64{m.Seconds}, []float64{m.RSSMB}
 	noCache = true
 	for i := 1; i < 3; i++ {
 		if beforeEach != nil {
@@ -97,12 +97,11 @@ func timedArgs(target string, timeout time.Duration, dir, name string, mk func(i
 		}
 		_, m2 := run(target, timeout, dir, name, mk(i)...)
 		if m2.Error == "" || benignExit(m2.Error) {
-			secs = append(secs, m2.Seconds)
+			secs, rss = append(secs, m2.Seconds), append(rss, m2.RSSMB)
 		}
 	}
 	noCache = false
-	sort.Float64s(secs)
-	m.Seconds = secs[len(secs)/2]
+	m.Seconds, m.RSSMB = median(secs), median(rss)
 	return out, m
 }
 
@@ -127,25 +126,35 @@ func timedPair(target string, timeout time.Duration, dir, a, b string, aArgs, bA
 	aOut, am = once(a, aArgs)
 	bOut, bm = once(b, bArgs)
 	aSecs, bSecs := []float64{am.Seconds}, []float64{bm.Seconds}
+	aRSS, bRSS := []float64{am.RSSMB}, []float64{bm.RSSMB}
 	runA, runB := again(am), again(bm)
 	noCache = true
 	for i := 1; i < 3; i++ {
 		if runA {
 			if _, m := once(a, aArgs); m.Error == "" || benignExit(m.Error) {
-				aSecs = append(aSecs, m.Seconds)
+				aSecs, aRSS = append(aSecs, m.Seconds), append(aRSS, m.RSSMB)
 			}
 		}
 		if runB {
 			if _, m := once(b, bArgs); m.Error == "" || benignExit(m.Error) {
-				bSecs = append(bSecs, m.Seconds)
+				bSecs, bRSS = append(bSecs, m.Seconds), append(bRSS, m.RSSMB)
 			}
 		}
 	}
 	noCache = false
-	sort.Float64s(aSecs)
-	sort.Float64s(bSecs)
-	am.Seconds, bm.Seconds = aSecs[len(aSecs)/2], bSecs[len(bSecs)/2]
+	am.Seconds, bm.Seconds = median(aSecs), median(bSecs)
+	am.RSSMB, bm.RSSMB = median(aRSS), median(bRSS)
 	return
+}
+
+// median is the middle of xs (the upper one of two), 0 for none.
+func median(xs []float64) float64 {
+	if len(xs) == 0 {
+		return 0
+	}
+	s := append([]float64(nil), xs...)
+	sort.Float64s(s)
+	return s[len(s)/2]
 }
 
 // benignExit: azhaq's exit 3 and 4 say the run was partial or stopped, and
@@ -239,6 +248,37 @@ func ratio(a, r float64) string {
 	return fmt.Sprintf("time ×%.2f of the reference", a/r)
 }
 
+// memPair is the peak memory in MB of the two tools of a comparison, kept
+// beside their seconds in the record: every row that has a time ratio has a
+// memory ratio.
+type memPair struct {
+	AzhaqRSS float64 `json:"azhaq_rss_mb,omitempty"`
+	RefRSS   float64 `json:"reference_rss_mb,omitempty"`
+}
+
+// set takes the two peaks from the runs that were timed.
+func (p *memPair) set(az, ref runMeasure) { p.AzhaqRSS, p.RefRSS = az.RSSMB, ref.RSSMB }
+
+// ratios is ratio and, when both peaks were measured, memory beside it.
+func ratios(a, r float64, m memPair) string {
+	out := ratio(a, r)
+	if m.AzhaqRSS > 0 && m.RefRSS > 0 {
+		if out != "" {
+			out += ", "
+		}
+		out += fmt.Sprintf("memory ×%.2f of the reference (%.0f MB against %.0f MB)", m.AzhaqRSS/m.RefRSS, m.AzhaqRSS, m.RefRSS)
+	}
+	return out
+}
+
+// mb is a peak for a table cell: ", 80 MB", or nothing when it was not measured.
+func mb(v float64) string {
+	if v <= 0 {
+		return ""
+	}
+	return fmt.Sprintf(", %.0f MB", v)
+}
+
 // cmdLine is a command for a check's detail.
 func cmdLine(name string, args ...string) string {
 	return filepath.Base(name) + " " + strings.Join(args, " ")
@@ -267,7 +307,7 @@ func fileExists(p string) bool {
 // azRun runs azhaq with its stdout and stderr kept, and records the run.
 func azRun(target string, timeout time.Duration, dir string, args ...string) azResult {
 	r := azStart(dir, args...).wait(timeout)
-	m := runMeasure{Tool: "azhaq", Target: target, Seconds: r.seconds, Profile: prof}
+	m := runMeasure{Tool: "azhaq", Target: target, Seconds: r.seconds, RSSMB: r.rssMB, Profile: prof}
 	if r.exit != 0 {
 		m.Error = fmt.Sprintf("exit status %d %s", r.exit, lastLine(r.stderr))
 	}

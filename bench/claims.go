@@ -354,6 +354,7 @@ type azResult struct {
 	stdout, stderr string
 	exit           int
 	seconds        float64
+	rssMB          float64 // the peak resident size
 }
 
 // summaryRequests is "requests" of the last JSON object on stderr that has
@@ -381,10 +382,11 @@ type azProc struct {
 	out, err bytes.Buffer
 	t0       time.Time
 	done     chan struct{}
+	peak     chan int64 // the peak resident size, KB, once the process ended
 }
 
 func azStart(dir string, args ...string) *azProc {
-	p := &azProc{t0: time.Now(), done: make(chan struct{})}
+	p := &azProc{t0: time.Now(), done: make(chan struct{}), peak: make(chan int64, 1)}
 	p.cmd = exec.Command(azhaq, args...)
 	p.cmd.Dir = dir
 	p.cmd.Stdout, p.cmd.Stderr = &p.out, &p.err
@@ -394,9 +396,12 @@ func azStart(dir string, args ...string) *azProc {
 	if err := p.cmd.Start(); err != nil {
 		p.err.WriteString(err.Error())
 		close(p.done)
+		p.peak <- 0
 		return p
 	}
-	go func() { _ = p.cmd.Wait(); close(p.done) }()
+	stop := make(chan struct{})
+	go func() { p.peak <- watchHWM(p.cmd.Process.Pid, stop) }()
+	go func() { _ = p.cmd.Wait(); close(stop); close(p.done) }()
 	return p
 }
 
@@ -412,12 +417,13 @@ func (p *azProc) wait(timeout time.Duration) azResult {
 	if p.cmd.ProcessState != nil {
 		exit = p.cmd.ProcessState.ExitCode()
 	}
-	return azResult{p.out.String(), p.err.String(), exit, time.Since(p.t0).Seconds()}
+	secs := time.Since(p.t0).Seconds()
+	return azResult{p.out.String(), p.err.String(), exit, secs, float64(<-p.peak) / 1024}
 }
 
 func azExec(dir string, timeout time.Duration, args ...string) azResult {
 	r := azStart(dir, args...).wait(timeout)
-	rec.Runs = append(rec.Runs, runMeasure{Tool: "azhaq", Target: "claims", Seconds: r.seconds})
+	rec.Runs = append(rec.Runs, runMeasure{Tool: "azhaq", Target: "claims", Seconds: r.seconds, RSSMB: r.rssMB})
 	if r.exit != 0 && r.exit != 3 && r.exit != 4 {
 		logf("claims: azhaq %s: exit %d: %s", firstWord(args), r.exit, lastLine(r.stderr))
 	}

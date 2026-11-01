@@ -50,6 +50,7 @@ type paramsRow struct {
 	Shared    int      `json:"shared"`
 	AzhaqSecs float64  `json:"azhaq_seconds"`
 	ArjunSecs float64  `json:"arjun_seconds"`
+	memPair            // the largest peak of any page's run
 	// Planted: the pages whose every parameter is known.
 	PlantedTruth int     `json:"planted_truth"`
 	AzhaqPlanted int     `json:"azhaq_planted"`
@@ -128,6 +129,7 @@ func benchParams() *paramsRow {
 		aa := append([]string{"params", "-u", p, "-w", wl, "-silent"}, azPace...)
 		out, m := timed(p, 20*time.Minute, dir, azhaq, aa...)
 		azFailed += azFail(m)
+		row.AzhaqRSS = max(row.AzhaqRSS, m.RSSMB)
 		if public {
 			row.GinAzhaqSecs += m.Seconds
 		} else {
@@ -147,6 +149,7 @@ func benchParams() *paramsRow {
 		_ = os.Remove(res)
 		// arjun writes a file: rerun for the median with the file removed first.
 		_, jm := runArjunTimed(p, dir, arjun, ja, res)
+		row.RefRSS = max(row.RefRSS, jm.RSSMB)
 		if public {
 			row.GinArjunSecs += jm.Seconds
 		} else {
@@ -207,7 +210,7 @@ func benchParams() *paramsRow {
 	sort.Strings(row.Azhaq)
 	cmds := azCmd + " vs " + ajCmd
 	note := fmt.Sprintf("%s; planted pages: azhaq %d right %d wrong, arjun %d right %d wrong, of %d; all pages azhaq %d, arjun %d, shared %d; %s", share(row.Shared, len(aj)),
-		row.AzhaqPlanted, row.AzhaqWrong, row.ArjunPlanted, row.ArjunWrong, row.PlantedTruth, len(az), len(aj), row.Shared, ratio(row.AzhaqSecs, row.ArjunSecs)) + azFailed
+		row.AzhaqPlanted, row.AzhaqWrong, row.ArjunPlanted, row.ArjunWrong, row.PlantedTruth, len(az), len(aj), row.Shared, ratios(row.AzhaqSecs, row.ArjunSecs, row.memPair)) + azFailed
 	if len(gin) > 0 {
 		addCheck("params: ginandjuice.shop (2 pages, 1,000 names, 5 requests per second) time ≤ 1.05× arjun's", row.GinAzhaqSecs <= row.GinArjunSecs*1.05,
 			"azhaq %.1fs, arjun %.1fs", row.GinAzhaqSecs, row.GinArjunSecs)

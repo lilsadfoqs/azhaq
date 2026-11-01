@@ -30,6 +30,7 @@ type fuzzLeg struct {
 	FfufOK        int      `json:"ffuf_confirmed"`
 	AzhaqSecs     float64  `json:"azhaq_seconds"`
 	FfufSecs      float64  `json:"ffuf_seconds"`
+	memPair
 	ReportEqual   *bool    `json:"report_equal,omitempty"`
 	ReportProblem string   `json:"report_problem,omitempty"`
 	FfufOnly      []string `json:"ffuf_only,omitempty"`
@@ -72,6 +73,7 @@ func benchFuzz(apps []string) *fuzzRow {
 			})
 			beforeEach = nil
 			leg.AzhaqSecs, leg.FfufSecs = am.Seconds, fm.Seconds
+			leg.set(am, fm)
 			leg.AzhaqHits, leg.FfufHits, leg.Shared = len(az), len(ff), overlap(az, ff)
 			for h := range az {
 				if !softHit(h) {
@@ -96,7 +98,7 @@ func benchFuzz(apps []string) *fuzzRow {
 			name := "fuzz " + filepath.Base(strings.TrimSuffix(strings.TrimPrefix(app, "http://"), "/")) + " " + lg.name
 			barOne(name, leg.AzhaqOK, leg.FfufOK, leg.AzhaqSecs, leg.FfufSecs, "a request that is not the app's catch-all answer",
 				cmds, fmt.Sprintf("%s; hits azhaq %d, ffuf %d, shared %d; %d words; %s; ffuf only %v%s", share(leg.Shared, leg.FfufHits), leg.AzhaqHits,
-					leg.FfufHits, leg.Shared, n, ratio(leg.AzhaqSecs, leg.FfufSecs), clipList(leg.FfufOnly, 5), azErr(am))+downNote(appRestarts-downs0))
+					leg.FfufHits, leg.Shared, n, ratios(leg.AzhaqSecs, leg.FfufSecs, leg.memPair), clipList(leg.FfufOnly, 5), azErr(am))+downNote(appRestarts-downs0))
 			if leg.ReportEqual != nil {
 				addCheck("fuzz "+app+": the JSON report equals ffuf's (duration dropped)", *leg.ReportEqual, "%s", leg.ReportProblem)
 			}
