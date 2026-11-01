@@ -18,6 +18,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -60,9 +61,70 @@ func (e Entry) IsTarget() bool { return e.Class == "" || e.Class == ClassTarget 
 // without its Hash.
 func (e Entry) sum() string {
 	e.Hash = ""
+	return sumOf(e.Prev, marshal(e))
+}
+
+// marshal is json.Marshal(e), byte for byte. A line made only of plain
+// ASCII (nearly every one) is written by hand: marshalling was a fifth of
+// the CPU a full-range port scan spent on its ledger.
+func marshal(e Entry) []byte {
+	if raw, ok := appendPlain(make([]byte, 0, 256), e); ok {
+		return raw
+	}
 	raw, _ := json.Marshal(e)
+	return raw
+}
+
+// plain says s needs no escaping in JSON: printable ASCII without the
+// characters encoding/json escapes (quote, backslash, <, >, &).
+func plain(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if c := s[i]; c < 0x20 || c >= 0x7f || c == '"' || c == '\\' || c == '<' || c == '>' || c == '&' {
+			return false
+		}
+	}
+	return true
+}
+
+// appendPlain writes e as json.Marshal does when every string is plain and
+// the time is a year encoding/json accepts; it says false otherwise.
+func appendPlain(b []byte, e Entry) ([]byte, bool) {
+	if y := e.Time.Year(); y < 0 || y > 9999 {
+		return nil, false
+	}
+	for _, s := range [...]string{e.Kind, e.Class, e.Method, e.Target, e.Host, e.VHost, e.Body, e.Rule, e.Collector, e.Prev, e.Hash} {
+		if !plain(s) {
+			return nil, false
+		}
+	}
+	b = append(b, `{"seq":`...)
+	b = strconv.AppendInt(b, e.Seq, 10)
+	b = append(b, `,"time":"`...)
+	b = e.Time.AppendFormat(b, time.RFC3339Nano)
+	b = append(b, `","kind":"`...)
+	b = append(b, e.Kind...)
+	b = append(b, '"')
+	for _, f := range [...]struct{ name, val string }{{"class", e.Class}, {"method", e.Method}} {
+		if f.val != "" {
+			b = append(append(append(b, `,"`...), f.name...), `":"`...)
+			b = append(append(b, f.val...), '"')
+		}
+	}
+	b = append(b, `,"target":"`...)
+	b = append(append(b, e.Target...), '"')
+	for _, f := range [...]struct{ name, val string }{{"host", e.Host}, {"vhost", e.VHost}, {"body", e.Body}, {"rule", e.Rule}, {"collector", e.Collector}, {"prev", e.Prev}, {"hash", e.Hash}} {
+		if f.val != "" {
+			b = append(append(append(b, `,"`...), f.name...), `":"`...)
+			b = append(append(b, f.val...), '"')
+		}
+	}
+	return append(b, '}'), true
+}
+
+// sumOf is the hash of an entry's JSON without its Hash after prev.
+func sumOf(prev string, raw []byte) string {
 	h := sha256.New()
-	h.Write([]byte(e.Prev))
+	h.Write([]byte(prev))
 	h.Write(raw)
 	return hex.EncodeToString(h.Sum(nil))
 }
@@ -259,9 +321,13 @@ func (l *Ledger) Record(e Entry) {
 	}
 	l.seq++
 	e.Seq, e.Prev = l.seq, l.prev
-	e.Hash = e.sum()
-	raw, _ := json.Marshal(e)
-	raw = append(raw, '\n')
+	// Hash is the entry's last field: the line is the JSON that is hashed
+	// with the hash added, so the entry is marshalled once, not twice.
+	raw := marshal(e)
+	e.Hash = sumOf(e.Prev, raw)
+	raw = append(raw[:len(raw)-1], `,"hash":"`...)
+	raw = append(raw, e.Hash...)
+	raw = append(raw, '"', '}', '\n')
 	_, err := l.w.Write(raw)
 	if err == nil {
 		err = l.w.Flush()
