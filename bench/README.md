@@ -158,7 +158,7 @@ The command fails when one of these does not hold. Rows marked "both" are measur
 - Claims: summary, ledger and an independent count agree on every path a request takes, including `azhaq_ports` after the MCP budget is spent.
 - Scale: on Juice Shop behind a counting proxy, a run capped at 100 requests per process and resumed until done, a run killed with SIGKILL and resumed, and a run shared with two workers each map the same URLs as one uninterrupted run, and no process sends more than its budget.
 - OpenAPI: the export of Juice Shop, VAmPI, DVGA, ginandjuice.shop and a fixture with `/blog` and `/blog/` is a valid OpenAPI 3 document by the bench's own checker (`bench/openapi.go`: structure, unique operation ids, path parameters declared, references resolve).
-- Docs: no public doc says an active option needs `-allow` or a scope, or that requests are "GETs only" without HEAD; the README's "Latest run (date, vX)" names the newest release in the changelog and is not older than the tag.
+- Docs: no public doc says an active option needs `-allow` or a scope, or that requests are "GETs only" without HEAD, or in a plan or an MCP description; the README's "Latest run (date, vX)" names the newest release in the changelog and is not older than the tag.
 - Go tests (`go test ./bench`): rows that were one assertion each (`bench/smoke_test.go`).
 
 ## Older results

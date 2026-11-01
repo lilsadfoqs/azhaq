@@ -37,6 +37,41 @@ func newestRecord(dir string) (*record, error) {
 
 type tableRow struct{ job, replaces, azhaq, ref string }
 
+// appBuild is the release of the app's pinned image in bench/compose.yaml
+// ("v20.3.0"), "" when the image is not pinned to one: the truth of the
+// known routes is per build, so the table names it.
+func appBuild(name string) string {
+	var raw []byte
+	for _, p := range []string{"bench/compose.yaml", "compose.yaml"} {
+		if b, err := os.ReadFile(p); err == nil {
+			raw = b
+			break
+		}
+	}
+	service := ""
+	for _, l := range strings.Split(string(raw), "\n") {
+		if t := strings.TrimSpace(l); strings.HasPrefix(l, "  ") && !strings.HasPrefix(l, "   ") && strings.HasSuffix(t, ":") {
+			service = strings.TrimSuffix(t, ":")
+		} else if img, ok := strings.CutPrefix(strings.TrimSpace(l), "image:"); ok && service == name {
+			_, tag, _ := strings.Cut(strings.TrimSpace(img), ":")
+			tag, _, _ = strings.Cut(tag, "@")
+			if tag == "latest" {
+				return ""
+			}
+			return tag
+		}
+	}
+	return ""
+}
+
+// appLabel is the app's name with its build, as the table shows it.
+func appLabel(name string) string {
+	if b := appBuild(name); b != "" {
+		return name + " " + b
+	}
+	return name
+}
+
 func secs(s float64) string {
 	if s >= 10 {
 		return fmt.Sprintf("%.0f s", s)
@@ -77,11 +112,11 @@ func tableRows(ps *profileSet) []tableRow {
 	for _, a := range ps.Apps {
 		// Two measures that must not be read as one: the whole map, and the crawler alone.
 		if a.Azhaq.TruthOf > 0 && a.Katana.TruthOf > 0 {
-			rows = append(rows, tableRow{"Known routes of " + a.Name + ", the whole map (`azhaq run`)", "katana `-jc -jsl`", fmt.Sprintf("%d/%d in %s%s", a.Azhaq.Truth, a.Azhaq.TruthOf, secs(a.Azhaq.Seconds), mb(a.Azhaq.RSSMB)),
+			rows = append(rows, tableRow{"Known routes of " + appLabel(a.Name) + ", the whole map (`azhaq run`)", "katana `-jc -jsl`", fmt.Sprintf("%d/%d in %s%s", a.Azhaq.Truth, a.Azhaq.TruthOf, secs(a.Azhaq.Seconds), mb(a.Azhaq.RSSMB)),
 				fmt.Sprintf("%d/%d in %s%s", a.Katana.Truth, a.Katana.TruthOf, secs(a.Katana.Seconds), mb(a.Katana.RSSMB))})
 		}
 		if a.Crawl != nil && a.CrawlKatana != nil {
-			rows = append(rows, tableRow{"Known routes of " + a.Name + ", the crawler alone (`azhaq crawl`, katana's depth)", "katana `-jc -jsl`", fmt.Sprintf("%d/%d in %s%s", a.Crawl.Truth, a.Crawl.TruthOf, secs(a.Crawl.Seconds), mb(a.Crawl.RSSMB)),
+			rows = append(rows, tableRow{"Known routes of " + appLabel(a.Name) + ", the crawler alone (`azhaq crawl`, katana's depth)", "katana `-jc -jsl`", fmt.Sprintf("%d/%d in %s%s", a.Crawl.Truth, a.Crawl.TruthOf, secs(a.Crawl.Seconds), mb(a.Crawl.RSSMB)),
 				fmt.Sprintf("%d/%d in %s%s", a.CrawlKatana.Truth, a.CrawlKatana.TruthOf, secs(a.CrawlKatana.Seconds), mb(a.CrawlKatana.RSSMB))})
 		}
 	}

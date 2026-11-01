@@ -15,6 +15,9 @@
 - `run` has `-catchall-after N` (default 3, 0 asks every path) and `-no-catchall`. Once an origin has answered 3 paths with the page every unknown path gets, `run` stops asking the paths scripts name in directories whose own control is that page; their rows stay as coverage `skipped`, the summary says how many were not asked and why, and `catchall` and `skipped` are counts of their own. `-no-catchall` leaves those rows out of what `run` prints and of `results`, and `left_out` says how many.
 - A `dangling` takeover finding carries `list`: the public takeover list's entry and the date azhaq read it. `docs/CONCEPTS.md` says what each dangling service rests on and how to confirm it.
 - A create another role sent that nothing shows to cross roles is `create accepted: nothing shows it crosses roles` (report class `create_accepted`); roles rows carry `created_owner`, and `owner_by` says whose object the create made.
+- `azhaq mcp` takes `-resolvers`, `-sources`, `-skip` and `-no-takeover`, held for every tool call like `-allow`; `azhaq_scope` and `azhaq_status` show them as `run_options` and `azhaq_resume` keeps them. With `-sources none` the plan lists no collector that asks a third party and `azhaq_subdomains` is refused.
+- The workspace keeps every archived URL a run read in `DB.urls.jsonl` beside it (`run`, `url`, `source`), written as the pages arrive; a stopped run keeps what it read and `azhaq resume` adds to it.
+- `docs/claims.tsv` ties each claim of the README and of the `plan`, `mcp`, `worker`, `query` and `ledger` pages to a test or a bench check; `go run ./scripts/claims`, a step of the checks job, fails on a claim with no proof, a reworded claim or a proof that is gone, and lists the pages not covered yet.
 
 ### Changed
 
@@ -28,6 +31,12 @@
 - `hunt` ranks a route only a script names whose GET answered 404 or 410 after every row the server confirmed, with no path-word weight and the reason `named by a script, not confirmed: GET 404`; a 405, 400, 415 or 422 shows the route exists and keeps its path words.
 - `fuzz -ac` and `dirs` read the page the calibration answers are (title, tags, shared words) when no size, word or line count is shared, hold back matches that look like it and count them in the summary; when they cannot filter at all the matches are said to be unfiltered and the exit is 3.
 - `roles` and `report` call a create `creates in another role's collection` (`Missing authorization on create`) only when the anonymous role was let to create or the object it made belongs to the replayed request's role; any other accepted create is `create accepted` (a guess at low severity).
+- `export -format urls` writes every URL the workspace learned: the map's URL rows and every archived URL of the run; `query` lists the graph's rows and says how many archived URLs they stand for.
+- `azhaq mcp` follows the initialize lifecycle: before `initialize` only `ping` is answered, a second `initialize` is an error, and everything but a tool call is answered in the order it was sent; `azhaq_export` passes the command's notes on.
+- `plan` and `azhaq_map` no longer say a map sends "GET requests only": `docs/CONCEPTS.md` states the promise once (no write method without its flag; a GET can change data and is requested; `-deny-path` keeps a URL out), and the other pages, the help of `-fill-forms` and the MCP descriptions carry it.
+- `crawl` says that a route a script names is a line only when the crawl asked for it (`-hints` lists the others, a larger `-depth` requests more) and under `-silent` prints the count it left out on stderr.
+- MIGRATING's dnsx section lists the extra row `dns -a -json` gives a dangling CNAME and how to filter it; its katana section says `-jsl` routes need `-hints` at a depth that does not reach them.
+- The README starts Juice Shop and VAmPI pinned, marks the 190-row summary as an example, names the build, the lab image list and the command behind each benchmark row, explains the roles table's cells, and counts 51 built-in path checks, not 32.
 
 ### Fixed
 
@@ -40,6 +49,7 @@
 - `hunt` no longer lists a translation reference such as `@Button_Cancel` under a name containing "Password" as a generic secret.
 - `urls` drops `/FUZZMultiple`, a fuzz keyword behind stray symbols (`%CB%93%E2%86%92FUZZ`, `FUZZ000003:C=200`), `/../` inside a query name and an injection glued to a value (`1union select`, `from information_schema.`) as junk.
 - A `-cookie` or `-header` run no longer measures a route without its session after an answer that looked like the end of the session, which made it take a revoked session's answer for a live one, miss the end and exit 0; it stops with exit 3, and a response that gives the user's cookie another value asks for a check too.
+- `export -format openapi` no longer lists the address the description was read from (`/openapi.json`) as a path of the API it describes, unless the description lists it.
 
 ## v0.13.0
 

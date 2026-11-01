@@ -79,7 +79,7 @@ func TestMCPArgumentTypes(t *testing.T) {
 // The server refuses them as a JSON-RPC error, as it does unknown
 // arguments, before any command runs.
 func TestMCPArgumentTypesOverRPC(t *testing.T) {
-	s := &mcpServer{dir: t.TempDir(), exe: "/nonexistent"}
+	s := &mcpServer{dir: t.TempDir(), exe: "/nonexistent", started: true}
 	got := rpcAll(t, s,
 		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"azhaq_roles","arguments":{"url":"http://127.0.0.1:5002/","roles":["anon","alice=Authorization: Bearer x"]}}}`,
 		`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"azhaq_roles","arguments":{"url":"http://127.0.0.1:5002/","roles":[{"name":"anon"},{"name":"bob","header":7}]}}}`,
