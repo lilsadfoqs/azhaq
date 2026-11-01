@@ -7,6 +7,7 @@ import (
 	"net/netip"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/trannghiach/azhaq/internal/normalize"
@@ -20,6 +21,12 @@ import (
 //	*.example.com    the same (bug bounty scopes write wildcards this way)
 //	=api.example.com that host only
 //	10.0.0.0/8       addresses in the range; 192.0.2.7 is one address
+//	127.0.0.1:3001   that host on that port only (an entry without a port
+//	                 allows every port); also app.example.com:8443, [::1]:80
+//
+// A port belongs to an allow entry alone: Allows(host) is true for a host any
+// entry names, and AllowsAddr(host, port) holds a connection to the entry's
+// port. A deny entry keeps its host out on every port, whatever port it names.
 //
 // DenyPath holds the user's own rules for paths (-deny-path): a regular
 // expression matched against a URL's path, and against path and query
@@ -124,6 +131,69 @@ func (r Rules) Allows(host string) bool {
 	return false
 }
 
+// AllowsAddr says whether a connection to host on port may be made: the host
+// is allowed, and the allow entry that names it either has no port or has
+// this one. A port "" is unknown: the host alone is judged.
+func (r Rules) AllowsAddr(host, port string) bool {
+	host = normalize.Hostname(host)
+	port = normPort(port)
+	if host == "" || port == "" {
+		return r.Allows(host)
+	}
+	if r.idx != nil {
+		if r.idx.deny.match(host) {
+			return false
+		}
+		return len(r.Allow) == 0 || r.idx.allow.matchPort(host, port)
+	}
+	for _, d := range r.Deny {
+		if hostMatch(host, d) {
+			return false
+		}
+	}
+	if len(r.Allow) == 0 {
+		return true
+	}
+	for _, a := range r.Allow {
+		if hostMatchPort(host, a, port) {
+			return true
+		}
+	}
+	return false
+}
+
+// OnlyOtherPort says host is allowed, and only on ports other than port: the
+// reason a connection AllowsAddr refuses is the port, not the host.
+func (r Rules) OnlyOtherPort(host, port string) bool {
+	return normPort(port) != "" && r.Allows(host) && !r.AllowsAddr(host, port)
+}
+
+// AllowsURL says whether a request to raw may be made: AllowsAddr for its
+// host and its port, the scheme's when it names none (80, 443). A URL that
+// does not parse, or names no host, is judged by what it has.
+func (r Rules) AllowsURL(raw string) bool {
+	u, err := url.Parse(raw)
+	if err != nil || u.Hostname() == "" {
+		return true
+	}
+	return r.AllowsAddr(u.Hostname(), URLPort(u))
+}
+
+// URLPort is the port a request to u goes to: the one it names, else its
+// scheme's; "" for a scheme with none.
+func URLPort(u *url.URL) string {
+	if p := u.Port(); p != "" {
+		return p
+	}
+	switch strings.ToLower(u.Scheme) {
+	case "http", "ws":
+		return "80"
+	case "https", "wss":
+		return "443"
+	}
+	return ""
+}
+
 // Match is the allow rule that lets host through, as it was written, or ""
 // when none does: no rules, a host a deny rule excludes, or a host outside
 // the allow list.
@@ -155,7 +225,7 @@ func (r Rules) AllowsSeed(s types.Seed) bool {
 	s = normalize.Seed(s)
 	switch s.Type {
 	case types.TypeURL:
-		return r.Allows(normalize.HostFromURL(s.Key()))
+		return r.AllowsURL(s.Key())
 	case types.TypeHostname, types.TypeDomain, types.TypeIPAddress:
 		return r.Allows(s.Key())
 	default:
@@ -211,22 +281,55 @@ func (r Rules) AllowsPrefix(pf netip.Prefix) bool {
 	return false
 }
 
-func hostMatch(host, rule string) bool {
+func hostMatch(host, rule string) bool { return hostMatchPort(host, rule, "") }
+
+// ruleHost splits an allow or deny entry written as a host with a port
+// (127.0.0.1:5013, [::1]:80): the entry without it, and the port. Only a
+// real host:port is split; a bare IPv6 address (::1) and a bare host are left
+// as they are. A range has no port.
+func ruleHost(rule string) (host, port string) {
+	rule = strings.TrimSpace(rule)
+	if strings.Contains(rule, "/") {
+		return rule, ""
+	}
+	exact := strings.HasPrefix(rule, "=")
+	rest := strings.TrimPrefix(strings.TrimPrefix(rule, "="), "*.")
+	if h, p, err := net.SplitHostPort(rest); err == nil && allDigits(p) {
+		rest, port = h, normPort(p)
+	}
+	if exact {
+		rest = "=" + rest
+	}
+	return rest, port
+}
+
+// normPort is a port as a number without leading zeros, "" for none.
+func normPort(p string) string {
+	if p == "" || !allDigits(p) {
+		return ""
+	}
+	n, err := strconv.Atoi(p)
+	if err != nil {
+		return ""
+	}
+	return strconv.Itoa(n)
+}
+
+// hostMatchPort is hostMatch that, with a port, also holds an entry that
+// names a port to it; a port "" asks about the host alone.
+func hostMatchPort(host, rule, port string) bool {
 	rule = strings.TrimSpace(rule)
 	if strings.Contains(rule, "/") {
 		_, n, err := net.ParseCIDR(rule)
 		ip := net.ParseIP(host)
 		return err == nil && ip != nil && n.Contains(ip)
 	}
-	exact := strings.HasPrefix(rule, "=")
-	rule = strings.TrimPrefix(strings.TrimPrefix(rule, "="), "*.")
-	// A user often copies a URL's authority into -allow (-allow
-	// 127.0.0.1:5013): scope is matched by host, so drop the port. Only a
-	// real host:port is split — a bare IPv6 address (::1) and a bare host
-	// are left as they are.
-	if h, p, err := net.SplitHostPort(rule); err == nil && allDigits(p) {
-		rule = h
+	rule, rport := ruleHost(rule)
+	if rport != "" && port != "" && rport != port {
+		return false
 	}
+	exact := strings.HasPrefix(rule, "=")
+	rule = strings.TrimPrefix(rule, "=")
 	rule = normalize.Hostname(rule)
 	if rule == "" {
 		return false
@@ -272,10 +375,16 @@ type ruleSet struct {
 	exact  map[string]bool // a host or address, as written
 	suffix map[string]bool // a domain: it and everything under it
 	nets   []*net.IPNet
+	// The same rules by the ports they allow, for a connection: bare are
+	// those written without a port, every port; onPort are those that name
+	// one, by host and then port.
+	bareExact, bareSuffix   map[string]bool
+	exactPorts, suffixPorts map[string]map[string]bool
 }
 
 func compileSet(rules []string) ruleSet {
-	set := ruleSet{exact: map[string]bool{}, suffix: map[string]bool{}}
+	set := ruleSet{exact: map[string]bool{}, suffix: map[string]bool{}, bareExact: map[string]bool{}, bareSuffix: map[string]bool{},
+		exactPorts: map[string]map[string]bool{}, suffixPorts: map[string]map[string]bool{}}
 	for _, rule := range rules {
 		rule = strings.TrimSpace(rule)
 		if strings.Contains(rule, "/") {
@@ -284,21 +393,37 @@ func compileSet(rules []string) ruleSet {
 			}
 			continue
 		}
+		rule, port := ruleHost(rule)
 		exact := strings.HasPrefix(rule, "=")
-		rule = strings.TrimPrefix(strings.TrimPrefix(rule, "="), "*.")
-		if h, p, err := net.SplitHostPort(rule); err == nil && allDigits(p) {
-			rule = h
-		}
-		rule = normalize.Hostname(rule)
+		rule = normalize.Hostname(strings.TrimPrefix(rule, "="))
 		if rule == "" {
 			continue
 		}
+		suffix := !exact && net.ParseIP(rule) == nil
 		set.exact[rule] = true
-		if !exact && net.ParseIP(rule) == nil {
+		if suffix {
 			set.suffix[rule] = true
+		}
+		if port == "" {
+			set.bareExact[rule] = true
+			if suffix {
+				set.bareSuffix[rule] = true
+			}
+			continue
+		}
+		addPort(set.exactPorts, rule, port)
+		if suffix {
+			addPort(set.suffixPorts, rule, port)
 		}
 	}
 	return set
+}
+
+func addPort(m map[string]map[string]bool, host, port string) {
+	if m[host] == nil {
+		m[host] = map[string]bool{}
+	}
+	m[host][port] = true
 }
 
 func (s ruleSet) match(host string) bool {
@@ -310,6 +435,10 @@ func (s ruleSet) match(host string) bool {
 			return true
 		}
 	}
+	return s.inNets(host)
+}
+
+func (s ruleSet) inNets(host string) bool {
 	if len(s.nets) > 0 {
 		if ip := net.ParseIP(host); ip != nil {
 			for _, n := range s.nets {
@@ -320,6 +449,20 @@ func (s ruleSet) match(host string) bool {
 		}
 	}
 	return false
+}
+
+// matchPort is match for a connection to port: a rule that names a port
+// holds it to that one.
+func (s ruleSet) matchPort(host, port string) bool {
+	if s.bareExact[host] || s.exactPorts[host][port] {
+		return true
+	}
+	for i := 0; i < len(host); i++ {
+		if host[i] == '.' && (s.bareSuffix[host[i+1:]] || s.suffixPorts[host[i+1:]][port]) {
+			return true
+		}
+	}
+	return s.inNets(host)
 }
 
 // HostHeaders are the request headers that name the host a front end

@@ -42,6 +42,7 @@ type Engine struct {
 	secured sync.Map // hosts whose http URLs are the https site's (scheme.go)
 	recent  sync.Map // entities upserted a moment ago (upsertRecent)
 	denied  sync.Map // URLs a -deny-path rule kept out, noted once
+	ported  sync.Map // URLs the scope's port kept out, noted once
 }
 
 func (e *Engine) Plan(seeds []types.Seed) []types.WorkItem {
@@ -595,6 +596,21 @@ func (e *Engine) noteDenied(raw, rule string) {
 		return
 	}
 	e.noteSkip(types.Seed{Type: types.TypeURL, Keys: map[string]string{"url": raw}}, egress.DenyReason(rule))
+}
+
+// notePortSkip records a URL found on a host that -allow lists with another
+// port only: it is listed as not requested, with the reason.
+func (e *Engine) notePortSkip(raw string) {
+	if e == nil || e.Store == nil {
+		return
+	}
+	if n, err := normalize.URL(raw); err == nil {
+		raw = n
+	}
+	if _, dup := e.ported.LoadOrStore(raw, true); dup {
+		return
+	}
+	e.noteSkip(types.Seed{Type: types.TypeURL, Keys: map[string]string{"url": raw}}, neterr.OutOfPortReason)
 }
 
 // noteSkip records a URL the run found and did not request, and why.

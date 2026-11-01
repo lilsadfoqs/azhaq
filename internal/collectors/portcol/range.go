@@ -102,6 +102,8 @@ func (c *Collector) runPrefix(ctx context.Context, seed types.Seed, emit func(ty
 		udpFilt   int // open|filtered ports of addresses that answered nothing else, not listed
 		udpSilent int // those addresses
 		withOpen  int
+		portsOut  int // ports left out because -allow names their host with other ports only
+		portsAddr int // the addresses they were on
 		asked     int // addresses scanned wholly or in part, for a range a limit stopped
 		// The closed UDP ports of addresses that have no row, and those addresses.
 		udpRefused, udpRefusing int
@@ -162,6 +164,7 @@ func (c *Collector) runPrefix(ctx context.Context, seed types.Seed, emit func(ty
 					ports = cdnPorts
 				}
 			}
+			ports, outScope := inScope(ip, ip, ports)
 			all := ports
 			prior, resumed := c.Prior[ip]
 			if resumed {
@@ -170,7 +173,8 @@ func (c *Collector) runPrefix(ctx context.Context, seed types.Seed, emit func(ty
 			s := &scan{up: true}
 			var uerr error
 			switch {
-			case c.Discover != DiscoverOff:
+			case len(ports) == 0:
+			case c.Discover != DiscoverOff && outScope == 0:
 				if s.up, s.err = c.Scanner.Up(ctx, ip, ip); s.err == nil && s.up && c.Discover == DiscoverFirst {
 					s = c.scanRange(ctx, ip, ports)
 				}
@@ -201,7 +205,9 @@ func (c *Collector) runPrefix(ctx context.Context, seed types.Seed, emit func(ty
 			}
 			var udp portscan.UDPReport
 			if len(c.UDPPorts) > 0 && !edge && s.up && c.Discover != DiscoverOnly {
-				udp, uerr = c.Scanner.ScanUDP(ctx, ip, ip, c.UDPPorts)
+				if uports, _ := inScope(ip, ip, c.UDPPorts); len(uports) > 0 {
+					udp, uerr = c.Scanner.ScanUDP(ctx, ip, ip, uports)
+				}
 				if uerr != nil {
 					recordStops(ip, udp.Stopped)
 					record(result{err: uerr})
@@ -237,10 +243,19 @@ func (c *Collector) runPrefix(ctx context.Context, seed types.Seed, emit func(ty
 			}
 			mu.Unlock()
 			if rowless {
+				if outScope > 0 { // no row of its own to say it
+					mu.Lock()
+					portsOut += outScope
+					portsAddr++
+					mu.Unlock()
+				}
 				return
 			}
 			row := c.row(ip, ip, ports, s, edgeName, edge)
 			row["prefix"] = pf.String()
+			if outScope > 0 {
+				row[outScopeKey] = outScope
+			}
 			if len(c.UDPPorts) > 0 && !edge && s.up && c.Discover != DiscoverOnly {
 				addUDP(row, udp, len(c.UDPPorts))
 			}
@@ -273,6 +288,9 @@ func (c *Collector) runPrefix(ctx context.Context, seed types.Seed, emit func(ty
 		"scanned": len(c.portsOf("")), "down": down, "outside_scope": out, "filtered_addresses": filtAddrs,
 		"cdn_addresses": edgeAddrs, "udp_silent_ports": udpFilt, "udp_silent_addresses": udpSilent,
 		"udp_closed_n": udpRefused, "udp_closed_a": udpRefusing, "open": []int{}}
+	if portsOut > 0 {
+		rng[outScopeKey], rng[outScopeKey+"_addresses"] = portsOut, portsAddr
+	}
 	raw, _ := json.Marshal(rng)
 	if err := emit(types.Observation{Collector: Name, Source: "tcp", Kind: "ports", Payload: raw, Confidence: 0.95, ObservedAt: time.Now().UTC()}); err != nil {
 		return meta, err

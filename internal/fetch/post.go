@@ -24,8 +24,8 @@ func Posts() int64 { return posts.Load() }
 // entered in the ledger like every request, and is counted for the
 // summary. The answer is read but not followed to its redirect.
 func SubmitForm(ctx context.Context, c *http.Client, raw, query string) (Result, error) {
-	if !inScope(raw) {
-		return Result{}, neterr.ErrOutOfScope
+	if err := scopeErr(raw); err != nil {
+		return Result{}, err
 	}
 	if err := denied(raw); err != nil {
 		return Result{}, err

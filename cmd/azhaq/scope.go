@@ -101,7 +101,7 @@ func seedOutsideRange(rules scope.Rules, s types.Seed) bool {
 // outsideScope is the usage error of a run whose every target is outside
 // the scope: it names them (the blocks of a range as the range), and nothing
 // was sent.
-func outsideScope(targets []string) error {
+func outsideScope(targets []string, hint ...string) error {
 	if len(targets) == 0 {
 		return usagef("every target is outside the scope (0 left out)")
 	}
@@ -132,5 +132,5 @@ func outsideScope(targets []string) error {
 	if len(names) > len(shown) {
 		list += fmt.Sprintf(" and %d more", len(names)-len(shown))
 	}
-	return usagef("every target is outside the scope (%d left out): %s; check -allow, -deny and -scope", len(names), list)
+	return usagef("every target is outside the scope (%d left out): %s; check -allow, -deny and -scope%s", len(names), list, strings.Join(hint, ""))
 }

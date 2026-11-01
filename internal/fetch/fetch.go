@@ -428,8 +428,8 @@ func Do(ctx context.Context, c *http.Client, raw string) (Result, bool, error) {
 // for this request only): its answer is kept apart from the GET's.
 func DoReq(ctx context.Context, c *http.Client, raw string, rq *Req) (Result, bool, error) {
 	key := rq.Key(raw)
-	if !inScope(raw) {
-		return Result{}, false, neterr.ErrOutOfScope
+	if err := scopeErr(raw); err != nil {
+		return Result{}, false, err
 	}
 	if err := denied(raw); err != nil {
 		return Result{}, false, err
@@ -872,7 +872,11 @@ func followable(raw, next string) bool {
 // belong to www.example.com; a library on a third-party CDN does not.
 func SameSite(page, other string) bool {
 	if egress.HasScope() {
-		return inScope(other)
+		if !inScope(other) {
+			egress.NotePortSkip(other)
+			return false
+		}
+		return true
 	}
 	a, b := hostOf(page), hostOf(other)
 	if a == "" || b == "" {
@@ -901,11 +905,19 @@ func hostOf(raw string) string {
 }
 
 func inScope(raw string) bool {
-	if !egress.HasScope() {
-		return true
+	return !egress.HasScope() || egress.AllowsURL(raw)
+}
+
+// scopeErr is nil for a URL the scope allows, else why it is not requested:
+// its host is outside, or in scope on another port only (-allow HOST:PORT).
+func scopeErr(raw string) error {
+	if inScope(raw) {
+		return nil
 	}
-	u, err := url.Parse(raw)
-	return err != nil || u.Hostname() == "" || egress.Allows(u.Hostname())
+	if u, err := url.Parse(raw); err == nil && egress.Allows(u.Hostname()) {
+		return neterr.ErrOutOfPort
+	}
+	return neterr.ErrOutOfScope
 }
 
 // HasSession says whether the run sends a session: a cookie, an

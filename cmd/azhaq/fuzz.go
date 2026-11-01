@@ -109,7 +109,7 @@ func cmdFuzz(args []string) error {
 	maxReq := fs.Int64("max-requests", 0, "requests this run may send (0: no cap)")
 	scopeSpec := fs.String("scope", "", "a program's scope: a file or hackerone, bugcrowd, intigriti, yeswehack")
 	program := fs.String("program", "", "the program to take from a -scope list")
-	fs.Var(&allow, "allow", "a domain, host or address range the run may touch (repeatable); default: the host of -u")
+	fs.Var(&allow, "allow", "a domain, host or address range the run may touch; HOST:PORT allows that host on that port only (repeatable); default: the host of -u")
 	fs.Var(&deny, "deny", "a domain, host or address range the run must not touch (repeatable)")
 	fs.Var(&denyPath, "deny-path", "a regular expression on a URL's path and query: an input whose URL it matches is never sent, and is listed as not requested (repeatable)")
 	flights := &flightFlags{}
@@ -349,6 +349,7 @@ func cmdFuzz(args []string) error {
 		// The engine counts what the scope keeps out; the policy holds the
 		// transport to the same rule, the Host header and the SNI included.
 		egress.Current().SetScope(rules.Allows, openHeaders)
+		egress.SetScopeAddr(rules.AllowsAddr)
 	}
 	if len(denyPath) > 0 {
 		egress.SetDenyPath(rules.DeniedPath)
@@ -761,7 +762,10 @@ func fuzzScope(t fuzz.Template, typed []fuzz.Header, keywords []string, spec, pr
 		}
 	}
 	rules = scope.Rules{Allow: allow, Deny: deny}
-	if u, err := url.Parse(t.URL); err == nil && !strings.Contains(u.Hostname(), "FUZZ") && !rules.Allows(u.Hostname()) {
+	if u, err := url.Parse(t.URL); err == nil && !strings.Contains(u.Hostname(), "FUZZ") && !rules.AllowsAddr(u.Hostname(), scope.URLPort(u)) {
+		if rules.Allows(u.Hostname()) {
+			return scope.Rules{}, nil, usagef("%s is outside the scope on port %s: -allow lists the host with another port only (HOST:PORT allows that port; HOST alone, every port)", u.Hostname(), scope.URLPort(u))
+		}
 		return scope.Rules{}, nil, usagef("%s is outside the scope", u.Hostname())
 	}
 	// A literal host header, before anything is sent; the ones that hold a

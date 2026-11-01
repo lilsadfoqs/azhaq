@@ -36,6 +36,13 @@ func (e *SessionLost) Is(target error) bool { return target == ErrSessionLost }
 // (-allow, -deny, -scope) excludes.
 var ErrOutOfScope = errors.New("not requested: outside the scope")
 
+// ErrOutOfPort is ErrOutOfScope for a host that is in scope on another port
+// only: -allow HOST:PORT names it with a port that is not this one.
+var ErrOutOfPort = fmt.Errorf("%w: %s", ErrOutOfScope, OutOfPortReason)
+
+// OutOfPortReason is how a run's summary lists what ErrOutOfPort kept out.
+const OutOfPortReason = "outside the scope: -allow lists this host with another port only"
+
 // ErrNotRepeated is returned instead of sending a write again that a run
 // sent before it was killed: the ledger holds the request, nothing holds
 // its answer, and sending it twice could do its work twice.

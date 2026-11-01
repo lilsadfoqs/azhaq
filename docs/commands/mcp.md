@@ -43,7 +43,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 | --- | --- | --- | --- |
 | `-scope` | string |  | a program's scope every tool is held to: a file, or hackerone, bugcrowd, intigriti, yeswehack with -program |
 | `-program` | string |  | the program to take from -scope |
-| `-allow` | string, repeatable |  | a domain or host the tools may touch (repeatable); with -scope, added to it |
+| `-allow` | string, repeatable |  | a domain or host the tools may touch; HOST:PORT allows that host on that port only (repeatable); with -scope, added to it |
 | `-deny` | string, repeatable |  | a domain or host the tools must not touch |
 | `-deny-path` | string, repeatable |  | a regular expression on a URL's path and query: a URL it matches is never requested by any tool |
 | `-unlocked` | bool |  | serve without a scope: any target a tool is given may be touched (port scans stay refused) |

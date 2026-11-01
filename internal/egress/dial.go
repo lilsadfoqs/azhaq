@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/trannghiach/azhaq/internal/ledger"
-	"github.com/trannghiach/azhaq/internal/neterr"
 )
 
 // DialTarget connects to a target as the run's HTTP client does: a name
@@ -17,8 +16,10 @@ import (
 // the machine has a route and IPv4 after a short head start (RFC 8305).
 // It refuses once the kill file exists and for a host outside the scope.
 func DialTarget(ctx context.Context, network, addr string) (net.Conn, error) {
-	if host, _, err := net.SplitHostPort(addr); err == nil && !Current().Allows(host) {
-		return nil, neterr.ErrOutOfScope
+	if host, port, err := net.SplitHostPort(addr); err == nil {
+		if err := Current().CheckAddr(host, port); err != nil {
+			return nil, err
+		}
 	}
 	return dialThrough(ctx, network, addr)
 }

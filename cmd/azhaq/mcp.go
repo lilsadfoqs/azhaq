@@ -56,7 +56,7 @@ func cmdMCP(args []string) error {
 	var allow, deny, denyPath stringsFlag
 	scopeSpec := fs.String("scope", "", "a program's scope every tool is held to: a file, or hackerone, bugcrowd, intigriti, yeswehack with -program")
 	program := fs.String("program", "", "the program to take from -scope")
-	fs.Var(&allow, "allow", "a domain or host the tools may touch (repeatable); with -scope, added to it")
+	fs.Var(&allow, "allow", "a domain or host the tools may touch; HOST:PORT allows that host on that port only (repeatable); with -scope, added to it")
 	fs.Var(&deny, "deny", "a domain or host the tools must not touch (repeatable)")
 	fs.Var(&denyPath, "deny-path", "a regular expression on a URL's path and query: a URL it matches is never requested by any tool (repeatable)")
 	budget := fs.Int64("max-requests", 0, "requests to targets all tool calls together may send (0: no cap)")

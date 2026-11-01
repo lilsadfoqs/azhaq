@@ -47,7 +47,8 @@ func NewPortDialer(timeout time.Duration, src net.IP, socks5, auth string) *Port
 func (d *PortDialer) Proxied() bool { return d.via != nil }
 
 // allowed refuses a connect once the kill file exists, or when neither the
-// name an address was found under nor the address is in the scope.
+// name an address was found under nor the address is in the scope, or the
+// port is not the one -allow names for the host.
 func (d *PortDialer) allowed(host, addr string) error {
 	p := Current()
 	if err := p.Killed(); err != nil {
@@ -56,13 +57,16 @@ func (d *PortDialer) allowed(host, addr string) error {
 	if p.Scope() == nil {
 		return nil
 	}
-	ip, _, err := net.SplitHostPort(addr)
+	ip, port, err := net.SplitHostPort(addr)
 	if err != nil {
 		ip = addr
 	}
 	// A name is in scope by its rule, an address by its own or its range's.
-	if p.Allows(ip) || (host != "" && p.Allows(host)) {
+	if p.AllowsAddr(ip, port) || (host != "" && p.AllowsAddr(host, port)) {
 		return nil
+	}
+	if p.Allows(ip) || (host != "" && p.Allows(host)) {
+		return neterr.ErrOutOfPort
 	}
 	return neterr.ErrOutOfScope
 }

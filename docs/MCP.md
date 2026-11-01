@@ -22,6 +22,8 @@ Every flag is described on the [`azhaq mcp` page](commands/mcp.md#flags): `-scop
 
 Without `-allow` or `-scope` the server does not start (exit 2), unless `-unlocked` says so. Then any target a tool is given may be touched, and port scans are refused.
 
+An `-allow HOST:PORT` holds the tools to that port of the host: every command a tool runs gets the same `-allow`, so a target on another port of the host is skipped and listed, and a port scan asks that port only.
+
 ## Adding it to a client
 
 Claude Code:

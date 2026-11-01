@@ -11,6 +11,7 @@ import (
 
 	"github.com/trannghiach/azhaq/internal/ledger"
 	"github.com/trannghiach/azhaq/internal/neterr"
+	"github.com/trannghiach/azhaq/scope"
 )
 
 // Class is what a request or connection is sent to.
@@ -37,9 +38,11 @@ const (
 type Policy struct {
 	mu          sync.RWMutex
 	allow       func(host string) bool
+	allowAddr   func(host, port string) bool // allow for a connection to a port; nil: allow's answer for the host
 	openHeaders map[string]bool
 	denyPath    func(raw string) string
 	onDenied    func(raw, rule string)
+	onPort      func(raw string) // hears of a URL kept out for its port
 	proxy       *url.URL
 	resolver    func(ctx context.Context, host string) []string
 	only        bool // the resolver is the only one: a name it cannot answer is not looked up elsewhere
@@ -111,7 +114,7 @@ func Reset() { Current().Reset() }
 // Reset is Reset for p.
 func (p *Policy) Reset() {
 	p.mu.Lock()
-	p.allow, p.openHeaders, p.denyPath, p.onDenied, p.proxy, p.resolver, p.only = nil, nil, nil, nil, nil, nil, false
+	p.allow, p.allowAddr, p.openHeaders, p.denyPath, p.onDenied, p.onPort, p.proxy, p.resolver, p.only = nil, nil, nil, nil, nil, nil, nil, nil, false
 	p.mu.Unlock()
 	p.maxReq.Store(0)
 	p.sent.Store(0)
@@ -122,7 +125,16 @@ func (p *Policy) Reset() {
 // SetScope sets which target hosts are in scope; nil lifts the scope.
 func (p *Policy) SetScope(allow func(host string) bool, open map[string]bool) {
 	p.mu.Lock()
-	p.allow, p.openHeaders = allow, open
+	p.allow, p.allowAddr, p.openHeaders = allow, nil, open
+	p.mu.Unlock()
+}
+
+// SetScopeAddr makes the scope hold a connection to its port as well: an
+// -allow entry written HOST:PORT allows that port only. Call it after SetScope,
+// which clears it.
+func (p *Policy) SetScopeAddr(allow func(host, port string) bool) {
+	p.mu.Lock()
+	p.allowAddr = allow
 	p.mu.Unlock()
 }
 
@@ -138,6 +150,33 @@ func (p *Policy) SetOnDenied(f func(raw, rule string)) {
 	p.mu.Lock()
 	p.onDenied = f
 	p.mu.Unlock()
+}
+
+// SetOnPortSkip sets who hears of a URL found on a host that is in scope on
+// another port only (-allow HOST:PORT), and so left out; nil: the run's notes.
+func (p *Policy) SetOnPortSkip(f func(raw string)) {
+	p.mu.Lock()
+	p.onPort = f
+	p.mu.Unlock()
+}
+
+// NotePortSkip tells the run about a URL it leaves out because -allow lists
+// its host with another port only, when that is why. A URL outside the scope
+// by its host is left out as before, without a word.
+func (p *Policy) NotePortSkip(raw string) {
+	u, err := url.Parse(raw)
+	if err != nil || u.Hostname() == "" || p.AllowsAddr(u.Hostname(), scope.URLPort(u)) || !p.Allows(u.Hostname()) {
+		return
+	}
+	p.mu.RLock()
+	f := p.onPort
+	p.mu.RUnlock()
+	switch {
+	case f != nil:
+		f(raw)
+	case Noter != nil:
+		Noter(raw + " was not requested: " + neterr.OutOfPortReason)
+	}
 }
 
 // SetTargetProxy sets the proxy for every request to a target (-proxy).
@@ -183,10 +222,59 @@ func (p *Policy) Scope() func(host string) bool {
 	return a
 }
 
+// ScopeAddr is the run's scope for a connection to a port, nil when it has
+// none; a scope that names no ports judges the host alone.
+func (p *Policy) ScopeAddr() func(host, port string) bool {
+	p.mu.RLock()
+	a, f := p.allow, p.allowAddr
+	p.mu.RUnlock()
+	switch {
+	case a == nil:
+		return nil
+	case f != nil:
+		return func(host, port string) bool {
+			if port == "" {
+				return a(host)
+			}
+			return f(host, port)
+		}
+	}
+	return func(host, _ string) bool { return a(host) }
+}
+
 // Allows says whether a target host is in scope: always without a scope.
 func (p *Policy) Allows(host string) bool {
 	a, _ := p.scope()
 	return a == nil || a(host)
+}
+
+// AllowsAddr says whether a connection to host on port is in scope: the host
+// is, and the -allow entry for it names no other port. A port "" is
+// unknown, and the host alone is judged.
+func (p *Policy) AllowsAddr(host, port string) bool {
+	p.mu.RLock()
+	a, f := p.allow, p.allowAddr
+	p.mu.RUnlock()
+	switch {
+	case a == nil:
+		return true
+	case f != nil && port != "":
+		return f(host, port)
+	}
+	return a(host)
+}
+
+// CheckAddr is nil for a connection to host on port the scope allows, else
+// the error to refuse it with: neterr.ErrOutOfPort when the host is in scope
+// on another port, neterr.ErrOutOfScope otherwise.
+func (p *Policy) CheckAddr(host, port string) error {
+	if p.AllowsAddr(host, port) {
+		return nil
+	}
+	if p.Allows(host) {
+		return neterr.ErrOutOfPort
+	}
+	return neterr.ErrOutOfScope
 }
 
 // TargetProxy is the proxy for requests to targets, nil for none.
@@ -264,11 +352,33 @@ func HasScope() bool { return Current().Scope() != nil }
 // Allows is Current().Allows.
 func Allows(host string) bool { return Current().Allows(host) }
 
+// SetScopeAddr is Current().SetScopeAddr.
+func SetScopeAddr(allow func(host, port string) bool) { Current().SetScopeAddr(allow) }
+
+// AllowsAddr is Current().AllowsAddr.
+func AllowsAddr(host, port string) bool { return Current().AllowsAddr(host, port) }
+
+// AllowsURL says whether a request to raw is in scope, its port included: the
+// one it names, else its scheme's. A URL with no host is not held back.
+func AllowsURL(raw string) bool {
+	u, err := url.Parse(raw)
+	if err != nil || u.Hostname() == "" {
+		return true
+	}
+	return Current().AllowsAddr(u.Hostname(), scope.URLPort(u))
+}
+
 // DeniedBy is Current().DeniedBy.
 func DeniedBy(raw string) string { return Current().DeniedBy(raw) }
 
 // CheckDenied is Current().CheckDenied.
 func CheckDenied(raw string) error { return Current().CheckDenied(raw) }
+
+// NotePortSkip is Current().NotePortSkip.
+func NotePortSkip(raw string) { Current().NotePortSkip(raw) }
+
+// SetOnPortSkip is Current().SetOnPortSkip.
+func SetOnPortSkip(f func(raw string)) { Current().SetOnPortSkip(f) }
 
 // SetOnDenied is Current().SetOnDenied.
 func SetOnDenied(f func(raw, rule string)) { Current().SetOnDenied(f) }

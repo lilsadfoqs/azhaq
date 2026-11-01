@@ -115,7 +115,7 @@ Rows of the kinds `domain` (a domain you gave) and `addr` (an address) carry no 
 
 ## Scope
 
-The scope is the set of hosts a run may send to. No request to a target goes to a host outside it, and Chrome's requests are included.
+The scope is the set of hosts, and ports where an entry names one, a run may send to. No request to a target goes outside it, and Chrome's requests are included.
 
 - `-allow` names the domains, hosts or address ranges a run may touch. With any `-allow`, nothing else is requested.
 - `-deny` names what the run must not touch, even when given as a target.
@@ -128,9 +128,12 @@ A scope entry, in `-allow`, `-deny` and a scope file, is one of:
 
 - a domain with its subdomains: `example.com` or `*.example.com`;
 - one host and no subdomains: `=api.example.com`;
-- an address range: `10.0.0.0/8`.
+- an address range: `10.0.0.0/8`;
+- a host with a port, `127.0.0.1:3001`, `app.example.com:8443` or `[::1]:80`: that host, subdomains of a domain included, on that port only.
 
-A port in an entry, as in `127.0.0.1:5013`, is dropped: the scope matches hosts. [`scope`](commands/scope.md) shows how a scope file is read.
+An `-allow` entry without a port allows every port of its host. With a port, a connection to any other port of the host is refused before it is made: a request, a redirect, a link, a script's URL, Chrome, an MCP tool, a port scan's connect. Each URL left out for its port is listed under `skipped` as `outside the scope: -allow lists this host with another port only`, and a port scan says how many ports it left out. A URL without a port has its scheme's: `http://127.0.0.1/` is port 80. A name you give as a target with no port (`-l hosts.txt`) is asked on ports 80 and 443, so under `-allow HOST:3001` give the target as `-url http://HOST:3001/`.
+
+A port in `-deny` is dropped: the host is kept out on every port. Looking a name up, or asking about a subdomain, is judged by the host alone. [`scope`](commands/scope.md) shows how a scope file is read.
 
 Requests the scope refuses are listed in the summary under `skipped`: see [OUTPUT](OUTPUT.md#the-summary). Targets that are all outside the scope exit 2: see [exit codes](OUTPUT.md#exit-codes).
 

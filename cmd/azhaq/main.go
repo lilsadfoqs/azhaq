@@ -47,6 +47,7 @@ import (
 	"github.com/trannghiach/azhaq/internal/dnsr"
 	"github.com/trannghiach/azhaq/internal/fetch"
 	"github.com/trannghiach/azhaq/internal/fuzz"
+	"github.com/trannghiach/azhaq/internal/neterr"
 	"github.com/trannghiach/azhaq/internal/normalize"
 	"github.com/trannghiach/azhaq/internal/portscan"
 	"github.com/trannghiach/azhaq/internal/timing"
@@ -381,7 +382,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	fs.Var(&domains, "domain", "seed Domain, for subdomain discovery (repeatable)")
 	fs.Var(&cookies, "cookie", "Cookie name=value (repeatable; sent as one Cookie header)")
 	fs.Var(&headers, "header", "extra request header K: V (repeatable)")
-	fs.Var(&allow, "allow", "a domain, host or address range the run may touch; with any -allow, nothing else is requested (repeatable)")
+	fs.Var(&allow, "allow", "a domain, host or address range the run may touch; HOST:PORT allows that host on that port only; with any -allow, nothing else is requested (repeatable)")
 	fs.Var(&deny, "deny", "a domain, host or address range the run must not touch, even when given as a target (repeatable)")
 	fs.Var(&denyPath, "deny-path", "a regular expression on a URL's path and query: a URL it matches is never requested, by any collector or Chrome, and is listed as not requested (repeatable; azhaq decides nothing by itself)")
 	if err := parse(fs, args); err != nil {
@@ -573,11 +574,16 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		// as a target: it is listed in the summary instead.
 		kept := seeds[:0]
 		var outside []string // the targets no address of can pass, as given
+		viaPort := false     // some are outside only for their port
 		reachable := 0
 		for _, s := range seeds {
 			switch {
 			case !rules.AllowsSeed(s):
-				rep.Skipped = append(rep.Skipped, engine.Skip{Target: s.Key(), Reason: "outside the scope"})
+				reason := "outside the scope"
+				if u, err := url.Parse(s.Key()); err == nil && s.Type == types.TypeURL && rules.OnlyOtherPort(u.Hostname(), scope.URLPort(u)) {
+					reason, viaPort = neterr.OutOfPortReason, true
+				}
+				rep.Skipped = append(rep.Skipped, engine.Skip{Target: s.Key(), Reason: reason})
 				outside = append(outside, s.Key())
 			case seedOutsideRange(rules, s):
 				// Kept: its addresses are each refused and counted in the summary.
@@ -590,6 +596,9 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		}
 		seeds = kept
 		if reachable == 0 && *factsPath == "" && *execCmd == "" && *workerOf == "" && !*demo {
+			if viaPort {
+				return outsideScope(outside, " (an -allow entry lists a host with a port: name the target with it, such as -url http://HOST:PORT/)")
+			}
 			return outsideScope(outside)
 		}
 	}
@@ -702,6 +711,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	}
 	if !budgets.Scope.Empty() {
 		egress.SetScope(budgets.Scope.Allows)
+		egress.SetScopeAddr(budgets.Scope.AllowsAddr)
 	}
 	if len(budgets.Scope.DenyPath) > 0 {
 		egress.SetDenyPath(budgets.Scope.DeniedPath)

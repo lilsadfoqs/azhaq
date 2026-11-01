@@ -21,6 +21,7 @@ import (
 
 	"github.com/trannghiach/azhaq/internal/egress"
 	"github.com/trannghiach/azhaq/internal/fetch"
+	"github.com/trannghiach/azhaq/scope"
 )
 
 // recorder is a server that keeps the paths it was asked for.
@@ -491,5 +492,24 @@ pc.createOffer().then(o => pc.setLocalDescription(o));
 	time.Sleep(2 * time.Second)
 	if n := got.Load(); n > 0 {
 		t.Errorf("WebRTC sent %d UDP datagrams outside the scope", n)
+	}
+}
+
+// -allow HOST:PORT: Chrome's requests to another port of the host are not
+// sent, whatever the page asks for.
+func TestChromeRequestsAreHeldToThePortOfTheScope(t *testing.T) {
+	egress.Reset()
+	defer egress.Reset()
+	rules := scope.Rules{Allow: []string{"127.0.0.1:3001", "app.test"}}.Compile()
+	egress.SetScope(rules.Allows)
+	egress.SetScopeAddr(rules.AllowsAddr)
+	b := &Browser{allow: egress.Current().Scope(), addr: egress.Current().ScopeAddr()}
+	for raw, want := range map[string]bool{
+		"http://127.0.0.1:3001/a": true, "http://127.0.0.1:3000/": false, "http://127.0.0.1/": false, "ws://127.0.0.1:4200/socket": false,
+		"https://app.test/x": true, "http://app.test:8080/": true, "http://other.test/": false, "data:text/plain,hi": true,
+	} {
+		if got := b.allowed(raw); got != want {
+			t.Errorf("allowed(%q) = %v, want %v", raw, got, want)
+		}
 	}
 }

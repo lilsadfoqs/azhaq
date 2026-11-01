@@ -371,7 +371,7 @@ Only `internal/egress` opens an outbound connection. A run has one `Policy`, set
 
 | Control | Set by | Applies to |
 | --- | --- | --- |
-| Scope: `Allow(host)` and `OpenHeaders` | `-allow`, `-deny`, `-scope` | the URL's host, the `Host` header, every header that names a host (`scope.NamesHost`) and the TLS server name of a request to a target; the address of a connect to a port |
+| Scope: `Allow(host)`, `AllowAddr(host, port)` and `OpenHeaders` | `-allow`, `-deny`, `-scope` | the URL's host and port, the `Host` header, every header that names a host (`scope.NamesHost`) and the TLS server name of a request to a target; the address and port of a connect |
 | `-deny-path`: `DenyPath` and `OnDenied` | `-deny-path` | a request to a target (through `ledger.Transport`) |
 | Budget: `MaxRequests`, `Spend`, `Take`, `Refund`, `Count`, `Sent` | `-max-requests`, `-daily-requests` | requests to targets, counted by their sender before they go |
 | Pace: `SetRate`, `Pace` | `-rate` | requests to targets |

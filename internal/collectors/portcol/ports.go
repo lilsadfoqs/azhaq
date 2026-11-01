@@ -207,6 +207,7 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		if edge && c.ExcludeCDN {
 			ports = cdnPorts
 		}
+		ports, outScope := inScope(host, ip, ports)
 		// A scan an earlier run stopped asks only the ports it had not.
 		all := ports
 		prior, resumed := c.Prior[ip]
@@ -215,9 +216,14 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		}
 		var s *scan
 		var err error
-		if c.Discover == DiscoverOff {
+		switch {
+		case len(ports) == 0:
+			s = &scan{up: true} // every port is outside the scope: nothing to ask
+		case c.Discover == DiscoverOff || outScope > 0:
+			// A host held to some ports is asked those, with no discovery
+			// of its own: its 80 and 443 may be outside the scope.
 			s, err = c.scanOnce(ctx, host, ip, ports)
-		} else {
+		default:
 			s, err = c.discoverOnce(ctx, host, ip, ports)
 		}
 		if err != nil && ctx.Err() != nil {
@@ -255,6 +261,9 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		}
 		if s.unprobed > 0 {
 			row["unprobed"] = s.unprobed
+		}
+		if outScope > 0 {
+			row[outScopeKey] = outScope
 		}
 		if len(unrouted) > 0 {
 			row[unroutedKey] = unrouted
@@ -325,6 +334,35 @@ func hintsOf(host string, open []portscan.Open) []types.Seed {
 	return out
 }
 
+// outScopeKey is how many ports of an address a row left out because -allow
+// names its host with another port only.
+const outScopeKey = "ports_outside_scope"
+
+// inScope keeps the ports the scope allows for an address, or for the name it
+// was found under: -allow HOST:PORT allows that port only. n is how many it
+// left out.
+func inScope(host, ip string, ports []int) (kept []int, n int) {
+	if !egress.HasScope() {
+		return ports, 0
+	}
+	kept = make([]int, 0, len(ports))
+	for _, p := range ports {
+		ps := strconv.Itoa(p)
+		if egress.AllowsAddr(ip, ps) || host != "" && host != ip && egress.AllowsAddr(host, ps) {
+			kept = append(kept, p)
+		}
+	}
+	return kept, len(ports) - len(kept)
+}
+
+// cmpWho is the address a row is about, else its name.
+func cmpWho(host, ip string) string {
+	if ip != "" && ip != host {
+		return ip
+	}
+	return host
+}
+
 // unroutedKey lists, in a name's rows, its IPv6 addresses this machine
 // has no route to, which were not scanned.
 const unroutedKey = "ipv6_not_scanned"
@@ -341,6 +379,9 @@ func Notes(obs []types.StoredObservation) []string {
 	var stopped []string // addresses the open-port threshold stopped
 	var edges []string
 	var down, outside, filtAddrs, addrs, ranges int
+	var portsOut, portsOutAddrs int // ports left out of the scope's port, and the addresses they were on
+	var portsOutAt []string
+	portsOutSeen := map[string]bool{} // an address's ports are counted once, whether its range or its own seed scanned it
 	// A row of a scan a limit stopped is read only while nothing came
 	// after it: the row that finishes the scan says it all.
 	newest := map[string]int{}
@@ -387,6 +428,8 @@ func Notes(obs []types.StoredObservation) []string {
 			Edges      int      `json:"cdn_addresses"`
 			UDPLimit   int      `json:"udp_limited"`
 			Unprobed   int      `json:"unprobed"`
+			PortsOut   int      `json:"ports_outside_scope"`
+			PortsOutA  int      `json:"ports_outside_scope_addresses"`
 		}
 		if json.Unmarshal(o.Payload, &p) != nil || p.Partial && newest[p.Host+"\x00"+p.IP] != i {
 			continue
@@ -404,7 +447,15 @@ func Notes(obs []types.StoredObservation) []string {
 			udp.silentIPs += p.UDPSilentA
 			udp.closedN += p.ClosedN
 			udp.closedIPs += p.ClosedA
+			portsOut += p.PortsOut
+			portsOutAddrs += p.PortsOutA
 			continue
+		}
+		if who := cmpWho(p.Host, p.IP); p.PortsOut > 0 && !portsOutSeen[who] {
+			portsOutSeen[who] = true
+			portsOut += p.PortsOut
+			portsOutAddrs++
+			portsOutAt = append(portsOutAt, who)
 		}
 		if p.Unresolved != "" {
 			unresolved = append(unresolved, p.Host)
@@ -452,6 +503,14 @@ func Notes(obs []types.StoredObservation) []string {
 	}
 	if outside > 0 {
 		out = append(out, fmt.Sprintf("%d addresses in the ranges are outside the scope (-deny, -allow) and were not scanned", outside))
+	}
+	if portsOut > 0 {
+		sort.Strings(portsOutAt)
+		at := ""
+		if len(portsOutAt) > 0 {
+			at = ": " + listOf(portsOutAt, 3)
+		}
+		out = append(out, fmt.Sprintf("%d ports on %d addresses were not scanned: -allow lists their hosts with other ports only (HOST:PORT allows that port; HOST alone allows every port)%s", portsOut, portsOutAddrs, at))
 	}
 	if down > 0 {
 		out = append(out, fmt.Sprintf("%d addresses answered neither a connect to 80 nor to 443 (asked twice) and were not scanned: a host that drops both is not found this way, scan without -wn to ask it anyway", down))

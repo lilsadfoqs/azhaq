@@ -40,7 +40,10 @@ func (c *Collector) scanUDPOnce(ctx context.Context, host, ip string) (portscan.
 			return portscan.UDPReport{}, ctx.Err()
 		}
 	}
-	s.rep, s.err = c.Scanner.ScanUDP(ctx, host, ip, c.UDPPorts)
+	ports, _ := inScope(host, ip, c.UDPPorts) // UDP ports are held to -allow HOST:PORT as TCP ones are
+	if len(ports) > 0 {
+		s.rep, s.err = c.Scanner.ScanUDP(ctx, host, ip, ports)
+	}
 	if s.err != nil {
 		recordStops(ip, s.rep.Stopped)
 	}
