@@ -177,6 +177,34 @@ func TestRolesRoleCmdFailsAtReplay(t *testing.T) {
 	}
 }
 
+// cutApp answers 200 with a body shorter than it promised, then drops the connection.
+func cutApp(t *testing.T) *httptest.Server {
+	t.Helper()
+	site := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, buf, _ := w.(http.Hijacker).Hijack()
+		fmt.Fprint(buf, "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 200\r\n\r\n{\"id\":")
+		buf.Flush()
+		conn.Close()
+	}))
+	t.Cleanup(site.Close)
+	return site
+}
+
+// An answer whose body is cut is a request that failed: a control built on
+// half a body says nothing.
+func TestAskControlsCutBody(t *testing.T) {
+	fetch.Reset()
+	site := cutApp(t)
+	roles := []role{{name: "alice", session: http.Header{}}, {name: "bob", session: http.Header{}}}
+	real, _ := readAnswer(200, []byte(`{"id":7,"name":"shoes"}`), "application/json")
+	rows := []roleRow{{URL: site.URL + "/api/items/7", From: site.URL + "/api/items/{id}", value: "7", Owner: "alice", Verdict: verdictCross,
+		Readers: []string{"bob"}, Answers: map[string]answer{"alice": real, "bob": real}}}
+	_, _ = askControls(roles, rows, map[string]bool{"127.0.0.1": true}, nil, nil, 10)
+	if c := rows[0].Control; c == nil || len(c.Answers) != 0 || len(c.Failed) != 1 || !strings.Contains(c.Failed[0], "the answer was cut") {
+		t.Errorf("control %+v", c)
+	}
+}
+
 // An interrupted replay is a run stopped (exit 4), not a note and exit 0.
 func TestNoteCapInterrupted(t *testing.T) {
 	rep := newReport("roles")

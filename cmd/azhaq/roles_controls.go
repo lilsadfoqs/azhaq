@@ -312,7 +312,10 @@ func askFresh(ctx context.Context, h http.Header, u string, own map[string]bool)
 		return answer{}, nil, err
 	}
 	defer resp.Body.Close()
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, int64(fetch.MaxBody)))
+	body, err := io.ReadAll(io.LimitReader(resp.Body, int64(fetch.MaxBody)))
+	if err != nil {
+		return answer{}, nil, fmt.Errorf("the answer was cut: %w", err)
+	}
 	ctype := resp.Header.Get("Content-Type")
 	a, _ := readAnswer(resp.StatusCode, body, ctype)
 	if resp.StatusCode >= 300 && resp.StatusCode < 400 {

@@ -653,3 +653,18 @@ func TestReplayWritesNoAnswer(t *testing.T) {
 		t.Errorf("notes %q failed %v", notes, failed)
 	}
 }
+
+// A write answered 200 with its body cut keeps the status and is noted.
+func TestReplayWritesCutBody(t *testing.T) {
+	fetch.Reset()
+	site := cutApp(t)
+	roles := []role{{name: "alice", session: http.Header{}}, {name: "bob", session: http.Header{}}}
+	put := writeReq{owner: "alice", method: "PUT", url: site.URL + "/api/items/3", header: http.Header{"Content-Type": {"application/json"}}, body: []byte(`{"note":"x"}`), status: 200}
+	rows, _, err := replayWrites(roles, []writeReq{put}, map[string]map[string]answer{}, map[string]bool{"127.0.0.1": true}, 0, 100, false)
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("rows %+v err %v", rows, err)
+	}
+	if a := rows[0].Answers["bob"]; a.Status != 200 || !slices.ContainsFunc(rows[0].Failed, func(f string) bool { return strings.HasPrefix(f, "bob's PUT: the answer was cut") }) {
+		t.Errorf("bob %+v failed %q", a, rows[0].Failed)
+	}
+}

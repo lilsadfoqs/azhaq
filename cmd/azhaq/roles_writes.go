@@ -248,7 +248,7 @@ func replayWrites(roles []role, reqs []writeReq, answers map[string]map[string]a
 			if noAnswer(na.err) && cur != nil {
 				cur.Failed = append(cur.Failed, fmt.Sprintf("%s's %s: %s", r.name, w.method, failWhy(na.err)))
 			}
-			return answer{}, nil // no answer: the row says so
+			return na.a, nil // no answer, or a cut one: the row says so
 		}
 		return a, err
 	}
@@ -828,7 +828,10 @@ func readAs(ctx context.Context, client *http.Client, r role, u string) (answer,
 		return answer{}, err
 	}
 	defer resp.Body.Close()
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil {
+		return answer{}, fmt.Errorf("the answer was cut: %w", err)
+	}
 	a, _ := readAnswer(resp.StatusCode, body, resp.Header.Get("Content-Type"))
 	if resp.StatusCode >= 300 && resp.StatusCode < 400 {
 		a.Location = bareLocation(resp.Header.Get("Location"))
@@ -864,10 +867,10 @@ func sendWrite(ctx context.Context, client *http.Client, r role, w writeReq) (an
 	fetch.Extra = nil
 	resp, err := client.Do(req)
 	if err != nil {
-		return answer{}, &noAnswerError{err}
+		return answer{}, &noAnswerError{err: err}
 	}
 	defer resp.Body.Close()
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	body, rerr := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	a, _ := readAnswer(resp.StatusCode, body, resp.Header.Get("Content-Type"))
 	if resp.StatusCode >= 300 && resp.StatusCode < 400 {
 		a.Location = bareLocation(resp.Header.Get("Location"))
@@ -876,12 +879,21 @@ func sendWrite(ctx context.Context, client *http.Client, r role, w writeReq) (an
 		a.Refusal = true // a short 2xx answer that says no ("Only Admins may delete users!")
 	}
 	keepBody(a.Hash, resp.Header.Get("Content-Type"), body)
+	if rerr != nil {
+		// The status came; the body was cut: the write was sent, so its
+		// status stands, noted as the failure it is.
+		return a, &noAnswerError{err: fmt.Errorf("the answer was cut: %w", rerr), a: a}
+	}
 	return a, nil
 }
 
-// noAnswerError is a write the target did not answer: replayWrites notes
-// it on the row and goes on.
-type noAnswerError struct{ err error }
+// noAnswerError is a write the target did not answer, or answered with a
+// body that was cut (a, then, is the status and what came): replayWrites
+// notes it on the row and goes on.
+type noAnswerError struct {
+	err error
+	a   answer
+}
 
 func (e *noAnswerError) Error() string { return e.err.Error() }
 func (e *noAnswerError) Unwrap() error { return e.err }
