@@ -134,6 +134,7 @@ Some work failed and did not get its answer. Fan-out and partial failures are li
 
 - The reasons: outside the scope, a `-deny-path` rule (`-deny-path REGEX`), sent before the run was killed, or a scope entry a run cannot use. azhaq lists nothing as skipped for what a URL is called.
 - Chrome's requests outside the scope are refused before they leave. They are listed without their query string as `outside the scope (Chrome)`.
+- A connection Chrome's own services tried and the guard refused is not in the ledger, because nothing was sent: the summary's `notes` counts it and names the hosts. On a new Chrome profile there are none.
 - Without a scope, the reason is `outside the site (Chrome)`. The site is the registrable domain or address of the pages Chrome was pointed at.
 - The first 100 URLs of a run are listed. `notes` gives the number of requests when there were more.
 - Chrome sends GET, HEAD and OPTIONS only, outside signing in: see [Chrome](CONCEPTS.md#chrome).
