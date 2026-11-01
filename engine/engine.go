@@ -396,6 +396,7 @@ func (e *Engine) linkNames(from types.Entity, o types.Observation, now time.Time
 			Name  string   `json:"name"`
 			IPs   []string `json:"ips"`
 			CNAME string   `json:"cname"`
+			Chain []string `json:"cnames"`
 		} `json:"answers"`
 	}
 	if json.Unmarshal(o.Payload, &p) != nil || len(p.Names) == 0 {
@@ -409,7 +410,7 @@ func (e *Engine) linkNames(from types.Entity, o types.Observation, now time.Time
 		if err != nil {
 			continue
 		}
-		raw, _ := json.Marshal(map[string]any{"fqdn": a.Name, "result": "ok", "ips": a.IPs, "cname": a.CNAME})
+		raw, _ := json.Marshal(map[string]any{"fqdn": a.Name, "result": "ok", "ips": a.IPs, "cname": a.CNAME, "cnames": a.Chain})
 		dns := types.Observation{Collector: o.Collector, Source: "dns", Kind: "dns", Payload: raw, Confidence: o.Confidence, ObservedAt: now}
 		if _, err := e.Store.AddObservation(ent.ID, dns); err == nil {
 			e.linkDNS(ent, dns, now)

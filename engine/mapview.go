@@ -120,6 +120,7 @@ func BuildMap(ents []types.Entity, seeds []types.Seed, obs []types.StoredObserva
 	}
 	decl := declaredRoles(obs)
 	secured := securedHosts(obs)
+	chain := chainAddrs(obs)
 	out := make([]MapEntry, 0, len(ents))
 	portAt := map[string]int{}
 	for _, e := range ents {
@@ -136,6 +137,15 @@ func BuildMap(ents []types.Entity, seeds []types.Seed, obs []types.StoredObserva
 			Coverage: coverageOf(e, rows, left, runCapped),
 			Role:     roleOf(e, rows, hosts, domains),
 			Proof:    proofOf(e, rows),
+		}
+		if ips := chain[e.Key]; e.Type == types.TypeHostname && m.Role == "unresolved" && len(ips) > 0 {
+			// Named by a CNAME in an answer that held its address: the run
+			// read it, whether or not the name was looked up itself.
+			m.Role = "sibling"
+			if hosts[e.Key] || under(e.Key, domains) {
+				m.Role = "live"
+			}
+			m.Proof = "ips=" + fmt.Sprint(ips)
 		}
 		if e.Type == types.TypeURL {
 			if !fetched(rows) && (hasKind(byEnt[e.ID], KindNoWeb) || hasKind(byEnt[e.ID], KindNotHTTP) || hasKind(byEnt[e.ID], "dropped")) {
@@ -373,6 +383,40 @@ func dnsResult(obs []types.StoredObservation) string {
 		}
 	}
 	return ""
+}
+
+// chainAddrs are the addresses the run read for the names in the CNAME
+// chains of its DNS answers: the answer that named api -> app held app's
+// address, so app resolves to it though nothing looked app up.
+func chainAddrs(obs []types.StoredObservation) map[string][]any {
+	out := map[string][]any{}
+	for _, o := range obs {
+		if o.Collector != "azhaq-dns" && o.Kind != "dns" {
+			continue
+		}
+		var p struct {
+			Fqdn     string   `json:"fqdn"`
+			Result   string   `json:"result"`
+			IPs      []any    `json:"ips"`
+			CNAME    string   `json:"cname"`
+			CNAMEs   []string `json:"cnames"`
+			Wildcard bool     `json:"wildcard"`
+		}
+		if json.Unmarshal(o.Payload, &p) != nil || len(p.IPs) == 0 || p.Wildcard {
+			continue
+		}
+		names := p.CNAMEs
+		if len(names) == 0 && p.CNAME != "" {
+			names = []string{p.CNAME}
+		}
+		for _, n := range names {
+			n = strings.ToLower(strings.TrimSuffix(n, "."))
+			if _, ok := out[n]; !ok && n != p.Fqdn {
+				out[n] = p.IPs
+			}
+		}
+	}
+	return out
 }
 
 // resolved: azhaq-dns looked the name up in this run.
