@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/lilsadfoqs/azhaq/internal/hunt"
+	"github.com/lilsadfoqs/azhaq/internal/takeover"
 )
 
 // hunt weighs the roles verdicts by their text; the text lives here.
@@ -94,5 +95,24 @@ func TestHuntNextNamesTheRolesDirectory(t *testing.T) {
 	n = nextOf(write("loose.jsonl", row("/basket/mine", "")))
 	if want := filepath.Join(work, "azhaq-roles-20261031-101500"); !strings.Contains(n, "azhaq roles show -dir "+want+" ") || strings.Contains(n, "DIR") {
 		t.Errorf("newest default: %q", n)
+	}
+}
+
+// A dangling takeover reads as a candidate that rests on NXDOMAIN, with the
+// list entry and date behind it; a strong one keeps its name.
+func TestHuntTakeoverDetail(t *testing.T) {
+	d, ok := takeover.ByCNAME("assets.t.test", []string{"x.azureedge.net"}, true, true)
+	if !ok {
+		t.Fatal("no finding")
+	}
+	got := takeoverDetail(d)
+	for _, want := range []string{"unverified: NXDOMAIN does not show the name is free", "x.azureedge.net", "Azure CDN", takeover.ListRead} {
+		if !strings.Contains(got, want) {
+			t.Errorf("%q lacks %q", got, want)
+		}
+	}
+	s, _ := takeover.ByCNAME("old.t.test", []string{"x.nobody-holds-this-domain.com"}, true, false)
+	if got := takeoverDetail(s); !strings.Contains(got, "domain takeover, strong") {
+		t.Errorf("strong: %q", got)
 	}
 }

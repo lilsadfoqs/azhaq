@@ -11,6 +11,7 @@ import (
 
 	"github.com/lilsadfoqs/azhaq/engine"
 	"github.com/lilsadfoqs/azhaq/internal/browser"
+	"github.com/lilsadfoqs/azhaq/internal/collectors/dirscol"
 	"github.com/lilsadfoqs/azhaq/internal/collectors/pathscol"
 	"github.com/lilsadfoqs/azhaq/internal/collectors/portcol"
 	"github.com/lilsadfoqs/azhaq/internal/collectors/subcol"
@@ -31,7 +32,8 @@ type report struct {
 	Complete    bool             `json:"complete"`
 	Exit        int              `json:"exit"`
 	Results     int              `json:"results"`
-	Stored      int              `json:"stored,omitempty"` // run: the map rows the database holds, before templates fold; the counts add up to it
+	LeftOut     int              `json:"left_out,omitempty"` // run -no-catchall: stored rows left out of the output and of results
+	Stored      int              `json:"stored,omitempty"`   // run: the map rows the database holds, before templates fold; the counts add up to it
 	Counts      map[string]int   `json:"counts,omitempty"`
 	Seconds     float64          `json:"seconds"`
 	Requests    int64            `json:"requests"`              // sent to targets
@@ -55,7 +57,9 @@ type report struct {
 
 	what   string // the unit of Results: "names", "web services"
 	warned bool   // a note says the results mislead (a role's dead session): exit 3
-	start  time.Time
+
+	noCatchAll bool // run -no-catchall: its rows of the catch-all page are left out of results
+	start      time.Time
 
 	// hints are measured suggestions, printed as "next:" lines for a person
 	// (see hints.go); they are never in the JSON summary.
@@ -133,10 +137,13 @@ func (r *report) print(w io.Writer) {
 			parts = append(parts, fmt.Sprintf("%d %s", r.Counts[k], name))
 		}
 		list := strings.Join(parts, ", ")
+		if r.LeftOut > 0 {
+			list += fmt.Sprintf("; %d left out (-no-catchall)", r.LeftOut)
+		}
 		if r.Stored > r.Results {
 			// A templated row holds many URLs, a dead-names row many names:
 			// the counts are of the stored rows, so they add up to more.
-			list = fmt.Sprintf("%d stored: %s; %d folded into templated rows", r.Stored, list, r.Stored-r.Results)
+			list = fmt.Sprintf("%d stored: %s; %d folded into templated rows", r.Stored, list, r.Stored-r.Results-r.LeftOut)
 		}
 		head[0] += " (" + list + ")"
 	}
@@ -216,7 +223,11 @@ func (r *report) print(w io.Writer) {
 		}
 	}
 	for _, t := range r.Takeover {
-		fmt.Fprintf(w, "  ! takeover candidate (%s): %s · %s\n", t.Strength, t.Host, t.Evidence)
+		line := fmt.Sprintf("  ! takeover candidate (%s): %s · %s", t.Strength, t.Host, t.Evidence)
+		if t.List != "" {
+			line += " [" + t.List + "]"
+		}
+		fmt.Fprintln(w, line)
 	}
 	for _, n := range r.Notes {
 		fmt.Fprintf(w, "  note: %s\n", n)
@@ -318,9 +329,14 @@ func fillReport(rep *report, path string, seeds []types.Seed, ents []types.Entit
 		rep.Notes = append(rep.Notes, n)
 	}
 	rep.Notes = append(rep.Notes, engine.CatchAllNotes(rows)...)
+	rep.Notes = append(rep.Notes, engine.CatchAllHeldNotes(rows, obs)...)
 	rep.Notes = append(rep.Notes, portcol.StoppedNotes()...)
 	rep.Notes = append(rep.Notes, engine.GraphQLNotes(obs)...)
 	rep.Notes = append(rep.Notes, pathscol.Notes(obs)...)
+	if notes, loose := dirscol.Notes(obs); len(notes) > 0 {
+		rep.Notes = append(rep.Notes, notes...)
+		rep.warned = rep.warned || loose // wildcard answers among the paths: not a calibrated list
+	}
 	rep.Notes = append(rep.Notes, fetch.Notes()...)
 	if partialShots(obs) {
 		rep.warned = true // a picture short of its page is not a result to take as whole
@@ -338,8 +354,16 @@ func fillReport(rep *report, path string, seeds []types.Seed, ents []types.Entit
 	for _, r := range rows {
 		counts[countKey(r)]++
 	}
-	rep.Results = len(engine.GroupTemplates(rows))
+	// What run prints is what results counts: with -no-catchall the rows
+	// that answered with the catch-all page, or were not asked for it, are
+	// stored and counted, and left out of both the output and results.
+	shown := rows
+	if rep.noCatchAll {
+		shown = withoutCatchAll(rows, engine.CatchAllHeldIDs(obs))
+	}
+	rep.Results = len(engine.GroupTemplates(shown))
 	rep.Stored = len(rows)
+	rep.LeftOut = len(rows) - len(shown)
 	rep.what = "map rows"
 	rep.Counts = counts
 	if hint := engine.BrowserHint(rows, obs); hint != "" {
@@ -366,6 +390,12 @@ func fillReport(rep *report, path string, seeds []types.Seed, ents []types.Entit
 func countKey(r engine.MapEntry) string {
 	switch r.Entity.Type {
 	case types.TypeURL:
+		switch r.Coverage {
+		case "catchall":
+			return "catchall" // the page every unknown path gets: apart from the kind of URL it is named as
+		case "skipped":
+			return "skipped" // named and not asked: a -deny-path rule, or an origin that answers every path alike
+		}
 		switch r.Role {
 		case "api", "auth", "forbidden":
 			return r.Role
@@ -683,4 +713,17 @@ func pageFaultNotes(obs []types.StoredObservation) []string {
 		return nil
 	}
 	return []string{fmt.Sprintf("-browser: %d scripts on %d pages did not load as JavaScript (%s), so those pages' apps could not start and Chrome saw none of their calls; ask a script by its address with curl, and through -proxy: a proxy must send the origin the path, not the full address", scripts, pages, strings.Join(first, "; "))}
+}
+
+// withoutCatchAll is the rows that did not answer with the page every
+// unknown path gets, and the URLs not asked because that was the answer.
+func withoutCatchAll(rows []engine.MapEntry, held map[string]bool) []engine.MapEntry {
+	out := make([]engine.MapEntry, 0, len(rows))
+	for _, r := range rows {
+		if r.Entity.Type == types.TypeURL && (r.Coverage == "catchall" || r.Coverage == "skipped" && held[r.Entity.ID]) {
+			continue
+		}
+		out = append(out, r)
+	}
+	return out
 }

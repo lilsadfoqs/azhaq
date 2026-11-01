@@ -13,6 +13,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -552,5 +553,74 @@ func TestFuzzPreflightCarriesTheCookieItSet(t *testing.T) {
 		if err != nil || len(rows) != 1 || !strings.Contains(rows[0], "password") || !strings.Contains(rows[0], "302") {
 			t.Errorf("%s: rows %q err %v, want the one word that logs in", mode, rows, err)
 		}
+	}
+}
+
+// nonceServer answers every Host and path with one page whose length, word
+// count and line count change on each request; a host in other answers its
+// own page.
+func nonceServer(t *testing.T, other string) *httptest.Server {
+	t.Helper()
+	var n atomic.Int64
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		title := "Console"
+		if other != "" && strings.HasPrefix(r.Host, other+".") {
+			title = "Staging"
+		}
+		k := int(n.Add(1))
+		var b strings.Builder
+		b.WriteString("<html><title>" + title + "</title><body>\n")
+		for i := 0; i < 20+k%37; i++ {
+			for j := 0; j < 3+(i*k)%9; j++ {
+				fmt.Fprintf(&b, "w%d ", k*1009+i*31+j*7)
+			}
+			b.WriteString("\n")
+		}
+		b.WriteString("</body></html>")
+		fmt.Fprint(w, b.String())
+	}))
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+// A catch-all page that is a different size on each request shares no number
+// for calibration to filter on: the answers are told by what the page is.
+func TestFuzzAutoCalibrationHoldsAPageThatChangesEachTime(t *testing.T) {
+	srv := nonceServer(t, "stage")
+	words := wlist(t, "www", "mail", "dev", "stage", "ns", "api", "admin", "vpn")
+	rows, rep, err := fuzzRows(t, "-u", srv.URL+"/", "-H", "Host: FUZZ.lab.test", "-w", words, "-ac")
+	if err != nil {
+		t.Fatalf("%v (%+v)", err, rep)
+	}
+	if len(rows) != 1 || !strings.Contains(rows[0], "FUZZ=stage") {
+		t.Errorf("want only the host that answers its own page: %q", rows)
+	}
+	if rep.Exit != 0 || !strings.Contains(strings.Join(rep.Notes, "\n"), "7 answers looked like the page") {
+		t.Errorf("exit %d, notes %q", rep.Exit, rep.Notes)
+	}
+	// No -ac: ffuf's behaviour, every answer is listed.
+	rows, _, _ = fuzzRows(t, "-u", srv.URL+"/", "-H", "Host: FUZZ.lab.test", "-w", words)
+	if len(rows) != 8 {
+		t.Errorf("without -ac: %q", rows)
+	}
+}
+
+// Answers that share neither a number nor a page cannot be calibrated: the
+// summary says the matches are unfiltered, and the exit is not 0.
+func TestFuzzAutoCalibrationThatFiltersNothingIsNotExit0(t *testing.T) {
+	var n atomic.Int64
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		k := n.Add(1)
+		for i := int64(0); i <= k%7; i++ {
+			fmt.Fprintf(w, "q%d z%d\n", k*13+i, k*7+i)
+		}
+	}))
+	defer srv.Close()
+	rows, rep, err := fuzzRows(t, "-u", srv.URL+"/FUZZ", "-w", wlist(t, "a1", "b2", "c3"), "-ac")
+	if exitCode(err) != exitPartial || rep.Exit != exitPartial || rep.Complete {
+		t.Errorf("exit %d (%v), want %d; rows %q", rep.Exit, err, exitPartial, rows)
+	}
+	if !strings.Contains(strings.Join(rep.Notes, "\n"), "set no filter and the wildcard answers are listed") {
+		t.Errorf("notes: %q", rep.Notes)
 	}
 }

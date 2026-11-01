@@ -89,17 +89,20 @@ func holdDeny() {
 
 // roleRow is one endpoint across the sessions.
 type roleRow struct {
-	URL       string            `json:"url"`
-	Method    string            `json:"method,omitempty"` // a write's: POST, PUT, PATCH, DELETE; reads have none
-	Status    map[string]int    `json:"status"`           // 0: not asked in that role
-	Answers   map[string]answer `json:"answers"`
-	FoundBy   []string          `json:"found_by"`            // the roles whose own runs reached it, or whose answers held its identifier
-	From      string            `json:"template,omitempty"`  // the route it fills in, for an object URL
-	Owner     string            `json:"owner,omitempty"`     // the role whose own object it is: given with -id, or held by that role's answers alone
-	OwnerBy   string            `json:"owner_by,omitempty"`  // what says it is the owner's: bid claim of alice's token → /rest/basket/{id}
-	Readers   []string          `json:"readers,omitempty"`   // the roles the verdict says read it
-	Sensitive []string          `json:"sensitive,omitempty"` // the sensitive fields the verdict is about
-	Verdict   string            `json:"verdict"`
+	URL     string            `json:"url"`
+	Method  string            `json:"method,omitempty"` // a write's: POST, PUT, PATCH, DELETE; reads have none
+	Status  map[string]int    `json:"status"`           // 0: not asked in that role
+	Answers map[string]answer `json:"answers"`
+	FoundBy []string          `json:"found_by"`           // the roles whose own runs reached it, or whose answers held its identifier
+	From    string            `json:"template,omitempty"` // the route it fills in, for an object URL
+	Owner   string            `json:"owner,omitempty"`    // the role whose own object it is: given with -id, or held by that role's answers alone
+	// CreatedOwner: for a create, the role whose object each sender's create
+	// made (sender → owner), where the answers say.
+	CreatedOwner map[string]string `json:"created_owner,omitempty"`
+	OwnerBy      string            `json:"owner_by,omitempty"`  // what says it is the owner's: bid claim of alice's token → /rest/basket/{id}
+	Readers      []string          `json:"readers,omitempty"`   // the roles the verdict says read it
+	Sensitive    []string          `json:"sensitive,omitempty"` // the sensitive fields the verdict is about
+	Verdict      string            `json:"verdict"`
 	// For a role reading or writing another role's object: why, in one
 	// line, and how surely the object is the owner's (proved, likely,
 	// guess).
@@ -572,7 +575,7 @@ func cmdRoles(args []string) error {
 			}
 		} else {
 			var n int
-			wrows, n, err = replayWrites(roles, reqs, answers, own, rate, max(0, *replayMax-replayed), *writesCanary, canaryFields...)
+			wrows, n, err = replayWritesAs(who, roles, reqs, answers, own, rate, max(0, *replayMax-replayed), *writesCanary, canaryFields...)
 			replayed += n
 			noteCap(rep, "write replay", err)
 			wn, failed := writeNotes(wrows)
@@ -704,7 +707,7 @@ func rolesFailed(rep *report, asJSON bool, err error) error {
 // listed: the verdicts worth a reader's time by default.
 func listed(v string) bool {
 	switch v {
-	case verdictWriteAnyone, verdictWriteCross, verdictWriteUnread, verdictWriteCreate, verdictWriteDry, verdictAnyoneSecrets, verdictCross, verdictAnyID, verdictObject, verdictSecrets, verdictShared, verdictSignedIn, verdictOnly,
+	case verdictWriteAnyone, verdictWriteCross, verdictWriteUnread, verdictWriteCreate, verdictWriteAccepted, verdictWriteDry, verdictAnyoneSecrets, verdictCross, verdictAnyID, verdictObject, verdictSecrets, verdictShared, verdictSignedIn, verdictOnly,
 		verdictRoleGated, verdictFields, verdictPublicObj, verdictStatus:
 		return true
 	}
@@ -817,6 +820,12 @@ func (row roleRow) label() string {
 		return who + verb + row.Owner + "'s object: accepted (" + strconv.Itoa(row.Answers[row.Readers[0]].Status) + "); the change cannot be read back to confirm"
 	case row.Verdict == verdictWriteCreate && len(row.Readers) > 0:
 		return who + " can create in the collection " + row.Owner + " wrote to"
+	case row.Verdict == verdictWriteAccepted && len(row.Readers) > 0:
+		s := who + "'s " + row.Method + " to " + pathOf(row.URL) + " was accepted"
+		if len(row.CreatedOwner) > 0 {
+			s += "; what it created belongs to its sender"
+		}
+		return s
 	case row.Verdict == verdictWriteNoChange && len(row.Readers) > 0:
 		return who + " answered 2xx but changed nothing of " + row.Owner + "'s"
 	case row.Verdict == verdictCross && len(row.Readers) == 1:

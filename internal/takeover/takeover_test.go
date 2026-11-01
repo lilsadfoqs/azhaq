@@ -1,6 +1,9 @@
 package takeover
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestByCNAME(t *testing.T) {
 	for _, c := range []struct {
@@ -48,6 +51,36 @@ func TestDomain(t *testing.T) {
 	} {
 		if got := Domain(host); got != want {
 			t.Errorf("%s: %q, want %q", host, got, want)
+		}
+	}
+}
+
+// A dangling finding says it rests on NXDOMAIN alone, and which list entry
+// and date it comes from; every dangling suffix has an entry.
+func TestDanglingFindingNamesWhatItRestsOn(t *testing.T) {
+	for _, c := range []struct{ target, entry string }{
+		{"a.azureedge.net", "Azure CDN"}, {"a.azurewebsites.net", "Azure App Service"},
+		{"a.elasticbeanstalk.com", "AWS Elastic Beanstalk"}, {"a.fly.dev", "Fly.io"},
+	} {
+		f, ok := ByCNAME("x.example.com", []string{c.target}, true, true)
+		if !ok || f.Strength != "dangling" {
+			t.Fatalf("%s: %+v %v", c.target, f, ok)
+		}
+		if !strings.Contains(f.List, c.entry) || !strings.Contains(f.List, ListRead) {
+			t.Errorf("%s: list %q", c.target, f.List)
+		}
+		if !strings.Contains(f.Evidence, "unverified: NXDOMAIN does not show it is free") {
+			t.Errorf("%s: evidence %q", c.target, f.Evidence)
+		}
+	}
+	for _, s := range services {
+		if !s.dangling {
+			continue
+		}
+		for _, suf := range s.suffixes {
+			if listEntry[suf] == "" {
+				t.Errorf("%s has no list entry", suf)
+			}
 		}
 	}
 }

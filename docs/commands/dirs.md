@@ -47,12 +47,18 @@ Plain output is one URL per line with its status, size, words and lines. With `-
 
 ## Summary and exit codes
 
-The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.md#the-summary) and [exit codes](../OUTPUT.md#exit-codes). Two cases end with exit 3.
+The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.md#the-summary) and [exit codes](../OUTPUT.md#exit-codes). Three cases end with exit 3.
 
 - **Cut-off answers.** An answer cut off before its body ended, by a server going down or a dropped connection, is asked once more. It is never counted as a hit. The summary says how many paths still got no whole answer: `12 paths got no whole answer, after one retry: they were not judged`.
 - **429 answers.** A sweep whose guesses were answered 429 says so the same way: `6 of 6 guesses were answered 429 …`. A 429 is outside the default `-mc`, so those paths were not judged.
 
+- **Calibration that could filter nothing.** When the answers to paths that cannot exist differ in size, in word and line counts, and share no title or words either, nothing tells a wildcard answer from a path that exists, and every one is listed. The summary says so (`calibration could filter nothing in …`) and the exit is 3.
+
 `fuzz` asks a cut-off answer once more too, then counts it as an error.
+
+### A catch-all page that changes each time
+
+ffuf's calibration filters one exact size, word count or line count that all its answers share. When the page changes size on every request (a nonce, a counter, a build stamp) they share none, and ffuf lists every word. `dirs` then reads what the page is, from the answers of one status: the title they all have, the tag names they use and the words they all show. An answer of that status that has the same title, uses only those tags and shows at least 80% of those words is held back as the catch-all page, and the summary counts them (`7 paths answered with the page that names that cannot exist get … and were held back`). A path that answers a page of its own (another title, other tags, other words) is listed. This needs a title or at least 3 shared words; without them the answers are listed and the exit is 3, as above. `-ac=false` lists them all.
 
 ## Details
 

@@ -123,6 +123,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 | `-path-climb` | bool |  | also list and ask the parent directories of each link a page names (/a/b/c: /a/b/ and /a/) |
 | `-fill-forms` | bool |  | ask the action of each GET form with neutral values in its fields (a search box gets a word): one GET request per form; a form that posts is not sent unless -submit-forms; crawl does this by default (-no-form-fill turns it off) |
 | `-per-template` | int |  | URLs of one template (/product?id={n}) to request; the rest are listed (default: all) |
+| `-catchall-after` | int | `3` | stop asking the page-like paths scripts name on an origin once it has answered this many paths with the page every unknown path gets; they stay in the map as skipped (0: ask them all) |
 | `-web-ports` | string |  | ports to probe on each hostname or address of the list, comma-separated (default: 443, falling back to 80; a target given with no port and nothing there is a note, not a failure) |
 | `-web-scheme` | string |  | try a name or an address over this scheme only, http or https (default: https, then http) |
 | `-no-favicon` | bool |  | do not hash the favicon of front pages (one or two requests less per web service) |
@@ -234,6 +235,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 | `-stream` | bool |  | also print each name, address, URL and open port as it is found, once per map row (found lines, before the ranked map) |
 | `-sr` | bool |  | also write each answer a target gave, headers and body as read, to the -srd directory as DIR/HOST/SHA1.txt with an index.txt (katana's -sr); query -fields response_file says where a row's is |
 | `-srd` | string | `azhaq_response` | directory for -sr |
+| `-no-catchall` | bool |  | leave out URLs that answer with the page every unknown path gets (client-side routes of a single-page app) from the rows printed |
 | `-fail-on-errors` | bool |  | accepted, and the default: every failure exits 3, a fan-out one and a source that failed while others answered included; no flag turns a failure into exit 0 |
 | `-fail-on-capped` | bool |  | exit 4 also when the run hit -depth with hints left |
 

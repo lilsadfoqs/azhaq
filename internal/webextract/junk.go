@@ -16,7 +16,7 @@ var payloadMarks = lazyRE(`(?i)` + strings.Join([]string{
 	`[;|&]\s*(curl|wget|nslookup|ping|id|whoami|cat|sleep|uname)\b\s`,
 	`\$\(\s*(curl|wget|id|whoami|cat|sleep|nslookup|ping|echo|uname)\b|` + "`" + `\s*(id|whoami|curl|wget|cat|sleep|uname)\b`,
 	`\$\{|#\{|\{\{|<%`,
-	`\bunion(\s|/\*.*?\*/)+(all\s+)?select\b|'\s*(or|and)\s+['"\d]|\bsleep\(\s*\d|\bbenchmark\(\s*\d|\bwaitfor\s+delay\b|\bxp_cmdshell\b`,
+	`(?:\b|\d)union(\s|/\*.*?\*/)+(all\s+)?select\b|\bfrom\s+information_schema\.|'\s*(or|and)\s+['"\d]|\bsleep\(\s*\d|\bbenchmark\(\s*\d|\bwaitfor\s+delay\b|\bxp_cmdshell\b`,
 	`<\s*(script|svg|img|iframe)\b|\bjavascript:|[\s"'/]on(error|load|mouseover|focus)\s*=|\balert\(|\bprompt\(|document\.cookie`,
 	`\b(oast\.(live|fun|pro|me|site|online)|interact\.sh|interactsh|burpcollaborator\.net|oastify\.com|dnslog\.cn|ceye\.io|requestbin\.|pipedream\.net|canarytokens\.|xss\.ht)\b`,
 }, "|"))
@@ -55,6 +55,21 @@ func probeQuery(raw string) bool {
 	return dotProbe.MatchString(q) || strings.IndexFunc(q, func(r rune) bool { return unicode.IsLetter(r) || unicode.IsDigit(r) }) < 0
 }
 
+// traversalInName reports a query name that holds /../: a traversal probe
+// sent as a query (?.tst5-Name/../Gen). A value may hold ../ (next=../home).
+func traversalInName(rawQuery string) bool {
+	for _, kv := range strings.FieldsFunc(rawQuery, func(r rune) bool { return r == ';' || r == '&' }) {
+		name, _, _ := strings.Cut(kv, "=")
+		if d, err := url.QueryUnescape(name); err == nil {
+			name = d
+		}
+		if strings.Contains(name, "/../") || strings.HasSuffix(name, "/..") {
+			return true
+		}
+	}
+	return false
+}
+
 // randomExe is an executable at the root named by a scanner's random
 // token: /7zSo1DIz.exe. Letters and digits, 6 to 10 of them, and nothing
 // else in the path.
@@ -81,7 +96,7 @@ func payloadKind(raw string) string {
 			low = d
 		}
 	}
-	if payloadMarks.MatchString(low) {
+	if payloadMarks.MatchString(low) || traversalInName(u.RawQuery) {
 		return JunkPayload
 	}
 	if scannerMarks.MatchString(low) || strings.Contains(low, "\x00") || strings.Contains(low, "%00") || probeQuery(u.RawQuery) {
@@ -135,9 +150,13 @@ const (
 
 // fuzzSegment is a path segment a fuzzer's wordlist keyword left in an
 // archive: ffuf's FUZZ and FUZ2Z (capitals; /fuzz in lower case is a
-// word), and the {payload} and {FUZZ} slots of a scan template. An
-// OpenAPI slot such as {id} is a route and stays.
-var fuzzSegment = lazyRE(`^(?:FUZ\d*Z|\{(?:payloads?|FUZ\d*Z|fuzz)\})(?:\.\w{1,5})?$`)
+// word), and the {payload} and {FUZZ} slots of a scan template. The
+// keyword may follow stray symbols (a mis-decoded arrow, "˓→FUZZ"), and
+// carry what a fuzzer's log line adds: its number and result
+// (FUZZ000003:C=200) or a capitalised word (FUZZMultiple). A word that
+// only begins like the keyword (FUZZY, FUZZ-list) is a word. An OpenAPI
+// slot such as {id} is a route and stays.
+var fuzzSegment = lazyRE(`^[^\p{L}\p{N}]*(?:FUZ\d*Z(?:\d+(?::\S*)?|[A-Z][a-z]\w*)?|\{(?:payloads?|FUZ\d*Z|fuzz)\})(?:\.\w{1,5})?$`)
 
 // requestLine is the protocol a request line ends with, read as a path:
 // /HTTP/1.1, or /index.php HTTP/1.1 (the space is kept as %20).
@@ -146,7 +165,7 @@ var requestLine = lazyRE(`(?:^|/|\s)HTTP/1\.[01]$`)
 // fuzzValue is a query name or value that is only fuzzer keywords:
 // FUZZ, FUZ2Z, both run together (FUZZFUZ2Z) and {payload}, with an
 // extension at most. A value in lower case (fuzz) is a word.
-var fuzzValue = lazyRE(`^(?:FUZ\d*Z|\{(?:payloads?|FUZ\d*Z|fuzz)\})+(?:\.\w{1,5})?$`)
+var fuzzValue = lazyRE(`^[^\p{L}\p{N}]*(?:FUZ\d*Z|\{(?:payloads?|FUZ\d*Z|fuzz)\})+(?:\d+(?::\S*)?|[A-Z][a-z]\w*)?(?:\.\w{1,5})?$`)
 
 // queryRequestLine is a request line pasted after a value, its space
 // kept or lost (artist=1 HTTP/1.1, artist=1HTTP/1.1). A value that is

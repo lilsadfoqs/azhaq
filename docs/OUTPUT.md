@@ -105,7 +105,7 @@ Some work failed and did not get its answer: a source that failed, a target that
 | `dns_queries` | Queries sent to resolvers: every question, retries and wildcard probes included, and the ones to the system resolver. It is the ledger's `DNS queries` class, with or without a ledger. Absent when none was sent. |
 | `db` | The database the results are in. Absent when it was temporary. |
 | `unreachable` | Targets you gave that never answered. |
-| `takeover` | Names another party may take over: `host`, `service`, `target` (the CNAME target), `evidence`, `strength`. See [takeover](#takeover). |
+| `takeover` | Names another party may take over: `host`, `service`, `target` (the CNAME target), `evidence`, `strength` and, for `dangling`, `list` (the public list's entry and when azhaq read it). See [takeover](#takeover). |
 | `failed` | Work that did not get its answer, grouped by collector, source and error, most frequent first. See [failed](#failed). |
 | `skipped` | Targets and requests azhaq did not send, with the reason. See [skipped](#skipped). |
 | `junk` | `urls` only: the URLs left out as junk, by reason. See [urls](commands/urls.md#junk). |
@@ -125,6 +125,8 @@ Some work failed and did not get its answer: a source that failed, a target that
 | --- | --- | --- |
 | `pages` | URL rows that are none of the kinds below: pages and routes | `-type URL -role page,app` |
 | `api`, `auth`, `forbidden` | URL rows of that role. They are not also in `pages`. | `-type URL -role api` (or `auth`, `forbidden`) |
+| `catchall` | URL rows that answered with the page every unknown path gets, whatever they are named as. They are in no other key. | `-type URL -coverage catchall` |
+| `skipped` | URL rows named and not asked: a `-deny-path` rule of yours, or a catch-all origin (`run` holds the paths scripts name once it has answered 3 with its catch-all page: see [run](commands/run.md#catch-all-origins)). They are in no other key. | `-type URL -coverage skipped` |
 | `client routes`, `websockets` | URLs the app's router draws, and WebSocket endpoints | `-role client-route`, `-role websocket` |
 | `scripts`, `assets`, `source maps`, `manifests` | The URLs of those roles. They are in the map, and in no other key. | `-role script` (`asset`, `sourcemap`, `manifest`) |
 | `hostnames` | Name rows that are neither dead nor wildcard: live, sibling and unresolved names | `-type Hostname`, less the two below |
@@ -132,7 +134,7 @@ Some work failed and did not get its answer: a source that failed, a target that
 | `ports`, `open|filtered ports` | Port rows, one for each host, port and protocol: those the scan found open, and the UDP ports that neither answered nor were refused | `-type Port`, by `state` |
 | `addresses`, `domains`, `prefixes`, `organizations`, and the other kinds | Rows of that type | `-type IPAddress`, `Domain`, `Prefix`, `Organization` |
 
-A key with no row is absent. The sum is one unit, the stored row. `results` is another, the printed row: a templated URL row holds `count` stored URLs and a names row holds `folded` names.
+The URL keys other than `catchall` and `skipped` count rows of the other coverages: add `-coverage visited,error,gone,hint,capped` to their filters when a run has catch-all or skipped rows. A key with no row is absent. The sum is one unit, the stored row. `results` is another, the printed row: a templated URL row holds `count` stored URLs and a names row holds `folded` names. `run -no-catchall` leaves the `catchall` rows, and the `skipped` rows a catch-all origin made, out of what it prints and out of `results`: `left_out` says how many, and `results = stored - folded - left_out`.
 
 ### takeover
 

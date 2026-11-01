@@ -98,3 +98,30 @@ func TestSecretsNameTheirRule(t *testing.T) {
 		t.Fatalf("%+v", got)
 	}
 }
+
+// A translation table names a key "…Password…" and holds another key as its
+// value: words, not a random string.
+func TestSecretsSkipTranslationReferences(t *testing.T) {
+	js := `var i18n={User_UserChangePassword_Cancel_Button:"@Button_Cancel",Save:"Save",` +
+		`passwordHint:"Enter_Your_Password",resetPasswordLabel:"@Reset_Password_Title",` +
+		`passwordTitle:"change-password-title"};` +
+		`var cfg={userPassword:"Kq7x2Pz9Lm4Wv8Tn", password_hash:"@Zx81QpLm2Vt9Rr4Nc7Ks"};`
+	got := Secrets(js)
+	var vals []string
+	for _, s := range got {
+		vals = append(vals, s.Value)
+	}
+	if len(got) != 2 || got[0].Value != "Kq7x2Pz9Lm4Wv8Tn" && got[1].Value != "Kq7x2Pz9Lm4Wv8Tn" {
+		t.Fatalf("want the two random values only, got %q", vals)
+	}
+	for _, v := range []string{"@Button_Cancel", "Enter_Your_Password", "@Reset_Password_Title", "change-password-title"} {
+		if !translationRef(v) {
+			t.Errorf("%q is a translation key", v)
+		}
+	}
+	for _, v := range []string{"Kq7x2Pz9Lm4Wv8Tn", "@Zx81QpLm2Vt9Rr4Nc7Ks", "xkqz_prst_vwxz", "Abc_dEf_Ghi", "ghp_abcdefghijklmnopqrstuvwxyz0123456789"} {
+		if translationRef(v) {
+			t.Errorf("%q is not a translation key", v)
+		}
+	}
+}

@@ -237,3 +237,48 @@ func TestProbeNameIsStableWithinARun(t *testing.T) {
 		t.Error("another run asked the same name")
 	}
 }
+
+// An origin that has answered CatchAllStop paths with its shell holds the
+// paths of directories whose control is the shell too, and asks the others.
+func TestCatchAllHeld(t *testing.T) {
+	Reset()
+	mux := http.NewServeMux()
+	mux.HandleFunc("/docs/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/docs/guide" {
+			_, _ = w.Write([]byte(`<title>Guide</title>real page`))
+			return
+		}
+		http.NotFound(w, r)
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`<!doctype html><title>Shop</title><app-root></app-root>`))
+	})
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	if CatchAllHeld(srv.URL+"/app/a/x", CatchAllStop) {
+		t.Fatal("held before any answer")
+	}
+	for _, p := range []string{"/app/a/1", "/app/a/2", "/app/a/3"} {
+		if !catchAll(t, srv, p) {
+			t.Fatalf("%s: want catch-all", p)
+		}
+	}
+	if n := CatchAllAnswers(srv.URL); n != 3 {
+		t.Fatalf("%d answers", n)
+	}
+	if !CatchAllHeld(srv.URL+"/app/a/4", CatchAllStop) {
+		t.Error("a path in a directory whose control is the shell is not held")
+	}
+	if CatchAllHeld(srv.URL+"/app/b/1", CatchAllStop) {
+		t.Error("a directory whose control was not asked is held")
+	}
+	if CatchAllHeld(srv.URL+"/app/a/4", 0) {
+		t.Error("held with the stop at 0")
+	}
+	if catchAll(t, srv, "/docs/guide") {
+		t.Fatal("a real page reported as catch-all")
+	}
+	if CatchAllHeld(srv.URL+"/docs/other", CatchAllStop) {
+		t.Error("a directory whose control is a 404 is held")
+	}
+}

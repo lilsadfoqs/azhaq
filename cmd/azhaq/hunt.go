@@ -69,7 +69,7 @@ func cmdHunt(args []string) error {
 		ents = append(ents, r.Entity)
 	}
 	for _, t := range takeovers(ents, g.obs) {
-		in.Takeovers = append(in.Takeovers, hunt.Takeover{Host: t.Host, Strong: t.Strength == "strong", Detail: takeoverDetail(t.Finding)})
+		in.Takeovers = append(in.Takeovers, hunt.Takeover{Host: t.Host, Strong: t.Strength == "strong", Dangling: t.Strength == "dangling", Detail: takeoverDetail(t.Finding)})
 	}
 	list := hunt.Build(in)
 	matched := len(list)
@@ -131,6 +131,10 @@ func rolesDirFor(file string) string {
 }
 
 func takeoverDetail(f takeover.Finding) string {
+	if f.Strength == "dangling" {
+		// What the claim rests on, and where to check it.
+		return "unverified: NXDOMAIN does not show the name is free: " + f.Service + " candidate, CNAME " + f.Target + " does not resolve (" + f.List + ")"
+	}
 	d := f.Service + " takeover, " + f.Strength
 	if f.Target != "" {
 		d += ": CNAME " + f.Target

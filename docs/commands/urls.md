@@ -74,13 +74,13 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 ### Junk
 `urls` counts the URLs on the domains that it left out as junk, by reason. Each URL is counted once.
 
-- `"scanner payload"`: for example 3.
+- `"scanner payload"`: for example 3. It covers `/../` in a query name (`?.tst5-Name/../Gen`; a value such as `next=../home` stays) and an injection glued to a value (`artist=1union select …`, `… from information_schema.…`).
 - `"scanner probe"`: a scanner's own file or tag, a NUL byte (`%00`) in the path or query, or a query that is only punctuation or a dot and an extension (`?.`, `?.tst`, `?.bak`).
 - `"directory listing sort link"`.
 - `"script placeholder (NaN, undefined, null)"`.
 - `"dot segment"`.
 - `"malformed link (wildcard, quote, bracket, ellipsis)"`: the ellipsis is `…` or a `...` that ends the path or is a segment of its own.
-- `"fuzzing placeholder or request-line fragment"`: a path segment, or a query name or value, that is a fuzzer's keyword in capitals (`FUZZ`, `FUZ2Z`, `FUZZFUZ2Z`, with or without an extension) or a `{payload}` or `{FUZZ}` slot, or a path or query value that ends in `HTTP/1.0` or `HTTP/1.1` (`/HTTP/1.1`, `/index.php%20HTTP/1.1`, `?artist=1HTTP/1.1`). `/fuzz`, `?q=fuzz`, `?proto=HTTP/1.1`, `/users/{id}` and `/docs/http/1.1` stay.
+- `"fuzzing placeholder or request-line fragment"`: a path segment, or a query name or value, that is a fuzzer's keyword in capitals (`FUZZ`, `FUZ2Z`, `FUZZFUZ2Z`, with or without an extension; with a fuzzer log's number and result, `FUZZ000003:C=200`; with a capitalised word, `FUZZMultiple`; after stray symbols such as a mis-decoded arrow, `%CB%93%E2%86%92FUZZ`) or a `{payload}` or `{FUZZ}` slot, or a path or query value that ends in `HTTP/1.0` or `HTTP/1.1` (`/HTTP/1.1`, `/index.php%20HTTP/1.1`, `?artist=1HTTP/1.1`). `/fuzz`, `?q=fuzz`, `/FUZZY`, `/FUZZ-list.txt`, `?proto=HTTP/1.1`, `/users/{id}` and `/docs/http/1.1` stay.
 - `"link cut at the end of its sentence"`: a path or query that ends in `.`, `,`, `;`, `'` or an unmatched `)` or `]`.
 
 Every source's URLs go through these rules, OTX's too.

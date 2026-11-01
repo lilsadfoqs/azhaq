@@ -9,6 +9,7 @@ import (
 	"html"
 	"net/http"
 	"net/url"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -38,10 +39,82 @@ var probeDepth atomic.Int32
 func SetProbeDepth(n int) { probeDepth.Store(int32(max(n, 0))) }
 
 var (
-	probeMu   sync.Mutex
-	baselines = map[string]*baseline{} // origin + dir
-	probeDirs = map[string]int{}       // origin → directories probed
+	probeMu    sync.Mutex
+	baselines  = map[string]*baseline{}       // origin + dir
+	probeDirs  = map[string]int{}             // origin → directories probed
+	shellPaths = map[string]map[string]bool{} // origin → paths answered with the catch-all page
+	shellPages = map[string][]fingerprint{}   // origin → what the controls of those answered
 )
+
+// CatchAllStop is how many paths of an origin answered with its catch-all
+// page before run stops asking the paths scripts name: the number the
+// summary's note has always started at.
+const CatchAllStop = 3
+
+// CatchAllAnswers is how many distinct paths of the origin were answered
+// with its catch-all page so far.
+func CatchAllAnswers(origin string) int {
+	probeMu.Lock()
+	defer probeMu.Unlock()
+	return len(shellPaths[origin])
+}
+
+func noteCatchAll(origin, path string, control fingerprint) {
+	probeMu.Lock()
+	if shellPaths[origin] == nil {
+		shellPaths[origin] = map[string]bool{}
+	}
+	shellPaths[origin][path] = true
+	if len(shellPages[origin]) < 8 && !slices.ContainsFunc(shellPages[origin], control.matches) {
+		shellPages[origin] = append(shellPages[origin], control)
+	}
+	probeMu.Unlock()
+}
+
+// CatchAllHeld says that asking raw would only draw its origin's catch-all
+// page again, by two measurements: the origin has answered stop paths with
+// that page, and the control for raw's directory (the answer for a path that
+// cannot exist there) is that page. A directory whose control was not asked
+// yet is no exception to know of, so its first path is asked, and that asks
+// the control; past the controls an origin gets, the nearest directory
+// above that was asked stands for it, as in the catch-all check itself.
+func CatchAllHeld(raw string, stop int) bool {
+	if stop <= 0 {
+		return false
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" {
+		return false
+	}
+	path := u.EscapedPath()
+	if path == "" || path == "/" {
+		return false
+	}
+	origin := u.Scheme + "://" + u.Host
+	dir := parentDir(path)
+	for d := int(probeDepth.Load()); d > 0 && strings.Count(dir, "/") > d+1; {
+		dir = parentDir(dir)
+	}
+	probeMu.Lock()
+	defer probeMu.Unlock()
+	if len(shellPaths[origin]) < stop {
+		return false
+	}
+	var own *baseline
+	for {
+		if own = baselines[origin+dir]; own != nil {
+			break
+		}
+		if dir == "/" || probeDirs[origin] < maxProbeDirs {
+			return false // asked, and the control with it
+		}
+		dir = parentDir(dir)
+	}
+	if !own.ready.Load() || !own.ok {
+		return false
+	}
+	return slices.ContainsFunc(shellPages[origin], own.fp.matches)
+}
 
 type baseline struct {
 	once  sync.Once
@@ -118,6 +191,8 @@ func resetProbes() {
 	probeMu.Lock()
 	baselines = map[string]*baseline{}
 	probeDirs = map[string]int{}
+	shellPaths = map[string]map[string]bool{}
+	shellPages = map[string][]fingerprint{}
 	probeMu.Unlock()
 }
 
@@ -145,33 +220,38 @@ func CatchAll(ctx context.Context, c *http.Client, res Result) bool {
 	origin := u.Scheme + "://" + u.Host
 	dir := parentDir(path)
 	fp := fingerprintOf(res, origin, requestTarget(u))
-	if rootShell(origin, dir, fp) {
+	if root := rootShell(origin, dir, fp); root != nil {
+		noteCatchAll(origin, path, *root)
 		return true
 	}
 	b := baselineFor(ctx, c, origin, dir)
 	if b == nil || !b.ok {
 		return false
 	}
-	return b.fp.matches(fp)
+	if b.fp.matches(fp) {
+		noteCatchAll(origin, path, b.fp)
+		return true
+	}
+	return false
 }
 
 // rootShell: a page byte for byte the site root's answer for an unknown
 // path (the single-page app's shell) is that answer in any directory not
 // yet asked, so its own baseline request is saved.
-func rootShell(origin, dir string, fp fingerprint) bool {
+func rootShell(origin, dir string, fp fingerprint) *fingerprint {
 	if dir == "/" {
-		return false
+		return nil
 	}
 	probeMu.Lock()
 	root, asked := baselines[origin+"/"], baselines[origin+dir] != nil
 	probeMu.Unlock()
-	if root == nil || asked {
-		return false
+	if root == nil || asked || !root.ready.Load() {
+		return nil
 	}
-	if !root.ready.Load() {
-		return false
+	if root.ok && root.fp.status == fp.status && root.fp.hash == fp.hash && fp.size > 0 {
+		return &root.fp
 	}
-	return root.ok && root.fp.status == fp.status && root.fp.hash == fp.hash && fp.size > 0
+	return nil
 }
 
 // FinalCatchAll is CatchAll for the page a redirect chain ended on: the

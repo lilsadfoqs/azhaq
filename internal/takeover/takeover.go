@@ -20,7 +20,15 @@ type Finding struct {
 	Target   string `json:"target,omitempty"` // the CNAME target
 	Evidence string `json:"evidence"`         // what the finding rests on
 	Strength string `json:"strength"`         // "strong": the service says nothing is there; "dangling": the target does not resolve
+	// List names what a "dangling" finding rests on: the public list's entry
+	// for the service and when azhaq read it. The name not resolving is the
+	// whole evidence.
+	List string `json:"list,omitempty"`
 }
+
+// ListRead is when the public takeover list's entries for the dangling
+// services were read; the list changes as providers change.
+const ListRead = "2026-10-28"
 
 // service is a hosting service whose names can be claimed by anyone.
 type service struct {
@@ -56,6 +64,26 @@ var services = []service{
 	{"Fly.io", []string{".fly.dev"}, true, nil, false},
 }
 
+// listEntry is the public list's entry behind each suffix of a dangling
+// service.
+var listEntry = map[string]string{
+	".azurewebsites.net": "Azure App Service", ".cloudapp.net": "Azure Cloud Services", ".cloudapp.azure.com": "Azure virtual machine public IP name",
+	".blob.core.windows.net": "Azure Blob Storage", ".azure-api.net": "Azure API Management", ".azurehdinsight.net": "Azure HDInsight",
+	".azureedge.net": "Azure CDN", ".azurecontainer.io": "Azure Container Instances",
+	".elasticbeanstalk.com": "AWS Elastic Beanstalk", ".fly.dev": "Fly.io",
+}
+
+// entryOf is the list entry a dangling target rests on.
+func entryOf(target string) string {
+	t := strings.ToLower(strings.TrimSuffix(target, "."))
+	for suf, e := range listEntry {
+		if strings.HasSuffix(t, suf) {
+			return e
+		}
+	}
+	return ""
+}
+
 func (s service) on(target string) bool {
 	t := strings.ToLower(strings.TrimSuffix(target, "."))
 	if s.name == "AWS S3" {
@@ -85,8 +113,9 @@ func ByCNAME(host string, chain []string, targetGone, registered bool) (Finding,
 	}
 	for _, s := range services {
 		if s.on(target) && s.dangling {
-			return Finding{Service: s.name, Target: target, Strength: "dangling",
-				Evidence: "CNAME to " + target + ", which does not resolve: the name on " + s.name + " may be free to create"}, true
+			e := entryOf(target)
+			return Finding{Service: s.name, Target: target, Strength: "dangling", List: "can-i-take-over-xyz, entry " + e + ", read " + ListRead,
+				Evidence: "CNAME to " + target + ", which does not resolve: the name on " + s.name + " may be free to create (unverified: NXDOMAIN does not show it is free)"}, true
 		}
 	}
 	if !registered {

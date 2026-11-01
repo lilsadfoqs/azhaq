@@ -12,6 +12,9 @@
 - A deploy lab on 127.0.0.1:5040 (`bench/truth/deploy`) with `$HOME/lab/deploy v1|v2`, started by `labs.sh`; the bench unit `once:deploy` runs `watch` on v1, again with no deploy (`no change`), then on v2, and compares the change set with `expected.md`.
 - `go run ./bench -checklist` and the `checklist` workflow run the capability checklist as commands (exit codes, counts that agree, scope, no write method without its flag, `-deny-path`, a lost session, the MCP lock, the budget, the kill switch); a push to next runs it, and the release workflow refuses a tag whose commit has no passing run.
 - The trial workflow publishes each review part's scores as an encrypted `scores.json.age`; `.github/ci/history.sh` prints each item across the last reviews with the spread between samples.
+- `run` has `-catchall-after N` (default 3, 0 asks every path) and `-no-catchall`. Once an origin has answered 3 paths with the page every unknown path gets, `run` stops asking the paths scripts name in directories whose own control is that page; their rows stay as coverage `skipped`, the summary says how many were not asked and why, and `catchall` and `skipped` are counts of their own. `-no-catchall` leaves those rows out of what `run` prints and of `results`, and `left_out` says how many.
+- A `dangling` takeover finding carries `list`: the public takeover list's entry and the date azhaq read it. `docs/CONCEPTS.md` says what each dangling service rests on and how to confirm it.
+- A create another role sent that nothing shows to cross roles is `create accepted: nothing shows it crosses roles` (report class `create_accepted`); roles rows carry `created_owner`, and `owner_by` says whose object the create made.
 
 ### Changed
 
@@ -21,6 +24,10 @@
 - `ports -rate N` runs on one core for each 15,000 connects a second (not more than the machine has; `-min-rate` and `GOMAXPROCS` keep every core): a full-range scan at `-rate 10000` used 12.9 CPU-seconds on 20 cores against nmap's 2.5 and now uses about 4.2 (8 hosts: 103 s against 19 s, now 29 s).
 - The ledger counts what it records, so a run no longer reads its ledger twice at the end (about 0.8 s after the last connect of a full-range scan); a plain ledger line is marshalled once and written without reflection.
 - The bench measures azhaq's memory on a copied binary: a freshly linked file showed 30 MB against 14 MB for the same bytes, for a small `dirs` sweep whose own cost (calibration, workspace, ledger) is below the noise.
+- `hunt` lists a dangling CNAME as `takeover-candidate` (weight 20, `unverified: NXDOMAIN does not show the name is free`), after every strong row and every row a server answered.
+- `hunt` ranks a route only a script names whose GET answered 404 or 410 after every row the server confirmed, with no path-word weight and the reason `named by a script, not confirmed: GET 404`; a 405, 400, 415 or 422 shows the route exists and keeps its path words.
+- `fuzz -ac` and `dirs` read the page the calibration answers are (title, tags, shared words) when no size, word or line count is shared, hold back matches that look like it and count them in the summary; when they cannot filter at all the matches are said to be unfiltered and the exit is 3.
+- `roles` and `report` call a create `creates in another role's collection` (`Missing authorization on create`) only when the anonymous role was let to create or the object it made belongs to the replayed request's role; any other accepted create is `create accepted` (a guess at low severity).
 
 ### Fixed
 
@@ -30,6 +37,8 @@
 - `query -coverage capped` returns templated rows that hold capped URLs.
 - `resume` of a `dirs` sweep no longer spends `-rate` on words whose answers are stored.
 - `run` no longer calls a CNAME target `unresolved` at `-depth 0` when the answer that named it held its address: the name is `live` (or `sibling`) with that address in `proof`, at any `-depth`.
+- `hunt` no longer lists a translation reference such as `@Button_Cancel` under a name containing "Password" as a generic secret.
+- `urls` drops `/FUZZMultiple`, a fuzz keyword behind stray symbols (`%CB%93%E2%86%92FUZZ`, `FUZZ000003:C=200`), `/../` inside a query name and an injection glued to a value (`1union select`, `from information_schema.`) as junk.
 
 ## v0.13.0
 

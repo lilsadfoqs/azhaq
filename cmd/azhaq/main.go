@@ -285,6 +285,8 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	passive := fs.Bool("passive", false, "skip HTTP/crawl/JS/paths/TLS (no handshake to the target)")
 	depth := fs.Int("depth", 4, "max fan-out waves (0 = seed wave only, not unlimited)")
 	maxItems := fs.Int("max-items", 0, "most collector tasks (a name, a URL, an address each, per collector) this run starts (default: no cap, katana's and httpx's); the work left is for azhaq resume, which starts as many more")
+	catchAfter := fs.Int("catchall-after", fetch.CatchAllStop, "stop asking the page-like paths scripts name on an origin once it has answered this many paths with the page every unknown path gets; they stay in the map as skipped (0: ask them all)")
+	noCatchAll := fs.Bool("no-catchall", false, "leave out URLs that answer with the page every unknown path gets (client-side routes of a single-page app) from the rows printed")
 	perTmpl := fs.Int("per-template", 0, "URLs of one template (/product?id={n}) to request; the rest are listed (default: all)")
 	maxRequests := fs.Int64("max-requests", 0, "requests to targets this run may send (0: no cap); the work left over is for azhaq resume")
 	rateFlag := fs.Float64("rate", 0, "requests per second to targets, over all hosts (0: no pace)")
@@ -703,6 +705,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		budgets.MaxItems = *maxItems
 	}
 	budgets.PerTemplate = *perTmpl
+	budgets.CatchAllStop = max(*catchAfter, 0)
 	if *maxNames > 0 {
 		budgets.MaxNames = *maxNames
 	}
@@ -1278,11 +1281,15 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	if *verbose {
 		fmt.Fprint(os.Stderr, log.Report(time.Since(t0)))
 	}
+	shown := rows
+	if *noCatchAll {
+		shown = withoutCatchAll(rows, engine.CatchAllHeldIDs(obs))
+	}
 	switch {
 	case *quiet || out.embedded:
 	case *jsonOut:
 		enc := json.NewEncoder(os.Stdout)
-		for _, r := range engine.GroupTemplates(rows) {
+		for _, r := range engine.GroupTemplates(shown) {
 			if err := enc.Encode(mapRowJSON(r)); err != nil {
 				return err
 			}
@@ -1297,7 +1304,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 			}
 		}
 	default:
-		printMap(rows)
+		printMap(shown)
 		if *showObs {
 			fmt.Println("observations")
 			for _, o := range obs {
@@ -1305,6 +1312,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 			}
 		}
 	}
+	rep.noCatchAll = *noCatchAll
 	fillReport(rep, path, seeds, ents, obs, rows)
 	if n := opts.DNS.TakeoverNote("-no-takeover"); n != "" {
 		rep.Notes = append(rep.Notes, n)
