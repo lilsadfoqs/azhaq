@@ -37,6 +37,28 @@ To reproduce a row, start the labs from that list and run the row's unit (`go ru
 go run ./bench -units default:dirs       # one row; -profile polite -units polite:dirs for the polite one
 ```
 
+## The review checklist, as commands
+
+`go run ./bench -checklist` runs what a release review spends its first hours on, with nobody in the loop, and fails on any broken check. It runs `claims:1`, `7`, `8`, `9` and `10` (the summary, the ledger and what a proxy or a listener saw agree, for a map, a port scan, the MCP server, a request budget and the kill file), `once:lab` (the DNS lab), `once:deploy` (`watch` against a deploy) and `once:checklist`: azhaq against a stand-in site on 127.0.0.1 that logs every request by method and holds a trap for each unsafe thing, with a second listener on 127.0.0.2 outside the scope. The `checklist` workflow runs it on every push to `next`, for a tag `checklist-NAME` (`.github/ci/run.sh checklist NAME`) or `gate-NAME`, and in under 20 minutes; the release workflow refuses a tag whose commit has no passing run, so run it on the commit to tag first.
+
+| Checked | How |
+| --- | --- |
+| Exit codes: 0 complete, 2 usage, 3 failure, 4 limit | a plain map, a dead target, an unknown flag, `-max-requests 4`, `-cookie` whose session ends |
+| The summary's requests = the ledger's lines = what arrived | every run above, and the claims cases (the site, or a counting proxy in front of Juice Shop) |
+| Every row inside the scope | a link, a script, a form and `-dirs`/`-graphql` toward 127.0.0.2: none arrives; a target outside `-allow` is refused (exit 2) |
+| GET-only mapping by default | the page, its script and its API description name POST, PUT and DELETE routes and a GraphQL endpoint: only GET, HEAD and OPTIONS arrive |
+| Writes only with their flags | `-submit-forms`, `-graphql`, `-params-writes`, `roles -replay-writes put`: that method arrives and no other; without the flag none |
+| `-deny-path` | `/logout` and `/admin/purge` are asked without the rule and never with it, and the summary lists what was skipped |
+| A lost session never goes on as an anonymous run | `-cookie`, a `/logout` link ends it: exit 3, the summary says so, no request without the session follows |
+| The MCP lock | no `-allow` or `-scope`: exit 2; a call for a URL outside `-allow` sends nothing; `-unlocked` refuses port scans; the budget holds over calls (`claims:8`) |
+| The request budget and the kill switch | `claims:9`, `claims:10`: the cap, the 0.6 s limit after the file, resume |
+| Ledger | `ledger -verify` accepts a run's ledger and refuses an edited one with exit 3 |
+| Web and API, hunt, diff, exports, ingest | the map holds the crawl, the script's routes, the API description and the GraphQL schema; `dirs` finds the five real paths and none of four that do not exist; `params` finds the parameter the page reads and not two it ignores; `hunt`, `diff`, `export -format openapi` and `ingest` give what is known |
+| Subdomains, DNS, takeover candidates, UDP | `once:lab` |
+| Monitoring with a deploy | `once:deploy`: v1, v1 again says `no change`, v2 reports `expected.md` |
+
+Not covered: passive subdomain collection and the coverage estimate (they need the public sources), service detection across the services lab (one banner is checked), probing at scale, screenshots (`claims:3`, `11` need Chrome and are not in this run), archived URLs, the proxy-history matrix (HAR import), report generation and notifications. The list is `checklistCover` in `bench/checklist.go`; a test keeps it in step with the capabilities of `.github/ci/trial/GATE.md`'s checklist, so a capability added there must be listed there as covered or not.
+
 ## Units, and the CI run
 
 A unit is one comparison section in one profile (`default:apps`; for `domains` one domain, `default:domains/hackerone.com`, each with its own no-silent-zeros check), one claims case (`claims:5`) or a section that runs once (`once:dropin`). No unit reads another's results, so any set of units gives the same checks as a full run, and `-merge` puts the records of several jobs in the order of one run (each record lists what every unit wrote in `units`). The bench logs `<profile>: <section> took Ns` for every unit.

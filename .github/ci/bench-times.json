@@ -25,6 +25,7 @@
   "default:services": 218,
   "default:shots": 113,
   "default:urls": 83,
+  "once:checklist": 90,
   "once:deploy": 8,
   "once:docs": 0,
   "once:dropin": 4,
