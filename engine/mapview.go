@@ -54,7 +54,7 @@ type MapEntry struct {
 	// nor was refused.
 	Service, Product, Version string
 	State                     string
-	Names                     []string // the names that point to the port's address, sorted
+	Names                     []string  // the names that point to the port's address, sorted
 	at                        time.Time // a port row: when the scan that found it ran
 }
 

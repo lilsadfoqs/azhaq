@@ -40,7 +40,7 @@ func TestPlanRequests(t *testing.T) {
 	if r.Sources["azhaq-rdap"] != 2 || r.Sources["azhaq-urls"] != 10 || r.Sources["azhaq-subdomains"] != 22 || r.Total != 34 || r.Sources["azhaq-search"] != 0 {
 		t.Errorf("source queries %+v", r)
 	}
-	if len(r.NotCounted) != 0 || !r.Found || r.MaxNames != 20000 {
+	if len(r.NotCounted) != 0 || !r.Found || r.MaxNames != 200000 {
 		t.Errorf("what is not known before the run %+v", r)
 	}
 	if r.PerService != 53 || r.Cap != 5000 || r.CapBy != "-max-requests" {

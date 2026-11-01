@@ -72,7 +72,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 - `source_queries` counts one query for each source asked. A source may page through its answer, so a query can take more than one request.
 - None of the built-in collectors is in `source_queries_not_counted`. A connector may be.
 - With `-sources none` no collector that asks a third party is in the plan (`azhaq-subdomains`, `azhaq-urls`, `azhaq-rdap`, `azhaq-search`), `source_queries` is none, and `sends` begins with a line that says no third party is asked.
-- `found_domains_asked` is about domains found on the way. They are asked about inside the scope. Without a scope, they are asked about within `-depth` and `-max-items`.
+- `found_domains_asked` is about domains found on the way. They are asked about inside the scope. Without a scope, they are asked about within `-depth`.
 
 ### The requests to the targets are a bound
 
@@ -203,8 +203,8 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 | `-max-requests` | int |  | requests to targets this run may send (0: no cap); the work left over is for azhaq resume |
 | `-max-host-requests` | int |  | requests one host may be sent (0: no cap); the rest of its work is left for azhaq resume |
 | `-daily-requests` | int |  | requests a day to the program's targets (-program, else this run's targets), counted over the runs in -db |
-| `-max-items` | int |  | max collector invocations (default 2048) |
-| `-max-names` | int |  | max hostnames resolved (default 20000) |
+| `-max-items` | int |  | most collector tasks (a name, a URL, an address each, per collector) this run starts (default: no cap, katana's and httpx's); the work left is for azhaq resume, which starts as many more |
+| `-max-names` | int |  | most hostnames this run resolves (default 200000, as many as subs keeps for a domain); the names left are for azhaq resume |
 | `-max-ips` | int | `4096` | addresses expanded from -asn and -cidr prefixes, for the whole run |
 | `-max-response-size` | int |  | bytes read of a page or document (default 2097152; scripts and JSON get 16 MiB) |
 | `-depth` | int | `4` | max fan-out waves (0 = seed wave only, not unlimited) |

@@ -39,9 +39,6 @@ func (e *Engine) RunLocal(ctx context.Context, seeds []types.Seed, b Budgets) er
 	if b.MaxDepth <= 0 {
 		b.MaxDepth = 1
 	}
-	if b.MaxItems <= 0 {
-		b.MaxItems = DefaultBudgets().MaxItems
-	}
 	if b.Parallel <= 0 {
 		b.Parallel = DefaultBudgets().Parallel
 	}
@@ -89,6 +86,7 @@ func (e *Engine) RunLocal(ctx context.Context, seeds []types.Seed, b Budgets) er
 	s.loop(ctx)
 	s.flush()
 	leftover := s.leftover()
+	e.setCaps(s.caps())
 	if len(leftover) > 0 && s.ran+s.names > 0 {
 		e.markCapped()
 	}
@@ -203,9 +201,20 @@ func (s *scheduler) flush() {
 	s.planned, s.done, s.stopped = s.planned[:0], s.done[:0], s.stopped[:0]
 }
 
-// restore rebuilds the queues from the run's recorded tasks: done ones
-// count against the budgets, the rest are queued again (behind the task
-// they wait for, when that is not done either).
+// itemsSpent says -max-items tasks have been started in this run.
+func (s *scheduler) itemsSpent() bool { return s.b.MaxItems > 0 && s.ran >= s.b.MaxItems }
+
+// originSpent says the tasks on the seed's own hosts have used what -max-items
+// leaves them besides the reserve for fan-out.
+func (s *scheduler) originSpent() bool {
+	return s.b.MaxItems > 0 && s.originRan >= s.b.MaxItems-s.reserve
+}
+
+// restore rebuilds the queues from the run's recorded tasks: the rest are
+// queued again (behind the task they wait for, when that is not done
+// either). Done ones do not count against -max-items and -max-names: a cap
+// holds for each run, as -max-requests does, so a resume that is given the
+// same cap goes on instead of finding it spent.
 func (s *scheduler) restore() error {
 	rows, err := s.e.Store.Tasks()
 	if err != nil {
@@ -226,16 +235,6 @@ func (s *scheduler) restore() error {
 		}
 		if !r.Done {
 			open[k][r.Collector] = true
-			continue
-		}
-		col, ok := s.e.Cat.Get(r.Collector)
-		if _, batch := col.(catalog.Batcher); ok && batch {
-			s.names++
-		} else {
-			s.ran++
-			if r.Prio == 0 {
-				s.originRan++
-			}
 		}
 	}
 	// What the resume is told to leave out (-skip, -passive, an active
@@ -282,6 +281,16 @@ func (s *scheduler) restore() error {
 	}
 	if len(left) > 0 {
 		s.done = append(s.done, left...)
+	}
+	// What a lower -depth left unasked is asked now, as far as this run's
+	// -depth goes.
+	if left, err := s.e.Store.LoadLeftover(); err == nil && len(left) > 0 {
+		st, _ := s.e.Store.Stats()
+		for _, seed := range left {
+			if !s.seen[seedKey(normalize.Seed(seed))] {
+				s.add(seed, max(st.Depth, 1), true)
+			}
+		}
 	}
 	// A task that ran but whose end was not recorded runs again whole.
 	return s.e.Store.Forget(again)
@@ -689,7 +698,7 @@ func (s *scheduler) lend(ctx context.Context, c claim) {
 			if !ok || !s.contacts(t) || catalog.InfoOf(col).Local {
 				continue
 			}
-			if s.ran >= s.b.MaxItems || egress.Spent() || (p == 0 && s.originRan >= s.b.MaxItems-s.reserve) {
+			if s.itemsSpent() || egress.Spent() || (p == 0 && s.originSpent()) {
 				break
 			}
 			s.queue[p] = append(s.queue[p][:i:i], s.queue[p][i+1:]...)
@@ -783,7 +792,7 @@ func (s *scheduler) dispatch(ctx context.Context) {
 // startRetry runs the cheapest task the budget stopped before, when
 // nothing else runs.
 func (s *scheduler) startRetry(ctx context.Context) {
-	for s.inflight-s.remote == 0 && len(s.retry) > 0 && !egress.Spent() && s.ran < s.b.MaxItems {
+	for s.inflight-s.remote == 0 && len(s.retry) > 0 && !egress.Spent() && !s.itemsSpent() {
 		t := s.retry[0]
 		s.retry = s.retry[1:]
 		if s.skip(t) {
@@ -814,10 +823,10 @@ func (s *scheduler) next() (task, bool) {
 				s.held = append(s.held, t)
 				continue
 			}
-			if s.ran >= s.b.MaxItems {
+			if s.itemsSpent() {
 				return task{}, false
 			}
-			if p == 0 && s.originRan >= s.b.MaxItems-s.reserve {
+			if p == 0 && s.originSpent() {
 				break
 			}
 			s.queue[p] = s.queue[p][1:]
@@ -962,6 +971,38 @@ func (s *scheduler) handle(f finished) {
 			s.add(h, t.depth+hintStep(h), true)
 		}
 	}
+}
+
+// caps says which limits of the run held work back, and how much.
+func (s *scheduler) caps() Caps {
+	var c Caps
+	if s.itemsSpent() {
+		for p := range s.queue {
+			for _, t := range s.queue[p] {
+				if !s.skip(t) {
+					c.ItemsLeft++
+				}
+			}
+		}
+		c.ItemsLeft += len(s.retry)
+	}
+	if s.b.MaxNames > 0 && s.names >= s.b.MaxNames {
+		for _, waiting := range s.batch {
+			c.NamesLeft += len(waiting)
+		}
+	}
+	for _, seed := range s.beyond {
+		if s.seen[seedKey(seed)] {
+			continue
+		}
+		switch seed.Type {
+		case types.TypeURL:
+			c.DepthURLs++
+		case types.TypeHostname:
+			c.DepthNames++
+		}
+	}
+	return c
 }
 
 // leftover is every seed with work that did not run: over budget, or

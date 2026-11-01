@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/lilsadfoqs/azhaq/internal/collectors/dirscol"
@@ -63,6 +64,11 @@ func cmdResume(args []string) error {
 		}
 	}
 	id, runArgs, left, ok, err := st.Resumable()
+	deeper := false
+	if err == nil && !ok {
+		id, runArgs, left, deeper = pastDepth(st, rest)
+		ok = deeper
+	}
 	command := ""
 	if ok {
 		command = st.GetMeta("command:" + id)
@@ -75,7 +81,11 @@ func cmdResume(args []string) error {
 		return fmt.Errorf("nothing to resume in %s: every run finished", db)
 	}
 	if !wantsJSON(rest) {
-		fmt.Fprintf(os.Stderr, "azhaq: resuming run %s of %s, %d tasks known and not done\n", id, db, left)
+		if deeper {
+			fmt.Fprintf(os.Stderr, "azhaq: resuming run %s of %s with a larger -depth, %d seeds found past its own to ask\n", id, db, left)
+		} else {
+			fmt.Fprintf(os.Stderr, "azhaq: resuming run %s of %s, %d tasks known and not done\n", id, db, left)
+		}
 	}
 	runArgs, gone := dropRemovedFlags(runArgs)
 	if len(gone) > 0 && !wantsJSON(rest) {
@@ -121,6 +131,26 @@ func mergeSkip(stored, given []string) ([]string, []string) {
 		return stored, given
 	}
 	return dropFlag(stored, "skip"), append(dropFlag(given, "skip"), "-skip="+was+","+now)
+}
+
+// pastDepth finds the run to continue when none has tasks left: the latest
+// one, when a -depth larger than its own is given and it found seeds past
+// its own, which the larger -depth asks.
+func pastDepth(st *store.Store, rest []string) (id string, args []string, left int, ok bool) {
+	v, given := flagValue(rest, "depth")
+	n, err := strconv.Atoi(v)
+	runs, _ := st.Runs()
+	if !given || err != nil || len(runs) == 0 {
+		return "", nil, 0, false
+	}
+	id = runs[len(runs)-1].ID
+	st.UseRun(id)
+	stats, _ := st.Stats()
+	seeds, _ := st.LoadLeftover()
+	if max(n, 1) <= max(stats.Depth, 1) || len(seeds) == 0 {
+		return "", nil, 0, false
+	}
+	return id, st.RunArgs(), len(seeds), true
 }
 
 // dropFlag is args without the flag name, as -name=value or -name value.

@@ -283,7 +283,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	failCapped := fs.Bool("fail-on-capped", false, "exit 4 also when the run hit -depth with hints left")
 	passive := fs.Bool("passive", false, "skip HTTP/crawl/JS/paths/TLS (no handshake to the target)")
 	depth := fs.Int("depth", 4, "max fan-out waves (0 = seed wave only, not unlimited)")
-	maxItems := fs.Int("max-items", 0, "max collector invocations (default 2048)")
+	maxItems := fs.Int("max-items", 0, "most collector tasks (a name, a URL, an address each, per collector) this run starts (default: no cap, katana's and httpx's); the work left is for azhaq resume, which starts as many more")
 	perTmpl := fs.Int("per-template", 0, "URLs of one template (/product?id={n}) to request; the rest are listed (default: all)")
 	maxRequests := fs.Int64("max-requests", 0, "requests to targets this run may send (0: no cap); the work left over is for azhaq resume")
 	rateFlag := fs.Float64("rate", 0, "requests per second to targets, over all hosts (0: no pace)")
@@ -296,7 +296,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	workerToken := fs.String("worker-token", os.Getenv("AZHAQ_WORKER_TOKEN"), "the token workers give (default $AZHAQ_WORKER_TOKEN, else a new one)")
 	workerOf := fs.String("worker-of", "", "internal: run as a worker of the run at this address (azhaq worker sets it)")
 	daily := fs.Int64("daily-requests", 0, "requests a day to the program's targets (-program, else this run's targets), counted over the runs in -db")
-	maxNames := fs.Int("max-names", 0, "max hostnames resolved (default 20000)")
+	maxNames := fs.Int("max-names", 0, "most hostnames this run resolves (default 200000, as many as subs keeps for a domain); the names left are for azhaq resume")
 	parallel := fs.Int("parallel", 0, "work items in flight (default 16)")
 	delay := fs.Duration("delay", 0, "pause before each uncached fetch")
 	noFollow := fs.Bool("no-follow", false, "do not follow redirects: each URL is asked once and its redirect recorded with the Location (httpx's default)")
@@ -1297,6 +1297,16 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	if n := opts.DNS.TakeoverNote("-no-takeover"); n != "" {
 		rep.Notes = append(rep.Notes, n)
 	}
+	if c := eng.Caps(); c.DepthURLs+c.DepthNames > 0 {
+		var what []string
+		if c.DepthURLs > 0 {
+			what = append(what, fmt.Sprintf("%d URLs", c.DepthURLs))
+		}
+		if c.DepthNames > 0 {
+			what = append(what, fmt.Sprintf("%d names", c.DepthNames))
+		}
+		rep.Notes = append(rep.Notes, fmt.Sprintf("-depth %d: %s found past it were not asked (their rows are coverage capped); azhaq resume -depth %d asks them", budgets.MaxDepth, strings.Join(what, " and "), budgets.MaxDepth+1))
+	}
 	if *permute {
 		if n := unvaried(leftover); n > 0 {
 			rep.Notes = append(rep.Notes, fmt.Sprintf("-permute did not vary %d names found past -depth %d: they were not resolved in this run (-depth %d reaches them)", n, budgets.MaxDepth, budgets.MaxDepth+1))
@@ -1362,7 +1372,15 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		case len(fetch.OriginsDown()) > 0:
 			rep.Stopped = fmt.Sprintf("%s stopped answering after %d timeouts, %d tasks known and not done", strings.Join(fetch.OriginsDown(), ", "), fetch.OriginTrips, left)
 		default:
-			rep.Stopped = fmt.Sprintf("-max-items %d reached, %d tasks known and not done", budgets.MaxItems, left)
+			caps := eng.Caps()
+			switch {
+			case caps.NamesLeft > 0 && caps.ItemsLeft == 0:
+				rep.Stopped = fmt.Sprintf("-max-names %d reached, %d names not looked up, %d tasks known and not done (-max-names raises it)", budgets.MaxNames, caps.NamesLeft, left)
+			case budgets.MaxItems > 0:
+				rep.Stopped = fmt.Sprintf("-max-items %d reached, %d tasks known and not done (-max-items raises it)", budgets.MaxItems, left)
+			default:
+				rep.Stopped = fmt.Sprintf("%d tasks known and not done", left)
+			}
 		}
 		rep.Resume = resumeHint(path, cut > 0, *login != "", *loginUser)
 		if *resumeRun != "" && st.TasksDone() == doneBefore && egress.Spent() && egress.Killed() == nil {

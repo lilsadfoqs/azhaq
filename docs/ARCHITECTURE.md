@@ -206,8 +206,9 @@ Up to `-parallel` items (default 16) run at a time. Each batch collector may run
 Limits:
 
 - `-depth` (default 4) bounds how many hints away from the seeds a seed may be. The same target under another scheme, and the page a redirect leads to within the site, are no step away: a link that redirects maps its destination at the link's own depth.
-- `-max-items` (default 2048) caps ordinary work items.
-- `-max-names` (default 20,000) caps the names handed to batch collectors (DNS). A domain with thousands of subdomains then does not spend the item budget on resolution.
+- `-max-items` caps the work items a run starts. There is no default cap: katana and httpx have none, and the scope, `-depth` and `-max-requests` bound what a run touches. A cap holds for each run, as `-max-requests` does: a resume given the same cap starts that many more.
+- `-max-names` (default 200,000, as many as `subs` keeps for a domain) caps the names handed to batch collectors (DNS) in a run. A domain with thousands of subdomains then does not spend the item budget on resolution.
+- A limit that holds work back is named in the summary with its flag: `-max-items` and `-max-names` in `stopped`, and what `-depth` left unasked in a note that gives its count (the rows are `coverage: capped`). A resume with a larger `-depth` asks them.
 - `-max-requests` caps the requests sent to targets, and `-rate` paces them over all hosts. See [The request budget](#the-request-budget).
 - `-daily-requests` gives a program a number of requests per UTC day. The program is `-program`, else the run's targets. Requests are counted over the runs in the database (table `spend`), and a run starts with what is left.
 
@@ -306,7 +307,7 @@ The run's options are stored with it. The database is left out, and so are the v
 
 1. runs it again with its stored options plus any given;
 2. rebuilds the queues from the tasks;
-3. counts done tasks against the item budget;
+3. leaves the done tasks out of the item budget: `-max-items` and `-max-names` hold for each run;
 4. queues the others again, behind the task they wait for when that is not done either;
 5. clears their done-marks.
 

@@ -164,15 +164,12 @@ func cmdCrawl(args []string) error {
 	if !*sweep && !explicit["kf"] && !explicit["paths"] {
 		run = append(run, "-no-paths")
 	}
-	// A crawler asks every page it finds: no template fold and no item cap
-	// unless -per-template or -max-items says so.
+	// A crawler asks every page it finds: no template fold unless -per-template
+	// says so (and no item cap, as run has none).
 	if *iqp {
 		run = append(run, "-per-template=1")
 	} else if !explicit["per-template"] {
 		run = append(run, "-per-template=1000000")
-	}
-	if !explicit["max-items"] {
-		run = append(run, "-max-items=1000000")
 	}
 	run = append(run, crawlRegexArgs(inScope, "-crawl-in")...)
 	run = append(run, crawlRegexArgs(outScope, "-crawl-out")...)
