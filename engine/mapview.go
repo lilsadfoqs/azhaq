@@ -54,6 +54,7 @@ type MapEntry struct {
 	// nor was refused.
 	Service, Product, Version string
 	State                     string
+	Names                     []string // the names that point to the port's address, sorted
 	at                        time.Time // a port row: when the scan that found it ran
 }
 
@@ -719,6 +720,9 @@ func (m MapEntry) Line() string {
 		}
 		b.WriteString("  ")
 		b.WriteString(p)
+	}
+	if len(m.Names) > 0 {
+		fmt.Fprintf(&b, "  (names: %s)", strings.Join(m.Names, ", "))
 	}
 	if m.Count > 1 {
 		if m.NotAsked > 0 {

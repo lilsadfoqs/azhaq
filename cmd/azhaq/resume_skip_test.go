@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"github.com/lilsadfoqs/azhaq/internal/ledger"
 	"net"
 	"strings"
@@ -118,5 +119,37 @@ func TestResumeRangeScanAsksEachAddressOnce(t *testing.T) {
 		if n > 1 {
 			t.Errorf("%s was asked %d times", target, n)
 		}
+	}
+}
+
+// Names that point to one address are one endpoint in the summary and in
+// query, with the names on its row.
+func TestRunCountsAPortOnceWhateverNamesPointToTheAddress(t *testing.T) {
+	port := portsServer(t)
+	zone := serveZone(t, fakeZone{a: map[string]string{"a.example.test": "127.0.0.1", "b.example.test": "127.0.0.1"}})
+	t.Chdir(t.TempDir())
+	out, rep, code := runContract(t, "run", "-list", hostsFile(t, "a.example.test", "b.example.test"), "-ports", port,
+		"-resolvers", zone, "-allow", "example.test", "-allow", "127.0.0.1", "-sources", "none", "-skip", "http,tls,paths", "-db", "n.db")
+	if code != exitOK {
+		t.Fatalf("exit %d: failed %+v notes %q", code, rep.Failed, rep.Notes)
+	}
+	var rows []map[string]any
+	for _, r := range jsonRows(t, out) {
+		if r["type"] == "Port" {
+			rows = append(rows, r)
+		}
+	}
+	if len(rows) != 1 || rows[0]["key"] != "127.0.0.1:"+port+"/tcp" {
+		t.Fatalf("port rows %v", rows)
+	}
+	if names := fmt.Sprint(rows[0]["names"]); names != "[a.example.test b.example.test]" {
+		t.Errorf("names %s", names)
+	}
+	if rep.Counts["ports"] != 1 {
+		t.Errorf("the summary counts %d ports: %v", rep.Counts["ports"], rep.Counts)
+	}
+	q, _, _ := runContract(t, "query", "-db", "n.db", "-type", "Port", "-fields", "key,names")
+	if n := len(lines(q)); n != 1 {
+		t.Errorf("query lists %d port rows:\n%s", n, q)
 	}
 }

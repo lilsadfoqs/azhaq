@@ -66,7 +66,7 @@ The map has one row per entity, best first: the target's own pages and APIs, the
 | Field | Meaning |
 | --- | --- |
 | `type` | `URL`, `Hostname`, `Domain`, `IPAddress`, `Port`, `Organization`, … |
-| `key` | The URL, name or address. For a port, `host:port/tcp` (`/udp`). For a folded page, its `{n}` template. |
+| `key` | The URL, name or address. For a port, `address:port/tcp` (`/udp`): one row for each endpoint, however many names point to the address. For a folded page, its `{n}` template. |
 | `scope` | `target`: what you asked about. `fanout`: found on the way (other hosts, CNAME targets). |
 | `coverage` (URLs) | What azhaq did with the URL: `visited`, `catchall`, `error`, `gone`, `hint`, `skipped` or `capped`. See [Coverage](#coverage). |
 | `evidence` (URLs) | How azhaq knows the row: the strongest level of its sources, from `answered` to `given`. See [Evidence](#evidence). |
@@ -74,6 +74,7 @@ The map has one row per entity, best first: the target's own pages and APIs, the
 | `answer` (URLs) | Set when the status says less than it looks, such as `500 without input`. See [Evidence](#evidence). |
 | `role` (URLs) | What the URL is: `app` (a front page), `auth` (401), `forbidden` (403), `api`, `page`, `script`, `asset`, `sourcemap`, `manifest`, `client-route`, `websocket`. |
 | `role` (names) | The status of a name: `live`, `sibling`, `unresolved`, `dead` or `wildcard`. [CONCEPTS](../CONCEPTS.md#names) defines them. |
+| `names` (ports) | The names that point to the port's address, sorted; the row's key is the address. |
 | `proof` | Why the row is as it is, in one line: `status=401 …`, `guard=canActivate`. |
 | `first_seen` | When the workspace first saw the entity. |
 | `guard` | What a client route's router checks before it draws the view. See [Client routes](#client-routes). |
@@ -120,7 +121,7 @@ found in
 
 - With `-stream`, `run` prints each URL, name that resolves, address and open port as it is found. They come before the map.
 - One line for each key the map has a row for: a URL found by the crawl and answered later, or the front page found twice, prints once, as the first way it was found (its status is in the map). The address of an IP host is a row and a line too (`found  address 127.0.0.1`).
-- Not streamed: names that do not resolve, which the map folds into a summary row. An open-ports line is one line for a host and stands for its port rows (`host:port/tcp`); the same host's ports print again only when a later scan finds others.
+- Not streamed: names that do not resolve, which the map folds into a summary row. An open-ports line is one line for a host and stands for its port rows (`address:port/tcp`); the same host's ports print again only when a later scan finds others.
 - An answer line looks like `found  answer http://app/openapi.json  [200]`. An answer that is the page every unknown path gets ends with `(catch-all: the page any unknown path gets)`.
 - With `-json`, each is an object with `"type":"found"` and these fields:
 

@@ -48,7 +48,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 
 ### Ports from naabu
 
-Each open port a naabu line names is a `Port` row (`host:port/tcp`, or `/udp`), as `ports` makes them, so `query -type Port`, the summary counts and the MCP tools list it. The lines naabu repeats fold into one row. naabu says nothing of the service, so the row has none until `ports` or `probe` asks. `export -format targets` lists web services that answered: run `probe` on the ports to have them.
+Each open port a naabu line names is a `Port` row (`address:port/tcp`, or `/udp`; names that point to one address are one row, with the names on it), as `ports` makes them, so `query -type Port`, the summary counts and the MCP tools list it. The lines naabu repeats fold into one row. naabu says nothing of the service, so the row has none until `ports` or `probe` asks. `export -format targets` lists web services that answered: run `probe` on the ports to have them.
 
 ### Where the facts go
 
