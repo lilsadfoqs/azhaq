@@ -80,7 +80,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 - `"script placeholder (NaN, undefined, null)"`.
 - `"dot segment"`.
 - `"malformed link (wildcard, quote, bracket, ellipsis)"`: the ellipsis is `…` or a `...` that ends the path or is a segment of its own.
-- `"fuzzing placeholder or request-line fragment"`: a path segment that is a fuzzer's keyword in capitals (`FUZZ`, `FUZ2Z`, with or without an extension) or a `{payload}` or `{FUZZ}` slot, or a path that ends in `HTTP/1.0` or `HTTP/1.1` (`/HTTP/1.1`, `/index.php%20HTTP/1.1`). `/fuzz`, `/users/{id}` and `/docs/http/1.1` stay.
+- `"fuzzing placeholder or request-line fragment"`: a path segment, or a query name or value, that is a fuzzer's keyword in capitals (`FUZZ`, `FUZ2Z`, `FUZZFUZ2Z`, with or without an extension) or a `{payload}` or `{FUZZ}` slot, or a path or query value that ends in `HTTP/1.0` or `HTTP/1.1` (`/HTTP/1.1`, `/index.php%20HTTP/1.1`, `?artist=1HTTP/1.1`). `/fuzz`, `?q=fuzz`, `?proto=HTTP/1.1`, `/users/{id}` and `/docs/http/1.1` stay.
 - `"link cut at the end of its sentence"`: a path or query that ends in `.`, `,`, `;`, `'` or an unmatched `)` or `]`.
 
 Every source's URLs go through these rules, OTX's too.

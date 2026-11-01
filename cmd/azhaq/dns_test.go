@@ -846,3 +846,22 @@ func TestDNSCountsTakeoverQuestionsOutsideTheScope(t *testing.T) {
 		t.Errorf("-no-takeover asked %d registration questions", got)
 	}
 }
+
+// -rtf a with no type flag keeps every answered name that has no A: one with
+// only another type (AAAA, SRV), no record at all, and a name that does not
+// exist, in -json as dnsx gives them; the names with an A are left out.
+func TestDNSResponseTypeFilterKeepsEveryNameWithoutThatRecord(t *testing.T) {
+	t.Chdir(t.TempDir())
+	lab := startLab(t)
+	l := writeList(t, "lab.zz", "www.lab.zz", "api.lab.zz", "v6.lab.zz", "nope.lab.zz", "_sip._tcp.lab.zz", "dual.lab.zz")
+	ls, rep, code := dnsOut(t, "-l", l, "-r", lab.addr, "-rtf", "a", "-json")
+	r := dnsRows(t, ls)
+	if code != exitOK || len(r) != 3 || r["v6.lab.zz"] == nil || r["_sip._tcp.lab.zz"] == nil || r["nope.lab.zz"]["status_code"] != "NXDOMAIN" || rep.Results != 3 {
+		t.Errorf("exit %d, rows %d: %v", code, len(r), ls)
+	}
+	// a type flag too: a name needs a record of a type asked
+	ls, _, _ = dnsOut(t, "-l", l, "-r", lab.addr, "-rtf", "a", "-a", "-json")
+	if len(ls) != 0 {
+		t.Errorf("-a -rtf a: %v", ls)
+	}
+}

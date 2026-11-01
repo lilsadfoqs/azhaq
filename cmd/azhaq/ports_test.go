@@ -582,3 +582,38 @@ func TestPortsExcludeCDNFlags(t *testing.T) {
 		t.Errorf("both: %v", err)
 	}
 }
+
+// -rate given to resume replaces the -rate the stopped ports run was paced
+// at: the 8 connects left, at the stored 2 a second, would take over 3 s.
+func TestPortsResumeRateWins(t *testing.T) {
+	t.Chdir(t.TempDir())
+	ports := listenOpen(t, 10)
+	spec := strings.Trim(strings.Join(strings.Fields(fmt.Sprint(ports)), ","), "[]")
+	if _, rep, code := runContract(t, "ports", "-host", "127.0.0.1", "-p", spec, "-order", "asc", "-detect", "none", "-rate", "2", "-max-requests", "2", "-db", "r.db"); code != exitLimit {
+		t.Fatalf("first run: exit %d\n%+v", code, rep)
+	}
+	begin := time.Now()
+	out, rep, code := runContract(t, "resume", "-db", "r.db", "-rate", "1000", "-max-requests", "0")
+	if code != exitOK || rep.Results != 8 || len(lines(out)) != 8 {
+		t.Fatalf("resume: exit %d, %d rows\n%+v", code, rep.Results, rep)
+	}
+	if took := time.Since(begin); took > 2*time.Second {
+		t.Errorf("resume -rate 1000 took %s: the stored -rate 2 held", took)
+	}
+}
+
+func TestRunSpellingRenamesACommandsFlags(t *testing.T) {
+	got := runSpelling("ports", []string{"-rate", "1000", "--c=50", "-quiet", "-max-requests", "0"})
+	if want := []string{"-port-rate", "1000", "-port-workers=50", "-quiet", "-max-requests", "0"}; !slices.Equal(got, want) {
+		t.Errorf("ports: %v", got)
+	}
+	if got := runSpelling("dirs", []string{"-rate=5", "-t", "3"}); !slices.Equal(got, []string{"-dirs-rate=5", "-dirs-threads", "3"}) {
+		t.Errorf("dirs: %v", got)
+	}
+	if got := runSpelling("params", []string{"-rate", "9"}); !slices.Equal(got, []string{"-params-rate", "9"}) {
+		t.Errorf("params: %v", got)
+	}
+	if got := runSpelling("probe", []string{"-rate", "9"}); !slices.Equal(got, []string{"-rate", "9"}) {
+		t.Errorf("probe keeps run's name: %v", got)
+	}
+}

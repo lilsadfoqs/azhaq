@@ -558,9 +558,9 @@ The allowed hosts are then requested, counted and in the ledger.
 
 ### `dns -json` prints no row for a name that does not exist
 
-**Why:** As dnsx does, `-json` gives a row for each name that has a record of the type asked, which is A when no type flag is given. A name that does not exist, or has no such record, is counted as `did not resolve` in the summary.
+**Why:** `-json` gives a row for each name that has a record of the type asked, as dnsx does with a type flag such as `-a`; with no type flag, azhaq asks A and does the same (dnsx gives a row to every answered name then). A name that does not exist, or has no such record, is counted as `did not resolve` in the summary.
 
-**Fix:** `-rcode nxdomain` (or `noerror`, `servfail`, a number) prints those names with their `status_code`. `-mx`, `-txt`, `-aaaa` and the other type flags ask for other records.
+**Fix:** `-rcode nxdomain` (or `noerror`, `servfail`, a number) prints those names with their `status_code`. `-mx`, `-txt`, `-aaaa` and the other type flags ask for other records. `-rtf a` prints every answered name that has no A, a name that does not exist included.
 
 ### `dns -timeout 5s` did not stop the run after 5 seconds
 

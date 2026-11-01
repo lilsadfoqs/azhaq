@@ -105,6 +105,7 @@ The summary also lists failures per kind of error, and takeover candidates: a CN
 - With a type flag (`-mx`, `-txt`, …), the types are those flags'.
 - With `-rcode`, only the names whose answer has that code get a row, with its `status_code`. That is how to list the names that do not exist.
 - With `-all`, `-any` or `-axfr`, `-json` gives a row to every name a resolver answered, including one with no record at all.
+- With `-response-type-filter` and no type flag, `-json` gives a row to every answered name that has none of the records filtered, as dnsx does: `-rtf a` keeps the names that have only AAAA, TXT, MX or SRV, that have no record (NODATA), that do not exist, and the CNAME-only ones, and leaves out the names with an A. In text, a kept name prints the records it has, so one with none prints nothing. With a type flag too (`-a -txt -rtf a`), a name needs a record of a type a flag asked.
 - A name whose CNAME points at what is gone also gets its `-json` row, with `takeover`, whatever the types asked: it is a finding, and it is not counted as `did not resolve`.
 
 ### Types
@@ -185,7 +186,7 @@ The summary also lists failures per kind of error, and takeover candidates: a CN
 | `-resp` | bool |  | print each record as: NAME [TYPE] [VALUE] |
 | `-resp-only` | bool |  | print the values of the records only |
 | `-rcode` | string |  | print NAME [RCODE] for names whose answer has one of these codes, comma-separated (noerror, nxdomain, servfail, refused, or a number); a name with no records is shown |
-| `-response-type-filter` | string |  | print names with no record of these types, comma-separated (a, cname, ...) |
+| `-response-type-filter` | string |  | print names with no record of these types, comma-separated (a, cname, ...); with -json and no type flag, a name that does not exist or has only other records has its row too |
 
 **Scope and safety**
 

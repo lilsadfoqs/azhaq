@@ -102,6 +102,7 @@ func cmdResume(args []string) error {
 			return err
 		}
 	}
+	rest = runSpelling(command, rest)
 	switch command {
 	case "ports":
 		return resumePorts(db, id, runArgs, rest)
@@ -351,4 +352,39 @@ func redactProbeOpts(raw string) string {
 		return raw
 	}
 	return string(out)
+}
+
+// localFlags are the flags a command names differently from run, whose
+// stored run holds them under run's name: ports -rate is run's -port-rate.
+var localFlags = map[string]map[string]string{
+	"ports": {"rate": "port-rate", "min-rate": "port-min-rate", "workers": "port-workers", "c": "port-workers",
+		"connect-timeout": "port-timeout", "retries": "port-retries", "max-retries": "port-retries"},
+	"dirs":   {"rate": "dirs-rate", "t": "dirs-threads"},
+	"params": {"rate": "params-rate"},
+}
+
+// runSpelling gives the flags a resume was given under the names the
+// stored run holds them by, so that -rate 1000 replaces a ports run's
+// -port-rate instead of setting run's own -rate beside it.
+func runSpelling(command string, args []string) []string {
+	names := localFlags[command]
+	if len(names) == 0 {
+		return args
+	}
+	out := make([]string, len(args))
+	copy(out, args)
+	for i, a := range out {
+		dashes := len(a) - len(strings.TrimLeft(a, "-"))
+		if dashes == 0 || dashes > 2 {
+			continue
+		}
+		name, val, inline := strings.Cut(a[dashes:], "=")
+		if to, ok := names[name]; ok {
+			out[i] = "-" + to
+			if inline {
+				out[i] += "=" + val
+			}
+		}
+	}
+	return out
 }

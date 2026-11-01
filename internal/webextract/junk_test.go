@@ -279,3 +279,39 @@ func TestJunkTemplateKeepsRealPaths(t *testing.T) {
 		}
 	}
 }
+
+// A fuzzing keyword or a pasted request line in a query is junk like one in
+// a path; real values close to them stay.
+func TestJunkTemplateInQuery(t *testing.T) {
+	for _, raw := range []string{
+		"http://a.test/artists.php?artist=FUZZ",
+		"http://a.test/artists.php?artist=FUZZFUZ2Z",
+		"http://a.test/artists.php?artist=FUZ2Z",
+		"http://a.test/listproducts.php?artist={payload}",
+		"http://a.test/listproducts.php?artist=%7Bpayload%7D",
+		"http://a.test/a.php?artist=1HTTP/1.1",
+		"http://a.test/a.php?artist=1%20HTTP/1.1",
+		"http://a.test/a.php?id=2&artist=1+HTTP/1.0",
+		"http://a.test/a.php?FUZZ=1",
+		"http://a.test/a.php?q=FUZZ.php",
+	} {
+		if why := JunkReason(raw); why != JunkTemplate {
+			t.Errorf("JunkReason(%s) = %q, want %q", raw, why, JunkTemplate)
+		}
+	}
+	for _, raw := range []string{
+		"http://a.test/a.php?q=fuzz",
+		"http://a.test/a.php?q=FUZZY",
+		"http://a.test/a.php?q=fuzzing&x=payload",
+		"http://a.test/a.php?q=HTTP/2",
+		"http://a.test/a.php?proto=HTTP/1.1",
+		"http://a.test/a.php?q=http/1.1",
+		"http://a.test/a.php?id={id}",
+		"http://a.test/a.php?q=MyHTTP/1.1",
+		"http://a.test/a.php?q=a=FUZZ-list",
+	} {
+		if why := JunkReason(raw); why != "" {
+			t.Errorf("JunkReason(%s) = %q, want none", raw, why)
+		}
+	}
+}
