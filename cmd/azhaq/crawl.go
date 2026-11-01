@@ -213,6 +213,7 @@ func cmdCrawl(args []string) error {
 	facts, rejected, offsite := crawlFacts(obs)
 	counts := map[string]int{}
 	var otherMethod, scriptsOnly int
+	otherAsked := map[int]int{} // what the GET of those routes answered
 	var kinds crawlKinds
 	for _, r := range rows {
 		if r.Entity.Type != types.TypeURL || (*noShell && r.Coverage == "catchall") || r.Scope != "target" {
@@ -235,6 +236,9 @@ func cmdCrawl(args []string) error {
 		switch {
 		case len(r.Methods) > 0 && !slices.Contains(r.Methods, "GET"):
 			otherMethod++
+			if r.Status > 0 {
+				otherAsked[r.Status]++
+			}
 		case r.Coverage == "hint" && len(r.Methods) == 0 && strings.HasSuffix(r.Proof, engine.ProofScriptsOnly):
 			scriptsOnly++
 		}
@@ -264,7 +268,7 @@ func cmdCrawl(args []string) error {
 	rep.Results, rep.Counts = out.w.count(), counts
 	kinds.put(counts, len(rejected))
 	if otherMethod > 0 {
-		rep.Notes = append(rep.Notes, fmt.Sprintf("%d listed URLs are routes scripts call with a method other than GET, so a GET may answer 404 or 405 (-json has methods; -ot '{{method}} {{url}}' prints them)", otherMethod))
+		rep.Notes = append(rep.Notes, fmt.Sprintf("%d listed URLs are routes scripts call with a method other than GET, so a GET may answer 404 or 405%s (-json has methods; -ot '{{method}} {{url}}' prints them)", otherMethod, askedNote(otherAsked)))
 	}
 	if scriptsOnly > 0 {
 		rep.Notes = append(rep.Notes, fmt.Sprintf("%d listed URLs are named only in scripts, with no call to say how they are used, and a GET answers 404 (-json has proof)", scriptsOnly))
@@ -927,4 +931,23 @@ func markResponses(rows []engine.MapEntry, dir string) {
 			rows[i].ResponseFile = file
 		}
 	}
+}
+
+// askedNote says what the GETs of routes called with another method
+// answered, so the requests they cost can be weighed: " (asked: 8 answered
+// 404, 2 answered 405)".
+func askedNote(by map[int]int) string {
+	if len(by) == 0 {
+		return ""
+	}
+	codes := make([]int, 0, len(by))
+	for c := range by {
+		codes = append(codes, c)
+	}
+	sort.Ints(codes)
+	parts := make([]string, len(codes))
+	for i, c := range codes {
+		parts[i] = fmt.Sprintf("%d answered %d", by[c], c)
+	}
+	return " (asked: " + strings.Join(parts, ", ") + ")"
 }

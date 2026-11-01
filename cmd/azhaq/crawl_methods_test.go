@@ -67,6 +67,7 @@ func TestCrawlShowsTheMethodOfScriptCalledRoutes(t *testing.T) {
 		}
 	}
 	if !strings.Contains(errOut, "3 listed URLs are routes scripts call with a method other than GET") ||
+		!strings.Contains(errOut, "(asked: 2 answered 404, 1 answered 405)") ||
 		!strings.Contains(errOut, "{{method}}") {
 		t.Errorf("the summary does not say that plain output lists routes with other methods:\n%s", errOut)
 	}

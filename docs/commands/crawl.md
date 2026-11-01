@@ -122,8 +122,24 @@ These filters limit what is printed, not what is crawled.
 - They are not pages. A GET may answer 404 or 405.
 - `-json` rows carry `methods` (`["POST"]`) and a `proof`: `GET answers 404; called with POST`.
 - In plain output, `-ot '{{method}} {{url}}'` or `-f method,url` prints the methods. A route gets one line for each method. A page that no script calls another way gets `GET`.
+- The summary counts them and says what their GETs answered: `(asked: 8 answered 404, 2 answered 405)`. They are requests too, and they count against `-max-requests`.
 - A string that a script only names, with no call, is listed when a GET fails. Its `proof` is `GET answers 404; found only in scripts, method unknown`.
 - Library scripts are not read for routes: `react`, `jquery` and `angular`, also under a versioned name such as `angular_1-7-7.js`.
+
+### What a crawl sends
+
+A crawl sends more requests than katana on a single-page app, because it asks the routes its scripts name. katana's `-jc` finds few of them. Every request is in the ledger with the collector that sent it. On a Juice Shop of 77 server routes the crawl finds 53 of them and katana 1; these are the kinds of request:
+
+| Kind | What it is |
+| --- | --- |
+| Pages and scripts | The start page, its scripts and stylesheets, and the links on them. |
+| Routes a script names | Each `/api/…` and `/rest/…` route found in a script, asked once with GET. Most of the crawl's requests. |
+| Routes called with another method | The GETs of routes scripts call with POST and the like: counted in a note, with what they answered. |
+| Unknown-path probes | One request for a path that cannot exist at the root and in each top-level directory, to tell a catch-all page from a real one. |
+
+- A route a script only lists in its route table (a hash-routed app, `#/about`) is a view the app draws: it is listed, and not asked.
+- A 500 or 502 answer is the answer: it is not asked again. A 429 or 503 is, with `-backoff` (on in `crawl`): after a wait, up to 3 more times, so a URL that always answers 503 costs 4 requests. The summary names the host.
+- A route is asked whatever its neighbours answered. Some routes of a directory that answers 500 to unknown paths are real, and a request is the only way to tell.
 
 ### Katana lines
 

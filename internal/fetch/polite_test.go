@@ -57,6 +57,34 @@ func TestBackoffGivesUpAndSaysSo(t *testing.T) {
 	}
 }
 
+// Only 429 and 503 say "wait": a 500 or a 502 is the answer and is not asked
+// again, so a route that errors costs one request.
+func TestBackoffDoesNotRetryOtherServerErrors(t *testing.T) {
+	Reset()
+	defer Reset()
+	backoffBase = time.Millisecond
+	defer func() { backoffBase = time.Second }()
+	Backoff = true
+	Retry = 1
+	var n atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n.Add(1)
+		if strings.HasSuffix(r.URL.Path, "/gateway") {
+			w.WriteHeader(http.StatusBadGateway)
+			return
+		}
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+	for _, p := range []string{"/boom", "/gateway"} {
+		before := n.Load()
+		res, _, err := Do(context.Background(), srv.Client(), srv.URL+p)
+		if err != nil || res.Status < 500 || n.Load()-before != 1 {
+			t.Errorf("%s: %v, status %d after %d requests", p, err, res.Status, n.Load()-before)
+		}
+	}
+}
+
 func TestWithoutBackoffA429IsTheAnswer(t *testing.T) {
 	Reset()
 	defer Reset()
