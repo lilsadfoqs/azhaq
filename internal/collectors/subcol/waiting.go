@@ -1,8 +1,10 @@
 package subcol
 
 import (
+	"context"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -61,4 +63,22 @@ func Waiting() []Wait {
 		return out[i].Source < out[j].Source
 	})
 	return out
+}
+
+type holdKey struct{}
+
+// holdState is what a source learns about the run it is in: how many
+// sources are still running, and how many gave names.
+type holdState struct {
+	pending atomic.Int32
+	gave    atomic.Int32
+}
+
+// holdsRun says whether the source asking is the only one still running and
+// the others gave names: what it does next is the whole of the wait. A
+// retry of its own (subfinder asks once) is not made then; with no names in
+// hand it may still be the only way to get any, and is made.
+func holdsRun(ctx context.Context) bool {
+	h, _ := ctx.Value(holdKey{}).(*holdState)
+	return h != nil && h.pending.Load() <= 1 && h.gave.Load() > 0
 }

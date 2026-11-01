@@ -478,7 +478,12 @@ func crtshJSON(ctx context.Context, domain string, sess *subscraping.Session) ([
 			break
 		}
 		// crt.sh is often down for a while: a few retries, as many as the
-		// source's own time (-source-timeout) leaves room for.
+		// source's own time (-source-timeout) leaves room for, but not
+		// when this retry would be all the run waits for: subfinder asks once.
+		if holdsRun(ctx) {
+			addNote(ctx, "not asked again: every other source had answered and the run does not wait for a retry")
+			break
+		}
 		if dl, ok := ctx.Deadline(); ok && time.Until(dl) <= wait {
 			break
 		}

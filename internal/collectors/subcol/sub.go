@@ -290,6 +290,8 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 	var mu sync.Mutex // results, reported
 	reported := make([]bool, len(run))
 	closed := false
+	hold := &holdState{}
+	hold.pending.Store(int32(len(run)))
 	for i, s := range run {
 		var sctx context.Context
 		var cancel context.CancelFunc
@@ -309,6 +311,7 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		sctx = withThrottle(sctx, &throttles[i])
 		sctx = context.WithValue(sctx, noteKey{}, &notes[i])
 		sctx = context.WithValue(sctx, answerKey{}, &answers[i])
+		sctx = context.WithValue(sctx, holdKey{}, hold)
 		if chk != nil {
 			sctx = context.WithValue(sctx, checkerKey{}, chk)
 		}
@@ -339,6 +342,10 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 				reported[i] = true
 			}
 			mu.Unlock()
+			if err == nil && len(names) > 0 {
+				hold.gave.Add(1)
+			}
+			hold.pending.Add(-1)
 			if !s.verify {
 				chk.know(cleaned(names, domain))
 				h.pass(names) // a padding source's names wait for their check
