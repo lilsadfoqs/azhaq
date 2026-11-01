@@ -765,6 +765,19 @@ def event(ts, kind, iid, cmd):
     return "%d %s" % (ts, json.dumps({"type": kind, "item": {"id": iid, "type": "command_execution", "command": cmd}}))
 
 
+class GateOrigin(unittest.TestCase):
+    """The briefs say where ./bin/azhaq came from: a CI build, or the release's install script."""
+
+    def test_both_parts_name_the_origin(self):
+        trial = os.path.join(HERE, "..", "trial")
+        v = {"DOMAIN1": "a.test", "NET1": "10.0.0.0/24", "DNS1": "10.0.0.53"}
+        for origin, said in (("build", "built from the commit under review"), ("release", "installed by the release's install script")):
+            for part in ("a", "b"):
+                text = render_brief.render_gate(part, "v9", v, trial, "azhaq", origin)
+                self.assertIn(said, text, (origin, part))
+                self.assertNotIn("__", text)
+
+
 class Grade(unittest.TestCase):
     def setUp(self):
         self.d = tempfile.mkdtemp()

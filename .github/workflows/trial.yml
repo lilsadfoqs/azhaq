@@ -76,6 +76,8 @@ jobs:
     if: needs.kind.outputs.kind == 'gate'
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    outputs:
+      release: ${{ steps.b.outputs.release }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -84,10 +86,13 @@ jobs:
         with:
           go-version: stable
       - name: build azhaq
-        # The build under test: this tagged commit (any branch, or next), not
-        # a release. Both parts install this same binary; the install script
-        # itself is checked separately, against a snapshot release (ci.yml).
+        id: b
+        # The build under test: this tagged commit (any branch, or next). When
+        # the commit is a release's, the parts install that release with its
+        # install script instead (release below); the script itself is also
+        # checked against a snapshot release in ci.yml.
         run: |
+          echo "release=$(git describe --exact-match --tags --match 'v[0-9]*' HEAD 2>/dev/null || true)" >> "$GITHUB_OUTPUT"
           v=$(git describe --tags --match 'v[0-9]*' --always)
           CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=$v" -o azhaq ./cmd/azhaq
           ./azhaq version
@@ -124,11 +129,23 @@ jobs:
         with:
           name: gate-azhaq
           path: _bin
+      - uses: sigstore/cosign-installer@v3
       - name: azhaq
+        # A release's commit: the release, by its install script with the
+        # signature required, as a user installs it. Otherwise the CI build.
+        env:
+          RELEASE: ${{ needs.build.outputs.release }}
         run: |
           mkdir -p "$HOME/trial/bin" "$HOME/ci"
-          install -m 755 _bin/azhaq "$HOME/trial/bin/azhaq"
-          cp _bin/azhaq.version "$HOME/ci/azhaq.version"
+          if [ -n "$RELEASE" ]; then
+            sh scripts/install.sh -v "$RELEASE" -d "$HOME/trial/bin" --require-signature
+            echo "$RELEASE" > "$HOME/ci/azhaq.version"
+            echo release > "$HOME/ci/azhaq.origin"
+          else
+            install -m 755 _bin/azhaq "$HOME/trial/bin/azhaq"
+            cp _bin/azhaq.version "$HOME/ci/azhaq.version"
+            echo build > "$HOME/ci/azhaq.origin"
+          fi
           "$HOME/trial/bin/azhaq" version
       - name: codex
         env:
@@ -186,7 +203,7 @@ jobs:
           find "$GITHUB_WORKSPACE" -mindepth 1 -delete
       - name: review
         run: |
-          python3 -I "$HOME/ci/render_brief.py" gate-a "$(cat "$HOME/ci/azhaq.version")" "$HOME/ci/vars.json" "$HOME/ci" > "$HOME/ci/brief.md"
+          python3 -I "$HOME/ci/render_brief.py" gate-a "$(cat "$HOME/ci/azhaq.version")" "$HOME/ci/vars.json" "$HOME/ci" "$(cat "$HOME/ci/azhaq.origin")" > "$HOME/ci/brief.md"
           cd "$HOME/trial"
           if [ "$DRYRUN" = 1 ]; then
             nets=$(jq -r '.NET1' "$HOME/ci/vars.json" 2>/dev/null || true)
@@ -248,14 +265,24 @@ jobs:
         with:
           name: gate-azhaq
           path: _bin
+      - uses: sigstore/cosign-installer@v3
       - name: azhaq
-        # Already built (the `build` job); installing it is not part of this
-        # review (the gate's part A keeps that timed; item 6 checks the
-        # install script itself, against a snapshot release, in ci.yml).
+        # Installed before the review, as in part A: a release's commit gets
+        # the release by its install script with the signature required,
+        # any other commit the CI build.
+        env:
+          RELEASE: ${{ needs.build.outputs.release }}
         run: |
           mkdir -p "$HOME/trial/bin" "$HOME/ci"
-          install -m 755 _bin/azhaq "$HOME/trial/bin/azhaq"
-          cp _bin/azhaq.version "$HOME/ci/azhaq.version"
+          if [ -n "$RELEASE" ]; then
+            sh scripts/install.sh -v "$RELEASE" -d "$HOME/trial/bin" --require-signature
+            echo "$RELEASE" > "$HOME/ci/azhaq.version"
+            echo release > "$HOME/ci/azhaq.origin"
+          else
+            install -m 755 _bin/azhaq "$HOME/trial/bin/azhaq"
+            cp _bin/azhaq.version "$HOME/ci/azhaq.version"
+            echo build > "$HOME/ci/azhaq.origin"
+          fi
           "$HOME/trial/bin/azhaq" version
       - name: codex
         env:
@@ -298,7 +325,7 @@ jobs:
       - name: review
         run: |
           echo '{}' > "$HOME/ci/vars.json"
-          python3 -I "$HOME/ci/render_brief.py" gate-b "$(cat "$HOME/ci/azhaq.version")" "$HOME/ci/vars.json" "$HOME/ci" > "$HOME/ci/brief.md"
+          python3 -I "$HOME/ci/render_brief.py" gate-b "$(cat "$HOME/ci/azhaq.version")" "$HOME/ci/vars.json" "$HOME/ci" "$(cat "$HOME/ci/azhaq.origin")" > "$HOME/ci/brief.md"
           cd "$HOME/trial"
           if [ "$DRYRUN" = 1 ]; then
             {

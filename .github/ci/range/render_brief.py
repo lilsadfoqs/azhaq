@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""render_brief.py KIND VERSION VARS.json TRIAL_DIR: prints the brief for KIND
+"""render_brief.py KIND VERSION VARS.json TRIAL_DIR [build|release]: prints the brief for KIND
 with its placeholders filled: the release under test (already installed in
 ./bin, except gate's part B which installs nothing), each client's domain,
 address range and resolver (from build.py's vars.json), and what each phase
@@ -35,7 +35,7 @@ PHASES = {
 }
 
 GATE_FILE = "GATE.md"
-GATE_AZHAQ_TOOLS = ("azhaq __VERSION__ is at ./bin/azhaq, built from the commit under review. Use it as your main tool. "
+GATE_AZHAQ_TOOLS = ("azhaq __VERSION__ is at ./bin/azhaq, __AZHAQ_ORIGIN__. Use it as your main tool. "
                     "Use other tools only where it cannot do the job, and log each such fallback with the reason in "
                     "./notes/fallbacks.md.")
 GATE_USUAL_TOOLS = USUAL + " azhaq is not installed here and must not be used."
@@ -73,16 +73,22 @@ def gate_part(text, part):
     return shared + blocks[want]
 
 
-def render_gate(part, version, variables, trial_dir, tools):
+# Where ./bin/azhaq came from: a CI build of the commit, or the release.
+ORIGINS = {"build": "built from the commit under review",
+           "release": "installed by the release's install script, with the checksum and signature checked"}
+
+
+def render_gate(part, version, variables, trial_dir, tools, origin="build"):
     """PART "a" or "b" of GATE.md, TOOLS "azhaq" or "usual" for part a's
     engagement (part b always has azhaq already installed)."""
     with open(os.path.join(trial_dir, GATE_FILE), encoding="utf-8") as f:
         text = gate_part(f.read(), part)
     values = dict(variables)
     values["VERSION"] = version
+    values["AZHAQ_ORIGIN"] = ORIGINS[origin]
     if part == "a":
         tool_text = GATE_AZHAQ_TOOLS if tools == "azhaq" else GATE_USUAL_TOOLS
-        values["ENGAGEMENT_TOOLS"] = tool_text.replace("__VERSION__", version)
+        values["ENGAGEMENT_TOOLS"] = tool_text.replace("__VERSION__", version).replace("__AZHAQ_ORIGIN__", ORIGINS[origin])
     for k, v in values.items():
         text = text.replace("__%s__" % k, v)
     left = sorted(set(re.findall(r"__[A-Z0-9_]+__", text)))
@@ -92,17 +98,18 @@ def render_gate(part, version, variables, trial_dir, tools):
 
 
 def main(argv):
-    if len(argv) != 5:
+    if len(argv) not in (5, 6) or (len(argv) == 6 and argv[5] not in ORIGINS):
         print(__doc__, file=sys.stderr)
         return 2
     kind, version, trial_dir = argv[1], argv[2], argv[4]
+    origin = argv[5] if len(argv) == 6 else "build"
     with open(argv[3], encoding="utf-8") as f:
         variables = json.load(f)
     try:
         if kind == "gate-a":
-            text = render_gate("a", version, variables, trial_dir, "azhaq")
+            text = render_gate("a", version, variables, trial_dir, "azhaq", origin)
         elif kind == "gate-b":
-            text = render_gate("b", version, variables, trial_dir, "azhaq")
+            text = render_gate("b", version, variables, trial_dir, "azhaq", origin)
         elif kind == "baseline":
             text = render_gate("a", version, variables, trial_dir, "usual")
         else:
