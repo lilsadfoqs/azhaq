@@ -7,7 +7,7 @@ Every command follows the same contract, so a script or an assistant can read an
 - **stdout** carries results only: one per line, or one JSON object per line with `-json`.
 - **stderr** carries progress, failures as they happen (the first three of each kind) and a **summary** at the end.
 - With `-json`, every stderr line is JSON, and the summary is one object with `"type":"summary"`.
-- With `-silent`, the summary is printed only when something failed or was cut short. A source or archive that failed counts, though the exit code stays 0.
+- With `-silent`, the summary is printed only when something failed or was cut short. A source or archive that failed counts, and the exit code is 3.
 - The **exit code** says whether the work is complete: see [Exit codes](#exit-codes).
 
 With `-json`, the drop-in commands use the field names of the tool they stand in for, so existing `jq` filters keep working.
@@ -49,7 +49,7 @@ A run paced slowly says so as it starts: `-rate 1 paces requests to 1/s: the cap
 
 | Code | Meaning | What to do |
 | --- | --- | --- |
-| 0 | Complete. | Use the results. |
+| 0 | Complete, and nothing failed. | Use the results. |
 | 1 | Error: the command could not do its job. | Read the message. |
 | 2 | Usage: bad flags or input. Nothing was sent. | `azhaq help COMMAND`. For a scope refusal, check the target, `-allow` or `-scope`. |
 | 3 | Finished, but some sources or requests failed. The results are usable. | The summary lists each failure, whether it is worth retrying, and its targets. |
@@ -70,7 +70,7 @@ The command could not do its job: a database it cannot open, or Chrome missing f
 
 ### Exit 3
 
-Some work failed and did not get its answer. Fan-out and partial failures are listed but do not make it 3: see [Failures](CONCEPTS.md#failures-fan-out-partial-and-degraded).
+Some work failed and did not get its answer: a source that failed, a target that did not answer, a degraded or partial result, one target among many. Every failure makes it 3, a `fanout` or `partial` one and a source that failed while others answered included. `-fail-on-errors` is accepted and has no effect of its own: it is the default, and no flag turns a failure into exit 0. The summary lists what failed and why: see [Failures](CONCEPTS.md#failures-fan-out-partial-and-degraded).
 
 ### Exit 4
 
@@ -109,7 +109,7 @@ Some work failed and did not get its answer. Fan-out and partial failures are li
 | `junk` | `urls` only: the URLs left out as junk, by reason. See [urls](commands/urls.md#junk). |
 | `sources` | `subs` and `urls`: which sources answered, which failed and why, and what each gave. See [subs](commands/subs.md#the-sources-block) and [urls](commands/urls.md#summary-and-exit-codes). |
 | `partial` (in `failed`) | A third-party source failed while other sources answered for the same target. |
-| `degraded` | `subs` only: a source the run relies on did not answer, so the names may be incomplete. See [subs](commands/subs.md#degraded). |
+| `degraded` | `subs` only: a source the run relies on did not answer, so the names may be incomplete, and the exit code is 3. See [subs](commands/subs.md#degraded). |
 | `degraded_by` | `subs` only, with `degraded`: an array of `{source, error, domains}`, one for each failed source of the default set. |
 | `stopped`, `resume` | The limit that stopped the work and the command that continues it. |
 | `notes` | Caps that were hit and other things worth knowing that are not failures. See [notes](#notes). |
@@ -128,7 +128,7 @@ Some work failed and did not get its answer. Fan-out and partial failures are li
 - `source` names a third-party source, such as `crtsh` or `wayback`.
 - `targets` names up to 100. `azhaq query -db FILE -failed` lists every failed target: the list to retry.
 - `azhaq-session` is a signed-in run whose session ended and could not be renewed (`the session ended: after /logout was requested …`). Every request after it was refused, so nothing after it was answered as an anonymous visitor. The exit code is 3: see [Sessions](CONCEPTS.md#sessions).
-- `partial` and `fanout` failures do not make the exit code 3: see [Failures](CONCEPTS.md#failures-fan-out-partial-and-degraded).
+- `partial` and `fanout` failures make the exit code 3 like any other: see [Failures](CONCEPTS.md#failures-fan-out-partial-and-degraded).
 
 ### skipped
 

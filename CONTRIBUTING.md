@@ -45,6 +45,7 @@ It needs commitlint, installed once: `npm i -g @commitlint/cli@19.8.1`. Merge, `
 - `gofmt`, `go vet ./...` and `go test -race ./...` pass on CI for every push.
 - Nothing outside `internal/egress` builds an `http.Client`, a `net.Dialer`, a `dns.Client` or a Chrome allocator, or calls `net.Dial`, `http.Get` and the like: ask egress for the client, so scope, budget, pace, proxy, kill file and ledger apply. The `lint` job and `go test ./internal/egress` check it; [Architecture: Egress](docs/ARCHITECTURE.md#egress) says how to add one.
 - A fix comes with a test that fails before it.
+- A test that runs a command through `cli`, `runContract` or `captureBoth` is held to the invariants in `cmd/azhaq/invariants_test.go`: a summary that lists a failure does not exit 0, the summary's requests are the ledger's lines to targets, no row or ledger line names a host and port outside `-allow` or `-scope`, and with `-resolvers` no DNS line goes to the system's resolver.
 - Comments are short and say why, not what. An exported name's comment starts with the name.
 - Flags and output fields are documented in `docs/`; tests in `cmd/azhaq` check the docs against the flags.
 

@@ -33,7 +33,7 @@ On a non-zero exit, Azhaq:
 2. counts the failure in the run's `errors`;
 3. continues with its own collectors.
 
-The connector's failure is a failure like any other. The run ends with exit 3, and the results are usable. `-fail-on-errors` makes every failure count, fan-out ones included.
+The connector's failure is a failure like any other. The run ends with exit 3, and the results are usable. Every failure counts, fan-out ones included; `-fail-on-errors` is accepted and has no effect of its own.
 
 A connector run with `-exec` must write facts.
 

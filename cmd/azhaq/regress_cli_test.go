@@ -29,6 +29,7 @@ func cli(t *testing.T, args ...string) (stdout, stderr string, code int) {
 		reportError(args, err)
 		return err
 	})
+	checkRun(t, args, out, errOut, exitCode(err))
 	return out, errOut, exitCode(err)
 }
 

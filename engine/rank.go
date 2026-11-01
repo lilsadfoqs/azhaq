@@ -131,7 +131,8 @@ func seedScope(seeds []types.Seed) (hosts, domains, ips map[string]bool) {
 			if s.Key() != "" {
 				domains[s.Key()] = true
 			}
-		case types.TypeIPAddress:
+		case types.TypeIPAddress, types.TypePrefix:
+			// A range is asked about as a whole: its entity is the target.
 			if s.Key() != "" {
 				ips[s.Key()] = true
 			}
@@ -164,7 +165,7 @@ func entityRank(e types.Entity, hosts, domains, ips map[string]bool) int {
 		if domains[e.Key] {
 			return 1
 		}
-	case types.TypeIPAddress:
+	case types.TypeIPAddress, types.TypePrefix:
 		if ips[e.Key] {
 			return 0
 		}
