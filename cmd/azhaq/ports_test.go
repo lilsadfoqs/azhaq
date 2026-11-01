@@ -115,6 +115,31 @@ func TestNmapOutputs(t *testing.T) {
 	}
 }
 
+// What a Server header says beside the product reaches the nmap files, as
+// nmap writes it: an extrainfo attribute, and in parentheses after the
+// version in the greppable line.
+func TestNmapOutputsCarryExtraInfo(t *testing.T) {
+	at := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	rows := []portRow{{Host: "b.test", IP: "10.0.0.2", Port: 5000, Proto: "tcp", State: "open", At: at,
+		Fields: map[string]any{"service": "http", "product": "Werkzeug", "version": "2.2.3", "extrainfo": "Python/3.11.15", "banner": "Werkzeug/2.2.3 Python/3.11.15"}}}
+	dir := t.TempDir()
+	o := &portOut{keep: true, rows: rows, xmlPath: filepath.Join(dir, "x.xml"), gnmapOut: filepath.Join(dir, "x.gnmap")}
+	if err := o.finish([]string{"-host", "b.test"}, at, at.Add(time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	x, _ := os.ReadFile(o.xmlPath)
+	if !strings.Contains(string(x), `product="Werkzeug" version="2.2.3" extrainfo="Python/3.11.15"`) {
+		t.Errorf("xml:\n%s", x)
+	}
+	g, _ := os.ReadFile(o.gnmapOut)
+	if !strings.Contains(string(g), "5000/open/tcp//http//Werkzeug 2.2.3 (Python|3.11.15)/") {
+		t.Errorf("gnmap:\n%s", g)
+	}
+	if got := rows[0].csvRow([]string{"product", "version", "extrainfo"}); !reflect.DeepEqual(got, []string{"Werkzeug", "2.2.3", "Python/3.11.15"}) {
+		t.Errorf("csv %v", got)
+	}
+}
+
 func TestRowJSONShape(t *testing.T) {
 	at := time.Date(2026, 1, 2, 3, 4, 5, 0, time.FixedZone("x", 7*3600))
 	r := portRow{Host: "h", IP: "1.2.3.4", Port: 80, Proto: "tcp", State: "open", CDN: "cloudflare", At: at, Fields: map[string]any{"service": "http"}}

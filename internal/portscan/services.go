@@ -42,6 +42,7 @@ var greetings = []greeting{
 // sshRe splits the software of "SSH-2.0-OpenSSH_9.6p1 Ubuntu-3ubuntu13.20".
 var (
 	sshRe     = regexp.MustCompile(`^SSH-\d\.\d+-(\S+)`)
+	sshProto  = regexp.MustCompile(`^SSH-(\d\.\d+)-`)
 	sshSplit  = regexp.MustCompile(`^(.+?)[_-](\d[\w.+~]*)$`)
 	rfbRe     = regexp.MustCompile(`^RFB (\d+)\.(\d+)`)
 	mariaTrim = regexp.MustCompile(`^5\.5\.5-`)
@@ -73,6 +74,22 @@ func greetingProduct(raw []byte, banner string) (service, product, version strin
 		}
 	}
 	return "", "", ""
+}
+
+// sshExtra is what an SSH identification line says beside the software and
+// its version: the comment after the first space (a distribution's package
+// name) and the protocol version, as the line gave them.
+func sshExtra(banner string) string {
+	m := sshProto.FindStringSubmatch(banner)
+	if m == nil {
+		return ""
+	}
+	var parts []string
+	if _, comment, ok := strings.Cut(banner, " "); ok && strings.TrimSpace(comment) != "" {
+		parts = append(parts, strings.TrimSpace(comment))
+	}
+	parts = append(parts, "protocol "+m[1])
+	return strings.Join(parts, "; ")
 }
 
 // mysqlVersion reads the server version from the handshake MySQL and
@@ -178,6 +195,30 @@ func serverProduct(s string) (product, version string) {
 	return name, version
 }
 
+// serverExtra is what a Server header says after its product token, as it
+// was sent: the runtime ("Python/3.11.15") or the distribution ("(Debian)").
+func serverExtra(s string) string {
+	t := strings.Fields(s)
+	if len(t) < 2 {
+		return ""
+	}
+	return strings.Join(t[1:], " ")
+}
+
+// headExtra is serverExtra of the header headProduct took the product from.
+func headExtra(h httpHead) string {
+	if h.elastic != "" {
+		return ""
+	}
+	if p, _ := serverProduct(h.server); p != "" {
+		return serverExtra(h.server)
+	}
+	if p, _ := serverProduct(h.powered); p != "" {
+		return serverExtra(h.powered)
+	}
+	return ""
+}
+
 // headProduct is the product an HTTP head names: an Elasticsearch product
 // header, else the Server header, else X-Powered-By.
 func headProduct(h httpHead) (product, version string) {
@@ -243,6 +284,9 @@ func (s *Scanner) greeted(o *Open, raw []byte) {
 		return
 	}
 	o.Product, o.Version = product, version
+	if service == "ssh" {
+		o.Extra = sshExtra(o.Banner)
+	}
 	if service != "" {
 		o.Service = service
 	} else if tmp := *o; passiveRead(raw, &tmp) {
@@ -303,7 +347,7 @@ func (s *Scanner) webProduct(ctx context.Context, o *Open, head []byte, status i
 		return
 	}
 	if p, v := headProduct(h); p != "" {
-		o.Product, o.Version = p, v
+		o.Product, o.Version, o.Extra = p, v, headExtra(h)
 	}
 	if o.Product != "" && h.elastic == "" {
 		return

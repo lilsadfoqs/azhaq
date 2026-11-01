@@ -65,8 +65,9 @@ The fields of a `-json` row, which are naabu's plus azhaq's:
 | `timestamp` | UTC, RFC 3339. |
 | `service` | The service the port answered as. A name ending in `?` is only the port's usual service. |
 | `product`, `version` | What the service states: see [Products and versions](#products-and-versions-of-tcp-ports). |
+| `extrainfo` | What the answer says beside the product and its version, as it was sent: the rest of a `Server` header (`Python/3.11.15`, `(Ubuntu)`), or an SSH line's comment and protocol (`Ubuntu-2ubuntu2.13; protocol 2.0`). nmap calls it `extrainfo` too, and `-oX` and `-oG` carry it. |
 | `title` | The `<title>` of a web page that names no product. |
-| `banner` | What the port said. A binary answer to the `HEAD` is `(binary)` and its first bytes in hex. |
+| `banner` | What the port said. A binary answer, to the first read or to the `HEAD`, is `(binary)` and its first bytes in hex. |
 | `subject_cn`, `subject_an` | The certificate's subject names of a TLS port, as httpx calls them. |
 | `state` | UDP only: `open`, or `open\|filtered`. |
 
@@ -263,11 +264,13 @@ Each open TCP port gets `product` and `version` next to `service`, from what it 
 | X11: a connection setup with no authorization | the vendor and release of an open server | `x11` |
 | Elasticsearch transport: the keep-alive ping (`ES` and a length of -1), 6 bytes, asked first on 9300 to 9303 | the same six bytes | `elasticsearch-transport`, product Elasticsearch |
 | SOCKS5, STOMP, XMPP, RTSP, SIP, JDWP, AFP, Minecraft, gopher, finger | the method reply, the CONNECTED frame, the stream header, the status line and `Server` header, the handshake, and so on | the service; a product where the answer states one |
+| Nping echo server: it opens with a binary handshake (version 1, type 1, its length) | the first 24 bytes or more | `nping-echo`, product Nping echo |
 | Greetings: VNC, Telnet, IRC, NNTP, ManageSieve, ICY | `RFB 003.008`, an option negotiation, `NOTICE AUTH`, `200 …`, `"IMPLEMENTATION" "…"`, `ICY 200 OK` | `vnc` with the protocol version; the service; INN, Icecast and Dovecot Pigeonhole where named |
 | A web page's title, when the head names no product (and for a `HEAD` that was refused) | `<title>Mailpit</title>` and its stylesheet's version | Mailpit 1.20.7 |
 | `GET /version` of a Go server that answers `/` with a 404 | etcd, Kubernetes or Docker JSON | etcd, Kubernetes, Docker Engine with the version |
 
 - `service` is unchanged.
+- `product` and `version` are the first token of the `Server` header (`Werkzeug/2.2.3`); the rest of the header is `extrainfo`, and the header as sent stays the `banner`. A version is only ever one the answer states.
 - A web page that names no product gets its `<title>` in `title`, and its `<meta name="generator">` as the product.
 - The `GET /` for a body is one more connection on a web port. It is made when the `HEAD` answer gave no product and is a 200 or 401 of type JSON or text. It is also made when the `HEAD` was refused (403, 404, 405, 501). It counts, is paced and is recorded like a connect.
 - Every request above is sent only to a port that said nothing and is not one of the raw printing ports (9100–9107). None logs in, sends a credential or changes anything.

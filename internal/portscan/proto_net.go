@@ -16,6 +16,10 @@ func init() {
 		&protocol{name: "telnet", passive: true, read: telnetRead},
 		// VNC: the ProtocolVersion message of the RFB protocol (RFC 6143, 7.1.1).
 		&protocol{name: "vnc", passive: true, read: vncRead},
+		// Nping echo server: it speaks first with a handshake message, version 1,
+		// type 1 (server hello), and its own total length, 24 bytes at least
+		// (the Nping Echo Protocol of Nping's echo mode).
+		&protocol{name: "nping-echo", ports: []int{9929}, passive: true, read: npingRead},
 		// IRC: the NOTICE AUTH or PING a server opens with (RFC 2812, 3.1, 3.7.2).
 		&protocol{name: "irc", passive: true, read: ircRead},
 		// NNTP: the 200 or 201 greeting (RFC 3977, 5.1).
@@ -95,6 +99,17 @@ func esFrame(b []byte) int {
 		return -1
 	}
 	return len(esPing)
+}
+
+func npingRead(r []byte, o *Open) bool {
+	if len(r) < 24 || r[0] != 1 || r[1] != 1 {
+		return false
+	}
+	if n := int(binary.BigEndian.Uint16(r[2:])); n < 24 || n > len(r) {
+		return false
+	}
+	o.Service, o.Product, o.Banner = "nping-echo", "Nping echo", bannerOf(r)
+	return true
 }
 
 func esRead(r []byte, o *Open) bool {

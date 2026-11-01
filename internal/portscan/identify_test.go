@@ -48,6 +48,7 @@ func TestProtocolReaders(t *testing.T) {
 		{"smb", "smb", "smb", "Samba smbd", "", "smb 3.1.1"},
 		{"dns", "dns", "dns", "", "", "dns answer"},
 		{"amqp", "amqp", "amqp", "RabbitMQ", "3.13.7", "amqp 0-9"},
+		{"nping-echo", "nping", "nping-echo", "Nping echo", "", "(binary) 01010018"},
 	}
 	for _, tt := range tests {
 		raw := fixture(t, tt.fixture)

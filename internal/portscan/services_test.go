@@ -189,17 +189,51 @@ func TestScanNamesProducts(t *testing.T) {
 	defer express.Close()
 	port := func(s *httptest.Server) int { return s.Listener.Addr().(*net.TCPAddr).Port }
 
-	if o := scanOne(t, ssh); o.Service != "ssh" || o.Product != "OpenSSH" || o.Version != "9.6p1" {
+	if o := scanOne(t, ssh); o.Service != "ssh" || o.Product != "OpenSSH" || o.Version != "9.6p1" || o.Extra != "Ubuntu-3ubuntu13.20; protocol 2.0" {
 		t.Errorf("ssh: %+v", o)
 	}
 	if o := scanOne(t, my); o.Service != "mysql" || o.Product != "MySQL" || o.Version != "8.0.35" || o.Banner != "8.0.35" {
 		t.Errorf("mysql: %+v", o)
 	}
-	if o := scanOne(t, port(srv)); o.Service != "http" || o.Product != "Werkzeug" || o.Version != "2.2.3" {
+	if o := scanOne(t, port(srv)); o.Service != "http" || o.Product != "Werkzeug" || o.Version != "2.2.3" || o.Extra != "Python/3.11" || o.Banner != "Werkzeug/2.2.3 Python/3.11" {
 		t.Errorf("werkzeug: %+v", o)
 	}
 	if o := scanOne(t, port(express)); o.Service != "http" || o.Product != "Express" || o.Version != "" {
 		t.Errorf("express: %+v", o)
+	}
+}
+
+// A Server header says more than its product and version: the rest is kept
+// as extrainfo, and the raw header stays the banner. Nothing is said that
+// the header did not.
+func TestServerHeaderExtra(t *testing.T) {
+	for _, tt := range []struct{ server, extra string }{
+		{"Werkzeug/2.2.3 Python/3.11.15", "Python/3.11.15"},
+		{"Apache/2.4.7 (Ubuntu)", "(Ubuntu)"},
+		{"nginx/1.25.3", ""},
+		{"nginx", ""},
+	} {
+		h := httpHead{server: tt.server}
+		if got := headExtra(h); got != tt.extra {
+			t.Errorf("%q: extra %q, want %q", tt.server, got, tt.extra)
+		}
+	}
+	if got := headExtra(httpHead{server: "(none)", powered: "PHP/8.2.12 (cli)"}); got != "(cli)" {
+		t.Errorf("X-Powered-By: extra %q", got)
+	}
+	if got := headExtra(httpHead{elastic: "Elasticsearch", server: "x/1 y"}); got != "" {
+		t.Errorf("elasticsearch header: extra %q", got)
+	}
+}
+
+// The Nping echo server speaks first with a binary handshake; it is named
+// from it on any port, and the first bytes stay as the banner.
+func TestNpingEchoGreeting(t *testing.T) {
+	raw := fixture(t, "nping")
+	port := listen(t, func(c net.Conn) { c.Write(raw) })
+	o := scanOne(t, port)
+	if o.Service != "nping-echo" || o.Product != "Nping echo" || o.Version != "" || !strings.HasPrefix(o.Banner, "(binary) 01010018") {
+		t.Errorf("nping: %+v", o)
 	}
 }
 

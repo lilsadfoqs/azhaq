@@ -129,6 +129,7 @@ type Open struct {
 	Product   string   `json:"product,omitempty"`
 	Title     string   `json:"title,omitempty"` // the HTML title of GET /, when the answer names no product
 	Version   string   `json:"version,omitempty"`
+	Extra     string   `json:"extrainfo,omitempty"` // what the answer says beside product and version: a Server header's runtime, an SSH comment
 	TLS       bool     `json:"tls,omitempty"`
 	SubjectCN string   `json:"subject_cn,omitempty"`
 	SubjectAN []string `json:"subject_an,omitempty"`
@@ -500,7 +501,7 @@ func (s *Scanner) probe(ctx context.Context, host, ip string, port int) (Open, p
 			n, err = conn.Read(buf)
 			silentGreeter = n == 0 && errors.As(err, &ne) && ne.Timeout()
 		}
-		o.Banner = printable(buf[:n])
+		o.Banner = bannerOf(buf[:n])
 		s.greeted(&o, buf[:n])
 		if n > 0 && o.Product == "" && bannerService(o.Banner) == "ftp-or-smtp" {
 			s.settle220(conn, &o)

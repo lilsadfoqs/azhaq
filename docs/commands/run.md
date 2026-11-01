@@ -79,7 +79,7 @@ The map has one row per entity, best first: the target's own pages and APIs, the
 | `first_seen` | When the workspace first saw the entity. |
 | `guard` | What a client route's router checks before it draws the view. See [Client routes](#client-routes). |
 | `protocol`, `namespace` | `protocol` is `socket.io` for a socket.io endpoint; `namespace` is its namespace, when the app names one. See [WebSockets](#websockets). |
-| `service`, `product`, `version` | A port's row (`-ports`, `-ports-udp`): what answered on it, as `azhaq ports` prints it. `role` is `service`; `state` is `open` or `open\|filtered` (a UDP port that neither answered nor was refused); `proof` repeats it with `tls` and the title or banner when no product was named. |
+| `service`, `product`, `version` | A port's row (`-ports`, `-ports-udp`): what answered on it, as `azhaq ports` prints it. `role` is `service`; `state` is `open` or `open\|filtered` (a UDP port that neither answered nor was refused); `proof` repeats it with `extrainfo`, `tls` and the title or banner when no product was named. |
 | `status`, `title` | The URL's own answer: the first hop of a redirect. See [Redirects](#redirects). |
 | `methods`, `params` | From API descriptions and call sites in scripts. See [Methods and parameters](#methods-and-parameters). |
 | `ops` | Each operation on the route: `method`, `query`, `path`, `header`, `body`, `body_type`, `auth`, `summary`, `operation_id`, `source`. See [Operations](#operations). |
