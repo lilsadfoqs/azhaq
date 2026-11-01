@@ -1,6 +1,7 @@
 package egress
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -347,5 +349,75 @@ func TestRefusedRedirectHopIsNotCounted(t *testing.T) {
 	}
 	if hits.Load() != 1 || Sent() != 1 {
 		t.Errorf("server %d, counted %d, want 1 each", hits.Load(), Sent())
+	}
+}
+
+// A request through an HTTP proxy names the URL's authority in its request
+// line whatever its Host header says: the proxy goes where the URL says, and
+// the Host header only picks the virtual host there (as curl -x does).
+func TestProxiedRequestLineNamesTheURLNotTheHostHeader(t *testing.T) {
+	Reset()
+	defer Reset()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	type seen struct{ line, host string }
+	got := make(chan seen, 4)
+	go func() { // a proxy that keeps the bytes as they came
+		for {
+			cn, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			go func() {
+				defer cn.Close()
+				br := bufio.NewReader(cn)
+				var s seen
+				for first := true; ; first = false {
+					l, err := br.ReadString('\n')
+					l = strings.TrimSpace(l)
+					if err != nil || l == "" {
+						break
+					}
+					if first {
+						s.line = strings.TrimSuffix(l, " HTTP/1.1")
+					} else if v, ok := strings.CutPrefix(l, "Host: "); ok {
+						s.host = v
+					}
+				}
+				got <- s
+				fmt.Fprint(cn, "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok")
+			}()
+		}
+	}()
+	pu, _ := url.Parse("http://" + ln.Addr().String())
+	SetTargetProxy(pu)
+	c := TargetClient(TargetOptions{})
+	for _, tc := range []struct {
+		name, url, host, raw, line, wantHost string // raw is an Opaque path, as -raw sends
+	}{
+		{"another port in Host", "http://127.0.0.1:3001/a/b?x=1", "127.0.0.1:5002", "", "GET http://127.0.0.1:3001/a/b?x=1", "127.0.0.1:5002"},
+		{"another name in Host", "http://127.0.0.1:3001/", "vhost.test", "", "GET http://127.0.0.1:3001/", "vhost.test"},
+		{"no Host header", "http://127.0.0.1:3001/a", "", "", "GET http://127.0.0.1:3001/a", "127.0.0.1:3001"},
+		{"raw path keeps its form", "http://127.0.0.1:3001/", "", "/a/../b%2f?q=1", "GET http://127.0.0.1:3001/a/../b%2f?q=1", "127.0.0.1:3001"},
+	} {
+		req, _ := http.NewRequest("GET", tc.url, nil)
+		req.Host = tc.host
+		if tc.raw != "" {
+			req.URL.Opaque = tc.raw
+		}
+		resp, err := c.Do(req)
+		if err != nil {
+			t.Fatalf("%s: %v", tc.name, err)
+		}
+		resp.Body.Close()
+		if resp.Request.URL.Opaque != req.URL.Opaque || resp.Request.URL.Host != "127.0.0.1:3001" {
+			t.Errorf("%s: the answer's request is not the one sent: %v", tc.name, resp.Request.URL)
+		}
+		if s := <-got; s.line != tc.line || s.host != tc.wantHost {
+			t.Errorf("%s: the proxy saw %q with Host %q, want %q with %q", tc.name, s.line, s.host, tc.line, tc.wantHost)
+		}
 	}
 }
