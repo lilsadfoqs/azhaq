@@ -97,6 +97,7 @@ func record(ctx context.Context, q *dns.Msg, server string) error {
 		return err
 	}
 	if len(q.Question) > 0 {
+		Current().dnsq.Add(1)
 		ledger.DNS(ctx, strings.TrimSuffix(q.Question[0].Name, "."), dns.TypeToString[q.Question[0].Qtype], server)
 	}
 	return nil
@@ -251,6 +252,7 @@ func SystemLookup(ctx context.Context, name string) ([]net.IPAddr, error) {
 	if err := Current().Killed(); err != nil {
 		return nil, err
 	}
+	Current().dnsq.Add(1)
 	ledger.DNS(ctx, name, "A/AAAA", "system")
 	return net.DefaultResolver.LookupIPAddr(ctx, name)
 }

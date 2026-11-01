@@ -396,6 +396,7 @@ func (e *Engine) linkNames(from types.Entity, o types.Observation, now time.Time
 			Name  string   `json:"name"`
 			IPs   []string `json:"ips"`
 			CNAME string   `json:"cname"`
+			Chain []string `json:"cnames"`
 		} `json:"answers"`
 	}
 	if json.Unmarshal(o.Payload, &p) != nil || len(p.Names) == 0 {
@@ -409,7 +410,7 @@ func (e *Engine) linkNames(from types.Entity, o types.Observation, now time.Time
 		if err != nil {
 			continue
 		}
-		raw, _ := json.Marshal(map[string]any{"fqdn": a.Name, "result": "ok", "ips": a.IPs, "cname": a.CNAME})
+		raw, _ := json.Marshal(map[string]any{"fqdn": a.Name, "result": "ok", "ips": a.IPs, "cname": a.CNAME, "cnames": a.Chain})
 		dns := types.Observation{Collector: o.Collector, Source: "dns", Kind: "dns", Payload: raw, Confidence: o.Confidence, ObservedAt: now}
 		if _, err := e.Store.AddObservation(ent.ID, dns); err == nil {
 			e.linkDNS(ent, dns, now)
@@ -750,7 +751,10 @@ func derivedSeeds(seed types.Seed) []types.Seed {
 	return out
 }
 
-func workID(collector string, s types.Seed) string {
-	sum := sha256.Sum256([]byte(collector + "\x00" + string(s.Type) + "\x00" + s.Key()))
+func workID(collector string, s types.Seed) string { return taskHash(collector, s.Type, s.Key()) }
+
+// taskHash is the id of the task of collector on the seed of a type and key.
+func taskHash(collector string, typ types.SeedType, key string) string {
+	sum := sha256.Sum256([]byte(collector + "\x00" + string(typ) + "\x00" + key))
 	return hex.EncodeToString(sum[:16])
 }

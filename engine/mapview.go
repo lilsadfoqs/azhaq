@@ -29,6 +29,7 @@ type MapEntry struct {
 	Template  string   // URL template; set on every templated URL row
 	Count     int      // URLs folded into this row by GroupTemplates
 	NotAsked  int      // of Count, the URLs found and not requested (-per-template, a budget)
+	Capped    int      // of Count, the URLs a limit (-depth, a budget) kept from being asked: coverage capped
 	Folded    int      // hostnames folded into a summary row (dead, wildcard)
 	Methods   []string // from API descriptions and the calls scripts make
 	Params    []string // query, form and API parameter names
@@ -119,6 +120,7 @@ func BuildMap(ents []types.Entity, seeds []types.Seed, obs []types.StoredObserva
 	}
 	decl := declaredRoles(obs)
 	secured := securedHosts(obs)
+	chain := chainAddrs(obs)
 	out := make([]MapEntry, 0, len(ents))
 	portAt := map[string]int{}
 	for _, e := range ents {
@@ -135,6 +137,15 @@ func BuildMap(ents []types.Entity, seeds []types.Seed, obs []types.StoredObserva
 			Coverage: coverageOf(e, rows, left, runCapped),
 			Role:     roleOf(e, rows, hosts, domains),
 			Proof:    proofOf(e, rows),
+		}
+		if ips := chain[e.Key]; e.Type == types.TypeHostname && m.Role == "unresolved" && len(ips) > 0 {
+			// Named by a CNAME in an answer that held its address: the run
+			// read it, whether or not the name was looked up itself.
+			m.Role = "sibling"
+			if hosts[e.Key] || under(e.Key, domains) {
+				m.Role = "live"
+			}
+			m.Proof = "ips=" + fmt.Sprint(ips)
 		}
 		if e.Type == types.TypeURL {
 			if !fetched(rows) && (hasKind(byEnt[e.ID], KindNoWeb) || hasKind(byEnt[e.ID], KindNotHTTP) || hasKind(byEnt[e.ID], "dropped")) {
@@ -374,6 +385,40 @@ func dnsResult(obs []types.StoredObservation) string {
 	return ""
 }
 
+// chainAddrs are the addresses the run read for the names in the CNAME
+// chains of its DNS answers: the answer that named api -> app held app's
+// address, so app resolves to it though nothing looked app up.
+func chainAddrs(obs []types.StoredObservation) map[string][]any {
+	out := map[string][]any{}
+	for _, o := range obs {
+		if o.Collector != "azhaq-dns" && o.Kind != "dns" {
+			continue
+		}
+		var p struct {
+			Fqdn     string   `json:"fqdn"`
+			Result   string   `json:"result"`
+			IPs      []any    `json:"ips"`
+			CNAME    string   `json:"cname"`
+			CNAMEs   []string `json:"cnames"`
+			Wildcard bool     `json:"wildcard"`
+		}
+		if json.Unmarshal(o.Payload, &p) != nil || len(p.IPs) == 0 || p.Wildcard {
+			continue
+		}
+		names := p.CNAMEs
+		if len(names) == 0 && p.CNAME != "" {
+			names = []string{p.CNAME}
+		}
+		for _, n := range names {
+			n = strings.ToLower(strings.TrimSuffix(n, "."))
+			if _, ok := out[n]; !ok && n != p.Fqdn {
+				out[n] = p.IPs
+			}
+		}
+	}
+	return out
+}
+
 // resolved: azhaq-dns looked the name up in this run.
 func resolved(obs []types.StoredObservation) bool {
 	for _, o := range obs {
@@ -506,12 +551,15 @@ func gate(obs []types.StoredObservation) int {
 // fetched by two collectors shows status=403 once. The open ports are the
 // newest azhaq scan's (a scan a limit stopped is followed by the one that
 // finishes it) joined with every port an imported row names, as a tool
-// like naabu writes one row per port.
+// like naabu writes one row per port. A prefix holds one scan row for each
+// address of its range: its open ports are those of every address (the
+// newest row of each), and addresses_open says how many had any.
 func proofOf(e types.Entity, obs []types.StoredObservation) string {
-	keys := []string{"status", "title", "role", "ips", "cname", "open", "count", "error", "skipped", "word", "warning", "note", "auth", "via", types.ExposedByKey}
+	keys := []string{"status", "title", "role", "ips", "cname", "open", "addresses_open", "count", "error", "skipped", "word", "warning", "note", "auth", "via", types.ExposedByKey}
 	vals := map[string]string{}
 	var own, imported []string
 	var haveOwn, haveImported bool
+	perAddr := map[string][]string{}
 	via := map[string]bool{}
 	for _, o := range obs {
 		var m map[string]any
@@ -520,7 +568,13 @@ func proofOf(e types.Entity, obs []types.StoredObservation) string {
 		}
 		if v, ok := m["open"]; ok && v != nil && o.Kind == "ports" && m["range"] != true {
 			ports := openPorts(v)
-			if o.Collector == "azhaq-ports" {
+			if ip, _ := m["ip"].(string); o.Collector == "azhaq-ports" && e.Type == types.TypePrefix && ip != "" {
+				perAddr[ip] = ports
+				own, haveOwn = nil, true
+				for _, p := range perAddr {
+					own = append(own, p...)
+				}
+			} else if o.Collector == "azhaq-ports" {
 				own, haveOwn = ports, true
 			} else {
 				imported, haveImported = append(imported, ports...), true
@@ -553,6 +607,15 @@ func proofOf(e types.Entity, obs []types.StoredObservation) string {
 		}
 		sort.Strings(names[1:])
 		vals["via"] = strings.Join(names, ",")
+	}
+	if len(perAddr) > 0 {
+		n := 0
+		for _, p := range perAddr {
+			if len(p) > 0 {
+				n++
+			}
+		}
+		vals["addresses_open"] = strconv.Itoa(n)
 	}
 	var parts []string
 	for _, k := range keys {
@@ -725,9 +788,12 @@ func (m MapEntry) Line() string {
 		fmt.Fprintf(&b, "  (names: %s)", strings.Join(m.Names, ", "))
 	}
 	if m.Count > 1 {
-		if m.NotAsked > 0 {
+		switch {
+		case m.NotAsked > 0 && m.Capped > 0:
+			fmt.Fprintf(&b, "  (%d urls, %d not asked, %d capped)", m.Count, m.NotAsked, m.Capped)
+		case m.NotAsked > 0:
 			fmt.Fprintf(&b, "  (%d urls, %d not asked)", m.Count, m.NotAsked)
-		} else {
+		default:
 			fmt.Fprintf(&b, "  (%d urls)", m.Count)
 		}
 	}
@@ -844,7 +910,7 @@ func groupTemplates(rows []MapEntry, foldNames bool) []MapEntry {
 		i, ok := idx[key]
 		if !ok {
 			r.Count = 1
-			r.NotAsked = notAsked(r)
+			r.NotAsked, r.Capped = notAsked(r), cappedBy(r)
 			idx[key] = len(out)
 			out = append(out, r)
 			continue
@@ -852,6 +918,7 @@ func groupTemplates(rows []MapEntry, foldNames bool) []MapEntry {
 		g := &out[i]
 		g.Count++
 		g.NotAsked += notAsked(r)
+		g.Capped += cappedBy(r)
 		g.mergeEvidence(r)
 		for _, f := range r.Forms {
 			g.Forms = addForm(g.Forms, f)
@@ -862,7 +929,7 @@ func groupTemplates(rows []MapEntry, foldNames bool) []MapEntry {
 	}
 	for i := range out {
 		if out[i].Count == 1 {
-			out[i].Count, out[i].NotAsked = 0, 0
+			out[i].Count, out[i].NotAsked, out[i].Capped = 0, 0, 0
 		}
 	}
 	return out
@@ -888,6 +955,14 @@ func templateFamily(t string) string {
 		return path
 	}
 	return path + "?" + strings.Join(keep, "&")
+}
+
+// cappedBy is 1 for a URL a limit kept from being asked.
+func cappedBy(r MapEntry) int {
+	if r.Coverage == "capped" {
+		return 1
+	}
+	return 0
 }
 
 // notAsked is 1 for a URL found and never requested.

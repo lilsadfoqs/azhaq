@@ -95,6 +95,8 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 
 The summary counts names: `12 names`. When a line is a record (`-resp`, `-resp-only`, a transfer), it counts both: `13 records of 12 names`. `-json` has one row for each name, so its `results` is the number of names.
 
+`requests` is 0 for `dns`: its questions go to resolvers, not targets. `dns_queries` counts them (the retries and the wildcard probes too, so it is more than `asked`), and equals the ledger's `DNS queries` line count, with or without `-ledger`.
+
 The summary also lists failures per kind of error, and takeover candidates: a CNAME to a name that no longer exists.
 
 ## Details

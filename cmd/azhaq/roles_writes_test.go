@@ -454,6 +454,58 @@ func TestReplayWriteServerError(t *testing.T) {
 	}
 }
 
+// A write one role is refused (401) and another gets a 5xx for is neither
+// refused nor failed for everyone: the row names both, and "refused" stays
+// for a row whose every answer is a refusal.
+func TestReplayWriteRefusedAndServerError(t *testing.T) {
+	var mu sync.Mutex
+	books := map[string]bool{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		user := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer t")
+		var in struct {
+			Title string `json:"book_title"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&in)
+		mu.Lock()
+		defer mu.Unlock()
+		switch {
+		case user == "":
+			w.WriteHeader(401)
+		case books[in.Title]:
+			w.WriteHeader(500) // a unique key the server already holds
+		default:
+			books[in.Title] = true
+		}
+	}))
+	defer srv.Close()
+	books["shared-title-a"], books["shared-title-b"] = true, true
+	post := func(file, user string) string {
+		return writeHAR(t, file, harEntry("2026-10-29T10:00:00.000Z", "POST", srv.URL+"/books/v1", `{"book_title":"shared-title-`+user+`"}`, 200,
+			"Authorization", "Bearer t"+user, "Content-Type", "application/json"))
+	}
+	alice, bob := post("a.har", "a"), post("b.har", "b")
+	out, errOut, err := captureBoth(t, func() error {
+		return cmdRoles([]string{"-json", "-all", "-dir", t.TempDir(), "-har", "alice=" + alice, "-har", "bob=" + bob, "-replay-writes", "post"})
+	})
+	if err != nil {
+		t.Fatalf("%v\n%s", err, errOut)
+	}
+	n := 0
+	for _, l := range strings.Split(strings.TrimSpace(out), "\n") {
+		var row roleRow
+		if json.Unmarshal([]byte(l), &row) != nil || row.Method != "POST" {
+			continue
+		}
+		n++
+		if row.Verdict != verdictWriteMixed {
+			t.Errorf("%s: verdict %q (answers %v), want %q", row.Owner, row.Verdict, row.Status, verdictWriteMixed)
+		}
+	}
+	if n != 2 {
+		t.Fatalf("want a row for each owner's POST, got %d:\n%s", n, out)
+	}
+}
+
 // An empty write that changes the owner's object stops there: nobody
 // else is asked.
 func TestReplayWriteChangedObject(t *testing.T) {

@@ -1,5 +1,29 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- `azhaq resume -retry-failed` asks again the failed targets the summary marks retryable (a timeout, a closed connection, a cut answer, a 429 or a 5xx) and says how many were asked again and how many still fail; with no task left, `resume` names them and the flag instead of "every run finished".
+- The summary has `dns_queries`, the queries sent to resolvers (retries and wildcard probes included), equal to the ledger's DNS query lines, with or without a ledger.
+- The summary has `stored`, the map rows the database holds; the counts add up to it, and `results` is smaller by the rows folded into templated rows and dead or wildcard name rows.
+- A templated row has `capped`, how many of its URLs a limit kept from being asked.
+
+### Changed
+
+- `run` summary counts are disjoint and cover every stored row: `pages` replaces `URLs` (api, auth and forbidden are no longer counted inside it), and scripts, assets, source maps, manifests, dead and wildcard hostnames, addresses, domains and prefixes have counts of their own; each is a `query` filter (OUTPUT.md).
+- A prefix row lists the open ports of every address of the range and `addresses_open`, not those of the last address scanned.
+- A `-cookie` or `-header` run takes the page a visitor without the session is sent to as its sign-in page; the docs say what is promised (an answer that looks like the end is noticed before the next request, others within 50 requests).
+
+### Fixed
+
+- A `-cookie` run no longer goes on anonymous for up to 50 requests after a `/logout` that only redirects to the login page; it stops at the next request and the failure names the answer.
+- Write replay no longer calls a row refused when one other role got a 5xx and another a 401: the verdict names both and says nothing was accepted.
+- The depth note no longer advises `resume -depth N` for work a larger depth cannot ask (a `dirs` sweep, a finished resume), counts each URL once, and equals the capped rows `query -coverage capped` lists.
+- `query -coverage capped` returns templated rows that hold capped URLs.
+- `resume` of a `dirs` sweep no longer spends `-rate` on words whose answers are stored.
+- `run` no longer calls a CNAME target `unresolved` at `-depth 0` when the answer that named it held its address: the name is `live` (or `sibling`) with that address in `proof`, at any `-depth`.
+
 ## v0.13.0
 
 ### Added
