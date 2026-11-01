@@ -54,7 +54,8 @@ Plain output is one name per line, as subfinder prints it. The domain you give i
 | `cname` | With `-live`, the chain. |
 | `cdn` | With `-live`, the CDN or WAF in front. |
 | `ip` | With `-live -oI`. |
-| `takeover` | `service`, `target`, `evidence` and `strength`, on a live name that is a takeover candidate (a page that names an unclaimed service). A CNAME to what is gone is no live name and has no row: see below. |
+| `cname_only` | With `-live`, `true` on a name that is a CNAME whose chain ends without an address (`a` is empty). It exists in DNS; one whose target is gone is a takeover lead. |
+| `takeover` | `service`, `target`, `evidence` and `strength`, on a name that is a takeover candidate: a CNAME to what is gone, or a page that names an unclaimed service. |
 
 `sources` holds the names of the sources, and these values:
 
@@ -62,7 +63,7 @@ Plain output is one name per line, as subfinder prints it. The domain you give i
 - `history` for a name an earlier run kept: see [Name history](#name-history).
 - `cname` for a live name DNS met as another name's CNAME target.
 
-Every takeover candidate is also in the summary, under `takeover`, with `host`, `service`, `target`, `evidence` and `strength`. With `-live`, a name whose CNAME chain ends without an address (a CNAME to a deleted service or domain) is not live: it is not printed and is not in `results`. It is counted as `CNAME without an address`, and the summary's `takeover` list and the `[takeover] …` line on stderr carry it. A CNAME whose target resolves, such as a CDN's name, is live.
+Every takeover candidate is also in the summary, under `takeover`, with `host`, `service`, `target`, `evidence` and `strength`. With `-live`, a name whose CNAME chain ends without an address (a CNAME to a deleted service or domain) is listed like the others, as `dnsx -a -cname` lists it. It has `"cname_only": true` and no `a`, it is counted as `CNAME only`, and a note names how many there are. The summary's `takeover` list and the `[takeover] …` line on stderr carry it when its target is gone.
 
 ## Summary and exit codes
 
@@ -126,8 +127,8 @@ The counts also say what became of the names, so a reader can add them up:
 | `the domain itself` | The domain given, when a source returned it. It is not printed. |
 | `did not resolve` | Names DNS says do not exist: guesses and history names that did not resolve, and with `-live` every other name that did not. A guess that only a wildcard answered is one of them. |
 | `collected` | With `-live`: `from sources` less the domain itself and the guesses that did not resolve. |
-| `resolved from sources` | With `-live`: names from sources that resolved and were printed. |
-| `CNAME without an address` | With `-live`: names whose CNAME chain ends without an address, left out as not live. The takeover candidates among them are in `takeover`. |
+| `resolved from sources` | With `-live`: names from sources that resolved to an address and were printed. |
+| `CNAME only` | With `-live`: printed names whose CNAME chain ends without an address. They are in `results` and not taken away from it. The takeover candidates among them are in `takeover`. |
 | `found as CNAME targets`, `found by guessing` | Live names no source gave: another name's CNAME target in scope, and the names of `-w` and `-permute`. |
 | `asked by guessing` | The names `-w` and `-permute` asked that no source gave. `found by guessing` is what is left of them after `did not resolve` and `left out by -m/-f`. |
 | `unverified` | Printed names no DNS lookup checked, without `-live`: names only subdomain.center guessed, and names only the name history held, which no source gave this run. |
@@ -139,17 +140,17 @@ The counts also say what became of the names, so a reader can add them up:
 | `cut by -max-names` | Names past `-max-names` (default 200,000), left out. The run ends with exit 3. |
 
 - `subs` lists subdomains, as subfinder does, so it does not print the domain itself. `run`'s map has it as the target it is.
-- `dnsx -a -cname` lists a name whose CNAME leads nowhere too. `subs -live` does not print it: it is no live name, and it is counted as `CNAME without an address`.
+- `dnsx -a -cname` lists a name whose CNAME leads nowhere, and so does `subs -live`: the row says `cname_only` and the summary counts it as `CNAME only`. A tool that wants addresses only filters on an empty `a`.
 
 The number of results is `from sources`, less some counts and plus others:
 
-- Less: `the domain itself`, `did not resolve`, `CNAME without an address`, `not checked`, `no answer`, `not asked`, `left out by -m/-f`, `listed under another domain` and `cut by -max-names`.
+- Less: `the domain itself`, `did not resolve`, `not checked`, `no answer`, `not asked`, `left out by -m/-f`, `listed under another domain` and `cut by -max-names`.
 - Plus: `found as CNAME targets` and `asked by guessing` (the guesses that did not resolve are in `did not resolve`).
 
 The run prints the sum as a note:
 
 ```
-count: 2638 from the sources − 2093 did not resolve − 3 CNAME without an address − 1 not checked + 10 found as CNAME targets = 551 printed
+count: 2638 from the sources − 2093 did not resolve − 1 not checked + 10 found as CNAME targets = 554 printed
 ```
 
 With `-w`, the guesses are in it: `count: 0 from the sources + 14 asked by guessing − 2 did not resolve = 12 printed`.
@@ -218,7 +219,7 @@ coverage: the independent sources hold about 1609 names; this run has 1400 of th
 - The next round is asked while the last round's new names are looked up, so a round costs the longer of the two. When a round adds no live name, the call already made ahead is dropped, and the source's `calls` counts it. No name is looked up twice.
 - `-max-time` ends the wait for it too: the names it gave by then are kept, listed as not checked when their lookup was cut, and its row says `-max-time` stopped it. `-source-timeout` bounds each of its calls and, with them, half the time it spends asking; the lookups of its guesses are paced by `-dns-rate`, not by `-source-timeout`.
 - With `-dns-rate` the guesses may cost at most half what the real names reported cost, and not less than 1,000.
-- A live name has an address, directly or through its CNAME chain. A chain that ends without one is a takeover candidate, not a live name.
+- A name is live when DNS has a record for it: an address, directly or through its CNAME chain, or a CNAME whose chain ends without one (marked `cname_only`).
 - Answers too big for 512 bytes, such as a long CNAME chain, arrive with EDNS0, or over TCP when a server truncates them.
 - Without `-live` nothing is looked up. The guesses are listed with `"unverified": true`, and the summary counts them.
 - With `-live`, a guess that could not be checked, near `-timeout` or with the DNS lookups failing, is left out and counted as `not checked`. The source's status says `N of its names not checked`, and `azhaq resume` checks them.

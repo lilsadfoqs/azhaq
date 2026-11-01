@@ -91,7 +91,7 @@ azhaq subs -d example.com -live -source-rate 2 -dns-rate 5 -resolvers 1.1.1.1,8.
 
 <!-- azhaq: subs -->
 
-- `-live` checks names against the zone's wildcard, per parent zone, with CNAME targets.
+- `-live` checks names against the zone's wildcard, per parent zone, with CNAME targets. It lists a name that is only a CNAME, as `dnsx -a -cname` does, with `cname_only` set and its own count.
 - `-w WORDS` also resolves `WORD.domain` for each word. `-permute` resolves variations of what was found.
 - A takeover candidate is listed with its evidence. It is a CNAME to a name that no longer exists, an unclaimed domain, or a hosting service's "no such site" page.
 - The summary says what each source gave. It also says how much of what the independent sources know this run holds, in the `coverage:` line: see [Coverage estimate](commands/subs.md#coverage-estimate).

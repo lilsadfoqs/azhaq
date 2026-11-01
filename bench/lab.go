@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"net"
 	"os"
@@ -139,7 +140,7 @@ func benchLab() *labRow {
 	must(os.WriteFile(wl, []byte(strings.Join(words, "\n")+"\n"), 0o644))
 	truth := map[string]bool{}
 	for _, w := range words {
-		if n := w + "." + labDomain; addressAt(lab, n) {
+		if n := w + "." + labDomain; answersAt(lab, n) {
 			truth[n] = true
 		}
 	}
@@ -148,8 +149,23 @@ func benchLab() *labRow {
 	live := hostSet(lines(out))
 	row.Live = sortedKeys(live)
 	missing, extra := diffKeys(truth, live)
-	addCheck("lab: subs -w -live gives the names that resolve to an address (a CNAME to nothing is a takeover candidate, not a live name)", len(missing) == 0 && len(extra) == 0,
+	addCheck("lab: subs -w -live gives the names with an address or a CNAME, as dnsx -a -cname lists them", len(missing) == 0 && len(extra) == 0,
 		"%d names resolve at the lab, azhaq printed %d; missing %v, extra %v; azhaq subs -d %s -w WORDS -resolvers LAB -live%s", len(truth), len(live), missing, extra, labDomain, azErr(m))
+
+	// The names whose chain ends without an address are marked, the others are not.
+	out, m = run("lab", 2*time.Minute, dir, azhaq, "subs", "-d", labDomain, "-w", wl, "-resolvers", res, "-live", "-json", "-silent", "-no-history")
+	var unmarked []string
+	for _, l := range lines(out) {
+		var o struct {
+			Host      string `json:"host"`
+			CNAMEOnly bool   `json:"cname_only"`
+		}
+		if json.Unmarshal([]byte(l), &o) == nil && o.Host != "" && o.CNAMEOnly == addressAt(lab, o.Host) {
+			unmarked = append(unmarked, o.Host)
+		}
+	}
+	addCheck("lab: subs -live marks a name with a CNAME and no address as cname_only, and no other", len(unmarked) == 0,
+		"names wrongly marked or unmarked: %v; azhaq subs -d %s -w WORDS -resolvers LAB -live -json%s", unmarked, labDomain, azErr(m))
 
 	// The wildcard subzone: only the name that differs from the wildcard answer is real.
 	ww := filepath.Join(dir, "wild-words.txt")

@@ -232,9 +232,10 @@ func cmdSubs(args []string) error {
 	out := &subsOut{w: w, cs: *cs, oI: *oI, dir: *oD, perInput: map[string]*bytes.Buffer{}, live: *live}
 	var alive map[string]map[string]any
 	// dangling: names that are a CNAME whose chain ends without an address.
-	// They exist in DNS but are not live: takeover candidates, not names.
+	// They exist in DNS, as dnsx -cname lists them, and are marked "cname_only":
+	// a takeover lead when the target is gone.
 	var dangling map[string]map[string]any
-	danglingN := 0
+	cnameOnly, cnameOnlySrc := 0, 0
 	seen := map[string]bool{}
 	answered, ran, failedOff := 0, 0, 0
 	verbose := hasFlag(extra, "v")
@@ -328,10 +329,7 @@ func cmdSubs(args []string) error {
 			case !filt.keep(name):
 				filtered++
 				continue
-			case alive != nil && alive[name] == nil && dangling[name] != nil:
-				danglingN++
-				continue
-			case alive != nil && alive[name] == nil:
+			case alive != nil && alive[name] == nil && dangling[name] == nil:
 				switch ans := answers[name]; {
 				case unver[name]:
 					notChecked++
@@ -363,8 +361,11 @@ func cmdSubs(args []string) error {
 			}
 			var ips []string
 			if alive != nil {
-				dnsFields(row, alive[name])
-				ips = strs(alive[name]["ips"])
+				var only bool
+				if ips, only = liveRow(row, alive, dangling, name); only {
+					cnameOnly++
+					cnameOnlySrc++
+				}
 				if *oI && len(ips) > 0 {
 					row["ip"] = ips[0]
 				}
@@ -396,8 +397,8 @@ func cmdSubs(args []string) error {
 		out.takeover[t.Host] = t
 	}
 	if *live {
-		// A live name has an address, directly or through its CNAME chain.
-		// A chain that ends without one is a takeover candidate, not live.
+		// A live name has an address, directly or through its CNAME chain; a
+		// chain that ends without one is listed too, marked cname_only.
 		alive = liveNames(st)
 		answers = dnsAnswers(st)
 		dangling = cnameNames(st)
@@ -405,8 +406,7 @@ func cmdSubs(args []string) error {
 	for _, p := range payloads(st, "azhaq-subdomains") {
 		process(p) // the ones not printed yet: every one with -live
 	}
-	// Names the guesses found. A dangling CNAME is found but not live: with
-	// -live it shows as a takeover candidate, not as a name.
+	// Names the guesses found.
 	guessed, guessTried, guessHeld, guessDead, guessFiltered := 0, 0, 0, 0, 0
 	for _, g := range []struct{ collector, source string }{{"azhaq-dns-brute", "dns-brute"}, {"azhaq-permute", "permute"}} {
 		for _, p := range payloads(st, g.collector) {
@@ -424,10 +424,7 @@ func cmdSubs(args []string) error {
 				case !filt.keep(name):
 					guessFiltered++
 					continue
-				case alive != nil && alive[name] == nil && dangling[name] != nil:
-					danglingN++
-					continue
-				case alive != nil && alive[name] == nil:
+				case alive != nil && alive[name] == nil && dangling[name] == nil:
 					guessDead++
 					continue
 				}
@@ -436,8 +433,10 @@ func cmdSubs(args []string) error {
 				row := map[string]any{"host": name, "input": apexOf(name, apexes), "source": g.source, "sources": []string{g.source}}
 				var ips []string
 				if alive != nil {
-					dnsFields(row, alive[name])
-					ips = strs(alive[name]["ips"])
+					var only bool
+					if ips, only = liveRow(row, alive, dangling, name); only {
+						cnameOnly++
+					}
 					if *oI && len(ips) > 0 {
 						row["ip"] = ips[0]
 					}
@@ -451,18 +450,22 @@ func cmdSubs(args []string) error {
 	viaCNAME := 0
 	if alive != nil {
 		var extra []string
-		for name := range alive {
-			if !seen[name] && apexOf(name, apexes) != "" && !slices.Contains(apexes, name) && filt.keep(name) {
-				extra = append(extra, name)
+		for _, set := range []map[string]map[string]any{alive, dangling} {
+			for name := range set {
+				if !seen[name] && apexOf(name, apexes) != "" && !slices.Contains(apexes, name) && filt.keep(name) {
+					extra = append(extra, name)
+				}
 			}
 		}
 		sort.Strings(extra)
-		for _, name := range extra {
+		for _, name := range slices.Compact(extra) {
 			seen[name] = true
 			viaCNAME++
 			row := map[string]any{"host": name, "input": apexOf(name, apexes), "source": "cname", "sources": []string{"cname"}}
-			dnsFields(row, alive[name])
-			ips := strs(alive[name]["ips"])
+			ips, only := liveRow(row, alive, dangling, name)
+			if only {
+				cnameOnly++
+			}
 			if *oI && len(ips) > 0 {
 				row["ip"] = ips[0]
 			}
@@ -509,10 +512,10 @@ func cmdSubs(args []string) error {
 		// that do not resolve (stale certificate logs, wildcard noise). The
 		// live set is the one you can act on.
 		rep.Counts["collected"] = len(collected)
-		rep.Counts["resolved from sources"] = rep.Results - guessed - viaCNAME
+		rep.Counts["resolved from sources"] = rep.Results - guessed - viaCNAME - cnameOnlySrc
 		set("found as CNAME targets", viaCNAME)
 	}
-	set("CNAME without an address", danglingN)
+	set("CNAME only", cnameOnly)
 	set("not checked", notChecked)
 	set("no answer", noAnswer)
 	set("not asked", notAsked)
@@ -526,6 +529,9 @@ func cmdSubs(args []string) error {
 	}
 	if unverified > 0 {
 		rep.Notes = append(rep.Notes, fmt.Sprintf("%d names are listed unverified (-json: \"unverified\": true): only subdomain.center's guesses or the name history held them and no DNS lookup was made; -live checks them", unverified))
+	}
+	if cnameOnly > 0 {
+		rep.Notes = append(rep.Notes, fmt.Sprintf("%d names are listed with a CNAME and no address (-json: \"cname_only\": true): one whose target is gone is a takeover lead", cnameOnly))
 	}
 	if notChecked > 0 {
 		rep.Notes = append(rep.Notes, fmt.Sprintf("%d names could not be checked (the resolvers failed) and are left out; azhaq resume checks them", notChecked))
@@ -598,7 +604,6 @@ func nameSum(c map[string]int, results int, filtering bool) string {
 	}
 	minus("the domain itself", "the domain itself, not a subdomain")
 	minus("did not resolve", "did not resolve")
-	minus("CNAME without an address", "CNAME without an address")
 	minus("not checked", "not checked")
 	minus("no answer", "no answer from the resolvers")
 	minus("not asked", "not asked before the run stopped")
@@ -669,6 +674,22 @@ func topSources(by map[string]int, n int) string {
 		parts = append(parts, fmt.Sprintf("%s %d", x.s, x.n))
 	}
 	return strings.Join(parts, ", ")
+}
+
+// liveRow puts a live name's DNS fields in row and returns its addresses. A
+// name that is only a CNAME whose chain ends without one is listed too, as
+// dnsx -cname lists it, marked "cname_only"; it returns true for it.
+func liveRow(row map[string]any, alive, dangling map[string]map[string]any, name string) (ips []string, only bool) {
+	p := alive[name]
+	if p == nil {
+		p, only = dangling[name], true
+	}
+	dnsFields(row, p)
+	if only {
+		row["cname_only"] = true
+		row["a"] = []string{}
+	}
+	return strs(p["ips"]), only
 }
 
 // cnameNames maps each name azhaq-dns found as a CNAME whose chain ends
