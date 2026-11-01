@@ -907,6 +907,9 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	if len(opts.Ports) > 0 || len(opts.UDPPorts) > 0 {
 		if obs, err := st.Observations(); err == nil {
 			opts.PortConfig.Prior = portcol.Priors(obs) // scans a limit stopped: resume asks the rest
+			if *resumeRun != "" {
+				opts.PortConfig.Swept = portcol.Swept(obs, runStart(st, *resumeRun)) // and not the addresses it finished
+			}
 		}
 	}
 	if *paramsFile != "" {
@@ -1390,6 +1393,17 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		}
 	}
 	return nil
+}
+
+// runStart is when the run began, the zero time for one the workspace does not know.
+func runStart(st *store.Store, id string) time.Time {
+	runs, _ := st.Runs()
+	for _, r := range runs {
+		if r.ID == id {
+			return r.Started
+		}
+	}
+	return time.Time{}
 }
 
 // unvaried counts the names a run found past -depth that -permute did not

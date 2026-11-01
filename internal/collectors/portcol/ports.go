@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/netip"
 	"slices"
 	"sort"
 	"strconv"
@@ -80,6 +81,11 @@ type Collector struct {
 
 	udpByIP map[string]*udpScan
 	ranged  map[string]bool // addresses a range scan handed on as it found them
+
+	// Swept holds, by prefix, the blocks a limit stopped: the addresses of
+	// those the run had finished are not asked again (azhaq resume).
+	Swept   map[string]Sweep
+	sweptIP map[string]bool
 }
 
 type scan struct {
@@ -123,7 +129,8 @@ func (c *Collector) Skip(seed types.Seed) bool {
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return c.ranged[normalize.Hostname(seed.Key())]
+	ip := normalize.Hostname(seed.Key())
+	return c.ranged[ip] || c.sweptIP[ip]
 }
 
 func (c *Collector) Inputs() []types.SeedType {
@@ -438,14 +445,20 @@ func Notes(obs []types.StoredObservation) []string {
 	// A row of a scan a limit stopped is read only while nothing came
 	// after it: the row that finishes the scan says it all.
 	newest := map[string]int{}
+	lastRange := map[string]int{} // by prefix: the stopped block's row counts until the one after it
 	for i, o := range obs {
 		if o.Collector == Name {
 			var id struct {
-				Host string `json:"host"`
-				IP   string `json:"ip"`
+				Host   string `json:"host"`
+				IP     string `json:"ip"`
+				Range  bool   `json:"range"`
+				Prefix string `json:"prefix"`
 			}
 			if json.Unmarshal(o.Payload, &id) == nil {
 				newest[id.Host+"\x00"+id.IP] = i
+				if id.Range {
+					lastRange[id.Prefix] = i
+				}
 			}
 		}
 	}
@@ -473,6 +486,7 @@ func Notes(obs []types.StoredObservation) []string {
 			Note       string   `json:"note"`
 			Up         *bool    `json:"up"`
 			Range      bool     `json:"range"`
+			Stopped    bool     `json:"stopped"`
 			Prefix     string   `json:"prefix"`
 			Addresses  int      `json:"addresses"`
 			Down       int      `json:"down"`
@@ -485,6 +499,9 @@ func Notes(obs []types.StoredObservation) []string {
 			PortsOutA  int      `json:"ports_outside_scope_addresses"`
 		}
 		if json.Unmarshal(o.Payload, &p) != nil || p.Partial && newest[p.Host+"\x00"+p.IP] != i {
+			continue
+		}
+		if p.Range && p.Stopped && lastRange[p.Prefix] != i {
 			continue
 		}
 		if p.Range {
@@ -744,6 +761,75 @@ const (
 	PartialKey = "partial"
 	AskedKey   = "asked_ports"
 )
+
+// SweptKey is the place, in its block, of each address a stopped range scan
+// finished (1-200,203), which azhaq resume does not ask again.
+const SweptKey = "swept"
+
+// Sweep is what a stopped scan of a block of addresses had finished: the
+// places of the addresses, and the counts its row kept.
+type Sweep struct {
+	Done   []int
+	Counts map[string]int
+}
+
+// Swept reads, from the rows a run wrote since it began, the blocks a limit
+// stopped, by prefix. A block whose scan ended after is not among them.
+func Swept(obs []types.StoredObservation, since time.Time) map[string]Sweep {
+	out := map[string]Sweep{}
+	for _, o := range obs {
+		if o.Collector != Name || o.Kind != "ports" || o.ObservedAt.Before(since) {
+			continue
+		}
+		var row map[string]any
+		if json.Unmarshal(o.Payload, &row) != nil || row["range"] != true {
+			continue
+		}
+		prefix, _ := row["prefix"].(string)
+		if row["stopped"] != true {
+			delete(out, prefix)
+			continue
+		}
+		spec, _ := row[SweptKey].(string)
+		done, err := portscan.Ports(spec)
+		if prefix == "" || err != nil {
+			continue
+		}
+		counts := map[string]int{}
+		for k, v := range row {
+			if n, ok := v.(float64); ok {
+				counts[k] = int(n)
+			}
+		}
+		out[prefix] = Sweep{Done: done, Counts: counts}
+	}
+	return out
+}
+
+// sweptAddrs are the addresses of the blocks a limit stopped that the run
+// had finished.
+func sweptAddrs(swept map[string]Sweep) map[string]bool {
+	out := map[string]bool{}
+	for prefix, sw := range swept {
+		pf, err := netip.ParsePrefix(prefix)
+		if err != nil {
+			continue
+		}
+		pf = pf.Masked()
+		done := map[int]bool{}
+		for _, n := range sw.Done {
+			done[n] = true
+		}
+		n := 1
+		for a := pf.Addr(); a.IsValid() && pf.Contains(a); a = a.Next() {
+			if done[n] {
+				out[a.String()] = true
+			}
+			n++
+		}
+	}
+	return out
+}
 
 // Prior is what a stopped scan of an address found and asked.
 type Prior struct {

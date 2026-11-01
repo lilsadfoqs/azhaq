@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/lilsadfoqs/azhaq/internal/ledger"
 	"net"
 	"strings"
 	"sync/atomic"
@@ -85,5 +86,37 @@ func TestResumeSkipAddsToTheStoredSkip(t *testing.T) {
 	runArgs, rest = mergeSkip([]string{"-depth", "2"}, []string{"-skip", "ports"})
 	if v, _ := flagValue(rest, "skip"); v != "ports" || len(runArgs) != 2 {
 		t.Errorf("no stored -skip: %v %v", runArgs, rest)
+	}
+}
+
+// A range scan the budget stopped and a resume ask each address once between
+// them: no connection of the ledger repeats another.
+func TestResumeRangeScanAsksEachAddressOnce(t *testing.T) {
+	t.Chdir(t.TempDir())
+	args := []string{"-cidr", "127.0.0.0/28", "-allow", "127.0.0.0/28", "-ports", "9", "-sources", "none", "-ledger", "l.jsonl", "-db", "r.db"}
+	_, rep, code := runContract(t, append([]string{"run", "-max-requests", "5"}, args...)...)
+	if code != exitLimit {
+		t.Fatalf("the first run: exit %d, stopped %q, failed %+v", code, rep.Stopped, rep.Failed)
+	}
+	_, rep, code = runContract(t, "resume", "-db", "r.db", "-max-requests", "0")
+	if code != exitOK {
+		t.Fatalf("resume: exit %d, stopped %q, failed %+v", code, rep.Stopped, rep.Failed)
+	}
+	seen := map[string]int{}
+	if err := ledger.Read("l.jsonl", func(e ledger.Entry) error {
+		if e.Kind == "tcp" && e.IsTarget() {
+			seen[e.Target]++
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if len(seen) != 16 {
+		t.Errorf("%d addresses were asked, want 16: %v", len(seen), seen)
+	}
+	for target, n := range seen {
+		if n > 1 {
+			t.Errorf("%s was asked %d times", target, n)
+		}
 	}
 }
