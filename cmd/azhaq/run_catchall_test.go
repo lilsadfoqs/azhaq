@@ -136,3 +136,26 @@ func TestRunNoCatchAllLeavesTheRowsOut(t *testing.T) {
 		t.Errorf("results %d, stored %d, rows printed %d", rep.Results, rep.Stored, n)
 	}
 }
+
+// In one directory the paths go one at a time until the origin has answered 3
+// with its shell: exactly 3 are asked, whatever the load.
+func TestRunCatchAllStopIsExactInOneDirectory(t *testing.T) {
+	var paths []string
+	for i := 0; i < 40; i++ {
+		paths = append(paths, fmt.Sprintf("'/app/view%d'", i))
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/static/bundle.js" {
+			w.Header().Set("Content-Type", "application/javascript")
+			fmt.Fprint(w, "var routes=["+strings.Join(paths, ",")+"];\n")
+			return
+		}
+		w.Header().Set("Content-Type", "text/html")
+		fmt.Fprint(w, `<html><head><title>App</title></head><body><script src="/static/bundle.js"></script></body></html>`)
+	}))
+	t.Cleanup(srv.Close)
+	_, rep := runShell(t, srv)
+	if rep.Counts["catchall"] != 3 || rep.Counts["skipped"] != 37 {
+		t.Errorf("counts %v: want 3 asked and 37 held", rep.Counts)
+	}
+}

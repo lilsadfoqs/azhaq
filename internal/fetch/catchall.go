@@ -79,41 +79,74 @@ func noteCatchAll(origin, path string, control fingerprint) {
 // the control; past the controls an origin gets, the nearest directory
 // above that was asked stands for it, as in the catch-all check itself.
 func CatchAllHeld(raw string, stop int) bool {
+	st, _ := CatchAllControl(raw, stop)
+	return st == ControlHeld
+}
+
+// ControlState is what the controls say of a path before it is asked.
+type ControlState int
+
+const (
+	// ControlNone: nothing to hold the path for (no stop, the root, a bad URL).
+	ControlNone ControlState = iota
+	// ControlUnknown: the control of the path's directory was not asked;
+	// asking a path of it asks the control.
+	ControlUnknown
+	// ControlPending: the control was asked and has not answered.
+	ControlPending
+	// ControlOther: the control answered something else, or failed: a real
+	// directory, whose paths are asked.
+	ControlOther
+	// ControlShell: the control is the catch-all page, and the origin has
+	// answered fewer than stop paths with it.
+	ControlShell
+	// ControlHeld: the control is the catch-all page and the origin has
+	// answered stop paths with it.
+	ControlHeld
+)
+
+// CatchAllControl says what the controls say of raw, and names its directory
+// (origin and directory, as the controls are kept), so that callers can keep
+// one path of a directory in flight until the control has answered.
+func CatchAllControl(raw string, stop int) (ControlState, string) {
 	if stop <= 0 {
-		return false
+		return ControlNone, ""
 	}
 	u, err := url.Parse(raw)
 	if err != nil || u.Host == "" {
-		return false
+		return ControlNone, ""
 	}
 	path := u.EscapedPath()
 	if path == "" || path == "/" {
-		return false
+		return ControlNone, ""
 	}
 	origin := u.Scheme + "://" + u.Host
 	dir := parentDir(path)
 	for d := int(probeDepth.Load()); d > 0 && strings.Count(dir, "/") > d+1; {
 		dir = parentDir(dir)
 	}
+	own := origin + dir
 	probeMu.Lock()
 	defer probeMu.Unlock()
-	if len(shellPaths[origin]) < stop {
-		return false
-	}
-	var own *baseline
+	var ctl *baseline
 	for {
-		if own = baselines[origin+dir]; own != nil {
+		if ctl = baselines[origin+dir]; ctl != nil {
 			break
 		}
 		if dir == "/" || probeDirs[origin] < maxProbeDirs {
-			return false // asked, and the control with it
+			return ControlUnknown, own // asked, and the control with it
 		}
 		dir = parentDir(dir)
 	}
-	if !own.ready.Load() || !own.ok {
-		return false
+	switch {
+	case !ctl.ready.Load():
+		return ControlPending, own
+	case !ctl.ok || !slices.ContainsFunc(shellPages[origin], ctl.fp.matches):
+		return ControlOther, own
+	case len(shellPaths[origin]) < stop:
+		return ControlShell, own
 	}
-	return slices.ContainsFunc(shellPages[origin], own.fp.matches)
+	return ControlHeld, own
 }
 
 type baseline struct {
