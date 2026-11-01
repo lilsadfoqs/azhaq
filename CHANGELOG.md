@@ -56,6 +56,7 @@
 - `fuzz -db` that is killed (SIGKILL, a crash) leaves its workspace, the command and the inputs asked, kept every second, so `azhaq resume` continues it; a write the killed run sent is never sent again, and the summary, written after the ledger is sealed, says what was asked again or held back.
 - A workspace keeps no secret of the run that made it: `fuzz -db` stores its command without `-b`, a credential `-H` and a proxy's password, with its files by full path (a resume says what it was not given again); `probe` keeps the requests of its stored answers without credential headers and body; the proxy flags of `run` and `dns` are stored without the password.
 - `azhaq resume` of a fuzz workspace takes run's `-quiet` and `-timeout` (fuzz's `-maxtime`).
+- A UDP scan reads a CoAP answer's payload past its header, token and options: a 0xff in the random message id was taken for the payload marker about once in 128 scans, and the banner began inside the header.
 
 ## v0.13.0
 
