@@ -187,7 +187,9 @@ func TestRunDeadlineKeepsWhatSourcesGave(t *testing.T) {
 		hang("slow", nil),
 		hang("deaf", stuck),
 	)
-	ctx, cancel := context.WithTimeout(context.Background(), 400*time.Millisecond)
+	// A quarter of what is left is kept to emit: 2 s leaves 0.5 s, room enough
+	// on a busy runner under -race (0.4 s left 0.1 s, and missed it once).
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	t0 := time.Now()
 	var payload map[string]any
