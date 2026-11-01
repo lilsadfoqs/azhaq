@@ -482,7 +482,7 @@ For each answer it stores these fields, besides status, title and headers:
 - No redirect is followed unless `-fr`. Then `-maxr` counts as httpx counts it, at most N-1 hops, within the site or, with `-fhr`, the host.
 - There is no `Accept` header, and one connection per request, as httpx sends.
 - TLS is 1.0 and up.
-- A bare `host:port` is asked over plain HTTP first on 8080 and on ports above 1024. It is asked over TLS when the plain request is answered 400.
+- A bare `host:port` is asked over both schemes, as httpx does: plain HTTP first on 80, 8080 and ports above 1024, TLS first on 443 and the other ports below 1024. The second scheme is asked when the first is not answered (the connection is refused or closed, or times out, the TLS handshake fails, or the service does not speak HTTP, such as an FTP banner) and, after plain HTTP, when it is answered 400. Any other answer stands and the second scheme is not asked.
 - The scheme order, `-p` ports (also for addresses), `-path`, `-nf` and `-pa` work as in httpx.
 - A name that resolves only through a wildcard answer is probed, not dropped.
 
