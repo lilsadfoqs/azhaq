@@ -87,7 +87,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 | Flag | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `-db` | string |  | the database (default: the last run's) |
-| `-fields` | string |  | print only these fields, comma-separated: key, type, role, coverage, status, answer, evidence, evidence_from, title, service, product, version, methods, params, body, scope, first_seen, found_in, watch, guard, protocol, namespace |
+| `-fields` | string |  | print only these fields, comma-separated: key, type, role, coverage, status, answer, evidence, evidence_from, response_file, title, service, product, version, methods, params, body, scope, first_seen, found_in, watch, guard, protocol, namespace |
 | `-json` | bool |  | one JSON object per row, and the summary as JSON on stderr |
 | `-limit` | int |  | rows at most, best first (default 0: all) |
 <!-- flags:end -->

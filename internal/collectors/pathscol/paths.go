@@ -43,6 +43,10 @@ var DefaultWordlist = []string{
 	"rest",
 	"graphql",
 	"graphiql",
+	"api/graphql",
+	"v1/graphql",
+	"gql",
+	"playground",
 	"swagger",
 	"swagger.json",
 	"swagger.yaml",
@@ -54,6 +58,21 @@ var DefaultWordlist = []string{
 	"swagger/v1/swagger.json",
 	"api/swagger.json",
 	"api/openapi.json",
+	"v3/api-docs.yaml",
+	"swagger/v2/swagger.json",
+	"swagger/doc.json",
+	"api-json",
+	"documentation/json",
+	"api/schema",
+	"apispec_1.json",
+	"api-docs/v1/swagger.json",
+	"docs/api-docs.json",
+	"api/v1/openapi.json",
+	"api/v1/swagger.json",
+	"swagger-ui.html",
+	"swagger-ui/index.html",
+	"redoc",
+	"docs",
 	"health",
 	"internal",
 	"backup",
@@ -199,9 +218,10 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 	// answer was an API description.
 	probe := func(target, path string) bool {
 		res, _, err := fetch.Do(ctx, c.Client, target)
-		if err != nil || !interesting(res.Status) || fetch.CatchAll(ctx, c.Client, res) {
+		if err != nil || !(interesting(res.Status) || isGraphQLLoc(path) && refusesGET(res.Status)) || fetch.CatchAll(ctx, c.Client, res) {
 			return false
 		}
+		known := isDescLoc(path) && res.Status < 400 && describes(res.Body) || isGraphQLLoc(path)
 		reqURL := target
 		if n, err := normalize.URL(target); err == nil {
 			reqURL = n
@@ -210,14 +230,18 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		if n, err := normalize.URL(res.URL); err == nil {
 			final = n
 		}
-		payload, _ := json.Marshal(map[string]any{
+		row := map[string]any{
 			"url":       reqURL,
 			"via":       "paths",
 			"status":    res.Status,
 			"path":      "/" + path,
 			"final_url": final,
 			"hops":      res.Hops,
-		})
+		}
+		if known {
+			row[types.ExposedByKey] = raw
+		}
+		payload, _ := json.Marshal(row)
 		mu.Lock()
 		defer mu.Unlock()
 		if err := emit(types.Observation{
@@ -255,10 +279,12 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 			if strings.HasSuffix(low, ".txt") || strings.HasSuffix(low, ".xml") || strings.HasSuffix(low, ".ico") {
 				continue
 			}
-			meta.NextHints = append(meta.NextHints, types.Seed{
-				Type: types.TypeURL,
-				Keys: map[string]string{"url": u},
-			})
+			keys := map[string]string{"url": u}
+			if known {
+				// A guess about the origin itself: read at any -depth.
+				keys[types.KnownLocationKey], keys[types.ExposedByKey] = "1", raw
+			}
+			meta.NextHints = append(meta.NextHints, types.Seed{Type: types.TypeURL, Keys: keys})
 		}
 		return isDescLoc(path) && res.Status < 400 && describes(res.Body)
 	}
@@ -451,6 +477,16 @@ func probePrefix(p string) string {
 		return p[:i+1]
 	}
 	return p + "/"
+}
+
+// refusesGET: a GraphQL endpoint's answer to a GET with no query, or to one
+// it does not take.
+func refusesGET(status int) bool {
+	switch status {
+	case 400, 405, 415, 422, 500:
+		return true
+	}
+	return false
 }
 
 func interesting(status int) bool {

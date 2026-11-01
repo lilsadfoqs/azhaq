@@ -43,6 +43,15 @@ const DerivedKey = "derived"
 // -depth.
 const SameTargetKey = "same"
 
+// KnownLocationKey marks a hint that is a well-known location on the origin
+// of the seed it came from (an API description, a GraphQL endpoint): the
+// guess is about the target itself, so it is no step of -depth. ExposedByKey
+// holds the URL whose checks found it.
+const (
+	KnownLocationKey = "known"
+	ExposedByKey     = "exposed_by"
+)
+
 // RedirectKey marks a hint that is where the seed it came from redirected to,
 // within the site: the redirect is the answer to the seed, so it is no step
 // of -depth either.

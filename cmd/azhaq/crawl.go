@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"net/http"
 	"net/url"
 	"os"
 	"path"
@@ -59,7 +60,7 @@ func cmdCrawl(args []string) error {
 	d := fs.Int("d", -1, "katana's -d: link levels below the start URL to visit (3 by default); -depth N is -d N-1")
 	assets := fs.Bool("assets", false, "also list images, fonts and media, and the source maps and build manifests azhaq reads (scripts and stylesheets are listed by default, as katana lists them)")
 	noShell := fs.Bool("no-catchall", false, "leave out URLs that answer with the page every unknown path gets (client-side routes of a single-page app)")
-	sweep := fs.Bool("sweep", false, "also ask each web service for the 32 built-in paths (robots.txt, sitemaps, API descriptions, .git/HEAD, admin, …) and for the source map next to each script, as run does; crawl asks only what a crawler does")
+	sweep := fs.Bool("sweep", false, "also ask each web service for the 51 built-in paths (robots.txt, sitemaps, API descriptions, .git/HEAD, admin, …) and for the source map next to each script, as run does; crawl asks only what a crawler does")
 	showOut := fs.Bool("do", false, "also list the URLs found and left out of the crawl's scope (never requested)")
 	showRejected := fs.Bool("rejected", false, "also list the strings read from scripts and pages and kept out of the URLs, each with its reason (text: string, a tab, the reason; -json: one object each)")
 	jsonl := fs.Bool("jsonl", false, "katana's JSON lines: {timestamp, request{method, endpoint, tag, attribute, source}, response{status_code, technologies, forms, content_length}, error}")
@@ -177,13 +178,14 @@ func cmdCrawl(args []string) error {
 	run = append(run, crawlRegexArgs(outScope, "-crawl-out")...)
 	var answers *answerStore
 	if *storeResp {
-		if answers, err = newAnswerStore(*storeRespDir, *omitBody); err != nil {
+		if answers, err = newAnswerStore(*storeRespDir, *omitBody, false); err != nil {
 			return err
 		}
 	}
 	if answers != nil {
 		answerTap = answers.tap
-		defer func() { answerTap = nil }()
+		answerDir, _ = filepath.Abs(*storeRespDir)
+		defer func() { answerTap, answerDir = nil, "" }()
 	}
 	if !*sweep {
 		// A crawler asks what a crawler asks: the baseline of the root and of
@@ -812,7 +814,23 @@ func (c *crawlOutput) close() error {
 }
 
 // answerTap is what a crawl -sr does with each answer; mapTarget hands it to fetch.
-var answerTap func(string, fetch.Result)
+// answerDir is the directory it writes to, which the workspace records so that
+// query can say where the answer of a row is stored.
+var (
+	answerTap func(string, fetch.Result)
+	answerDir string
+)
+
+// answerFile is the file name an answer gets inside the directory of its
+// host: the SHA1 of the URL, of the method and the URL for anything but a GET.
+func answerFile(method, raw string) string {
+	key := raw
+	if method != "" && method != http.MethodGet {
+		key = method + " " + raw
+	}
+	sum := sha1.Sum([]byte(key))
+	return hex.EncodeToString(sum[:]) + ".txt"
+}
 
 // answerStore writes the answers a crawl gets to DIR/HOST/SHA1.txt with an
 // index (katana's -sr layout), as they come.
@@ -825,11 +843,17 @@ type answerStore struct {
 	err      error
 }
 
-func newAnswerStore(dir string, omitBody bool) (*answerStore, error) {
+// newAnswerStore opens dir for the answers; resumed adds to its index, which
+// a new run starts again.
+func newAnswerStore(dir string, omitBody, resumed bool) (*answerStore, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, err
 	}
-	idx, err := os.Create(filepath.Join(dir, "index.txt"))
+	flags := os.O_CREATE | os.O_WRONLY | os.O_TRUNC
+	if resumed {
+		flags = os.O_CREATE | os.O_WRONLY | os.O_APPEND
+	}
+	idx, err := os.OpenFile(filepath.Join(dir, "index.txt"), flags, 0o644)
 	if err != nil {
 		return nil, err
 	}
@@ -844,10 +868,13 @@ func (a *answerStore) tap(raw string, res fetch.Result) {
 	if err != nil {
 		return
 	}
-	sum := sha1.Sum([]byte(raw))
-	name := hex.EncodeToString(sum[:]) + ".txt"
+	name := answerFile(res.Method, raw)
+	method := res.Method
+	if method == "" {
+		method = http.MethodGet
+	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s\n\nGET %s\n\n%s\n", raw, u.RequestURI(), res.StatusLine)
+	fmt.Fprintf(&b, "%s\n\n%s %s\n\n%s\n", raw, method, u.RequestURI(), res.StatusLine)
 	keys := make([]string, 0, len(res.Header))
 	for k := range res.Header {
 		keys = append(keys, k)
@@ -879,4 +906,25 @@ func (a *answerStore) tap(raw string, res fetch.Result) {
 func (a *answerStore) close() error {
 	a.idx.Close()
 	return a.err
+}
+
+// responsesKey is the workspace record of where a run's -sr put its answers.
+func responsesKey(run string) string { return "responses:" + run }
+
+// markResponses sets the file each URL row's answer was stored in, for the
+// rows whose file is there.
+func markResponses(rows []engine.MapEntry, dir string) {
+	for i, r := range rows {
+		if r.Entity.Type != types.TypeURL {
+			continue
+		}
+		u, err := url.Parse(r.Entity.Key)
+		if err != nil {
+			continue
+		}
+		file := filepath.Join(dir, u.Hostname(), answerFile("", r.Entity.Key))
+		if _, err := os.Stat(file); err == nil {
+			rows[i].ResponseFile = file
+		}
+	}
 }

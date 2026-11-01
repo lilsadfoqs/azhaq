@@ -77,6 +77,9 @@ func readGraph(path string) (*graphView, error) {
 		}
 	}
 	g.rows = engine.BuildMap(ents, engine.ScopeSeeds(seeds, ents, edges), obs, leftover, stats.Capped)
+	if dir := st.GetMeta(responsesKey(st.RunID())); dir != "" {
+		markResponses(g.rows, dir)
+	}
 	g.probe = engine.ProbeRows(obs)
 	return g, nil
 }

@@ -78,12 +78,24 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		}
 		return types.RunMeta{Status: types.StatusError, Error: err.Error(), Drop: true}, err
 	}
-	if res.Status == http.StatusNotFound || !signature.Match(res.Body) {
-		// Not GraphQL: the schema query is not sent.
+	postOnly := refusesGET(res)
+	switch {
+	case res.Status == http.StatusNotFound || res.Status == http.StatusMethodNotAllowed && !postOnly || res.Status < 400 && !signature.Match(res.Body):
+		// Nothing here, or an answer that is not GraphQL's: the schema query is not sent.
 		return types.RunMeta{Status: types.StatusOK, Drop: true}, nil
+	case !signature.Match(res.Body) && !postOnly:
+		// The GET was refused in words that do not say GraphQL (401, 403, a
+		// 500): not named here, but the schema query (-graphql) is still
+		// sent, as the server may answer a POST.
+		return types.RunMeta{Status: types.StatusOK}, nil
 	}
 	row := map[string]any{"url": raw, "role": "graphql", "status": res.Status}
-	if ide := ideName(res.Body); ide != "" {
+	if from := seed.Keys[types.ExposedByKey]; from != "" {
+		row[types.ExposedByKey] = from
+	}
+	if postOnly {
+		row["post_only"] = true // the GET was refused: queries go in a POST
+	} else if ide := ideName(res.Body); ide != "" {
 		row["ide"] = ide
 	} else if answersGET(ctx, c.Client, raw) {
 		// It runs queries sent with GET: they can be asked as any GET is,
@@ -109,6 +121,19 @@ func answersGET(ctx context.Context, client *http.Client, raw string) bool {
 }
 
 var typename = regexp.MustCompile(`"data"\s*:\s*\{\s*"__typename"\s*:\s*"`)
+
+// postOnlyRE is what a GraphQL server says when it takes no GET.
+var postOnlyRE = regexp.MustCompile(`(?i)only supports POST|supports only POST|POST (method )?(only|is required|required)|(GET|this) method is not (allowed|supported)|must (use|be) POST`)
+
+// refusesGET says whether a GET answer is a GraphQL endpoint's refusal to
+// take one: a 405 that allows POST, or a message that says POST only.
+func refusesGET(res fetch.Result) bool {
+	if res.Status == http.StatusMethodNotAllowed {
+		allow := strings.ToUpper(res.Header.Get("Allow"))
+		return allow == "" || strings.Contains(allow, "POST")
+	}
+	return res.Status >= 400 && postOnlyRE.Match(res.Body)
+}
 
 func ideName(body []byte) string {
 	b := bytes.ToLower(body)

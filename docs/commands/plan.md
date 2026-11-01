@@ -115,9 +115,9 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 | `-permute` | bool |  | resolve variations of found names (active; the targets given are the scope unless -allow) |
 | `-graphql` | bool |  | read the schema of GraphQL endpoints with an introspection query (active; the targets given are the scope unless -allow) |
 | `-graphql-wordlist` | string |  | extra probe words (one per line), tried and recombined with the built-in ones when a GraphQL endpoint's introspection is off and its schema has to be recovered from validation errors |
-| `-known-files` | string |  | ask each web service only for its robots.txt and sitemaps and read every entry (all, robotstxt or sitemapxml); replaces the 32 built-in paths |
+| `-known-files` | string |  | ask each web service only for its robots.txt and sitemaps and read every entry (all, robotstxt or sitemapxml); replaces the 51 built-in paths |
 | `-paths` | string |  | extra path wordlist (one path per line) |
-| `-no-paths` | bool |  | do not ask each web service for the 32 built-in paths (robots.txt, sitemaps, API descriptions, .git/HEAD, backup, admin, …): some programs count that as scanning |
+| `-no-paths` | bool |  | do not ask each web service for the 51 built-in paths (robots.txt, sitemaps, API descriptions, .git/HEAD, backup, admin, …): some programs count that as scanning |
 | `-path-climb` | bool |  | also list and ask the parent directories of each link a page names (/a/b/c: /a/b/ and /a/) |
 | `-fill-forms` | bool |  | ask the action of each GET form with neutral values in its fields (a search box gets a word): one GET request per form; a form that posts is not sent unless -submit-forms; crawl does this by default (-no-form-fill turns it off) |
 | `-per-template` | int |  | URLs of one template (/product?id={n}) to request; the rest are listed (default: all) |
@@ -228,11 +228,13 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 | `-quiet` | bool |  | print no map and no progress lines (a line every 10 s while the run works), only the summary (on stderr) |
 | `-v` | bool |  | print a line for every finished task, not only failures |
 | `-stream` | bool |  | also print each name, service, URL and open port as it is found (found lines, before the ranked map) |
+| `-sr` | bool |  | also write each answer a target gave, headers and body as read, to the -srd directory as DIR/HOST/SHA1.txt with an index.txt (katana's -sr); query -fields response_file says where a row's is |
+| `-srd` | string | `azhaq_response` | directory for -sr |
 | `-fail-on-errors` | bool |  | exit 3 on every failure: also fan-out (a source for the domain of a URL) and a source that failed while others answered |
 | `-fail-on-capped` | bool |  | exit 4 also when the run hit -depth with hints left |
 
 <details>
-<summary>Other names, flags accepted with no effect and rarely used flags (77)</summary>
+<summary>Other names, flags accepted with no effect and rarely used flags (78)</summary>
 
 | Flag | Type | Default | Meaning | Kind |
 | --- | --- | --- | --- | --- |
@@ -254,6 +256,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 | `-dirs-rate` | float |  | path guesses per second per host (0: no limit but -dirs-threads, as ffuf) | rarely needed |
 | `-dirs-threads` | int | `40` | path guesses in flight per service (as ffuf) | rarely needed |
 | `-facts` | string |  | JSONL connector facts to ingest before native collectors | rarely needed |
+| `-ob` | bool |  | with -sr: write the status line and headers only | rarely needed |
 | `-obs` | bool |  | also print the observation log | rarely needed |
 | `-params-chunk` | int |  | names per parameter request at most (0: 500, and about 7.6 KB in a query; fewer where the server refuses a long query) | rarely needed |
 | `-params-delay` | duration |  | wait before each parameter request, one at a time (arjun -d) | rarely needed |

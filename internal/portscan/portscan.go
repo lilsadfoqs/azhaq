@@ -289,12 +289,21 @@ type Report struct {
 // only double the scan. A port whose service greets first and said
 // nothing gets a second connection too.
 func (s *Scanner) ScanEach(ctx context.Context, host, ip string, ports []int) (Report, error) {
+	return s.ScanEachFn(ctx, host, ip, ports, nil)
+}
+
+// ScanEachFn is ScanEach that tells found each open port as soon as it is
+// named, while the rest of the address is still being asked. found is called
+// from the scan's own goroutines, so it must be safe to call at once. A
+// server-first port that said nothing is not told: the second look names it
+// in the report.
+func (s *Scanner) ScanEachFn(ctx context.Context, host, ip string, ports []int, found func(Open)) (Report, error) {
 	s.init()
 	var r Report
 	var err error
 	ports = s.ordered(ip, ports)
 	var asked, slow int
-	r.Open, r.Silent, asked, slow, err = s.pass(ctx, host, ip, ports)
+	r.Open, r.Silent, asked, slow, err = s.pass(ctx, host, ip, ports, found)
 	r.Asked = asked
 	r.Threshold = s.Threshold > 0 && len(r.Open) >= s.Threshold
 	for try := 0; err == nil && !r.Threshold && len(r.Silent) > 0 && s.again(try, len(r.Silent), len(ports)); try++ {
@@ -305,7 +314,7 @@ func (s *Scanner) ScanEach(ctx context.Context, host, ip string, ports []int) (R
 			}
 		}
 		var more []Open
-		more, r.Silent, _, slow, err = s.pass(ctx, host, ip, r.Silent)
+		more, r.Silent, _, slow, err = s.pass(ctx, host, ip, r.Silent, found)
 		r.Open = append(r.Open, more...)
 	}
 	if err == nil {
@@ -368,7 +377,7 @@ const retryFloor = 64
 // pass connects once to each port, at the scanner's rate, and says how
 // many it asked (all of them unless the threshold of open ports stopped it)
 // and how many of the silent ones timed out rather than failed at once.
-func (s *Scanner) pass(ctx context.Context, host, ip string, ports []int) (open []Open, silent []int, asked, slow int, err error) {
+func (s *Scanner) pass(ctx context.Context, host, ip string, ports []int, found func(Open)) (open []Open, silent []int, asked, slow int, err error) {
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 	var stop error
@@ -402,6 +411,9 @@ func (s *Scanner) pass(ctx context.Context, host, ip string, ports []int) (open 
 			defer wg.Done()
 			defer func() { <-s.conns }()
 			o, state := s.probe(ctx, host, ip, p)
+			if state == portOpen && found != nil && !o.again {
+				found(o)
+			}
 			mu.Lock()
 			switch state {
 			case portOpen:

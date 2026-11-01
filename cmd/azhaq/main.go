@@ -269,6 +269,9 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	pathsFile := fs.String("paths", "", "extra path wordlist (one path per line)")
 	quiet := fs.Bool("quiet", false, "print no map and no progress lines (a line every 10 s while the run works), only the summary (on stderr)")
 	jsonOut := fs.Bool("json", false, "print the map as JSON lines, and the summary as one JSON object on stderr")
+	storeResp := fs.Bool("sr", false, "also write each answer a target gave, headers and body as read, to the -srd directory as DIR/HOST/SHA1.txt with an index.txt (katana's -sr); query -fields response_file says where a row's is")
+	storeRespDir := fs.String("srd", "azhaq_response", "directory for -sr")
+	omitBody := fs.Bool("ob", false, "with -sr: write the status line and headers only")
 	stream := fs.Bool("stream", false, "also print each name, service, URL and open port as it is found (found lines, before the ranked map)")
 	verbose := fs.Bool("v", false, "print a line for every finished task, not only failures")
 	timeout := fs.Duration("timeout", 0, "stop after this long and keep what was found; azhaq resume continues (0: no limit)")
@@ -370,8 +373,8 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	graphql := fs.Bool("graphql", false, "read the schema of GraphQL endpoints with an introspection query (active; the targets given are the scope unless -allow)")
 	graphqlWordlist := fs.String("graphql-wordlist", "", "extra probe words (one per line), tried and recombined with the built-in ones when a GraphQL endpoint's introspection is off and its schema has to be recovered from validation errors")
 	skip := fs.String("skip", "", "collectors not to run, comma-separated (see azhaq plan)")
-	noPaths := fs.Bool("no-paths", false, "do not ask each web service for the 32 built-in paths (robots.txt, sitemaps, API descriptions, .git/HEAD, backup, admin, …): some programs count that as scanning")
-	knownFiles := fs.String("known-files", "", "ask each web service only for its robots.txt and sitemaps and read every entry (all, robotstxt or sitemapxml); replaces the 32 built-in paths")
+	noPaths := fs.Bool("no-paths", false, "do not ask each web service for the 51 built-in paths (robots.txt, sitemaps, API descriptions, .git/HEAD, backup, admin, …): some programs count that as scanning")
+	knownFiles := fs.String("known-files", "", "ask each web service only for its robots.txt and sitemaps and read every entry (all, robotstxt or sitemapxml); replaces the 51 built-in paths")
 	proxyFlag := fs.String("proxy", "", "send requests to targets through this proxy (http://, https:// or socks5://); Chrome too (default: $HTTP_PROXY, $HTTPS_PROXY)")
 	crawlScope := fs.String("crawl-scope", "", "the hosts a crawl follows links to: rdn (the start host's registrable domain and its subdomains), fqdn (the host only), dn (hosts that name its domain keyword) or a regex on the host (default: rdn for a name, the origin itself for an address)")
 	crawlAny := fs.Bool("crawl-any-host", false, "follow links to any host, within -allow and -deny (katana's -ns)")
@@ -411,6 +414,22 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	fetch.Delay = *delay
 	fetch.NoFollow = *noFollow
 	crawlscope.Reset()
+	if *storeResp && !out.plan {
+		answers, err := newAnswerStore(*storeRespDir, *omitBody, *resumeRun != "")
+		if err != nil {
+			return err
+		}
+		answerTap = answers.tap
+		answerDir, _ = filepath.Abs(*storeRespDir)
+		defer func() {
+			answerTap, answerDir = nil, ""
+			if err := answers.close(); err != nil {
+				rep.Notes = append(rep.Notes, fmt.Sprintf("answers written to %s: %v", *storeRespDir, err))
+				return
+			}
+			rep.Notes = append(rep.Notes, fmt.Sprintf("%d answers written to %s", answers.n, *storeRespDir))
+		}()
+	}
 	fetch.Tap = answerTap
 	fetch.Retry, fetch.Backoff = *retryFlag, *backoff
 	fetch.UseJar(*cookieJar)
@@ -749,6 +768,10 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 			raw, _ := json.Marshal(rules)
 			_ = st.SetMeta("scope:"+st.RunID(), string(raw))
 		}
+	}
+	if answerDir != "" {
+		// Where query finds the stored answer of a row.
+		_ = st.SetMeta(responsesKey(st.RunID()), answerDir)
 	}
 	// The catch-all checks of a resumed run ask for the same names as
 	// before, so their kept answers serve.

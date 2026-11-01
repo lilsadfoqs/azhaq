@@ -347,3 +347,43 @@ func lexical(a, b string) int {
 	}
 	return d[len(a)][len(b)]
 }
+
+// A GET the endpoint refuses because it takes POST only (a 405, or a 500
+// that says so) names the endpoint; a refusal that says nothing else (401,
+// 403, a bare 500) still lets the schema query go; a 404 and a 200 that is
+// no GraphQL answer do not.
+func TestRefusedGETStillLetsTheSchemaQueryGo(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		answer func(w http.ResponseWriter)
+		row    bool
+		drop   bool
+	}{
+		{"500 post only", func(w http.ResponseWriter) {
+			w.WriteHeader(500)
+			_, _ = w.Write([]byte("Error 500 java.lang.UnsupportedOperationException: GraphQL only supports POST method"))
+		}, true, false},
+		{"405 allow POST", func(w http.ResponseWriter) { w.Header().Set("Allow", "POST, OPTIONS"); w.WriteHeader(405) }, true, false},
+		{"405 allow GET only", func(w http.ResponseWriter) { w.Header().Set("Allow", "GET, HEAD"); w.WriteHeader(405) }, false, true},
+		{"401", func(w http.ResponseWriter) { w.WriteHeader(401) }, false, false},
+		{"json that says nothing", func(w http.ResponseWriter) { _, _ = w.Write([]byte(`{"status":"ok"}`)) }, false, true},
+		{"html page", func(w http.ResponseWriter) {
+			w.Header().Set("Content-Type", "text/html")
+			_, _ = w.Write([]byte("<h1>app</h1>"))
+		}, false, true},
+		{"404", func(w http.ResponseWriter) { w.WriteHeader(404) }, false, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fetch.Reset()
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { tc.answer(w) }))
+			t.Cleanup(srv.Close)
+			got, meta := run(t, New(srv.Client()), srv.URL+"/graphql")
+			if (got != nil) != tc.row || meta.Drop != tc.drop {
+				t.Errorf("row %v, drop %v; want row %v, drop %v", got, meta.Drop, tc.row, tc.drop)
+			}
+			if tc.row && got["post_only"] != true {
+				t.Errorf("the row does not say the GET was refused: %v", got)
+			}
+		})
+	}
+}

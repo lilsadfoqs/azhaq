@@ -44,6 +44,8 @@ type MapEntry struct {
 	// What a 5xx the run got says less of than it looks: "500 without
 	// input" when the route takes names and the request carried none.
 	Answer string `json:"answer,omitempty"`
+	// ResponseFile is where -sr stored the answer, when the run kept it.
+	ResponseFile string `json:"response_file,omitempty"`
 
 	// A port row: what answered on it, as the port scan named it.
 	Service, Product, Version string
@@ -478,7 +480,7 @@ func gate(obs []types.StoredObservation) int {
 // finishes it) joined with every port an imported row names, as a tool
 // like naabu writes one row per port.
 func proofOf(e types.Entity, obs []types.StoredObservation) string {
-	keys := []string{"status", "title", "role", "ips", "cname", "open", "count", "error", "skipped", "word", "warning", "note", "auth", "via"}
+	keys := []string{"status", "title", "role", "ips", "cname", "open", "count", "error", "skipped", "word", "warning", "note", "auth", "via", types.ExposedByKey}
 	vals := map[string]string{}
 	var own, imported []string
 	var haveOwn, haveImported bool
