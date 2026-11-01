@@ -243,6 +243,7 @@ Each open TCP port gets `product` and `version` next to `service`, from what it 
 | --- | --- | --- |
 | SSH greeting | `SSH-2.0-OpenSSH_9.6p1 Ubuntu-3ubuntu13.20` | OpenSSH, 9.6p1 |
 | FTP, SMTP, POP3, IMAP greeting | `220 (vsFTPd 3.0.5)`, `ESMTP Exim 4.96`, `Dovecot` | vsftpd 3.0.5, Exim 4.96, Dovecot |
+| FTP greeting naming no product: `SYST` before login | vsftpd 2.0.8 and later refuses it with `530 Please login with USER and PASS.` | vsftpd, no version (the greeting states none) |
 | MySQL, MariaDB handshake | server version in the first packet | MySQL 8.0.35, MariaDB 10.11.6 |
 | HTTP `Server` | `Werkzeug/2.2.3 Python/3.11`, `Apache/2.4.25 (Debian)`, `CUPS/2.4` | Werkzeug 2.2.3, Apache httpd 2.4.25, CUPS 2.4 |
 | HTTP `X-Powered-By`, when `Server` names none | `Express` | Express |

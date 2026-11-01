@@ -5,11 +5,15 @@
 package browser
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/lilsadfoqs/azhaq/internal/guard"
+	"image"
+	_ "image/jpeg" // registers image.DecodeConfig for -shot-format jpeg
+	_ "image/png"  // registers image.DecodeConfig for -shot-format png
 	"maps"
 	"net/url"
 	"os"
@@ -447,6 +451,12 @@ func (b *Browser) Load(ctx context.Context, rawURL string, shot bool) (Page, err
 	if err := chromedp.Do(tab); err != nil { // opens the tab
 		return p, err
 	}
+	// -window-size at launch sets the browser window, not the page's own
+	// viewport: headless Chrome reserves space of its own from it, so the
+	// picture comes out smaller than asked. The viewport is set here instead.
+	if err := chromedp.Do(tab, chromedp.EmulateViewport(int64(b.Width), int64(b.Height))); err != nil {
+		return p, err
+	}
 
 	// The page's requests, from the moment the tab opens, and the frames
 	// they came from: what Chrome refuses those is this page's.
@@ -661,7 +671,21 @@ func (b *Browser) capture(tab context.Context) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	if !b.FullPage {
+		if w, h, ok := imageSize(r.Data); ok && (w != b.Width || h != b.Height) {
+			return nil, fmt.Errorf("the picture came out %dx%d, not the %dx%d -shot-size asked for", w, h, b.Width, b.Height)
+		}
+	}
 	return r.Data, nil
+}
+
+// imageSize is a PNG or JPEG's pixel size, without decoding its pixels.
+func imageSize(data []byte) (width, height int, ok bool) {
+	cfg, _, err := image.DecodeConfig(bytes.NewReader(data))
+	if err != nil {
+		return 0, 0, false
+	}
+	return cfg.Width, cfg.Height, true
 }
 
 // fault ends the pages of a browser one of whose request loops panicked:

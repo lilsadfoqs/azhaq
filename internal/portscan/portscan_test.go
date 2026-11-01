@@ -111,6 +111,40 @@ func TestScanAndBanner(t *testing.T) {
 	}
 }
 
+// vsftpd 2.0.8 and later names no product in its greeting, but refuses a
+// pre-login SYST in its own wording: that names it, as nmap -sV does, with
+// no guessed version.
+func TestFTPProductFromPreLoginRefusal(t *testing.T) {
+	ln, _ := net.Listen("tcp", "127.0.0.1:0")
+	defer ln.Close()
+	go func() {
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			go func() {
+				defer c.Close()
+				c.Write([]byte("220 Welcome Alpine ftp server https://hub.docker.com/r/delfer/alpine-ftp-server/\r\n"))
+				buf := make([]byte, 64)
+				n, _ := c.Read(buf)
+				if strings.TrimSpace(string(buf[:n])) == "SYST" {
+					c.Write([]byte("530 Please login with USER and PASS.\r\n"))
+				}
+			}()
+		}
+	}()
+	port := ln.Addr().(*net.TCPAddr).Port
+	s := &Scanner{Rate: 1000, Banner: 200 * time.Millisecond}
+	open, err := s.Scan(context.Background(), "", "127.0.0.1", []int{port})
+	if err != nil || len(open) != 1 {
+		t.Fatalf("open %+v err %v", open, err)
+	}
+	if o := open[0]; o.Service != "ftp" || o.Product != "vsftpd" || o.Version != "" {
+		t.Errorf("got service %q product %q version %q, want ftp/vsftpd/\"\"", o.Service, o.Product, o.Version)
+	}
+}
+
 // A port that says nothing first is asked once: HTTP on the open
 // connection, then TLS on a second one, which counts like a connect.
 func TestIdentifySilentPorts(t *testing.T) {

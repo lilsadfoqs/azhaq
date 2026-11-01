@@ -2,6 +2,7 @@ package browser
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -84,6 +85,39 @@ func TestFullPage(t *testing.T) {
 	h := int(p.Image[22])<<24 | int(p.Image[23])<<16 | int(p.Image[24])<<8 | int(p.Image[25]) // PNG IHDR height
 	if h < 2000 {
 		t.Errorf("full page is %d pixels tall, want 2000", h)
+	}
+}
+
+// -shot-size's picture is exactly the pixels asked for: headless Chrome's
+// own window chrome must not shrink it (-window-size at launch is not the
+// viewport). Width and Height are set before Start, as -shot-size is.
+func TestShotSizeIsExact(t *testing.T) {
+	if _, err := Find(); err != nil {
+		t.Skip(err)
+	}
+	b := &Browser{Width: 800, Height: 600, Wait: -1}
+	t.Cleanup(fetch.Reset)
+	if err := b.Start(); errors.Is(err, ErrNoSandbox) {
+		t.Skip(err)
+	} else if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(b.Close)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		fmt.Fprint(w, `<html><body style="margin:0">hi</body></html>`)
+	}))
+	defer srv.Close()
+	fetch.Reset()
+	egress.SetScope(func(h string) bool { return h == "127.0.0.1" })
+	p, err := b.Load(context.Background(), srv.URL+"/", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := int(p.Image[16])<<24 | int(p.Image[17])<<16 | int(p.Image[18])<<8 | int(p.Image[19]) // PNG IHDR width
+	h := int(p.Image[20])<<24 | int(p.Image[21])<<16 | int(p.Image[22])<<8 | int(p.Image[23]) // PNG IHDR height
+	if w != 800 || h != 600 {
+		t.Errorf("picture is %dx%d, want 800x600", w, h)
 	}
 }
 

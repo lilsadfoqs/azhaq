@@ -334,6 +334,25 @@ func (s *Scanner) settle220(conn net.Conn, o *Open) {
 	switch {
 	case bytes.HasPrefix(r, []byte("215")), bytes.HasPrefix(r, []byte("530")), bytes.HasPrefix(r, []byte("331")):
 		o.Service = "ftp"
+	default:
+		return
+	}
+	ftpSYSTProduct(r, o)
+}
+
+// vsftpdPreLogin is vsftpd 2.0.8 and later's own wording when a command
+// other than USER, PASS or QUIT is sent before logging in (nmap's own
+// signature for it, nmap-service-probes' Help probe).
+const vsftpdPreLogin = "530 Please login with USER and PASS."
+
+// ftpSYSTProduct names the product an FTP server's SYST answer gives when
+// its greeting named none: a server that refuses the command before login
+// may still do so in wording that names it. No version is read from it:
+// azhaq states a version only when the server itself gives one, which this
+// refusal does not.
+func ftpSYSTProduct(syst []byte, o *Open) {
+	if o.Product == "" && bytes.HasPrefix(syst, []byte(vsftpdPreLogin)) {
+		o.Product = "vsftpd"
 	}
 }
 

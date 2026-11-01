@@ -503,8 +503,14 @@ func (s *Scanner) probe(ctx context.Context, host, ip string, port int) (Open, p
 		}
 		o.Banner = bannerOf(buf[:n])
 		s.greeted(&o, buf[:n])
-		if n > 0 && o.Product == "" && bannerService(o.Banner) == "ftp-or-smtp" {
-			s.settle220(conn, &o)
+		if n > 0 && o.Product == "" {
+			switch bannerService(o.Banner) {
+			case "ftp-or-smtp":
+				s.settle220(conn, &o)
+			case "ftp":
+				// Already known to be FTP: SYST alone, no EHLO guess.
+				ftpSYSTProduct(s.talk(conn, []byte("SYST\r\n"), nil, s.Banner), &o)
+			}
 		}
 		// Still open after the wait, the service waits to be asked. One
 		// that closed the connection says nothing to anyone (tcpwrapped).
