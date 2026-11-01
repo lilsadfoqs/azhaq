@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"os"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -1568,7 +1569,7 @@ func (r *dnsRun) keep(path string) error {
 	if err := st.BeginRun(newRunID(), 0, 0); err != nil {
 		return err
 	}
-	_ = st.SetRunArgs(append([]string{"dns"}, os.Args[2:]...))
+	_ = st.SetRunArgs(append([]string{"dns"}, keptDNSArgs(os.Args[2:])...))
 	now := time.Now().UTC()
 	r.mu.Lock()
 	kept := r.kept
@@ -1668,4 +1669,21 @@ func healthCheck(pool *dnsr.Pool, asJSON bool) error {
 		return exitErr{code: exitPartial}
 	}
 	return nil
+}
+
+// keptDNSArgs are dns's flags as stored with its run: a -proxy URL without
+// its password.
+func keptDNSArgs(args []string) []string {
+	out := slices.Clone(args)
+	for i, a := range out {
+		name, val, inline := strings.Cut(strings.TrimLeft(a, "-"), "=")
+		switch {
+		case !strings.HasPrefix(a, "-") || name != "proxy":
+		case inline:
+			out[i] = "-proxy=" + withoutUserinfo(val)
+		case i+1 < len(out):
+			out[i+1] = withoutUserinfo(out[i+1])
+		}
+	}
+	return out
 }

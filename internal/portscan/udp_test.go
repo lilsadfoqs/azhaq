@@ -242,6 +242,21 @@ func dnsReply(sent []byte) []byte {
 	return r
 }
 
+// The message id is random: a 0xff in it, or in an option, is not the
+// payload marker.
+func TestCoAPPayloadPastIdAndOptions(t *testing.T) {
+	sent := []byte{0x40, 0x01, 0xff, 0x7a}
+	// ACK 2.05, id ff7a, no token, Content-Format option (12) with value 0xff, payload.
+	r := append([]byte{0x60, 0x45, 0xff, 0x7a, 0xc1, 0xff, 0xff}, "</a>"...)
+	got, ok := parseCoAP(r, sent)
+	if !ok || got.banner != "coap 2.05 </a>" {
+		t.Fatalf("got %+v %v", got, ok)
+	}
+	if p := coapPayload([]byte{0x60, 0x45, 0, 1, 0xd1}); p != nil {
+		t.Fatalf("a cut extended option gave %q", p)
+	}
+}
+
 func TestUDPParsers(t *testing.T) {
 	ntp := make([]byte, 48)
 	ntp[0], ntp[1] = 0x1c, 2 // version 3, mode 4, stratum 2
