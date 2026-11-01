@@ -179,6 +179,7 @@ The workspace keeps a status for each source, shown by `azhaq show` and held in 
 | `rate_limited` | Set with `retried_429`, `waited_seconds`, `retry_after_seconds` and `gave_up_429` when the source answered 429. |
 | `rounds` | For subdomain.center, per call: names given, how many were new, looked up, and resolved with no other source having them, and the seconds. |
 | `kept`, `dropped_unresolved`, `unverified`, `checked_seconds` | From `-live` runs, for the sources whose names are checked. |
+| `sampling_stopped` | For subdomain.center: why it stopped asking for more samples. `sampling_bounded` is `true` when the reason was a bound (the guesses checked reached half the real names, or its time was used), not that nothing more was to be had. |
 | `"default": false` | The source ran only because of `-all-sources`. |
 
 A source that answered 429 is asked again after its `Retry-After`, up to three times and 30 s each. One that asks for longer, or keeps refusing, is not waited for.

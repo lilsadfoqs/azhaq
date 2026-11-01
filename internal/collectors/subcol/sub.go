@@ -486,6 +486,12 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		if st := rounds[i].statSnapshot(); len(st) > 0 {
 			row["rounds"] = st
 		}
+		if why := rounds[i].stopped(); why != "" {
+			row["sampling_stopped"] = why
+			if boundedStop(why) {
+				row["sampling_bounded"] = true
+			}
+		}
 		throttles[i].fields(row)
 		if n := notes[i].get(); n != "" {
 			row["partial"] = n

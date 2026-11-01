@@ -314,6 +314,9 @@ func cmdSubs(args []string) error {
 		if n := guessCheck(input, srcs); n != "" {
 			rep.Notes = append(rep.Notes, n)
 		}
+		if n := samplingNote(input, srcs); n != "" {
+			rep.Notes = append(rep.Notes, n)
+		}
 		for name, by := range foundBy {
 			if name == input {
 				continue

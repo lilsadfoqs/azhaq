@@ -236,7 +236,9 @@ func TestDeadNameAgreedByTwo(t *testing.T) {
 }
 
 // A bulk resolve (DNS brute force) takes a plain NXDOMAIN at its word: one
-// query per miss, not two. A NODATA answer is still confirmed.
+// query per miss, not two, and a NODATA answer is asked as A and AAAA once
+// (an empty non-terminal is no name to confirm); a dangling CNAME is still
+// confirmed.
 func TestBulkSkipsNXDOMAINSecondOpinion(t *testing.T) {
 	var n atomic.Int32
 	count := func(w dns.ResponseWriter, r *dns.Msg) { n.Add(1); testZone(w, r) }
@@ -245,10 +247,31 @@ func TestBulkSkipsNXDOMAINSecondOpinion(t *testing.T) {
 	if a := p.Resolve(ctx, "missing.example.org"); a.Status != StatusNXDomain || n.Load() != 1 {
 		t.Fatalf("bulk nxdomain %+v asked %d resolvers, want 1", a, n.Load())
 	}
-	// A real name still resolves, and a NODATA name is still confirmed.
+	// A real name still resolves.
 	n.Store(0)
 	if a := p.Resolve(ctx, "www.example.org"); a.Status != StatusOK {
 		t.Fatalf("bulk real name %+v", a)
+	}
+}
+
+// A bulk resolve of a name that is NODATA at the resolver asks A and AAAA
+// of it once, 2 queries; the resolve of a name a person gave asks a second
+// resolver too, 3.
+func TestBulkNODATAIsNotConfirmed(t *testing.T) {
+	var n atomic.Int32
+	empty := func(w dns.ResponseWriter, r *dns.Msg) {
+		n.Add(1)
+		m := new(dns.Msg)
+		m.SetReply(r) // NOERROR, no records
+		_ = w.WriteMsg(m)
+	}
+	p := New(Options{Resolvers: []string{serve(t, empty), serve(t, empty)}, PerSecond: -1, Timeout: time.Second})
+	if a := p.Resolve(Bulk(context.Background()), "node.example.org"); a.Status != StatusNoData || n.Load() != 2 {
+		t.Fatalf("bulk nodata %+v asked %d queries, want 2", a, n.Load())
+	}
+	n.Store(0)
+	if a := p.Resolve(context.Background(), "node2.example.org"); a.Status != StatusNoData || n.Load() != 3 {
+		t.Fatalf("nodata %+v asked %d queries, want 3", a, n.Load())
 	}
 }
 

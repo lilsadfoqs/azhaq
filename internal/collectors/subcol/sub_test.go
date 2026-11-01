@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -532,15 +533,19 @@ func TestSampledRowCountsCalls(t *testing.T) {
 	}
 }
 
-// With a DNS pace the guesses may cost what the real names did and no less
-// than guessFloor; without one only the time bounds them. Each round's
-// numbers are in the source's row.
+// With a DNS pace the first sample of guesses is always checked (as
+// subfinder | dnsx checks all it is given), and more only while the guesses
+// checked are fewer than half the names the real sources gave; without a
+// pace only the time bounds them. The row says why it stopped.
 func TestSampledGuessBudgetFollowsThePace(t *testing.T) {
 	round := 0
 	mk := func() source {
 		round = 0
 		return sampled(verified(source{name: "pad", deflt: true, collect: func(context.Context, string, []string, *subscraping.Session) ([]string, error) {
 			round++
+			if round == 1 {
+				time.Sleep(50 * time.Millisecond) // the real source has answered by then
+			}
 			names := make([]string, 500)
 			for i := range names {
 				names[i] = "g" + strings.Repeat("x", round) + string(rune('a'+i%26)) + string(rune('a'+i/26%26)) + ".example.org"
@@ -548,22 +553,68 @@ func TestSampledGuessBudgetFollowsThePace(t *testing.T) {
 			return names, nil
 		}}))
 	}
+	many := make([]string, 1200)
+	for i := range many {
+		many[i] = "real" + strconv.Itoa(i) + ".example.org"
+	}
 	for _, tc := range []struct {
-		paced  bool
-		rounds int
-	}{{true, 2}, {false, 12}} {
-		c := collector(Options{SourceTimeout: 5 * time.Second, NoHistory: true, DNSPaced: tc.paced, Verify: allLive}, mk(), fake("real", noKey, true, []string{"www.example.org"}, nil))
+		name    string
+		paced   bool
+		real    []string
+		rounds  int
+		stopped string
+	}{
+		{"paced, few real names", true, []string{"www.example.org"}, 1, stopShare},
+		{"paced, many real names", true, many, 2, stopShare},
+		{"not paced", false, []string{"www.example.org"}, 12, ""},
+	} {
+		c := collector(Options{SourceTimeout: 5 * time.Second, NoHistory: true, DNSPaced: tc.paced, Verify: allLive}, mk(), fake("real", noKey, true, tc.real, nil))
 		payload, _ := run(t, c, context.Background())
 		row := payload["sources"].(map[string]any)["pad"].(map[string]any)
 		// The next call is made while a round is looked up: the one that
 		// follows the last round is a call made ahead, and not used.
 		st := row["rounds"].([]any)
-		if got := int(row["calls"].(float64)); len(st) != tc.rounds || got < tc.rounds || got > tc.rounds+1 {
-			t.Errorf("paced %v: %d rounds and %d calls, want %d rounds (%v)", tc.paced, len(st), got, tc.rounds, row)
+		if len(st) != tc.rounds {
+			t.Errorf("%s: %d rounds, want %d (%v)", tc.name, len(st), tc.rounds, row)
+			continue
 		}
 		if first := st[0].(map[string]any); first["names"] != float64(500) || first["looked_up"] != float64(500) || first["new_live"] != float64(500) {
-			t.Errorf("round stats %v", st)
+			t.Errorf("%s: round stats %v", tc.name, st)
 		}
+		if got, _ := row["sampling_stopped"].(string); tc.stopped != "" && (got != tc.stopped || row["sampling_bounded"] != true) {
+			t.Errorf("%s: stopped %q (%v), want %q", tc.name, got, row["sampling_bounded"], tc.stopped)
+		}
+	}
+}
+
+// What the first sample costs, and the next ones, with a resolver that takes
+// 1 ms a name (a local stand-in for a polite -dns-rate): a second sample is
+// not taken unless the real names are many.
+func TestSampledGuessCheckTimeAtAPaceOfOneMillisecondAName(t *testing.T) {
+	round := 0
+	pad := sampled(verified(source{name: "pad", deflt: true, collect: func(context.Context, string, []string, *subscraping.Session) ([]string, error) {
+		round++
+		names := make([]string, 300)
+		for i := range names {
+			names[i] = "g" + strconv.Itoa(round) + "-" + strconv.Itoa(i) + ".example.org"
+		}
+		return names, nil
+	}}))
+	verify := func(_ context.Context, _ string, names []string) ([]string, []string) {
+		time.Sleep(time.Duration(len(names)) * time.Millisecond)
+		return names[:1], nil // one name of a sample resolves: the next sample is worth a look
+	}
+	c := collector(Options{SourceTimeout: 10 * time.Second, NoHistory: true, DNSPaced: true, Verify: verify}, pad, fake("real", noKey, true, []string{"www.example.org"}, nil))
+	t0 := time.Now()
+	payload, _ := run(t, c, context.Background())
+	took := time.Since(t0)
+	row := payload["sources"].(map[string]any)["pad"].(map[string]any)
+	if n := len(row["rounds"].([]any)); n != 1 {
+		t.Errorf("%d samples were checked, want 1: %v", n, row)
+	}
+	// One sample is 300 names at 1 ms; two would be 600 ms.
+	if took > 450*time.Millisecond {
+		t.Errorf("the run took %s: more than one sample of guesses was checked", took)
 	}
 }
 

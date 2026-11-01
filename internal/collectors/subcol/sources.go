@@ -305,10 +305,12 @@ func sampled(s source) source {
 			case err != nil:
 				return names, nil // later rounds were refused: the row says so
 			case len(fresh) == 0:
-				return names, nil // saturated
+				recordStop(ctx, stopSaturated)
+				return names, nil
 			case chk == nil:
 				// Nothing to check them against: a second sample would only
 				// add more guesses.
+				recordStop(ctx, stopUnchecked)
 				return names, nil
 			}
 			var pending <-chan reply
@@ -327,10 +329,13 @@ func sampled(s source) source {
 			switch {
 			case st.Live == 0:
 				stop = true // this round found nothing new that resolves
+				recordStop(ctx, stopNoLive)
 			case !chk.room():
 				stop = true // the guesses have cost what the real names did
+				recordStop(ctx, stopShare)
 			case !chk.paced && time.Since(start) >= sampleBudget, asking >= timeout/2, ctx.Err() != nil:
 				stop = true
+				recordStop(ctx, stopTime)
 			}
 			if stop || pending == nil {
 				if pending != nil {
@@ -345,6 +350,19 @@ func sampled(s source) source {
 	}
 	return s
 }
+
+// Why a sampled source stopped asking, for its row ("sampling_stopped").
+// The last two are bounds, not a finding: more samples may hold more names.
+const (
+	stopSaturated = "a call gave no name it had not given"
+	stopUnchecked = "the names are not looked up (no -live), so more samples would only add guesses"
+	stopNoLive    = "the last sample had no new name that resolves"
+	stopShare     = "the guesses checked reached half the names the real sources gave (the bound at a paced -dns-rate)"
+	stopTime      = "its time was used"
+)
+
+// boundedStop says whether a stop reason is a bound, not a finding.
+func boundedStop(why string) bool { return why == stopShare || why == stopTime }
 
 // roundStat is one round of a sampled source, for its row: the names it
 // gave, how many were new, how many of those were looked up and how many

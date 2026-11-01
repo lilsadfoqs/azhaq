@@ -169,10 +169,6 @@ func (h *hinter) was(n string) bool {
 	return h.hinted[n]
 }
 
-// guessFloor is how many guesses a paced run may always check: two of
-// subdomain.center's rounds.
-const guessFloor = 1000
-
 // totals is how many names the checker asked and the time it took; a round a
 // limit cut short may still be adding to them.
 func (k *checker) totals() (int, time.Duration) {
@@ -182,11 +178,12 @@ func (k *checker) totals() (int, time.Duration) {
 }
 
 // room says whether another round of guesses may be checked. With no DNS
-// pace it always may (the run's time is the bound); with one, the guesses
-// may cost at most half what the real names reported cost, and not less
-// than guessFloor.
+// pace it always may (the run's time is the bound). With one, the first
+// round is always checked, as subfinder | dnsx checks every name subfinder
+// gives, and the next ones only while the guesses checked are fewer than
+// half the names the real sources gave: they cost what those did, at most.
 func (k *checker) room() bool {
 	k.mu.Lock()
 	defer k.mu.Unlock()
-	return !k.paced || k.asked < max(guessFloor, len(k.known)/2)
+	return !k.paced || k.asked < len(k.known)/2
 }

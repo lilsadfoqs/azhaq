@@ -99,3 +99,22 @@ func TestGuessCheckSaysWhereTheTimeWent(t *testing.T) {
 		t.Errorf("a quick check: %q", n)
 	}
 }
+
+func TestSamplingNoteSaysWhatABoundLeftUntaken(t *testing.T) {
+	srcs := map[string]any{
+		"subdomaincenter": map[string]any{
+			"rounds":           []any{map[string]any{"names": 500.0}},
+			"sampling_stopped": "the guesses checked reached half the names the real sources gave (the bound at a paced -dns-rate)",
+			"sampling_bounded": true,
+		},
+		"crtsh": map[string]any{"seconds": 2.0},
+	}
+	n := samplingNote("vulnweb.com", srcs)
+	if !strings.Contains(n, "subdomaincenter was asked for 1 sample of its guesses and not again: the guesses checked reached half") || !strings.Contains(n, "not looked up") {
+		t.Errorf("note %q", n)
+	}
+	delete(srcs["subdomaincenter"].(map[string]any), "sampling_bounded")
+	if n := samplingNote("vulnweb.com", srcs); n != "" {
+		t.Errorf("a stop that was a finding: %q", n)
+	}
+}
