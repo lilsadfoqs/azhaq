@@ -16,13 +16,13 @@
 .github/ci/run.sh trial 21 gate seed=gate-alpha samples=2   # two estates, two samples
 .github/ci/run.sh trial b-alpha baseline seed=gate-alpha    # the pool estate's baseline
 .github/ci/run.sh trial dry1 gate dryrun         # build, estate, isolation and briefs, no agent
-.github/ci/fetch.sh trial trial-20 /tmp/t20      # DIR/a, DIR/b (or a1/a2/b1/b2 on samples=2)
+.github/ci/fetch.sh trial 20 /tmp/t20      # DIR/a, DIR/b (or a1/a2/b1/b2 on samples=2)
 python3 .github/ci/range/grade.py /tmp/t20/a/key.json /tmp/t20/a --baseline /tmp/b-alpha
 python3 .github/ci/range/merge_gate.py /tmp/t20  # one scorecard, both parts, the grade beside its baseline
 
 .github/ci/run.sh trial 11 research              # the older kinds still work
 .github/ci/run.sh trial 12 hunter seed=lilac     # a fixed draw
-.github/ci/fetch.sh trial trial-11 /tmp/t11
+.github/ci/fetch.sh trial 11 /tmp/t11
 python3 .github/ci/range/grade.py /tmp/t11/key.json /tmp/t11
 ```
 
@@ -41,8 +41,12 @@ through the whole pool. `samples=2` draws a second estate too: the pool entry
 right after the first one, so the two samples are always different estates
 (`pool_pick.py --sample 2`).
 
-Because the pool is fixed and public, each estate's usual-tools result can be
-measured once and kept: push `trial-baseline-X baseline seed=POOL-ENTRY` for
+The pool's names are public, the estates are not: a name goes through the
+same keyed hash as research's draw (the secret is CODEX_AUTH_KEY) before
+build.py, so reading the repository does not tell which applications an
+estate holds. Changing that secret changes every estate, and the baselines
+are measured again. Because the pool is fixed, each estate's usual-tools
+result can be measured once and kept: push `trial-baseline-X baseline seed=POOL-ENTRY` for
 each of the four entries (`.github/ci/range/pool.json`), fetch each
 (`fetch.sh trial baseline-X /tmp/baseline-X`), and keep `/tmp/baseline-X`
 (its `REPORT.md`, `leads.jsonl`, `surface-1.txt`, `phases.log`, `key.json`
