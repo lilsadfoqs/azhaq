@@ -216,7 +216,8 @@ class Smoke(unittest.TestCase):
         def run(cmd, cwd=None, env=None, timeout=0):
             cmds.append(cmd)
             if cmd[:2] == ["docker", "compose"] and "up" in cmd:
-                return (1, "pull access denied") if "p1" in " ".join(cmd) or "e1" in " ".join(cmd) else (0, "")
+                # By the project only: the temporary paths in the command are random.
+                return (1, "pull access denied") if cmd[3] == rangelib.project_name("e1", "azs") else (0, "")
             if cmd[:2] == ["docker", "ps"]:
                 return 0, "abc\ndef\n"
             if cmd[:2] == ["docker", "stats"]:

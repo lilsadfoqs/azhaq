@@ -22,6 +22,7 @@
 
 ### Fixed
 
+- `subs` with `-max-time` read the name checker's count and time while a sampled source it had cut short could still be writing them (a data race, seen with `-race`).
 - `params` keeps what a spent `-max-requests` established: the page's row carries the names found so far and a note says how many names were judged; exit stays 4 and `azhaq resume` searches the page again.
 - `query -type Port` printed each host/port pair twice (a prefix's scan and the scan of an address in it each made a row). A port is now one row for each host, port and protocol, with a `state` field (`open` or `open|filtered`). The summaries of `run`, `query` and `ports` count `open` ports and `open|filtered` ports apart, so a silent UDP port is never counted as open.
 - A streamed answer that is the page every unknown path gets (an app shell) ends with `(catch-all: the page any unknown path gets)`, and has `"catchall": true` with `-json`. The summary names each origin that answered three or more URLs that way and, for a bare address, says to ask again with the name (`-H 'Host: NAME'`).
