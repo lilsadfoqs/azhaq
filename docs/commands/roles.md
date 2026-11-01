@@ -7,7 +7,7 @@ Map the same target once per session and show where the answers differ (access c
 ## Synopsis
 
 ```
-azhaq roles -role NAME[=Header: value] -role … [-role-login NAME=USER:PASS -login URL] [-id [ROLE:]NAME=VALUE] [-jsonl] -- RUN FLAGS; roles show -dir DIR URL [-method M]
+azhaq roles -role NAME[=Header: value] -role … [-role-login NAME=USER:PASS -login URL] [-id [ROLE:]NAME=VALUE] [-jsonl] -- RUN FLAGS; roles show -dir DIR URL [-method M] [-owner NAME]
 ```
 
 ## Examples
@@ -532,7 +532,7 @@ Kept bodies have these replaced by `[redacted 1a2b3c4d]`:
 
 The same value shows the same tag within a run. The tag tells nothing of the value. A role may not be named `roles`.
 
-`azhaq roles show -dir DIR URL` prints the answers side by side for one row. Add `-method M` for a write's row. It prints:
+`azhaq roles show -dir DIR URL` prints the answers side by side for one row. Add `-method M` for a write's row. When two roles' requests share the URL and method (both created in one collection), each owner's row is kept and `show` prints both, the owner named; `-owner NAME` prints one. It prints:
 
 - the row's verdict, `confidence`, `evidence` and `owner_by`
 - per role, its status, length and type
@@ -625,4 +625,5 @@ The diff lines look like this:
 | `-dir` | string |  | the -dir of the roles run (it holds roles.db) |
 | `-json` | bool |  | one JSON object: the row, and each answer with its curl line and its differences |
 | `-method` | string |  | the method of a write row (-replay-writes); a read's row by default |
+| `-owner` | string |  | the owner of the row, when several owners' requests share the URL and method (two roles creating in one collection): every owner's row is shown by default |
 <!-- flags:end -->

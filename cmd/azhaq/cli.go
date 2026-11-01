@@ -70,7 +70,7 @@ func init() {
 			}},
 		{name: "roles", group: groupMap, run: cmdRoles,
 			summary: "map the same target once per session and show where the answers differ (access control)",
-			usage:   "-role NAME[=Header: value] -role … [-role-login NAME=USER:PASS -login URL] [-id [ROLE:]NAME=VALUE] [-jsonl] -- RUN FLAGS; roles show -dir DIR URL [-method M]",
+			usage:   "-role NAME[=Header: value] -role … [-role-login NAME=USER:PASS -login URL] [-id [ROLE:]NAME=VALUE] [-jsonl] -- RUN FLAGS; roles show -dir DIR URL [-method M] [-owner NAME]",
 			output: "one row per endpoint whose answer depends on the session: status, length and body per role, and a verdict (a role reading another role's object, sensitive fields anyone reads, …); " +
 				"a role refused wherever a session matters is named in a note (exit 3). A role sends only the headers it is given: what an app reads from a cookie " +
 				"(Juice Shop's /rest/user/whoami) needs NAME=Cookie: …, or -role-login, which carries the cookies and the stored token",
@@ -83,7 +83,7 @@ func init() {
 			}},
 		{name: "report", group: groupMap, run: cmdReport,
 			summary: "write each finding roles listed up as a report to submit (title, steps with curl, evidence, impact)",
-			usage:   "-dir DIR [-url URL [-method M]] [-format md|json] [-o FILE|DIR] [-redact]",
+			usage:   "-dir DIR [-url URL [-method M] [-owner NAME]] [-format md|json] [-o FILE|DIR] [-redact]",
 			output:  "one Markdown report per cross-role read, write or create and per sensitive field anyone reads, best-evidenced first (proved, likely, guess), written to DIR/reports or -o; -url writes one to standard output. Every piece comes from the roles run's evidence (roles.db); what it does not hold is named in the report. -redact masks hosts and identifiers",
 			examples: []string{
 				"azhaq report -dir azhaq-roles-20261028-101500",

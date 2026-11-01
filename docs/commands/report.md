@@ -7,7 +7,7 @@ Each report is ready to paste into HackerOne or Bugcrowd, or into a red team's c
 ## Synopsis
 
 ```
-azhaq report -dir DIR [-url URL [-method M]] [-format md|json] [-o FILE|DIR] [-redact]
+azhaq report -dir DIR [-url URL [-method M] [-owner NAME]] [-format md|json] [-o FILE|DIR] [-redact]
 ```
 
 ## Examples
@@ -33,7 +33,7 @@ azhaq report -dir azhaq-roles-20261028-101500 -url https://app/rest/basket/6 -re
 3. Orders the reports by confidence: `proved`, `likely`, `guess`, then rows that carry none.
 4. Writes one Markdown report per row. Every piece of a report comes from the evidence; what the evidence does not hold is named in the report.
 
-With `-url URL`, `report` writes that one row's report to standard output. A write or create row also needs `-method M`. A row whose verdict is not one of the six is refused, with exit 1, and a `-url` that matches no row is exit 1 too.
+With `-url URL`, `report` writes that row's report to standard output (a report for each owner when several owners' requests share the URL and method: see below). A write or create row also needs `-method M`. A row whose verdict is not one of the six is refused, with exit 1, and a `-url` that matches no row is exit 1 too.
 
 When no row qualifies, `report` prints a note on stderr, writes nothing and exits 0.
 
@@ -108,7 +108,7 @@ A report never says what the evidence does not hold. It says so under "Missing f
 
 A write's before-and-after reads of the owner's object are not kept, and the report says so. A create that was not read back says so too, and a create's report gives no confidence (`unrated`).
 
-`roles.db` keeps one row per method and URL. When two roles both created in the same collection (`POST /books/v1` in each HAR), the report is of the last row roles saved.
+`roles.db` keeps one row per method, URL and owner. When two roles both created in the same collection (`POST /books/v1` in each HAR), each owner's row is kept and each gets a report. With `-url`, both are written (to standard output only when one row matches; else to `DIR/reports` or `-o`); `-owner NAME` picks one. A `roles.db` an older azhaq wrote keeps one row per method and URL, and is read as it is.
 
 ### Redaction
 
@@ -129,6 +129,7 @@ Read a redacted report once before sharing it. An identifier that no kept body n
 | `-dir` | string |  | the -dir of the roles run (it holds roles.db) |
 | `-url` | string |  | write up this one row (its URL as roles lists it); every cross-role finding by default |
 | `-method` | string |  | the method of a write row (-replay-writes); a read's row by default |
+| `-owner` | string |  | with -url: only the row of this owner, when several owners' requests share the URL and method (two roles creating in one collection); a report for each owner by default |
 | `-format` | string | `md` | md or json |
 | `-o` | string |  | FILE for the reports (one file, or a directory with a report per file); without -url, DIR/reports; with -url, standard output |
 | `-redact` | bool |  | also mask hosts and identifiers (a report to share outside the engagement) |

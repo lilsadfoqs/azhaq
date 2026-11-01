@@ -610,11 +610,12 @@ func TestWriteEvidence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	er, ok, err := ev.Row("http://h/api/items/3", "PUT")
+	found, err := ev.Rows("http://h/api/items/3", "PUT")
 	ev.Close()
-	if err != nil || !ok || len(er.Answers) != 2 {
-		t.Fatalf("%v %v %+v", ok, err, er)
+	if err != nil || len(found) != 1 || len(found[0].Answers) != 2 {
+		t.Fatalf("%v %+v", err, found)
 	}
+	er := found[0]
 	want := `curl -sS -i -X PUT 'http://h/api/items/3' -b "$BOB_COOKIE" -H "X-Api-Key: $BOB_X_API_KEY" -H 'Content-Type: application/json' --data-raw '{}'`
 	if got := er.Answers[1].Curl; got != want {
 		t.Errorf("curl %s\nwant %s", got, want)
