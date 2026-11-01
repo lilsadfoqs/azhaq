@@ -90,7 +90,7 @@ func protocolsOn(port int, secure bool) []*protocol {
 // it: a DNS server may hold the connection or drop it on its idle timer.
 var ladderOrder = []string{
 	"redis", "postgresql", "mongodb", "memcached", "mqtt", "amqp", "dns", "ldap", "smb", "mssql", "kafka", "rdp",
-	"zookeeper", "cassandra", "oracle-tns", "sip", "rtsp", "socks5", "x11", "stomp", "xmpp",
+	"zookeeper", "cassandra", "oracle-tns", "sip", "rtsp", "socks5", "x11", "stomp", "xmpp", "elasticsearch-transport",
 }
 
 func ladder() []*protocol {

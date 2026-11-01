@@ -47,7 +47,7 @@ var wellKnown = map[int]string{
 	636: "ldaps", 873: "rsync", 990: "ftps", 993: "imaps", 995: "pop3s", 1080: "socks", 1723: "pptp",
 	1883: "mqtt", 2049: "nfs", 2181: "zookeeper", 3128: "http-proxy", 4190: "sieve", 5060: "sip",
 	5061: "sips", 5222: "xmpp-client", 5269: "xmpp-server", 5671: "amqps", 5672: "amqp", 6000: "x11",
-	8883: "mqtts", 9042: "cassandra", 9092: "kafka", 25565: "minecraft",
+	8883: "mqtts", 9042: "cassandra", 9092: "kafka", 9300: "elasticsearch-transport", 25565: "minecraft",
 	80: "http", 443: "https", 8080: "http", 8443: "https", 8000: "http", 8008: "http", 8888: "http",
 	3000: "http", 5000: "http", 9000: "http", 53: "dns", 3306: "mysql", 5432: "postgresql",
 	6379: "redis", 27017: "mongodb", 9200: "elasticsearch", 3389: "rdp", 445: "smb", 139: "netbios-ssn",

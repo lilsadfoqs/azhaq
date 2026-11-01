@@ -261,6 +261,7 @@ Each open TCP port gets `product` and `version` next to `service`, from what it 
 | Kerberos: an AS-REQ for a principal that does not exist | KRB-ERROR with the realm | `kerberos` |
 | RDP: an X.224 connection request | the selected protocol | `rdp` |
 | X11: a connection setup with no authorization | the vendor and release of an open server | `x11` |
+| Elasticsearch transport: the keep-alive ping (`ES` and a length of -1), 6 bytes, asked first on 9300 to 9303 | the same six bytes | `elasticsearch-transport`, product Elasticsearch |
 | SOCKS5, STOMP, XMPP, RTSP, SIP, JDWP, AFP, Minecraft, gopher, finger | the method reply, the CONNECTED frame, the stream header, the status line and `Server` header, the handshake, and so on | the service; a product where the answer states one |
 | Greetings: VNC, Telnet, IRC, NNTP, ManageSieve, ICY | `RFB 003.008`, an option negotiation, `NOTICE AUTH`, `200 …`, `"IMPLEMENTATION" "…"`, `ICY 200 OK` | `vnc` with the protocol version; the service; INN, Icecast and Dovecot Pigeonhole where named |
 | A web page's title, when the head names no product (and for a `HEAD` that was refused) | `<title>Mailpit</title>` and its stylesheet's version | Mailpit 1.20.7 |
@@ -270,6 +271,7 @@ Each open TCP port gets `product` and `version` next to `service`, from what it 
 - A web page that names no product gets its `<title>` in `title`, and its `<meta name="generator">` as the product.
 - The `GET /` for a body is one more connection on a web port. It is made when the `HEAD` answer gave no product and is a 200 or 401 of type JSON or text. It is also made when the `HEAD` was refused (403, 404, 405, 501). It counts, is paced and is recorded like a connect.
 - Every request above is sent only to a port that said nothing and is not one of the raw printing ports (9100–9107). None logs in, sends a credential or changes anything.
+- Elasticsearch's transport ping is answered by a node of 7.x or later. An older node ignores it, and a silent 9300 then reads `elasticsearch-transport?`: a guess by port, marked with the question mark like every guess. The ping carries no version, so a confirmed port has none.
 - A binary answer is read by the protocols' readers, and by none that does not recognise it. So a port with no recognised protocol keeps its banner and stays `service` empty.
 
 ## Flags

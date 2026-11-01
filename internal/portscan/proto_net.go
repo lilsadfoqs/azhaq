@@ -71,6 +71,12 @@ func init() {
 				o.Service, o.Product, o.Banner = "jdwp", "Java Debug Wire Protocol", "JDWP-Handshake"
 				return true
 			}},
+		// Elasticsearch transport: the keep-alive ping, "ES" and a length of
+		// -1 (TcpTransport). A node of 7.x or later answers with the same six
+		// bytes; an older one ignores it, and 9300 is then only a guess by port.
+		&protocol{name: "elasticsearch-transport", ports: []int{9300, 9301, 9302, 9303},
+			request: func(target) []byte { return esPing },
+			frame:   esFrame, read: esRead},
 		// AFP: the DSI GetStatus request, no login (Apple Filing Protocol
 		// Programming Guide, DSI).
 		&protocol{name: "afp", ports: []int{548},
@@ -80,6 +86,23 @@ func init() {
 		&protocol{name: "minecraft", ports: []int{25565},
 			request: minecraftPing, frame: mcFrame, read: minecraftRead},
 	)
+}
+
+var esPing = []byte{'E', 'S', 0xff, 0xff, 0xff, 0xff}
+
+func esFrame(b []byte) int {
+	if len(b) >= 1 && b[0] != 'E' || len(b) >= 2 && b[1] != 'S' {
+		return -1
+	}
+	return len(esPing)
+}
+
+func esRead(r []byte, o *Open) bool {
+	if !bytes.Equal(r, esPing) {
+		return false
+	}
+	o.Service, o.Product, o.Banner = "elasticsearch-transport", "Elasticsearch", "transport ping answered"
+	return true
 }
 
 func telnetRead(r []byte, o *Open) bool {
