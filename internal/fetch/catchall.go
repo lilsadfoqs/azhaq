@@ -9,7 +9,6 @@ import (
 	"html"
 	"net/http"
 	"net/url"
-	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -42,111 +41,194 @@ var (
 	probeMu    sync.Mutex
 	baselines  = map[string]*baseline{}       // origin + dir
 	probeDirs  = map[string]int{}             // origin → directories probed
-	shellPaths = map[string]map[string]bool{} // origin → paths answered with the catch-all page
-	shellPages = map[string][]fingerprint{}   // origin → what the controls of those answered
+	namedPaths = map[string]map[string]bool{} // origin → paths a script names, whose answers say what their directory holds
+	dirAnswers = map[string]*dirAnswer{}      // origin and directory → what those answered
 )
 
-// CatchAllStop is how many paths of an origin answered with its catch-all
-// page before run stops asking the paths scripts name: the number the
-// summary's note has always started at.
-const CatchAllStop = 3
-
-// CatchAllAnswers is how many distinct paths of the origin were answered
-// with its catch-all page so far.
-func CatchAllAnswers(origin string) int {
-	probeMu.Lock()
-	defer probeMu.Unlock()
-	return len(shellPaths[origin])
+// dirAnswer is what the script-named paths asked in one directory answered:
+// the catch-all page (shell), or anything else (real).
+type dirAnswer struct {
+	shell map[string]bool
+	real  map[string]bool
+	held  bool // a run before this resume held the directory's other paths
 }
 
-func noteCatchAll(origin, path string, control fingerprint) {
+// CatchAllStop is how many of a directory's script-named paths answer with
+// the origin's catch-all page, before as many answer with anything else, for
+// run to stop asking the others of that directory: the number the summary's
+// note has always started at.
+const CatchAllStop = 3
+
+// NoteNamed registers a URL a script names: what it answers, in its
+// directory, is what decides whether that directory's other script-named
+// paths are asked. The page's own links, the origin's files and what the
+// user gave say nothing of them.
+func NoteNamed(raw string) {
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" {
+		return
+	}
+	origin := u.Scheme + "://" + u.Host
 	probeMu.Lock()
-	if shellPaths[origin] == nil {
-		shellPaths[origin] = map[string]bool{}
+	if namedPaths[origin] == nil {
+		namedPaths[origin] = map[string]bool{}
 	}
-	shellPaths[origin][path] = true
-	if len(shellPages[origin]) < 8 && !slices.ContainsFunc(shellPages[origin], control.matches) {
-		shellPages[origin] = append(shellPages[origin], control)
-	}
+	namedPaths[origin][u.EscapedPath()] = true
 	probeMu.Unlock()
 }
 
-// CatchAllHeld says that asking raw would only draw its origin's catch-all
-// page again, by two measurements: the origin has answered stop paths with
-// that page, and the control for raw's directory (the answer for a path that
-// cannot exist there) is that page. A directory whose control was not asked
-// yet is no exception to know of, so its first path is asked, and that asks
-// the control; past the controls an origin gets, the nearest directory
-// above that was asked stands for it, as in the catch-all check itself.
-func CatchAllHeld(raw string, stop int) bool {
-	st, _ := CatchAllControl(raw, stop)
-	return st == ControlHeld
+// answerMemo and heldMemo are where a run keeps what the rule learned, for
+// azhaq resume: a capped task's answers are kept, but what it recorded is not.
+func answerMemo(origin, path string) string { return "catchall " + origin + path }
+func heldMemo(dirKey string) string         { return "catchall held " + dirKey }
+
+// NoteHeld records that the other script-named paths of raw's directory are
+// not asked.
+func NoteHeld(raw string) {
+	if u, err := url.Parse(raw); err == nil && u.Host != "" && Memos != nil {
+		Memos.Remember(heldMemo(u.Scheme+"://"+u.Host+trimDir(parentDir(u.EscapedPath()))), []byte("1"))
+	}
 }
 
-// ControlState is what the controls say of a path before it is asked.
-type ControlState int
+// RestoreNamed gives a resumed run what the run it continues learned of the
+// script-named URLs: how each answered, and which directories it stopped
+// asking in.
+func RestoreNamed(raws []string) {
+	if Memos == nil {
+		return
+	}
+	held := map[string]bool{} // directories looked up
+	for _, raw := range raws {
+		u, err := url.Parse(raw)
+		if err != nil || u.Host == "" {
+			continue
+		}
+		origin, path := u.Scheme+"://"+u.Host, u.EscapedPath()
+		NoteNamed(raw)
+		if v, ok := Memos.Recall(answerMemo(origin, path)); ok && len(v) > 0 {
+			noteAnswerAs(origin, path, v[0] == 's', false)
+		}
+		key := origin + trimDir(parentDir(path))
+		if held[key] {
+			continue
+		}
+		held[key] = true
+		if _, ok := Memos.Recall(heldMemo(key)); ok {
+			probeMu.Lock()
+			d := dirAnswers[key]
+			if d == nil {
+				d = &dirAnswer{shell: map[string]bool{}, real: map[string]bool{}}
+				dirAnswers[key] = d
+			}
+			d.held = true
+			probeMu.Unlock()
+		}
+	}
+}
 
-const (
-	// ControlNone: nothing to hold the path for (no stop, the root, a bad URL).
-	ControlNone ControlState = iota
-	// ControlUnknown: the control of the path's directory was not asked;
-	// asking a path of it asks the control.
-	ControlUnknown
-	// ControlPending: the control was asked and has not answered.
-	ControlPending
-	// ControlOther: the control answered something else, or failed: a real
-	// directory, whose paths are asked.
-	ControlOther
-	// ControlShell: the control is the catch-all page, and the origin has
-	// answered fewer than stop paths with it.
-	ControlShell
-	// ControlHeld: the control is the catch-all page and the origin has
-	// answered stop paths with it.
-	ControlHeld
-)
+// noteAnswer records how a script-named path answered, in the directory the
+// controls are kept for.
+func noteAnswer(origin, path string, shell bool) { noteAnswerAs(origin, path, shell, true) }
 
-// CatchAllControl says what the controls say of raw, and names its directory
-// (origin and directory, as the controls are kept), so that callers can keep
-// one path of a directory in flight until the control has answered.
-func CatchAllControl(raw string, stop int) (ControlState, string) {
-	if stop <= 0 {
-		return ControlNone, ""
+func noteAnswerAs(origin, path string, shell, keep bool) {
+	probeMu.Lock()
+	defer probeMu.Unlock()
+	if !namedPaths[origin][path] {
+		return
 	}
-	u, err := url.Parse(raw)
-	if err != nil || u.Host == "" {
-		return ControlNone, ""
+	key := origin + trimDir(parentDir(path))
+	d := dirAnswers[key]
+	if d == nil {
+		d = &dirAnswer{shell: map[string]bool{}, real: map[string]bool{}}
+		dirAnswers[key] = d
 	}
-	path := u.EscapedPath()
-	if path == "" || path == "/" {
-		return ControlNone, ""
+	if shell {
+		d.shell[path] = true
+		delete(d.real, path)
+	} else if !d.shell[path] {
+		d.real[path] = true
 	}
-	origin := u.Scheme + "://" + u.Host
-	dir := parentDir(path)
+	if keep && Memos != nil {
+		v := []byte("r")
+		if shell {
+			v = []byte("s")
+		}
+		Memos.Remember(answerMemo(origin, path), v)
+	}
+}
+
+// trimDir is the directory the controls are kept for: with a probe depth
+// set, a deeper one is the directory that many levels down.
+func trimDir(dir string) string {
 	for d := int(probeDepth.Load()); d > 0 && strings.Count(dir, "/") > d+1; {
 		dir = parentDir(dir)
 	}
-	own := origin + dir
+	return dir
+}
+
+// CatchAllHeld says that asking raw would only draw its origin's catch-all
+// page again, by what its own directory answered: stop of the directory's
+// script-named paths asked so far gave the page every unknown path gets (an
+// answer that matched the directory's control, and a success or a
+// redirect: an error page says nothing of the paths that exist), before stop
+// of them gave anything else. A directory nothing was asked in is no
+// exception to know of, so its first path is asked.
+func CatchAllHeld(raw string, stop int) bool {
+	st, _ := CatchAllDir(raw, stop)
+	return st == DirHeld
+}
+
+// DirState is what the answers of a directory's script-named paths say of
+// one that was not asked yet.
+type DirState int
+
+const (
+	// DirNone: nothing to hold the path for (no stop, the root, a bad URL).
+	DirNone DirState = iota
+	// DirUnknown: no script-named path of the directory was asked.
+	DirUnknown
+	// DirUndecided: some were, and neither stop of them gave the page nor
+	// stop of them anything else.
+	DirUndecided
+	// DirReal: stop of them gave something else, before as many gave the
+	// page: the directory's paths answer for themselves, and are asked.
+	DirReal
+	// DirHeld: stop of them gave the page before stop gave anything else.
+	DirHeld
+)
+
+// CatchAllDir says what the directory's answers say of raw, and names the
+// directory (origin and path), so that callers can keep one path of it in
+// flight until its answers have decided.
+func CatchAllDir(raw string, stop int) (DirState, string) {
+	if stop <= 0 {
+		return DirNone, ""
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" {
+		return DirNone, ""
+	}
+	path := u.EscapedPath()
+	if path == "" || path == "/" {
+		return DirNone, ""
+	}
+	own := u.Scheme + "://" + u.Host + trimDir(parentDir(path))
 	probeMu.Lock()
 	defer probeMu.Unlock()
-	var ctl *baseline
-	for {
-		if ctl = baselines[origin+dir]; ctl != nil {
-			break
-		}
-		if dir == "/" || probeDirs[origin] < maxProbeDirs {
-			return ControlUnknown, own // asked, and the control with it
-		}
-		dir = parentDir(dir)
-	}
+	d := dirAnswers[own]
 	switch {
-	case !ctl.ready.Load():
-		return ControlPending, own
-	case !ctl.ok || !slices.ContainsFunc(shellPages[origin], ctl.fp.matches):
-		return ControlOther, own
-	case len(shellPaths[origin]) < stop:
-		return ControlShell, own
+	case d == nil:
+		return DirUnknown, own
+	case d.held:
+		return DirHeld, own
+	case len(d.real) >= stop:
+		return DirReal, own
+	case len(d.shell) >= stop:
+		return DirHeld, own
+	case len(d.shell)+len(d.real) == 0:
+		return DirUnknown, own
 	}
-	return ControlHeld, own
+	return DirUndecided, own
 }
 
 type baseline struct {
@@ -224,8 +306,8 @@ func resetProbes() {
 	probeMu.Lock()
 	baselines = map[string]*baseline{}
 	probeDirs = map[string]int{}
-	shellPaths = map[string]map[string]bool{}
-	shellPages = map[string][]fingerprint{}
+	namedPaths = map[string]map[string]bool{}
+	dirAnswers = map[string]*dirAnswer{}
 	probeMu.Unlock()
 }
 
@@ -238,34 +320,43 @@ func resetProbes() {
 // dismissed as the shell, and its answer does not depend on how many
 // directories were probed before it.
 func CatchAll(ctx context.Context, c *http.Client, res Result) bool {
-	switch res.Status {
-	case 0, http.StatusNotFound, http.StatusGone, http.StatusUnauthorized, http.StatusForbidden:
+	if res.Status == 0 {
 		return false
+	}
+	shell, judged := catchAllVerdict(ctx, c, res)
+	if u, err := url.Parse(res.RequestURL); err == nil && u.Host != "" && judged {
+		noteAnswer(u.Scheme+"://"+u.Host, u.EscapedPath(), shell && res.Status < 400)
+	}
+	return shell
+}
+
+// catchAllVerdict says whether res is the catch-all page, and whether that
+// was judged: an answer whose control failed (refused by a budget, no
+// answer) is no verdict, and says nothing of its directory.
+func catchAllVerdict(ctx context.Context, c *http.Client, res Result) (shell, judged bool) {
+	switch res.Status {
+	case http.StatusNotFound, http.StatusGone, http.StatusUnauthorized, http.StatusForbidden:
+		return false, true
 	}
 	u, err := url.Parse(res.RequestURL)
 	if err != nil || u.Host == "" {
-		return false
+		return false, false
 	}
 	path := u.EscapedPath()
 	if path == "" || path == "/" {
-		return false
+		return false, false
 	}
 	origin := u.Scheme + "://" + u.Host
 	dir := parentDir(path)
 	fp := fingerprintOf(res, origin, requestTarget(u))
 	if root := rootShell(origin, dir, fp); root != nil {
-		noteCatchAll(origin, path, *root)
-		return true
+		return true, true
 	}
 	b := baselineFor(ctx, c, origin, dir)
 	if b == nil || !b.ok {
-		return false
+		return false, false
 	}
-	if b.fp.matches(fp) {
-		noteCatchAll(origin, path, b.fp)
-		return true
-	}
-	return false
+	return b.fp.matches(fp), true
 }
 
 // rootShell: a page byte for byte the site root's answer for an unknown
@@ -299,9 +390,7 @@ func FinalCatchAll(ctx context.Context, c *http.Client, res Result) bool {
 }
 
 func baselineFor(ctx context.Context, c *http.Client, origin, dir string) *baseline {
-	for d := int(probeDepth.Load()); d > 0 && strings.Count(dir, "/") > d+1; {
-		dir = parentDir(dir)
-	}
+	dir = trimDir(dir)
 	probeMu.Lock()
 	key := origin + dir
 	b, ok := baselines[key]

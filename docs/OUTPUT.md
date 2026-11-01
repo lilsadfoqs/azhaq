@@ -126,7 +126,7 @@ Some work failed and did not get its answer: a source that failed, a target that
 | `pages` | URL rows that are none of the kinds below: pages and routes | `-type URL -role page,app` |
 | `api`, `auth`, `forbidden` | URL rows of that role. They are not also in `pages`. | `-type URL -role api` (or `auth`, `forbidden`) |
 | `catchall` | URL rows that answered with the page every unknown path gets, whatever they are named as. They are in no other key. | `-type URL -coverage catchall` |
-| `skipped` | URL rows named and not asked: a `-deny-path` rule of yours, or a catch-all origin (`run` holds the paths scripts name once it has answered 3 with its catch-all page: see [run](commands/run.md#catch-all-origins)). They are in no other key. | `-type URL -coverage skipped` |
+| `skipped` | URL rows named and not asked: a `-deny-path` rule of yours, or a catch-all origin (`run` holds the paths scripts name in a directory once 3 of them answered with the catch-all page: see [run](commands/run.md#catch-all-origins)). They are in no other key. | `-type URL -coverage skipped` |
 | `client routes`, `websockets` | URLs the app's router draws, and WebSocket endpoints | `-role client-route`, `-role websocket` |
 | `scripts`, `assets`, `source maps`, `manifests` | The URLs of those roles. They are in the map, and in no other key. | `-role script` (`asset`, `sourcemap`, `manifest`) |
 | `hostnames` | Name rows that are neither dead nor wildcard: live, sibling and unresolved names | `-type Hostname`, less the two below |

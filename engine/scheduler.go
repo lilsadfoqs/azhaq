@@ -299,8 +299,27 @@ func (s *scheduler) restore() error {
 			}
 		}
 	}
+	s.restoreCatchAll(rows)
 	// A task that ran but whose end was not recorded runs again whole.
 	return s.e.Store.Forget(again)
+}
+
+// restoreCatchAll gives the catch-all rule what the stopped run had learned:
+// which URLs scripts named, how they answered, and which directories it
+// stopped asking in. Else a resume would ask again, from the start, what the
+// run had already settled.
+func (s *scheduler) restoreCatchAll(rows []store.Task) {
+	if s.b.CatchAllStop <= 0 {
+		return
+	}
+	var named []string
+	for _, r := range rows {
+		if seed := normalize.Seed(r.Seed); seed.Type == types.TypeURL && seed.Keys[types.ViaKey] == types.ViaScript && !s.named[seedKey(seed)] {
+			s.named[seedKey(seed)] = true
+			named = append(named, seed.Key())
+		}
+	}
+	fetch.RestoreNamed(named)
 }
 
 // add queues every allowed collector for a seed. Hints are checked against
@@ -822,7 +841,7 @@ func (s *scheduler) startRetry(ctx context.Context) {
 	for s.inflight-s.remote == 0 && len(s.retry) > 0 && !egress.Spent() && !s.itemsSpent() {
 		t := s.retry[0]
 		s.retry = s.retry[1:]
-		if s.skip(t) {
+		if s.skip(t) || s.catchAllGate(t) == gateHold {
 			s.finish(t)
 			s.unpark(t)
 			continue
@@ -852,7 +871,7 @@ func (s *scheduler) next() (task, bool) {
 				drop()
 				continue
 			case gateWait:
-				i++ // its directory's control has not answered: the others go on
+				i++ // its directory's answers have not decided: the others go on
 				continue
 			}
 			if egress.Spent() && s.contacts(t) {
@@ -975,7 +994,7 @@ func (s *scheduler) handle(f finished) {
 	if f.partial {
 		for i, t := range f.tasks {
 			for _, h := range f.metas[i].NextHints {
-				s.markNamed(t, h)
+				h = s.markNamed(t, h)
 				s.add(h, t.depth+hintStep(h), true)
 			}
 		}
@@ -1009,25 +1028,33 @@ func (s *scheduler) handle(f finished) {
 			continue
 		}
 		for _, h := range meta.NextHints {
-			s.markNamed(t, h)
+			h = s.markNamed(t, h)
 			s.add(h, t.depth+hintStep(h), true)
 		}
 	}
 }
 
 // markNamed notes a URL hint a script gave, unless it was queued before: a
-// link of a page is the app's own and is always asked.
-func (s *scheduler) markNamed(from task, h types.Seed) {
+// link of a page is the app's own and is always asked, and so is a script
+// the run loaded to read. The hint it returns says it was named, so that a
+// resume knows.
+func (s *scheduler) markNamed(from task, h types.Seed) types.Seed {
 	if from.col != "azhaq-js" {
-		return
+		return h
 	}
 	seed := normalize.Seed(h)
-	if seed.Type != types.TypeURL || seed.Key() == "" {
-		return
+	if seed.Type != types.TypeURL || seed.Key() == "" || seed.Keys[types.ViaKey] == types.ViaLoaded {
+		return h
 	}
 	if k := seedKey(seed); !s.seen[k] {
 		s.named[k] = true
+		fetch.NoteNamed(seed.Key())
+		if seed.Keys[types.ViaKey] == "" {
+			h = normalize.Seed(h)
+			h.Keys[types.ViaKey] = types.ViaScript
+		}
 	}
+	return h
 }
 
 // A task's turn under the catch-all rule.
@@ -1035,29 +1062,26 @@ type gateAnswer int
 
 const (
 	gateAsk  gateAnswer = iota // ask it
-	gateHold                   // do not ask it: its origin answers every path with one page
-	gateWait                   // ask it later, when the control it depends on has answered
+	gateHold                   // do not ask it: its directory answers every path with one page
+	gateWait                   // ask it later, when the directory's answers have decided
 )
 
-// namedFlight is the named URLs being asked, by origin and directory, and the
-// directories whose first path has been asked: the controls of a directory
-// are asked by its first path, and the rule is applied to the others only
-// when that has answered, so a loaded machine sends what an idle one does.
+// namedFlight is the named URLs being asked, by directory: the paths of a
+// directory whose answers have not settled the rule go one at a time.
 type namedFlight struct {
-	tasks  map[string]int // seed key → its tasks running
-	origin map[string]int // origin → seeds running
-	dir    map[string]int // origin and directory → seeds running
-	done   map[string]bool
-	began  map[string]bool // seed keys that started: their other tasks go on
+	tasks map[string]int  // seed key → its tasks running
+	dir   map[string]int  // origin and directory → seeds running
+	began map[string]bool // seed keys that started: their other tasks go on
 }
 
 func newNamedFlight() namedFlight {
-	return namedFlight{tasks: map[string]int{}, origin: map[string]int{}, dir: map[string]int{}, done: map[string]bool{}, began: map[string]bool{}}
+	return namedFlight{tasks: map[string]int{}, dir: map[string]int{}, began: map[string]bool{}}
 }
 
-// namedWhere is the origin and directory of a task's URL, when the rule
-// concerns it: a URL a script named, with a catch-all stop set.
-func (s *scheduler) namedWhere(t task) (k, origin, dir string, st fetch.ControlState, ok bool) {
+// namedWhere is the directory of a task's URL (origin and path, as the
+// controls are kept), when the rule concerns it: a URL a script named, with a
+// catch-all stop set.
+func (s *scheduler) namedWhere(t task) (k, dir string, st fetch.DirState, ok bool) {
 	if s.b.CatchAllStop <= 0 || t.seed.Type != types.TypeURL {
 		return
 	}
@@ -1065,38 +1089,32 @@ func (s *scheduler) namedWhere(t task) (k, origin, dir string, st fetch.ControlS
 	if !s.named[k] {
 		return
 	}
-	u, err := url.Parse(t.seed.Key())
-	if err != nil || u.Host == "" {
-		return
-	}
-	st, dir = fetch.CatchAllControl(t.seed.Key(), s.b.CatchAllStop)
-	return k, u.Scheme + "://" + u.Host, dir, st, st != fetch.ControlNone
+	st, dir = fetch.CatchAllDir(t.seed.Key(), s.b.CatchAllStop)
+	return k, dir, st, st != fetch.DirNone
 }
 
 // catchAllGate says what a task does under the catch-all rule: a URL a
-// script named is held when its origin has answered Budgets.CatchAllStop
-// paths with the page every unknown path gets and the control for its
-// directory is that page (fetch.CatchAllHeld); the first path of a directory
-// goes alone, to ask the control; while the origin is short of answers, the
-// paths of a directory whose control is that page go one at a time. Else it
-// is asked. A held URL stays in the map as not requested, with the reason.
+// script named is held when Budgets.CatchAllStop of its directory's
+// script-named paths answered with the page every unknown path gets, before
+// as many answered anything else (fetch.CatchAllHeld). Until then the
+// directory's paths go one at a time, so that a loaded machine sends what an
+// idle one does; a directory whose paths answer for themselves is asked
+// whole. A held URL stays in the map as not requested, with the reason.
 func (s *scheduler) catchAllGate(t task) gateAnswer {
-	k, origin, dir, st, ok := s.namedWhere(t)
+	k, dir, st, ok := s.namedWhere(t)
 	if !ok || s.flight.began[k] {
 		return gateAsk
 	}
 	if s.catchHeld[k] {
 		return gateHold
 	}
-	f := &s.flight
 	switch {
-	case st == fetch.ControlHeld:
+	case st == fetch.DirHeld:
 		s.catchHeld[k] = true
+		fetch.NoteHeld(t.seed.Key())
 		s.e.noteSkip(t.seed, CatchAllHeldReason)
 		return gateHold
-	case !f.done[dir] && f.dir[dir] > 0:
-		return gateWait
-	case (st == fetch.ControlShell || st == fetch.ControlPending) && f.origin[origin] > 0:
+	case st != fetch.DirReal && s.flight.dir[dir] > 0:
 		return gateWait
 	}
 	return gateAsk
@@ -1104,31 +1122,27 @@ func (s *scheduler) catchAllGate(t task) gateAnswer {
 
 // flightStart notes a task of a named URL running.
 func (s *scheduler) flightStart(t task) {
-	k, origin, dir, _, ok := s.namedWhere(t)
+	k, dir, _, ok := s.namedWhere(t)
 	if !ok {
 		return
 	}
 	f := &s.flight
 	if f.tasks[k] == 0 {
-		f.origin[origin]++
 		f.dir[dir]++
 	}
 	f.tasks[k]++
 	f.began[k] = true
 }
 
-// flightEnd notes one ended; the last task of a URL marks its directory's
-// control as answered.
+// flightEnd notes one ended.
 func (s *scheduler) flightEnd(t task) {
-	k, origin, dir, _, ok := s.namedWhere(t)
+	k, dir, _, ok := s.namedWhere(t)
 	f := &s.flight
 	if !ok || f.tasks[k] == 0 {
 		return
 	}
 	if f.tasks[k]--; f.tasks[k] == 0 {
-		f.origin[origin]--
 		f.dir[dir]--
-		f.done[dir] = true
 	}
 }
 

@@ -36,9 +36,10 @@ type Budgets struct {
 	// PerTemplate is how many URLs of one template (/product?id={n}) are
 	// requested; the rest are listed. Zero is the default: all.
 	PerTemplate int
-	// CatchAllStop: once an origin has answered this many paths with the page
-	// every unknown path gets, the page-like paths scripts name on it are
-	// not asked. Zero asks them all.
+	// CatchAllStop: once this many of the paths scripts name in a directory
+	// have answered with the page every unknown path gets, before as many
+	// answered anything else, the directory's other such paths are not asked.
+	// Zero asks them all.
 	CatchAllStop int
 }
 
