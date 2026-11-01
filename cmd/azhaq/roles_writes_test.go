@@ -357,8 +357,45 @@ func TestReplayWriteCreate(t *testing.T) {
 	if len(rows) != 1 || rows[0].Verdict != verdictWriteCreate || !slices.Contains(rows[0].Readers, "bob") {
 		t.Fatalf("rows %+v", rows)
 	}
-	if listed(verdictWriteCreate) {
-		t.Errorf("a create should not be listed by default")
+	if !listed(verdictWriteCreate) {
+		t.Errorf("a create another role was let to send is a finding and is listed by default")
+	}
+}
+
+// -replay-writes post, without -all: the creates the replay made in another
+// role's collection are in the rows and counted, not hidden behind -all.
+func TestRolesListsCreatesByDefault(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		user := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer tok-")
+		if user == "" {
+			w.WriteHeader(401)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == http.MethodPost && r.URL.Path == "/api/notes" {
+			w.WriteHeader(201)
+			fmt.Fprintf(w, `{"created":true,"by":%q}`, user)
+			return
+		}
+		w.WriteHeader(404)
+	}))
+	defer srv.Close()
+	browse := func(file, user string) string {
+		return writeHAR(t, file,
+			harEntry("2026-10-29T10:00:00.000Z", "POST", srv.URL+"/api/notes", `{"text":"hi"}`, 201, "Authorization", "Bearer tok-"+user, "Content-Type", "application/json"))
+	}
+	alice, bob := browse("alice.har", "alice"), browse("bob.har", "bob")
+	out, errOut, err := captureBoth(t, func() error {
+		return cmdRoles([]string{"-json", "-dir", t.TempDir(), "-har", "alice=" + alice, "-har", "bob=" + bob, "-replay-writes", "post"})
+	})
+	if err != nil {
+		t.Fatalf("%v\n%s", err, errOut)
+	}
+	if n := strings.Count(out, verdictWriteCreate); n != 2 {
+		t.Errorf("want both creates listed, got %d:\n%s", n, out)
+	}
+	if strings.Contains(errOut, "not listed") && strings.Contains(errOut, verdictWriteCreate) {
+		t.Errorf("the creates are still counted as not listed:\n%s", errOut)
 	}
 }
 
