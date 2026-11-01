@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/trannghiach/azhaq/types"
+	"github.com/lilsadfoqs/azhaq/types"
 )
 
 // A front page that is a hosting service's page for a name nobody claimed

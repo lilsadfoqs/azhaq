@@ -5,8 +5,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/trannghiach/azhaq/engine"
-	"github.com/trannghiach/azhaq/internal/gqlschema"
+	"github.com/lilsadfoqs/azhaq/engine"
+	"github.com/lilsadfoqs/azhaq/internal/gqlschema"
 )
 
 // sigRE reads a recovered field: name(arg: Type!, …): Type, with the

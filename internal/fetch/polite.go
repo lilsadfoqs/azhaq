@@ -18,9 +18,9 @@ import (
 
 	"golang.org/x/time/rate"
 
-	"github.com/trannghiach/azhaq/internal/egress"
-	"github.com/trannghiach/azhaq/internal/limit"
-	"github.com/trannghiach/azhaq/internal/neterr"
+	"github.com/lilsadfoqs/azhaq/internal/egress"
+	"github.com/lilsadfoqs/azhaq/internal/limit"
+	"github.com/lilsadfoqs/azhaq/internal/neterr"
 )
 
 // What a crawler does to be a good guest and to keep a session: wait when

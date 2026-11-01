@@ -20,7 +20,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/trannghiach/azhaq/internal/egress"
+	"github.com/lilsadfoqs/azhaq/internal/egress"
 )
 
 // Scope is what a run takes from a program's scope.

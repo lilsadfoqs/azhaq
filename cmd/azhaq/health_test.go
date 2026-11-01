@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/trannghiach/azhaq/internal/collectors/subcol"
+	"github.com/lilsadfoqs/azhaq/internal/collectors/subcol"
 )
 
 // The -json summary of subs says how many sources answered, which failed

@@ -12,10 +12,10 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/trannghiach/azhaq/internal/collectors/brutecol"
-	"github.com/trannghiach/azhaq/internal/collectors/subcol"
-	"github.com/trannghiach/azhaq/store"
-	"github.com/trannghiach/azhaq/types"
+	"github.com/lilsadfoqs/azhaq/internal/collectors/brutecol"
+	"github.com/lilsadfoqs/azhaq/internal/collectors/subcol"
+	"github.com/lilsadfoqs/azhaq/store"
+	"github.com/lilsadfoqs/azhaq/types"
 )
 
 // subsMode is what subs tells the run it starts.

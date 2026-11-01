@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/trannghiach/azhaq/internal/fetch"
+	"github.com/lilsadfoqs/azhaq/internal/fetch"
 )
 
 // noSandboxChrome is a Chrome that exits the way one does where the system

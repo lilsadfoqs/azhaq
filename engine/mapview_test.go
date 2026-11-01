@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/trannghiach/azhaq/engine"
-	"github.com/trannghiach/azhaq/types"
+	"github.com/lilsadfoqs/azhaq/engine"
+	"github.com/lilsadfoqs/azhaq/types"
 )
 
 func httpObs(id, payload string) types.StoredObservation {

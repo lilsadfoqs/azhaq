@@ -16,7 +16,7 @@ import (
 
 	"github.com/miekg/dns"
 
-	"github.com/trannghiach/azhaq/internal/collectors/subcol"
+	"github.com/lilsadfoqs/azhaq/internal/collectors/subcol"
 )
 
 // refusingServer answers every query REFUSED, as a resolver does that will

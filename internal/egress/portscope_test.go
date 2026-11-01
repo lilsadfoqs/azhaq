@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/trannghiach/azhaq/internal/neterr"
-	"github.com/trannghiach/azhaq/scope"
+	"github.com/lilsadfoqs/azhaq/internal/neterr"
+	"github.com/lilsadfoqs/azhaq/scope"
 )
 
 // portScope holds the policy to 127.0.0.1 on one port: -allow 127.0.0.1:PORT.

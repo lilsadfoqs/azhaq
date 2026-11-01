@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/trannghiach/azhaq/types"
+	"github.com/lilsadfoqs/azhaq/types"
 )
 
 // archives serves every source: Wayback in two pages, OTX in two pages,

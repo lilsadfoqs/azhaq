@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/trannghiach/azhaq/internal/normalize"
+	"github.com/lilsadfoqs/azhaq/internal/normalize"
 )
 
 // probeRow compares Azhaq's probing with httpx on the same host list: the
@@ -52,7 +52,7 @@ var publicSites = []string{"ginandjuice.shop", "testphp.vulnweb.com", "demo.test
 // The same User-Agent for both tools: with its default random browser one,
 // httpx got Akamai's "Access Denied" page where azhaq got the real page,
 // which makes the comparison about bot rules, not parsing.
-const probeAgent = "azhaq-bench/1 (+https://github.com/trannghiach/azhaq)"
+const probeAgent = "azhaq-bench/1 (+https://github.com/lilsadfoqs/azhaq)"
 
 type probeResult struct {
 	scheme, status, title, favicon, cdn string

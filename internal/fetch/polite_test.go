@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/trannghiach/azhaq/internal/egress"
+	"github.com/lilsadfoqs/azhaq/internal/egress"
 )
 
 func TestBackoffAsksAgainAfter429(t *testing.T) {

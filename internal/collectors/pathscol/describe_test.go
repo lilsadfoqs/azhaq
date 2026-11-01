@@ -9,8 +9,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/trannghiach/azhaq/internal/fetch"
-	"github.com/trannghiach/azhaq/types"
+	"github.com/lilsadfoqs/azhaq/internal/fetch"
+	"github.com/lilsadfoqs/azhaq/types"
 )
 
 const specJSON = `{"openapi":"3.0.0","info":{"title":"t","version":"1"},"paths":{"/pets":{"get":{}}}}`

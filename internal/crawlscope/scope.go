@@ -12,9 +12,9 @@ import (
 	"strings"
 	"sync/atomic"
 
-	"github.com/trannghiach/azhaq/internal/egress"
-	"github.com/trannghiach/azhaq/internal/normalize"
-	"github.com/trannghiach/azhaq/internal/webextract"
+	"github.com/lilsadfoqs/azhaq/internal/egress"
+	"github.com/lilsadfoqs/azhaq/internal/normalize"
+	"github.com/lilsadfoqs/azhaq/internal/webextract"
 )
 
 // Field "rdn-origin" is rdn for names, and for an address (a lab, a dev

@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/trannghiach/azhaq/types"
+	"github.com/lilsadfoqs/azhaq/types"
 )
 
 func TestASNPrefixes(t *testing.T) {

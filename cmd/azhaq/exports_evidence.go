@@ -3,8 +3,8 @@ package main
 import (
 	"net/url"
 
-	"github.com/trannghiach/azhaq/engine"
-	"github.com/trannghiach/azhaq/types"
+	"github.com/lilsadfoqs/azhaq/engine"
+	"github.com/lilsadfoqs/azhaq/types"
 )
 
 // flagEvidence gives the operations a served description lists the level

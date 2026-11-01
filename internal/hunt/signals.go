@@ -8,8 +8,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/trannghiach/azhaq/engine"
-	"github.com/trannghiach/azhaq/internal/webextract"
+	"github.com/lilsadfoqs/azhaq/engine"
+	"github.com/lilsadfoqs/azhaq/internal/webextract"
 )
 
 var braces = strings.NewReplacer("%7B", "{", "%7D", "}", "%7b", "{", "%7d", "}")

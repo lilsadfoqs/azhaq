@@ -18,8 +18,8 @@ import (
 
 	"golang.org/x/net/proxy"
 
-	"github.com/trannghiach/azhaq/internal/egress"
-	"github.com/trannghiach/azhaq/internal/fetch"
+	"github.com/lilsadfoqs/azhaq/internal/egress"
+	"github.com/lilsadfoqs/azhaq/internal/fetch"
 )
 
 // A process other than Chrome cannot use the guard to reach the scope.

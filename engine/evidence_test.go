@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/trannghiach/azhaq/engine"
-	"github.com/trannghiach/azhaq/types"
+	"github.com/lilsadfoqs/azhaq/engine"
+	"github.com/lilsadfoqs/azhaq/types"
 )
 
 func urlObs(collector, payload string) types.StoredObservation {

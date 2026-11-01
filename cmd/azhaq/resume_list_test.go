@@ -12,8 +12,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/trannghiach/azhaq/store"
-	"github.com/trannghiach/azhaq/types"
+	"github.com/lilsadfoqs/azhaq/store"
+	"github.com/lilsadfoqs/azhaq/types"
 )
 
 // A drop-in's target list is a temporary file, gone when azhaq resume

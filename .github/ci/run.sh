@@ -41,4 +41,4 @@ hunt | gate | trial)
 esac
 git tag -a "$kind-$name" -F "$msg"
 git push --no-verify -q origin "$kind-$name"
-echo "$kind-$name: https://github.com/trannghiach/azhaq/actions"
+echo "$kind-$name: https://github.com/lilsadfoqs/azhaq/actions"

@@ -17,7 +17,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/trannghiach/azhaq/internal/collectors/pathscol"
+	"github.com/lilsadfoqs/azhaq/internal/collectors/pathscol"
 )
 
 const (

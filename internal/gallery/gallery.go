@@ -10,7 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/trannghiach/azhaq/internal/collectors/shotcol"
+	"github.com/lilsadfoqs/azhaq/internal/collectors/shotcol"
 )
 
 // Gallery is the index over one or more workspaces' screenshots.

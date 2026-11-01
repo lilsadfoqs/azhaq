@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/trannghiach/azhaq/docs"
+	"github.com/lilsadfoqs/azhaq/docs"
 )
 
 // The flags the public docs name must exist: a command line in a doc runs,

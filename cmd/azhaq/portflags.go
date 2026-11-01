@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/trannghiach/azhaq/internal/collectors/portcol"
-	"github.com/trannghiach/azhaq/internal/portscan"
+	"github.com/lilsadfoqs/azhaq/internal/collectors/portcol"
+	"github.com/lilsadfoqs/azhaq/internal/portscan"
 )
 
 // portFlags are run's -port-* flags as given.

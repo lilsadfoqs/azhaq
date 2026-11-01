@@ -5,8 +5,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/trannghiach/azhaq/catalog"
-	"github.com/trannghiach/azhaq/types"
+	"github.com/lilsadfoqs/azhaq/catalog"
+	"github.com/lilsadfoqs/azhaq/types"
 )
 
 // What a checked name came to.

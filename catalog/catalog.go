@@ -10,7 +10,7 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/trannghiach/azhaq/types"
+	"github.com/lilsadfoqs/azhaq/types"
 )
 
 // Collector is the only plugin shape in Azhaq.

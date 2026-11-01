@@ -11,7 +11,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/trannghiach/azhaq/internal/answer"
+	"github.com/lilsadfoqs/azhaq/internal/answer"
 )
 
 // A source that answers 429 is asked again after the Retry-After it names

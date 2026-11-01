@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lilsadfoqs/azhaq/internal/neterr"
 	"github.com/miekg/dns"
-	"github.com/trannghiach/azhaq/internal/neterr"
 )
 
 func TestKillFileStopsSpendAndTake(t *testing.T) {

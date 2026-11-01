@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/trannghiach/azhaq/types"
+	"github.com/lilsadfoqs/azhaq/types"
 )
 
 // run -dns-brute with no passive source and -depth 0 does not go on to

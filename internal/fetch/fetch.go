@@ -17,10 +17,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/trannghiach/azhaq/internal/egress"
-	"github.com/trannghiach/azhaq/internal/neterr"
-	"github.com/trannghiach/azhaq/internal/normalize"
-	"github.com/trannghiach/azhaq/internal/timing"
+	"github.com/lilsadfoqs/azhaq/internal/egress"
+	"github.com/lilsadfoqs/azhaq/internal/neterr"
+	"github.com/lilsadfoqs/azhaq/internal/normalize"
+	"github.com/lilsadfoqs/azhaq/internal/timing"
 )
 
 func init() {
@@ -42,7 +42,7 @@ var UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (K
 
 // ToolAgent names Azhaq to the third-party services it asks (archives,
 // RDAP, RIPEstat, search APIs); the CLI sets the version.
-var ToolAgent = "azhaq (+https://github.com/trannghiach/azhaq)"
+var ToolAgent = "azhaq (+https://github.com/lilsadfoqs/azhaq)"
 
 // MaxBody caps HTML and other documents (-max-response-size).
 var MaxBody = 2 << 20

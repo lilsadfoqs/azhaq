@@ -19,9 +19,9 @@ import (
 	"github.com/chromedp/cdproto/cdp/jsonv2"
 	"github.com/chromedp/chromedp"
 
-	"github.com/trannghiach/azhaq/internal/egress"
-	"github.com/trannghiach/azhaq/internal/fetch"
-	"github.com/trannghiach/azhaq/scope"
+	"github.com/lilsadfoqs/azhaq/internal/egress"
+	"github.com/lilsadfoqs/azhaq/internal/fetch"
+	"github.com/lilsadfoqs/azhaq/scope"
 )
 
 // recorder is a server that keeps the paths it was asked for.

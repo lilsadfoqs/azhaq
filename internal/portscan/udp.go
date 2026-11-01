@@ -3,7 +3,7 @@ package portscan
 import (
 	"context"
 	"errors"
-	"github.com/trannghiach/azhaq/internal/guard"
+	"github.com/lilsadfoqs/azhaq/internal/guard"
 	"net"
 	"sort"
 	"strconv"

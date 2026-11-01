@@ -11,8 +11,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/trannghiach/azhaq/internal/browser"
-	"github.com/trannghiach/azhaq/internal/ledger"
+	"github.com/lilsadfoqs/azhaq/internal/browser"
+	"github.com/lilsadfoqs/azhaq/internal/ledger"
 )
 
 // A -role-login run sends requests of three kinds: the role runs', Chrome's

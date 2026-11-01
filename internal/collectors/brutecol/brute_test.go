@@ -14,8 +14,8 @@ import (
 	"github.com/miekg/dns"
 	"go.yaml.in/yaml/v3"
 
-	"github.com/trannghiach/azhaq/internal/dnsr"
-	"github.com/trannghiach/azhaq/types"
+	"github.com/lilsadfoqs/azhaq/internal/dnsr"
+	"github.com/lilsadfoqs/azhaq/types"
 )
 
 // live names in example.org; *.wild.example.org is a wildcard.
