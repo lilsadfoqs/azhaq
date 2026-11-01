@@ -11,7 +11,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"regexp"
 	"slices"
 	"sort"
 	"strings"
@@ -19,6 +18,7 @@ import (
 
 	"github.com/lilsadfoqs/azhaq/internal/egress"
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
+	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"github.com/lilsadfoqs/azhaq/internal/webextract"
 )
@@ -840,7 +840,7 @@ func readAs(ctx context.Context, client *http.Client, r role, u string) (answer,
 	return a, nil
 }
 
-var timeLike = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}|^\d{10,13}$`)
+var timeLike = lazyre.New(`^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}|^\d{10,13}$`)
 
 // sendWrite sends w as r: its method, body and own headers, r's session,
 // inside the scope and the run's budget and pace, without following a
@@ -914,7 +914,7 @@ func writeNotes(rows []roleRow) (notes []string, failed bool) {
 }
 
 // deniedText: what a server says when it refuses a write and still answers 2xx.
-var deniedText = regexp.MustCompile(`(?i)\bonly\s+(admin|administrator|owner|moderator)s?\b|not\s+(authori[sz]ed|permitted|allowed)|permission\s+denied|access\s+denied|\bforbidden\b|\bunauthori[sz]ed\b|insufficient\s+(privileges|permissions)`)
+var deniedText = lazyre.New(`(?i)\bonly\s+(admin|administrator|owner|moderator)s?\b|not\s+(authori[sz]ed|permitted|allowed)|permission\s+denied|access\s+denied|\bforbidden\b|\bunauthori[sz]ed\b|insufficient\s+(privileges|permissions)`)
 
 // writeVerdict reads the replay's result. A cross write is claimed only
 // when it was proven (the owner's object changed), and anyone-writes when

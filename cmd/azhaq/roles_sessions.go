@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -13,6 +12,7 @@ import (
 
 	"github.com/lilsadfoqs/azhaq/internal/egress"
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
+	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
 )
 
@@ -124,7 +124,7 @@ func sessionStates(roles []role, rows []roleRow) map[string]sessionState {
 // credentialName: a header or cookie that carries a credential by its
 // name (X-Auth-Token, X-Api-Key, session, connect.sid, jwt); an analytics
 // cookie (_ga_id) does not.
-var credentialName = regexp.MustCompile(`(?i)token|jwt|auth|sess|sid|access|bearer|identity|api[-_]?key|apikey`)
+var credentialName = lazyre.New(`(?i)token|jwt|auth|sess|sid|access|bearer|identity|api[-_]?key|apikey`)
 
 // tokenExpiry is the earliest expiry ("exp") of the JSON Web Tokens the
 // headers carry as a credential (in Authorization, or a header or cookie
@@ -319,8 +319,8 @@ func hideSent(text string, h http.Header) string {
 }
 
 var (
-	credentialish = regexp.MustCompile(`eyJ[A-Za-z0-9_-]{8,}(\.[A-Za-z0-9_-]*){0,2}|[A-Za-z0-9+/_.%-]{16,}={0,2}`)
-	titleTag      = regexp.MustCompile(`(?is)<title[^>]*>(.*?)</title>`)
+	credentialish = lazyre.New(`eyJ[A-Za-z0-9_-]{8,}(\.[A-Za-z0-9_-]*){0,2}|[A-Za-z0-9+/_.%-]{16,}={0,2}`)
+	titleTag      = lazyre.New(`(?is)<title[^>]*>(.*?)</title>`)
 )
 
 // hideCredentials takes out what looks like a credential: a JSON Web

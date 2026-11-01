@@ -40,7 +40,7 @@ func TestCompileAllFindsABadExpression(t *testing.T) {
 }
 
 // A package-level regexp.MustCompile builds its program in every command's
-// start-up: they are lazyre.New. (The roles command's are still eager.)
+// start-up: they are lazyre.New.
 func TestNoEagerPackageLevelRegexps(t *testing.T) {
 	root := filepath.Join("..", "..")
 	var eager []string
@@ -55,7 +55,7 @@ func TestNoEagerPackageLevelRegexps(t *testing.T) {
 			}
 			return nil
 		}
-		if !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") || strings.HasPrefix(name, "roles") {
+		if !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
 			return nil
 		}
 		f, err := parser.ParseFile(token.NewFileSet(), path, nil, 0)

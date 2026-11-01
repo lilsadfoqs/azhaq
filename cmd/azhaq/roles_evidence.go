@@ -13,13 +13,13 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"regexp"
 	"slices"
 	"sort"
 	"strings"
 	"sync"
 
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
+	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"github.com/lilsadfoqs/azhaq/internal/webextract"
 	"github.com/lilsadfoqs/azhaq/store"
@@ -187,9 +187,9 @@ func (rd *redactor) tag(v string) string {
 }
 
 var (
-	shellVar     = regexp.MustCompile(`\$([A-Z0-9_]+)`)
-	jsonPair     = regexp.MustCompile(`"((?:[^"\\]|\\.){1,64})"\s*:\s*("(?:[^"\\]|\\.)*"|-?\d[\d.eE+-]*)`)
-	jsonPairOpen = regexp.MustCompile(`"((?:[^"\\]|\\.){1,64})"\s*:\s*"(?:[^"\\]|\\.)*$`)
+	shellVar     = lazyre.New(`\$([A-Z0-9_]+)`)
+	jsonPair     = lazyre.New(`"((?:[^"\\]|\\.){1,64})"\s*:\s*("(?:[^"\\]|\\.)*"|-?\d[\d.eE+-]*)`)
+	jsonPairOpen = lazyre.New(`"((?:[^"\\]|\\.){1,64})"\s*:\s*"(?:[^"\\]|\\.)*$`)
 )
 
 // body is a kept body, its secrets taken out.

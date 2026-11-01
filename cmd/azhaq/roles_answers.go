@@ -5,13 +5,13 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"html"
-	"regexp"
 	"slices"
 	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/lilsadfoqs/azhaq/internal/collectors/httpcol"
+	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 )
 
 // answer is how an endpoint answered one session.
@@ -85,9 +85,9 @@ func readAnswer(status int, body []byte, contentType string) (answer, *jsonFacts
 }
 
 // heading is a page's first h1 or h2.
-var heading = regexp.MustCompile(`(?is)<h[12][^>]*>(.*?)</h[12]>`)
+var heading = lazyre.New(`(?is)<h[12][^>]*>(.*?)</h[12]>`)
 
-var tags = regexp.MustCompile(`<[^>]*>`)
+var tags = lazyre.New(`<[^>]*>`)
 
 // sayOf reads what a short answer says, to tell refusals by: an HTML
 // page's title, and its title and first heading; a JSON answer's message;
@@ -380,7 +380,7 @@ func scalarString(x any) (string, bool) {
 }
 
 // opaqueKey: a field named by data (an id, a hash), not by the schema.
-var opaqueKey = regexp.MustCompile(`^(\d+|[0-9a-fA-F-]{16,})$`)
+var opaqueKey = lazyre.New(`^(\d+|[0-9a-fA-F-]{16,})$`)
 
 // pathKey is a field's name in a path; fields named by data are one
 // field.
