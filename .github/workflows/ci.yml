@@ -170,12 +170,16 @@ jobs:
           go-version: stable
       - id: tag
         run: echo "tag=$(git tag -l 'v*' --sort=-v:refname | head -n1)" >> "$GITHUB_OUTPUT"
+      - name: this runner's target only
+        # The script is what is checked: one archive is enough.
+        run: |
+          sed 's/^    goos: .*/    goos: [linux]/; s/^    goarch: .*/    goarch: [amd64]/' .goreleaser.yaml > "$RUNNER_TEMP/goreleaser.yaml"
+          grep -n 'goos\|goarch' "$RUNNER_TEMP/goreleaser.yaml"
       - uses: goreleaser/goreleaser-action@v7
         with:
           distribution: goreleaser
           version: v2.18.3
-          # This runner's own target only: the script is what is checked.
-          args: release --snapshot --clean --single-target --skip=sign,sbom,docker
+          args: release --snapshot --clean --config ${{ runner.temp }}/goreleaser.yaml --skip=sign,sbom,docker
         env:
           GORELEASER_CURRENT_TAG: ${{ steps.tag.outputs.tag }}
       - name: install from the snapshot
