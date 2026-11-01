@@ -6,7 +6,7 @@
 | Kind | What happens | Brief |
 | --- | --- | --- |
 | `switch` (default) | A blind review of the latest release against five training apps. | `BRIEF.md` |
-| `research` | A researcher does two phases of an engagement on two fresh estates. Phase 1, estate 1: usual tools only, azhaq not installed. Phase 2, estate 2: azhaq installed from its latest release and used as the main tool; every fallback to another tool is logged with its reason. | `RESEARCH.md` |
+| `research` | A researcher does two phases of an engagement on two fresh estates. Phase 1, estate 1: usual tools only, azhaq not run. Phase 2, estate 2: azhaq used as the main tool; every fallback to another tool is logged with its reason. | `RESEARCH.md` |
 | `hunter` | The same estates as two bounty sessions, in the opposite order: azhaq first, the usual stack second with azhaq off. | `HUNTER.md` |
 
 ```
@@ -30,9 +30,21 @@ together. Each has a random `.test` domain, a /24 of loopback, one address per
 host, product-named and neutral host names (some under a `dev.` or `stg.`
 subzone, sometimes with a wildcard), a few services on non-default ports, three
 names served only by an nginx reverse proxy by Host, two dangling CNAMEs and
-PTR records for some hosts. One `bench/labdns` resolver per estate serves its
-zone (`-zone`): 127.0.0.1:5301 and 127.0.0.1:5302. `up.py` starts everything and
+PTR records for some hosts. The zone's two name servers (`ns1`, `ns2`) have
+addresses inside the /24 that no host uses. One `bench/labdns` resolver per
+estate serves its zone (`-zone`): at 127.0.0.1:5301 or :5302, as given to the
+reviewer, and on port 53 (UDP and TCP) of its name servers, so a zone transfer
+asked of the zone's own name servers stays inside the company's range (the
+binary has `cap_net_bind_service`; the fence allows those addresses on port
+53). The resolver refuses a transfer unless the estate planted the Vulhub
+BIND that allows one. `up.py` starts everything and
 records which probes answered in the key; the grader leaves out what was not up.
+
+azhaq's latest release is installed into the reviewer's workspace (`./bin/azhaq`)
+before the review, in the job's step after the usual tools, with `scripts/install.sh
+--require-signature`; the brief says where it is and which version. Installing it
+is not part of the timed work in these two kinds (it is in `switch`, where it is a
+scored item).
 
 Placeholders filled at run time: `__VERSION__` (the latest release),
 `__DOMAIN1__`, `__NET1__`, `__DNS1__`, `__DOMAIN2__`, `__NET2__`, `__DNS2__`,
@@ -41,8 +53,12 @@ is left).
 
 ## Isolation
 
-The `work` job does these before the agent starts, and `range/isolate.sh` fails
-the job when any check does not hold:
+The `work` job (research, hunter) and the `codex` job (switch) do these before
+the agent starts, and `range/isolate.sh` fails the job when any check does not
+hold. The switch review gets the same: its labs are made ready first
+(`lab_ready.py`: VAmPI's database created, DVWA's set up, each checked with a
+login), nmap is installed, and a copy of each app's source is put in its
+folder (`./lab-source`) because it cannot `docker cp` any more.
 
 | Step | How it is verified |
 | --- | --- |
@@ -61,7 +77,7 @@ to judge. Job logs are public: build, start and isolate print counts only.
 
 ## Heartbeat
 
-The review of a research or hunter trial writes no log until it ends. A loop
+The review of any trial kind writes no log until it ends. A loop
 (`heartbeat.sh`) publishes counts every 10 minutes to `trial/trial-NAME/heartbeat.txt`
 on ci-results; `.github/ci/beat.sh trial NAME` prints it: UTC time, minutes
 since the stream began, whether `codex` runs, the stream's lines and the
@@ -70,8 +86,8 @@ free disk. No command, no stream text, no estate data. It runs as root from
 `/root` with the token in a root-only file, started before `isolate.sh`, which
 checks that the file is unreadable and the process unlisted; the review's files
 are read as the agent's user and `phases.log` is cut to its `phase N start|end
-TIME` lines. The `switch` trial has no isolation (the reviewer keeps sudo), so
-it has no heartbeat.
+TIME` lines (the switch review has no `phases.log`, so that part is empty). The
+stream of every kind is `stream.ts.jsonl`, one epoch second in front of each line.
 
 ## What comes back
 

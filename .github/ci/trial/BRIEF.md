@@ -5,7 +5,7 @@ Your review must be independent and evidence-based. You decide only on what you 
 ## Core principle: verify everything, assume nothing
 
 - **Trust nothing the tool states about itself.** Treat every claim in its README, `-h`, shipped docs and its own run summaries as a hypothesis to confirm or refute by independent measurement. If you cannot confirm a claim with your own evidence, record it as **unverified** and do not count it in the tool's favour.
-- **Establish ground truth yourself first.** Decide what "correct" means from the target itself: the application's responses, its source code (the local apps' source is inside their containers; `docker cp` from them is allowed, read-only), independent DNS resolution, and an independent proxy log. Then run the established reference tools head-to-head on the same targets.
+- **Establish ground truth yourself first.** Decide what "correct" means from the target itself: the application's responses, its source code (a copy of each local app's source is in ./lab-source), independent DNS resolution, and an independent proxy log. Then run the established reference tools head-to-head on the same targets.
 - **Install and run the reference tools.** Use `go install` into ./bin or pip into a venv here, and measure counts, overlap, wall time, memory, and wrong, duplicate, missing or invented results on both sides. Do not describe a comparison you did not run.
 - **Test the tool's own framings; do not accept them.** Where azhaq argues a metric should be read its way, test that argument on several targets.
 - **Look hard for wrong or misleading output and silent failures.** Check exit codes against their documented meaning. Check that summary numbers add up.
@@ -45,11 +45,11 @@ Your review must be independent and evidence-based. You decide only on what you 
   - DVNA at http://127.0.0.1:5020/
   - DVWA at http://127.0.0.1:5030/ (its default accounts work, e.g. admin / password)
 
-  To reset one of these apps, you may run `docker restart` on its container: azq-juice, azq-vampi, azq-dvga, azq-dvna, azq-dvwa. Never touch any other container.
+  The apps are ready: VAmPI's database is created and DVWA's is set up, and each answers a login. You cannot restart them or reach their containers.
 - **Local DNS lab.** A resolver at 127.0.0.1:5354 serves the zone azqlab.lan: real names, a wildcard subzone and dangling CNAMEs. It forwards every other name to a public resolver. Use it for wildcard and takeover tests, with `-resolvers` or each tool's equivalent.
 - **Public applications published for tool testing,** at low rate only: ginandjuice.shop, *.vulnweb.com (for example testphp.vulnweb.com), demo.testfire.net.
 - **Port discovery:** only scanme.nmap.org and 127.0.0.1.
-- **Privileged steps:** you may run exactly one command with sudo, `sudo apt-get install -y nmap`, to use nmap as a reference tool. Nothing else with sudo.
+- **Privileged steps:** you have no sudo. nmap is installed already, to use as a reference tool.
 - **The public programs hackerone.com and tesla.com,** which publish an invitation for exactly this kind of review:
   - passive lookups (subdomain sources, certificates, archives);
   - probing the web services of the live hosts in their published scope, with at most one low-rate GET per host per tool.
@@ -57,7 +57,7 @@ Your review must be independent and evidence-based. You decide only on what you 
   No port scans, no wordlist runs and no crawling against them.
 - **No payloads at public targets.** Keep your evaluation of public targets to discovery, mapping and comparison.
 - **Wordlist-based path and parameter discovery** only on the local apps and the public test sites (low rate on the latter).
-- **Change nothing outside this folder** (apart from the lab resets allowed above).
+- **Change nothing outside this folder.**
 - **Nothing outward-facing:** no GitHub issues, PRs, stars or comments, no posting anywhere, and do not use the gh CLI.
 
 ## Deliverable: ./REPORT.md, in English

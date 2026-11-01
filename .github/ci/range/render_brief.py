@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """render_brief.py KIND VERSION VARS.json TRIAL_DIR: prints the brief for KIND
-(research or hunter) with its placeholders filled: the release under test,
-each client's domain, address range and resolver (from build.py's vars.json),
-and what each phase may use. Exits 1 when a placeholder is left over.
+(research or hunter) with its placeholders filled: the release under test
+(already installed in ./bin), each client's domain, address range and
+resolver (from build.py's vars.json), and what each phase may use. Exits 1 when a placeholder is left over.
 """
 import json
 import os
@@ -10,13 +10,16 @@ import re
 import sys
 
 USUAL = "your usual tools only."
-AZHAQ = ("install azhaq from its latest GitHub release and use it as your main tool. "
+# azhaq is in ./bin before the review starts (trial.yml), so installing it is not part of the timed work.
+HAVE = ("azhaq __VERSION__ is installed at ./bin/azhaq (by the release's install script, with the checksum and "
+        "signature checked; you may verify it again).")
+AZHAQ = (HAVE + " Use it as your main tool. "
          "Use other tools only where it cannot do the job, and log each such fallback with the reason in ./notes/fallbacks.md.")
 
 PHASES = {
     # kind: (template, phase 1 tools, phase 2 tools)
     "research": ("RESEARCH.md",
-                 USUAL + " azhaq is not installed, and you must not install it before phase 2.",
+                 USUAL + " " + HAVE + " Do not run it in phase 1.",
                  AZHAQ),
     "hunter": ("HUNTER.md",
                AZHAQ,
@@ -31,7 +34,8 @@ def render(kind, version, variables, trial_dir):
     with open(os.path.join(trial_dir, name), encoding="utf-8") as f:
         text = f.read()
     values = dict(variables)
-    values.update({"VERSION": version, "PHASE1_TOOLS": p1, "PHASE2_TOOLS": p2})
+    values.update({"VERSION": version, "PHASE1_TOOLS": p1.replace("__VERSION__", version),
+                   "PHASE2_TOOLS": p2.replace("__VERSION__", version)})
     for k, v in values.items():
         text = text.replace("__%s__" % k, v)
     left = sorted(set(re.findall(r"__[A-Z0-9_]+__", text)))

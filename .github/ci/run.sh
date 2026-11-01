@@ -9,7 +9,7 @@
 # brings back both. A hunt, a gate or a trial also carries this machine's
 # Codex session, encrypted to the CI's key (its private half is the secret
 # CODEX_AUTH_KEY). fetch.sh brings back what the run wrote; beat.sh reads a
-# research or hunter trial's heartbeat while it runs.
+# trial's heartbeat while it runs.
 set -euo pipefail
 kind=${1:?usage: run.sh bench|hunt|gate|trial|range-smoke NAME [WORDS...]}
 name=${2:?usage: run.sh bench|hunt|gate|trial|range-smoke NAME [WORDS...]}

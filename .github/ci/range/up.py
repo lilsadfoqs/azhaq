@@ -61,12 +61,18 @@ def start_proxy(ctx, proxy):
     return rc == 0
 
 
+def listen_addrs(d):
+    """The estate's resolver: its private address and port, and port 53 on
+    each of the zone's name servers (inside the estate's range)."""
+    return [d["listen"]] + ["%s:53" % a for a in d.get("ns", [])]
+
+
 def start_dns(ctx, d, labdns, run_as):
     # The zone goes in on stdin: the user the resolver runs as cannot read
     # the runner's files, and no copy is left for anyone to read.
     with open(os.path.join(ctx.out, d["zone"]), "rb") as f:
         raw = f.read()
-    cmd = [labdns, "-addr", d["listen"], "-zone", "-"]
+    cmd = [labdns, "-addr", ",".join(listen_addrs(d)), "-zone", "-"]
     if run_as:
         cmd = ["sudo", "-n", "-u", run_as, "setsid", "nohup"] + cmd
     logf = open(os.path.join(ctx.out, "labdns-%d.log" % d["estate"]), "a")
@@ -77,22 +83,42 @@ def start_dns(ctx, d, labdns, run_as):
 
 
 def dns_ready(ctx, d, apex):
-    host, port = d["listen"].rsplit(":", 1)
+    """Every address of the resolver answers an SOA query over UDP and TCP."""
     import socket
     import struct
-    for _ in range(20):
+
+    def answered(data):
+        return len(data) >= 12 and struct.unpack(">H", data[2:4])[0] & 0x8000 and data[3] & 0x0F == 0
+
+    def udp(host, port):
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.settimeout(1.5)
         try:
-            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            s.settimeout(1.5)
-            s.sendto(rangelib.dns_query(apex, 6), (host, int(port)))
-            data, _ = s.recvfrom(4096)
+            s.sendto(rangelib.dns_query(apex, 6), (host, port))
+            return answered(s.recvfrom(4096)[0])
+        finally:
             s.close()
-            if len(data) >= 12 and struct.unpack(">H", data[2:4])[0] & 0x8000 and data[3] & 0x0F == 0:
-                return True
-        except OSError:
-            pass
-        ctx.sleep(0.5)
-    return False
+
+    def tcp(host, port):
+        q = rangelib.dns_query(apex, 6)
+        with socket.create_connection((host, port), timeout=1.5) as s:
+            s.sendall(struct.pack(">H", len(q)) + q)
+            head = s.recv(2)
+            return len(head) == 2 and answered(s.recv(4096))
+
+    for addr in listen_addrs(d):
+        host, port = addr.rsplit(":", 1)
+        for probe in (udp, tcp):
+            for _ in range(20):
+                try:
+                    if probe(host, int(port)):
+                        break
+                except OSError:
+                    pass
+                ctx.sleep(0.5)
+            else:
+                return False
+    return True
 
 
 def fence_rules(key, plan, agent="runner"):
@@ -115,6 +141,12 @@ def fence_rules(key, plan, agent="runner"):
                 if r not in seen:
                     seen.add(r)
                     rules.append(["-A", "AZQ", "-d", a, "-p", r[1], "--dport", str(r[2]), "-j", "ACCEPT"])
+        # The zone's name servers answer on port 53 in the estate's range.
+        for h in est.get("ns", []):
+            a = h["address"]
+            addrs.add(a)
+            for proto in ("tcp", "udp"):
+                rules.append(["-A", "AZQ", "-d", a, "-p", proto, "--dport", "53", "-j", "ACCEPT"])
         for a in sorted(addrs):
             rules.append(["-A", "AZQ", "-d", a, "-p", "icmp", "-j", "ACCEPT"])
         net = est["net"]

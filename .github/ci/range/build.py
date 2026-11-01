@@ -4,9 +4,10 @@
 Each estate is about ten Vulhub environments, stratified by category so both
 have the same mix, inside a memory budget for the two together. For each
 estate it picks a random company-like domain under .test, a /24 of loopback
-(Linux routes all of 127/8 to lo), one address per host, names that look
-like a company's (some named after the product, some neutral, a few under a
-dev. subzone with a wildcard), some services on non-default ports, a few
+(Linux routes all of 127/8 to lo), one address per host, two name servers at
+further addresses of the /24 (the estate's resolver answers there on port 53),
+names that look like a company's (some named after the product, some neutral,
+a few under a dev. subzone with a wildcard), some services on non-default ports, a few
 names served only by a shared nginx reverse proxy by Host, and dangling
 CNAMEs.
 
@@ -41,6 +42,7 @@ NEUTRAL = ["dev-03", "tools", "internal", "stg-02", "app1", "portal", "legacy", 
 DANGLING_NAMES = ["assets", "status", "help", "cdn", "static", "docs-old", "shop-old", "media", "careers", "events"]
 DANGLING_TARGETS = ["azurewebsites.net", "azureedge.net", "trafficmanager.net", "cloudapp.net", "blob.core.windows.net"]
 SUBZONES = ["dev", "stg"]
+AXFR_ENV = "dns--dns-zone-transfer"
 PORT_POOL = [8000, 8008, 8081, 8088, 8090, 8181, 8888, 9000, 9090, 9999, 7000, 18080, 3000, 5000, 4443, 8443]
 
 
@@ -157,8 +159,11 @@ def build_estate(idx, entries, cat, rng, args, domain, net, dns_port, taken_hidd
     vhosted = rng.sample(candidates, min(n_vhost, len(candidates)))
     vhost_ids = {e["id"] for e in vhosted}
     direct = [e for e in entries if e["id"] not in vhost_ids]
-    octets = rng.sample(range(10, 251), len(direct) + 1)
+    octets = rng.sample(range(10, 251), len(direct) + 3)
     proxy_addr = "%s.%d" % (base, octets[-1])
+    # The name servers sit in the estate's range, on addresses no host uses,
+    # so a zone transfer asked of them stays inside the company's range.
+    ns_addrs = ["%s.%d" % (base, o) for o in octets[-3:-1]]
     labels = pick_names(rng, entries, domain)
     label_of = dict(zip((e["id"] for e in entries), labels))
 
@@ -173,8 +178,8 @@ def build_estate(idx, entries, cat, rng, args, domain, net, dns_port, taken_hidd
     add(apex, "SOA %s hostmaster.%s %d 3600 600 86400 60" % (ns, apex, 2026103100 + idx))
     add(apex, "NS " + ns)
     add(apex, "NS ns2." + apex)
-    add(ns, "A 127.0.0.1")
-    add("ns2." + apex, "A 127.0.0.1")
+    add(ns, "A " + ns_addrs[0])
+    add("ns2." + apex, "A " + ns_addrs[1])
     add(apex, "A " + proxy_addr)
     add("www." + apex, "A " + proxy_addr)
     add(apex, 'TXT "v=spf1 -all"')
@@ -233,12 +238,15 @@ def build_estate(idx, entries, cat, rng, args, domain, net, dns_port, taken_hidd
                       "summary": "reverse proxy; routes the other names by Host and answers 404 for any other",
                       "ports": [{"port": 80, "protocol": "http", "primary": True}], "aliases": [apex.rstrip(".")]})
     conf = proxy_conf(proxy_addr, [(h, e, haddr) for h, e, haddr in vhost_routes(key_hosts, plan_envs, vhosted)])
-    zone_doc = {"axfr": False, "zones": {apex: zs}}
+    # The name servers refuse a transfer unless the estate planted a BIND that allows one.
+    axfr = any(e["id"] == AXFR_ENV for e in entries)
+    zone_doc = {"axfr": axfr, "zones": {apex: zs}}
     ptr_origin = "%s.in-addr.arpa." % ".".join(reversed(base.split(".")))
     if ptr:
         zone_doc["ptr"] = {ptr_origin: dict(ptr, **{"@": [
             "SOA %s hostmaster.%s %d 3600 600 86400 60" % (ns, apex, 2026103100 + idx), "NS " + ns]})}
     est = {"index": idx, "domain": domain, "net": str(net), "dns": "127.0.0.1:%d" % dns_port,
+           "ns": [{"host": "ns1." + domain, "address": ns_addrs[0]}, {"host": "ns2." + domain, "address": ns_addrs[1]}],
            "wildcard": wildcard, "hosts": key_hosts}
     return est, zone_doc, plan_envs, proxy, conf
 
@@ -319,7 +327,7 @@ def main(argv=None):
         zname = "zone-%d.json" % i
         with open(os.path.join(out, zname), "w") as f:
             json.dump(zdoc, f, indent=1)
-        dns.append({"estate": i, "zone": zname, "listen": e["dns"]})
+        dns.append({"estate": i, "zone": zname, "listen": e["dns"], "ns": [n["address"] for n in e["ns"]]})
 
     by_id = {e["id"]: e for e in cat["entries"]}
     for p in plan_envs:
