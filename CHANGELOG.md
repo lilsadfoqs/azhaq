@@ -5,6 +5,9 @@
 ### Changed
 
 - Every failure now exits 3: a source that failed while others answered for the same domain (`partial`), a fan-out failure and a degraded `subs` run no longer exit 0. The summary still lists what failed and why. `-fail-on-errors` is accepted and is the default, and no flag turns a failure back into exit 0. Ports nmap did not name a web service that give no page are counted in a note, not listed as failures.
+- `subs` without `-live` no longer prints the names only subdomain.center guessed: they are held back and counted as `guesses held back`, and `-guesses` prints them (marked `unverified` in `-json`). `-live` looks them up as before; `-guesses` with `-live` is a usage error.
+- `subs -live` checks the first sample of subdomain.center's guesses in full at any `-dns-rate`, as `subfinder | dnsx` does with the one answer subfinder takes; a guess costs one query. Further samples are taken while the last found a new name that resolves, up to 12, if they fit a 20 s budget that starts after the first. `-guess-samples N` takes up to N samples with no time budget. The row says why sampling stopped (`sampling_stopped`), and a note says how many samples were left untaken and names the flag.
+- The `subs` coverage note says first that it is what the independent sources know, not every name that exists, prints no percentage, and counts the names outside the pool apart. The JSON `coverage.share` is unchanged.
 
 ### Fixed
 
@@ -14,6 +17,10 @@
 - A route that streams events for ever (`text/event-stream`, `multipart/x-mixed-replace`) is answered with its status, headers and the first 64 KiB or 2 seconds of its body, not held until the timeout.
 - `ports` (and any run that scans a range) gave its Port rows `scope: fanout`, so `query -scope target` and the MCP `azhaq_query` listed none of them; a range seed now makes its own entity the target.
 - `export -format graphml` named a URL the run's scope had refused (a link to another port); it now leaves those out, as the other formats do.
+- `urls` drops fuzzing placeholders (`/FUZZ`, `/FUZZ/FUZ2Z`, `/{payload}/…`) and pasted request lines (`/HTTP/1.1`) as junk, counted by reason; `-raw` keeps them. Crawl and script extraction share the rule.
+- `subs` no longer retries crt.sh's JSON API once every other source has answered with names and crt.sh alone is left, as subfinder asks it once; the retries still run while others are running or none has given names.
+- A generated name (a guess, `-w`, `-permute`) that answers NOERROR with no address and no CNAME is no longer confirmed at a second resolver (2 queries instead of 3), and a zone whose first wildcard probe answers NXDOMAIN gets one probe instead of two.
+- The install notes say `install.sh` is `scripts/install.sh`, downloaded first or run through the pipe.
 
 ## v0.12.1
 
