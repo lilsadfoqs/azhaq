@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Chrome no longer tries to connect outside the scope: its sign-in, update, search, Google API and safe browsing lookups are switched off at launch (service addresses pointed at a closed loopback port, a new profile with sign-in, safe browsing, password leak checks and suggestions off), and the password leak check on a sign-in is gone. The guard still refuses any attempt, and the summary note appears only if one was made (an existing `-chrome-profile` can enable a service).
+- Chrome starts where the system gives it no sandbox (containers, AppArmor on Ubuntu 24+, no user namespaces): azhaq starts it once more without the sandbox and the summary says so, as gowitness does. `-chrome-require-sandbox` refuses that second start. `AZHAQ_CHROME_NO_SANDBOX=1` is no longer needed.
+- `dirs` and `@common` no longer send `render?url=https://www.google.com`, `render/https://www.google.com` and `dns-query?name=google.com&type=A`, which asked a target to fetch or resolve an outside address (the built-in list is 4,747 words).
+- A route that streams events for ever (`text/event-stream`, `multipart/x-mixed-replace`) is answered with its status, headers and the first 64 KiB or 2 seconds of its body, not held until the timeout.
+
 ## v0.12.1
 
 ### Changed
