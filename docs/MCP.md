@@ -7,7 +7,7 @@
 The **scope**, the **request budget**, the **pace** and the **resolvers and sources** are fixed at start. No tool argument can widen or change them:
 
 - Targets outside the scope are skipped and listed in the summary.
-- Paths a `-deny-path` rule matches are never requested by any tool, and are listed as skipped. azhaq has no path rule of its own: every other GET found in scope is requested.
+- Paths a `-deny-path` rule matches are never requested by any tool, and are listed as skipped. azhaq has no path rule of its own: `azhaq_map` asks every GET it finds in scope, `/logout` and an API description's `GET /createdb` included, and the `-deny-path` rules set when the server starts are the only thing that keeps a URL out. A client cannot add one per call.
 - A subdomain lookup for a domain outside the scope is refused, because the passive sources would learn what the assistant asks about.
 - Once the budget is spent, every tool that sends requests refuses.
 - `-resolvers`, `-sources`, `-skip` and `-no-takeover` are held for every call that takes them, as `run` takes them. Without them a map asks the default public resolvers and the passive third-party sources (the plan names `azhaq-rdap`, `azhaq-search`, `azhaq-subdomains` and `azhaq-urls`), whatever `-allow` says. With `-sources none` it asks no third party at all, and `azhaq_subdomains`, which is one, is refused. `azhaq_scope` and `azhaq_status` show them as `run_options`.
@@ -74,6 +74,7 @@ Any client that takes a JSON configuration:
 **`azhaq_map`**
 
 - Returns the summary and the highlights: auth-gated routes, forbidden routes and API routes.
+- Asks every GET it finds in scope, a GET operation of an API description and a GET form included. A GET can change data or end a session; only the server's `-deny-path` rules keep a URL out.
 - `browser` loads pages in Chrome too.
 - `graphql` asks each GraphQL endpoint for its schema. That is an introspection POST, and it is counted. Where introspection is off, the schema is recovered from validation errors.
 
@@ -125,7 +126,7 @@ Formats: OpenAPI, GraphQL introspection JSON or SDL, Burp scope, nuclei targets,
 
 These are left out on purpose. Run them from the command line, where the person running them sees the flags.
 
-- Anything that sends a write or a body the client chooses: `roles -replay-writes`, `-browser-writes` and `fuzz`.
+- Anything that sends a write (a method other than GET, HEAD or OPTIONS) or a body the client chooses: `roles -replay-writes`, `-browser-writes` and `fuzz`.
 - Path and parameter wordlists: `-dirs` and `-params`, which can also send bodies with `-params-method`.
 - DNS brute force and permutations.
 - UDP scans.

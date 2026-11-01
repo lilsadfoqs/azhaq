@@ -1,6 +1,6 @@
 # azhaq plan
 
-Show what a run would do and send, without sending anything.
+Show what a run would do and the kinds of request it would send, without sending anything.
 
 ## Synopsis
 
@@ -27,7 +27,7 @@ azhaq plan -scope bugcrowd -program tesla -dirs words.txt
 1. The collectors that would run on each seed.
 2. The seeds left out of scope.
 3. The active techniques you asked for.
-4. What is sent to the targets: the GET requests for pages, and besides them each port scan, UDP probe, POST body, sign-in and Chrome load (`-screenshots`, `-browser`) that is planned. Every flag of `run` that asks for a collector is named here or under the active techniques.
+4. The kinds of request sent to the targets: the GET requests for pages, and besides them each port scan, UDP probe, POST body, sign-in and Chrome load (`-screenshots`, `-browser`) that is planned. Every flag of `run` that asks for a collector is named here or under the active techniques. It does not list the URLs a crawl will find (`/createdb` is known only after an API description is read): the ledger lists those, as they are sent.
 5. The third-party source queries, counted.
 6. A bound on the requests to the targets: what each web service costs, and the cap.
 
@@ -121,7 +121,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 | `-paths` | string |  | extra path wordlist (one path per line) |
 | `-no-paths` | bool |  | do not ask each web service for the 51 built-in paths (robots.txt, sitemaps, API descriptions, .git/HEAD, backup, admin, …): some programs count that as scanning |
 | `-path-climb` | bool |  | also list and ask the parent directories of each link a page names (/a/b/c: /a/b/ and /a/) |
-| `-fill-forms` | bool |  | ask the action of each GET form with neutral values in its fields (a search box gets a word): one GET request per form; a form that posts is not sent unless -submit-forms; crawl does this by default (-no-form-fill turns it off) |
+| `-fill-forms` | bool |  | ask the action of each GET form with neutral values in its fields (a search box gets a word): one GET request per form, even one that deletes or logs out (-deny-path keeps its action out); a form that posts is not sent unless -submit-forms; crawl does this by default (-no-form-fill turns it off) |
 | `-per-template` | int |  | URLs of one template (/product?id={n}) to request; the rest are listed (default: all) |
 | `-web-ports` | string |  | ports to probe on each hostname or address of the list, comma-separated (default: 443, falling back to 80; a target given with no port and nothing there is a note, not a failure) |
 | `-web-scheme` | string |  | try a name or an address over this scheme only, http or https (default: https, then http) |

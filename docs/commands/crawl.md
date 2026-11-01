@@ -30,7 +30,7 @@ azhaq crawl -u https://app.example.com/ -json -rejected
 ## What it does
 
 1. Starts from the URLs you give and follows links to the depth `-d`: 3 link levels below the start URL by default, as katana does.
-2. Reads forms, scripts and API descriptions for more URLs and routes. Library scripts are not read for routes.
+2. Reads forms, scripts and API descriptions for more URLs and routes. Library scripts are not read for routes. Every URL they give is requested, a GET operation of an API description (one that needs no path parameter and no required query parameter) and a GET form included, whatever the name: an endpoint that resets data or logs out is asked like any other. `-deny-path` keeps one out.
 3. Asks only what a crawler does. The built-in path checks of `run` are off unless you add `-sweep`. `-kf all`, `-kf robotstxt` or `-kf sitemapxml` asks each web service only for its `robots.txt` and sitemaps and reads every entry.
 4. Tells the page every unknown path gets from a real page with one request for a path that does not exist at the root and in each top-level directory (`/api/`, `/rest/`), not in every directory: `/rest/user/` is compared with the answer of `/rest/`. A directory below the first level whose own answer to an unknown path differs from the one above it then has its generic answers listed as `visited` where they would be `catchall`. `-sweep` asks every directory, as `run` does (up to 24 per origin). katana asks none.
 5. Lists the routes it observed: every page it asked and every URL a page links, each distinct URL once.
@@ -100,7 +100,7 @@ A crawl's rows are not all URLs that were requested, so the number of rows is no
 | --- | --- |
 | `requested` | URLs the crawl sent a request for, whatever the answer. These are katana's records, scripts and stylesheets included. |
 | `answered` | Of `requested`, those that got an answer, a 404 too. The others failed with no answer. |
-| `not requested` | URLs found in a page, a script or an API description and not asked: a hint, a URL past a limit, or a URL a `-deny-path` rule kept out. |
+| `not requested` | URLs found in a page, a script or an API description and not asked: a hint, a URL past a limit, or a URL a `-deny-path` rule kept out. A GET operation of a description that needs no path parameter and no required query parameter is not among them unless a rule kept it out: it is requested. |
 | `templates` | Routes with a placeholder, `/api/Cards/{id}`: never requested as written. |
 | `observed routes`, `hint routes`, `named strings` | The same rows by class: see [Output](#output). They add up to every URL row. |
 | `assets` | Images, fonts, media, source maps and build manifests, requested or not. Each is also one of the three above. |
@@ -125,7 +125,7 @@ These filters limit what is printed, not what is crawled.
 ### Forms
 
 - Every form is a `forms` entry of its page: `method`, `action`, `enctype`, `fields`, `files`.
-- A GET form is asked once with neutral values in its fields. Hidden fields, ticked boxes and selects get the page's own values. Text gets `azhaq`, an email gets `azhaq@example.org`, and a number gets `1`. `-no-form-fill` does not fill GET forms.
+- A GET form is asked once with neutral values in its fields, by default. A GET form can delete or log out: it is asked like any link, and `-deny-path` keeps its action out. Hidden fields, ticked boxes and selects get the page's own values. Text gets `azhaq`, an email gets `azhaq@example.org`, and a number gets `1`. `-no-form-fill` does not fill GET forms.
 - A POST form is sent only with `-submit-forms`, with the same values, urlencoded. It changes data on the target.
 - Each submission is one request of the budget and the pace, and is in the ledger. It is held to `-allow`, `-deny` and the crawl's scope. The same action with the same values is sent once.
 - A POST form is not sent when it uploads a file (`multipart`), has nothing to send, posts outside the crawl's scope, or its address matches a `-deny-path` rule. Its name decides nothing.
@@ -204,7 +204,7 @@ These filters limit what is printed, not what is crawled.
 | `-d` | int | `-1` | katana's -d: link levels below the start URL to visit (3 by default); -depth N is -d N-1 |
 | `-paths` | string |  | extra path wordlist (one path per line) |
 | `-sweep` | bool |  | also ask each web service for the 51 built-in paths (robots.txt, sitemaps, API descriptions, .git/HEAD, admin, …) and for the source map next to each script, as run does; crawl asks only what a crawler does |
-| `-no-form-fill` | bool |  | do not ask the action of GET forms with neutral values |
+| `-no-form-fill` | bool |  | do not ask the action of GET forms with neutral values (by default each is asked, even one that deletes or logs out; -deny-path keeps its action out) |
 | `-per-template` | int |  | URLs of one template (/product?id={n}) to request; the rest are listed (default: all) |
 | `-no-follow` | bool |  | do not follow redirects: each URL is asked once and its redirect recorded with the Location (httpx's default) |
 | `-no-map-guess` | bool |  | do not ask for main.js.map next to a script that names no source map (a map a script or a header names is still read) |

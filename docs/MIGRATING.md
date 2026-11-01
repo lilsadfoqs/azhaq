@@ -260,7 +260,7 @@ Behaviour, fields and edge cases: [`azhaq crawl`](commands/crawl.md).
 <!-- azhaq: crawl -->
 
 - **Hosts followed.** Without `-fs`, a crawl of a name follows its registrable domain and subdomains, as `rdn` does. A crawl of an address stays on that address and port. Redirects are followed inside the site, not to any host.
-- **Every URL found is asked.** Like katana and Burp's crawler, `crawl` requests every GET URL it finds in scope, `/logout` and `/delete?id=1` included: azhaq cannot know what a GET does on the server, so no name keeps a URL out. Writes go only with their flags. `-deny-path REGEX` keeps paths out of every request. With a session, a request that ends it is noticed and the session is renewed or the run stops: [Sessions](CONCEPTS.md#sessions).
+- **Every URL found is asked.** Like katana and Burp's crawler, `crawl` requests every GET URL it finds in scope, `/logout` and `/delete?id=1` included: azhaq cannot know what a GET does on the server, so no name keeps a URL out. A write (a method other than GET, HEAD or OPTIONS) goes only with its flag, and a GET operation named in an API description is requested too. `-deny-path REGEX` is the only thing that keeps paths out of every request. With a session, a request that ends it is noticed and the session is renewed or the run stops: [Sessions](CONCEPTS.md#sessions).
 - A URL with a scanner's payload in it never enters the map.
 - Chrome sends only GET, HEAD and OPTIONS unless you give `-browser-writes`.
 - A page with many query variants, such as `/item?id=N`, is asked for every URL, as katana does. `-per-template N` limits it (the rest are listed) and `-iqp` asks one for each path.

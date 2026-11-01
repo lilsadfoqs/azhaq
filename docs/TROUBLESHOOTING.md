@@ -35,7 +35,7 @@ Entries are grouped by what you were doing:
 
 ### Why was `/logout` (or `/exec`, `/createdb`) requested?
 
-**Why:** azhaq sends a GET to every URL it finds in scope. It cannot know what a GET does on the server: a name says nothing reliable, and the same name is a read-only page on one app and a state change on another. So no name keeps a URL out. Writes (POST, PUT, PATCH, DELETE) are different: they are sent only with their flags.
+**Why:** azhaq sends a GET to every URL it finds in scope. It cannot know what a GET does on the server: a name says nothing reliable, and the same name is a read-only page on one app and a state change on another. So no name keeps a URL out, and a GET that deletes or logs out is asked. Writes are different: a write is a request with a method other than GET, HEAD or OPTIONS (POST, PUT, PATCH, DELETE), and it is sent only with its flag. That is a promise about the method, not that nothing changes: see [what azhaq sends](CONCEPTS.md#what-azhaq-sends-and-what-it-cannot-know).
 
 **Fix:** Say which paths must not be requested, with your own rule.
 
@@ -48,7 +48,7 @@ Entries are grouped by what you were doing:
 **Why:** A request ended the session of a signed-in run: a logout link, or an expiry. azhaq noticed because its check page, the one that answers differently with the session and without it, no longer answered as it did.
 
 - With `-login`, the run signs in again, asks again the pages requested since the last good check, and says so in a note: `the session ended after /logout was requested; signed in again; 37 requests asked again`.
-- With `-cookie` or `-header` it cannot sign in again. It refuses every later request, lists `azhaq-session` as a failure and exits 3, so nothing after the loss is mistaken for an anonymous answer.
+- With `-cookie` or `-header` it cannot sign in again. It refuses every later request, lists `azhaq-session` as a failure and exits 3, so nothing after the check noticed the loss is mistaken for an anonymous answer. The check runs every 50 requests, and at once on a 401, a cleared session cookie or a redirect to the sign-in page.
 
 **Fix:** Give a fresh session and `azhaq resume -db W`, or keep the URL that ends it out with `-deny-path`. [Sessions](CONCEPTS.md#sessions) has the rules.
 

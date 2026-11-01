@@ -127,7 +127,7 @@ Some work failed and did not get its answer: a source that failed, a target that
 - `retryable` is true for timeouts, dropped connections, 429 and 5xx.
 - `source` names a third-party source, such as `crtsh` or `wayback`.
 - `targets` names up to 100. `azhaq query -db FILE -failed` lists every failed target: the list to retry.
-- `azhaq-session` is a signed-in run whose session ended and could not be renewed (`the session ended: after /logout was requested …`). Every request after it was refused, so nothing after it was answered as an anonymous visitor. The exit code is 3: see [Sessions](CONCEPTS.md#sessions).
+- `azhaq-session` is a signed-in run whose session ended and could not be renewed (`the session ended: after /logout was requested …`). Every request after the check noticed the loss was refused, so nothing after that was answered as an anonymous visitor. The exit code is 3: see [Sessions](CONCEPTS.md#sessions).
 - `partial` and `fanout` failures make the exit code 3 like any other: see [Failures](CONCEPTS.md#failures-fan-out-partial-and-degraded).
 
 ### skipped

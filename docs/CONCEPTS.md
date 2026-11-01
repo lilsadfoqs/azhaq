@@ -153,7 +153,7 @@ A run with a session (`-login`, `-cookie`, `-header` carrying a token) sends it 
 - **The check.** At the start the run asks a page with its session and without it (the page `-login` ended on, else a target) and keeps one whose answers differ: a 200 against a redirect to the sign-in page, say. If none differs, the summary says so, and the run looks on: a JSON answer of 200 that a visitor without the session is refused (such as `/api/me`) becomes the check as soon as the run gets one (up to 6 are measured). With none, a 401 or a redirect to the sign-in page is tested by signing in again (`-login`) and asking that URL once more: if it now answers differently, the session had ended, and it becomes the check; if alike, it was the page's own answer. At most 3 such sign-ins; with `-cookie` or `-header` there is no test, and a lost session is noticed only when a response clears the session cookie.
 - **When it is asked.** Every 50 requests, once more at the end, and right after an answer that looks like the end of the session: a 401, a redirect to the sign-in page the run used, or a response that expires a cookie the run sends (that response names the URL that ended it).
 - **A session that failed its check, with `-login` (or a `-role-login`).** The run signs in again, asks again the pages requested since the last good check (counted and entered in the ledger as any request) and says so in a note: `the session ended after /logout was requested; signed in again; 37 requests asked again`. The URL that ended the session is not asked again: when it is not named (a response cleared no cookie), a session that ends again right after signing in sends the requests since the sign-in once more, one at a time with a check after each, finds the one that ends it, and the note names it (`/logout ended the new session when asked again and is not asked again`). A session that ends 5 times stops the run as below.
-- **A session that failed its check, given with `-cookie` or `-header`.** The run cannot sign in again. It refuses every later request with `the session ended: …`, lists the failure, exits 3 and never goes on as an anonymous visitor. Give a fresh session and `azhaq resume`.
+- **A session that failed its check, given with `-cookie` or `-header`.** The run cannot sign in again. Once the check notices the loss, it refuses every later request with `the session ended: …`, lists the failure, exits 3 and never goes on as an anonymous visitor. Give a fresh session and `azhaq resume`.
 - **With workers (`-serve`).** The same holds. A worker that sees a 401, a redirect to the sign-in page or a cleared session cookie tells the run, and the run makes the check; the requests of every worker count toward the 50. After a new sign-in the workers take the new headers with their next task, and the pages they asked since the last good check are asked again. With a session that cannot be renewed the run lends no more work and ends with the failure above.
 - **Sweeps and page tasks.** The `-dirs` and `-params` tasks, and the `-browser` page loads and `-screenshots`, that ran since the last good check run again after the new sign-in: what they reported is dropped and they ask again with the new session. The note counts the requests they sent in the same stretch. A task that ran again and met a session that ended once more is not run a third time; `azhaq resume` runs it.
 - **`roles`.** Each signed-in role's session has its own check (a page only a live session reads), every `-canary-every` requests; see [roles](commands/roles.md). A role's logout is requested like any other URL, and the check says when it mattered.
@@ -349,7 +349,7 @@ With `-replay-writes`, three more come before them all:
 
 | What | Method | When |
 | --- | --- | --- |
-| Pages, scripts, API descriptions (at the root and under each API base), archived URL templates | GET | Every run, inside the scope. |
+| Pages, scripts, API descriptions (at the root and under each API base), archived URL templates, the GET operations a description names that need no path or required query parameter, GET forms | GET | Every run, inside the scope. A GET can change data on the target: only `-deny-path` keeps a URL out. |
 | 51 built-in path checks per web service: `robots.txt`, sitemaps, API descriptions, `.git/HEAD`, `backup`, `admin`, … | GET | Every run. `-no-paths` turns them off. |
 | Path and parameter guesses | GET. `params -X` sends the names in a POST, JSON or XML body. | `-dirs`, `-params`, held to the targets given or to `-allow` and `-scope`. |
 | GraphQL introspection | POST | `-graphql`, held to the targets given or to `-allow` and `-scope`. |
@@ -377,13 +377,18 @@ With `-replay-writes`, three more come before them all:
 
 ### What azhaq sends, and what it cannot know
 
-azhaq sends a GET to every URL it finds in scope. It cannot know what a GET does on the server: a name says nothing reliable (`/createdb`, `/logout`, `/rest/saveLoginIp` are GETs that change state on some apps and read-only pages on others), so no name keeps a URL out. What decides is known:
+azhaq sends a GET to every URL it finds in scope. It cannot know what a GET does on the server: a name says nothing reliable (`/createdb`, `/logout`, `/rest/saveLoginIp` are GETs that change state on some apps and read-only pages on others), so no name keeps a URL out. What azhaq promises is about the method, and nothing more:
 
-- **The method.** Writes (POST, PUT, PATCH, DELETE, a form submitted, a page's own writes in Chrome, a role's write replay, a parameter search with a body) are sent only with their flag: `-submit-forms`, `-browser-writes`, `roles -replay-writes`, `-params-writes`, `-graphql` for the introspection POST. Without it they are mapped, not sent.
-- **Your rule.** `-deny-path REGEX` keeps a path out of every request, Chrome's included.
+- **Without a flag, every request azhaq sends to a target on purpose is a GET**, besides what the table above lists: HEAD and TCP or UDP probes of ports, Chrome's HEAD and OPTIONS, and a sign-in.
+- **"A write" in these pages means a request with a method other than GET, HEAD or OPTIONS.** Writes (POST, PUT, PATCH, DELETE, a form submitted, a page's own writes in Chrome, a role's write replay, a parameter search with a body) are sent only with their flag: `-submit-forms`, `-browser-writes`, `roles -replay-writes`, `-params-writes`, `-graphql` for the introspection POST. Without it they are mapped, not sent. That says what the method is, not that nothing changes.
+- **A GET can change data or end a session, and azhaq requests it.** It does so for the URLs in links, in forms (a GET form is filled with neutral values and asked: `crawl` does it by default, `run` with `-fill-forms`), in scripts and in API descriptions. A GET operation a description names is requested like any other URL, an endpoint that resets the database or logs out included: VAmPI's `GET /createdb` drops and recreates its database, and a default crawl of its `/openapi.json` sends it.
+
+What keeps a URL out is known:
+
+- **Your rule.** `-deny-path REGEX` keeps a path out of every request, Chrome's included. It is the only thing that does: if a URL must not be requested, say so with it.
 - **A measurement.** A signed-in run checks that its session lives: see [Sessions](#sessions).
 
-`azhaq plan` lists what a run would send, and the [ledger](#the-ledger-and-its-seal) records what was sent. If a URL must not be requested, say so with `-deny-path`.
+`azhaq plan` lists the kinds of request, the counts and the seeds, not the URLs a crawl will find: `/createdb` is known only after the description is read. The [ledger](#the-ledger-and-its-seal) lists every request that was sent.
 
 ### What is held back
 

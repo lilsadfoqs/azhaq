@@ -30,7 +30,7 @@ azhaq run -url https://app.example.com/ -browser -login https://app.example.com/
 2. Resolves names, probes web services, crawls pages and scripts, and reads API descriptions.
 3. Follows what it finds in waves, as far as `-depth` allows. `-permute` still varies the names `-dns-brute` found, whatever `-depth` is: DNS answered them, and a variation asks DNS only. A name found past `-depth` and not resolved is not varied, and a note says how many.
 4. Asks each web service for the built-in paths unless `-no-paths` says not to ([Path checks](#path-checks-stop-at-their-answer)).
-5. Requests every GET URL it finds in scope. It cannot know what a GET does on the server, so no name keeps a URL out. Writes go only with their flags, and `-deny-path REGEX` keeps paths out (they get the coverage `skipped`).
+5. Requests every GET URL it finds in scope. It cannot know what a GET does on the server, so no name keeps a URL out. A GET can change data or end a session (`/createdb`, `/logout`), and azhaq asks it: every URL in a link, a script, an API description or a GET form is requested (a GET form is filled with neutral values with `-fill-forms`). A write, a request with a method other than GET, HEAD or OPTIONS, goes only with its flag. `-deny-path REGEX` is the only thing that keeps paths out (they get the coverage `skipped`). See [what azhaq sends](../CONCEPTS.md#what-azhaq-sends-and-what-it-cannot-know).
 6. Sends nothing to a host outside the scope, Chrome's requests included. `-passive` sends nothing to the targets at all. `-sources none` asks no third party at all: no subdomain source, archive, RDAP, RIPEstat or search engine. Only the resolvers and the targets get requests, and `azhaq plan` says so. `-urls-sources`, `-urls-archive` and `-asn` ask a third party, so with `-sources none` they are a usage error.
 7. Prints the ranked map when it ends and the summary on stderr.
 
@@ -227,6 +227,7 @@ A client route is a view that a single-page app's router draws.
 - A form whose action is empty or `#` submits to the page itself. Its `action` is the page's URL with its query.
 - `enctype` is a POST form's encoding: `application/x-www-form-urlencoded`, `multipart/form-data` or `text/plain`.
 - `files` are the fields that are file inputs.
+- A GET form is a request like a link: with `-fill-forms` its action is asked once with neutral values, and a form that deletes or logs out is asked too. `-deny-path` keeps its action out. A POST form is not sent without `-submit-forms`.
 
 ### found_in
 
@@ -319,7 +320,7 @@ Examples of what `notes` holds for a run:
 | `-paths` | string |  | extra path wordlist (one path per line) |
 | `-no-paths` | bool |  | do not ask each web service for the 51 built-in paths (robots.txt, sitemaps, API descriptions, .git/HEAD, backup, admin, …): some programs count that as scanning |
 | `-path-climb` | bool |  | also list and ask the parent directories of each link a page names (/a/b/c: /a/b/ and /a/) |
-| `-fill-forms` | bool |  | ask the action of each GET form with neutral values in its fields (a search box gets a word): one GET request per form; a form that posts is not sent unless -submit-forms; crawl does this by default (-no-form-fill turns it off) |
+| `-fill-forms` | bool |  | ask the action of each GET form with neutral values in its fields (a search box gets a word): one GET request per form, even one that deletes or logs out (-deny-path keeps its action out); a form that posts is not sent unless -submit-forms; crawl does this by default (-no-form-fill turns it off) |
 | `-per-template` | int |  | URLs of one template (/product?id={n}) to request; the rest are listed (default: all) |
 | `-web-ports` | string |  | ports to probe on each hostname or address of the list, comma-separated (default: 443, falling back to 80; a target given with no port and nothing there is a note, not a failure) |
 | `-web-scheme` | string |  | try a name or an address over this scheme only, http or https (default: https, then http) |

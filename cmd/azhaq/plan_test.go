@@ -122,14 +122,14 @@ func TestPlanChromeWrites(t *testing.T) {
 	}
 }
 
-// The sends of a plan are true of what it plans: GET requests only when
-// nothing else is sent, and a line for each port scan, UDP probe, POST body
-// and sign-in that is.
+// The sends of a plan are true of what it plans: GET requests first, never
+// said to be "only" (a GET can change data), and a line for each port scan,
+// UDP probe, POST body and sign-in that is planned.
 func TestPlanSendsNameWhatIsPlanned(t *testing.T) {
 	joined := func(args ...string) string {
 		return strings.Join(planJSON(t, append([]string{"-url", "http://127.0.0.1:3001/"}, args...)...).Sends, "\n")
 	}
-	if s := joined(); !strings.HasPrefix(s, "GET requests only") {
+	if s := joined(); !strings.HasPrefix(s, "GET requests to the targets") || strings.Contains(strings.SplitN(s, "\n", 2)[0], "only") {
 		t.Errorf("a plain run: %s", s)
 	}
 	if s := joined(); strings.Contains(s, "deny-path") || strings.Contains(s, "look like") || !strings.Contains(s, "azhaq cannot know what a GET does on the server") {
@@ -144,9 +144,6 @@ func TestPlanSendsNameWhatIsPlanned(t *testing.T) {
 			t.Errorf("-ports top-100 lacks %q:\n%s", want, s)
 		}
 	}
-	if strings.HasPrefix(s, "GET requests only") {
-		t.Errorf("a port scan is not GET only:\n%s", s)
-	}
 	if s := joined("-ports", "22,80", "-port-detect", "none"); !strings.Contains(s, "to 2 ports") || !strings.Contains(s, "closed at once") || strings.Contains(s, "HEAD /") {
 		t.Errorf("-port-detect none:\n%s", s)
 	}
@@ -157,14 +154,14 @@ func TestPlanSendsNameWhatIsPlanned(t *testing.T) {
 		"-graphql":      {"-graphql"},
 		"-submit-forms": {"-submit-forms"},
 	} {
-		if s := joined(flag); !strings.Contains(s, "POST requests") || !strings.Contains(s, want[0]) || strings.HasPrefix(s, "GET requests only") {
+		if s := joined(flag); !strings.Contains(s, "POST requests") || !strings.Contains(s, want[0]) {
 			t.Errorf("%s:\n%s", flag, s)
 		}
 	}
 	if s := joined("-params", "small", "-params-method", "JSON", "-params-writes"); !strings.Contains(s, "JSON requests whose body holds the parameter names") {
 		t.Errorf("-params-method JSON:\n%s", s)
 	}
-	if s := joined("-params", "small"); !strings.HasPrefix(s, "GET requests only") {
+	if s := joined("-params", "small"); !strings.HasPrefix(s, "GET requests to the targets") {
 		t.Errorf("-params by GET:\n%s", s)
 	}
 	// A click is made whatever it says: no word keeps one back.
