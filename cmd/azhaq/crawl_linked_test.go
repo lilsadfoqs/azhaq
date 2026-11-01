@@ -9,10 +9,11 @@ import (
 	"testing"
 )
 
-// A page the crawl requested links two product pages. At -d 1 the crawl
-// does not request them, so the default list does not hold them: -hints
-// lists them, -json marks them linked, and the summary counts them apart.
-func TestCrawlListsOnlyWhatItRequested(t *testing.T) {
+// A page the crawl requested links two product pages. At -d 1 the crawl does
+// not request them, but the page links them, so the default list holds them
+// as katana's does: -json marks them linked, the summary counts them apart
+// and a note says how many listed URLs were never requested.
+func TestCrawlListsWhatPagesLink(t *testing.T) {
 	pages := map[string]string{
 		"/":        `<a href="/catalog">Catalog</a><a href="/about">About</a>`,
 		"/about":   `about`,
@@ -36,19 +37,16 @@ func TestCrawlListsOnlyWhatItRequested(t *testing.T) {
 	p17, p18 := srv.URL+"/catalog/product?productId=17", srv.URL+"/catalog/product?productId=18"
 
 	out, errOut := crawlOut(t, srv, "-d", "1", "-silent")
-	if strings.Contains(out, "productId=") || len(strings.Fields(out)) != 3 {
-		t.Errorf("the default list holds links that were never requested:\n%s", out)
+	if !strings.Contains(out, p17+"\n") || !strings.Contains(out, p18+"\n") || len(strings.Fields(out)) != 5 {
+		t.Errorf("the default list does not hold the links of a page it read:\n%s", out)
 	}
-	if !strings.Contains(errOut, "azhaq crawl: 2 URLs a page links were not requested") {
-		t.Errorf("-silent does not say what the list left out: %q", errOut)
+	if !strings.Contains(errOut, "azhaq crawl: 2 listed URLs are links or loads a page holds that the crawl did not request") {
+		t.Errorf("-silent does not say how many listed URLs were not requested: %q", errOut)
 	}
 	for _, args := range [][]string{{"-f", "url"}, {"-ot", "{{url}}"}, {"-jsonl"}} {
-		if out, _ := crawlOut(t, srv, append([]string{"-d", "1"}, args...)...); strings.Contains(out, "productId=") {
-			t.Errorf("%v lists a link that was never requested:\n%s", args, out)
+		if out, _ := crawlOut(t, srv, append([]string{"-d", "1"}, args...)...); !strings.Contains(out, "productId=17") {
+			t.Errorf("%v does not list a link of a page it read:\n%s", args, out)
 		}
-	}
-	if out, _ := crawlOut(t, srv, "-d", "1", "-hints"); !strings.Contains(out, p17+"\n") || !strings.Contains(out, p18+"\n") {
-		t.Errorf("-hints does not list the links:\n%s", out)
 	}
 	mu.Lock()
 	for u := range asked {
@@ -58,7 +56,7 @@ func TestCrawlListsOnlyWhatItRequested(t *testing.T) {
 	}
 	mu.Unlock()
 
-	out, errOut = crawlOut(t, srv, "-d", "1", "-json", "-hints")
+	out, errOut = crawlOut(t, srv, "-d", "1", "-json")
 	classes := map[string]string{}
 	for _, l := range strings.Split(strings.TrimSpace(out), "\n") {
 		var row struct{ URL, Class string }
@@ -69,19 +67,44 @@ func TestCrawlListsOnlyWhatItRequested(t *testing.T) {
 	if classes[p17] != "linked" || classes[p18] != "linked" || classes[srv.URL+"/catalog"] != "observed" {
 		t.Errorf("-json classes: %v", classes)
 	}
-	counts, _ := sumMap(t, errOut)["counts"].(map[string]any)
-	if counts["observed routes"] != float64(3) || counts["linked routes"] != float64(2) || counts["not requested"] != float64(2) {
+	sum := sumMap(t, errOut)
+	counts, _ := sum["counts"].(map[string]any)
+	if counts["observed routes"] != float64(3) || counts["linked routes"] != float64(2) || counts["not requested"] != float64(2) || counts["requested"] != float64(3) {
 		t.Errorf("counts: %v", counts)
 	}
-	out, errOut = crawlOut(t, srv, "-d", "1", "-json")
-	if strings.Contains(out, "productId=") {
-		t.Errorf("-json lists links that were never requested without -hints:\n%s", out)
+	if counts["hint"] != float64(2) || counts["visited"] != float64(3) || sum["results"] != float64(5) {
+		t.Errorf("the printed rows do not add up: %v, results %v", counts, sum["results"])
 	}
-	if !strings.Contains(errOut, "2 URLs a page links were not requested") {
-		t.Errorf("the -json summary does not say what the list left out: %s", errOut)
+	if !strings.Contains(errOut, "2 listed URLs are links or loads a page holds that the crawl did not request") {
+		t.Errorf("the -json summary does not say how many listed URLs were not requested: %s", errOut)
 	}
-	// At -d 2 the crawl requests them, and they are listed.
-	if out, _ := crawlOut(t, srv, "-d", "2", "-silent"); !strings.Contains(out, p17+"\n") {
+	// At -d 2 the crawl requests them: nothing is left to say.
+	out, errOut = crawlOut(t, srv, "-d", "2", "-silent")
+	if !strings.Contains(out, p17+"\n") {
 		t.Errorf("-d 2 does not list the requested pages:\n%s", out)
+	}
+	if strings.Contains(errOut, "were not requested") || strings.Contains(errOut, "did not request") {
+		t.Errorf("-d 2 requested every link, and says it did not: %q", errOut)
+	}
+}
+
+// A -deny-path rule keeps a link out of the requests, not out of the list:
+// the row is listed, linked, and the note counts it.
+func TestCrawlListsLinkOfDenyPath(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		if r.URL.Path == "/" {
+			_, _ = w.Write([]byte(`<a href="/logout">out</a><a href="/home">home</a>`))
+			return
+		}
+		_, _ = w.Write([]byte(`page`))
+	}))
+	defer srv.Close()
+	out, errOut := crawlOut(t, srv, "-deny-path", "^/logout", "-silent")
+	if !strings.Contains(out, srv.URL+"/logout\n") || !strings.Contains(out, srv.URL+"/home\n") {
+		t.Errorf("the list lacks the link a rule kept out of the requests:\n%s", out)
+	}
+	if !strings.Contains(errOut, "1 listed URLs are links or loads a page holds that the crawl did not request") {
+		t.Errorf("the note does not count it: %q", errOut)
 	}
 }
