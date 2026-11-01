@@ -270,7 +270,12 @@ func cmdCrawl(args []string) error {
 	rep.Results, rep.Counts = out.w.count(), counts
 	kinds.put(counts, len(rejected))
 	if !*hints && kinds.hints+kinds.named > 0 {
-		rep.Notes = append(rep.Notes, fmt.Sprintf("%d hints and %d named URLs were left out of the list (-hints lists them; -json marks each row's class)", kinds.hints, kinds.named))
+		note := fmt.Sprintf("%d hints and %d named URLs were left out of the list (-hints lists them; a larger -depth requests more of the named URLs; -json marks each row's class)", kinds.hints, kinds.named)
+		rep.Notes = append(rep.Notes, note)
+		if c.silent && !c.json {
+			// -silent prints the list and no summary: what it left out is said all the same.
+			fmt.Fprintln(os.Stderr, "azhaq crawl: "+note)
+		}
 	}
 	if otherMethod > 0 {
 		rep.Notes = append(rep.Notes, fmt.Sprintf("%d listed URLs are routes scripts call with a method other than GET, so a GET may answer 404 or 405%s (-json has methods; -ot '{{method}} {{url}}' prints them)", otherMethod, askedNote(otherAsked)))

@@ -84,8 +84,8 @@ A crawl never drops links without a word. When `-max-items`, `-max-requests`, `-
 
 ### What is listed
 
-- One URL per line: every page asked and every URL a page links, each distinct URL once. The routes only scripts and descriptions name are left out unless `-hints` is given.
-- A link or a script's string with its query is its own line: `/catalog?category=Gin`, `/item?id=7`.
+- One URL per line: every page asked and every URL a page links, each distinct URL once. The routes only scripts and descriptions name are left out unless `-hints` is given, and the summary says how many (with `-silent` too: one line on stderr, `N hints and M named URLs were left out of the list`, and in the `-json` summary's notes).
+- A link's URL with its query is its own line: `/item?id=7`. A route a script names, `/catalog?category=Gin` in an object on `/catalog`, is a line only when the crawl asked for it: at `-d 2` it is requested, so it is `observed`; at `-d 1` it is not requested, so it is `named` and `-hints` lists it. katana's `-jc -jsl` prints it at `-d 1`.
 - `-per-template N` limits how many URLs of one template (`/item?id={n}`) are asked, not how many are listed. `crawl` and `run` ask every one by default, as katana does, and neither caps the tasks a run starts unless `-max-items` says so. `-iqp` asks one URL for each path.
 - Every script and stylesheet a page loads or a script imports is listed, whether it was fetched or only found. This holds when it is in the crawl's scope. Examples are `/main.js`, `/styles.css` and a lazy `chunk-*.js`.
 - `-json` is the map's rows, observed ones, each with its `class`. The extension list does not cut it. Its script and stylesheet rows are there by default, and an image's with `-assets`.
