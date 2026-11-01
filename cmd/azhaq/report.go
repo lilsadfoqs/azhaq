@@ -14,6 +14,7 @@ import (
 	"github.com/lilsadfoqs/azhaq/internal/collectors/pathscol"
 	"github.com/lilsadfoqs/azhaq/internal/collectors/portcol"
 	"github.com/lilsadfoqs/azhaq/internal/collectors/subcol"
+	"github.com/lilsadfoqs/azhaq/internal/egress"
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"github.com/lilsadfoqs/azhaq/internal/takeover"
@@ -33,7 +34,8 @@ type report struct {
 	Stored      int              `json:"stored,omitempty"` // run: the map rows the database holds, before templates fold; the counts add up to it
 	Counts      map[string]int   `json:"counts,omitempty"`
 	Seconds     float64          `json:"seconds"`
-	Requests    int64            `json:"requests"` // sent to targets
+	Requests    int64            `json:"requests"`              // sent to targets
+	DNSQueries  int64            `json:"dns_queries,omitempty"` // sent to resolvers, retries and wildcard probes included; the ledger's dns lines
 	DB          string           `json:"db,omitempty"`
 	RunID       string           `json:"run_id,omitempty"`
 	Unreachable []string         `json:"unreachable,omitempty"`
@@ -70,6 +72,7 @@ func (r *report) settle() {
 		r.start = time.Now()
 	}
 	r.Seconds = float64(time.Since(r.start).Milliseconds()) / 1000
+	r.DNSQueries = egress.DNSQueries()
 	switch {
 	case r.Stopped != "":
 		r.Exit = exitLimit
@@ -145,6 +148,9 @@ func (r *report) print(w io.Writer) {
 	}
 	if r.Requests > 0 {
 		head = append(head, fmt.Sprintf("%d requests", r.Requests))
+	}
+	if r.DNSQueries > 0 {
+		head = append(head, fmt.Sprintf("%d DNS queries", r.DNSQueries))
 	}
 	head = append(head, fmt.Sprintf("%.1f s", r.Seconds))
 	if r.DB != "" {

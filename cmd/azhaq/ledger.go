@@ -192,7 +192,7 @@ func (r *runLedger) close(rep *report) {
 	}
 	c, _ := ledger.Verify(path)
 	seal := r.l.Last()
-	what, targets := r.recorded(path)
+	what, targets, dnsLines := r.recorded(path)
 	rep.Notes = append(rep.Notes, fmt.Sprintf("ledger: %s, sealed %s (azhaq ledger -verify %s -seal %s; the seal alone proves no line was later removed and the rest re-chained)", fmt.Sprintf(what, path), seal, path, seal))
 	if r.from > 0 {
 		rep.Notes = append(rep.Notes, fmt.Sprintf("ledger: %s holds %d lines in all, the lines of the runs before this one included", path, r.l.Count()))
@@ -202,6 +202,9 @@ func (r *runLedger) close(rep *report) {
 	}
 	if targets != int(rep.Requests) {
 		rep.Notes = append(rep.Notes, fmt.Sprintf("the summary counts %d requests to targets and the ledger lists %d lines to them (azhaq ledger -summary %s lists them by kind)", rep.Requests, targets, path))
+	}
+	if dnsLines >= 0 && dnsLines != int(egress.DNSQueries()) {
+		rep.Notes = append(rep.Notes, fmt.Sprintf("the summary counts %d DNS queries and the ledger lists %d lines to resolvers (azhaq ledger -summary %s lists them by kind)", egress.DNSQueries(), dnsLines, path))
 	}
 	if r.sealTo != "" {
 		if err := sendSeal(r.sealTo, path, seal, c.Entries); err != nil {
@@ -213,7 +216,7 @@ func (r *runLedger) close(rep *report) {
 // recorded says what this run's part of the ledger holds, by what its lines
 // were sent to, as a format taking the file's path, and how many of them
 // went to targets: the number the summary's requests is checked against.
-func (r *runLedger) recorded(path string) (what string, targets int) {
+func (r *runLedger) recorded(path string) (what string, targets, dnsLines int) {
 	var reqs, conns, sources, dns, own, all int
 	spent := map[string]*stageSpend{}
 	err := ledger.Read(path, func(e ledger.Entry) error {
@@ -247,7 +250,7 @@ func (r *runLedger) recorded(path string) (what string, targets int) {
 	})
 	r.stages = stagesLine(spent)
 	if err != nil {
-		return "recorded in %s, not counted (" + strings.ReplaceAll(err.Error(), "%", "%%") + ")", int(r.l.Count() - r.from)
+		return "recorded in %s, not counted (" + strings.ReplaceAll(err.Error(), "%", "%%") + ")", int(r.l.Count() - r.from), -1
 	}
 	targets = reqs + conns
 	var parts []string
@@ -264,10 +267,10 @@ func (r *runLedger) recorded(path string) (what string, targets int) {
 		parts = append(parts, nOf(own, "to an endpoint of your own", "to endpoints of your own"))
 	}
 	if all == 0 {
-		return "nothing recorded in %s: the run sent nothing", 0
+		return "nothing recorded in %s: the run sent nothing", 0, 0
 	}
 	what = fmt.Sprintf("%d recorded in %%s: %s", all, strings.ReplaceAll(strings.Join(parts, ", "), "%", "%%"))
-	return what, targets
+	return what, targets, dns
 }
 
 // sealRecord is the one JSON line -seal-to writes or posts.

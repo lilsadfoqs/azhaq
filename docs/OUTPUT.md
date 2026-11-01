@@ -101,7 +101,8 @@ Some work failed and did not get its answer: a source that failed, a target that
 | `results` | What the command printed on stdout: names, web services, map rows. |
 | `counts` | A breakdown of the results, per command. For `run` the counts are disjoint and cover every stored map row: see [run's counts](#run-counts). |
 | `stored` | `run` only: the map rows the database holds. The counts add up to it. `results` is smaller when templated URLs and dead or wildcard names fold into one row. |
-| `requests` | Requests sent to targets, port connects included. Requests to third-party sources are not counted. |
+| `requests` | Requests sent to targets, port connects included. DNS queries and requests to third-party sources are not in it: the queries are in `dns_queries`, and a source's requests are in `sources` (`subs`, `urls`) and in the ledger's `source` lines. |
+| `dns_queries` | Queries sent to resolvers: every question, retries and wildcard probes included, and the ones to the system resolver. It is the ledger's `DNS queries` class, with or without a ledger. Absent when none was sent. |
 | `db` | The database the results are in. Absent when it was temporary. |
 | `unreachable` | Targets you gave that never answered. |
 | `takeover` | Names another party may take over: `host`, `service`, `target` (the CNAME target), `evidence`, `strength`. See [takeover](#takeover). |

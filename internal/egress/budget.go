@@ -292,6 +292,11 @@ func (p *Policy) Spent() bool {
 // Sent is how many requests the run has sent to its targets.
 func (p *Policy) Sent() int64 { return p.sent.Load() }
 
+// DNSQueries is how many DNS queries the run has sent to resolvers, retries
+// and wildcard probes included: the lines of class dns in the ledger. They
+// are not requests to targets and are not in Sent.
+func (p *Policy) DNSQueries() int64 { return p.dnsq.Load() }
+
 // Total is how many requests the process has sent to its targets since it
 // started, over every Reset: a command that resets between its parts (roles
 // does) reads what it sent from the difference of two.
@@ -336,6 +341,7 @@ func Count(n int)                                        { Current().Count(n) }
 func Spent() bool                                        { return Current().Spent() }
 func Sent() int64                                        { return Current().Sent() }
 func Total() int64                                       { return Current().Total() }
+func DNSQueries() int64                                  { return Current().DNSQueries() }
 func Hold(n int)                                         { Current().Hold(n) }
 func Release(n int)                                      { Current().Release(n) }
 func Departed() int64                                    { return Current().Departed() }
