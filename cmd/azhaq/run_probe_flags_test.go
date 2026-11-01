@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/trannghiach/azhaq/internal/browser"
@@ -116,5 +117,36 @@ func TestRunProbeRefusesFlagsOfWhatItTurnsOff(t *testing.T) {
 	_, errOut, code := cli(t, "run", "-url", "http://127.0.0.1:1/", "-probe", "-known-files", "all", "-ledger", "off", "-db", "p.db")
 	if code != exitUsage || !strings.Contains(errOut, "-known-files") {
 		t.Errorf("-known-files: exit %d\n%s", code, errOut)
+	}
+}
+
+// Every request Chrome makes for a screenshot spends the run's budget: the
+// page's images stop at the cap, the run exits 4 with work left, and the
+// summary counts what the server saw.
+func TestRunScreenshotsHoldsMaxRequests(t *testing.T) {
+	if _, err := browser.Find(); err != nil {
+		t.Skip(err)
+	}
+	var hits atomic.Int64
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		if r.URL.Path == "/" {
+			w.Header().Set("Content-Type", "text/html")
+			fmt.Fprint(w, "<html><title>home</title><body>")
+			for i := 0; i < 60; i++ {
+				fmt.Fprintf(w, `<img src="/i/%d.png">`, i)
+			}
+			return
+		}
+		w.WriteHeader(404)
+	}))
+	defer srv.Close()
+	t.Chdir(t.TempDir())
+	_, rep, code := runContract(t, "run", "-url", srv.URL+"/", "-probe", "-no-paths", "-no-favicon", "-screenshots", "shots", "-max-requests", "20", "-db", "p.db", "-timeout", "60s")
+	if code != exitLimit {
+		t.Errorf("exit %d, want %d (notes %q)", code, exitLimit, rep.Notes)
+	}
+	if got := hits.Load(); got > 20 || rep.Requests != got {
+		t.Errorf("the server saw %d requests, the summary says %d, the cap is 20", got, rep.Requests)
 	}
 }

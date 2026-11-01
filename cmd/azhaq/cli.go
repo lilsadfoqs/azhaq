@@ -406,6 +406,9 @@ func newFlags(name string) *flag.FlagSet {
 // mistake is a usage error. Flags may come after the other arguments
 // (azhaq show URL -json); everything after -- is left as given.
 func parse(fs *flag.FlagSet, args []string) error {
+	if err := flagEatsFlag(fs, args); err != nil {
+		return err
+	}
 	var pos []string
 	for {
 		if err := fs.Parse(args); err != nil {
@@ -431,6 +434,49 @@ func parse(fs *flag.FlagSet, args []string) error {
 		args = rest[1:]
 	}
 	return fs.Parse(append([]string{"--"}, pos...))
+}
+
+// flagEatsFlag is a usage error for a flag that takes a value and is followed
+// by another flag of the command: `-screenshots -max-requests 50` would take
+// "-max-requests" for the directory, and the cap would never be set. A value
+// that starts with a dash is written -flag=-value.
+func flagEatsFlag(fs *flag.FlagSet, args []string) error {
+	for i := 0; i+1 < len(args); i++ {
+		a := args[i]
+		if a == "--" {
+			return nil
+		}
+		name, ok := flagToken(a)
+		if !ok || strings.Contains(a, "=") {
+			continue
+		}
+		f := fs.Lookup(name)
+		if f == nil {
+			continue
+		}
+		if b, ok := f.Value.(interface{ IsBoolFlag() bool }); ok && b.IsBoolFlag() {
+			continue
+		}
+		next := args[i+1]
+		if n, ok := flagToken(next); ok && (fs.Lookup(n) != nil || n == "h" || n == "help") {
+			return usageErr{fmt.Errorf("-%s needs a value and the next argument is the flag %s: give it a value, or write -%s=VALUE if the value starts with a dash", name, next, name)}
+		}
+		i++ // its value
+	}
+	return nil
+}
+
+// flagToken is the name in an argument that reads as a flag (-name, --name,
+// -name=value), and whether it does.
+func flagToken(a string) (string, bool) {
+	if len(a) < 2 || a[0] != '-' {
+		return "", false
+	}
+	n, _, _ := strings.Cut(strings.TrimPrefix(strings.TrimPrefix(a, "-"), "-"), "=")
+	if n == "" || n[0] == '-' || n[0] >= '0' && n[0] <= '9' {
+		return "", false
+	}
+	return n, true
 }
 
 // flagsOf returns a command's flag set without running it.
