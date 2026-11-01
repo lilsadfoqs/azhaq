@@ -14,6 +14,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/lilsadfoqs/azhaq/internal/fetch"
 )
 
 // harEntry is a HAR entry sent at a time, with headers as name, value pairs.
@@ -613,5 +615,18 @@ func TestWriteProvedInItsField(t *testing.T) {
 	}
 	if r := rows[2]; r.Verdict != verdictWriteNoChange || !strings.Contains(r.OwnerBy, "already held what the write sets") {
 		t.Errorf("a write of what the object holds: %q %q", r.Verdict, r.OwnerBy)
+	}
+}
+
+// A page of a history that gets no answer is recorded, not skipped in silence.
+func TestReadHistoryURLsNoAnswer(t *testing.T) {
+	fetch.Reset()
+	dead := deadAddr(t)
+	u := "http://" + dead + "/api/items/7"
+	failed := askFailures{}
+	got, raw := map[string]answer{}, map[string]string{}
+	n, err := readHistoryURLs(role{name: "bob", session: http.Header{}}, []string{u}, got, raw, newRunSeen(), map[string]bool{"127.0.0.1": true}, 0, 10, failed)
+	if err != nil || n != 1 || len(got) != 0 || !strings.Contains(failed[u], "refused") {
+		t.Errorf("sent %d err %v got %v failed %v", n, err, got, failed)
 	}
 }

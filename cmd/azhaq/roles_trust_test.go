@@ -163,16 +163,35 @@ func TestAskControls(t *testing.T) {
 	}
 }
 
-// A control request that fails is not dropped: the row says its control
-// could not be asked and why, the summary counts it, and the run exits 3.
-func TestAskControlsFailedRequest(t *testing.T) {
-	fetch.Reset()
+// A -role-cmd that fails when the replay asks it for a new token leaves
+// the replay on the token the run started with: a note, and exit 3.
+func TestRolesRoleCmdFailsAtReplay(t *testing.T) {
+	alice, bob := jwt(`{"sub":"alice"}`), jwt(`{"sub":"bob"}`)
+	site := objectApp(t, map[string]string{alice: "alice", bob: "bob"})
+	flaky := filepath.Join(t.TempDir(), "n")
+	cmd := fmt.Sprintf(`n=$(cat %s 2>/dev/null || echo 0); n=$((n+1)); echo $n > %s; [ $n -gt 1 ] && exit 1; echo "Authorization: Bearer %s"`, flaky, flaky, alice)
+	_, _, sum, err := rolesJSON(t, site.URL, "-role", "anon", "-role-cmd", "alice="+cmd, "-role", "bob=Authorization: Bearer "+bob, "--", "-url", site.URL+"/")
+	if exitCode(err) != exitPartial || !strings.Contains(strings.Join(toStrings(sum["notes"]), "\n"), "it sends the token the role's run started with") {
+		t.Errorf("exit %d (%v), notes %q", exitCode(err), err, toStrings(sum["notes"]))
+	}
+}
+
+// deadAddr is a local address nothing listens on.
+func deadAddr(t *testing.T) string {
+	t.Helper()
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
-	dead := ln.Addr().String()
-	ln.Close() // nothing listens there now
+	defer ln.Close()
+	return ln.Addr().String()
+}
+
+// A control request that fails is not dropped: the row says its control
+// could not be asked and why, the summary counts it, and the run exits 3.
+func TestAskControlsFailedRequest(t *testing.T) {
+	fetch.Reset()
+	dead := deadAddr(t)
 	h := func(v string) http.Header { return http.Header{"Authorization": {v}} }
 	roles := []role{{name: "alice", session: h("alice")}, {name: "bob", session: h("bob")}}
 	real, _ := readAnswer(200, []byte(`{"id":7,"name":"shoes"}`), "application/json")
@@ -237,6 +256,26 @@ func TestRolesControlRequestFails(t *testing.T) {
 	}
 	if !want || sum["exit"] != float64(exitPartial) || sum["complete"] != false {
 		t.Errorf("summary %v", sum)
+	}
+}
+
+// A replay read that gets no answer leaves its role missing from the row:
+// the stage says how many and why, and asks the run to exit 3.
+func TestReplayAllNoAnswer(t *testing.T) {
+	fetch.Reset()
+	dead := deadAddr(t)
+	u := "http://" + dead + "/api/items/7"
+	real, _ := readAnswer(200, []byte(`{"id":7}`), "application/json")
+	roles := []role{{name: "alice", session: http.Header{"Authorization": {"alice"}}}, {name: "bob", session: http.Header{"Authorization": {"bob"}}}}
+	answers := map[string]map[string]answer{"alice": {u: real}, "bob": {}}
+	w := &replayWatch{}
+	_, err := replayAll(roles, answers, map[string][]string{u: {"alice"}}, nil, map[string]bool{"127.0.0.1": true}, 0, 100, w)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := answers["bob"][u]; ok || !w.failed || len(w.notes) != 1 ||
+		!strings.HasPrefix(w.notes[0], "role bob: 1 request of the replay got no answer, so it is missing from the comparison: ") || !strings.Contains(w.notes[0], "refused") {
+		t.Errorf("answers %v failed %v notes %q", answers["bob"], w.failed, w.notes)
 	}
 }
 
@@ -471,8 +510,11 @@ func TestRolesCanaryRenews(t *testing.T) {
 // on the answer and the row, with a note.
 func TestRolesCanarySuspect(t *testing.T) {
 	site := expiringApp(t, 4)
-	_, rows, sum, _ := rolesJSON(t, site.URL, "-canary-every", "3", "-role", "anon", "-role-cmd", "alice="+counter(t, "alice"), "-role", "bob=Authorization: Bearer bob-fixed",
+	_, rows, sum, err := rolesJSON(t, site.URL, "-canary-every", "3", "-role", "anon", "-role-cmd", "alice="+counter(t, "alice"), "-role", "bob=Authorization: Bearer bob-fixed",
 		"--", "-url", site.URL+"/")
+	if exitCode(err) != exitPartial {
+		t.Errorf("suspect answers: exit %d (%v), want %d", exitCode(err), err, exitPartial)
+	}
 	suspect := 0
 	for p, row := range rows {
 		if !row.SessionSuspect {

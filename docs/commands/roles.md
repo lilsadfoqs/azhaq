@@ -85,6 +85,7 @@ The text table names the roles and fields in brackets after the verdict. With `-
 | `confidence` | `proved`, `likely` or `guess`: how surely the object is the owner's. See [Confidence](#confidence). |
 | `evidence` | Why, in one line. See [evidence and control](#evidence-and-control). |
 | `control` | What its readers got for a made-up identifier on the same route. |
+| `failed` | On a write row: the requests that got no answer, and why. See [Summary and exit codes](#summary-and-exit-codes). |
 | `both_ways` | The owner reads one of its reader's objects on the same route too. |
 | `session_suspect` | An answer was asked after its role's session last proved alive. See [Canaries](#canaries). |
 | `readers` | For verdicts that say who reads it: those roles. |
@@ -154,6 +155,8 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 - **Exit 3:** a signed-in role was refused wherever a session matters. The summary names it in a note. See [Dead sessions](#dead-sessions).
 - **Exit 3:** a token has expired and nothing more can be said of it. A note says so. See [Expired tokens](#expired-tokens).
 - **Exit 3:** a control request got no answer. See [Negative controls](#negative-controls).
+- **Exit 3:** a replay read, a page of a role's history, a write, or the read of the owner's object after a write got no answer (a refused connect, a timeout). The role is then missing from that row, and a note says how many requests and why; a write row says it in `failed` and `evidence`. A request a `-deny-path` rule keeps out is not one.
+- **Exit 3:** a role's session failed its check during the replay and did not come back (`session_suspect` answers), or its `-role-cmd` failed when the replay asked for a new token.
 - **Exit 4:** a role's run was stopped by a limit. The summary marks it `stopped`.
 - **Exit 2:** a header names a host outside the scope rule. Nothing is sent. See [Headers that name a host](#headers-that-name-a-host).
 - A role whose run could not be done, such as a failed sign-in, ends `roles` with a summary whose `notes` say why.

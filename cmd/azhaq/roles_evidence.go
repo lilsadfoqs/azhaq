@@ -410,6 +410,9 @@ func writeEvidence(row roleRow) string {
 	if a, ok := row.Answers[row.Owner]; ok && a.Status != 0 {
 		s += ", as " + row.Owner + " did (" + answerCell(a) + ")"
 	}
+	if len(row.Failed) > 0 {
+		s += "; no answer: " + strings.Join(row.Failed, ", ")
+	}
 	return s + "; " + row.OwnerBy
 }
 

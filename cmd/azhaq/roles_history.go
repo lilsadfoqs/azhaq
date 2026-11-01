@@ -486,8 +486,9 @@ func (h *history) gets(sc histScope, own map[string]bool) (urls []string, seen m
 // readHistoryURLs asks role r for each URL its history reached, as r, and
 // keeps the answers as its run would have: the pages it reached, and what
 // their JSON held. budget counts the requests; the number asked is
-// returned, with an error when it ran out first.
-func readHistoryURLs(r role, urls []string, got map[string]answer, raw map[string]string, seen runSeen, own map[string]bool, rate float64, budget int) (int, error) {
+// returned, with an error when it ran out first. A request that got no
+// answer is recorded in failed.
+func readHistoryURLs(r role, urls []string, got map[string]answer, raw map[string]string, seen runSeen, own map[string]bool, rate float64, budget int, failed askFailures) (int, error) {
 	fetch.Reset()
 	defer fetch.Reset()
 	egress.SetRate(rate)
@@ -511,6 +512,7 @@ func readHistoryURLs(r role, urls []string, got map[string]answer, raw map[strin
 			if egress.Stopped(ctx) != nil {
 				return sent, egress.Stopped(ctx)
 			}
+			failed.add(u, err)
 			continue
 		}
 		a, f := resultAnswer(res)

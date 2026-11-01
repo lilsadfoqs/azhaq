@@ -105,6 +105,7 @@ type roleRow struct {
 	Evidence   string   `json:"evidence,omitempty"`
 	Confidence string   `json:"confidence,omitempty"`
 	Dir        string   `json:"dir,omitempty"`       // the -dir of the run, as an absolute path: where roles show and report find the answers
+	Failed     []string `json:"failed,omitempty"`    // a write row's requests that got no answer (a write, or the owner's object read back), and why
 	Control    *control `json:"control,omitempty"`   // what the readers got for a made-up identifier on the same route
 	BothWays   bool     `json:"both_ways,omitempty"` // the owner reads one of its reader's objects on the same route too
 	// SessionSuspect: an answer was asked after its role's session last
@@ -410,9 +411,14 @@ func cmdRoles(args []string) error {
 			hosts = append(hosts, sc.hostnames()...)
 			urls, _ := h.gets(sc, hostSet(hosts))
 			histURLs = append(histURLs, urls...)
-			n, err := readHistoryURLs(roles[i], urls, got, raw, s, hostSet(hosts), rate, max(0, *replayMax-replayed))
+			failed := askFailures{}
+			n, err := readHistoryURLs(roles[i], urls, got, raw, s, hostSet(hosts), rate, max(0, *replayMax-replayed), failed)
 			replayed += n
 			noteCap(rep, "history", err)
+			if len(failed) > 0 {
+				rep.warned = true
+				rep.Notes = append(rep.Notes, fmt.Sprintf("role %s: %s of its history got no answer, so it is missing from the comparison: %s", r.name, plural(len(failed), "page"), failed.reasons()))
+			}
 		}
 		answers[r.name], seen[r.name] = got, s
 		for t := range s.templates {
@@ -475,6 +481,7 @@ func cmdRoles(args []string) error {
 			lines, err := cmdHeaders(r)
 			if err != nil {
 				rep.Notes = append(rep.Notes, "replay: "+err.Error()+"; it sends the token the role's run started with")
+				rep.warned = true // that token may be dead: the replay's answers may be a visitor's
 				continue
 			}
 			if roles[i].session == nil {
@@ -495,6 +502,7 @@ func cmdRoles(args []string) error {
 		n, err := replayAll(roles, answers, found, rank, own, rate, *replayMax, watch)
 		replayed = n
 		rep.Notes = append(rep.Notes, watch.notes...)
+		rep.warned = rep.warned || watch.failed
 		noteCap(rep, "replay", err)
 	}
 	// A 200 "Access denied" page is a refusal: each origin's, as the
@@ -566,6 +574,9 @@ func cmdRoles(args []string) error {
 			wrows, n, err = replayWrites(roles, reqs, answers, own, rate, max(0, *replayMax-replayed), *writesCanary, canaryFields...)
 			replayed += n
 			noteCap(rep, "write replay", err)
+			wn, failed := writeNotes(wrows)
+			rep.Notes = append(rep.Notes, wn...)
+			rep.warned = rep.warned || failed
 		}
 		if len(reqs) == 0 {
 			rep.Notes = append(rep.Notes, "-replay-writes: no write to replay (no -har or -burp write of the methods named, and no PUT, PATCH or DELETE on a route with a role's own object)")
