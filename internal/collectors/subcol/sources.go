@@ -317,9 +317,10 @@ func sampled(s source) source {
 				pending, cancelPending = ask()
 			}
 			t1 := time.Now()
-			asked := chk.asked
+			before, _ := chk.totals()
 			st.Live = chk.check(cleaned(fresh, domain))
-			st.Asked = chk.asked - asked
+			after, _ := chk.totals()
+			st.Asked = after - before
 			st.Seconds = round(time.Since(t1).Seconds())
 			recordStat(ctx, st)
 			stop := false

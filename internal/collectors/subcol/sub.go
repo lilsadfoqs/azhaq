@@ -593,7 +593,7 @@ func (c *Collector) settle(ctx context.Context, domain string, run []source, nam
 		}
 	}
 	if chk != nil {
-		st.asked = chk.asked
+		st.asked, _ = chk.totals()
 	}
 	if len(padding) == 0 {
 		return names, foundBy, st
@@ -617,7 +617,7 @@ func (c *Collector) settle(ctx context.Context, domain string, run []source, nam
 	why := ""
 	took := time.Duration(0)
 	if chk != nil {
-		took = chk.took
+		_, took = chk.totals()
 		var more []string // not asked by the rounds, or the resolvers failed
 		for _, n := range check {
 			if v := chk.verdict(n); v == 0 || v == nameUnchecked {
@@ -646,7 +646,7 @@ func (c *Collector) settle(ctx context.Context, domain string, run []source, nam
 			start := time.Now()
 			chk.checkWith(vctx, more, true)
 			took += time.Since(start)
-			st.asked = chk.asked
+			st.asked, _ = chk.totals()
 		} else if len(more) > 0 {
 			why = cutWhy
 			if !cut {

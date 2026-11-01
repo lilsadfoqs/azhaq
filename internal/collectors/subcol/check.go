@@ -173,6 +173,14 @@ func (h *hinter) was(n string) bool {
 // subdomain.center's rounds.
 const guessFloor = 1000
 
+// totals is how many names the checker asked and the time it took; a round a
+// limit cut short may still be adding to them.
+func (k *checker) totals() (int, time.Duration) {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	return k.asked, k.took
+}
+
 // room says whether another round of guesses may be checked. With no DNS
 // pace it always may (the run's time is the bound); with one, the guesses
 // may cost at most half what the real names reported cost, and not less
