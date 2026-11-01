@@ -20,6 +20,7 @@ import (
 
 	"github.com/lilsadfoqs/azhaq/catalog"
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
+	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 	"github.com/lilsadfoqs/azhaq/internal/neterr"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"github.com/lilsadfoqs/azhaq/internal/webextract"
@@ -420,8 +421,8 @@ func resolveRef(ref string, d doc) any {
 
 var (
 	// specName: a document a Swagger UI page may load, as a string in it.
-	specName  = regexp.MustCompile(`["'\x60]([\w./-]*\.(?:json|ya?ml))["'\x60]`)
-	swaggerUI = regexp.MustCompile(`(?i)swagger-?ui|SwaggerUIBundle|redoc`)
+	specName  = lazyre.New(`["'\x60]([\w./-]*\.(?:json|ya?ml))["'\x60]`)
+	swaggerUI = lazyre.New(`(?i)swagger-?ui|SwaggerUIBundle|redoc`)
 )
 
 // siblings are where a description usually sits next to its UI.

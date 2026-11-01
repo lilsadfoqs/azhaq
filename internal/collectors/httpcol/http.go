@@ -13,7 +13,6 @@ import (
 	"net/http"
 	"net/netip"
 	"net/url"
-	"regexp"
 	"slices"
 	"sort"
 	"strconv"
@@ -28,6 +27,7 @@ import (
 	"github.com/lilsadfoqs/azhaq/internal/egress"
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
 	"github.com/lilsadfoqs/azhaq/internal/fingerprint"
+	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 	"github.com/lilsadfoqs/azhaq/internal/limit"
 	"github.com/lilsadfoqs/azhaq/internal/neterr"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
@@ -38,7 +38,7 @@ import (
 
 const Name = "azhaq-http"
 
-var titleRE = regexp.MustCompile(`(?is)<title[^>]*>(.*?)</title>`)
+var titleRE = lazyre.New(`(?is)<title[^>]*>(.*?)</title>`)
 
 type Collector struct {
 	Client *http.Client
@@ -994,7 +994,7 @@ func JSONKeys(body []byte, contentType string) []string {
 }
 
 // idKey: a field that names an object others may ask for by that value.
-var idKey = regexp.MustCompile(`(?i)^(id|uuid|guid|slug|key|name|username|user_?name|login|email|title|.*_id|.*Id|.*_name|.*_title|.*_uuid)$`)
+var idKey = lazyre.New(`(?i)^(id|uuid|guid|slug|key|name|username|user_?name|login|email|title|.*_id|.*Id|.*_name|.*_title|.*_uuid)$`)
 
 // JSONIDs collects the values of identifier-like fields in a JSON answer
 // (top level, the elements of an array, one envelope deep), a few per

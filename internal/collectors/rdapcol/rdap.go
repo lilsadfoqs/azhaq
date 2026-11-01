@@ -7,13 +7,13 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"regexp"
 	"strings"
 	"time"
 
 	"github.com/lilsadfoqs/azhaq/catalog"
 	"github.com/lilsadfoqs/azhaq/internal/egress"
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
+	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"github.com/lilsadfoqs/azhaq/internal/timing"
 	"github.com/lilsadfoqs/azhaq/types"
@@ -136,7 +136,7 @@ func (c *Collector) runDomain(ctx context.Context, seed types.Seed, emit func(ty
 	return meta, nil
 }
 
-var privacyService = regexp.MustCompile(`(?i)redacted|privacy|proxy|withheld|not disclosed|data protected|whoisguard|contact privacy|perfect privacy|statutory masking`)
+var privacyService = lazyre.New(`(?i)redacted|privacy|proxy|withheld|not disclosed|data protected|whoisguard|contact privacy|perfect privacy|statutory masking`)
 
 func (c *Collector) runOrg(ctx context.Context, seed types.Seed, emit func(types.Observation) error) (types.RunMeta, error) {
 	name := strings.TrimSpace(seed.Keys["name"])

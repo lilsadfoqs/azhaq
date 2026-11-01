@@ -4,8 +4,9 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"regexp"
 	"strings"
+
+	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 )
 
 // tftpRead is a read request (RFC 1350, 5) for a file that does not exist:
@@ -61,7 +62,7 @@ func parseRPCBind(r, sent []byte) (udpInfo, bool) {
 	return info, true
 }
 
-var sqlVersionRe = regexp.MustCompile(`(?i)Version;(\d+(?:\.\d+)+)`)
+var sqlVersionRe = lazyre.New(`(?i)Version;(\d+(?:\.\d+)+)`)
 
 // parseSQLBrowser reads SVR_RESP of the SQL Server Browser ([MS-SQLR] 2.2.2).
 func parseSQLBrowser(r, _ []byte) (udpInfo, bool) {

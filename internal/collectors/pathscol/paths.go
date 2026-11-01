@@ -6,7 +6,6 @@ import (
 	"github.com/lilsadfoqs/azhaq/internal/guard"
 	"net/http"
 	"net/url"
-	"regexp"
 	"slices"
 	"strings"
 	"sync"
@@ -16,6 +15,7 @@ import (
 	"github.com/lilsadfoqs/azhaq/catalog"
 	"github.com/lilsadfoqs/azhaq/internal/crawlscope"
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
+	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"github.com/lilsadfoqs/azhaq/internal/webextract"
 	"github.com/lilsadfoqs/azhaq/types"
@@ -143,7 +143,7 @@ var specWords = []string{"openapi.json", "openapi.yaml", "swagger.json", "swagge
 // maxBases bounds the API bases swept per origin.
 const maxBases = 8
 
-var versionSeg = regexp.MustCompile(`^v\d+(\.\d+)?$`)
+var versionSeg = lazyre.New(`^v\d+(\.\d+)?$`)
 
 // apiBase is the base of the API a path is under (/api/, /api/v2/,
 // /identity/api/v2/), or "" for a path under none, or under the root.
@@ -368,7 +368,7 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 	return meta, ctx.Err()
 }
 
-var locRE = regexp.MustCompile(`(?i)<loc>\s*([^<\s]+)\s*</loc>`)
+var locRE = lazyre.New(`(?i)<loc>\s*([^<\s]+)\s*</loc>`)
 
 func sitemapLocs(body []byte, all bool) []string {
 	var out []string

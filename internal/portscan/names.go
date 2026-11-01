@@ -1,27 +1,27 @@
 package portscan
 
-import "regexp"
+import "github.com/lilsadfoqs/azhaq/internal/lazyre"
 
 // banners name the service from the first line a port sent: the text each
 // protocol's specification gives a greeting.
 var banners = []struct {
-	re      *regexp.Regexp
+	re      *lazyre.Regexp
 	service string
 }{
-	{regexp.MustCompile(`^SSH-`), "ssh"},
-	{regexp.MustCompile(`(?i)^220[ -].*(ftp|filezilla|vsftpd|proftpd)`), "ftp"},
-	{regexp.MustCompile(`(?i)^220[ -].*(smtp|esmtp|postfix|exim|sendmail|mailpit)`), "smtp"},
-	{regexp.MustCompile(`(?i)^\+OK`), "pop3"},
-	{regexp.MustCompile(`(?i)^\* (OK|PREAUTH|BYE)`), "imap"},
-	{regexp.MustCompile(`(?i)mysql|mariadb`), "mysql"},
-	{regexp.MustCompile(`^-ERR|^-NOAUTH`), "redis"},
-	{regexp.MustCompile(`(?i)^HTTP/`), "http"},
-	{regexp.MustCompile(`^RFB \d`), "vnc"},
-	{regexp.MustCompile(`^RTSP/\d`), "rtsp"},
-	{regexp.MustCompile(`^SIP/2\.0 `), "sip"},
-	{regexp.MustCompile(`^20[01][ -]`), "nntp"},
-	{regexp.MustCompile(`^ICY \d`), "icy"},
-	{regexp.MustCompile(`^220[ -]`), "ftp-or-smtp"},
+	{lazyre.New(`^SSH-`), "ssh"},
+	{lazyre.New(`(?i)^220[ -].*(ftp|filezilla|vsftpd|proftpd)`), "ftp"},
+	{lazyre.New(`(?i)^220[ -].*(smtp|esmtp|postfix|exim|sendmail|mailpit)`), "smtp"},
+	{lazyre.New(`(?i)^\+OK`), "pop3"},
+	{lazyre.New(`(?i)^\* (OK|PREAUTH|BYE)`), "imap"},
+	{lazyre.New(`(?i)mysql|mariadb`), "mysql"},
+	{lazyre.New(`^-ERR|^-NOAUTH`), "redis"},
+	{lazyre.New(`(?i)^HTTP/`), "http"},
+	{lazyre.New(`^RFB \d`), "vnc"},
+	{lazyre.New(`^RTSP/\d`), "rtsp"},
+	{lazyre.New(`^SIP/2\.0 `), "sip"},
+	{lazyre.New(`^20[01][ -]`), "nntp"},
+	{lazyre.New(`^ICY \d`), "icy"},
+	{lazyre.New(`^220[ -]`), "ftp-or-smtp"},
 }
 
 // bannerService is the service a greeting names, if it does.

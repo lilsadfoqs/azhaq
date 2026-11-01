@@ -27,6 +27,7 @@ import (
 	"github.com/lilsadfoqs/azhaq/internal/collectors/asncol"
 	"github.com/lilsadfoqs/azhaq/internal/dnsr"
 	"github.com/lilsadfoqs/azhaq/internal/fingerprint"
+	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"github.com/lilsadfoqs/azhaq/internal/takeover"
 	"github.com/lilsadfoqs/azhaq/scope"
@@ -366,7 +367,7 @@ type dnsInput struct {
 	asked   atomic.Int64
 }
 
-var asnInput = regexp.MustCompile(`(?i)^as\d+$`)
+var asnInput = lazyre.New(`(?i)^as\d+$`)
 
 func newDNSInput(cf *dnsConf, names, lists, words []string) (*dnsInput, error) {
 	in := &dnsInput{cf: cf, counts: map[string]int{}}

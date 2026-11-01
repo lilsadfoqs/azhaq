@@ -5,9 +5,10 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
-	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 )
 
 func init() {
@@ -109,12 +110,12 @@ func respFrame(b []byte) int {
 	return -1
 }
 
-var redisVersionRe = regexp.MustCompile(`(?m)^redis_version:(\S+)`)
+var redisVersionRe = lazyre.New(`(?m)^redis_version:(\S+)`)
 
 // redisError is what Redis answers a request that is not its own with
 // (an old server quotes the command with ', a newer one with `): the HEAD
 // of the HTTP probe, or a password it wants.
-var redisError = regexp.MustCompile("^-(?:NOAUTH|DENIED)\\b|^-ERR unknown command [`']")
+var redisError = lazyre.New("^-(?:NOAUTH|DENIED)\\b|^-ERR unknown command [`']")
 
 func redisRead(r []byte, o *Open) bool {
 	s := string(r)
@@ -164,7 +165,7 @@ func pgFrame(b []byte) int {
 	return 1 + int(binary.BigEndian.Uint32(b[1:]))
 }
 
-var pgSupportsRe = regexp.MustCompile(`unsupported frontend protocol \d+\.\d+: server supports (\d+)\.(\d+) to (\d+)\.(\d+)`)
+var pgSupportsRe = lazyre.New(`unsupported frontend protocol \d+\.\d+: server supports (\d+)\.(\d+) to (\d+)\.(\d+)`)
 
 // postgresError is what PostgreSQL answers a request that is not its own
 // with.
@@ -295,7 +296,7 @@ func mongoDeepen(s *Scanner, c net.Conn, o *Open) {
 	}
 }
 
-var zkVersionRe = regexp.MustCompile(`Zookeeper version: (\d+(?:\.\d+)*)`)
+var zkVersionRe = lazyre.New(`Zookeeper version: (\d+(?:\.\d+)*)`)
 
 func zookeeperRead(r []byte, o *Open) bool {
 	if m := zkVersionRe.FindSubmatch(r); m != nil {
@@ -407,7 +408,7 @@ func tdsRead(r []byte, o *Open) bool {
 	return false
 }
 
-var cqlVersionRe = regexp.MustCompile(`3\.\d+\.\d+`)
+var cqlVersionRe = lazyre.New(`3\.\d+\.\d+`)
 
 // cassandraRead takes a SUPPORTED frame (opcode 6), or the protocol ERROR
 // (opcode 0) of a server that does not speak version 4.
@@ -469,7 +470,7 @@ func tnsFrame(b []byte) int {
 	return int(binary.BigEndian.Uint16(b))
 }
 
-var tnsVsnRe = regexp.MustCompile(`VSNNUM=(\d+)`)
+var tnsVsnRe = lazyre.New(`VSNNUM=(\d+)`)
 
 func tnsRead(r []byte, o *Open) bool {
 	if len(r) < 8 || int(binary.BigEndian.Uint16(r)) != len(r) || r[4] < 2 || r[4] > 5 || r[5] != 0 {

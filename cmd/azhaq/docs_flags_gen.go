@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 )
 
 // The flag tables of docs/commands/NAME.md are made from the flag sets
@@ -17,7 +19,7 @@ const (
 	flagsEnd   = "<!-- flags:end -->"
 )
 
-var flagsBlock = regexp.MustCompile(`(?s)<!-- flags:begin ([^>]*?) -->\n.*?` + regexp.QuoteMeta(flagsEnd))
+var flagsBlock = lazyre.New(`(?s)<!-- flags:begin ([^>]*?) -->\n.*?` + regexp.QuoteMeta(flagsEnd))
 
 // tableFlags are the flags a flags block of that name lists: a command's, or
 // those of roles show, which help -json holds under no command of its own.

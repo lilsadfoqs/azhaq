@@ -3,11 +3,11 @@ package main
 import (
 	"fmt"
 	"os"
-	"regexp"
 	"strings"
 
 	"github.com/lilsadfoqs/azhaq"
 	"github.com/lilsadfoqs/azhaq/docs"
+	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 )
 
 // topics are the documents azhaq docs prints, in the order it lists them.
@@ -24,7 +24,7 @@ var topics = []struct{ name, file, about string }{
 }
 
 // commandPageName is what a command's name looks like: the pages of docs/commands.
-var commandPageName = regexp.MustCompile(`^[a-z][a-z-]*$`)
+var commandPageName = lazyre.New(`^[a-z][a-z-]*$`)
 
 // docsOverview is what azhaq docs prints before the list of topics.
 const docsOverview = `azhaq maps what an application or a bug bounty program exposes, and who may

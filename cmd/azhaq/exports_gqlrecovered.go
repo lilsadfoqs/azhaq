@@ -2,16 +2,16 @@ package main
 
 import (
 	"encoding/json"
-	"regexp"
 	"strings"
 
 	"github.com/lilsadfoqs/azhaq/engine"
 	"github.com/lilsadfoqs/azhaq/internal/gqlschema"
+	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 )
 
 // sigRE reads a recovered field: name(arg: Type!, …): Type, with the
 // arguments and the type each optional.
-var sigRE = regexp.MustCompile(`^(\w+)(?:\((.*)\))?(?::\s*(.+))?$`)
+var sigRE = lazyre.New(`^(\w+)(?:\((.*)\))?(?::\s*(.+))?$`)
 
 var builtinScalar = map[string]bool{"String": true, "Int": true, "Float": true, "Boolean": true, "ID": true}
 

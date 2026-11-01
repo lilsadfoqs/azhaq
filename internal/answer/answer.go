@@ -7,8 +7,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
-	"regexp"
 	"strings"
+
+	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 )
 
 // MaxBody is the longest body looked at: an error is a few lines or a page
@@ -63,17 +64,17 @@ func Reason(body []byte) string {
 }
 
 // emptyAnswer is how a server says it holds nothing: not a failure.
-var emptyAnswer = regexp.MustCompile(`(?i)\bno (captures|results?|records?|data|matches|subdomains|urls|entries|hosts)\b|\bnot found\b|\bnothing found\b`)
+var emptyAnswer = lazyre.New(`(?i)\bno (captures|results?|records?|data|matches|subdomains|urls|entries|hosts)\b|\bnot found\b|\bnothing found\b`)
 
 // quota is what a refusal says: a quota, a limit, a block.
-var quota = regexp.MustCompile(`(?i)api count exceeded|quota|rate.?limit|too many (requests|queries)|(limit|usage|credits?)\b.{0,20}\b(exceeded|reached|used up)|exceeded|try again (later|in)|temporarily (unavailable|blocked|disabled)|access denied|forbidden|unauthori[sz]ed|invalid (api|access)?.?(key|token)|missing (api )?(key|token)|banned|blocked|captcha|are you (a )?(human|robot)|verify you are|service unavailable|bad gateway|gateway time-?out|internal server error|maintenance`)
+var quota = lazyre.New(`(?i)api count exceeded|quota|rate.?limit|too many (requests|queries)|(limit|usage|credits?)\b.{0,20}\b(exceeded|reached|used up)|exceeded|try again (later|in)|temporarily (unavailable|blocked|disabled)|access denied|forbidden|unauthori[sz]ed|invalid (api|access)?.?(key|token)|missing (api )?(key|token)|banned|blocked|captcha|are you (a )?(human|robot)|verify you are|service unavailable|bad gateway|gateway time-?out|internal server error|maintenance`)
 
-var errorTitle = regexp.MustCompile(`(?i)\b(error|forbidden|denied|blocked|captcha|too many requests|rate.?limit|just a moment|attention required|unavailable|bad gateway|gateway time-?out|timed out|verify you are|are you (a )?(human|robot)|maintenance|suspended|limit exceeded)\b|^\s*(4\d\d|5\d\d)\b`)
+var errorTitle = lazyre.New(`(?i)\b(error|forbidden|denied|blocked|captcha|too many requests|rate.?limit|just a moment|attention required|unavailable|bad gateway|gateway time-?out|timed out|verify you are|are you (a )?(human|robot)|maintenance|suspended|limit exceeded)\b|^\s*(4\d\d|5\d\d)\b`)
 
 var (
-	titleRE = regexp.MustCompile(`(?is)<title[^>]*>(.*?)</title>`)
-	tagRE   = regexp.MustCompile(`(?s)<script.*?</script>|<style.*?</style>|<[^>]*>`)
-	spaceRE = regexp.MustCompile(`\s+`)
+	titleRE = lazyre.New(`(?is)<title[^>]*>(.*?)</title>`)
+	tagRE   = lazyre.New(`(?s)<script.*?</script>|<style.*?</style>|<[^>]*>`)
+	spaceRE = lazyre.New(`\s+`)
 )
 
 // textReason: a short plain answer that starts with "error", or that is a

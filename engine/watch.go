@@ -1,9 +1,10 @@
 package engine
 
 import (
-	"regexp"
 	"sort"
 	"strings"
+
+	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 )
 
 // watchKinds name what a parameter's name says it takes, for the bugs
@@ -12,15 +13,15 @@ import (
 // switch a client should not hold.
 var watchKinds = []struct {
 	kind string
-	re   *regexp.Regexp
+	re   *lazyre.Regexp
 }{
-	{"redirect", regexp.MustCompile(`(?i)^(redirect|redir|redirect_?(uri|url|to)|return_?(url|to|path)?|returnurl|next|continue|dest(ination)?|goto|forward|callback_?url|success_?url|back_?url|target_?url|to)$`)},
-	{"url", regexp.MustCompile(`(?i)^(url|uri|link|href|src|source_?url|image_?url|img_?url|feed|webhook(_?url)?|proxy|host|domain|endpoint|site|fetch|load)$`)},
-	{"file", regexp.MustCompile(`(?i)^(file|filename|file_?name|path|filepath|file_?path|dir|directory|folder|document|template|include|download|attachment)$`)},
-	{"command", regexp.MustCompile(`(?i)^(cmd|command|exec|execute|run|shell|eval|ping)$`)},
-	{"debug", regexp.MustCompile(`(?i)^(debug|is_?admin|is_?staff|is_?superuser|privileges?|verbose|test_?mode|impersonate)$`)},
-	{"id", regexp.MustCompile(`(?i)^(id|uid|user_?id|account_?id|customer_?id|order_?id|owner_?id|profile_?id|member_?id|basket_?id|invoice_?id)$`)},
-	{"callback", regexp.MustCompile(`(?i)^(callback|jsonp|cb)$`)},
+	{"redirect", lazyre.New(`(?i)^(redirect|redir|redirect_?(uri|url|to)|return_?(url|to|path)?|returnurl|next|continue|dest(ination)?|goto|forward|callback_?url|success_?url|back_?url|target_?url|to)$`)},
+	{"url", lazyre.New(`(?i)^(url|uri|link|href|src|source_?url|image_?url|img_?url|feed|webhook(_?url)?|proxy|host|domain|endpoint|site|fetch|load)$`)},
+	{"file", lazyre.New(`(?i)^(file|filename|file_?name|path|filepath|file_?path|dir|directory|folder|document|template|include|download|attachment)$`)},
+	{"command", lazyre.New(`(?i)^(cmd|command|exec|execute|run|shell|eval|ping)$`)},
+	{"debug", lazyre.New(`(?i)^(debug|is_?admin|is_?staff|is_?superuser|privileges?|verbose|test_?mode|impersonate)$`)},
+	{"id", lazyre.New(`(?i)^(id|uid|user_?id|account_?id|customer_?id|order_?id|owner_?id|profile_?id|member_?id|basket_?id|invoice_?id)$`)},
+	{"callback", lazyre.New(`(?i)^(callback|jsonp|cb)$`)},
 }
 
 // Watch lists a row's parameter and body names worth trying first, as

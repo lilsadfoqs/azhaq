@@ -6,8 +6,9 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
-	"regexp"
 	"strings"
+
+	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 )
 
 // udpInfo is what an answer in the protocol asked for says.
@@ -227,10 +228,10 @@ func parseSNMP(r, _ []byte) (udpInfo, bool) {
 }
 
 var (
-	ciscoRe = regexp.MustCompile(`^Cisco IOS.*?Version (\d[\w.()]*)`)
-	junosRe = regexp.MustCompile(`JUNOS (\d[\w.\-]*)`)
-	linuxRe = regexp.MustCompile(`^Linux \S+ (\d+\.\d+[\w.\-+]*)`)
-	winRe   = regexp.MustCompile(`Software: Windows`)
+	ciscoRe = lazyre.New(`^Cisco IOS.*?Version (\d[\w.()]*)`)
+	junosRe = lazyre.New(`JUNOS (\d[\w.\-]*)`)
+	linuxRe = lazyre.New(`^Linux \S+ (\d+\.\d+[\w.\-+]*)`)
+	winRe   = lazyre.New(`Software: Windows`)
 )
 
 // sysDescrProduct names what a sysDescr.0 says it is: the operating system
@@ -397,7 +398,7 @@ func stunBinding() []byte {
 	return append([]byte{0, 1, 0, 0, 0x21, 0x12, 0xa4, 0x42}, randBytes(12)...)
 }
 
-var softwareRe = regexp.MustCompile(`^([A-Za-z][\w]*)[-/ ]v?(\d[\w.]*)`)
+var softwareRe = lazyre.New(`^([A-Za-z][\w]*)[-/ ]v?(\d[\w.]*)`)
 
 func parseSTUN(r, sent []byte) (udpInfo, bool) {
 	if len(r) < 20 || r[0] != 0x01 || r[1] != 0x01 || !bytes.Equal(r[4:8], sent[4:8]) {
@@ -428,7 +429,7 @@ func parseSTUN(r, sent []byte) (udpInfo, bool) {
 	return info, true
 }
 
-var memcachedRe = regexp.MustCompile(`^VERSION (\S+)`)
+var memcachedRe = lazyre.New(`^VERSION (\S+)`)
 
 func parseMemcached(r, _ []byte) (udpInfo, bool) {
 	if len(r) < 8 {

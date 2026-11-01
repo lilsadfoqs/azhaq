@@ -7,9 +7,9 @@
 package takeover
 
 import (
-	"regexp"
 	"strings"
 
+	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"golang.org/x/net/publicsuffix"
 )
@@ -27,7 +27,7 @@ type service struct {
 	name     string
 	suffixes []string       // CNAME targets on the service
 	dangling bool           // a target that does not resolve can be claimed
-	page     *regexp.Regexp // what its front page says when nothing is there
+	page     *lazyre.Regexp // what its front page says when nothing is there
 	// alone: the page's words are the service's own and nowhere else, so
 	// they say something even with no CNAME known; a page that other sites
 	// can show counts only beside a CNAME to the service.
@@ -39,20 +39,20 @@ type service struct {
 // a deleted database answers NXDOMAIN while its owner still holds it, or
 // serves nobody's pages.
 var services = []service{
-	{"AWS S3", nil, false, regexp.MustCompile(`<Code>NoSuchBucket</Code>`), true},
-	{"GitHub Pages", []string{".github.io"}, false, regexp.MustCompile(`There isn't a GitHub Pages site here\.`), true},
-	{"Heroku", []string{".herokuapp.com", ".herokudns.com", ".herokussl.com"}, false, regexp.MustCompile(`herokucdn\.com/error-pages/no-such-app\.html`), true},
+	{"AWS S3", nil, false, lazyre.New(`<Code>NoSuchBucket</Code>`), true},
+	{"GitHub Pages", []string{".github.io"}, false, lazyre.New(`There isn't a GitHub Pages site here\.`), true},
+	{"Heroku", []string{".herokuapp.com", ".herokudns.com", ".herokussl.com"}, false, lazyre.New(`herokucdn\.com/error-pages/no-such-app\.html`), true},
 	{"Azure", []string{".azurewebsites.net", ".cloudapp.net", ".cloudapp.azure.com", ".blob.core.windows.net",
 		".azure-api.net", ".azurehdinsight.net", ".azureedge.net", ".azurecontainer.io"}, true, nil, false},
 	{"AWS Elastic Beanstalk", []string{".elasticbeanstalk.com"}, true, nil, false},
-	{"Bitbucket", []string{".bitbucket.io"}, false, regexp.MustCompile(`Repository not found`), false},
-	{"Ghost", []string{".ghost.io"}, false, regexp.MustCompile(`Failed to resolve DNS path for this host`), true},
-	{"Pantheon", []string{".pantheonsite.io"}, false, regexp.MustCompile(`The gods are wise, but do not know of the site which you seek\.`), true},
-	{"Surge.sh", []string{".surge.sh"}, false, regexp.MustCompile(`project not found`), false},
-	{"WordPress.com", []string{".wordpress.com"}, false, regexp.MustCompile(`Do you want to register <em>[^<]*\.wordpress\.com</em>`), true},
-	{"Help Scout", []string{".helpscoutdocs.com"}, false, regexp.MustCompile(`No settings were found for this company:`), true},
-	{"ReadMe", []string{".readme.io"}, false, regexp.MustCompile(`Project doesnt exist\.\.\. yet!`), true},
-	{"Ngrok", []string{".ngrok.io", ".ngrok.app"}, false, regexp.MustCompile(`ERR_NGROK_3200`), true},
+	{"Bitbucket", []string{".bitbucket.io"}, false, lazyre.New(`Repository not found`), false},
+	{"Ghost", []string{".ghost.io"}, false, lazyre.New(`Failed to resolve DNS path for this host`), true},
+	{"Pantheon", []string{".pantheonsite.io"}, false, lazyre.New(`The gods are wise, but do not know of the site which you seek\.`), true},
+	{"Surge.sh", []string{".surge.sh"}, false, lazyre.New(`project not found`), false},
+	{"WordPress.com", []string{".wordpress.com"}, false, lazyre.New(`Do you want to register <em>[^<]*\.wordpress\.com</em>`), true},
+	{"Help Scout", []string{".helpscoutdocs.com"}, false, lazyre.New(`No settings were found for this company:`), true},
+	{"ReadMe", []string{".readme.io"}, false, lazyre.New(`Project doesnt exist\.\.\. yet!`), true},
+	{"Ngrok", []string{".ngrok.io", ".ngrok.app"}, false, lazyre.New(`ERR_NGROK_3200`), true},
 	{"Fly.io", []string{".fly.dev"}, true, nil, false},
 }
 

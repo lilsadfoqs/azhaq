@@ -2,13 +2,13 @@ package pathscol
 
 import (
 	"encoding/json"
-	"regexp"
 	"slices"
 	"strconv"
 	"strings"
 
 	"go.yaml.in/yaml/v3"
 
+	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 	"github.com/lilsadfoqs/azhaq/types"
 )
 
@@ -37,7 +37,7 @@ func descRank(path string) int {
 // isDescLoc says whether path is a guess of an API description's location.
 func isDescLoc(path string) bool { return descRank(path) >= 0 }
 
-var uiRE = regexp.MustCompile(`(?i)swagger-ui|SwaggerUIBundle|<redoc\b|redoc\.standalone`)
+var uiRE = lazyre.New(`(?i)swagger-ui|SwaggerUIBundle|<redoc\b|redoc\.standalone`)
 
 // describes says whether body is an API description (OpenAPI or Swagger
 // with paths) or the Swagger UI or ReDoc page that loads one.

@@ -3,8 +3,9 @@ package paramcol
 import (
 	_ "embed"
 	"fmt"
-	"regexp"
 	"strings"
+
+	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 )
 
 // names is the built-in parameter list, the likelier names first: SecLists'
@@ -36,7 +37,7 @@ func Builtin(name string) ([]string, bool) {
 	return out, true
 }
 
-var humpRE = regexp.MustCompile(`([a-z0-9])([A-Z])`)
+var humpRE = lazyre.New(`([a-z0-9])([A-Z])`)
 
 // Recase writes names in one style: snake (like_this), camel (likeThis) or
 // lower (likethis). arjun's spellings of them are accepted too.

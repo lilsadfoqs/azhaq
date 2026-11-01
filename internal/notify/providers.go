@@ -9,11 +9,12 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"regexp"
 	"strings"
 	"time"
 
 	"go.yaml.in/yaml/v3"
+
+	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 )
 
 // The provider configuration is projectdiscovery/notify's provider-config.yaml
@@ -196,7 +197,7 @@ func (s *Set) Send(ctx context.Context, msg string) []Delivery {
 	return out
 }
 
-var ansi = regexp.MustCompile("[\u001B\u009B][[\\]()#;?]*(?:(?:(?:[a-zA-Z\\d]*(?:;[a-zA-Z\\d]*)*)?\u0007)|(?:(?:\\d{1,4}(?:;\\d{0,4})*)?[\\dA-PRZcf-ntqry=><~]))")
+var ansi = lazyre.New("[\u001B\u009B][[\\]()#;?]*(?:(?:(?:[a-zA-Z\\d]*(?:;[a-zA-Z\\d]*)*)?\u0007)|(?:(?:\\d{1,4}(?:;\\d{0,4})*)?[\\dA-PRZcf-ntqry=><~]))")
 
 // LoadConfig reads a provider-config.yaml. Words that start with $ are
 // replaced by the environment variable of that name when it is set, as

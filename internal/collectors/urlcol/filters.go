@@ -4,10 +4,11 @@ import (
 	"fmt"
 	"net/url"
 	"path"
-	"regexp"
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 )
 
 // Filters narrow what the archives are asked for: the status and type
@@ -62,7 +63,7 @@ func (f Filters) flagsFor(kinds int) []string {
 	return out
 }
 
-var statusRE = regexp.MustCompile(`^[1-5][0-9][0-9]$`)
+var statusRE = lazyre.New(`^[1-5][0-9][0-9]$`)
 
 // Validate refuses a value no archive would understand: gau ignores a bad
 // date and sends it on a bad status; a mistake is better said than sent.

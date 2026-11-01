@@ -8,6 +8,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 )
 
 func init() {
@@ -152,9 +154,9 @@ func vncRead(r []byte, o *Open) bool {
 }
 
 var (
-	ircRe  = regexp.MustCompile(`^(?::\S+ NOTICE (?:AUTH|\*) :|PING :\S|ERROR :(?:Closing Link|Too many)|:\S+ 0?0[1-5] )`)
-	innRe  = regexp.MustCompile(`(?i)\bINN (\d[\w.]*)`)
-	hdrSrv = regexp.MustCompile(`(?im)^(?:server|user-agent):[ \t]*([^\r\n]+)`)
+	ircRe  = lazyre.New(`^(?::\S+ NOTICE (?:AUTH|\*) :|PING :\S|ERROR :(?:Closing Link|Too many)|:\S+ 0?0[1-5] )`)
+	innRe  = lazyre.New(`(?i)\bINN (\d[\w.]*)`)
+	hdrSrv = lazyre.New(`(?im)^(?:server|user-agent):[ \t]*([^\r\n]+)`)
 )
 
 func ircRead(r []byte, o *Open) bool {
@@ -176,7 +178,7 @@ func nntpRead(r []byte, o *Open) bool {
 	return true
 }
 
-var sieveRe = regexp.MustCompile(`^"IMPLEMENTATION" "([^"]+)"`)
+var sieveRe = lazyre.New(`^"IMPLEMENTATION" "([^"]+)"`)
 
 func sieveRead(r []byte, o *Open) bool {
 	m := sieveRe.FindSubmatch(r)
@@ -187,7 +189,7 @@ func sieveRead(r []byte, o *Open) bool {
 	return true
 }
 
-var rtspRe = regexp.MustCompile(`^RTSP/\d\.\d \d{3}`)
+var rtspRe = lazyre.New(`^RTSP/\d\.\d \d{3}`)
 
 // headerProduct reads the Server or User-Agent header of a text answer.
 func headerProduct(r []byte) (product, version string) {
@@ -221,7 +223,7 @@ func sipOptions(host, transport string) []byte {
 		"Call-ID: azhaq-1@azhaq.invalid\r\nCSeq: 1 OPTIONS\r\nContent-Length: 0\r\n\r\n")
 }
 
-var sipRe = regexp.MustCompile(`^SIP/2\.0 \d{3}`)
+var sipRe = lazyre.New(`^SIP/2\.0 \d{3}`)
 
 func sipRead(r []byte, o *Open) bool {
 	if !sipRe.Match(r) {
@@ -416,7 +418,7 @@ func x11Read(r []byte, o *Open) bool {
 	return true
 }
 
-var fingerRe = regexp.MustCompile(`(?i)no such user|not found|login\b|unknown user|finger\b|name\b.*\bhome\b`)
+var fingerRe = lazyre.New(`(?i)no such user|not found|login\b|unknown user|finger\b|name\b.*\bhome\b`)
 
 func fingerRead(r []byte, o *Open) bool {
 	if !isText(r) || !fingerRe.Match(r) {
@@ -426,7 +428,7 @@ func fingerRead(r []byte, o *Open) bool {
 	return true
 }
 
-var gopherRe = regexp.MustCompile(`(?m)^[0-9iIhgs+3][^\t\r\n]*\t[^\t\r\n]*\t[^\t\r\n]*\t\d+`)
+var gopherRe = lazyre.New(`(?m)^[0-9iIhgs+3][^\t\r\n]*\t[^\t\r\n]*\t[^\t\r\n]*\t\d+`)
 
 func gopherRead(r []byte, o *Open) bool {
 	if !gopherRe.Match(r) {

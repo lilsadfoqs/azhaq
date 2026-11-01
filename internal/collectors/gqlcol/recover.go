@@ -3,9 +3,10 @@ package gqlcol
 import (
 	"context"
 	"encoding/json"
-	"regexp"
 	"sort"
 	"strings"
+
+	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 )
 
 // Recovering a schema without introspection, as clairvoyance does: a
@@ -28,11 +29,11 @@ import (
 // probe word merely triggered.
 
 var (
-	unknownField = regexp.MustCompile(`^Cannot query field "([^"]+)" on type "([^"]+)"\.?(?:\s*Did you mean (.+?)\?)?\s*$`)
-	quotedName   = regexp.MustCompile(`"([A-Za-z_][A-Za-z0-9_]*)"`)
-	needsFields  = regexp.MustCompile(`^Field "([^"]+)" of type "([^"]+)" must have a (?:sub selection|selection of subfields)`)
-	needsArg     = regexp.MustCompile(`^Field "([^"]+)" argument "([^"]+)" of type "([^"]+)" is required`)
-	noFields     = regexp.MustCompile(`^Field "([^"]+)" must not have a selection since type "([^"]+)" has no subfields`)
+	unknownField = lazyre.New(`^Cannot query field "([^"]+)" on type "([^"]+)"\.?(?:\s*Did you mean (.+?)\?)?\s*$`)
+	quotedName   = lazyre.New(`"([A-Za-z_][A-Za-z0-9_]*)"`)
+	needsFields  = lazyre.New(`^Field "([^"]+)" of type "([^"]+)" must have a (?:sub selection|selection of subfields)`)
+	needsArg     = lazyre.New(`^Field "([^"]+)" argument "([^"]+)" of type "([^"]+)" is required`)
+	noFields     = lazyre.New(`^Field "([^"]+)" must not have a selection since type "([^"]+)" has no subfields`)
 )
 
 // poison is the field no schema has: it fails every document it is in.
@@ -91,7 +92,7 @@ const maxDeriveWords = 4000
 // camelPart splits a camelCase or PascalCase name into lowercase parts:
 // "deleteAllPastes" -> delete, all, pastes; "systemHealth" -> system,
 // health.
-var camelPart = regexp.MustCompile(`[A-Z]+[a-z0-9]*|[a-z0-9]+`)
+var camelPart = lazyre.New(`[A-Z]+[a-z0-9]*|[a-z0-9]+`)
 
 func camelParts(name string) []string {
 	var out []string

@@ -7,7 +7,6 @@ package brutecol
 import (
 	"context"
 	"encoding/json"
-	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -15,6 +14,7 @@ import (
 
 	"github.com/lilsadfoqs/azhaq/catalog"
 	"github.com/lilsadfoqs/azhaq/internal/dnsr"
+	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"github.com/lilsadfoqs/azhaq/types"
 )
@@ -26,7 +26,7 @@ const (
 
 // An underscore is a legal label of a service or policy name (_dmarc,
 // _domainkey, _acme-challenge).
-var label = regexp.MustCompile(`^[a-z0-9_]([a-z0-9_-]{0,61}[a-z0-9_])?$`)
+var label = lazyre.New(`^[a-z0-9_]([a-z0-9_-]{0,61}[a-z0-9_])?$`)
 
 // Brute resolves word.domain for every word in Words.
 type Brute struct {
@@ -240,7 +240,7 @@ func variants(host string, words []string) []string {
 	return out
 }
 
-var trailingNumber = regexp.MustCompile(`^(.*?)(\d+)$`)
+var trailingNumber = lazyre.New(`^(.*?)(\d+)$`)
 
 // PermuteSample is two of the names Permute would ask for host: a number
 // next to its first label and an environment word joined to it.

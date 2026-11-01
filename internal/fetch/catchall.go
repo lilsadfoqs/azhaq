@@ -9,11 +9,12 @@ import (
 	"html"
 	"net/http"
 	"net/url"
-	"regexp"
 	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
+
+	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 )
 
 // A catch-all response is what an origin returns for a path that does not
@@ -60,7 +61,7 @@ type fingerprint struct {
 	keys     string // a JSON answer's top-level fields; "" for anything else
 }
 
-var titleRE = regexp.MustCompile(`(?is)<title[^>]*>(.*?)</title>`)
+var titleRE = lazyre.New(`(?is)<title[^>]*>(.*?)</title>`)
 
 // RandomName is a path segment no site has: 10 to 14 lowercase letters
 // and digits, starting with a letter. It names nothing that would tell a

@@ -27,6 +27,7 @@ import (
 	"github.com/lilsadfoqs/azhaq/engine"
 	"github.com/lilsadfoqs/azhaq/internal/collectors/shotcol"
 	"github.com/lilsadfoqs/azhaq/internal/gqlschema"
+	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"github.com/lilsadfoqs/azhaq/internal/scopefile"
 	"github.com/lilsadfoqs/azhaq/internal/webextract"
@@ -226,7 +227,7 @@ func exportTo(path, format, origin string, safe bool, w io.Writer) error {
 	return nil
 }
 
-var placeholder = regexp.MustCompile(`\{[^}/]*\}`)
+var placeholder = lazyre.New(`\{[^}/]*\}`)
 
 // openAPI describes what was mapped on one origin as OpenAPI 3, for tools
 // that import a description (Burp, Postman, ZAP, nuclei's fuzzing). A
@@ -1077,7 +1078,7 @@ func uniqueOperationIDs(ops []map[string]any) {
 	}
 }
 
-var componentName = regexp.MustCompile(`^[a-zA-Z0-9.\-_]+$`)
+var componentName = lazyre.New(`^[a-zA-Z0-9.\-_]+$`)
 
 // tidyComponents renames components whose names OpenAPI does not allow
 // (letters, digits, '.', '-' and '_'), and the references to them.

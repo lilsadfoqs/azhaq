@@ -21,6 +21,7 @@ import (
 
 	"github.com/lilsadfoqs/azhaq/engine"
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
+	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"github.com/lilsadfoqs/azhaq/internal/webextract"
 	"github.com/lilsadfoqs/azhaq/types"
@@ -584,7 +585,7 @@ func crawlOutOpts(jsonl bool, fields, store, dir, tmpl, em, ef string, ndef bool
 	return o, nil
 }
 
-var crawlTagRe = regexp.MustCompile(`\{\{\s*([a-z]+)\s*\}\}`)
+var crawlTagRe = lazyre.New(`\{\{\s*([a-z]+)\s*\}\}`)
 
 // crawlOutput prints a crawl's rows as the command's flags say.
 type crawlOutput struct {
