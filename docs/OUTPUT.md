@@ -143,7 +143,7 @@ A key with no row is absent. The sum is one unit, the stored row. `results` is a
 
 ### failed
 
-- `retryable` is true for timeouts, dropped connections, 429 and 5xx.
+- `retryable` is true for timeouts, dropped connections, answers cut short, 429 and 5xx: a later try may work. `azhaq resume -db FILE -retry-failed` asks those targets again, and only those (see [resume](commands/resume.md#retrying-failed-targets)). Failures that are not retryable (a refused connection, a certificate error, a 4xx other than 429) are not asked again: the same request would fail the same way, so they are for you to read and fix. A plain `resume` continues only the tasks a limit or a kill left, never a failed one.
 - `source` names a third-party source, such as `crtsh` or `wayback`.
 - `targets` names up to 100. `azhaq query -db FILE -failed` lists every failed target: the list to retry.
 - `azhaq-session` is a signed-in run whose session ended and could not be renewed (`the session ended: after /logout was requested …`). Every request after it was refused, so nothing after it was answered as an anonymous visitor. The exit code is 3: see [Sessions](CONCEPTS.md#sessions).

@@ -292,6 +292,20 @@ func fillReport(rep *report, path string, seeds []types.Seed, ents []types.Entit
 	rep.DB = path
 	rep.Failed = engine.MarkPartial(engine.MarkFanout(engine.Failures(ents, obs), seeds), ents, obs)
 	rep.Skipped = append(rep.Skipped, engine.Skips(ents, obs)...)
+	if n := len(retried); n > 0 {
+		now := map[string]bool{}
+		for _, f := range engine.FailedTargets(ents, obs) {
+			now[f.Collector+"\x00"+f.Target] = true
+		}
+		still := 0
+		for _, f := range retried {
+			if now[f.Collector+"\x00"+f.Target] {
+				still++
+			}
+		}
+		retried = nil
+		rep.Notes = append(rep.Notes, fmt.Sprintf("-retry-failed: %d failed targets asked again, %d still fail (azhaq query -db %s -failed lists them)", n, still, path))
+	}
 	rep.Unreachable = engine.Unreachable(seeds, ents, obs)
 	rep.Notes = append(rep.Notes, engine.Notes(obs)...)
 	rep.Notes = append(rep.Notes, portcol.Notes(obs)...)

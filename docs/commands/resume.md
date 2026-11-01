@@ -18,7 +18,7 @@ azhaq resume -db app.db -max-requests 2000
 ## What it does
 
 1. Opens the workspace given with `-db`, which is required.
-2. Finds the run that has work left. If every run finished, it says so and exits 1.
+2. Finds the run that has work left. If every run finished, it says so and exits 1. When no task is left but failed targets are retryable, it says `no task left in DB, but N failed targets are retryable` and names `-retry-failed`, still exiting 1.
 3. Reads the run's flags back from the database. Flags given here are added and win. A flag the stopped command spells differently from `run` is read by the command's own name: for a `ports` run, `-rate`, `-min-rate`, `-workers`, `-c`, `-connect-timeout` and `-retries` replace the pace it was stopped at; for `dirs`, `-rate` and `-t`; for `params`, `-rate`. `-max-items`, `-max-names` and `-max-requests` hold for each run: a resume may start as many more tasks as it is given, so a resume at the same cap goes on. A larger `-depth` asks the URLs and names the stopped run found past its own.
 4. Continues the targets the run started with. A `-list` given here replaces them.
    What this resume leaves out applies to the tasks the run kept: `-skip` (which adds to the collectors the run skipped), `-passive`, and an active technique whose flag is not given do not run theirs. Those tasks end here and a note in the summary counts them.
@@ -35,6 +35,15 @@ As the command that started the run. A run that `ports` started prints the open 
 The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.md#the-summary) and [exit codes](../OUTPUT.md#exit-codes).
 
 ## Details
+
+### Retrying failed targets
+
+A request that failed is a finished task, so a plain `resume` does not ask it again. `azhaq resume -db FILE -retry-failed` does:
+
+- It asks again the failed targets the summary marks `retryable`: a timeout, a closed connection, an answer cut short, a 429 or a 5xx. Each target's task runs again with the failure it recorded dropped, and a stored 429 or 5xx answer is not read back. Targets that failed in a way a retry cannot fix are not asked, and stay in `failed` as they were. It exits 1 with `nothing to retry` when none is retryable.
+- It goes with the tasks a limit left: both run in one resume. The summary's `notes` says `-retry-failed: N failed targets asked again, M still fail`, and what still fails is in `failed` again, with exit 3. A limit that stops the resume first leaves the rest as tasks, which the next `resume` continues.
+- The retried requests count against `-max-requests` and are in the ledger like any other.
+- It applies to the run's own tasks. A `ports` or `dirs` sweep continues its unfinished addresses and words with a plain `resume`.
 
 ### Which flags come back
 

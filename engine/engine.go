@@ -750,7 +750,10 @@ func derivedSeeds(seed types.Seed) []types.Seed {
 	return out
 }
 
-func workID(collector string, s types.Seed) string {
-	sum := sha256.Sum256([]byte(collector + "\x00" + string(s.Type) + "\x00" + s.Key()))
+func workID(collector string, s types.Seed) string { return taskHash(collector, s.Type, s.Key()) }
+
+// taskHash is the id of the task of collector on the seed of a type and key.
+func taskHash(collector string, typ types.SeedType, key string) string {
+	sum := sha256.Sum256([]byte(collector + "\x00" + string(typ) + "\x00" + key))
 	return hex.EncodeToString(sum[:16])
 }
