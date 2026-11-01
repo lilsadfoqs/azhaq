@@ -179,6 +179,24 @@ func TestDefaultLabIsUnchanged(t *testing.T) {
 	}
 }
 
+// A dangling CNAME's target is NXDOMAIN at once, with no public resolver: a
+// blocked or rate-limited upstream made the bench's takeover check flaky.
+func TestDanglingCNAMEAnswersWithoutUpstream(t *testing.T) {
+	addr := serve(t, newTestHandler(defaultLab()))
+	for _, name := range []string{"old-shop.azqlab.lan.", "assets.azqlab.lan.", "docs.azqlab.lan."} {
+		for _, qt := range []uint16{dns.TypeA, dns.TypeAAAA} {
+			t0 := time.Now()
+			in := ask(t, addr, name, qt)
+			if in.Rcode != dns.RcodeNameError || len(in.Answer) != 1 || in.Answer[0].Header().Rrtype != dns.TypeCNAME {
+				t.Errorf("%s type %d: want a CNAME and NXDOMAIN, got %v", name, qt, in)
+			}
+			if time.Since(t0) > time.Second {
+				t.Errorf("%s took %v", name, time.Since(t0))
+			}
+		}
+	}
+}
+
 func TestLoadZonesRejectsBadFiles(t *testing.T) {
 	for name, raw := range map[string]string{
 		"not json":    `{`,
