@@ -1,5 +1,5 @@
 #!/bin/bash
-# fetch.sh bench|hunt|trial|range-smoke NAME DIR: copies what the CI run
+# fetch.sh bench|hunt|gate|trial|range-smoke NAME DIR: copies what the CI run
 # KIND-NAME put on the ci-results branch into DIR, decrypts and unpacks it,
 # and puts back a Codex session the run refreshed, when it is newer than
 # this machine's. A research or hunter trial's answer key comes back as
@@ -7,20 +7,30 @@
 # Then usage.py counts which commands and flags the run used and writes
 # DIR/usage.json (skipped without python3 or azhaq); to count every run
 # fetched into one folder: usage.py FOLDER <(azhaq help -json).
+# A gate (run.sh gate NAME) is two runs on one commit, bench/gate-NAME and
+# hunt/gate-NAME: they are fetched into DIR/bench and DIR/hunt.
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
-kind=${1:?usage: fetch.sh bench|hunt|trial|range-smoke NAME DIR}
-name=${2:?usage: fetch.sh bench|hunt|trial|range-smoke NAME DIR}
-dir=${3:?usage: fetch.sh bench|hunt|trial|range-smoke NAME DIR}
+kind=${1:?usage: fetch.sh bench|hunt|gate|trial|range-smoke NAME DIR}
+name=${2:?usage: fetch.sh bench|hunt|gate|trial|range-smoke NAME DIR}
+dir=${3:?usage: fetch.sh bench|hunt|gate|trial|range-smoke NAME DIR}
+if [ "$kind" = gate ]; then
+  rc=0
+  for part in bench hunt; do
+    FETCH_TAG=gate-$name "$0" "$part" "$name" "$dir/$part" || rc=1
+  done
+  exit $rc
+fi
+tag=${FETCH_TAG:-$kind-$name} # the tag, and the folder under $kind/
 key=${AZHAQ_AGE_KEY:-$HOME/.config/azhaq/age.key}
 age=$(command -v age || echo "$HOME/go/bin/age")
 repo=trannghiach/azhaq
 mkdir -p "$dir"
 cd "$dir"
-curl -fsS "https://api.github.com/repos/$repo/contents/$kind/$kind-$name?ref=ci-results" |
+curl -fsS "https://api.github.com/repos/$repo/contents/$kind/$tag?ref=ci-results" |
   python3 -I -c 'import sys, json; [print(f["name"]) for f in json.load(sys.stdin)]' |
   while read -r f; do
-    curl -fsSL -o "$f" "https://raw.githubusercontent.com/$repo/ci-results/$kind/$kind-$name/$f"
+    curl -fsSL -o "$f" "https://raw.githubusercontent.com/$repo/ci-results/$kind/$tag/$f"
   done
 for f in *.age; do
   [ -e "$f" ] || continue

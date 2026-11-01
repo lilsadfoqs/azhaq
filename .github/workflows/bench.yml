@@ -6,10 +6,12 @@ name: bench
 # bench-NAME whose message holds the bench's flags (for example
 # "-profile polite"); a message with -only runs those sections in one job.
 # The joined record and the logs go to the ci-results branch under
-# bench/NAME/.
+# bench/NAME/. A tag gate-NAME (.github/ci/run.sh gate) starts this and
+# hunt.yml on one commit: the bench takes its default flags, whatever the
+# message says (the words are the hunt's), and writes bench/gate-NAME/.
 on:
   push:
-    tags: ["bench-*"]
+    tags: ["bench-*", "gate-*"]
 
 permissions:
   contents: write
@@ -27,7 +29,7 @@ jobs:
       - id: p
         run: |
           args=""
-          if [ "$(git cat-file -t "refs/tags/$GITHUB_REF_NAME")" = tag ]; then
+          if [[ "$GITHUB_REF_NAME" != gate-* ]] && [ "$(git cat-file -t "refs/tags/$GITHUB_REF_NAME")" = tag ]; then
             args=$(git for-each-ref --format='%(contents:subject)' "refs/tags/$GITHUB_REF_NAME")
           fi
           echo "args=$args" >> "$GITHUB_OUTPUT"

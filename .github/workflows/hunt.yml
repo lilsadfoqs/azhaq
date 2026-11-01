@@ -4,10 +4,12 @@ name: hunt
 # commit against the labs (.github/ci/labs.sh) and writes FINDINGS.md, which
 # is encrypted to the maintainer's age key and goes to the ci-results branch
 # under hunt/NAME/. Push an annotated tag hunt-NAME; its message may name
-# the areas and the model: "areas=web,net model=gpt-5.6-luna".
+# the areas and the model: "areas=web,net model=gpt-5.6-luna". A tag
+# gate-NAME (.github/ci/run.sh gate) also starts bench.yml on the same
+# commit; the hunt's results go to hunt/gate-NAME/.
 on:
   push:
-    tags: ["hunt-*"]
+    tags: ["hunt-*", "gate-*"]
 
 permissions:
   contents: write
