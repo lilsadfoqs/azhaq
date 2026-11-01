@@ -275,7 +275,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	storeResp := fs.Bool("sr", false, "also write each answer a target gave, headers and body as read, to the -srd directory as DIR/HOST/SHA1.txt with an index.txt (katana's -sr); query -fields response_file says where a row's is")
 	storeRespDir := fs.String("srd", "azhaq_response", "directory for -sr")
 	omitBody := fs.Bool("ob", false, "with -sr: write the status line and headers only")
-	stream := fs.Bool("stream", false, "also print each name, service, URL and open port as it is found (found lines, before the ranked map)")
+	stream := fs.Bool("stream", false, "also print each name, address, URL and open port as it is found, once per map row (found lines, before the ranked map)")
 	verbose := fs.Bool("v", false, "print a line for every finished task, not only failures")
 	timeout := fs.Duration("timeout", 0, "stop after this long and keep what was found; azhaq resume continues (0: no limit)")
 	showObs := fs.Bool("obs", false, "also print the observation log")

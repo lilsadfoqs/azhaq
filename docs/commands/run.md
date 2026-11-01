@@ -47,7 +47,7 @@ The map has one row per entity, best first: the target's own pages and APIs, the
 - Plain: one row per line, with forms and parameters indented below ([The text map](#the-text-map)).
 - `-json`: one JSON object per row, and the summary as one JSON object on stderr.
 - `-quiet`: no map and no progress lines, only the summary.
-- `-stream`: also prints each name, service, URL and open port as it is found, before the map ([Streaming found lines](#streaming-found-lines)).
+- `-stream`: also prints each name, address, URL and open port as it is found, before the map ([Streaming found lines](#streaming-found-lines)).
 
 ```json
 {"type":"URL","key":"http://127.0.0.1:3001/api/Users","scope":"target","coverage":"visited","role":"auth",
@@ -117,14 +117,16 @@ found in
 
 ### Streaming found lines
 
-- With `-stream`, `run` prints each name that resolves, URL found, answer and open port as it is found, once each. They come before the map.
+- With `-stream`, `run` prints each URL, name that resolves, address and open port as it is found. They come before the map.
+- One line for each key the map has a row for: a URL found by the crawl and answered later, or the front page found twice, prints once, as the first way it was found (its status is in the map). The address of an IP host is a row and a line too (`found  address 127.0.0.1`).
+- Not streamed: names that do not resolve, which the map folds into a summary row. An open-ports line is one line for a host and stands for its port rows (`host:port/tcp`); the same host's ports print again only when a later scan finds others.
 - An answer line looks like `found  answer http://app/openapi.json  [200]`. An answer that is the page every unknown path gets ends with `(catch-all: the page any unknown path gets)`.
 - With `-json`, each is an object with `"type":"found"` and these fields:
 
 | Field | Meaning |
 | --- | --- |
-| `kind` | `name`, `url`, `answer` or `ports`. |
-| `key` | The name, the URL, or the host. |
+| `kind` | `name`, `url`, `answer`, `address` or `ports`. |
+| `key` | The name, the URL, the address, or the host of the ports. For `name`, `url`, `answer` and `address`, the key of the map row. |
 | `collector` | The collector that found it. |
 | `status`, `title` | For an answer. |
 | `catchall` | For an answer: `true` when it is the page every unknown path gets. |
@@ -422,7 +424,7 @@ Examples of what `notes` holds for a run:
 | `-json` | bool |  | print the map as JSON lines, and the summary as one JSON object on stderr |
 | `-quiet` | bool |  | print no map and no progress lines (a line every 10 s while the run works), only the summary (on stderr) |
 | `-v` | bool |  | print a line for every finished task, not only failures |
-| `-stream` | bool |  | also print each name, service, URL and open port as it is found (found lines, before the ranked map) |
+| `-stream` | bool |  | also print each name, address, URL and open port as it is found, once per map row (found lines, before the ranked map) |
 | `-sr` | bool |  | also write each answer a target gave, headers and body as read, to the -srd directory as DIR/HOST/SHA1.txt with an index.txt (katana's -sr); query -fields response_file says where a row's is |
 | `-srd` | string | `azhaq_response` | directory for -sr |
 | `-fail-on-errors` | bool |  | exit 3 on every failure: also fan-out (a source for the domain of a URL) and a source that failed while others answered |

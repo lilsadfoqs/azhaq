@@ -229,7 +229,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 | `-json` | bool |  | print the map as JSON lines, and the summary as one JSON object on stderr |
 | `-quiet` | bool |  | print no map and no progress lines (a line every 10 s while the run works), only the summary (on stderr) |
 | `-v` | bool |  | print a line for every finished task, not only failures |
-| `-stream` | bool |  | also print each name, service, URL and open port as it is found (found lines, before the ranked map) |
+| `-stream` | bool |  | also print each name, address, URL and open port as it is found, once per map row (found lines, before the ranked map) |
 | `-sr` | bool |  | also write each answer a target gave, headers and body as read, to the -srd directory as DIR/HOST/SHA1.txt with an index.txt (katana's -sr); query -fields response_file says where a row's is |
 | `-srd` | string | `azhaq_response` | directory for -sr |
 | `-fail-on-errors` | bool |  | exit 3 on every failure: also fan-out (a source for the domain of a URL) and a source that failed while others answered |

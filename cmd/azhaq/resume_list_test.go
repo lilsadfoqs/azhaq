@@ -1,6 +1,10 @@
 package main
 
 import (
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -65,9 +69,93 @@ func TestStreamFound(t *testing.T) {
 		see(types.Entity{}, types.Observation{Kind: "dns", Payload: []byte(`{"fqdn":"w.a.test","ips":["192.0.2.1"],"wildcard":true}`)})
 		return nil
 	})
-	want := "found  url     http://a.test/x\nfound  answer  http://a.test/  [200] Home\nfound  answer  http://a.test/signup  [200] Home  (catch-all: the page any unknown path gets)\n"
+	want := "found  url     http://a.test/x\nfound  answer  http://a.test/  [200] Home\nfound  answer  http://a.test/signup  [200] Home  (catch-all: the page any unknown path gets)\nfound  address 192.0.2.1\n"
 	if err != nil || out != want {
 		t.Errorf("%q, want %q", out, want)
+	}
+}
+
+// A URL found by the crawl and answered later, or answered and then linked,
+// is one line, and the address of an IP host is one more: a key prints once.
+func TestStreamFoundOncePerKey(t *testing.T) {
+	out, _, err := captureBoth(t, func() error {
+		see := streamFound(true)
+		obs := func(kind, payload string) {
+			see(types.Entity{}, types.Observation{Kind: kind, Collector: "c", Payload: []byte(payload)})
+		}
+		obs("url", `{"url":"http://127.0.0.1:5020/a"}`)
+		obs("application", `{"url":"http://127.0.0.1:5020/a","status":200,"title":"A"}`)
+		obs("application", `{"url":"http://127.0.0.1:5020/","status":200,"title":"Home"}`)
+		obs("url", `{"url":"http://127.0.0.1:5020/"}`)
+		obs("url", `{"url":"http://127.0.0.1:5020/#/x","role":"client-route"}`)
+		obs("dns", `{"fqdn":"a.test","ips":["192.0.2.1","127.0.0.1"]}`)
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var keys []string
+	for _, l := range strings.Split(strings.TrimSpace(out), "\n") {
+		var d map[string]any
+		if json.Unmarshal([]byte(l), &d) != nil {
+			t.Fatalf("not JSON: %q", l)
+		}
+		keys = append(keys, d["kind"].(string)+" "+d["key"].(string))
+	}
+	want := []string{"url http://127.0.0.1:5020/a", "address 127.0.0.1", "answer http://127.0.0.1:5020/", "url http://127.0.0.1:5020/#/x", "name a.test", "address 192.0.2.1"}
+	if !slices.Equal(keys, want) {
+		t.Errorf("lines %q, want %q", keys, want)
+	}
+}
+
+// What -stream prints and the map holds are the same keys, each once: the
+// address row and the front page found twice included.
+func TestRunStreamKeysAreTheMapsKeys(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		switch r.URL.Path {
+		case "/":
+			fmt.Fprint(w, `<html><head><title>Home</title><script src="/app.js"></script></head><body><a href="/">home</a><a href="/a">a</a><a href="/b">b</a></body></html>`)
+		case "/app.js":
+			w.Header().Set("Content-Type", "application/javascript")
+			fmt.Fprint(w, `fetch("/api/x")`)
+		case "/a", "/b":
+			fmt.Fprint(w, `<html><title>`+r.URL.Path+`</title></html>`)
+		default:
+			w.WriteHeader(404)
+		}
+	}))
+	defer srv.Close()
+	for _, depth := range []string{"0", "2"} {
+		out, _, err := captureBoth(t, func() error {
+			return cmdRun([]string{"-url", srv.URL + "/", "-allow", "127.0.0.1", "-no-paths", "-no-tech", "-no-favicon", "-depth", depth, "-max-requests", "40", "-stream", "-json", "-db", filepath.Join(t.TempDir(), "w.db")})
+		})
+		if err != nil && exitCode(err) != exitPartial {
+			t.Fatal(err)
+		}
+		var streamed, mapped []string
+		for _, l := range strings.Split(strings.TrimSpace(out), "\n") {
+			var d map[string]any
+			if json.Unmarshal([]byte(l), &d) != nil {
+				t.Fatalf("not JSON: %q", l)
+			}
+			key, _ := d["key"].(string)
+			switch d["type"] {
+			case "found":
+				streamed = append(streamed, key)
+			case "summary":
+			default:
+				mapped = append(mapped, key)
+			}
+		}
+		slices.Sort(streamed)
+		slices.Sort(mapped)
+		if !slices.Equal(streamed, mapped) {
+			t.Errorf("-depth %s: streamed %q, map %q", depth, streamed, mapped)
+		}
+		if !slices.Contains(mapped, "127.0.0.1") {
+			t.Errorf("-depth %s: no address row in %q", depth, mapped)
+		}
 	}
 }
 
