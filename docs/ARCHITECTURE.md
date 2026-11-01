@@ -894,7 +894,7 @@ The default set is keyless: anubis, certspotter, crt.sh, crtname, hackertarget, 
 
 subdomain.center pads its answer with random names. For tesla.com each call gives a random 500 of about 6,300. A name only it gave is kept when it resolves.
 
-- Without a key it is asked again while its last round gave a name that resolves and no other source had. There are at most 12 rounds.
+- Without a key it is asked again while its last round gave a name that resolves and no other source had, and until the names seen are 95% of the pool the rounds' repeats estimate (Schnabel). A round with no new live name ends it only then: a live name may be among the ones not yet seen, as a few real names are among 500 random ones. There are at most 12 rounds.
 - A round's new names are looked up before the next round is asked. Each is looked up once, and one resolver's NXDOMAIN is enough.
 - With `-dns-rate`, the guesses cost at most half what the other sources' names did, and not less than 1,000.
 - Without `-live` the guesses are not looked up. The source is asked once, and its names are listed unverified.
