@@ -1,8 +1,14 @@
 package main
 
 import (
+	"fmt"
+	"net"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
@@ -80,5 +86,39 @@ func TestDepthCapIsNamedAndResumeWithALargerDepthAsksIt(t *testing.T) {
 	}
 	if got, want := rowKeys(t, out), rowKeys(t, deep); !reflect.DeepEqual(got, want) {
 		t.Errorf("rows after the resume\n%v\nrows of the deep run\n%v", got, want)
+	}
+}
+
+// A request budget the port sweep alone could spend still maps the web
+// service the sweep found: the sweep leaves what plan says one service takes
+// (53 here), and the summary says how the budget went by stage.
+func TestBudgetBetweenTheSweepAndTheWebStage(t *testing.T) {
+	var mu sync.Mutex
+	paths := map[string]bool{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		paths[r.URL.Path] = true
+		mu.Unlock()
+		w.Header().Set("Content-Type", "text/html")
+		fmt.Fprint(w, "<title>lab</title>")
+	}))
+	t.Cleanup(srv.Close)
+	_, port, _ := net.SplitHostPort(srv.Listener.Addr().String())
+	first, _ := strconv.Atoi(port)
+	t.Chdir(t.TempDir())
+	_, rep, code := runContract(t, "run", "-cidr", "127.0.0.1/32", "-allow", "127.0.0.1", "-ports", fmt.Sprintf("%d-%d", first, first+400),
+		"-port-order", "asc", "-port-rate", "400", "-rate", "50", "-max-requests", "130", "-sources", "none", "-no-takeover", "-db", "b.db")
+	if code != exitLimit {
+		t.Fatalf("exit %d: stopped %q failed %+v", code, rep.Stopped, rep.Failed)
+	}
+	mu.Lock()
+	n := len(paths)
+	mu.Unlock()
+	if n < 40 {
+		t.Errorf("the web service the sweep found was asked %d paths: the sweep spent its budget", n)
+	}
+	notes := strings.Join(rep.Notes, "\n")
+	if !strings.Contains(notes, "request budget 130, spent by stage: ") || !strings.Contains(notes, "ports ") || !strings.Contains(notes, "TCP connections") {
+		t.Errorf("notes do not say how the budget was spent: %q", rep.Notes)
 	}
 }

@@ -904,6 +904,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		}
 	}
 	opts.PortConfig = portCfg
+	opts.PortConfig.WebCost = webServiceCost(budgets.Skip, opts.Paths, *noFavicon, *knownFiles)
 	if len(opts.Ports) > 0 || len(opts.UDPPorts) > 0 {
 		if obs, err := st.Observations(); err == nil {
 			opts.PortConfig.Prior = portcol.Priors(obs) // scans a limit stopped: resume asks the rest
@@ -1411,6 +1412,28 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		}
 	}
 	return nil
+}
+
+// webServiceCost is the requests mapping one web service takes at least: the
+// number plan gives as about N per web service (its page, the favicon, the
+// built-in path checks). A budget keeps that much for each service a port
+// sweep finds open and names web, so that the sweep cannot spend it all.
+func webServiceCost(skip map[string]bool, extraPaths []string, noFavicon bool, knownFiles string) int {
+	if skip["azhaq-http"] {
+		return 0
+	}
+	n := 1
+	if !noFavicon {
+		n++
+	}
+	switch {
+	case skip["azhaq-paths"]:
+	case knownFiles != "":
+		n += len(pathscol.KnownFiles(knownFiles))
+	default:
+		n += len(pathscol.DefaultWordlist) + len(extraPaths)
+	}
+	return n
 }
 
 // runStart is when the run began, the zero time for one the workspace does not know.

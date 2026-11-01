@@ -28,12 +28,14 @@ type Config struct {
 	IPv4Only, IPv6Only, AllIPs bool
 	PortsFor                   map[string][]int
 	Prior                      map[string]Prior // azhaq resume: scans a limit stopped
+	WebCost                    int              // requests the budget keeps for mapping each web service found open
 	Swept                      map[string]Sweep // azhaq resume: blocks a limit stopped
 }
 
 // Apply sets c's knobs from cfg.
 func (c *Collector) Apply(cfg Config) {
 	c.Prior = cfg.Prior
+	c.WebCost = cfg.WebCost
 	c.Swept, c.sweptIP = cfg.Swept, sweptAddrs(cfg.Swept)
 	s := c.Scanner
 	s.Timeout, s.Retries, s.Workers = cfg.Timeout, cfg.Retries, cfg.Workers

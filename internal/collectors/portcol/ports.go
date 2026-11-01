@@ -74,6 +74,9 @@ type Collector struct {
 	PortsFor map[string][]int
 	// Workers is how many addresses of a range are asked at once; 0 is 64.
 	Workers int
+	// WebCost is how many requests the budget keeps for mapping each web
+	// service the scan finds open (egress.Reserve); zero keeps none.
+	WebCost int
 
 	mu    sync.Mutex
 	byIP  map[string]*scan // one scan per address, however many names point to it
@@ -81,6 +84,7 @@ type Collector struct {
 
 	udpByIP map[string]*udpScan
 	ranged  map[string]bool // addresses a range scan handed on as it found them
+	held    map[string]bool // endpoints whose web mapping the budget has a reserve for
 
 	// Swept holds, by prefix, the blocks a limit stopped: the addresses of
 	// those the run had finished are not asked again (azhaq resume).
@@ -101,8 +105,50 @@ type scan struct {
 }
 
 func New(pool *dnsr.Pool, ports []int, rate float64) *Collector {
-	return &Collector{Pool: pool, Ports: ports, Scanner: &portscan.Scanner{Rate: rate, Take: egress.Take, UserAgent: fetch.UserAgent},
+	c := &Collector{Pool: pool, Ports: ports, Scanner: &portscan.Scanner{Rate: rate, Take: egress.TakeSweep, UserAgent: fetch.UserAgent},
 		byIP: map[string]*scan{}, maxIP: 2}
+	c.Scanner.Opened = c.holdWeb
+	return c
+}
+
+// holdWeb sets aside the requests that mapping a web service needs
+// (egress.Reserve) the moment a port accepts a connection, once for each
+// address and port: a sweep that would spend the whole budget leaves them,
+// though the port is not yet named. A port that proves no web service gives
+// them back (reserveWeb).
+func (c *Collector) holdWeb(ip string, port int) {
+	if c.WebCost <= 0 {
+		return
+	}
+	key := net.JoinHostPort(ip, strconv.Itoa(port))
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.held == nil {
+		c.held = map[string]bool{}
+	}
+	if !c.held[key] {
+		c.held[key] = true
+		egress.Reserve(int64(c.WebCost))
+	}
+}
+
+// reserveWeb keeps the reserve of a port named a web service, and gives back
+// that of any other: its one probe is paid from the budget as any request is.
+func (c *Collector) reserveWeb(ip string, o portscan.Open) {
+	if c.WebCost <= 0 {
+		return
+	}
+	if svc := strings.TrimSuffix(o.Service, "?"); svc == "http" || svc == "https" {
+		return
+	}
+	key := net.JoinHostPort(ip, strconv.Itoa(o.Port))
+	c.mu.Lock()
+	held := c.held[key]
+	c.held[key] = false
+	c.mu.Unlock()
+	if held {
+		egress.Reserve(-int64(c.WebCost))
+	}
 }
 
 func (c *Collector) routable() bool {
@@ -228,6 +274,10 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		}
 	}
 	for _, ip := range ips {
+		found := func(o portscan.Open) {
+			c.reserveWeb(ip, o)
+			found(o)
+		}
 		ports := c.portsOf(host)
 		name := edgeName
 		edge := name != ""
