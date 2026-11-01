@@ -54,6 +54,8 @@ jobs:
     if: needs.kind.outputs.kind == 'switch'
     runs-on: ubuntu-latest
     timeout-minutes: 300
+    env:
+      DRYRUN: ${{ needs.kind.outputs.dryrun }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
@@ -115,6 +117,21 @@ jobs:
           echo "release under review: $v"
           sed "s/__VERSION__/$v/" "$HOME/ci/BRIEF.md" > "$HOME/ci/brief.md"
           cd "$HOME/trial"
+          if [ "$DRYRUN" = 1 ]; then
+            # Everything but the agent: the labs answer the isolated user
+            # and the tools the brief names are there.
+            {
+              echo "dry run"
+              echo
+              for port in 3001 5002 5013 5020 5030; do
+                echo "lab 127.0.0.1:$port: $(curl -s -o /dev/null -m 5 -w '%{http_code}' "http://127.0.0.1:$port/")"
+              done
+              echo "nmap: $(nmap --version 2>/dev/null | head -1)"
+              echo "lab source: $(find lab-source -type f 2>/dev/null | wc -l) files"
+            } | tee REPORT.md
+            : > "$HOME/ci/stderr.txt"; : > "$HOME/ci/stream.ts.jsonl"
+            exit 0
+          fi
           # Every line of the event stream gets the second it arrived (the
           # heartbeat reads it), as in the work job.
           timeout 4h codex exec --dangerously-bypass-approvals-and-sandbox --skip-git-repo-check -C "$HOME/trial" \
