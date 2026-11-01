@@ -62,7 +62,7 @@ Also write ./surface-1.txt: every host, open port and service you mapped, one pe
 
 ## Part B: head-to-head on the local labs
 
-azhaq (__VERSION__) is at ./bin/azhaq, built from the commit under review; call it by that path. Installing it is not part of this review: a separate CI job checks the install script against a snapshot build.
+azhaq (__VERSION__) is at ./bin/azhaq, __AZHAQ_ORIGIN__; call it by that path. Installing it is not part of this review: a separate CI job checks the install script against a snapshot build.
 
 ### Coverage rules (these bind your scores)
 
