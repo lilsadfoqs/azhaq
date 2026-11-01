@@ -145,9 +145,8 @@ const chromeOff = "Translate,BlinkGenPropertyTrees,OptimizationHints,Optimizatio
 	"MediaRouter,DialMediaRouteProvider,GlobalMediaControls,InterestFeedContentSuggestions,PrivacySandboxSettings4,Fledge," +
 	"PreconnectToSearch,Prerender2,NoStatePrefetch,PrefetchProxy,ExtensionUpdater,IdentityStatus,SafeBrowsingHashPrefixRealTimeLookups"
 
-// deadService is where Chrome's own services are pointed: loopback, a
-// port nothing uses, and never a host outside the scope.
-const deadService = "http://127.0.0.1:1/"
+// deadService is where Chrome's own services are pointed (egress.ChromeOff).
+const deadService = "http://" + egress.ChromeOff + "/"
 
 func (b *Browser) start() error {
 	b.once.Do(func() {
@@ -202,12 +201,13 @@ func (b *Browser) start() error {
 		)
 		// The flags above leave services that start with the browser (the
 		// account reconciler, the component updater, Google search's
-		// eligibility check): their service roots point at a port nothing
-		// listens on, so none is even attempted.
+		// eligibility check): the updater is switched off and their service
+		// roots point at a name the guard refuses, so none leaves the host.
 		for _, f := range []string{"gaia-url", "google-apis-url", "google-base-url", "lso-url"} {
 			opts = append(opts, chromedp.Flag(f, deadService))
 		}
 		opts = append(opts, chromedp.Flag("component-updater", "url-source="+deadService))
+		opts = append(opts, chromedp.Flag("disable-component-update", true))
 		// The sandbox stays on: the pages are the targets'. Only where the
 		// system cannot give Chrome one (see below) does it run without.
 		noSandbox := os.Getenv("AZHAQ_CHROME_NO_SANDBOX") == "1"

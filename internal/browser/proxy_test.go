@@ -276,9 +276,8 @@ func TestChromeSignInPassesThroughTheRunsProxy(t *testing.T) {
 }
 
 // Chrome's own services (updates, sign-in, time, safe browsing) start with
-// the browser and while a page loads: none may even try to connect. The
-// scope holds only the target's own port, so a connection to anywhere else,
-// the loopback port Chrome's service roots point at included, is counted.
+// the browser and while a page loads: none reaches a host. The scope holds
+// only the target's own port, so a connection to anywhere else is counted.
 func TestChromeMakesNoConnectionOfItsOwn(t *testing.T) {
 	const jwt = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJtZW1iZXIifQ.c2lnbmVk"
 	target := newRecorder(func(w http.ResponseWriter, r *http.Request) {
