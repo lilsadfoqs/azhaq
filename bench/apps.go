@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/rand"
 	"crypto/sha256"
+	_ "embed"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -195,16 +196,32 @@ type labApp struct {
 	name  string // container
 	url   string // without the trailing slash
 	flags []string
-	image string
+	image string // the pinned image, from images.env
 }
+
+//go:embed images.env
+var imagesEnv string
+
+// labImages is images.env: the one list of pinned images, name to image.
+func labImages() map[string]string {
+	out := map[string]string{}
+	for _, l := range strings.Split(imagesEnv, "\n") {
+		if k, v, ok := strings.Cut(strings.TrimSpace(l), "="); ok && !strings.HasPrefix(k, "#") {
+			out[k] = v
+		}
+	}
+	return out
+}
+
+func labImage(name string) string { return labImages()[name] }
 
 // labApps mirrors labs.sh; TestLabAppsMatchLabsScript keeps them equal.
 var labApps = []labApp{
-	{"azq-juice", "http://127.0.0.1:3001", []string{"-p", "127.0.0.1:3001:3000", "-e", "NODE_OPTIONS=--max-old-space-size=4096"}, "bkimminich/juice-shop"},
-	{"azq-vampi", "http://127.0.0.1:5002", []string{"-p", "127.0.0.1:5002:5000", "-e", "vulnerable=1", "-e", "tokentimetolive=3600"}, "erev0s/vampi"},
-	{"azq-dvga", "http://127.0.0.1:5013", []string{"-p", "127.0.0.1:5013:5013", "-e", "WEB_HOST=0.0.0.0"}, "dolevf/dvga:latest"},
-	{"azq-dvna", "http://127.0.0.1:5020", []string{"-p", "127.0.0.1:5020:9090"}, "appsecco/dvna:sqlite"},
-	{"azq-dvwa", "http://127.0.0.1:5030", []string{"-p", "127.0.0.1:5030:80"}, "vulnerables/web-dvwa"},
+	{"azq-juice", "http://127.0.0.1:3001", []string{"-p", "127.0.0.1:3001:3000", "-e", "NODE_OPTIONS=--max-old-space-size=4096"}, labImage("AZQ_JUICE_IMAGE")},
+	{"azq-vampi", "http://127.0.0.1:5002", []string{"-p", "127.0.0.1:5002:5000", "-e", "vulnerable=1", "-e", "tokentimetolive=3600"}, labImage("AZQ_VAMPI_IMAGE")},
+	{"azq-dvga", "http://127.0.0.1:5013", []string{"-p", "127.0.0.1:5013:5013", "-e", "WEB_HOST=0.0.0.0"}, labImage("AZQ_DVGA_IMAGE")},
+	{"azq-dvna", "http://127.0.0.1:5020", []string{"-p", "127.0.0.1:5020:9090"}, labImage("AZQ_DVNA_IMAGE")},
+	{"azq-dvwa", "http://127.0.0.1:5030", []string{"-p", "127.0.0.1:5030:80"}, labImage("AZQ_DVWA_IMAGE")},
 }
 
 // labStartWait covers Juice Shop's cold start (a minute or two).

@@ -198,3 +198,37 @@ that was measured, nothing that stops relying on it; 7 to 8; 5 to 6; 3 to 4;
 that had no anchors: compare across that line with care. The gate passes when
 every merged score is 9 or more and no safety cap applies; the final call
 (before tagging a release) runs `samples=2` and both samples must pass.
+
+## The score history
+
+Every review part writes a second, small record beside its archive: the
+numbers of its scorecard (`range/scores.py extract`), encrypted to the same
+key as the archive, as `trial/NAME[/PART]/scores.json.age` on ci-results (gate
+parts, baseline and switch; not in the repository or an issue). `fetch.sh`
+decrypts it to `scores.json` next to `REPORT.md`. `history.sh [N]` fetches only
+those records of the last N reviews (not their archives) and prints each item
+across them, one cell per review, with the spread between the samples of a
+review (`7/9 (spread 2)`) and the range of the reviews' means. Two samples of one
+build have differed by two points on the same item: a change inside that
+spread is no trend. A review from before the records has none: fetch it and
+`python3 .github/ci/range/scores.py history DIR` reads its `REPORT.md`.
+
+```
+.github/ci/history.sh 10
+```
+
+## Before tagging a release
+
+The release workflow refuses a tag whose commit has no passing `checklist`
+run. That workflow runs the review's capability checklist as commands
+(`go run ./bench -checklist`: exit codes, counts that must agree, scope,
+GET-only mapping, writes only with their flags, `-deny-path`, a lost session,
+the MCP lock, the budget, the kill switch; `bench/README.md` lists what it
+covers and what it does not) on every push to `next`, so a merged commit
+usually has one. For the commit to tag, if it has none:
+
+```
+.github/ci/run.sh checklist v0-14-0       # a tag checklist-v0-14-0, under 20 minutes
+```
+
+then the `gate` trial with `samples=2`, then the tag.

@@ -72,7 +72,7 @@ type runMeasure struct {
 
 // sections are what -only picks from; dockerParts need the docker apps.
 var (
-	sections    = []string{"apps", "dropin", "dirs", "fuzz", "scope", "secrets", "tenants", "scale", "claims", "regress", "shots", "params", "domains", "urls", "brute", "dns", "lab", "ports", "services", "network", "probe", "notify", "openapi", "docs"}
+	sections    = []string{"apps", "dropin", "dirs", "fuzz", "scope", "secrets", "tenants", "scale", "claims", "regress", "deploy", "checklist", "shots", "params", "domains", "urls", "brute", "dns", "lab", "ports", "services", "network", "probe", "notify", "openapi", "docs"}
 	dockerParts = []string{"dropin", "dirs", "fuzz", "scope", "scale", "shots", "params", "openapi", "probe"}
 	// perProfile sections compare azhaq with a reference tool and run once
 	// for each profile; the others run once.
@@ -105,6 +105,7 @@ func main() {
 	pd := flag.String("polite-domains", "hackerone.com,vulnweb.com", "domains the polite profile looks up (at 10 DNS queries per second each takes minutes; the default profile runs bench/domains.txt)")
 	flag.StringVar(&refBin, "refbin", os.Getenv("AZHAQ_REFBIN"), "a folder of reference tool binaries to use before bench/.work/bin (env AZHAQ_REFBIN)")
 	flag.StringVar(&nmapAt, "nmap", os.Getenv("AZHAQ_NMAP"), "nmap, or a script that runs an unpacked one (env AZHAQ_NMAP; else nmap in PATH)")
+	checklistRun := flag.Bool("checklist", false, "run the review checklist as commands (the units "+strings.Join(checklistUnits, ", ")+") against the labs and stand-in servers; it fails on any broken check")
 	readme := flag.Bool("readme", false, "rewrite the benchmark table in README.md from the newest record in -out, and exit")
 	merge := flag.Bool("merge", false, "join the records named as arguments (units run apart) into one record in -out, print it, and exit")
 	expect := flag.String("expect", "", "with -merge: the units the joined record must hold; each one missing becomes a failed check")
@@ -134,6 +135,9 @@ func main() {
 		}
 		return
 	}
+	if *checklistRun {
+		*only, *unitList = "claims,lab,deploy,checklist", strings.Join(checklistUnits, ",")
+	}
 	politeDomains = strings.Split(*pd, ",")
 	var profiles []string
 	switch *profile {
@@ -161,7 +165,7 @@ func main() {
 	gate := map[string]bool{"apps": *apps, "dropin": *apps, "dirs": *apps, "fuzz": *apps, "scope": *apps, "secrets": *apps, "tenants": *apps,
 		"scale": *apps, "claims": *apps, "shots": *apps, "params": *apps, "domains": *domains, "urls": *domains, "brute": *brute,
 		"dns": true, "lab": true, "ports": *ports, "services": *ports, "network": *domains && *network, "probe": *probe,
-		"notify": true, "openapi": *apps, "docs": true}
+		"notify": true, "openapi": *apps, "docs": true, "deploy": true}
 	// -units narrows what the flags select: a unit runs when both agree.
 	var only1 map[string]bool
 	if *unitList != "" {
@@ -214,10 +218,11 @@ func main() {
 	if _, err := exec.Command("go", "build", "-o", azhaq, "./cmd/azhaq").CombinedOutput(); err != nil {
 		fatal("go build: %v", err)
 	}
+	must(freshCopy(azhaq))
 	if v, err := exec.Command(azhaq, "version").Output(); err == nil {
 		rec.Version = strings.TrimSpace(string(v))
 	}
-	if !(len(sel) == 1 && sel["regress"]) { // regress uses what $AZHAQ_REFBIN holds
+	if !(len(sel) == 1 && sel["regress"]) && !*checklistRun { // regress uses what $AZHAQ_REFBIN holds; the checklist uses no reference tool
 		must(installTools(binDir))
 		must(installBuilt(binDir))
 	}
@@ -321,16 +326,18 @@ func main() {
 		cases = nil // every case; CLAIMS_ONLY still narrows a development run
 	}
 	once := map[string]func(){
-		"dropin":  func() { rec.Dropin = benchDropin(*crapi) },
-		"scope":   func() { rec.Scope = benchScope(juiceURL) },
-		"secrets": func() { rec.Secrets = benchSecrets() },
-		"tenants": func() { rec.Tenants = benchTenants() },
-		"scale":   func() { rec.Scale = benchScale(juiceURL) },
-		"regress": func() { rec.Regress = benchRegress() },
-		"network": func() { rec.Network = benchNetwork() },
-		"lab":     func() { rec.Lab = benchLab() },
-		"openapi": func() { rec.OpenAPI = benchOpenAPI() },
-		"docs":    func() { rec.Docs = benchDocs() },
+		"dropin":    func() { rec.Dropin = benchDropin(*crapi) },
+		"scope":     func() { rec.Scope = benchScope(juiceURL) },
+		"secrets":   func() { rec.Secrets = benchSecrets() },
+		"tenants":   func() { rec.Tenants = benchTenants() },
+		"scale":     func() { rec.Scale = benchScale(juiceURL) },
+		"regress":   func() { rec.Regress = benchRegress() },
+		"network":   func() { rec.Network = benchNetwork() },
+		"lab":       func() { rec.Lab = benchLab() },
+		"openapi":   func() { rec.OpenAPI = benchOpenAPI() },
+		"docs":      func() { rec.Docs = benchDocs() },
+		"deploy":    benchDeploy,
+		"checklist": benchChecklist,
 	}
 	for _, name := range onceSections {
 		if name == "claims" { // its cases are units of their own
@@ -420,6 +427,24 @@ func run(target string, timeout time.Duration, dir string, name string, args ...
 		keepRef(key, dir, args, before, stdout.Bytes(), m)
 	}
 	return stdout.Bytes(), m
+}
+
+// freshCopy rewrites the file at path as a plain copy of itself. A binary the
+// linker has just written is mapped much more of (the kernel maps whole
+// folios of the cache around each fault, and counts them in the process's
+// resident size): the same azhaq measured 30 MB resident as built and 14 MB
+// as copied, as a downloaded or unpacked release, or a reference tool, is.
+// The memory the bench compares must not depend on how a file got to disk.
+func freshCopy(path string) error {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	tmp := path + ".copy"
+	if err := os.WriteFile(tmp, raw, 0o755); err != nil {
+		return err
+	}
+	return os.Rename(tmp, path)
 }
 
 // watchHWM samples the peak resident size (VmHWM, KB) of a running process.
