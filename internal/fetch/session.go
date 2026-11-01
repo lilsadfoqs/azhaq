@@ -706,6 +706,17 @@ func sessionSaw(ctx context.Context, raw string, res Result) {
 		return
 	}
 	signIn := g.signIn()
+	if replacesSession(res.Header) || replacesSession(res.FinalHeader) {
+		// The server gave the cookie the user gave another value: the run
+		// goes on with the user's, so the check decides whether it still holds.
+		g.due.Store(true)
+		g.mu.Lock()
+		if g.signal == "" {
+			g.signal = pathOf(raw) + " set the session cookie to another value"
+		}
+		g.mu.Unlock()
+		g.notify("")
+	}
 	if res.Status == http.StatusUnauthorized || signIn != "" && slices.ContainsFunc(res.Hops, func(h Hop) bool {
 		return h.Location != "" && pathOf(h.Location) == pathOf(signIn)
 	}) {
@@ -729,23 +740,30 @@ func (g *sessionGuard) probe(ctx context.Context, raw string, res Result) {
 		!strings.Contains(strings.ToLower(res.Header.Get("Content-Type")), "json") {
 		return
 	}
-	if page, _ := g.page(); page != "" || g.renewing.Load() || g.checking.Load() || !g.probing.CompareAndSwap(false, true) {
+	if page, _ := g.page(); page != "" || g.renewing.Load() || g.checking.Load() || g.due.Load() || !g.probing.CompareAndSwap(false, true) {
 		return
 	}
 	defer g.probing.Store(false)
 	g.mu.Lock()
-	if g.probes >= maxProbes || g.lost != nil {
+	// Once an answer looked like the end of the session, nothing is measured
+	// without it: the answer with the session would be the ended one, and
+	// would be taken as what a live session answers.
+	if g.probes >= maxProbes || g.lost != nil || g.endedBy != "" || g.signal != "" {
 		g.mu.Unlock()
 		return
 	}
 	g.probes++
 	g.mu.Unlock()
-	with, without, err := Measure(ctx, raw)
+	with, err := askPrint(ctx, raw, true)
+	if err != nil || g.due.Load() {
+		return
+	}
+	without, err := askPrint(ctx, raw, false)
 	if err != nil || with == without || with.Status == 0 {
 		return
 	}
 	g.mu.Lock()
-	if g.s.Check == "" {
+	if g.s.Check == "" && !g.due.Load() && g.endedBy == "" && g.signal == "" {
 		g.s.Check, g.s.Want = raw, with
 		if g.s.SignIn == "" {
 			g.s.SignIn = without.Loc
@@ -805,6 +823,26 @@ func clearsSession(h http.Header) bool {
 			if slices.ContainsFunc(mine, func(m *http.Cookie) bool { return m.Name == c.Name }) {
 				return true
 			}
+		}
+	}
+	return false
+}
+
+// replacesSession says a response sets a cookie the run sends to another
+// value than the one it was given.
+func replacesSession(h http.Header) bool {
+	if len(h["Set-Cookie"]) == 0 {
+		return false
+	}
+	extraMu.RLock()
+	mine := (&http.Request{Header: http.Header{"Cookie": Extra.Values("Cookie")}}).Cookies()
+	extraMu.RUnlock()
+	for _, c := range (&http.Response{Header: h}).Cookies() {
+		if c.MaxAge < 0 || c.Value == "" || !c.Expires.IsZero() && c.Expires.Before(time.Now()) {
+			continue // clearing: clearsSession's
+		}
+		if slices.ContainsFunc(mine, func(m *http.Cookie) bool { return m.Name == c.Name && m.Value != c.Value }) {
+			return true
 		}
 	}
 	return false

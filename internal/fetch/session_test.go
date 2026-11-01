@@ -32,6 +32,26 @@ func TestClearsSession(t *testing.T) {
 	}
 }
 
+// A response that gives a cookie the user gave another value asks for a
+// check; a response that sets it to the same value, or sets another, does not.
+func TestReplacesSession(t *testing.T) {
+	Reset()
+	defer Reset()
+	Extra = http.Header{"Cookie": {"sid=abc; theme=dark"}}
+	for set, want := range map[string]bool{
+		"sid=other; Path=/":  true,
+		"sid=abc; Path=/":    false,
+		"theme=light":        true,
+		"other=x":            false,
+		"sid=; Max-Age=0":    false,
+		"sid=new; Max-Age=0": false,
+	} {
+		if got := replacesSession(http.Header{"Set-Cookie": {set}}); got != want {
+			t.Errorf("%q: %v, want %v", set, got, want)
+		}
+	}
+}
+
 func sessionSite(t *testing.T) *httptest.Server {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {

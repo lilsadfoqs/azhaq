@@ -39,6 +39,7 @@
 - `run` no longer calls a CNAME target `unresolved` at `-depth 0` when the answer that named it held its address: the name is `live` (or `sibling`) with that address in `proof`, at any `-depth`.
 - `hunt` no longer lists a translation reference such as `@Button_Cancel` under a name containing "Password" as a generic secret.
 - `urls` drops `/FUZZMultiple`, a fuzz keyword behind stray symbols (`%CB%93%E2%86%92FUZZ`, `FUZZ000003:C=200`), `/../` inside a query name and an injection glued to a value (`1union select`, `from information_schema.`) as junk.
+- A `-cookie` or `-header` run no longer measures a route without its session after an answer that looked like the end of the session, which made it take a revoked session's answer for a live one, miss the end and exit 0; it stops with exit 3, and a response that gives the user's cookie another value asks for a check too.
 
 ## v0.13.0
 
