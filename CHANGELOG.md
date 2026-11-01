@@ -5,9 +5,13 @@
 ### Changed
 
 - `-H` and `-header` are one flag on every command: `run` and `plan` take `-H`, and `probe`, `crawl`, `dirs`, `params`, `shots` and `fuzz` take `-header`; a secret header given either way is kept out of what resume stores.
+- `run` takes `-sr`, `-srd` and `-ob` (the layout of `crawl -sr`: `DIR/HOST/SHA1.txt` with an `index.txt`, bounded by `-max-response-size`, off by default), and `query` has a `response_file` field with the path of a URL row's stored response.
+- A root seed now reads API descriptions and GraphQL endpoints at well-known paths at any `-depth`, from 19 more framework locations (`v3/api-docs.yaml`, `swagger/doc.json`, `api-json`, `api/graphql`, …); the row's proof says which URL exposed it (`exposed_by`). A GraphQL endpoint that refuses the GET (405, a 500 that says POST only) is named, and with `-graphql` its schema is read by a POST introspection.
 
 ### Fixed
 
+- `run -cidr` with `-ports` now hands each address to the web stage at its first open port, and each web port as it is named, instead of when the whole 256-address block ends: a full sweep has HTTP results in its first minute, not after the sweep.
+- A DNS query sent again beside a late one no longer shares its message with the first attempt (packing it raced the copy; seen with `-race`).
 - `crawl` and `run`: a page with two forms, where a select was left open in the first, no longer crashes the run with `index out of range`; the form reader forgets the select when a form opens or closes and at `</select>`.
 - A collector that panics, or a goroutine it started, now fails its task instead of ending the process: the panic and its first frames are in the summary's `failed` list, what the task found is kept, the other collectors finish, the ledger is sealed, and the run exits 3 with `complete: false`. Workers and Chrome's page loops are covered the same way; see TROUBLESHOOTING, "A failure that starts with `panic:`".
 - MCP `azhaq_status` reports a workspace from its database: a map the budget stopped is `stopped by a limit` with `tasks_left`, the `requests` it has sent and the `azhaq_resume` call, and a later query of the workspace no longer turns it `complete`.
