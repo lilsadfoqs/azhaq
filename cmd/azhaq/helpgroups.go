@@ -248,7 +248,7 @@ var helpSpecs = map[string]helpSpec{
 			{"Scope and safety", `allow deny deny-path kill-file ledger seal-to`},
 			{"Pace and limits", `rate t p timeout maxtime max-requests se-after control`},
 			{"Session and network", `x proxy replay-proxy`},
-			{"Output", `db json o of silent v c`},
+			{"Output", `db json o of silent quiet v c`},
 		},
 		hidden: map[string]string{
 			"compat:ffuf": `

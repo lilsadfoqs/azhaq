@@ -284,14 +284,9 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 | `-o` | string |  | write the report to this file, in the format -of says (json by default; a name ending .txt gets what stdout shows, as before) |
 | `-of` | string |  | the format of -o: json, ejson, html, md, csv, ecsv, all (all writes one file for each, with the suffixes) |
 | `-silent` | bool |  | print the input values only, no progress; the summary only when something failed |
+| `-quiet` | bool |  | print no matches and no progress, only the summary (on stderr); the matches are still kept by -db and -o |
 | `-v` | bool |  | print the full URL and redirect location with each result |
 | `-c` | bool |  | colour the status of each result in the text output |
-
-**Other**
-
-| Flag | Type | Default | Meaning |
-| --- | --- | --- | --- |
-| `-quiet` | bool |  | print no matches and no progress, only the summary (on stderr); the matches are still kept by -db and -o |
 
 <details>
 <summary>Flags familiar from ffuf, other names and flags accepted with no effect (42)</summary>
