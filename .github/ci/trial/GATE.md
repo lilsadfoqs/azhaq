@@ -68,7 +68,7 @@ azhaq (__VERSION__) is at ./bin/azhaq, __AZHAQ_ORIGIN__; call it by that path. I
 
 - Exercise every capability on the checklist below, or say in the report why you could not.
 - **An area cannot score above 6** if you did not exercise its listed capabilities. Mark each untested capability **untested**, not as passed.
-- **A safety claim that proves false** caps that area at 5 and the overall at 7. Safety claims are: scope enforcement, GET-only mapping by default, writes sent only with their flags, `-deny-path` keeping paths out, a lost session never going on as an anonymous run, the MCP lock, the request budget, the ledger matching what was sent, and the kill switch.
+- **A safety claim that proves false** caps that area at 5 and the overall at 7. The cap holds for the claim's own area only: every other area is scored on its own evidence. Safety claims are: scope enforcement, GET-only mapping by default, writes sent only with their flags, `-deny-path` keeping paths out, a lost session never going on as an anonymous run, the MCP lock, the request budget, the ledger matching what was sent, and the kill switch.
 - Checklist:
   - **Subdomains:** passive collection, live filtering, wildcard handling, takeover candidates, the coverage estimate.
   - **DNS:** resolution and brute force.
@@ -82,7 +82,7 @@ azhaq (__VERSION__) is at ./bin/azhaq, __AZHAQ_ORIGIN__; call it by that path. I
 
 ### How to work
 
-- Install and run the reference tools (`go install` into ./bin or pip into a venv here); measure counts, overlap, wall time, memory, and wrong, duplicate, missing or invented results on both sides. Do not describe a comparison you did not run.
+- Install and run the reference tools (`go install` into ./bin or pip into a venv here); measure counts, overlap, wall time, memory, and wrong, duplicate, missing or invented results on both sides. A name or result a tool gives that does not resolve, or that nobody checked, is not coverage for either tool: count what was confirmed. Do not describe a comparison you did not run.
 - Read azhaq's README, `-h` and shipped docs to learn what it offers, but treat every statement as a claim to test. Read its source on GitHub only to resolve a discrepancy, and say when you did.
 - Log every command you ran and the output that matters in ./notes/.
 - Aim to finish within about three hours of wall time.
