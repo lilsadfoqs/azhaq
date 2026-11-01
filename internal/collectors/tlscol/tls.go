@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"net"
 	"strings"
 	"time"
@@ -77,6 +78,14 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 	hs := timing.Start(ctx, "tls.handshake", host)
 	defer hs()
 
+	// A handshake is a connection to the target: counted and paced like a
+	// request, as the ledger lists it.
+	if err := egress.Spend(ctx); err != nil {
+		if errors.Is(err, neterr.ErrBudget) || errors.Is(err, neterr.ErrKilled) {
+			return types.RunMeta{Status: types.StatusCapped}, err
+		}
+		return types.RunMeta{Status: types.StatusError, Error: err.Error()}, err
+	}
 	var conn net.Conn
 	var err error
 	if c.Dial != nil {
@@ -90,6 +99,9 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		}, 8*time.Second)
 	}
 	if err != nil {
+		if errors.Is(err, neterr.ErrOutOfScope) {
+			egress.Refund() // never sent
+		}
 		if neterr.UnknownHost(err) || isIP {
 			return types.RunMeta{Status: types.StatusOK}, nil // most addresses of a network serve no TLS
 		}
