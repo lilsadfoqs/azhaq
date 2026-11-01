@@ -199,7 +199,7 @@ Behaviour, fields and edge cases: [`azhaq probe`](commands/probe.md).
 - A target with no answer is a row with `failed: true`, and `-probe` prints `[FAILED]` for it. With `-p` (or `-path`) every port (path) of every input ends as a row of its own, a failed one named by the scheme asked last and its error, as in httpx; the summary counts them and names each failed URL once.
 - A name that resolves only because its zone has a wildcard is probed, not dropped, so a list of real hosts is not thinned.
 - `-p` replaces the port of an input, as httpx does: `-l 127.0.0.1:3001 -p 5002` asks port 5002 only, and `input` stays the line as given. A URL with a path keeps its path and its own scheme on the new port, where httpx asks both schemes. Without `-p`, an input asks its own port.
-- A bare `host:port` is asked over plain HTTP first on 8080 and on ports above 1024. It is asked over TLS when the plain request is answered 400.
+- A bare `host:port` is asked over both schemes, as httpx does: plain HTTP first on 80, 8080 and ports above 1024, TLS first on 443 and the other ports below 1024. The second scheme is asked when the first is not answered (the connection is refused or closed, or times out, the TLS handshake fails, or the service does not speak HTTP, such as an FTP banner) and, after plain HTTP, when it is answered 400. Any other answer stands and the second scheme is not asked.
 - Every request goes through the scope, the budget, the pace and the ledger. A redirect to another site is recorded and not requested, even with `-fr`.
 
 ### Examples

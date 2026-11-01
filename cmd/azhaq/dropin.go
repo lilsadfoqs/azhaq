@@ -1362,7 +1362,7 @@ func samplingNote(domain string, srcs map[string]any) string {
 		}
 		rounds, _ := row["rounds"].([]any)
 		left := intOf(row["sample_ceiling"]) - len(rounds)
-		more := "-guess-samples N takes up to N samples while each finds a new name that resolves, with no time budget"
+		more := "-guess-samples N takes up to N samples while each finds a new name that resolves or the pool is not yet covered, with no time budget"
 		if left > 0 {
 			more = fmt.Sprintf("up to %s left untaken; %s", plural(left, "more sample"), more)
 		}

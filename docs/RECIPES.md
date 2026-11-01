@@ -421,7 +421,7 @@ Without `-live` nothing is looked up in DNS. Names that only subdomain.center gu
 
 The last command prints the guesses and leaves every unverified name out. A name that is only a CNAME is listed with `-live` too, with `cname` and no `a`, as `dnsx -a -cname` lists it.
 
-**Catch:** subdomain.center answers a random 500 names per call, and its real names differ between calls. Two runs list different names. A run asks it again only while a round gives a new name that resolves. The name history brings back names an earlier run found.
+**Catch:** subdomain.center answers a random 500 names per call, and its real names differ between calls. Two runs list different names. A run asks it again while a round gives a new name that resolves, and until the names seen are most of the pool its repeats estimate: a round with no new live name says little while a name in twenty is unseen. The name history brings back names an earlier run found.
 
 ## Find subdomains by variation
 

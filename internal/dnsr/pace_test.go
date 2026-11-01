@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -333,6 +334,79 @@ func TestResolveManyAsksAgainWhatALoadedResolverDropped(t *testing.T) {
 	for _, a := range out {
 		if a.Status == StatusFailed || a.Status == StatusBroken {
 			t.Fatalf("a name a loaded resolver dropped was not asked again: %+v", a)
+		}
+	}
+}
+
+// Names a zone's dead servers never answer are not asked a second time: the
+// second pass asks 16 of them first and, when none is answered, leaves the
+// rest with their first failure. 100 names, 40 of them in a zone that is
+// silent, cost their 3 attempts and 16 names' second pass, not 6 attempts
+// each; the 60 that answer are untouched.
+func TestResolveManySecondPassEndsWhenNoneOfItsFirstNamesAnswers(t *testing.T) {
+	p := New(Options{Timeout: 20 * time.Millisecond})
+	var asked atomic.Int32
+	dead := func(name string) bool { return strings.HasPrefix(name, "d") }
+	p.Exchange = func(ctx context.Context, q *dns.Msg, _ string) (*dns.Msg, error) {
+		asked.Add(1)
+		if dead(q.Question[0].Name) {
+			<-ctx.Done()
+			return nil, errors.New("read udp: i/o timeout")
+		}
+		m := new(dns.Msg)
+		m.SetReply(q)
+		rr, _ := dns.NewRR(q.Question[0].Name + " 60 IN A 192.0.2.1")
+		m.Answer = append(m.Answer, rr)
+		return m, nil
+	}
+	var all []string
+	for i := 0; i < 60; i++ {
+		all = append(all, fmt.Sprintf("h%d.example.org", i))
+	}
+	for i := 0; i < 40; i++ {
+		all = append(all, fmt.Sprintf("d%d.example.org", i))
+	}
+	for _, a := range p.ResolveMany(context.Background(), all, 128) {
+		switch {
+		case dead(a.Name) && a.Status != StatusFailed:
+			t.Fatalf("%s: %s, want its failure", a.Name, a.Status)
+		case !dead(a.Name) && a.Status != StatusOK:
+			t.Fatalf("%s: %s %s", a.Name, a.Status, a.Err)
+		}
+	}
+	// 60 answers, 3 attempts for each of 40 names, 3 more for 16 of them.
+	if n, max := int(asked.Load()), 60+40*3+retryProbe*3; n > max {
+		t.Errorf("%d queries, want at most %d: the second pass asked names that no probe name answered", n, max)
+	}
+}
+
+// A second pass whose first names are answered goes on to the rest: half
+// the names a resolver dropped (every other one) answer when asked again.
+func TestResolveManySecondPassGoesOnWhenItsFirstNamesAnswer(t *testing.T) {
+	p := New(Options{Timeout: 20 * time.Millisecond, Attempts: 1})
+	var mu sync.Mutex
+	seen := map[string]int{}
+	p.Exchange = func(ctx context.Context, q *dns.Msg, _ string) (*dns.Msg, error) {
+		name := q.Question[0].Name
+		mu.Lock()
+		seen[name]++
+		n := seen[name]
+		mu.Unlock()
+		var i int
+		fmt.Sscanf(strings.TrimPrefix(name, "h"), "%d", &i)
+		if n == 1 && i%2 == 0 { // dropped once: answered when asked again
+			<-ctx.Done()
+			return nil, errors.New("read udp: i/o timeout")
+		}
+		m := new(dns.Msg)
+		m.SetReply(q)
+		rr, _ := dns.NewRR(name + " 60 IN A 192.0.2.1")
+		m.Answer = append(m.Answer, rr)
+		return m, nil
+	}
+	for _, a := range p.ResolveMany(context.Background(), names(200), 128) {
+		if a.Status != StatusOK {
+			t.Fatalf("%s: %s %s: a name the second pass could answer was not asked", a.Name, a.Status, a.Err)
 		}
 	}
 }

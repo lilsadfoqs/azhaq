@@ -129,7 +129,7 @@ func cmdSubs(args []string) error {
 	guesses := fs.Bool("guesses", false, "also print the names only subdomain.center guessed, which no source asserted and no lookup checked (-json marks them \"unverified\": true); not with -live, which looks them up")
 	nW := fs.Bool("nW", false, "same as -live (subfinder's name)")
 	words := fs.String("w", "", "also resolve WORD.domain for each word in this file, like puredns bruteforce (active DNS; the names found are live)")
-	guessSamples := fs.Int("guess-samples", 0, fmt.Sprintf("with -live, take up to N samples of subdomain.center's guesses while each has a new name that resolves, with no time budget (default: the first sample, which is what subfinder | dnsx checks, then more for %s at most, up to %d)", subcol.SampleBudget(), subcol.SampleRounds()))
+	guessSamples := fs.Int("guess-samples", 0, fmt.Sprintf("with -live, take up to N samples of subdomain.center's guesses while each has a new name that resolves or the names seen are not yet most of its pool, with no time budget (default: the first sample, which is what subfinder | dnsx checks, then more for %s at most, up to %d)", subcol.SampleBudget(), subcol.SampleRounds()))
 	permute := fs.Bool("permute", false, "also resolve variations of the names found (api → api-dev, api2, dev.api), like alterx | dnsx (active DNS)")
 	oJ := fs.Bool("oJ", false, "same as -json (subfinder's name)")
 	ls := fs.Bool("ls", false, "list the sources and exit: name, then * if a key is required and ~ if one improves the answer; with -json one object each (name, default, recursive, keyRequirement)")
