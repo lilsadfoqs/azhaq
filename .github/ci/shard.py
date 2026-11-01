@@ -17,6 +17,9 @@ its *_test.go files (nothing is compiled to list them). test-times.json holds
 is split by test, the others are whole units; a package or test missing from
 the file counts as 1 s (a package) or the package's median (a test). Units go,
 longest first, to the least loaded shard, so the same inputs give the same plan.
+A shard runs a split package's tests in batches of about BATCH seconds, in name
+order: go test keeps a result per run, so a changed file that one test reads
+runs again only that test's batch.
 """
 import argparse
 import glob
@@ -30,6 +33,7 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 TIMES = os.path.join(HERE, "test-times.json")
 THRESHOLD = 20.0
+BATCH = 20.0
 TEST_RE = re.compile(r"^func ((?:Test|Example|Fuzz)(?:[^\sa-z(]\w*)?)\(", re.M)
 
 
@@ -136,6 +140,21 @@ def check(inv, p):
     return bad
 
 
+def batches(pkg, tests, times, limit=BATCH):
+    """Tests in name order, cut into runs of at most limit seconds (or one test)."""
+    out, cur, load = [], [], 0.0
+    for t in sorted(tests):
+        c = test_cost(pkg, t, times)
+        if cur and load + c > limit:
+            out.append(cur)
+            cur, load = [], 0.0
+        cur.append(t)
+        load += c
+    if cur:
+        out.append(cur)
+    return out
+
+
 def pkg_arg(rel):
     return "./" + rel if rel != "." else "."
 
@@ -184,8 +203,8 @@ class Run:
             rel = relpath(pkg, self.mod)
             test = e.get("Test")
             if test is None:
-                if act != "skip":
-                    self.packages[rel] = e.get("Elapsed", 0)
+                if act != "skip":  # a split package runs in batches
+                    self.packages[rel] = self.packages.get(rel, 0) + e.get("Elapsed", 0)
             elif "/" not in test:
                 self.tests.setdefault(rel, {})[test] = e.get("Elapsed", 0)
         if act == "fail" or act == "build-fail":
@@ -213,13 +232,14 @@ class Run:
         self.out.flush()
 
 
-def run_shard(inv, p, index, fresh, mod):
+def run_shard(inv, p, index, fresh, mod, times):
     s = p[index]
     run = Run(mod, sys.stdout)
     if s["whole"]:
         run.go(run_args(s["whole"], fresh=fresh))
     for pkg, tests in sorted(s["split"].items()):
-        run.go(run_args([pkg], tests, fresh))
+        for b in batches(pkg, tests, times):
+            run.go(run_args([pkg], b, fresh))
     with open("times-%d.json" % index, "w") as f:
         json.dump({"shard": index, "packages": run.packages, "tests": run.tests}, f, indent=1, sort_keys=True)
         f.write("\n")
@@ -302,7 +322,7 @@ def main(argv=None):
     if not 0 <= a.index < a.shards:
         ap.error("--index must be in 0..%d" % (a.shards - 1))
     mod = subprocess.check_output(["go", "list", "-m"], text=True).strip()
-    return run_shard(inv, p, a.index, a.fresh, mod)
+    return run_shard(inv, p, a.index, a.fresh, mod, times)
 
 
 if __name__ == "__main__":

@@ -102,6 +102,13 @@ class RunArgs(unittest.TestCase):
             ["go", "test", "-race", "-json", "-count=1", "-run", "^(T1|T2)$", "./a"],
         )
 
+    def test_batches_cut_by_time_in_name_order(self):
+        times = {"p": {"A": 15, "B": 10, "C": 30, "D": 1}}
+        self.assertEqual(shard.batches("p", ["D", "C", "B", "A"], times, limit=20),
+                         [["A"], ["B"], ["C"], ["D"]])
+        self.assertEqual(shard.batches("p", ["A", "D"], times, limit=20), [["A", "D"]])
+        self.assertEqual(shard.batches("p", [], times), [])
+
     def test_relpath(self):
         self.assertEqual(shard.relpath("m/x", "m"), "x")
         self.assertEqual(shard.relpath("m", "m"), ".")
