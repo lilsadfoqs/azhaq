@@ -541,6 +541,42 @@ func TestProbePathJoinsTheURLsPathAndKeepsItsQuery(t *testing.T) {
 	}
 }
 
+// The requests below are what httpx 1.12 sent for the same inputs. The row
+// names the URL that was asked: httpx prints `/login?x=1` for a request it
+// sent to `/api/login?x=1`, a URL no request used.
+func TestProbePathRowNamesTheURLAsked(t *testing.T) {
+	t.Chdir(t.TempDir())
+	site := newProbeSite(t)
+	for _, c := range []struct{ in, path, want string }{
+		{"/api?x=1", "/login", "/api/login?x=1"},
+		{"/api?x=1", "login", "/api/login?x=1"},
+		{"/api?x=1", "/login?x=2", "/api/login?x=1&x=2"},
+		{"/api?x=1&y=1", "/login?y=9", "/api/login?x=1&y=1&y=9"},
+		{"/api?x=1", "?q=2", "/api?x=1&q=2"},
+		{"/api/?x=1", "/a/b", "/api/a/b?x=1"},
+		{"/api/login", "/login", "/api/login"},
+		{"/api", "/api/login", "/api/login"},
+		{"/blog/admin", "/blog", "/blog/admin/blog"},
+		{"/api", "/a b", "/api/a%20b"},
+	} {
+		site.mu.Lock()
+		site.seen = nil
+		site.mu.Unlock()
+		out, _, _ := runContract(t, "probe", "-u", site.URL+c.in, "-path", c.path)
+		rows := probeRows(t, out)
+		site.mu.Lock()
+		seen := append([]string(nil), site.seen...)
+		site.mu.Unlock()
+		if len(rows) != 1 || len(seen) != 1 || seen[0] != "GET "+c.want {
+			t.Errorf("%s -path %s: asked %v, want GET %s", c.in, c.path, seen, c.want)
+			continue
+		}
+		if rows[0]["url"] != site.URL+c.want || rows[0]["path"] != c.want {
+			t.Errorf("%s -path %s: row url %v path %v, want %s", c.in, c.path, rows[0]["url"], rows[0]["path"], c.want)
+		}
+	}
+}
+
 // forwardProxy is an HTTP proxy that sends every request to target.
 func forwardProxy(t *testing.T, target string) string {
 	t.Helper()
