@@ -105,7 +105,7 @@ class BenchToolsTest(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.work = os.path.join(self.tmp.name, "work")
-        for p, body in {"bin/katana": "k", "bin/azhaq": "a", "bin/.katana-1": "", "arjun-2/bin/arjun": "j", "common.txt": "w", "paths.txt": "not kept"}.items():
+        for p, body in {"bin/katana": "k", "bin/azhaq": "a", "bin/.katana-1": "", "debs/nmap_7_amd64.deb": "d", "arjun-2/bin/arjun": "j", "common.txt": "w", "paths.txt": "not kept"}.items():
             path = os.path.join(self.work, p)
             os.makedirs(os.path.dirname(path), exist_ok=True)
             with open(path, "w") as f:
@@ -118,14 +118,14 @@ class BenchToolsTest(unittest.TestCase):
     def test_list_names_what_is_kept(self):
         r = self.sh("list")
         self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertEqual(r.stdout.split(), ["arjun-2/bin/arjun", "bin/.katana-1", "bin/katana", "common.txt"])
+        self.assertEqual(r.stdout.split(), ["arjun-2/bin/arjun", "bin/.katana-1", "bin/katana", "common.txt", "debs/nmap_7_amd64.deb"])
 
     def test_pack_makes_an_artifact_tar_without_azhaq(self):
         r = self.sh("pack", "out/dir")  # relative to the caller, not to the work folder
         self.assertEqual(r.returncode, 0, r.stderr)
         with tarfile.open(os.path.join(self.tmp.name, "out/dir/artifact.tar")) as t:
             names = sorted(m.name for m in t.getmembers() if m.isfile())
-        self.assertEqual(names, ["arjun-2/bin/arjun", "bin/.katana-1", "bin/katana", "common.txt"])
+        self.assertEqual(names, ["arjun-2/bin/arjun", "bin/.katana-1", "bin/katana", "common.txt", "debs/nmap_7_amd64.deb"])
 
     def test_nothing_to_keep_and_usage(self):
         self.env["WORK"] = os.path.join(self.tmp.name, "none")
