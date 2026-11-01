@@ -223,7 +223,7 @@ These controls hold for everything azhaq sends to a target. [Concepts](docs/CONC
 
 - **Scope.** No request to a target goes to a host outside the [scope](docs/CONCEPTS.md#scope), Chrome's included. Without a scope, requests stay on the site.
 - **Budget and pace.** `-max-requests` caps what a run sends, and `-rate` paces it. `azhaq resume` continues a run that a limit stopped. `azhaq plan` prints what a run would send before anything goes out.
-- **Kill switch.** Create the kill file (`-kill-file`, default `DB.stop`) and nothing more is sent, within a tenth of a second.
+- **Kill switch.** Create the kill file (`-kill-file`, default `DB.stop`) and no request, connection or query starts after it exists.
 - **Ledger.** Every request and connection of a run with a workspace is recorded in a hash-chained file that a seal closes. `azhaq ledger -verify` checks it.
 - **What azhaq sends.** azhaq sends a GET to every URL it finds in scope. It cannot know what a GET does on the server, so no name keeps a URL out. Writes (POST, PUT, PATCH, DELETE, forms, a page's own writes in Chrome, role write replays) are sent only with their flags. `-deny-path REGEX` keeps paths out, by any collector and Chrome. `azhaq plan` lists what will be sent, and the ledger records what was sent. Chrome saves no download.
 - **Sessions.** A signed-in run checks its session as it goes. If a request ends it, a `-login` run signs in again and asks again what the lost session answered; a `-cookie` run stops with a failure and exit 3, never going on anonymous. See [Sessions](docs/CONCEPTS.md#sessions).
