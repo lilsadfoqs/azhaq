@@ -461,12 +461,46 @@ func ledgerCount(path string) int { return len(readLedger(path)) }
 
 // ---- the section ----
 
-func benchClaims() *claimsRow {
+// claimStep is one case: its id, the apps it needs started together before
+// anything runs, and the code.
+type claimStep struct {
+	id   string
+	apps []string
+	fn   func()
+}
+
+func (c *claims) steps() []claimStep {
+	return []claimStep{
+		{"1", []string{claimJuice}, c.caseRun}, {"2", []string{claimJuice}, c.caseBrowser}, {"3", []string{claimJuice}, c.caseShots},
+		{"4", []string{claimDVWA}, c.caseDVWA}, {"5", []string{claimVampi}, c.caseRoles}, {"6", []string{claimJuice, claimVampi}, c.caseSweeps},
+		{"7", nil, c.casePorts}, {"8", []string{claimJuice}, c.caseMCP}, {"9", []string{claimJuice}, c.caseBudget},
+		{"10", []string{claimJuice}, c.caseKill}, {"11", []string{claimJuice}, c.caseKillShots},
+	}
+}
+
+// claimCaseIDs are the cases in the order they run: each is a unit of its own.
+func claimCaseIDs() []string {
+	var ids []string
+	for _, s := range (&claims{}).steps() {
+		ids = append(ids, s.id)
+	}
+	return ids
+}
+
+// benchClaims runs the cases named in only (all when empty). Case 1 also
+// holds the counter's self-check, so a case list from several jobs runs it
+// once.
+func benchClaims(only []string) *claimsRow {
 	row := &claimsRow{}
 	c := &claims{row: row, only: map[string]bool{}, labs: newLabSet()}
-	for _, s := range strings.Split(os.Getenv("CLAIMS_ONLY"), ",") { // while developing: CLAIMS_ONLY=3,4
-		if s = strings.TrimSpace(s); s != "" {
-			c.only[s] = true
+	for _, s := range only {
+		c.only[s] = true
+	}
+	if len(only) == 0 { // while developing: CLAIMS_ONLY=3,4
+		for _, s := range strings.Split(os.Getenv("CLAIMS_ONLY"), ",") {
+			if s = strings.TrimSpace(s); s != "" {
+				c.only[s] = true
+			}
 		}
 	}
 	c.dir, _ = filepath.Abs(filepath.Join(work, "claims-"+time.Now().Format("150405")))
@@ -476,15 +510,11 @@ func benchClaims() *claimsRow {
 	} else if _, err := exec.LookPath("chromium"); err == nil {
 		c.chrome = true
 	}
-	steps := []struct {
-		id   string
-		apps []string // started together before anything runs
-		fn   func()
-	}{
-		{"1", []string{claimJuice}, c.caseRun}, {"2", []string{claimJuice}, c.caseBrowser}, {"3", []string{claimJuice}, c.caseShots},
-		{"4", []string{claimDVWA}, c.caseDVWA}, {"5", []string{claimVampi}, c.caseRoles}, {"6", []string{claimJuice, claimVampi}, c.caseSweeps},
-		{"7", nil, c.casePorts}, {"8", []string{claimJuice}, c.caseMCP}, {"9", []string{claimJuice}, c.caseBudget},
-		{"10", []string{claimJuice}, c.caseKill}, {"11", []string{claimJuice}, c.caseKillShots},
+	steps := c.steps()
+	for id := range c.only {
+		if !slices.ContainsFunc(steps, func(s claimStep) bool { return s.id == id }) {
+			fatal("claims: no case %q (cases: %s)", id, strings.Join(claimCaseIDs(), ", "))
+		}
 	}
 	var need []string
 	for _, s := range steps {
@@ -498,11 +528,15 @@ func benchClaims() *claimsRow {
 	}
 	c.labs.start(need...)
 	t0 := time.Now()
-	c.selfCheck()
 	for _, s := range steps {
 		if c.want(s.id) {
 			s0 := time.Now()
-			s.fn()
+			trackUnit("claims:"+s.id, func() int { return len(row.Rows) }, func() {
+				if s.id == "1" {
+					c.selfCheck()
+				}
+				s.fn()
+			})
 			logf("claims: case %s took %.0fs", s.id, time.Since(s0).Seconds())
 		}
 	}
