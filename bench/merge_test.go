@@ -208,3 +208,67 @@ func TestMergeUnitSpansMustFit(t *testing.T) {
 		t.Fatal("spans longer than the checks were joined")
 	}
 }
+
+// The domain rows of units that ran in other jobs join in the order of the
+// domain list, in the default profile and the polite one.
+func TestMergeDomainRowsOfSeparateUnits(t *testing.T) {
+	dir := t.TempDir()
+	rows := func(ds ...string) []any {
+		var out []any
+		for _, d := range ds {
+			out = append(out, map[string]any{"domain": d, "azhaq_live": 1})
+		}
+		return out
+	}
+	mk := func(names []string, def, pol []any) map[string]any {
+		r := unitRec("abc", names...)
+		if def != nil {
+			r["domains"] = def
+		}
+		if pol != nil {
+			r["polite"] = map[string]any{"domains": pol}
+		}
+		return r
+	}
+	a := writeRec(t, dir, "a.json", mk([]string{"default:domains/vulnweb.com", "polite:domains/hackerone.com"}, rows("vulnweb.com"), rows("hackerone.com")))
+	b := writeRec(t, dir, "b.json", mk([]string{"default:domains/hackerone.com", "polite:domains/vulnweb.com"}, rows("hackerone.com"), rows("vulnweb.com")))
+	c := writeRec(t, dir, "c.json", mk([]string{"default:domains/tesla.com"}, rows("tesla.com"), nil))
+	expect := []string{"default:domains/hackerone.com", "default:domains/tesla.com", "default:domains/vulnweb.com", "polite:domains/hackerone.com", "polite:domains/vulnweb.com"}
+	if err := mergeRecords([]string{a, b, c}, filepath.Join(dir, "out"), expect); err != nil {
+		t.Fatal(err)
+	}
+	got := joined(t, dir)
+	if !slices.Equal(checkNames(got), expect) {
+		t.Errorf("checks %v", checkNames(got))
+	}
+	names := func(rs []domainRow) string {
+		var out []string
+		for _, r := range rs {
+			out = append(out, r.Domain)
+		}
+		return strings.Join(out, " ")
+	}
+	if n := names(got.Domains); n != "hackerone.com tesla.com vulnweb.com" {
+		t.Errorf("default domains %q", n)
+	}
+	if n := names(got.Polite.Domains); n != "hackerone.com vulnweb.com" {
+		t.Errorf("polite domains %q", n)
+	}
+	// A domain no record holds is a failed check, and no row.
+	if err := os.RemoveAll(filepath.Join(dir, "out")); err != nil {
+		t.Fatal(err)
+	}
+	if err := mergeRecords([]string{a, c}, filepath.Join(dir, "out"), expect); err != nil {
+		t.Fatal(err)
+	}
+	got = joined(t, dir)
+	failed := 0
+	for _, ch := range got.Checks {
+		if !ch.Pass {
+			failed++
+		}
+	}
+	if failed != 2 || len(got.Domains) != 2 {
+		t.Errorf("%d failed checks, %d default domain rows", failed, len(got.Domains))
+	}
+}

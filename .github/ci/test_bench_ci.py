@@ -21,6 +21,7 @@ bench: claims: case 5 took 190s
 bench: claims: case 10 took 56s
 bench: default: domains
 bench: some other took 9s
+bench: polite: domains/vulnweb.com took 223s
 """
 
 
@@ -28,7 +29,7 @@ class TimesTest(unittest.TestCase):
     def test_parse(self):
         self.assertEqual(
             bench_times.parse(LOG),
-            {"default:apps": 345, "polite:dirs": 212, "once:dropin": 31, "claims:5": 190, "claims:10": 56},
+            {"default:apps": 345, "polite:dirs": 212, "once:dropin": 31, "claims:5": 190, "claims:10": 56, "polite:domains/vulnweb.com": 223},
         )
 
     def test_base_keeps_untimed_units(self):
@@ -47,7 +48,7 @@ class TimesTest(unittest.TestCase):
     def test_committed_times_cover_the_measured_units(self):
         with open(os.path.join(HERE, "bench-times.json")) as f:
             times = json.load(f)
-        for u in ("default:apps", "polite:domains", "claims:5"):
+        for u in ("default:apps", "polite:domains/vulnweb.com", "claims:5"):
             self.assertIn(u, times)
         self.assertTrue(all(isinstance(v, int) and v >= 0 for v in times.values()))
 

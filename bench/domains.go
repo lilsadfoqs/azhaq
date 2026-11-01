@@ -1,11 +1,11 @@
 package main
 
 import (
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
-	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -100,130 +100,134 @@ func liveIndependent(names []string) map[string]bool {
 	return out
 }
 
-func benchDomains() []domainRow {
-	listFile := "bench/domains.txt"
+//go:embed domains.txt
+var domainsTxt []byte
+
+// domainList is the domains the bench looks up, one unit each
+// ("default:domains/hackerone.com"): bench/domains.txt, or the file named
+// by $AZHAQ_BENCH_DOMAINS.
+func domainList() []string {
+	raw := domainsTxt
 	if f := os.Getenv("AZHAQ_BENCH_DOMAINS"); f != "" { // while developing: one small domain
-		listFile = f
+		var err error
+		raw, err = os.ReadFile(f)
+		must(err)
 	}
-	raw, err := os.ReadFile(listFile)
-	must(err)
+	return lines(raw)
+}
+
+// benchDomain compares azhaq with subfinder | dnsx on one domain.
+func benchDomain(d string) domainRow {
 	dir, _ := filepath.Abs(filepath.Join(work, "domains"))
 	must(os.MkdirAll(dir, 0o755))
 	resFile := filepath.Join(dir, "resolvers.txt")
 	must(os.WriteFile(resFile, []byte(strings.Join(sharedResolvers, "\n")+"\n"), 0o644))
-	var out []domainRow
 	silent := true
-	for _, d := range lines(raw) {
-		if polite() && !slices.Contains(politeDomains, d) {
-			continue // at 10 DNS queries per second tesla.com alone takes minutes a tool
-		}
-		logf("domain %s", d)
-		row := domainRow{Domain: d, Profile: prof}
+	logf("domain %s", d)
+	row := domainRow{Domain: d, Profile: prof}
 
-		// azhaq subs -live: the passive sources and the DNS check, one command.
-		aa := []string{"subs", "-d", d, "-live", "-json", "-silent", "-resolvers", resFile}
-		if polite() {
-			aa = append(aa, "-dns-rate", politeDNS)
-		}
-		ar := azRun(d, 30*time.Minute, dir, aa...)
-		az := map[string]bool{}
-		for _, l := range lines([]byte(ar.stdout)) {
-			var o struct {
-				Host string `json:"host"`
-			}
-			if json.Unmarshal([]byte(l), &o) == nil && o.Host != "" && inDomain(o.Host, d) {
-				az[strings.ToLower(o.Host)] = true
-			}
-		}
-		row.AzhaqSeconds, row.AzhaqSubs, row.AzhaqNames, row.AzhaqLive = ar.seconds, ar.seconds, len(az), len(az)
-		summary := lastSummary(ar.stderr)
-		if !explained(summary) && !strings.Contains(ar.stderr, "error") && !strings.Contains(ar.stderr, "failed") {
-			silent = false
-		}
-		if _, ok := summary["sources"]; ok {
-			row.CT = subdomainSummary(summary)
-		}
-
-		// subfinder, then dnsx on its names, as the pipeline a reviewer runs.
-		sa := []string{"-d", d, "-silent", "-json", "-cs"}
-		subOut, sm := run(d, 30*time.Minute, dir, ref("subfinder"), sa...)
-		sub, srcOf := map[string]bool{}, map[string][]string{}
-		for _, l := range lines(subOut) {
-			var o struct {
-				Host   string   `json:"host"`
-				Source []string `json:"sources"` // with -cs
-			}
-			if json.Unmarshal([]byte(l), &o) == nil && o.Host != "" && inDomain(o.Host, d) {
-				n := strings.ToLower(o.Host)
-				sub[n], srcOf[n] = true, o.Source
-			}
-		}
-		row.SubfinderNames, row.SubSeconds = len(sub), sm.Seconds
-		list := filepath.Join(dir, d+"-"+prof+"-names.txt")
-		must(os.WriteFile(list, []byte(strings.Join(sortedKeys(sub), "\n")+"\n"), 0o644))
-		da := append([]string{"-l", list, "-silent", "-a", "-aaaa", "-cname", "-r", strings.Join(sharedResolvers, ",")}, pick([]string(nil), []string{"-rl", politeDNS})...)
-		liveOut, dm := run(d, 30*time.Minute, dir, ref("dnsx"), da...)
-		dx := map[string]bool{}
-		for _, n := range lines(liveOut) {
-			dx[strings.ToLower(strings.Fields(n)[0])] = true
-		}
-		row.SubfinderLive = len(dx)
-		refSecs := sm.Seconds + dm.Seconds
-
-		// Which of the names each tool calls live resolve at another resolver.
-		claimed := map[string]bool{}
-		for n := range az {
-			claimed[n] = true
-		}
-		for n := range dx {
-			claimed[n] = true
-		}
-		conf := liveIndependent(sortedKeys(claimed))
-		row.Live = len(conf)
-		var azOK, refOK int
-		var gaps []string
-		for n := range conf {
-			if az[n] {
-				azOK++
-			}
-			if dx[n] {
-				refOK++
-				if !az[n] {
-					gaps = append(gaps, n)
-				}
-			}
-			if az[n] && dx[n] {
-				row.SharedLive++
-			}
-		}
-		sort.Strings(gaps)
-		row.AzhaqLive, row.SubfinderLive = azOK, refOK
-		row.Gaps = gaps
-		row.RefSeconds = refSecs
-		unexplained := 0
-		var why []string
-		for _, g := range gaps {
-			ok := false
-			for _, src := range srcOf[g] {
-				if sourceFailed(ar.stderr, src) {
-					ok = true
-				}
-			}
-			if !ok {
-				unexplained++
-			}
-			why = append(why, fmt.Sprintf("%s (subfinder: %s)", g, strings.Join(srcOf[g], ",")))
-		}
-		cmds := cmdLine(azhaq, aa...) + " vs " + cmdLine("subfinder", sa...) + " | " + cmdLine("dnsx", da...)
-		barOne("subs -live "+d, azOK, refOK, ar.seconds, refSecs, "a name resolving at 9.9.9.9 or 208.67.222.222 (A, AAAA or CNAME)", cmds,
-			fmt.Sprintf("%s; azhaq printed %d, subfinder %d names, dnsx %d live; azhaq %d, reference %d confirmed, both %d; subfinder %.0fs + dnsx %.0fs; %s%s",
-				share(row.SharedLive, refOK), len(az), len(sub), len(dx), azOK, refOK, row.SharedLive, sm.Seconds, dm.Seconds, ratio(ar.seconds, refSecs), azErr(runMeasureOf(ar))))
-		addCheck("subs -live "+d+": every confirmed live name subfinder | dnsx finds is in azhaq's list or its source is named as failed", unexplained == 0,
-			"%d gaps, %d unexplained: %s", len(gaps), unexplained, clipList(why, 8))
-		out = append(out, row)
+	// azhaq subs -live: the passive sources and the DNS check, one command.
+	aa := []string{"subs", "-d", d, "-live", "-json", "-silent", "-resolvers", resFile}
+	if polite() {
+		aa = append(aa, "-dns-rate", politeDNS)
 	}
-	addCheck("subdomain sources: no silent zeros", silent, "every empty result is a failure flagged as error or degraded, or a zero every source answered")
-	return out
+	ar := azRun(d, 30*time.Minute, dir, aa...)
+	az := map[string]bool{}
+	for _, l := range lines([]byte(ar.stdout)) {
+		var o struct {
+			Host string `json:"host"`
+		}
+		if json.Unmarshal([]byte(l), &o) == nil && o.Host != "" && inDomain(o.Host, d) {
+			az[strings.ToLower(o.Host)] = true
+		}
+	}
+	row.AzhaqSeconds, row.AzhaqSubs, row.AzhaqNames, row.AzhaqLive = ar.seconds, ar.seconds, len(az), len(az)
+	summary := lastSummary(ar.stderr)
+	if !explained(summary) && !strings.Contains(ar.stderr, "error") && !strings.Contains(ar.stderr, "failed") {
+		silent = false
+	}
+	if _, ok := summary["sources"]; ok {
+		row.CT = subdomainSummary(summary)
+	}
+
+	// subfinder, then dnsx on its names, as the pipeline a reviewer runs.
+	sa := []string{"-d", d, "-silent", "-json", "-cs"}
+	subOut, sm := run(d, 30*time.Minute, dir, ref("subfinder"), sa...)
+	sub, srcOf := map[string]bool{}, map[string][]string{}
+	for _, l := range lines(subOut) {
+		var o struct {
+			Host   string   `json:"host"`
+			Source []string `json:"sources"` // with -cs
+		}
+		if json.Unmarshal([]byte(l), &o) == nil && o.Host != "" && inDomain(o.Host, d) {
+			n := strings.ToLower(o.Host)
+			sub[n], srcOf[n] = true, o.Source
+		}
+	}
+	row.SubfinderNames, row.SubSeconds = len(sub), sm.Seconds
+	list := filepath.Join(dir, d+"-"+prof+"-names.txt")
+	must(os.WriteFile(list, []byte(strings.Join(sortedKeys(sub), "\n")+"\n"), 0o644))
+	da := append([]string{"-l", list, "-silent", "-a", "-aaaa", "-cname", "-r", strings.Join(sharedResolvers, ",")}, pick([]string(nil), []string{"-rl", politeDNS})...)
+	liveOut, dm := run(d, 30*time.Minute, dir, ref("dnsx"), da...)
+	dx := map[string]bool{}
+	for _, n := range lines(liveOut) {
+		dx[strings.ToLower(strings.Fields(n)[0])] = true
+	}
+	row.SubfinderLive = len(dx)
+	refSecs := sm.Seconds + dm.Seconds
+
+	// Which of the names each tool calls live resolve at another resolver.
+	claimed := map[string]bool{}
+	for n := range az {
+		claimed[n] = true
+	}
+	for n := range dx {
+		claimed[n] = true
+	}
+	conf := liveIndependent(sortedKeys(claimed))
+	row.Live = len(conf)
+	var azOK, refOK int
+	var gaps []string
+	for n := range conf {
+		if az[n] {
+			azOK++
+		}
+		if dx[n] {
+			refOK++
+			if !az[n] {
+				gaps = append(gaps, n)
+			}
+		}
+		if az[n] && dx[n] {
+			row.SharedLive++
+		}
+	}
+	sort.Strings(gaps)
+	row.AzhaqLive, row.SubfinderLive = azOK, refOK
+	row.Gaps = gaps
+	row.RefSeconds = refSecs
+	unexplained := 0
+	var why []string
+	for _, g := range gaps {
+		ok := false
+		for _, src := range srcOf[g] {
+			if sourceFailed(ar.stderr, src) {
+				ok = true
+			}
+		}
+		if !ok {
+			unexplained++
+		}
+		why = append(why, fmt.Sprintf("%s (subfinder: %s)", g, strings.Join(srcOf[g], ",")))
+	}
+	cmds := cmdLine(azhaq, aa...) + " vs " + cmdLine("subfinder", sa...) + " | " + cmdLine("dnsx", da...)
+	barOne("subs -live "+d, azOK, refOK, ar.seconds, refSecs, "a name resolving at 9.9.9.9 or 208.67.222.222 (A, AAAA or CNAME)", cmds,
+		fmt.Sprintf("%s; azhaq printed %d, subfinder %d names, dnsx %d live; azhaq %d, reference %d confirmed, both %d; subfinder %.0fs + dnsx %.0fs; %s%s",
+			share(row.SharedLive, refOK), len(az), len(sub), len(dx), azOK, refOK, row.SharedLive, sm.Seconds, dm.Seconds, ratio(ar.seconds, refSecs), azErr(runMeasureOf(ar))))
+	addCheck("subs -live "+d+": every confirmed live name subfinder | dnsx finds is in azhaq's list or its source is named as failed", unexplained == 0,
+		"%d gaps, %d unexplained: %s", len(gaps), unexplained, clipList(why, 8))
+	addCheck("subdomain sources: no silent zeros ("+d+")", silent, "every empty result is a failure flagged as error or degraded, or a zero every source answered")
+	return row
 }
 
 func runMeasureOf(r azResult) runMeasure {

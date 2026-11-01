@@ -27,7 +27,7 @@ func TestUnitsCoverSections(t *testing.T) {
 		t.Errorf("%d claims cases", n)
 	}
 	units := canonicalUnits()
-	if len(units) != 2*len(cmpSections)+len(onceSections)-1+len(claimCaseIDs()) {
+	if len(units) != 2*(len(cmpSections)-1+len(domainList()))+len(onceSections)-1+len(claimCaseIDs()) {
 		t.Errorf("%d units: %v", len(units), units)
 	}
 	if len(units) != len(slices.Compact(slices.Sorted(slices.Values(units)))) {
@@ -61,6 +61,8 @@ func TestUnitsPlannedByProfileAndSection(t *testing.T) {
 	if !slices.IsSortedFunc(got, func(a, b string) int { return unitRank(a) - unitRank(b) }) {
 		t.Errorf("not in the order of a run: %v", got)
 	}
+	politeDomains = domainList()
+	defer func() { politeDomains = nil }()
 	all := plannedUnits(profileOrder, func(string, string) bool { return true })
 	if !slices.Equal(all, canonicalUnits()) {
 		t.Errorf("everything selected: %v", all)
@@ -78,5 +80,22 @@ func TestUnitsTrackWhatEachWrote(t *testing.T) {
 	want := []unitSpan{{"default:apps", 2, 0, 0}, {"default:dirs", 0, 1, 0}, {"claims:1", 1, 0, 3}}
 	if !slices.Equal(rec.Units, want) {
 		t.Errorf("spans %+v, want %+v", rec.Units, want)
+	}
+}
+
+// The domains are units of their own, the polite profile's only those it looks up.
+func TestUnitsOneDomainEach(t *testing.T) {
+	politeDomains = []string{"hackerone.com", "vulnweb.com"}
+	defer func() { politeDomains = nil }()
+	got := plannedUnits(profileOrder, func(u, s string) bool { return s == "domains" })
+	want := []string{"default:domains/hackerone.com", "default:domains/tesla.com", "default:domains/vulnweb.com", "polite:domains/hackerone.com", "polite:domains/vulnweb.com"}
+	if !slices.Equal(got, want) {
+		t.Errorf("units %v, want %v", got, want)
+	}
+	if unitSection(got[0]) != "domains" || unitSection("claims:3") != "claims" || unitSection("once:docs") != "docs" {
+		t.Error("unitSection")
+	}
+	if _, err := parseUnits("default:domains,polite:domains/nowhere.example"); err == nil {
+		t.Error("a domains unit without a domain, or of a domain not in the list, was accepted")
 	}
 }

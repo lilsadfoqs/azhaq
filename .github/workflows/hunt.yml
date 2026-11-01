@@ -53,16 +53,18 @@ jobs:
         uses: actions/setup-go@v7
         with:
           go-version: stable
-      - name: packages
-        run: sudo apt-get update -q && sudo apt-get install -y -q nmap dnsutils age
-      - name: labs
-        run: .github/ci/labs.sh
       - name: reference tools
         # The bench's artifact of the same pins (latest-artifact.sh: a tag run
         # cannot read another tag's Actions cache); a miss installs them below.
         env:
           GH_TOKEN: ${{ github.token }}
         run: .github/ci/latest-artifact.sh "$(.github/ci/bench-tools.sh key)" "$HOME/ref"
+      - name: packages
+        # nmap's .deb files come in the tools artifact: dpkg takes a second,
+        # apt-get update and the mirror 8 to 145 s; a miss installs with apt.
+        run: .github/ci/apt-tools.sh "$HOME/ref/debs" nmap bind9-dnsutils age
+      - name: labs
+        run: .github/ci/labs.sh
       - name: azhaq and the reference tools
         run: |
           mkdir -p "$HOME/hunt/bin" "$HOME/hunt/${{ matrix.area }}"

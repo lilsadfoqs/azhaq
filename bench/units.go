@@ -28,6 +28,23 @@ var profileOrder = []string{profDefault, profPolite}
 // unitName is the name of a comparison section in a profile.
 func unitName(profile, section string) string { return profile + ":" + section }
 
+// cmpUnitNames are the units of one comparison section in a profile: one,
+// but for domains one per domain ("default:domains/hackerone.com"), which
+// are the longest and the most variable. The polite profile looks up only
+// politeDomains; all lists them whatever the flag says.
+func cmpUnitNames(profile, section string, all bool) []string {
+	if section != "domains" {
+		return []string{unitName(profile, section)}
+	}
+	var out []string
+	for _, d := range domainList() {
+		if all || profile != profPolite || slices.Contains(politeDomains, d) {
+			out = append(out, unitName(profile, "domains/"+d))
+		}
+	}
+	return out
+}
+
 // canonicalUnits is every unit in the order one full run writes its
 // checks: the default profile's comparisons, the polite ones, then the
 // sections that run once.
@@ -35,7 +52,7 @@ func canonicalUnits() []string {
 	var out []string
 	for _, p := range profileOrder {
 		for _, s := range cmpSections {
-			out = append(out, unitName(p, s))
+			out = append(out, cmpUnitNames(p, s, true)...)
 		}
 	}
 	for _, s := range onceSections {
@@ -75,12 +92,14 @@ func parseUnits(list string) ([]string, error) {
 	return out, nil
 }
 
-// unitSection is the section a unit belongs to ("default:apps" → "apps").
+// unitSection is the section a unit belongs to ("default:apps" → "apps",
+// "polite:domains/vulnweb.com" → "domains").
 func unitSection(name string) string {
 	_, s, _ := strings.Cut(name, ":")
 	if strings.HasPrefix(name, "claims:") {
 		return "claims"
 	}
+	s, _, _ = strings.Cut(s, "/")
 	return s
 }
 
@@ -90,8 +109,10 @@ func plannedUnits(profiles []string, on func(unit, section string) bool) []strin
 	var out []string
 	for _, p := range profiles {
 		for _, s := range cmpSections {
-			if u := unitName(p, s); on(u, s) {
-				out = append(out, u)
+			for _, u := range cmpUnitNames(p, s, false) {
+				if on(u, s) {
+					out = append(out, u)
+				}
 			}
 		}
 	}

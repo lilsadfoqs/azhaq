@@ -1,7 +1,8 @@
 #!/bin/bash
 # bench-tools.sh key | list | pack OUT_DIR: the reference tools the bench
 # keeps between runs, in bench/.work (WORK): the binaries without azhaq (built
-# each run), the arjun virtualenv and the pinned wordlists.
+# each run), the arjun virtualenv, the .deb files of nmap (apt-tools.sh) and
+# the pinned wordlists.
 #   key   the artifact's name: the hash of bench/tools.go (it pins the tools,
 #         arjun and the wordlists) and the Go version
 #   list  the files kept, one a line (a run that changes the list has
@@ -21,7 +22,7 @@ list | pack)
   fi
   cd "$work" 2>/dev/null || exit 0
   items=()
-  for p in bin arjun-* subdomains-top1million-5000.txt common.txt burp-parameter-names.txt; do
+  for p in bin arjun-* debs subdomains-top1million-5000.txt common.txt burp-parameter-names.txt; do
     [ -e "$p" ] && items+=("$p")
   done
   [ ${#items[@]} -gt 0 ] || exit 0

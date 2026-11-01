@@ -1,8 +1,10 @@
 package main
 
 import (
+	"fmt"
 	"io"
 	"net"
+	"strings"
 	"testing"
 	"time"
 
@@ -144,5 +146,30 @@ func TestWaitServingWaitsForTheDaemons(t *testing.T) {
 	t0 = time.Now()
 	if not := waitServing(5*time.Second, 20*time.Millisecond, []int{late}); len(not) != 0 || time.Since(t0) > time.Second {
 		t.Errorf("a daemon that serves is waited for %v: %v", time.Since(t0), not)
+	}
+}
+
+// A daemon that never served leaves its container's last log lines in the check.
+func TestDaemonLogsNameTheContainer(t *testing.T) {
+	old := docker
+	defer func() { docker = old }()
+	docker = func(args ...string) (string, error) {
+		switch args[0] {
+		case "ps":
+			return "azq-svc-ftp Up 4 minutes", nil
+		case "logs":
+			return "vsftpd: bind failed\nexiting", nil
+		}
+		return "", nil
+	}
+	got := daemonLogs([]int{10021})
+	for _, want := range []string{"10021: azq-svc-ftp Up 4 minutes", "vsftpd: bind failed ; exiting"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("%q lacks %q", got, want)
+		}
+	}
+	docker = func(...string) (string, error) { return "", fmt.Errorf("no docker") }
+	if got := daemonLogs([]int{10021}); got != "" {
+		t.Errorf("without docker: %q", got)
 	}
 }
