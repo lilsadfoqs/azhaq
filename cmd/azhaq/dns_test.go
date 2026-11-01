@@ -17,7 +17,6 @@ import (
 	"github.com/miekg/dns"
 
 	"github.com/lilsadfoqs/azhaq/internal/dnsr"
-	"github.com/lilsadfoqs/azhaq/internal/egress"
 	"github.com/lilsadfoqs/azhaq/internal/ledger"
 )
 
@@ -424,12 +423,10 @@ func TestDNSSummaryCountsItsQueries(t *testing.T) {
 	t.Chdir(t.TempDir())
 	lab := startLab(t)
 	l := writeList(t, "x.wild.lab.zz", "real.wild.lab.zz", "www.lab.zz", "nope.lab.zz")
-	egress.Reset() // the counters are the process's: a new command starts them again
 	_, bare, _ := dnsOut(t, "-l", l, "-r", lab.addr, "-a", "-json")
 	if bare.Requests != 0 || bare.DNSQueries < 4 {
 		t.Fatalf("no ledger: requests %d, dns_queries %d (4 names asked, the wildcard probe too)", bare.Requests, bare.DNSQueries)
 	}
-	egress.Reset()
 	_, rep, _ := dnsOut(t, "-l", l, "-r", lab.addr, "-a", "-json", "-ledger", "l.jsonl")
 	lines := 0
 	if err := ledger.Read("l.jsonl", func(e ledger.Entry) error {

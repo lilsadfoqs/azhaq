@@ -297,6 +297,11 @@ func (p *Policy) Sent() int64 { return p.sent.Load() }
 // are not requests to targets and are not in Sent.
 func (p *Policy) DNSQueries() int64 { return p.dnsq.Load() }
 
+// DNSTotal is how many DNS queries the process has sent since it started,
+// over every Reset: what a command or a ledger reads its own from, as the
+// difference of two.
+func (p *Policy) DNSTotal() int64 { return p.dnsAll.Load() + p.dnsq.Load() }
+
 // Total is how many requests the process has sent to its targets since it
 // started, over every Reset: a command that resets between its parts (roles
 // does) reads what it sent from the difference of two.
@@ -342,6 +347,7 @@ func Spent() bool                                        { return Current().Spen
 func Sent() int64                                        { return Current().Sent() }
 func Total() int64                                       { return Current().Total() }
 func DNSQueries() int64                                  { return Current().DNSQueries() }
+func DNSTotal() int64                                    { return Current().DNSTotal() }
 func Hold(n int)                                         { Current().Hold(n) }
 func Release(n int)                                      { Current().Release(n) }
 func Departed() int64                                    { return Current().Departed() }

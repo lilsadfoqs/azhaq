@@ -50,6 +50,7 @@ type Policy struct {
 	maxReq atomic.Int64
 	sent   atomic.Int64
 	dnsq   atomic.Int64 // DNS queries sent to resolvers: the dns lines the ledger records
+	dnsAll atomic.Int64 // what dnsq held when Reset last put it back to zero, summed
 	// reserve is the requests set aside for web work already known (Reserve):
 	// a port sweep does not spend them, and the web requests sent use them up.
 	reserve atomic.Int64
@@ -123,7 +124,7 @@ func (p *Policy) Reset() {
 	p.mu.Unlock()
 	p.maxReq.Store(0)
 	p.gone.Add(p.sent.Swap(0))
-	p.dnsq.Store(0)
+	p.dnsAll.Add(p.dnsq.Swap(0))
 	p.held.Store(0)
 	p.reserve.Store(0)
 	p.SetRate(0)

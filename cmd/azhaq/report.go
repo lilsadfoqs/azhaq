@@ -51,6 +51,8 @@ type report struct {
 	Notes       []string         `json:"notes,omitempty"`
 	Next        []string         `json:"next,omitempty"`
 
+	dnsFrom int64 // egress.DNSTotal when the command began: dns_queries are its own
+
 	what   string // the unit of Results: "names", "web services"
 	warned bool   // a note says the results mislead (a role's dead session): exit 3
 	start  time.Time
@@ -63,7 +65,7 @@ type report struct {
 }
 
 func newReport(command string) *report {
-	return &report{Type: "summary", Command: command, Version: version, start: time.Now()}
+	return &report{Type: "summary", Command: command, Version: version, start: time.Now(), dnsFrom: egress.DNSTotal()}
 }
 
 // settle fills the exit code and seconds.
@@ -72,7 +74,7 @@ func (r *report) settle() {
 		r.start = time.Now()
 	}
 	r.Seconds = float64(time.Since(r.start).Milliseconds()) / 1000
-	r.DNSQueries = egress.DNSQueries()
+	r.DNSQueries = egress.DNSTotal() - r.dnsFrom
 	switch {
 	case r.Stopped != "":
 		r.Exit = exitLimit

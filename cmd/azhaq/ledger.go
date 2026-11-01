@@ -35,6 +35,8 @@ type runLedger struct {
 	from     int64 // lines the file held before this run's
 	stopKill func()
 	sealTo   string
+	dnsFrom  int64          // egress.DNSTotal when the ledger was opened, valid when dnsSet
+	dnsSet   bool           // dnsFrom was taken: the DNS queries sent since can be checked against the lines
 	writes   []ledger.Entry // writes of a killed run that a resume does not send again
 	stages   string         // what this run's requests to targets went to, by collector
 }
@@ -125,6 +127,7 @@ func startLedger(ledgerFlag, killFlag, db string, scratch bool, rules scope.Rule
 	l.Match = rules.Match
 	ledger.Use(l)
 	r.l, r.owned, r.from = l, true, l.Count()
+	r.dnsFrom, r.dnsSet = egress.DNSTotal(), true
 	return r, nil
 }
 
@@ -163,6 +166,7 @@ func rolesLedger(dir string, rep *report) (closeIt, rearm func()) {
 	}
 	ledger.Use(l)
 	r.l, r.owned, r.from = l, true, l.Count()
+	r.dnsFrom, r.dnsSet = egress.DNSTotal(), true
 	return func() { r.close(rep) }, rearm
 }
 
@@ -203,8 +207,8 @@ func (r *runLedger) close(rep *report) {
 	if targets != int(rep.Requests) {
 		rep.Notes = append(rep.Notes, fmt.Sprintf("the summary counts %d requests to targets and the ledger lists %d lines to them (azhaq ledger -summary %s lists them by kind)", rep.Requests, targets, path))
 	}
-	if dnsLines >= 0 && dnsLines != int(egress.DNSQueries()) {
-		rep.Notes = append(rep.Notes, fmt.Sprintf("the summary counts %d DNS queries and the ledger lists %d lines to resolvers (azhaq ledger -summary %s lists them by kind)", egress.DNSQueries(), dnsLines, path))
+	if sent := egress.DNSTotal() - r.dnsFrom; r.dnsSet && dnsLines >= 0 && dnsLines != int(sent) {
+		rep.Notes = append(rep.Notes, fmt.Sprintf("the summary counts %d DNS queries and the ledger lists %d lines to resolvers (azhaq ledger -summary %s lists them by kind)", sent, dnsLines, path))
 	}
 	if r.sealTo != "" {
 		if err := sendSeal(r.sealTo, path, seal, c.Entries); err != nil {
