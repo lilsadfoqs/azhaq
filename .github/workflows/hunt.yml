@@ -46,18 +46,35 @@ jobs:
       MODEL: ${{ needs.plan.outputs.model }}
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
+      - id: go
+        uses: actions/setup-go@v7
         with:
           go-version: stable
       - name: packages
         run: sudo apt-get update -q && sudo apt-get install -y -q nmap dnsutils age
       - name: labs
         run: .github/ci/labs.sh
+      - name: reference tools cache
+        # bench/tools.go skips a tool whose version marker and binary are in
+        # bin/; arjun is a venv beside it. Pins and the Go version are the key.
+        id: ref
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/ref/bin
+            ~/ref/arjun-*
+          key: ref-tools-${{ runner.os }}-${{ steps.go.outputs.go-version }}-${{ hashFiles('bench/tools.go', 'bench/params.go') }}
       - name: azhaq and the reference tools
         run: |
           mkdir -p "$HOME/hunt/bin" "$HOME/hunt/${{ matrix.area }}"
           go build -o "$HOME/hunt/bin/azhaq" ./cmd/azhaq
-          go run ./bench -tools-only -work "$HOME/ref"
+          # A restored cache is used only when arjun still runs (its venv
+          # points at the image's python); otherwise the tools are fetched.
+          if [ "${{ steps.ref.outputs.cache-hit }}" = true ] && "$HOME/ref/bin/arjun" -h > /dev/null 2>&1; then
+            echo "reference tools restored from the cache"
+          else
+            go run ./bench -tools-only -work "$HOME/ref"
+          fi
           rm -f "$HOME/ref/bin/azhaq"
           ls "$HOME/ref/bin"
       - name: codex
