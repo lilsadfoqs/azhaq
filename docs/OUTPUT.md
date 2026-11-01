@@ -74,7 +74,7 @@ Some work failed and did not get its answer: a source that failed, a target that
 
 ### Exit 4
 
-- A limit stopped the run: `-max-requests`, `-timeout`, `-daily-requests`, `-max-items` or `-max-names`. The `stopped` text names it with its flag. What `-depth` leaves unasked is a note, not a stop: the URLs and names found past it are counted there, and `azhaq resume -depth N` asks them.
+- A limit stopped the run: `-max-requests`, `-timeout`, `-daily-requests`, `-max-items` or `-max-names`. The `stopped` text names it with its flag. What `-depth` leaves unasked is a note, not a stop: the URLs and names found past it are counted there, and `azhaq resume -depth N` asks them. The URLs counted are distinct ones. The note is made only when a larger `-depth` has something to ask: a `dirs` run has none (its `-depth` is the sweep's own, and the paths it found are rows it asked), and a run that has finished its tasks says nothing about work it cannot do.
 - The kill file stopped it: `-kill-file`, default `DB.stop`. See [the kill file](CONCEPTS.md#the-kill-file).
 - A signal stopped it: Ctrl-C, `kill` or SIGHUP. All three stop a command the same way, with its summary printed and its ledger sealed.
 - `gallery`, `mcp` and `watch -every` are servers, and a signal is how they end: they exit 0 ([gallery](commands/gallery.md#summary-and-exit-codes), [mcp](commands/mcp.md#summary-and-exit-codes), [watch](commands/watch.md#summary-and-exit-codes)). `mcp` first interrupts the commands in flight, which seal their ledgers.

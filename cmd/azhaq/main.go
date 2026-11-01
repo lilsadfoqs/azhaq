@@ -1309,10 +1309,18 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	if n := opts.DNS.TakeoverNote("-no-takeover"); n != "" {
 		rep.Notes = append(rep.Notes, n)
 	}
-	if c := eng.Caps(); c.DepthURLs+c.DepthNames > 0 {
+	// The URLs are those the map holds as coverage capped: the number is
+	// what `query -coverage capped` lists, each URL once.
+	capped := 0
+	for _, r := range rows {
+		if r.Entity.Type == types.TypeURL && r.Coverage == "capped" {
+			capped++
+		}
+	}
+	if c := eng.Caps(); capped+c.DepthNames > 0 {
 		var what []string
-		if c.DepthURLs > 0 {
-			what = append(what, fmt.Sprintf("%d URLs", c.DepthURLs))
+		if capped > 0 {
+			what = append(what, fmt.Sprintf("%d URLs", capped))
 		}
 		if c.DepthNames > 0 {
 			what = append(what, fmt.Sprintf("%d names", c.DepthNames))
