@@ -150,6 +150,18 @@ jobs:
           cp "$range/vars.json" "$HOME/ci/vars.json"
           shred -u "$range/key.json" 2>/dev/null || rm -f "$range/key.json"
           rm -rf "$range" "$RUNNER_TEMP/vulhub" "$RUNNER_TEMP/dnsd"
+      - name: heartbeat
+        # Counts to ci-results every 10 minutes (heartbeat.sh), so a stuck
+        # review shows before it ends. It runs as root from /root with the
+        # token in a root-only file, started before isolate hides root's
+        # processes and removes sudo; the token is not in its environment.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          printf '%s' "$GITHUB_TOKEN" | sudo install -m 600 -o root -g root /dev/stdin /root/beat.token
+          sudo install -m 700 -o root -g root .github/ci/heartbeat.sh .github/ci/publish.sh /root/
+          sudo env -u GITHUB_TOKEN setsid bash /root/heartbeat.sh "$GITHUB_REF_NAME" "$HOME/ci/stream.ts.jsonl" "$HOME/trial/phases.log" "$(id -un)" "$GITHUB_REPOSITORY" > /dev/null 2>&1 < /dev/null &
+          echo "heartbeat started"
       - name: isolate
         # The agent must not see the containers or the key: hidepid on /proc,
         # no docker, no sudo; the job fails when any of it is still possible.

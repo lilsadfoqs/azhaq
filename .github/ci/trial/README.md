@@ -59,6 +59,20 @@ grader lists every command in the agent's log that touches docker, processes,
 sockets, interfaces, privilege or the outside (`gh`, `git push`), for a person
 to judge. Job logs are public: build, start and isolate print counts only.
 
+## Heartbeat
+
+The review of a research or hunter trial writes no log until it ends. A loop
+(`heartbeat.sh`) publishes counts every 10 minutes to `trial/trial-NAME/heartbeat.txt`
+on ci-results; `.github/ci/beat.sh trial NAME` prints it: UTC time, minutes
+since the stream began, whether `codex` runs, the stream's lines and the
+seconds since its last line, the commands completed, `phases.log`, load and
+free disk. No command, no stream text, no estate data. It runs as root from
+`/root` with the token in a root-only file, started before `isolate.sh`, which
+checks that the file is unreadable and the process unlisted; the review's files
+are read as the agent's user and `phases.log` is cut to its `phase N start|end
+TIME` lines. The `switch` trial has no isolation (the reviewer keeps sudo), so
+it has no heartbeat.
+
 ## What comes back
 
 `REPORT.md`, `leads.jsonl`, `phases.log`, `surface-*.txt`, `notes/`, the last
