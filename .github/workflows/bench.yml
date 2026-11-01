@@ -53,7 +53,7 @@ jobs:
           go-version: stable
       - id: p
         env:
-          MAXPARTS: ${{ vars.BENCH_MAXPARTS || '14' }}
+          MAXPARTS: ${{ vars.BENCH_MAXPARTS || '18' }}
         run: |
           args=""
           if [[ "$GITHUB_REF_NAME" != gate-* ]] && [ "$(git cat-file -t "refs/tags/$GITHUB_REF_NAME")" = tag ]; then

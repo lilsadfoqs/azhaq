@@ -21,7 +21,7 @@ Run it from the repository root. It needs Docker (Juice Shop and VAmPI from `ben
 
 A unit is one comparison section in one profile (`default:apps`; for `domains` one domain, `default:domains/hackerone.com`, each with its own no-silent-zeros check), one claims case (`claims:5`) or a section that runs once (`once:dropin`). No unit reads another's results, so any set of units gives the same checks as a full run, and `-merge` puts the records of several jobs in the order of one run (each record lists what every unit wrote in `units`). The bench logs `<profile>: <section> took Ns` for every unit.
 
-The `bench` workflow asks `-list-units` for the units of the tag's flags, packs them into at most 14 jobs (repository variable `BENCH_MAXPARTS`) by the times in `.github/ci/bench-times.json` (a unit missing from it counts 60 s), and joins the records with `-merge -expect`: a unit no record holds is a failed check. Refresh the times from a run's log:
+The `bench` workflow asks `-list-units` for the units of the tag's flags, packs them into at most 18 jobs (repository variable `BENCH_MAXPARTS`) by the times in `.github/ci/bench-times.json` (a unit missing from it counts 60 s), and joins the records with `-merge -expect`: a unit no record holds is a failed check. Refresh the times from a run's log:
 
 ```
 git show origin/ci-results:bench/TAG/bench.log > bench.log
