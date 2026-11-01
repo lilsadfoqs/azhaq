@@ -62,7 +62,7 @@ func cmdHunt(args []string) error {
 	}
 	in := hunt.Input{DB: path, Rows: g.rows, Obs: g.obs, Roles: rows, Now: time.Now(), Since: *since}
 	for _, s := range secretRows(g.obs) {
-		in.Secrets = append(in.Secrets, hunt.Secret{Kind: s.Kind, Severity: s.Severity, Where: s.Where})
+		in.Secrets = append(in.Secrets, hunt.Secret{Kind: s.Kind, Severity: s.Severity, Where: s.Where, Name: s.Name, Preview: s.Redacted, Rule: s.Rule, Entropy: s.Entropy})
 	}
 	ents := make([]types.Entity, 0, len(g.rows))
 	for _, r := range g.rows {

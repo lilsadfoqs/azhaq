@@ -109,6 +109,7 @@ Some work failed and did not get its answer. Fan-out and partial failures are li
 | `sources` | `subs` and `urls`: which sources answered, which failed and why, and what each gave. See [subs](commands/subs.md#the-sources-block) and [urls](commands/urls.md#summary-and-exit-codes). |
 | `partial` (in `failed`) | A third-party source failed while other sources answered for the same target. |
 | `degraded` | `subs` only: a source the run relies on did not answer, so the names may be incomplete. See [subs](commands/subs.md#degraded). |
+| `degraded_by` | `subs` only, with `degraded`: an array of `{source, error, domains}`, one for each failed source of the default set. |
 | `stopped`, `resume` | The limit that stopped the work and the command that continues it. |
 | `notes` | Caps that were hit and other things worth knowing that are not failures. See [notes](#notes). |
 | `next` | Commands worth running next. See [next](#next). |

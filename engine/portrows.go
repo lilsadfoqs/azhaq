@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/trannghiach/azhaq/internal/portscan"
 	"github.com/trannghiach/azhaq/store"
@@ -18,6 +19,7 @@ import (
 func portRows(e types.Entity, scope string, obs []types.StoredObservation) []MapEntry {
 	type scan struct {
 		host string
+		at   time.Time
 		tcp  []portscan.Open
 		udp  []portscan.UDPPort
 	}
@@ -48,11 +50,11 @@ func portRows(e types.Entity, scope string, obs []types.StoredObservation) []Map
 		if host == "" {
 			host = p.IP
 		}
-		newest[id] = scan{host: host, tcp: p.Services, udp: p.UDP}
+		newest[id] = scan{host: host, at: o.ObservedAt, tcp: p.Services, udp: p.UDP}
 	}
 	var out []MapEntry
 	seen := map[string]bool{}
-	add := func(host string, port int, proto, service, product, version string, proof []string) {
+	add := func(host string, port int, proto, state, service, product, version string, at time.Time, proof []string) {
 		key := net.JoinHostPort(host, strconv.Itoa(port)) + "/" + proto
 		if seen[key] {
 			return
@@ -61,17 +63,17 @@ func portRows(e types.Entity, scope string, obs []types.StoredObservation) []Map
 		out = append(out, MapEntry{
 			Entity: types.Entity{ID: store.EntityID(types.TypePort, key), Type: types.TypePort, Key: key, FirstSeen: e.FirstSeen, LastSeen: e.LastSeen},
 			Scope:  scope, Role: "service", Service: service, Product: product, Version: version,
-			Proof: strings.Join(proof, " "),
+			State: state, Proof: strings.Join(proof, " "), at: at,
 		})
 	}
 	for _, id := range order {
 		s := newest[id]
 		sort.Slice(s.tcp, func(i, j int) bool { return s.tcp[i].Port < s.tcp[j].Port })
 		for _, o := range s.tcp {
-			add(s.host, o.Port, "tcp", o.Service, o.Product, o.Version, portProof("open", o.Service, o.Product, o.Version, o.TLS, o.Title, o.Banner))
+			add(s.host, o.Port, "tcp", "open", o.Service, o.Product, o.Version, s.at, portProof("open", o.Service, o.Product, o.Version, o.TLS, o.Title, o.Banner))
 		}
 		for _, u := range s.udp {
-			add(s.host, u.Port, "udp", u.Service, u.Product, u.Version, portProof(u.State, u.Service, u.Product, u.Version, false, "", u.Banner))
+			add(s.host, u.Port, "udp", u.State, u.Service, u.Product, u.Version, s.at, portProof(u.State, u.Service, u.Product, u.Version, false, "", u.Banner))
 		}
 	}
 	return out
@@ -95,4 +97,37 @@ func portProof(state, service, product, version string, tls bool, title, banner 
 		parts = append(parts, "banner="+strconv.Quote(banner))
 	}
 	return parts
+}
+
+// addPortRows puts an address's port rows in out, one row for each
+// host, port and protocol: a prefix's scan and the scan of an address in
+// it list the same port. Of two rows the newer scan stands, with the first
+// time either saw it, and a confirmed open is never replaced by open|filtered.
+func addPortRows(out []MapEntry, at map[string]int, rows []MapEntry) []MapEntry {
+	for _, r := range rows {
+		i, dup := at[r.Entity.Key]
+		if !dup {
+			at[r.Entity.Key] = len(out)
+			out = append(out, r)
+			continue
+		}
+		old := out[i]
+		first, last := old.Entity.FirstSeen, old.Entity.LastSeen
+		if !r.Entity.FirstSeen.IsZero() && (first.IsZero() || r.Entity.FirstSeen.Before(first)) {
+			first = r.Entity.FirstSeen
+		}
+		if r.Entity.LastSeen.After(last) {
+			last = r.Entity.LastSeen
+		}
+		scope := old.Scope
+		if r.Scope == "target" {
+			scope = r.Scope
+		}
+		if (r.State == "open" && old.State != "open") || (r.at.After(old.at) && (old.State != "open" || r.State == "open")) {
+			old = r
+		}
+		old.Entity.FirstSeen, old.Entity.LastSeen, old.Scope = first, last, scope
+		out[i] = old
+	}
+	return out
 }

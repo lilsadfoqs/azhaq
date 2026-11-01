@@ -12,7 +12,18 @@ type Secret struct {
 	Severity string `json:"severity"` // high: works on its own; medium: needs a pair or context; info: public by design
 	Value    string `json:"value"`
 	Name     string `json:"name,omitempty"` // the property or variable it was assigned to
+	// Rule is why it was listed: a known key format, a bundler's inlined
+	// variable, or a name that says secret holding a value that looks random.
+	Rule    string  `json:"rule,omitempty"`
+	Entropy float64 `json:"entropy,omitempty"` // bits per character, of a generic-secret's value
 }
+
+// The rules a Secret can name.
+const (
+	RuleFormat   = "known key format"
+	RuleBuildVar = "variable a bundler inlined"
+	RuleGeneric  = "name says secret, value looks random"
+)
 
 // secretPatterns are tried only on a script that holds one of a pattern's
 // literals: a regular expression over a megabyte of script is slow, and
@@ -79,12 +90,12 @@ func Secrets(script string) []Secret {
 		}
 		for _, m := range p.re.FindAllStringSubmatchIndex(script, 64) {
 			v := script[m[2]:m[3]]
-			s := Secret{Kind: p.kind, Severity: p.severity, Value: v}
+			s := Secret{Kind: p.kind, Severity: p.severity, Value: v, Rule: RuleFormat}
 			if p.kind == "aws-access-key-id" {
 				// A secret key within a few lines makes the pair usable.
 				win := script[max(0, m[0]-300):min(len(script), m[1]+300)]
 				if sk := awsSecret.FindStringSubmatch(win); sk != nil && entropy(sk[1]) > 4 {
-					add(Secret{Kind: "aws-secret-access-key", Severity: "high", Value: sk[1]})
+					add(Secret{Kind: "aws-secret-access-key", Severity: "high", Value: sk[1], Rule: RuleFormat})
 					s.Severity = "high"
 				}
 			}
@@ -93,16 +104,16 @@ func Secrets(script string) []Secret {
 	}
 	if holdsAny(script, envPrefixes) {
 		for _, m := range envVar.FindAllStringSubmatch(script, 64) {
-			add(Secret{Kind: "build-variable", Severity: "info", Name: m[1], Value: m[2]})
+			add(Secret{Kind: "build-variable", Severity: "info", Name: m[1], Value: m[2], Rule: RuleBuildVar})
 		}
 	}
 	for _, m := range assignedIn(script, 64) {
 		name, v := m[1], m[2]
 		if seen[v] || notSecret(v) || entropy(v) < 3.2 || strings.Contains(v, "/") && !strings.ContainsAny(v, "+=") ||
-			notSecretName.MatchString(name) || oddChars(v) {
+			notSecretName.MatchString(name) || oddChars(v) || labelOf(name, v) {
 			continue
 		}
-		add(Secret{Kind: "generic-secret", Severity: "medium", Name: name, Value: v})
+		add(Secret{Kind: "generic-secret", Severity: "medium", Name: name, Value: v, Rule: RuleGeneric, Entropy: math.Round(entropy(v)*10) / 10})
 	}
 	sort.SliceStable(out, func(i, j int) bool { return rank(out[i].Severity) < rank(out[j].Severity) })
 	return out
@@ -194,6 +205,34 @@ func notSecret(v string) bool {
 // notSecretName: names with "token" in them that hold a parser's tables
 // (Lezer's tokenData, tokenPrec), not a credential.
 var notSecretName = lazyRE(`(?i)token(data|prec|izers?|types?|s|ize|ized|ization|count|length|index)$`)
+
+// cssModuleClass is a class name a CSS module made: name, a short hash and
+// a counter (_tokensUsage_dypaw_41).
+var cssModuleClass = lazyRE(`^_?[A-Za-z][A-Za-z0-9]*_[a-z0-9]{4,8}_[0-9]+$`)
+
+// labelOf: a value that repeats its own name (a class a build tool made
+// from the property, a translation key) or is a class name of a CSS module
+// is a label, not a credential.
+func labelOf(name, v string) bool {
+	if cssModuleClass.MatchString(v) {
+		return true
+	}
+	n := alnumLower(name)
+	return len(n) >= 5 && strings.Contains(alnumLower(v), n)
+}
+
+func alnumLower(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
+			b.WriteRune(r)
+		case r >= 'A' && r <= 'Z':
+			b.WriteRune(r + 'a' - 'A')
+		}
+	}
+	return b.String()
+}
 
 // oddChars: keys and tokens are letters, digits and a few separators; a
 // value full of other punctuation is encoded data.

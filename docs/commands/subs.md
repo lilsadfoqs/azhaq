@@ -95,7 +95,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 - `asked` is `answered` plus `failed` plus `off_by_default_failed`. A source skipped for want of a key is not asked.
 - `names` is what each source gave, before any DNS check or filter. For `urls` the field is `urls`: see [urls](urls.md#summary-and-exit-codes).
 - `requests` is what each source was sent, retries included, summed over the domains. The summary's top-level `requests` leaves them out: they go to third parties, not to targets.
-- `seconds` is how long each source took, the longest over the domains. The slowest source set the run's time. crt.sh is asked in its public PostgreSQL first, as subfinder does, and in its JSON API only when the database fails or has no names; a note says which happened, as in `crt.sh database: connection refused; asked the JSON API`. The database query is limited to 10000 rows, as subfinder's is; when exactly 10000 come back the rest is asked without the limit, then from the JSON API, and the note says which path gave the names. A note names it when it held the run: `crtsh took 30 s, the next slowest source 3 s, so it held the run`.
+- `seconds` is how long each source took, the longest over the domains. The slowest source set the run's time. crt.sh is asked in its public PostgreSQL first, as subfinder does, and in its JSON API only when the database fails or has no names (a 500, 502, 503 or 504 of the JSON API is asked again up to 4 times, with a pause that doubles from 1 s, as far as `-source-timeout` leaves time); a note says which happened, as in `crt.sh database: connection refused; asked the JSON API`. The limited query is cut at a quarter of `-source-timeout`, which leaves the rest for the JSON API: a large domain whose query needs longer wants a longer `-source-timeout`. The database query is limited to 10000 rows, as subfinder's is; when exactly 10000 come back the rest is asked without the limit, then from the JSON API, and the note says which path gave the names. A note names it when it held the run: `crtsh took 30 s, the next slowest source 3 s, so it held the run`.
 - `failed_sources` has each failed source's reason, such as `"wayback": "web.archive.org answered 429"`. With several domains, each reason starts with its domain.
 - `dns` asks resolvers, not sources, and has no such block.
 
@@ -107,7 +107,8 @@ The text summary ends with the same, and says why the exit code is what it is:
 
 ### Degraded
 - True when `sources failed` ([Sources in the summary](#sources-in-the-summary)) is above 0. A source the run relies on did not answer, so the names may be incomplete.
-- The text summary says it on its first line: `DEGRADED: 7 of 38 sources failed`.
+- The text summary opens with it, naming the sources and why: `DEGRADED: 2 of 4 sources failed: crtsh (HTTP 502, 2 domains), the names may be incomplete`. Past three sources it ends with `+N more`.
+- The JSON summary has `degraded_by`: one `{"source", "error", "domains"}` for each source of the default set that failed, the one that failed for most domains first.
 - It does not change the exit code. A failure the other sources made up for is listed as `partial`, and the exit stays 0. With `-fail-on-errors` it is 3.
 - Failures of sources that ran only because of `-all-sources` never set it on their own.
 

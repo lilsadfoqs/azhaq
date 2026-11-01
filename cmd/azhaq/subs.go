@@ -484,6 +484,9 @@ func cmdSubs(args []string) error {
 	rep.failOnErrors = hasFlag(extra, "fail-on-errors")
 	rep.Counts = map[string]int{"sources asked": ran, "sources answered": answered, "sources failed": ran - answered - failedOff, "off-by-default failed": failedOff}
 	rep.Degraded = rep.Counts["sources failed"] > 0
+	if rep.Degraded {
+		rep.DegradedBy = health.degradedBy()
+	}
 	if active {
 		rep.Counts["found by guessing"] = guessed
 		// A guess a source gave too is one of the source names.

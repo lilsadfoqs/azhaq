@@ -1,8 +1,10 @@
 package portscan
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -343,5 +345,36 @@ func TestScanFindsRedisAndPostgresOnOtherPorts(t *testing.T) {
 	}
 	if o := scanOne(t, pg); o.Service != "postgresql" || o.Product != "PostgreSQL" {
 		t.Errorf("postgres: %+v", o)
+	}
+}
+
+// A node of Elasticsearch 7.x or later answers the transport ping, "ES" and
+// a length of -1, with itself; a port that only echoes what it is sent, or
+// answers with anything else, is not the transport.
+func TestScanFindsElasticsearchTransport(t *testing.T) {
+	node := listen(t, func(c net.Conn) {
+		buf := make([]byte, 6)
+		if _, err := io.ReadFull(c, buf); err == nil && bytes.Equal(buf, []byte("ES\xff\xff\xff\xff")) {
+			c.Write(buf)
+		}
+	})
+	if o := scanOne(t, node); o.Service != "elasticsearch-transport" || o.Product != "Elasticsearch" {
+		t.Errorf("transport: %+v", o)
+	}
+	other := listen(t, func(c net.Conn) {
+		buf := make([]byte, 6)
+		if n, _ := io.ReadFull(c, buf); n == 6 {
+			c.Write([]byte("ES\x00\x00\x00\x10"))
+		}
+	})
+	if o := scanOne(t, other); o.Service == "elasticsearch-transport" {
+		t.Errorf("another answer taken for the transport: %+v", o)
+	}
+	var o Open
+	if esRead([]byte("ES\xff\xff\xff"), &o) || esRead([]byte("HTTP/1.1 400"), &o) {
+		t.Error("a short or foreign answer read as the transport")
+	}
+	if g := guess(9300, ""); g != "elasticsearch-transport?" {
+		t.Errorf("a silent 9300 is guessed %q", g)
 	}
 }

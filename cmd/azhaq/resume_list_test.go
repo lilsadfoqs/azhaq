@@ -61,10 +61,11 @@ func TestStreamFound(t *testing.T) {
 			see(types.Entity{}, types.Observation{Kind: "url", Payload: []byte(p)})
 		}
 		see(types.Entity{}, types.Observation{Kind: "application", Payload: []byte(`{"url":"http://a.test/","status":200,"title":"Home"}`)})
+		see(types.Entity{}, types.Observation{Kind: "application", Payload: []byte(`{"url":"http://a.test/signup","status":200,"title":"Home","catchall":true}`)})
 		see(types.Entity{}, types.Observation{Kind: "dns", Payload: []byte(`{"fqdn":"w.a.test","ips":["192.0.2.1"],"wildcard":true}`)})
 		return nil
 	})
-	want := "found  url     http://a.test/x\nfound  answer  http://a.test/  [200] Home\n"
+	want := "found  url     http://a.test/x\nfound  answer  http://a.test/  [200] Home\nfound  answer  http://a.test/signup  [200] Home  (catch-all: the page any unknown path gets)\n"
 	if err != nil || out != want {
 		t.Errorf("%q, want %q", out, want)
 	}

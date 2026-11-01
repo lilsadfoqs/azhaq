@@ -27,8 +27,13 @@ type Input struct {
 	Since     time.Duration // "new" means first seen within this long
 }
 
-// Secret is a credential a script carried; Where is the file.
-type Secret struct{ Kind, Severity, Where string }
+// Secret is a credential a script carried; Where is the file. Name, Preview
+// (the value, redacted), Rule and Entropy are the evidence a reader judges it by.
+type Secret struct {
+	Kind, Severity, Where string
+	Name, Preview, Rule   string
+	Entropy               float64
+}
 
 // Takeover is a name another party may claim.
 type Takeover struct {

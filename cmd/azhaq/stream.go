@@ -31,6 +31,11 @@ func streamFound(asJSON bool) func(types.Entity, types.Observation) {
 			if st, ok := p["status"].(float64); ok && st > 0 {
 				kind, key, more = "answer", str("url"), fmt.Sprintf("[%d] %s", int(st), str("title"))
 				fields = map[string]any{"status": int(st), "title": str("title")}
+				if p["catchall"] == true {
+					// The page every unknown path gets: not a page of its own.
+					more += "  (catch-all: the page any unknown path gets)"
+					fields["catchall"] = true
+				}
 			}
 		case "url":
 			kind, key = "url", str("url")

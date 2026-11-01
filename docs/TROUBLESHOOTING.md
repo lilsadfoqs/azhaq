@@ -424,7 +424,7 @@ The default stops where subfinder does, because its per-request limit is 30 seco
 
 ### The `subs` summary says `degraded`
 
-**Why:** The text summary says `DEGRADED: N of M sources failed` on its first line. A source in the default set failed, so `sources failed` is above 0 and the names may be incomplete. The exit code is not changed.
+**Why:** The text summary opens with `DEGRADED: N of M sources failed: SOURCE (REASON), …`. A source in the default set failed, so `sources failed` is above 0 and the names may be incomplete. The exit code is not changed.
 
 **Fix:** The failed sources are listed. `azhaq subs -v` shows what each source returned and its error.
 

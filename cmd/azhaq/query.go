@@ -34,7 +34,7 @@ func cmdQuery(args []string) error {
 	scopeF := fs.String("scope", "", "target (what was asked about) or fanout (found on the way)")
 	isNew := fs.Bool("new", false, "only what the last run saw that the run before it did not (a workspace)")
 	since := fs.Duration("since", 0, "only what was first seen within this long")
-	fields := fs.String("fields", "", "print only these fields, comma-separated: key, type, role, coverage, status, answer, evidence, evidence_from, response_file, title, service, product, version, methods, params, body, scope, first_seen, found_in, watch, guard, protocol, namespace")
+	fields := fs.String("fields", "", "print only these fields, comma-separated: key, type, role, coverage, status, answer, evidence, evidence_from, response_file, title, state, service, product, version, methods, params, body, scope, first_seen, found_in, watch, guard, protocol, namespace")
 	limit := fs.Int("limit", 0, "rows at most, best first (default 0: all)")
 	asJSON := fs.Bool("json", false, "one JSON object per row, and the summary as JSON on stderr")
 	failed := fs.Bool("failed", false, "list every target whose work failed (timeouts, refusals, a source's errors): the list to retry")
@@ -131,6 +131,7 @@ func cmdQuery(args []string) error {
 		}
 	}
 	rep.Results = len(out)
+	rep.Counts = portStates(out)
 	rep.DB = path
 	if matched > len(out) {
 		rep.Notes = append(rep.Notes, fmt.Sprintf("%d rows matched; -limit %d printed the first %d (best first)", matched, *limit, len(out)))
@@ -477,4 +478,27 @@ func payloadURLIs(raw json.RawMessage, key string) bool {
 	}
 	n, err := normalize.URL(p.URL)
 	return err == nil && n == key
+}
+
+// portStates counts the port rows of out by state, so a summary never
+// reads UDP open|filtered ports as open ones.
+func portStates(rows []engine.MapEntry) map[string]int {
+	var open, filtered int
+	for _, r := range rows {
+		switch {
+		case r.Entity.Type != types.TypePort:
+		case r.State == "open|filtered":
+			filtered++
+		default:
+			open++
+		}
+	}
+	if open+filtered == 0 {
+		return nil
+	}
+	counts := map[string]int{"open ports": open}
+	if filtered > 0 {
+		counts["open|filtered ports"] = filtered
+	}
+	return counts
 }

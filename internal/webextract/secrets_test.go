@@ -73,3 +73,28 @@ func TestSecretsInALargeScript(t *testing.T) {
 		t.Errorf("filler holds secrets: %v", got)
 	}
 }
+
+// A class name a CSS module made from a property that sounds secret, and a
+// value that only repeats its name, are labels: a bundle of a front-end
+// framework is full of them.
+func TestSecretsSkipLabels(t *testing.T) {
+	js := `const s={tokensUsage:"_tokensUsage_dypaw_41",tokenInput:"_tokenInput_x9k2m_7"};` +
+		`const k={apiKeyField:"apiKeyField_label_2",secretName:"secretName-input"};` +
+		`const cfg={apiToken:"Zx81QpLm2Vt9Rr4Nc7Ks"};`
+	got := Secrets(js)
+	if len(got) != 1 || got[0].Value != "Zx81QpLm2Vt9Rr4Nc7Ks" {
+		t.Fatalf("%+v", got)
+	}
+}
+
+// A generic-secret says which rule listed it and how random its value is.
+func TestSecretsNameTheirRule(t *testing.T) {
+	got := Secrets(`const cfg={apiToken:"Zx81QpLm2Vt9Rr4Nc7Ks"};`)
+	if len(got) != 1 || got[0].Rule != RuleGeneric || got[0].Name != "apiToken" || got[0].Entropy < 3.2 {
+		t.Fatalf("%+v", got)
+	}
+	got = Secrets(`var g="ghp_abcdefghijklmnopqrstuvwxyz0123456789";`)
+	if len(got) != 1 || got[0].Rule != RuleFormat {
+		t.Fatalf("%+v", got)
+	}
+}

@@ -1062,6 +1062,12 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 				if sec.Name != "" {
 					row["name"] = sec.Name
 				}
+				if sec.Rule != "" {
+					row["rule"] = sec.Rule
+				}
+				if sec.Entropy > 0 {
+					row["entropy"] = sec.Entropy
+				}
 				secrets = append(secrets, row)
 			}
 		}

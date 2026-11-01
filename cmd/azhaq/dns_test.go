@@ -120,6 +120,9 @@ func (lab *dnsLab) handle(w dns.ResponseWriter, r *dns.Msg) {
 		if !ok && strings.HasSuffix(name, ".wild.lab.zz.") {
 			recs, ok = []string{"A 192.0.2.99"}, true
 		}
+		if !ok && (strings.HasSuffix(name, ".dev.corp.lab.zz.") || strings.HasSuffix(name, ".dev.corp.test.")) {
+			recs, ok = []string{"A 192.0.2.77"}, true // a wildcard one label below the apex
+		}
 		if !ok {
 			m.Rcode = dns.RcodeNameError
 			break
@@ -409,6 +412,28 @@ func TestDNSWildcards(t *testing.T) {
 	ls, _, _ = dnsOut(t, "-l", l, "-r", lab.addr, "-silent", "-no-wildcard")
 	if len(ls) != 3 {
 		t.Errorf("-no-wildcard: %v", ls)
+	}
+}
+
+// A wildcard below the apex (*.dev.corp.lab.zz) is found as one at the apex is:
+// its names are left out and counted, and a name beside it stays. A special-use
+// apex (.test) is asked of the named resolver like any other.
+func TestDNSNestedWildcard(t *testing.T) {
+	for _, apex := range []string{"corp.lab.zz", "corp.test"} {
+		t.Run(apex, func(t *testing.T) {
+			t.Chdir(t.TempDir())
+			lab := startLab(t)
+			www := "www." + apex + "."
+			labZoneMu.Lock()
+			labZone[www] = []string{"A 192.0.2.77"}
+			labZoneMu.Unlock()
+			t.Cleanup(func() { labZoneMu.Lock(); delete(labZone, www); labZoneMu.Unlock() })
+			w := writeList(t, "www", "a.dev", "b.dev", "c.dev")
+			ls, rep, _ := dnsOut(t, "-d", apex, "-w", w, "-r", lab.addr, "-a", "-json")
+			if r := dnsRows(t, ls); len(r) != 1 || r["www."+apex] == nil || rep.Counts["wildcard answers left out"] != 3 {
+				t.Errorf("%v %v", ls, rep.Counts)
+			}
+		})
 	}
 }
 

@@ -346,3 +346,18 @@ func TestReadRoles(t *testing.T) {
 		t.Error("a line that is not JSON is an error naming the line")
 	}
 }
+
+// A secret candidate shows what a reader judges it by: the name it was
+// assigned to, its value redacted, the rule that listed it and its entropy.
+func TestSecretDetailShowsTheEvidence(t *testing.T) {
+	d := secretDetail(Secret{Kind: "generic-secret", Severity: "medium", Where: "http://t.test/app.js",
+		Name: "apiToken", Preview: "Zx81Qp…7Ks", Rule: "name says secret, value looks random", Entropy: 4.3})
+	for _, want := range []string{"generic-secret (medium) in http://t.test/app.js", "name apiToken", "value Zx81Qp…7Ks", "rule: name says secret, value looks random", "entropy 4.3"} {
+		if !strings.Contains(d, want) {
+			t.Errorf("%q lacks %q", d, want)
+		}
+	}
+	if d := secretDetail(Secret{Kind: "jwt", Severity: "info", Where: "http://t.test/a.js"}); d != "jwt (info) in http://t.test/a.js" {
+		t.Errorf("a secret with no evidence: %q", d)
+	}
+}
