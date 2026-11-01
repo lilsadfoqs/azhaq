@@ -155,7 +155,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 - **Exit 3:** a signed-in role was refused wherever a session matters. The summary names it in a note. See [Dead sessions](#dead-sessions).
 - **Exit 3:** a token has expired and nothing more can be said of it. A note says so. See [Expired tokens](#expired-tokens).
 - **Exit 3:** a control request got no answer. See [Negative controls](#negative-controls).
-- **Exit 3:** a replay read, a page of a role's history, a write, or the read of the owner's object after a write got no answer (a refused connect, a timeout). The role is then missing from that row, and a note says how many requests and why; a write row says it in `failed` and `evidence`. A request a `-deny-path` rule keeps out is not one.
+- **Exit 3:** a replay read, a page of a role's history, a write, or the read of the owner's object after a write got no answer (a refused connect, a timeout, an answer cut short). The role is then missing from that row, and a note says how many requests and why; a write row says it in `failed` and `evidence`. A request a `-deny-path` rule keeps out is not one.
 - **Exit 3:** a role's session failed its check during the replay and did not come back (`session_suspect` answers), or its `-role-cmd` failed when the replay asked for a new token.
 - **Exit 4:** a role's run was stopped by a limit, or the replay was interrupted (Ctrl-C) with requests left. The summary marks it `stopped`.
 - **Exit 2:** a header names a host outside the scope rule. Nothing is sent. See [Headers that name a host](#headers-that-name-a-host).
@@ -283,7 +283,7 @@ Also:
 - A reader the route answers so, beside one it refuses, is dropped from the row's readers.
 - Each reader is asked once per route and shape of identifier.
 - The controls count against what `-replay-max` leaves after the replay.
-- A control request that gets no answer (a refused connect, a timeout, a scope refusal) is a failure. The row keeps its verdict, holds the reason in `control.failed`, and says in `evidence` that its control could not be asked. A note counts them: `2 cross reads not checked with a made-up identifier: the request failed: connect: connection refused`. The run exits 3. A request a `-deny-path` rule keeps out is the rule's, not a failure: the row and a note say it, and the exit is not changed.
+- A control request that gets no answer (a refused connect, a timeout, an answer cut short, a scope refusal) is a failure. The row keeps its verdict, holds the reason in `control.failed`, and says in `evidence` that its control could not be asked. A note counts them: `2 cross reads not checked with a made-up identifier: the request failed: connect: connection refused`. The run exits 3. A request a `-deny-path` rule keeps out is the rule's, not a failure: the row and a note say it, and the exit is not changed.
 
 ### Refusal pages
 
