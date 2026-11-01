@@ -114,7 +114,7 @@ func TestCrawlListsEveryLinkedQueryURL(t *testing.T) {
 func TestCrawlPerTemplateBoundsAsksNotTheList(t *testing.T) {
 	srv, hits := scriptLinksSite(t)
 	out, _, err := captureBoth(t, func() error {
-		return cmdCrawl([]string{"-u", srv.URL + "/", "-allow", "127.0.0.1", "-per-template", "10", "-json", "-db", filepath.Join(t.TempDir(), "w.db")})
+		return cmdCrawl([]string{"-u", srv.URL + "/", "-allow", "127.0.0.1", "-per-template", "10", "-json", "-hints", "-db", filepath.Join(t.TempDir(), "w.db")})
 	})
 	if err != nil && exitCode(err) != exitPartial {
 		t.Fatal(err)

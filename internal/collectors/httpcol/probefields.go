@@ -528,7 +528,7 @@ func (c *Collector) probeFields(ctx context.Context, row map[string]any, raw, re
 	last := lastHeader(res)
 	if sp.Follow {
 		row["content_type"] = headerGet(last, "Content-Type")
-		row["server"] = headerGet(last, "Server")
+		row["server"] = serverHeader(last)
 		row["location"] = headerGet(last, "Location")
 	}
 	// httpx's length is the header's, else the bytes read.

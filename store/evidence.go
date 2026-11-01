@@ -11,14 +11,20 @@ import (
 // Evidence is what stands behind the rows azhaq roles listed: each role's
 // answer to each row, kept so that a row can be checked and asked again
 // by hand (azhaq roles show).
-type Evidence struct{ db *sql.DB }
+type Evidence struct {
+	db *sql.DB
+	// legacy: the file was made before rows were kept by owner. Reading it
+	// works (one row for each URL and method); saving replaces its tables.
+	legacy bool
+}
 
 // EvidenceRow is one listed row: the row as roles -json prints it, and the
-// answers behind it.
+// answers behind it. Owner is the role whose object or request it is: two
+// owners' POSTs to one collection are two rows.
 type EvidenceRow struct {
-	URL, Method string
-	Row         []byte
-	Answers     []EvidenceAnswer
+	URL, Method, Owner string
+	Row                []byte
+	Answers            []EvidenceAnswer
 }
 
 // EvidenceAnswer is one role's answer: to the row's URL, or, for a
@@ -41,17 +47,27 @@ func OpenEvidence(path string) (*Evidence, error) {
 	if err != nil {
 		return nil, err
 	}
-	_, err = db.Exec(`
+	e := &Evidence{db: db}
+	if err := e.schema(); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+	return e, nil
+}
+
+const evidenceTables = `
 CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS rows (
   url TEXT NOT NULL,
   method TEXT NOT NULL,
+  owner TEXT NOT NULL DEFAULT '',
   row TEXT NOT NULL,
-  PRIMARY KEY (url, method)
+  PRIMARY KEY (url, method, owner)
 );
 CREATE TABLE IF NOT EXISTS answers (
   url TEXT NOT NULL,
   method TEXT NOT NULL,
+  owner TEXT NOT NULL DEFAULT '',
   role TEXT NOT NULL,
   kind TEXT NOT NULL,
   asked TEXT NOT NULL,
@@ -61,13 +77,31 @@ CREATE TABLE IF NOT EXISTS answers (
   curl TEXT NOT NULL,
   body BLOB,
   truncated INTEGER NOT NULL DEFAULT 0,
-  PRIMARY KEY (url, method, role, kind)
-);`)
-	if err != nil {
-		_ = db.Close()
-		return nil, err
+  PRIMARY KEY (url, method, owner, role, kind)
+);`
+
+// schema makes the tables, and notes a file made before rows had an owner.
+func (e *Evidence) schema() error {
+	if _, err := e.db.Exec(evidenceTables); err != nil {
+		return err
 	}
-	return &Evidence{db: db}, nil
+	rs, err := e.db.Query(`PRAGMA table_info(rows)`)
+	if err != nil {
+		return err
+	}
+	defer rs.Close()
+	has := false
+	for rs.Next() {
+		var cid, notnull, pk int
+		var name, typ string
+		var dflt any
+		if err := rs.Scan(&cid, &name, &typ, &notnull, &dflt, &pk); err != nil {
+			return err
+		}
+		has = has || name == "owner"
+	}
+	e.legacy = !has
+	return rs.Err()
 }
 
 // OpenEvidenceExisting opens an evidence database that must exist.
@@ -88,6 +122,13 @@ func (e *Evidence) Save(roles []string, rows []EvidenceRow) error {
 		return err
 	}
 	defer tx.Rollback()
+	if e.legacy {
+		for _, q := range []string{`DROP TABLE rows`, `DROP TABLE answers`, evidenceTables} {
+			if _, err := tx.Exec(q); err != nil {
+				return err
+			}
+		}
+	}
 	for _, q := range []string{`DELETE FROM rows`, `DELETE FROM answers`} {
 		if _, err := tx.Exec(q); err != nil {
 			return err
@@ -99,18 +140,18 @@ func (e *Evidence) Save(roles []string, rows []EvidenceRow) error {
 	if _, err := tx.Exec(`INSERT OR REPLACE INTO meta (k, v) VALUES ('saved_at', ?)`, time.Now().UTC().Format(time.RFC3339)); err != nil {
 		return err
 	}
-	insRow, err := tx.Prepare(`INSERT OR REPLACE INTO rows (url, method, row) VALUES (?, ?, ?)`)
+	insRow, err := tx.Prepare(`INSERT OR REPLACE INTO rows (url, method, owner, row) VALUES (?, ?, ?, ?)`)
 	if err != nil {
 		return err
 	}
 	defer insRow.Close()
-	insAns, err := tx.Prepare(`INSERT OR REPLACE INTO answers (url, method, role, kind, asked, status, length, content_type, curl, body, truncated) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+	insAns, err := tx.Prepare(`INSERT OR REPLACE INTO answers (url, method, owner, role, kind, asked, status, length, content_type, curl, body, truncated) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 	if err != nil {
 		return err
 	}
 	defer insAns.Close()
 	for _, r := range rows {
-		if _, err := insRow.Exec(r.URL, r.Method, string(r.Row)); err != nil {
+		if _, err := insRow.Exec(r.URL, r.Method, r.Owner, string(r.Row)); err != nil {
 			return err
 		}
 		for _, a := range r.Answers {
@@ -122,12 +163,16 @@ func (e *Evidence) Save(roles []string, rows []EvidenceRow) error {
 			if a.Truncated {
 				cut = 1
 			}
-			if _, err := insAns.Exec(r.URL, r.Method, a.Role, a.Kind, a.Asked, a.Status, a.Length, a.ContentType, a.Curl, body, cut); err != nil {
+			if _, err := insAns.Exec(r.URL, r.Method, r.Owner, a.Role, a.Kind, a.Asked, a.Status, a.Length, a.ContentType, a.Curl, body, cut); err != nil {
 				return err
 			}
 		}
 	}
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	e.legacy = false
+	return nil
 }
 
 // Roles are the roles of the run, in the order they were given.
@@ -150,43 +195,75 @@ func (e *Evidence) SavedAt() (time.Time, bool) {
 	return t, err == nil
 }
 
-// Row is the row kept for url and method ("" for a read).
-func (e *Evidence) Row(url, method string) (EvidenceRow, bool, error) {
-	out := EvidenceRow{URL: url, Method: method}
-	var row string
-	switch err := e.db.QueryRow(`SELECT row FROM rows WHERE url = ? AND method = ?`, url, method).Scan(&row); {
-	case err == sql.ErrNoRows:
-		return out, false, nil
-	case err != nil:
-		return out, false, err
+// Rows are the rows kept for url and method ("" for a read), one for each
+// owner, by owner name; none when there is no such row.
+func (e *Evidence) Rows(url, method string) ([]EvidenceRow, error) {
+	col := "owner"
+	if e.legacy {
+		col = "''"
 	}
-	out.Row = []byte(row)
-	rs, err := e.db.Query(`SELECT role, kind, asked, status, length, content_type, curl, body, truncated FROM answers WHERE url = ? AND method = ? ORDER BY kind, role`, url, method)
+	rs, err := e.db.Query(`SELECT `+col+`, row FROM rows WHERE url = ? AND method = ? ORDER BY 1`, url, method)
 	if err != nil {
-		return out, false, err
+		return nil, err
+	}
+	var out []EvidenceRow
+	for rs.Next() {
+		r := EvidenceRow{URL: url, Method: method}
+		var row string
+		if err := rs.Scan(&r.Owner, &row); err != nil {
+			_ = rs.Close()
+			return nil, err
+		}
+		r.Row = []byte(row)
+		out = append(out, r)
+	}
+	if err := rs.Err(); err != nil {
+		_ = rs.Close()
+		return nil, err
+	}
+	_ = rs.Close()
+	for i := range out {
+		if out[i].Answers, err = e.answers(out[i]); err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
+}
+
+func (e *Evidence) answers(r EvidenceRow) ([]EvidenceAnswer, error) {
+	q := `SELECT role, kind, asked, status, length, content_type, curl, body, truncated FROM answers WHERE url = ? AND method = ?`
+	args := []any{r.URL, r.Method}
+	if !e.legacy {
+		q += ` AND owner = ?`
+		args = append(args, r.Owner)
+	}
+	rs, err := e.db.Query(q+` ORDER BY kind, role`, args...)
+	if err != nil {
+		return nil, err
 	}
 	defer rs.Close()
+	var out []EvidenceAnswer
 	for rs.Next() {
 		var a EvidenceAnswer
 		var body []byte
 		var cut int
 		if err := rs.Scan(&a.Role, &a.Kind, &a.Asked, &a.Status, &a.Length, &a.ContentType, &a.Curl, &body, &cut); err != nil {
-			return out, false, err
+			return nil, err
 		}
 		if body != nil {
 			if a.Body, err = gunzip(body); err != nil {
-				return out, false, err
+				return nil, err
 			}
 		}
 		a.Truncated = cut == 1
-		out.Answers = append(out.Answers, a)
+		out = append(out, a)
 	}
-	return out, true, rs.Err()
+	return out, rs.Err()
 }
 
-// Keys are the rows kept, as METHOD URL ("GET" for a read).
+// Keys are the URLs and methods kept, as METHOD URL ("GET" for a read).
 func (e *Evidence) Keys() ([]string, error) {
-	rs, err := e.db.Query(`SELECT method, url FROM rows ORDER BY url, method`)
+	rs, err := e.db.Query(`SELECT DISTINCT method, url FROM rows ORDER BY url, method`)
 	if err != nil {
 		return nil, err
 	}

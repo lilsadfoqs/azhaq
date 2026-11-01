@@ -239,7 +239,8 @@ Behaviour, fields and edge cases: [`azhaq crawl`](commands/crawl.md).
 | `-em`, `-ef`, `-mr`, `-fr` | the same | Extension filters and regex filters on the printed URLs. |
 | `-ndef` | `-ndef` | |
 | `-jsonl`, `-j` | `-jsonl`, `-j` | katana's `{"request","response"}` lines. |
-| (none) | `-json` | Not katana's: `{"url","coverage","role","status","methods","params","forms","tech"}`. |
+| (none) | `-json` | Not katana's: `{"url","class","coverage","role","status","methods","params","forms","tech"}`. |
+| (none) | `-hints` | katana lists the routes its `-jsl` finds in scripts with the pages it fetched. azhaq lists the routes it observed, and `-hints` adds the ones it only read about (a route a script calls with POST, a route with a parameter, a string a script only names). `-json` marks each row `observed`, `hint` or `named`. |
 | `-o FILE`, `-silent`, `-nc`, `-v` | the same | |
 | `-sr -srd DIR`, `-ob` | the same | |
 | `-kf robotstxt,sitemapxml` | `-kf robotstxt,sitemapxml` | |
@@ -265,7 +266,7 @@ Behaviour, fields and edge cases: [`azhaq crawl`](commands/crawl.md).
 - **Time at a low `-rate`.** The number of requests sets the time. On Juice Shop at `-rate 5`, azhaq sends 91 requests in 21 s. katana `-jc -jsl -d 3 -rl 5` sends about 80 in 17 s.
 - The extra azhaq requests are the API routes katana does not find, such as `/rest/…` and `/api/…`: about 60 more endpoints. They also include one check for the root and each top-level directory (`/api/`, `/rest/`) that tells a real answer from the page the app gives every unknown path. `-sweep` checks every directory.
 - Unpaced, azhaq is faster: 8.5 s against 14.3 s.
-- Routes a script calls with POST are listed, as katana lists them, but a GET of one may answer 404 or 405. `-json` has their `methods`. `-ot '{{method}} {{url}}'` prints them in plain output.
+- **Observed routes first.** The default list holds the routes the crawl observed. Routes a script calls with POST, routes with a parameter and strings that scripts only name are `hint` and `named` rows: `-hints` lists them, as katana's `-jsl` lists them with the rest, and the summary counts the three classes apart. A GET of a hint may answer 404 or 405. `-json -hints` has their `methods`. `-hints -ot '{{method}} {{url}}'` prints them in plain output.
 - `-json` is azhaq's, not katana's. The map keeps how each URL is known: `called`, `described`, `linked`, `archived` or `guessed`. `azhaq show -db FILE URL` prints the line of the script that names it.
 
 ### Examples

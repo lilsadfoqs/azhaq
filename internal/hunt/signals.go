@@ -10,6 +10,7 @@ import (
 
 	"github.com/lilsadfoqs/azhaq/engine"
 	"github.com/lilsadfoqs/azhaq/internal/webextract"
+	"github.com/lilsadfoqs/azhaq/types"
 )
 
 var braces = strings.NewReplacer("%7B", "{", "%7D", "}", "%7b", "{", "%7d", "}")
@@ -123,10 +124,19 @@ func (h *hunter) url(r engine.MapEntry) {
 	// Path words, one signal per class.
 	words := map[string]pathWord{} // class → the word that weighs most
 	wordOf := map[string]string{}
+	signIn, otherAuth := false, false
+	page := r.Role != "api" && len(r.Ops) == 0
 	for _, w := range wordsOf(path) {
 		pw, isWord := pathWords[singular(w)]
 		if !isWord {
 			continue
+		}
+		if pw.signal == "path-auth" && page {
+			if signInWords[singular(w)] {
+				pw.w, signIn = signInWeight, true
+			} else {
+				otherAuth = true
+			}
 		}
 		switch {
 		case ok, st >= 500, known:
@@ -144,6 +154,13 @@ func (h *hunter) url(r engine.MapEntry) {
 		}
 		if pw.w > words[pw.signal].w {
 			words[pw.signal], wordOf[pw.signal] = pw, w
+		}
+	}
+	if signIn && !otherAuth {
+		// A sign-in page is where the user data words are about the form.
+		if pw, ok := words["path-data"]; ok && pw.w > signInWeight {
+			pw.w = signInWeight
+			words["path-data"] = pw
 		}
 	}
 	for sig, pw := range words {
@@ -190,7 +207,7 @@ func (h *hunter) url(r engine.MapEntry) {
 			c.add("upload", fmt.Sprintf("file field %s in a %s form to %s", strings.Join(f.Files, ", "), f.Method, f.Action))
 		}
 	}
-	if names := inputNames(r); len(names) > 0 {
+	if names := h.own(r, inputNames(r)); len(names) > 0 {
 		w := weights["input"]
 		if writesBody(r) {
 			w = writeInputWeight // a body sent with a write is input that matters more than a query name
@@ -246,7 +263,7 @@ func (h *hunter) serverError(c *cand, r engine.MapEntry, raw string) {
 	case e.kind == webextract.ErrStack:
 		c.addW("server-error", serverErrorStack, fmt.Sprintf("answers %d with a stack trace: %q", st, e.sample))
 	case without:
-		c.addW("server-error", serverErrorBare, fmt.Sprintf("answers %d to a request without the input it takes (%s): a lead, nothing in the answer points further", st, join(inputNames(r), 3)))
+		c.addW("server-error", serverErrorBare, fmt.Sprintf("answers %d to a request without the input it takes (%s): a lead, nothing in the answer points further", st, join(h.own(r, inputNames(r)), 3)))
 	default:
 		c.add("server-error", fmt.Sprintf("answers %d: %s", st, clip(r.Title, 60)))
 	}
@@ -342,6 +359,118 @@ var extraKinds = []struct {
 // one (?page=file1.php); a page number is not.
 var fileish = regexp.MustCompile(`(?i)^(page|view|module|doc)$`)
 
+// chromeMin is how many pages of an origin carry an input name, and chromeShare
+// (in percent) what share of its fetched pages, for the name to belong to the
+// site's template: a search box or a sign-in form on every page.
+const (
+	chromeMin   = 5
+	chromeShare = 40
+)
+
+// chromeInputs finds the input names the pages of an origin carry in common,
+// by origin and name. Such a name says what the template holds, not what
+// each route takes: its own route, the form's action, is where it counts. A
+// name in the URL's own query is the route's.
+func chromeInputs(rows []engine.MapEntry) map[string]*chromeInfo {
+	pages := map[string]map[string]bool{} // origin → route templates fetched
+	carry := map[string]map[string]bool{} // origin and name → route templates
+	first := map[string]engine.MapEntry{} // origin and name → the page it was first seen on
+	for _, r := range rows {
+		if r.Entity.Type != types.TypeURL || r.Coverage != "visited" || r.Status < 200 || r.Status >= 500 || staticURL(r) {
+			continue
+		}
+		u, err := url.Parse(r.Entity.Key)
+		if err != nil {
+			continue
+		}
+		origin, key := u.Scheme+"://"+u.Host, GroupKey(r.Entity.Key, r.Role == "client-route")
+		if pages[origin] == nil {
+			pages[origin] = map[string]bool{}
+		}
+		pages[origin][key] = true
+		own := u.Query()
+		for _, n := range inputNames(r) {
+			if _, ok := own[n]; ok {
+				continue
+			}
+			id := origin + "\x00" + n
+			if carry[id] == nil {
+				carry[id] = map[string]bool{}
+			}
+			carry[id][key] = true
+			if f, ok := first[id]; !ok || r.Entity.FirstSeen.Before(f.Entity.FirstSeen) ||
+				r.Entity.FirstSeen.Equal(f.Entity.FirstSeen) && r.Entity.Key < f.Entity.Key {
+				first[id] = r
+			}
+		}
+	}
+	out := map[string]*chromeInfo{}
+	for id, routes := range carry {
+		origin, name, _ := strings.Cut(id, "\x00")
+		if n := len(routes); n >= chromeMin && n*100 >= len(pages[origin])*chromeShare {
+			out[id] = &chromeInfo{origin: origin, name: name, pages: n, of: len(pages[origin]), first: first[id]}
+		}
+	}
+	return out
+}
+
+// chromeInfo is an input name the pages of an origin carry in common: on
+// how many of its fetched pages, and the page it was first seen on.
+type chromeInfo struct {
+	origin, name string
+	pages, of    int
+	first        engine.MapEntry
+}
+
+// templates gives each such input one row of its own: a site-wide search
+// box can be the way in, so it is listed once per origin, on the page it
+// was first seen on, ranked by what its name says, while the pages that
+// only carry it have no signal for it.
+func (h *hunter) templates() {
+	for _, ci := range h.chrome {
+		raw := ci.first.Entity.Key
+		c := h.get("URL", raw+"\x00template\x00"+ci.name, ci.first.Scope)
+		c.instances = []string{raw}
+		c.origin = ci.origin
+		c.tmpl = &Template{Input: ci.name, Pages: ci.pages, Of: ci.of}
+		detail := fmt.Sprintf("input %s on %d of %d pages of %s (the site's template)", ci.name, ci.pages, ci.of, ci.origin)
+		c.add("input", detail)
+		seen := map[string]bool{}
+		note := func(kind string) {
+			if kind != "id" && !seen[kind] {
+				seen[kind] = true
+				c.add("param-"+kind, detail)
+			}
+		}
+		for _, w := range engine.Watch(engine.MapEntry{Params: []string{ci.name}}) {
+			if i := strings.LastIndex(w, " ("); i > 0 {
+				note(strings.TrimSuffix(w[i+2:], ")"))
+			}
+		}
+		for _, k := range extraKinds {
+			if k.re.MatchString(ci.name) {
+				note(k.kind)
+			}
+		}
+	}
+}
+
+// own is the names of a route's input that its own page takes, not those
+// its origin's template carries on most pages.
+func (h *hunter) own(r engine.MapEntry, names []string) []string {
+	u, err := url.Parse(r.Entity.Key)
+	if err != nil || len(h.chrome) == 0 {
+		return names
+	}
+	var out []string
+	for _, n := range names {
+		if _, inQuery := u.Query()[n]; inQuery || h.chrome[u.Scheme+"://"+u.Host+"\x00"+n] == nil {
+			out = append(out, n)
+		}
+	}
+	return out
+}
+
 func (h *hunter) params(c *cand, r engine.MapEntry, raw string, u *url.URL) {
 	seen := map[string]bool{}
 	note := func(kind, name string) {
@@ -352,11 +481,11 @@ func (h *hunter) params(c *cand, r engine.MapEntry, raw string, u *url.URL) {
 		c.add("param-"+kind, name)
 	}
 	for _, w := range engine.Watch(r) {
-		if i := strings.LastIndex(w, " ("); i > 0 {
+		if i := strings.LastIndex(w, " ("); i > 0 && len(h.own(r, []string{w[:i]})) > 0 {
 			note(strings.TrimSuffix(w[i+2:], ")"), w[:i])
 		}
 	}
-	for _, name := range allNames(r, u) {
+	for _, name := range h.own(r, allNames(r, u)) {
 		for _, k := range extraKinds {
 			if k.re.MatchString(name) {
 				note(k.kind, name)

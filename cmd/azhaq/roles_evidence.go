@@ -430,7 +430,7 @@ func saveEvidence(dir string, roles []role, rows []roleRow) error {
 		if err != nil {
 			return err
 		}
-		er := store.EvidenceRow{URL: row.URL, Method: row.Method, Row: raw}
+		er := store.EvidenceRow{URL: row.URL, Method: row.Method, Owner: row.Owner, Row: raw}
 		reqBody := row.reqBody
 		if reqBody != nil {
 			reqBody = rd.body(reqBody)
@@ -472,11 +472,12 @@ func cmdRolesShow(args []string) error {
 	method := fs.String("method", "", "the method of a write row (-replay-writes); a read's row by default")
 	asJSON := fs.Bool("json", false, "one JSON object: the row, and each answer with its curl line and its differences")
 	bodyOf := fs.String("body", "", "print the answer ROLE got, as kept (secrets taken out), and nothing else")
+	owner := fs.String("owner", "", "the owner of the row, when several owners' requests share the URL and method (two roles creating in one collection): every owner's row is shown by default")
 	if err := parse(fs, args); err != nil {
 		return err
 	}
 	if *dir == "" || fs.NArg() != 1 {
-		return usagef("usage: azhaq roles show -dir DIR URL [-method M]")
+		return usagef("usage: azhaq roles show -dir DIR URL [-method M] [-owner NAME]")
 	}
 	ev, err := store.OpenEvidenceExisting(filepath.Join(*dir, evidenceFile))
 	if err != nil {
@@ -488,17 +489,11 @@ func cmdRolesShow(args []string) error {
 		m = ""
 	}
 	u := fs.Arg(0)
-	er, ok, err := ev.Row(u, m)
-	if err == nil && !ok {
-		if n, nerr := normalize.URL(u); nerr == nil && n != u {
-			u = n
-			er, ok, err = ev.Row(u, m)
-		}
-	}
+	found, err := loadEvidenceRows(ev, u, m, *owner)
 	if err != nil {
 		return err
 	}
-	if !ok {
+	if len(found) == 0 {
 		keys, _ := ev.Keys()
 		var near []string
 		for _, k := range keys {
@@ -511,21 +506,70 @@ func cmdRolesShow(args []string) error {
 			verb = http.MethodGet
 		}
 		msg := fmt.Sprintf("no row for %s %s in %s", verb, u, filepath.Join(*dir, evidenceFile))
+		if *owner != "" {
+			msg = fmt.Sprintf("no row of owner %s for %s %s in %s", *owner, verb, u, filepath.Join(*dir, evidenceFile))
+		}
 		if len(near) > 0 {
 			msg += "; it holds " + strings.Join(near[:min(len(near), 10)], ", ")
 		}
 		return exitErr{code: exitError, msg: msg}
 	}
+	if *bodyOf != "" && len(found) > 1 {
+		return usagef("%d owners' rows share %s (%s): give -owner with -body", len(found), u, ownersOf(found))
+	}
+	for i, er := range found {
+		if i > 0 && !*asJSON {
+			fmt.Println()
+		}
+		if err := showEvidenceRow(ev, er, len(found) > 1, *asJSON, *bodyOf); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// loadEvidenceRows reads the rows kept for a URL and method as roles show
+// does: by the URL as given, or normalized; only the owner's with owner.
+func loadEvidenceRows(ev *store.Evidence, u, method, owner string) ([]store.EvidenceRow, error) {
+	rows, err := ev.Rows(u, method)
+	if err == nil && len(rows) == 0 {
+		if n, nerr := normalize.URL(u); nerr == nil && n != u {
+			rows, err = ev.Rows(n, method)
+		}
+	}
+	if err != nil || owner == "" {
+		return rows, err
+	}
+	var out []store.EvidenceRow
+	for _, r := range rows {
+		if r.Owner == owner {
+			out = append(out, r)
+		}
+	}
+	return out, nil
+}
+
+func ownersOf(rows []store.EvidenceRow) string {
+	var names []string
+	for _, r := range rows {
+		names = append(names, r.Owner)
+	}
+	return strings.Join(names, ", ")
+}
+
+// showEvidenceRow prints one kept row: with owners, when several owners'
+// rows share its URL and method, the owner is named.
+func showEvidenceRow(ev *store.Evidence, er store.EvidenceRow, owners, asJSON bool, bodyOf string) error {
 	var row roleRow
 	_ = json.Unmarshal(er.Row, &row)
-	if *bodyOf != "" {
+	if bodyOf != "" {
 		for _, a := range er.Answers {
-			if a.Role == *bodyOf && a.Kind == "answer" {
+			if a.Role == bodyOf && a.Kind == "answer" {
 				_, err := os.Stdout.Write(a.Body)
 				return err
 			}
 		}
-		return exitErr{code: exitError, msg: fmt.Sprintf("no answer of %s kept for %s", *bodyOf, u)}
+		return exitErr{code: exitError, msg: fmt.Sprintf("no answer of %s kept for %s", bodyOf, er.URL)}
 	}
 	order := ev.Roles()
 	sortAnswers(er.Answers, order)
@@ -567,7 +611,7 @@ func cmdRolesShow(args []string) error {
 		}
 		list = append(list, s)
 	}
-	if *asJSON {
+	if asJSON {
 		return json.NewEncoder(os.Stdout).Encode(struct {
 			URL     string          `json:"url"`
 			Method  string          `json:"method,omitempty"`
@@ -581,6 +625,9 @@ func cmdRolesShow(args []string) error {
 		verb = http.MethodGet
 	}
 	fmt.Printf("%s %s\n  [%s]", verb, er.URL, row.label())
+	if owners {
+		fmt.Printf(" owner %s", er.Owner)
+	}
 	if row.Confidence != "" {
 		fmt.Printf(" %s", row.Confidence)
 	}

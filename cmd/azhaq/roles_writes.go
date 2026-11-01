@@ -223,7 +223,7 @@ func routePath(raw string) string {
 // changes one short field of the body to a value unique to each role it
 // is sent with, so replaying the owner's exact body (idempotent: nothing
 // to read back) can still be proved. Every request counts against budget.
-func replayWrites(roles []role, reqs []writeReq, answers map[string]map[string]answer, own map[string]bool, rate float64, budget int, canary bool) ([]roleRow, int, error) {
+func replayWrites(roles []role, reqs []writeReq, answers map[string]map[string]answer, own map[string]bool, rate float64, budget int, canary bool, allow ...string) ([]roleRow, int, error) {
 	ctx := context.Background()
 	fetch.Reset()
 	defer fetch.Reset()
@@ -332,7 +332,7 @@ func replayWrites(roles []role, reqs []writeReq, answers map[string]map[string]a
 		var canaryField string
 		var canaryable bool
 		if canary && !w.empty && w.method != http.MethodDelete {
-			_, canaryField, canaryable = withCanary(w.body, "azhaqcanaryprobe")
+			_, canaryField, canaryable = withCanary(w.body, "azhaqcanaryprobe", allow...)
 		}
 		already := haveBefore && !w.empty && w.method != http.MethodDelete && !canaryable && alreadySet(before, w.body)
 		var let, proven []string
@@ -340,7 +340,7 @@ func replayWrites(roles []role, reqs []writeReq, answers map[string]map[string]a
 		for _, r := range otherRoles(roles, w.owner) {
 			wr := w
 			if canaryable {
-				wr.body, _, _ = withCanary(w.body, canaryToken())
+				wr.body, _, _ = withCanary(w.body, canaryToken(), allow...)
 			}
 			a, err := send(r, wr)
 			if err != nil {
@@ -684,35 +684,111 @@ func canaryToken() string {
 	return "azhaq-" + hex.EncodeToString(b[:])
 }
 
-// withCanary changes one short string field of a JSON write body to
-// token: a field already in the body, never an identifier, an owner or a
-// reference field (changing whose the object is is not what this proves),
-// a credential, or a timestamp. ok is false, and body is given back
-// unchanged, when the body is not a JSON object or none of its fields
-// qualifies: the write is then sent as recorded, proving nothing new.
-func withCanary(body []byte, token string) (out []byte, field string, ok bool) {
-	var m map[string]any
-	if json.Unmarshal(body, &m) != nil {
-		return body, "", false
-	}
+// fieldLeft is a field of a write body the canary leaves alone, and why.
+type fieldLeft struct{ name, why string }
+
+// canaryField picks the field of a JSON object body a canary sets, and
+// lists the string fields it leaves alone with the rule that did. A field
+// the caller named in allow is taken first, whatever the rules say: that
+// is the caller's risk. Otherwise it is the first of the fields by name
+// that is not an identifier, an owner or reference field (changing whose
+// the object is is not what this proves), a credential, or a timestamp.
+func canaryField(m map[string]any, allow []string) (field string, left []fieldLeft) {
 	keys := make([]string, 0, len(m))
 	for k := range m {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
+	named := map[string]bool{}
+	for _, a := range allow {
+		named[norm(a)] = true
+	}
+	for _, k := range keys {
+		if s, ok := m[k].(string); ok && s != "" && named[norm(k)] {
+			return k, nil
+		}
+	}
 	for _, k := range keys {
 		s, isStr := m[k].(string)
-		n := norm(k)
-		if !isStr || s == "" || ownerField(n) || refField(n) || sensitiveField(k) != "" || timeLike.MatchString(s) {
+		if !isStr || s == "" {
 			continue
 		}
-		m[k] = token
-		if raw, err := json.Marshal(m); err == nil {
-			return raw, k, true
+		n := norm(k)
+		switch {
+		case ownerField(n):
+			left = append(left, fieldLeft{k, "it says whose the object is"})
+		case refField(n):
+			left = append(left, fieldLeft{k, "it refers to another object"})
+		case sensitiveField(k) != "":
+			left = append(left, fieldLeft{k, "it holds a credential"})
+		case timeLike.MatchString(s):
+			left = append(left, fieldLeft{k, "it is a timestamp"})
+		default:
+			if field == "" {
+				field = k
+			}
 		}
+	}
+	return field, left
+}
+
+// withCanary changes one short string field of a JSON write body to
+// token (see canaryField). ok is false, and body is given back unchanged,
+// when the body is not a JSON object or no field qualifies: the write is
+// then sent as recorded, proving nothing new.
+func withCanary(body []byte, token string, allow ...string) (out []byte, field string, ok bool) {
+	var m map[string]any
+	if json.Unmarshal(body, &m) != nil {
 		return body, "", false
 	}
+	field, _ = canaryField(m, allow)
+	if field == "" {
+		return body, "", false
+	}
+	m[field] = token
+	if raw, err := json.Marshal(m); err == nil {
+		return raw, field, true
+	}
 	return body, "", false
+}
+
+// canaryNotes says, before anything is sent, which field the canary of
+// each PUT or PATCH write will set and which it leaves alone and why; when
+// no field qualifies, that the write goes as recorded with no canary.
+func canaryNotes(reqs []writeReq, allow []string) []string {
+	var out []string
+	seen := map[string]bool{}
+	for _, w := range reqs {
+		if w.empty || w.method == http.MethodDelete || w.method == http.MethodPost {
+			continue
+		}
+		id := w.method + " " + pathOf(w.url)
+		if seen[id] {
+			continue
+		}
+		seen[id] = true
+		var m map[string]any
+		if json.Unmarshal(w.body, &m) != nil || m == nil {
+			out = append(out, fmt.Sprintf("canary: %s has no JSON object body, so no field can carry a canary: it is replayed as recorded", id))
+			continue
+		}
+		field, left := canaryField(m, allow)
+		var parts []string
+		for _, l := range left {
+			parts = append(parts, fmt.Sprintf("%s (%s)", l.name, l.why))
+		}
+		switch {
+		case field != "" && len(parts) > 0:
+			out = append(out, fmt.Sprintf("canary: %s sets %s; left alone: %s", id, field, strings.Join(parts, ", ")))
+		case field != "":
+			out = append(out, fmt.Sprintf("canary: %s sets %s", id, field))
+		case len(parts) > 0:
+			out = append(out, fmt.Sprintf("canary: %s has no field a canary may set, so it is replayed as recorded, with no canary; left alone: %s; -replay-writes-field NAME takes one when you accept changing it", id, strings.Join(parts, ", ")))
+		default:
+			out = append(out, fmt.Sprintf("canary: %s has no non-empty string field, so it is replayed as recorded, with no canary", id))
+		}
+	}
+	return out
 }
 
 // readAs reads u as role r, past the cache, inside the scope and pace,
