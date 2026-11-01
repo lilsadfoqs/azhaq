@@ -70,6 +70,8 @@
 - `resume` of a `ports` range stopped before any address finished no longer reads the empty list of finished addresses as the default port list: it skipped about a hundred addresses of a /24 and counted 101 addresses.
 - `crawl -assets` lists the library script (`jquery-3.2.1.min.js`) and the stylesheet a page loads.
 - `subs -w -permute -max-names N` asked every guess (1,493 for N = 2): a `-max-names` you give now caps the words and variations together, exits 4 and counts `guesses held back by -max-names`; without it nothing is held back. A live row is no longer marked `unverified`.
+- `ports -detect all` names vsftpd when its greeting states no product, from its own literal pre-login refusal, as nmap -sV does; no version is guessed.
+- `shots` and `run -screenshots` make a picture exactly the size `-shot-size` asks for (headless Chrome kept part of the window, so it came out shorter by a fixed amount), and fail a page whose picture cannot be made that size instead of writing a smaller one.
 
 ## v0.13.0
 
