@@ -9,6 +9,10 @@
 # fetched into one folder: usage.py FOLDER <(azhaq help -json).
 # A gate (run.sh gate NAME) is two runs on one commit, bench/gate-NAME and
 # hunt/gate-NAME: they are fetched into DIR/bench and DIR/hunt.
+# A trial's gate or baseline kind publishes under a part instead of flat
+# (trial/trial-NAME/a, /b, or /a1 /a2 /b1 /b2 for samples=2 -
+# .github/ci/trial/README.md): fetch.sh trial NAME DIR brings every part back
+# into DIR/a, DIR/b (and so on), each decrypted and unpacked the same way.
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
 kind=${1:?usage: fetch.sh bench|hunt|gate|trial|range-smoke NAME DIR}
@@ -27,7 +31,21 @@ age=$(command -v age || echo "$HOME/go/bin/age")
 repo=lilsadfoqs/azhaq
 mkdir -p "$dir"
 cd "$dir"
-curl -fsS "https://api.github.com/repos/$repo/contents/$kind/$tag?ref=ci-results" |
+listing=$(curl -fsS "https://api.github.com/repos/$repo/contents/$kind/$tag?ref=ci-results")
+if [ "$kind" = trial ]; then
+  parts=$(printf '%s' "$listing" | python3 -I -c 'import sys, json
+d = json.load(sys.stdin)
+print("\n".join(f["name"] for f in d if isinstance(d, list) and f.get("type") == "dir"))' 2>/dev/null || true)
+  if [ -n "$parts" ]; then
+    rc=0
+    while IFS= read -r part; do
+      [ -n "$part" ] || continue
+      FETCH_TAG="$tag/$part" "$here/fetch.sh" "$kind" "$name" "$dir/$part" || rc=1
+    done <<<"$parts"
+    exit $rc
+  fi
+fi
+printf '%s' "$listing" |
   python3 -I -c 'import sys, json; [print(f["name"]) for f in json.load(sys.stdin)]' |
   while read -r f; do
     curl -fsSL -o "$f" "https://raw.githubusercontent.com/$repo/ci-results/$kind/$tag/$f"

@@ -62,6 +62,7 @@ func cmdCrawl(args []string) error {
 	noShell := fs.Bool("no-catchall", false, "leave out URLs that answer with the page every unknown path gets (client-side routes of a single-page app)")
 	sweep := fs.Bool("sweep", false, "also ask each web service for the 51 built-in paths (robots.txt, sitemaps, API descriptions, .git/HEAD, admin, …) and for the source map next to each script, as run does; crawl asks only what a crawler does")
 	showOut := fs.Bool("do", false, "also list the URLs found and left out of the crawl's scope (never requested)")
+	hints := fs.Bool("hints", false, "also list the hints (routes with a parameter, views and sockets, routes scripts or descriptions give a method other than GET) and the named URLs (found and not requested, or named only in scripts); by default only the routes the crawl observed are listed")
 	showRejected := fs.Bool("rejected", false, "also list the strings read from scripts and pages and kept out of the URLs, each with its reason (text: string, a tab, the reason; -json: one object each)")
 	jsonl := fs.Bool("jsonl", false, "katana's JSON lines: {timestamp, request{method, endpoint, tag, attribute, source}, response{status_code, technologies, forms, content_length}, error}")
 	fs.BoolVar(jsonl, "j", false, "same as -jsonl")
@@ -220,6 +221,9 @@ func cmdCrawl(args []string) error {
 		if outOpts.hidden(r) {
 			continue
 		}
+		if !*hints && crawlClass(r) != classObserved {
+			continue
+		}
 		if !c.json && !outOpts.jsonl && strings.Contains(r.Entity.Key, "{") {
 			continue // a route with a parameter (/api/Cards/{id}) is no URL to request; -json lists it
 		}
@@ -264,6 +268,9 @@ func cmdCrawl(args []string) error {
 	}
 	rep.Results, rep.Counts = out.w.count(), counts
 	kinds.put(counts, len(rejected))
+	if !*hints && kinds.hints+kinds.named > 0 {
+		rep.Notes = append(rep.Notes, fmt.Sprintf("%d hints and %d named URLs were left out of the list (-hints lists them; -json marks each row's class)", kinds.hints, kinds.named))
+	}
 	if otherMethod > 0 {
 		rep.Notes = append(rep.Notes, fmt.Sprintf("%d listed URLs are routes scripts call with a method other than GET, so a GET may answer 404 or 405%s (-json has methods; -ot '{{method}} {{url}}' prints them)", otherMethod, askedNote(otherAsked)))
 	}
@@ -286,9 +293,49 @@ func cmdCrawl(args []string) error {
 // reader compares like with like (katana's records are the requested ones):
 // requested + not requested + templates is every row, and assets are a
 // count of their own.
-type crawlKinds struct{ requested, answered, notRequested, templates, assets int }
+type crawlKinds struct {
+	requested, answered, notRequested, templates, assets int
+	observed, hints, named                               int // by class: see crawlClass
+}
+
+// What a crawl row is, by how well the crawl knows it: observed, the crawl
+// asked for it and got an answer or an error; a hint, a script, a
+// description or the app's router says a route exists (a route with a
+// parameter, a view, a socket, a method other than GET) that no GET
+// observed; named, a URL a script or a description names and the crawl did
+// not request, or only named in scripts with no call. A URL a page links is
+// observed even when a limit kept the crawl from asking it.
+const (
+	classObserved = "observed"
+	classHint     = "hint"
+	classNamed    = "named"
+)
+
+func crawlClass(r engine.MapEntry) string {
+	switch {
+	case strings.Contains(r.Entity.Key, "{"), r.Role == "client-route", r.Role == "websocket":
+		return classHint
+	case strings.HasSuffix(r.Proof, engine.ProofScriptsOnly):
+		return classNamed
+	case len(r.Methods) > 0 && !slices.Contains(r.Methods, "GET"):
+		return classHint
+	case r.Status > 0 || r.Coverage == "visited" || r.Coverage == "gone" || r.Coverage == "catchall" || r.Coverage == "error":
+		return classObserved
+	case slices.Contains(r.EvidenceFrom, "azhaq-crawl") || slices.Contains(r.EvidenceFrom, "azhaq-render"):
+		return classObserved // a page links it: seen, if not asked for
+	}
+	return classNamed
+}
 
 func (k *crawlKinds) add(r engine.MapEntry) {
+	switch crawlClass(r) {
+	case classObserved:
+		k.observed++
+	case classHint:
+		k.hints++
+	default:
+		k.named++
+	}
 	switch r.Role {
 	case "asset", "sourcemap", "manifest":
 		k.assets++
@@ -311,7 +358,8 @@ func (k *crawlKinds) add(r engine.MapEntry) {
 // the URLs.
 func (k *crawlKinds) put(c map[string]int, rejected int) {
 	for name, n := range map[string]int{"requested": k.requested, "answered": k.answered, "not requested": k.notRequested,
-		"templates": k.templates, "assets": k.assets, "rejected strings": rejected} {
+		"templates": k.templates, "assets": k.assets, "rejected strings": rejected,
+		"observed routes": k.observed, "hint routes": k.hints, "named strings": k.named} {
 		if n > 0 {
 			c[name] = n
 		}
@@ -661,6 +709,7 @@ func (c *crawlOutput) write(r engine.MapEntry, f crawlFact) {
 	case c.json:
 		row := mapRowJSON(r)
 		row["url"] = key
+		row["class"] = crawlClass(r)
 		delete(row, "key")
 		delete(row, "type")
 		if len(f.tech) > 0 {

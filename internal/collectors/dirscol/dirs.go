@@ -36,7 +36,10 @@ const Name = "azhaq-dirs"
 // common is SecLists' Discovery/Web-Content/common.txt (MIT, Daniel
 // Miessler; commit 61060549893d61b428d2184bb719abf23b4b3f13), the list a
 // sweep uses when the user gives none. It is read at build time: nothing
-// is downloaded when azhaq runs.
+// is downloaded when azhaq runs. Three entries are left out: they carry an
+// outside address (render?url=https://www.google.com, render/https://www.google.com,
+// dns-query?name=google.com&type=A) that makes the target fetch or look it
+// up, which a path is not.
 //
 //go:embed common.txt
 var common string
@@ -477,7 +480,7 @@ func (c *Collector) sweep(ctx context.Context, dir string, found func([]hit) err
 }
 
 // escapeWord puts a word in a URL as ffuf does: a "?" starts the query
-// (common.txt has render?url=…), the path is escaped by segment.
+// (SecLists lists have render?url=…), the path is escaped by segment.
 func escapeWord(w string) string {
 	path, query, hasQuery := strings.Cut(w, "?")
 	parts := strings.Split(path, "/")

@@ -5,11 +5,22 @@
 ### Changed
 
 - Every failure now exits 3: a source that failed while others answered for the same domain (`partial`), a fan-out failure and a degraded `subs` run no longer exit 0. The summary still lists what failed and why. `-fail-on-errors` is accepted and is the default, and no flag turns a failure back into exit 0. Ports nmap did not name a web service that give no page are counted in a note, not listed as failures.
+- `crawl` lists the routes it observed by default. Routes with a parameter, views, routes called with another method (`hint`) and strings only named in scripts (`named`) are listed with `-hints`; `-json` marks each row's `class`, and the summary counts the three classes apart.
 
 ### Fixed
 
+- Chrome no longer tries to connect outside the scope: its sign-in, update, search, Google API and safe browsing lookups are switched off at launch (the component updater off, service addresses pointed at `chrome-off.invalid`, a name that never resolves and that the guard refuses without counting, a new profile with sign-in, safe browsing, password leak checks and suggestions off), and the password leak check on a sign-in is gone. The guard still refuses any attempt, and the summary note appears only if one was made (an existing `-chrome-profile` can enable a service).
+- Chrome starts where the system gives it no sandbox (containers, AppArmor on Ubuntu 24+, no user namespaces): azhaq starts it once more without the sandbox and the summary says so, as gowitness does. `-chrome-require-sandbox` refuses that second start. `AZHAQ_CHROME_NO_SANDBOX=1` is no longer needed.
+- `dirs` and `@common` no longer send `render?url=https://www.google.com`, `render/https://www.google.com` and `dns-query?name=google.com&type=A`, which asked a target to fetch or resolve an outside address (the built-in list is 4,747 words).
+- A route that streams events for ever (`text/event-stream`, `multipart/x-mixed-replace`) is answered with its status, headers and the first 64 KiB or 2 seconds of its body, not held until the timeout.
 - `ports` (and any run that scans a range) gave its Port rows `scope: fanout`, so `query -scope target` and the MCP `azhaq_query` listed none of them; a range seed now makes its own entity the target.
 - `export -format graphml` named a URL the run's scope had refused (a link to another port); it now leaves those out, as the other formats do.
+- `probe` keeps every `Server` line of an answer, as httpx's `webserver` does: a proxy or gateway that adds its own line no longer hides the product behind it.
+- `params` no longer reports a name on a size, line or body change alone when the page varies by itself: such a name is checked against four names no page reads, and what that check sees widens the noise for the names that follow.
+- `hunt` ranks sign-in, sign-up and reset pages at 10 (still listed). An input that at least 5 pages and 40% of an origin's fetched pages carry (a search box in every header, 77 of the top 100 rows in the v0.12 evidence) is one row for each origin and name, on the page it was first seen on, with its page count and `template` in `-json`; the pages that only carry it no longer rank for it.
+- `roles` says before it sends which field each write canary sets and why the others are left, and says when no field qualifies. `-replay-writes-field NAME` names a field you accept the risk of setting; either canary flag without what it needs is a usage error.
+- `roles.db` keeps a row for each owner of a route: two roles' POSTs to one collection are two rows, `roles show` prints both (`-owner` picks one) and `report` writes each. An older `roles.db` is read as it is.
+- `-replay-max` counts every redirect hop, as the summary's requests do, and names the URLs the budget left unasked (exit 4).
 
 ## v0.12.1
 

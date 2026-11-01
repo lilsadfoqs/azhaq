@@ -3515,8 +3515,6 @@ removals
 remove
 removed
 render
-render?url=https://www.google.com
-render/https://www.google.com
 rendered
 reorder
 rep
@@ -4743,7 +4741,6 @@ zt
 ~webmaster
 ~www
 dns-query?dns=q80BAAABAAAAAAAAA3d3dwdleGFtcGxlA2NvbQAAAQAB
-dns-query?name=google.com&type=A
 sse
 mcp
 mcp/transport

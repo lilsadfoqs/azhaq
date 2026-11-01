@@ -231,6 +231,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	chromePath := fs.String("chrome", "", "the Chrome or Chromium to run (default $AZHAQ_CHROME, else the first found)")
 	chromeProxy := fs.String("chrome-proxy", "", "send Chrome's own connections through this http or socks5 proxy (default: -proxy, else the environment's); a plain http:// request reaches an http proxy as a proxy request, a page over TLS as a CONNECT tunnel")
 	chromeProfile := fs.String("chrome-profile", "", "a Chrome user data directory to use and keep: sessions it holds go with the pages (default: a temporary one)")
+	chromeSandbox := fs.Bool("chrome-require-sandbox", false, "never run Chrome without its sandbox: where the system gives it none (no user namespaces, AppArmor, a container) Chrome does not start (default: it is started once more without, and the summary says so)")
 	unsafePorts := fs.Bool("unsafe-ports", true, "let Chrome open the ports it refuses by default (6000, 6666, 10080 and others); -unsafe-ports=false keeps its refusal")
 	webScheme := fs.String("web-scheme", "", "try a name or an address over this scheme only, http or https (default: https, then http)")
 	urlsTimeout := fs.Duration("urls-timeout", 3*time.Minute, "time each archive source gets per domain (the Wayback Machine's answer for a large domain takes several minutes)")
@@ -840,6 +841,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		opts.Browser = &browser.Browser{} // never started: the collectors that need Chrome are listed
 	}
 	if (*shots != "" || *render) && !out.plan {
+		browser.RequireSandbox = *chromeSandbox
 		if *chromePath != "" {
 			if st, err := os.Stat(*chromePath); err != nil || st.IsDir() {
 				return usagef("-chrome %s: not a file", *chromePath)
@@ -2471,6 +2473,9 @@ func chromeRefused(rep *report, b *browser.Browser) {
 		if s := (engine.Skip{Target: w, Reason: browser.WriteReason}); !slices.Contains(rep.Skipped, s) {
 			rep.Skipped = append(rep.Skipped, s)
 		}
+	}
+	if why := b.Unsandboxed(); why != "" {
+		rep.Notes = append(rep.Notes, "Chrome ran without its sandbox ("+why+"): the pages it loaded are the targets' and untrusted; -chrome-require-sandbox refuses this")
 	}
 	if n, hosts := b.GuardDenied(); n > 0 {
 		rep.Notes = append(rep.Notes, fmt.Sprintf("Chrome's own services reached for %d connections outside the scope (%s); all were refused, none was sent", n, listOfHosts(hosts, 3)))

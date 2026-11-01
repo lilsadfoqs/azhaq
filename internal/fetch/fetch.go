@@ -14,6 +14,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/lilsadfoqs/azhaq/internal/egress"
@@ -777,6 +778,41 @@ func readBody(r io.Reader, limit int) ([]byte, bool, error) {
 		return body[:limit], true, nil
 	}
 	return body, false, nil
+}
+
+// A stream that never ends (server-sent events, multipart/x-mixed-replace)
+// answers with its status, headers and a first part of its body; reading it
+// to the end would hold the request until its timeout.
+const (
+	streamWindow = 2 * time.Second
+	streamLimit  = 64 << 10
+)
+
+func endless(resp *http.Response) bool {
+	ct := strings.ToLower(resp.Header.Get("Content-Type"))
+	return strings.Contains(ct, "text/event-stream") || strings.Contains(ct, "multipart/x-mixed-replace")
+}
+
+// readResponse reads resp's body up to limit, or, of a stream that never
+// ends, the first streamLimit bytes it sends within streamWindow; the body
+// is then marked truncated. It does not close the body.
+func readResponse(resp *http.Response, limit int) ([]byte, bool, error) {
+	if !endless(resp) {
+		return readBody(resp.Body, limit)
+	}
+	var cut atomic.Bool
+	t := time.AfterFunc(streamWindow, func() {
+		cut.Store(true)
+		_ = resp.Body.Close()
+	})
+	defer t.Stop()
+	n := min(limit, streamLimit)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, int64(n)))
+	if cut.Load() || len(body) >= n {
+		// What came is the answer, and the stream went on.
+		return body, true, nil
+	}
+	return body, false, err
 }
 
 func bodyLimit(resp *http.Response) int {

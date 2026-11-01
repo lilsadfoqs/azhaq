@@ -15,7 +15,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"github.com/lilsadfoqs/azhaq/store"
 )
 
@@ -120,6 +119,7 @@ func cmdReport(args []string) error {
 	dir := fs.String("dir", "", "the -dir of the roles run (it holds "+evidenceFile+")")
 	target := fs.String("url", "", "write up this one row (its URL as roles lists it); every cross-role finding by default")
 	method := fs.String("method", "", "the method of a write row (-replay-writes); a read's row by default")
+	owner := fs.String("owner", "", "with -url: only the row of this owner, when several owners' requests share the URL and method (two roles creating in one collection); a report for each owner by default")
 	format := fs.String("format", "md", "md or json")
 	out := fs.String("o", "", "FILE for the reports (one file, or a directory with a report per file); without -url, DIR/reports; with -url, standard output")
 	redact := fs.Bool("redact", false, "also mask hosts and identifiers (a report to share outside the engagement)")
@@ -127,7 +127,7 @@ func cmdReport(args []string) error {
 		return err
 	}
 	if *dir == "" || fs.NArg() != 0 {
-		return usagef("usage: azhaq report -dir DIR [-url URL] [-method M] [-format md|json] [-o FILE] [-redact]")
+		return usagef("usage: azhaq report -dir DIR [-url URL] [-method M] [-owner NAME] [-format md|json] [-o FILE] [-redact]")
 	}
 	if *format != "md" && *format != "json" {
 		return usagef("-format is md or json, not %q", *format)
@@ -144,21 +144,23 @@ func cmdReport(args []string) error {
 
 	var rows []store.EvidenceRow
 	if *target != "" {
-		er, ok, err := loadEvidenceRow(ev, *target, m)
+		found, err := loadEvidenceRows(ev, *target, m, *owner)
 		if err != nil {
 			return err
 		}
-		if !ok {
+		if len(found) == 0 {
 			return exitErr{code: exitError, msg: fmt.Sprintf("no row for %s in %s", *target, filepath.Join(*dir, evidenceFile))}
 		}
-		var row roleRow
-		if err := json.Unmarshal(er.Row, &row); err != nil {
-			return err
+		for _, er := range found {
+			var row roleRow
+			if err := json.Unmarshal(er.Row, &row); err != nil {
+				return err
+			}
+			if c, _ := classOf(row.Verdict); c == "" {
+				return exitErr{code: exitError, msg: fmt.Sprintf("%s is [%s]: report writes up a role reading, writing or creating in another role's object or collection, or sensitive fields anyone reads", *target, row.Verdict)}
+			}
+			rows = append(rows, er)
 		}
-		if c, _ := classOf(row.Verdict); c == "" {
-			return exitErr{code: exitError, msg: fmt.Sprintf("%s is [%s]: report writes up a role reading, writing or creating in another role's object or collection, or sensitive fields anyone reads", *target, row.Verdict)}
-		}
-		rows = append(rows, er)
 	} else {
 		keys, err := ev.Keys()
 		if err != nil {
@@ -169,14 +171,16 @@ func cmdReport(args []string) error {
 			if verb == http.MethodGet {
 				verb = ""
 			}
-			er, ok, err := ev.Row(u, verb)
-			if err != nil || !ok {
+			found, err := ev.Rows(u, verb)
+			if err != nil {
 				continue
 			}
-			var row roleRow
-			if json.Unmarshal(er.Row, &row) == nil {
-				if c, _ := classOf(row.Verdict); c != "" {
-					rows = append(rows, er)
+			for _, er := range found {
+				var row roleRow
+				if json.Unmarshal(er.Row, &row) == nil {
+					if c, _ := classOf(row.Verdict); c != "" {
+						rows = append(rows, er)
+					}
 				}
 			}
 		}
@@ -196,19 +200,7 @@ func cmdReport(args []string) error {
 		fmt.Fprintf(os.Stderr, "azhaq report: no row in %s is a role reading, writing or creating in another role's object or collection, or sensitive fields anyone reads\n", filepath.Join(*dir, evidenceFile))
 		return nil
 	}
-	return emitReports(docs, *format, *out, *dir, *target != "")
-}
-
-// loadEvidenceRow reads one row as roles show does: by its URL, or by the
-// URL normalized.
-func loadEvidenceRow(ev *store.Evidence, u, method string) (store.EvidenceRow, bool, error) {
-	er, ok, err := ev.Row(u, method)
-	if err == nil && !ok {
-		if n, nerr := normalize.URL(u); nerr == nil && n != u {
-			er, ok, err = ev.Row(n, method)
-		}
-	}
-	return er, ok, err
+	return emitReports(docs, *format, *out, *dir, *target != "" && len(docs) == 1)
 }
 
 var confRank = map[string]int{confProved: 0, confLikely: 1, confGuess: 2}

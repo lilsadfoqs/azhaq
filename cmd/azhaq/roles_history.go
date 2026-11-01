@@ -505,8 +505,8 @@ func readHistoryURLs(r role, urls []string, got map[string]answer, raw map[strin
 		if sent >= budget {
 			return sent, fmt.Errorf("%w: stopped after -replay-max %d requests; role %s's history has pages that were not read", errReplayMax, budget, r.name)
 		}
-		sent++
 		res, _, err := fetch.Do(ctx, client, u)
+		sent += max(1, len(res.Hops)) // each redirect hop is a request too
 		if err != nil {
 			if egress.Stopped(ctx) != nil {
 				return sent, egress.Stopped(ctx)

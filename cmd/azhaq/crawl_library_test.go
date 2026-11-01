@@ -30,7 +30,7 @@ func TestCrawlDoesNotReadVersionedLibraryScripts(t *testing.T) {
 		}
 	}))
 	t.Cleanup(srv.Close)
-	out, _ := crawlOut(t, srv)
+	out, _ := crawlOut(t, srv, "-hints")
 	if !strings.Contains(out, srv.URL+"/product/stock\n") {
 		t.Errorf("the app's own script is read:\n%s", out)
 	}

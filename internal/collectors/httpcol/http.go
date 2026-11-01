@@ -787,7 +787,7 @@ func describe(reqURL, final string, res fetch.Result, title string, noTech, ever
 		"status":       res.Status,
 		"final_url":    final,
 		"content_type": headerGet(res.Header, "Content-Type"),
-		"server":       headerGet(res.Header, "Server"),
+		"server":       serverHeader(res.Header),
 		"title":        title,
 		"location":     headerGet(res.Header, "Location"),
 		"body_hash":    hex.EncodeToString(sum[:8]),
@@ -867,6 +867,13 @@ func headerGet(h http.Header, k string) string {
 		return ""
 	}
 	return h.Get(k)
+}
+
+// serverHeader is every Server line, one after the other as httpx joins
+// them: a proxy or gateway in front adds one, and the first alone hides
+// the product behind it.
+func serverHeader(h http.Header) string {
+	return strings.Join(h.Values("Server"), " ")
 }
 
 func extraHeaders(h http.Header) map[string]string {

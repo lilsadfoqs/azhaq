@@ -13,11 +13,43 @@ import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CATALOG = os.path.join(HERE, "catalog.json")
+POOL = os.path.join(HERE, "pool.json")
 
 
 def load_catalog(path=CATALOG):
     with open(path, encoding="utf-8") as f:
         return json.load(f)
+
+
+def load_pool(path=POOL):
+    """The gate's fixed pool of seeds: a non-empty list of strings, each a
+    single-estate build.py seed whose usual-tools result is kept as a
+    baseline."""
+    with open(path, encoding="utf-8") as f:
+        pool = json.load(f)
+    if not isinstance(pool, list) or not pool or not all(isinstance(s, str) and s for s in pool):
+        raise SystemExit("%s must be a non-empty list of seed strings" % path)
+    if len(pool) != len(set(pool)):
+        raise SystemExit("%s has a repeated seed" % path)
+    return pool
+
+
+def pick_pool_seed(pool, run_number, requested=None, sample=1):
+    """The pool seed for SAMPLE (1-based) of this run: REQUESTED (a tag's
+    seed=WORD) fixes sample 1 when it names a pool entry; sample 2 and later
+    are the next pool entries after it, so `samples=2` always draws two
+    different estates. Without REQUESTED, sample 1 is chosen round robin by
+    RUN_NUMBER, so repeated gate runs cycle through the whole pool."""
+    if requested:
+        if requested not in pool:
+            raise SystemExit("seed %r is not in the pool: %s" % (requested, ", ".join(pool)))
+        base = pool.index(requested)
+    else:
+        try:
+            base = (int(run_number) - 1) % len(pool)
+        except (TypeError, ValueError):
+            raise SystemExit("run_number must be an integer, not %r" % (run_number,))
+    return pool[(base + sample - 1) % len(pool)]
 
 
 def project_name(entry_id, prefix="az"):

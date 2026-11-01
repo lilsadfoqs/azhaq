@@ -248,6 +248,7 @@ type roleReplay struct {
 	retried  int
 	suspect  int
 	failedAt string // the first failed check: its URL and status
+	unasked  int    // URLs left when the budget ran out
 }
 
 func (rr *roleReplay) setup() {
@@ -262,7 +263,7 @@ func (rr *roleReplay) setup() {
 
 func (rr *roleReplay) ask(u string) {
 	res, _, err := fetch.Do(rr.ctx, fetch.Client(nil), u)
-	*rr.sent++
+	*rr.sent += max(1, len(res.Hops)) // each redirect hop is a request too
 	if err != nil {
 		return
 	}
@@ -363,6 +364,7 @@ func (rr *roleReplay) run(todo []string) error {
 			return err
 		}
 		if *rr.sent >= rr.budget {
+			rr.unasked = len(todo) - n
 			break
 		}
 		rr.ask(u)

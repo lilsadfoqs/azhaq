@@ -98,8 +98,13 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 ### One answer's fields
 
 - `status_code`, `content_type`, `content_length`, `title` and `webserver` are one answer's: the first, or with `-fr` the last.
+- `webserver` is the whole Server header as sent, runtime included (`Werkzeug/2.2.3 Python/3.11.15`); when the answer has several Server lines (a proxy in front adds one) they are joined with a space, as httpx does.
 - `chain_status_codes` lists the statuses of the whole chain.
 - `url` of a URL input is the input as given, with its slash, query and fragment (`http://h/` and `http://h/#x` are two values); `path` stays the path asked. For a bare host it is httpx's form, the front page without a slash (`http://h`).
+
+### A route that never ends
+
+A route that streams for ever (server-sent events, `multipart/x-mixed-replace`) is answered with its status, headers and the first part of its body (up to 64 KiB, or what comes in 2 seconds), and then closed, not held until the timeout. Its body counts as truncated. Every command that reads a page does the same.
 
 ### Targets with no answer
 

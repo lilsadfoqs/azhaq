@@ -97,7 +97,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 
 | Flag | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `-w` | string |  | wordlist (default: SecLists' common.txt, built in: 4750 words) |
+| `-w` | string |  | wordlist (default: SecLists' common.txt, built in: 4747 words) |
 | `-e` | string |  | also try each word with these extensions, comma-separated (php,bak) |
 | `-depth` | int | `1` | directory levels to sweep; 2 also sweeps directories found |
 | `-ac` | bool | `true` | calibrate on paths that cannot exist, as ffuf's -ac does, so a catch-all answer is not listed even with a filter of your own; -ac=false sends no guesses and lists what the filters leave |

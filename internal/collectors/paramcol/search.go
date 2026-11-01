@@ -959,6 +959,7 @@ func (s *search) differs(a, ref answer, q []pair) bool {
 // judge names how a differs from ref apart from reflected values and
 // names: status, size, headers, location or lines; empty if it does not.
 func (s *search) judge(a, ref answer) string {
+	_, lineSlack, exact := s.tolerance()
 	switch {
 	case a.status != ref.status:
 		return "status"
@@ -968,9 +969,9 @@ func (s *search) judge(a, ref answer) string {
 		return "headers"
 	case a.loc != ref.loc:
 		return "location"
-	case abs(a.lines-ref.lines) > s.lineSlack:
+	case abs(a.lines-ref.lines) > lineSlack:
 		return "lines"
-	case s.exact && !bytes.Equal(a.body, ref.body):
+	case exact && !bytes.Equal(a.body, ref.body):
 		return "body"
 	}
 	return ""
@@ -978,10 +979,68 @@ func (s *search) judge(a, ref answer) string {
 
 // resized: the sizes differ by more than the page's noise.
 func (s *search) resized(a, ref answer) bool {
-	if abs(a.length-ref.length) > s.slack+s.slack/2+16 {
+	slack, _, _ := s.tolerance()
+	if abs(a.length-ref.length) > slack+slack/2+16 {
 		return true
 	}
-	return s.slack == 0 && (a.words != ref.words || a.lines != ref.lines)
+	return slack == 0 && (a.words != ref.words || a.lines != ref.lines)
+}
+
+// tolerance is what the page shows between identical requests: its size
+// and line count noise, and whether its body never changes.
+func (s *search) tolerance() (slack, lineSlack int, exact bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.slack, s.lineSlack, s.exact
+}
+
+// weak says a change is only in the answer's size, line count or body
+// bytes: all of them what a page that varies by itself shows too.
+func weak(why string) bool { return why == "size" || why == "lines" || why == "body" }
+
+// sizeControls is how many names no page reads are asked to measure the
+// page's own variance when a name's only evidence is a weak change: the
+// two requests of calibration cannot show a page that is calm twice by
+// chance.
+const sizeControls = 4
+
+// standsApart says whether seen, the answers to name that changed in a
+// weak way, hold up as evidence: names no page reads, as long as name, are
+// asked now, and each answer must differ from the reference and from each
+// of them as judge says. What they show is learned for the names that
+// follow: the size and line noise widens, and a body that changed with no
+// name to blame ends the rule that any other body is a change.
+func (s *search) standsApart(name, value string, seen []answer) bool {
+	ref := strip(s.ref, nil)
+	ctl := []answer{ref}
+	for i := 0; i < sizeControls; i++ {
+		q := controlFor([]string{name}, value)
+		a, ok := s.get(q)
+		if !ok {
+			return false
+		}
+		ctl = append(ctl, strip(a, q))
+	}
+	loLen, hiLen, loLines, hiLines := ref.length, ref.length, ref.lines, ref.lines
+	same := true
+	for _, c := range ctl[1:] {
+		loLen, hiLen = min(loLen, c.length), max(hiLen, c.length)
+		loLines, hiLines = min(loLines, c.lines), max(hiLines, c.lines)
+		same = same && bytes.Equal(c.body, ref.body)
+	}
+	s.mu.Lock()
+	s.slack = max(s.slack, hiLen-loLen)
+	s.lineSlack = max(s.lineSlack, hiLines-loLines)
+	s.exact = s.exact && same
+	s.mu.Unlock()
+	for _, x := range seen {
+		for _, c := range ctl {
+			if s.judge(x, c) == "" {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // headers: a header the reference lacks, or lacks one it has, other than
@@ -1011,6 +1070,7 @@ type verdict struct {
 	reflected []string // names whose value came back more often than a control's
 	named     []string // names the answer prints
 	crowd     bool     // the control changed the status too: the group's size did, not its names
+	ans       answer   // the answer without the values sent
 }
 
 // test sends group with random values, or with value when it is given.
@@ -1058,6 +1118,7 @@ func (s *search) test(group []string, value string) (verdict, bool) {
 	// above, by its count, and is not a change of size as well.
 	v.why = s.judge(strip(a, q), strip(base, control))
 	v.crowd = s.controlled && base.status != s.ref.status && a.status == base.status
+	v.ans = strip(a, q)
 	return v, true
 }
 
@@ -1130,12 +1191,21 @@ func (s *search) process(ck *chunk, group []string, v verdict, inferred bool) {
 		// Confirm: a single change must show again. (An inferred one has: its
 		// group changed the answer, its other half did not, and alone it
 		// does again.)
-		if !inferred {
-			if w, ok := s.test(group, ck.fixed); !ok || w.why == "" || w.crowd {
+		why, seen := v.why, []answer{v.ans}
+		if !inferred || weak(v.why) {
+			w, ok := s.test(group, ck.fixed)
+			if !ok || w.why == "" || w.crowd {
 				return
 			}
+			if !weak(w.why) {
+				why = w.why
+			}
+			seen = append(seen, w.ans)
 		}
-		ck.set(group[0], v.why)
+		if weak(why) && !s.standsApart(group[0], ck.fixed, seen) {
+			return
+		}
+		ck.set(group[0], why)
 		ck.mu.Lock()
 		ck.hits++
 		ck.mu.Unlock()

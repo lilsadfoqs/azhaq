@@ -18,7 +18,7 @@ import sys
 
 TEXT = ('.log', '.md', '.txt', '.sh', '.jsonl')
 # Files that quote azhaq's own commands, not what a run did.
-SKIP_FILES = ('README.md', 'CHANGELOG.md', 'BRIEF.md', 'RULES.md')
+SKIP_FILES = ('README.md', 'CHANGELOG.md', 'BRIEF.md', 'RESEARCH.md', 'HUNTER.md', 'GATE.md', 'RULES.md')
 
 INVOKE = re.compile(r'(?:^|[\s"\'`(;|&/])azhaq\s+([a-z]+)((?:\\\n|[^\n|;&`])*)')
 FLAG = re.compile(r'(?:^|\s)-{1,2}([a-zA-Z][a-zA-Z0-9-]*)')
