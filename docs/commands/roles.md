@@ -142,7 +142,8 @@ With `-replay-writes`, these verdicts join the list. Proved cross writes keep th
 | `writes another role's object: accepted; the change cannot be read back to confirm` | yes | Another role's write was answered 2xx, and nothing shows whether the owner's object changed. See Details. |
 | `would be sent (-dry-writes)` | yes | `-dry-writes`: nothing was sent. |
 | `answered 2xx but changed nothing of the owner's` | `-all` | A 2xx answer, but the owner's object did not change as the write asked, or could not be read. Not a finding. |
-| `creates in another role's collection` | yes | A POST another role was let to send: it created data on the target. A create, never another role's object written. |
+| `creates in another role's collection` | yes | A POST another role was let to send, and something shows it crosses roles: the anonymous role was let to send it, or the object the create made (read from the answer to the create and from the read-back) belongs to the role whose request was replayed, by what that role's session says. A create, never another role's object written. |
+| `create accepted: nothing shows it crosses roles` | yes | A POST another role was let to send, and neither of those is shown: the object may be its sender's own, as in a collection every signed-in user may post to. `created_owner` (sender, owner) and `owner_by` say whose object the create made when the answers say. Ranks as the row above. |
 | `only its owner writes it` | `-all` | The others were refused. |
 | `the owner's own write was refused` | `-all` | The owner was not let, or its empty write changed its object: nothing to compare. |
 | `the other roles were refused` | `-all` | A DELETE, never asked of its owner, that no other role was let to send. |
@@ -487,7 +488,8 @@ For a POST that creates in a collection, `roles` also reads the created object b
 - `writes another role's object` is reported only when the owner's object changed the way the write asks, or was deleted. Changed means one of the body's values is now in it.
 - The row names the URL the change was read back at when it is not the write's own.
 - A write answered 2xx that left the owner's object unchanged is `answered 2xx but changed nothing of the owner's`. It is not a finding. An app that writes the caller's own object whatever the path says does this.
-- A POST to a collection is never a cross write. A role let to send it `creates in another role's collection`.
+- A POST to a collection is never a cross write. A role let to send it makes a `create accepted`, or a `creates in another role's collection` when the anonymous role was let, or the object the create made belongs to the replayed request's role.
+- Whose object a create made is read from the owner fields of the answer to the create and of the read-back (`user`, `owner`, `createdBy`, `email`, …), matched with who each role is (its token's claims, its login answer, its `/me`). A name that only equals a role's name is a lead, said in `owner_by`, never the proof: "may belong to alice".
 
 #### Canary values
 
@@ -511,7 +513,7 @@ Replaying the owner's own recorded body is idempotent when the value it sets is 
 4. A DELETE goes to the others alone, the anonymous role first. It stops at the first proven.
 
 - A write is let when it is answered 2xx and not with an error shaped as data. It is proven by the owner's object changing.
-- Proved cross writes keep the top of the list, above the reads. The rows that prove nothing about another role's object rank below the proved reads: `creates in another role's collection`, which is listed, and `answered 2xx but changed nothing`, which is not.
+- Proved cross writes keep the top of the list, above the reads. The rows that prove nothing about another role's object rank below the proved reads: `creates in another role's collection` and `create accepted`, which are listed, and `answered 2xx but changed nothing`, which is not.
 - Every request counts against `-replay-max` (what the read replay left) and the run's `-max-requests`, at the run's `-rate`. That includes each write and each read of the owner's object to verify it.
 - Every request is sent without following a redirect.
 

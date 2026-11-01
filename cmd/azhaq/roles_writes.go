@@ -27,9 +27,12 @@ import (
 // that was answered but changed nothing of the owner's ranks below the
 // proved reads.
 const (
-	verdictWriteAnyone   = "anyone writes another role's object"
-	verdictWriteCross    = "writes another role's object"
-	verdictWriteCreate   = "creates in another role's collection"
+	verdictWriteAnyone = "anyone writes another role's object"
+	verdictWriteCross  = "writes another role's object"
+	verdictWriteCreate = "creates in another role's collection"
+	// A POST another role sent was accepted. Nothing shows the server ignores
+	// who may create: the object may be its sender's own.
+	verdictWriteAccepted = "create accepted: nothing shows it crosses roles"
 	verdictWriteNoChange = "answered 2xx but changed nothing of the owner's"
 	verdictWriteOwner    = "only its owner writes it"
 	verdictWriteVoid     = "the owner's own write was refused"
@@ -50,6 +53,7 @@ func init() {
 	verdictOrder[verdictWriteDry] = -3
 	verdictOrder[verdictWriteNoChange] = 15
 	verdictOrder[verdictWriteCreate] = 16
+	verdictOrder[verdictWriteAccepted] = 16
 	verdictOrder[verdictWriteOwner] = 20
 	verdictOrder[verdictWriteVoid] = 21
 	verdictOrder[verdictWriteRefused] = 20
@@ -225,6 +229,12 @@ func routePath(raw string) string {
 // is sent with, so replaying the owner's exact body (idempotent: nothing
 // to read back) can still be proved. Every request counts against budget.
 func replayWrites(roles []role, reqs []writeReq, answers map[string]map[string]answer, own map[string]bool, rate float64, budget int, canary bool, allow ...string) ([]roleRow, int, error) {
+	return replayWritesAs(nil, roles, reqs, answers, own, rate, budget, canary, allow...)
+}
+
+// replayWritesAs is replayWrites with who each role is, which tells whose
+// object a create made.
+func replayWritesAs(who map[string]identity, roles []role, reqs []writeReq, answers map[string]map[string]answer, own map[string]bool, rate float64, budget int, canary bool, allow ...string) ([]roleRow, int, error) {
 	ctx := context.Background()
 	fetch.Reset()
 	defer fetch.Reset()
@@ -288,7 +298,7 @@ func replayWrites(roles []role, reqs []writeReq, answers map[string]map[string]a
 		// A POST to a collection makes a new object: never another role's
 		// object written.
 		if w.method == http.MethodPost {
-			if err := replayCollection(&row, roles, w, answers, read, send); err != nil {
+			if err := replayCollection(&row, roles, w, answers, read, send, who); err != nil {
 				stop = err
 				rows = append(rows, finishWriteRow(row))
 				break
@@ -409,8 +419,16 @@ func replayWrites(roles []role, reqs []writeReq, answers map[string]map[string]a
 // the map already knows the member URL the created object would answer at
 // (createdURL), the first role let read it back, as itself, to confirm
 // the create is more than a 2xx.
-func replayCollection(row *roleRow, roles []role, w writeReq, answers map[string]map[string]answer, read func(role, string) (answer, bool), send func(role, writeReq) (answer, error)) error {
-	var let []string
+//
+// What a let create is called rests on whose object it made: the owner
+// fields of the answer to the create, and of the read-back, are matched with
+// who each role is. A create is "creates in another role's collection" only
+// when something shows it crosses roles: the anonymous role was let, or the
+// object belongs to the role whose request was replayed. Else it is "create
+// accepted": the object may well be its sender's own, which is what a
+// collection every signed-in user may post to does.
+func replayCollection(row *roleRow, roles []role, w writeReq, answers map[string]map[string]answer, read func(role, string) (answer, bool), send func(role, writeReq) (answer, error), who map[string]identity) error {
+	var let, shown []string
 	confirmed := false
 	for _, r := range otherRoles(roles, w.owner) {
 		a, err := send(r, w)
@@ -422,25 +440,80 @@ func replayCollection(row *roleRow, roles []role, w writeReq, answers map[string
 			continue
 		}
 		let = append(let, r.name)
+		made := a // the answer to the create, and the object read back, say whose it is
 		if !confirmed {
 			if u := createdURL(w, answers); u != "" {
 				if got, ok := read(r, u); ok && reads(got) {
 					row.OwnerBy += fmt.Sprintf("; %s's create is readable back at %s", r.name, pathOf(u))
 					confirmed = true
+					if got.self != nil {
+						made = got
+					}
 				}
 			}
+		}
+		if r.anonymous() {
+			shown = append(shown, r.name)
+			row.OwnerBy += fmt.Sprintf("; %s, a role with no session, was let to create", r.name)
+			continue
+		}
+		owner, by, strong := createdOwner(made, r.name, roles, who)
+		switch {
+		case owner == "":
+		case owner == r.name:
+			row.OwnerBy += fmt.Sprintf("; the object %s's create made belongs to %s (%s)", r.name, r.name, by)
+			setCreated(row, r.name, owner)
+		case owner == w.owner && strong:
+			shown = append(shown, r.name)
+			row.OwnerBy += fmt.Sprintf("; the object %s's create made belongs to %s, whose request was replayed (%s)", r.name, owner, by)
+			setCreated(row, r.name, owner)
+		default:
+			row.OwnerBy += fmt.Sprintf("; the object %s's create made may belong to %s (%s)", r.name, owner, by)
 		}
 	}
 	row.Readers = let
 	switch {
-	case len(let) > 0:
+	case len(shown) > 0:
 		row.Verdict = verdictWriteCreate
+	case len(let) > 0:
+		row.Verdict = verdictWriteAccepted
 	case serverFailed(row):
 		row.Verdict = verdictWriteFailed
 	default:
 		row.Verdict = verdictWriteRefused
 	}
 	return nil
+}
+
+func setCreated(row *roleRow, sender, owner string) {
+	if row.CreatedOwner == nil {
+		row.CreatedOwner = map[string]string{}
+	}
+	row.CreatedOwner[sender] = owner
+}
+
+// createdOwner is whose object an answer about a created object says it
+// is: the role that who names by an owner field of it, else a role whose
+// name the owner field spells (not strong: the session does not say). by
+// says what told.
+func createdOwner(a answer, sender string, roles []role, who map[string]identity) (owner, by string, strong bool) {
+	if a.self == nil {
+		return "", "", false
+	}
+	if o, why, known, _ := whose(a.self, roles, who, "", ""); known && o != "" {
+		return o, why, true // the session says so: not a name that matches a role's
+	}
+	for _, n := range sortedKeys(mapKeys(a.self.fields)) {
+		if !ownerField(n) {
+			continue
+		}
+		for _, r := range roles {
+			if !r.anonymous() && strings.EqualFold(a.self.fields[n], r.name) {
+				return r.name, fmt.Sprintf("its %s field says %s, the name of the role: its session does not say", a.self.spelled(n), a.self.fields[n]), false
+			}
+		}
+	}
+	return "", "", false
 }
 
 // provesCross: the owner's object changed the way the write asks. A DELETE

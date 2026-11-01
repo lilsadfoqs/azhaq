@@ -340,7 +340,10 @@ func TestReplayWriteCanaryProvesAnIdempotentReplay(t *testing.T) {
 }
 
 // A POST to a collection creates a new object; even when the other role is
-// let, it is a create, never a cross write.
+// let, it is a create, never a cross write. Whose the object is says what the
+// create is called: the server here stores it as its sender's, which is what a
+// collection every signed-in user may post to does, so nothing shows it
+// crosses roles.
 func TestReplayWriteCreate(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("A") == "" {
@@ -356,11 +359,113 @@ func TestReplayWriteCreate(t *testing.T) {
 	roles := []role{{name: "anon"}, {name: "alice", headers: []string{"A: alice"}, session: h("alice")}, {name: "bob", headers: []string{"A: bob"}, session: h("bob")}}
 	post := writeReq{owner: "alice", method: "POST", url: srv.URL + "/books/v1", header: http.Header{"Content-Type": {"application/json"}}, body: []byte(`{"title":"t"}`), status: 201, from: "alice.har"}
 	rows, _, _ := replayWrites(roles, []writeReq{post}, nil, map[string]bool{"127.0.0.1": true}, 0, 100, false)
-	if len(rows) != 1 || rows[0].Verdict != verdictWriteCreate || !slices.Contains(rows[0].Readers, "bob") {
+	if len(rows) != 1 || rows[0].Verdict != verdictWriteAccepted || !slices.Contains(rows[0].Readers, "bob") {
 		t.Fatalf("rows %+v", rows)
 	}
-	if !listed(verdictWriteCreate) {
-		t.Errorf("a create another role was let to send is a finding and is listed by default")
+	if rows[0].CreatedOwner["bob"] != "bob" || !strings.Contains(rows[0].OwnerBy, "belongs to bob") {
+		t.Errorf("the object bob's create made is bob's, and the row says so: %v, %q", rows[0].CreatedOwner, rows[0].OwnerBy)
+	}
+	if !listed(verdictWriteAccepted) || !listed(verdictWriteCreate) {
+		t.Errorf("a create another role was let to send is listed by default")
+	}
+	if txt := rows[0].label(); !strings.Contains(txt, "bob's POST to /books/v1 was accepted") || strings.Contains(txt, "create in the collection") {
+		t.Errorf("row text %q", txt)
+	}
+}
+
+// A create is called "creates in another role's collection" only when the
+// answers show it: the anonymous role was let, or the object belongs to the
+// role whose request was replayed (by what the session says, not by a name).
+func TestReplayWriteCreateCrossesRolesOnlyWhenShown(t *testing.T) {
+	idOf := func(names ...string) identity {
+		id := newIdentity()
+		for _, n := range names {
+			id.who[n] = true
+			id.keep("username", n)
+		}
+		return id
+	}
+	h := func(v string) http.Header { x := http.Header{}; x.Set("A", v); return x }
+	roles := []role{{name: "anon"}, {name: "alice", headers: []string{"A: alice"}, session: h("alice")}, {name: "bob", headers: []string{"A: bob"}, session: h("bob")}}
+	who := map[string]identity{"alice": idOf("alice", "alice@x.test"), "bob": idOf("bob", "bob@x.test")}
+	post := func(url string) writeReq {
+		return writeReq{owner: "alice", method: "POST", url: url + "/books/v1", header: http.Header{"Content-Type": {"application/json"}}, body: []byte(`{"title":"t"}`), status: 201, from: "alice.har"}
+	}
+	serve := func(handler func(w http.ResponseWriter, r *http.Request)) *httptest.Server {
+		srv := httptest.NewServer(http.HandlerFunc(handler))
+		t.Cleanup(srv.Close)
+		return srv
+	}
+	run := func(srv *httptest.Server) roleRow {
+		rows, _, _ := replayWritesAs(who, roles, []writeReq{post(srv.URL)}, nil, map[string]bool{"127.0.0.1": true}, 0, 100, false)
+		if len(rows) != 1 {
+			t.Fatalf("rows %+v", rows)
+		}
+		return rows[0]
+	}
+	// The create lands in the collection's first owner's account, whoever sends it.
+	got := run(serve(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("A") == "" {
+			w.WriteHeader(401)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(201)
+		w.Write([]byte(`{"username":"alice"}`))
+	}))
+	if got.Verdict != verdictWriteCreate || got.CreatedOwner["bob"] != "alice" || !strings.Contains(got.OwnerBy, "whose request was replayed") {
+		t.Errorf("an object that belongs to the recorder: %q %v %q", got.Verdict, got.CreatedOwner, got.OwnerBy)
+	}
+	// Every caller may create, with no session at all.
+	got = run(serve(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(201)
+		w.Write([]byte(`{"ok":true}`))
+	}))
+	if got.Verdict != verdictWriteCreate || !strings.Contains(got.OwnerBy, "anon, a role with no session, was let to create") {
+		t.Errorf("the anonymous role was let: %q %q", got.Verdict, got.OwnerBy)
+	}
+	// The object is its sender's, by what the session says of the sender.
+	got = run(serve(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("A") == "" {
+			w.WriteHeader(401)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(201)
+		w.Write([]byte(`{"user":"` + r.Header.Get("A") + `@x.test"}`))
+	}))
+	if got.Verdict != verdictWriteAccepted || got.CreatedOwner["bob"] != "bob" {
+		t.Errorf("an object that belongs to its sender: %q %v", got.Verdict, got.CreatedOwner)
+	}
+	// An answer that says nothing of whose it is: accepted, and no more.
+	got = run(serve(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("A") == "" {
+			w.WriteHeader(401)
+			return
+		}
+		w.WriteHeader(200)
+	}))
+	if got.Verdict != verdictWriteAccepted || len(got.CreatedOwner) != 0 {
+		t.Errorf("an answer with no owner: %q %v", got.Verdict, got.CreatedOwner)
+	}
+	// A name that only equals a role's, in an answer, is no proof it belongs
+	// to the recorder: not "creates in another role's collection".
+	noWho := func(srv *httptest.Server) roleRow {
+		rows, _, _ := replayWrites(roles, []writeReq{post(srv.URL)}, nil, map[string]bool{"127.0.0.1": true}, 0, 100, false)
+		return rows[0]
+	}
+	got = noWho(serve(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("A") == "" {
+			w.WriteHeader(401)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(201)
+		w.Write([]byte(`{"owner":"alice"}`))
+	}))
+	if got.Verdict != verdictWriteAccepted || !strings.Contains(got.OwnerBy, "may belong to alice") {
+		t.Errorf("a name is only a lead: %q %q", got.Verdict, got.OwnerBy)
 	}
 }
 
@@ -393,10 +498,10 @@ func TestRolesListsCreatesByDefault(t *testing.T) {
 	if err != nil {
 		t.Fatalf("%v\n%s", err, errOut)
 	}
-	if n := strings.Count(out, verdictWriteCreate); n != 2 {
+	if n := strings.Count(out, verdictWriteAccepted); n != 2 {
 		t.Errorf("want both creates listed, got %d:\n%s", n, out)
 	}
-	if strings.Contains(errOut, "not listed") && strings.Contains(errOut, verdictWriteCreate) {
+	if strings.Contains(errOut, "not listed") && strings.Contains(errOut, verdictWriteAccepted) {
 		t.Errorf("the creates are still counted as not listed:\n%s", errOut)
 	}
 }
@@ -425,7 +530,7 @@ func TestReplayWriteCreateConfirmedByKnownMemberURL(t *testing.T) {
 	known, _ := readAnswer(200, []byte(`{"title":"My Book","owner":"alice"}`), "application/json")
 	answers := map[string]map[string]answer{"anybody": {member: known}}
 	rows, _, _ := replayWrites(roles, []writeReq{post}, answers, map[string]bool{"127.0.0.1": true}, 0, 100, false)
-	if len(rows) != 1 || rows[0].Verdict != verdictWriteCreate {
+	if len(rows) != 1 || rows[0].Verdict != verdictWriteAccepted {
 		t.Fatalf("rows %+v", rows)
 	}
 	if !strings.Contains(rows[0].OwnerBy, "readable back at /books/v1/My Book") {
