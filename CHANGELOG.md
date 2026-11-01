@@ -24,6 +24,8 @@
 
 ### Fixed
 
+- `report` writes up `creates in another role's collection` (the verdict `roles -replay-writes` lists by default) as "Missing authorization on create", with the owner's request, each role's answer, a low severity that rises to medium when a request with no credential was let to create, and a note when the create was not read back. Before, the default run skipped it and `report -url … -method POST` refused it.
+- `run -stream` prints one line per map row: the front page found twice, or a URL found by the crawl and answered later, printed twice, and the address row (`127.0.0.1`) never printed. A key now prints once under its map key, an `address` line covers an IP host and the IPs a name resolves to, and URLs the map drops are not streamed.
 - A header that names a port is held to the `-allow HOST:PORT` rule like a URL: `-H 'Host: 127.0.0.1:5002'` under `-allow 127.0.0.1:3001` is refused with exit 2 and nothing sent, in every command, and `roles` no longer widens `-allow HOST:PORT` to the whole host for headers. Through an HTTP proxy, a plain-HTTP request names its URL in the request line, so a `Host` header can no longer send the proxy to another host or port (as curl `-x` does).
 - A link to another port of an `-allow HOST:PORT` host is outside the scope: `crawl` and `run` no longer print it as a result row (text, `-json`, `-jsonl`, stream); the summary's `skipped` names it and `crawl -do` lists it.
 - A page Chrome never requested (refused by `-deny-path` or the scope, or its tab never opened) gives its request count back, so the summary and the ledger agree on the requests of `-browser`, `-interact` and `-screenshots` runs.
