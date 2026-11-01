@@ -183,7 +183,7 @@ func (p *Policy) ProxyFor(r *http.Request) (*url.URL, error) {
 	if u := p.TargetProxy(); u != nil {
 		return u, nil
 	}
-	return http.ProxyFromEnvironment(r)
+	return envProxy(r)
 }
 
 // Resolve is the run's answer for host, nil without a resolver.

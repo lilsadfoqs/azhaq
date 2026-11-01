@@ -167,7 +167,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 - The host in `-u` is the scope unless `-allow`, `-deny` or `-scope` say otherwise. When the keyword starts the host, as in `FUZZ.example.com`, the scope is its domain.
 - A request to a host outside the scope is not sent, and the summary counts it.
 - Every request goes through the run's budget and pace (`-max-requests`, `-rate`) and the ledger, and stops at the kill file.
-- `-x` and `-replay-proxy` need their scheme, as in `http://127.0.0.1:8080`. The environment's `HTTP_PROXY` is not read, because Go sends loopback traffic through a proxy only when it is named.
+- `-x` (also `-proxy`, as on the other commands) and `-replay-proxy` need their scheme, as in `http://127.0.0.1:8080`. Without `-x`, `HTTP_PROXY` and `HTTPS_PROXY` apply, loopback included, and `NO_PROXY` keeps hosts direct: [Proxies](../CONCEPTS.md#proxies). `-replay-proxy` is not read from the environment.
 - The copies `-replay-proxy` sends go to the proxy you named. They are not requests to the target, so they are not in the ledger, the budget or the pace. The summary says how many were sent.
 
 ### Not in `fuzz`
@@ -262,6 +262,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 | Flag | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `-x` | string |  | send every request through this proxy: an http, https, socks5 or socks5h URL |
+| `-proxy` | string |  | the same as -x, as on every other command |
 | `-replay-proxy` | string |  | send each match once more through this proxy (Burp, for the history); the copy is the proxy's own, not counted by -max-requests or -rate and not in the ledger |
 
 **Output**

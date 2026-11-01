@@ -532,11 +532,11 @@ The allowed hosts are then requested, counted and in the ledger.
 
 ### `fuzz -x` or `-replay-proxy` shows nothing in the proxy
 
-**Why:** Go sends traffic for loopback addresses through a proxy only when `-x` names it. The environment's `HTTP_PROXY` is not read.
+**Why:** `-replay-proxy` gets a copy of each match and nothing else; the requests themselves go through `-x` (or `-proxy`), else through `HTTP_PROXY` and `HTTPS_PROXY`. `NO_PROXY` keeps the hosts it names direct, loopback addresses too.
 
 **Fix:**
 
-- Name the proxy with `-x`.
+- Name the proxy with `-x` or `-proxy`, or check `NO_PROXY`.
 - A proxy URL needs its scheme, such as `http://127.0.0.1:8080`.
 - The summary counts the matches sent through `-replay-proxy` and the ones that failed.
 

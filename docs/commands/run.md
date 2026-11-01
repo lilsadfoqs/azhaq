@@ -410,7 +410,7 @@ Examples of what `notes` holds for a run:
 | `-login` | string |  | sign in on this page with Chrome before the run; its cookies and token go with every request (needs -login-user and -login-pass) |
 | `-login-user` | string |  | user name or email for -login |
 | `-login-pass` | string |  | password for -login (default $AZHAQ_LOGIN_PASS) |
-| `-proxy` | string |  | send requests to targets through this proxy (http://, https:// or socks5://); Chrome too (default: $HTTP_PROXY, $HTTPS_PROXY) |
+| `-proxy` | string |  | send requests to targets through this proxy (http://, https:// or socks5://); Chrome too (default: $HTTP_PROXY, $HTTPS_PROXY, loopback targets included; $NO_PROXY keeps hosts direct) |
 
 **Output**
 

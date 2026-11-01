@@ -139,7 +139,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 | --- | --- | --- | --- |
 | `-H` | string, repeatable |  | extra request header K: V |
 | `-cookie` | string, repeatable |  | Cookie name=value (repeatable; sent as one Cookie header) |
-| `-proxy` | string |  | send requests to targets through this proxy (http://, https:// or socks5://); Chrome too (default: $HTTP_PROXY, $HTTPS_PROXY) |
+| `-proxy` | string |  | send requests to targets through this proxy (http://, https:// or socks5://); Chrome too (default: $HTTP_PROXY, $HTTPS_PROXY, loopback targets included; $NO_PROXY keeps hosts direct) |
 
 **Output**
 

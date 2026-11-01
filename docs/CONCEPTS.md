@@ -177,6 +177,15 @@ The budget holds for each run: `azhaq resume` sends up to as many more as its ow
 
 Ctrl-C, `kill` and a hangup (SIGINT, SIGTERM and SIGHUP) all stop a command the same way. It exits 4, prints its summary and seals its ledger.
 
+## Proxies
+
+One rule holds for every command that sends HTTP to a target: `run`, `crawl`, `probe`, `dirs`, `fuzz`, `params`, `shots`, `roles` and the commands `watch` and `resume` repeat.
+
+- `-proxy URL` (an `http://`, `https://` or `socks5://` URL; `fuzz` also takes `-x`) sends every request of the command through it. The proxy sees each one, and the ledger counts the same.
+- Without `-proxy`, the environment's `HTTP_PROXY` and `HTTPS_PROXY` apply, loopback targets (`127.0.0.1`, `localhost`, `::1`) included, as with curl. `NO_PROXY` keeps the hosts it names direct: `NO_PROXY=127.0.0.1` for a local lab you do not want in your proxy.
+- `azhaq mcp` has no `-proxy`: its commands read the environment the server starts with.
+- Not target requests, so not covered: `subs -proxy` and `-source-proxy` (the name sources), `urls -proxy` (the archives), `notify -proxy`, `dns -proxy` and `ports -proxy` (SOCKS5 for DNS and for connects).
+
 ## Workspaces, runs and resuming
 
 The summary's `next` lists commands worth running after a run: see [OUTPUT](OUTPUT.md#next).
