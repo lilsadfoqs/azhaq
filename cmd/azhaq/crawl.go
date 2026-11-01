@@ -173,6 +173,9 @@ func cmdCrawl(args []string) error {
 	} else if !explicit["per-template"] {
 		run = append(run, "-per-template=1000000")
 	}
+	// ... and every script-named path too: crawl lists catch-all answers
+	// (-no-catchall leaves them out) instead of holding them back.
+	run = append(run, "-catchall-after=0")
 	run = append(run, crawlRegexArgs(inScope, "-crawl-in")...)
 	run = append(run, crawlRegexArgs(outScope, "-crawl-out")...)
 	var answers *answerStore

@@ -94,6 +94,7 @@ The map has one row per entity, best first: the target's own pages and APIs, the
 
 The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.md#the-summary) and [exit codes](../OUTPUT.md#exit-codes). Two things are specific to `run`:
 
+- The summary counts `catchall` (URLs that answered with the page every unknown path gets) and `catchall not asked` (URLs scripts name that were not requested, see [Catch-all origins](#catch-all-origins)) apart: neither is in `results` or in `URLs`, so `results` plus the two is the rows `run` printed.
 - The summary counts `client routes` and `websockets` apart from `URLs`, `ports` for the open ports that have a row and `open|filtered ports` for the UDP ports that neither answered nor were refused, never counted as open. A port is one row for each host, port and protocol, however many scans listed it.
 - Under `-max-requests`, a port sweep leaves the requests that mapping each web service it found open needs (about N per service, as `plan` says), so a budget smaller than the sweep still maps the services found; the summary's notes say how the budget went by stage (`request budget N, spent by stage: ports …`).
 - A target given with no port (a name or an address) is asked on 443, then 80, or on `-web-ports`. So is the name of a URL given with its own port, and a name found on the way. A guess nothing listens on, refused, is a note (`no web service on 443 or 80`), not a failure, and so is a refused connection on 443 to read a name's certificate; a `-web-ports` port that refuses is one, and so is a URL given that refuses. A refused URL is one failed target: the other targets of the run are mapped as usual and the exit code is 3.
@@ -146,13 +147,24 @@ found in
   - A route that scripts call only with POST or PUT.
   - A route that only a page in Chrome writes to. A GET that answers 404, 405 or the catch-all page says nothing about such a route.
   - A route named only in scripts, with no GET call among them, while a GET answers 404. Its `proof` says `GET answers 404; found only in scripts, method unknown`.
-- `skipped` means found by a link, a script's call, an API description or an archive, and not requested because a `-deny-path` rule of yours keeps its path out.
+- `skipped` means found by a link, a script's call, an API description or an archive, and not requested because a `-deny-path` rule of yours keeps its path out, or because its origin answers every path alike: see [Catch-all origins](#catch-all-origins).
   - The row's `skipped` field and the summary say which rule: `-deny-path ^/admin/`.
   - Nothing else makes a URL `skipped`. A wordlist sweep (`dirs`, `-dirs`, `fuzz`) asks every word, `/logout` included, as ffuf does, and so does the map.
 - `capped` means left when a limit was hit, or when its origin stopped answering.
   - An origin has stopped answering after 5 connects or timeouts in a row with no answer between them.
   - The rest of that origin's work is left for `azhaq resume`. It is listed under `skipped` as `ORIGIN stopped answering after 5 timeouts`, and `stopped` names the origin.
 - A version prefix alone that only a script's strings name (`/v3`) is left out of the map when it answers 404 or the catch-all page.
+
+### Catch-all origins
+
+An origin that answers every path with the same page (a single-page app's shell) says nothing about a route by a 200. `run` tells the page from a real one by a control request for a path that cannot exist, in the same directory.
+
+- Once an origin has answered 3 paths with that page, `run` stops asking the paths that scripts name on it when the control of the path's directory is that page too. 3 is the number the summary's note has always used. A directory whose control was not asked is no exception azhaq knows of: its first path is asked, and that asks the control. A directory whose control is another answer (an API that answers JSON, a folder of real pages) is asked whole. Beyond the 24 directories an origin gets a control for, the nearest directory above stands for it, as in the catch-all check. Nothing is decided by a path's name.
+- The links of a page, the root and everything you give are always asked.
+- Their rows stay in the map with coverage `skipped`. The summary names how many and the origin (`http://app: 600 URLs that scripts name were not asked, because it had answered paths with the one page every unknown path gets`), the `skipped` list has one line for the origin, and `counts` has `catchall not asked`.
+- `-catchall-after N` sets the number (0 asks every path). `crawl` asks every path, as katana does, and lists catch-all answers.
+- A held path that is a real page of its own in a directory the catch-all covers would have answered a different page: this is an inference from the controls, not a request. Ask it with `-catchall-after 0`, or by hand.
+- `-no-catchall` leaves the rows that answered with the catch-all page, and those not asked for that reason, out of the rows printed. The summary still counts them.
 
 ### Evidence
 
@@ -321,6 +333,7 @@ Examples of what `notes` holds for a run:
 | `-path-climb` | bool |  | also list and ask the parent directories of each link a page names (/a/b/c: /a/b/ and /a/) |
 | `-fill-forms` | bool |  | ask the action of each GET form with neutral values in its fields (a search box gets a word): one GET request per form; a form that posts is not sent unless -submit-forms; crawl does this by default (-no-form-fill turns it off) |
 | `-per-template` | int |  | URLs of one template (/product?id={n}) to request; the rest are listed (default: all) |
+| `-catchall-after` | int | `3` | stop asking the page-like paths scripts name on an origin once it has answered this many paths with the page every unknown path gets; they stay in the map as skipped (0: ask them all) |
 | `-web-ports` | string |  | ports to probe on each hostname or address of the list, comma-separated (default: 443, falling back to 80; a target given with no port and nothing there is a note, not a failure) |
 | `-web-scheme` | string |  | try a name or an address over this scheme only, http or https (default: https, then http) |
 | `-no-favicon` | bool |  | do not hash the favicon of front pages (one or two requests less per web service) |
@@ -431,6 +444,7 @@ Examples of what `notes` holds for a run:
 | `-stream` | bool |  | also print each name, address, URL and open port as it is found, once per map row (found lines, before the ranked map) |
 | `-sr` | bool |  | also write each answer a target gave, headers and body as read, to the -srd directory as DIR/HOST/SHA1.txt with an index.txt (katana's -sr); query -fields response_file says where a row's is |
 | `-srd` | string | `azhaq_response` | directory for -sr |
+| `-no-catchall` | bool |  | leave out URLs that answer with the page every unknown path gets (client-side routes of a single-page app) from the rows printed |
 | `-fail-on-errors` | bool |  | accepted, and the default: every failure exits 3, a fan-out one and a source that failed while others answered included; no flag turns a failure into exit 0 |
 | `-fail-on-capped` | bool |  | exit 4 also when the run hit -depth with hints left |
 

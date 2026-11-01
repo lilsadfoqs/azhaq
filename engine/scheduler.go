@@ -51,6 +51,8 @@ func (e *Engine) RunLocal(ctx context.Context, seeds []types.Seed, b Budgets) er
 		origin:    seedOrigin(seeds),
 		seen:      map[string]bool{},
 		tmpl:      map[string]int{},
+		named:     map[string]bool{},
+		catchHeld: map[string]bool{},
 		batch:     map[string][]task{},
 		batchBusy: map[string]int{},
 		parked:    map[string][]task{},
@@ -120,9 +122,11 @@ type scheduler struct {
 	b      Budgets
 	origin originSet
 
-	seen  map[string]bool // seeds queued at some depth
-	tmpl  map[string]int  // URLs queued per template
-	queue [2][]task
+	seen      map[string]bool // seeds queued at some depth
+	tmpl      map[string]int  // URLs queued per template
+	named     map[string]bool // URL seeds a script named, by seed key (the hints of azhaq-js)
+	catchHeld map[string]bool // of those, the ones not asked: their origin answers every path with one page
+	queue     [2][]task
 
 	batch     map[string][]task // seeds waiting for a batch collector
 	batchBusy map[string]int    // batches in flight per collector
@@ -811,7 +815,7 @@ func (s *scheduler) next() (task, bool) {
 	for p := 0; p < 2; p++ {
 		for len(s.queue[p]) > 0 {
 			t := s.queue[p][0]
-			if s.skip(t) {
+			if s.skip(t) || s.catchAllHeld(t) {
 				s.queue[p] = s.queue[p][1:]
 				s.finish(t)
 				s.unpark(t) // nothing to wait for
@@ -936,6 +940,7 @@ func (s *scheduler) handle(f finished) {
 	if f.partial {
 		for i, t := range f.tasks {
 			for _, h := range f.metas[i].NextHints {
+				s.markNamed(t, h)
 				s.add(h, t.depth+hintStep(h), true)
 			}
 		}
@@ -968,9 +973,50 @@ func (s *scheduler) handle(f finished) {
 			continue
 		}
 		for _, h := range meta.NextHints {
+			s.markNamed(t, h)
 			s.add(h, t.depth+hintStep(h), true)
 		}
 	}
+}
+
+// markNamed notes a URL hint a script gave, unless it was queued before: a
+// link of a page is the app's own and is always asked.
+func (s *scheduler) markNamed(from task, h types.Seed) {
+	if from.col != "azhaq-js" {
+		return
+	}
+	seed := normalize.Seed(h)
+	if seed.Type != types.TypeURL || seed.Key() == "" {
+		return
+	}
+	if k := seedKey(seed); !s.seen[k] {
+		s.named[k] = true
+	}
+}
+
+// catchAllHeld says a task would only draw an origin's catch-all page again:
+// its URL was named by a script, its origin has already answered
+// Budgets.CatchAllStop paths with the page every unknown path gets, and the
+// control for the URL's directory is that page (fetch.CatchAllHeld). The URL
+// stays in the map as not requested, with the reason.
+func (s *scheduler) catchAllHeld(t task) bool {
+	if s.b.CatchAllStop <= 0 || t.seed.Type != types.TypeURL {
+		return false
+	}
+	k := seedKey(t.seed)
+	if !s.named[k] {
+		return false
+	}
+	raw := t.seed.Key()
+	if s.catchHeld[k] {
+		return true
+	}
+	if !fetch.CatchAllHeld(raw, s.b.CatchAllStop) {
+		return false
+	}
+	s.catchHeld[k] = true
+	s.e.noteSkip(t.seed, CatchAllHeldReason)
+	return true
 }
 
 // caps says which limits of the run held work back, and how much.

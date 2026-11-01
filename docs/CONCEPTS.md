@@ -37,11 +37,11 @@ A row's `scope` (`target` or `fanout`) is not the request [scope](#scope) that `
 | State | Meaning | What to do next |
 | --- | --- | --- |
 | `visited` | Requested; it answered as a page of its own (any status but 404 and 410). | Read it. |
-| `catchall` | Requested; it answered with the page every unknown path gets (an app shell, a soft 404). Not proof the route exists. A summary note names an origin that answered three or more URLs this way, and for a bare address says that the site's name may be served differently (`-H 'Host: NAME'`). | Look at it in a browser, or use `-browser`. |
+| `catchall` | Requested; it answered with the page every unknown path gets (an app shell, a soft 404). Not proof the route exists. A summary note names an origin that answered three or more URLs this way, `run` then stops asking the paths scripts name on it (`-catchall-after`), `counts` has `catchall` for them and they are not in `results`, and for a bare address says that the site's name may be served differently (`-H 'Host: NAME'`). | Look at it in a browser, or use `-browser`. |
 | `error` | Requested; no answer: timeout, refused, reset or TLS failure. | `azhaq query -db W -failed`, then try again. |
 | `gone` | Requested; it answered 404 or 410, usually a URL found in an archive or a link. Nothing read says it takes another method. | Try older API versions near it. |
 | `hint` | Known from a script, a description, an archive or a link, not proven by a GET. See below for the cases. | Send the method in its operations yourself. |
-| `skipped` | Found, and not requested for a stated reason: a `-deny-path` rule of yours keeps its path out. Listed under `skipped` with the rule. | Change the rule if you want it requested. |
+| `skipped` | Found, and not requested for a stated reason: a `-deny-path` rule of yours keeps its path out, or `run` held a script-named path because its origin answers every path with one page. Listed under `skipped` with the rule or the reason. | Change the rule, or `-catchall-after 0`, if you want it requested. |
 | `capped` | Not requested: a limit (budget, depth, items) ran out first. | `azhaq resume -db W`. |
 
 A `skipped` row says why in its `skipped` field, for example `-deny-path ^/admin/`. azhaq decides nothing by a URL's name: what a GET does on the server cannot be known from it.

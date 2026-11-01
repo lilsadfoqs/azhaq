@@ -299,6 +299,7 @@ func fillReport(rep *report, path string, seeds []types.Seed, ents []types.Entit
 		rep.Notes = append(rep.Notes, n)
 	}
 	rep.Notes = append(rep.Notes, engine.CatchAllNotes(rows)...)
+	rep.Notes = append(rep.Notes, engine.CatchAllHeldNotes(rows, obs)...)
 	rep.Notes = append(rep.Notes, portcol.StoppedNotes()...)
 	rep.Notes = append(rep.Notes, engine.GraphQLNotes(obs)...)
 	rep.Notes = append(rep.Notes, pathscol.Notes(obs)...)
@@ -320,7 +321,18 @@ func fillReport(rep *report, path string, seeds []types.Seed, ents []types.Entit
 		return // the command counts its own results
 	}
 	counts := map[string]int{}
+	asked := make([]engine.MapEntry, 0, len(rows))
+	held := engine.CatchAllHeldIDs(obs)
 	for _, r := range rows {
+		switch {
+		case r.Entity.Type == types.TypeURL && r.Coverage == "catchall":
+			counts["catchall"]++ // the page every unknown path gets: apart, not a result
+			continue
+		case r.Entity.Type == types.TypeURL && r.Coverage == "skipped" && held[r.Entity.ID]:
+			counts["catchall not asked"]++ // named by a script, not asked: its origin answers every path alike
+			continue
+		}
+		asked = append(asked, r)
 		switch r.Entity.Type {
 		case types.TypeURL:
 			switch r.Role {
@@ -353,7 +365,7 @@ func fillReport(rep *report, path string, seeds []types.Seed, ents []types.Entit
 			delete(counts, k)
 		}
 	}
-	rep.Results = len(engine.GroupTemplates(rows))
+	rep.Results = len(engine.GroupTemplates(asked))
 	rep.what = "map rows"
 	rep.Counts = counts
 	if hint := engine.BrowserHint(rows, obs); hint != "" {
@@ -637,4 +649,17 @@ func pageFaultNotes(obs []types.StoredObservation) []string {
 		return nil
 	}
 	return []string{fmt.Sprintf("-browser: %d scripts on %d pages did not load as JavaScript (%s), so those pages' apps could not start and Chrome saw none of their calls; ask a script by its address with curl, and through -proxy: a proxy must send the origin the path, not the full address", scripts, pages, strings.Join(first, "; "))}
+}
+
+// withoutCatchAll is the rows that did not answer with the page every
+// unknown path gets, and the URLs not asked because that was the answer.
+func withoutCatchAll(rows []engine.MapEntry, held map[string]bool) []engine.MapEntry {
+	out := make([]engine.MapEntry, 0, len(rows))
+	for _, r := range rows {
+		if r.Entity.Type == types.TypeURL && (r.Coverage == "catchall" || r.Coverage == "skipped" && held[r.Entity.ID]) {
+			continue
+		}
+		out = append(out, r)
+	}
+	return out
 }

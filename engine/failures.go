@@ -187,6 +187,8 @@ func Skips(ents []types.Entity, obs []types.StoredObservation) []Skip {
 	}
 	seen := map[string]bool{}
 	var out []Skip
+	heldAt := map[string]int{} // URLs a catch-all origin made not worth asking, by origin
+	var heldOrder []string
 	for _, o := range obs {
 		var p struct {
 			Error   string   `json:"error"`
@@ -208,6 +210,18 @@ func Skips(ents []types.Entity, obs []types.StoredObservation) []Skip {
 		default:
 			continue
 		}
+		if reason == CatchAllHeldReason {
+			// One line for the origin: a bundle names hundreds of paths.
+			if k := keys[o.EntityID]; !asked[k] && !seen["held\x00"+o.EntityID] {
+				seen["held\x00"+o.EntityID] = true
+				origin := originOf(k)
+				if heldAt[origin] == 0 {
+					heldOrder = append(heldOrder, origin)
+				}
+				heldAt[origin]++
+			}
+			continue
+		}
 		targets := []string{keys[o.EntityID]}
 		if len(p.URLs) > 0 {
 			targets = p.URLs
@@ -222,6 +236,9 @@ func Skips(ents []types.Entity, obs []types.StoredObservation) []Skip {
 				out = append(out, s)
 			}
 		}
+	}
+	for _, origin := range heldOrder {
+		out = append(out, Skip{Target: fmt.Sprintf("%d URLs of %s", heldAt[origin], origin), Reason: CatchAllHeldReason})
 	}
 	return out
 }

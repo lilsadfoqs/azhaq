@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -126,8 +127,11 @@ func checkInvariants(t *testing.T, what, stdout string, rep report, code int) {
 	if code == exitPartial && len(rep.Failed) == 0 && len(rep.Unreachable) == 0 && len(rep.Notes) == 0 && !rep.Degraded {
 		t.Errorf("I4 %s: exit 3 and nothing says why: %+v", what, rep)
 	}
-	// I5: run prints the map, not its results.
-	if rep.Command != "run" {
+	// I5: run prints the map, not its results: its rows with the catch-all
+	// page's answers are counted apart (counts.catchall). So does the resume
+	// of a drop-in's run, which says it prints the map's rows.
+	mapRows := rep.Command == "run" || slices.ContainsFunc(rep.Notes, func(n string) bool { return strings.Contains(n, "prints the rows of the map, as run does") })
+	if !mapRows {
 		if n := len(lines(stdout)); n != rep.Results {
 			t.Errorf("I5 %s: results %d, result lines on stdout %d\n%s", what, rep.Results, n, stdout)
 		}
