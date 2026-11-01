@@ -344,7 +344,7 @@ func askPrint(ctx context.Context, raw string, session bool) (Print, error) {
 	if err := egress.SpendCounted(ctx, true); err != nil {
 		return Print{}, err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, raw, nil)
+	req, err := http.NewRequestWithContext(egress.Unwatched(ctx), http.MethodGet, raw, nil)
 	if err != nil {
 		egress.Refund()
 		return Print{}, err
@@ -731,6 +731,53 @@ func sessionSaw(ctx context.Context, raw string, res Result) {
 	}
 }
 
+// sessionWire notices, as an answer comes in and before anything else can
+// be sent, that it looks like the end of the session: a response that
+// clears or replaces a cookie the user gave, a 401, a redirect to the
+// sign-in page. sessionSaw, when the run has read the whole answer, does the
+// rest (what to ask again, telling the run from a worker).
+func sessionWire(req *http.Request, resp *http.Response) {
+	g := guardP.Load()
+	if g == nil || g.renewing.Load() {
+		return
+	}
+	raw := req.URL.String()
+	switch {
+	case clearsSession(resp.Header):
+		g.mu.Lock()
+		if g.endedBy == "" {
+			g.endedBy = raw
+		}
+		g.mu.Unlock()
+		g.due.Store(true)
+	case replacesSession(resp.Header):
+		g.mu.Lock()
+		if g.signal == "" {
+			g.signal = pathOf(raw) + " set the session cookie to another value"
+		}
+		g.mu.Unlock()
+		g.due.Store(true)
+	case resp.StatusCode == http.StatusUnauthorized:
+		g.mu.Lock()
+		if g.signal == "" {
+			g.signal = pathOf(raw) + " answered 401"
+		}
+		g.mu.Unlock()
+		g.due.Store(true)
+	default:
+		if signIn := g.signIn(); signIn != "" && isRedirect(resp.StatusCode) {
+			if loc := resp.Header.Get("Location"); loc != "" && pathOf(loc) == pathOf(signIn) {
+				g.mu.Lock()
+				if g.signal == "" {
+					g.signal = pathOf(raw) + " answered " + fmt.Sprint(resp.StatusCode) + " to " + pathOf(signIn)
+				}
+				g.mu.Unlock()
+				g.due.Store(true)
+			}
+		}
+	}
+}
+
 // probe looks for the check page when the start found none: a page that
 // the run starts from answers alike with and without a session, an API
 // route it finds later (/api/me) often does not. A JSON answer of 200 is
@@ -754,6 +801,16 @@ func (g *sessionGuard) probe(ctx context.Context, raw string, res Result) {
 	}
 	g.probes++
 	g.mu.Unlock()
+	// Nothing else of the run is in the air while this goes out without the
+	// session, and nothing starts: a revocation cannot meet it.
+	ctx, release := egress.Exclusive(ctx)
+	defer release()
+	g.mu.Lock()
+	pending := g.endedBy != "" || g.signal != "" || g.lost != nil
+	g.mu.Unlock()
+	if pending || g.due.Load() {
+		return // an answer that waited for this showed the session ended
+	}
 	with, err := askPrint(ctx, raw, true)
 	if err != nil || g.due.Load() {
 		return

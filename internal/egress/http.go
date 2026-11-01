@@ -47,6 +47,11 @@ func newGuarded(class Class, base *http.Transport, sni string) *guarded {
 }
 
 func (g *guarded) RoundTrip(req *http.Request) (*http.Response, error) {
+	own := g.class == Target && !isExclusive(req.Context())
+	if own {
+		wire.RLock() // a measurement without the session waits for this one
+		defer wire.RUnlock()
+	}
 	if err := g.admit(req); err != nil {
 		return nil, err
 	}
@@ -54,6 +59,9 @@ func (g *guarded) RoundTrip(req *http.Request) (*http.Response, error) {
 	resp, err := g.rt.RoundTrip(out)
 	if resp != nil && out != req {
 		resp.Request = req
+	}
+	if resp != nil && own && SessionWire != nil && !isUnwatched(req.Context()) {
+		SessionWire(req, resp)
 	}
 	return resp, err
 }
@@ -100,7 +108,10 @@ func (g *guarded) admit(req *http.Request) error {
 	hop := g.class == Target && req.Response != nil
 	err := g.check(req)
 	if err == nil && hop {
-		err = Spend(req.Context())
+		// Counted and paced, not checked against the session: the request
+		// the hop belongs to was, and a hop that waited on a session check
+		// would hold the wire (see Exclusive) while the check waits for it.
+		err = Current().SpendCounted(req.Context(), true)
 	} else if err != nil && g.class == Target && !hop {
 		Refund() // counted by its sender, never sent
 	}
