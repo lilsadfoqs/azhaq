@@ -503,14 +503,21 @@ func (s *mcpServer) noteRun(tool string, r cmdResult, callErr error) {
 // output runs a command that reads a workspace and returns its stdout as
 // it is: an export is not lines to trim.
 func (s *mcpServer) output(ctx context.Context, args ...string) ([]byte, error) {
+	raw, _, err := s.outputNotes(ctx, args...)
+	return raw, err
+}
+
+// outputNotes is output that also gives what the command said on stderr
+// when it succeeded: notes about what the output holds.
+func (s *mcpServer) outputNotes(ctx context.Context, args ...string) ([]byte, string, error) {
 	cmd := exec.CommandContext(ctx, s.exe, args...)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	raw, err := cmd.Output()
 	if err != nil {
-		return nil, stderrError(stderr.String(), err)
+		return nil, "", stderrError(stderr.String(), err)
 	}
-	return raw, nil
+	return raw, strings.TrimSpace(stderr.String()), nil
 }
 
 // stderrError is the error a command printed, without what only makes
@@ -1015,7 +1022,7 @@ func (s *mcpServer) call(ctx context.Context, name string, a map[string]any, pro
 		if !slices.Contains(exportFormats, format) {
 			return nil, fmt.Errorf("format %q: one of %s", format, strings.Join(exportFormats, ", "))
 		}
-		raw, err := s.output(ctx, "export", "-db", db, "-format", format)
+		raw, notes, err := s.outputNotes(ctx, "export", "-db", db, "-format", format)
 		if err != nil {
 			return nil, err
 		}
@@ -1024,7 +1031,12 @@ func (s *mcpServer) call(ctx context.Context, name string, a map[string]any, pro
 			return nil, err
 		}
 		abs, _ := filepath.Abs(path)
-		return toolText(exportPart(abs, format, raw, num(a, "offset", 0)), false), nil
+		text := exportPart(abs, format, raw, num(a, "offset", 0))
+		if notes != "" { // after the first line, before the data
+			head, rest, _ := strings.Cut(text, "\n")
+			text = head + "\nnote: " + strings.ReplaceAll(notes, "\n", "\nnote: ") + "\n" + rest
+		}
+		return toolText(text, false), nil
 	case "azhaq_diff":
 		db, err := s.existing(a)
 		if err != nil {

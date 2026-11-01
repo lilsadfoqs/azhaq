@@ -30,7 +30,7 @@ azhaq urls -d example.com -mc 200 -mt text/html -from 2024 -urls-pause 0
 
 ## Output
 
-By default URLs are printed as each archive page arrives, unsorted, when stdout is not a terminal. On a terminal, or with `-sort`, they are sorted and printed at the end. `-raw` prints every row the archives gave, as they gave it. `-o` appends to the file. With `-json` you get one object per URL.
+By default URLs are printed as each archive page arrives, unsorted, when stdout is not a terminal. On a terminal, or with `-sort`, they are sorted and printed at the end. `-raw` prints every row the archives gave, as they gave it. `-o` appends to the file. With `-json` you get one object per URL. A workspace (`-db`) keeps one example for each URL shape, 200 a domain at most, so `export -format urls` and `query` list those and say how many archived URLs they stand for; stdout and `-o` hold every URL.
 
 | Field | Meaning |
 | --- | --- |

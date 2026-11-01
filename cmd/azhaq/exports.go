@@ -26,6 +26,7 @@ import (
 
 	"github.com/lilsadfoqs/azhaq/engine"
 	"github.com/lilsadfoqs/azhaq/internal/collectors/shotcol"
+	"github.com/lilsadfoqs/azhaq/internal/collectors/urlcol"
 	"github.com/lilsadfoqs/azhaq/internal/gqlschema"
 	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
@@ -132,6 +133,9 @@ func exportTo(path, format, origin string, safe bool, w io.Writer) error {
 			if r.Entity.Type == types.TypeURL {
 				fmt.Fprintln(w, r.Entity.Key)
 			}
+		}
+		if n := urlcol.Held(g.obs); n != "" {
+			fmt.Fprintf(os.Stderr, "azhaq export: %s\n", n)
 		}
 	case "names":
 		// Every hostname in the graph, resolved or not.

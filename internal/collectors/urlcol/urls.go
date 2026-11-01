@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/lilsadfoqs/azhaq/internal/guard"
 	"net/http"
 	"net/url"
@@ -628,4 +629,31 @@ func shorten(s string) string {
 		return s[:200] + "…"
 	}
 	return s
+}
+
+// Held says what a workspace keeps of the archived URLs a run read: one
+// example of each URL shape (up to maxEmit per domain), not every URL. It
+// is "" when the workspace holds them all or the run read no archive.
+func Held(obs []types.StoredObservation) string {
+	examples, total := 0, 0
+	for _, o := range obs {
+		if o.Collector != Name {
+			continue
+		}
+		switch o.Kind {
+		case "url":
+			examples++
+		case "urls":
+			var p struct {
+				Count int `json:"count"`
+			}
+			if json.Unmarshal(o.Payload, &p) == nil {
+				total += p.Count
+			}
+		}
+	}
+	if total <= examples {
+		return ""
+	}
+	return fmt.Sprintf("the workspace holds %d template examples of the %d archived URLs the run read (one URL stands for every URL of its shape); `azhaq urls -o FILE` writes them all", examples, total)
 }

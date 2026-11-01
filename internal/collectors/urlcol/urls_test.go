@@ -201,3 +201,44 @@ func TestGetterRetriesADroppedConnection(t *testing.T) {
 		t.Fatalf("got %q, %v after %d tries", body, err, n.Load())
 	}
 }
+
+// The graph keeps one example per URL shape, at most maxEmit a domain;
+// Held says so, so an export of the workspace is not taken for the list.
+func TestHeldSaysWhatTheWorkspaceKeeps(t *testing.T) {
+	word := func(i int) string {
+		s := ""
+		for n := i + 26; n > 0; n /= 26 {
+			s += string(rune('a' + n%26))
+		}
+		return s
+	}
+	var all []string
+	for i := 0; i < 900; i++ {
+		all = append(all, fmt.Sprintf(`["http://lab7stand.org/%s/%s.php"]`, word(i), word(i*7+3)))
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("page") == "0" {
+			fmt.Fprintf(w, `[["original"],%s]`, strings.Join(all, ","))
+			return
+		}
+		fmt.Fprint(w, `[["original"]]`)
+	}))
+	defer srv.Close()
+	waybackBase = srv.URL
+	c := New(Options{Client: srv.Client(), Only: []string{"wayback"}})
+	c.pauses = nil
+	var obs []types.StoredObservation
+	if _, err := c.Run(context.Background(), types.Seed{Type: types.TypeDomain, Keys: map[string]string{"domain": "lab7stand.org"}}, func(o types.Observation) error {
+		obs = append(obs, types.StoredObservation{Observation: o})
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	got := Held(obs)
+	if !strings.Contains(got, "holds 200 template examples of the 900 archived URLs") || !strings.Contains(got, "urls -o") {
+		t.Errorf("Held = %q", got)
+	}
+	if Held(nil) != "" {
+		t.Error("a run that read no archive has nothing to say")
+	}
+}
