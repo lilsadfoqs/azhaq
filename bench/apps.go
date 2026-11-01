@@ -93,7 +93,7 @@ type ffufRow struct {
 
 func startApps() error {
 	logf("starting docker apps")
-	cmd := exec.Command("docker", "compose", "--env-file", "bench/images.env", "-f", "bench/compose.yaml", "up", "-d")
+	cmd := exec.Command("docker", "compose", "-f", "bench/compose.yaml", "up", "-d")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("docker compose up: %v\n%s", err, out)
 	}
@@ -111,7 +111,7 @@ func startApps() error {
 // stopApps takes down the bench's own two containers (-down only): other
 // streams use the shared azq-* ones, which the bench never stops.
 func stopApps() {
-	_ = exec.Command("docker", "compose", "--env-file", "bench/images.env", "-f", "bench/compose.yaml", "down").Run()
+	_ = exec.Command("docker", "compose", "-f", "bench/compose.yaml", "down").Run()
 }
 
 // appUp: the app answers GET / with 200.
@@ -131,7 +131,7 @@ func ensureApps() {
 	for _, u := range []string{juiceURL, vampiURL} {
 		if !appUp(u) {
 			logf("%s does not answer: docker compose up -d", u)
-			_ = exec.Command("docker", "compose", "--env-file", "bench/images.env", "-f", "bench/compose.yaml", "up", "-d").Run()
+			_ = exec.Command("docker", "compose", "-f", "bench/compose.yaml", "up", "-d").Run()
 			if err := waitUp(u, 3*time.Minute); err != nil {
 				logf("%v", err)
 			}
@@ -165,7 +165,7 @@ func freshApp(app string) {
 	if !strings.Contains(app, "127.0.0.1:3101") {
 		return
 	}
-	_ = exec.Command("docker", "compose", "--env-file", "bench/images.env", "-f", "bench/compose.yaml", "restart", "juice-shop").Run()
+	_ = exec.Command("docker", "compose", "-f", "bench/compose.yaml", "restart", "juice-shop").Run()
 	if err := waitUp(app, 3*time.Minute); err != nil {
 		logf("%v", err)
 	}
@@ -193,11 +193,10 @@ func waitUp(u string, max time.Duration) error {
 // labApp is one training app of the shared labs, as .github/ci/labs.sh
 // starts it. The bench's own containers (compose.yaml) are not these.
 type labApp struct {
-	name     string // container
-	url      string // without the trailing slash
-	flags    []string
-	imageVar string // its name in images.env
-	image    string // the pinned image of that name
+	name  string // container
+	url   string // without the trailing slash
+	flags []string
+	image string // the pinned image, from images.env
 }
 
 //go:embed images.env
@@ -218,11 +217,11 @@ func labImage(name string) string { return labImages()[name] }
 
 // labApps mirrors labs.sh; TestLabAppsMatchLabsScript keeps them equal.
 var labApps = []labApp{
-	{"azq-juice", "http://127.0.0.1:3001", []string{"-p", "127.0.0.1:3001:3000", "-e", "NODE_OPTIONS=--max-old-space-size=4096"}, "AZQ_JUICE_IMAGE", labImage("AZQ_JUICE_IMAGE")},
-	{"azq-vampi", "http://127.0.0.1:5002", []string{"-p", "127.0.0.1:5002:5000", "-e", "vulnerable=1", "-e", "tokentimetolive=3600"}, "AZQ_VAMPI_IMAGE", labImage("AZQ_VAMPI_IMAGE")},
-	{"azq-dvga", "http://127.0.0.1:5013", []string{"-p", "127.0.0.1:5013:5013", "-e", "WEB_HOST=0.0.0.0"}, "AZQ_DVGA_IMAGE", labImage("AZQ_DVGA_IMAGE")},
-	{"azq-dvna", "http://127.0.0.1:5020", []string{"-p", "127.0.0.1:5020:9090"}, "AZQ_DVNA_IMAGE", labImage("AZQ_DVNA_IMAGE")},
-	{"azq-dvwa", "http://127.0.0.1:5030", []string{"-p", "127.0.0.1:5030:80"}, "AZQ_DVWA_IMAGE", labImage("AZQ_DVWA_IMAGE")},
+	{"azq-juice", "http://127.0.0.1:3001", []string{"-p", "127.0.0.1:3001:3000", "-e", "NODE_OPTIONS=--max-old-space-size=4096"}, labImage("AZQ_JUICE_IMAGE")},
+	{"azq-vampi", "http://127.0.0.1:5002", []string{"-p", "127.0.0.1:5002:5000", "-e", "vulnerable=1", "-e", "tokentimetolive=3600"}, labImage("AZQ_VAMPI_IMAGE")},
+	{"azq-dvga", "http://127.0.0.1:5013", []string{"-p", "127.0.0.1:5013:5013", "-e", "WEB_HOST=0.0.0.0"}, labImage("AZQ_DVGA_IMAGE")},
+	{"azq-dvna", "http://127.0.0.1:5020", []string{"-p", "127.0.0.1:5020:9090"}, labImage("AZQ_DVNA_IMAGE")},
+	{"azq-dvwa", "http://127.0.0.1:5030", []string{"-p", "127.0.0.1:5030:80"}, labImage("AZQ_DVWA_IMAGE")},
 }
 
 // labStartWait covers Juice Shop's cold start (a minute or two).

@@ -19,7 +19,7 @@ Run it from the repository root. It needs Docker (Juice Shop and VAmPI from `ben
 
 ## The lab images
 
-`bench/images.env` is the one list of the lab apps' images (Juice Shop, VAmPI, DVGA, DVNA and DVWA), each pinned by tag and digest. `bench/compose.yaml` reads it (`docker compose --env-file bench/images.env -f bench/compose.yaml up -d`, as the bench does), and so does `.github/ci/labs.sh`, which starts the five apps on 3001, 5002, 5013, 5020 and 5030 for the hunters and the trials. A user who starts the labs the documented way is on the build a row of the README's table was measured on. The truth files in `bench/truth` are per build (`juice-shop-v20.3.0-*`); a pin moves together with them. The services lab (`bench/services.yaml`) keeps its tags, and the table's service rows read what each daemon says, not a version.
+`bench/images.env` is the one list of the lab apps' images (Juice Shop, VAmPI, DVGA, DVNA and DVWA), each pinned by tag and digest. `bench/compose.yaml` and `.github/ci/labs.sh` name the same images (a test, `TestLabImagesPinnedFromOneList`, fails when either differs from the list; the README's quick start must name the same Juice Shop build, which `bench/pin_test.go` checks), and labs.sh starts the five apps on 3001, 5002, 5013, 5020 and 5030 for the hunters and the trials. A user who starts the labs the documented way is on the build a row of the README's table was measured on. The truth files in `bench/truth` are per build (`juice-shop-v20.3.0-*`); a pin moves together with them. The services lab (`bench/services.yaml`) keeps its tags, and the table's service rows read what each daemon says, not a version.
 
 `.github/ci/labs.sh` starts these, all on 127.0.0.1:
 
@@ -33,7 +33,7 @@ Run it from the repository root. It needs Docker (Juice Shop and VAmPI from `ben
 To reproduce a row, start the labs from that list and run the row's unit (`go run ./bench -list-units` names them: the row "Paths, 4750 words, Juice Shop and VAmPI" is `default:dirs`):
 
 ```
-.github/ci/labs.sh                       # or: docker compose --env-file bench/images.env -f bench/compose.yaml up -d
+.github/ci/labs.sh                       # or: docker compose -f bench/compose.yaml up -d (Juice Shop and VAmPI)
 go run ./bench -units default:dirs       # one row; -profile polite -units polite:dirs for the polite one
 ```
 

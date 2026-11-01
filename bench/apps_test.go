@@ -216,7 +216,7 @@ func TestLabAppsMatchLabsScript(t *testing.T) {
 			t.Errorf("labs.sh does not start %s", a.name)
 			continue
 		}
-		for _, w := range append(append([]string(nil), a.flags...), `"$`+a.imageVar+`"`) {
+		for _, w := range append(append([]string(nil), a.flags...), a.image) {
 			if !strings.Contains(line, w) {
 				t.Errorf("%s: labs.sh does not have %q: %s", a.name, w, line)
 			}
@@ -227,40 +227,44 @@ func TestLabAppsMatchLabsScript(t *testing.T) {
 	}
 }
 
-// Every image of the labs and of the bench's compose file comes from
-// bench/images.env, pinned by tag and digest, and nothing else names one.
+// Every image of the labs and of the bench's compose file is pinned by tag
+// and digest, and is the one bench/images.env lists: three places name each
+// image (labs.sh, compose.yaml and the list), and none may differ.
 func TestLabImagesPinnedFromOneList(t *testing.T) {
 	pin := regexp.MustCompile(`^[a-z0-9./-]+:[A-Za-z0-9._-]+@sha256:[0-9a-f]{64}$`)
 	images := labImages()
 	if len(images) < 5 {
 		t.Fatalf("images.env holds %d images: %v", len(images), images)
 	}
+	listed := map[string]bool{}
 	for k, v := range images {
+		listed[v] = true
 		if !pin.MatchString(v) {
 			t.Errorf("%s=%s is not pinned by tag and digest", k, v)
 		}
 	}
-	for _, a := range labApps {
-		if images[a.imageVar] == "" || a.image != images[a.imageVar] {
-			t.Errorf("%s: image %q is not %s of images.env", a.name, a.image, a.imageVar)
+	used := map[string]bool{}
+	files := map[string]string{"compose.yaml": "image: ", "../.github/ci/labs.sh": "docker run -d"}
+	for file, marker := range files {
+		raw, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, l := range strings.Split(string(raw), "\n") {
+			if !strings.Contains(l, marker) || strings.HasPrefix(strings.TrimSpace(l), "#") {
+				continue
+			}
+			f := strings.Fields(l)
+			img := f[len(f)-1]
+			if !listed[img] {
+				t.Errorf("%s names %s, which images.env does not list: %s", file, img, l)
+			}
+			used[img] = true
 		}
 	}
-	compose, err := os.ReadFile("compose.yaml")
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, l := range strings.Split(string(compose), "\n") {
-		if strings.Contains(l, "image:") && !strings.Contains(l, "${AZQ_") {
-			t.Errorf("compose.yaml names an image of its own: %s", l)
-		}
-	}
-	labs, err := os.ReadFile("../.github/ci/labs.sh")
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, l := range strings.Split(string(labs), "\n") {
-		if strings.HasPrefix(l, "docker run") && !strings.Contains(l, `"$AZQ_`) {
-			t.Errorf("labs.sh runs an image of its own: %s", l)
+	for k, v := range images {
+		if !used[v] {
+			t.Errorf("%s=%s is in no compose.yaml or labs.sh", k, v)
 		}
 	}
 }
