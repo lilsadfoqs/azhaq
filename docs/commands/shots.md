@@ -107,6 +107,11 @@ A page that was not fully loaded when the picture was taken has these fields, an
 - The refused URLs are also in the summary's skipped list, once each.
 - Nothing outside the scope is loaded by default.
 
+### When a page is taken
+- Chrome is started once for the run, and each page is taken after its load event, once nothing it shows is still on its way.
+- Without `-shot-wait`, a page with no script, frame, object or refresh is taken as soon as Chrome has painted it and its fonts are in: nothing can draw on it later. A page with a script is given 1.5 s after its load event, since a timer may draw at any moment.
+- `-shot-wait 3s` waits 3 s for every page, scripts or not; `-shot-wait 0` takes the page at once.
+
 ### Chrome, ports and file names
 - `AZHAQ_CHROME` names the browser. Where the system gives Chrome no sandbox (a container, AppArmor), it is started once more without one and the summary says so; the pages it loads are untrusted, so use a throwaway environment. `-chrome-require-sandbox` refuses that. `AZHAQ_CHROME_NO_SANDBOX=1` skips the first try.
 - Chrome refuses some ports, such as 6000, 6666 and 10080, with `net::ERR_UNSAFE_PORT`. `-unsafe-ports` allows them by default.
@@ -158,7 +163,7 @@ note: screenshot of http://127.0.0.1:3001/ not taken: the page needs about 26 re
 | `-shot-quality` | int | `80` | jpeg quality, 1 to 100 |
 | `-shot-size` | string | `1440x900` | screenshot size in pixels, WIDTHxHEIGHT |
 | `-shot-timeout` | duration | `30s` | time a page gets: with -rate, how long it may go without a request let go or an answer, not in all |
-| `-shot-wait` | duration | `1.5s` | wait after a page's load event for scripts that draw after it, before the screenshot (0: none) |
+| `-shot-wait` | duration | `1.5s` | wait after a page's load event for scripts that draw after it, before the screenshot: a value is waited out whatever the page does (0: none); by default a page with no script, frame or refresh is taken once painted, and one with a script after 1.5 s |
 | `-no-tech` | bool |  | skip technology fingerprints (saves about 30 MB of memory) |
 
 **Browser**

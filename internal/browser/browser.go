@@ -498,9 +498,12 @@ func (b *Browser) Load(ctx context.Context, rawURL string, shot bool) (Page, err
 	if (navLate || errors.Is(err, context.DeadlineExceeded)) && tab.Err() == nil {
 		err = nil
 	}
+	var drawn func() bool
 	if err == nil {
 		if wait := b.wait(); wait > 0 {
 			err = chromedp.Do(tab, chromedp.Sleep(wait)) // scripts that render after load
+		} else if b.Wait == 0 {
+			drawn = b.hasDrawn(tab, defaultWait) // no fixed wait: until it cannot change
 		}
 	}
 	waiting := 0
@@ -508,7 +511,7 @@ func (b *Browser) Load(ctx context.Context, rawURL string, shot bool) (Page, err
 		// Shot: until the picture's resources are in. Read: until no call is
 		// out, so an app a slow path (a proxy, a loaded machine) brings up
 		// late is read drawn, and its menus are there to click.
-		if n := b.quiet(tab, t, log, prog, !shot); shot {
+		if n := b.quiet(tab, t, log, prog, !shot, drawn); shot {
 			waiting = n
 		}
 	}
@@ -579,15 +582,44 @@ func (b *Browser) Load(ctx context.Context, rawURL string, shot bool) (Page, err
 	return p, err
 }
 
-// wait is how long Load waits after the load event.
+// defaultWait is the most a page without a Wait of its own is given, after
+// its load event, to draw.
+const defaultWait = 1500 * time.Millisecond
+
+// wait is how long Load sleeps after the load event: Wait when it is set,
+// nothing otherwise (with no Wait, drawn is waited for instead).
 func (b *Browser) wait() time.Duration {
-	switch {
-	case b.Wait < 0:
+	if b.Wait < 0 {
 		return 0
-	case b.Wait == 0:
-		return 1500 * time.Millisecond
 	}
 	return b.Wait
+}
+
+// staticJS says whether a page has drawn and can no longer change by
+// itself: it has no script, frame, object or refresh that could draw
+// anything later, Chrome has painted something (first contentful paint),
+// and its fonts are in. A page with a script may draw after any delay, and
+// is given the whole wait.
+const staticJS = `(() => {
+  if (document.scripts.length > 0 || document.querySelector('meta[http-equiv="refresh" i], iframe, frame, object, embed, [onload], [onerror]')) return false;
+  return performance.getEntriesByName('first-contentful-paint').length > 0 && document.fonts.status !== 'loading';
+})()`
+
+// hasDrawn is the page's answer to "has it finished drawing?" for quiet,
+// which asks it each time the network is quiet: true after within since the
+// page's load event, or sooner for a page that cannot change by itself
+// (staticJS). A page whose scripts may still draw is waited for, as it
+// always was; a page of plain markup is not held for a fixed time.
+func (b *Browser) hasDrawn(tab context.Context, within time.Duration) func() bool {
+	start := time.Now()
+	return func() bool {
+		if time.Since(start) >= within {
+			return true
+		}
+		byValue := true
+		r, err := chromedp.Call(tab, runtime.Evaluate, runtime.EvaluateParams{Expression: staticJS, ReturnByValue: &byValue})
+		return err == nil && r.ExceptionDetails == nil && r.Result != nil && string(r.Result.Value) == "true"
+	}
 }
 
 func (b *Browser) format() string {

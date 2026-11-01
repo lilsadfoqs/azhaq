@@ -1161,7 +1161,7 @@ Static extraction reads what scripts contain. `-browser` also runs them.
 
 These become URLs for the other collectors. It shares the browser, tab limit and session headers with screenshots.
 
-A page is read once it has settled: 1.5 s after the load event, and then until no request of it is out for 0.3 s, up to 5 s more. An app that a slow path (a proxy that takes its time, a loaded machine) brings up late is read drawn, and its menus are there to click.
+A page is read once it has settled: 1.5 s after the load event (a page with no script, frame, object or refresh cannot draw later, and is read as soon as it has painted), and then until no request of it is out for 0.3 s, up to 5 s more. An app that a slow path (a proxy that takes its time, a loaded machine) brings up late is read drawn, and its menus are there to click.
 
 A page read this way is loaded without its images, fonts and media, socket.io's polling and the tab's icon. A screenshot has them. They are not sent and not counted, because they name no route. A request to a host outside the scope is still listed.
 
@@ -1354,7 +1354,7 @@ The tab's `/favicon.ico` is not fetched. A dialog (`alert`, `confirm`, `beforeun
 
 - `-shot-size WxH` sets the size, 1440x900 by default.
 - `-shot-fullpage` takes the whole page, up to 16384 pixels tall.
-- `-shot-wait` is the wait after the load event, 1.5 s by default.
+- `-shot-wait` is the wait after the load event. A value is waited out. Without one, a page with no script, frame, object or refresh is taken once it has painted and its fonts are in, since nothing can draw on it later; a page with a script gets 1.5 s.
 - `-shot-timeout` is 30 s. With `-rate`, it is how long a page may go without moving.
 - `-shot-format png|jpeg` and `-shot-quality` set the format.
 - `-shot-js FILE` runs on the page before the picture. It runs on the target's page.

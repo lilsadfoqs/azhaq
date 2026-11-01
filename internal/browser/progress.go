@@ -153,7 +153,8 @@ func counted(rt network.ResourceType) bool {
 	return false
 }
 
-// quiet waits until the page has stopped asking: nothing of
+// quiet waits until the page has stopped asking (and, when drawn is set,
+// has drawn: see Browser.hasDrawn): nothing of
 // it waits for its turn and nothing it shows is still on its way, for
 // long enough that what a response draws has been asked for. A page whose
 // first screen comes from a script's request (a single-page app) asks for
@@ -164,7 +165,7 @@ func counted(rt network.ResourceType) bool {
 // second and no more than 5 s. With every set it is quiet only when no
 // request of any kind is out, not just those a picture shows: a page read
 // for its calls waits for the ones a slow answer holds back.
-func (b *Browser) quiet(ctx context.Context, t *tab, log *pageLog, prog *progress, every bool) (waiting int) {
+func (b *Browser) quiet(ctx context.Context, t *tab, log *pageLog, prog *progress, every bool, drawn func() bool) (waiting int) {
 	hold, limit := 300*time.Millisecond, 5*time.Second
 	if r := egress.Rate(); r > 0 {
 		hold, limit = 700*time.Millisecond+time.Duration(float64(time.Second)/r), 3*b.Timeout
@@ -191,7 +192,7 @@ func (b *Browser) quiet(ctx context.Context, t *tab, log *pageLog, prog *progres
 		if waiting == 0 && open == 0 {
 			if since.IsZero() {
 				since = time.Now()
-			} else if time.Since(since) >= hold {
+			} else if time.Since(since) >= hold && (drawn == nil || drawn()) {
 				return 0
 			}
 		} else {
@@ -200,7 +201,7 @@ func (b *Browser) quiet(ctx context.Context, t *tab, log *pageLog, prog *progres
 		select {
 		case <-ctx.Done():
 			return waiting
-		case <-time.After(50 * time.Millisecond):
+		case <-time.After(25 * time.Millisecond):
 		}
 	}
 	return waiting

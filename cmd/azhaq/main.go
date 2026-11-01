@@ -221,7 +221,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	tabs := fs.Int("tabs", 6, "Chrome tabs open at once for screenshots and -browser (gowitness -t)")
 	shotSize := fs.String("shot-size", "1440x900", "screenshot size in pixels, WIDTHxHEIGHT")
 	shotFull := fs.Bool("shot-fullpage", false, "screenshot the whole page, not only the first screen (up to 16384 pixels tall)")
-	shotWait := fs.Duration("shot-wait", 1500*time.Millisecond, "wait after a page's load event for scripts that draw after it, before the screenshot (0: none)")
+	shotWait := fs.Duration("shot-wait", 1500*time.Millisecond, "wait after a page's load event for scripts that draw after it, before the screenshot: a value is waited out whatever the page does (0: none); by default a page with no script, frame or refresh is taken once painted, and one with a script after 1.5 s")
 	shotTimeout := fs.Duration("shot-timeout", 30*time.Second, "time a page gets: with -rate, how long it may go without a request let go or an answer, not in all")
 	shotFormat := fs.String("shot-format", "png", "screenshot format: png or jpeg")
 	shotQuality := fs.Int("shot-quality", 80, "jpeg quality, 1 to 100")
@@ -855,7 +855,9 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 				hdr[k] = strings.Join(vs, ", ")
 			}
 		}
-		bb, err := shotBrowser(shotOptions{size: *shotSize, full: *shotFull, wait: *shotWait, timeout: *shotTimeout, format: *shotFormat,
+		waitGiven := false
+		fs.Visit(func(f *flag.Flag) { waitGiven = waitGiven || f.Name == "shot-wait" })
+		bb, err := shotBrowser(shotOptions{size: *shotSize, full: *shotFull, wait: *shotWait, waitGiven: waitGiven, timeout: *shotTimeout, format: *shotFormat,
 			quality: *shotQuality, js: *shotJS, codes: *shotCodes, chrome: *chromePath, proxy: *chromeProxy, profile: *chromeProfile, ports: *unsafePorts})
 		if err != nil {
 			return err
@@ -2822,6 +2824,7 @@ type shotOptions struct {
 	size, format, js, codes, chrome, proxy, profile string
 	full, ports                                     bool
 	wait, timeout                                   time.Duration
+	waitGiven                                       bool // -shot-wait was given: a fixed wait, not until the page has drawn
 	quality                                         int
 }
 
@@ -2851,9 +2854,13 @@ func shotBrowser(o shotOptions) (*browser.Browser, error) {
 		return nil, usagef("-shot-timeout must be more than 0")
 	}
 	b.Timeout = o.timeout
-	b.Wait = o.wait
-	if o.wait <= 0 {
+	switch {
+	case !o.waitGiven:
+		b.Wait = 0 // until the page has drawn, at most the default wait
+	case o.wait <= 0:
 		b.Wait = -1
+	default:
+		b.Wait = o.wait
 	}
 	if o.js != "" {
 		raw, err := os.ReadFile(o.js)
