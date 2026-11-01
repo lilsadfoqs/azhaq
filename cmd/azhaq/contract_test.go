@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -19,6 +20,7 @@ import (
 	"github.com/miekg/dns"
 
 	"github.com/trannghiach/azhaq/internal/collectors/subcol"
+	"github.com/trannghiach/azhaq/internal/fetch"
 	"github.com/trannghiach/azhaq/store"
 )
 
@@ -302,7 +304,6 @@ func pageSite(t *testing.T, chain, items int) *httptest.Server {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
 		var links []string
-		var n int
 		switch {
 		case r.URL.Path == "/":
 			links = append(links, "/p1")
@@ -311,7 +312,10 @@ func pageSite(t *testing.T, chain, items int) *httptest.Server {
 			}
 		case r.URL.Path == "/item":
 		default:
-			if _, err := fmt.Sscanf(r.URL.Path, "/p%d", &n); err != nil || n > chain {
+			// Digits only: the catch-all probe's random name (p3n0...) is not a page.
+			rest, ok := strings.CutPrefix(r.URL.Path, "/p")
+			n, err := strconv.Atoi(rest)
+			if !ok || err != nil || n < 0 || n > chain {
 				http.NotFound(w, r)
 				return
 			}
@@ -360,6 +364,10 @@ func TestContractFoldedURLsAreLabelled(t *testing.T) {
 // finish it, and the rows are those of a run with no cap.
 func TestContractRequestBudgetResumesToTheSameMap(t *testing.T) {
 	t.Chdir(t.TempDir())
+	// The unknown-path probe names a random path; one that looks like a page
+	// of the fixture must still be answered 404.
+	defer fetch.SetProbeToken(fetch.ProbeToken())
+	fetch.SetProbeToken("p3n0thodzmue")
 	srv := pageSite(t, 6, 0)
 	flags := []string{"-no-paths", "-no-favicon", "-no-tech", "-depth", "8"}
 	full, rep, code := runContract(t, append([]string{"run", "-url", srv.URL + "/", "-db", "full.db"}, flags...)...)
