@@ -216,3 +216,19 @@ spread is no trend. A review from before the records has none: fetch it and
 ```
 .github/ci/history.sh 10
 ```
+
+## Before tagging a release
+
+The release workflow refuses a tag whose commit has no passing `checklist`
+run. That workflow runs the review's capability checklist as commands
+(`go run ./bench -checklist`: exit codes, counts that must agree, scope,
+GET-only mapping, writes only with their flags, `-deny-path`, a lost session,
+the MCP lock, the budget, the kill switch; `bench/README.md` lists what it
+covers and what it does not) on every push to `next`, so a merged commit
+usually has one. For the commit to tag, if it has none:
+
+```
+.github/ci/run.sh checklist v0-14-0       # a tag checklist-v0-14-0, under 20 minutes
+```
+
+then the `gate` trial with `samples=2`, then the tag.

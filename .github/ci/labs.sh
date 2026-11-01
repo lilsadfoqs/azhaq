@@ -19,8 +19,10 @@ while read -r image; do
   pull "$image" &
   pids+=($!)
 done < <(grep '^docker run' "${BASH_SOURCE[0]}" | awk '{print $NF}')
-docker compose -p azhaq-services -f bench/services.yaml pull -q &
-pids+=($!)
+if [ "${LABS_SERVICES:-1}" != 0 ]; then # LABS_SERVICES=0 leaves the services lab out
+  docker compose -p azhaq-services -f bench/services.yaml pull -q &
+  pids+=($!)
+fi
 for pid in "${pids[@]}"; do
   wait "$pid" || { echo "labs.sh: an image did not pull" >&2; exit 1; }
 done
@@ -29,7 +31,7 @@ docker run -d --name azq-vampi -p 127.0.0.1:5002:5000 -e vulnerable=1 -e tokenti
 docker run -d --name azq-dvga -p 127.0.0.1:5013:5013 -e WEB_HOST=0.0.0.0 dolevf/dvga:latest@sha256:040aa33c199d99f3380c9ff9a1ee5d725e9abca7b189c63a35a2a73bda79c957
 docker run -d --name azq-dvna -p 127.0.0.1:5020:9090 appsecco/dvna:sqlite@sha256:2657051b73ac8f879d3a3b419b4618d98e4596a0fe27f8e91582c403541ef1b0
 docker run -d --name azq-dvwa -p 127.0.0.1:5030:80 vulnerables/web-dvwa:latest@sha256:dae203fe11646a86937bf04db0079adef295f426da68a92b40e3b181f337daa7
-docker compose -p azhaq-services -f bench/services.yaml up -d
+[ "${LABS_SERVICES:-1}" = 0 ] || docker compose -p azhaq-services -f bench/services.yaml up -d
 mkdir -p "$HOME/lab"
 go build -o "$HOME/lab/labdns" ./bench/labdns
 nohup "$HOME/lab/labdns" -addr 127.0.0.1:5354 > "$HOME/lab/labdns.log" 2>&1 &
