@@ -84,7 +84,7 @@ Some work failed and did not get its answer: a source that failed, a target that
 
 ```json
 {"type":"summary","command":"run","version":"0.10.0","complete":false,"exit":4,
- "results":148,"counts":{"URLs":123,"api":33,"auth":12},"seconds":7.4,"requests":195,
+ "results":148,"stored":160,"counts":{"pages":84,"api":33,"auth":12,"scripts":14,"hostnames":9,"ports":8},"seconds":7.4,"requests":195,
  "db":"app.db","run_id":"…",
  "unreachable":["http://testphp.vulnweb.com/"],
  "failed":[{"collector":"azhaq-http","error":"timeout","retryable":true,"count":34,
@@ -99,7 +99,8 @@ Some work failed and did not get its answer: a source that failed, a target that
 | `type`, `command`, `version`, `seconds` | Always `summary`, the command, azhaq's version, and the run time in seconds. |
 | `complete`, `exit` | As in the exit codes above: `complete` is true when `exit` is 0. |
 | `results` | What the command printed on stdout: names, web services, map rows. |
-| `counts` | A breakdown of the results, per command. |
+| `counts` | A breakdown of the results, per command. For `run` the counts are disjoint and cover every stored map row: see [run's counts](#run-counts). |
+| `stored` | `run` only: the map rows the database holds. The counts add up to it. `results` is smaller when templated URLs and dead or wildcard names fold into one row. |
 | `requests` | Requests sent to targets, port connects included. Requests to third-party sources are not counted. |
 | `db` | The database the results are in. Absent when it was temporary. |
 | `unreachable` | Targets you gave that never answered. |
@@ -114,6 +115,23 @@ Some work failed and did not get its answer: a source that failed, a target that
 | `stopped`, `resume` | The limit that stopped the work and the command that continues it. |
 | `notes` | Caps that were hit and other things worth knowing that are not failures. See [notes](#notes). |
 | `next` | Commands worth running next. See [next](#next). |
+
+### Run counts
+
+`run` counts every stored map row once, so `counts` adds up to `stored`, and `results = stored - folded`, where `folded` is the stored rows that a printed row holds (the text summary says `12 folded into templated rows`). A key says what it counts and what it leaves out; each is the number `azhaq query -db FILE` lists with its filter, except that `query` folds URL templates as `run` does.
+
+| Key | Counts | `query` filter |
+| --- | --- | --- |
+| `pages` | URL rows that are none of the kinds below: pages and routes | `-type URL -role page,app` |
+| `api`, `auth`, `forbidden` | URL rows of that role. They are not also in `pages`. | `-type URL -role api` (or `auth`, `forbidden`) |
+| `client routes`, `websockets` | URLs the app's router draws, and WebSocket endpoints | `-role client-route`, `-role websocket` |
+| `scripts`, `assets`, `source maps`, `manifests` | The URLs of those roles. They are in the map, and in no other key. | `-role script` (`asset`, `sourcemap`, `manifest`) |
+| `hostnames` | Name rows that are neither dead nor wildcard: live, sibling and unresolved names | `-type Hostname`, less the two below |
+| `dead hostnames`, `wildcard hostnames` | Names that did not resolve (a dangling CNAME among them) and names a wildcard answers | `-type Hostname -role dead` (or `wildcard`) |
+| `ports`, `open|filtered ports` | Port rows, one for each host, port and protocol: those the scan found open, and the UDP ports that neither answered nor were refused | `-type Port`, by `state` |
+| `addresses`, `domains`, `prefixes`, `organizations`, and the other kinds | Rows of that type | `-type IPAddress`, `Domain`, `Prefix`, `Organization` |
+
+A key with no row is absent. The sum is one unit, the stored row. `results` is another, the printed row: a templated URL row holds `count` stored URLs and a names row holds `folded` names.
 
 ### takeover
 

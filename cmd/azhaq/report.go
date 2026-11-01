@@ -30,6 +30,7 @@ type report struct {
 	Complete    bool             `json:"complete"`
 	Exit        int              `json:"exit"`
 	Results     int              `json:"results"`
+	Stored      int              `json:"stored,omitempty"` // run: the map rows the database holds, before templates fold; the counts add up to it
 	Counts      map[string]int   `json:"counts,omitempty"`
 	Seconds     float64          `json:"seconds"`
 	Requests    int64            `json:"requests"` // sent to targets
@@ -121,17 +122,18 @@ func (r *report) print(w io.Writer) {
 		var parts []string
 		for _, k := range sortedCountKeys(r.Counts) {
 			name := k
-			if k == "URLs" && r.what == "map rows" && r.Counts[k] > r.Results {
-				// A templated row holds many URLs: say so, or the numbers
-				// read as not adding up (44 map rows, 65 URLs).
-				name = "URLs, folded into templated rows"
-			}
-			if r.Counts[k] == 1 && (k == "websockets" || k == "client routes") {
-				name = strings.TrimSuffix(k, "s")
+			if r.Counts[k] == 1 {
+				name = countName(k)
 			}
 			parts = append(parts, fmt.Sprintf("%d %s", r.Counts[k], name))
 		}
-		head[0] += " (" + strings.Join(parts, ", ") + ")"
+		list := strings.Join(parts, ", ")
+		if r.Stored > r.Results {
+			// A templated row holds many URLs, a dead-names row many names:
+			// the counts are of the stored rows, so they add up to more.
+			list = fmt.Sprintf("%d stored: %s; %d folded into templated rows", r.Stored, list, r.Stored-r.Results)
+		}
+		head[0] += " (" + list + ")"
 	}
 	if r.Degraded {
 		// The summary opens with it, naming the sources and why.
@@ -312,39 +314,10 @@ func fillReport(rep *report, path string, seeds []types.Seed, ents []types.Entit
 	}
 	counts := map[string]int{}
 	for _, r := range rows {
-		switch r.Entity.Type {
-		case types.TypeURL:
-			switch r.Role {
-			case "asset", "script", "sourcemap", "manifest":
-				continue
-			case "client-route":
-				counts["client routes"]++
-				continue
-			case "websocket":
-				counts["websockets"]++
-				continue
-			case "api", "auth", "forbidden":
-				counts[r.Role]++
-			}
-			counts["URLs"]++
-		case types.TypeHostname:
-			if r.Role != "dead" && r.Role != "wildcard" {
-				counts["hostnames"]++
-			}
-		case types.TypePort:
-			if r.State == "open|filtered" {
-				counts["open|filtered ports"]++
-			} else {
-				counts["ports"]++
-			}
-		}
-	}
-	for k, v := range counts {
-		if v == 0 {
-			delete(counts, k)
-		}
+		counts[countKey(r)]++
 	}
 	rep.Results = len(engine.GroupTemplates(rows))
+	rep.Stored = len(rows)
 	rep.what = "map rows"
 	rep.Counts = counts
 	if hint := engine.BrowserHint(rows, obs); hint != "" {
@@ -363,6 +336,65 @@ func fillReport(rep *report, path string, seeds []types.Seed, ents []types.Entit
 	if counts["auth"] > 0 {
 		rep.Next = append(rep.Next, "azhaq roles -role anon -role 'user=Authorization: Bearer …' -- RUN FLAGS   (who may read what)")
 	}
+}
+
+// countKey is the one count a stored map row belongs to: the counts of a
+// run are disjoint and cover every row, so they add up to Stored. Each key
+// is a `query` filter (docs/OUTPUT.md lists them).
+func countKey(r engine.MapEntry) string {
+	switch r.Entity.Type {
+	case types.TypeURL:
+		switch r.Role {
+		case "api", "auth", "forbidden":
+			return r.Role
+		case "websocket":
+			return "websockets"
+		case "client-route":
+			return "client routes"
+		case "script":
+			return "scripts"
+		case "asset":
+			return "assets"
+		case "sourcemap":
+			return "source maps"
+		case "manifest":
+			return "manifests"
+		}
+		return "pages"
+	case types.TypeHostname:
+		switch r.Role {
+		case "dead", "wildcard":
+			return r.Role + " hostnames"
+		}
+		return "hostnames"
+	case types.TypePort:
+		if r.State == "open|filtered" {
+			return "open|filtered ports"
+		}
+		return "ports"
+	case types.TypeIPAddress:
+		return "addresses"
+	case types.TypeDomain:
+		return "domains"
+	case types.TypeOrganization:
+		return "organizations"
+	case types.TypePrefix:
+		return "prefixes"
+	case types.TypeCloudAccount:
+		return "cloud accounts"
+	}
+	return strings.ToLower(string(r.Entity.Type)) + "s"
+}
+
+// countName is a count's name for one: "1 websocket", "1 address".
+func countName(k string) string {
+	switch {
+	case k == "api" || k == "auth" || k == "forbidden":
+		return k
+	case strings.HasSuffix(k, "sses") || strings.HasSuffix(k, "xes"):
+		return strings.TrimSuffix(k, "es")
+	}
+	return strings.TrimSuffix(k, "s")
 }
 
 // mapRowJSON is one row of the map for -json output and azhaq query.
