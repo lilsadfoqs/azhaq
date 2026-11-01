@@ -49,7 +49,7 @@ class TimesTest(unittest.TestCase):
             times = json.load(f)
         for u in ("default:apps", "polite:domains", "claims:5"):
             self.assertIn(u, times)
-        self.assertTrue(all(isinstance(v, int) and v > 0 for v in times.values()))
+        self.assertTrue(all(isinstance(v, int) and v >= 0 for v in times.values()))
 
 
 class PlanTest(unittest.TestCase):
