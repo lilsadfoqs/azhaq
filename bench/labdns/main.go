@@ -198,6 +198,9 @@ func (d *labData) wildcardFor(name string) ([]string, bool) {
 	return d.wild[best], true
 }
 
+// goneTarget starts the names the zone's dangling CNAMEs point to: none exists.
+const goneTarget = "azq-lab-gone-"
+
 // zone is azqlab.lan: name → records, in zone-file syntax without the name.
 var zone = map[string][]string{
 	"azqlab.lan.": {
@@ -469,6 +472,8 @@ func handler(lab *labData, stats *counters, upstream string, delay time.Duration
 							m.Answer = append(m.Answer, rr)
 						}
 					}
+				} else if strings.HasPrefix(c.Target, goneTarget) {
+					m.Rcode = dns.RcodeNameError // as upstream says; no need to ask (and wait for) a public resolver
 				} else if in, _, err := client.Exchange(sub, upstream); err == nil {
 					m.Answer = append(m.Answer, in.Answer...)
 					m.Rcode = in.Rcode
