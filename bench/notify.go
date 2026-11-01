@@ -25,8 +25,8 @@ type notifyRow struct {
 	AzhaqSecs  float64 `json:"azhaq_seconds"`
 	NotifySecs float64 `json:"notify_seconds"`
 	memPair
-	SameBodies bool    `json:"same_bodies"`
-	TokenLeak  bool    `json:"token_leak"`
+	SameBodies bool `json:"same_bodies"`
+	TokenLeak  bool `json:"token_leak"`
 }
 
 type stubReq struct {

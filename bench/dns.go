@@ -18,12 +18,12 @@ import (
 // A, AAAA, CNAME, MX, NS, TXT, SRV, CAA, SOA and PTR), so the
 // answers are known and every query the tools send is counted at the server.
 type dnsRow struct {
-	Profile    string   `json:"profile,omitempty"`
-	Names      int      `json:"names"`
-	AzhaqOK    int      `json:"azhaq_confirmed"`
-	DnsxOK     int      `json:"dnsx_confirmed"`
-	AzhaqSecs  float64  `json:"azhaq_seconds"`
-	DnsxSecs   float64  `json:"dnsx_seconds"`
+	Profile   string  `json:"profile,omitempty"`
+	Names     int     `json:"names"`
+	AzhaqOK   int     `json:"azhaq_confirmed"`
+	DnsxOK    int     `json:"dnsx_confirmed"`
+	AzhaqSecs float64 `json:"azhaq_seconds"`
+	DnsxSecs  float64 `json:"dnsx_seconds"`
 	memPair
 	AzhaqQ     int      `json:"azhaq_queries"`
 	DnsxQ      int      `json:"dnsx_queries"`

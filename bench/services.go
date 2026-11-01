@@ -19,17 +19,17 @@ import (
 // services lab (bench/services.yaml): fifteen daemons on ports that are not
 // their usual ones, so a name has to come from what the service says.
 type servicesRow struct {
-	Profile    string          `json:"profile,omitempty"`
-	Ports      int             `json:"ports"`
-	AzhaqNamed int             `json:"azhaq_named"` // the service the port really runs
-	NmapNamed  int             `json:"nmap_named"`
-	AzhaqVer   int             `json:"azhaq_with_product"`
-	NmapVer    int             `json:"nmap_with_product"`
-	AzhaqSecs  float64         `json:"azhaq_seconds"`
-	NmapSecs   float64         `json:"nmap_seconds"`
+	Profile    string  `json:"profile,omitempty"`
+	Ports      int     `json:"ports"`
+	AzhaqNamed int     `json:"azhaq_named"` // the service the port really runs
+	NmapNamed  int     `json:"nmap_named"`
+	AzhaqVer   int     `json:"azhaq_with_product"`
+	NmapVer    int     `json:"nmap_with_product"`
+	AzhaqSecs  float64 `json:"azhaq_seconds"`
+	NmapSecs   float64 `json:"nmap_seconds"`
 	memPair
-	Rows       []serviceRow    `json:"rows"`
-	UDP        map[string]bool `json:"azhaq_udp,omitempty"`
+	Rows []serviceRow    `json:"rows"`
+	UDP  map[string]bool `json:"azhaq_udp,omitempty"`
 }
 
 type serviceRow struct {

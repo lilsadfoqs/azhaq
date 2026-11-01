@@ -18,15 +18,15 @@ import (
 // silently: each is in azhaq's list or was dropped as junk, with a reason,
 // and azhaq's list and its junk together are at least gau's.
 type urlsRow struct {
-	Profile   string   `json:"profile,omitempty"`
-	Domain    string   `json:"domain"`
-	Azhaq     int      `json:"azhaq"`
-	Gau       int      `json:"gau"`
-	Shared    int      `json:"shared"`
-	AzhaqSecs float64  `json:"azhaq_seconds"`
-	GauSecs   float64  `json:"gau_seconds"`
+	Profile   string  `json:"profile,omitempty"`
+	Domain    string  `json:"domain"`
+	Azhaq     int     `json:"azhaq"`
+	Gau       int     `json:"gau"`
+	Shared    int     `json:"shared"`
+	AzhaqSecs float64 `json:"azhaq_seconds"`
+	GauSecs   float64 `json:"gau_seconds"`
 	memPair
-	GauOnly   []string `json:"gau_only,omitempty"` // not in azhaq's list: the old bar's loss
+	GauOnly []string `json:"gau_only,omitempty"` // not in azhaq's list: the old bar's loss
 	// Dropped is what azhaq's -raw run holds as junk, by reason; GauJunk
 	// the URLs of GauOnly among it, and Missing the rest of GauOnly.
 	Dropped map[string]int    `json:"dropped_as_junk,omitempty"`

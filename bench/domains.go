@@ -38,8 +38,8 @@ type domainRow struct {
 	CDX            string   `json:"archives"`
 	Profile        string   `json:"profile,omitempty"`
 	RefSeconds     float64  `json:"reference_seconds,omitempty"` // subfinder and dnsx together
-	memPair                                                      // the peak of azhaq's run, and the larger of subfinder's and dnsx's
-	Gaps           []string `json:"gaps,omitempty"`              // confirmed live names only the reference found
+	memPair                 // the peak of azhaq's run, and the larger of subfinder's and dnsx's
+	Gaps           []string `json:"gaps,omitempty"` // confirmed live names only the reference found
 }
 
 // independentResolvers are not the two the tools are given, so a name both

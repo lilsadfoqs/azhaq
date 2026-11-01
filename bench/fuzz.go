@@ -21,15 +21,15 @@ type fuzzRow struct {
 }
 
 type fuzzLeg struct {
-	App           string   `json:"app"`
-	Variant       string   `json:"variant"` // calibrated (-ac) or filtered (-fs)
-	AzhaqHits     int      `json:"azhaq_hits"`
-	FfufHits      int      `json:"ffuf_hits"`
-	Shared        int      `json:"shared"`
-	AzhaqOK       int      `json:"azhaq_confirmed"`
-	FfufOK        int      `json:"ffuf_confirmed"`
-	AzhaqSecs     float64  `json:"azhaq_seconds"`
-	FfufSecs      float64  `json:"ffuf_seconds"`
+	App       string  `json:"app"`
+	Variant   string  `json:"variant"` // calibrated (-ac) or filtered (-fs)
+	AzhaqHits int     `json:"azhaq_hits"`
+	FfufHits  int     `json:"ffuf_hits"`
+	Shared    int     `json:"shared"`
+	AzhaqOK   int     `json:"azhaq_confirmed"`
+	FfufOK    int     `json:"ffuf_confirmed"`
+	AzhaqSecs float64 `json:"azhaq_seconds"`
+	FfufSecs  float64 `json:"ffuf_seconds"`
 	memPair
 	ReportEqual   *bool    `json:"report_equal,omitempty"`
 	ReportProblem string   `json:"report_problem,omitempty"`

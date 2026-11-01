@@ -27,7 +27,7 @@ type shotsRow struct {
 	AzhaqSeconds  float64 `json:"azhaq_seconds"`
 	GowitnessSecs float64 `json:"gowitness_seconds"`
 	memPair
-	Unpaced       bool    `json:"gowitness_unpaced,omitempty"` // polite: gowitness has no rate option, so the times are not compared
+	Unpaced bool `json:"gowitness_unpaced,omitempty"` // polite: gowitness has no rate option, so the times are not compared
 }
 
 // shotPages serves three pages with content a blank screenshot would lack.

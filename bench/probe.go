@@ -20,32 +20,32 @@ import (
 // local apps, a fleet of servers the bench starts, and three public test
 // sites at 5 requests per second.
 type probeRow struct {
-	Profile       string   `json:"profile,omitempty"`
-	Hosts         int      `json:"hosts"`
-	AzhaqAnswered int      `json:"azhaq_answered"`
-	HttpxAnswered int      `json:"httpx_answered"`
-	AzhaqOK       int      `json:"azhaq_confirmed"` // answers an independent GET agrees with
-	HttpxOK       int      `json:"httpx_confirmed"`
-	Shared        int      `json:"shared"`
-	Offsite       int      `json:"offsite"` // httpx -fr left the host's site: only the redirect's status compared
-	Status        int      `json:"status_agree"`
-	Title         int      `json:"title_agree"`
-	Tech          int      `json:"tech_agree"`
-	All           int      `json:"all_agree"`
-	FaviconBoth   int      `json:"favicon_both"`
-	FaviconAgree  int      `json:"favicon_agree"`
-	CDNHttpx      int      `json:"cdn_httpx"`
-	CDNAgree      int      `json:"cdn_agree"`
-	AzhaqSeconds  float64  `json:"azhaq_seconds"`
-	HttpxSeconds  float64  `json:"httpx_seconds"`
+	Profile       string  `json:"profile,omitempty"`
+	Hosts         int     `json:"hosts"`
+	AzhaqAnswered int     `json:"azhaq_answered"`
+	HttpxAnswered int     `json:"httpx_answered"`
+	AzhaqOK       int     `json:"azhaq_confirmed"` // answers an independent GET agrees with
+	HttpxOK       int     `json:"httpx_confirmed"`
+	Shared        int     `json:"shared"`
+	Offsite       int     `json:"offsite"` // httpx -fr left the host's site: only the redirect's status compared
+	Status        int     `json:"status_agree"`
+	Title         int     `json:"title_agree"`
+	Tech          int     `json:"tech_agree"`
+	All           int     `json:"all_agree"`
+	FaviconBoth   int     `json:"favicon_both"`
+	FaviconAgree  int     `json:"favicon_agree"`
+	CDNHttpx      int     `json:"cdn_httpx"`
+	CDNAgree      int     `json:"cdn_agree"`
+	AzhaqSeconds  float64 `json:"azhaq_seconds"`
+	HttpxSeconds  float64 `json:"httpx_seconds"`
 	memPair
-	PublicAzhaq   int      `json:"public_azhaq"`
-	PublicHttpx   int      `json:"public_httpx"`
-	PublicAzSecs  float64  `json:"public_azhaq_seconds"`
-	PublicHxSecs  float64  `json:"public_httpx_seconds"`
-	PublicMem     memPair  `json:"public_memory"`
-	Disagree      []string `json:"disagree,omitempty"`
-	Accounting    string   `json:"accounting,omitempty"`
+	PublicAzhaq  int      `json:"public_azhaq"`
+	PublicHttpx  int      `json:"public_httpx"`
+	PublicAzSecs float64  `json:"public_azhaq_seconds"`
+	PublicHxSecs float64  `json:"public_httpx_seconds"`
+	PublicMem    memPair  `json:"public_memory"`
+	Disagree     []string `json:"disagree,omitempty"`
+	Accounting   string   `json:"accounting,omitempty"`
 }
 
 // publicSites may receive GET requests from the bench at 5 per second.
