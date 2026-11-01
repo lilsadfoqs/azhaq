@@ -79,6 +79,7 @@ type hunter struct {
 	apiDoc    map[string]bool // entity IDs of API descriptions the run parsed
 	errs      map[string]errText
 	reflected map[string]bool // route keys with a parameter whose value came back
+	chrome    map[string]bool // origin and input name carried by most of the origin's pages
 	cut       time.Time
 	old       bool // some URL is older than the window: "new" tells rows apart
 }
@@ -95,6 +96,7 @@ func Build(in Input) []Row {
 	}
 	h := &hunter{in: in, cands: map[string]*cand{}, apiDoc: apiDescriptions(in.Obs), cut: in.Now.Add(-in.Since)}
 	h.errs, h.reflected = answersOf(in.Obs)
+	h.chrome = chromeInputs(in.Rows)
 	for _, r := range in.Rows {
 		if r.Entity.Type == types.TypeURL && r.Entity.FirstSeen.Before(h.cut) {
 			h.old = true
