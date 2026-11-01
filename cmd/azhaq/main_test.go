@@ -62,6 +62,7 @@ func captureBoth(t *testing.T, fn func() error) (string, string, error) {
 		errOut = <-done
 		return ferr
 	})
+	checkSummaryOf(t, errOut, err)
 	return out, errOut, err
 }
 

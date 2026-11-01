@@ -19,6 +19,7 @@ import (
 
 	"github.com/miekg/dns"
 
+	"github.com/lilsadfoqs/azhaq/engine"
 	"github.com/lilsadfoqs/azhaq/internal/collectors/subcol"
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
 	"github.com/lilsadfoqs/azhaq/store"
@@ -103,6 +104,7 @@ func runContract(t *testing.T, args ...string) (stdout string, rep report, code 
 	code = exitCode(err)
 	rep = lastReport(t, errOut)
 	checkInvariants(t, strings.Join(args, " "), out, rep, code)
+	checkRun(t, args, out, errOut, code)
 	return out, rep, code
 }
 
@@ -121,7 +123,7 @@ func checkInvariants(t *testing.T, what, stdout string, rep report, code int) {
 		t.Errorf("I3 %s: complete %v with exit %d", what, rep.Complete, code)
 	}
 	// I4
-	if code == exitPartial && len(rep.Failed) == 0 && len(rep.Unreachable) == 0 && len(rep.Notes) == 0 {
+	if code == exitPartial && len(rep.Failed) == 0 && len(rep.Unreachable) == 0 && len(rep.Notes) == 0 && !rep.Degraded {
 		t.Errorf("I4 %s: exit 3 and nothing says why: %+v", what, rep)
 	}
 	// I5: run prints the map, not its results.
@@ -426,8 +428,8 @@ func TestContractAllSourcesCountsOffByDefaultApart(t *testing.T) {
 	defer restore()
 	_, rep, code := runContract(t, "subs", "-d", "example.org", "-all-sources")
 	want := map[string]int{"sources asked": 3, "sources answered": 2, "sources failed": 0, "off-by-default failed": 1, "from sources": 2}
-	if code != exitOK || !reflect.DeepEqual(rep.Counts, want) || rep.Degraded {
-		t.Errorf("exit %d degraded %v counts %v, want %v and not degraded", code, rep.Degraded, rep.Counts, want)
+	if code != exitPartial || !reflect.DeepEqual(rep.Counts, want) || rep.Degraded {
+		t.Errorf("exit %d degraded %v counts %v, want exit 3, %v and not degraded: an off-by-default source that failed is a failure", code, rep.Degraded, rep.Counts, want)
 	}
 	// Named with -sources, the same source is not off-by-default.
 	_, rep, _ = runContract(t, "subs", "-d", "example.org", "-sources", "main,extra2")
@@ -467,8 +469,8 @@ func TestContractUnknownFlagIsUsage(t *testing.T) {
 	}
 }
 
-// contract C11: -fail-on-errors makes a failed source exit 3 even when
-// the others answered; without it the failure is listed as partial.
+// contract C11: a failed source exits 3 even when the others answered,
+// with or without -fail-on-errors; the failure is listed as partial.
 func TestContractFailOnErrors(t *testing.T) {
 	t.Chdir(t.TempDir())
 	defer subcol.UseTestSources(
@@ -476,11 +478,11 @@ func TestContractFailOnErrors(t *testing.T) {
 		subcol.TestSource{Name: "bad", Default: true, Err: errors.New("boom")},
 	)()
 	_, rep, code := runContract(t, "subs", "-d", "example.org")
-	if failed, partial := failedSource(rep, "bad"); code != exitOK || !failed || !partial {
+	if failed, partial := failedSource(rep, "bad"); code != exitPartial || !failed || !partial {
 		t.Errorf("without the flag: exit %d, failed %+v", code, rep.Failed)
 	}
 	_, rep, code = runContract(t, "subs", "-d", "example.org", "-fail-on-errors")
-	if failed, partial := failedSource(rep, "bad"); code != exitPartial || !failed || partial {
+	if failed, partial := failedSource(rep, "bad"); code != exitPartial || !failed || !partial {
 		t.Errorf("with -fail-on-errors: exit %d, failed %+v", code, rep.Failed)
 	}
 }
@@ -497,6 +499,12 @@ func TestContractSettleKeepsTheInvariants(t *testing.T) {
 		{"stopped and failed", func(r *report) { r.Stopped = "x"; r.Unreachable = []string{"h"} }, exitLimit},
 		{"unreachable", func(r *report) { r.Unreachable = []string{"h"} }, exitPartial},
 		{"warned", func(r *report) { r.warned = true; r.Notes = []string{"dead session"} }, exitPartial},
+		{"failed", func(r *report) { r.Failed = []engine.Failure{{Collector: "azhaq-http", Error: "timeout"}} }, exitPartial},
+		{"partial", func(r *report) {
+			r.Failed = []engine.Failure{{Collector: "azhaq-subdomains", Source: "s", Partial: true}}
+		}, exitPartial},
+		{"fanout", func(r *report) { r.Failed = []engine.Failure{{Collector: "azhaq-rdap", Fanout: true}} }, exitPartial},
+		{"degraded", func(r *report) { r.Degraded = true }, exitPartial},
 	} {
 		rep := newReport("roles")
 		c.set(rep)
@@ -506,6 +514,7 @@ func TestContractSettleKeepsTheInvariants(t *testing.T) {
 			t.Errorf("%s: exit %d, want %d", c.name, exitCode(err), c.exit)
 		}
 		checkInvariants(t, c.name, out, *rep, rep.Exit)
+		checkFailureRule(t, c.name, *rep, rep.Exit)
 	}
 }
 

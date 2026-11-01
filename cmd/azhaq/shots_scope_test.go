@@ -220,7 +220,7 @@ func TestShotsNmapTriesAWebPortNamedOddly(t *testing.T) {
 		return cmdShots([]string{"-nmap", xml, "-dir", filepath.Join(t.TempDir(), "s"), "-db", filepath.Join(t.TempDir(), "w.db")})
 	})
 	if exitCode(err) != exitOK {
-		t.Fatalf("exit %d, want 0: a port nmap did not name a web service is fan-out\n%s", exitCode(err), errOut)
+		t.Fatalf("exit %d, want 0: a port nmap did not name a web service that gives no page is no failure\n%s", exitCode(err), errOut)
 	}
 	if !strings.Contains(text, "http://127.0.0.1:"+su.Port()+"/") {
 		t.Errorf("the port nmap called nessus was not shot:\n%s\n%s", text, errOut)
@@ -238,7 +238,7 @@ func TestShotsNmapTriesAWebPortNamedOddly(t *testing.T) {
 }
 
 // A port nmap named http that does not answer is an ordinary failure:
-// exit 3. The same port named ssh is fan-out, listed in the summary.
+// exit 3. The same port named ssh is no web service: a note counts it.
 func TestShotsNmapDeadHTTPPortFailsButGuessedPortDoesNot(t *testing.T) {
 	if _, err := browser.Find(); err != nil {
 		t.Skip(err)
@@ -266,12 +266,12 @@ func TestShotsNmapDeadHTTPPortFailsButGuessedPortDoesNot(t *testing.T) {
 		if exitCode(err) != c.exit || rep.Exit != c.exit {
 			t.Errorf("port named %s: exit %d, want %d\n%s", c.svc, exitCode(err), c.exit, errOut)
 		}
-		fan := false
-		for _, f := range rep.Failed {
-			fan = fan || f.Fanout
+		noted := strings.Contains(strings.Join(rep.Notes, "\n"), "1 port nmap did not name a web service gave no page")
+		if c.svc == "ssh" && (len(rep.Failed) > 0 || len(rep.Unreachable) > 0 || !noted) {
+			t.Errorf("port named ssh: failures %+v unreachable %v notes %q", rep.Failed, rep.Unreachable, rep.Notes)
 		}
-		if (c.svc == "ssh") != fan || len(rep.Failed) == 0 || len(rep.Unreachable) > 0 && c.svc == "ssh" {
-			t.Errorf("port named %s: failures %+v unreachable %v", c.svc, rep.Failed, rep.Unreachable)
+		if c.svc == "http" && (len(rep.Failed) == 0 || noted) {
+			t.Errorf("port named http: failures %+v notes %q", rep.Failed, rep.Notes)
 		}
 	}
 }

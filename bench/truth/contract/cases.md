@@ -19,7 +19,7 @@ The contract:
 | C8 | trial 9 (reviewer A) | `subs -all-sources`, where off-by-default sources fail | the summary says how many sources answered out of how many asked (`sources answered`/`sources asked`); off-by-default sources that fail are counted apart (`off-by-default failed`) and do not make `degraded` true on their own |
 | C9 | every trial | any command with an unknown flag | exit 2; summary `exit:2` under `-json` |
 | C10 | trial 9 (reviewer B) | MCP `azhaq_subdomains` for a domain outside `-allow` | a JSON-RPC result with `isError:true`; no subdomain source is asked |
-| C11 | every trial | `-fail-on-errors`, where one source fails while the others answered | exit 3 (without the flag: exit 0, and the failure is listed as partial) |
+| C11 | every trial | `subs`, where one source fails while the others answered | exit 3, with or without `-fail-on-errors`; the failure is listed as partial |
 | C12 | trial 9 (reviewer A) | a `roles` run stopped by `-replay-max` | exit 4; `stopped` names `-replay-max` |
 
 **Invariants for every command and every case:**
