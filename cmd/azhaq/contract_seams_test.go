@@ -81,6 +81,7 @@ var notReportable = map[string]string{
 	"verdictWriteVoid":     "the owner's own write was refused: no comparison possible",
 	"verdictWriteRefused":  "the other roles were refused: access control working",
 	"verdictWriteFailed":   "a server error: neither refused nor accepted",
+	"verdictWriteMixed":    "some refused, some a server error: nothing accepted",
 	"verdictWriteDry":      "nothing was sent (-dry-writes)",
 }
 

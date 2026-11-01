@@ -131,7 +131,8 @@ type scheduler struct {
 	ran, originRan, reserve int
 	names                   int // seeds handed to batch collectors
 	inflight                int
-	beyond                  []types.Seed    // hints past MaxDepth
+	beyond                  []types.Seed    // distinct seeds past MaxDepth that a collector of the run would run on
+	beyondSeen              map[string]bool // keys of the seeds found past MaxDepth, however often
 	atLimit                 map[string]bool // names past MaxDepth that DNS-only collectors ran on
 	results                 chan finished
 
@@ -329,7 +330,7 @@ func (s *scheduler) add(raw types.Seed, depth int, hint bool) {
 		}
 	}
 	if depth >= s.b.MaxDepth {
-		s.beyond = append(s.beyond, seed)
+		s.pastDepth(seed, k)
 		s.atDepthLimit(seed, depth, k)
 		return
 	}
@@ -364,6 +365,26 @@ func (s *scheduler) add(raw types.Seed, depth int, hint bool) {
 			continue
 		}
 		s.enqueue(t)
+	}
+}
+
+// pastDepth keeps a seed found past -depth for a larger one to ask, once
+// however often it is found, and only when a collector the run has would
+// run on it: a found path no sweep takes as a start, a name the run does
+// not look up, has nothing for a larger -depth to ask.
+func (s *scheduler) pastDepth(seed types.Seed, k string) {
+	if s.beyondSeen[k] {
+		return
+	}
+	if s.beyondSeen == nil {
+		s.beyondSeen = map[string]bool{}
+	}
+	s.beyondSeen[k] = true
+	for _, col := range s.e.Cat.Where(seed.Type) {
+		if s.allowed(col, seed) && !s.skip(task{col: col.Name(), seed: seed}) {
+			s.beyond = append(s.beyond, seed)
+			return
+		}
 	}
 }
 

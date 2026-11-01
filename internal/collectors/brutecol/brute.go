@@ -298,7 +298,7 @@ func answerList(as []dnsr.Answer) []map[string]any {
 			out[i]["ips"] = ips
 		}
 		if len(a.CNAME) > 0 {
-			out[i]["cname"] = a.CNAME[0]
+			out[i]["cname"], out[i]["cnames"] = a.CNAME[0], a.CNAME
 		}
 	}
 	return out

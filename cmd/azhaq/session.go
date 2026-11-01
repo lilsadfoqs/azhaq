@@ -12,8 +12,10 @@ import (
 // watchSession gives a signed-in run its session check (fetch.Session): a
 // page the run asks with its session and without it, whose answers differ,
 // asked every 50 requests and when an answer looks like the end of the
-// session. renew signs in again (-login); nil for a session given with
-// -cookie or -header, which the run cannot renew.
+// session (a 401, a response that clears a session cookie, a redirect to the
+// sign-in page: -login's, else the one the check page sends a visitor to).
+// renew signs in again (-login); nil for a session given with -cookie or
+// -header, which the run cannot renew.
 func watchSession(ctx context.Context, seeds []types.Seed, home, loginURL string, renew func(context.Context) error, rep *report) {
 	if !fetch.HasSession() {
 		return
@@ -39,6 +41,9 @@ func watchSession(ctx context.Context, seeds []types.Seed, home, loginURL string
 		}
 		if with != without && with.Status != 0 {
 			s.Check, s.Want = c, with
+			if s.SignIn == "" {
+				s.SignIn = without.Loc // where a visitor without the session is sent
+			}
 			break
 		}
 		tried = append(tried, c)

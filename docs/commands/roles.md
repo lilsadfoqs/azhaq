@@ -147,6 +147,7 @@ With `-replay-writes`, these verdicts join the list. Proved cross writes keep th
 | `the owner's own write was refused` | `-all` | The owner was not let, or its empty write changed its object: nothing to compare. |
 | `the other roles were refused` | `-all` | A DELETE, never asked of its owner, that no other role was let to send. |
 | `the other roles' writes failed with a server error (5xx): neither refused nor accepted` | `-all` | Every other role's write was answered 5xx: nothing is said about who may write. |
+| `the other roles' writes were refused or failed with a server error (5xx): neither accepted` | `-all` | No other role was let, some were refused (401, 403 and the like) and some got a 5xx. Only the refused are known to be kept out. |
 
 ## Summary and exit codes
 
@@ -521,6 +522,7 @@ Replaying the owner's own recorded body is idempotent when the value it sets is 
 - That verdict is neither proved nor disproved. Check it by hand, or give `-replay-writes-canary` if the write would otherwise replay a value already there. It is never reported as "changed nothing".
 - `answered 2xx but changed nothing of the owner's`: the owner's object did not change the way the write asked, or could not be read to verify it. Not a finding; check by hand.
 - `the other roles' writes failed with a server error (5xx)`: every other role's write was answered 5xx. Examples are a unique key the server already held, and a crash.
+- `the other roles' writes were refused or failed with a server error (5xx)`: no other role was let, and the answers are a mix: the anonymous role gets a 401 and another role a 500. `the other roles were refused` and `only its owner writes it` are used only when every other role's answer is a refusal.
 - A write row's `owner_by` says what proved it. Examples: `after bob's PUT the owner's object changed to match it` and `after bob's DELETE the owner's object is gone (404)`.
 - `confidence` is `proved` on a proven cross write, and `evidence` says who was let.
 - `azhaq roles show -dir DIR -method PUT URL` prints each role's curl line with the write's body.

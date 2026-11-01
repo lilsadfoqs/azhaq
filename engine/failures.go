@@ -48,7 +48,7 @@ const maxFailureTargets = 100
 func Failures(ents []types.Entity, obs []types.StoredObservation) []Failure {
 	idx := map[string]int{}
 	var out []Failure
-	eachFailure(ents, obs, func(collector, source, raw, target string) {
+	eachFailure(ents, obs, func(collector, source, raw, target, _ string) {
 		msg := ShortError(raw)
 		k := collector + "\x00" + source + "\x00" + msg
 		i, ok := idx[k]
@@ -81,7 +81,7 @@ type FailedTarget struct {
 func FailedTargets(ents []types.Entity, obs []types.StoredObservation) []FailedTarget {
 	seen := map[string]bool{}
 	var out []FailedTarget
-	eachFailure(ents, obs, func(collector, source, raw, target string) {
+	eachFailure(ents, obs, func(collector, source, raw, target, _ string) {
 		msg := ShortError(raw)
 		k := target + "\x00" + collector + "\x00" + source + "\x00" + msg
 		if target == "" || seen[k] {
@@ -96,7 +96,7 @@ func FailedTargets(ents []types.Entity, obs []types.StoredObservation) []FailedT
 
 // eachFailure calls add for every failure in obs: a collector's error on
 // a target, a third-party source's error, a 429 from the target.
-func eachFailure(ents []types.Entity, obs []types.StoredObservation, add func(collector, source, raw, target string)) {
+func eachFailure(ents []types.Entity, obs []types.StoredObservation, add func(collector, source, raw, target, entity string)) {
 	keys := map[string]string{}
 	for _, e := range ents {
 		keys[e.ID] = e.Key
@@ -113,7 +113,8 @@ func eachFailure(ents []types.Entity, obs []types.StoredObservation, add func(co
 		var p map[string]any
 		_ = json.Unmarshal(o.Payload, &p)
 		target := keys[o.EntityID]
-		if o.ObservedAt.Before(newest[o.Collector+"\x00"+o.EntityID+"\x00"+o.Kind]) && (p["sources"] != nil || p["engines"] != nil) {
+		stale := o.ObservedAt.Before(newest[o.Collector+"\x00"+o.EntityID+"\x00"+o.Kind])
+		if stale && (p["sources"] != nil || p["engines"] != nil || p["degraded"] == true) {
 			continue
 		}
 		if o.Kind == "error" {
@@ -124,7 +125,7 @@ func eachFailure(ents []types.Entity, obs []types.StoredObservation, add func(co
 			if u, _ := p["url"].(string); u != "" {
 				target = u // one port or path of a seed that gave no answer
 			}
-			add(o.Collector, "", msg, target)
+			add(o.Collector, "", msg, target, o.EntityID)
 			continue
 		}
 		if p == nil {
@@ -135,7 +136,7 @@ func eachFailure(ents []types.Entity, obs []types.StoredObservation, add func(co
 			for name, v := range srcs {
 				row, _ := v.(map[string]any)
 				if msg, _ := row["error"].(string); msg != "" {
-					add(o.Collector, name, msg, sourceTarget(p, target))
+					add(o.Collector, name, msg, sourceTarget(p, target), o.EntityID)
 				}
 			}
 		}
@@ -146,7 +147,7 @@ func eachFailure(ents []types.Entity, obs []types.StoredObservation, add func(co
 			continue
 		}
 		if msg, _ := p["error"].(string); msg != "" && p["degraded"] == true {
-			add(o.Collector, "", msg, sourceTarget(p, target))
+			add(o.Collector, "", msg, sourceTarget(p, target), o.EntityID)
 			continue
 		}
 		if o.Collector == "azhaq-http" || o.Collector == "azhaq-paths" {
@@ -154,11 +155,14 @@ func eachFailure(ents []types.Entity, obs []types.StoredObservation, add func(co
 			// (a service that is down, an edge with no origin).
 			switch st := statusOf(o.Payload); st {
 			case 429:
+				if stale {
+					continue // asked again since: the newer answer is the target's
+				}
 				u, _ := p["url"].(string)
 				if u == "" {
 					u = target
 				}
-				add(o.Collector, "", fmt.Sprintf("HTTP %d from the target", st), u)
+				add(o.Collector, "", fmt.Sprintf("HTTP %d from the target", st), u, o.EntityID)
 			}
 		}
 	}

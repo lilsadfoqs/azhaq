@@ -154,6 +154,28 @@ func (s *Store) Forget(ids []string) error {
 	return nil
 }
 
+// ReopenTask makes a task of the current run not done, so that azhaq resume
+// runs it again. It reports whether the run has the task.
+func (s *Store) ReopenTask(id string) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	res, err := s.q().Exec(`UPDATE tasks SET done = 0, tries = 0, need = 0 WHERE run_id = ? AND id = ?`, s.runID, id)
+	if err != nil {
+		return false, err
+	}
+	n, _ := res.RowsAffected()
+	return n > 0, nil
+}
+
+// DropErrors deletes the errors the current run recorded for a collector on
+// an entity: a task that is asked again records its own.
+func (s *Store) DropErrors(entityID, collector string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, err := s.q().Exec(`DELETE FROM observations WHERE entity_id = ? AND run_id = ? AND collector = ? AND kind = 'error'`, entityID, s.runID, collector)
+	return err
+}
+
 // SetRunArgs records the options the current run was started with, for
 // azhaq resume.
 func (s *Store) SetRunArgs(args []string) error {
