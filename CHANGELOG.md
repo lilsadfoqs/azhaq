@@ -60,6 +60,8 @@
 - A workspace keeps no secret of the run that made it: `fuzz -db` stores its command without `-b`, a credential `-H` and a proxy's password, with its files by full path (a resume says what it was not given again); `probe` keeps the requests of its stored answers without credential headers and body; the proxy flags of `run` and `dns` are stored without the password.
 - `azhaq resume` of a fuzz workspace takes run's `-quiet` and `-timeout` (fuzz's `-maxtime`).
 - A UDP scan reads a CoAP answer's payload past its header, token and options: a 0xff in the random message id was taken for the payload marker about once in 128 scans, and the banner began inside the header.
+- `run` held the API routes scripts name on an app whose unknown `/api/` paths answer an error page or the app's shell, so `roles` found fewer endpoints that differ between roles and a URL only a held route links to was missing from the map. A directory's other script-named paths are now held only once 3 of its own answered with the catch-all page (a success or a redirect) before 3 answered anything else; its paths go one at a time until it is decided, and the scripts a page loads are always asked.
+- `azhaq resume` asked again every script-named path the stopped run had not got to on a catch-all origin; a resumed run now goes on with what the stopped run had learned (which URLs scripts named, how they answered, the directories it held). Paths lent to workers (`-serve`) are asked whole.
 
 ## v0.13.0
 
