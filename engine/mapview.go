@@ -506,12 +506,15 @@ func gate(obs []types.StoredObservation) int {
 // fetched by two collectors shows status=403 once. The open ports are the
 // newest azhaq scan's (a scan a limit stopped is followed by the one that
 // finishes it) joined with every port an imported row names, as a tool
-// like naabu writes one row per port.
+// like naabu writes one row per port. A prefix holds one scan row for each
+// address of its range: its open ports are those of every address (the
+// newest row of each), and addresses_open says how many had any.
 func proofOf(e types.Entity, obs []types.StoredObservation) string {
-	keys := []string{"status", "title", "role", "ips", "cname", "open", "count", "error", "skipped", "word", "warning", "note", "auth", "via", types.ExposedByKey}
+	keys := []string{"status", "title", "role", "ips", "cname", "open", "addresses_open", "count", "error", "skipped", "word", "warning", "note", "auth", "via", types.ExposedByKey}
 	vals := map[string]string{}
 	var own, imported []string
 	var haveOwn, haveImported bool
+	perAddr := map[string][]string{}
 	via := map[string]bool{}
 	for _, o := range obs {
 		var m map[string]any
@@ -520,7 +523,13 @@ func proofOf(e types.Entity, obs []types.StoredObservation) string {
 		}
 		if v, ok := m["open"]; ok && v != nil && o.Kind == "ports" && m["range"] != true {
 			ports := openPorts(v)
-			if o.Collector == "azhaq-ports" {
+			if ip, _ := m["ip"].(string); o.Collector == "azhaq-ports" && e.Type == types.TypePrefix && ip != "" {
+				perAddr[ip] = ports
+				own, haveOwn = nil, true
+				for _, p := range perAddr {
+					own = append(own, p...)
+				}
+			} else if o.Collector == "azhaq-ports" {
 				own, haveOwn = ports, true
 			} else {
 				imported, haveImported = append(imported, ports...), true
@@ -553,6 +562,15 @@ func proofOf(e types.Entity, obs []types.StoredObservation) string {
 		}
 		sort.Strings(names[1:])
 		vals["via"] = strings.Join(names, ",")
+	}
+	if len(perAddr) > 0 {
+		n := 0
+		for _, p := range perAddr {
+			if len(p) > 0 {
+				n++
+			}
+		}
+		vals["addresses_open"] = strconv.Itoa(n)
 	}
 	var parts []string
 	for _, k := range keys {

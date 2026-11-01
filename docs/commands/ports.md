@@ -97,6 +97,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 - `AS13335` stands for the prefixes RIPEstat lists, and the summary says so.
 - A `host:port` is asked that port only. `-p`, `-tp` and `-pf` apply to every target, and a `host:port` keeps its own port beside them: `-host 10.0.0.5:8081 -p 80` asks 80 and 8081. Each entry stands for itself: `-host 10.0.0.5,10.0.0.5:8081` scans the default ports of 10.0.0.5 and port 8081, and the same goes for an address in a given range, or a name given both ways.
 - A range is split into blocks of 256 addresses. The run takes them one at a time and records them. So a range has no size limit and is not expanded in memory, and `azhaq resume` continues it: a block a limit stopped keeps which of its addresses it finished, and the resume asks only the others.
+- In the map (`show`, `query -type Prefix`), a range's row lists the open ports of every address that answered, as `open=[8001 8002 …]`, and `addresses_open=N` says how many addresses had any. Which address answered on which port is in the `Port` rows (`query -type Port`).
 - A name costs the DNS queries of its A and AAAA records and no others.
 - One row is made for each address. A name's first two IPv4 and first two IPv6 addresses are scanned, IPv6 where this machine can reach it. `-sa` scans every address, and `-iv 4` or `-iv 6` keeps one family.
 - An address that shows nothing has no row.
