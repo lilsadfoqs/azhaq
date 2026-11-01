@@ -490,7 +490,10 @@ Replaying the owner's own recorded body is idempotent when the value it sets is 
 
 `-replay-writes-canary` fixes that. Before a PUT or PATCH body is sent, it changes one short string field to a value unique to each role it is sent with. The read-back then has something only that role's write could have put there.
 
-- It never changes an identifier, an owner or reference field, a credential, or a timestamp.
+- It never changes an identifier, an owner or reference field (`email`, `username`, `owner`, `createdBy`, a name ending in `id`), a credential, or a timestamp: changing whose an object is, or how its owner signs in, is not what the canary proves. It takes the first string field by name that none of these rules leaves out.
+- Before anything is sent, `roles` says on stderr and in the summary's `notes` which field each PUT or PATCH write will set and which fields it leaves alone, with the rule: `canary: PUT /users/v1/name1/email has no field a canary may set, so it is replayed as recorded, with no canary; left alone: email (it says whose the object is)`. A body with no eligible field is sent as recorded: nothing is claimed that a canary would have proved.
+- `-replay-writes-field NAME` (repeatable) names a field the canary may set although those rules leave it out, such as `email`. You accept that the write changes whose the object is, or what it holds. A named field is taken before any other.
+- `-replay-writes-canary` needs `-replay-writes`, and `-replay-writes-field` needs `-replay-writes-canary`: either alone is a usage error.
 - It is never on by default, since it changes data on the target.
 - The field is not restored afterward.
 - The row's evidence says which field changed and that it was a canary.
@@ -582,6 +585,7 @@ The diff lines look like this:
 | `-replay-max` | int | `2000` | requests the replay may send, over all roles |
 | `-replay-writes` | string |  | also replay writes with every other role's session: post,put,patch (add delete to delete objects). They change data on the target and go only to the -url hosts, or the -allow/-scope given in the run options. The writes are each role's own from -har or -burp (sent only to the history's origins), and the PUT and PATCH (an empty object, the owner's first: a server that replaces on PUT may clear the owner's own object) and DELETE the runs' routes take, on each role's objects. A cross-role write is claimed only when the owner's object, read as the owner before and after, changed the way the write asks |
 | `-replay-writes-canary` | bool |  | with -replay-writes: change one short string field of a PUT or PATCH body to a unique value for each role it is replayed with, before it is sent, so a write that would otherwise replay the owner's own value back (no change to read back) can still be proved; never on by default, since it changes data, and restoring the field afterward is not done |
+| `-replay-writes-field` | string, repeatable |  | NAME: with -replay-writes-canary, a field the canary may set although the rules leave it alone (an email or other owner field, an identifier, a credential, a timestamp): you accept that it changes whose the object is or what it holds |
 | `-dry-writes` | bool |  | with -replay-writes: list the writes it would send, with whose and why, and send none |
 | `-id` | string, repeatable |  | [ROLE:]NAME=VALUE: also fill routes with this identifier. NAME is a path parameter (book_title), a JSON field holding such values (basket_id) or a route (/rest/basket/{id}); with ROLE, VALUE names ROLE's own object, and another role that reads it is listed |
 | `-refusal` | string |  | REGEX: a 2xx answer whose body matches is a refusal, for every role (a 200 "Access denied" page); each origin's own refusal page is learned besides |

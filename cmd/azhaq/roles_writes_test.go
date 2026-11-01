@@ -555,3 +555,75 @@ func TestReplayWriteDeleteRefused(t *testing.T) {
 		t.Errorf("%+v", rows)
 	}
 }
+
+// -replay-writes-canary says before it sends which field it will set and
+// why it leaves the others, says when none qualifies (VAmPI's email: it
+// says whose the object is), and sets a field the user names with
+// -replay-writes-field.
+func TestReplayWriteCanaryNamesItsFields(t *testing.T) {
+	var mu sync.Mutex
+	sent := map[string]string{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		user := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer tok-")
+		if user == "" {
+			w.WriteHeader(401)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == http.MethodPut {
+			var m map[string]string
+			b, _ := io.ReadAll(r.Body)
+			_ = json.Unmarshal(b, &m)
+			mu.Lock()
+			sent[user] = m["email"]
+			mu.Unlock()
+			w.WriteHeader(204)
+			return
+		}
+		fmt.Fprint(w, `{"username":"name1"}`)
+	}))
+	defer srv.Close()
+	browse := func(file, user string) string {
+		return writeHAR(t, file,
+			harEntry("2026-10-29T10:00:00.000Z", "PUT", srv.URL+"/users/v1/name1/email", `{"email":"`+user+`@x.test"}`, 204, "Authorization", "Bearer tok-"+user, "Content-Type", "application/json"))
+	}
+	alice, bob := browse("alice.har", "alice"), browse("bob.har", "bob")
+	run := func(extra ...string) (string, error) {
+		args := append([]string{"-json", "-dir", t.TempDir(), "-har", "alice=" + alice, "-har", "bob=" + bob, "-replay-writes", "put", "-replay-writes-canary"}, extra...)
+		_, errOut, err := captureBoth(t, func() error { return cmdRoles(args) })
+		return errOut, err
+	}
+	errOut, err := run()
+	if err != nil && exitCode(err) == exitUsage {
+		t.Fatalf("%v", err)
+	}
+	for _, want := range []string{"canary: PUT /users/v1/name1/email has no field a canary may set", "email (it says whose the object is)", "-replay-writes-field"} {
+		if !strings.Contains(errOut, want) {
+			t.Errorf("the summary lacks %q:\n%s", want, errOut)
+		}
+	}
+	for u, v := range sent {
+		if strings.HasPrefix(v, "azhaq-") {
+			t.Errorf("%s's email was set to a canary though no field qualified: %s", u, v)
+		}
+	}
+	clear(sent)
+	errOut, err = run("-replay-writes-field", "email")
+	if err != nil && exitCode(err) == exitUsage {
+		t.Fatalf("%v", err)
+	}
+	if !strings.Contains(errOut, "canary: PUT /users/v1/name1/email sets email") {
+		t.Errorf("the summary does not say the canary sets email:\n%s", errOut)
+	}
+	if !strings.HasPrefix(sent["bob"], "azhaq-") && !strings.HasPrefix(sent["alice"], "azhaq-") {
+		t.Errorf("no canary reached the server: %v", sent)
+	}
+	args := []string{"-json", "-dir", t.TempDir(), "-har", "alice=" + alice, "-replay-writes-field", "email"}
+	if err := cmdRoles(args); err == nil || exitCode(err) != exitUsage {
+		t.Errorf("-replay-writes-field alone is a usage error: %v", err)
+	}
+	args = []string{"-json", "-dir", t.TempDir(), "-har", "alice=" + alice, "-replay-writes-canary"}
+	if err := cmdRoles(args); err == nil || exitCode(err) != exitUsage {
+		t.Errorf("-replay-writes-canary without -replay-writes is a usage error: %v", err)
+	}
+}
