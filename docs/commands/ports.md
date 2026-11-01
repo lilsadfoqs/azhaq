@@ -108,6 +108,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 - `-p -` is every port, `-p u:53` is a UDP port, and `-p none` leaves the TCP ports out.
 - The ports of a host are asked in a random order, the likeliest first: nmap's top 100, then its top 1000. `-order asc` asks them by number, and `-seed N` repeats an order.
 - `-rate` paces the scan: it is a ceiling. The default is 1500 connects a second. This machine's loopback is not paced unless you give `-rate`, and then 20,000 ports at `-rate 500` take 40 seconds. nmap's `--min-rate 500` is a floor, which is `-min-rate 500` here: no ceiling, so a loopback scan of 20,000 ports with `-detect none` takes a fraction of a second, as nmap's does.
+- With `-rate`, the scan runs on as many cores as that rate needs, one for each 15,000 connects a second, never more than the machine has: a scan on one core costs about the CPU nmap's does for the same rate, where the same scan spread over 20 cores cost several times as much. `-min-rate` has no ceiling and keeps every core; `GOMAXPROCS` in the environment sets the number yourself.
 - `-T0` to `-T5` set the rate, the connect timeout and the retries as nmap's templates do. An explicit flag wins.
 - `-c` is how many connects are in flight.
 - `-timeout` is how long the whole run may take, such as `90s`. `ports -timeout 500` is refused, with a pointer to `-connect-timeout`.

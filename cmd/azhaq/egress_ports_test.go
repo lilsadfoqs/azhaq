@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -147,5 +148,34 @@ func TestLedgerNoteDoesNotReadTheFileAgain(t *testing.T) {
 	}
 	if strings.Contains(got, "not counted") || strings.Contains(got, "the summary counts") {
 		t.Errorf("the note read the file or disagreed: %s", got)
+	}
+}
+
+func TestScanProcsFollowsTheRate(t *testing.T) {
+	for _, c := range []struct {
+		rate float64
+		ncpu int
+		want int
+	}{{1, 20, 1}, {100, 20, 1}, {15000, 20, 1}, {15001, 20, 2}, {50000, 20, 4}, {1e6, 20, 20}, {10000, 1, 1}} {
+		if got := scanProcs(c.rate, c.ncpu); got != c.want {
+			t.Errorf("scanProcs(%v, %d) = %d, want %d", c.rate, c.ncpu, got, c.want)
+		}
+	}
+}
+
+// ports -rate sizes the scheduler to the rate: it runs on one core when one
+// carries it (more cores only wake each other for every connect).
+func TestPortsRateSizesTheScheduler(t *testing.T) {
+	if runtime.NumCPU() < 2 || os.Getenv("GOMAXPROCS") != "" {
+		t.Skip("one core, or GOMAXPROCS says how many")
+	}
+	was := runtime.GOMAXPROCS(0)
+	t.Cleanup(func() { runtime.GOMAXPROCS(was) })
+	shut, _ := net.Listen("tcp", "127.0.0.1:0")
+	port := fmt.Sprint(shut.Addr().(*net.TCPAddr).Port)
+	shut.Close()
+	cli(t, "ports", "-host", "127.0.0.1", "-p", port, "-rate", "200", "-silent", "-ledger", "off")
+	if got := runtime.GOMAXPROCS(0); got != 1 {
+		t.Errorf("GOMAXPROCS %d after ports -rate 200, want 1", got)
 	}
 }
