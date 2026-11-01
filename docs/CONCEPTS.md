@@ -182,7 +182,8 @@ Ctrl-C, `kill` and a hangup (SIGINT, SIGTERM and SIGHUP) all stop a command the 
 One rule holds for every command that sends HTTP to a target: `run`, `crawl`, `probe`, `dirs`, `fuzz`, `params`, `shots`, `roles` and the commands `watch` and `resume` repeat.
 
 - `-proxy URL` (an `http://`, `https://` or `socks5://` URL; `fuzz` also takes `-x`) sends every request of the command through it. The proxy sees each one, and the ledger counts the same.
-- Without `-proxy`, the environment's `HTTP_PROXY` and `HTTPS_PROXY` apply, loopback targets (`127.0.0.1`, `localhost`, `::1`) included, as with curl. `NO_PROXY` keeps the hosts it names direct: `NO_PROXY=127.0.0.1` for a local lab you do not want in your proxy.
+- `-proxy` sends everything through the proxy, loopback targets (`127.0.0.1`, `localhost`, `::1`) included: that is how to put a local lab in Burp.
+- Without `-proxy`, the environment's `HTTP_PROXY`, `HTTPS_PROXY` and `NO_PROXY` apply by Go's rule, as in ffuf, httpx and katana: a loopback target always stays direct, so a company proxy in the environment never gets your local labs.
 - `azhaq mcp` has no `-proxy`: its commands read the environment the server starts with.
 - Not target requests, so not covered: `subs -proxy` and `-source-proxy` (the name sources), `urls -proxy` (the archives), `notify -proxy`, `dns -proxy` and `ports -proxy` (SOCKS5 for DNS and for connects).
 

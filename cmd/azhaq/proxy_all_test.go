@@ -4,8 +4,6 @@ import (
 	"slices"
 	"strings"
 	"testing"
-
-	"github.com/trannghiach/azhaq/internal/egress"
 )
 
 // Every command that sends HTTP to a target takes -proxy, and the proxy is
@@ -30,25 +28,22 @@ func TestDirsSendsEveryRequestThroughProxy(t *testing.T) {
 	}
 }
 
-func TestDirsFollowsProxyEnvironmentForLoopback(t *testing.T) {
+// The environment's proxy follows Go's rule: a loopback target stays direct.
+func TestDirsKeepsLoopbackDirectWithProxyEnvironment(t *testing.T) {
 	srv := dirsServer(t, map[string]int{"/admin": 403})
 	px, seen := countingProxy(srv, false, 0)
 	defer px.Close()
-	egress.ProxyLoopback = true
-	t.Cleanup(func() { egress.ProxyLoopback = false })
 	t.Setenv("HTTP_PROXY", px.URL)
 	t.Setenv("http_proxy", px.URL)
-	t.Setenv("NO_PROXY", "")
-	t.Setenv("no_proxy", "")
 	words := wlist(t, "admin", "nothing")
-	_, errOut, err := captureBoth(t, func() error {
+	out, errOut, err := captureBoth(t, func() error {
 		return cmdDirs([]string{"-u", srv.URL + "/", "-w", words, "-silent"})
 	})
-	if err != nil {
-		t.Fatalf("%v\n%s", err, errOut)
+	if err != nil || !strings.Contains(out, "/admin") {
+		t.Fatalf("%v %q\n%s", err, out, errOut)
 	}
-	if got := seen(); !slices.Contains(got, "GET /admin") {
-		t.Errorf("HTTP_PROXY was set and the proxy saw %v", got)
+	if got := seen(); len(got) != 0 {
+		t.Errorf("a loopback target went through the environment's proxy: %v", got)
 	}
 }
 

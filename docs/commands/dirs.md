@@ -75,8 +75,8 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 - `-u https://h/api/` asks `https://h/api/WORD`. A query or fragment on the URL is dropped, and a note says so.
 
 ### Proxy
-- `-proxy http://127.0.0.1:8080` (or an `https://` or `socks5://` URL) sends every request through that proxy: the calibration guesses and the retries too.
-- Without `-proxy`, `HTTP_PROXY` and `HTTPS_PROXY` apply, loopback targets included, and `NO_PROXY` keeps the hosts it names direct. This is the rule of every command that sends HTTP to a target: [Proxies](../CONCEPTS.md#proxies).
+- `-proxy http://127.0.0.1:8080` (or an `https://` or `socks5://` URL) sends every request through that proxy, loopback targets included: the calibration guesses and the retries too.
+- Without `-proxy`, `HTTP_PROXY` and `HTTPS_PROXY` apply by Go's rule: a loopback target (`127.0.0.1`, `localhost`, `::1`) stays direct, and `NO_PROXY` keeps other hosts direct. This is the rule of every command that sends HTTP to a target: [Proxies](../CONCEPTS.md#proxies).
 
 ### Pace
 - `-rate` paces every request, the calibration guesses included; ffuf sends its calibration unpaced. With `-ac=false` there are no guesses. Calibration asks 4 guesses for each directory, and one more for each extension. At a low rate a sweep takes about (guesses ÷ rate) seconds longer than ffuf's, and stays within your rate.
@@ -135,7 +135,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 | --- | --- | --- | --- |
 | `-H` | string, repeatable |  | extra request header K: V |
 | `-cookie` | string, repeatable |  | Cookie name=value (repeatable; sent as one Cookie header) |
-| `-proxy` | string |  | send requests to targets through this proxy (http://, https:// or socks5://); Chrome too (default: $HTTP_PROXY, $HTTPS_PROXY, loopback targets included; $NO_PROXY keeps hosts direct) |
+| `-proxy` | string |  | send requests to targets through this proxy (http://, https:// or socks5://); Chrome too (default: $HTTP_PROXY, $HTTPS_PROXY, except for loopback targets, which stay direct) |
 
 **Output**
 

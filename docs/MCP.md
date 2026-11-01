@@ -20,7 +20,7 @@ azhaq mcp -allow example.com -deny admin.example.com -max-requests 5000
 
 Every flag is described on the [`azhaq mcp` page](commands/mcp.md#flags): `-scope` with `-program`, `-allow`, `-deny`, `-deny-path`, `-max-requests`, `-rate`, `-dir` (default `azhaq-mcp`) and `-unlocked`.
 
-To see what the tools send in a proxy, start the server with `HTTP_PROXY` and `HTTPS_PROXY` set (loopback targets included; `NO_PROXY` keeps hosts direct): the server has no `-proxy` flag. See [Proxies](CONCEPTS.md#proxies).
+To see what the tools send in a proxy, start the server with `HTTP_PROXY` and `HTTPS_PROXY` set (Go's rule: loopback targets stay direct, as the server has no `-proxy` to send them): the server has no `-proxy` flag. See [Proxies](CONCEPTS.md#proxies).
 
 Without `-allow` or `-scope` the server does not start (exit 2), unless `-unlocked` says so. Then any target a tool is given may be touched, and port scans are refused.
 

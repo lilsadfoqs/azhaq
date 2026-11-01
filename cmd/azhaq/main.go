@@ -74,7 +74,6 @@ func init() {
 }
 
 func main() {
-	egress.ProxyLoopback = true // HTTP_PROXY applies to 127.0.0.1 too, as in curl
 	err := run(os.Args[1:])
 	reportError(os.Args[1:], err)
 	os.Exit(exitCode(err))
@@ -376,7 +375,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	skip := fs.String("skip", "", "collectors not to run, comma-separated (see azhaq plan)")
 	noPaths := fs.Bool("no-paths", false, "do not ask each web service for the 51 built-in paths (robots.txt, sitemaps, API descriptions, .git/HEAD, backup, admin, …): some programs count that as scanning")
 	knownFiles := fs.String("known-files", "", "ask each web service only for its robots.txt and sitemaps and read every entry (all, robotstxt or sitemapxml); replaces the 51 built-in paths")
-	proxyFlag := fs.String("proxy", "", "send requests to targets through this proxy (http://, https:// or socks5://); Chrome too (default: $HTTP_PROXY, $HTTPS_PROXY, loopback targets included; $NO_PROXY keeps hosts direct)")
+	proxyFlag := fs.String("proxy", "", "send requests to targets through this proxy (http://, https:// or socks5://); Chrome too (default: $HTTP_PROXY, $HTTPS_PROXY, except for loopback targets, which stay direct)")
 	crawlScope := fs.String("crawl-scope", "", "the hosts a crawl follows links to: rdn (the start host's registrable domain and its subdomains), fqdn (the host only), dn (hosts that name its domain keyword) or a regex on the host (default: rdn for a name, the origin itself for an address)")
 	crawlAny := fs.Bool("crawl-any-host", false, "follow links to any host, within -allow and -deny (katana's -ns)")
 	var cookies, headers, allow, deny, denyPath, domains, crawlIn, crawlOut stringsFlag

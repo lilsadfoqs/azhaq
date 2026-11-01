@@ -146,7 +146,7 @@ func ProxyOf(c *http.Client, req *http.Request) (*url.URL, error) {
 		}
 		return t.Proxy(req)
 	case nil:
-		return envProxy(req)
+		return http.ProxyFromEnvironment(req)
 	}
 	return nil, nil
 }
