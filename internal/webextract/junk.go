@@ -143,6 +143,36 @@ var fuzzSegment = lazyRE(`^(?:FUZ\d*Z|\{(?:payloads?|FUZ\d*Z|fuzz)\})(?:\.\w{1,5
 // /HTTP/1.1, or /index.php HTTP/1.1 (the space is kept as %20).
 var requestLine = lazyRE(`(?:^|/|\s)HTTP/1\.[01]$`)
 
+// fuzzValue is a query name or value that is only fuzzer keywords:
+// FUZZ, FUZ2Z, both run together (FUZZFUZ2Z) and {payload}, with an
+// extension at most. A value in lower case (fuzz) is a word.
+var fuzzValue = lazyRE(`^(?:FUZ\d*Z|\{(?:payloads?|FUZ\d*Z|fuzz)\})+(?:\.\w{1,5})?$`)
+
+// queryRequestLine is a request line pasted after a value, its space
+// kept or lost (artist=1 HTTP/1.1, artist=1HTTP/1.1). A value that is
+// only HTTP/1.1 is a value.
+var queryRequestLine = lazyRE(`(?:/|\s|\d)HTTP/1\.[01]$`)
+
+// queryTemplate reports a query whose names or values are a fuzzing
+// keyword or end in a pasted request line.
+func queryTemplate(rawQuery string) bool {
+	for _, kv := range strings.FieldsFunc(rawQuery, func(r rune) bool { return r == ';' || r == '&' }) {
+		k, v, hasV := strings.Cut(kv, "=")
+		for _, part := range []string{k, v} {
+			if d, err := url.QueryUnescape(part); err == nil {
+				part = d
+			}
+			if fuzzValue.MatchString(part) {
+				return true
+			}
+		}
+		if d, err := url.QueryUnescape(v); hasV && err == nil && queryRequestLine.MatchString(d) {
+			return true
+		}
+	}
+	return false
+}
+
 // templateJunk reports a path that is a fuzzing keyword or a pasted
 // request line, not a page.
 func templateJunk(escaped string) bool {
@@ -175,7 +205,7 @@ func JunkReason(raw string) string {
 		return JunkListing
 	}
 	p := u.EscapedPath()
-	if templateJunk(p) {
+	if templateJunk(p) || queryTemplate(u.RawQuery) {
 		return JunkTemplate
 	}
 	lp := strings.ToLower(p)

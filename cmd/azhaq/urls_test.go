@@ -388,7 +388,12 @@ func TestURLsFPDropsFuzzingPlaceholders(t *testing.T) {
 			`{"url":"http://example.org/HTTP/1.1"},`+
 			`{"url":"http://example.org/{payload}/admin/testing"},`+
 			`{"url":"http://example.org/users/{id}"},`+
-			`{"url":"http://example.org/docs/http/1.1"}]}`)
+			`{"url":"http://example.org/docs/http/1.1"},`+
+			`{"url":"http://example.org/a.php?artist=FUZZ"},`+
+			`{"url":"http://example.org/a.php?artist=FUZZFUZ2Z"},`+
+			`{"url":"http://example.org/a.php?artist={payload}"},`+
+			`{"url":"http://example.org/a.php?artist=1HTTP/1.1"},`+
+			`{"url":"http://example.org/a.php?artist=fuzz"}]}`)
 	}))
 	defer srv.Close()
 	args := []string{"-d", "example.org", "-providers", "otx", "-urls-pause", "0", "-archive", "otx=" + srv.URL, "-fp"}
@@ -397,17 +402,17 @@ func TestURLsFPDropsFuzzingPlaceholders(t *testing.T) {
 		t.Fatalf("%v\n%s", err, errOut)
 	}
 	got := strings.Join(lines, " ")
-	for _, bad := range []string{"FUZZ", "HTTP/1.1", "{payload}", "%7Bpayload"} {
+	for _, bad := range []string{"FUZZ", "HTTP/1.1", "{payload}", "%7Bpayload", "artist=FUZZ", "1HTTP"} {
 		if strings.Contains(got, bad) {
 			t.Errorf("%s kept: %v", bad, lines)
 		}
 	}
-	for _, p := range []string{"example.org/admin/", "example.org/users/", "example.org/docs/http/1.1"} {
+	for _, p := range []string{"example.org/admin/", "example.org/users/", "example.org/docs/http/1.1", "a.php?artist=fuzz"} {
 		if !strings.Contains(got, p) {
 			t.Errorf("%s dropped: %v", p, lines)
 		}
 	}
-	if len(lines) != 3 || !strings.Contains(errOut, "4 URLs dropped as junk (4 fuzzing placeholder or request-line fragment; -raw keeps them)") {
+	if len(lines) != 4 || !strings.Contains(errOut, "8 URLs dropped as junk (8 fuzzing placeholder or request-line fragment; -raw keeps them)") {
 		t.Errorf("%d lines %v\n%s", len(lines), lines, errOut)
 	}
 }
