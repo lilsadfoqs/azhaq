@@ -459,6 +459,12 @@ The default stops where subfinder does, because its per-request limit is 30 seco
 
 **Fix:** None is needed.
 
+### `shots` says `the picture came out WxH, not the WxH -shot-size asked for`
+
+**Why:** Headless Chrome's `-shot-size` sets the browser window, and the browser can reserve some of it for itself, so the drawn page is smaller than the window. The picture is checked against `-shot-size` after it is taken; a mismatch fails the page rather than keeping a smaller picture silently. `-shot-fullpage` is not checked: it is as tall as the page by design.
+
+**Fix:** None is needed: the picture failed instead of lying about its size. Report it if the gap keeps happening at a `-shot-size` you expect to work.
+
 ### `shots` says `screenshot … is partial` and exits 3
 
 **Why:** The picture was taken while some of the page's images, styles or scripts had not loaded. The row has `"partial":true`, `unloaded` and `resources`. The page was slow, or `-rate` is low for it. A page of 40 requests at `-rate 2` needs 20 seconds. The page's time runs from when it last moved, so a slow pace alone does not cut it short. A server that stops answering does.
