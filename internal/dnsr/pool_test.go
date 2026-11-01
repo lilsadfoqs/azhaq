@@ -115,6 +115,27 @@ func TestCacheAndMany(t *testing.T) {
 	}
 }
 
+// A zone with no wildcard costs one probe query, once however many names
+// are under it; a wildcard zone two, to see the addresses it rotates.
+func TestWildcardProbesAreOncePerZone(t *testing.T) {
+	var n atomic.Int32
+	addr := serve(t, func(w dns.ResponseWriter, r *dns.Msg) { n.Add(1); testZone(w, r) })
+	p := New(Options{Resolvers: []string{addr}, PerSecond: -1})
+	w := NewWildcards(p)
+	ctx := context.Background()
+	for _, name := range []string{"www.example.org", "www.example.org", "a.example.org"} {
+		w.Match(ctx, name, "example.org", Answer{Name: name, A: []string{"192.0.2.10"}})
+	}
+	if n.Load() != 1 {
+		t.Errorf("%d probe queries for a zone with no wildcard, want 1", n.Load())
+	}
+	n.Store(0)
+	w.Match(ctx, "x.wild.example.org", "example.org", Answer{Name: "x.wild.example.org", A: []string{"192.0.2.99"}})
+	if n.Load() != 2 { // two probes of wild.example.org; example.org is known
+		t.Errorf("%d probe queries for a wildcard zone, want 2", n.Load())
+	}
+}
+
 func TestWildcard(t *testing.T) {
 	p := New(Options{Resolvers: []string{serve(t, testZone)}, PerSecond: -1})
 	w := NewWildcards(p)
