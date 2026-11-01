@@ -2,7 +2,6 @@ package cdnranges
 
 import (
 	_ "embed"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -16,7 +15,7 @@ import (
 )
 
 //go:embed sources_data.json
-var sourcesData []byte
+var sourcesData string
 
 // tables are the ranges of one kind, a prefix table per provider, with
 // the provider names in the order they are tried.
@@ -25,45 +24,71 @@ type tables struct {
 	by    map[string]*bart.Table[struct{}]
 }
 
-type db struct {
-	cdn, waf, cloud tables
-	suffix          map[string]string // known suffix → provider
-}
-
-var load = sync.OnceValue(func() *db {
-	var in struct {
-		CDN, WAF, Cloud, Common map[string][]string
-	}
-	if err := json.Unmarshal(sourcesData, &in); err != nil {
+// document is the data's four members as raw JSON, found without reading
+// what is in them: the 116,000 cloud ranges are only read by a caller that
+// asks about a cloud, and the suffixes only by one that asks about a name.
+var document = sync.OnceValue(func() map[string]string {
+	m := map[string]string{}
+	err := members(sourcesData, func(key, val string) { m[strings.ToLower(key)] = val })
+	if err != nil {
 		panic("cdnranges: sources_data.json: " + err.Error())
 	}
-	d := &db{cdn: build(in.CDN), waf: build(in.WAF), cloud: build(in.Cloud), suffix: map[string]string{}}
-	sources := make([]string, 0, len(in.Common))
-	for s := range in.Common {
-		sources = append(sources, s)
-	}
-	sort.Strings(sources)
-	for _, s := range sources {
-		for _, suffix := range in.Common[s] {
-			if _, taken := d.suffix[suffix]; !taken {
-				d.suffix[suffix] = s // upstream's last write wins, in map order
-			}
-		}
-	}
-	return d
+	return m
 })
 
-func build(ranges map[string][]string) tables {
-	t := tables{by: make(map[string]*bart.Table[struct{}], len(ranges))}
-	for provider, cidrs := range ranges {
+// A kind is one member's ranges, read when first asked for.
+type kind struct {
+	key  string
+	once sync.Once
+	t    tables
+}
+
+var cdn, waf, cloud = &kind{key: "cdn"}, &kind{key: "waf"}, &kind{key: "cloud"}
+
+func (k *kind) tables() tables {
+	k.once.Do(func() { k.t = build(k.key) })
+	return k.t
+}
+
+// suffixes maps a known suffix to its provider.
+var suffixes = sync.OnceValue(func() map[string]string {
+	var sources []string
+	byName := map[string]string{}
+	if err := members(document()["common"], func(source, list string) {
+		sources = append(sources, source)
+		byName[source] = list
+	}); err != nil {
+		panic("cdnranges: sources_data.json: " + err.Error())
+	}
+	sort.Strings(sources)
+	out := map[string]string{}
+	for _, s := range sources {
+		err := strs(byName[s], func(suffix string) {
+			if _, taken := out[suffix]; !taken {
+				out[suffix] = s // upstream's last write wins, in map order
+			}
+		})
+		if err != nil {
+			panic("cdnranges: sources_data.json: " + err.Error())
+		}
+	}
+	return out
+})
+
+func build(key string) tables {
+	t := tables{by: map[string]*bart.Table[struct{}]{}}
+	err := members(document()[key], func(provider, list string) {
 		tab := new(bart.Table[struct{}])
-		for _, c := range cidrs {
+		_ = strs(list, func(c string) {
 			if p, err := netip.ParsePrefix(c); err == nil {
 				tab.Insert(p, struct{}{})
 			}
-		}
+		})
 		t.by[provider] = tab
 		t.names = append(t.names, provider)
+	})
+	if err != nil {
+		panic("cdnranges: sources_data.json: " + err.Error())
 	}
 	sort.Strings(t.names)
 	return t
@@ -86,19 +111,30 @@ func (t tables) match(ip netip.Addr) (bool, string) {
 // the provider and "cdn", "waf" or "cloud". A nil or malformed address is
 // an error.
 func Check(ip net.IP) (matched bool, provider, kind string, err error) {
+	return check(ip, true)
+}
+
+// CheckEdge is Check without the cloud ranges, which are most of the data
+// and hold no CDN or WAF: for a caller that does not report them.
+func CheckEdge(ip net.IP) (matched bool, provider, kind string, err error) {
+	return check(ip, false)
+}
+
+func check(ip net.IP, withCloud bool) (matched bool, provider, kind string, err error) {
 	addr, err := netip.ParseAddr(ip.String())
 	if err != nil {
 		return false, "", "", err
 	}
-	d := load()
-	if ok, p := d.cdn.match(addr); ok && p != "" {
+	if ok, p := cdn.tables().match(addr); ok && p != "" {
 		return true, p, "cdn", nil
 	}
-	if ok, p := d.waf.match(addr); ok && p != "" {
+	if ok, p := waf.tables().match(addr); ok && p != "" {
 		return true, p, "waf", nil
 	}
-	if ok, p := d.cloud.match(addr); ok && p != "" {
-		return true, p, "cloud", nil
+	if withCloud {
+		if ok, p := cloud.tables().match(addr); ok && p != "" {
+			return true, p, "cloud", nil
+		}
 	}
 	return false, "", "", nil
 }
@@ -106,16 +142,16 @@ func Check(ip net.IP) (matched bool, provider, kind string, err error) {
 // CheckSuffix says whether one of fqdns ends in a known CDN or WAF suffix
 // (its public suffix, or its registered domain).
 func CheckSuffix(fqdns ...string) (matched bool, provider, kind string, err error) {
-	d := load()
+	suffix := suffixes()
 	for _, fqdn := range fqdns {
 		tld, sld, err := split(fqdn)
 		if err != nil {
 			return false, "", "", &parseError{err}
 		}
-		if p, ok := d.suffix[tld]; ok {
+		if p, ok := suffix[tld]; ok {
 			return true, p, "waf", nil
 		}
-		if p, ok := d.suffix[sld+"."+tld]; ok {
+		if p, ok := suffix[sld+"."+tld]; ok {
 			return true, p, "waf", nil
 		}
 	}

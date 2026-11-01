@@ -78,6 +78,19 @@ func Network(ip net.IP) (name, kind string) {
 	return name, kind
 }
 
+// NetworkEdge is Network for the CDN and WAF ranges only: for a caller that
+// does not report a cloud, it leaves the cloud ranges unread.
+func NetworkEdge(ip net.IP) (name, kind string) {
+	if ip == nil {
+		return "", ""
+	}
+	ok, name, kind, err := cdnranges.CheckEdge(ip)
+	if err != nil || !ok {
+		return "", ""
+	}
+	return name, kind
+}
+
 // NetworkByName checks CNAME targets against known CDN and WAF suffixes
 // (*.cloudfront.net, *.akamaiedge.net, …).
 func NetworkByName(names ...string) (name, kind string) {

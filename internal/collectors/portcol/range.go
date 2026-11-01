@@ -190,7 +190,7 @@ func (c *Collector) runPrefix(ctx context.Context, seed types.Seed, emit func(ty
 			}
 			ports := c.portsOf(ip)
 			edge, edgeName := false, ""
-			if name, kind := fingerprint.Network(net.ParseIP(ip)); name != "" && kind != "cloud" {
+			if name, _ := fingerprint.NetworkEdge(net.ParseIP(ip)); name != "" {
 				edge, edgeName = true, name
 				if c.ExcludeCDN {
 					ports = cdnPorts
