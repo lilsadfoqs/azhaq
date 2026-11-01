@@ -475,7 +475,7 @@ func (h *hunter) secrets() {
 		}
 		c := h.get("URL", s.Where, "target")
 		c.instances = append(c.instances, s.Where)
-		c.addW("secret", w, fmt.Sprintf("%s (%s) in %s", s.Kind, s.Severity, s.Where))
+		c.addW("secret", w, secretDetail(s))
 	}
 }
 
@@ -488,4 +488,27 @@ func (h *hunter) takeovers() {
 		}
 		c.addW("takeover", w, t.Detail)
 	}
+}
+
+// secretDetail is what a reader needs to judge a candidate: where, the name
+// it was assigned to, the value redacted, and the rule that listed it.
+func secretDetail(s Secret) string {
+	d := fmt.Sprintf("%s (%s) in %s", s.Kind, s.Severity, s.Where)
+	var ev []string
+	if s.Name != "" {
+		ev = append(ev, "name "+s.Name)
+	}
+	if s.Preview != "" {
+		ev = append(ev, "value "+s.Preview)
+	}
+	if s.Rule != "" {
+		ev = append(ev, "rule: "+s.Rule)
+	}
+	if s.Entropy > 0 {
+		ev = append(ev, fmt.Sprintf("entropy %.1f", s.Entropy))
+	}
+	if len(ev) > 0 {
+		d += "; " + strings.Join(ev, ", ")
+	}
+	return d
 }

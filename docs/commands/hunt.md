@@ -63,7 +63,7 @@ $ azhaq hunt -db app.db
 | --- | --- |
 | `cross-role` | A `-roles` verdict that one role reached another's data. The heaviest signal: see [Cross-role rows](#cross-role-rows). |
 | `takeover` | A name another party may take over. |
-| `secret` | A credential a script carries. The reason names the file. |
+| `secret` | A credential a script carries. The reason names the file and gives the evidence: the name it was assigned to, the value redacted, the rule that listed it and, for a generic secret, its entropy. See [Secret candidates](#secret-candidates). |
 | `sourcemap` | A source map served. |
 | `exposed-file` | A backup, key, database or archive file, or a `.git` directory, served: see [Exposed files](#exposed-files). |
 | `listing` | A directory listing. |
@@ -108,6 +108,13 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 - `unauth-write`: weighs less when no GET showed that the route answers.
 - `input`: weighs more when a write sends named fields.
 - `graphql`: an endpoint whose IDE answers weighs more.
+
+### Secret candidates
+
+- A `secret` reason reads `generic-secret (medium) in URL; name apiToken, value Zx81Qp…7Ks, rule: name says secret, value looks random, entropy 4.3`.
+- The rule is `known key format` (an AWS, GitHub, Stripe, Slack or similar key, a private key, a JWT), `variable a bundler inlined` (a `VITE_` or `NEXT_PUBLIC_` variable, severity `info`) or `name says secret, value looks random`.
+- The last rule needs a property whose name holds `secret`, `token`, `password`, `apikey` and similar words, assigned a string of 8 characters or more with entropy of 3.2 bits per character or more. It leaves out placeholders, a parser's token tables, values with much punctuation, a class name a CSS module made (`_tokensUsage_dypaw_41`) and a value that repeats its own name (`secretName: "secretName-input"`).
+- A `medium` candidate needs a human: read the value in `azhaq export -format secrets` before acting on it.
 
 ### Cross-role rows
 

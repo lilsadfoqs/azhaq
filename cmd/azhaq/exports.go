@@ -215,7 +215,7 @@ func exportTo(path, format, origin string, safe bool, w io.Writer) error {
 		return graphML(path, w)
 	case "secrets":
 		for _, s := range secretRows(g.obs) {
-			fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", s.Severity, s.Kind, s.Value, s.Where)
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n", s.Severity, s.Kind, s.Value, s.Where, s.Name, s.Rule)
 		}
 	default:
 		return usagef("unknown -format %q (jsonl, urls, hosts, names, targets, openapi, graphql, sdl, burp, html, graphml, secrets)", format)
@@ -1444,7 +1444,11 @@ func shotGroups(obs []types.StoredObservation, dbDir string) [][]reportShot {
 	return groups
 }
 
-type secretRow struct{ Severity, Kind, Value, Redacted, Where string }
+type secretRow struct {
+	Severity, Kind, Value, Redacted, Where string
+	Name, Rule                             string
+	Entropy                                float64
+}
 
 // secretRows lists the credentials the scripts carried, worst first, each
 // value once.
@@ -1456,7 +1460,10 @@ func secretRows(obs []types.StoredObservation) []secretRow {
 			continue
 		}
 		var p struct {
-			Secrets []struct{ Kind, Severity, Value, Script string }
+			Secrets []struct {
+				Kind, Severity, Value, Script, Name, Rule string
+				Entropy                                   float64
+			}
 		}
 		if json.Unmarshal(o.Payload, &p) != nil {
 			continue
@@ -1464,7 +1471,7 @@ func secretRows(obs []types.StoredObservation) []secretRow {
 		for _, s := range p.Secrets {
 			if !seen[s.Value] {
 				seen[s.Value] = true
-				out = append(out, secretRow{s.Severity, s.Kind, s.Value, webextract.Redact(s.Value), s.Script})
+				out = append(out, secretRow{s.Severity, s.Kind, s.Value, webextract.Redact(s.Value), s.Script, s.Name, s.Rule, s.Entropy})
 			}
 		}
 	}

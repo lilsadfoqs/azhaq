@@ -48,7 +48,7 @@ The output is the format you chose, on stdout.
 | `burp` | Burp Suite project options with the run's target scope. See [burp](#burp). |
 | `html` | One self-contained page. See [html](#html). |
 | `graphml` | The graph for Gephi, yEd or Cytoscape. |
-| `secrets` | Credentials found in scripts, tab-separated: severity, kind, value, script. |
+| `secrets` | Credentials found in scripts, tab-separated: severity, kind, value, script, name it was assigned to, rule that listed it. |
 
 ## Summary and exit codes
 
