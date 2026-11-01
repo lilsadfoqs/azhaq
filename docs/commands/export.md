@@ -38,7 +38,7 @@ The output is the format you chose, on stdout.
 | Format | Output |
 | --- | --- |
 | `jsonl` | Everything: one object per map row (`"kind":"entity"`, with `evidence` and `evidence_from`), observation and edge. |
-| `urls` | Every URL row of the workspace, one per line. The archives' URLs are kept as one example for each URL shape (200 a domain), not each one; when the run read more, a note on stderr gives both counts and points to `azhaq urls -o FILE`, which writes them all. |
+| `urls` | Every URL the workspace learned, one per line: the map's URL rows, and every URL the archives gave for the run, which the workspace keeps in `DB.urls.jsonl` beside it (the graph holds one example for each URL shape, 200 a domain). Each URL once. A workspace made before the list was kept holds only the examples, and stderr says how many archived URLs they stand for. |
 | `hosts` | One per line: names that resolve, and addresses given as targets or serving the web. |
 | `names` | Every name, one per line. |
 | `targets` | Web services, one per line, for `nuclei -l` and `httpx`. See Details. |

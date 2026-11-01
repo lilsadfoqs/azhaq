@@ -139,7 +139,7 @@ func cmdQuery(args []string) error {
 		rep.Notes = append(rep.Notes, fmt.Sprintf("%d rows matched; -limit %d printed the first %d (best first)", matched, *limit, len(out)))
 	}
 	if inList(*typ, string(types.TypeURL)) {
-		if n := urlcol.Held(g.obs); n != "" {
+		if n := urlcol.Held(g.obs, archiveListed(path, g.run)); n != "" {
 			rep.Notes = append(rep.Notes, n)
 		}
 	}
@@ -508,4 +508,11 @@ func portStates(rows []engine.MapEntry) map[string]int {
 		counts["open|filtered ports"] = filtered
 	}
 	return counts
+}
+
+// archiveListed: the workspace keeps the list of every archived URL of the run.
+func archiveListed(db, run string) bool {
+	found := false
+	_ = urlcol.ReadArchive(urlcol.ArchivePath(db), run, func(string, string) { found = true })
+	return found
 }

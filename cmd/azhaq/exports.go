@@ -40,6 +40,7 @@ import (
 // graphView is a database read once for the export formats.
 type graphView struct {
 	path  string
+	run   string // the run the view is of
 	stats store.Stats
 	rows  []engine.MapEntry
 	obs   []types.StoredObservation
@@ -71,7 +72,7 @@ func readGraph(path string) (*graphView, error) {
 	seeds, _ := st.LoadSeeds()
 	leftover, _ := st.LoadLeftover()
 	stats, _ := st.Stats()
-	g := &graphView{path: path, stats: stats, obs: obs, live: liveNames(st), args: st.RunArgs()}
+	g := &graphView{path: path, run: st.RunID(), stats: stats, obs: obs, live: liveNames(st), args: st.RunArgs()}
 	if raw := st.GetMeta("scope:" + st.RunID()); raw != "" {
 		var r scope.Rules
 		if json.Unmarshal([]byte(raw), &r) == nil {
@@ -129,13 +130,29 @@ func exportTo(path, format, origin string, safe bool, w io.Writer) error {
 	}
 	switch format {
 	case "urls":
+		// The graph's rows, then the rest of what the archives gave: the
+		// workspace keeps those in a list beside it.
+		seen := map[string]bool{}
 		for _, r := range g.rows {
-			if r.Entity.Type == types.TypeURL {
+			if r.Entity.Type == types.TypeURL && !seen[r.Entity.Key] {
+				seen[r.Entity.Key] = true
 				fmt.Fprintln(w, r.Entity.Key)
 			}
 		}
-		if n := urlcol.Held(g.obs); n != "" {
-			fmt.Fprintf(os.Stderr, "azhaq export: %s\n", n)
+		listed := false
+		if err := urlcol.ReadArchive(urlcol.ArchivePath(path), g.run, func(u, _ string) {
+			listed = true
+			if !seen[u] {
+				seen[u] = true
+				fmt.Fprintln(w, u)
+			}
+		}); err != nil {
+			return err
+		}
+		if !listed {
+			if n := urlcol.Held(g.obs, false); n != "" {
+				fmt.Fprintf(os.Stderr, "azhaq export: %s\n", n)
+			}
 		}
 	case "names":
 		// Every hostname in the graph, resolved or not.

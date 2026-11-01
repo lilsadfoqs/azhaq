@@ -6,6 +6,7 @@ package urlcol
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -51,6 +52,8 @@ type Options struct {
 	Filters   Filters           // sent to the archives that can apply them
 	Blacklist []string          // drop URLs whose path ends in one of these extensions
 	FirstPath bool              // keep one URL for each host and path
+	Archive   string            // the workspace's list of every URL read (ArchivePath); "" keeps none
+	RunID     string            // the run its lines belong to
 	Retries   *int              // per request, on 429, 503 and network errors; default: a 429 or 503 until the source's time is spent, a network error 3 times
 	Pause     *time.Duration    // between a source's requests; default per source, 0 none
 	Proxy     string            // http, https or socks5 address, when no Client is given
@@ -209,6 +212,9 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 	junked := map[string]bool{} // URLs on the domain left out as junk
 	byReason := map[string]int{}
 	var all []string
+	var archiveErr error
+	// A URL kept for its path is known only when the sources are done.
+	streamArchive := c.archiveOn() && !deferFirst
 	dropped := 0 // URLs past the cap
 	results := make([]outcome, len(c.sources))
 	var wg sync.WaitGroup
@@ -243,6 +249,13 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 			add := func(urls []string) {
 				mu.Lock()
 				defer mu.Unlock()
+				var batch bytes.Buffer
+				defer func() {
+					// Per page, so a run that is stopped keeps what it read.
+					if err := c.appendArchive(batch.Bytes()); err != nil && archiveErr == nil {
+						archiveErr = err
+					}
+				}()
 				for _, raw := range urls {
 					if c.opts.Raw && c.opts.OnURL != nil && onDomain(raw, domain, apex) && !out.blocked(raw) && !out.repeat(raw) {
 						c.opts.OnURL(raw, s.name)
@@ -266,6 +279,9 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 					seen[u] = true
 					from[u] = s.name
 					all = append(all, u)
+					if streamArchive {
+						c.archiveLine(&batch, u, s.name)
+					}
 					if !c.opts.Raw && c.opts.OnURL != nil {
 						c.opts.OnURL(u, s.name)
 					}
@@ -293,6 +309,18 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 	sort.Strings(all)
 	if deferFirst {
 		all = firstPerPath(all)
+		if c.archiveOn() {
+			var batch bytes.Buffer
+			for _, u := range all {
+				c.archiveLine(&batch, u, from[u])
+			}
+			if err := c.appendArchive(batch.Bytes()); err != nil && archiveErr == nil {
+				archiveErr = err
+			}
+		}
+	}
+	if archiveErr != nil {
+		return types.RunMeta{Status: types.StatusError, Error: "the URL list of the workspace: " + archiveErr.Error()}, archiveErr
 	}
 	// What was found is kept whatever stopped the run: a recon tool never
 	// throws away work it already did.
@@ -631,10 +659,11 @@ func shorten(s string) string {
 	return s
 }
 
-// Held says what a workspace keeps of the archived URLs a run read: one
-// example of each URL shape (up to maxEmit per domain), not every URL. It
-// is "" when the workspace holds them all or the run read no archive.
-func Held(obs []types.StoredObservation) string {
+// Held says what a workspace's graph keeps of the archived URLs a run read:
+// one example of each URL shape (up to maxEmit per domain), not every URL.
+// It is "" when the graph holds them all or the run read no archive. listed
+// says the workspace also keeps the list of them all (ArchivePath).
+func Held(obs []types.StoredObservation, listed bool) string {
 	examples, total := 0, 0
 	for _, o := range obs {
 		if o.Collector != Name {
@@ -655,5 +684,8 @@ func Held(obs []types.StoredObservation) string {
 	if total <= examples {
 		return ""
 	}
-	return fmt.Sprintf("the workspace holds %d template examples of the %d archived URLs the run read (one URL stands for every URL of its shape); `azhaq urls -o FILE` writes them all", examples, total)
+	if listed {
+		return fmt.Sprintf("the graph holds %d template examples of the %d archived URLs the run read (one URL stands for every URL of its shape): query lists the graph's rows, `azhaq export -format urls` all of them", examples, total)
+	}
+	return fmt.Sprintf("the workspace holds %d template examples of the %d archived URLs the run read, and no list of the rest (it was made by an older azhaq); `azhaq urls -o FILE` writes them all", examples, total)
 }

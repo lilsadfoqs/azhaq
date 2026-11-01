@@ -1065,6 +1065,9 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 			return usagef("-urls-proxy: %v", err)
 		}
 	}
+	if !out.scratch {
+		opts.URLs.Archive, opts.URLs.RunID = urlcol.ArchivePath(path), st.RunID()
+	}
 	if opts.URLs.Bases, err = archiveBases(urlsArchive); err != nil {
 		return usagef("-urls-archive: %v", err)
 	}

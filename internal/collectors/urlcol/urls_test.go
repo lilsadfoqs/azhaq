@@ -202,9 +202,10 @@ func TestGetterRetriesADroppedConnection(t *testing.T) {
 	}
 }
 
-// The graph keeps one example per URL shape, at most maxEmit a domain;
-// Held says so, so an export of the workspace is not taken for the list.
-func TestHeldSaysWhatTheWorkspaceKeeps(t *testing.T) {
+// The graph keeps one example per URL shape, at most maxEmit a domain; the
+// list beside the workspace keeps every URL, as the pages arrive, and a run
+// that asks again adds to it. Held says what the graph holds.
+func TestArchiveListKeepsEveryURL(t *testing.T) {
 	word := func(i int) string {
 		s := ""
 		for n := i + 26; n > 0; n /= 26 {
@@ -225,20 +226,51 @@ func TestHeldSaysWhatTheWorkspaceKeeps(t *testing.T) {
 	}))
 	defer srv.Close()
 	waybackBase = srv.URL
-	c := New(Options{Client: srv.Client(), Only: []string{"wayback"}})
-	c.pauses = nil
-	var obs []types.StoredObservation
-	if _, err := c.Run(context.Background(), types.Seed{Type: types.TypeDomain, Keys: map[string]string{"domain": "lab7stand.org"}}, func(o types.Observation) error {
-		obs = append(obs, types.StoredObservation{Observation: o})
-		return nil
-	}); err != nil {
-		t.Fatal(err)
+	list := filepath.Join(t.TempDir(), "w.db.urls.jsonl")
+	runOnce := func(run string) []types.StoredObservation {
+		c := New(Options{Client: srv.Client(), Only: []string{"wayback"}, Archive: list, RunID: run})
+		c.pauses = nil
+		var obs []types.StoredObservation
+		if _, err := c.Run(context.Background(), types.Seed{Type: types.TypeDomain, Keys: map[string]string{"domain": "lab7stand.org"}}, func(o types.Observation) error {
+			obs = append(obs, types.StoredObservation{Observation: o})
+			return nil
+		}); err != nil {
+			t.Fatal(err)
+		}
+		return obs
 	}
-	got := Held(obs)
-	if !strings.Contains(got, "holds 200 template examples of the 900 archived URLs") || !strings.Contains(got, "urls -o") {
+	obs := runOnce("r1")
+	count := func(run string) (n int, distinct int) {
+		seen := map[string]bool{}
+		if err := ReadArchive(list, run, func(u, src string) {
+			n++
+			seen[u] = true
+			if src != "wayback" {
+				t.Errorf("source %q", src)
+			}
+		}); err != nil {
+			t.Fatal(err)
+		}
+		return n, len(seen)
+	}
+	if n, d := count("r1"); n != 900 || d != 900 {
+		t.Fatalf("the list holds %d lines, %d distinct, want 900", n, d)
+	}
+	if got := Held(obs, true); !strings.Contains(got, "holds 200 template examples of the 900 archived URLs") || !strings.Contains(got, "export -format urls") {
 		t.Errorf("Held = %q", got)
 	}
-	if Held(nil) != "" {
+	if got := Held(obs, false); !strings.Contains(got, "no list of the rest") {
+		t.Errorf("Held without the list = %q", got)
+	}
+	if Held(nil, true) != "" {
 		t.Error("a run that read no archive has nothing to say")
+	}
+	runOnce("r1") // the run goes on: it adds, the first lines stay
+	runOnce("r2")
+	if n, _ := count("r1"); n != 1800 {
+		t.Errorf("a second pass of run r1 left %d lines, want 1800 (appended)", n)
+	}
+	if n, _ := count("r2"); n != 900 {
+		t.Errorf("run r2 has %d lines, want its own 900", n)
 	}
 }
