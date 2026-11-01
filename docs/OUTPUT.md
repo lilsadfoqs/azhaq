@@ -103,7 +103,7 @@ Some work failed and did not get its answer: a source that failed, a target that
 | `requests` | Requests sent to targets, port connects included. Requests to third-party sources are not counted. |
 | `db` | The database the results are in. Absent when it was temporary. |
 | `unreachable` | Targets you gave that never answered. |
-| `takeover` | Names another party may take over: `host`, `service`, `target` (the CNAME target), `evidence`, `strength`. See [takeover](#takeover). |
+| `takeover` | Names another party may take over: `host`, `service`, `target` (the CNAME target), `evidence`, `strength` and, for `dangling`, `list` (the public list's entry and when azhaq read it). See [takeover](#takeover). |
 | `failed` | Work that did not get its answer, grouped by collector, source and error, most frequent first. See [failed](#failed). |
 | `skipped` | Targets and requests azhaq did not send, with the reason. See [skipped](#skipped). |
 | `junk` | `urls` only: the URLs left out as junk, by reason. See [urls](commands/urls.md#junk). |

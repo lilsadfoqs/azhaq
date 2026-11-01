@@ -361,3 +361,30 @@ func TestSecretDetailShowsTheEvidence(t *testing.T) {
 		t.Errorf("a secret with no evidence: %q", d)
 	}
 }
+
+// A CNAME to a cloud name that does not resolve rests on one DNS answer: a
+// candidate that sorts after a strong takeover and after any row the server
+// answered, however few signals it has.
+func TestDanglingTakeoverIsAnUnverifiedCandidate(t *testing.T) {
+	rows := Build(Input{DB: "w.db", Now: now,
+		Rows: []engine.MapEntry{
+			urlRow("http://t.test/q?id=1", "page", "visited", 200, func(r *engine.MapEntry) { r.Params = []string{"zz"} }),
+		},
+		Takeovers: []Takeover{
+			{Host: "assets.t.test", Dangling: true, Detail: "unverified: NXDOMAIN does not show the name is free: Azure candidate"},
+			{Host: "old.t.test", Strong: true, Detail: "s3 takeover"},
+		}})
+	d := find(rows, "assets.t.test")
+	if d == nil || !has(d, "takeover-candidate") || has(d, "takeover") {
+		t.Fatalf("dangling row: %+v", rows)
+	}
+	if !strings.Contains(d.Reasons[0].Detail, "unverified: NXDOMAIN does not show the name is free") {
+		t.Errorf("reason: %+v", d.Reasons)
+	}
+	if find(rows, "old.t.test").Rank != 1 || d.Rank != len(rows) {
+		t.Errorf("want the strong row first and the candidate after the answered page: %+v", rows)
+	}
+	if d.Score >= weights["takeover"] {
+		t.Errorf("a candidate scores %d, as much as a finding", d.Score)
+	}
+}

@@ -40,7 +40,10 @@ type Secret struct {
 type Takeover struct {
 	Host   string
 	Strong bool
-	Detail string
+	// Dangling: the claim rests on a CNAME target that does not resolve and
+	// nothing else.
+	Dangling bool
+	Detail   string
 }
 
 // Reason is one piece of evidence for a row's rank.
@@ -63,7 +66,7 @@ type Row struct {
 
 	scope   string
 	signals int  // distinct signals, "new" not counted
-	named   bool // every instance is a route a script names and the server did not confirm
+	named   bool // nothing but a script's naming or a DNS answer: no server confirmed it
 }
 
 // Template says a row is an origin's template input: on Pages of its Of
@@ -84,8 +87,9 @@ type cand struct {
 	roleDir         string // and the -dir of the roles run that listed it
 	origin          string
 	fresh           bool
-	named           int // instances only a script names, whose GET answered 404 or 410
-	namedGET        int // that status
+	named           int  // instances only a script names, whose GET answered 404 or 410
+	dangling        bool // a takeover that rests on NXDOMAIN alone
+	namedGET        int  // that status
 	tmpl            *Template
 }
 
@@ -148,7 +152,7 @@ func Build(in Input) []Row {
 }
 
 // sortRows orders best first: rows the server confirmed before routes only a
-// script names, then by score, then target scope before fan-out,
+// script names and names that rest on NXDOMAIN alone, then by score, then target scope before fan-out,
 // then more distinct signals, then key.
 func sortRows(out []Row) {
 	sort.Slice(out, func(i, j int) bool {
@@ -197,7 +201,10 @@ func (c *cand) add(signal, detail string) { c.addW(signal, weights[signal], deta
 func (c *cand) row(db string) Row {
 	rs := append([]Reason(nil), c.reasons...)
 	named := c.named > 0 && c.named == len(c.instances)
-	if named {
+	if c.dangling && len(c.weights) == 1 {
+		named = true
+	}
+	if named && !c.dangling {
 		rs = append(rs, Reason{"unconfirmed", fmt.Sprintf("named by a script, not confirmed: GET %d", c.namedGET)})
 	}
 	sort.SliceStable(rs, func(i, j int) bool { return c.weights[rs[i].Signal] > c.weights[rs[j].Signal] })

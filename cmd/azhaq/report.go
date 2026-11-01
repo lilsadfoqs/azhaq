@@ -206,7 +206,11 @@ func (r *report) print(w io.Writer) {
 		}
 	}
 	for _, t := range r.Takeover {
-		fmt.Fprintf(w, "  ! takeover candidate (%s): %s · %s\n", t.Strength, t.Host, t.Evidence)
+		line := fmt.Sprintf("  ! takeover candidate (%s): %s · %s", t.Strength, t.Host, t.Evidence)
+		if t.List != "" {
+			line += " [" + t.List + "]"
+		}
+		fmt.Fprintln(w, line)
 	}
 	for _, n := range r.Notes {
 		fmt.Fprintf(w, "  note: %s\n", n)

@@ -627,6 +627,11 @@ func (h *hunter) secrets() {
 func (h *hunter) takeovers() {
 	for _, t := range h.in.Takeovers {
 		c := h.get("Hostname", t.Host, "target")
+		if t.Dangling && !t.Strong {
+			c.dangling = true
+			c.addW("takeover-candidate", weights["takeover-candidate"], t.Detail)
+			continue
+		}
 		w := weights["takeover"]
 		if t.Strong {
 			w = takeoverStrong

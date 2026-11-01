@@ -63,7 +63,8 @@ $ azhaq hunt -db app.db
 | Signal | Raised by |
 | --- | --- |
 | `cross-role` | A `-roles` verdict that one role reached another's data. The heaviest signal: see [Cross-role rows](#cross-role-rows). |
-| `takeover` | A name another party may take over. |
+| `takeover` | A name another party may take over, on a service's own page or a domain nobody holds. |
+| `takeover-candidate` | A CNAME to a cloud name that does not resolve (`dangling`). It rests on NXDOMAIN alone: `unverified: NXDOMAIN does not show the name is free`. See [Takeover candidates](../CONCEPTS.md#what-a-dangling-row-rests-on). |
 | `secret` | A credential a script carries. The reason names the file and gives the evidence: the name it was assigned to, the value redacted, the rule that listed it and, for a generic secret, its entropy. See [Secret candidates](#secret-candidates). |
 | `sourcemap` | A source map served. |
 | `exposed-file` | A backup, key, database or archive file, or a `.git` directory, served: see [Exposed files](#exposed-files). |
@@ -100,13 +101,13 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 ### Score and order
 
 - The score is the sum of the row's signals. Each signal counts once, at its highest weight.
-- Rows only a script names and the server did not confirm come after every other row, whatever their score: see [Routes only a script names](#routes-only-a-script-names).
+- Rows only a script names and the server did not confirm, and a `takeover-candidate` that is the row's only signal, come after every other row, whatever their score: see [Routes only a script names](#routes-only-a-script-names).
 - Ties go to the target before fan-out, then to the row with more distinct signals, then by key. [Concepts](../CONCEPTS.md#reading-a-map-row) explains target and fan-out.
 - `-limit` (default 25) keeps the best rows.
 
 ### Weights
 
-- `takeover`: `strong` weighs more than `dangling` and `page`.
+- `takeover`: `strong` weighs more than `page`. `dangling` is its own signal, `takeover-candidate`, weighing 20.
 - `secret`: weighed by the credential's severity.
 - `object-id`: a route with no GET weighs less.
 - `unauth-write`: weighs less when no GET showed that the route answers.
