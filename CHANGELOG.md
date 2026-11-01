@@ -50,6 +50,7 @@
 - `urls` drops `/FUZZMultiple`, a fuzz keyword behind stray symbols (`%CB%93%E2%86%92FUZZ`, `FUZZ000003:C=200`), `/../` inside a query name and an injection glued to a value (`1union select`, `from information_schema.`) as junk.
 - A `-cookie` or `-header` run no longer measures a route without its session after an answer that looked like the end of the session, which made it take a revoked session's answer for a live one, miss the end and exit 0; it stops with exit 3, and a response that gives the user's cookie another value asks for a check too.
 - `export -format openapi` no longer lists the address the description was read from (`/openapi.json`) as a path of the API it describes, unless the description lists it.
+- A signed-in run's session check no longer sends a request without the session while a logout is in flight: its measurement of a check page waits until no request is in the air and holds the others back while it is out, and answers that clear or replace the user's cookie, a 401 or a redirect to the sign-in page are noticed as they arrive.
 
 ## v0.13.0
 
