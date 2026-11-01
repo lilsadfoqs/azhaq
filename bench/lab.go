@@ -177,7 +177,7 @@ func benchLab() *labRow {
 
 	// A passive run with the brute force names the dangling CNAMEs as takeover candidates.
 	db := filepath.Join(dir, "lab-"+time.Now().Format("150405")+".db")
-	r := azRun("lab", 5*time.Minute, dir, "run", "-domain", labDomain, "-passive", "-sources", "none", "-skip", "azhaq-cdx,azhaq-rdap",
+	r := azRun("lab", 5*time.Minute, dir, "run", "-domain", labDomain, "-passive", "-sources", "none", "-skip", "azhaq-urls,azhaq-rdap",
 		"-dns-brute", wl, "-allow", labDomain, "-resolvers", res, "-db", db)
 	for _, n := range []string{"assets", "docs", "old-shop"} {
 		if strings.Contains(r.stdout+r.stderr, "dangling): "+n+"."+labDomain) {
