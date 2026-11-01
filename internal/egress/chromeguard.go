@@ -22,6 +22,13 @@ import (
 	"github.com/lilsadfoqs/azhaq/internal/ledger"
 )
 
+// ChromeOff is the host Chrome's own service roots point at (sign-in,
+// Google APIs, the component updater): a reserved name that never resolves
+// and no scope holds, which the guard refuses without counting. A loopback
+// address would share its cookies with a loopback target, and Chrome would
+// ask its sign-in service about every cookie that target sets.
+const ChromeOff = "chrome-off.invalid"
+
 // ChromeGuard is a SOCKS5 proxy on loopback that Chrome makes every connection
 // through. The Fetch domain pauses requests, not connections: a WebSocket,
 // a preconnect or Chrome's own services (updates, sign-in, time) reaching
@@ -188,6 +195,10 @@ func (g *ChromeGuard) handle(c net.Conn) {
 	}
 	portNum := strconv.Itoa(int(binary.BigEndian.Uint16(port)))
 	addr := net.JoinHostPort(host, portNum)
+	if host == ChromeOff {
+		reply(socksNotAllowed)
+		return
+	}
 	if !g.allowed(host) {
 		g.refuse(host)
 		reply(socksNotAllowed)

@@ -926,7 +926,7 @@ A domain the engine derives from a URL or hostname gets 15 seconds per source in
 
 ## Path guessing
 
-`-dirs FILE` is active. `@common` is the built-in SecLists `common.txt` (MIT, 4,750 words). The targets given are its scope unless `-allow` or `-scope` names one.
+`-dirs FILE` is active. `@common` is the built-in SecLists `common.txt` (MIT, 4,747 words, the list without three entries that name an outside address). The targets given are its scope unless `-allow` or `-scope` names one.
 
 ### Where it sweeps
 
@@ -1225,7 +1225,7 @@ When Chrome starts, every request of the browser is paused through the DevTools 
 
 ### Connections the Fetch domain does not see
 
-What connects without a request the Fetch domain sees is stopped by a SOCKS5 proxy on loopback. This covers a WebSocket, a preconnect, and Chrome's own update and sign-in services. Chrome makes every connection through it, loopback ones too. It connects only to hosts the same predicate admits (`internal/browser/guard.go`). Chrome is also started with the flags that turn its background networking off (component and extension updates, sync, field trials, domain reliability, safe browsing, the time service). A current Chrome still reaches for accounts.google.com and update.googleapis.com at start-up whatever the flags say, so the guard refuses those connections and counts them: the summary says `Chrome's own services reached for N connections outside the scope (…); all were refused, none was sent`.
+What connects without a request the Fetch domain sees is stopped by a SOCKS5 proxy on loopback. This covers a WebSocket, a preconnect, and Chrome's own update and sign-in services. Chrome makes every connection through it, loopback ones too. It connects only to hosts the same predicate admits (`internal/browser/guard.go`). Chrome is also started so that its own services never try: the flags that turn its background networking off (component and extension updates, sync, field trials, domain reliability, safe browsing, the time service), the component updater switched off, its sign-in, Google APIs and Google base addresses pointed at `chrome-off.invalid` (a name that never resolves, which the guard refuses without counting; a loopback address would share its cookies with a loopback target), and a new profile whose preferences switch off sign-in, safe browsing, password leak checks and suggestions. A profile that already exists (`-chrome-profile`) keeps its own preferences, so a service it enables can still reach out. The guard stays the second line: it refuses such a connection and counts it, and then the summary says `Chrome's own services reached for N connections outside the scope (…); all were refused, none was sent`.
 
 1. The guard connects once Chrome has sent its first bytes, as the run's own requests would.
 2. TLS goes through the environment's `HTTPS_PROXY`. Plain HTTP goes through `HTTP_PROXY`, whatever the port. Without a proxy, it connects directly with the run's DNS answers.
@@ -1362,6 +1362,7 @@ Chrome itself is set with:
 
 - `-chrome PATH`;
 - `-chrome-proxy URL`, http or socks5, for Chrome's own connections only. `-proxy` takes the run's own requests and Chrome's;
+- `-chrome-require-sandbox`, which refuses to run Chrome without its sandbox. By default, where Chrome says the system gives it none, it is started once more without it and the summary notes it.
 - `-chrome-profile DIR`, a user data directory that is kept. Sessions in it go with the pages. They are the target's only if the scope says so.
 
 The run's `-H` and `-cookie` values and its user agent go with every request.

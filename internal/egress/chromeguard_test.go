@@ -87,6 +87,10 @@ func TestChromeGuardRelaysToTheScopeOnly(t *testing.T) {
 	if _, err := d.Dial("tcp", "192.0.2.1:80"); err == nil {
 		t.Fatal("a host outside the scope was relayed")
 	}
+	// Chrome's own services, pointed at ChromeOff, are refused uncounted.
+	if _, err := d.Dial("tcp", ChromeOff+":80"); err == nil {
+		t.Fatal("ChromeOff was relayed")
+	}
 	if n, hosts := g.Denied(); n != 1 || len(hosts) != 1 || hosts[0] != "192.0.2.1" {
 		t.Fatalf("denied %d %v", n, hosts)
 	}
