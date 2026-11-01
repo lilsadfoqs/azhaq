@@ -1,4 +1,6 @@
-# Local targets for `go run ./bench`. Pinned so numbers stay comparable.
+# Local targets for `go run ./bench`. Pinned (tag and digest) so numbers stay
+# comparable; bench/images.env lists the same images as .github/ci/labs.sh
+# starts, and a test keeps them equal.
 name: azhaq-bench
 
 services:

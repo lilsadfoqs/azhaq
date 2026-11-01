@@ -368,10 +368,11 @@ func TestReportWritesUpACreateInAnotherRolesCollection(t *testing.T) {
 		docs = append(docs, d)
 	}
 	for _, d := range docs {
-		if d.Class != classCreate || d.Verdict != verdictWriteCreate || d.Severity.Level != "low" {
+		// The answers say nothing of whose book it is: accepted, no vulnerability named.
+		if d.Class != classAccepted || d.Verdict != verdictWriteAccepted || d.Severity.Level != "low" {
 			t.Errorf("class %q verdict %q severity %q", d.Class, d.Verdict, d.Severity.Level)
 		}
-		if !strings.Contains(d.Title, "creates in ") || !strings.Contains(d.Title, "via POST /books/v1") {
+		if !strings.HasPrefix(d.Title, "Create accepted: ") || !strings.Contains(d.Title, "'s POST to /books/v1 was accepted") || strings.Contains(d.Title, "Missing authorization") {
 			t.Errorf("title %q", d.Title)
 		}
 		kinds := map[string]bool{}
@@ -398,7 +399,7 @@ func TestReportWritesUpACreateInAnotherRolesCollection(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"# Missing authorization on create:", "creates in", "## Where the create comes from", "-X POST", "Expected: 200"} {
+	for _, want := range []string{"# Create accepted:", "was accepted", "## Where the create comes from", "-X POST", "Expected: 200", "nothing says the server ignores who may create"} {
 		if !strings.Contains(rep, want) {
 			t.Errorf("the report lacks %q:\n%s", want, rep)
 		}

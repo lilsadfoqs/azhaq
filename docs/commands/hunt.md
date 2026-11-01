@@ -63,7 +63,8 @@ $ azhaq hunt -db app.db
 | Signal | Raised by |
 | --- | --- |
 | `cross-role` | A `-roles` verdict that one role reached another's data. The heaviest signal: see [Cross-role rows](#cross-role-rows). |
-| `takeover` | A name another party may take over. |
+| `takeover` | A name another party may take over, on a service's own page or a domain nobody holds. |
+| `takeover-candidate` | A CNAME to a cloud name that does not resolve (`dangling`). It rests on NXDOMAIN alone: `unverified: NXDOMAIN does not show the name is free`. See [Takeover candidates](../CONCEPTS.md#what-a-dangling-row-rests-on). |
 | `secret` | A credential a script carries. The reason names the file and gives the evidence: the name it was assigned to, the value redacted, the rule that listed it and, for a generic secret, its entropy. See [Secret candidates](#secret-candidates). |
 | `sourcemap` | A source map served. |
 | `exposed-file` | A backup, key, database or archive file, or a `.git` directory, served: see [Exposed files](#exposed-files). |
@@ -79,6 +80,7 @@ $ azhaq hunt -db app.db
 | `server-error` | A 5xx, weighed by what shows beside it: see [Server errors](#server-errors). |
 | `input` | The route takes query, body or form names. |
 | `new` | First seen within `-since`. |
+| `unconfirmed` | A route that only a script names, whose GET answered 404 or 410. It adds no weight: see [Routes only a script names](#routes-only-a-script-names). |
 | `path-auth`, `path-search` | A word in the path says it signs in or issues a session, or that it searches and filters: see [Words in paths](#words-in-paths). |
 | `param-command`, `param-url`, `param-file`, `param-debug`, `param-redirect`, `param-query`, `param-callback` | A parameter name that says what it takes. |
 | `path-admin`, `path-debug`, `path-config`, `path-env`, `path-doc`, `path-function`, `path-data` | A word in the path says what the route is for. The first five also read the labels of a host name that resolves. |
@@ -99,12 +101,13 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 ### Score and order
 
 - The score is the sum of the row's signals. Each signal counts once, at its highest weight.
+- Rows only a script names and the server did not confirm, and a `takeover-candidate` that is the row's only signal, come after every other row, whatever their score: see [Routes only a script names](#routes-only-a-script-names).
 - Ties go to the target before fan-out, then to the row with more distinct signals, then by key. [Concepts](../CONCEPTS.md#reading-a-map-row) explains target and fan-out.
 - `-limit` (default 25) keeps the best rows.
 
 ### Weights
 
-- `takeover`: `strong` weighs more than `dangling` and `page`.
+- `takeover`: `strong` weighs more than `page`. `dangling` is its own signal, `takeover-candidate`, weighing 20.
 - `secret`: weighed by the credential's severity.
 - `object-id`: a route with no GET weighs less.
 - `unauth-write`: weighs less when no GET showed that the route answers.
@@ -115,7 +118,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 
 - A `secret` reason reads `generic-secret (medium) in URL; name apiToken, value Zx81Qp…7Ks, rule: name says secret, value looks random, entropy 4.3`.
 - The rule is `known key format` (an AWS, GitHub, Stripe, Slack or similar key, a private key, a JWT), `variable a bundler inlined` (a `VITE_` or `NEXT_PUBLIC_` variable, severity `info`) or `name says secret, value looks random`.
-- The last rule needs a property whose name holds `secret`, `token`, `password`, `apikey` and similar words, assigned a string of 8 characters or more with entropy of 3.2 bits per character or more. It leaves out placeholders, a parser's token tables, values with much punctuation, a class name a CSS module made (`_tokensUsage_dypaw_41`) and a value that repeats its own name (`secretName: "secretName-input"`).
+- The last rule needs a property whose name holds `secret`, `token`, `password`, `apikey` and similar words, assigned a string of 8 characters or more with entropy of 3.2 bits per character or more. It leaves out placeholders, a parser's token tables, values with much punctuation, a class name a CSS module made (`_tokensUsage_dypaw_41`) a value that repeats its own name (`secretName: "secretName-input"`) and a translation key or a reference to one: two or more words of letters only, joined by `_` or `-`, each with a vowel and no capital after its first letter, and an optional leading `@` (`@Button_Cancel`, `Enter_Your_Password`). A value with a digit or a capital inside a word is still listed.
 - A `medium` candidate needs a human: read the value in `azhaq export -format secrets` before acting on it.
 
 ### Cross-role rows
@@ -157,6 +160,16 @@ A 5xx is a lead, not a finding. Its weight depends on what shows beside it:
 - `path-search`: a word that says the route searches or filters: `search`, `find`, `filter`, `query`, `lookup`. Weight 35.
 - A route that a script or a description gives methods for counts in full, even when it was not asked.
 - A named route that nobody calls weighs half.
+- A route whose GET answered 405, 400, 415 or 422 counts in full: the server has it, it only refused this request.
+
+### Routes only a script names
+
+A script that names a route says the client calls it, not that the server has it, and a GET that answers 404 or 410 shows nothing of a POST-only route either. A row of such a route (`hint` coverage, status 404 or 410) is not an answer to anything:
+
+- Its path words and an exposed-file name weigh nothing, and its reasons say `unconfirmed: named by a script, not confirmed: GET 404`, not `answers 404`.
+- It still keeps the signals the script gives it (the fields it sends, a write without credentials), and it comes after every row the server confirmed (200, 401, 403, 405 and other 4xx that are not 404 or 410, 5xx), whatever their scores.
+- A route template where one instance is confirmed is a confirmed row.
+- When nothing else is known of the route the row is left out.
 
 ### The next command
 

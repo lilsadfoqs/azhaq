@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"regexp"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -196,7 +197,8 @@ func TestClaimsSkipsOnlyTheDeadApp(t *testing.T) {
 	}
 }
 
-// bench's table of lab apps is what .github/ci/labs.sh starts.
+// bench's table of lab apps is what .github/ci/labs.sh starts, with the
+// image of bench/images.env, the one list of pinned images.
 func TestLabAppsMatchLabsScript(t *testing.T) {
 	raw, err := os.ReadFile("../.github/ci/labs.sh")
 	if err != nil {
@@ -221,6 +223,48 @@ func TestLabAppsMatchLabsScript(t *testing.T) {
 		}
 		if port := a.url[strings.LastIndex(a.url, ":")+1:]; !strings.Contains(line, "127.0.0.1:"+port+":") {
 			t.Errorf("%s: labs.sh does not publish port %s", a.name, port)
+		}
+	}
+}
+
+// Every image of the labs and of the bench's compose file is pinned by tag
+// and digest, and is the one bench/images.env lists: three places name each
+// image (labs.sh, compose.yaml and the list), and none may differ.
+func TestLabImagesPinnedFromOneList(t *testing.T) {
+	pin := regexp.MustCompile(`^[a-z0-9./-]+:[A-Za-z0-9._-]+@sha256:[0-9a-f]{64}$`)
+	images := labImages()
+	if len(images) < 5 {
+		t.Fatalf("images.env holds %d images: %v", len(images), images)
+	}
+	listed := map[string]bool{}
+	for k, v := range images {
+		listed[v] = true
+		if !pin.MatchString(v) {
+			t.Errorf("%s=%s is not pinned by tag and digest", k, v)
+		}
+	}
+	used := map[string]bool{}
+	files := map[string]string{"compose.yaml": "image: ", "../.github/ci/labs.sh": "docker run -d"}
+	for file, marker := range files {
+		raw, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, l := range strings.Split(string(raw), "\n") {
+			if !strings.Contains(l, marker) || strings.HasPrefix(strings.TrimSpace(l), "#") {
+				continue
+			}
+			f := strings.Fields(l)
+			img := f[len(f)-1]
+			if !listed[img] {
+				t.Errorf("%s names %s, which images.env does not list: %s", file, img, l)
+			}
+			used[img] = true
+		}
+	}
+	for k, v := range images {
+		if !used[v] {
+			t.Errorf("%s=%s is in no compose.yaml or labs.sh", k, v)
 		}
 	}
 }

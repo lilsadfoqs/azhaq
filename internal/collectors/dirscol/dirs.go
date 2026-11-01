@@ -15,6 +15,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -28,6 +29,7 @@ import (
 	"github.com/lilsadfoqs/azhaq/internal/limit"
 	"github.com/lilsadfoqs/azhaq/internal/neterr"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
+	"github.com/lilsadfoqs/azhaq/internal/pagesim"
 	"github.com/lilsadfoqs/azhaq/types"
 )
 
@@ -255,13 +257,14 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		return nil
 	}
 	var emitErr error
+	var note sweepNote
 	for len(queue) > 0 && ctx.Err() == nil && emitErr == nil {
 		d := queue[0]
 		queue = queue[1:]
 		if _, done := c.swept.LoadOrStore(d.url, true); done {
 			continue
 		}
-		hits, n, f, x, lim, held, spent, err := c.sweep(ctx, d.url, found)
+		hits, n, f, x, lim, held, spent, err := c.sweep(ctx, d.url, &note, found)
 		if err != nil {
 			emitErr = err
 		}
@@ -292,6 +295,7 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 	summary, _ := json.Marshal(map[string]any{
 		"base": base, "words": len(c.Opts.Words), "extensions": c.Opts.Extensions, "requests": requests,
 		"hits": len(all), "filtered": filtered, "failed": failed, "rate_limited": limited, "depth": c.Opts.Depth,
+		"held": note.shaped.Load(), "unfiltered": note.unfiltered(),
 	})
 	if err := emit(types.Observation{Collector: Name, Source: base, Kind: "dirs", Payload: summary, Confidence: 0.9, ObservedAt: time.Now().UTC()}); err != nil {
 		return meta, err
@@ -355,7 +359,7 @@ const (
 // spent says the request budget ran out before it was
 // through; limited counts the answers that were 429, which no default
 // matcher keeps; err is what found returned.
-func (c *Collector) sweep(ctx context.Context, dir string, found func([]hit) error) (_ []hit, _ int, _ int, failed, limited int, held []heldURL, spent bool, err error) {
+func (c *Collector) sweep(ctx context.Context, dir string, note *sweepNote, found func([]hit) error) (_ []hit, _ int, _ int, failed, limited int, held []heldURL, spent bool, err error) {
 	host := schemeHost(dir)
 	cal := calibration{echo: map[int]bool{}, vary: map[int]bool{}}
 	if !c.Opts.NoCalibration {
@@ -363,6 +367,7 @@ func (c *Collector) sweep(ctx context.Context, dir string, found func([]hit) err
 		if cal, dead = c.calibrate(ctx, dir, host); dead != nil {
 			return nil, 0, 0, 0, 0, nil, false, dead
 		}
+		note.loose(dir, cal.unfiltered)
 	}
 	var targets []string
 	for _, w := range c.Opts.Words {
@@ -422,7 +427,7 @@ func (c *Collector) sweep(ctx context.Context, dir string, found func([]hit) err
 	// request that got none.
 	ask := func(word string) error {
 		target := dir + escapeWord(word)
-		r, err := c.get(ctx, target, "")
+		r, err := c.get(ctx, target, "", len(cal.shapes) > 0)
 		if errors.Is(err, neterr.ErrBudget) {
 			out.Store(true)
 		}
@@ -438,8 +443,11 @@ func (c *Collector) sweep(ctx context.Context, dir string, found func([]hit) err
 		if !c.matches(r) {
 			return nil
 		}
-		if cal.explains(r, word) {
+		if by := cal.explains(r, word); by != byNothing {
 			filtered.Add(1)
+			if by == byShape {
+				note.shaped.Add(1)
+			}
 			return nil
 		}
 		pending <- hit{URL: target, Status: r.Status, Length: r.Length, Words: r.Words, Lines: r.Lines, Location: r.Location}
@@ -524,9 +532,10 @@ var errCutOff = errors.New("answer cut off")
 type response struct {
 	Status, Length, Words, Lines int
 	Location                     string
-	Echo                         bool        `json:",omitempty"` // calibration: the body names the path asked
-	Header                       http.Header `json:"-"`
-	Body                         []byte      `json:"-"`
+	Echo                         bool          `json:",omitempty"` // calibration: the body names the path asked
+	Page                         *pagesim.Page `json:",omitempty"` // what the body is, when calibration needs the shape of pages
+	Header                       http.Header   `json:"-"`
+	Body                         []byte        `json:"-"`
 }
 
 // pace waits for a pace slot before target is asked, unless its answer is
@@ -551,7 +560,7 @@ func (c *Collector) recalled(target string) bool {
 
 // get asks for target. probe, set for calibration, is the name asked: the
 // answer says whether its body repeats it.
-func (c *Collector) get(ctx context.Context, target, probe string) (response, error) {
+func (c *Collector) get(ctx context.Context, target, probe string, page bool) (response, error) {
 	// A guess the run made before it was stopped is not sent again (not
 	// with a pattern: the memo holds no body).
 	memo := fetch.Memos != nil && !c.needBody
@@ -563,9 +572,9 @@ func (c *Collector) get(ctx context.Context, target, probe string) (response, er
 			}
 		}
 	}
-	r, err := c.send(ctx, target, probe)
+	r, err := c.send(ctx, target, probe, page)
 	if errors.Is(err, errCutOff) && ctx.Err() == nil {
-		r, err = c.send(ctx, target, probe)
+		r, err = c.send(ctx, target, probe, page)
 	}
 	if err == nil && memo {
 		if raw, err := json.Marshal(r); err == nil {
@@ -584,7 +593,7 @@ const keepBody = 1 << 20
 
 var chunks = sync.Pool{New: func() any { b := make([]byte, 32<<10); return &b }}
 
-func (c *Collector) send(ctx context.Context, target, probe string) (response, error) {
+func (c *Collector) send(ctx context.Context, target, probe string, page bool) (response, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
 	if err != nil {
 		return response{}, err
@@ -601,7 +610,7 @@ func (c *Collector) send(ctx context.Context, target, probe string) (response, e
 	// Counted as it streams, as ffuf counts the body: words are spaces+1
 	// and lines newlines+1 of the whole of it.
 	r := response{Status: resp.StatusCode, Location: resp.Header.Get("Location"), Words: 1, Lines: 1}
-	keep := c.needBody || probe != ""
+	keep := c.needBody || probe != "" || page
 	var kept []byte
 	buf := chunks.Get().(*[]byte)
 	defer chunks.Put(buf)
@@ -631,14 +640,47 @@ func (c *Collector) send(ctx context.Context, target, probe string) (response, e
 	if probe != "" {
 		r.Echo = bytes.Contains(kept, []byte(probe))
 	}
+	if (probe != "" || page) && len(kept) > 0 {
+		p := pagesim.Of(kept)
+		r.Page = &p
+	}
 	return r, nil
 }
 
 // calibration holds what a directory answers for paths that cannot exist.
 type calibration struct {
-	base []response
-	echo map[int]bool // statuses whose body or redirect echoes the path
-	vary map[int]bool // statuses whose answers differ in size
+	base   []response
+	echo   map[int]bool          // statuses whose body or redirect echoes the path
+	vary   map[int]bool          // statuses whose answers differ in size
+	shapes map[int]pagesim.Shape // statuses whose answers differ in every number but are one page
+	// unfiltered: statuses whose answers the user's matchers keep and that
+	// share no size, no word and line counts and no page: nothing tells
+	// them from a path that exists.
+	unfiltered []int
+}
+
+// sweepNote is what a run's sweeps say of calibration beyond the paths:
+// the answers held back for being the calibration's page, and the
+// directories where calibration could filter nothing.
+type sweepNote struct {
+	shaped atomic.Int64
+	mu     sync.Mutex
+	dirs   []string
+}
+
+func (n *sweepNote) loose(dir string, statuses []int) {
+	if len(statuses) == 0 {
+		return
+	}
+	n.mu.Lock()
+	n.dirs = append(n.dirs, dir)
+	n.mu.Unlock()
+}
+
+func (n *sweepNote) unfiltered() []string {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	return slices.Clone(n.dirs)
 }
 
 // calibrate asks for random names of the shapes ffuf's -ac uses (a word,
@@ -673,7 +715,7 @@ func (c *Collector) calibrate(ctx context.Context, dir, host string) (cal calibr
 			defer guard.Recover(ctx)
 			defer wg.Done()
 			defer func() { <-sem }()
-			r, err := c.get(ctx, dir+s, probes[i])
+			r, err := c.get(ctx, dir+s, probes[i], false)
 			answers[i] = answer{r, err}
 		}()
 	}
@@ -705,7 +747,70 @@ func (c *Collector) calibrate(ctx context.Context, dir, host string) (cal calibr
 			cal.echo[r.Status] = true
 		}
 	}
+	c.learn(&cal)
 	return cal, lost
+}
+
+// learn reads the page the answers of a status are when their sizes differ
+// and nothing else they count is shared, and notes the statuses where
+// nothing tells them from a path that exists.
+func (c *Collector) learn(cal *calibration) {
+	by := map[int][]response{}
+	var order []int
+	for _, r := range cal.base {
+		if _, ok := by[r.Status]; !ok {
+			order = append(order, r.Status)
+		}
+		by[r.Status] = append(by[r.Status], r)
+	}
+	for _, st := range order {
+		rs := by[st]
+		if len(rs) < 2 || !cal.vary[st] || !slices.ContainsFunc(rs, c.matches) {
+			continue
+		}
+		var pages []pagesim.Page
+		for _, r := range rs {
+			if r.Page != nil {
+				pages = append(pages, *r.Page)
+			}
+		}
+		if len(pages) == len(rs) {
+			if shape, ok := pagesim.Learn(pages); ok {
+				if cal.shapes == nil {
+					cal.shapes = map[int]pagesim.Shape{}
+				}
+				cal.shapes[st] = shape
+				continue
+			}
+		}
+		if sharesCount(rs) || cal.echo[st] && sharesCountAll(rs) {
+			continue // explains: the same word and line counts say so
+		}
+		cal.unfiltered = append(cal.unfiltered, st)
+	}
+}
+
+// sharesCount: some two answers have the same word and line counts (what
+// explains takes for a page of that size's family).
+func sharesCount(rs []response) bool {
+	for i, a := range rs {
+		for _, b := range rs[i+1:] {
+			if a.Words == b.Words && a.Lines == b.Lines {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// sharesCountAll: every answer has the same word and line counts.
+func sharesCountAll(rs []response) bool {
+	for _, r := range rs[1:] {
+		if r.Words != rs[0].Words || r.Lines != rs[0].Lines {
+			return false
+		}
+	}
+	return true
 }
 
 // explains is true when r looks like an answer to a path that does not
@@ -716,30 +821,44 @@ func (c *Collector) calibrate(ctx context.Context, dir, host string) (cal calibr
 // size that differs by what the path's length adds. A redirect is
 // explained when it echoes the path the way calibration did, or goes where
 // they went.
-func (cal calibration) explains(r response, word string) bool {
+func (cal calibration) explains(r response, word string) explainedBy {
 	for _, b := range cal.base {
 		if r.Status != b.Status {
 			continue
 		}
 		if r.Length == b.Length {
-			return true
+			return bySize
 		}
 		if cal.vary[b.Status] && r.Words == b.Words && r.Lines == b.Lines {
-			return true
+			return bySize
 		}
 		// Bodies that echo the path differ by the path's length.
 		if cal.echo[b.Status] && r.Words == b.Words && r.Lines == b.Lines && abs(r.Length-b.Length) <= 2*len(word)+32 {
-			return true
+			return bySize
 		}
 		if r.Location != "" && b.Location != "" && cal.echo[r.Status] && strings.Contains(r.Location, word) {
-			return true
+			return bySize
 		}
 		if r.Location != "" && r.Location == b.Location {
-			return true
+			return bySize
 		}
 	}
-	return false
+	// A page that is a different size each time: by what it is.
+	if shape, ok := cal.shapes[r.Status]; ok && r.Page != nil && shape.Like(*r.Page) {
+		return byShape
+	}
+	return byNothing
 }
+
+// explainedBy says what made an answer the answer to a path that does not
+// exist.
+type explainedBy int
+
+const (
+	byNothing explainedBy = iota
+	bySize                // a count the calibration answers share
+	byShape               // the title, tags and words the calibration answers share
+)
 
 func abs(x int) int {
 	if x < 0 {
@@ -751,3 +870,38 @@ func abs(x int) int {
 // randWord is the name of the n-th calibration probe: fixed within a run, so
 // a resumed sweep asks the names the stopped one did and finds their answers kept.
 func randWord(n int) string { return fetch.ProbeName("dirs " + strconv.Itoa(n)) }
+
+// Notes says what the sweeps' summaries show of calibration: answers held
+// back for being the page that names which cannot exist get, and the
+// directories where calibration could filter nothing, so their wildcard
+// answers are among the paths listed (the second result is true then).
+func Notes(obs []types.StoredObservation) ([]string, bool) {
+	held := 0
+	var loose []string
+	for _, o := range obs {
+		if o.Collector != Name || o.Kind != "dirs" {
+			continue
+		}
+		var p struct {
+			Held       int      `json:"held"`
+			Unfiltered []string `json:"unfiltered"`
+		}
+		if json.Unmarshal(o.Payload, &p) != nil {
+			continue
+		}
+		held += p.Held
+		for _, d := range p.Unfiltered {
+			if !slices.Contains(loose, d) {
+				loose = append(loose, d)
+			}
+		}
+	}
+	var out []string
+	if held > 0 {
+		out = append(out, fmt.Sprintf("%d paths answered with the page that names that cannot exist get (the same status, title and words, though no size, word count or line count is shared) and were held back, not listed (-ac=false lists them)", held))
+	}
+	if len(loose) > 0 {
+		out = append(out, fmt.Sprintf("calibration could filter nothing in %s: the answers to names that cannot exist share no size, word count, line count, title or words, so the wildcard answers are among the paths listed", strings.Join(loose[:min(len(loose), 3)], ", ")+map[bool]string{true: " and others", false: ""}[len(loose) > 3]))
+	}
+	return out, len(loose) > 0
+}

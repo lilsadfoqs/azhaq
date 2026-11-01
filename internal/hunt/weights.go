@@ -8,31 +8,32 @@ import "strings"
 // secret, readable credential file), 30-50 a place a tester starts,
 // below 15 a hint that decides ties.
 var weights = map[string]int{
-	"takeover":        60, // strong findings: see takeoverStrong
-	"secret":          40, // by severity: see secretWeight
-	"sourcemap":       45,
-	"exposed-file":    55, // by extension: see fileExt
-	"listing":         55,
-	"api-description": 35,
-	"graphql":         40, // 45 when the schema was read or an IDE answers
-	"object-id":       35, // 15 when the route has no GET: a write alone
-	"unauth-write":    25, // 10 when no GET showed that it answers
-	"upload":          35,
-	"password-in-url": 30, // a GET form with a password field: it lands in logs and history
-	"param-command":   40,
-	"param-url":       35,
-	"param-file":      35,
-	"param-debug":     35,
-	"param-redirect":  30,
-	"param-query":     40,
-	"param-callback":  15,
-	"input":           8,
-	"gated":           15, // 401/403: a session is needed, a target for azhaq roles
-	"server-error":    10, // a 5xx; more with corroboration: see serverError*
-	"path-auth":       45, // sign-in, tokens, password reset: see pathWords
-	"path-search":     35,
-	"xml":             40, // the route takes an XML body
-	"new":             5,  // a bonus; a row with only this never ranks
+	"takeover":           60, // strong findings: see takeoverStrong
+	"takeover-candidate": 20, // a CNAME to a cloud name that does not resolve: NXDOMAIN alone
+	"secret":             40, // by severity: see secretWeight
+	"sourcemap":          45,
+	"exposed-file":       55, // by extension: see fileExt
+	"listing":            55,
+	"api-description":    35,
+	"graphql":            40, // 45 when the schema was read or an IDE answers
+	"object-id":          35, // 15 when the route has no GET: a write alone
+	"unauth-write":       25, // 10 when no GET showed that it answers
+	"upload":             35,
+	"password-in-url":    30, // a GET form with a password field: it lands in logs and history
+	"param-command":      40,
+	"param-url":          35,
+	"param-file":         35,
+	"param-debug":        35,
+	"param-redirect":     30,
+	"param-query":        40,
+	"param-callback":     15,
+	"input":              8,
+	"gated":              15, // 401/403: a session is needed, a target for azhaq roles
+	"server-error":       10, // a 5xx; more with corroboration: see serverError*
+	"path-auth":          45, // sign-in, tokens, password reset: see pathWords
+	"path-search":        35,
+	"xml":                40, // the route takes an XML body
+	"new":                5,  // a bonus; a row with only this never ranks
 }
 
 // A 5xx says little alone, and less when the plain request carried none of

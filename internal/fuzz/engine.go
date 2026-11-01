@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/lilsadfoqs/azhaq/internal/neterr"
+	"github.com/lilsadfoqs/azhaq/internal/pagesim"
 	"github.com/lilsadfoqs/azhaq/scope"
 )
 
@@ -137,6 +138,8 @@ type Stats struct {
 	Spent      bool              // the request budget ran out
 	Down       []string          // origins that stopped answering
 	Filters    []string          // what calibration added, "size 1234"
+	Held       int               // matches held back for looking like the page names that cannot exist get
+	Unfiltered bool              // calibration asked and could filter nothing: wildcard answers are listed
 	StoppedBy  string            // a guard of the run that ended it (-sf, -sa)
 	Replayed   int               // matches sent through the replay proxy
 	ReplayErr  int               // replays that failed
@@ -167,6 +170,9 @@ type engine struct {
 	calMu      sync.Mutex
 	calibrated map[string]bool // by host and directory with -ach, else "" once
 	calGroups  [][]string
+	shapeMu    sync.RWMutex
+	shapes     map[string][]calShape // by the same key: pages the calibration answers had in common
+	wantBody   atomic.Bool           // answers are read into memory, for calibration's page shape
 
 	outMu sync.Mutex // Stats, results and the queue
 	stats Stats
@@ -198,7 +204,8 @@ func Run(ctx context.Context, cfg Config) Stats {
 	if cfg.Progress == nil {
 		cfg.Progress = new(Progress)
 	}
-	e := &engine{cfg: cfg, downOrigs: map[string]bool{}, calibrated: map[string]bool{}}
+	e := &engine{cfg: cfg, downOrigs: map[string]bool{}, calibrated: map[string]bool{}, shapes: map[string][]calShape{}}
+	e.wantBody.Store(cfg.Calibrate)
 	e.calGroups = cfg.CalGroups
 	if len(e.calGroups) == 0 {
 		e.calGroups, _ = CalibrationGroups(nil, nil)
@@ -458,7 +465,10 @@ func (e *engine) task(ctx context.Context, j job, tmpl Template, input map[strin
 		e.n429.Add(1)
 	}
 	e.calibrate(ctx, tmpl, input, &req)
-	if e.cfg.Set.Matches(resp) {
+	matched := e.cfg.Set.Matches(resp)
+	if matched && e.likeCalibration(resp, &req) {
+		e.count(func(s *Stats) { s.Held++ })
+	} else if matched {
 		e.replay(ctx, &req)
 		e.emit(resp, &req, j.n)
 		if e.cfg.Recursion && e.cfg.Strategy == "greedy" {
@@ -491,7 +501,7 @@ func (e *engine) send(ctx context.Context, req *Request) (*Response, error) {
 	var err error
 	for try := 0; try < 2; try++ {
 		var resp *Response
-		keep := e.cfg.Set.NeedBody()
+		keep := e.cfg.Set.NeedBody() || e.wantBody.Load()
 		e.count(func(s *Stats) { s.Requests++ })
 		resp, err = e.cfg.Sender.Send(ctx, req, keep)
 		if err == nil {
@@ -712,6 +722,12 @@ func (e *engine) calibrate(ctx context.Context, t Template, input map[string]str
 		}
 		e.calibrateFilters(resps, key)
 	}
+	e.shapeMu.RLock()
+	shaped := len(e.shapes[key]) > 0
+	e.shapeMu.RUnlock()
+	if !shaped && !e.cfg.Set.PerHost {
+		e.wantBody.Store(false) // nothing reads the bodies after this
+	}
 }
 
 const letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
@@ -766,9 +782,80 @@ func (e *engine) calibrateFilters(rs []*Response, key string) {
 		}
 		return
 	}
+	if e.learnShape(rs, key) {
+		return
+	}
 	e.count(func(s *Stats) {
-		s.Notes = append(s.Notes, "auto-calibration: answers to names that cannot exist share no size, word count or line count, so a group of them set no filter")
+		s.Unfiltered = true
+		s.Notes = append(s.Notes, "auto-calibration: answers to names that cannot exist share no size, word count or line count, and no title or words either, so a group of them set no filter and the wildcard answers are listed with the matches")
 	})
+}
+
+// calShape is a page the calibration answers share though no number is the
+// same: the answers of its status that look like it are held back.
+type calShape struct {
+	shape  pagesim.Shape
+	status int
+}
+
+// learnShape sets a filter by what the answers are, for answers that share
+// no size, word count or line count: their status, title, tags and words.
+func (e *engine) learnShape(rs []*Response, key string) bool {
+	if len(rs) < 2 {
+		return false
+	}
+	pages := make([]pagesim.Page, len(rs))
+	for i, r := range rs {
+		if r.Status != rs[0].Status || len(r.Body) == 0 {
+			return false
+		}
+		pages[i] = pagesim.Of(r.Body)
+	}
+	shape, ok := pagesim.Learn(pages)
+	if !ok {
+		return false
+	}
+	e.shapeMu.Lock()
+	e.shapes[key] = append(e.shapes[key], calShape{shape, rs[0].Status})
+	e.shapeMu.Unlock()
+	what := "status " + strconv.Itoa(rs[0].Status) + " and the page they share (" + shape.Describe() + ")"
+	if key != "" {
+		what += " for " + key
+	}
+	e.count(func(s *Stats) { s.Filters = append(s.Filters, what) })
+	return true
+}
+
+// likeCalibration says whether the answer is a page the calibration names
+// got, which no number filter holds back because it changes each time.
+func (e *engine) likeCalibration(r *Response, req *Request) bool {
+	if !e.cfg.Calibrate {
+		return false
+	}
+	key := ""
+	if e.cfg.Set.PerHost {
+		key = HostKey(req)
+	}
+	e.shapeMu.RLock()
+	shapes := e.shapes[key]
+	e.shapeMu.RUnlock()
+	if len(shapes) == 0 {
+		return false
+	}
+	var page *pagesim.Page
+	for _, s := range shapes {
+		if s.status != r.Status {
+			continue
+		}
+		if page == nil {
+			p := pagesim.Of(r.Body)
+			page = &p
+		}
+		if s.shape.Like(*page) {
+			return true
+		}
+	}
+	return false
 }
 
 // denied says whether a -deny-path rule keeps req out, and counts it.

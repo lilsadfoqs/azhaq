@@ -99,7 +99,7 @@ sha256sum --ignore-missing -c checksums.txt
 
 Only scan systems you are allowed to test.
 
-- `localhost:3000` and `localhost:5000` are lab containers: `docker run --rm -p 3000:3000 bkimminich/juice-shop:v20.3.0` and `docker run --rm -p 5000:5000 erev0s/vampi`. Start Juice Shop fresh: a used one (registered users, baskets, feedback) answers other rows, and the benchmark's 70 of 77 known routes are for v20.3.0 started fresh, with no flag but `-url` and `-db`.
+- `localhost:3000` and `localhost:5000` are lab containers: `docker run --rm -p 3000:3000 bkimminich/juice-shop:v20.3.0` and `docker run --rm -p 5000:5000 erev0s/vampi:latest@sha256:0a5a224b6e14ae7da6a6ea265178ff71286ff903aec74adee98f660bb0e4ca12`. Start Juice Shop fresh: a used one (registered users, baskets, feedback) answers other rows, and the benchmark's 70 of 77 known routes are for v20.3.0 started fresh, with no flag but `-url` and `-db`.
 - `$TA` and `$TB` hold two accounts' tokens. `alice.har` and `alice.xml` are those accounts' saved browsing.
 - `-program` names a program in the platform's public list: `tesla` on Bugcrowd, `security` on HackerOne. `acme` in other examples stands for yours.
 
@@ -249,7 +249,7 @@ The tools run azhaq itself and return its summary and rows. The scope, the budge
 
 `go run ./bench` runs azhaq and the tools it replaces on the same targets, and prints the numbers, losses included. [bench/README.md](bench/README.md) has what is measured, the two profiles, the bar a row must clear, and the caveats.
 
-- **Local:** Juice Shop and VAmPI in Docker, the services lab (fifteen daemons), a DNS lab, and servers and a zone that the bench serves itself.
+- **Local:** Juice Shop and VAmPI in Docker (the lab images, each pinned by tag and digest, are listed in `bench/images.env`), the services lab (fifteen daemons), a DNS lab, and servers and a zone that the bench serves itself.
 - **Public, at 5 requests per second:** ginandjuice.shop, testphp.vulnweb.com and demo.testfire.net.
 - **Public, passive lookups only:** hackerone.com, tesla.com and vulnweb.com.
 

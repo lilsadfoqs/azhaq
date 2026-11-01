@@ -315,3 +315,36 @@ func TestJunkTemplateInQuery(t *testing.T) {
 		}
 	}
 }
+
+// The shapes of a pasted fuzzer log, a traversal probe in a query name and
+// an injection glued to a value are junk with a reason; the words close to
+// them stay.
+func TestJunkFuzzerLogsTraversalAndGluedSQL(t *testing.T) {
+	for raw, want := range map[string]string{
+		"http://vulnweb.com/FUZZMultiple":                                                 JunkTemplate,
+		"http://vulnweb.com/FUZZ000003:C=200":                                             JunkTemplate,
+		"http://testphp.vulnweb.com/%CB%93%E2%86%92FUZZ":                                  JunkTemplate,
+		"http://testphp.vulnweb.com/a/%CB%93%E2%86%92FUZZ.php":                            JunkTemplate,
+		"http://testphp.vulnweb.com/a.php?%CB%93%E2%86%92artist=FUZZ000003:C=200":         JunkTemplate,
+		"http://testphp.vulnweb.com/a.php?artist=FUZZMultiple":                            JunkTemplate,
+		"http://testasp.vulnweb.com/t/fit.txt?.tst5-ExcellenthdghrvubMaleSanskrit/../Gen": JunkPayload,
+		"http://a.test/a.php?x/../y=1":                                                    JunkPayload,
+		"http://testphp.vulnweb.com/artists.php?artist=1union%20select%20group_concat%28schema_name%29%20from%20information_schema.schemata": JunkPayload,
+		"http://a.test/a.php?q=1+union+all+select+1,2":               JunkPayload,
+		"http://a.test/a.php?q=x%20from%20information_schema.tables": JunkPayload,
+		// as today
+		"http://vulnweb.com/listproducts.php?cat=FUZZ": JunkTemplate,
+		"http://a.test/fuzz":                           "",
+		"http://a.test/a.php?q=fuzz":                   "",
+		"http://a.test/FUZZY":                          "",
+		"http://a.test/FUZZ-list.txt":                  "",
+		"http://a.test/a.php?next=../home":             "",
+		"http://a.test/a.php?q=reunion+select+a+seat":  "",
+		"http://a.test/docs/information_schema.html":   "",
+		"http://a.test/a.php?path=a/b/c":               "",
+	} {
+		if got := JunkReason(raw); got != want {
+			t.Errorf("%s: %q, want %q", raw, got, want)
+		}
+	}
+}

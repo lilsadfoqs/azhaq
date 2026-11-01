@@ -37,11 +37,11 @@ A row's `scope` (`target` or `fanout`) is not the request [scope](#scope) that `
 | State | Meaning | What to do next |
 | --- | --- | --- |
 | `visited` | Requested; it answered as a page of its own (any status but 404 and 410). | Read it. |
-| `catchall` | Requested; it answered with the page every unknown path gets (an app shell, a soft 404). Not proof the route exists. A summary note names an origin that answered three or more URLs this way, and for a bare address says that the site's name may be served differently (`-H 'Host: NAME'`). | Look at it in a browser, or use `-browser`. |
+| `catchall` | Requested; it answered with the page every unknown path gets (an app shell, a soft 404). Not proof the route exists. A summary note names an origin that answered three or more URLs this way, `run` then stops asking the paths scripts name on it (`-catchall-after`), `counts` has `catchall` for them, apart from the kinds of URL, and for a bare address says that the site's name may be served differently (`-H 'Host: NAME'`). | Look at it in a browser, or use `-browser`. |
 | `error` | Requested; no answer: timeout, refused, reset or TLS failure. | `azhaq query -db W -failed`, then try again. |
 | `gone` | Requested; it answered 404 or 410, usually a URL found in an archive or a link. Nothing read says it takes another method. | Try older API versions near it. |
 | `hint` | Known from a script, a description, an archive or a link, not proven by a GET. See below for the cases. | Send the method in its operations yourself. |
-| `skipped` | Found, and not requested for a stated reason: a `-deny-path` rule of yours keeps its path out. Listed under `skipped` with the rule. | Change the rule if you want it requested. |
+| `skipped` | Found, and not requested for a stated reason: a `-deny-path` rule of yours keeps its path out, or `run` held a script-named path because its origin answers every path with one page. Listed under `skipped` with the rule or the reason. | Change the rule, or `-catchall-after 0`, if you want it requested. |
 | `capped` | Not requested: a limit (budget, depth, items) ran out first. | `azhaq resume -db W`. |
 
 A `skipped` row says why in its `skipped` field, for example `-deny-path ^/admin/`. azhaq decides nothing by a URL's name: what a GET does on the server cannot be known from it.
@@ -278,15 +278,36 @@ A takeover candidate is a name whose CNAME points at something gone, or whose fr
 | Strength | Meaning |
 | --- | --- |
 | `strong` | The CNAME points at a hosting service whose own page says nobody claimed the name, or at a name whose ICANN domain is not registered. |
-| `dangling` | The CNAME points at a web name on Azure, Elastic Beanstalk or Fly.io that does not resolve. |
+| `dangling` | The CNAME points at a web name on Azure, Elastic Beanstalk or Fly.io that does not resolve. It rests on that one DNS answer: see [What a dangling row rests on](#what-a-dangling-row-rests-on). |
 | `page` | One of those services' own pages, with no CNAME known. Where DNS shows the name points elsewhere, nothing is said. |
 
 - The hosting pages that make a name `strong`: GitHub Pages' "There isn't a GitHub Pages site here.", S3's `NoSuchBucket`, Heroku's no-such-app page, Pantheon, Ghost, WordPress.com, Help Scout, ReadMe, ngrok, Bitbucket and Surge.
 - A cloud's shared suffix such as `elb.amazonaws.com` is no registry and never counts as an unregistered domain.
-- The Azure services for `dangling`: App Service, Cloud Services, CDN, API Management, Container Instances, HDInsight and Blob Storage.
+- The Azure services for `dangling`: App Service, Cloud Services, CDN, API Management, Container Instances, HDInsight, Blob Storage and a virtual machine's public IP name.
 - azhaq reads DNS answers (`subs -live`, `dns`, `run`) and front pages (`probe`, `run`). Even a plain `subs -live` flags a candidate.
 - To tell a free domain from a taken one, the check asks your resolvers for the SOA of a CNAME target's registrable domain (a known hosting service is not asked). When that domain is outside the scope, the summary counts the questions in a note: `asked the resolver about N CNAME targets outside the scope for the takeover check`. `-no-takeover` (`run`, `dns`) turns the check off, and with it the question.
 - How a candidate is printed: see the `takeover` field in [OUTPUT](OUTPUT.md#the-summary).
+
+### What a dangling row rests on
+
+A `dangling` row is a candidate. Its only evidence is that the CNAME target answered NXDOMAIN, and NXDOMAIN does not show the name is free: a disabled Traffic Manager profile or a deleted database answers it while its owner still holds the name. The row, the `-json` row and `hunt` say so (`unverified: NXDOMAIN does not show the name is free`), and `hunt` ranks it after every row a server answered and every `strong` row. The check sends nothing to the provider.
+
+Each service rests on its entry in the public takeover list (can-i-take-over-xyz), which azhaq's table copies. The entries were read on 2026-10-28, the `list` field of the row names the entry and that date, and the list changes as providers change: open the entry and read its status before relying on the row.
+
+| Suffix | List entry |
+| --- | --- |
+| `.azurewebsites.net` | Azure App Service |
+| `.cloudapp.net` | Azure Cloud Services |
+| `.cloudapp.azure.com` | Azure virtual machine public IP name |
+| `.blob.core.windows.net` | Azure Blob Storage |
+| `.azure-api.net` | Azure API Management |
+| `.azurehdinsight.net` | Azure HDInsight |
+| `.azureedge.net` | Azure CDN |
+| `.azurecontainer.io` | Azure Container Instances |
+| `.elasticbeanstalk.com` | AWS Elastic Beanstalk |
+| `.fly.dev` | Fly.io |
+
+To confirm one, ask the provider whether the name is available, from an account you hold and with the owner's permission: the provider's create form or its name-availability check (for Elastic Beanstalk, `aws elasticbeanstalk check-dns-availability --cname-prefix NAME`; for Blob Storage, `az storage account check-name --name NAME`). Registering the name is the takeover itself: do it only when the engagement allows, and release it afterwards.
 
 ## Access control (`azhaq roles`)
 

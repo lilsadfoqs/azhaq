@@ -33,6 +33,13 @@ func TestJuiceShopImageIsPinnedTheSameEverywhere(t *testing.T) {
 	if !strings.Contains(readme, "Known routes of juice-shop "+tag+",") {
 		t.Errorf("the README's table does not name the Juice Shop build %s", tag)
 	}
+	// The VAmPI the quick start starts, and the list of lab images the README names.
+	if v := labImages()["AZQ_VAMPI_IMAGE"]; v == "" || !strings.Contains(readme, "docker run --rm -p 5000:5000 "+v+"`") {
+		t.Errorf("the README's quick start does not start the VAmPI image of images.env (%q)", v)
+	}
+	if !strings.Contains(readme, "`bench/images.env`") {
+		t.Error("the README does not name bench/images.env as the list of lab images")
+	}
 	if !strings.Contains(readme, "go run ./bench -only apps -profile default") {
 		t.Error("the README does not give the command that reproduces the table row")
 	}

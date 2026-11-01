@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"math"
 	"os"
+	"runtime"
 	"slices"
 	"sort"
 	"strconv"
@@ -304,6 +306,12 @@ func cmdPorts(args []string) error {
 	if rate > 0 {
 		run = append(run, "-port-rate", strconv.FormatFloat(rate, 'f', -1, 64))
 	}
+	if visited["rate"] {
+		rate, _ = strconv.ParseFloat(fs.Lookup("rate").Value.String(), 64)
+	}
+	if rate > 0 && *minRate == 0 && os.Getenv("GOMAXPROCS") == "" {
+		runtime.GOMAXPROCS(scanProcs(rate, runtime.NumCPU()))
+	}
 	if ct > 0 {
 		run = append(run, "-port-timeout", ct.String())
 	}
@@ -431,6 +439,20 @@ func cmdPorts(args []string) error {
 	}
 	sink.settle(rep, *sn)
 	return rep.finish(c.json, c.silent)
+}
+
+// connectsPerCore is how many connects a second one core carries in a scan
+// (one core did 10,000 at under half its time on loopback, so 20,000 or more fit: kept under that).
+const connectsPerCore = 15000
+
+// scanProcs is the cores a scan at rate connects a second needs. Goroutines
+// spread over more cores than that wake each other across threads for every
+// connect, and the scan spends several times the CPU nmap does for the same
+// rate: a full-range scan at -rate 10000 took 11 CPU-seconds on 20 cores and
+// 3 on one. The user's rate is the ceiling, so what it needs it gets; the
+// rest of the cores stay idle (GOMAXPROCS in the environment overrides this).
+func scanProcs(rate float64, ncpu int) int {
+	return min(max(int(math.Ceil(rate/connectsPerCore)), 1), ncpu)
 }
 
 // portsSink prints the rows of a ports run as its tasks report them, each
