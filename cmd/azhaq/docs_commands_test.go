@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/trannghiach/azhaq/docs"
+	"github.com/lilsadfoqs/azhaq/docs"
 )
 
 // docs/commands holds one page for each command, and the page's flag table

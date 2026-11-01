@@ -13,7 +13,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/trannghiach/azhaq/internal/fuzz"
+	"github.com/lilsadfoqs/azhaq/internal/fuzz"
 )
 
 // fuzzOut is what fuzz writes besides stdout: the report of -o and -of, and

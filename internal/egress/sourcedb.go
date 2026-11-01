@@ -11,7 +11,7 @@ import (
 	"github.com/lib/pq"
 	"golang.org/x/net/proxy"
 
-	"github.com/trannghiach/azhaq/internal/ledger"
+	"github.com/lilsadfoqs/azhaq/internal/ledger"
 )
 
 // OpenSourceDB opens a PostgreSQL database that is a third-party source

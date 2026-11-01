@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/trannghiach/azhaq/types"
+	"github.com/lilsadfoqs/azhaq/types"
 )
 
 type stub struct {

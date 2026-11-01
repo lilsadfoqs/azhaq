@@ -17,7 +17,7 @@ import (
 	"github.com/miekg/dns"
 	"golang.org/x/net/proxy"
 
-	"github.com/trannghiach/azhaq/internal/ledger"
+	"github.com/lilsadfoqs/azhaq/internal/ledger"
 )
 
 // How a resolver is reached.

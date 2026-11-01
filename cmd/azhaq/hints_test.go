@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/trannghiach/azhaq/internal/collectors/subcol"
-	"github.com/trannghiach/azhaq/internal/fuzz"
+	"github.com/lilsadfoqs/azhaq/internal/collectors/subcol"
+	"github.com/lilsadfoqs/azhaq/internal/fuzz"
 )
 
 // atTerminal makes stderr a terminal for the hints.

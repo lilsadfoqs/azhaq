@@ -15,7 +15,7 @@ import (
 	"github.com/miekg/dns"
 	"golang.org/x/net/proxy"
 
-	"github.com/trannghiach/azhaq/internal/neterr"
+	"github.com/lilsadfoqs/azhaq/internal/neterr"
 )
 
 // systemDNS makes the system's resolver (net.DefaultResolver) a fake that

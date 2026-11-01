@@ -160,7 +160,7 @@ class Annotations(unittest.TestCase):
             "=== RUN TestX",
             "WARNING: DATA RACE",
             "Write at 0x00c000 by goroutine 8:",
-            "  github.com/trannghiach/azhaq/internal/x.f()",
+            "  github.com/lilsadfoqs/azhaq/internal/x.f()",
             "      /src/x.go:10 +0x1",
             "Previous read at 0x00c000 by goroutine 7:",
             "--- FAIL: TestX (0.01s)",
@@ -169,7 +169,7 @@ class Annotations(unittest.TestCase):
         ])
         a = shard.annotations(log)
         self.assertEqual(a[0], "::error::Write at 0x00c000 by goroutine 8:")
-        self.assertIn("::error::  github.com/trannghiach/azhaq/internal/x.f()", a)
+        self.assertIn("::error::  github.com/lilsadfoqs/azhaq/internal/x.f()", a)
         self.assertIn("::error::--- FAIL: TestX (0.01s)", a)
         self.assertIn("::error::    x_test.go:12: boom", a)
         self.assertLess(a.index("::error::Write at 0x00c000 by goroutine 8:"), a.index("::error::--- FAIL: TestX (0.01s)"))

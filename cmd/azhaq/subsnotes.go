@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/trannghiach/azhaq/internal/collectors/subcol"
+	"github.com/lilsadfoqs/azhaq/internal/collectors/subcol"
 )
 
 // subsNotes are the notes subs adds from the sources' payloads: how complete

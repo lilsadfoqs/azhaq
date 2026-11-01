@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/trannghiach/azhaq/internal/browser"
+	"github.com/lilsadfoqs/azhaq/internal/browser"
 )
 
 // An app whose script address answers its HTML shell (as an app server

@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/lilsadfoqs/azhaq/internal/dnsr"
+	"github.com/lilsadfoqs/azhaq/types"
 	"github.com/miekg/dns"
-	"github.com/trannghiach/azhaq/internal/dnsr"
-	"github.com/trannghiach/azhaq/types"
 )
 
 // A name whose CNAME chain ends at a name that does not exist: on a

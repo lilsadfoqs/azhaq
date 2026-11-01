@@ -6,8 +6,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/trannghiach/azhaq"
-	"github.com/trannghiach/azhaq/docs"
+	"github.com/lilsadfoqs/azhaq"
+	"github.com/lilsadfoqs/azhaq/docs"
 )
 
 // topics are the documents azhaq docs prints, in the order it lists them.

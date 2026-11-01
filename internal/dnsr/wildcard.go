@@ -7,7 +7,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/trannghiach/azhaq/internal/normalize"
+	"github.com/lilsadfoqs/azhaq/internal/normalize"
 )
 
 // Wildcards finds names that only resolve because their zone answers for

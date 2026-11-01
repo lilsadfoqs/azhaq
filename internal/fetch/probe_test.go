@@ -9,7 +9,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/trannghiach/azhaq/internal/egress"
+	"github.com/lilsadfoqs/azhaq/internal/egress"
 )
 
 // A request with a method or body of its own is asked, cached and kept

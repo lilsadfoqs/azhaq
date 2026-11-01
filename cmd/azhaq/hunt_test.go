@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/trannghiach/azhaq/internal/hunt"
+	"github.com/lilsadfoqs/azhaq/internal/hunt"
 )
 
 // hunt weighs the roles verdicts by their text; the text lives here.

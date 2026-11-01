@@ -8,13 +8,13 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/trannghiach/azhaq/catalog"
-	"github.com/trannghiach/azhaq/engine"
-	"github.com/trannghiach/azhaq/internal/collectors/dnscol"
-	"github.com/trannghiach/azhaq/internal/collectors/jscol"
-	"github.com/trannghiach/azhaq/internal/connector"
-	"github.com/trannghiach/azhaq/store"
-	"github.com/trannghiach/azhaq/types"
+	"github.com/lilsadfoqs/azhaq/catalog"
+	"github.com/lilsadfoqs/azhaq/engine"
+	"github.com/lilsadfoqs/azhaq/internal/collectors/dnscol"
+	"github.com/lilsadfoqs/azhaq/internal/collectors/jscol"
+	"github.com/lilsadfoqs/azhaq/internal/connector"
+	"github.com/lilsadfoqs/azhaq/store"
+	"github.com/lilsadfoqs/azhaq/types"
 )
 
 func TestSameHostOneNode(t *testing.T) {

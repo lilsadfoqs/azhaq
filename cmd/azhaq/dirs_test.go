@@ -13,8 +13,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/trannghiach/azhaq/internal/collectors/dirscol"
-	"github.com/trannghiach/azhaq/store"
+	"github.com/lilsadfoqs/azhaq/internal/collectors/dirscol"
+	"github.com/lilsadfoqs/azhaq/store"
 )
 
 func dirsServer(t *testing.T, status map[string]int) *httptest.Server {

@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/trannghiach/azhaq/internal/ledger"
+	"github.com/lilsadfoqs/azhaq/internal/ledger"
 )
 
 // DialTarget connects to a target as the run's HTTP client does: a name

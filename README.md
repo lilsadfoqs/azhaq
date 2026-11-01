@@ -56,12 +56,12 @@ Numbers for each job, against the tool it replaces, are in the [benchmark](#benc
 
 ## Install
 
-Download a binary for Linux, macOS or Windows from the [releases](https://github.com/trannghiach/azhaq/releases), or:
+Download a binary for Linux, macOS or Windows from the [releases](https://github.com/lilsadfoqs/azhaq/releases), or:
 
 ```
-curl -fsSL https://raw.githubusercontent.com/trannghiach/azhaq/main/scripts/install.sh | sh
-go install github.com/trannghiach/azhaq/cmd/azhaq@latest      # Go 1.26 or newer
-docker run --rm -v "$PWD:/work" -u "$(id -u)" ghcr.io/trannghiach/azhaq run -domain example.com -passive
+curl -fsSL https://raw.githubusercontent.com/lilsadfoqs/azhaq/main/scripts/install.sh | sh
+go install github.com/lilsadfoqs/azhaq/cmd/azhaq@latest      # Go 1.26 or newer
+docker run --rm -v "$PWD:/work" -u "$(id -u)" ghcr.io/lilsadfoqs/azhaq run -domain example.com -passive
 ```
 
 `azhaq help` lists the commands, `azhaq help COMMAND` shows one with examples, and `azhaq docs` prints an overview and the documentation offline. `azhaq help -json` describes every flag for a program to read. Start-up work is kept small: the CDN ranges are read the first time an address is checked.
@@ -84,7 +84,7 @@ The release workflow signs the checksums file with [sigstore](https://www.sigsto
 
 ```
 cosign verify-blob --bundle checksums.txt.sigstore.json checksums.txt \
-  --certificate-identity-regexp '^https://github\.com/trannghiach/azhaq/\.github/workflows/release\.yml@refs/tags/v' --certificate-oidc-issuer https://token.actions.githubusercontent.com
+  --certificate-identity-regexp '^https://github\.com/(lilsadfoqs|trannghiach)/azhaq/\.github/workflows/release\.yml@refs/tags/v' --certificate-oidc-issuer https://token.actions.githubusercontent.com
 sha256sum --ignore-missing -c checksums.txt
 ```
 

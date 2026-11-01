@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/trannghiach/azhaq/internal/ledger"
+	"github.com/lilsadfoqs/azhaq/internal/ledger"
 )
 
 // holder accepts and answers by a rule of its own: reply gets the first bytes

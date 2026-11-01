@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/trannghiach/azhaq/internal/collectors/urlcol"
+	"github.com/lilsadfoqs/azhaq/internal/collectors/urlcol"
 )
 
 // A gau config file (~/.gau.toml) is flat TOML: key = value lines, string

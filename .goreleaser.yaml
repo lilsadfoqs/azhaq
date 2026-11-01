@@ -66,7 +66,7 @@ dockers_v2:
   - id: azhaq
     ids: [azhaq]
     images:
-      - ghcr.io/trannghiach/azhaq
+      - ghcr.io/lilsadfoqs/azhaq
     tags:
       - "{{ .Version }}"
       - latest
@@ -79,7 +79,7 @@ dockers_v2:
     labels:
       org.opencontainers.image.title: azhaq
       org.opencontainers.image.description: Reconnaissance engine that maps hosts, web services, routes and historical URLs into one graph
-      org.opencontainers.image.source: https://github.com/trannghiach/azhaq
+      org.opencontainers.image.source: https://github.com/lilsadfoqs/azhaq
       org.opencontainers.image.licenses: MIT
       org.opencontainers.image.version: "{{ .Version }}"
       org.opencontainers.image.revision: "{{ .FullCommit }}"
@@ -93,5 +93,5 @@ changelog:
 
 release:
   github:
-    owner: trannghiach
+    owner: lilsadfoqs
     name: azhaq

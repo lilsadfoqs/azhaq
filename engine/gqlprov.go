@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/trannghiach/azhaq/types"
+	"github.com/lilsadfoqs/azhaq/types"
 )
 
 // RecoveryCount is how many of one root type's fields a recovery without

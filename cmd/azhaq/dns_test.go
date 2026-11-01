@@ -16,7 +16,7 @@ import (
 
 	"github.com/miekg/dns"
 
-	"github.com/trannghiach/azhaq/internal/dnsr"
+	"github.com/lilsadfoqs/azhaq/internal/dnsr"
 )
 
 // dnsLab is a zone with every record type, a reverse zone and a zone

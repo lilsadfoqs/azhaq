@@ -15,8 +15,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/trannghiach/azhaq/internal/normalize"
-	"github.com/trannghiach/azhaq/store"
+	"github.com/lilsadfoqs/azhaq/internal/normalize"
+	"github.com/lilsadfoqs/azhaq/store"
 )
 
 // azhaq report: each finding azhaq roles listed, written up from the

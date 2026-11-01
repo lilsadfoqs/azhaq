@@ -18,11 +18,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/trannghiach/azhaq/internal/collectors/paramcol"
-	"github.com/trannghiach/azhaq/internal/egress"
-	"github.com/trannghiach/azhaq/internal/fetch"
-	"github.com/trannghiach/azhaq/internal/normalize"
-	"github.com/trannghiach/azhaq/types"
+	"github.com/lilsadfoqs/azhaq/internal/collectors/paramcol"
+	"github.com/lilsadfoqs/azhaq/internal/egress"
+	"github.com/lilsadfoqs/azhaq/internal/fetch"
+	"github.com/lilsadfoqs/azhaq/internal/normalize"
+	"github.com/lilsadfoqs/azhaq/types"
 )
 
 // paramsRow is one page's result, as the command prints and saves it.

@@ -14,10 +14,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/trannghiach/azhaq/internal/collectors/asncol"
-	"github.com/trannghiach/azhaq/internal/portscan"
-	"github.com/trannghiach/azhaq/store"
-	"github.com/trannghiach/azhaq/types"
+	"github.com/lilsadfoqs/azhaq/internal/collectors/asncol"
+	"github.com/lilsadfoqs/azhaq/internal/portscan"
+	"github.com/lilsadfoqs/azhaq/store"
+	"github.com/lilsadfoqs/azhaq/types"
 )
 
 // msDuration is a time given as a Go duration (1500ms, 2s) or as a bare

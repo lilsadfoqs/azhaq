@@ -14,7 +14,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/trannghiach/azhaq/store"
+	"github.com/lilsadfoqs/azhaq/store"
 )
 
 // objectApp is a small API whose users each own a cart and a note:

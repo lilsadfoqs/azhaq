@@ -23,7 +23,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/trannghiach/azhaq/internal/ledger"
+	"github.com/lilsadfoqs/azhaq/internal/ledger"
 )
 
 // claimsRow is every safety claim azhaq makes about what it sent, checked

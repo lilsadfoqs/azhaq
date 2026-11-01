@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/trannghiach/azhaq/internal/crawlscope"
-	"github.com/trannghiach/azhaq/types"
+	"github.com/lilsadfoqs/azhaq/internal/crawlscope"
+	"github.com/lilsadfoqs/azhaq/types"
 )
 
 type seen struct {

@@ -19,7 +19,7 @@ import (
 
 	"golang.org/x/net/proxy"
 
-	"github.com/trannghiach/azhaq/internal/ledger"
+	"github.com/lilsadfoqs/azhaq/internal/ledger"
 )
 
 // ChromeGuard is a SOCKS5 proxy on loopback that Chrome makes every connection

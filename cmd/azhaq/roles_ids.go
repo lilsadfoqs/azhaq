@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/trannghiach/azhaq/internal/normalize"
+	"github.com/lilsadfoqs/azhaq/internal/normalize"
 )
 
 // Filling routes such as /books/v1/{book_title} with identifiers, so that

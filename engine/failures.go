@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/trannghiach/azhaq/internal/guard"
-	"github.com/trannghiach/azhaq/internal/normalize"
-	"github.com/trannghiach/azhaq/types"
+	"github.com/lilsadfoqs/azhaq/internal/guard"
+	"github.com/lilsadfoqs/azhaq/internal/normalize"
+	"github.com/lilsadfoqs/azhaq/types"
 )
 
 // Failure is work that did not get its answer, grouped: a source that

@@ -7,7 +7,7 @@ import (
 	"slices"
 	"sort"
 
-	"github.com/trannghiach/azhaq/types"
+	"github.com/lilsadfoqs/azhaq/types"
 )
 
 // How a route is known, strongest first. A row carries the strongest

@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/trannghiach/azhaq/internal/hunt"
-	"github.com/trannghiach/azhaq/internal/takeover"
-	"github.com/trannghiach/azhaq/types"
+	"github.com/lilsadfoqs/azhaq/internal/hunt"
+	"github.com/lilsadfoqs/azhaq/internal/takeover"
+	"github.com/lilsadfoqs/azhaq/types"
 )
 
 // cmdHunt ranks a workspace's surface: where to look first, and why.

@@ -9,9 +9,9 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/trannghiach/azhaq/engine"
-	"github.com/trannghiach/azhaq/internal/webextract"
-	"github.com/trannghiach/azhaq/types"
+	"github.com/lilsadfoqs/azhaq/engine"
+	"github.com/lilsadfoqs/azhaq/internal/webextract"
+	"github.com/lilsadfoqs/azhaq/types"
 )
 
 func routeRow(url, tmpl string, methods []string, ops ...engine.Op) engine.MapEntry {

@@ -6,8 +6,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/trannghiach/azhaq/internal/normalize"
-	"github.com/trannghiach/azhaq/types"
+	"github.com/lilsadfoqs/azhaq/internal/normalize"
+	"github.com/lilsadfoqs/azhaq/types"
 )
 
 // ProbeRow is one probed web service, the way httpx prints it.
