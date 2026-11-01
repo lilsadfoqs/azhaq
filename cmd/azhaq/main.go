@@ -979,7 +979,8 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	if err != nil {
 		return usagef("-resolvers: %v", err)
 	}
-	opts.DNS = dnsr.New(dnsr.Options{Resolvers: resolvers, PerSecond: *dnsRate})
+	// 3 s an attempt, as dnsx waits: a slow zone answers in time for both.
+	opts.DNS = dnsr.New(dnsr.Options{Resolvers: resolvers, PerSecond: *dnsRate, Timeout: 3 * time.Second})
 	probePool = opts.DNS
 	// HTTP connects to the addresses azhaq-dns found: one answer per name.
 	egress.SetResolver(func(ctx context.Context, host string) []string { return opts.DNS.ResolveBoth(ctx, host).IPs() })
