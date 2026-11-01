@@ -205,7 +205,9 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 	s := newSearch(c, ctx, u, tg)
 	meta, err := s.run(page, emit)
 	if s.err != nil {
-		return s.spent(page)
+		m, e := s.spent(page)
+		m.EmitCount = meta.EmitCount
+		return m, e
 	}
 	return meta, err
 }
@@ -262,7 +264,7 @@ func (s *search) give(page string, emit func(types.Observation) error, found map
 		row["note"] = strings.Join(notes, "; ")
 	}
 	payload, _ := json.Marshal(row)
-	if err := emit(types.Observation{Collector: Name, Source: page, Kind: "params", Payload: payload, Confidence: 0.8, ObservedAt: time.Now().UTC()}); err != nil {
+	if err := emit(types.Observation{Collector: Name, Source: page, Kind: "params", Payload: payload, Confidence: 0.8, ObservedAt: time.Now().UTC(), Keep: s.spentNow()}); err != nil {
 		return types.RunMeta{}, err
 	}
 	if fail != nil {

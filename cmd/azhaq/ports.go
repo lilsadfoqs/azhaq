@@ -103,7 +103,7 @@ func cmdPorts(args []string) error {
 	fs.IntVar(retries, "max-retries", -1, "same as -retries")
 	workers := fs.Int("workers", 0, "connects in flight at once, over all hosts (default: as many as the rate allows, up to 20000)")
 	fs.IntVar(workers, "c", 0, "same as -workers")
-	minRate := fs.Float64("min-rate", 0, "connects per second at least: raises -rate to this when lower")
+	minRate := fs.Float64("min-rate", 0, "connects per second at least, as nmap's --min-rate: raises -rate to this when lower, and sets no ceiling")
 	tmpl := fs.Int("T", -1, "timing template, 0 (paranoid) to 5 (insane); sets -rate, -connect-timeout and -retries where they are not given; 3 is the default")
 	order := fs.String("order", "random", "the order a host's ports are asked in: random (the likeliest ports first, each tier shuffled) or asc")
 	seed := fs.Int64("seed", 0, "make the random port order repeat (default: a new one each run)")

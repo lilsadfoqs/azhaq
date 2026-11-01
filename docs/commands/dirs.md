@@ -5,7 +5,7 @@ Sweeps a wordlist of paths and reports those that answer unlike a path that cann
 ## Synopsis
 
 ```
-azhaq dirs -u URL | -l FILE | stdin  [-w WORDLIST] [-e EXT] [-depth N] [-mc/-ms/-mw/-ml/-mr LIST] [-fc/-fs/-fw/-fl/-fr LIST] [-ac=false] [-rate N] [-json]
+azhaq dirs -u URL | -l FILE | stdin  [-w WORDLIST] [-e EXT] [-depth N] [-mc/-ms/-mw/-ml/-mr LIST] [-fc/-fs/-fw/-fl/-fr LIST] [-ac=false] [-rate N] [-proxy URL] [-json]
 ```
 
 ## Examples
@@ -74,6 +74,10 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 - With a session, the run checks it as it goes. A word that ended the session is noticed: a `-login` run signs in again, a `-cookie` or `-H` run stops with a failure and exit 3. The sweeps that ran since the last good check run again with the new session, and the note counts the words they sent: [Sessions](../CONCEPTS.md#sessions).
 - `-u https://h/api/` asks `https://h/api/WORD`. A query or fragment on the URL is dropped, and a note says so.
 
+### Proxy
+- `-proxy http://127.0.0.1:8080` (or an `https://` or `socks5://` URL) sends every request through that proxy, loopback targets included: the calibration guesses and the retries too.
+- Without `-proxy`, `HTTP_PROXY` and `HTTPS_PROXY` apply by Go's rule: a loopback target (`127.0.0.1`, `localhost`, `::1`) stays direct, and `NO_PROXY` keeps other hosts direct. This is the rule of every command that sends HTTP to a target: [Proxies](../CONCEPTS.md#proxies).
+
 ### Pace
 - `-rate` paces every request, the calibration guesses included; ffuf sends its calibration unpaced. With `-ac=false` there are no guesses. Calibration asks 4 guesses for each directory, and one more for each extension. At a low rate a sweep takes about (guesses ÷ rate) seconds longer than ffuf's, and stays within your rate.
 
@@ -131,6 +135,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 | --- | --- | --- | --- |
 | `-H` | string, repeatable |  | extra request header K: V |
 | `-cookie` | string, repeatable |  | Cookie name=value (repeatable; sent as one Cookie header) |
+| `-proxy` | string |  | send requests to targets through this proxy (http://, https:// or socks5://); Chrome too (default: $HTTP_PROXY, $HTTPS_PROXY, except for loopback targets, which stay direct) |
 
 **Output**
 

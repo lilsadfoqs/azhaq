@@ -106,7 +106,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 - `-p`, `-tp 100|1000|full` and `-pf FILE` add ports. `-ep LIST|FILE` takes ports out.
 - `-p -` is every port, `-p u:53` is a UDP port, and `-p none` leaves the TCP ports out.
 - The ports of a host are asked in a random order, the likeliest first: nmap's top 100, then its top 1000. `-order asc` asks them by number, and `-seed N` repeats an order.
-- `-rate` paces the scan. The default is 1500 connects a second. This machine's loopback is not paced unless you give `-rate`.
+- `-rate` paces the scan: it is a ceiling. The default is 1500 connects a second. This machine's loopback is not paced unless you give `-rate`, and then 20,000 ports at `-rate 500` take 40 seconds. nmap's `--min-rate 500` is a floor, which is `-min-rate 500` here: no ceiling, so a loopback scan of 20,000 ports with `-detect none` takes a fraction of a second, as nmap's does.
 - `-T0` to `-T5` set the rate, the connect timeout and the retries as nmap's templates do. An explicit flag wins.
 - `-c` is how many connects are in flight.
 - `-timeout` is how long the whole run may take, such as `90s`. `ports -timeout 500` is refused, with a pointer to `-connect-timeout`.
@@ -317,8 +317,8 @@ Each open TCP port gets `product` and `version` next to `service`, from what it 
 
 | Flag | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `-rate` | float |  | port connection attempts per second (0: 1500, as naabu's connect scan, and 127.0.0.1 unpaced) |
-| `-min-rate` | float |  | connects per second at least: raises -rate to this when lower |
+| `-rate` | float |  | port connection attempts per second, a ceiling (0: 1500, as naabu's connect scan, and 127.0.0.1 unpaced) |
+| `-min-rate` | float |  | connects per second at least, as nmap's --min-rate: raises -rate to this when lower, and sets no ceiling |
 | `-workers` | int |  | connects in flight at once, over all hosts (default: as many as the rate allows, up to 20000) |
 | `-connect-timeout` | string |  | wait this long for one port to accept or refuse a connect: 1500, 1500ms or 2s (default 1.5s; -timeout is the run's limit) |
 | `-dns-rate` | float |  | DNS queries per second per resolver (0: no pace but the queries in flight, as dnsx) |

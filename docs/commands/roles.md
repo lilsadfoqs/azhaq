@@ -141,7 +141,7 @@ With `-replay-writes`, these verdicts join the list. Proved cross writes keep th
 | `writes another role's object: accepted; the change cannot be read back to confirm` | yes | Another role's write was answered 2xx, and nothing shows whether the owner's object changed. See Details. |
 | `would be sent (-dry-writes)` | yes | `-dry-writes`: nothing was sent. |
 | `answered 2xx but changed nothing of the owner's` | `-all` | A 2xx answer, but the owner's object did not change as the write asked, or could not be read. Not a finding. |
-| `creates in another role's collection` | `-all` | A POST a role was let to send: a create, never another role's object written. |
+| `creates in another role's collection` | yes | A POST another role was let to send: it created data on the target. A create, never another role's object written. |
 | `only its owner writes it` | `-all` | The others were refused. |
 | `the owner's own write was refused` | `-all` | The owner was not let, or its empty write changed its object: nothing to compare. |
 | `the other roles were refused` | `-all` | A DELETE, never asked of its owner, that no other role was let to send. |
@@ -502,7 +502,7 @@ Replaying the owner's own recorded body is idempotent when the value it sets is 
 4. A DELETE goes to the others alone, the anonymous role first. It stops at the first proven.
 
 - A write is let when it is answered 2xx and not with an error shaped as data. It is proven by the owner's object changing.
-- Proved cross writes keep the top of the list, above the reads. The unproven rows rank below the proved reads: `answered 2xx but changed nothing` and `creates in another role's collection`.
+- Proved cross writes keep the top of the list, above the reads. The rows that prove nothing about another role's object rank below the proved reads: `creates in another role's collection`, which is listed, and `answered 2xx but changed nothing`, which is not.
 - Every request counts against `-replay-max` (what the read replay left) and the run's `-max-requests`, at the run's `-rate`. That includes each write and each read of the owner's object to verify it.
 - Every request is sent without following a redirect.
 

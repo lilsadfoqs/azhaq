@@ -180,6 +180,16 @@ The budget holds for each run: `azhaq resume` sends up to as many more as its ow
 
 Ctrl-C, `kill` and a hangup (SIGINT, SIGTERM and SIGHUP) all stop a command the same way. It exits 4, prints its summary and seals its ledger.
 
+## Proxies
+
+One rule holds for every command that sends HTTP to a target: `run`, `crawl`, `probe`, `dirs`, `fuzz`, `params`, `shots`, `roles` and the commands `watch` and `resume` repeat.
+
+- `-proxy URL` (an `http://`, `https://` or `socks5://` URL; `fuzz` also takes `-x`) sends every request of the command through it. The proxy sees each one, and the ledger counts the same.
+- `-proxy` sends everything through the proxy, loopback targets (`127.0.0.1`, `localhost`, `::1`) included: that is how to put a local lab in Burp.
+- Without `-proxy`, the environment's `HTTP_PROXY`, `HTTPS_PROXY` and `NO_PROXY` apply by Go's rule, as in ffuf, httpx and katana: a loopback target always stays direct, so a company proxy in the environment never gets your local labs.
+- `azhaq mcp` has no `-proxy`: its commands read the environment the server starts with.
+- Not target requests, so not covered: `subs -proxy` and `-source-proxy` (the name sources), `urls -proxy` (the archives), `notify -proxy`, `dns -proxy` and `ports -proxy` (SOCKS5 for DNS and for connects).
+
 ## Workspaces, runs and resuming
 
 The summary's `next` lists commands worth running after a run: see [OUTPUT](OUTPUT.md#next).

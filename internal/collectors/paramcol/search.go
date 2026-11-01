@@ -149,6 +149,7 @@ type chunk struct {
 	reads        bool
 	any          bool // the page answers any name
 	tried, count int  // what said so
+	done         bool // every name was judged
 }
 
 func (ck *chunk) set(name, why string) {
@@ -178,7 +179,7 @@ func (s *search) run(page string, emit func(types.Observation) error) (types.Run
 	if !s.calibrate(words) {
 		switch {
 		case s.err != nil:
-			return types.RunMeta{}, nil // spent
+			return s.partial(page, emit, nil, nil, nil, nil, 0)
 		case s.ctx.Err() != nil:
 			return types.RunMeta{Status: types.StatusCancelled}, s.ctx.Err()
 		}
@@ -222,11 +223,8 @@ func (s *search) run(page string, emit func(types.Observation) error) (types.Run
 	if s.ctx.Err() != nil {
 		return types.RunMeta{Status: types.StatusCancelled}, s.ctx.Err()
 	}
-	s.mu.Lock()
-	spent := s.err != nil
-	s.mu.Unlock()
-	if spent {
-		return types.RunMeta{}, nil
+	if s.spentNow() {
+		return s.partial(page, emit, chunks, nil, nil, nil, len(names))
 	}
 	found := map[string]string{}
 	notes := s.gather(page, chunks, found)
@@ -238,7 +236,7 @@ func (s *search) run(page string, emit func(types.Observation) error) (types.Run
 			return types.RunMeta{Status: types.StatusCancelled}, s.ctx.Err()
 		}
 		if s.spentNow() {
-			return types.RunMeta{}, nil
+			return s.partial(page, emit, chunks, found, nil, notes, len(names))
 		}
 	}
 	values := map[string]string{}
@@ -254,7 +252,7 @@ func (s *search) run(page string, emit func(types.Observation) error) (types.Run
 		case s.ctx.Err() != nil:
 			return types.RunMeta{Status: types.StatusCancelled}, s.ctx.Err()
 		case s.spentNow():
-			return types.RunMeta{}, nil
+			return s.partial(page, emit, chunks, found, values, notes, len(names))
 		}
 	}
 	// After deepen, which sends found names with every request: the URL has these.
@@ -267,6 +265,43 @@ func (s *search) run(page string, emit func(types.Observation) error) (types.Run
 	if bad > 0 {
 		notes = append(notes, fmt.Sprintf("%s: %d names are not valid XML element names and were not sent", page, bad))
 	}
+	return s.give(page, emit, found, values, notes)
+}
+
+// partial gives the page's row when the request budget ends the search: the
+// names established so far, and how far it got. total is how many names
+// there were to ask; 0 says calibration was not over. The page is searched
+// again by azhaq resume.
+func (s *search) partial(page string, emit func(types.Observation) error, chunks []*chunk, found, values map[string]string, notes []string, total int) (types.RunMeta, error) {
+	if found == nil {
+		found = map[string]string{}
+	}
+	if values == nil {
+		values = map[string]string{}
+	}
+	judged := 0
+	for _, ck := range chunks {
+		ck.mu.Lock()
+		if ck.done {
+			judged += len(ck.names)
+		}
+		ck.mu.Unlock()
+	}
+	notes = append(notes, s.gather(page, chunks, found)...)
+	var what string
+	switch {
+	case total == 0:
+		what = "before any name was asked: the page was still being measured"
+	case judged < total:
+		what = fmt.Sprintf("with %d of %d names judged", judged, total)
+	default:
+		what = fmt.Sprintf("after all %d names were asked, before the follow-up checks (names the page shows, switches, required fields) were over", total)
+	}
+	known := "none found so far"
+	if len(found) > 0 {
+		known = fmt.Sprintf("%d found so far", len(found))
+	}
+	notes = append(notes, fmt.Sprintf("%s: the request budget ended the search %s (%s); azhaq resume searches the page again", page, what, known))
 	return s.give(page, emit, found, values, notes)
 }
 
@@ -465,6 +500,11 @@ func (s *search) searchChunks(chunks []*chunk) {
 				s.mu.Unlock()
 				if !skip && !s.halted() {
 					s.runChunk(ck)
+					if !s.halted() {
+						ck.mu.Lock()
+						ck.done = true
+						ck.mu.Unlock()
+					}
 				}
 			}
 		}()

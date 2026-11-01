@@ -55,6 +55,7 @@ func cmdFuzz(args []string) error {
 	reqFile := fs.String("request", "", "read the request from this file (a raw HTTP request, as Burp saves it); -u, -X, -d, -H and -b replace what it holds")
 	reqProto := fs.String("request-proto", "https", "the protocol for the URL a -request file's Host header gives")
 	proxy := fs.String("x", "", "send every request through this proxy: an http, https, socks5 or socks5h URL")
+	fs.StringVar(proxy, "proxy", "", "the same as -x, as on every other command")
 	replayProxy := fs.String("replay-proxy", "", "send each match once more through this proxy (Burp, for the history); the copy is the proxy's own, not counted by -max-requests or -rate and not in the ledger")
 	ignoreBody := fs.Bool("ignore-body", false, "do not read the answer's body: size is the Content-Length, words and lines 0")
 	raw := fs.Bool("raw", false, "send the path and query as written, not encoded")
@@ -198,7 +199,7 @@ func cmdFuzz(args []string) error {
 	if *inputNum < 1 {
 		return usagef("-input-num wants at least 1")
 	}
-	for _, v := range []struct{ name, val string }{{"-x", *proxy}, {"-replay-proxy", *replayProxy}} {
+	for _, v := range []struct{ name, val string }{{"-x or -proxy", *proxy}, {"-replay-proxy", *replayProxy}} {
 		if v.val == "" {
 			continue
 		}
