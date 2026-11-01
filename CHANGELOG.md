@@ -23,6 +23,7 @@
 
 ### Fixed
 
+- `probe` with `-p` (or `-path`) now ends every input's port (path) as a row of its own, a failed one included, in text and JSON: before, one port answering hid the others' failures, and a name asked on several ports kept only the last port's error. The summary names each failed URL once.
 - `ingest` of naabu JSON now makes `Port` rows as azhaq's own scan does: `query -type Port`, the summary counts and the MCP tools list each open port, the lines naabu repeats fold into one row, and a naabu udp line is a udp port.
 - A worker no longer waits a minute and ends with a lost-run error when the run finishes between two of its claims: three refused connections in a row end it as an ended run.
 - `subs` with `-max-time` read the name checker's count and time while a sampled source it had cut short could still be writing them (a data race, seen with `-race`).
