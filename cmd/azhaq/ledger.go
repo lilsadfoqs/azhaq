@@ -190,7 +190,6 @@ func (r *runLedger) close(rep *report) {
 		rep.Notes = append(rep.Notes, fmt.Sprintf("ledger %s could not be written (%v): what the run sent may be missing from it", path, err))
 		return
 	}
-	c, _ := ledger.Verify(path)
 	seal := r.l.Last()
 	what, targets := r.recorded(path)
 	rep.Notes = append(rep.Notes, fmt.Sprintf("ledger: %s, sealed %s (azhaq ledger -verify %s -seal %s; the seal alone proves no line was later removed and the rest re-chained)", fmt.Sprintf(what, path), seal, path, seal))
@@ -204,6 +203,7 @@ func (r *runLedger) close(rep *report) {
 		rep.Notes = append(rep.Notes, fmt.Sprintf("the summary counts %d requests to targets and the ledger lists %d lines to them (azhaq ledger -summary %s lists them by kind)", rep.Requests, targets, path))
 	}
 	if r.sealTo != "" {
+		c, _ := ledger.Verify(path) // the file's whole count: earlier runs' lines too
 		if err := sendSeal(r.sealTo, path, seal, c.Entries); err != nil {
 			rep.Notes = append(rep.Notes, fmt.Sprintf("-seal-to %s: %v: the seal is only in %s, next to the run's own files", r.sealTo, err, path))
 		}
@@ -216,35 +216,47 @@ func (r *runLedger) close(rep *report) {
 func (r *runLedger) recorded(path string) (what string, targets int) {
 	var reqs, conns, sources, dns, own, all int
 	spent := map[string]*stageSpend{}
-	err := ledger.Read(path, func(e ledger.Entry) error {
-		if e.Seq <= r.from || e.Kind == ledger.KindSeal {
-			return nil
-		}
-		all++
-		switch e.Class {
+	count := func(class, kind, collector string, n int) {
+		all += n
+		switch class {
 		case ledger.ClassSource:
-			sources++
+			sources += n
 		case ledger.ClassDNS:
-			dns++
+			dns += n
 		case ledger.ClassOwn:
-			own++
+			own += n
 		default:
-			if e.Kind == "tcp" || e.Kind == "udp" {
-				conns++
+			if kind == "tcp" || kind == "udp" {
+				conns += n
 			} else {
-				reqs++
+				reqs += n
 			}
-			name := strings.TrimPrefix(e.Collector, "azhaq-")
+			name := strings.TrimPrefix(collector, "azhaq-")
 			if name == "" {
 				name = "other"
 			}
 			if spent[name] == nil {
 				spent[name] = &stageSpend{}
 			}
-			spent[name].add(e.Kind)
+			spent[name].add(kind, n)
 		}
-		return nil
-	})
+	}
+	// What the ledger counted as it wrote: the file is not read again at the
+	// end of a run. Only a ledger that held lines the run did not write (it
+	// was opened by something else first) is read.
+	var err error
+	if lines, opened := r.l.Tally(); opened == r.from {
+		for k, n := range lines {
+			count(k.Class, k.Kind, k.Collector, n)
+		}
+	} else {
+		err = ledger.Read(path, func(e ledger.Entry) error {
+			if e.Seq > r.from && e.Kind != ledger.KindSeal {
+				count(e.Class, e.Kind, e.Collector, 1)
+			}
+			return nil
+		})
+	}
 	r.stages = stagesLine(spent)
 	if err != nil {
 		return "recorded in %s, not counted (" + strings.ReplaceAll(err.Error(), "%", "%%") + ")", int(r.l.Count() - r.from)
@@ -311,14 +323,14 @@ func sendSeal(dest, ledgerPath, seal string, entries int) error {
 // stageSpend counts what one collector sent to targets, by kind.
 type stageSpend struct{ tcp, udp, other int }
 
-func (s *stageSpend) add(kind string) {
+func (s *stageSpend) add(kind string, n int) {
 	switch kind {
 	case "tcp":
-		s.tcp++
+		s.tcp += n
 	case "udp":
-		s.udp++
+		s.udp += n
 	default:
-		s.other++
+		s.other += n
 	}
 }
 

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -117,5 +118,34 @@ func TestLedgerNoteNamesTheClasses(t *testing.T) {
 	}
 	if strings.Contains(got, "the summary counts") {
 		t.Errorf("the counts agree: %s", got)
+	}
+}
+
+// The note at the end of a run comes from what the ledger counted as it
+// wrote: the file is not read again (a full-range scan spent the better part
+// of a second reading its 65,535 lines twice). With the file gone the count
+// is still right.
+func TestLedgerNoteDoesNotReadTheFileAgain(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "x.ledger.jsonl")
+	l, err := ledger.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for range 30 {
+		l.Record(ledger.Entry{Kind: "tcp", Class: ledger.ClassTarget, Target: "127.0.0.1:80", Collector: "azhaq-ports"})
+	}
+	l.Record(ledger.Entry{Kind: "http", Class: ledger.ClassTarget, Method: "GET", Target: "http://127.0.0.1/", Collector: "azhaq-urls"})
+	if err := os.Remove(path); err != nil {
+		t.Skip("the file cannot be removed while open:", err)
+	}
+	r := &runLedger{l: l, owned: true, stopKill: func() {}}
+	rep := &report{Requests: 31}
+	r.close(rep)
+	got := strings.Join(rep.Notes, "\n")
+	if !strings.Contains(got, "ledger: 31 recorded in ") || !strings.Contains(got, ": 31 to targets (1 request, 30 connections), sealed ") {
+		t.Errorf("the note without the file: %s", got)
+	}
+	if strings.Contains(got, "not counted") || strings.Contains(got, "the summary counts") {
+		t.Errorf("the note read the file or disagreed: %s", got)
 	}
 }

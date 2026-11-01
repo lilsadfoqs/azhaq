@@ -23,6 +23,10 @@ import (
 	"time"
 )
 
+// Kind3 is what Tally counts lines by: the class an entry was sent to, its
+// kind and the collector that sent it.
+type Kind3 struct{ Class, Kind, Collector string }
+
 // Entry is one request or connection. Hash covers Prev and every other field.
 type Entry struct {
 	Seq       int64     `json:"seq"`
@@ -78,6 +82,9 @@ type Ledger struct {
 	lastSeal bool // the last line is a seal: nothing to seal again
 	err      error
 
+	opened int64         // lines the file held when it was opened
+	tally  map[Kind3]int // lines recorded since, by class, kind and collector
+
 	tail    []Entry         // what follows the last seal when the file was opened
 	held    map[string]bool // writes of the run that was killed: method, target and body
 	heldAny map[string]bool // the same without the body (Chrome's)
@@ -92,7 +99,7 @@ func Open(path string) (*Ledger, error) {
 	if err != nil {
 		return nil, err
 	}
-	l := &Ledger{f: f, path: path, w: bufio.NewWriter(f)}
+	l := &Ledger{f: f, path: path, w: bufio.NewWriter(f), tally: map[Kind3]int{}}
 	last, err := lastLine(f)
 	if err == nil && len(last) > 0 {
 		var e Entry
@@ -104,6 +111,7 @@ func Open(path string) (*Ledger, error) {
 		f.Close()
 		return nil, fmt.Errorf("ledger %s: the last line is not an entry (%v): azhaq ledger -verify %s", path, err, path)
 	}
+	l.opened = l.seq
 	if l.seq > 0 && !l.lastSeal {
 		l.tail = unsealed(path)
 	}
@@ -260,6 +268,9 @@ func (l *Ledger) Record(e Entry) {
 	}
 	l.note(err)
 	l.prev, l.lastSeal = e.Hash, e.Kind == KindSeal
+	if e.Kind != KindSeal {
+		l.tally[Kind3{e.Class, e.Kind, e.Collector}]++
+	}
 	if k := key(e.Method, e.Target, ""); l.pending[k] && (e.Kind == "http" || e.Kind == "chrome") && e.IsTarget() {
 		delete(l.pending, k)
 		l.again++
@@ -278,6 +289,19 @@ func (l *Ledger) Count() int64 {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	return l.seq
+}
+
+// Tally is the lines this ledger recorded since it was opened, seals left
+// out, by class, kind and collector: what a summary says about them without
+// reading the file again. Opened is the lines the file held before them.
+func (l *Ledger) Tally() (lines map[Kind3]int, opened int64) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	out := make(map[Kind3]int, len(l.tally))
+	for k, n := range l.tally {
+		out[k] = n
+	}
+	return out, l.opened
 }
 
 // Last is the hash of the last line written: after Close, the seal's.
