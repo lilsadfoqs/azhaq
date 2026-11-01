@@ -315,7 +315,7 @@ The run's options are stored with it. The database is left out, and so are the v
 
 So a task that ran but whose end was not recorded runs again whole. Observations are stored once per run, so it reports nothing twice.
 
-Tasks the budget stopped before run last, one at a time and cheapest first, by the requests they had sent. So a path sweep that needs more than the budget does not starve cheaper work. Once the budget is spent, tasks that would contact targets are kept back. A resume in which no task finished says the budget is smaller than any task left needs.
+Tasks the budget stopped before run last, one at a time and cheapest first, by the requests they had sent. So a path sweep that needs more than the budget does not starve cheaper work. Once the budget is spent, tasks that would contact targets are kept back. A resume in which no task finished says the budget is smaller than any task left needs, in the command's terms: connections for `ports`, requests for the others.
 
 ### The request ledger and the kill switch
 

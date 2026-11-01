@@ -1415,7 +1415,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		}
 		rep.Resume = resumeHint(path, cut > 0, *login != "", *loginUser)
 		if *resumeRun != "" && st.TasksDone() == doneBefore && egress.Spent() && egress.Killed() == nil {
-			rep.Notes = append(rep.Notes, fmt.Sprintf("no task finished: each one left needs more than %d requests (a path sweep needs one per word); raise -max-requests", egress.MaxRequests()))
+			rep.Notes = append(rep.Notes, noTaskFinished(rep.Command, egress.MaxRequests()))
 		}
 	} else {
 		// Nothing left to resume: the kept answers have served.
@@ -1442,6 +1442,18 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		}
 	}
 	return nil
+}
+
+// noTaskFinished is the note of a resume that ended with the budget spent and
+// no task done: what a task left costs, in the command's own terms.
+func noTaskFinished(command string, budget int64) string {
+	switch command {
+	case "ports":
+		return fmt.Sprintf("no task finished: each one left needs more than %d connections (one per port to connect, for each of its addresses); raise -max-requests", budget)
+	case "run", "dirs":
+		return fmt.Sprintf("no task finished: each one left needs more than %d requests (a path sweep needs one per word); raise -max-requests", budget)
+	}
+	return fmt.Sprintf("no task finished: each one left needs more than %d requests; raise -max-requests", budget)
 }
 
 // webServiceCost is the requests mapping one web service takes at least: the

@@ -153,3 +153,36 @@ func TestRunCountsAPortOnceWhateverNamesPointToTheAddress(t *testing.T) {
 		t.Errorf("query lists %d port rows:\n%s", n, q)
 	}
 }
+
+// A capped ports resume names its leftovers in ports to connect, and counts
+// the one address it was asked about.
+func TestCappedPortsResumeNoteNamesPorts(t *testing.T) {
+	open, _ := countedListener(t)
+	t.Chdir(t.TempDir())
+	ports := "1,2,3,4,5,6," + open
+	if _, _, code := runContract(t, "ports", "-host", "127.0.0.1", "-p", ports, "-detect", "none", "-order", "asc", "-max-requests", "3", "-db", "p.db"); code != exitLimit {
+		t.Fatalf("the first run: exit %d", code)
+	}
+	_, rep, code := runContract(t, "resume", "-db", "p.db", "-max-requests", "3")
+	if code != exitLimit {
+		t.Fatalf("resume: exit %d, stopped %q", code, rep.Stopped)
+	}
+	if rep.Counts["addresses"] != 1 {
+		t.Errorf("the resume counts %d addresses, want 1: %v", rep.Counts["addresses"], rep.Counts)
+	}
+	notes := strings.Join(rep.Notes, "\n")
+	if !strings.Contains(notes, "no task finished: each one left needs more than 3 connections (one per port to connect") || strings.Contains(notes, "path sweep") {
+		t.Errorf("the note does not speak of ports: %q", rep.Notes)
+	}
+}
+
+func TestNoTaskFinishedNoteSpeaksTheCommandsTerms(t *testing.T) {
+	for cmd, want := range map[string]string{"ports": "3 connections", "dirs": "a path sweep needs one per word", "crawl": "3 requests; raise"} {
+		if got := noTaskFinished(cmd, 3); !strings.Contains(got, want) {
+			t.Errorf("%s: %q lacks %q", cmd, got, want)
+		}
+	}
+	if got := noTaskFinished("crawl", 3); strings.Contains(got, "path sweep") {
+		t.Errorf("crawl: %q", got)
+	}
+}
