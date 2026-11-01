@@ -275,42 +275,42 @@ func TestChromeSignInPassesThroughTheRunsProxy(t *testing.T) {
 	}
 }
 
-// Chrome's own services (updates, time, sign-in) reach for Google while a
-// page loads and the browser idles, whatever flags turn off: the guard
-// refuses each connection and counts it, and the proxy is asked for the
-// target and nothing else.
-func TestChromeBackgroundConnectionsAreRefusedAndCounted(t *testing.T) {
-	b := startChrome(t)
+// Chrome's own services (updates, sign-in, time, safe browsing) start with
+// the browser and while a page loads: none reaches a host. The scope holds
+// only the target's own port, so a connection to anywhere else is counted.
+func TestChromeMakesNoConnectionOfItsOwn(t *testing.T) {
+	const jwt = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJtZW1iZXIifQ.c2lnbmVk"
 	target := newRecorder(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/login" {
+			fmt.Fprintf(w, `{"token":%q,"bid":7}`, jwt)
+			return
+		}
 		w.Header().Set("Content-Type", "text/html")
-		fmt.Fprint(w, "<html><body>quiet</body></html>")
+		if r.URL.Path == "/login" {
+			fmt.Fprint(w, loginPage)
+			return
+		}
+		fmt.Fprint(w, "<html><body><form method=post action=/login><input name=u><input type=password name=p></form></body></html>")
 	})
 	defer target.Close()
-	prox := newProxyLog()
-	defer prox.Close()
-	pu, _ := url.Parse(prox.URL)
+	tu, _ := url.Parse(target.URL)
 	fetch.Reset()
 	egress.SetScope(func(h string) bool { return h == "127.0.0.1" })
-	egress.SetTargetProxy(pu)
+	egress.SetScopeAddr(func(h, port string) bool { return h == "127.0.0.1" && port == tu.Port() })
+	b := startChrome(t)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	_ = egress.Spend(ctx)
-	if _, err := b.Load(ctx, target.URL+"/", false); err != nil {
+	if _, err := b.Load(ctx, target.URL+"/", true); err != nil {
 		t.Fatal(err)
 	}
-	time.Sleep(6 * time.Second) // the updater and the time service start within seconds
+	if _, err := b.Login(ctx, target.URL+"/login", "member@x.test", "s3cret"); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(20 * time.Second) // the updater, sign-in and time services start within seconds
 	n, hosts := b.GuardDenied()
 	b.Close()
-	t.Logf("Chrome opened %d connections of its own, all refused: %v", n, hosts)
-	for _, h := range hosts {
-		if h == "127.0.0.1" {
-			t.Errorf("the target's own address was counted as outside the scope")
-		}
-	}
-	requests, connects := prox.seen()
-	for _, r := range append(requests, connects...) {
-		if !strings.Contains(r, "127.0.0.1") {
-			t.Errorf("the proxy was asked for %q: a connection outside the scope got through", r)
-		}
+	if n != 0 {
+		t.Errorf("Chrome tried %d connections of its own: %v", n, hosts)
 	}
 }

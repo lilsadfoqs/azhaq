@@ -159,3 +159,41 @@ func TestSubmitFormIsCountedAndHeldToScope(t *testing.T) {
 		t.Errorf("a submission outside the scope was sent: %v", err)
 	}
 }
+
+// A route that streams events forever answers with its status, headers and
+// the first part of its body at once, not when the request times out.
+func TestEventStreamDoesNotHoldTheRequest(t *testing.T) {
+	Reset()
+	defer Reset()
+	done := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		for i := 0; ; i++ {
+			select {
+			case <-done:
+				return
+			case <-r.Context().Done():
+				return
+			default:
+			}
+			if _, err := w.Write([]byte("data: tick\n\n")); err != nil {
+				return
+			}
+			w.(http.Flusher).Flush()
+			time.Sleep(100 * time.Millisecond)
+		}
+	}))
+	defer srv.Close()
+	defer close(done)
+	start := time.Now()
+	res, _, err := Do(context.Background(), srv.Client(), srv.URL+"/events")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if took := time.Since(start); took > 10*time.Second {
+		t.Errorf("the stream held the request for %v", took)
+	}
+	if res.Status != 200 || !strings.HasPrefix(string(res.Body), "data: tick") || !res.Truncated {
+		t.Errorf("status %d, truncated %v, body %q", res.Status, res.Truncated, res.Body)
+	}
+}

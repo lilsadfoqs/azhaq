@@ -122,6 +122,34 @@ for req in 1 0; do
     fi
 done
 
+# -f SOURCE_DIR: installs from the release folder on disk, no curl needed
+# (goreleaser --snapshot's dist/, before a release exists to download from).
+rm -rf "$T/destlocal"
+if env -i PATH="$BIN" HOME="$T" sh "$INSTALL" -v v9.9.9 -f "$REL" -d "$T/destlocal" >"$out" 2>&1 &&
+    [ -x "$T/destlocal/azhaq" ] && grep -q 'signature is not checked' "$out"; then
+    pass "-f installs from a local directory and says the signature is not checked"
+else
+    fail "-f installs from a local directory"; cat "$out"
+fi
+
+# -f without -v: no "latest" to look up locally.
+if env -i PATH="$BIN" HOME="$T" sh "$INSTALL" -f "$REL" -d "$T/destlocal2" >"$out" 2>&1; then
+    fail "-f without -v exits non-zero"
+elif [ -e "$T/destlocal2" ]; then
+    fail "-f without -v installs nothing"
+else
+    pass "-f without -v: refuses, nothing installed"
+fi
+
+# -f with --require-signature: refuses instead of silently skipping it.
+if env -i PATH="$BIN" HOME="$T" sh "$INSTALL" -v v9.9.9 -f "$REL" -d "$T/destlocal3" -s >"$out" 2>&1; then
+    fail "-f -s exits non-zero"
+elif [ -e "$T/destlocal3" ] || ! grep -q 'has no signature to verify' "$out"; then
+    fail "-f -s refuses, nothing installed"; cat "$out"
+else
+    pass "-f -s: refuses (a local source has nothing to verify a signature against)"
+fi
+
 # A tampered archive: nothing installed.
 echo tampered >> "$REL/$ARCHIVE"
 if run X=1; then

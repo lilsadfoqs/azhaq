@@ -32,7 +32,7 @@ var helpSpecs = map[string]helpSpec{
 			{"What to ask", `probe passive skip dirs params ports ports-on ports-udp dns-brute permute no-takeover graphql graphql-wordlist known-files paths no-paths path-climb fill-forms per-template web-ports web-scheme no-favicon no-tech no-map-guess no-follow`},
 			{"Crawl scope", `crawl-scope crawl-any-host crawl-in crawl-out`},
 			{"Names and sources", `sources all-sources exclude-sources providers resolvers dns-rate source-proxy source-rate source-rates source-timeout max-time max-body max-results urls-timeout no-history`},
-			{"Browser", `browser interact interact-clicks screenshots chrome chrome-profile chrome-proxy tabs unsafe-ports`},
+			{"Browser", `browser interact interact-clicks screenshots chrome chrome-profile chrome-proxy chrome-require-sandbox tabs unsafe-ports`},
 			{"Scope and safety", `allow deny deny-path kill-file ledger seal-to submit-forms browser-writes params-writes`},
 			{"Pace and limits", `rate host-rate host-parallel parallel delay backoff retry request-timeout timeout max-requests max-host-requests daily-requests max-items max-names max-ips max-response-size depth`},
 			{"Session", `cookie cookie-jar header login login-user login-pass proxy`},
@@ -289,7 +289,7 @@ var helpSpecs = map[string]helpSpec{
 		groups: []helpGroup{
 			{"Targets and input", `u l p nmap nessus scope program max-ips`},
 			{"Screenshots", `shot-codes shot-format shot-fullpage shot-html shot-js shot-quality shot-size shot-timeout shot-wait no-tech`},
-			{"Browser", `chrome chrome-profile tabs unsafe-ports`},
+			{"Browser", `chrome chrome-profile chrome-require-sandbox tabs unsafe-ports`},
 			{"Scope and safety", `allow deny deny-path kill-file ledger browser-writes`},
 			{"Pace and limits", `rate max-requests timeout`},
 			{"Session and network", `H cookie proxy`},

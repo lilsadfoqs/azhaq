@@ -105,12 +105,20 @@ In `roles` the file is `roles.stop` in the `-dir`. There it stops the runs of th
 
 ### Chrome does not start
 
-**Why:** azhaq looks for Chrome or Chromium on the usual paths. In some containers Chrome cannot start its sandbox, and the error says so.
+**Why:** azhaq looks for Chrome or Chromium on the usual paths. Chrome also needs a sandbox, which a container or a locked-down user may not give it (no unprivileged user namespaces, or AppArmor on Ubuntu 24.04 and later), and then it exits with `No usable sandbox`.
 
 **Fix:**
 
 - `AZHAQ_CHROME=/path/to/chrome` names the browser.
-- `AZHAQ_CHROME_NO_SANDBOX=1` runs it without a sandbox. Do this only where you accept that the pages Chrome loads are untrusted.
+- Nothing to set for the sandbox: azhaq starts Chrome with it, and when Chrome says the system gives it none, starts Chrome once more without it, as gowitness always does. The summary then says `Chrome ran without its sandbox` and why. The pages Chrome loads are the targets' and untrusted, so run it in a throwaway container or VM.
+- `-chrome-require-sandbox` refuses that second start: Chrome does not start, and the error says why. On Ubuntu, a sandbox is given back by allowing user namespaces to Chrome in AppArmor, or with `sysctl kernel.apparmor_restrict_unprivileged_userns=0`.
+- `AZHAQ_CHROME_NO_SANDBOX=1` runs Chrome without a sandbox from the start, with no first try. It cannot go with `-chrome-require-sandbox`.
+
+### The summary says Chrome's own services reached for connections
+
+**Why:** Chrome started with a profile that already exists (`-chrome-profile`) and one of its services, such as sign-in or safe browsing, is on in that profile. The guard refused each connection and none was sent. A new profile has them off.
+
+**Fix:** Use a new directory for `-chrome-profile`, or turn those services off in that profile.
 
 ## roles
 
