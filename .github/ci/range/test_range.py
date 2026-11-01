@@ -929,7 +929,7 @@ GATE_A_REPORT = """# Report
 
 | Item | Score | Reasoning |
 |---|---|---|
-| findings against the key and the baseline | 9 | matched all |
+| findings | 9 | matched all |
 | time to the first finding | 8 | a bit slow |
 | signal versus noise | 9 | clean |
 | trust | 9 | held up |

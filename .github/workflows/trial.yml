@@ -78,6 +78,8 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # git describe names the build from the last release tag
       - uses: actions/setup-go@v7
         with:
           go-version: stable
@@ -86,12 +88,16 @@ jobs:
         # a release. Both parts install this same binary; the install script
         # itself is checked separately, against a snapshot release (ci.yml).
         run: |
-          CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=$GITHUB_REF_NAME" -o azhaq ./cmd/azhaq
+          v=$(git describe --tags --match 'v[0-9]*' --always)
+          CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=$v" -o azhaq ./cmd/azhaq
           ./azhaq version
+          echo "$v" > azhaq.version
       - uses: actions/upload-artifact@v7
         with:
           name: gate-azhaq
-          path: azhaq
+          path: |
+            azhaq
+            azhaq.version
           retention-days: 2
   gate-a:
     needs: [kind, build]
@@ -122,6 +128,7 @@ jobs:
         run: |
           mkdir -p "$HOME/trial/bin" "$HOME/ci"
           install -m 755 _bin/azhaq "$HOME/trial/bin/azhaq"
+          cp _bin/azhaq.version "$HOME/ci/azhaq.version"
           "$HOME/trial/bin/azhaq" version
       - name: codex
         env:
@@ -175,7 +182,7 @@ jobs:
           find "$GITHUB_WORKSPACE" -mindepth 1 -delete
       - name: review
         run: |
-          python3 -I "$HOME/ci/render_brief.py" gate-a "$GITHUB_REF_NAME" "$HOME/ci/vars.json" "$HOME/ci" > "$HOME/ci/brief.md"
+          python3 -I "$HOME/ci/render_brief.py" gate-a "$(cat "$HOME/ci/azhaq.version")" "$HOME/ci/vars.json" "$HOME/ci" > "$HOME/ci/brief.md"
           cd "$HOME/trial"
           if [ "$DRYRUN" = 1 ]; then
             nets=$(jq -r '.NET1' "$HOME/ci/vars.json" 2>/dev/null || true)
@@ -244,6 +251,7 @@ jobs:
         run: |
           mkdir -p "$HOME/trial/bin" "$HOME/ci"
           install -m 755 _bin/azhaq "$HOME/trial/bin/azhaq"
+          cp _bin/azhaq.version "$HOME/ci/azhaq.version"
           "$HOME/trial/bin/azhaq" version
       - name: codex
         env:
@@ -286,7 +294,7 @@ jobs:
       - name: review
         run: |
           echo '{}' > "$HOME/ci/vars.json"
-          python3 -I "$HOME/ci/render_brief.py" gate-b "$GITHUB_REF_NAME" "$HOME/ci/vars.json" "$HOME/ci" > "$HOME/ci/brief.md"
+          python3 -I "$HOME/ci/render_brief.py" gate-b "$(cat "$HOME/ci/azhaq.version")" "$HOME/ci/vars.json" "$HOME/ci" > "$HOME/ci/brief.md"
           cd "$HOME/trial"
           if [ "$DRYRUN" = 1 ]; then
             {

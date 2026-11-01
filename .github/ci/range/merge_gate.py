@@ -34,7 +34,7 @@ ANCHORS = [
 # GATE.md's row labels, in the order its deliverable section lists them (the
 # overall of each part is read but not carried into the merged table: the
 # merge computes one overall of its own).
-PART_A_ITEMS = ["findings against the key and the baseline", "time to the first finding",
+PART_A_ITEMS = ["findings", "time to the first finding",
                 "signal versus noise", "trust", "would use on the next engagement"]
 PART_B_ITEMS = ["install and first run", "docs", "subdomain recon", "host and port discovery",
                 "web and api mapping", "signed-in and multi-role testing",

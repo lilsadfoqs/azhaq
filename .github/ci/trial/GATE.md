@@ -44,7 +44,7 @@ Also write ./surface-1.txt: every host, open port and service you mapped, one pe
 4. **What azhaq changed in the outcome,** with evidence: findings you made faster, or only, because of it; findings it hid, slowed or got wrong; output you could not trust.
 5. **Where you used other tools,** and why, for each.
 6. **Trust:** did its output hold up when you checked it by hand (wrong, missing or invented results, silent failures, summaries that do not add up)? Did it stay in scope and send what it said it sent?
-7. **Scorecard, 1 to 10, one line of reasoning each:** findings against the key and the baseline, time to the first finding, signal versus noise, trust, would use on the next engagement, overall (this part). Score only on what you measured.
+7. **Scorecard, 1 to 10, one line of reasoning each:** findings, time to the first finding, signal versus noise, trust, would use on the next engagement, overall (this part). Score only on what you measured.
 
    **Anchors for every score:** compare with how you do the same job today, on what you measured.
    - 10: you would hand the job to it without a second look.
@@ -62,7 +62,7 @@ Also write ./surface-1.txt: every host, open port and service you mapped, one pe
 
 ## Part B: head-to-head on the local labs
 
-azhaq (__VERSION__) is already installed at ./bin/azhaq (by the release's install script, with the checksum checked); call it by that path. Installing it is not part of this review: a separate CI job verifies the install script against a snapshot build.
+azhaq (__VERSION__) is at ./bin/azhaq, built from the commit under review; call it by that path. Installing it is not part of this review: a separate CI job checks the install script against a snapshot build.
 
 ### Coverage rules (these bind your scores)
 
@@ -113,7 +113,7 @@ azhaq (__VERSION__) is already installed at ./bin/azhaq (by the release's instal
 ### Deliverable: ./REPORT.md, in English
 
 1. **Verdict in three lines:** would you adopt it, for what, and what would you keep using instead.
-2. **Scorecard, 1 to 10, one line of reasoning each:** install and first run, docs, subdomain recon, host and port discovery, web and API mapping, signed-in and multi-role testing, output and integration (including assistants), reliability (crashes, hangs, wrong data, silent failures), performance (time, memory and CPU, and the requests it sends to the target for the same result), overall (this part). Score "install and first run" on the first commands you ran against ./bin/azhaq, not an install you did not do; a separate CI check (goreleaser snapshot, then the install script) verified the release installs cleanly before this review started. Score only on what you measured, under the coverage rules above.
+2. **Scorecard, 1 to 10, one line of reasoning each:** install and first run, docs, subdomain recon, host and port discovery, web and API mapping, signed-in and multi-role testing, output and integration (including assistants), reliability (crashes, hangs, wrong data, silent failures), performance (time, memory and CPU, and the requests it sends to the target for the same result), overall (this part). Score "install and first run" on the first commands you ran against ./bin/azhaq, not an install you did not do; the install script is checked by CI on its own. Score only on what you measured, under the coverage rules above.
 
    **Anchors for every score:** compare with how you do the same job today, on what you measured.
    - 10: you would hand the job to it without a second look.

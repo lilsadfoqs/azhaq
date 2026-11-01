@@ -35,7 +35,9 @@ PHASES = {
 }
 
 GATE_FILE = "GATE.md"
-GATE_AZHAQ_TOOLS = AZHAQ
+GATE_AZHAQ_TOOLS = ("azhaq __VERSION__ is at ./bin/azhaq, built from the commit under review. Use it as your main tool. "
+                    "Use other tools only where it cannot do the job, and log each such fallback with the reason in "
+                    "./notes/fallbacks.md.")
 GATE_USUAL_TOOLS = USUAL + " azhaq is not installed here and must not be used."
 
 
