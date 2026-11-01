@@ -9,7 +9,7 @@ jobs. Prints the jobs as a JSON array for the workflow's matrix:
 [{"name": "p1", "units": "default:apps,once:docs", "seconds": 405}, ...]
 and a table of them on stderr.
 
-    go run ./bench -list-units | .github/ci/bench_plan.py --times .github/ci/bench-times.json --max-parts 10
+    go run ./bench -list-units | .github/ci/bench_plan.py --times .github/ci/bench-times.json --max-parts 14
 """
 import argparse
 import json
@@ -50,7 +50,7 @@ def table(jobs, times, units):
 def main(argv):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--times", required=True, help="bench-times.json")
-    ap.add_argument("--max-parts", type=int, default=10)
+    ap.add_argument("--max-parts", type=int, default=14)
     args = ap.parse_args(argv)
     with open(args.times, encoding="utf-8") as f:
         times = json.load(f)

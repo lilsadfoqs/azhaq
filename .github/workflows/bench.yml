@@ -10,16 +10,19 @@ name: bench
 # "-profile polite"); -only and -profile restrict the units. The joined
 # record and the logs go to the ci-results branch under bench/NAME/.
 #
-# Two caches speed the jobs up: the reference tools (keyed on bench/tools.go
-# and the Go version) and the reference tools' results of the UTC day (the
-# merge job saves what the jobs produced). -fresh in the tag message neither
-# restores nor saves the results.
+# Two artifacts of earlier runs speed the jobs up (latest-artifact.sh; Actions
+# caches would not do: a tag run reads only its own ref's caches, and every
+# bench run is a new tag): the reference tools (bench-tools-HASH-GOVERSION,
+# the hash of bench/tools.go) and the reference tools' results of the UTC day
+# (bench-ref-DAY). The merge job uploads the new ones. -fresh in the tag
+# message neither fetches nor uploads the results.
 on:
   push:
     tags: ["bench-*"]
 
 permissions:
   contents: write
+  actions: read
 
 jobs:
   plan:
@@ -39,7 +42,7 @@ jobs:
           go-version: stable
       - id: p
         env:
-          MAXPARTS: ${{ vars.BENCH_MAXPARTS || '10' }}
+          MAXPARTS: ${{ vars.BENCH_MAXPARTS || '14' }}
         run: |
           args=""
           if [ "$(git cat-file -t "refs/tags/$GITHUB_REF_NAME")" = tag ]; then
@@ -73,29 +76,16 @@ jobs:
         id: go
         with:
           go-version: stable
-      - name: reference tools cache
-        # The tools the bench installs (bench/tools.go pins them, the wordlists
-        # and arjun too); a hit skips the install, and the files keep their
-        # times. azhaq itself is built each run.
-        uses: actions/cache@v6
-        with:
-          path: |
-            bench/.work/bin
-            !bench/.work/bin/azhaq
-            bench/.work/arjun-*
-            bench/.work/subdomains-top1million-5000.txt
-            bench/.work/common.txt
-            bench/.work/burp-parameter-names.txt
-          key: bench-tools-${{ runner.os }}-${{ steps.go.outputs.go-version }}-${{ hashFiles('bench/tools.go') }}
-      - name: reference results cache
-        # Today's runs of the reference tools, kept by an earlier run (the
-        # merge job saves them); -fresh runs the tools again.
-        if: needs.plan.outputs.fresh != 'true'
-        uses: actions/cache/restore@v6
-        with:
-          path: bench/.work/refcache
-          key: bench-ref-${{ needs.plan.outputs.day }}-${{ github.run_id }}-${{ matrix.name }}
-          restore-keys: bench-ref-${{ needs.plan.outputs.day }}-
+      - name: fetch the reference tools and results of earlier runs
+        # A miss is no failure: the bench installs what is missing.
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DAY: ${{ needs.plan.outputs.day }}
+          FRESH: ${{ needs.plan.outputs.fresh }}
+        run: |
+          .github/ci/latest-artifact.sh "$(.github/ci/bench-tools.sh key)" bench/.work
+          [ "$FRESH" = true ] || .github/ci/latest-artifact.sh "bench-ref-$DAY" bench/.work/refcache
+          .github/ci/bench-tools.sh list > tools-before.txt
       - name: reference tools from apt
         run: sudo apt-get update -q && sudo apt-get install -y -q nmap dnsutils
       - name: bench
@@ -119,6 +109,21 @@ jobs:
           name: bench-${{ matrix.name }}
           path: part/
           retention-days: 7
+      - name: pack the reference tools this job added
+        id: tools
+        if: always()
+        run: |
+          .github/ci/bench-tools.sh list > tools-after.txt
+          if ! cmp -s tools-before.txt tools-after.txt; then
+            .github/ci/bench-tools.sh pack tools-out
+            echo "added=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/upload-artifact@v7
+        if: steps.tools.outputs.added == 'true'
+        with:
+          name: tools-${{ matrix.name }}
+          path: tools-out/
+          retention-days: 1
       - uses: actions/upload-artifact@v7
         if: always() && needs.plan.outputs.fresh != 'true'
         with:
@@ -141,21 +146,66 @@ jobs:
           pattern: bench-*
           path: parts
           merge-multiple: true
-      - name: join the reference results
+      - name: fetch the reference results and tools of earlier runs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DAY: ${{ needs.plan.outputs.day }}
+          FRESH: ${{ needs.plan.outputs.fresh }}
+        run: |
+          .github/ci/latest-artifact.sh "$(.github/ci/bench-tools.sh key)" bench/.work
+          [ "$FRESH" = true ] || .github/ci/latest-artifact.sh "bench-ref-$DAY" bench/.work/refcache
+      - name: download the jobs' reference results
         if: needs.plan.outputs.fresh != 'true'
         uses: actions/download-artifact@v7
         continue-on-error: true
         with:
           pattern: refcache-*
-          path: bench/.work/refcache
-          merge-multiple: true
-      - name: save the reference results
-        # One cache of every job's runs, for the next run of the day.
-        if: always() && needs.plan.outputs.fresh != 'true' && hashFiles('bench/.work/refcache/**') != ''
-        uses: actions/cache/save@v6
+          path: added
+      - name: download the jobs' reference tools
+        uses: actions/download-artifact@v7
+        continue-on-error: true
         with:
-          path: bench/.work/refcache
-          key: bench-ref-${{ needs.plan.outputs.day }}-${{ github.run_id }}
+          pattern: tools-*
+          path: added
+      - name: pack the reference results and tools
+        id: pack
+        env:
+          FRESH: ${{ needs.plan.outputs.fresh }}
+        run: |
+          # The jobs' result folders hold what they fetched too: joined over the
+          # one fetched here, the newest copy of an entry wins (its name is a hash).
+          if [ "$FRESH" != true ]; then
+            mkdir -p bench/.work/refcache
+            for d in added/refcache-*; do
+              [ -d "$d" ] && cp -a "$d"/. bench/.work/refcache/
+            done
+            if [ -n "$(ls -A bench/.work/refcache)" ]; then
+              mkdir -p ref-out
+              tar -cf ref-out/artifact.tar -C bench/.work/refcache .
+              echo "ref=true" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+          tools=false
+          for t in added/tools-*/artifact.tar; do
+            [ -f "$t" ] && { tar -xf "$t" -C bench/.work; tools=true; }
+          done
+          if [ "$tools" = true ]; then
+            .github/ci/bench-tools.sh pack tools-out
+            echo "tools=true" >> "$GITHUB_OUTPUT"
+            echo "toolskey=$(.github/ci/bench-tools.sh key)" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/upload-artifact@v7
+        if: steps.pack.outputs.ref == 'true'
+        with:
+          name: bench-ref-${{ needs.plan.outputs.day }}
+          path: ref-out/
+          retention-days: 1
+      - uses: actions/upload-artifact@v7
+        if: steps.pack.outputs.tools == 'true'
+        with:
+          name: ${{ steps.pack.outputs.toolskey }}
+          path: tools-out/
+          retention-days: 7
       - name: join
         env:
           UNITS: ${{ needs.plan.outputs.units }}
