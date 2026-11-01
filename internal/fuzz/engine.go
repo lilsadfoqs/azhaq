@@ -88,6 +88,12 @@ type Config struct {
 	// Progress, when set, is kept up to date for a status line.
 	Progress *Progress
 
+	// Checkpoint, when set, gets the inputs of the first request answered so
+	// far (and how many it has) every CheckpointEvery while it runs, so that
+	// a run that is killed can go on from there. It is not called after Run.
+	Checkpoint      func(done Spans, total int)
+	CheckpointEvery time.Duration // default 1s
+
 	// OnResult gets each match, one at a time.
 	OnResult func(Result)
 	// OnError gets each request that failed, after its second try.
@@ -126,26 +132,27 @@ type Result struct {
 
 // Stats says how the run went.
 type Stats struct {
-	Requests   int               // sent, retries and calibration included
-	Matches    int               // results given
-	Errors     int               // requests that failed, after one retry
-	Answered   int               // inputs that got an answer, matched or not
-	Refused    int               // of those, answers with status 403 or 419
-	OutOfScope int               // inputs not sent for their host
-	Denied     map[string]int    // inputs not sent for a -deny-path rule, by rule
-	DeniedURL  map[string]string // the first URL each rule kept out
-	Jobs       int               // the start and each directory recursion followed
-	Spent      bool              // the request budget ran out
-	Down       []string          // origins that stopped answering
-	Filters    []string          // what calibration added, "size 1234"
-	Held       int               // matches held back for looking like the page names that cannot exist get
-	Unfiltered bool              // calibration asked and could filter nothing: wildcard answers are listed
-	StoppedBy  string            // a guard of the run that ended it (-sf, -sa)
-	Replayed   int               // matches sent through the replay proxy
-	ReplayErr  int               // replays that failed
-	Timeouts   []string          // requests that timed out while -mt or -ft is on: their inputs
-	CutJobs    []string          // jobs ended by -maxtime-job, with how far each got
-	Notes      []string
+	Requests    int               // sent, retries and calibration included
+	Matches     int               // results given
+	Errors      int               // requests that failed, after one retry
+	Answered    int               // inputs that got an answer, matched or not
+	Refused     int               // of those, answers with status 403 or 419
+	OutOfScope  int               // inputs not sent for their host
+	Denied      map[string]int    // inputs not sent for a -deny-path rule, by rule
+	DeniedURL   map[string]string // the first URL each rule kept out
+	Jobs        int               // the start and each directory recursion followed
+	Spent       bool              // the request budget ran out
+	Down        []string          // origins that stopped answering
+	Filters     []string          // what calibration added, "size 1234"
+	NotRepeated int               // inputs not sent: a write the killed run this one goes on from had sent
+	Held        int               // matches held back for looking like the page names that cannot exist get
+	Unfiltered  bool              // calibration asked and could filter nothing: wildcard answers are listed
+	StoppedBy   string            // a guard of the run that ended it (-sf, -sa)
+	Replayed    int               // matches sent through the replay proxy
+	ReplayErr   int               // replays that failed
+	Timeouts    []string          // requests that timed out while -mt or -ft is on: their inputs
+	CutJobs     []string          // jobs ended by -maxtime-job, with how far each got
+	Notes       []string
 	// Done: inputs of the first request answered in a row from Start, so a
 	// stopped run goes on from Start+Done. Queued: recursions not started.
 	Done, Queued int
@@ -347,6 +354,9 @@ func (e *engine) runJob(ctx context.Context, j job, first bool) {
 	if first && e.cfg.SkipTotal == total {
 		tr.spans = append(Spans(nil), e.cfg.Skip...)
 	}
+	if first && e.cfg.Checkpoint != nil {
+		defer e.checkpoints(tr, total)()
+	}
 	sem := make(chan struct{}, e.cfg.Threads)
 	var wg sync.WaitGroup
 	began := time.Now()
@@ -400,6 +410,35 @@ func (e *engine) runJob(ctx context.Context, j job, first bool) {
 		}(i)
 	}
 	wg.Wait()
+}
+
+// checkpoints reports the answered inputs to cfg.Checkpoint while the job
+// runs, when they changed; the func it returns ends the reports and waits for
+// the last one.
+func (e *engine) checkpoints(tr *tracker, total int) func() {
+	every := e.cfg.CheckpointEvery
+	if every <= 0 {
+		every = time.Second
+	}
+	quit, done := make(chan struct{}), make(chan struct{})
+	go func() {
+		defer close(done)
+		t := time.NewTicker(every)
+		defer t.Stop()
+		var last Spans
+		for {
+			select {
+			case <-quit:
+				return
+			case <-t.C:
+				if cur := tr.set(); !slices.Equal(cur, last) {
+					e.cfg.Checkpoint(cur, total)
+					last = cur
+				}
+			}
+		}
+	}()
+	return func() { close(quit); <-done }
 }
 
 // sleepDelay is -p: the thread waits before taking its next input.
@@ -511,6 +550,10 @@ func (e *engine) send(ctx context.Context, req *Request) (*Response, error) {
 		if errors.Is(err, neterr.ErrBudget) {
 			e.count(func(s *Stats) { s.Requests--; s.Spent = true })
 			e.stop.Store(true)
+			return nil, err
+		}
+		if errors.Is(err, neterr.ErrNotRepeated) { // held back, not sent: no request, no failure
+			e.count(func(s *Stats) { s.Requests--; s.NotRepeated++ })
 			return nil, err
 		}
 		if ctx.Err() != nil {

@@ -63,6 +63,7 @@ func cmdResume(args []string) error {
 				}
 			}
 			st.Close()
+			fuzzResuming = true
 			return cmdFuzz(append(args, rest...))
 		}
 	}
