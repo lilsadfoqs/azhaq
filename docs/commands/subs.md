@@ -190,15 +190,16 @@ Passive sources answer differently each run. subdomain.center, for one, returns 
 `subs` ends with a note such as:
 
 ```
-coverage: the independent sources hold about 1609 names; this run has 1400 of them (87%) — an estimate of what the sources know, not of every name that exists; the other 47 of the 1447 names came from the name history, from guesses checked in DNS or as CNAME targets, which the estimate leaves out
+coverage: what the independent sources know, not every name that exists. Their pool holds about 1609 names and this run has 1400 of them. Apart from the pool, the other 47 of the 1447 names printed came from the name history, from guesses checked in DNS or as CNAME targets
 ```
 
 - It is a Chao1 estimate over how many independent sources gave each name: S + f1²/(2·f2). Here f1 is the number of names given by one source, and f2 the number given by two. With f2 = 0 it is S + f1(f1−1)/2.
 - Independent means every source except the ones that pad their answer (subdomain.center) and `history`. A name only those gave is in the output but not in the count.
 - It needs two independent sources that gave names.
 - It counts the names printed. With `-live`, those are the live ones.
-- It estimates what the sources know, not every name that exists.
-- The `azhaq-subdomains` payload has `"coverage": {"observed", "estimated", "share"}`.
+- It estimates what the sources know, not every name that exists, and the note says so first. It prints no percentage: 1400 of 1609 is a share of what the sources hold, not of the subdomains the domain has.
+- With `-live` the names printed that the pool does not hold (the name history, guesses DNS confirmed, CNAME targets) are counted apart from it, and the two add up to the names printed.
+- The `azhaq-subdomains` payload has `"coverage": {"observed", "estimated", "share"}` (`share` is observed over estimated: a share of the sources' pool).
 - The row of a sampled source (subdomain.center) in `sources` has `"population_estimate"`, a Schnabel estimate of how many names one call draws from. It is there when its rounds repeated names.
 
 ### Flags that follow subfinder

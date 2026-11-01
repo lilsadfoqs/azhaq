@@ -30,7 +30,7 @@ func TestCoverageNoteTesla(t *testing.T) {
 		t.Fatalf("notes %q", notes)
 	}
 	t.Log(notes[0])
-	want := "coverage: the independent sources hold about 1609 names; this run has 1400 of them (87%) — an estimate of what the sources know, not of every name that exists"
+	want := "coverage: what the independent sources know, not every name that exists. Their pool holds about 1609 names and this run has 1400 of them"
 	if notes[0] != want {
 		t.Errorf("note %q", notes[0])
 	}
@@ -46,10 +46,13 @@ func TestCoverageNoteTesla(t *testing.T) {
 	}
 	notes = subsNotes([]map[string]any{p}, live)
 	t.Log(notes[0])
-	if !strings.Contains(notes[0], "about 485 names; this run has 481 of them (99%)") {
+	if !strings.Contains(notes[0], "holds about 485 names and this run has 481 of them") {
 		t.Errorf("live note %q", notes[0])
 	}
-	if want := fmt.Sprintf("the other %d of the %d names came from", len(live)-481, len(live)); len(live) > 481 && !strings.Contains(notes[0], want) {
+	if strings.Contains(notes[0], "%") {
+		t.Errorf("a lone percentage in %q", notes[0])
+	}
+	if want := fmt.Sprintf("the other %d of the %d names printed came from", len(live)-481, len(live)); len(live) > 481 && !strings.Contains(notes[0], want) {
 		t.Errorf("live note %q does not reconcile with the %d names printed", notes[0], len(live))
 	}
 }
