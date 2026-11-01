@@ -6,6 +6,19 @@ on:
     # author's machine. ci-results holds the workflows' outputs only.
     branches-ignore: [ci-results]
   pull_request:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+    inputs:
+      fresh:
+        description: Run every test again, ignoring kept results
+        type: boolean
+        default: true
+
+# A newer push to a branch replaces its running one; main always finishes.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 permissions:
   contents: read
@@ -16,14 +29,32 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
+        id: go
         with:
           go-version: stable
+      - name: golangci-lint binary
+        # Built with the Go of the job: a release built with an older one refuses the module.
+        # The key names that Go, so a new Go builds it again.
+        id: bin
+        uses: actions/cache@v6
+        with:
+          path: ~/golangci-bin
+          key: golangci-lint-v2.15.0-go${{ steps.go.outputs.go-version }}
+      - name: build golangci-lint
+        if: steps.bin.outputs.cache-hit != 'true'
+        run: GOBIN="$HOME/golangci-bin" go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
+      - name: golangci-lint cache
+        # Its analysis cache: one entry per commit, the newest one restored by prefix.
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/golangci-lint
+          key: golangci-lint-cache-${{ runner.os }}-${{ github.sha }}
+          restore-keys: golangci-lint-cache-${{ runner.os }}-
       - name: golangci-lint
         # forbidigo: only internal/egress opens an outbound connection (.golangci.yml).
-        # Built with the Go of the job: a release built with an older one refuses the module.
-        run: go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0 run ./...
+        run: ~/golangci-bin/golangci-lint run ./...
 
-  test:
+  checks:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -37,31 +68,86 @@ jobs:
           git fetch -q --depth=50 origin "${{ github.event.before }}" || git fetch -q --unshallow origin
           npm i -g --silent @commitlint/cli@19.8.1
           commitlint --from "${{ github.event.before }}" --to HEAD
-      - name: range scripts
-        # The workflow trials' estate builder, grader and isolation script.
+      - name: ci scripts
+        # The workflow trials' estate builder, grader and isolation script; the test split.
         run: |
           python3 -m unittest discover -s .github/ci/range
+          python3 -m unittest discover -s .github/ci -p 'test_*.py'
           bash -n .github/ci/range/isolate.sh .github/ci/run.sh .github/ci/fetch.sh
+      - name: test shards
+        # Every test runs in exactly one shard (keep --shards equal to the matrix below).
+        run: python3 .github/ci/shard.py --check --shards 6
       - name: gofmt
         run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
       - name: vet
         run: go vet ./...
-      - name: test
-        # The failing tests are annotations too: they read without a login.
-        run: |
-          set -o pipefail
-          # bash -e: a grep that finds nothing must not end the step before the lines are shown.
-          go test -race ./... 2>&1 | tee test.log || {
-            # A step shows ten annotations: a race's own frames first.
-            { awk '/WARNING: DATA RACE/{p=1} p&&n<40{print; n++}' test.log | grep -E '(Write|Read) at|azhaq/[a-z]' | head -6 || true
-              grep -E -- '--- FAIL|panic:|_test.go:[0-9]+:|^FAIL|signal: |\[build failed\]|^# ' test.log | head -20 || true; } | while IFS= read -r l; do echo "::error::$l"; done
-            exit 1
-          }
-      - name: ephemeral range
-        # It connects to every ephemeral port, so it runs with nothing else.
-        run: AZHAQ_EPHEMERAL_SCAN=1 go test -race -count=1 ./internal/portscan -run TestEphemeralRangeHasNoPhantomPorts
       - name: govulncheck
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
       - name: licenses
         # GPL, AGPL, SSPL and unknown licenses fail the build.
         run: go run github.com/google/go-licenses/v2@v2.0.1 check ./... --disallowed_types=forbidden,restricted,unknown
+
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Six shards, packed by .github/ci/test-times.json (shard.py has the rules).
+        shard: [0, 1, 2, 3, 4, 5]
+    env:
+      CACHE_KEY: go-test-${{ runner.os }}-${{ matrix.shard }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+          cache: false
+      - name: file times
+        # go test keeps a passing result while the files it opened keep size and time;
+        # a clone stamps them all with now.
+        run: python3 .github/ci/mtime.py
+      - name: restore build and test cache
+        uses: actions/cache/restore@v6
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ env.CACHE_KEY }}-${{ github.sha }}
+          restore-keys: |
+            ${{ env.CACHE_KEY }}-
+            go-test-${{ runner.os }}-
+      - name: test
+        # Nightly and manual runs pass --fresh (-count=1): a kept result never hides a flaky test.
+        run: python3 .github/ci/shard.py --shards 6 --index ${{ matrix.shard }} ${{ (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.fresh)) && '--fresh' || '' }}
+      - name: cache size
+        if: always()
+        run: du -sh ~/.cache/go-build ~/go/pkg/mod
+      - name: save build and test cache
+        # Also when tests fail: the passing ones are kept for the next run.
+        if: always()
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ env.CACHE_KEY }}-${{ github.sha }}
+      - name: times
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: times-${{ matrix.shard }}
+          path: times-${{ matrix.shard }}.json
+          if-no-files-found: ignore
+
+  ephemeral:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+      - name: ephemeral range
+        # It connects to every ephemeral port, so it runs with nothing else.
+        run: AZHAQ_EPHEMERAL_SCAN=1 go test -race -count=1 ./internal/portscan -run TestEphemeralRangeHasNoPhantomPorts
