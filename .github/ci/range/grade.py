@@ -344,6 +344,51 @@ def grade(key, d):
     return report
 
 
+def load_baseline(path):
+    """PATH is a baseline's grade.json, or a directory holding one."""
+    if os.path.isdir(path):
+        path = os.path.join(path, "grade.json")
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def compare_baseline(rep, baseline):
+    """REP's phases beside BASELINE's same-numbered phases: both are graded
+    against the same key, so for the gate (one pool estate) this is a fair
+    reading of azhaq against the estate's measured usual-tools result."""
+    by_phase = {p["phase"]: p for p in baseline.get("phases", [])}
+    same_seed = rep.get("seed") is not None and rep.get("seed") == baseline.get("seed")
+    out = []
+    for p in rep["phases"]:
+        b = by_phase.get(p["phase"])
+        if b is None:
+            continue
+        out.append({"phase": p["phase"], "same_seed": same_seed,
+                    "vulns_identified": [p["vulns"]["identified"], b["vulns"]["identified"]],
+                    "vulns_of": [p["vulns"]["of"], b["vulns"]["of"]],
+                    "leads_total": [p["leads"]["total"], b["leads"]["total"]],
+                    "first_match_s": [p["time"]["first_match_s"], b["time"]["first_match_s"]],
+                    "commands_total": [p["commands"]["total"], b["commands"]["total"]]})
+    return out
+
+
+def markdown_baseline(cmp):
+    o = ["", "## Compared with the estate's baseline", ""]
+    if not cmp:
+        o.append("No matching phase in the baseline grade.")
+        return o
+    o += ["| Phase | Vulns identified | Leads | Time to first match | Commands | Same seed |",
+          "|---|---|---|---|---|---|"]
+    for c in cmp:
+        o.append("| %d | %d vs %d (of %s) | %d vs %d | %s vs %s | %d vs %d | %s |" % (
+            c["phase"], c["vulns_identified"][0], c["vulns_identified"][1], " and ".join(str(x) for x in c["vulns_of"]),
+            c["leads_total"][0], c["leads_total"][1], fmt_s(c["first_match_s"][0]), fmt_s(c["first_match_s"][1]),
+            c["commands_total"][0], c["commands_total"][1], "yes" if c["same_seed"] else "NO, not a fair comparison"))
+    o.append("")
+    o.append("Each column reads \"azhaq vs baseline\".")
+    return o
+
+
 def fmt_s(s):
     if s is None:
         return "n/a"
@@ -395,6 +440,8 @@ def markdown(rep):
     for l in rep["unreadable_lead_lines"]:
         o.append("")
         o.append("Unreadable line in leads.jsonl, %s" % l)
+    if "baseline_comparison" in rep:
+        o += markdown_baseline(rep["baseline_comparison"])
     o += ["", "Fallbacks noted in notes/fallbacks.md: %d lines." % rep["fallbacks_noted"]]
     return "\n".join(o) + "\n"
 
@@ -405,10 +452,14 @@ def main(argv=None):
     ap.add_argument("dir")
     ap.add_argument("--json", help="where to write the JSON (default DIR/grade.json)")
     ap.add_argument("--md", help="where to write the Markdown (default: stdout)")
+    ap.add_argument("--baseline", help="the pool estate's baseline grade.json (or a directory holding one): "
+                                        "adds a comparison, since both are graded against the same key")
     a = ap.parse_args(argv)
     with open(a.key, encoding="utf-8") as f:
         key = json.load(f)
     rep = grade(key, a.dir)
+    if a.baseline:
+        rep["baseline_comparison"] = compare_baseline(rep, load_baseline(a.baseline))
     with open(a.json or os.path.join(a.dir, "grade.json"), "w", encoding="utf-8") as f:
         json.dump(rep, f, indent=1)
         f.write("\n")

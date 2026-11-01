@@ -53,37 +53,37 @@ def disk(e):
     return e.get("image_mb") or 600
 
 
-def quotas(cats, pool, size, rng):
-    """Entries per category: the same for both estates, `size` in all."""
+def quotas(cats, pool, size, rng, count=2):
+    """Entries per category: the same for every estate, `size` in all."""
     base = size // len(cats)
     left = size - base * len(cats)
-    ok = [c for c in cats if len({e["family"] for e in pool[c]}) >= 2 * (base + 1)]
+    ok = [c for c in cats if len({e["family"] for e in pool[c]}) >= count * (base + 1)]
     extra = rng.sample(ok, min(left, len(ok)))
     q = {c: base + (1 if c in extra else 0) for c in cats}
     for c in cats:
-        if len(pool[c]) < 2 * q[c]:
-            raise SystemExit("category %s has %d entries, too few for two estates of %d each" % (c, len(pool[c]), q[c]))
+        if len(pool[c]) < count * q[c]:
+            raise SystemExit("category %s has %d entries, too few for %d estates of %d each" % (c, len(pool[c]), count, q[c]))
     return q
 
 
-def try_pick(cats, pool, q, rng):
-    """One random draw: two disjoint lists, or None when a category cannot fill both."""
-    est = ([], [])
-    fams = (set(), set())
+def try_pick(cats, pool, q, rng, count=2):
+    """One random draw: COUNT disjoint lists, or None when a category cannot fill them all."""
+    est = [[] for _ in range(count)]
+    fams = [set() for _ in range(count)]
     for c in cats:
         cand = pool[c][:]
         rng.shuffle(cand)
         taken = set()
-        for i in (0, 1):
+        for i in range(count):
             got = 0
-            # Prefer products the other estate does not run.
+            # Prefer products no other estate runs.
             for prefer_fresh in (True, False):
                 for e in cand:
                     if got == q[c]:
                         break
                     if e["id"] in taken or e["family"] in fams[i]:
                         continue
-                    if prefer_fresh and e["family"] in fams[1 - i]:
+                    if prefer_fresh and any(e["family"] in fams[j] for j in range(count) if j != i):
                         continue
                     est[i].append(e)
                     fams[i].add(e["family"])
@@ -94,28 +94,28 @@ def try_pick(cats, pool, q, rng):
     return est
 
 
-def pick_estates(cat, rng, size, budget_mb, disk_mb, balance=0.3, tries=3000):
-    """Two disjoint lists of entries: same category mix, one family at most once per estate,
-    the memory and image size of both together within budget, and about equal weight."""
+def pick_estates(cat, rng, size, budget_mb, disk_mb, balance=0.3, tries=3000, count=2):
+    """COUNT disjoint lists of entries: same category mix, one family at most once per estate,
+    the memory and image size of all together within budget, and about equal weight."""
     cats = [c for c in cat["categories"] if any(e["category"] == c for e in cat["entries"])]
     pool = {c: [e for e in cat["entries"] if e["category"] == c] for c in cats}
-    q = quotas(cats, pool, size, rng)
+    q = quotas(cats, pool, size, rng, count)
     best = None
     for _ in range(tries):
-        est = try_pick(cats, pool, q, rng)
+        est = try_pick(cats, pool, q, rng, count)
         if est is None:
             continue
         m = [sum(mem(e) for e in x) for x in est]
-        if m[0] + m[1] > budget_mb or sum(disk(e) for x in est for e in x) > disk_mb:
+        if sum(m) > budget_mb or sum(disk(e) for x in est for e in x) > disk_mb:
             continue
-        skew = abs(m[0] - m[1]) / max(m)
+        skew = (max(m) - min(m)) / max(m) if count > 1 else 0.0
         if skew <= balance:
             return est
         if best is None or skew < best[0]:
             best = (skew, est)
     if best is not None:
         return best[1]
-    raise SystemExit("no pair of estates fits %d MB of memory and %d MB of images; raise the budget or lower --size" % (budget_mb, disk_mb))
+    raise SystemExit("no %d estates fit %d MB of memory and %d MB of images; raise the budget or lower --size" % (count, budget_mb, disk_mb))
 
 
 def company_domain(rng, taken):
@@ -295,8 +295,9 @@ def main(argv=None):
     ap.add_argument("--catalog", default=rangelib.CATALOG)
     ap.add_argument("--out", default="range-build")
     ap.add_argument("--size", type=int, default=10, help="environments per estate")
-    ap.add_argument("--budget-mb", type=int, default=9500, help="memory both estates may take together")
-    ap.add_argument("--disk-mb", type=int, default=30000, help="image size both estates may take together")
+    ap.add_argument("--count", type=int, default=2, choices=(1, 2), help="how many disjoint estates to draw (the gate's pool builds 1)")
+    ap.add_argument("--budget-mb", type=int, default=9500, help="memory all estates may take together")
+    ap.add_argument("--disk-mb", type=int, default=30000, help="image size all estates may take together")
     ap.add_argument("--net1", default="127.31.0.0/24")
     ap.add_argument("--net2", default="127.47.0.0/24")
     ap.add_argument("--dns-port1", type=int, default=5301)
@@ -310,14 +311,19 @@ def main(argv=None):
 
     cat = rangelib.load_catalog(a.catalog)
     rng = random.Random(a.seed)
-    est = pick_estates(cat, rng, a.size, a.budget_mb, a.disk_mb)
-    d1 = company_domain(rng, set())
-    d2 = company_domain(rng, {d1})
+    est = pick_estates(cat, rng, a.size, a.budget_mb, a.disk_mb, count=a.count)
+    domains, taken = [], set()
+    for _ in range(a.count):
+        d = company_domain(rng, taken)
+        domains.append(d)
+        taken.add(d)
+    nets = [a.net1, a.net2][: a.count]
+    ports = [a.dns_port1, a.dns_port2][: a.count]
     out = os.path.abspath(a.out)
     os.makedirs(os.path.join(out, "overrides"), exist_ok=True)
 
     estates, plan_envs, proxies, dns, confs = [], [], [], [], {}
-    for i, (entries, dom, net, port) in enumerate(((est[0], d1, a.net1, a.dns_port1), (est[1], d2, a.net2, a.dns_port2)), 1):
+    for i, (entries, dom, net, port) in enumerate(zip(est, domains, nets, ports), 1):
         e, zdoc, envs, proxy, conf = build_estate(i, entries, cat, rng, a, dom, net, port, None)
         estates.append(e)
         plan_envs += envs
@@ -337,14 +343,17 @@ def main(argv=None):
             f.write(text)
     key = {"seed": a.seed, "vulhub_commit": cat["vulhub"]["commit"], "estates": estates}
     plan = {"vulhub_commit": cat["vulhub"]["commit"], "envs": plan_envs, "proxies": proxies, "dns": dns}
-    variables = {"DOMAIN1": d1, "NET1": a.net1, "DNS1": estates[0]["dns"],
-                 "DOMAIN2": d2, "NET2": a.net2, "DNS2": estates[1]["dns"]}
+    variables = {}
+    for i, (dom, net) in enumerate(zip(domains, nets), 1):
+        variables["DOMAIN%d" % i] = dom
+        variables["NET%d" % i] = net
+        variables["DNS%d" % i] = estates[i - 1]["dns"]
     for name, doc in (("key.json", key), ("plan.json", plan), ("vars.json", variables)):
         with open(os.path.join(out, name), "w") as f:
             json.dump(doc, f, indent=1)
     sizes = [len(x) for x in est]
-    print("built two estates of %d and %d environments, about %d MB of memory in all"
-          % (sizes[0], sizes[1], sum(mem(e) for x in est for e in x)))
+    print("built %d estate%s of %s environments, about %d MB of memory in all"
+          % (len(sizes), "" if len(sizes) == 1 else "s", " and ".join(str(s) for s in sizes), sum(mem(e) for x in est for e in x)))
     return 0
 
 

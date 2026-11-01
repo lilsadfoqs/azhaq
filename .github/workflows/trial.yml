@@ -9,14 +9,28 @@ name: trial
 # trial-NAME.
 #
 # The first line of the tag's message picks the kind (.github/ci/run.sh):
-#   switch    the review above (the default)
-#   research  two phases of an engagement on two generated estates of Vulhub
-#             environments: usual tools on estate 1, azhaq on estate 2
-#   hunter    the same estates as two bug-bounty sessions: azhaq first, the
-#             usual stack second
-# The estates are built, started and isolated from the agent by the `work`
-# job (.github/ci/range, .github/ci/trial/README.md). "seed=WORDS" in the
-# message fixes the draw; without it the draw is secret.
+#   gate      the current kind: one persona, one build, two parts in
+#             parallel (.github/ci/trial/GATE.md) - part A (`gate-a`), an
+#             engagement on one Vulhub estate from the fixed pool
+#             (.github/ci/range/pool.json); part B (`gate-b`), the switch
+#             checklist head-to-head on the local labs. "samples=2" in the
+#             tag's message runs both parts twice, on two pool estates, in
+#             parallel; fetch.sh and merge_gate.py bring the samples back
+#             together.
+#   baseline  part A's engagement, usual tools only, azhaq off, on one pool
+#             estate: measures that estate's baseline once (README.md says
+#             how to run the four).
+#   switch    the older, single-build review (BRIEF.md), kept working until
+#             the gate replaces it.
+#   research  the older two-phase engagement (RESEARCH.md) on two generated
+#             estates: usual tools on estate 1, azhaq on estate 2.
+#   hunter    the older two-session bounty hunt (HUNTER.md) on the same two
+#             estates, in the opposite order.
+# The estates are built, started and isolated from the agent by the `work`,
+# `gate-a` and `baseline` jobs (.github/ci/range, .github/ci/trial/README.md).
+# "seed=WORDS" in the message fixes the draw (a pool entry for gate and
+# baseline); without it the draw is secret (research, hunter, switch) or
+# round robin by run number (gate, baseline).
 on:
   push:
     tags: ["trial-*"]
@@ -34,6 +48,8 @@ jobs:
       kind: ${{ steps.k.outputs.kind }}
       seed: ${{ steps.k.outputs.seed }}
       dryrun: ${{ steps.k.outputs.dryrun }}
+      samples: ${{ steps.k.outputs.samples }}
+      samples_json: ${{ steps.k.outputs.samples_json }}
     steps:
       - uses: actions/checkout@v7
       - id: k
@@ -43,12 +59,378 @@ jobs:
           case "${msg%% *}" in
             research) kind=research ;;
             hunter) kind=hunter ;;
+            gate) kind=gate ;;
+            baseline) kind=baseline ;;
             *) kind=switch ;;
           esac
           echo "kind=$kind" >> "$GITHUB_OUTPUT"
           echo "seed=$(echo "$msg" | sed -n 's/.*seed=\([A-Za-z0-9._-]*\).*/\1/p')" >> "$GITHUB_OUTPUT"
           case " $msg " in *" dryrun "*) echo "dryrun=1" >> "$GITHUB_OUTPUT" ;; esac
-          echo "trial kind: $kind"
+          samples=1
+          case " $msg " in *" samples=2 "*) samples=2 ;; esac
+          echo "samples=$samples" >> "$GITHUB_OUTPUT"
+          echo "samples_json=$([ "$samples" = 2 ] && echo '[1,2]' || echo '[1]')" >> "$GITHUB_OUTPUT"
+          echo "trial kind: $kind, samples: $samples"
+  build:
+    needs: kind
+    if: needs.kind.outputs.kind == 'gate'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # git describe names the build from the last release tag
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+      - name: build azhaq
+        # The build under test: this tagged commit (any branch, or next), not
+        # a release. Both parts install this same binary; the install script
+        # itself is checked separately, against a snapshot release (ci.yml).
+        run: |
+          v=$(git describe --tags --match 'v[0-9]*' --always)
+          CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=$v" -o azhaq ./cmd/azhaq
+          ./azhaq version
+          echo "$v" > azhaq.version
+      - uses: actions/upload-artifact@v7
+        with:
+          name: gate-azhaq
+          path: |
+            azhaq
+            azhaq.version
+          retention-days: 2
+  gate-a:
+    needs: [kind, build]
+    if: needs.kind.outputs.kind == 'gate'
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix:
+        sample: ${{ fromJSON(needs.kind.outputs.samples_json) }}
+    env:
+      DRYRUN: ${{ needs.kind.outputs.dryrun }}
+      SAMPLES: ${{ needs.kind.outputs.samples }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: disk
+        run: .github/ci/range/check-disk.sh
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+      - name: packages
+        run: sudo apt-get update -q && sudo apt-get install -y -q dnsutils age nmap jq
+      - uses: actions/download-artifact@v7
+        with:
+          name: gate-azhaq
+          path: _bin
+      - name: azhaq
+        run: |
+          mkdir -p "$HOME/trial/bin" "$HOME/ci"
+          install -m 755 _bin/azhaq "$HOME/trial/bin/azhaq"
+          cp _bin/azhaq.version "$HOME/ci/azhaq.version"
+          "$HOME/trial/bin/azhaq" version
+      - name: codex
+        env:
+          CODEX_AUTH_KEY: ${{ secrets.CODEX_AUTH_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          CODEX_AUTH_JSON: ${{ secrets.CODEX_AUTH_JSON }}
+        run: .github/ci/codex.sh
+      - name: estate
+        # One estate from the pool (build.py --count 1): this sample's pool
+        # seed, round robin by run number, or the tag's seed=WORD (sample 1),
+        # the next pool entry after it (sample 2, so samples=2 always draws
+        # two different estates).
+        env:
+          CODEX_AUTH_KEY: ${{ secrets.CODEX_AUTH_KEY }}
+          SEED_FROM_TAG: ${{ needs.kind.outputs.seed }}
+        run: |
+          pool_args=(); [ -n "$SEED_FROM_TAG" ] && pool_args+=(--seed "$SEED_FROM_TAG")
+          seed=$(python3 .github/ci/range/pool_pick.py "$GITHUB_RUN_NUMBER" "${pool_args[@]}" --sample "${{ matrix.sample }}")
+          echo "::add-mask::$seed"
+          range="$RUNNER_TEMP/range"
+          mkdir -p "$range" "$HOME/ci"
+          sudo sysctl -q -w vm.max_map_count=262144 # Elasticsearch
+          CGO_ENABLED=0 go build -o "$RUNNER_TEMP/dnsd" ./bench/labdns
+          sudo install -m 755 "$RUNNER_TEMP/dnsd" /usr/local/sbin/dnsd
+          sudo setcap cap_net_bind_service=+ep /usr/local/sbin/dnsd
+          getcap /usr/local/sbin/dnsd | grep -q cap_net_bind_service
+          .github/ci/range/fetch-vulhub.sh "$RUNNER_TEMP/vulhub" > /dev/null 2>&1
+          python3 .github/ci/range/build.py "$seed" --out "$range" --count 1
+          python3 .github/ci/range/up.py "$range" --vulhub "$RUNNER_TEMP/vulhub" --labdns /usr/local/sbin/dnsd --run-as nobody
+          age -r "$AGE_RECIPIENT" -o "$HOME/ci/key.json.age" "$range/key.json"
+          cp "$range/vars.json" "$HOME/ci/vars.json"
+          shred -u "$range/key.json" 2>/dev/null || rm -f "$range/key.json"
+          rm -rf "$range" "$RUNNER_TEMP/vulhub" "$RUNNER_TEMP/dnsd"
+      - name: part
+        id: part
+        run: echo "name=a$([ "$SAMPLES" = 2 ] && echo "${{ matrix.sample }}")" >> "$GITHUB_OUTPUT"
+      - name: heartbeat
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          printf '%s' "$GITHUB_TOKEN" | sudo install -m 600 -o root -g root /dev/stdin /root/beat.token
+          sudo install -m 700 -o root -g root .github/ci/heartbeat.sh .github/ci/publish.sh /root/
+          sudo env -u GITHUB_TOKEN setsid bash /root/heartbeat.sh "$GITHUB_REF_NAME/${{ steps.part.outputs.name }}" "$HOME/ci/stream.ts.jsonl" "$HOME/trial/phases.log" "$(id -un)" "$GITHUB_REPOSITORY" > /dev/null 2>&1 < /dev/null &
+          echo "heartbeat started"
+      - name: isolate
+        run: .github/ci/range/isolate.sh
+      - name: remove the source
+        run: |
+          mkdir -p "$HOME/ci" "$HOME/trial"
+          cp .github/ci/publish.sh .github/ci/trial/GATE.md .github/ci/range/render_brief.py "$HOME/ci/"
+          find "$GITHUB_WORKSPACE" -mindepth 1 -delete
+      - name: review
+        run: |
+          python3 -I "$HOME/ci/render_brief.py" gate-a "$(cat "$HOME/ci/azhaq.version")" "$HOME/ci/vars.json" "$HOME/ci" > "$HOME/ci/brief.md"
+          cd "$HOME/trial"
+          if [ "$DRYRUN" = 1 ]; then
+            nets=$(jq -r '.NET1' "$HOME/ci/vars.json" 2>/dev/null || true)
+            open=$(nmap -sT -T4 -Pn --top-ports 1000 -oG - $nets 2>/dev/null | grep -o '/open/' | wc -l)
+            echo "dry run: $open open ports seen by the agent user after isolation."
+            printf 'dry run\n\n%s open ports seen by the agent user after isolation.\n' "$open" > REPORT.md
+            : > "$HOME/ci/stderr.txt"; : > "$HOME/ci/stream.ts.jsonl"
+            exit 0
+          fi
+          timeout 4h codex exec --dangerously-bypass-approvals-and-sandbox --skip-git-repo-check -C "$HOME/trial" \
+            -m gpt-6-luna -c model_reasoning_effort=xhigh --json "$(cat "$HOME/ci/brief.md")" < /dev/null 2> "$HOME/ci/stderr.txt" |
+            while IFS= read -r line; do printf '%(%s)T %s\n' -1 "$line"; done > "$HOME/ci/stream.ts.jsonl"
+          echo "codex ended with ${PIPESTATUS[0]}"
+      - name: publish
+        if: always()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd "$HOME/trial"
+          { for f in REPORT.md leads.jsonl phases.log surface-*.txt; do [ -f "$f" ] && echo "$f"; done
+            find notes -type f \( -name '*.md' -o -name '*.txt' -o -name '*.log' -o -name '*.tsv' -o -name '*.jsonl' \) -size -2M 2>/dev/null || true; } > "$HOME/ci/list"
+          tail -n 300 "$HOME/ci/stream.ts.jsonl" > "$HOME/ci/stream-tail.jsonl" 2>/dev/null || true
+          gzip -9 -c "$HOME/ci/stream.ts.jsonl" > "$HOME/ci/stream.ts.jsonl.gz" 2>/dev/null || true
+          [ "$(stat -c %s "$HOME/ci/stream.ts.jsonl.gz" 2>/dev/null || echo 0)" -gt 41943040 ] && rm -f "$HOME/ci/stream.ts.jsonl.gz"
+          extra=""
+          [ -f "$HOME/ci/stream.ts.jsonl.gz" ] && extra="stream.ts.jsonl.gz"
+          tar czf "$HOME/ci/trial.tgz" -T "$HOME/ci/list" -C "$HOME/ci" stream-tail.jsonl stderr.txt $extra
+          age -r "$AGE_RECIPIENT" -o "$HOME/ci/trial.tgz.age" "$HOME/ci/trial.tgz"
+          files=("$HOME/ci/trial.tgz.age")
+          [ -s "$HOME/ci/key.json.age" ] && files+=("$HOME/ci/key.json.age")
+          if [ -s "$HOME/.codex/auth.json" ] && [ "$(sha256sum "$HOME/.codex/auth.json" | cut -d' ' -f1)" != "$(cat "$RUNNER_TEMP/auth.sum" 2>/dev/null)" ]; then
+            age -r "$AGE_RECIPIENT" -o "$HOME/ci/codex-auth.json.age" "$HOME/.codex/auth.json"
+            files+=("$HOME/ci/codex-auth.json.age")
+          fi
+          "$HOME/ci/publish.sh" "trial/$GITHUB_REF_NAME/${{ steps.part.outputs.name }}" "${files[@]}"
+          [ -s REPORT.md ] && echo "::notice title=trial::REPORT.md written" || echo "::warning title=trial::no REPORT.md"
+  gate-b:
+    needs: [kind, build]
+    if: needs.kind.outputs.kind == 'gate'
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    strategy:
+      fail-fast: false
+      matrix:
+        sample: ${{ fromJSON(needs.kind.outputs.samples_json) }}
+    env:
+      DRYRUN: ${{ needs.kind.outputs.dryrun }}
+      SAMPLES: ${{ needs.kind.outputs.samples }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+      - name: packages
+        run: sudo apt-get update -q && sudo apt-get install -y -q dnsutils age nmap jq
+      - name: labs
+        run: .github/ci/labs.sh
+      - uses: actions/download-artifact@v7
+        with:
+          name: gate-azhaq
+          path: _bin
+      - name: azhaq
+        # Already built (the `build` job); installing it is not part of this
+        # review (the gate's part A keeps that timed; item 6 checks the
+        # install script itself, against a snapshot release, in ci.yml).
+        run: |
+          mkdir -p "$HOME/trial/bin" "$HOME/ci"
+          install -m 755 _bin/azhaq "$HOME/trial/bin/azhaq"
+          cp _bin/azhaq.version "$HOME/ci/azhaq.version"
+          "$HOME/trial/bin/azhaq" version
+      - name: codex
+        env:
+          CODEX_AUTH_KEY: ${{ secrets.CODEX_AUTH_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          CODEX_AUTH_JSON: ${{ secrets.CODEX_AUTH_JSON }}
+        run: .github/ci/codex.sh
+      - name: lab source
+        run: |
+          src="$HOME/trial/lab-source"
+          mkdir -p "$src/juice" "$src/dvga" "$HOME/ci"
+          cp_app() { docker cp "azq-$1:$2" "$src/$3" || echo "::warning title=lab source::no $2 in azq-$1"; }
+          cp_app juice /juice-shop/package.json juice/package.json
+          cp_app juice /juice-shop/build/app.js juice/app.js
+          cp_app juice /juice-shop/build/server juice/server
+          cp_app vampi /vampi vampi
+          cp_app dvga /opt/dvga/app.py dvga/app.py
+          cp_app dvga /opt/dvga/core dvga/core
+          cp_app dvga /opt/dvga/schema.graphql dvga/schema.graphql
+          cp_app dvna /app dvna
+          cp_app dvwa /var/www/html dvwa
+      - name: part
+        id: part
+        run: echo "name=b$([ "$SAMPLES" = 2 ] && echo "${{ matrix.sample }}")" >> "$GITHUB_OUTPUT"
+      - name: heartbeat
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          printf '%s' "$GITHUB_TOKEN" | sudo install -m 600 -o root -g root /dev/stdin /root/beat.token
+          sudo install -m 700 -o root -g root .github/ci/heartbeat.sh .github/ci/publish.sh /root/
+          sudo env -u GITHUB_TOKEN setsid bash /root/heartbeat.sh "$GITHUB_REF_NAME/${{ steps.part.outputs.name }}" "$HOME/ci/stream.ts.jsonl" "$HOME/trial/phases.log" "$(id -un)" "$GITHUB_REPOSITORY" > /dev/null 2>&1 < /dev/null &
+          echo "heartbeat started"
+      - name: isolate
+        run: .github/ci/range/isolate.sh
+      - name: remove the source
+        run: |
+          mkdir -p "$HOME/ci" "$HOME/trial"
+          cp .github/ci/publish.sh .github/ci/trial/GATE.md .github/ci/range/render_brief.py "$HOME/ci/"
+          find "$GITHUB_WORKSPACE" -mindepth 1 -delete
+      - name: review
+        run: |
+          echo '{}' > "$HOME/ci/vars.json"
+          python3 -I "$HOME/ci/render_brief.py" gate-b "$(cat "$HOME/ci/azhaq.version")" "$HOME/ci/vars.json" "$HOME/ci" > "$HOME/ci/brief.md"
+          cd "$HOME/trial"
+          if [ "$DRYRUN" = 1 ]; then
+            {
+              echo "dry run"
+              echo
+              for port in 3001 5002 5013 5020 5030; do
+                echo "lab 127.0.0.1:$port: $(curl -s -o /dev/null -m 5 -w '%{http_code}' "http://127.0.0.1:$port/")"
+              done
+              echo "nmap: $(nmap --version 2>/dev/null | head -1)"
+              echo "lab source: $(find lab-source -type f 2>/dev/null | wc -l) files"
+            } | tee REPORT.md
+            : > "$HOME/ci/stderr.txt"; : > "$HOME/ci/stream.ts.jsonl"
+            exit 0
+          fi
+          timeout 4h codex exec --dangerously-bypass-approvals-and-sandbox --skip-git-repo-check -C "$HOME/trial" \
+            -m gpt-6-luna -c model_reasoning_effort=xhigh --json "$(cat "$HOME/ci/brief.md")" < /dev/null 2> "$HOME/ci/stderr.txt" |
+            while IFS= read -r line; do printf '%(%s)T %s\n' -1 "$line"; done > "$HOME/ci/stream.ts.jsonl"
+          echo "codex ended with ${PIPESTATUS[0]}"
+      - name: publish
+        if: always()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd "$HOME/trial"
+          { [ -f REPORT.md ] && echo REPORT.md
+            find notes -type f \( -name '*.md' -o -name '*.txt' -o -name '*.log' -o -name '*.tsv' \) -size -2M 2>/dev/null || true; } > "$HOME/ci/list"
+          tail -n 300 "$HOME/ci/stream.ts.jsonl" > "$HOME/ci/stream-tail.jsonl" 2>/dev/null || true
+          tar czf "$HOME/ci/trial.tgz" -T "$HOME/ci/list" -C "$HOME/ci" stream-tail.jsonl stderr.txt
+          age -r "$AGE_RECIPIENT" -o "$HOME/ci/trial.tgz.age" "$HOME/ci/trial.tgz"
+          files=("$HOME/ci/trial.tgz.age")
+          if [ -s "$HOME/.codex/auth.json" ] && [ "$(sha256sum "$HOME/.codex/auth.json" | cut -d' ' -f1)" != "$(cat "$RUNNER_TEMP/auth.sum" 2>/dev/null)" ]; then
+            age -r "$AGE_RECIPIENT" -o "$HOME/ci/codex-auth.json.age" "$HOME/.codex/auth.json"
+            files+=("$HOME/ci/codex-auth.json.age")
+          fi
+          "$HOME/ci/publish.sh" "trial/$GITHUB_REF_NAME/${{ steps.part.outputs.name }}" "${files[@]}"
+          [ -s REPORT.md ] && echo "::notice title=trial::REPORT.md written" || echo "::warning title=trial::no REPORT.md"
+  baseline:
+    needs: kind
+    if: needs.kind.outputs.kind == 'baseline'
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    env:
+      DRYRUN: ${{ needs.kind.outputs.dryrun }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: disk
+        run: .github/ci/range/check-disk.sh
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+      - name: packages
+        run: sudo apt-get update -q && sudo apt-get install -y -q dnsutils age nmap jq
+      - name: codex
+        env:
+          CODEX_AUTH_KEY: ${{ secrets.CODEX_AUTH_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          CODEX_AUTH_JSON: ${{ secrets.CODEX_AUTH_JSON }}
+        run: .github/ci/codex.sh
+      - name: estate
+        # The same single-estate pool build as gate-a, but azhaq is never
+        # installed: this measures the pool estate's usual-tools baseline.
+        env:
+          CODEX_AUTH_KEY: ${{ secrets.CODEX_AUTH_KEY }}
+          SEED_FROM_TAG: ${{ needs.kind.outputs.seed }}
+        run: |
+          pool_args=(); [ -n "$SEED_FROM_TAG" ] && pool_args+=(--seed "$SEED_FROM_TAG")
+          seed=$(python3 .github/ci/range/pool_pick.py "$GITHUB_RUN_NUMBER" "${pool_args[@]}")
+          echo "::add-mask::$seed"
+          range="$RUNNER_TEMP/range"
+          mkdir -p "$range" "$HOME/ci" "$HOME/trial"
+          sudo sysctl -q -w vm.max_map_count=262144 # Elasticsearch
+          CGO_ENABLED=0 go build -o "$RUNNER_TEMP/dnsd" ./bench/labdns
+          sudo install -m 755 "$RUNNER_TEMP/dnsd" /usr/local/sbin/dnsd
+          sudo setcap cap_net_bind_service=+ep /usr/local/sbin/dnsd
+          getcap /usr/local/sbin/dnsd | grep -q cap_net_bind_service
+          .github/ci/range/fetch-vulhub.sh "$RUNNER_TEMP/vulhub" > /dev/null 2>&1
+          python3 .github/ci/range/build.py "$seed" --out "$range" --count 1
+          python3 .github/ci/range/up.py "$range" --vulhub "$RUNNER_TEMP/vulhub" --labdns /usr/local/sbin/dnsd --run-as nobody
+          age -r "$AGE_RECIPIENT" -o "$HOME/ci/key.json.age" "$range/key.json"
+          cp "$range/vars.json" "$HOME/ci/vars.json"
+          shred -u "$range/key.json" 2>/dev/null || rm -f "$range/key.json"
+          rm -rf "$range" "$RUNNER_TEMP/vulhub" "$RUNNER_TEMP/dnsd"
+      - name: heartbeat
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          printf '%s' "$GITHUB_TOKEN" | sudo install -m 600 -o root -g root /dev/stdin /root/beat.token
+          sudo install -m 700 -o root -g root .github/ci/heartbeat.sh .github/ci/publish.sh /root/
+          sudo env -u GITHUB_TOKEN setsid bash /root/heartbeat.sh "$GITHUB_REF_NAME" "$HOME/ci/stream.ts.jsonl" "$HOME/trial/phases.log" "$(id -un)" "$GITHUB_REPOSITORY" > /dev/null 2>&1 < /dev/null &
+          echo "heartbeat started"
+      - name: isolate
+        run: .github/ci/range/isolate.sh
+      - name: remove the source
+        run: |
+          mkdir -p "$HOME/ci" "$HOME/trial"
+          cp .github/ci/publish.sh .github/ci/trial/GATE.md .github/ci/range/render_brief.py "$HOME/ci/"
+          find "$GITHUB_WORKSPACE" -mindepth 1 -delete
+      - name: review
+        run: |
+          python3 -I "$HOME/ci/render_brief.py" baseline "$GITHUB_REF_NAME" "$HOME/ci/vars.json" "$HOME/ci" > "$HOME/ci/brief.md"
+          cd "$HOME/trial"
+          if [ "$DRYRUN" = 1 ]; then
+            nets=$(jq -r '.NET1' "$HOME/ci/vars.json" 2>/dev/null || true)
+            open=$(nmap -sT -T4 -Pn --top-ports 1000 -oG - $nets 2>/dev/null | grep -o '/open/' | wc -l)
+            echo "dry run: $open open ports seen by the agent user after isolation."
+            printf 'dry run\n\n%s open ports seen by the agent user after isolation.\n' "$open" > REPORT.md
+            : > "$HOME/ci/stderr.txt"; : > "$HOME/ci/stream.ts.jsonl"
+            exit 0
+          fi
+          timeout 4h codex exec --dangerously-bypass-approvals-and-sandbox --skip-git-repo-check -C "$HOME/trial" \
+            -m gpt-6-luna -c model_reasoning_effort=xhigh --json "$(cat "$HOME/ci/brief.md")" < /dev/null 2> "$HOME/ci/stderr.txt" |
+            while IFS= read -r line; do printf '%(%s)T %s\n' -1 "$line"; done > "$HOME/ci/stream.ts.jsonl"
+          echo "codex ended with ${PIPESTATUS[0]}"
+      - name: publish
+        if: always()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd "$HOME/trial"
+          { for f in REPORT.md leads.jsonl phases.log surface-*.txt; do [ -f "$f" ] && echo "$f"; done
+            find notes -type f \( -name '*.md' -o -name '*.txt' -o -name '*.log' -o -name '*.tsv' -o -name '*.jsonl' \) -size -2M 2>/dev/null || true; } > "$HOME/ci/list"
+          tail -n 300 "$HOME/ci/stream.ts.jsonl" > "$HOME/ci/stream-tail.jsonl" 2>/dev/null || true
+          gzip -9 -c "$HOME/ci/stream.ts.jsonl" > "$HOME/ci/stream.ts.jsonl.gz" 2>/dev/null || true
+          [ "$(stat -c %s "$HOME/ci/stream.ts.jsonl.gz" 2>/dev/null || echo 0)" -gt 41943040 ] && rm -f "$HOME/ci/stream.ts.jsonl.gz"
+          extra=""
+          [ -f "$HOME/ci/stream.ts.jsonl.gz" ] && extra="stream.ts.jsonl.gz"
+          tar czf "$HOME/ci/trial.tgz" -T "$HOME/ci/list" -C "$HOME/ci" stream-tail.jsonl stderr.txt $extra
+          age -r "$AGE_RECIPIENT" -o "$HOME/ci/trial.tgz.age" "$HOME/ci/trial.tgz"
+          files=("$HOME/ci/trial.tgz.age")
+          [ -s "$HOME/ci/key.json.age" ] && files+=("$HOME/ci/key.json.age")
+          if [ -s "$HOME/.codex/auth.json" ] && [ "$(sha256sum "$HOME/.codex/auth.json" | cut -d' ' -f1)" != "$(cat "$RUNNER_TEMP/auth.sum" 2>/dev/null)" ]; then
+            age -r "$AGE_RECIPIENT" -o "$HOME/ci/codex-auth.json.age" "$HOME/.codex/auth.json"
+            files+=("$HOME/ci/codex-auth.json.age")
+          fi
+          "$HOME/ci/publish.sh" "trial/$GITHUB_REF_NAME" "${files[@]}"
+          [ -s REPORT.md ] && echo "::notice title=trial::REPORT.md written" || echo "::warning title=trial::no REPORT.md"
   codex:
     needs: kind
     if: needs.kind.outputs.kind == 'switch'
@@ -159,7 +541,7 @@ jobs:
           [ -s REPORT.md ] && echo "::notice title=trial::REPORT.md written" || echo "::warning title=trial::no REPORT.md"
   work:
     needs: kind
-    if: needs.kind.outputs.kind != 'switch'
+    if: needs.kind.outputs.kind == 'research' || needs.kind.outputs.kind == 'hunter'
     runs-on: ubuntu-latest
     timeout-minutes: 360
     env:

@@ -74,7 +74,7 @@ jobs:
         run: |
           python3 -m unittest discover -s .github/ci/range
           python3 -m unittest discover -s .github/ci -p 'test_*.py'
-          bash -n .github/ci/range/isolate.sh .github/ci/run.sh .github/ci/fetch.sh .github/ci/apt-tools.sh .github/ci/latest-artifact.sh .github/ci/bench-tools.sh
+          bash -n .github/ci/range/isolate.sh .github/ci/run.sh .github/ci/fetch.sh .github/ci/apt-tools.sh .github/ci/latest-artifact.sh .github/ci/bench-tools.sh .github/ci/beat.sh .github/ci/watch.sh .github/ci/heartbeat.sh
       - name: test shards
         # Every test runs in exactly one shard (keep --shards equal to the matrix below).
         run: python3 .github/ci/shard.py --check --shards 6
@@ -152,3 +152,39 @@ jobs:
       - name: ephemeral range
         # It connects to every ephemeral port, so it runs with nothing else.
         run: AZHAQ_EPHEMERAL_SCAN=1 go test -race -count=1 ./internal/portscan -run TestEphemeralRangeHasNoPhantomPorts
+
+  install-check:
+    # The install script, checked against a build, not a real release: a
+    # goreleaser snapshot (no sign, sbom or docker image; nothing published),
+    # then scripts/install.sh -f against that local dist/. A trial, bench or
+    # hunt tag (pushed to start a CI run) must not be mistaken for a release
+    # when goreleaser picks the "current" tag for the snapshot version, so
+    # this pins GORELEASER_CURRENT_TAG to the latest real vX.Y.Z tag.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+      - id: tag
+        run: echo "tag=$(git tag -l 'v*' --sort=-v:refname | head -n1)" >> "$GITHUB_OUTPUT"
+      - name: this runner's target only
+        # The script is what is checked: one archive is enough.
+        run: |
+          sed 's/^    goos: .*/    goos: [linux]/; s/^    goarch: .*/    goarch: [amd64]/' .goreleaser.yaml > "$RUNNER_TEMP/goreleaser.yaml"
+          grep -n 'goos\|goarch' "$RUNNER_TEMP/goreleaser.yaml"
+      - uses: goreleaser/goreleaser-action@v7
+        with:
+          distribution: goreleaser
+          version: v2.18.3
+          args: release --snapshot --clean --config ${{ runner.temp }}/goreleaser.yaml --skip=sign,sbom,docker
+        env:
+          GORELEASER_CURRENT_TAG: ${{ steps.tag.outputs.tag }}
+      - name: install from the snapshot
+        run: |
+          version=$(python3 -I -c 'import json; print(json.load(open("dist/metadata.json"))["version"])')
+          echo "snapshot version: $version"
+          sh scripts/install.sh -v "$version" -f dist -d "$RUNNER_TEMP/bin"
+          "$RUNNER_TEMP/bin/azhaq" version | grep -qF "$version" || { echo "::error::azhaq version did not report $version"; exit 1; }
