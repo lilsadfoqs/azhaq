@@ -63,7 +63,7 @@ func SubmitForm(ctx context.Context, c *http.Client, raw, query string) (Result,
 	if err != nil {
 		return Result{}, err
 	}
-	body, trunc, err := readBody(resp.Body, MaxBody)
+	body, trunc, err := readResponse(resp, MaxBody)
 	resp.Body.Close()
 	if err != nil {
 		return Result{}, err

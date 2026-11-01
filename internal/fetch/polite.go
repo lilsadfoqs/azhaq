@@ -303,7 +303,7 @@ func attempt(ctx, rctx context.Context, c *http.Client, method, raw string, sent
 		resp, err = c.Do(req)
 		body, trunc = nil, false
 		if err == nil {
-			body, trunc, err = readBody(resp.Body, bodyLimit(resp))
+			body, trunc, err = readResponse(resp, bodyLimit(resp))
 			resp.Body.Close()
 		}
 		if err != nil {
