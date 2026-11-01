@@ -371,7 +371,7 @@ func (c *Collector) supportsHTTP2(ctx context.Context, raw string) bool {
 		if err != nil {
 			return false
 		}
-		_, _ = io.Copy(io.Discard, resp.Body)
+		_, _ = io.CopyN(io.Discard, resp.Body, 64<<10) // a stream that never ends is not read to its end
 		resp.Body.Close()
 		return resp.StatusCode == http.StatusSwitchingProtocols
 	}
@@ -386,7 +386,7 @@ func (c *Collector) supportsHTTP2(ctx context.Context, raw string) bool {
 	if err != nil {
 		return false
 	}
-	_, _ = io.Copy(io.Discard, resp.Body)
+	_, _ = io.CopyN(io.Discard, resp.Body, 64<<10) // a stream that never ends is not read to its end
 	resp.Body.Close()
 	return resp.ProtoMajor == 2
 }

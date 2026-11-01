@@ -299,7 +299,7 @@ The Juice Shop truth is the 77 routes its server defines that its frontend calls
 - VAmPI's routes are in its OpenAPI document, which a crawler never reaches, so only the map finds them.
 - katana runs as `katana -u URL -d 3 -jc -jsl -silent -nc -timeout 10 -c 10`.
 
-`go run ./bench -readme` writes the table above from the newest record in `bench/history`, so its numbers cannot drift from a run. The reference commands are pinned in `bench/tools.go`. The polite path and fuzz sweeps send a short list, not 4,750 words, because at 5 requests per second that is 16 minutes a tool and app.
+`go run ./bench -readme` writes the table above from the newest record in `bench/history`, so its numbers cannot drift from a run. The reference commands are pinned in `bench/tools.go`. The polite path and fuzz sweeps send a short list, not 4,747 words, because at 5 requests per second that is 16 minutes a tool and app.
 
 ## Documentation
 
@@ -316,4 +316,4 @@ The Juice Shop truth is the 77 routes its server defines that its frontend calls
 
 ## License
 
-[MIT](LICENSE). Dependencies are MIT, BSD, Apache or Unlicense licensed, and CI checks it. The `common.txt` that `dirs` carries is SecLists' (MIT, 4,750 words). Most subdomain sources are [subfinder](https://github.com/projectdiscovery/subfinder)'s (MIT, ProjectDiscovery), run in-process. Technology fingerprints come from [wappalyzergo](https://github.com/projectdiscovery/wappalyzergo), whose passive matcher is included in `internal/wappalyzer`, and CDN ranges from [cdncheck](https://github.com/projectdiscovery/cdncheck). Both are MIT, ProjectDiscovery.
+[MIT](LICENSE). Dependencies are MIT, BSD, Apache or Unlicense licensed, and CI checks it. The `common.txt` that `dirs` carries is SecLists' (MIT, 4,747 words: three that ask a target to fetch or resolve an outside address are left out). Most subdomain sources are [subfinder](https://github.com/projectdiscovery/subfinder)'s (MIT, ProjectDiscovery), run in-process. Technology fingerprints come from [wappalyzergo](https://github.com/projectdiscovery/wappalyzergo), whose passive matcher is included in `internal/wappalyzer`, and CDN ranges from [cdncheck](https://github.com/projectdiscovery/cdncheck). Both are MIT, ProjectDiscovery.

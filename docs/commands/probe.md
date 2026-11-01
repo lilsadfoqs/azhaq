@@ -102,6 +102,10 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 - `chain_status_codes` lists the statuses of the whole chain.
 - `url` of a URL input is the input as given, with its slash, query and fragment (`http://h/` and `http://h/#x` are two values); `path` stays the path asked. For a bare host it is httpx's form, the front page without a slash (`http://h`).
 
+### A route that never ends
+
+A route that streams for ever (server-sent events, `multipart/x-mixed-replace`) is answered with its status, headers and the first part of its body (up to 64 KiB, or what comes in 2 seconds), and then closed, not held until the timeout. Its body counts as truncated. Every command that reads a page does the same.
+
 ### Targets with no answer
 
 - A target that got no answer, such as a name that does not resolve or a closed port, is a row with `failed: true` and an `error`.

@@ -224,7 +224,7 @@ def main(argv=None):
     with open(os.path.join(out, "key.json"), "w") as f:
         json.dump(key, f, indent=1)
     bad = 0
-    for i in (1, 2):
+    for i in sorted({e["estate"] for e in plan["envs"]}):
         mine = [r for e, r in ((e, result[e["id"]]) for e in plan["envs"] if e["estate"] == i)]
         up = sum(1 for r in mine if r["up"])
         print("estate %d: %d of %d environments answer, resolver %s" % (i, up, len(mine), "answers" if dns_ok[i] else "DOES NOT ANSWER"))

@@ -1,25 +1,29 @@
 #!/bin/sh
-# Installs azhaq from a GitHub release. The archive must match checksums.txt
-# and, when cosign is available, checksums.txt must carry a valid signature
-# from this repository's release workflow. Nothing is written to DIR before
-# both checks pass.
+# Installs azhaq from a GitHub release, or from a local directory (-f) such
+# as `goreleaser release --snapshot`'s dist/: the archive must match
+# checksums.txt and, when cosign is available (a release, not a local
+# source), checksums.txt must carry a valid signature from this
+# repository's release workflow. Nothing is written to DIR before both
+# checks pass.
 #
 # Without cosign the install rests on the checksum alone, and says so. To
 # refuse that, give -s (--require-signature) or set AZHAQ_REQUIRE_SIGNATURE=1:
 # the script then stops before downloading anything when cosign is missing,
-# and stops when the signature does not verify.
+# and stops when the signature does not verify. A local source (-f) has no
+# signature to check; -s with -f stops instead of silently skipping it.
 #
-# Needs: curl or wget; tar and gzip (the archive is a .tar.gz); sha256sum or
-# shasum; cosign (optional, required with -s); and the usual sh, awk, sed,
-# head, mktemp, uname, cp, chmod and mkdir.
+# Needs: curl or wget (not with -f); tar and gzip (the archive is a .tar.gz);
+# sha256sum or shasum; cosign (optional, required with -s); and the usual sh,
+# awk, sed, head, mktemp, uname, cp, chmod and mkdir.
 #
-# Usage: sh install.sh [-v VERSION] [-d DIR] [-s | --require-signature]
+# Usage: sh install.sh [-v VERSION] [-d DIR] [-f SOURCE_DIR] [-s | --require-signature]
 set -eu
 
 REPO=lilsadfoqs/azhaq
 RELEASES=https://github.com/$REPO/releases
 VERSION=
 INSTALL_DIR=
+FROM_DIR=
 TMP=
 REQUIRE_SIG=
 case ${AZHAQ_REQUIRE_SIGNATURE:-} in
@@ -38,13 +42,20 @@ info() {
 
 usage() {
     cat <<EOF
-usage: sh install.sh [-v VERSION] [-d DIR] [-s | --require-signature]
-  -v VERSION           release tag such as v0.8.1 (default: latest)
+usage: sh install.sh [-v VERSION] [-d DIR] [-f SOURCE_DIR] [-s | --require-signature]
+  -v VERSION           release tag such as v0.8.1 (required with -f; no
+                       "latest" lookup for a local source)
   -d DIR               install directory (default: \$HOME/.local/bin)
+  -f SOURCE_DIR        install from this local directory instead of
+                       downloading: the archive and checksums.txt are read
+                       from it, as goreleaser's dist/ holds them after
+                       \`goreleaser release --snapshot\`
   -s, --require-signature
                        install only when cosign verifies the signature of
                        checksums.txt; stop when cosign is missing or the
-                       signature fails (same: AZHAQ_REQUIRE_SIGNATURE=1)
+                       signature fails (same: AZHAQ_REQUIRE_SIGNATURE=1).
+                       With -f, stop instead: a local source has nothing to
+                       verify a signature against.
 EOF
 }
 
@@ -80,10 +91,11 @@ while [ "$n" -gt 0 ]; do
     n=$((n - 1))
 done
 
-while getopts ':v:d:sh' opt; do
+while getopts ':v:d:f:sh' opt; do
     case $opt in
         v) VERSION=$OPTARG ;;
         d) INSTALL_DIR=$OPTARG ;;
+        f) FROM_DIR=$OPTARG ;;
         s) REQUIRE_SIG=1 ;;
         h) usage; exit 0 ;;
         \?) err "unknown option -$OPTARG (see: sh install.sh -h)" ;;
@@ -93,22 +105,35 @@ done
 shift $((OPTIND - 1))
 [ $# -eq 0 ] || err "unexpected argument: $1"
 
+if [ -n "$FROM_DIR" ]; then
+    [ -d "$FROM_DIR" ] || err "no such directory: $FROM_DIR"
+    [ -n "$VERSION" ] || err "-f needs -v VERSION too: a local source has no \"latest\" to look up"
+    if [ -n "$REQUIRE_SIG" ]; then
+        err "-f (a local source) has no signature to verify; drop -s/--require-signature, or sign $FROM_DIR/checksums.txt first"
+    fi
+fi
+
 # Every tool is checked before anything is downloaded.
 need uname mktemp awk sed head tar gzip cp chmod mkdir
-command -v curl >/dev/null 2>&1 || command -v wget >/dev/null 2>&1 || err "need curl or wget to download files"
 command -v sha256sum >/dev/null 2>&1 || command -v shasum >/dev/null 2>&1 || err "need sha256sum or shasum to verify the download"
-COSIGN_BIN=$(command -v "${COSIGN:-cosign}" 2>/dev/null || true)
-if [ -n "${COSIGN:-}" ] && [ -z "$COSIGN_BIN" ]; then
-    err "COSIGN=$COSIGN is not an executable"
+if [ -z "$FROM_DIR" ]; then
+    command -v curl >/dev/null 2>&1 || command -v wget >/dev/null 2>&1 || err "need curl or wget to download files"
 fi
-if [ -n "$REQUIRE_SIG" ] && [ -z "$COSIGN_BIN" ]; then
-    printf 'install.sh: a signature is required (-s, AZHAQ_REQUIRE_SIGNATURE) but cosign was not found; nothing was downloaded or installed.\n' >&2
-    printf 'install.sh: install cosign, then run this again. Any one of:\n' >&2
-    printf '  go install github.com/sigstore/cosign/v2/cmd/cosign@latest   (needs Go; puts cosign in $(go env GOPATH)/bin)\n' >&2
-    printf '  brew install cosign   |   pacman -S cosign   |   apk add cosign   |   nix-shell -p cosign\n' >&2
-    printf '  a release binary: https://github.com/sigstore/cosign/releases/latest\n' >&2
-    printf 'install.sh: if it is installed outside PATH, name it with COSIGN=/path/to/cosign (other systems: https://docs.sigstore.dev/cosign/system_config/installation/)\n' >&2
-    exit 1
+COSIGN_BIN=
+if [ -z "$FROM_DIR" ]; then
+    COSIGN_BIN=$(command -v "${COSIGN:-cosign}" 2>/dev/null || true)
+    if [ -n "${COSIGN:-}" ] && [ -z "$COSIGN_BIN" ]; then
+        err "COSIGN=$COSIGN is not an executable"
+    fi
+    if [ -n "$REQUIRE_SIG" ] && [ -z "$COSIGN_BIN" ]; then
+        printf 'install.sh: a signature is required (-s, AZHAQ_REQUIRE_SIGNATURE) but cosign was not found; nothing was downloaded or installed.\n' >&2
+        printf 'install.sh: install cosign, then run this again. Any one of:\n' >&2
+        printf '  go install github.com/sigstore/cosign/v2/cmd/cosign@latest   (needs Go; puts cosign in $(go env GOPATH)/bin)\n' >&2
+        printf '  brew install cosign   |   pacman -S cosign   |   apk add cosign   |   nix-shell -p cosign\n' >&2
+        printf '  a release binary: https://github.com/sigstore/cosign/releases/latest\n' >&2
+        printf 'install.sh: if it is installed outside PATH, name it with COSIGN=/path/to/cosign (other systems: https://docs.sigstore.dev/cosign/system_config/installation/)\n' >&2
+        exit 1
+    fi
 fi
 
 case $(uname -s) in
@@ -134,6 +159,16 @@ TMP=$(mktemp -d) || err "cannot create a temp dir"
 trap 'if [ -n "$TMP" ]; then rm -rf "$TMP"; fi' EXIT
 trap 'exit 1' HUP INT TERM
 
+# get NAME FILE: FROM_DIR/NAME copied, or BASE/NAME downloaded.
+get() {
+    if [ -n "$FROM_DIR" ]; then
+        [ -f "$FROM_DIR/$1" ] || err "$FROM_DIR/$1 not found"
+        cp "$FROM_DIR/$1" "$2" || err "cannot read $FROM_DIR/$1"
+    else
+        fetch "$BASE/$1" "$2"
+    fi
+}
+
 if [ -z "$VERSION" ]; then
     fetch "https://api.github.com/repos/$REPO/releases/latest" "$TMP/latest.json"
     VERSION=$(sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' "$TMP/latest.json" | head -n 1)
@@ -156,8 +191,8 @@ NUM=${VERSION#v}
 ARCHIVE=azhaq_${NUM}_${OS}_${ARCH}.tar.gz
 BASE=$RELEASES/download/$VERSION
 
-fetch "$BASE/$ARCHIVE" "$TMP/$ARCHIVE"
-fetch "$BASE/checksums.txt" "$TMP/checksums.txt"
+get "$ARCHIVE" "$TMP/$ARCHIVE"
+get checksums.txt "$TMP/checksums.txt"
 
 awk -v f="$ARCHIVE" '$2 == f' "$TMP/checksums.txt" > "$TMP/check.txt"
 [ -s "$TMP/check.txt" ] || err "checksums.txt has no entry for $ARCHIVE"
@@ -172,7 +207,9 @@ fi
 (cd "$TMP" && $SHA_CMD check.txt >/dev/null 2>&1) || err "checksum mismatch for $ARCHIVE; nothing installed"
 info "sha256 of $ARCHIVE matches checksums.txt"
 
-if [ -n "$COSIGN_BIN" ]; then
+if [ -n "$FROM_DIR" ]; then
+    info "local source ($FROM_DIR): the signature is not checked (there is no release to verify against)"
+elif [ -n "$COSIGN_BIN" ]; then
     fetch "$BASE/checksums.txt.sigstore.json" "$TMP/checksums.txt.sigstore.json"
     "$COSIGN_BIN" verify-blob \
         --bundle "$TMP/checksums.txt.sigstore.json" \
