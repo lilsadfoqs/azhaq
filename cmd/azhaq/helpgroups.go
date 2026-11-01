@@ -356,7 +356,10 @@ var helpSpecs = map[string]helpSpec{
 	},
 	"diff": {
 		groups: []helpGroup{
-			{"", `db a b jsonl quiet`},
+			{"", `db a b json quiet`},
+		},
+		hidden: map[string]string{
+			"alias": `jsonl`,
 		},
 	},
 	"export": {

@@ -1700,11 +1700,13 @@ func cmdDiff(args []string) error {
 	a := fs.String("a", "", "old sqlite")
 	b := fs.String("b", "", "new sqlite (default: last run)")
 	ws := fs.String("db", "", "workspace: compare the last two runs recorded in this database")
-	jsonl := fs.Bool("jsonl", false, "emit JSONL instead of a text report")
+	asJSON := fs.Bool("json", false, "JSON lines instead of a text report, the summary last")
+	jsonl := fs.Bool("jsonl", false, "same as -json")
 	quiet := fs.Bool("quiet", false, "entities and counts only (skip observation lines)")
 	if err := parse(fs, args); err != nil {
 		return err
 	}
+	*jsonl = *jsonl || *asJSON
 	if *ws != "" {
 		st, err := store.OpenExisting(*ws)
 		if err != nil {
@@ -1871,7 +1873,7 @@ func printDiffStores(old, neu *store.Store, oldLabel string, opts diffOpts) erro
 		if len(failed) > 0 {
 			line += " (sources that failed this run: " + strings.Join(failed, ", ") + ")"
 		}
-		fmt.Println(line + "; -jsonl lists them")
+		fmt.Println(line + "; -json lists them")
 	}
 	fmt.Printf("added=%d removed=%d not_seen_again=%d observations=%d\n", len(d.Added), len(removed), len(unseen), len(d.NewObs))
 	return nil

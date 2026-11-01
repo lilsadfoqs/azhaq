@@ -244,7 +244,7 @@ func init() {
 			examples: []string{"azhaq new -db acme.db -since 24h"}},
 		{name: "diff", group: groupWS, run: cmdDiff,
 			summary:  "compare two runs",
-			usage:    "-a OLD.db -b NEW.db | -db WORKSPACE.db  [-jsonl] [-quiet]",
+			usage:    "-a OLD.db -b NEW.db | -db WORKSPACE.db  [-json] [-quiet]",
 			output:   "entities added and removed, new observations",
 			examples: []string{"azhaq diff -db acme.db"}},
 		{name: "export", group: groupWS, run: cmdExport,
