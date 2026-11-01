@@ -316,6 +316,10 @@ def grade(key, d):
             if level in ("strong", "product"):
                 kid = h["host"] + "|" + h.get("env", h["kind"])
                 if kid in found:
+                    # A later lead that names the CVE makes the match strong;
+                    # the time stays the first lead's.
+                    if level == "strong":
+                        found[kid]["match"] = "strong"
                     dups.append(brief)
                     continue
                 found[kid] = dict(brief, key_host=h["host"], product=h.get("product", "dangling CNAME"), match=level, category=h["category"])
