@@ -65,6 +65,7 @@ var rcodeNames = map[string]int{
 type dnsConf struct {
 	types      []uint16        // asked, in dnsx's order
 	selected   map[string]bool // by flag name
+	noTypeFlag bool            // no type flag: A was asked by default
 	all        bool            // -all
 	axfr       bool
 	resp, ro   bool
@@ -120,7 +121,7 @@ func cmdDNS(args []string) error {
 	alias("resp-only", "ro", "same as -resp-only")
 	rcode := fs.String("rcode", "", "print NAME [RCODE] for names whose answer has one of these codes, comma-separated (noerror, nxdomain, servfail, refused, or a number); a name with no records is shown")
 	alias("rcode", "rc", "same as -rcode")
-	rtf := fs.String("response-type-filter", "", "print names with no record of these types, comma-separated (a, cname, ...)")
+	rtf := fs.String("response-type-filter", "", "print names with no record of these types, comma-separated (a, cname, ...); with -json and no type flag, a name that does not exist or has only other records has its row too")
 	alias("response-type-filter", "rtf", "same as -response-type-filter")
 	cdn := fs.Bool("cdn", false, "name the CDN, WAF or cloud in front of each name (cdn, cdn-name, cdn-type)")
 	asn := fs.Bool("asn", false, "add the autonomous system of each address (as-number, as-name, as-country, as-range), asked of Team Cymru's DNS service")
@@ -217,6 +218,7 @@ func cmdDNS(args []string) error {
 	if len(cf.types) == 0 {
 		cf.types = []uint16{dns.TypeA}
 		cf.selected["a"] = true
+		cf.noTypeFlag = true
 	}
 	cf.ptrHosts = cf.selected["ptr"]
 	if *rcode != "" {
@@ -1116,8 +1118,11 @@ func (r *dnsRun) output(host string, d *dnsr.Data, row *dnsRow, selected bool) (
 	// JSON, -raw and templates print a name as one row, only when it has a
 	// record of a type asked (A without a flag), unless -rcode asked for others.
 	whole := cf.wholeRows()
+	// -rtf with no type flag asks for the names without a record: as in dnsx,
+	// those are the rows, whatever their type.
+	askedByRTF := len(cf.rtf) > 0 && cf.noTypeFlag
 	// A dangling CNAME is a finding: its row goes out with the takeover on it.
-	if whole && !cf.all && !cf.axfr && len(cf.rcodes) == 0 && !selected && !cf.selected["any"] && row.Takeover == nil {
+	if whole && !askedByRTF && !cf.all && !cf.axfr && len(cf.rcodes) == 0 && !selected && !cf.selected["any"] && row.Takeover == nil {
 		return
 	}
 	if len(cf.rtf) > 0 && r.hasAny(d, cf.rtf) {

@@ -109,6 +109,7 @@ Behaviour, fields and edge cases: [`azhaq dns`](commands/dns.md).
 | `-d example.com` | `-d example.com` | With `-w`, the domain to guess under. `-d FUZZ.example.com -w FILE` puts the words where `FUZZ` is. |
 | `-w FILE` | `-w FILE` | |
 | `-a -aaaa -cname -ns -txt -srv -ptr -mx -soa -caa -any -axfr` | the same | `-a` is the default. |
+| `-rtf a` | `-rtf a` (or `-response-type-filter`) | Every answered name with no A, in `-json` too: NODATA, other types only, NXDOMAIN, CNAME-only. |
 | `-recon` | `-all` (or `-recon`) | Every type but AXFR. `-e TYPES` leaves some out. |
 | `-resp`, `-resp-only` | `-resp`, `-resp-only` | `NAME [TYPE] [VALUE]`. |
 | `-rc noerror,nxdomain` | `-rcode noerror,nxdomain` | `-rc` is accepted too. |
@@ -131,6 +132,7 @@ Behaviour, fields and edge cases: [`azhaq dns`](commands/dns.md).
 <!-- azhaq: dns -->
 
 - **Wildcards.** Wildcard answers are always left out, per parent zone, with no domain to give. `-no-wildcard` prints them. `-aw` is accepted and changes nothing. dnsx prints wildcard answers unless it is given `-wd` or `-aw`.
+- **`-json` with no type flag.** azhaq asks A and gives a row only to a name that has one, as `-a -json` does in dnsx; `-rcode` (or `-rtf`) asks for the others. dnsx, with no type flag, gives a row to every name a resolver answered, NXDOMAIN included.
 - **`-timeout`.** It is the wait for one answer, as in dnsx. In the other azhaq commands it is how long the run may take. Here the run's bound is `-maxtime SECONDS`.
 - **`-rl` and `-dns-rate`.** `-rl` counts names, as dnsx's does. `-dns-rate N` is a second pace: N queries a second to each resolver. With 6 resolvers that is up to 6 times N.
 - **Pace, as observed.** With dnsx 1.x, `-rl` did not hold back the queries of `-d` with `-w` in one test run: 20 names at `-rl 1` took 0.46 s, and 40 at `-rl 10` took 0.64 s. azhaq's `-dns-rate` paced them: 20 names at 1 a second took 19 s. That is what was measured, not a statement about every dnsx version or input.
