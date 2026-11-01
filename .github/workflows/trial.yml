@@ -199,7 +199,7 @@ jobs:
       - name: remove the source
         run: |
           mkdir -p "$HOME/ci" "$HOME/trial"
-          cp .github/ci/publish.sh .github/ci/trial/GATE.md .github/ci/range/render_brief.py "$HOME/ci/"
+          cp .github/ci/publish.sh .github/ci/trial/GATE.md .github/ci/range/render_brief.py .github/ci/range/scores.py .github/ci/range/merge_gate.py "$HOME/ci/"
           find "$GITHUB_WORKSPACE" -mindepth 1 -delete
       - name: review
         run: |
@@ -233,6 +233,11 @@ jobs:
           tar czf "$HOME/ci/trial.tgz" -T "$HOME/ci/list" -C "$HOME/ci" stream-tail.jsonl stderr.txt $extra
           age -r "$AGE_RECIPIENT" -o "$HOME/ci/trial.tgz.age" "$HOME/ci/trial.tgz"
           files=("$HOME/ci/trial.tgz.age")
+          # The scorecard's numbers, encrypted apart from the archive: history.sh reads these alone.
+          python3 -I "$HOME/ci/scores.py" extract REPORT.md --kind gate-a --tag "$GITHUB_REF_NAME" --part "${{ steps.part.outputs.name }}" --run "$GITHUB_RUN_ID" \
+            --version "$(cat "$HOME/ci/azhaq.version" 2>/dev/null || true)" --out "$HOME/ci/scores.json" &&
+            age -r "$AGE_RECIPIENT" -o "$HOME/ci/scores.json.age" "$HOME/ci/scores.json" && files+=("$HOME/ci/scores.json.age") ||
+            echo "::warning title=scores::no scores record (no scorecard in REPORT.md)"
           [ -s "$HOME/ci/key.json.age" ] && files+=("$HOME/ci/key.json.age")
           if [ -s "$HOME/.codex/auth.json" ] && [ "$(sha256sum "$HOME/.codex/auth.json" | cut -d' ' -f1)" != "$(cat "$RUNNER_TEMP/auth.sum" 2>/dev/null)" ]; then
             age -r "$AGE_RECIPIENT" -o "$HOME/ci/codex-auth.json.age" "$HOME/.codex/auth.json"
@@ -320,7 +325,7 @@ jobs:
       - name: remove the source
         run: |
           mkdir -p "$HOME/ci" "$HOME/trial"
-          cp .github/ci/publish.sh .github/ci/trial/GATE.md .github/ci/range/render_brief.py "$HOME/ci/"
+          cp .github/ci/publish.sh .github/ci/trial/GATE.md .github/ci/range/render_brief.py .github/ci/range/scores.py .github/ci/range/merge_gate.py "$HOME/ci/"
           find "$GITHUB_WORKSPACE" -mindepth 1 -delete
       - name: review
         run: |
@@ -356,6 +361,11 @@ jobs:
           tar czf "$HOME/ci/trial.tgz" -T "$HOME/ci/list" -C "$HOME/ci" stream-tail.jsonl stderr.txt
           age -r "$AGE_RECIPIENT" -o "$HOME/ci/trial.tgz.age" "$HOME/ci/trial.tgz"
           files=("$HOME/ci/trial.tgz.age")
+          # The scorecard's numbers, encrypted apart from the archive: history.sh reads these alone.
+          python3 -I "$HOME/ci/scores.py" extract REPORT.md --kind gate-b --tag "$GITHUB_REF_NAME" --part "${{ steps.part.outputs.name }}" --run "$GITHUB_RUN_ID" \
+            --version "$(cat "$HOME/ci/azhaq.version" 2>/dev/null || true)" --out "$HOME/ci/scores.json" &&
+            age -r "$AGE_RECIPIENT" -o "$HOME/ci/scores.json.age" "$HOME/ci/scores.json" && files+=("$HOME/ci/scores.json.age") ||
+            echo "::warning title=scores::no scores record (no scorecard in REPORT.md)"
           if [ -s "$HOME/.codex/auth.json" ] && [ "$(sha256sum "$HOME/.codex/auth.json" | cut -d' ' -f1)" != "$(cat "$RUNNER_TEMP/auth.sum" 2>/dev/null)" ]; then
             age -r "$AGE_RECIPIENT" -o "$HOME/ci/codex-auth.json.age" "$HOME/.codex/auth.json"
             files+=("$HOME/ci/codex-auth.json.age")
@@ -425,7 +435,7 @@ jobs:
       - name: remove the source
         run: |
           mkdir -p "$HOME/ci" "$HOME/trial"
-          cp .github/ci/publish.sh .github/ci/trial/GATE.md .github/ci/range/render_brief.py "$HOME/ci/"
+          cp .github/ci/publish.sh .github/ci/trial/GATE.md .github/ci/range/render_brief.py .github/ci/range/scores.py .github/ci/range/merge_gate.py "$HOME/ci/"
           find "$GITHUB_WORKSPACE" -mindepth 1 -delete
       - name: review
         run: |
@@ -459,6 +469,11 @@ jobs:
           tar czf "$HOME/ci/trial.tgz" -T "$HOME/ci/list" -C "$HOME/ci" stream-tail.jsonl stderr.txt $extra
           age -r "$AGE_RECIPIENT" -o "$HOME/ci/trial.tgz.age" "$HOME/ci/trial.tgz"
           files=("$HOME/ci/trial.tgz.age")
+          # The scorecard's numbers, encrypted apart from the archive: history.sh reads these alone.
+          python3 -I "$HOME/ci/scores.py" extract REPORT.md --kind baseline --tag "$GITHUB_REF_NAME" --part "" --run "$GITHUB_RUN_ID" \
+            --version "$(cat "$HOME/ci/azhaq.version" 2>/dev/null || true)" --out "$HOME/ci/scores.json" &&
+            age -r "$AGE_RECIPIENT" -o "$HOME/ci/scores.json.age" "$HOME/ci/scores.json" && files+=("$HOME/ci/scores.json.age") ||
+            echo "::warning title=scores::no scores record (no scorecard in REPORT.md)"
           [ -s "$HOME/ci/key.json.age" ] && files+=("$HOME/ci/key.json.age")
           if [ -s "$HOME/.codex/auth.json" ] && [ "$(sha256sum "$HOME/.codex/auth.json" | cut -d' ' -f1)" != "$(cat "$RUNNER_TEMP/auth.sum" 2>/dev/null)" ]; then
             age -r "$AGE_RECIPIENT" -o "$HOME/ci/codex-auth.json.age" "$HOME/.codex/auth.json"
@@ -526,7 +541,7 @@ jobs:
         # As a new user, the reviewer has the release and GitHub, not a checkout.
         run: |
           mkdir -p "$HOME/ci" "$HOME/trial"
-          cp .github/ci/publish.sh .github/ci/trial/BRIEF.md "$HOME/ci/"
+          cp .github/ci/publish.sh .github/ci/trial/BRIEF.md .github/ci/range/scores.py .github/ci/range/merge_gate.py "$HOME/ci/"
           find "$GITHUB_WORKSPACE" -mindepth 1 -delete
       - name: review
         run: |
@@ -567,6 +582,11 @@ jobs:
           tar czf "$HOME/ci/trial.tgz" -T "$HOME/ci/list" -C "$HOME/ci" stream-tail.jsonl stderr.txt
           age -r "$AGE_RECIPIENT" -o "$HOME/ci/trial.tgz.age" "$HOME/ci/trial.tgz"
           files=("$HOME/ci/trial.tgz.age")
+          # The scorecard's numbers, encrypted apart from the archive: history.sh reads these alone.
+          python3 -I "$HOME/ci/scores.py" extract REPORT.md --kind switch --tag "$GITHUB_REF_NAME" --part "" --run "$GITHUB_RUN_ID" \
+            --version "$(cat "$HOME/ci/azhaq.version" 2>/dev/null || true)" --out "$HOME/ci/scores.json" &&
+            age -r "$AGE_RECIPIENT" -o "$HOME/ci/scores.json.age" "$HOME/ci/scores.json" && files+=("$HOME/ci/scores.json.age") ||
+            echo "::warning title=scores::no scores record (no scorecard in REPORT.md)"
           # A session Codex refreshed here goes back, or the author's is revoked.
           if [ -s "$HOME/.codex/auth.json" ] && [ "$(sha256sum "$HOME/.codex/auth.json" | cut -d' ' -f1)" != "$(cat "$RUNNER_TEMP/auth.sum" 2>/dev/null)" ]; then
             age -r "$AGE_RECIPIENT" -o "$HOME/ci/codex-auth.json.age" "$HOME/.codex/auth.json"
