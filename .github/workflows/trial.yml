@@ -120,6 +120,17 @@ jobs:
       - name: packages
         # nmap needs root: the agent gets it here, not through sudo.
         run: sudo apt-get update -q && sudo apt-get install -y -q dnsutils age nmap jq
+      - uses: sigstore/cosign-installer@v3
+      - name: azhaq
+        # Installed with the others, before the timed session: the latest
+        # release, by its install script with the signature required, into
+        # the reviewer's workspace (RESEARCH.md and HUNTER.md say where).
+        run: |
+          v=$(curl -s "https://api.github.com/repos/$GITHUB_REPOSITORY/releases/latest" | jq -r .tag_name)
+          mkdir -p "$HOME/trial/bin" "$HOME/ci"
+          sh scripts/install.sh -v "$v" -d "$HOME/trial/bin" --require-signature
+          "$HOME/trial/bin/azhaq" version
+          echo "$v" > "$HOME/ci/azhaq.version"
       - name: codex
         env:
           CODEX_AUTH_KEY: ${{ secrets.CODEX_AUTH_KEY }}
@@ -176,7 +187,7 @@ jobs:
           find "$GITHUB_WORKSPACE" -mindepth 1 -delete
       - name: review
         run: |
-          v=$(curl -s "https://api.github.com/repos/$GITHUB_REPOSITORY/releases/latest" | jq -r .tag_name)
+          v=$(cat "$HOME/ci/azhaq.version")
           echo "release under review: $v"
           python3 -I "$HOME/ci/render_brief.py" "$KIND" "$v" "$HOME/ci/vars.json" "$HOME/ci" > "$HOME/ci/brief.md"
           cd "$HOME/trial"

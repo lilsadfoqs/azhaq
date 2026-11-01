@@ -573,11 +573,15 @@ class Brief(unittest.TestCase):
         r = render_brief.render("research", "v0.10.1", v, d)
         self.assertIn("v0.10.1", r)
         self.assertIn("a.test", r)
-        self.assertRegex(r, r"Phase 1, client 1.*you must not install it before phase 2")
-        self.assertRegex(r, r"Phase 2, client 2.*install azhaq from its latest GitHub release")
+        where = "azhaq v0.10.1 is installed at ./bin/azhaq"
+        self.assertRegex(r, r"Phase 1, client 1.*" + where + r".*Do not run it in phase 1")
+        self.assertRegex(r, r"Phase 2, client 2.*" + where + r".*Use it as your main tool")
         h = render_brief.render("hunter", "v0.10.1", v, d)
-        self.assertRegex(h, r"Session 1, program 1.*install azhaq")
+        self.assertRegex(h, r"Session 1, program 1.*" + where + r".*Use it as your main tool")
         self.assertRegex(h, r"Session 2, program 2.*azhaq must not be used")
+        for text in (r, h):
+            self.assertNotIn("install azhaq from", text)
+            self.assertIn("do not reinstall it", text)
         with self.assertRaises(ValueError):
             render_brief.render("hunter", "v", {}, d)
         with self.assertRaises(ValueError):

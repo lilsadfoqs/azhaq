@@ -31,7 +31,7 @@ Also write ./surface-N.txt for each phase N: every host, open port and service y
 ## Rules (hard rules, no exceptions)
 
 - **The estates are black boxes, as a client's would be.** You have no access to how they are hosted, and trying to find out (the machine's containers, processes or their files) voids the review.
-- Work only inside this folder (/home/runner/trial). Put binaries in ./bin (`go install` into ./bin, pip into a venv here). nmap is installed already. Install azhaq from its GitHub release, as a new user would, when your phases say so.
+- Work only inside this folder (/home/runner/trial). Put binaries in ./bin (`go install` into ./bin, pip into a venv here). nmap is installed already, and so is azhaq (./bin/azhaq, the release named in your phases): do not reinstall it.
 - Nothing outward-facing: no GitHub issues, PRs, stars or comments, no posting anywhere, do not use the gh CLI. Send nothing to public hosts beyond downloading tools, wordlists and templates and reading documentation.
 - Log the commands you ran and the output that mattered in ./notes/.
 

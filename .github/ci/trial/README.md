@@ -6,7 +6,7 @@
 | Kind | What happens | Brief |
 | --- | --- | --- |
 | `switch` (default) | A blind review of the latest release against five training apps. | `BRIEF.md` |
-| `research` | A researcher does two phases of an engagement on two fresh estates. Phase 1, estate 1: usual tools only, azhaq not installed. Phase 2, estate 2: azhaq installed from its latest release and used as the main tool; every fallback to another tool is logged with its reason. | `RESEARCH.md` |
+| `research` | A researcher does two phases of an engagement on two fresh estates. Phase 1, estate 1: usual tools only, azhaq not run. Phase 2, estate 2: azhaq used as the main tool; every fallback to another tool is logged with its reason. | `RESEARCH.md` |
 | `hunter` | The same estates as two bounty sessions, in the opposite order: azhaq first, the usual stack second with azhaq off. | `HUNTER.md` |
 
 ```
@@ -39,6 +39,12 @@ binary has `cap_net_bind_service`; the fence allows those addresses on port
 53). The resolver refuses a transfer unless the estate planted the Vulhub
 BIND that allows one. `up.py` starts everything and
 records which probes answered in the key; the grader leaves out what was not up.
+
+azhaq's latest release is installed into the reviewer's workspace (`./bin/azhaq`)
+before the review, in the job's step after the usual tools, with `scripts/install.sh
+--require-signature`; the brief says where it is and which version. Installing it
+is not part of the timed work in these two kinds (it is in `switch`, where it is a
+scored item).
 
 Placeholders filled at run time: `__VERSION__` (the latest release),
 `__DOMAIN1__`, `__NET1__`, `__DNS1__`, `__DOMAIN2__`, `__NET2__`, `__DNS2__`,
