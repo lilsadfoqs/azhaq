@@ -28,10 +28,10 @@ jobs:
         shard: [0, 1, 2, 3]
     steps:
       - uses: actions/checkout@v7
+      - name: disk
+        run: .github/ci/range/check-disk.sh
       - name: packages
         run: sudo apt-get update -q && sudo apt-get install -y -q age
-      - name: free disk
-        run: .github/ci/range/free-disk.sh
       - name: compose version
         # The overrides use `ports: !override`, which needs Compose 2.24.
         run: |

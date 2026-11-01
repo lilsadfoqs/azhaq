@@ -112,14 +112,14 @@ jobs:
       DRYRUN: ${{ needs.kind.outputs.dryrun }}
     steps:
       - uses: actions/checkout@v7
+      - name: disk
+        run: .github/ci/range/check-disk.sh
       - uses: actions/setup-go@v7
         with:
           go-version: stable
       - name: packages
         # nmap needs root: the agent gets it here, not through sudo.
         run: sudo apt-get update -q && sudo apt-get install -y -q dnsutils age nmap jq
-      - name: free disk
-        run: .github/ci/range/free-disk.sh
       - name: codex
         env:
           CODEX_AUTH_KEY: ${{ secrets.CODEX_AUTH_KEY }}
