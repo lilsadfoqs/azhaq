@@ -22,6 +22,7 @@
 - The depth note no longer advises `resume -depth N` for work a larger depth cannot ask (a `dirs` sweep, a finished resume), counts each URL once, and equals the capped rows `query -coverage capped` lists.
 - `query -coverage capped` returns templated rows that hold capped URLs.
 - `resume` of a `dirs` sweep no longer spends `-rate` on words whose answers are stored.
+- `run` no longer calls a CNAME target `unresolved` at `-depth 0` when the answer that named it held its address: the name is `live` (or `sibling`) with that address in `proof`, at any `-depth`.
 
 ## v0.13.0
 
