@@ -53,6 +53,7 @@ func (e *Engine) RunLocal(ctx context.Context, seeds []types.Seed, b Budgets) er
 		tmpl:      map[string]int{},
 		named:     map[string]bool{},
 		catchHeld: map[string]bool{},
+		flight:    newNamedFlight(),
 		batch:     map[string][]task{},
 		batchBusy: map[string]int{},
 		parked:    map[string][]task{},
@@ -126,6 +127,7 @@ type scheduler struct {
 	tmpl      map[string]int  // URLs queued per template
 	named     map[string]bool // URL seeds a script named, by seed key (the hints of azhaq-js)
 	catchHeld map[string]bool // of those, the ones not asked: their origin answers every path with one page
+	flight    namedFlight
 	queue     [2][]task
 
 	batch     map[string][]task // seeds waiting for a batch collector
@@ -834,17 +836,28 @@ func (s *scheduler) startRetry(ctx context.Context) {
 // within its share of the budget, then fan-out.
 func (s *scheduler) next() (task, bool) {
 	for p := 0; p < 2; p++ {
-		for len(s.queue[p]) > 0 {
-			t := s.queue[p][0]
-			if s.skip(t) || s.catchAllHeld(t) {
-				s.queue[p] = s.queue[p][1:]
+		for i := 0; i < len(s.queue[p]); {
+			t := s.queue[p][i]
+			drop := func() {
+				s.queue[p] = slices.Delete(s.queue[p], i, i+1)
 				s.finish(t)
 				s.unpark(t) // nothing to wait for
+			}
+			if s.skip(t) {
+				drop()
+				continue
+			}
+			switch s.catchAllGate(t) {
+			case gateHold:
+				drop()
+				continue
+			case gateWait:
+				i++ // its directory's control has not answered: the others go on
 				continue
 			}
 			if egress.Spent() && s.contacts(t) {
 				// It would only be refused: it waits for azhaq resume.
-				s.queue[p] = s.queue[p][1:]
+				s.queue[p] = slices.Delete(s.queue[p], i, i+1)
 				s.held = append(s.held, t)
 				continue
 			}
@@ -854,7 +867,7 @@ func (s *scheduler) next() (task, bool) {
 			if p == 0 && s.originSpent() {
 				break
 			}
-			s.queue[p] = s.queue[p][1:]
+			s.queue[p] = slices.Delete(s.queue[p], i, i+1)
 			s.ran++
 			if p == 0 {
 				s.originRan++
@@ -867,6 +880,7 @@ func (s *scheduler) next() (task, bool) {
 
 func (s *scheduler) start(ctx context.Context, t task) {
 	s.inflight++
+	s.flightStart(t)
 	s.noteStretch(t)
 	item := types.WorkItem{ID: workID(t.col, t.seed), Collector: t.col, Seed: t.seed}
 	go func() {
@@ -989,6 +1003,7 @@ func (s *scheduler) handle(f finished) {
 			s.finish(t)
 			s.unpark(t)
 		}
+		s.flightEnd(t)
 		s.endStretch(t, meta)
 		if err != nil && meta.Status != types.StatusCancelled {
 			continue
@@ -1015,29 +1030,106 @@ func (s *scheduler) markNamed(from task, h types.Seed) {
 	}
 }
 
-// catchAllHeld says a task would only draw an origin's catch-all page again:
-// its URL was named by a script, its origin has already answered
-// Budgets.CatchAllStop paths with the page every unknown path gets, and the
-// control for the URL's directory is that page (fetch.CatchAllHeld). The URL
-// stays in the map as not requested, with the reason.
-func (s *scheduler) catchAllHeld(t task) bool {
+// A task's turn under the catch-all rule.
+type gateAnswer int
+
+const (
+	gateAsk  gateAnswer = iota // ask it
+	gateHold                   // do not ask it: its origin answers every path with one page
+	gateWait                   // ask it later, when the control it depends on has answered
+)
+
+// namedFlight is the named URLs being asked, by origin and directory, and the
+// directories whose first path has been asked: the controls of a directory
+// are asked by its first path, and the rule is applied to the others only
+// when that has answered, so a loaded machine sends what an idle one does.
+type namedFlight struct {
+	tasks  map[string]int // seed key → its tasks running
+	origin map[string]int // origin → seeds running
+	dir    map[string]int // origin and directory → seeds running
+	done   map[string]bool
+	began  map[string]bool // seed keys that started: their other tasks go on
+}
+
+func newNamedFlight() namedFlight {
+	return namedFlight{tasks: map[string]int{}, origin: map[string]int{}, dir: map[string]int{}, done: map[string]bool{}, began: map[string]bool{}}
+}
+
+// namedWhere is the origin and directory of a task's URL, when the rule
+// concerns it: a URL a script named, with a catch-all stop set.
+func (s *scheduler) namedWhere(t task) (k, origin, dir string, st fetch.ControlState, ok bool) {
 	if s.b.CatchAllStop <= 0 || t.seed.Type != types.TypeURL {
-		return false
+		return
 	}
-	k := seedKey(t.seed)
+	k = seedKey(t.seed)
 	if !s.named[k] {
-		return false
+		return
 	}
-	raw := t.seed.Key()
+	u, err := url.Parse(t.seed.Key())
+	if err != nil || u.Host == "" {
+		return
+	}
+	st, dir = fetch.CatchAllControl(t.seed.Key(), s.b.CatchAllStop)
+	return k, u.Scheme + "://" + u.Host, dir, st, st != fetch.ControlNone
+}
+
+// catchAllGate says what a task does under the catch-all rule: a URL a
+// script named is held when its origin has answered Budgets.CatchAllStop
+// paths with the page every unknown path gets and the control for its
+// directory is that page (fetch.CatchAllHeld); the first path of a directory
+// goes alone, to ask the control; while the origin is short of answers, the
+// paths of a directory whose control is that page go one at a time. Else it
+// is asked. A held URL stays in the map as not requested, with the reason.
+func (s *scheduler) catchAllGate(t task) gateAnswer {
+	k, origin, dir, st, ok := s.namedWhere(t)
+	if !ok || s.flight.began[k] {
+		return gateAsk
+	}
 	if s.catchHeld[k] {
-		return true
+		return gateHold
 	}
-	if !fetch.CatchAllHeld(raw, s.b.CatchAllStop) {
-		return false
+	f := &s.flight
+	switch {
+	case st == fetch.ControlHeld:
+		s.catchHeld[k] = true
+		s.e.noteSkip(t.seed, CatchAllHeldReason)
+		return gateHold
+	case !f.done[dir] && f.dir[dir] > 0:
+		return gateWait
+	case (st == fetch.ControlShell || st == fetch.ControlPending) && f.origin[origin] > 0:
+		return gateWait
 	}
-	s.catchHeld[k] = true
-	s.e.noteSkip(t.seed, CatchAllHeldReason)
-	return true
+	return gateAsk
+}
+
+// flightStart notes a task of a named URL running.
+func (s *scheduler) flightStart(t task) {
+	k, origin, dir, _, ok := s.namedWhere(t)
+	if !ok {
+		return
+	}
+	f := &s.flight
+	if f.tasks[k] == 0 {
+		f.origin[origin]++
+		f.dir[dir]++
+	}
+	f.tasks[k]++
+	f.began[k] = true
+}
+
+// flightEnd notes one ended; the last task of a URL marks its directory's
+// control as answered.
+func (s *scheduler) flightEnd(t task) {
+	k, origin, dir, _, ok := s.namedWhere(t)
+	f := &s.flight
+	if !ok || f.tasks[k] == 0 {
+		return
+	}
+	if f.tasks[k]--; f.tasks[k] == 0 {
+		f.origin[origin]--
+		f.dir[dir]--
+		f.done[dir] = true
+	}
 }
 
 // caps says which limits of the run held work back, and how much.
