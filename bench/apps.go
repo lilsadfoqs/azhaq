@@ -750,7 +750,7 @@ func benchAppsPolite() []appResult {
 // scores the routes each found against the app's own list of routes.
 func crawlCompare(a *appResult, truth map[string]bool, shell string) {
 	origin := strings.TrimSuffix(a.URL, "/")
-	aa := append([]string{"crawl", "-u", a.URL, "-depth", "3", "-silent"}, azPace(a.URL)...)
+	aa := append([]string{"crawl", "-u", a.URL, "-depth", "3", "-silent", "-hints"}, azPace(a.URL)...)
 	run1 := timed
 	if strings.HasPrefix(a.URL, "https://") {
 		run1 = run // a public site: one run

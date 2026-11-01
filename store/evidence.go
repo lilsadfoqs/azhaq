@@ -24,7 +24,7 @@ type Evidence struct {
 type EvidenceRow struct {
 	URL, Method, Owner string
 	Row                []byte
-	Answers     []EvidenceAnswer
+	Answers            []EvidenceAnswer
 }
 
 // EvidenceAnswer is one role's answer: to the row's URL, or, for a

@@ -164,7 +164,7 @@ var helpSpecs = map[string]helpSpec{
 		groups: []helpGroup{
 			{"Targets and input", `u l scope program`},
 			{"What to ask", `d paths sweep no-form-fill per-template no-follow no-map-guess browser interact interact-clicks fs kf`},
-			{"What to list", `assets no-catchall rejected em ndef do`},
+			{"What to list", `assets hints no-catchall rejected em ndef do`},
 			{"Scope and safety", `allow deny deny-path kill-file ledger submit-forms browser-writes`},
 			{"Pace and limits", `rl delay backoff retry host-rate hrl host-parallel parallel request-timeout ct max-requests max-host-requests max-items max-response-size`},
 			{"Session and network", `H cookie cookie-jar login login-user login-pass proxy resolvers`},
