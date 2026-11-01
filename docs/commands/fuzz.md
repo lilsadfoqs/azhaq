@@ -277,7 +277,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 | `-c` | bool |  | colour the status of each result in the text output |
 
 <details>
-<summary>Flags familiar from ffuf, other names and flags accepted with no effect (41)</summary>
+<summary>Flags familiar from ffuf, other names and flags accepted with no effect (42)</summary>
 
 | Flag | Type | Default | Meaning | Kind |
 | --- | --- | --- | --- | --- |
@@ -320,6 +320,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 | `-cookie` | string, repeatable |  | ffuf's alias of -b | other name |
 | `-data` | string |  | ffuf's alias of -d | other name |
 | `-data-ascii` | string |  | ffuf's alias of -d | other name |
+| `-header` | string, repeatable |  | same as -H | other name |
 | `-s` | bool |  | ffuf's name for -silent | other name |
 | `-noninteractive` | bool |  | accepted for ffuf's command lines: no effect (there is no console; see -control) | accepted, no effect |
 

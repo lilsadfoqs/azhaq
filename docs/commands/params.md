@@ -155,12 +155,13 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 | `-v` | bool |  | print a line for every finished task, not only failures |
 
 <details>
-<summary>Flags familiar from arjun (2)</summary>
+<summary>Flags familiar from arjun and other names (3)</summary>
 
 | Flag | Type | Default | Meaning | Kind |
 | --- | --- | --- | --- | --- |
 | `-include` | string |  | sent with every request: a query (a=1&b=2) for GET; for a body a form, a JSON object, or XML, or a template with $arjun$ where the names go | arjun's name |
 | `-stable` | bool |  | one request at a time, 3 to 9 s apart, and 30 s wait after a refused connection (arjun --stable) | arjun's name |
+| `-header` | string, repeatable |  | same as -H | other name |
 
 </details>
 <!-- flags:end -->

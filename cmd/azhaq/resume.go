@@ -227,7 +227,7 @@ func keptArgs(args []string) []string {
 				i++
 			}
 			continue
-		case "header":
+		case "header", "H":
 			if !inline && takesValue {
 				val = args[i+1]
 				i++

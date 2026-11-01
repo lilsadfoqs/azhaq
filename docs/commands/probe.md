@@ -237,7 +237,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 | `-v` | bool |  | print a line for every finished task, not only failures |
 
 <details>
-<summary>Flags familiar from httpx, other names and flags accepted with no effect (152)</summary>
+<summary>Flags familiar from httpx, other names and flags accepted with no effect (153)</summary>
 
 | Flag | Type | Default | Meaning | Kind |
 | --- | --- | --- | --- | --- |
@@ -346,6 +346,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 | `-frt` | string |  | drop rows by response time: '> 1' | other name |
 | `-fs` | string |  | drop rows whose response holds one of these strings | other name |
 | `-fwc` | string |  | drop rows with these word counts | other name |
+| `-header` | string, repeatable |  | same as -H | other name |
 | `-http-proxy` | string |  | send every request through this proxy (http://, https:// or socks5://) | other name |
 | `-im` | string |  | input mode: burp reads the URLs of a Burp XML export given with -l | other name |
 | `-include-response` | bool |  | add the request and the response to -json rows (request, body, header, raw_header) | other name |

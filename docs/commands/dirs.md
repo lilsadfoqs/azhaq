@@ -143,7 +143,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 | `-v` | bool |  | print a line for every finished task, not only failures |
 
 <details>
-<summary>Flags familiar from ffuf (7)</summary>
+<summary>Flags familiar from ffuf and other names (8)</summary>
 
 | Flag | Type | Default | Meaning | Kind |
 | --- | --- | --- | --- | --- |
@@ -154,6 +154,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 | `-mr` | string |  | report only answers whose headers or body match this regular expression | ffuf's name |
 | `-ms` | string |  | report only these response sizes (values and ranges, 100-200) | ffuf's name |
 | `-mw` | string |  | report only these word counts | ffuf's name |
+| `-header` | string, repeatable |  | same as -H | other name |
 
 </details>
 <!-- flags:end -->

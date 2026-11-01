@@ -107,9 +107,16 @@ func inherit(fs *flag.FlagSet, specs ...string) func() []string {
 			}
 		}
 	}
+	// -H and -header are one flag, whichever a command calls its own.
+	if f := fs.Lookup("H"); f != nil && fs.Lookup("header") == nil {
+		fs.Var(f.Value, "header", "same as -H")
+	}
 	return func() []string {
 		given := map[string]bool{}
 		fs.Visit(func(f *flag.Flag) { given[f.Name] = true })
+		if given["header"] {
+			given["H"] = true
+		}
 		var out []string
 		for _, p := range ps {
 			if !given[p.local] {

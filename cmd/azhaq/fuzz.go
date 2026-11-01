@@ -48,6 +48,7 @@ func cmdFuzz(args []string) error {
 	fs.StringVar(data, "data", "", "ffuf's alias of -d")
 	fs.StringVar(data, "data-ascii", "", "ffuf's alias of -d")
 	fs.StringVar(data, "data-binary", "", "ffuf's alias of -d")
+	fs.Var(&headers, "header", "same as -H")
 	fs.Var(&headers, "H", "header \"Name: value\"; the keyword may stand in name and value, Host included (repeatable). A header that names a host (Host, X-Forwarded-Host, X-Host, X-Original-Host) joins the target when no -allow, -deny or -scope is given; with one, the host must be in the scope")
 	fs.Var(&cookies, "b", "cookie data \"NAME=VALUE; NAME2=VALUE2\"")
 	fs.Var(&cookies, "cookie", "ffuf's alias of -b")
