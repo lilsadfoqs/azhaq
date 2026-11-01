@@ -482,7 +482,7 @@ For each answer it stores these fields, besides status, title and headers:
 - No redirect is followed unless `-fr`. Then `-maxr` counts as httpx counts it, at most N-1 hops, within the site or, with `-fhr`, the host.
 - There is no `Accept` header, and one connection per request, as httpx sends.
 - TLS is 1.0 and up.
-- A bare `host:port` is asked over plain HTTP first on 8080 and on ports above 1024. It is asked over TLS when the plain request is answered 400.
+- A bare `host:port` is asked over both schemes, as httpx does: plain HTTP first on 80, 8080 and ports above 1024, TLS first on 443 and the other ports below 1024. The second scheme is asked when the first is not answered (the connection is refused or closed, or times out, the TLS handshake fails, or the service does not speak HTTP, such as an FTP banner) and, after plain HTTP, when it is answered 400. Any other answer stands and the second scheme is not asked.
 - The scheme order, `-p` ports (also for addresses), `-path`, `-nf` and `-pa` work as in httpx.
 - A name that resolves only through a wildcard answer is probed, not dropped.
 
@@ -894,7 +894,7 @@ The default set is keyless: anubis, certspotter, crt.sh, crtname, hackertarget, 
 
 subdomain.center pads its answer with random names. For tesla.com each call gives a random 500 of about 6,300. A name only it gave is kept when it resolves.
 
-- Without a key it is asked again while its last round gave a name that resolves and no other source had. There are at most 12 rounds.
+- Without a key it is asked again while its last round gave a name that resolves and no other source had, and until the names seen are 95% of the pool the rounds' repeats estimate (Schnabel). A round with no new live name ends it only then: a live name may be among the ones not yet seen, as a few real names are among 500 random ones. There are at most 12 rounds.
 - A round's new names are looked up before the next round is asked. Each is looked up once, and one resolver's NXDOMAIN is enough.
 - With `-dns-rate`, the guesses cost at most half what the other sources' names did, and not less than 1,000.
 - Without `-live` the guesses are not looked up. The source is asked once, and its names are listed unverified.

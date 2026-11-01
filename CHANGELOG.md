@@ -18,6 +18,7 @@
 - `azhaq mcp` takes `-resolvers`, `-sources`, `-skip` and `-no-takeover`, held for every tool call like `-allow`; `azhaq_scope` and `azhaq_status` show them as `run_options` and `azhaq_resume` keeps them. With `-sources none` the plan lists no collector that asks a third party and `azhaq_subdomains` is refused.
 - The workspace keeps every archived URL a run read in `DB.urls.jsonl` beside it (`run`, `url`, `source`), written as the pages arrive; a stopped run keeps what it read and `azhaq resume` adds to it.
 - `docs/claims.tsv` ties each claim of the README and of the `plan`, `mcp`, `worker`, `query` and `ledger` pages to a test or a bench check; `go run ./scripts/claims`, a step of the checks job, fails on a claim with no proof, a reworded claim or a proof that is gone, and lists the pages not covered yet.
+- `fuzz -quiet` prints no matches and no progress, only the summary; `-db` and `-o` still keep the matches.
 
 ### Changed
 
@@ -37,6 +38,7 @@
 - `crawl` says that a route a script names is a line only when the crawl asked for it (`-hints` lists the others, a larger `-depth` requests more) and under `-silent` prints the count it left out on stderr.
 - MIGRATING's dnsx section lists the extra row `dns -a -json` gives a dangling CNAME and how to filter it; its katana section says `-jsl` routes need `-hints` at a depth that does not reach them.
 - The README starts Juice Shop and VAmPI pinned, marks the 190-row summary as an example, names the build, the lab image list and the command behind each benchmark row, explains the roles table's cells, and counts 51 built-in path checks, not 32.
+- `notify`: the docs say a webhook's host is shown in errors and the ledger, so a secret belongs in its path, query or user part, never in the host name.
 
 ### Fixed
 
@@ -51,6 +53,13 @@
 - A `-cookie` or `-header` run no longer measures a route without its session after an answer that looked like the end of the session, which made it take a revoked session's answer for a live one, miss the end and exit 0; it stops with exit 3, and a response that gives the user's cookie another value asks for a check too.
 - `export -format openapi` no longer lists the address the description was read from (`/openapi.json`) as a path of the API it describes, unless the description lists it.
 - A signed-in run's session check no longer sends a request without the session while a logout is in flight: its measurement of a check page waits until no request is in the air and holds the others back while it is out, and answers that clear or replace the user's cookie, a 401 or a redirect to the sign-in page are noticed as they arrive.
+- `subs -live` asks subdomain.center again until the names it has seen are most of the pool its repeats estimate, not only while a round gives a new live name: a name one call held was missing in about a third of runs when few names in the pool are live, and in about one in twenty now. The ceiling, the 20 s budget and `-source-timeout` still bound it and are named in a note.
+- A name no resolver answered is not asked a second time when 16 of the failed names, spread over the list, stay silent in the second pass: a zone whose servers are down cost every failed name twice its paced queries (a polite `subs -live` on such a zone: 2520 to 1476 queries, 183 s to 115 s, same counts and exit code).
+- MIGRATING and ARCHITECTURE say when a bare `host:port` is asked over the other scheme: when the first is not answered, and after plain HTTP also when it is answered 400.
+- `fuzz -db` that is killed (SIGKILL, a crash) leaves its workspace, the command and the inputs asked, kept every second, so `azhaq resume` continues it; a write the killed run sent is never sent again, and the summary, written after the ledger is sealed, says what was asked again or held back.
+- A workspace keeps no secret of the run that made it: `fuzz -db` stores its command without `-b`, a credential `-H` and a proxy's password, with its files by full path (a resume says what it was not given again); `probe` keeps the requests of its stored answers without credential headers and body; the proxy flags of `run` and `dns` are stored without the password.
+- `azhaq resume` of a fuzz workspace takes run's `-quiet` and `-timeout` (fuzz's `-maxtime`).
+- A UDP scan reads a CoAP answer's payload past its header, token and options: a 0xff in the random message id was taken for the payload marker about once in 128 scans, and the banner began inside the header.
 
 ## v0.13.0
 

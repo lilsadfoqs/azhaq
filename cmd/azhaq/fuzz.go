@@ -39,6 +39,7 @@ func cmdFuzz(args []string) error {
 	fs.Lookup("silent").Usage = "print the input values only, no progress; the summary only when something failed"
 	fs.Lookup("o").Usage = "write the report to this file, in the format -of says (json by default; a name ending .txt gets what stdout shows, as before)"
 	fs.BoolVar(&c.silent, "s", false, "ffuf's name for -silent")
+	quiet := fs.Bool("quiet", false, "print no matches and no progress, only the summary (on stderr); the matches are still kept by -db and -o")
 	rawURL := fs.String("u", "", "target URL; the keyword (FUZZ) may stand anywhere in it, in the host too")
 	var lists, headers, cookies, allow, deny, denyPath, inputCmds, encs, acStrategies, acStrings stringsFlag
 	fs.Var(&lists, "w", "wordlist `FILE[:KEYWORD]` (- for stdin; repeatable; a comma list is several; the keyword is FUZZ without one)")
@@ -133,6 +134,13 @@ func cmdFuzz(args []string) error {
 	showVersion := fs.Bool("V", false, "print the version")
 	fs.Bool("noninteractive", false, "accepted for ffuf's command lines: no effect (there is no console; see -control)")
 	origArgs := args
+	keptA, droppedA := keptFuzzArgs(origArgs)
+	if fuzzStored != nil {
+		// A resume goes on with the command that was stored: what it was
+		// given for this run only (-quiet, -max-requests) is not kept.
+		keptA, droppedA, fuzzStored = fuzzStored, nil, nil
+	}
+	keptArgv := append([]string{os.Args[0], "fuzz"}, keptA...)
 	rcNote, cfgPath := "", ""
 	if !describing {
 		var err error
@@ -429,6 +437,7 @@ func cmdFuzz(args []string) error {
 		hits = append(hits, r)
 		hitsMu.Unlock()
 		switch {
+		case *quiet:
 		case c.json:
 			w.obj(fuzz.StdoutJSON(r))
 		case c.silent:
@@ -492,11 +501,59 @@ func cmdFuzz(args []string) error {
 	if err != nil {
 		return err
 	}
-	defer led.close(rep)
+	sealed := false
+	sealLedger := func() { // before the summary, which says what the ledger holds
+		if !sealed {
+			sealed = true
+			led.close(rep)
+		}
+	}
+	defer sealLedger()
+	flushed := map[string]bool{} // hits already in the workspace, by hitKey
+	if c.db != "" {
+		// The workspace holds the command from the first request on: a run
+		// that is killed has nothing else to resume from.
+		resuming := fuzzResuming
+		dropped := fuzzDropped
+		fuzzResuming, fuzzDropped = false, nil
+		if resuming {
+			if n := notGivenAgain(dropped, cookies, headers, *proxy, *replayProxy); n != "" {
+				rep.Notes = append(rep.Notes, "the run's "+n+" were not stored, and are not given again: this resume goes without them (give them after -db)")
+			}
+		}
+		if err := beginFuzzWorkspace(c.db, keptArgv, keptA, droppedA, resuming); err != nil {
+			return err
+		}
+		if resuming {
+			if err := holdKilledWrites(led, c.db); err != nil {
+				return err
+			}
+		}
+		// A directory found for -recursion, or a filter changed by -control
+		// while the run goes, is not what the answered inputs say: such a
+		// run goes on from its start (a write that was sent is still not
+		// sent again).
+		if !*recursion && ctrl == nil {
+			cfg.CheckpointEvery = fuzzCheckpoint
+			cfg.Checkpoint = func(done fuzz.Spans, total int) {
+				// The spans come first: every hit of an input in them is in hits.
+				hitsMu.Lock()
+				fresh := unflushed(hits, flushed)
+				hitsMu.Unlock()
+				if err := keepFuzzHits(c.db, fresh, tmpl.Method, keptArgv, false); err != nil {
+					return
+				}
+				for _, h := range fresh {
+					flushed[hitKey(h)] = true
+				}
+				_ = setFuzzResume(c.db, resumeArgs(keptA, *start), fuzzAsked{Key: fuzzSkipKey(tmpl), Total: total, Spans: done})
+			}
+		}
+	}
 	rep.what = "matches"
 	t0 := time.Now()
 	switch {
-	case c.silent:
+	case c.silent || *quiet:
 	case stderrIsTerminal():
 		defer fuzzProgress(ctx, cfg.Progress, t0)()
 	default:
@@ -581,13 +638,13 @@ func cmdFuzz(args []string) error {
 	}
 	if rep.Stopped != "" {
 		// Go on from the first input not answered; azhaq resume -db runs it.
-		next := append(withoutFlag(origArgs, "start"), "-start", strconv.Itoa(*start+st.Done))
+		next := resumeArgs(origArgs, *start+st.Done)
 		rep.Resume = "azhaq fuzz " + shellJoin(next)
 		if st.Queued > 0 {
 			rep.Notes = append(rep.Notes, fmt.Sprintf("%d directories found for -recursion were not swept: run fuzz on each (they are in the results)", st.Queued))
 		}
 		if c.db != "" {
-			if err := setFuzzResume(c.db, next, fuzzAsked{Key: fuzzSkipKey(tmpl), Total: st.Total, Spans: st.Asked}); err != nil {
+			if err := setFuzzResume(c.db, resumeArgs(keptA, *start+st.Done), fuzzAsked{Key: fuzzSkipKey(tmpl), Total: st.Total, Spans: st.Asked}); err != nil {
 				return err
 			}
 		}
@@ -602,14 +659,15 @@ func cmdFuzz(args []string) error {
 	rep.hintsVrb = *verbose
 	if c.db != "" {
 		hitsMu.Lock()
-		kept := append([]fuzz.Result(nil), hits...)
+		hitsKept := append([]fuzz.Result(nil), hits...)
 		hitsMu.Unlock()
-		if err := keepFuzzHits(c.db, kept, tmpl.Method, os.Args); err != nil {
+		if err := keepFuzzHits(c.db, hitsKept, tmpl.Method, keptArgv, true); err != nil {
 			return err
 		}
 		rep.DB = c.db
 		rep.Next = append(rep.Next, "azhaq query -db "+c.db)
 	}
+	sealLedger()
 	return rep.finish(c.json, c.silent)
 }
 
@@ -808,8 +866,9 @@ func hasKeyword(s string, keywords []string) bool {
 
 // keepFuzzHits stores the hits in the workspace as ffuf's report, which
 // ingest reads: a hit asked with GET is the URL's answer, with another
-// method it says the route takes it.
-func keepFuzzHits(path string, hits []fuzz.Result, method string, argv []string) error {
+// method it says the route takes it. final is the end of the run: the
+// workspace then also keeps what its hits suggest to look at next.
+func keepFuzzHits(path string, hits []fuzz.Result, method string, argv []string, final bool) error {
 	rows := make([]map[string]any, 0, len(hits))
 	for _, h := range hits {
 		in := make(map[string]string, len(h.Input))
@@ -836,28 +895,145 @@ func keepFuzzHits(path string, hits []fuzz.Result, method string, argv []string)
 		return err
 	}
 	defer st.Close()
-	runs, err := st.Runs()
-	if err != nil {
+	if _, err := fuzzRun(st, argv); err != nil {
 		return err
-	}
-	fresh := len(runs) == 0
-	if fresh {
-		if err := st.BeginRun(newRunID(), 0, 0); err != nil {
-			return err
-		}
-		_ = st.SetRunArgs(append([]string{"fuzz"}, argv[min(2, len(argv)):]...))
-	} else {
-		st.UseRun(runs[len(runs)-1].ID)
 	}
 	eng := &engine.Engine{Store: st}
 	hints, err := eng.Ingest(context.Background(), facts)
 	if err != nil {
 		return err
 	}
-	if fresh {
+	if final && st.GetMeta("seeds") == "" {
 		_ = st.SaveSeeds(hints)
 	}
 	return nil
+}
+
+// fuzzRun makes the workspace's latest run the one the hits go to, and
+// starts one when it holds none.
+func fuzzRun(st *store.Store, argv []string) (fresh bool, err error) {
+	runs, err := st.Runs()
+	if err != nil {
+		return false, err
+	}
+	if len(runs) > 0 {
+		st.UseRun(runs[len(runs)-1].ID)
+		return false, nil
+	}
+	if err := st.BeginRun(newRunID(), 0, 0); err != nil {
+		return false, err
+	}
+	_ = st.SetRunArgs(append([]string{"fuzz"}, argv[min(2, len(argv)):]...))
+	return true, nil
+}
+
+// fuzzCheckpoint is how often a run with -db keeps which inputs it has
+// answered, and its matches, so that a run killed with SIGKILL goes on.
+const fuzzCheckpoint = time.Second
+
+// fuzzResuming says azhaq resume started this run from a workspace, and
+// fuzzDropped what the stored command lacks.
+var (
+	fuzzResuming bool
+	fuzzDropped  []string
+	fuzzStored   []string // the command azhaq resume read from the workspace
+)
+
+// notGivenAgain lists what the stored command left out (keptFuzzArgs) that
+// this run was not given again.
+func notGivenAgain(dropped, cookies, headers []string, proxy, replayProxy string) string {
+	var miss []string
+	for _, d := range dropped {
+		given := false
+		switch {
+		case d == "-b":
+			given = len(cookies) > 0
+		case strings.HasPrefix(d, "-H "):
+			given = slices.ContainsFunc(headers, func(h string) bool {
+				n, _, _ := strings.Cut(h, ":")
+				return strings.EqualFold(strings.TrimSpace(n), d[3:])
+			})
+		case d == "-replay-proxy credentials":
+			given = withoutUserinfo(replayProxy) != replayProxy
+		default: // -x or -proxy credentials
+			given = withoutUserinfo(proxy) != proxy
+		}
+		if !given {
+			miss = append(miss, d)
+		}
+	}
+	return strings.Join(miss, ", ")
+}
+
+// resumeArgs is the command that goes on from input start of the first request.
+func resumeArgs(origArgs []string, start int) []string {
+	return append(withoutFlag(origArgs, "start"), "-start", strconv.Itoa(start))
+}
+
+// beginFuzzWorkspace keeps the run's command in the workspace before its
+// first request, with a run to hold the matches. argv and args are the
+// command without its secrets (keptFuzzArgs), dropped what it left out. A
+// run that is not itself a resume has asked nothing yet.
+func beginFuzzWorkspace(path string, argv, args, dropped []string, resuming bool) error {
+	st, err := store.Open(path)
+	if err != nil {
+		return err
+	}
+	defer st.Close()
+	if _, err := fuzzRun(st, argv); err != nil {
+		return err
+	}
+	raw, _ := json.Marshal(args)
+	if !resuming {
+		if err := st.SetMeta(fuzzAskedKey, ""); err != nil {
+			return err
+		}
+	}
+	all := slices.Compact(slices.Sorted(slices.Values(append(storedDropped(st), dropped...))))
+	if err := st.SetMeta(fuzzDroppedKey, strings.Join(all, "\n")); err != nil {
+		return err
+	}
+	return st.SetMeta(fuzzResumeKey, string(raw))
+}
+
+// storedDropped is what an earlier run of the workspace left out of its command.
+func storedDropped(st *store.Store) []string {
+	if v := st.GetMeta(fuzzDroppedKey); v != "" {
+		return strings.Split(v, "\n")
+	}
+	return nil
+}
+
+// holdKilledWrites makes the run not send again a write the run it goes on
+// from sent before it was killed (the ledger lists it, the workspace has no
+// answer for it).
+func holdKilledWrites(led *runLedger, path string) error {
+	st, err := store.Open(path)
+	if err != nil {
+		return err
+	}
+	defer st.Close()
+	if _, err := fuzzRun(st, os.Args); err != nil {
+		return err
+	}
+	led.holdWrites(st, st.RunID())
+	return nil
+}
+
+// hitKey names a match: the job, the input's place and the URL asked.
+func hitKey(h fuzz.Result) string {
+	return fmt.Sprintf("%d %d %s %s", h.Job, h.Position, h.Method, h.URL)
+}
+
+// unflushed are the hits not yet in the workspace.
+func unflushed(hits []fuzz.Result, flushed map[string]bool) []fuzz.Result {
+	var out []fuzz.Result
+	for _, h := range hits {
+		if !flushed[hitKey(h)] {
+			out = append(out, h)
+		}
+	}
+	return out
 }
 
 // fuzzResumeKey holds, in a workspace, the fuzz command that goes on from
@@ -867,6 +1043,9 @@ func keepFuzzHits(path string, hits []fuzz.Result, method string, argv []string)
 const (
 	fuzzResumeKey = "fuzz:resume"
 	fuzzAskedKey  = "fuzz:asked"
+	// fuzzDroppedKey lists, a line each, what the stored command lacks: its
+	// secrets.
+	fuzzDroppedKey = "fuzz:dropped"
 )
 
 // fuzzAsked is the set of inputs a stopped run asked, with what it needs

@@ -345,6 +345,10 @@ func (p *Pool) ResolveBoth(ctx context.Context, name string) Answer {
 // answer at all is taken for dead resolvers.
 const minForPass = 16
 
+// retryProbe is how many of the names that failed the first pass the second
+// pass asks first: when none of them is answered the rest are not asked.
+const retryProbe = 16
+
 // ResolveMany resolves names with up to workers queries in flight and
 // returns answers in the same order. Names whose every attempt failed
 // (timeouts, SERVFAIL under load) get a second pass at a quarter of the
@@ -370,15 +374,53 @@ func (p *Pool) ResolveMany(ctx context.Context, names []string, workers int) []A
 	if len(names) >= minForPass && len(again) == len(names) {
 		again, at = nil, nil
 	}
-	for _, n := range again {
-		p.forget(n)
+	p.askAgain(ctx, again, at, out, max(workers/4, 4))
+	return out
+}
+
+// askAgain is ResolveMany's second pass over the names at out[at[i]]. It
+// asks retryProbe of them first, spread over the list: when none of those is
+// answered either, the zone's servers are not answering (a lame delegation,
+// a dead name server) and the rest would fail alike, each at the cost of
+// every attempt again; they keep the failure of the first pass.
+func (p *Pool) askAgain(ctx context.Context, names []string, at []int, out []Answer, workers int) {
+	ask := func(idx []int) (answered int) {
+		batch := make([]string, len(idx))
+		for j, i := range idx {
+			batch[j] = names[i]
+			p.forget(names[i])
+		}
+		for j, a := range p.resolveMany(ctx, batch, workers) {
+			out[at[idx[j]]] = a
+			if a.Status != StatusFailed && a.Status != StatusBroken {
+				answered++
+			}
+		}
+		return answered
 	}
-	if len(again) > 0 {
-		for j, a := range p.resolveMany(ctx, again, max(workers/4, 4)) {
-			out[at[j]] = a
+	idx := make([]int, len(names))
+	for i := range idx {
+		idx[i] = i
+	}
+	if len(idx) <= retryProbe {
+		ask(idx)
+		return
+	}
+	inProbe := map[int]bool{}
+	var probe, rest []int
+	for k := 0; k < retryProbe; k++ {
+		i := k * len(idx) / retryProbe
+		inProbe[i] = true
+		probe = append(probe, i)
+	}
+	for _, i := range idx {
+		if !inProbe[i] {
+			rest = append(rest, i)
 		}
 	}
-	return out
+	if ask(probe) > 0 {
+		ask(rest)
+	}
 }
 
 // Registered says whether a registrable domain exists in DNS: its SOA is

@@ -242,8 +242,10 @@ func verified(s source) source {
 // that resolve: subdomain.center answers a different random 500 per call
 // (2026-10-29: five calls gave 2135 tesla.com names, 49 live hosts one call
 // missed). Each round's new names are resolved (the checker in ctx) while
-// the next round is asked; it stops when a round adds no new live name, and
-// the call made ahead is dropped.
+// the next round is asked; it stops when a round adds no new live name and
+// the names seen are most of the pool the rounds' repeats estimate (a round
+// that finds none says little while a name in twenty is still unseen), and the
+// call made ahead is dropped.
 // Without resolvers it stops when under a tenth of a round is new. The
 // source's bound (-source-timeout) is for asking: a request may take that
 // long and the asking half of it in all; resolving is paced by -dns-rate.
@@ -264,6 +266,7 @@ func sampled(s source) source {
 		var budgetFrom time.Time // the budget for further samples starts when the first is checked
 		var asking time.Duration
 		var names []string
+		var calls [][]string // each round's names, for the pool estimate
 		seen := map[string]bool{}
 		// ask makes one call; the next one is made while the names of the
 		// last are looked up, so a round costs the longer of the two.
@@ -291,6 +294,7 @@ func sampled(s source) source {
 			got, err := r.got, r.err
 			asking += r.took
 			recordRound(ctx, got)
+			calls = append(calls, got)
 			var fresh []string
 			for _, n := range got {
 				if !seen[n] {
@@ -333,8 +337,8 @@ func sampled(s source) source {
 			}
 			stop := false
 			switch {
-			case st.Live == 0:
-				stop = true // this round found nothing new that resolves
+			case st.Live == 0 && poolCovered(calls, len(seen)):
+				stop = true // nothing new resolves, and little is left unseen
 				recordStop(ctx, stopNoLive)
 			case n == 0 && time.Since(budgetFrom)+took > sampleBudget:
 				// Another sample costs about what this one did: it is taken
@@ -367,11 +371,23 @@ func sampled(s source) source {
 const (
 	stopSaturated = "a call gave no name it had not given"
 	stopUnchecked = "the names are not looked up (no -live), so more samples would only add guesses"
-	stopNoLive    = "the last sample had no new name that resolves"
+	stopNoLive    = "the last sample had no new name that resolves, and the names seen are most of its estimated pool"
 	stopTime      = "its time was used"
 	stopBudget    = "another sample would not fit the 20 s budget for further samples"
 	stopRounds    = "the most samples were taken"
 )
+
+// poolCoverage is the share of the pool a sampled source's rounds estimate
+// that the names seen must reach before a round with no new live name ends
+// the asking: one name in twenty may still be unseen.
+const poolCoverage = 0.95
+
+// poolCovered says whether the names seen are poolCoverage of the pool the
+// rounds' repeats estimate. With no repeat yet there is no estimate: no.
+func poolCovered(rounds [][]string, seen int) bool {
+	est, ok := schnabel(rounds)
+	return ok && float64(seen) >= poolCoverage*est
+}
 
 // boundedStop says whether a stop reason is a bound, not a finding.
 func boundedStop(why string) bool { return why == stopTime || why == stopBudget || why == stopRounds }

@@ -137,7 +137,7 @@ The summary also lists failures per kind of error, and takeover candidates: a CN
 ### Time and pace
 - `-timeout` is how long one DNS answer is waited for, 3 s by default, as in dnsx. In `run` and the other commands `-timeout` is the time of the whole run.
 - `-maxtime SECONDS` bounds the run. It exits 4, and the summary says which `-start N` to go on from.
-- `-retry N` is the attempts per question on other resolvers. The default is 3, where dnsx's is 2. A name no resolver answers is counted as `no answer`, listed under `failed`, and the exit code is 3.
+- `-retry N` is the attempts per question on other resolvers. The default is 3, where dnsx's is 2. A name no resolver answers is counted as `no answer`, listed under `failed`, and the exit code is 3. A name no resolver answered is asked again in a second pass at a quarter of the concurrency, when others of the batch were answered; the second pass asks 16 of them first, spread over the list, and ends there when none is answered, because the rest would fail alike.
 - `-rl N` is names a second over all resolvers, as in dnsx. `-t N` is names in flight, 100 by default.
 - `-dns-rate N` is queries a second to each resolver. A second's worth may go out at once after a pause, so the total is N times the number of resolvers: six by default. A name asked for several types sends one query for each.
 - With one `-r` resolver, or with `-rl`, the total is the rate you gave. For a polite run give `-rl 5` and `-t 5`.

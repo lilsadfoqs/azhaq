@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -697,6 +698,96 @@ func TestProbeLiteralIPFillsTheAddressFields(t *testing.T) {
 		}
 		if rows[0]["host_ip"] != ip || fmt.Sprint(rows[0]["a"]) != "["+ip+"]" {
 			t.Errorf("%s: host_ip %v, a %v, want %s", name, rows[0]["host_ip"], rows[0]["a"], ip)
+		}
+	}
+}
+
+// A bare host:port asked over plain HTTP first is asked over TLS when the
+// plain request is answered 400, and also when it is not answered at all
+// (the connection is closed, or the service does not speak HTTP, such as an
+// FTP banner), as httpx does. Any other answer stands and TLS is not asked.
+// The docs say the same.
+func TestProbeBareHostPortAsksTLSWhenPlainFailsOrIs400(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		plain   string // what the server writes to a plain request; "" closes the connection
+		wantTLS bool
+	}{
+		{"answered 200", "HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n", false},
+		{"answered 404", "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n", false},
+		{"answered 500", "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\nConnection: close\r\n\r\n", false},
+		{"answered 400", "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n", true},
+		{"connection closed", "", true},
+		{"an FTP banner", "220 ftp ready\r\n", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Chdir(t.TempDir())
+			l, err := net.Listen("tcp", "127.0.0.1:0")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer l.Close()
+			var mu sync.Mutex
+			var plain, tls int
+			go func() {
+				for {
+					c, err := l.Accept()
+					if err != nil {
+						return
+					}
+					go func() {
+						defer c.Close()
+						_ = c.SetReadDeadline(time.Now().Add(3 * time.Second))
+						b := make([]byte, 1)
+						if _, err := c.Read(b); err != nil {
+							return
+						}
+						mu.Lock()
+						if b[0] == 0x16 { // a TLS ClientHello
+							tls++
+							mu.Unlock()
+							return
+						}
+						plain++
+						mu.Unlock()
+						// the rest of the request head, then the answer
+						r := bufio.NewReader(io.MultiReader(strings.NewReader(string(b)), c))
+						for {
+							if l, err := r.ReadString('\n'); err != nil || l == "\r\n" {
+								break
+							}
+						}
+						_, _ = c.Write([]byte(tc.plain))
+					}()
+				}
+			}()
+			_, _, code := runContract(t, "probe", "-u", l.Addr().String(), "-json")
+			mu.Lock()
+			defer mu.Unlock()
+			if plain != 1 {
+				t.Errorf("%d plain requests, want 1 (exit %d)", plain, code)
+			}
+			if (tls > 0) != tc.wantTLS {
+				t.Errorf("TLS asked %d times, want it asked: %v", tls, tc.wantTLS)
+			}
+		})
+	}
+}
+
+// MIGRATING and ARCHITECTURE tell when a bare host:port is asked over TLS
+// after plain HTTP: answered 400 or not answered, not 400 alone.
+func TestDocsSayWhenAPlainHostPortIsAskedOverTLS(t *testing.T) {
+	for _, file := range []string{"../../docs/MIGRATING.md", "../../docs/ARCHITECTURE.md", "../../docs/commands/probe.md"} {
+		var line string
+		for _, l := range docLines(readDoc(t, file)) {
+			if strings.Contains(l, "bare `host:port`") && strings.Contains(l, "TLS") && strings.Contains(l, "400") || strings.Contains(l, "plain request that is answered 400") {
+				line = l
+			}
+		}
+		if line == "" {
+			t.Errorf("%s: no line on the TLS retry of a bare host:port", file)
+		} else if !strings.Contains(line, "not answered") || !strings.Contains(line, "other answer") {
+			t.Errorf("%s: the line does not say it is asked when the plain request is not answered, and not after another answer: %s", file, line)
 		}
 	}
 }

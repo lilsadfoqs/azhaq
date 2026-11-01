@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"sort"
@@ -392,70 +393,73 @@ func TestSampledGathersUntilSaturated(t *testing.T) {
 }
 
 // subdomain.center answers a random sample per call. With resolvers, a
-// round's new names are resolved before the next round is asked, a name is
-// resolved once, and the asking stops at the first round that adds no name
-// that resolves.
-func TestSampledStopsWhenARoundAddsNoLiveName(t *testing.T) {
-	rounds := [][]string{
-		{"a.example.org", "b.example.org", "c.example.org"},
-		{"b.example.org", "d.example.org", "e.example.org"}, // d is live
-		{"a.example.org", "f.example.org", "g.example.org"}, // nothing live: stop
-		{"h.example.org"},
-	}
-	var mu sync.Mutex
-	var log []string
-	asked := 0
-	pad := sampled(verified(source{name: "pad", deflt: true, collect: func(context.Context, string, []string, *subscraping.Session) ([]string, error) {
-		mu.Lock()
-		defer mu.Unlock()
-		log = append(log, "ask")
-		r := rounds[min(asked, len(rounds)-1)]
-		asked++
-		return r, nil
-	}}))
-	live := map[string]bool{"a.example.org": true, "d.example.org": true}
-	sent := map[string]int{}
-	c := collector(Options{SourceTimeout: 5 * time.Second, NoHistory: true, Verify: func(_ context.Context, _ string, names []string) ([]string, []string) {
-		mu.Lock()
-		defer mu.Unlock()
+// round's new names are resolved before the next round is asked and a name
+// is resolved once. A round that adds no name that resolves ends the asking
+// only when the names seen are most of the pool the rounds' repeats
+// estimate: a live name may be among the ones not yet seen.
+func TestSampledStopsWhenNothingNewResolvesAndThePoolIsCovered(t *testing.T) {
+	name := func(i int) string { return "g" + string(rune('a'+i/26)) + string(rune('a'+i%26)) + ".example.org" }
+	span := func(from, to int) []string {
 		var out []string
-		for _, n := range names {
-			sent[n]++
-			if live[n] {
-				out = append(out, n)
+		for i := from; i < to; i++ {
+			out = append(out, name(i))
+		}
+		return out
+	}
+	for _, tc := range []struct {
+		name   string
+		rounds [][]string
+		live   []string
+		calls  int // samples checked (one that gave nothing new is not)
+		stop   string
+		found  int
+	}{
+		// 100 names; the live one is in the third sample only: two samples
+		// with no live name do not end the asking while a quarter of the
+		// pool is unseen.
+		{"a pool not yet covered is asked again", [][]string{span(0, 50), span(25, 75), span(50, 100), span(0, 100)}, []string{name(90)}, 3, stopSaturated, 1},
+		// The second sample repeats 99 names of the first and adds one: the
+		// pool is estimated at 101 and all of it seen, and nothing live ends
+		// the asking.
+		{"a covered pool with nothing live ends it", [][]string{span(0, 100), span(1, 101), span(2, 102)}, nil, 2, stopNoLive, 0},
+	} {
+		asked := 0
+		pad := sampled(verified(source{name: "pad", deflt: true, collect: func(context.Context, string, []string, *subscraping.Session) ([]string, error) {
+			r := tc.rounds[min(asked, len(tc.rounds)-1)]
+			asked++
+			return r, nil
+		}}))
+		live := map[string]bool{}
+		for _, n := range tc.live {
+			live[n] = true
+		}
+		sent := map[string]int{}
+		c := collector(Options{SourceTimeout: 5 * time.Second, NoHistory: true, Verify: func(_ context.Context, _ string, names []string) ([]string, []string) {
+			var out []string
+			for _, n := range names {
+				sent[n]++
+				if live[n] {
+					out = append(out, n)
+				}
+			}
+			return out, nil
+		}}, pad)
+		payload, _ := run(t, c, context.Background())
+		row := payload["sources"].(map[string]any)["pad"].(map[string]any)
+		if got := len(row["rounds"].([]any)); got != tc.calls {
+			t.Errorf("%s: %d samples checked, want %d (%v)", tc.name, got, tc.calls, row)
+		}
+		if got, _ := row["sampling_stopped"].(string); got != tc.stop {
+			t.Errorf("%s: stopped %q, want %q", tc.name, got, tc.stop)
+		}
+		if got := len(strs(payload["names"])); got != tc.found {
+			t.Errorf("%s: %d names kept, want %d", tc.name, got, tc.found)
+		}
+		for n, k := range sent {
+			if k != 1 {
+				t.Errorf("%s: %s resolved %d times", tc.name, n, k)
 			}
 		}
-		log = append(log, "check")
-		return out, nil
-	}}, pad, fake("real", noKey, true, []string{"www.example.org"}, nil))
-	payload, _ := run(t, c, context.Background())
-	// Each round's names are looked up once, and the next call is made
-	// while they are: three rounds, and a fourth call made ahead.
-	checks, asks := 0, 0
-	for _, l := range log {
-		if l == "check" {
-			checks++
-		} else {
-			asks++
-		}
-	}
-	if checks != 3 || asks < 3 || asks > 4 {
-		t.Errorf("%d checks and %d calls: %q", checks, asks, log)
-	}
-	for n, k := range sent {
-		if k != 1 {
-			t.Errorf("%s resolved %d times", n, k)
-		}
-	}
-	if got := strings.Join(strs(payload["names"]), ","); got != "a.example.org,d.example.org,www.example.org" {
-		t.Errorf("names %s", got)
-	}
-	if payload["from_sources"] != float64(8) || payload["dropped"] != float64(5) || payload["checked"] != float64(7) {
-		t.Errorf("counts %v", payload)
-	}
-	row := payload["sources"].(map[string]any)["pad"].(map[string]any)
-	if c := row["calls"].(float64); c < 3 || c > 4 || row["kept"] != float64(2) || row["error"] != nil {
-		t.Errorf("row %v", row)
 	}
 }
 
@@ -632,11 +636,11 @@ func TestSampledOverlapsTheCallWithTheCheck(t *testing.T) {
 		}
 		return []string{"live" + string(rune('a'+n)) + ".example.org", "dead" + string(rune('a'+n)) + ".example.org"}, nil
 	}}))
-	c := collector(Options{SourceTimeout: 10 * time.Second, NoHistory: true, Verify: func(_ context.Context, _ string, names []string) ([]string, []string) {
+	c := collector(Options{SourceTimeout: 10 * time.Second, NoHistory: true, GuessSamples: 5, Verify: func(_ context.Context, _ string, names []string) ([]string, []string) {
 		time.Sleep(300 * time.Millisecond)
 		var out []string
 		for _, n := range names {
-			// the fifth round gives no live name, and ends the asking
+			// the fifth round gives no live name; -guess-samples 5 ends the asking
 			if strings.HasPrefix(n, "live") && !strings.HasPrefix(n, "livef") {
 				out = append(out, n)
 			}
@@ -697,5 +701,67 @@ func TestMaxTimeEndsASampledSourceAndOneThatNeverAnswers(t *testing.T) {
 	}
 	if got := strings.Join(strs(payload["names"]), ","); !strings.Contains(got, "www.example.org") {
 		t.Errorf("names %s", got)
+	}
+}
+
+// subdomain.center holds a pool, and each call gives a random 500 of it:
+// the names that resolve are few and a call holds each with the chance
+// 500/pool. A reference that asks once keeps what that call held; a run
+// that asked again only while a round found a new live name missed such a
+// name in a third of its runs. Asking until the names seen are most of the
+// estimated pool leaves a name the one call held missing in few runs.
+func TestSampledKeepsWhatOneCallHeld(t *testing.T) {
+	const trials = 200
+	for _, tc := range []struct{ pool, live int }{{1000, 2}, {1000, 6}} {
+		pool := make([]string, tc.pool)
+		live := map[string]bool{}
+		for i := range pool {
+			pool[i] = "g" + strings.Repeat("x", i/26) + string(rune('a'+i%26)) + ".example.org"
+		}
+		for i := 0; i < tc.live; i++ {
+			live[pool[i*(tc.pool/tc.live)]] = true
+		}
+		missed := 0
+		for seed := 0; seed < trials; seed++ {
+			rng := rand.New(rand.NewSource(int64(seed)))
+			sample := func() []string {
+				var out []string
+				for _, i := range rng.Perm(len(pool))[:500] {
+					out = append(out, pool[i])
+				}
+				return out
+			}
+			one := sample() // what subfinder | dnsx would have
+			var mu sync.Mutex
+			pad := sampled(verified(source{name: "pad", deflt: true, collect: func(context.Context, string, []string, *subscraping.Session) ([]string, error) {
+				mu.Lock()
+				defer mu.Unlock()
+				return sample(), nil
+			}}))
+			c := collector(Options{SourceTimeout: 5 * time.Second, NoHistory: true, Verify: func(_ context.Context, _ string, names []string) ([]string, []string) {
+				var out []string
+				for _, n := range names {
+					if live[n] {
+						out = append(out, n)
+					}
+				}
+				return out, nil
+			}}, pad)
+			payload, _ := run(t, c, context.Background())
+			got := map[string]bool{}
+			for _, n := range strs(payload["names"]) {
+				got[n] = true
+			}
+			for _, n := range one {
+				if live[n] && !got[n] {
+					missed++
+					break
+				}
+			}
+		}
+		t.Logf("pool %d, %d live: %d of %d runs lacked a live name one call held", tc.pool, tc.live, missed, trials)
+		if missed > trials/10 {
+			t.Errorf("pool %d, %d live: %d of %d runs lacked a live name one call held, want at most %d", tc.pool, tc.live, missed, trials, trials/10)
+		}
 	}
 }

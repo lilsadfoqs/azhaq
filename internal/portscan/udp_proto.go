@@ -463,8 +463,51 @@ func parseCoAP(r, sent []byte) (udpInfo, bool) {
 		return udpInfo{}, false
 	}
 	info := udpInfo{service: "coap", banner: fmt.Sprintf("coap %d.%02d", r[1]>>5, r[1]&0x1f)}
-	if i := bytes.IndexByte(r, 0xff); i > 0 && i+1 < len(r) {
-		info.banner += " " + printable(r[i+1:])
+	if p := coapPayload(r); len(p) > 0 {
+		info.banner += " " + printable(p)
 	}
 	return info, true
+}
+
+// coapPayload is what follows the payload marker, found past the header,
+// the token and the options: the random message id or an option value can
+// hold a 0xff byte too.
+func coapPayload(r []byte) []byte {
+	i := 4 + int(r[0]&0x0f)
+	// ext reads an option's extended delta or length (RFC 7252 3.1).
+	ext := func(nib int) (int, bool) {
+		switch nib {
+		case 13:
+			if i >= len(r) {
+				return 0, false
+			}
+			i++
+			return 13 + int(r[i-1]), true
+		case 14:
+			if i+1 >= len(r) {
+				return 0, false
+			}
+			i += 2
+			return 269 + (int(r[i-2])<<8 | int(r[i-1])), true
+		case 15:
+			return 0, false // reserved outside the marker: not CoAP options
+		}
+		return nib, true
+	}
+	for i < len(r) {
+		b := r[i]
+		if b == 0xff {
+			return r[i+1:]
+		}
+		i++
+		if _, ok := ext(int(b >> 4)); !ok {
+			return nil
+		}
+		n, ok := ext(int(b & 0x0f))
+		if !ok {
+			return nil
+		}
+		i += n
+	}
+	return nil
 }
