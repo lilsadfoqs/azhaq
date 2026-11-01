@@ -409,9 +409,10 @@ func (p *Pool) resolveMany(ctx context.Context, names []string, workers int) []A
 
 func (p *Pool) resolve(ctx context.Context, name string) Answer {
 	a := Answer{Name: name}
-	if normalize.SpecialUse(name) || !strings.Contains(name, ".") {
+	if !p.named && (normalize.SpecialUse(name) || !strings.Contains(name, ".")) {
 		// localhost, *.test, *.local, single labels: public resolvers do not
-		// know them, but /etc/hosts or the local resolver may.
+		// know them, but /etc/hosts or the local resolver may. Resolvers the
+		// user named are asked for everything: the system's is never used.
 		return p.system(ctx, name)
 	}
 	q := question(name, dns.TypeA)

@@ -250,7 +250,7 @@ These filters limit what is printed, not what is crawled.
 | `-login-user` | string |  | user name or email for -login |
 | `-login-pass` | string |  | password for -login (default $AZHAQ_LOGIN_PASS) |
 | `-proxy` | string |  | send requests to targets through this proxy (http://, https:// or socks5://); Chrome too (default: $HTTP_PROXY, $HTTPS_PROXY) |
-| `-resolvers` | string |  | DNS resolvers: a file with one per line, or a comma list; each is ADDR, ADDR:PORT or udp:, tcp:, dot:, doh:URL[:get] and then the address (default: public resolvers) |
+| `-resolvers` | string |  | DNS resolvers: a file with one per line, or a comma list; each is ADDR, ADDR:PORT or udp:, tcp:, dot:, doh:URL[:get] and then the address (default: public resolvers). Named resolvers answer every name, special-use ones (.test, .local, localhost) included; the system resolver is never asked |
 
 **Output**
 
@@ -296,7 +296,7 @@ These filters limit what is printed, not what is crawled.
 | `-j` | bool |  | same as -jsonl | other name |
 | `-p` | int |  | work items in flight (default 16) | other name |
 | `-pc` | bool |  | same as -path-climb (katana's -pc) | other name |
-| `-r` | string |  | DNS resolvers: a file with one per line, or a comma list; each is ADDR, ADDR:PORT or udp:, tcp:, dot:, doh:URL[:get] and then the address (default: public resolvers) | other name |
+| `-r` | string |  | DNS resolvers: a file with one per line, or a comma list; each is ADDR, ADDR:PORT or udp:, tcp:, dot:, doh:URL[:get] and then the address (default: public resolvers). Named resolvers answer every name, special-use ones (.test, .local, localhost) included; the system resolver is never asked | other name |
 | `-rate` | float |  | requests per second to targets, over all hosts (0: no pace) | other name |
 | `-timeout` | duration |  | stop after this long and keep what was found; azhaq resume continues (0: no limit) | other name |
 | `-duc` | bool |  | accepted for katana's command lines; azhaq always reads scripts, forms and technologies | accepted, no effect |

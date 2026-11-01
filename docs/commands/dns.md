@@ -210,7 +210,7 @@ The summary also lists failures per kind of error, and takeover candidates: a CN
 
 | Flag | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `-resolvers` | string |  | DNS resolvers: a file with one per line, or a comma list; each is ADDR, ADDR:PORT or udp:, tcp:, dot:, doh:URL[:get] and then the address (default: public resolvers) |
+| `-resolvers` | string |  | DNS resolvers: a file with one per line, or a comma list; each is ADDR, ADDR:PORT or udp:, tcp:, dot:, doh:URL[:get] and then the address (default: public resolvers). Named resolvers answer every name, special-use ones (.test, .local, localhost) included; the system resolver is never asked |
 | `-proxy` | string |  | send DNS through this socks5 proxy (socks5://host:port), over TCP |
 
 **Output**

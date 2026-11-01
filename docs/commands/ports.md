@@ -328,7 +328,7 @@ Each open TCP port gets `product` and `version` next to `service`, from what it 
 | Flag | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `-proxy` | string |  | connect to TCP ports through this SOCKS5 proxy (host:port); a port is then asked its banner only, and UDP is not sent |
-| `-resolvers` | string |  | DNS resolvers: a list such as 1.1.1.1,8.8.8.8:53 or a file, one a line (default: public resolvers) |
+| `-resolvers` | string |  | DNS resolvers: a list such as 1.1.1.1,8.8.8.8:53 or a file, one a line (default: public resolvers); named ones answer every name, and the system resolver is never asked |
 
 **Output**
 

@@ -79,7 +79,9 @@ func TestBatch(t *testing.T) {
 	if p := got["127.0.0.1:8080"]; p["ips"] == nil || metas[4].Drop {
 		t.Errorf("ip:port %v", p)
 	}
-	if p := got["app.example.test"]; p["skipped"] != "reserved" || metas[5].Drop {
-		t.Errorf("reserved names stay probeable %v %+v", p, metas[5])
+	// The pool names its resolver, so it answers .test too: nothing is left to
+	// the system's resolver (a pool with the default resolvers does leave it).
+	if p := got["app.example.test"]; p["error"] != "nxdomain" || !metas[5].Drop {
+		t.Errorf("a named resolver answers special-use names %v %+v", p, metas[5])
 	}
 }

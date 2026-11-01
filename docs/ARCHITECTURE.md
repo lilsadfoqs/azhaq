@@ -836,8 +836,8 @@ How the pool behaves:
 - Every query goes through `egress.DNSExchanger`, which enters it in the ledger as a `dns` line (`dns -ledger FILE` keeps one for a command without a workspace) and refuses it once the kill file exists. The pool chooses and paces the resolvers.
 - Each name is resolved once per run.
 - A query that is late (past 1.5 times what 19 in 20 answers took, 250 ms at least, half the timeout at most) is not waited out: the next attempt is sent beside it, the first answer wins, and the attempts in all stay Retries+1. A lost datagram costs a fraction of the 2 s timeout, not all of it.
-- Special-use names (`localhost`, `*.test`, `*.local`) and single labels go to the system resolver instead, so `/etc/hosts` and local DNS still work.
-- In `dns`, naming resolvers with `-r` sends every name to them, as dnsx does.
+- With the default public resolvers, special-use names (`localhost`, `*.test`, `*.local`) and single labels go to the system resolver instead, so `/etc/hosts` and local DNS still work.
+- Naming resolvers (`-resolvers`, `-r`) sends every name to them, special-use ones included, in every command and for every connection (HTTP, ports, TLS probes, Chrome, takeover checks). The system resolver is never asked then: a name they cannot answer is unresolved. `localhost` still connects to loopback, with no lookup, so a proxy on it works.
 
 ### `azhaq dns`
 

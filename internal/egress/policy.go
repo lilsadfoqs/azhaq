@@ -42,6 +42,7 @@ type Policy struct {
 	onDenied    func(raw, rule string)
 	proxy       *url.URL
 	resolver    func(ctx context.Context, host string) []string
+	only        bool // the resolver is the only one: a name it cannot answer is not looked up elsewhere
 
 	maxReq atomic.Int64
 	sent   atomic.Int64
@@ -74,13 +75,16 @@ type Config struct {
 	TargetProxy *url.URL
 	// Resolver gives the addresses to connect to for a name; nil: the system's.
 	Resolver func(ctx context.Context, host string) []string
+	// ResolverOnly: a name Resolver has no address for is not connected to;
+	// the system's resolver is not asked in its place.
+	ResolverOnly bool
 }
 
 // New is a Policy holding what cfg says.
 func New(cfg Config) *Policy {
 	p := &Policy{}
 	p.allow, p.openHeaders, p.denyPath, p.onDenied = cfg.Allow, cfg.OpenHeaders, cfg.DenyPath, cfg.OnDenied
-	p.proxy, p.resolver = cfg.TargetProxy, cfg.Resolver
+	p.proxy, p.resolver, p.only = cfg.TargetProxy, cfg.Resolver, cfg.ResolverOnly
 	p.maxReq.Store(cfg.MaxRequests)
 	p.SetRate(cfg.Rate)
 	return p
@@ -107,7 +111,7 @@ func Reset() { Current().Reset() }
 // Reset is Reset for p.
 func (p *Policy) Reset() {
 	p.mu.Lock()
-	p.allow, p.openHeaders, p.denyPath, p.onDenied, p.proxy, p.resolver = nil, nil, nil, nil, nil, nil
+	p.allow, p.openHeaders, p.denyPath, p.onDenied, p.proxy, p.resolver, p.only = nil, nil, nil, nil, nil, nil, false
 	p.mu.Unlock()
 	p.maxReq.Store(0)
 	p.sent.Store(0)
@@ -150,6 +154,21 @@ func (p *Policy) SetResolver(f func(ctx context.Context, host string) []string) 
 	p.mu.Lock()
 	p.resolver = f
 	p.mu.Unlock()
+}
+
+// SetResolverOnly says the run's resolver is the only one (the user named
+// resolvers): a name it has no address for fails to connect instead of
+// going to the system's resolver.
+func (p *Policy) SetResolverOnly(on bool) {
+	p.mu.Lock()
+	p.only = on
+	p.mu.Unlock()
+}
+
+func (p *Policy) resolverOnly() bool {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.only
 }
 
 func (p *Policy) scope() (func(string) bool, map[string]bool) {
@@ -268,6 +287,9 @@ func ProxyFor(r *http.Request) (*url.URL, error) { return Current().ProxyFor(r) 
 
 // SetResolver is Current().SetResolver.
 func SetResolver(f func(ctx context.Context, host string) []string) { Current().SetResolver(f) }
+
+// SetResolverOnly is Current().SetResolverOnly.
+func SetResolverOnly(on bool) { Current().SetResolverOnly(on) }
 
 // Resolve is Current().Resolve.
 func Resolve(ctx context.Context, host string) []string { return Current().Resolve(ctx, host) }

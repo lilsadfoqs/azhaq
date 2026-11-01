@@ -98,7 +98,7 @@ func (d *PortDialer) TCP(ctx context.Context, host, addr string) (net.Conn, erro
 		return d.via.DialContext(cctx, "tcp", addr)
 	}
 	nd := d.netDialer(hostOfAddr(addr))
-	return nd.DialContext(ctx, "tcp", addr)
+	return dialResolvedWith(ctx, Current(), &nd, "tcp", addr)
 }
 
 // TCPDirect is TCP that never goes through the proxy: the service probes
@@ -109,7 +109,7 @@ func (d *PortDialer) TCPDirect(ctx context.Context, host, addr string) (net.Conn
 	}
 	ledger.TCP(ctx, host, addr)
 	nd := d.netDialer(hostOfAddr(addr))
-	return nd.DialContext(ctx, "tcp", addr)
+	return dialResolvedWith(ctx, Current(), &nd, "tcp", addr)
 }
 
 // TLS is TCPDirect with a TLS handshake that waits at most handshake.
@@ -121,7 +121,21 @@ func (d *PortDialer) TLS(ctx context.Context, host, addr string, cfg *tls.Config
 	nd := d.netDialer(hostOfAddr(addr))
 	hctx, cancel := context.WithTimeout(ctx, handshake)
 	defer cancel()
-	return (&tls.Dialer{NetDialer: &nd, Config: cfg}).DialContext(hctx, "tcp", addr)
+	// The name is looked up by the run's resolver, not the dialer's.
+	c, err := dialResolvedWith(hctx, Current(), &nd, "tcp", addr)
+	if err != nil {
+		return nil, err
+	}
+	cfg = cfg.Clone()
+	if cfg.ServerName == "" {
+		cfg.ServerName = hostOfAddr(addr)
+	}
+	tc := tls.Client(c, cfg)
+	if err := tc.HandshakeContext(hctx); err != nil {
+		c.Close()
+		return nil, err
+	}
+	return tc, nil
 }
 
 // UDP opens a socket connected to raddr, which is a datagram about to be

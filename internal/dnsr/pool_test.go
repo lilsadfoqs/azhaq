@@ -64,7 +64,6 @@ func TestResolveRecords(t *testing.T) {
 		"api.example.org":  "ok",
 		"v6.example.org":   "ok",
 		"dead.example.org": "nxdomain",
-		"app.example.test": "reserved",
 	}
 	for name, want := range cases {
 		if a := p.Resolve(ctx, name); a.Status != want {
@@ -416,5 +415,84 @@ func TestPoolQueriesAreInTheLedger(t *testing.T) {
 	})
 	if n == 0 || int32(n) != sent.Load() {
 		t.Fatalf("%d dns lines in the ledger, the server was asked %d times", n, sent.Load())
+	}
+}
+
+// labZone answers for the names of a made-up company under .test.
+func labZone(w dns.ResponseWriter, r *dns.Msg) {
+	m := new(dns.Msg)
+	m.SetReply(r)
+	q := r.Question[0]
+	name := strings.TrimSuffix(strings.ToLower(q.Name), ".")
+	switch {
+	case name == "app.lab.test" && q.Qtype == dns.TypeA:
+		rr, _ := dns.NewRR("app.lab.test. 60 IN A 127.31.0.5")
+		m.Answer = append(m.Answer, rr)
+	case name == "intranet" && q.Qtype == dns.TypeA:
+		rr, _ := dns.NewRR("intranet. 60 IN A 127.31.0.6")
+		m.Answer = append(m.Answer, rr)
+	default:
+		m.Rcode = dns.RcodeNameError
+	}
+	_ = w.WriteMsg(m)
+}
+
+// systemLines is how many dns lines the ledger at path has for the system.
+func systemLines(t *testing.T, path string) (system, all int) {
+	t.Helper()
+	if err := ledger.Read(path, func(e ledger.Entry) error {
+		if e.Kind == "dns" {
+			all++
+			if e.Target == "system" {
+				system++
+			}
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	return system, all
+}
+
+// Resolvers the user named answer every name, the special-use ones too
+// (*.test, single labels): the system's resolver is never asked.
+func TestNamedResolversAnswerSpecialUseNames(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "l.jsonl")
+	l, err := ledger.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ledger.Use(l)
+	defer ledger.Use(nil)
+	p := New(Options{Resolvers: []string{serve(t, labZone)}, PerSecond: -1, Timeout: time.Second})
+	ctx := context.Background()
+	if a := p.Resolve(ctx, "app.lab.test"); a.Status != StatusOK || len(a.A) != 1 || a.A[0] != "127.31.0.5" {
+		t.Errorf("app.lab.test: %+v", a)
+	}
+	if a := p.Resolve(ctx, "intranet"); a.Status != StatusOK || len(a.A) != 1 || a.A[0] != "127.31.0.6" {
+		t.Errorf("a single label: %+v", a)
+	}
+	// A name they cannot answer is unresolved: it is not asked elsewhere.
+	if a := p.Resolve(ctx, "ghost.lab.test"); a.Status != StatusNXDomain {
+		t.Errorf("ghost.lab.test: %+v", a)
+	}
+	if a := p.Resolve(ctx, "localhost"); a.Status == StatusReserved || a.Live() {
+		t.Errorf("localhost is the resolvers' to answer: %+v", a)
+	}
+	l.Close()
+	if system, all := systemLines(t, path); system != 0 || all == 0 {
+		t.Fatalf("%d of %d dns lines went to the system's resolver, want none", system, all)
+	}
+}
+
+// With the default public resolvers the system's resolver still answers the
+// special-use names, and nothing local is asked of a public one.
+func TestDefaultResolversLeaveSpecialUseNamesToTheSystem(t *testing.T) {
+	p := New(Options{PerSecond: -1})
+	if !p.Reserved("app.lab.test") || !p.Reserved("intranet") {
+		t.Fatal("special-use names are reserved for the system's resolver by default")
+	}
+	if a := p.Resolve(context.Background(), "localhost"); a.Status != StatusOK {
+		t.Fatalf("localhost: %+v", a)
 	}
 }
