@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -659,5 +660,40 @@ func TestOpenAPIExportWithNoRoutes(t *testing.T) {
 	doc.Servers = nil
 	if err := json.Unmarshal([]byte(out), &doc); err != nil || doc.OpenAPI != "3.0.3" || doc.Paths == nil || len(doc.Servers) != 0 {
 		t.Errorf("no URL: %v %+v\n%s", err, doc, out)
+	}
+}
+
+// The URL the description is served at is a route the run saw, but not an
+// operation of the API it describes: a tool importing the export would
+// send it as one. A description that lists its own address keeps it.
+func TestOpenAPIExportLeavesOutTheDescriptionItself(t *testing.T) {
+	spec := `{"url":"https://app.test/openapi.json","base":"https://app.test/","document":{"openapi":"3.0.1","info":{"title":"Lab"},
+		"paths":{"/users/v1":{"get":{"responses":{}}},"/books/v1":{"get":{"responses":{}},"post":{"responses":{}}}}}}`
+	swagger := `{"url":"https://app.test/swagger.json","spec":"swagger 2.0","base":"https://app.test/"}`
+	g := &graphView{path: "x.db",
+		obs: []types.StoredObservation{
+			{Observation: types.Observation{Collector: "azhaq-openapi", Kind: "api", Payload: json.RawMessage(spec)}},
+			{Observation: types.Observation{Collector: "azhaq-openapi", Kind: "api", Payload: json.RawMessage(swagger)}},
+		},
+		rows: []engine.MapEntry{
+			{Entity: types.Entity{Type: types.TypeURL, Key: "https://app.test/openapi.json"}, Role: "api", Coverage: "visited", Status: 200},
+			{Entity: types.Entity{Type: types.TypeURL, Key: "https://app.test/swagger.json"}, Role: "api", Coverage: "visited", Status: 200},
+			{Entity: types.Entity{Type: types.TypeURL, Key: "https://app.test/users/v1"}, Role: "api", Coverage: "visited", Status: 200},
+		}}
+	paths := func() []string {
+		t.Helper()
+		doc, err := openAPI(g, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return slices.Sorted(maps.Keys(doc["paths"].(map[string]any)))
+	}
+	if got, want := paths(), []string{"/books/v1", "/users/v1"}; !slices.Equal(got, want) {
+		t.Errorf("paths %v, want %v", got, want)
+	}
+	// A description listing its own address: the operation is its own.
+	g.rows[1].Ops = []engine.Op{{Method: "GET", Source: "openapi"}}
+	if got, want := paths(), []string{"/books/v1", "/swagger.json", "/users/v1"}; !slices.Equal(got, want) {
+		t.Errorf("a description that lists itself: paths %v, want %v", got, want)
 	}
 }

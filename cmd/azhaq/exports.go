@@ -248,6 +248,7 @@ func openAPI(g *graphView, origin string) (map[string]any, error) {
 	byOrigin := map[string][]engine.MapEntry{}
 	queried := map[string][]engine.MapEntry{}
 	urls := map[string]int{} // every URL row, by origin
+	documents := descriptionURLs(g.obs)
 	for _, r := range g.rows {
 		if r.Entity.Type != types.TypeURL {
 			continue
@@ -259,6 +260,9 @@ func openAPI(g *graphView, origin string) (map[string]any, error) {
 		o := u.Scheme + "://" + u.Host
 		urls[o]++
 		switch {
+		case documents[r.Entity.Key] && !listedBy(r):
+			// The description itself, not an operation of the API it
+			// describes (unless it lists its own address).
 		case isAPI(r) || len(r.Forms) > 0:
 			byOrigin[o] = append(byOrigin[o], r)
 		case takesQuery(r):
@@ -453,6 +457,33 @@ func templateNames(p string) []string {
 
 // opMethods are the keys of a path item that are operations.
 var opMethods = []string{"get", "put", "post", "delete", "options", "head", "patch", "trace"}
+
+// descriptionURLs are the addresses the run read as API descriptions.
+func descriptionURLs(obs []types.StoredObservation) map[string]bool {
+	out := map[string]bool{}
+	for _, o := range obs {
+		if o.Collector != "azhaq-openapi" || o.Kind != "api" {
+			continue
+		}
+		var p struct {
+			URL string `json:"url"`
+		}
+		if json.Unmarshal(o.Payload, &p) == nil && p.URL != "" {
+			out[p.URL] = true
+		}
+	}
+	return out
+}
+
+// listedBy: a description's operations name the row, as one of its paths.
+func listedBy(r engine.MapEntry) bool {
+	for _, o := range r.Ops {
+		if o.Source == "openapi" {
+			return true
+		}
+	}
+	return false
+}
 
 // servedDoc is an OpenAPI 3 document the target serves, with the path
 // its operations live under.

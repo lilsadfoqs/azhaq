@@ -83,6 +83,8 @@ The summary and the other exit codes are the shared ones: see [the summary](../O
 - the pages found with a query string of their own (a GET taking those names)
 - what answered
 
+The address a description was read from (`/openapi.json`) is not a path of the API it describes: it is left out unless the description lists it.
+
 It is a valid OpenAPI document whatever went into it:
 
 - A workspace with no API route gives one too, such as a run whose target did not answer. Its `paths` is `{}`, stderr says `azhaq export: no API routes found on ORIGIN: wrote a description with no paths`, and the exit code is 0.
