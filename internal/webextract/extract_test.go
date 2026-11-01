@@ -187,3 +187,30 @@ func TestLinksFromHandlers(t *testing.T) {
 		t.Errorf("got %q, want %d links", got, len(want))
 	}
 }
+
+func TestFormsSelectDoesNotLeakIntoNextForm(t *testing.T) {
+	page, _ := url.Parse("http://app.test/")
+	body := []byte(`<form action="/a"><input name="x"><input name="y"><select name="s"><option value="1">1</select>
+<select><option value="zz">zz</select></form>
+<form action="/b"><option value="late"><select name="t"><option value="5" selected></select><option value="stray"></form>
+<option value="outside">`)
+	fs := Forms(body, page)
+	if len(fs) != 2 {
+		t.Fatalf("forms %+v", fs)
+	}
+	if got := fs[0].Inputs[2]; got.Name != "s" || got.Value != "1" {
+		t.Errorf("first select %+v", got)
+	}
+	if got := fs[1].Inputs; len(got) != 1 || got[0].Name != "t" || got[0].Value != "5" {
+		t.Errorf("second form inputs %+v", got)
+	}
+}
+
+func TestFormsOptionAfterUnclosedSelectInPriorForm(t *testing.T) {
+	page, _ := url.Parse("http://app.test/")
+	body := []byte(`<form action="/a"><input name="a"><input name="b"><select name="s"><option value="1">1</form><form action="/b"><option value="2">2</form>`)
+	fs := Forms(body, page) // must not panic
+	if len(fs) != 2 || len(fs[1].Inputs) != 0 {
+		t.Errorf("forms %+v", fs)
+	}
+}

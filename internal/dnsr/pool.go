@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/trannghiach/azhaq/internal/guard"
 	"net"
 	"slices"
 	"strings"
@@ -392,6 +393,7 @@ func (p *Pool) resolveMany(ctx context.Context, names []string, workers int) []A
 	for i, n := range names {
 		wg.Add(1)
 		go func(i int, n string) {
+			defer guard.Recover(ctx)
 			defer wg.Done()
 			select {
 			case <-ctx.Done():
@@ -570,6 +572,7 @@ func (p *Pool) query(ctx context.Context, q *dns.Msg, avoid string) (*dns.Msg, s
 			m = q.Copy() // attempts run side by side
 		}
 		go func() {
+			defer guard.Recover(ctx)
 			r := reply{attempt: n, server: server}
 			if err := p.limit.Wait(qctx, server); err != nil {
 				r.err, r.paced = err, true

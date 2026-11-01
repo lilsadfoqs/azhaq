@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/trannghiach/azhaq/internal/guard"
 	"net/http"
 	"net/url"
 	"os"
@@ -213,6 +214,7 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 	for i, s := range c.sources {
 		wg.Add(1)
 		go func(i int, s source) {
+			defer guard.Recover(ctx)
 			defer wg.Done()
 			sctx, cancel := context.WithTimeout(ctx, timeout)
 			defer cancel()

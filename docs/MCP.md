@@ -61,8 +61,9 @@ Any client that takes a JSON configuration:
 
 - Reports the scope (locked, allow and deny rules), the request budget (limit, used, left) and the pace.
 - Lists every workspace this server's directory holds, each with its state: `complete`, `stopped by a limit` or `failed`.
-- `stopped by a limit` comes with the tasks left and the `azhaq_resume` call that continues it.
-- Those states are for a workspace this session ran a command for. A workspace from before this session, or one no call here has touched, shows what its database on disk says is left to do.
+- `stopped by a limit` comes with `tasks_left`, the `requests` the run has sent and the `azhaq_resume` call that continues it. `complete` means the database holds no task left to do.
+- The state is read from the workspace's database, so it is the same for a map this session ran, one it ran before a restart, and one made elsewhere, and a query of the workspace does not change it.
+- `failed` is for a workspace whose last map, resume or roles call in this session failed outright; a call that succeeds clears it.
 - Sends nothing and starts no command.
 
 **`azhaq_map`**

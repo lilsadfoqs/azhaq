@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/trannghiach/azhaq/internal/guard"
 	"io"
 	"net/http"
 	"net/url"
@@ -273,6 +274,7 @@ func sampled(s source) source {
 			fctx, cancel := context.WithTimeout(ctx, timeout)
 			ch := make(chan reply, 1)
 			go func() {
+				defer guard.Recover(ctx)
 				t0 := time.Now()
 				got, err := collect(fctx, domain, nil, sess)
 				ch <- reply{got, err, time.Since(t0)}

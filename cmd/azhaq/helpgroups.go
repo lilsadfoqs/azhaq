@@ -36,6 +36,7 @@ var helpSpecs = map[string]helpSpec{
 			{"Output", `db json quiet v stream fail-on-errors fail-on-capped`},
 		},
 		hidden: map[string]string{
+			"alias":    `H`,
 			"accepted": `port-cdn-full`,
 			"rare": `
 				port-exclude-cdn serve worker-token dirs-ac dirs-depth dirs-ext dirs-fc dirs-fl dirs-fr dirs-fs dirs-fw dirs-mc dirs-ml dirs-mr dirs-ms
@@ -148,7 +149,7 @@ var helpSpecs = map[string]helpSpec{
 				follow-redirects fpt frt fs fwc http-proxy im include-response include-response-header irrb kb
 				lc ldp ldv list-output-fields lof match-code match-condition match-string maxr mcdn md mfc ml
 				mlc mr mrt mwc nf oa ob pa ports rate-limit rhsts rr rstr rsts rt server sni ss status-code
-				store-response store-response-dir t tech-detect vi wc web-ports wp
+				store-response store-response-dir t tech-detect vi wc web-ports wp header
 			`,
 			"accepted": `
 				nc
@@ -170,7 +171,7 @@ var helpSpecs = map[string]helpSpec{
 				cos cs depth ef eof fr hrlm iqp lof mdp mr mrs ns ob path-climb rd rlm sf sfd sr srd
 			`,
 			"alias": `
-				c dr j p pc r rate timeout
+				c dr j p pc r rate timeout header
 			`,
 			"accepted": `
 				jsl duc fx jc kb nc s td
@@ -227,6 +228,7 @@ var helpSpecs = map[string]helpSpec{
 			{"Output", `db json o silent v`},
 		},
 		hidden: map[string]string{
+			"alias": `header`,
 			"compat:ffuf": `
 				fl fr fw ml mr ms mw
 			`,
@@ -251,7 +253,7 @@ var helpSpecs = map[string]helpSpec{
 				sf sni
 			`,
 			"alias": `
-				s cookie data data-ascii
+				s cookie data data-ascii header
 			`,
 			"accepted": `
 				noninteractive
@@ -268,6 +270,7 @@ var helpSpecs = map[string]helpSpec{
 			{"Output", `db json o oB oJ oT silent v`},
 		},
 		hidden: map[string]string{
+			"alias": `header`,
 			"compat:arjun": `
 				include stable
 			`,
@@ -289,6 +292,7 @@ var helpSpecs = map[string]helpSpec{
 			{"Output", `dir csv db json o silent v`},
 		},
 		hidden: map[string]string{
+			"alias": `header`,
 			"compat:gowitness": `
 				chrome-proxy cidr hostnames no-http no-https open-only random service service-contains skip-port
 			`,

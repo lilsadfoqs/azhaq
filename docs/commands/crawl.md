@@ -266,7 +266,7 @@ These filters limit what is printed, not what is crawled.
 | `-v` | bool |  | print a line for every finished task, not only failures |
 
 <details>
-<summary>Flags familiar from katana, other names and flags accepted with no effect (37)</summary>
+<summary>Flags familiar from katana, other names and flags accepted with no effect (38)</summary>
 
 | Flag | Type | Default | Meaning | Kind |
 | --- | --- | --- | --- | --- |
@@ -293,6 +293,7 @@ These filters limit what is printed, not what is crawled.
 | `-srd` | string | `katana_response` | directory for -sr | katana's name |
 | `-c` | int |  | requests in flight per host (default 10, as katana) | other name |
 | `-dr` | bool |  | do not follow redirects: each URL is asked once and its redirect recorded with the Location (httpx's default) | other name |
+| `-header` | string, repeatable |  | same as -H | other name |
 | `-j` | bool |  | same as -jsonl | other name |
 | `-p` | int |  | work items in flight (default 16) | other name |
 | `-pc` | bool |  | same as -path-climb (katana's -pc) | other name |

@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/trannghiach/azhaq/internal/guard"
 	"io"
 	"net/http"
 	"net/url"
@@ -371,6 +372,7 @@ func (c *Collector) sweep(ctx context.Context, dir string, found func([]hit) err
 	pending := make(chan hit, maxPending)
 	written := make(chan struct{})
 	go func() {
+		defer guard.Recover(ctx)
 		defer close(written)
 		for h := range pending {
 			batch := []hit{h}
@@ -458,6 +460,7 @@ func (c *Collector) sweep(ctx context.Context, dir string, found func([]hit) err
 		sem <- struct{}{}
 		wg.Add(1)
 		go func(word string) {
+			defer guard.Recover(ctx)
 			defer wg.Done()
 			defer func() { <-sem }()
 			_ = ask(word)
@@ -629,6 +632,7 @@ func (c *Collector) calibrate(ctx context.Context, dir, host string) (cal calibr
 		sem <- struct{}{}
 		wg.Add(1)
 		go func() {
+			defer guard.Recover(ctx)
 			defer wg.Done()
 			defer func() { <-sem }()
 			r, err := c.get(ctx, dir+s, probes[i])

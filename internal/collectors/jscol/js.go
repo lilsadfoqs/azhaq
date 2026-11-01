@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"github.com/trannghiach/azhaq/internal/guard"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -155,12 +156,13 @@ func (f *scanFuture) get() scanned {
 
 // startScan reads s on goroutines; page is the page's URL, appRoot where
 // its router takes paths from.
-func startScan(s script, page string, base, appRoot *url.URL) *scanFuture {
+func startScan(ctx context.Context, s script, page string, base, appRoot *url.URL) *scanFuture {
 	f := &scanFuture{done: make(chan struct{})}
 	var wg sync.WaitGroup
 	run := func(fn func(v *scanned)) {
 		wg.Add(1)
 		go func() {
+			defer guard.Recover(ctx)
 			defer wg.Done()
 			fn(&f.v)
 		}()
@@ -221,6 +223,7 @@ func startScan(s script, page string, base, appRoot *url.URL) *scanFuture {
 		v.gqlOps = webextract.GraphQLOps(s.body)
 	})
 	go func() {
+		defer guard.Recover(ctx)
 		wg.Wait()
 		close(f.done)
 	}()
@@ -513,7 +516,7 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 	started := 0
 	kick := func() {
 		for ; started < len(queue); started++ {
-			queue[started].scan = startScan(queue[started], raw, base, appRoot)
+			queue[started].scan = startScan(ctx, queue[started], raw, base, appRoot)
 		}
 	}
 	load := func(src string, needExt bool) {

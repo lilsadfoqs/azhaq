@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/trannghiach/azhaq/internal/guard"
 	"maps"
 	"net/url"
 	"os"
@@ -100,7 +101,8 @@ type Browser struct {
 	gate   gate
 
 	guard *egress.ChromeGuard
-	lost  atomic.Bool // Chrome's paused requests are no longer heard of
+	lost  atomic.Bool           // Chrome's paused requests are no longer heard of
+	broke atomic.Pointer[error] // the panic that ended one of the loops that hear of them
 
 	closeMu sync.Mutex
 	closing bool
@@ -315,11 +317,12 @@ func (b *Browser) Load(ctx context.Context, rawURL string, shot bool) (Page, err
 	weight := 0 // what the page asked for, once it is known, for the next page's admission
 	defer func() { b.gate.leave(weight) }()
 	if b.lost.Load() {
-		return Page{}, errLost
+		return Page{}, b.lostErr()
 	}
 	watched := func() {}
 	defer func() { watched() }() // once the tab is closed
 	tab, cancel := chromedp.NewContext(b.root)
+	tab = guard.Carry(tab, ctx)
 	defer cancel()
 	// With a pace the page's deadlines run from when it last moved.
 	var prog *progress
@@ -515,6 +518,24 @@ func (b *Browser) capture(tab context.Context) ([]byte, error) {
 		return nil, err
 	}
 	return r.Data, nil
+}
+
+// fault ends the pages of a browser one of whose request loops panicked:
+// requests Chrome holds would never be answered. Each page then fails with
+// the panic, and the others on the run go on.
+func (b *Browser) fault(err error) {
+	if b.broke.CompareAndSwap(nil, &err) {
+		fmt.Fprintf(os.Stderr, "azhaq: browser: %v; no more pages are loaded\n", err)
+	}
+	b.lost.Store(true)
+}
+
+// lostErr is why pages are not loaded: the panic when there was one.
+func (b *Browser) lostErr() error {
+	if p := b.broke.Load(); p != nil {
+		return *p
+	}
+	return errLost
 }
 
 var errLost = errors.New("Chrome no longer reports the requests it holds: its pages are not loaded")

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/trannghiach/azhaq/internal/guard"
 	"math/rand/v2"
 	"net/url"
 	"os"
@@ -378,6 +379,7 @@ func (e *engine) runJob(ctx context.Context, j job, first bool) {
 		e.dispatched.Add(1)
 		wg.Add(1)
 		go func(i int) {
+			defer guard.Recover(ctx)
 			defer func() { <-sem; wg.Done() }()
 			if e.task(ctx, j, tmpls[i/per], At(e.cfg.Mode, lists, i%per), i%per+1) {
 				tr.done(i)

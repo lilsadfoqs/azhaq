@@ -297,38 +297,15 @@ func TestMCPMapAndResume(t *testing.T) {
 }
 
 // azhaq_status reports the scope, the budget and each workspace's state:
-// complete or stopped by a limit (with what resumes it) from this
-// session's own calls, when it made one, else from what the database on
-// disk says is left to do.
+// complete or stopped by a limit (with what resumes it), as each
+// workspace's database records its runs.
 func TestMCPStatus(t *testing.T) {
 	dir := t.TempDir()
 	s := &mcpServer{exe: fakeAzhaq(t, dir), dir: dir, lock: []string{"-allow", "127.0.0.1"}, locked: true, budget: 500, rate: 5}
 
-	// The fake azhaq does not write real databases: make the files azhaq_map
-	// would, so azhaq_status's glob of the directory finds them; this
-	// session's own record (richer: it can say "stopped") still wins over
-	// what the empty file alone would show (a database with no runs looks
-	// "complete").
-	for _, name := range []string{"capped", "done"} {
-		st, err := store.Open(filepath.Join(dir, name+".db"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		st.Close()
-	}
-
-	t.Setenv("FAKE_SUMMARY", `{"type":"summary","command":"run","exit":4,"requests":20,"db":"`+filepath.Join(dir, "capped.db")+
-		`","stopped":"the request budget of 500 is spent, 5 tasks left","resume":"azhaq resume -db capped.db"}`)
-	if _, isErr := callText(t, s, "azhaq_map", map[string]any{"targets": []any{"127.0.0.1:1"}, "workspace": "capped"}); isErr {
-		t.Fatal("map failed")
-	}
-	t.Setenv("FAKE_SUMMARY", `{"type":"summary","command":"run","complete":true,"exit":0,"requests":5,"db":"`+filepath.Join(dir, "done.db")+`"}`)
-	if _, isErr := callText(t, s, "azhaq_map", map[string]any{"targets": []any{"127.0.0.1:2"}, "workspace": "done"}); isErr {
-		t.Fatal("map failed")
-	}
-
-	// A workspace this session never touched: its state comes from its
-	// database alone (resumable tasks it has, or not).
+	// The fake azhaq does not write real databases: make the ones azhaq_map
+	// would, since the state of a workspace is what its database records:
+	// tasks left (the capped run's) or not.
 	mkDB := func(name string, leftover bool) {
 		st, err := store.Open(filepath.Join(dir, name+".db"))
 		if err != nil {
@@ -346,6 +323,19 @@ func TestMCPStatus(t *testing.T) {
 			}
 		}
 	}
+	mkDB("capped", true)
+	mkDB("done", false)
+
+	t.Setenv("FAKE_SUMMARY", `{"type":"summary","command":"run","exit":4,"requests":20,"db":"`+filepath.Join(dir, "capped.db")+
+		`","stopped":"the request budget of 500 is spent, 5 tasks left","resume":"azhaq resume -db capped.db"}`)
+	if _, isErr := callText(t, s, "azhaq_map", map[string]any{"targets": []any{"127.0.0.1:1"}, "workspace": "capped"}); isErr {
+		t.Fatal("map failed")
+	}
+	t.Setenv("FAKE_SUMMARY", `{"type":"summary","command":"run","complete":true,"exit":0,"requests":5,"db":"`+filepath.Join(dir, "done.db")+`"}`)
+	if _, isErr := callText(t, s, "azhaq_map", map[string]any{"targets": []any{"127.0.0.1:2"}, "workspace": "done"}); isErr {
+		t.Fatal("map failed")
+	}
+
 	mkDB("fromdisk-left", true)
 	mkDB("fromdisk-done", false)
 

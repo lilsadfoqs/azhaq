@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/trannghiach/azhaq/internal/guard"
 	"regexp"
 	"sort"
 	"strings"
@@ -125,11 +126,12 @@ func (b *Browser) Login(ctx context.Context, loginURL, user, pass string) (_ Ses
 	}
 	b.visit(loginURL)
 	if b.lost.Load() {
-		return Session{}, errLost
+		return Session{}, b.lostErr()
 	}
 	watched := func() {}
 	defer func() { watched() }() // once the tab is closed
 	tab, cancel := chromedp.NewContext(b.root)
+	tab = guard.Carry(tab, ctx)
 	defer cancel()
 	tab, cancelT := context.WithTimeout(tab, 90*time.Second)
 	defer cancelT()
@@ -209,6 +211,7 @@ func (b *Browser) Login(ctx context.Context, loginURL, user, pass string) (_ Ses
 	defer stopListen()
 	events := chromedp.Events(listen, network.RequestWillBeSent)
 	go func() {
+		defer guard.Recover(ctx)
 		for ev, err := range events {
 			if err != nil {
 				return

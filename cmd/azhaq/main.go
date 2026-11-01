@@ -381,6 +381,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	fs.Var(&domains, "domain", "seed Domain, for subdomain discovery (repeatable)")
 	fs.Var(&cookies, "cookie", "Cookie name=value (repeatable; sent as one Cookie header)")
 	fs.Var(&headers, "header", "extra request header K: V (repeatable)")
+	fs.Var(&headers, "H", "same as -header")
 	fs.Var(&allow, "allow", "a domain, host or address range the run may touch; with any -allow, nothing else is requested (repeatable)")
 	fs.Var(&deny, "deny", "a domain, host or address range the run must not touch, even when given as a target (repeatable)")
 	fs.Var(&denyPath, "deny-path", "a regular expression on a URL's path and query: a URL it matches is never requested, by any collector or Chrome, and is listed as not requested (repeatable; azhaq decides nothing by itself)")
@@ -1023,6 +1024,9 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		}
 	}
 	collectors.Register(cat, opts)
+	if extraCollectors != nil {
+		extraCollectors(cat)
+	}
 	if *sourcesList == "none" {
 		// No passive source means no third party at all: the archives, RDAP, search
 		// engines and RIPEstat are as much a source as crt.sh. Only the resolvers
@@ -1287,6 +1291,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		opts.Browser.Close()
 	}
 	rep.Requests = egress.Sent()
+	_ = st.AddRunRequests(rep.Requests)
 	// Work the -timeout cut short (a source still asking) is not done:
 	// resume runs it again.
 	cut := 0
@@ -1875,6 +1880,9 @@ func cmdExport(args []string) error {
 	return nil
 }
 
+// extraCollectors lets a test add a collector to a run's catalog.
+var extraCollectors func(*catalog.Catalog)
+
 func demoServer() *httptest.Server {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -2402,7 +2410,7 @@ func headerHosts(h http.Header) []string {
 // flagHeaderHosts are the hosts the -header flags among run flags name.
 func flagHeaderHosts(runFlags []string) []string {
 	h := http.Header{}
-	for _, raw := range runFlagValues(runFlags, "header") {
+	for _, raw := range append(runFlagValues(runFlags, "header"), runFlagValues(runFlags, "H")...) {
 		if k, v, ok := strings.Cut(raw, ":"); ok {
 			h.Add(strings.TrimSpace(k), strings.TrimSpace(v))
 		}

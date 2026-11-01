@@ -210,7 +210,7 @@ note: screenshot of http://127.0.0.1:3001/ not taken: the page needs about 26 re
 | `-v` | bool |  | print a line for every finished task, not only failures |
 
 <details>
-<summary>Flags familiar from gowitness (10)</summary>
+<summary>Flags familiar from gowitness and other names (11)</summary>
 
 | Flag | Type | Default | Meaning | Kind |
 | --- | --- | --- | --- | --- |
@@ -224,6 +224,7 @@ note: screenshot of http://127.0.0.1:3001/ not taken: the page needs about 26 re
 | `-service` | string |  | with -nmap or -nessus: only the service names to take, comma-separated (default: every open port for nmap, as gowitness does; www, http and https for Nessus) | gowitness's name |
 | `-service-contains` | string |  | with -nmap: only ports whose service name has this in it, such as http | gowitness's name |
 | `-skip-port` | string |  | with -nmap: never these ports, comma-separated numbers or ranges | gowitness's name |
+| `-header` | string, repeatable |  | same as -H | other name |
 
 </details>
 <!-- flags:end -->

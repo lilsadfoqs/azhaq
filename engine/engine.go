@@ -18,6 +18,7 @@ import (
 
 	"github.com/trannghiach/azhaq/catalog"
 	"github.com/trannghiach/azhaq/internal/egress"
+	"github.com/trannghiach/azhaq/internal/guard"
 	"github.com/trannghiach/azhaq/internal/ledger"
 	"github.com/trannghiach/azhaq/internal/neterr"
 	"github.com/trannghiach/azhaq/internal/normalize"
@@ -176,10 +177,22 @@ func (e *Engine) Run(ctx context.Context, item types.WorkItem) (types.RunMeta, e
 	}
 
 	done := timing.Start(ctx, col.Name(), seed.Key())
-	ctx, refused, used := egress.WatchBudget(ledger.WithCollector(ctx, col.Name()))
-	got, err := col.Run(types.WithBatchEmit(ctx, emitMany), seed, emit)
+	wctx, panicked, stop := guard.Watch(ledger.WithCollector(ctx, col.Name()))
+	defer stop()
+	ctx, refused, used := egress.WatchBudget(wctx)
+	var got types.RunMeta
+	err = guard.Call(func() (err error) {
+		got, err = col.Run(types.WithBatchEmit(ctx, emitMany), seed, emit)
+		return err
+	})
 	done()
-	if errors.Is(err, neterr.ErrBudget) || refused() {
+	// A bug in a collector fails its task, not the run: what the task found
+	// is kept and the panic is listed with the failures.
+	perr := panicked()
+	if perr != nil {
+		err = perr
+	}
+	if perr == nil && (errors.Is(err, neterr.ErrBudget) || refused()) {
 		// Not done, whatever the collector made of the refusal: nothing
 		// waiting on it is dropped, and azhaq resume runs it again.
 		meta.Status, meta.Error, meta.Drop = types.StatusCapped, neterr.ErrBudget.Error(), false
@@ -196,7 +209,7 @@ func (e *Engine) Run(ctx context.Context, item types.WorkItem) (types.RunMeta, e
 		e.markCapped()
 		return meta, neterr.ErrBudget
 	}
-	if down := egress.Stopped(ctx); down != nil {
+	if down := egress.Stopped(ctx); perr == nil && down != nil {
 		// Its origin stopped answering: not done either, listed as left
 		// alone with the reason, and azhaq resume tries it again.
 		meta.Status, meta.Error, meta.Drop = types.StatusCapped, down.Error(), false
@@ -208,7 +221,7 @@ func (e *Engine) Run(ctx context.Context, item types.WorkItem) (types.RunMeta, e
 	if err := release(); err != nil {
 		return types.RunMeta{ItemID: item.ID, Status: types.StatusError, Error: err.Error()}, err
 	}
-	if ctx.Err() != nil {
+	if ctx.Err() != nil && perr == nil {
 		meta.Status = types.StatusCancelled
 		meta.Error = ctx.Err().Error()
 		return meta, ctx.Err()
@@ -300,8 +313,17 @@ func (e *Engine) RunBatch(ctx context.Context, name string, seeds []types.Seed) 
 		return nil
 	}
 	done := timing.Start(ctx, name, fmt.Sprintf("%d seeds", len(todo)))
-	metas, err := b.RunBatch(ctx, todo, emit)
+	wctx, panicked, stop := guard.Watch(ctx)
+	defer stop()
+	var metas []types.RunMeta
+	err := guard.Call(func() (err error) {
+		metas, err = b.RunBatch(wctx, todo, emit)
+		return err
+	})
 	done()
+	if perr := panicked(); perr != nil {
+		err = perr
+	}
 	stopped := ctx.Err() != nil
 	if stopped && (err == nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)) {
 		err = nil
@@ -611,6 +633,18 @@ func (e *Engine) noteSkip(seed types.Seed, reason string) {
 	_, _ = e.Store.AddObservation(ent.ID, types.Observation{
 		Collector: "azhaq-http", Source: "run", Kind: "skipped", Payload: payload, ObservedAt: now,
 	})
+}
+
+// failTask lists a task whose run broke outside its collector (a panic
+// the collector's own recovery did not see) with the failures.
+func (e *Engine) failTask(seed types.Seed, collector string, err error) {
+	if e == nil || e.Store == nil {
+		return
+	}
+	seed = normalize.Seed(seed)
+	if ent, uerr := e.Store.UpsertEntity(seed.Type, seed.Key(), time.Now().UTC()); uerr == nil {
+		e.noteError(ent.ID, collector, err)
+	}
 }
 
 func (e *Engine) noteError(entityID, collector string, err error) {
