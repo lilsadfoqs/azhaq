@@ -14,6 +14,8 @@ import (
 	"slices"
 	"sort"
 	"strings"
+
+	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 )
 
 func main() {
@@ -71,9 +73,9 @@ func (r *report) text() string {
 
 // trigger marks a line that makes a claim a review can prove false: an
 // absolute, a limit, an exit code, a refusal.
-var trigger = regexp.MustCompile(`(?i)\b(never|always|every|only|nothing|exactly|at most|at least|no request|exit [0-9]|cannot|without|all|any|not)\b`)
+var trigger = lazyre.New(`(?i)\b(never|always|every|only|nothing|exactly|at most|at least|no request|exit [0-9]|cannot|without|all|any|not)\b`)
 
-var idRE = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*\.[a-z0-9]+(-[a-z0-9]+)*$`)
+var idRE = lazyre.New(`^[a-z0-9]+(-[a-z0-9]+)*\.[a-z0-9]+(-[a-z0-9]+)*$`)
 
 // claimFiles are the pages the ledger is about: the README and every
 // command page.
