@@ -692,9 +692,19 @@ class Workflow(unittest.TestCase):
     def setUpClass(cls):
         text = open(os.path.join(HERE, "..", "..", "workflows", "trial.yml")).read()
         cls.codex = text.split("\n  codex:\n")[1].split("\n  work:\n")[0]
+        cls.text = text
+        parts = re.split(r"^  ([a-z][\w-]*):\n", text.split("\njobs:\n", 1)[1], flags=re.M)
+        jobs = dict(zip(parts[1::2], parts[2::2]))
         cls.steps = {}
-        for job, body in (("codex", cls.codex), ("work", text.split("\n  work:\n")[1])):
-            cls.steps[job] = [a or b for a, b in re.findall(r"^      - (?:name: (.+)|uses: (.+))$", body, re.M)]
+        for job in ("codex", "work", "gate-a", "gate-b", "baseline"):
+            cls.steps[job] = [a or b for a, b in re.findall(r"^      - (?:name: (.+)|uses: (.+))$", jobs[job], re.M)]
+
+    def test_each_job_names_the_kinds_it_runs_for(self):
+        # A job on "kind != X" also starts for every kind added later.
+        conds = re.findall(r"^    if: (.*needs\.kind\.outputs\.kind.*)$", self.text, re.M)
+        self.assertGreaterEqual(len(conds), 5)
+        for c in conds:
+            self.assertNotIn("!=", c)
 
     def test_both_jobs_heartbeat_and_isolate_before_the_review(self):
         for job, steps in self.steps.items():

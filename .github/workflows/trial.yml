@@ -541,7 +541,7 @@ jobs:
           [ -s REPORT.md ] && echo "::notice title=trial::REPORT.md written" || echo "::warning title=trial::no REPORT.md"
   work:
     needs: kind
-    if: needs.kind.outputs.kind != 'switch'
+    if: needs.kind.outputs.kind == 'research' || needs.kind.outputs.kind == 'hunter'
     runs-on: ubuntu-latest
     timeout-minutes: 360
     env:

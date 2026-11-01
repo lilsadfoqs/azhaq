@@ -174,7 +174,8 @@ jobs:
         with:
           distribution: goreleaser
           version: v2.18.3
-          args: release --snapshot --clean --skip=sign,sbom,docker
+          # This runner's own target only: the script is what is checked.
+          args: release --snapshot --clean --single-target --skip=sign,sbom,docker
         env:
           GORELEASER_CURRENT_TAG: ${{ steps.tag.outputs.tag }}
       - name: install from the snapshot
