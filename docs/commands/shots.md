@@ -108,7 +108,7 @@ A page that was not fully loaded when the picture was taken has these fields, an
 - Nothing outside the scope is loaded by default.
 
 ### Chrome, ports and file names
-- `AZHAQ_CHROME` names the browser. In a container where Chrome cannot start its sandbox, `AZHAQ_CHROME_NO_SANDBOX=1` runs it without one. Do that only where you accept that the pages it loads are untrusted.
+- `AZHAQ_CHROME` names the browser. Where the system gives Chrome no sandbox (a container, AppArmor), it is started once more without one and the summary says so; the pages it loads are untrusted, so use a throwaway environment. `-chrome-require-sandbox` refuses that. `AZHAQ_CHROME_NO_SANDBOX=1` skips the first try.
 - Chrome refuses some ports, such as 6000, 6666 and 10080, with `net::ERR_UNSAFE_PORT`. `-unsafe-ports` allows them by default.
 - A URL you give is shot as given, one file for each page, named like `http_host_port_path_hash.png`; with a scheme it is one target and one row (where Chrome ended is in `final_url`), and only a bare name or `host:port` is tried on both schemes. The URLs a run finds itself are shot only when they are front pages.
 - A page that calls `alert()` on load has its dialog accepted and is shot. Nothing waits for a click.
@@ -167,6 +167,7 @@ note: screenshot of http://127.0.0.1:3001/ not taken: the page needs about 26 re
 | --- | --- | --- | --- |
 | `-chrome` | string |  | the Chrome or Chromium to run (default $AZHAQ_CHROME, else the first found) |
 | `-chrome-profile` | string |  | a Chrome user data directory to use and keep: sessions it holds go with the pages (default: a temporary one) |
+| `-chrome-require-sandbox` | bool |  | never run Chrome without its sandbox: where the system gives it none (no user namespaces, AppArmor, a container) Chrome does not start (default: it is started once more without, and the summary says so) |
 | `-tabs` | int | `6` | Chrome tabs open at once for screenshots and -browser (gowitness -t) |
 | `-unsafe-ports` | bool | `true` | let Chrome open the ports it refuses by default (6000, 6666, 10080 and others); -unsafe-ports=false keeps its refusal |
 

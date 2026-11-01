@@ -29,11 +29,14 @@ import (
 	"github.com/trannghiach/azhaq/internal/egress"
 )
 
+// RequireSandbox is the default of Browser.RequireSandbox (-chrome-require-sandbox).
+var RequireSandbox bool
+
 // ErrNoChrome means no Chrome or Chromium was found.
 var ErrNoChrome = errors.New("no Chrome or Chromium found (install one, or set AZHAQ_CHROME to its path)")
 
 // ErrNoSandbox means the system refused Chrome its sandbox.
-var ErrNoSandbox = errors.New("Chrome could not start its sandbox (set AZHAQ_CHROME_NO_SANDBOX=1 to run it without one, knowing the pages are untrusted)")
+var ErrNoSandbox = errors.New("Chrome could not start its sandbox and -chrome-require-sandbox forbids running it without one (drop the flag to let azhaq retry without it, knowing the pages are untrusted)")
 
 // Start launches Chrome now rather than on the first page, so a run can
 // report a Chrome that cannot start before it begins.
@@ -83,7 +86,10 @@ type Browser struct {
 	ChromePath string        // the Chrome to run; default AZHAQ_CHROME, else the first found
 	ProfileDir string        // a user data directory to keep, signed in sessions and all; default a temporary one
 	Proxy      string        // an http or socks5 proxy for Chrome's own connections; default the environment's
-	AllowPorts bool          // let Chrome open the ports it refuses by default (6000, 10080, ...)
+	// RequireSandbox refuses to run Chrome without its sandbox: where the
+	// system cannot give it one, Chrome does not start (ErrNoSandbox).
+	RequireSandbox bool
+	AllowPorts     bool // let Chrome open the ports it refuses by default (6000, 10080, ...)
 	// Writes lets pages and their scripts send what they send besides
 	// GET, HEAD and OPTIONS, as a user's browser would (-browser-writes):
 	// it changes data on the target. Otherwise only the sign-in does.
@@ -93,13 +99,14 @@ type Browser struct {
 	// sends nothing a load does not (see interact.go).
 	Interact int
 
-	tmp    string // the temporary profile this browser made, removed on Close
-	once   sync.Once
-	err    error
-	alloc  context.Context
-	cancel context.CancelFunc
-	root   context.Context
-	gate   gate
+	unsandboxed string // why Chrome runs without its sandbox
+	tmp         string // the temporary profile this browser made, removed on Close
+	once        sync.Once
+	err         error
+	alloc       context.Context
+	cancel      context.CancelFunc
+	root        context.Context
+	gate        gate
 
 	guard *egress.ChromeGuard
 	lost  atomic.Bool           // Chrome's paused requests are no longer heard of
@@ -162,18 +169,9 @@ func (b *Browser) start() error {
 		// started: a later fetch.Reset (a run ending, a test) does not move
 		// it under requests still being decided.
 		b.allow, b.addr = egress.Current().Scope(), egress.Current().ScopeAddr()
-		if b.guard, err = egress.NewChromeGuard(b.allowedHost); err != nil {
-			b.err = fmt.Errorf("starting Chrome: %w", err)
+		if err = b.newGuard(); err != nil {
+			b.err = err
 			return
-		}
-		if b.Proxy != "" {
-			pu, err := url.Parse(b.Proxy)
-			if err != nil || pu.Host == "" {
-				b.err = fmt.Errorf("starting Chrome: -chrome-proxy wants a URL such as http://127.0.0.1:8080 or socks5://127.0.0.1:9050, got %q", b.Proxy)
-				b.guard.Close()
-				return
-			}
-			b.guard.SetProxy(pu)
 		}
 		opts := append(chromedp.DefaultExecAllocatorOptions[:],
 			chromedp.ExecPath(path),
@@ -210,11 +208,16 @@ func (b *Browser) start() error {
 			opts = append(opts, chromedp.Flag(f, deadService))
 		}
 		opts = append(opts, chromedp.Flag("component-updater", "url-source="+deadService))
-		// The sandbox stays on: the pages are the targets'. Where the system
-		// refuses it (AppArmor on recent Ubuntu, some containers), the user
-		// may turn it off knowingly.
-		if os.Getenv("AZHAQ_CHROME_NO_SANDBOX") == "1" {
-			opts = append(opts, chromedp.NoSandbox)
+		// The sandbox stays on: the pages are the targets'. Only where the
+		// system cannot give Chrome one (see below) does it run without.
+		noSandbox := os.Getenv("AZHAQ_CHROME_NO_SANDBOX") == "1"
+		if noSandbox && (b.RequireSandbox || RequireSandbox) {
+			b.err = errors.New("starting Chrome: AZHAQ_CHROME_NO_SANDBOX=1 and -chrome-require-sandbox contradict each other: drop one")
+			b.guard.Close()
+			return
+		}
+		if noSandbox {
+			b.unsandboxed = "AZHAQ_CHROME_NO_SANDBOX=1"
 		}
 		if b.UserAgent != "" {
 			opts = append(opts, chromedp.UserAgent(b.UserAgent))
@@ -238,15 +241,38 @@ func (b *Browser) start() error {
 		if b.AllowPorts {
 			opts = append(opts, chromedp.Flag("explicitly-allowed-ports", restrictedPorts))
 		}
-		// Every connection, loopback ones too, through the guard.
-		b.alloc, b.cancel = egress.LaunchChrome(b.guard, opts...)
-		root, _ := chromedp.NewContext(b.alloc)
-		if err := chromedp.Do(root); err != nil {
+		// Every connection, loopback ones too, through the guard. Where the
+		// system refuses Chrome its sandbox (no unprivileged user
+		// namespaces, AppArmor on recent Ubuntu, a container), Chrome says
+		// so and exits: it is started once more without it, as gowitness
+		// does always and katana -no-sandbox does on request, and the
+		// summary says so. -chrome-require-sandbox refuses that.
+		var root context.Context
+		for {
+			o := opts
+			if noSandbox {
+				o = append(slices.Clone(opts), chromedp.NoSandbox)
+			}
+			b.alloc, b.cancel = egress.LaunchChrome(b.guard, o...)
+			root, _ = chromedp.NewContext(b.alloc)
+			err = chromedp.Do(root)
+			if err == nil {
+				break
+			}
+			b.cancel()
+			if !noSandbox && !b.RequireSandbox && !RequireSandbox && strings.Contains(err.Error(), "sandbox") {
+				noSandbox, b.unsandboxed = true, sandboxReason(err)
+				if gerr := b.newGuard(); gerr != nil {
+					b.err = gerr
+					b.dropTmp()
+					return
+				}
+				continue
+			}
 			b.err = fmt.Errorf("starting Chrome: %w", err)
 			if strings.Contains(err.Error(), "sandbox") {
 				b.err = fmt.Errorf("%w: %v", ErrNoSandbox, err)
 			}
-			b.cancel()
 			b.dropTmp()
 			return
 		}
@@ -271,6 +297,41 @@ func (b *Browser) start() error {
 	})
 	return b.err
 }
+
+// newGuard starts the guard Chrome's connections go through (a failed
+// Chrome's guard ends with it).
+func (b *Browser) newGuard() error {
+	g, err := egress.NewChromeGuard(b.allowedHost)
+	if err != nil {
+		return fmt.Errorf("starting Chrome: %w", err)
+	}
+	if b.Proxy != "" {
+		pu, err := url.Parse(b.Proxy)
+		if err != nil || pu.Host == "" {
+			g.Close()
+			return fmt.Errorf("starting Chrome: -chrome-proxy wants a URL such as http://127.0.0.1:8080 or socks5://127.0.0.1:9050, got %q", b.Proxy)
+		}
+		g.SetProxy(pu)
+	}
+	b.guard = g
+	return nil
+}
+
+// sandboxReason is the line of Chrome's error that names the sandbox.
+func sandboxReason(err error) string {
+	for _, l := range strings.Split(err.Error(), "\n") {
+		if l = strings.TrimSpace(l); strings.Contains(strings.ToLower(l), "sandbox") {
+			if len(l) > 160 {
+				l = l[:160] + "..."
+			}
+			return l
+		}
+	}
+	return "Chrome reported no usable sandbox"
+}
+
+// Unsandboxed is why Chrome runs without its sandbox, or "" when it has one.
+func (b *Browser) Unsandboxed() string { return b.unsandboxed }
 
 // dropTmp removes the temporary profile, once Chrome has stopped.
 func (b *Browser) dropTmp() {
