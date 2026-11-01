@@ -93,6 +93,7 @@ type Browser struct {
 	// sends nothing a load does not (see interact.go).
 	Interact int
 
+	tmp    string // the temporary profile this browser made, removed on Close
 	once   sync.Once
 	err    error
 	alloc  context.Context
@@ -135,7 +136,11 @@ type Browser struct {
 const chromeOff = "Translate,BlinkGenPropertyTrees,OptimizationHints,OptimizationHintsFetching,OptimizationGuideModelDownloading," +
 	"OptimizationTargetPrediction,NetworkTimeServiceQuerying,AutofillServerCommunication,CertificateTransparencyComponentUpdater," +
 	"MediaRouter,DialMediaRouteProvider,GlobalMediaControls,InterestFeedContentSuggestions,PrivacySandboxSettings4,Fledge," +
-	"PreconnectToSearch,Prerender2,NoStatePrefetch,PrefetchProxy,ExtensionUpdater,IdentityStatus"
+	"PreconnectToSearch,Prerender2,NoStatePrefetch,PrefetchProxy,ExtensionUpdater,IdentityStatus,SafeBrowsingHashPrefixRealTimeLookups"
+
+// deadService is where Chrome's own services are pointed: loopback, a
+// port nothing uses, and never a host outside the scope.
+const deadService = "http://127.0.0.1:1/"
 
 func (b *Browser) start() error {
 	b.once.Do(func() {
@@ -197,6 +202,14 @@ func (b *Browser) start() error {
 			chromedp.Flag("safebrowsing-disable-auto-update", true),
 			chromedp.Flag("disable-features", chromeOff),
 		)
+		// The flags above leave services that start with the browser (the
+		// account reconciler, the component updater, Google search's
+		// eligibility check): their service roots point at a port nothing
+		// listens on, so none is even attempted.
+		for _, f := range []string{"gaia-url", "google-apis-url", "google-base-url", "lso-url"} {
+			opts = append(opts, chromedp.Flag(f, deadService))
+		}
+		opts = append(opts, chromedp.Flag("component-updater", "url-source="+deadService))
 		// The sandbox stays on: the pages are the targets'. Where the system
 		// refuses it (AppArmor on recent Ubuntu, some containers), the user
 		// may turn it off knowingly.
@@ -206,9 +219,22 @@ func (b *Browser) start() error {
 		if b.UserAgent != "" {
 			opts = append(opts, chromedp.UserAgent(b.UserAgent))
 		}
-		if b.ProfileDir != "" {
-			opts = append(opts, chromedp.UserDataDir(b.ProfileDir))
+		dir := b.ProfileDir
+		if dir == "" {
+			if dir, err = os.MkdirTemp("", "azhaq-chrome-"); err != nil {
+				b.err = fmt.Errorf("starting Chrome: %w", err)
+				b.guard.Close()
+				return
+			}
+			b.tmp = dir
 		}
+		if err := seedProfile(dir); err != nil {
+			b.err = fmt.Errorf("starting Chrome: preparing its profile: %w", err)
+			b.guard.Close()
+			b.dropTmp()
+			return
+		}
+		opts = append(opts, chromedp.UserDataDir(dir))
 		if b.AllowPorts {
 			opts = append(opts, chromedp.Flag("explicitly-allowed-ports", restrictedPorts))
 		}
@@ -221,6 +247,7 @@ func (b *Browser) start() error {
 				b.err = fmt.Errorf("%w: %v", ErrNoSandbox, err)
 			}
 			b.cancel()
+			b.dropTmp()
 			return
 		}
 		if p := chromedp.FromContext(root).Browser.Process(); p != nil {
@@ -231,16 +258,26 @@ func (b *Browser) start() error {
 		if err := b.intercept(root); err != nil {
 			b.err = fmt.Errorf("starting Chrome: holding its requests to the scope: %w", err)
 			b.cancel()
+			b.dropTmp()
 			return
 		}
 		if err := b.denyDownloads(root); err != nil {
 			b.err = fmt.Errorf("starting Chrome: refusing its downloads: %w", err)
 			b.cancel()
+			b.dropTmp()
 			return
 		}
 		b.root = root
 	})
 	return b.err
+}
+
+// dropTmp removes the temporary profile, once Chrome has stopped.
+func (b *Browser) dropTmp() {
+	if b.tmp != "" {
+		_ = os.RemoveAll(b.tmp)
+		b.tmp = ""
+	}
 }
 
 // Close stops Chrome, and waits for what was handling its requests.
@@ -251,6 +288,7 @@ func (b *Browser) Close() {
 	if b.cancel != nil {
 		b.cancel()
 	}
+	b.dropTmp()
 	if b.guard != nil {
 		b.guard.Close()
 	}
