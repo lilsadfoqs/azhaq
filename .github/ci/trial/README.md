@@ -36,8 +36,8 @@ estate serves its zone (`-zone`): at 127.0.0.1:5301 or :5302, as given to the
 reviewer, and on port 53 (UDP and TCP) of its name servers, so a zone transfer
 asked of the zone's own name servers stays inside the company's range (the
 binary has `cap_net_bind_service`; the fence allows those addresses on port
-53). The resolver refuses a transfer unless the estate planted the Vulhub
-BIND that allows one. `up.py` starts everything and
+53). The company's name servers always refuse a transfer; a planted Vulhub
+BIND that allows one serves its own zone on its own host. `up.py` starts everything and
 records which probes answered in the key; the grader leaves out what was not up.
 
 azhaq's latest release is installed into the reviewer's workspace (`./bin/azhaq`)
