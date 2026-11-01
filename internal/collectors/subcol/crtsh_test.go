@@ -248,7 +248,7 @@ func TestCrtshFullPageRestFallsBack(t *testing.T) {
 // A database that does not answer the limited query leaves most of the
 // source's time to the JSON API: the query is cut at a quarter of it.
 func TestCrtshSlowDatabaseLeavesTimeForJSON(t *testing.T) {
-	var qdl time.Time
+	qdls := make(chan time.Time, 1) // the query is left running: its deadline comes back on a channel
 	var jsonLeft time.Duration
 	c := New(Options{Client: &http.Client{Transport: rtFunc(func(r *http.Request) (*http.Response, error) {
 		dl, _ := r.Context().Deadline()
@@ -258,7 +258,8 @@ func TestCrtshSlowDatabaseLeavesTimeForJSON(t *testing.T) {
 	sess := &subscraping.Session{Client: c.opts.Client, RequestLimiter: c.limiter, Timeout: 5}
 	old := crtshQuery
 	crtshQuery = func(ctx context.Context, _ string, _ *url.URL, _ time.Duration, _ int) ([]string, int, error) {
-		qdl, _ = ctx.Deadline()
+		dl, _ := ctx.Deadline()
+		qdls <- dl
 		<-ctx.Done() // never answers
 		return nil, 0, ctx.Err()
 	}
@@ -270,7 +271,7 @@ func TestCrtshSlowDatabaseLeavesTimeForJSON(t *testing.T) {
 	if err != nil || len(names) == 0 || names[0] != "j.example.org" {
 		t.Fatalf("names %v, err %v", names, err)
 	}
-	if took := qdl.Sub(start); took > 2500*time.Millisecond {
+	if took := (<-qdls).Sub(start); took > 2500*time.Millisecond {
 		t.Errorf("the limited query was given %s of 8 s", took)
 	}
 	if jsonLeft < 5*time.Second {

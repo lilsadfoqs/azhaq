@@ -68,10 +68,11 @@ func crtshDatabase(ctx context.Context, domain string, client *http.Client, shar
 		err   error
 	}
 	done := make(chan result, 1)
+	query := crtshQuery // the goroutine may outlive this call
 	go func() {
 		defer guard.Recover(ctx)
 		var r result
-		r.names, r.rows, r.err = crtshQuery(qctx, domain, via, budget, limit)
+		r.names, r.rows, r.err = query(qctx, domain, via, budget, limit)
 		done <- r
 	}()
 	select {
