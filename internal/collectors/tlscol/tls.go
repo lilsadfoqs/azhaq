@@ -105,6 +105,11 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		if neterr.UnknownHost(err) || isIP {
 			return types.RunMeta{Status: types.StatusOK}, nil // most addresses of a network serve no TLS
 		}
+		if neterr.Refused(err) {
+			// The host is up and nothing listens on 443: a name whose service
+			// is on another port has no certificate here, which no one asked for.
+			return types.RunMeta{Status: types.StatusOK}, nil
+		}
 		return types.RunMeta{Status: types.StatusError, Error: err.Error()}, err
 	}
 	defer conn.Close()

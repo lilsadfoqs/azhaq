@@ -316,10 +316,12 @@ type groupFailure struct {
 	err error
 }
 
-// guessed: the seed is a name or address given with no port, and no
-// -web-ports says where to look, so the ports tried are a guess.
+// guessed: the seed is a name or address, given with no port or met on the
+// way (the host of a URL with its own port, a name a source found), and no
+// -web-ports says where to look, so 443 and 80 are a guess: a refusal there
+// says the host has no web service on them, not that a target failed.
 func (c *Collector) guessed(seed types.Seed) bool {
-	return seed.Keys[types.BareKey] != "" && c.Spec == nil && len(c.Ports) == 0
+	return (seed.Keys[types.BareKey] != "" || seed.Type != types.TypeURL) && c.Spec == nil && len(c.Ports) == 0
 }
 
 // FallbackKey on a URL seed asks for the same URL over plain HTTP when the
