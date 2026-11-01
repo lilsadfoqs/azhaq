@@ -42,7 +42,6 @@ NEUTRAL = ["dev-03", "tools", "internal", "stg-02", "app1", "portal", "legacy", 
 DANGLING_NAMES = ["assets", "status", "help", "cdn", "static", "docs-old", "shop-old", "media", "careers", "events"]
 DANGLING_TARGETS = ["azurewebsites.net", "azureedge.net", "trafficmanager.net", "cloudapp.net", "blob.core.windows.net"]
 SUBZONES = ["dev", "stg"]
-AXFR_ENV = "dns--dns-zone-transfer"
 PORT_POOL = [8000, 8008, 8081, 8088, 8090, 8181, 8888, 9000, 9090, 9999, 7000, 18080, 3000, 5000, 4443, 8443]
 
 
@@ -238,9 +237,9 @@ def build_estate(idx, entries, cat, rng, args, domain, net, dns_port, taken_hidd
                       "summary": "reverse proxy; routes the other names by Host and answers 404 for any other",
                       "ports": [{"port": 80, "protocol": "http", "primary": True}], "aliases": [apex.rstrip(".")]})
     conf = proxy_conf(proxy_addr, [(h, e, haddr) for h, e, haddr in vhost_routes(key_hosts, plan_envs, vhosted)])
-    # The name servers refuse a transfer unless the estate planted a BIND that allows one.
-    axfr = any(e["id"] == AXFR_ENV for e in entries)
-    zone_doc = {"axfr": axfr, "zones": {apex: zs}}
+    # The company's name servers refuse a transfer: a planted BIND that allows
+    # one serves its own zone on its own host, which is what the key lists.
+    zone_doc = {"axfr": False, "zones": {apex: zs}}
     ptr_origin = "%s.in-addr.arpa." % ".".join(reversed(base.split(".")))
     if ptr:
         zone_doc["ptr"] = {ptr_origin: dict(ptr, **{"@": [

@@ -343,18 +343,15 @@ class Build(unittest.TestCase):
             self.assertEqual(d["ns"], [n["address"] for n in est["ns"]])
             self.assertEqual(d["listen"], est["dns"])
 
-    def test_name_servers_refuse_a_transfer_unless_the_estate_planted_one(self):
-        planted = 0
+    def test_name_servers_refuse_a_transfer(self):
+        # Even beside a planted BIND that allows one: that BIND has its own zone and host.
         for seed in ("unit-1", "d", "n"):
             out = os.path.join(self.tmp, "x-" + seed)
             build.main([seed, "--out", out])
             key = json.load(open(os.path.join(out, "key.json")))
-            for i, est in enumerate(key["estates"], 1):
-                has = any(h.get("env") == build.AXFR_ENV for h in est["hosts"])
-                planted += has
+            for i, _ in enumerate(key["estates"], 1):
                 z = json.load(open(os.path.join(out, "zone-%d.json" % i)))
-                self.assertEqual(z["axfr"], has, (seed, i))
-        self.assertGreater(planted, 0, "no seed here planted the zone-transfer environment")
+                self.assertFalse(z["axfr"], (seed, i))
 
     def test_vhosts_dangling_and_names(self):
         for est in self.key["estates"]:
