@@ -127,23 +127,16 @@ func (t *healthTally) result() *sourceHealth {
 // failures is how many asks failed, off-by-default ones included.
 func (h *sourceHealth) failures() int { return h.Failed + h.OffByDefaultFailed }
 
-// line is the sentence that says what exit 0 (or 3) means for the sources:
-// "23 of 33 sources answered, 10 failed (listed above); exit 0 because …".
-func (h *sourceHealth) line(exit int, ownFailures int, failOnErrors, archives bool) string {
+// line is the sentence that says what the exit code means for the sources:
+// "23 of 33 sources answered, 10 failed (listed above); exit 3 because …".
+func (h *sourceHealth) line(exit int, archives bool) string {
 	what := "sources"
 	if archives {
 		what = "archives"
 	}
 	s := fmt.Sprintf("%d of %d %s answered, %d failed (listed above)", h.Answered, h.Asked, what, h.failures())
-	switch {
-	case exit == exitPartial && ownFailures > 0 && failOnErrors:
-		s += "; exit 3 because -fail-on-errors counts every failed source"
-	case exit == exitPartial && ownFailures > 0 && archives:
-		s += "; exit 3 because an archive that failed is not made up for by the others: the URLs it holds may be missing"
-	case exit == exitOK:
-		s += "; exit 0 because other sources answered for the same domain (-fail-on-errors makes it 3)"
-	case exit == exitPartial && ownFailures > 0:
-		s += "; exit 3 because a failed source was not made up for by others answering for the same domain"
+	if exit == exitPartial {
+		s += "; exit 3 because a failed source is a failure even when others answered for the same domain: the names they gave stand, and the failed source's may be missing"
 	}
 	return s
 }

@@ -240,27 +240,27 @@ Each line has its time, its class, the URL or `ip:port`, the host, the scope rul
 
 ## Failures: fan-out, partial and degraded
 
-A failure is work that did not get its answer. Exit code 3 says some failed: see [exit codes](OUTPUT.md#exit-codes). Fan-out and partial failures are still listed, but they do not make the exit code 3.
+A failure is work that did not get its answer. Exit code 3 says some failed: see [exit codes](OUTPUT.md#exit-codes). Every failure makes it 3, fan-out and partial ones included, and exit 0 means none failed. `-fail-on-errors` is accepted and is the default; no flag turns a failure into exit 0.
 
 ### Fan-out
 
 Fan-out is what you did not ask about. It is a name found on the way, and the third-party lookups (subdomain sources, archives, RDAP) of a domain that is only the domain of a URL you mapped.
 
-- A failure there is listed with `"fanout": true`. The exit code stays 0, because the map of what you asked about is still complete.
+- A failure there is listed with `"fanout": true`, so you can see it is not your target. The exit code is 3 all the same: the lookup did not get its answer.
 - Ask for the domain itself (`-domain`, `subs -d`, `urls -d`) and its failures count.
 
 ### Partial
 
 A failure is partial when one source failed while other sources answered for the same domain.
 
-- It is listed with `"partial": true`. The exit code stays 0. Sources fail all the time, and an exit code that is always 3 says nothing.
+- It is listed with `"partial": true`, which says the names other sources gave stand. The exit code is 3: a source that did not answer is a failure, and a pipeline that wants to go on anyway reads the summary, not the exit code.
 - crt.sh holds the most names of any certificate log, but it is also the flakiest: gateway 5xx are common. A run that got its names from other sources should not fail a CI gate over a transient crt.sh failure. The failure is still listed.
-- The summary's `sources` block and its last line say how many sources answered and which failed. Exit 0 is then not read as "all answered".
-- `-fail-on-errors` counts every failure, crt.sh's among them.
+- The summary's `sources` block and its last line say how many sources answered and which failed.
+- crt.sh is among them: its transient 5xx makes the run exit 3, and a retry (`azhaq resume`) asks it again.
 
 ### Degraded
 
-A run is degraded when every source or archive failed, so an empty answer is not an honest zero. `subs` also sets `degraded` when a source in the default set failed while others answered. Its names are listed, and the exit code does not change. The field is described in [OUTPUT](OUTPUT.md#the-summary).
+A run is degraded when every source or archive failed, so an empty answer is not an honest zero. `subs` also sets `degraded` when a source in the default set failed while others answered. Its names are listed, and the exit code is 3. The field is described in [OUTPUT](OUTPUT.md#the-summary).
 
 ### Which DNS answers are failures
 

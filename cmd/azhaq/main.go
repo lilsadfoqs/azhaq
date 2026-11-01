@@ -279,7 +279,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	verbose := fs.Bool("v", false, "print a line for every finished task, not only failures")
 	timeout := fs.Duration("timeout", 0, "stop after this long and keep what was found; azhaq resume continues (0: no limit)")
 	showObs := fs.Bool("obs", false, "also print the observation log")
-	failErrs := fs.Bool("fail-on-errors", false, "exit 3 on every failure: also fan-out (a source for the domain of a URL) and a source that failed while others answered")
+	fs.Bool("fail-on-errors", false, "accepted, and the default: every failure exits 3, a fan-out one and a source that failed while others answered included; no flag turns a failure into exit 0")
 	failCapped := fs.Bool("fail-on-capped", false, "exit 4 also when the run hit -depth with hints left")
 	passive := fs.Bool("passive", false, "skip HTTP/crawl/JS/paths/TLS (no handshake to the target)")
 	depth := fs.Int("depth", 4, "max fan-out waves (0 = seed wave only, not unlimited)")
@@ -686,7 +686,6 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		}
 	}
 	budgets := engine.DefaultBudgets()
-	budgets.FailOnErrors = *failErrs
 	budgets.FailOnCapped = *failCapped
 	budgets.Passive = *passive
 	budgets.Scope = rules
@@ -1370,12 +1369,6 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		}
 		if *failCapped && stats.Capped {
 			rep.Stopped = fmt.Sprintf("-depth %d reached with hints left", stats.Depth)
-		}
-	}
-	if *failErrs {
-		for i := range rep.Failed {
-			rep.Failed[i].Fanout = false
-			rep.Failed[i].Partial = false
 		}
 	}
 	if remember && !*demo && input != "" {

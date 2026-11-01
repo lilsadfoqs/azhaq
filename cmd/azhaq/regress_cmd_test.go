@@ -392,7 +392,7 @@ func TestRegressMAP29HTMLReportCountsServices(t *testing.T) {
 	}
 }
 
-// SUB-05: a subs run that exits 0 while sources failed says so on the
+// SUB-05: a subs run that exits 3 because sources failed says so on the
 // first line of its summary, not only in a field.
 func TestRegressSUB05DegradedIsOnTheFirstLine(t *testing.T) {
 	r := newReport("subs")
@@ -404,7 +404,7 @@ func TestRegressSUB05DegradedIsOnTheFirstLine(t *testing.T) {
 	var b strings.Builder
 	r.print(&b)
 	first, _, _ := strings.Cut(b.String(), "\n")
-	if r.Exit != exitOK || !strings.Contains(first, "DEGRADED: 7 of 38 sources failed") {
+	if r.Exit != exitPartial || !strings.Contains(first, "DEGRADED: 7 of 38 sources failed") {
 		t.Errorf("exit %d, first line %q", r.Exit, first)
 	}
 	r.Degraded = false
