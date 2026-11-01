@@ -4,6 +4,7 @@
 
 ### Changed
 
+- A flag that takes a value and is followed by another flag of the command is a usage error (exit 2, nothing sent): `run -screenshots -max-requests 50` took `-max-requests` as the screenshot folder and ran with no cap. Write `-flag=-value` for a value that starts with a dash.
 - `subs -live` lists a name that is only a CNAME, as `subfinder | dnsx -a -cname` does (v0.10.1 left it out): the row has `"cname_only": true` and no address, it is counted as `CNAME only` and is still in `results`, a note names how many there are, and one whose target is gone keeps its `takeover` lead.
 - `-allow HOST:PORT` (and `127.0.0.1:3001`, `[::1]:80`) now allows that host on that port only; an entry without a port still allows every port, and a port in `-deny` still denies the host on every port. Requests, redirects, links, script URLs, Chrome, port scans (TCP and UDP) and the commands an `azhaq mcp` server runs are refused before any connection; URLs left out for their port are listed under `skipped` and port scans count the ports they left out. Before, the port was dropped and the whole host was allowed. Write the host alone to keep that.
 - `-H` and `-header` are one flag on every command: `run` and `plan` take `-H`, and `probe`, `crawl`, `dirs`, `params`, `shots` and `fuzz` take `-header`; a secret header given either way is kept out of what resume stores.
@@ -23,6 +24,9 @@
 
 ### Fixed
 
+- A header that names a port is held to the `-allow HOST:PORT` rule like a URL: `-H 'Host: 127.0.0.1:5002'` under `-allow 127.0.0.1:3001` is refused with exit 2 and nothing sent, in every command, and `roles` no longer widens `-allow HOST:PORT` to the whole host for headers. Through an HTTP proxy, a plain-HTTP request names its URL in the request line, so a `Host` header can no longer send the proxy to another host or port (as curl `-x` does).
+- A link to another port of an `-allow HOST:PORT` host is outside the scope: `crawl` and `run` no longer print it as a result row (text, `-json`, `-jsonl`, stream); the summary's `skipped` names it and `crawl -do` lists it.
+- A page Chrome never requested (refused by `-deny-path` or the scope, or its tab never opened) gives its request count back, so the summary and the ledger agree on the requests of `-browser`, `-interact` and `-screenshots` runs.
 - `crawl -browser`, `run -browser`: a page whose scripts did not load as JavaScript (the network failed them, the server answered an error, or answered an HTML page where a script should be) is named in a `-browser:` note, with why; before, the app drew no menu and called no route, and the summary said only `0 clicks`. With 0 clicks the `-interact:` note adds the first error a script of the page threw.
 - `probe` with `-p` (or `-path`) now ends every input's port (path) as a row of its own, a failed one included, in text and JSON: before, one port answering hid the others' failures, and a name asked on several ports kept only the last port's error. The summary names each failed URL once.
 - `ingest` of naabu JSON now makes `Port` rows as azhaq's own scan does: `query -type Port`, the summary counts and the MCP tools list each open port, the lines naabu repeats fold into one row, and a naabu udp line is a udp port.
