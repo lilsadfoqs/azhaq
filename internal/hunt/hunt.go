@@ -56,9 +56,20 @@ type Row struct {
 	Type    string   `json:"type"`
 	Reasons []Reason `json:"reasons"`
 	Next    string   `json:"next"`
+	// Template is set on the row of an input the pages of an origin carry in
+	// common: the input, and on how many of the origin's pages.
+	Template *Template `json:"template,omitempty"`
 
 	scope   string
 	signals int // distinct signals, "new" not counted
+}
+
+// Template says a row is an origin's template input: on Pages of its Of
+// fetched pages.
+type Template struct {
+	Input string `json:"input"`
+	Pages int    `json:"pages"`
+	Of    int    `json:"of"`
 }
 
 // cand is a route template while its signals are collected.
@@ -71,6 +82,7 @@ type cand struct {
 	roleDir         string // and the -dir of the roles run that listed it
 	origin          string
 	fresh           bool
+	tmpl            *Template
 }
 
 type hunter struct {
@@ -78,8 +90,8 @@ type hunter struct {
 	cands     map[string]*cand
 	apiDoc    map[string]bool // entity IDs of API descriptions the run parsed
 	errs      map[string]errText
-	reflected map[string]bool // route keys with a parameter whose value came back
-	chrome    map[string]bool // origin and input name carried by most of the origin's pages
+	reflected map[string]bool        // route keys with a parameter whose value came back
+	chrome    map[string]*chromeInfo // origin and input name carried by most of the origin's pages
 	cut       time.Time
 	old       bool // some URL is older than the window: "new" tells rows apart
 }
@@ -110,6 +122,7 @@ func Build(in Input) []Row {
 			h.host(r)
 		}
 	}
+	h.templates()
 	h.secrets()
 	h.takeovers()
 	h.roles()
@@ -188,7 +201,7 @@ func (c *cand) row(db string) Row {
 	if len(rs) > 0 {
 		best = rs[0].Signal
 	}
-	return Row{Score: score, Key: c.display(), Type: c.typ, Reasons: rs, Next: c.next(db, best), scope: c.scope, signals: n}
+	return Row{Score: score, Key: c.display(), Type: c.typ, Reasons: rs, Next: c.next(db, best), Template: c.tmpl, scope: c.scope, signals: n}
 }
 
 // display is the key a row shows: the URL itself when only one was seen,

@@ -56,6 +56,7 @@ $ azhaq hunt -db app.db
 | `type` | `URL` or `Hostname`. |
 | `reasons` | An array of `{signal, detail}`, one per signal. |
 | `next` | The command to run next. [The next command](#the-next-command) says how it is chosen. |
+| `template` | Only on the row of an input the pages of an origin carry in common: `{"input", "pages", "of"}`, the input and how many of the origin's fetched pages carry it. |
 
 ### Signals
 
@@ -93,7 +94,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 - A row with no signal of its own is left out.
 - A row whose only signal is `new` never ranks.
 - Static assets, scripts, catch-all pages and pages that are gone are never rows.
-- An input name that most pages of an origin carry (at least 5 of them, and 40% of the origin's fetched pages) belongs to the site's template, such as a search box or a sign-in form in every page's header. It is no signal on each page that only carries it, so those pages are left out; the route it is sent to, and a route that takes it in its own query, keep it.
+- An input name that most pages of an origin carry belongs to the site's template, such as a search box or a sign-in form in every page's header. The rule: at least 5 of the origin's fetched pages carry the name, and at least 40% of them. The numbers come from the v0.12 hunter evidence, where one search box was 77 of the top 100 rows. The pages that only carry it have no signal for it and are left out. The input is not lost, since it can be the injection point: it is one row for each origin and name, on the page it was first seen on, with a reason such as `input q on 312 of 340 pages of http://host:8080 (the site's template)`, ranked by its own signals like any other input. Its `-json` row has `template: {input, pages, of}`. A route that takes the name in its own query keeps it as its own signal.
 
 ### Score and order
 

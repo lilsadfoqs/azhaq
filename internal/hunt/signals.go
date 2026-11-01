@@ -371,9 +371,10 @@ const (
 // by origin and name. Such a name says what the template holds, not what
 // each route takes: its own route, the form's action, is where it counts. A
 // name in the URL's own query is the route's.
-func chromeInputs(rows []engine.MapEntry) map[string]bool {
+func chromeInputs(rows []engine.MapEntry) map[string]*chromeInfo {
 	pages := map[string]map[string]bool{} // origin → route templates fetched
 	carry := map[string]map[string]bool{} // origin and name → route templates
+	first := map[string]engine.MapEntry{} // origin and name → the page it was first seen on
 	for _, r := range rows {
 		if r.Entity.Type != types.TypeURL || r.Coverage != "visited" || r.Status < 200 || r.Status >= 500 || staticURL(r) {
 			continue
@@ -397,16 +398,61 @@ func chromeInputs(rows []engine.MapEntry) map[string]bool {
 				carry[id] = map[string]bool{}
 			}
 			carry[id][key] = true
+			if f, ok := first[id]; !ok || r.Entity.FirstSeen.Before(f.Entity.FirstSeen) ||
+				r.Entity.FirstSeen.Equal(f.Entity.FirstSeen) && r.Entity.Key < f.Entity.Key {
+				first[id] = r
+			}
 		}
 	}
-	out := map[string]bool{}
+	out := map[string]*chromeInfo{}
 	for id, routes := range carry {
-		origin, _, _ := strings.Cut(id, "\x00")
+		origin, name, _ := strings.Cut(id, "\x00")
 		if n := len(routes); n >= chromeMin && n*100 >= len(pages[origin])*chromeShare {
-			out[id] = true
+			out[id] = &chromeInfo{origin: origin, name: name, pages: n, of: len(pages[origin]), first: first[id]}
 		}
 	}
 	return out
+}
+
+// chromeInfo is an input name the pages of an origin carry in common: on
+// how many of its fetched pages, and the page it was first seen on.
+type chromeInfo struct {
+	origin, name string
+	pages, of    int
+	first        engine.MapEntry
+}
+
+// templates gives each such input one row of its own: a site-wide search
+// box can be the way in, so it is listed once per origin, on the page it
+// was first seen on, ranked by what its name says, while the pages that
+// only carry it have no signal for it.
+func (h *hunter) templates() {
+	for _, ci := range h.chrome {
+		raw := ci.first.Entity.Key
+		c := h.get("URL", raw+"\x00template\x00"+ci.name, ci.first.Scope)
+		c.instances = []string{raw}
+		c.origin = ci.origin
+		c.tmpl = &Template{Input: ci.name, Pages: ci.pages, Of: ci.of}
+		detail := fmt.Sprintf("input %s on %d of %d pages of %s (the site's template)", ci.name, ci.pages, ci.of, ci.origin)
+		c.add("input", detail)
+		seen := map[string]bool{}
+		note := func(kind string) {
+			if kind != "id" && !seen[kind] {
+				seen[kind] = true
+				c.add("param-"+kind, detail)
+			}
+		}
+		for _, w := range engine.Watch(engine.MapEntry{Params: []string{ci.name}}) {
+			if i := strings.LastIndex(w, " ("); i > 0 {
+				note(strings.TrimSuffix(w[i+2:], ")"))
+			}
+		}
+		for _, k := range extraKinds {
+			if k.re.MatchString(ci.name) {
+				note(k.kind)
+			}
+		}
+	}
 }
 
 // own is the names of a route's input that its own page takes, not those
@@ -418,7 +464,7 @@ func (h *hunter) own(r engine.MapEntry, names []string) []string {
 	}
 	var out []string
 	for _, n := range names {
-		if _, inQuery := u.Query()[n]; inQuery || !h.chrome[u.Scheme+"://"+u.Host+"\x00"+n] {
+		if _, inQuery := u.Query()[n]; inQuery || h.chrome[u.Scheme+"://"+u.Host+"\x00"+n] == nil {
 			out = append(out, n)
 		}
 	}
