@@ -95,7 +95,7 @@ jobs:
         # Six shards, packed by .github/ci/test-times.json (shard.py has the rules).
         shard: [0, 1, 2, 3, 4, 5]
     env:
-      CACHE_KEY: go-test-${{ runner.os }}-${{ matrix.shard }}
+      CACHE_KEY: go-test-linux-${{ matrix.shard }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -117,7 +117,7 @@ jobs:
           key: ${{ env.CACHE_KEY }}-${{ github.sha }}
           restore-keys: |
             ${{ env.CACHE_KEY }}-
-            go-test-${{ runner.os }}-
+            go-test-linux-
       - name: test
         # Nightly and manual runs pass --fresh (-count=1): a kept result never hides a flaky test.
         run: python3 .github/ci/shard.py --shards 6 --index ${{ matrix.shard }} ${{ (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.fresh)) && '--fresh' || '' }}
