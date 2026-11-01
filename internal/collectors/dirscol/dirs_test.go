@@ -473,3 +473,59 @@ func TestWordCountIsTheListsLength(t *testing.T) {
 		t.Errorf("WordCount allocates %v times", allocs)
 	}
 }
+
+// memoStore is a run's memos in memory.
+type memoStore struct {
+	mu sync.Mutex
+	m  map[string][]byte
+}
+
+func (s *memoStore) Recall(k string) ([]byte, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	v, ok := s.m[k]
+	return v, ok
+}
+
+func (s *memoStore) Remember(k string, v []byte) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.m[k] = v
+}
+
+// A resume answers the words it already has from its memos: they take no
+// pace slot, so at 1 request a second the stored part is replayed at once.
+func TestResumeDoesNotPaceStoredWords(t *testing.T) {
+	fetch.Reset()
+	defer fetch.Reset()
+	var hits atomic.Int64
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		http.NotFound(w, r)
+	}))
+	defer srv.Close()
+	var words []string
+	for i := 0; i < 30; i++ {
+		words = append(words, fmt.Sprintf("w%d", i))
+	}
+	fetch.Memos = &memoStore{m: map[string][]byte{}}
+	opts := Options{Words: words, Depth: 1, NoCalibration: true, Rate: 1000}
+	seed := types.Seed{Type: types.TypeURL, Keys: map[string]string{"url": srv.URL + "/"}}
+	if _, err := New(srv.Client(), opts).Run(context.Background(), seed, func(types.Observation) error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	if hits.Load() < 30 {
+		t.Fatalf("the first sweep asked %d words", hits.Load())
+	}
+	hits.Store(0)
+	opts.Rate = 1
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	t0 := time.Now()
+	if _, err := New(srv.Client(), opts).Run(ctx, seed, func(types.Observation) error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	if d := time.Since(t0); d > 2*time.Second || hits.Load() != 0 {
+		t.Errorf("a resume at -rate 1 took %s and sent %d requests for 30 stored words", d, hits.Load())
+	}
+}
