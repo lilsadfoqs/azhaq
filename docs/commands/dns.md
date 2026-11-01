@@ -224,6 +224,12 @@ The summary also lists failures per kind of error, and takeover candidates: a CN
 | `-silent` | bool |  | results only: no progress; the summary only when something failed (a source that failed, a takeover candidate as a [takeover] line on stderr); stdout stays one result per line |
 | `-v` | bool |  | print each name that got no records, with its status, on stderr |
 
+**Other**
+
+| Flag | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `-no-takeover` | bool |  | do not check CNAMEs for a takeover: no question is asked about the domain of a CNAME target, in scope or not |
+
 <details>
 <summary>Flags familiar from dnsx, other names and flags accepted with no effect (34)</summary>
 

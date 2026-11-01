@@ -109,6 +109,14 @@ type Pool struct {
 	TraceRoots []string
 	TracePort  string
 
+	// Outside says whether a domain is outside the run's scope; nil: the egress
+	// scope's. Registered counts the questions it asks about such domains.
+	Outside func(domain string) bool
+
+	askMu   sync.Mutex
+	asked   int      // registration questions about domains outside the scope
+	askedAt []string // the first few of those domains
+
 	mu    sync.Mutex
 	cache map[string]*entry
 	six   map[string]*entry // AAAA asked for names that have A records
@@ -374,8 +382,45 @@ func (p *Pool) ResolveMany(ctx context.Context, names []string, workers int) []A
 // answered, or anything but NXDOMAIN is (a failure is taken as existing,
 // so nothing is called free that may not be).
 func (p *Pool) Registered(ctx context.Context, domain string) bool {
+	p.noteAsk(domain)
 	m, err := p.Query(ctx, domain, dns.TypeSOA)
 	return err != nil || m.Rcode != dns.RcodeNameError
+}
+
+// noteAsk counts a question about a domain outside the scope.
+func (p *Pool) noteAsk(domain string) {
+	out := p.Outside
+	if out == nil {
+		out = func(d string) bool { return egress.HasScope() && !egress.Allows(d) }
+	}
+	if !out(domain) {
+		return
+	}
+	p.askMu.Lock()
+	defer p.askMu.Unlock()
+	p.asked++
+	if len(p.askedAt) < 3 && !slices.Contains(p.askedAt, domain) {
+		p.askedAt = append(p.askedAt, domain)
+	}
+}
+
+// TakeoverNote says how many questions the takeover check put to the
+// resolvers about CNAME targets outside the scope, "" when none: asking the
+// resolver is how the check tells a free domain from a taken one, and the
+// user should be told it left the scope. off is the flag that turns the
+// check off.
+func (p *Pool) TakeoverNote(off string) string {
+	p.askMu.Lock()
+	defer p.askMu.Unlock()
+	if p.asked == 0 {
+		return ""
+	}
+	s := "s"
+	if p.asked == 1 {
+		s = ""
+	}
+	return fmt.Sprintf("asked the resolver about %d CNAME target%s outside the scope for the takeover check (%s): %s turns the check off",
+		p.asked, s, strings.Join(p.askedAt, ", "), off)
 }
 
 // forget drops a cached answer so the next Resolve asks again.

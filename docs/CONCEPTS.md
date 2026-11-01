@@ -273,6 +273,7 @@ A takeover candidate is a name whose CNAME points at something gone, or whose fr
 - A cloud's shared suffix such as `elb.amazonaws.com` is no registry and never counts as an unregistered domain.
 - The Azure services for `dangling`: App Service, Cloud Services, CDN, API Management, Container Instances, HDInsight and Blob Storage.
 - azhaq reads DNS answers (`subs -live`, `dns`, `run`) and front pages (`probe`, `run`). Even a plain `subs -live` flags a candidate.
+- To tell a free domain from a taken one, the check asks your resolvers for the SOA of a CNAME target's registrable domain (a known hosting service is not asked). When that domain is outside the scope, the summary counts the questions in a note: `asked the resolver about N CNAME targets outside the scope for the takeover check`. `-no-takeover` (`run`, `dns`) turns the check off, and with it the question.
 - How a candidate is printed: see the `takeover` field in [OUTPUT](OUTPUT.md#the-summary).
 
 ## Access control (`azhaq roles`)

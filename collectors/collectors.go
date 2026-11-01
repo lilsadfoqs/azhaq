@@ -39,6 +39,7 @@ type Options struct {
 	BruteWords      []string // wordlist for azhaq-dns-brute (runs only with -dns-brute)
 	URLs            urlcol.Options
 	WebPorts        []int            // ports azhaq-http tries on each hostname; nil for 443 then 80
+	NoTakeover      bool             // azhaq-dns skips the takeover check (no question about a CNAME target's domain)
 	NoTech          bool             // skip technology fingerprints
 	Probe           bool             // azhaq-http answers like httpx: no catch-all check
 	NoFavicon       bool             // azhaq-http does not hash favicons
@@ -101,7 +102,7 @@ func Register(cat *catalog.Catalog, o Options) {
 		pool = dnsr.New(dnsr.Options{})
 	}
 	dnsc := dnscol.New(pool)
-	dnsc.KeepWild, dnsc.NoHints = o.HTTP != nil, o.HTTP != nil
+	dnsc.KeepWild, dnsc.NoHints, dnsc.NoTakeover = o.HTTP != nil, o.HTTP != nil, o.NoTakeover
 	cat.MustRegister(dnsc)
 	cat.MustRegister(&brutecol.Brute{Pool: pool, Wild: dnsc.Wild, Words: o.BruteWords})
 	cat.MustRegister(&brutecol.Permute{Pool: pool, Wild: dnsc.Wild})

@@ -496,3 +496,22 @@ func TestDefaultResolversLeaveSpecialUseNamesToTheSystem(t *testing.T) {
 		t.Fatalf("localhost: %+v", a)
 	}
 }
+
+// Registration questions about a domain outside the scope are counted, with
+// the domains, for the summary; a domain inside it is not.
+func TestRegisteredCountsQuestionsOutsideTheScope(t *testing.T) {
+	p := New(Options{Resolvers: []string{serve(t, testZone)}, PerSecond: -1, Timeout: time.Second})
+	p.Outside = func(d string) bool { return d != "example.org" }
+	ctx := context.Background()
+	p.Registered(ctx, "example.org")
+	if n := p.TakeoverNote("-no-takeover"); n != "" {
+		t.Fatalf("a domain inside the scope is noted: %s", n)
+	}
+	p.Registered(ctx, "gone.example.com")
+	p.Registered(ctx, "gone.example.com")
+	p.Registered(ctx, "other.example.net")
+	want := "asked the resolver about 3 CNAME targets outside the scope for the takeover check (gone.example.com, other.example.net): -no-takeover turns the check off"
+	if n := p.TakeoverNote("-no-takeover"); n != want {
+		t.Errorf("note %q, want %q", n, want)
+	}
+}

@@ -761,3 +761,63 @@ func TestDNSTransferStaysInTheScopeByAddress(t *testing.T) {
 		t.Errorf("without a scope the zone's name server was not asked")
 	}
 }
+
+// serveDanglingSOA answers dangling.lab.zz with a CNAME to a name under a
+// registrable domain that does not exist, and counts what it is asked, the SOA questions apart.
+func serveDanglingSOA(t *testing.T, asked, soa *atomic.Int64) string {
+	t.Helper()
+	pc, err := net.ListenPacket("udp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := &dns.Server{PacketConn: pc, Handler: dns.HandlerFunc(func(w dns.ResponseWriter, r *dns.Msg) {
+		asked.Add(1)
+		m := new(dns.Msg)
+		m.SetReply(r)
+		q := r.Question[0]
+		if q.Qtype == dns.TypeSOA {
+			soa.Add(1)
+		}
+		name := strings.ToLower(q.Name)
+		if name == "dangling.lab.zz." && q.Qtype == dns.TypeA {
+			rr, _ := dns.NewRR("dangling.lab.zz. 60 IN CNAME app.gone-co.com.")
+			m.Answer = append(m.Answer, rr)
+		}
+		m.Rcode = dns.RcodeNameError
+		_ = w.WriteMsg(m)
+	})}
+	go srv.ActivateAndServe()
+	t.Cleanup(func() { srv.Shutdown() })
+	return pc.LocalAddr().String()
+}
+
+// The takeover check asks the user's resolver whether a CNAME target's
+// domain exists. That question about a domain outside the scope is counted
+// in the summary, with the flag that turns the check off; the flag stops it.
+func TestDNSCountsTakeoverQuestionsOutsideTheScope(t *testing.T) {
+	t.Chdir(t.TempDir())
+	var asked, soa atomic.Int64
+	addr := serveDanglingSOA(t, &asked, &soa)
+	_, rep, _ := dnsOut(t, "-d", "dangling.lab.zz", "-r", addr, "-a", "-j", "-allow", "lab.zz")
+	n := strings.Join(rep.Notes, "\n")
+	if !strings.Contains(n, "asked the resolver about 1 CNAME target outside the scope for the takeover check (gone-co.com): -no-takeover turns the check off") {
+		t.Errorf("the question outside the scope is not counted: %v", rep.Notes)
+	}
+	if len(rep.Takeover) != 1 {
+		t.Errorf("the dangling CNAME is not a finding: %+v", rep.Takeover)
+	}
+	// Inside the scope, or with no scope, there is nothing to say.
+	_, rep, _ = dnsOut(t, "-d", "dangling.lab.zz", "-r", addr, "-a", "-j", "-allow", "lab.zz", "-allow", "gone-co.com")
+	if strings.Contains(strings.Join(rep.Notes, "\n"), "takeover check") {
+		t.Errorf("a target inside the scope is noted: %v", rep.Notes)
+	}
+	// -no-takeover asks nothing about the target.
+	before := soa.Load()
+	_, rep, _ = dnsOut(t, "-d", "dangling.lab.zz", "-r", addr, "-a", "-j", "-allow", "lab.zz", "-no-takeover")
+	if len(rep.Takeover) != 0 || strings.Contains(strings.Join(rep.Notes, "\n"), "takeover check") {
+		t.Errorf("-no-takeover still checked: %+v %v", rep.Takeover, rep.Notes)
+	}
+	if got := soa.Load() - before; got != 0 {
+		t.Errorf("-no-takeover asked %d registration questions", got)
+	}
+}

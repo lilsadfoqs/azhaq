@@ -79,6 +79,7 @@ type dnsConf struct {
 	trace      bool
 	traceMax   int
 	noWildcard bool
+	noTakeover bool
 	wd         string
 	ptrHosts   bool // IPs are looked up (-ptr or -all)
 	stream     bool
@@ -154,6 +155,7 @@ func cmdDNS(args []string) error {
 	alias("auto-wildcard", "aw", "same as -auto-wildcard")
 	wd := fs.String("wildcard-domain", "", "also probe this zone for a wildcard (a zone the registrable domain does not reach, such as corp.internal)")
 	alias("wildcard-domain", "wd", "same as -wildcard-domain")
+	noTakeover := fs.Bool("no-takeover", false, "do not check CNAMEs for a takeover: no question is asked about the domain of a CNAME target, in scope or not")
 	noWild := fs.Bool("no-wildcard", false, "print names even when they only resolve because their zone has a wildcard")
 	proxyURL := fs.String("proxy", "", "send DNS through this socks5 proxy (socks5://host:port), over TCP")
 	inherit(fs, "resolvers", "dns-rate", "scope", "program", "allow", "deny", "ledger")
@@ -164,7 +166,7 @@ func cmdDNS(args []string) error {
 
 	cf := &dnsConf{selected: map[string]bool{}, axfr: *axfr, all: *all, resp: *resp, ro: *ro, json: c.json, omitRaw: *omitRaw,
 		raw: *raw, template: *tmpl, cdn: *cdn, asn: *asn, hosts: *hosts, trace: *trace, traceMax: *traceMax,
-		noWildcard: *noWild, verbose: *verbose, wd: normalize.Hostname(strings.TrimPrefix(*wd, "*.")), stream: *stream, start: *start}
+		noWildcard: *noWild, noTakeover: *noTakeover, verbose: *verbose, wd: normalize.Hostname(strings.TrimPrefix(*wd, "*.")), stream: *stream, start: *start}
 	if cf.json && cf.template != "" || cf.raw && cf.template != "" {
 		return usagef("-output-template cannot go with -json or -raw")
 	}
@@ -265,6 +267,7 @@ func cmdDNS(args []string) error {
 		attempts = 3
 	}
 	pool := dnsr.New(dnsr.Options{Resolvers: resolvers, PerSecond: rate, Burst: int(rate), Timeout: *timeout, Attempts: attempts, Proxy: *proxyURL})
+	pool.Outside = func(d string) bool { return cf.scoped && !cf.rules.Allows(d) }
 	if *hc {
 		return healthCheck(pool, c.json)
 	}
@@ -974,7 +977,7 @@ func shortDNSError(s string) string {
 
 // takeover notes a name whose CNAME points at what no longer exists.
 func (r *dnsRun) takeover(ctx context.Context, host string, d *dnsr.Data) *takeover.Finding {
-	if !r.cf.selected["a"] || len(d.CNAME) == 0 {
+	if !r.cf.selected["a"] || len(d.CNAME) == 0 || r.cf.noTakeover {
 		return nil
 	}
 	if rc, ok := d.Rcode(dns.TypeA); !ok || rc != dns.RcodeNameError {
@@ -1525,6 +1528,9 @@ func (r *dnsRun) summarize(ctx context.Context, args []string, maxtime float64) 
 	sort.Slice(r.takeovers, func(i, j int) bool { return r.takeovers[i].Host < r.takeovers[j].Host })
 	rep.Takeover = append(rep.Takeover, r.takeovers...)
 	rep.Notes = append(rep.Notes, r.axfrNotes...)
+	if n := r.pool.TakeoverNote("-no-takeover"); n != "" {
+		rep.Notes = append(rep.Notes, n)
+	}
 	if r.reservedN > 0 {
 		rep.Notes = append(rep.Notes, fmt.Sprintf("%d names (%s) are special-use or single labels: the system's resolver was asked, not the default public resolvers (name -r resolvers to ask them)", r.reservedN, strings.Join(r.reservedEg, ", ")))
 	}

@@ -424,6 +424,12 @@ Examples of what `notes` holds for a run:
 | `-fail-on-errors` | bool |  | exit 3 on every failure: also fan-out (a source for the domain of a URL) and a source that failed while others answered |
 | `-fail-on-capped` | bool |  | exit 4 also when the run hit -depth with hints left |
 
+**Other**
+
+| Flag | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `-no-takeover` | bool |  | do not check CNAMEs for a takeover: no question is asked about the domain of a CNAME target, in scope or not |
+
 <details>
 <summary>Flags accepted with no effect and rarely used flags (76)</summary>
 
