@@ -14,7 +14,7 @@ import json
 import re
 import sys
 
-LINE = re.compile(r"^bench: (?:(default|polite|once): (\w+)|claims: case (\d+)) took (\d+)s\s*$")
+LINE = re.compile(r"^bench: (?:(default|polite|once): ([\w.-]+(?:/[\w.-]+)?)|claims: case (\d+)) took (\d+)s\s*$")
 
 
 def parse(text):

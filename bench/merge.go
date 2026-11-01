@@ -83,6 +83,10 @@ func mergeRecords(paths []string, out string, expect []string) error {
 		}
 	}
 	all["checks"], all["runs"] = checks, runs
+	sortDomains(all)
+	if p, ok := all["polite"].(map[string]any); ok {
+		sortDomains(p)
+	}
 	if len(spans) > 0 {
 		all["units"] = spans
 	}
@@ -159,7 +163,7 @@ func mergeInto(dst, src map[string]any) {
 			continue
 		}
 		switch k {
-		case "checks", "runs":
+		case "checks", "runs", "domains": // domains: one row a unit, ordered after the join
 			a, _ := dst[k].([]any)
 			b, _ := v.([]any)
 			dst[k] = append(a, b...)
@@ -202,4 +206,20 @@ func recordName(date, commit string) string {
 		t = time.Now()
 	}
 	return t.UTC().Format("2006-01-02T150405") + "-" + commit + ".json"
+}
+
+// sortDomains puts the domain rows of a joined profile in the order of the
+// domain list, as one run writes them.
+func sortDomains(set map[string]any) {
+	rows, _ := set["domains"].([]any)
+	order := domainList()
+	idx := func(r any) int {
+		m, _ := r.(map[string]any)
+		d, _ := m["domain"].(string)
+		if i := slices.Index(order, d); i >= 0 {
+			return i
+		}
+		return len(order)
+	}
+	slices.SortStableFunc(rows, func(a, b any) int { return idx(a) - idx(b) })
 }

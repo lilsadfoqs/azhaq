@@ -257,8 +257,8 @@ func main() {
 	}
 
 	// Comparison sections: each profile in turn.
-	cmp := map[string]func(){
-		"apps": func() {
+	cmp := map[string]func(unit string){
+		"apps": func(string) {
 			cur.Apps = benchApps()
 			if *crapi && !polite() {
 				cur.Apps = append(cur.Apps, benchCrapi())
@@ -267,18 +267,21 @@ func main() {
 				appChecks(cur.Apps)
 			}
 		},
-		"dirs":     func() { cur.Dirs = benchDirs(local) },
-		"fuzz":     func() { cur.Fuzz = benchFuzz([]string{juiceURL, vampiURL}) },
-		"shots":    func() { cur.Shots = benchShots() },
-		"params":   func() { cur.Params = benchParams() },
-		"domains":  func() { cur.Domains = benchDomains() },
-		"urls":     func() { cur.URLs = benchURLs() },
-		"brute":    func() { cur.Brute = benchBrute() },
-		"dns":      func() { cur.DNS = benchDNS() },
-		"ports":    func() { cur.Ports = benchPorts() },
-		"services": func() { cur.Services = benchServices() },
-		"probe":    func() { cur.Probe = benchProbe(probeLocal) },
-		"notify":   func() { cur.Notify = benchNotify() },
+		"dirs":   func(string) { cur.Dirs = benchDirs(local) },
+		"fuzz":   func(string) { cur.Fuzz = benchFuzz([]string{juiceURL, vampiURL}) },
+		"shots":  func(string) { cur.Shots = benchShots() },
+		"params": func(string) { cur.Params = benchParams() },
+		"domains": func(u string) { // one domain a unit
+			_, d, _ := strings.Cut(u, "/")
+			cur.Domains = append(cur.Domains, benchDomain(d))
+		},
+		"urls":     func(string) { cur.URLs = benchURLs() },
+		"brute":    func(string) { cur.Brute = benchBrute() },
+		"dns":      func(string) { cur.DNS = benchDNS() },
+		"ports":    func(string) { cur.Ports = benchPorts() },
+		"services": func(string) { cur.Services = benchServices() },
+		"probe":    func(string) { cur.Probe = benchProbe(probeLocal) },
+		"notify":   func(string) { cur.Notify = benchNotify() },
 	}
 	for _, p := range profiles {
 		prof = p
@@ -289,12 +292,15 @@ func main() {
 			cur = rec.Polite
 		}
 		for _, name := range cmpSections {
-			if u := unitName(p, name); on(u, name) {
+			for _, u := range cmpUnitNames(p, name, false) {
+				if !on(u, name) {
+					continue
+				}
 				if docker {
 					ensureApps()
 				}
-				logf("%s: %s", p, name)
-				runUnit(u, cmp[name])
+				logf("%s: %s", p, strings.TrimPrefix(u, p+":"))
+				runUnit(u, func() { cmp[name](u) })
 			}
 		}
 	}
