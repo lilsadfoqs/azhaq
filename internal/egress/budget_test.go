@@ -131,3 +131,15 @@ func TestDepartedKeepsAHeldRequestOutUntilItLeaves(t *testing.T) {
 		t.Errorf("sent %d, departed %d, want 0", Sent(), Departed())
 	}
 }
+
+func TestTotalCountsOverResets(t *testing.T) {
+	Reset()
+	defer Reset()
+	from := Total()
+	Count(3)
+	Reset() // a command that resets between its parts
+	Count(2)
+	if Sent() != 2 || Total()-from != 5 {
+		t.Errorf("sent %d, total since %d, want 2 and 5", Sent(), Total()-from)
+	}
+}

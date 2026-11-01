@@ -49,6 +49,7 @@ type Policy struct {
 
 	maxReq atomic.Int64
 	sent   atomic.Int64
+	gone   atomic.Int64 // what sent held when Reset last put it back to zero, summed
 	held   atomic.Int64 // counted, and not yet known to have left (waiting for the pace, let go in Chrome)
 
 	paceMu sync.Mutex
@@ -117,7 +118,7 @@ func (p *Policy) Reset() {
 	p.allow, p.allowAddr, p.openHeaders, p.denyPath, p.onDenied, p.onPort, p.proxy, p.resolver, p.only = nil, nil, nil, nil, nil, nil, nil, nil, false
 	p.mu.Unlock()
 	p.maxReq.Store(0)
-	p.sent.Store(0)
+	p.gone.Add(p.sent.Swap(0))
 	p.held.Store(0)
 	p.SetRate(0)
 }

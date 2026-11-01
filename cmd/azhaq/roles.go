@@ -298,6 +298,11 @@ func cmdRoles(args []string) error {
 		defer closeLedger()
 		rearmKill = rearm
 	}
+	// What was sent is what the policy counted, over every part of the run:
+	// the role runs, Chrome's sign-ins, the replays, the redirect hops they
+	// followed. Each part's own count would miss some of them.
+	sentFrom := egress.Total()
+	counted := func() { rep.Requests = egress.Total() - sentFrom }
 	bodies = newBodyKeep()
 	defer func() { bodies = nil }()
 	rate := *rateFlag
@@ -351,6 +356,7 @@ func cmdRoles(args []string) error {
 	for i, r := range roles {
 		if r.cmd != "" {
 			if roles[i].headers, err = cmdHeaders(r); err != nil {
+				counted()
 				return rolesFailed(rep, *asJSON, err)
 			}
 			r = roles[i]
@@ -378,6 +384,7 @@ func cmdRoles(args []string) error {
 			rearmKill()
 			browser.OnLogin = nil
 			if err != nil {
+				counted()
 				return rolesFailed(rep, *asJSON, fmt.Errorf("role %s: %w", r.name, err))
 			}
 			roles[i].session = fetch.Extra.Clone()
@@ -386,7 +393,6 @@ func cmdRoles(args []string) error {
 			}
 			keepRunBodies(got, raw)
 			readBodies(got, raw, s, hostSet(hosts))
-			rep.Requests += egress.Sent() // the run's requests, and any the cache could not answer
 			absorb(rep, r.name, sub)
 		} else {
 			roles[i].session = headerOf(r.headers)
@@ -397,7 +403,6 @@ func cmdRoles(args []string) error {
 			urls, _ := h.gets(sc, hostSet(hosts))
 			histURLs = append(histURLs, urls...)
 			n, err := readHistoryURLs(roles[i], urls, got, raw, s, hostSet(hosts), rate, max(0, *replayMax-replayed))
-			rep.Requests += int64(n)
 			replayed += n
 			noteCap(rep, "history", err)
 		}
@@ -480,7 +485,6 @@ func cmdRoles(args []string) error {
 			}
 		}
 		n, err := replayAll(roles, answers, found, rank, own, rate, *replayMax, watch)
-		rep.Requests += int64(n)
 		replayed = n
 		rep.Notes = append(rep.Notes, watch.notes...)
 		noteCap(rep, "replay", err)
@@ -507,16 +511,14 @@ func cmdRoles(args []string) error {
 		holdDeny()
 		n, err := askControls(roles, rows, own, pages, refusalRE, max(0, *replayMax-replayed))
 		fetch.Reset()
-		rep.Requests += int64(n)
 		replayed += n
 		noteCap(rep, "controls", err)
 		rep.Notes = append(rep.Notes, bothWays(rows)...)
 		sortRows(rows)
 	}
-	notes, warn, asked := sessionNotes(roles, rows, expired, own)
+	notes, warn, _ := sessionNotes(roles, rows, expired, own)
 	rep.Notes = append(rep.Notes, notes...)
 	rep.warned = rep.warned || warn
-	rep.Requests += int64(asked)
 	if methods != nil {
 		var reqs []writeReq
 		for _, h := range hist {
@@ -542,7 +544,6 @@ func cmdRoles(args []string) error {
 		} else {
 			var n int
 			wrows, n, err = replayWrites(roles, reqs, answers, own, rate, max(0, *replayMax-replayed), *writesCanary)
-			rep.Requests += int64(n)
 			replayed += n
 			noteCap(rep, "write replay", err)
 		}
@@ -577,6 +578,7 @@ func cmdRoles(args []string) error {
 		rep.Notes = append(rep.Notes, fmt.Sprintf("%d more endpoints compared and not listed (%s); -all lists them", n, strings.Join(parts, ", ")))
 	}
 	rep.Results, rep.Counts = len(shown), counts
+	counted()
 	if k := egress.Killed(); k != nil && rep.Stopped == "" {
 		// The replay's refusals are answers it could not get: the matrix is cut short.
 		var kf *neterr.Killed
