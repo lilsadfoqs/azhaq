@@ -233,9 +233,25 @@ func servicesLab() bool {
 				}
 			}
 		}
-		addCheck("services: every lab daemon serves before anything is timed", false, "not serving after %s: %v (the rows for them measure a lab that was not up)", servicesStartWait, names)
+		addCheck("services: every lab daemon serves before anything is timed", false, "not serving after %s: %v (the rows for them measure a lab that was not up)%s", servicesStartWait, names, daemonLogs(not))
 	}
 	return true
+}
+
+// daemonLogs is what the containers of the ports that never served last
+// said: a lab that is not up, with no log, cannot be told from a flaky image.
+func daemonLogs(ports []int) string {
+	var b strings.Builder
+	for _, p := range ports {
+		name, err := docker("ps", "-a", "--filter", fmt.Sprintf("publish=%d", p), "--format", "{{.Names}} {{.Status}}")
+		if err != nil || name == "" {
+			continue
+		}
+		container, _, _ := strings.Cut(name, " ")
+		logs, _ := docker("logs", "--tail", "12", container)
+		fmt.Fprintf(&b, " | %d: %s; last log lines: %s", p, name, strings.Join(strings.Fields(strings.ReplaceAll(logs, "\n", " ; ")), " "))
+	}
+	return clip(b.String(), 1500)
 }
 
 func nmapBin() string {
