@@ -3,8 +3,10 @@ package engine
 import (
 	"context"
 	"fmt"
+	"maps"
 	"net/url"
 	"os"
+	"slices"
 	"time"
 
 	"github.com/lilsadfoqs/azhaq/catalog"
@@ -236,7 +238,20 @@ func (s *scheduler) restore() error {
 			}
 		}
 	}
-	var again []string
+	// What the resume is told to leave out (-skip, -passive, an active
+	// technique without its flag) is left out of the tasks the stopped run
+	// kept as well: they end here, and the summary counts them.
+	var again, left []string
+	omitted := map[string]int{}
+	for _, r := range rows {
+		col, ok := s.e.Cat.Get(r.Collector)
+		if r.Done || !ok || s.allowed(col, normalize.Seed(r.Seed)) {
+			continue
+		}
+		delete(open[seedKey(normalize.Seed(r.Seed))], r.Collector)
+		omitted[r.Collector]++
+		left = append(left, r.ID)
+	}
 	for _, r := range rows {
 		col, ok := s.e.Cat.Get(r.Collector)
 		if r.Done || !ok {
@@ -244,6 +259,9 @@ func (s *scheduler) restore() error {
 		}
 		seed := normalize.Seed(r.Seed)
 		k := seedKey(seed)
+		if !s.allowed(col, seed) {
+			continue
+		}
 		t := task{col: r.Collector, seed: seed, depth: r.Depth, prio: r.Prio}
 		again = append(again, r.ID)
 		if after := catalog.InfoOf(col).After; after != "" && open[k][after] {
@@ -258,6 +276,12 @@ func (s *scheduler) restore() error {
 			continue
 		}
 		s.enqueue(t)
+	}
+	for _, name := range slices.Sorted(maps.Keys(omitted)) {
+		fetch.Note(fmt.Sprintf("%s: %d tasks the run left are not run, as this resume leaves the collector out (-skip, -passive, or an active technique without its flag)", name, omitted[name]))
+	}
+	if len(left) > 0 {
+		s.done = append(s.done, left...)
 	}
 	// A task that ran but whose end was not recorded runs again whole.
 	return s.e.Store.Forget(again)

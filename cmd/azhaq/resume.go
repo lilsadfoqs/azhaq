@@ -20,6 +20,9 @@ import (
 // values are not stored and are given again after -db:
 //
 //	azhaq resume -db app.db [-cookie session=… | -login-pass …] [-max-items 4096]
+//
+// What the resume is told to leave out (-skip, -passive) applies to the
+// tasks the run kept as well as to new ones.
 func cmdResume(args []string) error {
 	db := ""
 	var rest []string
@@ -100,12 +103,24 @@ func cmdResume(args []string) error {
 		// are the map's.
 		runArgs = slices.DeleteFunc(slices.Clone(runArgs), func(a string) bool { return a == "-quiet" })
 	}
+	runArgs, rest = mergeSkip(runArgs, rest)
 	// Later options win: what is given now overrides what was stored.
 	all := append(append(append([]string(nil), runArgs...), rest...), "-db", db, "-resume-run", id)
 	if command == "" {
 		command = "run"
 	}
 	return cmdRunAs(command, all)
+}
+
+// mergeSkip makes the -skip given to a resume add to the one the run was
+// started with: a collector it skipped stays skipped.
+func mergeSkip(stored, given []string) ([]string, []string) {
+	now, ok := flagValue(given, "skip")
+	was, had := flagValue(stored, "skip")
+	if !ok || !had || was == "" {
+		return stored, given
+	}
+	return dropFlag(stored, "skip"), append(dropFlag(given, "skip"), "-skip="+was+","+now)
 }
 
 // dropFlag is args without the flag name, as -name=value or -name value.

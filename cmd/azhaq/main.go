@@ -375,7 +375,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	}
 	graphql := fs.Bool("graphql", false, "read the schema of GraphQL endpoints with an introspection query (active; the targets given are the scope unless -allow)")
 	graphqlWordlist := fs.String("graphql-wordlist", "", "extra probe words (one per line), tried and recombined with the built-in ones when a GraphQL endpoint's introspection is off and its schema has to be recovered from validation errors")
-	skip := fs.String("skip", "", "collectors not to run, comma-separated (see azhaq plan)")
+	skip := fs.String("skip", "", "collectors not to run, comma-separated: azhaq-ports or ports, subs for the subdomain collector (azhaq plan lists them); a name that is none is an error; azhaq resume leaves out the tasks the run kept for them")
 	noPaths := fs.Bool("no-paths", false, "do not ask each web service for the 51 built-in paths (robots.txt, sitemaps, API descriptions, .git/HEAD, backup, admin, …): some programs count that as scanning")
 	knownFiles := fs.String("known-files", "", "ask each web service only for its robots.txt and sitemaps and read every entry (all, robotstxt or sitemapxml); replaces the 51 built-in paths")
 	proxyFlag := fs.String("proxy", "", "send requests to targets through this proxy (http://, https:// or socks5://); Chrome too (default: $HTTP_PROXY, $HTTPS_PROXY, except for loopback targets, which stay direct)")
@@ -708,7 +708,11 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	if *noPaths {
 		budgets.Skip["azhaq-paths"] = true
 	}
-	for _, name := range splitList(*skip) {
+	skipped, err := resolveSkip(splitList(*skip))
+	if err != nil {
+		return usagef("-skip: %v", err)
+	}
+	for _, name := range skipped {
 		budgets.Skip[name] = true
 	}
 	budgets.Active = map[string]bool{}
@@ -2268,6 +2272,32 @@ func readLines(r io.Reader) ([]string, error) {
 	for _, line := range strings.Split(string(raw), "\n") {
 		if line = strings.TrimSpace(line); line != "" && !strings.HasPrefix(line, "#") {
 			out = append(out, line)
+		}
+	}
+	return out, nil
+}
+
+// skipAliases are the names of commands that are not their collector's:
+// -skip subs reads as the subdomain collector.
+var skipAliases = map[string]string{"subs": "azhaq-subdomains", "subdomains": "azhaq-subdomains", "brute": "azhaq-dns-brute"}
+
+// resolveSkip turns the names of -skip into collector names: a collector's
+// own, or without its azhaq- prefix (ports, urls, dirs), or a command's
+// alias (subs). A name that is none of them is an error: a skip that skips
+// nothing would pass for one that did.
+func resolveSkip(names []string) ([]string, error) {
+	have := allCollectors()
+	var out []string
+	for _, n := range names {
+		switch {
+		case slices.Contains(have, n):
+			out = append(out, n)
+		case slices.Contains(have, "azhaq-"+n):
+			out = append(out, "azhaq-"+n)
+		case skipAliases[n] != "" && slices.Contains(have, skipAliases[n]):
+			out = append(out, skipAliases[n])
+		default:
+			return nil, fmt.Errorf("no collector is named %q (they are %s; the azhaq- prefix may be left off, and subs is the subdomain collector)", n, strings.Join(have, ", "))
 		}
 	}
 	return out, nil
