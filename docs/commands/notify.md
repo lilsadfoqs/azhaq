@@ -155,7 +155,7 @@ custom failed: POST http://host/…: 500 … (after 3 tries) ×4 (id ops)
 
 ### Secrets
 
-- A webhook URL is a secret. azhaq never prints it, and the ledger lists it by its host.
+- A webhook URL is a secret. azhaq never prints it, and the ledger lists it by its host. The host is not hidden: it is what names the hook that failed, and the lookup of it is on the network anyway. Keep the secret in the path, the query or the user part of the URL, or in the provider config, not in the host name.
 - No error holds a URL's path or query, or a token, key, password or header value of the config, even if the server repeats it. An error from a hook names the host and what went wrong.
 - A provider config keeps its tokens in the file. A word that starts with `$` in it is replaced by that environment variable.
 - `watch` keeps URLs off the command line too, where `ps` shows them to every user: `-notify @FILE` and `AZHAQ_NOTIFY` (see [watch](watch.md#notifications)).
