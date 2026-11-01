@@ -442,6 +442,8 @@ type portsSink struct {
 	scanned    float64 // addresses asked
 	unresolved int
 	silentUDP  bool // a row is open|filtered: the rows are not all open ports
+	open       int  // rows in the open state
+	filtered   int  // rows in the open|filtered state
 }
 
 func newPortsSink(out *portOut) *portsSink {
@@ -467,6 +469,7 @@ func (k *portsSink) settle(rep *report, sn bool) {
 	}
 	if k.silentUDP {
 		rep.what = "ports"
+		rep.Counts["open"], rep.Counts["open|filtered"] = k.open, k.filtered
 	}
 	if sn {
 		rep.what = "addresses up"
@@ -482,6 +485,14 @@ func (k *portsSink) visit(o types.Observation, print bool) {
 	add := func(r portRow) {
 		if print {
 			out.add(r)
+			k.mu.Lock()
+			switch r.State {
+			case "open":
+				k.open++
+			case "open|filtered":
+				k.filtered++
+			}
+			k.mu.Unlock()
 		}
 	}
 	p := payloadOf(o)

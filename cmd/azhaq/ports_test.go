@@ -165,6 +165,9 @@ func TestPortsListsSilentUDPPort(t *testing.T) {
 	if code != exitOK || sum["results"] != float64(1) || !strings.Contains(string(notes), "1 UDP port open|filtered: no reply and no ICMP port unreachable") {
 		t.Errorf("exit %d, summary %v", code, sum)
 	}
+	if c, _ := sum["counts"].(map[string]any); c["open"] != float64(0) || c["open|filtered"] != float64(1) {
+		t.Errorf("counts %v do not say open and open|filtered apart", sum["counts"])
+	}
 
 	out, _, _ = cli(t, "ports", "-host", "127.0.0.1", "-p", "none", "-pu", pu, "-connect-timeout", "200ms", "-silent")
 	if want := fmt.Sprintf("127.0.0.1:%d/udp open|filtered", port); strings.TrimSpace(out) != want {

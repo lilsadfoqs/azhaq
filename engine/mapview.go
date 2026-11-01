@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/trannghiach/azhaq/internal/normalize"
 	"github.com/trannghiach/azhaq/internal/webextract"
@@ -45,8 +46,12 @@ type MapEntry struct {
 	// input" when the route takes names and the request carried none.
 	Answer string `json:"answer,omitempty"`
 
-	// A port row: what answered on it, as the port scan named it.
+	// A port row: what answered on it, as the port scan named it, and its
+	// state: open, or open|filtered for a UDP port that neither answered
+	// nor was refused.
 	Service, Product, Version string
+	State                     string
+	at                        time.Time // a port row: when the scan that found it ran
 }
 
 // ProofScriptsOnly ends the proof of a route only scripts name, with no call to go by.
@@ -111,6 +116,7 @@ func BuildMap(ents []types.Entity, seeds []types.Seed, obs []types.StoredObserva
 	decl := declaredRoles(obs)
 	secured := securedHosts(obs)
 	out := make([]MapEntry, 0, len(ents))
+	portAt := map[string]int{}
 	for _, e := range ents {
 		rows := ownObs(e, byEnt[e.ID])
 		if e.Type == types.TypeURL {
@@ -207,7 +213,7 @@ func BuildMap(ents []types.Entity, seeds []types.Seed, obs []types.StoredObserva
 			}
 		}
 		out = append(out, m)
-		out = append(out, portRows(e, m.Scope, byEnt[e.ID])...)
+		out = addPortRows(out, portAt, portRows(e, m.Scope, byEnt[e.ID]))
 	}
 	sort.SliceStable(out, func(i, j int) bool {
 		ri, rj := mapRank(out[i], hosts, domains, ips), mapRank(out[j], hosts, domains, ips)

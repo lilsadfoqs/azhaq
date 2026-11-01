@@ -334,7 +334,11 @@ func fillReport(rep *report, path string, seeds []types.Seed, ents []types.Entit
 				counts["hostnames"]++
 			}
 		case types.TypePort:
-			counts["ports"]++
+			if r.State == "open|filtered" {
+				counts["open|filtered ports"]++
+			} else {
+				counts["ports"]++
+			}
 		}
 	}
 	for k, v := range counts {
@@ -382,6 +386,7 @@ func mapRowJSON(r engine.MapEntry) map[string]any {
 	set("evidence", r.Evidence, r.Evidence != "")
 	set("evidence_from", r.EvidenceFrom, len(r.EvidenceFrom) > 0)
 	set("title", r.Title, r.Title != "")
+	set("state", r.State, r.State != "")
 	set("service", r.Service, r.Service != "")
 	set("product", r.Product, r.Product != "")
 	set("version", r.Version, r.Version != "")

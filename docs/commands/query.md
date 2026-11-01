@@ -33,6 +33,8 @@ azhaq query -db app.db -failed
 
 The filters are `-type`, `-role`, `-coverage`, `-evidence`, `-status`, `-method`, `-host`, `-scope`, `-since`, `-new` and `-match`. Each takes the values listed in Flags. `-match` is a case-insensitive text match on the key, or a regular expression with `-re`.
 
+A port row (`-type Port`) has a `state` field: `open`, or `open|filtered` for a UDP port that neither answered nor was refused. The summary counts `open ports` and `open|filtered ports` apart, as nmap does, and a port is one row for each host, port and protocol.
+
 ## Output
 
 Plain output is the matching rows of the map. `-json` prints one JSON object per row.
@@ -87,7 +89,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 | Flag | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `-db` | string |  | the database (default: the last run's) |
-| `-fields` | string |  | print only these fields, comma-separated: key, type, role, coverage, status, answer, evidence, evidence_from, title, service, product, version, methods, params, body, scope, first_seen, found_in, watch, guard, protocol, namespace |
+| `-fields` | string |  | print only these fields, comma-separated: key, type, role, coverage, status, answer, evidence, evidence_from, title, state, service, product, version, methods, params, body, scope, first_seen, found_in, watch, guard, protocol, namespace |
 | `-json` | bool |  | one JSON object per row, and the summary as JSON on stderr |
 | `-limit` | int |  | rows at most, best first (default 0: all) |
 <!-- flags:end -->

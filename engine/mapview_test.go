@@ -2,9 +2,11 @@ package engine_test
 
 import (
 	"encoding/json"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/trannghiach/azhaq/engine"
 	"github.com/trannghiach/azhaq/types"
@@ -232,5 +234,33 @@ func TestMapJoinsThePortsOfImportedRows(t *testing.T) {
 	}, nil, false)
 	if len(got) != 1 || got[0].Proof != "open=[22 443 3001] via=azhaq,naabu" {
 		t.Errorf("both: %+v", got)
+	}
+}
+
+// A prefix's scan and the scan of an address in it list the same port: the
+// map has one row for each host, port and protocol, and its state is a field.
+func TestMapListsAPortOnceWithItsState(t *testing.T) {
+	ents := []types.Entity{
+		{ID: "net", Type: types.TypePrefix, Key: "127.0.0.0/30", FirstSeen: time.Unix(100, 0)},
+		{ID: "ip", Type: types.TypeIPAddress, Key: "127.0.0.1", FirstSeen: time.Unix(200, 0)},
+	}
+	scan := func(ent string, at int64, payload string) types.StoredObservation {
+		return types.StoredObservation{EntityID: ent, Observation: types.Observation{Collector: "azhaq-ports", Kind: "ports", ObservedAt: time.Unix(at, 0), Payload: json.RawMessage(payload)}}
+	}
+	payload := `{"host":"127.0.0.1","ip":"127.0.0.1","services":[{"port":80,"service":"http"}],"udp_services":[{"port":123,"state":"open|filtered","service":"ntp?"},{"port":53,"state":"open","service":"dns"}]}`
+	rows := engine.BuildMap(ents, nil, []types.StoredObservation{scan("net", 100, payload), scan("ip", 200, payload)}, nil, false)
+	states := map[string]string{}
+	for _, r := range rows {
+		if r.Entity.Type != types.TypePort {
+			continue
+		}
+		if _, dup := states[r.Entity.Key]; dup {
+			t.Errorf("%s is listed twice", r.Entity.Key)
+		}
+		states[r.Entity.Key] = r.State
+	}
+	want := map[string]string{"127.0.0.1:80/tcp": "open", "127.0.0.1:53/udp": "open", "127.0.0.1:123/udp": "open|filtered"}
+	if !reflect.DeepEqual(states, want) {
+		t.Errorf("port rows %v, want %v", states, want)
 	}
 }

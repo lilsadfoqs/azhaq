@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -88,5 +89,48 @@ func TestRunWebPortsOfABareAddress(t *testing.T) {
 	_, rep, code = runContract(t, "run", "-list", hostsFile(t, "127.0.0.1"), "-web-ports", shutPort, "-probe", "-sources", "none", "-db", "w2.db")
 	if code != exitPartial || len(rep.Unreachable) == 0 {
 		t.Errorf("a -web-ports port nothing listens on: exit %d, unreachable %v", code, rep.Unreachable)
+	}
+}
+
+// query counts the open ports and the open|filtered ones apart, each row
+// carries its state, and a port is one row.
+func TestQueryPortStatesAreApart(t *testing.T) {
+	port := portsServer(t)
+	pc, err := net.ListenPacket("udp", "127.0.0.1:0")
+	if err != nil {
+		t.Skip(err)
+	}
+	defer pc.Close()
+	go func() {
+		buf := make([]byte, 64)
+		for {
+			if _, _, err := pc.ReadFrom(buf); err != nil {
+				return
+			}
+		}
+	}()
+	udp := fmt.Sprint(pc.LocalAddr().(*net.UDPAddr).Port)
+	t.Chdir(t.TempDir())
+	if _, _, code := runContract(t, "run", "-list", hostsFile(t, "127.0.0.1"), "-ports", port, "-ports-udp", udp, "-sources", "none", "-db", "q.db"); code != exitOK {
+		t.Fatalf("run exit %d", code)
+	}
+	out, rep, code := runContract(t, "query", "-db", "q.db", "-type", "Port", "-fields", "key,state")
+	if code != exitOK {
+		t.Fatalf("query exit %d", code)
+	}
+	got := map[string]string{}
+	for _, r := range jsonRows(t, out) {
+		key, _ := r["key"].(string)
+		if _, dup := got[key]; dup {
+			t.Errorf("%s is listed twice:\n%s", key, out)
+		}
+		got[key], _ = r["state"].(string)
+	}
+	want := map[string]string{"127.0.0.1:" + port + "/tcp": "open", "127.0.0.1:" + udp + "/udp": "open|filtered"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("rows %v, want %v", got, want)
+	}
+	if rep.Counts["open ports"] != 1 || rep.Counts["open|filtered ports"] != 1 {
+		t.Errorf("counts %v do not say open and open|filtered apart", rep.Counts)
 	}
 }

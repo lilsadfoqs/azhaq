@@ -78,7 +78,7 @@ The map has one row per entity, best first: the target's own pages and APIs, the
 | `first_seen` | When the workspace first saw the entity. |
 | `guard` | What a client route's router checks before it draws the view. See [Client routes](#client-routes). |
 | `protocol`, `namespace` | `protocol` is `socket.io` for a socket.io endpoint; `namespace` is its namespace, when the app names one. See [WebSockets](#websockets). |
-| `service`, `product`, `version` | A port's row (`-ports`, `-ports-udp`): what answered on it, as `azhaq ports` prints it. `role` is `service`; `proof` has the state (`open`, `open\|filtered`), `tls` and the title or banner when no product was named. |
+| `service`, `product`, `version` | A port's row (`-ports`, `-ports-udp`): what answered on it, as `azhaq ports` prints it. `role` is `service`; `state` is `open` or `open\|filtered` (a UDP port that neither answered nor was refused); `proof` repeats it with `tls` and the title or banner when no product was named. |
 | `status`, `title` | The URL's own answer: the first hop of a redirect. See [Redirects](#redirects). |
 | `methods`, `params` | From API descriptions and call sites in scripts. See [Methods and parameters](#methods-and-parameters). |
 | `ops` | Each operation on the route: `method`, `query`, `path`, `header`, `body`, `body_type`, `auth`, `summary`, `operation_id`, `source`. See [Operations](#operations). |
@@ -93,7 +93,7 @@ The map has one row per entity, best first: the target's own pages and APIs, the
 
 The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.md#the-summary) and [exit codes](../OUTPUT.md#exit-codes). Two things are specific to `run`:
 
-- The summary counts `client routes` and `websockets` apart from `URLs`, and `ports` for the open ports that have a row.
+- The summary counts `client routes` and `websockets` apart from `URLs`, `ports` for the open ports that have a row and `open|filtered ports` for the UDP ports that neither answered nor were refused, never counted as open. A port is one row for each host, port and protocol, however many scans listed it.
 - A target given with no port (a name or an address) is asked on 443, then 80, or on `-web-ports`. A guess nothing listens on, refused, is a note (`no web service on 443 or 80`), not a failure; a `-web-ports` port that refuses is one.
 - It counts the path checks it skipped, as a note ([Path checks](#path-checks-stop-at-their-answer)).
 

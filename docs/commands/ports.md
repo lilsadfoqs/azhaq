@@ -203,6 +203,7 @@ A sysDescr that names Linux, Cisco IOS, JUNOS or Windows gives `product` and `ve
 - JSON rows have `"protocol":"udp"` and `"state"`. `-json` and `-csv` rows of a silent port have `"state":"open|filtered"`, and each is a result, counted in `results`.
 - Plain output lists `host:port/udp` for an open port and `host:port/udp open|filtered` for a silent one. The first field is the same, and `-silent` prints the same lines.
 - A closed port is not a result, because nmap lists closed ports only on request.
+- When any row is `open|filtered`, the summary counts `open` and `open|filtered` apart, so a silent port is never read as an open one.
 
 In a workspace, the `ports` row has these UDP fields:
 
