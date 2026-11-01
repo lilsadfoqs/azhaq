@@ -165,6 +165,97 @@ func TestProbeFailureRows(t *testing.T) {
 	}
 }
 
+// An address asked on several ports ends as one row for each port, a failed
+// one for each port that did not answer, and the summary names each failed
+// target once (httpx prints one row for every port it was given).
+func TestProbePortSweepHasARowForEveryPort(t *testing.T) {
+	t.Chdir(t.TempDir())
+	var up []string
+	for i := 0; i < 2; i++ {
+		site := newProbeSite(t)
+		up = append(up, strings.TrimPrefix(site.URL, "http://"))
+	}
+	closed := func() string {
+		l, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer l.Close()
+		return l.Addr().String()
+	}
+	// A listener that is not a web server closes every connection it takes.
+	mute, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { mute.Close() })
+	go func() {
+		for {
+			c, err := mute.Accept()
+			if err != nil {
+				return
+			}
+			c.Close()
+		}
+	}()
+	var ports []string
+	for _, a := range append(append(up, closed(), closed()), mute.Addr().String()) {
+		_, p, _ := net.SplitHostPort(a)
+		ports = append(ports, p)
+	}
+	out, rep, code := runContract(t, "probe", "-u", "127.0.0.1", "-p", strings.Join(ports, ","), "-probe")
+	rows := probeRows(t, out)
+	if len(rows) != len(ports) || code != exitPartial {
+		t.Fatalf("want %d rows and exit 3, got %d rows, exit %d\n%s", len(ports), len(rows), code, out)
+	}
+	failed, seen := 0, map[string]bool{}
+	for _, r := range rows {
+		if r["input"] != "127.0.0.1" {
+			t.Errorf("input %v", r["input"])
+		}
+		u := fmt.Sprint(r["url"])
+		if seen[u] {
+			t.Errorf("%s twice", u)
+		}
+		seen[u] = true
+		if r["failed"] == true {
+			failed++
+			if r["error"] == nil || r["port"] == nil {
+				t.Errorf("failed row %v", r)
+			}
+		}
+	}
+	if failed != 3 || rep.Counts["without an answer"] != 3 || rep.Results != len(ports) {
+		t.Errorf("failed %d, summary counts %v, results %d", failed, rep.Counts, rep.Results)
+	}
+	named := map[string]int{}
+	for _, f := range rep.Failed {
+		for _, tg := range f.Targets {
+			named[tg]++
+		}
+	}
+	if len(named) != 3 {
+		t.Errorf("the summary names %v, want the 3 failed targets once each", named)
+	}
+	for tg, n := range named {
+		if n != 1 || !seen[strings.TrimSuffix(tg, "/")] {
+			t.Errorf("summary target %s named %d times, not one of the rows %v", tg, n, seen)
+		}
+	}
+	// A name is asked on the same ports and ends the same way.
+	out, rep, code = runContract(t, "probe", "-u", "localhost", "-p", strings.Join(ports, ","), "-allow", "localhost", "-probe")
+	rows = probeRows(t, out)
+	failed = 0
+	for _, r := range rows {
+		if r["failed"] == true {
+			failed++
+		}
+	}
+	if len(rows) != len(ports) || failed != 3 || code != exitPartial || len(rep.Failed) == 0 {
+		t.Errorf("name: %d rows, %d failed, exit %d\n%s", len(rows), failed, code, out)
+	}
+}
+
 // A bare host:port nothing answers is named as httpx names it: by the
 // scheme asked last, in the row and in the summary's failed target, with
 // that try's error. A port that asks https first ends on http, one that
@@ -538,6 +629,42 @@ func TestProbePathJoinsTheURLsPathAndKeepsItsQuery(t *testing.T) {
 	got = ask(site.URL+"/", "/api")
 	if fmt.Sprint(got) != "[GET /api]" {
 		t.Errorf("root URL: %v", got)
+	}
+}
+
+// The requests below are what httpx 1.12 sent for the same inputs. The row
+// names the URL that was asked: httpx prints `/login?x=1` for a request it
+// sent to `/api/login?x=1`, a URL no request used.
+func TestProbePathRowNamesTheURLAsked(t *testing.T) {
+	t.Chdir(t.TempDir())
+	site := newProbeSite(t)
+	for _, c := range []struct{ in, path, want string }{
+		{"/api?x=1", "/login", "/api/login?x=1"},
+		{"/api?x=1", "login", "/api/login?x=1"},
+		{"/api?x=1", "/login?x=2", "/api/login?x=1&x=2"},
+		{"/api?x=1&y=1", "/login?y=9", "/api/login?x=1&y=1&y=9"},
+		{"/api?x=1", "?q=2", "/api?x=1&q=2"},
+		{"/api/?x=1", "/a/b", "/api/a/b?x=1"},
+		{"/api/login", "/login", "/api/login"},
+		{"/api", "/api/login", "/api/login"},
+		{"/blog/admin", "/blog", "/blog/admin/blog"},
+		{"/api", "/a b", "/api/a%20b"},
+	} {
+		site.mu.Lock()
+		site.seen = nil
+		site.mu.Unlock()
+		out, _, _ := runContract(t, "probe", "-u", site.URL+c.in, "-path", c.path)
+		rows := probeRows(t, out)
+		site.mu.Lock()
+		seen := append([]string(nil), site.seen...)
+		site.mu.Unlock()
+		if len(rows) != 1 || len(seen) != 1 || seen[0] != "GET "+c.want {
+			t.Errorf("%s -path %s: asked %v, want GET %s", c.in, c.path, seen, c.want)
+			continue
+		}
+		if rows[0]["url"] != site.URL+c.want || rows[0]["path"] != c.want {
+			t.Errorf("%s -path %s: row url %v path %v, want %s", c.in, c.path, rows[0]["url"], rows[0]["path"], c.want)
+		}
 	}
 }
 

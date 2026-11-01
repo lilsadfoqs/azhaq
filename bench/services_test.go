@@ -200,3 +200,42 @@ func TestFTPLabUserHasAHomeThatExists(t *testing.T) {
 		t.Errorf("USERS %q: the third field must be a folder under /home", users)
 	}
 }
+
+// The ftp lab's container must live as long as vsftpd does. The image's own
+// start backgrounds the daemon and lets pidproxy watch a pid taken with
+// `pgrep vsftpd | tail -n 1`, which can be a process that is gone two
+// seconds later: the container then exits 0 and the port never serves. The
+// lab runs vsftpd itself in the foreground; vsftpd reads its options in
+// order, so -obackground=NO must come after the config file that says YES.
+func TestFTPLabRunsVsftpdInTheForeground(t *testing.T) {
+	raw, err := os.ReadFile("services.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cfg struct {
+		Services map[string]struct {
+			Command []string `yaml:"command"`
+		} `yaml:"services"`
+	}
+	if err := yaml.Unmarshal(raw, &cfg); err != nil {
+		t.Fatal(err)
+	}
+	cmd := cfg.Services["ftp"].Command
+	if len(cmd) == 0 || cmd[0] != "vsftpd" {
+		t.Fatalf("ftp command %q: want vsftpd run by the lab, not the image's pidproxy start", cmd)
+	}
+	conf, bg := -1, -1
+	for i, a := range cmd {
+		switch {
+		case !strings.HasPrefix(a, "-"):
+			if i > 0 {
+				conf = i
+			}
+		case a == "-obackground=NO":
+			bg = i
+		}
+	}
+	if conf < 0 || bg < conf {
+		t.Errorf("ftp command %q: -obackground=NO must follow the config file (index %d, option at %d)", cmd, conf, bg)
+	}
+}
