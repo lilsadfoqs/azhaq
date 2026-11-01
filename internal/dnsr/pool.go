@@ -99,6 +99,7 @@ type Pool struct {
 	limit   *limit.Limiter
 	timeout time.Duration
 	retries int
+	paced   bool                 // PerSecond is set: the user's rate bounds the queries sent
 	x       *egress.DNSExchanger // sends the queries: the only code here that opens a connection
 	rtt     rtts                 // how long answers took, for when a query is late
 	proto   map[string]Server    // by key
@@ -262,6 +263,7 @@ func New(o Options) *Pool {
 		limit:   limit.New(o.PerSecond, cmpBurst(o)),
 		timeout: o.Timeout,
 		retries: o.Retries,
+		paced:   o.PerSecond > 0,
 		x:       egress.NewDNSExchanger(o.Timeout, o.Proxy),
 		cache:   map[string]*entry{},
 		six:     map[string]*entry{},
@@ -595,7 +597,8 @@ type reply struct {
 // has another, is one that is not asked (a second opinion). An attempt that
 // is late (see hedgeDelay) is not waited out: the next one is sent beside it
 // and the first answer wins, so a dropped datagram costs a fraction of the
-// timeout; an attempt that fails sends the next at once.
+// timeout (not under a pace: see below); an attempt that fails sends the
+// next at once.
 func (p *Pool) query(ctx context.Context, q *dns.Msg, avoid string) (*dns.Msg, string, error) {
 	if len(p.servers) == 0 {
 		return nil, "", errors.New("no resolvers")
@@ -642,7 +645,10 @@ func (p *Pool) query(ctx context.Context, q *dns.Msg, avoid string) (*dns.Msg, s
 	for len(waiting) > 0 {
 		select {
 		case n := <-sent:
-			if n == launched-1 && launched <= p.retries {
+			// Under a pace no attempt is hedged: a slow answer would be
+			// asked for two or three times, each a slot of the rate the user
+			// set, and a retry waits for the timeout as dnsx's does.
+			if n == launched-1 && launched <= p.retries && !p.paced {
 				hedge.Reset(p.hedgeDelay() << shift)
 			}
 			continue
