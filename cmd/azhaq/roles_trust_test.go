@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -173,6 +174,16 @@ func TestRolesRoleCmdFailsAtReplay(t *testing.T) {
 	_, _, sum, err := rolesJSON(t, site.URL, "-role", "anon", "-role-cmd", "alice="+cmd, "-role", "bob=Authorization: Bearer "+bob, "--", "-url", site.URL+"/")
 	if exitCode(err) != exitPartial || !strings.Contains(strings.Join(toStrings(sum["notes"]), "\n"), "it sends the token the role's run started with") {
 		t.Errorf("exit %d (%v), notes %q", exitCode(err), err, toStrings(sum["notes"]))
+	}
+}
+
+// An interrupted replay is a run stopped (exit 4), not a note and exit 0.
+func TestNoteCapInterrupted(t *testing.T) {
+	rep := newReport("roles")
+	noteCap(rep, "replay", fmt.Errorf("asking: %w", context.Canceled))
+	rep.settle()
+	if rep.Exit != exitLimit || !strings.HasPrefix(rep.Stopped, "interrupted: the replay stopped") || len(rep.Notes) != 1 {
+		t.Errorf("exit %d stopped %q notes %q", rep.Exit, rep.Stopped, rep.Notes)
 	}
 }
 

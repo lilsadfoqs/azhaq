@@ -847,7 +847,7 @@ func size(n int) string {
 var errReplayMax = errors.New("replay stopped by -replay-max")
 
 // noteCap records a replay stage's error as a note, and when it is a
-// -replay-max cap marks the run stopped by a limit (exit 4) so a clean
+// -replay-max cap or an interrupt marks the run stopped (exit 4) so a clean
 // exit 0 does not hide an access-control comparison that was cut short.
 func noteCap(rep *report, prefix string, err error) {
 	if err == nil {
@@ -856,6 +856,9 @@ func noteCap(rep *report, prefix string, err error) {
 	rep.Notes = append(rep.Notes, prefix+": "+err.Error())
 	if errors.Is(err, errReplayMax) && rep.Stopped == "" {
 		rep.Stopped = err.Error()
+	}
+	if errors.Is(err, context.Canceled) && rep.Stopped == "" {
+		rep.Stopped = "interrupted: the " + prefix + " stopped with requests left; the rows are what was compared before it"
 	}
 }
 

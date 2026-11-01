@@ -157,7 +157,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 - **Exit 3:** a control request got no answer. See [Negative controls](#negative-controls).
 - **Exit 3:** a replay read, a page of a role's history, a write, or the read of the owner's object after a write got no answer (a refused connect, a timeout). The role is then missing from that row, and a note says how many requests and why; a write row says it in `failed` and `evidence`. A request a `-deny-path` rule keeps out is not one.
 - **Exit 3:** a role's session failed its check during the replay and did not come back (`session_suspect` answers), or its `-role-cmd` failed when the replay asked for a new token.
-- **Exit 4:** a role's run was stopped by a limit. The summary marks it `stopped`.
+- **Exit 4:** a role's run was stopped by a limit, or the replay was interrupted (Ctrl-C) with requests left. The summary marks it `stopped`.
 - **Exit 2:** a header names a host outside the scope rule. Nothing is sent. See [Headers that name a host](#headers-that-name-a-host).
 - A role whose run could not be done, such as a failed sign-in, ends `roles` with a summary whose `notes` say why.
 - `requests` in the summary is every request `roles` sent to the targets: the roles' runs, the Chrome sign-ins (the first and each renewal), the replays and every redirect hop they followed. It equals the target lines of `roles.ledger.jsonl`. A role's own summary line counts that role's run only, so they add up to less.
