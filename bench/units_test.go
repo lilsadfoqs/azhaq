@@ -1,6 +1,7 @@
 package main
 
 import (
+	"os"
 	"slices"
 	"strings"
 	"testing"
@@ -97,5 +98,27 @@ func TestUnitsOneDomainEach(t *testing.T) {
 	}
 	if _, err := parseUnits("default:domains,polite:domains/nowhere.example"); err == nil {
 		t.Error("a domains unit without a domain, or of a domain not in the list, was accepted")
+	}
+}
+
+// A unit that runs alone must bring up the docker apps it measures: every
+// section whose file names an app of bench/compose.yaml needs them, or it
+// measures a refused connection (openapi once exported "0 paths" in a job
+// that held no section starting them).
+func TestUnitsStartTheAppsTheyUse(t *testing.T) {
+	for _, s := range sections {
+		raw, err := os.ReadFile(s + ".go")
+		if err != nil {
+			continue
+		}
+		src := string(raw)
+		if (strings.Contains(src, "juiceURL") || strings.Contains(src, "vampiURL")) && s != "apps" && !slices.Contains(dockerParts, s) {
+			t.Errorf("%s.go uses the docker apps but %q is not in dockerParts", s, s)
+		}
+	}
+	for _, s := range []string{"openapi", "probe", "dirs", "fuzz", "scope", "scale"} { // main.go hands them the apps
+		if !slices.Contains(dockerParts, s) {
+			t.Errorf("%q is not in dockerParts", s)
+		}
 	}
 }
