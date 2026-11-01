@@ -129,7 +129,7 @@ $ azhaq roles -role anon -role "alice=Authorization: Bearer $TA" -role "bob=Auth
   200:1.1k → 200:1.1k → 200:1.1k  http://localhost:5000/users/v1/_debug  [anyone reads sensitive fields: password]
 ```
 
-Each column is one role's answer as `status:bytes`, in the order the roles were given. A `-` is a role that was never asked.
+Each column is one role's answer as `status:size`, in the order the roles were given: the size is bytes up to 1k, then `1.1k` or `2.0M`; `200:refused` is the app's refusal page answered as a success, `200:err` an error answered as one, and a trailing `?` a session that may have ended. A `-` is a role that was never asked.
 
 Or give each account's browsing as it was saved, one file per account, with no headers to copy and no crawl: a HAR from the browser, Caido or Burp, or Burp's "Save items" XML. An anonymous role is added. The page on [`roles`](docs/commands/roles.md#history-files) says how each is used.
 

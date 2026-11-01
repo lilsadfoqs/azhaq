@@ -54,3 +54,27 @@ func TestDocsCountTheBuiltInPathsAsThePlanDoes(t *testing.T) {
 		}
 	}
 }
+
+// The README says how a cell of the roles table reads.
+func TestRolesTableCellsReadAsTheREADMESays(t *testing.T) {
+	for want, a := range map[string]answer{
+		"-":           {},
+		"401":         {Status: 401},
+		"200:79":      {Status: 200, Hash: "h", Length: 79},
+		"200:1.1k":    {Status: 200, Hash: "h", Length: 1126},
+		"200:2.0M":    {Status: 200, Hash: "h", Length: 2 << 20},
+		"200:err":     {Status: 200, Hash: "h", Length: 79, Error: true},
+		"200:refused": {Status: 200, Hash: "h", Length: 79, Refusal: true},
+		"200:79?":     {Status: 200, Hash: "h", Length: 79, SessionSuspect: true},
+	} {
+		if got := answerCell(a); got != want {
+			t.Errorf("answerCell(%+v) = %q, want %q", a, got, want)
+		}
+	}
+	readme := readDoc(t, "../../README.md")
+	for _, want := range []string{"as `status:size`", "`200:refused`", "A `-` is a role that was never asked"} {
+		if !strings.Contains(readme, want) {
+			t.Errorf("the README's roles example does not say %q", want)
+		}
+	}
+}
