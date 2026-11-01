@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- `-H` and `-header` are one flag on every command: `run` and `plan` take `-H`, and `probe`, `crawl`, `dirs`, `params`, `shots` and `fuzz` take `-header`; a secret header given either way is kept out of what resume stores.
+
+### Fixed
+
+- `crawl` and `run`: a page with two forms, where a select was left open in the first, no longer crashes the run with `index out of range`; the form reader forgets the select when a form opens or closes and at `</select>`.
+- A collector that panics, or a goroutine it started, now fails its task instead of ending the process: the panic and its first frames are in the summary's `failed` list, what the task found is kept, the other collectors finish, the ledger is sealed, and the run exits 3 with `complete: false`. Workers and Chrome's page loops are covered the same way; see TROUBLESHOOTING, "A failure that starts with `panic:`".
+- MCP `azhaq_status` reports a workspace from its database: a map the budget stopped is `stopped by a limit` with `tasks_left`, the `requests` it has sent and the `azhaq_resume` call, and a later query of the workspace no longer turns it `complete`.
+
 ## v0.11.0
 
 ### Changed
