@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/trannghiach/azhaq/internal/guard"
+	"github.com/lilsadfoqs/azhaq/internal/guard"
 	"math/rand/v2"
 	"net/url"
 	"os"
@@ -18,8 +18,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/trannghiach/azhaq/internal/neterr"
-	"github.com/trannghiach/azhaq/scope"
+	"github.com/lilsadfoqs/azhaq/internal/neterr"
+	"github.com/lilsadfoqs/azhaq/scope"
 )
 
 // Config is one run.

@@ -11,7 +11,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/trannghiach/azhaq/internal/ledger"
+	"github.com/lilsadfoqs/azhaq/internal/ledger"
 )
 
 // dnsLines is how many dns lines of the ledger at path name the

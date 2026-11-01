@@ -16,8 +16,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/trannghiach/azhaq/internal/fuzz"
-	"github.com/trannghiach/azhaq/store"
+	"github.com/lilsadfoqs/azhaq/internal/fuzz"
+	"github.com/lilsadfoqs/azhaq/store"
 )
 
 func fuzzServer(t *testing.T) *httptest.Server {

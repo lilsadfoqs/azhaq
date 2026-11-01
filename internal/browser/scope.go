@@ -2,7 +2,7 @@ package browser
 
 import (
 	"context"
-	"github.com/trannghiach/azhaq/internal/guard"
+	"github.com/lilsadfoqs/azhaq/internal/guard"
 	"net/url"
 	"slices"
 	"sort"
@@ -19,11 +19,11 @@ import (
 	"github.com/chromedp/cdproto/target"
 	"github.com/chromedp/chromedp"
 
-	"github.com/trannghiach/azhaq/internal/egress"
-	"github.com/trannghiach/azhaq/internal/fetch"
-	"github.com/trannghiach/azhaq/internal/ledger"
-	"github.com/trannghiach/azhaq/internal/webextract"
-	"github.com/trannghiach/azhaq/scope"
+	"github.com/lilsadfoqs/azhaq/internal/egress"
+	"github.com/lilsadfoqs/azhaq/internal/fetch"
+	"github.com/lilsadfoqs/azhaq/internal/ledger"
+	"github.com/lilsadfoqs/azhaq/internal/webextract"
+	"github.com/lilsadfoqs/azhaq/scope"
 )
 
 // Chrome is held to where plain HTTP may go: every request a page, a frame

@@ -6,9 +6,9 @@ import (
 	"slices"
 	"time"
 
-	"github.com/trannghiach/azhaq/internal/browser"
-	"github.com/trannghiach/azhaq/internal/webextract"
-	"github.com/trannghiach/azhaq/types"
+	"github.com/lilsadfoqs/azhaq/internal/browser"
+	"github.com/lilsadfoqs/azhaq/internal/webextract"
+	"github.com/lilsadfoqs/azhaq/types"
 )
 
 // WriteFacts is what the writes of page say: each route of its origin

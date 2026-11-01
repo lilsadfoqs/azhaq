@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/trannghiach/azhaq/internal/collectors/subcol"
+	"github.com/lilsadfoqs/azhaq/internal/collectors/subcol"
 )
 
 // stderrProgressEvery is how often a command that is still working says so on

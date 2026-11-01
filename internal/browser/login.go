@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/trannghiach/azhaq/internal/guard"
+	"github.com/lilsadfoqs/azhaq/internal/guard"
 	"regexp"
 	"sort"
 	"strings"
@@ -17,9 +17,9 @@ import (
 	"github.com/chromedp/cdproto/network"
 	"github.com/chromedp/chromedp"
 
-	"github.com/trannghiach/azhaq/internal/egress"
-	"github.com/trannghiach/azhaq/internal/fetch"
-	"github.com/trannghiach/azhaq/internal/neterr"
+	"github.com/lilsadfoqs/azhaq/internal/egress"
+	"github.com/lilsadfoqs/azhaq/internal/fetch"
+	"github.com/lilsadfoqs/azhaq/internal/neterr"
 )
 
 // Session is what signing in left in the browser.

@@ -11,12 +11,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/trannghiach/azhaq/engine"
-	"github.com/trannghiach/azhaq/internal/egress"
-	"github.com/trannghiach/azhaq/internal/ledger"
-	"github.com/trannghiach/azhaq/internal/neterr"
-	"github.com/trannghiach/azhaq/scope"
-	"github.com/trannghiach/azhaq/store"
+	"github.com/lilsadfoqs/azhaq/engine"
+	"github.com/lilsadfoqs/azhaq/internal/egress"
+	"github.com/lilsadfoqs/azhaq/internal/ledger"
+	"github.com/lilsadfoqs/azhaq/internal/neterr"
+	"github.com/lilsadfoqs/azhaq/scope"
+	"github.com/lilsadfoqs/azhaq/store"
 )
 
 const (

@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/trannghiach/azhaq/internal/egress"
+	"github.com/lilsadfoqs/azhaq/internal/egress"
 )
 
 // crtshStatement is subfinder's lookup; crtshLimit is its "LIMIT 10000"

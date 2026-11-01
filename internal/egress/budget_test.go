@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/trannghiach/azhaq/internal/neterr"
+	"github.com/lilsadfoqs/azhaq/internal/neterr"
 )
 
 func TestRatePacesRequests(t *testing.T) {

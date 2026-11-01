@@ -7,10 +7,10 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/trannghiach/azhaq/engine"
-	"github.com/trannghiach/azhaq/internal/webextract"
-	"github.com/trannghiach/azhaq/store"
-	"github.com/trannghiach/azhaq/types"
+	"github.com/lilsadfoqs/azhaq/engine"
+	"github.com/lilsadfoqs/azhaq/internal/webextract"
+	"github.com/lilsadfoqs/azhaq/store"
+	"github.com/lilsadfoqs/azhaq/types"
 )
 
 // routeChange is one change in an app's API surface between two runs, tied

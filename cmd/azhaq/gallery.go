@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/trannghiach/azhaq/internal/gallery"
+	"github.com/lilsadfoqs/azhaq/internal/gallery"
 )
 
 // cmdGallery serves a workspace's screenshots to a browser on this

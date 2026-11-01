@@ -21,8 +21,8 @@ import (
 
 	"github.com/andybalholm/brotli"
 
-	"github.com/trannghiach/azhaq/internal/egress"
-	"github.com/trannghiach/azhaq/internal/fetch"
+	"github.com/lilsadfoqs/azhaq/internal/egress"
+	"github.com/lilsadfoqs/azhaq/internal/fetch"
 )
 
 // Sender sends one request and describes the answer. keepBody says a

@@ -8,10 +8,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/trannghiach/azhaq/internal/neterr"
-	"github.com/trannghiach/azhaq/internal/normalize"
-	"github.com/trannghiach/azhaq/scope"
-	"github.com/trannghiach/azhaq/types"
+	"github.com/lilsadfoqs/azhaq/internal/neterr"
+	"github.com/lilsadfoqs/azhaq/internal/normalize"
+	"github.com/lilsadfoqs/azhaq/scope"
+	"github.com/lilsadfoqs/azhaq/types"
 )
 
 type Budgets struct {

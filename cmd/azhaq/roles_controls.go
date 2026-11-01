@@ -14,9 +14,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/trannghiach/azhaq/internal/egress"
-	"github.com/trannghiach/azhaq/internal/fetch"
-	"github.com/trannghiach/azhaq/internal/normalize"
+	"github.com/lilsadfoqs/azhaq/internal/egress"
+	"github.com/lilsadfoqs/azhaq/internal/fetch"
+	"github.com/lilsadfoqs/azhaq/internal/normalize"
 )
 
 // Negative controls: a role that reads another role's object is asked for

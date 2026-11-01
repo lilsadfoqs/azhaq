@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/trannghiach/azhaq/internal/fetch"
-	"github.com/trannghiach/azhaq/types"
+	"github.com/lilsadfoqs/azhaq/internal/fetch"
+	"github.com/lilsadfoqs/azhaq/types"
 )
 
 func TestParsePorts(t *testing.T) {

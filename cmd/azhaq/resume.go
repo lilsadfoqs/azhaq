@@ -3,15 +3,15 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/trannghiach/azhaq/internal/collectors/httpcol"
+	"github.com/lilsadfoqs/azhaq/internal/collectors/httpcol"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 
-	"github.com/trannghiach/azhaq/internal/collectors/dirscol"
-	"github.com/trannghiach/azhaq/internal/scopefile"
-	"github.com/trannghiach/azhaq/store"
+	"github.com/lilsadfoqs/azhaq/internal/collectors/dirscol"
+	"github.com/lilsadfoqs/azhaq/internal/scopefile"
+	"github.com/lilsadfoqs/azhaq/store"
 )
 
 // cmdResume continues the latest run of a database that has tasks left:

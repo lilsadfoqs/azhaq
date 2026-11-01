@@ -11,12 +11,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/trannghiach/azhaq/catalog"
-	"github.com/trannghiach/azhaq/internal/egress"
-	"github.com/trannghiach/azhaq/internal/fetch"
-	"github.com/trannghiach/azhaq/internal/normalize"
-	"github.com/trannghiach/azhaq/internal/timing"
-	"github.com/trannghiach/azhaq/types"
+	"github.com/lilsadfoqs/azhaq/catalog"
+	"github.com/lilsadfoqs/azhaq/internal/egress"
+	"github.com/lilsadfoqs/azhaq/internal/fetch"
+	"github.com/lilsadfoqs/azhaq/internal/normalize"
+	"github.com/lilsadfoqs/azhaq/internal/timing"
+	"github.com/lilsadfoqs/azhaq/types"
 )
 
 const Name = "azhaq-rdap"

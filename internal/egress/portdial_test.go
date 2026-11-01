@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/trannghiach/azhaq/internal/neterr"
+	"github.com/lilsadfoqs/azhaq/internal/neterr"
 )
 
 func listener(t *testing.T) (addr string, accepted *atomic.Int32) {

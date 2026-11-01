@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/trannghiach/azhaq/scope"
+	"github.com/lilsadfoqs/azhaq/scope"
 )
 
 func scopeRules(allow, deny []string) scope.Rules {

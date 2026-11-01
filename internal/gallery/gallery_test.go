@@ -21,8 +21,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/trannghiach/azhaq/store"
-	"github.com/trannghiach/azhaq/types"
+	"github.com/lilsadfoqs/azhaq/store"
+	"github.com/lilsadfoqs/azhaq/types"
 )
 
 type srv struct {

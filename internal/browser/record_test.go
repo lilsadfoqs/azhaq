@@ -11,8 +11,8 @@ import (
 
 	"github.com/chromedp/cdproto/network"
 
-	"github.com/trannghiach/azhaq/internal/egress"
-	"github.com/trannghiach/azhaq/internal/fetch"
+	"github.com/lilsadfoqs/azhaq/internal/egress"
+	"github.com/lilsadfoqs/azhaq/internal/fetch"
 )
 
 // A page that calls alert() on load is shot in moments, not when its

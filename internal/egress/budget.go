@@ -7,7 +7,7 @@ import (
 
 	"golang.org/x/time/rate"
 
-	"github.com/trannghiach/azhaq/internal/neterr"
+	"github.com/lilsadfoqs/azhaq/internal/neterr"
 )
 
 // SessionTick, when set, is asked about each request counted with Spend:

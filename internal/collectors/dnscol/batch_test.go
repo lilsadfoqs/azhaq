@@ -9,8 +9,8 @@ import (
 
 	"github.com/miekg/dns"
 
-	"github.com/trannghiach/azhaq/internal/dnsr"
-	"github.com/trannghiach/azhaq/types"
+	"github.com/lilsadfoqs/azhaq/internal/dnsr"
+	"github.com/lilsadfoqs/azhaq/types"
 )
 
 func zone(w dns.ResponseWriter, r *dns.Msg) {

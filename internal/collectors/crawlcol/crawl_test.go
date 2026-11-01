@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/trannghiach/azhaq/types"
+	"github.com/lilsadfoqs/azhaq/types"
 )
 
 func TestMarkdownLinksAreFollowed(t *testing.T) {

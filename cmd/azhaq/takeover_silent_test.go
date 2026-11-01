@@ -10,7 +10,7 @@ import (
 
 	"github.com/miekg/dns"
 
-	"github.com/trannghiach/azhaq/internal/collectors/subcol"
+	"github.com/lilsadfoqs/azhaq/internal/collectors/subcol"
 )
 
 // danglingZone answers like a resolver for a zone with one name whose CNAME

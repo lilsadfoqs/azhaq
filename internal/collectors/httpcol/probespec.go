@@ -14,8 +14,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/trannghiach/azhaq/internal/egress"
-	"github.com/trannghiach/azhaq/internal/fetch"
+	"github.com/lilsadfoqs/azhaq/internal/egress"
+	"github.com/lilsadfoqs/azhaq/internal/fetch"
 )
 
 // Spec is what azhaq probe asks of azhaq-http beyond a run's own probe:

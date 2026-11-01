@@ -19,7 +19,7 @@ import (
 
 	"golang.org/x/net/html"
 
-	"github.com/trannghiach/azhaq/scope"
+	"github.com/lilsadfoqs/azhaq/scope"
 )
 
 // Preflight and postflight (-preflight FILE, -postflight FILE) are ffuf's:

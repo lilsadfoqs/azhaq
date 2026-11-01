@@ -15,8 +15,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/trannghiach/azhaq/store"
-	"github.com/trannghiach/azhaq/types"
+	"github.com/lilsadfoqs/azhaq/store"
+	"github.com/lilsadfoqs/azhaq/types"
 )
 
 // The server answers the handshake, lists its tools with schemas, keeps

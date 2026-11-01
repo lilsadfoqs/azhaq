@@ -13,8 +13,8 @@ import (
 
 	"github.com/miekg/dns"
 
-	"github.com/trannghiach/azhaq/internal/ledger"
-	"github.com/trannghiach/azhaq/internal/neterr"
+	"github.com/lilsadfoqs/azhaq/internal/ledger"
+	"github.com/lilsadfoqs/azhaq/internal/neterr"
 )
 
 // fakeDNS answers every A question with 192.0.2.1 and counts what it got.

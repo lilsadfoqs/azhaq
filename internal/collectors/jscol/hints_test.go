@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/trannghiach/azhaq/catalog"
-	"github.com/trannghiach/azhaq/types"
+	"github.com/lilsadfoqs/azhaq/catalog"
+	"github.com/lilsadfoqs/azhaq/types"
 )
 
 // What the scripts name goes to the scheduler before the secrets are

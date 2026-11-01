@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/trannghiach/azhaq/internal/portscan"
+	"github.com/lilsadfoqs/azhaq/internal/portscan"
 )
 
 // udpScan is one address's UDP scan, shared by the names that point to it.

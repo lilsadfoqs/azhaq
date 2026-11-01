@@ -15,9 +15,9 @@ import (
 
 	"go.yaml.in/yaml/v3"
 
-	"github.com/trannghiach/azhaq/engine"
-	"github.com/trannghiach/azhaq/internal/ledger"
-	"github.com/trannghiach/azhaq/internal/notify"
+	"github.com/lilsadfoqs/azhaq/engine"
+	"github.com/lilsadfoqs/azhaq/internal/ledger"
+	"github.com/lilsadfoqs/azhaq/internal/notify"
 )
 
 // cmdNotify is projectdiscovery's notify: text from a file or a pipe, one

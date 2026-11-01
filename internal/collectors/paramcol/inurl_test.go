@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/trannghiach/azhaq/internal/fetch"
+	"github.com/lilsadfoqs/azhaq/internal/fetch"
 )
 
 func ownWhy(t *testing.T, got map[string]any) map[string]any {

@@ -2,7 +2,7 @@ package browser
 
 import (
 	"context"
-	"github.com/trannghiach/azhaq/internal/guard"
+	"github.com/lilsadfoqs/azhaq/internal/guard"
 	"slices"
 	"sync"
 	"sync/atomic"
@@ -10,7 +10,7 @@ import (
 
 	"github.com/chromedp/cdproto/network"
 
-	"github.com/trannghiach/azhaq/internal/egress"
+	"github.com/lilsadfoqs/azhaq/internal/egress"
 )
 
 // With a pace set (-rate), a page's requests wait their turn, so the

@@ -8,9 +8,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/trannghiach/azhaq/engine"
-	"github.com/trannghiach/azhaq/internal/gqlschema"
-	"github.com/trannghiach/azhaq/types"
+	"github.com/lilsadfoqs/azhaq/engine"
+	"github.com/lilsadfoqs/azhaq/internal/gqlschema"
+	"github.com/lilsadfoqs/azhaq/types"
 )
 
 // gqlEndpoint is a GraphQL endpoint whose schema was read by

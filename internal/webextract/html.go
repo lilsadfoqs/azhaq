@@ -7,7 +7,7 @@ import (
 
 	"golang.org/x/net/html"
 
-	"github.com/trannghiach/azhaq/internal/normalize"
+	"github.com/lilsadfoqs/azhaq/internal/normalize"
 )
 
 var skipScheme = map[string]bool{

@@ -37,7 +37,7 @@ func capture(v any) *PanicError {
 		f, more := fr.Next()
 		name := f.Function
 		if !strings.HasPrefix(name, "runtime.") && !strings.HasSuffix(f.File, "/internal/guard/guard.go") {
-			name = strings.TrimPrefix(name, "github.com/trannghiach/azhaq/")
+			name = strings.TrimPrefix(name, "github.com/lilsadfoqs/azhaq/")
 			file := f.File
 			if i := strings.LastIndex(file, "/"); i >= 0 {
 				file = file[i+1:]

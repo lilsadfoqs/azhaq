@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/trannghiach/azhaq/internal/egress"
+	"github.com/lilsadfoqs/azhaq/internal/egress"
 )
 
 // A page that saves a file as it loads (<a download>), and a URL that is

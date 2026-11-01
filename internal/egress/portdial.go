@@ -9,8 +9,8 @@ import (
 
 	"golang.org/x/net/proxy"
 
-	"github.com/trannghiach/azhaq/internal/ledger"
-	"github.com/trannghiach/azhaq/internal/neterr"
+	"github.com/lilsadfoqs/azhaq/internal/ledger"
+	"github.com/lilsadfoqs/azhaq/internal/neterr"
 )
 
 // PortDialer opens the TCP connections and UDP sockets of a port scan. Each

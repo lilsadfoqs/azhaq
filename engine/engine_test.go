@@ -10,14 +10,14 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/trannghiach/azhaq/catalog"
-	"github.com/trannghiach/azhaq/engine"
-	"github.com/trannghiach/azhaq/internal/collectors/crawlcol"
-	"github.com/trannghiach/azhaq/internal/collectors/fake"
-	"github.com/trannghiach/azhaq/internal/collectors/httpcol"
-	"github.com/trannghiach/azhaq/scope"
-	"github.com/trannghiach/azhaq/store"
-	"github.com/trannghiach/azhaq/types"
+	"github.com/lilsadfoqs/azhaq/catalog"
+	"github.com/lilsadfoqs/azhaq/engine"
+	"github.com/lilsadfoqs/azhaq/internal/collectors/crawlcol"
+	"github.com/lilsadfoqs/azhaq/internal/collectors/fake"
+	"github.com/lilsadfoqs/azhaq/internal/collectors/httpcol"
+	"github.com/lilsadfoqs/azhaq/scope"
+	"github.com/lilsadfoqs/azhaq/store"
+	"github.com/lilsadfoqs/azhaq/types"
 )
 
 func TestPlanLocatesFromCatalog(t *testing.T) {

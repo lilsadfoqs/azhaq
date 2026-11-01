@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/trannghiach/azhaq/internal/browser"
+	"github.com/lilsadfoqs/azhaq/internal/browser"
 )
 
 // countingProxy is a proxy that counts the requests it is asked for and

@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/trannghiach/azhaq/engine"
+	"github.com/lilsadfoqs/azhaq/engine"
 )
 
 // sourceHealth is the summary's answer to "did the sources answer": how

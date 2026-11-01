@@ -6,7 +6,7 @@ import (
 	"net/url"
 	"sort"
 
-	"github.com/trannghiach/azhaq/types"
+	"github.com/lilsadfoqs/azhaq/types"
 )
 
 // CatchAllNotes say which origins answered three or more URLs with the

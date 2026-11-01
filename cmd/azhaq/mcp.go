@@ -20,8 +20,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/trannghiach/azhaq/scope"
-	"github.com/trannghiach/azhaq/store"
+	"github.com/lilsadfoqs/azhaq/scope"
+	"github.com/lilsadfoqs/azhaq/store"
 )
 
 // The MCP server speaks JSON-RPC over stdin and stdout, one message per

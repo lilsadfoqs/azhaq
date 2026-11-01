@@ -10,10 +10,10 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/trannghiach/azhaq/internal/egress"
-	"github.com/trannghiach/azhaq/internal/fetch"
-	"github.com/trannghiach/azhaq/internal/webextract"
-	"github.com/trannghiach/azhaq/types"
+	"github.com/lilsadfoqs/azhaq/internal/egress"
+	"github.com/lilsadfoqs/azhaq/internal/fetch"
+	"github.com/lilsadfoqs/azhaq/internal/webextract"
+	"github.com/lilsadfoqs/azhaq/types"
 )
 
 // served is a test server that counts what is asked of it; every path it

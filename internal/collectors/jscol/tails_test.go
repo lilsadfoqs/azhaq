@@ -5,7 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/trannghiach/azhaq/internal/fetch"
+	"github.com/lilsadfoqs/azhaq/internal/fetch"
 )
 
 // A path a script joins to a base it does not spell out (this.host+

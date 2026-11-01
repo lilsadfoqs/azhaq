@@ -3,7 +3,7 @@ package paramcol
 import (
 	"sync"
 
-	"github.com/trannghiach/azhaq/internal/guard"
+	"github.com/lilsadfoqs/azhaq/internal/guard"
 )
 
 // toggleNames are parameters that switch a mode on for the value yes,

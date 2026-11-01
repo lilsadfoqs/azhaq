@@ -17,9 +17,9 @@ import (
 
 	"github.com/chromedp/cdproto/network"
 
-	"github.com/trannghiach/azhaq/internal/egress"
-	"github.com/trannghiach/azhaq/internal/fetch"
-	"github.com/trannghiach/azhaq/internal/ledger"
+	"github.com/lilsadfoqs/azhaq/internal/egress"
+	"github.com/lilsadfoqs/azhaq/internal/fetch"
+	"github.com/lilsadfoqs/azhaq/internal/ledger"
 )
 
 // The ledger and the count hold what reached the server, no more: a page

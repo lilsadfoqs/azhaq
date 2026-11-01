@@ -24,7 +24,7 @@ fi
 tag=${FETCH_TAG:-$kind-$name} # the tag, and the folder under $kind/
 key=${AZHAQ_AGE_KEY:-$HOME/.config/azhaq/age.key}
 age=$(command -v age || echo "$HOME/go/bin/age")
-repo=trannghiach/azhaq
+repo=lilsadfoqs/azhaq
 mkdir -p "$dir"
 cd "$dir"
 curl -fsS "https://api.github.com/repos/$repo/contents/$kind/$tag?ref=ci-results" |

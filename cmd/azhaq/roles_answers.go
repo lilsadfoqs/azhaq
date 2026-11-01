@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/trannghiach/azhaq/internal/collectors/httpcol"
+	"github.com/lilsadfoqs/azhaq/internal/collectors/httpcol"
 )
 
 // answer is how an endpoint answered one session.

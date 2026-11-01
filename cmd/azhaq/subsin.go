@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/trannghiach/azhaq/internal/normalize"
+	"github.com/lilsadfoqs/azhaq/internal/normalize"
 )
 
 // parseSourceRates reads -source-rates: name=N/unit pairs, unit s, m or h

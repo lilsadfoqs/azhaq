@@ -13,8 +13,8 @@ import (
 
 	"github.com/miekg/dns"
 
-	"github.com/trannghiach/azhaq/internal/normalize"
-	"github.com/trannghiach/azhaq/internal/webextract"
+	"github.com/lilsadfoqs/azhaq/internal/normalize"
+	"github.com/lilsadfoqs/azhaq/internal/webextract"
 )
 
 // domainRow compares passive subdomain discovery on one domain. A name is

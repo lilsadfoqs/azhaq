@@ -10,11 +10,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/trannghiach/azhaq/catalog"
-	"github.com/trannghiach/azhaq/engine"
-	"github.com/trannghiach/azhaq/internal/fetch"
-	"github.com/trannghiach/azhaq/store"
-	"github.com/trannghiach/azhaq/types"
+	"github.com/lilsadfoqs/azhaq/catalog"
+	"github.com/lilsadfoqs/azhaq/engine"
+	"github.com/lilsadfoqs/azhaq/internal/fetch"
+	"github.com/lilsadfoqs/azhaq/store"
+	"github.com/lilsadfoqs/azhaq/types"
 )
 
 func TestForWorkers(t *testing.T) {

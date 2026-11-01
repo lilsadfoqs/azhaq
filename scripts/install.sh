@@ -16,7 +16,7 @@
 # Usage: sh install.sh [-v VERSION] [-d DIR] [-s | --require-signature]
 set -eu
 
-REPO=trannghiach/azhaq
+REPO=lilsadfoqs/azhaq
 RELEASES=https://github.com/$REPO/releases
 VERSION=
 INSTALL_DIR=
@@ -176,13 +176,13 @@ if [ -n "$COSIGN_BIN" ]; then
     fetch "$BASE/checksums.txt.sigstore.json" "$TMP/checksums.txt.sigstore.json"
     "$COSIGN_BIN" verify-blob \
         --bundle "$TMP/checksums.txt.sigstore.json" \
-        --certificate-identity-regexp '^https://github\.com/trannghiach/azhaq/\.github/workflows/release\.yml@refs/tags/v' \
+        --certificate-identity-regexp '^https://github\.com/(lilsadfoqs|trannghiach)/azhaq/\.github/workflows/release\.yml@refs/tags/v' \
         --certificate-oidc-issuer https://token.actions.githubusercontent.com \
         "$TMP/checksums.txt" || err "signature check failed for checksums.txt; nothing installed"
     info "signature of checksums.txt verified with cosign"
 else
     info "checksum verified, but the signature was NOT verified (cosign not found); to verify, run this in a directory holding the release's checksums.txt and checksums.txt.sigstore.json:"
-    printf '%s\n' "cosign verify-blob --bundle checksums.txt.sigstore.json --certificate-identity-regexp '^https://github\.com/trannghiach/azhaq/\.github/workflows/release\.yml@refs/tags/v' --certificate-oidc-issuer https://token.actions.githubusercontent.com checksums.txt"
+    printf '%s\n' "cosign verify-blob --bundle checksums.txt.sigstore.json --certificate-identity-regexp '^https://github\.com/(lilsadfoqs|trannghiach)/azhaq/\.github/workflows/release\.yml@refs/tags/v' --certificate-oidc-issuer https://token.actions.githubusercontent.com checksums.txt"
 fi
 
 mkdir "$TMP/x"

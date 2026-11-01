@@ -17,8 +17,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/trannghiach/azhaq/internal/egress"
-	"github.com/trannghiach/azhaq/internal/limit"
+	"github.com/lilsadfoqs/azhaq/internal/egress"
+	"github.com/lilsadfoqs/azhaq/internal/limit"
 )
 
 // Top lists are nmap's most frequent TCP ports, as naabu ships them (MIT,

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/trannghiach/azhaq/internal/browser"
+	"github.com/lilsadfoqs/azhaq/internal/browser"
 )
 
 // A page with a link to another site, a link of its own and a button that

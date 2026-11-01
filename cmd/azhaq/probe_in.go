@@ -15,10 +15,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/trannghiach/azhaq/engine"
-	"github.com/trannghiach/azhaq/internal/collectors/asncol"
-	"github.com/trannghiach/azhaq/internal/collectors/httpcol"
-	"github.com/trannghiach/azhaq/internal/normalize"
+	"github.com/lilsadfoqs/azhaq/engine"
+	"github.com/lilsadfoqs/azhaq/internal/collectors/asncol"
+	"github.com/lilsadfoqs/azhaq/internal/collectors/httpcol"
+	"github.com/lilsadfoqs/azhaq/internal/normalize"
 )
 
 // probeTarget is one target as given, and the lines it became.

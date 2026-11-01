@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/trannghiach/azhaq/engine"
-	"github.com/trannghiach/azhaq/internal/webextract"
-	"github.com/trannghiach/azhaq/types"
+	"github.com/lilsadfoqs/azhaq/engine"
+	"github.com/lilsadfoqs/azhaq/internal/webextract"
+	"github.com/lilsadfoqs/azhaq/types"
 )
 
 // Input is what a ranking reads, all from the workspace and the roles

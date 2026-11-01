@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/trannghiach/azhaq/internal/normalize"
+	"github.com/lilsadfoqs/azhaq/internal/normalize"
 )
 
 var (

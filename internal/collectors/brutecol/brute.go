@@ -13,10 +13,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/trannghiach/azhaq/catalog"
-	"github.com/trannghiach/azhaq/internal/dnsr"
-	"github.com/trannghiach/azhaq/internal/normalize"
-	"github.com/trannghiach/azhaq/types"
+	"github.com/lilsadfoqs/azhaq/catalog"
+	"github.com/lilsadfoqs/azhaq/internal/dnsr"
+	"github.com/lilsadfoqs/azhaq/internal/normalize"
+	"github.com/lilsadfoqs/azhaq/types"
 )
 
 const (
