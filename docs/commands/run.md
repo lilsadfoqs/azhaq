@@ -466,12 +466,12 @@ Examples of what `notes` holds for a run:
 | `-port-discover` | string |  | ask first whether an address is up, by a connect to 80 and 443: first (scan the ones that answer) or only (list them, scan nothing) | rarely needed |
 | `-port-exclude-cdn` | bool |  | ask a CDN or WAF address only ports 80, 443, 8080 and 8443 (naabu -ec asks 80 and 443; this adds 8080 and 8443) | rarely needed |
 | `-port-ip` | string |  | the address families of a name to scan: 4 or 6 (default both) | rarely needed |
-| `-port-min-rate` | float |  | port connection attempts per second at least: raises -port-rate to this when lower | rarely needed |
+| `-port-min-rate` | float |  | port connection attempts per second at least, as nmap's --min-rate: raises -port-rate to this when lower, and sets no ceiling | rarely needed |
 | `-port-order` | string | `random` | the order a host's ports are asked in: random (the likeliest ports first, each tier shuffled) or asc | rarely needed |
 | `-port-payload` | string |  | send this to each open TCP port before reading what it says (\r and \n are CR and LF) | rarely needed |
 | `-port-proxy` | string |  | connect to TCP ports through this SOCKS5 proxy (host:port); a port is then asked its banner only, and UDP is not sent | rarely needed |
 | `-port-proxy-auth` | string |  | user:password for -port-proxy | rarely needed |
-| `-port-rate` | float |  | port connection attempts per second (0: 1500, as naabu's connect scan, and 127.0.0.1 unpaced) | rarely needed |
+| `-port-rate` | float |  | port connection attempts per second, a ceiling (0: 1500, as naabu's connect scan, and 127.0.0.1 unpaced) | rarely needed |
 | `-port-retries` | int | `-1` | more passes over the ports that neither accepted nor refused: n passes over all of them, 0 none (default: one, when few did not answer) | rarely needed |
 | `-port-seed` | int |  | make the random port order repeat (0: a new one each run) | rarely needed |
 | `-port-source-ip` | string |  | connect from this local address | rarely needed |
