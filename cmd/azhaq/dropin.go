@@ -747,7 +747,7 @@ func cmdDirs(args []string) error {
 	var urls stringsFlag
 	fs.Var(&urls, "u", "web service, such as https://app.example.com/ (repeatable)")
 	list := onceString(fs, "l", "file of services (- for stdin)")
-	words := fs.String("w", "", "wordlist (default: SecLists' common.txt, built in: "+strconv.Itoa(len(dirscol.DefaultWords()))+" words)")
+	words := fs.String("w", "", "wordlist (default: SecLists' common.txt, built in: "+strconv.Itoa(dirscol.WordCount())+" words)")
 	specs := []string{"ac=dirs-ac", "e=dirs-ext", "depth=dirs-depth", "t=dirs-threads", "rate=dirs-rate",
 		"H=header", "cookie", "max-requests", "timeout", "v", "scope", "program", "allow", "deny", "deny-path", "ledger", "kill-file", "proxy"}
 	for _, m := range dirsMatchers {

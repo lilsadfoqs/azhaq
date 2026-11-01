@@ -463,3 +463,13 @@ func TestDefaultWordsNameNoOutsideAddress(t *testing.T) {
 		}
 	}
 }
+
+// The help names the list's size, counted without building the list.
+func TestWordCountIsTheListsLength(t *testing.T) {
+	if n, want := WordCount(), len(DefaultWords()); n != want || n < 4700 {
+		t.Errorf("WordCount %d, the list has %d", n, want)
+	}
+	if allocs := testing.AllocsPerRun(5, func() { WordCount() }); allocs != 0 {
+		t.Errorf("WordCount allocates %v times", allocs)
+	}
+}

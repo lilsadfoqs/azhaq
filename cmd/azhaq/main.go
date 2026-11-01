@@ -944,8 +944,10 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 			Delay: *paramsDelay, Stable: *paramsStable, Timeout: *paramsTimeout, Targets: targets}
 	}
 	if *dirsFile != "" {
-		words := dirscol.DefaultWords()
-		if *dirsFile != dirscol.Builtin {
+		var words []string
+		if *dirsFile == dirscol.Builtin {
+			words = dirscol.DefaultWords()
+		} else {
 			var err error
 			if words, err = loadWordlist(*dirsFile); err != nil {
 				return err
