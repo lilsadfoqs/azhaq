@@ -474,3 +474,34 @@ func TestCrtshRetriesDoNotHoldTheRun(t *testing.T) {
 		}
 	}
 }
+
+// A database driver that does not give up when its context ends (it waits
+// for the server) holds the source for the whole -source-timeout and the JSON
+// API is never asked. The attempt is left behind at its budget, a quarter of
+// the source's time, and the JSON API answers in what remains.
+func TestCrtshDatabaseThatNeverReturnsIsLeftAtItsBudget(t *testing.T) {
+	oldQuery := crtshQuery
+	release := make(chan struct{})
+	crtshQuery = func(context.Context, string, *url.URL, time.Duration, int) ([]string, int, error) {
+		<-release // ignores its context, as a stuck driver does
+		return nil, 0, nil
+	}
+	defer func() { close(release); crtshQuery = oldQuery }()
+	var asked atomic.Int32
+	client := &http.Client{Transport: rtFunc(func(r *http.Request) (*http.Response, error) {
+		asked.Add(1)
+		body := `[{"common_name":"api.example.org","name_value":"api.example.org"}]`
+		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(body)), Request: r, Header: http.Header{}}, nil
+	})}
+	c := collector(Options{Client: client, NoHistory: true, SourceTimeout: 8 * time.Second}, crtshSource())
+	t0 := time.Now()
+	payload, _ := run(t, c, context.Background())
+	took := time.Since(t0)
+	if got := strs(payload["names"]); !slices.Equal(got, []string{"api.example.org"}) || asked.Load() != 1 {
+		t.Errorf("names %v, JSON API asked %d times", got, asked.Load())
+	}
+	// The budget is a quarter of 8 s; without it the run took the 8 s and 2 s of grace.
+	if took > 3500*time.Millisecond {
+		t.Errorf("the run took %s: the database held the source", took)
+	}
+}
