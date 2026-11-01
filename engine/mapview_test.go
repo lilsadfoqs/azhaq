@@ -264,3 +264,22 @@ func TestMapListsAPortOnceWithItsState(t *testing.T) {
 		t.Errorf("port rows %v, want %v", states, want)
 	}
 }
+
+// An origin that answers many URLs with the page every unknown path gets
+// is named once, with how many; a bare address also gets the Host lead.
+func TestCatchAllNotesNameTheOrigin(t *testing.T) {
+	var rows []engine.MapEntry
+	add := func(key, cov string) {
+		rows = append(rows, engine.MapEntry{Entity: types.Entity{Type: types.TypeURL, Key: key}, Coverage: cov})
+	}
+	for _, p := range []string{"signup", "setup", "settings/users", "workflow/new"} {
+		add("http://127.0.0.9:8888/"+p, "catchall")
+	}
+	add("http://127.0.0.9:8888/", "visited")
+	add("https://shop.test/a", "catchall")
+	add("https://shop.test/b", "catchall")
+	got := engine.CatchAllNotes(rows)
+	if len(got) != 1 || !strings.Contains(got[0], "http://127.0.0.9:8888 answered 4 URLs") || !strings.Contains(got[0], "-H 'Host: NAME'") {
+		t.Errorf("notes %q", got)
+	}
+}

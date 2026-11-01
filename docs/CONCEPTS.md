@@ -37,7 +37,7 @@ A row's `scope` (`target` or `fanout`) is not the request [scope](#scope) that `
 | State | Meaning | What to do next |
 | --- | --- | --- |
 | `visited` | Requested; it answered as a page of its own (any status but 404 and 410). | Read it. |
-| `catchall` | Requested; it answered with the page every unknown path gets (an app shell, a soft 404). Not proof the route exists. | Look at it in a browser, or use `-browser`. |
+| `catchall` | Requested; it answered with the page every unknown path gets (an app shell, a soft 404). Not proof the route exists. A summary note names an origin that answered three or more URLs this way, and for a bare address says that the site's name may be served differently (`-H 'Host: NAME'`). | Look at it in a browser, or use `-browser`. |
 | `error` | Requested; no answer: timeout, refused, reset or TLS failure. | `azhaq query -db W -failed`, then try again. |
 | `gone` | Requested; it answered 404 or 410, usually a URL found in an archive or a link. Nothing read says it takes another method. | Try older API versions near it. |
 | `hint` | Known from a script, a description, an archive or a link, not proven by a GET. See below for the cases. | Send the method in its operations yourself. |

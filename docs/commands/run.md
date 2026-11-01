@@ -118,7 +118,7 @@ found in
 ### Streaming found lines
 
 - With `-stream`, `run` prints each name that resolves, URL found, answer and open port as it is found, once each. They come before the map.
-- An answer line looks like `found  answer http://app/openapi.json  [200]`.
+- An answer line looks like `found  answer http://app/openapi.json  [200]`. An answer that is the page every unknown path gets ends with `(catch-all: the page any unknown path gets)`.
 - With `-json`, each is an object with `"type":"found"` and these fields:
 
 | Field | Meaning |
@@ -127,6 +127,7 @@ found in
 | `key` | The name, the URL, or the host. |
 | `collector` | The collector that found it. |
 | `status`, `title` | For an answer. |
+| `catchall` | For an answer: `true` when it is the page every unknown path gets. |
 | `ip`, `open` | For ports: the address and the list of open ports. |
 
 ### Coverage
