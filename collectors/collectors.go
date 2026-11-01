@@ -36,7 +36,8 @@ type Options struct {
 	Paths           []string     // extra wordlist entries for azhaq-paths
 	DNS             *dnsr.Pool   // resolver pool; nil for the default resolvers
 	Subdomains      subcol.Options
-	BruteWords      []string // wordlist for azhaq-dns-brute (runs only with -dns-brute)
+	BruteWords      []string         // wordlist for azhaq-dns-brute (runs only with -dns-brute)
+	GuessBudget     *brutecol.Budget // the most names -dns-brute and -permute ask together; nil: every one
 	URLs            urlcol.Options
 	WebPorts        []int            // ports azhaq-http tries on each hostname; nil for 443 then 80
 	NoTakeover      bool             // azhaq-dns skips the takeover check (no question about a CNAME target's domain)
@@ -104,8 +105,8 @@ func Register(cat *catalog.Catalog, o Options) {
 	dnsc := dnscol.New(pool)
 	dnsc.KeepWild, dnsc.NoHints, dnsc.NoTakeover = o.HTTP != nil, o.HTTP != nil, o.NoTakeover
 	cat.MustRegister(dnsc)
-	cat.MustRegister(&brutecol.Brute{Pool: pool, Wild: dnsc.Wild, Words: o.BruteWords})
-	cat.MustRegister(&brutecol.Permute{Pool: pool, Wild: dnsc.Wild})
+	cat.MustRegister(&brutecol.Brute{Pool: pool, Wild: dnsc.Wild, Words: o.BruteWords, Budget: o.GuessBudget})
+	cat.MustRegister(&brutecol.Permute{Pool: pool, Wild: dnsc.Wild, Budget: o.GuessBudget})
 	pc := portcol.New(pool, o.Ports, o.PortRate)
 	pc.UDPPorts = o.UDPPorts
 	pc.Apply(o.PortConfig)

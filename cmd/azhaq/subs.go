@@ -149,7 +149,7 @@ func cmdSubs(args []string) error {
 	showVersion := fs.Bool("version", false, "print the version and exit")
 	given := inherit(fs, "sources", "exclude-sources", "all-sources", "no-history", "source-timeout", "providers", "resolvers", "dns-rate", "timeout", "v", "fail-on-errors",
 		"source-rate", "source-rates", "max-results", "max-time", "max-body", "proxy=source-proxy", "t=parallel")
-	maxNames := fs.Int("max-names", 0, fmt.Sprintf("most names kept per domain, and looked up with -live (default %d)", subcol.DefaultMaxNames))
+	maxNames := fs.Int("max-names", 0, fmt.Sprintf("most names kept per domain, and looked up with -live (default %d); a value you give also caps the names -w and -permute ask, together: the guesses past it are not asked, the run exits 4 and says how many", subcol.DefaultMaxNames))
 	if err := parse(fs, args); err != nil {
 		return err
 	}
@@ -225,12 +225,8 @@ func cmdSubs(args []string) error {
 		run = append(run, "-depth", "0")
 	}
 	extra := given()
-	switch {
-	case *maxNames > 0:
+	if *maxNames > 0 {
 		extra = append(extra, "-max-names="+fmt.Sprint(*maxNames))
-	case *live:
-		// A big zone is not cut at the run's default of 20,000 names looked up.
-		extra = append(extra, "-max-names="+fmt.Sprint(subcol.DefaultMaxNames))
 	}
 	subsMode.NoCheck, subsMode.Recursive, subsMode.GuessSamples, subsMode.MaxTimeBoundsRun = !*live && !active, *recursive, *guessSamples, true
 	// The output is opened before anything is sent: a bad -o is not found out
@@ -552,6 +548,7 @@ func cmdSubs(args []string) error {
 	set("left out by -m/-f", filtered+guessFiltered)
 	set("listed under another domain", dup)
 	set("cut by -max-names", cut)
+	set("guesses held back by -max-names", guessBudget.Held())
 	if cut > 0 {
 		rep.Notes = append(rep.Notes, fmt.Sprintf("%d names were cut at -max-names: raise it to keep them", cut))
 		rep.warned = true
