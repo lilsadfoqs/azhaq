@@ -926,7 +926,7 @@ A domain the engine derives from a URL or hostname gets 15 seconds per source in
 
 ## Path guessing
 
-`-dirs FILE` is active. `@common` is the built-in SecLists `common.txt` (MIT, 4,750 words). The targets given are its scope unless `-allow` or `-scope` names one.
+`-dirs FILE` is active. `@common` is the built-in SecLists `common.txt` (MIT, 4,747 words, the list without three entries that name an outside address). The targets given are its scope unless `-allow` or `-scope` names one.
 
 ### Where it sweeps
 

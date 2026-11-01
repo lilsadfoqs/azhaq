@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -303,7 +304,7 @@ func TestSweepReusesConnectionsAndReportsEveryHit(t *testing.T) {
 	}
 }
 
-// A "?" in a word starts the query, as in ffuf (common.txt has
+// A "?" in a word starts the query, as in ffuf (SecLists lists have
 // dns-query?name=…): the path is /dns-query, the query follows.
 func TestWordWithQuery(t *testing.T) {
 	fetch.Reset()
@@ -449,5 +450,16 @@ func TestSweepDenyPathHoldsAWordBackAndListsIt(t *testing.T) {
 	urls, _ := skipped["urls"].([]any)
 	if skipped["skipped"] != "-deny-path ^/logout" || len(urls) != 1 || urls[0] != srv.URL+"/logout" {
 		t.Errorf("skipped %v", skipped)
+	}
+}
+
+// The built-in list asks for paths: no word carries an outside address that
+// would make the target fetch or look it up.
+func TestDefaultWordsNameNoOutsideAddress(t *testing.T) {
+	outside := regexp.MustCompile(`(?i)://|[?&=/][a-z0-9-]+(\.[a-z0-9-]+)*\.(com|net|org|io|dev)\b`)
+	for _, w := range DefaultWords() {
+		if outside.MatchString(w) {
+			t.Errorf("built-in word %q carries an outside address", w)
+		}
 	}
 }
