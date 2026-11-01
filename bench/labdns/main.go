@@ -485,7 +485,7 @@ func handler(lab *labData, stats *counters, upstream string, delay time.Duration
 }
 
 func main() {
-	addr := flag.String("addr", "127.0.0.1:5354", "listen address (UDP and TCP)")
+	addr := flag.String("addr", "127.0.0.1:5354", "listen address (UDP and TCP); several, comma-separated, answer the same zones")
 	upstream := flag.String("upstream", "1.1.1.1:53", "resolver for names outside azqlab.lan")
 	statsAddr := flag.String("stats", "", "serve what was asked as JSON on this address: /stats, /stats?names=1, /reset")
 	delay := flag.Duration("delay", 0, "wait this long before each answer (makes queries in flight measurable)")
@@ -523,9 +523,11 @@ func main() {
 		go func() { log.Fatal(http.ListenAndServe(*statsAddr, mux)) }()
 	}
 	dns.HandleFunc(".", handler(lab, stats, *upstream, *delay, *cymru))
-	for _, n := range []string{"udp", "tcp"} {
-		srv := &dns.Server{Addr: *addr, Net: n}
-		go func() { log.Fatal(srv.ListenAndServe()) }()
+	for _, a := range strings.Split(*addr, ",") {
+		for _, n := range []string{"udp", "tcp"} {
+			srv := &dns.Server{Addr: strings.TrimSpace(a), Net: n}
+			go func() { log.Fatal(srv.ListenAndServe()) }()
+		}
 	}
 	log.Printf("labdns on %s, azqlab.lan answered here, the rest forwarded to %s", *addr, *upstream)
 	select {}

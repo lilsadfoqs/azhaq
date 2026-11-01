@@ -321,6 +321,40 @@ class Build(unittest.TestCase):
         names = [h["host"] for est in self.key["estates"] for h in est["hosts"]]
         self.assertEqual(len(names), len(set(names)))
 
+    def test_name_servers_are_inside_the_range_on_unused_addresses(self):
+        for i, est in enumerate(self.key["estates"], 1):
+            prefix = est["net"].rsplit(".", 1)[0] + "."
+            used = {h["address"] for h in est["hosts"] if h.get("address")}
+            self.assertEqual(len(est["ns"]), 2)
+            self.assertEqual(len({n["address"] for n in est["ns"]}), 2)
+            z = json.load(open(os.path.join(self.out, "zone-%d.json" % i)))
+            recs = z["zones"][est["domain"] + "."]
+            self.assertEqual(sorted(r for r in recs[est["domain"] + "."] if r.startswith("NS ")),
+                             ["NS ns1.%s." % est["domain"], "NS ns2.%s." % est["domain"]])
+            for n in est["ns"]:
+                self.assertTrue(n["address"].startswith(prefix), n)
+                self.assertNotIn(n["address"], used)
+                self.assertEqual(recs[n["host"] + "."], ["A " + n["address"]])
+            for env in self.plan["envs"]:
+                if env["estate"] == i:
+                    self.assertNotIn(env["address"], [n["address"] for n in est["ns"]])
+            d = next(x for x in self.plan["dns"] if x["estate"] == i)
+            self.assertEqual(d["ns"], [n["address"] for n in est["ns"]])
+            self.assertEqual(d["listen"], est["dns"])
+
+    def test_name_servers_refuse_a_transfer_unless_the_estate_planted_one(self):
+        planted = 0
+        for seed in ("unit-1", "d", "n"):
+            out = os.path.join(self.tmp, "x-" + seed)
+            build.main([seed, "--out", out])
+            key = json.load(open(os.path.join(out, "key.json")))
+            for i, est in enumerate(key["estates"], 1):
+                has = any(h.get("env") == build.AXFR_ENV for h in est["hosts"])
+                planted += has
+                z = json.load(open(os.path.join(out, "zone-%d.json" % i)))
+                self.assertEqual(z["axfr"], has, (seed, i))
+        self.assertGreater(planted, 0, "no seed here planted the zone-transfer environment")
+
     def test_vhosts_dangling_and_names(self):
         for est in self.key["estates"]:
             vh = [h for h in self.services(est) if h["vhost"]]
@@ -339,7 +373,6 @@ class Build(unittest.TestCase):
             origin = est["domain"] + "."
             recs = z["zones"][origin]
             self.assertTrue(any(r.startswith("SOA ") for r in recs[origin]))
-            self.assertFalse(z["axfr"])
             for h in est["hosts"]:
                 if h["kind"] == "service" and not h["vhost"]:
                     self.assertIn("A " + h["address"], recs[h["host"] + "."])
@@ -439,6 +472,83 @@ class Up(unittest.TestCase):
         self.assertEqual(len(procs), 2)
         self.assertEqual(procs[0][:5], ["sudo", "-n", "-u", "nobody", "setsid"])
         self.assertTrue(any(c[0] == "docker" and c[1] == "run" and "--network" in c and "host" in c for c, _ in calls), "the proxy runs on the host network")
+
+
+class NameServers(unittest.TestCase):
+    d = {"estate": 1, "zone": "zone-1.json", "listen": "127.0.0.1:5301", "ns": ["127.31.0.20", "127.31.0.30"]}
+
+    def test_the_resolver_listens_on_port_53_of_each_name_server(self):
+        self.assertEqual(up.listen_addrs(self.d), ["127.0.0.1:5301", "127.31.0.20:53", "127.31.0.30:53"])
+        self.assertEqual(up.listen_addrs({"listen": "127.0.0.1:5301"}), ["127.0.0.1:5301"])
+
+    def test_start_dns_gives_every_address_to_one_process(self):
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp, True)
+        with open(os.path.join(tmp, "zone-1.json"), "w") as f:
+            f.write("{}")
+        cmds = []
+
+        class P:
+            stdin = None
+
+        ctx = up.Ctx(tmp, "/vh", popen=lambda cmd, **kw: cmds.append(cmd) or P())
+        up.start_dns(ctx, self.d, "/bin/labdns", "nobody")
+        self.assertEqual(len(cmds), 1)
+        self.assertEqual(cmds[0][cmds[0].index("-addr") + 1], "127.0.0.1:5301,127.31.0.20:53,127.31.0.30:53")
+
+    def serve(self, udp=True, tcp=True):
+        """A resolver on one loopback port, answering every query; returns the port."""
+        import struct
+        socks = []
+        port = None
+        tcp_s = socket.socket()
+        tcp_s.bind(("127.0.0.1", 0))
+        port = tcp_s.getsockname()[1]
+        tcp_s.listen(4)
+        udp_s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        udp_s.bind(("127.0.0.1", port))
+
+        def reply(q):
+            return q[:2] + b"\x84\x00" + q[4:]
+
+        def serve_udp():
+            while True:
+                try:
+                    q, a = udp_s.recvfrom(512)
+                except OSError:
+                    return
+                if udp:
+                    udp_s.sendto(reply(q), a)
+
+        def serve_tcp():
+            while True:
+                try:
+                    c, _ = tcp_s.accept()
+                except OSError:
+                    return
+                if tcp:
+                    n = struct.unpack(">H", c.recv(2))[0]
+                    r = reply(c.recv(n))
+                    c.sendall(struct.pack(">H", len(r)) + r)
+                c.close()
+
+        for fn in (serve_udp, serve_tcp):
+            threading.Thread(target=fn, daemon=True).start()
+        self.addCleanup(tcp_s.close)
+        self.addCleanup(udp_s.close)
+        return port
+
+    def test_ready_needs_udp_and_tcp_on_every_address(self):
+        ctx = up.Ctx(tempfile.mkdtemp(), "/vh", sleep=lambda s: None)
+        self.addCleanup(shutil.rmtree, ctx.out, True)
+        good, no_tcp = self.serve(), self.serve(tcp=False)
+        d = {"listen": "127.0.0.1:%d" % good}
+        self.assertTrue(up.dns_ready(ctx, d, "one.test."))
+        self.assertFalse(up.dns_ready(ctx, {"listen": "127.0.0.1:%d" % no_tcp}, "one.test."))
+        orig = up.listen_addrs
+        up.listen_addrs = lambda d: ["127.0.0.1:%d" % good, "127.0.0.1:%d" % no_tcp]
+        self.addCleanup(setattr, up, "listen_addrs", orig)
+        self.assertFalse(up.dns_ready(ctx, d, "one.test."), "one dead address fails the estate")
 
 
 class UpDryRun(unittest.TestCase):
@@ -640,3 +750,17 @@ class FenceTest(unittest.TestCase):
         self.assertLess(rules.index("-A AZQ -d 127.31.0.5 -p tcp --dport 8080 -j ACCEPT"),
                         rules.index("-A AZQ -d 127.31.0.0/24 -p tcp -j REJECT --reject-with tcp-reset"))
         self.assertEqual(rules[-1], "-I OUTPUT 1 -j AZQ")
+
+    def test_the_name_servers_answer_on_53(self):
+        import up
+        key = {"estates": [{"net": "127.31.0.0/24", "ns": [{"host": "ns1.a.test", "address": "127.31.0.20"}, {"host": "ns2.a.test", "address": "127.31.0.30"}],
+                            "hosts": [{"address": "127.31.0.5", "ports": [{"port": 8080}]}]}]}
+        rules = [" ".join(r) for r in up.fence_rules(key, {"envs": []})]
+        reject = rules.index("-A AZQ -d 127.31.0.0/24 -p tcp -j REJECT --reject-with tcp-reset")
+        for a in ("127.31.0.20", "127.31.0.30"):
+            for proto in ("tcp", "udp"):
+                r = "-A AZQ -d %s -p %s --dport 53 -j ACCEPT" % (a, proto)
+                self.assertIn(r, rules)
+                self.assertLess(rules.index(r), reject)
+            self.assertIn("-A AZQ -d %s -p icmp -j ACCEPT" % a, rules)
+            self.assertNotIn("-A AZQ -d %s -p tcp --dport 80 -j ACCEPT" % a, rules)

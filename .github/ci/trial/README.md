@@ -30,8 +30,14 @@ together. Each has a random `.test` domain, a /24 of loopback, one address per
 host, product-named and neutral host names (some under a `dev.` or `stg.`
 subzone, sometimes with a wildcard), a few services on non-default ports, three
 names served only by an nginx reverse proxy by Host, two dangling CNAMEs and
-PTR records for some hosts. One `bench/labdns` resolver per estate serves its
-zone (`-zone`): 127.0.0.1:5301 and 127.0.0.1:5302. `up.py` starts everything and
+PTR records for some hosts. The zone's two name servers (`ns1`, `ns2`) have
+addresses inside the /24 that no host uses. One `bench/labdns` resolver per
+estate serves its zone (`-zone`): at 127.0.0.1:5301 or :5302, as given to the
+reviewer, and on port 53 (UDP and TCP) of its name servers, so a zone transfer
+asked of the zone's own name servers stays inside the company's range (the
+binary has `cap_net_bind_service`; the fence allows those addresses on port
+53). The resolver refuses a transfer unless the estate planted the Vulhub
+BIND that allows one. `up.py` starts everything and
 records which probes answered in the key; the grader leaves out what was not up.
 
 Placeholders filled at run time: `__VERSION__` (the latest release),

@@ -142,6 +142,9 @@ jobs:
           sudo sysctl -q -w vm.max_map_count=262144 # Elasticsearch
           CGO_ENABLED=0 go build -o "$RUNNER_TEMP/dnsd" ./bench/labdns
           sudo install -m 755 "$RUNNER_TEMP/dnsd" /usr/local/sbin/dnsd
+          # The resolver runs as nobody and answers on port 53 of each estate's name servers.
+          sudo setcap cap_net_bind_service=+ep /usr/local/sbin/dnsd
+          getcap /usr/local/sbin/dnsd | grep -q cap_net_bind_service
           .github/ci/range/fetch-vulhub.sh "$RUNNER_TEMP/vulhub" > /dev/null 2>&1
           python3 .github/ci/range/build.py "$seed" --out "$range"
           python3 .github/ci/range/up.py "$range" --vulhub "$RUNNER_TEMP/vulhub" --labdns /usr/local/sbin/dnsd --run-as nobody
