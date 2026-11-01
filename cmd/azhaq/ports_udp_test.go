@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"net"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -60,8 +61,9 @@ func TestPortsUDPStoppedSaysHowManyPayloadsWereAsked(t *testing.T) {
 	if code != exitLimit || sum["complete"] != false {
 		t.Fatalf("exit %d, summary %v", code, sum)
 	}
-	want := fmt.Sprintf("127.0.0.1:%d/udp: 3 of 4 payloads asked before the run stopped; no answer yet", port)
-	if !strings.Contains(fmt.Sprint(sum["notes"]), want) {
+	// How many left in 1 s at 5 a second depends on the machine: 1 to 3, never all.
+	want := regexp.MustCompile(fmt.Sprintf(`127\.0\.0\.1:%d/udp: [1-3] of 4 payloads asked before the run stopped; no answer yet`, port))
+	if !want.MatchString(fmt.Sprint(sum["notes"])) {
 		t.Errorf("no %q in notes %v", want, sum["notes"])
 	}
 }
