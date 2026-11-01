@@ -1,0 +1,57 @@
+=== parts/bench-p1.log
+bench: building azhaq
+bench: default: services
+bench: starting the services lab
+bench: default: services took 211s
+
+default flags: services (15 lab ports)  azhaq  nmap -sV  azhaq time  nmap time
+named right                             15     12        2.8s 41MB   145.3s 89MB
+with product and version                14     11                    
+
+checks
+  PASS  [default] services (nmap -sV): results ≥ the reference's, confirmed by the lab's own list of what runs on each port (bench/services.yaml) and `ss` showing every port listening  (azhaq 15, reference 12; 15 ports; with a product and version: azhaq 14, nmap 11; azhaq missed []; nmap missed [11883 mosquitto (mqtt): "" 21211 memcached: "unknown" 10053 coredns (tcp): "tcpwrapped"]; time ×0.02 of the reference, memory ×0.47 of the reference (41 MB against 89 MB) | azhaq ports -host 127.0.0.1 -p 16379,13306,15432,17017,11883,15682,21211,12222,10021,10025,18825,10389,10445,19200,10053 -json -silent vs nmap -sV -Pn -p 16379,13306,15432,17017,11883,15682,21211,12222,10021,10025,18825,10389,10445,19200,10053 -oX - 127.0.0.1)
+  PASS  [default] services (nmap -sV): time ≤ 1.05× the reference's  (azhaq 2.8s, reference 145.3s (the median of 3 below 20 s, one run above) | azhaq ports -host 127.0.0.1 -p 16379,13306,15432,17017,11883,15682,21211,12222,10021,10025,18825,10389,10445,19200,10053 -json -silent vs nmap -sV -Pn -p 16379,13306,15432,17017,11883,15682,21211,12222,10021,10025,18825,10389,10445,19200,10053 -oX - 127.0.0.1)
+  PASS  [default] services: azhaq names ≥ 90% of the lab's TCP services  (15 of 15)
+
+3 of 3 checks pass
+
+record bench/history/2026-11-01T222254-5faaa55.json
+=== parts/bench-p2.log
+bench: building azhaq
+bench: polite: services
+bench: starting the services lab
+bench: polite: services took 210s
+
+polite (HTTP 5/s, DNS 10/s, ports 100/s): services (15 lab ports)  azhaq  nmap -sV  azhaq time  nmap time
+named right                                                        15     13        2.9s 40MB   142.5s 89MB
+with product and version                                           14     12                    
+
+checks
+  PASS  [polite] services (nmap -sV): results ≥ the reference's, confirmed by the lab's own list of what runs on each port (bench/services.yaml) and `ss` showing every port listening  (azhaq 15, reference 13; 15 ports; with a product and version: azhaq 14, nmap 12; azhaq missed []; nmap missed [11883 mosquitto (mqtt): "" 21211 memcached: "unknown"]; time ×0.02 of the reference, memory ×0.45 of the reference (40 MB against 89 MB) | azhaq ports -host 127.0.0.1 -p 16379,13306,15432,17017,11883,15682,21211,12222,10021,10025,18825,10389,10445,19200,10053 -json -silent -rate 100 vs nmap -sV -Pn -p 16379,13306,15432,17017,11883,15682,21211,12222,10021,10025,18825,10389,10445,19200,10053 -oX - 127.0.0.1 --max-rate 100)
+  PASS  [polite] services (nmap -sV): time ≤ 1.05× the reference's  (azhaq 2.9s, reference 142.5s (the median of 3 below 20 s, one run above) | azhaq ports -host 127.0.0.1 -p 16379,13306,15432,17017,11883,15682,21211,12222,10021,10025,18825,10389,10445,19200,10053 -json -silent -rate 100 vs nmap -sV -Pn -p 16379,13306,15432,17017,11883,15682,21211,12222,10021,10025,18825,10389,10445,19200,10053 -oX - 127.0.0.1 --max-rate 100)
+  PASS  [polite] services: azhaq names ≥ 90% of the lab's TCP services  (15 of 15)
+
+3 of 3 checks pass
+
+record bench/history/2026-11-01T222259-5faaa55.json
+=== join
+
+default flags: services (15 lab ports)  azhaq  nmap -sV  azhaq time  nmap time
+named right                             15     12        2.8s 41MB   145.3s 89MB
+with product and version                14     11                    
+
+polite (HTTP 5/s, DNS 10/s, ports 100/s): services (15 lab ports)  azhaq  nmap -sV  azhaq time  nmap time
+named right                                                        15     13        2.9s 40MB   142.5s 89MB
+with product and version                                           14     12                    
+
+checks
+  PASS  [default] services (nmap -sV): results ≥ the reference's, confirmed by the lab's own list of what runs on each port (bench/services.yaml) and `ss` showing every port listening  (azhaq 15, reference 12; 15 ports; with a product and version: azhaq 14, nmap 11; azhaq missed []; nmap missed [11883 mosquitto (mqtt): "" 21211 memcached: "unknown" 10053 coredns (tcp): "tcpwrapped"]; time ×0.02 of the reference, memory ×0.47 of the reference (41 MB against 89 MB) | azhaq ports -host 127.0.0.1 -p 16379,13306,15432,17017,11883,15682,21211,12222,10021,10025,18825,10389,10445,19200,10053 -json -silent vs nmap -sV -Pn -p 16379,13306,15432,17017,11883,15682,21211,12222,10021,10025,18825,10389,10445,19200,10053 -oX - 127.0.0.1)
+  PASS  [default] services (nmap -sV): time ≤ 1.05× the reference's  (azhaq 2.8s, reference 145.3s (the median of 3 below 20 s, one run above) | azhaq ports -host 127.0.0.1 -p 16379,13306,15432,17017,11883,15682,21211,12222,10021,10025,18825,10389,10445,19200,10053 -json -silent vs nmap -sV -Pn -p 16379,13306,15432,17017,11883,15682,21211,12222,10021,10025,18825,10389,10445,19200,10053 -oX - 127.0.0.1)
+  PASS  [default] services: azhaq names ≥ 90% of the lab's TCP services  (15 of 15)
+  PASS  [polite] services (nmap -sV): results ≥ the reference's, confirmed by the lab's own list of what runs on each port (bench/services.yaml) and `ss` showing every port listening  (azhaq 15, reference 13; 15 ports; with a product and version: azhaq 14, nmap 12; azhaq missed []; nmap missed [11883 mosquitto (mqtt): "" 21211 memcached: "unknown"]; time ×0.02 of the reference, memory ×0.45 of the reference (40 MB against 89 MB) | azhaq ports -host 127.0.0.1 -p 16379,13306,15432,17017,11883,15682,21211,12222,10021,10025,18825,10389,10445,19200,10053 -json -silent -rate 100 vs nmap -sV -Pn -p 16379,13306,15432,17017,11883,15682,21211,12222,10021,10025,18825,10389,10445,19200,10053 -oX - 127.0.0.1 --max-rate 100)
+  PASS  [polite] services (nmap -sV): time ≤ 1.05× the reference's  (azhaq 2.9s, reference 142.5s (the median of 3 below 20 s, one run above) | azhaq ports -host 127.0.0.1 -p 16379,13306,15432,17017,11883,15682,21211,12222,10021,10025,18825,10389,10445,19200,10053 -json -silent -rate 100 vs nmap -sV -Pn -p 16379,13306,15432,17017,11883,15682,21211,12222,10021,10025,18825,10389,10445,19200,10053 -oX - 127.0.0.1 --max-rate 100)
+  PASS  [polite] services: azhaq names ≥ 90% of the lab's TCP services  (15 of 15)
+
+6 of 6 checks pass
+
+record bench/joined/2026-11-01T221851-5faaa55.json (joined from 2)
