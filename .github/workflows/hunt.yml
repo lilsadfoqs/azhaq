@@ -13,6 +13,7 @@ on:
 
 permissions:
   contents: write
+  actions: read
 
 env:
   AGE_RECIPIENT: age10llepsf6tflh3wjlfu8awk203049vfsn5vxw9uc3y23qlq9dhy7sm20pex
@@ -56,27 +57,20 @@ jobs:
         run: sudo apt-get update -q && sudo apt-get install -y -q nmap dnsutils age
       - name: labs
         run: .github/ci/labs.sh
-      - name: reference tools cache
-        # bench/tools.go skips a tool whose version marker and binary are in
-        # bin/; arjun is a venv beside it. Pins and the Go version are the key.
-        id: ref
-        uses: actions/cache@v6
-        with:
-          path: |
-            ~/ref/bin
-            ~/ref/arjun-*
-          key: ref-tools-${{ runner.os }}-${{ steps.go.outputs.go-version }}-${{ hashFiles('bench/tools.go', 'bench/params.go') }}
+      - name: reference tools
+        # The bench's artifact of the same pins (latest-artifact.sh: a tag run
+        # cannot read another tag's Actions cache); a miss installs them below.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: .github/ci/latest-artifact.sh "$(.github/ci/bench-tools.sh key)" "$HOME/ref"
       - name: azhaq and the reference tools
         run: |
           mkdir -p "$HOME/hunt/bin" "$HOME/hunt/${{ matrix.area }}"
           go build -o "$HOME/hunt/bin/azhaq" ./cmd/azhaq
-          # A restored cache is used only when arjun still runs (its venv
-          # points at the image's python); otherwise the tools are fetched.
-          if [ "${{ steps.ref.outputs.cache-hit }}" = true ] && "$HOME/ref/bin/arjun" -h > /dev/null 2>&1; then
-            echo "reference tools restored from the cache"
-          else
-            go run ./bench -tools-only -work "$HOME/ref"
-          fi
+          # bench/tools.go skips a tool whose marker and binary are there; arjun's
+          # venv points at the image's python, so it must still run.
+          "$HOME/ref/bin/arjun" -h > /dev/null 2>&1 || rm -rf "$HOME"/ref/arjun-* "$HOME/ref/bin/arjun"
+          go run ./bench -tools-only -work "$HOME/ref"
           rm -f "$HOME/ref/bin/azhaq"
           ls "$HOME/ref/bin"
       - name: codex
