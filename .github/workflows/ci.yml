@@ -69,7 +69,8 @@ jobs:
           npm i -g --silent @commitlint/cli@19.8.1
           commitlint --from "${{ github.event.before }}" --to HEAD
       - name: ci scripts
-        # The workflow trials' estate builder, grader and isolation script; the test split.
+        # The workflow trials' estate builder, grader and isolation script; the
+        # test split; the bench's planner and artifact helpers.
         run: |
           python3 -m unittest discover -s .github/ci/range
           python3 -m unittest discover -s .github/ci -p 'test_*.py'

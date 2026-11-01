@@ -10,10 +10,25 @@ go run ./bench -domains=false           # leave out the passive domain lookups
 go run ./bench -crapi                   # also OWASP crAPI (about 2 GB of images)
 go run ./bench -refbin DIR -nmap SCRIPT # reference tools built elsewhere; nmap unpacked without sudo
 go run ./bench -readme                  # rewrite the README's benchmark table from the newest record
-go run ./bench -merge a.json b.json     # join records of sections run apart into one (CI runs eight groups in parallel)
+go run ./bench -list-units              # the units these flags select: default:apps, polite:dirs, claims:5, once:dropin ...
+go run ./bench -units default:apps,once:docs  # only these units of the selection
+go run ./bench -merge -expect LIST a.json b.json  # join records of units run apart into one; a unit of LIST no record holds fails a check
 ```
 
 Run it from the repository root. It needs Docker (Juice Shop and VAmPI from `bench/compose.yaml`, the services lab from `bench/services.yaml` when the services section runs), network access, a C compiler (jsluice uses cgo), Python 3 (arjun), Chrome (screenshots, `-browser`, `-login`) and linux/amd64 (the reference tools are pinned to their linux/amd64 release archives, or taken from `-refbin`). It exits non-zero if a check fails, and writes a JSON record to `bench/history/`. The bench never stops containers: `-down` takes down only its own two (`azhaq-bench`).
+
+## Units, and the CI run
+
+A unit is one comparison section in one profile (`default:apps`), one claims case (`claims:5`) or a section that runs once (`once:dropin`). No unit reads another's results, so any set of units gives the same checks as a full run, and `-merge` puts the records of several jobs in the order of one run (each record lists what every unit wrote in `units`). The bench logs `<profile>: <section> took Ns` for every unit.
+
+The `bench` workflow asks `-list-units` for the units of the tag's flags, packs them into at most 14 jobs (repository variable `BENCH_MAXPARTS`) by the times in `.github/ci/bench-times.json` (a unit missing from it counts 60 s), and joins the records with `-merge -expect`: a unit no record holds is a failed check. Refresh the times from a run's log:
+
+```
+git show origin/ci-results:bench/TAG/bench.log > bench.log
+.github/ci/bench_times.py bench.log --base .github/ci/bench-times.json > new.json && mv new.json .github/ci/bench-times.json
+```
+
+The jobs fetch the reference tools (artifact `bench-tools-HASH-GOVERSION`, the hash of `bench/tools.go`) and the reference tools' results of the UTC day (`bench-ref-DAY`) from the newest earlier run that uploaded them (`.github/ci/latest-artifact.sh`; Actions caches would not do, as a tag run reads only its own ref's), and the merge job uploads the new ones. A miss only costs the install or the reference runs. `-fresh` runs the tools again and neither fetches nor uploads the results.
 
 ## Two profiles
 

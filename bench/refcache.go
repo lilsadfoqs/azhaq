@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"sync"
 	"time"
 )
 
@@ -24,14 +25,37 @@ type cachedRun struct {
 	Files   map[string]string `json:"files"` // path written → name in the entry
 }
 
-// refKey names a run by the day, the tool binary, the target and the
-// arguments, files among them by their content.
+var (
+	binHashMu sync.Mutex
+	binHashes = map[string]string{}
+)
+
+// binaryHash is the content hash of a tool, taken once a process. The size
+// and modification time would do for one machine, but jobs on other
+// machines install the same tool at another time and must reach one key.
+func binaryHash(path string) string {
+	binHashMu.Lock()
+	defer binHashMu.Unlock()
+	if h, ok := binHashes[path]; ok {
+		return h
+	}
+	sum := ""
+	if f, err := os.Open(path); err == nil {
+		h := sha256.New()
+		_, _ = io.Copy(h, f)
+		f.Close()
+		sum = hex.EncodeToString(h.Sum(nil))
+	}
+	binHashes[path] = sum
+	return sum
+}
+
+// refKey names a run by the day, the tool binary's content, the target and
+// the arguments, files among them by their content.
 func refKey(target, dir, name string, args []string) string {
 	h := sha256.New()
 	fmt.Fprintf(h, "%s\x00%s\x00%s\x00", time.Now().UTC().Format("2006-01-02"), filepath.Base(name), target)
-	if fi, err := os.Stat(name); err == nil {
-		fmt.Fprintf(h, "%d\x00%d\x00", fi.Size(), fi.ModTime().UnixNano())
-	}
+	fmt.Fprintf(h, "%s\x00", binaryHash(name))
 	outs := outputs(args)
 	for i, a := range args {
 		if p := argPath(dir, a); p != "" && !outs[i] {

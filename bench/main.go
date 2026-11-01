@@ -49,6 +49,7 @@ type record struct {
 	OpenAPI *openAPIRow  `json:"openapi,omitempty"`
 	Checks  []check      `json:"checks"`
 	Runs    []runMeasure `json:"runs"`
+	Units   []unitSpan   `json:"units,omitempty"` // what each unit wrote, in order (units.go)
 }
 
 // check is one pass/fail condition the run must meet.
@@ -105,7 +106,10 @@ func main() {
 	flag.StringVar(&refBin, "refbin", os.Getenv("AZHAQ_REFBIN"), "a folder of reference tool binaries to use before bench/.work/bin (env AZHAQ_REFBIN)")
 	flag.StringVar(&nmapAt, "nmap", os.Getenv("AZHAQ_NMAP"), "nmap, or a script that runs an unpacked one (env AZHAQ_NMAP; else nmap in PATH)")
 	readme := flag.Bool("readme", false, "rewrite the benchmark table in README.md from the newest record in -out, and exit")
-	merge := flag.Bool("merge", false, "join the records named as arguments (section jobs run apart) into one record in -out, print it, and exit")
+	merge := flag.Bool("merge", false, "join the records named as arguments (units run apart) into one record in -out, print it, and exit")
+	expect := flag.String("expect", "", "with -merge: the units the joined record must hold; each one missing becomes a failed check")
+	unitList := flag.String("units", "", "run only these units of the selection, comma-separated (default:apps, polite:dirs, claims:5, once:dropin; -list-units shows them)")
+	listUnits := flag.Bool("list-units", false, "print the units this run's flags select, one per line, and exit")
 	toolsOnly := flag.Bool("tools-only", false, "install the reference tools (and arjun) into -work/bin and exit: for a machine that runs them by hand")
 	flag.BoolVar(&fresh, "fresh", false, "run the reference tools again instead of reusing today's cached results")
 	out := flag.String("out", "bench/history", "directory for the JSON record")
@@ -120,7 +124,9 @@ func main() {
 		return
 	}
 	if *merge {
-		must(mergeRecords(flag.Args(), *out))
+		want, err := parseUnits(*expect)
+		must(err)
+		must(mergeRecords(flag.Args(), *out, want))
 		for _, c := range rec.Checks {
 			if !c.Pass {
 				os.Exit(1)
@@ -151,12 +157,40 @@ func main() {
 	if sel["probe"] && !sel["domains"] {
 		logf("-only probe without domains: the hosts are the local apps, the fleet and the three test sites")
 	}
+	// The flags that gate a section when no -only names one.
+	gate := map[string]bool{"apps": *apps, "dropin": *apps, "dirs": *apps, "fuzz": *apps, "scope": *apps, "secrets": *apps, "tenants": *apps,
+		"scale": *apps, "claims": *apps, "shots": *apps, "params": *apps, "domains": *domains, "urls": *domains, "brute": *brute,
+		"dns": true, "lab": true, "ports": *ports, "services": *ports, "network": *domains && *network, "probe": *probe,
+		"notify": true, "openapi": *apps, "docs": true}
+	// -units narrows what the flags select: a unit runs when both agree.
+	var only1 map[string]bool
+	if *unitList != "" {
+		us, err := parseUnits(*unitList)
+		must(err)
+		only1 = map[string]bool{}
+		for _, u := range us {
+			only1[u] = true
+		}
+	}
 	// on: the section runs; without -only, as its own flag says.
-	on := func(name string, def bool) bool {
+	on := func(unit, name string) bool {
+		if only1 != nil && !only1[unit] {
+			return false
+		}
 		if len(sel) == 0 {
-			return def
+			return gate[name]
 		}
 		return sel[name]
+	}
+	if *listUnits {
+		for _, u := range plannedUnits(profiles, on) {
+			fmt.Println(u)
+		}
+		return
+	}
+	planned := plannedUnits(profiles, on)
+	hasUnit := func(section string) bool {
+		return slices.ContainsFunc(planned, func(u string) bool { return unitSection(u) == section })
 	}
 
 	work, _ = filepath.Abs(work)
@@ -197,14 +231,9 @@ func main() {
 		return
 	}
 
-	// The flags that gate a section when no -only names one.
-	gate := map[string]bool{"apps": *apps, "dropin": *apps, "dirs": *apps, "fuzz": *apps, "scope": *apps, "secrets": *apps, "tenants": *apps,
-		"scale": *apps, "claims": *apps, "shots": *apps, "params": *apps, "domains": *domains, "urls": *domains, "brute": *brute,
-		"dns": true, "lab": true, "ports": *ports, "services": *ports, "network": *domains && *network, "probe": *probe,
-		"notify": true, "openapi": *apps, "docs": true}
 	docker := false
 	for _, s := range append([]string{"apps"}, dockerParts...) {
-		docker = docker || on(s, gate[s])
+		docker = docker || hasUnit(s)
 	}
 	if docker {
 		must(startApps())
@@ -228,11 +257,8 @@ func main() {
 	}
 
 	// Comparison sections: each profile in turn.
-	cmp := []struct {
-		name string
-		fn   func()
-	}{
-		{"apps", func() {
+	cmp := map[string]func(){
+		"apps": func() {
 			cur.Apps = benchApps()
 			if *crapi && !polite() {
 				cur.Apps = append(cur.Apps, benchCrapi())
@@ -240,19 +266,19 @@ func main() {
 			if len(cur.Apps) > 0 && !polite() {
 				appChecks(cur.Apps)
 			}
-		}},
-		{"dirs", func() { cur.Dirs = benchDirs(local) }},
-		{"fuzz", func() { cur.Fuzz = benchFuzz([]string{juiceURL, vampiURL}) }},
-		{"shots", func() { cur.Shots = benchShots() }},
-		{"params", func() { cur.Params = benchParams() }},
-		{"domains", func() { cur.Domains = benchDomains() }},
-		{"urls", func() { cur.URLs = benchURLs() }},
-		{"brute", func() { cur.Brute = benchBrute() }},
-		{"dns", func() { cur.DNS = benchDNS() }},
-		{"ports", func() { cur.Ports = benchPorts() }},
-		{"services", func() { cur.Services = benchServices() }},
-		{"probe", func() { cur.Probe = benchProbe(probeLocal) }},
-		{"notify", func() { cur.Notify = benchNotify() }},
+		},
+		"dirs":     func() { cur.Dirs = benchDirs(local) },
+		"fuzz":     func() { cur.Fuzz = benchFuzz([]string{juiceURL, vampiURL}) },
+		"shots":    func() { cur.Shots = benchShots() },
+		"params":   func() { cur.Params = benchParams() },
+		"domains":  func() { cur.Domains = benchDomains() },
+		"urls":     func() { cur.URLs = benchURLs() },
+		"brute":    func() { cur.Brute = benchBrute() },
+		"dns":      func() { cur.DNS = benchDNS() },
+		"ports":    func() { cur.Ports = benchPorts() },
+		"services": func() { cur.Services = benchServices() },
+		"probe":    func() { cur.Probe = benchProbe(probeLocal) },
+		"notify":   func() { cur.Notify = benchNotify() },
 	}
 	for _, p := range profiles {
 		prof = p
@@ -262,15 +288,13 @@ func main() {
 			rec.Polite = &profileSet{}
 			cur = rec.Polite
 		}
-		for _, c := range cmp {
-			if on(c.name, gate[c.name]) {
+		for _, name := range cmpSections {
+			if u := unitName(p, name); on(u, name) {
 				if docker {
 					ensureApps()
 				}
-				s0 := time.Now()
-				logf("%s: %s", p, c.name)
-				c.fn()
-				logf("%s: %s took %.0fs", p, c.name, time.Since(s0).Seconds())
+				logf("%s: %s", p, name)
+				runUnit(u, cmp[name])
 			}
 		}
 	}
@@ -280,38 +304,36 @@ func main() {
 	if docker {
 		ensureApps()
 	}
-	if on("dropin", gate["dropin"]) {
-		rec.Dropin = benchDropin(*crapi)
+	var cases []string // the claims cases to run
+	for _, id := range claimCaseIDs() {
+		if on("claims:"+id, "claims") {
+			cases = append(cases, id)
+		}
 	}
-	if on("scope", gate["scope"]) {
-		rec.Scope = benchScope(juiceURL)
+	all := len(cases) == len(claimCaseIDs())
+	if all {
+		cases = nil // every case; CLAIMS_ONLY still narrows a development run
 	}
-	if on("secrets", gate["secrets"]) {
-		rec.Secrets = benchSecrets()
+	once := map[string]func(){
+		"dropin":  func() { rec.Dropin = benchDropin(*crapi) },
+		"scope":   func() { rec.Scope = benchScope(juiceURL) },
+		"secrets": func() { rec.Secrets = benchSecrets() },
+		"tenants": func() { rec.Tenants = benchTenants() },
+		"scale":   func() { rec.Scale = benchScale(juiceURL) },
+		"regress": func() { rec.Regress = benchRegress() },
+		"network": func() { rec.Network = benchNetwork() },
+		"lab":     func() { rec.Lab = benchLab() },
+		"openapi": func() { rec.OpenAPI = benchOpenAPI() },
+		"docs":    func() { rec.Docs = benchDocs() },
 	}
-	if on("tenants", gate["tenants"]) {
-		rec.Tenants = benchTenants()
-	}
-	if on("scale", gate["scale"]) {
-		rec.Scale = benchScale(juiceURL)
-	}
-	if on("claims", gate["claims"]) {
-		rec.Claims = benchClaims()
-	}
-	if on("regress", false) {
-		rec.Regress = benchRegress()
-	}
-	if on("network", gate["network"]) {
-		rec.Network = benchNetwork()
-	}
-	if on("lab", gate["lab"]) {
-		rec.Lab = benchLab()
-	}
-	if on("openapi", gate["openapi"]) {
-		rec.OpenAPI = benchOpenAPI()
-	}
-	if on("docs", gate["docs"]) {
-		rec.Docs = benchDocs()
+	for _, name := range onceSections {
+		if name == "claims" { // its cases are units of their own
+			if all || len(cases) > 0 {
+				rec.Claims = benchClaims(cases)
+			}
+		} else if u := "once:" + name; on(u, name) {
+			runUnit(u, once[name])
+		}
 	}
 
 	stopLab()
