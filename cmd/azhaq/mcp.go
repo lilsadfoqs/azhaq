@@ -52,6 +52,7 @@ type mcpServer struct {
 	dropped map[string]bool               // requests the client cancelled: no response
 	calls   sync.WaitGroup                // requests in flight
 	stopped bool                          // a stop signal came: no request starts
+	started bool                          // initialize was answered: other requests may come
 }
 
 // heldRun are the run options a server start fixes like its scope: what the
@@ -288,6 +289,28 @@ func (s *mcpServer) serve(in io.Reader, out io.Writer) error {
 			s.notification(m)
 			continue
 		}
+		// The lifecycle: initialize first, once, and answered before the next
+		// line is read; until then only ping is answered.
+		if m.Method == "initialize" {
+			s.initialize(m)
+			continue
+		}
+		if m.Method != "ping" && !s.isStarted() {
+			s.fail(m.ID, -32600, "invalid request: the server is not initialized; send initialize first, then notifications/initialized")
+			continue
+		}
+		// Only a tool call takes time: everything else is answered here, in
+		// the order it was sent.
+		if m.Method != "tools/call" {
+			s.mu.Lock()
+			stopped := s.stopped
+			s.mu.Unlock()
+			if stopped {
+				break
+			}
+			s.request(context.Background(), m)
+			continue
+		}
 		// Known before it starts, so a cancellation sent right after the
 		// request finds it.
 		id := idKey(m.ID)
@@ -384,25 +407,43 @@ func (s *mcpServer) notification(m rpcMsg) {
 	}
 }
 
+func (s *mcpServer) isStarted() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.started
+}
+
+// initialize answers the first initialize of a connection with the server's
+// version, capabilities and instructions; a second one is an error.
+func (s *mcpServer) initialize(m rpcMsg) {
+	s.mu.Lock()
+	again := s.started
+	s.started = true
+	s.mu.Unlock()
+	if again {
+		s.fail(m.ID, -32600, "invalid request: the server is already initialized")
+		return
+	}
+	var p struct {
+		ProtocolVersion string `json:"protocolVersion"`
+	}
+	_ = json.Unmarshal(m.Params, &p)
+	v := mcpVersions[1]
+	for _, x := range mcpVersions {
+		if x == p.ProtocolVersion {
+			v = x
+		}
+	}
+	s.reply(m.ID, map[string]any{
+		"protocolVersion": v,
+		"capabilities":    map[string]any{"tools": map[string]any{"listChanged": false}},
+		"serverInfo":      map[string]any{"name": "azhaq", "title": "Azhaq recon", "version": version},
+		"instructions":    s.instructions(),
+	})
+}
+
 func (s *mcpServer) request(ctx context.Context, m rpcMsg) {
 	switch m.Method {
-	case "initialize":
-		var p struct {
-			ProtocolVersion string `json:"protocolVersion"`
-		}
-		_ = json.Unmarshal(m.Params, &p)
-		v := mcpVersions[1]
-		for _, x := range mcpVersions {
-			if x == p.ProtocolVersion {
-				v = x
-			}
-		}
-		s.reply(m.ID, map[string]any{
-			"protocolVersion": v,
-			"capabilities":    map[string]any{"tools": map[string]any{"listChanged": false}},
-			"serverInfo":      map[string]any{"name": "azhaq", "title": "Azhaq recon", "version": version},
-			"instructions":    s.instructions(),
-		})
 	case "ping":
 		s.reply(m.ID, map[string]any{})
 	case "shutdown":

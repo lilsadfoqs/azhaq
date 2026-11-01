@@ -165,7 +165,7 @@ func callText(t *testing.T, s *mcpServer, tool string, args map[string]any) (str
 // no response; progress comes early when the client asks for it.
 func TestMCPCancelAndProgress(t *testing.T) {
 	dir := t.TempDir()
-	s := &mcpServer{exe: fakeAzhaq(t, dir), dir: dir, lock: []string{"-allow", "127.0.0.1"}, locked: true, budget: 100}
+	s := &mcpServer{exe: fakeAzhaq(t, dir), dir: dir, lock: []string{"-allow", "127.0.0.1"}, locked: true, budget: 100, started: true}
 	t.Setenv("FAKE_SLOW", "1")
 	defer func(first time.Duration) { progressFirst = first }(progressFirst)
 	progressFirst = 50 * time.Millisecond
@@ -511,7 +511,7 @@ func TestMCPRefusesHostHeadersOfRoles(t *testing.T) {
 // A client that sends the language-server shutdown gets an answer, not
 // method-not-found, and the server ends when stdin closes.
 func TestMCPShutdownAnswered(t *testing.T) {
-	s := &mcpServer{dir: t.TempDir(), lock: []string{"-allow", "127.0.0.1"}, locked: true, budget: 10}
+	s := &mcpServer{dir: t.TempDir(), lock: []string{"-allow", "127.0.0.1"}, locked: true, budget: 10, started: true}
 	in := strings.NewReader(`{"jsonrpc":"2.0","id":7,"method":"shutdown"}` + "\n")
 	var out bytes.Buffer
 	if err := s.serve(in, &out); err != nil {

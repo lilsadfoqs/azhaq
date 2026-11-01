@@ -80,3 +80,7 @@ ledger.seal-apart	docs/commands/ledger.md	Only a seal kept apart from the ledger
 ledger.no-seal-matches	docs/commands/ledger.md	It fails with exit 3 when no seal matches	test:cmd/azhaq:TestLedgerVerifyWithAWrongSealSaysNoneOfItsSeals
 ledger.seal-elsewhere	docs/commands/ledger.md	The seal then lives where the ledger's own files, and whoever could edit them, do not reach	test:cmd/azhaq:TestSealToWritesAFileAndPostsToAURL
 ledger.note-counts	docs/commands/ledger.md	`N` counts this run's lines, by what each was sent to	test:cmd/azhaq:TestLedgerNoteNamesTheClasses,TestRunPortsSummaryReconcilesWithLedger
+mcp.lifecycle-refused	docs/commands/mcp.md	Before `initialize` the server answers `ping` and refuses every other request	test:cmd/azhaq:TestMCPLifecycle
+mcp.lifecycle-once	docs/commands/mcp.md	A second `initialize` on the same connection is refused	test:cmd/azhaq:TestMCPLifecycle
+mcp.lifecycle-order	docs/commands/mcp.md	requests sent back to back get their answers in the order they were sent	test:cmd/azhaq:TestMCPLifecycle
+mcp.lifecycle-scope	docs/commands/mcp.md	The scope, the budget and the pace hold for every call, however the requests are ordered	test:cmd/azhaq:TestMCPScopeHoldsAfterInitialize,TestMCPConcurrentCallsShareTheBudget
