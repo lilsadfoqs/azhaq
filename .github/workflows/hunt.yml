@@ -60,7 +60,7 @@ jobs:
         # bench/tools.go skips a tool whose version marker and binary are in
         # bin/; arjun is a venv beside it. Pins and the Go version are the key.
         id: ref
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: |
             ~/ref/bin
