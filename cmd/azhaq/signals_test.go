@@ -114,7 +114,7 @@ func TestRunStopsOnTermAndHupLikeCtrlC(t *testing.T) {
 // as the client's cancellation interrupts it, and no other call starts.
 func TestMCPStopInterruptsCallsInFlight(t *testing.T) {
 	dir := t.TempDir()
-	s := &mcpServer{exe: fakeAzhaq(t, dir), dir: dir, lock: []string{"-allow", "127.0.0.1"}, locked: true, budget: 100}
+	s := &mcpServer{exe: fakeAzhaq(t, dir), dir: dir, lock: []string{"-allow", "127.0.0.1"}, locked: true, budget: 100, started: true}
 	t.Setenv("FAKE_SLOW", "1")
 	defer func(first time.Duration) { progressFirst = first }(progressFirst)
 	progressFirst = 20 * time.Millisecond

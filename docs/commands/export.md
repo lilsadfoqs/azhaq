@@ -38,7 +38,7 @@ The output is the format you chose, on stdout.
 | Format | Output |
 | --- | --- |
 | `jsonl` | Everything: one object per map row (`"kind":"entity"`, with `evidence` and `evidence_from`), observation and edge. |
-| `urls` | Every URL, one per line. |
+| `urls` | Every URL the workspace learned, one per line: the map's URL rows, and every URL the archives gave for the run, which the workspace keeps in `DB.urls.jsonl` beside it (the graph holds one example for each URL shape, 200 a domain). Each URL once. A workspace made before the list was kept holds only the examples, and stderr says how many archived URLs they stand for. |
 | `hosts` | One per line: names that resolve, and addresses given as targets or serving the web. |
 | `names` | Every name, one per line. |
 | `targets` | Web services, one per line, for `nuclei -l` and `httpx`. See Details. |
@@ -82,6 +82,8 @@ The summary and the other exit codes are the shared ones: see [the summary](../O
 - forms
 - the pages found with a query string of their own (a GET taking those names)
 - what answered
+
+The address a description was read from (`/openapi.json`) is not a path of the API it describes: it is left out unless the description lists it.
 
 It is a valid OpenAPI document whatever went into it:
 

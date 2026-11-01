@@ -19,6 +19,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/lilsadfoqs/azhaq/internal/collectors/subcol"
+	"github.com/lilsadfoqs/azhaq/internal/dnsr"
 	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 	"github.com/lilsadfoqs/azhaq/scope"
 	"github.com/lilsadfoqs/azhaq/store"
@@ -37,6 +39,7 @@ type mcpServer struct {
 	dir     string   // where workspaces live
 	lock    []string // scope flags added to every command that touches targets
 	locked  bool     // a scope was given: active techniques may run
+	held    heldRun  // run options fixed at start, added to every command that takes them
 	rate    float64
 	budget  int64 // requests to targets over the server's life; 0: none
 	mu      sync.Mutex
@@ -49,6 +52,86 @@ type mcpServer struct {
 	dropped map[string]bool               // requests the client cancelled: no response
 	calls   sync.WaitGroup                // requests in flight
 	stopped bool                          // a stop signal came: no request starts
+	started bool                          // initialize was answered: other requests may come
+}
+
+// heldRun are the run options a server start fixes like its scope: what the
+// tools ask besides the targets, and who resolves. A client cannot set or
+// change them.
+type heldRun struct {
+	Resolvers  string `json:"resolvers,omitempty"`   // -resolvers: a list or a file, as given
+	Sources    string `json:"sources,omitempty"`     // -sources: "none" asks no third party
+	Skip       string `json:"skip,omitempty"`        // -skip: collectors never run
+	NoTakeover bool   `json:"no_takeover,omitempty"` // -no-takeover
+}
+
+// runOptions are the options for a command that maps (run, plan, resume,
+// roles' runs); the other commands take what they have of them.
+func (h heldRun) options(command string) []string {
+	var out []string
+	switch command {
+	case "run", "plan", "resume", "roles":
+		if h.Sources != "" {
+			out = append(out, "-sources", h.Sources)
+		}
+		if h.Skip != "" {
+			out = append(out, "-skip", h.Skip)
+		}
+		if h.NoTakeover {
+			out = append(out, "-no-takeover")
+		}
+		fallthrough
+	case "probe", "ports":
+		if h.Resolvers != "" {
+			out = append(out, "-resolvers", h.Resolvers)
+		}
+	case "subs":
+		if h.Sources != "" && h.Sources != "none" {
+			out = append(out, "-sources", h.Sources)
+		}
+		if h.Resolvers != "" {
+			out = append(out, "-resolvers", h.Resolvers)
+		}
+	}
+	return out
+}
+
+// view is the held options as azhaq_scope and azhaq_status show them, with
+// what an option left unset means.
+func (h heldRun) view() map[string]any {
+	or := func(v, def string) string {
+		if v == "" {
+			return def
+		}
+		return v
+	}
+	return map[string]any{
+		"resolvers":   or(h.Resolvers, "default public resolvers"),
+		"sources":     or(h.Sources, "default set"),
+		"skip":        splitList(h.Skip),
+		"no_takeover": h.NoTakeover,
+	}
+}
+
+// text is the held options as the server says them at start.
+func (h heldRun) text() string {
+	var out []string
+	if h.Resolvers != "" {
+		out = append(out, "resolvers "+h.Resolvers)
+	}
+	if h.Sources != "" {
+		out = append(out, "sources "+h.Sources)
+	}
+	if h.Skip != "" {
+		out = append(out, "skip "+h.Skip)
+	}
+	if h.NoTakeover {
+		out = append(out, "no takeover check")
+	}
+	if len(out) == 0 {
+		return "default resolvers and sources"
+	}
+	return strings.Join(out, ", ")
 }
 
 func cmdMCP(args []string) error {
@@ -62,6 +145,10 @@ func cmdMCP(args []string) error {
 	budget := fs.Int64("max-requests", 0, "requests to targets all tool calls together may send (0: no cap)")
 	rate := fs.Float64("rate", 0, "requests per second to targets in every tool call (0: no pace)")
 	dir := fs.String("dir", "azhaq-mcp", "directory for the workspaces the tools write")
+	resolvers := fs.String("resolvers", "", "DNS resolvers every tool uses (a comma list or a file, as run -resolvers): fixed at start, no tool argument sets them")
+	sources := fs.String("sources", "", "subdomain sources every tool may ask, comma-separated; none: no third party at all (no source, archive, RDAP or search engine), only the resolvers and the targets are asked; fixed at start")
+	skip := fs.String("skip", "", "collectors no tool runs, comma-separated (azhaq plan lists them): fixed at start")
+	noTakeover := fs.Bool("no-takeover", false, "no tool checks CNAMEs for a takeover: fixed at start")
 	unlocked := fs.Bool("unlocked", false, "serve without a scope: any target a tool is given may be touched (port scans stay refused)")
 	if err := parse(fs, args); err != nil {
 		return err
@@ -74,6 +161,10 @@ func cmdMCP(args []string) error {
 		// holds it to the program.
 		return usagef("azhaq mcp holds an assistant to a scope: give -allow DOMAIN (repeatable) or -scope, or -unlocked to let it touch any target it names")
 	}
+	held, err := checkHeld(*resolvers, *sources, *skip, *noTakeover)
+	if err != nil {
+		return err
+	}
 	exe, err := os.Executable()
 	if err != nil {
 		return err
@@ -81,7 +172,7 @@ func cmdMCP(args []string) error {
 	if err := os.MkdirAll(*dir, 0o755); err != nil {
 		return err
 	}
-	s := &mcpServer{exe: exe, dir: *dir, rate: *rate, budget: *budget}
+	s := &mcpServer{exe: exe, dir: *dir, rate: *rate, budget: *budget, held: held}
 	if *scopeSpec != "" {
 		sc, err := loadScope(*scopeSpec, *program)
 		if err != nil {
@@ -100,7 +191,7 @@ func cmdMCP(args []string) error {
 		s.lock = append(s.lock, "-deny-path", d)
 	}
 	s.locked = len(allow) > 0
-	fmt.Fprintf(os.Stderr, "azhaq mcp %s: %d allow, %d deny and %d deny-path rules, budget %s, workspaces in %s\n", version, len(allow), len(deny), len(denyPath), budgetText(*budget), *dir)
+	fmt.Fprintf(os.Stderr, "azhaq mcp %s: %d allow, %d deny and %d deny-path rules, budget %s, %s, workspaces in %s\n", version, len(allow), len(deny), len(denyPath), budgetText(*budget), held.text(), *dir)
 	ctx, stop := stopContext()
 	defer stop()
 	done := make(chan error, 1)
@@ -115,6 +206,32 @@ func cmdMCP(args []string) error {
 		s.calls.Wait()
 		return nil
 	}
+}
+
+// checkHeld refuses a held option no run would accept, at start rather than
+// in each call, and makes a resolvers file absolute: a command may run from
+// elsewhere.
+func checkHeld(resolvers, sources, skip string, noTakeover bool) (heldRun, error) {
+	h := heldRun{Resolvers: resolvers, Sources: sources, Skip: skip, NoTakeover: noTakeover}
+	if resolvers != "" {
+		if _, err := dnsr.ParseResolvers(resolvers); err != nil {
+			return h, usagef("-resolvers: %v", err)
+		}
+		if isFile(resolvers) {
+			if abs, err := filepath.Abs(resolvers); err == nil {
+				h.Resolvers = abs
+			}
+		}
+	}
+	if sources != "" && sources != "none" {
+		if unknown := subcol.Unknown(splitList(sources)); len(unknown) > 0 {
+			return h, usagef("-sources: no source named %s (azhaq subs -ls lists them)", strings.Join(unknown, ", "))
+		}
+	}
+	if _, err := resolveSkip(splitList(skip)); err != nil {
+		return h, usagef("-skip: %v", err)
+	}
+	return h, nil
 }
 
 // cancelAll interrupts every request in flight and starts no other.
@@ -170,6 +287,28 @@ func (s *mcpServer) serve(in io.Reader, out io.Writer) error {
 		}
 		if len(m.ID) == 0 {
 			s.notification(m)
+			continue
+		}
+		// The lifecycle: initialize first, once, and answered before the next
+		// line is read; until then only ping is answered.
+		if m.Method == "initialize" {
+			s.initialize(m)
+			continue
+		}
+		if m.Method != "ping" && !s.isStarted() {
+			s.fail(m.ID, -32600, "invalid request: the server is not initialized; send initialize first, then notifications/initialized")
+			continue
+		}
+		// Only a tool call takes time: everything else is answered here, in
+		// the order it was sent.
+		if m.Method != "tools/call" {
+			s.mu.Lock()
+			stopped := s.stopped
+			s.mu.Unlock()
+			if stopped {
+				break
+			}
+			s.request(context.Background(), m)
 			continue
 		}
 		// Known before it starts, so a cancellation sent right after the
@@ -268,25 +407,43 @@ func (s *mcpServer) notification(m rpcMsg) {
 	}
 }
 
+func (s *mcpServer) isStarted() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.started
+}
+
+// initialize answers the first initialize of a connection with the server's
+// version, capabilities and instructions; a second one is an error.
+func (s *mcpServer) initialize(m rpcMsg) {
+	s.mu.Lock()
+	again := s.started
+	s.started = true
+	s.mu.Unlock()
+	if again {
+		s.fail(m.ID, -32600, "invalid request: the server is already initialized")
+		return
+	}
+	var p struct {
+		ProtocolVersion string `json:"protocolVersion"`
+	}
+	_ = json.Unmarshal(m.Params, &p)
+	v := mcpVersions[1]
+	for _, x := range mcpVersions {
+		if x == p.ProtocolVersion {
+			v = x
+		}
+	}
+	s.reply(m.ID, map[string]any{
+		"protocolVersion": v,
+		"capabilities":    map[string]any{"tools": map[string]any{"listChanged": false}},
+		"serverInfo":      map[string]any{"name": "azhaq", "title": "Azhaq recon", "version": version},
+		"instructions":    s.instructions(),
+	})
+}
+
 func (s *mcpServer) request(ctx context.Context, m rpcMsg) {
 	switch m.Method {
-	case "initialize":
-		var p struct {
-			ProtocolVersion string `json:"protocolVersion"`
-		}
-		_ = json.Unmarshal(m.Params, &p)
-		v := mcpVersions[1]
-		for _, x := range mcpVersions {
-			if x == p.ProtocolVersion {
-				v = x
-			}
-		}
-		s.reply(m.ID, map[string]any{
-			"protocolVersion": v,
-			"capabilities":    map[string]any{"tools": map[string]any{"listChanged": false}},
-			"serverInfo":      map[string]any{"name": "azhaq", "title": "Azhaq recon", "version": version},
-			"instructions":    s.instructions(),
-		})
 	case "ping":
 		s.reply(m.ID, map[string]any{})
 	case "shutdown":
@@ -336,12 +493,17 @@ func (s *mcpServer) instructions() string {
 	if s.locked {
 		lock = "The tools are held to a scope fixed at start; targets outside it are skipped and listed in each summary, never requested."
 	}
-	return strings.Join([]string{
+	var held string
+	if h := s.held; h != (heldRun{}) {
+		held = "Fixed at start too, and not settable by a call: " + h.text() + "."
+	}
+	return strings.Join(slices.DeleteFunc([]string{
 		"Azhaq maps targets for security research: names, web services, pages, JavaScript routes, API operations, forms, parameters and access by role, in one graph per workspace. It never sends attack payloads.",
 		lock,
+		held,
 		"Budget: " + budgetText(s.budget) + " for all calls together. Every result has a summary: results, failures (retryable or not), what was skipped and why, the limit that stopped the work; azhaq_resume continues a run a limit or a cancellation stopped.",
 		"Typical flow: azhaq_plan to see what a run would send, azhaq_map to map a URL or domain into a workspace, azhaq_query and azhaq_show to read it, azhaq_roles to compare sessions, azhaq_export for Burp, Postman or ZAP.",
-	}, " ")
+	}, func(x string) bool { return x == "" }), " ")
 }
 
 // toolText is a tool result: one text block, compact JSON for data. The
@@ -398,6 +560,7 @@ func (s *mcpServer) run(ctx context.Context, progress any, touches bool, args ..
 			args = append(args, "-max-requests", fmt.Sprint(left))
 		}
 	}
+	args = append(args, s.held.options(args[0])...)
 	cmd := exec.Command(s.exe, args...)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
@@ -503,14 +666,21 @@ func (s *mcpServer) noteRun(tool string, r cmdResult, callErr error) {
 // output runs a command that reads a workspace and returns its stdout as
 // it is: an export is not lines to trim.
 func (s *mcpServer) output(ctx context.Context, args ...string) ([]byte, error) {
+	raw, _, err := s.outputNotes(ctx, args...)
+	return raw, err
+}
+
+// outputNotes is output that also gives what the command said on stderr
+// when it succeeded: notes about what the output holds.
+func (s *mcpServer) outputNotes(ctx context.Context, args ...string) ([]byte, string, error) {
 	cmd := exec.CommandContext(ctx, s.exe, args...)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	raw, err := cmd.Output()
 	if err != nil {
-		return nil, stderrError(stderr.String(), err)
+		return nil, "", stderrError(stderr.String(), err)
 	}
-	return raw, nil
+	return raw, strings.TrimSpace(stderr.String()), nil
 }
 
 // stderrError is the error a command printed, without what only makes
@@ -748,7 +918,7 @@ func (s *mcpServer) call(ctx context.Context, name string, a map[string]any, pro
 		s.mu.Lock()
 		used := s.used
 		s.mu.Unlock()
-		raw, _ := json.Marshal(map[string]any{"about": s.instructions(), "locked": s.locked, "rules": s.lock, "budget": s.budget, "used": used, "rate": s.rate})
+		raw, _ := json.Marshal(map[string]any{"about": s.instructions(), "locked": s.locked, "rules": s.lock, "run_options": s.held.view(), "budget": s.budget, "used": used, "rate": s.rate})
 		return toolText(string(raw), false), nil
 	case "azhaq_plan":
 		t, list, err := targets()
@@ -802,6 +972,9 @@ func (s *mcpServer) call(ctx context.Context, name string, a map[string]any, pro
 		ds := strList(a, "domain")
 		if len(ds) == 0 {
 			return nil, errors.New("give domain")
+		}
+		if s.held.Sources == "none" {
+			return nil, errors.New("this server was started with -sources none: no third party is asked, and every subdomain source is one")
 		}
 		args := []string{"subs", "-json", "-silent"}
 		for _, d := range ds {
@@ -1015,7 +1188,7 @@ func (s *mcpServer) call(ctx context.Context, name string, a map[string]any, pro
 		if !slices.Contains(exportFormats, format) {
 			return nil, fmt.Errorf("format %q: one of %s", format, strings.Join(exportFormats, ", "))
 		}
-		raw, err := s.output(ctx, "export", "-db", db, "-format", format)
+		raw, notes, err := s.outputNotes(ctx, "export", "-db", db, "-format", format)
 		if err != nil {
 			return nil, err
 		}
@@ -1024,7 +1197,12 @@ func (s *mcpServer) call(ctx context.Context, name string, a map[string]any, pro
 			return nil, err
 		}
 		abs, _ := filepath.Abs(path)
-		return toolText(exportPart(abs, format, raw, num(a, "offset", 0)), false), nil
+		text := exportPart(abs, format, raw, num(a, "offset", 0))
+		if notes != "" { // after the first line, before the data
+			head, rest, _ := strings.Cut(text, "\n")
+			text = head + "\nnote: " + strings.ReplaceAll(notes, "\n", "\nnote: ") + "\n" + rest
+		}
+		return toolText(text, false), nil
 	case "azhaq_diff":
 		db, err := s.existing(a)
 		if err != nil {
@@ -1099,7 +1277,7 @@ func (s *mcpServer) status() (map[string]any, error) {
 		budget["used"] = used
 	}
 	raw, _ := json.Marshal(map[string]any{
-		"scope":      map[string]any{"locked": s.locked, "rules": s.lock},
+		"scope":      map[string]any{"locked": s.locked, "rules": s.lock, "run_options": s.held.view()},
 		"budget":     budget,
 		"workspaces": workspaces,
 	})
@@ -1208,6 +1386,7 @@ var mcpRunFlags = map[string]bool{
 	"url": true, "domain": true, "cidr": true, "passive": true, "browser": true, "graphql": true, "depth": true, "timeout": true,
 	"header": true, "login": true, "login-user": true, "max-requests": true, "rate": true, "deny": true, "deny-path": true, "quiet": true,
 	"json": true, "probe": true, "no-favicon": true, "skip": true, "port-rate": true, "max-items": true, "live": true,
+	"resolvers": true, "sources": true, "no-takeover": true,
 }
 
 // forMCP rewrites what a summary says for the command line into what a

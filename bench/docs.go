@@ -24,7 +24,7 @@ type docsRow struct {
 var (
 	// An active option does not need -allow or a scope: the targets given are its scope.
 	needsScope = regexp.MustCompile("(?i)\\b(needs?|requires?)\\b[^.\\n|]{0,60}(`?-allow`?|\\ba scope\\b)")
-	getsOnly   = regexp.MustCompile(`(?i)\bGETs? only\b|\bonly GETs?\b|\bGET requests only\b`)
+	getsOnly   = regexp.MustCompile(`(?i)\bGETs?[ -]only\b|\bonly GETs?\b|\bGET requests only\b`)
 	// A "GETs only" that speaks for the whole tool, not one command's replay.
 	generalClaim = regexp.MustCompile(`(?i)\bsends?\b|requests? (are|is)|\bports?\b|banner|every request|all requests`)
 	latestRun    = regexp.MustCompile(`Latest run \((\d{4}-\d{2}-\d{2}), v?(\d+\.\d+\.\d+)`)
@@ -55,7 +55,21 @@ func benchDocs() *docsRow {
 	if out, err := exec.Command(azhaq, "help", "-json").Output(); err == nil {
 		text["help -json"] = string(out)
 	}
-	for _, f := range append(files, "help -json") {
+	// What a client reads besides help: a plan's sends and the MCP tools' descriptions.
+	// "GETs only" in them is a claim of safety whatever else the line says.
+	strict := map[string]bool{"plan -json": true, "mcp tools/list": true}
+	if out, err := exec.Command(azhaq, "plan", "-url", "http://127.0.0.1:1/", "-json").Output(); err == nil {
+		text["plan -json"] = string(out)
+	}
+	mcpDir, _ := os.MkdirTemp("", "azhaq-bench-docs-")
+	defer os.RemoveAll(mcpDir)
+	mcp := exec.Command(azhaq, "mcp", "-unlocked", "-dir", mcpDir)
+	mcp.Stdin = strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"bench","version":"1"}}}` + "\n" +
+		`{"jsonrpc":"2.0","method":"notifications/initialized"}` + "\n" + `{"jsonrpc":"2.0","id":2,"method":"tools/list"}` + "\n")
+	if out, err := mcp.Output(); err == nil {
+		text["mcp tools/list"] = string(out)
+	}
+	for _, f := range append(files, "help -json", "plan -json", "mcp tools/list") {
 		ls := strings.Split(text[f], "\n")
 		for i, l := range ls {
 			low := strings.ToLower(l)
@@ -70,13 +84,13 @@ func benchDocs() *docsRow {
 			}
 			if getsOnly.MatchString(l) && generalClaim.MatchString(l) {
 				ctx := strings.Join(ls[max(0, i-1):min(len(ls), i+2)], " ")
-				if !strings.Contains(strings.ToUpper(ctx), "HEAD") {
-					row.Hits = append(row.Hits, fmt.Sprintf("%s:%d: 'GETs only' without HEAD: %s", f, i+1, clip(strings.TrimSpace(l), 120)))
+				if !strings.Contains(strings.ToUpper(ctx), "HEAD") || strict[f] {
+					row.Hits = append(row.Hits, fmt.Sprintf("%s:%d: 'GETs only': %s", f, i+1, clip(strings.TrimSpace(l), 120)))
 				}
 			}
 		}
 	}
-	addCheck("docs: no public doc says an active option needs -allow or a scope, or that requests are GETs only without HEAD", len(row.Hits) == 0,
+	addCheck("docs: no public doc says an active option needs -allow or a scope, or that requests are GETs only (without HEAD, or in a plan or an MCP description)", len(row.Hits) == 0,
 		"%d lines: %s", len(row.Hits), clipList(row.Hits, 6))
 
 	// The README's benchmark label against the release and the newest record.

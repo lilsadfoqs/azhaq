@@ -35,7 +35,7 @@ Entries are grouped by what you were doing:
 
 ### Why was `/logout` (or `/exec`, `/createdb`) requested?
 
-**Why:** azhaq sends a GET to every URL it finds in scope. It cannot know what a GET does on the server: a name says nothing reliable, and the same name is a read-only page on one app and a state change on another. So no name keeps a URL out. Writes (POST, PUT, PATCH, DELETE) are different: they are sent only with their flags.
+**Why:** azhaq sends a GET to every URL it finds in scope. It cannot know what a GET does on the server: a name says nothing reliable, and the same name is a read-only page on one app and a state change on another. So no name keeps a URL out, and a GET that deletes or logs out is asked. Writes are different: a write is a request with a method other than GET, HEAD or OPTIONS (POST, PUT, PATCH, DELETE), and it is sent only with its flag. That is a promise about the method, not that nothing changes: see [what azhaq sends](CONCEPTS.md#what-azhaq-sends-and-what-it-cannot-know).
 
 **Fix:** Say which paths must not be requested, with your own rule.
 

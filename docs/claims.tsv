@@ -1,0 +1,87 @@
+# What the README and the command pages claim, and what proves it. CI runs
+# `go run ./scripts/claims`: it fails on a claim with no proof, a claim whose text
+# is gone from its page, a proof that is gone from the code, and, for the pages
+# named by @cover, any line that reads as a claim and is not here.
+#
+# id <TAB> page <TAB> a piece of the claim's own text <TAB> proof
+# proof: test:DIR:TestName[,TestName] | bench:TEXT of a bench check | file:PATH | note:WHY
+# The id starts with the page it is about (README.md: readme., docs/commands/plan.md: plan.).
+
+@cover README.md docs/commands/mcp.md docs/commands/plan.md docs/commands/worker.md docs/commands/query.md docs/commands/ledger.md
+
+readme.drop-in	README.md	with their flags and JSON field names	test:cmd/azhaq:TestMigratingCoversTheTools,TestDocsNameOnlyFlagsThatExist;bench:drop-in: azhaq probe reads stdin and writes httpx's JSON fields
+readme.maps-and-compares	README.md	It maps the routes an app's JavaScript calls and compares what each of your accounts may read and write	bench:juice-shop: ≥ 90% of the server routes its frontend calls;bench:roles: Juice Shop anonymous → user
+readme.scope-budget-ledger	README.md	It holds every request to a scope and a budget, and records what it sent	bench:scope: no request leaves the program's scope;bench:summary = ledger = what arrived;test:internal/egress:TestTargetClientRefusesWhatLeavesTheScope
+readme.one-workspace	README.md	Everything lands in one SQLite workspace you can query, export and diff	bench:identical runs diff empty;bench:export: targets and HTML report;test:cmd/azhaq:TestEveryCommandHasAPage
+readme.permute	README.md	resolves variations of the names found	test:cmd/azhaq:TestRunPermutesTheNamesTheBruteForceFound;test:internal/collectors/brutecol:TestPermute
+readme.interact	README.md	Chrome clicks the buttons and menus of an app that draws its pages in the browser	test:internal/browser:TestInteractClicksAndSendsNoWrite;test:cmd/azhaq:TestInteractAddsToTheCrawlWhenAClickLeavesTheScope
+readme.help-json	README.md	`azhaq help -json` describes every flag for a program to read	test:cmd/azhaq:TestHelpAllHoldsEveryFlag,TestHelpJSONMarksHiddenFlagsAndCommands
+readme.docs-offline	README.md	`azhaq docs` prints an overview and the documentation offline	test:cmd/azhaq:TestDocsOverview,TestDocsPrintsACommandPage
+readme.install	README.md	installs the latest release for Linux or macOS (amd64 or arm64)	test:cmd/azhaq:TestInstallScriptOffline;file:scripts/install.sh
+readme.install-checksum	README.md	Nothing is written when the checksum does not match	test:cmd/azhaq:TestInstallScriptOffline;file:scripts/install_offline_test.sh
+readme.install-no-cosign	README.md	Without cosign, it installs after the checksum check	test:cmd/azhaq:TestInstallScriptOffline;file:scripts/install_offline_test.sh
+readme.install-require-signature	README.md	refuses that: the script stops before downloading anything when cosign is missing	test:cmd/azhaq:TestInstallScriptOffline;file:scripts/install_offline_test.sh
+readme.install-cosign-path	README.md	names the cosign to use. The script stops if it is not an executable	test:cmd/azhaq:TestInstallScriptOffline;file:scripts/install_offline_test.sh
+readme.install-tools	README.md	It names every missing tool before it downloads anything	test:cmd/azhaq:TestInstallScriptOffline;file:scripts/install_offline_test.sh
+readme.advice	README.md	Only scan systems you are allowed to test.	note:advice to the reader, not a behaviour of the tool
+readme.juice-example	README.md	The rows and counts are an example, not a measurement	test:bench:TestJuiceShopImageIsPinnedTheSameEverywhere
+readme.roles-cells	README.md	Each column is one role's answer as `status:size`	test:cmd/azhaq:TestRolesTableCellsReadAsTheREADMESays
+readme.coverage-catchall	README.md	it answered with the page every unknown path gets	test:cmd/azhaq:TestDocsListTheCodesValues;test:internal/fetch:TestCatchAllSPA
+readme.coverage-error	README.md	`error`: no answer.	test:cmd/azhaq:TestDocsListTheCodesValues
+readme.coverage-gone	README.md	`gone`: 404 or 410.	test:cmd/azhaq:TestDocsListTheCodesValues,TestRunDirsRowsAreNotCappedWhenNoLimitWasHit
+readme.coverage-hint	README.md	`hint`: known, not proven by a GET.	test:cmd/azhaq:TestDocsListTheCodesValues;test:engine:TestScriptRoutesAreNotGone
+readme.coverage-skipped	README.md	not requested, because a `-deny-path` rule of yours keeps its path out	test:engine:TestEveryFoundGetIsRequestedAndDenyPathIsListed
+readme.coverage-capped	README.md	not requested, because a limit ran out	test:engine:TestMaxItemsMarksCapped;test:cmd/azhaq:TestContractRequestBudgetResumesToTheSameMap
+readme.evidence-suffix	README.md	A row that no request answered ends with how it is known	test:cmd/azhaq:TestEvidenceInRowJSONAndExports;test:engine:TestEvidenceLevelOrder
+readme.output-contract	README.md	Every command prints results on stdout and a summary on stderr	test:cmd/azhaq:TestContractSettleKeepsTheInvariants,TestContractInvariantsOnDemo,TestMissingArgumentsExitUsage
+readme.migrating	README.md	Every tool's own command lines, flag by flag, are in	test:cmd/azhaq:TestMigratingCoversTheTools
+readme.scope-control	README.md	No request to a target goes to a host outside the [scope]	bench:scope: no request leaves the program's scope;bench:scope: no request leaves the program's scope with Chrome;test:internal/fetch:TestScopeStopsRequestsAndRedirects,TestSameSiteScope;test:internal/browser:TestScope
+readme.kill-switch	README.md	no request, connection or query starts after it exists	test:internal/egress:TestKillFileStopsSpendAndTake,TestEverySendLooksForTheKillFileItself,TestPortDialerStopsAtTheKillFile,TestDNSExchangeStopsAtTheKillFile
+readme.ledger	README.md	Every request and connection of a run with a workspace is recorded in a hash-chained file that a seal closes	bench:summary = ledger = what arrived;test:cmd/azhaq:TestLedgerCommandVerify,TestLedgerCommandVerifySealCatchesARechainedForgery
+readme.sends-get	README.md	every request azhaq sends to a target on purpose is a GET	test:engine:TestEveryFoundGetIsRequestedAndDenyPathIsListed;test:cmd/azhaq:TestPlanSendsNameWhatIsPlanned,TestDocsStateWhatTheGETPromiseIs
+readme.sessions	README.md	A signed-in run checks its session as it goes	test:engine:TestMapSignsInAgainWhenALinkEndsTheSession,TestMapStopsWhenACookieSessionEnds,TestMapSurvivesASilentLogout
+readme.sessions-cookie	README.md	a `-cookie` run stops with a failure and exit 3 at the check that finds it	test:cmd/azhaq:TestCookieRunStopsAtTheRequestThatEndedItsSession;test:engine:TestMapStopsWhenACookieSessionEnds
+readme.kinds-of-request	README.md	Pages, scripts, API descriptions, GET forms and 51 built-in path checks are GETs	test:cmd/azhaq:TestDocsCountTheBuiltInPathsAsThePlanDoes,TestPlanSendsNameWhatIsPlanned
+readme.passive	README.md	`-passive` sends nothing to the targets	test:engine:TestPassiveSkipsHTTP;test:cmd/azhaq:TestRunDemoPassive
+readme.mcp-fixed	README.md	are fixed at start, and no tool argument can widen them	test:cmd/azhaq:TestMCPHeldRunOptionsReachTheCommands,TestMCPMapAndResume,TestMCPRefusesHostHeaders
+readme.mcp-schema	README.md	An argument the schema does not take is refused	test:cmd/azhaq:TestMCPProtocol
+readme.mcp-unlocked	README.md	Without `-allow` or `-scope` the server does not start	test:cmd/azhaq:TestMCPProtocol
+readme.bench-passive	README.md	Public, passive lookups only	note:says what the bench asks of third parties, and the bench sections it names run only those
+readme.bench-both-profiles	README.md	Every comparison runs twice, as a reviewer runs it	bench:results ≥ the reference's;bench:time ≤ 1.05× the reference's
+readme.bench-win-rule	README.md	a row is a win only when azhaq has at least the reference's results in at most 1.05 times its time	bench:results ≥ the reference's;bench:time ≤ 1.05× the reference's
+readme.bench-truth	README.md	The Juice Shop truth is the 77 routes its server defines that its frontend calls	bench:juice-shop: ≥ 90% of the server routes its frontend calls
+readme.bench-two-rows	README.md	Each app has two route rows	test:bench:TestKnownRoutesRowNamesTheAppBuild,TestCrawlTruthSplit
+readme.bench-vampi	README.md	VAmPI's routes are in its OpenAPI document, which a crawler never reaches	bench:vampi: paths from /openapi.json
+readme.bench-table	README.md	writes the table above from the newest record in `bench/history`	test:bench:TestReadmeBlockCarriesTheLabelTheDriftCheckReads;bench:README's 'Latest run (date, vX)'
+readme.bench-latest	README.md	Latest run (	test:bench:TestReadmeBlockCarriesTheLabelTheDriftCheckReads;bench:README's 'Latest run (date, vX)'
+readme.docs-pointer-troubleshooting	README.md	a URL that is `hint`, a thin map, exit 3, exit 4, the kill file, Chrome	test:cmd/azhaq:TestDocLinksLeadToHeadings
+readme.docs-pointer-architecture	README.md	every collector, how the engine works, limitations	test:cmd/azhaq:TestDocLinksLeadToHeadings
+readme.juice-routes	README.md	azhaq finds 70 of the 77 routes	bench:juice-shop: ≥ 90% of the server routes its frontend calls;test:bench:TestKnownRoutesRowNamesTheAppBuild
+mcp.scope-budget-pace	docs/commands/mcp.md	Holds every tool to the scope given by `-scope`, `-allow`, `-deny` and `-deny-path`	test:cmd/azhaq:TestMCPMapAndResume,TestMCPConcurrentCallsShareTheBudget,TestMCPRefusesHostHeaders,TestRegressSAF09MCPPortsHonourTheBudget
+mcp.held-options	docs/commands/mcp.md	Holds every tool to the resolvers and sources given by	test:cmd/azhaq:TestMCPHeldRunOptionsReachTheCommands,TestMCPMapHeldToResolversAndNoSources,TestMCPResumeKeepsTheHeldOptions,TestMCPRefusesBadHeldOptions
+mcp.signal-exit	docs/commands/mcp.md	A signal ends it with exit 0, after the commands in flight stop	test:cmd/azhaq:TestMCPServerStopsOnSIGTERM,TestMCPStopInterruptsCallsInFlight
+plan.sends-nothing	docs/commands/plan.md	without sending anything	test:cmd/azhaq:TestEgressContract
+plan.kinds-of-request	docs/commands/plan.md	The kinds of request sent to the targets	test:cmd/azhaq:TestPlanSendsNameWhatIsPlanned,TestPlanListsEveryCollectorFlag,TestPlanSaysWhatScreenshotsSend,TestPlanChromeWrites
+plan.found-domains	docs/commands/plan.md	`found_domains_asked` is about domains found on the way	test:cmd/azhaq:TestPlanRequests
+plan.bound-not-count	docs/commands/plan.md	The plan gives a bound, not a count	test:cmd/azhaq:TestPlanRequests
+plan.max-names	docs/commands/plan.md	At most `max_names` names are looked up	test:cmd/azhaq:TestPlanRequests
+plan.per-web-service	docs/commands/plan.md	`per_web_service` covers a web service's page, the favicon and the built-in paths	test:cmd/azhaq:TestPlanRequests,TestDocsCountTheBuiltInPathsAsThePlanDoes
+plan.cap	docs/commands/plan.md	`cap` is set by `cap_by`	test:cmd/azhaq:TestPlanRequests
+plan.sources-none	docs/commands/plan.md	With `-sources none` no collector that asks a third party is in the plan	test:cmd/azhaq:TestPlanSourcesNoneListsNoThirdParty
+worker.deny-path	docs/commands/worker.md	A URL a `-deny-path` rule keeps out is never sent	test:cmd/azhaq:TestWorkerHoldsDenyPathAndReportsIt
+worker.session	docs/commands/worker.md	In a signed-in run it reports a 401, a redirect to the sign-in page or a cleared session cookie	test:engine:TestWorkersSessionEndsAndIsRenewed,TestWorkersSessionLostIsNotRenewed;test:cmd/azhaq:TestWorkersSessionGivenByCookieEndsTheRun
+query.every-row	docs/commands/query.md	`query` prints every row that matches, unless `-limit` says otherwise	test:cmd/azhaq:TestRegressOUT03QueryPrintsEveryRow;test:bench:TestQueryDefaultUnlimited
+ledger.records-every-class	docs/commands/ledger.md	Check, count or export the record of every request, connection and query a run sent	test:internal/ledger:TestEntriesCarryTheirClass;test:cmd/azhaq:TestLedgerSummaryCountsByClass,TestNotifyLedgerListsEveryRequestItSent;test:internal/egress:TestDNSExchangeIsInTheLedgerAsADNSLine;bench:summary = ledger = what arrived
+ledger.summary-text	docs/commands/ledger.md	The text lists the counts by `class`, `kind`, `method`, `host` and `rule`	test:cmd/azhaq:TestLedgerSummaryCountsByClass;test:internal/ledger:TestALedgerFromBeforeClassesStillVerifies
+ledger.classes	docs/commands/ledger.md	Each line has a class: `target` (a host the run was pointed at)	test:internal/ledger:TestEntriesCarryTheirClass,TestALedgerFromBeforeClassesStillVerifies;test:cmd/azhaq:TestLedgerSummaryCountsByClass
+ledger.verify-proves	docs/commands/ledger.md	It proves only that no recorded line was edited, removed or reordered	test:internal/ledger:TestVerifyCatchesAnEditedLine;test:cmd/azhaq:TestLedgerCommandVerify
+ledger.verify-cannot-see-a-cut	docs/commands/ledger.md	It cannot see a run of lines cut from the middle, with the rest re-chained from there	test:cmd/azhaq:TestLedgerCommandVerifySealCatchesARechainedForgery
+ledger.rechained-lines	docs/commands/ledger.md	The re-chained lines have a new `seq`, `prev` and `hash`	test:cmd/azhaq:TestLedgerCommandVerifySealCatchesARechainedForgery;test:internal/ledger:TestVerifySealCatchesLinesRemovedAndRechained
+ledger.seal-apart	docs/commands/ledger.md	Only a seal kept apart from the ledger's own file proves that this did not happen	test:cmd/azhaq:TestLedgerCommandVerifySealCatchesARechainedForgery
+ledger.no-seal-matches	docs/commands/ledger.md	It fails with exit 3 when no seal matches	test:cmd/azhaq:TestLedgerVerifyWithAWrongSealSaysNoneOfItsSeals
+ledger.seal-elsewhere	docs/commands/ledger.md	The seal then lives where the ledger's own files, and whoever could edit them, do not reach	test:cmd/azhaq:TestSealToWritesAFileAndPostsToAURL
+ledger.note-counts	docs/commands/ledger.md	`N` counts this run's lines, by what each was sent to	test:cmd/azhaq:TestLedgerNoteNamesTheClasses,TestRunPortsSummaryReconcilesWithLedger
+mcp.lifecycle-refused	docs/commands/mcp.md	Before `initialize` the server answers `ping` and refuses every other request	test:cmd/azhaq:TestMCPLifecycle
+mcp.lifecycle-once	docs/commands/mcp.md	A second `initialize` on the same connection is refused	test:cmd/azhaq:TestMCPLifecycle
+mcp.lifecycle-order	docs/commands/mcp.md	requests sent back to back get their answers in the order they were sent	test:cmd/azhaq:TestMCPLifecycle
+mcp.lifecycle-scope	docs/commands/mcp.md	The scope, the budget and the pace hold for every call, however the requests are ordered	test:cmd/azhaq:TestMCPScopeHoldsAfterInitialize,TestMCPConcurrentCallsShareTheBudget

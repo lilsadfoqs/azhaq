@@ -320,8 +320,6 @@ func planFor(cat *catalog.Catalog, seeds []types.Seed, b engine.Budgets, paths [
 		// The techniques below still go to the targets: -passive leaves out the pages.
 		p.Sends = append([]string{"no pages are requested (-passive); only what the active techniques send goes to the targets"}, append(gets, others...)...)
 		return p
-	case len(others) == 0 && !send.chrome:
-		p.Sends = []string{"GET requests only, to the targets and what they lead to inside the scope"}
 	default:
 		p.Sends = []string{"GET requests to the targets and what they lead to inside the scope"}
 	}

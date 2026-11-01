@@ -14,7 +14,7 @@ Your review must be independent and evidence-based. You decide only on what you 
 
 - Exercise every capability on the checklist below, or say in the report why you could not.
 - **An area cannot score above 6** if you did not exercise its listed capabilities. Mark each untested capability **untested**, not as passed.
-- **A safety claim that proves false** caps that area at 5 and the overall at 7. Safety claims are: scope enforcement, GET-only mapping by default, writes sent only with their flags, `-deny-path` keeping paths out, a lost session never going on as an anonymous run, the MCP lock, the request budget, the ledger matching what was sent, and the kill switch.
+- **A safety claim that proves false** caps that area at 5 and the overall at 7. Safety claims are: scope enforcement, no write method (anything but GET, HEAD or OPTIONS) sent without its flag, `-deny-path` keeping paths out, a lost session never going on as an anonymous run, the MCP lock, the request budget, the ledger matching what was sent, and the kill switch. A GET that changes data on the target is not a break: azhaq asks every GET it finds in scope, and `-deny-path` is the only rule that keeps one out.
 - Checklist:
   - **Subdomains:** passive collection, live filtering, wildcard handling, takeover candidates, the coverage estimate.
   - **DNS:** resolution and brute force.

@@ -65,7 +65,7 @@ Evaluators score what they try, and some of azhaq's strongest features are the o
   - Known and intended, not a finding: under `-rate` (and `-dns-rate`), azhaq paces every request, the calibration guesses of `dirs` and `fuzz -ac` included; ffuf sends its calibration unpaced. At `-rate 5` a sweep is therefore about (guesses ÷ rate) seconds longer than ffuf's (4–6 guesses: about one second), and azhaq never exceeds the rate. Report it only if the gap is larger than that, or if azhaq is slower at default settings (no `-rate`). The same holds for any reference tool whose rate flag does not hold back every request it sends: measure what each tool actually sends per second before calling azhaq slower.
   - If azhaq finds more, check that the extra results are real.
 - **Exit codes:** 0 complete, 1 error, 2 usage, 3 some failures, 4 stopped by a limit. Check them against `help`. A summary whose numbers do not add up is a finding.
-- **Safety claims:** scope (including a `Host` header or anything else that names a host), GET-only default, ledger equals what was sent, budget, kill switch, `-proxy` carrying every request, and the MCP lock. Any break is critical.
+- **Safety claims:** scope (including a `Host` header or anything else that names a host), no write method (anything but GET, HEAD or OPTIONS) sent without its flag, ledger equals what was sent, budget, kill switch, `-proxy` carrying every request, and the MCP lock. Any break is critical. A GET that changes data on the target is not a break: azhaq asks every GET it finds in scope, and `-deny-path` is the only rule that keeps one out.
 - **MIGRATING.md:** check that a flag it maps does what the reference tool's flag does.
 
 ## Report

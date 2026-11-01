@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/lilsadfoqs/azhaq/engine"
+	"github.com/lilsadfoqs/azhaq/internal/collectors/urlcol"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"github.com/lilsadfoqs/azhaq/store"
 	"github.com/lilsadfoqs/azhaq/types"
@@ -52,10 +53,11 @@ func cmdQuery(args []string) error {
 	if *failed {
 		return queryFailed(path, *asJSON, rep)
 	}
-	rows, err := mapRows(path)
+	g, err := readGraph(path)
 	if err != nil {
 		return err
 	}
+	rows := g.rows
 	var matchRE *regexp.Regexp
 	if *re && *match != "" {
 		if matchRE, err = regexp.Compile("(?i)" + *match); err != nil {
@@ -135,6 +137,11 @@ func cmdQuery(args []string) error {
 	rep.DB = path
 	if matched > len(out) {
 		rep.Notes = append(rep.Notes, fmt.Sprintf("%d rows matched; -limit %d printed the first %d (best first)", matched, *limit, len(out)))
+	}
+	if inList(*typ, string(types.TypeURL)) {
+		if n := urlcol.Held(g.obs, archiveListed(path, g.run)); n != "" {
+			rep.Notes = append(rep.Notes, n)
+		}
 	}
 	return rep.finish(*asJSON, false)
 }
@@ -501,4 +508,11 @@ func portStates(rows []engine.MapEntry) map[string]int {
 		counts["open|filtered ports"] = filtered
 	}
 	return counts
+}
+
+// archiveListed: the workspace keeps the list of every archived URL of the run.
+func archiveListed(db, run string) bool {
+	found := false
+	_ = urlcol.ReadArchive(urlcol.ArchivePath(db), run, func(string, string) { found = true })
+	return found
 }

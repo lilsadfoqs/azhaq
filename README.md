@@ -45,7 +45,7 @@ The drop-in commands take your tools' flags and print their JSON field names. [d
 
 ## What it adds
 
-- **Routes other crawlers miss.** On OWASP Juice Shop azhaq finds 70 of the 77 routes the server defines that its frontend calls. It lists their methods and body fields, and names the script line that calls each. katana with its jsluice parser (`-jc -jsl`) lists 1. Grepping the scripts it fetched for quoted paths gives 37, as bare strings. It also saves reading bundles by hand.
+- **Routes other crawlers miss.** On OWASP Juice Shop v20.3.0, started fresh, azhaq finds 70 of the 77 routes the server defines that its frontend calls. It lists their methods and body fields, and names the script line that calls each. katana with its jsluice parser (`-jc -jsl`) lists 1. Grepping the scripts it fetched for quoted paths gives 37, as bare strings. It also saves reading bundles by hand.
 - **Access control with evidence.** [`azhaq roles`](docs/commands/roles.md) signs in as each of your accounts, reuses each session against the others, and reports `[bob reads alice's object]` with why the object is alice's. It stands in for Autorize and for diffing Burp histories. `-replay-writes` extends this to writes.
 - **Where to look first.** [`azhaq hunt`](docs/commands/hunt.md) ranks the mapped routes, hosts and files, each with the reasons for its score and the command to run next.
 - **The API routes a deploy added.** [`azhaq watch`](docs/commands/watch.md) compares the routes scripts call from one run to the next and ties each change to the script that calls it. It stands in for cron and diff.
@@ -99,7 +99,7 @@ sha256sum --ignore-missing -c checksums.txt
 
 Only scan systems you are allowed to test.
 
-- `localhost:3000` and `localhost:5000` are lab containers: `docker run -p 3000:3000 bkimminich/juice-shop` and `docker run -p 5000:5000 erev0s/vampi`.
+- `localhost:3000` and `localhost:5000` are lab containers: `docker run --rm -p 3000:3000 bkimminich/juice-shop:v20.3.0` and `docker run --rm -p 5000:5000 erev0s/vampi:latest@sha256:0a5a224b6e14ae7da6a6ea265178ff71286ff903aec74adee98f660bb0e4ca12`. Start Juice Shop fresh: a used one (registered users, baskets, feedback) answers other rows, and the benchmark's 70 of 77 known routes are for v20.3.0 started fresh, with no flag but `-url` and `-db`.
 - `$TA` and `$TB` hold two accounts' tokens. `alice.har` and `alice.xml` are those accounts' saved browsing.
 - `-program` names a program in the platform's public list: `tesla` on Bugcrowd, `security` on HackerOne. `acme` in other examples stands for yours.
 
@@ -119,6 +119,8 @@ azhaq run: 190 map rows (119 URLs, 71 api, 43 client routes, 11 auth, 8 forbidde
   next: azhaq export -db juice.db -format openapi > api.json   (for Burp, Postman, ZAP)
 ```
 
+The rows and counts are an example, not a measurement: they change with the app's build and state and with the flags. The number measured for the pinned build, a fresh `bkimminich/juice-shop:v20.3.0` and `azhaq run -url URL -db DB` with no other flag, is the 70 of 77 known routes in the [benchmark table](#benchmark); `go run ./bench -only apps -profile default` reproduces it (it needs Docker and a C compiler: [bench/README.md](bench/README.md)).
+
 ### Compare two accounts
 
 ```
@@ -127,7 +129,7 @@ $ azhaq roles -role anon -role "alice=Authorization: Bearer $TA" -role "bob=Auth
   200:1.1k → 200:1.1k → 200:1.1k  http://localhost:5000/users/v1/_debug  [anyone reads sensitive fields: password]
 ```
 
-Each column is one role's answer as `status:bytes`, in the order the roles were given. A `-` is a role that was never asked.
+Each column is one role's answer as `status:size`, in the order the roles were given: the size is bytes up to 1k, then `1.1k` or `2.0M`; `200:refused` is the app's refusal page answered as a success, `200:err` an error answered as one, and a trailing `?` a session that may have ended. A `-` is a role that was never asked.
 
 Or give each account's browsing as it was saved, one file per account, with no headers to copy and no crawl: a HAR from the browser, Caido or Burp, or Burp's "Save items" XML. An anonymous role is added. The page on [`roles`](docs/commands/roles.md#history-files) says how each is used.
 
@@ -230,9 +232,9 @@ These controls hold for everything azhaq sends to a target. [Concepts](docs/CONC
 - **Budget and pace.** `-max-requests` caps what a run sends, and `-rate` paces it. `azhaq resume` continues a run that a limit stopped. `azhaq plan` prints what a run would send before anything goes out.
 - **Kill switch.** Create the kill file (`-kill-file`, default `DB.stop`) and no request, connection or query starts after it exists.
 - **Ledger.** Every request and connection of a run with a workspace is recorded in a hash-chained file that a seal closes. `azhaq ledger -verify` checks it.
-- **What azhaq sends.** azhaq sends a GET to every URL it finds in scope. It cannot know what a GET does on the server, so no name keeps a URL out. Writes (POST, PUT, PATCH, DELETE, forms, a page's own writes in Chrome, role write replays) are sent only with their flags. `-deny-path REGEX` keeps paths out, by any collector and Chrome. `azhaq plan` lists what will be sent, and the ledger records what was sent. Chrome saves no download.
+- **What azhaq sends.** Without a flag, every request azhaq sends to a target on purpose is a GET, besides the kinds in the table linked below (port probes, Chrome's HEAD and OPTIONS, a sign-in). A write means a method other than GET, HEAD or OPTIONS: POST, PUT, PATCH, DELETE, POST forms, a page's own writes in Chrome and role write replays go only with their flags. A GET can change data or end a session, and azhaq asks it: every URL in a link, a script, a GET form (`crawl` fills and asks them by default, `run` with `-fill-forms`) or an API description is requested, `/createdb` and `/logout` included, because no name keeps a URL out. `-deny-path REGEX` does, for any collector and Chrome. `azhaq plan` lists the kinds of request and the seeds, and the ledger lists every URL sent. Chrome saves no download. [The promise in full](docs/CONCEPTS.md#what-azhaq-sends-and-what-it-cannot-know).
 - **Sessions.** A signed-in run checks its session as it goes. If a request ends it, a `-login` run signs in again and asks again what the lost session answered; a `-cookie` run stops with a failure and exit 3 at the check that finds it, at once after an answer that looks like the end (a 401, a cleared cookie, a redirect to the sign-in page) and within 50 requests otherwise; the failure counts what was answered without the session in between. See [Sessions](docs/CONCEPTS.md#sessions).
-- **Kinds of request.** Pages, scripts, API descriptions and 32 built-in path checks are GETs. Guesses, ports, UDP and wordlists go out only when you ask. A port (`-ports`) gets a TCP connect, and one that says nothing also a `HEAD /`. [Every row](docs/CONCEPTS.md#what-azhaq-sends).
+- **Kinds of request.** Pages, scripts, API descriptions, GET forms and 51 built-in path checks are GETs. Guesses, ports, UDP and wordlists go out only when you ask. A port (`-ports`) gets a TCP connect, and one that says nothing also a `HEAD /`. [Every row](docs/CONCEPTS.md#what-azhaq-sends).
 - **Passive.** `-passive` sends nothing to the targets. Third-party sources, such as subdomain lists, archives and RDAP, are asked about your domains.
 
 ## For assistants: MCP
@@ -241,13 +243,13 @@ These controls hold for everything azhaq sends to a target. [Concepts](docs/CONC
 claude mcp add azhaq -- azhaq mcp -allow example.com -max-requests 5000 -rate 5
 ```
 
-The tools run azhaq itself and return its summary and rows. The scope, the budget for all calls together and the pace are fixed at start, and no tool argument can widen them. An argument the schema does not take is refused. Without `-allow` or `-scope` the server does not start, unless `-unlocked` says so. Results are bounded, and exports come in pages that each parse alone: see [docs/MCP.md](docs/MCP.md).
+The tools run azhaq itself and return its summary and rows. The scope, the budget for all calls together, the pace and the resolvers and sources (`-resolvers`, `-sources none`) are fixed at start, and no tool argument can widen them. `azhaq_map` asks every GET it finds in scope, and only the `-deny-path` rules set when the server starts keep a URL out: a client cannot add one per call. An argument the schema does not take is refused. Without `-allow` or `-scope` the server does not start, unless `-unlocked` says so. Results are bounded, and exports come in pages that each parse alone: see [docs/MCP.md](docs/MCP.md).
 
 ## Benchmark
 
 `go run ./bench` runs azhaq and the tools it replaces on the same targets, and prints the numbers, losses included. [bench/README.md](bench/README.md) has what is measured, the two profiles, the bar a row must clear, and the caveats.
 
-- **Local:** Juice Shop and VAmPI in Docker, the services lab (fifteen daemons), a DNS lab, and servers and a zone that the bench serves itself.
+- **Local:** Juice Shop and VAmPI in Docker (the lab images, each pinned by tag and digest, are listed in `bench/images.env`), the services lab (fifteen daemons), a DNS lab, and servers and a zone that the bench serves itself.
 - **Public, at 5 requests per second:** ginandjuice.shop, testphp.vulnweb.com and demo.testfire.net.
 - **Public, passive lookups only:** hackerone.com, tesla.com and vulnweb.com.
 
@@ -264,8 +266,8 @@ Latest run (2026-11-01, v0.13.0, commit 01c3557; profile: both; 195 of 196 check
 | Wildcard zone, 3 real names of 50 | dnsx | default | 3 found, 0 fake | 50 without `-wd` |
 | Record types (9) of 32 names on a zone the bench serves | dnsx | default | 12 answers right in 0.0 s, 0 MB, 289 queries | 12 in 0.6 s, 44 MB, 523 queries |
 | Probing 107 hosts (the local apps and 100 local servers) | httpx | default | 107 answered, 105 confirmed; status, title and tech agree on 104 of 105 shared; 0.9 s, 75 MB | 105 answered, 105 confirmed; 1.7 s, 225 MB |
-| Known routes of juice-shop, the whole map (`azhaq run`) | katana `-jc -jsl` | default | 70/77 in 2.1 s, 90 MB | 1/77 in 14 s, 931 MB |
-| Known routes of juice-shop, the crawler alone (`azhaq crawl`, katana's depth) | katana `-jc -jsl` | default | 53/77 in 1.7 s, 81 MB | 1/77 in 14 s, 1423 MB |
+| Known routes of juice-shop v20.3.0, the whole map (`azhaq run`) | katana `-jc -jsl` | default | 70/77 in 2.1 s, 90 MB | 1/77 in 14 s, 931 MB |
+| Known routes of juice-shop v20.3.0, the crawler alone (`azhaq crawl`, katana's depth) | katana `-jc -jsl` | default | 53/77 in 1.7 s, 81 MB | 1/77 in 14 s, 1423 MB |
 | Known routes of vampi, the whole map (`azhaq run`) | katana `-jc -jsl` | default | 12/12 in 0.2 s, 62 MB | 1/12 in 11 s, 49 MB |
 | Known routes of vampi, the crawler alone (`azhaq crawl`, katana's depth) | katana `-jc -jsl` | default | 1/12 in 0.1 s, 58 MB | 1/12 in 10 s, 49 MB |
 | Known routes of ginandjuice.shop, the whole map (`azhaq run`) | katana `-jc -jsl` | default | 3/3 in 28 s, 92 MB | 2/3 in 21 s, 802 MB |
@@ -284,7 +286,7 @@ Latest run (2026-11-01, v0.13.0, commit 01c3557; profile: both; 195 of 196 check
 | DNS brute force, 310 words, the DNS lab | dnsx | polite | 9 confirmed in 29 s, 29 MB | 9 in 31 s, 43 MB |
 | Record types (9) of 32 names on a zone the bench serves | dnsx | polite | 12 answers right in 3.0 s, 28 MB, 289 queries | 12 in 3.6 s, 44 MB, 523 queries |
 | Probing 107 hosts (the local apps and 100 local servers) | httpx | polite | 107 answered, 105 confirmed; status, title and tech agree on 104 of 105 shared; 21 s, 72 MB | 105 answered, 105 confirmed; 22 s, 219 MB |
-| Known routes of juice-shop, the crawler alone (`azhaq crawl`, katana's depth) | katana `-jc -jsl` | polite | 53/77 in 17 s, 81 MB | 1/77 in 17 s, 1664 MB |
+| Known routes of juice-shop v20.3.0, the crawler alone (`azhaq crawl`, katana's depth) | katana `-jc -jsl` | polite | 53/77 in 17 s, 81 MB | 1/77 in 17 s, 1664 MB |
 | Known routes of vampi, the crawler alone (`azhaq crawl`, katana's depth) | katana `-jc -jsl` | polite | 1/12 in 0.2 s, 57 MB | 1/12 in 10 s, 49 MB |
 | Known routes of ginandjuice.shop, the crawler alone (`azhaq crawl`, katana's depth) | katana `-jc -jsl` | polite | 2/3 in 10 s, 82 MB | 2/3 in 21 s, 734 MB |
 | Paths, 257 words, Juice Shop and VAmPI | ffuf `-ac` | polite | 13 hits, 0 false positives, 104 s, 33 MB | 13 hits, 0 false positives, 103 s, 19 MB |

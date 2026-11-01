@@ -4,12 +4,13 @@
 
 ## What is fixed when the server starts
 
-The **scope**, the **request budget** and the **pace** are fixed at start. No tool argument can widen them:
+The **scope**, the **request budget**, the **pace** and the **resolvers and sources** are fixed at start. No tool argument can widen or change them:
 
 - Targets outside the scope are skipped and listed in the summary.
-- Paths a `-deny-path` rule matches are never requested by any tool, and are listed as skipped. azhaq has no path rule of its own: every other GET found in scope is requested.
+- Paths a `-deny-path` rule matches are never requested by any tool, and are listed as skipped. azhaq has no path rule of its own: `azhaq_map` asks every GET it finds in scope, `/logout` and an API description's `GET /createdb` included, and the `-deny-path` rules set when the server starts are the only thing that keeps a URL out. A client cannot add one per call.
 - A subdomain lookup for a domain outside the scope is refused, because the passive sources would learn what the assistant asks about.
 - Once the budget is spent, every tool that sends requests refuses.
+- `-resolvers`, `-sources`, `-skip` and `-no-takeover` are held for every call that takes them, as `run` takes them. Without them a map asks the default public resolvers and the passive third-party sources (the plan names `azhaq-rdap`, `azhaq-search`, `azhaq-subdomains` and `azhaq-urls`), whatever `-allow` says. With `-sources none` it asks no third party at all, and `azhaq_subdomains`, which is one, is refused. `azhaq_scope` and `azhaq_status` show them as `run_options`.
 
 See [Concepts](CONCEPTS.md) for scope, budget and pace.
 
@@ -18,7 +19,7 @@ azhaq mcp -scope hackerone -program security -max-requests 20000 -rate 5
 azhaq mcp -allow example.com -deny admin.example.com -max-requests 5000
 ```
 
-Every flag is described on the [`azhaq mcp` page](commands/mcp.md#flags): `-scope` with `-program`, `-allow`, `-deny`, `-deny-path`, `-max-requests`, `-rate`, `-dir` (default `azhaq-mcp`) and `-unlocked`.
+Every flag is described on the [`azhaq mcp` page](commands/mcp.md#flags): `-scope` with `-program`, `-allow`, `-deny`, `-deny-path`, `-resolvers`, `-sources`, `-skip`, `-no-takeover`, `-max-requests`, `-rate`, `-dir` (default `azhaq-mcp`) and `-unlocked`.
 
 To see what the tools send in a proxy, start the server with `HTTP_PROXY` and `HTTPS_PROXY` set (Go's rule: loopback targets stay direct, as the server has no `-proxy` to send them): the server has no `-proxy` flag. See [Proxies](CONCEPTS.md#proxies).
 
@@ -44,7 +45,7 @@ Any client that takes a JSON configuration:
 
 | Tool | What it does |
 | --- | --- |
-| `azhaq_scope` | The scope, budget and pace fixed at start, and how much of the budget is used. |
+| `azhaq_scope` | The scope, run options (resolvers, sources), budget and pace fixed at start, and how much of the budget is used. |
 | `azhaq_status` | A compact status of the server and each workspace. Sends nothing and starts no command. |
 | `azhaq_plan` | What a map would take, leave out and send, without sending anything. |
 | `azhaq_map` | Maps a URL, a domain or a list into a workspace. Returns the summary and the highlights. |
@@ -63,7 +64,7 @@ Any client that takes a JSON configuration:
 
 **`azhaq_status`**
 
-- Reports the scope (locked, allow and deny rules), the request budget (limit, used, left) and the pace.
+- Reports the scope (locked, allow and deny rules), the run options held (`run_options`: resolvers, sources, skipped collectors, takeover check), the request budget (limit, used, left) and the pace.
 - Lists every workspace this server's directory holds, each with its state: `complete`, `stopped by a limit` or `failed`.
 - `stopped by a limit` comes with `tasks_left`, the `requests` the run has sent and the `azhaq_resume` call that continues it. `complete` means the database holds no task left to do.
 - The state is read from the workspace's database, so it is the same for a map this session ran, one it ran before a restart, and one made elsewhere, and a query of the workspace does not change it.
@@ -73,13 +74,14 @@ Any client that takes a JSON configuration:
 **`azhaq_map`**
 
 - Returns the summary and the highlights: auth-gated routes, forbidden routes and API routes.
+- Asks every GET it finds in scope, a GET operation of an API description and a GET form included. A GET can change data or end a session; only the server's `-deny-path` rules keep a URL out.
 - `browser` loads pages in Chrome too.
 - `graphql` asks each GraphQL endpoint for its schema. That is an introspection POST, and it is counted. Where introspection is off, the schema is recovered from validation errors.
 
 **`azhaq_resume`**
 
 - Continues a workspace that the budget, `timeout_seconds` or a cancellation stopped, where it stopped.
-- Uses the server's scope, pace and what is left of its budget. Returns what `azhaq_map` returns.
+- Uses the server's scope, pace, run options and what is left of its budget. Returns what `azhaq_map` returns.
 - A workspace keeps no session: give `headers` or `login` again.
 - A run started with a scope wider than the server's is not resumed.
 
@@ -124,7 +126,7 @@ Formats: OpenAPI, GraphQL introspection JSON or SDL, Burp scope, nuclei targets,
 
 These are left out on purpose. Run them from the command line, where the person running them sees the flags.
 
-- Anything that sends a write or a body the client chooses: `roles -replay-writes`, `-browser-writes` and `fuzz`.
+- Anything that sends a write (a method other than GET, HEAD or OPTIONS) or a body the client chooses: `roles -replay-writes`, `-browser-writes` and `fuzz`.
 - Path and parameter wordlists: `-dirs` and `-params`, which can also send bodies with `-params-method`.
 - DNS brute force and permutations.
 - UDP scans.

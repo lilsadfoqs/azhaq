@@ -59,3 +59,13 @@ azhaq docs -flags NAME  # prints one table, to look at it
 ```
 
 A test in `cmd/azhaq` fails when a table differs from what the binary makes, when a command has no page, and when a link in the docs leads to a heading that is not there.
+
+### Claims
+
+What a page says about azhaq's behaviour is a claim, and a claim has a proof: a test, or a row of the bench. `docs/claims.tsv` ties each claim to its proof: an id that starts with the page (`readme.kill-switch`, `plan.cap`), a piece of the claim's own text, and the proof (`test:DIR:TestName`, `bench:TEXT of a check`, `file:PATH`, or `note:WHY` for a line that is advice or a pointer and holds no behaviour). A line that reads as a claim is one outside Synopsis, Examples and Flags that says never, always, every, only, nothing, exactly, at most, at least, without, any, all, cannot, not or an exit code.
+
+```
+go run ./scripts/claims
+```
+
+It fails when a claim has no proof, when the text of a claim is gone from its page (it was reworded: prove the new wording and update the row), and when a proof is gone from the code. The pages named by `@cover` in `docs/claims.tsv` are held to the whole rule: every line that reads as a claim has a row. The other pages are listed with how many such lines they hold, and join `@cover` once each has its rows. A new claim in a covered page needs its row in the same commit.

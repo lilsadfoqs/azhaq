@@ -192,3 +192,25 @@ func TestLedgerSummaryCountsByClass(t *testing.T) {
 		t.Fatalf("classes %v", got.Classes)
 	}
 }
+
+// A seal that is not in the chain exits 3 and says so, as the page does.
+func TestLedgerVerifyWithAWrongSealSaysNoneOfItsSeals(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "l.jsonl")
+	l, err := ledger.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	l.Record(ledger.Entry{Kind: "http", Method: "GET", Target: "http://a.test/1", Host: "a.test"})
+	l.Close()
+	var verr error
+	out, err := captureStdout(t, func() error {
+		verr = cmdLedger([]string{"-verify", path, "-seal", strings.Repeat("0", 64)})
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if exitCode(verr) != exitPartial || !strings.Contains(out, "the chain is intact, but none of its seals is the one given") {
+		t.Errorf("exit %d, output %q", exitCode(verr), out)
+	}
+}

@@ -30,7 +30,7 @@ azhaq urls -d example.com -mc 200 -mt text/html -from 2024 -urls-pause 0
 
 ## Output
 
-By default URLs are printed as each archive page arrives, unsorted, when stdout is not a terminal. On a terminal, or with `-sort`, they are sorted and printed at the end. `-raw` prints every row the archives gave, as they gave it. `-o` appends to the file. With `-json` you get one object per URL.
+By default URLs are printed as each archive page arrives, unsorted, when stdout is not a terminal. On a terminal, or with `-sort`, they are sorted and printed at the end. `-raw` prints every row the archives gave, as they gave it. `-o` appends to the file. With `-json` you get one object per URL. With `-db`, the workspace keeps every URL in `DB.urls.jsonl` beside it (one JSON object a line: `run`, `url`, `source`), written as the pages arrive, so a stopped run keeps what it read and `azhaq resume` adds to it. Its graph holds one example for each URL shape, 200 a domain at most: `export -format urls` writes all of them, and `query` lists the graph's rows and says how many archived URLs they stand for. The list is not kept for a run with no `-db`.
 
 | Field | Meaning |
 | --- | --- |

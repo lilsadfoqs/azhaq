@@ -897,3 +897,22 @@ func TestDNSResponseTypeFilterKeepsEveryNameWithoutThatRecord(t *testing.T) {
 		t.Errorf("-a -rtf a: %v", ls)
 	}
 }
+
+// dns -a -json gives a dangling CNAME a row that dnsx gives none: it has
+// `takeover` and no `a`, so `select(.a)` leaves it out. MIGRATING says so.
+func TestDNSJSONRowOfADanglingCNAMEHasTakeoverAndNoA(t *testing.T) {
+	migrating := readDoc(t, "../../docs/MIGRATING.md")
+	t.Chdir(t.TempDir())
+	var asked, soa atomic.Int64
+	addr := serveDanglingSOA(t, &asked, &soa)
+	ls, _, _ := dnsOut(t, "-d", "dangling.lab.zz", "-r", addr, "-a", "-j", "-allow", "lab.zz")
+	row := dnsRows(t, ls)["dangling.lab.zz"]
+	if row == nil || row["takeover"] == nil || row["a"] != nil {
+		t.Fatalf("the row of a dangling CNAME: %v", row)
+	}
+	for _, want := range []string{"adds a row for a name whose CNAME points at what is gone", "`takeover` and no `a`", "jq 'select(.a)'"} {
+		if !strings.Contains(migrating, want) {
+			t.Errorf("docs/MIGRATING.md does not say %q", want)
+		}
+	}
+}

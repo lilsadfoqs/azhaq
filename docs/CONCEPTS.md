@@ -370,7 +370,7 @@ With `-replay-writes`, three more come before them all:
 
 | What | Method | When |
 | --- | --- | --- |
-| Pages, scripts, API descriptions (at the root and under each API base), archived URL templates | GET | Every run, inside the scope. |
+| Pages, scripts, API descriptions (at the root and under each API base), archived URL templates, the GET operations a description names that need no path or required query parameter, GET forms | GET | Every run, inside the scope. A GET can change data on the target: only `-deny-path` keeps a URL out. |
 | 51 built-in path checks per web service: `robots.txt`, sitemaps, API descriptions, `.git/HEAD`, `backup`, `admin`, … | GET | Every run. `-no-paths` turns them off. |
 | Path and parameter guesses | GET. `params -X` sends the names in a POST, JSON or XML body. | `-dirs`, `-params`, held to the targets given or to `-allow` and `-scope`. |
 | GraphQL introspection | POST | `-graphql`, held to the targets given or to `-allow` and `-scope`. |
@@ -398,13 +398,18 @@ With `-replay-writes`, three more come before them all:
 
 ### What azhaq sends, and what it cannot know
 
-azhaq sends a GET to every URL it finds in scope. It cannot know what a GET does on the server: a name says nothing reliable (`/createdb`, `/logout`, `/rest/saveLoginIp` are GETs that change state on some apps and read-only pages on others), so no name keeps a URL out. What decides is known:
+azhaq sends a GET to every URL it finds in scope. It cannot know what a GET does on the server: a name says nothing reliable (`/createdb`, `/logout`, `/rest/saveLoginIp` are GETs that change state on some apps and read-only pages on others), so no name keeps a URL out. What azhaq promises is about the method, and nothing more:
 
-- **The method.** Writes (POST, PUT, PATCH, DELETE, a form submitted, a page's own writes in Chrome, a role's write replay, a parameter search with a body) are sent only with their flag: `-submit-forms`, `-browser-writes`, `roles -replay-writes`, `-params-writes`, `-graphql` for the introspection POST. Without it they are mapped, not sent.
-- **Your rule.** `-deny-path REGEX` keeps a path out of every request, Chrome's included.
+- **Without a flag, every request azhaq sends to a target on purpose is a GET**, besides what the table above lists: HEAD and TCP or UDP probes of ports, Chrome's HEAD and OPTIONS, and a sign-in.
+- **"A write" in these pages means a request with a method other than GET, HEAD or OPTIONS.** Writes (POST, PUT, PATCH, DELETE, a form submitted, a page's own writes in Chrome, a role's write replay, a parameter search with a body) are sent only with their flag: `-submit-forms`, `-browser-writes`, `roles -replay-writes`, `-params-writes`, `-graphql` for the introspection POST. Without it they are mapped, not sent. That says what the method is, not that nothing changes.
+- **A GET can change data or end a session, and azhaq requests it.** It does so for the URLs in links, in forms (a GET form is filled with neutral values and asked: `crawl` does it by default, `run` with `-fill-forms`), in scripts and in API descriptions. A GET operation a description names is requested like any other URL, an endpoint that resets the database or logs out included: VAmPI's `GET /createdb` drops and recreates its database, and a default crawl of its `/openapi.json` sends it.
+
+What keeps a URL out is known:
+
+- **Your rule.** `-deny-path REGEX` keeps a path out of every request, Chrome's included. It is the only thing that does: if a URL must not be requested, say so with it.
 - **A measurement.** A signed-in run checks that its session lives: see [Sessions](#sessions).
 
-`azhaq plan` lists what a run would send, and the [ledger](#the-ledger-and-its-seal) records what was sent. If a URL must not be requested, say so with `-deny-path`.
+`azhaq plan` lists the kinds of request, the counts and the seeds, not the URLs a crawl will find: `/createdb` is known only after the description is read. The [ledger](#the-ledger-and-its-seal) lists every request that was sent.
 
 ### What is held back
 

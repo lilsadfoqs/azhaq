@@ -26,6 +26,7 @@ import (
 
 	"github.com/lilsadfoqs/azhaq/engine"
 	"github.com/lilsadfoqs/azhaq/internal/collectors/shotcol"
+	"github.com/lilsadfoqs/azhaq/internal/collectors/urlcol"
 	"github.com/lilsadfoqs/azhaq/internal/gqlschema"
 	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
@@ -39,6 +40,7 @@ import (
 // graphView is a database read once for the export formats.
 type graphView struct {
 	path  string
+	run   string // the run the view is of
 	stats store.Stats
 	rows  []engine.MapEntry
 	obs   []types.StoredObservation
@@ -70,7 +72,7 @@ func readGraph(path string) (*graphView, error) {
 	seeds, _ := st.LoadSeeds()
 	leftover, _ := st.LoadLeftover()
 	stats, _ := st.Stats()
-	g := &graphView{path: path, stats: stats, obs: obs, live: liveNames(st), args: st.RunArgs()}
+	g := &graphView{path: path, run: st.RunID(), stats: stats, obs: obs, live: liveNames(st), args: st.RunArgs()}
 	if raw := st.GetMeta("scope:" + st.RunID()); raw != "" {
 		var r scope.Rules
 		if json.Unmarshal([]byte(raw), &r) == nil {
@@ -128,9 +130,28 @@ func exportTo(path, format, origin string, safe bool, w io.Writer) error {
 	}
 	switch format {
 	case "urls":
+		// The graph's rows, then the rest of what the archives gave: the
+		// workspace keeps those in a list beside it.
+		seen := map[string]bool{}
 		for _, r := range g.rows {
-			if r.Entity.Type == types.TypeURL {
+			if r.Entity.Type == types.TypeURL && !seen[r.Entity.Key] {
+				seen[r.Entity.Key] = true
 				fmt.Fprintln(w, r.Entity.Key)
+			}
+		}
+		listed := false
+		if err := urlcol.ReadArchive(urlcol.ArchivePath(path), g.run, func(u, _ string) {
+			listed = true
+			if !seen[u] {
+				seen[u] = true
+				fmt.Fprintln(w, u)
+			}
+		}); err != nil {
+			return err
+		}
+		if !listed {
+			if n := urlcol.Held(g.obs, false); n != "" {
+				fmt.Fprintf(os.Stderr, "azhaq export: %s\n", n)
 			}
 		}
 	case "names":
@@ -244,6 +265,7 @@ func openAPI(g *graphView, origin string) (map[string]any, error) {
 	byOrigin := map[string][]engine.MapEntry{}
 	queried := map[string][]engine.MapEntry{}
 	urls := map[string]int{} // every URL row, by origin
+	documents := descriptionURLs(g.obs)
 	for _, r := range g.rows {
 		if r.Entity.Type != types.TypeURL {
 			continue
@@ -255,6 +277,9 @@ func openAPI(g *graphView, origin string) (map[string]any, error) {
 		o := u.Scheme + "://" + u.Host
 		urls[o]++
 		switch {
+		case documents[r.Entity.Key] && !listedBy(r):
+			// The description itself, not an operation of the API it
+			// describes (unless it lists its own address).
 		case isAPI(r) || len(r.Forms) > 0:
 			byOrigin[o] = append(byOrigin[o], r)
 		case takesQuery(r):
@@ -449,6 +474,33 @@ func templateNames(p string) []string {
 
 // opMethods are the keys of a path item that are operations.
 var opMethods = []string{"get", "put", "post", "delete", "options", "head", "patch", "trace"}
+
+// descriptionURLs are the addresses the run read as API descriptions.
+func descriptionURLs(obs []types.StoredObservation) map[string]bool {
+	out := map[string]bool{}
+	for _, o := range obs {
+		if o.Collector != "azhaq-openapi" || o.Kind != "api" {
+			continue
+		}
+		var p struct {
+			URL string `json:"url"`
+		}
+		if json.Unmarshal(o.Payload, &p) == nil && p.URL != "" {
+			out[p.URL] = true
+		}
+	}
+	return out
+}
+
+// listedBy: a description's operations name the row, as one of its paths.
+func listedBy(r engine.MapEntry) bool {
+	for _, o := range r.Ops {
+		if o.Source == "openapi" {
+			return true
+		}
+	}
+	return false
+}
 
 // servedDoc is an OpenAPI 3 document the target serves, with the path
 // its operations live under.
