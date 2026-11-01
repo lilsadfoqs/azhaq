@@ -378,3 +378,49 @@ func TestCrtshThroughSocks(t *testing.T) {
 		t.Error("the proxy was not asked")
 	}
 }
+
+// A gateway error of the JSON API is asked again, as the error text the
+// session gives it reads ("unexpected status code 502 received from URL"):
+// the source keeps its names when a later answer is good, and says so when
+// every answer is a 502.
+func TestCrtshJSONRetriesAGatewayError(t *testing.T) {
+	old := crtshRetryWait
+	crtshRetryWait = time.Millisecond
+	defer func() { crtshRetryWait = old }()
+	dbDown := func(context.Context, string, *url.URL, time.Duration, int) ([]string, int, error) {
+		return nil, 0, errors.New("driver: bad connection")
+	}
+	asked := 0
+	c := New(Options{Client: &http.Client{Transport: rtFunc(func(r *http.Request) (*http.Response, error) {
+		asked++
+		status, body := 502, "<html>Bad Gateway</html>"
+		if asked == 3 {
+			status, body = 200, `[{"common_name":"late.example.org","name_value":"late.example.org"}]`
+		}
+		return &http.Response{StatusCode: status, Body: io.NopCloser(strings.NewReader(body)), Request: r, Header: http.Header{}}, nil
+	})}})
+	sess := &subscraping.Session{Client: c.opts.Client, RequestLimiter: c.limiter, Timeout: 5}
+	names, _, err := runCrtsh(t, dbDown, sess)
+	if err != nil || !slices.Contains(names, "late.example.org") || asked != 3 {
+		t.Errorf("names %v, err %v, asked %d times, want the third answer's names", names, err, asked)
+	}
+	asked = 0
+	always := crtshSession(502, "<html>Bad Gateway</html>", &asked)
+	_, _, err = runCrtsh(t, dbDown, always)
+	if err == nil || asked != crtshAttempts {
+		t.Errorf("err %v after %d requests, want a failure after %d", err, asked, crtshAttempts)
+	}
+}
+
+func TestRetryReadsBothFormsOfAGatewayError(t *testing.T) {
+	for _, s := range []string{"unexpected status code 502 received from https://crt.sh/json?q=tesla.com", "crt.sh 503", "unexpected status code 504 received from https://crt.sh/json?q=a.b"} {
+		if !retry(errors.New(s)) {
+			t.Errorf("%q is not asked again", s)
+		}
+	}
+	for _, s := range []string{"unexpected status code 404 received from https://crt.sh/json?q=a.b", "crt.sh 429", "unexpected status code 403 received from https://crt.sh/x?id=502"} {
+		if retry(errors.New(s)) {
+			t.Errorf("%q is asked again", s)
+		}
+	}
+}

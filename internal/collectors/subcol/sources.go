@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -471,14 +472,13 @@ func crtshJSON(ctx context.Context, domain string, sess *subscraping.Session) ([
 		NameValue  string `json:"name_value"`
 	}
 	var err error
-	start := time.Now()
-	for attempt, wait := 0, time.Second; attempt < 4; attempt, wait = attempt+1, wait*2 {
+	for attempt, wait := 0, crtshRetryWait; attempt < crtshAttempts; attempt, wait = attempt+1, wait*2 {
 		if err = getJSON(ctx, sess, "crtsh", u, nil, &rows); err == nil || !retry(err) {
 			break
 		}
-		// crt.sh is often down for a while: a few quick retries, not a
-		// minute of them, since every other source waits for this one.
-		if time.Since(start)+wait > crtshRetryBudget {
+		// crt.sh is often down for a while: a few retries, as many as the
+		// source's own time (-source-timeout) leaves room for.
+		if dl, ok := ctx.Deadline(); ok && time.Until(dl) <= wait {
 			break
 		}
 		select {
@@ -498,20 +498,22 @@ func crtshJSON(ctx context.Context, domain string, sess *subscraping.Session) ([
 	return names, nil
 }
 
-// crtshRetryBudget is how long crt.sh may take, retries included, before
-// its failure is taken as the answer.
-const crtshRetryBudget = 12 * time.Second
+// crtshAttempts is how many times the JSON API is asked before its failure
+// is the answer; crtshRetryWait is the first pause, doubled each time.
+const crtshAttempts = 4
+
+var crtshRetryWait = time.Second
+
+// gatewayRE reads the status code of a failed answer in the two forms the
+// requests give it: subfinder's "unexpected status code 502 received from
+// URL" and getJSON's "host 502".
+var gatewayRE = regexp.MustCompile(`(?:status code|\s)(50[0234])(?:\s+received from|$)`)
 
 // retry: crt.sh's gateway errors and dropped connections pass (a 429 is
 // waited out in the transport).
 func retry(err error) bool {
 	s := err.Error()
-	for _, code := range []string{" 500", " 502", " 503", " 504"} {
-		if strings.HasSuffix(s, code) {
-			return true
-		}
-	}
-	return strings.Contains(s, "EOF") || strings.Contains(s, "connection reset") || strings.Contains(s, "unexpected end of JSON")
+	return gatewayRE.MatchString(s) || strings.Contains(s, "EOF") || strings.Contains(s, "connection reset") || strings.Contains(s, "unexpected end of JSON")
 }
 
 // certspotterSource asks Cert Spotter. Unlike subfinder's version it also
