@@ -19,6 +19,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	"github.com/trannghiach/azhaq/catalog"
@@ -298,15 +299,27 @@ func runWorker(cat *catalog.Catalog, base, token string, slots int) error {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			failures := 0
+			failures, refused := 0, 0
 			for ctx.Err() == nil {
 				var task engine.Task
 				err := call(ctx, http.MethodPost, base+"/v1/claim", token, nil, &task)
+				if !errors.Is(err, syscall.ECONNREFUSED) {
+					refused = 0
+				}
 				switch {
 				case errors.Is(err, errGone):
 					return
 				case errors.Is(err, errNoContent):
 					failures = 0
+					continue
+				case errors.Is(err, syscall.ECONNREFUSED):
+					// Nothing listens at the run's address: its process has
+					// ended, as when it finished between two claims. Waiting
+					// longer would not bring it back.
+					if refused++; refused >= 3 {
+						return
+					}
+					sleepCtx(ctx, time.Second)
 					continue
 				case err != nil:
 					// The run may have ended between two claims.

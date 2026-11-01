@@ -129,3 +129,27 @@ func TestWorkerProtocol(t *testing.T) {
 		t.Errorf("%d observations, %d tasks left (worker ran %d)", stats.Observations, st.TasksLeft(), got)
 	}
 }
+
+// A run whose process has ended is not waited for: a worker that finds
+// nothing listening at the run's address after the run finished stops, it
+// does not retry for a minute and fail.
+func TestWorkerStopsWhenTheRunIsGone(t *testing.T) {
+	ln, _ := net.Listen("tcp", "127.0.0.1:0")
+	addr := ln.Addr().String()
+	ln.Close()
+	stop, err := serveWorkers(addr, "tok", engine.NewWorkers(), workerConfig{}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stop() // the run ended between two of the worker's claims
+	done := make(chan error, 1)
+	go func() { done <- runWorker(catalog.New(), "http://"+addr, "tok", 4) }()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Errorf("the worker ended with an error: %v", err)
+		}
+	case <-time.After(15 * time.Second):
+		t.Fatal("the worker still waits for a run that is gone")
+	}
+}
