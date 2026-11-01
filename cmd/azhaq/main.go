@@ -324,7 +324,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	sourceRate := fs.Float64("source-rate", 0, "requests per second to each subdomain source, as subfinder -rl (0: each source's own pace); a source's lower own pace stays")
 	sourceRates := fs.String("source-rates", "", "pace single subdomain sources, as subfinder -rls: name=N/unit, comma-separated, unit s, m or h (hackertarget=10/m,crtsh=1/s)")
 	maxResults := fs.Int("max-results", 0, "most names one paging subdomain source gives (0: no cap), as subfinder -mr")
-	maxTime := fs.Duration("max-time", 0, "wait this long for all subdomain sources of a domain, then go on with what they gave, also when subdomain.center is still asking and checking its guesses (0: -source-timeout and a short grace bound the wait, but not that source's DNS checks, which -dns-rate paces), as subfinder -max-time")
+	maxTime := fs.Duration("max-time", 0, "how long the run may take: subs stops after this long, in any phase (the sources, subdomain.center's guesses, the DNS checks of -live, -w and -permute), exits 4 and leaves the rest for azhaq resume; run and plan only wait this long for the sources of a domain, then go on with what they gave (0: -source-timeout and a short grace bound the wait; -timeout bounds a run), as subfinder -max-time")
 	maxBody := fs.Int64("max-body", 0, "largest response body read from a subdomain source, in bytes (default 33554432), as subfinder -rsr")
 	sourceProxy := fs.String("source-proxy", "", "send every subdomain source request through this proxy URL, as subfinder -proxy (else HTTP_PROXY and HTTPS_PROXY)")
 	providersFile := fs.String("providers", "", "API keys per source, YAML (default ~/.config/azhaq/providers.yaml, else subfinder's provider-config.yaml)")
@@ -1178,9 +1178,15 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 
 	ctx, stop := stopContext()
 	defer stop()
-	if *timeout > 0 {
+	// The run's wall-clock bound: -timeout, or for subs -max-time when that is
+	// shorter, which then bounds every phase and not only the wait on the sources.
+	bound, boundBy := *timeout, "-timeout"
+	if subsMode.MaxTimeBoundsRun && *maxTime > 0 && (bound == 0 || *maxTime < bound) {
+		bound, boundBy = *maxTime, "-max-time"
+	}
+	if bound > 0 {
 		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, *timeout)
+		ctx, cancel = context.WithTimeout(ctx, bound)
 		defer cancel()
 	}
 	ctx = timing.With(ctx, log)
@@ -1200,7 +1206,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	// -json as JSON lines, as everything on stderr is.
 	stopTicker := func() {}
 	if mode := progressMode(*quiet, *verbose, *jsonOut, out.progress); mode != "" {
-		cfg := progressCfg{JSON: mode == "json", Cap: egress.MaxRequests(), CapBy: "-max-requests", Timeout: *timeout}
+		cfg := progressCfg{JSON: mode == "json", Cap: egress.MaxRequests(), CapBy: "-max-requests", Timeout: bound, TimeoutBy: boundBy}
 		if *daily > 0 && egress.MaxRequests() != *maxRequests {
 			cfg.CapBy = "-daily-requests"
 		}
@@ -1393,7 +1399,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		// lead to more, so it can grow between resumes.
 		switch {
 		case errors.Is(ctx.Err(), context.DeadlineExceeded) || cut > 0:
-			rep.Stopped = fmt.Sprintf("-timeout %s reached with %d tasks known and not done", *timeout, left)
+			rep.Stopped = fmt.Sprintf("%s %s reached with %d tasks known and not done", boundBy, bound, left)
 		case ctx.Err() != nil:
 			rep.Stopped = fmt.Sprintf("interrupted with %d tasks known and not done", left)
 		case egress.Killed() != nil:

@@ -58,7 +58,7 @@ Behaviour, fields and edge cases: [`azhaq subs`](commands/subs.md).
 | `-o FILE` | `-o FILE` | |
 | `-silent`, `-v` | `-silent`, `-v` | |
 | `-rl N`, `-rls a=N/s` | `-source-rate N`, `-source-rates a=N/s` | Requests a second to each source, or to single ones. A source's own lower pace stays. |
-| `-max-time`, `-mr`, `-rsr`, `-proxy` | `-max-time`, `-max-results`, `-max-body`, `-proxy` | |
+| `-max-time`, `-mr`, `-rsr`, `-proxy` | `-max-time`, `-max-results`, `-max-body`, `-proxy` | `subs -max-time` bounds the whole run, the DNS checks of `-live` included (subfinder's bounds only the enumeration): exit 4 when it passes, and `azhaq resume` asks what was left. |
 | `-t` | `-t` | Work items in flight. |
 | `-ls`, `-oD DIR`, `-cs`, `-oI`, `-recursive`, `-stats` | `-ls`, `-oD DIR`, `-cs`, `-oI`, `-recursive`, `-stats` | `-oI` needs `-live`. |
 | `-m`, `-f` | `-m`, `-f`, `-match-regex`, `-filter-regex` | |

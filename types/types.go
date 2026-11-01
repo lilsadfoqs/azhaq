@@ -205,9 +205,9 @@ const (
 	StatusCapped = "capped"
 )
 
-// CutShort marks work the run's -timeout stopped: the run hit its limit
+// CutShort marks work the run's time limit stopped: the run hit its limit
 // (exit 4, resumable); the collector did not fail.
-const CutShort = "cut short by the run's -timeout"
+const CutShort = "cut short by the run's time limit (-timeout, or -max-time for subs)"
 
 // BatchEmit hands several observations at once; the engine writes them in
 // one transaction, which a collector with thousands of them (a path sweep)
