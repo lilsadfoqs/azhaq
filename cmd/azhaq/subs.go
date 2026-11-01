@@ -20,8 +20,10 @@ import (
 
 // subsMode is what subs tells the run it starts.
 var subsMode struct {
-	NoCheck   bool // names only guessed or only remembered are listed unverified, not looked up
-	Recursive bool // only the sources that handle subdomains of subdomains
+	NoCheck bool // names only guessed or only remembered are listed unverified, not looked up
+	// GuessSamples is -guess-samples: the most samples of guesses taken, with no time budget.
+	GuessSamples int
+	Recursive    bool // only the sources that handle subdomains of subdomains
 }
 
 // subsOut writes the names subs prints: text, subfinder's host,[sources] and
@@ -123,9 +125,11 @@ func cmdSubs(args []string) error {
 	var domains stringsFlag
 	fs.Var(&domains, "d", "domain (repeatable; a comma list, a URL or a name with a trailing dot is cleaned, as subfinder does)")
 	list := onceString(fs, "dL", "file of domains (- for stdin)")
-	live := fs.Bool("live", false, "only names that resolve (wildcard answers left out); without it nothing is looked up, and the names only subdomain.center guessed or only the name history held are listed unverified")
+	live := fs.Bool("live", false, "only names that resolve (wildcard answers left out); without it nothing is looked up, the names only subdomain.center guessed are held back (see -guesses) and the ones only the name history held are listed unverified")
+	guesses := fs.Bool("guesses", false, "also print the names only subdomain.center guessed, which no source asserted and no lookup checked (-json marks them \"unverified\": true); not with -live, which looks them up")
 	nW := fs.Bool("nW", false, "same as -live (subfinder's name)")
 	words := fs.String("w", "", "also resolve WORD.domain for each word in this file, like puredns bruteforce (active DNS; the names found are live)")
+	guessSamples := fs.Int("guess-samples", 0, fmt.Sprintf("with -live, take up to N samples of subdomain.center's guesses while each has a new name that resolves, with no time budget (default: the first sample, which is what subfinder | dnsx checks, then more for %s at most, up to %d)", subcol.SampleBudget(), subcol.SampleRounds()))
 	permute := fs.Bool("permute", false, "also resolve variations of the names found (api → api-dev, api2, dev.api), like alterx | dnsx (active DNS)")
 	oJ := fs.Bool("oJ", false, "same as -json (subfinder's name)")
 	ls := fs.Bool("ls", false, "list the sources and exit: name, then * if a key is required and ~ if one improves the answer; with -json one object each (name, default, recursive, keyRequirement)")
@@ -157,6 +161,12 @@ func cmdSubs(args []string) error {
 	if *ls {
 		printSources(c.json)
 		return nil
+	}
+	if *guesses && (*live || *nW) {
+		return usagef("-guesses prints names that no lookup checked, and -live looks them up and keeps the ones that resolve: use one of them")
+	}
+	if *guessSamples < 0 {
+		return usagef("-guess-samples is not negative")
 	}
 	if *oI && !(*live || *nW) {
 		return usagef("-oI prints the address, so it needs -live (or -nW)")
@@ -220,7 +230,7 @@ func cmdSubs(args []string) error {
 		// A big zone is not cut at the run's default of 20,000 names looked up.
 		extra = append(extra, "-max-names="+fmt.Sprint(subcol.DefaultMaxNames))
 	}
-	subsMode.NoCheck, subsMode.Recursive = !*live && !active, *recursive
+	subsMode.NoCheck, subsMode.Recursive, subsMode.GuessSamples = !*live && !active, *recursive, *guessSamples
 	// The output is opened before anything is sent: a bad -o is not found out
 	// after the run. Without -live a domain's names are printed when its
 	// sources have answered, as subfinder prints a domain when it ends.
@@ -242,7 +252,7 @@ func cmdSubs(args []string) error {
 	private := map[string]bool{}
 	collected := map[string]bool{} // every passive name, before the -live filter
 	bySource := map[string]int{}   // how many each source returned
-	var union, dropped, unverified, notChecked, filtered, dup, cut, didNot, itself, notAsked, noAnswer int
+	var union, dropped, unverified, heldBack, notChecked, filtered, dup, cut, didNot, itself, notAsked, noAnswer int
 	var answers map[string]map[string]any // every name DNS was asked: a name missing was not
 	noAnswerBy := map[[2]string]int{}
 	health := newHealthTally(false)
@@ -265,6 +275,10 @@ func cmdSubs(args []string) error {
 		unver := map[string]bool{}
 		for _, n := range strs(p["unverified"]) {
 			unver[n] = true
+		}
+		guess := map[string]bool{}
+		for _, n := range strs(p["guesses"]) {
+			guess[n] = true
 		}
 		wild := map[string]bool{}
 		for _, n := range strs(p["wildcard_certificate"]) {
@@ -306,6 +320,9 @@ func cmdSubs(args []string) error {
 		if n := guessCheck(input, srcs); n != "" {
 			rep.Notes = append(rep.Notes, n)
 		}
+		if n := samplingNote(input, srcs); n != "" {
+			rep.Notes = append(rep.Notes, n)
+		}
 		for name, by := range foundBy {
 			if name == input {
 				continue
@@ -328,6 +345,10 @@ func cmdSubs(args []string) error {
 				continue
 			case !filt.keep(name):
 				filtered++
+				continue
+			case alive == nil && guess[name] && !*guesses:
+				// No source asserted it and nothing looked it up: not printed.
+				heldBack++
 				continue
 			case alive != nil && alive[name] == nil && dangling[name] == nil:
 				switch ans := answers[name]; {
@@ -386,7 +407,7 @@ func cmdSubs(args []string) error {
 		}
 	}
 	st, done, err := runPreset(&c, append(run, extra...), rep, observe)
-	subsMode.NoCheck, subsMode.Recursive = false, false
+	subsMode.NoCheck, subsMode.Recursive, subsMode.GuessSamples = false, false, 0
 	if err != nil {
 		w.close()
 		return err
@@ -519,6 +540,7 @@ func cmdSubs(args []string) error {
 	set("no answer", noAnswer)
 	set("not asked", notAsked)
 	set("unverified", unverified)
+	set("guesses held back", heldBack)
 	set("left out by -m/-f", filtered+guessFiltered)
 	set("listed under another domain", dup)
 	set("cut by -max-names", cut)
@@ -526,8 +548,11 @@ func cmdSubs(args []string) error {
 		rep.Notes = append(rep.Notes, fmt.Sprintf("%d names were cut at -max-names: raise it to keep them", cut))
 		rep.warned = true
 	}
+	if heldBack > 0 {
+		rep.Notes = append(rep.Notes, fmt.Sprintf("%d names are held back: only subdomain.center guessed them, no source asserted them and no DNS lookup was made; -guesses prints them (-json marks them \"unverified\": true), -live looks them up and prints the ones that resolve", heldBack))
+	}
 	if unverified > 0 {
-		rep.Notes = append(rep.Notes, fmt.Sprintf("%d names are listed unverified (-json: \"unverified\": true): only subdomain.center's guesses or the name history held them and no DNS lookup was made; -live checks them", unverified))
+		rep.Notes = append(rep.Notes, fmt.Sprintf("%d names are listed unverified (-json: \"unverified\": true): only the name history or, with -guesses, subdomain.center's guesses held them and no DNS lookup was made; -live checks them", unverified))
 	}
 	if cnameOnly > 0 {
 		rep.Notes = append(rep.Notes, fmt.Sprintf("%d names are listed with a CNAME and no address (-json: \"cname_only\": true): one whose target is gone is a takeover lead", cnameOnly))
@@ -603,6 +628,7 @@ func nameSum(c map[string]int, results int, filtering bool) string {
 	}
 	minus("the domain itself", "the domain itself, not a subdomain")
 	minus("did not resolve", "did not resolve")
+	minus("guesses held back", "guesses held back (-guesses prints them)")
 	minus("not checked", "not checked")
 	minus("no answer", "no answer from the resolvers")
 	minus("not asked", "not asked before the run stopped")

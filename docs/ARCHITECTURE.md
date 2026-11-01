@@ -1658,6 +1658,7 @@ Junk that is not a URL never enters the graph:
 - path segments such as `NaN` or `undefined`, from a script that ran without its data;
 - links cut short in archives;
 - dot segments a browser would have resolved, such as `http://site/..`;
+- fuzzing keywords and pasted request lines that an archive kept as paths, such as `/FUZZ`, `/FUZZ/FUZ2Z`, `/{payload}/admin` and `/HTTP/1.1`;
 - URLs that carry a scanner's payload, decoded twice since archives keep them encoded. The payloads are path traversal, `/etc/passwd`, command or template injection, SQL, `<script>`, and out-of-band callback domains such as `oast.live`;
 - a scanner's own marks that an archive kept. These are its test files and tagged parameters, such as `acunetix_xsl_inclusion_test.xsl`, `netsparker(0).txt`, `?invicti=`, `nessus_test`, `bxss.me` and `xss.rocks`;
 - a random-named executable at the root, such as `/7zSo1DIz.exe`. The name is letters and digits with a digit and the case changing twice. `Setup64.exe` and `winrar.exe` stay (`webextract.Payload`).
