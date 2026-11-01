@@ -1581,7 +1581,10 @@ func endpointAnswers(db string) (map[string]answer, map[string]string, []string,
 			raw[u] = p.URL
 		}
 	}
-	seeds, _ := st.LoadSeeds()
+	seeds, err := st.LoadSeeds()
+	if err != nil {
+		return nil, nil, nil, seen, err
+	}
 	var hosts []string
 	for _, s := range seeds {
 		s = normalize.Seed(s)

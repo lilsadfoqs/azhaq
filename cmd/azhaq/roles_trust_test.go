@@ -205,6 +205,23 @@ func TestAskControlsCutBody(t *testing.T) {
 	}
 }
 
+// A database whose seeds cannot be read gives no hosts, and so no scope for
+// the replay: that is an error, not an empty scope.
+func TestEndpointAnswersSeedsUnreadable(t *testing.T) {
+	db := filepath.Join(t.TempDir(), "r.db")
+	st, err := store.Open(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SetMeta("seeds", "{not json"); err != nil {
+		t.Fatal(err)
+	}
+	st.Close()
+	if _, _, _, _, err := endpointAnswers(db); err == nil {
+		t.Error("unreadable seeds: no error")
+	}
+}
+
 // An interrupted replay is a run stopped (exit 4), not a note and exit 0.
 func TestNoteCapInterrupted(t *testing.T) {
 	rep := newReport("roles")
