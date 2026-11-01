@@ -15,6 +15,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/lilsadfoqs/azhaq/internal/fetch"
 	"github.com/lilsadfoqs/azhaq/store"
 )
 
@@ -125,6 +126,7 @@ func TestRolesNegativeControls(t *testing.T) {
 // A reader the route answers alike beside one it refuses is not a reader;
 // the controls count against the budget they are given.
 func TestAskControls(t *testing.T) {
+	fetch.Reset() // a command run before in this process leaves its scope and proxy
 	site := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if r.Header.Get("Authorization") == "admin" {
@@ -414,6 +416,7 @@ func TestRolesCanarySuspect(t *testing.T) {
 // every 3 requests, dies after 4: renewed, the stretch since its last good
 // check is asked again.
 func TestReplayCanaryRetries(t *testing.T) {
+	fetch.Reset()
 	var mu sync.Mutex
 	var asked []string
 	n := 0
@@ -674,6 +677,7 @@ func TestConfidence(t *testing.T) {
 // included: the target sees no more than the budget, the count is what it
 // saw, and the URLs left are named, not dropped without a word.
 func TestReplayMaxCountsRedirectHops(t *testing.T) {
+	fetch.Reset()
 	var mu sync.Mutex
 	hits := 0
 	site := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
