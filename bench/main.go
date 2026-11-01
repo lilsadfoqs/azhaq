@@ -73,7 +73,7 @@ type runMeasure struct {
 // sections are what -only picks from; dockerParts need the docker apps.
 var (
 	sections    = []string{"apps", "dropin", "dirs", "fuzz", "scope", "secrets", "tenants", "scale", "claims", "regress", "shots", "params", "domains", "urls", "brute", "dns", "lab", "ports", "services", "network", "probe", "notify", "openapi", "docs"}
-	dockerParts = []string{"dropin", "dirs", "fuzz", "scope", "scale", "shots", "params"}
+	dockerParts = []string{"dropin", "dirs", "fuzz", "scope", "scale", "shots", "params", "openapi", "probe"}
 	// perProfile sections compare azhaq with a reference tool and run once
 	// for each profile; the others run once.
 	perProfile = map[string]bool{"apps": true, "dirs": true, "fuzz": true, "shots": true, "params": true, "domains": true, "urls": true,

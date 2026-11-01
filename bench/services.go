@@ -238,20 +238,42 @@ func servicesLab() bool {
 	return true
 }
 
-// daemonLogs is what the containers of the ports that never served last
-// said: a lab that is not up, with no log, cannot be told from a flaky image.
+// daemonLogs is what the lab's containers say when ports never served: the
+// status of every azq-svc-* container (a container that exited has no
+// published port for docker ps to filter on) and the last log lines of the
+// ones for those ports. A docker that fails says so instead of saying nothing.
 func daemonLogs(ports []int) string {
+	list, err := docker("ps", "-a", "--filter", "name=azq-svc-", "--format", "{{.Names}}|{{.Status}}|{{.Ports}}")
+	if err != nil {
+		return fmt.Sprintf(" | docker ps: %v %s", err, clip(list, 200))
+	}
 	var b strings.Builder
-	for _, p := range ports {
-		name, err := docker("ps", "-a", "--filter", fmt.Sprintf("publish=%d", p), "--format", "{{.Names}} {{.Status}}")
-		if err != nil || name == "" {
+	var status []string
+	for _, l := range strings.Split(list, "\n") {
+		f := strings.SplitN(l, "|", 3)
+		if len(f) < 3 {
 			continue
 		}
-		container, _, _ := strings.Cut(name, " ")
-		logs, _ := docker("logs", "--tail", "12", container)
-		fmt.Fprintf(&b, " | %d: %s; last log lines: %s", p, name, strings.Join(strings.Fields(strings.ReplaceAll(logs, "\n", " ; ")), " "))
+		status = append(status, f[0]+" "+f[1])
+		for _, p := range ports {
+			if strings.Contains(f[2], fmt.Sprintf(":%d->", p)) || serviceNamed(f[0], p) {
+				logs, _ := docker("logs", "--tail", "12", f[0])
+				fmt.Fprintf(&b, " | %d %s (%s), last log lines: %s", p, f[0], f[1], strings.Join(strings.Fields(strings.ReplaceAll(logs, "\n", " ; ")), " "))
+			}
+		}
 	}
-	return clip(b.String(), 1500)
+	return clip(b.String()+" | lab containers: "+strings.Join(status, ", "), 1800)
+}
+
+// serviceNamed: the container azq-svc-X is the service that port p runs, by
+// the name the truth table gives it.
+func serviceNamed(container string, p int) bool {
+	for _, s := range serviceTruth {
+		if s.port == p && strings.HasSuffix(container, "-"+s.what) {
+			return true
+		}
+	}
+	return false
 }
 
 func nmapBin() string {
