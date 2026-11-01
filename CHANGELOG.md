@@ -23,6 +23,7 @@
 
 ### Fixed
 
+- `crawl -browser`, `run -browser`: a page whose scripts did not load as JavaScript (the network failed them, the server answered an error, or answered an HTML page where a script should be) is named in a `-browser:` note, with why; before, the app drew no menu and called no route, and the summary said only `0 clicks`. With 0 clicks the `-interact:` note adds the first error a script of the page threw.
 - `probe` with `-p` (or `-path`) now ends every input's port (path) as a row of its own, a failed one included, in text and JSON: before, one port answering hid the others' failures, and a name asked on several ports kept only the last port's error. The summary names each failed URL once.
 - `ingest` of naabu JSON now makes `Port` rows as azhaq's own scan does: `query -type Port`, the summary counts and the MCP tools list each open port, the lines naabu repeats fold into one row, and a naabu udp line is a udp port.
 - A worker no longer waits a minute and ends with a lost-run error when the run finishes between two of its claims: three refused connections in a row end it as an ended run.
