@@ -25,6 +25,7 @@ import (
 
 func init() {
 	egress.SessionTick = sessionTick
+	egress.SessionWire = sessionWire
 	egress.Noter = Note
 }
 
