@@ -771,7 +771,9 @@ func buildReport(er store.EvidenceRow, order []string, saved time.Time, savedOK,
 	for _, a := range controls {
 		controlled = append(controlled, fmt.Sprintf("%s %d", a.Role, a.Status))
 	}
-	if len(controls) == 0 && class == classRead {
+	if row.Control != nil && len(row.Control.Failed) > 0 {
+		missing("the control request failed (" + strings.Join(row.Control.Failed, ", ") + "): the report cannot say whether the route answers any identifier; run roles again")
+	} else if len(controls) == 0 && class == classRead {
 		missing("no control was asked for this row: the evidence store holds no answer for a made-up identifier, so the report cannot say whether the route answers any identifier")
 	}
 	if row.Control != nil && len(row.Control.Alike) > 0 {

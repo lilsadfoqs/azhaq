@@ -12,6 +12,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/lilsadfoqs/azhaq/internal/fetch"
 )
 
 func TestWriteMethods(t *testing.T) {
@@ -625,5 +627,44 @@ func TestReplayWriteCanaryNamesItsFields(t *testing.T) {
 	args = []string{"-json", "-dir", t.TempDir(), "-har", "alice=" + alice, "-replay-writes-canary"}
 	if err := cmdRoles(args); err == nil || exitCode(err) != exitUsage {
 		t.Errorf("-replay-writes-canary without -replay-writes is a usage error: %v", err)
+	}
+}
+
+// A write that gets no answer, and an owner's object that cannot be read
+// back, are noted on the row and counted in the summary, not shown as a
+// refusal and nothing else.
+func TestReplayWritesNoAnswer(t *testing.T) {
+	fetch.Reset()
+	dead := deadAddr(t)
+	h := func(v string) http.Header { x := http.Header{}; x.Set("A", v); return x }
+	roles := []role{{name: "alice", session: h("1")}, {name: "bob", session: h("2")}}
+	put := writeReq{owner: "alice", method: "PUT", url: "http://" + dead + "/api/items/3", header: http.Header{"Content-Type": {"application/json"}}, body: []byte(`{"note":"x"}`), status: 200}
+	rows, _, err := replayWrites(roles, []writeReq{put}, map[string]map[string]answer{}, map[string]bool{"127.0.0.1": true}, 0, 100, false)
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("rows %+v err %v", rows, err)
+	}
+	r := rows[0]
+	if !slices.ContainsFunc(r.Failed, func(f string) bool { return strings.HasPrefix(f, "bob's PUT: ") && strings.Contains(f, "refused") }) ||
+		!slices.ContainsFunc(r.Failed, func(f string) bool { return strings.HasPrefix(f, "read back at /api/items/3 as alice: ") }) || !strings.Contains(r.Evidence, "no answer: ") {
+		t.Errorf("row failed %q evidence %q", r.Failed, r.Evidence)
+	}
+	notes, failed := writeNotes(rows)
+	if !failed || len(notes) != 1 || !strings.HasPrefix(notes[0], "write replay: ") || !strings.Contains(notes[0], "got no answer") {
+		t.Errorf("notes %q failed %v", notes, failed)
+	}
+}
+
+// A write answered 200 with its body cut keeps the status and is noted.
+func TestReplayWritesCutBody(t *testing.T) {
+	fetch.Reset()
+	site := cutApp(t)
+	roles := []role{{name: "alice", session: http.Header{}}, {name: "bob", session: http.Header{}}}
+	put := writeReq{owner: "alice", method: "PUT", url: site.URL + "/api/items/3", header: http.Header{"Content-Type": {"application/json"}}, body: []byte(`{"note":"x"}`), status: 200}
+	rows, _, err := replayWrites(roles, []writeReq{put}, map[string]map[string]answer{}, map[string]bool{"127.0.0.1": true}, 0, 100, false)
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("rows %+v err %v", rows, err)
+	}
+	if a := rows[0].Answers["bob"]; a.Status != 200 || !slices.ContainsFunc(rows[0].Failed, func(f string) bool { return strings.HasPrefix(f, "bob's PUT: the answer was cut") }) {
+		t.Errorf("bob %+v failed %q", a, rows[0].Failed)
 	}
 }

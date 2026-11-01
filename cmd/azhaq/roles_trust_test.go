@@ -1,9 +1,11 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -159,6 +161,177 @@ func TestAskControls(t *testing.T) {
 	_, _ = askControls(roles, rows, own, nil, regexp.MustCompile(`socks`), 10)
 	if c := rows[0].Control; len(c.Alike) != 0 || !c.Answers["admin"].Refusal {
 		t.Errorf("-refusal: %+v", c)
+	}
+}
+
+// A -role-cmd that fails when the replay asks it for a new token leaves
+// the replay on the token the run started with: a note, and exit 3.
+func TestRolesRoleCmdFailsAtReplay(t *testing.T) {
+	alice, bob := jwt(`{"sub":"alice"}`), jwt(`{"sub":"bob"}`)
+	site := objectApp(t, map[string]string{alice: "alice", bob: "bob"})
+	flaky := filepath.Join(t.TempDir(), "n")
+	cmd := fmt.Sprintf(`n=$(cat %s 2>/dev/null || echo 0); n=$((n+1)); echo $n > %s; [ $n -gt 1 ] && exit 1; echo "Authorization: Bearer %s"`, flaky, flaky, alice)
+	_, _, sum, err := rolesJSON(t, site.URL, "-role", "anon", "-role-cmd", "alice="+cmd, "-role", "bob=Authorization: Bearer "+bob, "--", "-url", site.URL+"/")
+	if exitCode(err) != exitPartial || !strings.Contains(strings.Join(toStrings(sum["notes"]), "\n"), "it sends the token the role's run started with") {
+		t.Errorf("exit %d (%v), notes %q", exitCode(err), err, toStrings(sum["notes"]))
+	}
+}
+
+// cutApp answers 200 with a body shorter than it promised, then drops the connection.
+func cutApp(t *testing.T) *httptest.Server {
+	t.Helper()
+	site := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, buf, _ := w.(http.Hijacker).Hijack()
+		fmt.Fprint(buf, "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 200\r\n\r\n{\"id\":")
+		buf.Flush()
+		conn.Close()
+	}))
+	t.Cleanup(site.Close)
+	return site
+}
+
+// An answer whose body is cut is a request that failed: a control built on
+// half a body says nothing.
+func TestAskControlsCutBody(t *testing.T) {
+	fetch.Reset()
+	site := cutApp(t)
+	roles := []role{{name: "alice", session: http.Header{}}, {name: "bob", session: http.Header{}}}
+	real, _ := readAnswer(200, []byte(`{"id":7,"name":"shoes"}`), "application/json")
+	rows := []roleRow{{URL: site.URL + "/api/items/7", From: site.URL + "/api/items/{id}", value: "7", Owner: "alice", Verdict: verdictCross,
+		Readers: []string{"bob"}, Answers: map[string]answer{"alice": real, "bob": real}}}
+	_, _ = askControls(roles, rows, map[string]bool{"127.0.0.1": true}, nil, nil, 10)
+	if c := rows[0].Control; c == nil || len(c.Answers) != 0 || len(c.Failed) != 1 || !strings.Contains(c.Failed[0], "the answer was cut") {
+		t.Errorf("control %+v", c)
+	}
+}
+
+// A database whose seeds cannot be read gives no hosts, and so no scope for
+// the replay: that is an error, not an empty scope.
+func TestEndpointAnswersSeedsUnreadable(t *testing.T) {
+	db := filepath.Join(t.TempDir(), "r.db")
+	st, err := store.Open(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SetMeta("seeds", "{not json"); err != nil {
+		t.Fatal(err)
+	}
+	st.Close()
+	if _, _, _, _, err := endpointAnswers(db); err == nil {
+		t.Error("unreadable seeds: no error")
+	}
+}
+
+// An interrupted replay is a run stopped (exit 4), not a note and exit 0.
+func TestNoteCapInterrupted(t *testing.T) {
+	rep := newReport("roles")
+	noteCap(rep, "replay", fmt.Errorf("asking: %w", context.Canceled))
+	rep.settle()
+	if rep.Exit != exitLimit || !strings.HasPrefix(rep.Stopped, "interrupted: the replay stopped") || len(rep.Notes) != 1 {
+		t.Errorf("exit %d stopped %q notes %q", rep.Exit, rep.Stopped, rep.Notes)
+	}
+}
+
+// deadAddr is a local address nothing listens on.
+func deadAddr(t *testing.T) string {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	return ln.Addr().String()
+}
+
+// A control request that fails is not dropped: the row says its control
+// could not be asked and why, the summary counts it, and the run exits 3.
+func TestAskControlsFailedRequest(t *testing.T) {
+	fetch.Reset()
+	dead := deadAddr(t)
+	h := func(v string) http.Header { return http.Header{"Authorization": {v}} }
+	roles := []role{{name: "alice", session: h("alice")}, {name: "bob", session: h("bob")}}
+	real, _ := readAnswer(200, []byte(`{"id":7,"name":"shoes"}`), "application/json")
+	rows := []roleRow{{URL: "http://" + dead + "/api/items/7", From: "http://" + dead + "/api/items/{id}", value: "7", Owner: "alice", Verdict: verdictCross,
+		Readers: []string{"bob"}, Answers: map[string]answer{"alice": real, "bob": real}}}
+	if _, err := askControls(roles, rows, map[string]bool{"127.0.0.1": true}, nil, nil, 10); err != nil {
+		t.Fatal(err)
+	}
+	row := rows[0]
+	if row.Verdict != verdictCross || !slices.Equal(row.Readers, []string{"bob"}) || row.Control == nil || len(row.Control.Answers) != 0 ||
+		len(row.Control.Failed) != 1 || !strings.HasPrefix(row.Control.Failed[0], "bob: ") || !strings.Contains(row.Control.Failed[0], "refused") {
+		t.Fatalf("row %+v control %+v", row, row.Control)
+	}
+	explain(rows, nil, roles, nil)
+	if !strings.Contains(rows[0].Evidence, "could not be asked, bob: ") {
+		t.Errorf("evidence %q", rows[0].Evidence)
+	}
+	notes, hard := controlNotes(rows)
+	if !hard || len(notes) != 1 || !strings.HasPrefix(notes[0], "1 cross read not checked with a made-up identifier: the request failed: ") {
+		t.Errorf("notes %q hard %v", notes, hard)
+	}
+	// A host outside the scope is refused the same way.
+	rows = []roleRow{{URL: "http://" + dead + "/api/items/7", From: "http://" + dead + "/api/items/{id}", value: "7", Owner: "alice", Verdict: verdictCross,
+		Readers: []string{"bob"}, Answers: map[string]answer{"alice": real, "bob": real}}}
+	_, _ = askControls(roles, rows, map[string]bool{"other.test": true}, nil, nil, 10)
+	if c := rows[0].Control; c == nil || len(c.Failed) != 1 || !strings.Contains(c.Failed[0], "outside the scope") {
+		t.Errorf("scope refusal: %+v", c)
+	}
+	// A -deny-path rule is the user's: said on the row and in a note, not a failure.
+	rows[0].Control = &control{Failed: []string{"bob: not requested: -deny-path /api"}, quiet: 1}
+	if notes, hard := controlNotes(rows); hard || len(notes) != 1 || !strings.Contains(notes[0], "-deny-path") {
+		t.Errorf("denied: notes %q hard %v", notes, hard)
+	}
+}
+
+// Through roles: the route whose made-up identifiers drop the connection
+// keeps its verdict, says why it has no control, and the run exits 3.
+func TestRolesControlRequestFails(t *testing.T) {
+	alice, bob := jwt(`{"sub":"alice"}`), jwt(`{"sub":"bob"}`)
+	app := objectApp(t, map[string]string{alice: "alice", bob: "bob"})
+	site := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if id, ok := strings.CutPrefix(r.URL.Path, "/api/notes/"); ok && id != "21" && id != "22" {
+			conn, _, _ := w.(http.Hijacker).Hijack()
+			conn.Close() // a made-up note: the connection drops
+			return
+		}
+		app.Config.Handler.ServeHTTP(w, r)
+	}))
+	defer site.Close()
+	_, rows, sum, err := rolesJSON(t, site.URL, "-role", "anon", "-role", "alice=Authorization: Bearer "+alice, "-role", "bob=Authorization: Bearer "+bob,
+		"--", "-url", site.URL+"/")
+	if exitCode(err) != exitPartial {
+		t.Errorf("exit %d (%v), want %d", exitCode(err), err, exitPartial)
+	}
+	note := rows["/api/notes/21"]
+	if note.Verdict != verdictCross || note.Control == nil || len(note.Control.Failed) != 1 || !strings.Contains(note.Evidence, "could not be asked") {
+		t.Errorf("note row: %+v control %+v evidence %q", note.Verdict, note.Control, note.Evidence)
+	}
+	want := false
+	for _, n := range toStrings(sum["notes"]) {
+		want = want || strings.HasPrefix(n, "2 cross reads not checked with a made-up identifier: the request failed: ")
+	}
+	if !want || sum["exit"] != float64(exitPartial) || sum["complete"] != false {
+		t.Errorf("summary %v", sum)
+	}
+}
+
+// A replay read that gets no answer leaves its role missing from the row:
+// the stage says how many and why, and asks the run to exit 3.
+func TestReplayAllNoAnswer(t *testing.T) {
+	fetch.Reset()
+	dead := deadAddr(t)
+	u := "http://" + dead + "/api/items/7"
+	real, _ := readAnswer(200, []byte(`{"id":7}`), "application/json")
+	roles := []role{{name: "alice", session: http.Header{"Authorization": {"alice"}}}, {name: "bob", session: http.Header{"Authorization": {"bob"}}}}
+	answers := map[string]map[string]answer{"alice": {u: real}, "bob": {}}
+	w := &replayWatch{}
+	_, err := replayAll(roles, answers, map[string][]string{u: {"alice"}}, nil, map[string]bool{"127.0.0.1": true}, 0, 100, w)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := answers["bob"][u]; ok || !w.failed || len(w.notes) != 1 ||
+		!strings.HasPrefix(w.notes[0], "role bob: 1 request of the replay got no answer, so it is missing from the comparison: ") || !strings.Contains(w.notes[0], "refused") {
+		t.Errorf("answers %v failed %v notes %q", answers["bob"], w.failed, w.notes)
 	}
 }
 
@@ -393,8 +566,11 @@ func TestRolesCanaryRenews(t *testing.T) {
 // on the answer and the row, with a note.
 func TestRolesCanarySuspect(t *testing.T) {
 	site := expiringApp(t, 4)
-	_, rows, sum, _ := rolesJSON(t, site.URL, "-canary-every", "3", "-role", "anon", "-role-cmd", "alice="+counter(t, "alice"), "-role", "bob=Authorization: Bearer bob-fixed",
+	_, rows, sum, err := rolesJSON(t, site.URL, "-canary-every", "3", "-role", "anon", "-role-cmd", "alice="+counter(t, "alice"), "-role", "bob=Authorization: Bearer bob-fixed",
 		"--", "-url", site.URL+"/")
+	if exitCode(err) != exitPartial {
+		t.Errorf("suspect answers: exit %d (%v), want %d", exitCode(err), err, exitPartial)
+	}
 	suspect := 0
 	for p, row := range rows {
 		if !row.SessionSuspect {

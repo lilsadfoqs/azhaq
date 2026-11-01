@@ -36,6 +36,9 @@
 - `subs` no longer retries crt.sh's JSON API once every other source has answered with names and crt.sh alone is left, as subfinder asks it once; the retries still run while others are running or none has given names.
 - A generated name (a guess, `-w`, `-permute`) that answers NOERROR with no address and no CNAME is no longer confirmed at a second resolver (2 queries instead of 3), and a zone whose first wildcard probe answers NXDOMAIN gets one probe instead of two.
 - The install notes say `install.sh` is `scripts/install.sh`, downloaded first or run through the pipe.
+- `roles`: a control request that fails (a refused connection, a timeout, an answer cut short, a refused scope) is no longer dropped. The row keeps its verdict and holds the reason in `control.failed` and its evidence, a note counts the cross reads not checked with a made-up identifier, and the run exits 3. A `-deny-path` rule keeps its request out without failing the run.
+- `roles`: a replay read, a history page, a write or the read-back of the owner's object that gets no answer is recorded and noted (a write row holds it in `failed`), and the run exits 3; so do a role whose session failed its check and did not come back, and a `-role-cmd` that failed when the replay asked for a new token.
+- `roles`: a replay interrupted with Ctrl-C stops the run with exit 4 and `stopped: interrupted`, not a note and exit 0; an answer cut short is a failed request, not half a body compared as a whole one; a database whose seeds cannot be read ends the run with an error instead of an empty scope.
 
 ## v0.12.1
 

@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -235,12 +236,21 @@ func replayWrites(roles []role, reqs []writeReq, answers map[string]map[string]a
 	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	sent := 0
 	latest := map[string]answer{} // the owner's objects as last read: an earlier write may have changed what the run read
+	var cur *roleRow              // the write's row: a request that gets no answer is noted on it
 	send := func(r role, w writeReq) (answer, error) {
 		if sent >= budget {
 			return answer{}, fmt.Errorf("%w: some writes were not replayed", errReplayMax)
 		}
 		sent++
-		return sendWrite(ctx, &client, r, w)
+		a, err := sendWrite(ctx, &client, r, w)
+		var na *noAnswerError
+		if errors.As(err, &na) {
+			if noAnswer(na.err) && cur != nil {
+				cur.Failed = append(cur.Failed, fmt.Sprintf("%s's %s: %s", r.name, w.method, failWhy(na.err)))
+			}
+			return na.a, nil // no answer, or a cut one: the row says so
+		}
+		return a, err
 	}
 	// read gets the owner's object again, to see whether a write changed
 	// it; a budget spent or a failed read leaves the write unproven.
@@ -252,6 +262,8 @@ func replayWrites(roles []role, reqs []writeReq, answers map[string]map[string]a
 		a, err := readAs(ctx, &client, r, u)
 		if err == nil {
 			latest[r.name+"\x00"+u] = a
+		} else if noAnswer(err) && cur != nil {
+			cur.Failed = append(cur.Failed, fmt.Sprintf("read back at %s as %s: %s", pathOf(u), r.name, failWhy(err)))
 		}
 		return a, err == nil
 	}
@@ -269,6 +281,7 @@ func replayWrites(roles []role, reqs []writeReq, answers map[string]map[string]a
 		}
 		row := roleRow{URL: w.url, Method: w.method, Status: map[string]int{}, Answers: map[string]answer{}, FoundBy: []string{w.owner},
 			Owner: w.owner, OwnerBy: w.from, reqBody: w.body, reqType: w.header.Get("Content-Type")}
+		cur = &row
 		if w.status != 0 {
 			row.Answers[w.owner] = answer{Status: w.status}
 		}
@@ -815,7 +828,10 @@ func readAs(ctx context.Context, client *http.Client, r role, u string) (answer,
 		return answer{}, err
 	}
 	defer resp.Body.Close()
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil {
+		return answer{}, fmt.Errorf("the answer was cut: %w", err)
+	}
 	a, _ := readAnswer(resp.StatusCode, body, resp.Header.Get("Content-Type"))
 	if resp.StatusCode >= 300 && resp.StatusCode < 400 {
 		a.Location = bareLocation(resp.Header.Get("Location"))
@@ -851,10 +867,10 @@ func sendWrite(ctx context.Context, client *http.Client, r role, w writeReq) (an
 	fetch.Extra = nil
 	resp, err := client.Do(req)
 	if err != nil {
-		return answer{Status: 0}, nil // no answer: the row says so
+		return answer{}, &noAnswerError{err: err}
 	}
 	defer resp.Body.Close()
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	body, rerr := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	a, _ := readAnswer(resp.StatusCode, body, resp.Header.Get("Content-Type"))
 	if resp.StatusCode >= 300 && resp.StatusCode < 400 {
 		a.Location = bareLocation(resp.Header.Get("Location"))
@@ -863,7 +879,38 @@ func sendWrite(ctx context.Context, client *http.Client, r role, w writeReq) (an
 		a.Refusal = true // a short 2xx answer that says no ("Only Admins may delete users!")
 	}
 	keepBody(a.Hash, resp.Header.Get("Content-Type"), body)
+	if rerr != nil {
+		// The status came; the body was cut: the write was sent, so its
+		// status stands, noted as the failure it is.
+		return a, &noAnswerError{err: fmt.Errorf("the answer was cut: %w", rerr), a: a}
+	}
 	return a, nil
+}
+
+// noAnswerError is a write the target did not answer, or answered with a
+// body that was cut (a, then, is the status and what came): replayWrites
+// notes it on the row and goes on.
+type noAnswerError struct {
+	err error
+	a   answer
+}
+
+func (e *noAnswerError) Error() string { return e.err.Error() }
+func (e *noAnswerError) Unwrap() error { return e.err }
+
+// writeNotes says in the summary how many requests of the write replay got
+// no answer, and why. failed is true when one did: the run exits 3.
+func writeNotes(rows []roleRow) (notes []string, failed bool) {
+	n := 0
+	var reasons []string
+	for _, row := range rows {
+		n += len(row.Failed)
+		reasons = append(reasons, row.Failed...)
+	}
+	if n == 0 {
+		return nil, false
+	}
+	return []string{fmt.Sprintf("write replay: %s got no answer, so the rows say what the others showed: %s", plural(n, "request"), distinctReasons(reasons))}, true
 }
 
 // deniedText: what a server says when it refuses a write and still answers 2xx.
@@ -1013,6 +1060,9 @@ func liveVerify(w writeReq, owner role, live map[string]bool, read func(role, st
 func finishWriteRow(row roleRow) roleRow {
 	for n, a := range row.Answers {
 		row.Status[n] = a.Status
+	}
+	if len(row.Failed) > 0 {
+		row.Evidence = strings.TrimPrefix(row.Evidence+"; no answer: "+strings.Join(row.Failed, ", "), "; ")
 	}
 	return row
 }

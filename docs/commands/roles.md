@@ -85,6 +85,7 @@ The text table names the roles and fields in brackets after the verdict. With `-
 | `confidence` | `proved`, `likely` or `guess`: how surely the object is the owner's. See [Confidence](#confidence). |
 | `evidence` | Why, in one line. See [evidence and control](#evidence-and-control). |
 | `control` | What its readers got for a made-up identifier on the same route. |
+| `failed` | On a write row: the requests that got no answer, and why. See [Summary and exit codes](#summary-and-exit-codes). |
 | `both_ways` | The owner reads one of its reader's objects on the same route too. |
 | `session_suspect` | An answer was asked after its role's session last proved alive. See [Canaries](#canaries). |
 | `readers` | For verdicts that say who reads it: those roles. |
@@ -153,7 +154,10 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 
 - **Exit 3:** a signed-in role was refused wherever a session matters. The summary names it in a note. See [Dead sessions](#dead-sessions).
 - **Exit 3:** a token has expired and nothing more can be said of it. A note says so. See [Expired tokens](#expired-tokens).
-- **Exit 4:** a role's run was stopped by a limit. The summary marks it `stopped`.
+- **Exit 3:** a control request got no answer. See [Negative controls](#negative-controls).
+- **Exit 3:** a replay read, a page of a role's history, a write, or the read of the owner's object after a write got no answer (a refused connect, a timeout, an answer cut short). The role is then missing from that row, and a note says how many requests and why; a write row says it in `failed` and `evidence`. A request a `-deny-path` rule keeps out is not one.
+- **Exit 3:** a role's session failed its check during the replay and did not come back (`session_suspect` answers), or its `-role-cmd` failed when the replay asked for a new token.
+- **Exit 4:** a role's run was stopped by a limit, or the replay was interrupted (Ctrl-C) with requests left. The summary marks it `stopped`.
 - **Exit 2:** a header names a host outside the scope rule. Nothing is sent. See [Headers that name a host](#headers-that-name-a-host).
 - A role whose run could not be done, such as a failed sign-in, ends `roles` with a summary whose `notes` say why.
 - `requests` in the summary is every request `roles` sent to the targets: the roles' runs, the Chrome sign-ins (the first and each renewal), the replays and every redirect hop they followed. It equals the target lines of `roles.ledger.jsonl`. A role's own summary line counts that role's run only, so they add up to less.
@@ -279,6 +283,7 @@ Also:
 - A reader the route answers so, beside one it refuses, is dropped from the row's readers.
 - Each reader is asked once per route and shape of identifier.
 - The controls count against what `-replay-max` leaves after the replay.
+- A control request that gets no answer (a refused connect, a timeout, an answer cut short, a scope refusal) is a failure. The row keeps its verdict, holds the reason in `control.failed`, and says in `evidence` that its control could not be asked. A note counts them: `2 cross reads not checked with a made-up identifier: the request failed: connect: connection refused`. The run exits 3. A request a `-deny-path` rule keeps out is the rule's, not a failure: the row and a note say it, and the exit is not changed.
 
 ### Refusal pages
 
@@ -444,7 +449,7 @@ For a write, `evidence` says who was let, as the owner was, and where the write 
 bob got 200:80, as alice did (200:80); PUT /api/BasketItems/{id} with an empty body
 ```
 
-- `control` is on a row where a role reads another role's object. It holds what its readers got for a made-up identifier on the same route. Its keys are `url`, `value`, each reader's `answers`, and `alike`: the readers it answered as a real object.
+- `control` is on a row where a role reads another role's object. It holds what its readers got for a made-up identifier on the same route. Its keys are `url`, `value`, each reader's `answers`, `alike`: the readers it answered as a real object, and `failed`: the readers whose request got no answer, each with the reason.
 - `both_ways` is said in a note once per route and pair: `alice and bob read each other's objects on /rest/basket/{id}`.
 
 ### Writes

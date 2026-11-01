@@ -174,6 +174,7 @@ type replayWatch struct {
 	renew    func(i int) error // a new session for roles[i]
 	refusal  *regexp.Regexp
 	notes    []string
+	failed   bool // a request got no answer, or answers are suspect: the comparison misleads
 }
 
 // renewer renews a role's session: its -role-cmd run again, or a new
@@ -247,8 +248,9 @@ type roleReplay struct {
 	spent    bool     // a new session failed too, or none could be had: no more are asked for
 	retried  int
 	suspect  int
-	failedAt string // the first failed check: its URL and status
-	unasked  int    // URLs left when the budget ran out
+	failedAt string      // the first failed check: its URL and status
+	unasked  int         // URLs left when the budget ran out
+	failed   askFailures // URLs whose request got no answer, and why
 }
 
 func (rr *roleReplay) setup() {
@@ -265,8 +267,13 @@ func (rr *roleReplay) ask(u string) {
 	res, _, err := fetch.Do(rr.ctx, fetch.Client(nil), u)
 	*rr.sent += max(1, len(res.Hops)) // each redirect hop is a request too
 	if err != nil {
+		if rr.failed == nil {
+			rr.failed = askFailures{}
+		}
+		rr.failed.add(u, err)
 		return
 	}
+	delete(rr.failed, u)
 	rr.answers[rr.roles[rr.i].name][u], _ = resultAnswer(res)
 }
 
@@ -382,6 +389,10 @@ func (rr *roleReplay) run(todo []string) error {
 
 func (rr *roleReplay) note() {
 	name := rr.roles[rr.i].name
+	if n := len(rr.failed); n > 0 {
+		rr.w.failed = true
+		rr.w.notes = append(rr.w.notes, fmt.Sprintf("role %s: %s of the replay got no answer, so it is missing from the comparison: %s", name, plural(n, "request"), rr.failed.reasons()))
+	}
 	how := "its -role-cmd gave a new one"
 	if rr.roles[rr.i].user != "" {
 		how = "it signed in again"
@@ -391,6 +402,7 @@ func (rr *roleReplay) note() {
 	}
 	switch {
 	case rr.suspect > 0:
+		rr.w.failed = true
 		rr.w.notes = append(rr.w.notes, fmt.Sprintf("role %s's session failed its check (%s) during the replay and did not come back: %s asked after it was last seen alive (session_suspect)",
 			name, rr.failedAt, plural(rr.suspect, "answer")))
 	case rr.renewals > 0 && rr.failedAt != "" && rr.retried == 0:
