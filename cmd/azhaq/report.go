@@ -37,11 +37,12 @@ type report struct {
 	Unreachable []string         `json:"unreachable,omitempty"`
 	Failed      []engine.Failure `json:"failed,omitempty"`
 	Skipped     []engine.Skip    `json:"skipped,omitempty"`
-	Takeover    []takeoverRow    `json:"takeover,omitempty"` // names another party may take over
-	Degraded    bool             `json:"degraded,omitempty"` // a source the run depends on failed (subs); the exit code is not changed
-	Junk        map[string]int   `json:"junk,omitempty"`     // urls: URLs left out as junk, by reason (-raw keeps them)
-	Sources     *sourceHealth    `json:"sources,omitempty"`  // subs and urls: how many sources answered, which failed and why, what each gave
-	Stopped     string           `json:"stopped,omitempty"`  // the limit that stopped the work
+	Takeover    []takeoverRow    `json:"takeover,omitempty"`    // names another party may take over
+	Degraded    bool             `json:"degraded,omitempty"`    // a source the run depends on failed (subs); the exit code is not changed
+	DegradedBy  []degradedBy     `json:"degraded_by,omitempty"` // with degraded: each failed source, its reason and how many domains
+	Junk        map[string]int   `json:"junk,omitempty"`        // urls: URLs left out as junk, by reason (-raw keeps them)
+	Sources     *sourceHealth    `json:"sources,omitempty"`     // subs and urls: how many sources answered, which failed and why, what each gave
+	Stopped     string           `json:"stopped,omitempty"`     // the limit that stopped the work
 	Resume      string           `json:"resume,omitempty"`
 	Notes       []string         `json:"notes,omitempty"`
 	Next        []string         `json:"next,omitempty"`
@@ -145,8 +146,12 @@ func (r *report) print(w io.Writer) {
 	}
 	if r.Degraded {
 		// Exit 0 and "complete" say the run finished, not that every source
-		// answered: the first line of the summary says it too.
-		head = append(head, fmt.Sprintf("DEGRADED: %d of %d sources failed, the names may be incomplete", r.Counts["sources failed"], r.Counts["sources asked"]))
+		// answered: the summary opens with it, naming the sources and why.
+		d := fmt.Sprintf("DEGRADED: %d of %d sources failed", r.Counts["sources failed"], r.Counts["sources asked"])
+		if len(r.DegradedBy) > 0 {
+			d += ": " + degradedText(r.DegradedBy)
+		}
+		head = append([]string{d + ", the names may be incomplete"}, head...)
 	}
 	if r.Requests > 0 {
 		head = append(head, fmt.Sprintf("%d requests", r.Requests))

@@ -414,3 +414,42 @@ func TestRegressSUB05DegradedIsOnTheFirstLine(t *testing.T) {
 		t.Errorf("a run that was not degraded says so: %s", b.String())
 	}
 }
+
+// A degraded subs run opens its summary with the sources that failed and
+// why, and the JSON summary lists them: the headline count is not read as
+// coverage.
+func TestDegradedNamesTheFailedSources(t *testing.T) {
+	h := newHealthTally(false)
+	row := func(err string, def bool) map[string]any {
+		r := map[string]any{"count": 0.0, "default": def}
+		if err != "" {
+			r["error"] = err
+		}
+		return r
+	}
+	for _, d := range []string{"tesla.com", "hackerone.com"} {
+		h.add(d, map[string]any{
+			"crtsh":    row("unexpected status code 502 received from https://crt.sh/json?q="+d, true),
+			"rapiddns": map[string]any{"count": 54.0, "default": true},
+			"extra":    row("connection refused", false),
+		})
+	}
+	r := newReport("subs")
+	r.what = "names"
+	r.Results = 108
+	r.Counts = map[string]int{"sources asked": 6, "sources answered": 2, "sources failed": 2}
+	r.Degraded = true
+	r.DegradedBy = h.degradedBy()
+	r.settle()
+	var b strings.Builder
+	r.print(&b)
+	first, _, _ := strings.Cut(b.String(), "\n")
+	want := "azhaq subs: DEGRADED: 2 of 6 sources failed: crtsh (HTTP 502, 2 domains), the names may be incomplete · 108 names"
+	if !strings.HasPrefix(first, want) {
+		t.Errorf("first line %q, want it to start %q", first, want)
+	}
+	raw, _ := json.Marshal(r)
+	if !strings.Contains(string(raw), `"degraded":true`) || !strings.Contains(string(raw), `"degraded_by":[{"source":"crtsh","error":"HTTP 502","domains":2}]`) {
+		t.Errorf("summary %s", raw)
+	}
+}

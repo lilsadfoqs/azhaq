@@ -107,7 +107,8 @@ The text summary ends with the same, and says why the exit code is what it is:
 
 ### Degraded
 - True when `sources failed` ([Sources in the summary](#sources-in-the-summary)) is above 0. A source the run relies on did not answer, so the names may be incomplete.
-- The text summary says it on its first line: `DEGRADED: 7 of 38 sources failed`.
+- The text summary opens with it, naming the sources and why: `DEGRADED: 2 of 4 sources failed: crtsh (HTTP 502, 2 domains), the names may be incomplete`. Past three sources it ends with `+N more`.
+- The JSON summary has `degraded_by`: one `{"source", "error", "domains"}` for each source of the default set that failed, the one that failed for most domains first.
 - It does not change the exit code. A failure the other sources made up for is listed as `partial`, and the exit stays 0. With `-fail-on-errors` it is 3.
 - Failures of sources that ran only because of `-all-sources` never set it on their own.
 

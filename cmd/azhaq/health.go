@@ -6,6 +6,8 @@ import (
 	"slices"
 	"sort"
 	"strings"
+
+	"github.com/trannghiach/azhaq/engine"
 )
 
 // sourceHealth is the summary's answer to "did the sources answer": how
@@ -37,12 +39,15 @@ type sourceHealth struct {
 type healthTally struct {
 	h       sourceHealth
 	reasons map[string][]string // source → "domain: reason"
+	// down is what made the run degraded: a source of the default set that
+	// failed, with its short reason and for how many domains.
+	down    map[string]*degradedBy
 	domains map[string]bool
 	urls    bool
 }
 
 func newHealthTally(urls bool) *healthTally {
-	t := &healthTally{reasons: map[string][]string{}, domains: map[string]bool{}, urls: urls}
+	t := &healthTally{reasons: map[string][]string{}, down: map[string]*degradedBy{}, domains: map[string]bool{}, urls: urls}
 	t.h.Seconds = map[string]float64{}
 	t.h.Requests = map[string]int{}
 	if urls {
@@ -81,6 +86,12 @@ func (t *healthTally) add(domain string, srcs map[string]any) {
 			t.h.OffByDefaultFailed++
 		} else {
 			t.h.Failed++
+			d := t.down[name]
+			if d == nil {
+				d = &degradedBy{Source: name, Error: engine.ShortError(fmt.Sprint(row["error"]))}
+				t.down[name] = d
+			}
+			d.Domains++
 		}
 		t.reasons[name] = append(t.reasons[name], domain+"\x00"+fmt.Sprint(row["error"]))
 	}
@@ -188,4 +199,46 @@ func (h *sourceHealth) requestsNote() string {
 		total += h.Requests[n]
 	}
 	return fmt.Sprintf("%d requests to archives, retries included (%s): third parties, not in the requests count, which is what reached the targets", total, strings.Join(parts, ", "))
+}
+
+// degradedBy is a source of the default set that failed: why the names may
+// be incomplete.
+type degradedBy struct {
+	Source  string `json:"source"`
+	Error   string `json:"error"`
+	Domains int    `json:"domains"`
+}
+
+// degradedBy lists the failed sources of the default set, the one that
+// failed for most domains first.
+func (t *healthTally) degradedBy() []degradedBy {
+	var out []degradedBy
+	for _, d := range t.down {
+		out = append(out, *d)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Domains != out[j].Domains {
+			return out[i].Domains > out[j].Domains
+		}
+		return out[i].Source < out[j].Source
+	})
+	return out
+}
+
+// text is the sources and their reasons as the first line of a summary
+// names them: "crtsh (HTTP 502, 2 domains), hackertarget (HTTP 429)".
+func degradedText(by []degradedBy) string {
+	var parts []string
+	for i, d := range by {
+		if i == 3 {
+			parts = append(parts, fmt.Sprintf("+%d more", len(by)-3))
+			break
+		}
+		why := d.Error
+		if d.Domains > 1 {
+			why += fmt.Sprintf(", %d domains", d.Domains)
+		}
+		parts = append(parts, fmt.Sprintf("%s (%s)", d.Source, why))
+	}
+	return strings.Join(parts, ", ")
 }
