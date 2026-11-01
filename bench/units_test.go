@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"slices"
 	"strings"
@@ -120,5 +121,46 @@ func TestUnitsStartTheAppsTheyUse(t *testing.T) {
 		if !slices.Contains(dockerParts, s) {
 			t.Errorf("%q is not in dockerParts", s)
 		}
+	}
+}
+
+// A unit that dies through fatal or a panic is a failed check; the units
+// before it keep their results and the ones after it still run.
+func TestUnitThatDiesKeepsTheOthers(t *testing.T) {
+	rec = record{}
+	prof = profDefault
+	defer func() { prof, rec, inUnit = "", record{}, "" }()
+	runUnit("default:fuzz", func() { addCheck("fuzz ok", true, "") })
+	runUnit("default:dns", func() {
+		addCheck("dns started", true, "")
+		fatal("listen tcp 127.0.0.1:1: bind: address already in use")
+	})
+	runUnit("default:ports", func() { var m map[string]int; m["x"] = 1 })
+	runUnit("default:notify", func() { addCheck("notify ok", true, "") })
+	var names []string
+	for _, c := range rec.Checks {
+		names = append(names, fmt.Sprintf("%s=%v", c.Name, c.Pass))
+	}
+	want := "[default] fuzz ok=true [default] dns started=true [default] unit default:dns: ran to its end=false [default] unit default:ports: ran to its end=false [default] notify ok=true"
+	if strings.Join(names, " ") != want {
+		t.Errorf("checks %v", names)
+	}
+	if rec.Checks[2].Detail != "listen tcp 127.0.0.1:1: bind: address already in use" || !strings.HasPrefix(rec.Checks[3].Detail, "panic: ") {
+		t.Errorf("details %q %q", rec.Checks[2].Detail, rec.Checks[3].Detail)
+	}
+	if len(rec.Units) != 4 || rec.Units[1].Checks != 2 || rec.Units[2].Checks != 1 || inUnit != "" {
+		t.Errorf("spans %+v", rec.Units)
+	}
+}
+
+func TestListenPairSharesOnePort(t *testing.T) {
+	pc, ln, err := listenPair()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pc.Close()
+	defer ln.Close()
+	if pc.LocalAddr().String() != ln.Addr().String() {
+		t.Errorf("udp %v, tcp %v", pc.LocalAddr(), ln.Addr())
 	}
 }

@@ -478,6 +478,9 @@ func logf(format string, a ...any) {
 
 func fatal(format string, a ...any) {
 	logf(format, a...)
+	if inUnit != "" {
+		panic(unitStop{fmt.Sprintf(format, a...)}) // trackUnit ends the unit, not the run
+	}
 	os.Exit(2)
 }
 

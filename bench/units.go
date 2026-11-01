@@ -142,14 +142,44 @@ type unitSpan struct {
 	Rows   int    `json:"rows,omitempty"`
 }
 
+// unitStop is what fatal panics with inside a unit: the unit ends, the
+// record keeps the units already done.
+type unitStop struct{ msg string }
+
+// inUnit is the unit now running, "" outside units (flags, setup).
+var inUnit string
+
 // trackUnit runs fn and records what it added to the record. rows, when
-// set, counts the claims table's rows.
+// set, counts the claims table's rows. A unit that dies (a bench error
+// through fatal, or a panic) becomes a failed check of its own: the process
+// goes on with the next unit, and the record holds every unit that ran.
 func trackUnit(name string, rows func() int, fn func()) {
 	c0, r0, w0 := len(rec.Checks), len(rec.Runs), 0
 	if rows != nil {
 		w0 = rows()
 	}
-	fn()
+	func() {
+		inUnit = name
+		defer func() {
+			inUnit = ""
+			if r := recover(); r != nil {
+				msg := fmt.Sprint(r)
+				if st, ok := r.(unitStop); ok {
+					msg = st.msg
+				} else {
+					msg = "panic: " + msg
+				}
+				noCache, beforeEach = false, nil // a median loop may have stopped halfway
+				logf("unit %s stopped: %s", name, msg)
+				prefix := ""
+				if prof != "" {
+					prefix = "[" + prof + "] "
+				}
+				rec.Checks = append(rec.Checks, check{Name: prefix + "unit " + name + ": ran to its end", Pass: false, Detail: msg})
+			}
+		}()
+		fn()
+	}()
 	span := unitSpan{Name: name, Checks: len(rec.Checks) - c0, Runs: len(rec.Runs) - r0}
 	if rows != nil {
 		span.Rows = rows() - w0

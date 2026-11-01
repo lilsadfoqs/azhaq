@@ -91,17 +91,34 @@ func newRecServer() *recServer {
 		}
 		_ = w.WriteMsg(m)
 	})
-	pc, err := net.ListenPacket("udp", "127.0.0.1:0")
+	pc, ln, err := listenPair()
 	must(err)
 	z.addr = pc.LocalAddr().String()
-	ln, err := net.Listen("tcp", z.addr)
-	must(err)
 	for _, s := range []*dns.Server{{PacketConn: pc, Handler: h}, {Listener: ln, Handler: h}} {
 		z.srv = append(z.srv, s)
 		go func(s *dns.Server) { _ = s.ActivateAndServe() }(s)
 	}
 	time.Sleep(100 * time.Millisecond)
 	return z
+}
+
+// listenPair opens a UDP socket on a free port and a TCP listener on the
+// same one. Another process may take the TCP port between the two (it is
+// the ephemeral range), so a miss picks another port.
+func listenPair() (net.PacketConn, net.Listener, error) {
+	var err error
+	for range 20 {
+		var pc net.PacketConn
+		if pc, err = net.ListenPacket("udp", "127.0.0.1:0"); err != nil {
+			return nil, nil, err
+		}
+		var ln net.Listener
+		if ln, err = net.Listen("tcp", pc.LocalAddr().String()); err == nil {
+			return pc, ln, nil
+		}
+		pc.Close()
+	}
+	return nil, nil, err
 }
 
 func (z *recServer) stop() {
