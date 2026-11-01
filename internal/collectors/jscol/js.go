@@ -972,7 +972,7 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 			return meta, err
 		}
 		meta.NextHints = append(meta.NextHints, types.Seed{
-			Type: types.TypeURL, Keys: map[string]string{"url": src},
+			Type: types.TypeURL, Keys: map[string]string{"url": src, types.ViaKey: types.ViaLoaded},
 		})
 	}
 	// Strings with a complete query (/catalog?category=Gin) are pages of

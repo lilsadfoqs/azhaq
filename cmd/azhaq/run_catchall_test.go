@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 )
@@ -157,5 +158,110 @@ func TestRunCatchAllStopIsExactInOneDirectory(t *testing.T) {
 	_, rep := runShell(t, srv)
 	if rep.Counts["catchall"] != 3 || rep.Counts["skipped"] != 37 {
 		t.Errorf("counts %v: want 3 asked and 37 held", rep.Counts)
+	}
+}
+
+// An app whose unknown /api/ paths answer an error page, and whose /svc/
+// directory answers the shell for what it does not have, as an Express app
+// with a history fallback does: the real routes of both directories are
+// asked, though the origin answers the shell for the client routes the
+// bundle names, and only those are held.
+func TestRunAsksRealRoutesOfDirectoriesTheCatchAllCouldCover(t *testing.T) {
+	var names []string
+	var client, real []string
+	for i := 0; i < 30; i++ {
+		client = append(client, fmt.Sprintf("/view%d", i))
+	}
+	for i := 0; i < 8; i++ {
+		real = append(real, fmt.Sprintf("/api/Thing%d", i), fmt.Sprintf("/svc/item%d", i))
+	}
+	for _, p := range append(slices.Clone(client), real...) {
+		names = append(names, "'"+p+"'")
+	}
+	js := "var routes=[" + strings.Join(names, ",") + "];\n"
+	asked := map[string]int{}
+	var mu sync.Mutex
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		asked[r.URL.Path]++
+		mu.Unlock()
+		p := r.URL.Path
+		switch {
+		case p == "/static/bundle.js":
+			w.Header().Set("Content-Type", "application/javascript")
+			fmt.Fprint(w, js)
+		case strings.HasPrefix(p, "/api/Thing"), strings.HasPrefix(p, "/svc/item"):
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprintf(w, `{"path":%q,"rows":[]}`, p)
+		case strings.HasPrefix(p, "/api/"):
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprintf(w, "<html><head><title>Error: Unexpected path: %s</title></head></html>", p)
+		default:
+			w.Header().Set("Content-Type", "text/html")
+			fmt.Fprint(w, `<html><head><title>App</title></head><body><script src="/static/bundle.js"></script></body></html>`)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	_, rep := runShell(t, srv)
+	mu.Lock()
+	defer mu.Unlock()
+	for _, p := range real {
+		if asked[p] == 0 {
+			t.Errorf("%s answers for itself and was not asked", p)
+		}
+	}
+	held := 0
+	for _, p := range client {
+		if asked[p] == 0 {
+			held++
+		}
+	}
+	if held < 20 {
+		t.Errorf("%d of the 30 client routes were held: the shell's directory is asked again and again", held)
+	}
+	if rep.Counts["skipped"] != held {
+		t.Errorf("counts %v, %d held", rep.Counts, held)
+	}
+}
+
+// The scripts a page loads sit in the same directory as the client routes
+// its bundle names, and answer for themselves: they are the page's links, not
+// routes the rule is about, and do not stop it holding the client routes.
+func TestRunLoadedScriptsDoNotKeepClientRoutesAsked(t *testing.T) {
+	var names []string
+	for i := 0; i < 30; i++ {
+		names = append(names, fmt.Sprintf("'/view%d'", i))
+	}
+	bundle := "var routes=[" + strings.Join(names, ",") + "];\n"
+	asked := map[string]int{}
+	var mu sync.Mutex
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		asked[r.URL.Path]++
+		mu.Unlock()
+		switch r.URL.Path {
+		case "/main.js":
+			w.Header().Set("Content-Type", "application/javascript")
+			fmt.Fprint(w, bundle)
+		case "/runtime.js", "/polyfills.js", "/vendor.js":
+			w.Header().Set("Content-Type", "application/javascript")
+			fmt.Fprint(w, "var x=1;")
+		default:
+			w.Header().Set("Content-Type", "text/html")
+			fmt.Fprint(w, `<html><head><title>App</title></head><body><script src="/runtime.js"></script><script src="/polyfills.js"></script><script src="/vendor.js"></script><script src="/main.js"></script></body></html>`)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	runShell(t, srv)
+	mu.Lock()
+	defer mu.Unlock()
+	n := 0
+	for p, c := range asked {
+		if strings.HasPrefix(p, "/view") && c > 0 {
+			n++
+		}
+	}
+	if n > 10 {
+		t.Errorf("%d of the 30 client routes were asked: the page's own scripts kept the directory open", n)
 	}
 }

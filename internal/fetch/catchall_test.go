@@ -238,8 +238,19 @@ func TestProbeNameIsStableWithinARun(t *testing.T) {
 	}
 }
 
-// An origin that has answered CatchAllStop paths with its shell holds the
-// paths of directories whose control is the shell too, and asks the others.
+// named asks paths a script names, as run does: each is registered, then
+// asked and judged.
+func named(t *testing.T, srv *httptest.Server, paths ...string) {
+	t.Helper()
+	for _, p := range paths {
+		NoteNamed(srv.URL + p)
+		catchAll(t, srv, p)
+	}
+}
+
+// A directory whose control is the origin's shell holds its script-named
+// paths once CatchAllStop of them have answered with the shell; a directory
+// nothing was asked in, or whose control is something else, is asked.
 func TestCatchAllHeld(t *testing.T) {
 	Reset()
 	mux := http.NewServeMux()
@@ -258,27 +269,108 @@ func TestCatchAllHeld(t *testing.T) {
 	if CatchAllHeld(srv.URL+"/app/a/x", CatchAllStop) {
 		t.Fatal("held before any answer")
 	}
-	for _, p := range []string{"/app/a/1", "/app/a/2", "/app/a/3"} {
-		if !catchAll(t, srv, p) {
-			t.Fatalf("%s: want catch-all", p)
-		}
+	named(t, srv, "/app/a/1", "/app/a/2")
+	if CatchAllHeld(srv.URL+"/app/a/4", CatchAllStop) {
+		t.Error("held after fewer answers than the stop")
 	}
-	if n := CatchAllAnswers(srv.URL); n != 3 {
-		t.Fatalf("%d answers", n)
-	}
+	named(t, srv, "/app/a/3")
 	if !CatchAllHeld(srv.URL+"/app/a/4", CatchAllStop) {
-		t.Error("a path in a directory whose control is the shell is not held")
+		t.Error("a path in a directory whose own paths answered the shell is not held")
 	}
 	if CatchAllHeld(srv.URL+"/app/b/1", CatchAllStop) {
-		t.Error("a directory whose control was not asked is held")
+		t.Error("a directory nothing was asked in is held")
 	}
 	if CatchAllHeld(srv.URL+"/app/a/4", 0) {
 		t.Error("held with the stop at 0")
 	}
-	if catchAll(t, srv, "/docs/guide") {
-		t.Fatal("a real page reported as catch-all")
-	}
+	named(t, srv, "/docs/guide")
 	if CatchAllHeld(srv.URL+"/docs/other", CatchAllStop) {
 		t.Error("a directory whose control is a 404 is held")
+	}
+}
+
+// A directory of an app whose unknown paths answer the shell, API routes
+// included, is not held for it: its routes answer for themselves.
+func TestCatchAllHeldAsksRealRoutesInAShellDirectory(t *testing.T) {
+	Reset()
+	mux := http.NewServeMux()
+	for _, p := range []string{"/api/users", "/api/orders", "/api/items", "/api/stock"} {
+		mux.HandleFunc(p, func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprintf(w, `{"path":%q,"rows":[]}`, r.URL.Path)
+		})
+	}
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`<!doctype html><title>App</title><app-root></app-root>`))
+	})
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	// The origin answers the shell elsewhere, and /api/ asks for its control.
+	named(t, srv, "/about", "/login", "/register", "/api/users", "/api/orders", "/api/items")
+	if CatchAllHeld(srv.URL+"/api/stock", CatchAllStop) {
+		t.Error("a real route is held because its directory's unknown paths answer the shell")
+	}
+	if !CatchAllHeld(srv.URL+"/contact", CatchAllStop) {
+		t.Error("the shell's own directory, three of its paths answered with it, is not held")
+	}
+}
+
+// A directory whose unknown paths answer an error page says nothing of the
+// paths that exist: they are asked, whatever the origin's other answers.
+func TestCatchAllHeldAsksAfterAnErrorPage(t *testing.T) {
+	Reset()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/api/") {
+			if r.URL.Path == "/api/Challenges" {
+				_, _ = w.Write([]byte(`{"status":"success","data":[]}`))
+				return
+			}
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprintf(w, "<title>Error: Unexpected path: %s</title>", r.URL.Path)
+			return
+		}
+		_, _ = w.Write([]byte(`<!doctype html><title>Shop</title><app-root></app-root>`))
+	}))
+	t.Cleanup(srv.Close)
+	named(t, srv, "/about", "/login", "/register", "/api/old1", "/api/old2", "/api/old3")
+	if CatchAllHeld(srv.URL+"/api/Challenges", CatchAllStop) {
+		t.Error("a route is held because its directory answers an error page for paths that do not exist")
+	}
+}
+
+// A directory whose script-named paths answer for themselves before the
+// shell has answered CatchAllStop of them is asked whole, though its control
+// is the shell.
+func TestCatchAllHeldGivesWayToRealAnswers(t *testing.T) {
+	Reset()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/files/real") {
+			_, _ = w.Write([]byte(`<title>` + r.URL.Path + `</title>real`))
+			return
+		}
+		_, _ = w.Write([]byte(`<!doctype html><title>Shop</title><app-root></app-root>`))
+	}))
+	t.Cleanup(srv.Close)
+	named(t, srv, "/files/real1", "/files/gone1", "/files/real2", "/files/gone2", "/files/real3", "/files/gone3")
+	if CatchAllHeld(srv.URL+"/files/gone4", CatchAllStop) {
+		t.Error("held although as many paths answered for themselves as answered the shell")
+	}
+}
+
+// An answer whose control failed is no verdict: it counts neither for the
+// page nor for a real route, so a budget that refused the controls does not
+// make a directory look real.
+func TestCatchAllUnjudgedAnswersSayNothing(t *testing.T) {
+	Reset()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, ProbeToken()) {
+			panic(http.ErrAbortHandler) // the control gets no answer
+		}
+		_, _ = w.Write([]byte(`<!doctype html><title>Shop</title><app-root></app-root>`))
+	}))
+	t.Cleanup(srv.Close)
+	named(t, srv, "/app/a/1", "/app/a/2", "/app/a/3", "/app/a/4")
+	if st, _ := CatchAllDir(srv.URL+"/app/a/5", CatchAllStop); st != DirUnknown {
+		t.Errorf("state %d: answers that were not judged decided the directory", st)
 	}
 }

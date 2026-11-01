@@ -78,13 +78,15 @@ const GivenKey = "given"
 
 // ViaKey on a URL hint says where it was found when that sets what it is
 // worth: ViaArchive for a URL an archive listed, which a run under a
-// budget requests after what the application itself serves and names.
-// On a hostname, ViaPermute is a name a variation found, which is not varied
-// again.
+// budget requests after what the application itself serves and names;
+// ViaLoaded for a script the run loaded to read, which is asked like any link
+// of the page, not held as a path a script names. On a hostname, ViaPermute is a name a
+// variation found, which is not varied again.
 const (
 	ViaKey     = "via"
 	ViaArchive = "archive"
 	ViaPermute = "permute"
+	ViaLoaded  = "loaded"
 )
 
 // LiveKey on a hostname hint says an active DNS technique (-dns-brute)

@@ -285,7 +285,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	passive := fs.Bool("passive", false, "skip HTTP/crawl/JS/paths/TLS (no handshake to the target)")
 	depth := fs.Int("depth", 4, "max fan-out waves (0 = seed wave only, not unlimited)")
 	maxItems := fs.Int("max-items", 0, "most collector tasks (a name, a URL, an address each, per collector) this run starts (default: no cap, katana's and httpx's); the work left is for azhaq resume, which starts as many more")
-	catchAfter := fs.Int("catchall-after", fetch.CatchAllStop, "stop asking the page-like paths scripts name on an origin once it has answered this many paths with the page every unknown path gets; they stay in the map as skipped (0: ask them all)")
+	catchAfter := fs.Int("catchall-after", fetch.CatchAllStop, "stop asking the paths scripts name in a directory once this many of them have answered with the page every unknown path gets, before as many have answered anything else; they stay in the map as skipped (0: ask them all)")
 	noCatchAll := fs.Bool("no-catchall", false, "leave out URLs that answer with the page every unknown path gets (client-side routes of a single-page app) from the rows printed")
 	perTmpl := fs.Int("per-template", 0, "URLs of one template (/product?id={n}) to request; the rest are listed (default: all)")
 	maxRequests := fs.Int64("max-requests", 0, "requests to targets this run may send (0: no cap); the work left over is for azhaq resume")
