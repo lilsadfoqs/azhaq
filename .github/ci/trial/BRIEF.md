@@ -63,7 +63,7 @@ Your review must be independent and evidence-based. You decide only on what you 
 ## Deliverable: ./REPORT.md, in English
 
 1. **Verdict in three lines:** would you adopt it, for what, and what would you keep using instead.
-2. **Scorecard, 1 to 10, one line of reasoning each:** install and first run, docs, subdomain recon, host and port discovery, web and API mapping, signed-in and multi-role testing, output and integration (including assistants), reliability (crashes, hangs, wrong data, silent failures), speed and resources, overall. Score only on what you measured, under the coverage rules above.
+2. **Scorecard, 1 to 10, one line of reasoning each:** install and first run, docs, subdomain recon, host and port discovery, web and API mapping, signed-in and multi-role testing, output and integration (including assistants), reliability (crashes, hangs, wrong data, silent failures), performance (time, memory and CPU, and the requests it sends to the target for the same result), overall. Score only on what you measured, under the coverage rules above.
 
    **Anchors for every score:** compare with how you do the same job today, on what you measured.
    - 10: you would hand the job to it without a second look.
