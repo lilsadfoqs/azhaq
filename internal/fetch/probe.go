@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"net/http"
 	"net/http/httputil"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -128,3 +129,47 @@ type bodyReader struct{ *strings.Reader }
 func (bodyReader) Close() error { return nil }
 
 func nopCloser(b []byte) bodyReader { return bodyReader{strings.NewReader(string(b))} }
+
+// SecretHeader says whether a header's name sounds like a credential
+// (Authorization, Cookie, X-Api-Key, a token, a session, a CSRF value): what
+// is kept in a workspace is kept without such headers.
+func SecretHeader(name string) bool {
+	name = strings.ToLower(strings.TrimSpace(name))
+	for _, w := range []string{"auth", "cookie", "token", "key", "session", "secret", "csrf", "xsrf"} {
+		if strings.Contains(name, w) {
+			return true
+		}
+	}
+	return false
+}
+
+// scrubRequest is a request as it went over the wire, without its
+// credential headers and its body: the line and the other headers.
+func scrubRequest(wire string) string {
+	head, _, _ := strings.Cut(wire, "\r\n\r\n")
+	lines := strings.Split(head, "\r\n")
+	out := lines[:1]
+	for _, l := range lines[1:] {
+		if name, _, _ := strings.Cut(l, ":"); !SecretHeader(name) {
+			out = append(out, l)
+		}
+	}
+	return strings.Join(out, "\r\n") + "\r\n\r\n"
+}
+
+// Scrubbed is a copy of r whose requests keep no credential header and no
+// body: it is what a workspace stores of an answer.
+func (r *Raw) Scrubbed() *Raw {
+	if r == nil {
+		return nil
+	}
+	c := *r
+	if len(c.Request) > 0 {
+		c.Request = []byte(scrubRequest(string(c.Request)))
+	}
+	c.Chain = slices.Clone(r.Chain)
+	for i := range c.Chain {
+		c.Chain[i].Request = scrubRequest(c.Chain[i].Request)
+	}
+	return &c
+}

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/lilsadfoqs/azhaq/internal/collectors/httpcol"
+	"github.com/lilsadfoqs/azhaq/internal/fetch"
 	"os"
 	"path/filepath"
 	"slices"
@@ -62,9 +63,11 @@ func cmdResume(args []string) error {
 					fuzzSkip = &a
 				}
 			}
+			fuzzDropped, fuzzStored = storedDropped(st), slices.Clone(args)
 			st.Close()
 			fuzzResuming = true
-			return cmdFuzz(append(args, rest...))
+			// The stored command has no -db (and no secret): the workspace is this one.
+			return cmdFuzz(append(append(args, "-db", db), rest...))
 		}
 	}
 	var retryable int
@@ -346,6 +349,14 @@ func keptArgs(args []string) []string {
 				i++
 			}
 			continue
+		case "proxy", "source-proxy", "chrome-proxy", "urls-proxy", "port-proxy":
+			// A proxy's password is a secret: the proxy is kept without it.
+			if !inline && takesValue {
+				val = args[i+1]
+				i++
+			}
+			out = append(out, "-"+name+"="+withoutUserinfo(val))
+			continue
 		case "header", "H":
 			if !inline && takesValue {
 				val = args[i+1]
@@ -399,13 +410,7 @@ func keptArgs(args []string) []string {
 
 func secretHeader(h string) bool {
 	k, _, _ := strings.Cut(h, ":")
-	k = strings.ToLower(strings.TrimSpace(k))
-	for _, w := range []string{"auth", "cookie", "token", "key", "session", "secret", "csrf", "xsrf"} {
-		if strings.Contains(k, w) {
-			return true
-		}
-	}
-	return false
+	return fetch.SecretHeader(k)
 }
 
 // redactProbeOpts drops the credential headers of the raw request in

@@ -80,7 +80,7 @@ func (k *keeper) Keep(raw string, res fetch.Result) {
 	meta, err := json.Marshal(keptMeta{
 		RequestURL: res.RequestURL, Status: res.Status, URL: res.URL, Header: res.Header,
 		StatusLine: res.StatusLine, Hops: res.Hops, Truncated: res.Truncated, FinalHeader: res.FinalHeader,
-		IP: res.IP, Elapsed: res.Elapsed, Method: res.Method, Raw: res.Raw,
+		IP: res.IP, Elapsed: res.Elapsed, Method: res.Method, Raw: res.Raw.Scrubbed(),
 	})
 	if err != nil {
 		return
