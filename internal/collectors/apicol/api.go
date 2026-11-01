@@ -137,6 +137,9 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		version = "swagger " + d.Swagger
 	}
 	row := map[string]any{"url": raw, "spec": version, "title": d.Info.Title, "count": len(paths), "base": base}
+	if from := seed.Keys[types.ExposedByKey]; from != "" {
+		row[types.ExposedByKey] = from // the URL whose checks found the description
+	}
 	if len(res.Body) <= maxDocument && !res.Truncated {
 		// Kept whole, so an export can hand the original on.
 		var whole any

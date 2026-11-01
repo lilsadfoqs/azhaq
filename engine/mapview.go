@@ -480,7 +480,7 @@ func gate(obs []types.StoredObservation) int {
 // finishes it) joined with every port an imported row names, as a tool
 // like naabu writes one row per port.
 func proofOf(e types.Entity, obs []types.StoredObservation) string {
-	keys := []string{"status", "title", "role", "ips", "cname", "open", "count", "error", "skipped", "word", "warning", "note", "auth", "via"}
+	keys := []string{"status", "title", "role", "ips", "cname", "open", "count", "error", "skipped", "word", "warning", "note", "auth", "via", types.ExposedByKey}
 	vals := map[string]string{}
 	var own, imported []string
 	var haveOwn, haveImported bool

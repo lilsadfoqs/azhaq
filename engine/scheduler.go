@@ -980,10 +980,11 @@ func printBatch(ctx context.Context, name string, n int, d time.Duration, err er
 }
 
 // hintStep is how much deeper a hint goes: none for the same target under
-// another scheme (types.SameTargetKey) or where a redirect led
-// (types.RedirectKey), one otherwise.
+// another scheme (types.SameTargetKey), where a redirect led
+// (types.RedirectKey) or a well-known location of the same origin
+// (types.KnownLocationKey), one otherwise.
 func hintStep(h types.Seed) int {
-	if h.Keys[types.SameTargetKey] != "" || h.Keys[types.RedirectKey] != "" {
+	if h.Keys[types.SameTargetKey] != "" || h.Keys[types.RedirectKey] != "" || h.Keys[types.KnownLocationKey] != "" {
 		return 0
 	}
 	return 1

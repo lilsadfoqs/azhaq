@@ -259,10 +259,12 @@ A client route is a view that a single-page app's router draws.
 ### Path checks stop at their answer
 
 - The checks that guess where an API description sits are asked one at a time, likeliest first.
-- The names include `openapi.json`, `swagger.json`, `api-docs` and `v3/api-docs`. The same names are asked again under each API base the run found, such as `/rest/` or `/v3/`.
+- The names include `openapi.json`, `swagger.json`, `api-docs` and `v3/api-docs`, and what Spring, ASP.NET, NestJS, Fastify, Django, Flask, Rails, Laravel and Go servers use (`v3/api-docs.yaml`, `swagger/v2/swagger.json`, `api-json`, `documentation/json`, `api/schema` and more). The same names are asked again under each API base the run found, such as `/rest/` or `/v3/`.
+- A description found there is read at any `-depth`, from a root seed too, and its operations are in the map. The row's proof says which URL's checks found it: `exposed_by=http://app/`.
 - They stop at the first answer that is an OpenAPI or Swagger document with paths. A Swagger UI or ReDoc page that loads one counts too.
 - Once an origin has served a description, here or through `azhaq-openapi`, its other locations are not asked. The summary counts them: `note: path checks: 28 skipped (an API description was already found)`.
 - Every other check is still asked: `robots.txt`, `login`, `admin`, `graphql`, `.git/HEAD` and more.
+- The GraphQL names are `graphql`, `graphiql`, `api/graphql`, `v1/graphql`, `gql` and `playground`. A GET there that a server refuses (400 for the missing query, 405, a 500 that says POST only) counts as an answer. The endpoint is read at any `-depth`, and with `-graphql` its schema is read by introspection with a POST when the GET was refused or was not a GraphQL answer. Introspection is a read-only query, and the POSTs count in the budget and the ledger.
 - A Swagger UI whose script holds the document (Juice Shop's `/api-docs/`) is read from the script. The names next to it are not guessed.
 - A page that is byte for byte what the site root answers for a made-up path is a single-page app's shell. That makes it the catch-all answer of a directory whose own baseline was not asked, so that baseline is not requested. A directory with answers of its own is still asked.
 
@@ -315,9 +317,9 @@ Examples of what `notes` holds for a run:
 | `-permute` | bool |  | resolve variations of found names (active; the targets given are the scope unless -allow) |
 | `-graphql` | bool |  | read the schema of GraphQL endpoints with an introspection query (active; the targets given are the scope unless -allow) |
 | `-graphql-wordlist` | string |  | extra probe words (one per line), tried and recombined with the built-in ones when a GraphQL endpoint's introspection is off and its schema has to be recovered from validation errors |
-| `-known-files` | string |  | ask each web service only for its robots.txt and sitemaps and read every entry (all, robotstxt or sitemapxml); replaces the 32 built-in paths |
+| `-known-files` | string |  | ask each web service only for its robots.txt and sitemaps and read every entry (all, robotstxt or sitemapxml); replaces the 51 built-in paths |
 | `-paths` | string |  | extra path wordlist (one path per line) |
-| `-no-paths` | bool |  | do not ask each web service for the 32 built-in paths (robots.txt, sitemaps, API descriptions, .git/HEAD, backup, admin, …): some programs count that as scanning |
+| `-no-paths` | bool |  | do not ask each web service for the 51 built-in paths (robots.txt, sitemaps, API descriptions, .git/HEAD, backup, admin, …): some programs count that as scanning |
 | `-path-climb` | bool |  | also list and ask the parent directories of each link a page names (/a/b/c: /a/b/ and /a/) |
 | `-fill-forms` | bool |  | ask the action of each GET form with neutral values in its fields (a search box gets a word): one GET request per form; a form that posts is not sent unless -submit-forms; crawl does this by default (-no-form-fill turns it off) |
 | `-per-template` | int |  | URLs of one template (/product?id={n}) to request; the rest are listed (default: all) |

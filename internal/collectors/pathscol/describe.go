@@ -17,8 +17,18 @@ import (
 var descOrder = []string{
 	"openapi.json", "swagger.json", "api-docs", "v3/api-docs", "v2/api-docs",
 	"swagger/v1/swagger.json", "openapi.yaml", "swagger.yaml", "api/openapi.json", "api/swagger.json",
-	"swagger-resources", "v3/api-docs/swagger-config", "swagger",
+	"v3/api-docs.yaml", "swagger/v2/swagger.json", "swagger/doc.json", "api-json", "documentation/json",
+	"api/schema", "apispec_1.json", "api-docs/v1/swagger.json", "docs/api-docs.json", "api/v1/openapi.json",
+	"api/v1/swagger.json", "swagger-resources", "v3/api-docs/swagger-config", "swagger", "swagger-ui.html",
+	"swagger-ui/index.html", "redoc", "docs",
 }
+
+// graphqlLocs are where a GraphQL endpoint or its IDE usually is. A server
+// that refuses a GET there (400 for the missing query, 405, a 500 saying
+// it takes POST only) still answers where the endpoint is.
+var graphqlLocs = []string{"graphql", "graphiql", "api/graphql", "v1/graphql", "gql", "playground"}
+
+func isGraphQLLoc(path string) bool { return slices.Contains(graphqlLocs, strings.Trim(path, "/")) }
 
 func descRank(path string) int {
 	return slices.Index(descOrder, strings.Trim(path, "/"))

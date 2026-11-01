@@ -656,7 +656,7 @@ A route keeps up to three places per page, calls first. A route read from a sour
 `crawl` is `run` with these turned off:
 
 - the subdomain, archive, certificate and RDAP collectors;
-- the 32 path checks;
+- the 51 path checks;
 - the favicon;
 - the source-map guesses, which ask `main.js.map` next to a script that names none.
 
@@ -776,13 +776,16 @@ A matching response is stored with `"catchall": true` and shown as `catchall` in
 
 ### Path checks
 
-The built-in path checks are `azhaq-paths`. They ask 32 paths per web service, and `-no-paths` turns them off. They include the places an API description sits:
+The built-in path checks are `azhaq-paths`. They ask 51 paths per web service, and `-no-paths` turns them off. They include the places an API description sits:
 
 - `openapi.json`, `swagger.json` and `api-docs`;
 - `v3/api-docs`, `v2/api-docs` and `swagger/v1/swagger.json`;
-- the YAML names, `api/openapi.json`, `api/swagger.json` and `swagger`.
+- the YAML names, `api/openapi.json`, `api/swagger.json` and `swagger`;
+- what other frameworks serve: `v3/api-docs.yaml`, `swagger/v2/swagger.json`, `swagger/doc.json`, `api-json`, `documentation/json`, `api/schema`, `apispec_1.json`, `api-docs/v1/swagger.json`, `docs/api-docs.json`, `api/v1/openapi.json`, `api/v1/swagger.json`, and the pages `swagger-ui.html`, `swagger-ui/index.html`, `redoc` and `docs`.
 
 Under each API base the run found, such as `/rest/` or `/v3/`, the same names are asked again. This is up to 8 bases per origin.
+
+A description found at one of these names is read at any `-depth`, a seed of `/` included: the guess is about the origin itself, so it is no step. The same goes for the GraphQL names `graphql`, `graphiql`, `api/graphql`, `v1/graphql`, `gql` and `playground`. A server that refuses the GET there (400 for the missing query, 405, a 500 that says POST only) still has the endpoint, so those answers count for these names and nothing else. The rows of what was found say which URL's checks exposed it (`exposed_by` in the proof).
 
 These are asked one at a time, likeliest first. They stop at the first answer that is an OpenAPI or Swagger document with paths, or the Swagger UI or ReDoc page that loads one.
 
@@ -1630,6 +1633,7 @@ A GraphQL endpoint read with `-graphql` keeps the whole introspection result: ty
 - Its row lists each query, mutation and subscription with its signature, such as `query pastes(public: Boolean, limit: Int): [PasteObject]`.
 - `azhaq export -format graphql` or `-format sdl` writes the schema.
 - A run that found an endpoint and did not introspect it suggests the run that would. That happens with no `-graphql`, or when its host is outside the scope: `next: azhaq run -url ORIGIN/ -graphql -allow HOST …`.
+- The first look is a GET. An answer that says GraphQL (a missing-query error, an IDE) names the endpoint. A refusal that says POST only, or a 405 that allows POST, names it too and the row says `post_only`. A refusal that says nothing else (401, 403, a bare 500) names nothing, but `-graphql` still sends the introspection POST. A 404, a 405 that does not allow POST and a 2xx answer that is not GraphQL's end it there.
 
 ### What is requested
 

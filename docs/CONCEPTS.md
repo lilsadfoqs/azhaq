@@ -334,7 +334,7 @@ With `-replay-writes`, three more come before them all:
 | What | Method | When |
 | --- | --- | --- |
 | Pages, scripts, API descriptions (at the root and under each API base), archived URL templates | GET | Every run, inside the scope. |
-| 32 built-in path checks per web service: `robots.txt`, sitemaps, API descriptions, `.git/HEAD`, `backup`, `admin`, … | GET | Every run. `-no-paths` turns them off. |
+| 51 built-in path checks per web service: `robots.txt`, sitemaps, API descriptions, `.git/HEAD`, `backup`, `admin`, … | GET | Every run. `-no-paths` turns them off. |
 | Path and parameter guesses | GET. `params -X` sends the names in a POST, JSON or XML body. | `-dirs`, `-params`, held to the targets given or to `-allow` and `-scope`. |
 | GraphQL introspection | POST | `-graphql`, held to the targets given or to `-allow` and `-scope`. |
 | A port's service | A TCP connect, then for a port that says nothing: protocol probes, one `HEAD /`, a TLS handshake. | `-ports`, `ports` |
