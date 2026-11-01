@@ -336,7 +336,7 @@ The hooks are where a request leaves the process, and all of them are in [Egress
 
 Only a target's lines are held back after a kill and asked again on resume. The requests of a connector, which Azhaq does not send, and the user's own endpoints (`own`) are not recorded.
 
-`egress.SetKill` watches for the kill file every 100 ms (`egress.KillCheck`). Once it sees the file, it also ends every wait for the pace (`egress.Pace`). So a request counted before the file appeared is not sent after it.
+`egress.Killed` looks for the kill file with a stat each time it is asked, and every send asks at the moment it goes out (`Spend`, `Take`, `Pace`, the client's round trip, a dial, a DNS exchange, Chrome's paused request), so no request starts after the file exists. `egress.SetKill` also polls every 100 ms (`egress.KillCheck`) to end every wait for the pace (`egress.Pace`): a request counted before the file appeared is not sent after it. Chrome's requests already let go, open WebSockets and responses being read are the only things the file does not reach before the run closes Chrome.
 
 Once the file exists, `Spend`, `Take` and `Spent` refuse with `neterr.ErrKilled`, which is also an `ErrBudget`, and so does every client, dialer, DNS exchange and Chrome connection egress hands out. Every collector that leaves work for `azhaq resume` on a spent budget does so here. The run ends with exit 4, and `stopped` names the kill switch.
 

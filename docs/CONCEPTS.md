@@ -170,8 +170,8 @@ The budget holds for each run: `azhaq resume` sends up to as many more as its ow
 
 ### The kill file
 
-- Create the file. Within a tenth of a second (the file is looked for every 100 ms) nothing more is sent.
-- That includes a request already waiting for `-rate`, and Chrome's requests.
+- Create the file. Every request, connection and query looks for it at the moment it is sent, so none starts after the file exists. That includes a request already waiting for `-rate`: its wait ends within 100 ms and it is not sent.
+- Chrome is held the same way for each request it makes: a request Chrome was already let send before the file existed is not recalled, and neither are the frames of a WebSocket it had open or the rest of a response it was reading. Those end when the run closes Chrome.
 - The run exits 4. Its `stopped` says `the kill switch: kill file PATH exists, N tasks known and not done (remove it, then azhaq resume)`.
 - Remove the file, then run `azhaq resume -db DB` to continue.
 - A drop-in command without `-db` has no default kill file.

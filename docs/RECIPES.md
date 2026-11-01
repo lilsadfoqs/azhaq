@@ -326,7 +326,7 @@ Every run with a workspace writes `app.db.ledger.jsonl` next to it. It has one l
 - Show `-verify` passing on the file as delivered. It exits 0 when the file is intact. An edited, removed or reordered line is exit 3, and the message names the first bad line.
 - `-summary` counts by class, kind, host, method and scope rule. The target lines are what the targets received; the `source` and `dns` lines are what third parties and resolvers did.
 
-`touch app.db.stop` stops the run. Within a tenth of a second nothing more is sent, not even requests already waiting for `-rate`, and the run exits 4. Remove the file, and `azhaq resume -db app.db` continues.
+`touch app.db.stop` stops the run. No request starts after the file exists, not even one already waiting for `-rate`, and the run exits 4. Remove the file, and `azhaq resume -db app.db` continues.
 
 **Catches**
 
