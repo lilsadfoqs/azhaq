@@ -25,7 +25,7 @@ func cmdQuery(args []string) error {
 	typ := fs.String("type", "", "entity types, comma-separated: URL, Hostname, Domain, IPAddress, …")
 	roleF := fs.String("role", "", "roles, comma-separated: app, auth, forbidden, api, page, client-route, websocket, live, sibling, unresolved, dead, …")
 	evid := fs.String("evidence", "", "how the route is known, comma-separated: answered, browser, described, called, linked, archived, guessed, given")
-	cov := fs.String("coverage", "", "coverage, comma-separated: visited, catchall, error, gone, hint, skipped, capped")
+	cov := fs.String("coverage", "", "coverage, comma-separated: visited, catchall, error, gone, hint, skipped, capped (a templated row holding a capped URL matches capped)")
 	status := fs.String("status", "", "statuses, comma-separated: 200, 401, 4xx, 5xx")
 	method := fs.String("method", "", "routes with this method: GET, POST, …")
 	host := fs.String("host", "", "entities on this host or under this domain")
@@ -71,7 +71,7 @@ func cmdQuery(args []string) error {
 	keep := func(r engine.MapEntry) bool {
 		e := r.Entity
 		switch {
-		case !inList(*typ, string(e.Type)), !inList(*roleF, r.Role), !inList(*evid, r.Evidence), !inList(*cov, r.Coverage), !inList(*scopeF, r.Scope):
+		case !inList(*typ, string(e.Type)), !inList(*roleF, r.Role), !inList(*evid, r.Evidence), !(inList(*cov, r.Coverage) || r.Capped > 0 && inList(*cov, "capped")), !inList(*scopeF, r.Scope):
 			return false
 		case *status != "" && !statusIn(*status, r.Status):
 			return false

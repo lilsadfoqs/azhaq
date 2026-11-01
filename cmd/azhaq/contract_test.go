@@ -10,7 +10,6 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -127,11 +126,8 @@ func checkInvariants(t *testing.T, what, stdout string, rep report, code int) {
 	if code == exitPartial && len(rep.Failed) == 0 && len(rep.Unreachable) == 0 && len(rep.Notes) == 0 && !rep.Degraded {
 		t.Errorf("I4 %s: exit 3 and nothing says why: %+v", what, rep)
 	}
-	// I5: run prints the map, not its results: its rows with the catch-all
-	// page's answers are counted apart (counts.catchall). So does the resume
-	// of a drop-in's run, which says it prints the map's rows.
-	mapRows := rep.Command == "run" || slices.ContainsFunc(rep.Notes, func(n string) bool { return strings.Contains(n, "prints the rows of the map, as run does") })
-	if !mapRows {
+	// I5: run prints the map, not its results.
+	if rep.Command != "run" {
 		if n := len(lines(stdout)); n != rep.Results {
 			t.Errorf("I5 %s: results %d, result lines on stdout %d\n%s", what, rep.Results, n, stdout)
 		}
@@ -340,7 +336,7 @@ func pageSite(t *testing.T, chain, items int) *httptest.Server {
 }
 
 // contract C5: results are the map rows; URLs folded into a template are
-// labelled as folded when they outnumber the rows.
+// labelled as folded when the stored rows outnumber the printed ones.
 func TestContractFoldedURLsAreLabelled(t *testing.T) {
 	t.Chdir(t.TempDir())
 	srv := pageSite(t, 0, 8)
@@ -352,8 +348,8 @@ func TestContractFoldedURLsAreLabelled(t *testing.T) {
 	if rows := len(lines(out)); rep.Results != rows {
 		t.Errorf("results %d, map rows %d", rep.Results, rows)
 	}
-	if rep.Counts["URLs"] <= rep.Results {
-		t.Fatalf("the site was meant to fold URLs into rows: %d URLs, %d rows", rep.Counts["URLs"], rep.Results)
+	if rep.Stored <= rep.Results {
+		t.Fatalf("the site was meant to fold URLs into rows: %d stored, %d rows", rep.Stored, rep.Results)
 	}
 	_, errOut, err := captureBoth(t, func() error {
 		return run(append([]string{"run", "-url", srv.URL + "/", "-quiet", "-db", "fold-text.db"}, flags...))

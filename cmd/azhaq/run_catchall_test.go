@@ -74,18 +74,25 @@ func TestRunStopsAskingScriptPathsOnACatchAllOrigin(t *testing.T) {
 
 		t.Errorf("%d requests reached the server for 120 script-named paths", n)
 	}
-	asked, held := rep.Counts["catchall"], rep.Counts["catchall not asked"]
+	asked, held := rep.Counts["catchall"], rep.Counts["skipped"]
 	if asked < 3 || held < 40 || asked+held != 120 {
 		t.Errorf("counts %v: %d answered + %d not asked must be the 120 paths", rep.Counts, asked, held)
 	}
-	if rep.Results > 10 || rep.Counts["URLs"] > 8 {
-		t.Errorf("results %d, counts %v: the headline counts the catch-all rows", rep.Results, rep.Counts)
+	sum := 0
+	for _, n := range rep.Counts {
+		sum += n
+	}
+	if sum != rep.Stored || rep.Results != rep.Stored {
+		t.Errorf("counts add up to %d, stored %d, results %d: %v", sum, rep.Stored, rep.Results, rep.Counts)
+	}
+	if rep.Counts["pages"] < 1 || rep.Counts["pages"]+rep.Counts["api"]+rep.Counts["scripts"] > 12 {
+		t.Errorf("the catch-all paths are counted as pages: %v", rep.Counts)
 	}
 	notes := strings.Join(rep.Notes, "\n")
 	if !strings.Contains(notes, fmt.Sprintf("%d URLs that scripts name were not asked", held)) {
 		t.Errorf("notes: %q", rep.Notes)
 	}
-	if rep.Counts["URLs"] < 6 {
+	if rep.Counts["pages"]+rep.Counts["api"] < 6 {
 		t.Errorf("the 5 real pages of /svc/ were held back with the catch-all ones: counts %v", rep.Counts)
 	}
 	if len(rep.Skipped) != 1 || !strings.Contains(rep.Skipped[0].Target, fmt.Sprintf("%d URLs of ", held)) {
@@ -101,24 +108,31 @@ func TestRunCatchAllAfterZeroAsksEveryPath(t *testing.T) {
 	if n := hits.Load(); n < 120 {
 		t.Errorf("%d requests reached the server, want every path asked", n)
 	}
-	if rep.Counts["catchall"] != 120 || rep.Counts["catchall not asked"] != 0 || rep.Results > 10 {
+	if rep.Counts["catchall"] != 120 || rep.Counts["skipped"] != 0 || rep.Results != rep.Stored {
 		t.Errorf("results %d, counts %v", rep.Results, rep.Counts)
 	}
 }
 
-// -no-catchall leaves the catch-all rows out of what is printed; the
-// summary still counts them.
+// -no-catchall leaves the catch-all rows out of what is printed and of
+// results; the summary still counts them (stored, counts, left_out). What
+// run prints is what results counts, with it and without.
 func TestRunNoCatchAllLeavesTheRowsOut(t *testing.T) {
 	srv, _ := shellApp(t, 4)
 	out, rep := runShell(t, srv, "-catchall-after", "0", "-no-catchall", "-rows")
 	if strings.Contains(out, "/app/users/view") {
 		t.Errorf("catch-all rows printed: %.300s", out)
 	}
-	if rep.Counts["catchall"] != 24 {
-		t.Errorf("counts %v", rep.Counts)
+	if rep.Counts["catchall"] != 24 || rep.LeftOut != 24 || rep.Results != rep.Stored-rep.LeftOut {
+		t.Errorf("results %d, stored %d, left out %d, counts %v", rep.Results, rep.Stored, rep.LeftOut, rep.Counts)
 	}
-	out, _ = runShell(t, srv, "-catchall-after", "0", "-rows")
-	if !strings.Contains(out, "/app/users/view") {
+	if n := len(lines(out)); n != rep.Results {
+		t.Errorf("results %d, rows printed %d", rep.Results, n)
+	}
+	out, rep = runShell(t, srv, "-catchall-after", "0", "-rows")
+	if !strings.Contains(out, "/app/users/view") || rep.LeftOut != 0 {
 		t.Errorf("by default the rows are printed")
+	}
+	if n := len(lines(out)); n != rep.Results || rep.Results != rep.Stored {
+		t.Errorf("results %d, stored %d, rows printed %d", rep.Results, rep.Stored, n)
 	}
 }

@@ -74,7 +74,7 @@ Some work failed and did not get its answer: a source that failed, a target that
 
 ### Exit 4
 
-- A limit stopped the run: `-max-requests`, `-timeout`, `-daily-requests`, `-max-items` or `-max-names`. The `stopped` text names it with its flag. What `-depth` leaves unasked is a note, not a stop: the URLs and names found past it are counted there, and `azhaq resume -depth N` asks them.
+- A limit stopped the run: `-max-requests`, `-timeout`, `-daily-requests`, `-max-items` or `-max-names`. The `stopped` text names it with its flag. What `-depth` leaves unasked is a note, not a stop: the URLs and names found past it are counted there, and `azhaq resume -depth N` asks them. The URLs counted are the distinct ones `azhaq query -coverage capped` lists (a templated row holds `capped` of them). The note is made only when a larger `-depth` has something to ask: a `dirs` run has none (its `-depth` is the sweep's own, and the paths it found are rows it asked), and a run that has finished its tasks says nothing about work it cannot do.
 - The kill file stopped it: `-kill-file`, default `DB.stop`. See [the kill file](CONCEPTS.md#the-kill-file).
 - A signal stopped it: Ctrl-C, `kill` or SIGHUP. All three stop a command the same way, with its summary printed and its ledger sealed.
 - `gallery`, `mcp` and `watch -every` are servers, and a signal is how they end: they exit 0 ([gallery](commands/gallery.md#summary-and-exit-codes), [mcp](commands/mcp.md#summary-and-exit-codes), [watch](commands/watch.md#summary-and-exit-codes)). `mcp` first interrupts the commands in flight, which seal their ledgers.
@@ -84,7 +84,7 @@ Some work failed and did not get its answer: a source that failed, a target that
 
 ```json
 {"type":"summary","command":"run","version":"0.10.0","complete":false,"exit":4,
- "results":148,"counts":{"URLs":123,"api":33,"auth":12},"seconds":7.4,"requests":195,
+ "results":148,"stored":160,"counts":{"pages":84,"api":33,"auth":12,"scripts":14,"hostnames":9,"ports":8},"seconds":7.4,"requests":195,
  "db":"app.db","run_id":"…",
  "unreachable":["http://testphp.vulnweb.com/"],
  "failed":[{"collector":"azhaq-http","error":"timeout","retryable":true,"count":34,
@@ -99,8 +99,10 @@ Some work failed and did not get its answer: a source that failed, a target that
 | `type`, `command`, `version`, `seconds` | Always `summary`, the command, azhaq's version, and the run time in seconds. |
 | `complete`, `exit` | As in the exit codes above: `complete` is true when `exit` is 0. |
 | `results` | What the command printed on stdout: names, web services, map rows. |
-| `counts` | A breakdown of the results, per command. |
-| `requests` | Requests sent to targets, port connects included. Requests to third-party sources are not counted. |
+| `counts` | A breakdown of the results, per command. For `run` the counts are disjoint and cover every stored map row: see [run's counts](#run-counts). |
+| `stored` | `run` only: the map rows the database holds. The counts add up to it. `results` is smaller when templated URLs and dead or wildcard names fold into one row. |
+| `requests` | Requests sent to targets, port connects included. DNS queries and requests to third-party sources are not in it: the queries are in `dns_queries`, and a source's requests are in `sources` (`subs`, `urls`) and in the ledger's `source` lines. |
+| `dns_queries` | Queries sent to resolvers: every question, retries and wildcard probes included, and the ones to the system resolver. It is the ledger's `DNS queries` class, with or without a ledger. Absent when none was sent. |
 | `db` | The database the results are in. Absent when it was temporary. |
 | `unreachable` | Targets you gave that never answered. |
 | `takeover` | Names another party may take over: `host`, `service`, `target` (the CNAME target), `evidence`, `strength` and, for `dangling`, `list` (the public list's entry and when azhaq read it). See [takeover](#takeover). |
@@ -115,6 +117,25 @@ Some work failed and did not get its answer: a source that failed, a target that
 | `notes` | Caps that were hit and other things worth knowing that are not failures. See [notes](#notes). |
 | `next` | Commands worth running next. See [next](#next). |
 
+### Run counts
+
+`run` counts every stored map row once, so `counts` adds up to `stored`, and `results = stored - folded`, where `folded` is the stored rows that a printed row holds (the text summary says `12 folded into templated rows`). A key says what it counts and what it leaves out; each is the number `azhaq query -db FILE` lists with its filter, except that `query` folds URL templates as `run` does.
+
+| Key | Counts | `query` filter |
+| --- | --- | --- |
+| `pages` | URL rows that are none of the kinds below: pages and routes | `-type URL -role page,app` |
+| `api`, `auth`, `forbidden` | URL rows of that role. They are not also in `pages`. | `-type URL -role api` (or `auth`, `forbidden`) |
+| `catchall` | URL rows that answered with the page every unknown path gets, whatever they are named as. They are in no other key. | `-type URL -coverage catchall` |
+| `skipped` | URL rows named and not asked: a `-deny-path` rule of yours, or a catch-all origin (`run` holds the paths scripts name once it has answered 3 with its catch-all page: see [run](commands/run.md#catch-all-origins)). They are in no other key. | `-type URL -coverage skipped` |
+| `client routes`, `websockets` | URLs the app's router draws, and WebSocket endpoints | `-role client-route`, `-role websocket` |
+| `scripts`, `assets`, `source maps`, `manifests` | The URLs of those roles. They are in the map, and in no other key. | `-role script` (`asset`, `sourcemap`, `manifest`) |
+| `hostnames` | Name rows that are neither dead nor wildcard: live, sibling and unresolved names | `-type Hostname`, less the two below |
+| `dead hostnames`, `wildcard hostnames` | Names that did not resolve (a dangling CNAME among them) and names a wildcard answers | `-type Hostname -role dead` (or `wildcard`) |
+| `ports`, `open|filtered ports` | Port rows, one for each host, port and protocol: those the scan found open, and the UDP ports that neither answered nor were refused | `-type Port`, by `state` |
+| `addresses`, `domains`, `prefixes`, `organizations`, and the other kinds | Rows of that type | `-type IPAddress`, `Domain`, `Prefix`, `Organization` |
+
+The URL keys other than `catchall` and `skipped` count rows of the other coverages: add `-coverage visited,error,gone,hint,capped` to their filters when a run has catch-all or skipped rows. A key with no row is absent. The sum is one unit, the stored row. `results` is another, the printed row: a templated URL row holds `count` stored URLs and a names row holds `folded` names. `run -no-catchall` leaves the `catchall` rows, and the `skipped` rows a catch-all origin made, out of what it prints and out of `results`: `left_out` says how many, and `results = stored - folded - left_out`.
+
 ### takeover
 
 - Strengths, services and what each means: see [Takeover candidates](CONCEPTS.md#takeover-candidates). Confirm each by hand before reporting.
@@ -124,7 +145,7 @@ Some work failed and did not get its answer: a source that failed, a target that
 
 ### failed
 
-- `retryable` is true for timeouts, dropped connections, 429 and 5xx.
+- `retryable` is true for timeouts, dropped connections, answers cut short, 429 and 5xx: a later try may work. `azhaq resume -db FILE -retry-failed` asks those targets again, and only those (see [resume](commands/resume.md#retrying-failed-targets)). Failures that are not retryable (a refused connection, a certificate error, a 4xx other than 429) are not asked again: the same request would fail the same way, so they are for you to read and fix. A plain `resume` continues only the tasks a limit or a kill left, never a failed one.
 - `source` names a third-party source, such as `crtsh` or `wayback`.
 - `targets` names up to 100. `azhaq query -db FILE -failed` lists every failed target: the list to retry.
 - `azhaq-session` is a signed-in run whose session ended and could not be renewed (`the session ended: after /logout was requested …`). Every request after it was refused, so nothing after it was answered as an anonymous visitor. The exit code is 3: see [Sessions](CONCEPTS.md#sessions).

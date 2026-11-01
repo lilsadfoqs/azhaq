@@ -15,6 +15,7 @@ import (
 	"github.com/lilsadfoqs/azhaq/internal/collectors/pathscol"
 	"github.com/lilsadfoqs/azhaq/internal/collectors/portcol"
 	"github.com/lilsadfoqs/azhaq/internal/collectors/subcol"
+	"github.com/lilsadfoqs/azhaq/internal/egress"
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"github.com/lilsadfoqs/azhaq/internal/takeover"
@@ -31,9 +32,12 @@ type report struct {
 	Complete    bool             `json:"complete"`
 	Exit        int              `json:"exit"`
 	Results     int              `json:"results"`
+	LeftOut     int              `json:"left_out,omitempty"` // run -no-catchall: stored rows left out of the output and of results
+	Stored      int              `json:"stored,omitempty"`   // run: the map rows the database holds, before templates fold; the counts add up to it
 	Counts      map[string]int   `json:"counts,omitempty"`
 	Seconds     float64          `json:"seconds"`
-	Requests    int64            `json:"requests"` // sent to targets
+	Requests    int64            `json:"requests"`              // sent to targets
+	DNSQueries  int64            `json:"dns_queries,omitempty"` // sent to resolvers, retries and wildcard probes included; the ledger's dns lines
 	DB          string           `json:"db,omitempty"`
 	RunID       string           `json:"run_id,omitempty"`
 	Unreachable []string         `json:"unreachable,omitempty"`
@@ -49,9 +53,13 @@ type report struct {
 	Notes       []string         `json:"notes,omitempty"`
 	Next        []string         `json:"next,omitempty"`
 
+	dnsFrom int64 // egress.DNSTotal when the command began: dns_queries are its own
+
 	what   string // the unit of Results: "names", "web services"
 	warned bool   // a note says the results mislead (a role's dead session): exit 3
-	start  time.Time
+
+	noCatchAll bool // run -no-catchall: its rows of the catch-all page are left out of results
+	start      time.Time
 
 	// hints are measured suggestions, printed as "next:" lines for a person
 	// (see hints.go); they are never in the JSON summary.
@@ -61,7 +69,7 @@ type report struct {
 }
 
 func newReport(command string) *report {
-	return &report{Type: "summary", Command: command, Version: version, start: time.Now()}
+	return &report{Type: "summary", Command: command, Version: version, start: time.Now(), dnsFrom: egress.DNSTotal()}
 }
 
 // settle fills the exit code and seconds.
@@ -70,6 +78,7 @@ func (r *report) settle() {
 		r.start = time.Now()
 	}
 	r.Seconds = float64(time.Since(r.start).Milliseconds()) / 1000
+	r.DNSQueries = egress.DNSTotal() - r.dnsFrom
 	switch {
 	case r.Stopped != "":
 		r.Exit = exitLimit
@@ -122,17 +131,21 @@ func (r *report) print(w io.Writer) {
 		var parts []string
 		for _, k := range sortedCountKeys(r.Counts) {
 			name := k
-			if k == "URLs" && r.what == "map rows" && r.Counts[k] > r.Results {
-				// A templated row holds many URLs: say so, or the numbers
-				// read as not adding up (44 map rows, 65 URLs).
-				name = "URLs, folded into templated rows"
-			}
-			if r.Counts[k] == 1 && (k == "websockets" || k == "client routes") {
-				name = strings.TrimSuffix(k, "s")
+			if r.Counts[k] == 1 {
+				name = countName(k)
 			}
 			parts = append(parts, fmt.Sprintf("%d %s", r.Counts[k], name))
 		}
-		head[0] += " (" + strings.Join(parts, ", ") + ")"
+		list := strings.Join(parts, ", ")
+		if r.LeftOut > 0 {
+			list += fmt.Sprintf("; %d left out (-no-catchall)", r.LeftOut)
+		}
+		if r.Stored > r.Results {
+			// A templated row holds many URLs, a dead-names row many names:
+			// the counts are of the stored rows, so they add up to more.
+			list = fmt.Sprintf("%d stored: %s; %d folded into templated rows", r.Stored, list, r.Stored-r.Results-r.LeftOut)
+		}
+		head[0] += " (" + list + ")"
 	}
 	if r.Degraded {
 		// The summary opens with it, naming the sources and why.
@@ -144,6 +157,9 @@ func (r *report) print(w io.Writer) {
 	}
 	if r.Requests > 0 {
 		head = append(head, fmt.Sprintf("%d requests", r.Requests))
+	}
+	if r.DNSQueries > 0 {
+		head = append(head, fmt.Sprintf("%d DNS queries", r.DNSQueries))
 	}
 	head = append(head, fmt.Sprintf("%.1f s", r.Seconds))
 	if r.DB != "" {
@@ -289,6 +305,20 @@ func fillReport(rep *report, path string, seeds []types.Seed, ents []types.Entit
 	rep.DB = path
 	rep.Failed = engine.MarkPartial(engine.MarkFanout(engine.Failures(ents, obs), seeds), ents, obs)
 	rep.Skipped = append(rep.Skipped, engine.Skips(ents, obs)...)
+	if n := len(retried); n > 0 {
+		now := map[string]bool{}
+		for _, f := range engine.FailedTargets(ents, obs) {
+			now[f.Collector+"\x00"+f.Target] = true
+		}
+		still := 0
+		for _, f := range retried {
+			if now[f.Collector+"\x00"+f.Target] {
+				still++
+			}
+		}
+		retried = nil
+		rep.Notes = append(rep.Notes, fmt.Sprintf("-retry-failed: %d failed targets asked again, %d still fail (azhaq query -db %s -failed lists them)", n, still, path))
+	}
 	rep.Unreachable = engine.Unreachable(seeds, ents, obs)
 	rep.Notes = append(rep.Notes, engine.Notes(obs)...)
 	rep.Notes = append(rep.Notes, portcol.Notes(obs)...)
@@ -321,51 +351,19 @@ func fillReport(rep *report, path string, seeds []types.Seed, ents []types.Entit
 		return // the command counts its own results
 	}
 	counts := map[string]int{}
-	asked := make([]engine.MapEntry, 0, len(rows))
-	held := engine.CatchAllHeldIDs(obs)
 	for _, r := range rows {
-		switch {
-		case r.Entity.Type == types.TypeURL && r.Coverage == "catchall":
-			counts["catchall"]++ // the page every unknown path gets: apart, not a result
-			continue
-		case r.Entity.Type == types.TypeURL && r.Coverage == "skipped" && held[r.Entity.ID]:
-			counts["catchall not asked"]++ // named by a script, not asked: its origin answers every path alike
-			continue
-		}
-		asked = append(asked, r)
-		switch r.Entity.Type {
-		case types.TypeURL:
-			switch r.Role {
-			case "asset", "script", "sourcemap", "manifest":
-				continue
-			case "client-route":
-				counts["client routes"]++
-				continue
-			case "websocket":
-				counts["websockets"]++
-				continue
-			case "api", "auth", "forbidden":
-				counts[r.Role]++
-			}
-			counts["URLs"]++
-		case types.TypeHostname:
-			if r.Role != "dead" && r.Role != "wildcard" {
-				counts["hostnames"]++
-			}
-		case types.TypePort:
-			if r.State == "open|filtered" {
-				counts["open|filtered ports"]++
-			} else {
-				counts["ports"]++
-			}
-		}
+		counts[countKey(r)]++
 	}
-	for k, v := range counts {
-		if v == 0 {
-			delete(counts, k)
-		}
+	// What run prints is what results counts: with -no-catchall the rows
+	// that answered with the catch-all page, or were not asked for it, are
+	// stored and counted, and left out of both the output and results.
+	shown := rows
+	if rep.noCatchAll {
+		shown = withoutCatchAll(rows, engine.CatchAllHeldIDs(obs))
 	}
-	rep.Results = len(engine.GroupTemplates(asked))
+	rep.Results = len(engine.GroupTemplates(shown))
+	rep.Stored = len(rows)
+	rep.LeftOut = len(rows) - len(shown)
 	rep.what = "map rows"
 	rep.Counts = counts
 	if hint := engine.BrowserHint(rows, obs); hint != "" {
@@ -384,6 +382,71 @@ func fillReport(rep *report, path string, seeds []types.Seed, ents []types.Entit
 	if counts["auth"] > 0 {
 		rep.Next = append(rep.Next, "azhaq roles -role anon -role 'user=Authorization: Bearer …' -- RUN FLAGS   (who may read what)")
 	}
+}
+
+// countKey is the one count a stored map row belongs to: the counts of a
+// run are disjoint and cover every row, so they add up to Stored. Each key
+// is a `query` filter (docs/OUTPUT.md lists them).
+func countKey(r engine.MapEntry) string {
+	switch r.Entity.Type {
+	case types.TypeURL:
+		switch r.Coverage {
+		case "catchall":
+			return "catchall" // the page every unknown path gets: apart from the kind of URL it is named as
+		case "skipped":
+			return "skipped" // named and not asked: a -deny-path rule, or an origin that answers every path alike
+		}
+		switch r.Role {
+		case "api", "auth", "forbidden":
+			return r.Role
+		case "websocket":
+			return "websockets"
+		case "client-route":
+			return "client routes"
+		case "script":
+			return "scripts"
+		case "asset":
+			return "assets"
+		case "sourcemap":
+			return "source maps"
+		case "manifest":
+			return "manifests"
+		}
+		return "pages"
+	case types.TypeHostname:
+		switch r.Role {
+		case "dead", "wildcard":
+			return r.Role + " hostnames"
+		}
+		return "hostnames"
+	case types.TypePort:
+		if r.State == "open|filtered" {
+			return "open|filtered ports"
+		}
+		return "ports"
+	case types.TypeIPAddress:
+		return "addresses"
+	case types.TypeDomain:
+		return "domains"
+	case types.TypeOrganization:
+		return "organizations"
+	case types.TypePrefix:
+		return "prefixes"
+	case types.TypeCloudAccount:
+		return "cloud accounts"
+	}
+	return strings.ToLower(string(r.Entity.Type)) + "s"
+}
+
+// countName is a count's name for one: "1 websocket", "1 address".
+func countName(k string) string {
+	switch {
+	case k == "api" || k == "auth" || k == "forbidden":
+		return k
+	case strings.HasSuffix(k, "sses") || strings.HasSuffix(k, "xes"):
+		return strings.TrimSuffix(k, "es")
+	}
+	return strings.TrimSuffix(k, "s")
 }
 
 // mapRowJSON is one row of the map for -json output and azhaq query.
@@ -425,6 +488,7 @@ func mapRowJSON(r engine.MapEntry) map[string]any {
 	set("template", r.Template, r.Template != "")
 	set("count", r.Count, r.Count > 1)
 	set("not_asked", r.NotAsked, r.NotAsked > 0)
+	set("capped", r.Capped, r.Capped > 0)
 	set("folded", r.Folded, r.Folded > 0)
 	set("proof", r.Proof, r.Proof != "")
 	set("first_seen", r.Entity.FirstSeen.UTC().Format(time.RFC3339), !r.Entity.FirstSeen.IsZero())

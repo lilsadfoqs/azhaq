@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/lilsadfoqs/azhaq/engine"
 	"github.com/lilsadfoqs/azhaq/internal/collectors/dirscol"
 	"github.com/lilsadfoqs/azhaq/internal/scopefile"
 	"github.com/lilsadfoqs/azhaq/store"
@@ -41,6 +42,8 @@ func cmdResume(args []string) error {
 			rest = append(rest, a)
 		}
 	}
+	retry := hasFlag(rest, "retry-failed")
+	rest = dropFlag(rest, "retry-failed")
 	if db == "" {
 		return usagef("give -db FILE, the database of the run to continue (run options to add, such as -cookie or -login-pass, may follow)")
 	}
@@ -63,6 +66,19 @@ func cmdResume(args []string) error {
 			return cmdFuzz(append(args, rest...))
 		}
 	}
+	var retryable int
+	if retry {
+		n, err := retryFailed(st, db)
+		if err != nil {
+			st.Close()
+			return err
+		}
+		if !wantsJSON(rest) {
+			fmt.Fprintf(os.Stderr, "azhaq: -retry-failed: %d failed targets will be asked again\n", n)
+		}
+	} else {
+		retryable = retryableIn(st)
+	}
 	id, runArgs, left, ok, err := st.Resumable()
 	deeper := false
 	if err == nil && !ok {
@@ -77,6 +93,9 @@ func cmdResume(args []string) error {
 	if err != nil {
 		return err
 	}
+	if !ok && retryable > 0 {
+		return fmt.Errorf("no task left in %s, but %d failed targets are retryable: azhaq resume -db %s -retry-failed asks them again (azhaq query -db %s -failed lists them)", db, retryable, db, db)
+	}
 	if !ok {
 		return fmt.Errorf("nothing to resume in %s: every run finished", db)
 	}
@@ -85,6 +104,9 @@ func cmdResume(args []string) error {
 			fmt.Fprintf(os.Stderr, "azhaq: resuming run %s of %s with a larger -depth, %d seeds found past its own to ask\n", id, db, left)
 		} else {
 			fmt.Fprintf(os.Stderr, "azhaq: resuming run %s of %s, %d tasks known and not done\n", id, db, left)
+			if retryable > 0 {
+				fmt.Fprintf(os.Stderr, "azhaq: %d failed targets are retryable: -retry-failed asks them again\n", retryable)
+			}
 		}
 	}
 	runArgs, gone := dropRemovedFlags(runArgs)
@@ -121,6 +143,56 @@ func cmdResume(args []string) error {
 		command = "run"
 	}
 	return cmdRunAs(command, all)
+}
+
+// retried are the failed targets a -retry-failed resume asked again: the
+// run's summary says how many still fail.
+var retried []engine.FailedTarget
+
+// retryFailed makes the newest run of the workspace ask again the failed
+// targets a later try may fix, and gives how many there are.
+func retryFailed(st *store.Store, db string) (int, error) {
+	runs, err := st.Runs()
+	if err != nil {
+		return 0, err
+	}
+	if len(runs) == 0 {
+		return 0, fmt.Errorf("nothing to retry in %s: it holds no run", db)
+	}
+	st.UseRun(runs[len(runs)-1].ID)
+	if c := st.GetMeta("command:" + st.RunID()); c == "ports" || c == "dirs" {
+		return 0, usagef("-retry-failed does not apply to a %s run: azhaq resume alone continues its unfinished sweep", c)
+	}
+	ents, err := st.Entities()
+	if err != nil {
+		return 0, err
+	}
+	obs, err := st.Observations()
+	if err != nil {
+		return 0, err
+	}
+	r, err := engine.RetryFailed(st, ents, obs)
+	if err != nil {
+		return 0, err
+	}
+	if r.Targets == 0 {
+		return 0, fmt.Errorf("nothing to retry in %s: no failed target is retryable (azhaq query -db %s -failed lists the failures and says which are)", db, db)
+	}
+	retried = r.Asked
+	return r.Targets, nil
+}
+
+// retryableIn counts the failed targets of the newest run of the workspace
+// that a later try may fix.
+func retryableIn(st *store.Store) int {
+	runs, err := st.Runs()
+	if err != nil || len(runs) == 0 {
+		return 0
+	}
+	st.UseRun(runs[len(runs)-1].ID)
+	ents, _ := st.Entities()
+	obs, _ := st.Observations()
+	return engine.RetryableTargets(ents, obs)
 }
 
 // mergeSkip makes the -skip given to a resume add to the one the run was
@@ -268,7 +340,7 @@ func keptArgs(args []string) []string {
 		}
 		takesValue := !inline && i+1 < len(args)
 		switch name {
-		case "db", "resume-run", "cookie", "login-pass", "worker-token":
+		case "db", "resume-run", "cookie", "login-pass", "worker-token", "retry-failed":
 			if takesValue {
 				i++
 			}

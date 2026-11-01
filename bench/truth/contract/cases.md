@@ -13,7 +13,7 @@ The contract:
 | C2 | hunter v0.8.1 | `subs -d D -timeout T`, where T cuts the passive sources short | exit 4; `stopped` names `-timeout`; `resume` has `azhaq resume -db FILE`; `azhaq resume` of that db exits 0, and the result then holds the names the cut sources give |
 | C3 | hunter v0.8.1 | `subs -d D -live`, where a live name under D is only a CNAME target of another name | the name is printed; `results` = names printed = Hostname rows with role live under D in the db; `collected − did not resolve + found as CNAME targets = results` |
 | C4 | hunter v0.8.1 | `dns -l FILE` | `asked` = distinct names given; `results + did not resolve = asked` |
-| C5 | trial 9 (reviewer B) | `run` where URLs fold into templated rows | `results` = map rows; the URL count in the summary text is labelled as folded when it exceeds the rows |
+| C5 | trial 9 (reviewer B) | `run` where URLs fold into templated rows | `results` = map rows; the counts add up to `stored`, and the summary text says how many stored rows are folded into templated rows |
 | C6 | trial 8 | `run -max-requests N`, which stops with work left | exit 4; `stopped` names the budget; `azhaq resume` until exit 0; the union of rows = an uncapped run's rows |
 | C7 | review v0.8.1 | a sampled passive source refused (HTTP 429) on every call | that source is listed in `failed`, not counted as a clean zero |
 | C8 | trial 9 (reviewer A) | `subs -all-sources`, where off-by-default sources fail | the summary says how many sources answered out of how many asked (`sources answered`/`sources asked`); off-by-default sources that fail are counted apart (`off-by-default failed`) and do not make `degraded` true on their own |

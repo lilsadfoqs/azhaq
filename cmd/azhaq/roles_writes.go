@@ -40,7 +40,10 @@ const (
 	// Every other role's write ended in a server error: neither refused nor
 	// let through, so nothing is said about who may write.
 	verdictWriteFailed = "the other roles' writes failed with a server error (5xx): neither refused nor accepted"
-	verdictWriteDry    = "would be sent (-dry-writes)"
+	// Some other roles were refused and some got a 5xx, none was let: only
+	// the refused are known to be kept out.
+	verdictWriteMixed = "the other roles' writes were refused or failed with a server error (5xx): neither accepted"
+	verdictWriteDry   = "would be sent (-dry-writes)"
 	// A write another role sent was answered 2xx, and nothing the owner's
 	// object shows can tell whether it took.
 	verdictWriteUnread = "writes another role's object: accepted; the change cannot be read back to confirm"
@@ -58,21 +61,36 @@ func init() {
 	verdictOrder[verdictWriteVoid] = 21
 	verdictOrder[verdictWriteRefused] = 20
 	verdictOrder[verdictWriteFailed] = 19
+	verdictOrder[verdictWriteMixed] = 19
 }
 
-// serverFailed: every other role that was asked got a 5xx.
-func serverFailed(row *roleRow) bool {
-	n := 0
+// serverFailed counts the other roles that were asked and got a 5xx, and
+// those that got anything else (a refusal: a role that was let never gets
+// here).
+func serverFailed(row *roleRow) (failed, other int) {
 	for name, a := range row.Answers {
-		if name == row.Owner || a.Status == 0 {
-			continue
+		switch {
+		case name == row.Owner || a.Status == 0:
+		case a.Status >= 500:
+			failed++
+		default:
+			other++
 		}
-		if a.Status < 500 {
-			return false
-		}
-		n++
 	}
-	return n > 0
+	return
+}
+
+// serverVerdict is the verdict of a write nobody else was let to send, when
+// a 5xx is among the answers: failed when every other role got one, mixed
+// when some were refused. "" when there is no 5xx.
+func serverVerdict(row *roleRow) string {
+	switch failed, other := serverFailed(row); {
+	case failed > 0 && other == 0:
+		return verdictWriteFailed
+	case failed > 0:
+		return verdictWriteMixed
+	}
+	return ""
 }
 
 // writeOp is a write a route takes, as a role's run found it: PUT
@@ -477,10 +495,10 @@ func replayCollection(row *roleRow, roles []role, w writeReq, answers map[string
 		row.Verdict = verdictWriteCreate
 	case len(let) > 0:
 		row.Verdict = verdictWriteAccepted
-	case serverFailed(row):
-		row.Verdict = verdictWriteFailed
 	default:
-		row.Verdict = verdictWriteRefused
+		if row.Verdict = serverVerdict(row); row.Verdict == "" {
+			row.Verdict = verdictWriteRefused
+		}
 	}
 	return nil
 }
@@ -1026,8 +1044,8 @@ func writeVerdict(row *roleRow, let, proven []string, anon map[string]bool, owne
 			row.OwnerBy += "; the owner's object could not be read to verify the write"
 		}
 		return verdictWriteNoChange
-	case serverFailed(row):
-		return verdictWriteFailed
+	case serverVerdict(row) != "":
+		return serverVerdict(row)
 	case ownerLet:
 		return verdictWriteOwner
 	case !ownerAsked:

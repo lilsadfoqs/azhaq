@@ -88,14 +88,13 @@ The map has one row per entity, best first: the target's own pages and APIs, the
 | `found_in` | Up to three places where scripts name the route, calls first. See [found_in](#found_in). |
 | `watch` | Names worth trying first, by what each says it takes: `returnUrl (redirect)`, `url (url)`, `file (file)`, `cmd (command)`, `isAdmin (debug)`, `userId (id)`, `callback (callback)`. |
 | `folded` | On a summary row of names: how many dead, wildcard or unresolved names it holds. |
-| `template`, `count`, `not_asked` | A page that differs only by an ID is folded: its `{n}` template, how many URLs it holds, how many were not requested. See [Templates](#templates). |
+| `template`, `count`, `not_asked`, `capped` | A page that differs only by an ID is folded: its `{n}` template, how many URLs it holds, how many were not requested, and how many of those a limit kept from being asked (`coverage: capped`). See [Templates](#templates). |
 
 ## Summary and exit codes
 
 The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.md#the-summary) and [exit codes](../OUTPUT.md#exit-codes). Two things are specific to `run`:
 
-- The summary counts `catchall` (URLs that answered with the page every unknown path gets) and `catchall not asked` (URLs scripts name that were not requested, see [Catch-all origins](#catch-all-origins)) apart: neither is in `results` or in `URLs`, so `results` plus the two is the rows `run` printed.
-- The summary counts `client routes` and `websockets` apart from `URLs`, `ports` for the open ports that have a row and `open|filtered ports` for the UDP ports that neither answered nor were refused, never counted as open. A port is one row for each host, port and protocol, however many scans listed it.
+- The summary's `counts` are disjoint and add up to `stored`, the map rows in the database: `pages`, `api`, `auth`, `forbidden`, `catchall` (URLs that answered with the page every unknown path gets), `skipped` (URLs named and not asked: a `-deny-path` rule, or a catch-all origin, see [Catch-all origins](#catch-all-origins)), `client routes`, `websockets`, `scripts`, `assets`, `source maps` and `manifests` for URLs, `hostnames`, `dead hostnames` and `wildcard hostnames` for names, `ports`, and `open|filtered ports` for the UDP ports that neither answered nor were refused, never counted as open. `results` is smaller than `stored` by the rows folded into templated rows and dead or wildcard name rows, and the text summary says how many. Each key is a `query` filter: see [run counts](../OUTPUT.md#run-counts). A port is one row for each host, port and protocol, however many scans listed it.
 - Under `-max-requests`, a port sweep leaves the requests that mapping each web service it found open needs (about N per service, as `plan` says), so a budget smaller than the sweep still maps the services found; the summary's notes say how the budget went by stage (`request budget N, spent by stage: ports …`).
 - A target given with no port (a name or an address) is asked on 443, then 80, or on `-web-ports`. So is the name of a URL given with its own port, and a name found on the way. A guess nothing listens on, refused, is a note (`no web service on 443 or 80`), not a failure, and so is a refused connection on 443 to read a name's certificate; a `-web-ports` port that refuses is one, and so is a URL given that refuses. A refused URL is one failed target: the other targets of the run are mapped as usual and the exit code is 3.
 - A port the scan found open that answers the HTTP stage with something other than HTTP (an FTP or SSH banner) is a service, not a failed target: it keeps its `Port` row and the run names it in a note (`open, but not a web service`). Its plain-HTTP request is its only one when the reply is not TLS either. A web server that resets, times out or closes without answering is still a failure.
@@ -161,10 +160,10 @@ An origin that answers every path with the same page (a single-page app's shell)
 
 - Once an origin has answered 3 paths with that page, `run` stops asking the paths that scripts name on it when the control of the path's directory is that page too. 3 is the number the summary's note has always used. A directory whose control was not asked is no exception azhaq knows of: its first path is asked, and that asks the control. A directory whose control is another answer (an API that answers JSON, a folder of real pages) is asked whole. Beyond the 24 directories an origin gets a control for, the nearest directory above stands for it, as in the catch-all check. Nothing is decided by a path's name.
 - The links of a page, the root and everything you give are always asked.
-- Their rows stay in the map with coverage `skipped`. The summary names how many and the origin (`http://app: 600 URLs that scripts name were not asked, because it had answered paths with the one page every unknown path gets`), the `skipped` list has one line for the origin, and `counts` has `catchall not asked`.
+- Their rows stay in the map with coverage `skipped`. The summary names how many and the origin (`http://app: 600 URLs that scripts name were not asked, because it had answered paths with the one page every unknown path gets`), the `skipped` list has one line for the origin, and `counts` has `skipped` for them (and `catchall` for the answers), each row counted once.
 - `-catchall-after N` sets the number (0 asks every path). `crawl` asks every path, as katana does, and lists catch-all answers.
 - A held path that is a real page of its own in a directory the catch-all covers would have answered a different page: this is an inference from the controls, not a request. Ask it with `-catchall-after 0`, or by hand.
-- `-no-catchall` leaves the rows that answered with the catch-all page, and those not asked for that reason, out of the rows printed. The summary still counts them.
+- `-no-catchall` leaves the rows that answered with the catch-all page, and those not asked for that reason, out of the rows printed and out of `results`. `stored` and `counts` still hold them, and `left_out` says how many, so what `run` prints is what `results` counts.
 
 ### Evidence
 
@@ -254,7 +253,7 @@ A client route is a view that a single-page app's router draws.
 ### Templates
 
 - Pages that differ only by an ID are folded: `/product?id={n}`.
-- `count` is the number of URLs folded. `not_asked` is how many of them were found and not requested.
+- `count` is the number of URLs folded. `not_asked` is how many of them were found and not requested. `capped` is how many of those a limit (`-depth`, a budget) kept from being asked. The row's own `coverage` is that of its first URL, so `azhaq query -coverage capped` also returns a templated row that holds a capped URL.
 - Pages of one route that differ in which ID-like names they carry are one row: `/product?id={n}` and `/product?id={n}&store={n}`. Its `params` lists every name.
 - A query value that names a page, such as `index.jsp?content=about.htm` or `view=grid`, is not an ID. Each is a page of its own.
 - Every URL of a template is requested, as `crawl` and katana do. `-per-template N` limits it to N; the others are listed with `coverage: hint`.
@@ -420,6 +419,7 @@ Examples of what `notes` holds for a run:
 | `-max-ips` | int | `4096` | addresses expanded from -asn and -cidr prefixes, for the whole run |
 | `-max-response-size` | int |  | bytes read of a page or document (default 2097152; scripts and JSON get 16 MiB) |
 | `-depth` | int | `4` | max fan-out waves (0 = seed wave only, not unlimited) |
+| `-retry-failed` | bool |  | with azhaq resume: ask again the failed targets the summary marks retryable (a timeout, a closed connection, a 429 or 5xx); only those run again |
 
 **Session**
 

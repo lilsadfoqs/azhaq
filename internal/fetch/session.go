@@ -40,7 +40,8 @@ type Session struct {
 	// Every is how many requests pass between checks; 50 when zero.
 	Every int
 	// SignIn is the sign-in page of the run: an answer that redirects to it
-	// asks for a check.
+	// asks for a check. A run given with -cookie or -header has none; it
+	// takes the page the check page sends a visitor without the session to.
 	SignIn string
 	// Renew signs in again and sets the new session (SetExtra). Nil: the run
 	// cannot, and says so when its session ends.
@@ -80,6 +81,7 @@ type sessionGuard struct {
 	mu       sync.Mutex
 	asked    []string // GETs that came through Do since the last good check
 	endedBy  string   // a URL whose answer cleared the session cookie
+	signal   string   // the first answer since the last check that asked for one, as "/path answered 302 to /login"
 	lost     error
 	redo     []string
 	renewals int
@@ -217,6 +219,21 @@ func CheckDue(ctx context.Context) error {
 		return g.check(ctx)
 	}
 	return SessionLost()
+}
+
+// SignInPath is the sign-in page the run's checks watch for: the one it was
+// given, or the one an anonymous visitor is sent to from the check page.
+func SignInPath() string {
+	if g := guardP.Load(); g != nil {
+		return g.signIn()
+	}
+	return ""
+}
+
+func (g *sessionGuard) signIn() string {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.s.SignIn
 }
 
 // SessionGen is how many times the session was renewed: a worker that
@@ -401,7 +418,8 @@ func (g *sessionGuard) check(ctx context.Context) error {
 	sent := g.since.Swap(0)
 	g.due.Store(false)
 	g.mu.Lock()
-	endedBy := g.endedBy
+	endedBy, signal := g.endedBy, g.signal
+	g.signal = ""
 	g.mu.Unlock()
 	var got Print
 	if page, want := g.page(); page != "" {
@@ -420,11 +438,11 @@ func (g *sessionGuard) check(ctx context.Context) error {
 	} else if endedBy == "" {
 		return g.verify(ctx, int(sent))
 	}
-	return g.lose(ctx, got, endedBy, int(sent))
+	return g.lose(ctx, got, endedBy, signal, int(sent))
 }
 
 // lose handles a session that failed its check.
-func (g *sessionGuard) lose(ctx context.Context, got Print, endedBy string, sent int) error {
+func (g *sessionGuard) lose(ctx context.Context, got Print, endedBy, signal string, sent int) error {
 	g.mu.Lock()
 	n := len(g.asked)
 	g.mu.Unlock()
@@ -437,6 +455,8 @@ func (g *sessionGuard) lose(ctx context.Context, got Print, endedBy string, sent
 	what := fmt.Sprintf("the session ended (%s)", how)
 	if endedBy != "" {
 		what = fmt.Sprintf("the session ended after %s was requested (%s)", pathOf(endedBy), how)
+	} else if signal != "" {
+		what = fmt.Sprintf("the session ended (%s; the first answer that looked like its end was %s)", how, signal)
 	}
 	fail := func(why string) error {
 		err := &neterr.SessionLost{Msg: fmt.Sprintf("the session ended: %s; %s; %d GETs sent since the last good check were answered without it, and so were %d other requests", strings.TrimPrefix(what, "the session ended "), why, n, unrecorded)}
@@ -685,11 +705,17 @@ func sessionSaw(ctx context.Context, raw string, res Result) {
 		g.notify(raw)
 		return
 	}
-	if res.Status == http.StatusUnauthorized || g.s.SignIn != "" && slices.ContainsFunc(res.Hops, func(h Hop) bool {
-		return h.Location != "" && pathOf(h.Location) == pathOf(g.s.SignIn)
+	signIn := g.signIn()
+	if res.Status == http.StatusUnauthorized || signIn != "" && slices.ContainsFunc(res.Hops, func(h Hop) bool {
+		return h.Location != "" && pathOf(h.Location) == pathOf(signIn)
 	}) {
 		g.due.Store(true)
 		g.suspect(raw, res)
+		g.mu.Lock()
+		if g.signal == "" {
+			g.signal = pathOf(raw) + " answered " + describe(printOf(res))
+		}
+		g.mu.Unlock()
 		g.notify("")
 	}
 }
@@ -721,6 +747,9 @@ func (g *sessionGuard) probe(ctx context.Context, raw string, res Result) {
 	g.mu.Lock()
 	if g.s.Check == "" {
 		g.s.Check, g.s.Want = raw, with
+		if g.s.SignIn == "" {
+			g.s.SignIn = without.Loc
+		}
 	}
 	g.mu.Unlock()
 }
@@ -731,18 +760,24 @@ func (g *sessionGuard) suspect(raw string, res Result) {
 	if g.remote {
 		return
 	}
-	p := Print{Status: res.Status}
-	if len(res.Hops) > 0 {
-		if loc, err := url.Parse(res.Hops[0].Location); err == nil {
-			p.Loc = loc.Path
-		}
-	}
+	p := printOf(res)
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	if g.s.Check != "" || g.proven[raw] || len(g.suspects) >= 64 || slices.ContainsFunc(g.suspects, func(s suspect) bool { return s.url == raw }) {
 		return
 	}
 	g.suspects = append(g.suspects, suspect{raw, p})
+}
+
+// printOf is the print of an answer: its status and where it redirects.
+func printOf(res Result) Print {
+	p := Print{Status: res.Status}
+	if len(res.Hops) > 0 {
+		if loc, err := url.Parse(res.Hops[0].Location); err == nil {
+			p.Loc = loc.Path
+		}
+	}
+	return p
 }
 
 // notify tells the run, from a worker, that an answer looked like the end

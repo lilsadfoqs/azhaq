@@ -74,6 +74,15 @@ func (s *Store) LoadResponse(url string) (Response, bool) {
 	return Response{URL: url, Meta: []byte(meta), Body: raw}, true
 }
 
+// DropResponse forgets the answer recorded for url in the current run, so
+// that a resume asks it again.
+func (s *Store) DropResponse(url string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, err := s.q().Exec(`DELETE FROM responses WHERE run_id = ? AND url = ?`, s.runID, url)
+	return err
+}
+
 // DropResponses forgets the answers recorded for every run but keep: they
 // only serve a run that azhaq resume may still continue.
 func (s *Store) DropResponses(keep string) error {
