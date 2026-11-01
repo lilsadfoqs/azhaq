@@ -8,12 +8,19 @@
 - The summary has `dns_queries`, the queries sent to resolvers (retries and wildcard probes included), equal to the ledger's DNS query lines, with or without a ledger.
 - The summary has `stored`, the map rows the database holds; the counts add up to it, and `results` is smaller by the rows folded into templated rows and dead or wildcard name rows.
 - A templated row has `capped`, how many of its URLs a limit kept from being asked.
+- `bench/images.env` lists the lab images with tag and digest; `labs.sh`, `bench/compose.yaml` and the bench's lab table must name the same ones, and a test fails when they differ.
+- A deploy lab on 127.0.0.1:5040 (`bench/truth/deploy`) with `$HOME/lab/deploy v1|v2`, started by `labs.sh`; the bench unit `once:deploy` runs `watch` on v1, again with no deploy (`no change`), then on v2, and compares the change set with `expected.md`.
+- `go run ./bench -checklist` and the `checklist` workflow run the capability checklist as commands (exit codes, counts that agree, scope, no write method without its flag, `-deny-path`, a lost session, the MCP lock, the budget, the kill switch); a push to next runs it, and the release workflow refuses a tag whose commit has no passing run.
+- The trial workflow publishes each review part's scores as an encrypted `scores.json.age`; `.github/ci/history.sh` prints each item across the last reviews with the spread between samples.
 
 ### Changed
 
 - `run` summary counts are disjoint and cover every stored row: `pages` replaces `URLs` (api, auth and forbidden are no longer counted inside it), and scripts, assets, source maps, manifests, dead and wildcard hostnames, addresses, domains and prefixes have counts of their own; each is a `query` filter (OUTPUT.md).
 - A prefix row lists the open ports of every address of the range and `addresses_open`, not those of the last address scanned.
 - A `-cookie` or `-header` run takes the page a visitor without the session is sent to as its sign-in page; the docs say what is promised (an answer that looks like the end is noticed before the next request, others within 50 requests).
+- `ports -rate N` runs on one core for each 15,000 connects a second (not more than the machine has; `-min-rate` and `GOMAXPROCS` keep every core): a full-range scan at `-rate 10000` used 12.9 CPU-seconds on 20 cores against nmap's 2.5 and now uses about 4.2 (8 hosts: 103 s against 19 s, now 29 s).
+- The ledger counts what it records, so a run no longer reads its ledger twice at the end (about 0.8 s after the last connect of a full-range scan); a plain ledger line is marshalled once and written without reflection.
+- The bench measures azhaq's memory on a copied binary: a freshly linked file showed 30 MB against 14 MB for the same bytes, for a small `dirs` sweep whose own cost (calibration, workspace, ledger) is below the noise.
 
 ### Fixed
 
