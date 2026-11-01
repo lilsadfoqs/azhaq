@@ -115,3 +115,49 @@ func TestResumedRangeKeepsTheCountsOfTheStoppedBlock(t *testing.T) {
 		t.Errorf("the final row of the block: %v", got)
 	}
 }
+
+// A block the budget stopped before any address finished has nothing swept:
+// its empty list is none, not the default port list read as address places,
+// which skipped addresses 7, 9, 13 … of the block and counted 101 of them.
+func TestResumedRangeAfterAStopWithNothingFinished(t *testing.T) {
+	seed := types.Seed{Type: types.TypePrefix, Keys: map[string]string{"prefix": "127.0.0.0/24"}}
+	var takes atomic.Int32
+	scan := func(c *Collector, budget int32) (obs []types.StoredObservation) {
+		takes.Store(0)
+		c.Workers = 1
+		c.Scanner.Detect = portscan.DetectNone
+		c.Scanner.Take = func() error {
+			if n := takes.Add(1); budget >= 0 && n > budget {
+				return neterr.ErrBudget
+			}
+			return nil
+		}
+		_, _ = c.Run(context.Background(), seed, func(o types.Observation) error {
+			o.ObservedAt = time.Now()
+			obs = append(obs, types.StoredObservation{Observation: o})
+			return nil
+		})
+		return obs
+	}
+	first := scan(New(nil, []int{9}, 0), 0)
+	sw := Swept(first, time.Time{})["127.0.0.0/24"]
+	if len(sw.Done) != 0 {
+		t.Fatalf("a block that finished no address has %d swept: %v", len(sw.Done), sw.Done)
+	}
+	c := New(nil, []int{9}, 0)
+	c.Apply(Config{Swept: map[string]Sweep{"127.0.0.0/24": sw}})
+	second := scan(c, 5)
+	last := rows(t, []types.Observation{second[len(second)-1].Observation})[0]
+	if last["range"] != true || last["addresses"] != float64(5) {
+		t.Errorf("the stopped block's row: %v", last)
+	}
+	c = New(nil, []int{9}, 0)
+	c.Apply(Config{Swept: Swept(append(first, second...), time.Time{})})
+	third := scan(c, -1)
+	if n := takes.Load(); n != 251 {
+		t.Errorf("the third scan asked %d addresses, want the 251 the others did not finish", n)
+	}
+	if last = rows(t, []types.Observation{third[len(third)-1].Observation})[0]; last["addresses"] != float64(256) {
+		t.Errorf("the finished block's row: %v", last)
+	}
+}

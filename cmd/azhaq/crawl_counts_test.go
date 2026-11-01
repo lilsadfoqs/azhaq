@@ -45,7 +45,7 @@ func TestCrawlSummaryCountsEachKindOfRow(t *testing.T) {
 	sum := sumMap(t, errOut)
 	counts, _ := sum["counts"].(map[string]any)
 	want := map[string]float64{"requested": 4, "answered": 4, "not requested": 1, "templates": 1, "assets": 1, "rejected strings": 1,
-		"observed routes": 4, "hint routes": 2}
+		"observed routes": 3, "linked routes": 1, "hint routes": 2}
 	for k, v := range want {
 		if counts[k] != v {
 			t.Errorf("%s = %v, want %v (counts %v)", k, counts[k], v, counts)

@@ -19,6 +19,8 @@
 - The workspace keeps every archived URL a run read in `DB.urls.jsonl` beside it (`run`, `url`, `source`), written as the pages arrive; a stopped run keeps what it read and `azhaq resume` adds to it.
 - `docs/claims.tsv` ties each claim of the README and of the `plan`, `mcp`, `worker`, `query` and `ledger` pages to a test or a bench check; `go run ./scripts/claims`, a step of the checks job, fails on a claim with no proof, a reworded claim or a proof that is gone, and lists the pages not covered yet.
 - `fuzz -quiet` prints no matches and no progress, only the summary; `-db` and `-o` still keep the matches.
+- `diff` takes `-json` like every command that prints rows (`-jsonl` stays as the same flag).
+- The `crawl` summary counts `linked routes`, URLs a page links that the crawl did not request, apart from observed, hint and named; `-json` marks those rows `class: linked`.
 
 ### Changed
 
@@ -39,6 +41,8 @@
 - MIGRATING's dnsx section lists the extra row `dns -a -json` gives a dangling CNAME and how to filter it; its katana section says `-jsl` routes need `-hints` at a depth that does not reach them.
 - The README starts Juice Shop and VAmPI pinned, marks the 190-row summary as an example, names the build, the lab image list and the command behind each benchmark row, explains the roles table's cells, and counts 51 built-in path checks, not 32.
 - `notify`: the docs say a webhook's host is shown in errors and the ledger, so a secret belongs in its path, query or user part, never in the host name.
+- `crawl`'s default plain, `-f`, `-ot`, `-jsonl` and `-json` output lists only URLs the crawl requested: links past `-d`, a limit or a `-deny-path` rule are left out with a note (`-silent` included) and `-hints` lists them; stylesheets, images and fonts pages load are not requested, so `-assets`, `-ndef` and `-em` list them as `linked` rows. MIGRATING says what changes for a list migrated from katana.
+- The note of a resume that finished no task names its work in the command's own terms: connections, one per port to connect, for `ports`; requests for the others.
 
 ### Fixed
 
@@ -62,6 +66,7 @@
 - A UDP scan reads a CoAP answer's payload past its header, token and options: a 0xff in the random message id was taken for the payload marker about once in 128 scans, and the banner began inside the header.
 - `run` held the API routes scripts name on an app whose unknown `/api/` paths answer an error page or the app's shell, so `roles` found fewer endpoints that differ between roles and a URL only a held route links to was missing from the map. A directory's other script-named paths are now held only once 3 of its own answered with the catch-all page (a success or a redirect) before 3 answered anything else; its paths go one at a time until it is decided, and the scripts a page loads are always asked.
 - `azhaq resume` asked again every script-named path the stopped run had not got to on a catch-all origin; a resumed run now goes on with what the stopped run had learned (which URLs scripts named, how they answered, the directories it held). Paths lent to workers (`-serve`) are asked whole.
+- `resume` of a `ports` range stopped before any address finished no longer reads the empty list of finished addresses as the default port list: it skipped about a hundred addresses of a /24 and counted 101 addresses.
 
 ## v0.13.0
 

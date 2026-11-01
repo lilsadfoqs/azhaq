@@ -1415,7 +1415,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		}
 		rep.Resume = resumeHint(path, cut > 0, *login != "", *loginUser)
 		if *resumeRun != "" && st.TasksDone() == doneBefore && egress.Spent() && egress.Killed() == nil {
-			rep.Notes = append(rep.Notes, fmt.Sprintf("no task finished: each one left needs more than %d requests (a path sweep needs one per word); raise -max-requests", egress.MaxRequests()))
+			rep.Notes = append(rep.Notes, noTaskFinished(rep.Command, egress.MaxRequests()))
 		}
 	} else {
 		// Nothing left to resume: the kept answers have served.
@@ -1442,6 +1442,18 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		}
 	}
 	return nil
+}
+
+// noTaskFinished is the note of a resume that ended with the budget spent and
+// no task done: what a task left costs, in the command's own terms.
+func noTaskFinished(command string, budget int64) string {
+	switch command {
+	case "ports":
+		return fmt.Sprintf("no task finished: each one left needs more than %d connections (one per port to connect, for each of its addresses); raise -max-requests", budget)
+	case "run", "dirs":
+		return fmt.Sprintf("no task finished: each one left needs more than %d requests (a path sweep needs one per word); raise -max-requests", budget)
+	}
+	return fmt.Sprintf("no task finished: each one left needs more than %d requests; raise -max-requests", budget)
 }
 
 // webServiceCost is the requests mapping one web service takes at least: the
@@ -1700,11 +1712,13 @@ func cmdDiff(args []string) error {
 	a := fs.String("a", "", "old sqlite")
 	b := fs.String("b", "", "new sqlite (default: last run)")
 	ws := fs.String("db", "", "workspace: compare the last two runs recorded in this database")
-	jsonl := fs.Bool("jsonl", false, "emit JSONL instead of a text report")
+	asJSON := fs.Bool("json", false, "JSON lines instead of a text report, the summary last")
+	jsonl := fs.Bool("jsonl", false, "same as -json")
 	quiet := fs.Bool("quiet", false, "entities and counts only (skip observation lines)")
 	if err := parse(fs, args); err != nil {
 		return err
 	}
+	*jsonl = *jsonl || *asJSON
 	if *ws != "" {
 		st, err := store.OpenExisting(*ws)
 		if err != nil {
@@ -1871,7 +1885,7 @@ func printDiffStores(old, neu *store.Store, oldLabel string, opts diffOpts) erro
 		if len(failed) > 0 {
 			line += " (sources that failed this run: " + strings.Join(failed, ", ") + ")"
 		}
-		fmt.Println(line + "; -jsonl lists them")
+		fmt.Println(line + "; -json lists them")
 	}
 	fmt.Printf("added=%d removed=%d not_seen_again=%d observations=%d\n", len(d.Added), len(removed), len(unseen), len(d.NewObs))
 	return nil

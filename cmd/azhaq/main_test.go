@@ -358,6 +358,29 @@ func TestPrintDiffJSONLAndCounts(t *testing.T) {
 	}
 }
 
+// diff takes -json like every command that prints rows; -jsonl stays as the
+// same flag.
+func TestDiffTakesJSONAndJSONL(t *testing.T) {
+	dir := t.TempDir()
+	paths := []string{filepath.Join(dir, "a.db"), filepath.Join(dir, "b.db")}
+	for i, k := range []string{"old.test", "new.test"} {
+		st, err := store.Open(paths[i])
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := st.UpsertEntity(types.TypeHostname, k, time.Now()); err != nil {
+			t.Fatal(err)
+		}
+		_ = st.Close()
+	}
+	for _, flag := range []string{"-json", "-jsonl"} {
+		out, err := captureStdout(t, func() error { return cmdDiff([]string{"-a", paths[0], "-b", paths[1], flag}) })
+		if err != nil || !strings.Contains(out, `"kind":"added"`) || !strings.Contains(out, `"kind":"summary"`) {
+			t.Fatalf("%s: %q %v", flag, out, err)
+		}
+	}
+}
+
 func TestPrintDiffLabelsOtherSeeds(t *testing.T) {
 	dir := t.TempDir()
 	paths := []string{filepath.Join(dir, "juice.db"), filepath.Join(dir, "vampi.db")}

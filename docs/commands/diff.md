@@ -5,7 +5,7 @@ Compare two runs: the entities added and removed, and the new observations.
 ## Synopsis
 
 ```
-azhaq diff -a OLD.db -b NEW.db | -db WORKSPACE.db  [-jsonl] [-quiet]
+azhaq diff -a OLD.db -b NEW.db | -db WORKSPACE.db  [-json] [-quiet]
 ```
 
 ## Examples
@@ -18,7 +18,7 @@ azhaq diff -db acme.db
 azhaq diff -a old.db -b new.db
 
 # Print added, removed and not_seen_again rows and a summary as JSON lines
-azhaq diff -db acme.db -jsonl
+azhaq diff -db acme.db -json
 ```
 
 ## What it does
@@ -34,7 +34,7 @@ A workspace with only one run says so: a diff needs two.
 
 The text report lists the entities added and removed and the new observations.
 
-`-jsonl` prints one JSON object per line:
+`-json` (or `-jsonl`, the same flag) prints one JSON object per line, the `summary` last:
 
 | Row | Meaning |
 | --- | --- |
@@ -71,6 +71,15 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 | `-db` | string |  | workspace: compare the last two runs recorded in this database |
 | `-a` | string |  | old sqlite |
 | `-b` | string |  | new sqlite (default: last run) |
-| `-jsonl` | bool |  | emit JSONL instead of a text report |
+| `-json` | bool |  | JSON lines instead of a text report, the summary last |
 | `-quiet` | bool |  | entities and counts only (skip observation lines) |
+
+<details>
+<summary>Other names (1)</summary>
+
+| Flag | Type | Default | Meaning | Kind |
+| --- | --- | --- | --- | --- |
+| `-jsonl` | bool |  | same as -json | other name |
+
+</details>
 <!-- flags:end -->

@@ -841,7 +841,7 @@ func Swept(obs []types.StoredObservation, since time.Time) map[string]Sweep {
 			continue
 		}
 		spec, _ := row[SweptKey].(string)
-		done, err := portscan.Ports(spec)
+		done, err := places(spec)
 		if prefix == "" || err != nil {
 			continue
 		}
@@ -854,6 +854,15 @@ func Swept(obs []types.StoredObservation, since time.Time) map[string]Sweep {
 		out[prefix] = Sweep{Done: done, Counts: counts}
 	}
 	return out
+}
+
+// places reads a list a row kept (portscan.Compact): an empty one is none, not
+// the default port list portscan.Ports reads it as.
+func places(spec string) ([]int, error) {
+	if strings.TrimSpace(spec) == "" {
+		return nil, nil
+	}
+	return portscan.Ports(spec)
 }
 
 // sweptAddrs are the addresses of the blocks a limit stopped that the run
@@ -908,7 +917,7 @@ func Priors(obs []types.StoredObservation) map[string]Prior {
 			delete(out, row.IP) // a whole scan came after it
 			continue
 		}
-		asked, err := portscan.Ports(row.Asked)
+		asked, err := places(row.Asked)
 		if err != nil {
 			continue
 		}
