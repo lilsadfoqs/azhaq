@@ -181,6 +181,10 @@ func checkLedgerInvariants(t *testing.T, what string, args []string, rep report)
 	if err != nil {
 		return
 	}
+	if rep.Requests == 0 && strings.Contains(strings.Join(rep.Notes, "\n"), "the run sent nothing") {
+		// A run that sends nothing adds no seal: the lines before are an earlier run's.
+		lines = nil
+	}
 	rules := scopeOf(args)
 	targets := 0
 	for _, e := range lines {

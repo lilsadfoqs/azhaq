@@ -285,7 +285,7 @@ func planFor(cat *catalog.Catalog, seeds []types.Seed, b engine.Budgets, paths [
 			if s.Type == types.TypeDomain {
 				// Names found under another domain (a CNAME's target, a
 				// link) bring their domain: the scope decides whether it
-				// is asked about, and -depth and -max-items how far.
+				// is asked about, and -depth how far.
 				p.Requests.Found = true
 				if p.Requests.MaxNames = b.MaxNames; b.MaxNames <= 0 {
 					p.Requests.MaxNames = engine.DefaultBudgets().MaxNames
@@ -435,7 +435,7 @@ func printRequests(p runPlan) {
 	case r.Found && r.scoped:
 		fmt.Println("  domains found on the way are asked about too, inside the scope")
 	case r.Found:
-		fmt.Println("  domains found on the way are asked about too (no scope: -depth and -max-items bound them)")
+		fmt.Println("  domains found on the way are asked about too (no scope: -depth bounds how far, and -allow keeps them to yours)")
 	}
 	if r.Passive {
 		fmt.Println("requests to the targets: none (-passive)")
@@ -471,7 +471,7 @@ func limitsOf(b engine.Budgets, maxRequests int64, rate float64, timeout time.Du
 	}
 	return map[string]string{
 		"depth":          fmt.Sprint(b.MaxDepth),
-		"max-items":      fmt.Sprint(b.MaxItems),
+		"max-items":      none(b.MaxItems > 0, fmt.Sprint(b.MaxItems)),
 		"max-requests":   none(maxRequests > 0, fmt.Sprint(maxRequests)),
 		"rate":           none(rate > 0, fmt.Sprintf("%g/s", rate)),
 		"timeout":        none(timeout > 0, timeout.String()),

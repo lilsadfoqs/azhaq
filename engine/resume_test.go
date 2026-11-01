@@ -10,6 +10,7 @@ import (
 
 	"github.com/lilsadfoqs/azhaq/catalog"
 	"github.com/lilsadfoqs/azhaq/engine"
+	"github.com/lilsadfoqs/azhaq/scope"
 	"github.com/lilsadfoqs/azhaq/store"
 	"github.com/lilsadfoqs/azhaq/types"
 )
@@ -22,11 +23,18 @@ type tree struct {
 	stopAt int
 	stop   context.CancelFunc
 	n      int
+	kind   *catalog.Kind // nil: Passive
 }
 
 func (*tree) Name() string { return "test-tree" }
-func (*tree) Info() catalog.Info {
-	return catalog.Info{Kind: catalog.Passive}
+func (c *tree) Info() catalog.Info {
+	switch {
+	case c.kind == nil:
+		return catalog.Info{Kind: catalog.Passive}
+	case *c.kind == catalog.Active:
+		return catalog.Info{Kind: catalog.Active, Flag: "tree"}
+	}
+	return catalog.Info{Kind: *c.kind}
 }
 func (*tree) Inputs() []types.SeedType {
 	return []types.SeedType{types.TypeDomain, types.TypeHostname, types.TypeURL}
@@ -128,5 +136,61 @@ func TestResumeFinishesAnInterruptedRun(t *testing.T) {
 	}
 	if st.TasksLeft() != 0 {
 		t.Errorf("%d tasks left after the resumed run", st.TasksLeft())
+	}
+}
+
+// A resume honours the selection it is given: a collector it is told to skip,
+// and an active one whose flag it is not given, do not run the tasks the
+// stopped run left for them, and those tasks are not left over either.
+func TestResumeHonoursSkipAndActiveFlags(t *testing.T) {
+	seeds := []types.Seed{{Type: types.TypeDomain, Keys: map[string]string{"domain": "example.org"}}}
+	for _, tc := range []struct {
+		name   string
+		budget func(*engine.Budgets)
+		kind   catalog.Kind
+	}{
+		{"skip", func(b *engine.Budgets) { b.Skip = map[string]bool{"test-tree": true} }, catalog.Passive},
+		{"no flag", func(b *engine.Budgets) {}, catalog.Active},
+		{"passive", func(b *engine.Budgets) { b.Passive = true }, catalog.Touch},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "cut.db")
+			st, err := store.Open(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer st.Close()
+			_ = st.BeginRun("cut", 4, 0)
+			b := engine.DefaultBudgets()
+			b.Parallel = 1
+			b.Active = map[string]bool{"tree": true}
+			b.Scope = scope.Rules{Allow: []string{"example.org"}}.Compile()
+			ctx, cancel := context.WithCancel(context.Background())
+			first := &tree{ran: map[string]int{}, stopAt: 3, stop: cancel, kind: &tc.kind}
+			cat := catalog.New()
+			cat.MustRegister(first)
+			_ = (&engine.Engine{Cat: cat, Store: st}).RunLocal(ctx, seeds, b)
+			if st.TasksLeft() == 0 {
+				t.Fatal("an interrupted run left no tasks")
+			}
+			st.UseRun("cut")
+			second := &tree{ran: map[string]int{}, kind: &tc.kind}
+			cat = catalog.New()
+			cat.MustRegister(second)
+			b.Resume = true
+			tc.budget(&b)
+			if tc.name == "no flag" {
+				b.Active = nil
+			}
+			if err := (&engine.Engine{Cat: cat, Store: st}).RunLocal(context.Background(), seeds, b); err != nil {
+				t.Fatal(err)
+			}
+			if len(second.ran) != 0 {
+				t.Errorf("the resume ran %v", second.ran)
+			}
+			if left := st.TasksLeft(); left != 0 {
+				t.Errorf("%d tasks left after a resume that was told to leave them out", left)
+			}
+		})
 	}
 }

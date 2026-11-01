@@ -284,7 +284,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	failCapped := fs.Bool("fail-on-capped", false, "exit 4 also when the run hit -depth with hints left")
 	passive := fs.Bool("passive", false, "skip HTTP/crawl/JS/paths/TLS (no handshake to the target)")
 	depth := fs.Int("depth", 4, "max fan-out waves (0 = seed wave only, not unlimited)")
-	maxItems := fs.Int("max-items", 0, "max collector invocations (default 2048)")
+	maxItems := fs.Int("max-items", 0, "most collector tasks (a name, a URL, an address each, per collector) this run starts (default: no cap, katana's and httpx's); the work left is for azhaq resume, which starts as many more")
 	perTmpl := fs.Int("per-template", 0, "URLs of one template (/product?id={n}) to request; the rest are listed (default: all)")
 	maxRequests := fs.Int64("max-requests", 0, "requests to targets this run may send (0: no cap); the work left over is for azhaq resume")
 	rateFlag := fs.Float64("rate", 0, "requests per second to targets, over all hosts (0: no pace)")
@@ -297,7 +297,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	workerToken := fs.String("worker-token", os.Getenv("AZHAQ_WORKER_TOKEN"), "the token workers give (default $AZHAQ_WORKER_TOKEN, else a new one)")
 	workerOf := fs.String("worker-of", "", "internal: run as a worker of the run at this address (azhaq worker sets it)")
 	daily := fs.Int64("daily-requests", 0, "requests a day to the program's targets (-program, else this run's targets), counted over the runs in -db")
-	maxNames := fs.Int("max-names", 0, "max hostnames resolved (default 20000)")
+	maxNames := fs.Int("max-names", 0, "most hostnames this run resolves (default 200000, as many as subs keeps for a domain); the names left are for azhaq resume")
 	parallel := fs.Int("parallel", 0, "work items in flight (default 16)")
 	delay := fs.Duration("delay", 0, "pause before each uncached fetch")
 	noFollow := fs.Bool("no-follow", false, "do not follow redirects: each URL is asked once and its redirect recorded with the Location (httpx's default)")
@@ -376,7 +376,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	}
 	graphql := fs.Bool("graphql", false, "read the schema of GraphQL endpoints with an introspection query (active; the targets given are the scope unless -allow)")
 	graphqlWordlist := fs.String("graphql-wordlist", "", "extra probe words (one per line), tried and recombined with the built-in ones when a GraphQL endpoint's introspection is off and its schema has to be recovered from validation errors")
-	skip := fs.String("skip", "", "collectors not to run, comma-separated (see azhaq plan)")
+	skip := fs.String("skip", "", "collectors not to run, comma-separated: azhaq-ports or ports, subs for the subdomain collector (azhaq plan lists them); a name that is none is an error; azhaq resume leaves out the tasks the run kept for them")
 	noPaths := fs.Bool("no-paths", false, "do not ask each web service for the 51 built-in paths (robots.txt, sitemaps, API descriptions, .git/HEAD, backup, admin, …): some programs count that as scanning")
 	knownFiles := fs.String("known-files", "", "ask each web service only for its robots.txt and sitemaps and read every entry (all, robotstxt or sitemapxml); replaces the 51 built-in paths")
 	proxyFlag := fs.String("proxy", "", "send requests to targets through this proxy (http://, https:// or socks5://); Chrome too (default: $HTTP_PROXY, $HTTPS_PROXY, except for loopback targets, which stay direct)")
@@ -709,7 +709,11 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	if *noPaths {
 		budgets.Skip["azhaq-paths"] = true
 	}
-	for _, name := range splitList(*skip) {
+	skipped, err := resolveSkip(splitList(*skip))
+	if err != nil {
+		return usagef("-skip: %v", err)
+	}
+	for _, name := range skipped {
 		budgets.Skip[name] = true
 	}
 	budgets.Active = map[string]bool{}
@@ -902,9 +906,13 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		}
 	}
 	opts.PortConfig = portCfg
+	opts.PortConfig.WebCost = webServiceCost(budgets.Skip, opts.Paths, *noFavicon, *knownFiles)
 	if len(opts.Ports) > 0 || len(opts.UDPPorts) > 0 {
 		if obs, err := st.Observations(); err == nil {
 			opts.PortConfig.Prior = portcol.Priors(obs) // scans a limit stopped: resume asks the rest
+			if *resumeRun != "" {
+				opts.PortConfig.Swept = portcol.Swept(obs, runStart(st, *resumeRun)) // and not the addresses it finished
+			}
 		}
 	}
 	if *paramsFile != "" {
@@ -1292,6 +1300,16 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	if n := opts.DNS.TakeoverNote("-no-takeover"); n != "" {
 		rep.Notes = append(rep.Notes, n)
 	}
+	if c := eng.Caps(); c.DepthURLs+c.DepthNames > 0 {
+		var what []string
+		if c.DepthURLs > 0 {
+			what = append(what, fmt.Sprintf("%d URLs", c.DepthURLs))
+		}
+		if c.DepthNames > 0 {
+			what = append(what, fmt.Sprintf("%d names", c.DepthNames))
+		}
+		rep.Notes = append(rep.Notes, fmt.Sprintf("-depth %d: %s found past it were not asked (their rows are coverage capped); azhaq resume -depth %d asks them", budgets.MaxDepth, strings.Join(what, " and "), budgets.MaxDepth+1))
+	}
 	if *permute {
 		if n := unvaried(leftover); n > 0 {
 			rep.Notes = append(rep.Notes, fmt.Sprintf("-permute did not vary %d names found past -depth %d: they were not resolved in this run (-depth %d reaches them)", n, budgets.MaxDepth, budgets.MaxDepth+1))
@@ -1357,7 +1375,15 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		case len(fetch.OriginsDown()) > 0:
 			rep.Stopped = fmt.Sprintf("%s stopped answering after %d timeouts, %d tasks known and not done", strings.Join(fetch.OriginsDown(), ", "), fetch.OriginTrips, left)
 		default:
-			rep.Stopped = fmt.Sprintf("-max-items %d reached, %d tasks known and not done", budgets.MaxItems, left)
+			caps := eng.Caps()
+			switch {
+			case caps.NamesLeft > 0 && caps.ItemsLeft == 0:
+				rep.Stopped = fmt.Sprintf("-max-names %d reached, %d names not looked up, %d tasks known and not done (-max-names raises it)", budgets.MaxNames, caps.NamesLeft, left)
+			case budgets.MaxItems > 0:
+				rep.Stopped = fmt.Sprintf("-max-items %d reached, %d tasks known and not done (-max-items raises it)", budgets.MaxItems, left)
+			default:
+				rep.Stopped = fmt.Sprintf("%d tasks known and not done", left)
+			}
 		}
 		rep.Resume = resumeHint(path, cut > 0, *login != "", *loginUser)
 		if *resumeRun != "" && st.TasksDone() == doneBefore && egress.Spent() && egress.Killed() == nil {
@@ -1388,6 +1414,39 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		}
 	}
 	return nil
+}
+
+// webServiceCost is the requests mapping one web service takes at least: the
+// number plan gives as about N per web service (its page, the favicon, the
+// built-in path checks). A budget keeps that much for each service a port
+// sweep finds open and names web, so that the sweep cannot spend it all.
+func webServiceCost(skip map[string]bool, extraPaths []string, noFavicon bool, knownFiles string) int {
+	if skip["azhaq-http"] {
+		return 0
+	}
+	n := 1
+	if !noFavicon {
+		n++
+	}
+	switch {
+	case skip["azhaq-paths"]:
+	case knownFiles != "":
+		n += len(pathscol.KnownFiles(knownFiles))
+	default:
+		n += len(pathscol.DefaultWordlist) + len(extraPaths)
+	}
+	return n
+}
+
+// runStart is when the run began, the zero time for one the workspace does not know.
+func runStart(st *store.Store, id string) time.Time {
+	runs, _ := st.Runs()
+	for _, r := range runs {
+		if r.ID == id {
+			return r.Started
+		}
+	}
+	return time.Time{}
 }
 
 // unvaried counts the names a run found past -depth that -permute did not
@@ -2270,6 +2329,32 @@ func readLines(r io.Reader) ([]string, error) {
 	for _, line := range strings.Split(string(raw), "\n") {
 		if line = strings.TrimSpace(line); line != "" && !strings.HasPrefix(line, "#") {
 			out = append(out, line)
+		}
+	}
+	return out, nil
+}
+
+// skipAliases are the names of commands that are not their collector's:
+// -skip subs reads as the subdomain collector.
+var skipAliases = map[string]string{"subs": "azhaq-subdomains", "subdomains": "azhaq-subdomains", "brute": "azhaq-dns-brute"}
+
+// resolveSkip turns the names of -skip into collector names: a collector's
+// own, or without its azhaq- prefix (ports, urls, dirs), or a command's
+// alias (subs). A name that is none of them is an error: a skip that skips
+// nothing would pass for one that did.
+func resolveSkip(names []string) ([]string, error) {
+	have := allCollectors()
+	var out []string
+	for _, n := range names {
+		switch {
+		case slices.Contains(have, n):
+			out = append(out, n)
+		case slices.Contains(have, "azhaq-"+n):
+			out = append(out, "azhaq-"+n)
+		case skipAliases[n] != "" && slices.Contains(have, skipAliases[n]):
+			out = append(out, skipAliases[n])
+		default:
+			return nil, fmt.Errorf("no collector is named %q (they are %s; the azhaq- prefix may be left off, and subs is the subdomain collector)", n, strings.Join(have, ", "))
 		}
 	}
 	return out, nil

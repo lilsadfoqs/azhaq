@@ -206,8 +206,9 @@ Up to `-parallel` items (default 16) run at a time. Each batch collector may run
 Limits:
 
 - `-depth` (default 4) bounds how many hints away from the seeds a seed may be. The same target under another scheme, and the page a redirect leads to within the site, are no step away: a link that redirects maps its destination at the link's own depth.
-- `-max-items` (default 2048) caps ordinary work items.
-- `-max-names` (default 20,000) caps the names handed to batch collectors (DNS). A domain with thousands of subdomains then does not spend the item budget on resolution.
+- `-max-items` caps the work items a run starts. There is no default cap: katana and httpx have none, and the scope, `-depth` and `-max-requests` bound what a run touches. A cap holds for each run, as `-max-requests` does: a resume given the same cap starts that many more.
+- `-max-names` (default 200,000, as many as `subs` keeps for a domain) caps the names handed to batch collectors (DNS) in a run. A domain with thousands of subdomains then does not spend the item budget on resolution.
+- A limit that holds work back is named in the summary with its flag: `-max-items` and `-max-names` in `stopped`, and what `-depth` left unasked in a note that gives its count (the rows are `coverage: capped`). A resume with a larger `-depth` asks them.
 - `-max-requests` caps the requests sent to targets, and `-rate` paces them over all hosts. See [The request budget](#the-request-budget).
 - `-daily-requests` gives a program a number of requests per UTC day. The program is `-program`, else the run's targets. Requests are counted over the runs in the database (table `spend`), and a run starts with what is left.
 
@@ -229,6 +230,8 @@ A request the budget refuses fails with `neterr.ErrBudget`. The engine marks eve
 - drops nothing that waits on it.
 
 The run is marked `capped` too.
+
+A port sweep and the web stage share the budget. The sweep's connects ask `egress.TakeSweep`, which leaves what `egress.Reserve` holds. When a port accepts a connection, the budget reserves what mapping a web service takes, the number `plan` prints as about N per web service (the page, the favicon, the built-in path checks). A port that proves no web service gives its share back; a port named http or https keeps it. The web requests that follow use the reserve up as they are sent. So a budget smaller than the sweep stops the sweep, with work left for `azhaq resume`, and still maps the services the sweep found. The summary says how a budget went by stage: `request budget N, spent by stage: ports …; http …`.
 
 Under a budget, a task's reports are held until it ends, and those of a task the budget stopped are dropped. Otherwise a refused catch-all check would turn an application's index page into findings.
 
@@ -306,7 +309,7 @@ The run's options are stored with it. The database is left out, and so are the v
 
 1. runs it again with its stored options plus any given;
 2. rebuilds the queues from the tasks;
-3. counts done tasks against the item budget;
+3. leaves the done tasks out of the item budget: `-max-items` and `-max-names` hold for each run;
 4. queues the others again, behind the task they wait for when that is not done either;
 5. clears their done-marks.
 

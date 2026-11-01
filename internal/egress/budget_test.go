@@ -143,3 +143,31 @@ func TestTotalCountsOverResets(t *testing.T) {
 		t.Errorf("sent %d, total since %d, want 2 and 5", Sent(), Total()-from)
 	}
 }
+
+// A sweep leaves the requests reserved for web work, and the web requests use
+// the reserve up: what the sweep may spend does not move as they are sent.
+func TestSweepLeavesTheReserveForWebRequests(t *testing.T) {
+	Reset()
+	defer Reset()
+	SetMaxRequests(10)
+	Reserve(4)
+	for i := 0; i < 6; i++ {
+		if err := TakeSweep(); err != nil {
+			t.Fatalf("connect %d: %v", i, err)
+		}
+	}
+	if err := TakeSweep(); !errors.Is(err, neterr.ErrBudget) {
+		t.Fatalf("the sweep took what the reserve holds: %v", err)
+	}
+	for i := 0; i < 4; i++ {
+		if err := Spend(context.Background()); err != nil {
+			t.Fatalf("web request %d: %v", i, err)
+		}
+	}
+	if Reserved() != 0 || Sent() != 10 || !Spent() {
+		t.Errorf("reserved %d, sent %d", Reserved(), Sent())
+	}
+	if Spend(context.Background()) == nil {
+		t.Error("a request past the budget was let through")
+	}
+}

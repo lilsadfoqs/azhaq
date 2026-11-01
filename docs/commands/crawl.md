@@ -86,7 +86,7 @@ A crawl never drops links without a word. When `-max-items`, `-max-requests`, `-
 
 - One URL per line: every page asked and every URL a page links, each distinct URL once. The routes only scripts and descriptions name are left out unless `-hints` is given.
 - A link or a script's string with its query is its own line: `/catalog?category=Gin`, `/item?id=7`.
-- `-per-template N` limits how many URLs of one template (`/item?id={n}`) are asked, not how many are listed. `crawl` asks every one by default, as katana does, and its `-max-items` is 1,000,000. `run` asks 3 of a template and stops at 2,048 items. `-iqp` asks one URL for each path.
+- `-per-template N` limits how many URLs of one template (`/item?id={n}`) are asked, not how many are listed. `crawl` and `run` ask every one by default, as katana does, and neither caps the tasks a run starts unless `-max-items` says so. `-iqp` asks one URL for each path.
 - Every script and stylesheet a page loads or a script imports is listed, whether it was fetched or only found. This holds when it is in the crawl's scope. Examples are `/main.js`, `/styles.css` and a lazy `chunk-*.js`.
 - `-json` is the map's rows, observed ones, each with its `class`. The extension list does not cut it. Its script and stylesheet rows are there by default, and an image's with `-assets`.
 - `run`'s map lists every row, scripts and images included.
@@ -254,7 +254,7 @@ These filters limit what is printed, not what is crawled.
 | `-ct` | duration |  | stop after this long and keep what was found; azhaq resume continues (0: no limit) |
 | `-max-requests` | int |  | requests to targets this run may send (0: no cap); the work left over is for azhaq resume |
 | `-max-host-requests` | int |  | requests one host may be sent (0: no cap); the rest of its work is left for azhaq resume |
-| `-max-items` | int |  | max collector invocations (default 2048) |
+| `-max-items` | int |  | most collector tasks (a name, a URL, an address each, per collector) this run starts (default: no cap, katana's and httpx's); the work left is for azhaq resume, which starts as many more |
 | `-max-response-size` | int |  | bytes read of a page or document (default 2097152; scripts and JSON get 16 MiB) |
 
 **Session and network**

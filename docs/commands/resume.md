@@ -19,9 +19,10 @@ azhaq resume -db app.db -max-requests 2000
 
 1. Opens the workspace given with `-db`, which is required.
 2. Finds the run that has work left. If every run finished, it says so and exits 1.
-3. Reads the run's flags back from the database. Flags given here are added and win.
+3. Reads the run's flags back from the database. Flags given here are added and win. `-max-items`, `-max-names` and `-max-requests` hold for each run: a resume may start as many more tasks as it is given, so a resume at the same cap goes on. A larger `-depth` asks the URLs and names the stopped run found past its own.
 4. Continues the targets the run started with. A `-list` given here replaces them.
-5. Continues a stopped `fuzz` run with its own command, a stopped port scan with the ports it has not asked, and a stopped `dirs` sweep with its words.
+   What this resume leaves out applies to the tasks the run kept: `-skip` (which adds to the collectors the run skipped), `-passive`, and an active technique whose flag is not given do not run theirs. Those tasks end here and a note in the summary counts them.
+5. Continues a stopped `fuzz` run with its own command, a stopped port scan with the ports it has not asked, a stopped range scan with the addresses of its blocks it had not finished (the stopped block's row keeps them, those that answered nothing included, so no address is asked twice), and a stopped `dirs` sweep with its words.
 6. After a run that was killed (SIGKILL, a crash: its ledger has no seal at the end), reads the ledger lines after the last seal. Reads that had no stored answer are asked again. Writes are never sent again: each is held back, listed under `skipped`, and the summary says so. See [Workspaces, runs and resuming](../CONCEPTS.md#workspaces-runs-and-resuming).
 7. Prints a line on stderr: `azhaq: resuming run ID of DB, N tasks known and not done`. `-json` leaves it out.
 

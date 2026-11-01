@@ -15,7 +15,9 @@ import (
 )
 
 type Budgets struct {
-	MaxDepth     int
+	MaxDepth int
+	// MaxItems caps the collector tasks one run starts; zero is no cap. A
+	// resume starts up to as many more, as -max-requests allows more requests.
 	MaxItems     int
 	Parallel     int
 	FailOnCapped bool
@@ -23,7 +25,8 @@ type Budgets struct {
 	Scope        scope.Rules
 	// Active lists the flags of enabled active techniques ("dns-brute").
 	Active map[string]bool
-	// MaxNames caps the seeds handed to batch collectors (DNS) per run.
+	// MaxNames caps the seeds handed to batch collectors (DNS) per run; zero
+	// is DefaultBudgets().MaxNames.
 	MaxNames int
 	// Skip names collectors that must not run.
 	Skip map[string]bool
@@ -46,9 +49,17 @@ func isQuiet(ctx context.Context) bool {
 	return v
 }
 
+// DefaultBudgets cap the depth of fan-out and the names looked up (as many
+// as subs keeps for a domain), and the tasks of a run not at all: katana and
+// httpx stop at no number of them, and the request budget, the scope and the
+// depth bound what a run touches.
 func DefaultBudgets() Budgets {
-	return Budgets{MaxDepth: 4, MaxItems: 2048, Parallel: 16, MaxNames: 20000}
+	return Budgets{MaxDepth: 4, Parallel: 16, MaxNames: DefaultMaxNames}
 }
+
+// DefaultMaxNames is how many names a run looks up unless -max-names says
+// otherwise: the number subs keeps for a domain.
+const DefaultMaxNames = 200000
 
 // ExpandSeeds returns seeds plus URL→host→eTLD+1 so connectors see wave-0 types.
 func ExpandSeeds(seeds []types.Seed) []types.Seed {

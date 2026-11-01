@@ -40,10 +40,34 @@ type Engine struct {
 	// http://host/ is the https site, see scheme.go); nil is fetch's.
 	Client *http.Client
 
+	capsMu sync.Mutex
+	caps   Caps
+
 	secured sync.Map // hosts whose http URLs are the https site's (scheme.go)
 	recent  sync.Map // entities upserted a moment ago (upsertRecent)
 	denied  sync.Map // URLs a -deny-path rule kept out, noted once
 	ported  sync.Map // URLs the scope's port kept out, noted once
+}
+
+// Caps are the limits that held work back in the last run: how many tasks
+// -max-items left, how many names -max-names left unresolved, and how many
+// URLs and names found past -depth were not asked.
+type Caps struct {
+	ItemsLeft, NamesLeft  int
+	DepthURLs, DepthNames int
+}
+
+func (e *Engine) setCaps(c Caps) {
+	e.capsMu.Lock()
+	e.caps = c
+	e.capsMu.Unlock()
+}
+
+// Caps is what held work back in the last RunLocal.
+func (e *Engine) Caps() Caps {
+	e.capsMu.Lock()
+	defer e.capsMu.Unlock()
+	return e.caps
 }
 
 func (e *Engine) Plan(seeds []types.Seed) []types.WorkItem {
