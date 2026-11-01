@@ -64,6 +64,17 @@ Your review must be independent and evidence-based. You decide only on what you 
 
 1. **Verdict in three lines:** would you adopt it, for what, and what would you keep using instead.
 2. **Scorecard, 1 to 10, one line of reasoning each:** install and first run, docs, subdomain recon, host and port discovery, web and API mapping, signed-in and multi-role testing, output and integration (including assistants), reliability (crashes, hangs, wrong data, silent failures), speed and resources, overall. Score only on what you measured, under the coverage rules above.
+
+   **Anchors for every score:** compare with how you do the same job today, on what you measured.
+   - 10: you would hand the job to it without a second look.
+   - 9: at least as good as your usual tools on everything you measured, and nothing you found would stop you relying on it; what is left is minor or rare.
+   - 7 to 8: as good or better on most of it, with gaps you can name and work around.
+   - 5 to 6: useful, but you would keep your usual tools beside it for this job.
+   - 3 to 4: here it costs you more than it gives.
+   - 1 to 2: it fails or misleads at this job.
+
+   Each line says what kept the score from the next anchor up.
+
 3. **Coverage table:** each checklist capability marked tested (with the note file), untested (why), or failed.
 4. **What genuinely impressed you,** with evidence you produced: command plus output excerpt, and the ground-truth or reference result it was checked against.
 5. **What broke, misled or annoyed you:** exact command, expected versus actual. Tag each one: bug, doc gap, missing feature or design disagreement.

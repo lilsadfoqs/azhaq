@@ -112,3 +112,7 @@ and image size; then
 
 Tests: `python3 -m unittest discover -s .github/ci/range` (set `VULHUB` to also
 render every override with `docker compose config`).
+
+## Scores
+
+From the trials of v0.13.0 on, the three briefs give the reviewer anchors for each score (10: hand the job over; 9: at least as good as the usual tools on all that was measured, nothing that stops relying on it; 7 to 8; 5 to 6; 3 to 4; 1 to 2), and each score names what kept it from the next one. Scores before that had no anchors: compare across that line with care.

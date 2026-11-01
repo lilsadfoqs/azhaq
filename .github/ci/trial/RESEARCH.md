@@ -44,4 +44,15 @@ Also write ./surface-N.txt for each phase N: every host, open port and service y
 5. **Where you used other tools in the azhaq phase,** and why, for each.
 6. **Trust:** did its output hold up when you checked it by hand (wrong, missing or invented results, silent failures, summaries that do not add up)? Did it stay in scope and send what it said it sent?
 7. **Scores, 1 to 10, one line of reasoning each:** findings it enabled, time saved, effort saved, trust in its output, fit with how you work, overall "would use on the next engagement".
+
+   **Anchors for every score:** compare with how you do the same job today, on what you measured.
+   - 10: you would hand the job to it without a second look.
+   - 9: at least as good as your usual tools on everything you measured, and nothing you found would stop you relying on it; what is left is minor or rare.
+   - 7 to 8: as good or better on most of it, with gaps you can name and work around.
+   - 5 to 6: useful, but you would keep your usual tools beside it for this job.
+   - 3 to 4: here it costs you more than it gives.
+   - 1 to 2: it fails or misleads at this job.
+
+   Each line says what kept the score from the next anchor up.
+
 8. **The five changes** that would make it part of every engagement, ranked.
