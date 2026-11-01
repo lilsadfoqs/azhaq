@@ -218,6 +218,7 @@ func main() {
 	if _, err := exec.Command("go", "build", "-o", azhaq, "./cmd/azhaq").CombinedOutput(); err != nil {
 		fatal("go build: %v", err)
 	}
+	must(freshCopy(azhaq))
 	if v, err := exec.Command(azhaq, "version").Output(); err == nil {
 		rec.Version = strings.TrimSpace(string(v))
 	}
@@ -426,6 +427,24 @@ func run(target string, timeout time.Duration, dir string, name string, args ...
 		keepRef(key, dir, args, before, stdout.Bytes(), m)
 	}
 	return stdout.Bytes(), m
+}
+
+// freshCopy rewrites the file at path as a plain copy of itself. A binary the
+// linker has just written is mapped much more of (the kernel maps whole
+// folios of the cache around each fault, and counts them in the process's
+// resident size): the same azhaq measured 30 MB resident as built and 14 MB
+// as copied, as a downloaded or unpacked release, or a reference tool, is.
+// The memory the bench compares must not depend on how a file got to disk.
+func freshCopy(path string) error {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	tmp := path + ".copy"
+	if err := os.WriteFile(tmp, raw, 0o755); err != nil {
+		return err
+	}
+	return os.Rename(tmp, path)
 }
 
 // watchHWM samples the peak resident size (VmHWM, KB) of a running process.
