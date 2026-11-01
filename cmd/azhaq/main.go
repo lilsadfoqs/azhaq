@@ -1290,6 +1290,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		opts.Browser.Close()
 	}
 	rep.Requests = egress.Sent()
+	_ = st.AddRunRequests(rep.Requests)
 	// Work the -timeout cut short (a source still asking) is not done:
 	// resume runs it again.
 	cut := 0

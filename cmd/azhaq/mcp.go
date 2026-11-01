@@ -41,7 +41,7 @@ type mcpServer struct {
 	budget  int64 // requests to targets over the server's life; 0: none
 	mu      sync.Mutex
 	used    int64
-	runs    map[string]runRecord // workspace → its latest command's outcome, for azhaq_status
+	runs    map[string]runRecord // workspace → its latest command that failed, for azhaq_status
 	sending chan struct{}        // one command that touches targets at a time
 	out     *json.Encoder
 	outMu   sync.Mutex
@@ -467,45 +467,37 @@ wait:
 	return res, runErr
 }
 
-// runRecord is a workspace's latest command in this server's session: a
-// call's own outcome, which nothing on disk records (a workspace's
-// database cannot say a call failed outright, only what work is left).
+// runRecord is a workspace's latest command that failed outright in this
+// server's session: a call's own outcome, which nothing on disk records (a
+// database cannot say a call failed, only what work is left).
 type runRecord struct {
 	tool   string
-	state  string // "complete", "stopped by a limit", "failed"
 	detail string
-	resume string
 }
 
-// noteRun keeps the outcome of a command that touched a workspace, for
-// azhaq_status: complete, stopped by a limit (with what azhaq_resume would
-// continue), or failed.
+// noteRun keeps the failure of a command that runs work in a workspace.
+// Where a workspace stands, complete or not, is read from its database by
+// azhaq_status: a call's summary says it of that call alone (a query of
+// the workspace has a summary too, with nothing stopped in it).
 func (s *mcpServer) noteRun(tool string, r cmdResult, callErr error) {
+	if tool != "run" && tool != "resume" && tool != "roles" {
+		return
+	}
 	db, _ := r.summary["db"].(string)
 	if db == "" {
-		return // named no workspace: azhaq_scope, azhaq_workspaces and the like
+		return // named no workspace
 	}
 	ws := strings.TrimSuffix(filepath.Base(db), ".db")
-	rec := runRecord{tool: tool}
-	switch {
-	case callErr != nil:
-		rec.state, rec.detail = "failed", callErr.Error()
-	default:
-		if stopped, _ := r.summary["stopped"].(string); stopped != "" {
-			rec.state, rec.detail = "stopped by a limit", stopped
-		} else {
-			rec.state = "complete"
-		}
-	}
-	if _, ok := r.summary["resume"]; ok {
-		rec.resume = s.resumeHint(ws)
-	}
 	s.mu.Lock()
+	defer s.mu.Unlock()
+	if callErr == nil {
+		delete(s.runs, ws)
+		return
+	}
 	if s.runs == nil {
 		s.runs = map[string]runRecord{}
 	}
-	s.runs[ws] = rec
-	s.mu.Unlock()
+	s.runs[ws] = runRecord{tool: tool, detail: callErr.Error()}
 }
 
 // output runs a command that reads a workspace and returns its stdout as
@@ -1114,39 +1106,43 @@ func (s *mcpServer) status() (map[string]any, error) {
 	return toolText(string(raw), false), nil
 }
 
-// workspaceStatus is one workspace's row for azhaq_status: rec, when this
-// session has already run a command for it (the only way to know a
-// command failed outright); else what its database on disk shows left to
-// do, the most azhaq_resume could tell without running anything.
+// workspaceStatus is one workspace's row for azhaq_status, from what its
+// database records of its runs: complete, or stopped with the tasks left,
+// the requests the run has sent and the azhaq_resume call that continues
+// it. rec adds what the database cannot hold: a command of this session
+// that failed outright.
 func (s *mcpServer) workspaceStatus(ws, path string, rec runRecord) map[string]any {
 	row := map[string]any{"name": ws}
-	if rec.state != "" {
-		row["state"] = rec.state
-		if rec.detail != "" {
-			row["detail"] = rec.detail
-		}
-		if rec.resume != "" {
-			row["resume"] = rec.resume
-		}
-		return row
-	}
 	st, err := store.OpenExisting(path)
 	if err != nil {
 		row["state"], row["detail"] = "unknown", err.Error()
 		return row
 	}
-	_, _, left, ok, err := st.Resumable()
+	p, err := st.Progress()
+	again := st.GetMeta(fuzzResumeKey) != ""
 	st.Close()
 	if err != nil {
 		row["state"], row["detail"] = "unknown", err.Error()
 		return row
 	}
-	if ok && left > 0 {
+	if p.Requests > 0 {
+		row["requests"] = p.Requests
+	}
+	switch {
+	case p.Resumable:
 		row["state"] = "stopped by a limit"
-		row["detail"] = fmt.Sprintf("%d tasks left", left)
-		row["resume"] = fmt.Sprintf("azhaq_resume {\"workspace\":%q} continues it", ws)
-	} else {
+		row["detail"] = fmt.Sprintf("%d tasks left", p.Left)
+		row["tasks_left"] = p.Left
+		row["resume"] = s.resumeHint(ws)
+	case again:
+		row["state"], row["detail"] = "stopped by a limit", "a fuzz run to continue"
+		row["resume"] = s.resumeHint(ws)
+	default:
 		row["state"] = "complete"
+	}
+	if rec.detail != "" {
+		// Its last command failed: what the database shows is from before.
+		row["state"], row["detail"] = "failed", rec.detail
 	}
 	return row
 }

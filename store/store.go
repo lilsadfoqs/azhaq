@@ -262,7 +262,10 @@ CREATE TABLE IF NOT EXISTS run_edges (
 	if err := s.ensureColumn("observations", "run_id", "TEXT"); err != nil {
 		return err
 	}
-	return s.ensureColumn("runs", "args", "TEXT")
+	if err := s.ensureColumn("runs", "args", "TEXT"); err != nil {
+		return err
+	}
+	return s.ensureColumn("runs", "requests", "INTEGER NOT NULL DEFAULT 0")
 }
 
 func (s *Store) ensureColumn(table, col, decl string) error {

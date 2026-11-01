@@ -204,6 +204,50 @@ FROM runs r WHERE left > 0 ORDER BY r.started DESC LIMIT 1`).Scan(&id, &raw, &le
 	return id, args, left, true, nil
 }
 
+// AddRunRequests adds the requests a process sent for the current run: a
+// resumed run keeps adding to the run's count.
+func (s *Store) AddRunRequests(n int64) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.runID == "" || n <= 0 {
+		return nil
+	}
+	_, err := s.q().Exec(`UPDATE runs SET requests = requests + ? WHERE id = ?`, n, s.runID)
+	return err
+}
+
+// Progress is where a workspace's work stands, as the database records
+// it: the run a resume would continue when one has tasks not done, else the
+// latest run.
+type Progress struct {
+	RunID     string
+	Left      int   // tasks known and not done
+	Requests  int64 // sent for the run, all its attempts
+	Resumable bool  // Left > 0
+}
+
+// Progress reads it; a database with no runs gives the zero Progress.
+func (s *Store) Progress() (Progress, error) {
+	id, _, left, ok, err := s.Resumable()
+	if err != nil {
+		return Progress{}, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	p := Progress{RunID: id, Left: left, Resumable: ok && left > 0}
+	if !ok {
+		err = s.q().QueryRow(`SELECT id FROM runs ORDER BY started DESC LIMIT 1`).Scan(&p.RunID)
+		if err == sql.ErrNoRows {
+			return Progress{}, nil
+		}
+		if err != nil {
+			return Progress{}, err
+		}
+	}
+	err = s.q().QueryRow(`SELECT requests FROM runs WHERE id = ?`, p.RunID).Scan(&p.Requests)
+	return p, err
+}
+
 // Claim records owner for key in the current run unless the run has an
 // owner for it already, and returns the owner (see catalog.Claim).
 func (s *Store) Claim(key, owner string) string {
