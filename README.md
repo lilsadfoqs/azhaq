@@ -68,7 +68,12 @@ docker run --rm -v "$PWD:/work" -u "$(id -u)" ghcr.io/lilsadfoqs/azhaq run -doma
 
 <details><summary>What <code>install.sh</code> does, and verifying a download</summary>
 
-`scripts/install.sh` installs the latest release for Linux or macOS (amd64 or arm64) into `$HOME/.local/bin`.
+`scripts/install.sh` installs the latest release for Linux or macOS (amd64 or arm64) into `$HOME/.local/bin`. The script is in the repository's `scripts` folder, not at its root. Run it through the pipe as above, or download it first and run the file (`sh install.sh …` below is that file, `sh scripts/install.sh …` from a clone):
+
+```
+curl -fsSLO https://raw.githubusercontent.com/lilsadfoqs/azhaq/main/scripts/install.sh
+sh install.sh -h
+```
 
 - It downloads the archive and `checksums.txt`, and checks the archive's sha256 against it.
 - When `cosign` is found, it also checks the sigstore signature of `checksums.txt` against this repository's release workflow.
