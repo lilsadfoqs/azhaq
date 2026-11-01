@@ -115,6 +115,13 @@ func (h *hunter) url(r engine.MapEntry) {
 	ok := fetched && st >= 200 && st < 300
 	unfetched := r.Coverage == "hint" || r.Coverage == "skipped" || r.Coverage == "capped" || st == 0
 	known := unfetched && len(r.Methods) > 0 // not asked, but a script or a description says it takes requests
+	// A script names it and its GET found nothing: the client calls it, the
+	// server was not shown to have it (a POST-only route answers so too).
+	named404 := r.Coverage == "hint" && (st == 404 || st == 410)
+	if named404 {
+		c.named++
+		c.namedGET = st
+	}
 	path := u.Path
 
 	if r.Role == "sourcemap" {
@@ -139,7 +146,9 @@ func (h *hunter) url(r engine.MapEntry) {
 			}
 		}
 		switch {
-		case ok, st >= 500, known:
+		case named404:
+			continue
+		case ok, st >= 500, known, answeredButNotGET(st):
 		case st == 401 || st == 403:
 			if !guardedWords[pw.signal] {
 				continue
@@ -184,6 +193,7 @@ func (h *hunter) url(r engine.MapEntry) {
 		switch {
 		case ok:
 			c.addW("exposed-file", w, what+" served")
+		case named404:
 		case st == 401 || st == 403 || unfetched:
 			c.addW("exposed-file", w*fileUnseen/100, what+" named, "+map[bool]string{true: "answers " + fmt.Sprint(st), false: "not requested"}[st != 0])
 		}
@@ -214,6 +224,12 @@ func (h *hunter) url(r engine.MapEntry) {
 		}
 		c.addW("input", w, "takes "+join(names, 5))
 	}
+}
+
+// answeredButNotGET says a 4xx other than a refusal or a not-found shows the
+// route exists: it answered, only not to this request (405, 400, 415, 422).
+func answeredButNotGET(st int) bool {
+	return st >= 400 && st < 500 && st != 401 && st != 403 && st != 404 && st != 410
 }
 
 // writeInputWeight is the input signal of a route a script or a description

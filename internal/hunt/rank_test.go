@@ -136,3 +136,50 @@ func TestCrossRoleNextNamesTheRolesDirectory(t *testing.T) {
 		t.Errorf("a row whose roles directory is not known has no placeholder: %q", n)
 	}
 }
+
+// A script names two routes with POST; the server answers 405 to a GET of
+// one (it is there) and 404 to the other (nothing shows it is).
+func TestNamedRouteThatAnswered404RanksBelowOneTheServerConfirmed(t *testing.T) {
+	post := func(r *engine.MapEntry) {
+		r.Methods, r.Body = []string{"POST"}, []string{"password", "username"}
+		r.Ops = []engine.Op{{Method: "POST", Body: r.Body, Source: "js-call"}}
+	}
+	rows := build(
+		urlRow(shop+"/api/user/login", "api", "visited", 405, post),
+		urlRow(shop+"/api/user/register", "api", "hint", 404, post),
+		urlRow(shop+"/api/orders/{id}", "api", "hint", 404, func(r *engine.MapEntry) { r.Methods = []string{"GET"} }),
+		urlRow(shop+"/config.bak", "page", "hint", 404, func(r *engine.MapEntry) { r.Methods = []string{"GET"} }),
+	)
+	login, reg := find(rows, shop+"/api/user/login"), find(rows, shop+"/api/user/register")
+	if login == nil || reg == nil {
+		t.Fatalf("rows: %+v", rows)
+	}
+	if login.Rank >= reg.Rank {
+		t.Errorf("405 route ranks %d, 404 route %d: %+v", login.Rank, reg.Rank, rows)
+	}
+	if !has(login, "path-auth") || !has(login, "path-data") {
+		t.Errorf("a route the server confirmed keeps its path words: %+v", login)
+	}
+	if has(reg, "path-auth") || has(reg, "path-data") {
+		t.Errorf("path words add nothing when only a script names the route: %+v", reg)
+	}
+	var why string
+	for _, x := range reg.Reasons {
+		if x.Signal == "unconfirmed" {
+			why = x.Detail
+		}
+		if strings.Contains(x.Detail, "answers 404") {
+			t.Errorf("a 404 is no reason for a score: %+v", x)
+		}
+	}
+	if why != "named by a script, not confirmed: GET 404" {
+		t.Errorf("reason = %q", why)
+	}
+	if has(find(rows, shop+"/config.bak"), "exposed-file") {
+		t.Errorf("a file name a script gives, answered 404, is not an exposed file: %+v", rows)
+	}
+	// Even a 404 route with a heavier score sorts after the confirmed ones.
+	if o := find(rows, shop+"/api/orders/{id}"); o != nil && o.Rank < login.Rank {
+		t.Errorf("an unconfirmed route outranks a confirmed one: %+v", rows)
+	}
+}

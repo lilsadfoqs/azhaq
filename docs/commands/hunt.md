@@ -79,6 +79,7 @@ $ azhaq hunt -db app.db
 | `server-error` | A 5xx, weighed by what shows beside it: see [Server errors](#server-errors). |
 | `input` | The route takes query, body or form names. |
 | `new` | First seen within `-since`. |
+| `unconfirmed` | A route that only a script names, whose GET answered 404 or 410. It adds no weight: see [Routes only a script names](#routes-only-a-script-names). |
 | `path-auth`, `path-search` | A word in the path says it signs in or issues a session, or that it searches and filters: see [Words in paths](#words-in-paths). |
 | `param-command`, `param-url`, `param-file`, `param-debug`, `param-redirect`, `param-query`, `param-callback` | A parameter name that says what it takes. |
 | `path-admin`, `path-debug`, `path-config`, `path-env`, `path-doc`, `path-function`, `path-data` | A word in the path says what the route is for. The first five also read the labels of a host name that resolves. |
@@ -99,6 +100,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 ### Score and order
 
 - The score is the sum of the row's signals. Each signal counts once, at its highest weight.
+- Rows only a script names and the server did not confirm come after every other row, whatever their score: see [Routes only a script names](#routes-only-a-script-names).
 - Ties go to the target before fan-out, then to the row with more distinct signals, then by key. [Concepts](../CONCEPTS.md#reading-a-map-row) explains target and fan-out.
 - `-limit` (default 25) keeps the best rows.
 
@@ -157,6 +159,16 @@ A 5xx is a lead, not a finding. Its weight depends on what shows beside it:
 - `path-search`: a word that says the route searches or filters: `search`, `find`, `filter`, `query`, `lookup`. Weight 35.
 - A route that a script or a description gives methods for counts in full, even when it was not asked.
 - A named route that nobody calls weighs half.
+- A route whose GET answered 405, 400, 415 or 422 counts in full: the server has it, it only refused this request.
+
+### Routes only a script names
+
+A script that names a route says the client calls it, not that the server has it, and a GET that answers 404 or 410 shows nothing of a POST-only route either. A row of such a route (`hint` coverage, status 404 or 410) is not an answer to anything:
+
+- Its path words and an exposed-file name weigh nothing, and its reasons say `unconfirmed: named by a script, not confirmed: GET 404`, not `answers 404`.
+- It still keeps the signals the script gives it (the fields it sends, a write without credentials), and it comes after every row the server confirmed (200, 401, 403, 405 and other 4xx that are not 404 or 410, 5xx), whatever their scores.
+- A route template where one instance is confirmed is a confirmed row.
+- When nothing else is known of the route the row is left out.
 
 ### The next command
 

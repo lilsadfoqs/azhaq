@@ -5,6 +5,7 @@ package hunt
 
 import (
 	"encoding/json"
+	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -61,7 +62,8 @@ type Row struct {
 	Template *Template `json:"template,omitempty"`
 
 	scope   string
-	signals int // distinct signals, "new" not counted
+	signals int  // distinct signals, "new" not counted
+	named   bool // every instance is a route a script names and the server did not confirm
 }
 
 // Template says a row is an origin's template input: on Pages of its Of
@@ -82,6 +84,8 @@ type cand struct {
 	roleDir         string // and the -dir of the roles run that listed it
 	origin          string
 	fresh           bool
+	named           int // instances only a script names, whose GET answered 404 or 410
+	namedGET        int // that status
 	tmpl            *Template
 }
 
@@ -143,12 +147,15 @@ func Build(in Input) []Row {
 	return out
 }
 
-// sortRows orders best first: by score, then target scope before fan-out,
+// sortRows orders best first: rows the server confirmed before routes only a
+// script names, then by score, then target scope before fan-out,
 // then more distinct signals, then key.
 func sortRows(out []Row) {
 	sort.Slice(out, func(i, j int) bool {
 		a, b := out[i], out[j]
 		switch {
+		case a.named != b.named:
+			return !a.named
 		case a.Score != b.Score:
 			return a.Score > b.Score
 		case (a.scope == "target") != (b.scope == "target"):
@@ -189,6 +196,10 @@ func (c *cand) add(signal, detail string) { c.addW(signal, weights[signal], deta
 
 func (c *cand) row(db string) Row {
 	rs := append([]Reason(nil), c.reasons...)
+	named := c.named > 0 && c.named == len(c.instances)
+	if named {
+		rs = append(rs, Reason{"unconfirmed", fmt.Sprintf("named by a script, not confirmed: GET %d", c.namedGET)})
+	}
 	sort.SliceStable(rs, func(i, j int) bool { return c.weights[rs[i].Signal] > c.weights[rs[j].Signal] })
 	score, n := 0, 0
 	for s, w := range c.weights {
@@ -201,7 +212,7 @@ func (c *cand) row(db string) Row {
 	if len(rs) > 0 {
 		best = rs[0].Signal
 	}
-	return Row{Score: score, Key: c.display(), Type: c.typ, Reasons: rs, Next: c.next(db, best), Template: c.tmpl, scope: c.scope, signals: n}
+	return Row{Score: score, Key: c.display(), Type: c.typ, Reasons: rs, Next: c.next(db, best), Template: c.tmpl, scope: c.scope, signals: n, named: named}
 }
 
 // display is the key a row shows: the URL itself when only one was seen,
