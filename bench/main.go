@@ -72,7 +72,7 @@ type runMeasure struct {
 
 // sections are what -only picks from; dockerParts need the docker apps.
 var (
-	sections    = []string{"apps", "dropin", "dirs", "fuzz", "scope", "secrets", "tenants", "scale", "claims", "regress", "shots", "params", "domains", "urls", "brute", "dns", "lab", "ports", "services", "network", "probe", "notify", "openapi", "docs"}
+	sections    = []string{"apps", "dropin", "dirs", "fuzz", "scope", "secrets", "tenants", "scale", "claims", "regress", "deploy", "shots", "params", "domains", "urls", "brute", "dns", "lab", "ports", "services", "network", "probe", "notify", "openapi", "docs"}
 	dockerParts = []string{"dropin", "dirs", "fuzz", "scope", "scale", "shots", "params", "openapi", "probe"}
 	// perProfile sections compare azhaq with a reference tool and run once
 	// for each profile; the others run once.
@@ -161,7 +161,7 @@ func main() {
 	gate := map[string]bool{"apps": *apps, "dropin": *apps, "dirs": *apps, "fuzz": *apps, "scope": *apps, "secrets": *apps, "tenants": *apps,
 		"scale": *apps, "claims": *apps, "shots": *apps, "params": *apps, "domains": *domains, "urls": *domains, "brute": *brute,
 		"dns": true, "lab": true, "ports": *ports, "services": *ports, "network": *domains && *network, "probe": *probe,
-		"notify": true, "openapi": *apps, "docs": true}
+		"notify": true, "openapi": *apps, "docs": true, "deploy": true}
 	// -units narrows what the flags select: a unit runs when both agree.
 	var only1 map[string]bool
 	if *unitList != "" {
@@ -331,6 +331,7 @@ func main() {
 		"lab":     func() { rec.Lab = benchLab() },
 		"openapi": func() { rec.OpenAPI = benchOpenAPI() },
 		"docs":    func() { rec.Docs = benchDocs() },
+		"deploy":  benchDeploy,
 	}
 	for _, name := range onceSections {
 		if name == "claims" { // its cases are units of their own

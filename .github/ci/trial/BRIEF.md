@@ -44,6 +44,7 @@ Your review must be independent and evidence-based. You decide only on what you 
   - DVGA at http://127.0.0.1:5013/
   - DVNA at http://127.0.0.1:5020/
   - DVWA at http://127.0.0.1:5030/ (its default accounts work, e.g. admin / password)
+  - Deploy lab at http://127.0.0.1:5040/: a small app whose API routes change when it is deployed. It starts on its first version; `$HOME/lab/deploy v2` deploys the new one and `$HOME/lab/deploy v1` puts the first back. Use it to try `watch` with a deploy that changes routes.
 
   The apps are ready: VAmPI's database is created and DVWA's is set up, and each answers a login. You cannot restart them or reach their containers.
 - **Local DNS lab.** A resolver at 127.0.0.1:5354 serves the zone azqlab.lan: real names, a wildcard subzone and dangling CNAMEs. It forwards every other name to a public resolver. Use it for wildcard and takeover tests, with `-resolvers` or each tool's equivalent.
@@ -57,7 +58,7 @@ Your review must be independent and evidence-based. You decide only on what you 
   No port scans, no wordlist runs and no crawling against them.
 - **No payloads at public targets.** Keep your evaluation of public targets to discovery, mapping and comparison.
 - **Wordlist-based path and parameter discovery** only on the local apps and the public test sites (low rate on the latter).
-- **Change nothing outside this folder.**
+- **Change nothing outside this folder,** except what `$HOME/lab/deploy` changes.
 - **Nothing outward-facing:** no GitHub issues, PRs, stars or comments, no posting anywhere, and do not use the gh CLI.
 
 ## Deliverable: ./REPORT.md, in English

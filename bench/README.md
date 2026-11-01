@@ -21,6 +21,15 @@ Run it from the repository root. It needs Docker (Juice Shop and VAmPI from `ben
 
 `bench/images.env` is the one list of the lab apps' images (Juice Shop, VAmPI, DVGA, DVNA and DVWA), each pinned by tag and digest. `bench/compose.yaml` reads it (`docker compose --env-file bench/images.env -f bench/compose.yaml up -d`, as the bench does), and so does `.github/ci/labs.sh`, which starts the five apps on 3001, 5002, 5013, 5020 and 5030 for the hunters and the trials. A user who starts the labs the documented way is on the build a row of the README's table was measured on. The truth files in `bench/truth` are per build (`juice-shop-v20.3.0-*`); a pin moves together with them. The services lab (`bench/services.yaml`) keeps its tags, and the table's service rows read what each daemon says, not a version.
 
+`.github/ci/labs.sh` starts these, all on 127.0.0.1:
+
+| Lab | Port | Notes |
+| --- | --- | --- |
+| Juice Shop, VAmPI, DVGA, DVNA, DVWA | 3001, 5002, 5013, 5020, 5030 | the pinned images; VAmPI's and DVWA's databases are set up and a login is checked (`.github/ci/lab_ready.py`) |
+| Deploy lab | 5040 | `bench/truth/deploy`: an app whose API routes change when it is deployed, so `watch` can be tried against a deploy. `$HOME/lab/deploy v2` deploys the new version, `$HOME/lab/deploy v1` puts the first back; it starts on v1. What `watch` must report after the deploy is `bench/truth/deploy/expected.md`, and the `once:deploy` unit checks it: v1, v1 again (`no change`), then v2 |
+| Services lab | 10021 to 21211 | `bench/services.yaml`, fifteen daemons |
+| DNS lab | 5354 | `bench/labdns`, the zone azqlab.lan |
+
 To reproduce a row, start the labs from that list and run the row's unit (`go run ./bench -list-units` names them: the row "Paths, 4750 words, Juice Shop and VAmPI" is `default:dirs`):
 
 ```

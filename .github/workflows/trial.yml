@@ -331,7 +331,7 @@ jobs:
             {
               echo "dry run"
               echo
-              for port in 3001 5002 5013 5020 5030; do
+              for port in 3001 5002 5013 5020 5030 5040; do
                 echo "lab 127.0.0.1:$port: $(curl -s -o /dev/null -m 5 -w '%{http_code}' "http://127.0.0.1:$port/")"
               done
               echo "nmap: $(nmap --version 2>/dev/null | head -1)"
@@ -540,7 +540,7 @@ jobs:
             {
               echo "dry run"
               echo
-              for port in 3001 5002 5013 5020 5030; do
+              for port in 3001 5002 5013 5020 5030 5040; do
                 echo "lab 127.0.0.1:$port: $(curl -s -o /dev/null -m 5 -w '%{http_code}' "http://127.0.0.1:$port/")"
               done
               echo "nmap: $(nmap --version 2>/dev/null | head -1)"

@@ -21,7 +21,7 @@ var cmpSections = []string{"apps", "dirs", "fuzz", "shots", "params", "domains",
 
 // onceSections run once, after the comparisons, in this order. claims is
 // one unit a case (claimCaseIDs); regress runs only when -only names it.
-var onceSections = []string{"dropin", "scope", "secrets", "tenants", "scale", "claims", "regress", "network", "lab", "openapi", "docs"}
+var onceSections = []string{"dropin", "scope", "secrets", "tenants", "scale", "claims", "regress", "network", "lab", "openapi", "docs", "deploy"}
 
 var profileOrder = []string{profDefault, profPolite}
 
