@@ -2,6 +2,7 @@ package browser
 
 import (
 	"context"
+	"github.com/trannghiach/azhaq/internal/guard"
 	"net/url"
 	"slices"
 	"sort"
@@ -191,6 +192,7 @@ func (b *Browser) intercept(root context.Context) error {
 	opened, stopOpened := br.Subscribe(target.TargetCreated.Method)
 	context.AfterFunc(root, stopOpened)
 	go func() {
+		defer guard.Catch(b.fault)
 		defer stopOpened()
 		for raw := range opened {
 			var ev target.EventTargetCreated
@@ -201,6 +203,7 @@ func (b *Browser) intercept(root context.Context) error {
 			// sending requests for the rest of the run.
 			b.popup(cdp.FrameID(ev.TargetInfo.TargetID))
 			go func() {
+				defer guard.Catch(b.fault)
 				_, _ = chromedp.CallBrowser(root, target.CloseTarget, target.CloseTargetParams{TargetID: ev.TargetInfo.TargetID})
 			}()
 		}
@@ -215,6 +218,7 @@ func (b *Browser) intercept(root context.Context) error {
 		return err
 	}
 	go func() {
+		defer guard.Catch(b.fault)
 		defer stop()
 		b.answer(root, paused)
 	}()
@@ -253,6 +257,7 @@ func (b *Browser) busy(f func()) bool {
 	}
 	b.working.Add(1)
 	go func() {
+		defer guard.Catch(b.fault)
 		defer b.working.Done()
 		f()
 	}()
@@ -371,6 +376,7 @@ func (b *Browser) watch(ctx context.Context, t *tab, also func(*network.EventReq
 	var wg sync.WaitGroup
 	sent := chromedp.Events(ctx, network.RequestWillBeSent)
 	wg.Go(func() {
+		defer guard.Recover(ctx)
 		for ev, err := range sent {
 			if err != nil {
 				return
@@ -386,6 +392,7 @@ func (b *Browser) watch(ctx context.Context, t *tab, also func(*network.EventReq
 	})
 	if t.log != nil {
 		wg.Go(func() {
+			defer guard.Recover(ctx)
 			for ev, err := range chromedp.Events(ctx, network.LoadingFinished) {
 				if err != nil {
 					return
@@ -394,6 +401,7 @@ func (b *Browser) watch(ctx context.Context, t *tab, also func(*network.EventReq
 			}
 		})
 		wg.Go(func() {
+			defer guard.Recover(ctx)
 			for ev, err := range chromedp.Events(ctx, network.LoadingFailed) {
 				if err != nil {
 					return
@@ -402,6 +410,7 @@ func (b *Browser) watch(ctx context.Context, t *tab, also func(*network.EventReq
 			}
 		})
 		wg.Go(func() {
+			defer guard.Recover(ctx)
 			for ev, err := range chromedp.Events(ctx, runtime.ConsoleAPICalled) {
 				if err != nil {
 					return
@@ -410,6 +419,7 @@ func (b *Browser) watch(ctx context.Context, t *tab, also func(*network.EventReq
 			}
 		})
 		wg.Go(func() {
+			defer guard.Recover(ctx)
 			for ev, err := range chromedp.Events(ctx, runtime.ExceptionThrown) {
 				if err != nil {
 					return
@@ -422,17 +432,20 @@ func (b *Browser) watch(ctx context.Context, t *tab, also func(*network.EventReq
 	// is up: the dialog is accepted, as a visitor would, by a goroutine of
 	// its own because the event loop must not wait on Chrome.
 	wg.Go(func() {
+		defer guard.Recover(ctx)
 		for _, err := range chromedp.Events(ctx, page.JavascriptDialogOpening) {
 			if err != nil {
 				return
 			}
 			go func() {
+				defer guard.Recover(ctx)
 				_, _ = chromedp.Call(ctx, page.HandleJavaScriptDialog, page.HandleJavaScriptDialogParams{Accept: true})
 			}()
 		}
 	})
 	attached := chromedp.Events(ctx, page.FrameAttached)
 	wg.Go(func() {
+		defer guard.Recover(ctx)
 		for ev, err := range attached {
 			if err != nil {
 				return
@@ -442,6 +455,7 @@ func (b *Browser) watch(ctx context.Context, t *tab, also func(*network.EventReq
 	})
 	gone := chromedp.Events(ctx, network.RequestWillBeSentExtraInfo)
 	wg.Go(func() {
+		defer guard.Recover(ctx)
 		for ev, err := range gone {
 			if err != nil {
 				return
@@ -451,6 +465,7 @@ func (b *Browser) watch(ctx context.Context, t *tab, also func(*network.EventReq
 	})
 	hits := chromedp.Events(ctx, network.RequestServedFromCache)
 	wg.Go(func() {
+		defer guard.Recover(ctx)
 		for ev, err := range hits {
 			if err != nil {
 				return
@@ -462,6 +477,7 @@ func (b *Browser) watch(ctx context.Context, t *tab, also func(*network.EventReq
 	// is for the memory cache.
 	answered := chromedp.Events(ctx, network.ResponseReceived)
 	wg.Go(func() {
+		defer guard.Recover(ctx)
 		for ev, err := range answered {
 			if err != nil {
 				return
@@ -476,6 +492,7 @@ func (b *Browser) watch(ctx context.Context, t *tab, also func(*network.EventReq
 	})
 	sockets := chromedp.Events(ctx, network.WebSocketCreated)
 	wg.Go(func() {
+		defer guard.Recover(ctx)
 		for ev, err := range sockets {
 			if err != nil {
 				return

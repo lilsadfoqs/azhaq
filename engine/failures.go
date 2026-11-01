@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/trannghiach/azhaq/internal/guard"
 	"github.com/trannghiach/azhaq/internal/normalize"
 	"github.com/trannghiach/azhaq/types"
 )
@@ -244,6 +245,12 @@ var (
 func ShortError(s string) string {
 	l := strings.ToLower(s)
 	switch {
+	case strings.HasPrefix(s, guard.Prefix):
+		// The value and the frames are the report: cut only a runaway.
+		if len(s) > 400 {
+			s = s[:400] + "…"
+		}
+		return s
 	case triedRE.MatchString(s) && !strings.Contains(s, types.CutShort):
 		// What the tries were and what the server said is the reason.
 		if len(s) > 160 {
@@ -341,6 +348,9 @@ func Own(target string, seeds []types.Seed) bool {
 // does not make a map of that URL incomplete.
 func MarkFanout(fs []Failure, seeds []types.Seed) []Failure {
 	for i := range fs {
+		if strings.HasPrefix(fs[i].Error, guard.Prefix) {
+			continue // a bug fails the run wherever it hit
+		}
 		own := false
 		for _, t := range fs[i].Targets {
 			if thirdParty[fs[i].Collector] && ownDomain(t, seeds) || !thirdParty[fs[i].Collector] && Own(t, seeds) {

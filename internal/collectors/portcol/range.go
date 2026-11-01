@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/trannghiach/azhaq/internal/guard"
 	"net"
 	"net/netip"
 	"sort"
@@ -145,6 +146,7 @@ func (c *Collector) runPrefix(ctx context.Context, seed types.Seed, emit func(ty
 		wg.Add(1)
 		sem <- struct{}{}
 		go func(a netip.Addr) {
+			defer guard.Recover(ctx)
 			defer wg.Done()
 			defer func() { <-sem }()
 			ip := a.String()

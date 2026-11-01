@@ -1023,6 +1023,9 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		}
 	}
 	collectors.Register(cat, opts)
+	if extraCollectors != nil {
+		extraCollectors(cat)
+	}
 	if *sourcesList == "none" {
 		// No passive source means no third party at all: the archives, RDAP, search
 		// engines and RIPEstat are as much a source as crt.sh. Only the resolvers
@@ -1874,6 +1877,9 @@ func cmdExport(args []string) error {
 	}
 	return nil
 }
+
+// extraCollectors lets a test add a collector to a run's catalog.
+var extraCollectors func(*catalog.Catalog)
 
 func demoServer() *httptest.Server {
 	mux := http.NewServeMux()

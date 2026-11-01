@@ -10,6 +10,7 @@ import (
 	"github.com/trannghiach/azhaq/catalog"
 	"github.com/trannghiach/azhaq/internal/egress"
 	"github.com/trannghiach/azhaq/internal/fetch"
+	"github.com/trannghiach/azhaq/internal/guard"
 	"github.com/trannghiach/azhaq/internal/normalize"
 	"github.com/trannghiach/azhaq/internal/webextract"
 	"github.com/trannghiach/azhaq/store"
@@ -811,7 +812,14 @@ func (s *scheduler) start(ctx context.Context, t task) {
 		ctx := catalog.WithHints(ctx, func(seeds []types.Seed) {
 			s.results <- finished{tasks: []task{t}, metas: []types.RunMeta{{NextHints: seeds}}, errs: []error{nil}, partial: true}
 		})
-		meta, err := s.e.Run(ctx, item)
+		var meta types.RunMeta
+		var err error
+		// Run recovers a collector's panic; this catches the rest of the
+		// task's own code, so the loop is always answered.
+		if perr := guard.Call(func() error { meta, err = s.e.Run(ctx, item); return nil }); perr != nil {
+			meta, err = types.RunMeta{ItemID: item.ID, Status: types.StatusError, Error: perr.Error()}, perr
+			s.e.failTask(t.seed, t.col, perr)
+		}
 		printItem(ctx, item, time.Since(t0), meta, err)
 		s.results <- finished{tasks: []task{t}, metas: []types.RunMeta{meta}, errs: []error{err}}
 	}()
@@ -843,7 +851,14 @@ func (s *scheduler) startBatch(ctx context.Context) bool {
 				seeds[i] = t.seed
 			}
 			t0 := time.Now()
-			res, err := s.e.RunBatch(ctx, name, seeds)
+			var res []BatchResult
+			var err error
+			if perr := guard.Call(func() error { res, err = s.e.RunBatch(ctx, name, seeds); return nil }); perr != nil {
+				res, err = nil, perr
+				for _, sd := range seeds {
+					s.e.failTask(sd, name, perr)
+				}
+			}
 			printBatch(ctx, name, len(seeds), time.Since(t0), err)
 			byKey := map[string]types.RunMeta{}
 			for _, r := range res {

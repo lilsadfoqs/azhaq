@@ -3,6 +3,7 @@ package dnscol
 import (
 	"context"
 	"encoding/json"
+	"github.com/trannghiach/azhaq/internal/guard"
 	"net"
 	"strings"
 	"sync"
@@ -208,6 +209,7 @@ func (c *Collector) extras(ctx context.Context, host string, payload map[string]
 	for _, qt := range []uint16{dns.TypeMX, dns.TypeTXT, dns.TypeNS} {
 		wg.Add(1)
 		go func(qt uint16) {
+			defer guard.Recover(ctx)
 			defer wg.Done()
 			m, err := c.Pool.Query(ctx, host, qt)
 			if err != nil || m.Rcode != dns.RcodeSuccess {

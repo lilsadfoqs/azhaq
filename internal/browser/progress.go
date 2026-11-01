@@ -2,6 +2,7 @@ package browser
 
 import (
 	"context"
+	"github.com/trannghiach/azhaq/internal/guard"
 	"slices"
 	"sync"
 	"sync/atomic"
@@ -52,6 +53,7 @@ func deadline(parent context.Context, p *progress, d, hard time.Duration) (conte
 	}
 	start := time.Now()
 	go func() {
+		defer guard.Recover(ctx)
 		tick := time.NewTicker(100 * time.Millisecond)
 		defer tick.Stop()
 		for {

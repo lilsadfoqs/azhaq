@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/trannghiach/azhaq/internal/guard"
 	"io"
 	"math"
 	"net"
@@ -269,6 +270,7 @@ func (r *PTR) RunBatch(ctx context.Context, seeds []types.Seed, emit func(types.
 		}
 		wg.Add(1)
 		go func(i int, seed types.Seed, ip net.IP) {
+			defer guard.Recover(ctx)
 			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()

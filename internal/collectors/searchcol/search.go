@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"github.com/trannghiach/azhaq/internal/guard"
 	"io"
 	"net"
 	"net/http"
@@ -108,6 +109,7 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		}
 		wg.Add(1)
 		go func(e engine, key string) {
+			defer guard.Recover(ctx)
 			defer wg.Done()
 			t0 := time.Now()
 			rs, err := e.query(ctx, c.Client, key, domain, max(c.Pages, 1))

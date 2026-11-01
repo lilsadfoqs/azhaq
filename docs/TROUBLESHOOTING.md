@@ -75,6 +75,12 @@ Entries are grouped by what you were doing:
 
 **Fix:** The summary's `failed` list and notes say what failed. `azhaq query -db W -failed` lists every failed target.
 
+### A failure that starts with `panic:`
+
+**Why:** A collector hit a bug. The task fails, and the run goes on: the other collectors finish, what the task found before the bug is kept, the ledger is sealed, and the run ends with exit 3 and `complete: false`. The `failed` list names the collector, the panic and the first frames of the code that raised it, with a count of the tasks it hit. A panic is never set aside as fan-out or made up for by other sources.
+
+**Fix:** Report the line with the URL it hit (`azhaq query -db W -failed` lists them). `azhaq resume -db W` does not run a failed task again; `-skip COLLECTOR` runs the rest of a map without it.
+
 ### Exit 4
 
 **Why:** A limit stopped the run with work left. The limits are `-max-requests`, `-daily-requests`, `-max-items`, `-timeout`, Ctrl-C or `kill`, and the kill file. SIGINT, SIGTERM and SIGHUP stop a run alike.

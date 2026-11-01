@@ -3,6 +3,7 @@ package pathscol
 import (
 	"context"
 	"encoding/json"
+	"github.com/trannghiach/azhaq/internal/guard"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -286,6 +287,7 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 	if len(descs) > 0 {
 		wg.Add(1)
 		go func() {
+			defer guard.Recover(ctx)
 			defer wg.Done()
 			for _, path := range descs {
 				target := targetOf(path)
@@ -319,6 +321,7 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		}
 		wg.Add(1)
 		go func(target, path string) {
+			defer guard.Recover(ctx)
 			defer wg.Done()
 			select {
 			case <-ctx.Done():

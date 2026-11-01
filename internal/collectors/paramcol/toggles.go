@@ -1,6 +1,10 @@
 package paramcol
 
-import "sync"
+import (
+	"sync"
+
+	"github.com/trannghiach/azhaq/internal/guard"
+)
 
 // toggleNames are parameters that switch a mode on for the value yes,
 // true, 1 or on and do nothing for a random one: a page may read debug and
@@ -46,6 +50,7 @@ func (s *search) askToggles() []toggleAnswer {
 	for i, val := range toggleValues {
 		wg.Add(1)
 		go func() {
+			defer guard.Recover(s.ctx)
 			defer wg.Done()
 			v, ok := s.test(names, val)
 			out[i] = toggleAnswer{value: val, v: v, ok: ok, names: names}

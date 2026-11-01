@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/trannghiach/azhaq/internal/guard"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -312,6 +313,7 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		}
 		wg.Add(1)
 		go func(i int, s source, sctx context.Context, wg *sync.WaitGroup) {
+			defer guard.Recover(ctx)
 			defer wg.Done()
 			sess := &subscraping.Session{
 				Extractor:           ext,

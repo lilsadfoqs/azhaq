@@ -9,6 +9,7 @@ import (
 	"github.com/trannghiach/azhaq/catalog"
 	"github.com/trannghiach/azhaq/internal/egress"
 	"github.com/trannghiach/azhaq/internal/fetch"
+	"github.com/trannghiach/azhaq/internal/guard"
 	"github.com/trannghiach/azhaq/internal/neterr"
 	"github.com/trannghiach/azhaq/internal/normalize"
 	"github.com/trannghiach/azhaq/types"
@@ -35,6 +36,11 @@ type Denial struct {
 	Rule string `json:"rule"`
 }
 
+func isPanic(err error) bool {
+	var pe *guard.PanicError
+	return errors.As(err, &pe)
+}
+
 // Execute runs one work item with the collectors of cat and keeps what it
 // reports; nothing is stored. Hints sent while it runs are added to the
 // end result.
@@ -52,29 +58,38 @@ func Execute(ctx context.Context, cat *catalog.Catalog, item types.WorkItem) Out
 		early = append(early, seeds...)
 		mu.Unlock()
 	})
-	ctx, refused, used := egress.WatchBudget(ctx)
-	got, err := col.Run(ctx, seed, func(o types.Observation) error {
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		if o.ObservedAt.IsZero() {
-			o.ObservedAt = time.Now().UTC()
-		}
-		if o.Collector == "" {
-			o.Collector = col.Name()
-		}
-		mu.Lock()
-		out.Observations = append(out.Observations, o)
-		mu.Unlock()
-		return nil
+	wctx, panicked, stop := guard.Watch(ctx)
+	defer stop()
+	ctx, refused, used := egress.WatchBudget(wctx)
+	var got types.RunMeta
+	err := guard.Call(func() (err error) {
+		got, err = col.Run(ctx, seed, func(o types.Observation) error {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			if o.ObservedAt.IsZero() {
+				o.ObservedAt = time.Now().UTC()
+			}
+			if o.Collector == "" {
+				o.Collector = col.Name()
+			}
+			mu.Lock()
+			out.Observations = append(out.Observations, o)
+			mu.Unlock()
+			return nil
+		})
+		return err
 	})
+	if perr := panicked(); perr != nil {
+		err = perr
+	}
 	mu.Lock()
 	defer mu.Unlock()
 	got.NextHints = append(early, got.NextHints...)
 	out.Meta = got
 	out.Requests = used()
 	out.Refused = refused() || errors.Is(err, neterr.ErrBudget)
-	out.Cancelled = ctx.Err() != nil
+	out.Cancelled = ctx.Err() != nil && !isPanic(err)
 	if err != nil {
 		out.Error = err.Error()
 	}

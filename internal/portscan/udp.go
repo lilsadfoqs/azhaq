@@ -3,6 +3,7 @@ package portscan
 import (
 	"context"
 	"errors"
+	"github.com/trannghiach/azhaq/internal/guard"
 	"net"
 	"sort"
 	"strconv"
@@ -221,6 +222,7 @@ func (s *Scanner) udpPass(ctx context.Context, host, ip string, ports []int, pas
 		asked[p]++
 		mu.Unlock()
 		go func(p int) {
+			defer guard.Recover(ctx)
 			defer wg.Done()
 			defer func() { <-sem }()
 			u, state := s.udpProbe(ctx, host, ip, p, pass)

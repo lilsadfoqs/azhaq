@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/trannghiach/azhaq/internal/guard"
 	"io"
 	"math"
 	"net"
@@ -212,6 +213,7 @@ func (s *search) run(page string, emit func(types.Observation) error) (types.Run
 	var tw sync.WaitGroup
 	tw.Add(1)
 	go func() {
+		defer guard.Recover(s.ctx)
 		defer tw.Done()
 		toggled = s.askToggles()
 	}()
@@ -352,6 +354,7 @@ func (s *search) deepen(page string, names []string, found, values map[string]st
 		var tw sync.WaitGroup
 		tw.Add(1)
 		go func() {
+			defer guard.Recover(s.ctx)
 			defer tw.Done()
 			toggled = s.askToggles()
 		}()
@@ -454,6 +457,7 @@ func (s *search) searchChunks(chunks []*chunk) {
 	for i := 0; i < min(s.c.Opts.Threads, len(chunks)); i++ {
 		wg.Add(1)
 		go func() {
+			defer guard.Recover(s.ctx)
 			defer wg.Done()
 			for ck := range work {
 				s.mu.Lock()
@@ -761,8 +765,8 @@ func (s *search) calibrate(words []string) bool {
 	var okA, okB, okC bool
 	var wg sync.WaitGroup
 	wg.Add(2)
-	go func() { defer wg.Done(); a, okA = s.get(one) }()
-	go func() { defer wg.Done(); b, okB = s.get(randomPairs(1)) }()
+	go func() { defer wg.Done(); defer guard.Recover(s.ctx); a, okA = s.get(one) }()
+	go func() { defer wg.Done(); defer guard.Recover(s.ctx); b, okB = s.get(randomPairs(1)) }()
 	c, okC = s.ask(crowd, true)
 	wg.Wait()
 	if !okA || !okB {
@@ -1123,6 +1127,7 @@ func (s *search) halves(ck *chunk, group []string, v *verdict) {
 		var wg sync.WaitGroup
 		wg.Add(1)
 		go func() {
+			defer guard.Recover(s.ctx)
 			defer wg.Done()
 			s.narrow(ck, first)
 		}()

@@ -2,6 +2,7 @@ package browser
 
 import (
 	"context"
+	"github.com/trannghiach/azhaq/internal/guard"
 	"time"
 
 	cdpbrowser "github.com/chromedp/cdproto/browser"
@@ -37,6 +38,7 @@ func (b *Browser) denyDownloads(root context.Context) error {
 		return err
 	}
 	go func() {
+		defer guard.Catch(b.fault)
 		defer stop()
 		for raw := range began {
 			var ev cdpbrowser.EventDownloadWillBegin
