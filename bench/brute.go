@@ -131,7 +131,7 @@ func wildcardCheck(dir, stamp string, row *bruteRow) {
 	must(os.WriteFile(resolver, []byte(pc.LocalAddr().String()+"\n"), 0o644))
 
 	db := filepath.Join(dir, "wildcard-"+stamp+".db")
-	run(zone, 5*time.Minute, dir, azhaq, "run", "-domain", zone, "-passive", "-sources", "none", "-skip", "azhaq-cdx,azhaq-rdap,azhaq-urls",
+	run(zone, 5*time.Minute, dir, azhaq, "run", "-domain", zone, "-passive", "-sources", "none", "-skip", "azhaq-rdap,azhaq-urls",
 		"-dns-brute", list, "-allow", zone, "-resolvers", resolver, "-db", db, "-json")
 	az := namesFrom(db, "azhaq-dns-brute")
 	fake := 0
