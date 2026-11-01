@@ -83,6 +83,7 @@ func TestResumeAfterSIGKILLNeverSendsAWriteTwice(t *testing.T) {
 	}
 
 	dataDirs.Store(t.Name(), dir) // the resume reads what the killed run kept there
+	ledgerHoldsAKilledRun(t)
 	_, rep, code := runContract(t, "resume", "-db", db)
 	if code != exitOK {
 		t.Fatalf("resume: exit %d\n%+v", code, rep)

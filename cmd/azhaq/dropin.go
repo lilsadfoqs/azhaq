@@ -720,7 +720,6 @@ func cmdURLs(args []string) error {
 	if n := rep.Sources.requestsNote(); n != "" {
 		rep.Notes = append(rep.Notes, n)
 	}
-	rep.failOnErrors = hasFlag(given(), "fail-on-errors")
 	rep.Results = w.count()
 	return rep.finish(c.json, c.silent)
 }
@@ -1235,7 +1234,7 @@ func cmdShots(args []string) error {
 		return err
 	}
 	rep.Results = w.count()
-	if len(guessedHP) > 0 && !hasFlag(given(), "fail-on-errors") {
+	if len(guessedHP) > 0 {
 		guessedFanout(rep, guessedHP)
 	}
 	if scanPorts > 0 && len(urls) == 0 && *list == "" {
@@ -1248,42 +1247,45 @@ func cmdShots(args []string) error {
 	return rep.finish(c.json, c.silent)
 }
 
-// guessedFanout marks the failures of ports nmap did not name a web
-// service as fan-out: they are tried because nmap's guess cannot be
-// trusted, so they stay listed but do not make the exit code 3. A failure
-// that holds both kinds of target is split.
+// guessedFanout takes the ports nmap did not name a web service out of
+// the failures: they are tried because nmap's guess cannot be trusted, so
+// a port that gives no page is the answer "no web service here", not a
+// failure (gowitness scan nmap exits 0 on a scan with an ssh port). A note
+// counts them. A failure that holds both kinds of target keeps the others.
 func guessedFanout(rep *report, guessed map[string]bool) {
 	var out []engine.Failure
+	none := map[string]bool{}
 	for _, f := range rep.Failed {
-		var mine, others []string
+		var others []string
 		for _, t := range f.Targets {
-			if guessed[targets.HostPort(t)] {
-				mine = append(mine, t)
+			if hp := targets.HostPort(t); guessed[hp] {
+				none[hp] = true
 			} else {
 				others = append(others, t)
 			}
 		}
-		switch {
-		case len(mine) == 0 || f.Fanout || f.Partial:
-			out = append(out, f)
-		case len(others) == 0:
-			f.Fanout = true
-			out = append(out, f)
-		default:
-			g := f
-			g.Targets, g.Count, g.Fanout = mine, len(mine), true
-			f.Targets, f.Count = others, max(1, f.Count-len(mine))
-			out = append(out, f, g)
+		if len(f.Targets) > 0 && len(others) == 0 {
+			continue
 		}
+		if len(others) < len(f.Targets) {
+			f.Count = max(1, f.Count-(len(f.Targets)-len(others)))
+			f.Targets = others
+		}
+		out = append(out, f)
 	}
 	rep.Failed = out
 	var left []string
 	for _, u := range rep.Unreachable {
-		if !guessed[targets.HostPort(u)] {
+		if hp := targets.HostPort(u); guessed[hp] {
+			none[hp] = true
+		} else {
 			left = append(left, u)
 		}
 	}
 	rep.Unreachable = left
+	if len(none) > 0 {
+		rep.Notes = append(rep.Notes, fmt.Sprintf("%s nmap did not name a web service gave no page: that is no web service there, not a failure", nOf(len(none), "port", "ports")))
+	}
 }
 
 // scanFile reads a scan file with read.

@@ -39,7 +39,7 @@ type report struct {
 	Failed      []engine.Failure `json:"failed,omitempty"`
 	Skipped     []engine.Skip    `json:"skipped,omitempty"`
 	Takeover    []takeoverRow    `json:"takeover,omitempty"`    // names another party may take over
-	Degraded    bool             `json:"degraded,omitempty"`    // a source the run depends on failed (subs); the exit code is not changed
+	Degraded    bool             `json:"degraded,omitempty"`    // a source the run depends on failed (subs); the exit code is 3
 	DegradedBy  []degradedBy     `json:"degraded_by,omitempty"` // with degraded: each failed source, its reason and how many domains
 	Junk        map[string]int   `json:"junk,omitempty"`        // urls: URLs left out as junk, by reason (-raw keeps them)
 	Sources     *sourceHealth    `json:"sources,omitempty"`     // subs and urls: how many sources answered, which failed and why, what each gave
@@ -50,9 +50,7 @@ type report struct {
 
 	what   string // the unit of Results: "names", "web services"
 	warned bool   // a note says the results mislead (a role's dead session): exit 3
-	// failOnErrors: -fail-on-errors was given, so no failure is made up for.
-	failOnErrors bool
-	start        time.Time
+	start  time.Time
 
 	// hints are measured suggestions, printed as "next:" lines for a person
 	// (see hints.go); they are never in the JSON summary.
@@ -74,22 +72,12 @@ func (r *report) settle() {
 	switch {
 	case r.Stopped != "":
 		r.Exit = exitLimit
-	case len(r.Unreachable) > 0 || r.ownFailures() > 0 || r.warned:
+	case len(r.Unreachable) > 0 || len(r.Failed) > 0 || r.Degraded || r.warned:
 		r.Exit = exitPartial
 	default:
 		r.Exit = exitOK
 	}
 	r.Complete = r.Exit == exitOK
-}
-
-func (r *report) ownFailures() int {
-	n := 0
-	for _, f := range r.Failed {
-		if !f.Fanout && !f.Partial {
-			n++
-		}
-	}
-	return n
 }
 
 // err is the command's result for main: nil, or the exit code the
@@ -146,8 +134,7 @@ func (r *report) print(w io.Writer) {
 		head[0] += " (" + strings.Join(parts, ", ") + ")"
 	}
 	if r.Degraded {
-		// Exit 0 and "complete" say the run finished, not that every source
-		// answered: the summary opens with it, naming the sources and why.
+		// The summary opens with it, naming the sources and why.
 		d := fmt.Sprintf("DEGRADED: %d of %d sources failed", r.Counts["sources failed"], r.Counts["sources asked"])
 		if len(r.DegradedBy) > 0 {
 			d += ": " + degradedText(r.DegradedBy)
@@ -238,11 +225,11 @@ func (r *report) print(w io.Writer) {
 		fmt.Fprintf(w, "  next: %s\n", h)
 	}
 	if r.Sources != nil && r.Sources.failures() > 0 {
-		fmt.Fprintf(w, "  %s\n", r.Sources.line(r.Exit, r.ownFailures(), r.failOnErrors, r.Command == "urls"))
+		fmt.Fprintf(w, "  %s\n", r.Sources.line(r.Exit, r.Command == "urls"))
 	}
 	switch r.Exit {
 	case exitPartial:
-		if len(r.Unreachable) == 0 && r.ownFailures() == 0 {
+		if len(r.Unreachable) == 0 && len(r.Failed) == 0 && !r.Degraded {
 			fmt.Fprintf(w, "  exit 3: finished, but a note above says what to check first\n")
 			break
 		}
@@ -317,7 +304,7 @@ func fillReport(rep *report, path string, seeds []types.Seed, ents []types.Entit
 	rep.Notes = append(rep.Notes, pageFaultNotes(obs)...)
 	rep.Notes = append(rep.Notes, interactNotes(obs)...)
 	rep.Takeover = takeovers(ents, obs)
-	if path != "" && !strings.HasPrefix(path, os.TempDir()) && rep.ownFailures() > 0 {
+	if path != "" && !strings.HasPrefix(path, os.TempDir()) && len(rep.Failed) > 0 {
 		rep.Next = append(rep.Next, "azhaq query -db "+path+" -failed   (every failed target, the list to retry)")
 	}
 	if rep.Command != "run" {

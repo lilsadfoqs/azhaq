@@ -94,7 +94,7 @@
   "TestCrawlSummaryCountsEachKindOfRow": 0.18,
   "TestCrawlTarget": 0,
   "TestCrawlWithoutSubmitFormsSendsNoPost": 0.74,
-  "TestCrtshFailureDoesNotMakeExit3": 0.11,
+  "TestCrtshFailureMakesExit3": 0.11,
   "TestCurlLine": 0,
   "TestDNSAXFRJSONAndTextAskTheSameServers": 0.01,
   "TestDNSAllNamesOutsideTheScope": 0,

@@ -4,6 +4,17 @@
 
 ### Changed
 
+- Every failure now exits 3: a source that failed while others answered for the same domain (`partial`), a fan-out failure and a degraded `subs` run no longer exit 0. The summary still lists what failed and why. `-fail-on-errors` is accepted and is the default, and no flag turns a failure back into exit 0. Ports nmap did not name a web service that give no page are counted in a note, not listed as failures.
+
+### Fixed
+
+- `ports` (and any run that scans a range) gave its Port rows `scope: fanout`, so `query -scope target` and the MCP `azhaq_query` listed none of them; a range seed now makes its own entity the target.
+- `export -format graphml` named a URL the run's scope had refused (a link to another port); it now leaves those out, as the other formats do.
+
+## v0.12.1
+
+### Changed
+
 - The repository moved to github.com/lilsadfoqs/azhaq, and the Go module path with it: `go install github.com/lilsadfoqs/azhaq/cmd/azhaq@latest`. The image is `ghcr.io/lilsadfoqs/azhaq`. `install.sh --require-signature` accepts a release signed by the release workflow under either name, so the releases up to v0.12.0 still verify.
 
 ## v0.12.0

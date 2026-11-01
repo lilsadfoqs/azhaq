@@ -18,7 +18,6 @@ type Budgets struct {
 	MaxDepth     int
 	MaxItems     int
 	Parallel     int
-	FailOnErrors bool
 	FailOnCapped bool
 	Passive      bool
 	Scope        scope.Rules

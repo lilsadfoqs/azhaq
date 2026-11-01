@@ -215,7 +215,7 @@ func exportTo(path, format, origin string, safe bool, w io.Writer) error {
 	case "html":
 		return htmlReport(g, w)
 	case "graphml":
-		return graphML(path, w)
+		return graphML(path, g.rules, w)
 	case "secrets":
 		for _, s := range secretRows(g.obs) {
 			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n", s.Severity, s.Kind, s.Value, s.Where, s.Name, s.Rule)
@@ -1346,8 +1346,9 @@ func sortedKeys(m map[string]bool) []string {
 }
 
 // graphML writes the graph for Gephi, yEd or Cytoscape: entities are
-// nodes with their type and first sighting, relations are edges.
-func graphML(path string, w io.Writer) error {
+// nodes with their type and first sighting, relations are edges. A URL the
+// run's scope refused is not a node: it was named, never touched.
+func graphML(path string, rules *scope.Rules, w io.Writer) error {
 	st, err := store.OpenExisting(path)
 	if err != nil {
 		return err
@@ -1379,6 +1380,9 @@ func graphML(path string, w io.Writer) error {
 `)
 	known := map[string]bool{}
 	for _, e := range ents {
+		if rules != nil && e.Type == types.TypeURL && !rules.AllowsURL(e.Key) {
+			continue
+		}
 		known[e.ID] = true
 		fmt.Fprintf(w, "    <node id=\"%s\"><data key=\"type\">%s</data><data key=\"label\">%s</data><data key=\"first_seen\">%s</data></node>\n",
 			esc(e.ID), esc(string(e.Type)), esc(e.Key), e.FirstSeen.UTC().Format(time.RFC3339))
