@@ -11,11 +11,17 @@
 
 ### Added
 
+- `ports` identifies the transport port of Elasticsearch (9300 to 9303, and other silent ports last): it sends the 6-byte keep-alive ping and names the port `elasticsearch-transport` when a node of 7.x or later answers it. An older node ignores the ping, so a silent 9300 reads `elasticsearch-transport?`, a guess by port.
+- `subs` opens its summary with `DEGRADED: N of M sources failed: SOURCE (REASON, K domains), …`, and the JSON summary has `degraded_by` (source, error, domains for each failed source of the default set).
 - `azhaq plan -axfr` lists the zone transfers `dns -axfr` would try: the lookups, the connections, and the resolvers also asked.
 - The summary counts the questions the takeover check asked the resolvers about CNAME targets outside the scope, and `-no-takeover` (`run`, `dns`) turns the check off.
 
 ### Fixed
 
+- `query -type Port` printed each host/port pair twice (a prefix's scan and the scan of an address in it each made a row). A port is now one row for each host, port and protocol, with a `state` field (`open` or `open|filtered`). The summaries of `run`, `query` and `ports` count `open` ports and `open|filtered` ports apart, so a silent UDP port is never counted as open.
+- A streamed answer that is the page every unknown path gets (an app shell) ends with `(catch-all: the page any unknown path gets)`, and has `"catchall": true` with `-json`. The summary names each origin that answered three or more URLs that way and, for a bare address, says to ask again with the name (`-H 'Host: NAME'`).
+- `hunt` no longer lists a CSS module's class name (`tokensUsage: "_tokensUsage_dypaw_41"`) or a value that repeats its own name as a generic secret. Each candidate shows its name, the value redacted, the rule that listed it and its entropy; `export -format secrets` adds the name and rule columns.
+- A 500, 502, 503 or 504 from crt.sh's JSON API was never asked again, because the check read the end of an error text the session words differently. It is asked up to 4 times, as far as `-source-timeout` leaves time.
 - Resolvers named with `-resolvers` now answer every name in every command, special-use names (`.test`, `.local`, single labels) included, and HTTP, port, TLS and Chrome connections look names up through them; the system resolver is never asked. Before, `run -dns-brute` sent 110,000 questions to the system resolver and found nothing, and a seed URL was resolved there. `localhost` still connects to loopback with no lookup.
 - `dns -axfr` with `-allow` or `-scope` no longer connects to a name server whose address is outside the scope because its name is inside it; the summary names the skipped server and says to add its address to `-allow`.
 - The summary's request count now includes the TLS handshake the TLS collector makes to each name's port 443, so it matches the ledger's lines to targets, and `-max-requests` holds those connections.
