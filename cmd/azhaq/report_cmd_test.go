@@ -2,6 +2,9 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -61,6 +64,7 @@ func TestReportClassAndTitle(t *testing.T) {
 		{verdictCross, classRead, "Broken object level authorization: bob and carol read alice's basket via GET /rest/basket/{id}", []string{"bob", "carol"}},
 		{verdictWriteCross, classWrite, "Broken object level authorization (write): bob writes alice's basket via GET /rest/basket/{id}", []string{"bob"}},
 		{verdictWriteAnyone, classWrite, "Broken object level authorization (write): anyone writes alice's basket via GET /rest/basket/{id}", []string{"anon", "bob"}},
+		{verdictWriteCreate, classCreate, "Missing authorization on create: bob creates in alice's basket collection via GET /rest/basket/{id}", []string{"bob"}},
 		{verdictAnyoneSecrets, classExposure, "Excessive data exposure: anyone reads password and token via GET /rest/basket/{id}", nil},
 	} {
 		row := roleRow{URL: "https://s.test/rest/basket/6", From: "https://s.test/rest/basket/{id}", Owner: "alice", Readers: c.readers, Verdict: c.verdict, Confidence: confLikely, Sensitive: []string{"password", "token"},
@@ -74,7 +78,7 @@ func TestReportClassAndTitle(t *testing.T) {
 		}
 	}
 	// A verdict that is not a cross-role read or write has no report.
-	for _, v := range []string{verdictAnyID, verdictObject, verdictSignedIn, verdictWriteCreate, verdictWriteNoChange, verdictPublicObj} {
+	for _, v := range []string{verdictAnyID, verdictObject, verdictSignedIn, verdictWriteNoChange, verdictPublicObj} {
 		if c, _ := classOf(v); c != "" {
 			t.Errorf("%q is class %q", v, c)
 		}
@@ -96,10 +100,10 @@ func TestReportNoun(t *testing.T) {
 }
 
 func TestReportSeverityIsAGuessThatSensitiveFieldsAndWritesRaise(t *testing.T) {
-	read := severityOf(roleRow{Verdict: verdictCross}, classRead)
-	readSens := severityOf(roleRow{Verdict: verdictCross, Sensitive: []string{"secret"}}, classRead)
-	write := severityOf(roleRow{Verdict: verdictWriteCross}, classWrite)
-	anon := severityOf(roleRow{Verdict: verdictWriteAnyone}, classWrite)
+	read := severityOf(roleRow{Verdict: verdictCross}, classRead, false)
+	readSens := severityOf(roleRow{Verdict: verdictCross, Sensitive: []string{"secret"}}, classRead, false)
+	write := severityOf(roleRow{Verdict: verdictWriteCross}, classWrite, false)
+	anon := severityOf(roleRow{Verdict: verdictWriteAnyone}, classWrite, false)
 	if read.Level != "medium" || readSens.Level != "high" || write.Level != "high" || anon.Level != "critical" {
 		t.Errorf("levels %s %s %s %s", read.Level, readSens.Level, write.Level, anon.Level)
 	}
@@ -298,5 +302,99 @@ func TestReportWrite(t *testing.T) {
 	}
 	if strings.Contains(md, "No control was asked") {
 		t.Error("a write report asks for a control")
+	}
+}
+
+func TestReportCreateSeverity(t *testing.T) {
+	row := roleRow{Verdict: verdictWriteCreate}
+	if lv := severityOf(row, classCreate, false).Level; lv != "low" {
+		t.Errorf("a create by a signed-in role is %s, want low", lv)
+	}
+	if lv := severityOf(row, classCreate, true).Level; lv != "medium" {
+		t.Errorf("a create with no credential is %s, want medium", lv)
+	}
+	if !carriesNoCredential(`curl -sS -i -X POST 'https://s.test/a' -H 'Content-Type: application/json' --data-raw '{"p":"$5"}'`) ||
+		carriesNoCredential(`curl -sS -i -X POST 'https://s.test/a' -H "Authorization: Bearer $BOB_TOKEN"`) {
+		t.Error("carriesNoCredential misreads a curl line")
+	}
+}
+
+// roles -replay-writes post lists a create another role was let to send;
+// report writes it up, from the directory and by -url -method.
+func TestReportWritesUpACreateInAnotherRolesCollection(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		user := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer tok-")
+		if user == "" {
+			w.WriteHeader(401)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == http.MethodPost && r.URL.Path == "/books/v1" {
+			w.WriteHeader(200)
+			fmt.Fprintf(w, `{"status":"success","by":%q}`, user)
+			return
+		}
+		w.WriteHeader(404)
+	}))
+	defer srv.Close()
+	browse := func(file, user string) string {
+		return writeHAR(t, file,
+			harEntry("2026-10-29T10:00:00.000Z", "POST", srv.URL+"/books/v1", `{"book_title":"t-`+user+`"}`, 200, "Authorization", "Bearer tok-"+user, "Content-Type", "application/json"))
+	}
+	alice, bob := browse("alice.har", "alice"), browse("bob.har", "bob")
+	dir := t.TempDir()
+	if _, errOut, err := captureBoth(t, func() error {
+		return cmdRoles([]string{"-json", "-dir", dir, "-har", "alice=" + alice, "-har", "bob=" + bob, "-replay-writes", "post"})
+	}); err != nil {
+		t.Fatalf("%v\n%s", err, errOut)
+	}
+	out := filepath.Join(dir, "out")
+	if err := cmdReport([]string{"-dir", dir, "-format", "json", "-o", out + "/"}); err != nil {
+		t.Fatal(err)
+	}
+	files, _ := filepath.Glob(filepath.Join(out, "*.json"))
+	// Both owners' creates share one URL and method, which roles.db keys
+	// a row by: one report for the route.
+	if len(files) != 1 {
+		t.Fatalf("want one report for the route, got %v", files)
+	}
+	var docs []reportDoc
+	for _, f := range files {
+		b, _ := os.ReadFile(f)
+		var d reportDoc
+		if err := json.Unmarshal(b, &d); err != nil {
+			t.Fatal(err)
+		}
+		docs = append(docs, d)
+	}
+	for _, d := range docs {
+		if d.Class != classCreate || d.Verdict != verdictWriteCreate || d.Severity.Level != "low" {
+			t.Errorf("class %q verdict %q severity %q", d.Class, d.Verdict, d.Severity.Level)
+		}
+		if !strings.Contains(d.Title, "creates in ") || !strings.Contains(d.Title, "via POST /books/v1") {
+			t.Errorf("title %q", d.Title)
+		}
+		kinds := map[string]bool{}
+		for _, a := range d.Evidence {
+			kinds[a.Kind] = true
+			if a.Kind == "reader" && a.Status != 200 {
+				t.Errorf("the reader's answer is %d", a.Status)
+			}
+		}
+		if !kinds["owner"] || !kinds["reader"] {
+			t.Errorf("evidence kinds %v", kinds)
+		}
+	}
+	// One row by -url and -method, the report on standard output.
+	rep, _, err := captureBoth(t, func() error {
+		return cmdReport([]string{"-dir", dir, "-url", srv.URL + "/books/v1", "-method", "POST"})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"# Missing authorization on create:", "creates in", "## Where the create comes from", "-X POST", "Expected: 200"} {
+		if !strings.Contains(rep, want) {
+			t.Errorf("the report lacks %q:\n%s", want, rep)
+		}
 	}
 }

@@ -84,7 +84,7 @@ func init() {
 		{name: "report", group: groupMap, run: cmdReport,
 			summary: "write each finding roles listed up as a report to submit (title, steps with curl, evidence, impact)",
 			usage:   "-dir DIR [-url URL [-method M]] [-format md|json] [-o FILE|DIR] [-redact]",
-			output:  "one Markdown report per cross-role read or write and per sensitive field anyone reads, best-evidenced first (proved, likely, guess), written to DIR/reports or -o; -url writes one to standard output. Every piece comes from the roles run's evidence (roles.db); what it does not hold is named in the report. -redact masks hosts and identifiers",
+			output:  "one Markdown report per cross-role read, write or create and per sensitive field anyone reads, best-evidenced first (proved, likely, guess), written to DIR/reports or -o; -url writes one to standard output. Every piece comes from the roles run's evidence (roles.db); what it does not hold is named in the report. -redact masks hosts and identifiers",
 			examples: []string{
 				"azhaq report -dir azhaq-roles-20261028-101500",
 				"azhaq report -dir azhaq-roles-20261028-101500 -url https://app/rest/basket/6 -redact",

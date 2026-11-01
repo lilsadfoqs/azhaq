@@ -28,6 +28,7 @@ import (
 const (
 	classRead     = "bola_read"
 	classWrite    = "bola_write"
+	classCreate   = "unchecked_create"
 	classExposure = "excessive_data_exposure"
 )
 
@@ -41,6 +42,8 @@ func classOf(verdict string) (class, label string) {
 		return classWrite, "Broken object level authorization (write)"
 	case verdictWriteUnread:
 		return classWrite, "Broken object level authorization (write accepted, not read back)"
+	case verdictWriteCreate:
+		return classCreate, "Missing authorization on create"
 	case verdictAnyoneSecrets:
 		return classExposure, "Excessive data exposure"
 	}
@@ -153,7 +156,7 @@ func cmdReport(args []string) error {
 			return err
 		}
 		if c, _ := classOf(row.Verdict); c == "" {
-			return exitErr{code: exitError, msg: fmt.Sprintf("%s is [%s]: report writes up a role reading or writing another role's object, or sensitive fields anyone reads", *target, row.Verdict)}
+			return exitErr{code: exitError, msg: fmt.Sprintf("%s is [%s]: report writes up a role reading, writing or creating in another role's object or collection, or sensitive fields anyone reads", *target, row.Verdict)}
 		}
 		rows = append(rows, er)
 	} else {
@@ -190,7 +193,7 @@ func cmdReport(args []string) error {
 	}
 	sortReports(docs)
 	if len(docs) == 0 {
-		fmt.Fprintf(os.Stderr, "azhaq report: no row in %s is a role reading or writing another role's object, or sensitive fields anyone reads\n", filepath.Join(*dir, evidenceFile))
+		fmt.Fprintf(os.Stderr, "azhaq report: no row in %s is a role reading, writing or creating in another role's object or collection, or sensitive fields anyone reads\n", filepath.Join(*dir, evidenceFile))
 		return nil
 	}
 	return emitReports(docs, *format, *out, *dir, *target != "")
@@ -591,6 +594,10 @@ func joinNames(ns []string) string {
 
 func verbOf(class string, n int) string {
 	switch {
+	case class == classCreate && n == 1:
+		return "creates"
+	case class == classCreate:
+		return "create"
 	case class == classWrite && n == 1:
 		return "writes"
 	case class == classWrite:
@@ -681,6 +688,8 @@ func buildReport(er store.EvidenceRow, order []string, saved time.Time, savedOK,
 			break
 		}
 		d.Title = fmt.Sprintf("%s: %s %s %s %s via %s %s", label, who, verbOf(class, len(readers)), possessive(owner), noun(route), verb, route)
+	case classCreate:
+		d.Title = fmt.Sprintf("%s: %s %s in %s %s collection via %s %s", label, joinNames(readers), verbOf(class, len(readers)), possessive(owner), noun(route), verb, route)
 	default:
 		d.Title = fmt.Sprintf("%s: %s %s %s %s via %s %s", label, joinNames(readers), verbOf(class, len(readers)), possessive(owner), noun(route), verb, route)
 	}
@@ -779,6 +788,9 @@ func buildReport(er store.EvidenceRow, order []string, saved time.Time, savedOK,
 	if class != classExposure && row.OwnerBy == "" {
 		missing("the row holds no reason why the object is the owner's")
 	}
+	if class == classCreate && !strings.Contains(row.OwnerBy, "readable back") {
+		missing("the created object was not read back: only the 2xx answer shows the create took")
+	}
 	if class == classWrite {
 		missing("the owner's reads of the object before and after the write are not kept in the evidence store, only what the row says of them")
 	}
@@ -786,7 +798,13 @@ func buildReport(er store.EvidenceRow, order []string, saved time.Time, savedOK,
 	// Summary: two sentences.
 	d.Summary = summaryOf(row, class, verb, objPath, answers, owner, controlled, controls, mk)
 
-	d.Severity = severityOf(row, class)
+	anyone := false
+	for _, a := range answers {
+		if slices.Contains(readers, a.Role) && carriesNoCredential(a.Curl) {
+			anyone = true
+		}
+	}
+	d.Severity = severityOf(row, class, anyone)
 	d.Variables = vars
 
 	// Steps.
@@ -806,6 +824,10 @@ func buildReport(er store.EvidenceRow, order []string, saved time.Time, savedOK,
 		}
 		var text string
 		switch {
+		case ra.Kind == "owner" && class == classCreate:
+			text = fmt.Sprintf("As %s, whose request azhaq replayed, send the create to the collection.", ra.Role)
+		case class == classCreate:
+			text = fmt.Sprintf("As %s, send the same create to the collection %s created in.", ra.Role, owner)
 		case ra.Kind == "owner" && class == classWrite:
 			text = fmt.Sprintf("As %s, the owner, send the write to its own object.", ra.Role)
 		case ra.Kind == "owner":
@@ -834,6 +856,16 @@ func buildReport(er store.EvidenceRow, order []string, saved time.Time, savedOK,
 	}
 	d.Notes = reportNotes{Confidence: d.Confidence, ConfidenceWhy: confidenceWhy(row.Confidence), BothWays: row.BothWays, FoundBy: row.FoundBy, Run: run, SessionSuspect: row.SessionSuspect, Redacted: redact}
 	return d, nil
+}
+
+// carriesNoCredential: a curl line that names no session variable before
+// its body (the body may hold a $ of its own).
+func carriesNoCredential(curl string) bool {
+	if curl == "" {
+		return false
+	}
+	head, _, _ := strings.Cut(curl, " --data")
+	return !shellVar.MatchString(head)
 }
 
 func expectOf(a reportAns) string {
@@ -932,6 +964,12 @@ func summaryOf(row roleRow, class, verb, route string, answers []store.EvidenceA
 			got = append(got, get(r))
 		}
 		s1 = fmt.Sprintf("%s sent %s %s, a write to %s's object, and got %s", rs, verb, route, owner, joinNames(got))
+	case classCreate:
+		got := make([]string, 0, len(row.Readers))
+		for _, r := range row.Readers {
+			got = append(got, get(r))
+		}
+		s1 = fmt.Sprintf("%s sent %s %s, the create %s's request made in the collection, and got %s", joinNames(row.Readers), verb, route, owner, joinNames(got))
 	default:
 		var ok []string
 		for _, a := range answers {
@@ -945,6 +983,8 @@ func summaryOf(row roleRow, class, verb, route string, answers []store.EvidenceA
 	switch class {
 	case classExposure:
 		s2 = "azhaq roles lists it because the anonymous role reads them; it gives no confidence for this kind of row, which is about fields, not about whose object it is."
+	case classCreate:
+		s2 = "azhaq roles lists it because a role other than the one whose request it replayed was let to create there (2xx); it is a create, not another role's object written, and it gives no confidence for this kind of row. Check that the role is not meant to create here."
 	case classWrite:
 		s2 = "azhaq roles rates it " + row.Confidence + ": it lists a write only when the owner's object, read as the owner before and after, changed the way the write asks."
 	default:
@@ -964,7 +1004,7 @@ func summaryOf(row roleRow, class, verb, route string, answers []store.EvidenceA
 
 // severityOf is a guess from the class and what the row holds: sensitive
 // fields read and a write each raise it.
-func severityOf(row roleRow, class string) reportSeverty {
+func severityOf(row roleRow, class string, anyone bool) reportSeverty {
 	levels := []string{"low", "medium", "high", "critical"}
 	lvl := 1
 	var why []string
@@ -973,12 +1013,19 @@ func severityOf(row roleRow, class string) reportSeverty {
 		why = append(why, "a role reads another role's object (medium to start)")
 	case classWrite:
 		why = append(why, "a role writes another role's object (medium to start)")
+	case classCreate:
+		lvl = 0
+		why = append(why, "a role creates data in a collection another role's request created in (low to start: a role may be meant to create here)")
 	case classExposure:
 		why = append(why, "sensitive fields come back to a role with no more access than anyone (medium to start)")
 	}
 	if len(row.Sensitive) > 0 {
 		lvl++
 		why = append(why, "raised: the answer holds sensitive fields ("+strings.Join(row.Sensitive, ", ")+")")
+	}
+	if class == classCreate && anyone {
+		lvl++
+		why = append(why, "raised: a request that carries no credential was let to create")
 	}
 	if class == classWrite {
 		lvl++
@@ -988,7 +1035,7 @@ func severityOf(row roleRow, class string) reportSeverty {
 			why = append(why, "raised: the anonymous role can write")
 		}
 	}
-	if class != classExposure && row.Confidence == confGuess {
+	if class != classExposure && class != classCreate && row.Confidence == confGuess {
 		why = append(why, "not lowered or raised for the confidence, which is a guess: check the object is the owner's first")
 	}
 	lvl = min(lvl, len(levels)-1)
@@ -1000,6 +1047,9 @@ func impactOf(class string, row roleRow, owner string) (impact, remediation stri
 	case classWrite:
 		impact = "An account can change or delete another account's data by sending the owner's identifier in the request: the server does not check that the object belongs to the session that writes it."
 		remediation = "Check on the server, for every route that takes an identifier, that the object belongs to the session (or that the session's role may write it) before changing it, and refuse with 403 or 404 otherwise. Take the owner from the session, not from the request."
+	case classCreate:
+		impact = "A role can create data in a collection that another role's request created in. If the role is not meant to create there, the server does not check it: created data can fill storage, pass for another account's, or be used to probe what the route accepts."
+		remediation = "Decide which roles may create on the route and check it on the server before creating, refusing with 403 otherwise; take the owner of the new object from the session, not from the request."
 	case classExposure:
 		impact = "Anyone who can reach the route reads the sensitive fields it returns"
 		if len(row.Sensitive) > 0 {
@@ -1080,10 +1130,16 @@ func (d reportDoc) markdown() string {
 			w("### Control\n\nNone is held: azhaq roles asks a made-up identifier only for a role reading another role's object.\n\n")
 		}
 	}
-	w("## Why the object is the owner's\n\n")
+	if d.Class == classCreate {
+		w("## Where the create comes from\n\n")
+	} else {
+		w("## Why the object is the owner's\n\n")
+	}
 	switch {
 	case d.Class == classExposure:
 		w("Not applicable: this finding is about fields that come back to anyone, not about whose object it is.\n\n")
+	case d.OwnerReason == "" && d.Class == classCreate:
+		w("The row holds no source for the request that was replayed.\n\n")
 	case d.OwnerReason == "":
 		w("The row holds no reason why the object is the owner's.\n\n")
 	default:
@@ -1101,6 +1157,7 @@ func (d reportDoc) markdown() string {
 	w("- Confidence: %s.\n", conf)
 	switch {
 	case d.Class == classExposure:
+	case d.Class == classCreate:
 	case d.Notes.BothWays:
 		w("- Both ways: yes, the owner also reads one of its readers' objects on the same route.\n")
 	default:
