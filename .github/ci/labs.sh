@@ -2,28 +2,33 @@
 # Starts the labs the hunters and the trial use, as they run on the author's
 # machine: five training apps, the services lab and the DNS lab on 5354. VAmPI
 # and DVWA need a first-run step (database); it is done and checked here.
+# The apps' images are those of bench/images.env (tag and digest), the list the
+# bench's compose file uses too, so the labs are the builds the numbers come from.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
+set -a
+# shellcheck source=bench/images.env
+. bench/images.env
+set +a
 sudo sysctl -q -w vm.max_map_count=262144 # Elasticsearch in the services lab
 # Every image at once: the pulls wait on the network, so together they take
-# as long as the slowest. The images are the last word of each `docker run`
-# below, so the list cannot drift from the containers.
+# as long as the slowest. The images are the values of bench/images.env.
 pull() { docker pull -q "$1" > /dev/null || { sleep 5; docker pull -q "$1" > /dev/null; }; }
 pids=()
 while read -r image; do
   pull "$image" &
   pids+=($!)
-done < <(grep '^docker run' "${BASH_SOURCE[0]}" | awk '{print $NF}')
+done < <(sed -n 's/^AZQ_[A-Z]*_IMAGE=//p' bench/images.env)
 docker compose -p azhaq-services -f bench/services.yaml pull -q &
 pids+=($!)
 for pid in "${pids[@]}"; do
   wait "$pid" || { echo "labs.sh: an image did not pull" >&2; exit 1; }
 done
-docker run -d --name azq-juice -p 127.0.0.1:3001:3000 -e NODE_OPTIONS=--max-old-space-size=4096 bkimminich/juice-shop
-docker run -d --name azq-vampi -p 127.0.0.1:5002:5000 -e vulnerable=1 -e tokentimetolive=3600 erev0s/vampi
-docker run -d --name azq-dvga -p 127.0.0.1:5013:5013 -e WEB_HOST=0.0.0.0 dolevf/dvga:latest
-docker run -d --name azq-dvna -p 127.0.0.1:5020:9090 appsecco/dvna:sqlite
-docker run -d --name azq-dvwa -p 127.0.0.1:5030:80 vulnerables/web-dvwa
+docker run -d --name azq-juice -p 127.0.0.1:3001:3000 -e NODE_OPTIONS=--max-old-space-size=4096 "$AZQ_JUICE_IMAGE"
+docker run -d --name azq-vampi -p 127.0.0.1:5002:5000 -e vulnerable=1 -e tokentimetolive=3600 "$AZQ_VAMPI_IMAGE"
+docker run -d --name azq-dvga -p 127.0.0.1:5013:5013 -e WEB_HOST=0.0.0.0 "$AZQ_DVGA_IMAGE"
+docker run -d --name azq-dvna -p 127.0.0.1:5020:9090 "$AZQ_DVNA_IMAGE"
+docker run -d --name azq-dvwa -p 127.0.0.1:5030:80 "$AZQ_DVWA_IMAGE"
 docker compose -p azhaq-services -f bench/services.yaml up -d
 mkdir -p "$HOME/lab"
 go build -o "$HOME/lab/labdns" ./bench/labdns

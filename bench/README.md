@@ -17,6 +17,17 @@ go run ./bench -merge -expect LIST a.json b.json  # join records of units run ap
 
 Run it from the repository root. It needs Docker (Juice Shop and VAmPI from `bench/compose.yaml`, the services lab from `bench/services.yaml` when the services section runs), network access, a C compiler (jsluice uses cgo), Python 3 (arjun), Chrome (screenshots, `-browser`, `-login`) and linux/amd64 (the reference tools are pinned to their linux/amd64 release archives, or taken from `-refbin`). It exits non-zero if a check fails, and writes a JSON record to `bench/history/`. The bench never stops containers: `-down` takes down only its own two (`azhaq-bench`).
 
+## The lab images
+
+`bench/images.env` is the one list of the lab apps' images (Juice Shop, VAmPI, DVGA, DVNA and DVWA), each pinned by tag and digest. `bench/compose.yaml` reads it (`docker compose --env-file bench/images.env -f bench/compose.yaml up -d`, as the bench does), and so does `.github/ci/labs.sh`, which starts the five apps on 3001, 5002, 5013, 5020 and 5030 for the hunters and the trials. A user who starts the labs the documented way is on the build a row of the README's table was measured on. The truth files in `bench/truth` are per build (`juice-shop-v20.3.0-*`); a pin moves together with them. The services lab (`bench/services.yaml`) keeps its tags, and the table's service rows read what each daemon says, not a version.
+
+To reproduce a row, start the labs from that list and run the row's unit (`go run ./bench -list-units` names them: the row "Paths, 4750 words, Juice Shop and VAmPI" is `default:dirs`):
+
+```
+.github/ci/labs.sh                       # or: docker compose --env-file bench/images.env -f bench/compose.yaml up -d
+go run ./bench -units default:dirs       # one row; -profile polite -units polite:dirs for the polite one
+```
+
 ## Units, and the CI run
 
 A unit is one comparison section in one profile (`default:apps`; for `domains` one domain, `default:domains/hackerone.com`, each with its own no-silent-zeros check), one claims case (`claims:5`) or a section that runs once (`once:dropin`). No unit reads another's results, so any set of units gives the same checks as a full run, and `-merge` puts the records of several jobs in the order of one run (each record lists what every unit wrote in `units`). The bench logs `<profile>: <section> took Ns` for every unit.
