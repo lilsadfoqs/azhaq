@@ -53,8 +53,12 @@ is left).
 
 ## Isolation
 
-The `work` job does these before the agent starts, and `range/isolate.sh` fails
-the job when any check does not hold:
+The `work` job (research, hunter) and the `codex` job (switch) do these before
+the agent starts, and `range/isolate.sh` fails the job when any check does not
+hold. The switch review gets the same: its labs are made ready first
+(`lab_ready.py`: VAmPI's database created, DVWA's set up, each checked with a
+login), nmap is installed, and a copy of each app's source is put in its
+folder (`./lab-source`) because it cannot `docker cp` any more.
 
 | Step | How it is verified |
 | --- | --- |
@@ -73,7 +77,7 @@ to judge. Job logs are public: build, start and isolate print counts only.
 
 ## Heartbeat
 
-The review of a research or hunter trial writes no log until it ends. A loop
+The review of any trial kind writes no log until it ends. A loop
 (`heartbeat.sh`) publishes counts every 10 minutes to `trial/trial-NAME/heartbeat.txt`
 on ci-results; `.github/ci/beat.sh trial NAME` prints it: UTC time, minutes
 since the stream began, whether `codex` runs, the stream's lines and the
@@ -82,8 +86,8 @@ free disk. No command, no stream text, no estate data. It runs as root from
 `/root` with the token in a root-only file, started before `isolate.sh`, which
 checks that the file is unreadable and the process unlisted; the review's files
 are read as the agent's user and `phases.log` is cut to its `phase N start|end
-TIME` lines. The `switch` trial has no isolation (the reviewer keeps sudo), so
-it has no heartbeat.
+TIME` lines (the switch review has no `phases.log`, so that part is empty). The
+stream of every kind is `stream.ts.jsonl`, one epoch second in front of each line.
 
 ## What comes back
 

@@ -6,6 +6,7 @@ import gzip
 import http.server
 import json
 import os
+import re
 import shutil
 import socket
 import subprocess
@@ -586,6 +587,40 @@ class Brief(unittest.TestCase):
             render_brief.render("hunter", "v", {}, d)
         with self.assertRaises(ValueError):
             render_brief.render("switch", "v", v, d)
+
+
+class Workflow(unittest.TestCase):
+    """The shape of trial.yml: every kind is isolated and has a heartbeat; no review is told it has docker or sudo."""
+
+    @classmethod
+    def setUpClass(cls):
+        text = open(os.path.join(HERE, "..", "..", "workflows", "trial.yml")).read()
+        cls.codex = text.split("\n  codex:\n")[1].split("\n  work:\n")[0]
+        cls.steps = {}
+        for job, body in (("codex", cls.codex), ("work", text.split("\n  work:\n")[1])):
+            cls.steps[job] = [a or b for a, b in re.findall(r"^      - (?:name: (.+)|uses: (.+))$", body, re.M)]
+
+    def test_both_jobs_heartbeat_and_isolate_before_the_review(self):
+        for job, steps in self.steps.items():
+            order = [steps.index(x) for x in ("heartbeat", "isolate", "remove the source", "review")]
+            self.assertEqual(order, sorted(order), job)
+
+    def test_the_switch_job_readies_the_labs_and_the_tools_first(self):
+        steps = self.steps["codex"]
+        self.assertLess(steps.index("packages"), steps.index("labs"))
+        self.assertLess(steps.index("labs"), steps.index("lab source"))
+        self.assertLess(steps.index("lab source"), steps.index("isolate"))
+        codex = self.codex
+        self.assertRegex(codex.split("- name: packages")[1].split("- name: labs")[0], r"\bnmap\b")
+        self.assertIn("stream.ts.jsonl", codex.split("- name: heartbeat")[1].split("- name: isolate")[0])
+        self.assertIn("lab_ready.py", open(os.path.join(HERE, "..", "labs.sh")).read())
+
+    def test_the_switch_brief_offers_no_docker_or_sudo(self):
+        brief = open(os.path.join(HERE, "..", "trial", "BRIEF.md")).read()
+        self.assertNotIn("docker restart", brief)
+        self.assertNotIn("docker cp", brief)
+        self.assertNotIn("apt-get", brief)
+        self.assertIn("./lab-source", brief)
 
 
 class Isolate(unittest.TestCase):

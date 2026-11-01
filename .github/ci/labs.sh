@@ -1,6 +1,7 @@
 #!/bin/bash
 # Starts the labs the hunters and the trial use, as they run on the author's
-# machine: five training apps, the services lab and the DNS lab on 5354.
+# machine: five training apps, the services lab and the DNS lab on 5354. VAmPI
+# and DVWA need a first-run step (database); it is done and checked here.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 sudo sysctl -q -w vm.max_map_count=262144 # Elasticsearch in the services lab
@@ -35,3 +36,4 @@ for port in 3001 5002 5013 5020 5030; do
   echo "lab 127.0.0.1:$port: $(curl -s -o /dev/null -m 5 -w '%{http_code}' "http://127.0.0.1:$port/")"
 done
 dig +short @127.0.0.1 -p 5354 www.azqlab.lan
+python3 .github/ci/lab_ready.py --vampi http://127.0.0.1:5002 --dvwa http://127.0.0.1:5030

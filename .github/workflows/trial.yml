@@ -1,9 +1,10 @@
 name: trial
 
 # A blind review of the newest release by Codex (gpt-6-luna, xhigh) on a
-# runner, with the local trials' brief (.github/ci/trial/BRIEF.md). The
-# reviewer installs azhaq from the release; the source is removed from the
-# runner first. REPORT.md and the notes are encrypted to the maintainer's
+# runner, with the local trials' brief (.github/ci/trial/BRIEF.md). The labs
+# are made ready first, the reviewer is isolated as in the other kinds (no
+# docker, no sudo, hidden processes, a heartbeat) and installs azhaq from the
+# release; the source is removed from the runner first. REPORT.md and the notes are encrypted to the maintainer's
 # age key and go to the ci-results branch under trial/NAME/. Push a tag
 # trial-NAME.
 #
@@ -59,8 +60,11 @@ jobs:
         with:
           go-version: stable
       - name: packages
-        run: sudo apt-get update -q && sudo apt-get install -y -q dnsutils age
+        # nmap needs root: the reviewer gets it here, not through sudo.
+        run: sudo apt-get update -q && sudo apt-get install -y -q dnsutils age nmap jq
       - name: labs
+        # Started, and made ready: VAmPI's database created, DVWA's set up,
+        # each checked with a login (lab_ready.py, called by labs.sh).
         run: .github/ci/labs.sh
       - name: codex
         env:
@@ -68,6 +72,37 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           CODEX_AUTH_JSON: ${{ secrets.CODEX_AUTH_JSON }}
         run: .github/ci/codex.sh
+      - name: lab source
+        # The reviewer's ground truth is the apps' source; it cannot reach the
+        # containers after isolation, so a copy goes in its folder (./lab-source).
+        run: |
+          src="$HOME/trial/lab-source"
+          mkdir -p "$src/juice" "$src/dvga" "$HOME/ci"
+          cp_app() { docker cp "azq-$1:$2" "$src/$3" || echo "::warning title=lab source::no $2 in azq-$1"; }
+          cp_app juice /juice-shop/package.json juice/package.json
+          cp_app juice /juice-shop/server/routes juice/routes
+          cp_app juice /juice-shop/build/app.js juice/app.js
+          cp_app juice /juice-shop/build/server juice/server
+          cp_app vampi /vampi vampi
+          cp_app dvga /opt/dvga/app.py dvga/app.py
+          cp_app dvga /opt/dvga/core dvga/core
+          cp_app dvga /opt/dvga/schema.graphql dvga/schema.graphql
+          cp_app dvna /app dvna
+          cp_app dvwa /var/www/html dvwa
+      - name: heartbeat
+        # Counts to ci-results every 10 minutes (heartbeat.sh), as in the work
+        # job: root, token in a root-only file, started before isolate.sh.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          printf '%s' "$GITHUB_TOKEN" | sudo install -m 600 -o root -g root /dev/stdin /root/beat.token
+          sudo install -m 700 -o root -g root .github/ci/heartbeat.sh .github/ci/publish.sh /root/
+          sudo env -u GITHUB_TOKEN setsid bash /root/heartbeat.sh "$GITHUB_REF_NAME" "$HOME/ci/stream.ts.jsonl" "$HOME/trial/phases.log" "$(id -un)" "$GITHUB_REPOSITORY" > /dev/null 2>&1 < /dev/null &
+          echo "heartbeat started"
+      - name: isolate
+        # As in the work job: hidepid on /proc, no docker, no sudo; the job
+        # fails when any of it is still possible.
+        run: .github/ci/range/isolate.sh
       - name: remove the source
         # As a new user, the reviewer has the release and GitHub, not a checkout.
         run: |
@@ -80,9 +115,12 @@ jobs:
           echo "release under review: $v"
           sed "s/__VERSION__/$v/" "$HOME/ci/BRIEF.md" > "$HOME/ci/brief.md"
           cd "$HOME/trial"
+          # Every line of the event stream gets the second it arrived (the
+          # heartbeat reads it), as in the work job.
           timeout 4h codex exec --dangerously-bypass-approvals-and-sandbox --skip-git-repo-check -C "$HOME/trial" \
-            -m gpt-6-luna -c model_reasoning_effort=xhigh --json "$(cat "$HOME/ci/brief.md")" < /dev/null \
-            > "$HOME/ci/stream.jsonl" 2> "$HOME/ci/stderr.txt" || echo "codex ended with $?"
+            -m gpt-6-luna -c model_reasoning_effort=xhigh --json "$(cat "$HOME/ci/brief.md")" < /dev/null 2> "$HOME/ci/stderr.txt" |
+            while IFS= read -r line; do printf '%(%s)T %s\n' -1 "$line"; done > "$HOME/ci/stream.ts.jsonl"
+          echo "codex ended with ${PIPESTATUS[0]}"
       - name: publish
         if: always()
         env:
@@ -91,7 +129,7 @@ jobs:
           cd "$HOME/trial"
           { [ -f REPORT.md ] && echo REPORT.md
             find notes -type f \( -name '*.md' -o -name '*.txt' -o -name '*.log' -o -name '*.tsv' \) -size -2M 2>/dev/null || true; } > "$HOME/ci/list"
-          tail -n 300 "$HOME/ci/stream.jsonl" > "$HOME/ci/stream-tail.jsonl" 2>/dev/null || true
+          tail -n 300 "$HOME/ci/stream.ts.jsonl" > "$HOME/ci/stream-tail.jsonl" 2>/dev/null || true
           tar czf "$HOME/ci/trial.tgz" -T "$HOME/ci/list" -C "$HOME/ci" stream-tail.jsonl stderr.txt
           age -r "$AGE_RECIPIENT" -o "$HOME/ci/trial.tgz.age" "$HOME/ci/trial.tgz"
           files=("$HOME/ci/trial.tgz.age")
