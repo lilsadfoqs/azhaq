@@ -1,0 +1,56 @@
+name: measure
+
+# One-off measurements for the CI layout: the runner, each test's time,
+# compile cost with and without the build cache.
+on:
+  push:
+    tags: ["measure-*"]
+
+permissions:
+  contents: read
+
+jobs:
+  machine:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: runner
+        run: |
+          nproc; free -g; df -h / /mnt; lsblk -o NAME,SIZE,MOUNTPOINT
+          docker info --format '{{.DockerRootDir}} {{.Driver}}'
+      - name: mtime
+        run: time python3 .github/ci/mtime.py
+      - name: docker on /mnt
+        run: |
+          time {
+            sudo systemctl stop docker docker.socket
+            echo '{"data-root":"/mnt/docker"}' | sudo tee /etc/docker/daemon.json
+            sudo systemctl start docker
+          }
+          docker info --format '{{.DockerRootDir}} {{.Driver}}'
+          time docker pull -q vulhub/jenkins:2.46.1
+          df -h / /mnt
+
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+      - name: compile with the restored cache
+        run: time go test -race -run '^$' ./... > /dev/null
+      - name: compile cmd/azhaq cold
+        run: time GOCACHE=$(mktemp -d) go test -race -run '^$' ./cmd/azhaq > /dev/null
+      - name: tests
+        run: |
+          start=$(date +%s)
+          go test -race -json ./... > tests.json || true
+          echo "wall $(( $(date +%s) - start ))s"
+          gzip tests.json
+      - uses: actions/upload-artifact@v7
+        with:
+          name: tests
+          path: tests.json.gz
