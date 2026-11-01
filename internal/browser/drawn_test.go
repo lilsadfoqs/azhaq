@@ -35,6 +35,25 @@ func TestPageOfMarkupIsTakenOnceDrawn(t *testing.T) {
 	}
 }
 
+// A page with no script can still change after it paints: a CSS fade-in
+// or an autoplaying video. It keeps the wait.
+func TestScriptFreePageThatMovesKeepsTheWait(t *testing.T) {
+	b := startChrome(t)
+	for name, html := range map[string]string{
+		"fade-in": `<!doctype html><title>fade</title><style>@keyframes f{from{opacity:.4}to{opacity:1}} h1{animation:f 4s}</style><h1>Fading in</h1>`,
+		"video":   `<!doctype html><title>video</title><h1>Video</h1><video autoplay muted loop width=100 height=60></video>`,
+	} {
+		srv := pageServer(t, html)
+		t0 := time.Now()
+		if _, err := b.Load(context.Background(), srv.URL, true); err != nil {
+			t.Fatal(name, err)
+		}
+		if took := time.Since(t0); took < 1400*time.Millisecond {
+			t.Errorf("%s: a page that is still moving was taken after %s", name, took)
+		}
+	}
+}
+
 // A page with a script may draw after any delay: it is given the time it
 // always had, and the shot has what a timer drew a second later.
 func TestPageWithAScriptGetsTheTimeToDraw(t *testing.T) {

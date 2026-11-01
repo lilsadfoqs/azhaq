@@ -597,17 +597,20 @@ func (b *Browser) wait() time.Duration {
 
 // staticJS says whether a page has drawn and can no longer change by
 // itself: it has no script, frame, object or refresh that could draw
-// anything later, Chrome has painted something (first contentful paint),
-// and its fonts are in. A page with a script may draw after any delay, and
-// is given the whole wait.
+// anything later, no animation or transition that is still running (a CSS
+// fade-in) and no autoplaying video or audio, Chrome has painted something
+// (first contentful paint), and its fonts are in. A page that may still
+// change is given the whole wait.
 const staticJS = `(() => {
-  if (document.scripts.length > 0 || document.querySelector('meta[http-equiv="refresh" i], iframe, frame, object, embed, [onload], [onerror]')) return false;
+  if (document.scripts.length > 0 || document.querySelector('meta[http-equiv="refresh" i], iframe, frame, object, embed, [onload], [onerror], video[autoplay], audio[autoplay]')) return false;
+  if (document.getAnimations().some(a => a.playState !== 'finished' && a.playState !== 'idle')) return false;
   return performance.getEntriesByName('first-contentful-paint').length > 0 && document.fonts.status !== 'loading';
 })()`
 
 // hasDrawn is the page's answer to "has it finished drawing?" for quiet,
-// which asks it each time the network is quiet: true after within since the
-// page's load event, or sooner for a page that cannot change by itself
+// which asks it each time the network is quiet, and only once the load
+// event is in (Load starts it after the navigation, so its images and
+// styles are): true after within since the page's load event, or sooner for a page that cannot change by itself
 // (staticJS). A page whose scripts may still draw is waited for, as it
 // always was; a page of plain markup is not held for a fixed time.
 func (b *Browser) hasDrawn(tab context.Context, within time.Duration) func() bool {

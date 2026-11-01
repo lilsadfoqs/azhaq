@@ -109,7 +109,7 @@ A page that was not fully loaded when the picture was taken has these fields, an
 
 ### When a page is taken
 - Chrome is started once for the run, and each page is taken after its load event, once nothing it shows is still on its way.
-- Without `-shot-wait`, a page with no script, frame, object or refresh is taken as soon as Chrome has painted it and its fonts are in: nothing can draw on it later. A page with a script is given 1.5 s after its load event, since a timer may draw at any moment.
+- Without `-shot-wait`, a page is taken early only after its load event (its images and styles are then in) and only when nothing can still change it: no script, frame, object, embed or refresh, no CSS animation or transition still running (a fade-in), no autoplaying `<video>` or `<audio>`, and Chrome has painted it and its fonts are in. Any other page is given 1.5 s after its load event, since a timer or an animation may draw at any moment.
 - `-shot-wait 3s` waits 3 s for every page, scripts or not; `-shot-wait 0` takes the page at once.
 
 ### Chrome, ports and file names
