@@ -4,6 +4,7 @@
 
 ### Changed
 
+- `subs -live` lists a name that is only a CNAME, as `subfinder | dnsx -a -cname` does (v0.10.1 left it out): the row has `"cname_only": true` and no address, it is counted as `CNAME only` and is still in `results`, a note names how many there are, and one whose target is gone keeps its `takeover` lead.
 - `-allow HOST:PORT` (and `127.0.0.1:3001`, `[::1]:80`) now allows that host on that port only; an entry without a port still allows every port, and a port in `-deny` still denies the host on every port. Requests, redirects, links, script URLs, Chrome, port scans (TCP and UDP) and the commands an `azhaq mcp` server runs are refused before any connection; URLs left out for their port are listed under `skipped` and port scans count the ports they left out. Before, the port was dropped and the whole host was allowed. Write the host alone to keep that.
 - `-H` and `-header` are one flag on every command: `run` and `plan` take `-H`, and `probe`, `crawl`, `dirs`, `params`, `shots` and `fuzz` take `-header`; a secret header given either way is kept out of what resume stores.
 - `run` takes `-sr`, `-srd` and `-ob` (the layout of `crawl -sr`: `DIR/HOST/SHA1.txt` with an `index.txt`, bounded by `-max-response-size`, off by default), and `query` has a `response_file` field with the path of a URL row's stored response.
@@ -22,6 +23,7 @@
 
 ### Fixed
 
+- `ingest` of naabu JSON now makes `Port` rows as azhaq's own scan does: `query -type Port`, the summary counts and the MCP tools list each open port, the lines naabu repeats fold into one row, and a naabu udp line is a udp port.
 - A worker no longer waits a minute and ends with a lost-run error when the run finishes between two of its claims: three refused connections in a row end it as an ended run.
 - `subs` with `-max-time` read the name checker's count and time while a sampled source it had cut short could still be writing them (a data race, seen with `-race`).
 - `params` keeps what a spent `-max-requests` established: the page's row carries the names found so far and a note says how many names were judged; exit stays 4 and `azhaq resume` searches the page again.
