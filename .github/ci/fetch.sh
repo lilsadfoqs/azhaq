@@ -55,6 +55,7 @@ for f in *.age; do
   case $f in
   *codex-auth.json.age) ;;
   key.json.age) "$age" -d -i "$key" -o key.json "$f" ;;
+  scores.json.age) "$age" -d -i "$key" -o scores.json "$f" ;; # .github/ci/history.sh reads these
   *) "$age" -d -i "$key" -o "${f%.age}" "$f" && tar -xzf "${f%.age}" ;;
   esac
 done

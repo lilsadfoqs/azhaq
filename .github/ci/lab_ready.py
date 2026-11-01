@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-"""lab_ready.py [--vampi URL] [--dvwa URL]: puts the two training apps that
+"""lab_ready.py [--vampi URL] [--dvwa URL] [--deploy URL]: puts the two training apps that
 need a first-run step into the state a user who read their instructions has:
 VAmPI's database created (its documented GET /createdb) and DVWA's database
 set up (the create/reset button of its setup page). Each is then checked by
-a login: VAmPI's name1/pass1, DVWA's admin/password. Nothing else changes.
+a login: VAmPI's name1/pass1, DVWA's admin/password. The deploy lab
+(bench/truth/deploy) is checked by its page and script, which must be the
+first version's. Nothing else changes.
 Exits 1 when an app does not answer a login within --wait seconds.
 """
 import argparse
@@ -74,20 +76,30 @@ def dvwa_ready(base):
     return dvwa_login(base)
 
 
-def wait_for(name, check, base, wait, sleep=time.sleep, clock=time.time):
+def deploy_ready(base):
+    """True once the deploy lab serves its page and the first version's script."""
+    op = opener()
+    status, _, page = fetch(op, base + "/")
+    if status != 200 or "main.js" not in page:
+        return False
+    status, _, script = fetch(op, base + "/main.js")
+    return status == 200 and "/api/v2/export" not in script
+
+
+def wait_for(name, check, base, wait, sleep=time.sleep, clock=time.time, what="a login answers"):
     """Runs check(base) until it holds or `wait` seconds pass (the database server starts after the page)."""
     end = clock() + wait
     while True:
         try:
             if check(base):
-                print("lab %s: ready, a login answers" % name)
+                print("lab %s: ready, %s" % (name, what))
                 return True
         except (OSError, http.client.HTTPException) as e:
             last = e
         else:
             last = None
         if clock() >= end:
-            print("lab %s: no login answers after %ds%s" % (name, wait, " (%s)" % last if last else ""), file=sys.stderr)
+            print("lab %s: not ready after %ds, %s not met%s" % (name, wait, what, " (%s)" % last if last else ""), file=sys.stderr)
             return False
         sleep(3)
 
@@ -96,6 +108,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--vampi", default="")
     ap.add_argument("--dvwa", default="")
+    ap.add_argument("--deploy", default="")
     ap.add_argument("--wait", type=int, default=120)
     a = ap.parse_args(argv)
     ok = True
@@ -103,6 +116,8 @@ def main(argv=None):
         ok = wait_for("vampi", vampi_ready, a.vampi.rstrip("/"), a.wait) and ok
     if a.dvwa:
         ok = wait_for("dvwa", dvwa_ready, a.dvwa.rstrip("/"), a.wait) and ok
+    if a.deploy:
+        ok = wait_for("deploy", deploy_ready, a.deploy.rstrip("/"), a.wait, what="its page and first-version script answer") and ok
     return 0 if ok else 1
 
 

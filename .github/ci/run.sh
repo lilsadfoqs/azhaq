@@ -1,6 +1,9 @@
 #!/bin/bash
-# run.sh bench|hunt|gate|trial|range-smoke NAME [WORDS...]: starts a CI run
-# by pushing the annotated tag KIND-NAME on HEAD. WORDS are the tag's first
+# run.sh bench|hunt|gate|trial|range-smoke|checklist NAME [WORDS...]: starts a CI run
+# by pushing the annotated tag KIND-NAME on HEAD. A checklist (the review's
+# capability checklist as commands, under 20 minutes) takes no words; run it
+# on the commit to be tagged: the release workflow wants a passing run of it.
+# WORDS are the tag's first
 # line: the bench flags ("-only probe -profile polite"), "areas=web,net
 # model=…" for a hunt, "only=ID,ID" for a range-smoke, and for a trial its
 # kind: switch (the default, kept for now), gate or baseline, or the older
@@ -14,8 +17,8 @@
 # is the secret CODEX_AUTH_KEY). fetch.sh brings back what the run wrote;
 # beat.sh reads a trial's heartbeat while it runs.
 set -euo pipefail
-kind=${1:?usage: run.sh bench|hunt|gate|trial|range-smoke NAME [WORDS...]}
-name=${2:?usage: run.sh bench|hunt|gate|trial|range-smoke NAME [WORDS...]}
+kind=${1:?usage: run.sh bench|hunt|gate|trial|range-smoke|checklist NAME [WORDS...]}
+name=${2:?usage: run.sh bench|hunt|gate|trial|range-smoke|checklist NAME [WORDS...]}
 shift 2
 ci_recipient=age1s5k75wkcjwpps44lup59t048lxtsmc48l2lkg42mly922kj6g3ks3flrqj
 age=$(command -v age || echo "$HOME/go/bin/age")
@@ -24,6 +27,7 @@ trap 'rm -f "$msg"' EXIT
 case $kind in
 bench) printf '%s\n' "${*:--profile both}" > "$msg" ;;
 range-smoke) printf '%s\n' "${*:-all}" > "$msg" ;;
+checklist) printf '%s\n' "${*:-checklist}" > "$msg" ;;
 hunt | gate | trial)
   if [ "$kind" = trial ]; then
     case "${1:-switch}" in
@@ -38,7 +42,7 @@ hunt | gate | trial)
   "$age" -a -r "$ci_recipient" "${CODEX_HOME:-$HOME/.codex}/auth.json" >> "$msg"
   ;;
 *)
-  echo "run.sh: KIND is bench, hunt, gate, trial or range-smoke" >&2
+  echo "run.sh: KIND is bench, hunt, gate, trial, range-smoke or checklist" >&2
   exit 2
   ;;
 esac

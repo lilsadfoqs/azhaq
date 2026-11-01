@@ -18,10 +18,15 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
 )
+
+// Kind3 is what Tally counts lines by: the class an entry was sent to, its
+// kind and the collector that sent it.
+type Kind3 struct{ Class, Kind, Collector string }
 
 // Entry is one request or connection. Hash covers Prev and every other field.
 type Entry struct {
@@ -56,9 +61,70 @@ func (e Entry) IsTarget() bool { return e.Class == "" || e.Class == ClassTarget 
 // without its Hash.
 func (e Entry) sum() string {
 	e.Hash = ""
+	return sumOf(e.Prev, marshal(e))
+}
+
+// marshal is json.Marshal(e), byte for byte. A line made only of plain
+// ASCII (nearly every one) is written by hand: marshalling was a fifth of
+// the CPU a full-range port scan spent on its ledger.
+func marshal(e Entry) []byte {
+	if raw, ok := appendPlain(make([]byte, 0, 256), e); ok {
+		return raw
+	}
 	raw, _ := json.Marshal(e)
+	return raw
+}
+
+// plain says s needs no escaping in JSON: printable ASCII without the
+// characters encoding/json escapes (quote, backslash, <, >, &).
+func plain(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if c := s[i]; c < 0x20 || c >= 0x7f || c == '"' || c == '\\' || c == '<' || c == '>' || c == '&' {
+			return false
+		}
+	}
+	return true
+}
+
+// appendPlain writes e as json.Marshal does when every string is plain and
+// the time is a year encoding/json accepts; it says false otherwise.
+func appendPlain(b []byte, e Entry) ([]byte, bool) {
+	if y := e.Time.Year(); y < 0 || y > 9999 {
+		return nil, false
+	}
+	for _, s := range [...]string{e.Kind, e.Class, e.Method, e.Target, e.Host, e.VHost, e.Body, e.Rule, e.Collector, e.Prev, e.Hash} {
+		if !plain(s) {
+			return nil, false
+		}
+	}
+	b = append(b, `{"seq":`...)
+	b = strconv.AppendInt(b, e.Seq, 10)
+	b = append(b, `,"time":"`...)
+	b = e.Time.AppendFormat(b, time.RFC3339Nano)
+	b = append(b, `","kind":"`...)
+	b = append(b, e.Kind...)
+	b = append(b, '"')
+	for _, f := range [...]struct{ name, val string }{{"class", e.Class}, {"method", e.Method}} {
+		if f.val != "" {
+			b = append(append(append(b, `,"`...), f.name...), `":"`...)
+			b = append(append(b, f.val...), '"')
+		}
+	}
+	b = append(b, `,"target":"`...)
+	b = append(append(b, e.Target...), '"')
+	for _, f := range [...]struct{ name, val string }{{"host", e.Host}, {"vhost", e.VHost}, {"body", e.Body}, {"rule", e.Rule}, {"collector", e.Collector}, {"prev", e.Prev}, {"hash", e.Hash}} {
+		if f.val != "" {
+			b = append(append(append(b, `,"`...), f.name...), `":"`...)
+			b = append(append(b, f.val...), '"')
+		}
+	}
+	return append(b, '}'), true
+}
+
+// sumOf is the hash of an entry's JSON without its Hash after prev.
+func sumOf(prev string, raw []byte) string {
 	h := sha256.New()
-	h.Write([]byte(e.Prev))
+	h.Write([]byte(prev))
 	h.Write(raw)
 	return hex.EncodeToString(h.Sum(nil))
 }
@@ -78,6 +144,9 @@ type Ledger struct {
 	lastSeal bool // the last line is a seal: nothing to seal again
 	err      error
 
+	opened int64         // lines the file held when it was opened
+	tally  map[Kind3]int // lines recorded since, by class, kind and collector
+
 	tail    []Entry         // what follows the last seal when the file was opened
 	held    map[string]bool // writes of the run that was killed: method, target and body
 	heldAny map[string]bool // the same without the body (Chrome's)
@@ -92,7 +161,7 @@ func Open(path string) (*Ledger, error) {
 	if err != nil {
 		return nil, err
 	}
-	l := &Ledger{f: f, path: path, w: bufio.NewWriter(f)}
+	l := &Ledger{f: f, path: path, w: bufio.NewWriter(f), tally: map[Kind3]int{}}
 	last, err := lastLine(f)
 	if err == nil && len(last) > 0 {
 		var e Entry
@@ -104,6 +173,7 @@ func Open(path string) (*Ledger, error) {
 		f.Close()
 		return nil, fmt.Errorf("ledger %s: the last line is not an entry (%v): azhaq ledger -verify %s", path, err, path)
 	}
+	l.opened = l.seq
 	if l.seq > 0 && !l.lastSeal {
 		l.tail = unsealed(path)
 	}
@@ -251,15 +321,22 @@ func (l *Ledger) Record(e Entry) {
 	}
 	l.seq++
 	e.Seq, e.Prev = l.seq, l.prev
-	e.Hash = e.sum()
-	raw, _ := json.Marshal(e)
-	raw = append(raw, '\n')
+	// Hash is the entry's last field: the line is the JSON that is hashed
+	// with the hash added, so the entry is marshalled once, not twice.
+	raw := marshal(e)
+	e.Hash = sumOf(e.Prev, raw)
+	raw = append(raw[:len(raw)-1], `,"hash":"`...)
+	raw = append(raw, e.Hash...)
+	raw = append(raw, '"', '}', '\n')
 	_, err := l.w.Write(raw)
 	if err == nil {
 		err = l.w.Flush()
 	}
 	l.note(err)
 	l.prev, l.lastSeal = e.Hash, e.Kind == KindSeal
+	if e.Kind != KindSeal {
+		l.tally[Kind3{e.Class, e.Kind, e.Collector}]++
+	}
 	if k := key(e.Method, e.Target, ""); l.pending[k] && (e.Kind == "http" || e.Kind == "chrome") && e.IsTarget() {
 		delete(l.pending, k)
 		l.again++
@@ -278,6 +355,19 @@ func (l *Ledger) Count() int64 {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	return l.seq
+}
+
+// Tally is the lines this ledger recorded since it was opened, seals left
+// out, by class, kind and collector: what a summary says about them without
+// reading the file again. Opened is the lines the file held before them.
+func (l *Ledger) Tally() (lines map[Kind3]int, opened int64) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	out := make(map[Kind3]int, len(l.tally))
+	for k, n := range l.tally {
+		out[k] = n
+	}
+	return out, l.opened
 }
 
 // Last is the hash of the last line written: after Close, the seal's.

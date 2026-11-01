@@ -20,8 +20,8 @@ import (
 var cmpSections = []string{"apps", "dirs", "fuzz", "shots", "params", "domains", "urls", "brute", "dns", "ports", "services", "probe", "notify"}
 
 // onceSections run once, after the comparisons, in this order. claims is
-// one unit a case (claimCaseIDs); regress runs only when -only names it.
-var onceSections = []string{"dropin", "scope", "secrets", "tenants", "scale", "claims", "regress", "network", "lab", "openapi", "docs"}
+// one unit a case (claimCaseIDs); regress and checklist run only when -only (or -checklist) names them.
+var onceSections = []string{"dropin", "scope", "secrets", "tenants", "scale", "claims", "regress", "network", "lab", "openapi", "docs", "deploy", "checklist"}
 
 var profileOrder = []string{profDefault, profPolite}
 

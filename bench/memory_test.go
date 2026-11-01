@@ -2,6 +2,8 @@ package main
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -51,5 +53,26 @@ func TestRowsKeepMemoryAndTheTableShowsIt(t *testing.T) {
 func TestMedianOfRuns(t *testing.T) {
 	if median(nil) != 0 || median([]float64{3}) != 3 || median([]float64{9, 1, 5}) != 5 || median([]float64{4, 1}) != 4 {
 		t.Error("median")
+	}
+}
+
+// freshCopy keeps the bytes and the mode, and leaves a new file: the one the
+// linker wrote (and the kernel mapped whole) is replaced.
+func TestFreshCopyIsANewFileWithTheSameBytes(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "azhaq")
+	if err := os.WriteFile(p, []byte("binary"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	before, _ := os.Stat(p)
+	if err := freshCopy(p); err != nil {
+		t.Fatal(err)
+	}
+	after, _ := os.Stat(p)
+	got, _ := os.ReadFile(p)
+	if string(got) != "binary" || after.Mode().Perm() != 0o755 || os.SameFile(before, after) {
+		t.Errorf("content %q, mode %v, same file %v", got, after.Mode(), os.SameFile(before, after))
+	}
+	if _, err := os.Stat(p + ".copy"); err == nil {
+		t.Error("the temporary copy was left behind")
 	}
 }

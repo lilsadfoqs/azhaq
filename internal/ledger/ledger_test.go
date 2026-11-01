@@ -1,6 +1,7 @@
 package ledger
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -389,4 +390,44 @@ func TestGuardLeavesOtherClassesAlone(t *testing.T) {
 	if !Held("POST", "http://a.test/x") || Held("POST", "https://hooks.test/x") {
 		t.Fatal("only the target's write is held")
 	}
+}
+
+// marshal writes every entry as json.Marshal does, whatever it holds: the
+// hand-written path for plain lines and the fallback for the others.
+func TestMarshalIsJSONMarshal(t *testing.T) {
+	base := time.Date(2026, 11, 1, 16, 30, 8, 123456000, time.UTC)
+	strs := []string{"", "a", "http://127.0.0.1:8080/a b?x=1&y=<2>", `quote " and \ slash`, "caf\u00e9", "tab\there", "line\nbreak", "\u2028", "\x7f", "bad\xffutf8", "127.31.0.1:65535"}
+	times := []time.Time{base, base.Add(time.Nanosecond), base.Truncate(time.Second), time.Date(0, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(10000, 1, 1, 0, 0, 0, 0, time.UTC).Add(-time.Nanosecond)}
+	n := 0
+	for ti, tm := range times {
+		for i, a := range strs {
+			for j, b := range strs {
+				e := Entry{Seq: int64(i*100 + j), Time: tm, Kind: "tcp", Class: a, Method: b, Target: strs[(i+j)%len(strs)], Host: b, VHost: a, Body: strs[(ti+j)%len(strs)], Rule: a, Collector: b, Prev: a, Hash: b}
+				want, err := json.Marshal(e)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if got := marshal(e); !bytes.Equal(got, want) {
+					t.Fatalf("entry %+v:\n got %s\nwant %s", e, got, want)
+				}
+				n++
+			}
+		}
+	}
+	for _, e := range []Entry{{}, {Seq: -1, Kind: "seal"}, {Seq: 1 << 62, Time: base, Kind: "http", Target: "x"}} {
+		want, _ := json.Marshal(e)
+		if got := marshal(e); !bytes.Equal(got, want) {
+			t.Errorf("entry %+v:\n got %s\nwant %s", e, got, want)
+		}
+	}
+	// A recorded line is the entry with its hash, and verifies.
+	path := filepath.Join(t.TempDir(), "l.jsonl")
+	l, _ := Open(path)
+	l.Record(Entry{Kind: "tcp", Target: "127.0.0.1:80", Host: "a<b"})
+	l.Record(Entry{Kind: "http", Method: "GET", Target: "http://a.test/", Time: base})
+	l.Close()
+	if c, err := Verify(path); err != nil || c.Entries != 2 {
+		t.Fatalf("verify: %+v %v", c, err)
+	}
+	t.Logf("%d entries compared", n)
 }

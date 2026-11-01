@@ -1,7 +1,11 @@
 import http.server
 import json
 import os
+import socket
+import subprocess
 import sys
+import tempfile
+import time
 import threading
 import unittest
 import urllib.parse
@@ -127,6 +131,57 @@ class LabReady(unittest.TestCase):
         self.assertTrue(lab_ready.wait_for("x", late, "b", 60, sleep=lambda s: None, clock=lambda: next(clock)))
         self.assertEqual(len(n), 3)
         self.assertFalse(lab_ready.wait_for("x", lambda b: False, "b", 9, sleep=lambda s: None, clock=lambda: next(clock)))
+
+
+DEPLOY = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "bench", "truth", "deploy")
+
+
+class DeployLab(unittest.TestCase):
+    """The real fixture app and its deploy command, as labs.sh starts them."""
+
+    def setUp(self):
+        self.dir = tempfile.mkdtemp()
+        self.addCleanup(subprocess.call, ["rm", "-rf", self.dir])
+        self.state = os.path.join(self.dir, "state")
+        s = socket.socket()
+        s.bind(("127.0.0.1", 0))
+        port = s.getsockname()[1]
+        s.close()
+        self.base = "http://127.0.0.1:%d" % port
+        self.env = dict(os.environ, AZQ_DEPLOY_STATE=self.state, AZQ_DEPLOY_PORT=str(port))
+        self.deploy("v1")
+        self.app = subprocess.Popen([sys.executable, "-I", os.path.join(DEPLOY, "app.py"), str(port), self.state])
+        self.addCleanup(self.app.kill)
+        for _ in range(50):
+            try:
+                socket.create_connection(("127.0.0.1", port), 0.2).close()
+                break
+            except OSError:
+                time.sleep(0.1)
+
+    def deploy(self, *args):
+        return subprocess.run([os.path.join(DEPLOY, "deploy.sh"), *args], env=self.env, capture_output=True, text=True)
+
+    def test_ready_on_the_first_version_and_not_after_a_deploy(self):
+        self.assertTrue(lab_ready.deploy_ready(self.base))
+        self.assertEqual(lab_ready.main(["--deploy", self.base, "--wait", "0"]), 0)
+        self.assertEqual(self.deploy("v2").returncode, 0)
+        self.assertFalse(lab_ready.deploy_ready(self.base))
+        self.assertEqual(lab_ready.main(["--deploy", self.base, "--wait", "0"]), 1)
+        self.deploy("v1")
+        self.assertTrue(lab_ready.deploy_ready(self.base))
+
+    def test_deploy_command_flips_the_state_and_refuses_anything_else(self):
+        r = self.deploy("v2")
+        self.assertEqual((r.returncode, open(self.state).read().strip()), (0, "v2"))
+        self.assertIn("deployed v2", r.stdout)
+        for bad in (["v3"], []):
+            r = self.deploy(*bad)
+            self.assertEqual(r.returncode, 2)
+            self.assertEqual(open(self.state).read().strip(), "v2")
+
+    def test_no_answer_is_not_ready(self):
+        self.assertEqual(lab_ready.main(["--deploy", "http://127.0.0.1:9", "--wait", "0"]), 1)
 
 
 if __name__ == "__main__":

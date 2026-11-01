@@ -17,6 +17,48 @@ go run ./bench -merge -expect LIST a.json b.json  # join records of units run ap
 
 Run it from the repository root. It needs Docker (Juice Shop and VAmPI from `bench/compose.yaml`, the services lab from `bench/services.yaml` when the services section runs), network access, a C compiler (jsluice uses cgo), Python 3 (arjun), Chrome (screenshots, `-browser`, `-login`) and linux/amd64 (the reference tools are pinned to their linux/amd64 release archives, or taken from `-refbin`). It exits non-zero if a check fails, and writes a JSON record to `bench/history/`. The bench never stops containers: `-down` takes down only its own two (`azhaq-bench`).
 
+## The lab images
+
+`bench/images.env` is the one list of the lab apps' images (Juice Shop, VAmPI, DVGA, DVNA and DVWA), each pinned by tag and digest. `bench/compose.yaml` and `.github/ci/labs.sh` name the same images (a test, `TestLabImagesPinnedFromOneList`, fails when either differs from the list; the README's quick start must name the same Juice Shop build, which `bench/pin_test.go` checks), and labs.sh starts the five apps on 3001, 5002, 5013, 5020 and 5030 for the hunters and the trials. A user who starts the labs the documented way is on the build a row of the README's table was measured on. The truth files in `bench/truth` are per build (`juice-shop-v20.3.0-*`); a pin moves together with them. The services lab (`bench/services.yaml`) keeps its tags, and the table's service rows read what each daemon says, not a version.
+
+`.github/ci/labs.sh` starts these, all on 127.0.0.1:
+
+| Lab | Port | Notes |
+| --- | --- | --- |
+| Juice Shop, VAmPI, DVGA, DVNA, DVWA | 3001, 5002, 5013, 5020, 5030 | the pinned images; VAmPI's and DVWA's databases are set up and a login is checked (`.github/ci/lab_ready.py`) |
+| Deploy lab | 5040 | `bench/truth/deploy`: an app whose API routes change when it is deployed, so `watch` can be tried against a deploy. `$HOME/lab/deploy v2` deploys the new version, `$HOME/lab/deploy v1` puts the first back; it starts on v1. What `watch` must report after the deploy is `bench/truth/deploy/expected.md`, and the `once:deploy` unit checks it: v1, v1 again (`no change`), then v2 |
+| Services lab | 10021 to 21211 | `bench/services.yaml`, fifteen daemons |
+| DNS lab | 5354 | `bench/labdns`, the zone azqlab.lan |
+
+To reproduce a row, start the labs from that list and run the row's unit (`go run ./bench -list-units` names them: the row "Paths, 4750 words, Juice Shop and VAmPI" is `default:dirs`):
+
+```
+.github/ci/labs.sh                       # or: docker compose -f bench/compose.yaml up -d (Juice Shop and VAmPI)
+go run ./bench -units default:dirs       # one row; -profile polite -units polite:dirs for the polite one
+```
+
+## The review checklist, as commands
+
+`go run ./bench -checklist` runs what a release review spends its first hours on, with nobody in the loop, and fails on any broken check. It runs `claims:1`, `7`, `8`, `9` and `10` (the summary, the ledger and what a proxy or a listener saw agree, for a map, a port scan, the MCP server, a request budget and the kill file), `once:lab` (the DNS lab), `once:deploy` (`watch` against a deploy) and `once:checklist`: azhaq against a stand-in site on 127.0.0.1 that logs every request by method and holds a trap for each unsafe thing, with a second listener on 127.0.0.2 outside the scope. The `checklist` workflow runs it on every push to `next`, for a tag `checklist-NAME` (`.github/ci/run.sh checklist NAME`) or `gate-NAME`, and in under 20 minutes; the release workflow refuses a tag whose commit has no passing run, so run it on the commit to tag first.
+
+| Checked | How |
+| --- | --- |
+| Exit codes: 0 complete, 2 usage, 3 failure, 4 limit | a plain map, a dead target, an unknown flag, `-max-requests 4`, `-cookie` whose session ends |
+| The summary's requests = the ledger's lines = what arrived | every run above, and the claims cases (the site, or a counting proxy in front of Juice Shop) |
+| Every row inside the scope | a link, a script, a form and `-dirs`/`-graphql` toward 127.0.0.2: none arrives; a target outside `-allow` is refused (exit 2) |
+| GET-only mapping by default | the page, its script and its API description name POST, PUT and DELETE routes and a GraphQL endpoint: only GET, HEAD and OPTIONS arrive |
+| Writes only with their flags | `-submit-forms`, `-graphql`, `-params-writes`, `roles -replay-writes put`: that method arrives and no other; without the flag none |
+| `-deny-path` | `/logout` and `/admin/purge` are asked without the rule and never with it, and the summary lists what was skipped |
+| A lost session never goes on as an anonymous run | `-cookie`, a `/logout` link ends it: exit 3, the summary says so, no request without the session follows |
+| The MCP lock | no `-allow` or `-scope`: exit 2; a call for a URL outside `-allow` sends nothing; `-unlocked` refuses port scans; the budget holds over calls (`claims:8`) |
+| The request budget and the kill switch | `claims:9`, `claims:10`: the cap, the 0.6 s limit after the file, resume |
+| Ledger | `ledger -verify` accepts a run's ledger and refuses an edited one with exit 3 |
+| Web and API, hunt, diff, exports, ingest | the map holds the crawl, the script's routes, the API description and the GraphQL schema; `dirs` finds the five real paths and none of four that do not exist; `params` finds the parameter the page reads and not two it ignores; `hunt`, `diff`, `export -format openapi` and `ingest` give what is known |
+| Subdomains, DNS, takeover candidates, UDP | `once:lab` |
+| Monitoring with a deploy | `once:deploy`: v1, v1 again says `no change`, v2 reports `expected.md` |
+
+Not covered: passive subdomain collection and the coverage estimate (they need the public sources), service detection across the services lab (one banner is checked), probing at scale, screenshots (`claims:3`, `11` need Chrome and are not in this run), archived URLs, the proxy-history matrix (HAR import), report generation and notifications. The list is `checklistCover` in `bench/checklist.go`; a test keeps it in step with the capabilities of `.github/ci/trial/GATE.md`'s checklist, so a capability added there must be listed there as covered or not.
+
 ## Units, and the CI run
 
 A unit is one comparison section in one profile (`default:apps`; for `domains` one domain, `default:domains/hackerone.com`, each with its own no-silent-zeros check), one claims case (`claims:5`) or a section that runs once (`once:dropin`). No unit reads another's results, so any set of units gives the same checks as a full run, and `-merge` puts the records of several jobs in the order of one run (each record lists what every unit wrote in `units`). The bench logs `<profile>: <section> took Ns` for every unit.
@@ -52,7 +94,7 @@ Each comparison row is two checks.
 
 - **Results**: azhaq's results are at least the reference's, counting only results that something other than azhaq confirms: a server's own log, a second resolver, `ss -ltn`, the app's own routes or planted parameters, a GET to the host itself. Not 95%.
 - **Time**: azhaq's time is at most 1.05 times the reference's: the median of three runs when the first took under 20 s, one run above; for `dirs` and `fuzz` the two tools' runs alternate (azhaq, ffuf, azhaq, ffuf, …), so a target that slows down or speeds up as the bench goes on costs both the same. A run of azhaq that failed (a flag or a command a stream has not delivered) is no time to compare, and fails the check.
-- **Memory**: the peak resident size of each run is taken the same way (the median of the runs a time uses; for rows over several apps or pages, the largest). Every row keeps `azhaq_rss_mb` and `reference_rss_mb` in the record, the check's detail says "memory ×N of the reference" beside "time ×N", and the README's table and the report give the peak beside the time. It is shown and recorded, not a bar.
+- **Memory**: azhaq is copied once after it is built (`freshCopy`): a binary the linker has just written shows up to 16 MB more resident than the same bytes unpacked from an archive, as a release and the reference tools are (30 MB against 14 MB for the same `azhaq dirs` of 11 words), and a number that depends on how a file got to disk is not a measure. What a small `dirs` sweep holds is the process itself: about 14 MB at start-up (the executable's pages and 4.4 MB of heap, 2.5 MB of it package initialisation), and the sweep, its calibration, the workspace and the ledger add less than the 0.5 MB the runs differ by. The peak resident size of each run is taken the same way (the median of the runs a time uses; for rows over several apps or pages, the largest). Every row keeps `azhaq_rss_mb` and `reference_rss_mb` in the record, the check's detail says "memory ×N of the reference" beside "time ×N", and the README's table and the report give the peak beside the time. It is shown and recorded, not a bar.
 
 Every check names the exact commands, so a reviewer can run them again. The record still has the old numbers (shares of the reference's results, ratios of times).
 

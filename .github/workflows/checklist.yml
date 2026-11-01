@@ -1,0 +1,53 @@
+name: checklist
+
+# The review's checklist as commands, with no reviewer in the loop: azhaq runs
+# against the labs (.github/ci/labs.sh) and stand-in servers whose answers are
+# known, and every check of `go run ./bench -checklist` must hold (exit codes,
+# summary = ledger = what a proxy saw, scope, GET-only mapping, writes only
+# with their flags, -deny-path, a lost session, the MCP lock, the request
+# budget, the kill switch; bench/README.md says which capabilities it covers
+# and which it does not). It runs on every push to next and for a tag
+# checklist-NAME (.github/ci/run.sh checklist NAME) or gate-NAME, and the
+# release workflow refuses a tag whose commit has no passing run.
+on:
+  push:
+    branches: [next]
+    tags: ["checklist-*", "gate-*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: checklist-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref_type == 'branch' }}
+
+jobs:
+  checklist:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+      - name: labs
+        # The apps of bench/images.env, the deploy lab and the DNS lab; the
+        # services lab is not part of the checklist and is left out.
+        env:
+          LABS_SERVICES: "0"
+        run: .github/ci/labs.sh
+      - name: checklist
+        run: go run ./bench -checklist 2>&1 | tee checklist.log
+        shell: bash
+      - name: failed checks
+        if: failure()
+        run: grep -n 'FAIL' checklist.log | head -40 || true
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: checklist
+          path: |
+            checklist.log
+            bench/history/*.json
+          retention-days: 30
