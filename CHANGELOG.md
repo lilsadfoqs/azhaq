@@ -51,6 +51,9 @@
 - A `-cookie` or `-header` run no longer measures a route without its session after an answer that looked like the end of the session, which made it take a revoked session's answer for a live one, miss the end and exit 0; it stops with exit 3, and a response that gives the user's cookie another value asks for a check too.
 - `export -format openapi` no longer lists the address the description was read from (`/openapi.json`) as a path of the API it describes, unless the description lists it.
 - A signed-in run's session check no longer sends a request without the session while a logout is in flight: its measurement of a check page waits until no request is in the air and holds the others back while it is out, and answers that clear or replace the user's cookie, a 401 or a redirect to the sign-in page are noticed as they arrive.
+- `subs -live` asks subdomain.center again until the names it has seen are most of the pool its repeats estimate, not only while a round gives a new live name: a name one call held was missing in about a third of runs when few names in the pool are live, and in about one in twenty now. The ceiling, the 20 s budget and `-source-timeout` still bound it and are named in a note.
+- A name no resolver answered is not asked a second time when 16 of the failed names, spread over the list, stay silent in the second pass: a zone whose servers are down cost every failed name twice its paced queries (a polite `subs -live` on such a zone: 2520 to 1476 queries, 183 s to 115 s, same counts and exit code).
+- MIGRATING and ARCHITECTURE say when a bare `host:port` is asked over the other scheme: when the first is not answered, and after plain HTTP also when it is answered 400.
 
 ## v0.13.0
 
