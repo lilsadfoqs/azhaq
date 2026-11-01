@@ -13,10 +13,10 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/trannghiach/azhaq/engine"
-	"github.com/trannghiach/azhaq/internal/ledger"
-	"github.com/trannghiach/azhaq/internal/scopefile"
-	"github.com/trannghiach/azhaq/scope"
+	"github.com/lilsadfoqs/azhaq/engine"
+	"github.com/lilsadfoqs/azhaq/internal/ledger"
+	"github.com/lilsadfoqs/azhaq/internal/scopefile"
+	"github.com/lilsadfoqs/azhaq/scope"
 )
 
 // The global invariants every run a test makes must keep, whatever the test

@@ -2,7 +2,7 @@ package browser
 
 import (
 	"context"
-	"github.com/trannghiach/azhaq/internal/guard"
+	"github.com/lilsadfoqs/azhaq/internal/guard"
 	"time"
 
 	cdpbrowser "github.com/chromedp/cdproto/browser"

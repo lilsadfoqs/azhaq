@@ -20,7 +20,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/trannghiach/azhaq/internal/ledger"
+	"github.com/lilsadfoqs/azhaq/internal/ledger"
 )
 
 // Contract tests at the seams between commands, where a change on one side

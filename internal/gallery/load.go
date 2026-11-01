@@ -21,7 +21,7 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	"github.com/trannghiach/azhaq/internal/collectors/shotcol"
+	"github.com/lilsadfoqs/azhaq/internal/collectors/shotcol"
 )
 
 // Shot is one page's screenshot with what the index needs to list, filter

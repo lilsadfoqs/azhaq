@@ -20,8 +20,8 @@ import (
 
 	"github.com/andybalholm/brotli"
 
-	"github.com/trannghiach/azhaq/internal/egress"
-	"github.com/trannghiach/azhaq/internal/fetch"
+	"github.com/lilsadfoqs/azhaq/internal/egress"
+	"github.com/lilsadfoqs/azhaq/internal/fetch"
 )
 
 func TestEncodersMatchFfuf(t *testing.T) {

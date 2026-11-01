@@ -15,8 +15,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/trannghiach/azhaq/internal/cdnranges"
-	"github.com/trannghiach/azhaq/internal/wappalyzer"
+	"github.com/lilsadfoqs/azhaq/internal/cdnranges"
+	"github.com/lilsadfoqs/azhaq/internal/wappalyzer"
 )
 
 var (

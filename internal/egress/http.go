@@ -11,9 +11,9 @@ import (
 
 	"golang.org/x/net/http2"
 
-	"github.com/trannghiach/azhaq/internal/ledger"
-	"github.com/trannghiach/azhaq/internal/neterr"
-	"github.com/trannghiach/azhaq/scope"
+	"github.com/lilsadfoqs/azhaq/internal/ledger"
+	"github.com/lilsadfoqs/azhaq/internal/neterr"
+	"github.com/lilsadfoqs/azhaq/scope"
 )
 
 // guarded is the transport of every client egress hands out. Before a

@@ -10,8 +10,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/trannghiach/azhaq/internal/normalize"
-	"github.com/trannghiach/azhaq/types"
+	"github.com/lilsadfoqs/azhaq/internal/normalize"
+	"github.com/lilsadfoqs/azhaq/types"
 )
 
 // Rules is an optional allow/deny list for active fan-out (hosts and URLs).

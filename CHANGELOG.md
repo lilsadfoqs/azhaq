@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.12.1
+
+### Changed
+
+- The repository moved to github.com/lilsadfoqs/azhaq, and the Go module path with it: `go install github.com/lilsadfoqs/azhaq/cmd/azhaq@latest`. The image is `ghcr.io/lilsadfoqs/azhaq`. `install.sh --require-signature` accepts a release signed by the release workflow under either name, so the releases up to v0.12.0 still verify.
+
 ## v0.12.0
 
 ### Changed

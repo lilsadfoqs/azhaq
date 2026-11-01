@@ -10,16 +10,16 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/trannghiach/azhaq/catalog"
-	"github.com/trannghiach/azhaq/engine"
-	"github.com/trannghiach/azhaq/internal/collectors/crawlcol"
-	"github.com/trannghiach/azhaq/internal/collectors/dirscol"
-	"github.com/trannghiach/azhaq/internal/collectors/httpcol"
-	"github.com/trannghiach/azhaq/internal/fetch"
-	"github.com/trannghiach/azhaq/internal/neterr"
-	"github.com/trannghiach/azhaq/scope"
-	"github.com/trannghiach/azhaq/store"
-	"github.com/trannghiach/azhaq/types"
+	"github.com/lilsadfoqs/azhaq/catalog"
+	"github.com/lilsadfoqs/azhaq/engine"
+	"github.com/lilsadfoqs/azhaq/internal/collectors/crawlcol"
+	"github.com/lilsadfoqs/azhaq/internal/collectors/dirscol"
+	"github.com/lilsadfoqs/azhaq/internal/collectors/httpcol"
+	"github.com/lilsadfoqs/azhaq/internal/fetch"
+	"github.com/lilsadfoqs/azhaq/internal/neterr"
+	"github.com/lilsadfoqs/azhaq/scope"
+	"github.com/lilsadfoqs/azhaq/store"
+	"github.com/lilsadfoqs/azhaq/types"
 )
 
 // sessionApp is a signed-in site: its pages answer 200 to a live session

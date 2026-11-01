@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/trannghiach/azhaq/internal/fetch"
-	"github.com/trannghiach/azhaq/store"
+	"github.com/lilsadfoqs/azhaq/internal/fetch"
+	"github.com/lilsadfoqs/azhaq/store"
 )
 
 // keeper records a run's answers in its workspace (fetch.Keeper), in

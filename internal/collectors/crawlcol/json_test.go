@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/trannghiach/azhaq/internal/fetch"
-	"github.com/trannghiach/azhaq/types"
+	"github.com/lilsadfoqs/azhaq/internal/fetch"
+	"github.com/lilsadfoqs/azhaq/types"
 )
 
 // Juice Shop's /api/Challenges is JSON whose strings hold HTML. Read as

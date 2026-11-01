@@ -15,8 +15,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/trannghiach/azhaq/internal/ledger"
-	"github.com/trannghiach/azhaq/store"
+	"github.com/lilsadfoqs/azhaq/internal/ledger"
+	"github.com/lilsadfoqs/azhaq/store"
 )
 
 // A run killed (SIGKILL) while a POST and a GET were on their way has them

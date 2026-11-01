@@ -22,12 +22,12 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/trannghiach/azhaq/catalog"
-	"github.com/trannghiach/azhaq/engine"
-	"github.com/trannghiach/azhaq/internal/collectors/dirscol"
-	"github.com/trannghiach/azhaq/internal/collectors/paramcol"
-	"github.com/trannghiach/azhaq/internal/egress"
-	"github.com/trannghiach/azhaq/internal/fetch"
+	"github.com/lilsadfoqs/azhaq/catalog"
+	"github.com/lilsadfoqs/azhaq/engine"
+	"github.com/lilsadfoqs/azhaq/internal/collectors/dirscol"
+	"github.com/lilsadfoqs/azhaq/internal/collectors/paramcol"
+	"github.com/lilsadfoqs/azhaq/internal/egress"
+	"github.com/lilsadfoqs/azhaq/internal/fetch"
 )
 
 // workerConfig is what a worker needs to build the run's collectors: the

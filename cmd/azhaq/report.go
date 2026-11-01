@@ -9,15 +9,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/trannghiach/azhaq/engine"
-	"github.com/trannghiach/azhaq/internal/browser"
-	"github.com/trannghiach/azhaq/internal/collectors/pathscol"
-	"github.com/trannghiach/azhaq/internal/collectors/portcol"
-	"github.com/trannghiach/azhaq/internal/collectors/subcol"
-	"github.com/trannghiach/azhaq/internal/fetch"
-	"github.com/trannghiach/azhaq/internal/normalize"
-	"github.com/trannghiach/azhaq/internal/takeover"
-	"github.com/trannghiach/azhaq/types"
+	"github.com/lilsadfoqs/azhaq/engine"
+	"github.com/lilsadfoqs/azhaq/internal/browser"
+	"github.com/lilsadfoqs/azhaq/internal/collectors/pathscol"
+	"github.com/lilsadfoqs/azhaq/internal/collectors/portcol"
+	"github.com/lilsadfoqs/azhaq/internal/collectors/subcol"
+	"github.com/lilsadfoqs/azhaq/internal/fetch"
+	"github.com/lilsadfoqs/azhaq/internal/normalize"
+	"github.com/lilsadfoqs/azhaq/internal/takeover"
+	"github.com/lilsadfoqs/azhaq/types"
 )
 
 // report is what every command prints last, on stderr: what came out,

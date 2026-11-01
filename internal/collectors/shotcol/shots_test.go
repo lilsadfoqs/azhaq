@@ -11,9 +11,9 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/trannghiach/azhaq/internal/browser"
-	"github.com/trannghiach/azhaq/internal/fetch"
-	"github.com/trannghiach/azhaq/types"
+	"github.com/lilsadfoqs/azhaq/internal/browser"
+	"github.com/lilsadfoqs/azhaq/internal/fetch"
+	"github.com/lilsadfoqs/azhaq/types"
 )
 
 func pngOf(t *testing.T, draw func(x, y int) uint8) []byte {

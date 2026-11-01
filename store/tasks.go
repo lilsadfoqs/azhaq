@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/trannghiach/azhaq/types"
+	"github.com/lilsadfoqs/azhaq/types"
 )
 
 // Task is one collector on one seed, as the scheduler planned it. The

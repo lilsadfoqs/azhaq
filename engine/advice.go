@@ -7,8 +7,8 @@ import (
 	"regexp"
 	"sort"
 
-	"github.com/trannghiach/azhaq/internal/webextract"
-	"github.com/trannghiach/azhaq/types"
+	"github.com/lilsadfoqs/azhaq/internal/webextract"
+	"github.com/lilsadfoqs/azhaq/types"
 )
 
 // thinMap is how few routes an origin's map has for an empty shell of a

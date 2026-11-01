@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/trannghiach/azhaq/types"
+	"github.com/lilsadfoqs/azhaq/types"
 )
 
 // KindNoWeb is the observation of a target given with no port whose guessed

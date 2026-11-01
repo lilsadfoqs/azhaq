@@ -18,7 +18,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/trannghiach/azhaq/types"
+	"github.com/lilsadfoqs/azhaq/types"
 )
 
 // mirror is a fake archive for every source that records each request and

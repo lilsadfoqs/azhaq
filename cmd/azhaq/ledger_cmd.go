@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/trannghiach/azhaq/internal/ledger"
+	"github.com/lilsadfoqs/azhaq/internal/ledger"
 )
 
 // cmdLedger reads a ledger a run wrote: checks its chain, summarizes it,

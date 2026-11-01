@@ -4,7 +4,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/trannghiach/azhaq/internal/portscan"
+	"github.com/lilsadfoqs/azhaq/internal/portscan"
 )
 
 // Config holds the knobs of a port scan that the zero value leaves at the

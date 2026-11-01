@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/trannghiach/azhaq/types"
+	"github.com/lilsadfoqs/azhaq/types"
 )
 
 // No test writes into the real data directory.

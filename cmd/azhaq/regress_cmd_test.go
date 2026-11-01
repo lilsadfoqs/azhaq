@@ -3,7 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/trannghiach/azhaq/internal/browser"
+	"github.com/lilsadfoqs/azhaq/internal/browser"
 	"net"
 	"net/http"
 	"net/http/httptest"

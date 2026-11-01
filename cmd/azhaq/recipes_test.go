@@ -10,7 +10,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/trannghiach/azhaq/internal/browser"
+	"github.com/lilsadfoqs/azhaq/internal/browser"
 )
 
 // The recipes below are in docs/RECIPES.md. Each test takes the command lines

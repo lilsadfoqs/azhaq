@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/trannghiach/azhaq/catalog"
-	"github.com/trannghiach/azhaq/collectors"
+	"github.com/lilsadfoqs/azhaq/catalog"
+	"github.com/lilsadfoqs/azhaq/collectors"
 )
 
 // Every flag that asks run for a collector is in the plan, by name: in its

@@ -10,9 +10,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/trannghiach/azhaq/internal/collectors/asncol"
-	"github.com/trannghiach/azhaq/internal/collectors/portcol"
-	"github.com/trannghiach/azhaq/internal/normalize"
+	"github.com/lilsadfoqs/azhaq/internal/collectors/asncol"
+	"github.com/lilsadfoqs/azhaq/internal/collectors/portcol"
+	"github.com/lilsadfoqs/azhaq/internal/normalize"
 )
 
 // portTargets are the targets of a port scan sorted by what they are.

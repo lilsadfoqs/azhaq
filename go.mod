@@ -1,4 +1,4 @@
-module github.com/trannghiach/azhaq
+module github.com/lilsadfoqs/azhaq
 
 go 1.26.10
 

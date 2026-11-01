@@ -15,7 +15,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/trannghiach/azhaq/store"
+	"github.com/lilsadfoqs/azhaq/store"
 )
 
 func TestParseTargetsSpellings(t *testing.T) {

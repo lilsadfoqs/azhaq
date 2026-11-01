@@ -3,8 +3,8 @@ package portcol
 import (
 	"testing"
 
-	"github.com/trannghiach/azhaq/internal/collectors/httpcol"
-	"github.com/trannghiach/azhaq/internal/portscan"
+	"github.com/lilsadfoqs/azhaq/internal/collectors/httpcol"
+	"github.com/lilsadfoqs/azhaq/internal/portscan"
 )
 
 // A port nothing was probed on is asked over plain HTTP first when it is

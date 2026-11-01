@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/trannghiach/azhaq/internal/browser"
+	"github.com/lilsadfoqs/azhaq/internal/browser"
 )
 
 // An app that signs in like Juice Shop: the login answers a token, the API

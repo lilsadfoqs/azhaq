@@ -9,7 +9,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/trannghiach/azhaq/internal/fetch"
+	"github.com/lilsadfoqs/azhaq/internal/fetch"
 )
 
 // placeholder marks where an -include template takes the names.

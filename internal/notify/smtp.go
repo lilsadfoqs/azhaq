@@ -13,8 +13,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/trannghiach/azhaq/internal/egress"
-	"github.com/trannghiach/azhaq/internal/ledger"
+	"github.com/lilsadfoqs/azhaq/internal/egress"
+	"github.com/lilsadfoqs/azhaq/internal/ledger"
 )
 
 // SMTPOptions are notify's smtp entry. smtp_cc lists the recipients, as it

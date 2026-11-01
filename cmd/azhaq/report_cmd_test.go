@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/trannghiach/azhaq/store"
+	"github.com/lilsadfoqs/azhaq/store"
 )
 
 const reportJWT = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJjYXJvbCJ9.c2lnbmF0dXJlMTIz"

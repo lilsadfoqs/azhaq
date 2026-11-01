@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/trannghiach/azhaq/store"
-	"github.com/trannghiach/azhaq/types"
+	"github.com/lilsadfoqs/azhaq/store"
+	"github.com/lilsadfoqs/azhaq/types"
 )
 
 // These tests pin findings that reviewers raised and that were fixed

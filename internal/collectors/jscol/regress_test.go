@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/trannghiach/azhaq/internal/fetch"
-	"github.com/trannghiach/azhaq/types"
+	"github.com/lilsadfoqs/azhaq/internal/fetch"
+	"github.com/lilsadfoqs/azhaq/types"
 )
 
 // MAP-05: a page whose scripts exceed what one page's pass reads says so,

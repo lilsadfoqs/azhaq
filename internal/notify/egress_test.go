@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/trannghiach/azhaq/internal/egress"
-	"github.com/trannghiach/azhaq/internal/ledger"
+	"github.com/lilsadfoqs/azhaq/internal/egress"
+	"github.com/lilsadfoqs/azhaq/internal/ledger"
 )
 
 // A notification is sent to a third party, not a target: the target scope

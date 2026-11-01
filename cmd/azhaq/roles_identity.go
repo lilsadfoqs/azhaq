@@ -11,7 +11,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/trannghiach/azhaq/internal/browser"
+	"github.com/lilsadfoqs/azhaq/internal/browser"
 )
 
 // Who each role is, so that its own objects are known without -id: the

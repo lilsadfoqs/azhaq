@@ -15,7 +15,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/trannghiach/azhaq/internal/browser"
+	"github.com/lilsadfoqs/azhaq/internal/browser"
 )
 
 // bigScriptApp is a single-page app whose bundle is large, slow to start

@@ -16,7 +16,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/trannghiach/azhaq/internal/neterr"
+	"github.com/lilsadfoqs/azhaq/internal/neterr"
 )
 
 type collectorKey struct{}

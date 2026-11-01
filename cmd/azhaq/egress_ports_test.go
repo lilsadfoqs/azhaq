@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/trannghiach/azhaq/internal/ledger"
+	"github.com/lilsadfoqs/azhaq/internal/ledger"
 )
 
 // A run that asks a target over HTTP and also connects to its ports: the

@@ -11,7 +11,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/trannghiach/azhaq/internal/ledger"
+	"github.com/lilsadfoqs/azhaq/internal/ledger"
 )
 
 // captureAll runs f with standard output and error going to pipes.

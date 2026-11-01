@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/trannghiach/azhaq/internal/portscan"
-	"github.com/trannghiach/azhaq/store"
-	"github.com/trannghiach/azhaq/types"
+	"github.com/lilsadfoqs/azhaq/internal/portscan"
+	"github.com/lilsadfoqs/azhaq/store"
+	"github.com/lilsadfoqs/azhaq/types"
 )
 
 // portRows are the open ports a port scan of e's address found, one row

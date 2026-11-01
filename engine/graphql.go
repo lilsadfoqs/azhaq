@@ -3,8 +3,8 @@ package engine
 import (
 	"encoding/json"
 
-	"github.com/trannghiach/azhaq/internal/gqlschema"
-	"github.com/trannghiach/azhaq/types"
+	"github.com/lilsadfoqs/azhaq/internal/gqlschema"
+	"github.com/lilsadfoqs/azhaq/types"
 )
 
 // maxGraphQLLines caps the GraphQL operations the text map prints under

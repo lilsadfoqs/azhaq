@@ -12,7 +12,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/trannghiach/azhaq/internal/browser"
+	"github.com/lilsadfoqs/azhaq/internal/browser"
 )
 
 // -proxy holds for Chrome too: run -browser and shots send every request to

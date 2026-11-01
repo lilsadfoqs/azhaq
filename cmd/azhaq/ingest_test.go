@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/trannghiach/azhaq/engine"
+	"github.com/lilsadfoqs/azhaq/engine"
 )
 
 // What httpx, katana and ffuf found feeds the exports as Azhaq's own

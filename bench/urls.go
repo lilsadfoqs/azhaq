@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/trannghiach/azhaq/internal/normalize"
-	"github.com/trannghiach/azhaq/internal/webextract"
+	"github.com/lilsadfoqs/azhaq/internal/normalize"
+	"github.com/lilsadfoqs/azhaq/internal/webextract"
 )
 
 // urlsRow compares archived URLs with gau on vulnweb.com: passive lookups,

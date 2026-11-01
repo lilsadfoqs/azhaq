@@ -15,9 +15,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/trannghiach/azhaq/internal/collectors/shotcol"
-	"github.com/trannghiach/azhaq/store"
-	"github.com/trannghiach/azhaq/types"
+	"github.com/lilsadfoqs/azhaq/internal/collectors/shotcol"
+	"github.com/lilsadfoqs/azhaq/store"
+	"github.com/lilsadfoqs/azhaq/types"
 )
 
 // fixShot is what the fixture knows of a page, to check the API against.
