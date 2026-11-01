@@ -187,6 +187,13 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 			}
 		}
 	}
+	if faults := p.Record.ScriptFaults(); len(faults) > 0 {
+		payload, _ := json.Marshal(map[string]any{"url": raw, "scripts": faults})
+		if err := emit(types.Observation{Collector: Name, Source: raw, Kind: "pagefault", Payload: payload, Confidence: 0.9, ObservedAt: time.Now().UTC()}); err != nil {
+			return meta, err
+		}
+		meta.EmitCount++
+	}
 	if in := p.Interaction; c.Browser.Interact > 0 {
 		for _, h := range in.Snapshots {
 			for _, l := range webextract.Links([]byte(h), base) {
@@ -218,7 +225,7 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 				}
 			}
 		}
-		payload, _ := json.Marshal(map[string]any{"url": raw, "clicks": in.Clicks, "skipped": in.Skipped, "routes": len(in.Routes), "writes_mapped": len(p.Writes)})
+		payload, _ := json.Marshal(map[string]any{"url": raw, "clicks": in.Clicks, "skipped": in.Skipped, "routes": len(in.Routes), "writes_mapped": len(p.Writes), "threw": p.Record.Threw()})
 		if err := emit(types.Observation{Collector: Name, Source: raw, Kind: "interact", Payload: payload, Confidence: 0.9, ObservedAt: time.Now().UTC()}); err != nil {
 			return meta, err
 		}

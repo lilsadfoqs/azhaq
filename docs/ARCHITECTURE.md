@@ -1170,6 +1170,8 @@ The writes a page sends, such as a POST, a DELETE or a beacon, are not sent but 
 
 A page that shows nothing to click is looked at again for up to 2.4 s while it is still drawing. If it shows nothing, the `-interact:` note says so, with 0 clicks, instead of leaving the note out.
 
+With `-browser`, a script of a page that did not load as JavaScript is named in a `-browser:` note, with why: the network failed it, the server answered an error, or it answered an HTML page, which Chrome does not run. An app whose scripts fail draws no menu and calls no route. The usual cause is an origin that cannot map the script's address, for example Express behind a proxy that sends it the full address (`http://host/x`) instead of the path. The `-interact:` note adds the first error a script of the page threw when there were 0 clicks.
+
 It finds what only a click brings:
 
 - the requests a click's script sends, which are the API calls;

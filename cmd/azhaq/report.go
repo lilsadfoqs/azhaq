@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/trannghiach/azhaq/engine"
+	"github.com/trannghiach/azhaq/internal/browser"
 	"github.com/trannghiach/azhaq/internal/collectors/pathscol"
 	"github.com/trannghiach/azhaq/internal/collectors/portcol"
 	"github.com/trannghiach/azhaq/internal/collectors/subcol"
@@ -310,6 +311,7 @@ func fillReport(rep *report, path string, seeds []types.Seed, ents []types.Entit
 	if partialShots(obs) {
 		rep.warned = true // a picture short of its page is not a result to take as whole
 	}
+	rep.Notes = append(rep.Notes, pageFaultNotes(obs)...)
 	rep.Notes = append(rep.Notes, interactNotes(obs)...)
 	rep.Takeover = takeovers(ents, obs)
 	if path != "" && !strings.HasPrefix(path, os.TempDir()) && rep.ownFailures() > 0 {
@@ -570,6 +572,7 @@ func partialShots(obs []types.StoredObservation) bool {
 // writes the clicks would have sent.
 func interactNotes(obs []types.StoredObservation) []string {
 	var pages, clicks, skipped, routes, writes int
+	threw := ""
 	for _, o := range obs {
 		if o.Kind != "interact" {
 			continue
@@ -577,6 +580,7 @@ func interactNotes(obs []types.StoredObservation) []string {
 		var p struct {
 			Clicks, Skipped, Routes int
 			Writes                  int `json:"writes_mapped"`
+			Threw                   string
 		}
 		if json.Unmarshal(o.Payload, &p) != nil {
 			continue
@@ -586,6 +590,9 @@ func interactNotes(obs []types.StoredObservation) []string {
 		skipped += p.Skipped
 		routes += p.Routes
 		writes += p.Writes
+		if p.Clicks == 0 && threw == "" {
+			threw = p.Threw
+		}
 	}
 	if pages == 0 {
 		return nil
@@ -593,6 +600,41 @@ func interactNotes(obs []types.StoredObservation) []string {
 	note := fmt.Sprintf("-interact: %d clicks on %d pages found %d routes; %d downloads and mail or phone links not clicked; the %d writes the clicks tried were mapped, not sent", clicks, pages, routes, skipped, writes)
 	if clicks == 0 {
 		note += "; no button, link or menu showed on a page that had settled: it may draw them only after a slower answer than the page waits for, or need a sign-in (-login)"
+		if threw != "" {
+			note += "; a script of the page threw: " + threw
+		}
 	}
 	return []string{note}
+}
+
+// pageFaultNotes say which pages Chrome rendered without their scripts: a
+// script that failed, or that was answered with an HTML page (what an app
+// server does for an address it cannot map, or a proxy that sends the
+// origin the full address instead of the path), runs nothing, and the page
+// draws no menu and calls no route.
+func pageFaultNotes(obs []types.StoredObservation) []string {
+	var pages, scripts int
+	var first []string
+	for _, o := range obs {
+		if o.Kind != "pagefault" {
+			continue
+		}
+		var p struct {
+			Scripts []browser.ScriptFault
+		}
+		if json.Unmarshal(o.Payload, &p) != nil || len(p.Scripts) == 0 {
+			continue
+		}
+		pages++
+		scripts += len(p.Scripts)
+		for _, s := range p.Scripts {
+			if len(first) < 3 {
+				first = append(first, s.URL+" "+s.Why)
+			}
+		}
+	}
+	if pages == 0 {
+		return nil
+	}
+	return []string{fmt.Sprintf("-browser: %d scripts on %d pages did not load as JavaScript (%s), so those pages' apps could not start and Chrome saw none of their calls; ask a script by its address with curl, and through -proxy: a proxy must send the origin the path, not the full address", scripts, pages, strings.Join(first, "; "))}
 }

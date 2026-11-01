@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/chromedp/cdproto/network"
+
 	"github.com/trannghiach/azhaq/internal/egress"
 	"github.com/trannghiach/azhaq/internal/fetch"
 )
@@ -82,5 +84,31 @@ func TestFullPage(t *testing.T) {
 	h := int(p.Image[22])<<24 | int(p.Image[23])<<16 | int(p.Image[24])<<8 | int(p.Image[25]) // PNG IHDR height
 	if h < 2000 {
 		t.Errorf("full page is %d pixels tall, want 2000", h)
+	}
+}
+
+// A page whose scripts come back as its HTML shell, with an error, or not
+// at all has them listed with why, and a page that threw says what.
+func TestScriptFaultsAndThrew(t *testing.T) {
+	r := Record{
+		Network: []NetEntry{
+			{rt: network.ResourceTypeScript, URL: "/ok.js", Status: 200, MIME: "text/javascript"},
+			{rt: network.ResourceTypeScript, URL: "/shell.js", Status: 200, MIME: "text/html"},
+			{rt: network.ResourceTypeScript, URL: "/gone.js", Status: 404, MIME: "text/plain"},
+			{rt: network.ResourceTypeScript, URL: "/cut.js", Error: "net::ERR_FAILED"},
+			{rt: network.ResourceTypeScript, URL: "https://cdn.example/x.js", Error: "net::ERR_BLOCKED_BY_CLIENT", blocked: true},
+			{rt: network.ResourceTypeDocument, URL: "/", Status: 200, MIME: "text/html"},
+		},
+		Console: []ConsoleLn{{Type: "log", Value: "hi"}, {Type: "exception", Value: "TypeError: x is not a function\n    at main.js:1"}},
+	}
+	var got []string
+	for _, f := range r.ScriptFaults() {
+		got = append(got, f.URL)
+	}
+	if want := []string{"/shell.js", "/gone.js", "/cut.js"}; !slices.Equal(got, want) {
+		t.Errorf("faults %v, want %v", got, want)
+	}
+	if got := r.Threw(); got != "TypeError: x is not a function" {
+		t.Errorf("threw %q", got)
 	}
 }
