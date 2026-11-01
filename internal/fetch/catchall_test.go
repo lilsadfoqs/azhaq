@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 )
@@ -357,6 +358,25 @@ func TestCatchAllHeldGivesWayToRealAnswers(t *testing.T) {
 	}
 }
 
+// memoStore is what azhaq resume keeps across runs: here, in memory.
+type memoStore struct {
+	mu sync.Mutex
+	m  map[string][]byte
+}
+
+func (s *memoStore) Recall(k string) ([]byte, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	v, ok := s.m[k]
+	return v, ok
+}
+
+func (s *memoStore) Remember(k string, v []byte) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.m[k] = v
+}
+
 // An answer whose control failed is no verdict: it counts neither for the
 // page nor for a real route, so a budget that refused the controls does not
 // make a directory look real.
@@ -372,5 +392,35 @@ func TestCatchAllUnjudgedAnswersSayNothing(t *testing.T) {
 	named(t, srv, "/app/a/1", "/app/a/2", "/app/a/3", "/app/a/4")
 	if st, _ := CatchAllDir(srv.URL+"/app/a/5", CatchAllStop); st != DirUnknown {
 		t.Errorf("state %d: answers that were not judged decided the directory", st)
+	}
+}
+
+// What a stopped run learned of its script-named paths, a resume has: how
+// they answered, and the directories it held.
+func TestCatchAllRuleIsRestored(t *testing.T) {
+	Reset()
+	memos := &memoStore{m: map[string][]byte{}}
+	Memos = memos
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`<!doctype html><title>Shop</title><app-root></app-root>`))
+	}))
+	t.Cleanup(srv.Close)
+	named(t, srv, "/app/a/1", "/app/a/2", "/app/a/3", "/app/b/1", "/app/b/2")
+	NoteHeld(srv.URL + "/app/a/4")
+	if len(memos.m) == 0 {
+		t.Fatal("the run kept nothing for a resume")
+	}
+	Reset() // the resume is another process
+	Memos = memos
+	RestoreNamed([]string{srv.URL + "/app/a/1", srv.URL + "/app/a/2", srv.URL + "/app/a/3", srv.URL + "/app/b/1", srv.URL + "/app/b/2"})
+	if !CatchAllHeld(srv.URL+"/app/a/9", CatchAllStop) {
+		t.Error("the directory the stopped run held is asked again")
+	}
+	if CatchAllHeld(srv.URL+"/app/b/9", CatchAllStop) {
+		t.Error("another directory is held")
+	}
+	named(t, srv, "/app/b/3")
+	if !CatchAllHeld(srv.URL+"/app/b/9", CatchAllStop) {
+		t.Error("the two answers the stopped run had, and the third, do not make three")
 	}
 }

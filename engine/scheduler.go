@@ -299,8 +299,27 @@ func (s *scheduler) restore() error {
 			}
 		}
 	}
+	s.restoreCatchAll(rows)
 	// A task that ran but whose end was not recorded runs again whole.
 	return s.e.Store.Forget(again)
+}
+
+// restoreCatchAll gives the catch-all rule what the stopped run had learned:
+// which URLs scripts named, how they answered, and which directories it
+// stopped asking in. Else a resume would ask again, from the start, what the
+// run had already settled.
+func (s *scheduler) restoreCatchAll(rows []store.Task) {
+	if s.b.CatchAllStop <= 0 {
+		return
+	}
+	var named []string
+	for _, r := range rows {
+		if seed := normalize.Seed(r.Seed); seed.Type == types.TypeURL && seed.Keys[types.ViaKey] == types.ViaScript && !s.named[seedKey(seed)] {
+			s.named[seedKey(seed)] = true
+			named = append(named, seed.Key())
+		}
+	}
+	fetch.RestoreNamed(named)
 }
 
 // add queues every allowed collector for a seed. Hints are checked against
@@ -822,7 +841,7 @@ func (s *scheduler) startRetry(ctx context.Context) {
 	for s.inflight-s.remote == 0 && len(s.retry) > 0 && !egress.Spent() && !s.itemsSpent() {
 		t := s.retry[0]
 		s.retry = s.retry[1:]
-		if s.skip(t) {
+		if s.skip(t) || s.catchAllGate(t) == gateHold {
 			s.finish(t)
 			s.unpark(t)
 			continue
@@ -975,7 +994,7 @@ func (s *scheduler) handle(f finished) {
 	if f.partial {
 		for i, t := range f.tasks {
 			for _, h := range f.metas[i].NextHints {
-				s.markNamed(t, h)
+				h = s.markNamed(t, h)
 				s.add(h, t.depth+hintStep(h), true)
 			}
 		}
@@ -1009,7 +1028,7 @@ func (s *scheduler) handle(f finished) {
 			continue
 		}
 		for _, h := range meta.NextHints {
-			s.markNamed(t, h)
+			h = s.markNamed(t, h)
 			s.add(h, t.depth+hintStep(h), true)
 		}
 	}
@@ -1017,19 +1036,25 @@ func (s *scheduler) handle(f finished) {
 
 // markNamed notes a URL hint a script gave, unless it was queued before: a
 // link of a page is the app's own and is always asked, and so is a script
-// the run loaded to read.
-func (s *scheduler) markNamed(from task, h types.Seed) {
+// the run loaded to read. The hint it returns says it was named, so that a
+// resume knows.
+func (s *scheduler) markNamed(from task, h types.Seed) types.Seed {
 	if from.col != "azhaq-js" {
-		return
+		return h
 	}
 	seed := normalize.Seed(h)
 	if seed.Type != types.TypeURL || seed.Key() == "" || seed.Keys[types.ViaKey] == types.ViaLoaded {
-		return
+		return h
 	}
 	if k := seedKey(seed); !s.seen[k] {
 		s.named[k] = true
 		fetch.NoteNamed(seed.Key())
+		if seed.Keys[types.ViaKey] == "" {
+			h = normalize.Seed(h)
+			h.Keys[types.ViaKey] = types.ViaScript
+		}
 	}
+	return h
 }
 
 // A task's turn under the catch-all rule.
@@ -1086,6 +1111,7 @@ func (s *scheduler) catchAllGate(t task) gateAnswer {
 	switch {
 	case st == fetch.DirHeld:
 		s.catchHeld[k] = true
+		fetch.NoteHeld(t.seed.Key())
 		s.e.noteSkip(t.seed, CatchAllHeldReason)
 		return gateHold
 	case st != fetch.DirReal && s.flight.dir[dir] > 0:

@@ -50,6 +50,7 @@ var (
 type dirAnswer struct {
 	shell map[string]bool
 	real  map[string]bool
+	held  bool // a run before this resume held the directory's other paths
 }
 
 // CatchAllStop is how many of a directory's script-named paths answer with
@@ -76,9 +77,60 @@ func NoteNamed(raw string) {
 	probeMu.Unlock()
 }
 
+// answerMemo and heldMemo are where a run keeps what the rule learned, for
+// azhaq resume: a capped task's answers are kept, but what it recorded is not.
+func answerMemo(origin, path string) string { return "catchall " + origin + path }
+func heldMemo(dirKey string) string         { return "catchall held " + dirKey }
+
+// NoteHeld records that the other script-named paths of raw's directory are
+// not asked.
+func NoteHeld(raw string) {
+	if u, err := url.Parse(raw); err == nil && u.Host != "" && Memos != nil {
+		Memos.Remember(heldMemo(u.Scheme+"://"+u.Host+trimDir(parentDir(u.EscapedPath()))), []byte("1"))
+	}
+}
+
+// RestoreNamed gives a resumed run what the run it continues learned of the
+// script-named URLs: how each answered, and which directories it stopped
+// asking in.
+func RestoreNamed(raws []string) {
+	if Memos == nil {
+		return
+	}
+	held := map[string]bool{} // directories looked up
+	for _, raw := range raws {
+		u, err := url.Parse(raw)
+		if err != nil || u.Host == "" {
+			continue
+		}
+		origin, path := u.Scheme+"://"+u.Host, u.EscapedPath()
+		NoteNamed(raw)
+		if v, ok := Memos.Recall(answerMemo(origin, path)); ok && len(v) > 0 {
+			noteAnswerAs(origin, path, v[0] == 's', false)
+		}
+		key := origin + trimDir(parentDir(path))
+		if held[key] {
+			continue
+		}
+		held[key] = true
+		if _, ok := Memos.Recall(heldMemo(key)); ok {
+			probeMu.Lock()
+			d := dirAnswers[key]
+			if d == nil {
+				d = &dirAnswer{shell: map[string]bool{}, real: map[string]bool{}}
+				dirAnswers[key] = d
+			}
+			d.held = true
+			probeMu.Unlock()
+		}
+	}
+}
+
 // noteAnswer records how a script-named path answered, in the directory the
 // controls are kept for.
-func noteAnswer(origin, path string, shell bool) {
+func noteAnswer(origin, path string, shell bool) { noteAnswerAs(origin, path, shell, true) }
+
+func noteAnswerAs(origin, path string, shell, keep bool) {
 	probeMu.Lock()
 	defer probeMu.Unlock()
 	if !namedPaths[origin][path] {
@@ -95,6 +147,13 @@ func noteAnswer(origin, path string, shell bool) {
 		delete(d.real, path)
 	} else if !d.shell[path] {
 		d.real[path] = true
+	}
+	if keep && Memos != nil {
+		v := []byte("r")
+		if shell {
+			v = []byte("s")
+		}
+		Memos.Remember(answerMemo(origin, path), v)
 	}
 }
 
@@ -160,6 +219,8 @@ func CatchAllDir(raw string, stop int) (DirState, string) {
 	switch {
 	case d == nil:
 		return DirUnknown, own
+	case d.held:
+		return DirHeld, own
 	case len(d.real) >= stop:
 		return DirReal, own
 	case len(d.shell) >= stop:

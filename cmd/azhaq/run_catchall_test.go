@@ -224,6 +224,33 @@ func TestRunAsksRealRoutesOfDirectoriesTheCatchAllCouldCover(t *testing.T) {
 	}
 }
 
+// A run stopped by a budget and resumed asks what one run asks: the
+// catch-all rule goes on from what the stopped run learned, and holds the
+// paths it had not got to, instead of asking them all.
+func TestResumeKeepsTheCatchAllRule(t *testing.T) {
+	srv, hits := shellApp(t, 20)
+	db := filepath.Join(t.TempDir(), "w.db")
+	args := []string{"-url", srv.URL + "/", "-allow", "127.0.0.1", "-no-paths", "-no-tech", "-no-favicon", "-json", "-quiet", "-db", db}
+	if _, errOut, err := captureBoth(t, func() error { return cmdRun(append(slices.Clone(args), "-max-requests", "14")) }); exitCode(err) != exitLimit {
+		t.Fatalf("run: exit %d\n%s", exitCode(err), errOut)
+	}
+	for i := 0; i < 40; i++ {
+		_, errOut, err := captureBoth(t, func() error { return cmdResume([]string{"-db", db, "-json", "-quiet"}) })
+		if err == nil {
+			break
+		}
+		if exitCode(err) != exitLimit {
+			t.Fatalf("resume: %v\n%s", err, errOut)
+		}
+	}
+	split := hits.Load()
+	srv2, hits2 := shellApp(t, 20)
+	runShell(t, srv2)
+	if want := hits2.Load(); float64(split) > 1.3*float64(want) {
+		t.Errorf("a stopped and resumed run sent %d requests, one run %d", split, want)
+	}
+}
+
 // The scripts a page loads sit in the same directory as the client routes
 // its bundle names, and answer for themselves: they are the page's links, not
 // routes the rule is about, and do not stop it holding the client routes.
