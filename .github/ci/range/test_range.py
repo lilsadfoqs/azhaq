@@ -19,6 +19,8 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import build  # noqa: E402
 import grade  # noqa: E402
+import merge_gate  # noqa: E402
+import pool_pick  # noqa: E402
 import rangelib  # noqa: E402
 import render_brief  # noqa: E402
 import smoke  # noqa: E402
@@ -185,6 +187,55 @@ class Lib(unittest.TestCase):
         rangelib.probe_once  # noqa: B018
         ok, _, _ = rangelib.wait_ready({"port": 8080}, "a", 0, {8080: 9999}, check=lambda p, a, r: (seen.append(r) or True, "ok"))
         self.assertEqual(seen, [{8080: 9999}])
+
+
+class Pool(unittest.TestCase):
+    """The gate's fixed pool (range/pool.json) and how a run picks from it."""
+
+    def test_pool_file_is_a_non_empty_list_of_unique_seeds(self):
+        pool = rangelib.load_pool()
+        self.assertGreaterEqual(len(pool), 4)
+        self.assertEqual(len(pool), len(set(pool)))
+        self.assertTrue(all(isinstance(s, str) and s for s in pool))
+
+    def test_load_pool_rejects_bad_files(self):
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp, True)
+        for bad in ([], ["a", "a"], ["a", ""], "not-a-list", [1, 2]):
+            p = os.path.join(tmp, "p.json")
+            with open(p, "w") as f:
+                json.dump(bad, f)
+            with self.assertRaises(SystemExit):
+                rangelib.load_pool(p)
+
+    def test_round_robin_by_run_number(self):
+        pool = ["w", "x", "y", "z"]
+        got = [rangelib.pick_pool_seed(pool, n) for n in (1, 2, 3, 4, 5, 6)]
+        self.assertEqual(got, ["w", "x", "y", "z", "w", "x"])
+
+    def test_requested_seed_wins_and_must_be_in_the_pool(self):
+        pool = ["w", "x", "y", "z"]
+        self.assertEqual(rangelib.pick_pool_seed(pool, 1, "y"), "y")
+        self.assertEqual(rangelib.pick_pool_seed(pool, 999, "y"), "y")  # the run number is ignored
+        with self.assertRaises(SystemExit):
+            rangelib.pick_pool_seed(pool, 1, "not-in-the-pool")
+
+    def test_sample_two_is_always_a_different_estate(self):
+        pool = ["w", "x", "y", "z"]
+        for n in range(1, 9):
+            s1 = rangelib.pick_pool_seed(pool, n, sample=1)
+            s2 = rangelib.pick_pool_seed(pool, n, sample=2)
+            self.assertNotEqual(s1, s2)
+        self.assertEqual(rangelib.pick_pool_seed(pool, 1, "z", sample=2), "w")  # wraps around
+
+    def test_cli_prints_one_seed(self):
+        r = subprocess.run([sys.executable, os.path.join(HERE, "pool_pick.py"), "3"], capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn(r.stdout.strip(), rangelib.load_pool())
+
+    def test_cli_rejects_a_seed_outside_the_pool(self):
+        r = subprocess.run([sys.executable, os.path.join(HERE, "pool_pick.py"), "1", "--seed", "not-a-pool-entry"], capture_output=True, text=True)
+        self.assertNotEqual(r.returncode, 0)
 
 
 def entry(i, cat="cms", mem=100, family=None, **kw):
@@ -428,6 +479,53 @@ class Build(unittest.TestCase):
             self.assertNotIn(est["domain"], r.stdout + r.stderr)
         for h in self.key["estates"][0]["hosts"]:
             self.assertNotIn(h.get("product") or "-", r.stdout)
+
+
+class BuildSingle(unittest.TestCase):
+    """The gate's pool builds one estate (build.py --count 1), not a pair."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.mkdtemp()
+        cls.out = os.path.join(cls.tmp, "o")
+        build.main(["gate-unit-1", "--out", cls.out, "--count", "1"])
+        cls.key = json.load(open(os.path.join(cls.out, "key.json")))
+        cls.plan = json.load(open(os.path.join(cls.out, "plan.json")))
+        cls.vars = json.load(open(os.path.join(cls.out, "vars.json")))
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.tmp, ignore_errors=True)
+
+    def test_one_estate_only(self):
+        self.assertEqual(len(self.key["estates"]), 1)
+        self.assertEqual(self.key["estates"][0]["index"], 1)
+        self.assertEqual({e["estate"] for e in self.plan["envs"]}, {1})
+        self.assertEqual(len(self.plan["proxies"]), 1)
+        self.assertEqual(len(self.plan["dns"]), 1)
+
+    def test_vars_has_no_second_estate(self):
+        self.assertEqual(set(self.vars), {"DOMAIN1", "NET1", "DNS1"})
+        self.assertEqual(self.vars["DOMAIN1"], self.key["estates"][0]["domain"])
+        self.assertEqual(self.vars["NET1"], "127.31.0.0/24")
+
+    def test_deterministic(self):
+        out2 = os.path.join(self.tmp, "again")
+        build.main(["gate-unit-1", "--out", out2, "--count", "1"])
+        self.assertEqual(open(os.path.join(out2, "key.json")).read(), open(os.path.join(self.out, "key.json")).read())
+
+    def test_up_py_handles_one_estate(self):
+        # up.py's main() loop used to assume estates 1 and 2; it must not
+        # need a second one to report per-estate counts.
+        rc = up.main([self.out, "--vulhub", "/nonexistent", "--labdns", "/nonexistent", "--dry-run"])
+        self.assertEqual(rc, 1)  # the vulhub checkout and its files are missing, not a crash
+
+    def test_pool_seeds_are_single_estate_buildable(self):
+        for seed in rangelib.load_pool():
+            out = os.path.join(self.tmp, "pool-" + seed)
+            build.main([seed, "--out", out, "--count", "1"])
+            key = json.load(open(os.path.join(out, "key.json")))
+            self.assertEqual(len(key["estates"]), 1)
 
 
 class Up(unittest.TestCase):
@@ -766,6 +864,183 @@ class Grade(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertTrue(os.path.exists(os.path.join(self.d, "grade.json")))
         self.assertIn("Workflow trial grade", open(os.path.join(self.d, "g.md")).read())
+
+    def test_baseline_comparison_reads_a_same_seed_run_beside_this_one(self):
+        # azhaq's run: one estate (index 1), one vulnerability found fast.
+        key = mkkey()
+        key["estates"] = [key["estates"][0]]
+        key["seed"] = "gate-alpha"
+        self.write("phases.log", "phase 1 start 2026-01-01T00:00:00Z\n")
+        self.write("leads.jsonl", json.dumps({"phase": 1, "time": "2026-01-01T00:01:00Z", "host": "ci.one.test", "port": 8080,
+                                              "product": "Jenkins", "cve": "CVE-2018-1000861", "title": "t"}) + "\n")
+        ours = grade.grade(key, self.d)
+
+        baseline_dir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, baseline_dir, True)
+        os.makedirs(os.path.join(baseline_dir, "notes"))
+        with open(os.path.join(baseline_dir, "phases.log"), "w") as f:
+            f.write("phase 1 start 2026-01-01T00:00:00Z\n")
+        with open(os.path.join(baseline_dir, "leads.jsonl"), "w") as f:
+            f.write(json.dumps({"phase": 1, "time": "2026-01-01T00:05:00Z", "host": "ci.one.test", "port": 8080,
+                                "product": "Jenkins", "cve": "CVE-2018-1000861", "title": "t"}) + "\n")
+        theirs = grade.grade(key, baseline_dir)
+        with open(os.path.join(baseline_dir, "grade.json"), "w") as f:
+            json.dump(theirs, f)
+
+        cmp_ = grade.compare_baseline(ours, grade.load_baseline(baseline_dir))
+        self.assertEqual(len(cmp_), 1)
+        c = cmp_[0]
+        self.assertTrue(c["same_seed"])
+        self.assertEqual(c["vulns_identified"], [1, 1])
+        self.assertEqual(c["first_match_s"], [60, 300])  # ours found it faster
+        md = "\n".join(grade.markdown_baseline(cmp_))
+        self.assertIn("Compared with the estate's baseline", md)
+        self.assertIn("yes", md)
+
+    def test_baseline_comparison_flags_a_different_seed(self):
+        key = mkkey()
+        other = mkkey()
+        other["seed"] = "not-the-same-seed"
+        rep = {"seed": key["seed"], "phases": [{"phase": 1, "vulns": {"identified": 0, "of": 3}, "leads": {"total": 0}, "time": {"first_match_s": None}, "commands": {"total": 0}}]}
+        baseline = {"seed": other["seed"], "phases": [{"phase": 1, "vulns": {"identified": 0, "of": 3}, "leads": {"total": 0}, "time": {"first_match_s": None}, "commands": {"total": 0}}]}
+        cmp_ = grade.compare_baseline(rep, baseline)
+        self.assertFalse(cmp_[0]["same_seed"])
+        self.assertIn("not a fair comparison", "\n".join(grade.markdown_baseline(cmp_)))
+
+    def test_cli_with_baseline_flag(self):
+        key = os.path.join(self.d, "key.json")
+        one = mkkey()
+        one["estates"] = [one["estates"][0]]
+        json.dump(one, open(key, "w"))
+        baseline_dir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, baseline_dir, True)
+        json.dump({"seed": one["seed"], "phases": [{"phase": 1, "vulns": {"identified": 0, "of": 4}, "leads": {"total": 0}, "time": {"first_match_s": None}, "commands": {"total": 0}}]},
+                  open(os.path.join(baseline_dir, "grade.json"), "w"))
+        r = subprocess.run([sys.executable, os.path.join(HERE, "grade.py"), key, self.d, "--baseline", baseline_dir], capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        rep = json.load(open(os.path.join(self.d, "grade.json")))
+        self.assertIn("baseline_comparison", rep)
+        self.assertIn("Compared with the estate's baseline", r.stdout)
+
+
+GATE_A_REPORT = """# Report
+
+7. Scorecard
+
+| Item | Score | Reasoning |
+|---|---|---|
+| findings against the key and the baseline | 9 | matched all |
+| time to the first finding | 8 | a bit slow |
+| signal versus noise | 9 | clean |
+| trust | 9 | held up |
+| would use on the next engagement | 9 | yes |
+| overall (this part) | 9 | good |
+"""
+
+GATE_B_REPORT = """# Report
+
+2. Scorecard
+
+| Item | Score | Reasoning |
+|---|---|---|
+| install and first run | 9 | smooth |
+| docs | 8 | mostly clear |
+| subdomain recon | 9 | great |
+| host and port discovery | 9 | great |
+| web and api mapping | 9 | great |
+| signed-in and multi-role testing | 9 | great |
+| output and integration (including assistants) | 9 | great |
+| reliability (crashes, hangs, wrong data, silent failures) | 9 | great |
+| performance (time, memory and cpu, and the requests it sends to the target for the same result) | 8 | slower than ffuf |
+| overall (this part) | 9 | great |
+| extra thing nobody asked for | 7 | for a human |
+"""
+
+
+class MergeGate(unittest.TestCase):
+    def setUp(self):
+        self.d = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.d, True)
+
+    def write_pair(self, a="a", b="b", a_text=GATE_A_REPORT, b_text=GATE_B_REPORT):
+        os.makedirs(os.path.join(self.d, a), exist_ok=True)
+        os.makedirs(os.path.join(self.d, b), exist_ok=True)
+        with open(os.path.join(self.d, a, "REPORT.md"), "w") as f:
+            f.write(a_text)
+        with open(os.path.join(self.d, b, "REPORT.md"), "w") as f:
+            f.write(b_text)
+
+    def test_parses_and_matches_both_scorecards(self):
+        rows, _ = merge_gate.parse_scorecard(GATE_A_REPORT)
+        self.assertEqual(rows["trust"], (9, "held up"))
+        matched, leftover = merge_gate.match_items(rows, merge_gate.PART_A_ITEMS)
+        self.assertEqual([m[0] for m in matched], merge_gate.PART_A_ITEMS)
+        self.assertTrue(all(score is not None for _, score, _ in matched))
+        self.assertEqual(leftover, [])  # "overall (this part)" is not a leftover
+
+    def test_anchor_for_every_bucket(self):
+        self.assertIn("second look", merge_gate.anchor_for(10))
+        self.assertIn("at least as good", merge_gate.anchor_for(9))
+        self.assertIn("gaps you can name", merge_gate.anchor_for(8))
+        self.assertIn("keep your usual tools", merge_gate.anchor_for(6))
+        self.assertIn("costs you more", merge_gate.anchor_for(4))
+        self.assertIn("fails or misleads", merge_gate.anchor_for(1))
+
+    def test_merges_one_pair_and_computes_overall_as_the_lowest_score(self):
+        self.write_pair()
+        text, overall = merge_gate.one_pair(os.path.join(self.d, "a"), os.path.join(self.d, "b"))
+        self.assertEqual(overall, 8)  # "docs", "performance" and "time to the first finding" are 8
+        self.assertIn("| install and first run | 9 |", text)
+        self.assertIn("| **overall** | **8** |", text)
+        self.assertIn("extra thing nobody asked for", text)  # unmatched row, listed for a person
+
+    def test_missing_report_is_reported_not_crashed(self):
+        os.makedirs(os.path.join(self.d, "a"))
+        os.makedirs(os.path.join(self.d, "b"))
+        text, overall = merge_gate.one_pair(os.path.join(self.d, "a"), os.path.join(self.d, "b"))
+        self.assertIsNone(overall)
+        self.assertIn("No REPORT.md for part A.", text)
+        self.assertIn("No REPORT.md for part B.", text)
+
+    def test_find_pairs_prefers_samples_over_flat(self):
+        os.makedirs(os.path.join(self.d, "a1"))
+        os.makedirs(os.path.join(self.d, "b1"))
+        os.makedirs(os.path.join(self.d, "a2"))
+        os.makedirs(os.path.join(self.d, "b2"))
+        pairs = merge_gate.find_pairs(self.d)
+        self.assertEqual([p[2] for p in pairs], ["sample 1", "sample 2"])
+
+    def test_find_pairs_falls_back_to_flat(self):
+        os.makedirs(os.path.join(self.d, "a"))
+        os.makedirs(os.path.join(self.d, "b"))
+        pairs = merge_gate.find_pairs(self.d)
+        self.assertEqual(len(pairs), 1)
+        self.assertTrue(pairs[0][0].endswith(os.sep + "a"))
+
+    def test_cli_verdict_pass(self):
+        self.write_pair()
+        r = subprocess.run([sys.executable, os.path.join(HERE, "merge_gate.py"), self.d], capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("not a pass", r.stdout)  # two rows are 8, below 9
+
+    def test_cli_verdict_pass_when_every_score_is_nine_or_more(self):
+        nines_a = GATE_A_REPORT.replace("| 8 |", "| 9 |")
+        nines_b = GATE_B_REPORT.replace("| 8 |", "| 9 |")
+        self.write_pair(a_text=nines_a, b_text=nines_b)
+        out = os.path.join(self.d, "out.md")
+        r = subprocess.run([sys.executable, os.path.join(HERE, "merge_gate.py"), self.d, "--out", out], capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        text = open(out).read()
+        self.assertIn("PASS: every sample scored every item at 9 or more", text)
+
+    def test_baseline_summary_is_embedded_when_graded(self):
+        self.write_pair()
+        with open(os.path.join(self.d, "a", "grade.json"), "w") as f:
+            json.dump({"baseline_comparison": [{"phase": 1, "same_seed": True, "vulns_identified": [4, 3], "vulns_of": [5, 5],
+                                                "leads_total": [6, 5], "first_match_s": [120, 300], "commands_total": [40, 30]}]}, f)
+        text, _ = merge_gate.one_pair(os.path.join(self.d, "a"), os.path.join(self.d, "b"))
+        self.assertIn("Part A's grade beside its baseline", text)
+        self.assertIn("4 vs 3", text)
 
 
 if __name__ == "__main__":
