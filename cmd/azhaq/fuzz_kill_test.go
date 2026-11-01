@@ -248,6 +248,29 @@ func TestFuzzKeepsItsCommandWithoutSecrets(t *testing.T) {
 	}
 }
 
+// resume's own flags are run's: on a fuzz workspace -quiet prints only the
+// summary and -timeout is the run's bound, fuzz's -maxtime.
+func TestResumeOfFuzzTakesRunsFlags(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(404) }))
+	defer srv.Close()
+	db := filepath.Join(t.TempDir(), "q.db")
+	if _, _, code := runContract(t, "fuzz", "-u", srv.URL+"/FUZZ", "-w", wlist(t, "a", "b", "c", "d", "e"), "-ac=false", "-mc", "all", "-max-requests", "2", "-db", db); code != exitLimit {
+		t.Fatalf("exit %d", code)
+	}
+	// -quiet prints only the summary: the matches are counted, not printed.
+	dataDirs.Store(t.Name(), t.TempDir())
+	out, errOut, err := captureBoth(t, func() error {
+		return run([]string{"resume", "-db", db, "-quiet", "-timeout", "1m", "-max-requests", "2", "-json"})
+	})
+	rep := lastReport(t, errOut)
+	if exitCode(err) != exitLimit || out != "" || rep.Results != 2 {
+		t.Errorf("resume -quiet: exit %d, stdout %q, results %d\n%+v", exitCode(err), out, rep.Results, rep)
+	}
+	if _, _, code := runContract(t, "resume", "-db", db, "-timeout=1m"); code != exitOK {
+		t.Errorf("resume -timeout=1m: exit %d", code)
+	}
+}
+
 // The password of a proxy is no more stored than a cookie is, whichever
 // command's workspace it is.
 func TestKeptArgsDropAProxyPassword(t *testing.T) {

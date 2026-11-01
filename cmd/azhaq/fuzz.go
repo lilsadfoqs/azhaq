@@ -39,6 +39,7 @@ func cmdFuzz(args []string) error {
 	fs.Lookup("silent").Usage = "print the input values only, no progress; the summary only when something failed"
 	fs.Lookup("o").Usage = "write the report to this file, in the format -of says (json by default; a name ending .txt gets what stdout shows, as before)"
 	fs.BoolVar(&c.silent, "s", false, "ffuf's name for -silent")
+	quiet := fs.Bool("quiet", false, "print no matches and no progress, only the summary (on stderr); the matches are still kept by -db and -o")
 	rawURL := fs.String("u", "", "target URL; the keyword (FUZZ) may stand anywhere in it, in the host too")
 	var lists, headers, cookies, allow, deny, denyPath, inputCmds, encs, acStrategies, acStrings stringsFlag
 	fs.Var(&lists, "w", "wordlist `FILE[:KEYWORD]` (- for stdin; repeatable; a comma list is several; the keyword is FUZZ without one)")
@@ -436,6 +437,7 @@ func cmdFuzz(args []string) error {
 		hits = append(hits, r)
 		hitsMu.Unlock()
 		switch {
+		case *quiet:
 		case c.json:
 			w.obj(fuzz.StdoutJSON(r))
 		case c.silent:
@@ -551,7 +553,7 @@ func cmdFuzz(args []string) error {
 	rep.what = "matches"
 	t0 := time.Now()
 	switch {
-	case c.silent:
+	case c.silent || *quiet:
 	case stderrIsTerminal():
 		defer fuzzProgress(ctx, cfg.Progress, t0)()
 	default:

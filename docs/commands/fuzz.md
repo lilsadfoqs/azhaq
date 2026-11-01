@@ -161,6 +161,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 
 ### Stopping and resuming
 - A run stopped by `-max-requests`, `-maxtime`, the kill file or Ctrl-C keeps in its `-db` the exact inputs it asked. `azhaq resume -db FILE` asks only the others, so no input goes out twice, and its summary counts only what it newly did. Workers answer out of order, so the inputs asked are not always the first N.
+- `-quiet` prints no matches and no progress, only the summary; the matches are still counted and kept by `-db` and `-o`.
 - The command is stored without its secrets (`-b`, a credential `-H`, a proxy's password), with its files by full path: see [resume](resume.md#which-flags-come-back). Give the secrets again after `-db`.
 - With `-db`, the workspace holds the command from the first request on, and the inputs asked and the matches so far are kept every second. A run killed with SIGKILL, a crash or a power cut is continued by `azhaq resume -db FILE` from the last second kept: the inputs it asked since then are asked again (the summary counts them), and a write (`-X POST`, `-d`) the ledger lists is never sent again, whatever it was for. A run with `-recursion` or `-control` goes on from its first input, since the directories found and the filters changed are not in what is kept; it too holds back the writes already sent. With `-ledger off` nothing says what was sent after the last second, so a write may go out twice.
 - The `-start N` in the summary's command is the first input not asked in a row. Run by hand, it may repeat inputs past it; `azhaq resume` does not.
@@ -285,6 +286,12 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 | `-silent` | bool |  | print the input values only, no progress; the summary only when something failed |
 | `-v` | bool |  | print the full URL and redirect location with each result |
 | `-c` | bool |  | colour the status of each result in the text output |
+
+**Other**
+
+| Flag | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `-quiet` | bool |  | print no matches and no progress, only the summary (on stderr); the matches are still kept by -db and -o |
 
 <details>
 <summary>Flags familiar from ffuf, other names and flags accepted with no effect (42)</summary>

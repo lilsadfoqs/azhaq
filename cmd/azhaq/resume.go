@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/lilsadfoqs/azhaq/engine"
 	"github.com/lilsadfoqs/azhaq/internal/collectors/dirscol"
@@ -67,7 +68,7 @@ func cmdResume(args []string) error {
 			st.Close()
 			fuzzResuming = true
 			// The stored command has no -db (and no secret): the workspace is this one.
-			return cmdFuzz(append(append(args, "-db", db), rest...))
+			return cmdFuzz(append(append(args, "-db", db), fuzzSpelling(rest)...))
 		}
 	}
 	var retryable int
@@ -439,6 +440,34 @@ var localFlags = map[string]map[string]string{
 		"connect-timeout": "port-timeout", "retries": "port-retries", "max-retries": "port-retries"},
 	"dirs":   {"rate": "dirs-rate", "t": "dirs-threads"},
 	"params": {"rate": "params-rate"},
+}
+
+// fuzzSpelling gives run's flags a resume was given as fuzz spells them: run's
+// -timeout is a duration for the whole run, fuzz's -maxtime in seconds
+// (fuzz's own -timeout is one request's).
+func fuzzSpelling(args []string) []string {
+	out := slices.Clone(args)
+	for i, a := range out {
+		name, val, inline := strings.Cut(strings.TrimLeft(a, "-"), "=")
+		if !strings.HasPrefix(a, "-") || name != "timeout" {
+			continue
+		}
+		at := i + 1
+		if inline {
+			out[i], at = "-maxtime", -1
+		} else if i+1 < len(out) {
+			out[i], val = "-maxtime", out[i+1]
+		}
+		if d, err := time.ParseDuration(val); err == nil {
+			v := strconv.FormatFloat(d.Seconds(), 'f', -1, 64)
+			if at < 0 {
+				out[i] = "-maxtime=" + v
+			} else {
+				out[at] = v
+			}
+		}
+	}
+	return out
 }
 
 // runSpelling gives the flags a resume was given under the names the
