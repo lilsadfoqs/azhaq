@@ -336,7 +336,7 @@ func pageSite(t *testing.T, chain, items int) *httptest.Server {
 }
 
 // contract C5: results are the map rows; URLs folded into a template are
-// labelled as folded when they outnumber the rows.
+// labelled as folded when the stored rows outnumber the printed ones.
 func TestContractFoldedURLsAreLabelled(t *testing.T) {
 	t.Chdir(t.TempDir())
 	srv := pageSite(t, 0, 8)
@@ -348,8 +348,8 @@ func TestContractFoldedURLsAreLabelled(t *testing.T) {
 	if rows := len(lines(out)); rep.Results != rows {
 		t.Errorf("results %d, map rows %d", rep.Results, rows)
 	}
-	if rep.Counts["URLs"] <= rep.Results {
-		t.Fatalf("the site was meant to fold URLs into rows: %d URLs, %d rows", rep.Counts["URLs"], rep.Results)
+	if rep.Stored <= rep.Results {
+		t.Fatalf("the site was meant to fold URLs into rows: %d stored, %d rows", rep.Stored, rep.Results)
 	}
 	_, errOut, err := captureBoth(t, func() error {
 		return run(append([]string{"run", "-url", srv.URL + "/", "-quiet", "-db", "fold-text.db"}, flags...))

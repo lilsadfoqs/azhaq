@@ -139,6 +139,9 @@ func serveWorkers(addr, token string, w *engine.Workers, cfg workerConfig, onSes
 		}
 		live := cfg // the session may have been renewed since the run began
 		live.Headers, live.Session = fetch.ExtraLines(), fetch.SessionGen()
+		if live.SignIn == "" {
+			live.SignIn = fetch.SignInPath() // found from the check page, not given
+		}
 		_ = json.NewEncoder(rw).Encode(live)
 	})
 	// A worker saw an answer that looks like the end of the session: the run

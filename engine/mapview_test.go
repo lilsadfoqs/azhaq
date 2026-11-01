@@ -2,6 +2,7 @@ package engine_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"reflect"
 	"slices"
 	"strings"
@@ -145,6 +146,25 @@ func TestMapShowsTheNewestScansOpenPorts(t *testing.T) {
 	}
 	got := engine.BuildMap(ents, nil, obs, nil, false)
 	if len(got) != 1 || !strings.Contains(got[0].Proof, "open=[22 443 9000]") {
+		t.Errorf("proof %q", got[0].Proof)
+	}
+}
+
+// A prefix holds one scan row for each address of its range: its open
+// ports are those of all of them, not of the one that came last.
+func TestMapPrefixListsThePortsOfEveryAddress(t *testing.T) {
+	ents := []types.Entity{{ID: "p", Type: types.TypePrefix, Key: "127.31.0.0/24"}}
+	row := func(payload string) types.StoredObservation {
+		return types.StoredObservation{EntityID: "p", Observation: types.Observation{Collector: "azhaq-ports", Kind: "ports", Payload: json.RawMessage(payload)}}
+	}
+	var obs []types.StoredObservation
+	for i, port := range []int{8001, 8002, 8003, 8004, 8005} {
+		obs = append(obs, row(fmt.Sprintf(`{"prefix":"127.31.0.0/24","ip":"127.31.0.%d","open":[%d]}`, 10+i, port)))
+	}
+	obs = append(obs, row(`{"prefix":"127.31.0.0/24","ip":"127.31.0.99","open":[]}`),
+		row(`{"range":true,"prefix":"127.31.0.0/24","addresses":256,"with_open":5,"open":[]}`))
+	got := engine.BuildMap(ents, nil, obs, nil, false)
+	if len(got) != 1 || !strings.Contains(got[0].Proof, "open=[8001 8002 8003 8004 8005]") || !strings.Contains(got[0].Proof, "addresses_open=5") {
 		t.Errorf("proof %q", got[0].Proof)
 	}
 }

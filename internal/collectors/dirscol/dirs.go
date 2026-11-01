@@ -453,7 +453,7 @@ func (c *Collector) sweep(ctx context.Context, dir string, found func([]hit) err
 	if c.Opts.NoCalibration {
 		var lost error
 		for first < min(2, len(targets)) && ctx.Err() == nil && !out.Load() {
-			if c.limiter.Wait(ctx, host) != nil {
+			if c.pace(ctx, host, dir+escapeWord(targets[first])) != nil {
 				break
 			}
 			err := ask(targets[first])
@@ -472,7 +472,7 @@ func (c *Collector) sweep(ctx context.Context, dir string, found func([]hit) err
 		if ctx.Err() != nil || out.Load() || halt.Load() || dead != nil {
 			break
 		}
-		if err := c.limiter.Wait(ctx, host); err != nil {
+		if err := c.pace(ctx, host, dir+escapeWord(t)); err != nil {
 			break
 		}
 		sem <- struct{}{}
@@ -527,6 +527,26 @@ type response struct {
 	Echo                         bool        `json:",omitempty"` // calibration: the body names the path asked
 	Header                       http.Header `json:"-"`
 	Body                         []byte      `json:"-"`
+}
+
+// pace waits for a pace slot before target is asked, unless its answer is
+// stored: get answers from the memo without a request, and a resume does
+// not spend -rate on what it already has.
+func (c *Collector) pace(ctx context.Context, host, target string) error {
+	if c.recalled(target) {
+		return ctx.Err()
+	}
+	return c.limiter.Wait(ctx, host)
+}
+
+// recalled says an answer to target is stored in the run's memos.
+func (c *Collector) recalled(target string) bool {
+	if fetch.Memos == nil || c.needBody {
+		return false
+	}
+	raw, ok := fetch.Memos.Recall("dirs " + target)
+	var r response
+	return ok && json.Unmarshal(raw, &r) == nil
 }
 
 // get asks for target. probe, set for calibration, is the name asked: the
@@ -644,7 +664,7 @@ func (c *Collector) calibrate(ctx context.Context, dir, host string) (cal calibr
 	sem := make(chan struct{}, max(1, min(c.Opts.Threads, len(shapes))))
 	var wg sync.WaitGroup
 	for i, s := range shapes {
-		if c.limiter.Wait(ctx, host) != nil {
+		if c.pace(ctx, host, dir+s) != nil {
 			break
 		}
 		sem <- struct{}{}

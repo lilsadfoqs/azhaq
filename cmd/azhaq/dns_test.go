@@ -17,6 +17,7 @@ import (
 	"github.com/miekg/dns"
 
 	"github.com/lilsadfoqs/azhaq/internal/dnsr"
+	"github.com/lilsadfoqs/azhaq/internal/ledger"
 )
 
 // dnsLab is a zone with every record type, a reverse zone and a zone
@@ -412,6 +413,37 @@ func TestDNSWildcards(t *testing.T) {
 	ls, _, _ = dnsOut(t, "-l", l, "-r", lab.addr, "-silent", "-no-wildcard")
 	if len(ls) != 3 {
 		t.Errorf("-no-wildcard: %v", ls)
+	}
+}
+
+// A dns run sent its queries to resolvers, not to targets: the summary
+// says how many in dns_queries, with or without a ledger, and the number is
+// the ledger's dns lines (retries and wildcard probes included).
+func TestDNSSummaryCountsItsQueries(t *testing.T) {
+	t.Chdir(t.TempDir())
+	lab := startLab(t)
+	l := writeList(t, "x.wild.lab.zz", "real.wild.lab.zz", "www.lab.zz", "nope.lab.zz")
+	_, bare, _ := dnsOut(t, "-l", l, "-r", lab.addr, "-a", "-json")
+	if bare.Requests != 0 || bare.DNSQueries < 4 {
+		t.Fatalf("no ledger: requests %d, dns_queries %d (4 names asked, the wildcard probe too)", bare.Requests, bare.DNSQueries)
+	}
+	_, rep, _ := dnsOut(t, "-l", l, "-r", lab.addr, "-a", "-json", "-ledger", "l.jsonl")
+	lines := 0
+	if err := ledger.Read("l.jsonl", func(e ledger.Entry) error {
+		if e.Class == ledger.ClassDNS {
+			lines++
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if lines == 0 || rep.DNSQueries != int64(lines) || rep.DNSQueries != bare.DNSQueries {
+		t.Errorf("summary dns_queries %d, ledger dns lines %d, same run without a ledger %d", rep.DNSQueries, lines, bare.DNSQueries)
+	}
+	for _, n := range rep.Notes {
+		if strings.Contains(n, "DNS queries and the ledger lists") {
+			t.Errorf("the summary and the ledger disagree: %s", n)
+		}
 	}
 }
 
