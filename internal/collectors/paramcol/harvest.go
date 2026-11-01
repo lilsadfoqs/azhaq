@@ -2,20 +2,21 @@ package paramcol
 
 import (
 	"bytes"
-	"regexp"
 	"strings"
+
+	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 )
 
 // maxHarvest caps the names taken from one page.
 const maxHarvest = 300
 
 var (
-	formTagRE  = regexp.MustCompile(`(?is)<(?:input|textarea|select|button)\b[^>]*>`)
-	attrNameRE = regexp.MustCompile(`(?is)\b(?:name|id)\s*=\s*(?:"([^"]{1,60})"|'([^']{1,60})'|([A-Za-z0-9_.\[\]-]{1,60}))`)
-	jsEmptyRE  = regexp.MustCompile(`\b(?:var|let|const)\s+([A-Za-z_][A-Za-z0-9_]{1,40})\s*=\s*(?:""|'')`)
-	quotedKey  = regexp.MustCompile(`["']([A-Za-z_][A-Za-z0-9_.-]{1,40})["']\s*:`)
-	plainWord  = regexp.MustCompile(`[A-Za-z_][A-Za-z0-9_]{2,30}`)
-	nameOK     = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_.\[\]-]{0,59}$`)
+	formTagRE  = lazyre.New(`(?is)<(?:input|textarea|select|button)\b[^>]*>`)
+	attrNameRE = lazyre.New(`(?is)\b(?:name|id)\s*=\s*(?:"([^"]{1,60})"|'([^']{1,60})'|([A-Za-z0-9_.\[\]-]{1,60}))`)
+	jsEmptyRE  = lazyre.New(`\b(?:var|let|const)\s+([A-Za-z_][A-Za-z0-9_]{1,40})\s*=\s*(?:""|'')`)
+	quotedKey  = lazyre.New(`["']([A-Za-z_][A-Za-z0-9_.-]{1,40})["']\s*:`)
+	plainWord  = lazyre.New(`[A-Za-z_][A-Za-z0-9_]{2,30}`)
+	nameOK     = lazyre.New(`^[A-Za-z_][A-Za-z0-9_.\[\]-]{0,59}$`)
 )
 
 // harvest lists names the answer itself holds, which the page is likely

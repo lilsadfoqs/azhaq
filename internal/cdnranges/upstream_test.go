@@ -37,7 +37,7 @@ func TestParityIPs(t *testing.T) {
 func TestParityRangeEdges(t *testing.T) {
 	up := cdncheck.New()
 	var in struct{ CDN, WAF, Cloud map[string][]string }
-	if err := json.Unmarshal(sourcesData, &in); err != nil {
+	if err := json.Unmarshal([]byte(sourcesData), &in); err != nil {
 		t.Fatal(err)
 	}
 	n, skipped := 0, 0
@@ -76,8 +76,7 @@ func TestParityRangeEdges(t *testing.T) {
 
 // overlaps says a is in the ranges of two providers of kind.
 func overlaps(a netip.Addr, kind string) bool {
-	d := load()
-	tab := map[string]tables{"cdn": d.cdn, "waf": d.waf, "cloud": d.cloud}[kind]
+	tab := map[string]tables{"cdn": cdn.tables(), "waf": waf.tables(), "cloud": cloud.tables()}[kind]
 	hits := 0
 	for _, name := range tab.names {
 		if _, ok := tab.by[name].Lookup(a); ok {

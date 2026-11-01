@@ -7,10 +7,11 @@ import (
 	"html"
 	"net/http"
 	"net/url"
-	"regexp"
 	"strconv"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 )
 
 // ---- Slack
@@ -142,7 +143,7 @@ func newDiscord(o []*DiscordOptions, ids []string, env *Env) *discord {
 func (d *discord) Name() string { return "discord" }
 func (d *discord) entries() int { return len(d.opts) }
 
-var reDiscordWebhook = regexp.MustCompile(`(https?)://((?:ptb\.|canary\.)?discord(?:app)?\.com)/api/?(v\d{1,2})?/webhooks/(\d{17,19})/([\w\-]{68})`)
+var reDiscordWebhook = lazyre.New(`(https?)://((?:ptb\.|canary\.)?discord(?:app)?\.com)/api/?(v\d{1,2})?/webhooks/(\d{17,19})/([\w\-]{68})`)
 
 // Discord's limits for the embeds of one webhook message (shoutrrr's).
 const (
@@ -286,7 +287,7 @@ func newTelegram(o []*TelegramOptions, ids []string, env *Env) *telegram {
 func (t *telegram) Name() string { return "telegram" }
 func (t *telegram) entries() int { return len(t.opts) }
 
-var reTelegramToken = regexp.MustCompile(`^[0-9]+:[a-zA-Z0-9_-]+$`)
+var reTelegramToken = lazyre.New(`^[0-9]+:[a-zA-Z0-9_-]+$`)
 
 func (t *telegram) Send(ctx context.Context, msg, cli string) []Delivery {
 	n := t.next()
@@ -441,8 +442,8 @@ func (t *teams) entries() int { return len(t.opts) }
 const teamsLimit = 15000
 
 var (
-	reUUID4 = regexp.MustCompile(`[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}`)
-	reHash  = regexp.MustCompile(`[A-Za-z0-9]{32}`)
+	reUUID4 = lazyre.New(`[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}`)
+	reHash  = lazyre.New(`[A-Za-z0-9]{32}`)
 )
 
 func (t *teams) Send(ctx context.Context, msg, cli string) []Delivery {

@@ -23,6 +23,7 @@ type portsRow struct {
 	Shared       int        `json:"shared"`
 	AzhaqSeconds float64    `json:"azhaq_seconds"`
 	NaabuSeconds float64    `json:"naabu_seconds"`
+	memPair                 // the largest peak of any leg
 	AzhaqOnly    []string   `json:"azhaq_only,omitempty"`
 	NaabuOnly    []string   `json:"naabu_only,omitempty"`
 	Legs         []portsLeg `json:"legs,omitempty"`
@@ -38,6 +39,7 @@ type portsLeg struct {
 	NaabuOK   int     `json:"naabu_confirmed"`
 	AzhaqSecs float64 `json:"azhaq_seconds"`
 	NaabuSecs float64 `json:"naabu_seconds"`
+	memPair
 }
 
 // listening is the set of "ip:port" of TCP sockets in the listening state.
@@ -78,10 +80,12 @@ func benchPorts() *portsRow {
 	rate := pick([]string(nil), []string{"-rate", politePort})
 	nrate := pick([]string(nil), []string{"-rate", politePort})
 	var azCmd, nbCmd, azFailed string
+	var azMem, nbMem float64 // the peaks of the last pair of runs
 	add := func(l portsLeg) {
 		row.Legs = append(row.Legs, l)
 		row.AzhaqSeconds += l.AzhaqSecs
 		row.NaabuSeconds += l.NaabuSecs
+		row.AzhaqRSS, row.RefRSS = max(row.AzhaqRSS, l.AzhaqRSS), max(row.RefRSS, l.RefRSS)
 		row.AzhaqOpen += l.Azhaq
 		row.NaabuOpen += l.Naabu
 	}
@@ -98,20 +102,20 @@ func benchPorts() *portsRow {
 			out, m = timed(target, 10*time.Minute, work, azhaq, aa...)
 		}
 		azFailed += azFail(m)
-		az, azS = portSet(out), m.Seconds
+		az, azS, azMem = portSet(out), m.Seconds, m.RSSMB
 		if public {
 			out, m = run(target, 10*time.Minute, work, naabu, na...)
 		} else {
 			out, m = timed(target, 10*time.Minute, work, naabu, na...)
 		}
-		nb, nbS = portSet(out), m.Seconds
+		nb, nbS, nbMem = portSet(out), m.Seconds, m.RSSMB
 		return
 	}
 
 	// scanme.nmap.org, top 1000, once.
 	az, nb, azS, nbS := both("scanme.nmap.org", "top-1000", true)
 	// naabu's own spelling of the same list.
-	l := portsLeg{Target: "scanme.nmap.org", Ports: "top-1000", Azhaq: len(az), Naabu: len(nb), AzhaqSecs: azS, NaabuSecs: nbS}
+	l := portsLeg{Target: "scanme.nmap.org", Ports: "top-1000", Azhaq: len(az), Naabu: len(nb), AzhaqSecs: azS, NaabuSecs: nbS, memPair: memPair{azMem, nbMem}}
 	for k := range az {
 		if dialOK(k) {
 			l.AzhaqOK++
@@ -125,14 +129,14 @@ func benchPorts() *portsRow {
 	add(l)
 	row.AzhaqOnly, row.NaabuOnly = diffKeys(az, nb)
 	barOne("ports scanme.nmap.org top-1000", l.AzhaqOK, l.NaabuOK, l.AzhaqSecs, l.NaabuSecs, "an independent TCP connect",
-		azCmd+" vs "+nbCmd, fmt.Sprintf("%s; azhaq only %v, naabu only %v", share(overlap(az, nb), len(nb)), row.AzhaqOnly, row.NaabuOnly)+azFailed)
+		azCmd+" vs "+nbCmd, fmt.Sprintf("%s; azhaq only %v, naabu only %v", share(overlap(az, nb), len(nb)), row.AzhaqOnly, row.NaabuOnly)+"; "+ratios(l.AzhaqSecs, l.NaabuSecs, l.memPair)+azFailed)
 
 	// 127.0.0.1: the listening sockets ss shows, before and after the scan.
 	ports := pick("1-65535", "top-1000")
 	before := listening()
 	az, nb, azS, nbS = both("127.0.0.1", ports, false)
 	after := listening()
-	l = portsLeg{Target: "127.0.0.1", Ports: ports, Azhaq: len(az), Naabu: len(nb), AzhaqSecs: azS, NaabuSecs: nbS}
+	l = portsLeg{Target: "127.0.0.1", Ports: ports, Azhaq: len(az), Naabu: len(nb), AzhaqSecs: azS, NaabuSecs: nbS, memPair: memPair{azMem, nbMem}}
 	for k := range az {
 		if _, p, ok := strings.Cut(k, ":"); ok && (listensOn(before, p) || listensOn(after, p)) {
 			l.AzhaqOK++
@@ -156,13 +160,13 @@ func benchPorts() *portsRow {
 	}
 	ma, mn := missed(az), missed(nb)
 	barOne("ports 127.0.0.1 "+ports, l.AzhaqOK, l.NaabuOK, l.AzhaqSecs, l.NaabuSecs, "`ss -ltn` taken before and after the scan",
-		azCmd+" vs "+nbCmd, fmt.Sprintf("%s; sockets listening throughout and missed: azhaq %v, naabu %v", share(overlap(az, nb), len(nb)), clipList(ma, 5), clipList(mn, 5))+azFailed)
+		azCmd+" vs "+nbCmd, fmt.Sprintf("%s; sockets listening throughout and missed: azhaq %v, naabu %v", share(overlap(az, nb), len(nb)), clipList(ma, 5), clipList(mn, 5))+"; "+ratios(l.AzhaqSecs, l.NaabuSecs, l.memPair)+azFailed)
 
 	// 127.0.0.0/28 against listeners of the bench's own.
 	truth, plist, stop := cidrListeners()
 	defer stop()
 	az, nb, azS, nbS = both("127.0.0.0/28", plist, false)
-	l = portsLeg{Target: "127.0.0.0/28", Ports: plist, Azhaq: len(az), Naabu: len(nb), AzhaqSecs: azS, NaabuSecs: nbS}
+	l = portsLeg{Target: "127.0.0.0/28", Ports: plist, Azhaq: len(az), Naabu: len(nb), AzhaqSecs: azS, NaabuSecs: nbS, memPair: memPair{azMem, nbMem}}
 	for k := range az {
 		if truth[k] {
 			l.AzhaqOK++
@@ -175,7 +179,7 @@ func benchPorts() *portsRow {
 	}
 	add(l)
 	barOne("ports 127.0.0.0/28", l.AzhaqOK-(len(az)-l.AzhaqOK), l.NaabuOK-(len(nb)-l.NaabuOK), l.AzhaqSecs, l.NaabuSecs, "the listeners the bench opened (a port that is not one counts against)",
-		azCmd+" vs "+nbCmd, fmt.Sprintf("planted %d; azhaq %d of them, %d reported; naabu %d, %d reported%s", len(truth), l.AzhaqOK, len(az), l.NaabuOK, len(nb), "")+azFailed)
+		azCmd+" vs "+nbCmd, fmt.Sprintf("planted %d; azhaq %d of them, %d reported; naabu %d, %d reported%s", len(truth), l.AzhaqOK, len(az), l.NaabuOK, len(nb), "")+"; "+ratios(l.AzhaqSecs, l.NaabuSecs, l.memPair)+azFailed)
 	row.Shared = overlap(az, nb)
 	return row
 }

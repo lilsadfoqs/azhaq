@@ -262,7 +262,7 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		return types.RunMeta{Status: types.StatusOK, EmitCount: 1}, err
 	}
 	for _, ip := range ips {
-		if name, kind := fingerprint.Network(net.ParseIP(ip)); name != "" && kind != "cloud" && edgeName == "" {
+		if name, _ := fingerprint.NetworkEdge(net.ParseIP(ip)); name != "" && edgeName == "" {
 			edgeName = name
 		}
 	}

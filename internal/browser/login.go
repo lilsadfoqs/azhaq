@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/lilsadfoqs/azhaq/internal/guard"
-	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -19,6 +18,7 @@ import (
 
 	"github.com/lilsadfoqs/azhaq/internal/egress"
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
+	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 	"github.com/lilsadfoqs/azhaq/internal/neterr"
 )
 
@@ -114,7 +114,7 @@ const readStorage = `(() => {
   return out;
 })()`
 
-var jwtRE = regexp.MustCompile(`eyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]*`)
+var jwtRE = lazyre.New(`eyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]*`)
 
 // Login opens loginURL, fills the first visible password form with user and
 // pass, submits it, and returns the session the site set: its cookies, and

@@ -12,7 +12,6 @@ import (
 	"github.com/lilsadfoqs/azhaq/internal/guard"
 	"net/http"
 	"net/url"
-	"regexp"
 	"slices"
 	"sort"
 	"strings"
@@ -26,6 +25,7 @@ import (
 
 	"github.com/lilsadfoqs/azhaq/catalog"
 	"github.com/lilsadfoqs/azhaq/internal/egress"
+	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 	"github.com/lilsadfoqs/azhaq/internal/limit"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"github.com/lilsadfoqs/azhaq/internal/timing"
@@ -788,4 +788,4 @@ func shorten(s string) string {
 // keyParam is a credential in a URL's query: sources that take their key
 // there (Shodan's ?key=, hackertarget's &apikey=) name the URL in an error,
 // and the error goes to the summary and the workspace.
-var keyParam = regexp.MustCompile(`(?i)([?&](?:api[_-]?key|apikey|key|token|access_token|auth|password|secret)=)[^&\s"')]+`)
+var keyParam = lazyre.New(`(?i)([?&](?:api[_-]?key|apikey|key|token|access_token|auth|password|secret)=)[^&\s"')]+`)

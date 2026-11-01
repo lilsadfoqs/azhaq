@@ -7,45 +7,47 @@ import (
 	"encoding/json"
 	"html"
 	"net"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 )
 
 // A greeting signature names a product from the first line a service
 // sends: product is fixed, or taken from the group p; v is the version.
 type greeting struct {
-	re      *regexp.Regexp
+	re      *lazyre.Regexp
 	product string
 }
 
 var greetings = []greeting{
-	{regexp.MustCompile(`(?i)\bvsFTPd (?P<v>\d[\w.]*)`), "vsftpd"},
-	{regexp.MustCompile(`(?i)\bProFTPD (?P<v>\d[\w.]*)`), "ProFTPD"},
-	{regexp.MustCompile(`(?i)\bPure-FTPd\b`), "Pure-FTPd"},
-	{regexp.MustCompile(`(?i)\bFileZilla Server (?:version )?(?P<v>\d[\w.]*)`), "FileZilla Server"},
-	{regexp.MustCompile(`(?i)\bMicrosoft FTP Service\b`), "Microsoft ftpd"},
-	{regexp.MustCompile(`(?i)\bESMTP Postfix\b`), "Postfix"},
-	{regexp.MustCompile(`(?i)\bESMTP Exim (?P<v>\d[\w.]*)`), "Exim"},
-	{regexp.MustCompile(`(?i)\bSendmail (?P<v>\d[\w.]*)`), "Sendmail"},
-	{regexp.MustCompile(`(?i)\bESMTP OpenSMTPD\b`), "OpenSMTPD"},
-	{regexp.MustCompile(`(?i)\bMicrosoft ESMTP MAIL Service, Version: (?P<v>\d[\w.]*)`), "Microsoft Exchange smtpd"},
-	{regexp.MustCompile(`(?i)\bESMTP Haraka\b`), "Haraka"},
-	{regexp.MustCompile(`(?i)\bMailpit ESMTP\b`), "Mailpit"},
-	{regexp.MustCompile(`(?i)\bESMTP MailHog\b`), "MailHog"},
-	{regexp.MustCompile(`(?i)\bDovecot\b(?: (?P<v>\d[\d.]*))?`), "Dovecot"},
-	{regexp.MustCompile(`(?i)\bCyrus (?:IMAP|POP3)[ -]?(?:v)?(?P<v>\d[\w.]*)`), "Cyrus"},
-	{regexp.MustCompile(`(?i)\bCourier-IMAP\b`), "Courier"},
+	{lazyre.New(`(?i)\bvsFTPd (?P<v>\d[\w.]*)`), "vsftpd"},
+	{lazyre.New(`(?i)\bProFTPD (?P<v>\d[\w.]*)`), "ProFTPD"},
+	{lazyre.New(`(?i)\bPure-FTPd\b`), "Pure-FTPd"},
+	{lazyre.New(`(?i)\bFileZilla Server (?:version )?(?P<v>\d[\w.]*)`), "FileZilla Server"},
+	{lazyre.New(`(?i)\bMicrosoft FTP Service\b`), "Microsoft ftpd"},
+	{lazyre.New(`(?i)\bESMTP Postfix\b`), "Postfix"},
+	{lazyre.New(`(?i)\bESMTP Exim (?P<v>\d[\w.]*)`), "Exim"},
+	{lazyre.New(`(?i)\bSendmail (?P<v>\d[\w.]*)`), "Sendmail"},
+	{lazyre.New(`(?i)\bESMTP OpenSMTPD\b`), "OpenSMTPD"},
+	{lazyre.New(`(?i)\bMicrosoft ESMTP MAIL Service, Version: (?P<v>\d[\w.]*)`), "Microsoft Exchange smtpd"},
+	{lazyre.New(`(?i)\bESMTP Haraka\b`), "Haraka"},
+	{lazyre.New(`(?i)\bMailpit ESMTP\b`), "Mailpit"},
+	{lazyre.New(`(?i)\bESMTP MailHog\b`), "MailHog"},
+	{lazyre.New(`(?i)\bDovecot\b(?: (?P<v>\d[\d.]*))?`), "Dovecot"},
+	{lazyre.New(`(?i)\bCyrus (?:IMAP|POP3)[ -]?(?:v)?(?P<v>\d[\w.]*)`), "Cyrus"},
+	{lazyre.New(`(?i)\bCourier-IMAP\b`), "Courier"},
 }
 
 // sshRe splits the software of "SSH-2.0-OpenSSH_9.6p1 Ubuntu-3ubuntu13.20".
 var (
-	sshRe     = regexp.MustCompile(`^SSH-\d\.\d+-(\S+)`)
-	sshSplit  = regexp.MustCompile(`^(.+?)[_-](\d[\w.+~]*)$`)
-	rfbRe     = regexp.MustCompile(`^RFB (\d+)\.(\d+)`)
-	mariaTrim = regexp.MustCompile(`^5\.5\.5-`)
-	leadVer   = regexp.MustCompile(`^\d+(?:\.\d+)*`)
+	sshRe     = lazyre.New(`^SSH-\d\.\d+-(\S+)`)
+	sshProto  = lazyre.New(`^SSH-(\d\.\d+)-`)
+	sshSplit  = lazyre.New(`^(.+?)[_-](\d[\w.+~]*)$`)
+	rfbRe     = lazyre.New(`^RFB (\d+)\.(\d+)`)
+	mariaTrim = lazyre.New(`^5\.5\.5-`)
+	leadVer   = lazyre.New(`^\d+(?:\.\d+)*`)
 )
 
 // greetingProduct reads a product and version out of what a port said
@@ -73,6 +75,22 @@ func greetingProduct(raw []byte, banner string) (service, product, version strin
 		}
 	}
 	return "", "", ""
+}
+
+// sshExtra is what an SSH identification line says beside the software and
+// its version: the comment after the first space (a distribution's package
+// name) and the protocol version, as the line gave them.
+func sshExtra(banner string) string {
+	m := sshProto.FindStringSubmatch(banner)
+	if m == nil {
+		return ""
+	}
+	var parts []string
+	if _, comment, ok := strings.Cut(banner, " "); ok && strings.TrimSpace(comment) != "" {
+		parts = append(parts, strings.TrimSpace(comment))
+	}
+	parts = append(parts, "protocol "+m[1])
+	return strings.Join(parts, "; ")
 }
 
 // mysqlVersion reads the server version from the handshake MySQL and
@@ -142,7 +160,7 @@ func parseHead(head []byte) (h httpHead, ok bool) {
 	return h, true
 }
 
-var tokenName = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_.\-]{0,39}$`)
+var tokenName = lazyre.New(`^[A-Za-z][A-Za-z0-9_.\-]{0,39}$`)
 
 // aliases give the name a product is known by, for the Server tokens that
 // are not it.
@@ -176,6 +194,30 @@ func serverProduct(s string) (product, version string) {
 		name = a
 	}
 	return name, version
+}
+
+// serverExtra is what a Server header says after its product token, as it
+// was sent: the runtime ("Python/3.11.15") or the distribution ("(Debian)").
+func serverExtra(s string) string {
+	t := strings.Fields(s)
+	if len(t) < 2 {
+		return ""
+	}
+	return strings.Join(t[1:], " ")
+}
+
+// headExtra is serverExtra of the header headProduct took the product from.
+func headExtra(h httpHead) string {
+	if h.elastic != "" {
+		return ""
+	}
+	if p, _ := serverProduct(h.server); p != "" {
+		return serverExtra(h.server)
+	}
+	if p, _ := serverProduct(h.powered); p != "" {
+		return serverExtra(h.powered)
+	}
+	return ""
 }
 
 // headProduct is the product an HTTP head names: an Elasticsearch product
@@ -243,6 +285,9 @@ func (s *Scanner) greeted(o *Open, raw []byte) {
 		return
 	}
 	o.Product, o.Version = product, version
+	if service == "ssh" {
+		o.Extra = sshExtra(o.Banner)
+	}
 	if service != "" {
 		o.Service = service
 	} else if tmp := *o; passiveRead(raw, &tmp) {
@@ -303,7 +348,7 @@ func (s *Scanner) webProduct(ctx context.Context, o *Open, head []byte, status i
 		return
 	}
 	if p, v := headProduct(h); p != "" {
-		o.Product, o.Version = p, v
+		o.Product, o.Version, o.Extra = p, v, headExtra(h)
 	}
 	if o.Product != "" && h.elastic == "" {
 		return
@@ -346,22 +391,22 @@ func (s *Scanner) webProduct(ctx context.Context, o *Open, head []byte, status i
 // titleProducts name an application by its page's title: a product that
 // serves a page of its own and puts no name in a header.
 var titleProducts = []struct {
-	title   *regexp.Regexp
+	title   *lazyre.Regexp
 	product string
-	version *regexp.Regexp // looked for in the page
+	version *lazyre.Regexp // looked for in the page
 }{
-	{regexp.MustCompile(`(?i)^mailpit$`), "Mailpit", regexp.MustCompile(`/dist/app\.css\?v(\d[\w.]*)`)},
-	{regexp.MustCompile(`(?i)^rabbitmq management$`), "RabbitMQ Management", nil},
-	{regexp.MustCompile(`(?i)^grafana$`), "Grafana", nil},
-	{regexp.MustCompile(`(?i)\[jenkins\]$`), "Jenkins", nil},
-	{regexp.MustCompile(`(?i)^kibana$`), "Kibana", nil},
-	{regexp.MustCompile(`(?i)^prometheus time series`), "Prometheus", nil},
-	{regexp.MustCompile(`(?i)^portainer$`), "Portainer", nil},
-	{regexp.MustCompile(`(?i)^phpmyadmin$`), "phpMyAdmin", nil},
-	{regexp.MustCompile(`(?i)^welcome to nginx!?$`), "nginx", nil},
+	{lazyre.New(`(?i)^mailpit$`), "Mailpit", lazyre.New(`/dist/app\.css\?v(\d[\w.]*)`)},
+	{lazyre.New(`(?i)^rabbitmq management$`), "RabbitMQ Management", nil},
+	{lazyre.New(`(?i)^grafana$`), "Grafana", nil},
+	{lazyre.New(`(?i)\[jenkins\]$`), "Jenkins", nil},
+	{lazyre.New(`(?i)^kibana$`), "Kibana", nil},
+	{lazyre.New(`(?i)^prometheus time series`), "Prometheus", nil},
+	{lazyre.New(`(?i)^portainer$`), "Portainer", nil},
+	{lazyre.New(`(?i)^phpmyadmin$`), "phpMyAdmin", nil},
+	{lazyre.New(`(?i)^welcome to nginx!?$`), "nginx", nil},
 }
 
-var tomcatTitle = regexp.MustCompile(`^Apache Tomcat/(\d[\w.]*)`)
+var tomcatTitle = lazyre.New(`^Apache Tomcat/(\d[\w.]*)`)
 
 func titleProduct(title string, body []byte) (product, version string) {
 	if m := tomcatTitle.FindStringSubmatch(title); m != nil {
@@ -391,11 +436,11 @@ func needsVersionPage(body []byte) bool {
 }
 
 var (
-	titleRe   = regexp.MustCompile(`(?is)<title[^>]*>(.*?)</title>`)
-	metaRe    = regexp.MustCompile(`(?is)<meta\b[^>]*>`)
-	attrRe    = regexp.MustCompile(`(?is)([a-z][a-z0-9:_-]*)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))`)
-	genNameRe = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_. \-]{0,39}$`)
-	genVerRe  = regexp.MustCompile(`^v?(\d[\w.+~\-]*)$`)
+	titleRe   = lazyre.New(`(?is)<title[^>]*>(.*?)</title>`)
+	metaRe    = lazyre.New(`(?is)<meta\b[^>]*>`)
+	attrRe    = lazyre.New(`(?is)([a-z][a-z0-9:_-]*)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))`)
+	genNameRe = lazyre.New(`^[A-Za-z][A-Za-z0-9_. \-]{0,39}$`)
+	genVerRe  = lazyre.New(`^v?(\d[\w.+~\-]*)$`)
 )
 
 // pageTitle is the text of the first <title>: entities decoded, runs of

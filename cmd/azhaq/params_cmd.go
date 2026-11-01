@@ -12,7 +12,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -21,6 +20,7 @@ import (
 	"github.com/lilsadfoqs/azhaq/internal/collectors/paramcol"
 	"github.com/lilsadfoqs/azhaq/internal/egress"
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
+	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"github.com/lilsadfoqs/azhaq/types"
 )
@@ -366,7 +366,7 @@ func firstLine(b []byte) []byte {
 	return b
 }
 
-var rawRequestLine = regexp.MustCompile(`^[A-Z]+ \S+ HTTP/\d`)
+var rawRequestLine = lazyre.New(`^[A-Z]+ \S+ HTTP/\d`)
 
 // burpItems is a Burp Suite "save items" export.
 type burpItems struct {

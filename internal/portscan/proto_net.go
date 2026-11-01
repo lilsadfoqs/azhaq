@@ -8,6 +8,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 )
 
 func init() {
@@ -16,6 +18,10 @@ func init() {
 		&protocol{name: "telnet", passive: true, read: telnetRead},
 		// VNC: the ProtocolVersion message of the RFB protocol (RFC 6143, 7.1.1).
 		&protocol{name: "vnc", passive: true, read: vncRead},
+		// Nping echo server: it speaks first with a handshake message, version 1,
+		// type 1 (server hello), and its own total length, 24 bytes at least
+		// (the Nping Echo Protocol of Nping's echo mode).
+		&protocol{name: "nping-echo", ports: []int{9929}, passive: true, read: npingRead},
 		// IRC: the NOTICE AUTH or PING a server opens with (RFC 2812, 3.1, 3.7.2).
 		&protocol{name: "irc", passive: true, read: ircRead},
 		// NNTP: the 200 or 201 greeting (RFC 3977, 5.1).
@@ -97,6 +103,17 @@ func esFrame(b []byte) int {
 	return len(esPing)
 }
 
+func npingRead(r []byte, o *Open) bool {
+	if len(r) < 24 || r[0] != 1 || r[1] != 1 {
+		return false
+	}
+	if n := int(binary.BigEndian.Uint16(r[2:])); n < 24 || n > len(r) {
+		return false
+	}
+	o.Service, o.Product, o.Banner = "nping-echo", "Nping echo", bannerOf(r)
+	return true
+}
+
 func esRead(r []byte, o *Open) bool {
 	if !bytes.Equal(r, esPing) {
 		return false
@@ -137,9 +154,9 @@ func vncRead(r []byte, o *Open) bool {
 }
 
 var (
-	ircRe  = regexp.MustCompile(`^(?::\S+ NOTICE (?:AUTH|\*) :|PING :\S|ERROR :(?:Closing Link|Too many)|:\S+ 0?0[1-5] )`)
-	innRe  = regexp.MustCompile(`(?i)\bINN (\d[\w.]*)`)
-	hdrSrv = regexp.MustCompile(`(?im)^(?:server|user-agent):[ \t]*([^\r\n]+)`)
+	ircRe  = lazyre.New(`^(?::\S+ NOTICE (?:AUTH|\*) :|PING :\S|ERROR :(?:Closing Link|Too many)|:\S+ 0?0[1-5] )`)
+	innRe  = lazyre.New(`(?i)\bINN (\d[\w.]*)`)
+	hdrSrv = lazyre.New(`(?im)^(?:server|user-agent):[ \t]*([^\r\n]+)`)
 )
 
 func ircRead(r []byte, o *Open) bool {
@@ -161,7 +178,7 @@ func nntpRead(r []byte, o *Open) bool {
 	return true
 }
 
-var sieveRe = regexp.MustCompile(`^"IMPLEMENTATION" "([^"]+)"`)
+var sieveRe = lazyre.New(`^"IMPLEMENTATION" "([^"]+)"`)
 
 func sieveRead(r []byte, o *Open) bool {
 	m := sieveRe.FindSubmatch(r)
@@ -172,7 +189,7 @@ func sieveRead(r []byte, o *Open) bool {
 	return true
 }
 
-var rtspRe = regexp.MustCompile(`^RTSP/\d\.\d \d{3}`)
+var rtspRe = lazyre.New(`^RTSP/\d\.\d \d{3}`)
 
 // headerProduct reads the Server or User-Agent header of a text answer.
 func headerProduct(r []byte) (product, version string) {
@@ -206,7 +223,7 @@ func sipOptions(host, transport string) []byte {
 		"Call-ID: azhaq-1@azhaq.invalid\r\nCSeq: 1 OPTIONS\r\nContent-Length: 0\r\n\r\n")
 }
 
-var sipRe = regexp.MustCompile(`^SIP/2\.0 \d{3}`)
+var sipRe = lazyre.New(`^SIP/2\.0 \d{3}`)
 
 func sipRead(r []byte, o *Open) bool {
 	if !sipRe.Match(r) {
@@ -401,7 +418,7 @@ func x11Read(r []byte, o *Open) bool {
 	return true
 }
 
-var fingerRe = regexp.MustCompile(`(?i)no such user|not found|login\b|unknown user|finger\b|name\b.*\bhome\b`)
+var fingerRe = lazyre.New(`(?i)no such user|not found|login\b|unknown user|finger\b|name\b.*\bhome\b`)
 
 func fingerRead(r []byte, o *Open) bool {
 	if !isText(r) || !fingerRe.Match(r) {
@@ -411,7 +428,7 @@ func fingerRead(r []byte, o *Open) bool {
 	return true
 }
 
-var gopherRe = regexp.MustCompile(`(?m)^[0-9iIhgs+3][^\t\r\n]*\t[^\t\r\n]*\t[^\t\r\n]*\t\d+`)
+var gopherRe = lazyre.New(`(?m)^[0-9iIhgs+3][^\t\r\n]*\t[^\t\r\n]*\t[^\t\r\n]*\t\d+`)
 
 func gopherRead(r []byte, o *Open) bool {
 	if !gopherRe.Match(r) {

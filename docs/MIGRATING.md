@@ -668,7 +668,7 @@ Behaviour, fields and edge cases: [`azhaq shots`](commands/shots.md).
 | `--screenshot-fullpage` | `-shot-fullpage` | |
 | `--screenshot-format jpeg` | `-shot-format jpeg` | gowitness writes jpeg by default; azhaq writes png. |
 | `--screenshot-jpeg-quality 60` | `-shot-quality 60` | |
-| `--delay 3` | `-shot-wait 3s` | The default is 1.5 s here and 3 s in gowitness. |
+| `--delay 3` | `-shot-wait 3s` | The default is 1.5 s here for a page with a script, and none for a page without one, which cannot change once painted; gowitness waits 3 s for every page. |
 | `--timeout 60` | `-shot-timeout 60s` | |
 | `--threads 6` | `-tabs 6` | Chrome tabs in one Chrome. |
 | `--javascript-file FILE` | `-shot-js FILE` | |

@@ -3,12 +3,12 @@ package engine
 import (
 	"encoding/json"
 	"fmt"
-	"regexp"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/lilsadfoqs/azhaq/internal/guard"
+	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"github.com/lilsadfoqs/azhaq/types"
 )
@@ -236,11 +236,11 @@ func sourceTarget(p map[string]any, fallback string) string {
 }
 
 var (
-	statusRE = regexp.MustCompile(`(?i)(?:status(?: code)?|http)[ :=]*([45]\d\d)\b`)
+	statusRE = lazyre.New(`(?i)(?:status(?: code)?|http)[ :=]*([45]\d\d)\b`)
 	// triedRE is an archive request that kept failing: "failed after 4 tries, 429 Too Many Requests".
-	triedRE  = regexp.MustCompile(`^failed after \d+ tr(?:y|ies), (.*)$`)
-	leadHTTP = regexp.MustCompile(`^(429|5\d\d)\b`)
-	quotedRE = regexp.MustCompile(`"[^"]*"`)
+	triedRE  = lazyre.New(`^failed after \d+ tr(?:y|ies), (.*)$`)
+	leadHTTP = lazyre.New(`^(429|5\d\d)\b`)
+	quotedRE = lazyre.New(`"[^"]*"`)
 )
 
 // ShortError reduces an error to what went wrong, without the URL and the

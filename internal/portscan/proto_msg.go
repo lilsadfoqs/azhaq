@@ -5,8 +5,9 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
-	"regexp"
 	"strings"
+
+	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 )
 
 func init() {
@@ -99,7 +100,7 @@ func mqttDeepen(s *Scanner, c net.Conn, o *Open) {
 	_, _ = c.Write([]byte{0xe0, 0})
 }
 
-var brokerRe = regexp.MustCompile(`^([A-Za-z][\w .-]*?)(?: version)?[ /-]v?(\d[\w.]*)`)
+var brokerRe = lazyre.New(`^([A-Za-z][\w .-]*?)(?: version)?[ /-]v?(\d[\w.]*)`)
 
 // mqttBroker reads "mosquitto version 2.0.18" (or "name 1.2.3").
 func mqttBroker(s string) (product, version string) {
@@ -201,7 +202,7 @@ func amqpTable(b []byte) map[string]string {
 	return out
 }
 
-var stompServerRe = regexp.MustCompile(`(?m)^server:([^\r\n]+)`)
+var stompServerRe = lazyre.New(`(?m)^server:([^\r\n]+)`)
 
 func stompRead(r []byte, o *Open) bool {
 	if !bytes.HasPrefix(r, []byte("CONNECTED\n")) && !bytes.HasPrefix(r, []byte("ERROR\n")) {

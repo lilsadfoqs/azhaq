@@ -38,7 +38,8 @@ type domainRow struct {
 	CDX            string   `json:"archives"`
 	Profile        string   `json:"profile,omitempty"`
 	RefSeconds     float64  `json:"reference_seconds,omitempty"` // subfinder and dnsx together
-	Gaps           []string `json:"gaps,omitempty"`              // confirmed live names only the reference found
+	memPair                 // the peak of azhaq's run, and the larger of subfinder's and dnsx's
+	Gaps           []string `json:"gaps,omitempty"` // confirmed live names only the reference found
 }
 
 // independentResolvers are not the two the tools are given, so a name both
@@ -206,6 +207,7 @@ func benchDomain(d string) domainRow {
 	row.AzhaqLive, row.SubfinderLive = azOK, refOK
 	row.Gaps = gaps
 	row.RefSeconds = refSecs
+	row.memPair = memPair{ar.rssMB, max(sm.RSSMB, dm.RSSMB)}
 	unexplained := 0
 	var why []string
 	for _, g := range gaps {
@@ -223,7 +225,7 @@ func benchDomain(d string) domainRow {
 	cmds := cmdLine(azhaq, aa...) + " vs " + cmdLine("subfinder", sa...) + " | " + cmdLine("dnsx", da...)
 	barOne("subs -live "+d, azOK, refOK, ar.seconds, refSecs, "a name resolving at 9.9.9.9 or 208.67.222.222 (A, AAAA or CNAME)", cmds,
 		fmt.Sprintf("%s; azhaq printed %d, subfinder %d names, dnsx %d live; azhaq %d, reference %d confirmed, both %d; subfinder %.0fs + dnsx %.0fs; %s%s",
-			share(row.SharedLive, refOK), len(az), len(sub), len(dx), azOK, refOK, row.SharedLive, sm.Seconds, dm.Seconds, ratio(ar.seconds, refSecs), azErr(runMeasureOf(ar))))
+			share(row.SharedLive, refOK), len(az), len(sub), len(dx), azOK, refOK, row.SharedLive, sm.Seconds, dm.Seconds, ratios(ar.seconds, refSecs, row.memPair), azErr(runMeasureOf(ar))))
 	addCheck("subs -live "+d+": every confirmed live name subfinder | dnsx finds is in azhaq's list or its source is named as failed", unexplained == 0,
 		"%d gaps, %d unexplained: %s", len(gaps), unexplained, clipList(why, 8))
 	addCheck("subdomain sources: no silent zeros ("+d+")", silent, "every empty result is a failure flagged as error or degraded, or a zero every source answered")

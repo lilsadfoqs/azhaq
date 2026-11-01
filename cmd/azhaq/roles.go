@@ -20,6 +20,7 @@ import (
 	"github.com/lilsadfoqs/azhaq/internal/browser"
 	"github.com/lilsadfoqs/azhaq/internal/egress"
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
+	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 	"github.com/lilsadfoqs/azhaq/internal/neterr"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"github.com/lilsadfoqs/azhaq/internal/webextract"
@@ -1036,10 +1037,10 @@ func resultAnswer(res fetch.Result) (answer, *jsonFacts) {
 }
 
 // signInPath: a path that asks the visitor to sign in, or says it may not.
-var signInPath = regexp.MustCompile(`(?i)(^|[/._-])(login|log-in|log_in|logon|signin|sign-in|sign_in|auth|authenticate|authorize|oauth2?|sso|saml|cas|openid|sessions?/new|unauthori[sz]ed|access-?denied|forbidden)($|[/._-])`)
+var signInPath = lazyre.New(`(?i)(^|[/._-])(login|log-in|log_in|logon|signin|sign-in|sign_in|auth|authenticate|authorize|oauth2?|sso|saml|cas|openid|sessions?/new|unauthori[sz]ed|access-?denied|forbidden)($|[/._-])`)
 
 // signInHost: another site's sign-in service (login.example.com, sso.…).
-var signInHost = regexp.MustCompile(`(?i)(^|[.-])(login|auth|sso|signin|accounts|idp)([.-]|$)`)
+var signInHost = lazyre.New(`(?i)(^|[.-])(login|auth|sso|signin|accounts|idp)([.-]|$)`)
 
 // markRedirects marks the redirects that refuse: to a sign-in page (a
 // path that says login, sign-in, auth…, another site's sign-in service,

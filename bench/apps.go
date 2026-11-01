@@ -769,5 +769,5 @@ func crawlCompare(a *appResult, truth map[string]bool, shell string) {
 	a.Crawl, a.CrawlKatana = &az, &kt
 	barOne("crawl "+a.Name, az.Truth, kt.Truth, az.Seconds, kt.Seconds, "the app's own routes (its server code or OpenAPI document, or the routes only its page scripts hold)",
 		cmdLine(azhaq, aa...)+" vs "+cmdLine("katana", ka...),
-		fmt.Sprintf("routes found azhaq %d, katana %d; known %d and %d of %d; %s%s", az.Routes, kt.Routes, az.Truth, kt.Truth, len(truth), ratio(az.Seconds, kt.Seconds), azErr(m)))
+		fmt.Sprintf("routes found azhaq %d, katana %d; known %d and %d of %d; %s%s", az.Routes, kt.Routes, az.Truth, kt.Truth, len(truth), ratios(az.Seconds, kt.Seconds, memPair{az.RSSMB, kt.RSSMB}), azErr(m)))
 }

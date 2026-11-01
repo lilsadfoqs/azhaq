@@ -8,13 +8,13 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"regexp"
 	"slices"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 	"github.com/lilsadfoqs/azhaq/store"
 )
 
@@ -311,7 +311,7 @@ func splitJSONLines(all [][]byte) []string {
 	return out
 }
 
-var slugCut = regexp.MustCompile(`[^a-z0-9]+`)
+var slugCut = lazyre.New(`[^a-z0-9]+`)
 
 // reportSlug names a report's file by its method and route, never by the
 // identifier of the object.
@@ -326,8 +326,8 @@ func reportSlug(d reportDoc) string {
 // ---- building a report
 
 var (
-	rptVersionSeg = regexp.MustCompile(`^(v\d+|api)$`)
-	rptIDSeg      = regexp.MustCompile(`(?i)^(\d+|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-f]{16,})$`)
+	rptVersionSeg = lazyre.New(`^(v\d+|api)$`)
+	rptIDSeg      = lazyre.New(`(?i)^(\d+|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-f]{16,})$`)
 	idKeyWords    = []string{"username", "user", "owner", "email", "login", "slug", "handle", "account", "sub", "uuid", "guid"}
 )
 

@@ -12,7 +12,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"regexp"
 	"slices"
 	"sort"
 	"strings"
@@ -20,6 +19,7 @@ import (
 
 	"github.com/lilsadfoqs/azhaq/internal/egress"
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
+	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"github.com/lilsadfoqs/azhaq/internal/webextract"
 )
@@ -583,12 +583,12 @@ func addHistories(roles []role, hs []*history, sc histScope, noAnon bool) []role
 
 // ---- routes from the URLs of a history ----
 
-var paramWord = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+var paramWord = lazyre.New(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
 var (
-	segNumber = regexp.MustCompile(`^\d+$`)
-	segUUID   = regexp.MustCompile(`^(?i)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
-	segHex    = regexp.MustCompile(`^(?i)[0-9a-f]{16,}$`)
+	segNumber = lazyre.New(`^\d+$`)
+	segUUID   = lazyre.New(`^(?i)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
+	segHex    = lazyre.New(`^(?i)[0-9a-f]{16,}$`)
 )
 
 // historyTemplates are the routes with a path parameter the URLs of the

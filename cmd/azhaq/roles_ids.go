@@ -2,12 +2,12 @@ package main
 
 import (
 	"net/url"
-	"regexp"
 	"slices"
 	"sort"
 	"strconv"
 	"strings"
 
+	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
 )
 
@@ -115,7 +115,7 @@ type route struct {
 var genericParams = map[string]bool{"id": true, "uuid": true, "guid": true, "key": true, "slug": true, "pk": true}
 
 // versionSeg: a path segment that names no kind of object.
-var versionSeg = regexp.MustCompile(`^(v\d+(\.\d+)*|api|rest)$`)
+var versionSeg = lazyre.New(`^(v\d+(\.\d+)*|api|rest)$`)
 
 func newRoute(t string) (route, bool) {
 	phs := placeholder.FindAllString(t, -1)

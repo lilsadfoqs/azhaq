@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"regexp"
 	"slices"
 	"sort"
 	"strconv"
@@ -15,6 +14,7 @@ import (
 	"time"
 
 	"github.com/lilsadfoqs/azhaq/internal/collectors/asncol"
+	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 	"github.com/lilsadfoqs/azhaq/internal/portscan"
 	"github.com/lilsadfoqs/azhaq/store"
 	"github.com/lilsadfoqs/azhaq/types"
@@ -54,7 +54,7 @@ var timingTemplates = map[int]struct {
 	5: {30000, 500 * time.Millisecond, 0},
 }
 
-var timingArg = regexp.MustCompile(`^--?T([0-5])$`)
+var timingArg = lazyre.New(`^--?T([0-5])$`)
 
 // cmdPorts is naabu (connect scan): host:port per open port, as each host
 // is scanned. The hosts given are the scope.
@@ -530,7 +530,7 @@ func (k *portsSink) visit(o types.Observation, print bool) {
 		}
 		n, _ := strconv.Atoi(port)
 		row := portRow{Host: host, IP: ip, Port: n, Proto: "tcp", State: "open", TLS: svc["tls"] == true, CDN: cdn, At: time.Now(), Fields: map[string]any{}}
-		for _, f := range []string{"service", "product", "version", "title", "banner", "subject_cn", "subject_an"} {
+		for _, f := range []string{"service", "product", "version", "extrainfo", "title", "banner", "subject_cn", "subject_an"} {
 			if v, ok := svc[f]; ok {
 				row.Fields[f] = v
 			}

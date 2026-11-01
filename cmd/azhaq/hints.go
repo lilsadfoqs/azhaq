@@ -3,12 +3,12 @@ package main
 import (
 	"fmt"
 	"os"
-	"regexp"
 	"slices"
 	"strings"
 
 	"github.com/lilsadfoqs/azhaq/engine"
 	"github.com/lilsadfoqs/azhaq/internal/fuzz"
+	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 	"github.com/lilsadfoqs/azhaq/store"
 	"github.com/lilsadfoqs/azhaq/types"
 )
@@ -157,7 +157,7 @@ func catchAllHint(cmd string, ca engine.CatchAll) string {
 
 // tokenField matches the name of a request field that carries an anti-forgery
 // token: csrf_token, _token, authenticity_token, __RequestVerificationToken.
-var tokenField = regexp.MustCompile(`(?i)(?:^|[?&{,\s"'])["']?([\w.-]*(?:csrf|xsrf|authenticity_token|requestverificationtoken|nonce)[\w.-]*|_token)["']?\s*[=:]\s*["']?[^&"'\s,}]`)
+var tokenField = lazyre.New(`(?i)(?:^|[?&{,\s"'])["']?([\w.-]*(?:csrf|xsrf|authenticity_token|requestverificationtoken|nonce)[\w.-]*|_token)["']?\s*[=:]\s*["']?[^&"'\s,}]`)
 
 // tokenHint is the preflight command for a form that wants a token: the
 // request sends a token field with a value fixed on the command line, and

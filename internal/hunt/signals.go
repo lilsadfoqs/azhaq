@@ -3,12 +3,12 @@ package hunt
 import (
 	"fmt"
 	"net/url"
-	"regexp"
 	"slices"
 	"sort"
 	"strings"
 
 	"github.com/lilsadfoqs/azhaq/engine"
+	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 	"github.com/lilsadfoqs/azhaq/internal/webextract"
 	"github.com/lilsadfoqs/azhaq/types"
 )
@@ -49,7 +49,7 @@ func GroupKey(raw string, clientRoute bool) string {
 	return strings.TrimSuffix(t, "?"+u.RawQuery) + "?" + strings.Join(names, "&")
 }
 
-var wordSplit = regexp.MustCompile(`[^a-z0-9]+`)
+var wordSplit = lazyre.New(`[^a-z0-9]+`)
 
 // wordsOf are the lower-case words of a path or a host, with the
 // hyphenated ones ("api-docs") kept whole too.
@@ -269,7 +269,7 @@ func (h *hunter) serverError(c *cand, r engine.MapEntry, raw string) {
 	}
 }
 
-var passField = regexp.MustCompile(`(?i)pass(word|wd)?(_|$)`)
+var passField = lazyre.New(`(?i)pass(word|wd)?(_|$)`)
 
 func passwordField(fields []string) string {
 	for _, n := range fields {
@@ -349,15 +349,15 @@ func (h *hunter) objects(c *cand, r engine.MapEntry, path string) {
 // to a shell, and what a search feeds a query.
 var extraKinds = []struct {
 	kind string
-	re   *regexp.Regexp
+	re   *lazyre.Regexp
 }{
-	{"command", regexp.MustCompile(`(?i)^(ip|ip_?address|address|addr|hostname|eqn|expr|expression)$`)},
-	{"query", regexp.MustCompile(`(?i)^(q|query|search|keyword|term|filter|sort|order|order_?by|s)$`)},
+	{"command", lazyre.New(`(?i)^(ip|ip_?address|address|addr|hostname|eqn|expr|expression)$`)},
+	{"query", lazyre.New(`(?i)^(q|query|search|keyword|term|filter|sort|order|order_?by|s)$`)},
 }
 
 // fileish are selectors that name a file only when their value looks like
 // one (?page=file1.php); a page number is not.
-var fileish = regexp.MustCompile(`(?i)^(page|view|module|doc)$`)
+var fileish = lazyre.New(`(?i)^(page|view|module|doc)$`)
 
 // chromeMin is how many pages of an origin carry an input name, and chromeShare
 // (in percent) what share of its fetched pages, for the name to belong to the

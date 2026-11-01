@@ -13,7 +13,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -22,6 +21,7 @@ import (
 	"github.com/lilsadfoqs/azhaq/internal/egress"
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
 	"github.com/lilsadfoqs/azhaq/internal/gqlschema"
+	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 	"github.com/lilsadfoqs/azhaq/internal/neterr"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"github.com/lilsadfoqs/azhaq/internal/webextract"
@@ -35,10 +35,10 @@ const (
 )
 
 // graphqlPath: where GraphQL servers usually listen.
-var graphqlPath = regexp.MustCompile(`(?i)(^|/)(graphql|graphiql|gql|playground|altair|v\d+/graphql|graphql/v\d+|api/graphql)/?$`)
+var graphqlPath = lazyre.New(`(?i)(^|/)(graphql|graphiql|gql|playground|altair|v\d+/graphql|graphql/v\d+|api/graphql)/?$`)
 
 // signature: what a GraphQL server or its IDE answers to a bare GET.
-var signature = regexp.MustCompile(`(?i)must provide (a )?query|graphql operations must contain|query (is )?(missing|required)|no query (string )?(was )?(present|provided)|"errors"\s*:\s*\[\s*\{\s*"message"\s*:\s*"[^"]*(query|graphql)|<title>\s*(graphiql|graphql playground|apollo|altair)|graphiql\.(min\.)?(js|css)|embeddable-sandbox|graphql-playground`)
+var signature = lazyre.New(`(?i)must provide (a )?query|graphql operations must contain|query (is )?(missing|required)|no query (string )?(was )?(present|provided)|"errors"\s*:\s*\[\s*\{\s*"message"\s*:\s*"[^"]*(query|graphql)|<title>\s*(graphiql|graphql playground|apollo|altair)|graphiql\.(min\.)?(js|css)|embeddable-sandbox|graphql-playground`)
 
 // Collector marks URLs that answer like a GraphQL endpoint.
 type Collector struct {
@@ -120,10 +120,10 @@ func answersGET(ctx context.Context, client *http.Client, raw string) bool {
 	return err == nil && res.Status == http.StatusOK && typename.Match(res.Body)
 }
 
-var typename = regexp.MustCompile(`"data"\s*:\s*\{\s*"__typename"\s*:\s*"`)
+var typename = lazyre.New(`"data"\s*:\s*\{\s*"__typename"\s*:\s*"`)
 
 // postOnlyRE is what a GraphQL server says when it takes no GET.
-var postOnlyRE = regexp.MustCompile(`(?i)only supports POST|supports only POST|POST (method )?(only|is required|required)|(GET|this) method is not (allowed|supported)|must (use|be) POST`)
+var postOnlyRE = lazyre.New(`(?i)only supports POST|supports only POST|POST (method )?(only|is required|required)|(GET|this) method is not (allowed|supported)|must (use|be) POST`)
 
 // refusesGET says whether a GET answer is a GraphQL endpoint's refusal to
 // take one: a 405 that allows POST, or a message that says POST only.
@@ -176,7 +176,7 @@ const short = `query AzhaqSchema { __schema { queryType { name } mutationType { 
 const maxSchema = 8 << 20
 
 // introOff: what a server says when introspection is turned off.
-var introOff = regexp.MustCompile(`(?i)introspection[^"]{0,60}(disabled|not allowed|forbidden|blocked|not permitted|turned off)|(not allowed|disabled)[^"]{0,40}introspection`)
+var introOff = lazyre.New(`(?i)introspection[^"]{0,60}(disabled|not allowed|forbidden|blocked|not permitted|turned off)|(not allowed|disabled)[^"]{0,40}introspection`)
 
 // introspectionOff says whether an answer refuses introspection itself.
 func introspectionOff(data []byte) bool { return introOff.Match(data) }

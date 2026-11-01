@@ -30,13 +30,13 @@ type portRow struct {
 	TLS      bool
 	CDN      string
 	At       time.Time
-	Fields   map[string]any // service, product, version, banner, title, subject_cn, subject_an
+	Fields   map[string]any // service, product, version, extrainfo, banner, title, subject_cn, subject_an
 }
 
 func (r portRow) str(k string) string { s, _ := r.Fields[k].(string); return s }
 
 // the fields a row of -json and -csv has, in the order -csv writes them.
-var portFields = []string{"host", "ip", "port", "protocol", "state", "tls", "cdn", "cdn-name", "timestamp", "service", "product", "version", "banner", "title", "subject_cn", "subject_an"}
+var portFields = []string{"host", "ip", "port", "protocol", "state", "tls", "cdn", "cdn-name", "timestamp", "service", "product", "version", "extrainfo", "banner", "title", "subject_cn", "subject_an"}
 
 // jsonRow is the row as -json prints it: naabu's fields (cdn is whether
 // the address is a CDN's, cdn-name whose), and azhaq's service ones.
@@ -323,6 +323,7 @@ type xmlService struct {
 	Name    string `xml:"name,attr,omitempty"`
 	Product string `xml:"product,attr,omitempty"`
 	Version string `xml:"version,attr,omitempty"`
+	Extra   string `xml:"extrainfo,attr,omitempty"`
 	Tunnel  string `xml:"tunnel,attr,omitempty"`
 	Method  string `xml:"method,attr,omitempty"`
 	Conf    int    `xml:"conf,attr,omitempty"`
@@ -360,7 +361,7 @@ func newXMLService(r portRow) *xmlService {
 	if name == "" {
 		return nil
 	}
-	s := &xmlService{Name: strings.TrimSuffix(name, "?"), Product: r.str("product"), Version: r.str("version"), Method: "probed", Conf: 10}
+	s := &xmlService{Name: strings.TrimSuffix(name, "?"), Product: r.str("product"), Version: r.str("version"), Extra: r.str("extrainfo"), Method: "probed", Conf: 10}
 	if strings.HasSuffix(name, "?") {
 		s.Method, s.Conf = "table", 3 // named from the port number only
 	}
@@ -447,7 +448,11 @@ func writeGreppable(w io.Writer, hosts []nmapHost, start, end time.Time) error {
 		var parts []string
 		for _, p := range h.ports {
 			svc := grepSanitize(strings.TrimSuffix(p.str("service"), "?"))
-			ver := grepSanitize(strings.TrimSpace(p.str("product") + " " + p.str("version")))
+			ver := strings.TrimSpace(p.str("product") + " " + p.str("version"))
+			if x := p.str("extrainfo"); x != "" {
+				ver = strings.TrimSpace(ver + " (" + x + ")")
+			}
+			ver = grepSanitize(ver)
 			// portid/state/protocol/owner/service/rpc/version
 			parts = append(parts, fmt.Sprintf("%d/%s/%s//%s//%s/", p.Port, p.State, p.Proto, svc, ver))
 		}

@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
-	"regexp"
 	"sort"
 
+	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 	"github.com/lilsadfoqs/azhaq/internal/webextract"
 	"github.com/lilsadfoqs/azhaq/types"
 )
@@ -224,7 +224,7 @@ func originOf(raw string) string {
 }
 
 // passwordField: a form field that takes a password.
-var passwordField = regexp.MustCompile(`(?i)^(pass|passwd|password|pwd|passphrase|pin)$|password`)
+var passwordField = lazyre.New(`(?i)^(pass|passwd|password|pwd|passphrase|pin)$|password`)
 
 // LoginHint is the command to map again signed in, or "": a run without a
 // session whose target sites show a sign-in form (a page of the target's

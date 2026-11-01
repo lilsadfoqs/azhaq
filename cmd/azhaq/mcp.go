@@ -12,7 +12,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"slices"
 	"sort"
 	"strings"
@@ -20,6 +19,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 	"github.com/lilsadfoqs/azhaq/scope"
 	"github.com/lilsadfoqs/azhaq/store"
 )
@@ -551,7 +551,7 @@ func mustJSON(v any) json.RawMessage {
 
 // workspace is the database a tool call reads or writes: a name inside
 // the server's directory, never a path elsewhere.
-var workspaceName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`)
+var workspaceName = lazyre.New(`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`)
 
 func (s *mcpServer) workspace(a map[string]any) (string, error) {
 	name := wsName(a)

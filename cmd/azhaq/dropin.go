@@ -12,7 +12,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"regexp"
 	"slices"
 	"sort"
 	"strconv"
@@ -26,6 +25,7 @@ import (
 	"github.com/lilsadfoqs/azhaq/internal/collectors/dirscol"
 	"github.com/lilsadfoqs/azhaq/internal/collectors/shotcol"
 	"github.com/lilsadfoqs/azhaq/internal/collectors/urlcol"
+	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"github.com/lilsadfoqs/azhaq/internal/targets"
 	"github.com/lilsadfoqs/azhaq/store"
@@ -137,7 +137,7 @@ func inherit(fs *flag.FlagSet, specs ...string) func() []string {
 
 // flagName is a flag a help text names: -dirs-threads, not the -empty of
 // non-empty.
-var flagName = regexp.MustCompile(`\B-[a-z][a-z0-9-]*[a-z0-9]`)
+var flagName = lazyre.New(`\B-[a-z][a-z0-9-]*[a-z0-9]`)
 
 // targetFlags are the flags of every command that sends requests to
 // targets: scope, pace, budget, time, session.
@@ -747,7 +747,7 @@ func cmdDirs(args []string) error {
 	var urls stringsFlag
 	fs.Var(&urls, "u", "web service, such as https://app.example.com/ (repeatable)")
 	list := onceString(fs, "l", "file of services (- for stdin)")
-	words := fs.String("w", "", "wordlist (default: SecLists' common.txt, built in: "+strconv.Itoa(len(dirscol.DefaultWords()))+" words)")
+	words := fs.String("w", "", "wordlist (default: SecLists' common.txt, built in: "+strconv.Itoa(dirscol.WordCount())+" words)")
 	specs := []string{"ac=dirs-ac", "e=dirs-ext", "depth=dirs-depth", "t=dirs-threads", "rate=dirs-rate",
 		"H=header", "cookie", "max-requests", "timeout", "v", "scope", "program", "allow", "deny", "deny-path", "ledger", "kill-file", "proxy"}
 	for _, m := range dirsMatchers {

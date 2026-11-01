@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"regexp"
 	"slices"
 	"sort"
 	"strings"
 
 	"github.com/lilsadfoqs/azhaq/internal/browser"
+	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 )
 
 // Who each role is, so that its own objects are known without -id: the
@@ -143,7 +143,7 @@ func idShape(v string) string {
 	return ""
 }
 
-var jwtValue = regexp.MustCompile(`eyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]*`)
+var jwtValue = lazyre.New(`eyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]*`)
 
 // claims are the claims of a JSON Web Token, or nil.
 func claims(token string) map[string]any {

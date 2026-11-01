@@ -15,12 +15,12 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"regexp"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/lilsadfoqs/azhaq/internal/egress"
+	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 )
 
 // Scope is what a run takes from a program's scope.
@@ -120,10 +120,10 @@ func (b *builder) init() {
 }
 
 var (
-	webTypes   = regexp.MustCompile(`(?i)^(url|wildcard|domain|ip_address|cidr|website|api|web-application|web_application|iprange|ip-address|ip_range|other_web|)$`)
-	tldWild    = regexp.MustCompile(`\*\s*$|\.\*($|\.)`)
-	hostLike   = regexp.MustCompile(`^(\*\.)?[a-z0-9_-]+(\.[a-z0-9_-]+)+$`)
-	leadingAny = regexp.MustCompile(`^(\*|%)\.?`)
+	webTypes   = lazyre.New(`(?i)^(url|wildcard|domain|ip_address|cidr|website|api|web-application|web_application|iprange|ip-address|ip_range|other_web|)$`)
+	tldWild    = lazyre.New(`\*\s*$|\.\*($|\.)`)
+	hostLike   = lazyre.New(`^(\*\.)?[a-z0-9_-]+(\.[a-z0-9_-]+)+$`)
+	leadingAny = lazyre.New(`^(\*|%)\.?`)
 )
 
 // add records one identifier of the given platform type.

@@ -6,10 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"github.com/lilsadfoqs/azhaq/internal/guard"
+	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 	"io"
 	"net/http"
 	"net/url"
-	"regexp"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -556,7 +556,7 @@ var crtshRetryWait = time.Second
 // gatewayRE reads the status code of a failed answer in the two forms the
 // requests give it: subfinder's "unexpected status code 502 received from
 // URL" and getJSON's "host 502".
-var gatewayRE = regexp.MustCompile(`(?:status code|\s)(50[0234])(?:\s+received from|$)`)
+var gatewayRE = lazyre.New(`(?:status code|\s)(50[0234])(?:\s+received from|$)`)
 
 // retry: crt.sh's gateway errors and dropped connections pass (a 429 is
 // waited out in the transport).

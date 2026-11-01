@@ -20,30 +20,32 @@ import (
 // local apps, a fleet of servers the bench starts, and three public test
 // sites at 5 requests per second.
 type probeRow struct {
-	Profile       string   `json:"profile,omitempty"`
-	Hosts         int      `json:"hosts"`
-	AzhaqAnswered int      `json:"azhaq_answered"`
-	HttpxAnswered int      `json:"httpx_answered"`
-	AzhaqOK       int      `json:"azhaq_confirmed"` // answers an independent GET agrees with
-	HttpxOK       int      `json:"httpx_confirmed"`
-	Shared        int      `json:"shared"`
-	Offsite       int      `json:"offsite"` // httpx -fr left the host's site: only the redirect's status compared
-	Status        int      `json:"status_agree"`
-	Title         int      `json:"title_agree"`
-	Tech          int      `json:"tech_agree"`
-	All           int      `json:"all_agree"`
-	FaviconBoth   int      `json:"favicon_both"`
-	FaviconAgree  int      `json:"favicon_agree"`
-	CDNHttpx      int      `json:"cdn_httpx"`
-	CDNAgree      int      `json:"cdn_agree"`
-	AzhaqSeconds  float64  `json:"azhaq_seconds"`
-	HttpxSeconds  float64  `json:"httpx_seconds"`
-	PublicAzhaq   int      `json:"public_azhaq"`
-	PublicHttpx   int      `json:"public_httpx"`
-	PublicAzSecs  float64  `json:"public_azhaq_seconds"`
-	PublicHxSecs  float64  `json:"public_httpx_seconds"`
-	Disagree      []string `json:"disagree,omitempty"`
-	Accounting    string   `json:"accounting,omitempty"`
+	Profile       string  `json:"profile,omitempty"`
+	Hosts         int     `json:"hosts"`
+	AzhaqAnswered int     `json:"azhaq_answered"`
+	HttpxAnswered int     `json:"httpx_answered"`
+	AzhaqOK       int     `json:"azhaq_confirmed"` // answers an independent GET agrees with
+	HttpxOK       int     `json:"httpx_confirmed"`
+	Shared        int     `json:"shared"`
+	Offsite       int     `json:"offsite"` // httpx -fr left the host's site: only the redirect's status compared
+	Status        int     `json:"status_agree"`
+	Title         int     `json:"title_agree"`
+	Tech          int     `json:"tech_agree"`
+	All           int     `json:"all_agree"`
+	FaviconBoth   int     `json:"favicon_both"`
+	FaviconAgree  int     `json:"favicon_agree"`
+	CDNHttpx      int     `json:"cdn_httpx"`
+	CDNAgree      int     `json:"cdn_agree"`
+	AzhaqSeconds  float64 `json:"azhaq_seconds"`
+	HttpxSeconds  float64 `json:"httpx_seconds"`
+	memPair
+	PublicAzhaq  int      `json:"public_azhaq"`
+	PublicHttpx  int      `json:"public_httpx"`
+	PublicAzSecs float64  `json:"public_azhaq_seconds"`
+	PublicHxSecs float64  `json:"public_httpx_seconds"`
+	PublicMem    memPair  `json:"public_memory"`
+	Disagree     []string `json:"disagree,omitempty"`
+	Accounting   string   `json:"accounting,omitempty"`
 }
 
 // publicSites may receive GET requests from the bench at 5 per second.
@@ -162,6 +164,7 @@ func benchProbe(local []string) *probeRow {
 	az := httpxProbes(out, hosts)
 	out, hm := timed("probe", 20*time.Minute, dir, ref("httpx"), ha...)
 	row.HttpxSeconds = hm.Seconds
+	row.set(m, hm)
 	hx := httpxProbes(out, hosts)
 
 	row.AzhaqAnswered, row.HttpxAnswered = len(az), len(hx)
@@ -218,7 +221,7 @@ func benchProbe(local []string) *probeRow {
 	cmds := cmdLine(azhaq, aa...) + " vs " + cmdLine("httpx", ha...)
 	barOne("probe", row.AzhaqOK, row.HttpxOK, row.AzhaqSeconds, row.HttpxSeconds, "a GET to the host itself giving the status the tool reported", cmds,
 		fmt.Sprintf("%s; %d hosts (5 apps, the services lab's web ports, %d local servers); answered azhaq %d, httpx %d, shared %d; %s%s", share(row.Shared, row.HttpxAnswered),
-			row.Hosts, len(fl), row.AzhaqAnswered, row.HttpxAnswered, row.Shared, ratio(row.AzhaqSeconds, row.HttpxSeconds), azErr(m)))
+			row.Hosts, len(fl), row.AzhaqAnswered, row.HttpxAnswered, row.Shared, ratios(row.AzhaqSeconds, row.HttpxSeconds, row.memPair), azErr(m)))
 	addCheck("probe: status, title and tech agree with httpx on ≥ 95% of shared hosts", row.Shared > 0 && float64(row.All) >= 0.95*float64(row.Shared),
 		"all three %d/%d (status %d, title %d, tech %d; %d redirects out of the site compared by their own status)", row.All, row.Shared, row.Status, row.Title, row.Tech, row.Offsite)
 
@@ -238,6 +241,7 @@ func benchProbe(local []string) *probeRow {
 	pz := httpxProbes(out, pset)
 	out, phm := run("public", 10*time.Minute, dir, ref("httpx"), ph...)
 	row.PublicHxSecs = phm.Seconds
+	row.PublicMem.set(pm, phm)
 	px := httpxProbes(out, pset)
 	row.PublicAzhaq, row.PublicHttpx = len(pz), len(px)
 	pokA, pokH := 0, 0
@@ -252,7 +256,7 @@ func benchProbe(local []string) *probeRow {
 		}
 	}
 	barOne("probe public sites (5/s)", pokA, pokH, row.PublicAzSecs, row.PublicHxSecs, "a GET to the site giving the status the tool reported (a redirect out of the site counts)",
-		cmdLine(azhaq, pa...)+" vs "+cmdLine("httpx", ph...), fmt.Sprintf("%v; one run each%s", publicSites, azErr(pm)))
+		cmdLine(azhaq, pa...)+" vs "+cmdLine("httpx", ph...), fmt.Sprintf("%v; one run each; %s%s", publicSites, ratios(row.PublicAzSecs, row.PublicHxSecs, row.PublicMem), azErr(pm)))
 	if !polite() {
 		row.probeAccounting(dir, fl)
 	}

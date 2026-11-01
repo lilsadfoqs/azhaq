@@ -30,6 +30,7 @@ type dirsRow struct {
 	FfufFalse  int      `json:"ffuf_false"`
 	AzhaqSecs  float64  `json:"azhaq_seconds"`
 	FfufSecs   float64  `json:"ffuf_seconds"`
+	memPair             // the largest peak of any app's run
 	FfufOnly   []string `json:"ffuf_only,omitempty"`
 	AzhaqOnly  []string `json:"azhaq_only,omitempty"`
 }
@@ -85,6 +86,7 @@ func benchDirs(apps []string) *dirsRow {
 			fa := append([]string{"-u", app + "FUZZ", "-w", words, "-ac", "-s"}, pick([]string(nil), []string{"-rate", politeHTTP})...)
 			out, am, fout, fm := timedPair(app, 40*time.Minute, work, azhaq, ref("ffuf"), aa, fa)
 			aOut, aSecs, azCmd = out, am.Seconds, cmdLine(azhaq, aa...)
+			row.AzhaqRSS, row.RefRSS = max(row.AzhaqRSS, am.RSSMB), max(row.RefRSS, fm.RSSMB)
 			azBad = azFail(am)
 			fOut, fSecs, ffCmd = fout, fm.Seconds, cmdLine("ffuf", fa...)
 		})
@@ -123,7 +125,7 @@ func benchDirs(apps []string) *dirsRow {
 	sort.Strings(row.FfufOnly)
 	sort.Strings(row.AzhaqOnly)
 	note := fmt.Sprintf("%s; hits azhaq %d, ffuf %d, shared %d; %d words, %d apps; %s; ffuf only %v", share(row.Shared, row.FfufHits), row.AzhaqHits, row.FfufHits,
-		row.Shared, row.Words, len(apps), ratio(row.AzhaqSecs, row.FfufSecs), clipList(row.FfufOnly, 6)) + azBad + downNote(appRestarts-downs0)
+		row.Shared, row.Words, len(apps), ratios(row.AzhaqSecs, row.FfufSecs, row.memPair), clipList(row.FfufOnly, 6)) + azBad + downNote(appRestarts-downs0)
 	barOne("dirs", azOK, ffOK, row.AzhaqSecs, row.FfufSecs, "a request that is not the app's catch-all answer", azCmd+" vs "+ffCmd, note)
 	addCheck("dirs: no more false positives than ffuf", row.AzhaqFalse <= row.FfufFalse,
 		"hits that answer like a missing path: azhaq %d, ffuf %d", row.AzhaqFalse, row.FfufFalse)

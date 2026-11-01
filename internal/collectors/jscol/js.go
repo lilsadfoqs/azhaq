@@ -8,7 +8,6 @@ import (
 	"github.com/lilsadfoqs/azhaq/internal/guard"
 	"net/http"
 	"net/url"
-	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -16,6 +15,7 @@ import (
 
 	"github.com/lilsadfoqs/azhaq/catalog"
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
+	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 	"github.com/lilsadfoqs/azhaq/internal/neterr"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"github.com/lilsadfoqs/azhaq/internal/webextract"
@@ -1161,7 +1161,7 @@ type strCand struct {
 // origin (react-dom.development.js, jquery-3.6.0.min.js, angular_1-7-7.js):
 // they are large and hold no routes of the app. A version after an
 // underscore counts; chart_utils.js is the app's.
-var vendorScript = regexp.MustCompile(`(?i)(^|/)(react(-dom)?|jquery(-ui|-migrate)?|bootstrap(\.bundle)?|angular|vue|lodash|moment|popper|d3|three|chart|highcharts|swagger-ui-(bundle|standalone-preset)|polyfills?-legacy)([.-][\w.-]*|_\d[\w.-]*)?\.js$`)
+var vendorScript = lazyre.New(`(?i)(^|/)(react(-dom)?|jquery(-ui|-migrate)?|bootstrap(\.bundle)?|angular|vue|lodash|moment|popper|d3|three|chart|highcharts|swagger-ui-(bundle|standalone-preset)|polyfills?-legacy)([.-][\w.-]*|_\d[\w.-]*)?\.js$`)
 
 // load fetches a script on the page's site the run has not parsed yet and
 // queues it. Names found inside scripts must end in .js; <script src>

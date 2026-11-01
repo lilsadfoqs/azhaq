@@ -3,8 +3,9 @@ package webextract
 import (
 	"net/url"
 	"path"
-	"regexp"
 	"strings"
+
+	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 )
 
 // The patterns below are those of projectdiscovery/katana
@@ -57,8 +58,8 @@ var (
 	mimePrefix = lazyRE(`(?i)^(application|text|image|audio|video|font|multipart|message|model|chemical|x-[a-z]+)/`)
 	pageExt    = map[string]bool{".php": true, ".php5": true, ".asp": true, ".aspx": true, ".jsp": true, ".jspx": true,
 		".action": true, ".do": true, ".html": true, ".htm": true, ".xhtml": true, ".cgi": true, ".cfm": true, ".pl": true, ".py": true}
-	plainPath = regexp.MustCompile(`^[A-Za-z0-9._~/?#&=+@%:-]+$`)
-	dirWord   = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_-]{2,}(/[A-Za-z0-9_.-]+)*/$`)
+	plainPath = lazyre.New(`^[A-Za-z0-9._~/?#&=+@%:-]+$`)
+	dirWord   = lazyre.New(`^[A-Za-z][A-Za-z0-9_-]{2,}(/[A-Za-z0-9_.-]+)*/$`)
 )
 
 // BareString decides what a string katana's patterns took from a script is.
@@ -194,7 +195,7 @@ func anchored(s string) bool {
 	return false
 }
 
-var searchCall = regexp.MustCompile(`\.(?:indexOf|lastIndexOf|includes|startsWith|endsWith|search|match|split|replace|replaceAll)\(\s*$`)
+var searchCall = lazyre.New(`\.(?:indexOf|lastIndexOf|includes|startsWith|endsWith|search|match|split|replace|replaceAll)\(\s*$`)
 
 // searchedFor says whether the string at start is the first argument of a
 // string search (ua.indexOf("Trident/"), url.replace("/v3/", …)): text a

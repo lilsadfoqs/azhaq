@@ -9,6 +9,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 )
 
 // Response is what the matchers and filters see of an answer.
@@ -36,7 +38,7 @@ type Filter interface {
 
 type span struct{ min, max int64 }
 
-var rangeRE = regexp.MustCompile(`^(\d+)-(\d+)$`)
+var rangeRE = lazyre.New(`^(\d+)-(\d+)$`)
 
 func parseSpan(s string) (span, error) {
 	if m := rangeRE.FindStringSubmatch(s); m != nil {

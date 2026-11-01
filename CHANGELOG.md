@@ -2,9 +2,15 @@
 
 ## Unreleased
 
+### Added
+
+- `ports` names the Nping echo server (`nping-echo`, product "Nping echo") from its opening handshake on any port, and keeps what an answer says beside product and version as `extrainfo`: the rest of a `Server` header (`Python/3.11.15`) or an SSH line's comment and protocol. It is in `-json`, `-csv`, `-oX`, `-oG` and a port row's proof. A binary first answer keeps its first bytes in hex as the banner.
+- The bench record keeps each comparison's peak memory for both tools beside the times, the check details give the memory ratio beside the time ratio, and the report and the README table show the peak in each cell.
+
 ### Changed
 
 - Every failure now exits 3: a source that failed while others answered for the same domain (`partial`), a fan-out failure and a degraded `subs` run no longer exit 0. The summary still lists what failed and why. `-fail-on-errors` is accepted and is the default, and no flag turns a failure back into exit 0. Ports nmap did not name a web service that give no page are counted in a note, not listed as failures.
+- `shots` and `-browser`: with no `-shot-wait`, a page is taken as soon as it has painted, after its load event, when nothing can still change it: no script, frame, object or refresh, no running CSS animation or transition, no autoplaying video or audio (0.9 s against 2.4 s for one local page). Any other page still gets 1.5 s. A value given is waited out as before.
 - No default cap on the tasks a run starts (it was 2,048, and katana and httpx have none); `-max-items` and `-max-names` hold for each run, so a resume at the same cap goes on, and `-max-names` defaults to 200,000. The summary names the limit that held work back with its flag, `-depth` leftovers are counted in a note, and `resume -depth N` asks them.
 - A port is one row per address, port and protocol, however many names point to the address; the names are on the row (`names` in `-json` and `query -fields`), and the summary and query counts no longer grow with aliases. The `ports` command's own rows are unchanged.
 - `-skip` takes `ports`, `urls`, `subs` (with or without `azhaq-`), and an unknown name is a usage error; before, those names matched no collector and skipped nothing.
@@ -39,6 +45,7 @@
 - `roles`: a control request that fails (a refused connection, a timeout, an answer cut short, a refused scope) is no longer dropped. The row keeps its verdict and holds the reason in `control.failed` and its evidence, a note counts the cross reads not checked with a made-up identifier, and the run exits 3. A `-deny-path` rule keeps its request out without failing the run.
 - `roles`: a replay read, a history page, a write or the read-back of the owner's object that gets no answer is recorded and noted (a write row holds it in `failed`), and the run exits 3; so do a role whose session failed its check and did not come back, and a `-role-cmd` that failed when the replay asked for a new token.
 - `roles`: a replay interrupted with Ctrl-C stops the run with exit 4 and `stopped: interrupted`, not a note and exit 0; an answer cut short is a failed request, not half a body compared as a whole one; a database whose seeds cannot be read ends the run with an error instead of an empty scope.
+- A small command used more memory than it needed. `ports` read the whole 2.4 MB CDN/WAF/cloud table (17 MB allocated) for each scan and now reads only the CDN and WAF ranges, peak 34.6 MB down to 23.0 MB. Every package-level regular expression compiles on first use instead of at start (about 2 MB less for every command), and `dirs` no longer parses its 4,750 built-in words to print its help.
 
 ## v0.12.1
 

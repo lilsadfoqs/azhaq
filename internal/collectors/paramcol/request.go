@@ -6,10 +6,10 @@ import (
 	"encoding/xml"
 	"net/http"
 	"net/url"
-	"regexp"
 	"strings"
 
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
+	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 )
 
 // placeholder marks where an -include template takes the names.
@@ -126,7 +126,7 @@ func jsonBody(include string, q []pair) []byte {
 	return []byte("{" + m.String() + "}")
 }
 
-var xmlNameRE = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_.-]*$`)
+var xmlNameRE = lazyre.New(`^[A-Za-z_][A-Za-z0-9_.-]*$`)
 
 // xmlName says name can be an element: letters, digits, "_", "-" and ".",
 // not starting with a digit or with "xml".
@@ -164,8 +164,8 @@ func xmlBody(include string, q []pair) []byte {
 }
 
 var (
-	jsonKeyRE = regexp.MustCompile(`"([^"\\]{1,64})"\s*:`)
-	xmlTagRE  = regexp.MustCompile(`<([A-Za-z_][A-Za-z0-9_.-]*)[\s>/]`)
+	jsonKeyRE = lazyre.New(`"([^"\\]{1,64})"\s*:`)
+	xmlTagRE  = lazyre.New(`<([A-Za-z_][A-Za-z0-9_.-]*)[\s>/]`)
 )
 
 // includedNames are the names a request already carries: a query's, a

@@ -25,6 +25,7 @@ type bruteRow struct {
 	DnsxOK       int     `json:"dnsx_confirmed"`
 	AzhaqSeconds float64 `json:"azhaq_seconds"`
 	DnsxSeconds  float64 `json:"dnsx_seconds"`
+	memPair
 
 	WildcardWords  int `json:"wildcard_words"`
 	WildcardReal   int `json:"wildcard_real"`
@@ -67,6 +68,7 @@ func benchBrute() *bruteRow {
 	az := hostSet(lines(out))
 	out, dm := timed(labDomain, 15*time.Minute, dir, ref("dnsx"), da...)
 	row.DnsxSeconds = dm.Seconds
+	row.set(m, dm)
 	dx := hostSet(lines(out))
 	row.AzhaqFound, row.DnsxFound, row.Shared = len(az), len(dx), overlap(az, dx)
 	for n := range az {
@@ -82,7 +84,7 @@ func benchBrute() *bruteRow {
 	barOne("dns brute force", row.AzhaqOK, row.DnsxOK, row.AzhaqSeconds, row.DnsxSeconds, "the lab resolver, asked directly by the bench (A, AAAA or CNAME)",
 		cmdLine(azhaq, aa...)+" vs "+cmdLine("dnsx", da...),
 		fmt.Sprintf("%s; azhaq %v, dnsx %v; %d words on %s; %s%s", share(row.Shared, row.DnsxFound), clipList(sortedKeys(az), 12), clipList(sortedKeys(dx), 12), row.Words, labDomain,
-			ratio(row.AzhaqSeconds, row.DnsxSeconds), azErr(m)))
+			ratios(row.AzhaqSeconds, row.DnsxSeconds, row.memPair), azErr(m)))
 	if !polite() {
 		wildcardCheck(dir, time.Now().Format("150405"), row)
 	}

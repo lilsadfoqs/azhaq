@@ -17,7 +17,6 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -35,6 +34,7 @@ import (
 	"github.com/lilsadfoqs/azhaq/internal/egress"
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
 	"github.com/lilsadfoqs/azhaq/internal/fingerprint"
+	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"github.com/lilsadfoqs/azhaq/internal/pagekind"
 )
@@ -142,7 +142,7 @@ func hashes(kinds []string, body []byte, head string) map[string]any {
 var HashKinds = []string{"md5", "mmh3", "simhash", "sha1", "sha256", "sha512"}
 
 var stripTags = bluemonday.NewPolicy() // allows no element: only text is left
-var spaces = regexp.MustCompile(`\s+`)
+var spaces = lazyre.New(`\s+`)
 
 // preview is the first n characters of the body on one line with its tags
 // stripped, as httpx's -bp: the text is HTML-escaped as it is by httpx.
@@ -163,15 +163,15 @@ var ExtractPresets = map[string]string{
 }
 
 // websocket is httpx's test: a 101, or headers or a body that name one.
-var wsHeader = []*regexp.Regexp{
-	regexp.MustCompile(`(?m)^Sec-WebSocket-Accept:\s+.+`),
-	regexp.MustCompile(`(?m)^Upgrade:\s+websocket`),
-	regexp.MustCompile(`(?m)^Connection:\s+upgrade`),
+var wsHeader = []*lazyre.Regexp{
+	lazyre.New(`(?m)^Sec-WebSocket-Accept:\s+.+`),
+	lazyre.New(`(?m)^Upgrade:\s+websocket`),
+	lazyre.New(`(?m)^Connection:\s+upgrade`),
 }
 
-var wsBody = []*regexp.Regexp{
-	regexp.MustCompile(`{"socket":true,"socketUrl":"(?:wss?|ws)://.*"}`),
-	regexp.MustCompile(`{"sid":"[^"]*","upgrades":\["websocket"\].*}`),
+var wsBody = []*lazyre.Regexp{
+	lazyre.New(`{"socket":true,"socketUrl":"(?:wss?|ws)://.*"}`),
+	lazyre.New(`{"sid":"[^"]*","upgrades":\["websocket"\].*}`),
 }
 
 func isWebSocket(status int, head string, data []byte) bool {
@@ -870,7 +870,7 @@ func sortedKeys(m map[string]bool) []string {
 	return out
 }
 
-var hostRE = regexp.MustCompile(`(?i)(?:^|['"/@])([a-z0-9]+[a-z0-9.-]*\.[a-z]{2,})(?:['"/@]|$)`)
+var hostRE = lazyre.New(`(?i)(?:^|['"/@])([a-z0-9]+[a-z0-9.-]*\.[a-z]{2,})(?:['"/@]|$)`)
 
 // urlAttrs are the attributes that hold a URL.
 var urlAttrs = map[string]bool{"href": true, "src": true, "action": true, "formaction": true, "poster": true, "cite": true, "data-url": true, "data-href": true}

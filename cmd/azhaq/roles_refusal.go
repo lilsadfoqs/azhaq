@@ -6,6 +6,8 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+
+	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 )
 
 // Refusals answered as success: a "200 Access denied" page. Each origin's
@@ -25,9 +27,9 @@ type refusalPage struct {
 
 var (
 	// refusalWords say on their own that the visitor may not see the page.
-	refusalWords = regexp.MustCompile(`(?i)\b(access (is )?denied|permission denied|not authori[sz]ed|unauthori[sz]ed|forbidden|not allowed|no access|(login|authentication|authorization) required|please (log|sign) ?in|you must (be )?(log|sign)(ged)? ?in|session (has )?expired|insufficient (permissions|privileges|rights))\b`)
+	refusalWords = lazyre.New(`(?i)\b(access (is )?denied|permission denied|not authori[sz]ed|unauthori[sz]ed|forbidden|not allowed|no access|(login|authentication|authorization) required|please (log|sign) ?in|you must (be )?(log|sign)(ged)? ?in|session (has )?expired|insufficient (permissions|privileges|rights))\b`)
 	// signInWords say it when the same page stands for several endpoints.
-	signInWords = regexp.MustCompile(`(?i)\b(log ?in|sign ?in|log ?on)\b`)
+	signInWords = lazyre.New(`(?i)\b(log ?in|sign ?in|log ?on)\b`)
 )
 
 // saidOf is what an answer says, from its kept body when it was not read.

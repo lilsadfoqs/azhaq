@@ -8,7 +8,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -17,6 +16,7 @@ import (
 	"golang.org/x/time/rate"
 
 	"github.com/lilsadfoqs/azhaq/internal/egress"
+	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 	"github.com/lilsadfoqs/azhaq/internal/ledger"
 )
 
@@ -279,4 +279,4 @@ func (c *Client) scrub(text string, req *http.Request) string {
 var commonSegment = map[string]bool{"services": true, "sendMessage": true, "webhooks": true, "messages": true, "workflows": true, "webhookb2": true}
 
 // errorCode is an answer that is only a service's error code.
-var errorCode = regexp.MustCompile(`^[a-z][a-z0-9_]{2,40}$`)
+var errorCode = lazyre.New(`^[a-z][a-z0-9_]{2,40}$`)

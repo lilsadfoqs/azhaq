@@ -59,6 +59,20 @@ func DefaultWords() []string {
 	return out
 }
 
+// WordCount is how many words DefaultWords has, counted without building
+// the list (a flag's help names it, and help is built on every start).
+func WordCount() int {
+	n := 0
+	for rest := common; rest != ""; {
+		var l string
+		l, rest, _ = strings.Cut(rest, "\n")
+		if strings.TrimSpace(l) != "" {
+			n++
+		}
+	}
+	return n
+}
+
 // Options shape a sweep.
 type Options struct {
 	Words      []string

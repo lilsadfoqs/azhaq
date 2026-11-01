@@ -19,16 +19,17 @@ import (
 // services lab (bench/services.yaml): fifteen daemons on ports that are not
 // their usual ones, so a name has to come from what the service says.
 type servicesRow struct {
-	Profile    string          `json:"profile,omitempty"`
-	Ports      int             `json:"ports"`
-	AzhaqNamed int             `json:"azhaq_named"` // the service the port really runs
-	NmapNamed  int             `json:"nmap_named"`
-	AzhaqVer   int             `json:"azhaq_with_product"`
-	NmapVer    int             `json:"nmap_with_product"`
-	AzhaqSecs  float64         `json:"azhaq_seconds"`
-	NmapSecs   float64         `json:"nmap_seconds"`
-	Rows       []serviceRow    `json:"rows"`
-	UDP        map[string]bool `json:"azhaq_udp,omitempty"`
+	Profile    string  `json:"profile,omitempty"`
+	Ports      int     `json:"ports"`
+	AzhaqNamed int     `json:"azhaq_named"` // the service the port really runs
+	NmapNamed  int     `json:"nmap_named"`
+	AzhaqVer   int     `json:"azhaq_with_product"`
+	NmapVer    int     `json:"nmap_with_product"`
+	AzhaqSecs  float64 `json:"azhaq_seconds"`
+	NmapSecs   float64 `json:"nmap_seconds"`
+	memPair
+	Rows []serviceRow    `json:"rows"`
+	UDP  map[string]bool `json:"azhaq_udp,omitempty"`
 }
 
 type serviceRow struct {
@@ -342,6 +343,7 @@ func benchServices() *servicesRow {
 	}
 	nout, nm := timed("services", 20*time.Minute, work, nmap, na...)
 	row.NmapSecs = nm.Seconds
+	row.set(am, nm)
 	nmSvc, nmProd := map[int]string{}, map[int]string{}
 	var doc nmapRun
 	if err := xml.Unmarshal(nout, &doc); err == nil {
@@ -388,7 +390,7 @@ func benchServices() *servicesRow {
 	barOne("services (nmap -sV)", row.AzhaqNamed, row.NmapNamed, row.AzhaqSecs, row.NmapSecs, "the lab's own list of what runs on each port (bench/services.yaml) and `ss` showing every port listening",
 		cmdLine(azhaq, aa...)+" vs "+cmdLine("nmap", na...),
 		fmt.Sprintf("%d ports; with a product and version: azhaq %d, nmap %d; azhaq missed %v; nmap missed %v; %s%s", row.Ports, row.AzhaqVer, row.NmapVer,
-			clipList(azBad, 6), clipList(nmBad, 6), ratio(row.AzhaqSecs, row.NmapSecs), azErr(am)))
+			clipList(azBad, 6), clipList(nmBad, 6), ratios(row.AzhaqSecs, row.NmapSecs, row.memPair), azErr(am)))
 	addCheck("services: azhaq names ≥ 90% of the lab's TCP services", row.AzhaqNamed*10 >= row.Ports*9, "%d of %d", row.AzhaqNamed, row.Ports)
 
 	// UDP, which nmap -sU would need root for: asked of azhaq alone.

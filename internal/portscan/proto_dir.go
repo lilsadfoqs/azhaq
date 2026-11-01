@@ -5,8 +5,9 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
-	"regexp"
 	"strings"
+
+	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 )
 
 func init() {
@@ -128,7 +129,7 @@ var adLevels = map[string]string{
 	"5": "2012", "6": "2012 R2", "7": "2016",
 }
 
-var vendorVerRe = regexp.MustCompile(`(\d+(?:\.\d+)+)`)
+var vendorVerRe = lazyre.New(`(\d+(?:\.\d+)+)`)
 
 func ldapProduct(a map[string][]string, o *Open) {
 	first := func(k string) string {
@@ -191,9 +192,9 @@ func dnsDeepen(s *Scanner, c net.Conn, o *Open) {
 }
 
 var (
-	bindVerRe   = regexp.MustCompile(`^(\d+\.\d+[\w.\-+~]*)$`)
-	nameVerRe   = regexp.MustCompile(`^([A-Za-z][A-Za-z ]*?)[- ]v?(\d[\w.\-+~]*)$`)
-	isBindBuild = regexp.MustCompile(`^9\.\d+`)
+	bindVerRe   = lazyre.New(`^(\d+\.\d+[\w.\-+~]*)$`)
+	nameVerRe   = lazyre.New(`^([A-Za-z][A-Za-z ]*?)[- ]v?(\d[\w.\-+~]*)$`)
+	isBindBuild = lazyre.New(`^9\.\d+`)
 )
 
 // versionBind reads the TXT string of an answer to version.bind: BIND says

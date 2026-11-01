@@ -5,10 +5,11 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"regexp"
 	"strconv"
 	"strings"
 	"sync/atomic"
+
+	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 )
 
 // List is the words of one keyword: Words, or Count words made by Gen
@@ -100,7 +101,7 @@ func ReadList(path, keyword string, o ListOptions) (List, error) {
 	return l, nil
 }
 
-var extToken = regexp.MustCompile(`(?i)%ext%`)
+var extToken = lazyre.New(`(?i)%ext%`)
 
 // CommandList is -input-cmd: for each number 0..n-1 the command is run with
 // FFUF_NUM set to it, and what it prints is the word. It runs when the input
