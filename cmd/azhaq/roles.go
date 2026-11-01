@@ -521,6 +521,9 @@ func cmdRoles(args []string) error {
 		fetch.Reset()
 		replayed += n
 		noteCap(rep, "controls", err)
+		cn, hard := controlNotes(rows)
+		rep.Notes = append(rep.Notes, cn...)
+		rep.warned = rep.warned || hard
 		rep.Notes = append(rep.Notes, bothWays(rows)...)
 		sortRows(rows)
 	}
@@ -843,6 +846,57 @@ func noteCap(rep *report, prefix string, err error) {
 	if errors.Is(err, errReplayMax) && rep.Stopped == "" {
 		rep.Stopped = err.Error()
 	}
+}
+
+// noAnswer: err is a request that should have been answered and was not
+// (a refused connect, a timeout, a scope refusal), not one azhaq chose not
+// to send (a -deny-path rule, a kill file, a spent budget, Ctrl-C).
+func noAnswer(err error) bool {
+	return err != nil && !errors.Is(err, neterr.ErrDenied) && !errors.Is(err, neterr.ErrBudget) && !errors.Is(err, context.Canceled)
+}
+
+// failWhy is err in a few words: the transport's own error, without the
+// URL the request carried.
+func failWhy(err error) string {
+	var ue *url.Error
+	if errors.As(err, &ue) {
+		return ue.Err.Error()
+	}
+	return err.Error()
+}
+
+// distinctReasons lists up to three of reasons, each once, and counts the rest.
+func distinctReasons(reasons []string) string {
+	var out []string
+	for _, r := range reasons {
+		if !slices.Contains(out, r) {
+			out = append(out, r)
+		}
+	}
+	if len(out) > 3 {
+		return strings.Join(out[:3], "; ") + fmt.Sprintf("; and %d more", len(out)-3)
+	}
+	return strings.Join(out, "; ")
+}
+
+// askFailures are the requests of one stage that got no answer, by URL,
+// with why.
+type askFailures map[string]string
+
+// add records the request for u, when err is a failure to be answered.
+func (f askFailures) add(u string, err error) {
+	if noAnswer(err) {
+		f[u] = failWhy(err)
+	}
+}
+
+func (f askFailures) reasons() string {
+	var rs []string
+	for u := range f {
+		rs = append(rs, f[u])
+	}
+	sort.Strings(rs)
+	return distinctReasons(rs)
 }
 
 // replayAll asks each URL some role reached, and each object URL made

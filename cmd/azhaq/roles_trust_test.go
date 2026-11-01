@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -159,6 +160,83 @@ func TestAskControls(t *testing.T) {
 	_, _ = askControls(roles, rows, own, nil, regexp.MustCompile(`socks`), 10)
 	if c := rows[0].Control; len(c.Alike) != 0 || !c.Answers["admin"].Refusal {
 		t.Errorf("-refusal: %+v", c)
+	}
+}
+
+// A control request that fails is not dropped: the row says its control
+// could not be asked and why, the summary counts it, and the run exits 3.
+func TestAskControlsFailedRequest(t *testing.T) {
+	fetch.Reset()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dead := ln.Addr().String()
+	ln.Close() // nothing listens there now
+	h := func(v string) http.Header { return http.Header{"Authorization": {v}} }
+	roles := []role{{name: "alice", session: h("alice")}, {name: "bob", session: h("bob")}}
+	real, _ := readAnswer(200, []byte(`{"id":7,"name":"shoes"}`), "application/json")
+	rows := []roleRow{{URL: "http://" + dead + "/api/items/7", From: "http://" + dead + "/api/items/{id}", value: "7", Owner: "alice", Verdict: verdictCross,
+		Readers: []string{"bob"}, Answers: map[string]answer{"alice": real, "bob": real}}}
+	if _, err := askControls(roles, rows, map[string]bool{"127.0.0.1": true}, nil, nil, 10); err != nil {
+		t.Fatal(err)
+	}
+	row := rows[0]
+	if row.Verdict != verdictCross || !slices.Equal(row.Readers, []string{"bob"}) || row.Control == nil || len(row.Control.Answers) != 0 ||
+		len(row.Control.Failed) != 1 || !strings.HasPrefix(row.Control.Failed[0], "bob: ") || !strings.Contains(row.Control.Failed[0], "refused") {
+		t.Fatalf("row %+v control %+v", row, row.Control)
+	}
+	explain(rows, nil, roles, nil)
+	if !strings.Contains(rows[0].Evidence, "could not be asked, bob: ") {
+		t.Errorf("evidence %q", rows[0].Evidence)
+	}
+	notes, hard := controlNotes(rows)
+	if !hard || len(notes) != 1 || !strings.HasPrefix(notes[0], "1 cross read not checked with a made-up identifier: the request failed: ") {
+		t.Errorf("notes %q hard %v", notes, hard)
+	}
+	// A host outside the scope is refused the same way.
+	rows = []roleRow{{URL: "http://" + dead + "/api/items/7", From: "http://" + dead + "/api/items/{id}", value: "7", Owner: "alice", Verdict: verdictCross,
+		Readers: []string{"bob"}, Answers: map[string]answer{"alice": real, "bob": real}}}
+	_, _ = askControls(roles, rows, map[string]bool{"other.test": true}, nil, nil, 10)
+	if c := rows[0].Control; c == nil || len(c.Failed) != 1 || !strings.Contains(c.Failed[0], "outside the scope") {
+		t.Errorf("scope refusal: %+v", c)
+	}
+	// A -deny-path rule is the user's: said on the row and in a note, not a failure.
+	rows[0].Control = &control{Failed: []string{"bob: not requested: -deny-path /api"}, quiet: 1}
+	if notes, hard := controlNotes(rows); hard || len(notes) != 1 || !strings.Contains(notes[0], "-deny-path") {
+		t.Errorf("denied: notes %q hard %v", notes, hard)
+	}
+}
+
+// Through roles: the route whose made-up identifiers drop the connection
+// keeps its verdict, says why it has no control, and the run exits 3.
+func TestRolesControlRequestFails(t *testing.T) {
+	alice, bob := jwt(`{"sub":"alice"}`), jwt(`{"sub":"bob"}`)
+	app := objectApp(t, map[string]string{alice: "alice", bob: "bob"})
+	site := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if id, ok := strings.CutPrefix(r.URL.Path, "/api/notes/"); ok && id != "21" && id != "22" {
+			conn, _, _ := w.(http.Hijacker).Hijack()
+			conn.Close() // a made-up note: the connection drops
+			return
+		}
+		app.Config.Handler.ServeHTTP(w, r)
+	}))
+	defer site.Close()
+	_, rows, sum, err := rolesJSON(t, site.URL, "-role", "anon", "-role", "alice=Authorization: Bearer "+alice, "-role", "bob=Authorization: Bearer "+bob,
+		"--", "-url", site.URL+"/")
+	if exitCode(err) != exitPartial {
+		t.Errorf("exit %d (%v), want %d", exitCode(err), err, exitPartial)
+	}
+	note := rows["/api/notes/21"]
+	if note.Verdict != verdictCross || note.Control == nil || len(note.Control.Failed) != 1 || !strings.Contains(note.Evidence, "could not be asked") {
+		t.Errorf("note row: %+v control %+v evidence %q", note.Verdict, note.Control, note.Evidence)
+	}
+	want := false
+	for _, n := range toStrings(sum["notes"]) {
+		want = want || strings.HasPrefix(n, "2 cross reads not checked with a made-up identifier: the request failed: ")
+	}
+	if !want || sum["exit"] != float64(exitPartial) || sum["complete"] != false {
+		t.Errorf("summary %v", sum)
 	}
 }
 

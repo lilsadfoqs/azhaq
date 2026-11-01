@@ -153,6 +153,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 
 - **Exit 3:** a signed-in role was refused wherever a session matters. The summary names it in a note. See [Dead sessions](#dead-sessions).
 - **Exit 3:** a token has expired and nothing more can be said of it. A note says so. See [Expired tokens](#expired-tokens).
+- **Exit 3:** a control request got no answer. See [Negative controls](#negative-controls).
 - **Exit 4:** a role's run was stopped by a limit. The summary marks it `stopped`.
 - **Exit 2:** a header names a host outside the scope rule. Nothing is sent. See [Headers that name a host](#headers-that-name-a-host).
 - A role whose run could not be done, such as a failed sign-in, ends `roles` with a summary whose `notes` say why.
@@ -279,6 +280,7 @@ Also:
 - A reader the route answers so, beside one it refuses, is dropped from the row's readers.
 - Each reader is asked once per route and shape of identifier.
 - The controls count against what `-replay-max` leaves after the replay.
+- A control request that gets no answer (a refused connect, a timeout, a scope refusal) is a failure. The row keeps its verdict, holds the reason in `control.failed`, and says in `evidence` that its control could not be asked. A note counts them: `2 cross reads not checked with a made-up identifier: the request failed: connect: connection refused`. The run exits 3. A request a `-deny-path` rule keeps out is the rule's, not a failure: the row and a note say it, and the exit is not changed.
 
 ### Refusal pages
 
@@ -444,7 +446,7 @@ For a write, `evidence` says who was let, as the owner was, and where the write 
 bob got 200:80, as alice did (200:80); PUT /api/BasketItems/{id} with an empty body
 ```
 
-- `control` is on a row where a role reads another role's object. It holds what its readers got for a made-up identifier on the same route. Its keys are `url`, `value`, each reader's `answers`, and `alike`: the readers it answered as a real object.
+- `control` is on a row where a role reads another role's object. It holds what its readers got for a made-up identifier on the same route. Its keys are `url`, `value`, each reader's `answers`, `alike`: the readers it answered as a real object, and `failed`: the readers whose request got no answer, each with the reason.
 - `both_ways` is said in a note once per route and pair: `alice and bob read each other's objects on /rest/basket/{id}`.
 
 ### Writes
