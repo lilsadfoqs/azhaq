@@ -110,7 +110,7 @@ func Secrets(script string) []Secret {
 	for _, m := range assignedIn(script, 64) {
 		name, v := m[1], m[2]
 		if seen[v] || notSecret(v) || entropy(v) < 3.2 || strings.Contains(v, "/") && !strings.ContainsAny(v, "+=") ||
-			notSecretName.MatchString(name) || oddChars(v) || labelOf(name, v) {
+			notSecretName.MatchString(name) || oddChars(v) || labelOf(name, v) || translationRef(v) {
 			continue
 		}
 		add(Secret{Kind: "generic-secret", Severity: "medium", Name: name, Value: v, Rule: RuleGeneric, Entropy: math.Round(entropy(v)*10) / 10})
@@ -219,6 +219,25 @@ func labelOf(name, v string) bool {
 	}
 	n := alnumLower(name)
 	return len(n) >= 5 && strings.Contains(alnumLower(v), n)
+}
+
+// textKey is a translation key or a reference to one: an optional @, then
+// two or more capitalised or lower-case letter-only words joined by _ or -
+// (@Button_Cancel, Save_Changes). A credential carries digits or mixed case
+// inside its words.
+var textKey = lazyRE(`^@?[A-Za-z][a-z]+(?:[_-][A-Za-z][a-z]+)+$`)
+
+// translationRef says v is such a key: every word has a vowel, as words do.
+func translationRef(v string) bool {
+	if !textKey.MatchString(v) {
+		return false
+	}
+	for _, w := range strings.FieldsFunc(v, func(r rune) bool { return r == '@' || r == '_' || r == '-' }) {
+		if !strings.ContainsAny(strings.ToLower(w), "aeiouy") {
+			return false
+		}
+	}
+	return true
 }
 
 func alnumLower(s string) string {

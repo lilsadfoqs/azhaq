@@ -117,7 +117,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 
 - A `secret` reason reads `generic-secret (medium) in URL; name apiToken, value Zx81Qp…7Ks, rule: name says secret, value looks random, entropy 4.3`.
 - The rule is `known key format` (an AWS, GitHub, Stripe, Slack or similar key, a private key, a JWT), `variable a bundler inlined` (a `VITE_` or `NEXT_PUBLIC_` variable, severity `info`) or `name says secret, value looks random`.
-- The last rule needs a property whose name holds `secret`, `token`, `password`, `apikey` and similar words, assigned a string of 8 characters or more with entropy of 3.2 bits per character or more. It leaves out placeholders, a parser's token tables, values with much punctuation, a class name a CSS module made (`_tokensUsage_dypaw_41`) and a value that repeats its own name (`secretName: "secretName-input"`).
+- The last rule needs a property whose name holds `secret`, `token`, `password`, `apikey` and similar words, assigned a string of 8 characters or more with entropy of 3.2 bits per character or more. It leaves out placeholders, a parser's token tables, values with much punctuation, a class name a CSS module made (`_tokensUsage_dypaw_41`) a value that repeats its own name (`secretName: "secretName-input"`) and a translation key or a reference to one: two or more words of letters only, joined by `_` or `-`, each with a vowel and no capital after its first letter, and an optional leading `@` (`@Button_Cancel`, `Enter_Your_Password`). A value with a digit or a capital inside a word is still listed.
 - A `medium` candidate needs a human: read the value in `azhaq export -format secrets` before acting on it.
 
 ### Cross-role rows
