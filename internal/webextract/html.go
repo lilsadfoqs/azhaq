@@ -77,6 +77,7 @@ func Forms(body []byte, page *url.URL) []Form {
 			cur.Enctype = enctype(attr(tok.Attr, "enctype"))
 		}
 		curTag, depth = strings.ToLower(tok.Data), 1
+		inSelect = 0
 	}
 	for {
 		tt := z.Next()
@@ -84,10 +85,16 @@ func Forms(body []byte, page *url.URL) []Form {
 			break
 		}
 		if tt != html.StartTagToken && tt != html.SelfClosingTagToken {
-			if tt == html.EndTagToken && cur != nil && strings.EqualFold(z.Token().Data, curTag) {
-				if depth--; depth == 0 {
-					out = append(out, *cur)
-					cur = nil
+			if tt == html.EndTagToken {
+				name := strings.ToLower(z.Token().Data)
+				if name == "select" {
+					inSelect = 0
+				}
+				if cur != nil && name == curTag {
+					if depth--; depth == 0 {
+						out = append(out, *cur)
+						cur, inSelect = nil, 0
+					}
 				}
 			}
 			continue
@@ -112,6 +119,9 @@ func Forms(body []byte, page *url.URL) []Form {
 			}
 			name := attr(tok.Attr, "name")
 			if name == "" || nameIn(cur.Fields, name) {
+				if tag == "select" {
+					inSelect = 0
+				}
 				continue
 			}
 			cur.Fields = append(cur.Fields, name)
@@ -130,7 +140,7 @@ func Forms(body []byte, page *url.URL) []Form {
 				inSelect = len(cur.Inputs)
 			}
 		case "option":
-			if cur != nil && inSelect > 0 {
+			if cur != nil && inSelect > 0 && inSelect <= len(cur.Inputs) {
 				in := &cur.Inputs[inSelect-1]
 				if _, sel := tokAttr(tok.Attr, "selected"); sel || in.Value == "" {
 					in.Value = attr(tok.Attr, "value")
