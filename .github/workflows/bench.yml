@@ -1,12 +1,19 @@
 name: bench
 
-# The whole benchmark, both profiles by default, in parallel jobs: each job
-# runs a group of sections on its own runner and a last job joins their
-# records into one (go run ./bench -merge). Push an annotated tag
-# bench-NAME whose message holds the bench's flags (for example
-# "-profile polite"); a message with -only runs those sections in one job.
-# The joined record and the logs go to the ci-results branch under
-# bench/NAME/.
+# The whole benchmark, both profiles by default, in parallel jobs. The plan
+# job asks the bench for its units (one section in one profile, one claims
+# case, or a section that runs once) and packs them into at most MAXPARTS
+# jobs by their measured times (.github/ci/bench-times.json, refreshed with
+# .github/ci/bench_times.py from a run's log); each job runs its units on its
+# own runner and a last job joins the records (go run ./bench -merge). Push an
+# annotated tag bench-NAME whose message holds the bench's flags (for example
+# "-profile polite"); -only and -profile restrict the units. The joined
+# record and the logs go to the ci-results branch under bench/NAME/.
+#
+# Two caches speed the jobs up: the reference tools (keyed on bench/tools.go
+# and the Go version) and the reference tools' results of the UTC day (the
+# merge job saves what the jobs produced). -fresh in the tag message neither
+# restores nor saves the results.
 on:
   push:
     tags: ["bench-*"]
@@ -20,32 +27,35 @@ jobs:
     outputs:
       args: ${{ steps.p.outputs.args }}
       parts: ${{ steps.p.outputs.parts }}
+      units: ${{ steps.p.outputs.units }}
+      day: ${{ steps.p.outputs.day }}
+      fresh: ${{ steps.p.outputs.fresh }}
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
       - id: p
+        env:
+          MAXPARTS: ${{ vars.BENCH_MAXPARTS || '10' }}
         run: |
           args=""
           if [ "$(git cat-file -t "refs/tags/$GITHUB_REF_NAME")" = tag ]; then
             args=$(git for-each-ref --format='%(contents:subject)' "refs/tags/$GITHUB_REF_NAME")
           fi
           echo "args=$args" >> "$GITHUB_OUTPUT"
-          # Groups of about 15 minutes; sections that read each other's
-          # results stay together (network and probe use the domains').
-          if [[ " $args " == *" -only "* ]]; then
-            parts='[{"name":"only","only":""}]'
-          else
-            parts='[{"name":"apps","only":"apps,openapi"},
-              {"name":"dirs-params","only":"dirs,params"},
-              {"name":"fuzz-shots","only":"fuzz,shots"},
-              {"name":"once","only":"dropin,scope,scale,secrets,tenants"},
-              {"name":"claims","only":"claims"},
-              {"name":"domains","only":"domains,urls,network,probe"},
-              {"name":"ports","only":"ports,services"},
-              {"name":"dns","only":"brute,dns,lab,notify,docs"}]'
-          fi
-          echo "parts=$(echo "$parts" | jq -c .)" >> "$GITHUB_OUTPUT"
+          echo "day=$(date -u +%F)" >> "$GITHUB_OUTPUT"
+          fresh=false
+          [[ " $args " == *" -fresh "* ]] && fresh=true
+          echo "fresh=$fresh" >> "$GITHUB_OUTPUT"
+          # The units this tag's flags select, packed by measured time.
+          # shellcheck disable=SC2086 # the flags are words
+          go run ./bench $args -list-units > units.txt
+          echo "units=$(paste -sd, units.txt)" >> "$GITHUB_OUTPUT"
+          parts=$(.github/ci/bench_plan.py --times .github/ci/bench-times.json --max-parts "$MAXPARTS" < units.txt)
+          echo "parts=$parts" >> "$GITHUB_OUTPUT"
 
   part:
     needs: plan
@@ -60,20 +70,42 @@ jobs:
         with:
           fetch-depth: 0
       - uses: actions/setup-go@v7
+        id: go
         with:
           go-version: stable
+      - name: reference tools cache
+        # The tools the bench installs (bench/tools.go pins them, the wordlists
+        # and arjun too); a hit skips the install, and the files keep their
+        # times. azhaq itself is built each run.
+        uses: actions/cache@v6
+        with:
+          path: |
+            bench/.work/bin
+            !bench/.work/bin/azhaq
+            bench/.work/arjun-*
+            bench/.work/subdomains-top1million-5000.txt
+            bench/.work/common.txt
+            bench/.work/burp-parameter-names.txt
+          key: bench-tools-${{ runner.os }}-${{ steps.go.outputs.go-version }}-${{ hashFiles('bench/tools.go') }}
+      - name: reference results cache
+        # Today's runs of the reference tools, kept by an earlier run (the
+        # merge job saves them); -fresh runs the tools again.
+        if: needs.plan.outputs.fresh != 'true'
+        uses: actions/cache/restore@v6
+        with:
+          path: bench/.work/refcache
+          key: bench-ref-${{ needs.plan.outputs.day }}-${{ github.run_id }}-${{ matrix.name }}
+          restore-keys: bench-ref-${{ needs.plan.outputs.day }}-
       - name: reference tools from apt
         run: sudo apt-get update -q && sudo apt-get install -y -q nmap dnsutils
       - name: bench
         env:
           ARGS: ${{ needs.plan.outputs.args }}
-          ONLY: ${{ matrix.only }}
+          UNITS: ${{ matrix.units }}
         run: |
-          only=()
-          [ -n "$ONLY" ] && only=(-only "$ONLY")
-          echo "bench flags: $ARGS ${only[*]}"
+          echo "bench flags: $ARGS -units $UNITS"
           # shellcheck disable=SC2086 # the flags are words
-          go run ./bench $ARGS "${only[@]}" -nmap "$(command -v nmap)" 2>&1 | tee "bench-${{ matrix.name }}.log" || true
+          go run ./bench $ARGS -units "$UNITS" -nmap "$(command -v nmap)" 2>&1 | tee "bench-${{ matrix.name }}.log" || true
           mkdir -p part
           mv "bench-${{ matrix.name }}.log" part/
           f=$(ls -t bench/history/*.json 2>/dev/null | head -1 || true)
@@ -86,6 +118,13 @@ jobs:
         with:
           name: bench-${{ matrix.name }}
           path: part/
+          retention-days: 7
+      - uses: actions/upload-artifact@v7
+        if: always() && needs.plan.outputs.fresh != 'true'
+        with:
+          name: refcache-${{ matrix.name }}
+          path: bench/.work/refcache
+          if-no-files-found: ignore
           retention-days: 7
 
   merge:
@@ -102,10 +141,27 @@ jobs:
           pattern: bench-*
           path: parts
           merge-multiple: true
+      - name: join the reference results
+        if: needs.plan.outputs.fresh != 'true'
+        uses: actions/download-artifact@v7
+        continue-on-error: true
+        with:
+          pattern: refcache-*
+          path: bench/.work/refcache
+          merge-multiple: true
+      - name: save the reference results
+        # One cache of every job's runs, for the next run of the day.
+        if: always() && needs.plan.outputs.fresh != 'true' && hashFiles('bench/.work/refcache/**') != ''
+        uses: actions/cache/save@v6
+        with:
+          path: bench/.work/refcache
+          key: bench-ref-${{ needs.plan.outputs.day }}-${{ github.run_id }}
       - name: join
+        env:
+          UNITS: ${{ needs.plan.outputs.units }}
         run: |
           ls parts
-          go run ./bench -merge -out bench/joined parts/*.json 2>&1 | tee merge.log || true
+          go run ./bench -merge -expect "$UNITS" -out bench/joined parts/*.json 2>&1 | tee merge.log || true
           { for l in parts/*.log; do echo "=== $l"; cat "$l"; done; echo "=== join"; cat merge.log; } > bench.log
       - name: publish
         if: always()
