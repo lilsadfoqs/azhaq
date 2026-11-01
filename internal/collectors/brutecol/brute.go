@@ -28,12 +28,65 @@ const (
 // _domainkey, _acme-challenge).
 var label = lazyre.New(`^[a-z0-9_]([a-z0-9_-]{0,61}[a-z0-9_])?$`)
 
+// Budget is the most names a run asks by guessing, the words of -dns-brute and
+// the variations of -permute together (-max-names, when given). A nil Budget
+// asks every guess.
+type Budget struct {
+	mu    sync.Mutex
+	left  int
+	asked map[string]bool
+	held  map[string]bool
+}
+
+// NewBudget is a budget of n guesses, or nil for n <= 0.
+func NewBudget(n int) *Budget {
+	if n <= 0 {
+		return nil
+	}
+	return &Budget{left: n, asked: map[string]bool{}, held: map[string]bool{}}
+}
+
+// take returns the first names that fit what is left and holds back the rest.
+func (b *Budget) take(names []string) []string {
+	if b == nil {
+		return names
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	n := min(len(names), b.left)
+	b.left -= n
+	for _, x := range names[:n] {
+		b.asked[x] = true
+	}
+	for _, x := range names[n:] {
+		b.held[x] = true
+	}
+	return names[:n]
+}
+
+// Held is how many different guesses the budget kept from being asked.
+func (b *Budget) Held() int {
+	if b == nil {
+		return 0
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	n := 0
+	for x := range b.held {
+		if !b.asked[x] {
+			n++
+		}
+	}
+	return n
+}
+
 // Brute resolves word.domain for every word in Words.
 type Brute struct {
 	Pool    *dnsr.Pool
 	Wild    *dnsr.Wildcards
 	Words   []string
 	Workers int
+	Budget  *Budget
 }
 
 func (b *Brute) Name() string { return BruteName }
@@ -62,6 +115,7 @@ func (b *Brute) Run(ctx context.Context, seed types.Seed, emit func(types.Observ
 			names = append(names, n)
 		}
 	}
+	names = b.Budget.take(names)
 	answers := resolveFound(ctx, b.Pool, b.Wild, domain, names, b.Workers)
 	found := nameList(answers)
 	wild := b.Wild.Zone(ctx, domain)
@@ -84,6 +138,7 @@ type Permute struct {
 	Words   []string // default: PermuteWords
 	PerHost int      // candidates per hostname; 0: every one
 	Workers int
+	Budget  *Budget
 
 	mu    sync.Mutex
 	tried map[string]bool // candidates, including the names found
@@ -163,9 +218,12 @@ func (p *Permute) Run(ctx context.Context, seed types.Seed, emit func(types.Obse
 			break
 		}
 		if n != host && !p.tried[n] {
-			p.tried[n] = true
 			names = append(names, n)
 		}
+	}
+	names = p.Budget.take(names)
+	for _, n := range names {
+		p.tried[n] = true
 	}
 	p.mu.Unlock()
 	if len(names) == 0 {

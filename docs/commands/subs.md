@@ -70,9 +70,9 @@ Every takeover candidate is also in the summary, under `takeover`, with `host`, 
 The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.md#the-summary) and [exit codes](../OUTPUT.md#exit-codes). These points are specific to `subs`. The counts themselves are in [Details](#details).
 
 - The summary has `degraded` when `sources failed` is above 0.
-- Names past `-max-names` are left out, and the run ends with exit 3.
+- Names past `-max-names` are left out, and the run ends with exit 3. Guesses past a `-max-names` you gave are not asked, and the run ends with exit 4.
 - With `-live`, names every resolver failed on (a timeout, a REFUSED) are left out as `no answer`, and the run ends with exit 3. A note names the resolver, how many names and why: `no answer from 8.8.8.8 for 512 names (timed out)`. They are not counted as `did not resolve`: the name may well exist.
-- A signal (Ctrl-C, SIGTERM, SIGHUP) or `-timeout` while names wait for DNS stops the run: exit 4, `complete` false, `stopped` says why. The names DNS had answered before the stop are kept and listed; the names it had not answered are counted as `not asked`, and `azhaq resume` asks only those.
+- A signal (Ctrl-C, SIGTERM, SIGHUP), `-timeout` or `-max-time` while names wait for DNS stops the run: exit 4, `complete` false, `stopped` says why (`-max-time 25s reached with N tasks known and not done`). The names DNS had answered before the stop are kept and listed; the names it had not answered are counted as `not asked`, and `azhaq resume` asks only those.
 - A source that answered 200 with an error and gave no names is a failed source: see [Failed sources](#failed-sources).
 - `subs` ends with a `coverage:` note: see [Coverage estimate](#coverage-estimate).
 
@@ -139,6 +139,7 @@ The counts also say what became of the names, so a reader can add them up:
 | `left out by -m/-f` | Names a `-m`, `-f`, `-match-regex` or `-filter-regex` removed. |
 | `listed under another domain` | A name under two of the domains given, printed once. |
 | `cut by -max-names` | Names past `-max-names` (default 200,000), left out. The run ends with exit 3. |
+| `guesses held back by -max-names` | With a `-max-names` you gave: the `-w` words and `-permute` variations past it, which were not asked. They are no row and not in `asked by guessing`. The run ends with exit 4, and a note names the cap. |
 
 - `subs` lists subdomains, as subfinder does, so it does not print the domain itself. `run`'s map has it as the target it is.
 - `dnsx -a -cname` lists a name whose CNAME leads nowhere, and so does `subs -live`: the row says `cname_only` and the summary counts it as `CNAME only`. A tool that wants addresses only filters on an empty `a`.
@@ -220,7 +221,7 @@ coverage: what the independent sources know, not every name that exists. Their p
 - `-m`, `-f`, `-match-regex` and `-filter-regex` filter the names.
 - `-ls` lists the sources with their key requirement. With `-json` it prints one object for each.
 - `-recursive` runs only the sources that handle subdomains of subdomains.
-- `-max-names` is a different limit here than in `run`: names kept for each domain, 200,000 by default. In `run` it is the hostnames resolved, 20,000 by default.
+- `-max-names` is a different limit here than in `run`: names kept for each domain, 200,000 by default. In `run` it is the hostnames resolved, 200,000 by default. A value you give also caps the names `-w` and `-permute` ask, together, first the words and then the variations: the guesses past it are not asked, so `asked by guessing` is at most the cap, the run exits 4, `stopped` names `-max-names`, and a note says how many guesses it held back. Without it, a guess list has no cap: the cap's default is for the names looked up, never for a wordlist.
 - A SOCKS5 `-proxy` carries crt.sh's database connection too. An HTTP proxy cannot, so crt.sh is then asked in the JSON API only, and a note says so.
 - A source that needs a key and has none is not run. Its status says `skipped: needs a key`, and `-ls` marks it with `*`.
 - `-stats` prints each source's requests, names and errors. `-version` prints the version.
@@ -231,7 +232,8 @@ coverage: what the independent sources know, not every name that exists. Their p
 - subdomain.center answers a random 500 names per call, most of them made up.
 - Without a key it is asked again only while its last round gave a name that resolves and no other source had.
 - The next round is asked while the last round's new names are looked up, so a round costs the longer of the two. When a round adds no live name, the call already made ahead is dropped, and the source's `calls` counts it. No name is looked up twice.
-- `-max-time` ends the wait for it too: the names it gave by then are kept, listed as not checked when their lookup was cut, and its row says `-max-time` stopped it. `-source-timeout` bounds each of its calls and, with them, half the time it spends asking; the lookups of its guesses are paced by `-dns-rate`, not by `-source-timeout`.
+- `-max-time` bounds the whole run, this source's rounds and the lookups of its guesses too: when it passes, the names gathered are kept, the ones whose lookup was cut are counted as `not checked`, and its row says the run's time limit cut it short. `-source-timeout` bounds each of its calls and, with them, half the time it spends asking; the lookups of its guesses are paced by `-dns-rate`, not by `-source-timeout`.
+- `-max-time` is the whole run's wall-clock bound, as `-timeout` is, and the shorter of the two applies: the sources, subdomain.center's rounds, and the DNS checks of `-live`, `-w` and `-permute` all end with it. The run exits 4, `stopped` names `-max-time`, a note counts the names not asked in DNS, and `azhaq resume` asks them. subfinder's `-max-time` bounds only the enumeration.
 - How many samples are taken is in [Guesses](#guesses).
 - A lookup waits 3 s for an answer, as dnsx does, and is asked again on another resolver when it times out, up to 3 attempts. Without `-dns-rate` a late attempt is also hedged: another is sent beside it and the first answer wins. With `-dns-rate` nothing is hedged, because a hedge spends a slot of your rate on every answer that is merely slow: a zone that answers in 1.2 s cost 1.5 queries a guess hedged, 1 not.
 - A name that no resolver answered in its 3 attempts is asked again in a second pass at a quarter of the concurrency, when others of the batch were answered; resolvers that answer nothing are down, not busy, and get no second pass. The second pass asks 16 of those names first, spread over the list, and ends there when none of them is answered: the zone's servers are not answering, the rest would fail alike at the cost of every attempt again, and they keep the first failure (`no answer`, or `not checked` for a guess).
@@ -239,7 +241,7 @@ coverage: what the independent sources know, not every name that exists. Their p
 - A name is live when DNS has a record for it: an address, directly or through its CNAME chain, or a CNAME whose chain ends without one (marked `cname_only`).
 - Answers too big for 512 bytes, such as a long CNAME chain, arrive with EDNS0, or over TCP when a server truncates them.
 - Without `-live` nothing is looked up. The guesses are listed with `"unverified": true`, and the summary counts them.
-- With `-live`, a guess that could not be checked, near `-timeout` or with the DNS lookups failing, is left out and counted as `not checked`. The source's status says `N of its names not checked`, and `azhaq resume` checks them.
+- With `-live`, a guess that could not be checked, near `-timeout` or `-max-time` or with the DNS lookups failing, is left out and counted as `not checked`. The source's status says `N of its names not checked`, and `azhaq resume` checks them.
 
 On tesla.com, `subs -live -dns-rate 10` with two resolvers took 161 s and listed 555 live names. `subfinder | dnsx -a -cname -rl 10` on the same resolvers took 211 s and listed 513. At the default pace it took 25 to 29 s against 56 to 63 s.
 
@@ -274,10 +276,10 @@ On tesla.com, `subs -live -dns-rate 10` with two resolvers took 161 s and listed
 | `-source-rate` | float |  | requests per second to each subdomain source, as subfinder -rl (0: each source's own pace); a source's lower own pace stays |
 | `-source-rates` | string |  | pace single subdomain sources, as subfinder -rls: name=N/unit, comma-separated, unit s, m or h (hackertarget=10/m,crtsh=1/s) |
 | `-source-timeout` | duration | `30s` | give each subdomain source this long, 30s as subfinder does; a slower one (crt.sh) is abandoned, listed as failed, and the names the others gave are kept; -source-timeout 60s or more waits for crt.sh on a large domain (not -timeout, the run's bound) |
-| `-max-time` | duration |  | wait this long for all subdomain sources of a domain, then go on with what they gave, also when subdomain.center is still asking and checking its guesses (0: -source-timeout and a short grace bound the wait, but not that source's DNS checks, which -dns-rate paces), as subfinder -max-time |
+| `-max-time` | duration |  | how long the run may take: subs stops after this long, in any phase (the sources, subdomain.center's guesses, the DNS checks of -live, -w and -permute), exits 4 and leaves the rest for azhaq resume; run and plan only wait this long for the sources of a domain, then go on with what they gave (0: -source-timeout and a short grace bound the wait; -timeout bounds a run), as subfinder -max-time |
 | `-max-body` | int |  | largest response body read from a subdomain source, in bytes (default 33554432), as subfinder -rsr |
 | `-max-results` | int |  | most names one paging subdomain source gives (0: no cap), as subfinder -mr |
-| `-max-names` | int |  | most names kept per domain, and looked up with -live (default 200000) |
+| `-max-names` | int |  | most names kept per domain, and looked up with -live (default 200000); a value you give also caps the names -w and -permute ask, together: the guesses past it are not asked, the run exits 4 and says how many |
 | `-dns-rate` | float |  | DNS queries per second per resolver (0: no pace but the queries in flight, as dnsx) |
 | `-t` | int |  | work items in flight (default 16) |
 | `-timeout` | duration |  | stop after this long and keep what was found; azhaq resume continues (0: no limit) |

@@ -31,6 +31,15 @@ type progressCfg struct {
 	Cap     int64         // requests at most; 0: no cap
 	CapBy   string        // the option that set Cap
 	Timeout time.Duration // 0: none
+	// TimeoutBy is the option that set Timeout; empty: -timeout.
+	TimeoutBy string
+}
+
+func (c progressCfg) timeoutBy() string {
+	if c.TimeoutBy == "" {
+		return "-timeout"
+	}
+	return c.TimeoutBy
 }
 
 // rate is the requests a second between two snapshots.
@@ -75,7 +84,7 @@ func (c progressCfg) ends(prev, cur progressSnap) (by string, in time.Duration, 
 	}
 	if c.Timeout > 0 && cur.At < c.Timeout {
 		if left := c.Timeout - cur.At; !ok || left < in {
-			by, in, ok = "-timeout "+c.Timeout.String(), left, true
+			by, in, ok = c.timeoutBy()+" "+c.Timeout.String(), left, true
 		}
 	}
 	return by, in, ok

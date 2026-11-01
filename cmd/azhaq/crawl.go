@@ -59,11 +59,11 @@ func cmdCrawl(args []string) error {
 	excludeFields := fs.String("eof", "", "leave these fields out of -json and -jsonl lines, comma-separated (request.tag, response.forms, tech, …)")
 	noFill := fs.Bool("no-form-fill", false, "do not ask the action of GET forms with neutral values (by default each is asked, even one that deletes or logs out; -deny-path keeps its action out)")
 	d := fs.Int("d", -1, "katana's -d: link levels below the start URL to visit (3 by default); -depth N is -d N-1")
-	assets := fs.Bool("assets", false, "also list the stylesheets, images, fonts and media pages load, which the crawl does not request (listed as linked), and the source maps and build manifests azhaq reads (the scripts it requests are listed by default)")
+	assets := fs.Bool("assets", false, "also list the images, fonts and media pages load (listed as linked: the crawl does not request them), and the source maps and build manifests azhaq reads (scripts and stylesheets are listed by default, as katana lists them)")
 	noShell := fs.Bool("no-catchall", false, "leave out URLs that answer with the page every unknown path gets (client-side routes of a single-page app)")
 	sweep := fs.Bool("sweep", false, "also ask each web service for the 51 built-in paths (robots.txt, sitemaps, API descriptions, .git/HEAD, admin, …) and for the source map next to each script, as run does; crawl asks only what a crawler does")
 	showOut := fs.Bool("do", false, "also list the URLs found and left out of the crawl's scope (never requested)")
-	hints := fs.Bool("hints", false, "also list what the crawl did not request: the URLs a page links (past -depth, a limit or a -deny-path rule), the hints (routes with a parameter, views and sockets, routes scripts or descriptions give a method other than GET) and the named URLs (named by scripts or descriptions, or only in scripts); by default only the URLs the crawl requested are listed")
+	hints := fs.Bool("hints", false, "also list the hints (routes with a parameter, views and sockets, routes scripts or descriptions give a method other than GET) and the named URLs (named by scripts or descriptions, or only in scripts); by default the URLs the crawl requested and the URLs pages link to or load are listed")
 	showRejected := fs.Bool("rejected", false, "also list the strings read from scripts and pages and kept out of the URLs, each with its reason (text: string, a tab, the reason; -json: one object each)")
 	jsonl := fs.Bool("jsonl", false, "katana's JSON lines: {timestamp, request{method, endpoint, tag, attribute, source}, response{status_code, technologies, forms, content_length}, error}")
 	fs.BoolVar(jsonl, "j", false, "same as -jsonl")
@@ -214,7 +214,7 @@ func cmdCrawl(args []string) error {
 	}
 	facts, rejected, offsite := crawlFacts(obs)
 	counts := map[string]int{}
-	var otherMethod, scriptsOnly, linkedLeft int
+	var otherMethod, scriptsOnly, linkedListed int
 	otherAsked := map[int]int{} // what the GET of those routes answered
 	var kinds crawlKinds
 	for _, r := range rows {
@@ -226,9 +226,6 @@ func cmdCrawl(args []string) error {
 			continue
 		}
 		if !*hints && !outOpts.listed(r) {
-			if crawlClass(r) == classLinked {
-				linkedLeft++
-			}
 			continue
 		}
 		if !c.json && !outOpts.jsonl && strings.Contains(r.Entity.Key, "{") {
@@ -241,6 +238,9 @@ func cmdCrawl(args []string) error {
 			continue
 		}
 		counts[r.Coverage]++
+		if crawlClass(r) == classLinked {
+			linkedListed++
+		}
 		switch {
 		case len(r.Methods) > 0 && !slices.Contains(r.Methods, "GET"):
 			otherMethod++
@@ -283,8 +283,9 @@ func cmdCrawl(args []string) error {
 			fmt.Fprintln(os.Stderr, "azhaq crawl: "+note)
 		}
 	}
-	if linkedLeft > 0 {
-		note := fmt.Sprintf("%d URLs a page links were not requested (past -depth, a limit or a -deny-path rule), so they are left out of the list (-hints lists them; a larger -depth requests more of them; -json marks each row's class)", linkedLeft)
+	if linkedListed > 0 {
+		// Listed as katana lists them, and said so: no request asked them.
+		note := fmt.Sprintf("%d listed URLs are links or loads a page holds that the crawl did not request (past -depth, a limit or a -deny-path rule, or a stylesheet, library script, image or font it does not fetch), so a GET may answer 404 (-json marks each row's class: linked)", linkedListed)
 		rep.Notes = append(rep.Notes, note)
 		if c.silent && !c.json {
 			fmt.Fprintln(os.Stderr, "azhaq crawl: "+note)
@@ -539,15 +540,14 @@ func (o crawlOpts) hidden(r engine.MapEntry) bool {
 }
 
 // listed says whether the plain and JSON list holds a row without -hints: the
-// crawl requested it. The stylesheets, images, fonts and media a page loads
-// are requested by no crawl step; -assets, -ndef and -em, which ask for them,
-// list them as linked.
+// crawl requested it, or a page links or loads it (a link past -depth, a
+// limit or a -deny-path rule; the stylesheets, scripts, images and fonts a
+// page names), as katana lists them. The hints and the named URLs, which
+// no page holds, wait for -hints.
 func (o crawlOpts) listed(r engine.MapEntry) bool {
 	switch crawlClass(r) {
-	case classObserved:
+	case classObserved, classLinked:
 		return true
-	case classLinked:
-		return r.Role == "asset" && (o.showAssets || o.assets)
 	}
 	return false
 }

@@ -154,7 +154,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 | `-source-rate` | float |  | requests per second to each subdomain source, as subfinder -rl (0: each source's own pace); a source's lower own pace stays |
 | `-source-rates` | string |  | pace single subdomain sources, as subfinder -rls: name=N/unit, comma-separated, unit s, m or h (hackertarget=10/m,crtsh=1/s) |
 | `-source-timeout` | duration | `30s` | give each subdomain source this long, 30s as subfinder does; a slower one (crt.sh) is abandoned, listed as failed, and the names the others gave are kept; -source-timeout 60s or more waits for crt.sh on a large domain (not -timeout, the run's bound) |
-| `-max-time` | duration |  | wait this long for all subdomain sources of a domain, then go on with what they gave, also when subdomain.center is still asking and checking its guesses (0: -source-timeout and a short grace bound the wait, but not that source's DNS checks, which -dns-rate paces), as subfinder -max-time |
+| `-max-time` | duration |  | how long the run may take: subs stops after this long, in any phase (the sources, subdomain.center's guesses, the DNS checks of -live, -w and -permute), exits 4 and leaves the rest for azhaq resume; run and plan only wait this long for the sources of a domain, then go on with what they gave (0: -source-timeout and a short grace bound the wait; -timeout bounds a run), as subfinder -max-time |
 | `-max-body` | int |  | largest response body read from a subdomain source, in bytes (default 33554432), as subfinder -rsr |
 | `-max-results` | int |  | most names one paging subdomain source gives (0: no cap), as subfinder -mr |
 | `-urls-timeout` | duration | `3m0s` | time each archive source gets per domain (the Wayback Machine's answer for a large domain takes several minutes) |
@@ -206,7 +206,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 | `-max-host-requests` | int |  | requests one host may be sent (0: no cap); the rest of its work is left for azhaq resume |
 | `-daily-requests` | int |  | requests a day to the program's targets (-program, else this run's targets), counted over the runs in -db |
 | `-max-items` | int |  | most collector tasks (a name, a URL, an address each, per collector) this run starts (default: no cap, katana's and httpx's); the work left is for azhaq resume, which starts as many more |
-| `-max-names` | int |  | most hostnames this run resolves (default 200000, as many as subs keeps for a domain); the names left are for azhaq resume |
+| `-max-names` | int |  | most hostnames this run resolves (default 200000, as many as subs keeps for a domain); the names left are for azhaq resume. A value you give also caps the names -dns-brute and -permute ask, together: the guesses past it are not asked, the run exits 4 and says how many (a larger -max-names asks them) |
 | `-max-ips` | int | `4096` | addresses expanded from -asn and -cidr prefixes, for the whole run |
 | `-max-response-size` | int |  | bytes read of a page or document (default 2097152; scripts and JSON get 16 MiB) |
 | `-depth` | int | `4` | max fan-out waves (0 = seed wave only, not unlimited) |

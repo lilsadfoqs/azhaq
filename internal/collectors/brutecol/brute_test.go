@@ -258,3 +258,57 @@ func TestVariantsCoverAlterxDefaults(t *testing.T) {
 		}
 	}
 }
+
+// -max-names caps what guessing asks, the words and the variations together:
+// the words take the budget first, and a variation past it is held back, once.
+func TestBudgetCapsWhatGuessingAsks(t *testing.T) {
+	p := pool(t)
+	bud := NewBudget(3)
+	run := func(c interface {
+		Run(context.Context, types.Seed, func(types.Observation) error) (types.RunMeta, error)
+	}, seed types.Seed) (tried int) {
+		_, err := c.Run(context.Background(), seed, func(o types.Observation) error {
+			var pl struct {
+				Tried int `json:"tried"`
+			}
+			if err := json.Unmarshal(o.Payload, &pl); err != nil {
+				t.Fatal(err)
+			}
+			tried = pl.Tried
+			return nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return tried
+	}
+	b := &Brute{Pool: p, Wild: dnsr.NewWildcards(p), Budget: bud, Words: []string{"www", "api", "nope", "nope2", "nope3"}}
+	if n := run(b, types.Seed{Type: types.TypeDomain, Keys: map[string]string{"domain": "example.org"}}); n != 3 {
+		t.Errorf("the words asked %d names, want the 3 of the budget", n)
+	}
+	if bud.Held() != 2 {
+		t.Errorf("held %d, want the 2 words past the budget", bud.Held())
+	}
+	pm := &Permute{Pool: p, Wild: dnsr.NewWildcards(p), Budget: bud}
+	if n := run(pm, types.Seed{Type: types.TypeHostname, Keys: map[string]string{"fqdn": "api.example.org"}}); n != 0 {
+		t.Errorf("-permute asked %d names after the budget was spent", n)
+	}
+	want := 2 // the words past the budget, and the variations that no word asked
+	for _, v := range variants("api.example.org", PermuteWords) {
+		if v != "www.example.org" && v != "api.example.org" {
+			want++
+		}
+	}
+	if got := bud.Held(); got != want {
+		t.Errorf("held %d, want %d: 2 words and the variations of api.example.org", got, want)
+	}
+	// The same variations of a second name are held back once.
+	run(pm, types.Seed{Type: types.TypeHostname, Keys: map[string]string{"fqdn": "api.example.org"}})
+	if got := bud.Held(); got != want {
+		t.Errorf("held %d after the same name again, want %d", got, want)
+	}
+	var none *Budget
+	if none.Held() != 0 || len(none.take([]string{"a", "b"})) != 2 {
+		t.Error("a nil budget caps nothing")
+	}
+}

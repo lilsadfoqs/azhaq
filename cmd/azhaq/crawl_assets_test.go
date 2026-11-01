@@ -9,8 +9,8 @@ import (
 	"testing"
 )
 
-// A page that loads two scripts, a stylesheet, an image and an icon, and a
-// script that imports a chunk.
+// A page that loads two scripts, a library script, two stylesheets, an image
+// and an icon, and a script that imports a chunk.
 func assetsSite(t *testing.T) *httptest.Server {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		js := func(body string) {
@@ -20,14 +20,16 @@ func assetsSite(t *testing.T) *httptest.Server {
 		switch r.URL.Path {
 		case "/":
 			w.Header().Set("Content-Type", "text/html")
-			fmt.Fprint(w, `<html><head><link rel="stylesheet" href="/styles.css"><link rel="icon" href="/favicon.ico"><script src="/main.js"></script><script src="/polyfills.js"></script></head><body><img src="/logo.png"><a href="/about">about</a></body></html>`)
+			fmt.Fprint(w, `<html><head><link rel="stylesheet" href="/styles.css"><link rel="stylesheet" href="/assets/fa/css/font-awesome.min.css"><script src="/assets/jquery-3.2.1.min.js"></script><link rel="icon" href="/favicon.ico"><script src="/main.js"></script><script src="/polyfills.js"></script></head><body><img src="/logo.png"><a href="/about">about</a></body></html>`)
 		case "/main.js":
 			js(`import("./chunk-abc.js").then(function (m) { m.go(); });`)
 		case "/polyfills.js":
 			js(`window.polyfilled = true;`)
 		case "/chunk-abc.js":
 			js(`export function go() {}`)
-		case "/styles.css":
+		case "/assets/jquery-3.2.1.min.js":
+			js(`window.jQuery = {};`)
+		case "/styles.css", "/assets/fa/css/font-awesome.min.css":
 			w.Header().Set("Content-Type", "text/css")
 			fmt.Fprint(w, `body { margin: 0 }`)
 		case "/about":
@@ -56,24 +58,26 @@ func crawlLines(t *testing.T, srv *httptest.Server, args ...string) map[string]b
 	return lines
 }
 
-// crawl lists the scripts of the pages it reads by default, which it
-// requests. The stylesheets, images, fonts and media a page loads are
-// requested by no crawl step, so -assets lists them.
+// crawl lists what the pages it reads load, as katana does: the scripts and
+// stylesheets (a library script and a stylesheet no crawl step requests too)
+// by default, and the images, fonts and media with -assets. The rows no
+// request asked are marked linked.
 func TestCrawlListsScriptsAndStylesByDefault(t *testing.T) {
 	srv := assetsSite(t)
+	const jq, fa = "/assets/jquery-3.2.1.min.js", "/assets/fa/css/font-awesome.min.css"
 	lines := crawlLines(t, srv)
-	for _, want := range []string{"/", "/about", "/main.js", "/polyfills.js", "/chunk-abc.js"} {
+	for _, want := range []string{"/", "/about", "/main.js", "/polyfills.js", "/chunk-abc.js", "/styles.css", jq, fa} {
 		if !lines[want] {
 			t.Errorf("crawl does not list %s: %v", want, lines)
 		}
 	}
-	for _, not := range []string{"/styles.css", "/logo.png", "/favicon.ico"} {
+	for _, not := range []string{"/logo.png", "/favicon.ico"} {
 		if lines[not] {
 			t.Errorf("crawl lists %s without -assets", not)
 		}
 	}
 	all := crawlLines(t, srv, "-assets")
-	for _, want := range []string{"/main.js", "/styles.css", "/logo.png", "/favicon.ico"} {
+	for _, want := range []string{"/main.js", "/styles.css", jq, fa, "/logo.png", "/favicon.ico"} {
 		if !all[want] {
 			t.Errorf("crawl -assets does not list %s: %v", want, all)
 		}
@@ -84,14 +88,14 @@ func TestCrawlListsScriptsAndStylesByDefault(t *testing.T) {
 		})
 		return out
 	}())
-	for _, want := range []string{"/main.js", "/chunk-abc.js"} {
+	for want, class := range map[string]string{"/main.js": "observed", "/chunk-abc.js": "observed", "/styles.css": "linked", jq: "linked", fa: "linked"} {
 		if rows[srv.URL+want] == nil {
 			t.Errorf("crawl -json has no row for %s", want)
+		} else if rows[srv.URL+want]["class"] != class {
+			t.Errorf("crawl -json marks %s %v, want %s", want, rows[srv.URL+want]["class"], class)
 		}
 	}
-	for _, not := range []string{"/styles.css", "/logo.png"} {
-		if rows[srv.URL+not] != nil {
-			t.Errorf("crawl -json lists %s without -assets", not)
-		}
+	if rows[srv.URL+"/logo.png"] != nil {
+		t.Error("crawl -json lists an image without -assets")
 	}
 }

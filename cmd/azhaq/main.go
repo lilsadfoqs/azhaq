@@ -34,6 +34,7 @@ import (
 	"github.com/lilsadfoqs/azhaq/internal/browser"
 	"github.com/lilsadfoqs/azhaq/internal/collectors/apicol"
 	"github.com/lilsadfoqs/azhaq/internal/collectors/asncol"
+	"github.com/lilsadfoqs/azhaq/internal/collectors/brutecol"
 	"github.com/lilsadfoqs/azhaq/internal/collectors/dirscol"
 	"github.com/lilsadfoqs/azhaq/internal/collectors/gqlcol"
 	"github.com/lilsadfoqs/azhaq/internal/collectors/httpcol"
@@ -300,7 +301,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	workerToken := fs.String("worker-token", os.Getenv("AZHAQ_WORKER_TOKEN"), "the token workers give (default $AZHAQ_WORKER_TOKEN, else a new one)")
 	workerOf := fs.String("worker-of", "", "internal: run as a worker of the run at this address (azhaq worker sets it)")
 	daily := fs.Int64("daily-requests", 0, "requests a day to the program's targets (-program, else this run's targets), counted over the runs in -db")
-	maxNames := fs.Int("max-names", 0, "most hostnames this run resolves (default 200000, as many as subs keeps for a domain); the names left are for azhaq resume")
+	maxNames := fs.Int("max-names", 0, "most hostnames this run resolves (default 200000, as many as subs keeps for a domain); the names left are for azhaq resume. A value you give also caps the names -dns-brute and -permute ask, together: the guesses past it are not asked, the run exits 4 and says how many (a larger -max-names asks them)")
 	parallel := fs.Int("parallel", 0, "work items in flight (default 16)")
 	delay := fs.Duration("delay", 0, "pause before each uncached fetch")
 	noFollow := fs.Bool("no-follow", false, "do not follow redirects: each URL is asked once and its redirect recorded with the Location (httpx's default)")
@@ -324,7 +325,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	sourceRate := fs.Float64("source-rate", 0, "requests per second to each subdomain source, as subfinder -rl (0: each source's own pace); a source's lower own pace stays")
 	sourceRates := fs.String("source-rates", "", "pace single subdomain sources, as subfinder -rls: name=N/unit, comma-separated, unit s, m or h (hackertarget=10/m,crtsh=1/s)")
 	maxResults := fs.Int("max-results", 0, "most names one paging subdomain source gives (0: no cap), as subfinder -mr")
-	maxTime := fs.Duration("max-time", 0, "wait this long for all subdomain sources of a domain, then go on with what they gave, also when subdomain.center is still asking and checking its guesses (0: -source-timeout and a short grace bound the wait, but not that source's DNS checks, which -dns-rate paces), as subfinder -max-time")
+	maxTime := fs.Duration("max-time", 0, "how long the run may take: subs stops after this long, in any phase (the sources, subdomain.center's guesses, the DNS checks of -live, -w and -permute), exits 4 and leaves the rest for azhaq resume; run and plan only wait this long for the sources of a domain, then go on with what they gave (0: -source-timeout and a short grace bound the wait; -timeout bounds a run), as subfinder -max-time")
 	maxBody := fs.Int64("max-body", 0, "largest response body read from a subdomain source, in bytes (default 33554432), as subfinder -rsr")
 	sourceProxy := fs.String("source-proxy", "", "send every subdomain source request through this proxy URL, as subfinder -proxy (else HTTP_PROXY and HTTPS_PROXY)")
 	providersFile := fs.String("providers", "", "API keys per source, YAML (default ~/.config/azhaq/providers.yaml, else subfinder's provider-config.yaml)")
@@ -997,6 +998,10 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 			return err
 		}
 	}
+	// A -max-names the user gave also caps the names guessing asks; the default
+	// cap is for the names looked up, and never cuts a wordlist.
+	guessBudget = brutecol.NewBudget(*maxNames)
+	opts.GuessBudget = guessBudget
 	providerPaths := subcol.ProviderPaths()
 	if *providersFile != "" {
 		providerPaths = []string{*providersFile}
@@ -1178,9 +1183,15 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 
 	ctx, stop := stopContext()
 	defer stop()
-	if *timeout > 0 {
+	// The run's wall-clock bound: -timeout, or for subs -max-time when that is
+	// shorter, which then bounds every phase and not only the wait on the sources.
+	bound, boundBy := *timeout, "-timeout"
+	if subsMode.MaxTimeBoundsRun && *maxTime > 0 && (bound == 0 || *maxTime < bound) {
+		bound, boundBy = *maxTime, "-max-time"
+	}
+	if bound > 0 {
 		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, *timeout)
+		ctx, cancel = context.WithTimeout(ctx, bound)
 		defer cancel()
 	}
 	ctx = timing.With(ctx, log)
@@ -1200,7 +1211,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	// -json as JSON lines, as everything on stderr is.
 	stopTicker := func() {}
 	if mode := progressMode(*quiet, *verbose, *jsonOut, out.progress); mode != "" {
-		cfg := progressCfg{JSON: mode == "json", Cap: egress.MaxRequests(), CapBy: "-max-requests", Timeout: *timeout}
+		cfg := progressCfg{JSON: mode == "json", Cap: egress.MaxRequests(), CapBy: "-max-requests", Timeout: bound, TimeoutBy: boundBy}
 		if *daily > 0 && egress.MaxRequests() != *maxRequests {
 			cfg.CapBy = "-daily-requests"
 		}
@@ -1393,7 +1404,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		// lead to more, so it can grow between resumes.
 		switch {
 		case errors.Is(ctx.Err(), context.DeadlineExceeded) || cut > 0:
-			rep.Stopped = fmt.Sprintf("-timeout %s reached with %d tasks known and not done", *timeout, left)
+			rep.Stopped = fmt.Sprintf("%s %s reached with %d tasks known and not done", boundBy, bound, left)
 		case ctx.Err() != nil:
 			rep.Stopped = fmt.Sprintf("interrupted with %d tasks known and not done", left)
 		case egress.Killed() != nil:
@@ -1425,6 +1436,12 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		}
 		if *failCapped && stats.Capped {
 			rep.Stopped = fmt.Sprintf("-depth %d reached with hints left", stats.Depth)
+		}
+	}
+	if n := guessBudget.Held(); n > 0 {
+		rep.Notes = append(rep.Notes, fmt.Sprintf("-max-names %d held back %d guesses: the -w words and -permute variations beyond it were not asked (a larger -max-names asks them)", *maxNames, n))
+		if rep.Stopped == "" {
+			rep.Stopped = fmt.Sprintf("-max-names %d reached, %d guesses not asked (-max-names raises it)", *maxNames, n)
 		}
 	}
 	if remember && !*demo && input != "" {
@@ -2124,6 +2141,9 @@ var probeSeeding bool
 
 // probePool is the run's resolver pool, for the resolvers a probe row names.
 var probePool *dnsr.Pool
+
+// guessBudget is the run's cap on the names its guessing asks (-max-names given); nil: none.
+var guessBudget *brutecol.Budget
 
 func listSeed(line string) (types.Seed, error) {
 	if !strings.Contains(line, "://") {

@@ -24,6 +24,8 @@ var subsMode struct {
 	// GuessSamples is -guess-samples: the most samples of guesses taken, with no time budget.
 	GuessSamples int
 	Recursive    bool // only the sources that handle subdomains of subdomains
+	// MaxTimeBoundsRun makes -max-time the whole run's wall-clock bound, the DNS checks included.
+	MaxTimeBoundsRun bool
 }
 
 // subsOut writes the names subs prints: text, subfinder's host,[sources] and
@@ -147,7 +149,7 @@ func cmdSubs(args []string) error {
 	showVersion := fs.Bool("version", false, "print the version and exit")
 	given := inherit(fs, "sources", "exclude-sources", "all-sources", "no-history", "source-timeout", "providers", "resolvers", "dns-rate", "timeout", "v", "fail-on-errors",
 		"source-rate", "source-rates", "max-results", "max-time", "max-body", "proxy=source-proxy", "t=parallel")
-	maxNames := fs.Int("max-names", 0, fmt.Sprintf("most names kept per domain, and looked up with -live (default %d)", subcol.DefaultMaxNames))
+	maxNames := fs.Int("max-names", 0, fmt.Sprintf("most names kept per domain, and looked up with -live (default %d); a value you give also caps the names -w and -permute ask, together: the guesses past it are not asked, the run exits 4 and says how many", subcol.DefaultMaxNames))
 	if err := parse(fs, args); err != nil {
 		return err
 	}
@@ -223,14 +225,10 @@ func cmdSubs(args []string) error {
 		run = append(run, "-depth", "0")
 	}
 	extra := given()
-	switch {
-	case *maxNames > 0:
+	if *maxNames > 0 {
 		extra = append(extra, "-max-names="+fmt.Sprint(*maxNames))
-	case *live:
-		// A big zone is not cut at the run's default of 20,000 names looked up.
-		extra = append(extra, "-max-names="+fmt.Sprint(subcol.DefaultMaxNames))
 	}
-	subsMode.NoCheck, subsMode.Recursive, subsMode.GuessSamples = !*live && !active, *recursive, *guessSamples
+	subsMode.NoCheck, subsMode.Recursive, subsMode.GuessSamples, subsMode.MaxTimeBoundsRun = !*live && !active, *recursive, *guessSamples, true
 	// The output is opened before anything is sent: a bad -o is not found out
 	// after the run. Without -live a domain's names are printed when its
 	// sources have answered, as subfinder prints a domain when it ends.
@@ -253,6 +251,7 @@ func cmdSubs(args []string) error {
 	collected := map[string]bool{} // every passive name, before the -live filter
 	bySource := map[string]int{}   // how many each source returned
 	var union, dropped, unverified, heldBack, notChecked, filtered, dup, cut, didNot, itself, notAsked, noAnswer int
+	lookupsFailed := false                // a source says its names were not checked because the lookups failed
 	var answers map[string]map[string]any // every name DNS was asked: a name missing was not
 	noAnswerBy := map[[2]string]int{}
 	health := newHealthTally(false)
@@ -300,6 +299,9 @@ func cmdSubs(args []string) error {
 				} else if row["default"] == false {
 					failedOff++ // -all-sources reaches for flaky ones: counted apart
 				}
+			}
+			if e, _ := row["error"].(string); strings.Contains(e, "the DNS lookups failed") {
+				lookupsFailed = true
 			}
 			if n, _ := row["partial"].(string); n != "" {
 				rep.Notes = append(rep.Notes, fmt.Sprintf("%s: %s gave a partial answer: %s", input, name, n))
@@ -366,7 +368,9 @@ func cmdSubs(args []string) error {
 				continue
 			}
 			seen[name] = true
-			if unver[name] {
+			// A live row was looked up, whatever the source's own check could not do.
+			isUnver := unver[name] && alive == nil
+			if isUnver {
 				unverified++
 			}
 			by := strs(foundBy[name])
@@ -374,7 +378,7 @@ func cmdSubs(args []string) error {
 			if len(by) > 0 {
 				row["source"], row["sources"] = by[0], by
 			}
-			if unver[name] {
+			if isUnver {
 				row["unverified"] = true
 			}
 			if wild[name] {
@@ -407,7 +411,7 @@ func cmdSubs(args []string) error {
 		}
 	}
 	st, done, err := runPreset(&c, append(run, extra...), rep, observe)
-	subsMode.NoCheck, subsMode.Recursive, subsMode.GuessSamples = false, false, 0
+	subsMode.NoCheck, subsMode.Recursive, subsMode.GuessSamples, subsMode.MaxTimeBoundsRun = false, false, 0, false
 	if err != nil {
 		w.close()
 		return err
@@ -544,6 +548,7 @@ func cmdSubs(args []string) error {
 	set("left out by -m/-f", filtered+guessFiltered)
 	set("listed under another domain", dup)
 	set("cut by -max-names", cut)
+	set("guesses held back by -max-names", guessBudget.Held())
 	if cut > 0 {
 		rep.Notes = append(rep.Notes, fmt.Sprintf("%d names were cut at -max-names: raise it to keep them", cut))
 		rep.warned = true
@@ -558,7 +563,11 @@ func cmdSubs(args []string) error {
 		rep.Notes = append(rep.Notes, fmt.Sprintf("%d names are listed with a CNAME and no address (-json: \"cname_only\": true): one whose target is gone is a takeover lead", cnameOnly))
 	}
 	if notChecked > 0 {
-		rep.Notes = append(rep.Notes, fmt.Sprintf("%d names could not be checked (the resolvers failed) and are left out; azhaq resume checks them", notChecked))
+		why := "the resolvers failed"
+		if rep.Stopped != "" && !lookupsFailed {
+			why = "the run stopped first" // -timeout, -max-time, a signal or a budget
+		}
+		rep.Notes = append(rep.Notes, fmt.Sprintf("%d names could not be checked (%s) and are left out; azhaq resume checks them", notChecked, why))
 		rep.warned = true
 	}
 	if noAnswer > 0 {
