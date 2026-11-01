@@ -4,12 +4,21 @@
 
 ### Changed
 
+- `-allow HOST:PORT` (and `127.0.0.1:3001`, `[::1]:80`) now allows that host on that port only; an entry without a port still allows every port, and a port in `-deny` still denies the host on every port. Requests, redirects, links, script URLs, Chrome, port scans (TCP and UDP) and the commands an `azhaq mcp` server runs are refused before any connection; URLs left out for their port are listed under `skipped` and port scans count the ports they left out. Before, the port was dropped and the whole host was allowed. Write the host alone to keep that.
 - `-H` and `-header` are one flag on every command: `run` and `plan` take `-H`, and `probe`, `crawl`, `dirs`, `params`, `shots` and `fuzz` take `-header`; a secret header given either way is kept out of what resume stores.
 - `run` takes `-sr`, `-srd` and `-ob` (the layout of `crawl -sr`: `DIR/HOST/SHA1.txt` with an `index.txt`, bounded by `-max-response-size`, off by default), and `query` has a `response_file` field with the path of a URL row's stored response.
 - A root seed now reads API descriptions and GraphQL endpoints at well-known paths at any `-depth`, from 19 more framework locations (`v3/api-docs.yaml`, `swagger/doc.json`, `api-json`, `api/graphql`, …); the row's proof says which URL exposed it (`exposed_by`). A GraphQL endpoint that refuses the GET (405, a 500 that says POST only) is named, and with `-graphql` its schema is read by a POST introspection.
 
+### Added
+
+- `azhaq plan -axfr` lists the zone transfers `dns -axfr` would try: the lookups, the connections, and the resolvers also asked.
+- The summary counts the questions the takeover check asked the resolvers about CNAME targets outside the scope, and `-no-takeover` (`run`, `dns`) turns the check off.
+
 ### Fixed
 
+- Resolvers named with `-resolvers` now answer every name in every command, special-use names (`.test`, `.local`, single labels) included, and HTTP, port, TLS and Chrome connections look names up through them; the system resolver is never asked. Before, `run -dns-brute` sent 110,000 questions to the system resolver and found nothing, and a seed URL was resolved there. `localhost` still connects to loopback with no lookup.
+- `dns -axfr` with `-allow` or `-scope` no longer connects to a name server whose address is outside the scope because its name is inside it; the summary names the skipped server and says to add its address to `-allow`.
+- The summary's request count now includes the TLS handshake the TLS collector makes to each name's port 443, so it matches the ledger's lines to targets, and `-max-requests` holds those connections.
 - `run -cidr` with `-ports` now hands each address to the web stage at its first open port, and each web port as it is named, instead of when the whole 256-address block ends: a full sweep has HTTP results in its first minute, not after the sweep.
 - A DNS query sent again beside a late one no longer shares its message with the first attempt (packing it raced the copy; seen with `-race`).
 - `crawl` and `run`: a page with two forms, where a select was left open in the first, no longer crashes the run with `index out of range`; the form reader forgets the select when a form opens or closes and at `</select>`.
