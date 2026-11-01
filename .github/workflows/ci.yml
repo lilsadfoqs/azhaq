@@ -1,10 +1,10 @@
 name: ci
 
 on:
+  # Work reaches next and main through pull requests, squash-merged: the
+  # race tests run on the pull request, and again on the merged branch.
   push:
-    # Every branch the work is pushed on: the race tests run here, not on the
-    # author's machine. ci-results holds the workflows' outputs only.
-    branches-ignore: [ci-results]
+    branches: [next, main]
   pull_request:
   schedule:
     - cron: "17 3 * * *"
