@@ -12,7 +12,8 @@ import (
 
 // Wildcards finds names that only resolve because their zone answers for
 // every label (*.example.com). Each parent zone is probed once with random
-// labels; a name is a wildcard answer when all its addresses, or its CNAME
+// labels (a second only when the first was answered, to see the addresses a
+// wildcard rotates, or got no definite answer); a name is a wildcard answer when all its addresses, or its CNAME
 // target, are what the random labels got.
 type Wildcards struct {
 	pool  *Pool
@@ -65,6 +66,9 @@ func (w *Wildcards) zone(ctx context.Context, name string) *zone {
 		for i := 0; i < 2; i++ {
 			a := w.pool.Resolve(ctx, randomLabel()+"."+name)
 			if !a.Live() && len(a.CNAME) == 0 {
+				if a.Status == StatusNXDomain && i == 0 {
+					break // a zone that answers NXDOMAIN to a random label has no wildcard: one probe says so
+				}
 				continue
 			}
 			z.on = true

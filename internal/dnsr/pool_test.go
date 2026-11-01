@@ -115,6 +115,27 @@ func TestCacheAndMany(t *testing.T) {
 	}
 }
 
+// A zone with no wildcard costs one probe query, once however many names
+// are under it; a wildcard zone two, to see the addresses it rotates.
+func TestWildcardProbesAreOncePerZone(t *testing.T) {
+	var n atomic.Int32
+	addr := serve(t, func(w dns.ResponseWriter, r *dns.Msg) { n.Add(1); testZone(w, r) })
+	p := New(Options{Resolvers: []string{addr}, PerSecond: -1})
+	w := NewWildcards(p)
+	ctx := context.Background()
+	for _, name := range []string{"www.example.org", "www.example.org", "a.example.org"} {
+		w.Match(ctx, name, "example.org", Answer{Name: name, A: []string{"192.0.2.10"}})
+	}
+	if n.Load() != 1 {
+		t.Errorf("%d probe queries for a zone with no wildcard, want 1", n.Load())
+	}
+	n.Store(0)
+	w.Match(ctx, "x.wild.example.org", "example.org", Answer{Name: "x.wild.example.org", A: []string{"192.0.2.99"}})
+	if n.Load() != 2 { // two probes of wild.example.org; example.org is known
+		t.Errorf("%d probe queries for a wildcard zone, want 2", n.Load())
+	}
+}
+
 func TestWildcard(t *testing.T) {
 	p := New(Options{Resolvers: []string{serve(t, testZone)}, PerSecond: -1})
 	w := NewWildcards(p)
@@ -236,7 +257,9 @@ func TestDeadNameAgreedByTwo(t *testing.T) {
 }
 
 // A bulk resolve (DNS brute force) takes a plain NXDOMAIN at its word: one
-// query per miss, not two. A NODATA answer is still confirmed.
+// query per miss, not two, and a NODATA answer is asked as A and AAAA once
+// (an empty non-terminal is no name to confirm); a dangling CNAME is still
+// confirmed.
 func TestBulkSkipsNXDOMAINSecondOpinion(t *testing.T) {
 	var n atomic.Int32
 	count := func(w dns.ResponseWriter, r *dns.Msg) { n.Add(1); testZone(w, r) }
@@ -245,10 +268,31 @@ func TestBulkSkipsNXDOMAINSecondOpinion(t *testing.T) {
 	if a := p.Resolve(ctx, "missing.example.org"); a.Status != StatusNXDomain || n.Load() != 1 {
 		t.Fatalf("bulk nxdomain %+v asked %d resolvers, want 1", a, n.Load())
 	}
-	// A real name still resolves, and a NODATA name is still confirmed.
+	// A real name still resolves.
 	n.Store(0)
 	if a := p.Resolve(ctx, "www.example.org"); a.Status != StatusOK {
 		t.Fatalf("bulk real name %+v", a)
+	}
+}
+
+// A bulk resolve of a name that is NODATA at the resolver asks A and AAAA
+// of it once, 2 queries; the resolve of a name a person gave asks a second
+// resolver too, 3.
+func TestBulkNODATAIsNotConfirmed(t *testing.T) {
+	var n atomic.Int32
+	empty := func(w dns.ResponseWriter, r *dns.Msg) {
+		n.Add(1)
+		m := new(dns.Msg)
+		m.SetReply(r) // NOERROR, no records
+		_ = w.WriteMsg(m)
+	}
+	p := New(Options{Resolvers: []string{serve(t, empty), serve(t, empty)}, PerSecond: -1, Timeout: time.Second})
+	if a := p.Resolve(Bulk(context.Background()), "node.example.org"); a.Status != StatusNoData || n.Load() != 2 {
+		t.Fatalf("bulk nodata %+v asked %d queries, want 2", a, n.Load())
+	}
+	n.Store(0)
+	if a := p.Resolve(context.Background(), "node2.example.org"); a.Status != StatusNoData || n.Load() != 3 {
+		t.Fatalf("nodata %+v asked %d queries, want 3", a, n.Load())
 	}
 }
 

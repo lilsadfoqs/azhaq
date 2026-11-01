@@ -112,6 +112,24 @@ type roundLog struct {
 	mu     sync.Mutex
 	rounds [][]string
 	stats  []roundStat
+	stop   string
+}
+
+func (l *roundLog) stopped() string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.stop
+}
+
+// recordStop notes why the source stopped asking, if it has not yet.
+func recordStop(ctx context.Context, why string) {
+	if l, ok := ctx.Value(roundsKey{}).(*roundLog); ok {
+		l.mu.Lock()
+		if l.stop == "" {
+			l.stop = why
+		}
+		l.mu.Unlock()
+	}
 }
 
 func (l *roundLog) statSnapshot() []roundStat {

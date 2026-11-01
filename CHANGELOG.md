@@ -9,6 +9,9 @@
 - A port is one row per address, port and protocol, however many names point to the address; the names are on the row (`names` in `-json` and `query -fields`), and the summary and query counts no longer grow with aliases. The `ports` command's own rows are unchanged.
 - `-skip` takes `ports`, `urls`, `subs` (with or without `azhaq-`), and an unknown name is a usage error; before, those names matched no collector and skipped nothing.
 - `crawl` lists the routes it observed by default. Routes with a parameter, views, routes called with another method (`hint`) and strings only named in scripts (`named`) are listed with `-hints`; `-json` marks each row's `class`, and the summary counts the three classes apart.
+- `subs` without `-live` no longer prints the names only subdomain.center guessed: they are held back and counted as `guesses held back`, and `-guesses` prints them (marked `unverified` in `-json`). `-live` looks them up as before; `-guesses` with `-live` is a usage error.
+- `subs -live` checks the first sample of subdomain.center's guesses in full at any `-dns-rate`, as `subfinder | dnsx` does with the one answer subfinder takes; a guess costs one query. Further samples are taken while the last found a new name that resolves, up to 12, if they fit a 20 s budget that starts after the first. `-guess-samples N` takes up to N samples with no time budget. The row says why sampling stopped (`sampling_stopped`), and a note says how many samples were left untaken and names the flag.
+- The `subs` coverage note says first that it is what the independent sources know, not every name that exists, prints no percentage, and counts the names outside the pool apart. The JSON `coverage.share` is unchanged.
 
 ### Fixed
 
@@ -29,6 +32,10 @@
 - `roles` says before it sends which field each write canary sets and why the others are left, and says when no field qualifies. `-replay-writes-field NAME` names a field you accept the risk of setting; either canary flag without what it needs is a usage error.
 - `roles.db` keeps a row for each owner of a route: two roles' POSTs to one collection are two rows, `roles show` prints both (`-owner` picks one) and `report` writes each. An older `roles.db` is read as it is.
 - `-replay-max` counts every redirect hop, as the summary's requests do, and names the URLs the budget left unasked (exit 4).
+- `urls` drops fuzzing placeholders (`/FUZZ`, `/FUZZ/FUZ2Z`, `/{payload}/…`) and pasted request lines (`/HTTP/1.1`) as junk, counted by reason; `-raw` keeps them. Crawl and script extraction share the rule.
+- `subs` no longer retries crt.sh's JSON API once every other source has answered with names and crt.sh alone is left, as subfinder asks it once; the retries still run while others are running or none has given names.
+- A generated name (a guess, `-w`, `-permute`) that answers NOERROR with no address and no CNAME is no longer confirmed at a second resolver (2 queries instead of 3), and a zone whose first wildcard probe answers NXDOMAIN gets one probe instead of two.
+- The install notes say `install.sh` is `scripts/install.sh`, downloaded first or run through the pipe.
 
 ## v0.12.1
 

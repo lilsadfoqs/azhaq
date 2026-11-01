@@ -259,7 +259,9 @@ func sampled(s source) source {
 			timeout = time.Duration(sess.Timeout) * time.Second
 		}
 		chk, _ := ctx.Value(checkerKey{}).(*checker)
-		start := time.Now()
+		n, _ := ctx.Value(samplesKey{}).(int)
+		ceiling := sampleCeiling(n)
+		var budgetFrom time.Time // the budget for further samples starts when the first is checked
 		var asking time.Duration
 		var names []string
 		seen := map[string]bool{}
@@ -283,7 +285,7 @@ func sampled(s source) source {
 			return ch, cancel
 		}
 		next, cancelNext := ask()
-		for call := 0; call < sampleRounds; call++ {
+		for call := 0; call < ceiling; call++ {
 			r := <-next
 			cancelNext()
 			got, err := r.got, r.err
@@ -305,15 +307,17 @@ func sampled(s source) source {
 			case err != nil:
 				return names, nil // later rounds were refused: the row says so
 			case len(fresh) == 0:
-				return names, nil // saturated
+				recordStop(ctx, stopSaturated)
+				return names, nil
 			case chk == nil:
 				// Nothing to check them against: a second sample would only
 				// add more guesses.
+				recordStop(ctx, stopUnchecked)
 				return names, nil
 			}
 			var pending <-chan reply
 			var cancelPending context.CancelFunc
-			if call+1 < sampleRounds && ctx.Err() == nil && chk.room() {
+			if call+1 < ceiling && ctx.Err() == nil {
 				pending, cancelPending = ask()
 			}
 			t1 := time.Now()
@@ -321,16 +325,28 @@ func sampled(s source) source {
 			st.Live = chk.check(cleaned(fresh, domain))
 			after, _ := chk.totals()
 			st.Asked = after - before
-			st.Seconds = round(time.Since(t1).Seconds())
+			took := time.Since(t1)
+			st.Seconds = round(took.Seconds())
 			recordStat(ctx, st)
+			if call == 0 {
+				budgetFrom = time.Now()
+			}
 			stop := false
 			switch {
 			case st.Live == 0:
 				stop = true // this round found nothing new that resolves
-			case !chk.room():
-				stop = true // the guesses have cost what the real names did
-			case !chk.paced && time.Since(start) >= sampleBudget, asking >= timeout/2, ctx.Err() != nil:
+				recordStop(ctx, stopNoLive)
+			case n == 0 && time.Since(budgetFrom)+took > sampleBudget:
+				// Another sample costs about what this one did: it is taken
+				// only if it fits what is left of the budget.
 				stop = true
+				recordStop(ctx, stopBudget)
+			case asking >= timeout/2, ctx.Err() != nil:
+				stop = true
+				recordStop(ctx, stopTime)
+			}
+			if !stop && pending == nil {
+				recordStop(ctx, stopRounds)
 			}
 			if stop || pending == nil {
 				if pending != nil {
@@ -345,6 +361,20 @@ func sampled(s source) source {
 	}
 	return s
 }
+
+// Why a sampled source stopped asking, for its row ("sampling_stopped").
+// The last is a bound, not a finding: more samples may hold more names.
+const (
+	stopSaturated = "a call gave no name it had not given"
+	stopUnchecked = "the names are not looked up (no -live), so more samples would only add guesses"
+	stopNoLive    = "the last sample had no new name that resolves"
+	stopTime      = "its time was used"
+	stopBudget    = "another sample would not fit the 20 s budget for further samples"
+	stopRounds    = "the most samples were taken"
+)
+
+// boundedStop says whether a stop reason is a bound, not a finding.
+func boundedStop(why string) bool { return why == stopTime || why == stopBudget || why == stopRounds }
 
 // roundStat is one round of a sampled source, for its row: the names it
 // gave, how many were new, how many of those were looked up and how many
@@ -399,11 +429,24 @@ func countCall(ctx context.Context) {
 }
 
 var (
+	// sampleRounds is the most samples taken by default.
 	sampleRounds = 12
-	// sampleBudget bounds the sampling when DNS is not paced: a round is a
-	// request and its lookups, a few seconds.
+	// sampleBudget bounds the further samples by default, from when the
+	// first has been checked: the first is the reference's own work
+	// (subfinder asks once, dnsx checks all of it) and is always checked.
 	sampleBudget = 20 * time.Second
 )
+
+type samplesKey struct{}
+
+// sampleCeiling is the most samples taken: -guess-samples, or by default
+// sampleRounds.
+func sampleCeiling(n int) int {
+	if n > 0 {
+		return n
+	}
+	return sampleRounds
+}
 
 // keyed marks a source that has started to require a key.
 func keyed(s source) source {
@@ -478,7 +521,12 @@ func crtshJSON(ctx context.Context, domain string, sess *subscraping.Session) ([
 			break
 		}
 		// crt.sh is often down for a while: a few retries, as many as the
-		// source's own time (-source-timeout) leaves room for.
+		// source's own time (-source-timeout) leaves room for, but not
+		// when this retry would be all the run waits for: subfinder asks once.
+		if holdsRun(ctx) {
+			addNote(ctx, "not asked again: every other source had answered and the run does not wait for a retry")
+			break
+		}
 		if dl, ok := ctx.Deadline(); ok && time.Until(dl) <= wait {
 			break
 		}
@@ -647,3 +695,7 @@ func getJSON(ctx context.Context, sess *subscraping.Session, name, u string, hea
 	}
 	return err
 }
+
+// SampleBudget and SampleRounds are the defaults -guess-samples goes beyond.
+func SampleBudget() time.Duration { return sampleBudget }
+func SampleRounds() int           { return sampleRounds }

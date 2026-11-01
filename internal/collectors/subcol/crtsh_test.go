@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -421,6 +422,55 @@ func TestRetryReadsBothFormsOfAGatewayError(t *testing.T) {
 	for _, s := range []string{"unexpected status code 404 received from https://crt.sh/json?q=a.b", "crt.sh 429", "unexpected status code 403 received from https://crt.sh/x?id=502"} {
 		if retry(errors.New(s)) {
 			t.Errorf("%q is asked again", s)
+		}
+	}
+}
+
+// crt.sh's own retries are not what the run waits for once every other
+// source has answered with names (subfinder asks crt.sh once); with names
+// still to come from others, or none yet, they are made. The JSON API here
+// is a local one that takes 150 ms to say 502.
+func TestCrtshRetriesDoNotHoldTheRun(t *testing.T) {
+	oldWait, oldQuery := crtshRetryWait, crtshQuery
+	crtshRetryWait = 50 * time.Millisecond
+	crtshQuery = func(context.Context, string, *url.URL, time.Duration, int) ([]string, int, error) {
+		return nil, 0, errors.New("driver: bad connection")
+	}
+	defer func() { crtshRetryWait, crtshQuery = oldWait, oldQuery }()
+	slow502 := func(asked *atomic.Int32) *http.Client {
+		return &http.Client{Transport: rtFunc(func(r *http.Request) (*http.Response, error) {
+			asked.Add(1)
+			time.Sleep(150 * time.Millisecond)
+			return &http.Response{StatusCode: 502, Body: io.NopCloser(strings.NewReader("Bad Gateway")), Request: r, Header: http.Header{}}, nil
+		})}
+	}
+	later := source{name: "later", deflt: true, collect: func(ctx context.Context, _ string, _ []string, _ *subscraping.Session) ([]string, error) {
+		select {
+		case <-time.After(800 * time.Millisecond):
+		case <-ctx.Done():
+		}
+		return []string{"www.example.org"}, nil
+	}}
+	for _, tc := range []struct {
+		name    string
+		others  []source
+		asked   int32 // JSON API requests
+		maxTook time.Duration
+	}{
+		{"the others answered with names", []source{fake("real", noKey, true, []string{"www.example.org"}, nil)}, 1, 400 * time.Millisecond},
+		{"no other source", nil, crtshAttempts, 0},
+		{"another source still running", []source{later}, crtshAttempts, 0},
+	} {
+		var asked atomic.Int32
+		c := collector(Options{Client: slow502(&asked), NoHistory: true, SourceTimeout: 10 * time.Second}, append([]source{crtshSource()}, tc.others...)...)
+		t0 := time.Now()
+		payload, _ := run(t, c, context.Background())
+		took := time.Since(t0)
+		if asked.Load() != tc.asked || (tc.maxTook > 0 && took > tc.maxTook) {
+			t.Errorf("%s: %d JSON API requests in %s, want %d (at most %s)", tc.name, asked.Load(), took, tc.asked, tc.maxTook)
+		}
+		if e, _ := payload["sources"].(map[string]any)["crtsh"].(map[string]any)["error"].(string); e == "" {
+			t.Errorf("%s: crt.sh's failure is not in its row: %v", tc.name, payload["sources"])
 		}
 	}
 }

@@ -528,7 +528,10 @@ func (p *Pool) resolve(ctx context.Context, name string) Answer {
 			}
 		}
 	}
-	if !a.Live() {
+	// A generated name that answers NOERROR with no address and no CNAME is
+	// an empty non-terminal or a name with other records: as with its
+	// NXDOMAIN above, a bulk resolve does not ask a second resolver.
+	if !a.Live() && !(bulk(ctx) && len(a.CNAME) == 0) {
 		second()
 	}
 	switch {
@@ -732,8 +735,8 @@ func (p *Pool) pick(attempt int, avoid string) string {
 type bulkKey struct{}
 
 // Bulk marks ctx as a bulk resolve (DNS brute force, permutations), where
-// a plain NXDOMAIN is taken at its word: see resolve. A NODATA answer or a
-// dangling CNAME is confirmed either way.
+// a plain NXDOMAIN, or a NODATA with no CNAME, is taken at its word: see
+// resolve. A dangling CNAME is confirmed either way.
 func Bulk(ctx context.Context) context.Context {
 	return context.WithValue(ctx, bulkKey{}, true)
 }
