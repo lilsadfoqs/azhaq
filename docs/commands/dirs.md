@@ -79,7 +79,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 - Without `-proxy`, `HTTP_PROXY` and `HTTPS_PROXY` apply by Go's rule: a loopback target (`127.0.0.1`, `localhost`, `::1`) stays direct, and `NO_PROXY` keeps other hosts direct. This is the rule of every command that sends HTTP to a target: [Proxies](../CONCEPTS.md#proxies).
 
 ### Pace
-- `-rate` paces every request, the calibration guesses included; ffuf sends its calibration unpaced. With `-ac=false` there are no guesses. Calibration asks 4 guesses for each directory, and one more for each extension. At a low rate a sweep takes about (guesses ÷ rate) seconds longer than ffuf's, and stays within your rate.
+- `-rate` paces every request, the calibration guesses included; ffuf sends its calibration unpaced. With `-ac=false` there are no guesses. Calibration asks 4 guesses for each directory, and one more for each extension. At a low rate a sweep takes about (guesses ÷ rate) seconds longer than ffuf's, and stays within your rate. The guesses' names are fixed for a run: `azhaq resume` asks the names the stopped sweep asked and reuses their answers, so both halves of a sweep are judged by one calibration and the resume sends none again.
 
 ## Flags
 

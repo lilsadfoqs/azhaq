@@ -15,6 +15,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -609,10 +610,10 @@ type calibration struct {
 // the catch-all page.
 func (c *Collector) calibrate(ctx context.Context, dir, host string) (cal calibration, dead error) {
 	cal = calibration{echo: map[int]bool{}, vary: map[int]bool{}}
-	probes := []string{randWord(), randWord(), randWord(), randWord()}
+	probes := []string{randWord(0), randWord(1), randWord(2), randWord(3)}
 	shapes := []string{probes[0], "admin" + probes[1], ".htaccess" + probes[2], probes[3] + "/"}
 	for _, ext := range c.Opts.Extensions {
-		p := randWord()
+		p := randWord(len(probes))
 		probes = append(probes, p)
 		shapes = append(shapes, p+"."+strings.TrimPrefix(ext, "."))
 	}
@@ -710,4 +711,6 @@ func abs(x int) int {
 	return x
 }
 
-func randWord() string { return fetch.RandomName() }
+// randWord is the name of the n-th calibration probe: fixed within a run, so
+// a resumed sweep asks the names the stopped one did and finds their answers kept.
+func randWord(n int) string { return fetch.ProbeName("dirs " + strconv.Itoa(n)) }
