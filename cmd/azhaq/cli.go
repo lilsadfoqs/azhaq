@@ -125,7 +125,7 @@ func init() {
 		{name: "crawl", group: groupDropIn, like: "katana + jsluice", run: cmdCrawl,
 			summary: "the URLs of an application: links, forms, scripts, routes in JavaScript, API descriptions",
 			usage:   "-u URL | -l FILE | stdin  [-d N] [-fs rdn|fqdn|dn|REGEX] [-cs RE] [-cos RE] [-do] [-f FIELDS] [-em/-ef/-mr/-fr] [-jsonl | -json] [-rejected] [-submit-forms] [-rl N] [-silent]",
-			output:  "one URL per line (pages, scripts and stylesheets; -assets adds images, fonts and media); -jsonl: katana's {\"request\",\"response\"} lines; -json: {\"url\",\"coverage\",\"role\",\"status\",\"methods\",\"params\",\"forms\",\"tech\"} (routes a script calls with POST are listed, and their GET may answer 404 or 405: -json has methods, -ot '{{method}} {{url}}' prints them); -rejected adds the strings kept out of the URLs, with the reason",
+			output:  "one URL per line, the ones the crawl requested (pages and scripts; -hints adds the URLs it found and did not request; -assets adds the stylesheets, images, fonts and media pages load); -jsonl: katana's {\"request\",\"response\"} lines; -json: {\"url\",\"coverage\",\"role\",\"status\",\"methods\",\"params\",\"forms\",\"tech\"} (routes a script calls with POST are listed, and their GET may answer 404 or 405: -json has methods, -ot '{{method}} {{url}}' prints them); -rejected adds the strings kept out of the URLs, with the reason",
 			examples: []string{
 				"azhaq crawl -u https://app.example.com/ -d 3 -silent",
 				"azhaq crawl -u https://app.example.com/ -jsonl > crawl.jsonl",

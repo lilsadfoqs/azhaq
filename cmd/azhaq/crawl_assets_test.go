@@ -56,17 +56,18 @@ func crawlLines(t *testing.T, srv *httptest.Server, args ...string) map[string]b
 	return lines
 }
 
-// crawl lists the scripts and stylesheets of the pages it reads by default,
-// as katana does, and keeps images, fonts and media for -assets.
+// crawl lists the scripts of the pages it reads by default, which it
+// requests. The stylesheets, images, fonts and media a page loads are
+// requested by no crawl step, so -assets lists them.
 func TestCrawlListsScriptsAndStylesByDefault(t *testing.T) {
 	srv := assetsSite(t)
 	lines := crawlLines(t, srv)
-	for _, want := range []string{"/", "/about", "/main.js", "/polyfills.js", "/chunk-abc.js", "/styles.css"} {
+	for _, want := range []string{"/", "/about", "/main.js", "/polyfills.js", "/chunk-abc.js"} {
 		if !lines[want] {
 			t.Errorf("crawl does not list %s: %v", want, lines)
 		}
 	}
-	for _, not := range []string{"/logo.png", "/favicon.ico"} {
+	for _, not := range []string{"/styles.css", "/logo.png", "/favicon.ico"} {
 		if lines[not] {
 			t.Errorf("crawl lists %s without -assets", not)
 		}
@@ -83,12 +84,14 @@ func TestCrawlListsScriptsAndStylesByDefault(t *testing.T) {
 		})
 		return out
 	}())
-	for _, want := range []string{"/main.js", "/chunk-abc.js", "/styles.css"} {
+	for _, want := range []string{"/main.js", "/chunk-abc.js"} {
 		if rows[srv.URL+want] == nil {
 			t.Errorf("crawl -json has no row for %s", want)
 		}
 	}
-	if rows[srv.URL+"/logo.png"] != nil {
-		t.Error("crawl -json lists an image without -assets")
+	for _, not := range []string{"/styles.css", "/logo.png"} {
+		if rows[srv.URL+not] != nil {
+			t.Errorf("crawl -json lists %s without -assets", not)
+		}
 	}
 }

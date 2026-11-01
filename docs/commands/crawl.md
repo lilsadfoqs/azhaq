@@ -33,23 +33,24 @@ azhaq crawl -u https://app.example.com/ -json -rejected
 2. Reads forms, scripts and API descriptions for more URLs and routes. Library scripts are not read for routes. Every URL they give is requested, a GET operation of an API description (one that needs no path parameter and no required query parameter) and a GET form included, whatever the name: an endpoint that resets data or logs out is asked like any other. `-deny-path` keeps one out.
 3. Asks only what a crawler does. The built-in path checks of `run` are off unless you add `-sweep`. `-kf all`, `-kf robotstxt` or `-kf sitemapxml` asks each web service only for its `robots.txt` and sitemaps and reads every entry.
 4. Tells the page every unknown path gets from a real page with one request for a path that does not exist at the root and in each top-level directory (`/api/`, `/rest/`), not in every directory: `/rest/user/` is compared with the answer of `/rest/`. A directory below the first level whose own answer to an unknown path differs from the one above it then has its generic answers listed as `visited` where they would be `catchall`. `-sweep` asks every directory, as `run` does (up to 24 per origin). katana asks none.
-5. Lists the routes it observed: every page it asked and every URL a page links, each distinct URL once.
-6. Keeps what it only read about apart: routes that scripts call with POST, PUT or another method, routes with a parameter, views and sockets, and strings that scripts only name. `-hints` lists them, each marked with its class; the summary counts them apart.
+5. Lists the URLs it requested, each distinct URL once: every page and script it asked, whatever the answer. A URL a page links that it did not request (past `-d`, a limit, a `-deny-path` rule) is not in the list: `-hints` adds it.
+6. Keeps what it did not request apart: the URLs pages link, routes that scripts call with POST, PUT or another method, routes with a parameter, views and sockets, and strings that scripts only name. `-hints` lists them, each marked with its class; the summary counts them apart.
 7. Never drops links without a word. When a limit stops the crawl, it exits 4 and `azhaq resume` continues it.
 
 ## Output
 
-`crawl` prints one URL per line, as katana does: the routes it observed, pages, scripts and stylesheets. `-assets` adds images, fonts and media; `-hints` adds the routes it only read about. [What is listed](#what-is-listed) says what that includes.
+`crawl` prints one URL per line: the URLs it requested, pages and scripts. `-hints` adds the URLs it did not request; `-assets` adds the stylesheets, images, fonts and media that pages load, which no crawl step requests. [What is listed](#what-is-listed) says what that includes.
 
 Every row has a class, and `-json` prints it as `class`:
 
 | Class | The row is |
 | --- | --- |
-| `observed` | A URL the crawl asked for and got an answer or an error for, or one a page links and a limit kept it from asking. |
+| `observed` | A URL the crawl requested: it got an answer or an error, or Chrome sent the request. |
+| `linked` | A URL a page links that the crawl did not request: it is past `-d`, a limit stopped the crawl, or a `-deny-path` rule keeps it out. Stylesheets, images, fonts and media that pages load are `linked` too: no crawl step requests them. |
 | `hint` | A route a script, a description or the app's router says exists, that no GET observed: a route with a parameter (`/api/Cards/{id}`), a view or a socket, or a route given a method other than GET. |
 | `named` | A URL a script or a description names and the crawl did not ask for, or one only scripts name, with no call to say how it is used (its GET fails). |
 
-Plain output and `-json` list `observed` rows only; `-hints` adds the other two. A page that holds hundreds of script strings no longer buries the routes the crawl saw. The summary's `counts` has `observed routes`, `hint routes` and `named strings`, which add up to every URL row, and a note says how many were left out.
+Plain output and `-json` list `observed` rows only; `-hints` adds the other three. A URL a page links is no result until the crawl has asked for it: it may answer 404, and nothing in the page says so. A page that holds hundreds of script strings no longer buries the routes the crawl saw. The summary's `counts` has `observed routes`, `linked routes`, `hint routes` and `named strings`, which add up to every URL row, and a note says how many of the linked URLs and of the others were left out. The images, fonts and media an explicit `-assets`, `-ndef` or `-em` asks for are listed as `linked` rows, requested or not.
 
 - `-json` prints one object per row, with the map's fields and its `class`. `-jsonl` prints katana's lines instead.
 - `-rejected` adds the strings that were kept out of the URLs, with the reason.
@@ -58,7 +59,7 @@ Plain output and `-json` list `observed` rows only; `-hints` adds the other two.
 | Flag | Output |
 | --- | --- |
 | `-json` | One object per row: `url`, `class`, `coverage`, `role`, `status`, `methods`, `params`, `forms`, `found_in` and `tech` on a page. See below. |
-| `-hints` | Also the `hint` and `named` rows, which are left out by default. See [Output](#output). |
+| `-hints` | Also the `linked`, `hint` and `named` rows, which are left out by default. See [Output](#output). |
 | `-jsonl` (`-j`) | katana's lines, with a `request` and a `response`. See [Katana lines](#katana-lines). |
 | `-f url,path,…` | Katana's URL fields, and `method`. See [Field output](#field-output). |
 | `-rejected` | The strings kept out of the URLs, each with its reason. See [Rejected strings](#rejected-strings). |
@@ -73,7 +74,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 
 - counts the rejected strings and the links outside the scope;
 - names a host that answered 429 or 503, and what was done about it;
-- counts the rows by class, `observed routes`, `hint routes` and `named strings`, and says how many hints and named URLs were left out of the list (`-hints` lists them);
+- counts the rows by class, `observed routes`, `linked routes`, `hint routes` and `named strings`, and says how many linked URLs, hints and named URLs were left out of the list (`-hints` lists them);
 - with `-hints`, counts both kinds of listed URL, and says where to look: routes that scripts call with other methods, and strings that scripts only name;
 - counts what the rows are, apart: see [What the counts compare](#what-the-counts-compare);
 - says how many POST forms `-submit-forms` sent, and which POST forms it did not send and why.
@@ -84,11 +85,11 @@ A crawl never drops links without a word. When `-max-items`, `-max-requests`, `-
 
 ### What is listed
 
-- One URL per line: every page asked and every URL a page links, each distinct URL once. The routes only scripts and descriptions name are left out unless `-hints` is given, and the summary says how many (with `-silent` too: one line on stderr, `N hints and M named URLs were left out of the list`, and in the `-json` summary's notes).
-- A link's URL with its query is its own line: `/item?id=7`. A route a script names, `/catalog?category=Gin` in an object on `/catalog`, is a line only when the crawl asked for it: at `-d 2` it is requested, so it is `observed`; at `-d 1` it is not requested, so it is `named` and `-hints` lists it. katana's `-jc -jsl` prints it at `-d 1`.
+- One URL per line: every page and script the crawl asked, each distinct URL once. The URLs it did not ask are left out unless `-hints` is given: the URLs a page links, and the routes only scripts and descriptions name. The summary says how many (with `-silent` too: one line each on stderr, `N URLs a page links were not requested …` and `N hints and M named URLs were left out of the list`, and in the `-json` summary's notes).
+- A link's URL with its query is its own line: `/item?id=7`. A route a script names, `/catalog?category=Gin` in an object on `/catalog`, is a line only when the crawl asked for it: at `-d 2` it is requested, so it is `observed`; at `-d 1` it is not requested, so it is `named` and `-hints` lists it. katana's `-jc -jsl` prints it at `-d 1`. The same holds for a link: at `-d 1` the links of the pages at depth 1 are not requested, katana prints them with `"error":"max depth reached"` and no response, and azhaq lists them as `linked` rows with `-hints`.
 - `-per-template N` limits how many URLs of one template (`/item?id={n}`) are asked, not how many are listed. `crawl` and `run` ask every one by default, as katana does, and neither caps the tasks a run starts unless `-max-items` says so. `-iqp` asks one URL for each path.
-- Every script and stylesheet a page loads or a script imports is listed, whether it was fetched or only found. This holds when it is in the crawl's scope. Examples are `/main.js`, `/styles.css` and a lazy `chunk-*.js`.
-- `-json` is the map's rows, observed ones, each with its `class`. The extension list does not cut it. Its script and stylesheet rows are there by default, and an image's with `-assets`.
+- Every script a page loads or a script imports is listed once the crawl has requested it, when it is in the crawl's scope. Examples are `/main.js` and a lazy `chunk-*.js`. A stylesheet, image or font is requested by no crawl step, so `/styles.css` is a `linked` row that `-assets` lists.
+- `-json` is the map's rows, observed ones, each with its `class`. The extension list does not cut it. Its script rows are there by default, and a stylesheet's or an image's with `-assets`.
 - `run`'s map lists every row, scripts and images included.
 - Views (`client-route`) and sockets (`websocket`) are `hint` rows, listed with `-json -hints` only, as routes with a parameter are. No GET gets them.
 
@@ -100,17 +101,17 @@ A crawl's rows are not all URLs that were requested, so the number of rows is no
 | --- | --- |
 | `requested` | URLs the crawl sent a request for, whatever the answer. These are katana's records, scripts and stylesheets included. |
 | `answered` | Of `requested`, those that got an answer, a 404 too. The others failed with no answer. |
-| `not requested` | URLs found in a page, a script or an API description and not asked: a hint, a URL past a limit, or a URL a `-deny-path` rule kept out. A GET operation of a description that needs no path parameter and no required query parameter is not among them unless a rule kept it out: it is requested. |
+| `not requested` | URLs found in a page, a script or an API description and not asked: a linked URL past `-d` or a limit, a hint, or a URL a `-deny-path` rule kept out. A GET operation of a description that needs no path parameter and no required query parameter is not among them unless a rule kept it out: it is requested. |
 | `templates` | Routes with a placeholder, `/api/Cards/{id}`: never requested as written. |
-| `observed routes`, `hint routes`, `named strings` | The same rows by class: see [Output](#output). They add up to every URL row. |
+| `observed routes`, `linked routes`, `hint routes`, `named strings` | The same rows by class: see [Output](#output). They add up to every URL row. |
 | `assets` | Images, fonts, media, source maps and build manifests, requested or not. Each is also one of the three above. |
 | `rejected strings` | Strings read from scripts and pages and kept out of the URLs, each with a reason. They are no row. `-rejected` lists them. |
 
 `requested`, `not requested` and `templates` add up to every URL row. The older counts, `visited` and `hint`, are of the rows that were printed, after the filters.
 
-Which rows plain output prints, and so `-silent` too: the `observed` rows, scripts and stylesheets included, less the default extension list (images, fonts, archives, media, `.pdf`, `.txt`, `.map`) unless `-assets`, `-ndef` or `-em` says otherwise. With `-hints` it also prints the `hint` and `named` rows that can be requested; templates, views and sockets are left out of plain output. `-json -hints` prints every row, templates included, and `-rejected` adds the rejected strings as lines of their own, which the number of results counts.
+Which rows plain output prints, and so `-silent` too: the `observed` rows, scripts included, less the default extension list (images, fonts, archives, media, `.pdf`, `.txt`, `.map`) unless `-assets`, `-ndef` or `-em` says otherwise. With `-hints` it also prints the `linked`, `hint` and `named` rows that can be requested; templates, views and sockets are left out of plain output. `-json -hints` prints every row, templates included, and `-rejected` adds the rejected strings as lines of their own, which the number of results counts.
 
-To compare with katana, count the lines of `-silent`, which are the observed routes; `-silent -hints` adds the routes only scripts name, which katana's `-jsl` lists too.
+To compare with katana, count the lines of `-silent`, which are the requested URLs; `-silent -hints` adds the links past `-d` that katana prints as `max depth reached` and the routes only scripts name, which katana's `-jsl` lists too.
 
 ### Filters
 
@@ -218,8 +219,8 @@ These filters limit what is printed, not what is crawled.
 
 | Flag | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `-assets` | bool |  | also list images, fonts and media, and the source maps and build manifests azhaq reads (scripts and stylesheets are listed by default, as katana lists them) |
-| `-hints` | bool |  | also list the hints (routes with a parameter, views and sockets, routes scripts or descriptions give a method other than GET) and the named URLs (found and not requested, or named only in scripts); by default only the routes the crawl observed are listed |
+| `-assets` | bool |  | also list the stylesheets, images, fonts and media pages load, which the crawl does not request (listed as linked), and the source maps and build manifests azhaq reads (the scripts it requests are listed by default) |
+| `-hints` | bool |  | also list what the crawl did not request: the URLs a page links (past -depth, a limit or a -deny-path rule), the hints (routes with a parameter, views and sockets, routes scripts or descriptions give a method other than GET) and the named URLs (named by scripts or descriptions, or only in scripts); by default only the URLs the crawl requested are listed |
 | `-no-catchall` | bool |  | leave out URLs that answer with the page every unknown path gets (client-side routes of a single-page app) |
 | `-rejected` | bool |  | also list the strings read from scripts and pages and kept out of the URLs, each with its reason (text: string, a tab, the reason; -json: one object each) |
 | `-em` | string |  | list only URLs with these extensions, comma-separated (none: URLs without one) |

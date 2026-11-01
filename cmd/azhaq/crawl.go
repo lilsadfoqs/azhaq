@@ -59,11 +59,11 @@ func cmdCrawl(args []string) error {
 	excludeFields := fs.String("eof", "", "leave these fields out of -json and -jsonl lines, comma-separated (request.tag, response.forms, tech, …)")
 	noFill := fs.Bool("no-form-fill", false, "do not ask the action of GET forms with neutral values (by default each is asked, even one that deletes or logs out; -deny-path keeps its action out)")
 	d := fs.Int("d", -1, "katana's -d: link levels below the start URL to visit (3 by default); -depth N is -d N-1")
-	assets := fs.Bool("assets", false, "also list images, fonts and media, and the source maps and build manifests azhaq reads (scripts and stylesheets are listed by default, as katana lists them)")
+	assets := fs.Bool("assets", false, "also list the stylesheets, images, fonts and media pages load, which the crawl does not request (listed as linked), and the source maps and build manifests azhaq reads (the scripts it requests are listed by default)")
 	noShell := fs.Bool("no-catchall", false, "leave out URLs that answer with the page every unknown path gets (client-side routes of a single-page app)")
 	sweep := fs.Bool("sweep", false, "also ask each web service for the 51 built-in paths (robots.txt, sitemaps, API descriptions, .git/HEAD, admin, …) and for the source map next to each script, as run does; crawl asks only what a crawler does")
 	showOut := fs.Bool("do", false, "also list the URLs found and left out of the crawl's scope (never requested)")
-	hints := fs.Bool("hints", false, "also list the hints (routes with a parameter, views and sockets, routes scripts or descriptions give a method other than GET) and the named URLs (found and not requested, or named only in scripts); by default only the routes the crawl observed are listed")
+	hints := fs.Bool("hints", false, "also list what the crawl did not request: the URLs a page links (past -depth, a limit or a -deny-path rule), the hints (routes with a parameter, views and sockets, routes scripts or descriptions give a method other than GET) and the named URLs (named by scripts or descriptions, or only in scripts); by default only the URLs the crawl requested are listed")
 	showRejected := fs.Bool("rejected", false, "also list the strings read from scripts and pages and kept out of the URLs, each with its reason (text: string, a tab, the reason; -json: one object each)")
 	jsonl := fs.Bool("jsonl", false, "katana's JSON lines: {timestamp, request{method, endpoint, tag, attribute, source}, response{status_code, technologies, forms, content_length}, error}")
 	fs.BoolVar(jsonl, "j", false, "same as -jsonl")
@@ -214,7 +214,7 @@ func cmdCrawl(args []string) error {
 	}
 	facts, rejected, offsite := crawlFacts(obs)
 	counts := map[string]int{}
-	var otherMethod, scriptsOnly int
+	var otherMethod, scriptsOnly, linkedLeft int
 	otherAsked := map[int]int{} // what the GET of those routes answered
 	var kinds crawlKinds
 	for _, r := range rows {
@@ -225,7 +225,10 @@ func cmdCrawl(args []string) error {
 		if outOpts.hidden(r) {
 			continue
 		}
-		if !*hints && crawlClass(r) != classObserved {
+		if !*hints && !outOpts.listed(r) {
+			if crawlClass(r) == classLinked {
+				linkedLeft++
+			}
 			continue
 		}
 		if !c.json && !outOpts.jsonl && strings.Contains(r.Entity.Key, "{") {
@@ -280,6 +283,13 @@ func cmdCrawl(args []string) error {
 			fmt.Fprintln(os.Stderr, "azhaq crawl: "+note)
 		}
 	}
+	if linkedLeft > 0 {
+		note := fmt.Sprintf("%d URLs a page links were not requested (past -depth, a limit or a -deny-path rule), so they are left out of the list (-hints lists them; a larger -depth requests more of them; -json marks each row's class)", linkedLeft)
+		rep.Notes = append(rep.Notes, note)
+		if c.silent && !c.json {
+			fmt.Fprintln(os.Stderr, "azhaq crawl: "+note)
+		}
+	}
 	if otherMethod > 0 {
 		rep.Notes = append(rep.Notes, fmt.Sprintf("%d listed URLs are routes scripts call with a method other than GET, so a GET may answer 404 or 405%s (-json has methods; -ot '{{method}} {{url}}' prints them)", otherMethod, askedNote(otherAsked)))
 	}
@@ -304,18 +314,20 @@ func cmdCrawl(args []string) error {
 // count of their own.
 type crawlKinds struct {
 	requested, answered, notRequested, templates, assets int
-	observed, hints, named                               int // by class: see crawlClass
+	observed, linked, hints, named                       int // by class: see crawlClass
 }
 
 // What a crawl row is, by how well the crawl knows it: observed, the crawl
-// asked for it and got an answer or an error; a hint, a script, a
-// description or the app's router says a route exists (a route with a
-// parameter, a view, a socket, a method other than GET) that no GET
-// observed; named, a URL a script or a description names and the crawl did
-// not request, or only named in scripts with no call. A URL a page links is
-// observed even when a limit kept the crawl from asking it.
+// requested it (an answer or an error came back, or Chrome sent the request);
+// linked, a page links it and the crawl did not request it (past -depth, a
+// limit, a -deny-path rule); a hint, a script, a description or the app's
+// router says a route exists (a route with a parameter, a view, a socket, a
+// method other than GET) that no GET observed; named, a URL a script or a
+// description names and the crawl did not request, or only named in scripts
+// with no call.
 const (
 	classObserved = "observed"
+	classLinked   = "linked"
 	classHint     = "hint"
 	classNamed    = "named"
 )
@@ -330,8 +342,10 @@ func crawlClass(r engine.MapEntry) string {
 		return classHint
 	case r.Status > 0 || r.Coverage == "visited" || r.Coverage == "gone" || r.Coverage == "catchall" || r.Coverage == "error":
 		return classObserved
+	case r.Evidence == engine.EvBrowser:
+		return classObserved // Chrome sent the request
 	case slices.Contains(r.EvidenceFrom, "azhaq-crawl") || slices.Contains(r.EvidenceFrom, "azhaq-render"):
-		return classObserved // a page links it: seen, if not asked for
+		return classLinked // a page links it and nothing asked for it
 	}
 	return classNamed
 }
@@ -340,6 +354,8 @@ func (k *crawlKinds) add(r engine.MapEntry) {
 	switch crawlClass(r) {
 	case classObserved:
 		k.observed++
+	case classLinked:
+		k.linked++
 	case classHint:
 		k.hints++
 	default:
@@ -368,7 +384,7 @@ func (k *crawlKinds) add(r engine.MapEntry) {
 func (k *crawlKinds) put(c map[string]int, rejected int) {
 	for name, n := range map[string]int{"requested": k.requested, "answered": k.answered, "not requested": k.notRequested,
 		"templates": k.templates, "assets": k.assets, "rejected strings": rejected,
-		"observed routes": k.observed, "hint routes": k.hints, "named strings": k.named} {
+		"observed routes": k.observed, "linked routes": k.linked, "hint routes": k.hints, "named strings": k.named} {
 		if n > 0 {
 			c[name] = n
 		}
@@ -518,6 +534,20 @@ func (o crawlOpts) hidden(r engine.MapEntry) bool {
 		return true
 	case "asset":
 		return o.defDeny[urlExt(r.Entity.Key)]
+	}
+	return false
+}
+
+// listed says whether the plain and JSON list holds a row without -hints: the
+// crawl requested it. The stylesheets, images, fonts and media a page loads
+// are requested by no crawl step; -assets, -ndef and -em, which ask for them,
+// list them as linked.
+func (o crawlOpts) listed(r engine.MapEntry) bool {
+	switch crawlClass(r) {
+	case classObserved:
+		return true
+	case classLinked:
+		return r.Role == "asset" && (o.showAssets || o.assets)
 	}
 	return false
 }
