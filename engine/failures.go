@@ -299,7 +299,7 @@ func ShortError(s string) string {
 	}
 	switch {
 	case strings.Contains(l, "x509") || strings.Contains(l, "tls:"):
-		return "TLS error"
+		return tlsReason(s)
 	case strings.HasSuffix(l, "eof"):
 		return "connection closed (EOF)"
 	}
@@ -311,6 +311,31 @@ func ShortError(s string) string {
 		s = s[:120] + "…"
 	}
 	return strings.TrimSpace(s)
+}
+
+// tlsReason is "TLS error" and what the handshake said: the alert a server
+// sent ("remote error: tls: handshake failure"), the version or suite crypto/tls
+// refused, the certificate's fault. The same failures group under one reason.
+func tlsReason(s string) string {
+	l := strings.ToLower(s)
+	i := strings.Index(l, "remote error: tls:")
+	if i < 0 {
+		i = strings.Index(l, "tls:")
+	}
+	if j := strings.Index(l, "x509:"); j >= 0 && (i < 0 || j < i) {
+		i = j
+	}
+	if i < 0 {
+		return "TLS error"
+	}
+	r := strings.TrimSpace(s[i:])
+	if k := strings.Index(r, "; fallback TLS client"); k >= 0 {
+		r = r[:k]
+	}
+	if len(r) > 120 {
+		r = r[:120] + "…"
+	}
+	return "TLS error: " + r
 }
 
 // Retryable: a later attempt may well succeed (timeouts, dropped
