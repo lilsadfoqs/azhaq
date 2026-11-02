@@ -305,9 +305,13 @@ func cmdRoles(args []string) error {
 	rep.what = "endpoints listed"
 	rep.DB = *dir
 	rearmKill := func() {}
-	if !hasFlag(runArgs, "ledger") {
-		// One ledger for the role runs and the requests between them.
-		closeLedger, rearm := rolesLedger(*dir, rep)
+	if path, _ := flagValue(runArgs, "ledger"); path != "off" {
+		// One ledger for the role runs and the requests between them: the
+		// file -ledger names in the run options, else roles.ledger.jsonl.
+		if path == "" {
+			path = filepath.Join(*dir, "roles.ledger.jsonl")
+		}
+		closeLedger, rearm := rolesLedger(*dir, path, rep)
 		defer closeLedger()
 		rearmKill = rearm
 	}

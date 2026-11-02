@@ -162,7 +162,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 - **Exit 4:** a role's run was stopped by a limit, or the replay was interrupted (Ctrl-C) with requests left. The summary marks it `stopped`.
 - **Exit 2:** a header names a host outside the scope rule. Nothing is sent. See [Headers that name a host](#headers-that-name-a-host).
 - A role whose run could not be done, such as a failed sign-in, ends `roles` with a summary whose `notes` say why.
-- `requests` in the summary is every request `roles` sent to the targets: the roles' runs, the Chrome sign-ins (the first and each renewal), the replays and every redirect hop they followed. It equals the target lines of `roles.ledger.jsonl`. A role's own summary line counts that role's run only, so they add up to less.
+- `requests` in the summary is every request `roles` sent to the targets: the roles' runs, the Chrome sign-ins (the first and each renewal), the replays and every redirect hop they followed. It equals the target lines of `roles.ledger.jsonl`, or of the file `-ledger` names in the run options (`-- -ledger FILE`): one ledger for the whole command, written by the runs and by everything `roles` sends between them, sealed at the end. `-ledger off` writes none. A role's own summary line counts that role's run only, so they add up to less.
 - With `-json`, stderr holds the summary only. The roles' runs print nothing. The summary says what they did not finish: `failed`, `unreachable`, `skipped` and `notes`.
 
 ## Details

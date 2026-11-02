@@ -22,6 +22,11 @@ func TestRolesLoginCountsEveryRequestOfTheSignIn(t *testing.T) {
 	if _, err := browser.Find(); err != nil {
 		t.Skip(err)
 	}
+	t.Run("roles.ledger.jsonl", func(t *testing.T) { rolesLoginCounts(t, false) })
+	t.Run("-ledger FILE", func(t *testing.T) { rolesLoginCounts(t, true) })
+}
+
+func rolesLoginCounts(t *testing.T, ledgerFlag bool) {
 	var mu sync.Mutex
 	hits := map[string]int{}
 	site := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -62,10 +67,16 @@ func TestRolesLoginCountsEveryRequestOfTheSignIn(t *testing.T) {
 	}))
 	defer site.Close()
 	dir := t.TempDir()
+	file := filepath.Join(dir, "roles.ledger.jsonl")
+	run := []string{"-url", site.URL + "/", "-no-paths", "-depth", "0", "-allow", strings.TrimPrefix(site.URL, "http://")}
+	if ledgerFlag {
+		file = filepath.Join(t.TempDir(), "mine.jsonl")
+		run = append(run, "-ledger", file)
+	}
 	_, errOut, err := captureBoth(t, func() error {
 		_, e := captureStdout(t, func() error {
-			return cmdRoles([]string{"-dir", dir, "-login", site.URL + "/login.php", "-role", "anon",
-				"-role-login", "admin=admin:password", "--", "-url", site.URL + "/", "-no-paths", "-depth", "0", "-allow", strings.TrimPrefix(site.URL, "http://")})
+			return cmdRoles(append([]string{"-dir", dir, "-login", site.URL + "/login.php", "-role", "anon",
+				"-role-login", "admin=admin:password", "--"}, run...))
 		})
 		return e
 	})
@@ -87,7 +98,7 @@ func TestRolesLoginCountsEveryRequestOfTheSignIn(t *testing.T) {
 		}
 	}
 	target := 0
-	_ = ledger.Read(filepath.Join(dir, "roles.ledger.jsonl"), func(e ledger.Entry) error {
+	_ = ledger.Read(file, func(e ledger.Entry) error {
 		if e.Kind != ledger.KindSeal && e.Class != ledger.ClassSource && e.Class != ledger.ClassDNS && e.Class != ledger.ClassOwn {
 			target++
 		}
