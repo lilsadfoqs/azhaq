@@ -3,6 +3,7 @@ package contract
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/binary"
 	"fmt"
 	"net"
@@ -41,6 +42,25 @@ func freePort(t testing.TB) string {
 	}
 	defer ln.Close()
 	return portOf(ln.Addr().String())
+}
+
+// goTLSServer serves HTTPS from crypto/tls for the classes it can offer
+// (ECDHE and TLS 1.3): unlike an openssl s_server it takes connections side
+// by side, so nmap's many probes do not wait on each other.
+func goTLSServer(t *testing.T, tls13 bool) string {
+	t.Helper()
+	srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		fmt.Fprint(w, "<html><title>tls</title><body>ok</body></html>")
+	}))
+	cfg := &tls.Config{MaxVersion: tls.VersionTLS12}
+	if tls13 {
+		cfg = &tls.Config{MinVersion: tls.VersionTLS13}
+	}
+	srv.TLS = cfg
+	srv.StartTLS()
+	t.Cleanup(srv.Close)
+	return strings.TrimPrefix(srv.URL, "https://")
 }
 
 // opensslServer starts `openssl s_server -www` offering only the class, and
@@ -90,7 +110,7 @@ func getOnly(t *testing.T) string {
 			return
 		}
 		if string(head) != "GET " {
-			time.Sleep(time.Second)
+			time.Sleep(4 * time.Second)
 			return
 		}
 		buf := make([]byte, 4096)

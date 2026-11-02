@@ -285,4 +285,24 @@ func TestMCPWireIsLedgerIsSummary(t *testing.T) {
 	}
 }
 
+// Every request the tools sent is in a ledger of the server. The tools with no
+// workspace write none (draft issue s5-mcp-stateless-tools-no-ledger).
+func TestMCPLedgersHoldEveryRequestTheToolsSent(t *testing.T) {
+	l := newLabs(t)
+	l.Ports = newPortLab(t)
+	c := startMCP(t, l.Dir, "-allow", "127.0.0.1")
+	var total int64
+	total += c.Tool("azhaq_probe", map[string]any{"targets": []string{l.Site.URL}}).Requests
+	total += c.Tool("azhaq_map", map[string]any{"url": l.Site.URL, "workspace": "w"}).Requests
+	total += c.Tool("azhaq_ports", map[string]any{"hosts": []string{"127.0.0.1"}, "ports": portOf(l.Ports.Banner)}).Requests
+	files, _ := filepath.Glob(filepath.Join(l.Dir, "*", "*.ledger.jsonl"))
+	var lines int
+	for _, f := range files {
+		lines += ledgerSent(readLedger(t, f)).N
+	}
+	v := newInv(t, "draft s5-mcp-stateless-tools-no-ledger")
+	v.Equal("the summaries' requests over all tool calls, against the lines to targets of every ledger the server wrote", total, int64(lines))
+	v.Done()
+}
+
 func portOf(addr string) string { _, p, _ := net.SplitHostPort(addr); return p }

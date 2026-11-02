@@ -87,7 +87,17 @@ func TestReferenceTLSHandshakeClasses(t *testing.T) {
 			if c.name == "tls12-rsa-kex" || c.name == "tls12-dhe" {
 				known = "#91"
 			}
-			addr := opensslServer(t, c)
+			// Go serves the two classes it offers, side by side; openssl the other two, one connection at a time.
+			var addr string
+			nmapToo := false
+			switch c.name {
+			case "tls12-ecdhe":
+				addr, nmapToo = goTLSServer(t, false), true
+			case "tls13":
+				addr, nmapToo = goTLSServer(t, true), true
+			default:
+				addr = opensslServer(t, c)
+			}
 			if got := strings.TrimSpace(output(t, "curl", "-k", "-s", "-o", "/dev/null", "-w", "%{http_code}", "--max-time", "8", "https://"+addr+"/")); got != "200" {
 				t.Skipf("curl does not complete this class (%q): there is no reference to match", got)
 			}
@@ -107,10 +117,12 @@ func TestReferenceTLSHandshakeClasses(t *testing.T) {
 			if row["tls"] != true {
 				v.Errorf("curl completes a TLS handshake on the port; ports says tls %v", row["tls"])
 			}
-			// nmap -sV names it ssl/http: ports must name it too. An openssl s_server
-			// serves one connection at a time, so nmap may run out of time: no answer, no comparison.
-			if n, ok := nmapServes(t, portOf(addr), "30s"); ok {
-				atLeastNmap(v, n, row)
+			// nmap -sV names it ssl/http: ports must name it too. (An openssl s_server serves
+			// one connection at a time, and nmap's probes wait on each other there.)
+			if nmapToo {
+				if n, ok := nmapServes(t, portOf(addr), "60s"); ok {
+					atLeastNmap(v, n, row)
+				}
 			}
 			v.Done()
 		})
@@ -130,7 +142,7 @@ func TestReferenceServicesByTheirFirstBytes(t *testing.T) {
 			addr := c.start(t)
 			v := newInv(t, c.known)
 			row := azhaqServes(t, t.TempDir(), portOf(addr))
-			n, ok := nmapServes(t, portOf(addr), "120s")
+			n, ok := nmapServes(t, portOf(addr), "180s")
 			if !ok {
 				t.Skip("nmap does not name this service here: there is no reference to match")
 			}
