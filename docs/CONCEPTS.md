@@ -107,7 +107,7 @@ Views after the hash and sockets are never requested, so they stay `hint`. A vie
 | --- | --- |
 | `live` | Resolves. A host you gave, or a name under a domain you gave. |
 | `sibling` | Resolves. Found on the way, under another domain. |
-| `unresolved` | From a source or a list, not looked up, and named by no DNS answer of the run that held its address. A name that is the target of a CNAME in an answer holding its address is `live` or `sibling` at any `-depth`, with that address in `proof`. |
+| `unresolved` | From a source or a list, not looked up (a name that was asked and did not exist is `dead`), and named by no DNS answer of the run that held its address. A name a stopped `subs -live` listed and did not ask says `not checked:` and why in its `proof`; `azhaq resume` asks it. A name that is the target of a CNAME in an answer holding its address is `live` or `sibling` at any `-depth`, with that address in `proof`. |
 | `dead` | Does not resolve: NXDOMAIN, no address, or SERVFAIL from every resolver. |
 | `wildcard` | Resolves only because its zone answers for any name. |
 

@@ -133,7 +133,7 @@ The counts also say what became of the names, so a reader can add them up:
 | `asked by guessing` | The names `-w` and `-permute` asked that no source gave. `found by guessing` is what is left of them after `did not resolve` and `left out by -m/-f`. |
 | `guesses held back` | Without `-live` and `-guesses`: names only subdomain.center guessed, which no source asserted and nothing looked up. They are not printed. See [Guesses](#guesses). |
 | `unverified` | Printed names no DNS lookup checked, without `-live`: names only the name history held, which no source gave this run, and with `-guesses` the guesses. |
-| `not checked` | With `-live`: guessed or history names the resolvers failed on, or the run ended before it checked, left out. `azhaq resume` checks them. |
+| `not checked` | With `-live`: guessed or history names the resolvers failed on, or the run ended before it checked, left out. The note names the cause (the resolvers, or the time limit) and, with `-db`, the commands that check and list them. `azhaq resume` checks them, and a resume that checks every one ends with exit 0. |
 | `no answer` | With `-live`: names every resolver failed on, left out. A note says which resolver and why. The run ends with exit 3. |
 | `not asked` | With `-live`: names the run stopped before DNS answered them (the answered ones are kept). `azhaq resume` asks them. |
 | `left out by -m/-f` | Names a `-m`, `-f`, `-match-regex` or `-filter-regex` removed. |
@@ -191,14 +191,16 @@ A source that answered 429 is asked again after its `Retry-After`, up to three t
 ### Name history
 Passive sources answer differently each run. subdomain.center, for one, returns a random sample of its names on each call. So `subs` keeps what it found.
 
-- Azhaq keeps every name it kept for a domain in `names/DOMAIN.json`. The directory is `$AZHAQ_DATA_DIR`, else `$XDG_DATA_HOME/azhaq`, else `~/.local/share/azhaq`.
+- Azhaq keeps the names of a domain that a source gave, and the names of the history itself that resolved, in `names/DOMAIN.json`. A name that only `-w` or `-permute` guessed, and a CNAME target, is not stored: those can be asked again, and the history is the memory of what passive sources answered. The directory is `$AZHAQ_DATA_DIR`, else `$XDG_DATA_HOME/azhaq`, else `~/.local/share/azhaq`.
 - Each name has its first and last time seen (`first_seen`, `last_seen`) and the sources that gave it (`sources`).
 - At most 200,000 names are kept per domain. The ones unseen the longest go first.
 - The next run asks this file as a source called `history`.
 - With `-live`, a stored name counts only if it resolves now, and not to a wildcard. Stale names drop out, and a name a source missed this time comes back.
 - Without `-live` no DNS lookup is made. A stored name that no source gave this run is listed with `"unverified": true`, and its `source` is `history`. The names are stored only once a source gave them or DNS confirmed them, so they are not guesses.
-- A stored name that a source gave again is not flagged: its `source` is that source, and `history` comes last in `sources`. Every name a run kept is stored, so flagging them all would flag nearly every name after the first run.
-- `-no-history` neither reads nor writes the file. A file that cannot be written is a note: `name history not saved: …`.
+- A stored name that a source gave again is not flagged: its `source` is that source, and `history` comes last in `sources`. Every name a source gave and a run kept is stored, so flagging them all would flag nearly every name after the first run.
+- A run that read names from the file or wrote to it says so in its summary, in `subs` and in `run`: `name history /home/me/.local/share/azhaq/names/example.com.json: 303 names read, 2 written; …`. It gives the path, the names the file gave the run (before any check) and the names the run wrote (a name no lookup checked is not written). For more than three domains one note counts them all.
+- `-no-history` neither reads nor writes the file, and the summary says nothing of it. A file that cannot be written is a note: `name history not saved: …`.
+- A resolver check (`-live`) that was stopped leaves its names unchecked and out of the list. The summary says how many, why, and, with `-db`, the commands that check them (`azhaq resume`) and list them (`azhaq query -db FILE -type Hostname -role unresolved`: `unresolved` is a name no lookup has asked, and its `proof` says `not checked:` and why). Without `-db` there is nothing to resume, and the note says to run again with `-db FILE`, or without `-live` to list them unverified.
 
 ### Coverage estimate
 `subs` ends with a note such as:

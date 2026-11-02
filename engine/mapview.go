@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -121,6 +122,7 @@ func BuildMap(ents []types.Entity, seeds []types.Seed, obs []types.StoredObserva
 	decl := declaredRoles(obs)
 	secured := securedHosts(obs)
 	chain := chainAddrs(obs)
+	unchecked := uncheckedNames(obs)
 	out := make([]MapEntry, 0, len(ents))
 	portAt := map[string]int{}
 	for _, e := range ents {
@@ -137,6 +139,9 @@ func BuildMap(ents []types.Entity, seeds []types.Seed, obs []types.StoredObserva
 			Coverage: coverageOf(e, rows, left, runCapped),
 			Role:     roleOf(e, rows, hosts, domains),
 			Proof:    proofOf(e, rows),
+		}
+		if why := unchecked[e.Key]; why != "" && m.Role == "unresolved" && m.Proof == "" {
+			m.Proof = "not checked: " + why // listed by a source, and no lookup was made
 		}
 		if ips := chain[e.Key]; e.Type == types.TypeHostname && m.Role == "unresolved" && len(ips) > 0 {
 			// Named by a CNAME in an answer that held its address: the run
@@ -420,6 +425,28 @@ func chainAddrs(obs []types.StoredObservation) map[string][]any {
 }
 
 // resolved: azhaq-dns looked the name up in this run.
+// uncheckedNames are the names a subdomain run listed without a lookup
+// (its unverified names), with why none was made.
+func uncheckedNames(obs []types.StoredObservation) map[string]string {
+	out := map[string]string{}
+	for _, o := range obs {
+		if o.Collector != "azhaq-subdomains" || o.Kind != "subdomains" || !bytes.Contains(o.Payload, []byte(`"unverified_why"`)) {
+			continue
+		}
+		var p struct {
+			Unverified []string `json:"unverified"`
+			Why        string   `json:"unverified_why"`
+		}
+		if json.Unmarshal(o.Payload, &p) != nil {
+			continue
+		}
+		for _, n := range p.Unverified {
+			out[n] = p.Why
+		}
+	}
+	return out
+}
+
 func resolved(obs []types.StoredObservation) bool {
 	for _, o := range obs {
 		if o.Collector == "azhaq-dns" || o.Kind == "dns" {

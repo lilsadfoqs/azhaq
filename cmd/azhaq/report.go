@@ -322,6 +322,9 @@ func fillReport(rep *report, path string, seeds []types.Seed, ents []types.Entit
 	rep.Unreachable = engine.Unreachable(seeds, ents, obs)
 	rep.Notes = append(rep.Notes, engine.Notes(obs)...)
 	rep.Notes = append(rep.Notes, portcol.Notes(obs)...)
+	if rep.Command == "run" {
+		rep.Notes = append(rep.Notes, historyNotes(subdomainPayloads(obs))...)
+	}
 	if n := engine.NoWebNote(obs); n != "" {
 		rep.Notes = append(rep.Notes, n)
 	}

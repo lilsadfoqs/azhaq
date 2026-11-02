@@ -765,3 +765,48 @@ func TestSampledKeepsWhatOneCallHeld(t *testing.T) {
 		}
 	}
 }
+
+// A DNS pass the run's time limit cut short names the limit; it does not say
+// the lookups failed (nothing failed), and the row marks the names it left
+// and why, for the map and for a resume to read.
+func TestCheckCutByTheLimitIsNotAFailedLookup(t *testing.T) {
+	pad := fake("pad", noKey, true, []string{"a.example.org", "b.example.org"}, nil)
+	pad.verify = true
+	c := collector(Options{NoHistory: true, Verify: func(ctx context.Context, _ string, names []string) ([]string, []string) {
+		<-ctx.Done() // slow resolvers: the limit ends the pass
+		return nil, names
+	}}, pad)
+	ctx, cancel := context.WithTimeout(context.Background(), emitGrace+400*time.Millisecond)
+	defer cancel()
+	payload, _ := run(t, c, ctx)
+	row := payload["sources"].(map[string]any)["pad"].(map[string]any)
+	e, _ := row["error"].(string)
+	if strings.Contains(e, "lookups failed") || !strings.Contains(e, types.CutShort) {
+		t.Errorf("row error %q: want the time limit named, no failed lookups", e)
+	}
+	if row[NotCheckedKey] != float64(2) {
+		t.Errorf("row %v: not_checked is not 2", row)
+	}
+	if why, _ := payload[UncheckedWhyKey].(string); why != types.CutShort {
+		t.Errorf("unverified_why %q", why)
+	}
+}
+
+// A run that read the history and wrote to it says where, how many names it
+// read and how many it wrote; -w and -permute names are not among them.
+func TestRunReportsTheNameHistoryItUsed(t *testing.T) {
+	t.Setenv("AZHAQ_DATA_DIR", t.TempDir())
+	if _, err := remember("example.org", []string{"old.example.org"}, map[string][]string{"old.example.org": {"x"}}, nil); err != nil {
+		t.Fatal(err)
+	}
+	c := collector(Options{Verify: allLive}, historySource(), fake("a", noKey, true, []string{"www.example.org"}, nil))
+	payload, _ := run(t, c, context.Background())
+	h, _ := payload[HistoryKey].(map[string]any)
+	if h == nil || h["path"] != historyPath("example.org") || h["read"] != float64(1) || h["stored"] != float64(2) {
+		t.Errorf("history account %v", h)
+	}
+	c = collector(Options{NoHistory: true, Verify: allLive}, historySource(), fake("a", noKey, true, []string{"www.example.org"}, nil))
+	if payload, _ = run(t, c, context.Background()); payload[HistoryKey] != nil {
+		t.Errorf("-no-history left an account: %v", payload[HistoryKey])
+	}
+}

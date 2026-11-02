@@ -34,6 +34,8 @@ azhaq dns -d example.com -axfr -allow example.com
 3. Leaves out a name that only resolves through a wildcard zone.
 4. Prints the names that have a record of the types asked.
 
+`dns` neither reads nor writes the name history `subs` keeps under `$AZHAQ_DATA_DIR` (see [Name history](subs.md#name-history)): it resolves the names it is given and stores nothing outside `-db`.
+
 `dns` sends DNS queries and nothing else. `-axfr` connects to the name servers of the name, `-trace` asks the root servers, and `-asn` asks Team Cymru's DNS service through your resolvers.
 
 ## Output

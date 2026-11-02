@@ -252,6 +252,7 @@ func cmdSubs(args []string) error {
 	bySource := map[string]int{}   // how many each source returned
 	var union, dropped, unverified, heldBack, notChecked, filtered, dup, cut, didNot, itself, notAsked, noAnswer int
 	lookupsFailed := false                // a source says its names were not checked because the lookups failed
+	notCheckedWhy := map[string]bool{}    // why names no lookup checked were not (the run's own words)
 	var answers map[string]map[string]any // every name DNS was asked: a name missing was not
 	noAnswerBy := map[[2]string]int{}
 	health := newHealthTally(false)
@@ -271,6 +272,9 @@ func cmdSubs(args []string) error {
 		union += intOf(p["from_sources"])
 		dropped += intOf(p["dropped"])
 		cut += intOf(p["names_cut"])
+		if why, _ := p[subcol.UncheckedWhyKey].(string); why != "" {
+			notCheckedWhy[why] = true
+		}
 		unver := map[string]bool{}
 		for _, n := range strs(p["unverified"]) {
 			unver[n] = true
@@ -564,10 +568,16 @@ func cmdSubs(args []string) error {
 	}
 	if notChecked > 0 {
 		why := "the resolvers failed"
-		if rep.Stopped != "" && !lookupsFailed {
+		if len(notCheckedWhy) > 0 {
+			why = strings.Join(slices.Sorted(maps.Keys(notCheckedWhy)), "; ")
+		} else if rep.Stopped != "" && !lookupsFailed {
 			why = "the run stopped first" // -timeout, -max-time, a signal or a budget
 		}
-		rep.Notes = append(rep.Notes, fmt.Sprintf("%d names could not be checked (%s) and are left out; azhaq resume checks them", notChecked, why))
+		how := "azhaq resume -db " + c.db + " checks them, and azhaq query -db " + c.db + " -type Hostname -role unresolved lists them"
+		if c.db == "" {
+			how = "this run kept no database: run again with -db FILE to keep them for azhaq resume, or without -live to list them unverified"
+		}
+		rep.Notes = append(rep.Notes, fmt.Sprintf("%d names could not be checked (%s) and are left out of the list; %s", notChecked, why, how))
 		rep.warned = true
 	}
 	if noAnswer > 0 {
