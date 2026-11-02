@@ -156,12 +156,15 @@ func Candidates(text string, page, src *url.URL, script bool) []Cand {
 	out := make([]Cand, 0, len(strs))
 	for i, s := range strs {
 		c := Cand{Str: s}
+		key := false
 		c.Link, c.Reason = BareString(s.Text, page)
 		if script && c.Link != "" {
 			if i >= nScript && !anchored(s.Text) {
 				// Taken by the body pattern from unquoted code
 				// (a.number/t.doc), not from a string.
 				c.Link, c.Reason = "", ReasonCode
+			} else if strings.HasPrefix(s.Text, "./") && s.Start > 0 && s.End < len(text) && text[s.Start-1] == text[s.End] && mapKeyAt(text, s.Start-1, s.End+1) {
+				c.Link, c.Reason, key = "", ReasonModuleKey, true
 			} else if searchedFor(text, s.Start) {
 				c.Link, c.Reason = "", ReasonSearched
 			} else if i < nScript && s.Start > 0 && s.End < len(text) && text[s.Start-1] == text[s.End] && HeadAt(text, s.Start-1, s.End+1) {
@@ -174,7 +177,7 @@ func Candidates(text string, page, src *url.URL, script bool) []Cand {
 				c.Resolved = n
 			}
 		}
-		if src != nil && src.String() != page.String() {
+		if src != nil && !key && src.String() != page.String() {
 			if alt, ok := resolve(src, strings.TrimSpace(s.Text)); ok && alt != c.Resolved {
 				c.Alt = alt
 			}
