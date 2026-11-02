@@ -150,3 +150,32 @@ func TestReservedConnectsKeepTheirControls(t *testing.T) {
 		t.Errorf("a reserved connect after the kill file: %v", err)
 	}
 }
+
+// Two scans of one address reserve its connects twice and make them twice:
+// each connect is a line once, as the connects counted are.
+func TestReservedConnectsOfTwoScansAreRecordedOnce(t *testing.T) {
+	Reset()
+	defer Reset()
+	l, err := ledger.Open(filepath.Join(t.TempDir(), "d.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ledger.Use(l)
+	defer func() { ledger.Use(nil); l.Close() }()
+	ok, _ := net.Listen("tcp", "127.0.0.1:0")
+	defer ok.Close()
+	d := NewPortDialer(time.Second, nil, "", "")
+	addr := ok.Addr().String()
+	d.Reserve(context.Background(), "", []string{addr})
+	d.Reserve(context.Background(), "", []string{addr})
+	for i := 0; i < 2; i++ {
+		c, err := d.TCP(context.Background(), "", addr)
+		if err != nil {
+			t.Fatal(err)
+		}
+		c.Close()
+	}
+	if n := l.Count(); n != 2 {
+		t.Errorf("%d lines for 2 reserved connects", n)
+	}
+}

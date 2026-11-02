@@ -24,7 +24,8 @@ type PortDialer struct {
 	timeout time.Duration
 	src     net.IP
 	via     proxy.ContextDialer // SOCKS5 for the connects of the scan itself; nil: direct
-	pre     sync.Map            // addresses Reserve recorded, until their TCP call
+	preMu   sync.Mutex
+	pre     map[string]int // connects Reserve recorded for an address, until their TCP calls
 }
 
 // NewPortDialer is a dialer with a timeout per connect, connecting from
@@ -99,7 +100,7 @@ func hostOfAddr(addr string) string {
 // TCP connects to addr (ip:port) of host ("" when only the address is
 // known), through the proxy when there is one.
 func (d *PortDialer) TCP(ctx context.Context, host, addr string) (net.Conn, error) {
-	if _, done := d.pre.LoadAndDelete(addr); done {
+	if d.takeReserved(addr) {
 		// Reserve checked the scope and recorded the line: the kill file only.
 		if err := Current().Killed(); err != nil {
 			return nil, err
@@ -131,9 +132,25 @@ func (d *PortDialer) Reserve(ctx context.Context, host string, addrs []string) {
 		}
 	}
 	ledger.TCPBatch(ctx, host, ok)
-	for _, a := range ok {
-		d.pre.Store(a, struct{}{})
+	d.preMu.Lock()
+	defer d.preMu.Unlock()
+	if d.pre == nil {
+		d.pre = map[string]int{}
 	}
+	for _, a := range ok {
+		d.pre[a]++ // two scans of one address reserve it twice, and connect twice
+	}
+}
+
+// takeReserved says a connect to addr was recorded by Reserve, and uses it up.
+func (d *PortDialer) takeReserved(addr string) bool {
+	d.preMu.Lock()
+	defer d.preMu.Unlock()
+	if d.pre[addr] == 0 {
+		return false
+	}
+	d.pre[addr]--
+	return true
 }
 
 // TCPDirect is TCP that never goes through the proxy: the service probes
