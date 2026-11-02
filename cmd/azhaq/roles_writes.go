@@ -282,8 +282,10 @@ func replayWritesAs(who map[string]identity, roles []role, reqs []writeReq, answ
 	}
 	// read gets the owner's object again, to see whether a write changed
 	// it; a budget spent or a failed read leaves the write unproven.
+	short := false // a read was left out for the budget
 	read := func(r role, u string) (answer, bool) {
 		if sent >= budget {
+			short = true
 			return answer{}, false
 		}
 		sent++
@@ -428,6 +430,9 @@ func replayWritesAs(who map[string]identity, roles []role, reqs []writeReq, answ
 		row.Verdict = writeVerdict(&row, let, proven, anon, ownerLet, ownerAsked, vu != "", why, already)
 		rows = append(rows, finishWriteRow(row))
 	}
+	if short && stop == nil {
+		stop = fmt.Errorf("%w: some objects were not read back", errReplayMax)
+	}
 	return rows, sent, stop
 }
 
@@ -449,6 +454,7 @@ func replayCollection(row *roleRow, roles []role, w writeReq, answers map[string
 	var let, shown []string
 	confirmed := false
 	for _, r := range otherRoles(roles, w.owner) {
+		var obj *createdObject // the object r's create made, when this create confirmed it
 		a, err := send(r, w)
 		if err != nil {
 			return err
@@ -460,10 +466,11 @@ func replayCollection(row *roleRow, roles []role, w writeReq, answers map[string
 		let = append(let, r.name)
 		made := a // the answer to the create, and the object read back, say whose it is
 		if !confirmed {
-			if u := createdURL(w, answers); u != "" {
+			if u, field, value := createdMember(w, answers); u != "" {
 				if got, ok := read(r, u); ok && reads(got) {
 					row.OwnerBy += fmt.Sprintf("; %s's create is readable back at %s", r.name, pathOf(u))
 					confirmed = true
+					obj = &createdObject{url: u, field: field, value: value, creator: r.name, answers: map[string]answer{r.name: got}}
 					if got.self != nil {
 						made = got
 					}
@@ -481,6 +488,9 @@ func replayCollection(row *roleRow, roles []role, w writeReq, answers map[string
 		case owner == r.name:
 			row.OwnerBy += fmt.Sprintf("; the object %s's create made belongs to %s (%s)", r.name, r.name, by)
 			setCreated(row, r.name, owner)
+			if obj != nil {
+				readByOthers(row, roles, obj, read)
+			}
 		case owner == w.owner && strong:
 			shown = append(shown, r.name)
 			row.OwnerBy += fmt.Sprintf("; the object %s's create made belongs to %s, whose request was replayed (%s)", r.name, owner, by)
@@ -501,6 +511,89 @@ func replayCollection(row *roleRow, roles []role, w writeReq, answers map[string
 		}
 	}
 	return nil
+}
+
+// readByOthers has every role but the creator read the object its create
+// made, once, as itself: what the create's row cannot say alone is whether
+// the object is the creator's only. The object is kept on the row when a
+// role read it, for createdRows to judge.
+func readByOthers(row *roleRow, roles []role, c *createdObject, read func(role, string) (answer, bool)) {
+	readers := false
+	for _, o := range roles {
+		if o.name == c.creator {
+			continue
+		}
+		a, ok := read(o, c.url)
+		if !ok {
+			break // the budget is spent or the request failed: the row says which
+		}
+		c.answers[o.name] = a
+		readers = readers || reads(a)
+	}
+	if readers {
+		row.made = c // else only its sender reads it: the create stays accepted
+	}
+}
+
+// createdObject is an object a replayed create made, that a role besides its
+// creator read.
+type createdObject struct {
+	url, field, value string
+	creator           string
+	answers           map[string]answer // each role's read of it
+}
+
+// createdRows are the rows for the objects the replayed creates made and
+// other roles read: each a read of the creator's own object. made learns
+// whose each object is and how it is known.
+func createdRows(roles []role, wrows []roleRow, made map[string]instance) []roleRow {
+	var out []roleRow
+	for _, w := range wrows {
+		c := w.made
+		if c == nil {
+			continue
+		}
+		in := made[c.url]
+		if in.template == "" {
+			if i := strings.LastIndex(c.url, "/"+url.PathEscape(c.value)); i >= 0 && c.field != "" {
+				in.template = c.url[:i] + "/{" + c.field + "}"
+			}
+		}
+		by := fmt.Sprintf("created by %s's replayed POST %s", c.creator, pathOf(w.URL))
+		in.value, in.owner, in.by, in.sure, in.told, in.given = c.value, c.creator, by, proved, toldConfirms, false
+		in.holders = []string{c.creator}
+		made[c.url] = in
+		row := roleRow{URL: c.url, Status: map[string]int{}, Answers: map[string]answer{}, FoundBy: []string{c.creator},
+			From: in.template, Owner: c.creator, OwnerBy: by, value: c.value}
+		for _, r := range roles {
+			if a, ok := c.answers[r.name]; ok {
+				row.Answers[r.name] = a
+				row.Status[r.name] = a.Status
+			}
+		}
+		row.Verdict = verdict(roles, &row)
+		out = append(out, row)
+	}
+	return out
+}
+
+// withRows is rows with extra's added: a row for a URL the read replay
+// listed before the object existed is replaced.
+func withRows(rows, extra []roleRow) []roleRow {
+	at := map[string]int{}
+	for i, r := range rows {
+		if r.Method == "" {
+			at[r.URL] = i
+		}
+	}
+	for _, r := range extra {
+		if i, ok := at[r.URL]; ok {
+			rows[i] = r
+		} else {
+			rows = append(rows, r)
+		}
+	}
+	return rows
 }
 
 func setCreated(row *roleRow, sender, owner string) {
@@ -761,22 +854,29 @@ func knownReadBack(w writeReq, answers map[string]map[string]answer) string {
 // more segment, one of the scalar values the write's body sets, in the
 // order the body names them.
 func createdURL(w writeReq, answers map[string]map[string]answer) string {
-	u, err := url.Parse(w.url)
+	u, _, _ := createdMember(w, answers)
+	return u
+}
+
+// createdMember is createdURL with the body field and the value that made
+// the last segment.
+func createdMember(w writeReq, answers map[string]map[string]answer) (u, field, value string) {
+	pu, err := url.Parse(w.url)
 	if err != nil {
-		return ""
+		return "", "", ""
 	}
-	base := strings.TrimRight(u.Path, "/")
+	base := strings.TrimRight(pu.Path, "/")
 	for _, p := range bodyPairs(w.body) {
-		cand := *u
+		cand := *pu
 		cand.Path, cand.RawQuery, cand.Fragment = base+"/"+p[1], "", ""
 		out := cand.String()
 		for _, byURL := range answers {
 			if _, ok := byURL[out]; ok {
-				return out
+				return out, p[0], p[1]
 			}
 		}
 	}
-	return ""
+	return "", "", ""
 }
 
 // canaryToken is a value unlikely to already be anywhere in a target: a

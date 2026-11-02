@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/lilsadfoqs/azhaq/internal/browser"
@@ -22,6 +23,11 @@ func TestRolesLoginCountsEveryRequestOfTheSignIn(t *testing.T) {
 	if _, err := browser.Find(); err != nil {
 		t.Skip(err)
 	}
+	t.Run("roles.ledger.jsonl", func(t *testing.T) { rolesLoginCounts(t, false) })
+	t.Run("-ledger FILE", func(t *testing.T) { rolesLoginCounts(t, true) })
+}
+
+func rolesLoginCounts(t *testing.T, ledgerFlag bool) {
 	var mu sync.Mutex
 	hits := map[string]int{}
 	site := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -62,10 +68,16 @@ func TestRolesLoginCountsEveryRequestOfTheSignIn(t *testing.T) {
 	}))
 	defer site.Close()
 	dir := t.TempDir()
+	file := filepath.Join(dir, "roles.ledger.jsonl")
+	run := []string{"-url", site.URL + "/", "-no-paths", "-depth", "0", "-allow", strings.TrimPrefix(site.URL, "http://")}
+	if ledgerFlag {
+		file = filepath.Join(t.TempDir(), "mine.jsonl")
+		run = append(run, "-ledger", file)
+	}
 	_, errOut, err := captureBoth(t, func() error {
 		_, e := captureStdout(t, func() error {
-			return cmdRoles([]string{"-dir", dir, "-login", site.URL + "/login.php", "-role", "anon",
-				"-role-login", "admin=admin:password", "--", "-url", site.URL + "/", "-no-paths", "-depth", "0", "-allow", strings.TrimPrefix(site.URL, "http://")})
+			return cmdRoles(append([]string{"-dir", dir, "-login", site.URL + "/login.php", "-role", "anon",
+				"-role-login", "admin=admin:password", "--"}, run...))
 		})
 		return e
 	})
@@ -87,7 +99,7 @@ func TestRolesLoginCountsEveryRequestOfTheSignIn(t *testing.T) {
 		}
 	}
 	target := 0
-	_ = ledger.Read(filepath.Join(dir, "roles.ledger.jsonl"), func(e ledger.Entry) error {
+	_ = ledger.Read(file, func(e ledger.Entry) error {
 		if e.Kind != ledger.KindSeal && e.Class != ledger.ClassSource && e.Class != ledger.ClassDNS && e.Class != ledger.ClassOwn {
 			target++
 		}
@@ -113,5 +125,48 @@ func TestRolesLoginCountsEveryRequestOfTheSignIn(t *testing.T) {
 	}
 	if strings.Contains(errOut, "the summary counts") {
 		t.Errorf("the ledger check found the summary off\n%s", errOut)
+	}
+}
+
+// -max-requests in the run options is the budget of the whole command: the
+// runs, the history reads, the replay and the writes together send no more,
+// and the command exits 4 naming the flag.
+func TestRolesMaxRequestsIsTheWholeCommands(t *testing.T) {
+	var served atomic.Int64
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		served.Add(1)
+		ok := r.Header.Get("Authorization") == "Bearer t-alice"
+		switch {
+		case r.Method == http.MethodPost && ok:
+			fmt.Fprint(w, `{"id":3}`)
+		case r.URL.Path == "/":
+			fmt.Fprint(w, `<a href="/api/items">items</a>`)
+		case ok:
+			fmt.Fprint(w, `{"id":1,"owner":"alice"}`)
+		default:
+			w.WriteHeader(401)
+			fmt.Fprint(w, `{"error":"no"}`)
+		}
+	}))
+	defer srv.Close()
+	har := writeHAR(t, "alice.har",
+		harEntry("2026-10-29T10:00:00.000Z", "GET", srv.URL+"/api/items", "", 200, "Authorization", "Bearer t-alice"),
+		harEntry("2026-10-29T10:00:01.000Z", "GET", srv.URL+"/api/items/1", "", 200, "Authorization", "Bearer t-alice"),
+		harEntry("2026-10-29T10:00:02.000Z", "POST", srv.URL+"/api/items", `{"name":"x"}`, 200, "Authorization", "Bearer t-alice", "Content-Type", "application/json"))
+	for _, limit := range []string{"4", "7", "10"} {
+		served.Store(0)
+		_, errOut, code := cli(t, "roles", "-role", "anon", "-har", "alice="+har, "-replay-writes", "post", "-json", "-dir", t.TempDir(),
+			"--", "-url", srv.URL+"/", "-allow", strings.TrimPrefix(srv.URL, "http://"), "-no-paths", "-max-requests", limit)
+		rep := lastReport(t, errOut)
+		n, _ := strconv.Atoi(limit)
+		if int(served.Load()) > n || rep.Requests != served.Load() {
+			t.Errorf("-max-requests %s: the server saw %d requests, the summary says %d", limit, served.Load(), rep.Requests)
+		}
+		if code != exitLimit || !strings.Contains(rep.Stopped, "-max-requests "+limit) {
+			t.Errorf("-max-requests %s: exit %d, stopped %q", limit, code, rep.Stopped)
+		}
+		if !strings.Contains(strings.Join(rep.Notes, "\n"), "request budget "+limit+" for the whole command") {
+			t.Errorf("-max-requests %s: the summary does not say the budget is the command's: %v", limit, rep.Notes)
+		}
 	}
 }

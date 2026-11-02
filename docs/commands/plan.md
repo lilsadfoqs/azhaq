@@ -38,7 +38,7 @@ Plain text prints the same parts, one block each. `-json` prints one object.
 | Field | Meaning |
 | --- | --- |
 | `targets` | Each seed, with the collectors that would run on it. |
-| `skipped` | The seeds left out of scope. |
+| `skipped` | The seeds left out: out of scope, or a URL a `-deny-path` rule matches (`reason` is `-deny-path RULE`), which a run never requests. A skipped seed is not in `targets` or in the requests estimate. |
 | `collectors` | What each collector does, and to whom. |
 | `active` | The active techniques asked for. |
 | `builtin_paths` | The built-in path checks on each web service. |
@@ -171,7 +171,8 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 | `-chrome` | string |  | the Chrome or Chromium to run (default $AZHAQ_CHROME, else the first found) |
 | `-chrome-profile` | string |  | a Chrome user data directory to use and keep: sessions it holds go with the pages (default: a temporary one) |
 | `-chrome-proxy` | string |  | send Chrome's own connections through this http or socks5 proxy (default: -proxy, else the environment's); a plain http:// request reaches an http proxy as a proxy request, a page over TLS as a CONNECT tunnel |
-| `-chrome-require-sandbox` | bool |  | never run Chrome without its sandbox: where the system gives it none (no user namespaces, AppArmor, a container) Chrome does not start (default: it is started once more without, and the summary says so) |
+| `-chrome-no-sandbox` | bool |  | let Chrome run without its sandbox where the system gives it none (no user namespaces, AppArmor, a container): it is started once more without, and the summary says so. The pages it loads are the targets' and untrusted: use a throwaway environment. By default Chrome does not start then |
+| `-chrome-require-sandbox` | bool |  | never run Chrome without its sandbox (the default since v0.15.0, so this changes nothing: kept for scripts that pass it; it cannot go with -chrome-no-sandbox) |
 | `-tabs` | int | `6` | Chrome tabs open at once for screenshots and -browser (gowitness -t) |
 | `-unsafe-ports` | bool | `true` | let Chrome open the ports it refuses by default (6000, 6666, 10080 and others); -unsafe-ports=false keeps its refusal |
 

@@ -88,10 +88,10 @@ func benchScope(app string) *scopeRow {
 	}
 	before := trapped.Load()
 	cdb := filepath.Join(dir, "scope-chrome-"+time.Now().Format("150405")+".db")
-	rb := azRun("scope", 5*time.Minute, dir, "run", "-scope", scopeFile, "-browser", "-db", cdb, "-quiet")
-	rl := azRun("scope", 5*time.Minute, dir, "run", "-scope", scopeFile, "-login", site+"/login", "-login-user", "bench", "-login-pass", "bench", "-db", cdb+"-login.db", "-quiet")
-	rs := azRun("scope", 5*time.Minute, dir, "shots", "-u", site+"/", "-u", site+"/login", "-scope", scopeFile, "-dir", filepath.Join(dir, "shots"), "-silent")
-	rc := azRun("scope", 5*time.Minute, dir, "crawl", "-u", site+"/", "-browser", "-scope", scopeFile, "-silent")
+	rb := azRun("scope", 5*time.Minute, dir, "run", "-scope", scopeFile, "-browser", "-chrome-no-sandbox", "-db", cdb, "-quiet")
+	rl := azRun("scope", 5*time.Minute, dir, "run", "-scope", scopeFile, "-login", site+"/login", "-login-user", "bench", "-login-pass", "bench", "-chrome-no-sandbox", "-db", cdb+"-login.db", "-quiet")
+	rs := azRun("scope", 5*time.Minute, dir, "shots", "-u", site+"/", "-u", site+"/login", "-scope", scopeFile, "-dir", filepath.Join(dir, "shots"), "-silent", "-chrome-no-sandbox")
+	rc := azRun("scope", 5*time.Minute, dir, "crawl", "-u", site+"/", "-browser", "-chrome-no-sandbox", "-scope", scopeFile, "-silent")
 	row.ChromeTrap = trapped.Load() - before
 	addCheck("scope: no request leaves the program's scope with Chrome (-browser, -login, shots)", row.ChromeTrap == 0,
 		"%d requests to the out-of-scope host from run -browser (exit %d), run -login (exit %d: the sign-in form posts to the trap, so it is refused), shots (exit %d) and crawl -browser (exit %d)", row.ChromeTrap, rb.exit, rl.exit, rs.exit, rc.exit)

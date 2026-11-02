@@ -322,7 +322,7 @@ func (r *regressRow) prb18(dir string) {
 		r.record("PRB-18", true, false, "gowitness not found (bin or $AZHAQ_REFBIN)")
 		return
 	}
-	_, am := run("shots", 5*time.Minute, dir, azhaq, "shots", "-u", regressJuice, "-dir", filepath.Join(dir, "p18-azhaq"), "-silent")
+	_, am := run("shots", 5*time.Minute, dir, azhaq, "shots", "-u", regressJuice, "-dir", filepath.Join(dir, "p18-azhaq"), "-silent", "-chrome-no-sandbox")
 	_, gm := run("shots", 5*time.Minute, dir, gow, "scan", "single", "-u", regressJuice, "--chrome-path", chrome, "-s", filepath.Join(dir, "p18-gowitness"), "-T", "30")
 	r.record("PRB-18", true, am.Seconds <= 2*gm.Seconds, "one screenshot of Juice Shop: azhaq %.1fs, gowitness %.1fs (azhaq <= 2x)", am.Seconds, gm.Seconds)
 }
@@ -358,6 +358,6 @@ func (r *regressRow) spd01(dir string) {
 		r.record("SPD-01", true, false, "no Chrome here")
 		return
 	}
-	_, m := run("browser", 10*time.Minute, dir, azhaq, "run", "-url", regressJuice, "-browser", "-db", filepath.Join(dir, "spd01.db"), "-quiet")
+	_, m := run("browser", 10*time.Minute, dir, azhaq, "run", "-url", regressJuice, "-browser", "-chrome-no-sandbox", "-db", filepath.Join(dir, "spd01.db"), "-quiet")
 	r.record("SPD-01", true, m.RSSMB > 0 && m.RSSMB <= 250, "run -browser on Juice Shop; azhaq's peak %.0f MB (<= 250 MB), %.1fs", m.RSSMB, m.Seconds)
 }

@@ -210,3 +210,50 @@ func TestPlanListsZoneTransfers(t *testing.T) {
 		t.Errorf("a transfer planned without -axfr: %+v", q.AXFR)
 	}
 }
+
+// A seed a -deny-path rule keeps out is listed as skipped with the rule, as
+// run lists it, and is neither a target nor in the requests estimate; the CLI
+// and the MCP tool say the same.
+func TestPlanSkipsASeedADenyPathRuleKeepsOut(t *testing.T) {
+	check := func(p runPlan) {
+		t.Helper()
+		for _, tg := range p.Targets {
+			if strings.Contains(tg.Key, "/logout") {
+				t.Errorf("/logout is a target of the plan: %+v", p.Targets)
+			}
+		}
+		if len(p.Skipped) != 1 || !strings.HasSuffix(p.Skipped[0].Target, "/logout") || p.Skipped[0].Reason != "-deny-path ^/logout" {
+			t.Errorf("skipped: %+v", p.Skipped)
+		}
+		home := false
+		for _, tg := range p.Targets {
+			home = home || strings.HasSuffix(tg.Key, "/home") && len(tg.Collectors) > 0
+		}
+		if !home {
+			t.Errorf("the seed no rule matches stays a target: %+v", p.Targets)
+		}
+	}
+	args := []string{"-url", "http://127.0.0.1:18081/logout", "-url", "http://127.0.0.1:18081/home", "-deny-path", "^/logout", "-sources", "none", "-depth", "0"}
+	check(planJSON(t, args...))
+
+	dir := t.TempDir()
+	exe := filepath.Join(dir, "azhaq")
+	if err := os.WriteFile(exe, []byte("#!/bin/sh\nAZHAQ_TEST_AS_MAIN=1 exec '"+os.Args[0]+"' \"$@\"\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	s := &mcpServer{exe: exe, dir: filepath.Join(dir, "ws"), lock: []string{"-allow", "127.0.0.1:18081", "-deny-path", "^/logout"}, locked: true, held: heldRun{Sources: "none"}}
+	if err := os.MkdirAll(s.dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	text, isErr := callText(t, s, "azhaq_plan", map[string]any{"targets": []any{"http://127.0.0.1:18081/logout", "http://127.0.0.1:18081/home"}, "depth": 0})
+	if isErr {
+		t.Fatalf("azhaq_plan: %s", text)
+	}
+	var got struct {
+		Plan []runPlan `json:"plan"`
+	}
+	if err := json.Unmarshal([]byte(text), &got); err != nil || len(got.Plan) != 1 {
+		t.Fatalf("azhaq_plan answered %v: %s", err, text)
+	}
+	check(got.Plan[0])
+}

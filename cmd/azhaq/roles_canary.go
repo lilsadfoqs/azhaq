@@ -12,6 +12,7 @@ import (
 
 	"github.com/lilsadfoqs/azhaq/internal/egress"
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
+	"github.com/lilsadfoqs/azhaq/internal/neterr"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
 )
 
@@ -179,8 +180,9 @@ type replayWatch struct {
 
 // renewer renews a role's session: its -role-cmd run again, or a new
 // sign-in on loginURL with Chrome, as its run signed in. A role given with
-// -role headers cannot be renewed.
-func renewer(roles []role, loginURL string, quiet bool) func(int) error {
+// -role headers cannot be renewed. left, when not nil, is what the command's
+// budget has left: the sign-in is held to it.
+func renewer(roles []role, loginURL string, quiet bool, left func() int64) func(int) error {
 	return func(i int) error {
 		r := roles[i]
 		if r.session != nil {
@@ -207,6 +209,12 @@ func renewer(roles []role, loginURL string, quiet bool) func(int) error {
 			base.Del("Cookie")
 			base.Del("Authorization")
 			fetch.Reset()
+			if left != nil {
+				if left() == 0 {
+					return fmt.Errorf("the sign-in was not made: %w", neterr.ErrBudget)
+				}
+				egress.SetMaxRequests(left())
+			}
 			fetch.Extra = base
 			_, err := quietly(quiet, func() (*report, error) {
 				_, err := signIn(nil, loginURL, r.user, r.pass, newReport("roles"), nil)

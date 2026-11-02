@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -823,5 +824,112 @@ func TestReplayWritesCutBody(t *testing.T) {
 	}
 	if a := rows[0].Answers["bob"]; a.Status != 200 || !slices.ContainsFunc(rows[0].Failed, func(f string) bool { return strings.HasPrefix(f, "bob's PUT: the answer was cut") }) {
 		t.Errorf("bob %+v failed %q", a, rows[0].Failed)
+	}
+}
+
+// The object a replayed create makes is read by every other role too: a
+// store where any signed-in user reads any book is a cross read of the book
+// the replay made, with a made-up title as its control; a store that gives a
+// book to its owner alone is not, and the create stays accepted.
+func TestRolesReadsTheObjectAReplayedCreateMade(t *testing.T) {
+	tok := func(sub string) string {
+		b := func(v string) string { return base64.RawURLEncoding.EncodeToString([]byte(v)) }
+		return b(`{"alg":"none"}`) + "." + b(`{"sub":"`+sub+`"}`) + "."
+	}
+	serve := func(ownerOnly bool) *httptest.Server {
+		var mu sync.Mutex
+		books := map[string]string{"seed": "carol"}
+		return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			mu.Lock()
+			defer mu.Unlock()
+			who := ""
+			if h := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "); strings.Count(h, ".") == 2 {
+				p, _ := base64.RawURLEncoding.DecodeString(strings.Split(h, ".")[1])
+				var c struct{ Sub string }
+				_ = json.Unmarshal(p, &c)
+				who = c.Sub
+			}
+			reply := func(code int, v any) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(code)
+				_ = json.NewEncoder(w).Encode(v)
+			}
+			switch {
+			case r.URL.Path == "/openapi.json":
+				reply(200, map[string]any{"openapi": "3.0.0", "info": map[string]any{"title": "t", "version": "1"}, "paths": map[string]any{
+					"/api/books":              map[string]any{"get": map[string]any{"responses": map[string]any{"200": map[string]any{"description": "ok"}}}, "post": map[string]any{"responses": map[string]any{"200": map[string]any{"description": "ok"}}}},
+					"/api/books/{book_title}": map[string]any{"get": map[string]any{"parameters": []any{map[string]any{"name": "book_title", "in": "path", "required": true, "schema": map[string]any{"type": "string"}}}, "responses": map[string]any{"200": map[string]any{"description": "ok"}}}}}})
+			case who == "":
+				reply(401, map[string]string{"error": "sign in"})
+			case r.Method == http.MethodPost:
+				var d struct {
+					Title string `json:"book_title"`
+				}
+				_ = json.NewDecoder(r.Body).Decode(&d)
+				books[d.Title] = who
+				reply(200, map[string]string{"status": "created"})
+			case r.URL.Path == "/api/books":
+				reply(200, map[string]any{"books": []any{map[string]string{"book_title": "seed"}}})
+			default:
+				title := strings.TrimPrefix(r.URL.Path, "/api/books/")
+				owner, ok := books[title]
+				switch {
+				case !ok:
+					reply(404, map[string]string{"error": "no such book"})
+				case ownerOnly && owner != who && owner != "carol":
+					reply(403, map[string]string{"error": "not yours"})
+				default:
+					reply(200, map[string]string{"book_title": title, "owner": owner})
+				}
+			}
+		}))
+	}
+	run := func(ownerOnly bool) (rows []roleRow, errOut string) {
+		srv := serve(ownerOnly)
+		defer srv.Close()
+		har := writeHAR(t, "alice.har",
+			harEntry("2026-10-29T10:00:00.000Z", "GET", srv.URL+"/api/books", "", 200, "Authorization", "Bearer "+tok("alice")),
+			harEntry("2026-10-29T10:00:01.000Z", "POST", srv.URL+"/api/books", `{"book_title":"alice-book"}`, 200, "Authorization", "Bearer "+tok("alice"), "Content-Type", "application/json"))
+		out, errOut, err := captureBoth(t, func() error {
+			return cmdRoles([]string{"-json", "-dir", t.TempDir(), "-role", "anon", "-role", "alice=Authorization: Bearer " + tok("alice"), "-role", "bob=Authorization: Bearer " + tok("bob"),
+				"-har", "alice=" + har, "-id", "alice:book_title=alice-book", "-replay-writes", "post", "-all",
+				"--", "-url", srv.URL + "/openapi.json", "-allow", strings.TrimPrefix(srv.URL, "http://"), "-no-paths"})
+		})
+		if err != nil && exitCode(err) != exitLimit {
+			t.Fatalf("%v\n%s", err, errOut)
+		}
+		for _, l := range strings.Split(strings.TrimSpace(out), "\n") {
+			var row roleRow
+			if json.Unmarshal([]byte(l), &row) == nil && row.URL != "" {
+				rows = append(rows, row)
+			}
+		}
+		return rows, errOut
+	}
+	find := func(rows []roleRow, path, method string) *roleRow {
+		for i := range rows {
+			if strings.HasSuffix(rows[i].URL, path) && rows[i].Method == method {
+				return &rows[i]
+			}
+		}
+		return nil
+	}
+
+	rows, errOut := run(false)
+	book := find(rows, "/api/books/alice-book", "")
+	if book == nil || book.Verdict != verdictCross || book.Owner != "bob" || !slices.Contains(book.Readers, "alice") ||
+		!strings.Contains(book.OwnerBy, "created by bob's replayed POST /api/books") || book.Confidence != confProved || book.Control == nil || book.Control.Value == "alice-book" {
+		t.Fatalf("the book bob's replayed create made is not reported as a cross read:\n%+v\n%s", book, errOut)
+	}
+	if post := find(rows, "/api/books", "POST"); post == nil || post.Verdict != verdictWriteAccepted {
+		t.Errorf("the create's own row: %+v", post)
+	}
+
+	rows, errOut = run(true)
+	if book := find(rows, "/api/books/alice-book", ""); book != nil && book.Verdict == verdictCross {
+		t.Errorf("a book only its owner reads is reported as read by another role: %+v\n%s", book, errOut)
+	}
+	if post := find(rows, "/api/books", "POST"); post == nil || post.Verdict != verdictWriteAccepted {
+		t.Errorf("a create whose object only its sender reads should stay accepted: %+v", post)
 	}
 }

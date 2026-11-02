@@ -15,7 +15,7 @@ go run ./bench -units default:apps,once:docs  # only these units of the selectio
 go run ./bench -merge -expect LIST a.json b.json  # join records of units run apart into one; a unit of LIST no record holds fails a check
 ```
 
-Run it from the repository root. It needs Docker (Juice Shop and VAmPI from `bench/compose.yaml`, the services lab from `bench/services.yaml` when the services section runs), network access, a C compiler (jsluice uses cgo), Python 3 (arjun), Chrome (screenshots, `-browser`, `-login`) and linux/amd64 (the reference tools are pinned to their linux/amd64 release archives, or taken from `-refbin`). It exits non-zero if a check fails, and writes a JSON record to `bench/history/`. The bench never stops containers: `-down` takes down only its own two (`azhaq-bench`).
+Run it from the repository root. It needs Docker (Juice Shop and VAmPI from `bench/compose.yaml`, the services lab from `bench/services.yaml` when the services section runs), network access, a C compiler (jsluice uses cgo), Python 3 (arjun), Chrome (screenshots, `-browser`, `-login`; the bench runs on machines that give it no sandbox, so every azhaq command it runs with Chrome passes `-chrome-no-sandbox`) and linux/amd64 (the reference tools are pinned to their linux/amd64 release archives, or taken from `-refbin`). It exits non-zero if a check fails, and writes a JSON record to `bench/history/`. The bench never stops containers: `-down` takes down only its own two (`azhaq-bench`).
 
 ## The lab images
 

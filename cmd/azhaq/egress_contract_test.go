@@ -331,8 +331,60 @@ var egressContract = map[string]egressEntry{
 			t.Errorf("plan: exit %d, the target was asked %d times", code, h.served.Load())
 		}
 	}},
-	"scope":   {sends: "delegates", via: "run", why: "reads a file; only -scope PLATFORM asks the platform, through egress.SourceClient like every source (rules_test.go, scopefile_test)"},
-	"roles":   {sends: "delegates", via: "run", why: "runs `run` once per role through fetch.Client (target clients) and replays through the same; its own ledger is roles.ledger.jsonl"},
+	"scope": {sends: "delegates", via: "run", why: "reads a file; only -scope PLATFORM asks the platform, through egress.SourceClient like every source (rules_test.go, scopefile_test)"},
+	"roles": {sends: "direct", run: func(t *testing.T, h *egressHarness) {
+		// A history file and -replay-writes: the runs, the history reads, the
+		// replay and the POST are one number at the server, in the summary and
+		// in the ledger, without -ledger (roles.ledger.jsonl) and with it.
+		for _, withLedger := range []bool{false, true} {
+			var gets, posts atomic.Int64
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == http.MethodPost {
+					posts.Add(1)
+				} else {
+					gets.Add(1)
+				}
+				ok := r.Header.Get("Authorization") == "Bearer t-alice"
+				switch {
+				case r.Method == http.MethodPost && ok:
+					fmt.Fprint(w, `{"id":3}`)
+				case r.URL.Path == "/":
+					fmt.Fprint(w, `<a href="/api/items">items</a>`)
+				case ok:
+					fmt.Fprint(w, `{"id":1,"owner":"alice"}`)
+				default:
+					w.WriteHeader(401)
+					fmt.Fprint(w, `{"error":"no"}`)
+				}
+			}))
+			har := writeHAR(t, "alice.har",
+				harEntry("2026-10-29T10:00:00.000Z", "GET", srv.URL+"/api/items", "", 200, "Authorization", "Bearer t-alice"),
+				harEntry("2026-10-29T10:00:01.000Z", "GET", srv.URL+"/api/items/1", "", 200, "Authorization", "Bearer t-alice"),
+				harEntry("2026-10-29T10:00:02.000Z", "POST", srv.URL+"/api/items", `{"name":"x"}`, 200, "Authorization", "Bearer t-alice", "Content-Type", "application/json"))
+			dir := t.TempDir()
+			file := filepath.Join(dir, "roles.ledger.jsonl")
+			run := []string{"-url", srv.URL + "/", "-allow", strings.TrimPrefix(srv.URL, "http://"), "-no-paths"}
+			if withLedger {
+				file = filepath.Join(t.TempDir(), "mine.jsonl")
+				run = append(run, "-ledger", file)
+			}
+			h.ledger = file
+			_, errOut, code := cli(t, append([]string{"roles", "-role", "anon", "-har", "alice=" + har, "-replay-writes", "post", "-json", "-dir", dir, "--"}, run...)...)
+			rep := lastReport(t, errOut)
+			srv.Close()
+			if code != exitOK && code != exitPartial {
+				t.Fatalf("with -ledger %v: exit %d: %+v", withLedger, code, rep)
+			}
+			c := h.counts()
+			got, lines := gets.Load()+posts.Load(), int64(c.class("target"))
+			if posts.Load() != 1 || got != rep.Requests || lines != got {
+				t.Errorf("with -ledger %v: the server saw %d GET and %d POST, the summary says %d, the ledger lists %d: %v", withLedger, gets.Load(), posts.Load(), rep.Requests, lines, c.byClassKind)
+			}
+			if strings.Contains(errOut, "the summary counts") {
+				t.Errorf("with -ledger %v: the ledger check found the summary off\n%s", withLedger, errOut)
+			}
+		}
+	}},
 	"report":  {sends: "silent", why: "writes reports from the evidence of a roles run"},
 	"subs":    {sends: "delegates", via: "dns", why: "passive sources are source clients (subcol tests), resolving goes through the dns pool"},
 	"asn":     {sends: "delegates", via: "urls", why: "RIPEstat is a source client, like the archives of urls"},

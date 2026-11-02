@@ -23,6 +23,9 @@ azhaq crawl -u https://app.example.com/ -fs rdn -do -f rdn,path -rl 5
 # Also the routes scripts and descriptions name that the crawl did not observe, each row marked with its class
 azhaq crawl -u https://app.example.com/ -json -hints
 
+# Load pages in Chrome in a container that gives it no sandbox (the pages are untrusted: a throwaway environment)
+azhaq crawl -u https://app.example.com/ -browser -chrome-no-sandbox
+
 # The map's rows, with the strings kept out of the URLs
 azhaq crawl -u https://app.example.com/ -json -rejected
 ```
@@ -241,6 +244,7 @@ These filters limit what is printed, not what is crawled.
 | `-ledger` | string |  | write every request, connection and DNS query the run sends (to targets, third-party sources and resolvers) to this file, a chain of hashes that azhaq ledger -verify checks (default DB.ledger.jsonl next to the workspace; off: none; with a temporary database, only when given) |
 | `-submit-forms` | bool |  | also submit POST forms with neutral values (crawl): CHANGES DATA on the target, each submission counts as a request and is in the ledger, the summary says how many; held to -allow, -deny and the crawl's scope |
 | `-browser-writes` | bool |  | let pages in Chrome send their writes (POST, PUT, DELETE…, beacons, forms posted on load) as a user's browser would: they change data on the target; by default Chrome sends only GET, HEAD and OPTIONS outside signing in, and maps the writes it does not send |
+| `-chrome-no-sandbox` | bool |  | let Chrome run without its sandbox where the system gives it none (no user namespaces, AppArmor, a container): it is started once more without, and the summary says so. The pages it loads are the targets' and untrusted: use a throwaway environment. By default Chrome does not start then |
 
 **Pace and limits**
 
