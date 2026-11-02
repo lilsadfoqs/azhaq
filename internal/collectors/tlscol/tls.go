@@ -98,6 +98,13 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 			MinVersion:         tls.VersionTLS12,
 		}, 8*time.Second)
 	}
+	if err != nil && c.Dial == nil && egress.LegacyTLSNeeded(err) && egress.Spend(ctx) == nil {
+		// A server crypto/tls cannot handshake with: one more connection, counted
+		// and recorded like the first, with the fallback client.
+		if conn2, lerr := egress.DialTLSLegacy(dctx, host, addr, &tls.Config{ServerName: serverName, InsecureSkipVerify: true, MinVersion: tls.VersionTLS12}, 8*time.Second); lerr == nil {
+			conn, err = conn2, nil
+		}
+	}
 	if err != nil {
 		if errors.Is(err, neterr.ErrOutOfScope) {
 			egress.Refund() // never sent

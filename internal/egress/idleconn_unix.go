@@ -18,6 +18,8 @@ func connDead(c net.Conn) bool {
 			return false // HTTP/2 reads its connection all the time
 		}
 		c = tc.NetConn()
+	} else if lc, ok := c.(*legacyConn); ok {
+		c = lc.NetConn()
 	}
 	sc, ok := c.(syscall.Conn)
 	if !ok {

@@ -5,9 +5,12 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"net"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/lilsadfoqs/azhaq/internal/egress"
+	"github.com/lilsadfoqs/azhaq/internal/tlstest"
 	"github.com/lilsadfoqs/azhaq/types"
 )
 
@@ -50,5 +53,27 @@ func TestRefusedTLSPortIsNotAFailure(t *testing.T) {
 		func(types.Observation) error { got++; return nil })
 	if err != nil || meta.Status != types.StatusOK || got != 0 {
 		t.Errorf("status %q error %v observations %d", meta.Status, err, got)
+	}
+}
+
+// A server whose suites crypto/tls does not offer still gives its
+// certificate: the handshake runs again with the fallback client, counted
+// like the first.
+func TestCertificateOfAServerWithLegacySuites(t *testing.T) {
+	srv := tlstest.Serve(t, 0, 0, tlstest.RSAGCM)
+	_, port, _ := net.SplitHostPort(srv.Addr)
+	col := &Collector{Port: port}
+	var rows []types.Observation
+	before := egress.Sent()
+	meta, err := col.Run(context.Background(), types.Seed{Type: types.TypeIPAddress, Keys: map[string]string{"ip": "127.0.0.1"}},
+		func(o types.Observation) error { rows = append(rows, o); return nil })
+	if err != nil || meta.Status != types.StatusOK || len(rows) != 1 {
+		t.Fatalf("status %q error %v rows %d", meta.Status, err, len(rows))
+	}
+	if !strings.Contains(string(rows[0].Payload), "legacy.test") {
+		t.Errorf("row %s", rows[0].Payload)
+	}
+	if n := egress.Sent() - before; n != 2 {
+		t.Errorf("%d connections counted, want the failed handshake and the fallback's", n)
 	}
 }

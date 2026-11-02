@@ -149,6 +149,17 @@ func (d *PortDialer) TCPDirect(ctx context.Context, host, addr string) (net.Conn
 
 // TLS is TCPDirect with a TLS handshake that waits at most handshake.
 func (d *PortDialer) TLS(ctx context.Context, host, addr string, cfg *tls.Config, handshake time.Duration) (net.Conn, error) {
+	return d.tls(ctx, host, addr, cfg, handshake, false)
+}
+
+// TLSLegacy is TLS with the fallback client (see legacytls.go): for a server
+// crypto/tls failed with an error LegacyTLSNeeded names. It is another
+// connection, recorded like any other, and the caller counts and paces it.
+func (d *PortDialer) TLSLegacy(ctx context.Context, host, addr string, cfg *tls.Config, handshake time.Duration) (net.Conn, error) {
+	return d.tls(ctx, host, addr, cfg, handshake, true)
+}
+
+func (d *PortDialer) tls(ctx context.Context, host, addr string, cfg *tls.Config, handshake time.Duration, legacy bool) (net.Conn, error) {
 	if err := d.allowed(host, addr); err != nil {
 		return nil, err
 	}
@@ -164,6 +175,14 @@ func (d *PortDialer) TLS(ctx context.Context, host, addr string, cfg *tls.Config
 	cfg = cfg.Clone()
 	if cfg.ServerName == "" {
 		cfg.ServerName = hostOfAddr(addr)
+	}
+	if legacy {
+		lc, err := legacyClient(hctx, c, cfg, hostOfAddr(addr))
+		if err != nil {
+			c.Close()
+			return nil, err
+		}
+		return lc, nil
 	}
 	tc := tls.Client(c, cfg)
 	if err := tc.HandshakeContext(hctx); err != nil {
@@ -198,4 +217,11 @@ func (d *PortDialer) UDPAnySource(ctx context.Context, host string, raddr *net.U
 // ledger line, held to the kill file and the scope.
 func DialTLS(ctx context.Context, host, addr string, cfg *tls.Config, timeout time.Duration) (net.Conn, error) {
 	return (&PortDialer{timeout: timeout}).TLS(ctx, host, addr, cfg, timeout)
+}
+
+// DialTLSLegacy is DialTLS with the fallback client, for a server crypto/tls
+// failed with an error LegacyTLSNeeded names: another connection and ledger
+// line, which the caller counts.
+func DialTLSLegacy(ctx context.Context, host, addr string, cfg *tls.Config, timeout time.Duration) (net.Conn, error) {
+	return (&PortDialer{timeout: timeout}).TLSLegacy(ctx, host, addr, cfg, timeout)
 }

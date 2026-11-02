@@ -3,6 +3,7 @@ package egress
 import (
 	"context"
 	"crypto/tls"
+	"fmt"
 	"net"
 	"strings"
 	"sync"
@@ -224,7 +225,8 @@ func ConnectTarget(ctx context.Context, addr string) (net.Conn, error) {
 }
 
 // ConnectTargetTLS is ConnectTarget with a TLS handshake that takes any
-// certificate.
+// certificate. A server crypto/tls cannot handshake with (see legacytls.go)
+// gets a second connection, counted like the first, with the fallback client.
 func ConnectTargetTLS(ctx context.Context, addr string, cfg *tls.Config) (net.Conn, error) {
 	c, err := ConnectTarget(ctx, addr)
 	if err != nil {
@@ -233,7 +235,20 @@ func ConnectTargetTLS(ctx context.Context, addr string, cfg *tls.Config) (net.Co
 	tc := tls.Client(c, cfg)
 	if err := tc.HandshakeContext(ctx); err != nil {
 		c.Close()
-		return nil, err
+		if !LegacyTLSNeeded(err) || cfg == nil || !cfg.InsecureSkipVerify || Spend(ctx) != nil {
+			return nil, err
+		}
+		c2, cerr := ConnectTarget(ctx, addr)
+		if cerr != nil {
+			return nil, err
+		}
+		host, _, _ := net.SplitHostPort(addr)
+		lc, lerr := legacyClient(ctx, c2, cfg, host)
+		if lerr != nil {
+			c2.Close()
+			return nil, fmt.Errorf("%w; fallback TLS client: %v", err, lerr)
+		}
+		return lc, nil
 	}
 	return tc, nil
 }

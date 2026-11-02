@@ -212,7 +212,7 @@ func tlsData(raw string, t *fetch.TLSInfo) map[string]any {
 	names := append(append([]string(nil), cert.DNSNames...), cert.Subject.CommonName)
 	out := map[string]any{
 		"host": host, "port": port, "probe_status": true,
-		"tls_version": tlsVersions[t.Version], "cipher": tls.CipherSuiteName(t.Cipher),
+		"tls_version": tlsVersions[t.Version], "cipher": egress.CipherSuiteName(t.Cipher),
 		"not_before": cert.NotBefore.Format(time.RFC3339Nano), "not_after": cert.NotAfter.Format(time.RFC3339Nano),
 		"subject_dn": dn(cert.Subject.String()), "subject_cn": cert.Subject.CommonName,
 		"issuer_dn": dn(cert.Issuer.String()), "issuer_cn": cert.Issuer.CommonName,
