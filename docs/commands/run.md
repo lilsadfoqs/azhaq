@@ -422,6 +422,7 @@ Examples of what `notes` holds for a run:
 | `-max-response-size` | int |  | bytes read of a page or document (default 2097152; scripts and JSON get 16 MiB) |
 | `-depth` | int | `4` | max fan-out waves (0 = seed wave only, not unlimited) |
 | `-retry-failed` | bool |  | with azhaq resume: ask again the failed targets the summary marks retryable (a timeout, a closed connection, a 429 or 5xx); only those run again |
+| `-retry-run` | string |  | with -retry-failed: the run to ask again, by the run_id of its summary (default: the newest run of the workspace) |
 
 **Session**
 

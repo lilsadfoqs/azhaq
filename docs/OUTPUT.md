@@ -147,7 +147,7 @@ The URL keys other than `catchall` and `skipped` count rows of the other coverag
 
 - `retryable` is true for timeouts, dropped connections, answers cut short, 429 and 5xx: a later try may work. `azhaq resume -db FILE -retry-failed` asks those targets again, and only those (see [resume](commands/resume.md#retrying-failed-targets)). Failures that are not retryable (a refused connection, a certificate error, a 4xx other than 429) are not asked again: the same request would fail the same way, so they are for you to read and fix. A plain `resume` continues only the tasks a limit or a kill left, never a failed one.
 - `source` names a third-party source, such as `crtsh` or `wayback`.
-- `targets` names up to 100. `azhaq query -db FILE -failed` lists every failed target: the list to retry.
+- `targets` names up to 100. `azhaq query -db FILE -failed` lists every failed target of the newest run (`-run ID` reads another by its `run_id`): the list to retry.
 - `azhaq-session` is a signed-in run whose session ended and could not be renewed (`the session ended: after /logout was requested …`). Every request after the check noticed the loss was refused, so nothing after that was answered as an anonymous visitor. The exit code is 3: see [Sessions](CONCEPTS.md#sessions).
 - `partial` and `fanout` failures make the exit code 3 like any other: see [Failures](CONCEPTS.md#failures-fan-out-partial-and-degraded).
 

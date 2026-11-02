@@ -34,7 +34,7 @@ var helpSpecs = map[string]helpSpec{
 			{"Names and sources", `sources all-sources exclude-sources providers resolvers dns-rate source-proxy source-rate source-rates source-timeout max-time max-body max-results urls-timeout no-history`},
 			{"Browser", `browser interact interact-clicks screenshots chrome chrome-profile chrome-proxy chrome-require-sandbox tabs unsafe-ports`},
 			{"Scope and safety", `allow deny deny-path kill-file ledger seal-to submit-forms browser-writes params-writes`},
-			{"Pace and limits", `rate host-rate host-parallel parallel delay backoff retry request-timeout timeout max-requests max-host-requests daily-requests max-items max-names max-ips max-response-size depth retry-failed`},
+			{"Pace and limits", `rate host-rate host-parallel parallel delay backoff retry request-timeout timeout max-requests max-host-requests daily-requests max-items max-names max-ips max-response-size depth retry-failed retry-run`},
 			{"Session", `cookie cookie-jar header login login-user login-pass proxy`},
 			{"Output", `db json quiet v stream sr srd no-catchall fail-on-errors fail-on-capped`},
 		},
@@ -320,7 +320,7 @@ var helpSpecs = map[string]helpSpec{
 	},
 	"query": {
 		groups: []helpGroup{
-			{"Which rows", `coverage evidence failed host match method new re role scope since status type`},
+			{"Which rows", `coverage evidence failed host match method new re role run scope since status type`},
 			{"Output", `db fields json limit`},
 		},
 	},

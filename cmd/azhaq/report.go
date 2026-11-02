@@ -317,7 +317,7 @@ func fillReport(rep *report, path string, seeds []types.Seed, ents []types.Entit
 			}
 		}
 		retried = nil
-		rep.Notes = append(rep.Notes, fmt.Sprintf("-retry-failed: %d failed targets asked again, %d still fail (azhaq query -db %s -failed lists them)", n, still, path))
+		rep.Notes = append(rep.Notes, fmt.Sprintf("-retry-failed: %d failed targets of run %s asked again, %d still fail (azhaq query -db %s -failed -run %s lists them)", n, retriedRun, still, path, retriedRun))
 	}
 	rep.Unreachable = engine.Unreachable(seeds, ents, obs)
 	rep.Notes = append(rep.Notes, engine.Notes(obs)...)
