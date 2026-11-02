@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"net"
 	"strings"
 	"testing"
@@ -14,6 +13,8 @@ import (
 // ports, with its TLS version and suite in the rows and nothing failed; the
 // invariants run() holds every command to (the summary's requests are the
 // ledger's lines) cover the fallback's connections.
+var suiteName = map[string]string{"rsa": "TLS_RSA_WITH_AES_128_GCM_SHA256", "dhe": "TLS_DHE_RSA_WITH_AES_256_GCM_SHA384"}
+
 func TestCommandsReachAServerThatNeedsTheFallbackTLSClient(t *testing.T) {
 	for name, suite := range map[string]uint16{"rsa": tlstest.RSAGCM, "dhe": tlstest.DHEGCM} {
 		t.Run(name, func(t *testing.T) {
@@ -22,7 +23,7 @@ func TestCommandsReachAServerThatNeedsTheFallbackTLSClient(t *testing.T) {
 			url := "https://" + srv.Addr + "/"
 			t.Chdir(t.TempDir())
 			for _, args := range [][]string{
-				{"probe", "-u", url, "-allow", "127.0.0.1"},
+				{"probe", "-u", url, "-allow", "127.0.0.1", "-tls-grab"},
 				{"crawl", "-u", url, "-allow", "127.0.0.1", "-db", "c.db"},
 				{"run", "-url", url, "-allow", "127.0.0.1", "-sources", "none", "-db", "r.db"},
 			} {
@@ -33,12 +34,15 @@ func TestCommandsReachAServerThatNeedsTheFallbackTLSClient(t *testing.T) {
 				if !strings.Contains(out, "200") {
 					t.Errorf("%s: no 200 in the rows:\n%s", args[0], out)
 				}
+				if args[0] == "probe" && (!strings.Contains(out, `"tls_version":"tls12"`) || !strings.Contains(out, suiteName[name])) {
+					t.Errorf("probe -tls-grab: no tls12 and %s in the row:\n%s", suiteName[name], out)
+				}
 			}
 			out, rep, code := runContract(t, "ports", "-host", "127.0.0.1", "-p", port, "-allow", "127.0.0.1")
 			if code != exitOK || len(rep.Failed) != 0 {
 				t.Fatalf("ports: exit %d %+v", code, rep.Failed)
 			}
-			for _, want := range []string{`"service":"https"`, `"tls":true`, `"tls_version":"tls12"`, fmt.Sprintf(`"cipher":"TLS_%s`, map[string]string{"rsa": "RSA_WITH_AES_128_GCM_SHA256", "dhe": "DHE_RSA_WITH_AES_256_GCM_SHA384"}[name])} {
+			for _, want := range []string{`"service":"https"`, `"tls":true`, `"tls_version":"tls12"`, `"cipher":"` + suiteName[name]} {
 				if !strings.Contains(out, want) {
 					t.Errorf("ports rows lack %s:\n%s", want, out)
 				}
