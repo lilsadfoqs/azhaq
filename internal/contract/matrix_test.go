@@ -97,7 +97,7 @@ func rows() []row {
 			return l.sent(l.Cmd("roles", "-role", "anon", "-role", "alice=Authorization: Bearer t-alice", "-role", "bob=Authorization: Bearer t-bob",
 				"-replay", "-dir", "rd", "-proxy", l.Proxy.URL, "--", "-url", l.Site.URL, "-allow", l.Allow()))
 		}},
-		{name: "roles -ledger", known: "#89", writes: true, ledgers: []string{"l.jsonl"}, do: func(l *Labs) []outcome {
+		{name: "roles -ledger", known: "", writes: true, ledgers: []string{"l.jsonl"}, do: func(l *Labs) []outcome {
 			h := l.File("alice.har", har(l.Site, [2]string{"GET", "/api/v1/items/1"}, [2]string{"POST", "/api/v1/items"}))
 			return l.sent(l.Cmd("roles", "-role", "anon", "-role", "bob=Authorization: Bearer t-bob", "-har", "alice="+h,
 				"-replay", "-replay-writes", "post", "-dir", "rd", "-proxy", l.Proxy.URL, "--", "-url", l.Site.URL, "-allow", l.Allow(), "-ledger", "l.jsonl"))

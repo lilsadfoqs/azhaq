@@ -24,6 +24,7 @@ type guarded struct {
 	base  *http.Transport
 	sni   string // the server name every handshake asks for, "" for the URL's host
 	rt    http.RoundTripper
+	leg   legacyHTTP
 }
 
 // wrapLedger records rt's requests as class's, and keeps them off
@@ -56,7 +57,7 @@ func (g *guarded) RoundTrip(req *http.Request) (*http.Response, error) {
 		return nil, err
 	}
 	out := keepTargetInRequestLine(g.base, req)
-	resp, err := g.rt.RoundTrip(out)
+	resp, err := g.send(out)
 	if resp != nil && out != req {
 		resp.Request = req
 	}
@@ -191,7 +192,10 @@ func hostPortOf(hostport string) (host, port string) {
 }
 
 // CloseIdleConnections passes on to the transport, as http.Client looks for it.
-func (g *guarded) CloseIdleConnections() { g.base.CloseIdleConnections() }
+func (g *guarded) CloseIdleConnections() {
+	g.base.CloseIdleConnections()
+	g.leg.closeIdle()
+}
 
 // ProxyOf is the proxy a request through c would go through, nil for none:
 // -proxy's for a client egress made for targets, the environment's for one

@@ -144,14 +144,16 @@ type Ledger struct {
 	lastSeal bool // the last line is a seal: nothing to seal again
 	err      error
 
-	opened int64         // lines the file held when it was opened
-	tally  map[Kind3]int // lines recorded since, by class, kind and collector
+	flushes int64         // writes of lines to the file since it was opened
+	opened  int64         // lines the file held when it was opened
+	tally   map[Kind3]int // lines recorded since, by class, kind and collector
 
 	tail    []Entry         // what follows the last seal when the file was opened
 	held    map[string]bool // writes of the run that was killed: method, target and body
 	heldAny map[string]bool // the same without the body (Chrome's)
-	pending map[string]bool // reads of that run, until one is asked again
+	pending map[string]bool // reads and connects of that run, until one is asked again
 	again   int             // reads asked again
+	againTC int             // connects asked again
 }
 
 // Open appends to the file at path, creating it, and continues the chain
@@ -229,6 +231,10 @@ func (l *Ledger) Guard(more []Entry) []Entry {
 	l.held, l.heldAny, l.pending = map[string]bool{}, map[string]bool{}, map[string]bool{}
 	var writes []Entry
 	for _, e := range append(append([]Entry(nil), more...), l.tail...) {
+		if e.Kind == "tcp" && e.IsTarget() {
+			l.pending[key("tcp", e.Target, "")] = true // a connect has no answer to lose, but it is asked again
+			continue
+		}
 		if (e.Kind != "http" && e.Kind != "chrome") || !e.IsTarget() {
 			continue
 		}
@@ -244,6 +250,14 @@ func (l *Ledger) Guard(more []Entry) []Entry {
 		l.heldAny[key(e.Method, e.Target, "")] = true
 	}
 	return writes
+}
+
+// AgainConns is how many connects of the killed run (a port scan's) this run
+// made again to the same address and port.
+func (l *Ledger) AgainConns() int {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.againTC
 }
 
 // Again is how many reads of the killed run, which had no stored answer,
@@ -306,12 +320,34 @@ func lastLine(f *os.File) ([]byte, error) {
 // Record adds e to the chain: it takes its Seq, Prev and Hash, and its
 // time unless e has one. The line is flushed before Record returns, so a
 // crash loses nothing that was sent.
-func (l *Ledger) Record(e Entry) {
+func (l *Ledger) Record(e Entry) { l.RecordMany([]Entry{e}) }
+
+// RecordMany is Record for entries made together: each takes its place in
+// the chain and the lines are flushed once, before it returns. A batch of
+// connects that go out one after the other costs one write, not one each.
+func (l *Ledger) RecordMany(es []Entry) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if l.f == nil {
 		return
 	}
+	for _, e := range es {
+		l.add(e)
+	}
+	l.note(l.w.Flush())
+	l.flushes++
+}
+
+// Flushes is how many times the ledger wrote lines to its file since it was
+// opened: a batch of lines made together is one.
+func (l *Ledger) Flushes() int64 {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.flushes
+}
+
+// add chains e and buffers its line; the caller holds the lock and flushes.
+func (l *Ledger) add(e Entry) {
 	if e.Time.IsZero() {
 		e.Time = time.Now()
 	}
@@ -329,9 +365,6 @@ func (l *Ledger) Record(e Entry) {
 	raw = append(raw, e.Hash...)
 	raw = append(raw, '"', '}', '\n')
 	_, err := l.w.Write(raw)
-	if err == nil {
-		err = l.w.Flush()
-	}
 	l.note(err)
 	l.prev, l.lastSeal = e.Hash, e.Kind == KindSeal
 	if e.Kind != KindSeal {
@@ -340,6 +373,9 @@ func (l *Ledger) Record(e Entry) {
 	if k := key(e.Method, e.Target, ""); l.pending[k] && (e.Kind == "http" || e.Kind == "chrome") && e.IsTarget() {
 		delete(l.pending, k)
 		l.again++
+	} else if k := key("tcp", e.Target, ""); e.Kind == "tcp" && l.pending[k] && e.IsTarget() {
+		delete(l.pending, k)
+		l.againTC++
 	}
 }
 

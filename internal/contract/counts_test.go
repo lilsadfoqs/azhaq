@@ -13,7 +13,8 @@ import (
 
 var leftOutNote = []*regexp.Regexp{
 	regexp.MustCompile(`(\d+) hints? and (\d+) named URLs? (?:was|were) left out of the list`),
-	regexp.MustCompile(`(\d+) (?:images?|fonts?|media|image, font or media)[^;]* (?:rows? )?(?:was|were) left out of the list`),
+	regexp.MustCompile(`(\d+) rows? (?:was|were) left out of the list by the default extension list`),
+	regexp.MustCompile(`(\d+) rows? (?:was|were) left out of the list by -em, -ef, -mr or -fr`),
 }
 
 // leftOutOfList is how many URL rows the notes say the list does not hold.
@@ -39,8 +40,8 @@ func TestCrawlCountsAddUpToTheRows(t *testing.T) {
 		flags []string
 		all   bool // every URL row is printed: -hints and -assets
 	}{
-		{"default", "#95", nil, false},
-		{"-hints", "#95", []string{"-hints"}, false},
+		{"default", "", nil, false},
+		{"-hints", "", []string{"-hints"}, false},
 		{"-hints -assets", "", []string{"-hints", "-assets"}, true},
 	} {
 		t.Run(c.name, func(t *testing.T) {
@@ -96,7 +97,7 @@ func TestRunCountsAddUpToTheRows(t *testing.T) {
 				v.Done()
 			})
 			t.Run("results + folded + left_out = stored", func(t *testing.T) {
-				v := newInv(t, "#97")
+				v := newInv(t, "")
 				if s.Folded == nil {
 					v.Errorf("the JSON summary has no folded: results %d + left_out %d does not give stored %d without the docs", s.Results, s.LeftOut, s.Stored)
 				} else {

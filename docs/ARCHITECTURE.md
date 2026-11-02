@@ -419,6 +419,18 @@ Ask egress for it. If what you need is not there, add it there, with the checks 
 - the `lint` job of CI runs `golangci-lint` with `forbidigo` (`.golangci.yml`): the default client and transport, `http.Get`, `net.Dial` and `net.Dialer`, `tls.Dial`, `dns.Client`, `http2.Transport`, the Chrome allocators, `smtp.Dial`, `pq.NewConnector` and `sql.OpenDB` are forbidden outside `internal/egress`, `bench/` and tests;
 - `TestOnlyEgressOpensConnections` in `internal/egress` walks the tree and forbids the same names, and the literals `http.Client{}`, `http.Transport{}`, `net.Dialer{}`, `tls.Dialer{}` and `dns.Client{}`, which forbidigo cannot tell from the types of a signature.
 
+### Servers crypto/tls cannot handshake with
+
+Go's `crypto/tls` offers ECDHE and TLS 1.3 suites only: it removed RSA key exchange, never had DHE, and no `GODEBUG` brings them back. A server that offers nothing else (an appliance, a printer, an old Java or OpenSSL configuration) answers a handshake with an alert, and `curl -k` completes it. `internal/egress/legacytls.go` keeps a fallback for those: the TLS 1.0 to 1.2 client of [github.com/zmap/zcrypto](https://github.com/zmap/zcrypto) (Apache-2.0 with BSD parts, a fork of `crypto/tls` that keeps those suites, maintained for ZGrab). Nothing else imports it, and it runs only after `crypto/tls` failed with an error `LegacyTLSNeeded` names: a handshake failure, protocol version, insufficient security, illegal parameter, unexpected message or internal error alert, or a version or suite crypto/tls will not take. A timeout, a reset, an answer that is not TLS and a certificate are not that.
+
+- **HTTP** (`probe`, `crawl`, `run`, `fetch`, anything that asks egress for a client of targets): `guarded.send` watches the handshake of an `https` request with `httptrace`. When it fails that way, nothing of the request was written, so the same request goes again on a second transport that dials with the fallback client, through the run's resolver, the proxy if there is one (an HTTP proxy by CONNECT, a SOCKS5 one), the kill file and the scope. The ledger has the request once, as the first try recorded it, and the budget counts it once. The address is remembered, so the next request to it goes straight to the fallback transport. `resp.TLS` carries the version, the suite and the certificates, as for any other response.
+- **Port scans** (`ports`, the port stage of `run`, the TLS collector): `dialWait` tries again after the same failures with `PortDialer.TLSLegacy`: another connect, paced, counted against `-max-requests` and recorded in the ledger like any other. A row names the version and suite (`tls_version`, `cipher`).
+- **The probe's own handshakes** (`ConnectTargetTLS`): a second connect, counted with `Spend`.
+- The fallback client never verifies a certificate, as no handshake of azhaq does; it is not used for a config that asks for it. Its versions run from the config's minimum (TLS 1.2, or 1.0 for `probe`) to 1.2, and it offers ECDHE, DHE and RSA key exchange suites with AES (GCM and CBC) and 3DES. It sends no client certificate.
+- A failure keeps its reason in the row: `TLS error: remote error: tls: handshake failure`, not a bare `TLS error`. TLS failures are not retried.
+
+`internal/tlstest` serves such a server for the tests (TLS 1.2 with RSA key exchange or DHE, on the same fork).
+
 ### The contract test
 
 `TestEgressContract` in `cmd/azhaq` runs each command that sends something (`run`, `probe`, `crawl`, `dirs`, `fuzz`, `params`, `shots`, `ports`, `urls`, `dns`) against servers of the machine only, behind a counting proxy or listener. The target's count, the proxy's, the ledger's and the summary's must be one number, so a request that went round the proxy shows as a server count above the proxy's and one that skipped the ledger as a ledger count below it. `TestEgressContractControls` checks the budget (the server saw exactly the budget), `-deny-path` (the path was never asked), the kill file (nothing was sent) and the scope. A command added to the registry without an entry in `egressContract` fails `TestEgressContractNamesEveryCommand`: it says how the command sends (its own case, through another command, or not at all).
@@ -1441,7 +1453,7 @@ A `Prefix` seed is scanned by `azhaq-ports` itself. It goes address by address i
 
 An open port is read for 1.5 seconds. The first line a service sends names it, such as `SSH-2.0-…`, `220 … ESMTP`, a Telnet option negotiation or an IRC `NOTICE AUTH`. Binary greetings are marked as such.
 
-Ports that stay silent or answer like HTTP become URLs for `azhaq-http`. A port that was named `http` or `https` is asked over that scheme, and one that was not read (`-port-detect none`) is asked as a `host:port` is, plain HTTP first above 1024. A port that answers something other than HTTP ends as a note, not a failure.
+Ports that stay silent or answer like HTTP become URLs for `azhaq-http`. A port that was named `http` or `https` is asked over that scheme, and one that was not read (`-port-detect none`) is asked as a `host:port` is, plain HTTP first above 1024. A port that answers something other than HTTP, or that was not named HTTP and closes or resets at once on the request (the hint carries `types.UnnamedPortKey`), ends as a note, not a failure.
 
 The greeting and the HTTP head (`Server`, `X-Powered-By`) also give `product` and `version`. For a web port whose head names no product, or refused the HEAD with a 405 or 501, there is one more request. It is a `GET /` for a small JSON or text body, or an HTML page's title and generator. The code is in `internal/portscan/services.go`.
 
@@ -1455,10 +1467,11 @@ Every step is a connect that is paced, counted by `egress.Take` and recorded in 
 2. The `HEAD /`.
 3. For an answer that is not text, a TLS handshake. A greeting inside the tunnel is read before the `HEAD`, so IMAPS, POP3S, SMTPS and LDAPS are named.
 4. One request of each of the remaining protocols, on a connection of its own, the likeliest first.
+5. A port still unnamed and silent gets one `GET /` (`ident.getRoot`): a handler that waits for its own protocol after any other first bytes, such as Jenkins' agent port, names itself from the page. It is not asked for an address whose ladder was skipped (`-unnamed`).
 
 The protocols of step 4, in order, are:
 
-Redis, PostgreSQL, MongoDB, memcached, MQTT, AMQP, DNS over TCP, LDAP, SMB, SQL Server, Kafka, RDP, ZooKeeper, Cassandra, Oracle TNS, SIP, RTSP, SOCKS5, X11, STOMP and XMPP.
+Redis, PostgreSQL, MongoDB, memcached, MQTT, AMQP, DNS over TCP, LDAP, SMB, SQL Server, Kafka, RDP, ZooKeeper, Cassandra, Oracle TNS, SIP, RTSP, SOCKS5, X11, STOMP, XMPP, Elasticsearch transport and Java RMI.
 
 #### The window of protocols
 
@@ -1480,7 +1493,7 @@ All of it counts the same connects. So a quick service may cost a few more than 
 
 #### Limits
 
-- An open port costs at most 24 connects after the first.
+- An open port costs at most 25 connects after the first.
 - A request waits twenty round trips for its answer: at least half a second, at most the banner wait.
 - After six open ports of one address that no request could name, the rest of that address's silent ports are not run down the list. The row's `unprobed` and the summary count them. A firewall that accepts every connect would otherwise cost thousands.
 - A request carries no credential and changes nothing.

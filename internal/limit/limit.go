@@ -53,6 +53,23 @@ func (l *Limiter) Wait(ctx context.Context, key string) error {
 	return Wait(ctx, l.bucket(key))
 }
 
+// WaitN blocks until key may send n requests at once (n at most the burst).
+func (l *Limiter) WaitN(ctx context.Context, key string, n int) error {
+	if l == nil {
+		return ctx.Err()
+	}
+	b := l.bucket(key)
+	n = min(n, b.Burst())
+	err := b.WaitN(ctx, n)
+	if err != nil && ctx.Err() == nil {
+		if _, ok := ctx.Deadline(); ok {
+			<-ctx.Done()
+			return ctx.Err()
+		}
+	}
+	return err
+}
+
 // Wait is lim.Wait, but a wait that would pass ctx's deadline lasts until
 // the deadline and returns ctx's error: rate refuses at once without
 // ending ctx, which made a sweep stop early and look finished.

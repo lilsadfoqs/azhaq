@@ -134,3 +134,34 @@ func TestQueryPortStatesAreApart(t *testing.T) {
 		t.Errorf("counts %v do not say open and open|filtered apart", rep.Counts)
 	}
 }
+
+// A port the scan found open that closes or resets at once on the HTTP
+// request, and was not named HTTP, is an answer: the run exits 0 with
+// nothing under failed, and a note says the port is not a web service.
+func TestRunPortThatClosesOnTheRequestIsNotAFailure(t *testing.T) {
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { l.Close() })
+	go func() {
+		for {
+			c, err := l.Accept()
+			if err != nil {
+				return
+			}
+			buf := make([]byte, 4096)
+			c.Read(buf)
+			c.Close()
+		}
+	}()
+	_, port, _ := net.SplitHostPort(l.Addr().String())
+	t.Chdir(t.TempDir())
+	_, rep, code := runContract(t, "run", "-cidr", "127.0.0.1/32", "-ports", port, "-port-detect", "none", "-allow", "127.0.0.1", "-sources", "none", "-db", "c.db")
+	if code != exitOK || len(rep.Failed) != 0 || !rep.Complete {
+		t.Fatalf("exit %d complete %v: failed %+v notes %q", code, rep.Complete, rep.Failed, rep.Notes)
+	}
+	if !strings.Contains(strings.Join(rep.Notes, "\n"), "closed the connection on the request") {
+		t.Errorf("no note says the port is not a web service: %q", rep.Notes)
+	}
+}

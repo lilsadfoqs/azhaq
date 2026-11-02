@@ -30,13 +30,13 @@ type portRow struct {
 	TLS      bool
 	CDN      string
 	At       time.Time
-	Fields   map[string]any // service, product, version, extrainfo, banner, title, subject_cn, subject_an
+	Fields   map[string]any // service, product, version, extrainfo, banner, title, tls_version, cipher, subject_cn, subject_an
 }
 
 func (r portRow) str(k string) string { s, _ := r.Fields[k].(string); return s }
 
 // the fields a row of -json and -csv has, in the order -csv writes them.
-var portFields = []string{"host", "ip", "port", "protocol", "state", "tls", "cdn", "cdn-name", "timestamp", "service", "product", "version", "extrainfo", "banner", "title", "subject_cn", "subject_an"}
+var portFields = []string{"host", "ip", "port", "protocol", "state", "tls", "cdn", "cdn-name", "timestamp", "service", "product", "version", "extrainfo", "banner", "title", "tls_version", "cipher", "subject_cn", "subject_an"}
 
 // jsonRow is the row as -json prints it: naabu's fields (cdn is whether
 // the address is a CDN's, cdn-name whose), and azhaq's service ones.

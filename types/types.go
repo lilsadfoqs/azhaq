@@ -62,6 +62,11 @@ const RedirectKey = "redirect"
 // URL is the service the user named.
 const FromURLKey = "from_url"
 
+// UnnamedPortKey marks a URL hint made from an open port a scan did not name
+// as HTTP: the web probe asks whether it is one, and a port that closes or
+// resets at once on the request has answered no.
+const UnnamedPortKey = "unnamed_port"
+
 // BareKey marks a target the user gave with no port (a name or an address):
 // its web ports are a guess, so a guess nothing answers is a note, not a
 // failure.
@@ -149,8 +154,10 @@ type Observation struct {
 	Payload    json.RawMessage `json:"payload"`
 	Confidence float64         `json:"confidence"`
 	ObservedAt time.Time       `json:"observed_at"`
-	// Keep: written even when the request budget stops its task, which
-	// azhaq resume runs again (what a port scan found before it stopped).
+	// Keep: written at once, even under a request budget that holds a task's
+	// rows until it ends, and so kept when the budget stops the task or the
+	// process is killed; azhaq resume runs the task again (what a port scan
+	// found and asked before it stopped).
 	Keep bool `json:"-"`
 }
 

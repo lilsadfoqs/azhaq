@@ -11,13 +11,15 @@ import (
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/lilsadfoqs/azhaq/internal/egress"
 )
 
 // maxProbes is how many more connects an open port that said nothing may
 // cost to find out what it serves: the TLS handshake, the requests of the
 // protocols usual on its number and the ladder of the others. The GET for
 // a web page's body is counted apart (at most two).
-const maxProbes = 24
+const maxProbes = 25
 
 // ladderLimit: by default, after this many open ports of one address that
 // no probe could name, the rest of that address's silent ports are not run
@@ -25,6 +27,9 @@ const maxProbes = 24
 // cost thousands of connects for nothing). Scanner.Unnamed changes it; the
 // report says how many were skipped.
 const ladderLimit = 6
+
+// legacyHandshakeMin is the least a handshake with the fallback client waits.
+const legacyHandshakeMin = 5 * time.Second
 
 // target is what a request is built for.
 type target struct {
@@ -90,7 +95,7 @@ func protocolsOn(port int, secure bool) []*protocol {
 // it: a DNS server may hold the connection or drop it on its idle timer.
 var ladderOrder = []string{
 	"redis", "postgresql", "mongodb", "memcached", "mqtt", "amqp", "dns", "ldap", "smb", "mssql", "kafka", "rdp",
-	"zookeeper", "cassandra", "oracle-tns", "sip", "rtsp", "socks5", "x11", "stomp", "xmpp", "elasticsearch-transport",
+	"zookeeper", "cassandra", "oracle-tns", "sip", "rtsp", "socks5", "x11", "stomp", "xmpp", "elasticsearch-transport", "java-rmi",
 }
 
 func ladder() []*protocol {
@@ -111,6 +116,7 @@ type ident struct {
 	host, ip string
 	left     *probeBudget // shared by the forks that ask beside each other
 	tried    map[string]bool
+	laddered bool          // the ladder was asked, not skipped
 	rtt      time.Duration // the shortest connect seen: how long a quiet answer is worth waiting for
 	// shook is called once a TLS handshake of this identification succeeded.
 	shook func()
@@ -220,7 +226,29 @@ func (s *Scanner) dialWait(ctx context.Context, host, ip string, port int, secur
 	if net.ParseIP(host) == nil {
 		cfg.ServerName = host
 	}
-	return s.pd.TLS(ctx, host, addr, cfg, handshake)
+	c, err := s.pd.TLS(ctx, host, addr, cfg, handshake)
+	if err == nil || !egress.LegacyTLSNeeded(err) || ctx.Err() != nil {
+		return c, err
+	}
+	// The server answered with an alert crypto/tls takes for no TLS it can do
+	// (RSA key exchange only, DHE): one more connect, as paced, counted and
+	// recorded as any, with the fallback client.
+	if werr := s.wait(ctx, ip); werr != nil {
+		return nil, err
+	}
+	if s.Take != nil {
+		if terr := s.Take(); terr != nil {
+			s.noteStop(terr)
+			return nil, err
+		}
+	}
+	// The alert showed the port speaks TLS, so its handshake is not the quick
+	// "is anything there" of a plain port: the fallback client is slower than
+	// crypto/tls, and a loaded machine slower still.
+	if lc, lerr := s.pd.TLSLegacy(ctx, host, addr, cfg, max(handshake, s.Timeout+s.Banner, legacyHandshakeMin)); lerr == nil {
+		return lc, nil
+	}
+	return nil, err
 }
 
 // talk writes req (when there is one) and reads the answer until frame
@@ -334,6 +362,7 @@ func (s *Scanner) identify(ctx context.Context, o *Open, conn net.Conn, host, ip
 		host = ip
 	}
 	id := &ident{s: s, ctx: ctx, o: o, host: host, ip: ip, left: &probeBudget{n: maxProbes}, tried: map[string]bool{}, rtt: rtt}
+	defer id.getRoot()
 	for _, p := range protocolsOn(o.Port, false) {
 		if id.try(conn, p) {
 			return
@@ -445,6 +474,39 @@ func (s *Scanner) identify(ctx context.Context, o *Open, conn net.Conn, host, ip
 	id.ladder()
 }
 
+// getRoot is the last ask of a port that stayed silent to the HEAD, the
+// handshake and the ladder (not of one the ladder was skipped for: an address
+// that has that many unnamed ports is not asked more): one GET / (nmap's GetRequest), for a handler that
+// answers GET and waits for its own protocol after any other first bytes (the
+// Jenkins agent port). An HTTP answer names it; nothing else does.
+func (id *ident) getRoot() {
+	s, o := id.s, id.o
+	if !id.laddered || o.Service != "" || o.Banner != "" || speaksFirst(o.Port) || rawData(o.Port) || id.ctx.Err() != nil || s.stopped() {
+		return
+	}
+	c, err := id.dial(false)
+	if err != nil {
+		return
+	}
+	defer c.Close()
+	defer id.guard(c)()
+	resp := s.talk(c, s.httpRequest("GET", id.host, o.Port, 80), nil, id.patience(500*time.Millisecond))
+	status, banner, ok := httpAnswer(resp)
+	if !ok {
+		return
+	}
+	o.Service, o.Banner = "http", banner
+	head, body, _ := bytes.Cut(resp, []byte("\r\n\r\n"))
+	if h, ok := parseHead(head); ok {
+		if p, v := headProduct(h); p != "" {
+			o.Product, o.Version, o.Extra = p, v, headExtra(h)
+		}
+	}
+	if o.Product == "" && status < 400 {
+		s.pageProduct(id.ctx, o, body, id.host, id.ip, false)
+	}
+}
+
 // adopt takes what a fork found. A protocol of the ladder keeps the banner
 // an earlier answer left when it names none of its own.
 func adopt(o *Open, found Open, keepBanner bool) {
@@ -524,6 +586,7 @@ func (id *ident) ladder() {
 		s.ladderSkip(id.ip)
 		return
 	}
+	id.laddered = true
 	if id.climb(id.ladderProbes(), []int{3, 6, laneMax}) < 0 && id.o.Service == "" {
 		s.ladderFailed(id.ip)
 	}
@@ -660,6 +723,7 @@ func (id *ident) speculate() *speculation {
 	ps := []probe{{tls: true, run: func(sub *ident) bool { return sub.tls() }}}
 	ladder := !speaksFirst(id.o.Port) && id.s.ladderOpen(id.ip)
 	if ladder {
+		id.laddered = true
 		// The handshake gets a head start: a TLS server has shaken hands
 		// before the first of these connects, and calls them off.
 		grace := min(max(8*id.rtt, 250*time.Millisecond), id.patience(500*time.Millisecond))
@@ -767,7 +831,11 @@ func (id *ident) tls() bool {
 	}
 	o.TLS = true
 	o.Service, o.Banner = "tls", ""
-	if certs := c.(*tls.Conn).ConnectionState().PeerCertificates; len(certs) > 0 {
+	if st, ok := c.(interface{ ConnectionState() tls.ConnectionState }); ok {
+		cs := st.ConnectionState()
+		o.TLSVers, o.Cipher = tlsVersionName(cs.Version), egress.CipherSuiteName(cs.CipherSuite)
+	}
+	if certs := c.(interface{ ConnectionState() tls.ConnectionState }).ConnectionState().PeerCertificates; len(certs) > 0 {
 		o.SubjectCN = certs[0].Subject.CommonName
 		o.SubjectAN = append(o.SubjectAN, certs[0].DNSNames...)
 		for _, a := range certs[0].IPAddresses {
@@ -813,6 +881,21 @@ func (id *ident) tls() bool {
 		return true
 	}
 	return true
+}
+
+// tlsVersionName is tls10 to tls13, as the probe rows name them; "" for another.
+func tlsVersionName(v uint16) string {
+	switch v {
+	case tls.VersionTLS10:
+		return "tls10"
+	case tls.VersionTLS11:
+		return "tls11"
+	case tls.VersionTLS12:
+		return "tls12"
+	case tls.VersionTLS13:
+		return "tls13"
+	}
+	return ""
 }
 
 // noteStop keeps the error that stopped a probe (the run's request budget is

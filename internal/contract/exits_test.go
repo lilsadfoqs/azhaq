@@ -104,7 +104,7 @@ func TestExitCodeFollowsTheOutcome(t *testing.T) {
 			return []string{"dirs", "-u", "http://" + deadPort(l), "-w", "w.txt"}
 		}},
 		// An open port that is not a web server answers the question "is this HTTP?" by closing.
-		{name: "run -ports: a port that closes on the HTTP request", known: "#102", want: 0, shape: func(l *Labs) []string {
+		{name: "run -ports: a port that closes on the HTTP request", known: "", want: 0, shape: func(l *Labs) []string {
 			l.Ports = newPortLab(l.T)
 			// As the RMI registry does: it reads what it is sent, and closes.
 			rmi := listenCounted(l.T, l.Ports.Wire, func(c net.Conn) {

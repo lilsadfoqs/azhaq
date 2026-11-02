@@ -56,3 +56,22 @@ func TestShortErrorKeepsTheTriesOfAnArchive(t *testing.T) {
 		}
 	}
 }
+
+// A TLS failure keeps what the handshake said: the alert, the version or the
+// certificate's fault, not a bare "TLS error"; none of them is retried.
+func TestShortErrorKeepsTheTLSReason(t *testing.T) {
+	for raw, want := range map[string]string{
+		`Get "https://h/": remote error: tls: handshake failure`: "TLS error: remote error: tls: handshake failure",
+		`Get "https://h/": remote error: tls: protocol version not supported; fallback TLS client: remote error: tls: protocol version not supported`: "TLS error: remote error: tls: protocol version not supported",
+		`Get "https://h/": tls: no supported versions satisfy MinVersion and MaxVersion`:                                                              "TLS error: tls: no supported versions satisfy MinVersion and MaxVersion",
+		`Get "https://h/": tls: failed to verify certificate: x509: certificate has expired or is not yet valid`:                                      "TLS error: tls: failed to verify certificate: x509: certificate has expired or is not yet valid",
+		`x509: certificate signed by unknown authority`:                                                                                               "TLS error: x509: certificate signed by unknown authority",
+	} {
+		if got := ShortError(raw); got != want {
+			t.Errorf("%q: got %q, want %q", raw, got, want)
+		}
+		if Retryable(raw) {
+			t.Errorf("%q is retryable", raw)
+		}
+	}
+}

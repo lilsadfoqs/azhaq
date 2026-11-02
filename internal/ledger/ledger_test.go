@@ -431,3 +431,49 @@ func TestMarshalIsJSONMarshal(t *testing.T) {
 	}
 	t.Logf("%d entries compared", n)
 }
+
+// A connect of a run that was killed is asked again by the resume that
+// connects to the same address and port: that is counted, once, and another
+// address is not.
+func TestAgainCountsTheConnectsOfAKilledRun(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "k.jsonl")
+	l, _ := Open(path)
+	l.Record(Entry{Kind: "tcp", Target: "127.0.0.1:80"})
+	l.Record(Entry{Kind: "tcp", Target: "127.0.0.1:81"})
+	l.f.Close() // killed: no seal
+	l, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer l.Close()
+	l.Guard(nil)
+	l.Record(Entry{Kind: "tcp", Target: "127.0.0.1:81"})
+	l.Record(Entry{Kind: "tcp", Target: "127.0.0.1:81"})
+	l.Record(Entry{Kind: "tcp", Target: "127.0.0.1:82"})
+	if n := l.AgainConns(); n != 1 {
+		t.Errorf("%d connects counted as asked again, want 1", n)
+	}
+	if n := l.Again(); n != 0 {
+		t.Errorf("a connect counted as a read asked again: %d", n)
+	}
+}
+
+// Entries made together are lines of the chain, each with its place, and
+// one write of the file.
+func TestRecordManyIsOneWriteOfChainedLines(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "m.jsonl")
+	l, _ := Open(path)
+	var es []Entry
+	for i := 0; i < 20; i++ {
+		es = append(es, Entry{Kind: "tcp", Target: fmt.Sprintf("127.0.0.1:%d", 1000+i)})
+	}
+	l.RecordMany(es)
+	l.Record(Entry{Kind: "tcp", Target: "127.0.0.1:80"})
+	if n := l.Flushes(); n != 2 {
+		t.Errorf("%d writes for a batch of 20 and a line, want 2", n)
+	}
+	l.Close()
+	if c, err := Verify(path); err != nil || c.Entries != 21 {
+		t.Fatalf("verify: %+v %v", c, err)
+	}
+}

@@ -7,17 +7,21 @@ import (
 	"crypto/tls"
 	"encoding/binary"
 	"encoding/hex"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/lilsadfoqs/azhaq/internal/egress"
 	"github.com/lilsadfoqs/azhaq/internal/ledger"
+	"github.com/lilsadfoqs/azhaq/internal/tlstest"
 )
 
 func fixture(t *testing.T, name string) []byte {
@@ -345,7 +349,8 @@ func TestLadderLimit(t *testing.T) {
 	if r.Unprobed != 3 {
 		t.Errorf("%d ports left unprobed, want 3", r.Unprobed)
 	}
-	if max := len(ports) + ladderLimit*maxProbes; int(takes.Load()) > max {
+	// A port the ladder is skipped for is still asked the handshake.
+	if max := len(ports) + ladderLimit*maxProbes + (len(ports) - ladderLimit); int(takes.Load()) > max {
 		t.Errorf("%d connects, bound %d", takes.Load(), max)
 	}
 }
@@ -452,6 +457,107 @@ func TestSlowGreeterIsNotTCPWrapped(t *testing.T) {
 		want := map[int]string{my: "mysql", ssh: "ssh"}[o.Port]
 		if o.Service != want {
 			t.Errorf("port %d said %q after 2 s: service %q, want %q", o.Port, o.Banner, o.Service, want)
+		}
+	}
+}
+
+// A handler that answers GET but holds any other first bytes (the Jenkins
+// agent port) is named from its answer to one last GET /, and a port that
+// holds that too stays unnamed.
+func TestSilentToHeadIsAskedOneGet(t *testing.T) {
+	var gets atomic.Int32
+	jenkins := listen(t, func(c net.Conn) {
+		_ = c.SetDeadline(time.Now().Add(2 * time.Second))
+		br := bufio.NewReader(c)
+		if p, err := br.Peek(4); err != nil || string(p) != "GET " {
+			time.Sleep(2 * time.Second)
+			return
+		}
+		gets.Add(1)
+		buf := make([]byte, 4096)
+		br.Read(buf)
+		c.Write([]byte("HTTP/1.0 200 OK\r\nConnection: close\r\nContent-Type: text/plain;charset=UTF-8\r\n\r\n" +
+			"Jenkins-Agent-Protocols: JNLP4-connect, Ping\nJenkins-Version: 2.462\nRemoting-Minimum-Version: 3.4\n\n"))
+	})
+	mute := listen(t, func(c net.Conn) { time.Sleep(2 * time.Second) })
+	var takes atomic.Int32
+	s := &Scanner{Workers: 1, Banner: 60 * time.Millisecond, Timeout: 60 * time.Millisecond, Take: func() error { takes.Add(1); return nil }}
+	r, err := s.ScanEach(t.Context(), "", "127.0.0.1", []int{jenkins, mute})
+	if err != nil || len(r.Open) != 2 {
+		t.Fatalf("%v %+v", err, r)
+	}
+	for _, o := range r.Open {
+		switch o.Port {
+		case jenkins:
+			if o.Service != "http" || o.Product != "Jenkins" || o.Version != "2.462" {
+				t.Errorf("agent port: %+v", o)
+			}
+		case mute:
+			if o.Service != "" || o.Product != "" {
+				t.Errorf("mute port named: %+v", o)
+			}
+		}
+	}
+	if gets.Load() != 1 {
+		t.Errorf("%d GETs reached the agent port, want 1", gets.Load())
+	}
+	if max := 2 + 2*maxProbes; int(takes.Load()) > max {
+		t.Errorf("%d connects, bound %d", takes.Load(), max)
+	}
+}
+
+// A Java RMI registry answers the stream header with a ProtocolAck and the
+// host it sees the asker as: named java-rmi from that, on its usual number
+// and on any other.
+func TestJavaRMIRegistryIsNamed(t *testing.T) {
+	registry := func(c net.Conn) {
+		_ = c.SetDeadline(time.Now().Add(2 * time.Second))
+		hdr := make([]byte, 7)
+		if _, err := io.ReadFull(c, hdr); err != nil || string(hdr[:4]) != "JRMI" {
+			return
+		}
+		host := "192.168.0.5"
+		out := append([]byte{0x4e, 0, byte(len(host))}, host...)
+		c.Write(append(out, 0, 0, 0, 0))
+	}
+	other := listen(t, registry)
+	var o Open
+	if !protocolNamed("java-rmi").read([]byte("\x4e\x00\x0b192.168.0.5\x00\x00\x00\x00"), &o) || o.Service != "java-rmi" || o.Product != "Java RMI" || !strings.Contains(o.Extra, "192.168.0.5") {
+		t.Errorf("reader: %+v", o)
+	}
+	if protocolNamed("java-rmi").read([]byte("\x4e\x00\x0b192.168.0.5"), &o) || protocolNamed("java-rmi").read([]byte("HTTP/1.0 400 Bad Request\r\n\r\n"), &o) {
+		t.Error("a short answer or HTTP read as RMI")
+	}
+	s := &Scanner{Banner: 100 * time.Millisecond, Timeout: 500 * time.Millisecond}
+	r, err := s.ScanEach(t.Context(), "", "127.0.0.1", []int{other})
+	if err != nil || len(r.Open) != 1 {
+		t.Fatalf("%v %+v", err, r)
+	}
+	if got := r.Open[0]; got.Service != "java-rmi" || got.Product != "Java RMI" || !strings.Contains(got.Extra, "192.168.0.5") {
+		t.Errorf("registry on a free port: %+v", got)
+	}
+}
+
+// A TLS port whose suites are only RSA key exchange or DHE, which crypto/tls
+// does not offer, is named as the handshake with the fallback client says:
+// https with the version and suite in the row, the extra connect counted.
+func TestTLSPortWithOnlyLegacySuitesIsNamed(t *testing.T) {
+	for name, suite := range map[string]uint16{"rsa": tlstest.RSAGCM, "dhe": tlstest.DHEGCM} {
+		srv := tlstest.Serve(t, 0, 0, suite)
+		_, p, _ := net.SplitHostPort(srv.Addr)
+		port, _ := strconv.Atoi(p)
+		var takes atomic.Int32
+		s := &Scanner{Banner: 200 * time.Millisecond, Timeout: 10 * time.Second, Take: func() error { takes.Add(1); return nil }}
+		r, err := s.ScanEach(t.Context(), "", "127.0.0.1", []int{port})
+		if err != nil || len(r.Open) != 1 {
+			t.Fatalf("%s: %v %+v", name, err, r)
+		}
+		o := r.Open[0]
+		if !o.TLS || o.Service != "https" || o.TLSVers != "tls12" || o.Cipher != tls.CipherSuiteName(suite) && o.Cipher != egress.CipherSuiteName(suite) || o.SubjectCN != "legacy.test" {
+			t.Errorf("%s: %+v", name, o)
+		}
+		if takes.Load() > 1+maxProbes {
+			t.Errorf("%s: %d connects", name, takes.Load())
 		}
 	}
 }

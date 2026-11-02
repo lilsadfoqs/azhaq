@@ -131,6 +131,8 @@ type Open struct {
 	Version   string   `json:"version,omitempty"`
 	Extra     string   `json:"extrainfo,omitempty"` // what the answer says beside product and version: a Server header's runtime, an SSH comment
 	TLS       bool     `json:"tls,omitempty"`
+	TLSVers   string   `json:"tls_version,omitempty"` // tls10 to tls13, what the handshake negotiated
+	Cipher    string   `json:"cipher,omitempty"`      // the suite it negotiated
 	SubjectCN string   `json:"subject_cn,omitempty"`
 	SubjectAN []string `json:"subject_an,omitempty"`
 
@@ -307,7 +309,7 @@ func (s *Scanner) ScanEachFn(ctx context.Context, host, ip string, ports []int, 
 	var err error
 	ports = s.ordered(ip, ports)
 	var asked, slow int
-	r.Open, r.Silent, asked, slow, err = s.pass(ctx, host, ip, ports, found)
+	r.Open, r.Silent, asked, slow, err = s.pass(ctx, host, ip, ports, found, true)
 	r.Asked = asked
 	r.Threshold = s.Threshold > 0 && len(r.Open) >= s.Threshold
 	for try := 0; err == nil && !r.Threshold && len(r.Silent) > 0 && s.again(try, len(r.Silent), len(ports)); try++ {
@@ -318,7 +320,7 @@ func (s *Scanner) ScanEachFn(ctx context.Context, host, ip string, ports []int, 
 			}
 		}
 		var more []Open
-		more, r.Silent, _, slow, err = s.pass(ctx, host, ip, r.Silent, found)
+		more, r.Silent, _, slow, err = s.pass(ctx, host, ip, r.Silent, found, false)
 		r.Open = append(r.Open, more...)
 	}
 	if err == nil {
@@ -367,11 +369,24 @@ func (s *Scanner) again(try, silent, ports int) bool {
 
 // wait paces a connect. This machine's loopback is not paced unless a rate
 // was given: no network to spare (a full scan of 127.0.0.1 took 218 s at 300/s).
-func (s *Scanner) wait(ctx context.Context, ip string) error {
+func (s *Scanner) wait(ctx context.Context, ip string) error { return s.waitN(ctx, ip, 1) }
+
+// waitN paces n connects at once: one wake-up of the timer for all of them.
+func (s *Scanner) waitN(ctx context.Context, ip string, n int) error {
 	if a := net.ParseIP(ip); a != nil && a.IsLoopback() && !s.loopPaced {
 		return ctx.Err()
 	}
-	return s.limiter.Wait(ctx, "")
+	return s.limiter.WaitN(ctx, "", n)
+}
+
+// batch is how many connects of a pass have their ledger lines written
+// together: none beyond one below a rate of 1,000 a second, where a write
+// for each costs the scan nothing that matters.
+func (s *Scanner) batch() int {
+	if s.Rate < 1000 {
+		return 1
+	}
+	return min(int(s.Rate/500), 32)
 }
 
 // retryFloor: up to this many silent ports are asked again whatever
@@ -380,8 +395,9 @@ const retryFloor = 64
 
 // pass connects once to each port, at the scanner's rate, and says how
 // many it asked (all of them unless the threshold of open ports stopped it)
-// and how many of the silent ones timed out rather than failed at once.
-func (s *Scanner) pass(ctx context.Context, host, ip string, ports []int, found func(Open)) (open []Open, silent []int, asked, slow int, err error) {
+// and how many of the silent ones timed out rather than failed at once. With
+// track set, the Progress function of ctx hears what is finished while it goes.
+func (s *Scanner) pass(ctx context.Context, host, ip string, ports []int, found func(Open), track bool) (open []Open, silent []int, asked, slow int, err error) {
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 	var stop error
@@ -390,48 +406,137 @@ func (s *Scanner) pass(ctx context.Context, host, ip string, ports []int, found 
 		defer mu.Unlock()
 		return s.Threshold > 0 && len(open) >= s.Threshold
 	}
-	for _, p := range ports {
+	var prog *progress
+	if fn, _ := ctx.Value(progressKey{}).(func(Progress)); fn != nil && track {
+		prog = &progress{fn: fn, ports: ports, state: make([]uint8, len(ports)), opens: map[int]Open{}}
+	}
+	// The connects go out in small batches, their ledger lines written
+	// together (before any of them goes): at 10,000 a second a write for
+	// each line was a tenth of the scan's CPU.
+	k := s.batch()
+	var bmu sync.Mutex // guards batch: a timer starts a batch the loop is slow to fill
+	var batch []int    // indexes into ports
+	var flush *time.Timer
+	jobs := make(chan int)
+	work := func(i int) {
+		defer func() { <-s.conns }()
+		p := ports[i]
+		o, state := s.probe(ctx, host, ip, p)
+		if state == portOpen && found != nil && !o.again {
+			found(o)
+		}
+		mu.Lock()
+		switch state {
+		case portOpen:
+			open = append(open, o)
+		case portSilent, portTimedOut:
+			silent = append(silent, p)
+			if state == portTimedOut {
+				slow++
+			}
+		}
+		if prog != nil {
+			prog.done(i, state, o, ctx.Err() != nil)
+		}
+		mu.Unlock()
+	}
+	// launchLocked starts the batch (the caller holds bmu).
+	launchLocked := func() {
+		if flush != nil {
+			flush.Stop()
+			flush = nil
+		}
+		if len(batch) == 0 {
+			return
+		}
+		if k > 1 {
+			addrs := make([]string, len(batch))
+			for j, i := range batch {
+				addrs[j] = net.JoinHostPort(ip, strconv.Itoa(ports[i]))
+			}
+			s.pd.Reserve(ctx, host, addrs)
+		}
+		for _, i := range batch {
+			// An idle worker takes it, else a new one starts: a goroutine's
+			// stack grows once, not for each connect.
+			select {
+			case jobs <- i:
+			default:
+				wg.Add(1)
+				go func(i int) {
+					defer wg.Done()
+					for ok := true; ok; i, ok = <-jobs {
+						work(i)
+					}
+				}(i)
+			}
+		}
+		batch = batch[:0]
+	}
+	launch := func() {
+		bmu.Lock()
+		launchLocked()
+		bmu.Unlock()
+	}
+	add := func(i int) {
+		bmu.Lock()
+		defer bmu.Unlock()
+		batch = append(batch, i)
+		switch {
+		case len(batch) >= k:
+			launchLocked()
+		case len(batch) == 1:
+			// A wait or a count that blocks must not hold a connect back for long.
+			flush = time.AfterFunc(2*time.Millisecond, launch)
+		}
+	}
+	stopTicks := func() {}
+	if prog != nil {
+		stopTicks = prog.every(&mu, func() int { return asked })
+	}
+	paid := 0 // connects whose place in the pace is already taken
+	for i := range ports {
 		if full() {
 			break
 		}
-		if err := s.wait(ctx, ip); err != nil {
-			break
+		if paid == 0 {
+			// The pace is taken for the next batch at once: one wake-up of the
+			// timer for all of them, not one each.
+			paid = min(k, len(ports)-i)
+			if err := s.waitN(ctx, ip, paid); err != nil {
+				break
+			}
 		}
+		paid--
 		if s.Take != nil {
 			if stop = s.Take(); stop != nil {
 				break
 			}
 		}
 		select {
-		case <-ctx.Done():
 		case s.conns <- struct{}{}:
+		default:
+			launch() // never wait for a worker while holding ones not yet started
+			select {
+			case <-ctx.Done():
+			case s.conns <- struct{}{}:
+			}
 		}
 		if ctx.Err() != nil {
 			break
 		}
+		mu.Lock()
 		asked++
-		wg.Add(1)
-		go func(p int) {
-			defer wg.Done()
-			defer func() { <-s.conns }()
-			o, state := s.probe(ctx, host, ip, p)
-			if state == portOpen && found != nil && !o.again {
-				found(o)
-			}
-			mu.Lock()
-			switch state {
-			case portOpen:
-				open = append(open, o)
-			case portSilent, portTimedOut:
-				silent = append(silent, p)
-				if state == portTimedOut {
-					slow++
-				}
-			}
-			mu.Unlock()
-		}(p)
+		mu.Unlock()
+		add(i)
 	}
+	launch()
+	close(jobs)
 	wg.Wait()
+	stopTicks()
+	if prog != nil {
+		prog.last(&mu, asked)
+	}
 	if stop != nil {
 		return open, silent, asked, slow, stop
 	}
@@ -503,7 +608,7 @@ func (s *Scanner) probe(ctx context.Context, host, ip string, port int) (Open, p
 		}
 		o.Banner = bannerOf(buf[:n])
 		s.greeted(&o, buf[:n])
-		if n > 0 && o.Product == "" {
+		if n > 0 && o.Product == "" && s.Detect == DetectAll { // banner sends nothing
 			switch bannerService(o.Banner) {
 			case "ftp-or-smtp":
 				s.settle220(conn, &o)
@@ -614,19 +719,25 @@ func rawData(port int) bool { return port >= 9100 && port <= 9107 }
 
 // ask sends HEAD / and returns the head of the answer, if any.
 func (s *Scanner) ask(conn net.Conn, host string, port, defaultPort int) []byte {
+	// The time of a connect and of a banner: a remote server's answer
+	// takes a round trip more than its silence.
+	return s.talk(conn, s.httpRequest("HEAD", host, port, defaultPort), headFrame, s.Timeout+s.Banner)
+}
+
+// httpRequest is method / over HTTP/1.0, the Host header naming the port
+// unless it is the scheme's own.
+func (s *Scanner) httpRequest(method, host string, port, defaultPort int) []byte {
 	switch {
 	case port != defaultPort:
 		host = net.JoinHostPort(host, strconv.Itoa(port))
 	case strings.Contains(host, ":"):
 		host = "[" + host + "]"
 	}
-	req := "HEAD / HTTP/1.0\r\nHost: " + host + "\r\n"
+	req := method + " / HTTP/1.0\r\nHost: " + host + "\r\n"
 	if s.UserAgent != "" {
 		req += "User-Agent: " + s.UserAgent + "\r\n"
 	}
-	// The time of a connect and of a banner: a remote server's answer
-	// takes a round trip more than its silence.
-	return s.talk(conn, []byte(req+"Accept: */*\r\n\r\n"), headFrame, s.Timeout+s.Banner)
+	return []byte(req + "Accept: */*\r\n\r\n")
 }
 
 // headFrame ends the read of an HTTP head at its blank line, and lets any

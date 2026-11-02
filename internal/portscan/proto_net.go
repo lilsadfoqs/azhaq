@@ -77,6 +77,12 @@ func init() {
 				o.Service, o.Product, o.Banner = "jdwp", "Java Debug Wire Protocol", "JDWP-Handshake"
 				return true
 			}},
+		// Java RMI: the stream protocol's header (JRMI, version 2, StreamProtocol),
+		// which a registry answers with a ProtocolAck, the client's host as it
+		// sees it and its port (Java RMI Specification, 10.2).
+		&protocol{name: "java-rmi", ports: rmiPorts,
+			request: func(target) []byte { return []byte("JRMI\x00\x02\x4b") },
+			frame:   rmiFrame, read: rmiRead},
 		// Elasticsearch transport: the keep-alive ping, "ES" and a length of
 		// -1 (TcpTransport). A node of 7.x or later answers with the same six
 		// bytes; an older one ignores it, and 9300 is then only a guess by port.
@@ -92,6 +98,46 @@ func init() {
 		&protocol{name: "minecraft", ports: []int{25565},
 			request: minecraftPing, frame: mcFrame, read: minecraftRead},
 	)
+}
+
+// rmiPorts are where a Java RMI registry or JMX agent usually listens (the
+// ports nmap's JavaRMI probe goes to first).
+var rmiPorts = []int{1090, 1098, 1099, 1129, 1199, 2199, 5999, 7800, 8686, 8999, 9999, 10098, 10099, 10990, 11099, 31099, 47001, 47002}
+
+// rmiFrame is the length of a ProtocolAck: the 0x4e, a host string with its
+// two-byte length and a four-byte port.
+func rmiFrame(b []byte) int {
+	if len(b) >= 1 && b[0] != 0x4e {
+		return -1
+	}
+	if len(b) < 3 {
+		return 0
+	}
+	return 3 + int(binary.BigEndian.Uint16(b[1:])) + 4
+}
+
+// rmiRead names a port that answered the header with a ProtocolAck. The host
+// and port are what the registry says it sees the asker as; nothing else of
+// the answer is taken.
+func rmiRead(r []byte, o *Open) bool {
+	if len(r) < 7 || r[0] != 0x4e {
+		return false
+	}
+	n := int(binary.BigEndian.Uint16(r[1:]))
+	if n == 0 || len(r) != 3+n+4 {
+		return false
+	}
+	host := r[3 : 3+n]
+	for _, c := range host {
+		if c <= 0x20 || c >= 0x7f {
+			return false
+		}
+	}
+	port := binary.BigEndian.Uint32(r[3+n:])
+	o.Service, o.Product = "java-rmi", "Java RMI"
+	o.Extra = fmt.Sprintf("client seen as %s:%d", host, port)
+	o.Banner = "rmi protocol ack"
+	return true
 }
 
 var esPing = []byte{'E', 'S', 0xff, 0xff, 0xff, 0xff}

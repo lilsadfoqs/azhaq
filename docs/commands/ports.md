@@ -36,7 +36,7 @@ azhaq ports 192.0.2.0/24 -sn
 5. With `-udp`, also sends each UDP port one harmless datagram.
 6. Prints one line for each open port.
 
-A port that says nothing is asked the request of its own protocol, an HTTP `HEAD /` and a TLS handshake. Then it gets one harmless request of each other protocol. That is at most 24 connects after the first. Nothing logs in, sends a credential or changes anything. Raw printing ports (9100–9107) are never asked anything. A CDN or WAF address is scanned in full, as naabu does; `-ec` limits it to ports 80, 443, 8080 and 8443.
+A port that says nothing is asked the request of its own protocol, an HTTP `HEAD /` and a TLS handshake. Then it gets one harmless request of each other protocol. That is at most 25 connects after the first. Nothing logs in, sends a credential or changes anything. Raw printing ports (9100–9107) are never asked anything. A CDN or WAF address is scanned in full, as naabu does; `-ec` limits it to ports 80, 443, 8080 and 8443.
 
 ## Output
 
@@ -68,6 +68,7 @@ The fields of a `-json` row, which are naabu's plus azhaq's:
 | `extrainfo` | What the answer says beside the product and its version, as it was sent: the rest of a `Server` header (`Python/3.11.15`, `(Ubuntu)`), or an SSH line's comment and protocol (`Ubuntu-2ubuntu2.13; protocol 2.0`). nmap calls it `extrainfo` too, and `-oX` and `-oG` carry it. |
 | `title` | The `<title>` of a web page that names no product. |
 | `banner` | What the port said. A binary answer, to the first read or to the `HEAD`, is `(binary)` and its first bytes in hex. |
+| `tls_version`, `cipher` | What the handshake of a TLS port negotiated: `tls10` to `tls13`, and the suite's name (`TLS_AES_128_GCM_SHA256`, `TLS_RSA_WITH_AES_128_GCM_SHA256`). |
 | `subject_cn`, `subject_an` | The certificate's subject names of a TLS port, as httpx calls them. |
 | `state` | UDP only: `open`, or `open\|filtered`. |
 
@@ -96,6 +97,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 - A CIDR range is IPv4, or IPv6 down to /104. A larger IPv6 range is refused, since no scan finishes it.
 - `AS13335` stands for the prefixes RIPEstat lists, and the summary says so.
 - A `host:port` is asked that port only. `-p`, `-tp` and `-pf` apply to every target, and a `host:port` keeps its own port beside them: `-host 10.0.0.5:8081 -p 80` asks 80 and 8081. Each entry stands for itself: `-host 10.0.0.5,10.0.0.5:8081` scans the default ports of 10.0.0.5 and port 8081, and the same goes for an address in a given range, or a name given both ways.
+- A scan keeps what it has finished while it runs: about every second, the ports it has asked (all those before the first connect still on its way, the open ones named, a port that timed out left out). A range keeps the addresses of its block it has finished every two seconds. A scan killed with SIGKILL or a crash is continued by `azhaq resume -db FILE` with the ports after them, and the summary says how many connects of the killed run it made again. The checkpoints are rows of the workspace marked `checkpoint`: the newest of an address stands, and the row that ends the scan replaces them. A scan that ends within a second leaves none.
 - A range is split into blocks of 256 addresses. The run takes them one at a time and records them. So a range has no size limit and is not expanded in memory, and `azhaq resume` continues it: a block a limit stopped keeps which of its addresses it finished, and the resume asks only the others.
 - In the map (`show`, `query -type Prefix`), a range's row lists the open ports of every address that answered, as `open=[8001 8002 …]`, and `addresses_open=N` says how many addresses had any. Which address answered on which port is in the `Port` rows (`query -type Port`).
 - A name costs the DNS queries of its A and AAAA records and no others.
@@ -122,10 +124,11 @@ A service that speaks first (`ssh`, `ftp`, `smtp`, `telnet`, `irc`, …) is name
 2. An HTTP `HEAD / HTTP/1.0` on the open connection. An HTTP answer is `http`, and its banner is the `Server` header or the status line. A `405` or `501` is asked `GET /` for the page's title and product.
 3. For an answer that is not HTTP text, a TLS handshake on a second connection, counted like a connect. The service is `tls`, or `https` when HTTP answers inside it. A greeting inside it, as an IMAPS or SMTPS server sends, is read first and names the service, with `tls` true.
 4. One harmless request of each other protocol, each on a connection of its own, a few at a time. The first in the list that answers is the port's, with the product and version it states.
+5. A port still unnamed after all that, whose silence to the `HEAD` was complete, is asked one `GET / HTTP/1.0`, nmap's GetRequest. A handler that answers `GET` and waits for its own protocol after any other first bytes (the Jenkins agent port) says `HTTP/1.0 200` and its text page. An HTTP answer is `http`, with the product its head or page names (`Jenkins-Version: 2.462` is Jenkins 2.462). Nothing else names the port. It is skipped for an address whose ports were no longer run down the list (see `-unnamed`).
 
 - A `HEAD` that stays unanswered for half a second is waited on while the handshake and the list are asked beside it. A port that answers neither is done when the `HEAD`'s wait ends, not after a wait for each protocol.
 - Every connect, whatever its purpose, counts against `-max-requests`, takes a token of the pace and is in the ledger.
-- An open port costs at most 24 connects after the first. A port named by a late protocol may cost a few more than asking the protocols one by one would. Several are asked at once.
+- An open port costs at most 25 connects after the first, the `GET /` of step 5 included. A port named by a late protocol may cost a few more than asking the protocols one by one would. Several are asked at once.
 - A port that accepts a connection and closes it without a word is `tcpwrapped`.
 - Raw printing ports (9100–9107) are never asked anything.
 - A service on a port that usually speaks first (22, 21, 25, 3306, …) gets a second wait for its greeting before it is asked anything. A greeting that arrives in reply to the `HEAD` is read as one.
@@ -147,7 +150,7 @@ A service that speaks first (`ssh`, `ftp`, `smtp`, `telnet`, `irc`, …) is name
 - `-pts N` stops asking a host after N open ports, for a host that answers every port. The row has `"threshold":true` and the summary names the host. Ports already in flight are still asked, so a few more than N may be listed.
 - `-detect` says what is asked of an open port:
   - `none` connects and closes: one connect per port, as naabu without `-sV`.
-  - `banner` reads what the service says on that connection.
+  - `banner` reads what the service says on that connection and sends nothing after it: a bare `220` greeting stays `ftp-or-smtp` with its banner, and an FTP greeting that names no product is not asked `SYST`. Only `all` sends `EHLO` or `SYST`.
   - `all` is the default, and costs a second or two on top of the connect scan. `-detect none` (`-port-detect none` in `run`) matches naabu's time and output. It also asks a silent port for HTTP and TLS, then one request of each protocol that waits to be asked. Each goes on a connection of its own, several at once while the scan has workers free.
 - `-proxy host:port` (SOCKS5) and `-source-ip` make the TCP connects go through that proxy or from that address. The service probes beyond the first connection dial on their own, so with either the scan asks the banner only, and the summary says so.
 - UDP is not sent through a proxy. `-proxy` with `-udp` is refused.
@@ -155,7 +158,7 @@ A service that speaks first (`ssh`, `ftp`, `smtp`, `telnet`, `irc`, …) is name
 ### More on formats
 - `-csv` writes a list joined with spaces. `-lof` lists the fields and stops.
 - `-eof a,b` leaves fields out of `-json`, `-csv` and `-oA`'s JSON.
-- `-json` rows have `timestamp` in UTC, RFC 3339, and `subject_cn` and `subject_an` on a TLS port.
+- `-json` rows have `timestamp` in UTC, RFC 3339, and `tls_version`, `cipher`, `subject_cn` and `subject_an` on a TLS port.
 - `-oX FILE` and `-oG FILE` take `-` for stdout. Hosts are in address order and ports by number. `service` has no `?`, which marks a guess from the port number alone (`method="table"` in the XML).
 - The XML and greppable layouts follow naabu's.
 
@@ -249,7 +252,7 @@ Each open TCP port gets `product` and `version` next to `service`, from what it 
 | --- | --- | --- |
 | SSH greeting | `SSH-2.0-OpenSSH_9.6p1 Ubuntu-3ubuntu13.20` | OpenSSH, 9.6p1 |
 | FTP, SMTP, POP3, IMAP greeting | `220 (vsFTPd 3.0.5)`, `ESMTP Exim 4.96`, `Dovecot` | vsftpd 3.0.5, Exim 4.96, Dovecot |
-| FTP greeting naming no product: `SYST` before login | vsftpd 2.0.8 and later refuses it with `530 Please login with USER and PASS.` | vsftpd, no version (the greeting states none) |
+| FTP greeting naming no product: `SYST` before login (`-detect all` only) | vsftpd 2.0.8 and later refuses it with `530 Please login with USER and PASS.` | vsftpd, no version (the greeting states none) |
 | MySQL, MariaDB handshake | server version in the first packet | MySQL 8.0.35, MariaDB 10.11.6 |
 | HTTP `Server` | `Werkzeug/2.2.3 Python/3.11`, `Apache/2.4.25 (Debian)`, `CUPS/2.4` | Werkzeug 2.2.3, Apache httpd 2.4.25, CUPS 2.4 |
 | HTTP `X-Powered-By`, when `Server` names none | `Express` | Express |
@@ -271,6 +274,7 @@ Each open TCP port gets `product` and `version` next to `service`, from what it 
 | Kerberos: an AS-REQ for a principal that does not exist | KRB-ERROR with the realm | `kerberos` |
 | RDP: an X.224 connection request | the selected protocol | `rdp` |
 | X11: a connection setup with no authorization | the vendor and release of an open server | `x11` |
+| Java RMI: the stream header `JRMI`, version 2, StreamProtocol (7 bytes), asked first on 1090, 1098, 1099, 1129, 1199, 2199, 5999, 7800, 8686, 8999, 9999, 10098, 10099, 10990, 11099, 31099, 47001 and 47002, and last in the list on any port | a ProtocolAck (`0x4e`), then the host and port the registry sees the asker as | `java-rmi`, product Java RMI; `extrainfo` is `client seen as HOST:PORT` |
 | Elasticsearch transport: the keep-alive ping (`ES` and a length of -1), 6 bytes, asked first on 9300 to 9303 | the same six bytes | `elasticsearch-transport`, product Elasticsearch |
 | SOCKS5, STOMP, XMPP, RTSP, SIP, JDWP, AFP, Minecraft, gopher, finger | the method reply, the CONNECTED frame, the stream header, the status line and `Server` header, the handshake, and so on | the service; a product where the answer states one |
 | Nping echo server: it opens with a binary handshake (version 1, type 1, its length) | the first 24 bytes or more | `nping-echo`, product Nping echo |
@@ -308,7 +312,7 @@ Each open TCP port gets `product` and `version` next to `service`, from what it 
 | --- | --- | --- | --- |
 | `-udp` | bool |  | also ask the common UDP ports (25: dns, ntp, snmp, ssdp, mdns, ...) |
 | `-pu` | string |  | UDP ports to ask: top, full or a list of ports, ranges and these names, such as 53,123,1-1024 or top,5354 (implies -udp; without -p, -tp or -pf no TCP port is asked) |
-| `-detect` | string | `all` | what is asked of an open port: all (its banner, then HTTP and TLS, then one request of each protocol that waits to be asked, each on its own connection, several at once while the scan has workers free: at most 24 connects after the first), banner (what it says on the one connection) or none (connect and close, as naabu without -sV). UDP ports: all and banner ask every request a port's protocol has (4 datagrams to a silent port); none asks one |
+| `-detect` | string | `all` | what is asked of an open port: all (its banner, then HTTP and TLS, then one request of each protocol that waits to be asked, each on its own connection, several at once while the scan has workers free: at most 25 connects after the first), banner (what it says on the one connection; nothing is sent, so a bare 220 stays ftp-or-smtp) or none (connect and close, as naabu without -sV). UDP ports: all and banner ask every request a port's protocol has (4 datagrams to a silent port); none asks one |
 | `-order` | string | `random` | the order a host's ports are asked in: random (the likeliest ports first, each tier shuffled) or asc |
 | `-unnamed` | int |  | after this many open ports of an address that no protocol probe could name, ask its other silent ports their banner only (0: 6, a guard against hosts that accept every connect; -1: no limit) |
 | `-exclude-cdn` | bool |  | ask a CDN or WAF address only ports 80, 443, 8080 and 8443 (naabu's two ports plus 8080 and 8443; the default is the full list) |

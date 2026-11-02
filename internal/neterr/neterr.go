@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"strings"
 	"syscall"
@@ -145,6 +146,21 @@ func NotHTTP(err error) bool {
 		strings.Contains(s, "readLoopPeekFailLocked") || // bytes before any request
 		strings.Contains(s, "first record does not look like a TLS handshake") ||
 		strings.Contains(s, "tls: oversized record")
+}
+
+// ClosedAtOnce: the peer closed or reset the connection before it said
+// anything (EOF, a reset), as a TCP wrapper or a port that speaks another
+// protocol does. A timeout, a refusal and a TLS alert are not this.
+func ClosedAtOnce(err error) bool {
+	if err == nil || Unanswered(err) {
+		return false
+	}
+	var al tls.AlertError
+	if errors.As(err, &al) {
+		return false
+	}
+	return errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, syscall.ECONNRESET) ||
+		strings.Contains(err.Error(), "connection reset by peer")
 }
 
 // NotTLS: err came from a plain-HTTP request, and the peer's reply is not

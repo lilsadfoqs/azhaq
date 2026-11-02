@@ -25,7 +25,7 @@ func listedURLs(t *testing.T, r Result) map[string]bool {
 func TestCrawlRequestsTheStylesheetsAPageLoads(t *testing.T) {
 	l := newLabs(t)
 	r := l.Cmd("crawl", "-u", l.Site.URL, "-d", "2")
-	v := newInv(t, "#76")
+	v := newInv(t, "")
 	css := l.Site.URL + "/static/site.css"
 	if !listedURLs(t, r)[css] {
 		v.Errorf("the stylesheet the front page loads is not in the default list")
@@ -43,7 +43,7 @@ func TestCrawlTakesNoModuleMapKeyForARoute(t *testing.T) {
 	site := webpackSite(t)
 	dir := t.TempDir()
 	r := Run(t, dir, "crawl", "-u", site.URL, "-d", "3", "-hints", "-json")
-	v := newInv(t, "#93")
+	v := newInv(t, "")
 	for k := range site.Wire.HTTP() {
 		for _, id := range []string{"/components/locale/", "/AdhocFilter", "/AdhocMetric"} {
 			if strings.Contains(k, id) {

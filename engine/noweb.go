@@ -90,5 +90,5 @@ func NotHTTPNote(obs []types.StoredObservation) string {
 	if len(at) > 5 {
 		list = fmt.Sprintf("%s and %d more", strings.Join(at[:5], ", "), len(at)-5)
 	}
-	return "open, but not a web service (answered something other than HTTP): " + list
+	return "open, but not a web service (answered something other than HTTP, or closed the connection on the request): " + list
 }

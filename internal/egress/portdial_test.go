@@ -10,7 +10,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lilsadfoqs/azhaq/internal/ledger"
 	"github.com/lilsadfoqs/azhaq/internal/neterr"
+	"github.com/lilsadfoqs/azhaq/scope"
 )
 
 func listener(t *testing.T) (addr string, accepted *atomic.Int32) {
@@ -109,5 +111,71 @@ func TestPortDialerUDPIsRecorded(t *testing.T) {
 	c.Close()
 	if got := entries(); len(got) != 2 || got[0] != "udp/target" {
 		t.Fatalf("ledger %v", got)
+	}
+}
+
+// Connects reserved in a batch are held to the same controls as any other:
+// an address outside the scope is not recorded and not connected to, and the
+// kill file stops a reserved connect that has not been made yet.
+func TestReservedConnectsKeepTheirControls(t *testing.T) {
+	Reset()
+	defer Reset()
+	path := filepath.Join(t.TempDir(), "r.jsonl")
+	l, err := ledger.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ledger.Use(l)
+	defer func() { ledger.Use(nil); l.Close() }()
+	ok, _ := net.Listen("tcp", "127.0.0.1:0")
+	defer ok.Close()
+	rules := scope.Rules{Allow: []string{ok.Addr().String()}}.Compile()
+	SetScope(rules.Allows)
+	SetScopeAddr(rules.AllowsAddr)
+	d := NewPortDialer(time.Second, nil, "", "")
+	other := "127.0.0.1:1"
+	d.Reserve(context.Background(), "", []string{ok.Addr().String(), other})
+	if n := l.Count(); n != 1 {
+		t.Errorf("%d lines for a batch of one allowed address and one outside the scope", n)
+	}
+	if _, err := d.TCP(context.Background(), "", other); !errors.Is(err, neterr.ErrOutOfScope) {
+		t.Errorf("an address outside the scope: %v", err)
+	}
+	kill := filepath.Join(t.TempDir(), "stop")
+	defer SetKill(kill)()
+	if err := os.WriteFile(kill, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.TCP(context.Background(), "", ok.Addr().String()); !errors.Is(err, neterr.ErrKilled) {
+		t.Errorf("a reserved connect after the kill file: %v", err)
+	}
+}
+
+// Two scans of one address reserve its connects twice and make them twice:
+// each connect is a line once, as the connects counted are.
+func TestReservedConnectsOfTwoScansAreRecordedOnce(t *testing.T) {
+	Reset()
+	defer Reset()
+	l, err := ledger.Open(filepath.Join(t.TempDir(), "d.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ledger.Use(l)
+	defer func() { ledger.Use(nil); l.Close() }()
+	ok, _ := net.Listen("tcp", "127.0.0.1:0")
+	defer ok.Close()
+	d := NewPortDialer(time.Second, nil, "", "")
+	addr := ok.Addr().String()
+	d.Reserve(context.Background(), "", []string{addr})
+	d.Reserve(context.Background(), "", []string{addr})
+	for i := 0; i < 2; i++ {
+		c, err := d.TCP(context.Background(), "", addr)
+		if err != nil {
+			t.Fatal(err)
+		}
+		c.Close()
+	}
+	if n := l.Count(); n != 2 {
+		t.Errorf("%d lines for 2 reserved connects", n)
 	}
 }

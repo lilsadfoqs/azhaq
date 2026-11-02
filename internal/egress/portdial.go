@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"net"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/net/proxy"
@@ -23,6 +24,8 @@ type PortDialer struct {
 	timeout time.Duration
 	src     net.IP
 	via     proxy.ContextDialer // SOCKS5 for the connects of the scan itself; nil: direct
+	preMu   sync.Mutex
+	pre     map[string]int // connects Reserve recorded for an address, until their TCP calls
 }
 
 // NewPortDialer is a dialer with a timeout per connect, connecting from
@@ -50,10 +53,15 @@ func (d *PortDialer) Proxied() bool { return d.via != nil }
 // name an address was found under nor the address is in the scope, or the
 // port is not the one -allow names for the host.
 func (d *PortDialer) allowed(host, addr string) error {
-	p := Current()
-	if err := p.Killed(); err != nil {
+	if err := Current().Killed(); err != nil {
 		return err
 	}
+	return d.inScope(host, addr)
+}
+
+// inScope is allowed without the kill file.
+func (d *PortDialer) inScope(host, addr string) error {
+	p := Current()
 	if p.Scope() == nil {
 		return nil
 	}
@@ -92,10 +100,17 @@ func hostOfAddr(addr string) string {
 // TCP connects to addr (ip:port) of host ("" when only the address is
 // known), through the proxy when there is one.
 func (d *PortDialer) TCP(ctx context.Context, host, addr string) (net.Conn, error) {
-	if err := d.allowed(host, addr); err != nil {
-		return nil, err
+	if d.takeReserved(addr) {
+		// Reserve checked the scope and recorded the line: the kill file only.
+		if err := Current().Killed(); err != nil {
+			return nil, err
+		}
+	} else {
+		if err := d.allowed(host, addr); err != nil {
+			return nil, err
+		}
+		ledger.TCP(ctx, host, addr)
 	}
-	ledger.TCP(ctx, host, addr)
 	if d.via != nil {
 		cctx, cancel := context.WithTimeout(ctx, d.timeout)
 		defer cancel()
@@ -103,6 +118,39 @@ func (d *PortDialer) TCP(ctx context.Context, host, addr string) (net.Conn, erro
 	}
 	nd := d.netDialer(hostOfAddr(addr))
 	return dialResolvedWith(ctx, Current(), &nd, "tcp", addr)
+}
+
+// Reserve records the connects a scan is about to make to addrs (ip:port),
+// those the scope allows, in one write of the ledger: each is a line before
+// its connect goes, and the TCP call for it does not record it again. The
+// kill file still stops each connect at its TCP call.
+func (d *PortDialer) Reserve(ctx context.Context, host string, addrs []string) {
+	ok := make([]string, 0, len(addrs))
+	for _, a := range addrs {
+		if d.inScope(host, a) == nil {
+			ok = append(ok, a)
+		}
+	}
+	ledger.TCPBatch(ctx, host, ok)
+	d.preMu.Lock()
+	defer d.preMu.Unlock()
+	if d.pre == nil {
+		d.pre = map[string]int{}
+	}
+	for _, a := range ok {
+		d.pre[a]++ // two scans of one address reserve it twice, and connect twice
+	}
+}
+
+// takeReserved says a connect to addr was recorded by Reserve, and uses it up.
+func (d *PortDialer) takeReserved(addr string) bool {
+	d.preMu.Lock()
+	defer d.preMu.Unlock()
+	if d.pre[addr] == 0 {
+		return false
+	}
+	d.pre[addr]--
+	return true
 }
 
 // TCPDirect is TCP that never goes through the proxy: the service probes
@@ -118,6 +166,17 @@ func (d *PortDialer) TCPDirect(ctx context.Context, host, addr string) (net.Conn
 
 // TLS is TCPDirect with a TLS handshake that waits at most handshake.
 func (d *PortDialer) TLS(ctx context.Context, host, addr string, cfg *tls.Config, handshake time.Duration) (net.Conn, error) {
+	return d.tls(ctx, host, addr, cfg, handshake, false)
+}
+
+// TLSLegacy is TLS with the fallback client (see legacytls.go): for a server
+// crypto/tls failed with an error LegacyTLSNeeded names. It is another
+// connection, recorded like any other, and the caller counts and paces it.
+func (d *PortDialer) TLSLegacy(ctx context.Context, host, addr string, cfg *tls.Config, handshake time.Duration) (net.Conn, error) {
+	return d.tls(ctx, host, addr, cfg, handshake, true)
+}
+
+func (d *PortDialer) tls(ctx context.Context, host, addr string, cfg *tls.Config, handshake time.Duration, legacy bool) (net.Conn, error) {
 	if err := d.allowed(host, addr); err != nil {
 		return nil, err
 	}
@@ -133,6 +192,14 @@ func (d *PortDialer) TLS(ctx context.Context, host, addr string, cfg *tls.Config
 	cfg = cfg.Clone()
 	if cfg.ServerName == "" {
 		cfg.ServerName = hostOfAddr(addr)
+	}
+	if legacy {
+		lc, err := legacyClient(hctx, c, cfg, hostOfAddr(addr))
+		if err != nil {
+			c.Close()
+			return nil, err
+		}
+		return lc, nil
 	}
 	tc := tls.Client(c, cfg)
 	if err := tc.HandshakeContext(hctx); err != nil {
@@ -167,4 +234,11 @@ func (d *PortDialer) UDPAnySource(ctx context.Context, host string, raddr *net.U
 // ledger line, held to the kill file and the scope.
 func DialTLS(ctx context.Context, host, addr string, cfg *tls.Config, timeout time.Duration) (net.Conn, error) {
 	return (&PortDialer{timeout: timeout}).TLS(ctx, host, addr, cfg, timeout)
+}
+
+// DialTLSLegacy is DialTLS with the fallback client, for a server crypto/tls
+// failed with an error LegacyTLSNeeded names: another connection and ledger
+// line, which the caller counts.
+func DialTLSLegacy(ctx context.Context, host, addr string, cfg *tls.Config, timeout time.Duration) (net.Conn, error) {
+	return (&PortDialer{timeout: timeout}).TLSLegacy(ctx, host, addr, cfg, timeout)
 }

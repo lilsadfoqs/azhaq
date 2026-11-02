@@ -85,6 +85,9 @@ func (r *runLedger) noteResume(rep *report) {
 	if n := r.l.Again(); n > 0 {
 		rep.Notes = append(rep.Notes, fmt.Sprintf("%s sent before the run was killed had no stored answer and %s asked again", nOf(n, "request", "requests"), map[bool]string{true: "was", false: "were"}[n == 1]))
 	}
+	if n := r.l.AgainConns(); n > 0 {
+		rep.Notes = append(rep.Notes, fmt.Sprintf("%s made before the run was killed had no stored answer (the scan had kept the ports it finished before them) and %s asked again", nOf(n, "connect", "connects"), map[bool]string{true: "was", false: "were"}[n == 1]))
+	}
 }
 
 func nOf(n int, one, many string) string {

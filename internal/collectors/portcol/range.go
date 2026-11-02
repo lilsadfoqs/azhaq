@@ -156,6 +156,41 @@ func (c *Collector) runPrefix(ctx context.Context, seed types.Seed, emit func(ty
 			meta.NextHints = append(meta.NextHints, res.sent.hand(ctx, append([]types.Seed{ipSeed(res.ip)}, hintsOf(res.ip, res.open)...))...)
 		}
 	}
+	// What the block has finished is kept as it goes, in the row a stopped block
+	// leaves (what azhaq resume reads), so a kill leaves the addresses done.
+	var keepFinished func()
+	if len(addrs) > 1 {
+		lastKept := len(swept)
+		keepFinished = func() {
+			mu.Lock()
+			defer mu.Unlock()
+			if len(finished) <= lastKept || emitErr != nil {
+				return
+			}
+			lastKept = len(finished)
+			row := counts()
+			row["range"], row["prefix"], row["addresses"], row["stopped"], row["open"] = true, pf.String(), len(finished), true, []int{}
+			row[SweptKey] = portscan.Compact(slices.Collect(maps.Keys(finished)))
+			row[CheckpointKey] = true
+			raw, _ := json.Marshal(row)
+			_ = emit(types.Observation{Collector: Name, Source: "tcp", Kind: "ports", Payload: raw, Confidence: 0.95, ObservedAt: time.Now().UTC(), Keep: true})
+		}
+		quit, ended := make(chan struct{}), make(chan struct{})
+		go func() {
+			defer close(ended)
+			t := time.NewTicker(2 * time.Second)
+			defer t.Stop()
+			for {
+				select {
+				case <-quit:
+					return
+				case <-t.C:
+					keepFinished()
+				}
+			}
+		}()
+		defer func() { close(quit); <-ended }()
+	}
 	for at, a := range addrs {
 		if swept[at+1] {
 			continue
@@ -176,11 +211,6 @@ func (c *Collector) runPrefix(ctx context.Context, seed types.Seed, emit func(ty
 			defer wg.Done()
 			defer func() { <-sem }()
 			ip := a.String()
-			done := func() {
-				mu.Lock()
-				finished[place] = true
-				mu.Unlock()
-			}
 			if !egress.Allows(ip) {
 				mu.Lock()
 				out++
@@ -205,14 +235,23 @@ func (c *Collector) runPrefix(ctx context.Context, seed types.Seed, emit func(ty
 			s := &scan{up: true}
 			var uerr error
 			early := &earlyAddr{c: c, ctx: ctx, ip: ip}
+			sctx := ctx
+			if single {
+				// One address is one long scan: it keeps what it has finished as it goes.
+				sctx = portscan.WithProgress(ctx, c.checkpoint(func(o types.Observation) error {
+					mu.Lock()
+					defer mu.Unlock()
+					return emit(o)
+				}, ip, ip, all, prior, resumed, edgeName, edge, pf.String()))
+			}
 			switch {
 			case len(ports) == 0:
 			case c.Discover != DiscoverOff && outScope == 0:
 				if s.up, s.err = c.Scanner.Up(ctx, ip, ip); s.err == nil && s.up && c.Discover == DiscoverFirst {
-					s = c.scanRange(ctx, ip, ports, early.found)
+					s = c.scanRange(sctx, ip, ports, early.found)
 				}
 			default:
-				s = c.scanRange(ctx, ip, ports, early.found)
+				s = c.scanRange(sctx, ip, ports, early.found)
 			}
 			if s.err != nil {
 				res := result{err: s.err}
@@ -265,36 +304,40 @@ func (c *Collector) runPrefix(ctx context.Context, seed types.Seed, emit func(ty
 			// An address that shows nothing has no row: the range's row counts
 			// them. The one asked has a row for the UDP ports it refused.
 			rowless := len(s.open) == 0 && len(udp.Open) == 0 && !listed && !(c.Discover == DiscoverOnly && s.up) && !(single && udp.Closed > 0)
-			mu.Lock()
-			switch {
-			case !s.up:
-				down++
-			case len(s.open) > 0 || len(udp.Open) > 0:
-				withOpen++
-			}
-			if len(s.silent) > 0 {
-				filtAddrs++
-			}
-			if edge && c.ExcludeCDN {
-				edgeAddrs++
-			}
-			if len(udp.OpenFiltered) > 0 && !listed {
-				udpFilt += len(udp.OpenFiltered)
-				udpSilent++
-			}
-			if rowless && udp.Closed > 0 {
-				udpRefused += udp.Closed
-				udpRefusing++
-			}
-			mu.Unlock()
-			if rowless {
-				if outScope > 0 { // no row of its own to say it
-					mu.Lock()
+			// Counted and marked finished together, after the address's row is
+			// written: a checkpoint of the block (below) never names an address
+			// whose row or count is missing.
+			apply := func() {
+				mu.Lock()
+				defer mu.Unlock()
+				switch {
+				case !s.up:
+					down++
+				case len(s.open) > 0 || len(udp.Open) > 0:
+					withOpen++
+				}
+				if len(s.silent) > 0 {
+					filtAddrs++
+				}
+				if edge && c.ExcludeCDN {
+					edgeAddrs++
+				}
+				if len(udp.OpenFiltered) > 0 && !listed {
+					udpFilt += len(udp.OpenFiltered)
+					udpSilent++
+				}
+				if rowless && udp.Closed > 0 {
+					udpRefused += udp.Closed
+					udpRefusing++
+				}
+				if rowless && outScope > 0 { // no row of its own to say it
 					portsOut += outScope
 					portsAddr++
-					mu.Unlock()
 				}
-				done()
+				finished[place] = true
+			}
+			if rowless {
+				apply()
 				return
 			}
 			row := c.row(ip, ip, ports, s, edgeName, edge)
@@ -310,8 +353,8 @@ func (c *Collector) runPrefix(ctx context.Context, seed types.Seed, emit func(ty
 				// The address seed that follows finds its scan done.
 				c.remember(ip, s, udp, len(c.UDPPorts) > 0 && !edge && s.up && c.Discover != DiscoverOnly)
 			}
-			done()
 			record(result{row: row, open: s.open, ip: ip, follow: follow, sent: &early.sent})
+			apply()
 		}(a, at+1)
 	}
 	wg.Wait()

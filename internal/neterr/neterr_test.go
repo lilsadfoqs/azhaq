@@ -1,9 +1,12 @@
 package neterr
 
 import (
+	"context"
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"io"
+	"syscall"
 	"testing"
 )
 
@@ -27,6 +30,26 @@ func TestNotHTTPAndNotTLS(t *testing.T) {
 		}
 		if got := NotTLS(tc.err); got != tc.notTLS {
 			t.Errorf("NotTLS(%v) = %v", tc.err, got)
+		}
+	}
+}
+
+func TestClosedAtOnce(t *testing.T) {
+	for _, tc := range []struct {
+		err  error
+		want bool
+	}{
+		{fmt.Errorf(`Get "http://h:1099/": %w`, io.EOF), true},
+		{errors.New(`Get "http://h:1099/": read tcp 1.2.3.4:5->6.7.8.9:1099: read: connection reset by peer`), true},
+		{fmt.Errorf("read: %w", syscall.ECONNRESET), true},
+		{fmt.Errorf("dial: %w", syscall.ECONNREFUSED), false},
+		{context.DeadlineExceeded, false},
+		{fmt.Errorf("Get: %w", tls.AlertError(40)), false},
+		{errors.New("tls: handshake failure"), false},
+		{nil, false},
+	} {
+		if got := ClosedAtOnce(tc.err); got != tc.want {
+			t.Errorf("ClosedAtOnce(%v) = %v", tc.err, got)
 		}
 	}
 }

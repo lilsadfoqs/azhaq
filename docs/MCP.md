@@ -95,7 +95,7 @@ Any client that takes a JSON configuration:
 
 - Scans TCP ports only. UDP ports are not scanned over MCP.
 - Rows carry `product` and `version` where the port names one.
-- A port that waits is asked up to 24 more connects, each counted.
+- A port that waits is asked up to 25 more connects, each counted.
 - Each connect counts against the budget and follows the pace.
 
 **`azhaq_query`**

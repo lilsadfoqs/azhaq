@@ -294,15 +294,16 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		}
 		var s *scan
 		var err error
+		sctx := portscan.WithProgress(ctx, c.checkpoint(emit, host, ip, all, prior, resumed, name, edge, ""))
 		switch {
 		case len(ports) == 0:
 			s = &scan{up: true} // every port is outside the scope: nothing to ask
 		case c.Discover == DiscoverOff || outScope > 0:
 			// A host held to some ports is asked those, with no discovery
 			// of its own: its 80 and 443 may be outside the scope.
-			s, err = c.scanOnce(ctx, host, ip, ports, found)
+			s, err = c.scanOnce(sctx, host, ip, ports, found)
 		default:
-			s, err = c.discoverOnce(ctx, host, ip, ports, found)
+			s, err = c.discoverOnce(sctx, host, ip, ports, found)
 		}
 		if err != nil && ctx.Err() != nil {
 			return types.RunMeta{Status: types.StatusCancelled}, err
@@ -418,9 +419,22 @@ func hintsOf(host string, open []portscan.Open) []types.Seed {
 			keys = map[string]string{"url": "http://" + hp + "/", httpcol.FallbackKey: "https"}
 		}
 		keys[types.SameTargetKey] = "1" // a port of the target itself, not a step away from it
+		if !namedWeb(o.Service) {
+			keys[types.UnnamedPortKey] = "1" // a close on the request is an answer: it is not a web service
+		}
 		out = append(out, types.Seed{Type: types.TypeURL, Keys: keys})
 	}
 	return out
+}
+
+// namedWeb says the scan named the port as an HTTP service from what it
+// answered (a name guessed from the port number ends in "?").
+func namedWeb(service string) bool {
+	switch service {
+	case "http", "https", "elasticsearch", "docker", "kubernetes", "http-proxy":
+		return true
+	}
+	return false
 }
 
 // handed is the seeds a scan has given the scheduler, each once.
@@ -978,7 +992,11 @@ func (c *Collector) partialRow(host, ip string, all, ports []int, s *scan, prior
 	if s == nil || (s.asked == 0 && !resumed) {
 		return nil
 	}
-	asked := c.Scanner.Ordered(ip, ports)[:min(s.asked, len(ports))]
+	return c.partialRowOf(host, ip, all, c.Scanner.Ordered(ip, ports)[:min(s.asked, len(ports))], s, prior, resumed, name, edge)
+}
+
+// partialRowOf is partialRow for the ports named as asked.
+func (c *Collector) partialRowOf(host, ip string, all, asked []int, s *scan, prior Prior, resumed bool, name string, edge bool) map[string]any {
 	part := s
 	if resumed {
 		part = withPrior(s, prior)
@@ -989,6 +1007,25 @@ func (c *Collector) partialRow(host, ip string, all, ports []int, s *scan, prior
 	row[PartialKey] = true
 	row[AskedKey] = portscan.Compact(asked)
 	return row
+}
+
+// CheckpointKey marks the partial row a scan keeps while it goes, as against
+// the one a limit leaves: azhaq resume asks what neither names.
+const CheckpointKey = "checkpoint"
+
+// checkpoint keeps what the scan of an address has finished, so that a run
+// killed with no chance to say so is resumed after those ports. The row is
+// the stopped scan's, kept at once (Keep) and not held to the end of the task.
+func (c *Collector) checkpoint(emit func(types.Observation) error, host, ip string, all []int, prior Prior, resumed bool, name string, edge bool, prefix string) func(portscan.Progress) {
+	return func(p portscan.Progress) {
+		row := c.partialRowOf(host, ip, all, p.Asked, &scan{open: p.Open, up: true}, prior, resumed, name, edge)
+		row[CheckpointKey] = true
+		if prefix != "" {
+			row["prefix"] = prefix // the single address of a block
+		}
+		raw, _ := json.Marshal(row)
+		_ = emit(types.Observation{Collector: Name, Source: "tcp", Kind: "ports", Payload: raw, Confidence: 0.95, ObservedAt: time.Now().UTC(), Keep: true})
+	}
 }
 
 // markPartial marks the row of a scan whose UDP part a limit stopped: every

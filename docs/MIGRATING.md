@@ -586,7 +586,7 @@ A connect scan is what runs, and it needs no privileges. Behaviour, fields and e
 
 - **UDP needs no root.** Each port gets one harmless datagram on a connected socket. A reply is `open`, an ICMP "port unreachable" is `closed`, and silence after every request its protocol has is `open|filtered`. Nothing logs in, guesses a credential or changes state. See [UDP, products and versions](commands/ports.md#udp-products-and-versions).
 - **Versions come from a few connections.** A port that speaks first is named from what it says, on the one connection. One that waits is asked HTTP and TLS, then one harmless request of each protocol that waits to be asked. [The ports page](commands/ports.md#udp-products-and-versions) lists those protocols.
-- An open port costs at most 24 more connects, all counted, paced and in the ledger. nmap's `-sV` can send many more probes to one port.
+- An open port costs at most 25 more connects, all counted, paced and in the ledger. nmap's `-sV` can send many more probes to one port.
 - **Open ports are what is printed.** Ports that neither accepted nor refused a connect are named in the summary and in the workspace row's `filtered_ports`. An open port may hide among them.
 
 ### Examples

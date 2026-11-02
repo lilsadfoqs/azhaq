@@ -162,6 +162,11 @@ func TCPAs(ctx context.Context, class, host, addr string) {
 	if l == nil {
 		return
 	}
+	l.Record(tcpEntry(l, ctx, class, host, addr))
+}
+
+// tcpEntry is the line of a connection to addr.
+func tcpEntry(l *Ledger, ctx context.Context, class, host, addr string) Entry {
 	ip, _, err := net.SplitHostPort(addr)
 	if err != nil {
 		ip = addr
@@ -176,7 +181,22 @@ func TCPAs(ctx context.Context, class, host, addr string) {
 			rule = l.rule(ip)
 		}
 	}
-	l.Record(Entry{Kind: "tcp", Class: class, Target: addr, Host: host, Rule: rule, Collector: collectorOf(ctx)})
+	return Entry{Kind: "tcp", Class: class, Target: addr, Host: host, Rule: rule, Collector: collectorOf(ctx)}
+}
+
+// TCPBatch records connections about to be made to the targets at addrs
+// (ip:port), in one write: each is a line before its connect goes.
+func TCPBatch(ctx context.Context, host string, addrs []string) {
+	counter(ClassTarget).Add(int64(len(addrs)))
+	l := Active()
+	if l == nil || len(addrs) == 0 {
+		return
+	}
+	es := make([]Entry, 0, len(addrs))
+	for _, addr := range addrs {
+		es = append(es, tcpEntry(l, ctx, ClassTarget, host, addr))
+	}
+	l.RecordMany(es)
 }
 
 // DNS records a query about to be sent to a resolver: the name, its type

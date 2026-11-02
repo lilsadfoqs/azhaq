@@ -73,3 +73,29 @@ func TestWaitUntilDeadlineEndsTheContext(t *testing.T) {
 		t.Fatalf("returned after %s, before the deadline", d)
 	}
 }
+
+// WaitN takes the places of n requests in one wait: the pace is the same as
+// n waits of one, past the burst.
+func TestWaitNTakesPlacesAtTheRate(t *testing.T) {
+	l := New(1000, 100)
+	ctx := context.Background()
+	t0 := time.Now()
+	if err := l.WaitN(ctx, "k", 100); err != nil { // the burst
+		t.Fatal(err)
+	}
+	if d := time.Since(t0); d > 30*time.Millisecond {
+		t.Errorf("the burst took %v", d)
+	}
+	t0 = time.Now()
+	for i := 0; i < 5; i++ {
+		if err := l.WaitN(ctx, "k", 20); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if d := time.Since(t0); d < 80*time.Millisecond || d > 200*time.Millisecond {
+		t.Errorf("100 requests past the burst took %v at 1000 a second", d)
+	}
+	if err := l.WaitN(ctx, "k", 5000); err != nil { // more than the burst: the burst
+		t.Errorf("more than the burst: %v", err)
+	}
+}

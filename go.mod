@@ -22,6 +22,7 @@ require (
 	github.com/projectdiscovery/subfinder/v2 v2.14.1-0.20261026103132-98ef8711acb9
 	github.com/projectdiscovery/wappalyzergo v0.3.5
 	github.com/stretchr/testify v1.12.1
+	github.com/zmap/zcrypto v0.0.0-20261015050653-aa1de3126e87
 	go.yaml.in/yaml/v3 v3.0.5
 	golang.org/x/net v0.62.0
 	golang.org/x/text v0.43.0
@@ -67,7 +68,7 @@ require (
 	github.com/tidwall/match v1.2.0 // indirect
 	github.com/tidwall/pretty v1.2.1 // indirect
 	github.com/tomnomnom/linkheader v0.0.0-20180905144013-02ca5825eb80 // indirect
-	github.com/weppos/publicsuffix-go v0.50.3 // indirect
+	github.com/weppos/publicsuffix-go v0.50.4-0.20260918082853-3c3d7dc4a0cb // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/crypto v0.58.0 // indirect
 	golang.org/x/exp v0.0.0-20260112195511-716be5621a96 // indirect

@@ -43,6 +43,12 @@ Entries are grouped by what you were doing:
 - `azhaq plan` lists the rules a run would hold to, and the ledger records everything that was sent.
 - A request that ended your session is noticed: see below.
 
+### A URL fails with `TLS error: remote error: tls: handshake failure`
+
+**Why:** The server's handshake failed for a reason that is not the certificate: it sent an alert (`handshake failure`, `protocol version not supported`, `insufficient security`) or crypto/tls refused what the server chose (`no supported versions satisfy MinVersion and MaxVersion`). azhaq has already tried again with its fallback TLS client, which still speaks RSA key exchange and DHE, so what is left is a server that wants something neither offers: SSL 3.0, TLS 1.0 or 1.1 under `crawl` and `run` (which ask TLS 1.2 up; `probe` takes 1.0), a suite of RC4 or export grade, or a client certificate. A certificate fault reads `TLS error: x509: ...` or `tls: failed to verify certificate`. TLS failures are not retried.
+
+**Fix:** Look at what the server offers (`nmap --script ssl-enum-ciphers -p PORT HOST`). For TLS 1.0 or 1.1 use `probe`, which takes them.
+
 ### The run says `the session ended`
 
 **Why:** A request ended the session of a signed-in run: a logout link, or an expiry. azhaq noticed because its check page, the one that answers differently with the session and without it, no longer answered as it did.
@@ -269,7 +275,7 @@ A real page that is byte-for-byte the not-found page cannot be told apart by any
 
 ### An open TCP port has no `service` or `product`
 
-**Why:** One of two things happened. The port said nothing, and none of the protocols azhaq asks answered. azhaq asks about 30 protocols, one request each, and at most 24 connects per port. Or the port answered in a protocol azhaq does not know.
+**Why:** One of two things happened. The port said nothing, and none of the protocols azhaq asks answered. azhaq asks about 30 protocols, one request each, and at most 25 connects per port. Or the port answered in a protocol azhaq does not know.
 
 - The row keeps the first bytes of any answer in `banner`.
 - A port that accepts a connection and closes it without a word is `tcpwrapped`.

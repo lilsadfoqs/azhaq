@@ -8,6 +8,7 @@ import (
 	"math"
 	"os"
 	"runtime"
+	"runtime/debug"
 	"slices"
 	"sort"
 	"strconv"
@@ -112,7 +113,7 @@ func cmdPorts(args []string) error {
 	seed := fs.Int64("seed", 0, "make the random port order repeat (default: a new one each run)")
 	threshold := fs.Int("pts", 0, "stop asking a host after this many open ports: it answers every port (default: no limit)")
 	unnamed := fs.Int("unnamed", 0, "after this many open ports of an address that no protocol probe could name, ask its other silent ports their banner only (0: 6, a guard against hosts that accept every connect; -1: no limit)")
-	detect := fs.String("detect", "all", "what is asked of an open port: all (its banner, then HTTP and TLS, then one request of each protocol that waits to be asked, each on its own connection, several at once while the scan has workers free: at most 24 connects after the first), banner (what it says on the one connection) or none (connect and close, as naabu without -sV). UDP ports: all and banner ask every request a port's protocol has (4 datagrams to a silent port); none asks one")
+	detect := fs.String("detect", "all", "what is asked of an open port: all (its banner, then HTTP and TLS, then one request of each protocol that waits to be asked, each on its own connection, several at once while the scan has workers free: at most 25 connects after the first), banner (what it says on the one connection; nothing is sent, so a bare 220 stays ftp-or-smtp) or none (connect and close, as naabu without -sV). UDP ports: all and banner ask every request a port's protocol has (4 datagrams to a silent port); none asks one")
 	cdnFull := fs.Bool("cdn-full", false, "accepted: CDN and WAF addresses are scanned in full by default")
 	excludeCDN := fs.Bool("exclude-cdn", false, "ask a CDN or WAF address only ports 80, 443, 8080 and 8443 (naabu's two ports plus 8080 and 8443; the default is the full list)")
 	fs.BoolVar(excludeCDN, "ec", false, "same as -exclude-cdn")
@@ -312,6 +313,7 @@ func cmdPorts(args []string) error {
 	}
 	if rate > 0 && *minRate == 0 && os.Getenv("GOMAXPROCS") == "" {
 		runtime.GOMAXPROCS(scanProcs(rate, runtime.NumCPU()))
+		debug.SetGCPercent(400) // a scan allocates little that lives: fewer collections
 	}
 	if ct > 0 {
 		run = append(run, "-port-timeout", ct.String())
@@ -526,10 +528,12 @@ func (k *portsSink) visit(o types.Observation, print bool) {
 		k.mu.Lock()
 		switch {
 		case p["range"] == true:
-			k.scanned += float64(intOf(p["addresses"]))
+			if p[portcol.CheckpointKey] != true { // a checkpoint is a block under way
+				k.scanned += float64(intOf(p["addresses"]))
+			}
 		case p["unresolved"] != nil:
 			k.unresolved++
-		case p["prefix"] == nil:
+		case p["prefix"] == nil && p[portcol.CheckpointKey] != true: // a checkpoint is a scan under way, not one more address
 			k.scanned++
 		}
 		k.mu.Unlock()
@@ -553,7 +557,7 @@ func (k *portsSink) visit(o types.Observation, print bool) {
 		}
 		n, _ := strconv.Atoi(port)
 		row := portRow{Host: host, IP: ip, Port: n, Proto: "tcp", State: "open", TLS: svc["tls"] == true, CDN: cdn, At: time.Now(), Fields: map[string]any{}}
-		for _, f := range []string{"service", "product", "version", "extrainfo", "title", "banner", "subject_cn", "subject_an"} {
+		for _, f := range []string{"service", "product", "version", "extrainfo", "title", "banner", "tls_version", "cipher", "subject_cn", "subject_an"} {
 			if v, ok := svc[f]; ok {
 				row.Fields[f] = v
 			}
