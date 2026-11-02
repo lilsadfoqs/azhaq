@@ -307,7 +307,7 @@ func cmdCrawl(args []string) error {
 	}
 	if linkedListed > 0 {
 		// Listed as katana lists them, and said so: no request asked them.
-		note := fmt.Sprintf("%d listed URLs are links or loads a page holds that the crawl did not request (past -depth, a limit or a -deny-path rule, or a stylesheet, library script, image or font it does not fetch), so a GET may answer 404 (-json marks each row's class: linked)", linkedListed)
+		note := fmt.Sprintf("%d listed URLs are links or loads a page holds that the crawl did not request (past -depth, a limit or a -deny-path rule, or a library script, image or font it does not fetch), so a GET may answer 404 (-json marks each row's class: linked)", linkedListed)
 		rep.Notes = append(rep.Notes, note)
 		if c.silent && !c.json {
 			fmt.Fprintln(os.Stderr, "azhaq crawl: "+note)
@@ -545,7 +545,7 @@ type crawlOpts struct {
 }
 
 // hidden: a row the crawl does not list unless -assets, -em or -ndef asks. Scripts and
-// stylesheets are listed, found or fetched, as katana lists them; what is left out is what
+// stylesheets are listed, requested as katana does; what is left out is what
 // the default extension list leaves out (images, fonts, media) and the source maps and
 // build manifests azhaq guesses at, which no page names.
 func (o crawlOpts) hidden(r engine.MapEntry) bool {
