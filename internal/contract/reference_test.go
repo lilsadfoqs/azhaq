@@ -169,7 +169,15 @@ func pathsOf(site string, urls []string) map[string]bool {
 		if err != nil || u.Host != base.Host {
 			continue
 		}
-		out[u.Path+"?"+u.RawQuery] = true
+		path := u.Path
+		if path == "" {
+			path = "/" // http://host and http://host/ are one page
+		}
+		key := path
+		if u.RawQuery != "" { // an empty query is no query: "/a?" is "/a"
+			key += "?" + u.RawQuery
+		}
+		out[key] = true
 	}
 	return out
 }
@@ -184,9 +192,12 @@ func TestReferenceCrawlListsWhatKatanaDoes(t *testing.T) {
 		site        func(*testing.T) *Site
 		// not are paths the reference lists that are no routes (see the issue the marker names).
 		not []string
+		// parents are paths listed whole that are no routes: /api/v1 is the parent of the one real
+		// route /api/v1/dashboards, and the site answers it 404.
+		parents []string
 	}{
-		{"a page that loads a stylesheet, a script and an image", "", func(t *testing.T) *Site { return newSite(t) }, nil},
-		{"a single-page app with a webpack module map", "", webpackSite, []string{"/components/locale/", "/AdhocFilter", "/AdhocMetric"}},
+		{"a page that loads a stylesheet, a script and an image", "", func(t *testing.T) *Site { return newSite(t) }, nil, nil},
+		{"a single-page app with a webpack module map", "", webpackSite, []string{"/components/locale/", "/AdhocFilter", "/AdhocMetric"}, []string{"/api/v1"}},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			site := c.site(t)
@@ -198,6 +209,9 @@ func TestReferenceCrawlListsWhatKatanaDoes(t *testing.T) {
 				skip := false
 				for _, n := range c.not {
 					skip = skip || strings.Contains(p, n)
+				}
+				for _, n := range c.parents {
+					skip = skip || p == n
 				}
 				if !skip && !got[p] {
 					v.Errorf("katana lists %s; azhaq does not", p)
