@@ -42,13 +42,32 @@ func (c *Collector) scanUDPOnce(ctx context.Context, host, ip string) (portscan.
 	}
 	ports, _ := inScope(host, ip, c.UDPPorts) // UDP ports are held to -allow HOST:PORT as TCP ones are
 	if len(ports) > 0 {
-		s.rep, s.err = c.Scanner.ScanUDP(ctx, host, ip, ports)
+		s.rep, s.err = c.Scanner.ScanUDPFrom(ctx, host, ip, ports, c.Prior[ip].UDP)
 	}
 	if s.err != nil {
 		recordStops(ip, s.rep.Stopped)
 	}
 	close(s.done)
 	return s.rep, s.err
+}
+
+// scanUDPGated is ScanUDPFrom for an address of a range, run when one of the
+// UDP scans the rate can keep busy is free: with a cap or a stop the first
+// addresses of the range are finished, and a resume goes on from there.
+func (c *Collector) scanUDPGated(ctx context.Context, ip string, ports []int, prior portscan.UDPPrior) (portscan.UDPReport, error) {
+	c.mu.Lock()
+	if c.udpGate == nil {
+		c.udpGate = make(chan struct{}, c.Scanner.UDPHosts())
+	}
+	gate := c.udpGate
+	c.mu.Unlock()
+	select {
+	case gate <- struct{}{}:
+	case <-ctx.Done():
+		return portscan.UDPReport{}, ctx.Err()
+	}
+	defer func() { <-gate }()
+	return c.Scanner.ScanUDPFrom(ctx, ip, ip, ports, prior)
 }
 
 var stops struct {
@@ -92,11 +111,11 @@ func StoppedNotes() []string {
 				untouched++
 				continue
 			}
-			named = append(named, fmt.Sprintf("%s/udp: %d of %d payloads asked before the run stopped; no answer yet", net.JoinHostPort(ip, strconv.Itoa(st.Port)), st.Asked, st.Of))
+			named = append(named, fmt.Sprintf("%s/udp: %d of %d payloads asked before the run stopped; no answer yet, so open|filtered is not final", net.JoinHostPort(ip, strconv.Itoa(st.Port)), st.Asked, st.Of))
 		}
 		if len(named) > 3 {
 			out = append(out, named[:3]...)
-			out = append(out, fmt.Sprintf("%s: %d more UDP ports asked only part of their payloads", ip, len(named)-3))
+			out = append(out, fmt.Sprintf("%s: %d more UDP ports asked only part of their payloads (not final); azhaq resume asks the rest", ip, len(named)-3))
 		} else {
 			out = append(out, named...)
 		}
@@ -144,6 +163,104 @@ func addUDP(row map[string]any, r portscan.UDPReport, scanned int) {
 	if len(services) > 0 {
 		row["udp_services"] = services
 	}
+	if len(r.Stopped) > 0 {
+		addUDPStop(row, r)
+	}
+}
+
+// udpRow is addUDP for a row of this collector's scan, which also says when
+// each port was asked one request only.
+func (c *Collector) udpRow(row map[string]any, r portscan.UDPReport, scanned int) {
+	addUDP(row, r, scanned)
+	if c.Scanner.Detect == portscan.DetectNone {
+		row[udpOneKey] = true
+	}
+}
+
+// UDP fields of a row a limit stopped: the ports refused (all of them),
+// how many requests each port that is not decided was asked (requests
+// asked: the ports), and how many ports that is.
+const (
+	udpRefusedKey    = "udp_refused"
+	udpAskedKey      = "udp_asked"
+	udpUnfinishedKey = "udp_unfinished"
+	udpUnaskedKey    = "udp_unasked"
+	udpOneKey        = "udp_one_request"
+)
+
+// addUDPStop says what a stopped UDP scan settled and how far it asked the
+// rest, which azhaq resume reads back (Priors).
+func addUDPStop(row map[string]any, r portscan.UDPReport) {
+	if len(r.ClosedPorts) > 0 {
+		row[udpRefusedKey] = portscan.Compact(r.ClosedPorts)
+	}
+	by := map[int][]int{}
+	unasked, unfinished := 0, 0
+	for _, st := range r.Stopped {
+		if st.Asked == 0 {
+			unasked++
+			continue
+		}
+		by[st.Asked] = append(by[st.Asked], st.Port)
+		unfinished++
+	}
+	if len(by) > 0 {
+		asked := map[string]string{}
+		for n, ports := range by {
+			asked[strconv.Itoa(n)] = portscan.Compact(ports)
+		}
+		row[udpAskedKey] = asked
+	}
+	if unfinished > 0 {
+		row[udpUnfinishedKey] = unfinished
+	}
+	if unasked > 0 {
+		row[udpUnaskedKey] = unasked
+	}
+}
+
+// udpPrior reads, from the fields of a row a limit stopped, what its UDP
+// scan had settled.
+func udpPrior(services []portscan.UDPPort, refused string, asked map[string]string, filtered []int) portscan.UDPPrior {
+	var pr portscan.UDPPrior
+	for _, u := range services {
+		if u.State == portscan.UDPOpen {
+			pr.Open = append(pr.Open, u)
+		}
+	}
+	pr.Closed, _ = places(refused)
+	pr.Asked = map[int]int{}
+	for k, v := range asked {
+		n, err := strconv.Atoi(k)
+		ports, perr := places(v)
+		if err != nil || perr != nil {
+			continue
+		}
+		for _, p := range ports {
+			pr.Asked[p] = n
+		}
+	}
+	for _, p := range filtered {
+		if _, undecided := pr.Asked[p]; !undecided {
+			pr.Silent = append(pr.Silent, p)
+		}
+	}
+	return pr
+}
+
+// UDPUnfinished are the ports of a stopped row whose open|filtered is not
+// final: they were asked only some of their requests.
+func UDPUnfinished(row map[string]any) map[int]bool {
+	out := map[int]bool{}
+	asked, _ := row[udpAskedKey].(map[string]any)
+	for _, v := range asked {
+		spec, _ := v.(string)
+		ports, _ := places(spec)
+		for _, p := range ports {
+			out[p] = true
+		}
+	}
+	return out
 }
 
 // udpSummary is what the rows of a run say of UDP ports that stayed
@@ -154,6 +271,7 @@ type udpSummary struct {
 	silentN   int                     // silent ports of range addresses that answered nothing, not listed
 	silentIPs int                     // those addresses
 	limited   int
+	once      bool                 // a row asked each port one request only (-detect none)
 	closed    map[string]closedUDP // address: the ports it refused
 	// Addresses of the ranges that showed nothing else but refused UDP ports.
 	closedN, closedIPs int
@@ -208,7 +326,11 @@ func (u *udpSummary) notes() []string {
 		}
 	}
 	if rows > 0 {
-		out = append(out, fmt.Sprintf("%d UDP %s open|filtered: no reply and no ICMP port unreachable after every request its protocol has (a silent service or a firewall); a closed port answers with an ICMP error", rows, plural(rows, "port")))
+		asked := "every request its protocol has"
+		if u.once {
+			asked = "the one request -detect none sends each port"
+		}
+		out = append(out, fmt.Sprintf("%d UDP %s open|filtered: no reply and no ICMP port unreachable after %s (a silent service or a firewall); a closed port answers with an ICMP error", rows, plural(rows, "port"), asked))
 	}
 	if n, list := u.closedList(); n > 0 {
 		out = append(out, fmt.Sprintf("%d UDP %s closed (ICMP port unreachable): %s", n, plural(n, "port"), list))

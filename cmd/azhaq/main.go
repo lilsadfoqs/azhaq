@@ -296,6 +296,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	killFile := fs.String("kill-file", "", killFileHelp)
 	sealTo := fs.String("seal-to", "", sealToHelp)
 	resumeRun := fs.String("resume-run", "", "internal: continue this run of -db (azhaq resume sets it)")
+	retryRun := fs.String("retry-run", "", "with -retry-failed: the run to ask again, by the run_id of its summary (default: the newest run of the workspace)")
 	retryFailed := fs.Bool("retry-failed", false, "with azhaq resume: ask again the failed targets the summary marks retryable (a timeout, a closed connection, a 429 or 5xx); only those run again")
 	probeOpts := fs.String("probe-opts", "", "internal: azhaq probe's httpx options, as JSON")
 	serve := fs.String("serve", "", "let azhaq worker processes take this run's work, at this address (127.0.0.1:7777)")
@@ -345,7 +346,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	portSeed := fs.Int64("port-seed", 0, "make the random port order repeat (0: a new one each run)")
 	portThreshold := fs.Int("port-threshold", 0, "stop asking a host after this many open ports: it answers every port (0: no limit)")
 	portUnnamed := fs.Int("port-unnamed", 0, "after this many open ports of an address that no protocol probe could name, ask its other silent ports their banner only (0: 6; -1: no limit; each probe is a connect)")
-	portDetect := fs.String("port-detect", "all", "what is asked of an open port: all (its banner, then HTTP and TLS, then one request of each protocol that waits to be asked, each on its own connection, several at once while the scan has workers free: at most 24 connects after the first), banner (what it says on the one connection) or none (connect and close)")
+	portDetect := fs.String("port-detect", "all", "what is asked of an open port: all (its banner, then HTTP and TLS, then one request of each protocol that waits to be asked, each on its own connection, several at once while the scan has workers free: at most 24 connects after the first), banner (what it says on the one connection) or none (connect and close). UDP ports: all and banner ask every request a port's protocol has (4 datagrams to a silent port); none asks one")
 	portCDNFull := fs.Bool("port-cdn-full", false, "accepted: CDN and WAF addresses are scanned in full by default")
 	portExcludeCDN := fs.Bool("port-exclude-cdn", false, "ask a CDN or WAF address only ports 80, 443, 8080 and 8443 (naabu -ec asks 80 and 443; this adds 8080 and 8443)")
 	portDiscover := fs.String("port-discover", "", "ask first whether an address is up, by a connect to 80 and 443: first (scan the ones that answer) or only (list them, scan nothing)")
@@ -400,8 +401,8 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	if err := parse(fs, args); err != nil {
 		return err
 	}
-	if *retryFailed {
-		return usagef("-retry-failed continues a run: give it to azhaq resume -db FILE")
+	if *retryFailed || *retryRun != "" {
+		return usagef("-retry-failed and -retry-run continue a run: give them to azhaq resume -db FILE")
 	}
 	if err := scope.CompilePaths(denyPath); err != nil {
 		return usagef("%v", err)
@@ -1387,6 +1388,12 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		runHints(rep, rows, obs, *interact, signedIn(*login, cookies, headers))
 	}
 	rep.RunID = stats.RunID
+	if runs, err := st.Runs(); err == nil && len(runs) > 0 && runs[len(runs)-1].ID != stats.RunID {
+		// A resumed earlier run: query -failed reads the newest unless told.
+		for i, n := range rep.Next {
+			rep.Next[i] = strings.Replace(n, " -failed   (", " -failed -run "+stats.RunID+"   (", 1)
+		}
+	}
 	if opts.Browser != nil {
 		// What Chrome still held waiting for the pace is given back first:
 		// never sent, it is not counted.
