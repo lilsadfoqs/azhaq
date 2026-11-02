@@ -120,12 +120,23 @@ func rows() []row {
 			l.Ports = newPortLab(l.T)
 			return l.sent(l.Cmd("ports", "-host", "127.0.0.1", "-p", l.Ports.List(), "-detect", "none", "-ledger", "l.jsonl", "-allow", "127.0.0.1"))
 		}},
+		{name: "ports -udp", direct: true, ledgers: []string{"l.jsonl"}, do: func(l *Labs) []outcome {
+			l.Ports = newPortLab(l.T)
+			l.UDP = listenUDP(l.T, l.Ports.Wire)
+			return l.sent(l.Cmd("ports", "-host", "127.0.0.1", "-p", portOf(l.Ports.Banner), "-pu", portOf(l.UDP), "-ledger", "l.jsonl", "-allow", "127.0.0.1"))
+		}},
+		{name: "shots", ledgers: []string{"l.jsonl"}, do: func(l *Labs) []outcome {
+			return l.sent(l.Chrome("shots", "-u", l.Site.URL, "-dir", "sh", "-proxy", l.Proxy.URL, "-ledger", "l.jsonl"))
+		}},
+		{name: "crawl -browser", ledgers: []string{"l.jsonl"}, do: func(l *Labs) []outcome {
+			return l.sent(l.Chrome("crawl", "-u", l.Site.URL, "-d", "1", "-browser", "-proxy", l.Proxy.URL, "-ledger", "l.jsonl"))
+		}},
 		{name: "subs -live -w", ledgers: []string{"w.db.ledger.jsonl"}, do: func(l *Labs) []outcome {
 			l.Resolver = newResolver(l.T, "lab.test", "www", "api")
 			w := l.File("words.txt", "www\napi\nnope\nfoo\n")
 			return l.sent(l.Cmd("subs", "-d", "lab.test", "-sources", "none", "-w", w, "-live", "-resolvers", l.Resolver.Addr, "-no-history", "-db", "w.db"))
 		}},
-		{name: "dns", ledgers: []string{"l.jsonl"}, exit: []int{0, 3}, do: func(l *Labs) []outcome {
+		{name: "dns", ledgers: []string{"l.jsonl"}, do: func(l *Labs) []outcome {
 			l.Resolver = newResolver(l.T, "lab.test", "www", "api")
 			names := l.File("names.txt", "www.lab.test\napi.lab.test\nnope.lab.test\n")
 			return l.sent(l.Cmd("dns", "-l", names, "-resolvers", l.Resolver.Addr, "-ledger", "l.jsonl"))
@@ -198,10 +209,13 @@ func checkRow(t *testing.T, v *Inv, l *Labs, r row, outs []outcome) {
 		for _, a := range []string{l.Ports.Closing, l.Ports.Banner, l.Ports.Web} {
 			v.Equal("connections to "+a+": the ledger's tcp lines, against accepted", int64(sent.TCP[a]), int64(l.Ports.Wire.tcp[a]))
 		}
-		if n := sent.TCP[l.Ports.Gone]; n == 0 {
+		if n := sent.TCP[l.Ports.Gone]; n == 0 && l.Ports.goneAsked {
 			v.Errorf("the closed port %s has no line in the ledger", l.Ports.Gone)
 		}
 		v.Equal("the ledger's lines to targets, against the TCP lines", int64(sent.N), int64(sumMap(sent.TCP)+sumMap(sent.HTTP)+sumMap(sent.UDP)))
+	}
+	if l.UDP != "" {
+		v.Equal("packets to "+l.UDP+": the ledger's udp lines, against received", int64(sent.UDP[l.UDP]), int64(l.Ports.Wire.udp[l.UDP]))
 	}
 	if l.Resolver != nil {
 		v.Equal("DNS lines of the ledger, against packets the resolver got", dnsLines, int64(l.Resolver.Wire.Total()))

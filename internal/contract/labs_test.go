@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -23,6 +24,7 @@ type Labs struct {
 
 	// Ports is the TCP lab and Resolver the DNS one, made when a row asks.
 	Ports    *PortLab
+	UDP      string // a counted UDP port beside Ports
 	Resolver *Resolver
 
 	results []Result
@@ -50,6 +52,24 @@ func (l *Labs) Cmd(args ...string) Result {
 	return r
 }
 
+// Chrome is Cmd for a command that starts Chrome: the test is skipped where
+// there is none or it will not start (a sandbox the machine does not give).
+func (l *Labs) Chrome(args ...string) Result {
+	l.T.Helper()
+	if _, err := exec.LookPath("google-chrome"); err != nil {
+		if _, err := exec.LookPath("chromium"); err != nil {
+			l.T.Skip("no Chrome on this machine")
+		}
+	}
+	args = append(slices.Clone(args), "-json")
+	r := RunRaw(l.T, l.Dir, nil, args...)
+	if !r.Has || r.Code == 1 || strings.Contains(r.Stderr, "sandbox") {
+		l.T.Skipf("Chrome did not start here: %s", strings.TrimSpace(r.Stderr))
+	}
+	l.results = append(l.results, r)
+	return r
+}
+
 // File writes a file in the lab's directory and returns its name.
 func (l *Labs) File(name, body string) string {
 	l.T.Helper()
@@ -64,6 +84,7 @@ func (l *Labs) File(name, body string) string {
 type PortLab struct {
 	Wire                       *Wire
 	Closing, Banner, Web, Gone string // host:port
+	goneAsked                  bool
 }
 
 func newPortLab(t *testing.T) *PortLab {
@@ -92,6 +113,7 @@ func newPortLab(t *testing.T) *PortLab {
 
 // Ports are the lab's port numbers, comma-joined, the closed one included.
 func (p *PortLab) List() string {
+	p.goneAsked = true
 	var ports []string
 	for _, a := range []string{p.Closing, p.Banner, p.Web, p.Gone} {
 		_, port, _ := net.SplitHostPort(a)
@@ -175,3 +197,24 @@ func must(t testing.TB, err error) {
 }
 
 var _ = fmt.Sprint
+
+// listenUDP is a UDP port that counts each packet and answers none.
+func listenUDP(t testing.TB, wire *Wire) string {
+	t.Helper()
+	pc, err := net.ListenPacket("udp", "127.0.0.1:0")
+	if err != nil {
+		t.Skipf("no UDP: %v", err)
+	}
+	addr := pc.LocalAddr().String()
+	go func() {
+		buf := make([]byte, 2048)
+		for {
+			if _, _, err := pc.ReadFrom(buf); err != nil {
+				return
+			}
+			wire.addUDP(addr)
+		}
+	}()
+	t.Cleanup(func() { _ = pc.Close() })
+	return addr
+}
