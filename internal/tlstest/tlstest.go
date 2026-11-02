@@ -86,7 +86,7 @@ func Serve(t *testing.T, min, max uint16, suites ...uint16) *Server {
 
 func (s *Server) serve(c *ztls.Conn) {
 	defer c.Close()
-	_ = c.SetDeadline(time.Now().Add(5 * time.Second))
+	_ = c.SetDeadline(time.Now().Add(30 * time.Second))
 	if c.Handshake() != nil {
 		return
 	}

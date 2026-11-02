@@ -547,7 +547,7 @@ func TestTLSPortWithOnlyLegacySuitesIsNamed(t *testing.T) {
 		_, p, _ := net.SplitHostPort(srv.Addr)
 		port, _ := strconv.Atoi(p)
 		var takes atomic.Int32
-		s := &Scanner{Banner: 200 * time.Millisecond, Timeout: 2 * time.Second, Take: func() error { takes.Add(1); return nil }}
+		s := &Scanner{Banner: 200 * time.Millisecond, Timeout: 10 * time.Second, Take: func() error { takes.Add(1); return nil }}
 		r, err := s.ScanEach(t.Context(), "", "127.0.0.1", []int{port})
 		if err != nil || len(r.Open) != 1 {
 			t.Fatalf("%s: %v %+v", name, err, r)

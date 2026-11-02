@@ -28,6 +28,9 @@ const maxProbes = 25
 // report says how many were skipped.
 const ladderLimit = 6
 
+// legacyHandshakeMin is the least a handshake with the fallback client waits.
+const legacyHandshakeMin = 5 * time.Second
+
 // target is what a request is built for.
 type target struct {
 	host string
@@ -239,7 +242,10 @@ func (s *Scanner) dialWait(ctx context.Context, host, ip string, port int, secur
 			return nil, err
 		}
 	}
-	if lc, lerr := s.pd.TLSLegacy(ctx, host, addr, cfg, handshake); lerr == nil {
+	// The alert showed the port speaks TLS, so its handshake is not the quick
+	// "is anything there" of a plain port: the fallback client is slower than
+	// crypto/tls, and a loaded machine slower still.
+	if lc, lerr := s.pd.TLSLegacy(ctx, host, addr, cfg, max(handshake, s.Timeout+s.Banner, legacyHandshakeMin)); lerr == nil {
 		return lc, nil
 	}
 	return nil, err
