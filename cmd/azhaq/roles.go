@@ -372,6 +372,16 @@ func cmdRoles(args []string) error {
 		runArgs = append(runArgs, "-proxy", *proxyFlag) // the runs too
 	}
 	if fs := flagsOf("run"); fs != nil && crawl && fs.Parse(runArgs) == nil {
+		// The sign-ins roles makes itself (a renewal in the replay) take the
+		// runs' say on Chrome's sandbox; the first start is tried before any
+		// request, so a Chrome that cannot start refuses the command at once.
+		browser.RequireSandbox = fs.Lookup("chrome-require-sandbox").Value.String() == "true"
+		browser.AllowNoSandbox = fs.Lookup("chrome-no-sandbox").Value.String() == "true"
+		if len(logins) > 0 {
+			if err := chromePreflight(fs.Lookup("chrome").Value.String()); err != nil {
+				return fmt.Errorf("-role-login: %w", err)
+			}
+		}
 		if r, _ := strconv.ParseFloat(fs.Lookup("rate").Value.String(), 64); r > 0 {
 			rate = r
 		}
@@ -767,6 +777,17 @@ func absorb(rep *report, name string, sub *report) {
 			rep.Notes = append(rep.Notes, stop)
 		}
 	}
+}
+
+// chromePreflight starts Chrome and closes it again, sending nothing: a
+// Chrome the system gives no sandbox is refused here, before the first request.
+func chromePreflight(path string) error {
+	b := &browser.Browser{ChromePath: path}
+	defer b.Close()
+	if err := b.Start(); err != nil {
+		return chromeStartErr(err)
+	}
+	return nil
 }
 
 // rolesFailed ends roles when a role's run could not be done (a sign-in

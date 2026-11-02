@@ -51,7 +51,7 @@ A role is one of four things:
 - anonymous, with no headers
 - headers you give it with `-role`
 - headers a command prints, with `-role-cmd`, for tokens that live minutes
-- a Chrome sign-in, with `-role-login`
+- a Chrome sign-in, with `-role-login`. Chrome is not run without its sandbox: where the system gives it none, `roles` stops with exit 2 before its first request (tried first, when a role signs in), and names `-chrome-no-sandbox`. Give it among the run options after `--` to allow it.
 
 ## Output
 

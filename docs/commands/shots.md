@@ -113,7 +113,7 @@ A page that was not fully loaded when the picture was taken has these fields, an
 - `-shot-wait 3s` waits 3 s for every page, scripts or not; `-shot-wait 0` takes the page at once.
 
 ### Chrome, ports and file names
-- `AZHAQ_CHROME` names the browser. Where the system gives Chrome no sandbox (a container, AppArmor), it is started once more without one and the summary says so; the pages it loads are untrusted, so use a throwaway environment. `-chrome-require-sandbox` refuses that. `AZHAQ_CHROME_NO_SANDBOX=1` skips the first try.
+- `AZHAQ_CHROME` names the browser. Where the system gives Chrome no sandbox (a container, AppArmor), Chrome does not start: `shots` stops with exit 2 before any request, and the error names `-chrome-no-sandbox`. With that flag Chrome is started once more without a sandbox and the summary says so; the pages it loads are untrusted, so use a throwaway environment. `AZHAQ_CHROME_NO_SANDBOX=1` is the same say and skips the first try. `-chrome-require-sandbox` is the default now and is still accepted.
 - Chrome refuses some ports, such as 6000, 6666 and 10080, with `net::ERR_UNSAFE_PORT`. `-unsafe-ports` allows them by default.
 - A URL you give is shot as given, one file for each page, named like `http_host_port_path_hash.png`; with a scheme it is one target and one row (where Chrome ended is in `final_url`), and only a bare name or `host:port` is tried on both schemes. The URLs a run finds itself are shot only when they are front pages.
 - A page that calls `alert()` on load has its dialog accepted and is shot. Nothing waits for a click.
@@ -172,7 +172,8 @@ note: screenshot of http://127.0.0.1:3001/ not taken: the page needs about 26 re
 | --- | --- | --- | --- |
 | `-chrome` | string |  | the Chrome or Chromium to run (default $AZHAQ_CHROME, else the first found) |
 | `-chrome-profile` | string |  | a Chrome user data directory to use and keep: sessions it holds go with the pages (default: a temporary one) |
-| `-chrome-require-sandbox` | bool |  | never run Chrome without its sandbox: where the system gives it none (no user namespaces, AppArmor, a container) Chrome does not start (default: it is started once more without, and the summary says so) |
+| `-chrome-no-sandbox` | bool |  | let Chrome run without its sandbox where the system gives it none (no user namespaces, AppArmor, a container): it is started once more without, and the summary says so. The pages it loads are the targets' and untrusted: use a throwaway environment. By default Chrome does not start then |
+| `-chrome-require-sandbox` | bool |  | never run Chrome without its sandbox (the default since v0.15.0, so this changes nothing: kept for scripts that pass it; it cannot go with -chrome-no-sandbox) |
 | `-tabs` | int | `6` | Chrome tabs open at once for screenshots and -browser (gowitness -t) |
 | `-unsafe-ports` | bool | `true` | let Chrome open the ports it refuses by default (6000, 6666, 10080 and others); -unsafe-ports=false keeps its refusal |
 

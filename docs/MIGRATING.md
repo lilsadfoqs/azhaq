@@ -234,6 +234,7 @@ Behaviour, fields and edge cases: [`azhaq crawl`](commands/crawl.md).
 | `-jc`, `-jsl` | `-jc`, `-jsl` | Accepted. Scripts are always read: routes, calls with their methods and body names, router tables, source maps, API descriptions. |
 | `-kb`, `-td`, `-duc` | the same | Accepted and always on. Forms and technologies are always read. |
 | `-headless` | `-browser` | Pages are also loaded in Chrome. `-interact` clicks the buttons and menus. |
+| `-no-sandbox` | `-chrome-no-sandbox` | Chrome is not run without its sandbox unless you say so: where the system gives it none, `crawl -browser` stops with exit 2 before any request and names this flag. |
 | `-fs rdn` | `-fs rdn` | The hosts a crawl follows: `rdn`, `fqdn`, `dn` or a regex. See below for the default. |
 | `-ns` | `-ns` | Follow links to any host, still held to `-allow` and `-deny`. |
 | `-cs`, `-cos` | `-cs`, `-cos` | Regexes of the URLs to follow or never follow. `-deny-path REGEX` goes further: a URL it matches is never requested, by any collector or Chrome. |
@@ -677,6 +678,7 @@ Behaviour, fields and edge cases: [`azhaq shots`](commands/shots.md).
 | `--javascript-file FILE` | `-shot-js FILE` | |
 | `--http-code-filter 200` | `-shot-codes 200` | |
 | `--chrome-path`, `--chrome-proxy` | `-chrome`, `-chrome-proxy` | |
+| Chrome without its sandbox, always | `-chrome-no-sandbox` | gowitness runs Chrome without its sandbox. azhaq does not: where the system gives Chrome none (a container, AppArmor), `shots` stops with exit 2 before any request and names this flag. With it Chrome is started once more without a sandbox and the summary says so. |
 | `--chrome-user-data-dir DIR` | `-chrome-profile DIR` | |
 | `--chrome-header 'K: V'` | `-H 'K: V'` | |
 | `--chrome-window-x`, `--chrome-window-y` | `-shot-size 1440x900` | The default is 1440x900 here and 1280x720 in gowitness. |

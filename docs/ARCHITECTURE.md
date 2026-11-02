@@ -1365,7 +1365,7 @@ Chrome itself is set with:
 
 - `-chrome PATH`;
 - `-chrome-proxy URL`, http or socks5, for Chrome's own connections only. `-proxy` takes the run's own requests and Chrome's;
-- `-chrome-require-sandbox`, which refuses to run Chrome without its sandbox. By default, where Chrome says the system gives it none, it is started once more without it and the summary notes it.
+- `-chrome-no-sandbox`, which lets Chrome run without its sandbox where the system gives it none: it is started once more without it and the summary notes it. Without the flag Chrome does not start there: the command stops with exit 2 before any request. `-chrome-require-sandbox` is that default and is kept, accepted and doing nothing more; it cannot go with `-chrome-no-sandbox`.
 - `-chrome-profile DIR`, a user data directory that is kept. Sessions in it go with the pages. They are the target's only if the scope says so.
 
 The run's `-H` and `-cookie` values and its user agent go with every request.

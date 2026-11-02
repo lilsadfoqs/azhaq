@@ -63,6 +63,8 @@ type heldRun struct {
 	Sources    string `json:"sources,omitempty"`     // -sources: "none" asks no third party
 	Skip       string `json:"skip,omitempty"`        // -skip: collectors never run
 	NoTakeover bool   `json:"no_takeover,omitempty"` // -no-takeover
+	// ChromeNoSandbox is -chrome-no-sandbox: Chrome may run without its sandbox.
+	ChromeNoSandbox bool `json:"chrome_no_sandbox,omitempty"`
 }
 
 // runOptions are the options for a command that maps (run, plan, resume,
@@ -79,6 +81,9 @@ func (h heldRun) options(command string) []string {
 		}
 		if h.NoTakeover {
 			out = append(out, "-no-takeover")
+		}
+		if h.ChromeNoSandbox {
+			out = append(out, "-chrome-no-sandbox")
 		}
 		fallthrough
 	case "probe", "ports":
@@ -110,6 +115,7 @@ func (h heldRun) view() map[string]any {
 		"sources":     or(h.Sources, "default set"),
 		"skip":        splitList(h.Skip),
 		"no_takeover": h.NoTakeover,
+		"chrome":      map[bool]string{false: "needs its sandbox: where the system gives none, Chrome does not start (-chrome-no-sandbox at start allows it)", true: "may run without its sandbox (-chrome-no-sandbox)"}[h.ChromeNoSandbox],
 	}
 }
 
@@ -127,6 +133,9 @@ func (h heldRun) text() string {
 	}
 	if h.NoTakeover {
 		out = append(out, "no takeover check")
+	}
+	if h.ChromeNoSandbox {
+		out = append(out, "Chrome may run without its sandbox")
 	}
 	if len(out) == 0 {
 		return "default resolvers and sources"
@@ -149,6 +158,7 @@ func cmdMCP(args []string) error {
 	sources := fs.String("sources", "", "subdomain sources every tool may ask, comma-separated; none: no third party at all (no source, archive, RDAP or search engine), only the resolvers and the targets are asked; fixed at start")
 	skip := fs.String("skip", "", "collectors no tool runs, comma-separated (azhaq plan lists them): fixed at start")
 	noTakeover := fs.Bool("no-takeover", false, "no tool checks CNAMEs for a takeover: fixed at start")
+	chromeNoSandbox := fs.Bool("chrome-no-sandbox", false, "let Chrome run without its sandbox where the system gives it none (the tools that load pages in Chrome, such as azhaq_map with browser, and sign in with it): fixed at start. The pages are the targets' and untrusted: use a throwaway environment. By default Chrome does not start then")
 	unlocked := fs.Bool("unlocked", false, "serve without a scope: any target a tool is given may be touched (port scans stay refused)")
 	if err := parse(fs, args); err != nil {
 		return err
@@ -165,6 +175,7 @@ func cmdMCP(args []string) error {
 	if err != nil {
 		return err
 	}
+	held.ChromeNoSandbox = *chromeNoSandbox
 	exe, err := os.Executable()
 	if err != nil {
 		return err
@@ -1383,7 +1394,7 @@ var mcpRunFlags = map[string]bool{
 	"url": true, "domain": true, "cidr": true, "passive": true, "browser": true, "graphql": true, "depth": true, "timeout": true,
 	"header": true, "login": true, "login-user": true, "max-requests": true, "rate": true, "deny": true, "deny-path": true, "quiet": true,
 	"json": true, "probe": true, "no-favicon": true, "skip": true, "port-rate": true, "max-items": true, "live": true,
-	"resolvers": true, "sources": true, "no-takeover": true,
+	"resolvers": true, "sources": true, "no-takeover": true, "chrome-no-sandbox": true,
 }
 
 // forMCP rewrites what a summary says for the command line into what a

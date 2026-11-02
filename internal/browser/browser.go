@@ -33,14 +33,20 @@ import (
 	"github.com/lilsadfoqs/azhaq/internal/egress"
 )
 
-// RequireSandbox is the default of Browser.RequireSandbox (-chrome-require-sandbox).
+// RequireSandbox is the default of Browser.RequireSandbox: with the sandbox
+// refused, Chrome does not start. It is what every Chrome does unless
+// -chrome-no-sandbox says otherwise (-chrome-require-sandbox is kept, and
+// cannot go with it).
 var RequireSandbox bool
+
+// AllowNoSandbox is the default of Browser.AllowNoSandbox (-chrome-no-sandbox).
+var AllowNoSandbox bool
 
 // ErrNoChrome means no Chrome or Chromium was found.
 var ErrNoChrome = errors.New("no Chrome or Chromium found (install one, or set AZHAQ_CHROME to its path)")
 
 // ErrNoSandbox means the system refused Chrome its sandbox.
-var ErrNoSandbox = errors.New("Chrome could not start its sandbox and -chrome-require-sandbox forbids running it without one (drop the flag to let azhaq retry without it, knowing the pages are untrusted)")
+var ErrNoSandbox = errors.New("Chrome could not start its sandbox (a container, AppArmor or no user namespaces) and azhaq does not run it without one unless told to: the pages it loads are the targets' and untrusted. Give Chrome a sandbox, or add -chrome-no-sandbox to run it without, in a throwaway environment")
 
 // Start launches Chrome now rather than on the first page, so a run can
 // report a Chrome that cannot start before it begins.
@@ -93,6 +99,10 @@ type Browser struct {
 	// RequireSandbox refuses to run Chrome without its sandbox: where the
 	// system cannot give it one, Chrome does not start (ErrNoSandbox).
 	RequireSandbox bool
+	// AllowNoSandbox lets Chrome run without its sandbox where the system
+	// cannot give it one: it is started once more without (-chrome-no-sandbox).
+	// Without it, Chrome does not start then.
+	AllowNoSandbox bool
 	AllowPorts     bool // let Chrome open the ports it refuses by default (6000, 10080, ...)
 	// Writes lets pages and their scripts send what they send besides
 	// GET, HEAD and OPTIONS, as a user's browser would (-browser-writes):
@@ -213,10 +223,13 @@ func (b *Browser) start() error {
 		opts = append(opts, chromedp.Flag("component-updater", "url-source="+deadService))
 		opts = append(opts, chromedp.Flag("disable-component-update", true))
 		// The sandbox stays on: the pages are the targets'. Only where the
-		// system cannot give Chrome one (see below) does it run without.
+		// system cannot give Chrome one (see below) and the user said to run
+		// it without (AZHAQ_CHROME_NO_SANDBOX=1 from the start, or
+		// -chrome-no-sandbox once the sandbox was refused) does it run without.
 		noSandbox := os.Getenv("AZHAQ_CHROME_NO_SANDBOX") == "1"
-		if noSandbox && (b.RequireSandbox || RequireSandbox) {
-			b.err = errors.New("starting Chrome: AZHAQ_CHROME_NO_SANDBOX=1 and -chrome-require-sandbox contradict each other: drop one")
+		allow := b.AllowNoSandbox || AllowNoSandbox
+		if (noSandbox || allow) && (b.RequireSandbox || RequireSandbox) {
+			b.err = errors.New("starting Chrome: -chrome-require-sandbox contradicts -chrome-no-sandbox and AZHAQ_CHROME_NO_SANDBOX=1: drop one")
 			b.guard.Close()
 			return
 		}
@@ -248,9 +261,9 @@ func (b *Browser) start() error {
 		// Every connection, loopback ones too, through the guard. Where the
 		// system refuses Chrome its sandbox (no unprivileged user
 		// namespaces, AppArmor on recent Ubuntu, a container), Chrome says
-		// so and exits: it is started once more without it, as gowitness
-		// does always and katana -no-sandbox does on request, and the
-		// summary says so. -chrome-require-sandbox refuses that.
+		// so and exits: with -chrome-no-sandbox it is started once more
+		// without it, as katana -no-sandbox does on request, and the summary
+		// says so. Without the flag Chrome does not start (ErrNoSandbox).
 		var root context.Context
 		for {
 			o := opts
@@ -264,7 +277,7 @@ func (b *Browser) start() error {
 				break
 			}
 			b.cancel()
-			if !noSandbox && !b.RequireSandbox && !RequireSandbox && strings.Contains(err.Error(), "sandbox") {
+			if !noSandbox && allow && strings.Contains(err.Error(), "sandbox") {
 				noSandbox, b.unsandboxed = true, sandboxReason(err)
 				if gerr := b.newGuard(); gerr != nil {
 					b.err = gerr
