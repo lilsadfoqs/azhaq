@@ -196,7 +196,7 @@ func TestReferenceCrawlListsWhatKatanaDoes(t *testing.T) {
 		// route /api/v1/dashboards, and the site answers it 404.
 		parents []string
 	}{
-		{"a page that loads a stylesheet, a script and an image", "", func(t *testing.T) *Site { return newSite(t) }, nil, nil},
+		{"a page that loads a stylesheet, a script and an image", "", func(t *testing.T) *Site { return newSite(t) }, nil, []string{"/api/v1"}},
 		{"a single-page app with a webpack module map", "", webpackSite, []string{"/components/locale/", "/AdhocFilter", "/AdhocMetric"}, []string{"/api/v1"}},
 	} {
 		t.Run(c.name, func(t *testing.T) {
