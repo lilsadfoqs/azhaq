@@ -153,3 +153,75 @@ func TestHTTPFirstFindsATLSPort(t *testing.T) {
 		t.Errorf("row %+v", row)
 	}
 }
+
+// A port the scan found open and did not name as HTTP that closes or resets
+// at once on the request has answered: it is not a web service. The same
+// URL given by the user, or a port named HTTP, stays a failure.
+func TestClosedAtOnceOnAnUnnamedPortIsAnAnswer(t *testing.T) {
+	for name, linger := range map[string]bool{"eof": false, "reset": true} {
+		t.Run(name, func(t *testing.T) {
+			fetch.Reset()
+			l, err := net.Listen("tcp", "127.0.0.1:0")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer l.Close()
+			go func() {
+				for {
+					c, err := l.Accept()
+					if err != nil {
+						return
+					}
+					_ = c.SetReadDeadline(time.Now().Add(time.Second))
+					if linger {
+						_, _ = c.Read(make([]byte, 1))
+						_ = c.(*net.TCPConn).SetLinger(0)
+					} else {
+						_, _ = c.Read(make([]byte, 4096))
+					}
+					c.Close()
+				}
+			}()
+			addr := l.Addr().String()
+			for _, order := range []struct{ first, fallback string }{{"https", "http"}, {"http", "https"}} {
+				seed := types.Seed{Type: types.TypeURL, Keys: map[string]string{"url": order.first + "://" + addr + "/", FallbackKey: order.fallback, types.UnnamedPortKey: "1"}}
+				var kinds []string
+				meta, err := New(nil).Run(context.Background(), seed, func(ob types.Observation) error { kinds = append(kinds, ob.Kind); return nil })
+				if err != nil || meta.Status != types.StatusOK || len(kinds) != 1 || kinds[0] != KindNotHTTP {
+					t.Errorf("%s first: status %q err %v observations %v", order.first, meta.Status, err, kinds)
+				}
+			}
+			o := runSeed(New(nil), "https://"+addr+"/", "http")
+			if o.err == nil || len(o.kinds) != 0 {
+				t.Errorf("a URL nobody marked: err %v observations %v", o.err, o.kinds)
+			}
+		})
+	}
+}
+
+// A port that answers nothing before the timeout is a failure, marked or not.
+func TestSilentUnnamedPortTimesOut(t *testing.T) {
+	fetch.Reset()
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer l.Close()
+	go func() {
+		for {
+			c, err := l.Accept()
+			if err != nil {
+				return
+			}
+			defer c.Close()
+		}
+	}()
+	seed := types.Seed{Type: types.TypeURL, Keys: map[string]string{"url": "http://" + l.Addr().String() + "/", FallbackKey: "https", types.UnnamedPortKey: "1"}}
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+	defer cancel()
+	var kinds []string
+	_, err = New(nil).Run(ctx, seed, func(ob types.Observation) error { kinds = append(kinds, ob.Kind); return nil })
+	if err == nil || len(kinds) != 0 {
+		t.Errorf("observations %v err %v", kinds, err)
+	}
+}

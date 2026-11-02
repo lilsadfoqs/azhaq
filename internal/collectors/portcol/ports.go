@@ -411,9 +411,22 @@ func hintsOf(host string, open []portscan.Open) []types.Seed {
 			keys = map[string]string{"url": "http://" + hp + "/", httpcol.FallbackKey: "https"}
 		}
 		keys[types.SameTargetKey] = "1" // a port of the target itself, not a step away from it
+		if !namedWeb(o.Service) {
+			keys[types.UnnamedPortKey] = "1" // a close on the request is an answer: it is not a web service
+		}
 		out = append(out, types.Seed{Type: types.TypeURL, Keys: keys})
 	}
 	return out
+}
+
+// namedWeb says the scan named the port as an HTTP service from what it
+// answered (a name guessed from the port number ends in "?").
+func namedWeb(service string) bool {
+	switch service {
+	case "http", "https", "elasticsearch", "docker", "kubernetes", "http-proxy":
+		return true
+	}
+	return false
 }
 
 // handed is the seeds a scan has given the scheduler, each once.

@@ -49,7 +49,7 @@ A run paced slowly says so as it starts: `-rate 1 paces requests to 1/s: the cap
 
 | Code | Meaning | What to do |
 | --- | --- | --- |
-| 0 | Complete, and nothing failed. | Use the results. |
+| 0 | Complete, and nothing failed. An open port that closes or resets at once on `run`'s HTTP request, and was not named HTTP, is an answer (not a web service), not a failure. | Use the results. |
 | 1 | Error: the command could not do its job. | Read the message. |
 | 2 | Usage: bad flags or input. Nothing was sent. | `azhaq help COMMAND`. For a scope refusal, check the target, `-allow` or `-scope`. |
 | 3 | Finished, but some sources or requests failed. The results are usable. | The summary lists each failure, whether it is worth retrying, and its targets. |

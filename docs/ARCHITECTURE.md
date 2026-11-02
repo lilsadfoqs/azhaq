@@ -1441,7 +1441,7 @@ A `Prefix` seed is scanned by `azhaq-ports` itself. It goes address by address i
 
 An open port is read for 1.5 seconds. The first line a service sends names it, such as `SSH-2.0-…`, `220 … ESMTP`, a Telnet option negotiation or an IRC `NOTICE AUTH`. Binary greetings are marked as such.
 
-Ports that stay silent or answer like HTTP become URLs for `azhaq-http`. A port that was named `http` or `https` is asked over that scheme, and one that was not read (`-port-detect none`) is asked as a `host:port` is, plain HTTP first above 1024. A port that answers something other than HTTP ends as a note, not a failure.
+Ports that stay silent or answer like HTTP become URLs for `azhaq-http`. A port that was named `http` or `https` is asked over that scheme, and one that was not read (`-port-detect none`) is asked as a `host:port` is, plain HTTP first above 1024. A port that answers something other than HTTP, or that was not named HTTP and closes or resets at once on the request (the hint carries `types.UnnamedPortKey`), ends as a note, not a failure.
 
 The greeting and the HTTP head (`Server`, `X-Powered-By`) also give `product` and `version`. For a web port whose head names no product, or refused the HEAD with a 405 or 501, there is one more request. It is a `GET /` for a small JSON or text body, or an HTML page's title and generator. The code is in `internal/portscan/services.go`.
 

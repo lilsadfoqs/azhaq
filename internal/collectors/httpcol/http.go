@@ -142,6 +142,13 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 				continue
 			}
 			obs, hint, _, err := c.fetchFirst(ctx, raw, variants[0], gi == 0 && len(group) > 1 && strings.HasPrefix(raw, "http://"))
+			if err != nil && c.Spec == nil && len(group) > 1 && seed.Keys[types.UnnamedPortKey] != "" && neterr.ClosedAtOnce(err) {
+				// A port the scan found open and did not name as HTTP closed on
+				// the request: the answer to "is this HTTP?" is no.
+				refused = false
+				notHTTP++
+				continue
+			}
 			if err != nil && c.Spec == nil && len(group) > 1 && neterr.NotHTTP(err) {
 				// Neither scheme was asked for: the port speaks something else.
 				refused = false

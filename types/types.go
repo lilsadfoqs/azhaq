@@ -62,6 +62,11 @@ const RedirectKey = "redirect"
 // URL is the service the user named.
 const FromURLKey = "from_url"
 
+// UnnamedPortKey marks a URL hint made from an open port a scan did not name
+// as HTTP: the web probe asks whether it is one, and a port that closes or
+// resets at once on the request has answered no.
+const UnnamedPortKey = "unnamed_port"
+
 // BareKey marks a target the user gave with no port (a name or an address):
 // its web ports are a guess, so a guess nothing answers is a note, not a
 // failure.
