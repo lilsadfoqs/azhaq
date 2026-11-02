@@ -34,6 +34,7 @@ type report struct {
 	Results     int              `json:"results"`
 	LeftOut     int              `json:"left_out,omitempty"` // run -no-catchall: stored rows left out of the output and of results
 	Stored      int              `json:"stored,omitempty"`   // run: the map rows the database holds, before templates fold; the counts add up to it
+	Folded      *int             `json:"folded,omitempty"`   // run: stored rows a printed row holds (templated URLs, dead names): results + folded + left_out = stored
 	Counts      map[string]int   `json:"counts,omitempty"`
 	Seconds     float64          `json:"seconds"`
 	Requests    int64            `json:"requests"`              // sent to targets
@@ -140,10 +141,10 @@ func (r *report) print(w io.Writer) {
 		if r.LeftOut > 0 {
 			list += fmt.Sprintf("; %d left out (-no-catchall)", r.LeftOut)
 		}
-		if r.Stored > r.Results {
+		if r.Stored > r.Results && r.Folded != nil {
 			// A templated row holds many URLs, a dead-names row many names:
 			// the counts are of the stored rows, so they add up to more.
-			list = fmt.Sprintf("%d stored: %s; %d folded into templated rows", r.Stored, list, r.Stored-r.Results-r.LeftOut)
+			list = fmt.Sprintf("%d stored: %s; %d folded into templated rows", r.Stored, list, *r.Folded)
 		}
 		head[0] += " (" + list + ")"
 	}
@@ -362,6 +363,8 @@ func fillReport(rep *report, path string, seeds []types.Seed, ents []types.Entit
 		shown = withoutCatchAll(rows, engine.CatchAllHeldIDs(obs))
 	}
 	rep.Results = len(engine.GroupTemplates(shown))
+	folded := len(shown) - rep.Results
+	rep.Folded = &folded
 	rep.Stored = len(rows)
 	rep.LeftOut = len(rows) - len(shown)
 	rep.what = "map rows"
