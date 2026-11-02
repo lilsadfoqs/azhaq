@@ -285,8 +285,8 @@ func TestMCPWireIsLedgerIsSummary(t *testing.T) {
 	}
 }
 
-// Every request the tools sent is in a ledger of the server. The tools with no
-// workspace write none (issue #118).
+// Every request the tools sent is in a ledger of the server: a workspace's,
+// or the server's own for the tools with no workspace.
 func TestMCPLedgersHoldEveryRequestTheToolsSent(t *testing.T) {
 	l := newLabs(t)
 	l.Ports = newPortLab(t)
@@ -300,7 +300,7 @@ func TestMCPLedgersHoldEveryRequestTheToolsSent(t *testing.T) {
 	for _, f := range files {
 		lines += ledgerSent(readLedger(t, f)).N
 	}
-	v := newInv(t, "#118")
+	v := newInv(t, "")
 	v.Equal("the summaries' requests over all tool calls, against the lines to targets of every ledger the server wrote", total, int64(lines))
 	v.Done()
 }

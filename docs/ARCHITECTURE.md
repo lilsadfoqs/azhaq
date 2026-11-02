@@ -343,7 +343,7 @@ Only a target's lines are held back after a kill and asked again on resume. The 
 
 Once the file exists, `Spend`, `Take` and `Spent` refuse with `neterr.ErrKilled`, which is also an `ErrBudget`, and so does every client, dialer, DNS exchange and Chrome connection egress hands out. Every collector that leaves work for `azhaq resume` on a spent budget does so here. The run ends with exit 4, and `stopped` names the kill switch.
 
-Without a workspace of its own, a run has no default ledger or kill file. This is a drop-in command without `-db`.
+Without a workspace of its own, a run has no default ledger or kill file. This is a drop-in command without `-db`. `azhaq mcp` gives such a command it starts for a tool call (`azhaq_probe`, `azhaq_ports`, `azhaq_subdomains` with no workspace) `-ledger DIR/server.ledger.jsonl`, one file for the server, and runs those one at a time: the chain has one writer.
 
 ### Workers (`-serve`, `azhaq worker`)
 

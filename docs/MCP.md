@@ -66,6 +66,7 @@ Any client that takes a JSON configuration:
 **`azhaq_status`**
 
 - Reports the scope (locked, allow and deny rules), the run options held (`run_options`: resolvers, sources, skipped collectors, takeover check), the request budget (limit, used, left) and the pace.
+- Names the server's ledger (`ledger`), the file of the calls that name no workspace. The file exists once such a call has run.
 - Lists every workspace this server's directory holds, each with its state: `complete`, `stopped by a limit` or `failed`.
 - `stopped by a limit` comes with `tasks_left`, the `requests` the run has sent and the `azhaq_resume` call that continues it. `complete` means the database holds no task left to do.
 - The state is read from the workspace's database, so it is the same for a map this session ran, one it ran before a restart, and one made elsewhere, and a query of the workspace does not change it.
@@ -175,7 +176,14 @@ Each workspace has two more files, described in [Concepts](CONCEPTS.md):
 - The ledger, `juice.db.ledger.jsonl`, has one line for each request, connection or query the tools sent for that workspace, to targets, third-party sources and resolvers. Each line holds the hash of the one before. `azhaq ledger -verify FILE` checks it, and `-csv` prints it for a client.
 - `juice.db.stop` is the workspace's kill switch. While it exists, a call that uses the workspace sends nothing more and ends stopped (`the kill switch: kill file … exists`). `azhaq_resume` continues once the file is removed.
 
-No tool argument turns either off.
+The calls that name no workspace have a ledger of the server's: `azhaq_probe`, `azhaq_ports` and `azhaq_subdomains` without a `workspace`.
+
+- It is one file, `server.ledger.jsonl`, in `-dir`, and `azhaq_status` gives its path as `ledger`. It has the same lines as a workspace's, for each request, connection or query those calls sent, and each call appends to it and seals it when it ends.
+- `azhaq ledger -verify DIR/server.ledger.jsonl` checks its chain and its seal like a workspace's.
+- The summaries' `requests`, which count against the server's budget, add up to the lines to targets of this file and of the workspaces' ledgers together.
+- Its calls run one at a time, so the chain has one writer.
+
+No tool argument turns any of them off.
 
 ## Arguments, progress and cancelling
 
