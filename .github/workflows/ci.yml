@@ -146,6 +146,27 @@ jobs:
           path: times-${{ matrix.shard }}.json
           if-no-files-found: ignore
 
+  reference:
+    # The reference matrix: fixtures shaped like real cases, azhaq's default
+    # output against curl, nmap -sV and katana (internal/contract, tag
+    # reference). katana is the release pinned in bench/tools.go.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+      - name: reference tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq nmap
+          mkdir -p "$HOME/refbin"
+          curl -sSfL -o katana.zip https://github.com/projectdiscovery/katana/releases/download/v1.8.0/katana_1.8.0_linux_amd64.zip
+          echo "cb027ae99d0757061b70c07a15c7a80f62c5a535ab52c4a329f80c4b0a7309d2  katana.zip" | sha256sum -c -
+          unzip -q katana.zip katana -d "$HOME/refbin"
+      - name: reference matrix
+        run: PATH="$HOME/refbin:$PATH" go test -tags reference -count=1 -timeout 20m ./internal/contract -run TestReference
+
   ephemeral:
     runs-on: ubuntu-latest
     steps:

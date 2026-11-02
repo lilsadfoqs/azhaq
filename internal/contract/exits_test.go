@@ -221,6 +221,9 @@ func TestExitCodeFollowsTheOutcome(t *testing.T) {
 			if !r.Has {
 				t.Fatalf("no summary (exit %d)\n%s", r.Code, r.Stderr)
 			}
+			if c.chrome && r.Code != c.want && strings.Contains(r.Stderr, "sandbox") {
+				t.Skipf("Chrome would not start here without a sandbox: %s", strings.TrimSpace(r.Stderr))
+			}
 			v := newInv(t, c.known)
 			if r.Code != c.want {
 				v.Errorf("exit %d, want %d: %s\n%s", r.Code, c.want, failureListed(r.Summary), strings.Join(r.Summary.Notes, "\n"))
