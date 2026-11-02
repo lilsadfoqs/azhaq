@@ -128,18 +128,19 @@ func TestFallbackSendsABodyOnce(t *testing.T) {
 // the fallback cannot cure keeps its reason.
 func TestFallbackLeavesAModernServerAndKeepsTheReason(t *testing.T) {
 	Reset()
-	modern := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { io.WriteString(w, "modern") }))
-	defer modern.Close()
-	var conns int
-	modern.Config.ConnState = func(_ net.Conn, s http.ConnState) {
+	var conns atomic.Int32
+	modern := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { io.WriteString(w, "modern") }))
+	modern.Config.ConnState = func(_ net.Conn, s http.ConnState) { // set before the server runs
 		if s == http.StateNew {
-			conns++
+			conns.Add(1)
 		}
 	}
+	modern.StartTLS()
+	defer modern.Close()
 	c := TargetClient(TargetOptions{})
 	resp, body, err := fetchBody(t, c, modern.URL+"/")
-	if err != nil || body != "modern" || resp.TLS == nil || conns != 1 {
-		t.Fatalf("%v %q %v %d connections", err, body, resp, conns)
+	if err != nil || body != "modern" || resp.TLS == nil || conns.Load() != 1 {
+		t.Fatalf("%v %q %v %d connections", err, body, resp, conns.Load())
 	}
 	// TLS 1.1 only: below the 1.2 the client asks for, whoever the client is.
 	old := tlstest.Serve(t, tls.VersionTLS10, tls.VersionTLS11, tlstest.RSACBC)
