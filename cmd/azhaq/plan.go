@@ -13,7 +13,9 @@ import (
 
 	"github.com/lilsadfoqs/azhaq/catalog"
 	"github.com/lilsadfoqs/azhaq/engine"
+	"github.com/lilsadfoqs/azhaq/internal/collectors/gqlcol"
 	"github.com/lilsadfoqs/azhaq/internal/collectors/portcol"
+	"github.com/lilsadfoqs/azhaq/internal/egress"
 	"github.com/lilsadfoqs/azhaq/internal/portscan"
 	"github.com/lilsadfoqs/azhaq/types"
 )
@@ -167,7 +169,7 @@ func planSends(b engine.Budgets, send sendLimits) (gets, others []string) {
 		*out = append(*out, "Chrome loads each page found and reads the links its scripts draw (-browser, azhaq-render): every page costs a GET and the requests its scripts, styles and images make")
 	}
 	if send.graphql {
-		*out = append(*out, "POST requests with a GraphQL introspection query to the GraphQL endpoints found (-graphql): they read the schema and change nothing")
+		*out = append(*out, fmt.Sprintf("POST requests with a GraphQL introspection query to the GraphQL endpoints found (-graphql): they read the schema and change nothing; at most 2 per endpoint, and up to %d more when it refuses introspection, validation queries with a field no schema has that never run (a GraphiQL page is not asked once another URL of its origin gave the schema whole)", gqlcol.MaxRecoveryPOSTs))
 	}
 	if send.paramsBody != "" {
 		*out = append(*out, fmt.Sprintf("%s requests whose body holds the parameter names guessed (-params-method %s, -params-writes): a body may change data on the target", send.paramsBody, send.paramsBody))
@@ -251,7 +253,7 @@ func planTransfers(seeds []types.Seed, b engine.Budgets, resolvers []string) []p
 }
 
 func planFor(cat *catalog.Catalog, seeds []types.Seed, b engine.Budgets, paths []string, limits map[string]string, send sendLimits, rep *report) runPlan {
-	p := runPlan{Collectors: map[string]string{}, Limits: limits, Skipped: rep.Skipped}
+	p := runPlan{Collectors: map[string]string{}, Limits: limits, Skipped: slices.Clone(rep.Skipped)}
 	p.Requests = planRequests{Sources: map[string]int{}, Cap: send.max, scoped: !b.Scope.Empty()}
 	if send.max > 0 {
 		p.Requests.CapBy = send.by
@@ -259,6 +261,13 @@ func planFor(cat *catalog.Catalog, seeds []types.Seed, b engine.Budgets, paths [
 	notCounted := map[string]bool{}
 	eng := &engine.Engine{Cat: cat}
 	for _, s := range engine.ExpandSeeds(seeds) {
+		if s.Type == types.TypeURL {
+			if rule := b.Scope.DeniedPath(s.Key()); rule != "" {
+				// A run never requests it: it is left out, with the rule, as run lists it.
+				p.Skipped = append(p.Skipped, engine.Skip{Target: s.Key(), Reason: egress.DenyReason(rule)})
+				continue
+			}
+		}
 		t := planTarget{Type: s.Type, Key: s.Key()}
 		for _, item := range eng.Plan([]types.Seed{s}) {
 			col, ok := cat.Get(item.Collector)

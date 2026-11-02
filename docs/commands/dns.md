@@ -34,6 +34,8 @@ azhaq dns -d example.com -axfr -allow example.com
 3. Leaves out a name that only resolves through a wildcard zone.
 4. Prints the names that have a record of the types asked.
 
+`dns` neither reads nor writes the name history `subs` keeps under `$AZHAQ_DATA_DIR` (see [Name history](subs.md#name-history)): it resolves the names it is given and stores nothing outside `-db`.
+
 `dns` sends DNS queries and nothing else. `-axfr` connects to the name servers of the name, `-trace` asks the root servers, and `-asn` asks Team Cymru's DNS service through your resolvers.
 
 ## Output
@@ -137,7 +139,7 @@ The summary also lists failures per kind of error, and takeover candidates: a CN
 ### Time and pace
 - `-timeout` is how long one DNS answer is waited for, 3 s by default, as in dnsx. In `run` and the other commands `-timeout` is the time of the whole run.
 - `-maxtime SECONDS` bounds the run. It exits 4, and the summary says which `-start N` to go on from.
-- `-retry N` is the attempts per question on other resolvers. The default is 3, where dnsx's is 2. A name no resolver answers is counted as `no answer`, listed under `failed`, and the exit code is 3. A name no resolver answered is asked again in a second pass at a quarter of the concurrency, when others of the batch were answered; the second pass asks 16 of them first, spread over the list, and ends there when none is answered, because the rest would fail alike.
+- `-retry N` is the attempts per question on other resolvers. The default is 3, where dnsx's is 2, and 2 for the names `-w` generates (made-up names mostly do not exist, and an unanswered one costs every attempt as a paced query); `-retry N` given sets it for every name. A name no resolver answers is counted as `no answer`, listed under `failed`, and the exit code is 3. A name no resolver answered is asked again in a second pass at a quarter of the concurrency, when others of the batch were answered; the second pass asks 16 of them first, spread over the list and once each, and ends there when none is answered, because the rest would fail alike.
 - `-rl N` is names a second over all resolvers, as in dnsx. `-t N` is names in flight, 100 by default.
 - `-dns-rate N` is queries a second to each resolver. A second's worth may go out at once after a pause, so the total is N times the number of resolvers: six by default. A name asked for several types sends one query for each.
 - With one `-r` resolver, or with `-rl`, the total is the rate you gave. For a polite run give `-rl 5` and `-t 5`.
@@ -207,7 +209,7 @@ The summary also lists failures per kind of error, and takeover candidates: a CN
 | `-rl` | int |  | names asked per second, over all resolvers; each name's types are asked together (0: no limit); see also -dns-rate |
 | `-t` | int | `100` | names resolved at once |
 | `-dns-rate` | float |  | DNS queries per second per resolver (0: no pace but the queries in flight, as dnsx) |
-| `-retry` | int |  | attempts per question on other resolvers (default 3; 1 asks once) |
+| `-retry` | int |  | attempts per question on other resolvers (default 3, 2 for the names -w generates; 1 asks once) |
 | `-timeout` | duration | `3s` | wait this long for each DNS answer (not the run's time, as in azhaq run: see -maxtime) |
 | `-maxtime` | float |  | stop the run after this many seconds (0: no limit); the summary says where to go on |
 

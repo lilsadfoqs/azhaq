@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -88,7 +89,7 @@ func TestCrawlListsScriptsAndStylesByDefault(t *testing.T) {
 		})
 		return out
 	}())
-	for want, class := range map[string]string{"/main.js": "observed", "/chunk-abc.js": "observed", "/styles.css": "linked", jq: "linked", fa: "linked"} {
+	for want, class := range map[string]string{"/main.js": "observed", "/chunk-abc.js": "observed", "/styles.css": "observed", jq: "linked", fa: "observed"} {
 		if rows[srv.URL+want] == nil {
 			t.Errorf("crawl -json has no row for %s", want)
 		} else if rows[srv.URL+want]["class"] != class {
@@ -97,5 +98,58 @@ func TestCrawlListsScriptsAndStylesByDefault(t *testing.T) {
 	}
 	if rows[srv.URL+"/logo.png"] != nil {
 		t.Error("crawl -json lists an image without -assets")
+	}
+}
+
+// The stylesheets a page loads are requested, as katana does, and listed as
+// observed rows: the URLs they name are read, an @import is requested too,
+// and the images and fonts stay unrequested and linked.
+func TestCrawlRequestsTheStylesheetsAPageLoads(t *testing.T) {
+	var mu sync.Mutex
+	asked := map[string]int{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		asked[r.URL.Path]++
+		mu.Unlock()
+		switch r.URL.Path {
+		case "/":
+			w.Header().Set("Content-Type", "text/html")
+			fmt.Fprint(w, `<html><head><link rel="stylesheet" href="/css/site.css"><link rel="icon" href="/favicon.ico"></head><body><img src="/logo.png"></body></html>`)
+		case "/css/site.css":
+			w.Header().Set("Content-Type", "text/css")
+			fmt.Fprint(w, `@import url("theme.css"); body { background: url(../img/bg.png) } @font-face { src: url('/fonts/f.woff2') } /* a { background: url(/gone.png) } */`)
+		case "/css/theme.css":
+			w.Header().Set("Content-Type", "text/css")
+			fmt.Fprint(w, `h1 { background: url(/img/h1.gif) }`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	rows := urlRows(t, func() string {
+		out, _, _ := captureBoth(t, func() error {
+			return cmdCrawl([]string{"-u", srv.URL + "/", "-allow", "127.0.0.1", "-json", "-assets", "-db", filepath.Join(t.TempDir(), "w.db")})
+		})
+		return out
+	}())
+	for want, class := range map[string]string{"/css/site.css": "observed", "/css/theme.css": "observed", "/img/bg.png": "linked", "/fonts/f.woff2": "linked", "/img/h1.gif": "linked", "/logo.png": "linked"} {
+		if rows[srv.URL+want] == nil {
+			t.Errorf("crawl has no row for %s: %v", want, rows)
+		} else if rows[srv.URL+want]["class"] != class {
+			t.Errorf("%s is %v, want %s", want, rows[srv.URL+want]["class"], class)
+		}
+	}
+	if rows[srv.URL+"/gone.png"] != nil {
+		t.Error("a url() in a comment is listed")
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if asked["/css/site.css"] != 1 || asked["/css/theme.css"] != 1 {
+		t.Errorf("the stylesheets are each requested once: %v", asked)
+	}
+	for _, p := range []string{"/img/bg.png", "/fonts/f.woff2", "/img/h1.gif", "/logo.png", "/favicon.ico"} {
+		if asked[p] != 0 {
+			t.Errorf("%s was requested: images, fonts and media are not", p)
+		}
 	}
 }

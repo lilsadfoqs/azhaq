@@ -1,6 +1,6 @@
 # azhaq params
 
-Finds the query parameters a page reads, by trying names from a list. Names go in the query by default; `-X POST`, `-X JSON` and `-X XML` send them in a body. Replaces arjun (see [Migrating](../MIGRATING.md#arjun-azhaq-params)).
+Finds the query parameters a page reads, by trying names from a list. Names go in the query by default; `-X POST`, `-X JSON` and `-X XML` send them in a body. `-X` is the opt-in: no `-params-writes` is needed (that flag is for `run -params`), but the target must be named (`-allow` or `-scope`) or be one page. Replaces arjun (see [Migrating](../MIGRATING.md#arjun-azhaq-params)).
 
 ## Synopsis
 

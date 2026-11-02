@@ -38,7 +38,7 @@ Plain text prints the same parts, one block each. `-json` prints one object.
 | Field | Meaning |
 | --- | --- |
 | `targets` | Each seed, with the collectors that would run on it. |
-| `skipped` | The seeds left out of scope. |
+| `skipped` | The seeds left out: out of scope, or a URL a `-deny-path` rule matches (`reason` is `-deny-path RULE`), which a run never requests. A skipped seed is not in `targets` or in the requests estimate. |
 | `collectors` | What each collector does, and to whom. |
 | `active` | The active techniques asked for. |
 | `builtin_paths` | The built-in path checks on each web service. |
@@ -171,7 +171,8 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 | `-chrome` | string |  | the Chrome or Chromium to run (default $AZHAQ_CHROME, else the first found) |
 | `-chrome-profile` | string |  | a Chrome user data directory to use and keep: sessions it holds go with the pages (default: a temporary one) |
 | `-chrome-proxy` | string |  | send Chrome's own connections through this http or socks5 proxy (default: -proxy, else the environment's); a plain http:// request reaches an http proxy as a proxy request, a page over TLS as a CONNECT tunnel |
-| `-chrome-require-sandbox` | bool |  | never run Chrome without its sandbox: where the system gives it none (no user namespaces, AppArmor, a container) Chrome does not start (default: it is started once more without, and the summary says so) |
+| `-chrome-no-sandbox` | bool |  | let Chrome run without its sandbox where the system gives it none (no user namespaces, AppArmor, a container): it is started once more without, and the summary says so. The pages it loads are the targets' and untrusted: use a throwaway environment. By default Chrome does not start then |
+| `-chrome-require-sandbox` | bool |  | never run Chrome without its sandbox (the default since v0.15.0, so this changes nothing: kept for scripts that pass it; it cannot go with -chrome-no-sandbox) |
 | `-tabs` | int | `6` | Chrome tabs open at once for screenshots and -browser (gowitness -t) |
 | `-unsafe-ports` | bool | `true` | let Chrome open the ports it refuses by default (6000, 6666, 10080 and others); -unsafe-ports=false keeps its refusal |
 
@@ -211,6 +212,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 | `-max-response-size` | int |  | bytes read of a page or document (default 2097152; scripts and JSON get 16 MiB) |
 | `-depth` | int | `4` | max fan-out waves (0 = seed wave only, not unlimited) |
 | `-retry-failed` | bool |  | with azhaq resume: ask again the failed targets the summary marks retryable (a timeout, a closed connection, a 429 or 5xx); only those run again |
+| `-retry-run` | string |  | with -retry-failed: the run to ask again, by the run_id of its summary (default: the newest run of the workspace) |
 
 **Session**
 
@@ -281,7 +283,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 | `-params-threads` | int | `5` | parameter requests in flight per page (as arjun -t); 1 with -params-delay and -params-stable | rarely needed |
 | `-params-timeout` | duration | `15s` | wait for each parameter request; one that times out is asked again with 5 s more, up to 20 s (arjun -T) | rarely needed |
 | `-port-all-ips` | bool |  | scan every address of a name, not the first two of each family | rarely needed |
-| `-port-detect` | string | `all` | what is asked of an open port: all (its banner, then HTTP and TLS, then one request of each protocol that waits to be asked, each on its own connection, several at once while the scan has workers free: at most 24 connects after the first), banner (what it says on the one connection) or none (connect and close) | rarely needed |
+| `-port-detect` | string | `all` | what is asked of an open port: all (its banner, then HTTP and TLS, then one request of each protocol that waits to be asked, each on its own connection, several at once while the scan has workers free: at most 24 connects after the first), banner (what it says on the one connection) or none (connect and close). UDP ports: all and banner ask every request a port's protocol has (4 datagrams to a silent port); none asks one | rarely needed |
 | `-port-discover` | string |  | ask first whether an address is up, by a connect to 80 and 443: first (scan the ones that answer) or only (list them, scan nothing) | rarely needed |
 | `-port-exclude-cdn` | bool |  | ask a CDN or WAF address only ports 80, 443, 8080 and 8443 (naabu -ec asks 80 and 443; this adds 8080 and 8443) | rarely needed |
 | `-port-ip` | string |  | the address families of a name to scan: 4 or 6 (default both) | rarely needed |

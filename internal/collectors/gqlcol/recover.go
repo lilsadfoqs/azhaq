@@ -189,8 +189,9 @@ type recField struct {
 // server. clientWords are field, argument and type names the map found in
 // the endpoint's own HTML and scripts; extra is the user's
 // -graphql-wordlist, added to the built-in wordlist and the derive pool;
-// seen are the fields recovered for the other root types.
-func (s *Schema) recoverType(ctx context.Context, raw, op string, clientWords, extra, seen []string) (*recoveredType, error) {
+// seen are the fields recovered for the other root types; halt, when set,
+// is asked before each document and stops the recovery when it says so.
+func (s *Schema) recoverType(ctx context.Context, raw, op string, clientWords, extra, seen []string, halt func() bool) (*recoveredType, error) {
 	rt := &recoveredType{fields: map[string]*recField{}, how: map[string]string{}}
 	tried := map[string]bool{}
 	queuedOnce := map[string]bool{}
@@ -215,6 +216,9 @@ func (s *Schema) recoverType(ctx context.Context, raw, op string, clientWords, e
 	sawErrors := false
 	deriveRounds := 0
 	for sent := 0; sent < maxRecover; {
+		if halt != nil && halt() {
+			return nil, nil
+		}
 		if len(queue) == 0 {
 			if deriveRounds >= maxDeriveRounds {
 				break

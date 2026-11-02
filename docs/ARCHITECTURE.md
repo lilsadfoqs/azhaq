@@ -836,7 +836,7 @@ How the pool behaves:
 
 - Queries go round robin. Only the queries in flight pace them, unless `-dns-rate` sets a rate per resolver.
 - A resolver that leaves a third of its recent queries unanswered is asked one turn in sixteen until it answers again.
-- A timeout, SERVFAIL or REFUSED moves the query to another resolver. `-retry` sets the attempts, 3 by default.
+- A timeout, SERVFAIL or REFUSED moves the query to another resolver. `-retry` sets the attempts, 3 by default and 2 for generated names (`Bulk` contexts: brute force, permutations, a source's guesses and the history's names) unless `-retry` is given.
 - Every question carries an EDNS0 buffer of 4,096 bytes, as dnsx asks, so a long answer arrives over UDP. A truncated answer, or one larger than the buffer, is retried over TCP.
 - `-proxy socks5://` sends every query over TCP through the proxy.
 - Every query goes through `egress.DNSExchanger`, which enters it in the ledger as a `dns` line (`dns -ledger FILE` keeps one for a command without a workspace) and refuses it once the kill file exists. The pool chooses and paces the resolvers.
@@ -1123,7 +1123,7 @@ Nothing is dropped without a word.
 
 The method is GET by default. `-params-method POST`, `JSON` or `XML` (`params -X`) send the names in a form, a JSON object or an XML document instead. At most 500 names go in one request.
 
-A body method may change data on the target. So it is refused unless `-params-writes` is given and `-allow` or `-scope` names the targets, or there is one target.
+A body method may change data on the target, so it is sent only when asked for by name, and `-allow` or `-scope` must name the targets, or there must be one target. In `run` the stage's `-params-method` is refused unless `-params-writes` is given too. `params -X POST|JSON|XML` names the method on the command itself, so `-X` is the opt-in and no second flag is needed (as `-m POST` is for arjun): `params` passes `-params-writes` to the run it makes, and does the same for an imported (`-i`) target whose own method is a body method.
 
 - Every such request is counted in the budget, paced and in the ledger.
 - The page's row says how many were sent (`writes`), and the summary says writes were sent.
@@ -1365,7 +1365,7 @@ Chrome itself is set with:
 
 - `-chrome PATH`;
 - `-chrome-proxy URL`, http or socks5, for Chrome's own connections only. `-proxy` takes the run's own requests and Chrome's;
-- `-chrome-require-sandbox`, which refuses to run Chrome without its sandbox. By default, where Chrome says the system gives it none, it is started once more without it and the summary notes it.
+- `-chrome-no-sandbox`, which lets Chrome run without its sandbox where the system gives it none: it is started once more without it and the summary notes it. Without the flag Chrome does not start there: the command stops with exit 2 before any request. `-chrome-require-sandbox` is that default and is kept, accepted and doing nothing more; it cannot go with `-chrome-no-sandbox`.
 - `-chrome-profile DIR`, a user data directory that is kept. Sessions in it go with the pages. They are the target's only if the scope says so.
 
 The run's `-H` and `-cookie` values and its user agent go with every request.

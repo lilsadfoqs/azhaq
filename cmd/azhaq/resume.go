@@ -45,7 +45,12 @@ func cmdResume(args []string) error {
 		}
 	}
 	retry := hasFlag(rest, "retry-failed")
-	rest = dropFlag(rest, "retry-failed")
+	rest = dropBoolFlag(rest, "retry-failed")
+	retryRun, _ := flagValue(rest, "retry-run")
+	rest = dropFlag(rest, "retry-run")
+	if retryRun != "" && !retry {
+		return usagef("-retry-run picks the run -retry-failed asks again: add -retry-failed")
+	}
 	if db == "" {
 		return usagef("give -db FILE, the database of the run to continue (run options to add, such as -cookie or -login-pass, may follow)")
 	}
@@ -72,19 +77,32 @@ func cmdResume(args []string) error {
 		}
 	}
 	var retryable int
+	var retryHint string
+	retriedID := ""
 	if retry {
-		n, err := retryFailed(st, db)
+		n, run, err := retryFailed(st, db, retryRun)
 		if err != nil {
 			st.Close()
 			return err
 		}
+		retriedID = run
 		if !wantsJSON(rest) {
-			fmt.Fprintf(os.Stderr, "azhaq: -retry-failed: %d failed targets will be asked again\n", n)
+			fmt.Fprintf(os.Stderr, "azhaq: -retry-failed: %d failed targets of run %s will be asked again\n", n, run)
 		}
 	} else {
-		retryable = retryableIn(st)
+		retryable, retryHint = retryableIn(st, db)
 	}
-	id, runArgs, left, ok, err := st.Resumable()
+	var id string
+	var runArgs []string
+	var left int
+	var ok bool
+	if retriedID != "" {
+		// The run whose targets were reopened, whichever run is the newest.
+		id = retriedID
+		runArgs, left, ok, err = st.ResumableRun(id)
+	} else {
+		id, runArgs, left, ok, err = st.Resumable()
+	}
 	deeper := false
 	if err == nil && !ok {
 		id, runArgs, left, deeper = pastDepth(st, rest)
@@ -99,7 +117,7 @@ func cmdResume(args []string) error {
 		return err
 	}
 	if !ok && retryable > 0 {
-		return fmt.Errorf("no task left in %s, but %d failed targets are retryable: azhaq resume -db %s -retry-failed asks them again (azhaq query -db %s -failed lists them)", db, retryable, db, db)
+		return fmt.Errorf("no task left in %s, but %d failed targets are retryable: %s (azhaq query -db %s -failed lists them)", db, retryable, retryHint, db)
 	}
 	if !ok {
 		return fmt.Errorf("nothing to resume in %s: every run finished", db)
@@ -110,7 +128,7 @@ func cmdResume(args []string) error {
 		} else {
 			fmt.Fprintf(os.Stderr, "azhaq: resuming run %s of %s, %d tasks known and not done\n", id, db, left)
 			if retryable > 0 {
-				fmt.Fprintf(os.Stderr, "azhaq: %d failed targets are retryable: -retry-failed asks them again\n", retryable)
+				fmt.Fprintf(os.Stderr, "azhaq: %d failed targets are retryable: %s\n", retryable, retryHint)
 			}
 		}
 	}
@@ -151,53 +169,79 @@ func cmdResume(args []string) error {
 }
 
 // retried are the failed targets a -retry-failed resume asked again: the
-// run's summary says how many still fail.
-var retried []engine.FailedTarget
+// run's summary says how many still fail; retriedRun is the run they were
+// asked again in.
+var (
+	retried    []engine.FailedTarget
+	retriedRun string
+)
 
-// retryFailed makes the newest run of the workspace ask again the failed
-// targets a later try may fix, and gives how many there are.
-func retryFailed(st *store.Store, db string) (int, error) {
+// retryFailed makes a run of the workspace (the one named, else the newest)
+// ask again the failed targets a later try may fix, and gives how many there
+// are and the run.
+func retryFailed(st *store.Store, db, want string) (int, string, error) {
 	runs, err := st.Runs()
 	if err != nil {
-		return 0, err
+		return 0, "", err
 	}
 	if len(runs) == 0 {
-		return 0, fmt.Errorf("nothing to retry in %s: it holds no run", db)
+		return 0, "", fmt.Errorf("nothing to retry in %s: it holds no run", db)
 	}
-	st.UseRun(runs[len(runs)-1].ID)
+	run, err := pickRun(runs, want)
+	if err != nil {
+		return 0, "", err
+	}
+	st.UseRun(run.ID)
 	if c := st.GetMeta("command:" + st.RunID()); c == "ports" || c == "dirs" {
-		return 0, usagef("-retry-failed does not apply to a %s run: azhaq resume alone continues its unfinished sweep", c)
+		return 0, "", usagef("-retry-failed does not apply to a %s run: azhaq resume alone continues its unfinished sweep", c)
 	}
 	ents, err := st.Entities()
 	if err != nil {
-		return 0, err
+		return 0, "", err
 	}
 	obs, err := st.Observations()
 	if err != nil {
-		return 0, err
+		return 0, "", err
 	}
 	r, err := engine.RetryFailed(st, ents, obs)
 	if err != nil {
-		return 0, err
+		return 0, "", err
 	}
 	if r.Targets == 0 {
-		return 0, fmt.Errorf("nothing to retry in %s: no failed target is retryable (azhaq query -db %s -failed lists the failures and says which are)", db, db)
+		msg := fmt.Sprintf("nothing to retry in run %s of %s: no failed target is retryable (azhaq query -db %s -failed -run %s lists the failures and says which are)", run.ID, db, db, run.ID)
+		if want == "" {
+			if n := otherRunsNote(db, earlierFailures(st, runs, run.ID), true); n != "" {
+				msg += "; " + n
+			}
+		}
+		return 0, "", fmt.Errorf("%s", msg)
 	}
-	retried = r.Asked
-	return r.Targets, nil
+	retried, retriedRun = r.Asked, run.ID
+	return r.Targets, run.ID, nil
 }
 
 // retryableIn counts the failed targets of the newest run of the workspace
-// that a later try may fix.
-func retryableIn(st *store.Store) int {
+// that a later try may fix, with the command that asks them again; when the
+// newest has none, the count and command are those of the newest earlier run
+// that has some.
+func retryableIn(st *store.Store, db string) (int, string) {
 	runs, err := st.Runs()
 	if err != nil || len(runs) == 0 {
-		return 0
+		return 0, ""
 	}
-	st.UseRun(runs[len(runs)-1].ID)
+	newest := runs[len(runs)-1].ID
+	st.UseRun(newest)
 	ents, _ := st.Entities()
 	obs, _ := st.Observations()
-	return engine.RetryableTargets(ents, obs)
+	if n := engine.RetryableTargets(ents, obs); n > 0 {
+		return n, "azhaq resume -db " + db + " -retry-failed asks them again"
+	}
+	for _, r := range earlierFailures(st, runs, newest) {
+		if r.Retryable > 0 {
+			return r.Retryable, fmt.Sprintf("in run %s: azhaq resume -db %s -retry-failed -retry-run %s asks them again", r.Run, db, r.Run)
+		}
+	}
+	return 0, ""
 }
 
 // mergeSkip makes the -skip given to a resume add to the one the run was
@@ -229,6 +273,14 @@ func pastDepth(st *store.Store, rest []string) (id string, args []string, left i
 		return "", nil, 0, false
 	}
 	return id, st.RunArgs(), len(seeds), true
+}
+
+// dropBoolFlag is args without a flag that takes no value, whatever follows it.
+func dropBoolFlag(args []string, name string) []string {
+	return slices.DeleteFunc(slices.Clone(args), func(a string) bool {
+		k, _, _ := strings.Cut(strings.TrimLeft(a, "-"), "=")
+		return strings.HasPrefix(a, "-") && k == name
+	})
 }
 
 // dropFlag is args without the flag name, as -name=value or -name value.
@@ -345,7 +397,7 @@ func keptArgs(args []string) []string {
 		}
 		takesValue := !inline && i+1 < len(args)
 		switch name {
-		case "db", "resume-run", "cookie", "login-pass", "worker-token", "retry-failed":
+		case "db", "resume-run", "cookie", "login-pass", "worker-token", "retry-failed", "retry-run":
 			if takesValue {
 				i++
 			}

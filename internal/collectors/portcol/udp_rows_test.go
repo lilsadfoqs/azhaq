@@ -3,7 +3,9 @@ package portcol
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"github.com/lilsadfoqs/azhaq/internal/neterr"
 	"net"
 	"strings"
 	"testing"
@@ -187,4 +189,38 @@ func closedUDPPort(t *testing.T) int {
 	p := pc.LocalAddr().(*net.UDPAddr).Port
 	pc.Close()
 	return p
+}
+
+// A UDP scan the budget stops leaves a row that keeps how far each silent
+// port was asked; the summary does not call that port open|filtered after
+// every request, and a resume reads the row back as the port's prior.
+func TestStoppedUDPScanRowKeepsHowFarEachPortWasAsked(t *testing.T) {
+	port := silentUDP(t, "127.0.0.1:0")
+	c := New(nil, nil, 0)
+	c.UDPPorts = []int{port}
+	c.Scanner.Timeout = 150 * time.Millisecond
+	var takes int
+	c.Scanner.Take = func() error {
+		if takes++; takes > 2 {
+			return neterr.ErrBudget
+		}
+		return nil
+	}
+	var obs []types.StoredObservation
+	_, err := c.Run(context.Background(), types.Seed{Type: types.TypePrefix, Keys: map[string]string{"prefix": "127.0.0.1/32"}}, func(o types.Observation) error {
+		obs = append(obs, types.StoredObservation{Observation: o})
+		return nil
+	})
+	if !errors.Is(err, neterr.ErrBudget) {
+		t.Fatalf("err %v", err)
+	}
+	pr := Priors(obs)["127.0.0.1"]
+	if pr.UDP.Asked[port] != 2 || len(pr.UDP.Silent) != 0 {
+		t.Fatalf("prior %+v: want the port asked 2 requests, none settled", pr.UDP)
+	}
+	for _, n := range Notes(obs) {
+		if strings.Contains(n, "after every request") {
+			t.Errorf("a port with requests left is called open|filtered after every request: %q", n)
+		}
+	}
 }

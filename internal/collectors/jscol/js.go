@@ -652,6 +652,9 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		}
 		specStart, specEnd := sc.specStart, sc.specEnd
 		for _, r := range sc.refs {
+			if r.Key {
+				continue // a module id; Candidates gives it a rejected row
+			}
 			if r.URL == raw || inRoutes(routes, r.Start) || webextract.InSocket(ws, r.Start) || !keepString(raw, r.URL) {
 				continue
 			}

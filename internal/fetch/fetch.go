@@ -222,6 +222,7 @@ func Reset() {
 	origins = map[string]*origin{}
 	originMu.Unlock()
 	resetProbes()
+	resetLearned()
 	resetDescribed()
 	resetNotes()
 	resetPolite()

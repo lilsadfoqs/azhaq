@@ -39,6 +39,7 @@ func cmdQuery(args []string) error {
 	limit := fs.Int("limit", 0, "rows at most, best first (default 0: all)")
 	asJSON := fs.Bool("json", false, "one JSON object per row, and the summary as JSON on stderr")
 	failed := fs.Bool("failed", false, "list every target whose work failed (timeouts, refusals, a source's errors): the list to retry")
+	failedRun := fs.String("run", "", "with -failed: the run to read, by the run_id of its summary (default: the newest run of the workspace)")
 	if err := parse(fs, args); err != nil {
 		return err
 	}
@@ -50,8 +51,11 @@ func cmdQuery(args []string) error {
 	}
 	rep := newReport("query")
 	rep.what = "rows"
+	if *failedRun != "" && !*failed {
+		return usagef("-run picks the run -failed reads: add -failed")
+	}
 	if *failed {
-		return queryFailed(path, *asJSON, rep)
+		return queryFailed(path, *failedRun, *asJSON, rep)
 	}
 	g, err := readGraph(path)
 	if err != nil {
@@ -146,18 +150,27 @@ func cmdQuery(args []string) error {
 	return rep.finish(*asJSON, false)
 }
 
-// queryFailed prints every failed target of the newest run, one per
-// line: target, who failed, the error, and whether retrying may help.
-func queryFailed(path string, asJSON bool, rep *report) error {
-	g, err := readGraph(path)
+// queryFailed prints every failed target of a run (the newest, unless one
+// is named), one per line: target, who failed, the error, and whether
+// retrying may help. A run with none says which runs of the workspace have.
+func queryFailed(path, want string, asJSON bool, rep *report) error {
+	st, err := store.OpenExisting(path)
 	if err != nil {
 		return err
 	}
-	ents := make([]types.Entity, 0, len(g.rows))
-	for _, r := range g.rows {
-		ents = append(ents, r.Entity)
+	defer st.Close()
+	runs, err := st.Runs()
+	if err != nil {
+		return err
 	}
-	list := engine.FailedTargets(ents, g.obs)
+	run, err := pickRun(runs, want)
+	if err != nil {
+		return err
+	}
+	list, err := failuresOf(st, run.ID)
+	if err != nil {
+		return err
+	}
 	for _, f := range list {
 		if asJSON {
 			raw, _ := json.Marshal(f)
@@ -177,6 +190,16 @@ func queryFailed(path string, asJSON bool, rep *report) error {
 	rep.what = "failed targets"
 	rep.Results = len(list)
 	rep.DB = path
+	which := "the newest run"
+	if want != "" {
+		which = "the run named"
+	}
+	rep.Notes = append(rep.Notes, fmt.Sprintf("read run %s (%s of %d in the workspace); -run ID reads another", run.ID, which, len(runs)))
+	if len(list) == 0 && len(runs) > 1 {
+		if n := otherRunsNote(path, earlierFailures(st, runs, run.ID), false); n != "" {
+			rep.Notes = append(rep.Notes, "no failed target in this run, but "+n)
+		}
+	}
 	return rep.finish(asJSON, false)
 }
 

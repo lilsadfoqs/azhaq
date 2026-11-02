@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"errors"
 	"net"
 	"path/filepath"
 	"reflect"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"github.com/lilsadfoqs/azhaq/internal/ledger"
+	"github.com/lilsadfoqs/azhaq/internal/neterr"
 )
 
 func TestUDPPorts(t *testing.T) {
@@ -500,5 +502,100 @@ func TestUDPICMPRateLimit(t *testing.T) {
 	r, err = s.ScanUDP(context.Background(), "", "127.0.0.1", ports)
 	if err != nil || r.Limited != 4 || len(r.OpenFiltered) != 4 {
 		t.Fatalf("too many to pace: %+v %v", r, err)
+	}
+}
+
+// takeN lets n datagrams through and then says the budget is spent.
+func takeN(n int32) func() error {
+	var used atomic.Int32
+	return func() error {
+		if used.Add(1) > n {
+			return neterr.ErrBudget
+		}
+		return nil
+	}
+}
+
+// A scan the budget stopped keeps what it has: the port that answered, the
+// ports refused, and the silent ones as open|filtered, with how far each
+// was asked.
+func TestUDPStoppedScanKeepsWhatItHas(t *testing.T) {
+	answering, _ := udpListener(t, []byte("pong"))
+	quiet, _ := udpListener(t, nil)
+	closed := closedUDPPort(t)
+	s := &Scanner{Timeout: 100 * time.Millisecond, Take: takeN(4)} // the first pass (3 ports), then one more
+	r, err := s.ScanUDP(context.Background(), "", "127.0.0.1", []int{answering, quiet, closed})
+	if !errors.Is(err, neterr.ErrBudget) {
+		t.Fatalf("err %v", err)
+	}
+	if len(r.Open) != 1 || r.Open[0].Port != answering || r.Closed != 1 {
+		t.Errorf("open %+v closed %d", r.Open, r.Closed)
+	}
+	if len(r.OpenFiltered) != 1 || r.OpenFiltered[0].Port != quiet {
+		t.Errorf("open|filtered %+v", r.OpenFiltered)
+	}
+	if len(r.Stopped) != 1 || r.Stopped[0] != (UDPStop{Port: quiet, Asked: 2, Of: 4}) {
+		t.Errorf("stopped %+v", r.Stopped)
+	}
+}
+
+// A scan that goes on from a stopped one asks each port the requests it was
+// not asked, so that resuming with the same cap finishes: the silent port
+// gets its four datagrams in all, the answered and refused ports none more.
+func TestUDPResumeAsksWhatWasNotAsked(t *testing.T) {
+	answering, answerReads := udpListener(t, []byte("pong"))
+	quiet, quietReads := udpListener(t, nil)
+	closed := closedUDPPort(t)
+	ports := []int{answering, quiet, closed}
+	prior := UDPPrior{}
+	var final UDPReport
+	for runs := 0; ; runs++ {
+		if runs > 5 {
+			t.Fatal("the scan never finished with a cap of 2 datagrams a run")
+		}
+		s := &Scanner{Timeout: 100 * time.Millisecond, Take: takeN(2)}
+		r, err := s.ScanUDPFrom(context.Background(), "", "127.0.0.1", ports, prior)
+		if err == nil {
+			final = r
+			break
+		}
+		prior = UDPPrior{Open: r.Open, Closed: r.ClosedPorts, Asked: map[int]int{}}
+		for _, st := range r.Stopped {
+			prior.Asked[st.Port] = st.Asked
+		}
+		for _, p := range r.OpenFiltered {
+			if _, undecided := prior.Asked[p.Port]; !undecided {
+				prior.Silent = append(prior.Silent, p.Port)
+			}
+		}
+	}
+	if answerReads.Load() != 1 || quietReads.Load() != 4 {
+		t.Errorf("the answering port read %d datagrams, the silent one %d: want 1 and 4", answerReads.Load(), quietReads.Load())
+	}
+	if len(final.Open) != 1 || final.Closed != 1 || len(final.OpenFiltered) != 1 || len(final.Stopped) != 0 {
+		t.Errorf("final %+v", final)
+	}
+}
+
+// -detect none asks a port one datagram: its protocol's request on its
+// usual number, an empty datagram elsewhere.
+func TestUDPDetectNoneAsksOnce(t *testing.T) {
+	quiet, reads := udpListener(t, nil)
+	s := &Scanner{Timeout: 100 * time.Millisecond, Detect: DetectNone}
+	r, err := s.ScanUDP(context.Background(), "", "127.0.0.1", []int{quiet})
+	if err != nil || len(r.OpenFiltered) != 1 {
+		t.Fatalf("%+v %v", r, err)
+	}
+	if n := reads.Load(); n != 1 {
+		t.Errorf("a silent port read %d datagrams, want 1", n)
+	}
+	if req, _ := s.udpReqFor(53, 0); len(req.payload) == 0 {
+		t.Error("port 53 is asked no request of its own")
+	}
+	if req, _ := s.udpReqFor(5555, 0); len(req.payload) != 0 {
+		t.Error("an odd port is asked something but an empty datagram")
+	}
+	if _, ok := s.udpReqFor(53, 1); ok {
+		t.Error("a second request")
 	}
 }

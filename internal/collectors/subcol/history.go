@@ -102,11 +102,12 @@ func historySource() source {
 
 // remember stores the names a run kept (foundBy gives each one's sources),
 // through a temp file and a rename so a crash leaves the old file whole.
-// A name in unverified was never seen to resolve and is not stored.
-func remember(domain string, names []string, foundBy map[string][]string, unverified map[string]bool) error {
+// A name in unverified was never seen to resolve and is not stored. It
+// returns how many names it wrote.
+func remember(domain string, names []string, foundBy map[string][]string, unverified map[string]bool) (int, error) {
 	path := historyPath(domain)
 	if path == "" || len(names) == 0 {
-		return nil
+		return 0, nil
 	}
 	historyMu.Lock()
 	defer historyMu.Unlock()
@@ -114,16 +115,18 @@ func remember(domain string, names []string, foundBy map[string][]string, unveri
 	if err != nil {
 		// A file that does not parse is set aside, not overwritten.
 		if rerr := os.Rename(path, path+".bad"); rerr != nil {
-			return err
+			return 0, err
 		}
 		m = map[string]seenName{}
 	}
 	stamp := now().UTC().Format(time.RFC3339)
+	stored := 0
 	for _, n := range names {
 		by := foundBy[n]
 		if unverified[n] {
 			continue
 		}
+		stored++
 		e, ok := m[n]
 		if !ok {
 			e.First = stamp
@@ -154,14 +157,14 @@ func remember(domain string, names []string, foundBy map[string][]string, unveri
 	}
 	raw, err := json.Marshal(m)
 	if err != nil {
-		return err
+		return stored, err
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
+		return stored, err
 	}
 	tmp, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".tmp*")
 	if err != nil {
-		return err
+		return stored, err
 	}
 	_, werr := tmp.Write(raw)
 	if cerr := tmp.Close(); werr == nil {
@@ -169,13 +172,13 @@ func remember(domain string, names []string, foundBy map[string][]string, unveri
 	}
 	if werr != nil {
 		os.Remove(tmp.Name())
-		return werr
+		return stored, werr
 	}
 	if err := os.Rename(tmp.Name(), path); err != nil {
 		os.Remove(tmp.Name())
-		return err
+		return stored, err
 	}
-	return nil
+	return stored, nil
 }
 
 func has(xs []string, x string) bool {

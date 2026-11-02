@@ -45,7 +45,7 @@ func JSURLs(script string, base *url.URL) []string {
 	seen := map[string]bool{}
 	var out []string
 	for _, r := range JSURLRefs(script, base) {
-		if !seen[r.URL] {
+		if !seen[r.URL] && !r.Key {
 			seen[r.URL] = true
 			out = append(out, r.URL)
 		}
@@ -64,6 +64,10 @@ type Ref struct {
 	Start, End int
 	Joined     bool
 	Head       bool
+	// Key says the string is a key of an object or a case label
+	// ({"./Filter":2}, case "./Filter":): a module id of the bundler's
+	// source tree, not a path of the app. It is not in JSURLs.
+	Key bool
 }
 
 // JSURLRefs is JSURLs with every place each URL is named, in the order
@@ -73,33 +77,50 @@ func JSURLRefs(script string, base *url.URL) []Ref {
 		return nil
 	}
 	var out []Ref
-	add := func(raw string, start, end int) {
+	add := func(raw string, start, end int, key bool) {
 		if u, ok := resolve(base, raw); ok && !StringNoise(u) {
 			ls, le := start, end // the literal with its quotes: a bare URL match is inside them
 			if le < len(script) && ls > 0 && strings.ContainsRune("\"'`", rune(script[le])) && script[ls-1] == script[le] {
 				ls, le = ls-1, le+1
 			}
-			out = append(out, Ref{URL: u, Start: start, End: end, Joined: joined(script, start), Head: HeadAt(script, ls, le)})
+			out = append(out, Ref{URL: u, Start: start, End: end, Joined: joined(script, start), Head: HeadAt(script, ls, le), Key: key})
 		}
 	}
 	for _, m := range absURL.FindAllStringIndex(script, -1) {
-		add(trimURLJunk(script[m[0]:m[1]]), m[0], m[1])
+		add(trimURLJunk(script[m[0]:m[1]]), m[0], m[1], false)
 	}
 	for _, m := range relURL.FindAllStringSubmatchIndex(script, -1) {
 		if p, ok := bracketPath(script[m[2]:m[3]]); ok && !numericPath.MatchString(p) {
-			add(p, m[0], m[1])
+			add(p, m[0], m[1], false)
 		}
 	}
 	for _, m := range dotURL.FindAllStringSubmatchIndex(script, -1) {
 		if p := script[m[2]:m[3]]; !strings.HasSuffix(p, ".js") && !strings.HasSuffix(p, ".mjs") && !strings.HasSuffix(p, ".css") {
 			// Relative to the app's root, where a single-page app runs.
-			add("/"+strings.TrimPrefix(p, "./"), m[0], m[1])
+			add("/"+strings.TrimPrefix(p, "./"), m[0], m[1], mapKeyAt(script, m[0], m[1]))
 		}
 	}
 	for _, m := range jsonPath.FindAllStringSubmatchIndex(script, -1) {
-		add(script[m[2]:m[3]], m[0], m[1])
+		add(script[m[2]:m[3]], m[0], m[1], false)
 	}
 	return out
+}
+
+// mapKeyAt says whether the string literal script[start:end] is a key of
+// an object literal or a case label: it follows "{", "," or "case" and is
+// followed by ":". A ternary branch (a?"./x":"./y") follows "?" or ":".
+func mapKeyAt(script string, start, end int) bool {
+	if end > len(script) || end-start < 2 || !strings.ContainsRune("\"'`", rune(script[end-1])) {
+		return false // the match ended on a "?" of a query, not on the closing quote
+	}
+	if i := skipSpace(script, end); i >= len(script) || script[i] != ':' {
+		return false
+	}
+	i := start
+	for i > 0 && strings.ContainsRune(" \t\r\n", rune(script[i-1])) {
+		i--
+	}
+	return i > 0 && (script[i-1] == '{' || script[i-1] == ',' || (strings.HasSuffix(script[:i], "case") && (i == 4 || !isIdentByte(script[i-5]))))
 }
 
 // HeadAt says whether the string literal script[start:end] (quotes

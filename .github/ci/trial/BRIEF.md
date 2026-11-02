@@ -34,6 +34,7 @@ Your review must be independent and evidence-based. You decide only on what you 
 - Call the binary you installed by its path (./bin/azhaq).
 - Read its README, `-h` and shipped docs to learn what it offers, but treat every statement as a claim to test. Read its source on GitHub only to resolve a discrepancy, and say when you did.
 - Log every command you ran and the output that matters in ./notes/.
+- This machine is a disposable CI runner whose kernel gives Chrome no sandbox. Running Chrome without it is allowed here: where azhaq refuses to start Chrome for that reason, use the opt-in flag its error names.
 - Aim to finish within about three hours of wall time.
 
 ## Scope and rules (hard rules, no exceptions)

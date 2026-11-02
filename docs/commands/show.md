@@ -74,6 +74,8 @@ Three kinds of word are tried, in this order:
 - A recovered schema is not the server's schema. It lacks types, fields the server never suggested, and the types of fields whose errors did not name them.
 - The exports mark it as partial (see [export](export.md#graphql-and-sdl)). A whole schema read by introspection is not marked.
 - Every document asked carries a field no schema has, so none passes validation and nothing runs.
+- Recovery sends at most 96 documents to one endpoint: 48 for the query type and 48 for the mutation type. `azhaq plan -graphql` says so.
+- A GraphiQL or Playground page (one whose GET served the IDE) is not asked for a schema once another URL of its origin gave one whole by introspection: no POST goes to it, or its recovery stops before the next document, and the summary notes `an IDE page, not asked for its schema`. With no such schema on its origin, the page is recovered as any endpoint is. A resume keeps what the run it continues learned.
 
 ## Flags
 

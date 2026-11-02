@@ -34,6 +34,17 @@ import (
 
 const Name = "azhaq-subdomains"
 
+// NotCheckedKey is the field of a source's row that says how many of its
+// names no lookup checked and the row's error is about; UncheckedWhyKey, in
+// the payload, says why those names (unverified) were not checked.
+const (
+	NotCheckedKey   = "not_checked"
+	UncheckedWhyKey = "unverified_why"
+	// HistoryKey is the payload's account of the name history: the file, how
+	// many names were read from it and how many were written.
+	HistoryKey = "history"
+)
+
 // fanoutTimeout bounds each source for a domain derived from a URL: the
 // run is about the application, and crt.sh alone can take 35 s.
 var fanoutTimeout = 15 * time.Second
@@ -527,6 +538,7 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 	if len(st.unverified) > 0 {
 		sort.Strings(st.unverified)
 		payload["unverified"] = st.unverified
+		payload[UncheckedWhyKey] = st.why
 	}
 	if len(st.guesses) > 0 {
 		sort.Strings(st.guesses)
@@ -557,8 +569,18 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		payload["coverage"] = cov
 	}
 	if !c.opts.NoHistory {
-		if err := remember(domain, names, foundBy, st.skip); err != nil {
+		stored, err := remember(domain, names, foundBy, st.skip)
+		if err != nil {
 			payload["history_error"] = shorten(err.Error())
+		}
+		if path := historyPath(domain); path != "" {
+			read := 0
+			if row, ok := status[historyName].(map[string]any); ok {
+				read, _ = row["count"].(int)
+			}
+			if read > 0 || stored > 0 {
+				payload[HistoryKey] = map[string]any{"path": path, "read": read, "stored": stored}
+			}
 		}
 	}
 	meta := types.RunMeta{Status: types.StatusOK, EmitCount: 1}
@@ -602,6 +624,7 @@ type settled struct {
 	guesses    []string        // of those, the names only a padding source gave: no source asserted them
 	asked      int             // names sent to the resolvers, in all
 	skip       map[string]bool // not stored in the history: never seen to resolve
+	why        string          // why the unverified names were not checked
 }
 
 // settle drops the names only padding sources gave (source.verify) that do
@@ -671,6 +694,14 @@ func (c *Collector) settle(ctx context.Context, domain string, run []source, nam
 			chk.checkWith(vctx, more, true)
 			took += time.Since(start)
 			st.asked, _ = chk.totals()
+			if vctx.Err() != nil {
+				// The limit ended the pass: the names it did not reach are
+				// not a failure of the lookups.
+				why = cutWhy
+				if !cut {
+					why = types.CutShort
+				}
+			}
 		} else if len(more) > 0 {
 			why = cutWhy
 			if !cut {
@@ -701,6 +732,12 @@ func (c *Collector) settle(ctx context.Context, domain string, run []source, nam
 		}
 	}
 	st.dropped = len(drop)
+	if len(st.unverified) > 0 {
+		st.why = why
+		if why == "" {
+			st.why = "the DNS lookups failed"
+		}
+	}
 	kept := names[:0]
 	for _, n := range names {
 		if !drop[n] {
@@ -717,12 +754,14 @@ func (c *Collector) settle(ctx context.Context, domain string, run []source, nam
 			if chk != nil {
 				row["checked_seconds"] = round(took.Seconds()) // all the guesses at once, shared
 			}
-			if why != "" && chk != nil {
+			if why != "" && chk != nil && len(st.unverified) > 0 {
 				// Said, not silent: these may hold a real name. azhaq resume
 				// checks them.
 				row["error"] = fmt.Sprintf("%d of its names not checked: %s; azhaq resume checks them", len(st.unverified), why)
+				row[NotCheckedKey] = len(st.unverified)
 			} else if chk != nil && len(st.unverified) > 0 {
 				row["error"] = fmt.Sprintf("%d of its names not checked: the DNS lookups failed; azhaq resume checks them", len(st.unverified))
+				row[NotCheckedKey] = len(st.unverified)
 			}
 		}
 	}

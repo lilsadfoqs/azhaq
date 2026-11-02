@@ -107,7 +107,7 @@ Views after the hash and sockets are never requested, so they stay `hint`. A vie
 | --- | --- |
 | `live` | Resolves. A host you gave, or a name under a domain you gave. |
 | `sibling` | Resolves. Found on the way, under another domain. |
-| `unresolved` | From a source or a list, not looked up, and named by no DNS answer of the run that held its address. A name that is the target of a CNAME in an answer holding its address is `live` or `sibling` at any `-depth`, with that address in `proof`. |
+| `unresolved` | From a source or a list, not looked up (a name that was asked and did not exist is `dead`), and named by no DNS answer of the run that held its address. A name a stopped `subs -live` listed and did not ask says `not checked:` and why in its `proof`; `azhaq resume` asks it. A name that is the target of a CNAME in an answer holding its address is `live` or `sibling` at any `-depth`, with that address in `proof`. |
 | `dead` | Does not resolve: NXDOMAIN, no address, or SERVFAIL from every resolver. |
 | `wildcard` | Resolves only because its zone answers for any name. |
 
@@ -166,7 +166,7 @@ Three controls bound what a run sends. They hold for every request to a target, 
 - **Pace.** `-rate` is requests per second to targets, over all hosts. Chrome's requests count too.
 - **Kill switch.** `-kill-file PATH` names a file that stops all sending when it exists. The default is `DB.stop`.
 
-The budget holds for each run: `azhaq resume` sends up to as many more as its own `-max-requests` says. Other limits end a run the same way: [exit code 4](OUTPUT.md#exit-codes) lists them. `azhaq plan` prints what a run would send before anything goes out.
+The budget holds for each run: `azhaq roles` is one run whose budget (the run options' `-max-requests`) covers every role's run, the history reads and the replay together; `azhaq resume` sends up to as many more as its own `-max-requests` says. Other limits end a run the same way: [exit code 4](OUTPUT.md#exit-codes) lists them. `azhaq plan` prints what a run would send before anything goes out.
 
 ### The kill file
 
@@ -401,7 +401,7 @@ With `-replay-writes`, three more come before them all:
 azhaq sends a GET to every URL it finds in scope. It cannot know what a GET does on the server: a name says nothing reliable (`/createdb`, `/logout`, `/rest/saveLoginIp` are GETs that change state on some apps and read-only pages on others), so no name keeps a URL out. What azhaq promises is about the method, and nothing more:
 
 - **Without a flag, every request azhaq sends to a target on purpose is a GET**, besides what the table above lists: HEAD and TCP or UDP probes of ports, Chrome's HEAD and OPTIONS, and a sign-in.
-- **"A write" in these pages means a request with a method other than GET, HEAD or OPTIONS.** Writes (POST, PUT, PATCH, DELETE, a form submitted, a page's own writes in Chrome, a role's write replay, a parameter search with a body) are sent only with their flag: `-submit-forms`, `-browser-writes`, `roles -replay-writes`, `-params-writes`, `-graphql` for the introspection POST. Without it they are mapped, not sent. That says what the method is, not that nothing changes.
+- **"A write" in these pages means a request with a method other than GET, HEAD or OPTIONS.** Writes (POST, PUT, PATCH, DELETE, a form submitted, a page's own writes in Chrome, a role's write replay, a parameter search with a body) are sent only when you ask for them by name: with their flag (`-submit-forms`, `-browser-writes`, `roles -replay-writes`, `run -params-writes` with `-params-method`, `-graphql` for the introspection POST) or on a command whose own option is the method (`params -X POST|JSON|XML`, `fuzz -X`, `probe -x`), which needs no second flag. Without it they are mapped, not sent. That says what the method is, not that nothing changes.
 - **A GET can change data or end a session, and azhaq requests it.** It does so for the URLs in links, in forms (a GET form is filled with neutral values and asked: `crawl` does it by default, `run` with `-fill-forms`), in scripts and in API descriptions. A GET operation a description names is requested like any other URL, an endpoint that resets the database or logs out included: VAmPI's `GET /createdb` drops and recreates its database, and a default crawl of its `/openapi.json` sends it.
 
 What keeps a URL out is known:

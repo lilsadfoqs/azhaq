@@ -78,7 +78,7 @@ func benchShots() *shotsRow {
 	row := &shotsRow{Profile: prof, Targets: len(targets)}
 
 	azArgs := func(i int) []string {
-		a := []string{"shots", "-l", list, "-dir", filepath.Join(dir, fmt.Sprintf("azhaq%d", i)), "-silent"}
+		a := []string{"shots", "-l", list, "-dir", filepath.Join(dir, fmt.Sprintf("azhaq%d", i)), "-silent", "-chrome-no-sandbox"}
 		return append(a, pick([]string(nil), []string{"-rate", politeHTTP})...)
 	}
 	// gowitness has no rate option, so it runs with its defaults in both

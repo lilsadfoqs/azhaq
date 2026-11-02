@@ -215,7 +215,7 @@ func TestHistoryCapDropsOldest(t *testing.T) {
 		at := time.Date(2026, 10, 1+i, 0, 0, 0, 0, time.UTC)
 		now = func() time.Time { return at }
 		name := n + ".example.org"
-		if err := remember("example.org", []string{name}, map[string][]string{name: {"x"}}, nil); err != nil {
+		if _, err := remember("example.org", []string{name}, map[string][]string{name: {"x"}}, nil); err != nil {
 			t.Fatal(err)
 		}
 	}

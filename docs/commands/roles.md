@@ -35,6 +35,8 @@ azhaq roles show -dir azhaq-roles-20261028-101500 https://app/rest/basket/6
 ## What it does
 
 1. Runs the map once for each role. The run options after `--` say what to map. A role sends only the headers it is given.
+
+`-max-requests` in the run options is the budget of the whole command, as it is for every other command: the runs, the Chrome sign-ins, the history reads, the replay, the controls and the writes together send no more. Each role's run gets what the runs before it left, a history read, the replay, the controls and the writes stop at what is left, and a run that has no budget left does not start. When it is spent the command exits 4 and `stopped` names `-max-requests` and the stage it ended in. The summary says `request budget N for the whole command ... M sent`. `-replay-max` still limits the replay and the history reads, over all roles. The Chrome sign-in that renews a session in the replay is held to what is left too.
 2. Reads the requests an account sent, if you give a history file with `-har` or `-burp`. See [History files](#history-files).
 3. Asks every endpoint any role reached with every other role's session. This is the replay. It sends the GETs that change nothing.
 4. Fills `{id}` routes with each role's own objects. The identifiers come from the sessions and the answers, or from `-id`.
@@ -49,7 +51,7 @@ A role is one of four things:
 - anonymous, with no headers
 - headers you give it with `-role`
 - headers a command prints, with `-role-cmd`, for tokens that live minutes
-- a Chrome sign-in, with `-role-login`
+- a Chrome sign-in, with `-role-login`. Chrome is not run without its sandbox: where the system gives it none, `roles` stops with exit 2 before its first request (tried first, when a role signs in), and names `-chrome-no-sandbox`. Give it among the run options after `--` to allow it.
 
 ## Output
 
@@ -143,7 +145,7 @@ With `-replay-writes`, these verdicts join the list. Proved cross writes keep th
 | `would be sent (-dry-writes)` | yes | `-dry-writes`: nothing was sent. |
 | `answered 2xx but changed nothing of the owner's` | `-all` | A 2xx answer, but the owner's object did not change as the write asked, or could not be read. Not a finding. |
 | `creates in another role's collection` | yes | A POST another role was let to send, and something shows it crosses roles: the anonymous role was let to send it, or the object the create made (read from the answer to the create and from the read-back) belongs to the role whose request was replayed, by what that role's session says. A create, never another role's object written. |
-| `create accepted: nothing shows it crosses roles` | yes | A POST another role was let to send, and neither of those is shown: the object may be its sender's own, as in a collection every signed-in user may post to. `created_owner` (sender, owner) and `owner_by` say whose object the create made when the answers say. Ranks as the row above. |
+| `create accepted: nothing shows it crosses roles` | yes | A POST another role was let to send, and neither of those is shown: the object may be its sender's own, as in a collection every signed-in user may post to. `created_owner` (sender, owner) and `owner_by` say whose object the create made when the answers say. Ranks as the row above. When the read-back works and the object is the sender's, every other role reads it once too: a role that reads it makes its own row, `reads another role's object`, with the create in `owner_by` and a made-up identifier as its control. |
 | `only its owner writes it` | `-all` | The others were refused. |
 | `the owner's own write was refused` | `-all` | The owner was not let, or its empty write changed its object: nothing to compare. |
 | `the other roles were refused` | `-all` | A DELETE, never asked of its owner, that no other role was let to send. |
@@ -162,7 +164,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 - **Exit 4:** a role's run was stopped by a limit, or the replay was interrupted (Ctrl-C) with requests left. The summary marks it `stopped`.
 - **Exit 2:** a header names a host outside the scope rule. Nothing is sent. See [Headers that name a host](#headers-that-name-a-host).
 - A role whose run could not be done, such as a failed sign-in, ends `roles` with a summary whose `notes` say why.
-- `requests` in the summary is every request `roles` sent to the targets: the roles' runs, the Chrome sign-ins (the first and each renewal), the replays and every redirect hop they followed. It equals the target lines of `roles.ledger.jsonl`. A role's own summary line counts that role's run only, so they add up to less.
+- `requests` in the summary is every request `roles` sent to the targets: the roles' runs, the Chrome sign-ins (the first and each renewal), the replays and every redirect hop they followed. It equals the target lines of `roles.ledger.jsonl`, or of the file `-ledger` names in the run options (`-- -ledger FILE`): one ledger for the whole command, written by the runs and by everything `roles` sends between them, sealed at the end. `-ledger off` writes none. A role's own summary line counts that role's run only, so they add up to less.
 - With `-json`, stderr holds the summary only. The roles' runs print nothing. The summary says what they did not finish: `failed`, `unreachable`, `skipped` and `notes`.
 
 ## Details
@@ -490,6 +492,7 @@ For a POST that creates in a collection, `roles` also reads the created object b
 - The row names the URL the change was read back at when it is not the write's own.
 - A write answered 2xx that left the owner's object unchanged is `answered 2xx but changed nothing of the owner's`. It is not a finding. An app that writes the caller's own object whatever the path says does this.
 - A POST to a collection is never a cross write. A role let to send it makes a `create accepted`, or a `creates in another role's collection` when the anonymous role was let, or the object the create made belongs to the replayed request's role.
+- The object a create made is read by every role but its creator when it is read back and the answers say it is the creator's (`created_owner`). A role that reads it makes the row `reads another role's object` for the object's URL, with `owner_by` `created by bob's replayed POST /api/books`, `confidence` `proved` and the made-up identifier control. An object only its creator reads adds no row. The reads and the control count against `-replay-max` and the budget like every replay request.
 - Whose object a create made is read from the owner fields of the answer to the create and of the read-back (`user`, `owner`, `createdBy`, `email`, …), matched with who each role is (its token's claims, its login answer, its `/me`). A name that only equals a role's name is a lead, said in `owner_by`, never the proof: "may belong to alice".
 
 #### Canary values
@@ -515,7 +518,7 @@ Replaying the owner's own recorded body is idempotent when the value it sets is 
 
 - A write is let when it is answered 2xx and not with an error shaped as data. It is proven by the owner's object changing.
 - Proved cross writes keep the top of the list, above the reads. The rows that prove nothing about another role's object rank below the proved reads: `creates in another role's collection` and `create accepted`, which are listed, and `answered 2xx but changed nothing`, which is not.
-- Every request counts against `-replay-max` (what the read replay left) and the run's `-max-requests`, at the run's `-rate`. That includes each write and each read of the owner's object to verify it.
+- Every request counts against `-replay-max` (what the read replay left) and the command's `-max-requests`, at the run's `-rate`. That includes each write and each read of the owner's object to verify it.
 - Every request is sent without following a redirect.
 
 #### What the write verdicts mean
@@ -591,7 +594,7 @@ The diff lines look like this:
 | Flag | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `-replay` | bool | `true` | ask every endpoint one session reached with every other session, and each role's objects with the others (reads only, by method: GET; a write is replayed only with -replay-writes) |
-| `-replay-max` | int | `2000` | requests the replay may send, over all roles |
+| `-replay-max` | int | `2000` | requests the history reads and the replay may send, over all roles (the run options' -max-requests caps the whole command) |
 | `-replay-writes` | string |  | also replay writes with every other role's session: post,put,patch (add delete to delete objects). They change data on the target and go only to the -url hosts, or the -allow/-scope given in the run options. The writes are each role's own from -har or -burp (sent only to the history's origins), and the PUT and PATCH (an empty object, the owner's first: a server that replaces on PUT may clear the owner's own object) and DELETE the runs' routes take, on each role's objects. A cross-role write is claimed only when the owner's object, read as the owner before and after, changed the way the write asks |
 | `-replay-writes-canary` | bool |  | with -replay-writes: change one short string field of a PUT or PATCH body to a unique value for each role it is replayed with, before it is sent, so a write that would otherwise replay the owner's own value back (no change to read back) can still be proved; never on by default, since it changes data, and restoring the field afterward is not done |
 | `-replay-writes-field` | string, repeatable |  | NAME: with -replay-writes-canary, a field the canary may set although the rules leave it alone (an email or other owner field, an identifier, a credential, a timestamp): you accept that it changes whose the object is or what it holds |

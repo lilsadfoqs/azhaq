@@ -616,7 +616,7 @@ func (c *claims) caseBrowser() {
 		return
 	}
 	c.httpCase("run -browser", claimJuice, paces3, func(o, db string, p claimPace) []string {
-		return append([]string{"run", "-url", o, "-db", db, "-json", "-browser"}, p.flags...)
+		return append([]string{"run", "-url", o, "-db", db, "-json", "-browser", "-chrome-no-sandbox"}, p.flags...)
 	}, func(t *tally, px *countProxy) {
 		ws, poll := 0, 0
 		for _, s := range px.since(0) {
@@ -637,7 +637,7 @@ func (c *claims) caseShots() {
 		return
 	}
 	c.httpCase("shots", claimJuice, []claimPace{paceFree, pace2}, func(o, db string, p claimPace) []string {
-		return append([]string{"shots", "-u", o, "-db", db, "-json", "-dir", c.caseFile("shots-" + p.name)}, p.flags...)
+		return append([]string{"shots", "-u", o, "-db", db, "-json", "-dir", c.caseFile("shots-" + p.name), "-chrome-no-sandbox"}, p.flags...)
 	}, nil)
 }
 
@@ -655,7 +655,7 @@ func (c *claims) caseDVWA() {
 			name = "run -login -browser"
 		}
 		c.httpCase(name, claimDVWA, paces3, func(o, db string, p claimPace) []string {
-			a := []string{"run", "-url", o + "/", "-db", db, "-json", "-login", o + "/login.php", "-login-user", "admin", "-login-pass", "password"}
+			a := []string{"run", "-url", o + "/", "-db", db, "-json", "-login", o + "/login.php", "-login-user", "admin", "-login-pass", "password", "-chrome-no-sandbox"}
 			if browser {
 				a = append(a, "-browser")
 			}
@@ -901,7 +901,7 @@ func (c *claims) caseKillShots() {
 		return
 	}
 	c.killCase("kill switch shots", func(o, db string) []string {
-		return []string{"shots", "-u", o, "-db", db, "-json", "-rate", "5", "-dir", c.caseFile("kill-shots")}
+		return []string{"shots", "-u", o, "-db", db, "-json", "-rate", "5", "-dir", c.caseFile("kill-shots"), "-chrome-no-sandbox"}
 	}, []string{"-max-requests", "60"})
 }
 

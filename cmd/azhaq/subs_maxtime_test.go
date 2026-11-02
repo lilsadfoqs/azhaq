@@ -101,7 +101,7 @@ func TestSubsMaxTimeBoundsSampledGuessesToo(t *testing.T) {
 		t.Fatalf("exit %d, stopped %q", code, rep.Stopped)
 	}
 	notes := strings.Join(rep.Notes, "\n")
-	if rep.Counts["not checked"] == 0 || !strings.Contains(notes, fmt.Sprintf("%d names could not be checked (the run stopped first)", rep.Counts["not checked"])) {
+	if rep.Counts["not checked"] == 0 || !strings.Contains(notes, fmt.Sprintf("%d names could not be checked (cut short by the run's time limit", rep.Counts["not checked"])) {
 		t.Errorf("counts %v, notes %v: the cut guesses are not said to be cut by the stop", rep.Counts, rep.Notes)
 	}
 	if strings.Contains(out, `"unverified"`) || rep.Counts["unverified"] != 0 {

@@ -164,7 +164,7 @@ An origin that answers every path with the same page (a single-page app's shell)
 - Their rows stay in the map with coverage `skipped`. The summary names how many and the origin (`http://app: 600 URLs that scripts name were not asked, because it had answered paths with the one page every unknown path gets`), the `skipped` list has one line for the origin, and `counts` has `skipped` for them (and `catchall` for the answers), each row counted once.
 - `-catchall-after N` sets the number (0 asks every path). `crawl` asks every path, as katana does, and lists catch-all answers.
 - A held path that is a real page of its own in a directory the catch-all covers would have answered a different page: this is an inference from the controls, not a request. Ask it with `-catchall-after 0`, or by hand.
-- `-no-catchall` leaves the rows that answered with the catch-all page, and those not asked for that reason, out of the rows printed and out of `results`. `stored` and `counts` still hold them, and `left_out` says how many, so what `run` prints is what `results` counts.
+- `-no-catchall` leaves the rows that answered with the catch-all page, and those not asked for that reason, out of the rows printed and out of `results`. `stored` and `counts` still hold them, and `left_out` says how many, so what `run` prints is what `results` counts: `results + folded + left_out = stored`.
 
 ### Evidence
 
@@ -267,6 +267,7 @@ A client route is a view that a single-page app's router draws.
 - Nor is a base that calls are built on, such as `this.hostServer + "/rest/web3"`, whose calls are `/rest/web3/submitKey`.
 - It has no row and is never requested. It is kept as a rejected string with the reason `the start of a path a script joins more to`. `crawl -rejected` lists it.
 - A string with a query, `"/search?q=" + q`, names its route and stays.
+- A `./name` that is a key of an object or a `case` label, as in a webpack module map (`{"./components/locale/zh_CN": 1}`), is a module id in the bundler's source tree, not a path of the app. It is never requested and is kept as a rejected string with the reason `a key of a module map or a case label`. A `./name` written as a value, `"./redirect?to="`, is still a route.
 
 ### Path checks stop at their answer
 
@@ -283,7 +284,7 @@ Examples of what `notes` holds for a run:
 
 - `path checks: 28 skipped (an API description was already found)`: see [Path checks](#path-checks-stop-at-their-answer).
 - `screenshot of URL not taken: the page needs about 26 requests and 8 were left (raise -max-requests)`, or `the budget was spent before the page loaded`: see [shots](shots.md#screenshots-and-the-budget).
-- `GraphQL URL: introspection disabled: schema recovered (partial: query Query: 2 fields (1 client, 1 probe), 140 words tried; not proof there is nothing more)`, or `introspection: full schema`.
+- `GraphQL URL: introspection disabled: schema recovered (partial: query Query: 2 fields (1 client, 1 probe), 140 words tried; not proof there is nothing more)`, or `introspection: full schema`. `GraphQL URL: an IDE page, not asked for its schema: URL on the same origin gave it whole` says why a GraphiQL page got no POST: see [show](show.md#recovering-a-schema-when-introspection-is-off).
 
 ### Next in the summary
 `next` suggests a command in three cases:
@@ -382,7 +383,8 @@ Examples of what `notes` holds for a run:
 | `-chrome` | string |  | the Chrome or Chromium to run (default $AZHAQ_CHROME, else the first found) |
 | `-chrome-profile` | string |  | a Chrome user data directory to use and keep: sessions it holds go with the pages (default: a temporary one) |
 | `-chrome-proxy` | string |  | send Chrome's own connections through this http or socks5 proxy (default: -proxy, else the environment's); a plain http:// request reaches an http proxy as a proxy request, a page over TLS as a CONNECT tunnel |
-| `-chrome-require-sandbox` | bool |  | never run Chrome without its sandbox: where the system gives it none (no user namespaces, AppArmor, a container) Chrome does not start (default: it is started once more without, and the summary says so) |
+| `-chrome-no-sandbox` | bool |  | let Chrome run without its sandbox where the system gives it none (no user namespaces, AppArmor, a container): it is started once more without, and the summary says so. The pages it loads are the targets' and untrusted: use a throwaway environment. By default Chrome does not start then |
+| `-chrome-require-sandbox` | bool |  | never run Chrome without its sandbox (the default since v0.15.0, so this changes nothing: kept for scripts that pass it; it cannot go with -chrome-no-sandbox) |
 | `-tabs` | int | `6` | Chrome tabs open at once for screenshots and -browser (gowitness -t) |
 | `-unsafe-ports` | bool | `true` | let Chrome open the ports it refuses by default (6000, 6666, 10080 and others); -unsafe-ports=false keeps its refusal |
 
@@ -422,6 +424,7 @@ Examples of what `notes` holds for a run:
 | `-max-response-size` | int |  | bytes read of a page or document (default 2097152; scripts and JSON get 16 MiB) |
 | `-depth` | int | `4` | max fan-out waves (0 = seed wave only, not unlimited) |
 | `-retry-failed` | bool |  | with azhaq resume: ask again the failed targets the summary marks retryable (a timeout, a closed connection, a 429 or 5xx); only those run again |
+| `-retry-run` | string |  | with -retry-failed: the run to ask again, by the run_id of its summary (default: the newest run of the workspace) |
 
 **Session**
 
@@ -486,7 +489,7 @@ Examples of what `notes` holds for a run:
 | `-params-threads` | int | `5` | parameter requests in flight per page (as arjun -t); 1 with -params-delay and -params-stable | rarely needed |
 | `-params-timeout` | duration | `15s` | wait for each parameter request; one that times out is asked again with 5 s more, up to 20 s (arjun -T) | rarely needed |
 | `-port-all-ips` | bool |  | scan every address of a name, not the first two of each family | rarely needed |
-| `-port-detect` | string | `all` | what is asked of an open port: all (its banner, then HTTP and TLS, then one request of each protocol that waits to be asked, each on its own connection, several at once while the scan has workers free: at most 24 connects after the first), banner (what it says on the one connection) or none (connect and close) | rarely needed |
+| `-port-detect` | string | `all` | what is asked of an open port: all (its banner, then HTTP and TLS, then one request of each protocol that waits to be asked, each on its own connection, several at once while the scan has workers free: at most 24 connects after the first), banner (what it says on the one connection) or none (connect and close). UDP ports: all and banner ask every request a port's protocol has (4 datagrams to a silent port); none asks one | rarely needed |
 | `-port-discover` | string |  | ask first whether an address is up, by a connect to 80 and 443: first (scan the ones that answer) or only (list them, scan nothing) | rarely needed |
 | `-port-exclude-cdn` | bool |  | ask a CDN or WAF address only ports 80, 443, 8080 and 8443 (naabu -ec asks 80 and 443; this adds 8080 and 8443) | rarely needed |
 | `-port-ip` | string |  | the address families of a name to scan: 4 or 6 (default both) | rarely needed |
