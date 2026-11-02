@@ -345,7 +345,8 @@ func TestLadderLimit(t *testing.T) {
 	if r.Unprobed != 3 {
 		t.Errorf("%d ports left unprobed, want 3", r.Unprobed)
 	}
-	if max := len(ports) + ladderLimit*maxProbes; int(takes.Load()) > max {
+	// A port the ladder is skipped for is still asked the handshake.
+	if max := len(ports) + ladderLimit*maxProbes + (len(ports) - ladderLimit); int(takes.Load()) > max {
 		t.Errorf("%d connects, bound %d", takes.Load(), max)
 	}
 }
@@ -453,5 +454,50 @@ func TestSlowGreeterIsNotTCPWrapped(t *testing.T) {
 		if o.Service != want {
 			t.Errorf("port %d said %q after 2 s: service %q, want %q", o.Port, o.Banner, o.Service, want)
 		}
+	}
+}
+
+// A handler that answers GET but holds any other first bytes (the Jenkins
+// agent port) is named from its answer to one last GET /, and a port that
+// holds that too stays unnamed.
+func TestSilentToHeadIsAskedOneGet(t *testing.T) {
+	var gets atomic.Int32
+	jenkins := listen(t, func(c net.Conn) {
+		_ = c.SetDeadline(time.Now().Add(2 * time.Second))
+		br := bufio.NewReader(c)
+		if p, err := br.Peek(4); err != nil || string(p) != "GET " {
+			time.Sleep(2 * time.Second)
+			return
+		}
+		gets.Add(1)
+		buf := make([]byte, 4096)
+		br.Read(buf)
+		c.Write([]byte("HTTP/1.0 200 OK\r\nConnection: close\r\nContent-Type: text/plain;charset=UTF-8\r\n\r\n" +
+			"Jenkins-Agent-Protocols: JNLP4-connect, Ping\nJenkins-Version: 2.462\nRemoting-Minimum-Version: 3.4\n\n"))
+	})
+	mute := listen(t, func(c net.Conn) { time.Sleep(2 * time.Second) })
+	var takes atomic.Int32
+	s := &Scanner{Workers: 1, Banner: 60 * time.Millisecond, Timeout: 60 * time.Millisecond, Take: func() error { takes.Add(1); return nil }}
+	r, err := s.ScanEach(t.Context(), "", "127.0.0.1", []int{jenkins, mute})
+	if err != nil || len(r.Open) != 2 {
+		t.Fatalf("%v %+v", err, r)
+	}
+	for _, o := range r.Open {
+		switch o.Port {
+		case jenkins:
+			if o.Service != "http" || o.Product != "Jenkins" || o.Version != "2.462" {
+				t.Errorf("agent port: %+v", o)
+			}
+		case mute:
+			if o.Service != "" || o.Product != "" {
+				t.Errorf("mute port named: %+v", o)
+			}
+		}
+	}
+	if gets.Load() != 1 {
+		t.Errorf("%d GETs reached the agent port, want 1", gets.Load())
+	}
+	if max := 2 + 2*maxProbes; int(takes.Load()) > max {
+		t.Errorf("%d connects, bound %d", takes.Load(), max)
 	}
 }

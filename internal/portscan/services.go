@@ -232,12 +232,17 @@ func headProduct(h httpHead) (product, version string) {
 	return serverProduct(h.powered)
 }
 
+var jenkinsVersion = lazyre.New(`(?m)^Jenkins-Version: ?(\d[\w.\-]*)\s*$`)
+
 // bodyProduct reads the product a GET / body names: Ollama says so in
 // plain text, Elasticsearch and OpenSearch give their version in JSON.
 func bodyProduct(body []byte) (product, version string) {
 	body = bytes.TrimSpace(body)
 	if string(body) == "Ollama is running" {
 		return "Ollama", ""
+	}
+	if m := jenkinsVersion.FindSubmatch(body); m != nil {
+		return "Jenkins", string(m[1]) // the agent port's text page
 	}
 	var other struct {
 		Etcd    string `json:"etcdserver"`
@@ -385,7 +390,12 @@ func (s *Scanner) webProduct(ctx context.Context, o *Open, head []byte, status i
 	default:
 		return
 	}
-	body := s.getBody(ctx, o.Port, host, ip, https)
+	s.pageProduct(ctx, o, s.getBody(ctx, o.Port, host, ip, https), host, ip, https)
+}
+
+// pageProduct reads what a GET / body names: a product, or the page's title
+// and generator.
+func (s *Scanner) pageProduct(ctx context.Context, o *Open, body []byte, host, ip string, https bool) {
 	if p, v := bodyProduct(body); p != "" {
 		o.Product, o.Version = p, v
 		return

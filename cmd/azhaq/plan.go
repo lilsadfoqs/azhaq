@@ -146,7 +146,7 @@ func planSends(b engine.Budgets, send sendLimits) (gets, others []string) {
 		if send.portDiscover != portcol.DiscoverOnly {
 			switch send.portDetect {
 			case portscan.DetectAll:
-				*out = append(*out, "each open port is asked what it is, on connections of their own (-port-detect all): its banner, and for a port that says nothing its protocol's own request on its usual number, one HEAD /, a TLS handshake and one request of each of the other protocols until one answers (at most 24 more connects per port; a GET / for a web page whose head names no product)")
+				*out = append(*out, "each open port is asked what it is, on connections of their own (-port-detect all): its banner, and for a port that says nothing its protocol's own request on its usual number, one HEAD /, a TLS handshake and one request of each of the other protocols until one answers, then one GET / if nothing named it (at most 24 more connects per port; a GET / for a web page whose head names no product)")
 			case portscan.DetectBanner:
 				*out = append(*out, "an open port is read for what it says first, and nothing is sent on it (-port-detect banner)")
 			default:

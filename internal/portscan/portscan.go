@@ -614,19 +614,25 @@ func rawData(port int) bool { return port >= 9100 && port <= 9107 }
 
 // ask sends HEAD / and returns the head of the answer, if any.
 func (s *Scanner) ask(conn net.Conn, host string, port, defaultPort int) []byte {
+	// The time of a connect and of a banner: a remote server's answer
+	// takes a round trip more than its silence.
+	return s.talk(conn, s.httpRequest("HEAD", host, port, defaultPort), headFrame, s.Timeout+s.Banner)
+}
+
+// httpRequest is method / over HTTP/1.0, the Host header naming the port
+// unless it is the scheme's own.
+func (s *Scanner) httpRequest(method, host string, port, defaultPort int) []byte {
 	switch {
 	case port != defaultPort:
 		host = net.JoinHostPort(host, strconv.Itoa(port))
 	case strings.Contains(host, ":"):
 		host = "[" + host + "]"
 	}
-	req := "HEAD / HTTP/1.0\r\nHost: " + host + "\r\n"
+	req := method + " / HTTP/1.0\r\nHost: " + host + "\r\n"
 	if s.UserAgent != "" {
 		req += "User-Agent: " + s.UserAgent + "\r\n"
 	}
-	// The time of a connect and of a banner: a remote server's answer
-	// takes a round trip more than its silence.
-	return s.talk(conn, []byte(req+"Accept: */*\r\n\r\n"), headFrame, s.Timeout+s.Banner)
+	return []byte(req + "Accept: */*\r\n\r\n")
 }
 
 // headFrame ends the read of an HTTP head at its blank line, and lets any

@@ -1455,6 +1455,7 @@ Every step is a connect that is paced, counted by `egress.Take` and recorded in 
 2. The `HEAD /`.
 3. For an answer that is not text, a TLS handshake. A greeting inside the tunnel is read before the `HEAD`, so IMAPS, POP3S, SMTPS and LDAPS are named.
 4. One request of each of the remaining protocols, on a connection of its own, the likeliest first.
+5. A port still unnamed and silent gets one `GET /` (`ident.getRoot`): a handler that waits for its own protocol after any other first bytes, such as Jenkins' agent port, names itself from the page. It is not asked for an address whose ladder was skipped (`-unnamed`).
 
 The protocols of step 4, in order, are:
 

@@ -122,10 +122,11 @@ A service that speaks first (`ssh`, `ftp`, `smtp`, `telnet`, `irc`, …) is name
 2. An HTTP `HEAD / HTTP/1.0` on the open connection. An HTTP answer is `http`, and its banner is the `Server` header or the status line. A `405` or `501` is asked `GET /` for the page's title and product.
 3. For an answer that is not HTTP text, a TLS handshake on a second connection, counted like a connect. The service is `tls`, or `https` when HTTP answers inside it. A greeting inside it, as an IMAPS or SMTPS server sends, is read first and names the service, with `tls` true.
 4. One harmless request of each other protocol, each on a connection of its own, a few at a time. The first in the list that answers is the port's, with the product and version it states.
+5. A port still unnamed after all that, whose silence to the `HEAD` was complete, is asked one `GET / HTTP/1.0`, nmap's GetRequest. A handler that answers `GET` and waits for its own protocol after any other first bytes (the Jenkins agent port) says `HTTP/1.0 200` and its text page. An HTTP answer is `http`, with the product its head or page names (`Jenkins-Version: 2.462` is Jenkins 2.462). Nothing else names the port. It is skipped for an address whose ports were no longer run down the list (see `-unnamed`).
 
 - A `HEAD` that stays unanswered for half a second is waited on while the handshake and the list are asked beside it. A port that answers neither is done when the `HEAD`'s wait ends, not after a wait for each protocol.
 - Every connect, whatever its purpose, counts against `-max-requests`, takes a token of the pace and is in the ledger.
-- An open port costs at most 24 connects after the first. A port named by a late protocol may cost a few more than asking the protocols one by one would. Several are asked at once.
+- An open port costs at most 24 connects after the first, the `GET /` of step 5 included. A port named by a late protocol may cost a few more than asking the protocols one by one would. Several are asked at once.
 - A port that accepts a connection and closes it without a word is `tcpwrapped`.
 - Raw printing ports (9100–9107) are never asked anything.
 - A service on a port that usually speaks first (22, 21, 25, 3306, …) gets a second wait for its greeting before it is asked anything. A greeting that arrives in reply to the `HEAD` is read as one.
