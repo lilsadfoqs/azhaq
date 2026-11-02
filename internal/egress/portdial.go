@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"net"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/net/proxy"
@@ -23,6 +24,7 @@ type PortDialer struct {
 	timeout time.Duration
 	src     net.IP
 	via     proxy.ContextDialer // SOCKS5 for the connects of the scan itself; nil: direct
+	pre     sync.Map            // addresses Reserve recorded, until their TCP call
 }
 
 // NewPortDialer is a dialer with a timeout per connect, connecting from
@@ -50,10 +52,15 @@ func (d *PortDialer) Proxied() bool { return d.via != nil }
 // name an address was found under nor the address is in the scope, or the
 // port is not the one -allow names for the host.
 func (d *PortDialer) allowed(host, addr string) error {
-	p := Current()
-	if err := p.Killed(); err != nil {
+	if err := Current().Killed(); err != nil {
 		return err
 	}
+	return d.inScope(host, addr)
+}
+
+// inScope is allowed without the kill file.
+func (d *PortDialer) inScope(host, addr string) error {
+	p := Current()
 	if p.Scope() == nil {
 		return nil
 	}
@@ -95,7 +102,9 @@ func (d *PortDialer) TCP(ctx context.Context, host, addr string) (net.Conn, erro
 	if err := d.allowed(host, addr); err != nil {
 		return nil, err
 	}
-	ledger.TCP(ctx, host, addr)
+	if _, done := d.pre.LoadAndDelete(addr); !done {
+		ledger.TCP(ctx, host, addr)
+	}
 	if d.via != nil {
 		cctx, cancel := context.WithTimeout(ctx, d.timeout)
 		defer cancel()
@@ -103,6 +112,23 @@ func (d *PortDialer) TCP(ctx context.Context, host, addr string) (net.Conn, erro
 	}
 	nd := d.netDialer(hostOfAddr(addr))
 	return dialResolvedWith(ctx, Current(), &nd, "tcp", addr)
+}
+
+// Reserve records the connects a scan is about to make to addrs (ip:port),
+// those the scope allows, in one write of the ledger: each is a line before
+// its connect goes, and the TCP call for it does not record it again. The
+// kill file still stops each connect at its TCP call.
+func (d *PortDialer) Reserve(ctx context.Context, host string, addrs []string) {
+	ok := make([]string, 0, len(addrs))
+	for _, a := range addrs {
+		if d.inScope(host, a) == nil {
+			ok = append(ok, a)
+		}
+	}
+	ledger.TCPBatch(ctx, host, ok)
+	for _, a := range ok {
+		d.pre.Store(a, struct{}{})
+	}
 }
 
 // TCPDirect is TCP that never goes through the proxy: the service probes

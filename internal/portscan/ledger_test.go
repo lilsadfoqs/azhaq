@@ -4,6 +4,7 @@ import (
 	"context"
 	"net"
 	"path/filepath"
+	"strconv"
 	"sync/atomic"
 	"testing"
 
@@ -65,5 +66,38 @@ func TestEveryConnectIsRecorded(t *testing.T) {
 	}
 	if accepted.Load() != 3 {
 		t.Fatalf("the listeners accepted %d connections, want 3", accepted.Load())
+	}
+}
+
+// The connects of a fast scan are written to the ledger a batch at a time,
+// each a line before its connect, none twice and none missing.
+func TestFastScanWritesItsConnectsInBatches(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "l.jsonl")
+	l, err := ledger.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ledger.Use(l)
+	t.Cleanup(func() { ledger.Use(nil); l.Close() })
+	var ports []int
+	for p := 20000; p < 20640; p++ {
+		ports = append(ports, p)
+	}
+	s := &Scanner{Rate: 20000, Detect: DetectNone}
+	if _, err := s.ScanEach(t.Context(), "", "127.0.0.1", ports); err != nil {
+		t.Fatal(err)
+	}
+	if n := l.Count(); n != 640 {
+		t.Errorf("%d lines for 640 connects", n)
+	}
+	if n := l.Flushes(); n > 640/8 {
+		t.Errorf("%d writes for 640 connects", n)
+	}
+	seen := map[string]int{}
+	_ = ledger.Read(path, func(e ledger.Entry) error { seen[e.Target]++; return nil })
+	for _, p := range ports {
+		if seen[net.JoinHostPort("127.0.0.1", strconv.Itoa(p))] != 1 {
+			t.Fatalf("port %d is in the ledger %d times", p, seen[net.JoinHostPort("127.0.0.1", strconv.Itoa(p))])
+		}
 	}
 }

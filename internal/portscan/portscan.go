@@ -374,6 +374,16 @@ func (s *Scanner) wait(ctx context.Context, ip string) error {
 	return s.limiter.Wait(ctx, "")
 }
 
+// batch is how many connects of a pass have their ledger lines written
+// together: none beyond one below a rate of 1,000 a second, where a write
+// for each costs the scan nothing that matters.
+func (s *Scanner) batch() int {
+	if s.Rate < 1000 {
+		return 1
+	}
+	return min(int(s.Rate/500), 32)
+}
+
 // retryFloor: up to this many silent ports are asked again whatever
 // share of the scan they are.
 const retryFloor = 64
@@ -390,7 +400,73 @@ func (s *Scanner) pass(ctx context.Context, host, ip string, ports []int, found 
 		defer mu.Unlock()
 		return s.Threshold > 0 && len(open) >= s.Threshold
 	}
-	for _, p := range ports {
+	// The connects go out in small batches, their ledger lines written
+	// together (before any of them goes): at 10,000 a second a write for
+	// each line was a tenth of the scan's CPU.
+	k := s.batch()
+	var bmu sync.Mutex // guards batch: a timer starts a batch the loop is slow to fill
+	var batch []int    // indexes into ports
+	var flush *time.Timer
+	work := func(i int) {
+		defer wg.Done()
+		defer func() { <-s.conns }()
+		p := ports[i]
+		o, state := s.probe(ctx, host, ip, p)
+		if state == portOpen && found != nil && !o.again {
+			found(o)
+		}
+		mu.Lock()
+		switch state {
+		case portOpen:
+			open = append(open, o)
+		case portSilent, portTimedOut:
+			silent = append(silent, p)
+			if state == portTimedOut {
+				slow++
+			}
+		}
+		mu.Unlock()
+	}
+	// launchLocked starts the batch (the caller holds bmu).
+	launchLocked := func() {
+		if flush != nil {
+			flush.Stop()
+			flush = nil
+		}
+		if len(batch) == 0 {
+			return
+		}
+		if k > 1 {
+			addrs := make([]string, len(batch))
+			for j, i := range batch {
+				addrs[j] = net.JoinHostPort(ip, strconv.Itoa(ports[i]))
+			}
+			s.pd.Reserve(ctx, host, addrs)
+		}
+		for _, i := range batch {
+			wg.Add(1)
+			go work(i)
+		}
+		batch = batch[:0]
+	}
+	launch := func() {
+		bmu.Lock()
+		launchLocked()
+		bmu.Unlock()
+	}
+	add := func(i int) {
+		bmu.Lock()
+		defer bmu.Unlock()
+		batch = append(batch, i)
+		switch {
+		case len(batch) >= k:
+			launchLocked()
+		case len(batch) == 1:
+			// A wait or a count that blocks must not hold a connect back for long.
+			flush = time.AfterFunc(2*time.Millisecond, launch)
+		}
+	}
+	for i := range ports {
 		if full() {
 			break
 		}
@@ -403,34 +479,23 @@ func (s *Scanner) pass(ctx context.Context, host, ip string, ports []int, found 
 			}
 		}
 		select {
-		case <-ctx.Done():
 		case s.conns <- struct{}{}:
+		default:
+			launch() // never wait for a worker while holding ones not yet started
+			select {
+			case <-ctx.Done():
+			case s.conns <- struct{}{}:
+			}
 		}
 		if ctx.Err() != nil {
 			break
 		}
+		mu.Lock()
 		asked++
-		wg.Add(1)
-		go func(p int) {
-			defer wg.Done()
-			defer func() { <-s.conns }()
-			o, state := s.probe(ctx, host, ip, p)
-			if state == portOpen && found != nil && !o.again {
-				found(o)
-			}
-			mu.Lock()
-			switch state {
-			case portOpen:
-				open = append(open, o)
-			case portSilent, portTimedOut:
-				silent = append(silent, p)
-				if state == portTimedOut {
-					slow++
-				}
-			}
-			mu.Unlock()
-		}(p)
+		mu.Unlock()
+		add(i)
 	}
+	launch()
 	wg.Wait()
 	if stop != nil {
 		return open, silent, asked, slow, stop
