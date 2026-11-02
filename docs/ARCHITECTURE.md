@@ -1123,7 +1123,7 @@ Nothing is dropped without a word.
 
 The method is GET by default. `-params-method POST`, `JSON` or `XML` (`params -X`) send the names in a form, a JSON object or an XML document instead. At most 500 names go in one request.
 
-A body method may change data on the target. So it is refused unless `-params-writes` is given and `-allow` or `-scope` names the targets, or there is one target.
+A body method may change data on the target, so it is sent only when asked for by name, and `-allow` or `-scope` must name the targets, or there must be one target. In `run` the stage's `-params-method` is refused unless `-params-writes` is given too. `params -X POST|JSON|XML` names the method on the command itself, so `-X` is the opt-in and no second flag is needed (as `-m POST` is for arjun): `params` passes `-params-writes` to the run it makes, and does the same for an imported (`-i`) target whose own method is a body method.
 
 - Every such request is counted in the budget, paced and in the ledger.
 - The page's row says how many were sent (`writes`), and the summary says writes were sent.
