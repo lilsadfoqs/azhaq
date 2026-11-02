@@ -1150,6 +1150,8 @@ At most 20 pages per host are searched (`-params-per-host`).
 
 `-asn` seeds an autonomous system. `azhaq-asn` lists the prefixes it announces (RIPEstat, no key) and the holder's name. `-cidr` seeds a range directly.
 
+`-sweep` seeds the IPv4 ranges and addresses of `-allow` and `-scope` the same way, and a run that names some addresses of such a range without it says how many it leaves (`sweepLead`). The scope stays a fence: without `-sweep` it adds no target.
+
 `azhaq-prefix` expands IPv4 prefixes into addresses. It makes at most `-max-ips` (4,096) for the whole run, and says so when a range is cut short.
 
 Each address gets:

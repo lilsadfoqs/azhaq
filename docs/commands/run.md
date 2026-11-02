@@ -5,7 +5,7 @@ Map a target: names, services, pages, scripts, APIs, forms, parameters, in one g
 ## Synopsis
 
 ```
-azhaq run (-url URL | -domain D | -list FILE | -scope FILE|PLATFORM -program P | -asn AS | -cidr NET | -in seeds.jsonl) [flags]
+azhaq run (-url URL | -domain D | -list FILE | -scope FILE|PLATFORM -program P | -asn AS | -cidr NET | -in seeds.jsonl | -allow NET -sweep) [flags]
 ```
 
 ## Examples
@@ -279,8 +279,13 @@ A client route is a view that a single-page app's router draws.
 - A Swagger UI whose script holds the document (Juice Shop's `/api-docs/`) is read from the script. The names next to it are not guessed.
 - A page that is byte for byte what the site root answers for a made-up path is a single-page app's shell. That makes it the catch-all answer of a directory whose own baseline was not asked, so that baseline is not requested. A directory with answers of its own is still asked.
 
+### Sweeping the scope
+`-allow` and `-scope` fence a run; they do not add targets. `-url http://10.0.0.5/ -allow 10.0.0.0/24` maps 10.0.0.5 only, and a note says how much of the range that leaves. `-sweep` adds the IPv4 ranges and addresses `-allow` and `-scope` hold to the targets, as `-cidr` does for each: with `-ports` they are scanned in blocks with no size limit, and without it a range is expanded up to `-max-ips` (the summary says when it is cut). `-sweep` needs no other target (`azhaq run -allow 10.0.0.0/24 -sweep -ports top-100`). The sweep asks what the named targets are asked and holds to `-deny`, `-deny-path`, `-rate`, `-max-requests` and the kill file. A tighter `-allow` bounds it. The ledger and the summary count every address. IPv6 ranges are left alone, with a note. See [scope](../CONCEPTS.md#scope).
+
 ### Notes in the summary
 Examples of what `notes` holds for a run:
+
+- `the scope (-allow, -scope) holds 256 addresses and the targets name 1 of them: -sweep covers the other 255, …`: see [Sweeping the scope](#sweeping-the-scope).
 
 - `path checks: 28 skipped (an API description was already found)`: see [Path checks](#path-checks-stop-at-their-answer).
 - `screenshot of URL not taken: the page needs about 26 requests and 8 were left (raise -max-requests)`, or `the budget was spent before the page loaded`: see [shots](shots.md#screenshots-and-the-budget).
@@ -393,6 +398,7 @@ Examples of what `notes` holds for a run:
 | Flag | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `-allow` | string, repeatable |  | a domain, host or address range the run may touch; HOST:PORT allows that host on that port only; with any -allow, nothing else is requested |
+| `-sweep` | bool |  | cover the whole scope: the IPv4 ranges and addresses -allow and -scope hold are targets too, not only the ones named (without it a note says how much of a range the targets leave); -deny, -deny-path, -rate, -max-requests and the kill file hold as for any target, and a range is expanded up to -max-ips unless -ports scans it |
 | `-deny` | string, repeatable |  | a domain, host or address range the run must not touch, even when given as a target |
 | `-deny-path` | string, repeatable |  | a regular expression on a URL's path and query: a URL it matches is never requested, by any collector or Chrome, and is listed as not requested (repeatable; azhaq decides nothing by itself) |
 | `-kill-file` | string |  | stop all sending when this file exists, so that no request starts after it, and exit 4; azhaq resume works once it is removed (default DB.stop) |
