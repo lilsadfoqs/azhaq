@@ -130,7 +130,7 @@ func cmdDNS(args []string) error {
 	alias("t", "threads", "same as -t")
 	rl := fs.Int("rl", 0, "names asked per second, over all resolvers; each name's types are asked together (0: no limit); see also -dns-rate")
 	alias("rl", "rate-limit", "same as -rl")
-	retry := fs.Int("retry", 0, "attempts per question on other resolvers (default 3; 1 asks once)")
+	retry := fs.Int("retry", 0, "attempts per question on other resolvers (default 3, 2 for the names -w generates; 1 asks once)")
 	timeout := fs.Duration("timeout", 3*time.Second, "wait this long for each DNS answer (not the run's time, as in azhaq run: see -maxtime)")
 	maxtime := fs.Float64("maxtime", 0, "stop the run after this many seconds (0: no limit); the summary says where to go on")
 	start := fs.Int("start", 0, "skip this many names at the start of the input, in order after de-duplication")
@@ -266,11 +266,8 @@ func cmdDNS(args []string) error {
 		return usagef("-resolvers: %v", err)
 	}
 	rate, _ := strconv.ParseFloat(fs.Lookup("dns-rate").Value.String(), 64)
-	attempts := *retry
-	if attempts == 0 {
-		attempts = 3
-	}
-	pool := dnsr.New(dnsr.Options{Resolvers: resolvers, PerSecond: rate, Burst: int(rate), Timeout: *timeout, Attempts: attempts, Proxy: *proxyURL})
+	// -retry unset: 3 attempts per name, 2 for the names -w and -wl generate.
+	pool := dnsr.New(dnsr.Options{Resolvers: resolvers, PerSecond: rate, Burst: int(rate), Timeout: *timeout, Attempts: *retry, Proxy: *proxyURL})
 	pool.Outside = func(d string) bool { return cf.scoped && !cf.rules.Allows(d) }
 	if *hc {
 		return healthCheck(pool, c.json)
