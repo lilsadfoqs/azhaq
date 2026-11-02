@@ -8,6 +8,7 @@ import (
 	"math"
 	"os"
 	"runtime"
+	"runtime/debug"
 	"slices"
 	"sort"
 	"strconv"
@@ -312,6 +313,7 @@ func cmdPorts(args []string) error {
 	}
 	if rate > 0 && *minRate == 0 && os.Getenv("GOMAXPROCS") == "" {
 		runtime.GOMAXPROCS(scanProcs(rate, runtime.NumCPU()))
+		debug.SetGCPercent(400) // a scan allocates little that lives: fewer collections
 	}
 	if ct > 0 {
 		run = append(run, "-port-timeout", ct.String())

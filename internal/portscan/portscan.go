@@ -369,11 +369,14 @@ func (s *Scanner) again(try, silent, ports int) bool {
 
 // wait paces a connect. This machine's loopback is not paced unless a rate
 // was given: no network to spare (a full scan of 127.0.0.1 took 218 s at 300/s).
-func (s *Scanner) wait(ctx context.Context, ip string) error {
+func (s *Scanner) wait(ctx context.Context, ip string) error { return s.waitN(ctx, ip, 1) }
+
+// waitN paces n connects at once: one wake-up of the timer for all of them.
+func (s *Scanner) waitN(ctx context.Context, ip string, n int) error {
 	if a := net.ParseIP(ip); a != nil && a.IsLoopback() && !s.loopPaced {
 		return ctx.Err()
 	}
-	return s.limiter.Wait(ctx, "")
+	return s.limiter.WaitN(ctx, "", n)
 }
 
 // batch is how many connects of a pass have their ledger lines written
@@ -414,8 +417,8 @@ func (s *Scanner) pass(ctx context.Context, host, ip string, ports []int, found 
 	var bmu sync.Mutex // guards batch: a timer starts a batch the loop is slow to fill
 	var batch []int    // indexes into ports
 	var flush *time.Timer
+	jobs := make(chan int)
 	work := func(i int) {
-		defer wg.Done()
 		defer func() { <-s.conns }()
 		p := ports[i]
 		o, state := s.probe(ctx, host, ip, p)
@@ -454,8 +457,19 @@ func (s *Scanner) pass(ctx context.Context, host, ip string, ports []int, found 
 			s.pd.Reserve(ctx, host, addrs)
 		}
 		for _, i := range batch {
-			wg.Add(1)
-			go work(i)
+			// An idle worker takes it, else a new one starts: a goroutine's
+			// stack grows once, not for each connect.
+			select {
+			case jobs <- i:
+			default:
+				wg.Add(1)
+				go func(i int) {
+					defer wg.Done()
+					for ok := true; ok; i, ok = <-jobs {
+						work(i)
+					}
+				}(i)
+			}
 		}
 		batch = batch[:0]
 	}
@@ -480,13 +494,20 @@ func (s *Scanner) pass(ctx context.Context, host, ip string, ports []int, found 
 	if prog != nil {
 		stopTicks = prog.every(&mu, func() int { return asked })
 	}
+	paid := 0 // connects whose place in the pace is already taken
 	for i := range ports {
 		if full() {
 			break
 		}
-		if err := s.wait(ctx, ip); err != nil {
-			break
+		if paid == 0 {
+			// The pace is taken for the next batch at once: one wake-up of the
+			// timer for all of them, not one each.
+			paid = min(k, len(ports)-i)
+			if err := s.waitN(ctx, ip, paid); err != nil {
+				break
+			}
 		}
+		paid--
 		if s.Take != nil {
 			if stop = s.Take(); stop != nil {
 				break
@@ -510,6 +531,7 @@ func (s *Scanner) pass(ctx context.Context, host, ip string, ports []int, found 
 		add(i)
 	}
 	launch()
+	close(jobs)
 	wg.Wait()
 	stopTicks()
 	if prog != nil {
