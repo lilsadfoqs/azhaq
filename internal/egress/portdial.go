@@ -99,10 +99,15 @@ func hostOfAddr(addr string) string {
 // TCP connects to addr (ip:port) of host ("" when only the address is
 // known), through the proxy when there is one.
 func (d *PortDialer) TCP(ctx context.Context, host, addr string) (net.Conn, error) {
-	if err := d.allowed(host, addr); err != nil {
-		return nil, err
-	}
-	if _, done := d.pre.LoadAndDelete(addr); !done {
+	if _, done := d.pre.LoadAndDelete(addr); done {
+		// Reserve checked the scope and recorded the line: the kill file only.
+		if err := Current().Killed(); err != nil {
+			return nil, err
+		}
+	} else {
+		if err := d.allowed(host, addr); err != nil {
+			return nil, err
+		}
 		ledger.TCP(ctx, host, addr)
 	}
 	if d.via != nil {
