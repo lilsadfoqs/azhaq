@@ -164,7 +164,7 @@ An origin that answers every path with the same page (a single-page app's shell)
 - Their rows stay in the map with coverage `skipped`. The summary names how many and the origin (`http://app: 600 URLs that scripts name were not asked, because it had answered paths with the one page every unknown path gets`), the `skipped` list has one line for the origin, and `counts` has `skipped` for them (and `catchall` for the answers), each row counted once.
 - `-catchall-after N` sets the number (0 asks every path). `crawl` asks every path, as katana does, and lists catch-all answers.
 - A held path that is a real page of its own in a directory the catch-all covers would have answered a different page: this is an inference from the controls, not a request. Ask it with `-catchall-after 0`, or by hand.
-- `-no-catchall` leaves the rows that answered with the catch-all page, and those not asked for that reason, out of the rows printed and out of `results`. `stored` and `counts` still hold them, and `left_out` says how many, so what `run` prints is what `results` counts.
+- `-no-catchall` leaves the rows that answered with the catch-all page, and those not asked for that reason, out of the rows printed and out of `results`. `stored` and `counts` still hold them, and `left_out` says how many, so what `run` prints is what `results` counts: `results + folded + left_out = stored`.
 
 ### Evidence
 
@@ -267,6 +267,7 @@ A client route is a view that a single-page app's router draws.
 - Nor is a base that calls are built on, such as `this.hostServer + "/rest/web3"`, whose calls are `/rest/web3/submitKey`.
 - It has no row and is never requested. It is kept as a rejected string with the reason `the start of a path a script joins more to`. `crawl -rejected` lists it.
 - A string with a query, `"/search?q=" + q`, names its route and stays.
+- A `./name` that is a key of an object or a `case` label, as in a webpack module map (`{"./components/locale/zh_CN": 1}`), is a module id in the bundler's source tree, not a path of the app. It is never requested and is kept as a rejected string with the reason `a key of a module map or a case label`. A `./name` written as a value, `"./redirect?to="`, is still a route.
 
 ### Path checks stop at their answer
 
@@ -283,7 +284,7 @@ Examples of what `notes` holds for a run:
 
 - `path checks: 28 skipped (an API description was already found)`: see [Path checks](#path-checks-stop-at-their-answer).
 - `screenshot of URL not taken: the page needs about 26 requests and 8 were left (raise -max-requests)`, or `the budget was spent before the page loaded`: see [shots](shots.md#screenshots-and-the-budget).
-- `GraphQL URL: introspection disabled: schema recovered (partial: query Query: 2 fields (1 client, 1 probe), 140 words tried; not proof there is nothing more)`, or `introspection: full schema`.
+- `GraphQL URL: introspection disabled: schema recovered (partial: query Query: 2 fields (1 client, 1 probe), 140 words tried; not proof there is nothing more)`, or `introspection: full schema`. `GraphQL URL: an IDE page, not asked for its schema: URL on the same origin gave it whole` says why a GraphiQL page got no POST: see [show](show.md#recovering-a-schema-when-introspection-is-off).
 
 ### Next in the summary
 `next` suggests a command in three cases:

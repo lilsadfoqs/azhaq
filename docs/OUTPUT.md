@@ -84,7 +84,7 @@ Some work failed and did not get its answer: a source that failed, a target that
 
 ```json
 {"type":"summary","command":"run","version":"0.10.0","complete":false,"exit":4,
- "results":148,"stored":160,"counts":{"pages":84,"api":33,"auth":12,"scripts":14,"hostnames":9,"ports":8},"seconds":7.4,"requests":195,
+ "results":148,"stored":160,"folded":12,"counts":{"pages":84,"api":33,"auth":12,"scripts":14,"hostnames":9,"ports":8},"seconds":7.4,"requests":195,
  "db":"app.db","run_id":"…",
  "unreachable":["http://testphp.vulnweb.com/"],
  "failed":[{"collector":"azhaq-http","error":"timeout","retryable":true,"count":34,
@@ -101,6 +101,7 @@ Some work failed and did not get its answer: a source that failed, a target that
 | `results` | What the command printed on stdout: names, web services, map rows. |
 | `counts` | A breakdown of the results, per command. For `run` the counts are disjoint and cover every stored map row: see [run's counts](#run-counts). |
 | `stored` | `run` only: the map rows the database holds. The counts add up to it. `results` is smaller when templated URLs and dead or wildcard names fold into one row. |
+| `folded` | `run` only, always present: the stored rows a printed row holds (templated URLs, dead and wildcard names). `results + folded + left_out = stored`, with `left_out` (`-no-catchall`) absent when 0. |
 | `requests` | Requests sent to targets, port connects included. DNS queries and requests to third-party sources are not in it: the queries are in `dns_queries`, and a source's requests are in `sources` (`subs`, `urls`) and in the ledger's `source` lines. |
 | `dns_queries` | Queries sent to resolvers: every question, retries and wildcard probes included, and the ones to the system resolver. It is the ledger's `DNS queries` class, with or without a ledger. Absent when none was sent. |
 | `db` | The database the results are in. Absent when it was temporary. |
@@ -119,7 +120,7 @@ Some work failed and did not get its answer: a source that failed, a target that
 
 ### Run counts
 
-`run` counts every stored map row once, so `counts` adds up to `stored`, and `results = stored - folded`, where `folded` is the stored rows that a printed row holds (the text summary says `12 folded into templated rows`). A key says what it counts and what it leaves out; each is the number `azhaq query -db FILE` lists with its filter, except that `query` folds URL templates as `run` does.
+`run` counts every stored map row once, so `counts` adds up to `stored`, and `results = stored - folded`, where `folded` is the stored rows that a printed row holds (the JSON summary has `"folded":12`, the text summary says `12 folded into templated rows`). A key says what it counts and what it leaves out; each is the number `azhaq query -db FILE` lists with its filter, except that `query` folds URL templates as `run` does.
 
 | Key | Counts | `query` filter |
 | --- | --- | --- |
