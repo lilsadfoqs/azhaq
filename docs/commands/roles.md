@@ -35,6 +35,8 @@ azhaq roles show -dir azhaq-roles-20261028-101500 https://app/rest/basket/6
 ## What it does
 
 1. Runs the map once for each role. The run options after `--` say what to map. A role sends only the headers it is given.
+
+`-max-requests` in the run options is the budget of the whole command, as it is for every other command: the runs, the Chrome sign-ins, the history reads, the replay, the controls and the writes together send no more. Each role's run gets what the runs before it left, a history read, the replay, the controls and the writes stop at what is left, and a run that has no budget left does not start. When it is spent the command exits 4 and `stopped` names `-max-requests` and the stage it ended in. The summary says `request budget N for the whole command ... M sent`. `-replay-max` still limits the replay and the history reads, over all roles. The Chrome sign-in that renews a session in the replay is held to what is left too.
 2. Reads the requests an account sent, if you give a history file with `-har` or `-burp`. See [History files](#history-files).
 3. Asks every endpoint any role reached with every other role's session. This is the replay. It sends the GETs that change nothing.
 4. Fills `{id}` routes with each role's own objects. The identifiers come from the sessions and the answers, or from `-id`.
@@ -515,7 +517,7 @@ Replaying the owner's own recorded body is idempotent when the value it sets is 
 
 - A write is let when it is answered 2xx and not with an error shaped as data. It is proven by the owner's object changing.
 - Proved cross writes keep the top of the list, above the reads. The rows that prove nothing about another role's object rank below the proved reads: `creates in another role's collection` and `create accepted`, which are listed, and `answered 2xx but changed nothing`, which is not.
-- Every request counts against `-replay-max` (what the read replay left) and the run's `-max-requests`, at the run's `-rate`. That includes each write and each read of the owner's object to verify it.
+- Every request counts against `-replay-max` (what the read replay left) and the command's `-max-requests`, at the run's `-rate`. That includes each write and each read of the owner's object to verify it.
 - Every request is sent without following a redirect.
 
 #### What the write verdicts mean
@@ -591,7 +593,7 @@ The diff lines look like this:
 | Flag | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `-replay` | bool | `true` | ask every endpoint one session reached with every other session, and each role's objects with the others (reads only, by method: GET; a write is replayed only with -replay-writes) |
-| `-replay-max` | int | `2000` | requests the replay may send, over all roles |
+| `-replay-max` | int | `2000` | requests the history reads and the replay may send, over all roles (the run options' -max-requests caps the whole command) |
 | `-replay-writes` | string |  | also replay writes with every other role's session: post,put,patch (add delete to delete objects). They change data on the target and go only to the -url hosts, or the -allow/-scope given in the run options. The writes are each role's own from -har or -burp (sent only to the history's origins), and the PUT and PATCH (an empty object, the owner's first: a server that replaces on PUT may clear the owner's own object) and DELETE the runs' routes take, on each role's objects. A cross-role write is claimed only when the owner's object, read as the owner before and after, changed the way the write asks |
 | `-replay-writes-canary` | bool |  | with -replay-writes: change one short string field of a PUT or PATCH body to a unique value for each role it is replayed with, before it is sent, so a write that would otherwise replay the owner's own value back (no change to read back) can still be proved; never on by default, since it changes data, and restoring the field afterward is not done |
 | `-replay-writes-field` | string, repeatable |  | NAME: with -replay-writes-canary, a field the canary may set although the rules leave it alone (an email or other owner field, an identifier, a credential, a timestamp): you accept that it changes whose the object is or what it holds |

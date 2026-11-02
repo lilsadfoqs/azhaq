@@ -1145,8 +1145,8 @@ func (s *mcpServer) call(ctx context.Context, name string, a map[string]any, pro
 		if list != "" {
 			defer os.Remove(list)
 		}
-		// The server's budget holds for roles too: each role's run and the
-		// replay get an equal share of what is left.
+		// The server's budget holds for roles too: what is left of it is the
+		// budget of the whole command (the runs, the history reads, the replay).
 		share := 0
 		if s.budget > 0 {
 			s.mu.Lock()
@@ -1155,10 +1155,7 @@ func (s *mcpServer) call(ctx context.Context, name string, a map[string]any, pro
 			if left <= 0 {
 				return nil, fmt.Errorf("the request budget of this server (%d) is spent; restart azhaq mcp with a larger -max-requests", s.budget)
 			}
-			share = int(left) / (len(roles) + 1)
-			if share < 1 {
-				return nil, fmt.Errorf("%d requests are left of this server's budget: too few for %d roles", left, len(roles))
-			}
+			share = int(left)
 			args = append(args, "-replay-max", fmt.Sprint(share))
 		}
 		args = append(args, "--")

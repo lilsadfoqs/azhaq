@@ -166,7 +166,7 @@ Three controls bound what a run sends. They hold for every request to a target, 
 - **Pace.** `-rate` is requests per second to targets, over all hosts. Chrome's requests count too.
 - **Kill switch.** `-kill-file PATH` names a file that stops all sending when it exists. The default is `DB.stop`.
 
-The budget holds for each run: `azhaq resume` sends up to as many more as its own `-max-requests` says. Other limits end a run the same way: [exit code 4](OUTPUT.md#exit-codes) lists them. `azhaq plan` prints what a run would send before anything goes out.
+The budget holds for each run: `azhaq roles` is one run whose budget (the run options' `-max-requests`) covers every role's run, the history reads and the replay together; `azhaq resume` sends up to as many more as its own `-max-requests` says. Other limits end a run the same way: [exit code 4](OUTPUT.md#exit-codes) lists them. `azhaq plan` prints what a run would send before anything goes out.
 
 ### The kill file
 

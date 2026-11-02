@@ -168,7 +168,7 @@ func cmdRoles(args []string) error {
 	jsonl := fs.Bool("jsonl", false, "one JSON object per endpoint (same as -json)")
 	asJSON := fs.Bool("json", false, "one JSON object per endpoint, and only the summary, as JSON, on stderr")
 	replay := fs.Bool("replay", true, "ask every endpoint one session reached with every other session, and each role's objects with the others (reads only, by method: GET; a write is replayed only with -replay-writes)")
-	replayMax := fs.Int("replay-max", 2000, "requests the replay may send, over all roles")
+	replayMax := fs.Int("replay-max", 2000, "requests the history reads and the replay may send, over all roles (the run options' -max-requests caps the whole command)")
 	all := fs.Bool("all", false, "also list endpoints that answer every role the same, or with each role's own data")
 	writesSpec := fs.String("replay-writes", "", "also replay writes with every other role's session: post,put,patch (add delete to delete objects). They change data on the target and go only to the -url hosts, or the -allow/-scope given in the run options. The writes are each role's own from -har or -burp (sent only to the history's origins), and the PUT and PATCH (an empty object, the owner's first: a server that replaces on PUT may clear the owner's own object) and DELETE the runs' routes take, on each role's objects. A cross-role write is claimed only when the owner's object, read as the owner before and after, changed the way the write asks")
 	dryWrites := fs.Bool("dry-writes", false, "with -replay-writes: list the writes it would send, with whose and why, and send none")
@@ -320,6 +320,41 @@ func cmdRoles(args []string) error {
 	// followed. Each part's own count would miss some of them.
 	sentFrom := egress.Total()
 	counted := func() { rep.Requests = egress.Total() - sentFrom }
+	// -max-requests in the run options is the budget of the whole command:
+	// each run is given what the ones before it left, and the history reads,
+	// the replay and the writes stop at what is left too.
+	var cmdMax int64
+	if v, ok := flagValue(runArgs, "max-requests"); ok {
+		cmdMax, _ = strconv.ParseInt(v, 10, 64)
+	}
+	var renewLeft func() int64 // what a renewal's sign-in may send, nil: no budget
+	budgetLeft := func() int64 { return max(cmdMax-(egress.Total()-sentFrom), 0) }
+	if cmdMax > 0 {
+		renewLeft = budgetLeft
+	}
+	// stageBudget is what a stage may send: what -replay-max leaves, or less
+	// when the command's budget leaves less (byCmd).
+	stageBudget := func(replayLeft int) (n int, byCmd bool) {
+		replayLeft = max(replayLeft, 0)
+		if cmdMax <= 0 || budgetLeft() >= int64(replayLeft) {
+			return replayLeft, false
+		}
+		return int(budgetLeft()), true
+	}
+	// capErr says an errReplayMax of a stage that ran on the command's budget
+	// is that budget's, not -replay-max's.
+	capErr := func(err error, byCmd bool) error {
+		if !byCmd || !errors.Is(err, errReplayMax) {
+			return err
+		}
+		msg := strings.TrimPrefix(err.Error(), errReplayMax.Error()+": ")
+		msg = strings.ReplaceAll(msg, "raise -replay-max", "raise -max-requests")
+		msg = regexp.MustCompile(`-replay-max \d+`).ReplaceAllString(msg, fmt.Sprintf("-max-requests %d (the budget of the whole command)", cmdMax))
+		if !strings.Contains(msg, "-max-requests") {
+			msg += fmt.Sprintf(" (-max-requests %d, the budget of the whole command, is spent)", cmdMax)
+		}
+		return fmt.Errorf("%w: %s", errReplayMax, msg)
+	}
 	bodies = newBodyKeep()
 	defer func() { bodies = nil }()
 	rate := *rateFlag
@@ -384,9 +419,21 @@ func cmdRoles(args []string) error {
 			hosts []string
 			s     = newRunSeen()
 		)
-		if crawl {
+		if crawl && cmdMax > 0 && budgetLeft() == 0 {
+			// -max-requests 0 would mean no cap: the run is not started.
+			roles[i].session = headerOf(r.headers)
+			stop := fmt.Sprintf("-max-requests %d, the budget of the whole command, was spent before role %s's run: its run did not start (raise -max-requests)", cmdMax, r.name)
+			if rep.Stopped == "" {
+				rep.Stopped = stop
+			} else {
+				rep.Notes = append(rep.Notes, stop)
+			}
+		} else if crawl {
 			db := filepath.Join(*dir, r.name+".db")
 			args := append([]string{"-db", db, "-quiet", "-kill-file", filepath.Join(*dir, "roles.stop")}, runArgs...) // one stop file for every role
+			if cmdMax > 0 {
+				args = append(withoutFlag(args, "max-requests"), "-max-requests", strconv.FormatInt(budgetLeft(), 10))
+			}
 			for _, h := range r.headers {
 				args = append(args, "-header", h)
 			}
@@ -410,6 +457,9 @@ func cmdRoles(args []string) error {
 			}
 			keepRunBodies(got, raw)
 			readBodies(got, raw, s, hostSet(hosts))
+			if cmdMax > 0 && strings.HasPrefix(sub.Stopped, "the request budget of") {
+				sub.Stopped = fmt.Sprintf("-max-requests %d, the budget of the whole command, was spent in the run (raise -max-requests)", cmdMax)
+			}
 			absorb(rep, r.name, sub)
 		} else {
 			roles[i].session = headerOf(r.headers)
@@ -420,9 +470,10 @@ func cmdRoles(args []string) error {
 			urls, _ := h.gets(sc, hostSet(hosts))
 			histURLs = append(histURLs, urls...)
 			failed := askFailures{}
-			n, err := readHistoryURLs(roles[i], urls, got, raw, s, hostSet(hosts), rate, max(0, *replayMax-replayed), failed)
+			bud, byCmd := stageBudget(*replayMax - replayed)
+			n, err := readHistoryURLs(roles[i], urls, got, raw, s, hostSet(hosts), rate, bud, failed)
 			replayed += n
-			noteCap(rep, "history", err)
+			noteCap(rep, "history", capErr(err, byCmd))
 			if len(failed) > 0 {
 				rep.warned = true
 				rep.Notes = append(rep.Notes, fmt.Sprintf("role %s: %s of its history got no answer, so it is missing from the comparison: %s", r.name, plural(len(failed), "page"), failed.reasons()))
@@ -499,7 +550,7 @@ func cmdRoles(args []string) error {
 				roles[i].session[k] = v
 			}
 		}
-		watch := &replayWatch{every: *canaryEvery, canaries: pickCanaries(roles, answers, made, canaries, own), renew: renewer(roles, *loginURL, *asJSON), refusal: refusalRE}
+		watch := &replayWatch{every: *canaryEvery, canaries: pickCanaries(roles, answers, made, canaries, own), renew: renewer(roles, *loginURL, *asJSON, renewLeft), refusal: refusalRE}
 		if watch.every > 0 {
 			for _, r := range roles {
 				if !r.anonymous() && watch.canaries[r.name] == nil {
@@ -507,11 +558,12 @@ func cmdRoles(args []string) error {
 				}
 			}
 		}
-		n, err := replayAll(roles, answers, found, rank, own, rate, *replayMax, watch)
+		bud, byCmd := stageBudget(*replayMax)
+		n, err := replayAll(roles, answers, found, rank, own, rate, bud, watch)
 		replayed = n
 		rep.Notes = append(rep.Notes, watch.notes...)
 		rep.warned = rep.warned || watch.failed
-		noteCap(rep, "replay", err)
+		noteCap(rep, "replay", capErr(err, byCmd))
 	}
 	// A 200 "Access denied" page is a refusal: each origin's, as the
 	// anonymous role got it, and what -refusal says.
@@ -533,10 +585,11 @@ func cmdRoles(args []string) error {
 		egress.SetRate(rate)
 		egress.SetTargetProxy(rolesProxy)
 		holdDeny()
-		n, err := askControls(roles, rows, own, pages, refusalRE, max(0, *replayMax-replayed))
+		bud, byCmd := stageBudget(*replayMax - replayed)
+		n, err := askControls(roles, rows, own, pages, refusalRE, bud)
 		fetch.Reset()
 		replayed += n
-		noteCap(rep, "controls", err)
+		noteCap(rep, "controls", capErr(err, byCmd))
 		cn, hard := controlNotes(rows)
 		rep.Notes = append(rep.Notes, cn...)
 		rep.warned = rep.warned || hard
@@ -579,9 +632,10 @@ func cmdRoles(args []string) error {
 			}
 		} else {
 			var n int
-			wrows, n, err = replayWritesAs(who, roles, reqs, answers, own, rate, max(0, *replayMax-replayed), *writesCanary, canaryFields...)
+			bud, byCmd := stageBudget(*replayMax - replayed)
+			wrows, n, err = replayWritesAs(who, roles, reqs, answers, own, rate, bud, *writesCanary, canaryFields...)
 			replayed += n
-			noteCap(rep, "write replay", err)
+			noteCap(rep, "write replay", capErr(err, byCmd))
 			wn, failed := writeNotes(wrows)
 			rep.Notes = append(rep.Notes, wn...)
 			rep.warned = rep.warned || failed
@@ -618,6 +672,9 @@ func cmdRoles(args []string) error {
 	}
 	rep.Results, rep.Counts = len(shown), counts
 	counted()
+	if cmdMax > 0 {
+		rep.Notes = append(rep.Notes, fmt.Sprintf("request budget %d for the whole command (the runs, the sign-ins, the history reads, the replay and the writes together), %d sent", cmdMax, rep.Requests))
+	}
 	if k := egress.Killed(); k != nil && rep.Stopped == "" {
 		// The replay's refusals are answers it could not get: the matrix is cut short.
 		var kf *neterr.Killed
