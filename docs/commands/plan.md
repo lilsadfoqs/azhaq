@@ -38,7 +38,7 @@ Plain text prints the same parts, one block each. `-json` prints one object.
 | Field | Meaning |
 | --- | --- |
 | `targets` | Each seed, with the collectors that would run on it. |
-| `skipped` | The seeds left out of scope. |
+| `skipped` | The seeds left out: out of scope, or a URL a `-deny-path` rule matches (`reason` is `-deny-path RULE`), which a run never requests. A skipped seed is not in `targets` or in the requests estimate. |
 | `collectors` | What each collector does, and to whom. |
 | `active` | The active techniques asked for. |
 | `builtin_paths` | The built-in path checks on each web service. |

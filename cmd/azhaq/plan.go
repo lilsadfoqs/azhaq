@@ -14,6 +14,7 @@ import (
 	"github.com/lilsadfoqs/azhaq/catalog"
 	"github.com/lilsadfoqs/azhaq/engine"
 	"github.com/lilsadfoqs/azhaq/internal/collectors/portcol"
+	"github.com/lilsadfoqs/azhaq/internal/egress"
 	"github.com/lilsadfoqs/azhaq/internal/portscan"
 	"github.com/lilsadfoqs/azhaq/types"
 )
@@ -251,7 +252,7 @@ func planTransfers(seeds []types.Seed, b engine.Budgets, resolvers []string) []p
 }
 
 func planFor(cat *catalog.Catalog, seeds []types.Seed, b engine.Budgets, paths []string, limits map[string]string, send sendLimits, rep *report) runPlan {
-	p := runPlan{Collectors: map[string]string{}, Limits: limits, Skipped: rep.Skipped}
+	p := runPlan{Collectors: map[string]string{}, Limits: limits, Skipped: slices.Clone(rep.Skipped)}
 	p.Requests = planRequests{Sources: map[string]int{}, Cap: send.max, scoped: !b.Scope.Empty()}
 	if send.max > 0 {
 		p.Requests.CapBy = send.by
@@ -259,6 +260,13 @@ func planFor(cat *catalog.Catalog, seeds []types.Seed, b engine.Budgets, paths [
 	notCounted := map[string]bool{}
 	eng := &engine.Engine{Cat: cat}
 	for _, s := range engine.ExpandSeeds(seeds) {
+		if s.Type == types.TypeURL {
+			if rule := b.Scope.DeniedPath(s.Key()); rule != "" {
+				// A run never requests it: it is left out, with the rule, as run lists it.
+				p.Skipped = append(p.Skipped, engine.Skip{Target: s.Key(), Reason: egress.DenyReason(rule)})
+				continue
+			}
+		}
 		t := planTarget{Type: s.Type, Key: s.Key()}
 		for _, item := range eng.Plan([]types.Seed{s}) {
 			col, ok := cat.Get(item.Collector)
