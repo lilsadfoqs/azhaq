@@ -158,6 +158,9 @@ func TestPlanSendsNameWhatIsPlanned(t *testing.T) {
 			t.Errorf("%s:\n%s", flag, s)
 		}
 	}
+	if s := joined("-graphql"); !strings.Contains(s, "at most 2 per endpoint, and up to 96 more when it refuses introspection") || !strings.Contains(s, "GraphiQL page is not asked") {
+		t.Errorf("-graphql says no number for the POSTs it sends:\n%s", s)
+	}
 	if s := joined("-params", "small", "-params-method", "JSON", "-params-writes"); !strings.Contains(s, "JSON requests whose body holds the parameter names") {
 		t.Errorf("-params-method JSON:\n%s", s)
 	}

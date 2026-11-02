@@ -13,6 +13,7 @@ import (
 
 	"github.com/lilsadfoqs/azhaq/catalog"
 	"github.com/lilsadfoqs/azhaq/engine"
+	"github.com/lilsadfoqs/azhaq/internal/collectors/gqlcol"
 	"github.com/lilsadfoqs/azhaq/internal/collectors/portcol"
 	"github.com/lilsadfoqs/azhaq/internal/portscan"
 	"github.com/lilsadfoqs/azhaq/types"
@@ -167,7 +168,7 @@ func planSends(b engine.Budgets, send sendLimits) (gets, others []string) {
 		*out = append(*out, "Chrome loads each page found and reads the links its scripts draw (-browser, azhaq-render): every page costs a GET and the requests its scripts, styles and images make")
 	}
 	if send.graphql {
-		*out = append(*out, "POST requests with a GraphQL introspection query to the GraphQL endpoints found (-graphql): they read the schema and change nothing")
+		*out = append(*out, fmt.Sprintf("POST requests with a GraphQL introspection query to the GraphQL endpoints found (-graphql): they read the schema and change nothing; at most 2 per endpoint, and up to %d more when it refuses introspection, validation queries with a field no schema has that never run (a GraphiQL page is not asked once another URL of its origin gave the schema whole)", gqlcol.MaxRecoveryPOSTs))
 	}
 	if send.paramsBody != "" {
 		*out = append(*out, fmt.Sprintf("%s requests whose body holds the parameter names guessed (-params-method %s, -params-writes): a body may change data on the target", send.paramsBody, send.paramsBody))

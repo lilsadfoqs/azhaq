@@ -97,6 +97,7 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		row["post_only"] = true // the GET was refused: queries go in a POST
 	} else if ide := ideName(res.Body); ide != "" {
 		row["ide"] = ide
+		fetch.Learn(ideFact(raw), ide)
 	} else if answersGET(ctx, c.Client, raw) {
 		// It runs queries sent with GET: they can be asked as any GET is,
 		// by every session, with no POST.
@@ -186,6 +187,15 @@ func (s *Schema) Run(ctx context.Context, seed types.Seed, emit func(types.Obser
 	if err != nil {
 		return types.RunMeta{Status: types.StatusError, Error: err.Error()}, err
 	}
+	// A GraphiQL or Playground page is a client of the origin's endpoint:
+	// once another URL of the origin gave the whole schema it is not asked.
+	ide := s.isIDE(raw)
+	if ide {
+		if from := schemaElsewhere(raw); from != "" {
+			ideSkipped(raw, from)
+			return types.RunMeta{Status: types.StatusOK}, nil
+		}
+	}
 	status, data, err := s.post(ctx, raw, gqlschema.Query)
 	if err != nil {
 		return failed(err)
@@ -204,10 +214,11 @@ func (s *Schema) Run(ctx context.Context, seed types.Seed, emit func(types.Obser
 	if !ok {
 		// Introspection is off or refused: the fields the server's errors
 		// name are what can still be read.
-		return s.recoverSchema(ctx, raw, status, emit)
+		return s.recoverSchema(ctx, raw, status, ide, emit)
 	}
 	row := summary(sc)
 	if full != nil {
+		fetch.Learn(schemaFact(raw), raw)
 		if kept, fits := gqlschema.Bound(full, maxSchema); fits {
 			row["schema"] = kept
 		} else {
@@ -218,20 +229,69 @@ func (s *Schema) Run(ctx context.Context, seed types.Seed, emit func(types.Obser
 	return one(emit, raw, "graphql", row)
 }
 
+// MaxRecoveryPOSTs is how many validation queries recovering a schema may
+// send to one endpoint whose introspection is off: up to maxRecover for the
+// query type and as many for the mutation type.
+const MaxRecoveryPOSTs = 2 * maxRecover
+
+// schemaFact is where a run keeps that an origin's schema was read whole.
+func schemaFact(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return ""
+	}
+	return "graphql schema " + strings.ToLower(u.Scheme+"://"+u.Host)
+}
+
+// schemaElsewhere is the URL on raw's origin that gave its schema whole, or
+// "" when none has, as far as the run knows.
+func schemaElsewhere(raw string) string {
+	from, ok := fetch.Learned(schemaFact(raw))
+	if !ok || from == raw {
+		return ""
+	}
+	return from
+}
+
+func ideSkipped(raw, from string) {
+	fetch.Note("GraphQL " + raw + ": an IDE page, not asked for its schema: " + from + " on the same origin gave it whole")
+}
+
+// ideFact is where a run keeps that a GET of raw answered with a GraphiQL
+// or Playground page.
+func ideFact(raw string) string { return "graphql ide " + raw }
+
+// isIDE says whether the recognising stage saw raw answer with an IDE page.
+func (s *Schema) isIDE(raw string) bool {
+	_, ok := fetch.Learned(ideFact(raw))
+	return ok
+}
+
 // recoverSchema reads the root fields of the query and mutation types
 // from the server's validation errors, when introspection gave nothing.
-func (s *Schema) recoverSchema(ctx context.Context, raw string, status int, emit func(types.Observation) error) (types.RunMeta, error) {
+func (s *Schema) recoverSchema(ctx context.Context, raw string, status int, ide bool, emit func(types.Observation) error) (types.RunMeta, error) {
 	clientWords := harvestClientWords(raw)
-	q, err := s.recoverType(ctx, raw, "query", clientWords, s.Wordlist, nil)
+	// An IDE page's recovery stops once the origin's schema is read whole.
+	var halt func() bool
+	if ide {
+		halt = func() bool { return schemaElsewhere(raw) != "" }
+	}
+	q, err := s.recoverType(ctx, raw, "query", clientWords, s.Wordlist, nil, halt)
 	if err != nil {
 		return failed(err)
 	}
 	if q == nil {
+		if halt != nil && halt() {
+			ideSkipped(raw, schemaElsewhere(raw))
+		}
 		return types.RunMeta{Status: types.StatusOK}, nil
 	}
-	m, err := s.recoverType(ctx, raw, "mutation", clientWords, s.Wordlist, q.names())
+	m, err := s.recoverType(ctx, raw, "mutation", clientWords, s.Wordlist, q.names(), halt)
 	if err != nil {
 		return failed(err)
+	}
+	if halt != nil && halt() {
+		ideSkipped(raw, schemaElsewhere(raw))
 	}
 	row := map[string]any{"url": raw, "role": "graphql", "status": status, "introspection": false, "recovered": "suggestions",
 		"queries": q.names(), "types": typeNames(q, m), "errors": q.errors, "query_type": q.name,
