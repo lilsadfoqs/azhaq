@@ -116,12 +116,13 @@ type roleRow struct {
 	// proved alive, and its session did not prove alive again.
 	SessionSuspect bool `json:"session_suspect,omitempty"`
 
-	given   bool     // Owner was given with -id
-	value   string   // the identifier filled into the route
-	reqBody []byte   // a write's body
-	reqType string   // and its Content-Type
-	mutual  []string // the readers whose objects on the route the owner reads too
-	suspect []string // the roles whose answers are suspect
+	given   bool           // Owner was given with -id
+	value   string         // the identifier filled into the route
+	reqBody []byte         // a write's body
+	reqType string         // and its Content-Type
+	mutual  []string       // the readers whose objects on the route the owner reads too
+	suspect []string       // the roles whose answers are suspect
+	made    *createdObject // a create's object that other roles read
 }
 
 // Verdicts, in the order rows are listed.
@@ -636,6 +637,23 @@ func cmdRoles(args []string) error {
 			wrows, n, err = replayWritesAs(who, roles, reqs, answers, own, rate, bud, *writesCanary, canaryFields...)
 			replayed += n
 			noteCap(rep, "write replay", capErr(err, byCmd))
+			if objs := createdRows(roles, wrows, made); len(objs) > 0 {
+				// What a create made and the other roles read: asked with a
+				// made-up identifier too, as every cross read is.
+				fetch.Reset()
+				egress.SetRate(rate)
+				egress.SetTargetProxy(rolesProxy)
+				holdDeny()
+				bud, byCmd := stageBudget(*replayMax - replayed)
+				n, err := askControls(roles, objs, own, pages, refusalRE, bud)
+				fetch.Reset()
+				replayed += n
+				noteCap(rep, "controls", capErr(err, byCmd))
+				cn, hard := controlNotes(objs)
+				rep.Notes = append(rep.Notes, cn...)
+				rep.warned = rep.warned || hard
+				rows = withRows(rows, objs)
+			}
 			wn, failed := writeNotes(wrows)
 			rep.Notes = append(rep.Notes, wn...)
 			rep.warned = rep.warned || failed
