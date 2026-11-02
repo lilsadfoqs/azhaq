@@ -23,3 +23,17 @@ func TestCrawlTruthSplit(t *testing.T) {
 		}
 	}
 }
+
+// The crawl comparison counts the stylesheets each tool lists: routes
+// leaves them out, as it does every asset.
+func TestStylesheetsAreCounted(t *testing.T) {
+	urls := []string{"http://a.test/", "http://a.test/styles.css", "http://a.test/styles.css?v=2", "http://a.test/assets/app.CSS",
+		"http://a.test/app.js", "http://b.test/other.css", "http://a.test/css/"}
+	got := stylesheets(urls, "http://a.test")
+	if len(got) != 2 || !got["/styles.css"] || !got["/assets/app.CSS"] {
+		t.Errorf("stylesheets %v", got)
+	}
+	if r := routes(urls, "http://a.test"); r["/styles.css"] || !r["/css"] {
+		t.Errorf("routes %v keeps an asset or loses a route", r)
+	}
+}

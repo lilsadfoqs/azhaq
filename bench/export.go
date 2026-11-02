@@ -138,6 +138,18 @@ func routes(urls []string, origin string) map[string]bool {
 	return out
 }
 
+// stylesheets are the distinct .css paths among urls on origin: the
+// stylesheets a crawler listed, which routes leaves out as assets.
+func stylesheets(urls []string, origin string) map[string]bool {
+	out := map[string]bool{}
+	for _, raw := range urls {
+		if r := route(raw); strings.HasPrefix(raw, origin) && strings.HasSuffix(strings.ToLower(r), ".css") {
+			out[r] = true
+		}
+	}
+	return out
+}
+
 func asset(path string) bool {
 	p := strings.ToLower(path)
 	for _, ext := range []string{".js", ".mjs", ".css", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico", ".webp", ".woff", ".woff2", ".ttf", ".map"} {

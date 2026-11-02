@@ -66,6 +66,7 @@ The command could not do its job: a database it cannot open, or Chrome missing f
 - The targets are all outside the scope given: `every target is outside the scope (2 left out): 127.0.0.2, 127.0.0.3`. The message names them. A range that no allow rule touches counts. `ports` and `dns` say it too.
 - A header names a host (`Host`, `X-Forwarded-Host`, `X-Host`, `X-Original-Host`) outside a scope rule. For example `-H 'Host: secret.lab'` with `-deny secret.lab`, or a request file's or import's header whose host is not a target. See [Hosts named in headers](CONCEPTS.md#hosts-named-in-headers).
 - A flag that takes a value is followed by another flag of the command: `-screenshots -max-requests 50` would take `-max-requests` for the directory. Give the value, or join the flag and a value that starts with a dash with an equals sign.
+- Chrome would start without its sandbox, because the system gives it none (a container, AppArmor, no user namespaces), and `-chrome-no-sandbox` was not given. The message names the flag. This holds for every command that starts Chrome: `shots`, `crawl` and `run` with `-browser` or `-screenshots`, a sign-in with `-login`, `roles` with `-role-login` (tried before the first request), and the tools of `azhaq mcp`.
 - Nothing was sent.
 
 ### Exit 3
@@ -84,7 +85,7 @@ Some work failed and did not get its answer: a source that failed, a target that
 
 ```json
 {"type":"summary","command":"run","version":"0.10.0","complete":false,"exit":4,
- "results":148,"stored":160,"counts":{"pages":84,"api":33,"auth":12,"scripts":14,"hostnames":9,"ports":8},"seconds":7.4,"requests":195,
+ "results":148,"stored":160,"folded":12,"counts":{"pages":84,"api":33,"auth":12,"scripts":14,"hostnames":9,"ports":8},"seconds":7.4,"requests":195,
  "db":"app.db","run_id":"…",
  "unreachable":["http://testphp.vulnweb.com/"],
  "failed":[{"collector":"azhaq-http","error":"timeout","retryable":true,"count":34,
@@ -101,6 +102,7 @@ Some work failed and did not get its answer: a source that failed, a target that
 | `results` | What the command printed on stdout: names, web services, map rows. |
 | `counts` | A breakdown of the results, per command. For `run` the counts are disjoint and cover every stored map row: see [run's counts](#run-counts). |
 | `stored` | `run` only: the map rows the database holds. The counts add up to it. `results` is smaller when templated URLs and dead or wildcard names fold into one row. |
+| `folded` | `run` only, always present: the stored rows a printed row holds (templated URLs, dead and wildcard names). `results + folded + left_out = stored`, with `left_out` (`-no-catchall`) absent when 0. |
 | `requests` | Requests sent to targets, port connects included. DNS queries and requests to third-party sources are not in it: the queries are in `dns_queries`, and a source's requests are in `sources` (`subs`, `urls`) and in the ledger's `source` lines. |
 | `dns_queries` | Queries sent to resolvers: every question, retries and wildcard probes included, and the ones to the system resolver. It is the ledger's `DNS queries` class, with or without a ledger. Absent when none was sent. |
 | `db` | The database the results are in. Absent when it was temporary. |
@@ -119,7 +121,7 @@ Some work failed and did not get its answer: a source that failed, a target that
 
 ### Run counts
 
-`run` counts every stored map row once, so `counts` adds up to `stored`, and `results = stored - folded`, where `folded` is the stored rows that a printed row holds (the text summary says `12 folded into templated rows`). A key says what it counts and what it leaves out; each is the number `azhaq query -db FILE` lists with its filter, except that `query` folds URL templates as `run` does.
+`run` counts every stored map row once, so `counts` adds up to `stored`, and `results = stored - folded`, where `folded` is the stored rows that a printed row holds (the JSON summary has `"folded":12`, the text summary says `12 folded into templated rows`). A key says what it counts and what it leaves out; each is the number `azhaq query -db FILE` lists with its filter, except that `query` folds URL templates as `run` does.
 
 | Key | Counts | `query` filter |
 | --- | --- | --- |
@@ -147,7 +149,7 @@ The URL keys other than `catchall` and `skipped` count rows of the other coverag
 
 - `retryable` is true for timeouts, dropped connections, answers cut short, 429 and 5xx: a later try may work. `azhaq resume -db FILE -retry-failed` asks those targets again, and only those (see [resume](commands/resume.md#retrying-failed-targets)). Failures that are not retryable (a refused connection, a certificate error, a 4xx other than 429) are not asked again: the same request would fail the same way, so they are for you to read and fix. A plain `resume` continues only the tasks a limit or a kill left, never a failed one.
 - `source` names a third-party source, such as `crtsh` or `wayback`.
-- `targets` names up to 100. `azhaq query -db FILE -failed` lists every failed target: the list to retry.
+- `targets` names up to 100. `azhaq query -db FILE -failed` lists every failed target of the newest run (`-run ID` reads another by its `run_id`): the list to retry.
 - `azhaq-session` is a signed-in run whose session ended and could not be renewed (`the session ended: after /logout was requested …`). Every request after the check noticed the loss was refused, so nothing after that was answered as an anonymous visitor. The exit code is 3: see [Sessions](CONCEPTS.md#sessions).
 - `partial` and `fanout` failures make the exit code 3 like any other: see [Failures](CONCEPTS.md#failures-fan-out-partial-and-degraded).
 

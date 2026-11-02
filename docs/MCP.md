@@ -10,6 +10,7 @@ The **scope**, the **request budget**, the **pace** and the **resolvers and sour
 - Paths a `-deny-path` rule matches are never requested by any tool, and are listed as skipped. azhaq has no path rule of its own: `azhaq_map` asks every GET it finds in scope, `/logout` and an API description's `GET /createdb` included, and the `-deny-path` rules set when the server starts are the only thing that keeps a URL out. A client cannot add one per call.
 - A subdomain lookup for a domain outside the scope is refused, because the passive sources would learn what the assistant asks about.
 - Once the budget is spent, every tool that sends requests refuses.
+- Chrome is not run without its sandbox: where the system gives it none, a tool that needs Chrome (`browser`, `login`, `azhaq_roles` with a login) answers with an error that names `-chrome-no-sandbox`, before any request. Start the server with that flag to allow it, in a throwaway environment.
 - `-resolvers`, `-sources`, `-skip` and `-no-takeover` are held for every call that takes them, as `run` takes them. Without them a map asks the default public resolvers and the passive third-party sources (the plan names `azhaq-rdap`, `azhaq-search`, `azhaq-subdomains` and `azhaq-urls`), whatever `-allow` says. With `-sources none` it asks no third party at all, and `azhaq_subdomains`, which is one, is refused. `azhaq_scope` and `azhaq_status` show them as `run_options`.
 
 See [Concepts](CONCEPTS.md) for scope, budget and pace.
@@ -19,7 +20,7 @@ azhaq mcp -scope hackerone -program security -max-requests 20000 -rate 5
 azhaq mcp -allow example.com -deny admin.example.com -max-requests 5000
 ```
 
-Every flag is described on the [`azhaq mcp` page](commands/mcp.md#flags): `-scope` with `-program`, `-allow`, `-deny`, `-deny-path`, `-resolvers`, `-sources`, `-skip`, `-no-takeover`, `-max-requests`, `-rate`, `-dir` (default `azhaq-mcp`) and `-unlocked`.
+Every flag is described on the [`azhaq mcp` page](commands/mcp.md#flags): `-scope` with `-program`, `-allow`, `-deny`, `-deny-path`, `-resolvers`, `-sources`, `-skip`, `-no-takeover`, `-chrome-no-sandbox`, `-max-requests`, `-rate`, `-dir` (default `azhaq-mcp`) and `-unlocked`.
 
 To see what the tools send in a proxy, start the server with `HTTP_PROXY` and `HTTPS_PROXY` set (Go's rule: loopback targets stay direct, as the server has no `-proxy` to send them): the server has no `-proxy` flag. See [Proxies](CONCEPTS.md#proxies).
 

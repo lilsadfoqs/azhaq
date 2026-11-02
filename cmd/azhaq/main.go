@@ -232,7 +232,8 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	chromePath := fs.String("chrome", "", "the Chrome or Chromium to run (default $AZHAQ_CHROME, else the first found)")
 	chromeProxy := fs.String("chrome-proxy", "", "send Chrome's own connections through this http or socks5 proxy (default: -proxy, else the environment's); a plain http:// request reaches an http proxy as a proxy request, a page over TLS as a CONNECT tunnel")
 	chromeProfile := fs.String("chrome-profile", "", "a Chrome user data directory to use and keep: sessions it holds go with the pages (default: a temporary one)")
-	chromeSandbox := fs.Bool("chrome-require-sandbox", false, "never run Chrome without its sandbox: where the system gives it none (no user namespaces, AppArmor, a container) Chrome does not start (default: it is started once more without, and the summary says so)")
+	chromeSandbox := fs.Bool("chrome-require-sandbox", false, "never run Chrome without its sandbox (the default since v0.15.0, so this changes nothing: kept for scripts that pass it; it cannot go with -chrome-no-sandbox)")
+	chromeNoSandbox := fs.Bool("chrome-no-sandbox", false, "let Chrome run without its sandbox where the system gives it none (no user namespaces, AppArmor, a container): it is started once more without, and the summary says so. The pages it loads are the targets' and untrusted: use a throwaway environment. By default Chrome does not start then")
 	unsafePorts := fs.Bool("unsafe-ports", true, "let Chrome open the ports it refuses by default (6000, 6666, 10080 and others); -unsafe-ports=false keeps its refusal")
 	webScheme := fs.String("web-scheme", "", "try a name or an address over this scheme only, http or https (default: https, then http)")
 	urlsTimeout := fs.Duration("urls-timeout", 3*time.Minute, "time each archive source gets per domain (the Wayback Machine's answer for a large domain takes several minutes)")
@@ -295,6 +296,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	killFile := fs.String("kill-file", "", killFileHelp)
 	sealTo := fs.String("seal-to", "", sealToHelp)
 	resumeRun := fs.String("resume-run", "", "internal: continue this run of -db (azhaq resume sets it)")
+	retryRun := fs.String("retry-run", "", "with -retry-failed: the run to ask again, by the run_id of its summary (default: the newest run of the workspace)")
 	retryFailed := fs.Bool("retry-failed", false, "with azhaq resume: ask again the failed targets the summary marks retryable (a timeout, a closed connection, a 429 or 5xx); only those run again")
 	probeOpts := fs.String("probe-opts", "", "internal: azhaq probe's httpx options, as JSON")
 	serve := fs.String("serve", "", "let azhaq worker processes take this run's work, at this address (127.0.0.1:7777)")
@@ -344,7 +346,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	portSeed := fs.Int64("port-seed", 0, "make the random port order repeat (0: a new one each run)")
 	portThreshold := fs.Int("port-threshold", 0, "stop asking a host after this many open ports: it answers every port (0: no limit)")
 	portUnnamed := fs.Int("port-unnamed", 0, "after this many open ports of an address that no protocol probe could name, ask its other silent ports their banner only (0: 6; -1: no limit; each probe is a connect)")
-	portDetect := fs.String("port-detect", "all", "what is asked of an open port: all (its banner, then HTTP and TLS, then one request of each protocol that waits to be asked, each on its own connection, several at once while the scan has workers free: at most 25 connects after the first), banner (what it says on the one connection; nothing is sent, so a bare 220 stays ftp-or-smtp) or none (connect and close)")
+	portDetect := fs.String("port-detect", "all", "what is asked of an open port: all (its banner, then HTTP and TLS, then one request of each protocol that waits to be asked, each on its own connection, several at once while the scan has workers free: at most 25 connects after the first), banner (what it says on the one connection; nothing is sent, so a bare 220 stays ftp-or-smtp) or none (connect and close). UDP ports: all and banner ask every request a port's protocol has (4 datagrams to a silent port); none asks one")
 	portCDNFull := fs.Bool("port-cdn-full", false, "accepted: CDN and WAF addresses are scanned in full by default")
 	portExcludeCDN := fs.Bool("port-exclude-cdn", false, "ask a CDN or WAF address only ports 80, 443, 8080 and 8443 (naabu -ec asks 80 and 443; this adds 8080 and 8443)")
 	portDiscover := fs.String("port-discover", "", "ask first whether an address is up, by a connect to 80 and 443: first (scan the ones that answer) or only (list them, scan nothing)")
@@ -399,8 +401,8 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	if err := parse(fs, args); err != nil {
 		return err
 	}
-	if *retryFailed {
-		return usagef("-retry-failed continues a run: give it to azhaq resume -db FILE")
+	if *retryFailed || *retryRun != "" {
+		return usagef("-retry-failed and -retry-run continue a run: give them to azhaq resume -db FILE")
 	}
 	if err := scope.CompilePaths(denyPath); err != nil {
 		return usagef("%v", err)
@@ -848,8 +850,11 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	if (*shots != "" || *render) && out.plan {
 		opts.Browser = &browser.Browser{} // never started: the collectors that need Chrome are listed
 	}
+	if *chromeSandbox && *chromeNoSandbox {
+		return usagef("-chrome-require-sandbox and -chrome-no-sandbox contradict each other: drop one")
+	}
+	browser.RequireSandbox, browser.AllowNoSandbox = *chromeSandbox, *chromeNoSandbox // for the sign-in's Chrome too
 	if (*shots != "" || *render) && !out.plan {
-		browser.RequireSandbox = *chromeSandbox
 		if *chromePath != "" {
 			if st, err := os.Stat(*chromePath); err != nil || st.IsDir() {
 				return usagef("-chrome %s: not a file", *chromePath)
@@ -877,7 +882,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		}
 		defer opts.Browser.Close()
 		if err := opts.Browser.Start(); err != nil {
-			return fmt.Errorf("-screenshots and -browser: %w", err)
+			return chromeStartErr(fmt.Errorf("-screenshots and -browser: %w", err))
 		}
 	}
 	var loginHome string
@@ -1383,6 +1388,12 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		runHints(rep, rows, obs, *interact, signedIn(*login, cookies, headers))
 	}
 	rep.RunID = stats.RunID
+	if runs, err := st.Runs(); err == nil && len(runs) > 0 && runs[len(runs)-1].ID != stats.RunID {
+		// A resumed earlier run: query -failed reads the newest unless told.
+		for i, n := range rep.Next {
+			rep.Next[i] = strings.Replace(n, " -failed   (", " -failed -run "+stats.RunID+"   (", 1)
+		}
+	}
 	if opts.Browser != nil {
 		// What Chrome still held waiting for the pace is given back first:
 		// never sent, it is not counted.
@@ -2484,7 +2495,7 @@ func signIn(b *browser.Browser, loginURL, user, pass string, rep *report, base h
 		rep.Skipped = append(rep.Skipped, engine.Skip{Target: u, Reason: browser.Reason()})
 	}
 	if err != nil {
-		return "", fmt.Errorf("-login %s: %w", loginURL, err)
+		return "", chromeStartErr(fmt.Errorf("-login %s: %w", loginURL, err))
 	}
 	if len(s.Cookies) == 0 && s.Bearer == "" {
 		return "", fmt.Errorf("-login %s: signed in, but the site set no cookie and stored no token", loginURL)
@@ -2520,6 +2531,16 @@ func signIn(b *browser.Browser, loginURL, user, pass string, rep *report, base h
 	return s.URL, nil
 }
 
+// chromeStartErr is err, as a usage error when Chrome did not start because
+// the system gave it no sandbox: the command line is what to change
+// (-chrome-no-sandbox), and nothing was sent yet.
+func chromeStartErr(err error) error {
+	if errors.Is(err, browser.ErrNoSandbox) {
+		return usageErr{err}
+	}
+	return err
+}
+
 // chromeRefused lists in rep what Chrome was refused that no page claimed
 // (a service worker's requests, WebSockets, a beacon as a tab closed, a
 // download the sign-in began), and how many requests there were when
@@ -2537,7 +2558,7 @@ func chromeRefused(rep *report, b *browser.Browser) {
 		}
 	}
 	if why := b.Unsandboxed(); why != "" {
-		rep.Notes = append(rep.Notes, "Chrome ran without its sandbox ("+why+"): the pages it loaded are the targets' and untrusted; -chrome-require-sandbox refuses this")
+		rep.Notes = append(rep.Notes, "Chrome ran without its sandbox ("+why+"), as -chrome-no-sandbox or AZHAQ_CHROME_NO_SANDBOX=1 allowed: the pages it loaded are the targets' and untrusted")
 	}
 	if n, hosts := b.GuardDenied(); n > 0 {
 		rep.Notes = append(rep.Notes, fmt.Sprintf("Chrome's own services reached for %d connections outside the scope (%s); all were refused, none was sent", n, listOfHosts(hosts, 3)))

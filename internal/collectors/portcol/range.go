@@ -278,11 +278,23 @@ func (c *Collector) runPrefix(ctx context.Context, seed types.Seed, emit func(ty
 			var udp portscan.UDPReport
 			if len(c.UDPPorts) > 0 && !edge && s.up && c.Discover != DiscoverOnly {
 				if uports, _ := inScope(ip, ip, c.UDPPorts); len(uports) > 0 {
-					udp, uerr = c.Scanner.ScanUDP(ctx, ip, ip, uports)
+					udp, uerr = c.scanUDPGated(ctx, ip, uports, prior.UDP)
 				}
 				if uerr != nil {
 					recordStops(ip, udp.Stopped)
-					record(result{err: uerr})
+					res := result{err: uerr}
+					if stopped(uerr) {
+						// What it settled is kept, with how far it asked the rest.
+						row := c.row(ip, ip, ports, s, edgeName, edge)
+						row["prefix"] = pf.String()
+						if outScope > 0 {
+							row[outScopeKey] = outScope
+						}
+						c.udpRow(row, udp, len(c.UDPPorts))
+						c.markPartial(row, ports)
+						res.row = row
+					}
+					record(res)
 					return
 				}
 			}
@@ -334,7 +346,7 @@ func (c *Collector) runPrefix(ctx context.Context, seed types.Seed, emit func(ty
 				row[outScopeKey] = outScope
 			}
 			if len(c.UDPPorts) > 0 && !edge && s.up && c.Discover != DiscoverOnly {
-				addUDP(row, udp, len(c.UDPPorts))
+				c.udpRow(row, udp, len(c.UDPPorts))
 			}
 			follow := len(s.open) > 0 || len(udp.Open) > 0
 			if follow {

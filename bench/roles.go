@@ -40,7 +40,7 @@ func benchRoles(target, dir string) *rolesRow {
 		return row
 	}
 	out, m := run("roles", 10*time.Minute, dir, azhaq, "roles", "-dir", filepath.Join(dir, "roles-"+time.Now().Format("150405")),
-		"-jsonl", "-role", "anon", "-role", "user=Authorization: Bearer "+token, "--", "-url", target)
+		"-jsonl", "-role", "anon", "-role", "user=Authorization: Bearer "+token, "--", "-url", target, "-chrome-no-sandbox")
 	row.Seconds = m.Seconds
 	row.Rows, row.Found = juiceRoleRows(out, target)
 	addCheck("roles: Juice Shop anonymous → user", len(row.Found) == len(rolesExpected) && row.Rows >= 5,
@@ -49,7 +49,7 @@ func benchRoles(target, dir string) *rolesRow {
 	// The same, signing in on the login page (an Angular form behind a
 	// welcome dialog) instead of being handed a token.
 	out, m = run("roles-login", 10*time.Minute, dir, azhaq, "roles", "-dir", filepath.Join(dir, "roles-login-"+time.Now().Format("150405")),
-		"-jsonl", "-login", target+"#/login", "-role", "anon", "-role-login", "user="+email+":"+password, "--", "-url", target)
+		"-jsonl", "-login", target+"#/login", "-role", "anon", "-role-login", "user="+email+":"+password, "--", "-url", target, "-chrome-no-sandbox")
 	row.ChromeSecs = m.Seconds
 	row.ChromeRows, row.ChromeFound = juiceRoleRows(out, target)
 	if m.Error != "" {

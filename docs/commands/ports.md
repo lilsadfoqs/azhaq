@@ -168,7 +168,8 @@ A service that speaks first (`ssh`, `ftp`, `smtp`, `telnet`, `irc`, …) is name
 - `ports -udp` asks the 25 common UDP ports. `-pu top` asks the same: 53, 67, 69, 111, 123, 137, 161, 500, 514, 520, 623, 1194, 1434, 1900, 3478, 4500, 5060, 5351, 5353, 5683, 10001, 11211, 27015, 47808 and 51820.
 - `-pu LIST` asks a list instead, such as `-pu 1-1024` or `-pu top,5354`. List names and numbers combine, in `-p` too.
 - `-p none` leaves the TCP ports out. `-pu LIST` without `-p`, `-tp` or `-pf` does the same: only those UDP ports are asked, as `nmap -sU` does, so that a low `-rate` under `-timeout` is not spent on the default TCP top-100 first. `-udp` alone still asks TCP too. In `run` it is `-ports-udp SPEC`, with `top`, `full` or a list.
-- A port that does not run its own protocol is asked a DNS query first, then an SNMP get, memcached's version and an empty datagram, and the scan stops asking a port at its first answer.
+- What each UDP port is sent, in one rule: a port with a protocol of its own (the list above) is asked that request, and 161 a second one (SNMPv3 discovery); any other port is asked a DNS query, an SNMP get, memcached's version and an empty datagram, in that order. The scan stops asking a port at its first answer or ICMP port unreachable, so a silent port costs 2 datagrams on a known port and 4 on any other: a full range of N addresses is up to 4 x 65,535 x N datagrams. `-detect all` and `-detect banner` follow that rule.
+- `-detect none` (`-port-detect none` in `run`) asks each UDP port one datagram: the request of its protocol on a port that has one, an empty datagram on any other. A silent port then costs 1 datagram, and the summary says the `open|filtered` ports were asked once. An empty datagram is answered by few services, so `none` finds fewer open ports than the default and is for sizing or for a full-range sweep that must stay small.
 - No privileges are needed. Each port gets one datagram on a connected socket, and the kernel tells an ICMP port unreachable from silence.
 - Every datagram counts against `-max-requests`, is paced by `-rate` and goes in the request ledger as kind `udp`.
 - A CDN or WAF address is not asked.
@@ -221,11 +222,16 @@ In a workspace, the `ports` row has these UDP fields:
 | `udp_scanned` | How many UDP ports were scanned. |
 | `udp_limited` | Silent ports that may be closed: see below. |
 | `udp_services` | For each listed port: port, state, service, product, version, banner. |
+| `udp_one_request` | `true` when `-detect none` asked each port one datagram. |
+| `partial`, `udp_refused`, `udp_asked`, `udp_unfinished`, `udp_unasked` | On the row of a scan a limit stopped: the ports refused, how many requests each undecided port was asked (`udp_asked` maps a request count to its ports), and how many ports are undecided or not asked at all. `azhaq resume` reads them. |
 | `udp_unlisted` | How many `open\|filtered` ports the row does not list one by one. |
 | `udp_silent_ports`, `udp_silent_addresses` | On a range row, the silent ports and addresses that answered nothing on UDP. |
 
 #### What the summary says about UDP
-- A scan that a limit, `-timeout` or a signal stopped says how far it got: `127.0.0.1:5354/udp: 3 of 4 payloads asked before the run stopped; no answer yet`. Ports not asked at all are counted. `azhaq resume` asks them again.
+- A scan that a limit, `-timeout` or a signal stopped says how far it got: `127.0.0.1:5354/udp: 3 of 4 payloads asked before the run stopped; no answer yet, so open|filtered is not final`. Ports not asked at all are counted.
+- A stopped scan prints and stores what it has, as a stopped TCP scan does: the ports that answered, the ports refused (counted in `udp_closed`), and the silent ports asked so far as `open|filtered`. Those silent ports are not final: a later request may still be answered. They are results of the stopped run, and `results` counts them.
+- `azhaq resume` goes on from there, port by port. It does not ask again a port that answered or was refused, and a silent port is asked the requests it was not, so a resume under the same cap makes progress and the scan finishes. The resumed run prints the final state of the ports the stop left undecided.
+- UDP scans of the addresses of a range run on as many addresses at once as the rate can keep busy (the rate times the timeout over 100 datagrams in flight each: 23 at the default `-rate 1500`), not on all 64 at once. With a cap or a stop, the first addresses are finished and the others hold their progress, and a resume continues from it.
 - It says what the state means: `1 UDP port open|filtered: no reply and no ICMP port unreachable after every request its protocol has (a silent service or a firewall); …`.
 - It names the closed ports, so that a scan that found nothing says what it saw: `1 UDP port closed (ICMP port unreachable): 127.0.0.1:9`. Up to three are shown as `address:port`, then `and N more`. In a range, the addresses that refused ports and showed nothing else are counted.
 - An address asked on its own, or a name, lists every silent port up to 64. Past that the rows would be noise: the summary counts them, and the workspace row's `udp_open_filtered` keeps them.
@@ -306,7 +312,7 @@ Each open TCP port gets `product` and `version` next to `service`, from what it 
 | --- | --- | --- | --- |
 | `-udp` | bool |  | also ask the common UDP ports (25: dns, ntp, snmp, ssdp, mdns, ...) |
 | `-pu` | string |  | UDP ports to ask: top, full or a list of ports, ranges and these names, such as 53,123,1-1024 or top,5354 (implies -udp; without -p, -tp or -pf no TCP port is asked) |
-| `-detect` | string | `all` | what is asked of an open port: all (its banner, then HTTP and TLS, then one request of each protocol that waits to be asked, each on its own connection, several at once while the scan has workers free: at most 25 connects after the first), banner (what it says on the one connection; nothing is sent, so a bare 220 stays ftp-or-smtp) or none (connect and close, as naabu without -sV) |
+| `-detect` | string | `all` | what is asked of an open port: all (its banner, then HTTP and TLS, then one request of each protocol that waits to be asked, each on its own connection, several at once while the scan has workers free: at most 25 connects after the first), banner (what it says on the one connection; nothing is sent, so a bare 220 stays ftp-or-smtp) or none (connect and close, as naabu without -sV). UDP ports: all and banner ask every request a port's protocol has (4 datagrams to a silent port); none asks one |
 | `-order` | string | `random` | the order a host's ports are asked in: random (the likeliest ports first, each tier shuffled) or asc |
 | `-unnamed` | int |  | after this many open ports of an address that no protocol probe could name, ask its other silent ports their banner only (0: 6, a guard against hosts that accept every connect; -1: no limit) |
 | `-exclude-cdn` | bool |  | ask a CDN or WAF address only ports 80, 443, 8080 and 8443 (naabu's two ports plus 8080 and 8443; the default is the full list) |

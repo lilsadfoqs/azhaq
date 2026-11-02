@@ -109,6 +109,7 @@ func eachFailure(ents []types.Entity, obs []types.StoredObservation, add func(co
 			newest[k] = o.ObservedAt
 		}
 	}
+	asked := dnsAnswered(keys, obs)
 	for _, o := range obs {
 		var p map[string]any
 		_ = json.Unmarshal(o.Payload, &p)
@@ -136,6 +137,9 @@ func eachFailure(ents []types.Entity, obs []types.StoredObservation, add func(co
 			for name, v := range srcs {
 				row, _ := v.(map[string]any)
 				if msg, _ := row["error"].(string); msg != "" {
+					if n, _ := row["not_checked"].(float64); n > 0 && checkedSince(p["unverified"], o.ObservedAt, asked) {
+						continue // the names it left were asked since: a resume checked them
+					}
 					add(o.Collector, name, msg, sourceTarget(p, target), o.EntityID)
 				}
 			}
@@ -166,6 +170,40 @@ func eachFailure(ents []types.Entity, obs []types.StoredObservation, add func(co
 			}
 		}
 	}
+}
+
+// dnsAnswered is, for each name, when the resolvers last answered it (a
+// resolver that failed is no answer).
+func dnsAnswered(keys map[string]string, obs []types.StoredObservation) map[string]time.Time {
+	out := map[string]time.Time{}
+	for _, o := range obs {
+		if o.Collector != "azhaq-dns" || o.Kind != "dns" {
+			continue
+		}
+		var p struct {
+			Degraded bool `json:"degraded"`
+		}
+		if json.Unmarshal(o.Payload, &p) != nil || p.Degraded {
+			continue
+		}
+		if k := keys[o.EntityID]; o.ObservedAt.After(out[k]) {
+			out[k] = o.ObservedAt
+		}
+	}
+	return out
+}
+
+// checkedSince says whether every name of a source's unverified list was
+// answered after the row that listed it.
+func checkedSince(names any, listed time.Time, asked map[string]time.Time) bool {
+	list, _ := names.([]any)
+	for _, v := range list {
+		n, _ := v.(string)
+		if !asked[n].After(listed) {
+			return false
+		}
+	}
+	return len(list) > 0
 }
 
 // Skips lists the requests Azhaq refused to send in obs (outside the

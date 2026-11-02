@@ -170,7 +170,7 @@ func benchTenants() *tenantsRow {
 	out, m := run("tenants", 10*time.Minute, dir, azhaq, "roles", "-dir", filepath.Join(dir, "tenants-"+time.Now().Format("150405")),
 		"-jsonl", "-all", "-login", site+"login", "-role", "anon",
 		"-role-login", "member=member@acme.test:"+password, "-role-login", "owner=owner@acme.test:"+password,
-		"--", "-url", site)
+		"--", "-url", site, "-chrome-no-sandbox")
 	row.Seconds = m.Seconds
 	row.Logouts = logouts.Load()
 	origin := strings.TrimSuffix(site, "/")

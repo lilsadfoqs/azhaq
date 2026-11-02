@@ -99,6 +99,7 @@ type Pool struct {
 	limit   *limit.Limiter
 	timeout time.Duration
 	retries int
+	fixed   bool                 // the retries were asked for (-retry): generated names keep them
 	paced   bool                 // PerSecond is set: the user's rate bounds the queries sent
 	x       *egress.DNSExchanger // sends the queries: the only code here that opens a connection
 	rtt     rtts                 // how long answers took, for when a query is late
@@ -245,6 +246,7 @@ func New(o Options) *Pool {
 	if o.Timeout <= 0 {
 		o.Timeout = 2 * time.Second
 	}
+	fixed := o.Retries != 0 || o.Attempts > 0
 	if o.Retries == 0 {
 		o.Retries = 2
 	}
@@ -263,6 +265,7 @@ func New(o Options) *Pool {
 		limit:   limit.New(o.PerSecond, cmpBurst(o)),
 		timeout: o.Timeout,
 		retries: o.Retries,
+		fixed:   fixed,
 		paced:   o.PerSecond > 0,
 		x:       egress.NewDNSExchanger(o.Timeout, o.Proxy),
 		cache:   map[string]*entry{},
@@ -379,12 +382,13 @@ func (p *Pool) ResolveMany(ctx context.Context, names []string, workers int) []A
 }
 
 // askAgain is ResolveMany's second pass over the names at out[at[i]]. It
-// asks retryProbe of them first, spread over the list: when none of those is
-// answered either, the zone's servers are not answering (a lame delegation,
-// a dead name server) and the rest would fail alike, each at the cost of
-// every attempt again; they keep the failure of the first pass.
+// asks retryProbe of them first, spread over the list and once each: when
+// none of those is answered either, the zone's servers are not answering (a
+// lame delegation, a dead name server) and the rest would fail alike, each
+// at the cost of every attempt again; they keep the failure of the first
+// pass. When one is answered, every name still failed is asked in full.
 func (p *Pool) askAgain(ctx context.Context, names []string, at []int, out []Answer, workers int) {
-	ask := func(idx []int) (answered int) {
+	ask := func(ctx context.Context, idx []int) (answered int, failed []int) {
 		batch := make([]string, len(idx))
 		for j, i := range idx {
 			batch[j] = names[i]
@@ -394,16 +398,18 @@ func (p *Pool) askAgain(ctx context.Context, names []string, at []int, out []Ans
 			out[at[idx[j]]] = a
 			if a.Status != StatusFailed && a.Status != StatusBroken {
 				answered++
+			} else {
+				failed = append(failed, idx[j])
 			}
 		}
-		return answered
+		return answered, failed
 	}
 	idx := make([]int, len(names))
 	for i := range idx {
 		idx[i] = i
 	}
 	if len(idx) <= retryProbe {
-		ask(idx)
+		ask(ctx, idx)
 		return
 	}
 	inProbe := map[int]bool{}
@@ -418,10 +424,16 @@ func (p *Pool) askAgain(ctx context.Context, names []string, at []int, out []Ans
 			rest = append(rest, i)
 		}
 	}
-	if ask(probe) > 0 {
-		ask(rest)
+	answered, failed := ask(once(ctx), probe)
+	if answered > 0 {
+		ask(ctx, append(rest, failed...))
 	}
 }
+
+type onceKey struct{}
+
+// once marks ctx for one attempt a query.
+func once(ctx context.Context) context.Context { return context.WithValue(ctx, onceKey{}, true) }
 
 // Registered says whether a registrable domain exists in DNS: its SOA is
 // answered, or anything but NXDOMAIN is (a failure is taken as existing,
@@ -645,16 +657,17 @@ func (p *Pool) query(ctx context.Context, q *dns.Msg, avoid string) (*dns.Msg, s
 	if len(p.servers) == 0 {
 		return nil, "", errors.New("no resolvers")
 	}
+	retries := p.retriesFor(ctx)
 	qctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	var last error
 	var lastServer string
 	var lastMsg *dns.Msg         // the last SERVFAIL or REFUSED, returned with the error
 	servfail := map[string]int{} // resolver → attempts it answered SERVFAIL
-	ch := make(chan reply, p.retries+1)
-	waiting := map[int]string{}         // attempts sent and not answered, by number
-	sent := make(chan int, p.retries+1) // attempts that left the pace
-	shift := 0                          // how many times the latest attempt's hedge delay doubles
+	ch := make(chan reply, retries+1)
+	waiting := map[int]string{}       // attempts sent and not answered, by number
+	sent := make(chan int, retries+1) // attempts that left the pace
+	shift := 0                        // how many times the latest attempt's hedge delay doubles
 	launched := 0
 	launch := func(doubled int) {
 		n, server := launched, p.pick(launched, avoid)
@@ -690,12 +703,12 @@ func (p *Pool) query(ctx context.Context, q *dns.Msg, avoid string) (*dns.Msg, s
 			// Under a pace no attempt is hedged: a slow answer would be
 			// asked for two or three times, each a slot of the rate the user
 			// set, and a retry waits for the timeout as dnsx's does.
-			if n == launched-1 && launched <= p.retries && !p.paced {
+			if n == launched-1 && launched <= retries && !p.paced {
 				hedge.Reset(p.hedgeDelay() << shift)
 			}
 			continue
 		case <-hedge.C:
-			if launched <= p.retries {
+			if launched <= retries {
 				launch(launched) // each later one waits longer: losses come in bursts
 			}
 			continue
@@ -726,7 +739,7 @@ func (p *Pool) query(ctx context.Context, q *dns.Msg, avoid string) (*dns.Msg, s
 				return r.in, r.server, nil
 			}
 		}
-		if len(waiting) == 0 && launched <= p.retries {
+		if len(waiting) == 0 && launched <= retries {
 			hedge.Stop()
 			launch(0)
 		}
@@ -735,7 +748,7 @@ func (p *Pool) query(ctx context.Context, q *dns.Msg, avoid string) (*dns.Msg, s
 	for _, c := range servfail {
 		n += c
 	}
-	if n == p.retries+1 && len(servfail) >= 2 {
+	if n == retries+1 && len(servfail) >= 2 {
 		return lastMsg, "", fmt.Errorf("%w (last %v)", errBroken, last)
 	}
 	if last != nil && lastServer != "" {
@@ -760,10 +773,13 @@ func (p *Pool) pick(attempt int, avoid string) string {
 			}
 		}
 	}
+	// One step of the round robin a call, however many resolvers it passes
+	// over: when every one is sick the first is the next in turn, not always
+	// the same one (which would halve the pace the user set).
+	start := int(p.next.Add(1) - 1)
 	var first string
-	for range n {
-		i := p.next.Add(1) - 1
-		s := p.servers[int(i)%n]
+	for k := range n {
+		s := p.servers[(start+k)%n]
 		if s == avoid && n > 1 {
 			continue
 		}
@@ -778,6 +794,25 @@ func (p *Pool) pick(attempt int, avoid string) string {
 		first = p.servers[0]
 	}
 	return first
+}
+
+// bulkAttempts is how many times a generated name (DNS brute force,
+// permutations, a source's guesses, the name history) is asked unless -retry
+// says otherwise: dnsx's default of 2. Made-up names mostly do not exist, a
+// name the resolvers never answer costs every attempt, and each is a paced
+// query (-dns-rate), so a third attempt is 50% more time on a zone whose
+// servers are silent, for names that are rarely there.
+const bulkAttempts = 2
+
+// retriesFor is how many extra attempts a query under ctx gets.
+func (p *Pool) retriesFor(ctx context.Context) int {
+	if v, _ := ctx.Value(onceKey{}).(bool); v {
+		return 0
+	}
+	if bulk(ctx) && !p.fixed {
+		return min(p.retries, bulkAttempts-1)
+	}
+	return p.retries
 }
 
 type bulkKey struct{}

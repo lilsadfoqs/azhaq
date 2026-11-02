@@ -11,7 +11,7 @@
 
 readme.drop-in	README.md	with their flags and JSON field names	test:cmd/azhaq:TestMigratingCoversTheTools,TestDocsNameOnlyFlagsThatExist;bench:drop-in: azhaq probe reads stdin and writes httpx's JSON fields
 readme.maps-and-compares	README.md	It maps the routes an app's JavaScript calls and compares what each of your accounts may read and write	bench:juice-shop: ≥ 90% of the server routes its frontend calls;bench:roles: Juice Shop anonymous → user
-readme.scope-budget-ledger	README.md	It holds every request to a scope and a budget, and records what it sent	bench:scope: no request leaves the program's scope;bench:summary = ledger = what arrived;test:internal/egress:TestTargetClientRefusesWhatLeavesTheScope
+readme.scope-budget-ledger	README.md	It holds every request to a scope and a budget, and records what it sent	bench:scope: no request leaves the program's scope;bench:summary = ledger = what arrived;test:internal/egress:TestTargetClientRefusesWhatLeavesTheScope;test:internal/contract:TestWireIsLedgerIsSummary
 readme.one-workspace	README.md	Everything lands in one SQLite workspace you can query, export and diff	bench:identical runs diff empty;bench:export: targets and HTML report;test:cmd/azhaq:TestEveryCommandHasAPage
 readme.permute	README.md	resolves variations of the names found	test:cmd/azhaq:TestRunPermutesTheNamesTheBruteForceFound;test:internal/collectors/brutecol:TestPermute
 readme.interact	README.md	Chrome clicks the buttons and menus of an app that draws its pages in the browser	test:internal/browser:TestInteractClicksAndSendsNoWrite;test:cmd/azhaq:TestInteractAddsToTheCrawlWhenAClickLeavesTheScope
@@ -37,12 +37,12 @@ readme.output-contract	README.md	Every command prints results on stdout and a su
 readme.migrating	README.md	Every tool's own command lines, flag by flag, are in	test:cmd/azhaq:TestMigratingCoversTheTools
 readme.scope-control	README.md	No request to a target goes to a host outside the [scope]	bench:scope: no request leaves the program's scope;bench:scope: no request leaves the program's scope with Chrome;test:internal/fetch:TestScopeStopsRequestsAndRedirects,TestSameSiteScope;test:internal/browser:TestScope
 readme.kill-switch	README.md	no request, connection or query starts after it exists	test:internal/egress:TestKillFileStopsSpendAndTake,TestEverySendLooksForTheKillFileItself,TestPortDialerStopsAtTheKillFile,TestDNSExchangeStopsAtTheKillFile
-readme.ledger	README.md	Every request and connection of a run with a workspace is recorded in a hash-chained file that a seal closes	bench:summary = ledger = what arrived;test:cmd/azhaq:TestLedgerCommandVerify,TestLedgerCommandVerifySealCatchesARechainedForgery
+readme.ledger	README.md	Every request and connection of a run with a workspace is recorded in a hash-chained file that a seal closes	bench:summary = ledger = what arrived;test:cmd/azhaq:TestLedgerCommandVerify,TestLedgerCommandVerifySealCatchesARechainedForgery;test:internal/contract:TestWireIsLedgerIsSummary
 readme.sends-get	README.md	every request azhaq sends to a target on purpose is a GET	test:engine:TestEveryFoundGetIsRequestedAndDenyPathIsListed;test:cmd/azhaq:TestPlanSendsNameWhatIsPlanned,TestDocsStateWhatTheGETPromiseIs
 readme.sessions	README.md	A signed-in run checks its session as it goes	test:engine:TestMapSignsInAgainWhenALinkEndsTheSession,TestMapStopsWhenACookieSessionEnds,TestMapSurvivesASilentLogout
 readme.sessions-cookie	README.md	a `-cookie` run stops with a failure and exit 3 at the check that finds it	test:cmd/azhaq:TestCookieRunStopsAtTheRequestThatEndedItsSession;test:engine:TestMapStopsWhenACookieSessionEnds
 readme.kinds-of-request	README.md	Pages, scripts, API descriptions, GET forms and 51 built-in path checks are GETs	test:cmd/azhaq:TestDocsCountTheBuiltInPathsAsThePlanDoes,TestPlanSendsNameWhatIsPlanned
-readme.passive	README.md	`-passive` sends nothing to the targets	test:engine:TestPassiveSkipsHTTP;test:cmd/azhaq:TestRunDemoPassive
+readme.passive	README.md	`-passive` sends nothing to the targets	test:engine:TestPassiveSkipsHTTP;test:cmd/azhaq:TestRunDemoPassive;test:internal/contract:TestDocumentedPromisesAreKept
 readme.mcp-fixed	README.md	are fixed at start, and no tool argument can widen them	test:cmd/azhaq:TestMCPHeldRunOptionsReachTheCommands,TestMCPMapAndResume,TestMCPRefusesHostHeaders
 readme.mcp-schema	README.md	An argument the schema does not take is refused	test:cmd/azhaq:TestMCPProtocol
 readme.mcp-unlocked	README.md	Without `-allow` or `-scope` the server does not start	test:cmd/azhaq:TestMCPProtocol
@@ -71,6 +71,7 @@ plan.sources-none	docs/commands/plan.md	With `-sources none` no collector that a
 worker.deny-path	docs/commands/worker.md	A URL a `-deny-path` rule keeps out is never sent	test:cmd/azhaq:TestWorkerHoldsDenyPathAndReportsIt
 worker.session	docs/commands/worker.md	In a signed-in run it reports a 401, a redirect to the sign-in page or a cleared session cookie	test:engine:TestWorkersSessionEndsAndIsRenewed,TestWorkersSessionLostIsNotRenewed;test:cmd/azhaq:TestWorkersSessionGivenByCookieEndsTheRun
 query.every-row	docs/commands/query.md	`query` prints every row that matches, unless `-limit` says otherwise	test:cmd/azhaq:TestRegressOUT03QueryPrintsEveryRow;test:bench:TestQueryDefaultUnlimited
+query.failed-run	docs/commands/query.md	`query -failed` reads the newest run of the workspace unless `-run ID` names another, and says which run it read in a note.	test:cmd/azhaq:TestFailedTargetsOfAnEarlierRunAreNamedAndRetried
 ledger.records-every-class	docs/commands/ledger.md	Check, count or export the record of every request, connection and query a run sent	test:internal/ledger:TestEntriesCarryTheirClass;test:cmd/azhaq:TestLedgerSummaryCountsByClass,TestNotifyLedgerListsEveryRequestItSent;test:internal/egress:TestDNSExchangeIsInTheLedgerAsADNSLine;bench:summary = ledger = what arrived
 ledger.summary-text	docs/commands/ledger.md	The text lists the counts by `class`, `kind`, `method`, `host` and `rule`	test:cmd/azhaq:TestLedgerSummaryCountsByClass;test:internal/ledger:TestALedgerFromBeforeClassesStillVerifies
 ledger.classes	docs/commands/ledger.md	Each line has a class: `target` (a host the run was pointed at)	test:internal/ledger:TestEntriesCarryTheirClass,TestALedgerFromBeforeClassesStillVerifies;test:cmd/azhaq:TestLedgerSummaryCountsByClass

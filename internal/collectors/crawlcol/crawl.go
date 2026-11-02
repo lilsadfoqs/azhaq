@@ -52,8 +52,12 @@ func (c *Collector) Inputs() []types.SeedType { return []types.SeedType{types.Ty
 
 func (c *Collector) Outputs() []string { return []string{"url"} }
 
-// Skip declines scripts and static assets: there is nothing to crawl.
+// Skip declines scripts and static assets: there is nothing to crawl. A
+// stylesheet is read for the URLs it names.
 func (c *Collector) Skip(seed types.Seed) bool {
+	if u, err := url.Parse(seed.Keys["url"]); err == nil && strings.HasSuffix(strings.ToLower(u.Path), ".css") {
+		return false
+	}
 	switch webextract.ClassifyURL(seed.Keys["url"]) {
 	case "script", "asset":
 		return true
@@ -109,6 +113,8 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 	switch {
 	case strings.Contains(ct, "json"):
 		return c.jsonLinks(raw, res.Body, base, emit)
+	case strings.Contains(ct, "css"):
+		return c.cssLinks(raw, res.Body, base, emit)
 	case ct != "" && !strings.Contains(ct, "html") && !strings.Contains(ct, "xml"):
 		if strings.HasPrefix(ct, "text/") && !strings.Contains(ct, "javascript") {
 			linked := map[string]bool{raw: true}
@@ -187,6 +193,12 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 	// of the map, and its row lists them.
 	linked := map[string]bool{}
 	refs := append(webextract.HeaderRefs(res.Header, base), webextract.LinkRefs(body, base)...)
+	// The stylesheets the page loads are requested, as a browser does and as
+	// katana lists them; the images and fonts they and the page name are not.
+	sheets := map[string]bool{}
+	for _, u := range webextract.Stylesheets(body, base) {
+		sheets[u] = true
+	}
 	for _, ref := range refs {
 		link := ref.URL
 		linked[link] = true
@@ -218,7 +230,7 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 				return meta, err
 			}
 		}
-		if ref.Method == "" && !asked[link] && webextract.Hintable(link) {
+		if ref.Method == "" && !asked[link] && (webextract.Hintable(link) || ref.Tag == "link" && sheets[link]) {
 			meta.NextHints = append(meta.NextHints, types.Seed{
 				Type: types.TypeURL,
 				Keys: map[string]string{"url": link},
@@ -261,6 +273,38 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 			meta.NextHints = append(meta.NextHints, types.Seed{
 				Type: types.TypeURL, Keys: map[string]string{"url": link},
 			})
+		}
+	}
+	return meta, nil
+}
+
+// cssLinks reads the URLs a stylesheet names: each is a URL of the map; an
+// imported stylesheet and what is not an image or a font is requested.
+func (c *Collector) cssLinks(raw string, body []byte, base *url.URL, emit func(types.Observation) error) (types.RunMeta, error) {
+	meta := types.RunMeta{Status: types.StatusOK}
+	for _, ref := range webextract.CSSRefs(string(body), base) {
+		if ref.URL == raw {
+			continue
+		}
+		attr := "url"
+		if ref.Import {
+			attr = "import"
+		}
+		pref := webextract.PageRef{URL: ref.URL, Tag: "style", Attr: attr}
+		if !crawlscope.Within(raw, ref.URL) {
+			c.offsite(raw, pref, emit, &meta)
+			continue
+		}
+		payload, _ := json.Marshal(map[string]string{"url": ref.URL, "via": "css", "tag": pref.Tag, "attribute": attr})
+		if err := emit(types.Observation{
+			Collector: Name, Source: raw, Kind: "url",
+			Payload: payload, Confidence: 0.85, ObservedAt: time.Now().UTC(),
+		}); err != nil {
+			return meta, err
+		}
+		meta.EmitCount++
+		if ref.Import || webextract.Hintable(ref.URL) {
+			meta.NextHints = append(meta.NextHints, types.Seed{Type: types.TypeURL, Keys: map[string]string{"url": ref.URL}})
 		}
 	}
 	return meta, nil

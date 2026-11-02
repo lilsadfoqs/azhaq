@@ -1000,6 +1000,18 @@
   "TestReadWriteSeeds": 0,
   "TestRejectEmptyAndExport": 0
  },
+ "internal/contract": {
+  "TestCommandsThatReadSendNothing": 2.69,
+  "TestCrawlCountsAddUpToTheRows": 1.24,
+  "TestCrawlRequestsTheStylesheetsAPageLoads": 0.38,
+  "TestCrawlTakesNoModuleMapKeyForARoute": 0.26,
+  "TestDocumentedPromisesAreKept": 1.88,
+  "TestExitCodeFollowsTheOutcome": 27.54,
+  "TestMCPWireIsLedgerIsSummary": 3.27,
+  "TestPromisesWithoutAProof": 0.08,
+  "TestRunCountsAddUpToTheRows": 2.56,
+  "TestWireIsLedgerIsSummary": 31.86
+ },
  "internal/cpedetect": {
   "TestDetect": 0.1,
   "TestWordPress": 0.06

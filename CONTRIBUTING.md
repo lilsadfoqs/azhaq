@@ -47,6 +47,7 @@ It needs commitlint, installed once: `npm i -g @commitlint/cli@19.8.1`. Merge, `
 - A fix comes with a test that fails before it.
 - A test that runs a command through `cli`, `runContract` or `captureBoth` is held to the invariants in `cmd/azhaq/invariants_test.go`: a summary that lists a failure does not exit 0, the summary's requests are the ledger's lines to targets, no row or ledger line names a host and port outside `-allow` or `-scope`, and with `-resolvers` no DNS line goes to the system's resolver.
 - Comments are short and say why, not what. An exported name's comment starts with the name.
+- `internal/contract` builds the binary and runs each command that sends against local labs: what a proxy or listener in front of the lab sees, the lines of the ledger and the summary's `requests` must be the same; the counts of `crawl` and `run` add up to their rows; the exit code follows what a lab forces; the promises a page makes are run (`claims()` in `docclaims_test.go`). A row that breaks an open issue names it (`known: "#N"`) and is skipped until the fix lands; `AZHAQ_CONTRACT_STRICT=1` fails those rows too. `go test -tags reference ./internal/contract -run TestReference` compares azhaq's default output with curl, nmap -sV and katana where they are installed (the `reference` job of `ci.yml`).
 - Flags and output fields are documented in `docs/`; tests in `cmd/azhaq` check the docs against the flags.
 
 ## Docs

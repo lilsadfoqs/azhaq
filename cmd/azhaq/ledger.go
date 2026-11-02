@@ -154,15 +154,16 @@ func startSideLedger(ledgerFlag, db string) (*runLedger, error) {
 	return &runLedger{stopKill: func() {}, l: l, owned: true, from: l.Count()}, nil
 }
 
-// rolesLedger opens one ledger in dir for everything azhaq roles sends: the
+// rolesLedger opens one ledger, path, for everything azhaq roles sends: the
 // run of each role, which finds it in use, and the requests between them.
+// dir holds the kill file.
 // It returns the func that closes it, and rearm, which watches roles.stop
 // again after a role's run ended its own watch: the replay stops at it too.
-func rolesLedger(dir string, rep *report) (closeIt, rearm func()) {
+func rolesLedger(dir, path string, rep *report) (closeIt, rearm func()) {
 	kill := filepath.Join(dir, "roles.stop")
 	r := &runLedger{stopKill: egress.SetKill(kill)}
 	rearm = func() { r.stopKill = egress.SetKill(kill) }
-	l, err := ledger.Open(filepath.Join(dir, "roles.ledger.jsonl"))
+	l, err := ledger.Open(path)
 	if err != nil {
 		rep.Notes = append(rep.Notes, "no ledger: "+err.Error())
 		return func() { r.stopKill() }, rearm

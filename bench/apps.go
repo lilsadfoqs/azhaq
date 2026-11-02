@@ -59,7 +59,7 @@ const headlessLimit = 5 * time.Minute
 
 func compareBrowsers(target, db string, truth map[string]bool, shell string) *browserRow {
 	row := &browserRow{Limit: headlessLimit.Seconds()}
-	_, m := run(target, 10*time.Minute, filepath.Dir(db), azhaq, "run", "-url", target, "-db", db, "-browser", "-quiet")
+	_, m := run(target, 10*time.Minute, filepath.Dir(db), azhaq, "run", "-url", target, "-db", db, "-browser", "-chrome-no-sandbox", "-quiet")
 	out, _ := exec.Command(azhaq, "export", "-db", db).Output()
 	row.Azhaq = scoreAzhaq(readExport(out), target, truth, shell, m)
 	var km runMeasure
@@ -75,7 +75,8 @@ type toolScore struct {
 	Routes  int     `json:"routes"`          // distinct non-asset paths on the app's origin
 	Truth   int     `json:"truth,omitempty"` // known routes found
 	TruthOf int     `json:"truth_of,omitempty"`
-	Shell   int     `json:"shell"` // reported URLs that are the app's catch-all page
+	Shell   int     `json:"shell"`            // reported URLs that are the app's catch-all page
+	Styles  int     `json:"styles,omitempty"` // distinct stylesheets listed, which Routes leaves out (the crawl comparison)
 	Seconds float64 `json:"seconds"`
 	RSSMB   float64 `json:"rss_mb"`
 }
@@ -778,13 +779,13 @@ func crawlCompare(a *appResult, truth map[string]bool, shell string) {
 		urls = append(urls, firstField(l))
 	}
 	found := routes(urls, origin)
-	az := toolScore{Routes: len(found), Truth: matched(found, truth), TruthOf: len(truth), Seconds: m.Seconds, RSSMB: m.RSSMB}
+	az := toolScore{Routes: len(found), Styles: len(stylesheets(urls, origin)), Truth: matched(found, truth), TruthOf: len(truth), Seconds: m.Seconds, RSSMB: m.RSSMB}
 	ka := append([]string{"-u", a.URL, "-d", "3", "-jc", "-jsl", "-silent", "-nc", "-timeout", "10", "-c", "10"}, katanaPace(a.URL)...)
 	kout, km := run1(a.URL, 30*time.Minute, work, ref("katana"), ka...)
 	kfound := routes(lines(kout), origin)
-	kt := toolScore{Routes: len(kfound), Truth: matched(kfound, truth), TruthOf: len(truth), Seconds: km.Seconds, RSSMB: km.RSSMB}
+	kt := toolScore{Routes: len(kfound), Styles: len(stylesheets(lines(kout), origin)), Truth: matched(kfound, truth), TruthOf: len(truth), Seconds: km.Seconds, RSSMB: km.RSSMB}
 	a.Crawl, a.CrawlKatana = &az, &kt
 	barOne("crawl "+a.Name, az.Truth, kt.Truth, az.Seconds, kt.Seconds, "the app's own routes (its server code or OpenAPI document, or the routes only its page scripts hold)",
 		cmdLine(azhaq, aa...)+" vs "+cmdLine("katana", ka...),
-		fmt.Sprintf("routes found azhaq %d, katana %d; known %d and %d of %d; %s%s", az.Routes, kt.Routes, az.Truth, kt.Truth, len(truth), ratios(az.Seconds, kt.Seconds, memPair{az.RSSMB, kt.RSSMB}), azErr(m)))
+		fmt.Sprintf("routes found azhaq %d, katana %d; stylesheets listed azhaq %d, katana %d; known %d and %d of %d; %s%s", az.Routes, kt.Routes, az.Styles, kt.Styles, az.Truth, kt.Truth, len(truth), ratios(az.Seconds, kt.Seconds, memPair{az.RSSMB, kt.RSSMB}), azErr(m)))
 }

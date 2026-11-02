@@ -36,7 +36,7 @@ func cmdCrawl(args []string) error {
 	var urls stringsFlag
 	fs.Var(&urls, "u", "start URL (repeatable, or comma-separated)")
 	list := onceString(fs, "l", "file of start URLs (- for stdin)")
-	given := inherit(fs, append([]string{"depth", "max-items", "parallel", "host-parallel", "delay", "paths", "browser", "browser-writes",
+	given := inherit(fs, append([]string{"depth", "max-items", "parallel", "host-parallel", "delay", "paths", "browser", "browser-writes", "chrome-no-sandbox",
 		"login", "login-user", "login-pass", "per-template", "proxy", "retry", "backoff", "cookie-jar", "host-rate", "max-host-requests", "request-timeout", "max-response-size", "submit-forms", "path-climb", "no-map-guess", "interact", "interact-clicks", "resolvers", "no-follow",
 		"kf=known-files", "fs=crawl-scope", "ns=crawl-any-host", "c=host-parallel", "p=parallel", "rl=rate", "ct=timeout", "dr=no-follow", "r=resolvers"},
 		targetFlags...)...)
@@ -214,7 +214,7 @@ func cmdCrawl(args []string) error {
 	}
 	facts, rejected, offsite := crawlFacts(obs)
 	counts := map[string]int{}
-	var otherMethod, scriptsOnly, linkedListed int
+	var otherMethod, scriptsOnly, linkedListed, extLeft, filterLeft int
 	otherAsked := map[int]int{} // what the GET of those routes answered
 	var kinds crawlKinds
 	for _, r := range rows {
@@ -223,6 +223,7 @@ func cmdCrawl(args []string) error {
 		}
 		kinds.add(r)
 		if outOpts.hidden(r) {
+			extLeft++ // the extension list: counted in the summary, listed with -assets
 			continue
 		}
 		if !*hints && !outOpts.listed(r) {
@@ -235,6 +236,11 @@ func cmdCrawl(args []string) error {
 			continue // a view the app draws, a socket: no page a GET gets; -json lists them
 		}
 		if !out.keep(r.Entity.Key) {
+			if out.byDefaultList(r.Entity.Key) {
+				extLeft++
+			} else {
+				filterLeft++
+			}
 			continue
 		}
 		counts[r.Coverage]++
@@ -275,6 +281,22 @@ func cmdCrawl(args []string) error {
 	}
 	rep.Results, rep.Counts = out.w.count(), counts
 	kinds.put(counts, len(rejected))
+	if extLeft > 0 {
+		counts["left out by the extension list"] = extLeft
+	}
+	if filterLeft > 0 {
+		counts["left out by -em, -ef, -mr, -fr"] = filterLeft
+	}
+	if extLeft > 0 {
+		note := fmt.Sprintf("%s left out of the list by the default extension list: images, fonts, media, archives, .pdf, .txt, source maps and build manifests (-assets lists the images, fonts, media, source maps and manifests; -ndef lists all of them)", plural(extLeft, "row")+rowWere(extLeft))
+		rep.Notes = append(rep.Notes, note)
+		if c.silent && !c.json {
+			fmt.Fprintln(os.Stderr, "azhaq crawl: "+note)
+		}
+	}
+	if filterLeft > 0 {
+		rep.Notes = append(rep.Notes, fmt.Sprintf("%s left out of the list by -em, -ef, -mr or -fr", plural(filterLeft, "row")+rowWere(filterLeft)))
+	}
 	if !*hints && kinds.hints+kinds.named > 0 {
 		note := fmt.Sprintf("%d hints and %d named URLs were left out of the list (-hints lists them; a larger -depth requests more of the named URLs; -json marks each row's class)", kinds.hints, kinds.named)
 		rep.Notes = append(rep.Notes, note)
@@ -285,7 +307,7 @@ func cmdCrawl(args []string) error {
 	}
 	if linkedListed > 0 {
 		// Listed as katana lists them, and said so: no request asked them.
-		note := fmt.Sprintf("%d listed URLs are links or loads a page holds that the crawl did not request (past -depth, a limit or a -deny-path rule, or a stylesheet, library script, image or font it does not fetch), so a GET may answer 404 (-json marks each row's class: linked)", linkedListed)
+		note := fmt.Sprintf("%d listed URLs are links or loads a page holds that the crawl did not request (past -depth, a limit or a -deny-path rule, or a library script, image or font it does not fetch), so a GET may answer 404 (-json marks each row's class: linked)", linkedListed)
 		rep.Notes = append(rep.Notes, note)
 		if c.silent && !c.json {
 			fmt.Fprintln(os.Stderr, "azhaq crawl: "+note)
@@ -523,7 +545,7 @@ type crawlOpts struct {
 }
 
 // hidden: a row the crawl does not list unless -assets, -em or -ndef asks. Scripts and
-// stylesheets are listed, found or fetched, as katana lists them; what is left out is what
+// stylesheets are listed, requested as katana does; what is left out is what
 // the default extension list leaves out (images, fonts, media) and the source maps and
 // build manifests azhaq guesses at, which no page names.
 func (o crawlOpts) hidden(r engine.MapEntry) bool {
@@ -665,6 +687,24 @@ func (c *crawlOutput) keep(raw string) bool {
 		return false
 	}
 	return true
+}
+
+func rowWere(n int) string {
+	if n == 1 {
+		return " was"
+	}
+	return " were"
+}
+
+// byDefaultList says whether keep dropped raw for the default extension list
+// alone, and no -em, -ef, -mr or -fr the user gave.
+func (c *crawlOutput) byDefaultList(raw string) bool {
+	o := c.o
+	ext := urlExt(raw)
+	if o.hasMatch || o.deny[ext] || !o.defDeny[ext] {
+		return false
+	}
+	return (o.mr == nil || o.mr.MatchString(raw)) && (o.fr == nil || !o.fr.MatchString(raw))
 }
 
 // urlFields are katana's fields of a URL (pkg/output/fields.go, MIT).

@@ -38,11 +38,11 @@ exit 1
 	return script
 }
 
-// Where Chrome has no sandbox, it is started once more without it, and the
-// browser says why.
+// Where Chrome has no sandbox and the user allowed it, it is started once
+// more without it, and the browser says why.
 func TestChromeWithoutSandboxRetries(t *testing.T) {
 	t.Setenv("AZHAQ_CHROME_NO_SANDBOX", "")
-	b := &Browser{ChromePath: noSandboxChrome(t)}
+	b := &Browser{ChromePath: noSandboxChrome(t), AllowNoSandbox: true}
 	t.Cleanup(fetch.Reset)
 	if err := b.Start(); err != nil {
 		t.Fatalf("Chrome did not start without its sandbox: %v", err)
@@ -50,6 +50,31 @@ func TestChromeWithoutSandboxRetries(t *testing.T) {
 	defer b.Close()
 	if r := b.Unsandboxed(); !strings.Contains(r, "No usable sandbox") {
 		t.Errorf("reason %q, want Chrome's own line", r)
+	}
+}
+
+// By default Chrome is not run without its sandbox: it does not start, and
+// the error names the flag that allows it.
+func TestChromeDoesNotRunWithoutItsSandboxByDefault(t *testing.T) {
+	t.Setenv("AZHAQ_CHROME_NO_SANDBOX", "")
+	b := &Browser{ChromePath: noSandboxChrome(t)}
+	t.Cleanup(fetch.Reset)
+	err := b.Start()
+	if !errors.Is(err, ErrNoSandbox) || !strings.Contains(err.Error(), "-chrome-no-sandbox") {
+		t.Fatalf("got %v, want ErrNoSandbox naming -chrome-no-sandbox", err)
+	}
+	if b.Unsandboxed() != "" {
+		t.Errorf("Chrome was started without its sandbox: %q", b.Unsandboxed())
+	}
+}
+
+// The two settings contradict each other.
+func TestChromeRequireAndAllowNoSandboxContradict(t *testing.T) {
+	t.Setenv("AZHAQ_CHROME_NO_SANDBOX", "")
+	b := &Browser{ChromePath: noSandboxChrome(t), RequireSandbox: true, AllowNoSandbox: true}
+	t.Cleanup(fetch.Reset)
+	if err := b.Start(); err == nil || !strings.Contains(err.Error(), "contradict") {
+		t.Fatalf("got %v", err)
 	}
 }
 

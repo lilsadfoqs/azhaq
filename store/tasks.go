@@ -226,6 +226,29 @@ FROM runs r WHERE left > 0 ORDER BY r.started DESC LIMIT 1`).Scan(&id, &raw, &le
 	return id, args, left, true, nil
 }
 
+// ResumableRun is Resumable for one run: its options and how many tasks it
+// has left. ok is false when it has none.
+func (s *Store) ResumableRun(id string) (args []string, left int, ok bool, err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var raw sql.NullString
+	err = s.q().QueryRow(`
+SELECT r.args, (SELECT COUNT(*) FROM tasks t WHERE t.run_id = r.id AND t.done = 0) AS left
+FROM runs r WHERE r.id = ? AND left > 0`, id).Scan(&raw, &left)
+	if err == sql.ErrNoRows {
+		return nil, 0, false, nil
+	}
+	if err != nil {
+		return nil, 0, false, err
+	}
+	if raw.Valid && raw.String != "" {
+		if err := json.Unmarshal([]byte(raw.String), &args); err != nil {
+			return nil, 0, false, err
+		}
+	}
+	return args, left, true, nil
+}
+
 // AddRunRequests adds the requests a process sent for the current run: a
 // resumed run keeps adding to the run's count.
 func (s *Store) AddRunRequests(n int64) error {

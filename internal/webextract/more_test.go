@@ -99,3 +99,28 @@ func TestTemplateFoldsRecordsUnderOtherNames(t *testing.T) {
 		}
 	}
 }
+
+func TestJSURLRefsMarkModuleMapKeys(t *testing.T) {
+	base, _ := url.Parse("http://h/")
+	script := `var m={"./components/locale/zh_CN":0,"./AdhocFilter":2};switch(e){case"./Alpha":1}` +
+		`var a=x?"./T1":"./T2";var r="./redirect?to=";`
+	keys := map[string]bool{}
+	for _, r := range JSURLRefs(script, base) {
+		keys[r.URL] = r.Key
+	}
+	for _, u := range []string{"http://h/components/locale/zh_CN", "http://h/AdhocFilter", "http://h/Alpha"} {
+		if !keys[u] {
+			t.Errorf("%s is a module id: %v", u, keys)
+		}
+	}
+	for _, u := range []string{"http://h/T1", "http://h/T2", "http://h/redirect"} {
+		if k, ok := keys[u]; !ok || k {
+			t.Errorf("%s is a route: %v", u, keys)
+		}
+	}
+	for _, u := range JSURLs(script, base) {
+		if strings.Contains(u, "Adhoc") || strings.Contains(u, "zh_CN") || strings.Contains(u, "Alpha") {
+			t.Errorf("JSURLs lists the module id %s", u)
+		}
+	}
+}
