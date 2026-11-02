@@ -13,12 +13,15 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/lilsadfoqs/azhaq/internal/egress"
 	"github.com/lilsadfoqs/azhaq/internal/ledger"
+	"github.com/lilsadfoqs/azhaq/internal/tlstest"
 )
 
 func fixture(t *testing.T, name string) []byte {
@@ -532,5 +535,29 @@ func TestJavaRMIRegistryIsNamed(t *testing.T) {
 	}
 	if got := r.Open[0]; got.Service != "java-rmi" || got.Product != "Java RMI" || !strings.Contains(got.Extra, "192.168.0.5") {
 		t.Errorf("registry on a free port: %+v", got)
+	}
+}
+
+// A TLS port whose suites are only RSA key exchange or DHE, which crypto/tls
+// does not offer, is named as the handshake with the fallback client says:
+// https with the version and suite in the row, the extra connect counted.
+func TestTLSPortWithOnlyLegacySuitesIsNamed(t *testing.T) {
+	for name, suite := range map[string]uint16{"rsa": tlstest.RSAGCM, "dhe": tlstest.DHEGCM} {
+		srv := tlstest.Serve(t, 0, 0, suite)
+		_, p, _ := net.SplitHostPort(srv.Addr)
+		port, _ := strconv.Atoi(p)
+		var takes atomic.Int32
+		s := &Scanner{Banner: 200 * time.Millisecond, Timeout: 2 * time.Second, Take: func() error { takes.Add(1); return nil }}
+		r, err := s.ScanEach(t.Context(), "", "127.0.0.1", []int{port})
+		if err != nil || len(r.Open) != 1 {
+			t.Fatalf("%s: %v %+v", name, err, r)
+		}
+		o := r.Open[0]
+		if !o.TLS || o.Service != "https" || o.TLSVers != "tls12" || o.Cipher != tls.CipherSuiteName(suite) && o.Cipher != egress.CipherSuiteName(suite) || o.SubjectCN != "legacy.test" {
+			t.Errorf("%s: %+v", name, o)
+		}
+		if takes.Load() > 1+maxProbes {
+			t.Errorf("%s: %d connects", name, takes.Load())
+		}
 	}
 }

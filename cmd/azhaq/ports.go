@@ -555,7 +555,7 @@ func (k *portsSink) visit(o types.Observation, print bool) {
 		}
 		n, _ := strconv.Atoi(port)
 		row := portRow{Host: host, IP: ip, Port: n, Proto: "tcp", State: "open", TLS: svc["tls"] == true, CDN: cdn, At: time.Now(), Fields: map[string]any{}}
-		for _, f := range []string{"service", "product", "version", "extrainfo", "title", "banner", "subject_cn", "subject_an"} {
+		for _, f := range []string{"service", "product", "version", "extrainfo", "title", "banner", "tls_version", "cipher", "subject_cn", "subject_an"} {
 			if v, ok := svc[f]; ok {
 				row.Fields[f] = v
 			}

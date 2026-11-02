@@ -131,6 +131,8 @@ type Open struct {
 	Version   string   `json:"version,omitempty"`
 	Extra     string   `json:"extrainfo,omitempty"` // what the answer says beside product and version: a Server header's runtime, an SSH comment
 	TLS       bool     `json:"tls,omitempty"`
+	TLSVers   string   `json:"tls_version,omitempty"` // tls10 to tls13, what the handshake negotiated
+	Cipher    string   `json:"cipher,omitempty"`      // the suite it negotiated
 	SubjectCN string   `json:"subject_cn,omitempty"`
 	SubjectAN []string `json:"subject_an,omitempty"`
 

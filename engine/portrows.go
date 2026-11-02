@@ -106,17 +106,17 @@ func portRows(e types.Entity, scope string, obs []types.StoredObservation) []Map
 		}
 		sort.SliceStable(s.tcp, func(i, j int) bool { return s.tcp[i].Port < s.tcp[j].Port })
 		for _, o := range s.tcp {
-			add(id, s, o.Port, "tcp", "open", o.Service, o.Product, o.Version, portProof("open", o.Service, o.Product, o.Version, o.Extra, o.TLS, o.Title, o.Banner))
+			add(id, s, o.Port, "tcp", "open", o.Service, o.Product, o.Version, portProof("open", o.Service, o.Product, o.Version, o.Extra, o.TLS, o.TLSVers, o.Cipher, o.Title, o.Banner))
 		}
 		for _, u := range s.udp {
-			add(id, s, u.Port, "udp", u.State, u.Service, u.Product, u.Version, portProof(u.State, u.Service, u.Product, u.Version, "", false, "", u.Banner))
+			add(id, s, u.Port, "udp", u.State, u.Service, u.Product, u.Version, portProof(u.State, u.Service, u.Product, u.Version, "", false, "", "", "", u.Banner))
 		}
 	}
 	return out
 }
 
 // portProof is a port row's facts, in the order a reader looks for them.
-func portProof(state, service, product, version, extra string, tls bool, title, banner string) []string {
+func portProof(state, service, product, version, extra string, tls bool, tlsVers, cipher, title, banner string) []string {
 	parts := []string{"state=" + state}
 	for _, kv := range [][2]string{{"service", service}, {"product", product}, {"version", version}, {"extrainfo", extra}} {
 		if kv[1] != "" {
@@ -125,6 +125,11 @@ func portProof(state, service, product, version, extra string, tls bool, title, 
 	}
 	if tls {
 		parts = append(parts, "tls=true")
+		for _, kv := range [][2]string{{"tls_version", tlsVers}, {"cipher", cipher}} {
+			if kv[1] != "" {
+				parts = append(parts, kv[0]+"="+kv[1])
+			}
+		}
 	}
 	if title != "" {
 		parts = append(parts, "title="+strconv.Quote(title))

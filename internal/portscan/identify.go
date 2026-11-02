@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/lilsadfoqs/azhaq/internal/egress"
 )
 
 // maxProbes is how many more connects an open port that said nothing may
@@ -221,7 +223,26 @@ func (s *Scanner) dialWait(ctx context.Context, host, ip string, port int, secur
 	if net.ParseIP(host) == nil {
 		cfg.ServerName = host
 	}
-	return s.pd.TLS(ctx, host, addr, cfg, handshake)
+	c, err := s.pd.TLS(ctx, host, addr, cfg, handshake)
+	if err == nil || !egress.LegacyTLSNeeded(err) || ctx.Err() != nil {
+		return c, err
+	}
+	// The server answered with an alert crypto/tls takes for no TLS it can do
+	// (RSA key exchange only, DHE): one more connect, as paced, counted and
+	// recorded as any, with the fallback client.
+	if werr := s.wait(ctx, ip); werr != nil {
+		return nil, err
+	}
+	if s.Take != nil {
+		if terr := s.Take(); terr != nil {
+			s.noteStop(terr)
+			return nil, err
+		}
+	}
+	if lc, lerr := s.pd.TLSLegacy(ctx, host, addr, cfg, handshake); lerr == nil {
+		return lc, nil
+	}
+	return nil, err
 }
 
 // talk writes req (when there is one) and reads the answer until frame
@@ -804,7 +825,11 @@ func (id *ident) tls() bool {
 	}
 	o.TLS = true
 	o.Service, o.Banner = "tls", ""
-	if certs := c.(*tls.Conn).ConnectionState().PeerCertificates; len(certs) > 0 {
+	if st, ok := c.(interface{ ConnectionState() tls.ConnectionState }); ok {
+		cs := st.ConnectionState()
+		o.TLSVers, o.Cipher = tlsVersionName(cs.Version), egress.CipherSuiteName(cs.CipherSuite)
+	}
+	if certs := c.(interface{ ConnectionState() tls.ConnectionState }).ConnectionState().PeerCertificates; len(certs) > 0 {
 		o.SubjectCN = certs[0].Subject.CommonName
 		o.SubjectAN = append(o.SubjectAN, certs[0].DNSNames...)
 		for _, a := range certs[0].IPAddresses {
@@ -850,6 +875,21 @@ func (id *ident) tls() bool {
 		return true
 	}
 	return true
+}
+
+// tlsVersionName is tls10 to tls13, as the probe rows name them; "" for another.
+func tlsVersionName(v uint16) string {
+	switch v {
+	case tls.VersionTLS10:
+		return "tls10"
+	case tls.VersionTLS11:
+		return "tls11"
+	case tls.VersionTLS12:
+		return "tls12"
+	case tls.VersionTLS13:
+		return "tls13"
+	}
+	return ""
 }
 
 // noteStop keeps the error that stopped a probe (the run's request budget is

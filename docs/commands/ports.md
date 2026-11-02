@@ -68,6 +68,7 @@ The fields of a `-json` row, which are naabu's plus azhaq's:
 | `extrainfo` | What the answer says beside the product and its version, as it was sent: the rest of a `Server` header (`Python/3.11.15`, `(Ubuntu)`), or an SSH line's comment and protocol (`Ubuntu-2ubuntu2.13; protocol 2.0`). nmap calls it `extrainfo` too, and `-oX` and `-oG` carry it. |
 | `title` | The `<title>` of a web page that names no product. |
 | `banner` | What the port said. A binary answer, to the first read or to the `HEAD`, is `(binary)` and its first bytes in hex. |
+| `tls_version`, `cipher` | What the handshake of a TLS port negotiated: `tls10` to `tls13`, and the suite's name (`TLS_AES_128_GCM_SHA256`, `TLS_RSA_WITH_AES_128_GCM_SHA256`). |
 | `subject_cn`, `subject_an` | The certificate's subject names of a TLS port, as httpx calls them. |
 | `state` | UDP only: `open`, or `open\|filtered`. |
 
@@ -157,7 +158,7 @@ A service that speaks first (`ssh`, `ftp`, `smtp`, `telnet`, `irc`, …) is name
 ### More on formats
 - `-csv` writes a list joined with spaces. `-lof` lists the fields and stops.
 - `-eof a,b` leaves fields out of `-json`, `-csv` and `-oA`'s JSON.
-- `-json` rows have `timestamp` in UTC, RFC 3339, and `subject_cn` and `subject_an` on a TLS port.
+- `-json` rows have `timestamp` in UTC, RFC 3339, and `tls_version`, `cipher`, `subject_cn` and `subject_an` on a TLS port.
 - `-oX FILE` and `-oG FILE` take `-` for stdout. Hosts are in address order and ports by number. `service` has no `?`, which marks a guess from the port number alone (`method="table"` in the XML).
 - The XML and greppable layouts follow naabu's.
 
