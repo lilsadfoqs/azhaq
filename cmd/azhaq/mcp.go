@@ -46,6 +46,7 @@ type mcpServer struct {
 	used    int64
 	runs    map[string]runRecord // workspace → its latest command that failed, for azhaq_status
 	sending chan struct{}        // one command that touches targets at a time
+	ledgerS chan struct{}        // one command at a time writes the server's ledger
 	out     *json.Encoder
 	outMu   sync.Mutex
 	running map[string]context.CancelFunc // request id → its command
@@ -65,6 +66,41 @@ type heldRun struct {
 	NoTakeover bool   `json:"no_takeover,omitempty"` // -no-takeover
 	// ChromeNoSandbox is -chrome-no-sandbox: Chrome may run without its sandbox.
 	ChromeNoSandbox bool `json:"chrome_no_sandbox,omitempty"`
+}
+
+// serverLedgerName is the ledger of the calls that name no workspace, in -dir.
+const serverLedgerName = "server.ledger.jsonl"
+
+func (s *mcpServer) serverLedger() string { return filepath.Join(s.dir, serverLedgerName) }
+
+// serverLedgerPath is where azhaq_status says it is: absolute, as a client
+// on another machine reads it from the server's.
+func (s *mcpServer) serverLedgerPath() string {
+	p, err := filepath.Abs(s.serverLedger())
+	if err != nil {
+		return s.serverLedger()
+	}
+	return p
+}
+
+// runLedgered runs a command that sends and names no workspace, with the
+// server's ledger: one file, which each such command appends to and seals
+// as a workspace's is. The chain has one writer at a time, so these wait
+// for each other.
+func (s *mcpServer) runLedgered(ctx context.Context, progress any, touches bool, args ...string) (cmdResult, error) {
+	s.mu.Lock()
+	if s.ledgerS == nil {
+		s.ledgerS = make(chan struct{}, 1)
+	}
+	sem := s.ledgerS
+	s.mu.Unlock()
+	select {
+	case sem <- struct{}{}:
+	case <-ctx.Done():
+		return cmdResult{}, ctx.Err()
+	}
+	defer func() { <-sem }()
+	return s.run(ctx, progress, touches, append(args, "-ledger", s.serverLedger())...)
 }
 
 // runOptions are the options for a command that maps (run, plan, resume,
@@ -1006,7 +1042,11 @@ func (s *mcpServer) call(ctx context.Context, name string, a map[string]any, pro
 			}
 			args = append(args, "-db", db)
 		}
-		r, err := s.run(ctx, progress, false, args...)
+		run := s.runLedgered
+		if a["workspace"] != nil {
+			run = s.run // the workspace's own ledger
+		}
+		r, err := run(ctx, progress, false, args...)
 		if err != nil {
 			return nil, err
 		}
@@ -1023,7 +1063,7 @@ func (s *mcpServer) call(ctx context.Context, name string, a map[string]any, pro
 		_, _ = f.WriteString(strings.Join(ts, "\n") + "\n")
 		f.Close()
 		defer os.Remove(f.Name())
-		r, err := s.run(ctx, progress, true, "probe", "-json", "-silent", "-l", f.Name())
+		r, err := s.runLedgered(ctx, progress, true, "probe", "-json", "-silent", "-l", f.Name())
 		if err != nil {
 			return nil, err
 		}
@@ -1050,7 +1090,7 @@ func (s *mcpServer) call(ctx context.Context, name string, a map[string]any, pro
 		}
 		// The lock is the scope; each connect counts against the server's
 		// request budget and is paced at its -rate.
-		r, err := s.run(ctx, progress, true, args...)
+		r, err := s.runLedgered(ctx, progress, true, args...)
 		if err != nil {
 			return nil, err
 		}
@@ -1287,6 +1327,7 @@ func (s *mcpServer) status() (map[string]any, error) {
 	raw, _ := json.Marshal(map[string]any{
 		"scope":      map[string]any{"locked": s.locked, "rules": s.lock, "run_options": s.held.view()},
 		"budget":     budget,
+		"ledger":     s.serverLedgerPath(),
 		"workspaces": workspaces,
 	})
 	return toolText(string(raw), false), nil

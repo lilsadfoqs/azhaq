@@ -32,6 +32,8 @@ azhaq subs -ls -json
 4. With `-w WORDS` or `-permute`, also resolves guesses. That is active DNS, and the names found are live.
 5. Prints each name once, then the summary with its counts and a coverage estimate.
 
+With `-db` the requests and queries go in `DB.ledger.jsonl`; without it, in the file `-ledger FILE` names, and nowhere otherwise. `azhaq mcp` gives `azhaq_subdomains` calls with no workspace one of its own.
+
 ## Output
 
 Plain output is one name per line, as subfinder prints it. The domain you give is not printed, because subfinder keeps only the names below it. `-o` appends to a file. With `-json` you get one object per name, with subfinder's fields and azhaq's. The summary's counts add up to the names printed: see [What became of the names](#what-became-of-the-names).
@@ -298,6 +300,7 @@ On tesla.com, `subs -live -dns-rate 10` with two resolvers took 161 s and listed
 | Flag | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `-db` | string |  | keep the graph in this database for query, show, export and diff (default: a temporary one) |
+| `-ledger` | string |  | write every request, connection and DNS query the run sends (to targets, third-party sources and resolvers) to this file, a chain of hashes that azhaq ledger -verify checks (default DB.ledger.jsonl next to the workspace; off: none; with a temporary database, only when given) |
 | `-json` | bool |  | JSONL output, and the summary as one JSON object on stderr |
 | `-o` | string |  | also write results to this file |
 | `-oI` | bool |  | text output: host,ip,source, with -live (subfinder -oI); -json rows get an ip field |

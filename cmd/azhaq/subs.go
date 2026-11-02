@@ -148,7 +148,7 @@ func cmdSubs(args []string) error {
 	stats := fs.Bool("stats", false, "after the run, one note per source: requests, names, errors and seconds, as subfinder -stats")
 	showVersion := fs.Bool("version", false, "print the version and exit")
 	given := inherit(fs, "sources", "exclude-sources", "all-sources", "no-history", "source-timeout", "providers", "resolvers", "dns-rate", "timeout", "v", "fail-on-errors",
-		"source-rate", "source-rates", "max-results", "max-time", "max-body", "proxy=source-proxy", "t=parallel")
+		"source-rate", "source-rates", "max-results", "max-time", "max-body", "proxy=source-proxy", "t=parallel", "ledger")
 	maxNames := fs.Int("max-names", 0, fmt.Sprintf("most names kept per domain, and looked up with -live (default %d); a value you give also caps the names -w and -permute ask, together: the guesses past it are not asked, the run exits 4 and says how many", subcol.DefaultMaxNames))
 	if err := parse(fs, args); err != nil {
 		return err
