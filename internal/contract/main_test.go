@@ -61,6 +61,7 @@ type Summary struct {
 	Results     int            `json:"results"`
 	LeftOut     int            `json:"left_out"`
 	Stored      int            `json:"stored"`
+	Folded      *int           `json:"folded"` // run: stored rows a printed row holds; nil when the summary has no such field
 	Counts      map[string]int `json:"counts"`
 	Requests    int64          `json:"requests"`
 	DNSQueries  int64          `json:"dns_queries"`

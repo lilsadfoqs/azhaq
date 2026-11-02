@@ -21,12 +21,14 @@ type Site struct {
 	delay time.Duration
 	// Status overrides the answer for a path, 0 for none.
 	status map[string]int
+	// spa: every unknown path answers the front page with a 200.
+	spa bool
 }
 
 const siteIndex = `<!doctype html><html><head><title>Lab Shop</title>
 <link rel="stylesheet" href="/static/site.css"></head><body>
 <a href="/about">about</a> <a href="/products?id=1">one</a> <a href="/products?id=2">two</a>
-<a href="/products?id=2">two again</a> <a href="/admin/">admin</a> <a href="/old">old</a>
+<a href="/products?id=2">two again</a> <a href="/admin/">admin</a> <a href="/old">old</a> <a href="/catalog">catalog</a>
 <img src="/static/logo.png">
 <form action="/search" method="get"><input name="q"></form>
 <form action="/contact" method="post"><input name="email"><input name="msg"></form>
@@ -57,13 +59,16 @@ func (s *Site) SetStatus(path string, code int) {
 	s.mu.Unlock()
 }
 
+// SetSPA makes the site answer the front page for every path it has no page for.
+func (s *Site) SetSPA() { s.mu.Lock(); s.spa = true; s.mu.Unlock() }
+
 // SetDelay makes every answer wait.
 func (s *Site) SetDelay(d time.Duration) { s.mu.Lock(); s.delay = d; s.mu.Unlock() }
 
 func (s *Site) serve(w http.ResponseWriter, r *http.Request) {
 	s.Wire.addHTTP(r.Method, s.URL+r.RequestURI)
 	s.mu.Lock()
-	d, code := s.delay, s.status[r.URL.Path]
+	d, code, spa := s.delay, s.status[r.URL.Path], s.spa
 	s.mu.Unlock()
 	if d > 0 {
 		time.Sleep(d)
@@ -86,6 +91,16 @@ func (s *Site) serve(w http.ResponseWriter, r *http.Request) {
 	case p == "/static/logo.png":
 		w.Header().Set("Content-Type", "image/png")
 		fmt.Fprint(w, "\x89PNG\r\n\x1a\n")
+	case p == "/catalog":
+		w.Header().Set("Content-Type", "text/html")
+		fmt.Fprint(w, "<html><title>catalog</title><body>")
+		for i := 1; i <= 30; i++ {
+			fmt.Fprintf(w, `<a href="/item/%d">item %d</a> `, i, i)
+		}
+		fmt.Fprint(w, "</body></html>")
+	case strings.HasPrefix(p, "/item/"):
+		w.Header().Set("Content-Type", "text/html")
+		fmt.Fprintf(w, "<html><title>%s</title><body><h1>Item %s</h1><p>stock: %d</p></body></html>", p, p, len(p)*7)
 	case p == "/robots.txt":
 		fmt.Fprint(w, "User-agent: *\nDisallow: /admin/\n")
 	case p == "/about", p == "/products", p == "/search", p == "/contact", p == "/admin/", p == "/admin", p == "/backup":
@@ -108,6 +123,9 @@ func (s *Site) serve(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		fmt.Fprintf(w, `{"path":%q,"owner":%q,"ok":true}`, p, who)
+	case spa:
+		w.Header().Set("Content-Type", "text/html")
+		fmt.Fprint(w, siteIndex)
 	default:
 		http.NotFound(w, r)
 	}
