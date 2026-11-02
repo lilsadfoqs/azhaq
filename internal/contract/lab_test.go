@@ -48,10 +48,12 @@ func newSiteTLS(t testing.TB, tls bool) *Site {
 	t.Helper()
 	s := &Site{Wire: newWire(), status: map[string]int{}}
 	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { s.serve(w, r) })
+	// The server is set before it starts, so the handler's reads of s.URL follow its writes.
+	s.Server = httptest.NewUnstartedServer(h)
 	if tls {
-		s.Server = httptest.NewTLSServer(h)
+		s.Server.StartTLS()
 	} else {
-		s.Server = httptest.NewServer(h)
+		s.Server.Start()
 	}
 	t.Cleanup(s.Server.Close)
 	return s
@@ -63,6 +65,9 @@ func (s *Site) SetStatus(path string, code int) {
 	s.status[path] = code
 	s.mu.Unlock()
 }
+
+// SetEmbed makes the page /embed load a stylesheet, a script and an image named from url.
+func (s *Site) SetEmbed(url string) { s.mu.Lock(); s.embed = url; s.mu.Unlock() }
 
 // SetBroken makes path close the connection without an answer, and links it from the front page.
 func (s *Site) SetBroken(path string) { s.mu.Lock(); s.broken = append(s.broken, path); s.mu.Unlock() }
@@ -76,7 +81,7 @@ func (s *Site) SetDelay(d time.Duration) { s.mu.Lock(); s.delay = d; s.mu.Unlock
 func (s *Site) serve(w http.ResponseWriter, r *http.Request) {
 	s.Wire.addHTTP(r.Method, s.URL+r.RequestURI)
 	s.mu.Lock()
-	d, code, spa, broken := s.delay, s.status[r.URL.Path], s.spa, slices.Clone(s.broken)
+	d, code, spa, broken, embed := s.delay, s.status[r.URL.Path], s.spa, slices.Clone(s.broken), s.embed
 	s.mu.Unlock()
 	if d > 0 {
 		time.Sleep(d)
@@ -110,7 +115,7 @@ func (s *Site) serve(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, "\x89PNG\r\n\x1a\n")
 	case p == "/embed":
 		w.Header().Set("Content-Type", "text/html")
-		fmt.Fprintf(w, `<html><title>embed</title><head><link rel="stylesheet" href="%s.css"><script src="%s.js"></script></head><body><img src="%s"><a href="/about">about</a></body></html>`, s.embed, s.embed, s.embed)
+		fmt.Fprintf(w, `<html><title>embed</title><head><link rel="stylesheet" href="%s.css"><script src="%s.js"></script></head><body><img src="%s"><a href="/about">about</a></body></html>`, embed, embed, embed)
 	case p == "/catalog":
 		w.Header().Set("Content-Type", "text/html")
 		fmt.Fprint(w, "<html><title>catalog</title><body>")

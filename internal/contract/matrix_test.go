@@ -196,18 +196,18 @@ func checkRow(t *testing.T, v *Inv, l *Labs, r row, outs []outcome) {
 	if r.direct {
 		truth = l.Site.Wire
 	}
-	if d := diff("ledger", sent.HTTP, "wire", truth.snapshot(truth.http)); d != "" {
+	if d := diff("ledger", sent.HTTP, "wire", truth.HTTP()); d != "" {
 		v.Errorf("the ledger's HTTP lines and what the proxy saw differ:\n%s", d)
 	}
 	if !r.direct && len(sent.HTTP) > 0 {
 		// The proxy and the site itself saw the same: the harness is right.
-		if d := diff("proxy", l.Proxy.Wire.snapshot(l.Proxy.Wire.http), "site", l.Site.Wire.snapshot(l.Site.Wire.http)); d != "" {
+		if d := diff("proxy", l.Proxy.Wire.HTTP(), "site", l.Site.Wire.HTTP()); d != "" {
 			t.Fatalf("the harness: the proxy and the site disagree:\n%s", d)
 		}
 	}
 	if l.Ports != nil {
 		for _, a := range []string{l.Ports.Closing, l.Ports.Banner, l.Ports.Web} {
-			v.Equal("connections to "+a+": the ledger's tcp lines, against accepted", int64(sent.TCP[a]), int64(l.Ports.Wire.tcp[a]))
+			v.Equal("connections to "+a+": the ledger's tcp lines, against accepted", int64(sent.TCP[a]), int64(l.Ports.Wire.TCP()[a]))
 		}
 		if n := sent.TCP[l.Ports.Gone]; n == 0 && l.Ports.goneAsked {
 			v.Errorf("the closed port %s has no line in the ledger", l.Ports.Gone)
@@ -215,7 +215,7 @@ func checkRow(t *testing.T, v *Inv, l *Labs, r row, outs []outcome) {
 		v.Equal("the ledger's lines to targets, against the TCP lines", int64(sent.N), int64(sumMap(sent.TCP)+sumMap(sent.HTTP)+sumMap(sent.UDP)))
 	}
 	if l.UDP != "" {
-		v.Equal("packets to "+l.UDP+": the ledger's udp lines, against received", int64(sent.UDP[l.UDP]), int64(l.Ports.Wire.udp[l.UDP]))
+		v.Equal("packets to "+l.UDP+": the ledger's udp lines, against received", int64(sent.UDP[l.UDP]), int64(l.Ports.Wire.UDP()[l.UDP]))
 	}
 	if l.Resolver != nil {
 		v.Equal("DNS lines of the ledger, against packets the resolver got", dnsLines, int64(l.Resolver.Wire.Total()))
@@ -275,7 +275,7 @@ func TestMCPWireIsLedgerIsSummary(t *testing.T) {
 		if call.ledger != "" {
 			sent := ledgerSent(readLedger(t, filepath.Join(l.Dir, "ws", call.ledger)))
 			v.Equal(call.tool+": the summary's requests, against the workspace ledger's lines to targets", s.Requests, int64(sent.N))
-			if d := diff("ledger", sent.HTTP, "site", l.Site.Wire.snapshot(l.Site.Wire.http)); d != "" {
+			if d := diff("ledger", sent.HTTP, "site", l.Site.Wire.HTTP()); d != "" {
 				v.Errorf("%s: the ledger and what the site got differ:\n%s", call.tool, d)
 			}
 		}

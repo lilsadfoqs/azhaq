@@ -51,6 +51,9 @@ func (l *Labs) Cmd(args ...string) Result {
 	}
 	r := Run(l.T, l.Dir, args...)
 	l.results = append(l.results, r)
+	v := newInv(l.T, "")
+	checkSummary(v, r)
+	v.Done()
 	return r
 }
 

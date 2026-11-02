@@ -179,7 +179,7 @@ func TestExitCodeFollowsTheOutcome(t *testing.T) {
 		{name: "a -deny-path rule keeps URLs out", want: 0, shape: func(l *Labs) []string {
 			return []string{"crawl", "-u", l.Site.URL, "-d", "3", "-deny-path", "^/admin"}
 		}, then: func(v *Inv, l *Labs, r Result) {
-			for k := range l.Site.Wire.http {
+			for k := range l.Site.Wire.HTTP() {
 				if strings.Contains(k, "/admin") {
 					v.Errorf("the site got %s though a rule keeps it out", k)
 				}
@@ -187,7 +187,7 @@ func TestExitCodeFollowsTheOutcome(t *testing.T) {
 		}},
 		{name: "Chrome: assets outside the scope are refused", want: 0, chrome: true, shape: func(l *Labs) []string {
 			l.Other = newSite(l.T)
-			l.Site.embed = l.Other.URL + "/pixel"
+			l.Site.SetEmbed(l.Other.URL + "/pixel")
 			return []string{"shots", "-u", l.Site.URL + "/embed", "-allow", l.Allow(), "-dir", "sh"}
 		}, then: func(v *Inv, l *Labs, r Result) {
 			if n := l.Other.Wire.Total(); n != 0 {

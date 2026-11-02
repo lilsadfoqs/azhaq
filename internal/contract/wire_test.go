@@ -71,15 +71,20 @@ func (w *Wire) Total() int {
 	return n
 }
 
-func (w *Wire) snapshot(m map[string]int) map[string]int {
+func (w *Wire) copyOf(pick func(*Wire) map[string]int) map[string]int {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	out := map[string]int{}
-	for k, v := range m {
+	for k, v := range pick(w) {
 		out[k] = v
 	}
 	return out
 }
+
+// HTTP, TCP and UDP are copies of what was seen.
+func (w *Wire) HTTP() map[string]int { return w.copyOf(func(w *Wire) map[string]int { return w.http }) }
+func (w *Wire) TCP() map[string]int  { return w.copyOf(func(w *Wire) map[string]int { return w.tcp }) }
+func (w *Wire) UDP() map[string]int  { return w.copyOf(func(w *Wire) map[string]int { return w.udp }) }
 
 // diff says how two multisets differ, "" when they are equal.
 func diff(aName string, a map[string]int, bName string, b map[string]int) string {
