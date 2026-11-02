@@ -59,7 +59,7 @@ const headlessLimit = 5 * time.Minute
 
 func compareBrowsers(target, db string, truth map[string]bool, shell string) *browserRow {
 	row := &browserRow{Limit: headlessLimit.Seconds()}
-	_, m := run(target, 10*time.Minute, filepath.Dir(db), azhaq, "run", "-url", target, "-db", db, "-browser", "-quiet")
+	_, m := run(target, 10*time.Minute, filepath.Dir(db), azhaq, "run", "-url", target, "-db", db, "-browser", "-chrome-no-sandbox", "-quiet")
 	out, _ := exec.Command(azhaq, "export", "-db", db).Output()
 	row.Azhaq = scoreAzhaq(readExport(out), target, truth, shell, m)
 	var km runMeasure
