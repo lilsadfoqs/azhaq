@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"github.com/lilsadfoqs/azhaq/internal/guard"
+	"math"
 	"net"
 	"sort"
 	"strconv"
@@ -76,16 +77,43 @@ type UDPStop struct {
 	Port, Asked, Of int
 }
 
-// udpPayloads is how many requests a port has in all.
-func udpPayloads(port int) int {
+// udpReqFor is the pass-th request of a port. With DetectNone a port has one: the
+// request of its own protocol on its usual number, an empty datagram on any
+// other.
+func (s *Scanner) udpReqFor(port, pass int) (udpReq, bool) {
+	if s.Detect != DetectNone {
+		return udpAsk(port, pass)
+	}
+	if pass > 0 {
+		return udpReq{}, false
+	}
+	if udpRequestHook != nil {
+		return udpRequestHook(port)
+	}
+	return udpRequest(port), true
+}
+
+// payloads is how many requests a port has in all.
+func (s *Scanner) payloads(port int) int {
 	n := 0
 	for pass := 0; pass < 8; pass++ {
-		if _, ok := udpAsk(port, pass); !ok {
+		if _, ok := s.udpReqFor(port, pass); !ok {
 			break
 		}
 		n++
 	}
 	return n
+}
+
+// UDPPrior is what a scan of an address a limit stopped had settled, so
+// that a resumed scan asks only what is left: the ports that answered, the
+// ports the host refused, the ports that were silent to every request their
+// protocol has, and for each other port how many requests were asked.
+type UDPPrior struct {
+	Open   []UDPPort
+	Closed []int
+	Silent []int
+	Asked  map[int]int
 }
 
 // ScanUDP sends each port of ip a request of its protocol (where none is
@@ -104,44 +132,111 @@ func udpPayloads(port int) int {
 // when too many remain for that, they stay open|filtered and Limited says
 // so.
 func (s *Scanner) ScanUDP(ctx context.Context, host, ip string, ports []int) (UDPReport, error) {
+	return s.ScanUDPFrom(ctx, host, ip, ports, UDPPrior{})
+}
+
+// ScanUDPFrom is ScanUDP for a scan that goes on from what a stopped one
+// settled: a port that answered or was refused is not asked again, and a
+// port asked some of its requests is asked the next. The report holds the
+// prior's ports too, as a scan of the whole list would.
+func (s *Scanner) ScanUDPFrom(ctx context.Context, host, ip string, ports []int, prior UDPPrior) (UDPReport, error) {
 	s.init()
 	var r UDPReport
 	asked := map[int]int{}
-	answered, silent, closed, err := s.udpPass(ctx, host, ip, ports, 0, 0, asked)
-	r.Open, r.ClosedPorts = answered, closed
+	settled := map[int]bool{}
+	for _, u := range prior.Open {
+		settled[u.Port] = true
+	}
+	for _, p := range prior.Closed {
+		settled[p] = true
+	}
+	silent0 := map[int]bool{}
+	for _, p := range prior.Silent {
+		silent0[p] = true
+	}
+	inList := map[int]bool{}
+	for _, p := range ports {
+		inList[p] = true
+	}
+	for _, u := range prior.Open {
+		if inList[u.Port] {
+			r.Open = append(r.Open, u)
+		}
+	}
+	for _, p := range prior.Closed {
+		if inList[p] {
+			r.ClosedPorts = append(r.ClosedPorts, p)
+		}
+	}
+	// A port starts at the request after the last it was asked.
+	byPass := map[int][]int{}
 	var spent []int // asked every way their protocol has
-	for pass := 1; err == nil && len(silent) > 0 && pass <= 3; pass++ {
+	for _, p := range ports {
+		switch {
+		case settled[p]:
+		case silent0[p]:
+			asked[p] = s.payloads(p)
+			spent = append(spent, p)
+		case prior.Asked[p] >= s.payloads(p) && prior.Asked[p] > 0:
+			asked[p] = prior.Asked[p]
+			spent = append(spent, p)
+		default:
+			asked[p] = prior.Asked[p]
+			byPass[asked[p]] = append(byPass[asked[p]], p)
+		}
+	}
+	var silent []int
+	var err error
+	gapped := false
+	for pass := 0; err == nil && pass <= 3; pass++ {
 		var ask []int
 		for _, p := range silent {
-			if _, ok := udpAsk(p, pass); ok {
+			if _, ok := s.udpReqFor(p, pass); ok {
 				ask = append(ask, p)
 			} else {
 				spent = append(spent, p)
 			}
 		}
-		silent = ask
-		if len(silent) == 0 {
-			break
+		silent = nil
+		ask = append(ask, byPass[pass]...)
+		if len(ask) == 0 {
+			continue
 		}
 		var gap time.Duration
-		if pass == 1 && len(closed) > 0 && !isLoopback(ip) {
-			if len(silent) <= icmpPaceMax {
+		if pass >= 1 && !gapped && len(r.ClosedPorts) > 0 && !isLoopback(ip) {
+			gapped = true
+			if len(ask) <= icmpPaceMax {
 				gap = icmpGap
 			} else {
-				r.Limited = len(silent)
+				r.Limited = len(ask)
 			}
 		}
-		var again []UDPPort
-		var more []int
-		again, silent, more, err = s.udpPass(ctx, host, ip, silent, pass, gap, asked)
-		r.Open = append(r.Open, again...)
-		r.ClosedPorts = append(r.ClosedPorts, more...)
-	}
-	if err != nil {
-		r.Stopped = stoppedPorts(ports, r, silent, asked)
+		var found []UDPPort
+		var refused []int
+		found, silent, refused, err = s.udpPass(ctx, host, ip, ask, pass, gap, asked)
+		r.Open = append(r.Open, found...)
+		r.ClosedPorts = append(r.ClosedPorts, refused...)
 	}
 	sort.Ints(r.ClosedPorts)
 	r.Closed = len(r.ClosedPorts)
+	if err != nil {
+		// Every port asked and not answered or refused is open|filtered so
+		// far; those with requests left are in Stopped, to be asked again.
+		done := map[int]bool{}
+		for _, u := range r.Open {
+			done[u.Port] = true
+		}
+		for _, p := range r.ClosedPorts {
+			done[p] = true
+		}
+		silent, spent = nil, nil
+		for _, p := range ports {
+			if !done[p] && asked[p] > 0 {
+				silent = append(silent, p)
+			}
+		}
+		r.Stopped = s.stoppedPorts(ports, r, asked)
+	}
 	silent = append(silent, spent...)
 	for _, p := range silent {
 		r.OpenFiltered = append(r.OpenFiltered, UDPPort{Port: p, State: UDPOpenFiltered, Service: udpGuess(p)})
@@ -149,6 +244,15 @@ func (s *Scanner) ScanUDP(ctx context.Context, host, ip string, ports []int) (UD
 	sort.Slice(r.Open, func(i, j int) bool { return r.Open[i].Port < r.Open[j].Port })
 	sort.Slice(r.OpenFiltered, func(i, j int) bool { return r.OpenFiltered[i].Port < r.OpenFiltered[j].Port })
 	return r, err
+}
+
+// UDPHosts is how many addresses a scan asks UDP ports of at once: as many
+// as keep the rate busy (each holds udpWorkers datagrams in flight for the
+// timeout), so that with a cap or a stop the first addresses are finished,
+// not every address left half asked.
+func (s *Scanner) UDPHosts() int {
+	s.init()
+	return max(1, int(math.Ceil(s.Rate*s.Timeout.Seconds()/float64(s.udpWorkers))))
 }
 
 var (
@@ -167,7 +271,7 @@ var (
 
 // stoppedPorts are the ports of a stopped scan that neither answered nor
 // were refused and still had requests to ask, with what was asked of each.
-func stoppedPorts(all []int, r UDPReport, silent []int, asked map[int]int) []UDPStop {
+func (s *Scanner) stoppedPorts(all []int, r UDPReport, asked map[int]int) []UDPStop {
 	done := map[int]bool{}
 	for _, u := range r.Open {
 		done[u.Port] = true
@@ -180,7 +284,7 @@ func stoppedPorts(all []int, r UDPReport, silent []int, asked map[int]int) []UDP
 		if done[p] {
 			continue
 		}
-		if of := udpPayloads(p); asked[p] < of {
+		if of := s.payloads(p); asked[p] < of {
 			out = append(out, UDPStop{Port: p, Asked: asked[p], Of: of})
 		}
 	}
@@ -254,7 +358,7 @@ func (s *Scanner) udpProbe(ctx context.Context, host, ip string, port, pass int)
 	if err != nil {
 		return UDPPort{}, UDPOpenFiltered
 	}
-	req, _ := udpAsk(port, pass)
+	req, _ := s.udpReqFor(port, pass)
 	var conn *net.UDPConn
 	if req.anySource {
 		if conn, err = s.pd.UDPAnySource(ctx, host, raddr); err != nil {
