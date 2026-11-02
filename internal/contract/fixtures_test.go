@@ -6,6 +6,8 @@ import (
 	"crypto/tls"
 	"encoding/binary"
 	"fmt"
+	"io"
+	"log"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -58,6 +60,7 @@ func goTLSServer(t *testing.T, tls13 bool) string {
 		cfg = &tls.Config{MinVersion: tls.VersionTLS13}
 	}
 	srv.TLS = cfg
+	srv.Config.ErrorLog = log.New(io.Discard, "", 0)
 	srv.StartTLS()
 	t.Cleanup(srv.Close)
 	return strings.TrimPrefix(srv.URL, "https://")

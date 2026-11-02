@@ -120,7 +120,7 @@ func TestReferenceTLSHandshakeClasses(t *testing.T) {
 			// nmap -sV names it ssl/http: ports must name it too. (An openssl s_server serves
 			// one connection at a time, and nmap's probes wait on each other there.)
 			if nmapToo {
-				if n, ok := nmapServes(t, portOf(addr), "60s"); ok {
+				if n, ok := nmapServes(t, portOf(addr), "30s"); ok {
 					atLeastNmap(v, n, row)
 				}
 			}
@@ -134,7 +134,8 @@ func TestReferenceServicesByTheirFirstBytes(t *testing.T) {
 		name, known string
 		start       func(*testing.T) string
 	}{
-		{"a service that answers only GET", "#100", getOnly},
+		// #100 describes this service on port 50000; on another port azhaq already names it.
+		{"a service that answers only GET", "", getOnly},
 		{"JDWP", "", jdwp},
 		{"Java RMI registry", "#101", rmi},
 	} {
