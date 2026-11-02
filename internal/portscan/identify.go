@@ -17,7 +17,7 @@ import (
 // cost to find out what it serves: the TLS handshake, the requests of the
 // protocols usual on its number and the ladder of the others. The GET for
 // a web page's body is counted apart (at most two).
-const maxProbes = 24
+const maxProbes = 25
 
 // ladderLimit: by default, after this many open ports of one address that
 // no probe could name, the rest of that address's silent ports are not run
@@ -90,7 +90,7 @@ func protocolsOn(port int, secure bool) []*protocol {
 // it: a DNS server may hold the connection or drop it on its idle timer.
 var ladderOrder = []string{
 	"redis", "postgresql", "mongodb", "memcached", "mqtt", "amqp", "dns", "ldap", "smb", "mssql", "kafka", "rdp",
-	"zookeeper", "cassandra", "oracle-tns", "sip", "rtsp", "socks5", "x11", "stomp", "xmpp", "elasticsearch-transport",
+	"zookeeper", "cassandra", "oracle-tns", "sip", "rtsp", "socks5", "x11", "stomp", "xmpp", "elasticsearch-transport", "java-rmi",
 }
 
 func ladder() []*protocol {

@@ -267,7 +267,7 @@ A real page that is byte-for-byte the not-found page cannot be told apart by any
 
 ### An open TCP port has no `service` or `product`
 
-**Why:** One of two things happened. The port said nothing, and none of the protocols azhaq asks answered. azhaq asks about 30 protocols, one request each, and at most 24 connects per port. Or the port answered in a protocol azhaq does not know.
+**Why:** One of two things happened. The port said nothing, and none of the protocols azhaq asks answered. azhaq asks about 30 protocols, one request each, and at most 25 connects per port. Or the port answered in a protocol azhaq does not know.
 
 - The row keeps the first bytes of any answer in `banner`.
 - A port that accepts a connection and closes it without a word is `tcpwrapped`.

@@ -1459,7 +1459,7 @@ Every step is a connect that is paced, counted by `egress.Take` and recorded in 
 
 The protocols of step 4, in order, are:
 
-Redis, PostgreSQL, MongoDB, memcached, MQTT, AMQP, DNS over TCP, LDAP, SMB, SQL Server, Kafka, RDP, ZooKeeper, Cassandra, Oracle TNS, SIP, RTSP, SOCKS5, X11, STOMP and XMPP.
+Redis, PostgreSQL, MongoDB, memcached, MQTT, AMQP, DNS over TCP, LDAP, SMB, SQL Server, Kafka, RDP, ZooKeeper, Cassandra, Oracle TNS, SIP, RTSP, SOCKS5, X11, STOMP, XMPP, Elasticsearch transport and Java RMI.
 
 #### The window of protocols
 
@@ -1481,7 +1481,7 @@ All of it counts the same connects. So a quick service may cost a few more than 
 
 #### Limits
 
-- An open port costs at most 24 connects after the first.
+- An open port costs at most 25 connects after the first.
 - A request waits twenty round trips for its answer: at least half a second, at most the banner wait.
 - After six open ports of one address that no request could name, the rest of that address's silent ports are not run down the list. The row's `unprobed` and the summary count them. A firewall that accepts every connect would otherwise cost thousands.
 - A request carries no credential and changes nothing.

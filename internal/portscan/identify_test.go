@@ -7,6 +7,7 @@ import (
 	"crypto/tls"
 	"encoding/binary"
 	"encoding/hex"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -499,5 +500,37 @@ func TestSilentToHeadIsAskedOneGet(t *testing.T) {
 	}
 	if max := 2 + 2*maxProbes; int(takes.Load()) > max {
 		t.Errorf("%d connects, bound %d", takes.Load(), max)
+	}
+}
+
+// A Java RMI registry answers the stream header with a ProtocolAck and the
+// host it sees the asker as: named java-rmi from that, on its usual number
+// and on any other.
+func TestJavaRMIRegistryIsNamed(t *testing.T) {
+	registry := func(c net.Conn) {
+		_ = c.SetDeadline(time.Now().Add(2 * time.Second))
+		hdr := make([]byte, 7)
+		if _, err := io.ReadFull(c, hdr); err != nil || string(hdr[:4]) != "JRMI" {
+			return
+		}
+		host := "192.168.0.5"
+		out := append([]byte{0x4e, 0, byte(len(host))}, host...)
+		c.Write(append(out, 0, 0, 0, 0))
+	}
+	other := listen(t, registry)
+	var o Open
+	if !protocolNamed("java-rmi").read([]byte("\x4e\x00\x0b192.168.0.5\x00\x00\x00\x00"), &o) || o.Service != "java-rmi" || o.Product != "Java RMI" || !strings.Contains(o.Extra, "192.168.0.5") {
+		t.Errorf("reader: %+v", o)
+	}
+	if protocolNamed("java-rmi").read([]byte("\x4e\x00\x0b192.168.0.5"), &o) || protocolNamed("java-rmi").read([]byte("HTTP/1.0 400 Bad Request\r\n\r\n"), &o) {
+		t.Error("a short answer or HTTP read as RMI")
+	}
+	s := &Scanner{Banner: 100 * time.Millisecond, Timeout: 500 * time.Millisecond}
+	r, err := s.ScanEach(t.Context(), "", "127.0.0.1", []int{other})
+	if err != nil || len(r.Open) != 1 {
+		t.Fatalf("%v %+v", err, r)
+	}
+	if got := r.Open[0]; got.Service != "java-rmi" || got.Product != "Java RMI" || !strings.Contains(got.Extra, "192.168.0.5") {
+		t.Errorf("registry on a free port: %+v", got)
 	}
 }

@@ -382,7 +382,7 @@ With `-replay-writes`, three more come before them all:
 
 ### Ports
 
-- For a port that says nothing, azhaq sends its own protocol's request on its usual number, one `HEAD /`, a TLS handshake, and one request of each of the other protocols until one answers, then, if nothing named it, one `GET /`. That is at most 24 more connects for each port.
+- For a port that says nothing, azhaq sends its own protocol's request on its usual number, one `HEAD /`, a TLS handshake, and one request of each of the other protocols until one answers, then, if nothing named it, one `GET /`. That is at most 25 more connects for each port.
 - On a web port whose head names no product, azhaq sends a `GET /`.
 - On 5432, 6379 and 27017–27019, it sends that database's own first request.
 - A UDP port with no known protocol is asked four ways: a DNS query, an SNMP get, memcached's version, then an empty datagram.

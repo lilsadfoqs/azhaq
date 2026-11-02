@@ -36,7 +36,7 @@ azhaq ports 192.0.2.0/24 -sn
 5. With `-udp`, also sends each UDP port one harmless datagram.
 6. Prints one line for each open port.
 
-A port that says nothing is asked the request of its own protocol, an HTTP `HEAD /` and a TLS handshake. Then it gets one harmless request of each other protocol. That is at most 24 connects after the first. Nothing logs in, sends a credential or changes anything. Raw printing ports (9100–9107) are never asked anything. A CDN or WAF address is scanned in full, as naabu does; `-ec` limits it to ports 80, 443, 8080 and 8443.
+A port that says nothing is asked the request of its own protocol, an HTTP `HEAD /` and a TLS handshake. Then it gets one harmless request of each other protocol. That is at most 25 connects after the first. Nothing logs in, sends a credential or changes anything. Raw printing ports (9100–9107) are never asked anything. A CDN or WAF address is scanned in full, as naabu does; `-ec` limits it to ports 80, 443, 8080 and 8443.
 
 ## Output
 
@@ -126,7 +126,7 @@ A service that speaks first (`ssh`, `ftp`, `smtp`, `telnet`, `irc`, …) is name
 
 - A `HEAD` that stays unanswered for half a second is waited on while the handshake and the list are asked beside it. A port that answers neither is done when the `HEAD`'s wait ends, not after a wait for each protocol.
 - Every connect, whatever its purpose, counts against `-max-requests`, takes a token of the pace and is in the ledger.
-- An open port costs at most 24 connects after the first, the `GET /` of step 5 included. A port named by a late protocol may cost a few more than asking the protocols one by one would. Several are asked at once.
+- An open port costs at most 25 connects after the first, the `GET /` of step 5 included. A port named by a late protocol may cost a few more than asking the protocols one by one would. Several are asked at once.
 - A port that accepts a connection and closes it without a word is `tcpwrapped`.
 - Raw printing ports (9100–9107) are never asked anything.
 - A service on a port that usually speaks first (22, 21, 25, 3306, …) gets a second wait for its greeting before it is asked anything. A greeting that arrives in reply to the `HEAD` is read as one.
@@ -266,6 +266,7 @@ Each open TCP port gets `product` and `version` next to `service`, from what it 
 | Kerberos: an AS-REQ for a principal that does not exist | KRB-ERROR with the realm | `kerberos` |
 | RDP: an X.224 connection request | the selected protocol | `rdp` |
 | X11: a connection setup with no authorization | the vendor and release of an open server | `x11` |
+| Java RMI: the stream header `JRMI`, version 2, StreamProtocol (7 bytes), asked first on 1090, 1098, 1099, 1129, 1199, 2199, 5999, 7800, 8686, 8999, 9999, 10098, 10099, 10990, 11099, 31099, 47001 and 47002, and last in the list on any port | a ProtocolAck (`0x4e`), then the host and port the registry sees the asker as | `java-rmi`, product Java RMI; `extrainfo` is `client seen as HOST:PORT` |
 | Elasticsearch transport: the keep-alive ping (`ES` and a length of -1), 6 bytes, asked first on 9300 to 9303 | the same six bytes | `elasticsearch-transport`, product Elasticsearch |
 | SOCKS5, STOMP, XMPP, RTSP, SIP, JDWP, AFP, Minecraft, gopher, finger | the method reply, the CONNECTED frame, the stream header, the status line and `Server` header, the handshake, and so on | the service; a product where the answer states one |
 | Nping echo server: it opens with a binary handshake (version 1, type 1, its length) | the first 24 bytes or more | `nping-echo`, product Nping echo |
@@ -303,7 +304,7 @@ Each open TCP port gets `product` and `version` next to `service`, from what it 
 | --- | --- | --- | --- |
 | `-udp` | bool |  | also ask the common UDP ports (25: dns, ntp, snmp, ssdp, mdns, ...) |
 | `-pu` | string |  | UDP ports to ask: top, full or a list of ports, ranges and these names, such as 53,123,1-1024 or top,5354 (implies -udp; without -p, -tp or -pf no TCP port is asked) |
-| `-detect` | string | `all` | what is asked of an open port: all (its banner, then HTTP and TLS, then one request of each protocol that waits to be asked, each on its own connection, several at once while the scan has workers free: at most 24 connects after the first), banner (what it says on the one connection; nothing is sent, so a bare 220 stays ftp-or-smtp) or none (connect and close, as naabu without -sV) |
+| `-detect` | string | `all` | what is asked of an open port: all (its banner, then HTTP and TLS, then one request of each protocol that waits to be asked, each on its own connection, several at once while the scan has workers free: at most 25 connects after the first), banner (what it says on the one connection; nothing is sent, so a bare 220 stays ftp-or-smtp) or none (connect and close, as naabu without -sV) |
 | `-order` | string | `random` | the order a host's ports are asked in: random (the likeliest ports first, each tier shuffled) or asc |
 | `-unnamed` | int |  | after this many open ports of an address that no protocol probe could name, ask its other silent ports their banner only (0: 6, a guard against hosts that accept every connect; -1: no limit) |
 | `-exclude-cdn` | bool |  | ask a CDN or WAF address only ports 80, 443, 8080 and 8443 (naabu's two ports plus 8080 and 8443; the default is the full list) |
