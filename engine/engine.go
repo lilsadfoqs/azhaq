@@ -164,7 +164,7 @@ func (e *Engine) Run(ctx context.Context, item types.WorkItem) (types.RunMeta, e
 		mu.Lock()
 		defer mu.Unlock()
 		meta.EmitCount++
-		if hold {
+		if hold && !o.Keep { // a kept row is what a kill must not lose: written at once
 			held = append(held, o)
 			return nil
 		}

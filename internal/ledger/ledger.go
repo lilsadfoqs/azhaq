@@ -151,8 +151,9 @@ type Ledger struct {
 	tail    []Entry         // what follows the last seal when the file was opened
 	held    map[string]bool // writes of the run that was killed: method, target and body
 	heldAny map[string]bool // the same without the body (Chrome's)
-	pending map[string]bool // reads of that run, until one is asked again
+	pending map[string]bool // reads and connects of that run, until one is asked again
 	again   int             // reads asked again
+	againTC int             // connects asked again
 }
 
 // Open appends to the file at path, creating it, and continues the chain
@@ -230,6 +231,10 @@ func (l *Ledger) Guard(more []Entry) []Entry {
 	l.held, l.heldAny, l.pending = map[string]bool{}, map[string]bool{}, map[string]bool{}
 	var writes []Entry
 	for _, e := range append(append([]Entry(nil), more...), l.tail...) {
+		if e.Kind == "tcp" && e.IsTarget() {
+			l.pending[key("tcp", e.Target, "")] = true // a connect has no answer to lose, but it is asked again
+			continue
+		}
 		if (e.Kind != "http" && e.Kind != "chrome") || !e.IsTarget() {
 			continue
 		}
@@ -245,6 +250,14 @@ func (l *Ledger) Guard(more []Entry) []Entry {
 		l.heldAny[key(e.Method, e.Target, "")] = true
 	}
 	return writes
+}
+
+// AgainConns is how many connects of the killed run (a port scan's) this run
+// made again to the same address and port.
+func (l *Ledger) AgainConns() int {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.againTC
 }
 
 // Again is how many reads of the killed run, which had no stored answer,
@@ -360,6 +373,9 @@ func (l *Ledger) add(e Entry) {
 	if k := key(e.Method, e.Target, ""); l.pending[k] && (e.Kind == "http" || e.Kind == "chrome") && e.IsTarget() {
 		delete(l.pending, k)
 		l.again++
+	} else if k := key("tcp", e.Target, ""); e.Kind == "tcp" && l.pending[k] && e.IsTarget() {
+		delete(l.pending, k)
+		l.againTC++
 	}
 }
 

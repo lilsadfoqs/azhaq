@@ -307,7 +307,7 @@ func (s *Scanner) ScanEachFn(ctx context.Context, host, ip string, ports []int, 
 	var err error
 	ports = s.ordered(ip, ports)
 	var asked, slow int
-	r.Open, r.Silent, asked, slow, err = s.pass(ctx, host, ip, ports, found)
+	r.Open, r.Silent, asked, slow, err = s.pass(ctx, host, ip, ports, found, true)
 	r.Asked = asked
 	r.Threshold = s.Threshold > 0 && len(r.Open) >= s.Threshold
 	for try := 0; err == nil && !r.Threshold && len(r.Silent) > 0 && s.again(try, len(r.Silent), len(ports)); try++ {
@@ -318,7 +318,7 @@ func (s *Scanner) ScanEachFn(ctx context.Context, host, ip string, ports []int, 
 			}
 		}
 		var more []Open
-		more, r.Silent, _, slow, err = s.pass(ctx, host, ip, r.Silent, found)
+		more, r.Silent, _, slow, err = s.pass(ctx, host, ip, r.Silent, found, false)
 		r.Open = append(r.Open, more...)
 	}
 	if err == nil {
@@ -390,8 +390,9 @@ const retryFloor = 64
 
 // pass connects once to each port, at the scanner's rate, and says how
 // many it asked (all of them unless the threshold of open ports stopped it)
-// and how many of the silent ones timed out rather than failed at once.
-func (s *Scanner) pass(ctx context.Context, host, ip string, ports []int, found func(Open)) (open []Open, silent []int, asked, slow int, err error) {
+// and how many of the silent ones timed out rather than failed at once. With
+// track set, the Progress function of ctx hears what is finished while it goes.
+func (s *Scanner) pass(ctx context.Context, host, ip string, ports []int, found func(Open), track bool) (open []Open, silent []int, asked, slow int, err error) {
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 	var stop error
@@ -399,6 +400,10 @@ func (s *Scanner) pass(ctx context.Context, host, ip string, ports []int, found 
 		mu.Lock()
 		defer mu.Unlock()
 		return s.Threshold > 0 && len(open) >= s.Threshold
+	}
+	var prog *progress
+	if fn, _ := ctx.Value(progressKey{}).(func(Progress)); fn != nil && track {
+		prog = &progress{fn: fn, ports: ports, state: make([]uint8, len(ports)), opens: map[int]Open{}}
 	}
 	// The connects go out in small batches, their ledger lines written
 	// together (before any of them goes): at 10,000 a second a write for
@@ -424,6 +429,9 @@ func (s *Scanner) pass(ctx context.Context, host, ip string, ports []int, found 
 			if state == portTimedOut {
 				slow++
 			}
+		}
+		if prog != nil {
+			prog.done(i, state, o, ctx.Err() != nil)
 		}
 		mu.Unlock()
 	}
@@ -466,6 +474,10 @@ func (s *Scanner) pass(ctx context.Context, host, ip string, ports []int, found 
 			flush = time.AfterFunc(2*time.Millisecond, launch)
 		}
 	}
+	stopTicks := func() {}
+	if prog != nil {
+		stopTicks = prog.every(&mu, func() int { return asked })
+	}
 	for i := range ports {
 		if full() {
 			break
@@ -497,6 +509,10 @@ func (s *Scanner) pass(ctx context.Context, host, ip string, ports []int, found 
 	}
 	launch()
 	wg.Wait()
+	stopTicks()
+	if prog != nil {
+		prog.last(&mu, asked)
+	}
 	if stop != nil {
 		return open, silent, asked, slow, stop
 	}

@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/lilsadfoqs/azhaq/internal/collectors/asncol"
+	"github.com/lilsadfoqs/azhaq/internal/collectors/portcol"
 	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 	"github.com/lilsadfoqs/azhaq/internal/portscan"
 	"github.com/lilsadfoqs/azhaq/store"
@@ -525,10 +526,12 @@ func (k *portsSink) visit(o types.Observation, print bool) {
 		k.mu.Lock()
 		switch {
 		case p["range"] == true:
-			k.scanned += float64(intOf(p["addresses"]))
+			if p[portcol.CheckpointKey] != true { // a checkpoint is a block under way
+				k.scanned += float64(intOf(p["addresses"]))
+			}
 		case p["unresolved"] != nil:
 			k.unresolved++
-		case p["prefix"] == nil:
+		case p["prefix"] == nil && p[portcol.CheckpointKey] != true: // a checkpoint is a scan under way, not one more address
 			k.scanned++
 		}
 		k.mu.Unlock()

@@ -82,3 +82,63 @@ func TestBudgetKeepsTheMappingOfAWebPortTheSweepFound(t *testing.T) {
 		t.Errorf("%d requests sent, the budget was 60", egress.Sent())
 	}
 }
+
+// A row a collector marks Keep reaches the workspace as it is emitted, also
+// under a request budget, which holds the other rows of a task until it
+// ends: a task killed in the middle leaves what it kept.
+type keeper struct {
+	kept, held chan struct{}
+}
+
+func (keeper) Name() string             { return "keeper" }
+func (keeper) Inputs() []types.SeedType { return []types.SeedType{types.TypeDomain} }
+func (keeper) Outputs() []string        { return nil }
+func (k keeper) Run(ctx context.Context, _ types.Seed, emit func(types.Observation) error) (types.RunMeta, error) {
+	_ = emit(types.Observation{Collector: "keeper", Source: "s", Kind: "plain", Payload: []byte(`{}`), ObservedAt: time.Now().UTC()})
+	_ = emit(types.Observation{Collector: "keeper", Source: "s", Kind: "kept", Payload: []byte(`{}`), ObservedAt: time.Now().UTC(), Keep: true})
+	close(k.kept)
+	<-k.held // the process is killed here
+	return types.RunMeta{Status: types.StatusOK}, nil
+}
+
+func TestKeptRowIsWrittenAtOnceUnderABudget(t *testing.T) {
+	egress.Reset()
+	k := keeper{kept: make(chan struct{}), held: make(chan struct{})}
+	cat := catalog.New()
+	cat.MustRegister(k)
+	st, err := store.Open(filepath.Join(t.TempDir(), "k.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	_ = st.BeginRun("r", 1, 0)
+	egress.SetMaxRequests(100)
+	eng := &engine.Engine{Cat: cat, Store: st}
+	done := make(chan error, 1)
+	go func() {
+		done <- eng.RunLocal(context.Background(), []types.Seed{{Type: types.TypeDomain, Keys: map[string]string{"domain": "a.test"}}}, engine.Budgets{MaxDepth: 1})
+	}()
+	select {
+	case <-k.kept:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the collector did not run")
+	}
+	obs, err := st.Observations()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var kinds []string
+	for _, o := range obs {
+		kinds = append(kinds, o.Kind)
+	}
+	if len(kinds) != 1 || kinds[0] != "kept" {
+		t.Errorf("while the task runs the workspace holds %v, want only the kept row", kinds)
+	}
+	close(k.held)
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	if obs, _ = st.Observations(); len(obs) != 2 {
+		t.Errorf("after the task the workspace holds %d rows, want both", len(obs))
+	}
+}
