@@ -24,6 +24,8 @@ type Site struct {
 	status map[string]int
 	// broken paths close the connection with no answer, and the front page links to them.
 	broken []string
+	// redirects send a path elsewhere.
+	redirects map[string]string
 	// embed, when set, is an image the page /embed loads.
 	embed string
 	// spa: every unknown path answers the front page with a 200.
@@ -46,7 +48,7 @@ func newSite(t testing.TB) *Site { return newSiteTLS(t, false) }
 
 func newSiteTLS(t testing.TB, tls bool) *Site {
 	t.Helper()
-	s := &Site{Wire: newWire(), status: map[string]int{}}
+	s := &Site{Wire: newWire(), status: map[string]int{}, redirects: map[string]string{}}
 	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { s.serve(w, r) })
 	// The server is set before it starts, so the handler's reads of s.URL follow its writes.
 	s.Server = httptest.NewUnstartedServer(h)
@@ -66,6 +68,13 @@ func (s *Site) SetStatus(path string, code int) {
 	s.mu.Unlock()
 }
 
+// SetRedirect makes path answer 302 to a URL.
+func (s *Site) SetRedirect(path, to string) {
+	s.mu.Lock()
+	s.redirects[path] = to
+	s.mu.Unlock()
+}
+
 // SetEmbed makes the page /embed load a stylesheet, a script and an image named from url.
 func (s *Site) SetEmbed(url string) { s.mu.Lock(); s.embed = url; s.mu.Unlock() }
 
@@ -81,6 +90,7 @@ func (s *Site) SetDelay(d time.Duration) { s.mu.Lock(); s.delay = d; s.mu.Unlock
 func (s *Site) serve(w http.ResponseWriter, r *http.Request) {
 	s.Wire.addHTTP(r.Method, s.URL+r.RequestURI)
 	s.mu.Lock()
+	to, redirected := s.redirects[r.URL.Path]
 	d, code, spa, broken, embed := s.delay, s.status[r.URL.Path], s.spa, slices.Clone(s.broken), s.embed
 	s.mu.Unlock()
 	if d > 0 {
@@ -89,6 +99,10 @@ func (s *Site) serve(w http.ResponseWriter, r *http.Request) {
 	if code != 0 {
 		w.WriteHeader(code)
 		fmt.Fprintf(w, "status %d", code)
+		return
+	}
+	if redirected {
+		http.Redirect(w, r, to, http.StatusFound)
 		return
 	}
 	if slices.Contains(broken, r.URL.Path) {
@@ -115,7 +129,7 @@ func (s *Site) serve(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, "\x89PNG\r\n\x1a\n")
 	case p == "/embed":
 		w.Header().Set("Content-Type", "text/html")
-		fmt.Fprintf(w, `<html><title>embed</title><head><link rel="stylesheet" href="%s.css"><script src="%s.js"></script></head><body><img src="%s"><a href="/about">about</a></body></html>`, embed, embed, embed)
+		fmt.Fprintf(w, `<html><title>embed</title><head><link rel="stylesheet" href="%s.css"><script src="%s.js"></script></head><body><img src="%s"><a href="%s">elsewhere</a><a href="/about">about</a></body></html>`, embed, embed, embed, embed)
 	case p == "/catalog":
 		w.Header().Set("Content-Type", "text/html")
 		fmt.Fprint(w, "<html><title>catalog</title><body>")
