@@ -111,7 +111,7 @@ func cmdPorts(args []string) error {
 	seed := fs.Int64("seed", 0, "make the random port order repeat (default: a new one each run)")
 	threshold := fs.Int("pts", 0, "stop asking a host after this many open ports: it answers every port (default: no limit)")
 	unnamed := fs.Int("unnamed", 0, "after this many open ports of an address that no protocol probe could name, ask its other silent ports their banner only (0: 6, a guard against hosts that accept every connect; -1: no limit)")
-	detect := fs.String("detect", "all", "what is asked of an open port: all (its banner, then HTTP and TLS, then one request of each protocol that waits to be asked, each on its own connection, several at once while the scan has workers free: at most 24 connects after the first), banner (what it says on the one connection) or none (connect and close, as naabu without -sV)")
+	detect := fs.String("detect", "all", "what is asked of an open port: all (its banner, then HTTP and TLS, then one request of each protocol that waits to be asked, each on its own connection, several at once while the scan has workers free: at most 24 connects after the first), banner (what it says on the one connection; nothing is sent, so a bare 220 stays ftp-or-smtp) or none (connect and close, as naabu without -sV)")
 	cdnFull := fs.Bool("cdn-full", false, "accepted: CDN and WAF addresses are scanned in full by default")
 	excludeCDN := fs.Bool("exclude-cdn", false, "ask a CDN or WAF address only ports 80, 443, 8080 and 8443 (naabu's two ports plus 8080 and 8443; the default is the full list)")
 	fs.BoolVar(excludeCDN, "ec", false, "same as -exclude-cdn")

@@ -503,7 +503,7 @@ func (s *Scanner) probe(ctx context.Context, host, ip string, port int) (Open, p
 		}
 		o.Banner = bannerOf(buf[:n])
 		s.greeted(&o, buf[:n])
-		if n > 0 && o.Product == "" {
+		if n > 0 && o.Product == "" && s.Detect == DetectAll { // banner sends nothing
 			switch bannerService(o.Banner) {
 			case "ftp-or-smtp":
 				s.settle220(conn, &o)
