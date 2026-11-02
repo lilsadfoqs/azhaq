@@ -95,6 +95,7 @@ func cmdPorts(args []string) error {
 	exclPorts := fs.String("ep", "", "ports not to scan: a list or a file")
 	udp := fs.Bool("udp", false, "also ask the common UDP ports (25: dns, ntp, snmp, ssdp, mdns, ...)")
 	udpSpec := fs.String("pu", "", "UDP ports to ask: top, full or a list of ports, ranges and these names, such as 53,123,1-1024 or top,5354 (implies -udp; without -p, -tp or -pf no TCP port is asked)")
+	sweep := fs.Bool("sweep", false, "scan the whole scope: every IPv4 address -allow and -scope hold, not only the targets given (without it a note says how much of a range the targets leave); -eh, -deny, -rate, -max-requests and the kill file hold as for any target")
 	exclHosts := fs.String("eh", "", "hosts, addresses or ranges not to scan, comma-separated (same as -deny)")
 	exclFile := fs.String("ef", "", "file of hosts, addresses and ranges not to scan")
 	resolvers := fs.String("resolvers", "", "DNS resolvers: a list such as 1.1.1.1,8.8.8.8:53 or a file, one a line (default: public resolvers); named ones answer every name, and the system resolver is never asked")
@@ -145,15 +146,19 @@ func cmdPorts(args []string) error {
 
 	tokens := append([]string(nil), hosts...)
 	tokens = append(tokens, fs.Args()...)
-	if *noStdin && *list == "" && len(tokens) == 0 {
+	// -sweep alone is a target: the scope's ranges (stdin is not waited for).
+	scopeOnly := *sweep && *list == "" && len(tokens) == 0
+	if *noStdin && *list == "" && len(tokens) == 0 && !scopeOnly {
 		return usagef("give -host HOST, -l FILE or targets as arguments (-no-stdin is set)")
 	}
-	tokens, err := inputs(tokens, *list)
-	if err != nil {
-		return err
-	}
-	if len(tokens) == 0 {
-		return usagef("give -host HOST, -l FILE or hosts on stdin")
+	var err error
+	if !scopeOnly {
+		if tokens, err = inputs(tokens, *list); err != nil {
+			return err
+		}
+		if len(tokens) == 0 {
+			return usagef("give -host HOST, -l FILE or hosts on stdin")
+		}
 	}
 	tg, err := parseTargets(tokens)
 	if err != nil {
@@ -178,6 +183,25 @@ func cmdPorts(args []string) error {
 			}
 		}
 		rep.Notes = append(rep.Notes, fmt.Sprintf("%s (%s): %d prefixes, %s addresses to scan (RIPEstat)", as, holder, len(prefixes), humanCount(tg.addresses()-before)))
+	}
+
+	if *sweep {
+		allow := flagStrings(fs, "allow")
+		if spec := fs.Lookup("scope").Value.String(); spec != "" {
+			sc, err := loadScope(spec, fs.Lookup("program").Value.String())
+			if err != nil {
+				return err
+			}
+			allow = append(allow, sc.Allow...)
+		}
+		v4, v6 := allowedAddrs(allow)
+		if len(v4) == 0 {
+			return usagef("-sweep scans the IPv4 ranges and addresses -allow and -scope hold, and they hold none: give -allow 192.0.2.0/24")
+		}
+		tg.v4 = append(tg.v4, v4...)
+		for _, pf := range v6 {
+			rep.Notes = append(rep.Notes, fmt.Sprintf("-sweep leaves the IPv6 range %s alone: name it as a target to scan it", pf))
+		}
 	}
 
 	// The ports: -p, -tp and -pf together, less -ep; a port on a target

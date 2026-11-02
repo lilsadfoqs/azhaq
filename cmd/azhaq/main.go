@@ -241,6 +241,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	loginUser := fs.String("login-user", "", "user name or email for -login")
 	loginPass := fs.String("login-pass", "", "password for -login (default $AZHAQ_LOGIN_PASS)")
 	maxIPs := fs.Int("max-ips", 4096, "addresses expanded from -asn and -cidr prefixes, for the whole run")
+	sweep := fs.Bool("sweep", false, "cover the whole scope: the IPv4 ranges and addresses -allow and -scope hold are targets too, not only the ones named (without it a note says how much of a range the targets leave); -deny, -deny-path, -rate, -max-requests and the kill file hold as for any target, and a range is expanded up to -max-ips unless -ports scans it")
 	scopeSpec := fs.String("scope", "", "a program's scope: a file (HackerOne CSV, bounty-targets JSON, Burp options, lines) or hackerone, bugcrowd, intigriti, yeswehack")
 	program := fs.String("program", "", "the program to take from a -scope list (handle, name or URL)")
 	probe := fs.Bool("probe", false, "resolve and fetch each target once, print one line per web service and per path -dirs found: no crawl, scripts, path checks, TLS, subdomain or archive sources, and depth 1; a flag that asks for a collector (-dirs, -params, -ports, -ports-udp, -screenshots, -browser, -dns-brute, -permute, -graphql) still runs it, and a flag for what -probe turns off (-fill-forms, -submit-forms, -path-climb, -known-files) is a usage error")
@@ -552,6 +553,18 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 			for _, e := range sc.Skipped {
 				rep.Skipped = append(rep.Skipped, engine.Skip{Target: e, Reason: "a scope entry a run cannot use"})
 			}
+		}
+		if *sweep {
+			more, v6, err := sweepSeeds(allow, seeds)
+			if err != nil {
+				return err
+			}
+			for _, pf := range v6 {
+				rep.Notes = append(rep.Notes, fmt.Sprintf("-sweep leaves the IPv6 range %s alone: name it as a target to scan it", pf))
+			}
+			seeds = append(seeds, more...)
+		} else if lead := sweepLead(allow, deny, namedAddrs(seeds)); lead != "" {
+			rep.Notes = append(rep.Notes, lead)
 		}
 		if len(seeds) == 0 && *factsPath == "" && *execCmd == "" && *workerOf == "" {
 			return usagef("need a target: -url, -domain, -list, -scope, -asn, -cidr, -org, -in, -facts, -exec or -demo")

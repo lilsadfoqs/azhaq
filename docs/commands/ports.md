@@ -5,7 +5,7 @@ Finds the open TCP ports of hosts with a connect scan, so it needs no root. It n
 ## Synopsis
 
 ```
-azhaq ports -host HOST[,HOST…] | -l FILE | stdin | TARGET…  [-p LIST | -tp 100|1000|full | -pf FILE] [-ep LIST] [-udp | -pu LIST] [-rate N] [-T0..5] [-connect-timeout MS] [-retries N] [-c N] [-sn | -wn] [-ec] [-csv | -json] [-oX F] [-oG F] [-oA BASE]
+azhaq ports -host HOST[,HOST…] | -l FILE | stdin | TARGET…  [-p LIST | -tp 100|1000|full | -pf FILE] [-ep LIST] [-udp | -pu LIST] [-rate N] [-T0..5] [-connect-timeout MS] [-retries N] [-c N] [-sn | -wn] [-sweep] [-ec] [-csv | -json] [-oX F] [-oG F] [-oA BASE]
 ```
 
 ## Examples
@@ -25,6 +25,9 @@ azhaq ports -l hosts.txt -tp 1000 -ep 25,3306 -T2 -oA scan
 
 # which addresses of a range are up
 azhaq ports 192.0.2.0/24 -sn
+
+# every address the scope holds, not only the one named
+azhaq ports -allow 192.0.2.0/24 -sweep -p 22,80,443
 ```
 
 ## What it does
@@ -80,6 +83,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 | --- | --- |
 | `addresses`, in `counts` | The addresses asked, wholly or in part when a limit stopped the run. |
 | notes | How many addresses were not up (`-wn`), were outside the scope, or had ports that neither accepted nor refused a connect. |
+| `the scope (-allow, -scope) holds N addresses and the targets name M of them` | The targets cover part of a range `-allow` or `-scope` allows (less what `-deny` holds); `-sweep` scans the rest. |
 | AS prefixes | The prefixes RIPEstat lists for an AS number. |
 | `IPv6 addresses of 1 name not scanned: no IPv6 route from this machine` | A name's IPv6 addresses were not scanned, because this machine cannot reach them. |
 | CDN or WAF | With `-ec`, the addresses that were asked only ports 80, 443, 8080 and 8443. |
@@ -96,6 +100,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 - A target is a name, an address, `host:port`, a URL, a CIDR range or an AS number. Give them comma-separated in `-host`, one per line in `-l` or on stdin, or as arguments.
 - A CIDR range is IPv4, or IPv6 down to /104. A larger IPv6 range is refused, since no scan finishes it.
 - `AS13335` stands for the prefixes RIPEstat lists, and the summary says so.
+- `-allow` and `-scope` are a fence: `-host 10.0.0.5 -allow 10.0.0.0/24` scans 10.0.0.5, and a note says `the scope (-allow, -scope) holds 256 addresses and the targets name 1 of them: -sweep covers the other 255`. `-sweep` scans every IPv4 address and range `-allow` and `-scope` hold, as if each were a target, and needs no other: `azhaq ports -allow 10.0.0.0/24 -sweep`. An address given as `host:port` is asked its own port and, with `-sweep`, the default ports as an address of a range. `-eh`, `-deny`, `-rate`, `-max-requests` and the kill file hold as for any target; the summary counts every address of the range. IPv6 ranges in the scope are left alone, with a note: name them as targets.
 - A `host:port` is asked that port only. `-p`, `-tp` and `-pf` apply to every target, and a `host:port` keeps its own port beside them: `-host 10.0.0.5:8081 -p 80` asks 80 and 8081. Each entry stands for itself: `-host 10.0.0.5,10.0.0.5:8081` scans the default ports of 10.0.0.5 and port 8081, and the same goes for an address in a given range, or a name given both ways.
 - A scan keeps what it has finished while it runs: about every second, the ports it has asked (all those before the first connect still on its way, the open ones named, a port that timed out left out). A range keeps the addresses of its block it has finished every two seconds. A scan killed with SIGKILL or a crash is continued by `azhaq resume -db FILE` with the ports after them, and the summary says how many connects of the killed run it made again. The checkpoints are rows of the workspace marked `checkpoint`: the newest of an address stands, and the row that ends the scan replaces them. A scan that ends within a second leaves none.
 - A range is split into blocks of 256 addresses. The run takes them one at a time and records them. So a range has no size limit and is not expanded in memory, and `azhaq resume` continues it: a block a limit stopped keeps which of its addresses it finished, and the resume asks only the others.
@@ -325,6 +330,7 @@ Each open TCP port gets `product` and `version` next to `service`, from what it 
 | Flag | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `-allow` | string, repeatable |  | a domain, host or address range the run may touch; HOST:PORT allows that host on that port only; with any -allow, nothing else is requested |
+| `-sweep` | bool |  | scan the whole scope: every IPv4 address -allow and -scope hold, not only the targets given (without it a note says how much of a range the targets leave); -eh, -deny, -rate, -max-requests and the kill file hold as for any target |
 | `-deny` | string, repeatable |  | a domain, host or address range the run must not touch, even when given as a target |
 | `-kill-file` | string |  | stop all sending when this file exists, so that no request starts after it, and exit 4; azhaq resume works once it is removed (default DB.stop) |
 | `-ledger` | string |  | write every request, connection and DNS query the run sends (to targets, third-party sources and resolvers) to this file, a chain of hashes that azhaq ledger -verify checks (default DB.ledger.jsonl next to the workspace; off: none; with a temporary database, only when given) |
