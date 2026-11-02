@@ -21,6 +21,7 @@ type Labs struct {
 	Dir   string
 	Site  *Site
 	Proxy *Proxy
+	Other *Site // a second site, outside the scope
 
 	// Ports is the TCP lab and Resolver the DNS one, made when a row asks.
 	Ports    *PortLab
@@ -28,6 +29,7 @@ type Labs struct {
 	Resolver *Resolver
 
 	results []Result
+	env     Env // set by a row's shape, for its run
 }
 
 func newLabs(t *testing.T) *Labs {
@@ -50,6 +52,13 @@ func (l *Labs) Cmd(args ...string) Result {
 	r := Run(l.T, l.Dir, args...)
 	l.results = append(l.results, r)
 	return r
+}
+
+func lookChrome() (string, error) {
+	if p, err := exec.LookPath("google-chrome"); err == nil {
+		return p, nil
+	}
+	return exec.LookPath("chromium")
 }
 
 // Chrome is Cmd for a command that starts Chrome: the test is skipped where

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -21,6 +22,10 @@ type Site struct {
 	delay time.Duration
 	// Status overrides the answer for a path, 0 for none.
 	status map[string]int
+	// broken paths close the connection with no answer, and the front page links to them.
+	broken []string
+	// embed, when set, is an image the page /embed loads.
+	embed string
 	// spa: every unknown path answers the front page with a 200.
 	spa bool
 }
@@ -59,6 +64,9 @@ func (s *Site) SetStatus(path string, code int) {
 	s.mu.Unlock()
 }
 
+// SetBroken makes path close the connection without an answer, and links it from the front page.
+func (s *Site) SetBroken(path string) { s.mu.Lock(); s.broken = append(s.broken, path); s.mu.Unlock() }
+
 // SetSPA makes the site answer the front page for every path it has no page for.
 func (s *Site) SetSPA() { s.mu.Lock(); s.spa = true; s.mu.Unlock() }
 
@@ -68,7 +76,7 @@ func (s *Site) SetDelay(d time.Duration) { s.mu.Lock(); s.delay = d; s.mu.Unlock
 func (s *Site) serve(w http.ResponseWriter, r *http.Request) {
 	s.Wire.addHTTP(r.Method, s.URL+r.RequestURI)
 	s.mu.Lock()
-	d, code, spa := s.delay, s.status[r.URL.Path], s.spa
+	d, code, spa, broken := s.delay, s.status[r.URL.Path], s.spa, slices.Clone(s.broken)
 	s.mu.Unlock()
 	if d > 0 {
 		time.Sleep(d)
@@ -78,10 +86,19 @@ func (s *Site) serve(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "status %d", code)
 		return
 	}
+	if slices.Contains(broken, r.URL.Path) {
+		if c, _, err := w.(http.Hijacker).Hijack(); err == nil {
+			c.Close()
+		}
+		return
+	}
 	switch p := r.URL.Path; {
 	case p == "/":
 		w.Header().Set("Content-Type", "text/html")
 		fmt.Fprint(w, siteIndex)
+		for _, b := range broken {
+			fmt.Fprintf(w, `<a href="%s">broken</a>`, b)
+		}
 	case p == "/static/app.js":
 		w.Header().Set("Content-Type", "application/javascript")
 		fmt.Fprint(w, siteJS)
@@ -91,6 +108,9 @@ func (s *Site) serve(w http.ResponseWriter, r *http.Request) {
 	case p == "/static/logo.png":
 		w.Header().Set("Content-Type", "image/png")
 		fmt.Fprint(w, "\x89PNG\r\n\x1a\n")
+	case p == "/embed":
+		w.Header().Set("Content-Type", "text/html")
+		fmt.Fprintf(w, `<html><title>embed</title><head><link rel="stylesheet" href="%s.css"><script src="%s.js"></script></head><body><img src="%s"><a href="/about">about</a></body></html>`, s.embed, s.embed, s.embed)
 	case p == "/catalog":
 		w.Header().Set("Content-Type", "text/html")
 		fmt.Fprint(w, "<html><title>catalog</title><body>")
