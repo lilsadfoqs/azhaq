@@ -85,7 +85,7 @@ func claims() []claim {
 			}
 		}},
 		{id: "the kill file stops every request", on: pages("README.md", "no request, connection or query starts after it exists"), test: "TestExitCodeFollowsTheOutcome"},
-		{id: "every kept name is stored", on: pages("docs/commands/subs.md", "Every name a run kept is stored"), check: func(v *Inv, l *Labs) {
+		{id: "every kept name is stored", on: pages("docs/commands/subs.md", "Every name a source gave and a run kept is stored"), check: func(v *Inv, l *Labs) {
 			l.Resolver = newResolver(l.T, "lab.test", "www", "api", "mail")
 			w := l.File("words.txt", "www\napi\nmail\nnope\n")
 			r := l.Cmd("subs", "-d", "lab.test", "-sources", "none", "-w", w, "-live", "-resolvers", l.Resolver.Addr, "-no-history", "-db", "w.db")
@@ -105,7 +105,7 @@ func claims() []claim {
 		{id: "ledger lines equal the proxy's count", on: pages("docs/OUTPUT.md", "equal the requests a proxy in front of them counts"), test: "TestWireIsLedgerIsSummary"},
 		{id: "a GET unless a flag says write", on: pages("docs/CONCEPTS.md", "Without a flag, every request azhaq sends to a target on purpose is a GET", "README.md", "Without a flag, every request azhaq sends to a target on purpose is a GET"), test: "TestWireIsLedgerIsSummary"},
 		{id: "a -deny-path rule keeps a path out", on: pages("docs/CONCEPTS.md", "`-deny-path REGEX` keeps a path out of every request"), test: "TestExitCodeFollowsTheOutcome"},
-		{id: "roles requests are the ledger's lines", on: pages("docs/commands/roles.md", "It equals the target lines of `roles.ledger.jsonl`."), test: "TestWireIsLedgerIsSummary"},
+		{id: "roles requests are the ledger's lines", on: pages("docs/commands/roles.md", "It equals the target lines of `roles.ledger.jsonl`"), test: "TestWireIsLedgerIsSummary"},
 		{id: "Chrome off-scope assets are marked, exit 0", on: pages("docs/commands/shots.md", "The run still exits 0, because the scope is yours."), test: "TestExitCodeFollowsTheOutcome"},
 	}
 }
