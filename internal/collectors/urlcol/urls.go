@@ -63,7 +63,23 @@ type Options struct {
 	// With Raw it gets every row on the domain exactly as the archive gave
 	// it: no normalising, junk filter or deduplication.
 	OnURL func(url, source string)
+	// OnRow is OnURL with the whole row: when it is set, OnURL is not called.
+	OnRow func(Row)
 	Raw   bool
+	// KeepJunk lists the URLs left out as junk too, each labelled with its
+	// class and reason, instead of only counting them.
+	KeepJunk bool
+}
+
+// Row is one URL as the run lists it.
+type Row struct {
+	URL        string `json:"url"`                  // normalised; with Raw, as the archive gave it
+	Normalized string `json:"normalized,omitempty"` // the normalised form, when the archive's differs or Raw
+	RawURL     string `json:"raw_url,omitempty"`    // as the archive gave it, when URL is not
+	Source     string `json:"source"`               // the archive that gave it first
+	Archived   string `json:"archived,omitempty"`   // when the archive captured it, RFC 3339 UTC, as the archive states it
+	Junk       string `json:"junk,omitempty"`       // why it looks like noise: a class (see JunkClasses) or "asset"
+	Reason     string `json:"junk_reason,omitempty"`
 }
 
 type Collector struct {
@@ -202,13 +218,14 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 	}
 
 	out := newOutFilter(c.opts.Blacklist, c.opts.FirstPath)
-	deferFirst := c.opts.FirstPath && c.opts.OnURL == nil // sorted output keeps the first in order, not of arrival
+	deferFirst := c.opts.FirstPath && c.opts.OnURL == nil && c.opts.OnRow == nil // sorted output keeps the first in order, not of arrival
 	if deferFirst {
 		out.first = false
 	}
 	var mu sync.Mutex
 	seen := map[string]bool{}
-	from := map[string]string{} // URL → the source that gave it first
+	from := map[string]Row{}    // URL → the row of the source that gave it first
+	var junkRows []Row          // with KeepJunk: the URLs left out as junk
 	junked := map[string]bool{} // URLs on the domain left out as junk
 	byReason := map[string]int{}
 	var all []string
@@ -246,7 +263,7 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 			// asked; otx and urlscan answer for the domain with its
 			// subdomains, and gau prints those too.
 			apex := c.opts.Apex && s.name != "otx" && s.name != "urlscan"
-			add := func(urls []string) {
+			add := func(urls []rec) {
 				mu.Lock()
 				defer mu.Unlock()
 				var batch bytes.Buffer
@@ -256,14 +273,32 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 						archiveErr = err
 					}
 				}()
-				for _, raw := range urls {
-					if c.opts.Raw && c.opts.OnURL != nil && onDomain(raw, domain, apex) && !out.blocked(raw) && !out.repeat(raw) {
-						c.opts.OnURL(raw, s.name)
-					}
+				for _, r := range urls {
+					raw := r.url
 					u, junk, ok := cleanWhy(raw, domain, apex)
+					row := Row{Source: s.name, Archived: r.at}
+					if c.opts.Raw && (c.opts.OnURL != nil || c.opts.OnRow != nil) && onDomain(raw, domain, apex) && !out.blocked(raw) && !out.repeat(raw) {
+						row.URL = raw
+						if n, err := normalize.URL(raw); err == nil {
+							row.Normalized = n
+						}
+						row.Junk, row.Reason = label(junk, row.Normalized)
+						c.emitRow(row)
+					}
 					if junk != "" && !junked[raw] {
 						junked[raw] = true
 						byReason[junk]++
+						if c.opts.KeepJunk && !c.opts.Raw {
+							jr := Row{URL: raw, Source: s.name, Archived: r.at, Junk: junkClass(junk), Reason: junk}
+							if n, err := normalize.URL(raw); err == nil {
+								jr.URL = n
+								if n != raw {
+									jr.RawURL = raw
+								}
+							}
+							junkRows = append(junkRows, jr)
+							c.emitRow(jr)
+						}
 					}
 					if !ok || out.blocked(u) {
 						continue
@@ -277,13 +312,18 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 						continue
 					}
 					seen[u] = true
-					from[u] = s.name
+					row = Row{URL: u, Source: s.name, Archived: r.at}
+					if u != raw {
+						row.RawURL = raw
+					}
+					row.Junk, row.Reason = label("", u)
+					from[u] = row
 					all = append(all, u)
 					if streamArchive {
-						c.archiveLine(&batch, u, s.name)
+						c.archiveLine(&batch, u, s.name, r.at)
 					}
-					if !c.opts.Raw && c.opts.OnURL != nil {
-						c.opts.OnURL(u, s.name)
+					if !c.opts.Raw {
+						c.emitRow(row)
 					}
 				}
 			}
@@ -312,7 +352,7 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		if c.archiveOn() {
 			var batch bytes.Buffer
 			for _, u := range all {
-				c.archiveLine(&batch, u, from[u])
+				c.archiveLine(&batch, u, from[u].Source, from[u].Archived)
 			}
 			if err := c.appendArchive(batch.Bytes()); err != nil && archiveErr == nil {
 				archiveErr = err
@@ -324,7 +364,7 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 	}
 	// What was found is kept whatever stopped the run: a recon tool never
 	// throws away work it already did.
-	if err := c.write(all, from); err != nil {
+	if err := c.write(all, from, junkRows); err != nil {
 		return types.RunMeta{Status: types.StatusError, Error: err.Error()}, err
 	}
 	if ctx.Err() != nil {
@@ -335,7 +375,7 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 	var failed, capped []string
 	for i, s := range c.sources {
 		r := results[i]
-		row := map[string]any{"count": r.count, "pages": r.pages, "seconds": float64(r.took.Milliseconds()/100) / 10}
+		row := map[string]any{"asked": c.askedOf(s, domain), "count": r.count, "pages": r.pages, "seconds": float64(r.took.Milliseconds()/100) / 10}
 		if what, flags := c.unfiltered(s); what != "" {
 			row["unfiltered"], row["unfiltered_by"] = what, flags
 		}
@@ -349,6 +389,10 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		if r.err != nil {
 			row["error"] = shorten(r.err.Error())
 			failed = append(failed, s.name)
+			if r.count > 0 {
+				// What it gave before it failed is in the set; the rest is not.
+				row["partial"] = true
+			}
 		}
 		if r.capped {
 			row["capped"] = true
@@ -414,6 +458,20 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		}
 	}
 	return meta, nil
+}
+
+// askedOf says what the archive was asked for: the host pattern of a CDX
+// archive, OTX's indicator, urlscan.io's search.
+func (c *Collector) askedOf(s source, domain string) string {
+	switch s.name {
+	case "otx":
+		category, name := otxTarget(domain, c.opts.Apex)
+		return category + " " + name
+	case "urlscan":
+		return urlscanQuery(domain, c.opts.Filters)
+	}
+	g := &getter{apex: c.opts.Apex}
+	return g.pattern(domain)
 }
 
 // clean keeps http(s) URLs on domain (and its subdomains, unless apex),
@@ -625,9 +683,11 @@ func rank(ts []template) []template {
 	return out
 }
 
-// write appends urls to the -urls file, each with its source when asked.
-func (c *Collector) write(urls []string, from map[string]string) error {
-	if c.opts.Out == "" || len(urls) == 0 {
+// write appends urls to the -urls file, each with its source when asked: the
+// URL, the archive, the time of the capture, the junk class, its reason and
+// the URL as the archive gave it when that differs, separated by tabs. The URLs left out as junk (KeepJunk) follow.
+func (c *Collector) write(urls []string, from map[string]Row, junk []Row) error {
+	if c.opts.Out == "" || len(urls)+len(junk) == 0 {
 		return nil
 	}
 	c.outMu.Lock()
@@ -637,19 +697,84 @@ func (c *Collector) write(urls []string, from map[string]string) error {
 		return err
 	}
 	w := bufio.NewWriter(f)
-	for _, u := range urls {
-		w.WriteString(u)
+	line := func(r Row) {
+		w.WriteString(r.URL)
 		if c.opts.OutFrom {
-			w.WriteByte('\t')
-			w.WriteString(from[u])
+			for _, f := range []string{r.Source, r.Archived, r.Junk, r.Reason, r.RawURL} {
+				w.WriteByte('\t')
+				w.WriteString(f)
+			}
 		}
 		w.WriteByte('\n')
+	}
+	for _, u := range urls {
+		r := from[u]
+		r.URL = u
+		line(r)
+	}
+	for _, r := range junk {
+		line(r)
 	}
 	if err := w.Flush(); err != nil {
 		f.Close()
 		return err
 	}
 	return f.Close()
+}
+
+// emitRow gives a row to the run's callback.
+func (c *Collector) emitRow(r Row) {
+	switch {
+	case c.opts.OnRow != nil:
+		c.opts.OnRow(r)
+	case c.opts.OnURL != nil:
+		c.opts.OnURL(r.URL, r.Source)
+	}
+}
+
+// Classes of URLs that look like noise, by the rule that found them.
+var junkClasses = map[string]string{
+	webextract.JunkPayload:     "scanner-payload",
+	webextract.JunkScanner:     "scanner-probe",
+	webextract.JunkListing:     "listing-sort",
+	webextract.JunkPlaceholder: "placeholder",
+	webextract.JunkDot:         "dot-segment",
+	webextract.JunkMalformed:   "malformed",
+	webextract.JunkSentence:    "cut-link",
+	webextract.JunkNotURL:      "not-url",
+	webextract.JunkTemplate:    "fuzzing",
+}
+
+// JunkClasses are the values of a row's junk, besides "asset".
+func JunkClasses() []string {
+	out := make([]string, 0, len(junkClasses))
+	for _, c := range junkClasses {
+		out = append(out, c)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func junkClass(reason string) string {
+	if c, ok := junkClasses[reason]; ok {
+		return c
+	}
+	return "junk"
+}
+
+// assetReason is why a static file is labelled: no route sits behind it.
+const assetReason = "static file (by extension or media host): no route sits behind it"
+
+// label is the class and reason a row carries: the junk rule that fired, or
+// "asset" for a static file; "" for a URL that looks like a page or an API.
+func label(junk, normalized string) (class, reason string) {
+	switch {
+	case junk != "":
+		return junkClass(junk), junk
+	case normalized != "" && static(normalized):
+		return "asset", assetReason
+	}
+	return "", ""
 }
 
 func shorten(s string) string {

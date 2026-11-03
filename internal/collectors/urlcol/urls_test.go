@@ -172,11 +172,15 @@ func TestUnlistedDomain(t *testing.T) {
 
 func TestCDXRowsKeepsWhatArrived(t *testing.T) {
 	var got []string
-	n, err := cdxRows(strings.NewReader("[[\"original\"],\n[\"http://a.test/1\"],\n[\"http://a.test/2\"],\n[\"http://a.te"), func(u []string) { got = append(got, u...) })
+	n, err := cdxRows(strings.NewReader("[[\"original\"],\n[\"http://a.test/1\"],\n[\"http://a.test/2\"],\n[\"http://a.te"), func(u []rec) {
+		for _, r := range u {
+			got = append(got, r.url)
+		}
+	})
 	if err == nil || n != 2 || len(got) != 2 {
 		t.Errorf("cut answer: n=%d err=%v got=%v", n, err, got)
 	}
-	if n, err := cdxRows(strings.NewReader(""), func([]string) {}); n != 0 || err != nil {
+	if n, err := cdxRows(strings.NewReader(""), func([]rec) {}); n != 0 || err != nil {
 		t.Errorf("empty answer: n=%d err=%v", n, err)
 	}
 }

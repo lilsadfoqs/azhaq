@@ -25,12 +25,12 @@ func teslaPayload(t *testing.T) map[string]any {
 
 func TestCoverageNoteTesla(t *testing.T) {
 	p := teslaPayload(t)
-	notes := subsNotes([]map[string]any{p}, nil)
+	notes := subsNotes([]map[string]any{p}, []tierSet{{countRaw, nil}})
 	if len(notes) != 1 {
 		t.Fatalf("notes %q", notes)
 	}
 	t.Log(notes[0])
-	want := "coverage: what the independent sources know, not every name that exists. Their pool holds about 1609 names and this run has 1400 of them"
+	want := "coverage (raw candidates): what the independent sources know, not every name that exists. Their pool holds about 1609 names and this run has 1400 of them"
 	if notes[0] != want {
 		t.Errorf("note %q", notes[0])
 	}
@@ -44,26 +44,26 @@ func TestCoverageNoteTesla(t *testing.T) {
 	for _, n := range strings.Fields(string(raw)) {
 		live[n] = true
 	}
-	notes = subsNotes([]map[string]any{p}, live)
+	notes = subsNotes([]map[string]any{p}, []tierSet{{countDNS, live}})
 	t.Log(notes[0])
-	if !strings.Contains(notes[0], "holds about 485 names and this run has 481 of them") {
+	if !strings.HasPrefix(notes[0], "coverage (DNS-confirmed): ") || !strings.Contains(notes[0], "holds about 485 names and this run has 481 of them") {
 		t.Errorf("live note %q", notes[0])
 	}
 	if strings.Contains(notes[0], "%") {
 		t.Errorf("a lone percentage in %q", notes[0])
 	}
-	if want := fmt.Sprintf("the other %d of the %d names printed came from", len(live)-481, len(live)); len(live) > 481 && !strings.Contains(notes[0], want) {
+	if want := fmt.Sprintf("the other %d of the %d names in this tier came from", len(live)-481, len(live)); len(live) > 481 && !strings.Contains(notes[0], want) {
 		t.Errorf("live note %q does not reconcile with the %d names printed", notes[0], len(live))
 	}
 }
 
 func TestSubsNotesQuietWithoutEstimate(t *testing.T) {
 	p := map[string]any{"found_by": map[string]any{"a.example.org": []any{"crtsh"}}}
-	if n := subsNotes([]map[string]any{p}, nil); len(n) != 0 {
+	if n := subsNotes([]map[string]any{p}, []tierSet{{countRaw, nil}}); len(n) != 0 {
 		t.Errorf("one source: %q", n)
 	}
 	p["history_error"] = "disk full"
-	if n := subsNotes([]map[string]any{p}, nil); len(n) != 1 || !strings.Contains(n[0], "disk full") {
+	if n := subsNotes([]map[string]any{p}, []tierSet{{countRaw, nil}}); len(n) != 1 || !strings.Contains(n[0], "disk full") {
 		t.Errorf("history error: %q", n)
 	}
 }
