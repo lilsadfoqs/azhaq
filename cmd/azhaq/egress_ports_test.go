@@ -98,11 +98,16 @@ func TestLedgerNoteNamesTheClasses(t *testing.T) {
 	for _, want := range []string{
 		"ledger: 217 recorded in ",
 		": 214 to targets (210 requests, 4 connections), 2 to third-party sources, 1 DNS query, sealed ",
-		"the summary counts 213 requests to targets and the ledger lists 214 lines to them",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("no note says %q:\n%s", want, got)
 		}
+	}
+	// A summary that counts 213 where the ledger lists 214 is not a note to read past: it is an
+	// internal error, exit 1, naming both numbers.
+	rep.settle()
+	if rep.Exit != exitError || rep.Complete || !strings.Contains(rep.Error, "the summary says 213, the rows say 214") {
+		t.Errorf("exit %d, complete %v, error %q: a summary that disagrees with the ledger is an internal error", rep.Exit, rep.Complete, rep.Error)
 	}
 	// A second run in the same file counts its own lines, and says the file holds more.
 	l2, err := ledger.Open(path)
@@ -117,8 +122,8 @@ func TestLedgerNoteNamesTheClasses(t *testing.T) {
 	if !strings.Contains(got, "ledger: 1 recorded in ") || !strings.Contains(got, ": 1 to targets (1 request, 0 connections), sealed ") || !strings.Contains(got, " holds 220 lines in all, the lines of the runs before this one included") {
 		t.Errorf("the second run's note: %s", got)
 	}
-	if strings.Contains(got, "the summary counts") {
-		t.Errorf("the counts agree: %s", got)
+	if rep2.settle(); len(rep2.problems) > 0 {
+		t.Errorf("the counts agree: %v", rep2.problems)
 	}
 }
 

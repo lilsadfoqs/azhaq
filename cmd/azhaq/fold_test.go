@@ -435,3 +435,58 @@ func TestCrawlListsATemplatedRouteThatOnlyHasTheControlsShape(t *testing.T) {
 		t.Errorf("pages of their own were folded as the control: %s", errOut)
 	}
 }
+
+// A fold view is a view of the same rows: the audit that compares the summary
+// with the rows it printed agrees with every one of them, for run and crawl, in
+// text, -json and -all-rows, with and without -no-catchall: exit 0, complete,
+// no internal error.
+func TestFoldViewsPassTheSummaryAudit(t *testing.T) {
+	srv, _ := juiceShop(t)
+	runArgs := func(extra ...string) []string {
+		return append([]string{"-url", srv.URL + "/", "-allow", "127.0.0.1", "-no-paths", "-no-tech", "-no-favicon", "-sources", "none",
+			"-catchall-after", "0", "-db", filepath.Join(t.TempDir(), "w.db")}, extra...)
+	}
+	crawlArgs := func(extra ...string) []string {
+		return append([]string{"-u", srv.URL + "/", "-allow", "127.0.0.1", "-db", filepath.Join(t.TempDir(), "w.db")}, extra...)
+	}
+	for name, c := range map[string]struct {
+		cmd  func([]string) error
+		args []string
+	}{
+		"run text":                 {cmdRun, runArgs()},
+		"run -all-rows":            {cmdRun, runArgs("-all-rows")},
+		"run -json":                {cmdRun, runArgs("-json")},
+		"run -json -all-rows":      {cmdRun, runArgs("-json", "-all-rows")},
+		"run -no-catchall":         {cmdRun, runArgs("-no-catchall")},
+		"run -no-catchall -json":   {cmdRun, runArgs("-no-catchall", "-json")},
+		"crawl":                    {cmdCrawl, crawlArgs()},
+		"crawl -all-rows":          {cmdCrawl, crawlArgs("-all-rows")},
+		"crawl -json":              {cmdCrawl, crawlArgs("-json")},
+		"crawl -silent":            {cmdCrawl, crawlArgs("-silent")},
+		"crawl -json -all-rows":    {cmdCrawl, crawlArgs("-json", "-all-rows")},
+		"crawl -no-catchall":       {cmdCrawl, crawlArgs("-no-catchall")},
+		"crawl -assets -hints":     {cmdCrawl, crawlArgs("-assets", "-hints")},
+		"crawl -json -no-catchall": {cmdCrawl, crawlArgs("-json", "-no-catchall")},
+	} {
+		t.Run(name, func(t *testing.T) {
+			args := append([]string{}, c.args...)
+			if !slices.Contains(args, "-json") {
+				// the text summary says the same; ask for the JSON one beside it
+				_, errOut, err := captureBoth(t, func() error { return c.cmd(args) })
+				if err != nil || strings.Contains(errOut, "internal error") {
+					t.Fatalf("text: %v\n%s", err, errOut)
+				}
+				args = append(args, "-json")
+			}
+			// Text view with a JSON summary is not a mode: the text rows are checked above.
+			_, errOut, err := captureBoth(t, func() error { return c.cmd(args) })
+			if err != nil {
+				t.Fatalf("%v\n%s", err, errOut)
+			}
+			sum := sumMap(t, errOut)
+			if sum["exit"] != float64(0) || sum["complete"] != true || sum["error"] != nil {
+				t.Errorf("the summary: exit %v, complete %v, error %v", sum["exit"], sum["complete"], sum["error"])
+			}
+		})
+	}
+}

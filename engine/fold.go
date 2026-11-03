@@ -164,6 +164,8 @@ type FoldGroup struct {
 	Templates []FoldTemplate `json:"templates,omitempty"`
 	Templated int            `json:"templated,omitempty"`
 	Origins   int            `json:"origins,omitempty"` // origins the rows are of, when more than one
+	// Rows are the folded rows the line stands for, for the summary's audit.
+	Rows []MapEntry `json:"-"`
 }
 
 const foldTemplates = 5
@@ -198,6 +200,7 @@ func (f *Folder) Groups(rows []MapEntry) []FoldGroup {
 			order = append(order, k)
 		}
 		g.Count++
+		g.Rows = append(g.Rows, r)
 		switch {
 		case r.Coverage == "skipped" || r.Coverage == "hint" || r.Coverage == "capped":
 			g.NotAsked++

@@ -56,6 +56,7 @@ type report struct {
 	Resume      string             `json:"resume,omitempty"`
 	Notes       []string           `json:"notes,omitempty"`
 	Next        []string           `json:"next,omitempty"`
+	Error       string             `json:"error,omitempty"` // an internal error: the summary disagrees with its rows (audit.go); exit 1
 	// Advisories are the -advisories leads: one per stored advisory row,
 	// each with its advisory id and URL, its match label and, when a
 	// confirmation ran, its confidence. They are leads, not map rows:
@@ -71,8 +72,18 @@ type report struct {
 
 	dnsFrom int64 // egress.DNSTotal when the command began: dns_queries are its own
 
-	what   string // the unit of Results: "names", "web services"
-	warned bool   // a note says the results mislead (a role's dead session): exit 3
+	what string // the unit of Results: "names", "web services"
+
+	// What the summary is audited against (audit.go): the rows the command
+	// emitted, the counts of rows it left out, the identities it states and the
+	// disagreements found.
+	rows      *tally
+	leftOutBy map[string]int
+	sums      []sum
+	problems  []string
+	audited   bool
+
+	warned bool // a note says the results mislead (a role's dead session): exit 3
 
 	noCatchAll bool // run -no-catchall: its rows of the catch-all page are left out of results
 	foldView   bool // run's text view: the folded rows are counted in a line of their class each, and results counts those lines
@@ -96,7 +107,11 @@ func (r *report) settle() {
 	}
 	r.Seconds = float64(time.Since(r.start).Milliseconds()) / 1000
 	r.DNSQueries = egress.DNSTotal() - r.dnsFrom
+	r.audit()
 	switch {
+	case len(r.problems) > 0:
+		r.Error = r.internalError()
+		r.Exit = exitError
 	case r.Stopped != "":
 		r.Exit = exitLimit
 	case len(r.Unreachable) > 0 || len(r.Failed) > 0 || r.Degraded || r.warned:
@@ -112,6 +127,9 @@ func (r *report) settle() {
 func (r *report) err() error {
 	if r.Exit == exitOK {
 		return nil
+	}
+	if r.Error != "" {
+		return exitErr{code: r.Exit, msg: r.Error}
 	}
 	return exitErr{code: r.Exit}
 }
@@ -269,6 +287,10 @@ func (r *report) print(w io.Writer) {
 		fmt.Fprintf(w, "  %s\n", r.Sources.line(r.Exit, r.Command == "urls"))
 	}
 	switch r.Exit {
+	case exitError:
+		if r.Error != "" {
+			fmt.Fprintf(w, "  ERROR: %s\n", r.Error)
+		}
 	case exitPartial:
 		if len(r.Unreachable) == 0 && len(r.Failed) == 0 && !r.Degraded {
 			fmt.Fprintf(w, "  exit 3: finished, but a note above says what to check first\n")
@@ -411,6 +433,18 @@ func fillReport(rep *report, path string, seeds []types.Seed, ents []types.Entit
 			how = "each row's fold names its class"
 		}
 		rep.Notes = append(rep.Notes, fmt.Sprintf("folded by what the run's requests measured: %s (%s; -all-rows lists every row; the summary's folds name the control each catch-all answer matched)", strings.Join(parts, ", "), how))
+	}
+	if rep.noCatchAll {
+		shownBy := map[string]int{}
+		for _, r := range shown {
+			shownBy[countKey(r)]++
+		}
+		rep.leftOutBy = map[string]int{}
+		for k, n := range counts {
+			if d := n - shownBy[k]; d > 0 {
+				rep.leftOutBy[k] = d
+			}
+		}
 	}
 	folded := len(shown) - rep.Results
 	rep.Folded = &folded

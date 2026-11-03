@@ -222,6 +222,9 @@ func cmdCrawl(args []string) error {
 	var foldedRows, classed []engine.MapEntry // the rows left out of the list; every listed or left out row with a class
 	counts := map[string]int{}
 	var otherMethod, scriptsOnly, linkedListed, extLeft, filterLeft int
+	// Every URL row has one fate: listed, or left out for one reason, so the
+	// rows listed and the rows left out add up to the rows counted by class.
+	var listedRows, hintsHeld, namedHeld, notURLs, extraLines int
 	otherAsked := map[int]int{} // what the GET of those routes answered
 	var kinds crawlKinds
 	for _, r := range rows {
@@ -234,12 +237,19 @@ func cmdCrawl(args []string) error {
 			continue
 		}
 		if !*hints && !outOpts.listed(r) {
+			if crawlClass(r) == classNamed {
+				namedHeld++
+			} else {
+				hintsHeld++
+			}
 			continue
 		}
 		if !c.json && !outOpts.jsonl && strings.Contains(r.Entity.Key, "{") {
+			notURLs++
 			continue // a route with a parameter (/api/Cards/{id}) is no URL to request; -json lists it
 		}
 		if !c.json && !outOpts.jsonl && (r.Role == "client-route" || r.Role == "websocket") {
+			notURLs++
 			continue // a view the app draws, a socket: no page a GET gets; -json lists them
 		}
 		fc := folder.Class(r)
@@ -258,6 +268,7 @@ func cmdCrawl(args []string) error {
 			continue
 		}
 		counts[r.Coverage]++
+		listedRows++
 		if crawlClass(r) == classLinked {
 			linkedListed++
 		}
@@ -280,12 +291,14 @@ func cmdCrawl(args []string) error {
 		for _, o := range offsite {
 			if out.keep(o.url) {
 				out.writeOut(o)
+				extraLines++
 			}
 		}
 	}
 	if *showRejected {
 		for _, x := range rejected {
 			out.writeRejected(x)
+			extraLines++
 		}
 	}
 	if answers != nil {
@@ -299,6 +312,10 @@ func cmdCrawl(args []string) error {
 	}
 	rep.Results, rep.Counts = out.w.count(), counts
 	kinds.put(counts, len(rejected))
+	if notURLs > 0 {
+		counts["left out as not URLs"] = notURLs
+		rep.Notes = append(rep.Notes, fmt.Sprintf("%s left out of the list: a route with a parameter, a view the app draws or a socket is no URL to request (-json lists them)", plural(notURLs, "row")+rowWere(notURLs)))
+	}
 	if extLeft > 0 {
 		counts["left out by the extension list"] = extLeft
 	}
@@ -328,8 +345,8 @@ func cmdCrawl(args []string) error {
 	if filterLeft > 0 {
 		rep.Notes = append(rep.Notes, fmt.Sprintf("%s left out of the list by -em, -ef, -mr or -fr", plural(filterLeft, "row")+rowWere(filterLeft)))
 	}
-	if !*hints && kinds.hints+kinds.named > 0 {
-		note := fmt.Sprintf("%d hints and %d named URLs were left out of the list (-hints lists them; a larger -depth requests more of the named URLs; -json marks each row's class)", kinds.hints, kinds.named)
+	if !*hints && hintsHeld+namedHeld > 0 {
+		note := fmt.Sprintf("%d hints and %d named URLs were left out of the list (-hints lists them; a larger -depth requests more of the named URLs; -json marks each row's class)", hintsHeld, namedHeld)
 		rep.Notes = append(rep.Notes, note)
 		if c.silent && !c.json {
 			// -silent prints the list and no summary: what it left out is said all the same.
@@ -358,6 +375,16 @@ func cmdCrawl(args []string) error {
 	}
 	if ca := engine.CatchAllShell(rows, obs); ca.Origin != "" && !hasFlag(args, "interact") {
 		rep.hint(catchAllHint("azhaq crawl -u "+ca.Origin+"/ -browser -interact", ca))
+	}
+	// What the summary counts is what the rows say: every URL row of the crawl's
+	// scope is listed or left out for one reason, and the kinds are one split of
+	// the same rows.
+	byClass := kinds.observed + kinds.linked + kinds.hints + kinds.named
+	rep.holds("the URL rows counted by class, against the rows listed, the rows folded and the rows left out", byClass,
+		listedRows+extLeft+filterLeft+hintsHeld+namedHeld+notURLs+len(foldedRows))
+	rep.holds("requested + not requested + templates, against the URL rows counted by class", kinds.requested+kinds.notRequested+kinds.templates, byClass)
+	if !outOpts.jsonl && outOpts.tmpl == "" && len(outOpts.fields) == 0 {
+		rep.holds("results, against the rows listed and the other lines printed", rep.Results, listedRows+extraLines)
 	}
 	return rep.finish(c.json, c.silent)
 }
