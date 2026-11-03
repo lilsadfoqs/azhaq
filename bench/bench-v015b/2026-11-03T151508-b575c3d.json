@@ -1156,6 +1156,47 @@
       "azhaq_rss_mb": 44.4921875,
       "reference_rss_mb": 19.37890625
     },
+    "params": {
+      "profile": "polite",
+      "pages": [
+        "http://127.0.0.1:37033/search",
+        "http://127.0.0.1:37033/item",
+        "http://127.0.0.1:3101/rest/products/search"
+      ],
+      "words": 6453,
+      "azhaq": [
+        "http://127.0.0.1:3101/rest/products/search q",
+        "http://127.0.0.1:37033/item debug",
+        "http://127.0.0.1:37033/item format",
+        "http://127.0.0.1:37033/item id",
+        "http://127.0.0.1:37033/search lang",
+        "http://127.0.0.1:37033/search limit",
+        "http://127.0.0.1:37033/search page",
+        "http://127.0.0.1:37033/search q",
+        "http://127.0.0.1:37033/search sort"
+      ],
+      "arjun": [
+        "http://127.0.0.1:3101/rest/products/search q",
+        "http://127.0.0.1:37033/item debug",
+        "http://127.0.0.1:37033/item format",
+        "http://127.0.0.1:37033/item id",
+        "http://127.0.0.1:37033/search lang",
+        "http://127.0.0.1:37033/search limit",
+        "http://127.0.0.1:37033/search page",
+        "http://127.0.0.1:37033/search q",
+        "http://127.0.0.1:37033/search sort"
+      ],
+      "shared": 9,
+      "azhaq_seconds": 45.099586754,
+      "arjun_seconds": 44.487290647,
+      "azhaq_rss_mb": 44.8125,
+      "reference_rss_mb": 36.234375,
+      "planted_truth": 8,
+      "azhaq_planted": 8,
+      "arjun_planted": 8,
+      "azhaq_wrong": 0,
+      "arjun_wrong": 0
+    },
     "shots": {
       "profile": "polite",
       "targets": 4,
@@ -1485,6 +1526,33 @@
   },
   "claims": {
     "rows": [
+      {
+        "case": "run",
+        "pace": "unpaced",
+        "summary": 157,
+        "ledger": 157,
+        "counter": 157,
+        "pass": true,
+        "detail": "summary 157, ledger 157 (http 157), counter 157"
+      },
+      {
+        "case": "run",
+        "pace": "rate 10",
+        "summary": 157,
+        "ledger": 157,
+        "counter": 157,
+        "pass": true,
+        "detail": "summary 157, ledger 157 (http 157), counter 157"
+      },
+      {
+        "case": "run",
+        "pace": "rate 2",
+        "summary": 60,
+        "ledger": 60,
+        "counter": 60,
+        "pass": true,
+        "detail": "summary 60, ledger 60 (http 60), counter 60"
+      },
       {
         "case": "run -browser",
         "pace": "unpaced",
@@ -1858,7 +1926,7 @@
         "pass": true
       }
     ],
-    "seconds": 567.578294644
+    "seconds": 618.828492127
   },
   "lab": {
     "resolver": "127.0.0.1:46330",
@@ -2390,9 +2458,14 @@
       "detail": "azhaq 4, reference 4; old bar: 4 of 4 = 100%; 4 targets; azhaq listed 4, gowitness wrote 4 files; time ×2.80 of the reference, memory ×0.34 of the reference (84 MB against 245 MB) | azhaq shots -l /home/runner/work/azhaq/azhaq/bench/.work/shots-151925-polite/targets.txt -dir /home/runner/work/azhaq/azhaq/bench/.work/shots-151925-polite/azhaq0 -silent -chrome-no-sandbox -rate 5 vs gowitness scan file -f /home/runner/work/azhaq/azhaq/bench/.work/shots-151925-polite/targets.txt --chrome-path /usr/bin/google-chrome -s /home/runner/work/azhaq/azhaq/bench/.work/shots-151925-polite/gowitness0 -q"
     },
     {
-      "name": "unit polite:params: no result",
-      "pass": false,
-      "detail": "no record holds it: the job that ran it wrote none, or stopped before it (see that job's log)"
+      "name": "[polite] params: results ≥ the reference's, confirmed by the planted server's own list of the parameters it reads (wrong names count against)",
+      "pass": true,
+      "detail": "azhaq 8, reference 8; old bar: 9 of 9 = 100%; planted pages: azhaq 8 right 0 wrong, arjun 8 right 0 wrong, of 8; all pages azhaq 9, arjun 9, shared 9; time ×1.01 of the reference, memory ×1.24 of the reference (45 MB against 36 MB) | azhaq params -u http://127.0.0.1:3101/rest/products/search -w /home/runner/work/azhaq/azhaq/bench/.work/burp-parameter-names.txt -silent -rate 5 vs arjun -u http://127.0.0.1:3101/rest/products/search -w /home/runner/work/azhaq/azhaq/bench/.work/burp-parameter-names.txt -oJ /home/runner/work/azhaq/azhaq/bench/.work/params/arjun.json -q --disable-redirects --rate-limit 5"
+    },
+    {
+      "name": "[polite] params: time ≤ 1.05× the reference's",
+      "pass": true,
+      "detail": "azhaq 45.1s, reference 44.5s (the median of 3 below 20 s, one run above) | azhaq params -u http://127.0.0.1:3101/rest/products/search -w /home/runner/work/azhaq/azhaq/bench/.work/burp-parameter-names.txt -silent -rate 5 vs arjun -u http://127.0.0.1:3101/rest/products/search -w /home/runner/work/azhaq/azhaq/bench/.work/burp-parameter-names.txt -oJ /home/runner/work/azhaq/azhaq/bench/.work/params/arjun.json -q --disable-redirects --rate-limit 5"
     },
     {
       "name": "[polite] subs -live hackerone.com: results ≥ the reference's, confirmed by a name resolving at 9.9.9.9 or 208.67.222.222 (A, AAAA or CNAME)",
@@ -2635,9 +2708,24 @@
       "detail": "733 URLs, one run 733; the workers ran 141 tasks"
     },
     {
-      "name": "unit claims:1: no result",
-      "pass": false,
-      "detail": "no record holds it: the job that ran it wrote none, or stopped before it (see that job's log)"
+      "name": "claims: the counter forwards and logs a WebSocket upgrade (Juice Shop socket.io)",
+      "pass": true,
+      "detail": "answer \"HTTP/1.1 101 Switching Protocols\", logged 1 requests, upgrade flag true "
+    },
+    {
+      "name": "claims: run unpaced: summary = ledger = what arrived",
+      "pass": true,
+      "detail": "summary 157, ledger 157 (http 157), counter 157"
+    },
+    {
+      "name": "claims: run rate 10: summary = ledger = what arrived",
+      "pass": true,
+      "detail": "summary 157, ledger 157 (http 157), counter 157"
+    },
+    {
+      "name": "claims: run rate 2: summary = ledger = what arrived",
+      "pass": true,
+      "detail": "summary 60, ledger 60 (http 60), counter 60"
     },
     {
       "name": "claims: run -browser unpaced: summary = ledger = what arrived",
@@ -4324,6 +4412,104 @@
     },
     {
       "tool": "azhaq",
+      "target": "http://127.0.0.1:37033/search",
+      "seconds": 21.230337537,
+      "rss_mb": 44.09765625,
+      "profile": "polite"
+    },
+    {
+      "tool": "arjun",
+      "target": "http://127.0.0.1:37033/search",
+      "seconds": 21.150900498,
+      "rss_mb": 35.16015625,
+      "profile": "polite"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:37033/item",
+      "seconds": 16.028638817,
+      "rss_mb": 44.234375,
+      "profile": "polite"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:37033/item",
+      "seconds": 16.028325944,
+      "rss_mb": 44.08203125,
+      "profile": "polite"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:37033/item",
+      "seconds": 16.02825318,
+      "rss_mb": 44.07421875,
+      "profile": "polite"
+    },
+    {
+      "tool": "arjun",
+      "target": "http://127.0.0.1:37033/item",
+      "seconds": 15.140221905,
+      "rss_mb": 35.13671875,
+      "profile": "polite"
+    },
+    {
+      "tool": "arjun",
+      "target": "http://127.0.0.1:37033/item",
+      "seconds": 14.147097523,
+      "rss_mb": 35.0625,
+      "profile": "polite"
+    },
+    {
+      "tool": "arjun",
+      "target": "http://127.0.0.1:37033/item",
+      "seconds": 15.140495415,
+      "rss_mb": 35.2265625,
+      "profile": "polite"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:3101/rest/products/search",
+      "seconds": 7.843526087,
+      "rss_mb": 45.1328125,
+      "profile": "polite"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:3101/rest/products/search",
+      "seconds": 7.840923273,
+      "rss_mb": 44.8125,
+      "profile": "polite"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:3101/rest/products/search",
+      "seconds": 7.839938765,
+      "rss_mb": 44.671875,
+      "profile": "polite"
+    },
+    {
+      "tool": "arjun",
+      "target": "http://127.0.0.1:3101/rest/products/search",
+      "seconds": 8.196168244,
+      "rss_mb": 36.234375,
+      "profile": "polite"
+    },
+    {
+      "tool": "arjun",
+      "target": "http://127.0.0.1:3101/rest/products/search",
+      "seconds": 9.174020623,
+      "rss_mb": 36.12890625,
+      "profile": "polite"
+    },
+    {
+      "tool": "arjun",
+      "target": "http://127.0.0.1:3101/rest/products/search",
+      "seconds": 8.193060777,
+      "rss_mb": 36.2109375,
+      "profile": "polite"
+    },
+    {
+      "tool": "azhaq",
       "target": "hackerone.com",
       "seconds": 55.828163583,
       "rss_mb": 64.60546875,
@@ -4797,6 +4983,24 @@
     {
       "tool": "azhaq",
       "target": "claims",
+      "seconds": 3.769531302,
+      "rss_mb": 108.71484375
+    },
+    {
+      "tool": "azhaq",
+      "target": "claims",
+      "seconds": 15.792056902,
+      "rss_mb": 95.0859375
+    },
+    {
+      "tool": "azhaq",
+      "target": "claims",
+      "seconds": 29.566511395,
+      "rss_mb": 87.234375
+    },
+    {
+      "tool": "azhaq",
+      "target": "claims",
       "seconds": 20.156973764,
       "rss_mb": 113.78125
     },
@@ -5229,6 +5433,11 @@
       "runs": 6
     },
     {
+      "name": "polite:params",
+      "checks": 2,
+      "runs": 14
+    },
+    {
       "name": "polite:domains/hackerone.com",
       "checks": 4,
       "runs": 3
@@ -5297,6 +5506,12 @@
       "name": "once:scale",
       "checks": 4,
       "runs": 3
+    },
+    {
+      "name": "claims:1",
+      "checks": 4,
+      "runs": 3,
+      "rows": 3
     },
     {
       "name": "claims:2",
