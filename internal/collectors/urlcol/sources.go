@@ -9,6 +9,7 @@ import (
 	"math"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -25,7 +26,48 @@ type source struct {
 	name  string
 	needs string // provider key name; "" when none is needed
 	can   int    // the filters it applies (by*); the others are not applied to its URLs
-	fetch func(ctx context.Context, g *getter, domain string, key string, add func([]string)) (pages int, err error)
+	fetch func(ctx context.Context, g *getter, domain string, key string, add func([]rec)) (pages int, err error)
+}
+
+// rec is one URL an archive gave, with the time of its capture as the
+// archive states it ("" when the archive gives none).
+type rec struct {
+	url, at string
+}
+
+// recs is urls with no capture time.
+func recs(urls []string) []rec {
+	out := make([]rec, len(urls))
+	for i, u := range urls {
+		out[i] = rec{url: u}
+	}
+	return out
+}
+
+// captureTime reads an archive's time of capture: a CDX timestamp
+// (YYYYMMDDhhmmss, or a prefix of it) or an ISO 8601 time, as RFC 3339 in
+// UTC; "" for what is neither.
+func captureTime(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return ""
+	}
+	if len(s) >= 8 && len(s) <= 14 && strings.Trim(s, "0123456789") == "" {
+		layout := "20060102150405"[:len(s)]
+		if len(s) == 9 || len(s) == 11 || len(s) == 13 {
+			return ""
+		}
+		if t, err := time.Parse(layout, s); err == nil {
+			return t.UTC().Format(time.RFC3339)
+		}
+		return ""
+	}
+	for _, layout := range []string{time.RFC3339Nano, "2006-01-02T15:04:05.999999999", "2006-01-02 15:04:05", "2006-01-02"} {
+		if t, err := time.Parse(layout, s); err == nil {
+			return t.UTC().Format(time.RFC3339)
+		}
+	}
+	return ""
 }
 
 func allSources() []source {
@@ -308,8 +350,8 @@ func limited(err error, pages int) error {
 // row by row (one row a line): what arrived before the time ran out counts.
 var waybackBase = "https://web.archive.org/cdx/search/cdx"
 
-func wayback(ctx context.Context, g *getter, domain, _ string, add func([]string)) (int, error) {
-	q := url.Values{"url": {g.pattern(domain)}, "output": {"json"}, "collapse": {"urlkey"}, "fl": {"original"}, "pageSize": {"100"}}
+func wayback(ctx context.Context, g *getter, domain, _ string, add func([]rec)) (int, error) {
+	q := url.Values{"url": {g.pattern(domain)}, "output": {"json"}, "collapse": {"urlkey"}, "fl": {"timestamp,original"}, "pageSize": {"100"}}
 	g.filters.params(q, cdxWayback)
 	for page := 0; page < g.maxPages; page++ {
 		q.Set("page", strconv.Itoa(page))
@@ -334,9 +376,11 @@ func wayback(ctx context.Context, g *getter, domain, _ string, add func([]string
 	return g.maxPages, nil
 }
 
-// cdxRows reads a CDX JSON answer ([["original"], ["http://…"], …]) as it
-// arrives and adds the URLs in batches; it returns how many it read.
-func cdxRows(body io.Reader, add func([]string)) (int, error) {
+// cdxRows reads a CDX JSON answer ([["timestamp","original"], ["2024…",
+// "http://…"], …]) as it arrives and adds the URLs in batches; it returns how
+// many it read. The first row names the columns; an answer without it is
+// one column of URLs.
+func cdxRows(body io.Reader, add func([]rec)) (int, error) {
 	dec := json.NewDecoder(body)
 	if tok, err := dec.Token(); err == io.EOF {
 		return 0, nil
@@ -346,7 +390,8 @@ func cdxRows(body io.Reader, add func([]string)) (int, error) {
 		return 0, fmt.Errorf("not a JSON array")
 	}
 	n := 0
-	var batch []string
+	urlAt, timeAt := 0, -1
+	var batch []rec
 	defer func() {
 		if len(batch) > 0 {
 			add(batch)
@@ -357,10 +402,21 @@ func cdxRows(body io.Reader, add func([]string)) (int, error) {
 		if err := dec.Decode(&row); err != nil {
 			return n, err
 		}
-		if len(row) == 0 || row[0] == "" || row[0] == "original" {
+		if len(row) == 0 {
 			continue
 		}
-		batch = append(batch, row[0])
+		if i := slices.Index(row, "original"); i >= 0 {
+			urlAt, timeAt = i, slices.Index(row, "timestamp")
+			continue
+		}
+		if urlAt >= len(row) || row[urlAt] == "" {
+			continue
+		}
+		r := rec{url: row[urlAt]}
+		if timeAt >= 0 && timeAt < len(row) {
+			r.at = captureTime(row[timeAt])
+		}
+		batch = append(batch, r)
 		n++
 		if len(batch) == 1000 {
 			add(batch)
@@ -373,7 +429,7 @@ func cdxRows(body io.Reader, add func([]string)) (int, error) {
 // Common Crawl: the newest index from collinfo.json, paged.
 var commonCrawlInfo = "https://index.commoncrawl.org/collinfo.json"
 
-func commonCrawl(ctx context.Context, g *getter, domain, _ string, add func([]string)) (int, error) {
+func commonCrawl(ctx context.Context, g *getter, domain, _ string, add func([]rec)) (int, error) {
 	body, err := g.get(ctx, g.at(commonCrawlInfo))
 	if err != nil {
 		return 0, limited(err, 0)
@@ -385,7 +441,7 @@ func commonCrawl(ctx context.Context, g *getter, domain, _ string, add func([]st
 		return 0, fmt.Errorf("no Common Crawl index listed")
 	}
 	api := indexes[0].CDXAPI
-	q := url.Values{"url": {g.pattern(domain)}, "output": {"json"}, "fl": {"url"}}
+	q := url.Values{"url": {g.pattern(domain)}, "output": {"json"}, "fl": {"url,timestamp"}}
 	g.filters.params(q, cdxPywb)
 	n := 1
 	if body, err := g.get(ctx, api+"?"+q.Encode()+"&showNumPages=true"); err == nil {
@@ -409,16 +465,7 @@ func commonCrawl(ctx context.Context, g *getter, domain, _ string, add func([]st
 		if err != nil {
 			return page, limited(err, page)
 		}
-		var urls []string
-		for _, line := range strings.Split(string(body), "\n") {
-			var o struct {
-				URL string `json:"url"`
-			}
-			if json.Unmarshal([]byte(line), &o) == nil && o.URL != "" {
-				urls = append(urls, o.URL)
-			}
-		}
-		add(urls)
+		add(pywbRows(body))
 	}
 	g.capped = n > g.maxPages
 	return min(n, g.maxPages), nil
@@ -447,7 +494,7 @@ func otxTarget(domain string, apex bool) (category, name string) {
 	return "domain", reg
 }
 
-func otx(ctx context.Context, g *getter, domain, _ string, add func([]string)) (int, error) {
+func otx(ctx context.Context, g *getter, domain, _ string, add func([]rec)) (int, error) {
 	category, name := otxTarget(domain, g.apex)
 	for page := 1; page <= g.maxPages; page++ {
 		body, err := g.get(ctx, fmt.Sprintf("%s/%s/%s/url_list?limit=500&page=%d", g.at(otxBase), category, url.PathEscape(name), page))
@@ -459,20 +506,21 @@ func otx(ctx context.Context, g *getter, domain, _ string, add func([]string)) (
 			FullSize int  `json:"full_size"`
 			URLList  []struct {
 				URL      string `json:"url"`
+				Date     string `json:"date"`
 				HTTPCode int    `json:"httpcode"` // 0 when OTX has none
 			} `json:"url_list"`
 		}
 		if err := json.Unmarshal(body, &r); err != nil {
 			return page - 1, fmt.Errorf("page %d: %w", page, err)
 		}
-		var urls []string
+		var urls []rec
 		for _, u := range r.URLList {
 			code := ""
 			if u.HTTPCode > 0 {
 				code = strconv.Itoa(u.HTTPCode)
 			}
 			if g.filters.keepStatus(code) {
-				urls = append(urls, u.URL)
+				urls = append(urls, rec{url: u.URL, at: captureTime(u.Date)})
 			}
 		}
 		add(urls)
@@ -489,7 +537,7 @@ func otx(ctx context.Context, g *getter, domain, _ string, add func([]string)) (
 // without a key, paged with search_after.
 var urlscanBase = "https://urlscan.io/api/v1/search/"
 
-func urlscan(ctx context.Context, g *getter, domain, key string, add func([]string)) (int, error) {
+func urlscan(ctx context.Context, g *getter, domain, key string, add func([]rec)) (int, error) {
 	if key != "" {
 		g.header = http.Header{"Api-Key": {key}}
 	}
@@ -511,7 +559,8 @@ func urlscan(ctx context.Context, g *getter, domain, key string, add func([]stri
 					MimeType string `json:"mimeType"`
 				} `json:"page"`
 				Task struct {
-					URL string `json:"url"`
+					URL  string `json:"url"`
+					Time string `json:"time"`
 				} `json:"task"`
 				Sort []json.RawMessage `json:"sort"`
 			} `json:"results"`
@@ -520,14 +569,15 @@ func urlscan(ctx context.Context, g *getter, domain, key string, add func([]stri
 		if err := json.Unmarshal(body, &r); err != nil {
 			return page - 1, fmt.Errorf("page %d: %w", page, err)
 		}
-		var urls []string
+		var urls []rec
 		for _, x := range r.Results {
+			at := captureTime(x.Task.Time)
 			if g.filters.keepStatus(x.Page.Status) && g.filters.keepMime(x.Page.MimeType) {
-				urls = append(urls, x.Page.URL)
+				urls = append(urls, rec{url: x.Page.URL, at: at})
 			}
 			// The submitted URL has no status or type of its own.
 			if !g.raw && g.filters.keepStatus("") && g.filters.keepMime("") {
-				urls = append(urls, x.Task.URL)
+				urls = append(urls, rec{url: x.Task.URL, at: at})
 			}
 		}
 		add(urls)
@@ -578,28 +628,36 @@ func dateBound(d string, last bool) string {
 	return d[:4] + "-" + d[4:6] + "-" + d[6:8]
 }
 
+// pywbRows reads a pywb CDX answer: one JSON object per line, the URL in
+// "url" and the time of the capture in "timestamp".
+func pywbRows(body []byte) []rec {
+	var out []rec
+	for _, line := range strings.Split(string(body), "\n") {
+		var o struct {
+			URL       string `json:"url"`
+			Timestamp string `json:"timestamp"`
+		}
+		if json.Unmarshal([]byte(line), &o) == nil && o.URL != "" {
+			out = append(out, rec{url: o.URL, at: captureTime(o.Timestamp)})
+		}
+	}
+	return out
+}
+
 // arquivo.pt (Portuguese web archive, pywb): one request, one JSON object
 // per line. It often holds what the Wayback Machine refuses to serve.
 var arquivoBase = "https://arquivo.pt/wayback/cdx"
 
-func arquivo(ctx context.Context, g *getter, domain, _ string, add func([]string)) (int, error) {
+func arquivo(ctx context.Context, g *getter, domain, _ string, add func([]rec)) (int, error) {
 	q := url.Values{"url": {g.pattern(domain)}, "output": {"json"}, "collapse": {"urlkey"}, "limit": {strconv.Itoa(arquivoLimit)}}
 	g.filters.params(q, cdxPywb)
 	body, err := g.get(ctx, g.at(arquivoBase)+"?"+q.Encode())
 	if err != nil {
 		return 0, limited(err, 0)
 	}
-	var urls []string
-	for _, line := range strings.Split(string(body), "\n") {
-		var o struct {
-			URL string `json:"url"`
-		}
-		if json.Unmarshal([]byte(line), &o) == nil && o.URL != "" {
-			urls = append(urls, o.URL)
-		}
-	}
-	add(urls)
-	g.capped = len(urls) >= arquivoLimit
+	rows := pywbRows(body)
+	add(rows)
+	g.capped = len(rows) >= arquivoLimit
 	return 1, nil
 }
 

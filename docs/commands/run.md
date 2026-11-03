@@ -122,18 +122,19 @@ found in
 
 - With `-stream`, `run` prints each URL, name that resolves, address and open port as it is found. They come before the map.
 - One line for each key the map has a row for: a URL found by the crawl and answered later, or the front page found twice, prints once, as the first way it was found (its status is in the map). The address of an IP host is a row and a line too (`found  address 127.0.0.1`).
-- Not streamed: names that do not resolve, which the map folds into a summary row. An open-ports line is one line for a host and stands for its port rows (`address:port/tcp`); the same host's ports print again only when a later scan finds others.
+- An open port is a line of its own, under its row's key: `address:port/protocol`, printed once, when a scan reports the port (`found  port    127.0.0.1:3001/tcp  open http`). A later scan that lists the same port does not print it again.
+- Not streamed: names that do not resolve, which the map folds into a summary row.
 - An answer line looks like `found  answer http://app/openapi.json  [200]`. An answer that is the page every unknown path gets ends with `(catch-all: the page any unknown path gets)`.
 - With `-json`, each is an object with `"type":"found"` and these fields:
 
 | Field | Meaning |
 | --- | --- |
-| `kind` | `name`, `url`, `answer`, `address` or `ports`. |
-| `key` | The name, the URL, the address, or the host of the ports. For `name`, `url`, `answer` and `address`, the key of the map row. |
+| `kind` | `name`, `url`, `answer`, `address` or `port`. |
+| `key` | The name, the URL, the address, or `address:port/protocol` of a port: the key of the map row. |
 | `collector` | The collector that found it. |
 | `status`, `title` | For an answer. |
 | `catchall` | For an answer: `true` when it is the page every unknown path gets. |
-| `ip`, `open` | For ports: the address and the list of open ports. |
+| `ip`, `host`, `port`, `protocol`, `state`, `service` | For a port: the address, the name it was scanned under (empty for an address given as such), the port number, `tcp` or `udp`, `open` (UDP also `open\|filtered`) and the service when one was named. |
 
 ### Coverage
 
@@ -311,6 +312,28 @@ azhaq run -url https://app.example.com/ -ports top-100 -advisories -advisory-sou
 azhaq run -url https://app.example.com/ -ports top-100 -advisories -advisories-confirm -advisory-source osv.json -allow app.example.com
 ```
 
+### Read-only verification
+
+With `-verify`, each service the run named gets at most one more read, from a fixed list of checks — there is no way to name another request. Each check sends only what a client with no credentials sends to read what the service already gives anyone:
+
+| Check | Sends exactly | Settles |
+| --- | --- | --- |
+| Redis | `INFO server` | whether the data store answers a read with no credential, and the version it states |
+| MongoDB | an `isMaster` OP_MSG (`{$db: "admin"}`) | whether the server answers a hello with no credential, and the version it states |
+| memcached | `version` | whether the service answers with no credential, and the version it states |
+
+With `-advisories`, each advisory lead is labelled from its one confirmation read as well (the read itself is `-advisories-confirm`'s; `-verify` sends nothing more for a lead). Every result is labelled exactly one of:
+
+- `proved` — the read answered with no credential sent, or an advisory's version and named precondition were both settled by its confirmation read. Proved names that read only, never exploitability, which is never tested.
+- `version-only` — only the product and version identification stands: the service asked for authentication, or no confirmation read settled more. No unauthenticated read is claimed.
+- `conditional` — the result depends on a precondition the read did not show, which the result names.
+
+Each result carries the exact request sent and an excerpt of the answer, is printed after the map (one `{"type":"verify", …}` object with `-json`), held in the summary's `verify`, and stored as one `verify` observation (azhaq `show` lists them), so every count derives from the stored rows. The severity printed is a stated ranking of how directly the read shows the fact (an unauthenticated data-store read is `high`, a settled advisory `medium`, a conditional `low`, the rest `info`); it is not a CVSS score. Every read goes through the scope, `-deny-path`, the kill file, `-max-requests` and the pace, and is a ledger line of the collector `azhaq-verify`. A read the scope refuses, a rule keeps out or a limit stops is a note, not a failure; a read that gets no answer is a failure (exit 3). Never a payload, never a write or state change, never a credential or a guessed password, never a request that tries to trigger a flaw. The boundary is stated once, in [Read-only verification](../CONCEPTS.md#read-only-verification--verify).
+
+```
+azhaq run -url https://app.example.com/ -ports top-1000 -verify -db app.db
+```
+
 ## Flags
 
 <!-- flags:begin run -->
@@ -363,6 +386,7 @@ azhaq run -url https://app.example.com/ -ports top-100 -advisories -advisories-c
 | `-advisories` | bool |  | match the products and versions this run already confirmed against the advisory records of -advisory-source, as labelled leads (affected, not affected or conditional, each with its advisory id and URL): a pure lookup over what the run already holds, nothing more is sent to a target |
 | `-advisories-confirm` | bool |  | with -advisories: for each affected or conditional lead, also make the one benign read the advisory names (a GET of its documented version or info path, or of / to read the version it states): no payload, no login, no state change, never a request that could trigger the issue; each read is in the ledger and counts against -max-requests, and each lead is labelled observed, inferred or claimed (with -advisories; reads only within the run's scope: the targets given, -allow or -scope) |
 | `-advisory-source` | string |  | the advisory records to match against, OSV JSON (a record, a list, {"vulns": [...]}, or JSON lines): a file the user downloaded (works offline), or an http(s) URL asked once as a third-party source; azhaq vendors no snapshot and fetches none it was not given |
+| `-verify` | bool |  | with the services this run confirmed: make each enumerated safe read-only verification (Redis INFO server, MongoDB isMaster, memcached version, each sent with no credential, and, with -advisories, each advisory lead labelled from its confirmation read) and label the results proved, version-only or conditional, each with the exact request sent and an excerpt of the answer; every read goes through the scope, -deny-path (for the advisory GET), -max-requests, the pace, the kill file and the ledger; no payload, no credential, no write and no request that tries to trigger an issue |
 
 **Crawl scope**
 
@@ -476,7 +500,7 @@ azhaq run -url https://app.example.com/ -ports top-100 -advisories -advisories-c
 | `-fail-on-capped` | bool |  | exit 4 also when the run hit -depth with hints left |
 
 <details>
-<summary>Other names, flags accepted with no effect and rarely used flags (78)</summary>
+<summary>Other names, flags accepted with no effect and rarely used flags (79)</summary>
 
 | Flag | Type | Default | Meaning | Kind |
 | --- | --- | --- | --- | --- |
@@ -545,6 +569,7 @@ azhaq run -url https://app.example.com/ -ports top-100 -advisories -advisories-c
 | `-urls-fp` | bool |  | keep one URL for each host and path, dropping the variants that differ by parameters | rarely needed |
 | `-urls-from` | string |  | only captures from this time on: YYYY, YYYYMM, YYYYMMDD or YYYYMMDDhhmmss; OTX, which dates no capture, is asked all the same and its URLs kept, with a note | rarely needed |
 | `-urls-ft` | string |  | leave out URLs the archive recorded with these MIME types, comma-separated; OTX, which keeps no type, is asked all the same and its URLs kept, with a note | rarely needed |
+| `-urls-keep-junk` | bool |  | list the archived URLs left out as junk too, each labelled with its class and reason (-json), instead of only counting them | rarely needed |
 | `-urls-max` | int | `500000` | URLs kept for each domain (0: no cap); the summary counts the ones past it | rarely needed |
 | `-urls-mc` | string |  | keep only URLs the archive recorded with these HTTP status codes, comma-separated (200,301); OTX and urlscan.io record a status for most URLs, and a URL with none is not kept | rarely needed |
 | `-urls-mt` | string |  | keep only URLs the archive recorded with these MIME types, comma-separated (text/html); OTX, which keeps no type, is asked all the same and its URLs kept, with a note | rarely needed |
@@ -553,7 +578,7 @@ azhaq run -url https://app.example.com/ -ports top-100 -advisories -advisories-c
 | `-urls-proxy` | string |  | send the archive requests through this proxy: http://HOST:PORT, https:// or socks5:// | rarely needed |
 | `-urls-raw` | bool |  | print the archived URLs exactly as the archives gave them: no normalising, junk filter or deduplication | rarely needed |
 | `-urls-retries` | int |  | times an archive request is asked again after a 429, 503 or network error, after its Retry-After (seconds or a date, however long) or 2, 5, 10, 20, then 30 s; 0 makes the first refusal final (default: a 429 or 503 is asked again until the archive's time, -urls-timeout, or the run's is spent, a network error 3 times; a wait longer than the time left ends the request at once, with the reason) | rarely needed |
-| `-urls-source` | bool |  | with -urls: each line is the URL, a tab, and the archive that gave it | rarely needed |
+| `-urls-source` | bool |  | with -urls: each line is the URL, then after tabs the archive that gave it, when it captured it, and the junk class and reason of a URL that looks like noise | rarely needed |
 | `-urls-sources` | string |  | ask only these archives, comma-separated: wayback, commoncrawl, otx, urlscan, arquivo (default: all) | rarely needed |
 | `-urls-subs` | bool | `true` | ask the archives for the subdomains of each domain too (false: only the name itself, as gau does without --subs) | rarely needed |
 | `-urls-to` | string |  | only captures up to this time, in the same form | rarely needed |

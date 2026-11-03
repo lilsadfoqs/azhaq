@@ -1,0 +1,6 @@
+[["timestamp","original"],
+["20190312083015","http://example.org/a?x=1"],
+["20200704120000","http://example.org/a?x=2"],
+["20210101000000","http://example.org/img/logo.png"],
+["20220815101112","http://www.example.org/w"],
+["20230220091500","http://example.org/b"]]

@@ -209,3 +209,21 @@ func ledgerHosts(t *testing.T, path, host string) int {
 	}
 	return n
 }
+
+// An IPv6 range in -allow is not swept: ports says so in a note and asks
+// none of its addresses, while the IPv4 range beside it is.
+func TestSweepLeavesAnIPv6RangeAloneWithANote(t *testing.T) {
+	t.Chdir(t.TempDir())
+	lab := newSweepLab(t)
+	out, errOut, code := cli(t, "ports", "-sweep", "-allow", "127.7.7.4/30", "-allow", "2001:db8::/120", "-p", lab.port, "-json")
+	sum := sumMap(t, errOut)
+	if got := portRows(t, out); code != exitOK || fmt.Sprint(got) != "[127.7.7.5 127.7.7.6]" {
+		t.Errorf("exit %d, rows %v: the IPv4 range was not swept", code, got)
+	}
+	if !strings.Contains(notesOf(sum), "-sweep leaves the IPv6 range 2001:db8::/120 alone: name it as a target to scan it") {
+		t.Errorf("no note about the IPv6 range: %v", sum["notes"])
+	}
+	if c, _ := sum["counts"].(map[string]any); c["addresses"] != float64(4) {
+		t.Errorf("only the 4 IPv4 addresses are counted: %v", sum["counts"])
+	}
+}

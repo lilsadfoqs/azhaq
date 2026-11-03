@@ -164,3 +164,31 @@ func TestListenPairSharesOnePort(t *testing.T) {
 		t.Errorf("udp %v, tcp %v", pc.LocalAddr(), ln.Addr())
 	}
 }
+
+// A setup that fails before any unit runs leaves a record: each planned unit
+// has a failed check holding the tool's own output.
+func TestSetupFailureIsInTheRecord(t *testing.T) {
+	rec = record{}
+	defer func() { rec = record{} }()
+	text := "exit status 1\n# github.com/lilsadfoqs/azhaq/cmd/azhaq\ncmd/azhaq/main.go:9:2: undefined: nope"
+	noteSetupFailure("go build", text, []string{"default:urls", "polite:dirs", "claims:3", "once:docs"})
+	var names []string
+	for _, c := range rec.Checks {
+		if c.Pass || !strings.Contains(c.Detail, "main.go:9:2: undefined: nope") || !strings.HasPrefix(c.Detail, "go build failed: ") {
+			t.Errorf("check %+v", c)
+		}
+		names = append(names, c.Name)
+	}
+	want := "[default] unit default:urls: ran to its end|[polite] unit polite:dirs: ran to its end|unit claims:3: ran to its end|unit once:docs: ran to its end"
+	if strings.Join(names, "|") != want || len(rec.Units) != 4 || rec.Units[0].Checks != 1 {
+		t.Errorf("names %v, spans %+v", names, rec.Units)
+	}
+	rec = record{}
+	noteSetupFailure("go build", "boom", nil)
+	if len(rec.Checks) != 1 || rec.Checks[0].Name != "setup: go build" {
+		t.Errorf("no planned units: %+v", rec.Checks)
+	}
+	if got := clipText(strings.Repeat("a", 100)+"END", 20); !strings.HasSuffix(got, "END") || len(got) > 40 {
+		t.Errorf("clip %q", got)
+	}
+}

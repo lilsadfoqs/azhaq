@@ -499,10 +499,12 @@ func TestRolesListsCreatesByDefault(t *testing.T) {
 	if err != nil {
 		t.Fatalf("%v\n%s", err, errOut)
 	}
-	if n := strings.Count(out, verdictWriteAccepted); n != 2 {
+	// Nothing locates the notes these creates made (no identifier, no
+	// readable collection), so both rows are unverifiable, and listed.
+	if n := strings.Count(out, verdictWriteUnverifiable); n != 2 {
 		t.Errorf("want both creates listed, got %d:\n%s", n, out)
 	}
-	if strings.Contains(errOut, "not listed") && strings.Contains(errOut, verdictWriteAccepted) {
+	if strings.Contains(errOut, "not listed") && strings.Contains(errOut, verdictWriteUnverifiable) {
 		t.Errorf("the creates are still counted as not listed:\n%s", errOut)
 	}
 }

@@ -53,6 +53,7 @@ import (
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"github.com/lilsadfoqs/azhaq/internal/portscan"
 	"github.com/lilsadfoqs/azhaq/internal/timing"
+	"github.com/lilsadfoqs/azhaq/internal/verify"
 	"github.com/lilsadfoqs/azhaq/scope"
 	"github.com/lilsadfoqs/azhaq/store"
 	"github.com/lilsadfoqs/azhaq/types"
@@ -199,7 +200,7 @@ var observer func(types.Entity, types.Observation)
 // collector in this process: a function that gets each URL as it
 // arrives, and a urlscan.io key from a config file.
 var (
-	urlSink    func(url, source string)
+	urlSink    func(urlcol.Row)
 	urlscanKey string
 )
 
@@ -250,7 +251,8 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	noTech := fs.Bool("no-tech", false, "skip technology fingerprints (saves about 30 MB of memory)")
 	noFavicon := fs.Bool("no-favicon", false, "do not hash the favicon of front pages (one or two requests less per web service)")
 	urlsOut := fs.String("urls", "", "write every archived URL of the run's domains to this file, one per line")
-	urlsFrom := fs.Bool("urls-source", false, "with -urls: each line is the URL, a tab, and the archive that gave it")
+	urlsFrom := fs.Bool("urls-source", false, "with -urls: each line is the URL, then after tabs the archive that gave it, when it captured it, and the junk class and reason of a URL that looks like noise")
+	urlsKeepJunk := fs.Bool("urls-keep-junk", false, "list the archived URLs left out as junk too, each labelled with its class and reason (-json), instead of only counting them")
 	urlsSubs := fs.Bool("urls-subs", true, "ask the archives for the subdomains of each domain too (false: only the name itself, as gau does without --subs)")
 	urlsSources := fs.String("urls-sources", "", "ask only these archives, comma-separated: wayback, commoncrawl, otx, urlscan, arquivo (default: all)")
 	urlsMC := fs.String("urls-mc", "", "keep only URLs the archive recorded with these HTTP status codes, comma-separated (200,301); OTX and urlscan.io record a status for most URLs, and a URL with none is not kept")
@@ -384,6 +386,8 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	}
 	var advFlags advisoryFlags
 	advFlags.register(fs)
+	var verifyFl verifyFlags
+	verifyFl.register(fs)
 	graphql := fs.Bool("graphql", false, "read the schema of GraphQL endpoints with an introspection query (active; the targets given are the scope unless -allow)")
 	graphqlWordlist := fs.String("graphql-wordlist", "", "extra probe words (one per line), tried and recombined with the built-in ones when a GraphQL endpoint's introspection is off and its schema has to be recovered from validation errors")
 	skip := fs.String("skip", "", "collectors not to run, comma-separated: azhaq-ports or ports, subs for the subdomain collector (azhaq plan lists them); a name that is none is an error; azhaq resume leaves out the tasks the run kept for them")
@@ -1077,7 +1081,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	}
 	opts.URLs = urlcol.Options{Keys: urlKeys, Out: *urlsOut, OutFrom: *urlsFrom, Timeout: *urlsTimeout,
 		Apex: !*urlsSubs, Only: splitList(*urlsSources), FirstPath: *urlsFP, Blacklist: splitList(*urlsBlacklist), Proxy: *urlsProxy,
-		MaxPages: *urlsPages, MaxURLs: *urlsMax, Raw: *urlsRaw, OnURL: urlSink}
+		MaxPages: *urlsPages, MaxURLs: *urlsMax, Raw: *urlsRaw, KeepJunk: *urlsKeepJunk, OnRow: urlSink}
 	if *urlsPages == 0 {
 		opts.URLs.MaxPages = math.MaxInt32
 	}
@@ -1183,6 +1187,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		}
 		send.tcpPorts, send.udpPorts = len(opts.Ports), len(opts.UDPPorts)
 		send.axfr, send.resolvers = out.axfr, resolvers
+		send.verify = verifyFl.on
 		if *daily > 0 && (send.max == 0 || *daily < send.max) {
 			// A plan reads no database: what today's runs spent is not
 			// taken off.
@@ -1337,6 +1342,16 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		advLeads, advFailures, advNote = advisoryStage(ctx, st, obs, advFlags)
 		obs, _ = st.Observations()
 	}
+	// -verify: the data-store checks make their one read here, while
+	// the run's ledger and budget are still the run's; the advisory
+	// results label the leads above and send nothing more.
+	var verifyResults []verify.Result
+	var verifyFailures []engine.Failure
+	verifyNote := ""
+	if verifyFl.on {
+		verifyResults, verifyFailures, verifyNote = verifyStage(ctx, st, obs, advLeads, "azhaq "+rep.Command+" -verify")
+		obs, _ = st.Observations()
+	}
 	edges, _ := st.Edges()
 	leftover, _ := st.LoadLeftover()
 	scope := engine.ScopeSeeds(seeds, ents, edges)
@@ -1367,6 +1382,11 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 				return err
 			}
 		}
+		for _, r := range verifyResults {
+			if err := enc.Encode(verifyRow(r)); err != nil {
+				return err
+			}
+		}
 	case *probe:
 		for _, r := range engine.ProbeRows(obs) {
 			fmt.Println(r.Line())
@@ -1379,10 +1399,16 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		for _, lead := range advLeads {
 			fmt.Println(lead.Line())
 		}
+		for _, r := range verifyResults {
+			fmt.Println(r.Line())
+		}
 	default:
 		printMap(shown)
 		for _, lead := range advLeads {
 			fmt.Printf("  %s\n", lead.Line())
+		}
+		for _, r := range verifyResults {
+			fmt.Printf("  %s\n", r.Line())
 		}
 		if *showObs {
 			fmt.Println("observations")
@@ -1428,6 +1454,13 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		rep.Failed = append(rep.Failed, advFailures...)
 		if advNote != "" {
 			rep.Notes = append(rep.Notes, advNote)
+		}
+	}
+	if verifyFl.on {
+		rep.Verify = verifyResults
+		rep.Failed = append(rep.Failed, verifyFailures...)
+		if verifyNote != "" {
+			rep.Notes = append(rep.Notes, verifyNote)
 		}
 	}
 	if n := opts.DNS.TakeoverNote("-no-takeover"); n != "" {
@@ -2045,7 +2078,7 @@ func newRunID() string {
 func cmdExport(args []string) error {
 	fs := newFlags("export")
 	dbPath := fs.String("db", "", "sqlite path (default: last run)")
-	format := fs.String("format", "jsonl", "jsonl (everything), urls, hosts (names that resolve), names (every name), targets (web services, for nuclei -l), openapi, graphql (introspection JSON), sdl (GraphQL schema), burp (the run's scope), html, graphml, secrets")
+	format := fs.String("format", "jsonl", "jsonl (everything), urls, hosts (names that resolve), names (every name), targets (web services, for nuclei -l), openapi, graphql (introspection JSON), sdl (GraphQL schema), burp (the run's scope), html, graphml, secrets, findings (one record per qualifying stored row, JSON Lines; an empty workspace writes an explicit empty record set), findings-md (the same records in Markdown)")
 	origin := fs.String("origin", "", "openapi: the origin to describe (default: the one with most API routes); graphql, sdl: the endpoints of an origin, or one endpoint's URL")
 	safe := fs.Bool("safe", false, "openapi: leave out the routes the run did not request, such as those -deny-path kept out (otherwise they carry x-azhaq-skipped: true)")
 	if err := parse(fs, args); err != nil {

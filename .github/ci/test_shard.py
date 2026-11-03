@@ -154,6 +154,57 @@ class Events(unittest.TestCase):
         self.assertEqual(r.tests["a"]["TestA"], 1)
 
 
+class Claims(unittest.TestCase):
+    def ledger(self, text):
+        d = tempfile.mkdtemp()
+        path = os.path.join(d, "claims.tsv")
+        with open(path, "w") as f:
+            f.write(text)
+        return shard.claim_tests(path)
+
+    def test_reads_the_test_proofs_only(self):
+        got = self.ledger(
+            "# a comment\n@cover README.md\n"
+            "a.one\tREADME.md\ttext of one\ttest:cmd/x:TestA,TestB;bench:a check;test:internal/y:TestC\n"
+            "a.two\tREADME.md\ttext of two\ttest:cmd/x:TestA\n"
+            "a.note\tREADME.md\ttext of note\tnote:why it is not a behaviour\n")
+        self.assertEqual(got, {("cmd/x", "TestA"): ["a.one", "a.two"], ("cmd/x", "TestB"): ["a.one"],
+                               ("internal/y", "TestC"): ["a.one"]})
+
+    def test_a_proof_that_does_not_build_is_a_problem(self):
+        claims = {("cmd/x", "TestA"): ["a.one"], ("cmd/x", "TestGone"): ["a.two"]}
+        bad = shard.claims_unbuilt(claims, {"cmd/x": ["TestA", "TestOther"]})
+        self.assertEqual(len(bad), 1)
+        self.assertIn("a.two", bad[0])
+        self.assertIn("TestGone", bad[0])
+
+    def test_a_proof_that_was_skipped_or_did_not_run_is_a_problem(self):
+        claims = {("cmd/x", "TestA"): ["a.one"], ("cmd/x", "TestB"): ["a.two"], ("cmd/x", "TestC"): ["a.three"],
+                  ("cmd/other", "TestD"): ["a.four"]}
+        outcome = {("cmd/x", "TestA"): "pass", ("cmd/x", "TestB"): "skip"}
+        assigned = {("cmd/x", "TestA"), ("cmd/x", "TestB"), ("cmd/x", "TestC")}
+        bad = shard.claims_unrun(outcome, claims, assigned)
+        self.assertEqual(len(bad), 2)
+        self.assertIn("a.two", bad[0] + bad[1])
+        self.assertIn("was skipped", bad[0])
+        self.assertIn("did not run", bad[1])
+
+    def test_a_run_records_what_each_test_did(self):
+        out = io.StringIO()
+        r = shard.Run("m", out)
+        for l in events(
+            {"Action": "pass", "Package": "m/a", "Test": "TestA", "Elapsed": 0.1},
+            {"Action": "skip", "Package": "m/a", "Test": "TestB", "Elapsed": 0},
+            {"Action": "pass", "Package": "m/a", "Test": "TestB/sub", "Elapsed": 0},
+        ):
+            r.line(l)
+        self.assertEqual(r.outcome, {("a", "TestA"): "pass", ("a", "TestB"): "skip"})
+
+    def test_the_repository_proofs_build(self):
+        inv = shard.load_inventory()
+        self.assertEqual(shard.claims_unbuilt(shard.claim_tests(), inv), [])
+
+
 class Annotations(unittest.TestCase):
     def test_race_frames_first(self):
         log = "\n".join([
