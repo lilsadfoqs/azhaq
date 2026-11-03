@@ -21,6 +21,7 @@ import (
 	"github.com/lilsadfoqs/azhaq/internal/egress"
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
 	"github.com/lilsadfoqs/azhaq/internal/lazyre"
+	"github.com/lilsadfoqs/azhaq/internal/ledger"
 	"github.com/lilsadfoqs/azhaq/internal/neterr"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"github.com/lilsadfoqs/azhaq/internal/webextract"
@@ -180,6 +181,7 @@ func cmdRoles(args []string) error {
 	fs.Var(&burps, "burp", "NAME=FILE: the same from a Burp \"Save items\" XML file (repeat a name to add files)")
 	fs.Var(&allows, "allow", "HOST: an origin of the history that is the target besides the ones most of a role's requests go to (the others, analytics and CDNs, are left out) (repeatable)")
 	noAnon := fs.Bool("no-anon", false, "with -har or -burp: do not add the anonymous role")
+	planOnly := fs.Bool("plan", false, "print what roles would send, by stage (sign-ins, each role's map, the history reads, the replay, the controls, the write replay and its verification) and send nothing; azhaq plan roles is the same")
 	rateFlag := fs.Float64("rate", 0, "requests per second for the history reads and the replay, when the run options give none")
 	proxyFlag := fs.String("proxy", "", "send every request through this proxy (http, https or socks5 URL): the runs, the history reads and the replay")
 	fs.Var(&canarySpecs, "canary", "[ROLE:]URL[=REGEX]: what checks a session during the replay: a URL only a live session reads, and what its body holds (default: the role's own /me-like answer, or a page the anonymous role is refused)")
@@ -296,6 +298,21 @@ func cmdRoles(args []string) error {
 			}
 		}
 	}
+	costIn := rolesCostIn{roles: roles, logins: len(logins), crawl: crawl, hist: hist, sc: sc, replay: *replay, max: *replayMax, methods: methods}
+	if *planOnly {
+		if crawl {
+			var p runPlan
+			if err := mapTarget(runArgs, newReport("plan"), &runOut{embedded: true, plan: true, planInto: &p}); err != nil {
+				return err
+			}
+			costIn.mapsPlan = &p
+		}
+		var budget int64
+		if v, ok := flagValue(runArgs, "max-requests"); ok {
+			budget, _ = strconv.ParseInt(v, 10, 64)
+		}
+		return planRoles(costIn, *asJSON, budget)
+	}
 	if *dir == "" {
 		*dir = "azhaq-roles-" + time.Now().Format("20060102-150405")
 	}
@@ -305,6 +322,8 @@ func cmdRoles(args []string) error {
 	rep := newReport("roles")
 	rep.what = "endpoints listed"
 	rep.DB = *dir
+	est := estimateRoles(costIn)
+	rep.estimate = &est
 	rearmKill := func() {}
 	if path, _ := flagValue(runArgs, "ledger"); path != "off" {
 		// One ledger for the role runs and the requests between them: the
@@ -455,12 +474,14 @@ func cmdRoles(args []string) error {
 				fmt.Fprintf(os.Stderr, "azhaq roles: %s\n", r.name)
 			}
 			browser.OnLogin = func(s browser.Session) { signedIn[r.name] = s }
+			endStage := ledger.SetStage(stageRoleMaps)
 			sub, err := quietly(*asJSON, func() (*report, error) { return runEmbedded(args) })
+			endStage()
 			rearmKill()
 			browser.OnLogin = nil
 			if err != nil {
 				counted()
-				return rolesFailed(rep, *asJSON, fmt.Errorf("role %s: %w", r.name, err))
+				return rolesFailed(rep, *asJSON, failedWithBudget(rep, fmt.Errorf("role %s: %w", r.name, err)))
 			}
 			roles[i].session = fetch.Extra.Clone()
 			if got, raw, hosts, s, err = endpointAnswers(db); err != nil {
@@ -469,8 +490,9 @@ func cmdRoles(args []string) error {
 			keepRunBodies(got, raw)
 			readBodies(got, raw, s, hostSet(hosts))
 			if cmdMax > 0 && strings.HasPrefix(sub.Stopped, "the request budget of") {
-				sub.Stopped = fmt.Sprintf("-max-requests %d, the budget of the whole command, was spent in the run (raise -max-requests)", cmdMax)
+				sub.Stopped = fmt.Sprintf("-max-requests %d, the budget of the whole command, was spent in the %s stage (%s; raise -max-requests)", cmdMax, roleStage(ledger.LastSender()), stopDetail(ledger.LastSender().Collector, sub.refusedBy, accountCost(nil, rep.spentFrom, rolesStages)))
 			}
+			addRunEstimate(rep.estimate, sub)
 			absorb(rep, r.name, sub)
 		} else {
 			roles[i].session = headerOf(r.headers)
@@ -482,7 +504,9 @@ func cmdRoles(args []string) error {
 			histURLs = append(histURLs, urls...)
 			failed := askFailures{}
 			bud, byCmd := stageBudget(*replayMax - replayed)
+			endStage := ledger.SetStage(stageHistory)
 			n, err := readHistoryURLs(roles[i], urls, got, raw, s, hostSet(hosts), rate, bud, failed)
+			endStage()
 			replayed += n
 			noteCap(rep, "history", capErr(err, byCmd))
 			if len(failed) > 0 {
@@ -570,7 +594,9 @@ func cmdRoles(args []string) error {
 			}
 		}
 		bud, byCmd := stageBudget(*replayMax)
+		endStage := ledger.SetStage(stageReplay)
 		n, err := replayAll(roles, answers, found, rank, own, rate, bud, watch)
+		endStage()
 		replayed = n
 		rep.Notes = append(rep.Notes, watch.notes...)
 		rep.warned = rep.warned || watch.failed
@@ -597,7 +623,9 @@ func cmdRoles(args []string) error {
 		egress.SetTargetProxy(rolesProxy)
 		holdDeny()
 		bud, byCmd := stageBudget(*replayMax - replayed)
+		endStage := ledger.SetStage(stageControls)
 		n, err := askControls(roles, rows, own, pages, refusalRE, bud)
+		endStage()
 		fetch.Reset()
 		replayed += n
 		noteCap(rep, "controls", capErr(err, byCmd))
@@ -644,7 +672,9 @@ func cmdRoles(args []string) error {
 		} else {
 			var n int
 			bud, byCmd := stageBudget(*replayMax - replayed)
+			endStage := ledger.SetStage(stageWrites)
 			wrows, n, err = replayWritesAs(who, roles, reqs, answers, own, rate, bud, *writesCanary, canaryFields...)
+			endStage()
 			replayed += n
 			noteCap(rep, "write replay", capErr(err, byCmd))
 			if objs := createdRows(roles, wrows, made); len(objs) > 0 {
@@ -655,7 +685,9 @@ func cmdRoles(args []string) error {
 				egress.SetTargetProxy(rolesProxy)
 				holdDeny()
 				bud, byCmd := stageBudget(*replayMax - replayed)
+				endStage := ledger.SetStage(stageControls)
 				n, err := askControls(roles, objs, own, pages, refusalRE, bud)
+				endStage()
 				fetch.Reset()
 				replayed += n
 				noteCap(rep, "controls", capErr(err, byCmd))
@@ -700,8 +732,9 @@ func cmdRoles(args []string) error {
 	}
 	rep.Results, rep.Counts = len(shown), counts
 	counted()
+	rep.Cost = accountCost(rep.estimate, rep.spentFrom, rolesStages)
 	if cmdMax > 0 {
-		rep.Notes = append(rep.Notes, fmt.Sprintf("request budget %d for the whole command (the runs, the sign-ins, the history reads, the replay and the writes together), %d sent", cmdMax, rep.Requests))
+		rep.Notes = append(rep.Notes, fmt.Sprintf("request budget %d for the whole command (the runs, the sign-ins, the history reads, the replay and the writes together), %d sent%s", cmdMax, rep.Requests, spentBy(rep.Cost)))
 	}
 	if k := egress.Killed(); k != nil && rep.Stopped == "" {
 		// The replay's refusals are answers it could not get: the matrix is cut short.
@@ -798,6 +831,9 @@ func rolesFailed(rep *report, asJSON bool, err error) error {
 	}
 	rep.settle()
 	rep.Exit, rep.Complete = exitCode(err), false
+	if rep.Cost == nil {
+		rep.Cost = accountCost(rep.estimate, rep.spentFrom, rolesStages)
+	}
 	rep.Notes = append(rep.Notes, err.Error())
 	raw, _ := json.Marshal(rep)
 	fmt.Fprintf(os.Stderr, "%s\n", raw)

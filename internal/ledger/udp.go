@@ -8,6 +8,7 @@ import (
 // UDP records a datagram about to be sent to addr (ip:port), as TCP does
 // a connect.
 func UDP(ctx context.Context, host, addr string) {
+	spend(ClassTarget, "udp", collectorOf(ctx), 1)
 	l := Active()
 	if l == nil {
 		return

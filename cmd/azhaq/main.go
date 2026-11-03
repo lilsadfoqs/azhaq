@@ -49,6 +49,7 @@ import (
 	"github.com/lilsadfoqs/azhaq/internal/dnsr"
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
 	"github.com/lilsadfoqs/azhaq/internal/fuzz"
+	"github.com/lilsadfoqs/azhaq/internal/ledger"
 	"github.com/lilsadfoqs/azhaq/internal/neterr"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"github.com/lilsadfoqs/azhaq/internal/portscan"
@@ -185,7 +186,8 @@ func resumeHint(db string, cut, signedIn bool, user string) string {
 // so nothing is kept for azhaq resume.
 type runOut struct {
 	json, quiet, embedded, plan, scratch bool
-	axfr                                 bool // plan: also the zone transfers of dns -axfr
+	planInto                             *runPlan // plan: the plan is put here, not printed
+	axfr                                 bool     // plan: also the zone transfers of dns -axfr
 	// progress is how a drop-in wants the lines of a long run: "json" for
 	// its -json, which hushes the run itself; empty, as run's own flags say.
 	progress string
@@ -1160,16 +1162,18 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 			return conflict
 		}
 	}
+	paths := append(append([]string{}, pathscol.DefaultWordlist...), opts.Paths...)
+	send := sendLimits{noThirdParty: *sourcesList == "none", max: *maxRequests, by: "-max-requests", noFavicon: *noFavicon, chrome: *shots != "" || *render, shots: *shots, render: *render, chromeWrites: *browserWrites,
+		interact: *interact, dirs: *dirsFile != "", params: *paramsFile != "", login: *login, loginUser: *loginUser, graphql: *graphql, submitForms: *submitForms,
+		portsOn: len(portsOn) > 0, portDetect: portCfg.Detect, portPayload: len(portCfg.Payload) > 0, portDiscover: portCfg.Discover}
+	if m := strings.ToUpper(*paramsMethod); *paramsFile != "" && m != "GET" {
+		send.paramsBody = m
+	}
+	send.tcpPorts, send.udpPorts = len(opts.Ports), len(opts.UDPPorts)
+	send.axfr, send.resolvers = out.axfr, resolvers
+	send.dirsWords, send.dirsExts, send.paramsN, send.bruteN = len(opts.Dirs.Words), len(opts.Dirs.Extensions), len(opts.Params.Words), len(opts.BruteWords)
+	send.dirsNoCal = opts.Dirs.NoCalibration
 	if out.plan {
-		paths := append(append([]string{}, pathscol.DefaultWordlist...), opts.Paths...)
-		send := sendLimits{noThirdParty: *sourcesList == "none", max: *maxRequests, by: "-max-requests", noFavicon: *noFavicon, chrome: *shots != "" || *render, shots: *shots, render: *render, chromeWrites: *browserWrites,
-			interact: *interact, dirs: *dirsFile != "", params: *paramsFile != "", login: *login, loginUser: *loginUser, graphql: *graphql, submitForms: *submitForms,
-			portsOn: len(portsOn) > 0, portDetect: portCfg.Detect, portPayload: len(portCfg.Payload) > 0, portDiscover: portCfg.Discover}
-		if m := strings.ToUpper(*paramsMethod); *paramsFile != "" && m != "GET" {
-			send.paramsBody = m
-		}
-		send.tcpPorts, send.udpPorts = len(opts.Ports), len(opts.UDPPorts)
-		send.axfr, send.resolvers = out.axfr, resolvers
 		if *daily > 0 && (send.max == 0 || *daily < send.max) {
 			// A plan reads no database: what today's runs spent is not
 			// taken off.
@@ -1177,6 +1181,10 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		}
 		plan := buildPlan(cat, seeds, budgets, paths, limitsOf(budgets, *maxRequests, *rateFlag, *timeout, *daily), send, rep)
 		rep.Results, rep.what = len(plan.Targets), "targets"
+		if out.planInto != nil {
+			*out.planInto = plan
+			return nil
+		}
 		return printPlan(plan, *jsonOut)
 	}
 	if *workerOf != "" {
@@ -1304,6 +1312,16 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	}
 	if !out.plan {
 		watchSession(ctx, seeds, loginHome, *login, loginRenew, rep)
+	}
+	// What the run will send, counted before it sends: said first when it is
+	// not small, and kept for the summary to set beside what was sent.
+	var estimate *costEstimate
+	if *resumeRun == "" {
+		ep := planFor(cat, seeds, budgets, paths, limitsOf(budgets, *maxRequests, *rateFlag, *timeout, *daily), send, rep).Estimate
+		estimate = &ep
+		if !*quiet && !*jsonOut && !out.embedded && ep.Total.contacts() > trivialRun {
+			printEstimate(os.Stderr, "azhaq: before sending, the run is estimated at ", ep)
+		}
 	}
 	localErr := eng.RunLocal(ctx, seeds, budgets)
 	stopKeep()
@@ -1455,6 +1473,9 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	}
 	rep.Requests = egress.Sent()
 	_ = st.AddRunRequests(rep.Requests)
+	rep.estimate, rep.refusedBy = estimate, eng.Refused()
+	rep.Cost = accountCostBy(estimate, rep.spentFrom, nil, true)
+	rep.hushCost = out.embedded
 	// Work the -timeout cut short (a source still asking) is not done:
 	// resume runs it again.
 	cut := 0
@@ -1475,7 +1496,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		case egress.Killed() != nil:
 			rep.Stopped = killStopped(left)
 		case egress.Spent():
-			rep.Stopped = fmt.Sprintf("the request budget of %d is spent, %d tasks known and not done (the cap holds for each run: azhaq resume sends up to %d more, or as many as its -max-requests says, 0 for no cap)", egress.MaxRequests(), left, egress.MaxRequests())
+			rep.Stopped = fmt.Sprintf("the request budget of %d is spent%s, %d tasks known and not done (the cap holds for each run: azhaq resume sends up to %d more, or as many as its -max-requests says, 0 for no cap)", egress.MaxRequests(), stoppedIn(eng.Refused(), rep.Cost), left, egress.MaxRequests())
 		case len(fetch.OriginsDown()) > 0:
 			rep.Stopped = fmt.Sprintf("%s stopped answering after %d timeouts, %d tasks known and not done", strings.Join(fetch.OriginsDown(), ", "), fetch.OriginTrips, left)
 		default:
@@ -2544,6 +2565,7 @@ func signIn(b *browser.Browser, loginURL, user, pass string, rep *report, base h
 	}
 	ctx, stop := stopContext()
 	defer stop()
+	ctx = ledger.WithCollector(ctx, signInStage)
 	s, err := b.Login(ctx, loginURL, user, pass)
 	for _, u := range s.Blocked {
 		rep.Skipped = append(rep.Skipped, engine.Skip{Target: u, Reason: browser.Reason()})

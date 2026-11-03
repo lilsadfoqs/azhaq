@@ -23,6 +23,10 @@ import (
 // cmdPlan is a run that stops before sending anything: what it would
 // take, leave out, run and send.
 func cmdPlan(args []string) error {
+	if len(args) > 0 && args[0] == "roles" {
+		// What azhaq roles would send, by stage.
+		return cmdRoles(append([]string{"-plan"}, args[1:]...))
+	}
 	fs := newFlags("plan")
 	var names []string
 	runFlags().VisitAll(func(f *flag.Flag) {
@@ -53,6 +57,7 @@ type runPlan struct {
 	Limits     map[string]string `json:"limits"`
 	Sends      []string          `json:"sends"`
 	Requests   planRequests      `json:"requests"`
+	Estimate   costEstimate      `json:"estimate"`       // what the run would send, by stage
 	AXFR       []planAXFR        `json:"axfr,omitempty"` // -axfr: the zone transfers dns -axfr would try
 }
 
@@ -117,6 +122,11 @@ type sendLimits struct {
 	portDiscover portcol.Discovery
 	axfr         bool     // -axfr: plan the zone transfers of dns -axfr too
 	resolvers    []string // the resolvers named (-resolvers)
+	dirsWords    int      // words of -dirs
+	dirsExts     int      // -dirs-ext extensions
+	paramsN      int      // names of -params
+	bruteN       int      // words of -dns-brute
+	dirsNoCal    bool     // -dirs-calibrate=false
 }
 
 // planSends are the lines on what a run sends besides the GET requests for
@@ -260,6 +270,8 @@ func planFor(cat *catalog.Catalog, seeds []types.Seed, b engine.Budgets, paths [
 	}
 	notCounted := map[string]bool{}
 	eng := &engine.Engine{Cat: cat}
+	var kept []types.Seed // the seeds a run would take, with the collectors planned on each
+	var planned [][]string
 	for _, s := range engine.ExpandSeeds(seeds) {
 		if s.Type == types.TypeURL {
 			if rule := b.Scope.DeniedPath(s.Key()); rule != "" {
@@ -302,6 +314,7 @@ func planFor(cat *catalog.Catalog, seeds []types.Seed, b engine.Budgets, paths [
 			}
 		}
 		p.Targets = append(p.Targets, t)
+		kept, planned = append(kept, s), append(planned, t.Collectors)
 	}
 	p.Requests.NotCounted = sortedKeys(notCounted)
 	for f, on := range b.Active {
@@ -319,6 +332,20 @@ func planFor(cat *catalog.Catalog, seeds []types.Seed, b engine.Budgets, paths [
 	if runs("azhaq-paths") {
 		p.Paths = paths
 	}
+	asks := func(name string, s types.Seed) int {
+		if col, ok := cat.Get(name); ok {
+			if a, ok := col.(catalog.Asker); ok {
+				return len(a.Asks(s))
+			}
+		}
+		return 0
+	}
+	env := costEnv{sendLimits: send, favicon: !send.noFavicon}
+	if runs("azhaq-paths") {
+		env.paths = len(p.Paths)
+	}
+	env.dirsWords, env.dirsExts, env.paramsN, env.bruteN = send.dirsWords, send.dirsExts, send.paramsN, send.bruteN
+	p.Estimate = estimateCost(kept, planned, runs, b.Active, env, asks)
 	gets, others := planSends(b, send)
 	switch {
 	case b.Passive && len(others) == 0:
@@ -416,6 +443,7 @@ func printPlan(p runPlan, asJSON bool) error {
 		fmt.Printf("sends: %s\n", s)
 	}
 	printRequests(p)
+	printEstimate(os.Stdout, "estimate: ", p.Estimate)
 	return nil
 }
 

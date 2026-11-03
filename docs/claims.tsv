@@ -63,6 +63,8 @@ mcp.signal-exit	docs/commands/mcp.md	A signal ends it with exit 0, after the com
 plan.sends-nothing	docs/commands/plan.md	without sending anything	test:cmd/azhaq:TestEgressContract
 plan.kinds-of-request	docs/commands/plan.md	The kinds of request sent to the targets	test:cmd/azhaq:TestPlanSendsNameWhatIsPlanned,TestPlanListsEveryCollectorFlag,TestPlanSaysWhatScreenshotsSend,TestPlanChromeWrites
 plan.found-domains	docs/commands/plan.md	`found_domains_asked` is about domains found on the way	test:cmd/azhaq:TestPlanRequests
+plan.estimate	docs/commands/plan.md	`estimate` is the number a run would send, counted before it starts	test:cmd/azhaq:TestPlanEstimatesEachStage,TestRunCostByStageOnAJuiceShopShapedApp,TestRunSaysItsEstimateFirstWhenLarge
+plan.estimate-leaves-out	docs/commands/plan.md	The estimate counts what the flags and the targets fix	test:cmd/azhaq:TestPlanEstimatesEachStage,TestRunCostByStageOnAJuiceShopShapedApp
 plan.bound-not-count	docs/commands/plan.md	The plan gives a bound, not a count	test:cmd/azhaq:TestPlanRequests
 plan.max-names	docs/commands/plan.md	At most `max_names` names are looked up	test:cmd/azhaq:TestPlanRequests
 plan.per-web-service	docs/commands/plan.md	`per_web_service` covers a web service's page, the favicon and the built-in paths	test:cmd/azhaq:TestPlanRequests,TestDocsCountTheBuiltInPathsAsThePlanDoes
