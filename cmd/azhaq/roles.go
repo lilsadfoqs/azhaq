@@ -725,10 +725,14 @@ func cmdRoles(args []string) error {
 			if err := enc.Encode(row); err != nil {
 				return err
 			}
+			rep.emitted().add(row.Verdict, 1)
 		}
 		return rep.finish(true, false)
 	}
 	printRoles(roles, shown, len(rows), *dir)
+	for _, row := range shown {
+		rep.emitted().add(row.Verdict, 1)
+	}
 	return rep.finish(false, false)
 }
 

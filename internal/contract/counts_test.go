@@ -15,6 +15,7 @@ var leftOutNote = []*regexp.Regexp{
 	regexp.MustCompile(`(\d+) hints? and (\d+) named URLs? (?:was|were) left out of the list`),
 	regexp.MustCompile(`(\d+) rows? (?:was|were) left out of the list by the default extension list`),
 	regexp.MustCompile(`(\d+) rows? (?:was|were) left out of the list by -em, -ef, -mr or -fr`),
+	regexp.MustCompile(`(\d+) rows? (?:was|were) left out of the list: a route with a parameter`),
 }
 
 // leftOutOfList is how many URL rows the notes say the list does not hold.

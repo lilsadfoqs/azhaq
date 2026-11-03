@@ -207,11 +207,11 @@ func (r *runLedger) close(rep *report) {
 	if r.stages != "" && egress.MaxRequests() > 0 {
 		rep.Notes = append(rep.Notes, fmt.Sprintf("request budget %d, spent by stage: %s", egress.MaxRequests(), r.stages))
 	}
-	if targets != int(rep.Requests) {
-		rep.Notes = append(rep.Notes, fmt.Sprintf("the summary counts %d requests to targets and the ledger lists %d lines to them (azhaq ledger -summary %s lists them by kind)", rep.Requests, targets, path))
-	}
-	if sent := egress.DNSTotal() - r.dnsFrom; r.dnsSet && dnsLines >= 0 && dnsLines != int(sent) {
-		rep.Notes = append(rep.Notes, fmt.Sprintf("the summary counts %d DNS queries and the ledger lists %d lines to resolvers (azhaq ledger -summary %s lists them by kind)", sent, dnsLines, path))
+	// What the summary counts is what the ledger lists: a difference is an
+	// internal error (audit.go), not a note to read past.
+	rep.expect("requests to targets, against the ledger's lines to them (azhaq ledger -summary "+path+" lists them by kind)", int(rep.Requests), targets)
+	if sent := egress.DNSTotal() - r.dnsFrom; r.dnsSet && dnsLines >= 0 {
+		rep.expect("DNS queries, against the ledger's lines to resolvers (azhaq ledger -summary "+path+" lists them by kind)", int(sent), dnsLines)
 	}
 	if r.sealTo != "" {
 		c, _ := ledger.Verify(path) // the file's whole count: earlier runs' lines too

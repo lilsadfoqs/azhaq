@@ -50,7 +50,7 @@ A run paced slowly says so as it starts: `-rate 1 paces requests to 1/s: the cap
 | Code | Meaning | What to do |
 | --- | --- | --- |
 | 0 | Complete, and nothing failed. An open port that closes or resets at once on `run`'s HTTP request, and was not named HTTP, is an answer (not a web service), not a failure. | Use the results. |
-| 1 | Error: the command could not do its job. | Read the message. |
+| 1 | Error: the command could not do its job, or its summary disagreed with its rows (an internal error). | Read the message. |
 | 2 | Usage: bad flags or input. Nothing was sent. | `azhaq help COMMAND`. For a scope refusal, check the target, `-allow` or `-scope`. |
 | 3 | Finished, but some sources or requests failed. The results are usable. | The summary lists each failure, whether it is worth retrying, and its targets. |
 | 4 | Stopped with work left, by a limit, the kill file or a signal. | `azhaq resume -db FILE` continues where it stopped. With a kill file, remove it first. |
@@ -59,7 +59,8 @@ A run paced slowly says so as it starts: `-rate 1 paces requests to 1/s: the cap
 
 ### Exit 1
 
-The command could not do its job: a database it cannot open, or Chrome missing for `-browser`.
+- The command could not do its job: a database it cannot open, or Chrome missing for `-browser`.
+- The summary disagrees with the rows it summarises or with the ledger. The message and the summary's `error` say which number: `internal error: the summary disagrees with the rows and the ledger it summarises (results, against the rows emitted: the summary says 5, the rows say 4)`. The summary has `complete: false`. This is a bug in azhaq: the rows already printed are as they were, and the numbers beside them are not to be relied on. See [what is checked](#what-the-summary-is-checked-against).
 
 ### Exit 2
 
@@ -119,6 +120,19 @@ Some work failed and did not get its answer: a source that failed, a target that
 | `notes` | Caps that were hit and other things worth knowing that are not failures. See [notes](#notes). |
 | `next` | Commands worth running next. See [next](#next). |
 | `advisories` | With `-advisories`: the known-issue leads, one per lead line printed and per stored `advisory` row: `advisory_id`, `url` (its source), `target`, `product`, `version_seen`, `affected_range`, `label` (`affected`, `not affected` or `conditional`), `precondition` when one is named, and with `-advisories-confirm` also `confidence` (`observed`, `inferred` or `claimed`) and `read` (what was read, or why nothing was). They are leads, not map rows: `counts` still adds up to `stored` without them, and a note counts them by label from these rows. See [Known-issue matching](CONCEPTS.md#known-issue-matching--advisories). |
+
+### What the summary is checked against
+
+Before a summary is printed, azhaq recomputes what it can from the rows it emitted and from the ledger, and a number that differs ends the run with exit 1 (see above) instead of printing as complete. Each command that prints rows counts them as they go out, apart from the numbers it publishes:
+
+| Command | The numbers that must equal the rows |
+| --- | --- |
+| `run` | `results` is the rows printed; `stored - left_out` is the stored rows they stand for and `folded` the ones they hold beyond themselves; the counts add up to `stored`; and, when no printed row stands for several, each count is the rows of that kind. |
+| `crawl` | Every URL row of the crawl's scope is listed or left out for one reason, and the four class counts add up to the rows listed and the rows the notes say were left out (the extension list, `-em`/`-ef`/`-mr`/`-fr`, the hints and named URLs without `-hints`, and the routes with a parameter, views and sockets that plain output cannot ask); `requested + not requested + templates` is the same total; `results` is the rows listed and the other lines printed. |
+| `subs` | The names the sources gave, less what was left out, plus what DNS and the guesses added, are the names printed (the note beginning `count:`). |
+| `ports` | `results` is the rows handed to the output. |
+| `roles` | `results` is the rows printed, and each count is the rows with that verdict. |
+| every command with a ledger | `requests` is the ledger's lines to targets and `dns_queries` its lines to resolvers, for this run. |
 
 ### Run counts
 
