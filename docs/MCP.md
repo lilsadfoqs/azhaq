@@ -11,7 +11,8 @@ The **scope**, the **request budget**, the **pace** and the **resolvers and sour
 - A subdomain lookup for a domain outside the scope is refused, because the passive sources would learn what the assistant asks about.
 - Once the budget is spent, every tool that sends requests refuses.
 - Chrome is not run without its sandbox: where the system gives it none, a tool that needs Chrome (`browser`, `login`, `azhaq_roles` with a login) answers with an error that names `-chrome-no-sandbox`, before any request. Start the server with that flag to allow it, in a throwaway environment.
-- `-resolvers`, `-sources`, `-skip` and `-no-takeover` are held for every call that takes them, as `run` takes them. Without them a map asks the default public resolvers and the passive third-party sources (the plan names `azhaq-rdap`, `azhaq-search`, `azhaq-subdomains` and `azhaq-urls`), whatever `-allow` says. With `-sources none` it asks no third party at all, and `azhaq_subdomains`, which is one, is refused. `azhaq_scope` and `azhaq_status` show them as `run_options`.
+- `-resolvers`, `-sources`, `-skip` and `-no-takeover` are held for every call that takes them, as `run` takes them. The server is locked down by default: it asks no third party at all (sources `none`: no subdomain source, archive, RDAP or search engine) and reads or writes no name history, unless the server was started with `-sources` naming the sources to ask or with `-history`. Without `-resolvers` a map asks the default public resolvers. `azhaq_subdomains`, which is itself a third-party lookup, is refused unless the server was started with `-sources` naming some. `azhaq_scope` and `azhaq_status` show them as `run_options`.
+- Writes are held the same way: `azhaq_params` with a body method and `azhaq_roles_writes` send requests that may change data, and they are refused before anything is sent unless the server was started with `-allow-writes`. `azhaq_params` by GET and the read tools need no such flag.
 
 See [Concepts](CONCEPTS.md) for scope, budget and pace.
 
@@ -20,7 +21,7 @@ azhaq mcp -scope hackerone -program security -max-requests 20000 -rate 5
 azhaq mcp -allow example.com -deny admin.example.com -max-requests 5000
 ```
 
-Every flag is described on the [`azhaq mcp` page](commands/mcp.md#flags): `-scope` with `-program`, `-allow`, `-deny`, `-deny-path`, `-resolvers`, `-sources`, `-skip`, `-no-takeover`, `-chrome-no-sandbox`, `-max-requests`, `-rate`, `-dir` (default `azhaq-mcp`) and `-unlocked`.
+Every flag is described on the [`azhaq mcp` page](commands/mcp.md#flags): `-scope` with `-program`, `-allow`, `-deny`, `-deny-path`, `-resolvers`, `-sources`, `-history`, `-allow-writes`, `-skip`, `-no-takeover`, `-chrome-no-sandbox`, `-max-requests`, `-rate`, `-dir` (default `azhaq-mcp`) and `-unlocked`.
 
 To see what the tools send in a proxy, start the server with `HTTP_PROXY` and `HTTPS_PROXY` set (Go's rule: loopback targets stay direct, as the server has no `-proxy` to send them): the server has no `-proxy` flag. See [Proxies](CONCEPTS.md#proxies).
 
@@ -53,10 +54,14 @@ Any client that takes a JSON configuration:
 | `azhaq_resume` | Continues the stopped run of a workspace, where it stopped. |
 | `azhaq_subdomains` | Subdomains from passive sources, with the sources of each name. `live` keeps names that resolve. |
 | `azhaq_probe` | Web services of targets, like httpx. |
-| `azhaq_ports` | Open TCP ports and what serves them (locked servers only). |
+| `azhaq_ports` | Open TCP ports and what serves them, and UDP ports with `udp_ports` (locked servers only). |
+| `azhaq_dirs` | Paths on web services from a wordlist, like ffuf. |
+| `azhaq_params` | Parameters pages read, from a wordlist, like arjun (GET, or a body method with `-allow-writes` at start). |
+| `azhaq_dns_brute` | Subdomains by resolving guessed names, through the server's resolvers. |
 | `azhaq_query` | Rows of a workspace's map, filtered, with chosen fields. |
 | `azhaq_show` | Everything about one URL, host or name, with the evidence. |
 | `azhaq_roles` | The access matrix of several sessions. |
+| `azhaq_roles_writes` | The roles comparison, with the writes replayed across sessions (only with `-allow-writes` at start; `dry_writes` lists them and sends none). |
 | `azhaq_export` | A workspace in a standard format, written to a file and returned a page at a time. |
 | `azhaq_diff` | What the last run into a workspace added and lost. |
 | `azhaq_workspaces` | The workspaces written so far. |
@@ -72,6 +77,11 @@ Any client that takes a JSON configuration:
 - The state is read from the workspace's database, so it is the same for a map this session ran, one it ran before a restart, and one made elsewhere, and a query of the workspace does not change it.
 - `failed` is for a workspace whose last map, resume or roles call in this session failed outright; a call that succeeds clears it.
 - Sends nothing and starts no command.
+
+**`azhaq_plan`**
+
+- Built by the same code path that builds `azhaq_map`'s call (the same targets and flags, the same lock, pace, budget and held options), so the plan is what the call would send; it sends nothing itself.
+- `state_changing` names, per target, the GET requests among the targets whose own name declares a state change — a whole word of the documented set (create, createdb, delete, remove, reset, populate, logout, signout, clear, wipe, drop, truncate, purge, destroy, erase, seed) in the URL's path or query — each with the `-deny-path` rule that would keep it out. Nothing is withheld by the list. What a crawl would only find by reading an API description (VAmPI's `GET /createdb`, whose description says it creates and populates its database) is not known to a plan; a run names those in its summary's `state_changing` as it finds them.
 
 **`azhaq_map`**
 
@@ -94,10 +104,25 @@ Any client that takes a JSON configuration:
 
 **`azhaq_ports`**
 
-- Scans TCP ports only. UDP ports are not scanned over MCP.
+- With `udp_ports`, UDP ports are asked too: a reply is open, an ICMP unreachable closed, neither `open|filtered`. Without it only TCP ports are scanned.
 - Rows carry `product` and `version` where the port names one.
 - A port that waits is asked up to 25 more connects, each counted.
 - Each connect counts against the budget and follows the pace.
+
+**`azhaq_dirs`**
+
+- A GET for each word of the wordlist (built-in common list, or the call's `words`, at most 5000) under each target, calibrated as `azhaq dirs` is. Extensions add a word each.
+- A target outside the scope, and a word list the schema bounds out, are refused before anything is sent. The server's `-deny-path` rules keep their paths out, as for a map.
+
+**`azhaq_params`**
+
+- GET sends the names in the query and no body. `method` POST, JSON or XML sends them in a body, which may change data: refused unless the server was started with `-allow-writes`.
+- `words` (at most 5000) or a built-in `wordlist` (small, medium, large); the two do not go together.
+
+**`azhaq_dns_brute`**
+
+- Resolves `WORD.domain` for each of the call's `words` (required, at most 5000) through the server's resolvers; wildcard answers are left out. Nothing is sent to the targets.
+- A domain outside the scope is refused before any query, and the call is refused when the server's budget is spent.
 
 **`azhaq_query`**
 
@@ -128,10 +153,8 @@ Formats: OpenAPI, GraphQL introspection JSON or SDL, Burp scope, nuclei targets,
 
 These are left out on purpose. Run them from the command line, where the person running them sees the flags.
 
-- Anything that sends a write (a method other than GET, HEAD or OPTIONS) or a body the client chooses: `roles -replay-writes`, `-browser-writes` and `fuzz`.
-- Path and parameter wordlists: `-dirs` and `-params`, which can also send bodies with `-params-method`.
-- DNS brute force and permutations.
-- UDP scans.
+- A client-chosen request body or method beyond what a tool declares: `fuzz`, Chrome's page writes (`-browser-writes`) and form submissions. The writes a tool does send are the ones its own description names — `azhaq_params` with a body method and `azhaq_roles_writes` — and only when the server was started with `-allow-writes`.
+- Permutations of found names (`-permute`): `azhaq_dns_brute` guesses the call's words only, so the names it asks are the ones the call listed.
 
 ## Results
 
@@ -176,7 +199,7 @@ Each workspace has two more files, described in [Concepts](CONCEPTS.md):
 - The ledger, `juice.db.ledger.jsonl`, has one line for each request, connection or query the tools sent for that workspace, to targets, third-party sources and resolvers. Each line holds the hash of the one before. `azhaq ledger -verify FILE` checks it, and `-csv` prints it for a client.
 - `juice.db.stop` is the workspace's kill switch. While it exists, a call that uses the workspace sends nothing more and ends stopped (`the kill switch: kill file … exists`). `azhaq_resume` continues once the file is removed.
 
-The calls that name no workspace have a ledger of the server's: `azhaq_probe`, `azhaq_ports` and `azhaq_subdomains` without a `workspace`.
+The calls that name no workspace have a ledger of the server's: `azhaq_probe`, `azhaq_ports`, `azhaq_subdomains`, `azhaq_dirs`, `azhaq_params` and `azhaq_dns_brute` without a `workspace`.
 
 - It is one file, `server.ledger.jsonl`, in `-dir`, and `azhaq_status` gives its path as `ledger`. It has the same lines as a workspace's, for each request, connection or query those calls sent, and each call appends to it and seals it when it ends.
 - `azhaq ledger -verify DIR/server.ledger.jsonl` checks its chain and its seal like a workspace's.

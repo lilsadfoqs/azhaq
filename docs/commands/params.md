@@ -141,6 +141,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 | `-H` | string, repeatable |  | extra request header K: V |
 | `-cookie` | string, repeatable |  | Cookie name=value (repeatable; sent as one Cookie header) |
 | `-proxy` | string |  | send requests to targets through this proxy (http://, https:// or socks5://); Chrome too (default: $HTTP_PROXY, $HTTPS_PROXY, except for loopback targets, which stay direct) |
+| `-resolvers` | string |  | DNS resolvers: a file with one per line, or a comma list; each is ADDR, ADDR:PORT or udp:, tcp:, dot:, doh:URL[:get] and then the address (default: public resolvers). Named resolvers answer every name, special-use ones (.test, .local, localhost) included; the system resolver is never asked |
 
 **Output**
 

@@ -32,6 +32,12 @@ func strs1(desc string) map[string]any {
 	return map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": desc}
 }
 
+// strsN is a list of strings with a bound: an unbounded list is refused
+// by the schema check before any network activity.
+func strsN(desc string, max int) map[string]any {
+	return map[string]any{"type": "array", "maxItems": max, "items": map[string]any{"type": "string"}, "description": desc}
+}
+
 func with(s map[string]any, k string, v any) map[string]any {
 	s[k] = v
 	return s
@@ -74,7 +80,13 @@ const (
 )
 
 func annotations(readOnly, openWorld bool, title string) map[string]any {
-	return map[string]any{"title": title, "readOnlyHint": readOnly, "destructiveHint": false, "idempotentHint": readOnly, "openWorldHint": openWorld}
+	return annotationsD(readOnly, openWorld, title, false)
+}
+
+// annotationsD is annotations for a tool that can send writes: its
+// destructiveHint says so, as its readOnlyHint says it is no read.
+func annotationsD(readOnly, openWorld bool, title string, destructive bool) map[string]any {
+	return map[string]any{"title": title, "readOnlyHint": readOnly, "destructiveHint": destructive, "idempotentHint": readOnly, "openWorldHint": openWorld}
 }
 
 func mcpTools() []map[string]any {
@@ -89,10 +101,10 @@ func mcpTools() []map[string]any {
 			"description": "What this server may touch (the scope fixed at start), the run options fixed with it (resolvers, sources, skipped collectors, takeover check: run_options), its request budget and how much of it is used. Call it first on a program.",
 			"inputSchema": obj(map[string]any{}), "annotations": annotations(true, false, "Scope and budget")},
 		{"name": "azhaq_plan", "title": "Plan a run",
-			"description": "What azhaq_map would take, leave out of the scope (and why), run and send for these targets, without sending anything: collectors per target, built-in paths, active techniques, limits.",
+			"description": "What azhaq_map would take, leave out of the scope (and why), run and send for these targets, without sending anything: collectors per target, built-in paths, active techniques, limits, and state_changing: the GET requests among the targets whose own name declares a state change (create, delete, reset, populate, logout and the other words of the documented set), each with the -deny-path rule that would keep it out. They are still sent: the list informs, the user decides. Built by the same code path that builds azhaq_map's call, so the plan is what the call would send.",
 			"inputSchema": obj(planProps), "annotations": annotations(true, false, "Plan a run")},
 		{"name": "azhaq_map", "title": "Map a target",
-			"description": "Map a URL, a domain or a list of targets into a workspace: names and their addresses, web services, pages, routes the JavaScript calls (method, query and body fields), API descriptions and their operations, forms, parameters, what needs a session (401) or is refused (403). Without a flag every request to a target is a GET (with graphql, also the introspection POST), and a GET can change data or end a session: every URL found in scope is requested, a GET operation of an API description and a GET form included, because what a GET does on the server cannot be known from its name. Only the -deny-path rules the server was started with keep a URL out, and a call cannot add one. Returns the summary (failures, skipped targets, limits hit) and the highlights: auth-gated, forbidden and API routes. Read the rest with azhaq_query. A run the budget, timeout_seconds or a cancellation stopped continues with azhaq_resume; mapping again starts over.",
+			"description": "Map a URL, a domain or a list of targets into a workspace: names and their addresses, web services, pages, routes the JavaScript calls (method, query and body fields), API descriptions and their operations, forms, parameters, what needs a session (401) or is refused (403). Without a flag every request to a target is a GET (with graphql, also the introspection POST), and a GET can change data or end a session: every URL found in scope is requested, a GET operation of an API description and a GET form included, because what a GET does on the server cannot be known from its name. Only the -deny-path rules the server was started with keep a URL out, and a call cannot add one. Returns the summary (failures, skipped targets, limits hit, and state_changing: the GETs whose own name or API description declares a state change, each with the -deny-path rule that would keep it out) and the highlights: auth-gated, forbidden and API routes. Read the rest with azhaq_query. A run the budget, timeout_seconds or a cancellation stopped continues with azhaq_resume; mapping again starts over.",
 			"inputSchema": obj(mapProps), "annotations": annotations(false, true, "Map a target")},
 		{"name": "azhaq_resume", "title": "Resume a run",
 			"description": "Continue the run of a workspace that a limit (the request budget, timeout_seconds) or a cancellation stopped, where it stopped: the answers it got are not asked for again. Holds to the server's scope and pace and spends what is left of its budget. Returns the summary and the highlights, like azhaq_map. A workspace keeps no session: give headers or login again if the run had them.",
@@ -107,9 +119,21 @@ func mcpTools() []map[string]any {
 			"description": "Which targets serve the web, like httpx: URL, status, title, technologies, web server, CDN, the address connected to. One GET per service.",
 			"inputSchema": obj(map[string]any{"targets": pTargets, "limit": pLimit}, "targets"), "annotations": annotations(false, true, "Probe web services")},
 		{"name": "azhaq_ports", "title": "Scan ports",
-			"description": "Open TCP ports of hosts inside the locked scope (connect scan, no root), with banners. Only when the server was started with -allow or -scope.",
-			"inputSchema": obj(map[string]any{"hosts": strs1("hosts or addresses"), "ports": prop("string", "top-100 (default), top-1000, full, or a list such as 22,80,8000-8100"), "limit": pLimit}, "hosts"),
+			"description": "Open TCP ports of hosts inside the locked scope (connect scan, no root), with banners; with udp_ports, UDP ports too: a reply is open, an ICMP unreachable closed, neither open|filtered. Only when the server was started with -allow or -scope.",
+			"inputSchema": obj(map[string]any{"hosts": strsN("hosts or addresses, at most 100", 100), "ports": prop("string", "TCP ports: top-100 (default), top-1000, full, or a list such as 22,80,8000-8100"), "udp_ports": prop("string", "UDP ports to ask too: top (about 25 common ones), full, or a list such as 53,123,161,1-1024; when ports names no TCP port, no TCP port is asked"), "limit": pLimit}, "hosts"),
 			"annotations": annotations(false, true, "Scan ports")},
+		{"name": "azhaq_dirs", "title": "Discover paths",
+			"description": "Paths on web services from a wordlist, like ffuf with auto-calibration: a GET for each word (and each extension) under each target, calibrated on paths that cannot exist so a catch-all answer is not listed. The server's scope, deny-path rules, pace and budget hold; a target outside the scope is refused before anything is sent. words is the wordlist (at most 5000); without it the built-in common list is used. With workspace the results are kept in that workspace, else the call writes the server's ledger.",
+			"inputSchema": obj(map[string]any{"targets": strsN("web services such as https://app.example.com/, at most 100", 100), "words": strsN("path words to guess, at most 5000 (default: the built-in common list)", 5000), "extensions": strsN("also try each word with these extensions, such as php or bak, at most 20", 20), "workspace": pWorkspace, "limit": pLimit}, "targets"),
+			"annotations": annotations(false, true, "Discover paths")},
+		{"name": "azhaq_params", "title": "Discover parameters",
+			"description": "Query parameters the pages read, from a wordlist, like arjun: the names the pages themselves hold first, then batches of the wordlist. method GET (the default) sends names in the query and no body; POST, JSON and XML send names in a body, which may change data, and are refused unless the server was started with -allow-writes. The server's scope, deny-path rules, pace and budget hold; a target outside the scope is refused before anything is sent. words is the wordlist (at most 5000); wordlist names a built-in one instead.",
+			"inputSchema": obj(map[string]any{"targets": strsN("page URLs, at most 100", 100), "words": strsN("parameter names to try, at most 5000", 5000), "wordlist": with(prop("string", "a built-in wordlist instead of words"), "enum", []string{"small", "medium", "large"}), "method": with(prop("string", "how names are sent: GET (query, the default), POST (form body), JSON or XML (a body; needs -allow-writes at server start)"), "enum", []string{"GET", "POST", "JSON", "XML"}), "workspace": pWorkspace, "limit": pLimit}, "targets"),
+			"annotations": annotationsD(false, true, "Discover parameters", true)},
+		{"name": "azhaq_dns_brute", "title": "Brute-force DNS names",
+			"description": "Subdomains by resolving guesses: WORD.domain for each word under each domain, through the server's resolvers (wildcard answers left out). Nothing is sent to the targets: the queries go to the resolvers, paced at the server's rate and refused when its budget is spent. A domain outside the scope is refused before any query. words is required and bounded (at most 5000), domains at most 20. With workspace the names are kept in that workspace, else the call writes the server's ledger.",
+			"inputSchema": obj(map[string]any{"domain": strsN("domains such as example.com, at most 20", 20), "words": strsN("words to guess under each domain, at most 5000", 5000), "workspace": pWorkspace, "limit": pLimit}, "domain", "words"),
+			"annotations": annotations(true, true, "Brute-force DNS names")},
 		{"name": "azhaq_query", "title": "Query a workspace",
 			"description": "The rows of a workspace's map that match, best first: by entity type (URL, Hostname, IPAddress, Domain), role (app, auth, forbidden, api, page, client-route, websocket, live, sibling, unresolved, dead), coverage (visited, hint, catchall, error, skipped), status (200, 401, 4xx), method (GET, POST), host, text, what the last run saw first (new). fields picks the columns: " +
 				strings.Join(queryColumns, ", ") + " (default " + strings.ReplaceAll(queryFields, ",", ", ") + ").",
@@ -133,6 +157,19 @@ func mcpTools() []map[string]any {
 				"ids":     strs1("identifiers to fill routes with, [ROLE:]NAME=VALUE: alice:book_title=aliceBook says that book is alice's, so another role reading it is reported"),
 				"browser": pBrowser, "depth": pDepth, "timeout_seconds": pTimeout, "limit": pLimit}, "roles"),
 			"annotations": annotations(false, true, "Compare sessions")},
+		{"name": "azhaq_roles_writes", "title": "Replay role writes",
+			"description": "Like azhaq_roles, and replay the writes with every other role's session: the writes each role's own map or routes name (PUT and PATCH with an empty object, DELETE, and the POSTs a route takes), of the methods replay_writes names. Writes change data on the target, so the call is refused before anything is sent unless the server was started with -allow-writes; dry_writes lists the writes it would send and sends none, and needs no opt-in. A cross-role write is listed only when the owner's object, read as the owner before and after, changed the way the write asks. Each role is an object: " +
+				roleAnon + " is anonymous, " + roleHeader + " sends those headers, " + roleLogin + " signs in at login_url with Chrome.",
+			"inputSchema": obj(map[string]any{"url": pURL, "targets": pTargets, "program_scope": pScope,
+				"workspace": prop("string", "where the roles' maps are kept: a database per role in <workspace>-roles in the server's directory; default \"default\""),
+				"roles":          map[string]any{"type": "array", "description": "two or more sessions", "minItems": 2, "items": pRole},
+				"replay_writes":  prop("string", "the write methods to replay, such as post,put,patch (add delete to delete objects)"),
+				"dry_writes":     prop("boolean", "list the writes it would send, with whose and why, and send none"),
+				"canary":         prop("boolean", "with a PUT or PATCH, change one short string field of the body to a value unique to each role it is replayed with, so an otherwise invisible change can be proved (it changes data; restoring the field is not done)"),
+				"login_url":      prop("string", "the login page, for roles that sign in"), "all": prop("boolean", "also list endpoints that answer every role alike"),
+				"ids":     strs1("identifiers to fill routes with, [ROLE:]NAME=VALUE: alice:book_title=aliceBook says that book is alice's, so another role reading it is reported"),
+				"browser": pBrowser, "depth": pDepth, "timeout_seconds": pTimeout, "limit": pLimit}, "roles", "replay_writes"),
+			"annotations": annotationsD(false, true, "Replay role writes", true)},
 		{"name": "azhaq_export", "title": "Export a workspace",
 			"description": "A workspace in another tool's format: openapi (the target's own description where it serves one, plus what scripts call and forms send), graphql (introspection JSON, for InQL or Burp), sdl (GraphQL schema), burp (scope), targets (web services, for nuclei -l), urls, hosts, names, html, graphml, secrets, jsonl. Writes the whole export to a file next to the workspace on the server's machine (juice.openapi.json, juice.html) and returns it a page of about 16 KB at a time, each page a document of its own: an OpenAPI description with some of the paths, an introspection result or SDL with some of the definitions, whole lines. The result says how many paths, definitions or lines there are, which ones the page holds, and the offset of the next page.",
 			"inputSchema": obj(map[string]any{"workspace": pWorkspace, "format": map[string]any{"type": "string", "enum": exportFormats, "description": "default openapi"},
