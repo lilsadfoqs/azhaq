@@ -100,16 +100,8 @@ func hostOfAddr(addr string) string {
 // TCP connects to addr (ip:port) of host ("" when only the address is
 // known), through the proxy when there is one.
 func (d *PortDialer) TCP(ctx context.Context, host, addr string) (net.Conn, error) {
-	if d.takeReserved(addr) {
-		// Reserve checked the scope and recorded the line: the kill file only.
-		if err := Current().Killed(); err != nil {
-			return nil, err
-		}
-	} else {
-		if err := d.allowed(host, addr); err != nil {
-			return nil, err
-		}
-		ledger.TCP(ctx, host, addr)
+	if err := d.admit(ctx, host, addr); err != nil {
+		return nil, err
 	}
 	if d.via != nil {
 		cctx, cancel := context.WithTimeout(ctx, d.timeout)
@@ -118,6 +110,20 @@ func (d *PortDialer) TCP(ctx context.Context, host, addr string) (net.Conn, erro
 	}
 	nd := d.netDialer(hostOfAddr(addr))
 	return dialResolvedWith(ctx, Current(), &nd, "tcp", addr)
+}
+
+// admit is what a connect to addr must pass before it goes: the kill file,
+// and for one Reserve did not record, the scope and a ledger line.
+func (d *PortDialer) admit(ctx context.Context, host, addr string) error {
+	if d.takeReserved(addr) {
+		// Reserve checked the scope and recorded the line: the kill file only.
+		return Current().Killed()
+	}
+	if err := d.allowed(host, addr); err != nil {
+		return err
+	}
+	ledger.TCP(ctx, host, addr)
+	return nil
 }
 
 // Reserve records the connects a scan is about to make to addrs (ip:port),

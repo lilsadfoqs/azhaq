@@ -418,10 +418,9 @@ func (s *Scanner) pass(ctx context.Context, host, ip string, ports []int, found 
 	var batch []int    // indexes into ports
 	var flush *time.Timer
 	jobs := make(chan int)
-	work := func(i int) {
+	// record notes what a connect found, and frees its place.
+	record := func(i int, o Open, state portState) {
 		defer func() { <-s.conns }()
-		p := ports[i]
-		o, state := s.probe(ctx, host, ip, p)
 		if state == portOpen && found != nil && !o.again {
 			found(o)
 		}
@@ -430,7 +429,7 @@ func (s *Scanner) pass(ctx context.Context, host, ip string, ports []int, found 
 		case portOpen:
 			open = append(open, o)
 		case portSilent, portTimedOut:
-			silent = append(silent, p)
+			silent = append(silent, ports[i])
 			if state == portTimedOut {
 				slow++
 			}
@@ -439,6 +438,32 @@ func (s *Scanner) pass(ctx context.Context, host, ip string, ports []int, found 
 			prog.done(i, state, o, ctx.Err() != nil)
 		}
 		mu.Unlock()
+	}
+	work := func(i int) {
+		o, state := s.probe(ctx, host, ip, ports[i])
+		record(i, o, state)
+	}
+	// batched: the batch is connected by one poll on one goroutine, and only
+	// a port that accepted gets a goroutine of its own, to be named.
+	batched := k > 1 && s.pd.CanBatch(ip)
+	connect := func(idx []int) {
+		ps := make([]int, len(idx))
+		for j, i := range idx {
+			ps[j] = ports[i]
+		}
+		s.pd.TCPBatch(ctx, host, ip, ps, func(j int, c net.Conn, rtt time.Duration, err error) {
+			i := idx[j]
+			if err != nil {
+				record(i, Open{}, s.failed(ctx, err))
+				return
+			}
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				o, state := s.probeConn(ctx, host, ip, ps[j], c, rtt)
+				record(i, o, state)
+			}()
+		})
 	}
 	// launchLocked starts the batch (the caller holds bmu).
 	launchLocked := func() {
@@ -455,6 +480,16 @@ func (s *Scanner) pass(ctx context.Context, host, ip string, ports []int, found 
 				addrs[j] = net.JoinHostPort(ip, strconv.Itoa(ports[i]))
 			}
 			s.pd.Reserve(ctx, host, addrs)
+		}
+		if batched {
+			idx := slices.Clone(batch)
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				connect(idx)
+			}()
+			batch = batch[:0]
+			return
 		}
 		for _, i := range batch {
 			// An idle worker takes it, else a new one starts: a goroutine's
@@ -572,15 +607,27 @@ func (s *Scanner) probe(ctx context.Context, host, ip string, port int) (Open, p
 	conn, err := s.pd.TCP(ctx, host, addr)
 	rtt := time.Since(t0)
 	if err != nil {
-		if refused(err) || ctx.Err() != nil {
-			return Open{}, portClosed
-		}
-		var ne net.Error
-		if errors.As(err, &ne) && ne.Timeout() {
-			return Open{}, portTimedOut
-		}
-		return Open{}, portSilent
+		return Open{}, s.failed(ctx, err)
 	}
+	return s.probeConn(ctx, host, ip, port, conn, rtt)
+}
+
+// failed is what a connect that did not connect says of its port: refused
+// (closed), no answer within the timeout, or no answer either way.
+func (s *Scanner) failed(ctx context.Context, err error) portState {
+	if refused(err) || ctx.Err() != nil {
+		return portClosed
+	}
+	var ne net.Error
+	if errors.As(err, &ne) && ne.Timeout() {
+		return portTimedOut
+	}
+	return portSilent
+}
+
+// probeConn is probe once the port has accepted: what it says, and what it
+// answers, name its service. It closes conn.
+func (s *Scanner) probeConn(ctx context.Context, host, ip string, port int, conn net.Conn, rtt time.Duration) (Open, portState) {
 	defer conn.Close()
 	if selfConnect(conn) {
 		return Open{}, portClosed

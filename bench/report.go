@@ -166,6 +166,13 @@ func printSet(w *tabwriter.Writer, title string, ps *profileSet) {
 			fmt.Fprintf(w, "%s %s\t%d\t%d\t%d / %d\t%.1fs%s\t%.1fs%s\n", l.Target, l.Ports, l.Azhaq, l.Naabu, l.AzhaqOK, l.NaabuOK, l.AzhaqSecs, mem(l.AzhaqRSS), l.NaabuSecs, mem(l.RefRSS))
 		}
 	}
+	if c := ps.Ports; c != nil && c.CPU != nil && !c.CPU.NmapMissing {
+		c := c.CPU
+		fmt.Fprintf(w, "\n%s: ports, CPU (%s %s, -rate %s)\tazhaq\tnmap -sT\n", title, c.Target, c.Ports, c.Rate)
+		fmt.Fprintf(w, "CPU seconds\t%.2f\t%.2f\n", c.AzhaqCPU, c.NmapCPU)
+		fmt.Fprintf(w, "time\t%.1fs\t%.1fs\n", c.AzhaqWall, c.NmapWall)
+		fmt.Fprintf(w, "open ports\t%d\t%d\n", c.AzhaqOpen, c.NmapOpen)
+	}
 	if s := ps.Services; s != nil {
 		fmt.Fprintf(w, "\n%s: services (%d lab ports)\tazhaq\tnmap -sV\tazhaq time\tnmap time\n", title, s.Ports)
 		fmt.Fprintf(w, "named right\t%d\t%d\t%.1fs%s\t%.1fs%s\n", s.AzhaqNamed, s.NmapNamed, s.AzhaqSecs, mem(s.AzhaqRSS), s.NmapSecs, mem(s.RefRSS))
