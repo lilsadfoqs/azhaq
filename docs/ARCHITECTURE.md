@@ -322,7 +322,7 @@ Tasks the budget stopped before run last, one at a time and cheapest first, by t
 `internal/ledger` keeps a tamper-evident record of what a run sends: to targets, to third-party sources and to resolvers. Each entry is one JSON line with these fields: `seq`, `time`, `class`, `kind`, `method`, `target`, `host`, `rule`, `collector`, `prev` and `hash`. A line without a `class` is from a ledger written before classes, and is a target's; `omitempty` keeps its hash the same, so those ledgers still verify.
 
 - `hash` is the sha256 of `prev` and the entry's JSON without `hash`. An edited, removed or reordered line breaks the chain from there on.
-- A line is flushed before the request goes, so a crash loses nothing that was sent.
+- A line is made when the request leaves (what that means for each kind is in [OUTPUT](OUTPUT.md#what-a-line-means)) and flushed before `Record` returns, so a crash loses nothing that was sent. A request, connect or datagram that never left has no line and is given back to the budget (`ledger.Unsent`, `egress.Refund`), so the summary counts what the ledger lists.
 - `Open` continues the chain of a file that exists. `azhaq resume` and later runs into the workspace append to the same file. `azhaq roles` opens one ledger in its `-dir` for all its runs.
 - `Match` names the scope rule that allows each host, from the run's `-allow` and `-scope`.
 
@@ -900,7 +900,7 @@ Most sources are subfinder's source packages, run in-process. Azhaq supplies the
 
 crt.sh, Cert Spotter and Chaos are implemented in Azhaq. Cert Spotter is usable without a key. It then reads the first page of issuances and says so. With a key it pages with `after=` until a page is empty.
 
-The default set is keyless: anubis, certspotter, crt.sh, crtname, hackertarget, hudsonrock, rapiddns, scanmalware, shodanct, subdomain.center and thc. Keyed sources join it when their key is configured. `-all-sources` adds slower ones.
+The default set is keyless: anubis, certspotter, commoncrawl, crt.sh, crtname, hackertarget, hudsonrock, rapiddns, scanmalware, shodanct, sitedossier, subdomain.center, thc and waybackarchive. Keyed sources join it when their key is configured. Each source is bounded by `-source-timeout`, so one slow source cannot hold the run, and a source that fails makes the summary `degraded` without taking away the names the others gave. A source that was dead or refused every request when last checked (digitorus, reconcloud, riddler, submd, threatcrowd and threatminer on 2026-11-03) is left out; `-sources NAME` or `-all-sources` runs it.
 
 ### subdomain.center
 
@@ -909,7 +909,7 @@ subdomain.center pads its answer with random names. For tesla.com each call give
 - Without a key it is asked again while its last round gave a name that resolves and no other source had, and until the names seen are 95% of the pool the rounds' repeats estimate (Schnabel). A round with no new live name ends it only then: a live name may be among the ones not yet seen, as a few real names are among 500 random ones. There are at most 12 rounds.
 - A round's new names are looked up before the next round is asked. Each is looked up once, and one resolver's NXDOMAIN is enough.
 - With `-dns-rate`, the guesses cost at most half what the other sources' names did, and not less than 1,000.
-- Without `-live` the guesses are not looked up. The source is asked once, and its names are listed unverified.
+- Without `-live` the guesses are not looked up. The source is asked once (up to `-guess-samples` times when given), and its names are printed as raw candidates, marked unverified.
 
 ### Name history
 

@@ -170,12 +170,13 @@ func (c *canary) alive(ctx context.Context, h http.Header, own map[string]bool, 
 
 // replayWatch is how replayAll watches the sessions.
 type replayWatch struct {
-	every    int // requests between checks; 0: no checks
-	canaries map[string]*canary
-	renew    func(i int) error // a new session for roles[i]
-	refusal  *regexp.Regexp
-	notes    []string
-	failed   bool // a request got no answer, or answers are suspect: the comparison misleads
+	every       int // requests between checks; 0: no checks
+	canaries    map[string]*canary
+	renew       func(i int) error // a new session for roles[i]
+	refusal     *regexp.Regexp
+	notes       []string
+	failed      bool            // a request got no answer, or answers are suspect: the comparison misleads
+	pausedRoles map[string]bool // roles paused on session loss: their remaining work is not attempted
 }
 
 // renewer renews a role's session: its -role-cmd run again, or a new
@@ -253,6 +254,9 @@ type roleReplay struct {
 	since    []string // asked since the last good check
 	good     bool     // the last check found the session alive
 	renewals int      // new sessions it got
+	paused   bool     // the session did not come back: the rest was not attempted
+	notTried int      // URLs not attempted because the session was paused
+	total    int      // URLs this role was to be asked
 	spent    bool     // a new session failed too, or none could be had: no more are asked for
 	retried  int
 	suspect  int
@@ -359,11 +363,22 @@ func (rr *roleReplay) checkpoint() {
 		}
 	}
 	rr.since, rr.good = nil, ok
+	if !ok {
+		// Pause this role: asking the rest with a dead session would
+		// spend the budget on near-anonymous answers. They stay
+		// not-attempted (status 0) until a renewed session is given.
+		rr.paused = true
+		if rr.w.pausedRoles == nil {
+			rr.w.pausedRoles = map[string]bool{}
+		}
+		rr.w.pausedRoles[rr.roles[rr.i].name] = true
+	}
 }
 
 // run asks todo, checking the session before, every w.every requests, and
 // after.
 func (rr *roleReplay) run(todo []string) error {
+	rr.total = len(todo)
 	rr.setup()
 	c := rr.w.canaries[rr.roles[rr.i].name]
 	watch := c != nil && rr.w.every > 0
@@ -371,6 +386,15 @@ func (rr *roleReplay) run(todo []string) error {
 	if watch {
 		if rr.good = rr.check(); !rr.good {
 			rr.good = rr.renew()
+		}
+		if !rr.good {
+			rr.paused, rr.notTried = true, len(todo)
+			if rr.w.pausedRoles == nil {
+				rr.w.pausedRoles = map[string]bool{}
+			}
+			rr.w.pausedRoles[rr.roles[rr.i].name] = true
+			rr.note()
+			return nil
 		}
 	}
 	n := 0
@@ -386,6 +410,10 @@ func (rr *roleReplay) run(todo []string) error {
 		rr.since = append(rr.since, u)
 		if n++; watch && n%rr.w.every == 0 && n < len(todo) {
 			rr.checkpoint()
+			if rr.paused {
+				rr.notTried = len(todo) - n
+				break
+			}
 		}
 	}
 	if watch {
@@ -407,6 +435,12 @@ func (rr *roleReplay) note() {
 	}
 	if rr.renewals > 1 {
 		how += fmt.Sprintf(" (%d times)", rr.renewals)
+	}
+	if rr.paused && rr.notTried > 0 {
+		rr.w.failed = true
+		proved := max(rr.total-rr.notTried-rr.suspect, 0)
+		rr.w.notes = append(rr.w.notes, fmt.Sprintf("role %s: its remaining replay was paused on session loss: %s not attempted for it (not-attempted, status 0), so those rows are unproven for %s; they are neither proved nor suspect; give a renewed session (a -role-cmd that prints a fresh one, a -role-login sign-in, or new -role headers on a rerun) and run roles again to prove them; for %s the summary separates %s proved, %s suspect and %s not-attempted",
+			name, plural(rr.notTried, "URL"), name, name, plural(proved, "answer"), plural(rr.suspect, "answer"), plural(rr.notTried, "answer")))
 	}
 	switch {
 	case rr.suspect > 0:

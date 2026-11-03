@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -511,5 +513,43 @@ func TestChromeRequestsAreHeldToThePortOfTheScope(t *testing.T) {
 		if got := b.allowed(raw); got != want {
 			t.Errorf("allowed(%q) = %v, want %v", raw, got, want)
 		}
+	}
+}
+
+// The kill file holds Chrome as it holds the run: the requests a page still
+// had to send when the file appeared, waiting for the pace, are not sent.
+func TestKillFileStopsWhatChromeStillHasToSend(t *testing.T) {
+	b := startChrome(t)
+	kill := filepath.Join(t.TempDir(), "run.stop")
+	var once sync.Once
+	own := newRecorder(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/" {
+			w.Header().Set("Content-Type", "text/html")
+			fmt.Fprint(w, `<html><body>`)
+			for i := 0; i < 10; i++ {
+				fmt.Fprintf(w, `<img src="/i.png?%d">`, i)
+			}
+			fmt.Fprint(w, `</body></html>`)
+			return
+		}
+		once.Do(func() { _ = os.WriteFile(kill, nil, 0o644) }) // the first image is the signal
+	})
+	defer own.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	fetch.Reset()
+	egress.SetScope(func(h string) bool { return h == "127.0.0.1" })
+	egress.SetRate(4)
+	defer egress.SetKill(kill)()
+	_ = egress.Spend(ctx)
+	_, _ = b.Load(ctx, own.URL+"/", true) // a screenshot: the images are fetched
+	images := 0
+	for _, p := range own.got() {
+		if p == "/i.png" {
+			images++
+		}
+	}
+	if images == 0 || images >= 10 {
+		t.Errorf("Chrome sent %d of 10 images: the kill file made as the first was asked did not stop the rest", images)
 	}
 }

@@ -203,3 +203,59 @@ func atoiPort(t *testing.T, s string) int {
 	}
 	return n
 }
+
+// The ledger's rule for a batch: the lines Reserve wrote are the connects'
+// and a stop that came after them does not take them back (each connect
+// begins, and no other line is made); a connect made after the stop has no
+// line and is given back to the budget the caller counted.
+func TestTCPBatchHasOneLedgerLinePerConnectThatBegan(t *testing.T) {
+	Reset()
+	defer Reset()
+	entries := withLedger(t)
+	addr, _ := listener(t)
+	_, p, _ := net.SplitHostPort(addr)
+	port := atoiPort(t, p)
+	d := NewPortDialer(time.Second, nil, "", "")
+	ctx, cancel := context.WithCancel(context.Background())
+	addrs := []string{addr, addr, addr}
+	d.Reserve(ctx, "", addrs)
+	cancel() // the stop comes after the lines
+	for range addrs {
+		if err := Take(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got := runBatch(t, d, ctx, "127.0.0.1", []int{port, port, port})
+	for _, r := range got {
+		if r.conn != nil {
+			r.conn.Close()
+		}
+	}
+	if e := entries(); len(e) != 3 {
+		t.Errorf("ledger %v: want the 3 lines Reserve wrote, and no more", e)
+	}
+	if Sent() != 3 {
+		t.Errorf("%d counted, want 3: each connect began", Sent())
+	}
+
+	// After the stop: nothing is reserved, nothing is written, all are given back.
+	before := len(entries())
+	d.Reserve(ctx, "", addrs)
+	for range addrs {
+		if err := Take(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got = runBatch(t, d, ctx, "127.0.0.1", []int{port, port, port})
+	for i, r := range got {
+		if !errors.Is(r.err, context.Canceled) || r.conn != nil {
+			t.Errorf("port %d after the stop: %+v", i, r)
+		}
+	}
+	if n := len(entries()) - before; n != 0 {
+		t.Errorf("%d lines for connects that never began", n)
+	}
+	if Sent() != 3 {
+		t.Errorf("%d counted, want 3: the three after the stop are given back", Sent())
+	}
+}

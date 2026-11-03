@@ -75,27 +75,71 @@ func (r *report) text() string {
 // absolute, a limit, an exit code, a refusal.
 var trigger = lazyre.New(`(?i)\b(never|always|every|only|nothing|exactly|at most|at least|no request|exit [0-9]|cannot|without|all|any|not)\b`)
 
+// linkTarget is the address of a markdown link: a heading's slug in it is not a claim.
+var linkTarget = lazyre.New(`\]\([^)]*\)`)
+
+func triggers(s string) bool { return trigger.MatchString(linkTarget.ReplaceAllString(s, "]")) }
+
 var idRE = lazyre.New(`^[a-z0-9]+(-[a-z0-9]+)*\.[a-z0-9]+(-[a-z0-9]+)*$`)
 
-// claimFiles are the pages the ledger is about: the README and every
-// command page.
+// claimFiles are the pages the ledger is about: the README, the pages of
+// docs/ that tell a user what to expect (ARCHITECTURE.md is how the code
+// works) and every command page.
 func claimFiles(root string) []string {
 	files := []string{"README.md"}
-	pages, _ := filepath.Glob(filepath.Join(root, "docs", "commands", "*.md"))
-	sort.Strings(pages)
-	for _, p := range pages {
-		rel, _ := filepath.Rel(root, p)
-		files = append(files, filepath.ToSlash(rel))
+	for _, dir := range []string{"docs", "docs/commands"} {
+		pages, _ := filepath.Glob(filepath.Join(root, dir, "*.md"))
+		sort.Strings(pages)
+		for _, p := range pages {
+			rel, _ := filepath.Rel(root, p)
+			if rel = filepath.ToSlash(rel); rel != "docs/ARCHITECTURE.md" {
+				files = append(files, rel)
+			}
+		}
 	}
 	return files
+}
+
+// pagePrefix is what the id of a claim about a page starts with: the page's
+// name, and docs- before it for a page of docs/ (docs/MCP.md and
+// docs/commands/mcp.md are two pages).
+func pagePrefix(file string) string {
+	name := strings.ToLower(strings.TrimSuffix(filepath.Base(file), ".md"))
+	if filepath.Dir(file) == "docs" {
+		return "docs-" + name
+	}
+	return name
+}
+
+// A line of a page that reads as a claim, with the "## " section it is in.
+type claimLine struct {
+	n             int
+	text, section string
+}
+
+// sentences cuts a line where a sentence ends and another begins: a full
+// stop, question or exclamation mark, then a space and a capital, a quote or
+// a code span.
+func sentences(line string) [][2]int {
+	var out [][2]int
+	start := 0
+	for i := 0; i+2 < len(line); i++ {
+		if (line[i] == '.' || line[i] == '?' || line[i] == '!') && line[i+1] == ' ' {
+			if c := line[i+2]; c >= 'A' && c <= 'Z' || c == '`' || c == '*' || c == '"' {
+				out = append(out, [2]int{start, i + 1})
+				start = i + 2
+			}
+		}
+	}
+	return append(out, [2]int{start, len(line)})
 }
 
 // claimLines are the lines of a page that read as claims: prose and list
 // items outside the synopsis, examples and flag tables (the flag tables are
 // made from the binary and the examples are run by tests), code, tables
 // and headings.
-func claimLines(text string) map[int]string {
-	out := map[int]string{}
+func claimLines(text string) []claimLine {
+	var out []claimLine
 	incode := false
 	section := ""
 	for i, l := range strings.Split(text, "\n") {
@@ -119,8 +163,8 @@ func claimLines(text string) map[int]string {
 		case "Synopsis", "Examples", "Flags":
 			continue
 		}
-		if trigger.MatchString(t) {
-			out[i+1] = t
+		if triggers(t) {
+			out = append(out, claimLine{i + 1, t, section})
 		}
 	}
 	return out
@@ -137,7 +181,11 @@ func readClaims(root string) (claims []claim, covered []string, problems []strin
 			continue
 		}
 		if rest, ok := strings.CutPrefix(l, "@cover"); ok {
-			covered = append(covered, strings.Fields(rest)...)
+			if strings.Contains(rest, "#") {
+				covered = append(covered, strings.TrimSpace(rest)) // FILE#Section: one spec, spaces and all
+			} else {
+				covered = append(covered, strings.Fields(rest)...)
+			}
 			continue
 		}
 		f := strings.Split(l, "\t")
@@ -229,6 +277,44 @@ func readDir(root, dir, suffix string, cache map[string]string) string {
 	return cache[key]
 }
 
+// isCovered says whether a line of file, in section, must have its claims
+// proved: its whole page is under @cover, or its "## " section is
+// (FILE#Section).
+func isCovered(covered []string, file, section string) bool {
+	return slices.Contains(covered, file) || slices.Contains(covered, file+"#"+section)
+}
+
+// unproved are the sentences of a line that read as claims and that no claim
+// of the page touches: a claim holds the sentences its text overlaps, so one
+// claim cannot stand for the sentences beside it.
+func unproved(line string, claims []claim, file string) []string {
+	var held [][2]int
+	for _, c := range claims {
+		if c.File != file {
+			continue
+		}
+		for from := 0; ; {
+			i := strings.Index(line[from:], c.Text)
+			if i < 0 {
+				break
+			}
+			held = append(held, [2]int{from + i, from + i + len(c.Text)})
+			from += i + 1
+		}
+	}
+	var out []string
+	for _, r := range sentences(line) {
+		sentence := line[r[0]:r[1]]
+		if !triggers(sentence) {
+			continue
+		}
+		if !slices.ContainsFunc(held, func(h [2]int) bool { return h[0] < r[1] && r[0] < h[1] }) {
+			out = append(out, sentence)
+		}
+	}
+	return out
+}
+
 func check(root string) (*report, error) {
 	claims, covered, problems, err := readClaims(root)
 	if err != nil {
@@ -236,7 +322,7 @@ func check(root string) (*report, error) {
 	}
 	rep := &report{Claims: len(claims), Proved: map[string]int{}, Problems: problems, Backlog: map[string]int{}}
 	files := claimFiles(root)
-	pages := map[string]map[int]string{}
+	pages := map[string][]claimLine{}
 	texts := map[string]string{}
 	for _, f := range files {
 		raw, err := os.ReadFile(filepath.Join(root, f))
@@ -249,13 +335,13 @@ func check(root string) (*report, error) {
 	cache := map[string]string{}
 	for _, c := range claims {
 		at := fmt.Sprintf("docs/claims.tsv:%d: %s", c.line, c.ID)
-		if page := strings.ToLower(strings.TrimSuffix(filepath.Base(c.File), ".md")); !strings.HasPrefix(c.ID, page+".") {
+		if page := pagePrefix(c.File); !strings.HasPrefix(c.ID, page+".") {
 			rep.Problems = append(rep.Problems, at+": the id starts with the page it is about, "+page+".")
 		}
 		text, ok := texts[c.File]
 		switch {
 		case !ok:
-			rep.Problems = append(rep.Problems, at+": "+c.File+" is not README.md or a docs/commands page")
+			rep.Problems = append(rep.Problems, at+": "+c.File+" is not README.md or a page of docs/ or docs/commands")
 		case len(c.Text) < 12:
 			rep.Problems = append(rep.Problems, at+": the text is too short to find the claim by")
 		case !strings.Contains(text, c.Text):
@@ -269,35 +355,26 @@ func check(root string) (*report, error) {
 		}
 	}
 	for _, f := range files {
-		var lines []int
-		for n := range pages[f] {
-			lines = append(lines, n)
-		}
-		sort.Ints(lines)
-		unproved := 0
-		for _, n := range lines {
-			held := false
-			for _, c := range claims {
-				if c.File == f && strings.Contains(pages[f][n], c.Text) {
-					held = true
-					break
-				}
-			}
-			if held {
+		for _, l := range pages[f] {
+			open := unproved(l.text, claims, f)
+			if len(open) == 0 {
 				continue
 			}
-			unproved++
-			if slices.Contains(covered, f) {
-				rep.Problems = append(rep.Problems, fmt.Sprintf("%s:%d: a claim with no proof (add it to docs/claims.tsv with a test, or reword it): %s", f, n, clip(pages[f][n])))
+			if isCovered(covered, f, l.section) {
+				rep.Problems = append(rep.Problems, fmt.Sprintf("%s:%d: a claim with no proof (add it to docs/claims.tsv with a test, or reword it): %s", f, l.n, clip(open[0])))
+			} else {
+				rep.Backlog[f]++
 			}
 		}
-		if unproved > 0 && !slices.Contains(covered, f) {
-			rep.Backlog[f] = unproved
-		}
 	}
-	for _, f := range covered {
-		if _, ok := texts[f]; !ok {
-			rep.Problems = append(rep.Problems, "docs/claims.tsv: @cover names "+f+", which is not README.md or a docs/commands page")
+	for _, spec := range covered {
+		f, section, hasSection := strings.Cut(spec, "#")
+		text, ok := texts[f]
+		switch {
+		case !ok:
+			rep.Problems = append(rep.Problems, "docs/claims.tsv: @cover names "+f+", which is not README.md or a page of docs/ or docs/commands")
+		case hasSection && !strings.Contains("\n"+text, "\n## "+section+"\n"):
+			rep.Problems = append(rep.Problems, "docs/claims.tsv: @cover names the section "+section+" of "+f+", which has no such \"## \" heading")
 		}
 	}
 	return rep, nil

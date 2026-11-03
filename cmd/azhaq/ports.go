@@ -86,6 +86,8 @@ func cmdPorts(args []string) error {
 	c.register(fs)
 	var advFlags advisoryFlags
 	advFlags.register(fs)
+	var verifyFl verifyFlags
+	verifyFl.register(fs)
 	fs.BoolVar(&c.json, "j", false, "same as -json")
 	var hosts stringsFlag
 	fs.Var(&hosts, "host", "hosts, addresses, CIDR ranges, AS numbers or host:port, comma-separated and repeatable")
@@ -309,6 +311,9 @@ func cmdPorts(args []string) error {
 			run = append(run, "-advisories-confirm")
 		}
 	}
+	if verifyFl.on {
+		run = append(run, "-verify")
+	}
 	if len(udpPorts) > 0 {
 		run = append(run, "-ports-udp", portscan.Spec(udpPorts))
 	}
@@ -492,6 +497,21 @@ func cmdPorts(args []string) error {
 		}
 		rep.Counts["advisory leads"] = len(leads)
 	}
+	if verifyFl.on {
+		obs, _ := st.Observations()
+		results := verifyResultsOf(obs)
+		for _, r := range results {
+			if c.json {
+				w.obj(verifyRow(r))
+			} else {
+				w.line(r.Line())
+			}
+		}
+		if rep.Counts == nil {
+			rep.Counts = map[string]int{}
+		}
+		rep.Counts["verify results"] = len(results)
+	}
 	if err := w.close(); err != nil {
 		return err
 	}
@@ -523,6 +543,7 @@ type portsSink struct {
 	silentUDP  bool // a row is open|filtered: the rows are not all open ports
 	open       int  // rows in the open state
 	filtered   int  // rows in the open|filtered state
+	printed    int  // rows handed to the output, whatever their state
 }
 
 func newPortsSink(out *portOut) *portsSink {
@@ -542,6 +563,9 @@ func (k *portsSink) replay(obs []types.StoredObservation) {
 // settle puts the sink's counts in the summary, after the rows are written.
 func (k *portsSink) settle(rep *report, sn bool) {
 	rep.Results = k.out.w.count()
+	k.mu.Lock()
+	rep.holds("results, against the rows handed to the output", rep.Results, k.printed)
+	k.mu.Unlock()
 	rep.Counts = map[string]int{"addresses": int(k.scanned)}
 	if k.unresolved > 0 {
 		rep.Counts["did not resolve"] = k.unresolved
@@ -565,6 +589,7 @@ func (k *portsSink) visit(o types.Observation, print bool) {
 		if print {
 			out.add(r)
 			k.mu.Lock()
+			k.printed++
 			switch r.State {
 			case "open":
 				k.open++

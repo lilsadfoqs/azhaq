@@ -50,7 +50,7 @@ A run paced slowly says so as it starts: `-rate 1 paces requests to 1/s: the cap
 | Code | Meaning | What to do |
 | --- | --- | --- |
 | 0 | Complete, and nothing failed. An open port that closes or resets at once on `run`'s HTTP request, and was not named HTTP, is an answer (not a web service), not a failure. | Use the results. |
-| 1 | Error: the command could not do its job. | Read the message. |
+| 1 | Error: the command could not do its job, or its summary disagreed with its rows (an internal error). | Read the message. |
 | 2 | Usage: bad flags or input. Nothing was sent. | `azhaq help COMMAND`. For a scope refusal, check the target, `-allow` or `-scope`. |
 | 3 | Finished, but some sources or requests failed. The results are usable. | The summary lists each failure, whether it is worth retrying, and its targets. |
 | 4 | Stopped with work left, by a limit, the kill file or a signal. | `azhaq resume -db FILE` continues where it stopped. With a kill file, remove it first. |
@@ -59,7 +59,8 @@ A run paced slowly says so as it starts: `-rate 1 paces requests to 1/s: the cap
 
 ### Exit 1
 
-The command could not do its job: a database it cannot open, or Chrome missing for `-browser`.
+- The command could not do its job: a database it cannot open, or Chrome missing for `-browser`.
+- The summary disagrees with the rows it summarises or with the ledger. The message and the summary's `error` say which number: `internal error: the summary disagrees with the rows and the ledger it summarises (results, against the rows emitted: the summary says 5, the rows say 4)`. The summary has `complete: false`. This is a bug in azhaq: the rows already printed are as they were, and the numbers beside them are not to be relied on. See [what is checked](#what-the-summary-is-checked-against).
 
 ### Exit 2
 
@@ -119,6 +120,19 @@ Some work failed and did not get its answer: a source that failed, a target that
 | `notes` | Caps that were hit and other things worth knowing that are not failures. See [notes](#notes). |
 | `next` | Commands worth running next. See [next](#next). |
 | `advisories` | With `-advisories`: the known-issue leads, one per lead line printed and per stored `advisory` row: `advisory_id`, `url` (its source), `target`, `product`, `version_seen`, `affected_range`, `label` (`affected`, `not affected` or `conditional`), `precondition` when one is named, and with `-advisories-confirm` also `confidence` (`observed`, `inferred` or `claimed`) and `read` (what was read, or why nothing was). They are leads, not map rows: `counts` still adds up to `stored` without them, and a note counts them by label from these rows. See [Known-issue matching](CONCEPTS.md#known-issue-matching--advisories). |
+
+### What the summary is checked against
+
+Before a summary is printed, azhaq recomputes what it can from the rows it emitted and from the ledger, and a number that differs ends the run with exit 1 (see above) instead of printing as complete. Each command that prints rows counts them as they go out, apart from the numbers it publishes:
+
+| Command | The numbers that must equal the rows |
+| --- | --- |
+| `run` | `results` is the rows printed; `stored - left_out` is the stored rows they stand for and `folded` the ones they hold beyond themselves; the counts add up to `stored`; and, when no printed row stands for several, each count is the rows of that kind. |
+| `crawl` | Every URL row of the crawl's scope is listed or left out for one reason, and the four class counts add up to the rows listed and the rows the notes say were left out (the extension list, `-em`/`-ef`/`-mr`/`-fr`, the hints and named URLs without `-hints`, and the routes with a parameter, views and sockets that plain output cannot ask); `requested + not requested + templates` is the same total; `results` is the rows listed and the other lines printed. |
+| `subs` | The names the sources gave, less what was left out, plus what DNS and the guesses added, are the names printed (the note beginning `count:`). |
+| `ports` | `results` is the rows handed to the output. |
+| `roles` | `results` is the rows printed, and each count is the rows with that verdict. |
+| every command with a ledger | `requests` is the ledger's lines to targets and `dns_queries` its lines to resolvers, for this run. |
 
 ### Run counts
 
@@ -220,6 +234,20 @@ A line has:
 - `source` lines are `http` or `tcp`, with no `rule`: the scope holds targets, not the third parties asked about them.
 - `chrome`: a request Chrome sent, listed once it left. One that Chrome dropped before sending is not listed, and not counted.
 - A Chrome WebSocket handshake is `ws://host:port/path?query`, and `wss://host:port` inside TLS.
+
+### What a line means
+
+A line says the request or connection left, and the summary's `requests` counts the same lines: a request counted and then cancelled before it left (by `-timeout`, the kill file, Ctrl-C or a request that failed its checks) has no line and is given back to the count. What leaving means for each kind:
+
+| Kind | A line is made when | No line for |
+| --- | --- | --- |
+| `http` | The request has been written to its connection. Also when it failed with no stop to blame: a connect was attempted and failed, a TLS handshake began, the name had no address, or the other end dropped the connection before the write. | A request a stop cancelled before any of that: before a connection was tried, or on a connection that never took the write. |
+| `tcp` | The socket is about to connect (`connect(2)`), so a stop that lands earlier leaves no line. A fast port scan (`-rate` of 1,000 or more) writes the lines of up to 32 connects together just before they start; those connects are not stopped by a kill file or a deadline that comes after the lines, and a stop that comes before them records none. | A connect refused by the scope or the kill file, with no address, or stopped before its socket connected. |
+| `udp` | The socket to the port is open and the datagram is written at once. | A socket that could not be opened. |
+| `chrome` | Chrome says the request's headers went out. A request Chrome was let send and nothing was heard of afterwards is listed when its tab closes, since it may have left. | A request Chrome dropped or answered from its cache. |
+| `dns` | The query goes to the resolver. | A query refused by the kill file or after the context ended. |
+
+`azhaq ledger -verify` checks the chain and the seal, not this: it cannot say a line was sent, only that it was not changed afterwards.
 - An `http` line is written when the request has a live connection, and a request is one line however many connections it took. One that fails to connect (refused, timed out) is a line too. A pooled connection the server had closed is not written to; a request that fails on one the server closed unseen is sent again once on a new connection, and is still one line. So the lines to targets equal the requests a proxy in front of them counts.
 - A notification is a request to a third party: a `source` line, by the webhook's host. `watch` sends its notifications after its run has sealed the workspace's ledger, so they are lines after that seal, which `watch` seals again, and its own summary counts them: [watch](commands/watch.md#notifications). `notify -ledger FILE` keeps them in a file of its own.
 - `seal`: the end of a run, with no target.

@@ -64,15 +64,15 @@ func TestSubsLiveCountsAddUp(t *testing.T) {
 	}
 }
 
-// Without -live a guess is not looked up and no source asserted it: it is
-// held back and counted, not printed, and the names add up here too.
+// -guesses=false holds back what no source asserted and nothing looked up: it
+// is counted, not printed, and the names add up here too.
 func TestSubsWithoutLiveHoldsGuessesBack(t *testing.T) {
 	t.Chdir(t.TempDir())
 	defer subcol.UseTestSources(
 		subcol.TestSource{Name: "s", Default: true, Names: []string{"www.example.org"}},
 		subcol.TestSource{Name: "pad", Default: true, Padding: true, Names: []string{"guess1.example.org", "guess2.example.org", "www.example.org"}},
 	)()
-	out, rep, code := runContract(t, "subs", "-d", "example.org", "-no-history")
+	out, rep, code := runContract(t, "subs", "-d", "example.org", "-no-history", "-guesses=false")
 	if code != exitOK {
 		t.Fatalf("exit %d %+v", code, rep)
 	}
@@ -92,23 +92,23 @@ func TestSubsWithoutLiveHoldsGuessesBack(t *testing.T) {
 	}
 	var said, summed bool
 	for _, n := range rep.Notes {
-		said = said || strings.Contains(n, "2 names are held back") && strings.Contains(n, "-guesses prints them") && strings.Contains(n, "-live")
-		summed = summed || strings.HasPrefix(n, "count: 3 from the sources − 2 guesses held back (-guesses prints them) = 1 printed")
+		said = said || strings.Contains(n, "2 names are held back") && strings.Contains(n, "-guesses (the default) prints them") && strings.Contains(n, "-live")
+		summed = summed || strings.HasPrefix(n, "count: 3 from the sources − 2 guesses held back (-guesses=false) = 1 printed")
 	}
 	if !said || !summed {
 		t.Errorf("notes %q", rep.Notes)
 	}
 }
 
-// -guesses prints the held-back names, marked unverified; -live looks them
-// up instead, so the two do not go together.
+// The guesses are printed by default, marked unverified; -live looks them
+// up instead, so an explicit -guesses does not go with it.
 func TestSubsGuessesFlagPrintsThemUnverified(t *testing.T) {
 	t.Chdir(t.TempDir())
 	defer subcol.UseTestSources(
 		subcol.TestSource{Name: "s", Default: true, Names: []string{"www.example.org"}},
 		subcol.TestSource{Name: "pad", Default: true, Padding: true, Names: []string{"guess1.example.org", "guess2.example.org", "www.example.org"}},
 	)()
-	out, rep, code := runContract(t, "subs", "-d", "example.org", "-no-history", "-guesses")
+	out, rep, code := runContract(t, "subs", "-d", "example.org", "-no-history")
 	if code != exitOK {
 		t.Fatalf("exit %d %+v", code, rep)
 	}
@@ -375,7 +375,7 @@ func TestSubsMaxNamesCutIsSaid(t *testing.T) {
 		t.Fatalf("uncut: exit %d, %d names", code, len(hosts(t, out)))
 	}
 	out, rep, code = runContract(t, "subs", "-d", "example.org", "-no-history", "-max-names", "10")
-	if code != exitPartial || len(hosts(t, out)) != 10 || rep.Counts["cut by -max-names"] != 20 || rep.Counts["from sources"] != 10 {
+	if code != exitPartial || len(hosts(t, out)) != 10 || rep.Counts["cut by -max-names"] != 20 || rep.Counts["from sources"] != 30 {
 		t.Errorf("cut: exit %d, %d names, counts %v", code, len(hosts(t, out)), rep.Counts)
 	}
 }

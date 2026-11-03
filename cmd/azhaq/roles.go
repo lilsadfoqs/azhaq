@@ -115,14 +115,20 @@ type roleRow struct {
 	// SessionSuspect: an answer was asked after its role's session last
 	// proved alive, and its session did not prove alive again.
 	SessionSuspect bool `json:"session_suspect,omitempty"`
+	// WriteVerification, on a write row the user gave a verification step
+	// for (or a create that could not be located): proved,
+	// accepted-not-verified or refuted. Distinct words on purpose: an
+	// accepted write is not a proved one.
+	WriteVerification string `json:"write_verification,omitempty"`
 
-	given   bool           // Owner was given with -id
-	value   string         // the identifier filled into the route
-	reqBody []byte         // a write's body
-	reqType string         // and its Content-Type
-	mutual  []string       // the readers whose objects on the route the owner reads too
-	suspect []string       // the roles whose answers are suspect
-	made    *createdObject // a create's object that other roles read
+	given   bool             // Owner was given with -id
+	value   string           // the identifier filled into the route
+	reqBody []byte           // a write's body
+	reqType string           // and its Content-Type
+	mutual  []string         // the readers whose objects on the route the owner reads too
+	suspect []string         // the roles whose answers are suspect
+	made    *createdObject   // a create's object that other roles read
+	mades   []*createdObject // every create's object on this row that other roles read
 }
 
 // Verdicts, in the order rows are listed.
@@ -176,6 +182,8 @@ func cmdRoles(args []string) error {
 	writesCanary := fs.Bool("replay-writes-canary", false, "with -replay-writes: change one short string field of a PUT or PATCH body to a unique value for each role it is replayed with, before it is sent, so a write that would otherwise replay the owner's own value back (no change to read back) can still be proved; never on by default, since it changes data, and restoring the field afterward is not done")
 	var canaryFields stringsFlag
 	fs.Var(&canaryFields, "replay-writes-field", "NAME: with -replay-writes-canary, a field the canary may set although the rules leave it alone (an email or other owner field, an identifier, a credential, a timestamp): you accept that it changes whose the object is or what it holds (repeatable)")
+	var verifySpecs stringsFlag
+	fs.Var(&verifySpecs, "replay-writes-verify", "SPEC: with -replay-writes, a step that proves an accepted write took (repeatable): login:URL signs in as the owner with the password the write set; read:URL[;field=NAME[=VALUE]] reads URL as the writer ({owner} and {writer} are replaced) and, with field, checks that field holds VALUE or the value the write set. A row then reports write_verification proved, accepted-not-verified or refuted")
 	fs.Var(&hars, "har", "NAME=FILE: the requests account NAME sent, as a browser or proxy saved them (HAR). Every GET is a page the role reached, its Authorization and Cookie headers of the latest request are its session (unless -role gives headers), its writes are replayed with -replay-writes. Without -- run options this is the whole input: no crawl")
 	fs.Var(&burps, "burp", "NAME=FILE: the same from a Burp \"Save items\" XML file (repeat a name to add files)")
 	fs.Var(&allows, "allow", "HOST: an origin of the history that is the target besides the ones most of a role's requests go to (the others, analytics and CDNs, are left out) (repeatable)")
@@ -247,6 +255,13 @@ func cmdRoles(args []string) error {
 	}
 	if len(canaryFields) > 0 && !*writesCanary {
 		return usagef("-replay-writes-field names a field for the canary: give -replay-writes-canary too")
+	}
+	verifySteps, err := parseVerifyWrites(verifySpecs)
+	if err != nil {
+		return err
+	}
+	if len(verifySteps) > 0 && *writesSpec == "" {
+		return usagef("-replay-writes-verify verifies a write: give -replay-writes too")
 	}
 	var methods map[string]bool
 	if *writesSpec != "" {
@@ -507,6 +522,7 @@ func cmdRoles(args []string) error {
 	}
 	own := hostSet(scopeHosts)
 	var who map[string]identity
+	var pausedRoles map[string]bool // roles paused on session loss: no write is asked of them either
 	if *replay {
 		// /books/v1/{book_title} with the titles each role's answers held
 		// and those given with -id: whose objects can the others read?
@@ -572,6 +588,7 @@ func cmdRoles(args []string) error {
 		bud, byCmd := stageBudget(*replayMax)
 		n, err := replayAll(roles, answers, found, rank, own, rate, bud, watch)
 		replayed = n
+		pausedRoles = watch.pausedRoles
 		rep.Notes = append(rep.Notes, watch.notes...)
 		rep.warned = rep.warned || watch.failed
 		noteCap(rep, "replay", capErr(err, byCmd))
@@ -644,7 +661,7 @@ func cmdRoles(args []string) error {
 		} else {
 			var n int
 			bud, byCmd := stageBudget(*replayMax - replayed)
-			wrows, n, err = replayWritesAs(who, roles, reqs, answers, own, rate, bud, *writesCanary, canaryFields...)
+			wrows, n, err = replayWritesPaused(who, roles, reqs, answers, own, rate, bud, *writesCanary, verifySteps, pausedRoles, canaryFields...)
 			replayed += n
 			noteCap(rep, "write replay", capErr(err, byCmd))
 			if objs := createdRows(roles, wrows, made); len(objs) > 0 {
@@ -725,10 +742,14 @@ func cmdRoles(args []string) error {
 			if err := enc.Encode(row); err != nil {
 				return err
 			}
+			rep.emitted().add(row.Verdict, 1)
 		}
 		return rep.finish(true, false)
 	}
 	printRoles(roles, shown, len(rows), *dir)
+	for _, row := range shown {
+		rep.emitted().add(row.Verdict, 1)
+	}
 	return rep.finish(false, false)
 }
 
@@ -807,7 +828,7 @@ func rolesFailed(rep *report, asJSON bool, err error) error {
 // listed: the verdicts worth a reader's time by default.
 func listed(v string) bool {
 	switch v {
-	case verdictWriteAnyone, verdictWriteCross, verdictWriteUnread, verdictWriteCreate, verdictWriteAccepted, verdictWriteDry, verdictAnyoneSecrets, verdictCross, verdictAnyID, verdictObject, verdictSecrets, verdictShared, verdictSignedIn, verdictOnly,
+	case verdictWriteAnyone, verdictWriteCross, verdictWriteUnread, verdictWriteCreate, verdictWriteAccepted, verdictWriteUnverifiable, verdictWriteDry, verdictAnyoneSecrets, verdictCross, verdictAnyID, verdictObject, verdictSecrets, verdictShared, verdictSignedIn, verdictOnly,
 		verdictRoleGated, verdictFields, verdictPublicObj, verdictStatus:
 		return true
 	}
@@ -855,6 +876,9 @@ func printRoles(roles []role, rows []roleRow, compared int, dir string) {
 		}
 		if row.SessionSuspect {
 			line += " · session suspect: " + strings.Join(row.suspect, ", ")
+		}
+		if row.WriteVerification != "" {
+			line += " · write_verification: " + row.WriteVerification
 		}
 		fmt.Println(line)
 	}
@@ -926,6 +950,8 @@ func (row roleRow) label() string {
 			s += "; what it created belongs to its sender"
 		}
 		return s
+	case row.Verdict == verdictWriteUnverifiable && len(row.Readers) > 0:
+		return who + "'s " + row.Method + " to " + pathOf(row.URL) + " was accepted: unverifiable (the created object could not be located, so no role read it back and no negative is claimed)"
 	case row.Verdict == verdictWriteNoChange && len(row.Readers) > 0:
 		return who + " answered 2xx but changed nothing of " + row.Owner + "'s"
 	case row.Verdict == verdictCross && len(row.Readers) == 1:

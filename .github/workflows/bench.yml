@@ -23,6 +23,13 @@ name: bench
 # earlier. Every run uploads its own results as bench-ref-DAY for such a run;
 # -fresh uploads and reuses nothing.
 #
+# This workflow is the only benchmark workflow. A separate one, run on tags
+# archives-*, was retired: its checks needed nmap, which it never installed, so
+# it failed on every tag for that reason, and it asserted subdomain wall-clock
+# against subfinder, which swings threefold between runs on live networks and
+# which the domains units here already compare. The overlap of azhaq's
+# archived URLs with gau's is the `urls` unit; it asserts overlap, not time.
+#
 # A tag gate-NAME (.github/ci/run.sh gate) starts this and hunt.yml on one
 # commit: the bench takes its default flags, whatever the message says (the
 # words are the hunt's), and writes bench/gate-NAME/.

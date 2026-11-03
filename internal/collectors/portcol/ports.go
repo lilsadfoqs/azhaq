@@ -106,7 +106,7 @@ type scan struct {
 }
 
 func New(pool *dnsr.Pool, ports []int, rate float64) *Collector {
-	c := &Collector{Pool: pool, Ports: ports, Scanner: &portscan.Scanner{Rate: rate, Take: egress.TakeSweep, UserAgent: fetch.UserAgent},
+	c := &Collector{Pool: pool, Ports: ports, Scanner: &portscan.Scanner{Rate: rate, Take: egress.TakeSweep, Give: egress.Refund, UserAgent: fetch.UserAgent},
 		byIP: map[string]*scan{}, maxIP: 2}
 	c.Scanner.Opened = c.holdWeb
 	return c

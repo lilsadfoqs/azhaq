@@ -5,7 +5,7 @@ Lists the URLs that web archives hold for a domain: the Wayback Machine, Common 
 ## Synopsis
 
 ```
-azhaq urls -d DOMAIN | -dL FILE | DOMAIN… | stdin  [-subs] [-providers wayback,otx,…] [-mc/-fc/-mt/-ft LIST] [-from/-to YYYYMM] [-blacklist EXT,…] [-fp] [-raw] [-proxy URL] [-retries N] [-urls-threads N] [-o FILE] [-json]
+azhaq urls -d DOMAIN | -dL FILE | DOMAIN… | stdin  [-subs] [-providers wayback,otx,…] [-mc/-fc/-mt/-ft LIST] [-from/-to YYYYMM] [-blacklist EXT,…] [-fp] [-raw] [-keep-junk] [-live [-live-rate N] [-live-max N]] [-proxy URL] [-retries N] [-urls-threads N] [-o FILE] [-json]
 ```
 
 ## Examples
@@ -19,6 +19,9 @@ azhaq urls example.com -subs -providers wayback,commoncrawl -blacklist png,jpg,c
 
 # only 200 answers of type text/html captured since 2024, with no pause between requests
 azhaq urls -d example.com -mc 200 -mt text/html -from 2024 -urls-pause 0
+
+# rows to triage: provider, capture date, junk labels, and a spot-check of 200 URLs against the live site at 5 a second
+azhaq urls -d example.com -json -keep-junk -live -live-max 200 -live-rate 5
 ```
 
 ## What it does
@@ -34,19 +37,28 @@ By default URLs are printed as each archive page arrives, unsorted, when stdout 
 
 | Field | Meaning |
 | --- | --- |
-| `url` | The archived URL. |
-| `source` | The archive that gave it first: `wayback`, `commoncrawl`, `otx`, `urlscan` or `arquivo`. |
+| `url` | The archived URL, normalised (as the archives gave it with `-raw`). |
+| `normalized` | The normalised form, always there (with `-raw`, `url` is as the archive gave it and this is the normalised form). |
+| `raw_url` | The URL as the archive gave it, when that is not `url`. |
+| `source` | The archive that gave it first: `wayback`, `commoncrawl`, `otx`, `urlscan` or `arquivo`. When two give a URL, the one whose page arrived first is its source, and `archived` is that archive's. |
+| `archived` | When the archive captured it, in UTC (RFC 3339), as the archive states it: the Wayback Machine's and Common Crawl's capture timestamp (for the Wayback Machine the first capture of the URL, as `collapse=urlkey` keeps it), arquivo.pt's timestamp, OTX's `date` and urlscan.io's scan time. Left out when the archive gives none. |
+| `junk`, `junk_reason` | Why it looks like noise: a class and the rule's words. Left out for a URL that looks like a page or an API. See [Junk](#junk). |
+| `verified`, `verified_status`, `verified_error` | With `-live`: see [Live spot-check](#live-spot-check). |
+
+In plain output every row is its URL; `-json` carries the fields above.
 
 The summary lists one row for each archive:
 
 | Field | Meaning |
 | --- | --- |
+| `asked` | What it was asked for: the host pattern of the Wayback Machine, Common Crawl and arquivo.pt (`example.com/*`, `*.example.com/*` with `-subs`), OTX's indicator, urlscan.io's search. |
 | `count` | URLs the archive gave. |
 | `pages` | Pages read from it. |
 | `seconds` | Time spent on it. |
 | `requests` | Requests sent, retries included. |
 | `retried`, `waited_seconds` | Requests asked again after a 429 or 503, and the seconds waited: see Details. |
 | `error` | Why the archive failed, in words: see Details. |
+| `partial` | Set with `error` when the archive gave URLs before it failed: what it gave is in the set. |
 | `capped` | Set when the archive stopped at `-urls-pages` with more to read. |
 | `unfiltered`, `unfiltered_by` | What the archive keeps none of, and the filter that could not apply: see Details. |
 
@@ -55,8 +67,9 @@ The summary lists one row for each archive:
 The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.md#the-summary) and [exit codes](../OUTPUT.md#exit-codes). These points are specific to `urls`.
 
 - The summary has a `sources` block with a row for each archive. It reads as the one of `subs` ([The sources block](subs.md#the-sources-block)), with `urls` where `subs` has `names`.
-- The summary's top-level `requests` is what reached the targets, as in every command. `urls` sends none, so it is 0. The archives are third parties: their requests, retries included, are `requests` in each archive row and in the `sources` block, and a note adds them up.
+- The summary's top-level `requests` is what reached the targets, as in every command. `urls` sends none, so it is 0, unless `-live` asks the live site: then the requests it sent are counted. The archives are third parties: their requests, retries included, are `requests` in each archive row and in the `sources` block, and a note adds them up.
 - It has `junk`, the URLs left out and why: see [Junk](#junk).
+- The summary's `sources` block says, for each archive, what it was asked (`queries`), what it gave (`urls`), whether it failed (`failed_sources`, with the archive's words, such as `127.0.0.1:8080 answered 504`) and whether it gave URLs before failing (`partial_sources`). A failed archive leaves a partial set: the URLs of the others are listed, the exit code is 3, and a note says `the set is partial: wayback failed, so the URLs only they hold are missing and those of the others are listed`. It does not need stderr to be read.
 
 ## Details
 
@@ -85,7 +98,16 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 
 Every source's URLs go through these rules, OTX's too.
 
-`counts` has the total as `dropped as junk`, and a note says it: `7 URLs dropped as junk (…; -raw keeps them)`. `-raw` prints them and drops none.
+`counts` has the total as `dropped as junk`, and a note says it: `7 URLs dropped as junk (…; -raw keeps them)`. `-raw` prints them and drops none. `-keep-junk` (with `-json`) lists them too, each row labelled with its class in `junk` and the rule's words in `junk_reason`; they stay in `dropped as junk`, and `-live` never asks one of them.
+
+The classes, in the order of the rules above: `scanner-payload`, `scanner-probe`, `listing-sort`, `placeholder`, `dot-segment`, `malformed`, `fuzzing`, `cut-link`. A row that is not junk but is a static file (an image, a font, a style sheet, or anything on a media host with an opaque name) is listed with `"junk": "asset"` and the reason `static file (by extension or media host): no route sits behind it`: a reader who wants pages filters on an absent `junk`.
+
+### Live spot-check
+`-live` asks the live site for each URL once, after every archive has answered: one GET, not followed (a redirect is its own answer), at `-live-rate` requests a second (10 by default; a note states it). It sends requests to the domain's hosts, so it is off unless you give it, and the rows are printed when the check is done. `-live-max N` asks only N URLs, spread evenly over the sorted list, so a long list can be spot-checked; the others are listed without `verified` and counted as `not asked (-live-max)`. `-live-proxy` sends the requests through a proxy.
+
+- `verified` is `true` when the site answered with a status other than 404 or 410: the page is still there (a 301, 403 or 500 answers too). It is `false` for a 404 or 410 and for a URL that got no answer. `verified_status` is the status (absent with no answer), and `verified_error` says why there was none. Rows with no `verified` were not asked.
+- A URL that looks like junk (a scanner's payload) is never sent: the counts say `not asked (junk)`.
+- The counts are `verified live`, `gone (404, 410)` and `no answer`, and they add up to the URLs asked. A note says how many were asked, the rate and the counts.
 
 ### Filters an archive cannot apply
 - OTX records a status for each URL (`httpcode`) and urlscan.io for each page (`status`, with its `mimeType`). `-mc`, `-fc`, and for urlscan.io `-mt` and `-ft`, judge them. A URL with no recorded status is not kept by `-mc` and is not left out by `-fc`.
@@ -113,6 +135,7 @@ Every source's URLs go through these rules, OTX's too.
 | `-archive` | string, repeatable |  | ask NAME's archive at this address instead of its own, as NAME=URL (a mirror or a test server; repeatable) |
 | `-raw` | bool |  | print the archived URLs exactly as the archives gave them: no normalising, junk filter or deduplication |
 | `-subs` | bool |  | also the subdomains of each domain: the archives are asked for *.DOMAIN (default: the name given, as gau does without --subs; azhaq run keeps the broader default) |
+| `-keep-junk` | bool |  | list the archived URLs left out as junk too, each labelled with its class and reason (-json), instead of only counting them |
 
 **Matchers and filters**
 
@@ -125,6 +148,15 @@ Every source's URLs go through these rules, OTX's too.
 | `-fp` | bool |  | keep one URL for each host and path, dropping the variants that differ by parameters |
 | `-from` | string |  | only captures from this time on: YYYY, YYYYMM, YYYYMMDD or YYYYMMDDhhmmss; OTX, which dates no capture, is asked all the same and its URLs kept, with a note |
 | `-to` | string |  | only captures up to this time, in the same form |
+
+**Spot-check the live site**
+
+| Flag | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `-live` | bool |  | spot-check the URLs against the live site once every archive has answered: one GET of each (not followed) at -live-rate, and each -json row says verified, with the status it got; sends requests to the domain's hosts, so it is off by default; it prints at the end, so not with -stream |
+| `-live-rate` | float | `10` | with -live, requests a second to the live site |
+| `-live-max` | int |  | with -live, check at most N URLs, spread evenly over the sorted list; the rest are listed unchecked and counted (0: every URL) |
+| `-live-proxy` | string |  | with -live, send the requests through this proxy (http://, https:// or socks5://; default: $HTTP_PROXY, $HTTPS_PROXY, except for loopback targets) |
 
 **Pace and limits**
 

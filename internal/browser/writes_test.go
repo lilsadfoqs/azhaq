@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/url"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -11,6 +13,7 @@ import (
 
 	"github.com/lilsadfoqs/azhaq/internal/egress"
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
+	"github.com/lilsadfoqs/azhaq/internal/ledger"
 )
 
 // A body gives its names, never its values: a JSON object's keys (also
@@ -90,5 +93,50 @@ addEventListener('pagehide', () => navigator.sendBeacon('/api/bye', 'x'));</scri
 	}
 	if left := b.LeftoverWrites(); !slices.Equal(left, []string{"POST " + srv.URL + "/api/bye"}) {
 		t.Errorf("leftover %q", left)
+	}
+}
+
+// Everything a sign-in sends, the form's POST and the page's own scripts
+// meanwhile, is in the ledger: the ledger lists what the server got.
+func TestSignInIsInTheLedger(t *testing.T) {
+	b := startChrome(t)
+	srv := newRecorder(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/login":
+			fmt.Fprint(w, `{"ok":true}`)
+		default:
+			w.Header().Set("Content-Type", "text/html")
+			fmt.Fprint(w, loginPage)
+		}
+	})
+	defer srv.Close()
+	path := filepath.Join(t.TempDir(), "l.jsonl")
+	l, err := ledger.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ledger.Use(l)
+	defer ledger.Use(nil)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	fetch.Reset()
+	egress.SetScope(func(h string) bool { return h == "127.0.0.1" })
+	if _, err := b.Login(ctx, srv.URL+"/login", "member@x.test", "s3cret"); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(500 * time.Millisecond)
+	b.Close()
+	l.Close()
+	var listed []string
+	_ = ledger.Read(path, func(e ledger.Entry) error {
+		u, _ := url.Parse(e.Target)
+		listed = append(listed, e.Method+" "+u.Path)
+		return nil
+	})
+	if !slices.Contains(listed, "POST /api/login") {
+		t.Errorf("the sign-in's POST is not in the ledger: %v", listed)
+	}
+	if got := len(srv.got()); got != len(listed) {
+		t.Errorf("the ledger lists %d requests, the server got %d: %v %v", len(listed), got, listed, srv.got())
 	}
 }

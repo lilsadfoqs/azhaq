@@ -529,3 +529,34 @@ func TestResumeDoesNotPaceStoredWords(t *testing.T) {
 		t.Errorf("a resume at -rate 1 took %s and sent %d requests for 30 stored words", d, hits.Load())
 	}
 }
+
+// A wordlist sweep asks every word, /logout included, as ffuf does, with a
+// session or without one: no name keeps a word out.
+func TestSweepAsksEveryWordWithOrWithoutASession(t *testing.T) {
+	for _, session := range []bool{false, true} {
+		t.Run(fmt.Sprintf("session %v", session), func(t *testing.T) {
+			fetch.Reset()
+			defer fetch.Reset()
+			if session {
+				fetch.Extra = http.Header{"Cookie": {"sid=1"}}
+			}
+			var asked sync.Map
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				asked.Store(r.URL.Path, true)
+				http.NotFound(w, r)
+			}))
+			t.Cleanup(srv.Close)
+			words := []string{"logout", "signout", "delete", "admin"}
+			c := New(srv.Client(), Options{Words: words, Rate: 1000, NoCalibration: true})
+			_, err := c.Run(context.Background(), types.Seed{Type: types.TypeURL, Keys: map[string]string{"url": srv.URL + "/"}}, func(types.Observation) error { return nil })
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, w := range words {
+				if _, ok := asked.Load("/" + w); !ok {
+					t.Errorf("/%s was not requested", w)
+				}
+			}
+		})
+	}
+}

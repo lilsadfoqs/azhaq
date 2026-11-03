@@ -314,11 +314,17 @@ func (s *Scanner) udpPass(ctx context.Context, host, ip string, ports []int, pas
 				break
 			}
 		}
+		got := true
 		select {
 		case <-ctx.Done():
+			got = false
 		case sem <- struct{}{}:
 		}
 		if ctx.Err() != nil {
+			if got {
+				<-sem
+			}
+			s.give() // counted, never sent
 			break
 		}
 		wg.Add(1)

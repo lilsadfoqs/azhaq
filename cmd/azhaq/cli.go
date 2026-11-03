@@ -83,11 +83,12 @@ func init() {
 			}},
 		{name: "report", group: groupMap, run: cmdReport,
 			summary: "write each finding roles listed up as a report to submit (title, steps with curl, evidence, impact)",
-			usage:   "-dir DIR [-url URL [-method M] [-owner NAME]] [-format md|json] [-o FILE|DIR] [-redact]",
-			output:  "one Markdown report per cross-role read, write or create and per sensitive field anyone reads, best-evidenced first (proved, likely, guess), written to DIR/reports or -o; -url writes one to standard output. Every piece comes from the roles run's evidence (roles.db); what it does not hold is named in the report. -redact masks hosts and identifiers",
+			usage:   "-dir DIR [-url URL [-method M] [-owner NAME]] [-format md|json] [-o FILE|DIR] [-redact]  |  -findings -db WORKSPACE.db [-format jsonl|md] [-o FILE]",
+			output:  "one Markdown report per cross-role read, write or create and per sensitive field anyone reads, best-evidenced first (proved, likely, guess), written to DIR/reports or -o; -url writes one to standard output. Every piece comes from the roles run's evidence (roles.db); what it does not hold is named in the report. -redact masks hosts and identifiers. With -findings: one record per qualifying stored row of a run's workspace (kind, severity, host, port, URL, product and version where confirmed, advisory id where matched, evidence excerpt, the command that produced it), proved first with version-only and conditional kept distinct and unproved hints listed as leads; a workspace with no qualifying rows writes an explicit empty record set and exits 0",
 			examples: []string{
 				"azhaq report -dir azhaq-roles-20261028-101500",
 				"azhaq report -dir azhaq-roles-20261028-101500 -url https://app/rest/basket/6 -redact",
+				"azhaq report -findings -db acme.db -format jsonl",
 			}},
 		{name: "subs", group: groupDropIn, like: "subfinder", run: cmdSubs,
 			summary: "subdomains from passive sources",
@@ -249,8 +250,8 @@ func init() {
 			examples: []string{"azhaq diff -db acme.db"}},
 		{name: "export", group: groupWS, run: cmdExport,
 			summary: "write a database in another tool's format",
-			usage:   "[-db FILE] [-format jsonl|urls|hosts|names|targets|openapi|graphql|sdl|burp|html|graphml|secrets] [-origin ORIGIN|URL] [-safe]",
-			output:  "the chosen format; graphql: {\"data\":{\"__schema\":…}} of a GraphQL endpoint read with -graphql (keyed by URL when there are several; -origin picks one), sdl: its schema in GraphQL SDL, burp: the run's scope, allow rules as include and deny rules as exclude",
+			usage:   "[-db FILE] [-format jsonl|urls|hosts|names|targets|openapi|graphql|sdl|burp|html|graphml|secrets|findings|findings-md] [-origin ORIGIN|URL] [-safe]",
+			output:  "the chosen format; graphql: {\"data\":{\"__schema\":…}} of a GraphQL endpoint read with -graphql (keyed by URL when there are several; -origin picks one), sdl: its schema in GraphQL SDL, burp: the run's scope, allow rules as include and deny rules as exclude, findings: the findings records of the workspace (the same as azhaq report -findings), findings-md the same in Markdown; an empty workspace writes an explicit empty record set",
 			examples: []string{
 				"azhaq export -db app.db -format openapi > app.openapi.json",
 				"azhaq export -db app.db -format graphql -origin https://app.example.com/graphql > schema.json",
@@ -345,7 +346,7 @@ var exitCodes = []struct {
 	Meaning string `json:"meaning"`
 }{
 	{exitOK, "complete"},
-	{exitError, "error: the command could not do its job"},
+	{exitError, "error: the command could not do its job, or its summary disagreed with its rows (an internal error)"},
 	{exitUsage, "usage: bad flags or input (targets all outside the scope given too), nothing was sent"},
 	{exitPartial, "finished, but some sources or requests failed: the results are usable, the summary on stderr lists what failed"},
 	{exitLimit, "stopped by a limit (-max-requests, -timeout, -daily-requests, -max-items) or by the kill file (-kill-file) or by a signal (Ctrl-C, SIGTERM, SIGHUP) with work left: azhaq resume -db FILE continues"},

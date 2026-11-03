@@ -97,7 +97,7 @@ Entries are grouped by what you were doing:
 
 **Why:** The kill file exists, perhaps from an earlier stop. By default it is `W.stop`, next to the workspace `W`. `-kill-file` names another file in its place. The `stopped` line says `the kill switch`. Nothing more is sent while the file exists.
 
-In `roles` the file is `roles.stop` in the `-dir`. There it stops the runs of the roles, and not the replay after them.
+In `roles` the file is `roles.stop` in the `-dir`. There it stops the runs of the roles and the history reads and replay after them.
 
 **Fix:** Remove the file, then run `azhaq resume -db W`.
 

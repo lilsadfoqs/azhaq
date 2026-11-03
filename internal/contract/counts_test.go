@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"regexp"
 	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -15,6 +16,7 @@ var leftOutNote = []*regexp.Regexp{
 	regexp.MustCompile(`(\d+) hints? and (\d+) named URLs? (?:was|were) left out of the list`),
 	regexp.MustCompile(`(\d+) rows? (?:was|were) left out of the list by the default extension list`),
 	regexp.MustCompile(`(\d+) rows? (?:was|were) left out of the list by -em, -ef, -mr or -fr`),
+	regexp.MustCompile(`(\d+) rows? (?:was|were) left out of the list: a route with a parameter`),
 }
 
 // leftOutOfList is how many URL rows the notes say the list does not hold.
@@ -122,4 +124,50 @@ func TestRunCountsAddUpToTheRows(t *testing.T) {
 			})
 		})
 	}
+}
+
+// -stream prints one found line per map row, ports included: the keys of the
+// found lines are the keys of the rows, each once. (URLs the map folds into a
+// template are left out of the comparison: their lines are the rows folded.)
+func TestRunStreamFoundLinesAreMapRows(t *testing.T) {
+	l := newLabs(t)
+	l.Ports = newPortLab(t)
+	r := l.Cmd("run", "-url", l.Site.URL, "-ports", l.Ports.List(), "-allow", "127.0.0.1", "-sources", "none", "-no-paths", "-depth", "0", "-stream", "-db", "w.db")
+	found := map[string]int{}
+	rows := map[string]bool{}
+	for _, row := range r.Rows(t) {
+		key, _ := row["key"].(string)
+		switch row["type"] {
+		case "found":
+			found[key]++
+		case "summary":
+		default:
+			rows[key] = true
+		}
+	}
+	v := newInv(t, "")
+	ports := 0
+	for key, n := range found {
+		if strings.HasPrefix(key, "http") && !rows[key] {
+			continue
+		}
+		if n != 1 {
+			v.Errorf("found key %q printed %d times", key, n)
+		}
+		if !rows[key] {
+			v.Errorf("found key %q is no map row", key)
+		}
+		if strings.Contains(key, "/tcp") {
+			ports++
+		}
+	}
+	for key := range rows {
+		if strings.Contains(key, "/tcp") && found[key] == 0 {
+			v.Errorf("port row %q has no found line", key)
+		}
+	}
+	if ports < 2 {
+		v.Errorf("%d port lines for a lab with open ports: %v", ports, found)
+	}
+	v.Done()
 }

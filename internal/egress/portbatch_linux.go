@@ -11,12 +11,14 @@ import (
 	"time"
 
 	"golang.org/x/sys/unix"
+
+	"github.com/lilsadfoqs/azhaq/internal/ledger"
 )
 
 // CanBatch says TCPBatch can connect to ip: the scan's connects go direct
 // (not through a proxy) and ip is a plain address.
 func (d *PortDialer) CanBatch(ip string) bool {
-	if d.via != nil {
+	if d.via != nil || d.socks != "" {
 		return false
 	}
 	a, err := netip.ParseAddr(ip)
@@ -26,7 +28,7 @@ func (d *PortDialer) CanBatch(ip string) bool {
 // TCPBatch connects to each of ports of ip at once, on non-blocking sockets
 // that one poll waits on, instead of a goroutine and a netpoller entry for
 // each: a full-range scan spends most of its CPU on that. Each connect passes
-// what TCP asks (kill file, scope, ledger) and ends as TCP's would: done is
+// what TCP asks (kill file, scope, one ledger line as it begins, a refund when it never did) and ends as TCP's would: done is
 // called once for each port, from this goroutine, with the open connection or
 // the error (a refusal wraps ECONNREFUSED, a timeout is a net.Error that says
 // so) and how long the connect took.
@@ -54,25 +56,39 @@ func (d *PortDialer) TCPBatch(ctx context.Context, host, ip string, ports []int,
 	}
 	for i, port := range ports {
 		addr := net.JoinHostPort(ip, itoa(port))
-		if err := d.admit(ctx, host, addr); err != nil {
-			done(i, nil, 0, err)
-			continue
-		}
-		if err := ctx.Err(); err != nil {
-			done(i, nil, 0, err)
-			continue
+		// As a dial of TCP's: Reserve wrote the line of a reserved connect, and a
+		// stop since then waits until its connect has begun; any other connect is
+		// held to the kill file, the scope and ctx, makes its line as it begins,
+		// and one that never begun is given back to the budget the caller counted.
+		reserved := d.takeReserved(addr)
+		if !reserved {
+			if err := d.allowed(host, addr); err != nil {
+				Refund()
+				done(i, nil, 0, err)
+				continue
+			}
+			if err := ctx.Err(); err != nil {
+				Refund()
+				done(i, nil, 0, err)
+				continue
+			}
 		}
 		fd, err := syscall.Socket(family, syscall.SOCK_STREAM|syscall.SOCK_NONBLOCK|syscall.SOCK_CLOEXEC, 0)
 		if err != nil {
+			Refund()
 			fail(i, "socket", err)
 			continue
 		}
 		if local != nil {
 			if err := syscall.Bind(fd, local); err != nil {
 				syscall.Close(fd)
+				Refund()
 				fail(i, "bind", err)
 				continue
 			}
+		}
+		if !reserved {
+			ledger.TCP(ctx, host, addr) // the socket is about to connect(2)
 		}
 		at := time.Now()
 		switch err := syscall.Connect(fd, sockaddr(ap, port)); err {

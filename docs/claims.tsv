@@ -8,6 +8,15 @@
 # The id starts with the page it is about (README.md: readme., docs/commands/plan.md: plan.).
 
 @cover README.md docs/commands/mcp.md docs/commands/plan.md docs/commands/worker.md docs/commands/query.md docs/commands/ledger.md
+@cover docs/CONCEPTS.md#Scope
+@cover docs/CONCEPTS.md#Budget, pace and the kill switch
+@cover docs/CONCEPTS.md#The ledger and its seal
+@cover docs/CONCEPTS.md#What azhaq sends
+@cover docs/OUTPUT.md#Exit codes
+@cover docs/MCP.md#What is fixed when the server starts
+@cover docs/MCP.md#What the tools do not start
+@cover docs/MCP.md#Workspaces, ledger and kill switch
+@cover docs/MCP.md#Arguments, progress and cancelling
 
 readme.drop-in	README.md	with their flags and JSON field names	test:cmd/azhaq:TestMigratingCoversTheTools,TestDocsNameOnlyFlagsThatExist;bench:drop-in: azhaq probe reads stdin and writes httpx's JSON fields
 readme.maps-and-compares	README.md	It maps the routes an app's JavaScript calls and compares what each of your accounts may read and write	bench:juice-shop: ≥ 90% of the server routes its frontend calls;bench:roles: Juice Shop anonymous → user
@@ -75,6 +84,8 @@ query.failed-run	docs/commands/query.md	`query -failed` reads the newest run of 
 ledger.records-every-class	docs/commands/ledger.md	Check, count or export the record of every request, connection and query a run sent	test:internal/ledger:TestEntriesCarryTheirClass;test:cmd/azhaq:TestLedgerSummaryCountsByClass,TestNotifyLedgerListsEveryRequestItSent;test:internal/egress:TestDNSExchangeIsInTheLedgerAsADNSLine;bench:summary = ledger = what arrived
 ledger.summary-text	docs/commands/ledger.md	The text lists the counts by `class`, `kind`, `method`, `host` and `rule`	test:cmd/azhaq:TestLedgerSummaryCountsByClass;test:internal/ledger:TestALedgerFromBeforeClassesStillVerifies
 ledger.classes	docs/commands/ledger.md	Each line has a class: `target` (a host the run was pointed at)	test:internal/ledger:TestEntriesCarryTheirClass,TestALedgerFromBeforeClassesStillVerifies;test:cmd/azhaq:TestLedgerSummaryCountsByClass
+ledger.verify-integrity-only	docs/commands/ledger.md	It checks the chain's integrity and nothing else	test:internal/ledger:TestVerifyCatchesAnEditedLine;test:cmd/azhaq:TestLedgerCommandVerify
+ledger.line-means-left	docs/commands/ledger.md	has no line and is not in the summary's `requests`	test:internal/ledger:TestARequestCancelledBeforeItLeftHasNoLine,TestARequestCancelledWhileConnectingToAnAddressNobodyTriedHasNoLine,TestARequestThatWasWrittenHasOneLineAndIsNotGivenBack;test:internal/egress:TestACancelledRequestIsNeitherListedNorCounted,TestAConnectThatNeverBeganHasNoLineAndIsGivenBack,TestAReservedConnectOutlivesAStopThatCameBeforeIt;test:internal/contract:TestStopBoundaryHTTP,TestStopBoundaryTCP
 ledger.verify-proves	docs/commands/ledger.md	It proves only that no recorded line was edited, removed or reordered	test:internal/ledger:TestVerifyCatchesAnEditedLine;test:cmd/azhaq:TestLedgerCommandVerify
 ledger.verify-cannot-see-a-cut	docs/commands/ledger.md	It cannot see a run of lines cut from the middle, with the rest re-chained from there	test:cmd/azhaq:TestLedgerCommandVerifySealCatchesARechainedForgery
 ledger.rechained-lines	docs/commands/ledger.md	The re-chained lines have a new `seq`, `prev` and `hash`	test:cmd/azhaq:TestLedgerCommandVerifySealCatchesARechainedForgery;test:internal/ledger:TestVerifySealCatchesLinesRemovedAndRechained
@@ -86,3 +97,153 @@ mcp.lifecycle-refused	docs/commands/mcp.md	Before `initialize` the server answer
 mcp.lifecycle-once	docs/commands/mcp.md	A second `initialize` on the same connection is refused	test:cmd/azhaq:TestMCPLifecycle
 mcp.lifecycle-order	docs/commands/mcp.md	requests sent back to back get their answers in the order they were sent	test:cmd/azhaq:TestMCPLifecycle
 mcp.lifecycle-scope	docs/commands/mcp.md	The scope, the budget and the pace hold for every call, however the requests are ordered	test:cmd/azhaq:TestMCPScopeHoldsAfterInitialize,TestMCPConcurrentCallsShareTheBudget
+readme.adds-what-the-chain-does-not	README.md	It adds what that chain does not do.	note:introduces the three sentences after it, each proved on its own row
+readme.install-script-folder	README.md	The script is in the repository's `scripts` folder, not at its root.	file:scripts/install.sh
+readme.summary-counts-by-kind	README.md	The summary also counts the rows by kind	test:internal/contract:TestRunCountsAddUpToTheRows;test:cmd/azhaq:TestContractInvariantsOnDemo
+readme.roles-never-asked	README.md	A `-` is a role that was never asked.	test:cmd/azhaq:TestRolesTableCellsReadAsTheREADMESays
+readme.exit-codes	README.md	Exit codes: `0` complete, `1` error, `2` usage (nothing sent), `3` finished with failures, `4` stopped by a limit or the kill file.	test:internal/contract:TestExitCodeFollowsTheOutcome;test:cmd/azhaq:TestMissingArgumentsExitUsage
+readme.scope-stays-on-the-site	README.md	Without a scope, requests stay on the site.	test:internal/contract:TestDocumentedPromisesAreKept
+readme.write-gates	README.md	A write means a method other than GET, HEAD or OPTIONS: POST, PUT, PATCH, DELETE, POST forms, a page's own writes in Chrome and role write replays go only with their flags.	test:internal/contract:TestEveryWriteWaitsForItsFlag,TestWireIsLedgerIsSummary;test:cmd/azhaq:TestCrawlWithoutSubmitFormsSendsNoPost,TestPlanChromeWrites;test:internal/collectors/rendercol:TestRenderWrites
+readme.guesses-on-request	README.md	Guesses, ports, UDP and wordlists go out only when you ask.	test:internal/contract:TestGuessesAndProbesGoOutOnlyWhenAsked
+readme.mcp-deny-path	README.md	`azhaq_map` asks every GET it finds in scope, and only the `-deny-path` rules set when the server starts keep a URL out: a client cannot add one per call.	test:internal/contract:TestMCPHoldsWhatItWasStartedWith
+readme.bench-record	README.md	The record, with every check and the commands, is `bench/history/*.json`.	file:bench/history
+readme.bench-polite-list	README.md	The polite path and fuzz sweeps send a short list, not 4,747 words, because at 5 requests per second that is 16 minutes a tool and app.	note:the reason for a bench setting, whose lists and rate the bench README states and the bench runs
+ledger.no-class-is-target	docs/commands/ledger.md	A line without a class, from a ledger written before classes, counts as a `target`.	test:internal/ledger:TestALedgerFromBeforeClassesStillVerifies;test:cmd/azhaq:TestLedgerSummaryCountsByClass
+ledger.older-azhaq	docs/commands/ledger.md	The other way does not hold: an older azhaq cannot verify a ledger whose lines have a `class`.	note:describes releases older than this one, which no test of this one can run
+mcp.shared-budget-and-pace	docs/commands/mcp.md	All tool calls together share the `-max-requests` budget and the `-rate` pace.	test:cmd/azhaq:TestMCPConcurrentCallsShareTheBudget,TestMCPScopeHoldsAfterInitialize
+mcp.call-cannot-change-held	docs/commands/mcp.md	A call cannot set or change them.	test:cmd/azhaq:TestMCPHeldRunOptionsReachTheCommands,TestMCPRefusesBadHeldOptions;test:internal/contract:TestMCPHoldsWhatItWasStartedWith
+plan.every-collector-flag	docs/commands/plan.md	Every flag of `run` that asks for a collector is named here or under the active techniques.	test:cmd/azhaq:TestPlanListsEveryCollectorFlag
+plan.found-domains-scope	docs/commands/plan.md	Without a scope, they are asked about within `-depth`.	test:cmd/azhaq:TestPlanRequests
+plan.names-known-by-asking	docs/commands/plan.md	How many names resolve and answer is known only by asking.	test:cmd/azhaq:TestPlanRequests
+plan.per-service-not-links	docs/commands/plan.md	It does not cover what its links, scripts and archived URLs lead to.	test:cmd/azhaq:TestPlanRequests
+plan.daily-requests	docs/commands/plan.md	With `-daily-requests`, a plan does not take off what the day's runs already spent.	test:cmd/azhaq:TestPlanRequests
+query.failed-newest-run	docs/commands/query.md	A workspace is shared by every command that writes to it, so a later `probe` or `ports` is the newest run	test:cmd/azhaq:TestFailedTargetsOfAnEarlierRunAreNamedAndRetried
+worker.cookie-not-renewed	docs/commands/worker.md	A session given with `-cookie` or `-header` cannot be renewed: the run ends its signed-in work with a failure, exit 3.	test:engine:TestWorkersSessionLostIsNotRenewed;test:cmd/azhaq:TestWorkersSessionGivenByCookieEndsTheRun
+readme.juice-measured-number	README.md	The number measured for the pinned build	bench:juice-shop: ≥ 90% of the server routes its frontend calls;test:bench:TestKnownRoutesRowNamesTheAppBuild
+readme.get-can-change-data	README.md	A GET can change data or end a session, and azhaq asks it	test:engine:TestEveryFoundGetIsRequestedAndDenyPathIsListed
+readme.deny-path-any-collector	README.md	`-deny-path REGEX` does, for any collector and Chrome.	test:cmd/azhaq:TestDenyPathHoldsInRunDirsAndFuzz;test:internal/fetch:TestDenyPathKeepsAPathOut;test:internal/collectors/dirscol:TestSweepDenyPathHoldsAWordBackAndListsIt;test:internal/egress:TestTargetClientStopsAtTheKillFileAndDenyPath;test:internal/browser:TestRefusedPageGivesItsCountBack
+readme.port-connect-head	README.md	A port (`-ports`) gets a TCP connect, and one that says nothing also a `HEAD /`.	test:internal/portscan:TestIdentifySilentPorts,TestSilentToHeadIsAskedOneGet
+mcp.chrome-no-sandbox-held	docs/commands/mcp.md	`-chrome-no-sandbox` is held too: Chrome, which a tool uses with `browser` or `login`, does not start without its sandbox	test:cmd/azhaq:TestMCPHoldsChromeNoSandbox,TestChromeIsNotRunWithoutItsSandboxUnlessAllowed
+plan.no-crawl-urls	docs/commands/plan.md	It does not list the URLs a crawl will find	test:cmd/azhaq:TestPlanRequests,TestPlanSendsNameWhatIsPlanned
+readme.plan-and-ledger-list	README.md	`azhaq plan` lists the kinds of request and the seeds, and the ledger lists every URL sent.	test:cmd/azhaq:TestPlanSendsNameWhatIsPlanned;test:internal/contract:TestWireIsLedgerIsSummary
+docs-concepts.scope-no-request-outside	docs/CONCEPTS.md	No request to a target goes outside it, and Chrome's requests are included.	test:internal/contract:TestDocumentedPromisesAreKept;test:internal/egress:TestTargetClientRefusesWhatLeavesTheScope;test:internal/fetch:TestScopeStopsRequestsAndRedirects;test:internal/browser:TestScope
+docs-concepts.scope-allow-nothing-else	docs/CONCEPTS.md	With any `-allow`, nothing else is requested.	test:internal/contract:TestDocumentedPromisesAreKept;test:scope:TestAllowsSuffixAndDeny
+docs-concepts.scope-deny	docs/CONCEPTS.md	`-deny` names what the run must not touch, even when given as a target.	test:internal/contract:TestADeniedHostIsNotAskedEvenAsATarget;test:scope:TestAllowsSuffixAndDeny
+docs-concepts.scope-fence	docs/CONCEPTS.md	A scope is a fence, not a list of targets: a run (and `ports`) given targets scans those	test:cmd/azhaq:TestPortsSweepCoversTheAllowedRange,TestRunSweepCoversTheAllowedRange
+docs-concepts.scope-fence-note	docs/CONCEPTS.md	The summary says so in a note	test:cmd/azhaq:TestPortsSweepCoversTheAllowedRange,TestRunSweepCoversTheAllowedRange
+docs-concepts.scope-sweep	docs/CONCEPTS.md	`-sweep` makes the IPv4 ranges and addresses `-allow` and `-scope` hold targets as well.	test:cmd/azhaq:TestPortsSweepCoversTheAllowedRange,TestPortsSweepNeedsARange,TestRunSweepCoversTheAllowedRange
+docs-concepts.scope-sweep-adds-no-request-type	docs/CONCEPTS.md	It adds no request type: they are asked what the named ones are asked, within `-deny`	test:cmd/azhaq:TestRunSweepCoversTheAllowedRange,TestPortsSweepCoversTheAllowedRange;test:internal/egress:TestSweepLeavesTheReserveForWebRequests
+docs-concepts.scope-sweep-counts	docs/CONCEPTS.md	The note counts what the scope allows less what it denies	test:cmd/azhaq:TestPortsSweepCoversTheAllowedRange
+docs-concepts.scope-sweep-a-name	docs/CONCEPTS.md	names an address as a target only when it is an address, a URL on one or a range: a name is not resolved for it.	test:cmd/azhaq:TestPortsSweepNeedsARange
+docs-concepts.scope-sweep-ipv6	docs/CONCEPTS.md	IPv6 ranges are left alone, with a note.	test:cmd/azhaq:TestSweepLeavesAnIPv6RangeAloneWithANote
+docs-concepts.scope-deny-path	docs/CONCEPTS.md	`-deny-path REGEX` keeps paths out (repeatable)	test:cmd/azhaq:TestDenyPathHoldsInRunDirsAndFuzz;test:engine:TestEveryFoundGetIsRequestedAndDenyPathIsListed;test:internal/fetch:TestDenyPathKeepsAPathOut;test:internal/collectors/dirscol:TestSweepDenyPathHoldsAWordBackAndListsIt;test:internal/browser:TestRefusedPageGivesItsCountBack;test:internal/contract:TestExitCodeFollowsTheOutcome
+docs-concepts.scope-deny-path-only-rule	docs/CONCEPTS.md	It is the only rule azhaq has about a path, and it has no default	test:engine:TestEveryFoundGetIsRequestedAndDenyPathIsListed
+docs-concepts.scope-options-held	docs/CONCEPTS.md	Options that send more than the map does are held to the targets given, or to `-allow` and `-scope`	test:internal/contract:TestEveryWriteWaitsForItsFlag,TestGuessesAndProbesGoOutOnlyWhenAsked;test:cmd/azhaq:TestWorkerHoldsDenyPathAndReportsIt
+docs-concepts.scope-entry-with-a-port	docs/CONCEPTS.md	a host with a port, `127.0.0.1:3001`	test:scope:TestAllowPortHoldsTheConnectionToThatPort,TestRuleForms,TestRulePortStripped
+docs-concepts.scope-port-held	docs/CONCEPTS.md	An `-allow` entry without a port allows every port of its host.	test:scope:TestAllowPortHoldsTheConnectionToThatPort
+docs-concepts.scope-other-port-refused	docs/CONCEPTS.md	With a port, a connection to any other port of the host is refused before it is made	test:internal/egress:TestAllowPortHoldsEveryConnection,TestChromeGuardHoldsThePort;test:cmd/azhaq:TestRunAllowWithAPortStaysOnThePort,TestProbeAllowWithAPortRefusesAnotherPort,TestCrawlAllowWithAPortStaysOnThePort,TestPortsAllowWithAPortScansThatPortOnly
+docs-concepts.scope-other-port-listed	docs/CONCEPTS.md	Each URL left out for its port is listed under `skipped`	test:cmd/azhaq:TestRunAllowWithAPortStaysOnThePort,TestUrlsOnAnotherPortAreNotResults,TestPortsAllowWithAPortScansThatPortOnly
+docs-concepts.scope-url-port	docs/CONCEPTS.md	A URL without a port has its scheme's	test:scope:TestAllowsURLUsesThePortOfTheURL
+docs-concepts.scope-name-target-ports	docs/CONCEPTS.md	A name you give as a target with no port (`-l hosts.txt`) is asked on ports 80 and 443	test:cmd/azhaq:TestRunAllowWithAPortSaysHowToNameTheTarget
+docs-concepts.scope-deny-port-dropped	docs/CONCEPTS.md	A port in `-deny` is dropped: the host is kept out on every port.	test:internal/contract:TestADeniedHostIsNotAskedEvenAsATarget;test:scope:TestRulePortStripped
+docs-concepts.scope-lookup-by-host	docs/CONCEPTS.md	Looking a name up, or asking about a subdomain, is judged by the host alone.	test:scope:TestAllowPortHoldsTheConnectionToThatPort
+docs-concepts.scope-skipped-listed	docs/CONCEPTS.md	Requests the scope refuses are listed in the summary under `skipped`	test:cmd/azhaq:TestUrlsOnAnotherPortAreNotResults;test:internal/collectors/rendercol:TestRenderHeldToScope
+docs-concepts.scope-all-outside-exit-2	docs/CONCEPTS.md	Targets that are all outside the scope exit 2	test:internal/contract:TestExitCodeFollowsTheOutcome
+docs-concepts.scope-imported-headers	docs/CONCEPTS.md	They are held to the targets.	test:cmd/azhaq:TestHostHeaderOutsideScopeIsRefusedByEveryCommand,TestHostHeaderOtherPortIsRefusedByEveryCommand,TestHostHeaderInsideScopeIsSent
+docs-concepts.scope-imported-headers-bring	docs/CONCEPTS.md	A request file, an import (`params -i`), a `-vi` line and a `-role-cmd` bring headers you did not type.	test:cmd/azhaq:TestHostHeaderOutsideScopeIsRefusedByEveryCommand,TestHostHeaderNamedOnTheCommandLineJoinsTheTargets
+docs-concepts.controls-hold-for-chrome	docs/CONCEPTS.md	They hold for every request to a target, Chrome's included.	test:internal/browser:TestScope,TestPaced,TestHeldBounded,TestKillFileStopsWhatChromeStillHasToSend;test:internal/egress:TestTargetClientStopsAtTheKillFileAndDenyPath,TestSpendStopsAtTheBudgetAndRefundGivesBack
+docs-concepts.budget-counts-everything	docs/CONCEPTS.md	Port connects and UDP datagrams count too, and so does each redirect a command follows	test:internal/portscan:TestUDPBudgetStopsTheScan;test:cmd/azhaq:TestRegressSAF09MCPPortsHonourTheBudget;test:internal/egress:TestBudgetStopsAFollowedRedirect,TestFollowedRedirectHopsAreCountedAndRecorded
+docs-concepts.budget-zero	docs/CONCEPTS.md	`0` means no cap.	test:internal/contract:TestWireIsLedgerIsSummary
+docs-concepts.pace-over-all-hosts	docs/CONCEPTS.md	`-rate` is requests per second to targets, over all hosts. Chrome's requests count too.	test:internal/egress:TestRatePacesRequests;test:internal/browser:TestPaced
+docs-concepts.kill-file-default	docs/CONCEPTS.md	`-kill-file PATH` names a file that stops all sending when it exists. The default is `DB.stop`.	test:internal/contract:TestTheKillFileStopsTheRunAndResumeGoesOn
+docs-concepts.budget-per-run	docs/CONCEPTS.md	The budget holds for each run: `azhaq roles` is one run whose budget	test:cmd/azhaq:TestRolesMaxRequestsIsTheWholeCommands,TestContractRequestBudgetResumesToTheSameMap
+docs-concepts.limits-exit-4	docs/CONCEPTS.md	Other limits end a run the same way	test:internal/contract:TestExitCodeFollowsTheOutcome
+docs-concepts.plan-before-sending	docs/CONCEPTS.md	`azhaq plan` prints what a run would send before anything goes out.	test:cmd/azhaq:TestEgressContract;test:internal/contract:TestCommandsThatReadSendNothing
+docs-concepts.kill-no-send-after	docs/CONCEPTS.md	Every request, connection and query looks for it at the moment it is sent, so none starts after the file exists.	test:internal/egress:TestEverySendLooksForTheKillFileItself,TestKillFileStopsSpendAndTake,TestPortDialerStopsAtTheKillFile,TestDNSExchangeStopsAtTheKillFile;test:internal/contract:TestTheKillFileStopsTheRunAndResumeGoesOn
+docs-concepts.kill-ends-the-wait	docs/CONCEPTS.md	That includes a request already waiting for `-rate`: its wait ends within 100 ms and it is not sent.	test:internal/fetch:TestKillEndsTheWaitForThePace;test:internal/browser:TestKillFileStopsWhatChromeStillHasToSend
+docs-concepts.kill-chrome	docs/CONCEPTS.md	Chrome is held the same way for each request it makes	test:internal/browser:TestKillFileStopsWhatChromeStillHasToSend
+docs-concepts.kill-stopped-text	docs/CONCEPTS.md	Its `stopped` says `the kill switch: kill file PATH exists	test:internal/contract:TestTheKillFileStopsTheRunAndResumeGoesOn
+docs-concepts.kill-exit-4	docs/CONCEPTS.md	The run exits 4.	test:internal/contract:TestTheKillFileStopsTheRunAndResumeGoesOn,TestExitCodeFollowsTheOutcome
+docs-concepts.kill-resume	docs/CONCEPTS.md	Remove the file, then run `azhaq resume -db DB` to continue.	test:internal/contract:TestTheKillFileStopsTheRunAndResumeGoesOn
+docs-concepts.kill-drop-in	docs/CONCEPTS.md	A drop-in command without `-db` has no default kill file.	test:internal/contract:TestTheKillFileStopsTheRunAndResumeGoesOn
+docs-concepts.kill-roles	docs/CONCEPTS.md	`azhaq roles` uses `roles.stop` in its `-dir`. It stops the runs of the roles and the history reads and replay after them, and `roles` exits 4.	test:internal/contract:TestRolesKillFileStopsTheReplayToo
+docs-concepts.signals	docs/CONCEPTS.md	Ctrl-C, `kill` and a hangup (SIGINT, SIGTERM and SIGHUP) all stop a command the same way. It exits 4, prints its summary and seals its ledger.	test:cmd/azhaq:TestRunStopsOnTermAndHupLikeCtrlC,TestStopContextEndsOnEachStopSignal
+docs-concepts.ledger-chain-limit	docs/CONCEPTS.md	The chain alone cannot tell a ledger from one with lines removed and the rest re-chained. A seal kept apart from the file can	test:cmd/azhaq:TestLedgerCommandVerifySealCatchesARechainedForgery;test:internal/ledger:TestVerifySealCatchesLinesRemovedAndRechained
+docs-concepts.ledger-not-listed	docs/CONCEPTS.md	The user's own endpoints: a `-replay-proxy`, the link of a worker to its run, and where `-seal-to` posts the seal. They are not requests about a target.	test:internal/contract:TestTheLedgerHoldsNoEndpointOfTheUser
+docs-concepts.ledger-chrome-background	docs/CONCEPTS.md	Chrome's own background services are refused, not sent.	test:internal/egress:TestChromeGuardRelaysToTheScopeOnly
+docs-concepts.ledger-drop-in	docs/CONCEPTS.md	A drop-in command without `-db` writes one only with `-ledger FILE`.	test:internal/contract:TestTheLedgerIsWhereTheUserPutsIt
+docs-concepts.ledger-role-cmd	docs/CONCEPTS.md	A `-role-cmd` command's own requests are not azhaq's and are not in the ledger or held to the scope	test:internal/contract:TestARoleCommandsOwnRequestsAreNotHeldNorRecorded
+docs-concepts.ledger-commands	docs/CONCEPTS.md	`azhaq ledger -verify FILE` checks the chain and the seal.	test:cmd/azhaq:TestLedgerCommandVerify,TestLedgerSummaryCountsByClass,TestLedgerVerifyWithAWrongSealSaysNoneOfItsSeals
+docs-concepts.ledger-page-exit-3	docs/CONCEPTS.md	has the details, including exit 3.	test:cmd/azhaq:TestLedgerVerifyWithAWrongSealSaysNoneOfItsSeals,TestLedgerCommandVerifySealCatchesARechainedForgery
+docs-concepts.sends-ports	docs/CONCEPTS.md	For a port that says nothing, azhaq sends its own protocol's request on its usual number, one `HEAD /`, a TLS handshake	test:internal/portscan:TestIdentifySilentPorts,TestSilentToHeadIsAskedOneGet,TestASilentPortCostsAtMostTwentyFiveMoreConnects
+docs-concepts.sends-signin-methods	docs/CONCEPTS.md	While signing in, it sends every method the page sends	test:internal/browser:TestSignInWrites,TestLedgerHoldsWhatTheServerGot
+docs-concepts.sends-downloads	docs/CONCEPTS.md	Every download is refused and listed. Chrome saves nothing to disk.	test:internal/browser:TestDownloadsDenied
+docs-concepts.sends-lean-page	docs/CONCEPTS.md	A page read for its requests is loaded without its images, fonts and media.	test:internal/browser:TestLeanPage
+docs-concepts.sends-get-to-every-url	docs/CONCEPTS.md	azhaq sends a GET to every URL it finds in scope.	test:engine:TestEveryFoundGetIsRequestedAndDenyPathIsListed
+docs-concepts.sends-a-get-unless-flag	docs/CONCEPTS.md	**Without a flag, every request azhaq sends to a target on purpose is a GET**	test:internal/contract:TestWireIsLedgerIsSummary,TestEveryWriteWaitsForItsFlag
+docs-concepts.sends-writes-by-name	docs/CONCEPTS.md	Writes (POST, PUT, PATCH, DELETE, a form submitted	test:internal/contract:TestEveryWriteWaitsForItsFlag;test:cmd/azhaq:TestCrawlWithoutSubmitFormsSendsNoPost,TestPlanChromeWrites;test:internal/collectors/rendercol:TestRenderWrites;test:internal/browser:TestSignInWrites
+docs-concepts.sends-writes-own-option	docs/CONCEPTS.md	or on a command whose own option is the method	test:internal/collectors/paramcol:TestBodiesNeedWrites;test:internal/fuzz:TestHeldWriteIsNeitherARequestNorAFailure
+docs-concepts.sends-description-get	docs/CONCEPTS.md	A GET operation a description names is requested like any other URL	test:engine:TestEveryFoundGetIsRequestedAndDenyPathIsListed
+docs-concepts.sends-deny-path-rule	docs/CONCEPTS.md	`-deny-path REGEX` keeps a path out of every request, Chrome's included.	test:cmd/azhaq:TestDenyPathHoldsInRunDirsAndFuzz;test:internal/fetch:TestDenyPathKeepsAPathOut;test:internal/browser:TestRefusedPageGivesItsCountBack
+docs-concepts.sends-plan-lists-kinds	docs/CONCEPTS.md	`azhaq plan` lists the kinds of request, the counts and the seeds, not the URLs a crawl will find	test:cmd/azhaq:TestPlanRequests,TestPlanSendsNameWhatIsPlanned
+docs-concepts.held-deny-path	docs/CONCEPTS.md	A path a `-deny-path` rule matches is never requested.	test:engine:TestEveryFoundGetIsRequestedAndDenyPathIsListed;test:internal/contract:TestExitCodeFollowsTheOutcome
+docs-concepts.held-sweep	docs/CONCEPTS.md	A wordlist sweep (`dirs`, `-dirs`, `fuzz`) asks every word, `/logout` included	test:internal/collectors/dirscol:TestSweepAsksEveryWordWithOrWithoutASession
+docs-concepts.held-sweep-deny-path	docs/CONCEPTS.md	A word a `-deny-path` rule matches is not sent.	test:internal/collectors/dirscol:TestSweepDenyPathHoldsAWordBackAndListsIt;test:cmd/azhaq:TestDenyPathHoldsInRunDirsAndFuzz
+docs-concepts.held-payload-urls	docs/CONCEPTS.md	A URL that carries a scanner's payload in its path or query never enters the map.	test:internal/webextract:TestJunkURLPayloads,TestJunkURLScannerArtifacts,TestJunkURLScannerProbeQueries
+docs-concepts.held-no-request-outside-scope	docs/CONCEPTS.md	No request to a target goes to a host outside the [scope](#scope), Chrome's included.	test:internal/contract:TestDocumentedPromisesAreKept;test:internal/browser:TestScope
+docs-concepts.held-passive	docs/CONCEPTS.md	`-passive` sends nothing to the targets.	test:internal/contract:TestDocumentedPromisesAreKept;test:engine:TestPassiveSkipsHTTP
+docs-concepts.held-ledger-classes	docs/CONCEPTS.md	Every request, connection and query goes in the [ledger](#the-ledger-and-its-seal), by class	test:internal/ledger:TestEntriesCarryTheirClass;test:internal/contract:TestWireIsLedgerIsSummary
+docs-concepts.held-which-hold-what	docs/CONCEPTS.md	Only the scope and `-deny-path` hold a target's; the kill file stops all three.	test:internal/egress:TestSourceClientIsRecordedAndKilledButNotScoped,TestDNSExchangeStopsAtTheKillFile,TestTargetClientStopsAtTheKillFileAndDenyPath
+docs-concepts.sends-25-connects	docs/CONCEPTS.md	That is at most 25 more connects for each port.	test:internal/portscan:TestASilentPortCostsAtMostTwentyFiveMoreConnects
+docs-concepts.sends-signin-in-ledger	docs/CONCEPTS.md	All of them are in the ledger.	test:internal/browser:TestSignInIsInTheLedger
+docs-concepts.sends-no-name-keeps-out	docs/CONCEPTS.md	It cannot know what a GET does on the server: a name says nothing reliable	test:engine:TestEveryFoundGetIsRequestedAndDenyPathIsListed
+docs-concepts.sends-mapped-not-sent	docs/CONCEPTS.md	Without it they are mapped, not sent.	test:internal/contract:TestEveryWriteWaitsForItsFlag;test:cmd/azhaq:TestCrawlWithoutSubmitFormsSendsNoPost;test:internal/collectors/rendercol:TestRenderWrites
+docs-concepts.sends-deny-path-only	docs/CONCEPTS.md	It is the only thing that does: if a URL must not be requested, say so with it.	test:engine:TestEveryFoundGetIsRequestedAndDenyPathIsListed
+docs-concepts.sends-ledger-lists-every	docs/CONCEPTS.md	The [ledger](#the-ledger-and-its-seal) lists every request that was sent.	test:internal/contract:TestWireIsLedgerIsSummary
+docs-concepts.held-scanner-test-file	docs/CONCEPTS.md	A scanner's own test file never enters either.	test:internal/webextract:TestJunkURLScannerArtifacts
+docs-concepts.held-without-scope	docs/CONCEPTS.md	Without a scope, requests stay on the site.	test:internal/contract:TestDocumentedPromisesAreKept
+docs-concepts.promise-is-the-method	docs/CONCEPTS.md	What azhaq promises is about the method, and nothing more:	note:states the scope of the three promises after it, each proved on its own row
+docs-concepts.method-not-effect	docs/CONCEPTS.md	That says what the method is, not that nothing changes.	note:a limit of what the method promise says, not a behaviour a test can hold
+docs-mcp.held-intro	docs/MCP.md	No tool argument can widen or change them	test:cmd/azhaq:TestMCPScopeHoldsAfterInitialize,TestMCPHeldRunOptionsReachTheCommands;test:internal/contract:TestMCPHoldsWhatItWasStartedWith
+docs-mcp.out-of-scope-skipped	docs/MCP.md	Targets outside the scope are skipped and listed in the summary.	test:cmd/azhaq:TestMCPProtocol,TestMCPScopeHoldsAfterInitialize
+docs-mcp.deny-path	docs/MCP.md	Paths a `-deny-path` rule matches are never requested by any tool, and are listed as skipped.	test:internal/contract:TestMCPHoldsWhatItWasStartedWith;test:engine:TestEveryFoundGetIsRequestedAndDenyPathIsListed
+docs-mcp.no-path-rule	docs/MCP.md	azhaq has no path rule of its own: `azhaq_map` asks every GET it finds in scope	test:engine:TestEveryFoundGetIsRequestedAndDenyPathIsListed;test:internal/contract:TestMCPHoldsWhatItWasStartedWith
+docs-mcp.subdomain-outside	docs/MCP.md	A subdomain lookup for a domain outside the scope is refused	test:cmd/azhaq:TestMCPProtocol,TestMCPScopeHoldsAfterInitialize
+docs-mcp.budget-spent	docs/MCP.md	Once the budget is spent, every tool that sends requests refuses.	test:cmd/azhaq:TestMCPProtocol,TestMCPConcurrentCallsShareTheBudget,TestRegressSAF09MCPPortsHonourTheBudget
+docs-mcp.chrome-sandbox	docs/MCP.md	Chrome is not run without its sandbox	test:cmd/azhaq:TestMCPHoldsChromeNoSandbox,TestChromeIsNotRunWithoutItsSandboxUnlessAllowed
+docs-mcp.resolvers-sources	docs/MCP.md	`-resolvers`, `-sources`, `-skip` and `-no-takeover` are held for every call that takes them	test:cmd/azhaq:TestMCPHeldRunOptionsReachTheCommands,TestMCPMapHeldToResolversAndNoSources,TestMCPResumeKeepsTheHeldOptions
+docs-mcp.sources-none	docs/MCP.md	With `-sources none` it asks no third party at all	test:cmd/azhaq:TestMCPMapHeldToResolversAndNoSources
+docs-mcp.flags-listed	docs/MCP.md	Every flag is described on the [`azhaq mcp` page]	test:cmd/azhaq:TestDocsNameOnlyFlagsThatExist,TestEveryCommandHasAPage
+docs-mcp.needs-a-scope	docs/MCP.md	Without `-allow` or `-scope` the server does not start (exit 2), unless `-unlocked` says so.	test:cmd/azhaq:TestMCPNeedsAScope
+docs-mcp.unlocked-ports	docs/MCP.md	Then any target a tool is given may be touched, and port scans are refused.	test:internal/contract:TestMCPUnlockedRefusesPortScansAndNoToolTakesWhatItLeavesOut
+docs-mcp.allow-port	docs/MCP.md	An `-allow HOST:PORT` holds the tools to that port of the host	test:cmd/azhaq:TestProbeAllowWithAPortRefusesAnotherPort,TestPortsAllowWithAPortScansThatPortOnly
+docs-mcp.left-out-writes	docs/MCP.md	Anything that sends a write (a method other than GET, HEAD or OPTIONS) or a body the client chooses	test:internal/contract:TestNoMCPToolThatSendsTakesWhatTheToolsLeaveOut,TestMCPUnlockedRefusesPortScansAndNoToolTakesWhatItLeavesOut
+docs-mcp.left-out-wordlists	docs/MCP.md	Path and parameter wordlists: `-dirs` and `-params`	test:internal/contract:TestNoMCPToolThatSendsTakesWhatTheToolsLeaveOut
+docs-mcp.left-out-dns-udp	docs/MCP.md	DNS brute force and permutations.	test:internal/contract:TestNoMCPToolThatSendsTakesWhatTheToolsLeaveOut
+docs-mcp.workspace-targets-kept	docs/MCP.md	It is kept only while the run it started can be resumed.	test:internal/contract:TestMCPKillFileStopsTheWorkspaceAndResumeGoesOn
+docs-mcp.kill-file	docs/MCP.md	While it exists, a call that uses the workspace sends nothing more and ends stopped	test:internal/contract:TestMCPKillFileStopsTheWorkspaceAndResumeGoesOn,TestTheKillFileStopsTheRunAndResumeGoesOn
+docs-mcp.server-ledger	docs/MCP.md	The calls that name no workspace have a ledger of the server's	test:cmd/azhaq:TestMCPStatelessToolsWriteTheServerLedger,TestMCPServerLedgerHasOneWriterAtATime;test:internal/contract:TestMCPLedgersHoldEveryRequestTheToolsSent
+docs-mcp.no-argument-turns-off	docs/MCP.md	No tool argument turns any of them off.	test:internal/contract:TestMCPHoldsWhatItWasStartedWith;test:cmd/azhaq:TestMCPArgumentTypesOverRPC
+docs-mcp.refused-jsonrpc	docs/MCP.md	These are refused with a JSON-RPC error (`-32602`), not dropped or guessed:	test:cmd/azhaq:TestMCPArgumentTypesOverRPC,TestMCPProtocol
+docs-mcp.refused-unknown	docs/MCP.md	an argument the schema does not name;	test:cmd/azhaq:TestMCPArgumentTypes
+docs-mcp.refused-wrong-type	docs/MCP.md	a value of the wrong type, such as a string where a list goes or a role that is not an object;	test:cmd/azhaq:TestMCPArgumentTypes,TestMCPStringForList
+docs-mcp.check-any-depth	docs/MCP.md	The check applies at any depth.	test:cmd/azhaq:TestMCPArgumentTypes
+docs-mcp.progress	docs/MCP.md	Calls send progress notifications when the client gives a `progressToken`	test:cmd/azhaq:TestMCPCancelAndProgress
+docs-mcp.client-cannot-add-deny-path	docs/MCP.md	A client cannot add one per call.	test:internal/contract:TestMCPHoldsWhatItWasStartedWith
+docs-mcp.default-sources	docs/MCP.md	Without them a map asks the default public resolvers and the passive third-party sources	test:cmd/azhaq:TestPlanRequests,TestPlanSourcesNoneListsNoThirdParty,TestMCPMapHeldToResolversAndNoSources
+docs-output.exit-1	docs/OUTPUT.md	The command could not do its job: a database it cannot open, or Chrome missing for `-browser`.	test:internal/contract:TestExitOneIsACommandThatCouldNotDoItsJob
+docs-output.exit-2-outside-scope	docs/OUTPUT.md	The targets are all outside the scope given	test:internal/contract:TestExitCodeFollowsTheOutcome;test:cmd/azhaq:TestPortsSweepNeedsARange
+docs-output.exit-2-message-names-them	docs/OUTPUT.md	The message names them. A range that no allow rule touches counts. `ports` and `dns` say it too.	test:cmd/azhaq:TestDNSStopsWithAnExitAndSaysWhereToGoOn
+docs-output.exit-2-header-host	docs/OUTPUT.md	A header names a host (`Host`, `X-Forwarded-Host`, `X-Host`, `X-Original-Host`) outside a scope rule.	test:cmd/azhaq:TestHostHeaderOutsideScopeIsRefusedByEveryCommand,TestHostHeaderOtherPortIsRefusedByEveryCommand
+docs-output.exit-2-chrome-sandbox	docs/OUTPUT.md	Chrome would start without its sandbox, because the system gives it none	test:cmd/azhaq:TestChromeIsNotRunWithoutItsSandboxUnlessAllowed
+docs-output.exit-2-nothing-sent	docs/OUTPUT.md	Nothing was sent.	test:internal/contract:TestExitCodeFollowsTheOutcome;test:cmd/azhaq:TestChromeIsNotRunWithoutItsSandboxUnlessAllowed
+docs-output.exit-3	docs/OUTPUT.md	Some work failed and did not get its answer	test:internal/contract:TestExitCodeFollowsTheOutcome;test:cmd/azhaq:TestSubsSummaryLineSaysWhatTheExitCodeMeans,TestCrtshFailureMakesExit3
+docs-output.exit-3-fail-on-errors	docs/OUTPUT.md	`-fail-on-errors` is accepted and has no effect of its own	test:cmd/azhaq:TestSubsSummaryLineSaysWhatTheExitCodeMeans,TestCrtshFailureMakesExit3
+docs-output.exit-4-depth-note	docs/OUTPUT.md	What `-depth` leaves unasked is a note, not a stop	test:cmd/azhaq:TestDepthNoteCountsDistinctURLs,TestDirsSweepHasNoRunDepthNote
+docs-output.exit-4-signals	docs/OUTPUT.md	All three stop a command the same way, with its summary printed and its ledger sealed.	test:cmd/azhaq:TestRunStopsOnTermAndHupLikeCtrlC
+docs-output.exit-4-servers	docs/OUTPUT.md	`gallery`, `mcp` and `watch -every` are servers, and a signal is how they end: they exit 0	test:cmd/azhaq:TestGalleryServesAndStops,TestMCPServerStopsOnSIGTERM,TestMCPStopInterruptsCallsInFlight;test:internal/contract:TestWatchEveryEndsOnASignalWithExit0
+docs-output.exit-2-header-example	docs/OUTPUT.md	For example `-H 'Host: secret.lab'` with `-deny secret.lab`	test:cmd/azhaq:TestHostHeaderOutsideScopeIsRefusedByEveryCommand,TestHostHeaderNamedOnTheCommandLineJoinsTheTargets
+docs-output.exit-2-chrome-every-command	docs/OUTPUT.md	This holds for every command that starts Chrome	test:cmd/azhaq:TestChromeIsNotRunWithoutItsSandboxUnlessAllowed,TestMCPHoldsChromeNoSandbox
+docs-output.exit-3-every-failure	docs/OUTPUT.md	Every failure makes it 3, a `fanout` or `partial` one and a source that failed while others answered included.	test:internal/contract:TestExitCodeFollowsTheOutcome;test:cmd/azhaq:TestCrtshFailureMakesExit3
+docs-output.exit-4-depth-note-made	docs/OUTPUT.md	The note is made only when a larger `-depth` has something to ask	test:cmd/azhaq:TestDepthNoteCountsDistinctURLs,TestDirsSweepHasNoRunDepthNote
+docs-output.internal-error	docs/OUTPUT.md	the rows already printed are as they were, and the numbers beside them are not to be relied on	test:cmd/azhaq:TestASummaryThatDisagreesWithItsRowsIsAnInternalError,TestASummaryThatAgreesWithItsRowsIsComplete
