@@ -751,7 +751,11 @@ func derivedSeeds(seed types.Seed) []types.Seed {
 	case types.TypeURL:
 		host = normalize.HostFromURL(seed.Key())
 		if host != "" && net.ParseIP(host) == nil {
-			out = append(out, types.Seed{Type: types.TypeHostname, Keys: map[string]string{"fqdn": host, types.FromURLKey: seed.Key()}})
+			keys := map[string]string{"fqdn": host, types.FromURLKey: seed.Key()}
+			if seed.Keys[types.GivenKey] != "" || seed.Keys[types.RedirectKey] != "" {
+				keys[types.NamedURLKey] = "1"
+			}
+			out = append(out, types.Seed{Type: types.TypeHostname, Keys: keys})
 		}
 		if ip := net.ParseIP(host); ip != nil {
 			out = append(out, types.Seed{Type: types.TypeIPAddress, Keys: map[string]string{"ip": ip.String()}})

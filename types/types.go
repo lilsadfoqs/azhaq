@@ -62,6 +62,11 @@ const RedirectKey = "redirect"
 // URL is the service the user named.
 const FromURLKey = "from_url"
 
+// NamedURLKey on a hostname derived from a URL says that URL is a page the
+// user named or the answer to one (a redirect's destination): it is that
+// target's own answer, so the name is not also tried on both schemes.
+const NamedURLKey = "named_url"
+
 // UnnamedPortKey marks a URL hint made from an open port a scan did not name
 // as HTTP: the web probe asks whether it is one, and a port that closes or
 // resets at once on the request has answered no.
