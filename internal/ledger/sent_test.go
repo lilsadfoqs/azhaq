@@ -130,3 +130,40 @@ func TestAnAnsweredRequestHasOneLine(t *testing.T) {
 		t.Fatalf("given back %d times", unsent.Load())
 	}
 }
+
+// A server that takes the connection and closes it at once (a port that is
+// not HTTP) was contacted: the request has its line, though it may never have
+// been written.
+func TestARequestToAServerThatDropsTheConnectionHasALine(t *testing.T) {
+	l, path := open(t)
+	Use(l)
+	defer Use(nil)
+	unsent := countUnsent(t)
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	go func() {
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			c.Close()
+		}
+	}()
+	c := &http.Client{Transport: Wrap(&http.Transport{DisableKeepAlives: true})}
+	for i := 0; i < 20; i++ {
+		if resp, err := c.Get("http://" + ln.Addr().String() + "/"); err == nil {
+			resp.Body.Close()
+			t.Fatal("a server that closed the connection answered")
+		}
+	}
+	if got := linesOf(t, l, path); len(got) != 20 {
+		t.Fatalf("%d lines for 20 requests to a server that dropped each connection", len(got))
+	}
+	if unsent.Load() != 0 {
+		t.Fatalf("given back %d times", unsent.Load())
+	}
+}

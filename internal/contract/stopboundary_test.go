@@ -2,6 +2,7 @@ package contract
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -86,13 +87,13 @@ func TestStopBoundaryTCP(t *testing.T) {
 			var ports []string
 			var addrs []string
 			for i := 0; i < 400; i++ {
-				ln := listenCounted(t, wire, nil)
+				ln := listenCountedOn(t, wire, stopHost)
 				addrs = append(addrs, ln.Addr)
 				ports = append(ports, portOf(ln.Addr))
 			}
 			go killAfterLines(l.Dir, "l.jsonl", "k.stop", c.after)
-			r := RunRaw(t, l.Dir, nil, "ports", "-host", "127.0.0.1", "-p", strings.Join(ports, ","), "-detect", "none",
-				"-rate", c.rate, "-allow", "127.0.0.1", "-ledger", "l.jsonl", "-kill-file", "k.stop", "-json")
+			r := RunRaw(t, l.Dir, nil, "ports", "-host", stopHost, "-p", strings.Join(ports, ","), "-detect", "none",
+				"-rate", c.rate, "-allow", stopHost, "-ledger", "l.jsonl", "-kill-file", "k.stop", "-json")
 			if !r.Has {
 				t.Fatalf("no summary (exit %d)\n%s", r.Code, r.Stderr)
 			}
@@ -124,4 +125,30 @@ func killAfterLines(dir, ledger, kill string, n int) {
 			return
 		}
 	}
+}
+
+// stopHost is a loopback address of its own: the listeners of the scan are not
+// asked by anything else that scans 127.0.0.1 on the machine meanwhile.
+const stopHost = "127.77.31.9"
+
+// listenCountedOn is listenCounted on the address host; it closes each connection at once.
+func listenCountedOn(t testing.TB, wire *Wire, host string) *Counted {
+	t.Helper()
+	ln, err := net.Listen("tcp", host+":0")
+	if err != nil {
+		t.Skipf("no TCP on %s: %v", host, err)
+	}
+	c := &Counted{Addr: ln.Addr().String(), Wire: wire, ln: ln}
+	go func() {
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			wire.addTCP(c.Addr)
+			conn.Close()
+		}
+	}()
+	t.Cleanup(func() { _ = ln.Close() })
+	return c
 }
