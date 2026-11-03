@@ -34,6 +34,7 @@ func (s *Scanner) Up(ctx context.Context, host, ip string) (bool, error) {
 			}
 			select {
 			case <-ctx.Done():
+				s.give() // counted, never connected
 				wg.Wait()
 				return false, ctx.Err()
 			case s.conns <- struct{}{}:

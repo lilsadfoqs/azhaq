@@ -322,7 +322,7 @@ Tasks the budget stopped before run last, one at a time and cheapest first, by t
 `internal/ledger` keeps a tamper-evident record of what a run sends: to targets, to third-party sources and to resolvers. Each entry is one JSON line with these fields: `seq`, `time`, `class`, `kind`, `method`, `target`, `host`, `rule`, `collector`, `prev` and `hash`. A line without a `class` is from a ledger written before classes, and is a target's; `omitempty` keeps its hash the same, so those ledgers still verify.
 
 - `hash` is the sha256 of `prev` and the entry's JSON without `hash`. An edited, removed or reordered line breaks the chain from there on.
-- A line is flushed before the request goes, so a crash loses nothing that was sent.
+- A line is made when the request leaves (what that means for each kind is in [OUTPUT](OUTPUT.md#what-a-line-means)) and flushed before `Record` returns, so a crash loses nothing that was sent. A request, connect or datagram that never left has no line and is given back to the budget (`ledger.Unsent`, `egress.Refund`), so the summary counts what the ledger lists.
 - `Open` continues the chain of a file that exists. `azhaq resume` and later runs into the workspace append to the same file. `azhaq roles` opens one ledger in its `-dir` for all its runs.
 - `Match` names the scope rule that allows each host, from the run's `-allow` and `-scope`.
 

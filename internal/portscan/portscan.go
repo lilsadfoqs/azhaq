@@ -149,6 +149,9 @@ type Scanner struct {
 	// included; an error stops the scan and is returned (the run's
 	// request budget is spent).
 	Take func() error
+	// Give, when set, gives back what Take counted for a connect that was
+	// not made after all (a stop came between the count and the connect).
+	Give func()
 	// Opened, when set, hears of each port that accepted a connection, before
 	// the port is asked what it is.
 	Opened func(ip string, port int)
@@ -513,16 +516,22 @@ func (s *Scanner) pass(ctx context.Context, host, ip string, ports []int, found 
 				break
 			}
 		}
+		got := true
 		select {
 		case s.conns <- struct{}{}:
 		default:
 			launch() // never wait for a worker while holding ones not yet started
 			select {
 			case <-ctx.Done():
+				got = false
 			case s.conns <- struct{}{}:
 			}
 		}
 		if ctx.Err() != nil {
+			if got {
+				<-s.conns
+			}
+			s.give() // counted, never connected
 			break
 		}
 		mu.Lock()
@@ -659,11 +668,17 @@ func (s *Scanner) secondLook(ctx context.Context, host, ip string, open []Open) 
 				continue
 			}
 		}
+		got := true
 		select {
 		case <-ctx.Done():
+			got = false
 		case s.conns <- struct{}{}:
 		}
 		if ctx.Err() != nil {
+			if got {
+				<-s.conns
+			}
+			s.give()
 			continue
 		}
 		wg.Add(1)
@@ -814,4 +829,11 @@ func (o Open) Web() bool {
 		return true // tls: a handshake answered, HTTP inside it may be slow
 	}
 	return false
+}
+
+// give gives back one connect Take counted and the scan did not make.
+func (s *Scanner) give() {
+	if s.Take != nil && s.Give != nil {
+		s.Give()
+	}
 }
