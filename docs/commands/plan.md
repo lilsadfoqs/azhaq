@@ -242,6 +242,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 | `-sr` | bool |  | also write each answer a target gave, headers and body as read, to the -srd directory as DIR/HOST/SHA1.txt with an index.txt (katana's -sr); query -fields response_file says where a row's is |
 | `-srd` | string | `azhaq_response` | directory for -sr |
 | `-no-catchall` | bool |  | leave out URLs that answer with the page every unknown path gets (client-side routes of a single-page app) from the rows printed |
+| `-all-rows` | bool |  | list every row, as run printed before: by default the rows that answer as the control request for a path that cannot exist does, the 404s, the assets no request asked for and the hints only scripts name are counted in one line of their class each (-json lists every row with its fold class) |
 | `-fail-on-errors` | bool |  | accepted, and the default: every failure exits 3, a fan-out one and a source that failed while others answered included; no flag turns a failure into exit 0 |
 | `-fail-on-capped` | bool |  | exit 4 also when the run hit -depth with hints left |
 

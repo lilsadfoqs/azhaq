@@ -94,7 +94,7 @@ The map has one row per entity, best first: the target's own pages and APIs, the
 
 The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.md#the-summary) and [exit codes](../OUTPUT.md#exit-codes). Two things are specific to `run`:
 
-- The summary's `counts` are disjoint and add up to `stored`, the map rows in the database: `pages`, `api`, `auth`, `forbidden`, `catchall` (URLs that answered with the page every unknown path gets), `skipped` (URLs named and not asked: a `-deny-path` rule, or a catch-all origin, see [Catch-all origins](#catch-all-origins)), `client routes`, `websockets`, `scripts`, `assets`, `source maps` and `manifests` for URLs, `hostnames`, `dead hostnames` and `wildcard hostnames` for names, `ports`, and `open|filtered ports` for the UDP ports that neither answered nor were refused, never counted as open. `results` is smaller than `stored` by the rows folded into templated rows and dead or wildcard name rows, and the text summary says how many. Each key is a `query` filter: see [run counts](../OUTPUT.md#run-counts). A port is one row for each host, port and protocol, however many scans listed it.
+- The summary's `counts` are disjoint and add up to `stored`, the map rows in the database: `pages`, `api`, `auth`, `forbidden`, `catchall` (URLs that answered with the page every unknown path gets), `skipped` (URLs named and not asked: a `-deny-path` rule, or a catch-all origin, see [Catch-all origins](#catch-all-origins)), `client routes`, `websockets`, `scripts`, `assets`, `source maps` and `manifests` for URLs, `hostnames`, `dead hostnames` and `wildcard hostnames` for names, `ports`, and `open|filtered ports` for the UDP ports that neither answered nor were refused, never counted as open. `results` is smaller than `stored` by the rows folded into templated rows, dead or wildcard name rows and, in the text view, the lines of the [folded classes](#folded-rows), and the text summary says how many. Each key is a `query` filter: see [run counts](../OUTPUT.md#run-counts). A port is one row for each host, port and protocol, however many scans listed it.
 - Under `-max-requests`, a port sweep leaves the requests that mapping each web service it found open needs (about N per service, as `plan` says), so a budget smaller than the sweep still maps the services found; the summary's notes say how the budget went by stage (`request budget N, spent by stage: ports …`).
 - A target given with no port (a name or an address) is asked on 443, then 80, or on `-web-ports`. So is the name of a URL given with its own port, and a name found on the way. A guess nothing listens on, refused, is a note (`no web service on 443 or 80`), not a failure, and so is a refused connection on 443 to read a name's certificate; a `-web-ports` port that refuses is one, and so is a URL given that refuses. A refused URL is one failed target: the other targets of the run are mapped as usual and the exit code is 3.
 - A port the scan found open that answers the HTTP stage with something other than HTTP (an FTP or SSH banner) is a service, not a failed target: it keeps its `Port` row and the run names it in a note (`open, but not a web service`). Its plain-HTTP request is its only one when the reply is not TLS either. A port the scan found open and did not name as HTTP that closes or resets at once on the request is an answer too, as `tcpwrapped` is in `ports`: no failure, the same note, exit 0. A timeout, a refused connect after the port was seen open, a TLS error, and a port named `http` or `https` that resets or closes without answering are still failures.
@@ -108,6 +108,23 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 - A GraphQL endpoint's operations are listed by their signatures: the first 50. The rest are in `-json` and the exports.
 - A row that is not `answered` ends with its evidence: `[browser]`, `[described]`, `[called]`, `[linked]`, `[archived]`, `[guessed]` or `[given]`.
 - A row that has an `answer` shows `500 without input` after its proof.
+
+### Folded rows
+
+The text map lists the rows that answer for themselves and counts the others in one line of their class each. A row folds only for what the run's own requests measured; no name decides it:
+
+| Class | The rows | The line says |
+| --- | --- | --- |
+| `catchall` | URLs whose answer is the one the origin gives a path that cannot exist (`catchall` rows), and the URLs not asked because the origin had answered other paths so. | The origin, how many URLs, and the control: the request for a path that cannot exist and its answer (`GET /xq3 → 200 text/html, 3748 bytes, "OWASP Juice Shop"`). One line for each origin. |
+| `not-found` | URLs the server answered with 404 or 410, and routes only scripts name whose GET got one. | How many, and the templates they fall into (`/api/Feedbacks/{n} ×12`), the five largest. |
+| `beyond-depth` | Images, fonts, media, source maps and manifests a page holds that no request asked for (past `-depth`, a limit, or fetched by no step). | How many. |
+| `unrequested` | Hints only scripts name, with no call, method, form, description or page link, that nothing requested. | How many. |
+
+A route a script calls with a method, a description lists, a page links or a request answered with anything else stays listed, as does every row under `-deny-path`: those are leads or the effect of a setting you chose. Each line counts as one result, and `results + folded + left_out = stored` as before.
+
+- `-all-rows` prints one line for each row, as `run` did.
+- `-json` prints every row, each folded one with its class as `fold`. The summary's `folds` has one entry for each line of the text view: `class`, `count`, and for a catch-all origin its `origin` and the `controls` it was compared with.
+- Folded rows stay in the workspace: `query` lists them, `-all-rows` and `-json` print them.
 - Parameter and body names worth trying first are on a `watch:` line under the row.
 - A folded template shows its count: `(30 urls, 27 not asked)`.
 - Client routes and websockets come after the server's routes of the same rank. Their proof is `guard=…`, `protocol=…` and `namespace=…`.
@@ -164,7 +181,7 @@ An origin that answers every path with the same page (a single-page app's shell)
 - Their rows stay in the map with coverage `skipped`. The summary names how many and the origin (`http://app: 600 URLs that scripts name were not asked, because it had answered paths with the one page every unknown path gets`), the `skipped` list has one line for the origin, and `counts` has `skipped` for them (and `catchall` for the answers), each row counted once.
 - `-catchall-after N` sets the number (0 asks every path). `crawl` asks every path, as katana does, and lists catch-all answers.
 - A held path that is a real page of its own in a directory the catch-all covers would have answered a different page: this is an inference from the controls, not a request. Ask it with `-catchall-after 0`, or by hand.
-- `-no-catchall` leaves the rows that answered with the catch-all page, and those not asked for that reason, out of the rows printed and out of `results`. `stored` and `counts` still hold them, and `left_out` says how many, so what `run` prints is what `results` counts: `results + folded + left_out = stored`.
+- The text view counts the catch-all rows in one line, with the control ([Folded rows](#folded-rows)); `-all-rows` lists them. `-no-catchall` leaves the rows that answered with the catch-all page, and those not asked for that reason, out of the rows printed and out of `results`. `stored` and `counts` still hold them, and `left_out` says how many, so what `run` prints is what `results` counts: `results + folded + left_out = stored`.
 
 ### Evidence
 
@@ -468,6 +485,7 @@ azhaq run -url https://app.example.com/ -ports top-100 -advisories -advisories-c
 | `-sr` | bool |  | also write each answer a target gave, headers and body as read, to the -srd directory as DIR/HOST/SHA1.txt with an index.txt (katana's -sr); query -fields response_file says where a row's is |
 | `-srd` | string | `azhaq_response` | directory for -sr |
 | `-no-catchall` | bool |  | leave out URLs that answer with the page every unknown path gets (client-side routes of a single-page app) from the rows printed |
+| `-all-rows` | bool |  | list every row, as run printed before: by default the rows that answer as the control request for a path that cannot exist does, the 404s, the assets no request asked for and the hints only scripts name are counted in one line of their class each (-json lists every row with its fold class) |
 | `-fail-on-errors` | bool |  | accepted, and the default: every failure exits 3, a fan-out one and a source that failed while others answered included; no flag turns a failure into exit 0 |
 | `-fail-on-capped` | bool |  | exit 4 also when the run hit -depth with hints left |
 

@@ -424,3 +424,38 @@ func TestCatchAllRuleIsRestored(t *testing.T) {
 		t.Error("the two answers the stopped run had, and the third, do not make three")
 	}
 }
+
+// A catch-all answer comes with the control it matched: the request for a
+// path that cannot exist, and what that got. A real page has none.
+func TestCatchAllControlNamesTheRequestItMatched(t *testing.T) {
+	Reset()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/real" {
+			_, _ = w.Write([]byte("<title>real</title>own page"))
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte("<title>Shop</title><app-root></app-root>"))
+	}))
+	t.Cleanup(srv.Close)
+	ask := func(p string) (bool, *Control) {
+		res, _, err := Do(context.Background(), srv.Client(), srv.URL+p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return CatchAllControl(context.Background(), srv.Client(), res)
+	}
+	shell, ctl := ask("/about")
+	if !shell || ctl == nil {
+		t.Fatalf("/about: shell %v, control %v", shell, ctl)
+	}
+	if !strings.HasPrefix(ctl.URL, srv.URL+"/") || !strings.HasSuffix(ctl.URL, ProbeToken()) || ctl.Status != 200 || ctl.Type != "text/html" || ctl.Title != "Shop" || ctl.Size != len("<title>Shop</title><app-root></app-root>") {
+		t.Errorf("control %+v", ctl)
+	}
+	if want := "GET /" + ProbeToken() + " → 200 text/html, 40 bytes, \"Shop\""; ctl.String() != want {
+		t.Errorf("control reads %q, want %q", ctl.String(), want)
+	}
+	if shell, ctl = ask("/real"); shell || ctl != nil {
+		t.Errorf("/real: shell %v, control %v", shell, ctl)
+	}
+}

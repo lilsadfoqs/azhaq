@@ -79,7 +79,7 @@ func TestCrawlListsWhatPagesLink(t *testing.T) {
 		t.Errorf("the -json summary does not say how many listed URLs were not requested: %s", errOut)
 	}
 	// At -d 2 the crawl requests them: nothing is left to say.
-	out, errOut = crawlOut(t, srv, "-d", "2", "-silent")
+	out, errOut = crawlOut(t, srv, "-d", "2", "-silent", "-all-rows") // the product pages answer 404: folded by default
 	if !strings.Contains(out, p17+"\n") {
 		t.Errorf("-d 2 does not list the requested pages:\n%s", out)
 	}
@@ -100,7 +100,7 @@ func TestCrawlListsLinkOfDenyPath(t *testing.T) {
 		_, _ = w.Write([]byte(`page`))
 	}))
 	defer srv.Close()
-	out, errOut := crawlOut(t, srv, "-deny-path", "^/logout", "-silent")
+	out, errOut := crawlOut(t, srv, "-deny-path", "^/logout", "-silent", "-all-rows") // every path answers the one page: folded by default
 	if !strings.Contains(out, srv.URL+"/logout\n") || !strings.Contains(out, srv.URL+"/home\n") {
 		t.Errorf("the list lacks the link a rule kept out of the requests:\n%s", out)
 	}

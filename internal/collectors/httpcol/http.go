@@ -742,10 +742,17 @@ func (c *Collector) fetchFirst(ctx context.Context, raw string, rq *fetch.Req, f
 	dres.Body = data
 	row := describe(reqURL, final, dres, title, c.NoTech, c.Spec != nil)
 	bare := first && res.Status == http.StatusBadRequest
-	catchAll := !c.Probe && !bare && fetch.CatchAll(ctx, c.Client, res)
+	var control *fetch.Control
+	catchAll := false
+	if !c.Probe && !bare {
+		catchAll, control = fetch.CatchAllControl(ctx, c.Client, res)
+	}
 	if catchAll {
 		// Same answer as a path that does not exist: not a page of its own.
 		row["catchall"] = true
+		if control != nil {
+			row["control"] = control // the request it was compared with, for the map's folded groups
+		}
 	}
 	if !c.NoFavicon && !catchAll && !bare && (isRoot(reqURL) || isRoot(final)) {
 		if hash, from, icon := c.favicon(ctx, final, res); hash != "" {
