@@ -69,7 +69,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 - The summary has a `sources` block with a row for each archive. It reads as the one of `subs` ([The sources block](subs.md#the-sources-block)), with `urls` where `subs` has `names`.
 - The summary's top-level `requests` is what reached the targets, as in every command. `urls` sends none, so it is 0, unless `-live` asks the live site: then the requests it sent are counted. The archives are third parties: their requests, retries included, are `requests` in each archive row and in the `sources` block, and a note adds them up.
 - It has `junk`, the URLs left out and why: see [Junk](#junk).
-- The summary's `sources` block says, for each archive, what it was asked (`queries`), what it gave (`urls`), whether it failed (`failed_sources`, with the archive's words, such as `127.0.0.1:8080 answered 504`) and whether it gave URLs before failing (`partial_sources`). A failed archive leaves a partial set: the URLs of the others are listed, the exit code is 3, and a note says `the set is partial: wayback failed, so the URLs only they hold are missing and those of the others are listed`. It does not need stderr to be read.
+- The summary's `sources` block says, for each archive, what it was asked (`queries`), what it gave (`urls`), whether it failed (`failed_sources`, with the archive's words, such as `127.0.0.1:8080 answered 504`) and whether it gave URLs before failing (`partial_sources`). A failed archive leaves a partial set: the URLs of the others are listed, the failure is counted in `failures` (the exit code is 0 while another archive answered, 3 with `-strict-exit` or when none did), and a note says `the set is partial: wayback failed, so the URLs only they hold are missing and those of the others are listed`. It does not need stderr to be read.
 
 ## Details
 
@@ -188,7 +188,8 @@ The classes, in the order of the rules above: `scanner-payload`, `scanner-probe`
 | `-sort` | bool |  | print once every archive has answered, sorted (the default on a terminal) |
 | `-stream` | bool |  | print each URL as it arrives, unsorted (the default when stdout is not a terminal) |
 | `-fail-on-capped` | bool |  | exit 4 when an archive stopped at its page cap with more to read |
-| `-fail-on-errors` | bool |  | accepted, and the default: every failure exits 3, a fan-out one and a source that failed while others answered included; no flag turns a failure into exit 0 |
+| `-fail-on-errors` | bool |  | the same as -strict-exit |
+| `-strict-exit` | bool |  | exit 3 for any failure, a target among many included (the rule before 0.15); without it a run that did its job exits 0 and its summary counts and lists the failures |
 
 <details>
 <summary>Flags familiar from gau and other names (4)</summary>

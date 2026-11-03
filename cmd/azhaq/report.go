@@ -18,6 +18,7 @@ import (
 	"github.com/lilsadfoqs/azhaq/internal/collectors/subcol"
 	"github.com/lilsadfoqs/azhaq/internal/egress"
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
+	"github.com/lilsadfoqs/azhaq/internal/ledger"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"github.com/lilsadfoqs/azhaq/internal/takeover"
 	"github.com/lilsadfoqs/azhaq/internal/verify"
@@ -45,6 +46,7 @@ type report struct {
 	DB          string             `json:"db,omitempty"`
 	RunID       string             `json:"run_id,omitempty"`
 	Unreachable []string           `json:"unreachable,omitempty"`
+	Failures    int                `json:"failures"` // the sum of count over failed, plus unreachable targets it does not name: see decide
 	Failed      []engine.Failure   `json:"failed,omitempty"`
 	Skipped     []engine.Skip      `json:"skipped,omitempty"`
 	Takeover    []takeoverRow      `json:"takeover,omitempty"`    // names another party may take over
@@ -57,6 +59,9 @@ type report struct {
 	Notes       []string           `json:"notes,omitempty"`
 	Next        []string           `json:"next,omitempty"`
 	Error       string             `json:"error,omitempty"` // an internal error: the summary disagrees with its rows (audit.go); exit 1
+	// Cost is what the run was estimated to send before it started, by
+	// stage, beside what each stage sent (see cost.go).
+	Cost *costReport `json:"cost,omitempty"`
 	// Advisories are the -advisories leads: one per stored advisory row,
 	// each with its advisory id and URL, its match label and, when a
 	// confirmation ran, its confidence. They are leads, not map rows:
@@ -70,7 +75,9 @@ type report struct {
 	// without them, and the notes say how their counts are derived.
 	Verify []verify.Result `json:"verify,omitempty"`
 
-	dnsFrom int64 // egress.DNSTotal when the command began: dns_queries are its own
+	estimate  *costEstimate             // what the command was estimated to send, for Cost
+	dnsFrom   int64                     // egress.DNSTotal when the command began: dns_queries are its own
+	spentFrom map[ledger.SpentKey]int64 // ledger.Account when it began: the cost is what it sent since
 
 	what string // the unit of Results: "names", "web services"
 
@@ -84,6 +91,9 @@ type report struct {
 	audited   bool
 
 	warned bool // a note says the results mislead (a role's dead session): exit 3
+	// failedRows, when set, is `failures`: probe counts its rows without an answer.
+	failedRows *int
+	targets    targetTally // the targets the run was given and how many of them got no answer (exit.go)
 
 	noCatchAll bool // run -no-catchall: its rows of the catch-all page are left out of results
 	foldView   bool // run's text view: the folded rows are counted in a line of their class each, and results counts those lines
@@ -94,10 +104,13 @@ type report struct {
 	hints              []string
 	late               []func() string
 	hintsOff, hintsVrb bool
+
+	hushCost  bool     // an embedded run: the command that owns it says the cost
+	refusedBy []string // run: the collectors whose work the request budget refused, first first
 }
 
 func newReport(command string) *report {
-	return &report{Type: "summary", Command: command, Version: version, start: time.Now(), dnsFrom: egress.DNSTotal()}
+	return &report{Type: "summary", Command: command, Version: version, start: time.Now(), dnsFrom: egress.DNSTotal(), spentFrom: ledger.Account()}
 }
 
 // settle fills the exit code and seconds.
@@ -107,6 +120,7 @@ func (r *report) settle() {
 	}
 	r.Seconds = float64(time.Since(r.start).Milliseconds()) / 1000
 	r.DNSQueries = egress.DNSTotal() - r.dnsFrom
+	r.Failures = r.failureCount()
 	r.audit()
 	switch {
 	case len(r.problems) > 0:
@@ -114,10 +128,8 @@ func (r *report) settle() {
 		r.Exit = exitError
 	case r.Stopped != "":
 		r.Exit = exitLimit
-	case len(r.Unreachable) > 0 || len(r.Failed) > 0 || r.Degraded || r.warned:
-		r.Exit = exitPartial
 	default:
-		r.Exit = exitOK
+		r.Exit = r.decide()
 	}
 	r.Complete = r.Exit == exitOK
 }
@@ -143,7 +155,7 @@ func (r *report) finish(asJSON, silent bool) error {
 	case asJSON:
 		raw, _ := json.Marshal(r)
 		fmt.Fprintf(os.Stderr, "%s\n", raw)
-	case silent && r.Exit == exitOK && (r.Sources == nil || r.Sources.failures() == 0):
+	case silent && r.Exit == exitOK && r.Failures == 0 && (r.Sources == nil || r.Sources.failures() == 0):
 		// A source that failed is something that failed: it is said under -silent too.
 		// So is a takeover candidate: a finding, not a note.
 		for _, t := range r.Takeover {
@@ -270,6 +282,11 @@ func (r *report) print(w io.Writer) {
 	for _, n := range r.Notes {
 		fmt.Fprintf(w, "  note: %s\n", n)
 	}
+	if r.Cost != nil && !r.hushCost && (r.Command == "run" || r.Command == "roles") {
+		for _, l := range r.Cost.lines() {
+			fmt.Fprintf(w, "  cost: %s\n", l)
+		}
+	}
 	if r.Stopped != "" {
 		line := "  stopped: " + r.Stopped
 		if r.Resume != "" {
@@ -291,12 +308,12 @@ func (r *report) print(w io.Writer) {
 		if r.Error != "" {
 			fmt.Fprintf(w, "  ERROR: %s\n", r.Error)
 		}
-	case exitPartial:
-		if len(r.Unreachable) == 0 && len(r.Failed) == 0 && !r.Degraded {
-			fmt.Fprintf(w, "  exit 3: finished, but a note above says what to check first\n")
-			break
+	case exitOK:
+		if r.hasFailure() {
+			fmt.Fprintf(w, "  exit 0: %s; the results are usable (-strict-exit makes any failure exit 3)\n", r.doneWith())
 		}
-		fmt.Fprintf(w, "  exit 3: finished, but what is marked ! failed; the results are usable\n")
+	case exitPartial:
+		fmt.Fprintf(w, "  exit 3: %s\n", r.failedBecause())
 	case exitLimit:
 		fmt.Fprintf(w, "  exit 4: stopped by a limit with work left\n")
 	}
@@ -362,6 +379,7 @@ func fillReport(rep *report, path string, seeds []types.Seed, ents []types.Entit
 		rep.Notes = append(rep.Notes, fmt.Sprintf("-retry-failed: %d failed targets of run %s asked again, %d still fail (azhaq query -db %s -failed -run %s lists them)", n, retriedRun, still, path, retriedRun))
 	}
 	rep.Unreachable = engine.Unreachable(seeds, ents, obs)
+	rep.targets = tallySeeds(rep.Command, seeds, rep.Unreachable, rep.Failed)
 	rep.Notes = append(rep.Notes, engine.Notes(obs)...)
 	rep.Notes = append(rep.Notes, portcol.Notes(obs)...)
 	if rep.Command == "run" {

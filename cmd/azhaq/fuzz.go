@@ -23,6 +23,7 @@ import (
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
 	"github.com/lilsadfoqs/azhaq/internal/fuzz"
 	"github.com/lilsadfoqs/azhaq/internal/neterr"
+	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"github.com/lilsadfoqs/azhaq/scope"
 	"github.com/lilsadfoqs/azhaq/store"
 )
@@ -570,9 +571,11 @@ func cmdFuzz(args []string) error {
 	rep.Results = st.Matches
 	rep.Requests = egress.Sent()
 	rep.Unreachable = st.Down
+	rep.warned = rep.warned || len(st.Down) > 0 // the run ended early on a target that stopped answering: not whole
 	if st.Errors > 0 {
-		rep.Failed = append(rep.Failed, engine.Failure{Collector: "azhaq-fuzz", Error: "request failed", Retryable: true, Count: st.Errors})
+		rep.Failed = append(rep.Failed, engine.Failure{Collector: "azhaq-fuzz", Error: "request failed", Retryable: true, Count: st.Errors, Targets: []string{normalize.HostFromURL(tmpl.URL)}})
 	}
+	rep.units(st.Answered+st.Errors, st.Errors) // every input asked: a run in which none was answered did not do its job
 	if st.OutOfScope > 0 {
 		rep.Skipped = append(rep.Skipped, engine.Skip{Target: fmt.Sprintf("%d inputs", st.OutOfScope), Reason: "their host is outside the scope"})
 	}

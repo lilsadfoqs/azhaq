@@ -19,6 +19,7 @@ import (
 	"github.com/lilsadfoqs/azhaq/internal/egress"
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
 	"github.com/lilsadfoqs/azhaq/internal/lazyre"
+	"github.com/lilsadfoqs/azhaq/internal/ledger"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"github.com/lilsadfoqs/azhaq/internal/webextract"
 )
@@ -314,7 +315,9 @@ func replayWritesPaused(who map[string]identity, roles []role, reqs []writeReq, 
 			return answer{}, false
 		}
 		sent++
+		endStage := ledger.SetStage(stageVerify)
 		a, err := readAs(ctx, &client, r, u)
+		endStage()
 		if err == nil {
 			latest[r.name+"\x00"+u] = a
 		} else if noAnswer(err) && cur != nil {

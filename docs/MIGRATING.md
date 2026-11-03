@@ -27,7 +27,7 @@ This page lists, tool by tool:
 
 - **Flags.** A flag may have one dash or two: `-silent` or `--silent`. A flag a command does not have stops it with exit 2 before anything is sent, and the error names the closest flags. `azhaq help COMMAND` lists azhaq's own flags by task; `azhaq help COMMAND all` (or `-h all`) adds the names kept for the other tools' command lines, the other names of a flag and the rarely needed ones, all of which work. `azhaq help -json` lists every flag for a program, marking those `-h` leaves out.
 - **Output.** Results go to stdout, one per line, as the tool prints them. A summary goes to stderr: what failed, what was not requested, and which limit stopped the run. With `-json` the results are JSON lines and the summary is one JSON object. See [OUTPUT.md](OUTPUT.md).
-- **Exit codes.** `0` complete, `1` error, `2` usage, `3` finished with failures, `4` stopped by a limit or the kill file. They are the same for every command. The tools above exit 0 after most of these, so a script that checks `$?` sees more than it did. See [OUTPUT.md](OUTPUT.md#exit-codes).
+- **Exit codes.** `0` complete, `1` error, `2` usage, `3` the run's own job failed or is incomplete (nothing it was given answered, a note says the results are short), `4` stopped by a limit or the kill file. They are the same for every command. A run that did its job exits 0 with its failures counted in `failures`, as the tools above do; `-strict-exit` exits 3 for any failure. See [OUTPUT.md](OUTPUT.md#exit-codes).
 - **Scope and limits.** Nothing is sent to a host outside the scope. See [Concepts](CONCEPTS.md). The flags differ by command:
   - `probe`, `crawl`, `ports`, `dirs`, `fuzz`, `params` and `shots` take `-allow`, `-deny`, `-scope`, `-max-requests`, `-kill-file`, `-ledger` and `-rate`. `-scope` takes a program's scope. Except `ports`, they also take `-deny-path REGEX`, which keeps paths out: it is where the out-of-scope regexes of katana and feroxbuster (its dont-scan list) go when a URL must never be requested. azhaq decides nothing about a path by itself, so it has no default rule.
   - `dns` takes the three scope flags.
@@ -72,7 +72,7 @@ Behaviour, fields and edge cases: [`azhaq subs`](commands/subs.md).
 - crt.sh is asked as subfinder asks it: its public PostgreSQL (`host=crt.sh user=guest dbname=certwatch`, port 5432) first, then the JSON API when the database fails or has no names. azhaq adds subfinder's `LIMIT 10000` to the query too, which keeps it fast, and when exactly 10000 rows come back it asks again without the limit (then the JSON API) for the rest, so it lists at least what subfinder lists, and a note says which path gave the names. A SOCKS5 `-proxy` carries the database connection too. An HTTP proxy cannot, so crt.sh is then asked in the JSON API only, and a note says so.
 - Sources outside the default set stay out. `-all-sources` runs them.
 - A source that needs a key and has none is listed as `needs a key`, not skipped without a word.
-- A run in which every source failed is `degraded` and exits 3, not 0 with an empty list. The summary names each source that failed.
+- A run in which every source failed is `degraded` and exits 3, not 0 with an empty list. One in which some answered exits 0, and the summary names the sources that failed (`-strict-exit` makes it 3). The summary names each source that failed.
 - azhaq keeps the names it found for a domain and checks them again in the next run. `-no-history` turns this off. See [Name history](commands/subs.md#name-history).
 - With `-live`, a name that no longer resolves drops out.
 - Without `-live`, a stored name that no source gave this run is listed with `"unverified": true`. subdomain.center's guesses, which subfinder prints, are held back and counted (`guesses held back`): `-guesses` prints them, flagged the same way, and `-live` checks them.
@@ -138,7 +138,7 @@ Behaviour, fields and edge cases: [`azhaq dns`](commands/dns.md).
 - **`-rl` and `-dns-rate`.** `-rl` counts names, as dnsx's does. `-dns-rate N` is a second pace: N queries a second to each resolver. With 6 resolvers that is up to 6 times N.
 - **Pace, as observed.** With dnsx 1.x, `-rl` did not hold back the queries of `-d` with `-w` in one test run: 20 names at `-rl 1` took 0.46 s, and 40 at `-rl 10` took 0.64 s. azhaq's `-dns-rate` paced them: 20 names at 1 a second took 19 s. That is what was measured, not a statement about every dnsx version or input.
 - **A polite run.** Give both `-rl 5` and `-t 5`. Add a `-resolvers` list of one address if you want 5 queries a second in all.
-- **`-retry` and failures.** `-retry` is 3 where dnsx's is 2. A name that no resolver answers is a failure in the summary, and the exit code is 3.
+- **`-retry` and failures.** `-retry` is 3 where dnsx's is 2. A name that no resolver answers is a failure in the summary, counted in `failures`; the exit code is 3 when no name was answered (or with `-strict-exit`).
 
 ### Examples
 
@@ -412,7 +412,7 @@ Behaviour, fields and edge cases: [`azhaq urls`](commands/urls.md).
 - The output is de-duplicated and has no scanner payloads or trailing punctuation. `-raw` prints what the archives gave, unchanged. The benchmark in the README counts how many of gau's URLs azhaq's list holds.
 - OTX gives each URL a status (`httpcode`, 0 when it has none) and urlscan.io each page a status and a type. gau 2.2.4 sends neither `--mc` nor `--fc` to them and prints every URL. azhaq judges them: `-mc 200` keeps the URLs recorded as 200 and drops one with no recorded status, `-fc 404` leaves out the 404s and keeps one with none. An archive that keeps no type or date, OTX, is asked all the same and its URLs are kept unfiltered, with a note such as `otx has no type of its captures: its 13 URLs are not filtered by -mt`.
 - A 429 or a 503 is asked again after its `Retry-After`, however long, or after 2, 5, 10, 20 and 30 seconds. This lasts as long as the archive's `-urls-timeout` and the run's `-timeout` allow. A network error is asked again 3 times.
-- A source that still failed is named in the summary with its tries and the server's words, and the exit code is 3. gau exits 0. An example is `wayback: failed after 4 tries, 429 Too Many Requests`.
+- A source that still failed is named in the summary with its tries and the server's words and counted in `failures`; the exit code is 0 while another archive answered, as gau's is, and 3 with `-strict-exit`. An example is `wayback: failed after 4 tries, 429 Too Many Requests`.
 - Each archive is asked at its own pace. The default pause between one archive's requests is 1 s for the Wayback Machine and Common Crawl, 0.5 s for OTX, 2 s for urlscan.io and none for Arquivo. `-urls-pause` changes it: [urls](commands/urls.md#flags).
 
 ### Examples

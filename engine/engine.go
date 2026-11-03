@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -40,8 +41,9 @@ type Engine struct {
 	// http://host/ is the https site, see scheme.go); nil is fetch's.
 	Client *http.Client
 
-	capsMu sync.Mutex
-	caps   Caps
+	capsMu  sync.Mutex
+	caps    Caps
+	refused []string // collectors whose work the request budget refused, first refusal first
 
 	secured sync.Map // hosts whose http URLs are the https site's (scheme.go)
 	recent  sync.Map // entities upserted a moment ago (upsertRecent)
@@ -61,6 +63,23 @@ func (e *Engine) setCaps(c Caps) {
 	e.capsMu.Lock()
 	e.caps = c
 	e.capsMu.Unlock()
+}
+
+// noteRefused records that the request budget refused work of collector name.
+func (e *Engine) noteRefused(name string) {
+	e.capsMu.Lock()
+	defer e.capsMu.Unlock()
+	if !slices.Contains(e.refused, name) {
+		e.refused = append(e.refused, name)
+	}
+}
+
+// Refused is the collectors whose work the request budget refused, the first
+// to be refused first: the stage that reached the limit.
+func (e *Engine) Refused() []string {
+	e.capsMu.Lock()
+	defer e.capsMu.Unlock()
+	return slices.Clone(e.refused)
 }
 
 // Caps is what held work back in the last RunLocal.
@@ -232,6 +251,7 @@ func (e *Engine) Run(ctx context.Context, item types.WorkItem) (types.RunMeta, e
 			return meta, err
 		}
 		e.markCapped()
+		e.noteRefused(col.Name())
 		return meta, neterr.ErrBudget
 	}
 	if down := egress.Stopped(ctx); perr == nil && down != nil {

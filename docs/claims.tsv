@@ -18,6 +18,7 @@
 @cover docs/MCP.md#Workspaces, ledger and kill switch
 @cover docs/MCP.md#Arguments, progress and cancelling
 
+readme.first-map	README.md	A name, an address or a URL with its scheme is the whole command	test:cmd/azhaq:TestGuidedRunMakesTheSameMapAsTheExplicitRun,TestAWordThatIsATargetStartsTheGuidedRun,TestATopPortsScanNamesTheUnaskedRange
 readme.drop-in	README.md	with their flags and JSON field names	test:cmd/azhaq:TestMigratingCoversTheTools,TestDocsNameOnlyFlagsThatExist;bench:drop-in: azhaq probe reads stdin and writes httpx's JSON fields
 readme.maps-and-compares	README.md	It maps the routes an app's JavaScript calls and compares what each of your accounts may read and write	bench:juice-shop: ≥ 90% of the server routes its frontend calls;bench:roles: Juice Shop anonymous → user
 readme.scope-budget-ledger	README.md	It holds every request to a scope and a budget, and records what it sent	bench:scope: no request leaves the program's scope;bench:summary = ledger = what arrived;test:internal/egress:TestTargetClientRefusesWhatLeavesTheScope;test:internal/contract:TestWireIsLedgerIsSummary
@@ -72,6 +73,12 @@ mcp.signal-exit	docs/commands/mcp.md	A signal ends it with exit 0, after the com
 plan.sends-nothing	docs/commands/plan.md	without sending anything	test:cmd/azhaq:TestEgressContract
 plan.kinds-of-request	docs/commands/plan.md	The kinds of request sent to the targets	test:cmd/azhaq:TestPlanSendsNameWhatIsPlanned,TestPlanListsEveryCollectorFlag,TestPlanSaysWhatScreenshotsSend,TestPlanChromeWrites
 plan.found-domains	docs/commands/plan.md	`found_domains_asked` is about domains found on the way	test:cmd/azhaq:TestPlanRequests
+plan.estimate	docs/commands/plan.md	`estimate` is the number a run would send, counted before it starts	test:cmd/azhaq:TestPlanEstimatesEachStage,TestRunCostByStageOnAJuiceShopShapedApp,TestRunSaysItsEstimateFirstWhenLarge
+plan.estimate-leaves-out	docs/commands/plan.md	The estimate counts what the flags and the targets fix	test:cmd/azhaq:TestPlanEstimatesEachStage,TestRunCostByStageOnAJuiceShopShapedApp
+plan.estimate-said-first	docs/commands/plan.md	`run` prints it before it sends when it is more than 1000 requests, connects and DNS queries together	test:cmd/azhaq:TestRunSaysItsEstimateFirstWhenLarge
+plan.estimate-not-counted	docs/commands/plan.md	It does not count what an answer leads to	test:cmd/azhaq:TestPlanEstimatesEachStage
+plan.estimate-at-least	docs/commands/plan.md	A stage that leaves something out says `estimate_at_least`	test:cmd/azhaq:TestPlanEstimatesEachStage
+plan.estimate-exact	docs/commands/plan.md	A stage with nothing in `not_counted` is the number the run sends	test:cmd/azhaq:TestRunCostByStageOnAJuiceShopShapedApp
 plan.bound-not-count	docs/commands/plan.md	The plan gives a bound, not a count	test:cmd/azhaq:TestPlanRequests
 plan.max-names	docs/commands/plan.md	At most `max_names` names are looked up	test:cmd/azhaq:TestPlanRequests
 plan.per-web-service	docs/commands/plan.md	`per_web_service` covers a web service's page, the favicon and the built-in paths	test:cmd/azhaq:TestPlanRequests,TestDocsCountTheBuiltInPathsAsThePlanDoes
@@ -102,7 +109,7 @@ readme.adds-what-the-chain-does-not	README.md	It adds what that chain does not d
 readme.install-script-folder	README.md	The script is in the repository's `scripts` folder, not at its root.	file:scripts/install.sh
 readme.summary-counts-by-kind	README.md	The summary also counts the rows by kind	test:internal/contract:TestRunCountsAddUpToTheRows;test:cmd/azhaq:TestContractInvariantsOnDemo
 readme.roles-never-asked	README.md	A `-` is a role that was never asked.	test:cmd/azhaq:TestRolesTableCellsReadAsTheREADMESays
-readme.exit-codes	README.md	Exit codes: `0` complete, `1` error, `2` usage (nothing sent), `3` finished with failures, `4` stopped by a limit or the kill file.	test:internal/contract:TestExitCodeFollowsTheOutcome;test:cmd/azhaq:TestMissingArgumentsExitUsage
+readme.exit-codes	README.md	Exit codes: `0` complete (a run that did its job exits 0 with the failures it names, counted in `failures`; `-strict-exit` makes any failure exit 3), `1` error, `2` usage (nothing sent), `3` the run's own job failed or is incomplete, `4` stopped by a limit or the kill file.	test:internal/contract:TestExitCodeFollowsTheOutcome;test:cmd/azhaq:TestMissingArgumentsExitUsage,TestExitRule
 readme.scope-stays-on-the-site	README.md	Without a scope, requests stay on the site.	test:internal/contract:TestDocumentedPromisesAreKept
 readme.write-gates	README.md	A write means a method other than GET, HEAD or OPTIONS: POST, PUT, PATCH, DELETE, POST forms, a page's own writes in Chrome and role write replays go only with their flags.	test:internal/contract:TestEveryWriteWaitsForItsFlag,TestWireIsLedgerIsSummary;test:cmd/azhaq:TestCrawlWithoutSubmitFormsSendsNoPost,TestPlanChromeWrites;test:internal/collectors/rendercol:TestRenderWrites
 readme.guesses-on-request	README.md	Guesses, ports, UDP and wordlists go out only when you ask.	test:internal/contract:TestGuessesAndProbesGoOutOnlyWhenAsked
@@ -238,13 +245,25 @@ docs-output.exit-2-message-names-them	docs/OUTPUT.md	The message names them. A r
 docs-output.exit-2-header-host	docs/OUTPUT.md	A header names a host (`Host`, `X-Forwarded-Host`, `X-Host`, `X-Original-Host`) outside a scope rule.	test:cmd/azhaq:TestHostHeaderOutsideScopeIsRefusedByEveryCommand,TestHostHeaderOtherPortIsRefusedByEveryCommand
 docs-output.exit-2-chrome-sandbox	docs/OUTPUT.md	Chrome would start without its sandbox, because the system gives it none	test:cmd/azhaq:TestChromeIsNotRunWithoutItsSandboxUnlessAllowed
 docs-output.exit-2-nothing-sent	docs/OUTPUT.md	Nothing was sent.	test:internal/contract:TestExitCodeFollowsTheOutcome;test:cmd/azhaq:TestChromeIsNotRunWithoutItsSandboxUnlessAllowed
-docs-output.exit-3	docs/OUTPUT.md	Some work failed and did not get its answer	test:internal/contract:TestExitCodeFollowsTheOutcome;test:cmd/azhaq:TestSubsSummaryLineSaysWhatTheExitCodeMeans,TestCrtshFailureMakesExit3
-docs-output.exit-3-fail-on-errors	docs/OUTPUT.md	`-fail-on-errors` is accepted and has no effect of its own	test:cmd/azhaq:TestSubsSummaryLineSaysWhatTheExitCodeMeans,TestCrtshFailureMakesExit3
 docs-output.exit-4-depth-note	docs/OUTPUT.md	What `-depth` leaves unasked is a note, not a stop	test:cmd/azhaq:TestDepthNoteCountsDistinctURLs,TestDirsSweepHasNoRunDepthNote
 docs-output.exit-4-signals	docs/OUTPUT.md	All three stop a command the same way, with its summary printed and its ledger sealed.	test:cmd/azhaq:TestRunStopsOnTermAndHupLikeCtrlC
 docs-output.exit-4-servers	docs/OUTPUT.md	`gallery`, `mcp` and `watch -every` are servers, and a signal is how they end: they exit 0	test:cmd/azhaq:TestGalleryServesAndStops,TestMCPServerStopsOnSIGTERM,TestMCPStopInterruptsCallsInFlight;test:internal/contract:TestWatchEveryEndsOnASignalWithExit0
 docs-output.exit-2-header-example	docs/OUTPUT.md	For example `-H 'Host: secret.lab'` with `-deny secret.lab`	test:cmd/azhaq:TestHostHeaderOutsideScopeIsRefusedByEveryCommand,TestHostHeaderNamedOnTheCommandLineJoinsTheTargets
 docs-output.exit-2-chrome-every-command	docs/OUTPUT.md	This holds for every command that starts Chrome	test:cmd/azhaq:TestChromeIsNotRunWithoutItsSandboxUnlessAllowed,TestMCPHoldsChromeNoSandbox
-docs-output.exit-3-every-failure	docs/OUTPUT.md	Every failure makes it 3, a `fanout` or `partial` one and a source that failed while others answered included.	test:internal/contract:TestExitCodeFollowsTheOutcome;test:cmd/azhaq:TestCrtshFailureMakesExit3
 docs-output.exit-4-depth-note-made	docs/OUTPUT.md	The note is made only when a larger `-depth` has something to ask	test:cmd/azhaq:TestDepthNoteCountsDistinctURLs,TestDirsSweepHasNoRunDepthNote
+docs-output.exit-3-one-rule	docs/OUTPUT.md	One rule decides it, for every command, in one place of the code: the step that writes the summary.	test:internal/contract:TestExitCodeFollowsTheOutcome;test:cmd/azhaq:TestExitRule
+docs-output.exit-3-did-its-job	docs/OUTPUT.md	A run **did its job** when at least one target it was given answered and each failure is named in the summary	test:internal/contract:TestExitCodeFollowsTheOutcome;test:cmd/azhaq:TestExitRule,TestFuzzExitRule,TestDNSFailuresAreSaid,TestOneRefusedTargetDoesNotStopTheOthers
+docs-output.exit-3-failed	docs/OUTPUT.md	A run **failed** (exit 3, `complete: false`) when any of these holds:	test:internal/contract:TestExitCodeFollowsTheOutcome;test:cmd/azhaq:TestExitRule
+docs-output.exit-3-nothing-answered	docs/OUTPUT.md	**Nothing it was given answered.**	test:internal/contract:TestExitCodeFollowsTheOutcome;test:cmd/azhaq:TestExitRule,TestFuzzExitRule,TestDNSFailuresAreSaid
+docs-output.exit-3-own-failure	docs/OUTPUT.md	**A failure is the run's own.**	test:internal/contract:TestExitCodeFollowsTheOutcome;test:cmd/azhaq:TestExitRule,TestRunConnectorFailureCounted,TestCookieRunStopsAtTheRequestThatEndedItsSession
+docs-output.exit-3-short-results	docs/OUTPUT.md	**A note says the results are short or misleading.**	test:internal/contract:TestExitCodeFollowsTheOutcome;test:cmd/azhaq:TestExitRule,TestFuzzAutoCalibrationThatFiltersNothingIsNotExit0
+docs-output.exit-3-nothing-countable	docs/OUTPUT.md	**The command was given nothing it can count.**	test:internal/contract:TestExitCodeFollowsTheOutcome;test:cmd/azhaq:TestExitRule
+docs-output.exit-3-failures-count	docs/OUTPUT.md	`failures` is the sum of `count` over `failed`, plus each `unreachable` target no entry of `failed` names	test:internal/contract:TestExitCodeFollowsTheOutcome;test:cmd/azhaq:TestExitRule,TestProbeFailureRows
+docs-output.exit-3-strict-exit	docs/OUTPUT.md	`-strict-exit` restores the rule before 0.15 for one release: any failure exits 3, a target among many included.	test:internal/contract:TestExitCodeFollowsTheOutcome;test:cmd/azhaq:TestExitRule,TestSubsSummaryLineSaysWhatTheExitCodeMeans,TestContractFailOnErrors,TestFuzzExitRule
+docs-output.exit-3-fail-on-errors	docs/OUTPUT.md	`-fail-on-errors` is the same flag.	test:cmd/azhaq:TestSubsSummaryLineSaysWhatTheExitCodeMeans,TestContractFailOnErrors
+docs-output.exit-3-partial-source	docs/OUTPUT.md	`partial` and `fanout` failures are failures of a target like any other	test:cmd/azhaq:TestCrtshFailureIsPartialAndExits0,TestExitRule
+docs-output.exit-3-note-count	docs/OUTPUT.md	A count in a note cannot name each one, so these are not "done with failures".	test:internal/contract:TestExitCodeFollowsTheOutcome;test:cmd/azhaq:TestExitRule
+docs-output.exit-3-failures-always	docs/OUTPUT.md	It is in every summary, `0` when nothing failed, under both behaviours.	test:internal/contract:TestExitCodeFollowsTheOutcome;test:cmd/azhaq:TestExitRule
+docs-output.exit-3-script-alarm	docs/OUTPUT.md	Without it the exit code is the rule above, and a script that must alarm on any failure reads `failures` or passes `-strict-exit`.	test:internal/contract:TestExitCodeFollowsTheOutcome;test:cmd/azhaq:TestExitRule,TestFuzzExitRule
 docs-output.internal-error	docs/OUTPUT.md	the rows already printed are as they were, and the numbers beside them are not to be relied on	test:cmd/azhaq:TestASummaryThatDisagreesWithItsRowsIsAnInternalError,TestASummaryThatAgreesWithItsRowsIsComplete
+docs-output.exit-1-before-rule	docs/OUTPUT.md	a summary that disagrees with its rows exits 1, whatever the outcome of the run was, and is never a run that did its job.	test:cmd/azhaq:TestAnInternalErrorComesBeforeTheExitRule

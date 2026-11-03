@@ -215,6 +215,7 @@ note: screenshot of http://127.0.0.1:3001/ not taken: the page needs about 26 re
 | `-o` | string |  | also write results to this file |
 | `-silent` | bool |  | results only: no progress; the summary only when something failed (a source that failed, a takeover candidate as a [takeover] line on stderr); stdout stays one result per line |
 | `-v` | bool |  | print a line for every finished task, not only failures |
+| `-strict-exit` | bool |  | exit 3 for any failure, a target among many included (the rule before 0.15); without it a run that did its job exits 0 and its summary counts and lists the failures |
 
 <details>
 <summary>Flags familiar from gowitness and other names (11)</summary>

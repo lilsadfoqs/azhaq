@@ -31,7 +31,8 @@ func TestRefusedGuessOfADerivedNameIsNotAFailure(t *testing.T) {
 }
 
 // One URL of a list that refuses the connection is one failed target: the
-// URLs before and after it are mapped all the same, and the exit code is 3.
+// URLs before and after it are mapped all the same: the run did its job, so the
+// exit code is 0 and the refused target is counted as one failure.
 func TestOneRefusedTargetDoesNotStopTheOthers(t *testing.T) {
 	a, b := portsServer(t), portsServer(t)
 	shut, err := net.Listen("tcp", "127.0.0.1:0")
@@ -43,8 +44,8 @@ func TestOneRefusedTargetDoesNotStopTheOthers(t *testing.T) {
 	t.Chdir(t.TempDir())
 	list := hostsFile(t, "http://127.0.0.1:"+a+"/", "http://127.0.0.1:"+shutPort+"/", "http://127.0.0.1:"+b+"/")
 	out, rep, code := runContract(t, "run", "-list", list, "-sources", "none", "-parallel", "1", "-db", "m.db")
-	if code != exitPartial {
-		t.Fatalf("exit %d: failed %+v unreachable %v", code, rep.Failed, rep.Unreachable)
+	if code != exitOK || rep.Failures != 1 || !rep.Complete {
+		t.Fatalf("exit %d: failures %d, failed %+v unreachable %v", code, rep.Failures, rep.Failed, rep.Unreachable)
 	}
 	for _, p := range []string{a, b} {
 		if !strings.Contains(out, `"key":"http://127.0.0.1:`+p+`/"`) {

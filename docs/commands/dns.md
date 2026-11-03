@@ -229,6 +229,7 @@ The summary also lists failures per kind of error, and takeover candidates: a CN
 | `-o` | string |  | also write results to this file |
 | `-silent` | bool |  | results only: no progress; the summary only when something failed (a source that failed, a takeover candidate as a [takeover] line on stderr); stdout stays one result per line |
 | `-v` | bool |  | print each name that got no records, with its status, on stderr |
+| `-strict-exit` | bool |  | exit 3 for any failure, a target among many included (the rule before 0.15); without it a run that did its job exits 0 and its summary counts and lists the failures |
 
 <details>
 <summary>Flags familiar from dnsx, other names and flags accepted with no effect (34)</summary>

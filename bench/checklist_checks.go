@@ -184,6 +184,8 @@ func (c *checklist) exitCodes() {
 	db := c.fresh("exit")
 	for _, k := range []exitCase{
 		{"a target that does not answer", 3, []string{"run", "-url", closed, "-db", db + "a", "-json"}},
+		{"one target that answers and one that does not (the run did its job)", 0, []string{"run", "-url", c.site.origin + "/", "-url", closed, "-db", db + "c", "-json"}},
+		{"the same with -strict-exit", 3, []string{"run", "-url", c.site.origin + "/", "-url", closed, "-db", db + "d", "-json", "-strict-exit"}},
 		{"an unknown flag", 2, []string{"run", "-no-such-flag"}},
 		{"a request budget that cuts the run short", 4, []string{"run", "-url", c.site.origin + "/", "-db", db + "b", "-json", "-max-requests", "4"}},
 	} {

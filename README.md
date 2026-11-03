@@ -103,6 +103,14 @@ Only scan systems you are allowed to test.
 - `$TA` and `$TB` hold two accounts' tokens. `alice.har` and `alice.xml` are those accounts' saved browsing.
 - `-program` names a program in the platform's public list: `tesla` on Bugcrowd, `security` on HackerOne. `acme` in other examples stands for yours.
 
+### First map
+
+```
+$ azhaq https://app.example.com/ -db app.db
+```
+
+A name, an address or a URL with its scheme is the whole command. [`azhaq quickstart`](docs/commands/quickstart.md) (the same) prints the plan and its estimate of what it will send, then maps the target as `azhaq run` does, and ends with the commands that go deeper in the workspace and the wider passes it did not make, each with what it would send.
+
 ### Map an app
 
 ```
@@ -183,7 +191,7 @@ Coverage is one of seven states:
 
 A row that no request answered ends with how it is known, such as `[called]`. [Concepts](docs/CONCEPTS.md#evidence-how-azhaq-knows-a-url) lists the levels.
 
-Every command prints results on stdout and a summary on stderr: what failed, what was not requested and which limit stopped it. `-json` makes both JSON. Exit codes: `0` complete, `1` error, `2` usage (nothing sent), `3` finished with failures, `4` stopped by a limit or the kill file. See [Output](docs/OUTPUT.md#exit-codes) and [Concepts](docs/CONCEPTS.md).
+Every command prints results on stdout and a summary on stderr: what failed, what was not requested and which limit stopped it. `-json` makes both JSON. Exit codes: `0` complete (a run that did its job exits 0 with the failures it names, counted in `failures`; `-strict-exit` makes any failure exit 3), `1` error, `2` usage (nothing sent), `3` the run's own job failed or is incomplete, `4` stopped by a limit or the kill file. See [Output](docs/OUTPUT.md#exit-codes) and [Concepts](docs/CONCEPTS.md).
 
 ## Drop-in commands
 
@@ -203,6 +211,7 @@ Every tool's own command lines, flag by flag, are in [docs/MIGRATING.md](docs/MI
 
 | Command | What it does |
 | --- | --- |
+| [`quickstart`](docs/commands/quickstart.md) | A first map of one target: the plan and its cost, the map, how to go deeper. `azhaq TARGET` is the same. |
 | [`run`](docs/commands/run.md) | Map a target into one graph. |
 | [`plan`](docs/commands/plan.md) | Show what a run would send, without sending. |
 | [`scope`](docs/commands/scope.md) | Read a program's scope. |

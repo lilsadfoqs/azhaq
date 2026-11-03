@@ -156,7 +156,8 @@ func TestProbeFailureRows(t *testing.T) {
 	if failed == nil || failed["input"] != dead || failed["error"] == nil {
 		t.Errorf("failed row %v", failed)
 	}
-	if code != exitPartial || rep.Counts["without an answer"] != 1 {
+	// One answered and one did not: the run did its job and counts the failure.
+	if code != exitOK || rep.Counts["without an answer"] != 1 || rep.Failures != 1 || !rep.Complete {
 		t.Errorf("exit %d, counts %v, summary %+v", code, rep.Counts, rep)
 	}
 	// The text form prints [FAILED] with -probe.
@@ -206,8 +207,8 @@ func TestProbePortSweepHasARowForEveryPort(t *testing.T) {
 	}
 	out, rep, code := runContract(t, "probe", "-u", "127.0.0.1", "-p", strings.Join(ports, ","), "-probe")
 	rows := probeRows(t, out)
-	if len(rows) != len(ports) || code != exitPartial {
-		t.Fatalf("want %d rows and exit 3, got %d rows, exit %d\n%s", len(ports), len(rows), code, out)
+	if len(rows) != len(ports) || code != exitOK {
+		t.Fatalf("want %d rows and exit 0 (some answered), got %d rows, exit %d\n%s", len(ports), len(rows), code, out)
 	}
 	failed, seen := 0, map[string]bool{}
 	for _, r := range rows {
@@ -252,7 +253,7 @@ func TestProbePortSweepHasARowForEveryPort(t *testing.T) {
 			failed++
 		}
 	}
-	if len(rows) != len(ports) || failed != 3 || code != exitPartial || len(rep.Failed) == 0 {
+	if len(rows) != len(ports) || failed != 3 || code != exitOK || len(rep.Failed) == 0 || rep.Failures != 3 {
 		t.Errorf("name: %d rows, %d failed, exit %d\n%s", len(rows), failed, code, out)
 	}
 }
@@ -483,8 +484,9 @@ func TestProbeOneRowPerInput(t *testing.T) {
 				t.Errorf("%s: %q failed with %v, not with what its request got", tc.name, in, r["error"])
 			}
 		}
-		if wantCode := map[bool]int{true: exitPartial, false: exitOK}[tc.failed != ""]; code != wantCode || rep.Requests != int64(tc.requests) {
-			t.Errorf("%s: exit %d with %d requests, want %d with %d", tc.name, code, rep.Requests, wantCode, tc.requests)
+		// A row that failed beside one that answered: the run did its job, and counts it.
+		if wantFailures := map[bool]int{true: 1}[tc.failed != ""]; code != exitOK || rep.Failures != wantFailures || rep.Requests != int64(tc.requests) {
+			t.Errorf("%s: exit %d, %d failures with %d requests, want exit 0, %d and %d", tc.name, code, rep.Failures, rep.Requests, wantFailures, tc.requests)
 		}
 	}
 }

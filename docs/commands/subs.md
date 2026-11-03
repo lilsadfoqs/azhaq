@@ -79,6 +79,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 - A signal (Ctrl-C, SIGTERM, SIGHUP), `-timeout` or `-max-time` while names wait for DNS stops the run: exit 4, `complete` false, `stopped` says why (`-max-time 25s reached with N tasks known and not done`). The names DNS had answered before the stop are kept and listed; the names it had not answered are counted as `not asked`, and `azhaq resume` asks only those.
 - A source that answered 200 with an error and gave no names is a failed source: see [Failed sources](#failed-sources).
 - `subs` ends with a `coverage:` note: see [Coverage estimate](#coverage-estimate).
+- Without `-live`, `-w` or `-permute` it ends with the wider pass as its first `next:` line: `azhaq subs … -live   (next pass, not run: N names listed by the sources were not looked up, so some may not exist; -live asks about 2N DNS queries)`. The count is two queries (A and AAAA) for each name listed, before the retries and wildcard probes. It is a line: nothing is looked up for it. Like the other `next:` lines of `subs` it is for a person at a terminal: it is not in `-json`, and `AZHAQ_NO_HINTS` hides it.
 
 ## Details
 
@@ -107,14 +108,14 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 The text summary ends with the same, and says why the exit code is what it is:
 
 ```
-23 of 33 sources answered, 10 failed (listed above); exit 3 because a failed source is a failure even when others answered for the same domain: the names they gave stand, and the failed source's may be missing
+23 of 33 sources answered, 10 failed (listed above); exit 0 because the run did its job: the names the others gave stand, and a failed source's may be missing (-strict-exit makes it 3)
 ```
 
 ### Degraded
 - True when `sources failed` ([Sources in the summary](#sources-in-the-summary)) is above 0. A source the run relies on did not answer, so the names may be incomplete.
 - The text summary opens with it, naming the sources and why: `DEGRADED: 2 of 4 sources failed: crtsh (HTTP 502, 2 domains), the names may be incomplete`. Past three sources it ends with `+N more`.
 - The JSON summary has `degraded_by`: one `{"source", "error", "domains"}` for each source of the default set that failed, the one that failed for most domains first.
-- The exit code is 3. A failure the other sources made up for is listed as `partial`, and the names they gave stand. `-fail-on-errors` is accepted and has no effect of its own.
+- The exit code is 0 while a source answered for each domain, and 3 when no source answered for a domain of a run given one, or with `-strict-exit` (also `-fail-on-errors`). A failure the other sources made up for is listed as `partial`, and the names they gave stand. Each failed source is in `failed` and counted in `failures`.
 - Failures of sources that ran only because of `-all-sources` never set it on their own.
 
 ### Failed sources
@@ -329,10 +330,11 @@ On tesla.com, `subs -live -dns-rate 10` with two resolvers took 161 s and listed
 | `-oI` | bool |  | text output: host,ip,source, with -live (subfinder -oI); -json rows get an ip field |
 | `-silent` | bool |  | results only: no progress; the summary only when something failed (a source that failed, a takeover candidate as a [takeover] line on stderr); stdout stays one result per line |
 | `-v` | bool |  | print a line for every finished task, not only failures |
-| `-fail-on-errors` | bool |  | accepted, and the default: every failure exits 3, a fan-out one and a source that failed while others answered included; no flag turns a failure into exit 0 |
+| `-fail-on-errors` | bool |  | the same as -strict-exit |
 | `-ls` | bool |  | list the sources and exit: name, then * if a key is required and ~ if one improves the answer; with -json one object each (name, default, recursive, keyRequirement) |
 | `-stats` | bool |  | after the run, one note per source: requests, names, errors and seconds, as subfinder -stats |
 | `-no-history` | bool |  | do not read or write the name history (names earlier runs found, kept under $AZHAQ_DATA_DIR, else ~/.local/share/azhaq; with -live each is checked by DNS in the run) |
+| `-strict-exit` | bool |  | exit 3 for any failure, a target among many included (the rule before 0.15); without it a run that did its job exits 0 and its summary counts and lists the failures |
 
 <details>
 <summary>Flags familiar from subfinder, other names and flags accepted with no effect (11)</summary>

@@ -1752,7 +1752,7 @@ The writes a page's scripts would send are mapped and listed, not sent. Operatio
 **Every outcome said.**
 
 - Each command ends with a summary. It says what failed and whether it is worth retrying, which targets never answered, what was not requested and why, and the limit that stopped the work.
-- The exit code says the same: 0 complete, 3 finished with failures, 4 stopped by a limit. So a script or an assistant never has to guess whether an empty result is an honest zero.
+- The exit code says the same: 0 complete (a run that did its job names its failures, counted in `failures`), 3 the run's job failed or is incomplete, 4 stopped by a limit. So a script or an assistant never has to guess whether an empty result is an honest zero.
 
 ## Limitations
 

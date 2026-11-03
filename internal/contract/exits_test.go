@@ -24,8 +24,9 @@ func failureListed(s Summary) string {
 }
 
 // checkSummary is what holds for the summary of every run: the exit code
-// the process gave is the one it says, 0 is a run with no failure of any
-// kind, 4 is a run a limit stopped, and 3 says what failed.
+// the process gave is the one it says, 0 is a run that did its job (with the
+// failures it names counted in `failures`; none at all under -strict-exit),
+// 4 is a run a limit stopped, and 3 says what failed.
 func checkSummary(v *Inv, r Result) {
 	s := r.Summary
 	if s.Exit != r.Code {
@@ -37,10 +38,18 @@ func checkSummary(v *Inv, r Result) {
 	if s.Complete != (r.Code == 0) {
 		v.Errorf("complete %v with exit %d", s.Complete, r.Code)
 	}
-	if why := failureListed(s); why != "" && r.Code == 0 {
-		v.Errorf("the summary lists %s and the exit code is 0", why)
+	if r.Code == 1 || r.Code == 2 {
+		return // an error's summary says the error, and nothing was run to count
 	}
-	if r.Code == 3 && failureListed(s) == "" && len(s.Notes) == 0 {
+	if s.Failures == nil {
+		v.Errorf("the summary has no failures count")
+	} else if why := failureListed(s); why != "" && *s.Failures == 0 {
+		v.Errorf("the summary lists %s and counts no failure", why)
+	}
+	if why := failureListed(s); why != "" && r.Code == 0 && slices.Contains(r.Args, "-strict-exit") {
+		v.Errorf("the summary lists %s and -strict-exit gave exit 0", why)
+	}
+	if r.Code == 3 && failureListed(s) == "" && len(s.Notes) == 0 && (s.Failures == nil || *s.Failures == 0) {
 		v.Errorf("exit 3 and nothing says why")
 	}
 }
@@ -50,6 +59,8 @@ type exitCase struct {
 	name  string
 	known string
 	want  int
+	// failures is the summary's count of failures, when the case forces some.
+	failures int
 	// shape sets the lab up and returns the command line.
 	shape func(l *Labs) []string
 	env   Env
@@ -83,21 +94,60 @@ func TestExitCodeFollowsTheOutcome(t *testing.T) {
 			l.Site.SetDelay(3 * time.Second)
 			return []string{"probe", "-u", l.Site.URL, "-req-timeout", "300ms"}
 		}},
-		{name: "probe: one of two targets fails", want: 3, shape: func(l *Labs) []string {
+		// All of the targets it was given fail: the run did not do its job.
+		{name: "probe: both targets fail", want: 3, shape: func(l *Labs) []string {
+			return []string{"probe", "-u", "http://" + deadPort(l), "-u", "http://" + deadPort(l)}
+		}},
+		{name: "run: both URLs fail", want: 3, shape: func(l *Labs) []string {
+			return []string{"run", "-url", "http://" + deadPort(l), "-url", "http://" + deadPort(l), "-allow", "127.0.0.1", "-sources", "none", "-db", "w.db"}
+		}},
+		{name: "probe: a name that does not resolve", want: 3, shape: func(l *Labs) []string {
+			return []string{"probe", "-u", "no-such-name.invalid"}
+		}},
+		// Some of the targets fail and the run names each: it did its job, exit 0.
+		// -strict-exit keeps the rule that any failure exits 3.
+		{name: "probe: one of two targets fails", want: 0, failures: 1, shape: func(l *Labs) []string {
 			return []string{"probe", "-u", l.Site.URL, "-u", "http://" + deadPort(l)}
 		}, then: func(v *Inv, l *Labs, r Result) {
 			if r.Summary.Results != 2 {
 				v.Errorf("the failed target is a row too: %d results, want 2", r.Summary.Results)
 			}
 		}},
-		// A failure on a URL the crawl found.
-		{name: "crawl: a page it found closes the connection", want: 3, shape: func(l *Labs) []string {
+		{name: "probe -strict-exit: one of two targets fails", want: 3, failures: 1, shape: func(l *Labs) []string {
+			return []string{"probe", "-u", l.Site.URL, "-u", "http://" + deadPort(l), "-strict-exit"}
+		}},
+		{name: "probe: a name that does not resolve among others", want: 0, failures: 1, shape: func(l *Labs) []string {
+			return []string{"probe", "-u", l.Site.URL, "-u", "no-such-name.invalid"}
+		}},
+		{name: "run: one of two URLs fails", want: 0, failures: 1, shape: func(l *Labs) []string {
+			return []string{"run", "-url", l.Site.URL, "-url", "http://" + deadPort(l), "-allow", "127.0.0.1", "-sources", "none", "-db", "w.db"}
+		}},
+		{name: "run -strict-exit: one of two URLs fails", want: 3, failures: 1, shape: func(l *Labs) []string {
+			return []string{"run", "-url", l.Site.URL, "-url", "http://" + deadPort(l), "-allow", "127.0.0.1", "-sources", "none", "-db", "w.db", "-strict-exit"}
+		}},
+		{name: "crawl: one of two URLs fails", want: 0, failures: 1, shape: func(l *Labs) []string {
+			return []string{"crawl", "-u", l.Site.URL, "-u", "http://" + deadPort(l), "-d", "1"}
+		}},
+		{name: "dirs: one of two targets fails", want: 0, failures: 1, shape: func(l *Labs) []string {
+			l.File("w.txt", "a\nb\n")
+			return []string{"dirs", "-u", l.Site.URL, "-u", "http://" + deadPort(l), "-w", "w.txt"}
+		}},
+		// A failure on a URL the crawl found: a failed target among the pages it asked.
+		{name: "crawl: a page it found closes the connection", want: 0, failures: 1, shape: func(l *Labs) []string {
 			l.Site.SetBroken("/reset")
 			return []string{"crawl", "-u", l.Site.URL, "-d", "2"}
 		}},
-		{name: "run: a page it found closes the connection", want: 3, shape: func(l *Labs) []string {
+		{name: "crawl -strict-exit: a page it found closes the connection", want: 3, failures: 1, shape: func(l *Labs) []string {
+			l.Site.SetBroken("/reset")
+			return []string{"crawl", "-u", l.Site.URL, "-d", "2", "-strict-exit"}
+		}},
+		{name: "run: a page it found closes the connection", want: 0, failures: 1, shape: func(l *Labs) []string {
 			l.Site.SetBroken("/reset")
 			return []string{"run", "-url", l.Site.URL, "-allow", l.Allow(), "-sources", "none", "-db", "w.db"}
+		}},
+		{name: "run -strict-exit: a page it found closes the connection", want: 3, failures: 1, shape: func(l *Labs) []string {
+			l.Site.SetBroken("/reset")
+			return []string{"run", "-url", l.Site.URL, "-allow", l.Allow(), "-sources", "none", "-db", "w.db", "-strict-exit"}
 		}},
 		{name: "dirs: every request fails", want: 3, shape: func(l *Labs) []string {
 			l.File("w.txt", "a\nb\n")
@@ -229,6 +279,9 @@ func TestExitCodeFollowsTheOutcome(t *testing.T) {
 				v.Errorf("exit %d, want %d: %s\n%s", r.Code, c.want, failureListed(r.Summary), strings.Join(r.Summary.Notes, "\n"))
 			}
 			checkSummary(v, r)
+			if c.failures > 0 && (r.Summary.Failures == nil || *r.Summary.Failures != c.failures) {
+				v.Errorf("failures %v, want %d", r.Summary.Failures, c.failures)
+			}
 			if c.then != nil {
 				c.then(v, l, r)
 			}

@@ -366,6 +366,9 @@ func (b *Browser) decide(root context.Context, ev cdpfetch.EventRequestPaused, t
 	if t != nil {
 		rctx = t.ctx
 	}
+	if t != nil && t.signin {
+		rctx = ledger.WithCollector(rctx, ledger.SignIn)
+	}
 	b.sending(ev.NetworkID, letGo{ctx: rctx, method: ev.Request.Method, url: ev.Request.URL, at: time.Now(), t: t})
 	_, _ = chromedp.CallBrowser(root, cdpfetch.ContinueRequest, cdpfetch.ContinueRequestParams{RequestID: ev.RequestID})
 }

@@ -104,7 +104,8 @@ func TestSubsTiersLiveSeparatesRawFromConfirmed(t *testing.T) {
 }
 
 // A source that fails after giving names, or at all, makes the summary
-// degraded and exit 3; the names the others gave are still printed.
+// degraded and counted in failures, with exit 0 while another answered; the
+// names the others gave are still printed.
 func TestSubsFailedSourceDegradesTheSummaryNotTheResult(t *testing.T) {
 	t.Chdir(t.TempDir())
 	defer subcol.UseTestSources(
@@ -112,8 +113,8 @@ func TestSubsFailedSourceDegradesTheSummaryNotTheResult(t *testing.T) {
 		subcol.TestSource{Name: "bad", Default: true, Err: errors.New("HTTP 504")},
 	)()
 	out, rep, code := runContract(t, "subs", "-d", "example.org", "-no-history")
-	if code != exitPartial {
-		t.Fatalf("exit %d, want %d: %+v", code, exitPartial, rep)
+	if code != exitOK || rep.Failures != 1 {
+		t.Fatalf("exit %d, want %d with 1 failure: %+v", code, exitOK, rep)
 	}
 	if got := len(jsonRows(t, out)); got != 2 {
 		t.Errorf("%d names printed, want 2:\n%s", got, out)

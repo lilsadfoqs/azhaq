@@ -81,6 +81,7 @@ func HTTPAs(class string, req *http.Request) {
 		return
 	}
 	counter(class).Add(1)
+	spend(class, "http", collectorOf(req.Context()), 1)
 	l := Active()
 	if l == nil {
 		return
@@ -138,6 +139,7 @@ func Chrome(ctx context.Context, method, raw string) { ChromeAt(ctx, method, raw
 
 // ChromeAt is Chrome for a request sent at a time already past; zero is now.
 func ChromeAt(ctx context.Context, method, raw string, at time.Time) {
+	spend(ClassTarget, "chrome", collectorOf(ctx), 1)
 	l := Active()
 	if l == nil {
 		return
@@ -161,6 +163,7 @@ func TCP(ctx context.Context, host, addr string) { TCPAs(ctx, ClassTarget, host,
 // TCPAs is TCP for a connection of another class.
 func TCPAs(ctx context.Context, class, host, addr string) {
 	counter(class).Add(1)
+	spend(class, "tcp", collectorOf(ctx), 1)
 	l := Active()
 	if l == nil {
 		return
@@ -191,6 +194,7 @@ func tcpEntry(l *Ledger, ctx context.Context, class, host, addr string) Entry {
 // (ip:port), in one write: each is a line before its connect goes.
 func TCPBatch(ctx context.Context, host string, addrs []string) {
 	counter(ClassTarget).Add(int64(len(addrs)))
+	spend(ClassTarget, "tcp", collectorOf(ctx), int64(len(addrs)))
 	l := Active()
 	if l == nil || len(addrs) == 0 {
 		return
@@ -205,6 +209,7 @@ func TCPBatch(ctx context.Context, host string, addrs []string) {
 // DNS records a query about to be sent to a resolver: the name, its type
 // ("A") and the resolver's address or URL.
 func DNS(ctx context.Context, name, qtype, server string) {
+	spend(ClassDNS, "dns", collectorOf(ctx), 1)
 	l := Active()
 	if l == nil {
 		return
