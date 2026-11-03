@@ -3,7 +3,8 @@
 
   shard.py --shards N --index I [--fresh]   run shard I (writes times-I.json)
   shard.py --shards N [--plan]              print the plan: load per shard
-  shard.py --shards N --check               every test lands in exactly one shard
+  shard.py --shards N --check               every test lands in exactly one shard, and every test
+                                            that docs/claims.tsv names as a proof is one that builds
   shard.py --refresh DIR                    rewrite test-times.json from the
                                             times-*.json of a run:
     gh run download RUN -p 'times-*' -D DIR && shard.py --refresh DIR
@@ -17,7 +18,8 @@ its *_test.go files (nothing is compiled to list them). test-times.json holds
 is split by test, the others are whole units; a package or test missing from
 the file counts as 1 s (a package) or the package's median (a test). Units go,
 longest first, to the least loaded shard, so the same inputs give the same plan.
-A shard runs a split package's tests in batches of about BATCH seconds, in name
+A shard also fails when a test that docs/claims.tsv names as the proof of a claim, and that the
+shard ran, was skipped or did not run: a claim is proved only by a test that passed. A shard runs a split package's tests in batches of about BATCH seconds, in name
 order: go test keeps a result per run, so a changed file that one test reads
 runs again only that test's batch.
 """
@@ -34,11 +36,52 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 TIMES = os.path.join(HERE, "test-times.json")
 THRESHOLD = 20.0
 BATCH = 20.0
+CLAIMS = os.path.join(HERE, "..", "..", "docs", "claims.tsv")
 TEST_RE = re.compile(r"^func ((?:Test|Example|Fuzz)(?:[^\sa-z(]\w*)?)\(", re.M)
 
 
 def list_tests(src):
     return TEST_RE.findall(src)
+
+
+def claim_tests(path=CLAIMS):
+    """{(package, test): [claim ids]}: the tests that docs/claims.tsv names as the proof of a claim."""
+    out = {}
+    try:
+        lines = open(path, encoding="utf-8").read().splitlines()
+    except FileNotFoundError:
+        return out
+    for line in lines:
+        f = line.split("\t")
+        if len(f) != 4 or line.startswith(("#", "@")):
+            continue
+        for spec in f[3].split(";"):
+            kind, _, rest = spec.strip().partition(":")
+            if kind != "test":
+                continue
+            pkg, _, names = rest.partition(":")
+            for name in names.split(","):
+                out.setdefault((pkg, name), []).append(f[0])
+    return out
+
+
+def claims_unbuilt(claims, inv):
+    """Proofs that no test file of the build holds: a test renamed, removed or behind a build tag."""
+    return ["claim %s: %s %s is not a test that builds" % (", ".join(ids), pkg, test)
+            for (pkg, test), ids in sorted(claims.items()) if test not in inv.get(pkg, [])]
+
+
+def claims_unrun(outcome, claims, assigned):
+    """Proofs among this shard's tests that did not pass: skipped, or not run at all."""
+    out = []
+    for (pkg, test), ids in sorted(claims.items()):
+        if (pkg, test) not in assigned:
+            continue
+        got = outcome.get((pkg, test))
+        if got != "pass":
+            why = "was skipped" if got == "skip" else "did not run" if got is None else "ended with " + got
+            out.append("claim %s: %s %s %s, so the claim is not proved" % (", ".join(ids), pkg, test, why))
+    return out
 
 
 def go_packages():
@@ -191,6 +234,7 @@ class Run:
         self.failed = False
         self.tests = {}
         self.packages = {}
+        self.outcome = {}  # (package, top-level test) -> pass, fail or skip
 
     def event(self, e):
         text = e.get("Output")
@@ -207,6 +251,7 @@ class Run:
                     self.packages[rel] = self.packages.get(rel, 0) + e.get("Elapsed", 0)
             elif "/" not in test:
                 self.tests.setdefault(rel, {})[test] = e.get("Elapsed", 0)
+                self.outcome[(rel, test)] = act
         if act == "fail" or act == "build-fail":
             self.failed = True
 
@@ -243,11 +288,16 @@ def run_shard(inv, p, index, fresh, mod, times):
     with open("times-%d.json" % index, "w") as f:
         json.dump({"shard": index, "packages": run.packages, "tests": run.tests}, f, indent=1, sort_keys=True)
         f.write("\n")
+    assigned = {(pkg, t) for pkg in s["whole"] for t in inv[pkg]}
+    assigned |= {(pkg, t) for pkg, tests in s["split"].items() for t in tests}
+    unrun = [] if run.failed else claims_unrun(run.outcome, claim_tests(), assigned)
+    for u in unrun:
+        print("::error::" + u)
     if run.failed:
         for a in annotations("".join(run.log)):
             print(a)
         return 1
-    return 0
+    return 1 if unrun else 0
 
 
 def print_plan(inv, times, p):
@@ -301,7 +351,7 @@ def main(argv=None):
     times = load_times()
     p = plan(inv, times, a.shards, a.threshold)
     if a.check:
-        bad = check(inv, p)
+        bad = check(inv, p) + claims_unbuilt(claim_tests(), inv)
         for pkg in times:
             if pkg not in inv:
                 print("warning: test-times.json has %s, which has no tests" % pkg, file=sys.stderr)
