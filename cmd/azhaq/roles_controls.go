@@ -319,8 +319,8 @@ func askFresh(ctx context.Context, h http.Header, u string, own map[string]bool)
 	}
 	ctype := resp.Header.Get("Content-Type")
 	a, _ := readAnswer(resp.StatusCode, body, ctype)
-	if resp.StatusCode >= 300 && resp.StatusCode < 400 {
-		a.Location = bareLocation(resp.Header.Get("Location"))
+	if loc := resp.Header.Get("Location"); loc != "" {
+		a.Location = bareLocation(loc)
 	}
 	keepBody(a.Hash, ctype, body)
 	return a, body, nil

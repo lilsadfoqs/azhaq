@@ -37,7 +37,7 @@ func TestPlanRequests(t *testing.T) {
 	}
 
 	r := planJSON(t, "-domain", "example.com", "-domain", "example.org", "-providers", none, "-max-requests", "5000").Requests
-	if r.Sources["azhaq-rdap"] != 2 || r.Sources["azhaq-urls"] != 10 || r.Sources["azhaq-subdomains"] != 22 || r.Total != 34 || r.Sources["azhaq-search"] != 0 {
+	if r.Sources["azhaq-rdap"] != 2 || r.Sources["azhaq-urls"] != 10 || r.Sources["azhaq-subdomains"] != 28 || r.Total != 40 || r.Sources["azhaq-search"] != 0 {
 		t.Errorf("source queries %+v", r)
 	}
 	if len(r.NotCounted) != 0 || !r.Found || r.MaxNames != 200000 {
@@ -50,7 +50,7 @@ func TestPlanRequests(t *testing.T) {
 	// A scan engine with a key is asked; a daily allowance below
 	// -max-requests is the cap that applies.
 	r = planJSON(t, "-domain", "example.com", "-providers", keys, "-max-requests", "5000", "-daily-requests", "300", "-no-favicon").Requests
-	if r.Sources["azhaq-search"] != 1 || r.Total != 19 {
+	if r.Sources["azhaq-search"] != 1 || r.Total != 22 {
 		t.Errorf("keyed engine %+v", r)
 	}
 	if r.Cap != 300 || !strings.HasPrefix(r.CapBy, "-daily-requests") || r.PerService != 52 {
@@ -58,7 +58,7 @@ func TestPlanRequests(t *testing.T) {
 	}
 
 	r = planJSON(t, "-domain", "example.com", "-providers", none, "-passive").Requests
-	if !r.Passive || r.PerService != 0 || r.Total != 17 {
+	if !r.Passive || r.PerService != 0 || r.Total != 20 {
 		t.Errorf("passive %+v", r)
 	}
 
@@ -82,7 +82,7 @@ func TestPlanRequests(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, want := range []string{
-		"source queries: 17 about the targets above (azhaq-rdap 1, azhaq-subdomains 11, azhaq-urls 5)",
+		"source queries: 20 about the targets above (azhaq-rdap 1, azhaq-subdomains 14, azhaq-urls 5)",
 		"requests to the targets: at most 5000 (-max-requests)",
 		"about 53 per web service (its page, the favicon, 51 built-in paths)",
 	} {

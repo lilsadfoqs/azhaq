@@ -215,16 +215,20 @@ func main() {
 	// A fresh name history per bench run: one-shot, as the reference tools are.
 	must(os.Setenv("AZHAQ_DATA_DIR", filepath.Join(work, "data-"+time.Now().UTC().Format("20060102T150405"))))
 	logf("building azhaq")
-	if _, err := exec.Command("go", "build", "-o", azhaq, "./cmd/azhaq").CombinedOutput(); err != nil {
-		fatal("go build: %v", err)
+	if built, err := exec.Command("go", "build", "-o", azhaq, "./cmd/azhaq").CombinedOutput(); err != nil {
+		setupFailed(*out, "go build", err, built, planned)
 	}
 	must(freshCopy(azhaq))
 	if v, err := exec.Command(azhaq, "version").Output(); err == nil {
 		rec.Version = strings.TrimSpace(string(v))
 	}
 	if !(len(sel) == 1 && sel["regress"]) && !*checklistRun { // regress uses what $AZHAQ_REFBIN holds; the checklist uses no reference tool
-		must(installTools(binDir))
-		must(installBuilt(binDir))
+		if err := installTools(binDir); err != nil {
+			setupFailed(*out, "installing the reference tools", err, nil, planned)
+		}
+		if err := installBuilt(binDir); err != nil {
+			setupFailed(*out, "building the reference tools", err, nil, planned)
+		}
 	}
 	if *toolsOnly {
 		a, err := installArjun()

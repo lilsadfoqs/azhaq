@@ -2,6 +2,48 @@
 
 Task by task: the commands, what to look at, and the catches. `azhaq docs recipes` prints this page. Only test what you are allowed to test.
 
+## Start with the task
+
+Four jobs, each as the commands to run. The recipes below say what to look at, and the [command pages](commands/run.md) hold every flag.
+
+**Make a first map.** Ask for the plan, then run it inside a scope and a budget, then read the API routes.
+
+```
+azhaq plan -url https://app.example.com/ -allow app.example.com
+azhaq run -url https://app.example.com/ -allow app.example.com -max-requests 2000 -rate 5 -db app.db
+azhaq query -db app.db -role api
+```
+
+More: [Map a single-page app and get its API into Burp](#map-a-single-page-app-and-get-its-api-into-burp), [Continue a run a limit stopped](#continue-a-run-a-limit-stopped). Flags: [`plan`](commands/plan.md), [`run`](commands/run.md). The scope and the budget: [Concepts](CONCEPTS.md#scope).
+
+**Compare two sessions.** Give each account a role, and read what differs between them.
+
+```
+azhaq roles -role anon -role "alice=Authorization: Bearer $TA" -role "bob=Authorization: Bearer $TB" -- -url https://app.example.com/
+azhaq roles show -dir DIR URL
+```
+
+More: [Find IDOR and BOLA with two accounts](#find-idor-and-bola-with-two-accounts). Flags: [`roles`](commands/roles.md).
+
+**Verify a service.** Map it with its ports, and match what it reports against the advisory records of a source you give. A match is a lead with its label; `-advisories-confirm` adds the one read-only request each lead names.
+
+```
+azhaq run -url https://app.example.com/ -ports top-100 -advisories -advisory-source osv.json -allow app.example.com -db app.db
+azhaq run -url https://app.example.com/ -ports top-100 -advisories -advisories-confirm -advisory-source osv.json -allow app.example.com -db app.db
+```
+
+More: [Known-issue matching](CONCEPTS.md#known-issue-matching--advisories). Flags: [`run`](commands/run.md).
+
+**Hand over findings.** Write each finding up, export the map, and give the client the list of what was sent.
+
+```
+azhaq report -dir DIR
+azhaq export -db app.db -format html > app.html
+azhaq ledger -csv app.db.ledger.jsonl > sent.csv
+```
+
+More: [Write a finding up](#write-a-finding-up), [Deconfliction and audit](#deconfliction-and-audit). Flags: [`report`](commands/report.md), [`export`](commands/export.md), [`ledger`](commands/ledger.md).
+
 ## How to read the commands
 
 - `app.example.com` and `example.com` stand for your target, and `acme` for your program.
@@ -408,7 +450,7 @@ httpx -l hosts.txt -json | azhaq ingest - -db acme.db
 ```
 azhaq subs -d example.com -live -dns-rate 5 -resolvers two.txt -source-rate 2 -db subs.db -json > names.jsonl
 azhaq subs -d example.com -live -m '*.dev.example.com' -oI
-azhaq subs -d example.com,example.org -guesses -json | jq 'select(.unverified | not)'
+azhaq subs -d example.com,example.org -json | jq 'select(.unverified | not)'
 ```
 
 The first line is `subfinder | dnsx` at a pace.
@@ -417,9 +459,9 @@ The first line is `subfinder | dnsx` at a pace.
 - `-source-rate` is requests a second to each passive source.
 - The summary's `counts` add up. `from sources`, less `did not resolve`, plus what DNS found as CNAME targets and the names `-w` asked, is `results`. The `count:` note writes the sum out.
 
-Without `-live` nothing is looked up in DNS. Names that only subdomain.center guessed, which no source asserted, are held back: they are not printed, and the summary counts them as `guesses held back`. `-guesses` prints them, with `"unverified": true`. A name that only the name history held, because no source gave it this run, is printed with `"unverified": true` too.
+Without `-live` nothing is looked up in DNS: every name the sources gave is printed as a raw candidate (`"tier": "candidate"`), and the summary counts none of them as confirmed. Names that only subdomain.center guessed, which no source asserted, carry `"unverified": true`; so does a name that only the name history held, because no source gave it this run. With `-live` the rows are the DNS-confirmed tier (`"tier": "dns"`), and the summary's `raw candidates` and `DNS-confirmed` show how many of the names the sources gave resolve.
 
-The last command prints the guesses and leaves every unverified name out. A name that is only a CNAME is listed with `-live` too, with `cname` and no `a`, as `dnsx -a -cname` lists it.
+The last command leaves every unverified name out. A name that is only a CNAME is listed with `-live` too, with `cname` and no `a`, as `dnsx -a -cname` lists it.
 
 **Catch:** subdomain.center answers a random 500 names per call, and its real names differ between calls. Two runs list different names. A run asks it again while a round gives a new name that resolves, and until the names seen are most of the pool its repeats estimate: a round with no new live name says little while a name in twenty is unseen. The name history brings back names an earlier run found.
 

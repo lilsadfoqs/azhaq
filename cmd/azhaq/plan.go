@@ -17,6 +17,7 @@ import (
 	"github.com/lilsadfoqs/azhaq/internal/collectors/portcol"
 	"github.com/lilsadfoqs/azhaq/internal/egress"
 	"github.com/lilsadfoqs/azhaq/internal/portscan"
+	"github.com/lilsadfoqs/azhaq/internal/verify"
 	"github.com/lilsadfoqs/azhaq/types"
 )
 
@@ -125,6 +126,7 @@ type sendLimits struct {
 	portPayload  bool
 	portDiscover portcol.Discovery
 	axfr         bool     // -axfr: plan the zone transfers of dns -axfr too
+	verify       bool     // -verify: the enumerated read-only verification checks
 	resolvers    []string // the resolvers named (-resolvers)
 }
 
@@ -170,6 +172,12 @@ func planSends(b engine.Budgets, send sendLimits) (gets, others []string) {
 	}
 	if b.Active["ports"] && send.udpPorts > 0 {
 		*out = append(*out, fmt.Sprintf("UDP datagrams to %s of each address (-ports-udp): the harmless request of the protocol the port usually carries, and, for a port that stays silent, each other request its protocol has (a port with no known protocol: a DNS query, an SNMP get with community public, memcached's version, an empty datagram)", plural(send.udpPorts, "port")))
+	}
+	if send.verify {
+		for _, c := range verify.Checks() {
+			*out = append(*out, fmt.Sprintf("one verification read to each %s service confirmed (-verify %s): sends %s and no credential; precondition: %s", c.Service, c.ID, c.Request, c.Precondition))
+		}
+		*out = append(*out, "with -advisories, each advisory lead is labelled proved, version-only or conditional from its confirmation read (-verify): the one GET the advisory names, or of /, held to -deny-path like any GET; a data-store read is a TCP connect with no path, held to the scope, the budget, the kill file and the ledger")
 	}
 	if send.shots != "" {
 		*out = append(*out, fmt.Sprintf("Chrome loads the front page of each web service and saves a screenshot in %s (-screenshots, azhaq-shots): it also requests the page's scripts, styles and images, so a page costs more than one GET", send.shots))

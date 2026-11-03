@@ -8,6 +8,7 @@ Each report is ready to paste into HackerOne or Bugcrowd, or into a red team's c
 
 ```
 azhaq report -dir DIR [-url URL [-method M] [-owner NAME]] [-format md|json] [-o FILE|DIR] [-redact]
+azhaq report -findings -db WORKSPACE.db [-format jsonl|md] [-o FILE]
 ```
 
 ## Examples
@@ -18,6 +19,9 @@ azhaq report -dir azhaq-roles-20261028-101500
 
 # one row's report on standard output, with hosts and identifiers masked
 azhaq report -dir azhaq-roles-20261028-101500 -url https://app/rest/basket/6 -redact
+
+# the findings records of a run's workspace, one JSON object per record
+azhaq report -findings -db app.db -format jsonl
 ```
 
 ## What it does
@@ -37,6 +41,12 @@ azhaq report -dir azhaq-roles-20261028-101500 -url https://app/rest/basket/6 -re
 With `-url URL`, `report` writes that row's report to standard output (a report for each owner when several owners' requests share the URL and method: see below). A write or create row also needs `-method M`. A row whose verdict is not one of the six is refused, with exit 1, and a `-url` that matches no row is exit 1 too.
 
 When no row qualifies, `report` prints a note on stderr, writes nothing and exits 0.
+
+### Findings records (`-findings`)
+
+With `-findings -db WORKSPACE.db`, `report` writes the findings records of a run's workspace instead of roles reports, and sends nothing. One record is written per qualifying stored row: the `verify` results a `-verify` run stored, and the advisory leads a `-advisories` run stored (labelled as `-verify` labels them), restricted to rows whose label supports a record. A `not affected` lead is no record, and a verify row covers its own lead, so no lead is recorded twice. Each record carries the kind, the severity, the host, port and URL, the product and version where confirmed, the advisory id and URL where matched, the precondition where one is open, the exact request where one was sent, an excerpt of the evidence, the command that produced it, and the collector of the stored row it is read from — every field traceable to that row.
+
+The labels are kept distinct, never merged: `proved` records come first, then `version-only`, then `conditional`. Rows that prove nothing — a map row whose coverage is `hint` — are written as leads, after the findings, under their own type in JSONL and their own heading in Markdown. In JSONL (`-format jsonl`, the same as `json`) each finding is one `{"type":"finding", …}` line and each lead one `{"type":"lead", …}` line; in Markdown (`-format md`) the records are grouped under `## Proved (n)`, `## Version-only (n)`, `## Conditional (n)` and `## Leads — unproved hints`. The counts in those headings are the numbers of records under them, read from the stored rows. A workspace with no qualifying rows writes an explicit empty record set — `{"type":"findings","findings":0,"leads":0}` in JSONL, a sentence saying no qualifying rows in Markdown — and exits 0. The same records are in `azhaq export -format findings` and `-format findings-md`. The labels and the fence behind them are in [Read-only verification](../CONCEPTS.md#read-only-verification--verify).
 
 ## Output
 
@@ -127,6 +137,8 @@ Read a redacted report once before sharing it. An identifier that no kept body n
 <!-- flags:begin report -->
 | Flag | Type | Default | Meaning |
 | --- | --- | --- | --- |
+| `-findings` | bool |  | write the findings records of a workspace instead of roles reports: one record per stored row whose label supports it (a -verify run's results and a -advisories run's leads), proved first, version-only and conditional kept distinct, unproved hints listed as leads; a workspace with no qualifying rows writes an explicit empty record set and exits 0 |
+| `-db` | string |  | with -findings: the workspace database the records are read from |
 | `-dir` | string |  | the -dir of the roles run (it holds roles.db) |
 | `-url` | string |  | write up this one row (its URL as roles lists it); every cross-role finding by default |
 | `-method` | string |  | the method of a write row (-replay-writes); a read's row by default |

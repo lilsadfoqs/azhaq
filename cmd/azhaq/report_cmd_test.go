@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -322,6 +323,7 @@ func TestReportCreateSeverity(t *testing.T) {
 // roles -replay-writes post lists a create another role was let to send;
 // report writes it up, from the directory and by -url -method.
 func TestReportWritesUpACreateInAnotherRolesCollection(t *testing.T) {
+	books := map[string]string{}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		user := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer tok-")
 		if user == "" {
@@ -330,9 +332,22 @@ func TestReportWritesUpACreateInAnotherRolesCollection(t *testing.T) {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		if r.Method == http.MethodPost && r.URL.Path == "/books/v1" {
+			var in struct {
+				Title string `json:"book_title"`
+			}
+			b, _ := io.ReadAll(r.Body)
+			_ = json.Unmarshal(b, &in)
+			books[in.Title] = user
 			w.WriteHeader(200)
 			fmt.Fprintf(w, `{"status":"success","by":%q}`, user)
 			return
+		}
+		if r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/books/v1/") {
+			title := strings.TrimPrefix(r.URL.Path, "/books/v1/")
+			if owner, ok := books[title]; ok {
+				fmt.Fprintf(w, `{"book_title":%q,"owner":%q}`, title, owner)
+				return
+			}
 		}
 		w.WriteHeader(404)
 	}))
@@ -354,10 +369,9 @@ func TestReportWritesUpACreateInAnotherRolesCollection(t *testing.T) {
 	}
 	files, _ := filepath.Glob(filepath.Join(out, "*.json"))
 	// Both owners' creates share one URL and method: roles.db keeps a row
-	// for each owner, and each is written up.
-	if len(files) != 2 {
-		t.Fatalf("want a report for each owner's create, got %v", files)
-	}
+	// for each owner, and each is written up. The books the creates made
+	// are read by the other role too, so cross-read reports join them:
+	// only the creates are counted here.
 	var docs []reportDoc
 	for _, f := range files {
 		b, _ := os.ReadFile(f)
@@ -365,7 +379,12 @@ func TestReportWritesUpACreateInAnotherRolesCollection(t *testing.T) {
 		if err := json.Unmarshal(b, &d); err != nil {
 			t.Fatal(err)
 		}
-		docs = append(docs, d)
+		if d.Method == http.MethodPost {
+			docs = append(docs, d)
+		}
+	}
+	if len(docs) != 2 {
+		t.Fatalf("want a report for each owner's create, got %v", files)
 	}
 	for _, d := range docs {
 		// The answers say nothing of whose book it is: accepted, no vulnerability named.

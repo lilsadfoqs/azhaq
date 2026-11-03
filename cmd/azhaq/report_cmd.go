@@ -114,13 +114,22 @@ type reportNotes struct {
 	Run            string   `json:"run"`
 	SessionSuspect bool     `json:"session_suspect,omitempty"`
 	Redacted       bool     `json:"redacted,omitempty"`
+	// WriteVerification keeps proved, accepted-not-verified and refuted
+	// distinct in a report, as the row reports them.
+	WriteVerification string `json:"write_verification,omitempty"`
 }
 
 // cmdReport writes up the findings a roles run listed:
 //
 //	azhaq report -dir azhaq-roles-… [-url URL [-method M]] [-format md|json] [-o FILE] [-redact]
+//
+// or, with -findings, the findings records of a run's workspace:
+//
+//	azhaq report -findings -db WORKSPACE.db [-format jsonl|md] [-o FILE]
 func cmdReport(args []string) error {
 	fs := newFlags("report")
+	findings := fs.Bool("findings", false, "write the findings records of a workspace instead of roles reports: one record per stored row whose label supports it (a -verify run's results and a -advisories run's leads), proved first, version-only and conditional kept distinct, unproved hints listed as leads; a workspace with no qualifying rows writes an explicit empty record set and exits 0")
+	db := fs.String("db", "", "with -findings: the workspace database the records are read from")
 	dir := fs.String("dir", "", "the -dir of the roles run (it holds "+evidenceFile+")")
 	target := fs.String("url", "", "write up this one row (its URL as roles lists it); every cross-role finding by default")
 	method := fs.String("method", "", "the method of a write row (-replay-writes); a read's row by default")
@@ -129,6 +138,34 @@ func cmdReport(args []string) error {
 	out := fs.String("o", "", "FILE for the reports (one file, or a directory with a report per file); without -url, DIR/reports; with -url, standard output")
 	redact := fs.Bool("redact", false, "also mask hosts and identifiers (a report to share outside the engagement)")
 	if err := parse(fs, args); err != nil {
+		return err
+	}
+	if *findings {
+		if *db == "" || fs.NArg() != 0 {
+			return usagef("usage: azhaq report -findings -db WORKSPACE.db [-format jsonl|md] [-o FILE]")
+		}
+		if *format != "md" && *format != "jsonl" && *format != "json" {
+			return usagef("-format with -findings is jsonl or md, not %q", *format)
+		}
+		g, err := readGraph(*db)
+		if err != nil {
+			return err
+		}
+		found, leads := buildFindings(g)
+		var body []byte
+		if *format == "md" {
+			body = findingsMarkdown(found, leads)
+		} else {
+			body = findingsJSONL(found, leads)
+		}
+		if *out != "" {
+			if err := os.WriteFile(*out, body, 0o644); err != nil {
+				return err
+			}
+			fmt.Fprintf(os.Stderr, "azhaq report: %s and %s in %s\n", plural(len(found), "finding"), plural(len(leads), "lead"), *out)
+			return nil
+		}
+		_, err = os.Stdout.Write(body)
 		return err
 	}
 	if *dir == "" || fs.NArg() != 0 {
@@ -804,6 +841,12 @@ func buildReport(er store.EvidenceRow, order []string, saved time.Time, savedOK,
 	if class == classWrite {
 		missing("the owner's reads of the object before and after the write are not kept in the evidence store, only what the row says of them")
 	}
+	switch row.WriteVerification {
+	case verifyAccepted:
+		missing("the write is accepted-not-verified: no verification step proved it took")
+	case verifyRefuted:
+		missing("the write is refuted by the verification step the user gave: it did not take as the owner's")
+	}
 
 	// Summary: two sentences.
 	d.Summary = summaryOf(row, class, verb, objPath, answers, owner, controlled, controls, mk)
@@ -864,7 +907,7 @@ func buildReport(er store.EvidenceRow, order []string, saved time.Time, savedOK,
 	if savedOK {
 		run = saved.UTC().Format("2006-01-02 15:04 UTC")
 	}
-	d.Notes = reportNotes{Confidence: d.Confidence, ConfidenceWhy: confidenceWhy(row.Confidence), BothWays: row.BothWays, FoundBy: row.FoundBy, Run: run, SessionSuspect: row.SessionSuspect, Redacted: redact}
+	d.Notes = reportNotes{Confidence: d.Confidence, ConfidenceWhy: confidenceWhy(row.Confidence), BothWays: row.BothWays, FoundBy: row.FoundBy, Run: run, SessionSuspect: row.SessionSuspect, Redacted: redact, WriteVerification: row.WriteVerification}
 	return d, nil
 }
 
@@ -1183,6 +1226,9 @@ func (d reportDoc) markdown() string {
 	}
 	if d.Notes.SessionSuspect {
 		w("- Session suspect: an answer was asked after its role's session last proved alive; ask it again before sending.\n")
+	}
+	if d.Notes.WriteVerification != "" {
+		w("- Write verification: %s.\n", d.Notes.WriteVerification)
 	}
 	if len(d.Notes.FoundBy) > 0 {
 		w("- Found by the runs of: %s.\n", strings.Join(d.Notes.FoundBy, ", "))

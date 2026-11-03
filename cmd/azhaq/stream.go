@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -17,9 +18,9 @@ import (
 // streamFound prints what a run finds as it finds it, once per map row: a
 // long run is not silent for minutes before its map. A URL, a name that
 // resolves and an address each print one line, under the key its map row
-// has, however many collectors found it; an open-ports line stands for the
-// host's port rows (host:port/tcp). Lines go to stdout before the map; with
-// -json each is an object with "type":"found".
+// has, however many collectors found it, and an open port prints one line
+// under its row's key (address:port/tcp), when the scan reports it. Lines go
+// to stdout before the map; with -json each is an object with "type":"found".
 func streamFound(asJSON bool) func(types.Entity, types.Observation) {
 	var mu sync.Mutex
 	seen := map[string]bool{}
@@ -79,15 +80,51 @@ func streamFound(asJSON bool) func(types.Entity, types.Observation) {
 				}
 			}
 		case "ports":
-			if open, _ := p["open"].([]any); len(open) > 0 {
-				l := line{kind: "ports", key: str("host"), more: fmt.Sprint(open), fields: map[string]any{"ip": str("ip"), "open": open}}
-				if l.key == "" {
-					l.key = str("ip")
-				} else if ip := str("ip"); ip != "" && ip != l.key {
-					l.more = ip + " " + l.more
-				}
-				lines = append(lines, l)
+			// One line per port row, as the map has them: the host's
+			// address, the port and the protocol. A range's own row has no
+			// ports of its own, and an address row names the ports it
+			// found, so the open list repeated by each scan is not a key.
+			if p["range"] == true {
+				break
 			}
+			addr, host := str("ip"), str("host")
+			if addr == "" {
+				addr = host
+			}
+			if addr == "" {
+				break
+			}
+			add := func(port any, proto, state, service string) {
+				n, _ := port.(float64)
+				if n <= 0 {
+					return
+				}
+				key := net.JoinHostPort(addr, strconv.Itoa(int(n))) + "/" + proto
+				fields := map[string]any{"ip": str("ip"), "host": host, "port": int(n), "protocol": proto, "state": state}
+				more := state
+				if service != "" {
+					fields["service"] = service
+					more += " " + service
+				}
+				if host != "" && host != addr {
+					more = host + "  " + more
+				}
+				lines = append(lines, line{kind: "port", key: key, more: more, fields: fields})
+			}
+			rows := func(k, proto string) {
+				list, _ := p[k].([]any)
+				for _, v := range list {
+					m, _ := v.(map[string]any)
+					state, _ := m["state"].(string)
+					if state == "" {
+						state = "open"
+					}
+					svc, _ := m["service"].(string)
+					add(m["port"], proto, state, svc)
+				}
+			}
+			rows("services", "tcp")
+			rows("udp_services", "udp")
 		}
 		mu.Lock()
 		defer mu.Unlock()
@@ -95,16 +132,11 @@ func streamFound(asJSON bool) func(types.Entity, types.Observation) {
 			if l.key == "" {
 				continue
 			}
-			// A key is printed once, whichever way it was found first; its
-			// ports line is a separate key, as the port rows are.
-			id := l.key
-			if l.kind == "ports" {
-				id = "ports " + l.key + " " + l.more
-			}
-			if seen[id] {
+			// A key is printed once, whichever way it was found first.
+			if seen[l.key] {
 				continue
 			}
-			seen[id] = true
+			seen[l.key] = true
 			if asJSON {
 				row := map[string]any{"type": "found", "kind": l.kind, "key": l.key, "collector": o.Collector}
 				for k, v := range l.fields {
