@@ -455,3 +455,19 @@ func TestRolesBudgetSpentWhileSigningInNamesTheStage(t *testing.T) {
 		t.Errorf("the summary of the failed run has no sign-in stage: %v", sum["cost"])
 	}
 }
+
+// Behind the counting reverse proxy (bench/truth/ledger/countproxy.py), the
+// requests it logs are the ones the stages say they sent, and the estimate of
+// the map is within the stated factor of them.
+func TestStagesAddUpToWhatTheCountProxyLogged(t *testing.T) {
+	var hits atomic.Int64
+	srv := juiceShaped(&hits)
+	defer srv.Close()
+	proxy, logged := startCountProxy(t, srv)
+	sum := runJSON(t, "run", "-url", "http://"+proxy+"/", "-allow", "127.0.0.1", "-sources", "none", "-db", filepath.Join(t.TempDir(), "w.db"))
+	stagesAddUp(t, sum, int64(logged()))
+	m := stagesOf(t, sum)["map"]
+	if est, got := stageAmount(m, "estimate", "requests"), float64(logged()); got < est || got > costFactor*est {
+		t.Errorf("map stage: estimated %v requests, the proxy logged %v: not within a factor of %d, from above", est, got, costFactor)
+	}
+}

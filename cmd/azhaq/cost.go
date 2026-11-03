@@ -139,7 +139,7 @@ func stageOfCollector(name string) string {
 }
 
 // stageOrder is how stages are listed: the order a run goes through them.
-var stageOrder = []string{signInStage, "sources", "names", "map", "ports", "dirs", "params", "screenshots", "advisories",
+var stageOrder = []string{signInStage, "sources", "names", "map", "ports", "dirs", "params", "screenshots", "advisories", "notify",
 	stageRoleMaps, stageHistory, stageReplay, stageControls, stageWrites, stageVerify, "other"}
 
 func stageRank(s string) int {
