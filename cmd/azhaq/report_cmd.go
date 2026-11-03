@@ -114,6 +114,9 @@ type reportNotes struct {
 	Run            string   `json:"run"`
 	SessionSuspect bool     `json:"session_suspect,omitempty"`
 	Redacted       bool     `json:"redacted,omitempty"`
+	// WriteVerification keeps proved, accepted-not-verified and refuted
+	// distinct in a report, as the row reports them.
+	WriteVerification string `json:"write_verification,omitempty"`
 }
 
 // cmdReport writes up the findings a roles run listed:
@@ -838,6 +841,12 @@ func buildReport(er store.EvidenceRow, order []string, saved time.Time, savedOK,
 	if class == classWrite {
 		missing("the owner's reads of the object before and after the write are not kept in the evidence store, only what the row says of them")
 	}
+	switch row.WriteVerification {
+	case verifyAccepted:
+		missing("the write is accepted-not-verified: no verification step proved it took")
+	case verifyRefuted:
+		missing("the write is refuted by the verification step the user gave: it did not take as the owner's")
+	}
 
 	// Summary: two sentences.
 	d.Summary = summaryOf(row, class, verb, objPath, answers, owner, controlled, controls, mk)
@@ -898,7 +907,7 @@ func buildReport(er store.EvidenceRow, order []string, saved time.Time, savedOK,
 	if savedOK {
 		run = saved.UTC().Format("2006-01-02 15:04 UTC")
 	}
-	d.Notes = reportNotes{Confidence: d.Confidence, ConfidenceWhy: confidenceWhy(row.Confidence), BothWays: row.BothWays, FoundBy: row.FoundBy, Run: run, SessionSuspect: row.SessionSuspect, Redacted: redact}
+	d.Notes = reportNotes{Confidence: d.Confidence, ConfidenceWhy: confidenceWhy(row.Confidence), BothWays: row.BothWays, FoundBy: row.FoundBy, Run: run, SessionSuspect: row.SessionSuspect, Redacted: redact, WriteVerification: row.WriteVerification}
 	return d, nil
 }
 
@@ -1217,6 +1226,9 @@ func (d reportDoc) markdown() string {
 	}
 	if d.Notes.SessionSuspect {
 		w("- Session suspect: an answer was asked after its role's session last proved alive; ask it again before sending.\n")
+	}
+	if d.Notes.WriteVerification != "" {
+		w("- Write verification: %s.\n", d.Notes.WriteVerification)
 	}
 	if len(d.Notes.FoundBy) > 0 {
 		w("- Found by the runs of: %s.\n", strings.Join(d.Notes.FoundBy, ", "))
