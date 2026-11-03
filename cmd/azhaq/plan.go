@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"maps"
 	"os"
 	"slices"
@@ -24,6 +25,10 @@ import (
 // cmdPlan is a run that stops before sending anything: what it would
 // take, leave out, run and send.
 func cmdPlan(args []string) error {
+	if len(args) > 0 && args[0] == "roles" {
+		// What azhaq roles would send, by stage.
+		return cmdRoles(append([]string{"-plan"}, args[1:]...))
+	}
 	fs := newFlags("plan")
 	var names []string
 	runFlags().VisitAll(func(f *flag.Flag) {
@@ -54,6 +59,7 @@ type runPlan struct {
 	Limits     map[string]string `json:"limits"`
 	Sends      []string          `json:"sends"`
 	Requests   planRequests      `json:"requests"`
+	Estimate   costEstimate      `json:"estimate"`       // what the run would send, by stage
 	AXFR       []planAXFR        `json:"axfr,omitempty"` // -axfr: the zone transfers dns -axfr would try
 	// StateChanging are the in-scope GET requests among the targets
 	// whose own name declares a state change, each with the -deny-path
@@ -126,6 +132,11 @@ type sendLimits struct {
 	axfr         bool     // -axfr: plan the zone transfers of dns -axfr too
 	verify       bool     // -verify: the enumerated read-only verification checks
 	resolvers    []string // the resolvers named (-resolvers)
+	dirsWords    int      // words of -dirs
+	dirsExts     int      // -dirs-ext extensions
+	paramsN      int      // names of -params
+	bruteN       int      // words of -dns-brute
+	dirsNoCal    bool     // -dirs-calibrate=false
 }
 
 // planSends are the lines on what a run sends besides the GET requests for
@@ -276,6 +287,8 @@ func planFor(cat *catalog.Catalog, seeds []types.Seed, b engine.Budgets, paths [
 	}
 	notCounted := map[string]bool{}
 	eng := &engine.Engine{Cat: cat}
+	var kept []types.Seed // the seeds a run would take, with the collectors planned on each
+	var planned [][]string
 	for _, s := range engine.ExpandSeeds(seeds) {
 		if s.Type == types.TypeURL {
 			if rule := b.Scope.DeniedPath(s.Key()); rule != "" {
@@ -318,6 +331,7 @@ func planFor(cat *catalog.Catalog, seeds []types.Seed, b engine.Budgets, paths [
 			}
 		}
 		p.Targets = append(p.Targets, t)
+		kept, planned = append(kept, s), append(planned, t.Collectors)
 	}
 	p.Requests.NotCounted = sortedKeys(notCounted)
 	for f, on := range b.Active {
@@ -335,6 +349,20 @@ func planFor(cat *catalog.Catalog, seeds []types.Seed, b engine.Budgets, paths [
 	if runs("azhaq-paths") {
 		p.Paths = paths
 	}
+	asks := func(name string, s types.Seed) int {
+		if col, ok := cat.Get(name); ok {
+			if a, ok := col.(catalog.Asker); ok {
+				return len(a.Asks(s))
+			}
+		}
+		return 0
+	}
+	env := costEnv{sendLimits: send, favicon: !send.noFavicon}
+	if runs("azhaq-paths") {
+		env.paths = len(p.Paths)
+	}
+	env.dirsWords, env.dirsExts, env.paramsN, env.bruteN = send.dirsWords, send.dirsExts, send.paramsN, send.bruteN
+	p.Estimate = estimateCost(kept, planned, runs, b.Active, env, asks)
 	gets, others := planSends(b, send)
 	switch {
 	case b.Passive && len(others) == 0:
@@ -383,27 +411,33 @@ func printPlan(p runPlan, asJSON bool) error {
 	if asJSON {
 		return json.NewEncoder(os.Stdout).Encode(p)
 	}
+	printPlanText(os.Stdout, p)
+	return nil
+}
+
+// printPlanText is the plan in plain text on w.
+func printPlanText(w io.Writer, p runPlan) {
 	if len(p.Targets) == 0 {
-		fmt.Println("targets (0): nothing to do")
+		fmt.Fprintln(w, "targets (0): nothing to do")
 	}
-	fmt.Printf("targets (%d)\n", len(p.Targets))
+	fmt.Fprintf(w, "targets (%d)\n", len(p.Targets))
 	for _, t := range p.Targets {
-		fmt.Printf("  %s %s: %s\n", t.Type, t.Key, strings.Join(t.Collectors, " "))
+		fmt.Fprintf(w, "  %s %s: %s\n", t.Type, t.Key, strings.Join(t.Collectors, " "))
 	}
 	if len(p.AXFR) > 0 {
-		fmt.Printf("zone transfers (%d, -axfr)\n", len(p.AXFR))
+		fmt.Fprintf(w, "zone transfers (%d, -axfr)\n", len(p.AXFR))
 		for _, x := range p.AXFR {
-			fmt.Printf("  %s: %s; then %s", x.Zone, x.Lookups, x.Transfer)
+			fmt.Fprintf(w, "  %s: %s; then %s", x.Zone, x.Lookups, x.Transfer)
 			if len(x.Resolvers) > 0 {
-				fmt.Printf("; also each resolver named: %s", strings.Join(x.Resolvers, ", "))
+				fmt.Fprintf(w, "; also each resolver named: %s", strings.Join(x.Resolvers, ", "))
 			}
-			fmt.Println()
+			fmt.Fprintln(w)
 		}
 	}
 	if len(p.Skipped) > 0 {
-		fmt.Printf("left out (%d)\n", len(p.Skipped))
+		fmt.Fprintf(w, "left out (%d)\n", len(p.Skipped))
 		for _, s := range p.Skipped {
-			fmt.Printf("  %s: %s\n", s.Target, s.Reason)
+			fmt.Fprintf(w, "  %s: %s\n", s.Target, s.Reason)
 		}
 	}
 	if len(p.StateChanging) > 0 {
@@ -417,33 +451,33 @@ func printPlan(p runPlan, asJSON bool) error {
 		names = append(names, n)
 	}
 	sort.Strings(names)
-	fmt.Println("collectors")
+	fmt.Fprintln(w, "collectors")
 	for _, n := range names {
-		fmt.Printf("  %-18s %s\n", n, p.Collectors[n])
+		fmt.Fprintf(w, "  %-18s %s\n", n, p.Collectors[n])
 	}
 	if len(p.Paths) > 0 {
-		fmt.Printf("built-in path checks on each web service (%d; -no-paths turns them off): %s\n", len(p.Paths), strings.Join(p.Paths, " "))
+		fmt.Fprintf(w, "built-in path checks on each web service (%d; -no-paths turns them off): %s\n", len(p.Paths), strings.Join(p.Paths, " "))
 	}
 	active := "none"
 	if len(p.Active) > 0 {
 		active = strings.Join(p.Active, " ")
 	}
-	fmt.Printf("active techniques (wordlists, ports, introspection; besides the built-in path checks): %s\n", active)
+	fmt.Fprintf(w, "active techniques (wordlists, ports, introspection; besides the built-in path checks): %s\n", active)
 	var lim []string
 	for _, k := range []string{"depth", "max-items", "max-requests", "rate", "timeout", "daily-requests"} {
 		lim = append(lim, k+" "+p.Limits[k])
 	}
-	fmt.Printf("limits: %s\n", strings.Join(lim, ", "))
+	fmt.Fprintf(w, "limits: %s\n", strings.Join(lim, ", "))
 	for _, s := range p.Sends {
-		fmt.Printf("sends: %s\n", s)
+		fmt.Fprintf(w, "sends: %s\n", s)
 	}
-	printRequests(p)
-	return nil
+	printRequests(w, p)
+	printEstimate(w, "estimate: ", p.Estimate)
 }
 
 // printRequests says what is known of the requests before any is sent:
 // the source queries exactly, the requests to the targets as a bound.
-func printRequests(p runPlan) {
+func printRequests(w io.Writer, p runPlan) {
 	r := p.Requests
 	var by []string
 	for _, n := range slices.Sorted(maps.Keys(r.Sources)) {
@@ -451,29 +485,29 @@ func printRequests(p runPlan) {
 	}
 	switch {
 	case len(by) > 0:
-		fmt.Printf("source queries: %d about the targets above (%s)\n", r.Total, strings.Join(by, ", "))
+		fmt.Fprintf(w, "source queries: %d about the targets above (%s)\n", r.Total, strings.Join(by, ", "))
 	case len(r.NotCounted) > 0:
-		fmt.Println("source queries:")
+		fmt.Fprintln(w, "source queries:")
 	default:
-		fmt.Println("source queries: none")
+		fmt.Fprintln(w, "source queries: none")
 	}
 	for _, n := range r.NotCounted {
-		fmt.Printf("  %s: not counted; it does not say which sources it asks before it runs\n", n)
+		fmt.Fprintf(w, "  %s: not counted; it does not say which sources it asks before it runs\n", n)
 	}
 	switch {
 	case r.Found && r.scoped:
-		fmt.Println("  domains found on the way are asked about too, inside the scope")
+		fmt.Fprintln(w, "  domains found on the way are asked about too, inside the scope")
 	case r.Found:
-		fmt.Println("  domains found on the way are asked about too (no scope: -depth bounds how far, and -allow keeps them to yours)")
+		fmt.Fprintln(w, "  domains found on the way are asked about too (no scope: -depth bounds how far, and -allow keeps them to yours)")
 	}
 	if r.Passive {
-		fmt.Println("requests to the targets: none (-passive)")
+		fmt.Fprintln(w, "requests to the targets: none (-passive)")
 		return
 	}
 	if r.Cap > 0 {
-		fmt.Printf("requests to the targets: at most %d (%s)\n", r.Cap, r.CapBy)
+		fmt.Fprintf(w, "requests to the targets: at most %d (%s)\n", r.Cap, r.CapBy)
 	} else {
-		fmt.Println("requests to the targets: no cap (-max-requests sets one)")
+		fmt.Fprintln(w, "requests to the targets: no cap (-max-requests sets one)")
 	}
 	if r.PerService > 0 {
 		names := "the names that resolve and answer"
@@ -484,10 +518,10 @@ func printRequests(p runPlan) {
 		if r.PerService > 1+len(p.Paths) {
 			what = fmt.Sprintf("its page, the favicon, %d built-in paths", len(p.Paths))
 		}
-		fmt.Printf("  how many depends on %s: about %d per web service (%s), then what its pages, scripts and archived URLs lead to\n", names, r.PerService, what)
+		fmt.Fprintf(w, "  how many depends on %s: about %d per web service (%s), then what its pages, scripts and archived URLs lead to\n", names, r.PerService, what)
 	}
 	if len(p.Active) > 0 {
-		fmt.Printf("  %s add their own\n", strings.Join(p.Active, " "))
+		fmt.Fprintf(w, "  %s add their own\n", strings.Join(p.Active, " "))
 	}
 }
 

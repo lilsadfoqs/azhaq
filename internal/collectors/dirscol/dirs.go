@@ -683,6 +683,10 @@ func (n *sweepNote) unfiltered() []string {
 	return slices.Clone(n.dirs)
 }
 
+// CalibrationProbes is how many requests calibrating one directory sends:
+// the four shapes and one for each extension (see calibrate).
+func CalibrationProbes(extensions int) int { return 4 + extensions }
+
 // calibrate asks for random names of the shapes ffuf's -ac uses (a word,
 // admin…, .htaccess…, a directory) and one per extension, at the sweep's
 // pace. A file that exists keeps its place even when its content equals

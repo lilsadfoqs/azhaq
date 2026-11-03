@@ -79,6 +79,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 - A signal (Ctrl-C, SIGTERM, SIGHUP), `-timeout` or `-max-time` while names wait for DNS stops the run: exit 4, `complete` false, `stopped` says why (`-max-time 25s reached with N tasks known and not done`). The names DNS had answered before the stop are kept and listed; the names it had not answered are counted as `not asked`, and `azhaq resume` asks only those.
 - A source that answered 200 with an error and gave no names is a failed source: see [Failed sources](#failed-sources).
 - `subs` ends with a `coverage:` note: see [Coverage estimate](#coverage-estimate).
+- Without `-live`, `-w` or `-permute` it ends with the wider pass as its first `next:` line: `azhaq subs … -live   (next pass, not run: N names listed by the sources were not looked up, so some may not exist; -live asks about 2N DNS queries)`. The count is two queries (A and AAAA) for each name listed, before the retries and wildcard probes. It is a line: nothing is looked up for it. Like the other `next:` lines of `subs` it is for a person at a terminal: it is not in `-json`, and `AZHAQ_NO_HINTS` hides it.
 
 ## Details
 

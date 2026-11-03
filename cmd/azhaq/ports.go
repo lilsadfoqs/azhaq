@@ -478,6 +478,11 @@ func cmdPorts(args []string) error {
 		return err
 	}
 	sink.settle(rep, *sn)
+	if stdin := *list == "" && len(hosts)+len(fs.Args()) == 0 && !scopeOnly; !*sn && !stdin && rep.Stopped == "" {
+		if why, _ := portsPass(len(ports), int(sink.scanned), sink.open); why != "" {
+			rep.nextPass(portsPassCommand(args, rep.DB), why)
+		}
+	}
 	if advFlags.on {
 		// The leads the run stored, after the port rows: one line each
 		// (a JSON object with -json), counted apart from the open ports
