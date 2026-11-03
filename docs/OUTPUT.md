@@ -118,6 +118,7 @@ Some work failed and did not get its answer: a source that failed, a target that
 | `stopped`, `resume` | The limit that stopped the work and the command that continues it. |
 | `notes` | Caps that were hit and other things worth knowing that are not failures. See [notes](#notes). |
 | `next` | Commands worth running next. See [next](#next). |
+| `advisories` | With `-advisories`: the known-issue leads, one per lead line printed and per stored `advisory` row: `advisory_id`, `url` (its source), `target`, `product`, `version_seen`, `affected_range`, `label` (`affected`, `not affected` or `conditional`), `precondition` when one is named, and with `-advisories-confirm` also `confidence` (`observed`, `inferred` or `claimed`) and `read` (what was read, or why nothing was). They are leads, not map rows: `counts` still adds up to `stored` without them, and a note counts them by label from these rows. See [Known-issue matching](CONCEPTS.md#known-issue-matching--advisories). |
 
 ### Run counts
 

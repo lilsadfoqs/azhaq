@@ -295,6 +295,14 @@ Each open TCP port gets `product` and `version` next to `service`, from what it 
 - Elasticsearch's transport ping is answered by a node of 7.x or later. An older node ignores it, and a silent 9300 then reads `elasticsearch-transport?`: a guess by port, marked with the question mark like every guess. The ping carries no version, so a confirmed port has none.
 - A binary answer is read by the protocols' readers, and by none that does not recognise it. So a port with no recognised protocol keeps its banner and stays `service` empty.
 
+### Known-issue matching
+
+With `-advisories -advisory-source FILE`, each open port's product and version (what the service itself stated) is matched against the advisory records of that source, and each match is printed after the port rows: one lead line each, or one `{"type":"advisory", …}` object with `-json`. They are counted apart in the summary (`advisory leads` in `counts`, and the label counts in a note), never as open ports. Matching sends nothing: it reads only what the scan already holds. `-advisories-confirm` adds, for each affected or conditional lead, the one benign read the advisory names (a `GET` of its documented version or info path, or of `/`), labelled `observed`, `inferred` or `claimed` with what was read; it goes through the scope, the budget and the ledger like any request. A lead is never a proven finding. See [Known-issue matching](../CONCEPTS.md#known-issue-matching--advisories).
+
+```
+azhaq ports -host 192.0.2.10 -p top-100 -advisories -advisory-source osv.json -json
+```
+
 ## Flags
 
 <!-- flags:begin ports -->
@@ -324,6 +332,9 @@ Each open TCP port gets `product` and `version` next to `service`, from what it 
 | `-seed` | int |  | make the random port order repeat (default: a new one each run) |
 | `-sn` | bool |  | list the addresses that are up (a connect to 80 or 443 is accepted or refused) and scan nothing |
 | `-wn` | bool |  | scan only the addresses that are up (by -sn's test); the default scans every address |
+| `-advisories` | bool |  | match the products and versions this run already confirmed against the advisory records of -advisory-source, as labelled leads (affected, not affected or conditional, each with its advisory id and URL): a pure lookup over what the run already holds, nothing more is sent to a target |
+| `-advisories-confirm` | bool |  | with -advisories: for each affected or conditional lead, also make the one benign read the advisory names (a GET of its documented version or info path, or of / to read the version it states): no payload, no login, no state change, never a request that could trigger the issue; each read is in the ledger and counts against -max-requests, and each lead is labelled observed, inferred or claimed (needs -advisories and a scope: -allow, -scope or the targets given) |
+| `-advisory-source` | string |  | the advisory records to match against, OSV JSON (a record, a list, {"vulns": [...]}, or JSON lines): a file the user downloaded (works offline), or an http(s) URL asked once as a third-party source; azhaq vendors no snapshot and fetches none it was not given |
 
 **Scope and safety**
 
