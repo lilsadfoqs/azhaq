@@ -34,10 +34,14 @@ const (
 	// A POST another role sent was accepted. Nothing shows the server ignores
 	// who may create: the object may be its sender's own.
 	verdictWriteAccepted = "create accepted: nothing shows it crosses roles"
-	verdictWriteNoChange = "answered 2xx but changed nothing of the owner's"
-	verdictWriteOwner    = "only its owner writes it"
-	verdictWriteVoid     = "the owner's own write was refused"
-	verdictWriteRefused  = "the other roles were refused"
+	// A create was accepted but the object it made could not be located
+	// (no Location, no identifier in the answer, no new item in the
+	// collection), so nobody read it back: this claims no negative.
+	verdictWriteUnverifiable = "create accepted: the created object could not be located to check who reads it"
+	verdictWriteNoChange     = "answered 2xx but changed nothing of the owner's"
+	verdictWriteOwner        = "only its owner writes it"
+	verdictWriteVoid         = "the owner's own write was refused"
+	verdictWriteRefused      = "the other roles were refused"
 	// Every other role's write ended in a server error: neither refused nor
 	// let through, so nothing is said about who may write.
 	verdictWriteFailed = "the other roles' writes failed with a server error (5xx): neither refused nor accepted"
@@ -50,6 +54,14 @@ const (
 	verdictWriteUnread = "writes another role's object: accepted; the change cannot be read back to confirm"
 )
 
+// The words a write row reports for a verification step.
+const (
+	verifyProved    = "proved"
+	verifyAccepted  = "accepted-not-verified"
+	verifyRefuted   = "refuted"
+	verifyUnlocated = "unverifiable"
+)
+
 func init() {
 	verdictOrder[verdictWriteAnyone] = -2
 	verdictOrder[verdictWriteCross] = -1
@@ -58,6 +70,7 @@ func init() {
 	verdictOrder[verdictWriteNoChange] = 15
 	verdictOrder[verdictWriteCreate] = 16
 	verdictOrder[verdictWriteAccepted] = 16
+	verdictOrder[verdictWriteUnverifiable] = 17
 	verdictOrder[verdictWriteOwner] = 20
 	verdictOrder[verdictWriteVoid] = 21
 	verdictOrder[verdictWriteRefused] = 20
@@ -254,6 +267,18 @@ func replayWrites(roles []role, reqs []writeReq, answers map[string]map[string]a
 // replayWritesAs is replayWrites with who each role is, which tells whose
 // object a create made.
 func replayWritesAs(who map[string]identity, roles []role, reqs []writeReq, answers map[string]map[string]answer, own map[string]bool, rate float64, budget int, canary bool, allow ...string) ([]roleRow, int, error) {
+	return replayWritesVerify(who, roles, reqs, answers, own, rate, budget, canary, nil, allow...)
+}
+
+// replayWritesVerify is replayWritesAs with the user's verification
+// steps for writes the read-back cannot prove.
+func replayWritesVerify(who map[string]identity, roles []role, reqs []writeReq, answers map[string]map[string]answer, own map[string]bool, rate float64, budget int, canary bool, verify []verifyWrite, allow ...string) ([]roleRow, int, error) {
+	return replayWritesPaused(who, roles, reqs, answers, own, rate, budget, canary, verify, nil, allow...)
+}
+
+// replayWritesPaused is replayWritesVerify with the roles paused on
+// session loss in the read replay: they are not asked to send writes.
+func replayWritesPaused(who map[string]identity, roles []role, reqs []writeReq, answers map[string]map[string]answer, own map[string]bool, rate float64, budget int, canary bool, verify []verifyWrite, paused map[string]bool, allow ...string) ([]roleRow, int, error) {
 	ctx := context.Background()
 	fetch.Reset()
 	defer fetch.Reset()
@@ -321,7 +346,7 @@ func replayWritesAs(who map[string]identity, roles []role, reqs []writeReq, answ
 		// A POST to a collection makes a new object: never another role's
 		// object written.
 		if w.method == http.MethodPost {
-			if err := replayCollection(&row, roles, w, answers, read, send, who); err != nil {
+			if err := replayCollectionPaused(&row, roles, w, answers, read, send, who, paused); err != nil {
 				stop = err
 				rows = append(rows, finishWriteRow(row))
 				break
@@ -384,6 +409,10 @@ func replayWritesAs(who map[string]identity, roles []role, reqs []writeReq, answ
 		var let, proven []string
 		anon := map[string]bool{}
 		for _, r := range otherRoles(roles, w.owner) {
+			if paused[r.name] {
+				row.OwnerBy += fmt.Sprintf("; %s was not asked: its session was lost and its remaining work was paused", r.name)
+				continue
+			}
 			wr := w
 			if canaryable {
 				wr.body, _, _ = withCanary(w.body, canaryToken(), allow...)
@@ -430,7 +459,38 @@ func replayWritesAs(who map[string]identity, roles []role, reqs []writeReq, answ
 		// A map DELETE is never asked of its owner: it would delete it.
 		ownerAsked := w.status != 0 || w.empty
 		why := unreadable(w, vu, before)
+		if len(let) > 0 && len(proven) == 0 && len(verify) > 0 {
+			refuted := false
+			for _, name := range let {
+				sender := byName[name]
+				switch verifyOutcome(verify, w, sender, w.owner, read, send) {
+				case verifyProved:
+					proven = append(proven, name)
+					if sender.anonymous() {
+						anon[name] = true
+					}
+					row.OwnerBy += fmt.Sprintf("; %s's write is proved by the verification step the user gave", name)
+				case verifyRefuted:
+					refuted = true
+				}
+			}
+			switch {
+			case len(proven) > 0:
+				row.WriteVerification = verifyProved
+			case refuted:
+				row.WriteVerification = verifyRefuted
+				row.OwnerBy += "; the verification step the user gave refuted it: the write did not take as the owner's"
+			default:
+				row.WriteVerification = verifyAccepted
+			}
+		}
 		row.Verdict = writeVerdict(&row, let, proven, anon, ownerLet, ownerAsked, vu != "", why, already)
+		switch {
+		case len(proven) > 0 && row.WriteVerification == "":
+			row.WriteVerification = verifyProved
+		case row.Verdict == verdictWriteUnread && row.WriteVerification == "":
+			row.WriteVerification = verifyAccepted
+		}
 		rows = append(rows, finishWriteRow(row))
 	}
 	if short && stop == nil {
@@ -453,11 +513,49 @@ func replayWritesAs(who map[string]identity, roles []role, reqs []writeReq, answ
 // object belongs to the role whose request was replayed. Else it is "create
 // accepted": the object may well be its sender's own, which is what a
 // collection every signed-in user may post to does.
-func replayCollection(row *roleRow, roles []role, w writeReq, answers map[string]map[string]answer, read func(role, string) (answer, bool), send func(role, writeReq) (answer, error), who map[string]identity) error {
-	var let, shown []string
-	confirmed := false
+func replayCollectionPaused(row *roleRow, roles []role, w writeReq, answers map[string]map[string]answer, read func(role, string) (answer, bool), send func(role, writeReq) (answer, error), who map[string]identity, paused map[string]bool) error {
+	var let, shown, unlocated []string
+	ownerRole, hasOwner := role{}, false
+	for _, r := range roles {
+		if r.name == w.owner {
+			ownerRole, hasOwner = r, true
+		}
+	}
 	for _, r := range otherRoles(roles, w.owner) {
-		var obj *createdObject // the object r's create made, when this create confirmed it
+		if paused[r.name] {
+			row.OwnerBy += fmt.Sprintf("; %s was not asked: its session was lost and its remaining work was paused", r.name)
+			continue
+		}
+		// The object's pre-state, before this create: the collection as
+		// the sender reads it, and the member the write's own identifier
+		// names, as its recorded owner reads it.
+		collBefore, collBeforeOK := read(r, w.url)
+		type preState struct {
+			exists bool
+			ans    answer
+			owner  string
+			item   *listObject
+		}
+		pre := map[string]preState{}
+		for _, c := range bodyCandidates(w) {
+			if !hasOwner {
+				break
+			}
+			if got, ok := read(ownerRole, c.url); ok {
+				o, _, _ := createdOwner(got, w.owner, roles, who)
+				exists := reads(got)
+				if exists {
+					// A route that answers a made-up identifier alike
+					// proves nothing about the identifier before.
+					if fake := madeUp(c.value); fake != "" {
+						if ctrl, ok := read(ownerRole, memberURLFor(w.url, fake)); ok && reads(ctrl) && (ctrl.Hash == got.Hash || !fieldsDiffer(ctrl, got)) {
+							exists = false
+						}
+					}
+				}
+				pre[c.url] = preState{exists: exists, ans: got, owner: o}
+			}
+		}
 		a, err := send(r, w)
 		if err != nil {
 			return err
@@ -467,53 +565,366 @@ func replayCollection(row *roleRow, roles []role, w writeReq, answers map[string
 			continue
 		}
 		let = append(let, r.name)
-		made := a // the answer to the create, and the object read back, say whose it is
-		if !confirmed {
-			if u, field, value := createdMember(w, answers); u != "" {
-				if got, ok := read(r, u); ok && reads(got) {
-					row.OwnerBy += fmt.Sprintf("; %s's create is readable back at %s", r.name, pathOf(u))
-					confirmed = true
-					obj = &createdObject{url: u, field: field, value: value, creator: r.name, answers: map[string]answer{r.name: got}}
-					if got.self != nil {
-						made = got
+		// Locate the created object without guessing a mapped URL: the
+		// answer's Location, a link or identifier in its body, the
+		// write's own identifier, then the collection as the creator
+		// reads it before and after.
+		var obj *createdObject
+		var postAns answer
+		tried := map[string]bool{}
+		try := func(c candidate) bool {
+			if c.url == "" || tried[c.url] {
+				return false
+			}
+			tried[c.url] = true
+			got, ok := read(r, c.url)
+			if !ok || !reads(got) {
+				return false
+			}
+			obj = &createdObject{url: c.url, field: c.field, value: c.value, creator: r.name, answers: map[string]answer{r.name: got}}
+			postAns = got
+			row.OwnerBy += fmt.Sprintf("; %s's create is readable back at %s (%s)", r.name, pathOf(c.url), c.how)
+			return true
+		}
+		for _, c := range responseCandidates(w, a) {
+			if try(c) {
+				break
+			}
+		}
+		if obj == nil {
+			if collAfter, ok := read(r, w.url); ok {
+				for _, c := range collectionCandidates(w, collBefore, collAfter) {
+					if try(c) {
+						break
 					}
 				}
 			}
+		}
+		if obj == nil {
+			unlocated = append(unlocated, r.name)
+			why := "no Location and no identifier in the create answer or the write reads back, and the collection read as " + r.name + " before and after shows no new or changed object"
+			if !collBeforeOK {
+				why = "no Location and no identifier in the create answer or the write reads back, and the collection could not be read as " + r.name + " before the create"
+			}
+			row.OwnerBy += fmt.Sprintf("; unverifiable: %s's created object could not be located: %s; check by hand: read %s as %s, find the object it made, then read that object as each other role", r.name, why, pathOf(w.url), r.name)
+			row.Evidence = "unverifiable: " + why
+			continue
+		}
+		made := postAns
+		// Did the identifier already belong to another role?
+		var preInfo preState
+		hasPre := false
+		if p, ok := pre[obj.url]; ok {
+			preInfo, hasPre = p, true
+		} else if item := findItem(collBefore, obj.value); item != nil {
+			cp := *item
+			preInfo = preState{exists: true, item: &cp, owner: ownerOfItem(cp, roles, who)}
+			hasPre = true
+		}
+		postOwner, postBy, postStrong := createdOwner(made, r.name, roles, who)
+		if postOwner == "" {
+			if o, by, strong := createdOwner(a, r.name, roles, who); o != "" {
+				postOwner, postBy, postStrong = o, by, strong
+			}
+		}
+		changedPre := false
+		if hasPre && preInfo.exists {
+			switch {
+			case preInfo.ans.Hash != "" && postAns.Hash != "" && preInfo.ans.Hash != postAns.Hash:
+				changedPre = true
+			case preInfo.item != nil && postAns.self != nil && itemDiffers(*preInfo.item, *postAns.self):
+				changedPre = true
+			case preInfo.owner != "" && postOwner != "" && preInfo.owner != postOwner:
+				changedPre = true
+			}
+		}
+		if hasPre && preInfo.exists && preInfo.owner != "" && preInfo.owner != r.name && changedPre && postOwner != preInfo.owner {
+			shown = append(shown, r.name)
+			effective := postOwner
+			if effective == "" {
+				effective = r.name
+			}
+			obj.preOwner, obj.displaced = preInfo.owner, true
+			row.WriteVerification = verifyProved
+			row.OwnerBy += fmt.Sprintf("; the identifier %s belonged to %s before %s's create and is changed after it (now %s): a create that displaced another role's object", obj.value, preInfo.owner, r.name, effective)
+			setCreated(row, r.name, effective)
+			if !r.anonymous() {
+				readByOthers(row, roles, obj, read)
+			}
+			continue
 		}
 		if r.anonymous() {
 			shown = append(shown, r.name)
 			row.OwnerBy += fmt.Sprintf("; %s, a role with no session, was let to create", r.name)
 			continue
 		}
-		owner, by, strong := createdOwner(made, r.name, roles, who)
+		owner, by, strong := postOwner, postBy, postStrong
 		switch {
 		case owner == "":
+			row.OwnerBy += fmt.Sprintf("; the object %s's create made at %s does not say whose it is", r.name, pathOf(obj.url))
+			obj.ownerUnknown = true
+			if row.WriteVerification == "" {
+				row.WriteVerification = verifyAccepted
+			}
+			readByOthers(row, roles, obj, read)
 		case owner == r.name:
 			row.OwnerBy += fmt.Sprintf("; the object %s's create made belongs to %s (%s)", r.name, r.name, by)
+			row.WriteVerification = verifyProved
 			setCreated(row, r.name, owner)
-			if obj != nil {
-				readByOthers(row, roles, obj, read)
-			}
+			readByOthers(row, roles, obj, read)
 		case owner == w.owner && strong:
 			shown = append(shown, r.name)
 			row.OwnerBy += fmt.Sprintf("; the object %s's create made belongs to %s, whose request was replayed (%s)", r.name, owner, by)
 			setCreated(row, r.name, owner)
 		default:
 			row.OwnerBy += fmt.Sprintf("; the object %s's create made may belong to %s (%s)", r.name, owner, by)
+			obj.ownerUnknown = owner != r.name
+			if owner == r.name {
+				readByOthers(row, roles, obj, read)
+			}
 		}
+		_ = answers
 	}
 	row.Readers = let
 	switch {
 	case len(shown) > 0:
 		row.Verdict = verdictWriteCreate
+	case len(let) > 0 && len(unlocated) == len(let):
+		row.Verdict = verdictWriteUnverifiable
+		row.WriteVerification = verifyUnlocated
 	case len(let) > 0:
 		row.Verdict = verdictWriteAccepted
+		if len(unlocated) > 0 {
+			row.WriteVerification = verifyUnlocated
+		}
 	default:
 		if row.Verdict = serverVerdict(row); row.Verdict == "" {
 			row.Verdict = verdictWriteRefused
 		}
 	}
 	return nil
+}
+
+type candidate struct {
+	url, field, value, how string
+}
+
+func memberURLFor(collection, value string) string {
+	pu, err := url.Parse(collection)
+	if err != nil || value == "" {
+		return ""
+	}
+	pu.Path = strings.TrimRight(pu.Path, "/") + "/" + value
+	pu.RawPath = ""
+	pu.RawQuery, pu.Fragment = "", ""
+	return pu.String()
+}
+
+func bodyCandidates(w writeReq) []candidate {
+	var out []candidate
+	seen := map[string]bool{}
+	for _, p := range bodyPairs(w.body) {
+		u := memberURLFor(w.url, p[1])
+		if u != "" && !seen[u] {
+			seen[u] = true
+			out = append(out, candidate{url: u, field: p[0], value: p[1], how: "the write's " + p[0]})
+		}
+	}
+	return out
+}
+
+func resolveAgainst(base, ref string) string {
+	b, err := url.Parse(base)
+	if err != nil {
+		return ""
+	}
+	r, err := b.Parse(ref)
+	if err != nil {
+		return ""
+	}
+	r.RawQuery, r.Fragment = "", ""
+	return r.String()
+}
+
+func idFieldRank(n string) int {
+	switch {
+	case n == "id" || strings.HasSuffix(n, "id"):
+		return 0
+	case strings.Contains(n, "title") || n == "name" || strings.Contains(n, "slug") || n == "key":
+		return 1
+	}
+	return 2
+}
+
+func responseCandidates(w writeReq, a answer) []candidate {
+	var out []candidate
+	seen := map[string]bool{}
+	add := func(c candidate) {
+		if c.url != "" && !seen[c.url] {
+			seen[c.url] = true
+			out = append(out, c)
+		}
+	}
+	if a.Location != "" {
+		if u := resolveAgainst(w.url, a.Location); u != "" {
+			v := u
+			if pu, err := url.Parse(u); err == nil {
+				seg := pu.Path[strings.LastIndex(pu.Path, "/")+1:]
+				if un, err := url.PathUnescape(seg); err == nil {
+					v = un
+				}
+			}
+			add(candidate{url: u, value: v, how: "the create answer's Location"})
+		}
+	}
+	if a.self != nil {
+		var fields []string
+		for n := range a.self.fields {
+			fields = append(fields, n)
+		}
+		sort.Slice(fields, func(i, j int) bool {
+			ri, rj := idFieldRank(fields[i]), idFieldRank(fields[j])
+			if ri != rj {
+				return ri < rj
+			}
+			return fields[i] < fields[j]
+		})
+		// A link the answer itself gives comes before a guessed member.
+		for _, n := range fields {
+			v := a.self.fields[n]
+			switch norm(n) {
+			case "url", "self", "href", "link", "location", "uri":
+				if strings.HasPrefix(v, "http") || strings.HasPrefix(v, "/") {
+					add(candidate{url: resolveAgainst(w.url, v), value: v, how: "the create answer's " + n})
+				}
+			}
+		}
+		bodyFields := map[string]bool{}
+		for _, p := range bodyPairs(w.body) {
+			bodyFields[norm(p[0])] = true
+		}
+		sort.Slice(fields, func(i, j int) bool {
+			bi, bj := bodyFields[fields[i]], bodyFields[fields[j]]
+			if bi != bj {
+				return bi
+			}
+			ri, rj := idFieldRank(fields[i]), idFieldRank(fields[j])
+			if ri != rj {
+				return ri < rj
+			}
+			return fields[i] < fields[j]
+		})
+		for _, n := range fields {
+			v := a.self.fields[n]
+			if v == "" || len(v) > 64 || strings.ContainsAny(v, "/?#") {
+				continue
+			}
+			if idFieldRank(n) < 2 || bodyFields[n] {
+				add(candidate{url: memberURLFor(w.url, v), field: a.self.spelled(n), value: v, how: "the create answer's " + a.self.spelled(n)})
+			}
+		}
+	}
+	for _, c := range bodyCandidates(w) {
+		c.how = "the write's " + c.field
+		add(c)
+	}
+	return out
+}
+
+func orderedValFields(w writeReq, a answer) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, p := range bodyPairs(w.body) {
+		if n := norm(p[0]); !seen[n] {
+			seen[n] = true
+			out = append(out, n)
+		}
+	}
+	var rest []string
+	for n := range a.vals {
+		if !seen[n] {
+			rest = append(rest, n)
+		}
+	}
+	sort.Slice(rest, func(i, j int) bool {
+		ri, rj := idFieldRank(rest[i]), idFieldRank(rest[j])
+		if ri != rj {
+			return ri < rj
+		}
+		return rest[i] < rest[j]
+	})
+	return append(out, rest...)
+}
+
+func collectionCandidates(w writeReq, before, after answer) []candidate {
+	var out []candidate
+	seen := map[string]bool{}
+	add := func(field, value, how string) {
+		u := memberURLFor(w.url, value)
+		if u != "" && !seen[u] {
+			seen[u] = true
+			out = append(out, candidate{url: u, field: field, value: value, how: how})
+		}
+	}
+	for _, f := range orderedValFields(w, after) {
+		bv := map[string]bool{}
+		for _, v := range before.vals[f] {
+			bv[v] = true
+		}
+		for _, v := range after.vals[f] {
+			if !bv[v] {
+				add(f, v, "the collection as the creator read it before and after")
+			}
+		}
+	}
+	for i := range after.items {
+		for _, f := range orderedValFields(w, after) {
+			v := after.items[i].fields[f]
+			if v == "" {
+				continue
+			}
+			for j := range before.items {
+				if before.items[j].fields[f] == v && itemDiffers(before.items[j], after.items[i]) {
+					add(f, v, "an object changed in the collection as the creator read it before and after")
+				}
+			}
+		}
+	}
+	return out
+}
+
+func findItem(a answer, value string) *listObject {
+	if value == "" {
+		return nil
+	}
+	for i := range a.items {
+		for _, v := range a.items[i].fields {
+			if v == value {
+				return &a.items[i]
+			}
+		}
+	}
+	return nil
+}
+
+func itemDiffers(a, b listObject) bool {
+	for n, v := range a.fields {
+		if b.fields[n] != v && !timeLike.MatchString(v) {
+			return true
+		}
+	}
+	for n, v := range b.fields {
+		if a.fields[n] != v && !timeLike.MatchString(v) {
+			return true
+		}
+	}
+	return false
+}
+
+func ownerOfItem(item listObject, roles []role, who map[string]identity) string {
+	o := item
+	owner, _, _ := createdOwner(answer{self: &o}, "", roles, who)
+	return owner
 }
 
 // readByOthers has every role but the creator read the object its create
@@ -534,7 +945,10 @@ func readByOthers(row *roleRow, roles []role, c *createdObject, read func(role, 
 		readers = readers || reads(a)
 	}
 	if readers {
-		row.made = c // else only its sender reads it: the create stays accepted
+		if row.made == nil {
+			row.made = c // else only its sender reads it: the create stays accepted
+		}
+		row.mades = append(row.mades, c)
 	}
 }
 
@@ -544,6 +958,9 @@ type createdObject struct {
 	url, field, value string
 	creator           string
 	answers           map[string]answer // each role's read of it
+	ownerUnknown      bool              // the read-back does not say whose it is
+	preOwner          string            // the role the identifier belonged to before the create, when it did
+	displaced         bool              // it belonged to preOwner before and changed after
 }
 
 // createdRows are the rows for the objects the replayed creates made and
@@ -552,32 +969,44 @@ type createdObject struct {
 func createdRows(roles []role, wrows []roleRow, made map[string]instance) []roleRow {
 	var out []roleRow
 	for _, w := range wrows {
-		c := w.made
-		if c == nil {
-			continue
+		cs := w.mades
+		if len(cs) == 0 && w.made != nil {
+			cs = []*createdObject{w.made}
 		}
-		in := made[c.url]
-		if in.template == "" {
-			if i := strings.LastIndex(c.url, "/"+url.PathEscape(c.value)); i >= 0 && c.field != "" {
-				in.template = c.url[:i] + "/{" + c.field + "}"
-			}
+		for _, c := range cs {
+			out = append(out, createdRow(roles, w, c, made))
 		}
-		by := fmt.Sprintf("created by %s's replayed POST %s", c.creator, pathOf(w.URL))
-		in.value, in.owner, in.by, in.sure, in.told, in.given = c.value, c.creator, by, proved, toldConfirms, false
-		in.holders = []string{c.creator}
-		made[c.url] = in
-		row := roleRow{URL: c.url, Status: map[string]int{}, Answers: map[string]answer{}, FoundBy: []string{c.creator},
-			From: in.template, Owner: c.creator, OwnerBy: by, value: c.value}
-		for _, r := range roles {
-			if a, ok := c.answers[r.name]; ok {
-				row.Answers[r.name] = a
-				row.Status[r.name] = a.Status
-			}
-		}
-		row.Verdict = verdict(roles, &row)
-		out = append(out, row)
 	}
 	return out
+}
+
+func createdRow(roles []role, w roleRow, c *createdObject, made map[string]instance) roleRow {
+	in := made[c.url]
+	if in.template == "" {
+		if i := strings.LastIndex(c.url, "/"+url.PathEscape(c.value)); i >= 0 && c.field != "" {
+			in.template = c.url[:i] + "/{" + c.field + "}"
+		}
+	}
+	by := fmt.Sprintf("created by %s's replayed POST %s", c.creator, pathOf(w.URL))
+	if c.displaced && c.preOwner != "" {
+		by += fmt.Sprintf("; the identifier belonged to %s before the create", c.preOwner)
+	}
+	in.value, in.owner, in.by, in.sure, in.told, in.given = c.value, c.creator, by, proved, toldConfirms, false
+	if c.ownerUnknown {
+		in.sure, in.told = hinted, toldNone
+	}
+	in.holders = []string{c.creator}
+	made[c.url] = in
+	row := roleRow{URL: c.url, Status: map[string]int{}, Answers: map[string]answer{}, FoundBy: []string{c.creator},
+		From: in.template, Owner: c.creator, OwnerBy: by, value: c.value}
+	for _, r := range roles {
+		if a, ok := c.answers[r.name]; ok {
+			row.Answers[r.name] = a
+			row.Status[r.name] = a.Status
+		}
+	}
+	row.Verdict = verdict(roles, &row)
+	return row
 }
 
 // withRows is rows with extra's added: a row for a URL the read replay
@@ -1027,8 +1456,8 @@ func readAs(ctx context.Context, client *http.Client, r role, u string) (answer,
 		return answer{}, fmt.Errorf("the answer was cut: %w", err)
 	}
 	a, _ := readAnswer(resp.StatusCode, body, resp.Header.Get("Content-Type"))
-	if resp.StatusCode >= 300 && resp.StatusCode < 400 {
-		a.Location = bareLocation(resp.Header.Get("Location"))
+	if loc := resp.Header.Get("Location"); loc != "" {
+		a.Location = bareLocation(loc)
 	}
 	keepBody(a.Hash, resp.Header.Get("Content-Type"), body)
 	return a, nil
@@ -1066,8 +1495,8 @@ func sendWrite(ctx context.Context, client *http.Client, r role, w writeReq) (an
 	defer resp.Body.Close()
 	body, rerr := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	a, _ := readAnswer(resp.StatusCode, body, resp.Header.Get("Content-Type"))
-	if resp.StatusCode >= 300 && resp.StatusCode < 400 {
-		a.Location = bareLocation(resp.Header.Get("Location"))
+	if loc := resp.Header.Get("Location"); loc != "" {
+		a.Location = bareLocation(loc)
 	}
 	if ok2xx(a.Status) && len(body) <= 300 && deniedText.Match(body) {
 		a.Refusal = true // a short 2xx answer that says no ("Only Admins may delete users!")

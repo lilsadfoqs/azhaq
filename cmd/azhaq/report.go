@@ -21,6 +21,7 @@ import (
 	"github.com/lilsadfoqs/azhaq/internal/ledger"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"github.com/lilsadfoqs/azhaq/internal/takeover"
+	"github.com/lilsadfoqs/azhaq/internal/verify"
 	"github.com/lilsadfoqs/azhaq/types"
 )
 
@@ -64,6 +65,12 @@ type report struct {
 	// Counts still adds up to Stored without them, and the notes say
 	// how their counts are derived (one lead per line printed).
 	Advisories []advisory.Lead `json:"advisories,omitempty"`
+	// Verify are the -verify results: one per stored verify row, each
+	// labelled proved, version-only or conditional with the exact
+	// request sent and an excerpt of the answer. Like the advisory
+	// leads they are not map rows: Counts still adds up to Stored
+	// without them, and the notes say how their counts are derived.
+	Verify []verify.Result `json:"verify,omitempty"`
 
 	estimate  *costEstimate             // what the command was estimated to send, for Cost
 	dnsFrom   int64                     // egress.DNSTotal when the command began: dns_queries are its own

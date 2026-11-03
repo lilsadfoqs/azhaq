@@ -86,6 +86,8 @@ func cmdPorts(args []string) error {
 	c.register(fs)
 	var advFlags advisoryFlags
 	advFlags.register(fs)
+	var verifyFl verifyFlags
+	verifyFl.register(fs)
 	fs.BoolVar(&c.json, "j", false, "same as -json")
 	var hosts stringsFlag
 	fs.Var(&hosts, "host", "hosts, addresses, CIDR ranges, AS numbers or host:port, comma-separated and repeatable")
@@ -308,6 +310,9 @@ func cmdPorts(args []string) error {
 			run = append(run, "-advisories-confirm")
 		}
 	}
+	if verifyFl.on {
+		run = append(run, "-verify")
+	}
 	if len(udpPorts) > 0 {
 		run = append(run, "-ports-udp", portscan.Spec(udpPorts))
 	}
@@ -495,6 +500,21 @@ func cmdPorts(args []string) error {
 			rep.Counts = map[string]int{}
 		}
 		rep.Counts["advisory leads"] = len(leads)
+	}
+	if verifyFl.on {
+		obs, _ := st.Observations()
+		results := verifyResultsOf(obs)
+		for _, r := range results {
+			if c.json {
+				w.obj(verifyRow(r))
+			} else {
+				w.line(r.Line())
+			}
+		}
+		if rep.Counts == nil {
+			rep.Counts = map[string]int{}
+		}
+		rep.Counts["verify results"] = len(results)
 	}
 	if err := w.close(); err != nil {
 		return err
