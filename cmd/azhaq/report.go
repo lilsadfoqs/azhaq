@@ -354,6 +354,7 @@ func fillReport(rep *report, path string, seeds []types.Seed, ents []types.Entit
 		rep.warned = rep.warned || loose // wildcard answers among the paths: not a calibrated list
 	}
 	rep.Notes = append(rep.Notes, fetch.Notes()...)
+	rep.Notes = append(rep.Notes, egress.GuessNotes()...)
 	if partialShots(obs) {
 		rep.warned = true // a picture short of its page is not a result to take as whole
 	}

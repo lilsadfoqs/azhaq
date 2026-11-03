@@ -158,8 +158,17 @@ func TestPlanSendsNameWhatIsPlanned(t *testing.T) {
 			t.Errorf("%s:\n%s", flag, s)
 		}
 	}
-	if s := joined("-graphql"); !strings.Contains(s, "at most 2 per endpoint, and up to 96 more when it refuses introspection") || !strings.Contains(s, "GraphiQL page is not asked") {
+	if s := joined("-graphql"); !strings.Contains(s, "at most 2 per endpoint (a page that refuses both the same way is dropped there), and up to 96 more when it refuses introspection in words of its own") || !strings.Contains(s, "GraphiQL page is not asked") {
 		t.Errorf("-graphql says no number for the POSTs it sends:\n%s", s)
+	}
+	// The guesses a host is sent are stated, and the cap on them.
+	g := planJSON(t, "-url", "http://127.0.0.1:3001/", "-params", "small", "-graphql").Requests
+	if gs := strings.Join(g.Guesses, "\n"); !strings.Contains(gs, "-params: on at most 20 pages of a host") || !strings.Contains(gs, "built-in path checks") || !strings.Contains(gs, "-graphql: at most 2 per endpoint") || !strings.Contains(gs, "no cap on them (-host-guesses sets one for each host)") || g.GuessCap != 0 {
+		t.Errorf("the plan does not state the guesses per host:\n%s", gs)
+	}
+	g = planJSON(t, "-url", "http://127.0.0.1:3001/", "-params", "small", "-host-guesses", "300").Requests
+	if gs := strings.Join(g.Guesses, "\n"); !strings.Contains(gs, "-host-guesses 300: no host is sent more than that of them together") || strings.Contains(gs, "no cap on them") || g.GuessCap != 300 {
+		t.Errorf("the plan does not state the cap on guesses:\n%s", gs)
 	}
 	if s := joined("-params", "small", "-params-method", "JSON", "-params-writes"); !strings.Contains(s, "JSON requests whose body holds the parameter names") {
 		t.Errorf("-params-method JSON:\n%s", s)

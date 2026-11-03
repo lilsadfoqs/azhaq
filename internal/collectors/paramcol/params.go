@@ -77,6 +77,10 @@ type Options struct {
 	Timeout time.Duration
 	// Targets are pages asked otherwise than the options say.
 	Targets map[string]Target
+	// All searches the pages a run's own request showed to read no name:
+	// one that answered as a path that cannot exist does, or refused (401,
+	// 403, 405). By default they are not searched, and a note says so.
+	All bool
 }
 
 type Collector struct {
@@ -88,6 +92,7 @@ type Collector struct {
 	perHost map[string]int
 	done    map[string]bool
 	hold    map[string]time.Time // a host that asked for time: no request before
+	passed  map[string]bool      // pages left out for what the run's answer to them showed
 }
 
 func New(client *http.Client, o Options) *Collector {
@@ -122,7 +127,7 @@ func New(client *http.Client, o Options) *Collector {
 	}
 	c := *fetch.Client(client)
 	c.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
-	return &Collector{Client: &c, Opts: o, limiter: limit.New(o.Rate, max(1, int(o.Rate/5))), perHost: map[string]int{}, done: map[string]bool{}, hold: map[string]time.Time{}}
+	return &Collector{Client: &c, Opts: o, limiter: limit.New(o.Rate, max(1, int(o.Rate/5))), perHost: map[string]int{}, done: map[string]bool{}, hold: map[string]time.Time{}, passed: map[string]bool{}}
 }
 
 func (c *Collector) Name() string { return Name }
@@ -187,9 +192,17 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		tg.Include = c.Opts.Include
 	}
 	c.mu.Lock()
-	if c.done[page] {
+	if c.done[page] || c.passed[page] {
 		c.mu.Unlock()
 		return types.RunMeta{Status: types.StatusOK}, nil
+	}
+	if why, ok := fetch.Learned(fetch.PageAnswerFact(page)); ok && !c.Opts.All && !userGave(seed) {
+		// The run asked this page already, and its answer says no name changes
+		// it: the 1,000-odd names are not asked of it. A page the user named is
+		// asked whatever it answered, and so is every page of azhaq params.
+		c.passed[page] = true
+		c.mu.Unlock()
+		return types.RunMeta{Status: types.StatusOK, EmitCount: 1}, noted(emit, page, fmt.Sprintf("%s: not searched, %s (-params-all searches it; azhaq params -u URL asks it)", page, why))
 	}
 	if c.perHost[u.Host] >= c.Opts.PerHost {
 		c.mu.Unlock()
@@ -304,4 +317,9 @@ func (c *Collector) held(host string) time.Duration {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return time.Until(c.hold[host])
+}
+
+// userGave says the seed is a page the user named, not one the run found.
+func userGave(seed types.Seed) bool {
+	return seed.Keys[types.StartKey] != "" || seed.Keys[types.GivenKey] != ""
 }

@@ -41,6 +41,9 @@ func opaque(ctx context.Context) bool {
 	return ok
 }
 
+// CollectorOf is the collector whose work ctx is (see WithCollector), or "".
+func CollectorOf(ctx context.Context) string { return collectorOf(ctx) }
+
 func collectorOf(ctx context.Context) string {
 	if ctx == nil {
 		return ""

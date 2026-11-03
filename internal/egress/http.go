@@ -137,6 +137,9 @@ func (g *guarded) check(req *http.Request) error {
 	if g.class != Target {
 		return nil
 	}
+	if err := admitGuess(req); err != nil {
+		return err
+	}
 	return p.checkRequest(req, g.sni)
 }
 

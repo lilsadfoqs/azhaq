@@ -71,7 +71,7 @@ Two files can be written as well:
 The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.md#the-summary) and [exit codes](../OUTPUT.md#exit-codes). These cases are specific to `params`.
 
 - A page that rate-limits (429, 418, 503) or leaves requests unanswered fails with exit 3. The failure is listed as `failed` and retryable, with a note.
-- A page not searched has a note that says why: it changes by itself, is not text, is past `-params-per-host`, or a `-deny-path` rule matches its address.
+- A page not searched has a note that says why: it changes by itself, is not text, is past `-params-per-host`, or a `-deny-path` rule matches its address. In `run -params`, a page that answered the run's own request as the origin answers a path that cannot exist, or with 401, 403 or 405, is not searched either (`-params-all` searches it); `azhaq params` asks the pages you give it all.
 - A page that answers names it does not read is listed in the summary's `notes`: see Details.
 - A page the request budget (`-max-requests`) ends is not lost: its row has the names established so far, the summary's `notes` say how many of the names were judged (`the request budget ended the search with 4 of 8 names judged (1 found so far)`), and the exit is 4. `azhaq resume` searches the page again, from the start. Each pass costs a fixed part (4 requests to measure the page, 4 for the switch names such as `debug`) besides the names: a page that answers 400 until a required field is given is searched up to 3 more passes with the fields found, so a short list can need over 30 requests.
 

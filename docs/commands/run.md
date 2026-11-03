@@ -308,6 +308,14 @@ Examples of what `notes` holds for a run:
 - `screenshot of URL not taken: the page needs about 26 requests and 8 were left (raise -max-requests)`, or `the budget was spent before the page loaded`: see [shots](shots.md#screenshots-and-the-budget).
 - `GraphQL URL: introspection disabled: schema recovered (partial: query Query: 2 fields (1 client, 1 probe), 140 words tried; not proof there is nothing more)`, or `introspection: full schema`. `GraphQL URL: an IDE page, not asked for its schema: URL on the same origin gave it whole` says why a GraphiQL page got no POST: see [show](show.md#recovering-a-schema-when-introspection-is-off).
 
+### Guesses and their budget
+
+A guess is a request for a name nobody gave: a path of the built-in sweep or of `-dirs`, a parameter name of `-params`, a field name `-graphql` asks a server's errors about. `plan` states, for each host, what each technique sends (`guesses_per_host` in `plan -json`, `guesses sent to each host` in the text), and the cap on them.
+
+- `-host-guesses N` is the most guesses one host is sent, all techniques together; 0 (the default) sets none, so a run asks what its reference tools ask. A host that reached it is sent no more: the summary says which collectors' requests were not sent and how many, and the run exits 4. `azhaq resume -host-guesses M` asks the rest.
+- `-params` does not search a page that a request of the run showed to read no name: one whose answer was the one the origin gives a path that cannot exist, or that refused with 401, 403 or 405. Each such page gets a note with the answer that decided it. A page you named is searched whatever it answered. `-params-all` searches them all, and `azhaq params -u URL` asks any page you name.
+- A GraphQL candidate that refuses the schema query and its shorter form the same way is sent those two POSTs and no more, and the summary names it ([show](show.md#recovering-a-schema-when-introspection-is-off)).
+
 ### Next in the summary
 `next` suggests a command in three cases:
 
@@ -452,6 +460,7 @@ azhaq run -url https://app.example.com/ -ports top-100 -advisories -advisories-c
 | `-timeout` | duration |  | stop after this long and keep what was found; azhaq resume continues (0: no limit) |
 | `-max-requests` | int |  | requests to targets this run may send (0: no cap); the work left over is for azhaq resume |
 | `-max-host-requests` | int |  | requests one host may be sent (0: no cap); the rest of its work is left for azhaq resume |
+| `-host-guesses` | int |  | most guesses one host is sent (0: no cap): requests for the built-in paths, a -dirs or -params wordlist or GraphQL field names; the rest are not asked and the summary lists them, the run exits 4 and azhaq resume asks them with a larger value |
 | `-daily-requests` | int |  | requests a day to the program's targets (-program, else this run's targets), counted over the runs in -db |
 | `-max-items` | int |  | most collector tasks (a name, a URL, an address each, per collector) this run starts (default: no cap, katana's and httpx's); the work left is for azhaq resume, which starts as many more |
 | `-max-names` | int |  | most hostnames this run resolves (default 200000, as many as subs keeps for a domain); the names left are for azhaq resume. A value you give also caps the names -dns-brute and -permute ask, together: the guesses past it are not asked, the run exits 4 and says how many (a larger -max-names asks them) |
@@ -490,7 +499,7 @@ azhaq run -url https://app.example.com/ -ports top-100 -advisories -advisories-c
 | `-fail-on-capped` | bool |  | exit 4 also when the run hit -depth with hints left |
 
 <details>
-<summary>Other names, flags accepted with no effect and rarely used flags (78)</summary>
+<summary>Other names, flags accepted with no effect and rarely used flags (79)</summary>
 
 | Flag | Type | Default | Meaning | Kind |
 | --- | --- | --- | --- | --- |
@@ -514,6 +523,7 @@ azhaq run -url https://app.example.com/ -ports top-100 -advisories -advisories-c
 | `-facts` | string |  | JSONL connector facts to ingest before native collectors | rarely needed |
 | `-ob` | bool |  | with -sr: write the status line and headers only | rarely needed |
 | `-obs` | bool |  | also print the observation log | rarely needed |
+| `-params-all` | bool |  | with -params, also search the pages a request of the run showed to read no name: one that answered as a path that cannot exist does, or refused (401, 403, 405); by default a note lists them | rarely needed |
 | `-params-chunk` | int |  | names per parameter request at most (0: 500, and about 7.6 KB in a query; fewer where the server refuses a long query) | rarely needed |
 | `-params-delay` | duration |  | wait before each parameter request, one at a time (arjun -d) | rarely needed |
 | `-params-include` | string |  | sent with every parameter request: a query for GET; for a body a form, a JSON object or XML, or a template with $arjun$ where the names go | rarely needed |

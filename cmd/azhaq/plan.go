@@ -84,10 +84,14 @@ type planRequests struct {
 	Found      bool           `json:"found_domains_asked"`                  // domains found on the way are asked about too
 	Passive    bool           `json:"passive,omitempty"`                    // none go to the targets
 	PerService int            `json:"per_web_service,omitempty"`            // about: its page, the favicon, the built-in paths
-	MaxNames   int            `json:"max_names,omitempty"`                  // names found under the domains looked up at most
-	Cap        int64          `json:"cap"`                                  // requests to the targets at most; 0: no cap
-	CapBy      string         `json:"cap_by,omitempty"`
-	scoped     bool
+	// Guesses are the requests for names nobody gave, on each host, by
+	// technique, and the cap on them (-host-guesses; 0: none).
+	Guesses  []string `json:"guesses_per_host,omitempty"`
+	GuessCap int64    `json:"host_guesses"`
+	MaxNames int      `json:"max_names,omitempty"` // names found under the domains looked up at most
+	Cap      int64    `json:"cap"`                 // requests to the targets at most; 0: no cap
+	CapBy    string   `json:"cap_by,omitempty"`
+	scoped   bool
 }
 
 // sendLimits are the options that bound or change what a run sends to its
@@ -104,6 +108,11 @@ type sendLimits struct {
 	login        string
 	loginUser    string
 	graphql      bool
+	hostGuesses  int64 // -host-guesses; 0: none
+	dirsWords    int   // -dirs: words, and extensions besides the bare word
+	dirsExts     int
+	paramsWords  int // -params: names, and pages searched at most on each host
+	paramsPages  int
 	submitForms  bool
 	dirs         bool
 	params       bool
@@ -169,7 +178,7 @@ func planSends(b engine.Budgets, send sendLimits) (gets, others []string) {
 		*out = append(*out, "Chrome loads each page found and reads the links its scripts draw (-browser, azhaq-render): every page costs a GET and the requests its scripts, styles and images make")
 	}
 	if send.graphql {
-		*out = append(*out, fmt.Sprintf("POST requests with a GraphQL introspection query to the GraphQL endpoints found (-graphql): they read the schema and change nothing; at most 2 per endpoint, and up to %d more when it refuses introspection, validation queries with a field no schema has that never run (a GraphiQL page is not asked once another URL of its origin gave the schema whole)", gqlcol.MaxRecoveryPOSTs))
+		*out = append(*out, fmt.Sprintf("POST requests with a GraphQL introspection query to the GraphQL endpoints found (-graphql): they read the schema and change nothing; at most 2 per endpoint (a page that refuses both the same way is dropped there), and up to %d more when it refuses introspection in words of its own, validation queries with a field no schema has that never run (a GraphiQL page is not asked once another URL of its origin gave the schema whole)", gqlcol.MaxRecoveryPOSTs))
 	}
 	if send.paramsBody != "" {
 		*out = append(*out, fmt.Sprintf("%s requests whose body holds the parameter names guessed (-params-method %s, -params-writes): a body may change data on the target", send.paramsBody, send.paramsBody))
@@ -343,6 +352,8 @@ func planFor(cat *catalog.Catalog, seeds []types.Seed, b engine.Budgets, paths [
 		p.Sends = append(p.Sends, "Chrome sends GET, HEAD and OPTIONS only, except signing in: the writes pages would send are mapped and listed, not sent (-browser-writes to send them)")
 	}
 	p.Sends = append(append(p.Sends, gets...), others...)
+	p.Requests.GuessCap = send.hostGuesses
+	p.Requests.Guesses = planGuesses(p.Paths, send)
 	if runs("azhaq-http") {
 		p.Requests.PerService = 1 + len(p.Paths)
 		if !send.noFavicon {
@@ -350,6 +361,31 @@ func planFor(cat *catalog.Catalog, seeds []types.Seed, b engine.Budgets, paths [
 		}
 	}
 	return p
+}
+
+// planGuesses says what each technique that guesses names sends to one host,
+// before any answer shortens it.
+func planGuesses(paths []string, send sendLimits) []string {
+	var out []string
+	if len(paths) > 0 {
+		out = append(out, fmt.Sprintf("%s, one each, on each web service (-no-paths turns them off)", plural(len(paths), "built-in path check")))
+	}
+	if send.dirs {
+		out = append(out, fmt.Sprintf("-dirs: %s on each web service (every word, and each of %s)", plural(send.dirsWords*(1+send.dirsExts), "request"), plural(send.dirsExts, "extension")))
+	}
+	if send.params {
+		per := 3 + (send.paramsWords+499)/500
+		out = append(out, fmt.Sprintf("-params: on at most %s of a host, each at least %d requests for its %s (groups of 500 names; a group that changes the answer is narrowed down, so more); pages beyond are listed as not searched (-params-per-host), and pages a request of the run showed to read no name are not searched at all (-params-all)", plural(send.paramsPages, "page"), per, plural(send.paramsWords, "name")))
+	}
+	if send.graphql {
+		out = append(out, fmt.Sprintf("-graphql: at most 2 per endpoint; one that refuses both queries the same way gets no more and is named in the summary; one whose introspection is off gets up to %d more", gqlcol.MaxRecoveryPOSTs))
+	}
+	if send.hostGuesses > 0 {
+		out = append(out, fmt.Sprintf("-host-guesses %d: no host is sent more than that of them together; the rest are not asked, the summary lists them, and the run exits 4 (azhaq resume asks them with a larger value)", send.hostGuesses))
+	} else if len(out) > 0 {
+		out = append(out, "no cap on them (-host-guesses sets one for each host)")
+	}
+	return out
 }
 
 func collectorRole(k catalog.Kind) string {
@@ -466,6 +502,12 @@ func printRequests(p runPlan) {
 	}
 	if len(p.Active) > 0 {
 		fmt.Printf("  %s add their own\n", strings.Join(p.Active, " "))
+	}
+	if len(r.Guesses) > 0 {
+		fmt.Println("guesses sent to each host (requests for names nobody gave):")
+		for _, g := range r.Guesses {
+			fmt.Printf("  %s\n", g)
+		}
 	}
 }
 

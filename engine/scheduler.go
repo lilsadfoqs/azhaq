@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/lilsadfoqs/azhaq/catalog"
@@ -502,11 +503,21 @@ func tierOf(seed types.Seed) int {
 	switch {
 	case u.Path == "" || u.Path == "/":
 		return 0
+	case seed.Keys[types.KnownLocationKey] != "" && guessedGraphQL(u.Path):
+		// A GraphQL location a path sweep found is a guess about the origin:
+		// the endpoints scripts and descriptions name go first, so a budget
+		// reads their schemas before it is spent on a guess.
+		return 2
 	case webextract.ClassifyURL(seed.Key()) == "api":
 		return 1
 	default:
 		return 2
 	}
+}
+
+func guessedGraphQL(path string) bool {
+	path = strings.ToLower(path)
+	return strings.Contains(path, "/graphql") || strings.Contains(path, "/graphiql")
 }
 
 // allowed applies the run's policy: -passive keeps only collectors that do
