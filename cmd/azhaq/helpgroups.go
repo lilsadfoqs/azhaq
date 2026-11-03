@@ -63,7 +63,7 @@ var helpSpecs = map[string]helpSpec{
 	"roles": {
 		groups: []helpGroup{
 			{"Sessions", `role role-cmd role-login login har burp no-anon canary canary-every`},
-			{"What to replay", `replay replay-max replay-writes replay-writes-canary replay-writes-field dry-writes id refusal allow all`},
+			{"What to replay", `replay replay-max replay-writes replay-writes-canary replay-writes-field replay-writes-verify dry-writes id refusal allow all`},
 			{"Pace and network", `rate proxy`},
 			{"Output", `dir json`},
 		},

@@ -38,6 +38,7 @@ type answer struct {
 	vals    map[string][]string // the short values of each field, by folded name: what a write set, to be seen in the answer
 	flags   map[string]bool     // paths of list items' fields that only hold true or false (data[].liked)
 	self    *listObject         // the object the answer is about: its fields say whose it is
+	items   []listObject        // the items of a list answer, owner fields or not: a created object can be found in it
 	toLogin bool                // a redirect to a sign-in page
 	toRoot  bool                // a redirect to the front page
 }
@@ -130,6 +131,7 @@ type jsonFacts struct {
 	held    map[string]bool     // the first few hundred scalar values
 	flags   map[string]bool     // paths under a list whose values are all true or false
 	objects []listObject        // the list items that say whose they are
+	items   []listObject        // every list item, for finding a created object in a collection
 	self    *listObject         // the object the answer is about
 }
 
@@ -212,6 +214,7 @@ func inspect(body []byte, contentType string) *jsonFacts {
 				if o, ok := ownedObject(t); ok {
 					f.objects = append(f.objects, o)
 				}
+				f.items = append(f.items, objectOf(t))
 			}
 		case []any:
 			for i, e := range t {
@@ -341,7 +344,7 @@ func (f *jsonFacts) scalar(k string, x any, seen map[string]bool) {
 func (f *jsonFacts) apply(a *answer) {
 	a.Keys, a.nested = f.paths, true
 	a.Error = f.isError
-	a.secrets, a.held, a.flags, a.self = f.secrets, f.held, f.flags, f.self
+	a.secrets, a.held, a.flags, a.self, a.items = f.secrets, f.held, f.flags, f.self, f.items
 	a.vals = nil
 	if len(f.ids) <= 64 {
 		a.vals = map[string][]string{}
