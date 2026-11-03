@@ -3,12 +3,14 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"reflect"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -156,6 +158,108 @@ func TestRunStreamKeysAreTheMapsKeys(t *testing.T) {
 		if !slices.Contains(mapped, "127.0.0.1") {
 			t.Errorf("-depth %s: no address row in %q", depth, mapped)
 		}
+	}
+}
+
+// An open port is one line under its row's key, whichever scan reports it:
+// the cumulative open list of a later scan does not print the first port
+// again, and a range's own row is no port.
+func TestStreamFoundPortRows(t *testing.T) {
+	out, _, err := captureBoth(t, func() error {
+		see := streamFound(true)
+		obs := func(payload string) {
+			see(types.Entity{}, types.Observation{Kind: "ports", Collector: "azhaq-ports", Payload: []byte(payload)})
+		}
+		obs(`{"host":"a.test","ip":"192.0.2.1","open":[22],"services":[{"port":22,"service":"ssh"}]}`)
+		obs(`{"host":"a.test","ip":"192.0.2.1","open":[22,3001],"services":[{"port":22,"service":"ssh"},{"port":3001}],"udp_services":[{"port":53,"state":"open|filtered"}]}`)
+		obs(`{"host":"a.test","ip":"192.0.2.1","open":[],"scanned":2}`)
+		obs(`{"range":true,"prefix":"192.0.2.0/24","open":[]}`)
+		obs(`{"host":"192.0.2.9","open":[80],"services":[{"port":80}]}`)
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var keys []string
+	for _, l := range strings.Split(strings.TrimSpace(out), "\n") {
+		var d map[string]any
+		if json.Unmarshal([]byte(l), &d) != nil {
+			t.Fatalf("not JSON: %q", l)
+		}
+		if d["kind"] != "port" || d["port"] == nil || d["protocol"] == nil || d["ip"] == nil {
+			t.Errorf("line %q lacks kind port, port, protocol or ip", l)
+		}
+		keys = append(keys, d["key"].(string))
+	}
+	want := []string{"192.0.2.1:22/tcp", "192.0.2.1:3001/tcp", "192.0.2.1:53/udp", "192.0.2.9:80/tcp"}
+	if !slices.Equal(keys, want) {
+		t.Errorf("keys %q, want %q", keys, want)
+	}
+	text, _, _ := captureBoth(t, func() error {
+		streamFound(false)(types.Entity{}, types.Observation{Kind: "ports", Payload: []byte(`{"host":"a.test","ip":"192.0.2.1","services":[{"port":22,"service":"ssh"}]}`)})
+		return nil
+	})
+	if text != "found  port    192.0.2.1:22/tcp  a.test  open ssh\n" {
+		t.Errorf("text line %q", text)
+	}
+}
+
+// With ports, what -stream prints and the map holds are the same keys: one
+// line for each port row, the open-port list of the scan is not one.
+func TestRunStreamPortKeysAreTheMapsKeys(t *testing.T) {
+	var ports []string
+	for i := 0; i < 2; i++ {
+		ln, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			t.Skip(err)
+		}
+		defer ln.Close()
+		go func() {
+			for {
+				c, err := ln.Accept()
+				if err != nil {
+					return
+				}
+				c.Write([]byte("SSH-2.0-OpenSSH_9.6\r\n"))
+				c.Close()
+			}
+		}()
+		ports = append(ports, strconv.Itoa(ln.Addr().(*net.TCPAddr).Port))
+	}
+	out, _, err := captureBoth(t, func() error {
+		return cmdRun([]string{"-cidr", "127.0.0.1/32", "-ports", strings.Join(ports, ","), "-allow", "127.0.0.1", "-sources", "none", "-no-paths", "-depth", "0", "-stream", "-json", "-db", filepath.Join(t.TempDir(), "w.db")})
+	})
+	if err != nil && exitCode(err) != exitPartial {
+		t.Fatal(err)
+	}
+	var streamed, mapped []string
+	for _, l := range strings.Split(strings.TrimSpace(out), "\n") {
+		var d map[string]any
+		if json.Unmarshal([]byte(l), &d) != nil {
+			t.Fatalf("not JSON: %q", l)
+		}
+		key, _ := d["key"].(string)
+		switch d["type"] {
+		case "found":
+			if d["kind"] == "port" {
+				streamed = append(streamed, key)
+			}
+		case "summary":
+		default:
+			if strings.Contains(key, "/tcp") {
+				mapped = append(mapped, key)
+			}
+		}
+	}
+	slices.Sort(streamed)
+	slices.Sort(mapped)
+	var want []string
+	for _, p := range ports {
+		want = append(want, "127.0.0.1:"+p+"/tcp")
+	}
+	slices.Sort(want)
+	if !slices.Equal(streamed, want) || !slices.Equal(mapped, want) {
+		t.Errorf("streamed %q, map %q, want %q", streamed, mapped, want)
 	}
 }
 
