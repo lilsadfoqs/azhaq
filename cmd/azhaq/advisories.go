@@ -130,7 +130,7 @@ func advisoryStage(ctx context.Context, st *store.Store, obs []types.StoredObser
 			svcByTarget[s.Target()+"\x00"+s.Product] = s
 		}
 		cctx := ledger.WithCollector(ctx, "azhaq-advisories")
-		failed, refused, stopped := 0, 0, 0
+		failed, refused, stopped, denied := 0, 0, 0, 0
 		for i, lead := range leads {
 			leads[i].Confidence = advisory.Claimed
 			leads[i].Read = "nothing read: a range match only"
@@ -142,6 +142,11 @@ func advisoryStage(ctx context.Context, st *store.Store, obs []types.StoredObser
 			switch {
 			case err == nil:
 				leads[i].Confidence, leads[i].Read = conf, read
+			case isDenied(err):
+				// A -deny-path rule of the user's keeps the read out:
+				// a note, not a failure, and the lead stays claimed.
+				denied++
+				leads[i].Read = "not read: " + err.Error() + " (a -deny-path rule of yours keeps its path out)"
 			case isScopeRefusal(err):
 				// A scope that refuses a target is a note, not a failure:
 				// the scope is the user's, and the lead stays claimed.
@@ -157,6 +162,9 @@ func advisoryStage(ctx context.Context, st *store.Store, obs []types.StoredObser
 		}
 		if failed > 0 {
 			failures = append(failures, engine.Failure{Collector: "azhaq-advisories", Error: "a confirmation read got no answer", Count: failed, Retryable: true})
+		}
+		if denied > 0 {
+			deferNote = append(deferNote, fmt.Sprintf("advisories-confirm: %d confirmation reads were not sent: a -deny-path rule keeps their paths out", denied))
 		}
 		if refused > 0 {
 			deferNote = append(deferNote, fmt.Sprintf("advisories-confirm: %d confirmation reads were not sent: their targets are outside the scope", refused))
@@ -212,6 +220,13 @@ func advisoryStage(ctx context.Context, st *store.Store, obs []types.StoredObser
 		note += "; " + n
 	}
 	return leads, failures, note
+}
+
+// isDenied says err is a -deny-path rule of the user's keeping a
+// request out: the rule's doing, not a failure.
+func isDenied(err error) bool {
+	var d *neterr.Denied
+	return errors.As(err, &d)
 }
 
 // isScopeRefusal says err is the egress chokepoint refusing a target the

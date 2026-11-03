@@ -53,6 +53,7 @@ import (
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"github.com/lilsadfoqs/azhaq/internal/portscan"
 	"github.com/lilsadfoqs/azhaq/internal/timing"
+	"github.com/lilsadfoqs/azhaq/internal/verify"
 	"github.com/lilsadfoqs/azhaq/scope"
 	"github.com/lilsadfoqs/azhaq/store"
 	"github.com/lilsadfoqs/azhaq/types"
@@ -384,6 +385,8 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	}
 	var advFlags advisoryFlags
 	advFlags.register(fs)
+	var verifyFl verifyFlags
+	verifyFl.register(fs)
 	graphql := fs.Bool("graphql", false, "read the schema of GraphQL endpoints with an introspection query (active; the targets given are the scope unless -allow)")
 	graphqlWordlist := fs.String("graphql-wordlist", "", "extra probe words (one per line), tried and recombined with the built-in ones when a GraphQL endpoint's introspection is off and its schema has to be recovered from validation errors")
 	skip := fs.String("skip", "", "collectors not to run, comma-separated: azhaq-ports or ports, subs for the subdomain collector (azhaq plan lists them); a name that is none is an error; azhaq resume leaves out the tasks the run kept for them")
@@ -1170,6 +1173,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		}
 		send.tcpPorts, send.udpPorts = len(opts.Ports), len(opts.UDPPorts)
 		send.axfr, send.resolvers = out.axfr, resolvers
+		send.verify = verifyFl.on
 		if *daily > 0 && (send.max == 0 || *daily < send.max) {
 			// A plan reads no database: what today's runs spent is not
 			// taken off.
@@ -1324,6 +1328,16 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		advLeads, advFailures, advNote = advisoryStage(ctx, st, obs, advFlags)
 		obs, _ = st.Observations()
 	}
+	// -verify: the data-store checks make their one read here, while
+	// the run's ledger and budget are still the run's; the advisory
+	// results label the leads above and send nothing more.
+	var verifyResults []verify.Result
+	var verifyFailures []engine.Failure
+	verifyNote := ""
+	if verifyFl.on {
+		verifyResults, verifyFailures, verifyNote = verifyStage(ctx, st, obs, advLeads, "azhaq "+rep.Command+" -verify")
+		obs, _ = st.Observations()
+	}
 	edges, _ := st.Edges()
 	leftover, _ := st.LoadLeftover()
 	scope := engine.ScopeSeeds(seeds, ents, edges)
@@ -1354,6 +1368,11 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 				return err
 			}
 		}
+		for _, r := range verifyResults {
+			if err := enc.Encode(verifyRow(r)); err != nil {
+				return err
+			}
+		}
 	case *probe:
 		for _, r := range engine.ProbeRows(obs) {
 			fmt.Println(r.Line())
@@ -1366,10 +1385,16 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		for _, lead := range advLeads {
 			fmt.Println(lead.Line())
 		}
+		for _, r := range verifyResults {
+			fmt.Println(r.Line())
+		}
 	default:
 		printMap(shown)
 		for _, lead := range advLeads {
 			fmt.Printf("  %s\n", lead.Line())
+		}
+		for _, r := range verifyResults {
+			fmt.Printf("  %s\n", r.Line())
 		}
 		if *showObs {
 			fmt.Println("observations")
@@ -1385,6 +1410,13 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		rep.Failed = append(rep.Failed, advFailures...)
 		if advNote != "" {
 			rep.Notes = append(rep.Notes, advNote)
+		}
+	}
+	if verifyFl.on {
+		rep.Verify = verifyResults
+		rep.Failed = append(rep.Failed, verifyFailures...)
+		if verifyNote != "" {
+			rep.Notes = append(rep.Notes, verifyNote)
 		}
 	}
 	if n := opts.DNS.TakeoverNote("-no-takeover"); n != "" {
