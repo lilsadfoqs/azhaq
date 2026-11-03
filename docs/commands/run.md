@@ -298,6 +298,15 @@ Examples of what `notes` holds for a run:
 - A run that found a GraphQL endpoint and did not read its schema gets `azhaq run -url ORIGIN/ -graphql -allow HOST …   (/graphql and /graphiql answer like GraphQL; -graphql reads the schema by introspection)`. That is a run with no `-graphql`, or with the endpoint's host outside the scope.
 - A run without a session (`-login`, `-cookie`, `-header`) whose target site shows a sign-in form gets `azhaq run -url ORIGIN/ -login PAGE -login-user USER -login-pass PASS -allow HOST …`. A sign-in form is a form that takes a password.
 
+### Known-issue matching
+
+With `-advisories -advisory-source FILE`, every product and version the run confirmed (a port scan's services, a web answer's `Server` header) is matched against the advisory records of that source, and each match is printed as a lead after the map: `advisory: nginx 1.18.0 on app.example.com:443 is affected (range >=1.0.0 <1.20.0) — CVE-… https://…`. With `-json` each lead is one object with `"type":"advisory"`, and the summary holds them in `advisories`, one per line printed; the summary's note counts them by label from those rows, and the map's own counts are unchanged. Part 1 sends nothing to any target. `-advisories-confirm` adds the one benign read of each lead (a scope is required) and labels it `observed`, `inferred` or `claimed`, with what was read. The boundary, the labels and the data-source decision are in [Known-issue matching](../CONCEPTS.md#known-issue-matching--advisories).
+
+```
+azhaq run -url https://app.example.com/ -ports top-100 -advisories -advisory-source osv.json -db app.db
+azhaq run -url https://app.example.com/ -ports top-100 -advisories -advisories-confirm -advisory-source osv.json -allow app.example.com
+```
+
 ## Flags
 
 <!-- flags:begin run -->
@@ -347,6 +356,9 @@ Examples of what `notes` holds for a run:
 | `-no-tech` | bool |  | skip technology fingerprints (saves about 30 MB of memory) |
 | `-no-map-guess` | bool |  | do not ask for main.js.map next to a script that names no source map (a map a script or a header names is still read) |
 | `-no-follow` | bool |  | do not follow redirects: each URL is asked once and its redirect recorded with the Location (httpx's default) |
+| `-advisories` | bool |  | match the products and versions this run already confirmed against the advisory records of -advisory-source, as labelled leads (affected, not affected or conditional, each with its advisory id and URL): a pure lookup over what the run already holds, nothing more is sent to a target |
+| `-advisories-confirm` | bool |  | with -advisories: for each affected or conditional lead, also make the one benign read the advisory names (a GET of its documented version or info path, or of / to read the version it states): no payload, no login, no state change, never a request that could trigger the issue; each read is in the ledger and counts against -max-requests, and each lead is labelled observed, inferred or claimed (needs -advisories and a scope: -allow, -scope or the targets given) |
+| `-advisory-source` | string |  | the advisory records to match against, OSV JSON (a record, a list, {"vulns": [...]}, or JSON lines): a file the user downloaded (works offline), or an http(s) URL asked once as a third-party source; azhaq vendors no snapshot and fetches none it was not given |
 
 **Crawl scope**
 
