@@ -26,11 +26,11 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
-	"regexp"
 	"strings"
 	"time"
 
 	"github.com/lilsadfoqs/azhaq/internal/advisory"
+	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 )
 
 // Labels of a verification result.
@@ -218,7 +218,7 @@ func parseRedis(resp []byte, svc advisory.Service, r *Result) {
 	}
 }
 
-var redisVersionRe = regexp.MustCompile(`(?m)^redis_version:(\S+)`)
+var redisVersionRe = lazyre.New(`(?m)^redis_version:(\S+)`)
 
 func redisVersion(s string) string {
 	if m := redisVersionRe.FindStringSubmatch(s); m != nil {
