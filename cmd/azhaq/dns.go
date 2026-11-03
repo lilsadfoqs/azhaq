@@ -981,7 +981,7 @@ func (r *dnsRun) takeover(ctx context.Context, host string, d *dnsr.Data) *takeo
 	if !r.cf.selected["a"] || len(d.CNAME) == 0 || r.cf.noTakeover {
 		return nil
 	}
-	if rc, ok := d.Rcode(dns.TypeA); !ok || rc != dns.RcodeNameError {
+	if rc, ok := d.ChainRcode(dns.TypeA); !ok || rc != dns.RcodeNameError {
 		return nil
 	}
 	target := d.CNAME[len(d.CNAME)-1]
@@ -1014,7 +1014,7 @@ func (r *dnsRun) keepRow(host string, d *dnsr.Data, row *dnsRow) {
 		status = "cname"
 	}
 	p := map[string]any{"fqdn": host}
-	if rc, ok := d.Rcode(dns.TypeA); ok && rc == dns.RcodeNameError {
+	if rc, ok := d.ChainRcode(dns.TypeA); ok && rc == dns.RcodeNameError {
 		status = "nxdomain"
 		p["error"] = "nxdomain"
 	}

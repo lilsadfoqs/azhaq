@@ -929,3 +929,59 @@ func TestDNSJSONRowOfADanglingCNAMEHasTakeoverAndNoA(t *testing.T) {
 		}
 	}
 }
+
+// -axfr asks a resolver given with a port at that port, and the zone's name
+// server at its own address and the transfer port (53, as dig does with no
+// @server): a name server nobody listens on is a note, and the zone the
+// resolver gave is still the answer.
+func TestDNSAXFRAsksTheResolverAtItsPortAndTheNameServerAtTheTransferPort(t *testing.T) {
+	t.Chdir(t.TempDir())
+	resolver := startLab(t)
+	ns := startLab(t) // the zone's name server, on the transfer port of this run
+	_, nsPort, _ := net.SplitHostPort(ns.addr)
+	old := axfrPort
+	axfrPort = nsPort
+	t.Cleanup(func() { axfrPort = old })
+	ls, rep, code := dnsOut(t, "-d", "lab.zz", "-r", resolver.addr, "-axfr", "-j", "-timeout", "300ms")
+	axfr, _ := dnsRows(t, ls)["lab.zz"]["axfr"].(map[string]any)
+	chain, _ := axfr["chain"].([]any)
+	var from []string
+	for _, c := range chain {
+		from = append(from, c.(map[string]any)["resolver"].([]any)[0].(string))
+	}
+	if code != exitOK || !reflect.DeepEqual(from, []string{"127.0.0.1:" + nsPort, resolver.addr}) {
+		t.Errorf("exit %d, the zone came from %v, want the name server at 127.0.0.1:%s then the resolver at %s\n%v", code, from, nsPort, resolver.addr, rep.Notes)
+	}
+	if len(rep.Notes) != 0 {
+		t.Errorf("notes %v", rep.Notes)
+	}
+}
+
+// The status_code of a row is the code of the name asked. A resolver answers
+// a dangling CNAME with the code of the target (NXDOMAIN): the owner exists,
+// so it is NOERROR, and the target's state is in cname_status.
+func TestDNSRcodeOfACNAMEOwnerIsItsOwn(t *testing.T) {
+	t.Chdir(t.TempDir())
+	var asked, soa atomic.Int64
+	addr := serveDanglingSOA(t, &asked, &soa)
+	args := []string{"-d", "dangling.lab.zz", "-r", addr, "-allow", "lab.zz", "-no-takeover"}
+	ls, _, _ := dnsOut(t, append(args, "-rcode", "nxdomain")...)
+	if len(ls) != 0 {
+		t.Errorf("-rcode nxdomain lists the owner of a CNAME: %v", ls)
+	}
+	ls, rep, _ := dnsOut(t, append(args, "-rcode", "noerror")...)
+	if !reflect.DeepEqual(ls, []string{"dangling.lab.zz [NOERROR]"}) || rep.Counts["other codes"] != 0 {
+		t.Errorf("-rcode noerror: %v %v", ls, rep.Counts)
+	}
+	ls, _, _ = dnsOut(t, "-d", "dangling.lab.zz", "-r", addr, "-a", "-j", "-allow", "lab.zz")
+	row := dnsRows(t, ls)["dangling.lab.zz"]
+	if row["status_code"] != "NOERROR" || row["status_code_raw"] != nil || row["cname_status"] != "NXDOMAIN" || row["takeover"] == nil {
+		t.Errorf("the row: %v", row)
+	}
+	// a name that is not a CNAME keeps the code of its own answer
+	ls, _, _ = dnsOut(t, "-d", "nope.lab.zz", "-r", addr, "-rcode", "nxdomain", "-j")
+	row = dnsRows(t, ls)["nope.lab.zz"]
+	if row["status_code"] != "NXDOMAIN" || row["cname_status"] != nil {
+		t.Errorf("a name that does not exist: %v", row)
+	}
+}
