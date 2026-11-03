@@ -235,3 +235,47 @@ func TestCompareIgnoresVolatileFields(t *testing.T) {
 		t.Fatalf("status change missed: %+v", d.NewObs)
 	}
 }
+
+// A catch-all row names the random path its control asked for; two runs of
+// the same app differ in it and in the size an echoing page gives it. A
+// control that answers differently, or in another directory, is a change.
+func TestCompareIgnoresTheControlsRandomPath(t *testing.T) {
+	dir := t.TempDir()
+	open := func(name string) *Store {
+		st, err := Open(filepath.Join(dir, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = st.Close() })
+		return st
+	}
+	a, b := open("a.db"), open("b.db")
+	now := time.Now().UTC()
+	add := func(st *Store, control string) {
+		t.Helper()
+		e, err := st.UpsertEntity(types.TypeURL, "http://127.0.0.1:3001/about", now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		payload := `{"status":200,"catchall":true,"control_exact":true,"control":` + control + `}`
+		if _, err := st.AddObservation(e.ID, types.Observation{Collector: "azhaq-http", Kind: "application", Payload: json.RawMessage(payload), ObservedAt: now}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	add(a, `{"url":"http://127.0.0.1:3001/ok6utwq3e5ernh","status":200,"type":"text/html","size":1083,"title":"Shop"}`)
+	add(b, `{"url":"http://127.0.0.1:3001/qz81xk2mpl","status":200,"type":"text/html","size":1079,"title":"Shop"}`)
+	if d, err := Compare(a, b); err != nil || len(d.NewObs) != 0 {
+		t.Fatalf("the control's path and size reported as a change: %v %+v", err, d.NewObs)
+	}
+	for name, ctl := range map[string]string{
+		"status":    `{"url":"http://127.0.0.1:3001/qz81xk2mpl","status":404,"type":"text/html","title":"Shop"}`,
+		"title":     `{"url":"http://127.0.0.1:3001/qz81xk2mpl","status":200,"type":"text/html","title":"Other"}`,
+		"directory": `{"url":"http://127.0.0.1:3001/api/qz81xk2mpl","status":200,"type":"text/html","title":"Shop"}`,
+	} {
+		c := open(name + ".db")
+		add(c, ctl)
+		if d, _ := Compare(a, c); len(d.NewObs) != 1 {
+			t.Errorf("a control with another %s missed: %+v", name, d.NewObs)
+		}
+	}
+}
