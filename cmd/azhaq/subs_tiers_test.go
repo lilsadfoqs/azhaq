@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -158,5 +159,39 @@ func TestSubsTiersHTTPConfirmsOnlyWhatAnswered(t *testing.T) {
 	c := rep.Counts
 	if c["raw candidates"] != 3 || c["DNS-confirmed"] != 2 || c["HTTP-confirmed"] != 1 {
 		t.Errorf("counts %v", c)
+	}
+}
+
+// With -live the raw tier still counts every name a source gave, the guesses
+// of a sampled source included: the ones that do not resolve are counted as
+// such, and only the ones a lookup confirmed are DNS-confirmed.
+func TestSubsTiersLiveCountsEverySampledGuess(t *testing.T) {
+	t.Chdir(t.TempDir())
+	resolvers := serveZone(t, fakeZone{a: map[string]string{
+		"www.example.org": "192.0.2.10", "r1.example.org": "192.0.2.11", "r2.example.org": "192.0.2.12",
+	}})
+	var r1, r2 []string
+	for i := 0; i < 60; i++ {
+		r1 = append(r1, fmt.Sprintf("g%d.example.org", i))
+		r2 = append(r2, fmt.Sprintf("h%d.example.org", i))
+	}
+	r1, r2 = append(r1, "r1.example.org"), append(r2, "r2.example.org")
+	defer subcol.UseTestSources(
+		subcol.TestSource{Name: "s", Default: true, Names: []string{"www.example.org", "api.example.org"}},
+		subcol.TestSource{Name: "center", Default: true, Padding: true, Sampled: true, Rounds: [][]string{r1, r2, r2}},
+	)()
+	out, rep, code := runContract(t, "subs", "-d", "example.org", "-live", "-resolvers", resolvers, "-no-history")
+	if code != exitOK {
+		t.Fatalf("exit %d %+v", code, rep)
+	}
+	c := rep.Counts
+	if want := 2 + len(r1) + len(r2); c["raw candidates"] != want {
+		t.Errorf("raw candidates %d, the sources gave %d names: %v", c["raw candidates"], want, c)
+	}
+	if c["DNS-confirmed"] != 3 || len(jsonRows(t, out)) != 3 {
+		t.Errorf("DNS-confirmed %d, rows %d, want 3 (www, r1, r2): %v", c["DNS-confirmed"], len(jsonRows(t, out)), c)
+	}
+	if c["raw candidates"]-c["did not resolve"] != c["DNS-confirmed"] {
+		t.Errorf("raw less what did not resolve is not the DNS-confirmed: %v", c)
 	}
 }
