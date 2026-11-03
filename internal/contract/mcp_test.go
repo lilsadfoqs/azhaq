@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -82,4 +83,73 @@ func (c *mcpClient) Tool(name string, args map[string]any) Summary {
 	var body struct{ Summary Summary }
 	must(c.t, json.Unmarshal([]byte(res.Content[0].Text), &body))
 	return body.Summary
+}
+
+// Refused is what the server says to a call it refuses, in the protocol's error or in the tool's.
+func (c *mcpClient) Refused(name string, args map[string]any) string {
+	c.t.Helper()
+	c.next++
+	b, _ := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": c.next, "method": "tools/call", "params": map[string]any{"name": name, "arguments": args}})
+	_, _ = fmt.Fprintln(c.in, string(b))
+	if !c.sc.Scan() {
+		c.t.Fatalf("mcp: no answer to %s: %v", name, c.sc.Err())
+	}
+	var resp struct {
+		Result struct {
+			Content []struct{ Text string }
+			IsError bool
+		}
+		Error *struct{ Message string }
+	}
+	must(c.t, json.Unmarshal(c.sc.Bytes(), &resp))
+	switch {
+	case resp.Error != nil:
+		return resp.Error.Message
+	case resp.Result.IsError && len(resp.Result.Content) > 0:
+		return resp.Result.Content[0].Text
+	}
+	c.t.Errorf("mcp %s was not refused: %s", name, c.sc.Text())
+	return ""
+}
+
+// What the server was started with holds for every call: the -deny-path
+// rules keep a URL out, and no argument of a call adds a rule, a scope or a
+// budget.
+func TestMCPHoldsWhatItWasStartedWith(t *testing.T) {
+	l := newLabs(t)
+	c := startMCP(t, l.Dir, "-allow", l.Allow(), "-deny-path", "^/about", "-max-requests", "200")
+	c.Tool("azhaq_map", map[string]any{"url": l.Site.URL, "workspace": "w"})
+	if l.Site.Wire.Total() == 0 {
+		t.Fatal("the map sent nothing")
+	}
+	for k := range l.Site.Wire.HTTP() {
+		if strings.Contains(k, "/about") {
+			t.Errorf("the server was started with -deny-path ^/about and a map sent %s", k)
+		}
+	}
+	// The control: the same map without the rule asks /about, so its absence above is the rule's doing.
+	open := newLabs(t)
+	startMCP(t, open.Dir, "-allow", open.Allow()).Tool("azhaq_map", map[string]any{"url": open.Site.URL, "workspace": "w"})
+	if _, ok := open.Site.Wire.HTTP()[canon("GET", open.Site.URL+"/about")]; !ok {
+		t.Error("a map with no -deny-path never asks /about, so the check above proves nothing")
+	}
+	before := l.Site.Wire.Total()
+	for _, extra := range []map[string]any{
+		{"deny_path": []string{"^/x"}},
+		{"deny-path": "^/x"},
+		{"allow": []string{"example.com"}},
+		{"max_requests": 100000},
+		{"rate": 1000},
+	} {
+		args := map[string]any{"url": l.Site.URL + "/products"}
+		for k, v := range extra {
+			args[k] = v
+		}
+		if msg := c.Refused("azhaq_map", args); msg == "" {
+			t.Errorf("%v: no reason given", extra)
+		}
+	}
+	if got := l.Site.Wire.Total(); got != before {
+		t.Errorf("refused calls sent %d requests", got-before)
+	}
 }
