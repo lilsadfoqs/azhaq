@@ -88,6 +88,7 @@ type Collector struct {
 	// under API bases.
 	Known     bool
 	probed    sync.Map // scheme://host (or scheme://host/api/v2/) → the URL whose task sweeps it; one sweep each
+	planned   sync.Map // the same, claimed while no workspace is bound: a plan's, or a run's with none
 	baseCount sync.Map // scheme://host → API bases swept
 }
 
@@ -173,15 +174,19 @@ func (c *Collector) bases(origin string) int {
 
 // owner is the URL whose task sweeps origin, claiming it for raw when
 // nobody has.
+//
+// A claim made while none is bound (azhaq plan, or the estimate a run makes
+// before it sends) is not the run's: it stays apart, so that the run's first
+// claim lands in its workspace and a resume gives the sweep to the same task.
 func (c *Collector) owner(origin, raw string) string {
+	if catalog.Claim == nil {
+		v, _ := c.planned.LoadOrStore(origin, raw)
+		return v.(string)
+	}
 	if v, ok := c.probed.Load(origin); ok {
 		return v.(string)
 	}
-	o := raw
-	if catalog.Claim != nil {
-		o = catalog.Claim(Name+" "+origin, raw)
-	}
-	v, _ := c.probed.LoadOrStore(origin, o)
+	v, _ := c.probed.LoadOrStore(origin, catalog.Claim(Name+" "+origin, raw))
 	return v.(string)
 }
 
