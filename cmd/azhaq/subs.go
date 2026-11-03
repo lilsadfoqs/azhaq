@@ -584,7 +584,7 @@ func cmdSubs(args []string) error {
 	set("guesses held back", heldBack)
 	set("left out by -m/-f", filtered+guessFiltered)
 	set("listed under another domain", dup)
-	if !*live && !active && rep.Results > 0 && !*guesses {
+	if !*live && !active && rep.Results > 0 && !(hasFlag(args, "guesses") && *guesses) { // an explicit -guesses cannot go with -live
 		if why, _ := livePass(rep.Results); why != "" {
 			rep.hint(livePassCommand(args) + "   (next pass, not run: " + why + ")")
 		}
