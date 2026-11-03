@@ -17,8 +17,8 @@ azhaq urls -d example.com
 # with subdomains, from two archives, without static files, one URL per host and path
 azhaq urls example.com -subs -providers wayback,commoncrawl -blacklist png,jpg,css,js -fp | httpx
 
-# only 200 answers of type text/html captured since 2024, with no pause between requests
-azhaq urls -d example.com -mc 200 -mt text/html -from 2024 -urls-pause 0
+# only 200 answers of type text/html captured since 2024, a second between the requests of an archive
+azhaq urls -d example.com -mc 200 -mt text/html -from 2024 -urls-pause 1s
 
 # rows to triage: provider, capture date, junk labels, and a spot-check of 200 URLs against the live site at 5 a second
 azhaq urls -d example.com -json -keep-junk -live -live-max 200 -live-rate 5
@@ -163,8 +163,8 @@ The classes, in the order of the rules above: `scanner-payload`, `scanner-probe`
 | Flag | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `-urls-max` | int | `500000` | URLs kept for each domain (0: no cap); the summary counts the ones past it |
-| `-urls-pages` | int | `50` | pages read from each archive for a domain (0: no cap); an archive that stops at the cap says so in the summary |
-| `-urls-pause` | duration |  | pause between the requests of one archive (default: 1 s for the Wayback Machine and Common Crawl, 0.5 s for OTX, 2 s for urlscan.io; 0 for none) |
+| `-urls-pages` | int |  | stop reading an archive after this many pages for a domain (default 0: no cap, as gau reads every page); an archive that stops at the cap says so in the summary |
+| `-urls-pause` | duration |  | pause between the requests of one archive (default: none, as gau asks; an archive that answers 429 or 503 is waited out) |
 | `-urls-threads` | int |  | domains asked at once (default 16) |
 | `-urls-timeout` | duration | `3m0s` | time each archive source gets per domain (the Wayback Machine's answer for a large domain takes several minutes) |
 | `-retries` | int |  | times an archive request is asked again after a 429, 503 or network error, after its Retry-After (seconds or a date, however long) or 2, 5, 10, 20, then 30 s; 0 makes the first refusal final (default: a 429 or 503 is asked again until the archive's time, -urls-timeout, or the run's is spent, a network error 3 times; a wait longer than the time left ends the request at once, with the reason) |

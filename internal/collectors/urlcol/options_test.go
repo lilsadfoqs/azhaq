@@ -506,6 +506,10 @@ func TestProxyCarriesEveryRequest(t *testing.T) {
 		mu.Lock()
 		seen = append(seen, r.URL.String())
 		mu.Unlock()
+		if r.URL.Query().Get("page") != "0" { // past the last page
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
 		fmt.Fprint(w, `[["original"],["http://example.org/via-proxy"]]`)
 	}))
 	defer proxy.Close()
@@ -552,8 +556,15 @@ func TestPauseOverride(t *testing.T) {
 			t.Errorf("%s still pauses %v", name, p)
 		}
 	}
-	if c := New(Options{}); c.pauses["urlscan"] != 2*time.Second {
-		t.Error("default pause changed")
+	// By default no archive is paused: gau sends its requests back to back.
+	for name, p := range New(Options{}).pauses {
+		if p != 0 {
+			t.Errorf("%s pauses %v by default", name, p)
+		}
+	}
+	one := 40 * time.Millisecond
+	if c := New(Options{Pause: &one}); c.pauses["wayback"] != one {
+		t.Errorf("a pause the user gave: %v", c.pauses)
 	}
 }
 

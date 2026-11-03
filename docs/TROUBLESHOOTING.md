@@ -189,7 +189,7 @@ For the last case the note reads like `otx has no type of its captures: its 13 U
 **Fix:**
 
 - Add `-subs` for the subdomains.
-- `-urls-pages 0` removes the page cap. `-fail-on-capped` exits 4 on it.
+- Leave `-urls-pages` at 0, its default, for no page cap. `-fail-on-capped` exits 4 on a cap you set.
 
 ### `urls -providers` says a name is not an archive
 

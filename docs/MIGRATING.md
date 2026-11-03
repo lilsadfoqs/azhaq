@@ -413,7 +413,7 @@ Behaviour, fields and edge cases: [`azhaq urls`](commands/urls.md).
 - OTX gives each URL a status (`httpcode`, 0 when it has none) and urlscan.io each page a status and a type. gau 2.2.4 sends neither `--mc` nor `--fc` to them and prints every URL. azhaq judges them: `-mc 200` keeps the URLs recorded as 200 and drops one with no recorded status, `-fc 404` leaves out the 404s and keeps one with none. An archive that keeps no type or date, OTX, is asked all the same and its URLs are kept unfiltered, with a note such as `otx has no type of its captures: its 13 URLs are not filtered by -mt`.
 - A 429 or a 503 is asked again after its `Retry-After`, however long, or after 2, 5, 10, 20 and 30 seconds. This lasts as long as the archive's `-urls-timeout` and the run's `-timeout` allow. A network error is asked again 3 times.
 - A source that still failed is named in the summary with its tries and the server's words and counted in `failures`; the exit code is 0 while another archive answered, as gau's is, and 3 with `-strict-exit`. An example is `wayback: failed after 4 tries, 429 Too Many Requests`.
-- Each archive is asked at its own pace. The default pause between one archive's requests is 1 s for the Wayback Machine and Common Crawl, 0.5 s for OTX, 2 s for urlscan.io and none for Arquivo. `-urls-pause` changes it: [urls](commands/urls.md#flags).
+- Each archive is asked as fast as it answers, with no pause between its requests, as gau asks. `-urls-pause` adds one: [urls](commands/urls.md#flags).
 
 ### Examples
 
@@ -432,7 +432,7 @@ azhaq urls -dL domains.txt -providers wayback,commoncrawl -from 2024 -json -o ur
 - `-timeout` with `azhaq resume`.
 - `-db` and `-json` summaries.
 - `-fail-on-errors` and `-fail-on-capped` for CI.
-- A page cap, with a note when an archive had more to read.
+- A page cap you can set (`-urls-pages`), with a note when an archive had more to read.
 
 ## arjun: `azhaq params`
 

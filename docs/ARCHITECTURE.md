@@ -1561,8 +1561,9 @@ failed after 2 tries, 429 Too Many Requests, Retry-After 2m0s; the 2m0s to wait 
 
 A source that still fails stops and keeps the pages it read. It is reported with its tries and the server's words, such as `failed after 4 tries, 429 Too Many Requests`. Its row has `requests`, `retried` and `waited_seconds`. The summary says what each archive gave.
 
-- Each source has 3 minutes (`-urls-timeout`) and 50 pages (`-urls-pages`). A source that stops at the page limit is marked `capped`.
-- There is a pause between a source's requests (`-urls-pause`).
+- Each source has 3 minutes (`-urls-timeout`) and reads every page it has, as gau does. `-urls-pages N` stops it after N pages and marks it `capped`.
+- Requests go out as fast as the archive answers, as gau's do. `-urls-pause` puts a wait between a source's requests. An archive that answers 429 or 503 is waited out.
+- The Wayback Machine is read page by page in order until it answers 400 (past the last page) or sends an empty body. A page with no rows is skipped, not the end.
 - The run's own `-timeout` ends the sources a few seconds before it. So their summary is still recorded, marked as cut short.
 
 ### Filters

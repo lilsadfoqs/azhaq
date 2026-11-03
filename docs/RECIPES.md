@@ -534,7 +534,7 @@ azhaq urls -d example.com -subs -providers wayback,commoncrawl -o urls.txt
 azhaq urls -d example.com -mc 200 -mt text/html -from 2024 -blacklist png,jpg,css,js -fp
 azhaq urls -d example.com -sort -json | jq -r .url                      # held until every archive answered, sorted
 azhaq urls -d example.com -raw                                          # what the archives said, nothing changed
-azhaq urls -d example.com -urls-pause 0 -urls-pages 0 -retries 5        # as fast as the archives answer, no page cap
+azhaq urls -d example.com -urls-pause 1s -urls-pages 20 -retries 5      # a second between requests, at most 20 pages of each archive
 ```
 
 `httpx` and `jq` here are separate tools.
@@ -549,7 +549,7 @@ azhaq urls -d example.com -urls-pause 0 -urls-pages 0 -retries 5        # as fas
 - URLs are normalized and the scanner junk archives hold is dropped. `-raw` turns both off, and the deduplication too.
 - A URL that two archives hold is printed once.
 - TLS certificates are checked.
-- The summary names an archive that failed, an archive that stopped at the page cap, and archives left out by a filter. The page cap is `-urls-pages`, 50 by default and 0 for none. `-fail-on-capped` makes the cap exit 4.
+- The summary names an archive that failed, an archive that stopped at the page cap, and archives left out by a filter. The page cap is `-urls-pages`, 0 (none) by default. `-fail-on-capped` makes a cap you set exit 4.
 
 ## Move an ffuf command line, or replay it through Burp
 
