@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/lilsadfoqs/azhaq/catalog"
 	"github.com/lilsadfoqs/azhaq/types"
 )
 
@@ -159,5 +160,44 @@ func TestAPIBase(t *testing.T) {
 		if got := apiBase(p); got != want {
 			t.Errorf("%s: %q, want %q", p, got, want)
 		}
+	}
+}
+
+// A claim made while the run has none bound (the plan a run makes before it
+// sends) is not the run's: the first claim after the workspace is bound is
+// recorded, and a resume, a collector with nothing in memory, gives the sweep
+// of the origin to the URL that started it.
+func TestPlanningDoesNotTakeTheRunsClaim(t *testing.T) {
+	claims := map[string]string{}
+	bind := func() {
+		catalog.Claim = func(key, owner string) string {
+			if v, ok := claims[key]; ok {
+				return v
+			}
+			claims[key] = owner
+			return owner
+		}
+	}
+	t.Cleanup(func() { catalog.Claim = nil })
+	seed := func(u string) types.Seed { return types.Seed{Type: types.TypeURL, Keys: map[string]string{"url": u}} }
+
+	// The plan asks before any workspace is bound.
+	catalog.Claim = nil
+	col := New(nil)
+	col.Skip(seed("http://a.test/"))
+
+	// The run asks another URL first: it owns the sweep, and the claim is kept.
+	bind()
+	if col.Skip(seed("http://a.test/rest/basket/1")) {
+		t.Fatal("the first URL the run asks does not own the origin's sweep")
+	}
+	if got := claims["azhaq-paths http://a.test"]; got != "http://a.test/rest/basket/1" {
+		t.Fatalf("the run's claim is %q, want the first URL it asked", got)
+	}
+
+	// The resume has nothing in memory and asks the URLs in another order.
+	resumed := New(nil)
+	if !resumed.Skip(seed("http://a.test/")) || resumed.Skip(seed("http://a.test/rest/basket/1")) {
+		t.Error("a resume does not give the sweep to the URL that owns it")
 	}
 }
