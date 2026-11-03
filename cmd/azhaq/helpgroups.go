@@ -29,7 +29,7 @@ var helpSpecs = map[string]helpSpec{
 	"run": {
 		groups: []helpGroup{
 			{"Targets and input", `url domain list in asn cidr org scope program exec demo`},
-			{"What to ask", `probe passive skip dirs params ports ports-on ports-udp dns-brute permute no-takeover graphql graphql-wordlist known-files paths no-paths path-climb fill-forms per-template catchall-after web-ports web-scheme no-favicon no-tech no-map-guess no-follow advisories advisories-confirm advisory-source`},
+			{"What to ask", `probe passive skip dirs params ports ports-on ports-udp dns-brute permute no-takeover graphql graphql-wordlist known-files paths no-paths path-climb fill-forms per-template catchall-after web-ports web-scheme no-favicon no-tech no-map-guess no-follow advisories advisories-confirm advisory-source verify`},
 			{"Crawl scope", `crawl-scope crawl-any-host crawl-in crawl-out`},
 			{"Names and sources", `sources all-sources exclude-sources providers resolvers dns-rate source-proxy source-rate source-rates source-timeout max-time max-body max-results urls-timeout no-history`},
 			{"Browser", `browser interact interact-clicks screenshots chrome chrome-profile chrome-proxy chrome-no-sandbox chrome-require-sandbox tabs unsafe-ports`},
@@ -75,7 +75,7 @@ var helpSpecs = map[string]helpSpec{
 	},
 	"report": {
 		groups: []helpGroup{
-			{"", `dir url method owner format o redact`},
+			{"", `findings db dir url method owner format o redact`},
 		},
 	},
 	"subs": {
@@ -203,7 +203,7 @@ var helpSpecs = map[string]helpSpec{
 	"ports": {
 		groups: []helpGroup{
 			{"Targets and input", `host l p tp ep no-stdin scope program`},
-			{"What to ask", `udp pu detect order unnamed exclude-cdn seed sn wn advisories advisories-confirm advisory-source`},
+			{"What to ask", `udp pu detect order unnamed exclude-cdn seed sn wn advisories advisories-confirm advisory-source verify`},
 			{"Scope and safety", `allow sweep deny kill-file ledger`},
 			{"Pace and limits", `rate min-rate workers connect-timeout dns-rate retries max-requests timeout`},
 			{"Network", `proxy resolvers`},

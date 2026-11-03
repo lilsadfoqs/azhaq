@@ -308,6 +308,28 @@ azhaq run -url https://app.example.com/ -ports top-100 -advisories -advisory-sou
 azhaq run -url https://app.example.com/ -ports top-100 -advisories -advisories-confirm -advisory-source osv.json -allow app.example.com
 ```
 
+### Read-only verification
+
+With `-verify`, each service the run named gets at most one more read, from a fixed list of checks — there is no way to name another request. Each check sends only what a client with no credentials sends to read what the service already gives anyone:
+
+| Check | Sends exactly | Settles |
+| --- | --- | --- |
+| Redis | `INFO server` | whether the data store answers a read with no credential, and the version it states |
+| MongoDB | an `isMaster` OP_MSG (`{$db: "admin"}`) | whether the server answers a hello with no credential, and the version it states |
+| memcached | `version` | whether the service answers with no credential, and the version it states |
+
+With `-advisories`, each advisory lead is labelled from its one confirmation read as well (the read itself is `-advisories-confirm`'s; `-verify` sends nothing more for a lead). Every result is labelled exactly one of:
+
+- `proved` — the read answered with no credential sent, or an advisory's version and named precondition were both settled by its confirmation read. Proved names that read only, never exploitability, which is never tested.
+- `version-only` — only the product and version identification stands: the service asked for authentication, or no confirmation read settled more. No unauthenticated read is claimed.
+- `conditional` — the result depends on a precondition the read did not show, which the result names.
+
+Each result carries the exact request sent and an excerpt of the answer, is printed after the map (one `{"type":"verify", …}` object with `-json`), held in the summary's `verify`, and stored as one `verify` observation (azhaq `show` lists them), so every count derives from the stored rows. The severity printed is a stated ranking of how directly the read shows the fact (an unauthenticated data-store read is `high`, a settled advisory `medium`, a conditional `low`, the rest `info`); it is not a CVSS score. Every read goes through the scope, `-deny-path`, the kill file, `-max-requests` and the pace, and is a ledger line of the collector `azhaq-verify`. A read the scope refuses, a rule keeps out or a limit stops is a note, not a failure; a read that gets no answer is a failure (exit 3). Never a payload, never a write or state change, never a credential or a guessed password, never a request that tries to trigger a flaw. The boundary is stated once, in [Read-only verification](../CONCEPTS.md#read-only-verification--verify).
+
+```
+azhaq run -url https://app.example.com/ -ports top-1000 -verify -db app.db
+```
+
 ## Flags
 
 <!-- flags:begin run -->
@@ -360,6 +382,7 @@ azhaq run -url https://app.example.com/ -ports top-100 -advisories -advisories-c
 | `-advisories` | bool |  | match the products and versions this run already confirmed against the advisory records of -advisory-source, as labelled leads (affected, not affected or conditional, each with its advisory id and URL): a pure lookup over what the run already holds, nothing more is sent to a target |
 | `-advisories-confirm` | bool |  | with -advisories: for each affected or conditional lead, also make the one benign read the advisory names (a GET of its documented version or info path, or of / to read the version it states): no payload, no login, no state change, never a request that could trigger the issue; each read is in the ledger and counts against -max-requests, and each lead is labelled observed, inferred or claimed (with -advisories; reads only within the run's scope: the targets given, -allow or -scope) |
 | `-advisory-source` | string |  | the advisory records to match against, OSV JSON (a record, a list, {"vulns": [...]}, or JSON lines): a file the user downloaded (works offline), or an http(s) URL asked once as a third-party source; azhaq vendors no snapshot and fetches none it was not given |
+| `-verify` | bool |  | with the services this run confirmed: make each enumerated safe read-only verification (Redis INFO server, MongoDB isMaster, memcached version, each sent with no credential, and, with -advisories, each advisory lead labelled from its confirmation read) and label the results proved, version-only or conditional, each with the exact request sent and an excerpt of the answer; every read goes through the scope, -deny-path (for the advisory GET), -max-requests, the pace, the kill file and the ledger; no payload, no credential, no write and no request that tries to trigger an issue |
 
 **Crawl scope**
 
