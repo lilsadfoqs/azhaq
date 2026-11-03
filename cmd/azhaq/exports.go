@@ -242,8 +242,20 @@ func exportTo(path, format, origin string, safe bool, w io.Writer) error {
 		for _, s := range secretRows(g.obs) {
 			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n", s.Severity, s.Kind, s.Value, s.Where, s.Name, s.Rule)
 		}
+	case "findings":
+		// The findings records of the workspace, as JSON Lines: the
+		// same records `azhaq report -findings` writes. An empty
+		// workspace writes the explicit empty record set, so there is
+		// always a line to read.
+		found, leads := buildFindings(g)
+		_, err := w.Write(findingsJSONL(found, leads))
+		return err
+	case "findings-md":
+		found, leads := buildFindings(g)
+		_, err := w.Write(findingsMarkdown(found, leads))
+		return err
 	default:
-		return usagef("unknown -format %q (jsonl, urls, hosts, names, targets, openapi, graphql, sdl, burp, html, graphml, secrets)", format)
+		return usagef("unknown -format %q (jsonl, urls, hosts, names, targets, openapi, graphql, sdl, burp, html, graphml, secrets, findings, findings-md)", format)
 	}
 	return nil
 }

@@ -245,8 +245,10 @@ type Lead struct {
 	AffectedRange string `json:"affected_range"`
 	Label         string `json:"label"` // affected, not affected or conditional
 	Precondition  string `json:"precondition,omitempty"`
-	Confidence    string `json:"confidence,omitempty"` // observed, inferred or claimed, when confirmation ran
-	Read          string `json:"read,omitempty"`       // what the confirmation read, or why it read nothing
+	Confidence    string `json:"confidence,omitempty"`      // observed, inferred or claimed, when confirmation ran
+	Read          string `json:"read,omitempty"`            // what the confirmation read, or why it read nothing
+	Origin        string `json:"origin,omitempty"`          // the web origin of the service, when it is a web one
+	ConfirmReq    string `json:"confirm_request,omitempty"` // the exact request a confirmation sent or would send ("GET /version")
 }
 
 // Line is the lead as one line of text output: the label, the product
@@ -319,7 +321,12 @@ func Match(services []Service, advisories []Advisory) []Lead {
 					AdvisoryID: adv.ID, URL: adv.URL(), Summary: adv.Summary,
 					Target: svc.Target(), Host: firstNonEmpty(svc.Host, svc.IP), Port: svc.Port,
 					Service: svc.Service, Product: svc.Product, VersionSeen: svc.Version,
-					AffectedRange: ranges,
+					AffectedRange: ranges, Origin: svc.Origin,
+				}
+				if p := adv.confirmPath(); p != "" {
+					lead.ConfirmReq = "GET " + p
+				} else if svc.Origin != "" {
+					lead.ConfirmReq = "GET /"
 				}
 				switch {
 				case st == stateUncertain:

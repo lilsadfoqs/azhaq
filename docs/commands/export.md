@@ -5,7 +5,7 @@ Write a database in another tool's format.
 ## Synopsis
 
 ```
-azhaq export [-db FILE] [-format jsonl|urls|hosts|names|targets|openapi|graphql|sdl|burp|html|graphml|secrets] [-origin ORIGIN|URL] [-safe]
+azhaq export [-db FILE] [-format jsonl|urls|hosts|names|targets|openapi|graphql|sdl|burp|html|graphml|secrets|findings|findings-md] [-origin ORIGIN|URL] [-safe]
 ```
 
 ## Examples
@@ -25,6 +25,9 @@ azhaq export -db h1.db -format burp > scope.json
 
 # Web services, for nuclei
 azhaq export -db h1.db -format targets | nuclei -l -
+
+# The findings records of a run, one JSON object per record
+azhaq export -db app.db -format findings > findings.jsonl
 ```
 
 ## What it does
@@ -49,10 +52,12 @@ The output is the format you chose, on stdout.
 | `html` | One self-contained page. See [html](#html). |
 | `graphml` | The graph for Gephi, yEd or Cytoscape. |
 | `secrets` | Credentials found in scripts, tab-separated: severity, kind, value, script, name it was assigned to, rule that listed it. |
+| `findings` | The findings records of the workspace, as JSON Lines: one `{"type":"finding", …}` per stored row whose label supports it (a `-verify` run's results, a `-advisories` run's leads), proved first, `version-only` and `conditional` kept distinct, each with kind, severity, host, port, URL, product and version where confirmed, advisory id where matched, evidence excerpt and the command that produced it; then one `{"type":"lead", …}` per unproved hint. A workspace with no qualifying rows writes one explicit line, `{"type":"findings","findings":0,"leads":0}`. The same as `azhaq report -findings -format jsonl`. |
+| `findings-md` | The same records in Markdown: a section per label with its count, and the leads under their own heading; an empty workspace writes a sentence saying there are no qualifying rows. |
 
 ## Summary and exit codes
 
-A format that finds nothing writes nothing and says why on stderr; `openapi` writes a description with no paths instead (below). The exit code is 0.
+A format that finds nothing writes nothing and says why on stderr; `openapi` writes a description with no paths instead (below), and `findings`/`findings-md` write an explicit empty record set. The exit code is 0.
 
 ```
 azhaq export: nothing to write: the workspace holds no host names (a run of a URL or an address has none: …)
@@ -186,7 +191,7 @@ Rules look like this:
 | Flag | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `-db` | string |  | sqlite path (default: last run) |
-| `-format` | string | `jsonl` | jsonl (everything), urls, hosts (names that resolve), names (every name), targets (web services, for nuclei -l), openapi, graphql (introspection JSON), sdl (GraphQL schema), burp (the run's scope), html, graphml, secrets |
+| `-format` | string | `jsonl` | jsonl (everything), urls, hosts (names that resolve), names (every name), targets (web services, for nuclei -l), openapi, graphql (introspection JSON), sdl (GraphQL schema), burp (the run's scope), html, graphml, secrets, findings (one record per qualifying stored row, JSON Lines; an empty workspace writes an explicit empty record set), findings-md (the same records in Markdown) |
 | `-origin` | string |  | openapi: the origin to describe (default: the one with most API routes); graphql, sdl: the endpoints of an origin, or one endpoint's URL |
 | `-safe` | bool |  | openapi: leave out the routes the run did not request, such as those -deny-path kept out (otherwise they carry x-azhaq-skipped: true) |
 <!-- flags:end -->

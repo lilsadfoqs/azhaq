@@ -29,7 +29,7 @@ var helpSpecs = map[string]helpSpec{
 	"run": {
 		groups: []helpGroup{
 			{"Targets and input", `url domain list in asn cidr org scope program exec demo`},
-			{"What to ask", `probe passive skip dirs params ports ports-on ports-udp dns-brute permute no-takeover graphql graphql-wordlist known-files paths no-paths path-climb fill-forms per-template catchall-after web-ports web-scheme no-favicon no-tech no-map-guess no-follow advisories advisories-confirm advisory-source`},
+			{"What to ask", `probe passive skip dirs params ports ports-on ports-udp dns-brute permute no-takeover graphql graphql-wordlist known-files paths no-paths path-climb fill-forms per-template catchall-after web-ports web-scheme no-favicon no-tech no-map-guess no-follow advisories advisories-confirm advisory-source verify`},
 			{"Crawl scope", `crawl-scope crawl-any-host crawl-in crawl-out`},
 			{"Names and sources", `sources all-sources exclude-sources providers resolvers dns-rate source-proxy source-rate source-rates source-timeout max-time max-body max-results urls-timeout no-history`},
 			{"Browser", `browser interact interact-clicks screenshots chrome chrome-profile chrome-proxy chrome-no-sandbox chrome-require-sandbox tabs unsafe-ports`},
@@ -50,7 +50,7 @@ var helpSpecs = map[string]helpSpec{
 				port-proxy-auth port-rate port-retries port-seed port-source-ip port-threshold port-timeout
 				port-unnamed port-workers shot-codes shot-format shot-fullpage shot-html shot-js shot-quality
 				shot-size shot-timeout shot-wait urls urls-archive urls-blacklist urls-fc urls-fp urls-from
-				urls-ft urls-max urls-mc urls-mt urls-pages urls-pause urls-proxy urls-raw urls-retries
+				urls-ft urls-keep-junk urls-max urls-mc urls-mt urls-pages urls-pause urls-proxy urls-raw urls-retries
 				urls-source urls-sources urls-subs urls-to
 			`,
 		},
@@ -63,7 +63,7 @@ var helpSpecs = map[string]helpSpec{
 	"roles": {
 		groups: []helpGroup{
 			{"Sessions", `role role-cmd role-login login har burp no-anon canary canary-every`},
-			{"What to replay", `replay replay-max replay-writes replay-writes-canary replay-writes-field dry-writes id refusal allow all`},
+			{"What to replay", `replay replay-max replay-writes replay-writes-canary replay-writes-field replay-writes-verify dry-writes id refusal allow all`},
 			{"Pace and network", `rate proxy`},
 			{"Output", `dir json`},
 		},
@@ -75,15 +75,15 @@ var helpSpecs = map[string]helpSpec{
 	},
 	"report": {
 		groups: []helpGroup{
-			{"", `dir url method owner format o redact`},
+			{"", `findings db dir url method owner format o redact`},
 		},
 	},
 	"subs": {
 		groups: []helpGroup{
 			{"Targets and input", `d dL`},
-			{"What to ask", `live guesses guess-samples w permute all-sources sources m providers`},
+			{"What to ask", `live http guesses guess-samples w permute all-sources sources m providers`},
 			{"Pace and limits", `source-rate source-rates source-timeout max-time max-body max-results max-names dns-rate t timeout`},
-			{"Network", `resolvers proxy`},
+			{"Network", `resolvers proxy web-ports http-proxy`},
 			{"Output", `db ledger json o oI silent v fail-on-errors ls stats no-history`},
 		},
 		hidden: map[string]string{
@@ -185,8 +185,9 @@ var helpSpecs = map[string]helpSpec{
 	"urls": {
 		groups: []helpGroup{
 			{"Targets and input", `d dL`},
-			{"What to ask", `providers provider-config archive raw subs`},
+			{"What to ask", `providers provider-config archive raw subs keep-junk`},
 			{"Matchers and filters", `mc mt ft blacklist fp from to`},
+			{"Spot-check the live site", `live live-rate live-max live-proxy`},
 			{"Pace and limits", `urls-max urls-pages urls-pause urls-threads urls-timeout retries timeout`},
 			{"Network", `proxy`},
 			{"Output", `db o json silent v sort stream fail-on-capped fail-on-errors`},
@@ -203,7 +204,7 @@ var helpSpecs = map[string]helpSpec{
 	"ports": {
 		groups: []helpGroup{
 			{"Targets and input", `host l p tp ep no-stdin scope program`},
-			{"What to ask", `udp pu detect order unnamed exclude-cdn seed sn wn advisories advisories-confirm advisory-source`},
+			{"What to ask", `udp pu detect order unnamed exclude-cdn seed sn wn advisories advisories-confirm advisory-source verify`},
 			{"Scope and safety", `allow sweep deny kill-file ledger`},
 			{"Pace and limits", `rate min-rate workers connect-timeout dns-rate retries max-requests timeout`},
 			{"Network", `proxy resolvers`},

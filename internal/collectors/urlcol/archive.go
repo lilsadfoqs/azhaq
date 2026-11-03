@@ -21,6 +21,7 @@ type archiveLine struct {
 	Run    string `json:"run"`
 	URL    string `json:"url"`
 	Source string `json:"source"`
+	At     string `json:"archived,omitempty"`
 }
 
 func (c *Collector) archiveOn() bool { return c.opts.Archive != "" && c.opts.RunID != "" }
@@ -44,8 +45,8 @@ func (c *Collector) appendArchive(lines []byte) error {
 	return f.Close()
 }
 
-func (c *Collector) archiveLine(buf *bytes.Buffer, u, source string) {
-	raw, _ := json.Marshal(archiveLine{Run: c.opts.RunID, URL: u, Source: source})
+func (c *Collector) archiveLine(buf *bytes.Buffer, u, source, at string) {
+	raw, _ := json.Marshal(archiveLine{Run: c.opts.RunID, URL: u, Source: source, At: at})
 	buf.Write(raw)
 	buf.WriteByte('\n')
 }
