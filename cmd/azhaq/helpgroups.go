@@ -36,7 +36,7 @@ var helpSpecs = map[string]helpSpec{
 			{"Scope and safety", `allow sweep deny deny-path kill-file ledger seal-to submit-forms browser-writes params-writes`},
 			{"Pace and limits", `rate host-rate host-parallel parallel delay backoff retry request-timeout timeout max-requests max-host-requests daily-requests max-items max-names max-ips max-response-size depth retry-failed retry-run`},
 			{"Session", `cookie cookie-jar header login login-user login-pass proxy`},
-			{"Output", `db json quiet v stream sr srd no-catchall fail-on-errors fail-on-capped`},
+			{"Output", `db json quiet v stream sr srd no-catchall fail-on-errors fail-on-capped strict-exit`},
 		},
 		hidden: map[string]string{
 			"alias":    `H`,
@@ -84,7 +84,7 @@ var helpSpecs = map[string]helpSpec{
 			{"What to ask", `live guesses guess-samples w permute all-sources sources m providers`},
 			{"Pace and limits", `source-rate source-rates source-timeout max-time max-body max-results max-names dns-rate t timeout`},
 			{"Network", `resolvers proxy`},
-			{"Output", `db ledger json o oI silent v fail-on-errors ls stats no-history`},
+			{"Output", `db ledger json o oI silent v fail-on-errors ls stats no-history strict-exit`},
 		},
 		hidden: map[string]string{
 			"compat:subfinder": `
@@ -107,7 +107,7 @@ var helpSpecs = map[string]helpSpec{
 			{"Scope and safety", `allow deny scope program ledger`},
 			{"Pace and limits", `rl t dns-rate retry timeout maxtime`},
 			{"Network", `resolvers proxy`},
-			{"Output", `db json o silent v`},
+			{"Output", `db json o silent v strict-exit`},
 		},
 		hidden: map[string]string{
 			"compat:dnsx": `
@@ -132,7 +132,7 @@ var helpSpecs = map[string]helpSpec{
 			{"Scope and safety", `allow deny deny-path kill-file ledger`},
 			{"Pace and limits", `rate rl delay host-parallel parallel dns-rate req-timeout timeout max-requests`},
 			{"Session and network", `H cookie proxy resolvers`},
-			{"Output", `db json o silent v`},
+			{"Output", `db json o silent v strict-exit`},
 		},
 		hidden: map[string]string{
 			"compat:httpx": `
@@ -168,7 +168,7 @@ var helpSpecs = map[string]helpSpec{
 			{"Scope and safety", `allow deny deny-path kill-file ledger submit-forms browser-writes chrome-no-sandbox`},
 			{"Pace and limits", `rl delay backoff retry host-rate hrl host-parallel parallel request-timeout ct max-requests max-host-requests max-items max-response-size`},
 			{"Session and network", `H cookie cookie-jar login login-user login-pass proxy resolvers`},
-			{"Output", `db o json jsonl f ot silent v`},
+			{"Output", `db o json jsonl f ot silent v strict-exit`},
 		},
 		hidden: map[string]string{
 			"compat:katana": `
@@ -189,7 +189,7 @@ var helpSpecs = map[string]helpSpec{
 			{"Matchers and filters", `mc mt ft blacklist fp from to`},
 			{"Pace and limits", `urls-max urls-pages urls-pause urls-threads urls-timeout retries timeout`},
 			{"Network", `proxy`},
-			{"Output", `db o json silent v sort stream fail-on-capped fail-on-errors`},
+			{"Output", `db o json silent v sort stream fail-on-capped fail-on-errors strict-exit`},
 		},
 		hidden: map[string]string{
 			"compat:gau": `
@@ -229,7 +229,7 @@ var helpSpecs = map[string]helpSpec{
 			{"Scope and safety", `allow deny deny-path kill-file ledger`},
 			{"Pace and limits", `rate t max-requests timeout`},
 			{"Session and network", `H cookie proxy`},
-			{"Output", `db json o silent v`},
+			{"Output", `db json o silent v strict-exit`},
 		},
 		hidden: map[string]string{
 			"alias": `header`,
@@ -248,7 +248,7 @@ var helpSpecs = map[string]helpSpec{
 			{"Scope and safety", `allow deny deny-path kill-file ledger seal-to`},
 			{"Pace and limits", `rate t p timeout maxtime max-requests se-after control`},
 			{"Session and network", `x proxy replay-proxy`},
-			{"Output", `db json o of silent quiet v c`},
+			{"Output", `db json o of silent quiet v c strict-exit`},
 		},
 		hidden: map[string]string{
 			"compat:ffuf": `
@@ -271,7 +271,7 @@ var helpSpecs = map[string]helpSpec{
 			{"Scope and safety", `allow deny deny-path kill-file ledger`},
 			{"Pace and limits", `rate t d T max-requests timeout urls-timeout`},
 			{"Session and network", `H cookie proxy`},
-			{"Output", `db json o oB oJ oT silent v`},
+			{"Output", `db json o oB oJ oT silent v strict-exit`},
 		},
 		hidden: map[string]string{
 			"alias": `header`,
@@ -293,7 +293,7 @@ var helpSpecs = map[string]helpSpec{
 			{"Scope and safety", `allow deny deny-path kill-file ledger browser-writes`},
 			{"Pace and limits", `rate max-requests timeout`},
 			{"Session and network", `H cookie proxy`},
-			{"Output", `dir csv db json o silent v`},
+			{"Output", `dir csv db json o silent v strict-exit`},
 		},
 		hidden: map[string]string{
 			"alias": `header`,

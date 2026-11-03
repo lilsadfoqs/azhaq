@@ -143,6 +143,7 @@ func run(args []string) error {
 		}
 		return usagef("unknown command %q (azhaq help lists every command)", args[0])
 	}
+	strictExit = false // this command's own -strict-exit sets it
 	return c.run(args[1:])
 }
 
@@ -284,7 +285,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	verbose := fs.Bool("v", false, "print a line for every finished task, not only failures")
 	timeout := fs.Duration("timeout", 0, "stop after this long and keep what was found; azhaq resume continues (0: no limit)")
 	showObs := fs.Bool("obs", false, "also print the observation log")
-	fs.Bool("fail-on-errors", false, "accepted, and the default: every failure exits 3, a fan-out one and a source that failed while others answered included; no flag turns a failure into exit 0")
+	fs.Bool("fail-on-errors", false, "the same as -strict-exit")
 	failCapped := fs.Bool("fail-on-capped", false, "exit 4 also when the run hit -depth with hints left")
 	passive := fs.Bool("passive", false, "skip HTTP/crawl/JS/paths/TLS (no handshake to the target)")
 	depth := fs.Int("depth", 4, "max fan-out waves (0 = seed wave only, not unlimited)")

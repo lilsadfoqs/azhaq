@@ -156,7 +156,8 @@ Every source's URLs go through these rules, OTX's too.
 | `-sort` | bool |  | print once every archive has answered, sorted (the default on a terminal) |
 | `-stream` | bool |  | print each URL as it arrives, unsorted (the default when stdout is not a terminal) |
 | `-fail-on-capped` | bool |  | exit 4 when an archive stopped at its page cap with more to read |
-| `-fail-on-errors` | bool |  | accepted, and the default: every failure exits 3, a fan-out one and a source that failed while others answered included; no flag turns a failure into exit 0 |
+| `-fail-on-errors` | bool |  | the same as -strict-exit |
+| `-strict-exit` | bool |  | exit 3 for any failure, a target among many included (the rule before 0.15); without it a run that did its job exits 0 and its summary counts and lists the failures |
 
 <details>
 <summary>Flags familiar from gau and other names (4)</summary>

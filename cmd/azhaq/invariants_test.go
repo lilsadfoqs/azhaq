@@ -23,7 +23,8 @@ import (
 // is about. cli, runContract and the capture helpers call them, so a run
 // that breaks one fails its test:
 //
-//	F  a summary that lists a failure does not exit 0, and an exit 0 lists none
+//	F  a summary that lists a failure exits 0 only for a run that did its job, and counts it
+//	   in failures (never under -strict-exit); an exit 0 with failures says exit 0
 //	R  the summary's requests are the ledger's lines to targets
 //	S  every result row names a host and port inside the scope given
 //	D  with -resolvers, no DNS line of the ledger names the system's resolver
@@ -88,11 +89,18 @@ func failureListed(rep report) string {
 	return ""
 }
 
-// checkFailureRule is invariant F: exit 0 means no failure of any kind.
+// checkFailureRule is invariant F: exit 0 with a failure listed is a run that
+// did its job (see exit.go), and its summary counts the failure; -strict-exit
+// has no such run.
 func checkFailureRule(t *testing.T, what string, rep report, code int) {
 	t.Helper()
 	if why := failureListed(rep); why != "" && code == exitOK {
-		t.Errorf("F %s: the summary lists %s and the exit code is 0", what, why)
+		if strictExit {
+			t.Errorf("F %s: the summary lists %s and -strict-exit gave exit 0", what, why)
+		}
+		if rep.Failures == 0 {
+			t.Errorf("F %s: the summary lists %s and counts no failure", what, why)
+		}
 	}
 	if code == exitOK && rep.Exit != exitOK {
 		t.Errorf("F %s: exit 0 and the summary says exit %d", what, rep.Exit)

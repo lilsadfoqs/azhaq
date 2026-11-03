@@ -43,6 +43,7 @@ type report struct {
 	DB          string           `json:"db,omitempty"`
 	RunID       string           `json:"run_id,omitempty"`
 	Unreachable []string         `json:"unreachable,omitempty"`
+	Failures    int              `json:"failures"` // the sum of count over failed, plus unreachable targets it does not name: see decide
 	Failed      []engine.Failure `json:"failed,omitempty"`
 	Skipped     []engine.Skip    `json:"skipped,omitempty"`
 	Takeover    []takeoverRow    `json:"takeover,omitempty"`    // names another party may take over
@@ -65,6 +66,9 @@ type report struct {
 
 	what   string // the unit of Results: "names", "web services"
 	warned bool   // a note says the results mislead (a role's dead session): exit 3
+	// failedRows, when set, is `failures`: probe counts its rows without an answer.
+	failedRows *int
+	tally      tally // the targets the run was given and how many of them got no answer (exit.go)
 
 	noCatchAll bool // run -no-catchall: its rows of the catch-all page are left out of results
 	start      time.Time
@@ -87,13 +91,11 @@ func (r *report) settle() {
 	}
 	r.Seconds = float64(time.Since(r.start).Milliseconds()) / 1000
 	r.DNSQueries = egress.DNSTotal() - r.dnsFrom
-	switch {
-	case r.Stopped != "":
+	r.Failures = r.failureCount()
+	if r.Stopped != "" {
 		r.Exit = exitLimit
-	case len(r.Unreachable) > 0 || len(r.Failed) > 0 || r.Degraded || r.warned:
-		r.Exit = exitPartial
-	default:
-		r.Exit = exitOK
+	} else {
+		r.Exit = r.decide()
 	}
 	r.Complete = r.Exit == exitOK
 }
@@ -116,7 +118,7 @@ func (r *report) finish(asJSON, silent bool) error {
 	case asJSON:
 		raw, _ := json.Marshal(r)
 		fmt.Fprintf(os.Stderr, "%s\n", raw)
-	case silent && r.Exit == exitOK && (r.Sources == nil || r.Sources.failures() == 0):
+	case silent && r.Exit == exitOK && r.Failures == 0 && (r.Sources == nil || r.Sources.failures() == 0):
 		// A source that failed is something that failed: it is said under -silent too.
 		// So is a takeover candidate: a finding, not a note.
 		for _, t := range r.Takeover {
@@ -257,12 +259,12 @@ func (r *report) print(w io.Writer) {
 		fmt.Fprintf(w, "  %s\n", r.Sources.line(r.Exit, r.Command == "urls"))
 	}
 	switch r.Exit {
-	case exitPartial:
-		if len(r.Unreachable) == 0 && len(r.Failed) == 0 && !r.Degraded {
-			fmt.Fprintf(w, "  exit 3: finished, but a note above says what to check first\n")
-			break
+	case exitOK:
+		if r.hasFailure() {
+			fmt.Fprintf(w, "  exit 0: %s; the results are usable (-strict-exit makes any failure exit 3)\n", r.doneWith())
 		}
-		fmt.Fprintf(w, "  exit 3: finished, but what is marked ! failed; the results are usable\n")
+	case exitPartial:
+		fmt.Fprintf(w, "  exit 3: %s\n", r.failedBecause())
 	case exitLimit:
 		fmt.Fprintf(w, "  exit 4: stopped by a limit with work left\n")
 	}
@@ -328,6 +330,7 @@ func fillReport(rep *report, path string, seeds []types.Seed, ents []types.Entit
 		rep.Notes = append(rep.Notes, fmt.Sprintf("-retry-failed: %d failed targets of run %s asked again, %d still fail (azhaq query -db %s -failed -run %s lists them)", n, retriedRun, still, path, retriedRun))
 	}
 	rep.Unreachable = engine.Unreachable(seeds, ents, obs)
+	rep.tally = tallySeeds(rep.Command, seeds, rep.Unreachable, rep.Failed)
 	rep.Notes = append(rep.Notes, engine.Notes(obs)...)
 	rep.Notes = append(rep.Notes, portcol.Notes(obs)...)
 	if rep.Command == "run" {
