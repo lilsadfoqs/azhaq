@@ -67,3 +67,61 @@ func TestStopBoundaryHTTP(t *testing.T) {
 		})
 	}
 }
+
+// A port scan stopped by the kill file lists the connects it made: its
+// ledger holds one line for each connection the listeners accepted, and the
+// summary counts as many.
+func TestStopBoundaryTCP(t *testing.T) {
+	for _, c := range []struct {
+		name  string
+		rate  string
+		after int // the kill file appears once the ledger holds this many lines
+	}{
+		{"a paced scan", "300", 60},
+		{"a batched scan", "2000", 120},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			l := newLabs(t)
+			wire := newWire()
+			var ports []string
+			var addrs []string
+			for i := 0; i < 400; i++ {
+				ln := listenCounted(t, wire, nil)
+				addrs = append(addrs, ln.Addr)
+				ports = append(ports, portOf(ln.Addr))
+			}
+			go killAfterLines(l.Dir, "l.jsonl", "k.stop", c.after)
+			r := RunRaw(t, l.Dir, nil, "ports", "-host", "127.0.0.1", "-p", strings.Join(ports, ","), "-detect", "none",
+				"-rate", c.rate, "-allow", "127.0.0.1", "-ledger", "l.jsonl", "-kill-file", "k.stop", "-json")
+			if !r.Has {
+				t.Fatalf("no summary (exit %d)\n%s", r.Code, r.Stderr)
+			}
+			time.Sleep(200 * time.Millisecond) // the listeners finish accepting
+			sent := ledgerSent(readLedger(t, filepath.Join(l.Dir, "l.jsonl")))
+			v := newInv(t, "")
+			if r.Code != 4 {
+				v.Errorf("exit %d, want 4: the kill file came before the scan ended (a timing of the test, or the scan finished first)", r.Code)
+			}
+			if sent.N == 0 || sent.N >= len(addrs) {
+				v.Errorf("%d connects of %d: the scan was not stopped in the middle", sent.N, len(addrs))
+			}
+			v.Equal("summary requests, against the connect lines of the ledger", r.Summary.Requests, int64(sent.N))
+			accepted := wire.TCP()
+			if d := diff("ledger", sent.TCP, "accepted", accepted); d != "" {
+				v.Errorf("the connects the ledger lists and the connections the listeners accepted differ (another process connecting to these ports at the same time would show here):\n%s", d)
+			}
+			v.Done()
+		})
+	}
+}
+
+// killAfterLines writes the kill file once the ledger holds n lines.
+func killAfterLines(dir, ledger, kill string, n int) {
+	for end := time.Now().Add(30 * time.Second); time.Now().Before(end); time.Sleep(time.Millisecond) {
+		raw, err := os.ReadFile(filepath.Join(dir, ledger))
+		if err == nil && strings.Count(string(raw), "\n") >= n {
+			_ = os.WriteFile(filepath.Join(dir, kill), nil, 0o644)
+			return
+		}
+	}
+}

@@ -26,7 +26,7 @@ azhaq ledger -csv app.db.ledger.jsonl > sent.csv
 
 ## What it does
 
-1. `-verify` recomputes the chain of hashes. It prints the number of entries and runs, whether the chain is intact, and the hash of the last seal.
+1. `-verify` recomputes the chain of hashes. It prints the number of entries and runs, whether the chain is intact, and the hash of the last seal. It checks the chain's integrity and nothing else: that a line names a request that was sent is how the run writes it ([what a line means](../OUTPUT.md#what-a-line-means)), not something `-verify` can see.
 2. `-summary` counts the lines by class, kind, method, host and scope rule, with the first and last time.
 3. `-csv` prints one row per line.
 
@@ -73,6 +73,10 @@ The summary and the other exit codes are the shared ones: see [the summary](../O
 ### Classes
 
 Each line has a class: `target` (a host the run was pointed at), `source` (a third party asked about the targets) or `dns` (a resolver). `-summary` counts by class, and `-csv` has a `class` column. A ledger written before classes has none on its lines: they read as targets and verify as before. The other way does not hold: an older azhaq cannot verify a ledger whose lines have a `class`.
+
+### What a line means
+
+A line says the request or connection left. One cancelled before it did (by `-timeout`, the kill file or Ctrl-C) has no line and is not in the summary's `requests`. [OUTPUT](../OUTPUT.md#what-a-line-means) says what leaving means for each kind.
 
 ### What -verify proves
 

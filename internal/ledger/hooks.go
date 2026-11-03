@@ -210,8 +210,8 @@ func DNS(ctx context.Context, name, qtype, server string) {
 }
 
 // Transport records each request once it has been written to its
-// connection in full, so a request a stop cancelled before it left is not
-// listed: it is given back to the budget (Unsent) instead. One that went
+// connection (or the write failed with no stop to blame), so a request a stop
+// cancelled before it left is not listed: it is given back to the budget (Unsent) instead. One that went
 // out and failed still appears, and so does one whose connection attempt
 // failed or whose TLS handshake began: those reached the target (a SYN or a
 // ClientHello left) though no request was written. Class is what the
@@ -299,7 +299,10 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 			},
 			TLSHandshakeStart: func() { reached.Store(true) }, // a ClientHello leaves
 			WroteRequest: func(info httptrace.WroteRequestInfo) {
-				if info.Err == nil && !skipped.Load() {
+				// The write was made. One that failed because the other end reset the
+				// connection was still tried; one that failed because a stop closed
+				// the connection may have left nothing at all.
+				if (info.Err == nil || req.Context().Err() == nil) && !skipped.Load() {
 					record() // the first live connection: later ones are a replay of it
 				}
 			},

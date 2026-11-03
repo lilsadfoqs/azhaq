@@ -115,8 +115,9 @@ func TestPortDialerUDPIsRecorded(t *testing.T) {
 }
 
 // Connects reserved in a batch are held to the same controls as any other:
-// an address outside the scope is not recorded and not connected to, and the
-// kill file stops a reserved connect that has not been made yet.
+// an address outside the scope is not recorded and not connected to; once the
+// kill file exists nothing more is reserved, and what was reserved before it
+// goes out, as its line says.
 func TestReservedConnectsKeepTheirControls(t *testing.T) {
 	Reset()
 	defer Reset()
@@ -146,8 +147,19 @@ func TestReservedConnectsKeepTheirControls(t *testing.T) {
 	if err := os.WriteFile(kill, nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
+	// Reserved before the kill file: its line is made, so the connect is.
+	c, err := d.TCP(context.Background(), "", ok.Addr().String())
+	if err != nil {
+		t.Fatalf("a connect reserved before the kill file: %v", err)
+	}
+	c.Close()
+	// Reserved after it: no line, and its connect is refused.
+	d.Reserve(context.Background(), "", []string{ok.Addr().String()})
+	if n := l.Count(); n != 1 {
+		t.Errorf("%d lines after a reserve with the kill file in place, want the 1 from before", n)
+	}
 	if _, err := d.TCP(context.Background(), "", ok.Addr().String()); !errors.Is(err, neterr.ErrKilled) {
-		t.Errorf("a reserved connect after the kill file: %v", err)
+		t.Errorf("a connect after the kill file: %v", err)
 	}
 }
 
@@ -177,5 +189,110 @@ func TestReservedConnectsOfTwoScansAreRecordedOnce(t *testing.T) {
 	}
 	if n := l.Count(); n != 2 {
 		t.Errorf("%d lines for 2 reserved connects", n)
+	}
+}
+
+// A connect is a line when it begins; one that never began has none and is
+// given back to the budget its caller counted it in.
+func TestAConnectThatNeverBeganHasNoLineAndIsGivenBack(t *testing.T) {
+	Reset()
+	defer Reset()
+	l, err := ledger.Open(filepath.Join(t.TempDir(), "n.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ledger.Use(l)
+	defer func() { ledger.Use(nil); l.Close() }()
+	var accepted atomic.Int64
+	ln, _ := net.Listen("tcp", "127.0.0.1:0")
+	defer ln.Close()
+	go func() {
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			accepted.Add(1)
+			c.Close()
+		}
+	}()
+	d := NewPortDialer(time.Second, nil, "", "")
+	addr := ln.Addr().String()
+	count := func() {
+		if err := Take(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Stopped by the end of its context after it was counted.
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	count()
+	if _, err := d.TCP(ctx, "", addr); err == nil {
+		t.Fatal("a connect with a finished context was made")
+	}
+	// Stopped by the kill file.
+	kill := filepath.Join(t.TempDir(), "stop")
+	stop := SetKill(kill)
+	defer stop()
+	count() // counted before the file appeared
+	_ = os.WriteFile(kill, nil, 0o600)
+	if _, err := d.TCP(context.Background(), "", addr); !errors.Is(err, neterr.ErrKilled) {
+		t.Fatalf("a connect after the kill file: %v", err)
+	}
+	stop()
+	if n, c := l.Count(), Sent(); n != 0 || c != 0 || accepted.Load() != 0 {
+		t.Fatalf("lines %d, counted %d, accepted %d: want 0 each", n, c, accepted.Load())
+	}
+	// One that is made is all three.
+	count()
+	c, err := d.TCP(context.Background(), "", addr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.Close()
+	time.Sleep(50 * time.Millisecond)
+	if n, c := l.Count(), Sent(); n != 1 || c != 1 || accepted.Load() != 1 {
+		t.Fatalf("lines %d, counted %d, accepted %d: want 1 each", n, c, accepted.Load())
+	}
+}
+
+// A reserved connect whose context ends before it begins still goes out: its
+// line says it did.
+func TestAReservedConnectOutlivesAStopThatCameBeforeIt(t *testing.T) {
+	Reset()
+	defer Reset()
+	l, err := ledger.Open(filepath.Join(t.TempDir(), "h.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ledger.Use(l)
+	defer func() { ledger.Use(nil); l.Close() }()
+	var accepted atomic.Int64
+	ln, _ := net.Listen("tcp", "127.0.0.1:0")
+	defer ln.Close()
+	go func() {
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			accepted.Add(1)
+			c.Close()
+		}
+	}()
+	d := NewPortDialer(time.Second, nil, "", "")
+	addr := ln.Addr().String()
+	ctx, cancel := context.WithCancel(context.Background())
+	d.Reserve(ctx, "", []string{addr, addr, addr})
+	cancel() // the stop lands between the lines and the connects
+	for i := 0; i < 3; i++ {
+		c, err := d.TCP(ctx, "", addr)
+		if err == nil {
+			c.Close()
+		}
+	}
+	time.Sleep(50 * time.Millisecond)
+	if n := l.Count(); n != 3 || accepted.Load() != 3 {
+		t.Fatalf("lines %d, accepted %d: a line says a connect went out", n, accepted.Load())
 	}
 }

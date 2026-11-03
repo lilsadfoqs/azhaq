@@ -106,8 +106,8 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		}
 	}
 	if err != nil {
-		if errors.Is(err, neterr.ErrOutOfScope) {
-			egress.Refund() // never sent
+		if c.Dial != nil && errors.Is(err, neterr.ErrOutOfScope) {
+			egress.Refund() // never sent (the dialer of egress gives its own back)
 		}
 		if neterr.UnknownHost(err) || isIP {
 			return types.RunMeta{Status: types.StatusOK}, nil // most addresses of a network serve no TLS

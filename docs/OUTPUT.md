@@ -220,6 +220,20 @@ A line has:
 - `source` lines are `http` or `tcp`, with no `rule`: the scope holds targets, not the third parties asked about them.
 - `chrome`: a request Chrome sent, listed once it left. One that Chrome dropped before sending is not listed, and not counted.
 - A Chrome WebSocket handshake is `ws://host:port/path?query`, and `wss://host:port` inside TLS.
+
+### What a line means
+
+A line says the request or connection left, and the summary's `requests` counts the same lines: a request counted and then cancelled before it left (by `-timeout`, the kill file, Ctrl-C or a request that failed its checks) has no line and is given back to the count. What leaving means for each kind:
+
+| Kind | A line is made when | No line for |
+| --- | --- | --- |
+| `http` | The request has been written to its connection. Also when its connection failed after a connect was attempted or a TLS handshake began: a SYN or a ClientHello reached the target though no request was written. | A request cancelled before that: before a connection was tried, while a name had no address, or on a connection that never took the write. |
+| `tcp` | The socket is about to connect (`connect(2)`), so a stop that lands earlier leaves no line. A fast port scan (`-rate` of 1,000 or more) writes the lines of up to 32 connects together just before they start; those connects are not stopped by a kill file or a deadline that comes after the lines, and a stop that comes before them records none. | A connect refused by the scope or the kill file, with no address, or stopped before its socket connected. |
+| `udp` | The socket to the port is open and the datagram is written at once. | A socket that could not be opened. |
+| `chrome` | Chrome says the request's headers went out. A request Chrome was let send and nothing was heard of afterwards is listed when its tab closes, since it may have left. | A request Chrome dropped or answered from its cache. |
+| `dns` | The query goes to the resolver. | A query refused by the kill file or after the context ended. |
+
+`azhaq ledger -verify` checks the chain and the seal, not this: it cannot say a line was sent, only that it was not changed afterwards.
 - An `http` line is written when the request has a live connection, and a request is one line however many connections it took. One that fails to connect (refused, timed out) is a line too. A pooled connection the server had closed is not written to; a request that fails on one the server closed unseen is sent again once on a new connection, and is still one line. So the lines to targets equal the requests a proxy in front of them counts.
 - A notification is a request to a third party: a `source` line, by the webhook's host. `watch` sends its notifications after its run has sealed the workspace's ledger, so they are lines after that seal, which `watch` seals again, and its own summary counts them: [watch](commands/watch.md#notifications). `notify -ledger FILE` keeps them in a file of its own.
 - `seal`: the end of a run, with no target.
