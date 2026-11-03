@@ -549,6 +549,7 @@ func Notes(obs []types.StoredObservation) []string {
 			ClosedAt   []int             `json:"udp_closed_ports"`
 			ClosedN    int               `json:"udp_closed_n"`
 			ClosedA    int               `json:"udp_closed_a"`
+			SilentOnly bool              `json:"udp_silent_only"`
 			UDPSilentN int               `json:"udp_silent_ports"`
 			UDPSilentA int               `json:"udp_silent_addresses"`
 			Unresolved string            `json:"unresolved"`
@@ -593,6 +594,9 @@ func Notes(obs []types.StoredObservation) []string {
 			portsOut += p.PortsOut
 			portsOutAddrs += p.PortsOutA
 			continue
+		}
+		if p.SilentOnly {
+			continue // its ports are the range row's udp_silent_ports
 		}
 		if who := cmpWho(p.Host, p.IP); p.PortsOut > 0 && !portsOutSeen[who] {
 			portsOutSeen[who] = true

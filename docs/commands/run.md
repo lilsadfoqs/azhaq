@@ -500,8 +500,9 @@ azhaq run -url https://app.example.com/ -ports top-1000 -verify -db app.db
 | `-sr` | bool |  | also write each answer a target gave, headers and body as read, to the -srd directory as DIR/HOST/SHA1.txt with an index.txt (katana's -sr); query -fields response_file says where a row's is |
 | `-srd` | string | `azhaq_response` | directory for -sr |
 | `-no-catchall` | bool |  | leave out URLs that answer with the page every unknown path gets (client-side routes of a single-page app) from the rows printed |
-| `-fail-on-errors` | bool |  | accepted, and the default: every failure exits 3, a fan-out one and a source that failed while others answered included; no flag turns a failure into exit 0 |
+| `-fail-on-errors` | bool |  | the same as -strict-exit |
 | `-fail-on-capped` | bool |  | exit 4 also when the run hit -depth with hints left |
+| `-strict-exit` | bool |  | exit 3 for any failure, a target among many included (the rule before 0.15); without it a run that did its job exits 0 and its summary counts and lists the failures |
 
 <details>
 <summary>Other names, flags accepted with no effect and rarely used flags (79)</summary>

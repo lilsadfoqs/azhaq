@@ -66,6 +66,7 @@ type Summary struct {
 	Requests    int64          `json:"requests"`
 	DNSQueries  int64          `json:"dns_queries"`
 	Unreachable []string       `json:"unreachable"`
+	Failures    *int           `json:"failures"` // nil when the summary has no such field
 	Failed      []struct {
 		Collector string `json:"collector"`
 		Source    string `json:"source"`

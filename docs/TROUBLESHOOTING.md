@@ -77,7 +77,7 @@ Entries are grouped by what you were doing:
 
 ### Exit 3, but the results look fine
 
-**Why:** Exit 3 means the results are usable and something failed. That can be a source, a host that did not answer, or a dead session.
+**Why:** Exit 3 means the run's own job failed or is incomplete, and the results are usable: nothing it was given answered, a failure names no target (a dead session, a bug), or a note says the results are short or misleading. A failure of one target among others that answered is exit 0 with `failures` above 0 in the summary; `-strict-exit` makes it 3 too. The rule is in [Exit 3](OUTPUT.md#exit-3).
 
 **Fix:** The summary's `failed` list and notes say what failed. `azhaq query -db W -failed` lists every failed target.
 
@@ -184,7 +184,7 @@ In `roles` the file is `roles.stop` in the `-dir`. There it stops the runs of th
 - URLs went past `-urls-max`;
 - an archive cannot apply a `-mt`, `-ft`, `-from` or `-to` filter (OTX has no type or date).
 
-For the last case the note reads like `otx has no type of its captures: its 13 URLs are not filtered by -mt`. Those URLs are listed, not judged by the filter. An archive that failed is listed as failed, and the exit code is 3.
+For the last case the note reads like `otx has no type of its captures: its 13 URLs are not filtered by -mt`. Those URLs are listed, not judged by the filter. An archive that failed is listed as failed and counted in `failures`; the exit code is 3 only when no archive answered, or with `-strict-exit`.
 
 **Fix:**
 
@@ -350,7 +350,7 @@ A real page that is byte-for-byte the not-found page cannot be told apart by any
 
 - `error` says which.
 - The summary counts these rows under `without an answer`.
-- Exit 3 follows when the failure is worth another try.
+- Exit 3 follows when every row is without an answer; with some rows answered the exit is 0 and `failures` counts the rest (`-strict-exit` makes it 3).
 - `-probe` prints `[FAILED]` lines in the text output.
 
 ### A name resolves only through a wildcard, and `probe` still asks it
@@ -437,7 +437,7 @@ The default stops where subfinder does, because its per-request limit is 30 seco
 
 ### The `subs` summary says `degraded`
 
-**Why:** The text summary opens with `DEGRADED: N of M sources failed: SOURCE (REASON), …`. A source in the default set failed, so `sources failed` is above 0 and the names may be incomplete. The exit code is not changed.
+**Why:** The text summary opens with `DEGRADED: N of M sources failed: SOURCE (REASON), …`. A source in the default set failed, so `sources failed` is above 0 and the names may be incomplete. The exit code is 0 while a source answered for each domain, and 3 when none did or with `-strict-exit`.
 
 **Fix:** The failed sources are listed. `azhaq subs -v` shows what each source returned and its error.
 

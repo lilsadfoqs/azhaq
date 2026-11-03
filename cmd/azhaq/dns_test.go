@@ -330,13 +330,26 @@ func TestDNSFailuresAreSaid(t *testing.T) {
 	t.Chdir(t.TempDir())
 	lab := startLab(t)
 	l := writeList(t, "www.lab.zz", "servfail.lab.zz", "refused.lab.zz")
+	// One name answered and two failed: the run did its job, and counts the failures.
 	ls, _, code := dnsOut(t, "-l", l, "-r", lab.addr, "-silent", "-a")
-	if !reflect.DeepEqual(ls, []string{"www.lab.zz"}) || code != exitPartial {
+	if !reflect.DeepEqual(ls, []string{"www.lab.zz"}) || code != exitOK {
 		t.Errorf("%v exit %d", ls, code)
 	}
 	_, rep, _ := dnsOut(t, "-l", l, "-r", lab.addr, "-j", "-a")
-	if len(rep.Failed) != 2 || rep.Failed[0].Count != 1 || rep.Failed[1].Count != 1 {
-		t.Errorf("a failure of each kind: %+v", rep.Failed)
+	if len(rep.Failed) != 2 || rep.Failed[0].Count != 1 || rep.Failed[1].Count != 1 || rep.Failures != 2 || !rep.Complete {
+		t.Errorf("a failure of each kind: %+v, failures %d", rep.Failed, rep.Failures)
+	}
+	// -strict-exit: any failure exits 3.
+	was := strictExit
+	t.Cleanup(func() { strictExit = was })
+	if _, rep, code := dnsOut(t, "-l", l, "-r", lab.addr, "-j", "-a", "-strict-exit"); code != exitPartial || rep.Failures != 2 || rep.Complete {
+		t.Errorf("-strict-exit: exit %d, failures %d, complete %v", code, rep.Failures, rep.Complete)
+	}
+	strictExit = false
+	// Every name failed: the run did not do its job.
+	bad := writeList(t, "servfail.lab.zz", "refused.lab.zz")
+	if _, rep, code := dnsOut(t, "-l", bad, "-r", lab.addr, "-j", "-a"); code != exitPartial || rep.Failures != 2 || rep.Complete {
+		t.Errorf("all failed: exit %d, failures %d, complete %v", code, rep.Failures, rep.Complete)
 	}
 	// asked for with -rcode, they are results, not failures
 	ls, _, code = dnsOut(t, "-l", l, "-r", lab.addr, "-rcode", "servfail,refused")

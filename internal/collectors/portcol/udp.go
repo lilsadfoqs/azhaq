@@ -168,6 +168,22 @@ func addUDP(row map[string]any, r portscan.UDPReport, scanned int) {
 	}
 }
 
+// SilentOnlyKey marks the row of an address in a range that answered nothing
+// on UDP: it holds only the ports it was asked, in udp_open_filtered. Output
+// lists these ports only when asked, and the summary counts them from the
+// range's row.
+const SilentOnlyKey = "udp_silent_only"
+
+// silentRow is the row of an address of a range whose every UDP port stayed
+// silent.
+func silentRow(ip, prefix string, r portscan.UDPReport, scanned int) map[string]any {
+	ports := make([]int, 0, len(r.OpenFiltered))
+	for _, u := range r.OpenFiltered {
+		ports = append(ports, u.Port)
+	}
+	return map[string]any{"host": ip, "ip": ip, "prefix": prefix, SilentOnlyKey: true, "udp_scanned": scanned, "udp_open_filtered": ports}
+}
+
 // udpRow is addUDP for a row of this collector's scan, which also says when
 // each port was asked one request only.
 func (c *Collector) udpRow(row map[string]any, r portscan.UDPReport, scanned int) {
@@ -347,7 +363,11 @@ func (u *udpSummary) notes() []string {
 		out = append(out, fmt.Sprintf("%d UDP ports open|filtered on %s are not listed one by one (more than %d on an address: it ignores UDP, or a filter drops it); the workspace row keeps them in udp_open_filtered", n, listOf(u.unlisted, 3), maxListed))
 	}
 	if u.silentIPs > 0 {
-		out = append(out, fmt.Sprintf("%d addresses of the ranges answered no UDP port (no reply, no ICMP port unreachable, %d ports open|filtered in all) and are not listed: a host that is down or drops UDP reads this way; ask one address on its own to list its ports", u.silentIPs, u.silentN))
+		each := ""
+		if u.silentN%u.silentIPs == 0 {
+			each = fmt.Sprintf("%d %s asked of each, ", u.silentN/u.silentIPs, plural(u.silentN/u.silentIPs, "port"))
+		}
+		out = append(out, fmt.Sprintf("%d addresses of the ranges answered no UDP port (no reply, no ICMP port unreachable; %s%d ports open|filtered in all) and are not listed: a host that is down or drops UDP reads this way; -udp-rows lists them, and the workspace keeps each address's ports in its row's udp_open_filtered", u.silentIPs, each, u.silentN))
 	}
 	if u.limited > 0 {
 		out = append(out, fmt.Sprintf("udp: %d silent ports on a host that refused others were not asked again at its ICMP rate limit (about one reply a second; too many for that): some of them may be closed, so scan fewer ports to be sure", u.limited))

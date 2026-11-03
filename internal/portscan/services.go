@@ -24,17 +24,40 @@ type greeting struct {
 var greetings = []greeting{
 	{lazyre.New(`(?i)\bvsFTPd (?P<v>\d[\w.]*)`), "vsftpd"},
 	{lazyre.New(`(?i)\bProFTPD (?P<v>\d[\w.]*)`), "ProFTPD"},
+	{lazyre.New(`(?i)\bProFTPD\b`), "ProFTPD"},
 	{lazyre.New(`(?i)\bPure-FTPd\b`), "Pure-FTPd"},
 	{lazyre.New(`(?i)\bFileZilla Server (?:version )?(?P<v>\d[\w.]*)`), "FileZilla Server"},
+	{lazyre.New(`(?i)\bMicrosoft FTP Service \(Version (?P<v>\d[\w.]*)`), "Microsoft ftpd"},
 	{lazyre.New(`(?i)\bMicrosoft FTP Service\b`), "Microsoft ftpd"},
+	{lazyre.New(`(?i)\bServ-U FTP[ -]Server v(?P<v>\d[\w.]*)`), "Serv-U ftpd"},
+	{lazyre.New(`(?i)\bNcFTPd Server\b`), "NcFTPd"},
+	{lazyre.New(`(?i)\bGene6 FTP Server v(?P<v>\d[\w.]*)`), "Gene6 ftpd"},
+	{lazyre.New(`(?i)\bMikroTik FTP server \(MikroTik (?P<v>\d[\w.]*)`), "MikroTik router ftpd"},
+	{lazyre.New(`(?i)\bTitan FTP Server (?P<v>\d[\w.]*)`), "Titan ftpd"},
+	{lazyre.New(`(?i)\bGNU inetutils (?P<v>\d[\w.]*)`), "GNU Inetutils FTPd"},
+	{lazyre.New(`(?i)\bFTP server \(Version (?P<v>wu-[\w.+()-]+)`), "WU-FTPD"},
+	{lazyre.New(`(?i)\bbftpd (?P<v>\d[\w.]*)`), "Bftpd"},
+	{lazyre.New(`(?i)\bglFTPd (?P<v>\d[\w.]*)`), "glFTPd"},
+	{lazyre.New(`(?i)\bWS_FTP Server (?P<v>\d[\w.]*)`), "WS FTPd"},
+	{lazyre.New(`(?i)\bCerberus FTP Server\b`), "Cerberus ftpd"},
+	{lazyre.New(`(?i)\bSambar FTP Server Version (?P<v>\d[\w.]*)`), "Sambar ftpd"},
 	{lazyre.New(`(?i)\bESMTP Postfix\b`), "Postfix"},
 	{lazyre.New(`(?i)\bESMTP Exim (?P<v>\d[\w.]*)`), "Exim"},
 	{lazyre.New(`(?i)\bSendmail (?P<v>\d[\w.]*)`), "Sendmail"},
 	{lazyre.New(`(?i)\bESMTP OpenSMTPD\b`), "OpenSMTPD"},
 	{lazyre.New(`(?i)\bMicrosoft ESMTP MAIL Service, Version: (?P<v>\d[\w.]*)`), "Microsoft Exchange smtpd"},
-	{lazyre.New(`(?i)\bESMTP Haraka\b`), "Haraka"},
+	{lazyre.New(`(?i)\bESMTP Haraka\b(?: (?P<v>\d[\w.]*))?`), "Haraka"},
 	{lazyre.New(`(?i)\bMailpit ESMTP\b`), "Mailpit"},
 	{lazyre.New(`(?i)\bESMTP MailHog\b`), "MailHog"},
+	{lazyre.New(`(?i)\bESMTP MDaemon (?P<v>\d[\w.]*)`), "MDaemon smtpd"},
+	{lazyre.New(`(?i)\bKerio (?:MailServer|Connect) (?P<v>\d[\w.]*)`), "Kerio Connect"},
+	{lazyre.New(`(?i)\bESMTP IceWarp (?P<v>\d[\w.]*)`), "IceWarp smtpd"},
+	{lazyre.New(`(?i)\bESMTP CommuniGate Pro (?P<v>\d[\w.]*)`), "CommuniGate Pro SMTP"},
+	{lazyre.New(`(?i)\bESMTP MailEnable Service, Version: (?P<v>\d[\w.]*)`), "MailEnable smtpd"},
+	{lazyre.New(`(?i)\bESMTP Service \(Lotus Domino (?:Release )?(?P<v>\d[\w. ]*?)\)`), "Lotus Domino smtpd"},
+	{lazyre.New(`(?i)\bESMTP \S+ - gsmtp\b`), "Google gsmtp"},
+	{lazyre.New(`(?i)\bMicrosoft Exchange Server \d+ POP3 server version (?P<v>\d[\w.]*)`), "Microsoft Exchange pop3d"},
+	{lazyre.New(`(?i)\bThe Microsoft Exchange IMAP4 service is ready\b`), "Microsoft Exchange imapd"},
 	{lazyre.New(`(?i)\bDovecot\b(?: (?P<v>\d[\d.]*))?`), "Dovecot"},
 	{lazyre.New(`(?i)\bCyrus (?:IMAP|POP3)[ -]?(?:v)?(?P<v>\d[\w.]*)`), "Cyrus"},
 	{lazyre.New(`(?i)\bCourier-IMAP\b`), "Courier"},
@@ -50,6 +73,25 @@ var (
 	leadVer   = lazyre.New(`^\d+(?:\.\d+)*`)
 )
 
+// sshKnown names the SSH servers whose identification line does not split
+// into "product_version": the product is what the bytes state, and the last
+// group is the version (empty when the line states none).
+var sshKnown = []struct {
+	re      *lazyre.Regexp
+	product string
+}{
+	{lazyre.New(`^SSH-\d\.\d+-\S+ FlowSsh: (?:Bitvise SSH Server \(WinSSHD\)|WinSSHD) (\d[\w.-]*)`), "Bitvise WinSSHD"},
+	{lazyre.New(`^SSH-\d\.\d+-\S+ sshlib: WinSSHD (\d[\w.-]*)`), "Bitvise WinSSHD"},
+	{lazyre.New(`^SSH-\d\.\d+-OpenSSH_for_Windows_(\d[\w.]*)`), "OpenSSH"},
+	{lazyre.New(`^SSH-\d\.\d+-ROSSSH\b()`), "MikroTik RouterOS sshd"},
+	{lazyre.New(`^SSH-\d\.\d+-mod_sftp\b()`), "ProFTPD mod_sftp"},
+	{lazyre.New(`^SSH-\d\.\d+-Serv-U_(\d[\w.]*)`), "Serv-U SSH Server"},
+	{lazyre.New(`^SSH-\d\.\d+-Sun_SSH_(\d[\w.]*)`), "SunSSH"},
+	{lazyre.New(`^SSH-\d\.\d+-Cisco-(\d[\w.]*)`), "Cisco SSH"},
+	{lazyre.New(`^SSH-\d\.\d+-FortiSSH_(\d[\w.]*)`), "FortiSSH"},
+	{lazyre.New(`^SSH-\d\.\d+-mpSSH_(\d[\w.]*)`), "HP Integrated Lights-Out mpSSH"},
+}
+
 // greetingProduct reads a product and version out of what a port said
 // first: raw is the bytes, banner their first printable line.
 func greetingProduct(raw []byte, banner string) (service, product, version string) {
@@ -61,6 +103,11 @@ func greetingProduct(raw []byte, banner string) (service, product, version strin
 		return "mysql", product, version
 	}
 	if m := sshRe.FindStringSubmatch(banner); m != nil {
+		for _, r := range sshKnown {
+			if k := r.re.FindStringSubmatch(banner); k != nil {
+				return "ssh", r.product, k[len(k)-1]
+			}
+		}
 		if s := sshSplit.FindStringSubmatch(m[1]); s != nil {
 			return "ssh", s[1], s[2]
 		}

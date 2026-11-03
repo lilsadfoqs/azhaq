@@ -347,7 +347,7 @@ const (
 	exitOK      = 0
 	exitError   = 1 // the command could not do its job
 	exitUsage   = 2 // bad flags or input; nothing was sent
-	exitPartial = 3 // finished, but some sources or requests failed: results are usable, the summary lists what failed
+	exitPartial = 3 // the run's job failed or is incomplete (exit.go): results are usable, the summary lists what failed
 	exitLimit   = 4 // stopped by a limit (-max-requests, -timeout, a daily budget) with work left: azhaq resume continues
 )
 
@@ -355,10 +355,10 @@ var exitCodes = []struct {
 	Code    int    `json:"code"`
 	Meaning string `json:"meaning"`
 }{
-	{exitOK, "complete"},
+	{exitOK, "complete: nothing failed, or the run did its job and the summary names its failures (the count is `failures`)"},
 	{exitError, "error: the command could not do its job, or its summary disagreed with its rows (an internal error)"},
 	{exitUsage, "usage: bad flags or input (targets all outside the scope given too), nothing was sent"},
-	{exitPartial, "finished, but some sources or requests failed: the results are usable, the summary on stderr lists what failed"},
+	{exitPartial, "the run's own job failed or is incomplete (nothing it was given answered, a failure names no target, a note says the results are short; with -strict-exit, any failure): the results are usable, the summary on stderr lists what failed"},
 	{exitLimit, "stopped by a limit (-max-requests, -timeout, -daily-requests, -max-items) or by the kill file (-kill-file) or by a signal (Ctrl-C, SIGTERM, SIGHUP) with work left: azhaq resume -db FILE continues"},
 }
 
@@ -417,6 +417,9 @@ func newFlags(name string) *flag.FlagSet {
 // mistake is a usage error. Flags may come after the other arguments
 // (azhaq show URL -json); everything after -- is left as given.
 func parse(fs *flag.FlagSet, args []string) error {
+	if strictCommands[fs.Name()] && fs.Lookup("strict-exit") == nil {
+		fs.Bool("strict-exit", false, strictExitUsage)
+	}
 	if err := flagEatsFlag(fs, args); err != nil {
 		return err
 	}
@@ -444,7 +447,11 @@ func parse(fs *flag.FlagSet, args []string) error {
 		pos = append(pos, rest[0])
 		args = rest[1:]
 	}
-	return fs.Parse(append([]string{"--"}, pos...))
+	err := fs.Parse(append([]string{"--"}, pos...))
+	if err == nil && (flagOn(fs, "strict-exit") || flagOn(fs, "fail-on-errors")) {
+		strictExit = true // a command that runs run's flags reads its own again: never turned off here
+	}
+	return err
 }
 
 // flagEatsFlag is a usage error for a flag that takes a value and is followed
@@ -586,7 +593,7 @@ func printHelp(w io.Writer, name string, fs *flag.FlagSet, all bool) {
 		fmt.Fprintf(w, "output: %s\n", c.output)
 	}
 	// The exit codes come before the flags, so -h ends with its "-h all" line.
-	fmt.Fprintf(w, "exit: 0 complete, 1 error, 2 usage, 3 finished with failures (see the summary), 4 stopped by a limit (resumable)\n")
+	fmt.Fprintf(w, "exit: 0 complete (failures named in the summary, none when the job failed), 1 error, 2 usage, 3 the job failed or is incomplete (-strict-exit: any failure), 4 stopped by a limit (resumable)\n")
 	if len(c.examples) > 0 {
 		fmt.Fprintf(w, "\nexamples:\n")
 		for _, e := range c.examples {
@@ -619,8 +626,9 @@ Every command:
   results on stdout, one per line (-json: one JSON object per line);
   progress and a summary on stderr (-json: the summary is one JSON object,
   "type":"summary": results, failures, what was skipped and why, limits);
-  exit 0 complete, 1 error, 2 usage, 3 finished with failures, 4 stopped
-  by a limit (azhaq resume continues).
+  exit 0 complete (a run that did its job names its failures in the summary,
+  counted in "failures"), 1 error, 2 usage, 3 the job failed or is incomplete
+  (-strict-exit: any failure), 4 stopped by a limit (azhaq resume continues).
 Active techniques (-dirs, -params, -ports, -dns-brute, -permute, -graphql)
 reach only the targets given, or the scope -allow or -scope names. azhaq
 plan shows what a run would send.

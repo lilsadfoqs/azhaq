@@ -90,14 +90,14 @@ func triageRows(t *testing.T, out string) map[string]triageRow {
 // A row says which archive gave the URL, when it was captured, its
 // normalised form, and why it looks like junk; and a Wayback Machine that
 // answers 504 leaves a partial set that the summary names, with the other
-// archives' URLs delivered and exit 3.
+// archives' URLs delivered and exit 0 (the run did its job; -strict-exit says 3).
 func TestURLsRowsCarryTriageFieldsAndAFailedArchiveIsNamed(t *testing.T) {
 	t.Chdir(t.TempDir())
 	flags := recordedArchives(t, "504")
 	args := append([]string{"urls", "-d", "example.org", "-json", "-sort", "-keep-junk", "-urls-pause", "0"}, flags...)
 	out, errOut, err := captureBoth(t, func() error { return run(args) })
-	if code := exitCode(err); code != exitPartial {
-		t.Fatalf("exit %d, want %d: %v\n%s", code, exitPartial, err, errOut)
+	if code := exitCode(err); code != exitOK || lastReport(t, errOut).Failures == 0 {
+		t.Fatalf("exit %d, want %d with the failure counted: %v\n%s", code, exitOK, err, errOut)
 	}
 	rows := triageRows(t, out)
 	for u, want := range map[string]triageRow{
@@ -137,7 +137,7 @@ func TestURLsRowsCarryTriageFieldsAndAFailedArchiveIsNamed(t *testing.T) {
 	for _, n := range rep.Notes {
 		partial = partial || strings.Contains(n, "the set is partial: wayback failed")
 	}
-	if !rep.Degraded && rep.Exit != exitPartial || !partial {
+	if !rep.Degraded && rep.Failures == 0 || !partial {
 		t.Errorf("summary %+v", rep)
 	}
 }
@@ -180,8 +180,8 @@ func TestURLsArchiveThatFailsMidwayIsPartial(t *testing.T) {
 	out, errOut, err := captureBoth(t, func() error {
 		return run(append([]string{"urls", "-d", "example.org", "-json", "-sort", "-urls-pause", "0", "-retries", "0"}, flags...))
 	})
-	if code := exitCode(err); code != exitPartial {
-		t.Fatalf("exit %d, want %d\n%s", code, exitPartial, errOut)
+	if code := exitCode(err); code != exitOK {
+		t.Fatalf("exit %d, want %d\n%s", code, exitOK, errOut)
 	}
 	if rows := triageRows(t, out); rows["http://www.example.org/w"].Source != "wayback" {
 		t.Errorf("what wayback gave before it failed is lost: %v", rows)
