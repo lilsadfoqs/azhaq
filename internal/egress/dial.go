@@ -7,6 +7,8 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"sync/atomic"
+	"syscall"
 	"time"
 
 	"github.com/lilsadfoqs/azhaq/internal/ledger"
@@ -48,9 +50,12 @@ func DialSource(ctx context.Context, network, addr string) (net.Conn, error) {
 	if err := Current().Killed(); err != nil {
 		return nil, err
 	}
-	ledger.TCPAs(ctx, ledger.ClassSource, "", addr)
-	d := &net.Dialer{Timeout: 30 * time.Second}
-	return d.DialContext(ctx, network, addr)
+	d := net.Dialer{Timeout: 30 * time.Second}
+	c, _, err := connectTracked(ctx, d, false, func() { ledger.TCPAs(ctx, ledger.ClassSource, "", addr) },
+		func(dctx context.Context, nd *net.Dialer) (net.Conn, error) {
+			return nd.DialContext(dctx, network, addr)
+		})
+	return c, err
 }
 
 // DialSourceTLS is DialSource with an implicit TLS handshake (SMTPS).
@@ -216,12 +221,69 @@ var ipv6Routable = sync.OnceValue(func() bool {
 
 // ConnectTarget opens a raw connection to a target (a probe that speaks a
 // protocol of its own: JARM, pipelining) and records it in the ledger as a
-// connect. It is held to the scope and the kill file; the caller counts it
-// with Spend.
+// connect, as the connect begins. It is held to the scope and the kill file;
+// the caller counts it with Spend, and a connect that never began (refused,
+// stopped, or the name had no address) is given back.
 func ConnectTarget(ctx context.Context, addr string) (net.Conn, error) {
-	host, _, _ := net.SplitHostPort(addr)
-	ledger.TCP(ctx, host, addr)
-	return DialTarget(ctx, "tcp", addr)
+	host, port, err := net.SplitHostPort(addr)
+	if err == nil {
+		if err := Current().CheckAddr(host, port); err != nil {
+			Refund()
+			return nil, err
+		}
+	}
+	p := Current()
+	if err := p.Killed(); err != nil {
+		Refund()
+		return nil, err
+	}
+	c, began, err := connectTracked(ctx, net.Dialer{Timeout: 5 * time.Second}, false, func() { ledger.TCP(ctx, host, addr) },
+		func(dctx context.Context, nd *net.Dialer) (net.Conn, error) {
+			return dialResolvedWith(dctx, p, nd, "tcp", addr)
+		})
+	if !began {
+		Refund()
+	}
+	return c, err
+}
+
+// connectTracked runs dial with nd made to call rec once, when the first
+// connect is about to be made: a line made then is for a connect that was
+// attempted, and none is made when the dial fails before (no address, a
+// stopped ctx, no socket). began says whether it was. With hold, a ctx that
+// ends before then does not stop the dial: whoever holds a line already
+// made for this connect needs it to go out; one that ends after stops it
+// as usual.
+func connectTracked(ctx context.Context, nd net.Dialer, hold bool, rec func(), dial func(context.Context, *net.Dialer) (net.Conn, error)) (c net.Conn, began bool, err error) {
+	var begun atomic.Bool
+	dctx, cancel := ctx, context.CancelFunc(func() {})
+	if hold {
+		dctx, cancel = context.WithCancel(context.WithoutCancel(ctx))
+		stop := context.AfterFunc(ctx, func() {
+			if begun.Load() {
+				cancel()
+			}
+		})
+		defer stop()
+	}
+	defer cancel()
+	prev := nd.Control
+	var once sync.Once
+	nd.Control = func(network, address string, rc syscall.RawConn) error {
+		once.Do(func() {
+			rec()
+			begun.Store(true)
+			if hold && ctx.Err() != nil {
+				cancel()
+			}
+		})
+		if prev != nil {
+			return prev(network, address, rc)
+		}
+		return nil
+	}
+	c, err = dial(dctx, &nd)
+	return c, begun.Load(), err
 }
 
 // ConnectTargetTLS is ConnectTarget with a TLS handshake that takes any

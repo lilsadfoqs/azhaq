@@ -96,6 +96,9 @@ func record(ctx context.Context, q *dns.Msg, server string) error {
 	if err := Current().Killed(); err != nil {
 		return err
 	}
+	if err := ctx.Err(); err != nil {
+		return err // a query is listed when it goes, not after a stop
+	}
 	if len(q.Question) > 0 {
 		Current().dnsq.Add(1)
 		ledger.DNS(ctx, strings.TrimSuffix(q.Question[0].Name, "."), dns.TypeToString[q.Question[0].Qtype], server)
@@ -250,6 +253,9 @@ func queryJoin(u string) string {
 // the kill file exists.
 func SystemLookup(ctx context.Context, name string) ([]net.IPAddr, error) {
 	if err := Current().Killed(); err != nil {
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	Current().dnsq.Add(1)

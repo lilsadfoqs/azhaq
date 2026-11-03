@@ -1392,6 +1392,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 			if err := enc.Encode(mapRowJSON(r)); err != nil {
 				return err
 			}
+			rep.emitted().add(countKey(r), heldBy(r))
 		}
 		for _, lead := range advLeads {
 			if err := enc.Encode(leadRow(lead)); err != nil {
@@ -1419,7 +1420,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 			fmt.Println(r.Line())
 		}
 	default:
-		printMap(shown)
+		printMap(shown, rep)
 		for _, lead := range advLeads {
 			fmt.Printf("  %s\n", lead.Line())
 		}
@@ -1715,8 +1716,21 @@ func normalizeSeeds(seeds []types.Seed) []types.Seed {
 	return out
 }
 
-func printMap(rows []engine.MapEntry) {
+// heldBy is how many stored rows an emitted row stands for: the members of a
+// template, the dead names folded into one row, or itself.
+func heldBy(r engine.MapEntry) int {
+	switch {
+	case r.Count > 0:
+		return r.Count
+	case r.Folded > 0:
+		return r.Folded
+	}
+	return 1
+}
+
+func printMap(rows []engine.MapEntry, rep *report) {
 	for _, row := range engine.GroupTemplates(rows) {
+		rep.emitted().add(countKey(row), heldBy(row))
 		fmt.Printf("  %s\n", row.Line())
 		for _, d := range row.Details() {
 			fmt.Printf("      %s\n", d)

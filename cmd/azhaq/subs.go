@@ -630,6 +630,7 @@ func cmdSubs(args []string) error {
 	}
 	if n := nameSum(rep.Counts, rep.Results, filtering); n != "" {
 		rep.Notes = append(rep.Notes, n)
+		rep.holds("names from the sources, less what was left out, plus what DNS added, against the names printed", namesFromCounts(rep.Counts), rep.Results)
 	}
 	tiers := []tierSet{{countRaw, nil}}
 	if *live || active {
@@ -704,6 +705,17 @@ func nameSum(c map[string]int, results int, filtering bool) string {
 		parts = append(parts, fmt.Sprintf("+ %d found as CNAME targets", n))
 	}
 	return fmt.Sprintf("count: %s = %d printed", strings.Join(parts, " "), results)
+}
+
+// namesFromCounts is the names printed that the counts of a subs run give:
+// the sum nameSum writes out.
+func namesFromCounts(c map[string]int) int {
+	n := c["from sources"] + c["asked by guessing"] + c["found as CNAME targets"]
+	for _, k := range []string{"the domain itself", "did not resolve", "guesses held back", "not checked", "no answer", "not asked",
+		"left out by -m/-f", "listed under another domain", "cut by -max-names"} {
+		n -= c[k]
+	}
+	return n
 }
 
 // rateLimitNote says what a source's 429 answers cost.

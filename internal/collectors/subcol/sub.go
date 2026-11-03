@@ -456,6 +456,7 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 	seen := map[string]bool{}
 	var names []string
 	cutNames := 0
+	cutSeen := map[string]bool{}
 	foundBy := map[string][]string{} // name → the sources that gave it
 	wildcard := map[string]bool{}    // names a certificate gave as *.name
 	status := map[string]any{}
@@ -478,7 +479,10 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 			n++
 			if !seen[name] {
 				if len(names) >= c.opts.MaxNames {
-					cutNames++
+					if !cutSeen[name] { // a name two sources gave is one name cut
+						cutSeen[name] = true
+						cutNames++
+					}
 					continue
 				}
 				seen[name] = true
@@ -521,7 +525,7 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 	for name, why := range skipped {
 		status[name] = map[string]any{"skipped": why}
 	}
-	union := len(names)
+	union := len(names) + cutNames // every name the sources gave, the ones cut included
 	names, foundBy, st := c.settle(ctx, domain, run, names, foundBy, status, cut, cutWhy, chk)
 	sort.Strings(names)
 	for _, by := range foundBy {
