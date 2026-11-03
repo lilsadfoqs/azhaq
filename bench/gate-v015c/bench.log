@@ -1,0 +1,1180 @@
+=== parts/bench-p1.log
+bench: building azhaq
+bench: starting docker apps
+bench: default: apps
+bench: default: apps took 375s
+
+== default flags ==
+apps                      azhaq routes  known  shell  time   RSS    katana routes  known  shell  time   RSS
+juice-shop (crawl)        59            52/77  0      3.0s   101MB  5              1/77   0      14.7s  1480MB
+juice-shop (run)          103           70/77  0      3.8s   109MB  5              1/77   3      14.7s  1403MB
+vampi (crawl)             1             1/12   0      0.2s   72MB   1              1/12   0      10.4s  49MB
+vampi (run)               13            12/12  0      0.4s   78MB   1              1/12   0      10.4s  49MB
+ginandjuice.shop (crawl)  11            2/3    0      11.1s  90MB   14             2/3    0      20.6s  748MB
+ginandjuice.shop (run)    39            3/3    0      33.0s  101MB  14             2/3    0      20.6s  721MB
+
+with a browser (juice-shop)  routes  known  shell  time   RSS
+azhaq -browser               104     70/77  0      15.2s  113MB
+katana -headless             30      6/77   4      8.6s   80MB
+
+roles (juice-shop)         endpoints that differ  expected 401 → 200  time
+anon → user (token)        39                     2/2                 8.4s
+anon → user (-role-login)  41                     2/2                 34.0s
+
+wordlist (51 words)  azhaq hits  shell  ffuf -ac hits  shell  shared  ffuf time
+juice-shop           3           0      4              0      3       0.4s
+
+checks
+  PASS  [default] juice-shop: ≥ 90% of the server routes its frontend calls  (azhaq 70/77, katana 1/77, jsluice 0/77)
+  PASS  [default] juice-shop: no catch-all page reported as visited  (0 visited URLs return the SPA index)
+  PASS  [default] crawl juice-shop: results ≥ the reference's, confirmed by the app's own routes (its server code or OpenAPI document, or the routes only its page scripts hold)  (azhaq 52, reference 1; routes found azhaq 59, katana 5; stylesheets listed azhaq 1, katana 1; known 52 and 1 of 77; time ×0.20 of the reference, memory ×0.07 of the reference (101 MB against 1480 MB) | azhaq crawl -u http://127.0.0.1:3101/ -depth 3 -silent -hints vs katana -u http://127.0.0.1:3101/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10)
+  PASS  [default] crawl juice-shop: time ≤ 1.05× the reference's  (azhaq 3.0s, reference 14.7s (the median of 3 below 20 s, one run above) | azhaq crawl -u http://127.0.0.1:3101/ -depth 3 -silent -hints vs katana -u http://127.0.0.1:3101/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10)
+  PASS  [default] roles: Juice Shop anonymous → user  (39 endpoints differ; 401 → 200 on 2/2 of /api/Users, /rest/user/authentication-details)
+  PASS  [default] roles: Juice Shop anonymous → user, signed in with Chrome  (41 endpoints differ; 401 → 200 on 2/2 (with a token: 39 endpoints) )
+  PASS  [default] juice-shop: -browser finds the known routes katana -headless finds  (azhaq -browser 70/77 in 15s, katana -headless 6/77 in 9s)
+  FAIL  [default] identical runs diff empty  (added=0 removed=0 observations=7)
+  PASS  [default] crawl vampi: results ≥ the reference's, confirmed by the app's own routes (its server code or OpenAPI document, or the routes only its page scripts hold)  (azhaq 1, reference 1; routes found azhaq 1, katana 1; stylesheets listed azhaq 0, katana 0; known 1 and 1 of 12; time ×0.02 of the reference, memory ×1.46 of the reference (72 MB against 49 MB) | azhaq crawl -u http://127.0.0.1:5102/ -depth 3 -silent -hints vs katana -u http://127.0.0.1:5102/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10)
+  PASS  [default] crawl vampi: time ≤ 1.05× the reference's  (azhaq 0.2s, reference 10.4s (the median of 3 below 20 s, one run above) | azhaq crawl -u http://127.0.0.1:5102/ -depth 3 -silent -hints vs katana -u http://127.0.0.1:5102/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10)
+  PASS  [default] vampi: paths from /openapi.json  (azhaq 12/12, katana 1/12)
+  PASS  [default] diff across different seeds is labelled  (seeds_differ=true)
+  PASS  [default] crawl ginandjuice.shop: results ≥ the reference's, confirmed by the app's own routes (its server code or OpenAPI document, or the routes only its page scripts hold)  (azhaq 2, reference 2; routes found azhaq 11, katana 14; stylesheets listed azhaq 4, katana 4; known 2 and 2 of 3; time ×0.54 of the reference, memory ×0.12 of the reference (90 MB against 748 MB) | azhaq crawl -u https://ginandjuice.shop/ -depth 3 -silent -hints -rate 5 vs katana -u https://ginandjuice.shop/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10 -rl 5)
+  PASS  [default] crawl ginandjuice.shop: time ≤ 1.05× the reference's  (azhaq 11.1s, reference 20.6s (the median of 3 below 20 s, one run above) | azhaq crawl -u https://ginandjuice.shop/ -depth 3 -silent -hints -rate 5 vs katana -u https://ginandjuice.shop/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10 -rl 5)
+  PASS  [default] ginandjuice: page scripts parsed  (4/4 page scripts, 3/3 routes only in page scripts or script-driven forms)
+  PASS  [default] ginandjuice: product and blog pages are one template each  (map lines: product 1, blog post 1)
+  PASS  [default] known routes ≥ katana ∪ jsluice on every app  (juice-shop 70/77 vs 1, vampi 12/12 vs 1, ginandjuice.shop 3/3 vs 2)
+  PASS  [default] no catch-all page reported as visited on any app  (3 apps)
+
+17 of 18 checks pass
+
+record bench/history/2026-11-03T182110-5508e6d.json
+exit status 1
+=== parts/bench-p10.log
+bench: building azhaq
+bench: starting docker apps
+bench: polite: fuzz
+bench: polite: fuzz took 213s
+bench: claims: ports -p unpaced: true
+bench: claims: ports -pu unpaced: true
+bench: claims: ports -p rate 5: true
+bench: claims: ports -pu rate 5: true
+bench: claims: case 7 took 51s
+
+polite (HTTP 5/s, DNS 10/s, ports 100/s): fuzz (257 words)  azhaq hits (confirmed)  ffuf hits (confirmed)  shared  azhaq s    ffuf s     JSON report equal
+http://127.0.0.1:3101/ calibrated (-ac)                     11 (11)                 11 (11)                11      52.4 44MB  51.4 19MB  -
+http://127.0.0.1:5102/ calibrated (-ac)                     2 (2)                   2 (2)                  2       52.4 44MB  51.5 15MB  -
+
+claims (51s)  pace     summary  ledger  counter  pass
+ports -p      unpaced  83       83      80       true
+ports -pu     unpaced  14       14      13       true
+ports -p      rate 5   83       83      80       true
+ports -pu     rate 5   14       14      13       true
+
+checks
+  PASS  [polite] fuzz 127.0.0.1:3101 calibrated (-ac): results ≥ the reference's, confirmed by a request that is not the app's catch-all answer  (azhaq 11, reference 11; old bar: 11 of 11 = 100%; hits azhaq 11, ffuf 11, shared 11; 257 words; time ×1.02 of the reference, memory ×2.33 of the reference (44 MB against 19 MB); ffuf only [] | azhaq fuzz -u http://127.0.0.1:3101/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/fuzz-polite.txt -s -ac -rate 5 vs ffuf -u http://127.0.0.1:3101/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/fuzz-polite.txt -s -ac -rate 5)
+  PASS  [polite] fuzz 127.0.0.1:3101 calibrated (-ac): time ≤ 1.05× the reference's  (azhaq 52.4s, reference 51.4s (the median of 3 below 20 s, one run above) | azhaq fuzz -u http://127.0.0.1:3101/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/fuzz-polite.txt -s -ac -rate 5 vs ffuf -u http://127.0.0.1:3101/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/fuzz-polite.txt -s -ac -rate 5)
+  PASS  [polite] fuzz 127.0.0.1:5102 calibrated (-ac): results ≥ the reference's, confirmed by a request that is not the app's catch-all answer  (azhaq 2, reference 2; old bar: 2 of 2 = 100%; hits azhaq 2, ffuf 2, shared 2; 257 words; time ×1.02 of the reference, memory ×2.97 of the reference (44 MB against 15 MB); ffuf only [] | azhaq fuzz -u http://127.0.0.1:5102/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/fuzz-polite.txt -s -ac -rate 5 vs ffuf -u http://127.0.0.1:5102/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/fuzz-polite.txt -s -ac -rate 5)
+  PASS  [polite] fuzz 127.0.0.1:5102 calibrated (-ac): time ≤ 1.05× the reference's  (azhaq 52.4s, reference 51.5s (the median of 3 below 20 s, one run above) | azhaq fuzz -u http://127.0.0.1:5102/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/fuzz-polite.txt -s -ac -rate 5 vs ffuf -u http://127.0.0.1:5102/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/fuzz-polite.txt -s -ac -rate 5)
+  PASS  claims: ports -p unpaced: summary = ledger = what arrived  (summary 83, ledger 83 (tcp 83), counter 80; accepts map[127.0.0.1:33151:26 127.0.0.1:43891:26 127.0.0.1:44307:1 127.0.0.1:44463:1 127.0.0.1:46183:26]; HTTP requests answered 1, http ledger lines 0)
+  PASS  claims: ports -pu unpaced: summary = ledger = what arrived  (summary 14, ledger 14 (udp 14), counter 13; datagrams map[127.0.0.1:37459:1 127.0.0.1:37521:4 127.0.0.1:58402:4 127.0.0.1:60070:4])
+  PASS  claims: ports -p rate 5: summary = ledger = what arrived  (summary 83, ledger 83 (tcp 83), counter 80; accepts map[127.0.0.1:37633:1 127.0.0.1:42581:26 127.0.0.1:43425:26 127.0.0.1:45147:1 127.0.0.1:46115:26]; HTTP requests answered 1, http ledger lines 0)
+  PASS  claims: ports -pu rate 5: summary = ledger = what arrived  (summary 14, ledger 14 (udp 14), counter 13; datagrams map[127.0.0.1:33782:4 127.0.0.1:38118:1 127.0.0.1:39798:4 127.0.0.1:43406:4])
+
+8 of 8 checks pass
+
+record bench/history/2026-11-03T181923-5508e6d.json
+=== parts/bench-p11.log
+bench: building azhaq
+bench: starting docker apps
+bench: default: ports
+bench: default: ports took 221s
+bench: default: notify
+bench: default: notify took 33s
+bench: polite: shots
+bench: http://127.0.0.1:5002 does not answer
+bench: http://127.0.0.1:5020 does not answer
+bench: http://127.0.0.1:3001 does not answer
+bench: http://127.0.0.1:5030 does not answer
+bench: http://127.0.0.1:5013 does not answer
+bench: polite: shots took 62s
+
+default flags: ports (connect)                    azhaq  naabu  confirmed azhaq / naabu  azhaq time  naabu time
+scanme.nmap.org top-1000                          3      3      3 / 3                    2.0s 47MB   5.7s 68MB
+127.0.0.1 1-65535                                 3      3      3 / 3                    1.8s 62MB   133.4s 106MB
+127.0.0.0/28 33517,43563,45635,40121,43917,39505  4      4      4 / 4                    0.0s 45MB   2.4s 57MB
+
+default flags: ports, CPU (127.0.0.1 1-65535, -rate 10000)  azhaq  nmap -sT
+CPU seconds                                                 1.72   1.99
+time                                                        6.6s   6.6s
+open ports                                                  3      3
+
+default flags: notify (6 messages, 2 providers)  azhaq  notify  azhaq time  notify time
+received at the stub                             6      6       5.0s 41MB   5.0s 25MB
+
+polite (HTTP 5/s, DNS 10/s, ports 100/s): screenshots (4 targets)  azhaq  gowitness  azhaq time  gowitness time
+not blank                                                          4      4          21.4s 82MB  4.6s 236MB
+
+checks
+  PASS  [default] ports 127.0.0.1 1-65535: open ports ≥ nmap -sT's  (azhaq 1.72 CPU s and 6.6 s, nmap 1.99 CPU s and 6.6 s (median of 5 runs in turn); open: azhaq 3, nmap 3; listening throughout and azhaq missed [], nmap missed [] | azhaq ports -host 127.0.0.1 -p 1-65535 -rate 10000 -retries 0 -detect none -silent -db /home/runner/work/azhaq/azhaq/bench/.work/portscpu3179973275/cpu.db vs nmap -sT -Pn -n -p 1-65535 --max-rate 10000 --max-retries 0 -oG - 127.0.0.1)
+  PASS  [default] ports 127.0.0.1 1-65535: CPU ≤ 1.25× nmap -sT's  (0.86×: azhaq 1.72 CPU s and 6.6 s, nmap 1.99 CPU s and 6.6 s (median of 5 runs in turn); open: azhaq 3, nmap 3; listening throughout and azhaq missed [], nmap missed [] | azhaq ports -host 127.0.0.1 -p 1-65535 -rate 10000 -retries 0 -detect none -silent -db /home/runner/work/azhaq/azhaq/bench/.work/portscpu3179973275/cpu.db vs nmap -sT -Pn -n -p 1-65535 --max-rate 10000 --max-retries 0 -oG - 127.0.0.1)
+  PASS  [default] ports 127.0.0.1 1-65535: time ≤ 1.25× nmap -sT's  (1.01×: azhaq 1.72 CPU s and 6.6 s, nmap 1.99 CPU s and 6.6 s (median of 5 runs in turn); open: azhaq 3, nmap 3; listening throughout and azhaq missed [], nmap missed [] | azhaq ports -host 127.0.0.1 -p 1-65535 -rate 10000 -retries 0 -detect none -silent -db /home/runner/work/azhaq/azhaq/bench/.work/portscpu3179973275/cpu.db vs nmap -sT -Pn -n -p 1-65535 --max-rate 10000 --max-retries 0 -oG - 127.0.0.1)
+  PASS  [default] ports scanme.nmap.org top-1000: results ≥ the reference's, confirmed by an independent TCP connect  (azhaq 3, reference 3; old bar: 3 of 3 = 100%; azhaq only [], naabu only []; time ×0.35 of the reference, memory ×0.70 of the reference (47 MB against 68 MB) | azhaq ports -host scanme.nmap.org -p top-1000 -silent vs naabu -host scanme.nmap.org -top-ports 1000 -scan-type c -Pn -silent)
+  PASS  [default] ports scanme.nmap.org top-1000: time ≤ 1.05× the reference's  (azhaq 2.0s, reference 5.7s (the median of 3 below 20 s, one run above) | azhaq ports -host scanme.nmap.org -p top-1000 -silent vs naabu -host scanme.nmap.org -top-ports 1000 -scan-type c -Pn -silent)
+  PASS  [default] ports 127.0.0.1 1-65535: results ≥ the reference's, confirmed by `ss -ltn` taken before and after the scan  (azhaq 3, reference 3; old bar: 3 of 3 = 100%; sockets listening throughout and missed: azhaq [], naabu []; time ×0.01 of the reference, memory ×0.58 of the reference (62 MB against 106 MB) | azhaq ports -host 127.0.0.1 -p 1-65535 -silent vs naabu -host 127.0.0.1 -p 1-65535 -scan-type c -Pn -silent)
+  PASS  [default] ports 127.0.0.1 1-65535: time ≤ 1.05× the reference's  (azhaq 1.8s, reference 133.4s (the median of 3 below 20 s, one run above) | azhaq ports -host 127.0.0.1 -p 1-65535 -silent vs naabu -host 127.0.0.1 -p 1-65535 -scan-type c -Pn -silent)
+  PASS  [default] ports 127.0.0.0/28: results ≥ the reference's, confirmed by the listeners the bench opened (a port that is not one counts against)  (azhaq 4, reference 4; planted 4; azhaq 4 of them, 4 reported; naabu 4, 4 reported; time ×0.01 of the reference, memory ×0.79 of the reference (45 MB against 57 MB) | azhaq ports -host 127.0.0.0/28 -p 33517,43563,45635,40121,43917,39505 -silent vs naabu -host 127.0.0.0/28 -p 33517,43563,45635,40121,43917,39505 -scan-type c -Pn -silent)
+  PASS  [default] ports 127.0.0.0/28: time ≤ 1.05× the reference's  (azhaq 0.0s, reference 2.4s (the median of 3 below 20 s, one run above) | azhaq ports -host 127.0.0.0/28 -p 33517,43563,45635,40121,43917,39505 -silent vs naabu -host 127.0.0.0/28 -p 33517,43563,45635,40121,43917,39505 -scan-type c -Pn -silent)
+  PASS  [default] notify: results ≥ the reference's, confirmed by the stub's own log (a request with the message in its body, per provider)  (azhaq 6, reference 6; 6 messages to 2 providers; distinct requests at the stub: azhaq 6, notify 6; time ×1.00 of the reference, memory ×1.66 of the reference (41 MB against 25 MB) [azhaq finished with failures or was stopped: exit status 3   exit 3: the targets given cannot be counted (addresses, ranges), so any failure exits 3; what is marked ! failed] | azhaq notify -i /home/runner/work/azhaq/azhaq/bench/.work/notify/input.txt -provider-config /home/runner/work/azhaq/azhaq/bench/.work/notify/azhaq.yaml -silent vs notify -i /home/runner/work/azhaq/azhaq/bench/.work/notify/input.txt -provider-config /home/runner/work/azhaq/azhaq/bench/.work/notify/notify.yaml -silent -duc)
+  PASS  [default] notify: time ≤ 1.05× the reference's  (azhaq 5.0s, reference 5.0s (the median of 3 below 20 s, one run above) | azhaq notify -i /home/runner/work/azhaq/azhaq/bench/.work/notify/input.txt -provider-config /home/runner/work/azhaq/azhaq/bench/.work/notify/azhaq.yaml -silent vs notify -i /home/runner/work/azhaq/azhaq/bench/.work/notify/input.txt -provider-config /home/runner/work/azhaq/azhaq/bench/.work/notify/notify.yaml -silent -duc)
+  PASS  [default] notify: the same requests as notify's (bodies and content types), per the stub  (azhaq /custom application/json {"text":"new host app1.example.com live"} ; /custom application/json {"text":"new host app2.example.com live"} ; /custom application/json {"text":"new host app3.example.com live"} ; /custom application/json {"text":"new host app4.example.com live"} ; /custom application/json… | notify /custom application/json {"text":"new host app1.example.com live"} ; /custom application/json {"text":"new host app2.example.com live"} ; /custom application/json {"text":"new host app3.example.com live"} ; /custom application/json {"text":"new host app4.example.com live"} ; /custom application/json…)
+  PASS  [default] notify: a webhook token reaches no output when the webhook cannot be reached  (azhaq watch -always -notify http://127.0.0.1:CLOSED/services/…/TOKEN: exit 3, token printed: false)
+  PASS  [polite] screenshots: results ≥ the reference's, confirmed by the image files: each decodes and is not one colour  (azhaq 4, reference 4; old bar: 4 of 4 = 100%; 4 targets; azhaq listed 4, gowitness wrote 4 files; time ×4.62 of the reference, memory ×0.35 of the reference (82 MB against 236 MB) | azhaq shots -l /home/runner/work/azhaq/azhaq/bench/.work/shots-181921-polite/targets.txt -dir /home/runner/work/azhaq/azhaq/bench/.work/shots-181921-polite/azhaq0 -silent -chrome-no-sandbox -rate 5 vs gowitness scan file -f /home/runner/work/azhaq/azhaq/bench/.work/shots-181921-polite/targets.txt --chrome-path /usr/bin/google-chrome -s /home/runner/work/azhaq/azhaq/bench/.work/shots-181921-polite/gowitness0 -q)
+
+14 of 14 checks pass
+  note: azhaq on notify (default): exit status 3   exit 3: the targets given cannot be counted (addresses, ranges), so any failure exits 3; what is marked ! failed
+  note: azhaq on notify (default): exit status 3   exit 3: the targets given cannot be counted (addresses, ranges), so any failure exits 3; what is marked ! failed
+  note: azhaq on notify (default): exit status 3   exit 3: the targets given cannot be counted (addresses, ranges), so any failure exits 3; what is marked ! failed
+  note: azhaq on notify (default): exit status 3 azhaq watch: POST http://127.0.0.1:40633/…: dial tcp 127.0.0.1:40633: connect: connection refused (after 3 tries)
+
+record bench/history/2026-11-03T181956-5508e6d.json
+=== parts/bench-p12.log
+bench: building azhaq
+bench: starting docker apps
+bench: polite: apps
+bench: polite: apps took 168s
+bench: polite: urls
+bench: polite: urls took 75s
+bench: http://127.0.0.1:3001 does not answer
+bench: claims: kill switch shots rate 5: true
+bench: claims: case 11 took 17s
+
+== polite (HTTP 5/s, DNS 10/s, ports 100/s) ==
+apps                      azhaq routes  known  shell  time   RSS   katana routes  known  shell  time   RSS
+juice-shop (crawl)        59            52/77  0      16.9s  97MB  5              1/77   0      17.7s  1629MB
+vampi (crawl)             1             1/12   0      0.2s   65MB  1              1/12   0      10.6s  49MB
+ginandjuice.shop (crawl)  11            2/3    0      11.2s  90MB  14             2/3    0      20.7s  731MB
+
+polite (HTTP 5/s, DNS 10/s, ports 100/s): urls (vulnweb.com)  azhaq  gau  gau's in azhaq  azhaq s  gau s
+URLs                                                          141    149  136             20 48MB  44 12MB
+
+claims (17s)                pace    summary  ledger  counter  pass
+kill switch shots (run)     rate 5  12       12      12       true
+kill switch shots (resume)  rate 5  52       52      52       true
+
+checks
+  PASS  [polite] crawl juice-shop: results ≥ the reference's, confirmed by the app's own routes (its server code or OpenAPI document, or the routes only its page scripts hold)  (azhaq 52, reference 1; routes found azhaq 59, katana 5; stylesheets listed azhaq 1, katana 1; known 52 and 1 of 77; time ×0.96 of the reference, memory ×0.06 of the reference (97 MB against 1629 MB) | azhaq crawl -u http://127.0.0.1:3101/ -depth 3 -silent -hints -rate 5 vs katana -u http://127.0.0.1:3101/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10 -rl 5)
+  PASS  [polite] crawl juice-shop: time ≤ 1.05× the reference's  (azhaq 16.9s, reference 17.7s (the median of 3 below 20 s, one run above) | azhaq crawl -u http://127.0.0.1:3101/ -depth 3 -silent -hints -rate 5 vs katana -u http://127.0.0.1:3101/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10 -rl 5)
+  PASS  [polite] crawl vampi: results ≥ the reference's, confirmed by the app's own routes (its server code or OpenAPI document, or the routes only its page scripts hold)  (azhaq 1, reference 1; routes found azhaq 1, katana 1; stylesheets listed azhaq 0, katana 0; known 1 and 1 of 12; time ×0.01 of the reference, memory ×1.33 of the reference (65 MB against 49 MB) | azhaq crawl -u http://127.0.0.1:5102/ -depth 3 -silent -hints -rate 5 vs katana -u http://127.0.0.1:5102/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10 -rl 5)
+  PASS  [polite] crawl vampi: time ≤ 1.05× the reference's  (azhaq 0.2s, reference 10.6s (the median of 3 below 20 s, one run above) | azhaq crawl -u http://127.0.0.1:5102/ -depth 3 -silent -hints -rate 5 vs katana -u http://127.0.0.1:5102/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10 -rl 5)
+  PASS  [polite] crawl ginandjuice.shop: results ≥ the reference's, confirmed by the app's own routes (its server code or OpenAPI document, or the routes only its page scripts hold)  (azhaq 2, reference 2; routes found azhaq 11, katana 14; stylesheets listed azhaq 4, katana 4; known 2 and 2 of 3; time ×0.54 of the reference, memory ×0.12 of the reference (90 MB against 731 MB) | azhaq crawl -u https://ginandjuice.shop/ -depth 3 -silent -hints -rate 5 vs katana -u https://ginandjuice.shop/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10 -rl 5)
+  PASS  [polite] crawl ginandjuice.shop: time ≤ 1.05× the reference's  (azhaq 11.2s, reference 20.7s (the median of 3 below 20 s, one run above) | azhaq crawl -u https://ginandjuice.shop/ -depth 3 -silent -hints -rate 5 vs katana -u https://ginandjuice.shop/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10 -rl 5)
+  PASS  [polite] urls vulnweb.com: results ≥ the reference's, confirmed by being on the domain and not a static asset, azhaq's list and the URLs it dropped as junk together (the archives refuse this machine, so no other source is asked)  (azhaq 154, reference 149; azhaq 141 listed, 13 dropped as junk (3 fuzzing placeholder or request-line fragment, 2 link cut at the end of its sentence, 4 malformed link (wildcard, quote, bracket, ellipsis), 4 scanner probe), gau 149, missing 0 []; old bar: 136 of 149 = 91%; time ×0.46 of the reference, memory ×3.89 of the reference (48 MB against 12 MB) | azhaq urls -d vulnweb.com -silent vs gau --threads 1 --providers wayback,otx,urlscan --timeout 30 vulnweb.com)
+  PASS  [polite] urls vulnweb.com: time ≤ 1.05× the reference's  (azhaq 20.4s, reference 44.1s (the median of 3 below 20 s, one run above) | azhaq urls -d vulnweb.com -silent vs gau --threads 1 --providers wayback,otx,urlscan --timeout 30 vulnweb.com)
+  PASS  [polite] urls vulnweb.com: every URL gau lists is in azhaq's list or dropped as junk with a reason  (azhaq 141 listed, 13 dropped as junk (3 fuzzing placeholder or request-line fragment, 2 link cut at the end of its sentence, 4 malformed link (wildcard, quote, bracket, ellipsis), 4 scanner probe), gau 149, missing 0 [])
+  PASS  claims: kill switch shots rate 5: summary = ledger = what arrived  (run: summary 12, ledger 12 (chrome 11, http 1), counter 12; last request 0.00s after the file, exit 4; resume: summary 52, ledger 52 (chrome 52), counter 52; together: summary 64, ledger 64, counter 64)
+
+10 of 10 checks pass
+
+record bench/history/2026-11-03T181902-5508e6d.json
+=== parts/bench-p13.log
+bench: building azhaq
+bench: starting docker apps
+bench: default: urls
+bench: default: urls took 145s
+bench: polite: dns
+bench: polite: dns took 21s
+bench: polite: probe
+bench: http://127.0.0.1:5030 does not answer
+bench: http://127.0.0.1:5013 does not answer
+bench: http://127.0.0.1:5020 does not answer
+bench: probing 107 hosts
+bench: polite: probe took 138s
+
+default flags: urls (vulnweb.com)  azhaq  gau  gau's in azhaq  azhaq s  gau s
+URLs                               141    149  136             30 49MB  78 12MB
+
+polite (HTTP 5/s, DNS 10/s, ports 100/s): dns record types  azhaq  dnsx  azhaq time  dnsx time  queries azhaq/dnsx
+32 names                                                    12     12    3.0s 43MB   3.5s 45MB  289 / 523
+
+polite (HTTP 5/s, DNS 10/s, ports 100/s): probe (107 hosts)  answered (confirmed)  shared  status  title  tech  all  favicon  cdn  time
+azhaq                                                        107 (105)             105     105     105    104   104  103/103  0/0  21.3s 85MB
+httpx                                                        105 (105)                                                             22.0s 218MB
+
+probe differences (azhaq/httpx), polite
+  127.0.0.1:5020: status 200/200 title "Damn Vulnerable NodeJS Application"/"Damn Vulnerable NodeJS Application" tech [Bootstrap:3.3.7 BootstrapCDN:3.3.7 Express Node.js Showdown cdnjs jQuery:3.2.1]/[Bootstrap:3.3.7 BootstrapCDN:3.3.7 Cloudflare Express Node.js Showdown cdnjs jQuery:3.2.1]
+
+checks
+  PASS  [default] urls vulnweb.com: results ≥ the reference's, confirmed by being on the domain and not a static asset, azhaq's list and the URLs it dropped as junk together (the archives refuse this machine, so no other source is asked)  (azhaq 154, reference 149; azhaq 141 listed, 13 dropped as junk (3 fuzzing placeholder or request-line fragment, 2 link cut at the end of its sentence, 4 malformed link (wildcard, quote, bracket, ellipsis), 4 scanner probe), gau 149, missing 0 []; old bar: 136 of 149 = 91%; time ×0.38 of the reference, memory ×4.00 of the reference (49 MB against 12 MB) | azhaq urls -d vulnweb.com -silent vs gau --providers wayback,otx,urlscan --timeout 30 vulnweb.com)
+  PASS  [default] urls vulnweb.com: time ≤ 1.05× the reference's  (azhaq 30.0s, reference 78.4s (the median of 3 below 20 s, one run above) | azhaq urls -d vulnweb.com -silent vs gau --providers wayback,otx,urlscan --timeout 30 vulnweb.com)
+  PASS  [default] urls vulnweb.com: every URL gau lists is in azhaq's list or dropped as junk with a reason  (azhaq 141 listed, 13 dropped as junk (3 fuzzing placeholder or request-line fragment, 2 link cut at the end of its sentence, 4 malformed link (wildcard, quote, bracket, ellipsis), 4 scanner probe), gau 149, missing 0 [])
+  PASS  [polite] dns record types: results ≥ the reference's, confirmed by the zone the bench serves (a name and type it holds)  (azhaq 12, reference 12; 32 names, 9 types; queries received azhaq 289, dnsx 523; time ×0.86 of the reference, memory ×0.97 of the reference (43 MB against 45 MB) | azhaq dns -l /home/runner/work/azhaq/azhaq/bench/.work/dns/names.txt -resolvers /home/runner/work/azhaq/azhaq/bench/.work/dns/resolvers.txt -json -silent -a -aaaa -cname -mx -ns -txt -srv -caa -soa -rl 10 vs dnsx -l /home/runner/work/azhaq/azhaq/bench/.work/dns/names.txt -r 127.0.0.1:49791 -json -silent -a -aaaa -cname -mx -ns -txt -srv -caa -soa -rl 10)
+  PASS  [polite] dns record types: time ≤ 1.05× the reference's  (azhaq 3.0s, reference 3.5s (the median of 3 below 20 s, one run above) | azhaq dns -l /home/runner/work/azhaq/azhaq/bench/.work/dns/names.txt -resolvers /home/runner/work/azhaq/azhaq/bench/.work/dns/resolvers.txt -json -silent -a -aaaa -cname -mx -ns -txt -srv -caa -soa -rl 10 vs dnsx -l /home/runner/work/azhaq/azhaq/bench/.work/dns/names.txt -r 127.0.0.1:49791 -json -silent -a -aaaa -cname -mx -ns -txt -srv -caa -soa -rl 10)
+  PASS  [polite] dns record types: azhaq's JSON values equal dnsx's  (0 differences [])
+  PASS  [polite] dns record types: queries per second at the server within the rate, or no more than dnsx's at the same setting  (most in one second: azhaq 91, dnsx 180 (rate 10 per second; 289 and 523 queries))
+  PASS  [polite] dns -ptr: results ≥ the reference's, confirmed by the zone's PTR records  (azhaq 2, reference 2; azhaq [app.bench.lan www.bench.lan], dnsx [app.bench.lan www.bench.lan]; time ×0.03 of the reference, memory ×0.00 of the reference (0 MB against 43 MB) | azhaq dns -l /home/runner/work/azhaq/azhaq/bench/.work/dns/ips.txt -resolvers /home/runner/work/azhaq/azhaq/bench/.work/dns/resolvers.txt -ptr -json -silent vs dnsx -l /home/runner/work/azhaq/azhaq/bench/.work/dns/ips.txt -r 127.0.0.1:49791 -ptr -json -silent)
+  PASS  [polite] dns -ptr: time ≤ 1.05× the reference's  (azhaq 0.0s, reference 0.5s (the median of 3 below 20 s, one run above) | azhaq dns -l /home/runner/work/azhaq/azhaq/bench/.work/dns/ips.txt -resolvers /home/runner/work/azhaq/azhaq/bench/.work/dns/resolvers.txt -ptr -json -silent vs dnsx -l /home/runner/work/azhaq/azhaq/bench/.work/dns/ips.txt -r 127.0.0.1:49791 -ptr -json -silent)
+  PASS  [polite] probe: results ≥ the reference's, confirmed by a GET to the host itself giving the status the tool reported  (azhaq 105, reference 105; old bar: 105 of 105 = 100%; 107 hosts (5 apps, the services lab's web ports, 100 local servers); answered azhaq 107, httpx 105, shared 105; time ×0.97 of the reference, memory ×0.39 of the reference (85 MB against 218 MB) | azhaq probe -l /home/runner/work/azhaq/azhaq/bench/.work/probe/hosts.txt -json -silent -favicon -fr -rl 5 vs httpx -l /home/runner/work/azhaq/azhaq/bench/.work/probe/hosts.txt -silent -json -fr -td -cdn -favicon -title -sc -no-color -rl 5)
+  PASS  [polite] probe: time ≤ 1.05× the reference's  (azhaq 21.3s, reference 22.0s (the median of 3 below 20 s, one run above) | azhaq probe -l /home/runner/work/azhaq/azhaq/bench/.work/probe/hosts.txt -json -silent -favicon -fr -rl 5 vs httpx -l /home/runner/work/azhaq/azhaq/bench/.work/probe/hosts.txt -silent -json -fr -td -cdn -favicon -title -sc -no-color -rl 5)
+  PASS  [polite] probe: status, title and tech agree with httpx on ≥ 95% of shared hosts  (all three 104/105 (status 105, title 105, tech 104; 0 redirects out of the site compared by their own status))
+  PASS  [polite] probe public sites (5/s): results ≥ the reference's, confirmed by a GET to the site giving the status the tool reported (a redirect out of the site counts)  (azhaq 1, reference 1; [ginandjuice.shop testphp.vulnweb.com demo.testfire.net]; one run each; time ×0.49 of the reference, memory ×0.38 of the reference (82 MB against 216 MB) | azhaq probe -l /home/runner/work/azhaq/azhaq/bench/.work/probe/public.txt -json -silent -rate 5 -H User-Agent: azhaq-bench/1 (+https://github.com/lilsadfoqs/azhaq) -fr vs httpx -l /home/runner/work/azhaq/azhaq/bench/.work/probe/public.txt -silent -json -fr -title -sc -rl 5 -t 1 -H User-Agent: azhaq-bench/1 (+https://github.com/lilsadfoqs/azhaq) -no-color)
+  PASS  [polite] probe public sites (5/s): time ≤ 1.05× the reference's  (azhaq 10.5s, reference 21.7s (the median of 3 below 20 s, one run above) | azhaq probe -l /home/runner/work/azhaq/azhaq/bench/.work/probe/public.txt -json -silent -rate 5 -H User-Agent: azhaq-bench/1 (+https://github.com/lilsadfoqs/azhaq) -fr vs httpx -l /home/runner/work/azhaq/azhaq/bench/.work/probe/public.txt -silent -json -fr -title -sc -rl 5 -t 1 -H User-Agent: azhaq-bench/1 (+https://github.com/lilsadfoqs/azhaq) -no-color)
+
+14 of 14 checks pass
+
+record bench/history/2026-11-03T181949-5508e6d.json
+=== parts/bench-p14.log
+bench: building azhaq
+bench: polite: ports
+bench: polite: ports took 150s
+bench: polite: notify
+bench: polite: notify took 6s
+bench: http://127.0.0.1:3001 does not answer
+bench: claims: run -browser unpaced: true
+bench: claims: run -browser rate 10: true
+bench: claims: run -browser rate 2: true
+bench: claims: case 2 took 80s
+bench: claims: budget -max-requests 40 unpaced: true
+bench: claims: case 9 took 2s
+bench: once: network took 6s
+
+polite (HTTP 5/s, DNS 10/s, ports 100/s): ports (connect)  azhaq  naabu  confirmed azhaq / naabu  azhaq time  naabu time
+scanme.nmap.org top-1000                                   3      3      3 / 3                    10.1s 47MB  61.8s 58MB
+127.0.0.1 top-1000                                         1      1      1 / 1                    9.9s 47MB   31.6s 60MB
+127.0.0.0/28 40789,35421,44927,32923,42027,39901           4      4      4 / 4                    0.9s 44MB   4.6s 57MB
+
+polite (HTTP 5/s, DNS 10/s, ports 100/s): notify (6 messages, 2 providers)  azhaq  notify  azhaq time  notify time
+received at the stub                                                        6      6       1.0s 41MB   1.0s 25MB
+
+claims (82s)                      pace     summary  ledger  counter  pass
+run -browser                      unpaced  259      259     259      true
+run -browser                      rate 10  200      200     200      true
+run -browser                      rate 2   60       60      60       true
+budget -max-requests 40 (run)     unpaced  40       40      40       true
+budget -max-requests 40 (resume)  unpaced  40       40      40       true
+
+checks
+  PASS  [polite] ports scanme.nmap.org top-1000: results ≥ the reference's, confirmed by an independent TCP connect  (azhaq 3, reference 3; old bar: 3 of 3 = 100%; azhaq only [], naabu only []; time ×0.16 of the reference, memory ×0.81 of the reference (47 MB against 58 MB) | azhaq ports -host scanme.nmap.org -p top-1000 -silent -rate 100 vs naabu -host scanme.nmap.org -top-ports 1000 -scan-type c -Pn -silent -rate 100)
+  PASS  [polite] ports scanme.nmap.org top-1000: time ≤ 1.05× the reference's  (azhaq 10.1s, reference 61.8s (the median of 3 below 20 s, one run above) | azhaq ports -host scanme.nmap.org -p top-1000 -silent -rate 100 vs naabu -host scanme.nmap.org -top-ports 1000 -scan-type c -Pn -silent -rate 100)
+  PASS  [polite] ports 127.0.0.1 top-1000: results ≥ the reference's, confirmed by `ss -ltn` taken before and after the scan  (azhaq 1, reference 1; old bar: 1 of 1 = 100%; sockets listening throughout and missed: azhaq [], naabu []; time ×0.31 of the reference, memory ×0.78 of the reference (47 MB against 60 MB) | azhaq ports -host 127.0.0.1 -p top-1000 -silent -rate 100 vs naabu -host 127.0.0.1 -top-ports 1000 -scan-type c -Pn -silent -rate 100)
+  PASS  [polite] ports 127.0.0.1 top-1000: time ≤ 1.05× the reference's  (azhaq 9.9s, reference 31.6s (the median of 3 below 20 s, one run above) | azhaq ports -host 127.0.0.1 -p top-1000 -silent -rate 100 vs naabu -host 127.0.0.1 -top-ports 1000 -scan-type c -Pn -silent -rate 100)
+  PASS  [polite] ports 127.0.0.0/28: results ≥ the reference's, confirmed by the listeners the bench opened (a port that is not one counts against)  (azhaq 4, reference 4; planted 4; azhaq 4 of them, 4 reported; naabu 4, 4 reported; time ×0.19 of the reference, memory ×0.78 of the reference (44 MB against 57 MB) | azhaq ports -host 127.0.0.0/28 -p 40789,35421,44927,32923,42027,39901 -silent -rate 100 vs naabu -host 127.0.0.0/28 -p 40789,35421,44927,32923,42027,39901 -scan-type c -Pn -silent -rate 100)
+  PASS  [polite] ports 127.0.0.0/28: time ≤ 1.05× the reference's  (azhaq 0.9s, reference 4.6s (the median of 3 below 20 s, one run above) | azhaq ports -host 127.0.0.0/28 -p 40789,35421,44927,32923,42027,39901 -silent -rate 100 vs naabu -host 127.0.0.0/28 -p 40789,35421,44927,32923,42027,39901 -scan-type c -Pn -silent -rate 100)
+  PASS  [polite] notify: results ≥ the reference's, confirmed by the stub's own log (a request with the message in its body, per provider)  (azhaq 6, reference 6; 6 messages to 2 providers; distinct requests at the stub: azhaq 6, notify 6; time ×0.99 of the reference, memory ×1.62 of the reference (41 MB against 25 MB) [azhaq finished with failures or was stopped: exit status 3   exit 3: the targets given cannot be counted (addresses, ranges), so any failure exits 3; what is marked ! failed] | azhaq notify -i /home/runner/work/azhaq/azhaq/bench/.work/notify/input.txt -provider-config /home/runner/work/azhaq/azhaq/bench/.work/notify/azhaq.yaml -silent -rl 5 vs notify -i /home/runner/work/azhaq/azhaq/bench/.work/notify/input.txt -provider-config /home/runner/work/azhaq/azhaq/bench/.work/notify/notify.yaml -silent -duc -rl 5)
+  PASS  [polite] notify: time ≤ 1.05× the reference's  (azhaq 1.0s, reference 1.0s (the median of 3 below 20 s, one run above) | azhaq notify -i /home/runner/work/azhaq/azhaq/bench/.work/notify/input.txt -provider-config /home/runner/work/azhaq/azhaq/bench/.work/notify/azhaq.yaml -silent -rl 5 vs notify -i /home/runner/work/azhaq/azhaq/bench/.work/notify/input.txt -provider-config /home/runner/work/azhaq/azhaq/bench/.work/notify/notify.yaml -silent -duc -rl 5)
+  PASS  claims: run -browser unpaced: summary = ledger = what arrived  (summary 259, ledger 259 (chrome 96, http 163), counter 259; socket.io requests at the counter 0, WebSocket upgrades 0)
+  PASS  claims: run -browser rate 10: summary = ledger = what arrived  (summary 200, ledger 200 (chrome 67, http 133), counter 200; socket.io requests at the counter 0, WebSocket upgrades 0)
+  PASS  claims: run -browser rate 2: summary = ledger = what arrived  (summary 60, ledger 60 (chrome 13, http 47), counter 60; socket.io requests at the counter 0, WebSocket upgrades 0)
+  PASS  claims: budget -max-requests 40 unpaced: summary = ledger = what arrived  (run: summary 40, ledger 40 (http 40), counter 40; resume: summary 40, ledger 40 (http 40), counter 40; together: summary 80, ledger 80, counter 80)
+  PASS  asn: announced prefixes match registered routes  (AS394161: azhaq 102 (RIPEstat), RADb 39, shared 31)
+  PASS  ptr: ≥ 95% of dnsx -ptr's answers  (45.33.32.128/25: azhaq 36, dnsx 36, shared 36 addresses with a reverse name)
+
+14 of 14 checks pass
+  note: azhaq on notify (polite): exit status 3   exit 3: the targets given cannot be counted (addresses, ranges), so any failure exits 3; what is marked ! failed
+  note: azhaq on notify (polite): exit status 3   exit 3: the targets given cannot be counted (addresses, ranges), so any failure exits 3; what is marked ! failed
+  note: azhaq on notify (polite): exit status 3   exit 3: the targets given cannot be counted (addresses, ranges), so any failure exits 3; what is marked ! failed
+
+record bench/history/2026-11-03T181857-5508e6d.json
+=== parts/bench-p15.log
+bench: building azhaq
+bench: starting docker apps
+bench: default: fuzz
+bench: default: fuzz took 237s
+bench: once: dropin took 4s
+
+default flags: fuzz (4750 words)            azhaq hits (confirmed)  ffuf hits (confirmed)  shared  azhaq s    ffuf s     JSON report equal
+http://127.0.0.1:3101/ calibrated (-ac)     20 (18)                 20 (18)                20      22.2 51MB  21.6 23MB  true
+http://127.0.0.1:3101/ filtered (-fs 9984)  20 (18)                 20 (18)                20      21.9 51MB  21.6 23MB  -
+http://127.0.0.1:5102/ calibrated (-ac)     2 (2)                   2 (2)                  2       6.6 49MB   6.6 16MB   true
+http://127.0.0.1:5102/ filtered (-fs 205)   2 (2)                   2 (2)                  2       5.9 48MB   5.8 16MB   -
+
+drop-in and exports                                        result
+azhaq crawl, Juice Shop routes its pages and scripts name  69/69 (+0 of 8 only the full map reaches)
+azhaq probe -json on stdin                                 2 of 2, httpx fields true
+OpenAPI export, VAmPI / crAPI paths                        12/12, 0/40
+targets, HTML report                                       2, 7372 bytes
+
+checks
+  PASS  [default] fuzz 127.0.0.1:3101 calibrated (-ac): results ≥ the reference's, confirmed by a request that is not the app's catch-all answer  (azhaq 18, reference 18; old bar: 20 of 20 = 100%; hits azhaq 20, ffuf 20, shared 20; 4750 words; time ×1.03 of the reference, memory ×2.25 of the reference (51 MB against 23 MB); ffuf only [] | azhaq fuzz -u http://127.0.0.1:3101/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -ac vs ffuf -u http://127.0.0.1:3101/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -ac)
+  PASS  [default] fuzz 127.0.0.1:3101 calibrated (-ac): time ≤ 1.05× the reference's  (azhaq 22.2s, reference 21.6s (the median of 3 below 20 s, one run above) | azhaq fuzz -u http://127.0.0.1:3101/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -ac vs ffuf -u http://127.0.0.1:3101/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -ac)
+  PASS  [default] fuzz http://127.0.0.1:3101/: the JSON report equals ffuf's (duration dropped)  (20 results equal)
+  PASS  [default] fuzz 127.0.0.1:3101 filtered (-fs 9984): results ≥ the reference's, confirmed by a request that is not the app's catch-all answer  (azhaq 18, reference 18; old bar: 20 of 20 = 100%; hits azhaq 20, ffuf 20, shared 20; 4750 words; time ×1.01 of the reference, memory ×2.18 of the reference (51 MB against 23 MB); ffuf only [] | azhaq fuzz -u http://127.0.0.1:3101/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -fs 9984 vs ffuf -u http://127.0.0.1:3101/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -fs 9984)
+  PASS  [default] fuzz 127.0.0.1:3101 filtered (-fs 9984): time ≤ 1.05× the reference's  (azhaq 21.9s, reference 21.6s (the median of 3 below 20 s, one run above) | azhaq fuzz -u http://127.0.0.1:3101/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -fs 9984 vs ffuf -u http://127.0.0.1:3101/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -fs 9984)
+  PASS  [default] fuzz 127.0.0.1:5102 calibrated (-ac): results ≥ the reference's, confirmed by a request that is not the app's catch-all answer  (azhaq 2, reference 2; old bar: 2 of 2 = 100%; hits azhaq 2, ffuf 2, shared 2; 4750 words; time ×1.00 of the reference, memory ×2.97 of the reference (49 MB against 16 MB); ffuf only [] | azhaq fuzz -u http://127.0.0.1:5102/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -ac vs ffuf -u http://127.0.0.1:5102/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -ac)
+  PASS  [default] fuzz 127.0.0.1:5102 calibrated (-ac): time ≤ 1.05× the reference's  (azhaq 6.6s, reference 6.6s (the median of 3 below 20 s, one run above) | azhaq fuzz -u http://127.0.0.1:5102/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -ac vs ffuf -u http://127.0.0.1:5102/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -ac)
+  PASS  [default] fuzz http://127.0.0.1:5102/: the JSON report equals ffuf's (duration dropped)  (2 results equal)
+  PASS  [default] fuzz 127.0.0.1:5102 filtered (-fs 205): results ≥ the reference's, confirmed by a request that is not the app's catch-all answer  (azhaq 2, reference 2; old bar: 2 of 2 = 100%; hits azhaq 2, ffuf 2, shared 2; 4750 words; time ×1.02 of the reference, memory ×2.94 of the reference (48 MB against 16 MB); ffuf only [] | azhaq fuzz -u http://127.0.0.1:5102/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -fs 205 vs ffuf -u http://127.0.0.1:5102/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -fs 205)
+  PASS  [default] fuzz 127.0.0.1:5102 filtered (-fs 205): time ≤ 1.05× the reference's  (azhaq 5.9s, reference 5.8s (the median of 3 below 20 s, one run above) | azhaq fuzz -u http://127.0.0.1:5102/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -fs 205 vs ffuf -u http://127.0.0.1:5102/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -fs 205)
+  PASS  drop-in: azhaq crawl finds every Juice Shop route its pages and scripts name  (69/69 (8 more known routes only the full map reaches; crawl found 0 of them))
+  PASS  drop-in: azhaq probe reads stdin and writes httpx's JSON fields  (2 of 2 local apps, fields true)
+  PASS  export: OpenAPI of VAmPI holds every path of its own description  (12/12)
+  PASS  export: targets and HTML report  (targets 2 of 2, HTML 7372 bytes with its sections true)
+
+14 of 14 checks pass
+
+record bench/history/2026-11-03T181843-5508e6d.json
+=== parts/bench-p16.log
+bench: building azhaq
+bench: default: domains/vulnweb.com
+bench: domain vulnweb.com
+bench: default: domains/vulnweb.com took 152s
+bench: default: brute
+bench: default: brute took 5s
+bench: default: dns
+bench: default: dns took 4s
+bench: polite: domains/vulnweb.com
+bench: domain vulnweb.com
+bench: polite: domains/vulnweb.com took 226s
+bench: once: deploy took 3s
+
+default flags: subs -live  azhaq live (confirmed)  azhaq s  subfinder | dnsx live (confirmed)  time s   both  gaps
+vulnweb.com                0                       30 63MB  0                                  98 51MB  0     0
+sources                    subdomain sources
+vulnweb.com                7 answered (names 0, requests 0, seconds 0), 0 failed
+
+default flags: DNS brute force (azqlab.lan)  azhaq            dnsx           shared  azhaq time  dnsx time
+5000 words                                   9                9              9       0.2s 49MB   0.9s 58MB
+wildcard zone, 50 words, 3 real              3 found, 0 fake  50 unfiltered                      
+
+default flags: dns record types  azhaq  dnsx  azhaq time  dnsx time  queries azhaq/dnsx
+32 names                         12     12    0.0s 43MB   0.7s 45MB  289 / 523
+
+polite (HTTP 5/s, DNS 10/s, ports 100/s): subs -live  azhaq live (confirmed)  azhaq s   subfinder | dnsx live (confirmed)  time s    both  gaps
+vulnweb.com                                           0                       168 63MB  0                                  131 47MB  0     0
+sources                                               subdomain sources
+vulnweb.com                                           7 answered (asked 0, answered 0, failed 0), 0 failed
+
+checks
+  PASS  [default] subs -live vulnweb.com: results ≥ the reference's, confirmed by a name resolving at 9.9.9.9 or 208.67.222.222 (A, AAAA or CNAME)  (azhaq 0, reference 0; old bar: reference found none; azhaq printed 7, subfinder 518 names, dnsx 2 live; azhaq 0, reference 0 confirmed, both 0; subfinder 73s + dnsx 25s; time ×0.31 of the reference, memory ×1.24 of the reference (63 MB against 51 MB) | azhaq subs -d vulnweb.com -live -json -silent -resolvers /home/runner/work/azhaq/azhaq/bench/.work/domains/resolvers.txt vs subfinder -d vulnweb.com -silent -json -cs | dnsx -l /home/runner/work/azhaq/azhaq/bench/.work/domains/vulnweb.com-default-names.txt -silent -a -aaaa -cname -r 1.1.1.1,8.8.8.8)
+  PASS  [default] subs -live vulnweb.com: time ≤ 1.05× the reference's  (azhaq 30.1s, reference 97.9s (the median of 3 below 20 s, one run above) | azhaq subs -d vulnweb.com -live -json -silent -resolvers /home/runner/work/azhaq/azhaq/bench/.work/domains/resolvers.txt vs subfinder -d vulnweb.com -silent -json -cs | dnsx -l /home/runner/work/azhaq/azhaq/bench/.work/domains/vulnweb.com-default-names.txt -silent -a -aaaa -cname -r 1.1.1.1,8.8.8.8)
+  PASS  [default] subs -live vulnweb.com: every confirmed live name subfinder | dnsx finds is in azhaq's list or its source is named as failed  (0 gaps, 0 unexplained: [])
+  PASS  [default] subs -live vulnweb.com: rows are DNS-confirmed, raw candidates are counted apart and the confirmed set reaches the reference's  (raw candidates 678, DNS-confirmed 7, reference confirmed 0: [])
+  PASS  [default] subs -live vulnweb.com: raw candidates reach the names the reference listed  (azhaq 678 raw candidates, subfinder 518 names)
+  PASS  [default] subdomain sources: no silent zeros (vulnweb.com)  (every empty result is a failure flagged as error or degraded, or a zero every source answered)
+  PASS  [default] dns brute force: results ≥ the reference's, confirmed by the lab resolver, asked directly by the bench (A, AAAA or CNAME)  (azhaq 9, reference 9; old bar: 9 of 9 = 100%; azhaq [api.azqlab.lan app.azqlab.lan dev.azqlab.lan mail.azqlab.lan ns1.azqlab.lan ns2.azqlab.lan staging.azqlab.lan vpn.azqlab.lan www.azqlab.lan], dnsx [api.azqlab.lan app.azqlab.lan dev.azqlab.lan mail.azqlab.lan ns1.azqlab.lan ns2.azqlab.lan staging.azqlab.lan vpn.azqlab.lan www.azqlab.lan]; 5000 words on azqlab.lan; time ×0.23 of the reference, memory ×0.85 of the reference (49 MB against 58 MB) | azhaq dns -d azqlab.lan -w /home/runner/work/azhaq/azhaq/bench/.work/subdomains-top1million-5000.txt -resolvers /home/runner/work/azhaq/azhaq/bench/.work/brute/resolvers.txt -silent vs dnsx -d azqlab.lan -w /home/runner/work/azhaq/azhaq/bench/.work/subdomains-top1million-5000.txt -r 127.0.0.1:39231 -silent)
+  PASS  [default] dns brute force: time ≤ 1.05× the reference's  (azhaq 0.2s, reference 0.9s (the median of 3 below 20 s, one run above) | azhaq dns -d azqlab.lan -w /home/runner/work/azhaq/azhaq/bench/.work/subdomains-top1million-5000.txt -resolvers /home/runner/work/azhaq/azhaq/bench/.work/brute/resolvers.txt -silent vs dnsx -d azqlab.lan -w /home/runner/work/azhaq/azhaq/bench/.work/subdomains-top1million-5000.txt -r 127.0.0.1:39231 -silent)
+  PASS  [default] wildcard zone: no fake hosts  (3 of 3 real names found, 0 fake (dnsx without wildcard filtering reports 50))
+  PASS  [default] dns record types: results ≥ the reference's, confirmed by the zone the bench serves (a name and type it holds)  (azhaq 12, reference 12; 32 names, 9 types; queries received azhaq 289, dnsx 523; time ×0.04 of the reference, memory ×0.95 of the reference (43 MB against 45 MB) | azhaq dns -l /home/runner/work/azhaq/azhaq/bench/.work/dns/names.txt -resolvers /home/runner/work/azhaq/azhaq/bench/.work/dns/resolvers.txt -json -silent -a -aaaa -cname -mx -ns -txt -srv -caa -soa vs dnsx -l /home/runner/work/azhaq/azhaq/bench/.work/dns/names.txt -r 127.0.0.1:36677 -json -silent -a -aaaa -cname -mx -ns -txt -srv -caa -soa)
+  PASS  [default] dns record types: time ≤ 1.05× the reference's  (azhaq 0.0s, reference 0.7s (the median of 3 below 20 s, one run above) | azhaq dns -l /home/runner/work/azhaq/azhaq/bench/.work/dns/names.txt -resolvers /home/runner/work/azhaq/azhaq/bench/.work/dns/resolvers.txt -json -silent -a -aaaa -cname -mx -ns -txt -srv -caa -soa vs dnsx -l /home/runner/work/azhaq/azhaq/bench/.work/dns/names.txt -r 127.0.0.1:36677 -json -silent -a -aaaa -cname -mx -ns -txt -srv -caa -soa)
+  PASS  [default] dns record types: azhaq's JSON values equal dnsx's  (0 differences [])
+  PASS  [default] dns -ptr: results ≥ the reference's, confirmed by the zone's PTR records  (azhaq 2, reference 2; azhaq [app.bench.lan www.bench.lan], dnsx [app.bench.lan www.bench.lan]; time ×0.02 of the reference, memory ×0.00 of the reference (0 MB against 44 MB) | azhaq dns -l /home/runner/work/azhaq/azhaq/bench/.work/dns/ips.txt -resolvers /home/runner/work/azhaq/azhaq/bench/.work/dns/resolvers.txt -ptr -json -silent vs dnsx -l /home/runner/work/azhaq/azhaq/bench/.work/dns/ips.txt -r 127.0.0.1:36677 -ptr -json -silent)
+  PASS  [default] dns -ptr: time ≤ 1.05× the reference's  (azhaq 0.0s, reference 0.6s (the median of 3 below 20 s, one run above) | azhaq dns -l /home/runner/work/azhaq/azhaq/bench/.work/dns/ips.txt -resolvers /home/runner/work/azhaq/azhaq/bench/.work/dns/resolvers.txt -ptr -json -silent vs dnsx -l /home/runner/work/azhaq/azhaq/bench/.work/dns/ips.txt -r 127.0.0.1:36677 -ptr -json -silent)
+  PASS  [polite] subs -live vulnweb.com: results ≥ the reference's, confirmed by a name resolving at 9.9.9.9 or 208.67.222.222 (A, AAAA or CNAME)  (azhaq 0, reference 0; old bar: reference found none; azhaq printed 3, subfinder 518 names, dnsx 1 live; azhaq 0, reference 0 confirmed, both 0; subfinder 73s + dnsx 58s; time ×1.29 of the reference, memory ×1.35 of the reference (63 MB against 47 MB) [azhaq finished with failures or was stopped: exit status 3 {"type":"summary","command":"subs","version":"0.14.1-0.20261103181129-5508e6d075f0+dirty","complete":false,"exit":3,"results":3,"counts":{"DNS-con…] | azhaq subs -d vulnweb.com -live -json -silent -resolvers /home/runner/work/azhaq/azhaq/bench/.work/domains/resolvers.txt -dns-rate 10 vs subfinder -d vulnweb.com -silent -json -cs | dnsx -l /home/runner/work/azhaq/azhaq/bench/.work/domains/vulnweb.com-polite-names.txt -silent -a -aaaa -cname -r 1.1.1.1,8.8.8.8 -rl 10)
+  FAIL  [polite] subs -live vulnweb.com: time ≤ 1.05× the reference's  (azhaq 167.9s, reference 130.7s (the median of 3 below 20 s, one run above) | azhaq subs -d vulnweb.com -live -json -silent -resolvers /home/runner/work/azhaq/azhaq/bench/.work/domains/resolvers.txt -dns-rate 10 vs subfinder -d vulnweb.com -silent -json -cs | dnsx -l /home/runner/work/azhaq/azhaq/bench/.work/domains/vulnweb.com-polite-names.txt -silent -a -aaaa -cname -r 1.1.1.1,8.8.8.8 -rl 10)
+  PASS  [polite] subs -live vulnweb.com: every confirmed live name subfinder | dnsx finds is in azhaq's list or its source is named as failed  (0 gaps, 0 unexplained: [])
+  PASS  [polite] subs -live vulnweb.com: rows are DNS-confirmed, raw candidates are counted apart and the confirmed set reaches the reference's  (raw candidates 676, DNS-confirmed 3, reference confirmed 0: [])
+  PASS  [polite] subs -live vulnweb.com: raw candidates reach the names the reference listed  (azhaq 676 raw candidates, subfinder 518 names)
+  PASS  [polite] subdomain sources: no silent zeros (vulnweb.com)  (every empty result is a failure flagged as error or degraded, or a zero every source answered)
+  PASS  watch: a deploy that changes routes is reported as expected.md says, and no deploy is "no change"  (azhaq watch -db DB -- -url http://127.0.0.1:38237/ -allow HOST: v1, v1 again, then v2; 4 changes after the deploy: fields PUT /api/profile +role; gone /api/legacy/report; methods /api/orders/{id} +DELETE; new POST /api/v2/export fields format,userId)
+
+20 of 21 checks pass
+  note: azhaq on vulnweb.com (polite): exit status 3 {"type":"summary","command":"subs","version":"0.14.1-0.20261103181129-5508e6d075f0+dirty","complete":false,"exit":3,"results":3,"counts":{"DNS-confirmed":3,"collected":99,"did not resolve":620,"from sources":677,"no answer":53,"off-by-default failed":0,"raw candidates":676,"resolved from sources":3,"sources answered":12,"sources asked":14,"sources failed":2,"the domain itself":1},"seconds":167.912,"requests":0,"dns_queries":2681,"run_id":"166597cd-2e60-4dee-a86f-f7b74f31f701","failures":55,"failed":[{"collector":"azhaq-dns","error":"timeout","retryable":true,"count":53,"targets":["testphp.vulnweb.com","testhtml5.vulnweb.com","testasp.vulnweb.com","html5.vulnweb.com","php.vulnweb.com","testhmtml5.vulnweb.com","estphp.vulnweb.com","virus.vulnweb.com","www.test.php.vulnweb.com","testpphp.vulnweb.com","rest.vulnweb.com","test.vulnweb.com","zzz.vulnweb.com","www.gd5.vulnweb.com","3-3-69.us-east-2.compute.vulnweb.com","jabatestphp.vulnweb.com","infolab.vulnweb.com","ec2-54-171-215-132.eu-west-1.compute.vulnweb.com","h4.vulnweb.com","ec2-3-211-45-81.compute-1.vulnweb.com","user.vulnweb.com","search-es-spoon-kr-api-product-eltsagishrb2ve2pcda6i46a6u.ap-northeast-1.es.vulnweb.com","january2009edtestasp.vulnweb.com","s3.us-gov-east-1.vulnweb.com","news.vulnweb.com","teste.vulnweb.com","testaps.vulnweb.com","bing.com.vulnweb.com","webtierssl-1657747348.us-west-1.elb.vulnweb.com","29cd17f3faa.elb.us-east-1.vulnweb.com","markus.vulnweb.com","gd.vulnweb.com","zz.vulnweb.com","remus.vulnweb.com","httptestasp.vulnweb.com","0-30.ap-northeast-1.compute.vulnweb.com","dev.vulnweb.com","digital-defense-load-balancer-1314805317.us-east-1.elb.vulnweb.com","9ac83b4d29c705000a7dc1-1759549683.eu-west-1.elb.vulnweb.com","www.textphp.vulnweb.com","129.eu-west-1.compute.vulnweb.com","testnet.vulnweb.com","janus-go.hkgf3k.ng.0001.apse1.cache.vulnweb.com","ec2-13-210-145-106.ap-southeast-2.compute.vulnweb.com","pic.vulnweb.com","gd3.vulnweb.com","ec2-35-164-39-246.us-west-2.compute.vulnweb.com","cs.vulnweb.com","i.vulnweb.com","testphpnet.vulnweb.com","baidu.vulnweb.com","sites.vulnweb.com","testmetasploitable.vulnweb.com"]},{"collector":"azhaq-subdomains","source":"waybackarchive","error":"timeout","retryable":true,"count":1,"targets":["vulnweb.com"],"partial":true},{"collector":"azhaq-subdomains","source":"commoncrawl","error":"HTTP 502","retryable":true,"count":1,"targets":["vulnweb.com"],"partial":true}],"degraded":true,"degraded_by":[{"source":"commoncrawl","error":"HTTP 502","domains":1},{"source":"waybackarchive","error":"timeout","domains":1}],"sources":{"asked":14,"answered":12,"failed":2,"names":{"anubis":14,"certspotter":0,"commoncrawl":0,"crtname":18,"crtsh":0,"hackertarget":6,"hudsonrock":7,"rapiddns":87,"scanmalware":1,"shodanct":0,"sitedossier":0,"subdomaincenter":500,"thc":13,"waybackarchive":0},"requests":{"anubis":1,"certspotter":1,"commoncrawl":2,"crtname":1,"crtsh":1,"hackertarget":1,"hudsonrock":1,"rapiddns":1,"scanmalware":3,"shodanct":1,"sitedossier":2,"subdomaincenter":2,"thc":1,"waybackarchive":1},"seconds":{"anubis":0.1,"certspotter":0.2,"commoncrawl":8.3,"crtname":0.5,"crtsh":13.5,"hackertarget":0.5,"hudsonrock":0.1,"rapiddns":1.4,"scanmalware":0.7,"shodanct":0.1,"sitedossier":1.7,"subdomaincenter":147.2,"thc":0.9,"waybackarchive":30},"failed_sources":{"commoncrawl":"unexpected status code 502 received from https://index.commoncrawl.org/CC-MAIN-2022-49-index?url=*.vulnweb.com","waybackarchive":"no answer in 30s (-source-timeout)"}},"notes":["vulnweb.com: crtsh gave a partial answer: crt.sh database: pq: no more connections allowed (max_client_conn); asked the JSON API","vulnweb.com: subdomaincenter took 147 s, the next slowest source 30 s, so it held the run (-source-timeout bounds each source: a shorter one ends the wait sooner and its names are then missing; -exclude-sources subdomaincenter drops it; -v lists them all)","vulnweb.com: checking the 1154 names history, subdomaincenter guessed in DNS took 147 s, before they were kept or dropped (-dns-rate paces it; -exclude-sources history,subdomaincenter leaves them out)","vulnweb.com: subdomaincenter was asked for 1 sample of its guesses (the first is what subfinder | dnsx checks) and not again: another sample would not fit the 20 s budget for further samples; up to 11 more samples left untaken; -guess-samples N takes up to N samples while each finds a new name that resolves or the pool is not yet covered, with no time budget","no answer from 8.8.8.8 for 27 names (timed out), 1.1.1.1 for 26 names (timed out): those names are left out, neither live nor dead; ask again with other -resolvers or a lower -dns-rate","sources: history 99, rapiddns 87, crtname 18, anubis 14, thc 12, hudsonrock 7, hackertarget 6, subdomaincenter 3, +1 more","count: 677 from the sources − 1 the domain itself, not a subdomain − 620 did not resolve − 53 no answer from the resolvers = 3 printed","tiers: 676 raw candidates (what the sources gave; a row's sources say who); 3 DNS-confirmed (resolved); HTTP-confirmed not asked (-http): a candidate is never counted as confirmed","name history /home/runner/work/azhaq/azhaq/bench/.work/data-20261103T181340/names/vulnweb.com.json: 180 names read, 100 written; it keeps the names the sources gave and the history's own that resolved, not -w, -permute or CNAME-target names; -no-history leaves it alone","coverage (raw candidates): what the independent sources know, not every name that exists. Their pool holds about 592 names and this run has 100 of them","coverage (DNS-confirmed): what the independent sources know, not every name that exists. Their pool holds about 3 names and this run has 3 of them"],"cost":{"estimate":{"source_queries":14},"estimate_at_least":true,"actual":{"dns_queries":2681,"source_queries":19},"stages":[{"stage":"sources","estimate":{"source_queries":14},"estimate_at_least":true,"not_counted":"names and archived URLs found are asked about too","actual":{"dns_queries":2077,"source_queries":19},"collectors":[{"collector":"azhaq-subdomains","estimate":{"source_queries":14},"actual":{"dns_queries":2077,"source_queries":19}}]},{"stage":"other","actual":{"dns_queries":604}}]}}
+
+1 reference runs replayed from today's (their times are that run's); -fresh runs them again
+
+record bench/history/2026-11-03T182042-5508e6d.json
+exit status 1
+=== parts/bench-p17.log
+bench: building azhaq
+bench: polite: domains/hackerone.com
+bench: domain hackerone.com
+bench: polite: domains/hackerone.com took 46s
+bench: polite: brute
+bench: polite: brute took 60s
+bench: once: secrets took 0s
+bench: http://127.0.0.1:3001 does not answer
+bench: claims: mcp budget 60 unpaced: true
+bench: claims: mcp budget 2 unpaced: true
+bench: claims: case 8 took 5s
+bench: once: lab took 0s
+bench: once: docs took 0s
+
+polite (HTTP 5/s, DNS 10/s, ports 100/s): subs -live  azhaq live (confirmed)  azhaq s  subfinder | dnsx live (confirmed)  time s   both  gaps
+hackerone.com                                         14                      30 59MB  12                                 15 46MB  12    0
+sources                                               subdomain sources
+hackerone.com                                         7 answered (asked 0, answered 0, failed 0), 0 failed
+
+polite (HTTP 5/s, DNS 10/s, ports 100/s): DNS brute force (azqlab.lan)  azhaq  dnsx  shared  azhaq time  dnsx time
+310 words                                                               9      9     9       29.2s 45MB  30.6s 45MB
+
+claims (5s)                                            pace     summary  ledger  counter  pass
+mcp budget 60 (first azhaq_map)                        unpaced  60       60      60       true
+mcp budget 60 (second azhaq_map)                       unpaced  0        0       0        true
+mcp budget 60 (azhaq_ports after the budget is spent)  unpaced  0        0       0        true
+mcp budget 2 (two calls at once)                       unpaced  2        2       2        true
+
+checks
+  PASS  [polite] subs -live hackerone.com: results ≥ the reference's, confirmed by a name resolving at 9.9.9.9 or 208.67.222.222 (A, AAAA or CNAME)  (azhaq 14, reference 12; old bar: 12 of 12 = 100%; azhaq printed 14, subfinder 32 names, dnsx 12 live; azhaq 14, reference 12 confirmed, both 12; subfinder 12s + dnsx 4s; time ×1.98 of the reference, memory ×1.29 of the reference (59 MB against 46 MB) | azhaq subs -d hackerone.com -live -json -silent -resolvers /home/runner/work/azhaq/azhaq/bench/.work/domains/resolvers.txt -dns-rate 10 vs subfinder -d hackerone.com -silent -json -cs | dnsx -l /home/runner/work/azhaq/azhaq/bench/.work/domains/hackerone.com-polite-names.txt -silent -a -aaaa -cname -r 1.1.1.1,8.8.8.8 -rl 10)
+  FAIL  [polite] subs -live hackerone.com: time ≤ 1.05× the reference's  (azhaq 30.3s, reference 15.3s (the median of 3 below 20 s, one run above) | azhaq subs -d hackerone.com -live -json -silent -resolvers /home/runner/work/azhaq/azhaq/bench/.work/domains/resolvers.txt -dns-rate 10 vs subfinder -d hackerone.com -silent -json -cs | dnsx -l /home/runner/work/azhaq/azhaq/bench/.work/domains/hackerone.com-polite-names.txt -silent -a -aaaa -cname -r 1.1.1.1,8.8.8.8 -rl 10)
+  PASS  [polite] subs -live hackerone.com: every confirmed live name subfinder | dnsx finds is in azhaq's list or its source is named as failed  (0 gaps, 0 unexplained: [])
+  PASS  [polite] subs -live hackerone.com: rows are DNS-confirmed, raw candidates are counted apart and the confirmed set reaches the reference's  (raw candidates 41, DNS-confirmed 14, reference confirmed 12: [])
+  PASS  [polite] subs -live hackerone.com: raw candidates reach the names the reference listed  (azhaq 41 raw candidates, subfinder 32 names)
+  PASS  [polite] subdomain sources: no silent zeros (hackerone.com)  (every empty result is a failure flagged as error or degraded, or a zero every source answered)
+  PASS  [polite] dns brute force: results ≥ the reference's, confirmed by the lab resolver, asked directly by the bench (A, AAAA or CNAME)  (azhaq 9, reference 9; old bar: 9 of 9 = 100%; azhaq [api.azqlab.lan app.azqlab.lan dev.azqlab.lan mail.azqlab.lan ns1.azqlab.lan ns2.azqlab.lan staging.azqlab.lan vpn.azqlab.lan www.azqlab.lan], dnsx [api.azqlab.lan app.azqlab.lan dev.azqlab.lan mail.azqlab.lan ns1.azqlab.lan ns2.azqlab.lan staging.azqlab.lan vpn.azqlab.lan www.azqlab.lan]; 310 words on azqlab.lan; time ×0.95 of the reference, memory ×0.99 of the reference (45 MB against 45 MB) | azhaq dns -d azqlab.lan -w /home/runner/work/azhaq/azhaq/bench/.work/brute/words-polite.txt -resolvers /home/runner/work/azhaq/azhaq/bench/.work/brute/resolvers.txt -silent -dns-rate 10 vs dnsx -d azqlab.lan -w /home/runner/work/azhaq/azhaq/bench/.work/brute/words-polite.txt -r 127.0.0.1:45821 -silent -rl 10)
+  PASS  [polite] dns brute force: time ≤ 1.05× the reference's  (azhaq 29.2s, reference 30.6s (the median of 3 below 20 s, one run above) | azhaq dns -d azqlab.lan -w /home/runner/work/azhaq/azhaq/bench/.work/brute/words-polite.txt -resolvers /home/runner/work/azhaq/azhaq/bench/.work/brute/resolvers.txt -silent -dns-rate 10 vs dnsx -d azqlab.lan -w /home/runner/work/azhaq/azhaq/bench/.work/brute/words-polite.txt -r 127.0.0.1:45821 -silent -rl 10)
+  PASS  secrets: everything jsluice finds in the planted script, and more  (azhaq 12 values, jsluice 4, shared 4)
+  PASS  claims: mcp budget 60 unpaced: summary = ledger = what arrived  (first azhaq_map: summary 60, ledger 60 (http 60), counter 60; second azhaq_map: summary 0, ledger 0 (), counter 0; azhaq_ports after the budget is spent: summary 0, ledger 0 (), counter 0; result: the request budget of this server (60) is spent; restart azhaq mcp with a larger -max-requests; together: summary 60, ledger 60, counter 60)
+  PASS  claims: mcp budget 2 unpaced: summary = ledger = what arrived  (two calls at once: summary 2, ledger 2 (http 2), counter 2; call 1: 0 (refused: budget spent); call 2: 2 ({"highlights":[{"coverage":"visited","key":"http://127.0.0.1:36275/","role":"app","status":200,"title":"OWASP Juice Shop…))
+  PASS  lab: ports -pu finds the DNS lab's UDP port open  (azhaq ports -host 127.0.0.1 -p none -pu top,45821: 1 rows)
+  PASS  lab: subs -w -live gives the names with an address or a CNAME, as dnsx -a -cname lists them  (10 names resolve at the lab, azhaq printed 10; missing [], extra []; azhaq subs -d azqlab.lan -w WORDS -resolvers LAB -live)
+  PASS  lab: subs -live marks a name with a CNAME and no address as cname_only, and no other  (names wrongly marked or unmarked: []; azhaq subs -d azqlab.lan -w WORDS -resolvers LAB -live -json)
+  PASS  lab: a wildcard subzone gives only its real name  (azhaq dns -d wild.azqlab.lan -w WORDS: [real.wild.azqlab.lan] (the lab answers 5 for every label; only real.wild differs))
+  PASS  lab: run -domain -passive names the dangling CNAMEs (assets, docs, old-shop)  (takeover candidates named: [assets docs old-shop]; exit 0)
+  PASS  docs: no public doc says an active option needs -allow or a scope, or that requests are GETs only (without HEAD, or in a plan or an MCP description)  (0 lines: [])
+  PASS  docs: README's 'Latest run (date, vX)' names the newest release (CHANGELOG) and is not older than the tag  (README "0.14.0" on 2026-11-01, CHANGELOG newest "0.14.0", latest tag "0.14.0", newest bench record 2026-11-01)
+
+17 of 18 checks pass
+
+record bench/history/2026-11-03T181623-5508e6d.json
+exit status 1
+=== parts/bench-p18.log
+bench: building azhaq
+bench: starting docker apps
+bench: default: dirs
+bench: default: dirs took 171s
+bench: once: scale took 14s
+bench: http://127.0.0.1:5030 does not answer
+bench: claims: run -login unpaced: true
+bench: claims: run -login rate 10: true
+bench: claims: run -login rate 2: true
+bench: claims: run -login -browser unpaced: true
+bench: claims: run -login -browser rate 10: true
+bench: claims: run -login -browser rate 2: true
+bench: claims: case 4 took 125s
+
+default flags: paths (4750 words, 2 apps)  azhaq  ffuf -ac  shared  false positives  time
+hits                                       22     22        22      2 / 2            24.4s 53MB / 24.1s 23MB
+
+scale (juice-shop, 733 URLs in one run)  URLs as one run  detail
+-max-requests 100, resumed               true             2 processes, at most 100 requests received from one, 192 in all (one run 158)
+kill -9, resumed                         true             killed after 0.9s
+two workers                              true             165 tasks on the workers, 3.7s (one process 2.8s)
+
+claims (125s)        pace     summary  ledger  counter  pass
+run -login           unpaced  97       97      97       true
+run -login           rate 10  97       97      97       true
+run -login           rate 2   60       60      60       true
+run -login -browser  unpaced  118      118     118      true
+run -login -browser  rate 10  118      118     118      true
+run -login -browser  rate 2   60       60      60       true
+
+checks
+  PASS  [default] dirs: results ≥ the reference's, confirmed by a request that is not the app's catch-all answer  (azhaq 20, reference 20; old bar: 22 of 22 = 100%; hits azhaq 22, ffuf 22, shared 22; 4750 words, 2 apps; time ×1.01 of the reference, memory ×2.32 of the reference (53 MB against 23 MB); ffuf only [] | azhaq dirs -u http://127.0.0.1:5102/ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -silent vs ffuf -u http://127.0.0.1:5102/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -ac -s)
+  PASS  [default] dirs: time ≤ 1.05× the reference's  (azhaq 24.4s, reference 24.1s (the median of 3 below 20 s, one run above) | azhaq dirs -u http://127.0.0.1:5102/ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -silent vs ffuf -u http://127.0.0.1:5102/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -ac -s)
+  PASS  [default] dirs: no more false positives than ffuf  (hits that answer like a missing path: azhaq 2, ffuf 2)
+  PASS  scale: a run stopped by -max-requests and resumed maps everything one run maps  (2 processes of at most 100 requests (Juice Shop received at most 100 from one); 735 URLs, one run 733, 0 missing)
+  FAIL  scale: a stopped and resumed run sends at most 10% more than one run  (192 requests over 2 processes, one run 158)
+  PASS  scale: a run killed with SIGKILL and resumed maps everything one run maps  (killed after 0.9s; 751 URLs, one run 733)
+  PASS  scale: a run shared with two workers maps everything one run maps  (733 URLs, one run 733; the workers ran 165 tasks)
+  PASS  claims: run -login unpaced: summary = ledger = what arrived  (summary 97, ledger 97 (chrome 10, http 87), counter 97)
+  PASS  claims: run -login rate 10: summary = ledger = what arrived  (summary 97, ledger 97 (chrome 10, http 87), counter 97)
+  PASS  claims: run -login rate 2: summary = ledger = what arrived  (summary 60, ledger 60 (chrome 8, http 52), counter 60)
+  PASS  claims: run -login -browser unpaced: summary = ledger = what arrived  (summary 118, ledger 118 (chrome 31, http 87), counter 118)
+  PASS  claims: run -login -browser rate 10: summary = ledger = what arrived  (summary 118, ledger 118 (chrome 31, http 87), counter 118)
+  PASS  claims: run -login -browser rate 2: summary = ledger = what arrived  (summary 60, ledger 60 (chrome 19, http 41), counter 60)
+
+12 of 13 checks pass
+  note: azhaq on scale (): exit status 4   exit 4: stopped by a limit with work left
+
+record bench/history/2026-11-03T182004-5508e6d.json
+exit status 1
+=== parts/bench-p2.log
+bench: building azhaq
+bench: default: domains/tesla.com
+bench: domain tesla.com
+bench: default: domains/tesla.com took 580s
+
+default flags: subs -live  azhaq live (confirmed)  azhaq s  subfinder | dnsx live (confirmed)  time s    both  gaps
+tesla.com                  201                     30 72MB  32                                 146 50MB  30    2
+sources                    subdomain sources
+tesla.com                  7 answered (answered 0, failed 0, names 0), 0 failed
+
+checks
+  PASS  [default] subs -live tesla.com: results ≥ the reference's, confirmed by a name resolving at 9.9.9.9 or 208.67.222.222 (A, AAAA or CNAME)  (azhaq 201, reference 32; old bar: 30 of 32 = 94%; azhaq printed 519, subfinder 1806 names, dnsx 97 live; azhaq 201, reference 32 confirmed, both 30; subfinder 31s + dnsx 115s; time ×0.21 of the reference, memory ×1.45 of the reference (72 MB against 50 MB) | azhaq subs -d tesla.com -live -json -silent -resolvers /home/runner/work/azhaq/azhaq/bench/.work/domains/resolvers.txt vs subfinder -d tesla.com -silent -json -cs | dnsx -l /home/runner/work/azhaq/azhaq/bench/.work/domains/tesla.com-default-names.txt -silent -a -aaaa -cname -r 1.1.1.1,8.8.8.8)
+  PASS  [default] subs -live tesla.com: time ≤ 1.05× the reference's  (azhaq 30.2s, reference 145.6s (the median of 3 below 20 s, one run above) | azhaq subs -d tesla.com -live -json -silent -resolvers /home/runner/work/azhaq/azhaq/bench/.work/domains/resolvers.txt vs subfinder -d tesla.com -silent -json -cs | dnsx -l /home/runner/work/azhaq/azhaq/bench/.work/domains/tesla.com-default-names.txt -silent -a -aaaa -cname -r 1.1.1.1,8.8.8.8)
+  PASS  [default] subs -live tesla.com: every confirmed live name subfinder | dnsx finds is in azhaq's list or its source is named as failed  (2 gaps, 0 unexplained: [akamai-apigateway-mytcore-prdsvc.tesla.com (subfinder: subdomaincenter) apigateway-supplierprofileapi.tesla.com (subfinder: subdomaincenter)])
+  FAIL  [default] subs -live tesla.com: rows are DNS-confirmed, raw candidates are counted apart and the confirmed set reaches the reference's  (raw candidates 1400, DNS-confirmed 519, reference confirmed 32: [2 names the reference's lookups confirmed are not DNS-confirmed here])
+  FAIL  [default] subs -live tesla.com: raw candidates reach the names the reference listed  (azhaq 1400 raw candidates, subfinder 1806 names)
+  PASS  [default] subdomain sources: no silent zeros (tesla.com)  (every empty result is a failure flagged as error or degraded, or a zero every source answered)
+
+4 of 6 checks pass
+
+record bench/history/2026-11-03T182426-5508e6d.json
+exit status 1
+=== parts/bench-p3.log
+bench: building azhaq
+bench: starting docker apps
+bench: default: domains/hackerone.com
+bench: domain hackerone.com
+bench: default: domains/hackerone.com took 79s
+bench: polite: dirs
+bench: polite: dirs took 212s
+
+default flags: subs -live  azhaq live (confirmed)  azhaq s  subfinder | dnsx live (confirmed)  time s   both  gaps
+hackerone.com              14                      30 58MB  4                                  49 50MB  4     0
+sources                    subdomain sources
+hackerone.com              7 answered (answered 0, failed 0, names 0), 0 failed
+
+polite (HTTP 5/s, DNS 10/s, ports 100/s): paths (257 words, 2 apps)  azhaq  ffuf -ac  shared  false positives  time
+hits                                                                 13     13        13      0 / 0            104.0s 45MB / 103.0s 19MB
+
+checks
+  PASS  [default] subs -live hackerone.com: results ≥ the reference's, confirmed by a name resolving at 9.9.9.9 or 208.67.222.222 (A, AAAA or CNAME)  (azhaq 14, reference 4; old bar: 4 of 4 = 100%; azhaq printed 14, subfinder 527 names, dnsx 4 live; azhaq 14, reference 4 confirmed, both 4; subfinder 31s + dnsx 18s; time ×0.61 of the reference, memory ×1.16 of the reference (58 MB against 50 MB) | azhaq subs -d hackerone.com -live -json -silent -resolvers /home/runner/work/azhaq/azhaq/bench/.work/domains/resolvers.txt vs subfinder -d hackerone.com -silent -json -cs | dnsx -l /home/runner/work/azhaq/azhaq/bench/.work/domains/hackerone.com-default-names.txt -silent -a -aaaa -cname -r 1.1.1.1,8.8.8.8)
+  PASS  [default] subs -live hackerone.com: time ≤ 1.05× the reference's  (azhaq 29.8s, reference 48.6s (the median of 3 below 20 s, one run above) | azhaq subs -d hackerone.com -live -json -silent -resolvers /home/runner/work/azhaq/azhaq/bench/.work/domains/resolvers.txt vs subfinder -d hackerone.com -silent -json -cs | dnsx -l /home/runner/work/azhaq/azhaq/bench/.work/domains/hackerone.com-default-names.txt -silent -a -aaaa -cname -r 1.1.1.1,8.8.8.8)
+  PASS  [default] subs -live hackerone.com: every confirmed live name subfinder | dnsx finds is in azhaq's list or its source is named as failed  (0 gaps, 0 unexplained: [])
+  PASS  [default] subs -live hackerone.com: rows are DNS-confirmed, raw candidates are counted apart and the confirmed set reaches the reference's  (raw candidates 41, DNS-confirmed 14, reference confirmed 4: [])
+  FAIL  [default] subs -live hackerone.com: raw candidates reach the names the reference listed  (azhaq 41 raw candidates, subfinder 527 names)
+  PASS  [default] subdomain sources: no silent zeros (hackerone.com)  (every empty result is a failure flagged as error or degraded, or a zero every source answered)
+  PASS  [polite] dirs: results ≥ the reference's, confirmed by a request that is not the app's catch-all answer  (azhaq 13, reference 13; old bar: 13 of 13 = 100%; hits azhaq 13, ffuf 13, shared 13; 257 words, 2 apps; time ×1.01 of the reference, memory ×2.38 of the reference (45 MB against 19 MB); ffuf only [] | azhaq dirs -u http://127.0.0.1:5102/ -w /home/runner/work/azhaq/azhaq/bench/.work/dirs-polite.txt -silent -rate 5 vs ffuf -u http://127.0.0.1:5102/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/dirs-polite.txt -ac -s -rate 5)
+  PASS  [polite] dirs: time ≤ 1.05× the reference's  (azhaq 104.0s, reference 103.0s (the median of 3 below 20 s, one run above) | azhaq dirs -u http://127.0.0.1:5102/ -w /home/runner/work/azhaq/azhaq/bench/.work/dirs-polite.txt -silent -rate 5 vs ffuf -u http://127.0.0.1:5102/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/dirs-polite.txt -ac -s -rate 5)
+  PASS  [polite] dirs: no more false positives than ffuf  (hits that answer like a missing path: azhaq 0, ffuf 0)
+
+8 of 9 checks pass
+
+record bench/history/2026-11-03T181910-5508e6d.json
+exit status 1
+=== parts/bench-p4.log
+bench: building azhaq
+bench: http://127.0.0.1:3001 does not answer
+bench: http://127.0.0.1:5002 does not answer
+bench: claims: roles unpaced: true
+bench: claims: roles rate 10: true
+bench: claims: roles rate 2: true
+bench: claims: roles -replay-writes put unpaced: true
+bench: claims: roles -replay-writes put rate 10: true
+bench: claims: roles -replay-writes put rate 2: true
+bench: claims: case 5 took 98s
+bench: claims: kill switch run rate 10: true
+bench: claims: kill switch run rate 2: true
+bench: claims: case 10 took 57s
+
+claims (154s)             pace     summary  ledger  counter  pass
+roles                     unpaced  168      168     168      true
+roles                     rate 10  180      180     180      true
+roles                     rate 2   60       60      60       true
+roles -replay-writes put  unpaced  161      161     161      true
+roles -replay-writes put  rate 10  175      175     175      true
+roles -replay-writes put  rate 2   60       60      60       true
+kill switch run (run)     rate 10  31       31      31       true
+kill switch run (resume)  rate 10  80       80      80       true
+kill switch run (run)     rate 2   6        6       6        true
+kill switch run (resume)  rate 2   80       80      80       true
+
+checks
+  PASS  claims: roles unpaced: summary = ledger = what arrived  (summary 168, ledger 168 (http 168), counter 168)
+  PASS  claims: roles rate 10: summary = ledger = what arrived  (summary 180, ledger 180 (http 180), counter 180)
+  PASS  claims: roles rate 2: summary = ledger = what arrived  (summary 60, ledger 60 (http 60), counter 60)
+  PASS  claims: roles -replay-writes put unpaced: summary = ledger = what arrived  (summary 161, ledger 161 (http 161), counter 161)
+  PASS  claims: roles -replay-writes put rate 10: summary = ledger = what arrived  (summary 175, ledger 175 (http 175), counter 175)
+  PASS  claims: roles -replay-writes put rate 2: summary = ledger = what arrived  (summary 60, ledger 60 (http 60), counter 60)
+  PASS  claims: kill switch run rate 10: summary = ledger = what arrived  (run: summary 31, ledger 31 (http 31), counter 31; last request 0.00s after the file, exit 4; resume: summary 80, ledger 80 (http 80), counter 80; together: summary 111, ledger 111, counter 111)
+  PASS  claims: kill switch run rate 2: summary = ledger = what arrived  (run: summary 6, ledger 6 (http 6), counter 6; last request 0.00s after the file, exit 4; resume: summary 80, ledger 80 (http 80), counter 80; together: summary 86, ledger 86, counter 86)
+
+8 of 8 checks pass
+
+record bench/history/2026-11-03T181721-5508e6d.json
+=== parts/bench-p5.log
+bench: building azhaq
+bench: starting docker apps
+bench: default: params
+bench: default: params took 152s
+bench: once: tenants took 28s
+bench: http://127.0.0.1:5002 does not answer
+bench: http://127.0.0.1:3001 does not answer
+bench: claims: dirs unpaced: true
+bench: claims: dirs rate 10: true
+bench: claims: dirs rate 2: true
+bench: claims: fuzz unpaced: true
+bench: claims: fuzz rate 10: true
+bench: claims: fuzz rate 2: true
+bench: claims: params unpaced: true
+bench: claims: params rate 10: true
+bench: claims: params rate 2: true
+bench: claims: case 6 took 114s
+
+default flags: parameters (7 pages, 6453 names)  azhaq             arjun             shared  time
+found                                            12                11                11      1.2s 52MB / 5.5s 44MB
+planted truth (8)                                8 right, 0 wrong  8 right, 0 wrong          
+
+claims (114s)  pace     summary  ledger  counter  pass
+dirs           unpaced  504      504     504      true
+dirs           rate 10  200      200     200      true
+dirs           rate 2   60       60      60       true
+fuzz           unpaced  506      506     506      true
+fuzz           rate 10  200      200     200      true
+fuzz           rate 2   60       60      60       true
+params         unpaced  8        8       8        true
+params         rate 10  8        8       8        true
+params         rate 2   8        8       8        true
+
+roles (multi-tenant fixture)  rows as expected  wrong  extra  signed-in logouts  time
+anon → member → owner         6/6               0      0      5                  28.5s
+
+checks
+  PASS  [default] params: ginandjuice.shop (2 pages, 1,000 names, 5 requests per second) time ≤ 1.05× arjun's  (azhaq 10.8s, arjun 21.1s)
+  PASS  [default] params: results ≥ the reference's, confirmed by the planted server's own list of the parameters it reads (wrong names count against)  (azhaq 8, reference 8; old bar: 11 of 11 = 100%; planted pages: azhaq 8 right 0 wrong, arjun 8 right 0 wrong, of 8; all pages azhaq 12, arjun 11, shared 11; time ×0.22 of the reference, memory ×1.19 of the reference (52 MB against 44 MB) | azhaq params -u https://ginandjuice.shop/blog/ -w /home/runner/work/azhaq/azhaq/bench/.work/params/gin-words.txt -silent -rate 5 vs arjun -u https://ginandjuice.shop/blog/ -w /home/runner/work/azhaq/azhaq/bench/.work/params/gin-words.txt -oJ /home/runner/work/azhaq/azhaq/bench/.work/params/arjun.json -q --disable-redirects --rate-limit 5)
+  PASS  [default] params: time ≤ 1.05× the reference's  (azhaq 1.2s, reference 5.5s (the median of 3 below 20 s, one run above) | azhaq params -u https://ginandjuice.shop/blog/ -w /home/runner/work/azhaq/azhaq/bench/.work/params/gin-words.txt -silent -rate 5 vs arjun -u https://ginandjuice.shop/blog/ -w /home/runner/work/azhaq/azhaq/bench/.work/params/gin-words.txt -oJ /home/runner/work/azhaq/azhaq/bench/.work/params/arjun.json -q --disable-redirects --rate-limit 5)
+  PASS  roles: anon → member → owner on a multi-tenant app, signed in with Chrome  (6/6 rows as expected; wrong []; extra []; /logout requested with a session 5 times (the session check signs in again) )
+  PASS  claims: dirs unpaced: summary = ledger = what arrived  (summary 504, ledger 504 (http 504), counter 504)
+  PASS  claims: dirs rate 10: summary = ledger = what arrived  (summary 200, ledger 200 (http 200), counter 200)
+  PASS  claims: dirs rate 2: summary = ledger = what arrived  (summary 60, ledger 60 (http 60), counter 60)
+  PASS  claims: fuzz unpaced: summary = ledger = what arrived  (summary 506, ledger 506 (http 506), counter 506)
+  PASS  claims: fuzz rate 10: summary = ledger = what arrived  (summary 200, ledger 200 (http 200), counter 200)
+  PASS  claims: fuzz rate 2: summary = ledger = what arrived  (summary 60, ledger 60 (http 60), counter 60)
+  PASS  claims: params unpaced: summary = ledger = what arrived  (summary 8, ledger 8 (http 8), counter 8)
+  PASS  claims: params rate 10: summary = ledger = what arrived  (summary 8, ledger 8 (http 8), counter 8)
+  PASS  claims: params rate 2: summary = ledger = what arrived  (summary 8, ledger 8 (http 8), counter 8)
+
+13 of 13 checks pass
+
+record bench/history/2026-11-03T181957-5508e6d.json
+=== parts/bench-p6.log
+bench: building azhaq
+bench: starting docker apps
+bench: polite: services
+bench: starting the services lab
+bench: polite: services took 203s
+bench: http://127.0.0.1:5013 does not answer
+bench: once: openapi took 62s
+
+polite (HTTP 5/s, DNS 10/s, ports 100/s): services (15 lab ports)  azhaq  nmap -sV  azhaq time  nmap time
+named right                                                        15     13        2.9s 45MB   142.4s 89MB
+with product and version                                           14     12                    
+
+checks
+  PASS  [polite] services (nmap -sV): results ≥ the reference's, confirmed by the lab's own list of what runs on each port (bench/services.yaml) and `ss` showing every port listening  (azhaq 15, reference 13; 15 ports; with a product and version: azhaq 14, nmap 12; azhaq missed []; nmap missed [11883 mosquitto (mqtt): "" 21211 memcached: "unknown"]; time ×0.02 of the reference, memory ×0.51 of the reference (45 MB against 89 MB) | azhaq ports -host 127.0.0.1 -p 16379,13306,15432,17017,11883,15682,21211,12222,10021,10025,18825,10389,10445,19200,10053 -json -silent -rate 100 vs nmap -sV -Pn -p 16379,13306,15432,17017,11883,15682,21211,12222,10021,10025,18825,10389,10445,19200,10053 -oX - 127.0.0.1 --max-rate 100)
+  PASS  [polite] services (nmap -sV): time ≤ 1.05× the reference's  (azhaq 2.9s, reference 142.4s (the median of 3 below 20 s, one run above) | azhaq ports -host 127.0.0.1 -p 16379,13306,15432,17017,11883,15682,21211,12222,10021,10025,18825,10389,10445,19200,10053 -json -silent -rate 100 vs nmap -sV -Pn -p 16379,13306,15432,17017,11883,15682,21211,12222,10021,10025,18825,10389,10445,19200,10053 -oX - 127.0.0.1 --max-rate 100)
+  PASS  [polite] services: azhaq names ≥ 90% of the lab's TCP services  (15 of 15)
+  PASS  openapi: the export of Juice Shop is a valid OpenAPI 3 document  (76 paths; 0 problems [])
+  PASS  openapi: the export of VAmPI is a valid OpenAPI 3 document  (12 paths; 0 problems [])
+  PASS  openapi: the export of DVGA is a valid OpenAPI 3 document  (2 paths; 0 problems [])
+  PASS  openapi: the export of duplicate /blog and /blog/ is a valid OpenAPI 3 document  (3 paths; 0 problems [])
+  PASS  openapi: the export of ginandjuice.shop is a valid OpenAPI 3 document  (16 paths; 0 problems [])
+
+8 of 8 checks pass
+
+record bench/history/2026-11-03T181904-5508e6d.json
+=== parts/bench-p7.log
+bench: building azhaq
+bench: starting docker apps
+bench: polite: params
+bench: polite: params took 185s
+bench: http://127.0.0.1:3001 does not answer
+bench: claims: run unpaced: true
+bench: claims: run rate 10: true
+bench: claims: run rate 2: true
+bench: claims: case 1 took 49s
+
+polite (HTTP 5/s, DNS 10/s, ports 100/s): parameters (3 pages, 6453 names)  azhaq             arjun             shared  time
+found                                                                       9                 9                 9       45.1s 45MB / 44.5s 36MB
+planted truth (8)                                                           8 right, 0 wrong  8 right, 0 wrong          
+
+claims (49s)  pace     summary  ledger  counter  pass
+run           unpaced  157      157     157      true
+run           rate 10  157      157     157      true
+run           rate 2   60       60      60       true
+
+checks
+  PASS  [polite] params: results ≥ the reference's, confirmed by the planted server's own list of the parameters it reads (wrong names count against)  (azhaq 8, reference 8; old bar: 9 of 9 = 100%; planted pages: azhaq 8 right 0 wrong, arjun 8 right 0 wrong, of 8; all pages azhaq 9, arjun 9, shared 9; time ×1.01 of the reference, memory ×1.26 of the reference (45 MB against 36 MB) | azhaq params -u http://127.0.0.1:3101/rest/products/search -w /home/runner/work/azhaq/azhaq/bench/.work/burp-parameter-names.txt -silent -rate 5 vs arjun -u http://127.0.0.1:3101/rest/products/search -w /home/runner/work/azhaq/azhaq/bench/.work/burp-parameter-names.txt -oJ /home/runner/work/azhaq/azhaq/bench/.work/params/arjun.json -q --disable-redirects --rate-limit 5)
+  PASS  [polite] params: time ≤ 1.05× the reference's  (azhaq 45.1s, reference 44.5s (the median of 3 below 20 s, one run above) | azhaq params -u http://127.0.0.1:3101/rest/products/search -w /home/runner/work/azhaq/azhaq/bench/.work/burp-parameter-names.txt -silent -rate 5 vs arjun -u http://127.0.0.1:3101/rest/products/search -w /home/runner/work/azhaq/azhaq/bench/.work/burp-parameter-names.txt -oJ /home/runner/work/azhaq/azhaq/bench/.work/params/arjun.json -q --disable-redirects --rate-limit 5)
+  PASS  claims: the counter forwards and logs a WebSocket upgrade (Juice Shop socket.io)  (answer "HTTP/1.1 101 Switching Protocols", logged 1 requests, upgrade flag true )
+  PASS  claims: run unpaced: summary = ledger = what arrived  (summary 157, ledger 157 (http 157), counter 157)
+  PASS  claims: run rate 10: summary = ledger = what arrived  (summary 157, ledger 157 (http 157), counter 157)
+  PASS  claims: run rate 2: summary = ledger = what arrived  (summary 60, ledger 60 (http 60), counter 60)
+
+6 of 6 checks pass
+
+record bench/history/2026-11-03T181839-5508e6d.json
+=== parts/bench-p8.log
+bench: building azhaq
+bench: starting docker apps
+bench: default: shots
+bench: http://127.0.0.1:5013 does not answer
+bench: http://127.0.0.1:3001 does not answer
+bench: http://127.0.0.1:5020 does not answer
+bench: http://127.0.0.1:5030 does not answer
+bench: http://127.0.0.1:5002 does not answer
+bench: default: shots took 100s
+bench: default: probe
+bench: probing 107 hosts
+bench: default: probe took 83s
+bench: claims: shots unpaced: true
+bench: claims: shots rate 2: true
+bench: claims: case 3 took 30s
+
+default flags: probe (107 hosts)  answered (confirmed)  shared  status  title  tech  all  favicon  cdn  time
+azhaq                             107 (105)             105     105     105    104   104  103/103  0/0  0.9s 87MB
+httpx                             105 (105)                                                             1.5s 218MB
+
+default flags: screenshots (8 targets)  azhaq  gowitness  azhaq time  gowitness time
+not blank                               8      6          4.6s 97MB   64.4s 237MB
+
+claims (30s)  pace     summary  ledger  counter  pass
+shots         unpaced  51       51      51       true
+shots         rate 2   49       49      49       true
+
+probe differences (azhaq/httpx), default
+  127.0.0.1:5020: status 200/200 title "Damn Vulnerable NodeJS Application"/"Damn Vulnerable NodeJS Application" tech [Bootstrap:3.3.7 BootstrapCDN:3.3.7 Express Node.js Showdown cdnjs jQuery:3.2.1]/[Bootstrap:3.3.7 BootstrapCDN:3.3.7 Cloudflare Express Node.js Showdown cdnjs jQuery:3.2.1]
+
+checks
+  PASS  [default] screenshots: results ≥ the reference's, confirmed by the image files: each decodes and is not one colour  (azhaq 8, reference 6; old bar: 8 of 6 = 133%; 8 targets; azhaq listed 8, gowitness wrote 6 files; time ×0.07 of the reference, memory ×0.41 of the reference (97 MB against 237 MB) | azhaq shots -l /home/runner/work/azhaq/azhaq/bench/.work/shots-181500-default/targets.txt -dir /home/runner/work/azhaq/azhaq/bench/.work/shots-181500-default/azhaq0 -silent -chrome-no-sandbox vs gowitness scan file -f /home/runner/work/azhaq/azhaq/bench/.work/shots-181500-default/targets.txt --chrome-path /usr/bin/google-chrome -s /home/runner/work/azhaq/azhaq/bench/.work/shots-181500-default/gowitness0 -q)
+  PASS  [default] screenshots: time ≤ 1.05× the reference's  (azhaq 4.6s, reference 64.4s (the median of 3 below 20 s, one run above) | azhaq shots -l /home/runner/work/azhaq/azhaq/bench/.work/shots-181500-default/targets.txt -dir /home/runner/work/azhaq/azhaq/bench/.work/shots-181500-default/azhaq0 -silent -chrome-no-sandbox vs gowitness scan file -f /home/runner/work/azhaq/azhaq/bench/.work/shots-181500-default/targets.txt --chrome-path /usr/bin/google-chrome -s /home/runner/work/azhaq/azhaq/bench/.work/shots-181500-default/gowitness0 -q)
+  PASS  [default] probe: results ≥ the reference's, confirmed by a GET to the host itself giving the status the tool reported  (azhaq 105, reference 105; old bar: 105 of 105 = 100%; 107 hosts (5 apps, the services lab's web ports, 100 local servers); answered azhaq 107, httpx 105, shared 105; time ×0.60 of the reference, memory ×0.40 of the reference (87 MB against 218 MB) | azhaq probe -l /home/runner/work/azhaq/azhaq/bench/.work/probe/hosts.txt -json -silent -favicon -fr vs httpx -l /home/runner/work/azhaq/azhaq/bench/.work/probe/hosts.txt -silent -json -fr -td -cdn -favicon -title -sc -no-color)
+  PASS  [default] probe: time ≤ 1.05× the reference's  (azhaq 0.9s, reference 1.5s (the median of 3 below 20 s, one run above) | azhaq probe -l /home/runner/work/azhaq/azhaq/bench/.work/probe/hosts.txt -json -silent -favicon -fr vs httpx -l /home/runner/work/azhaq/azhaq/bench/.work/probe/hosts.txt -silent -json -fr -td -cdn -favicon -title -sc -no-color)
+  PASS  [default] probe: status, title and tech agree with httpx on ≥ 95% of shared hosts  (all three 104/105 (status 105, title 105, tech 104; 0 redirects out of the site compared by their own status))
+  PASS  [default] probe public sites (5/s): results ≥ the reference's, confirmed by a GET to the site giving the status the tool reported (a redirect out of the site counts)  (azhaq 1, reference 1; [ginandjuice.shop testphp.vulnweb.com demo.testfire.net]; one run each; time ×0.48 of the reference, memory ×0.36 of the reference (82 MB against 225 MB) | azhaq probe -l /home/runner/work/azhaq/azhaq/bench/.work/probe/public.txt -json -silent -rate 5 -H User-Agent: azhaq-bench/1 (+https://github.com/lilsadfoqs/azhaq) -fr vs httpx -l /home/runner/work/azhaq/azhaq/bench/.work/probe/public.txt -silent -json -fr -title -sc -rl 5 -t 1 -H User-Agent: azhaq-bench/1 (+https://github.com/lilsadfoqs/azhaq) -no-color)
+  PASS  [default] probe public sites (5/s): time ≤ 1.05× the reference's  (azhaq 10.4s, reference 21.7s (the median of 3 below 20 s, one run above) | azhaq probe -l /home/runner/work/azhaq/azhaq/bench/.work/probe/public.txt -json -silent -rate 5 -H User-Agent: azhaq-bench/1 (+https://github.com/lilsadfoqs/azhaq) -fr vs httpx -l /home/runner/work/azhaq/azhaq/bench/.work/probe/public.txt -silent -json -fr -title -sc -rl 5 -t 1 -H User-Agent: azhaq-bench/1 (+https://github.com/lilsadfoqs/azhaq) -no-color)
+  PASS  [default] probe: every input is a row, a failure or a skip (rows + failed + skipped == inputs)  (6 distinct inputs: 6 rows, 0 failed or skipped in the summary, unaccounted [] (exit 0; azhaq probe -l LIST -json; the list holds a live host, a redirect to another input, a closed port, a raw TCP port, a name that does not resolve, a repeat, a URL))
+  PASS  claims: shots unpaced: summary = ledger = what arrived  (summary 51, ledger 51 (chrome 50, http 1), counter 51)
+  PASS  claims: shots rate 2: summary = ledger = what arrived  (summary 49, ledger 49 (chrome 48, http 1), counter 49)
+
+10 of 10 checks pass
+
+record bench/history/2026-11-03T181811-5508e6d.json
+=== parts/bench-p9.log
+bench: building azhaq
+bench: starting docker apps
+bench: default: services
+bench: starting the services lab
+bench: default: services took 206s
+bench: once: scope took 25s
+
+default flags: services (15 lab ports)  azhaq  nmap -sV  azhaq time  nmap time
+named right                             15     12        2.8s 46MB   145.4s 89MB
+with product and version                14     11                    
+
+checks
+  PASS  [default] services (nmap -sV): results ≥ the reference's, confirmed by the lab's own list of what runs on each port (bench/services.yaml) and `ss` showing every port listening  (azhaq 15, reference 12; 15 ports; with a product and version: azhaq 14, nmap 11; azhaq missed []; nmap missed [11883 mosquitto (mqtt): "" 21211 memcached: "unknown" 10053 coredns (tcp): "tcpwrapped"]; time ×0.02 of the reference, memory ×0.52 of the reference (46 MB against 89 MB) | azhaq ports -host 127.0.0.1 -p 16379,13306,15432,17017,11883,15682,21211,12222,10021,10025,18825,10389,10445,19200,10053 -json -silent vs nmap -sV -Pn -p 16379,13306,15432,17017,11883,15682,21211,12222,10021,10025,18825,10389,10445,19200,10053 -oX - 127.0.0.1)
+  PASS  [default] services (nmap -sV): time ≤ 1.05× the reference's  (azhaq 2.8s, reference 145.4s (the median of 3 below 20 s, one run above) | azhaq ports -host 127.0.0.1 -p 16379,13306,15432,17017,11883,15682,21211,12222,10021,10025,18825,10389,10445,19200,10053 -json -silent vs nmap -sV -Pn -p 16379,13306,15432,17017,11883,15682,21211,12222,10021,10025,18825,10389,10445,19200,10053 -oX - 127.0.0.1)
+  PASS  [default] services: azhaq names ≥ 90% of the lab's TCP services  (15 of 15)
+  PASS  scope: no request leaves the program's scope  (0 requests to the out-of-scope host (links, scripts, a redirect, a form, robots.txt; path, parameter, port and GraphQL modules on); 6 in-scope URLs mapped)
+  PASS  scope: no request leaves the program's scope with Chrome (-browser, -login, shots)  (0 requests to the out-of-scope host from run -browser (exit 0), run -login (exit 1: the sign-in form posts to the trap, so it is refused), shots (exit 0) and crawl -browser (exit 0))
+  PASS  watch: an unchanged app reports no change  (3 runs, 0 reported changes [])
+
+6 of 6 checks pass
+  note: azhaq on scope (): exit status 1 azhaq: -login http://127.0.0.1:46311/login: the sign-in went to 127.0.0.2, outside the scope: add it with -allow 127.0.0.2
+
+record bench/history/2026-11-03T181832-5508e6d.json
+=== join
+
+== default flags ==
+apps                      azhaq routes  known  shell  time   RSS    katana routes  known  shell  time   RSS
+juice-shop (crawl)        59            52/77  0      3.0s   101MB  5              1/77   0      14.7s  1480MB
+juice-shop (run)          103           70/77  0      3.8s   109MB  5              1/77   3      14.7s  1403MB
+vampi (crawl)             1             1/12   0      0.2s   72MB   1              1/12   0      10.4s  49MB
+vampi (run)               13            12/12  0      0.4s   78MB   1              1/12   0      10.4s  49MB
+ginandjuice.shop (crawl)  11            2/3    0      11.1s  90MB   14             2/3    0      20.6s  748MB
+ginandjuice.shop (run)    39            3/3    0      33.0s  101MB  14             2/3    0      20.6s  721MB
+
+with a browser (juice-shop)  routes  known  shell  time   RSS
+azhaq -browser               104     70/77  0      15.2s  113MB
+katana -headless             30      6/77   4      8.6s   80MB
+
+roles (juice-shop)         endpoints that differ  expected 401 → 200  time
+anon → user (token)        39                     2/2                 8.4s
+anon → user (-role-login)  41                     2/2                 34.0s
+
+wordlist (51 words)  azhaq hits  shell  ffuf -ac hits  shell  shared  ffuf time
+juice-shop           3           0      4              0      3       0.4s
+
+default flags: subs -live  azhaq live (confirmed)  azhaq s  subfinder | dnsx live (confirmed)  time s    both  gaps
+hackerone.com              14                      30 58MB  4                                  49 50MB   4     0
+tesla.com                  201                     30 72MB  32                                 146 50MB  30    2
+vulnweb.com                0                       30 63MB  0                                  98 51MB   0     0
+sources                    subdomain sources
+hackerone.com              7 answered (answered 0, failed 0, names 0), 0 failed
+tesla.com                  7 answered (answered 0, failed 0, names 0), 0 failed
+vulnweb.com                7 answered (names 0, requests 0, seconds 0), 0 failed
+
+default flags: urls (vulnweb.com)  azhaq  gau  gau's in azhaq  azhaq s  gau s
+URLs                               141    149  136             30 49MB  78 12MB
+
+default flags: DNS brute force (azqlab.lan)  azhaq            dnsx           shared  azhaq time  dnsx time
+5000 words                                   9                9              9       0.2s 49MB   0.9s 58MB
+wildcard zone, 50 words, 3 real              3 found, 0 fake  50 unfiltered                      
+
+default flags: dns record types  azhaq  dnsx  azhaq time  dnsx time  queries azhaq/dnsx
+32 names                         12     12    0.0s 43MB   0.7s 45MB  289 / 523
+
+default flags: probe (107 hosts)  answered (confirmed)  shared  status  title  tech  all  favicon  cdn  time
+azhaq                             107 (105)             105     105     105    104   104  103/103  0/0  0.9s 87MB
+httpx                             105 (105)                                                             1.5s 218MB
+
+default flags: paths (4750 words, 2 apps)  azhaq  ffuf -ac  shared  false positives  time
+hits                                       22     22        22      2 / 2            24.4s 53MB / 24.1s 23MB
+
+default flags: fuzz (4750 words)            azhaq hits (confirmed)  ffuf hits (confirmed)  shared  azhaq s    ffuf s     JSON report equal
+http://127.0.0.1:3101/ calibrated (-ac)     20 (18)                 20 (18)                20      22.2 51MB  21.6 23MB  true
+http://127.0.0.1:3101/ filtered (-fs 9984)  20 (18)                 20 (18)                20      21.9 51MB  21.6 23MB  -
+http://127.0.0.1:5102/ calibrated (-ac)     2 (2)                   2 (2)                  2       6.6 49MB   6.6 16MB   true
+http://127.0.0.1:5102/ filtered (-fs 205)   2 (2)                   2 (2)                  2       5.9 48MB   5.8 16MB   -
+
+default flags: parameters (7 pages, 6453 names)  azhaq             arjun             shared  time
+found                                            12                11                11      1.2s 52MB / 5.5s 44MB
+planted truth (8)                                8 right, 0 wrong  8 right, 0 wrong          
+
+default flags: ports (connect)                    azhaq  naabu  confirmed azhaq / naabu  azhaq time  naabu time
+scanme.nmap.org top-1000                          3      3      3 / 3                    2.0s 47MB   5.7s 68MB
+127.0.0.1 1-65535                                 3      3      3 / 3                    1.8s 62MB   133.4s 106MB
+127.0.0.0/28 33517,43563,45635,40121,43917,39505  4      4      4 / 4                    0.0s 45MB   2.4s 57MB
+
+default flags: ports, CPU (127.0.0.1 1-65535, -rate 10000)  azhaq  nmap -sT
+CPU seconds                                                 1.72   1.99
+time                                                        6.6s   6.6s
+open ports                                                  3      3
+
+default flags: services (15 lab ports)  azhaq  nmap -sV  azhaq time  nmap time
+named right                             15     12        2.8s 46MB   145.4s 89MB
+with product and version                14     11                    
+
+default flags: screenshots (8 targets)  azhaq  gowitness  azhaq time  gowitness time
+not blank                               8      6          4.6s 97MB   64.4s 237MB
+
+default flags: notify (6 messages, 2 providers)  azhaq  notify  azhaq time  notify time
+received at the stub                             6      6       5.0s 41MB   5.0s 25MB
+
+== polite (HTTP 5/s, DNS 10/s, ports 100/s) ==
+apps                      azhaq routes  known  shell  time   RSS   katana routes  known  shell  time   RSS
+juice-shop (crawl)        59            52/77  0      16.9s  97MB  5              1/77   0      17.7s  1629MB
+vampi (crawl)             1             1/12   0      0.2s   65MB  1              1/12   0      10.6s  49MB
+ginandjuice.shop (crawl)  11            2/3    0      11.2s  90MB  14             2/3    0      20.7s  731MB
+
+polite (HTTP 5/s, DNS 10/s, ports 100/s): subs -live  azhaq live (confirmed)  azhaq s   subfinder | dnsx live (confirmed)  time s    both  gaps
+hackerone.com                                         14                      30 59MB   12                                 15 46MB   12    0
+vulnweb.com                                           0                       168 63MB  0                                  131 47MB  0     0
+sources                                               subdomain sources
+hackerone.com                                         7 answered (asked 0, answered 0, failed 0), 0 failed
+vulnweb.com                                           7 answered (asked 0, answered 0, failed 0), 0 failed
+
+polite (HTTP 5/s, DNS 10/s, ports 100/s): urls (vulnweb.com)  azhaq  gau  gau's in azhaq  azhaq s  gau s
+URLs                                                          141    149  136             20 48MB  44 12MB
+
+polite (HTTP 5/s, DNS 10/s, ports 100/s): DNS brute force (azqlab.lan)  azhaq  dnsx  shared  azhaq time  dnsx time
+310 words                                                               9      9     9       29.2s 45MB  30.6s 45MB
+
+polite (HTTP 5/s, DNS 10/s, ports 100/s): dns record types  azhaq  dnsx  azhaq time  dnsx time  queries azhaq/dnsx
+32 names                                                    12     12    3.0s 43MB   3.5s 45MB  289 / 523
+
+polite (HTTP 5/s, DNS 10/s, ports 100/s): probe (107 hosts)  answered (confirmed)  shared  status  title  tech  all  favicon  cdn  time
+azhaq                                                        107 (105)             105     105     105    104   104  103/103  0/0  21.3s 85MB
+httpx                                                        105 (105)                                                             22.0s 218MB
+
+polite (HTTP 5/s, DNS 10/s, ports 100/s): paths (257 words, 2 apps)  azhaq  ffuf -ac  shared  false positives  time
+hits                                                                 13     13        13      0 / 0            104.0s 45MB / 103.0s 19MB
+
+polite (HTTP 5/s, DNS 10/s, ports 100/s): fuzz (257 words)  azhaq hits (confirmed)  ffuf hits (confirmed)  shared  azhaq s    ffuf s     JSON report equal
+http://127.0.0.1:3101/ calibrated (-ac)                     11 (11)                 11 (11)                11      52.4 44MB  51.4 19MB  -
+http://127.0.0.1:5102/ calibrated (-ac)                     2 (2)                   2 (2)                  2       52.4 44MB  51.5 15MB  -
+
+polite (HTTP 5/s, DNS 10/s, ports 100/s): parameters (3 pages, 6453 names)  azhaq             arjun             shared  time
+found                                                                       9                 9                 9       45.1s 45MB / 44.5s 36MB
+planted truth (8)                                                           8 right, 0 wrong  8 right, 0 wrong          
+
+polite (HTTP 5/s, DNS 10/s, ports 100/s): ports (connect)  azhaq  naabu  confirmed azhaq / naabu  azhaq time  naabu time
+scanme.nmap.org top-1000                                   3      3      3 / 3                    10.1s 47MB  61.8s 58MB
+127.0.0.1 top-1000                                         1      1      1 / 1                    9.9s 47MB   31.6s 60MB
+127.0.0.0/28 40789,35421,44927,32923,42027,39901           4      4      4 / 4                    0.9s 44MB   4.6s 57MB
+
+polite (HTTP 5/s, DNS 10/s, ports 100/s): services (15 lab ports)  azhaq  nmap -sV  azhaq time  nmap time
+named right                                                        15     13        2.9s 45MB   142.4s 89MB
+with product and version                                           14     12                    
+
+polite (HTTP 5/s, DNS 10/s, ports 100/s): screenshots (4 targets)  azhaq  gowitness  azhaq time  gowitness time
+not blank                                                          4      4          21.4s 82MB  4.6s 236MB
+
+polite (HTTP 5/s, DNS 10/s, ports 100/s): notify (6 messages, 2 providers)  azhaq  notify  azhaq time  notify time
+received at the stub                                                        6      6       1.0s 41MB   1.0s 25MB
+
+drop-in and exports                                        result
+azhaq crawl, Juice Shop routes its pages and scripts name  69/69 (+0 of 8 only the full map reaches)
+azhaq probe -json on stdin                                 2 of 2, httpx fields true
+OpenAPI export, VAmPI / crAPI paths                        12/12, 0/40
+targets, HTML report                                       2, 7372 bytes
+
+scale (juice-shop, 733 URLs in one run)  URLs as one run  detail
+-max-requests 100, resumed               true             2 processes, at most 100 requests received from one, 192 in all (one run 158)
+kill -9, resumed                         true             killed after 0.9s
+two workers                              true             165 tasks on the workers, 3.7s (one process 2.8s)
+
+claims (628s)                                          pace     summary  ledger  counter  pass
+run                                                    unpaced  157      157     157      true
+run                                                    rate 10  157      157     157      true
+run                                                    rate 2   60       60      60       true
+run -browser                                           unpaced  259      259     259      true
+run -browser                                           rate 10  200      200     200      true
+run -browser                                           rate 2   60       60      60       true
+shots                                                  unpaced  51       51      51       true
+shots                                                  rate 2   49       49      49       true
+run -login                                             unpaced  97       97      97       true
+run -login                                             rate 10  97       97      97       true
+run -login                                             rate 2   60       60      60       true
+run -login -browser                                    unpaced  118      118     118      true
+run -login -browser                                    rate 10  118      118     118      true
+run -login -browser                                    rate 2   60       60      60       true
+roles                                                  unpaced  168      168     168      true
+roles                                                  rate 10  180      180     180      true
+roles                                                  rate 2   60       60      60       true
+roles -replay-writes put                               unpaced  161      161     161      true
+roles -replay-writes put                               rate 10  175      175     175      true
+roles -replay-writes put                               rate 2   60       60      60       true
+dirs                                                   unpaced  504      504     504      true
+dirs                                                   rate 10  200      200     200      true
+dirs                                                   rate 2   60       60      60       true
+fuzz                                                   unpaced  506      506     506      true
+fuzz                                                   rate 10  200      200     200      true
+fuzz                                                   rate 2   60       60      60       true
+params                                                 unpaced  8        8       8        true
+params                                                 rate 10  8        8       8        true
+params                                                 rate 2   8        8       8        true
+ports -p                                               unpaced  83       83      80       true
+ports -pu                                              unpaced  14       14      13       true
+ports -p                                               rate 5   83       83      80       true
+ports -pu                                              rate 5   14       14      13       true
+mcp budget 60 (first azhaq_map)                        unpaced  60       60      60       true
+mcp budget 60 (second azhaq_map)                       unpaced  0        0       0        true
+mcp budget 60 (azhaq_ports after the budget is spent)  unpaced  0        0       0        true
+mcp budget 2 (two calls at once)                       unpaced  2        2       2        true
+budget -max-requests 40 (run)                          unpaced  40       40      40       true
+budget -max-requests 40 (resume)                       unpaced  40       40      40       true
+kill switch run (run)                                  rate 10  31       31      31       true
+kill switch run (resume)                               rate 10  80       80      80       true
+kill switch run (run)                                  rate 2   6        6       6        true
+kill switch run (resume)                               rate 2   80       80      80       true
+kill switch shots (run)                                rate 5   12       12      12       true
+kill switch shots (resume)                             rate 5   52       52      52       true
+
+roles (multi-tenant fixture)  rows as expected  wrong  extra  signed-in logouts  time
+anon → member → owner         6/6               0      0      5                  28.5s
+
+probe differences (azhaq/httpx), default
+  127.0.0.1:5020: status 200/200 title "Damn Vulnerable NodeJS Application"/"Damn Vulnerable NodeJS Application" tech [Bootstrap:3.3.7 BootstrapCDN:3.3.7 Express Node.js Showdown cdnjs jQuery:3.2.1]/[Bootstrap:3.3.7 BootstrapCDN:3.3.7 Cloudflare Express Node.js Showdown cdnjs jQuery:3.2.1]
+
+probe differences (azhaq/httpx), polite
+  127.0.0.1:5020: status 200/200 title "Damn Vulnerable NodeJS Application"/"Damn Vulnerable NodeJS Application" tech [Bootstrap:3.3.7 BootstrapCDN:3.3.7 Express Node.js Showdown cdnjs jQuery:3.2.1]/[Bootstrap:3.3.7 BootstrapCDN:3.3.7 Cloudflare Express Node.js Showdown cdnjs jQuery:3.2.1]
+
+checks
+  PASS  [default] juice-shop: ≥ 90% of the server routes its frontend calls  (azhaq 70/77, katana 1/77, jsluice 0/77)
+  PASS  [default] juice-shop: no catch-all page reported as visited  (0 visited URLs return the SPA index)
+  PASS  [default] crawl juice-shop: results ≥ the reference's, confirmed by the app's own routes (its server code or OpenAPI document, or the routes only its page scripts hold)  (azhaq 52, reference 1; routes found azhaq 59, katana 5; stylesheets listed azhaq 1, katana 1; known 52 and 1 of 77; time ×0.20 of the reference, memory ×0.07 of the reference (101 MB against 1480 MB) | azhaq crawl -u http://127.0.0.1:3101/ -depth 3 -silent -hints vs katana -u http://127.0.0.1:3101/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10)
+  PASS  [default] crawl juice-shop: time ≤ 1.05× the reference's  (azhaq 3.0s, reference 14.7s (the median of 3 below 20 s, one run above) | azhaq crawl -u http://127.0.0.1:3101/ -depth 3 -silent -hints vs katana -u http://127.0.0.1:3101/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10)
+  PASS  [default] roles: Juice Shop anonymous → user  (39 endpoints differ; 401 → 200 on 2/2 of /api/Users, /rest/user/authentication-details)
+  PASS  [default] roles: Juice Shop anonymous → user, signed in with Chrome  (41 endpoints differ; 401 → 200 on 2/2 (with a token: 39 endpoints) )
+  PASS  [default] juice-shop: -browser finds the known routes katana -headless finds  (azhaq -browser 70/77 in 15s, katana -headless 6/77 in 9s)
+  FAIL  [default] identical runs diff empty  (added=0 removed=0 observations=7)
+  PASS  [default] crawl vampi: results ≥ the reference's, confirmed by the app's own routes (its server code or OpenAPI document, or the routes only its page scripts hold)  (azhaq 1, reference 1; routes found azhaq 1, katana 1; stylesheets listed azhaq 0, katana 0; known 1 and 1 of 12; time ×0.02 of the reference, memory ×1.46 of the reference (72 MB against 49 MB) | azhaq crawl -u http://127.0.0.1:5102/ -depth 3 -silent -hints vs katana -u http://127.0.0.1:5102/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10)
+  PASS  [default] crawl vampi: time ≤ 1.05× the reference's  (azhaq 0.2s, reference 10.4s (the median of 3 below 20 s, one run above) | azhaq crawl -u http://127.0.0.1:5102/ -depth 3 -silent -hints vs katana -u http://127.0.0.1:5102/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10)
+  PASS  [default] vampi: paths from /openapi.json  (azhaq 12/12, katana 1/12)
+  PASS  [default] diff across different seeds is labelled  (seeds_differ=true)
+  PASS  [default] crawl ginandjuice.shop: results ≥ the reference's, confirmed by the app's own routes (its server code or OpenAPI document, or the routes only its page scripts hold)  (azhaq 2, reference 2; routes found azhaq 11, katana 14; stylesheets listed azhaq 4, katana 4; known 2 and 2 of 3; time ×0.54 of the reference, memory ×0.12 of the reference (90 MB against 748 MB) | azhaq crawl -u https://ginandjuice.shop/ -depth 3 -silent -hints -rate 5 vs katana -u https://ginandjuice.shop/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10 -rl 5)
+  PASS  [default] crawl ginandjuice.shop: time ≤ 1.05× the reference's  (azhaq 11.1s, reference 20.6s (the median of 3 below 20 s, one run above) | azhaq crawl -u https://ginandjuice.shop/ -depth 3 -silent -hints -rate 5 vs katana -u https://ginandjuice.shop/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10 -rl 5)
+  PASS  [default] ginandjuice: page scripts parsed  (4/4 page scripts, 3/3 routes only in page scripts or script-driven forms)
+  PASS  [default] ginandjuice: product and blog pages are one template each  (map lines: product 1, blog post 1)
+  PASS  [default] known routes ≥ katana ∪ jsluice on every app  (juice-shop 70/77 vs 1, vampi 12/12 vs 1, ginandjuice.shop 3/3 vs 2)
+  PASS  [default] no catch-all page reported as visited on any app  (3 apps)
+  PASS  [default] dirs: results ≥ the reference's, confirmed by a request that is not the app's catch-all answer  (azhaq 20, reference 20; old bar: 22 of 22 = 100%; hits azhaq 22, ffuf 22, shared 22; 4750 words, 2 apps; time ×1.01 of the reference, memory ×2.32 of the reference (53 MB against 23 MB); ffuf only [] | azhaq dirs -u http://127.0.0.1:5102/ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -silent vs ffuf -u http://127.0.0.1:5102/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -ac -s)
+  PASS  [default] dirs: time ≤ 1.05× the reference's  (azhaq 24.4s, reference 24.1s (the median of 3 below 20 s, one run above) | azhaq dirs -u http://127.0.0.1:5102/ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -silent vs ffuf -u http://127.0.0.1:5102/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -ac -s)
+  PASS  [default] dirs: no more false positives than ffuf  (hits that answer like a missing path: azhaq 2, ffuf 2)
+  PASS  [default] fuzz 127.0.0.1:3101 calibrated (-ac): results ≥ the reference's, confirmed by a request that is not the app's catch-all answer  (azhaq 18, reference 18; old bar: 20 of 20 = 100%; hits azhaq 20, ffuf 20, shared 20; 4750 words; time ×1.03 of the reference, memory ×2.25 of the reference (51 MB against 23 MB); ffuf only [] | azhaq fuzz -u http://127.0.0.1:3101/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -ac vs ffuf -u http://127.0.0.1:3101/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -ac)
+  PASS  [default] fuzz 127.0.0.1:3101 calibrated (-ac): time ≤ 1.05× the reference's  (azhaq 22.2s, reference 21.6s (the median of 3 below 20 s, one run above) | azhaq fuzz -u http://127.0.0.1:3101/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -ac vs ffuf -u http://127.0.0.1:3101/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -ac)
+  PASS  [default] fuzz http://127.0.0.1:3101/: the JSON report equals ffuf's (duration dropped)  (20 results equal)
+  PASS  [default] fuzz 127.0.0.1:3101 filtered (-fs 9984): results ≥ the reference's, confirmed by a request that is not the app's catch-all answer  (azhaq 18, reference 18; old bar: 20 of 20 = 100%; hits azhaq 20, ffuf 20, shared 20; 4750 words; time ×1.01 of the reference, memory ×2.18 of the reference (51 MB against 23 MB); ffuf only [] | azhaq fuzz -u http://127.0.0.1:3101/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -fs 9984 vs ffuf -u http://127.0.0.1:3101/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -fs 9984)
+  PASS  [default] fuzz 127.0.0.1:3101 filtered (-fs 9984): time ≤ 1.05× the reference's  (azhaq 21.9s, reference 21.6s (the median of 3 below 20 s, one run above) | azhaq fuzz -u http://127.0.0.1:3101/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -fs 9984 vs ffuf -u http://127.0.0.1:3101/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -fs 9984)
+  PASS  [default] fuzz 127.0.0.1:5102 calibrated (-ac): results ≥ the reference's, confirmed by a request that is not the app's catch-all answer  (azhaq 2, reference 2; old bar: 2 of 2 = 100%; hits azhaq 2, ffuf 2, shared 2; 4750 words; time ×1.00 of the reference, memory ×2.97 of the reference (49 MB against 16 MB); ffuf only [] | azhaq fuzz -u http://127.0.0.1:5102/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -ac vs ffuf -u http://127.0.0.1:5102/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -ac)
+  PASS  [default] fuzz 127.0.0.1:5102 calibrated (-ac): time ≤ 1.05× the reference's  (azhaq 6.6s, reference 6.6s (the median of 3 below 20 s, one run above) | azhaq fuzz -u http://127.0.0.1:5102/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -ac vs ffuf -u http://127.0.0.1:5102/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -ac)
+  PASS  [default] fuzz http://127.0.0.1:5102/: the JSON report equals ffuf's (duration dropped)  (2 results equal)
+  PASS  [default] fuzz 127.0.0.1:5102 filtered (-fs 205): results ≥ the reference's, confirmed by a request that is not the app's catch-all answer  (azhaq 2, reference 2; old bar: 2 of 2 = 100%; hits azhaq 2, ffuf 2, shared 2; 4750 words; time ×1.02 of the reference, memory ×2.94 of the reference (48 MB against 16 MB); ffuf only [] | azhaq fuzz -u http://127.0.0.1:5102/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -fs 205 vs ffuf -u http://127.0.0.1:5102/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -fs 205)
+  PASS  [default] fuzz 127.0.0.1:5102 filtered (-fs 205): time ≤ 1.05× the reference's  (azhaq 5.9s, reference 5.8s (the median of 3 below 20 s, one run above) | azhaq fuzz -u http://127.0.0.1:5102/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -fs 205 vs ffuf -u http://127.0.0.1:5102/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -fs 205)
+  PASS  [default] screenshots: results ≥ the reference's, confirmed by the image files: each decodes and is not one colour  (azhaq 8, reference 6; old bar: 8 of 6 = 133%; 8 targets; azhaq listed 8, gowitness wrote 6 files; time ×0.07 of the reference, memory ×0.41 of the reference (97 MB against 237 MB) | azhaq shots -l /home/runner/work/azhaq/azhaq/bench/.work/shots-181500-default/targets.txt -dir /home/runner/work/azhaq/azhaq/bench/.work/shots-181500-default/azhaq0 -silent -chrome-no-sandbox vs gowitness scan file -f /home/runner/work/azhaq/azhaq/bench/.work/shots-181500-default/targets.txt --chrome-path /usr/bin/google-chrome -s /home/runner/work/azhaq/azhaq/bench/.work/shots-181500-default/gowitness0 -q)
+  PASS  [default] screenshots: time ≤ 1.05× the reference's  (azhaq 4.6s, reference 64.4s (the median of 3 below 20 s, one run above) | azhaq shots -l /home/runner/work/azhaq/azhaq/bench/.work/shots-181500-default/targets.txt -dir /home/runner/work/azhaq/azhaq/bench/.work/shots-181500-default/azhaq0 -silent -chrome-no-sandbox vs gowitness scan file -f /home/runner/work/azhaq/azhaq/bench/.work/shots-181500-default/targets.txt --chrome-path /usr/bin/google-chrome -s /home/runner/work/azhaq/azhaq/bench/.work/shots-181500-default/gowitness0 -q)
+  PASS  [default] params: ginandjuice.shop (2 pages, 1,000 names, 5 requests per second) time ≤ 1.05× arjun's  (azhaq 10.8s, arjun 21.1s)
+  PASS  [default] params: results ≥ the reference's, confirmed by the planted server's own list of the parameters it reads (wrong names count against)  (azhaq 8, reference 8; old bar: 11 of 11 = 100%; planted pages: azhaq 8 right 0 wrong, arjun 8 right 0 wrong, of 8; all pages azhaq 12, arjun 11, shared 11; time ×0.22 of the reference, memory ×1.19 of the reference (52 MB against 44 MB) | azhaq params -u https://ginandjuice.shop/blog/ -w /home/runner/work/azhaq/azhaq/bench/.work/params/gin-words.txt -silent -rate 5 vs arjun -u https://ginandjuice.shop/blog/ -w /home/runner/work/azhaq/azhaq/bench/.work/params/gin-words.txt -oJ /home/runner/work/azhaq/azhaq/bench/.work/params/arjun.json -q --disable-redirects --rate-limit 5)
+  PASS  [default] params: time ≤ 1.05× the reference's  (azhaq 1.2s, reference 5.5s (the median of 3 below 20 s, one run above) | azhaq params -u https://ginandjuice.shop/blog/ -w /home/runner/work/azhaq/azhaq/bench/.work/params/gin-words.txt -silent -rate 5 vs arjun -u https://ginandjuice.shop/blog/ -w /home/runner/work/azhaq/azhaq/bench/.work/params/gin-words.txt -oJ /home/runner/work/azhaq/azhaq/bench/.work/params/arjun.json -q --disable-redirects --rate-limit 5)
+  PASS  [default] subs -live hackerone.com: results ≥ the reference's, confirmed by a name resolving at 9.9.9.9 or 208.67.222.222 (A, AAAA or CNAME)  (azhaq 14, reference 4; old bar: 4 of 4 = 100%; azhaq printed 14, subfinder 527 names, dnsx 4 live; azhaq 14, reference 4 confirmed, both 4; subfinder 31s + dnsx 18s; time ×0.61 of the reference, memory ×1.16 of the reference (58 MB against 50 MB) | azhaq subs -d hackerone.com -live -json -silent -resolvers /home/runner/work/azhaq/azhaq/bench/.work/domains/resolvers.txt vs subfinder -d hackerone.com -silent -json -cs | dnsx -l /home/runner/work/azhaq/azhaq/bench/.work/domains/hackerone.com-default-names.txt -silent -a -aaaa -cname -r 1.1.1.1,8.8.8.8)
+  PASS  [default] subs -live hackerone.com: time ≤ 1.05× the reference's  (azhaq 29.8s, reference 48.6s (the median of 3 below 20 s, one run above) | azhaq subs -d hackerone.com -live -json -silent -resolvers /home/runner/work/azhaq/azhaq/bench/.work/domains/resolvers.txt vs subfinder -d hackerone.com -silent -json -cs | dnsx -l /home/runner/work/azhaq/azhaq/bench/.work/domains/hackerone.com-default-names.txt -silent -a -aaaa -cname -r 1.1.1.1,8.8.8.8)
+  PASS  [default] subs -live hackerone.com: every confirmed live name subfinder | dnsx finds is in azhaq's list or its source is named as failed  (0 gaps, 0 unexplained: [])
+  PASS  [default] subs -live hackerone.com: rows are DNS-confirmed, raw candidates are counted apart and the confirmed set reaches the reference's  (raw candidates 41, DNS-confirmed 14, reference confirmed 4: [])
+  FAIL  [default] subs -live hackerone.com: raw candidates reach the names the reference listed  (azhaq 41 raw candidates, subfinder 527 names)
+  PASS  [default] subdomain sources: no silent zeros (hackerone.com)  (every empty result is a failure flagged as error or degraded, or a zero every source answered)
+  PASS  [default] subs -live tesla.com: results ≥ the reference's, confirmed by a name resolving at 9.9.9.9 or 208.67.222.222 (A, AAAA or CNAME)  (azhaq 201, reference 32; old bar: 30 of 32 = 94%; azhaq printed 519, subfinder 1806 names, dnsx 97 live; azhaq 201, reference 32 confirmed, both 30; subfinder 31s + dnsx 115s; time ×0.21 of the reference, memory ×1.45 of the reference (72 MB against 50 MB) | azhaq subs -d tesla.com -live -json -silent -resolvers /home/runner/work/azhaq/azhaq/bench/.work/domains/resolvers.txt vs subfinder -d tesla.com -silent -json -cs | dnsx -l /home/runner/work/azhaq/azhaq/bench/.work/domains/tesla.com-default-names.txt -silent -a -aaaa -cname -r 1.1.1.1,8.8.8.8)
+  PASS  [default] subs -live tesla.com: time ≤ 1.05× the reference's  (azhaq 30.2s, reference 145.6s (the median of 3 below 20 s, one run above) | azhaq subs -d tesla.com -live -json -silent -resolvers /home/runner/work/azhaq/azhaq/bench/.work/domains/resolvers.txt vs subfinder -d tesla.com -silent -json -cs | dnsx -l /home/runner/work/azhaq/azhaq/bench/.work/domains/tesla.com-default-names.txt -silent -a -aaaa -cname -r 1.1.1.1,8.8.8.8)
+  PASS  [default] subs -live tesla.com: every confirmed live name subfinder | dnsx finds is in azhaq's list or its source is named as failed  (2 gaps, 0 unexplained: [akamai-apigateway-mytcore-prdsvc.tesla.com (subfinder: subdomaincenter) apigateway-supplierprofileapi.tesla.com (subfinder: subdomaincenter)])
+  FAIL  [default] subs -live tesla.com: rows are DNS-confirmed, raw candidates are counted apart and the confirmed set reaches the reference's  (raw candidates 1400, DNS-confirmed 519, reference confirmed 32: [2 names the reference's lookups confirmed are not DNS-confirmed here])
+  FAIL  [default] subs -live tesla.com: raw candidates reach the names the reference listed  (azhaq 1400 raw candidates, subfinder 1806 names)
+  PASS  [default] subdomain sources: no silent zeros (tesla.com)  (every empty result is a failure flagged as error or degraded, or a zero every source answered)
+  PASS  [default] subs -live vulnweb.com: results ≥ the reference's, confirmed by a name resolving at 9.9.9.9 or 208.67.222.222 (A, AAAA or CNAME)  (azhaq 0, reference 0; old bar: reference found none; azhaq printed 7, subfinder 518 names, dnsx 2 live; azhaq 0, reference 0 confirmed, both 0; subfinder 73s + dnsx 25s; time ×0.31 of the reference, memory ×1.24 of the reference (63 MB against 51 MB) | azhaq subs -d vulnweb.com -live -json -silent -resolvers /home/runner/work/azhaq/azhaq/bench/.work/domains/resolvers.txt vs subfinder -d vulnweb.com -silent -json -cs | dnsx -l /home/runner/work/azhaq/azhaq/bench/.work/domains/vulnweb.com-default-names.txt -silent -a -aaaa -cname -r 1.1.1.1,8.8.8.8)
+  PASS  [default] subs -live vulnweb.com: time ≤ 1.05× the reference's  (azhaq 30.1s, reference 97.9s (the median of 3 below 20 s, one run above) | azhaq subs -d vulnweb.com -live -json -silent -resolvers /home/runner/work/azhaq/azhaq/bench/.work/domains/resolvers.txt vs subfinder -d vulnweb.com -silent -json -cs | dnsx -l /home/runner/work/azhaq/azhaq/bench/.work/domains/vulnweb.com-default-names.txt -silent -a -aaaa -cname -r 1.1.1.1,8.8.8.8)
+  PASS  [default] subs -live vulnweb.com: every confirmed live name subfinder | dnsx finds is in azhaq's list or its source is named as failed  (0 gaps, 0 unexplained: [])
+  PASS  [default] subs -live vulnweb.com: rows are DNS-confirmed, raw candidates are counted apart and the confirmed set reaches the reference's  (raw candidates 678, DNS-confirmed 7, reference confirmed 0: [])
+  PASS  [default] subs -live vulnweb.com: raw candidates reach the names the reference listed  (azhaq 678 raw candidates, subfinder 518 names)
+  PASS  [default] subdomain sources: no silent zeros (vulnweb.com)  (every empty result is a failure flagged as error or degraded, or a zero every source answered)
+  PASS  [default] urls vulnweb.com: results ≥ the reference's, confirmed by being on the domain and not a static asset, azhaq's list and the URLs it dropped as junk together (the archives refuse this machine, so no other source is asked)  (azhaq 154, reference 149; azhaq 141 listed, 13 dropped as junk (3 fuzzing placeholder or request-line fragment, 2 link cut at the end of its sentence, 4 malformed link (wildcard, quote, bracket, ellipsis), 4 scanner probe), gau 149, missing 0 []; old bar: 136 of 149 = 91%; time ×0.38 of the reference, memory ×4.00 of the reference (49 MB against 12 MB) | azhaq urls -d vulnweb.com -silent vs gau --providers wayback,otx,urlscan --timeout 30 vulnweb.com)
+  PASS  [default] urls vulnweb.com: time ≤ 1.05× the reference's  (azhaq 30.0s, reference 78.4s (the median of 3 below 20 s, one run above) | azhaq urls -d vulnweb.com -silent vs gau --providers wayback,otx,urlscan --timeout 30 vulnweb.com)
+  PASS  [default] urls vulnweb.com: every URL gau lists is in azhaq's list or dropped as junk with a reason  (azhaq 141 listed, 13 dropped as junk (3 fuzzing placeholder or request-line fragment, 2 link cut at the end of its sentence, 4 malformed link (wildcard, quote, bracket, ellipsis), 4 scanner probe), gau 149, missing 0 [])
+  PASS  [default] dns brute force: results ≥ the reference's, confirmed by the lab resolver, asked directly by the bench (A, AAAA or CNAME)  (azhaq 9, reference 9; old bar: 9 of 9 = 100%; azhaq [api.azqlab.lan app.azqlab.lan dev.azqlab.lan mail.azqlab.lan ns1.azqlab.lan ns2.azqlab.lan staging.azqlab.lan vpn.azqlab.lan www.azqlab.lan], dnsx [api.azqlab.lan app.azqlab.lan dev.azqlab.lan mail.azqlab.lan ns1.azqlab.lan ns2.azqlab.lan staging.azqlab.lan vpn.azqlab.lan www.azqlab.lan]; 5000 words on azqlab.lan; time ×0.23 of the reference, memory ×0.85 of the reference (49 MB against 58 MB) | azhaq dns -d azqlab.lan -w /home/runner/work/azhaq/azhaq/bench/.work/subdomains-top1million-5000.txt -resolvers /home/runner/work/azhaq/azhaq/bench/.work/brute/resolvers.txt -silent vs dnsx -d azqlab.lan -w /home/runner/work/azhaq/azhaq/bench/.work/subdomains-top1million-5000.txt -r 127.0.0.1:39231 -silent)
+  PASS  [default] dns brute force: time ≤ 1.05× the reference's  (azhaq 0.2s, reference 0.9s (the median of 3 below 20 s, one run above) | azhaq dns -d azqlab.lan -w /home/runner/work/azhaq/azhaq/bench/.work/subdomains-top1million-5000.txt -resolvers /home/runner/work/azhaq/azhaq/bench/.work/brute/resolvers.txt -silent vs dnsx -d azqlab.lan -w /home/runner/work/azhaq/azhaq/bench/.work/subdomains-top1million-5000.txt -r 127.0.0.1:39231 -silent)
+  PASS  [default] wildcard zone: no fake hosts  (3 of 3 real names found, 0 fake (dnsx without wildcard filtering reports 50))
+  PASS  [default] dns record types: results ≥ the reference's, confirmed by the zone the bench serves (a name and type it holds)  (azhaq 12, reference 12; 32 names, 9 types; queries received azhaq 289, dnsx 523; time ×0.04 of the reference, memory ×0.95 of the reference (43 MB against 45 MB) | azhaq dns -l /home/runner/work/azhaq/azhaq/bench/.work/dns/names.txt -resolvers /home/runner/work/azhaq/azhaq/bench/.work/dns/resolvers.txt -json -silent -a -aaaa -cname -mx -ns -txt -srv -caa -soa vs dnsx -l /home/runner/work/azhaq/azhaq/bench/.work/dns/names.txt -r 127.0.0.1:36677 -json -silent -a -aaaa -cname -mx -ns -txt -srv -caa -soa)
+  PASS  [default] dns record types: time ≤ 1.05× the reference's  (azhaq 0.0s, reference 0.7s (the median of 3 below 20 s, one run above) | azhaq dns -l /home/runner/work/azhaq/azhaq/bench/.work/dns/names.txt -resolvers /home/runner/work/azhaq/azhaq/bench/.work/dns/resolvers.txt -json -silent -a -aaaa -cname -mx -ns -txt -srv -caa -soa vs dnsx -l /home/runner/work/azhaq/azhaq/bench/.work/dns/names.txt -r 127.0.0.1:36677 -json -silent -a -aaaa -cname -mx -ns -txt -srv -caa -soa)
+  PASS  [default] dns record types: azhaq's JSON values equal dnsx's  (0 differences [])
+  PASS  [default] dns -ptr: results ≥ the reference's, confirmed by the zone's PTR records  (azhaq 2, reference 2; azhaq [app.bench.lan www.bench.lan], dnsx [app.bench.lan www.bench.lan]; time ×0.02 of the reference, memory ×0.00 of the reference (0 MB against 44 MB) | azhaq dns -l /home/runner/work/azhaq/azhaq/bench/.work/dns/ips.txt -resolvers /home/runner/work/azhaq/azhaq/bench/.work/dns/resolvers.txt -ptr -json -silent vs dnsx -l /home/runner/work/azhaq/azhaq/bench/.work/dns/ips.txt -r 127.0.0.1:36677 -ptr -json -silent)
+  PASS  [default] dns -ptr: time ≤ 1.05× the reference's  (azhaq 0.0s, reference 0.6s (the median of 3 below 20 s, one run above) | azhaq dns -l /home/runner/work/azhaq/azhaq/bench/.work/dns/ips.txt -resolvers /home/runner/work/azhaq/azhaq/bench/.work/dns/resolvers.txt -ptr -json -silent vs dnsx -l /home/runner/work/azhaq/azhaq/bench/.work/dns/ips.txt -r 127.0.0.1:36677 -ptr -json -silent)
+  PASS  [default] ports 127.0.0.1 1-65535: open ports ≥ nmap -sT's  (azhaq 1.72 CPU s and 6.6 s, nmap 1.99 CPU s and 6.6 s (median of 5 runs in turn); open: azhaq 3, nmap 3; listening throughout and azhaq missed [], nmap missed [] | azhaq ports -host 127.0.0.1 -p 1-65535 -rate 10000 -retries 0 -detect none -silent -db /home/runner/work/azhaq/azhaq/bench/.work/portscpu3179973275/cpu.db vs nmap -sT -Pn -n -p 1-65535 --max-rate 10000 --max-retries 0 -oG - 127.0.0.1)
+  PASS  [default] ports 127.0.0.1 1-65535: CPU ≤ 1.25× nmap -sT's  (0.86×: azhaq 1.72 CPU s and 6.6 s, nmap 1.99 CPU s and 6.6 s (median of 5 runs in turn); open: azhaq 3, nmap 3; listening throughout and azhaq missed [], nmap missed [] | azhaq ports -host 127.0.0.1 -p 1-65535 -rate 10000 -retries 0 -detect none -silent -db /home/runner/work/azhaq/azhaq/bench/.work/portscpu3179973275/cpu.db vs nmap -sT -Pn -n -p 1-65535 --max-rate 10000 --max-retries 0 -oG - 127.0.0.1)
+  PASS  [default] ports 127.0.0.1 1-65535: time ≤ 1.25× nmap -sT's  (1.01×: azhaq 1.72 CPU s and 6.6 s, nmap 1.99 CPU s and 6.6 s (median of 5 runs in turn); open: azhaq 3, nmap 3; listening throughout and azhaq missed [], nmap missed [] | azhaq ports -host 127.0.0.1 -p 1-65535 -rate 10000 -retries 0 -detect none -silent -db /home/runner/work/azhaq/azhaq/bench/.work/portscpu3179973275/cpu.db vs nmap -sT -Pn -n -p 1-65535 --max-rate 10000 --max-retries 0 -oG - 127.0.0.1)
+  PASS  [default] ports scanme.nmap.org top-1000: results ≥ the reference's, confirmed by an independent TCP connect  (azhaq 3, reference 3; old bar: 3 of 3 = 100%; azhaq only [], naabu only []; time ×0.35 of the reference, memory ×0.70 of the reference (47 MB against 68 MB) | azhaq ports -host scanme.nmap.org -p top-1000 -silent vs naabu -host scanme.nmap.org -top-ports 1000 -scan-type c -Pn -silent)
+  PASS  [default] ports scanme.nmap.org top-1000: time ≤ 1.05× the reference's  (azhaq 2.0s, reference 5.7s (the median of 3 below 20 s, one run above) | azhaq ports -host scanme.nmap.org -p top-1000 -silent vs naabu -host scanme.nmap.org -top-ports 1000 -scan-type c -Pn -silent)
+  PASS  [default] ports 127.0.0.1 1-65535: results ≥ the reference's, confirmed by `ss -ltn` taken before and after the scan  (azhaq 3, reference 3; old bar: 3 of 3 = 100%; sockets listening throughout and missed: azhaq [], naabu []; time ×0.01 of the reference, memory ×0.58 of the reference (62 MB against 106 MB) | azhaq ports -host 127.0.0.1 -p 1-65535 -silent vs naabu -host 127.0.0.1 -p 1-65535 -scan-type c -Pn -silent)
+  PASS  [default] ports 127.0.0.1 1-65535: time ≤ 1.05× the reference's  (azhaq 1.8s, reference 133.4s (the median of 3 below 20 s, one run above) | azhaq ports -host 127.0.0.1 -p 1-65535 -silent vs naabu -host 127.0.0.1 -p 1-65535 -scan-type c -Pn -silent)
+  PASS  [default] ports 127.0.0.0/28: results ≥ the reference's, confirmed by the listeners the bench opened (a port that is not one counts against)  (azhaq 4, reference 4; planted 4; azhaq 4 of them, 4 reported; naabu 4, 4 reported; time ×0.01 of the reference, memory ×0.79 of the reference (45 MB against 57 MB) | azhaq ports -host 127.0.0.0/28 -p 33517,43563,45635,40121,43917,39505 -silent vs naabu -host 127.0.0.0/28 -p 33517,43563,45635,40121,43917,39505 -scan-type c -Pn -silent)
+  PASS  [default] ports 127.0.0.0/28: time ≤ 1.05× the reference's  (azhaq 0.0s, reference 2.4s (the median of 3 below 20 s, one run above) | azhaq ports -host 127.0.0.0/28 -p 33517,43563,45635,40121,43917,39505 -silent vs naabu -host 127.0.0.0/28 -p 33517,43563,45635,40121,43917,39505 -scan-type c -Pn -silent)
+  PASS  [default] services (nmap -sV): results ≥ the reference's, confirmed by the lab's own list of what runs on each port (bench/services.yaml) and `ss` showing every port listening  (azhaq 15, reference 12; 15 ports; with a product and version: azhaq 14, nmap 11; azhaq missed []; nmap missed [11883 mosquitto (mqtt): "" 21211 memcached: "unknown" 10053 coredns (tcp): "tcpwrapped"]; time ×0.02 of the reference, memory ×0.52 of the reference (46 MB against 89 MB) | azhaq ports -host 127.0.0.1 -p 16379,13306,15432,17017,11883,15682,21211,12222,10021,10025,18825,10389,10445,19200,10053 -json -silent vs nmap -sV -Pn -p 16379,13306,15432,17017,11883,15682,21211,12222,10021,10025,18825,10389,10445,19200,10053 -oX - 127.0.0.1)
+  PASS  [default] services (nmap -sV): time ≤ 1.05× the reference's  (azhaq 2.8s, reference 145.4s (the median of 3 below 20 s, one run above) | azhaq ports -host 127.0.0.1 -p 16379,13306,15432,17017,11883,15682,21211,12222,10021,10025,18825,10389,10445,19200,10053 -json -silent vs nmap -sV -Pn -p 16379,13306,15432,17017,11883,15682,21211,12222,10021,10025,18825,10389,10445,19200,10053 -oX - 127.0.0.1)
+  PASS  [default] services: azhaq names ≥ 90% of the lab's TCP services  (15 of 15)
+  PASS  [default] probe: results ≥ the reference's, confirmed by a GET to the host itself giving the status the tool reported  (azhaq 105, reference 105; old bar: 105 of 105 = 100%; 107 hosts (5 apps, the services lab's web ports, 100 local servers); answered azhaq 107, httpx 105, shared 105; time ×0.60 of the reference, memory ×0.40 of the reference (87 MB against 218 MB) | azhaq probe -l /home/runner/work/azhaq/azhaq/bench/.work/probe/hosts.txt -json -silent -favicon -fr vs httpx -l /home/runner/work/azhaq/azhaq/bench/.work/probe/hosts.txt -silent -json -fr -td -cdn -favicon -title -sc -no-color)
+  PASS  [default] probe: time ≤ 1.05× the reference's  (azhaq 0.9s, reference 1.5s (the median of 3 below 20 s, one run above) | azhaq probe -l /home/runner/work/azhaq/azhaq/bench/.work/probe/hosts.txt -json -silent -favicon -fr vs httpx -l /home/runner/work/azhaq/azhaq/bench/.work/probe/hosts.txt -silent -json -fr -td -cdn -favicon -title -sc -no-color)
+  PASS  [default] probe: status, title and tech agree with httpx on ≥ 95% of shared hosts  (all three 104/105 (status 105, title 105, tech 104; 0 redirects out of the site compared by their own status))
+  PASS  [default] probe public sites (5/s): results ≥ the reference's, confirmed by a GET to the site giving the status the tool reported (a redirect out of the site counts)  (azhaq 1, reference 1; [ginandjuice.shop testphp.vulnweb.com demo.testfire.net]; one run each; time ×0.48 of the reference, memory ×0.36 of the reference (82 MB against 225 MB) | azhaq probe -l /home/runner/work/azhaq/azhaq/bench/.work/probe/public.txt -json -silent -rate 5 -H User-Agent: azhaq-bench/1 (+https://github.com/lilsadfoqs/azhaq) -fr vs httpx -l /home/runner/work/azhaq/azhaq/bench/.work/probe/public.txt -silent -json -fr -title -sc -rl 5 -t 1 -H User-Agent: azhaq-bench/1 (+https://github.com/lilsadfoqs/azhaq) -no-color)
+  PASS  [default] probe public sites (5/s): time ≤ 1.05× the reference's  (azhaq 10.4s, reference 21.7s (the median of 3 below 20 s, one run above) | azhaq probe -l /home/runner/work/azhaq/azhaq/bench/.work/probe/public.txt -json -silent -rate 5 -H User-Agent: azhaq-bench/1 (+https://github.com/lilsadfoqs/azhaq) -fr vs httpx -l /home/runner/work/azhaq/azhaq/bench/.work/probe/public.txt -silent -json -fr -title -sc -rl 5 -t 1 -H User-Agent: azhaq-bench/1 (+https://github.com/lilsadfoqs/azhaq) -no-color)
+  PASS  [default] probe: every input is a row, a failure or a skip (rows + failed + skipped == inputs)  (6 distinct inputs: 6 rows, 0 failed or skipped in the summary, unaccounted [] (exit 0; azhaq probe -l LIST -json; the list holds a live host, a redirect to another input, a closed port, a raw TCP port, a name that does not resolve, a repeat, a URL))
+  PASS  [default] notify: results ≥ the reference's, confirmed by the stub's own log (a request with the message in its body, per provider)  (azhaq 6, reference 6; 6 messages to 2 providers; distinct requests at the stub: azhaq 6, notify 6; time ×1.00 of the reference, memory ×1.66 of the reference (41 MB against 25 MB) [azhaq finished with failures or was stopped: exit status 3   exit 3: the targets given cannot be counted (addresses, ranges), so any failure exits 3; what is marked ! failed] | azhaq notify -i /home/runner/work/azhaq/azhaq/bench/.work/notify/input.txt -provider-config /home/runner/work/azhaq/azhaq/bench/.work/notify/azhaq.yaml -silent vs notify -i /home/runner/work/azhaq/azhaq/bench/.work/notify/input.txt -provider-config /home/runner/work/azhaq/azhaq/bench/.work/notify/notify.yaml -silent -duc)
+  PASS  [default] notify: time ≤ 1.05× the reference's  (azhaq 5.0s, reference 5.0s (the median of 3 below 20 s, one run above) | azhaq notify -i /home/runner/work/azhaq/azhaq/bench/.work/notify/input.txt -provider-config /home/runner/work/azhaq/azhaq/bench/.work/notify/azhaq.yaml -silent vs notify -i /home/runner/work/azhaq/azhaq/bench/.work/notify/input.txt -provider-config /home/runner/work/azhaq/azhaq/bench/.work/notify/notify.yaml -silent -duc)
+  PASS  [default] notify: the same requests as notify's (bodies and content types), per the stub  (azhaq /custom application/json {"text":"new host app1.example.com live"} ; /custom application/json {"text":"new host app2.example.com live"} ; /custom application/json {"text":"new host app3.example.com live"} ; /custom application/json {"text":"new host app4.example.com live"} ; /custom application/json… | notify /custom application/json {"text":"new host app1.example.com live"} ; /custom application/json {"text":"new host app2.example.com live"} ; /custom application/json {"text":"new host app3.example.com live"} ; /custom application/json {"text":"new host app4.example.com live"} ; /custom application/json…)
+  PASS  [default] notify: a webhook token reaches no output when the webhook cannot be reached  (azhaq watch -always -notify http://127.0.0.1:CLOSED/services/…/TOKEN: exit 3, token printed: false)
+  PASS  [polite] crawl juice-shop: results ≥ the reference's, confirmed by the app's own routes (its server code or OpenAPI document, or the routes only its page scripts hold)  (azhaq 52, reference 1; routes found azhaq 59, katana 5; stylesheets listed azhaq 1, katana 1; known 52 and 1 of 77; time ×0.96 of the reference, memory ×0.06 of the reference (97 MB against 1629 MB) | azhaq crawl -u http://127.0.0.1:3101/ -depth 3 -silent -hints -rate 5 vs katana -u http://127.0.0.1:3101/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10 -rl 5)
+  PASS  [polite] crawl juice-shop: time ≤ 1.05× the reference's  (azhaq 16.9s, reference 17.7s (the median of 3 below 20 s, one run above) | azhaq crawl -u http://127.0.0.1:3101/ -depth 3 -silent -hints -rate 5 vs katana -u http://127.0.0.1:3101/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10 -rl 5)
+  PASS  [polite] crawl vampi: results ≥ the reference's, confirmed by the app's own routes (its server code or OpenAPI document, or the routes only its page scripts hold)  (azhaq 1, reference 1; routes found azhaq 1, katana 1; stylesheets listed azhaq 0, katana 0; known 1 and 1 of 12; time ×0.01 of the reference, memory ×1.33 of the reference (65 MB against 49 MB) | azhaq crawl -u http://127.0.0.1:5102/ -depth 3 -silent -hints -rate 5 vs katana -u http://127.0.0.1:5102/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10 -rl 5)
+  PASS  [polite] crawl vampi: time ≤ 1.05× the reference's  (azhaq 0.2s, reference 10.6s (the median of 3 below 20 s, one run above) | azhaq crawl -u http://127.0.0.1:5102/ -depth 3 -silent -hints -rate 5 vs katana -u http://127.0.0.1:5102/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10 -rl 5)
+  PASS  [polite] crawl ginandjuice.shop: results ≥ the reference's, confirmed by the app's own routes (its server code or OpenAPI document, or the routes only its page scripts hold)  (azhaq 2, reference 2; routes found azhaq 11, katana 14; stylesheets listed azhaq 4, katana 4; known 2 and 2 of 3; time ×0.54 of the reference, memory ×0.12 of the reference (90 MB against 731 MB) | azhaq crawl -u https://ginandjuice.shop/ -depth 3 -silent -hints -rate 5 vs katana -u https://ginandjuice.shop/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10 -rl 5)
+  PASS  [polite] crawl ginandjuice.shop: time ≤ 1.05× the reference's  (azhaq 11.2s, reference 20.7s (the median of 3 below 20 s, one run above) | azhaq crawl -u https://ginandjuice.shop/ -depth 3 -silent -hints -rate 5 vs katana -u https://ginandjuice.shop/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10 -rl 5)
+  PASS  [polite] dirs: results ≥ the reference's, confirmed by a request that is not the app's catch-all answer  (azhaq 13, reference 13; old bar: 13 of 13 = 100%; hits azhaq 13, ffuf 13, shared 13; 257 words, 2 apps; time ×1.01 of the reference, memory ×2.38 of the reference (45 MB against 19 MB); ffuf only [] | azhaq dirs -u http://127.0.0.1:5102/ -w /home/runner/work/azhaq/azhaq/bench/.work/dirs-polite.txt -silent -rate 5 vs ffuf -u http://127.0.0.1:5102/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/dirs-polite.txt -ac -s -rate 5)
+  PASS  [polite] dirs: time ≤ 1.05× the reference's  (azhaq 104.0s, reference 103.0s (the median of 3 below 20 s, one run above) | azhaq dirs -u http://127.0.0.1:5102/ -w /home/runner/work/azhaq/azhaq/bench/.work/dirs-polite.txt -silent -rate 5 vs ffuf -u http://127.0.0.1:5102/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/dirs-polite.txt -ac -s -rate 5)
+  PASS  [polite] dirs: no more false positives than ffuf  (hits that answer like a missing path: azhaq 0, ffuf 0)
+  PASS  [polite] fuzz 127.0.0.1:3101 calibrated (-ac): results ≥ the reference's, confirmed by a request that is not the app's catch-all answer  (azhaq 11, reference 11; old bar: 11 of 11 = 100%; hits azhaq 11, ffuf 11, shared 11; 257 words; time ×1.02 of the reference, memory ×2.33 of the reference (44 MB against 19 MB); ffuf only [] | azhaq fuzz -u http://127.0.0.1:3101/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/fuzz-polite.txt -s -ac -rate 5 vs ffuf -u http://127.0.0.1:3101/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/fuzz-polite.txt -s -ac -rate 5)
+  PASS  [polite] fuzz 127.0.0.1:3101 calibrated (-ac): time ≤ 1.05× the reference's  (azhaq 52.4s, reference 51.4s (the median of 3 below 20 s, one run above) | azhaq fuzz -u http://127.0.0.1:3101/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/fuzz-polite.txt -s -ac -rate 5 vs ffuf -u http://127.0.0.1:3101/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/fuzz-polite.txt -s -ac -rate 5)
+  PASS  [polite] fuzz 127.0.0.1:5102 calibrated (-ac): results ≥ the reference's, confirmed by a request that is not the app's catch-all answer  (azhaq 2, reference 2; old bar: 2 of 2 = 100%; hits azhaq 2, ffuf 2, shared 2; 257 words; time ×1.02 of the reference, memory ×2.97 of the reference (44 MB against 15 MB); ffuf only [] | azhaq fuzz -u http://127.0.0.1:5102/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/fuzz-polite.txt -s -ac -rate 5 vs ffuf -u http://127.0.0.1:5102/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/fuzz-polite.txt -s -ac -rate 5)
+  PASS  [polite] fuzz 127.0.0.1:5102 calibrated (-ac): time ≤ 1.05× the reference's  (azhaq 52.4s, reference 51.5s (the median of 3 below 20 s, one run above) | azhaq fuzz -u http://127.0.0.1:5102/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/fuzz-polite.txt -s -ac -rate 5 vs ffuf -u http://127.0.0.1:5102/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/fuzz-polite.txt -s -ac -rate 5)
+  PASS  [polite] screenshots: results ≥ the reference's, confirmed by the image files: each decodes and is not one colour  (azhaq 4, reference 4; old bar: 4 of 4 = 100%; 4 targets; azhaq listed 4, gowitness wrote 4 files; time ×4.62 of the reference, memory ×0.35 of the reference (82 MB against 236 MB) | azhaq shots -l /home/runner/work/azhaq/azhaq/bench/.work/shots-181921-polite/targets.txt -dir /home/runner/work/azhaq/azhaq/bench/.work/shots-181921-polite/azhaq0 -silent -chrome-no-sandbox -rate 5 vs gowitness scan file -f /home/runner/work/azhaq/azhaq/bench/.work/shots-181921-polite/targets.txt --chrome-path /usr/bin/google-chrome -s /home/runner/work/azhaq/azhaq/bench/.work/shots-181921-polite/gowitness0 -q)
+  PASS  [polite] params: results ≥ the reference's, confirmed by the planted server's own list of the parameters it reads (wrong names count against)  (azhaq 8, reference 8; old bar: 9 of 9 = 100%; planted pages: azhaq 8 right 0 wrong, arjun 8 right 0 wrong, of 8; all pages azhaq 9, arjun 9, shared 9; time ×1.01 of the reference, memory ×1.26 of the reference (45 MB against 36 MB) | azhaq params -u http://127.0.0.1:3101/rest/products/search -w /home/runner/work/azhaq/azhaq/bench/.work/burp-parameter-names.txt -silent -rate 5 vs arjun -u http://127.0.0.1:3101/rest/products/search -w /home/runner/work/azhaq/azhaq/bench/.work/burp-parameter-names.txt -oJ /home/runner/work/azhaq/azhaq/bench/.work/params/arjun.json -q --disable-redirects --rate-limit 5)
+  PASS  [polite] params: time ≤ 1.05× the reference's  (azhaq 45.1s, reference 44.5s (the median of 3 below 20 s, one run above) | azhaq params -u http://127.0.0.1:3101/rest/products/search -w /home/runner/work/azhaq/azhaq/bench/.work/burp-parameter-names.txt -silent -rate 5 vs arjun -u http://127.0.0.1:3101/rest/products/search -w /home/runner/work/azhaq/azhaq/bench/.work/burp-parameter-names.txt -oJ /home/runner/work/azhaq/azhaq/bench/.work/params/arjun.json -q --disable-redirects --rate-limit 5)
+  PASS  [polite] subs -live hackerone.com: results ≥ the reference's, confirmed by a name resolving at 9.9.9.9 or 208.67.222.222 (A, AAAA or CNAME)  (azhaq 14, reference 12; old bar: 12 of 12 = 100%; azhaq printed 14, subfinder 32 names, dnsx 12 live; azhaq 14, reference 12 confirmed, both 12; subfinder 12s + dnsx 4s; time ×1.98 of the reference, memory ×1.29 of the reference (59 MB against 46 MB) | azhaq subs -d hackerone.com -live -json -silent -resolvers /home/runner/work/azhaq/azhaq/bench/.work/domains/resolvers.txt -dns-rate 10 vs subfinder -d hackerone.com -silent -json -cs | dnsx -l /home/runner/work/azhaq/azhaq/bench/.work/domains/hackerone.com-polite-names.txt -silent -a -aaaa -cname -r 1.1.1.1,8.8.8.8 -rl 10)
+  FAIL  [polite] subs -live hackerone.com: time ≤ 1.05× the reference's  (azhaq 30.3s, reference 15.3s (the median of 3 below 20 s, one run above) | azhaq subs -d hackerone.com -live -json -silent -resolvers /home/runner/work/azhaq/azhaq/bench/.work/domains/resolvers.txt -dns-rate 10 vs subfinder -d hackerone.com -silent -json -cs | dnsx -l /home/runner/work/azhaq/azhaq/bench/.work/domains/hackerone.com-polite-names.txt -silent -a -aaaa -cname -r 1.1.1.1,8.8.8.8 -rl 10)
+  PASS  [polite] subs -live hackerone.com: every confirmed live name subfinder | dnsx finds is in azhaq's list or its source is named as failed  (0 gaps, 0 unexplained: [])
+  PASS  [polite] subs -live hackerone.com: rows are DNS-confirmed, raw candidates are counted apart and the confirmed set reaches the reference's  (raw candidates 41, DNS-confirmed 14, reference confirmed 12: [])
+  PASS  [polite] subs -live hackerone.com: raw candidates reach the names the reference listed  (azhaq 41 raw candidates, subfinder 32 names)
+  PASS  [polite] subdomain sources: no silent zeros (hackerone.com)  (every empty result is a failure flagged as error or degraded, or a zero every source answered)
+  PASS  [polite] subs -live vulnweb.com: results ≥ the reference's, confirmed by a name resolving at 9.9.9.9 or 208.67.222.222 (A, AAAA or CNAME)  (azhaq 0, reference 0; old bar: reference found none; azhaq printed 3, subfinder 518 names, dnsx 1 live; azhaq 0, reference 0 confirmed, both 0; subfinder 73s + dnsx 58s; time ×1.29 of the reference, memory ×1.35 of the reference (63 MB against 47 MB) [azhaq finished with failures or was stopped: exit status 3 {"type":"summary","command":"subs","version":"0.14.1-0.20261103181129-5508e6d075f0+dirty","complete":false,"exit":3,"results":3,"counts":{"DNS-con…] | azhaq subs -d vulnweb.com -live -json -silent -resolvers /home/runner/work/azhaq/azhaq/bench/.work/domains/resolvers.txt -dns-rate 10 vs subfinder -d vulnweb.com -silent -json -cs | dnsx -l /home/runner/work/azhaq/azhaq/bench/.work/domains/vulnweb.com-polite-names.txt -silent -a -aaaa -cname -r 1.1.1.1,8.8.8.8 -rl 10)
+  FAIL  [polite] subs -live vulnweb.com: time ≤ 1.05× the reference's  (azhaq 167.9s, reference 130.7s (the median of 3 below 20 s, one run above) | azhaq subs -d vulnweb.com -live -json -silent -resolvers /home/runner/work/azhaq/azhaq/bench/.work/domains/resolvers.txt -dns-rate 10 vs subfinder -d vulnweb.com -silent -json -cs | dnsx -l /home/runner/work/azhaq/azhaq/bench/.work/domains/vulnweb.com-polite-names.txt -silent -a -aaaa -cname -r 1.1.1.1,8.8.8.8 -rl 10)
+  PASS  [polite] subs -live vulnweb.com: every confirmed live name subfinder | dnsx finds is in azhaq's list or its source is named as failed  (0 gaps, 0 unexplained: [])
+  PASS  [polite] subs -live vulnweb.com: rows are DNS-confirmed, raw candidates are counted apart and the confirmed set reaches the reference's  (raw candidates 676, DNS-confirmed 3, reference confirmed 0: [])
+  PASS  [polite] subs -live vulnweb.com: raw candidates reach the names the reference listed  (azhaq 676 raw candidates, subfinder 518 names)
+  PASS  [polite] subdomain sources: no silent zeros (vulnweb.com)  (every empty result is a failure flagged as error or degraded, or a zero every source answered)
+  PASS  [polite] urls vulnweb.com: results ≥ the reference's, confirmed by being on the domain and not a static asset, azhaq's list and the URLs it dropped as junk together (the archives refuse this machine, so no other source is asked)  (azhaq 154, reference 149; azhaq 141 listed, 13 dropped as junk (3 fuzzing placeholder or request-line fragment, 2 link cut at the end of its sentence, 4 malformed link (wildcard, quote, bracket, ellipsis), 4 scanner probe), gau 149, missing 0 []; old bar: 136 of 149 = 91%; time ×0.46 of the reference, memory ×3.89 of the reference (48 MB against 12 MB) | azhaq urls -d vulnweb.com -silent vs gau --threads 1 --providers wayback,otx,urlscan --timeout 30 vulnweb.com)
+  PASS  [polite] urls vulnweb.com: time ≤ 1.05× the reference's  (azhaq 20.4s, reference 44.1s (the median of 3 below 20 s, one run above) | azhaq urls -d vulnweb.com -silent vs gau --threads 1 --providers wayback,otx,urlscan --timeout 30 vulnweb.com)
+  PASS  [polite] urls vulnweb.com: every URL gau lists is in azhaq's list or dropped as junk with a reason  (azhaq 141 listed, 13 dropped as junk (3 fuzzing placeholder or request-line fragment, 2 link cut at the end of its sentence, 4 malformed link (wildcard, quote, bracket, ellipsis), 4 scanner probe), gau 149, missing 0 [])
+  PASS  [polite] dns brute force: results ≥ the reference's, confirmed by the lab resolver, asked directly by the bench (A, AAAA or CNAME)  (azhaq 9, reference 9; old bar: 9 of 9 = 100%; azhaq [api.azqlab.lan app.azqlab.lan dev.azqlab.lan mail.azqlab.lan ns1.azqlab.lan ns2.azqlab.lan staging.azqlab.lan vpn.azqlab.lan www.azqlab.lan], dnsx [api.azqlab.lan app.azqlab.lan dev.azqlab.lan mail.azqlab.lan ns1.azqlab.lan ns2.azqlab.lan staging.azqlab.lan vpn.azqlab.lan www.azqlab.lan]; 310 words on azqlab.lan; time ×0.95 of the reference, memory ×0.99 of the reference (45 MB against 45 MB) | azhaq dns -d azqlab.lan -w /home/runner/work/azhaq/azhaq/bench/.work/brute/words-polite.txt -resolvers /home/runner/work/azhaq/azhaq/bench/.work/brute/resolvers.txt -silent -dns-rate 10 vs dnsx -d azqlab.lan -w /home/runner/work/azhaq/azhaq/bench/.work/brute/words-polite.txt -r 127.0.0.1:45821 -silent -rl 10)
+  PASS  [polite] dns brute force: time ≤ 1.05× the reference's  (azhaq 29.2s, reference 30.6s (the median of 3 below 20 s, one run above) | azhaq dns -d azqlab.lan -w /home/runner/work/azhaq/azhaq/bench/.work/brute/words-polite.txt -resolvers /home/runner/work/azhaq/azhaq/bench/.work/brute/resolvers.txt -silent -dns-rate 10 vs dnsx -d azqlab.lan -w /home/runner/work/azhaq/azhaq/bench/.work/brute/words-polite.txt -r 127.0.0.1:45821 -silent -rl 10)
+  PASS  [polite] dns record types: results ≥ the reference's, confirmed by the zone the bench serves (a name and type it holds)  (azhaq 12, reference 12; 32 names, 9 types; queries received azhaq 289, dnsx 523; time ×0.86 of the reference, memory ×0.97 of the reference (43 MB against 45 MB) | azhaq dns -l /home/runner/work/azhaq/azhaq/bench/.work/dns/names.txt -resolvers /home/runner/work/azhaq/azhaq/bench/.work/dns/resolvers.txt -json -silent -a -aaaa -cname -mx -ns -txt -srv -caa -soa -rl 10 vs dnsx -l /home/runner/work/azhaq/azhaq/bench/.work/dns/names.txt -r 127.0.0.1:49791 -json -silent -a -aaaa -cname -mx -ns -txt -srv -caa -soa -rl 10)
+  PASS  [polite] dns record types: time ≤ 1.05× the reference's  (azhaq 3.0s, reference 3.5s (the median of 3 below 20 s, one run above) | azhaq dns -l /home/runner/work/azhaq/azhaq/bench/.work/dns/names.txt -resolvers /home/runner/work/azhaq/azhaq/bench/.work/dns/resolvers.txt -json -silent -a -aaaa -cname -mx -ns -txt -srv -caa -soa -rl 10 vs dnsx -l /home/runner/work/azhaq/azhaq/bench/.work/dns/names.txt -r 127.0.0.1:49791 -json -silent -a -aaaa -cname -mx -ns -txt -srv -caa -soa -rl 10)
+  PASS  [polite] dns record types: azhaq's JSON values equal dnsx's  (0 differences [])
+  PASS  [polite] dns record types: queries per second at the server within the rate, or no more than dnsx's at the same setting  (most in one second: azhaq 91, dnsx 180 (rate 10 per second; 289 and 523 queries))
+  PASS  [polite] dns -ptr: results ≥ the reference's, confirmed by the zone's PTR records  (azhaq 2, reference 2; azhaq [app.bench.lan www.bench.lan], dnsx [app.bench.lan www.bench.lan]; time ×0.03 of the reference, memory ×0.00 of the reference (0 MB against 43 MB) | azhaq dns -l /home/runner/work/azhaq/azhaq/bench/.work/dns/ips.txt -resolvers /home/runner/work/azhaq/azhaq/bench/.work/dns/resolvers.txt -ptr -json -silent vs dnsx -l /home/runner/work/azhaq/azhaq/bench/.work/dns/ips.txt -r 127.0.0.1:49791 -ptr -json -silent)
+  PASS  [polite] dns -ptr: time ≤ 1.05× the reference's  (azhaq 0.0s, reference 0.5s (the median of 3 below 20 s, one run above) | azhaq dns -l /home/runner/work/azhaq/azhaq/bench/.work/dns/ips.txt -resolvers /home/runner/work/azhaq/azhaq/bench/.work/dns/resolvers.txt -ptr -json -silent vs dnsx -l /home/runner/work/azhaq/azhaq/bench/.work/dns/ips.txt -r 127.0.0.1:49791 -ptr -json -silent)
+  PASS  [polite] ports scanme.nmap.org top-1000: results ≥ the reference's, confirmed by an independent TCP connect  (azhaq 3, reference 3; old bar: 3 of 3 = 100%; azhaq only [], naabu only []; time ×0.16 of the reference, memory ×0.81 of the reference (47 MB against 58 MB) | azhaq ports -host scanme.nmap.org -p top-1000 -silent -rate 100 vs naabu -host scanme.nmap.org -top-ports 1000 -scan-type c -Pn -silent -rate 100)
+  PASS  [polite] ports scanme.nmap.org top-1000: time ≤ 1.05× the reference's  (azhaq 10.1s, reference 61.8s (the median of 3 below 20 s, one run above) | azhaq ports -host scanme.nmap.org -p top-1000 -silent -rate 100 vs naabu -host scanme.nmap.org -top-ports 1000 -scan-type c -Pn -silent -rate 100)
+  PASS  [polite] ports 127.0.0.1 top-1000: results ≥ the reference's, confirmed by `ss -ltn` taken before and after the scan  (azhaq 1, reference 1; old bar: 1 of 1 = 100%; sockets listening throughout and missed: azhaq [], naabu []; time ×0.31 of the reference, memory ×0.78 of the reference (47 MB against 60 MB) | azhaq ports -host 127.0.0.1 -p top-1000 -silent -rate 100 vs naabu -host 127.0.0.1 -top-ports 1000 -scan-type c -Pn -silent -rate 100)
+  PASS  [polite] ports 127.0.0.1 top-1000: time ≤ 1.05× the reference's  (azhaq 9.9s, reference 31.6s (the median of 3 below 20 s, one run above) | azhaq ports -host 127.0.0.1 -p top-1000 -silent -rate 100 vs naabu -host 127.0.0.1 -top-ports 1000 -scan-type c -Pn -silent -rate 100)
+  PASS  [polite] ports 127.0.0.0/28: results ≥ the reference's, confirmed by the listeners the bench opened (a port that is not one counts against)  (azhaq 4, reference 4; planted 4; azhaq 4 of them, 4 reported; naabu 4, 4 reported; time ×0.19 of the reference, memory ×0.78 of the reference (44 MB against 57 MB) | azhaq ports -host 127.0.0.0/28 -p 40789,35421,44927,32923,42027,39901 -silent -rate 100 vs naabu -host 127.0.0.0/28 -p 40789,35421,44927,32923,42027,39901 -scan-type c -Pn -silent -rate 100)
+  PASS  [polite] ports 127.0.0.0/28: time ≤ 1.05× the reference's  (azhaq 0.9s, reference 4.6s (the median of 3 below 20 s, one run above) | azhaq ports -host 127.0.0.0/28 -p 40789,35421,44927,32923,42027,39901 -silent -rate 100 vs naabu -host 127.0.0.0/28 -p 40789,35421,44927,32923,42027,39901 -scan-type c -Pn -silent -rate 100)
+  PASS  [polite] services (nmap -sV): results ≥ the reference's, confirmed by the lab's own list of what runs on each port (bench/services.yaml) and `ss` showing every port listening  (azhaq 15, reference 13; 15 ports; with a product and version: azhaq 14, nmap 12; azhaq missed []; nmap missed [11883 mosquitto (mqtt): "" 21211 memcached: "unknown"]; time ×0.02 of the reference, memory ×0.51 of the reference (45 MB against 89 MB) | azhaq ports -host 127.0.0.1 -p 16379,13306,15432,17017,11883,15682,21211,12222,10021,10025,18825,10389,10445,19200,10053 -json -silent -rate 100 vs nmap -sV -Pn -p 16379,13306,15432,17017,11883,15682,21211,12222,10021,10025,18825,10389,10445,19200,10053 -oX - 127.0.0.1 --max-rate 100)
+  PASS  [polite] services (nmap -sV): time ≤ 1.05× the reference's  (azhaq 2.9s, reference 142.4s (the median of 3 below 20 s, one run above) | azhaq ports -host 127.0.0.1 -p 16379,13306,15432,17017,11883,15682,21211,12222,10021,10025,18825,10389,10445,19200,10053 -json -silent -rate 100 vs nmap -sV -Pn -p 16379,13306,15432,17017,11883,15682,21211,12222,10021,10025,18825,10389,10445,19200,10053 -oX - 127.0.0.1 --max-rate 100)
+  PASS  [polite] services: azhaq names ≥ 90% of the lab's TCP services  (15 of 15)
+  PASS  [polite] probe: results ≥ the reference's, confirmed by a GET to the host itself giving the status the tool reported  (azhaq 105, reference 105; old bar: 105 of 105 = 100%; 107 hosts (5 apps, the services lab's web ports, 100 local servers); answered azhaq 107, httpx 105, shared 105; time ×0.97 of the reference, memory ×0.39 of the reference (85 MB against 218 MB) | azhaq probe -l /home/runner/work/azhaq/azhaq/bench/.work/probe/hosts.txt -json -silent -favicon -fr -rl 5 vs httpx -l /home/runner/work/azhaq/azhaq/bench/.work/probe/hosts.txt -silent -json -fr -td -cdn -favicon -title -sc -no-color -rl 5)
+  PASS  [polite] probe: time ≤ 1.05× the reference's  (azhaq 21.3s, reference 22.0s (the median of 3 below 20 s, one run above) | azhaq probe -l /home/runner/work/azhaq/azhaq/bench/.work/probe/hosts.txt -json -silent -favicon -fr -rl 5 vs httpx -l /home/runner/work/azhaq/azhaq/bench/.work/probe/hosts.txt -silent -json -fr -td -cdn -favicon -title -sc -no-color -rl 5)
+  PASS  [polite] probe: status, title and tech agree with httpx on ≥ 95% of shared hosts  (all three 104/105 (status 105, title 105, tech 104; 0 redirects out of the site compared by their own status))
+  PASS  [polite] probe public sites (5/s): results ≥ the reference's, confirmed by a GET to the site giving the status the tool reported (a redirect out of the site counts)  (azhaq 1, reference 1; [ginandjuice.shop testphp.vulnweb.com demo.testfire.net]; one run each; time ×0.49 of the reference, memory ×0.38 of the reference (82 MB against 216 MB) | azhaq probe -l /home/runner/work/azhaq/azhaq/bench/.work/probe/public.txt -json -silent -rate 5 -H User-Agent: azhaq-bench/1 (+https://github.com/lilsadfoqs/azhaq) -fr vs httpx -l /home/runner/work/azhaq/azhaq/bench/.work/probe/public.txt -silent -json -fr -title -sc -rl 5 -t 1 -H User-Agent: azhaq-bench/1 (+https://github.com/lilsadfoqs/azhaq) -no-color)
+  PASS  [polite] probe public sites (5/s): time ≤ 1.05× the reference's  (azhaq 10.5s, reference 21.7s (the median of 3 below 20 s, one run above) | azhaq probe -l /home/runner/work/azhaq/azhaq/bench/.work/probe/public.txt -json -silent -rate 5 -H User-Agent: azhaq-bench/1 (+https://github.com/lilsadfoqs/azhaq) -fr vs httpx -l /home/runner/work/azhaq/azhaq/bench/.work/probe/public.txt -silent -json -fr -title -sc -rl 5 -t 1 -H User-Agent: azhaq-bench/1 (+https://github.com/lilsadfoqs/azhaq) -no-color)
+  PASS  [polite] notify: results ≥ the reference's, confirmed by the stub's own log (a request with the message in its body, per provider)  (azhaq 6, reference 6; 6 messages to 2 providers; distinct requests at the stub: azhaq 6, notify 6; time ×0.99 of the reference, memory ×1.62 of the reference (41 MB against 25 MB) [azhaq finished with failures or was stopped: exit status 3   exit 3: the targets given cannot be counted (addresses, ranges), so any failure exits 3; what is marked ! failed] | azhaq notify -i /home/runner/work/azhaq/azhaq/bench/.work/notify/input.txt -provider-config /home/runner/work/azhaq/azhaq/bench/.work/notify/azhaq.yaml -silent -rl 5 vs notify -i /home/runner/work/azhaq/azhaq/bench/.work/notify/input.txt -provider-config /home/runner/work/azhaq/azhaq/bench/.work/notify/notify.yaml -silent -duc -rl 5)
+  PASS  [polite] notify: time ≤ 1.05× the reference's  (azhaq 1.0s, reference 1.0s (the median of 3 below 20 s, one run above) | azhaq notify -i /home/runner/work/azhaq/azhaq/bench/.work/notify/input.txt -provider-config /home/runner/work/azhaq/azhaq/bench/.work/notify/azhaq.yaml -silent -rl 5 vs notify -i /home/runner/work/azhaq/azhaq/bench/.work/notify/input.txt -provider-config /home/runner/work/azhaq/azhaq/bench/.work/notify/notify.yaml -silent -duc -rl 5)
+  PASS  drop-in: azhaq crawl finds every Juice Shop route its pages and scripts name  (69/69 (8 more known routes only the full map reaches; crawl found 0 of them))
+  PASS  drop-in: azhaq probe reads stdin and writes httpx's JSON fields  (2 of 2 local apps, fields true)
+  PASS  export: OpenAPI of VAmPI holds every path of its own description  (12/12)
+  PASS  export: targets and HTML report  (targets 2 of 2, HTML 7372 bytes with its sections true)
+  PASS  scope: no request leaves the program's scope  (0 requests to the out-of-scope host (links, scripts, a redirect, a form, robots.txt; path, parameter, port and GraphQL modules on); 6 in-scope URLs mapped)
+  PASS  scope: no request leaves the program's scope with Chrome (-browser, -login, shots)  (0 requests to the out-of-scope host from run -browser (exit 0), run -login (exit 1: the sign-in form posts to the trap, so it is refused), shots (exit 0) and crawl -browser (exit 0))
+  PASS  watch: an unchanged app reports no change  (3 runs, 0 reported changes [])
+  PASS  secrets: everything jsluice finds in the planted script, and more  (azhaq 12 values, jsluice 4, shared 4)
+  PASS  roles: anon → member → owner on a multi-tenant app, signed in with Chrome  (6/6 rows as expected; wrong []; extra []; /logout requested with a session 5 times (the session check signs in again) )
+  PASS  scale: a run stopped by -max-requests and resumed maps everything one run maps  (2 processes of at most 100 requests (Juice Shop received at most 100 from one); 735 URLs, one run 733, 0 missing)
+  FAIL  scale: a stopped and resumed run sends at most 10% more than one run  (192 requests over 2 processes, one run 158)
+  PASS  scale: a run killed with SIGKILL and resumed maps everything one run maps  (killed after 0.9s; 751 URLs, one run 733)
+  PASS  scale: a run shared with two workers maps everything one run maps  (733 URLs, one run 733; the workers ran 165 tasks)
+  PASS  claims: the counter forwards and logs a WebSocket upgrade (Juice Shop socket.io)  (answer "HTTP/1.1 101 Switching Protocols", logged 1 requests, upgrade flag true )
+  PASS  claims: run unpaced: summary = ledger = what arrived  (summary 157, ledger 157 (http 157), counter 157)
+  PASS  claims: run rate 10: summary = ledger = what arrived  (summary 157, ledger 157 (http 157), counter 157)
+  PASS  claims: run rate 2: summary = ledger = what arrived  (summary 60, ledger 60 (http 60), counter 60)
+  PASS  claims: run -browser unpaced: summary = ledger = what arrived  (summary 259, ledger 259 (chrome 96, http 163), counter 259; socket.io requests at the counter 0, WebSocket upgrades 0)
+  PASS  claims: run -browser rate 10: summary = ledger = what arrived  (summary 200, ledger 200 (chrome 67, http 133), counter 200; socket.io requests at the counter 0, WebSocket upgrades 0)
+  PASS  claims: run -browser rate 2: summary = ledger = what arrived  (summary 60, ledger 60 (chrome 13, http 47), counter 60; socket.io requests at the counter 0, WebSocket upgrades 0)
+  PASS  claims: shots unpaced: summary = ledger = what arrived  (summary 51, ledger 51 (chrome 50, http 1), counter 51)
+  PASS  claims: shots rate 2: summary = ledger = what arrived  (summary 49, ledger 49 (chrome 48, http 1), counter 49)
+  PASS  claims: run -login unpaced: summary = ledger = what arrived  (summary 97, ledger 97 (chrome 10, http 87), counter 97)
+  PASS  claims: run -login rate 10: summary = ledger = what arrived  (summary 97, ledger 97 (chrome 10, http 87), counter 97)
+  PASS  claims: run -login rate 2: summary = ledger = what arrived  (summary 60, ledger 60 (chrome 8, http 52), counter 60)
+  PASS  claims: run -login -browser unpaced: summary = ledger = what arrived  (summary 118, ledger 118 (chrome 31, http 87), counter 118)
+  PASS  claims: run -login -browser rate 10: summary = ledger = what arrived  (summary 118, ledger 118 (chrome 31, http 87), counter 118)
+  PASS  claims: run -login -browser rate 2: summary = ledger = what arrived  (summary 60, ledger 60 (chrome 19, http 41), counter 60)
+  PASS  claims: roles unpaced: summary = ledger = what arrived  (summary 168, ledger 168 (http 168), counter 168)
+  PASS  claims: roles rate 10: summary = ledger = what arrived  (summary 180, ledger 180 (http 180), counter 180)
+  PASS  claims: roles rate 2: summary = ledger = what arrived  (summary 60, ledger 60 (http 60), counter 60)
+  PASS  claims: roles -replay-writes put unpaced: summary = ledger = what arrived  (summary 161, ledger 161 (http 161), counter 161)
+  PASS  claims: roles -replay-writes put rate 10: summary = ledger = what arrived  (summary 175, ledger 175 (http 175), counter 175)
+  PASS  claims: roles -replay-writes put rate 2: summary = ledger = what arrived  (summary 60, ledger 60 (http 60), counter 60)
+  PASS  claims: dirs unpaced: summary = ledger = what arrived  (summary 504, ledger 504 (http 504), counter 504)
+  PASS  claims: dirs rate 10: summary = ledger = what arrived  (summary 200, ledger 200 (http 200), counter 200)
+  PASS  claims: dirs rate 2: summary = ledger = what arrived  (summary 60, ledger 60 (http 60), counter 60)
+  PASS  claims: fuzz unpaced: summary = ledger = what arrived  (summary 506, ledger 506 (http 506), counter 506)
+  PASS  claims: fuzz rate 10: summary = ledger = what arrived  (summary 200, ledger 200 (http 200), counter 200)
+  PASS  claims: fuzz rate 2: summary = ledger = what arrived  (summary 60, ledger 60 (http 60), counter 60)
+  PASS  claims: params unpaced: summary = ledger = what arrived  (summary 8, ledger 8 (http 8), counter 8)
+  PASS  claims: params rate 10: summary = ledger = what arrived  (summary 8, ledger 8 (http 8), counter 8)
+  PASS  claims: params rate 2: summary = ledger = what arrived  (summary 8, ledger 8 (http 8), counter 8)
+  PASS  claims: ports -p unpaced: summary = ledger = what arrived  (summary 83, ledger 83 (tcp 83), counter 80; accepts map[127.0.0.1:33151:26 127.0.0.1:43891:26 127.0.0.1:44307:1 127.0.0.1:44463:1 127.0.0.1:46183:26]; HTTP requests answered 1, http ledger lines 0)
+  PASS  claims: ports -pu unpaced: summary = ledger = what arrived  (summary 14, ledger 14 (udp 14), counter 13; datagrams map[127.0.0.1:37459:1 127.0.0.1:37521:4 127.0.0.1:58402:4 127.0.0.1:60070:4])
+  PASS  claims: ports -p rate 5: summary = ledger = what arrived  (summary 83, ledger 83 (tcp 83), counter 80; accepts map[127.0.0.1:37633:1 127.0.0.1:42581:26 127.0.0.1:43425:26 127.0.0.1:45147:1 127.0.0.1:46115:26]; HTTP requests answered 1, http ledger lines 0)
+  PASS  claims: ports -pu rate 5: summary = ledger = what arrived  (summary 14, ledger 14 (udp 14), counter 13; datagrams map[127.0.0.1:33782:4 127.0.0.1:38118:1 127.0.0.1:39798:4 127.0.0.1:43406:4])
+  PASS  claims: mcp budget 60 unpaced: summary = ledger = what arrived  (first azhaq_map: summary 60, ledger 60 (http 60), counter 60; second azhaq_map: summary 0, ledger 0 (), counter 0; azhaq_ports after the budget is spent: summary 0, ledger 0 (), counter 0; result: the request budget of this server (60) is spent; restart azhaq mcp with a larger -max-requests; together: summary 60, ledger 60, counter 60)
+  PASS  claims: mcp budget 2 unpaced: summary = ledger = what arrived  (two calls at once: summary 2, ledger 2 (http 2), counter 2; call 1: 0 (refused: budget spent); call 2: 2 ({"highlights":[{"coverage":"visited","key":"http://127.0.0.1:36275/","role":"app","status":200,"title":"OWASP Juice Shop…))
+  PASS  claims: budget -max-requests 40 unpaced: summary = ledger = what arrived  (run: summary 40, ledger 40 (http 40), counter 40; resume: summary 40, ledger 40 (http 40), counter 40; together: summary 80, ledger 80, counter 80)
+  PASS  claims: kill switch run rate 10: summary = ledger = what arrived  (run: summary 31, ledger 31 (http 31), counter 31; last request 0.00s after the file, exit 4; resume: summary 80, ledger 80 (http 80), counter 80; together: summary 111, ledger 111, counter 111)
+  PASS  claims: kill switch run rate 2: summary = ledger = what arrived  (run: summary 6, ledger 6 (http 6), counter 6; last request 0.00s after the file, exit 4; resume: summary 80, ledger 80 (http 80), counter 80; together: summary 86, ledger 86, counter 86)
+  PASS  claims: kill switch shots rate 5: summary = ledger = what arrived  (run: summary 12, ledger 12 (chrome 11, http 1), counter 12; last request 0.00s after the file, exit 4; resume: summary 52, ledger 52 (chrome 52), counter 52; together: summary 64, ledger 64, counter 64)
+  PASS  asn: announced prefixes match registered routes  (AS394161: azhaq 102 (RIPEstat), RADb 39, shared 31)
+  PASS  ptr: ≥ 95% of dnsx -ptr's answers  (45.33.32.128/25: azhaq 36, dnsx 36, shared 36 addresses with a reverse name)
+  PASS  lab: ports -pu finds the DNS lab's UDP port open  (azhaq ports -host 127.0.0.1 -p none -pu top,45821: 1 rows)
+  PASS  lab: subs -w -live gives the names with an address or a CNAME, as dnsx -a -cname lists them  (10 names resolve at the lab, azhaq printed 10; missing [], extra []; azhaq subs -d azqlab.lan -w WORDS -resolvers LAB -live)
+  PASS  lab: subs -live marks a name with a CNAME and no address as cname_only, and no other  (names wrongly marked or unmarked: []; azhaq subs -d azqlab.lan -w WORDS -resolvers LAB -live -json)
+  PASS  lab: a wildcard subzone gives only its real name  (azhaq dns -d wild.azqlab.lan -w WORDS: [real.wild.azqlab.lan] (the lab answers 5 for every label; only real.wild differs))
+  PASS  lab: run -domain -passive names the dangling CNAMEs (assets, docs, old-shop)  (takeover candidates named: [assets docs old-shop]; exit 0)
+  PASS  openapi: the export of Juice Shop is a valid OpenAPI 3 document  (76 paths; 0 problems [])
+  PASS  openapi: the export of VAmPI is a valid OpenAPI 3 document  (12 paths; 0 problems [])
+  PASS  openapi: the export of DVGA is a valid OpenAPI 3 document  (2 paths; 0 problems [])
+  PASS  openapi: the export of duplicate /blog and /blog/ is a valid OpenAPI 3 document  (3 paths; 0 problems [])
+  PASS  openapi: the export of ginandjuice.shop is a valid OpenAPI 3 document  (16 paths; 0 problems [])
+  PASS  docs: no public doc says an active option needs -allow or a scope, or that requests are GETs only (without HEAD, or in a plan or an MCP description)  (0 lines: [])
+  PASS  docs: README's 'Latest run (date, vX)' names the newest release (CHANGELOG) and is not older than the tag  (README "0.14.0" on 2026-11-01, CHANGELOG newest "0.14.0", latest tag "0.14.0", newest bench record 2026-11-01)
+  PASS  watch: a deploy that changes routes is reported as expected.md says, and no deploy is "no change"  (azhaq watch -db DB -- -url http://127.0.0.1:38237/ -allow HOST: v1, v1 again, then v2; 4 changes after the deploy: fields PUT /api/profile +role; gone /api/legacy/report; methods /api/orders/{id} +DELETE; new POST /api/v2/export fields format,userId)
+
+203 of 210 checks pass
+  note: azhaq on notify (default): exit status 3   exit 3: the targets given cannot be counted (addresses, ranges), so any failure exits 3; what is marked ! failed
+  note: azhaq on notify (default): exit status 3   exit 3: the targets given cannot be counted (addresses, ranges), so any failure exits 3; what is marked ! failed
+  note: azhaq on notify (default): exit status 3   exit 3: the targets given cannot be counted (addresses, ranges), so any failure exits 3; what is marked ! failed
+  note: azhaq on notify (default): exit status 3 azhaq watch: POST http://127.0.0.1:40633/…: dial tcp 127.0.0.1:40633: connect: connection refused (after 3 tries)
+  note: azhaq on vulnweb.com (polite): exit status 3 {"type":"summary","command":"subs","version":"0.14.1-0.20261103181129-5508e6d075f0+dirty","complete":false,"exit":3,"results":3,"counts":{"DNS-confirmed":3,"collected":99,"did not resolve":620,"from sources":677,"no answer":53,"off-by-default failed":0,"raw candidates":676,"resolved from sources":3,"sources answered":12,"sources asked":14,"sources failed":2,"the domain itself":1},"seconds":167.912,"requests":0,"dns_queries":2681,"run_id":"166597cd-2e60-4dee-a86f-f7b74f31f701","failures":55,"failed":[{"collector":"azhaq-dns","error":"timeout","retryable":true,"count":53,"targets":["testphp.vulnweb.com","testhtml5.vulnweb.com","testasp.vulnweb.com","html5.vulnweb.com","php.vulnweb.com","testhmtml5.vulnweb.com","estphp.vulnweb.com","virus.vulnweb.com","www.test.php.vulnweb.com","testpphp.vulnweb.com","rest.vulnweb.com","test.vulnweb.com","zzz.vulnweb.com","www.gd5.vulnweb.com","3-3-69.us-east-2.compute.vulnweb.com","jabatestphp.vulnweb.com","infolab.vulnweb.com","ec2-54-171-215-132.eu-west-1.compute.vulnweb.com","h4.vulnweb.com","ec2-3-211-45-81.compute-1.vulnweb.com","user.vulnweb.com","search-es-spoon-kr-api-product-eltsagishrb2ve2pcda6i46a6u.ap-northeast-1.es.vulnweb.com","january2009edtestasp.vulnweb.com","s3.us-gov-east-1.vulnweb.com","news.vulnweb.com","teste.vulnweb.com","testaps.vulnweb.com","bing.com.vulnweb.com","webtierssl-1657747348.us-west-1.elb.vulnweb.com","29cd17f3faa.elb.us-east-1.vulnweb.com","markus.vulnweb.com","gd.vulnweb.com","zz.vulnweb.com","remus.vulnweb.com","httptestasp.vulnweb.com","0-30.ap-northeast-1.compute.vulnweb.com","dev.vulnweb.com","digital-defense-load-balancer-1314805317.us-east-1.elb.vulnweb.com","9ac83b4d29c705000a7dc1-1759549683.eu-west-1.elb.vulnweb.com","www.textphp.vulnweb.com","129.eu-west-1.compute.vulnweb.com","testnet.vulnweb.com","janus-go.hkgf3k.ng.0001.apse1.cache.vulnweb.com","ec2-13-210-145-106.ap-southeast-2.compute.vulnweb.com","pic.vulnweb.com","gd3.vulnweb.com","ec2-35-164-39-246.us-west-2.compute.vulnweb.com","cs.vulnweb.com","i.vulnweb.com","testphpnet.vulnweb.com","baidu.vulnweb.com","sites.vulnweb.com","testmetasploitable.vulnweb.com"]},{"collector":"azhaq-subdomains","source":"waybackarchive","error":"timeout","retryable":true,"count":1,"targets":["vulnweb.com"],"partial":true},{"collector":"azhaq-subdomains","source":"commoncrawl","error":"HTTP 502","retryable":true,"count":1,"targets":["vulnweb.com"],"partial":true}],"degraded":true,"degraded_by":[{"source":"commoncrawl","error":"HTTP 502","domains":1},{"source":"waybackarchive","error":"timeout","domains":1}],"sources":{"asked":14,"answered":12,"failed":2,"names":{"anubis":14,"certspotter":0,"commoncrawl":0,"crtname":18,"crtsh":0,"hackertarget":6,"hudsonrock":7,"rapiddns":87,"scanmalware":1,"shodanct":0,"sitedossier":0,"subdomaincenter":500,"thc":13,"waybackarchive":0},"requests":{"anubis":1,"certspotter":1,"commoncrawl":2,"crtname":1,"crtsh":1,"hackertarget":1,"hudsonrock":1,"rapiddns":1,"scanmalware":3,"shodanct":1,"sitedossier":2,"subdomaincenter":2,"thc":1,"waybackarchive":1},"seconds":{"anubis":0.1,"certspotter":0.2,"commoncrawl":8.3,"crtname":0.5,"crtsh":13.5,"hackertarget":0.5,"hudsonrock":0.1,"rapiddns":1.4,"scanmalware":0.7,"shodanct":0.1,"sitedossier":1.7,"subdomaincenter":147.2,"thc":0.9,"waybackarchive":30},"failed_sources":{"commoncrawl":"unexpected status code 502 received from https://index.commoncrawl.org/CC-MAIN-2022-49-index?url=*.vulnweb.com","waybackarchive":"no answer in 30s (-source-timeout)"}},"notes":["vulnweb.com: crtsh gave a partial answer: crt.sh database: pq: no more connections allowed (max_client_conn); asked the JSON API","vulnweb.com: subdomaincenter took 147 s, the next slowest source 30 s, so it held the run (-source-timeout bounds each source: a shorter one ends the wait sooner and its names are then missing; -exclude-sources subdomaincenter drops it; -v lists them all)","vulnweb.com: checking the 1154 names history, subdomaincenter guessed in DNS took 147 s, before they were kept or dropped (-dns-rate paces it; -exclude-sources history,subdomaincenter leaves them out)","vulnweb.com: subdomaincenter was asked for 1 sample of its guesses (the first is what subfinder | dnsx checks) and not again: another sample would not fit the 20 s budget for further samples; up to 11 more samples left untaken; -guess-samples N takes up to N samples while each finds a new name that resolves or the pool is not yet covered, with no time budget","no answer from 8.8.8.8 for 27 names (timed out), 1.1.1.1 for 26 names (timed out): those names are left out, neither live nor dead; ask again with other -resolvers or a lower -dns-rate","sources: history 99, rapiddns 87, crtname 18, anubis 14, thc 12, hudsonrock 7, hackertarget 6, subdomaincenter 3, +1 more","count: 677 from the sources − 1 the domain itself, not a subdomain − 620 did not resolve − 53 no answer from the resolvers = 3 printed","tiers: 676 raw candidates (what the sources gave; a row's sources say who); 3 DNS-confirmed (resolved); HTTP-confirmed not asked (-http): a candidate is never counted as confirmed","name history /home/runner/work/azhaq/azhaq/bench/.work/data-20261103T181340/names/vulnweb.com.json: 180 names read, 100 written; it keeps the names the sources gave and the history's own that resolved, not -w, -permute or CNAME-target names; -no-history leaves it alone","coverage (raw candidates): what the independent sources know, not every name that exists. Their pool holds about 592 names and this run has 100 of them","coverage (DNS-confirmed): what the independent sources know, not every name that exists. Their pool holds about 3 names and this run has 3 of them"],"cost":{"estimate":{"source_queries":14},"estimate_at_least":true,"actual":{"dns_queries":2681,"source_queries":19},"stages":[{"stage":"sources","estimate":{"source_queries":14},"estimate_at_least":true,"not_counted":"names and archived URLs found are asked about too","actual":{"dns_queries":2077,"source_queries":19},"collectors":[{"collector":"azhaq-subdomains","estimate":{"source_queries":14},"actual":{"dns_queries":2077,"source_queries":19}}]},{"stage":"other","actual":{"dns_queries":604}}]}}
+  note: azhaq on notify (polite): exit status 3   exit 3: the targets given cannot be counted (addresses, ranges), so any failure exits 3; what is marked ! failed
+  note: azhaq on notify (polite): exit status 3   exit 3: the targets given cannot be counted (addresses, ranges), so any failure exits 3; what is marked ! failed
+  note: azhaq on notify (polite): exit status 3   exit 3: the targets given cannot be counted (addresses, ranges), so any failure exits 3; what is marked ! failed
+  note: azhaq on scope (): exit status 1 azhaq: -login http://127.0.0.1:46311/login: the sign-in went to 127.0.0.2, outside the scope: add it with -allow 127.0.0.2
+  note: azhaq on scale (): exit status 4   exit 4: stopped by a limit with work left
+
+1 reference runs replayed from today's (their times are that run's); -fresh runs them again
+
+record bench/joined/2026-11-03T181340-5508e6d.json (joined from 18)
+exit status 1
