@@ -988,9 +988,9 @@ func obsKey(o types.StoredObservation) string {
 var volatile = []string{"body_hash", "auth", "length", "words", "lines", "ms", "ip", "json_ids"}
 
 // stablePayload is the payload as diff compares it: volatile fields
-// dropped, per-source timings dropped and response headers reduced to
+// dropped, per-source timings dropped, response headers reduced to
 // their names (rate-limit counters and request IDs change on every
-// request).
+// request) and a catch-all control reduced to its directory and answer.
 func stablePayload(raw json.RawMessage) string {
 	var m map[string]any
 	if json.Unmarshal(raw, &m) != nil {
@@ -1005,6 +1005,17 @@ func stablePayload(raw json.RawMessage) string {
 				delete(row, "seconds")
 			}
 		}
+	}
+	if c, ok := m["control"].(map[string]any); ok {
+		// The control's path is random in every run, and its size follows
+		// the name when the page echoes it: what it proved is its status,
+		// type and title, in the directory it was asked in.
+		if u, ok := c["url"].(string); ok {
+			if i := strings.LastIndex(u, "/"); i >= 0 {
+				c["url"] = u[:i+1]
+			}
+		}
+		delete(c, "size")
 	}
 	if h, ok := m["headers"].(map[string]any); ok {
 		names := make([]string, 0, len(h))
