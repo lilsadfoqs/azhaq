@@ -300,6 +300,16 @@ func variants(host string, words []string) []string {
 
 var trailingNumber = lazyre.New(`^(.*?)(\d+)$`)
 
+// PermuteCount is how many names Permute asks for host: the variations it
+// has before a limit or an answer shortens them.
+func PermuteCount(host string) int {
+	host = normalize.Hostname(host)
+	if d := normalize.RegistrableDomain(host); d == "" || host == d {
+		return 0
+	}
+	return len(variants(host, PermuteWords))
+}
+
 // PermuteSample is two of the names Permute would ask for host: a number
 // next to its first label and an environment word joined to it.
 func PermuteSample(host string) []string {

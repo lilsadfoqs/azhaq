@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/lilsadfoqs/azhaq/internal/collectors/brutecol"
 	"github.com/lilsadfoqs/azhaq/internal/collectors/dirscol"
 	"github.com/lilsadfoqs/azhaq/internal/collectors/portcol"
 	"github.com/lilsadfoqs/azhaq/internal/ledger"
@@ -249,6 +250,7 @@ func estimateCost(seeds []types.Seed, planned [][]string, runs func(string) bool
 		}
 		return false
 	}
+	permuteNoted := false
 	services := 0 // web services known: the URLs given, and the names given, which are asked to answer
 	for i, s := range seeds {
 		for _, c := range planned[i] {
@@ -262,7 +264,10 @@ func estimateCost(seeds []types.Seed, planned [][]string, runs func(string) bool
 			case "azhaq-dns-brute":
 				e.add(c, amount{DNS: int64(env.bruteN)}, "")
 			case "azhaq-permute":
-				e.add(c, amount{}, "variations of the names found")
+				// The variations of a name given are known; the names a source or
+				// a lookup gives later bring variations of their own.
+				e.add(c, amount{DNS: int64(brutecol.PermuteCount(s.Key()))}, permuteOpen)
+				permuteNoted = true
 			case "azhaq-tls":
 				e.add(c, amount{Connects: 1}, "")
 			case "azhaq-ports":
@@ -275,6 +280,14 @@ func estimateCost(seeds []types.Seed, planned [][]string, runs func(string) bool
 		case types.TypeHostname:
 			if has(i, "azhaq-http") {
 				services++
+			}
+		}
+	}
+	if active["permute"] && !permuteNoted {
+		for _, s := range seeds {
+			if s.Type == types.TypeDomain || s.Type == types.TypeHostname {
+				e.add("azhaq-permute", amount{}, permuteOpen)
+				break
 			}
 		}
 	}
@@ -304,6 +317,10 @@ func estimateCost(seeds []types.Seed, planned [][]string, runs func(string) bool
 	}
 	return e.result()
 }
+
+// permuteOpen is what -permute's estimate leaves out: the names the sources
+// and the lookups give are not known before they answer.
+const permuteOpen = "variations of the names the sources and lookups find (-permute)"
 
 // portCost is what one address costs the port scan: a connect for each port,
 // the two that tell whether it is up first, the datagrams of -ports-udp.
