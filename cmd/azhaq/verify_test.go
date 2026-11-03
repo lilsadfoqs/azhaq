@@ -154,6 +154,7 @@ func TestVerifyStageRedisWithAndWithoutAuth(t *testing.T) {
 // a note, not a failure, and nothing more is sent.
 func TestVerifyStageBudgetStopsReads(t *testing.T) {
 	egress.Reset()
+	t.Cleanup(egress.Reset) // the spent budget is process-wide
 	fx := newRedisFixture(t, redisInfoResp())
 	other := newRedisFixture(t, redisInfoResp())
 	st, err := store.Open(filepath.Join(t.TempDir(), "w.db"))

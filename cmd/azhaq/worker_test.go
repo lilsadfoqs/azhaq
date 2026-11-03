@@ -12,6 +12,7 @@ import (
 
 	"github.com/lilsadfoqs/azhaq/catalog"
 	"github.com/lilsadfoqs/azhaq/engine"
+	"github.com/lilsadfoqs/azhaq/internal/egress"
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
 	"github.com/lilsadfoqs/azhaq/store"
 	"github.com/lilsadfoqs/azhaq/types"
@@ -64,6 +65,7 @@ func (echo) Run(_ context.Context, seed types.Seed, emit func(types.Observation)
 }
 
 func TestWorkerProtocol(t *testing.T) {
+	egress.Reset() // a budget another test spent would end the run before a task is lent
 	st, err := store.Open(filepath.Join(t.TempDir(), "t.db"))
 	if err != nil {
 		t.Fatal(err)
