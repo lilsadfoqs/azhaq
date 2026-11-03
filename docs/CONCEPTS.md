@@ -421,7 +421,7 @@ What keeps a URL out is known:
 - **Your rule.** `-deny-path REGEX` keeps a path out of every request, Chrome's included. It is the only thing that does: if a URL must not be requested, say so with it.
 - **A measurement.** A signed-in run checks that its session lives: see [Sessions](#sessions).
 
-`azhaq plan` lists the kinds of request, the counts and the seeds, not the URLs a crawl will find: `/createdb` is known only after the description is read. The [ledger](#the-ledger-and-its-seal) lists every request that was sent.
+`azhaq plan` lists the kinds of request, the counts and the seeds, not the URLs a crawl will find: `/createdb` is known only after the description is read. The [ledger](#the-ledger-and-its-seal) lists every request that was sent. What is named in advance, without being withheld, is narrower: a GET among the targets whose own name declares a state change (`plan` and, before it sends anything, a run), and the ones a run finds whose API descriptions declare one — each printed with the `-deny-path` rule that would keep it out ([State-changing requests](commands/run.md#state-changing-requests)).
 
 ### What is held back
 

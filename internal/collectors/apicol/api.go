@@ -1,7 +1,12 @@
 // Package apicol reads OpenAPI 3 and Swagger 2 documents and maps the
 // operations they declare. Of those it asks only the GETs that need no
-// parameter, and the run leaves out the ones whose names say they do
-// something (VAmPI's GET /createdb resets its database). A Swagger UI page
+// parameter. A name or a description decides nothing: VAmPI's
+// GET /createdb, whose description says it creates and populates its
+// database, is asked like any other GET, and only a -deny-path rule
+// keeps it out. The operation's summary, description and operationId
+// are kept on its row, and a GET whose own words declare a state
+// change (see internal/statechange) is marked state_change, so plan
+// and run can name it before a later run sends it. A Swagger UI page
 // that builds its document's URL at run time is read for the names of
 // the documents it may load.
 package apicol
@@ -23,6 +28,7 @@ import (
 	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 	"github.com/lilsadfoqs/azhaq/internal/neterr"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
+	"github.com/lilsadfoqs/azhaq/internal/statechange"
 	"github.com/lilsadfoqs/azhaq/internal/webextract"
 	"github.com/lilsadfoqs/azhaq/types"
 )
@@ -200,8 +206,19 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 			if s, _ := op["summary"].(string); s != "" {
 				x["summary"] = s
 			}
+			if s, _ := op["description"].(string); s != "" {
+				x["description"] = s
+			}
 			if id, _ := op["operationId"].(string); id != "" {
 				x["operation_id"] = id
+			}
+			if m == "get" {
+				summary, _ := x["summary"].(string)
+				description, _ := x["description"].(string)
+				operationID, _ := x["operation_id"].(string)
+				if word, ok := statechange.Declares(p, summary, description, operationID); ok {
+					x["state_change"] = word
+				}
 			}
 			ops = append(ops, x)
 			if m == "get" && len(in["path"]) == 0 && len(requiredQuery(item, op, d)) == 0 {

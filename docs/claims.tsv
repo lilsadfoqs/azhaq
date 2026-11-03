@@ -68,6 +68,7 @@ plan.max-names	docs/commands/plan.md	At most `max_names` names are looked up	tes
 plan.per-web-service	docs/commands/plan.md	`per_web_service` covers a web service's page, the favicon and the built-in paths	test:cmd/azhaq:TestPlanRequests,TestDocsCountTheBuiltInPathsAsThePlanDoes
 plan.cap	docs/commands/plan.md	`cap` is set by `cap_by`	test:cmd/azhaq:TestPlanRequests
 plan.sources-none	docs/commands/plan.md	With `-sources none` no collector that asks a third party is in the plan	test:cmd/azhaq:TestPlanSourcesNoneListsNoThirdParty
+plan.state-changing	docs/commands/plan.md	The requests among the targets that may change state	test:cmd/azhaq:TestPlanNamesStateChangingGETBeforeAnyRequest,TestStateChangesFromVAmPIDescription,TestRunNamesStateChangingGETsAndDenyKeepsThemOut
 worker.deny-path	docs/commands/worker.md	A URL a `-deny-path` rule keeps out is never sent	test:cmd/azhaq:TestWorkerHoldsDenyPathAndReportsIt
 worker.session	docs/commands/worker.md	In a signed-in run it reports a 401, a redirect to the sign-in page or a cleared session cookie	test:engine:TestWorkersSessionEndsAndIsRenewed,TestWorkersSessionLostIsNotRenewed;test:cmd/azhaq:TestWorkersSessionGivenByCookieEndsTheRun
 query.every-row	docs/commands/query.md	`query` prints every row that matches, unless `-limit` says otherwise	test:cmd/azhaq:TestRegressOUT03QueryPrintsEveryRow;test:bench:TestQueryDefaultUnlimited
