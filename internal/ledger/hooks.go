@@ -209,9 +209,12 @@ func DNS(ctx context.Context, name, qtype, server string) {
 	l.Record(Entry{Kind: "dns", Class: ClassDNS, Method: qtype, Target: server, Host: name, Rule: l.rule(name), Collector: collectorOf(ctx)})
 }
 
-// Transport records each request as it is written to its connection, and
-// one that fails to get a connection after it, so a request that fails
-// still appears and one that never left does not. Class is what the
+// Transport records each request once it has been written to its
+// connection in full, so a request a stop cancelled before it left is not
+// listed: it is given back to the budget (Unsent) instead. One that went
+// out and failed still appears, and so does one whose connection attempt
+// failed or whose TLS handshake began: those reached the target (a SYN or a
+// ClientHello left) though no request was written. Class is what the
 // requests are sent to (ClassTarget when empty); only a target's are held
 // by -deny-path and by the writes a killed run sent.
 type Transport struct {
@@ -224,6 +227,15 @@ type Transport struct {
 
 	freshOnce sync.Once
 	freshRT   http.RoundTripper
+}
+
+// leaving settles, for one request, whether it left: the first of the
+// events that say so records it, and what comes after the call returned
+// does not.
+type leaving struct {
+	mu       sync.Mutex
+	recorded bool
+	done     bool
 }
 
 func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -251,27 +263,53 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 		}
 		return nil, neterr.ErrNotRepeated
 	}
-	var once sync.Once
-	record := func() { once.Do(func() { HTTPAs(class, req) }) }
+	var lv leaving
+	record := func() {
+		lv.mu.Lock()
+		defer lv.mu.Unlock()
+		if !lv.recorded && !lv.done {
+			lv.recorded = true
+			HTTPAs(class, req)
+		}
+	}
+	// finish ends the call: a request nothing says left is given back.
+	finish := func() {
+		lv.mu.Lock()
+		defer lv.mu.Unlock()
+		lv.done = true
+		if !lv.recorded && class == ClassTarget && Unsent != nil {
+			Unsent()
+		}
+	}
 	for try := 0; ; try++ {
-		var reused, skipped, answered bool
+		var reused, skipped, answered, reached atomic.Bool
 		trace := &httptrace.ClientTrace{
 			GotConn: func(info httptrace.GotConnInfo) {
-				reused = info.Reused
+				reused.Store(info.Reused)
 				if info.Reused && t.Dead != nil && info.Conn != nil && t.Dead(info.Conn) {
 					// Closed under the pool: nothing is written to it.
-					skipped = true
+					skipped.Store(true)
 					info.Conn.Close()
-					return
 				}
-				record() // the first live connection: later ones are a replay of it
 			},
-			GotFirstResponseByte: func() { answered = true },
+			ConnectDone: func(_, _ string, err error) {
+				if err != nil {
+					reached.Store(true) // a SYN left and nothing answered it
+				}
+			},
+			TLSHandshakeStart: func() { reached.Store(true) }, // a ClientHello leaves
+			WroteRequest: func(info httptrace.WroteRequestInfo) {
+				if info.Err == nil && !skipped.Load() {
+					record() // the first live connection: later ones are a replay of it
+				}
+			},
+			GotFirstResponseByte: func() { answered.Store(true) },
 		}
 		sent := req.WithContext(httptrace.WithClientTrace(req.Context(), trace))
 		if try > 0 && req.GetBody != nil {
 			body, err := req.GetBody()
 			if err != nil {
+				finish()
 				return nil, err
 			}
 			sent.Body = body
@@ -286,11 +324,14 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 		// cannot tell from one that was answered). It is made again, on another
 		// connection, and is one request: the server read it once, the ledger and
 		// the count hold it once.
-		if err != nil && try < maxReplays && reused && (skipped || !answered && closedByPeer(err)) && req.Context().Err() == nil &&
+		if err != nil && try < maxReplays && reused.Load() && (skipped.Load() || !answered.Load() && closedByPeer(err)) && req.Context().Err() == nil &&
 			(req.Body == nil || req.Body == http.NoBody || req.GetBody != nil) {
 			continue
 		}
-		record() // no connection was reached (refused, timed out), or the transport reports none
+		if resp != nil || (err != nil && reached.Load()) {
+			record() // it was answered (the write's report may come late), or it reached the target
+		}
+		finish()
 		if resp != nil && resp.Request == sent {
 			resp.Request = req
 		}
