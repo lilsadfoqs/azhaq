@@ -91,6 +91,7 @@ type source struct {
 	verify  bool    // a name only it gave is kept when it resolves
 	sampler bool    // asked again by sampled(): it keeps its own time
 	recurse bool    // handles subdomains of a subdomain (-recursive)
+	extra   bool    // not in subfinder's default set: bounded by -extra-wait
 	collect func(ctx context.Context, domain string, keys []string, s *subscraping.Session) ([]string, error)
 }
 
@@ -229,7 +230,7 @@ func off(s source) source {
 // bounded by -source-timeout, so one of them cannot hold the run, and a
 // failure of one is a failed source of the summary, not of the result.
 func on(s source) source {
-	s.deflt = true
+	s.deflt, s.extra = true, true
 	return s
 }
 

@@ -26,6 +26,7 @@ type TestSource struct {
 	DelayDomain string
 	Sampled     bool // asked again by sampled(), as a keyless source is
 	Padding     bool // its names are guesses: kept only when they resolve
+	Extra       bool // outside subfinder's default set: bounded by ExtraWait
 	Recursive   bool // handles subdomains of subdomains
 }
 
@@ -59,6 +60,7 @@ func UseTestSources(srcs ...TestSource) (restore func()) {
 			return ts.Names, ts.Err
 		}}
 		s.recurse = ts.Recursive
+		s.extra = ts.Extra
 		if ts.Padding {
 			s = verified(s)
 		}
