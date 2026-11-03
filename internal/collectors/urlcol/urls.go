@@ -11,7 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/lilsadfoqs/azhaq/internal/guard"
+	"math"
 	"net/http"
 	"net/url"
 	"os"
@@ -23,6 +23,7 @@ import (
 
 	"github.com/lilsadfoqs/azhaq/catalog"
 	"github.com/lilsadfoqs/azhaq/internal/egress"
+	"github.com/lilsadfoqs/azhaq/internal/guard"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"github.com/lilsadfoqs/azhaq/internal/timing"
 	"github.com/lilsadfoqs/azhaq/internal/webextract"
@@ -44,7 +45,7 @@ type Options struct {
 	Out      string              // write every URL here, one per line
 	OutFrom  bool                // and the source that gave it first, after a tab
 	Timeout  time.Duration       // per source; default 3 minutes
-	MaxPages int                 // per source; default 50
+	MaxPages int                 // per source; default none, as gau reads every page
 	MaxURLs  int                 // kept per domain; default 500,000
 
 	Apex      bool              // the domain's own host only, not its subdomains
@@ -55,7 +56,7 @@ type Options struct {
 	Archive   string            // the workspace's list of every URL read (ArchivePath); "" keeps none
 	RunID     string            // the run its lines belong to
 	Retries   *int              // per request, on 429, 503 and network errors; default: a 429 or 503 until the source's time is spent, a network error 3 times
-	Pause     *time.Duration    // between a source's requests; default per source, 0 none
+	Pause     *time.Duration    // between a source's requests; default none, as gau asks
 	Proxy     string            // http, https or socks5 address, when no Client is given
 	Bases     map[string]string // replaces a source's address (a mirror, a test server)
 
@@ -102,14 +103,14 @@ func New(o Options) *Collector {
 		o.Timeout = 3 * time.Minute
 	}
 	if o.MaxPages <= 0 {
-		o.MaxPages = 50
+		o.MaxPages = math.MaxInt32
 	}
 	if o.MaxURLs <= 0 {
 		o.MaxURLs = maxURLs
 	}
-	pauses := map[string]time.Duration{
-		"wayback": time.Second, "commoncrawl": time.Second, "otx": 500 * time.Millisecond, "urlscan": 2 * time.Second,
-	}
+	// No pause unless the user sets one: an archive that wants the requests
+	// slower says so with a 429 or 503, which is waited out.
+	pauses := map[string]time.Duration{}
 	if o.Pause != nil {
 		for _, s := range allSources() {
 			pauses[s.name] = *o.Pause

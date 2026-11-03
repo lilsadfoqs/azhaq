@@ -344,10 +344,12 @@ func limited(err error, pages int) error {
 }
 
 // Wayback Machine CDX API, page by page as gau reads it: showNumPages
-// answers [["original"],[null]] when output=json, so the pages are read
-// until one comes back empty or the server says 400 (past the last page).
-// A page of a large domain is tens of MB and takes minutes, so it is read
-// row by row (one row a line): what arrived before the time ran out counts.
+// answers [["original"],[null]] when output=json, so the pages are read in
+// order until the server says 400 (past the last page) or sends no body. A
+// page with no rows is skipped, not the end: a filter empties pages the
+// archive still holds more after. A page of a large domain is tens of MB and
+// takes minutes, so it is read row by row (one row a line): what arrived
+// before the time ran out counts.
 var waybackBase = "https://web.archive.org/cdx/search/cdx"
 
 func wayback(ctx context.Context, g *getter, domain, _ string, add func([]rec)) (int, error) {
@@ -363,17 +365,30 @@ func wayback(ctx context.Context, g *getter, domain, _ string, add func([]rec)) 
 			}
 			return page, limited(err, page)
 		}
-		n, err := cdxRows(body, add)
+		cb := &countReader{r: body}
+		_, err = cdxRows(cb, add)
 		body.Close()
 		if err != nil {
 			return page, fmt.Errorf("page %d: %w", page, err)
 		}
-		if n == 0 {
+		if cb.n == 0 {
 			return page, nil
 		}
 	}
 	g.capped = true
 	return g.maxPages, nil
+}
+
+// countReader counts the bytes read through it.
+type countReader struct {
+	r io.Reader
+	n int
+}
+
+func (c *countReader) Read(p []byte) (int, error) {
+	n, err := c.r.Read(p)
+	c.n += n
+	return n, err
 }
 
 // cdxRows reads a CDX JSON answer ([["timestamp","original"], ["2024…",

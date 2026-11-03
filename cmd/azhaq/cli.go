@@ -150,7 +150,7 @@ func init() {
 			examples: []string{
 				"azhaq urls -d example.com",
 				"azhaq urls example.com -subs -providers wayback,commoncrawl -blacklist png,jpg,css,js -fp | httpx",
-				"azhaq urls -d example.com -mc 200 -mt text/html -from 2024 -urls-pause 0",
+				"azhaq urls -d example.com -mc 200 -mt text/html -from 2024 -urls-pause 1s",
 			}},
 		{name: "ports", group: groupDropIn, like: "naabu", run: cmdPorts,
 			summary: "open TCP ports (connect scan, no root), named by what they answer on any port, with products and versions; ranges, CIDR and AS numbers without a cap; -udp asks the common UDP ports",

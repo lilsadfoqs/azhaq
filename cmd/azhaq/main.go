@@ -271,8 +271,8 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	urlsBlacklist := fs.String("urls-blacklist", "", "leave out URLs whose path ends in these extensions, comma-separated (png,jpg,svg)")
 	urlsFP := fs.Bool("urls-fp", false, "keep one URL for each host and path, dropping the variants that differ by parameters")
 	urlsRetries := fs.Int("urls-retries", 0, "times an archive request is asked again after a 429, 503 or network error, after its Retry-After (seconds or a date, however long) or 2, 5, 10, 20, then 30 s; 0 makes the first refusal final (default: a 429 or 503 is asked again until the archive's time, -urls-timeout, or the run's is spent, a network error 3 times; a wait longer than the time left ends the request at once, with the reason)")
-	urlsPages := fs.Int("urls-pages", 50, "pages read from each archive for a domain (0: no cap); an archive that stops at the cap says so in the summary")
-	urlsPause := fs.Duration("urls-pause", 0, "pause between the requests of one archive (default: 1 s for the Wayback Machine and Common Crawl, 0.5 s for OTX, 2 s for urlscan.io; 0 for none)")
+	urlsPages := fs.Int("urls-pages", 0, "stop reading an archive after this many pages for a domain (default 0: no cap, as gau reads every page); an archive that stops at the cap says so in the summary")
+	urlsPause := fs.Duration("urls-pause", 0, "pause between the requests of one archive (default: none, as gau asks; an archive that answers 429 or 503 is waited out)")
 	urlsProxy := fs.String("urls-proxy", "", "send the archive requests through this proxy: http://HOST:PORT, https:// or socks5://")
 	urlsMax := fs.Int("urls-max", 500000, "URLs kept for each domain (0: no cap); the summary counts the ones past it")
 	var urlsArchive stringsFlag

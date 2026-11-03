@@ -226,7 +226,7 @@ func TestArchiveListKeepsEveryURL(t *testing.T) {
 			fmt.Fprintf(w, `[["original"],%s]`, strings.Join(all, ","))
 			return
 		}
-		fmt.Fprint(w, `[["original"]]`)
+		w.WriteHeader(http.StatusBadRequest) // past the last page
 	}))
 	defer srv.Close()
 	waybackBase = srv.URL

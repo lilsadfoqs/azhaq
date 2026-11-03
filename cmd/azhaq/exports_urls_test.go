@@ -33,6 +33,10 @@ func archiveStandIn(t *testing.T, n int) (flag string, urls []string) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var p int
 		fmt.Sscanf(r.URL.Query().Get("page"), "%d", &p)
+		if p*4000 >= n { // past the last page
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
 		rows := [][]string{{"original"}}
 		for i := p * 4000; i < min(n, (p+1)*4000); i++ {
 			rows = append(rows, []string{urls[i]})
