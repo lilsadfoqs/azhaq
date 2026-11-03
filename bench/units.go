@@ -1,7 +1,10 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -194,4 +197,60 @@ func runUnit(name string, fn func()) {
 	trackUnit(name, nil, fn)
 	profile, section, _ := strings.Cut(name, ":")
 	logf("%s: %s took %.0fs", profile, section, time.Since(t0).Seconds())
+}
+
+// setupFailed ends a run whose setup (the build of azhaq, the install of a
+// reference tool) failed before any unit began. The tool's own output goes to
+// the log, and the record holds one failed check for each unit the run
+// planned, with that output in its detail, so a job that built nothing is
+// diagnosed from its record and the merge does not report "no result".
+func setupFailed(dir, what string, err error, output []byte, planned []string) {
+	text := strings.TrimSpace(err.Error())
+	if o := strings.TrimSpace(string(output)); o != "" {
+		text += "\n" + o
+	}
+	text = strings.ReplaceAll(text, work, "bench/.work")
+	logf("%s failed for %s:\n%s", what, unitsText(planned), text)
+	noteSetupFailure(what, text, planned)
+	if e := os.MkdirAll(dir, 0o755); e == nil {
+		name := filepath.Join(dir, recordName(time.Now().UTC().Format(time.RFC3339), rec.Commit))
+		raw, _ := json.MarshalIndent(rec, "", "  ")
+		if e := os.WriteFile(name, append(raw, '\n'), 0o644); e == nil {
+			fmt.Printf("record %s\n", name)
+		}
+	}
+	os.Exit(2)
+}
+
+// noteSetupFailure puts the failure in the record: one failed check for each
+// planned unit, or one of its own when the run planned none.
+func noteSetupFailure(what, text string, planned []string) {
+	detail := what + " failed: " + clipText(text, 4000)
+	if len(planned) == 0 {
+		rec.Checks = append(rec.Checks, check{Name: "setup: " + what, Pass: false, Detail: detail})
+	}
+	for _, u := range planned {
+		name := "unit " + u + ": ran to its end"
+		if p, _, ok := strings.Cut(u, ":"); ok && slices.Contains(profileOrder, p) {
+			name = "[" + p + "] " + name
+		}
+		rec.Checks = append(rec.Checks, check{Name: name, Pass: false, Detail: detail})
+		rec.Units = append(rec.Units, unitSpan{Name: u, Checks: 1})
+	}
+}
+
+func unitsText(planned []string) string {
+	if len(planned) == 0 {
+		return "this run"
+	}
+	return "units " + strings.Join(planned, ", ")
+}
+
+// clipText keeps the head and the tail of s, which is where a compiler puts
+// the first error and the summary.
+func clipText(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[:n/2] + "\n[...]\n" + s[len(s)-n/2:]
 }
