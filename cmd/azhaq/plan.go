@@ -544,9 +544,9 @@ func printRequests(w io.Writer, p runPlan) {
 		fmt.Fprintf(w, "  %s add their own\n", strings.Join(p.Active, " "))
 	}
 	if len(r.Guesses) > 0 {
-		fmt.Println("guesses sent to each host (requests for names nobody gave):")
+		fmt.Fprintln(w, "guesses sent to each host (requests for names nobody gave):")
 		for _, g := range r.Guesses {
-			fmt.Printf("  %s\n", g)
+			fmt.Fprintf(w, "  %s\n", g)
 		}
 	}
 }
