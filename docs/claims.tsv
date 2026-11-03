@@ -246,3 +246,4 @@ docs-output.exit-2-header-example	docs/OUTPUT.md	For example `-H 'Host: secret.l
 docs-output.exit-2-chrome-every-command	docs/OUTPUT.md	This holds for every command that starts Chrome	test:cmd/azhaq:TestChromeIsNotRunWithoutItsSandboxUnlessAllowed,TestMCPHoldsChromeNoSandbox
 docs-output.exit-3-every-failure	docs/OUTPUT.md	Every failure makes it 3, a `fanout` or `partial` one and a source that failed while others answered included.	test:internal/contract:TestExitCodeFollowsTheOutcome;test:cmd/azhaq:TestCrtshFailureMakesExit3
 docs-output.exit-4-depth-note-made	docs/OUTPUT.md	The note is made only when a larger `-depth` has something to ask	test:cmd/azhaq:TestDepthNoteCountsDistinctURLs,TestDirsSweepHasNoRunDepthNote
+docs-output.internal-error	docs/OUTPUT.md	the rows already printed are as they were, and the numbers beside them are not to be relied on	test:cmd/azhaq:TestASummaryThatDisagreesWithItsRowsIsAnInternalError,TestASummaryThatAgreesWithItsRowsIsComplete

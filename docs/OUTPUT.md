@@ -241,7 +241,7 @@ A line says the request or connection left, and the summary's `requests` counts 
 
 | Kind | A line is made when | No line for |
 | --- | --- | --- |
-| `http` | The request has been written to its connection. Also when its connection failed after a connect was attempted or a TLS handshake began: a SYN or a ClientHello reached the target though no request was written. | A request cancelled before that: before a connection was tried, while a name had no address, or on a connection that never took the write. |
+| `http` | The request has been written to its connection. Also when it failed with no stop to blame: a connect was attempted and failed, a TLS handshake began, the name had no address, or the other end dropped the connection before the write. | A request a stop cancelled before any of that: before a connection was tried, or on a connection that never took the write. |
 | `tcp` | The socket is about to connect (`connect(2)`), so a stop that lands earlier leaves no line. A fast port scan (`-rate` of 1,000 or more) writes the lines of up to 32 connects together just before they start; those connects are not stopped by a kill file or a deadline that comes after the lines, and a stop that comes before them records none. | A connect refused by the scope or the kill file, with no address, or stopped before its socket connected. |
 | `udp` | The socket to the port is open and the datagram is written at once. | A socket that could not be opened. |
 | `chrome` | Chrome says the request's headers went out. A request Chrome was let send and nothing was heard of afterwards is listed when its tab closes, since it may have left. | A request Chrome dropped or answered from its cache. |

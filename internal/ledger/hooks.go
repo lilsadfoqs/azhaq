@@ -213,9 +213,9 @@ func DNS(ctx context.Context, name, qtype, server string) {
 // connection (or the write failed with no stop to blame), so a request a stop
 // cancelled before it left is not listed: it is given back to the budget (Unsent) instead. One that went
 // out and failed still appears, and so does one whose connection attempt
-// failed or whose TLS handshake began, or whose connection the other end
-// dropped before the write: those reached the target though no request was
-// written. Class is what the
+// failed or whose TLS handshake began, or that failed with no stop to blame
+// (no address for the name, a connection dropped before the write): those were
+// tried though no request was written. Class is what the
 // requests are sent to (ClassTarget when empty); only a target's are held
 // by -deny-path and by the writes a killed run sent.
 type Transport struct {
@@ -283,7 +283,7 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 		}
 	}
 	for try := 0; ; try++ {
-		var reused, skipped, answered, reached, connected atomic.Bool
+		var reused, skipped, answered, reached atomic.Bool
 		trace := &httptrace.ClientTrace{
 			GotConn: func(info httptrace.GotConnInfo) {
 				reused.Store(info.Reused)
@@ -296,8 +296,6 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 			ConnectDone: func(_, _ string, err error) {
 				if err != nil {
 					reached.Store(true) // a SYN left and nothing answered it
-				} else {
-					connected.Store(true)
 				}
 			},
 			TLSHandshakeStart: func() { reached.Store(true) }, // a ClientHello leaves
@@ -334,10 +332,12 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 			(req.Body == nil || req.Body == http.NoBody || req.GetBody != nil) {
 			continue
 		}
-		// It was answered (the write's report may come late), or it reached the
-		// target: a connect failed, a handshake began, or a connection was made
-		// and the other end dropped it before the write (no stop to blame).
-		if resp != nil || (err != nil && (reached.Load() || connected.Load() && req.Context().Err() == nil)) {
+		// It was answered (the write's report may come late), or it was tried: a
+		// connect failed, a handshake began, or it failed for a reason no stop is
+		// to blame for (a name with no address, a connection the other end dropped
+		// before the write). Only a request a stop cancelled before it left is not
+		// listed.
+		if resp != nil || (err != nil && (reached.Load() || req.Context().Err() == nil)) {
 			record()
 		}
 		finish()

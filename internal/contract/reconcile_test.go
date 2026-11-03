@@ -10,7 +10,7 @@ import (
 // tests derive each count from the rows on stdout, with a ruler of their own,
 // and compare: a summary that disagrees with its rows is a failed run.
 
-func str(m map[string]any, k string) string { s, _ := m[k].(string); return s }
+func rowStr(m map[string]any, k string) string { s, _ := m[k].(string); return s }
 
 func TestCrawlCountsAreDerivedFromTheRowsEmitted(t *testing.T) {
 	for _, flags := range [][]string{{"-hints", "-assets"}, {"-hints"}, nil} {
@@ -20,8 +20,8 @@ func TestCrawlCountsAreDerivedFromTheRowsEmitted(t *testing.T) {
 			s, rows := r.Summary, r.Rows(t)
 			byClass, byCoverage := map[string]int{}, map[string]int{}
 			for _, row := range rows {
-				byClass[str(row, "class")]++
-				byCoverage[str(row, "coverage")]++
+				byClass[rowStr(row, "class")]++
+				byCoverage[rowStr(row, "coverage")]++
 			}
 			v := newInv(t, "")
 			v.Equal("results, against the rows printed", int64(s.Results), int64(len(rows)))
@@ -44,13 +44,13 @@ func TestCrawlCountsAreDerivedFromTheRowsEmitted(t *testing.T) {
 
 // keyOf is the ruler: the count a map row of a run belongs to, written here from the docs, not taken from the code.
 func keyOf(row map[string]any) string {
-	switch str(row, "type") {
+	switch rowStr(row, "type") {
 	case "URL":
-		switch str(row, "coverage") {
+		switch rowStr(row, "coverage") {
 		case "catchall", "skipped":
-			return str(row, "coverage")
+			return rowStr(row, "coverage")
 		}
-		switch role := str(row, "role"); role {
+		switch role := rowStr(row, "role"); role {
 		case "api", "auth", "forbidden":
 			return role
 		case "websocket":
@@ -68,13 +68,13 @@ func keyOf(row map[string]any) string {
 		}
 		return "pages"
 	case "Hostname":
-		switch role := str(row, "role"); role {
+		switch role := rowStr(row, "role"); role {
 		case "dead", "wildcard":
 			return role + " hostnames"
 		}
 		return "hostnames"
 	case "Port":
-		if str(row, "state") == "open|filtered" {
+		if rowStr(row, "state") == "open|filtered" {
 			return "open|filtered ports"
 		}
 		return "ports"
@@ -83,7 +83,7 @@ func keyOf(row map[string]any) string {
 	case "Domain":
 		return "domains"
 	}
-	return strings.ToLower(str(row, "type")) + "s"
+	return strings.ToLower(rowStr(row, "type")) + "s"
 }
 
 // held is how many stored rows a printed one stands for.
@@ -149,8 +149,8 @@ func TestPortsCountsAreDerivedFromTheRowsEmitted(t *testing.T) {
 	s, rows := r.Summary, r.Rows(t)
 	byState := map[string]int{}
 	for _, row := range rows {
-		st := str(row, "state")
-		if st == "" && str(row, "protocol") == "tcp" {
+		st := rowStr(row, "state")
+		if st == "" && rowStr(row, "protocol") == "tcp" {
 			st = "open" // a TCP row is an open port: only a UDP row says its state
 		}
 		byState[st]++
@@ -191,7 +191,7 @@ func TestRolesCountsAreDerivedFromTheRowsEmitted(t *testing.T) {
 	s, rows := r.Summary, r.Rows(t)
 	by := map[string]int{}
 	for _, row := range rows {
-		by[str(row, "verdict")]++
+		by[rowStr(row, "verdict")]++
 	}
 	v := newInv(t, "")
 	v.Equal("results, against the rows printed", int64(s.Results), int64(len(rows)))
