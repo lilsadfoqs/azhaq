@@ -375,7 +375,7 @@ func TestSubsMaxNamesCutIsSaid(t *testing.T) {
 		t.Fatalf("uncut: exit %d, %d names", code, len(hosts(t, out)))
 	}
 	out, rep, code = runContract(t, "subs", "-d", "example.org", "-no-history", "-max-names", "10")
-	if code != exitPartial || len(hosts(t, out)) != 10 || rep.Counts["cut by -max-names"] != 20 || rep.Counts["from sources"] != 10 {
+	if code != exitPartial || len(hosts(t, out)) != 10 || rep.Counts["cut by -max-names"] != 20 || rep.Counts["from sources"] != 30 {
 		t.Errorf("cut: exit %d, %d names, counts %v", code, len(hosts(t, out)), rep.Counts)
 	}
 }
