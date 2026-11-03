@@ -133,6 +133,7 @@ func cmdPorts(args []string) error {
 	oG := fs.String("oG", "", "write nmap greppable output to this file (- for stdout)")
 	oA := fs.String("oA", "", "write JSON lines, XML and greppable output to BASE.json, BASE.xml and BASE.gnmap")
 	asCSV := fs.Bool("csv", false, "CSV output, a header line first")
+	udpRows := fs.Bool("udp-rows", false, "list each UDP port that stayed silent (open|filtered) as a row of its own; by default an address has one row for them, with their count, how many ports were asked and how many were refused (the nmap files and the workspace list them one by one either way)")
 	eof := fs.String("eof", "", "leave these fields out of -json, -csv and -oA's JSON, comma-separated")
 	lof := fs.Bool("lof", false, "list the fields of -json and -csv, and stop")
 	given := inherit(fs, "rate=port-rate", "max-requests", "dns-rate", "timeout", "v", "scope", "program", "allow", "deny", "ledger", "kill-file")
@@ -437,7 +438,7 @@ func cmdPorts(args []string) error {
 	}
 
 	// Results.
-	out := &portOut{exclude: map[string]bool{}, csv: *asCSV}
+	out := &portOut{exclude: map[string]bool{}, csv: *asCSV, udpRows: *udpRows, udpCols: len(udpPorts) > 0}
 	for _, f := range strings.Split(*eof, ",") {
 		if f = strings.TrimSpace(f); f != "" {
 			out.exclude[f] = true
@@ -568,7 +569,11 @@ func (k *portsSink) visit(o types.Observation, print bool) {
 			case "open":
 				k.open++
 			case "open|filtered":
-				k.filtered++
+				if r.Silent != nil {
+					k.filtered += r.Silent.N
+				} else {
+					k.filtered++
+				}
 			}
 			k.mu.Unlock()
 		}
@@ -622,6 +627,7 @@ func (k *portsSink) visit(o types.Observation, print bool) {
 	if !print && p["partial"] == true {
 		undecided = portcol.UDPUnfinished(p)
 	}
+	var silent []int // the ports no UDP request was answered on
 	for _, s := range udpServices {
 		svc, _ := s.(map[string]any)
 		port := fmt.Sprint(svc["port"])
@@ -630,13 +636,12 @@ func (k *portsSink) visit(o types.Observation, print bool) {
 		if state != "open" && undecided[n] {
 			continue
 		}
-		if !once(&k.mu, k.seen, ip+" "+host+":"+port+"/udp") {
+		if state != "open" {
+			silent = append(silent, n)
 			continue
 		}
-		if state != "open" && print {
-			k.mu.Lock()
-			k.silentUDP = true
-			k.mu.Unlock()
+		if !once(&k.mu, k.seen, ip+" "+host+":"+port+"/udp") {
+			continue
 		}
 		row := portRow{Host: host, IP: ip, Port: n, Proto: "udp", State: state, At: time.Now(), Fields: map[string]any{}}
 		for _, f := range []string{"service", "product", "version", "banner"} {
@@ -645,6 +650,54 @@ func (k *portsSink) visit(o types.Observation, print bool) {
 			}
 		}
 		add(row)
+	}
+	// A row's own list has every silent port, past the few a row lists one by one.
+	if all, ok := p["udp_open_filtered"].([]any); ok && (len(silent) > 0 || p[portcol.SilentOnlyKey] == true) {
+		silent = silent[:0]
+		for _, x := range all {
+			if n, ok := x.(float64); ok && !undecided[int(n)] {
+				silent = append(silent, int(n))
+			}
+		}
+	}
+	if len(silent) == 0 {
+		return
+	}
+	silentOnly := p[portcol.SilentOnlyKey] == true
+	if silentOnly && !out.udpRows {
+		return // a range's address that answered nothing: the summary counts it
+	}
+	sort.Ints(silent)
+	if out.udpRows {
+		for _, n := range silent {
+			if !once(&k.mu, k.seen, ip+" "+host+":"+strconv.Itoa(n)+"/udp") {
+				continue
+			}
+			k.markSilent(print)
+			add(portRow{Host: host, IP: ip, Port: n, Proto: "udp", State: "open|filtered", At: time.Now(), Fields: map[string]any{}})
+		}
+		return
+	}
+	if !once(&k.mu, k.seen, ip+" "+host+"/udp open|filtered") {
+		return
+	}
+	k.markSilent(print)
+	agg := portRow{Host: host, IP: ip, Proto: "udp", State: "open|filtered", At: time.Now(),
+		Silent: &silentUDP{Ports: portscan.Compact(silent), N: len(silent), Asked: intOf(p["udp_scanned"]), Refused: intOf(p["udp_closed"])}}
+	if print {
+		for _, n := range silent {
+			out.note(portRow{Host: host, IP: ip, Port: n, Proto: "udp", State: "open|filtered", At: agg.At, Fields: map[string]any{}})
+		}
+	}
+	add(agg)
+}
+
+// markSilent notes that a row is open|filtered: the results are not all open ports.
+func (k *portsSink) markSilent(print bool) {
+	if print {
+		k.mu.Lock()
+		k.silentUDP = true
+		k.mu.Unlock()
 	}
 }
 
@@ -661,7 +714,7 @@ func resumePorts(db, id string, runArgs, rest []string) error {
 	if err != nil {
 		return err
 	}
-	out := &portOut{w: w, exclude: map[string]bool{}, quiet: hasFlag(rest, "quiet")}
+	out := &portOut{w: w, exclude: map[string]bool{}, quiet: hasFlag(rest, "quiet"), udpRows: hasFlag(rest, "udp-rows"), udpCols: hasFlag(runArgs, "ports-udp")}
 	sink := newPortsSink(out)
 	st, err := store.OpenExisting(db)
 	if err != nil {

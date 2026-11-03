@@ -66,6 +66,7 @@ The fields of a `-json` row, which are naabu's plus azhaq's:
 | `cdn` | `true` on a CDN or WAF address. |
 | `cdn-name` | The CDN or WAF. |
 | `timestamp` | UTC, RFC 3339. |
+| `ports`, `silent`, `asked`, `refused` | On the one row of an address's silent UDP ports (no `port`): the ports, how many, how many UDP ports were asked, how many the address refused. See [UDP rows and lines](#udp-rows-and-lines). |
 | `service` | The service the port answered as. A name ending in `?` is only the port's usual service. |
 | `product`, `version` | What the service states: see [Products and versions](#products-and-versions-of-tcp-ports). |
 | `extrainfo` | What the answer says beside the product and its version, as it was sent: the rest of a `Server` header (`Python/3.11.15`, `(Ubuntu)`), or an SSH line's comment and protocol (`Ubuntu-2ubuntu2.13; protocol 2.0`). nmap calls it `extrainfo` too, and `-oX` and `-oG` carry it. |
@@ -212,8 +213,11 @@ The request is the harmless one of the protocol the port usually carries:
 A sysDescr that names Linux, Cisco IOS, JUNOS or Windows gives `product` and `version`. A port with no known protocol is asked a DNS query first. Then come an SNMP get with community `public`, memcached's version and an empty datagram, until one answers. DNS, SNMP and memcached are what move to odd ports: 5354, 8053, 10161.
 
 #### UDP rows and lines
-- JSON rows have `"protocol":"udp"` and `"state"`. `-json` and `-csv` rows of a silent port have `"state":"open|filtered"`, and each is a result, counted in `results`.
-- Plain output lists `host:port/udp` for an open port and `host:port/udp open|filtered` for a silent one. The first field is the same, and `-silent` prints the same lines.
+- JSON rows have `"protocol":"udp"` and `"state"`. A port that answered has a row of its own, with `"port"`.
+- The ports of an address that stayed silent (`open|filtered`) are one row, not one each: a range of silent ports is a screenful, and the least informative answer of the scan. The row has `"state":"open|filtered"`, `ports` (the silent ports as a list, `1-24,60`), `silent` (how many), `asked` (how many UDP ports were asked of the address) and `refused` (how many the address refused with an ICMP port unreachable, left out when none). It has no `port`. `-csv` writes the same four as columns when the scan asks UDP ports.
+- Plain output prints that row as `host/udp open|filtered 24 of 25 ports: 1-24,60 (1 refused)`; `-silent` prints the same lines. A closed port answers with an ICMP error and a silent one does not, so `refused` against `silent` is what tells the two apart on one address.
+- `-udp-rows` prints each silent port as a row of its own instead, `host:port/udp open|filtered` in plain output and a row with `port` in `-json` and `-csv`. It lists every silent port, past the 64 a row lists one by one. `-oX`, `-oG` and `-oA`'s XML and greppable files list each silent port as nmap does, with or without it.
+- Each row is a result, counted in `results`, so the aggregate row is one. The summary's `open|filtered` counts ports: the sum of the `silent` of the rows printed, or one for each row of `-udp-rows`.
 - A closed port is not a result, because nmap lists closed ports only on request.
 - When any row is `open|filtered`, the summary counts `open` and `open|filtered` apart, so a silent port is never read as an open one.
 
@@ -230,6 +234,7 @@ In a workspace, the `ports` row has these UDP fields:
 | `udp_one_request` | `true` when `-detect none` asked each port one datagram. |
 | `partial`, `udp_refused`, `udp_asked`, `udp_unfinished`, `udp_unasked` | On the row of a scan a limit stopped: the ports refused, how many requests each undecided port was asked (`udp_asked` maps a request count to its ports), and how many ports are undecided or not asked at all. `azhaq resume` reads them. |
 | `udp_unlisted` | How many `open\|filtered` ports the row does not list one by one. |
+| `udp_silent_only` | `true` on the row of an address of a range that answered nothing on UDP: it holds only `udp_open_filtered` and `udp_scanned`. |
 | `udp_silent_ports`, `udp_silent_addresses` | On a range row, the silent ports and addresses that answered nothing on UDP. |
 
 #### What the summary says about UDP
@@ -239,9 +244,9 @@ In a workspace, the `ports` row has these UDP fields:
 - UDP scans of the addresses of a range run on as many addresses at once as the rate can keep busy (the rate times the timeout over 100 datagrams in flight each: 23 at the default `-rate 1500`), not on all 64 at once. With a cap or a stop, the first addresses are finished and the others hold their progress, and a resume continues from it.
 - It says what the state means: `1 UDP port open|filtered: no reply and no ICMP port unreachable after every request its protocol has (a silent service or a firewall); …`.
 - It names the closed ports, so that a scan that found nothing says what it saw: `1 UDP port closed (ICMP port unreachable): 127.0.0.1:9`. Up to three are shown as `address:port`, then `and N more`. In a range, the addresses that refused ports and showed nothing else are counted.
-- An address asked on its own, or a name, lists every silent port up to 64. Past that the rows would be noise: the summary counts them, and the workspace row's `udp_open_filtered` keeps them.
-- In a range, an address that answered nothing at all on UDP, because it is down or drops it, has no rows. The range row counts its `udp_silent_ports` and `udp_silent_addresses`, and the summary says so. Ask the address on its own to list them.
-- An address that refused or answered some port, or has an open one, lists its silent ports.
+- An address asked on its own, or a name, has one row for its silent ports. The workspace row's `udp_services` lists them up to 64, and its `udp_open_filtered` keeps every one.
+- In a range, an address that answered nothing at all on UDP, because it is down or drops it, has no row in the output: 254 of them would be a screenful. The range row counts its `udp_silent_ports` and `udp_silent_addresses`, the summary says how many addresses and how many ports were asked of each, and `-udp-rows` lists them. The workspace keeps them in a row of the address that has `udp_silent_only` and the silent ports in `udp_open_filtered`; `azhaq show` and `azhaq query` do not take that row for an open port.
+- An address that refused or answered some port, or has an open one, has the one row for its silent ports.
 
 #### Why a UDP port reads open|filtered
 - A port is `closed` only on an ICMP unreachable for that port.
@@ -376,6 +381,7 @@ azhaq ports -host 192.0.2.10 -p top-100 -advisories -advisory-source osv.json -j
 | `-oA` | string |  | write JSON lines, XML and greppable output to BASE.json, BASE.xml and BASE.gnmap |
 | `-oX` | string |  | write nmap XML to this file (- for stdout) |
 | `-silent` | bool |  | results only: no progress; the summary only when something failed (a source that failed, a takeover candidate as a [takeover] line on stderr); stdout stays one result per line |
+| `-udp-rows` | bool |  | list each UDP port that stayed silent (open\|filtered) as a row of its own; by default an address has one row for them, with their count, how many ports were asked and how many were refused (the nmap files and the workspace list them one by one either way) |
 | `-v` | bool |  | print a line for every finished task, not only failures |
 
 <details>

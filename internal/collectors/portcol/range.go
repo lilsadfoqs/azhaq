@@ -337,6 +337,12 @@ func (c *Collector) runPrefix(ctx context.Context, seed types.Seed, emit func(ty
 				finished[place] = true
 			}
 			if rowless {
+				if len(udp.OpenFiltered) > 0 {
+					// The silent ports of an address that showed nothing else are
+					// kept, in a row that no command prints unless asked: the
+					// range's row and the summary count them.
+					record(result{row: silentRow(ip, pf.String(), udp, len(c.UDPPorts))})
+				}
 				apply()
 				return
 			}
