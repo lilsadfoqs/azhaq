@@ -92,13 +92,19 @@ func (c *Collector) Outputs() []string { return []string{"screenshot"} }
 
 // Skip: only with -screenshots, and only front pages, and the pages the
 // user named (types.GivenKey), whatever their path. A name taken from a
-// front-page URL is that URL's own shot, not a guess on both schemes.
+// front-page URL, or from a URL the user named, is that URL's own shot, not
+// a guess on both schemes. Where a page redirected to (types.RedirectKey)
+// is not a target: Chrome follows the redirect, and the picture's
+// final_url says where it ended.
 func (c *Collector) Skip(seed types.Seed) bool {
 	if c.Dir == "" || c.Browser == nil {
 		return true
 	}
 	switch seed.Type {
 	case types.TypeHostname:
+		if seed.Keys[types.NamedURLKey] != "" {
+			return true
+		}
 		if from := seed.Keys[types.FromURLKey]; from != "" {
 			if u, err := url.Parse(from); err == nil && (u.Path == "" || u.Path == "/") && u.RawQuery == "" {
 				return true
@@ -107,6 +113,9 @@ func (c *Collector) Skip(seed types.Seed) bool {
 		return false
 	case types.TypeIPAddress:
 		return seed.Keys["from"] != "prefix"
+	}
+	if seed.Keys[types.RedirectKey] != "" {
+		return true
 	}
 	u, err := url.Parse(seed.Keys["url"])
 	if err != nil {

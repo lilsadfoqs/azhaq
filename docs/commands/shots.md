@@ -43,7 +43,15 @@ What shapes it:
 
 ## Output
 
-Plain: one line per page, with its URL and picture file. `-json`: one object per page. `-csv FILE` writes the scalar columns.
+Plain: one line per target, with its URL and picture file. `-json`: one object per target. `-csv FILE` writes the scalar columns, and `error` for a target with no picture.
+
+A target is a URL, a name, an address or `host:port` you gave. Each ends as one row, and the rows add up:
+
+- A page that was taken has its row and its file. Where a redirect led is in `final_url`; the destination is not a second target, row or file.
+- A target with no picture has a row of its own, with `url` as you gave it. A failure (a timeout, a refused connection, a name that does not resolve, a page Chrome could not take) has `failed: true` and its `error`, and the text line ends `failed: ` and the error. An answer that is not a failure (no web service on the ports guessed for a bare name, a target outside the scope, a page left alone by `-shot-codes`) has `failed: false` and a `note`, and the text line ends `no screenshot: ` and the note.
+- A scan file's port that nmap did not name a web service, and gave no page, has no row: see `-nmap` above.
+- A run that stopped before it came to a target leaves it without a row: `azhaq resume` asks it.
+- The summary's results are the pictures, and `without a screenshot` counts the other rows, so the rows printed are the two added.
 
 | Field | Meaning |
 | --- | --- |
@@ -115,7 +123,7 @@ A page that was not fully loaded when the picture was taken has these fields, an
 ### Chrome, ports and file names
 - `AZHAQ_CHROME` names the browser. Where the system gives Chrome no sandbox (a container, AppArmor), Chrome does not start: `shots` stops with exit 2 before any request, and the error names `-chrome-no-sandbox`. With that flag Chrome is started once more without a sandbox and the summary says so; the pages it loads are untrusted, so use a throwaway environment. `AZHAQ_CHROME_NO_SANDBOX=1` is the same say and skips the first try. `-chrome-require-sandbox` is the default now and is still accepted.
 - Chrome refuses some ports, such as 6000, 6666 and 10080, with `net::ERR_UNSAFE_PORT`. `-unsafe-ports` allows them by default.
-- A URL you give is shot as given, one file for each page, named like `http_host_port_path_hash.png`; with a scheme it is one target and one row (where Chrome ended is in `final_url`), and only a bare name or `host:port` is tried on both schemes. The URLs a run finds itself are shot only when they are front pages.
+- A URL you give is shot as given, one file for each page, named like `http_host_port_path_hash.png`; with a scheme it is one target and one row (where Chrome ended is in `final_url`, also when the page redirected to another scheme or host), and only a bare name or `host:port` is tried on both schemes. The URLs a run finds itself are shot only when they are front pages.
 - A page that calls `alert()` on load has its dialog accepted and is shot. Nothing waits for a click.
 - Every download is refused and listed, and a window a page opens (`window.open`, a `_blank` link) is closed as it opens. A page's own writes are refused and mapped. Chrome saves nothing to disk but the picture.
 
@@ -209,7 +217,7 @@ note: screenshot of http://127.0.0.1:3001/ not taken: the page needs about 26 re
 | Flag | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `-dir` | string | `screenshots` | directory for the picture files |
-| `-csv` | string |  | also write one row per page to this CSV file (url, final_url, response_code, title, technologies, file, phash, partial) |
+| `-csv` | string |  | also write one row per page to this CSV file (url, final_url, response_code, title, technologies, file, phash, partial, error) |
 | `-db` | string |  | keep the graph in this database for query, show, export and diff (default: a temporary one) |
 | `-json` | bool |  | JSONL output, and the summary as one JSON object on stderr |
 | `-o` | string |  | also write results to this file |

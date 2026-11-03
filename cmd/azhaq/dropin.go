@@ -1079,7 +1079,7 @@ func cmdShots(args []string) error {
 	fs.Var(&urls, "u", "target: URL (its path and query are kept), host, host:port, IP or address range such as 192.0.2.0/24 (repeatable)")
 	list := onceString(fs, "l", "file of targets (- for stdin)")
 	dir := fs.String("dir", "screenshots", "directory for the picture files")
-	csvOut := fs.String("csv", "", "also write one row per page to this CSV file (url, final_url, response_code, title, technologies, file, phash, partial)")
+	csvOut := fs.String("csv", "", "also write one row per page to this CSV file (url, final_url, response_code, title, technologies, file, phash, partial, error)")
 	ports := fs.String("p", "", "web ports to try on each host, comma-separated: numbers, ranges, small (80, 443), medium or large (default: 443, then 80)")
 	noHTTP := fs.Bool("no-http", false, "try names and addresses over https only")
 	noHTTPS := fs.Bool("no-https", false, "try names and addresses over http only")
@@ -1192,10 +1192,11 @@ func cmdShots(args []string) error {
 		}
 		defer csvf.Close()
 		csvw = csv.NewWriter(csvf)
-		_ = csvw.Write([]string{"url", "final_url", "response_code", "title", "technologies", "file", "format", "bytes", "phash", "partial"})
+		_ = csvw.Write([]string{"url", "final_url", "response_code", "title", "technologies", "file", "format", "bytes", "phash", "partial", "error"})
 	}
 	answered := map[string]bool{} // host:port of each page shot
 	var answeredMu sync.Mutex
+	var pages []string // the url of each picture taken
 	see := func(_ types.Entity, o types.Observation) {
 		if o.Collector != "azhaq-shots" || o.Kind != "screenshot" {
 			return // what Chrome refused, and the writes it mapped, are the summary's
@@ -1204,6 +1205,7 @@ func cmdShots(args []string) error {
 		if u, err := url.Parse(fmt.Sprint(p["url"])); err == nil {
 			answeredMu.Lock()
 			answered[u.Host] = true
+			pages = append(pages, fmt.Sprint(p["url"]))
 			answeredMu.Unlock()
 		}
 		if csvw != nil {
@@ -1223,7 +1225,7 @@ func cmdShots(args []string) error {
 			}
 			csvMu.Lock()
 			_ = csvw.Write([]string{cell("url"), cell("final_url"), cell("response_code"), cell("title"),
-				strings.Join(tech, ";"), cell("file"), cell("format"), cell("bytes"), cell("phash"), fmt.Sprint(p["partial"] == true)})
+				strings.Join(tech, ";"), cell("file"), cell("format"), cell("bytes"), cell("phash"), fmt.Sprint(p["partial"] == true), ""})
 			csvw.Flush()
 			csvMu.Unlock()
 		}
@@ -1274,15 +1276,54 @@ func cmdShots(args []string) error {
 	case *noHTTPS:
 		run = append(run, "-web-scheme", "http")
 	}
-	_, done, err := runPreset(&c, append(run, given()...), rep, see)
+	st, done, err := runPreset(&c, append(run, given()...), rep, see)
 	if err != nil {
 		return err
 	}
 	defer done()
+	// One row for each target given: a target with no picture is a row too.
+	answeredMu.Lock()
+	misses := shotMisses(rep, st, targs, pages, guessedHP)
+	answeredMu.Unlock()
+	failedRows := 0
+	gaps := map[[2]string][]string{} // collector and why → targets the summary does not yet name
+	for _, m := range misses {
+		if m.failed {
+			failedRows++
+			if !shotNamed(rep, m.target) {
+				gaps[[2]string{m.by, m.why}] = append(gaps[[2]string{m.by, m.why}], m.target)
+			}
+		}
+		row := shotMissRow(m)
+		if csvw != nil {
+			_ = csvw.Write([]string{m.target, "", "", "", "", "", "", "", "", "", m.why})
+			csvw.Flush()
+		}
+		if w.json {
+			w.obj(row)
+		} else {
+			w.line(shotMissLine(m))
+		}
+	}
+	kinds := make([][2]string, 0, len(gaps))
+	for k := range gaps {
+		kinds = append(kinds, k)
+	}
+	sort.Slice(kinds, func(i, j int) bool { return kinds[i][0]+kinds[i][1] < kinds[j][0]+kinds[j][1] })
+	for _, k := range kinds {
+		rep.Failed = append(rep.Failed, engine.Failure{Collector: k[0], Error: k[1], Count: len(gaps[k]), Targets: gaps[k]})
+	}
+	if len(misses) > 0 {
+		rep.units(len(pages)+len(misses), failedRows)
+		if rep.Counts == nil {
+			rep.Counts = map[string]int{}
+		}
+		rep.Counts["without a screenshot"] = len(misses) // the rows printed are these and the screenshots
+	}
 	if err := w.close(); err != nil {
 		return err
 	}
-	rep.Results = w.count()
+	rep.Results = w.count() - len(misses)
 	if len(guessedHP) > 0 {
 		guessedFanout(rep, guessedHP)
 	}

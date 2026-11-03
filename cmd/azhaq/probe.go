@@ -9,6 +9,7 @@ import (
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"github.com/lilsadfoqs/azhaq/internal/pagekind"
 	"github.com/lilsadfoqs/azhaq/store"
+	"github.com/lilsadfoqs/azhaq/types"
 	"net"
 	"net/netip"
 	"os"
@@ -619,33 +620,7 @@ func (o *probeOut) settle(rep *report, st *store.Store, fs *flag.FlagSet) {
 			}
 		}
 	}
-	dnsErr := map[string]string{}
-	wild := 0
-	for _, ob := range obs {
-		if ob.Collector != "azhaq-dns" {
-			continue
-		}
-		m := payloadOf(ob.Observation)
-		host, _ := m["fqdn"].(string)
-		if w, _ := m["wildcard"].(bool); w {
-			wild++
-		}
-		e, _ := m["error"].(string)
-		if e == "" {
-			switch r, _ := m["result"].(string); r {
-			case "nodata":
-				e = "the name has no address (no A or AAAA record)"
-			case "reserved":
-				e = "a special-use name (.invalid, .test, .local) the system resolver and /etc/hosts do not know"
-			}
-		}
-		if e == "nxdomain" {
-			e = "no such host"
-		}
-		if e != "" {
-			dnsErr[host] = e
-		}
-	}
+	dnsErr, wild := dnsAnswerErrors(obs)
 	skipped := map[string]string{}
 	for _, sk := range rep.Skipped {
 		skipped[sk.Target] = sk.Reason
@@ -823,4 +798,37 @@ func (o *probeOut) nameLastTried(rep *report) {
 	for i, t := range rep.Unreachable {
 		rep.Unreachable[i] = swap(t)
 	}
+}
+
+// dnsAnswerErrors is why each name the DNS collector looked up has no
+// address, and how many of the names answered as a wildcard.
+func dnsAnswerErrors(obs []types.StoredObservation) (map[string]string, int) {
+	dnsErr := map[string]string{}
+	wild := 0
+	for _, ob := range obs {
+		if ob.Collector != "azhaq-dns" {
+			continue
+		}
+		m := payloadOf(ob.Observation)
+		host, _ := m["fqdn"].(string)
+		if w, _ := m["wildcard"].(bool); w {
+			wild++
+		}
+		e, _ := m["error"].(string)
+		if e == "" {
+			switch r, _ := m["result"].(string); r {
+			case "nodata":
+				e = "the name has no address (no A or AAAA record)"
+			case "reserved":
+				e = "a special-use name (.invalid, .test, .local) the system resolver and /etc/hosts do not know"
+			}
+		}
+		if e == "nxdomain" {
+			e = "no such host"
+		}
+		if e != "" {
+			dnsErr[host] = e
+		}
+	}
+	return dnsErr, wild
 }

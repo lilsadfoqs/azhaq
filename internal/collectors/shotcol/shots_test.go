@@ -190,3 +190,29 @@ func TestSkipLeavesTheNameOfAFrontPageURL(t *testing.T) {
 		t.Error("a name the user gave was skipped")
 	}
 }
+
+// A redirect's destination is the answer to the page that redirected, not a
+// target of its own: Chrome follows it and the row's final_url says where it
+// ended. A URL the user named is one target as well: its host is not also
+// tried on both schemes, whatever the URL's path.
+func TestSkipLeavesWhereAPageRedirectedTo(t *testing.T) {
+	c := &Collector{Dir: "d", Browser: &browser.Browser{}}
+	dest := types.Seed{Type: types.TypeURL, Keys: map[string]string{"url": "https://h.test/", types.RedirectKey: "1"}}
+	if !c.Skip(dest) {
+		t.Error("the destination of a redirect was shot as a second target")
+	}
+	found := types.Seed{Type: types.TypeURL, Keys: map[string]string{"url": "https://h.test/"}}
+	if c.Skip(found) {
+		t.Error("a front page a run found was skipped")
+	}
+	host := func(keys map[string]string) types.Seed {
+		keys["fqdn"] = "h.test"
+		return types.Seed{Type: types.TypeHostname, Keys: keys}
+	}
+	if !c.Skip(host(map[string]string{types.FromURLKey: "http://h.test/a/b", types.NamedURLKey: "1"})) {
+		t.Error("the name of a URL the user named was shot on both schemes")
+	}
+	if !c.Skip(host(map[string]string{types.FromURLKey: "https://h.test/en/", types.NamedURLKey: "1"})) {
+		t.Error("the name of a redirect's destination was shot on both schemes")
+	}
+}
