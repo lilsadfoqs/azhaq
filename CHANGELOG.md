@@ -1,5 +1,110 @@
 # Changelog
 
+## v0.15.0
+
+### Added
+
+- `run` and `ports` take `-advisories` with `-advisory-source FILE|URL`: every product and version the run confirmed (a service's banner, a `Server` header) is matched against OSV advisory records, and each match is printed as a lead with the advisory's id and URL, labelled `affected`, `not affected` or `conditional` (naming the precondition). Matching sends nothing to a target, and azhaq ships no advisory data: the user names the records, a file or a URL read once as a source.
+- `-advisories-confirm` makes, for each affected or conditional lead, the one benign read the advisory names (a GET of its documented version or info path, or of `/`), and labels the lead `observed`, `inferred` or `claimed` with what was read: no payload, no login, no state change. The reads are in the ledger and count against `-max-requests`. A lead is never a proven finding.
+- `run` and `ports` take `-sweep`: the IPv4 ranges and addresses that `-allow` and `-scope` hold become targets too. Without it the scope stays a fence, and a note says how many addresses it holds and how many of them the targets name. IPv6 ranges are left alone, with a note.
+- `-chrome-no-sandbox` starts Chrome without its sandbox where the system gives it none, and the summary says so (see Changed).
+- `ports` names a port that answers only an HTTP GET (a Jenkins agent listener) `http`, with the product its answer gives, and a Java RMI registry `java-rmi` from its protocol answer. Nothing is named from the port number. An open port costs at most 25 connects after the first.
+- Servers limited to RSA key exchange or DHE suites are reached: when the usual TLS handshake fails with such a server's alert, a second connection uses a fallback TLS client (github.com/zmap/zcrypto, Apache-2.0) for `probe`, `crawl`, `run`, `fetch`, `fuzz`, `ports` and the TLS collector, through the same resolver, proxy, scope, kill file, ledger and budget. Port rows carry `tls_version` and `cipher` (also in `-csv`, `-lof` and the map). Chrome keeps its own TLS stack.
+- `query -failed -run ID` and `resume -retry-failed -retry-run ID` read and retry the failed targets of an earlier run of a workspace, not only of the newest; a note names an earlier run that still has retryable failures.
+- The run summary has `folded`, the rows folded into a templated or dead-names row, so `results + folded + left_out = stored` can be checked without the docs.
+- `crawl` requests the stylesheets a page loads, as katana does, and reads them for `url()` and `@import` URLs; images and fonts stay listed and unrequested.
+- `subs` takes `-ledger`. In `azhaq mcp`, `azhaq_probe`, `azhaq_ports` and `azhaq_subdomains` without a workspace write the server's ledger, `server.ledger.jsonl`, sealed by each call; `azhaq_status` names it.
+- A killed or stopped `ports` scan keeps the ports it finished (about every second, up to 30 s apart), and `resume` asks only the ports after them; a stopped UDP scan keeps its rows, and `resume` continues each port from the request it reached.
+- `internal/contract`, a test package run in CI, builds the binary and runs every command that sends against local labs. The requests the wire saw, the ledger's lines and the summary's count must agree; the counts must add up to the rows; the exit code must follow the outcome a lab forces; the promises the docs make are run. A reference matrix checks azhaq's default output against curl, nmap -sV and katana.
+- `run` and `ports`: `-verify` makes the enumerated safe read-only checks (Redis `INFO server`, MongoDB `isMaster`, memcached `version`, each sent with no credential) and labels each result proved, version-only or conditional with the exact request sent and an excerpt of the answer; advisory leads are labelled the same way from their confirmation read. `plan` lists each check and its precondition.
+- `azhaq report -findings -db WORKSPACE.db` and `azhaq export -format findings|findings-md`: one findings record per qualifying stored row (kind, severity, host/port/URL, product and version where confirmed, advisory id where matched, evidence excerpt, the command that produced it), proved first with version-only and conditional kept distinct and unproved hints listed as leads; a workspace with no qualifying rows writes an explicit empty record set and exits 0.
+- `docs/claims.tsv` covers the safety sections of docs/CONCEPTS.md (scope, budget, pace, kill file, the ledger, what is sent), docs/MCP.md (what the server holds and refuses) and the exit codes of docs/OUTPUT.md; each sentence there that reads as a claim names the test that runs it. `@cover FILE#Section` covers one section of a page.
+- docs/RECIPES.md opens with the four jobs (first map, compare two sessions, verify a service, hand over findings) as commands to run.
+- `roles` locates the object a replayed create made (from its `Location`, its answer, or the collection read before and after), records whether its identifier already belonged to another role, and reads it with every other role; a create that displaces another role's object is reported apart from a fresh sender-owned create, and one that cannot be located is `unverifiable` instead of a negative result.
+- `roles -replay-writes-verify` attaches a user-named verification step (a sign-in, or a read of a named field) to a replayed write; the row and `report` report it `proved`, `accepted-not-verified` or `refuted`.
+- `subs` rows carry `tier` (`candidate`, `dns`, `http`); the summary counts `raw candidates`, `DNS-confirmed` and `HTTP-confirmed` apart, says which tiers were not asked, and estimates coverage per tier.
+- `subs -http` asks each live name one `GET /` and marks the names that answered `"tier": "http"` (`-http-proxy`, `-web-ports`); `subs -guess-samples N` also applies without `-live`.
+- `urls -json` rows carry `normalized`, `raw_url`, `archived` and `junk` / `junk_reason` (`asset` for a static file); `-keep-junk` lists the URLs left out as junk, labelled.
+- `urls` summary: `sources.queries` and `sources.partial_sources`, and a note that the set is partial naming the failed archive.
+- `urls -live` spot-checks URLs against the live site at `-live-rate` (default 10 a second); `-live-max N` asks N; rows say `verified`, `verified_status` or `verified_error`; `-live-proxy`.
+- `failures` in every summary: how many failures the run has (the sum of `count` over `failed`, plus unreachable targets it does not name; `probe`: its rows without an answer).
+- `-strict-exit` on run, crawl, probe, subs, urls, dns, dirs, fuzz, params and shots: any failure exits 3, as before this release; `-fail-on-errors` is now the same flag.
+- `error` in the JSON summary; `left out as not URLs` in crawl's counts.
+- `run` and `crawl` count the rows a control request proves say nothing (the page every unknown path gets, 404s by template, images and fonts no request asked for, strings only scripts name) in one line of their class each, with the control answer; `-all-rows` lists every row, `-json` marks each row's `fold`, and the summary has `folds`.
+- `-host-guesses N` caps the guesses (built-in paths, `-dirs`, `-params`, GraphQL field names) one host is sent, for `run` and `crawl`; `plan` states what each technique sends to a host and the cap; the summary lists what the cap kept from being asked, and the run exits 4. `-params-all` searches the pages `-params` leaves out.
+- `plan` estimates a run's requests, connects, DNS queries and source queries by stage and by collector, naming what an answer leads to as `not_counted`; `azhaq plan roles` and `roles -plan` do the same for roles' stages. `run` prints the estimate before sending when it is over 1000 contacts (never with `-quiet` or `-json`; no prompt, no cap), and the run and roles summaries have `cost`, each stage's estimate beside what it sent.
+- `azhaq TARGET` and `azhaq quickstart TARGET` print the plan and its estimate, run the scoped default map and end with the wider passes and their costs; finished runs end with costed `next pass, not run` lines (the unasked port range, `-live` after `subs`, `-replay-writes` when histories hold writes never replayed); the `-sweep` note says what the sweep would send.
+- `ports -udp-rows` prints each UDP port that stayed silent (`open|filtered`) as a row of its own.
+- The bench's `ports` row takes a full-range scan of 127.0.0.1 at `-rate 10000` against `nmap -sT` and holds azhaq's CPU and time to 1.25 times nmap's, with the open ports nmap found all found.
+- `dns -json` rows have `cname_status`, the code of a CNAME's target when it is not NOERROR.
+- A `shots` target with no picture has a row of its own: a failure (timeout, refusal, a name that does not resolve) has `failed: true` and `error`; an answer that is no failure (no web service on the guessed ports, scope, `-shot-codes`) has a `note`. `-csv` has an `error` column, and the summary counts the rows under `without a screenshot`.
+- `-extra-wait` (default 5s): the sources azhaq adds to subfinder's default set (commoncrawl, hudsonrock, rapiddns, sitedossier, thc, waybackarchive) are cut this long after every source of that set has answered; the cut source is listed as failed and its names so far are kept; 0 waits as long as `-source-timeout`; a source named with `-sources` is not cut.
+
+### Changed
+
+- Chrome no longer starts without its sandbox unless asked. Where the system gives it none (a container, AppArmor, no user namespaces), every command that starts Chrome (`shots`, `run` and `crawl -browser`, `-login`, `roles -role-login`, `mcp`) exits 2 before any request and names `-chrome-no-sandbox`. `-chrome-require-sandbox` is still accepted and changes nothing; `AZHAQ_CHROME_NO_SANDBOX=1` stays.
+- `roles` holds `-max-requests` for the whole command (every role's run, the sign-ins, the history reads, the replay, the controls and the writes), exits 4 naming the stage that reached it, and the summary says the budget and what was sent. With `-ledger` it writes one ledger for the whole command.
+- A port that accepted `run`'s HTTP request and then closed or reset at once, and was not named http or https, is a not-a-web-service answer (what `ports` calls tcpwrapped), not a retryable failure.
+- `-detect banner` sends nothing after the connection: a bare 220 greeting stays `ftp-or-smtp` with its banner, and only `-detect all` asks EHLO or SYST. `-detect none` asks a UDP port one datagram.
+- A TLS failure reads `TLS error:` followed by what the handshake said, and failures group by reason.
+- Generated names (brute force, permutations, a source's guesses, the name history) are asked 2 times, as dnsx does, unless `-retry` is given. On a zone whose servers do not answer, `subs -live -dns-rate 10` takes 25 s where it took 39 s (dnsx 26 s).
+- A fast `ports` scan writes the ledger lines of a batch of up to 32 connects in one write, takes their pace in one wait, reuses idle workers and collects garbage less often: a full-range scan at `-rate 10000` uses 1.84 CPU-seconds where v0.14.0 used 2.34 (nmap -sT 1.28).
+- The addresses of a range are asked UDP on as many at once as the rate keeps busy.
+- `plan -graphql` says how many POSTs schema recovery may send: 2 per endpoint and up to 96 more.
+- `crawl` counts the rows the default extension list leaves out, with a note naming `-assets`, and apart the rows `-em`, `-ef`, `-mr` and `-fr` dropped.
+- `subs` and `run` say in one note which name history file was read or written and how many names; the docs list exactly which names are stored.
+- The params pages state one rule: `params -X POST|JSON|XML` is its own opt-in, as `-m POST` is for arjun; only `run -params-method` takes `-params-writes`.
+- The `archives-*` tag workflow (`bench-archives`) is retired; the main benchmark (`bench.yml`) already compares archived URLs with gau by overlap.
+- Found lines of kind `ports` (with an `open` list) are now kind `port`, one per port.
+- `go run ./scripts/claims` reads the pages of docs/ too, and a claim proves only the sentences its text touches; CI fails when a test named as the proof of a claim does not build, was skipped, or did not pass.
+- When a role's session dies during the replay and cannot be renewed, `roles` pauses that role's remaining work (and asks no writes of it) instead of spending the budget on suspect answers; the summary separates its proved, suspect and not-attempted answers and says how to supply a renewed session.
+- Added: `plan` and `run` name the GET requests among the targets whose own name or API description declares a state change (create, delete, reset, populate, logout and the like), each with the `-deny-path` rule that would keep it out; a run also names the ones it finds on the way in its summary's `state_changing`. Nothing is withheld by the list.
+- Added: MCP tools `azhaq_dirs`, `azhaq_params`, `azhaq_dns_brute` and `azhaq_roles_writes`, and UDP ports on `azhaq_ports` (`udp_ports`), each held to the server's scope, budget, lock and ledger.
+- Changed: an MCP server now asks no third-party source and reads or writes no name history unless started with `-sources` naming sources or with `-history`; `azhaq_params` with a body method and `azhaq_roles_writes` need the new `-allow-writes` at start.
+- Changed: `azhaq_plan` and `azhaq_map` build their requests through one code path, so the plan is what the call would send.
+- `subs` without `-live` prints every name the sources gave; subdomain.center's guesses are candidates marked `"unverified": true`, and `-guesses=false` holds them back.
+- `commoncrawl`, `sitedossier` and `waybackarchive` are in the default source set, each bounded by `-source-timeout`.
+- The Wayback Machine is asked for the capture time too (`fl=timestamp,original`).
+- Exit 3 means the run's own job failed or is incomplete: nothing it was given answered, a failure names no target (a lost session, a bug, the `-exec` connector), or a note says the results are short or misleading. A run that did its job and names its failures exits 0 with `complete: true` (one of several targets down, a subdomain source that timed out while others answered, a page the crawl found that fails). The rule is in OUTPUT.md "Exit 3", per command. A run given only addresses or ranges (`ports`, `asn`, `notify`, `watch`, `roles`) keeps "any failure exits 3".
+- A summary that disagrees with its rows or the ledger ends with exit 1, `complete: false` and an `error` (internal error), instead of a note or a complete run.
+- The default `crawl` list and `run` text map no longer hold the folded rows; they are in the workspace, in `-json` and in `-all-rows`.
+- A GraphQL candidate that refuses the introspection query and its shorter form the same way gets those two POSTs and is dropped and named in the summary; endpoints a script or description names are asked before ones a path sweep found; `run -params` does not search a page whose own answer was the catch-all page or a refusal (401, 403, 405), and says why in a note. A page you named is always searched.
+- A budget stop names the stage whose request used the last of the budget; `azhaq help` groups commands by task and opens with `azhaq TARGET`.
+- `ports` gives the UDP ports of an address that stayed silent as one row (`ports`, `silent`, `asked`, `refused`; plain `host/udp open|filtered N of M ports: LIST`), not one row each. The summary's `open|filtered` still counts ports; `-oX`, `-oG` and the workspace list each port.
+- An address of a range that answered nothing on UDP has a stored row with its silent ports (`udp_silent_only`, `udp_open_filtered`), and the summary says how many ports were asked of each.
+- `ports` at `-rate 1000` and up connects each batch of ports with one poll, not a goroutine each: a full-range scan of 127.0.0.1 at `-rate 10000` used 1.50 CPU-seconds against nmap -sT's 1.21 and now uses 1.20.
+- `ports` names the product and version of more greetings: Bitvise WinSSHD, MikroTik RouterOS sshd, Cisco SSH, SunSSH, OpenSSH for Windows, Serv-U, NcFTPd, Gene6, Titan, MikroTik and GNU inetutils ftpd, ProFTPD without a version, MDaemon, Kerio, IceWarp, Lotus Domino, Google gsmtp, Microsoft Exchange POP3 and IMAP.
+- A dns row's `status_code` is the code of the name asked: a name that is a CNAME is NOERROR, so `-rcode nxdomain` no longer lists the owners of dangling CNAMEs; their takeover finding is unchanged.
+- `shots` exits 3 when no target gave a picture, and a name that does not resolve is named in the summary.
+- A polite `subs -live` no longer waits the full `-source-timeout` for a slow extra source such as sitedossier.
+- `urls` and `run` ask each archive without a pause between requests and with no page cap by default, as gau does; `-urls-pause` and `-urls-pages N` still set them.
+
+### Fixed
+
+- `crawl` no longer requests or lists the `./name` keys of a webpack module map as routes; `crawl -rejected` shows them with a reason.
+- A GraphiQL or Playground page no longer sends up to 96 recovery POSTs when another URL of its origin already gave the whole schema.
+- `roles` replay: when a replayed create makes the sender's own object, every other role now reads it once, so a cross read is reported (`reads another role's object`, `owner_by` naming the create).
+- `plan` and `azhaq_plan` list a URL seed that a `-deny-path` rule keeps out under `skipped`, as `run` does, not as a target.
+- A `subs -live` run stopped by `-max-time` no longer says the DNS lookups failed for the names it did not reach: the row names the time limit and counts them as `not_checked`, and a resume that checks them all exits 0.
+- `resume -retry-failed` no longer drops the flag that follows it.
+- A UDP scan stopped by a limit no longer prints and stores nothing.
+- Two scans of one address that run together no longer write one ledger line more than the summary counts.
+- A benchmark job whose build of azhaq or install of a reference tool failed now prints the tool's output, names the units it stopped and writes a record with a failed check for each; before, it printed `go build: exit status 1` and the merge said "no result".
+- `run -stream` printed the host's whole open-port list again for each new port; it now prints one `found  port` line per port row (`address:port/protocol`), once, and `-json` found lines carry `ip`, `host`, `port`, `protocol`, `state` and `service`.
+- An advisory confirmation read refused by a `-deny-path` rule no longer fails the run; the lead stays claimed and a note counts the reads not sent.
+- docs/CONCEPTS.md and docs/TROUBLESHOOTING.md said the `roles` replay does not look for `roles.stop`; it does, and the kill file ends the history reads and the replay too.
+- `probe` of a name that does not resolve exited 0 with `complete: true`; it now exits 3 when no input answered.
+- The ledger lists a request when it is written and a connect when its socket is about to connect, and the summary counts only those. A request a stop (`-timeout`, the kill file, Ctrl-C) cancelled before it left has no line and is given back; a fast `ports` scan stopped between its batched ledger lines and their connects no longer lists connects it never made. What a line means per kind is in docs/OUTPUT.md.
+- `crawl` without `-json`: routes with a parameter, views and sockets that plain output cannot ask are counted as `left out as not URLs` and named in a note; the "hints and named URLs left out" note no longer counts a row the extension list already left out.
+- `subs -max-names`: `from sources` counts every name the sources gave (the cut ones included), and a name two sources gave is cut once.
+- A GraphiQL page that refuses every POST no longer spends the request budget before the endpoint's schema is read.
+- A server that greets after more than 4.5 seconds (sshd looking the client up) was `ssh?` with no product; the second look and the last connect of a silent port now wait six seconds, as nmap does.
+- `diff` no longer reports a changed observation for every catch-all row of two runs of one unchanged app; the control is compared by its answer and directory, not its random path.
+- `shots` gives one row and one file per target given: the destination of a redirect (http to https) is in `final_url` and is no second target, and a URL you name is no longer also tried as a bare name on both schemes.
+- A run stopped by `-max-requests` and resumed no longer sweeps the origin's paths a second time from another URL: the sweep claim made before the run sends is kept in the workspace, so a resume continues the stopped sweep.
+- The estimate of a run with `-permute` (subs, run, plan) counts the variations of names given as targets and names the permutation queries it leaves out in `not_counted`.
+- `urls` stopped reading the Wayback Machine at the first page with no rows; it now reads until the archive answers 400 or sends an empty body.
+
 ## v0.14.0
 
 ### Added
