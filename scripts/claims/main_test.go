@@ -90,10 +90,70 @@ func TestLedgerRowsAreChecked(t *testing.T) {
 		"readme.b\tdocs/commands/run.md\tNever sends a write without its flag\ttest:cmd/azhaq:TestKeepsScope\n" +
 		"run.c\tdocs/commands/gone.md\tNever sends a write without its flag\ttest:cmd/azhaq:TestKeepsScope\n"
 	got := problems(t, "# azhaq\n", page, ledger)
-	for _, want := range []string{"want id, file, text and proof", "too short", "in the ledger twice", "the id starts with the page it is about, run.", "is not README.md or a docs/commands page"} {
+	for _, want := range []string{"want id, file, text and proof", "too short", "in the ledger twice", "the id starts with the page it is about, run.", "is not README.md or a page of docs/ or docs/commands"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("no problem says %q:\n%s", want, got)
 		}
+	}
+}
+
+// A claim proves the sentences its text touches, not the ones beside it.
+func TestASentenceBesideAProvedOneNeedsItsOwnProof(t *testing.T) {
+	pg := "# azhaq run\n\n## What it does\n\nIt never sends a write without its flag. It always asks the scope first.\n"
+	ledger := "@cover docs/commands/run.md\nrun.no-writes\tdocs/commands/run.md\tnever sends a write without its flag\ttest:cmd/azhaq:TestKeepsScope\n"
+	got := problems(t, "# azhaq\n", pg, ledger)
+	if !strings.Contains(got, "run.md:5: a claim with no proof") || !strings.Contains(got, "It always asks the scope first") || strings.Contains(got, "never sends a write") {
+		t.Errorf("want the second sentence alone:\n%s", got)
+	}
+	ledger += "run.scope\tdocs/commands/run.md\tIt always asks the scope first\ttest:cmd/azhaq:TestKeepsScope\n"
+	if got := problems(t, "# azhaq\n", pg, ledger); got != "" {
+		t.Errorf("both sentences have a proof:\n%s", got)
+	}
+}
+
+// @cover FILE#Section holds that section of a page, and not the rest of it.
+func TestASectionCoverHoldsOnlyThatSection(t *testing.T) {
+	pg := "# Concepts\n\n## Scope\n\nNo request goes outside it.\n\n## Other\n\nNever guess.\n"
+	root := tree(t, "# azhaq\n", page, "@cover docs/CONCEPTS.md#Scope\n")
+	if err := os.WriteFile(filepath.Join(root, "docs", "CONCEPTS.md"), []byte(pg), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	rep, err := check(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := strings.Join(rep.Problems, "\n")
+	if !strings.Contains(got, "CONCEPTS.md:5: a claim with no proof") || strings.Contains(got, "CONCEPTS.md:9") {
+		t.Errorf("want the Scope claim and not the Other one:\n%s", got)
+	}
+	if rep.Backlog["docs/CONCEPTS.md"] != 1 {
+		t.Errorf("the line outside the section is backlog: %+v", rep.Backlog)
+	}
+	if err := os.WriteFile(filepath.Join(root, "docs", "claims.tsv"), []byte("@cover docs/CONCEPTS.md#Nowhere\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	rep, _ = check(root)
+	if got := strings.Join(rep.Problems, "\n"); !strings.Contains(got, "no such") {
+		t.Errorf("a section that does not exist passes:\n%s", got)
+	}
+}
+
+// The pages of docs/ are claim pages, and their ids start with docs-.
+func TestAPageOfDocsTakesClaims(t *testing.T) {
+	pg := "# Concepts\n\n## Scope\n\nNo request goes outside it.\n"
+	root := tree(t, "# azhaq\n", page, "concepts.scope\tdocs/CONCEPTS.md\tNo request goes outside it\ttest:cmd/azhaq:TestKeepsScope\n")
+	if err := os.WriteFile(filepath.Join(root, "docs", "CONCEPTS.md"), []byte(pg), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	rep, _ := check(root)
+	if got := strings.Join(rep.Problems, "\n"); !strings.Contains(got, "the id starts with the page it is about, docs-concepts.") {
+		t.Errorf("a docs page id with the wrong prefix passes:\n%s", got)
+	}
+	if err := os.WriteFile(filepath.Join(root, "docs", "claims.tsv"), []byte("docs-concepts.scope\tdocs/CONCEPTS.md\tNo request goes outside it\ttest:cmd/azhaq:TestKeepsScope\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if rep, _ = check(root); len(rep.Problems) != 0 {
+		t.Errorf("%v", rep.Problems)
 	}
 }
 

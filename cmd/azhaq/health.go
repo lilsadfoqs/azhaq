@@ -33,12 +33,21 @@ type sourceHealth struct {
 	// FailedSources has the reason of each failure; with several domains each
 	// reason names its domain.
 	FailedSources map[string]string `json:"failed_sources,omitempty"`
+	// Queries is what each archive was asked for (urls): the host pattern,
+	// the indicator or the search. With several domains each is led by its
+	// domain.
+	Queries map[string]string `json:"queries,omitempty"`
+	// PartialSources are the archives that failed after giving URLs: what
+	// they gave is in the set, the rest of what they hold is not.
+	PartialSources []string `json:"partial_sources,omitempty"`
 }
 
 // healthTally collects sourceHealth from the per-domain payloads.
 type healthTally struct {
 	h       sourceHealth
 	reasons map[string][]string // source → "domain: reason"
+	queries map[string][]string // source → "domain\x00what it was asked for"
+	partial map[string]bool
 	// down is what made the run degraded: a source of the default set that
 	// failed, with its short reason and for how many domains.
 	down    map[string]*degradedBy
@@ -47,7 +56,7 @@ type healthTally struct {
 }
 
 func newHealthTally(urls bool) *healthTally {
-	t := &healthTally{reasons: map[string][]string{}, down: map[string]*degradedBy{}, domains: map[string]bool{}, urls: urls}
+	t := &healthTally{reasons: map[string][]string{}, queries: map[string][]string{}, partial: map[string]bool{}, down: map[string]*degradedBy{}, domains: map[string]bool{}, urls: urls}
 	t.h.Seconds = map[string]float64{}
 	t.h.Requests = map[string]int{}
 	if urls {
@@ -72,6 +81,12 @@ func (t *healthTally) add(domain string, srcs map[string]any) {
 			gave = t.h.URLs
 		}
 		gave[name] += intOf(row["count"])
+		if q, _ := row["asked"].(string); q != "" && t.urls {
+			t.queries[name] = append(t.queries[name], domain+"\x00"+q)
+		}
+		if row["partial"] == true && row["error"] != nil {
+			t.partial[name] = true
+		}
 		if n := intOf(row["requests"]); n > 0 {
 			t.h.Requests[name] += n
 		}
@@ -120,6 +135,24 @@ func (t *healthTally) result() *sourceHealth {
 			}
 			h.FailedSources[name] = strings.Join(parts, "; ")
 		}
+	}
+	if len(t.queries) > 0 {
+		h.Queries = map[string]string{}
+		for name, qs := range t.queries {
+			sort.Strings(qs)
+			var parts []string
+			for _, q := range qs {
+				domain, what, _ := strings.Cut(q, "\x00")
+				if len(t.domains) > 1 {
+					what = domain + ": " + what
+				}
+				parts = append(parts, what)
+			}
+			h.Queries[name] = strings.Join(parts, "; ")
+		}
+	}
+	if len(t.partial) > 0 {
+		h.PartialSources = slices.Sorted(maps.Keys(t.partial))
 	}
 	return &h
 }
@@ -205,7 +238,17 @@ func (h *sourceHealth) archivesNote() string {
 		}
 		parts = append(parts, p)
 	}
-	return "URLs by archive: " + strings.Join(parts, ", ")
+	note := "URLs by archive: " + strings.Join(parts, ", ")
+	if h.failures() > 0 {
+		var failed []string
+		for _, n := range slices.Sorted(maps.Keys(h.FailedSources)) {
+			failed = append(failed, n)
+		}
+		if h.Answered > 0 {
+			note += fmt.Sprintf("; the set is partial: %s failed, so the URLs only they hold are missing and those of the others are listed", strings.Join(failed, ", "))
+		}
+	}
+	return note
 }
 
 // requestsNote says what the archives were sent: the summary's own

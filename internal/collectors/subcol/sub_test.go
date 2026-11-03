@@ -810,3 +810,52 @@ func TestRunReportsTheNameHistoryItUsed(t *testing.T) {
 		t.Errorf("-no-history left an account: %v", payload[HistoryKey])
 	}
 }
+
+// With no lookup to make, a sampled source is asked once, as subfinder asks
+// it; -guess-samples N asks it up to N times while the names seen are not
+// yet most of its pool.
+func TestSampledWithoutLookupsTakesTheSamplesTheUserAsksFor(t *testing.T) {
+	round := func(names ...string) []string { return names }
+	answers := [][]string{
+		round("a.example.org", "b.example.org", "c.example.org", "d.example.org"),
+		round("c.example.org", "d.example.org", "e.example.org", "f.example.org"),
+		round("a.example.org", "e.example.org", "g.example.org", "h.example.org"),
+		round("never.example.org"),
+	}
+	for _, tc := range []struct {
+		samples, calls, names int
+	}{{0, 1, 4}, {1, 1, 4}, {3, 3, 8}} {
+		calls := 0
+		s := sampled(source{name: "s", collect: func(context.Context, string, []string, *subscraping.Session) ([]string, error) {
+			a := answers[calls]
+			calls++
+			return a, nil
+		}})
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx = context.WithValue(ctx, samplesKey{}, tc.samples)
+		got, err := s.collect(ctx, "example.org", nil, nil) // no checker in ctx: nothing is looked up
+		cancel()
+		if err != nil || calls != tc.calls || len(got) != tc.names {
+			t.Errorf("-guess-samples %d: %d calls and %d names (%v), want %d and %d", tc.samples, calls, len(got), err, tc.calls, tc.names)
+		}
+	}
+}
+
+// Every keyless source that answers is in the default set; one that was dead
+// or refused every request at the last check is not.
+func TestDefaultSetHoldsTheKeylessSourcesThatAnswer(t *testing.T) {
+	deflt := map[string]bool{}
+	for _, s := range allSources() {
+		deflt[s.name] = s.deflt
+	}
+	for _, name := range []string{"commoncrawl", "sitedossier", "waybackarchive", "rapiddns", "thc", "hudsonrock"} {
+		if !deflt[name] {
+			t.Errorf("%s answers without a key and is not in the default set", name)
+		}
+	}
+	for _, name := range []string{"digitorus", "reconcloud", "riddler", "submd", "threatcrowd", "threatminer"} {
+		if deflt[name] {
+			t.Errorf("%s was dead at the last check and is in the default set", name)
+		}
+	}
+}

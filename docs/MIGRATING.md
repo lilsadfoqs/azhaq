@@ -138,7 +138,7 @@ Behaviour, fields and edge cases: [`azhaq dns`](commands/dns.md).
 - **`-rl` and `-dns-rate`.** `-rl` counts names, as dnsx's does. `-dns-rate N` is a second pace: N queries a second to each resolver. With 6 resolvers that is up to 6 times N.
 - **Pace, as observed.** With dnsx 1.x, `-rl` did not hold back the queries of `-d` with `-w` in one test run: 20 names at `-rl 1` took 0.46 s, and 40 at `-rl 10` took 0.64 s. azhaq's `-dns-rate` paced them: 20 names at 1 a second took 19 s. That is what was measured, not a statement about every dnsx version or input.
 - **A polite run.** Give both `-rl 5` and `-t 5`. Add a `-resolvers` list of one address if you want 5 queries a second in all.
-- **`-retry` and failures.** `-retry` is 3 where dnsx's is 2. A name that no resolver answers is a failure in the summary, and the exit code is 3.
+- **`-retry` and failures.** `-retry` is 3 where dnsx's is 2. A name that no resolver answers is a failure in the summary, counted in `failures`; the exit code is 3 when no name was answered (or with `-strict-exit`).
 
 ### Examples
 
@@ -412,7 +412,7 @@ Behaviour, fields and edge cases: [`azhaq urls`](commands/urls.md).
 - The output is de-duplicated and has no scanner payloads or trailing punctuation. `-raw` prints what the archives gave, unchanged. The benchmark in the README counts how many of gau's URLs azhaq's list holds.
 - OTX gives each URL a status (`httpcode`, 0 when it has none) and urlscan.io each page a status and a type. gau 2.2.4 sends neither `--mc` nor `--fc` to them and prints every URL. azhaq judges them: `-mc 200` keeps the URLs recorded as 200 and drops one with no recorded status, `-fc 404` leaves out the 404s and keeps one with none. An archive that keeps no type or date, OTX, is asked all the same and its URLs are kept unfiltered, with a note such as `otx has no type of its captures: its 13 URLs are not filtered by -mt`.
 - A 429 or a 503 is asked again after its `Retry-After`, however long, or after 2, 5, 10, 20 and 30 seconds. This lasts as long as the archive's `-urls-timeout` and the run's `-timeout` allow. A network error is asked again 3 times.
-- A source that still failed is named in the summary with its tries and the server's words, and the exit code is 3. gau exits 0. An example is `wayback: failed after 4 tries, 429 Too Many Requests`.
+- A source that still failed is named in the summary with its tries and the server's words and counted in `failures`; the exit code is 0 while another archive answered, as gau's is, and 3 with `-strict-exit`. An example is `wayback: failed after 4 tries, 429 Too Many Requests`.
 - Each archive is asked at its own pace. The default pause between one archive's requests is 1 s for the Wayback Machine and Common Crawl, 0.5 s for OTX, 2 s for urlscan.io and none for Arquivo. `-urls-pause` changes it: [urls](commands/urls.md#flags).
 
 ### Examples

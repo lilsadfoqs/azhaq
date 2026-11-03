@@ -19,12 +19,32 @@ import (
 // already confirmed: the services of a port scan's rows (their product
 // and version are what the service itself stated), and the Server
 // header of a web answer azhaq-http recorded. Nothing is asked of any
-// target to build this list.
+// target to build this list. A service with no version yet is left
+// out: there is nothing to match an advisory against.
 func Services(obs []types.StoredObservation) []Service {
+	return services(obs, true)
+}
+
+// ServicesAnyVersion is Services without the version: the named
+// services a port scan recorded even when nothing named their version.
+// A read-only verification (internal/verify) checks those too — its
+// one read is how the version is learned — so it reads this list and
+// picks the names it has a check for.
+func ServicesAnyVersion(obs []types.StoredObservation) []Service {
+	return services(obs, false)
+}
+
+func services(obs []types.StoredObservation, needVersion bool) []Service {
 	var out []Service
 	seen := map[string]bool{}
 	add := func(s Service) {
-		if s.Product == "" || s.Version == "" {
+		if needVersion {
+			// Matching an advisory needs a stated product and version.
+			if s.Product == "" || s.Version == "" {
+				return
+			}
+		} else if s.Service == "" && s.Product == "" {
+			// A verification check keys on the service name alone.
 			return
 		}
 		key := fmt.Sprintf("%s|%d|%s|%s|%s", s.Target(), s.Port, s.Proto, s.Product, s.Version)

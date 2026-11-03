@@ -561,3 +561,22 @@ func TestTLSPortWithOnlyLegacySuitesIsNamed(t *testing.T) {
 		}
 	}
 }
+
+// A port that says nothing to anything costs at most 25 more connects, and
+// the scan counts each one (Take) as it makes it.
+func TestASilentPortCostsAtMostTwentyFiveMoreConnects(t *testing.T) {
+	var accepted, takes atomic.Int32
+	mute := listen(t, func(c net.Conn) { accepted.Add(1); time.Sleep(300 * time.Millisecond) })
+	s := &Scanner{Workers: 1, Banner: 20 * time.Millisecond, Timeout: 50 * time.Millisecond, Take: func() error { takes.Add(1); return nil }}
+	r, err := s.ScanEach(t.Context(), "", "127.0.0.1", []int{mute})
+	if err != nil || len(r.Open) != 1 {
+		t.Fatalf("%v %+v", err, r)
+	}
+	time.Sleep(400 * time.Millisecond)
+	if n := accepted.Load(); n < 2 || n > 1+maxProbes {
+		t.Errorf("a silent port was connected to %d times: want the scan's connect and at most %d more", n, maxProbes)
+	}
+	if got := takes.Load(); got < accepted.Load() || got > 1+maxProbes {
+		t.Errorf("the scan counted %d connects and the port accepted %d", got, accepted.Load())
+	}
+}

@@ -53,7 +53,7 @@ var coordinatorOnly = map[string]bool{
 	"login": true, "login-user": true, "login-pass": true, "cookie": true, "header": true, "H": true,
 	"urls": true, "urls-subs": true, "urls-sources": true, "urls-mc": true, "urls-fc": true, "urls-mt": true, "urls-ft": true,
 	"urls-from": true, "urls-to": true, "urls-blacklist": true, "urls-fp": true, "urls-retries": true, "urls-pages": true, "urls-pause": true,
-	"urls-proxy": true, "urls-max": true, "urls-archive": true, "urls-raw": true, "screenshots": true, "browser": true, "browser-writes": true, "tabs": true,
+	"urls-proxy": true, "urls-max": true, "urls-archive": true, "urls-raw": true, "urls-keep-junk": true, "screenshots": true, "browser": true, "browser-writes": true, "tabs": true,
 	"max-requests": true, "daily-requests": true, "json": true, "quiet": true, "obs": true,
 	"providers": true, "sources": true, "exclude-sources": true, "all-sources": true,
 	"allow": true, "deny": true, "deny-path": true, "parallel": true, "fail-on-errors": true, "strict-exit": true, "fail-on-capped": true,

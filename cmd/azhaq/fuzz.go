@@ -571,6 +571,7 @@ func cmdFuzz(args []string) error {
 	rep.Results = st.Matches
 	rep.Requests = egress.Sent()
 	rep.Unreachable = st.Down
+	rep.warned = rep.warned || len(st.Down) > 0 // the run ended early on a target that stopped answering: not whole
 	if st.Errors > 0 {
 		rep.Failed = append(rep.Failed, engine.Failure{Collector: "azhaq-fuzz", Error: "request failed", Retryable: true, Count: st.Errors, Targets: []string{normalize.HostFromURL(tmpl.URL)}})
 	}

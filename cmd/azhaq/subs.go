@@ -127,11 +127,12 @@ func cmdSubs(args []string) error {
 	var domains stringsFlag
 	fs.Var(&domains, "d", "domain (repeatable; a comma list, a URL or a name with a trailing dot is cleaned, as subfinder does)")
 	list := onceString(fs, "dL", "file of domains (- for stdin)")
-	live := fs.Bool("live", false, "only names that resolve (wildcard answers left out); without it nothing is looked up, the names only subdomain.center guessed are held back (see -guesses) and the ones only the name history held are listed unverified")
-	guesses := fs.Bool("guesses", false, "also print the names only subdomain.center guessed, which no source asserted and no lookup checked (-json marks them \"unverified\": true); not with -live, which looks them up")
+	live := fs.Bool("live", false, "only names that resolve (wildcard answers left out, tier \"dns\"); without it nothing is looked up and every name the sources gave is printed as a candidate (-json: \"tier\": \"candidate\"), the ones no source asserted (subdomain.center's guesses, the name history's) marked \"unverified\": true")
+	guesses := fs.Bool("guesses", true, "print the names only subdomain.center guessed, which no source asserted and no lookup checked, as candidates marked \"unverified\": true; -guesses=false holds them back and counts them; not with -live, which looks them up")
 	nW := fs.Bool("nW", false, "same as -live (subfinder's name)")
+	httpTier := fs.Bool("http", false, "also ask each live name's web service one request (GET /, as azhaq probe does) and mark the names that answered \"tier\": \"http\"; sends requests to the names, so it is off by default; implies -live (-web-ports names the ports)")
 	words := fs.String("w", "", "also resolve WORD.domain for each word in this file, like puredns bruteforce (active DNS; the names found are live)")
-	guessSamples := fs.Int("guess-samples", 0, fmt.Sprintf("with -live, take up to N samples of subdomain.center's guesses while each has a new name that resolves or the names seen are not yet most of its pool, with no time budget (default: the first sample, which is what subfinder | dnsx checks, then more for %s at most, up to %d)", subcol.SampleBudget(), subcol.SampleRounds()))
+	guessSamples := fs.Int("guess-samples", 0, fmt.Sprintf("take up to N samples of subdomain.center's guesses while each has a new name that resolves (with -live) or the names seen are not yet most of its pool, with no time budget (default: the first sample, which is what subfinder | dnsx checks, then with -live more for %s at most, up to %d; without -live one)", subcol.SampleBudget(), subcol.SampleRounds()))
 	permute := fs.Bool("permute", false, "also resolve variations of the names found (api → api-dev, api2, dev.api), like alterx | dnsx (active DNS)")
 	oJ := fs.Bool("oJ", false, "same as -json (subfinder's name)")
 	ls := fs.Bool("ls", false, "list the sources and exit: name, then * if a key is required and ~ if one improves the answer; with -json one object each (name, default, recursive, keyRequirement)")
@@ -148,7 +149,7 @@ func cmdSubs(args []string) error {
 	stats := fs.Bool("stats", false, "after the run, one note per source: requests, names, errors and seconds, as subfinder -stats")
 	showVersion := fs.Bool("version", false, "print the version and exit")
 	given := inherit(fs, "sources", "exclude-sources", "all-sources", "no-history", "source-timeout", "providers", "resolvers", "dns-rate", "timeout", "v", "fail-on-errors",
-		"source-rate", "source-rates", "max-results", "max-time", "max-body", "proxy=source-proxy", "t=parallel", "ledger")
+		"source-rate", "source-rates", "max-results", "max-time", "max-body", "proxy=source-proxy", "t=parallel", "ledger", "web-ports", "http-proxy=proxy")
 	maxNames := fs.Int("max-names", 0, fmt.Sprintf("most names kept per domain, and looked up with -live (default %d); a value you give also caps the names -w and -permute ask, together: the guesses past it are not asked, the run exits 4 and says how many", subcol.DefaultMaxNames))
 	if err := parse(fs, args); err != nil {
 		return err
@@ -164,7 +165,7 @@ func cmdSubs(args []string) error {
 		printSources(c.json)
 		return nil
 	}
-	if *guesses && (*live || *nW) {
+	if hasFlag(args, "guesses") && *guesses && (*live || *nW) {
 		return usagef("-guesses prints names that no lookup checked, and -live looks them up and keeps the ones that resolve: use one of them")
 	}
 	if *guessSamples < 0 {
@@ -173,7 +174,7 @@ func cmdSubs(args []string) error {
 	if *oI && !(*live || *nW) {
 		return usagef("-oI prints the address, so it needs -live (or -nW)")
 	}
-	*live = *live || *nW
+	*live = *live || *nW || *httpTier
 	filt, err := compileSubsFilter(listOrFile(match), listOrFile(filter), matchRe, filterRe)
 	if err != nil {
 		return usagef("%v", err)
@@ -198,10 +199,16 @@ func cmdSubs(args []string) error {
 	if *live || active {
 		keep = append(keep, "azhaq-dns")
 	}
+	if *httpTier {
+		keep = append(keep, "azhaq-http")
+	}
 	if *live {
 		rep.what = "live names"
 	}
 	run := []string{"-passive"}
+	if *httpTier {
+		run = nil // the requests to the names are asked for
+	}
 	if *words != "" {
 		keep = append(keep, "azhaq-dns-brute")
 		run = append(run, "-dns-brute", *words)
@@ -245,6 +252,9 @@ func cmdSubs(args []string) error {
 	var dangling map[string]map[string]any
 	cnameOnly, cnameOnlySrc := 0, 0
 	seen := map[string]bool{}
+	dnsTier := map[string]bool{}     // printed rows a DNS lookup confirmed
+	var answeredHTTP map[string]bool // with -http: the names a request got an answer from
+	httpTier2 := map[string]bool{}   // printed rows an HTTP answer confirmed
 	answered, ran, failedOff := 0, 0, 0
 	verbose := hasFlag(extra, "v")
 	private := map[string]bool{}
@@ -385,6 +395,15 @@ func cmdSubs(args []string) error {
 			if isUnver {
 				row["unverified"] = true
 			}
+			row["tier"] = tierCandidate
+			if alive != nil {
+				row["tier"] = tierDNS
+				dnsTier[name] = true
+				if answeredHTTP[name] {
+					row["tier"] = tierHTTP
+					httpTier2[name] = true
+				}
+			}
 			if wild[name] {
 				row["wildcard_certificate"] = true
 			}
@@ -425,6 +444,9 @@ func cmdSubs(args []string) error {
 	for _, t := range rep.Takeover {
 		out.takeover[t.Host] = t
 	}
+	if *httpTier {
+		answeredHTTP = answeredNames(st)
+	}
 	if *live {
 		// A live name has an address, directly or through its CNAME chain; a
 		// chain that ends without one is listed too, marked cname_only.
@@ -459,7 +481,8 @@ func cmdSubs(args []string) error {
 				}
 				seen[name] = true
 				guessed++
-				row := map[string]any{"host": name, "input": apexOf(name, apexes), "source": g.source, "sources": []string{g.source}}
+				row := map[string]any{"host": name, "input": apexOf(name, apexes), "source": g.source, "sources": []string{g.source}, "tier": tierDNS}
+				dnsTier[name] = true // a guess is kept only when it resolved
 				var ips []string
 				if alive != nil {
 					var only bool
@@ -490,7 +513,8 @@ func cmdSubs(args []string) error {
 		for _, name := range slices.Compact(extra) {
 			seen[name] = true
 			viaCNAME++
-			row := map[string]any{"host": name, "input": apexOf(name, apexes), "source": "cname", "sources": []string{"cname"}}
+			row := map[string]any{"host": name, "input": apexOf(name, apexes), "source": "cname", "sources": []string{"cname"}, "tier": tierDNS}
+			dnsTier[name] = true
 			ips, only := liveRow(row, alive, dangling, name)
 			if only {
 				cnameOnly++
@@ -533,6 +557,15 @@ func cmdSubs(args []string) error {
 			rep.Counts[k] = n
 		}
 	}
+	// The tiers: what the sources gave, and what a lookup then confirmed.
+	// They nest: a name is a candidate before it is DNS-confirmed.
+	rep.Counts[countRaw] = max(union-itself, 0)
+	if *live || active {
+		rep.Counts[countDNS] = len(dnsTier)
+	}
+	if *httpTier {
+		rep.Counts[countHTTP] = len(httpTier2)
+	}
 	set("the domain itself", itself)
 	set("did not resolve", dropped+didNot+guessDead)
 	if *live {
@@ -558,10 +591,10 @@ func cmdSubs(args []string) error {
 		rep.warned = true
 	}
 	if heldBack > 0 {
-		rep.Notes = append(rep.Notes, fmt.Sprintf("%d names are held back: only subdomain.center guessed them, no source asserted them and no DNS lookup was made; -guesses prints them (-json marks them \"unverified\": true), -live looks them up and prints the ones that resolve", heldBack))
+		rep.Notes = append(rep.Notes, fmt.Sprintf("%d names are held back: only subdomain.center guessed them, no source asserted them and no DNS lookup was made; -guesses (the default) prints them as unverified candidates, -live looks them up and prints the ones that resolve", heldBack))
 	}
 	if unverified > 0 {
-		rep.Notes = append(rep.Notes, fmt.Sprintf("%d names are listed unverified (-json: \"unverified\": true): only the name history or, with -guesses, subdomain.center's guesses held them and no DNS lookup was made; -live checks them", unverified))
+		rep.Notes = append(rep.Notes, fmt.Sprintf("%d names are listed unverified (-json: \"unverified\": true): only the name history or subdomain.center's guesses held them and no DNS lookup was made; -live checks them", unverified))
 	}
 	if cnameOnly > 0 {
 		rep.Notes = append(rep.Notes, fmt.Sprintf("%d names are listed with a CNAME and no address (-json: \"cname_only\": true): one whose target is gone is a takeover lead", cnameOnly))
@@ -593,7 +626,15 @@ func cmdSubs(args []string) error {
 	if n := nameSum(rep.Counts, rep.Results, filtering); n != "" {
 		rep.Notes = append(rep.Notes, n)
 	}
-	rep.Notes = append(rep.Notes, subsNotes(payloads(st, "azhaq-subdomains"), seen)...)
+	tiers := []tierSet{{countRaw, nil}}
+	if *live || active {
+		tiers = append(tiers, tierSet{countDNS, dnsTier})
+	}
+	if *httpTier {
+		tiers = append(tiers, tierSet{countHTTP, httpTier2})
+	}
+	rep.Notes = append(rep.Notes, tierNote(rep.Counts, *live || active)...)
+	rep.Notes = append(rep.Notes, subsNotes(payloads(st, "azhaq-subdomains"), tiers)...)
 	if c.db != "" {
 		rep.Next = append(rep.Next, "azhaq query -db "+c.db+" -type Hostname")
 	}
@@ -647,7 +688,7 @@ func nameSum(c map[string]int, results int, filtering bool) string {
 	}
 	minus("the domain itself", "the domain itself, not a subdomain")
 	minus("did not resolve", "did not resolve")
-	minus("guesses held back", "guesses held back (-guesses prints them)")
+	minus("guesses held back", "guesses held back (-guesses=false)")
 	minus("not checked", "not checked")
 	minus("no answer", "no answer from the resolvers")
 	minus("not asked", "not asked before the run stopped")

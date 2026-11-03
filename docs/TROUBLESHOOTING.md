@@ -97,7 +97,7 @@ Entries are grouped by what you were doing:
 
 **Why:** The kill file exists, perhaps from an earlier stop. By default it is `W.stop`, next to the workspace `W`. `-kill-file` names another file in its place. The `stopped` line says `the kill switch`. Nothing more is sent while the file exists.
 
-In `roles` the file is `roles.stop` in the `-dir`. There it stops the runs of the roles, and not the replay after them.
+In `roles` the file is `roles.stop` in the `-dir`. There it stops the runs of the roles and the history reads and replay after them.
 
 **Fix:** Remove the file, then run `azhaq resume -db W`.
 
@@ -184,7 +184,7 @@ In `roles` the file is `roles.stop` in the `-dir`. There it stops the runs of th
 - URLs went past `-urls-max`;
 - an archive cannot apply a `-mt`, `-ft`, `-from` or `-to` filter (OTX has no type or date).
 
-For the last case the note reads like `otx has no type of its captures: its 13 URLs are not filtered by -mt`. Those URLs are listed, not judged by the filter. An archive that failed is listed as failed, and the exit code is 3.
+For the last case the note reads like `otx has no type of its captures: its 13 URLs are not filtered by -mt`. Those URLs are listed, not judged by the filter. An archive that failed is listed as failed and counted in `failures`; the exit code is 3 only when no archive answered, or with `-strict-exit`.
 
 **Fix:**
 

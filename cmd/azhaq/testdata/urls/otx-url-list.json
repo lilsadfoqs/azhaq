@@ -1,0 +1,3 @@
+{"has_next":false,"full_size":2,"url_list":[
+{"url":"http://example.org/otx","date":"2023-05-02T10:11:12","httpcode":200,"domain":"example.org","hostname":"example.org"},
+{"url":"http://example.org/b","date":"2022-01-30T08:00:00","httpcode":404,"domain":"example.org","hostname":"example.org"}]}

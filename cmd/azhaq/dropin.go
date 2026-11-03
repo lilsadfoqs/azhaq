@@ -586,7 +586,11 @@ func cmdURLs(args []string) error {
 	config := fs.String("config", "", "a gau config file (default: ~/.gau.toml when it exists): threads, retries, subdomains, parameters, providers, blacklist, proxy, [urlscan] apikey and host, otx, and the [filters] table; flags win")
 	failCapped := fs.Bool("fail-on-capped", false, "exit 4 when an archive stopped at its page cap with more to read")
 	showVersion := fs.Bool("version", false, "print the version")
-	given := inherit(fs, "provider-config=providers", "mc=urls-mc", "fc=urls-fc", "mt=urls-mt", "ft=urls-ft", "from=urls-from", "to=urls-to",
+	live := fs.Bool("live", false, "spot-check the URLs against the live site once every archive has answered: one GET of each (not followed) at -live-rate, and each -json row says verified, with the status it got; sends requests to the domain's hosts, so it is off by default; it prints at the end, so not with -stream")
+	liveRate := fs.Float64("live-rate", 10, "with -live, requests a second to the live site")
+	liveProxy := fs.String("live-proxy", "", "with -live, send the requests through this proxy (http://, https:// or socks5://; default: $HTTP_PROXY, $HTTPS_PROXY, except for loopback targets)")
+	liveMax := fs.Int("live-max", 0, "with -live, check at most N URLs, spread evenly over the sorted list; the rest are listed unchecked and counted (0: every URL)")
+	given := inherit(fs, "provider-config=providers", "keep-junk=urls-keep-junk", "mc=urls-mc", "fc=urls-fc", "mt=urls-mt", "ft=urls-ft", "from=urls-from", "to=urls-to",
 		"blacklist=urls-blacklist", "fp=urls-fp", "retries=urls-retries", "urls-pages", "urls-pause", "proxy=urls-proxy", "urls-max",
 		"archive=urls-archive", "raw=urls-raw", "urls-timeout", "timeout", "v", "fail-on-errors")
 	if err := parse(fs, args); err != nil {
@@ -613,11 +617,22 @@ func cmdURLs(args []string) error {
 		return usagef("give -d DOMAIN, -dL FILE, domains as arguments or on stdin")
 	}
 	raw := fs.Lookup("raw").Value.String() == "true"
+	keepJunk := fs.Lookup("keep-junk").Value.String() == "true"
 	switch {
 	case *stream && *sorted:
 		return usagef("-stream and -sort say opposite things")
 	case raw && *sorted:
 		return usagef("-raw prints the URLs as they arrive: it cannot be sorted")
+	case *live && (*stream || raw):
+		return usagef("-live prints once the archives have answered and the check is done: it cannot go with -stream or -raw")
+	case *live && *liveRate <= 0:
+		return usagef("-live-rate wants requests a second above 0")
+	case *liveMax < 0:
+		return usagef("-live-max is not negative")
+	case keepJunk && !c.json:
+		return usagef("-keep-junk labels each URL with its class and reason, which only -json can carry")
+	case (hasFlag(args, "live-rate", "live-max", "live-proxy")) && !*live:
+		return usagef("-live-rate, -live-max and -live-proxy are for -live")
 	}
 	var run []string
 	if *providers != "" {
@@ -636,9 +651,9 @@ func cmdURLs(args []string) error {
 	rep := newReport("urls")
 	rep.what = "archived URLs"
 	rep.Notes = append(rep.Notes, notes...)
-	live := *stream || raw || !stdoutTerminal()
-	if *sorted {
-		live = false
+	streaming := *stream || raw || !stdoutTerminal()
+	if *sorted || *live {
+		streaming = false
 	}
 	c.appendOut = true
 	w, err := newWriter(&c)
@@ -647,26 +662,23 @@ func cmdURLs(args []string) error {
 	}
 	run = append(run, "-passive", "-depth", "0", "-skip", skipAllBut("azhaq-urls"), "-urls-subs="+strconv.FormatBool(*subs))
 	flush := func() {}
-	if live {
+	var rows []urlcol.Row // the sorted path: every row, for -live and the output
+	if streaming {
 		// Each URL is printed from the goroutine that reads its page: a
 		// stop keeps what was already printed.
 		var mu sync.Mutex
 		seen := map[string]bool{}
-		urlSink = func(u, src string) {
+		urlSink = func(r urlcol.Row) {
 			if !raw {
 				mu.Lock()
-				dup := seen[u]
-				seen[u] = true
+				dup := seen[r.URL]
+				seen[r.URL] = true
 				mu.Unlock()
 				if dup {
 					return
 				}
 			}
-			if w.json {
-				w.obj(map[string]string{"url": u, "source": src})
-			} else {
-				w.line(u)
-			}
+			printURL(w, urlOut{Row: r}, raw)
 		}
 		defer func() { urlSink = nil }()
 	} else {
@@ -683,16 +695,15 @@ func cmdURLs(args []string) error {
 			sort.Strings(lines)
 			seen := map[string]bool{}
 			for _, l := range lines {
-				u, src, _ := strings.Cut(l, "\t")
-				if seen[u] {
+				parts := strings.Split(l, "\t")
+				for len(parts) < 6 {
+					parts = append(parts, "")
+				}
+				if seen[parts[0]] {
 					continue
 				}
-				seen[u] = true
-				if w.json {
-					w.obj(map[string]string{"url": u, "source": src})
-				} else {
-					w.line(u)
-				}
+				seen[parts[0]] = true
+				rows = append(rows, urlcol.Row{URL: parts[0], Source: parts[1], Archived: parts[2], Junk: parts[3], Reason: parts[4], RawURL: parts[5]})
 			}
 		}
 	}
@@ -702,6 +713,17 @@ func cmdURLs(args []string) error {
 	}
 	st, done, err := runPreset(&c, append(run, given()...), rep, nil)
 	flush()
+	var checked *liveCheck
+	if err == nil && *live && len(rows) > 0 && rep.Stopped == "" {
+		checked, err = verifyURLs(&c, rows, *liveRate, *liveMax, *liveProxy, rep)
+	}
+	for _, r := range rows {
+		o := urlOut{Row: r}
+		if checked != nil {
+			o.verdict(checked, r.URL)
+		}
+		printURL(w, o, raw)
+	}
 	if cerr := w.close(); err == nil {
 		err = cerr
 	}
@@ -709,6 +731,9 @@ func cmdURLs(args []string) error {
 		return err
 	}
 	defer done()
+	if checked != nil {
+		checked.note(rep)
+	}
 	urlsNotes(rep, payloads(st, "azhaq-urls"), *failCapped)
 	if !raw {
 		urlsJunk(rep, payloads(st, "azhaq-urls"))
@@ -723,6 +748,29 @@ func cmdURLs(args []string) error {
 	}
 	rep.Results = w.count()
 	return rep.finish(c.json, c.silent)
+}
+
+// urlOut is a URL row as -json prints it: the row, and with -live whether
+// the live site still answers it.
+type urlOut struct {
+	urlcol.Row
+	Verified       *bool  `json:"verified,omitempty"`
+	VerifiedStatus int    `json:"verified_status,omitempty"`
+	VerifiedError  string `json:"verified_error,omitempty"`
+}
+
+// printURL writes a row: the URL on a line, or the row as JSON. A row's
+// normalised form is always there, as is the form the archive gave when it
+// differs.
+func printURL(w *writer, o urlOut, raw bool) {
+	if !w.json {
+		w.line(o.URL)
+		return
+	}
+	if o.Normalized == "" && !raw {
+		o.Normalized = o.URL
+	}
+	w.obj(o)
 }
 
 // hasFlag says whether args set one of the flags named.

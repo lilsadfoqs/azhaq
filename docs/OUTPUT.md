@@ -7,7 +7,7 @@ Every command follows the same contract, so a script or an assistant can read an
 - **stdout** carries results only: one per line, or one JSON object per line with `-json`.
 - **stderr** carries progress, failures as they happen (the first three of each kind) and a **summary** at the end.
 - With `-json`, every stderr line is JSON, and the summary is one object with `"type":"summary"`.
-- With `-silent`, the summary is printed only when something failed or was cut short. A source or archive that failed counts, and the exit code is 3.
+- With `-silent`, the summary is printed only when something failed or was cut short. A source or archive that failed counts, whatever the exit code is.
 - The **exit code** says whether the work is complete: see [Exit codes](#exit-codes).
 
 With `-json`, the drop-in commands use the field names of the tool they stand in for, so existing `jq` filters keep working.
@@ -75,7 +75,7 @@ One rule decides it, for every command, in one place of the code: the step that 
 
 1. **Nothing it was given answered.** Every target the command can count failed: a `probe` of two dead hosts, a `run` whose only URL refused, `subs` for a domain no source answered, a `dns` run in which no resolver answered any name, a `fuzz` run in which every request failed.
 2. **A failure is the run's own.** It names no target: a signed-in run that lost its session (`azhaq-session`), a report that could not be written. Or it is a bug (`panic:`), or the failure of the `-exec` connector you gave.
-3. **A note says the results are short or misleading.** Names cut at `-max-names`, names `-live` could not check or got no answer for, a role whose session is dead, a picture short of its page, a calibration that filtered nothing, wildcard answers among a sweep's paths. A count in a note cannot name each one, so these are not "done with failures".
+3. **A note says the results are short or misleading.** Names cut at `-max-names`, names `-live` could not check or got no answer for, a role whose session is dead, a picture short of its page, a `fuzz` run that stopped on a target that stopped answering, a calibration that filtered nothing, wildcard answers among a sweep's paths. A count in a note cannot name each one, so these are not "done with failures".
 4. **The command was given nothing it can count.** An address list, a range or a file of ports has no answer to tell from a failure, so any failure exits 3 (`ports`, `asn`, `notify`, `watch`, `roles`, and `run` with only addresses, ranges or an organisation; `gallery` and `ledger` have rules of their own).
 
 What a command counts as a target it was given, and so as a failed one:
