@@ -115,7 +115,7 @@ The text map lists the rows that answer for themselves and counts the others in 
 
 | Class | The rows | The line says |
 | --- | --- | --- |
-| `catchall` | URLs whose answer is the one the origin gives a path that cannot exist (`catchall` rows), and the URLs not asked because the origin had answered other paths so. | The origin, how many URLs, and the control: the request for a path that cannot exist and its answer (`GET /xq3 → 200 text/html, 3748 bytes, "OWASP Juice Shop"`). One line for each origin. |
+| `catchall` | URLs whose answer is the very page the origin gives a path that cannot exist (`catchall` rows, with the page equal byte for byte once the requested path is taken out of both; a page that only has its shape, title, size and lines, may be a route of its own and stays listed), and the URLs not asked because the origin had answered other paths so. | The origin, how many URLs, and the control: the request for a path that cannot exist and its answer (`GET /xq3 → 200 text/html, 3748 bytes, "OWASP Juice Shop"`). One line for each origin. |
 | `not-found` | URLs the server answered with 404 or 410, and routes only scripts name whose GET got one. | How many, and the templates they fall into (`/api/Feedbacks/{n} ×12`), the five largest. |
 | `beyond-depth` | Images, fonts, media, source maps and manifests a page holds that no request asked for (past `-depth`, a limit, or fetched by no step). | How many. |
 | `unrequested` | Hints only scripts name, with no call, method, form, description or page link, that nothing requested. | How many. |
@@ -523,7 +523,7 @@ azhaq run -url https://app.example.com/ -ports top-1000 -verify -db app.db
 | `-fail-on-capped` | bool |  | exit 4 also when the run hit -depth with hints left |
 
 <details>
-<summary>Other names, flags accepted with no effect and rarely used flags (79)</summary>
+<summary>Other names, flags accepted with no effect and rarely used flags (80)</summary>
 
 | Flag | Type | Default | Meaning | Kind |
 | --- | --- | --- | --- | --- |

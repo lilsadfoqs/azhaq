@@ -256,7 +256,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 | `-axfr` | bool |  | also plan the zone transfers azhaq dns -axfr would try for the domain and host targets: the name servers' lookups, and which name servers the scope would let it ask |
 
 <details>
-<summary>Other names, flags accepted with no effect and rarely used flags (79)</summary>
+<summary>Other names, flags accepted with no effect and rarely used flags (80)</summary>
 
 | Flag | Type | Default | Meaning | Kind |
 | --- | --- | --- | --- | --- |

@@ -100,7 +100,7 @@ A crawl never drops links without a word. When `-max-items`, `-max-requests`, `-
 
 The plain list holds the URLs that answer for themselves. The summary counts the others in a line of their class each, with what each class was measured against, and `-all-rows` lists every row as katana does (`-json` lists every row, a folded one marked `fold`):
 
-- `catchall`: URLs that answer as the control does, the request for a path that cannot exist at the root or in a top-level directory. The line has the control's answer (`GET /xq3 → 200 text/html, 3748 bytes, "OWASP Juice Shop"`).
+- `catchall`: URLs whose answer is the control's own page, equal byte for byte once the requested path is taken out of both (a page that only has its shape, such as an item page that prints its own number, stays listed), the request for a path that cannot exist at the root or in a top-level directory. The line has the control's answer (`GET /xq3 → 200 text/html, 3748 bytes, "OWASP Juice Shop"`).
 - `not-found`: URLs the crawl requested and the server answered 404 or 410, with their templates (`/api/Feedbacks/{n} ×12`).
 - `beyond-depth`: images, fonts and media a page holds that no step requested. `-assets`, `-ndef` and `-em` list them, as they ask for them.
 

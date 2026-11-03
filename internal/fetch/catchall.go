@@ -249,6 +249,7 @@ type fingerprint struct {
 	status   int
 	location string
 	hash     string
+	raw      string // the hash of the body as it came, before the requested path is taken out
 	title    string
 	lines    int
 	words    int
@@ -339,6 +340,11 @@ type Control struct {
 	Type   string `json:"type,omitempty"` // the Content-Type, without parameters
 	Size   int    `json:"size"`           // body bytes
 	Title  string `json:"title,omitempty"`
+	// Exact says the answer that matched it was the control's own page, byte
+	// for byte once the requested path is taken out of both; not by shape
+	// (same title, size and lines). It is a property of the answer, not of the
+	// control, so it is not part of what is stored for the control.
+	Exact bool `json:"-"`
 }
 
 // CatchAllControl is CatchAll, and for a catch-all answer also the control
@@ -377,13 +383,17 @@ func catchAllVerdict(ctx context.Context, c *http.Client, res Result) (shell, ju
 	dir := parentDir(path)
 	fp := fingerprintOf(res, origin, requestTarget(u))
 	if root := rootShell(origin, dir, fp); root != nil {
-		return true, true, root.control()
+		rc := root.control()
+		rc.Exact = true
+		return true, true, rc
 	}
 	b := baselineFor(ctx, c, origin, dir)
 	if b == nil || !b.ok {
 		return false, false, nil
 	}
-	return b.fp.matches(fp), true, b.control()
+	ctl = b.control()
+	ctl.Exact = b.fp.status == fp.status && (isRedirect(fp.status) && b.fp.location == fp.location || !isRedirect(fp.status) && (b.fp.hash == fp.hash || b.fp.raw == fp.raw))
+	return b.fp.matches(fp), true, ctl
 }
 
 // rootShell: a page byte for byte the site root's answer for an unknown
@@ -502,6 +512,8 @@ func fingerprintBy(res Result, origin string, strip func(string) string) fingerp
 	body := strip(string(res.Body))
 	sum := sha256.Sum256([]byte(body))
 	fp.hash = hex.EncodeToString(sum[:8])
+	rawSum := sha256.Sum256(res.Body)
+	fp.raw = hex.EncodeToString(rawSum[:8])
 	if m := titleRE.FindStringSubmatch(body); len(m) == 2 {
 		fp.title = strings.Join(strings.Fields(m[1]), " ")
 	}

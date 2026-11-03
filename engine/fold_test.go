@@ -17,6 +17,9 @@ func foldRow(key, coverage, role string, status int) MapEntry {
 // API description lists, is a lead and stays.
 func TestFolderClass(t *testing.T) {
 	f := NewFolder(nil)
+	f.exact["same"] = true
+	same := foldRow("https://h/a", "catchall", "page", 200)
+	same.Entity.ID = "same"
 	scriptsOnly := foldRow("https://h/old", "hint", "page", 404)
 	scriptsOnly.Proof = "GET answers 404; " + ProofScriptsOnly
 	named := foldRow("https://h/named", "hint", "page", 0)
@@ -32,9 +35,12 @@ func TestFolderClass(t *testing.T) {
 		row  MapEntry
 		want string
 	}{
-		"answered":            {foldRow("https://h/a", "visited", "page", 200), ""},
-		"gated":               {foldRow("https://h/a", "visited", "auth", 401), ""},
-		"catchall":            {foldRow("https://h/a", "catchall", "page", 200), FoldCatchAll},
+		"answered":              {foldRow("https://h/a", "visited", "page", 200), ""},
+		"gated":                 {foldRow("https://h/a", "visited", "auth", 401), ""},
+		"catchall, the control": {same, FoldCatchAll},
+		// A page of the control's shape (title, lines, size) is not proved to say
+		// nothing: a templated route answers so.
+		"catchall by shape":   {foldRow("https://h/a", "catchall", "page", 200), ""},
 		"gone":                {foldRow("https://h/a", "gone", "page", 404), FoldNotFound},
 		"a 404 only scripts":  {scriptsOnly, FoldNotFound},
 		"asset not asked":     {foldRow("https://h/a.png", "hint", "asset", 0), FoldBeyondDepth},
@@ -57,15 +63,21 @@ func TestFolderClass(t *testing.T) {
 // with the control its answers were compared with, and the 404s by template.
 func TestFolderGroups(t *testing.T) {
 	var rows []MapEntry
+	f := NewFolder(nil)
 	for _, p := range []string{"/a", "/b", "/c"} {
-		rows = append(rows, foldRow("https://h"+p, "catchall", "page", 200))
+		r := foldRow("https://h"+p, "catchall", "page", 200)
+		r.Entity.ID = r.Entity.Key
+		f.exact[r.Entity.ID] = true
+		rows = append(rows, r)
 	}
-	rows = append(rows, foldRow("https://other/a", "catchall", "page", 200))
+	other := foldRow("https://other/a", "catchall", "page", 200)
+	other.Entity.ID = other.Entity.Key
+	f.exact[other.Entity.ID] = true
+	rows = append(rows, other)
 	for _, p := range []string{"/api/F/1", "/api/F/2", "/api/F/3", "/rest/m"} {
 		rows = append(rows, foldRow("https://h"+p, "gone", "api", 404))
 	}
 	rows = append(rows, foldRow("https://h/x.png", "hint", "asset", 0), foldRow("https://h/ok", "visited", "page", 200))
-	f := NewFolder(nil)
 	f.controls["https://h"] = nil
 	gs := f.Groups(rows)
 	if len(gs) != 4 || gs[0].Class != FoldCatchAll || gs[1].Class != FoldCatchAll || gs[2].Class != FoldNotFound || gs[3].Class != FoldBeyondDepth {

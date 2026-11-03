@@ -752,6 +752,7 @@ func (c *Collector) fetchFirst(ctx context.Context, raw string, rq *fetch.Req, f
 		row["catchall"] = true
 		if control != nil {
 			row["control"] = control // the request it was compared with, for the map's folded groups
+			row["control_exact"] = control.Exact
 		}
 	}
 	if !c.Probe {

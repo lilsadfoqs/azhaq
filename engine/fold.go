@@ -17,7 +17,7 @@ import (
 // route is counted in one line of its class. Every class follows from an
 // answer the run got or a request it did not send; none from a name.
 const (
-	// FoldCatchAll: the answer is the one the origin gives a path that
+	// FoldCatchAll: the answer is the very page the origin gives a path that
 	// cannot exist (the control request's), or the URL was not asked because
 	// the origin had answered other paths so.
 	FoldCatchAll = "catchall"
@@ -41,6 +41,7 @@ var FoldClasses = []string{FoldCatchAll, FoldNotFound, FoldBeyondDepth, FoldUnre
 // catch-all origin, the controls); NewFolder reads those.
 type Folder struct {
 	held     map[string]bool // entity IDs of URLs not asked: their origin answers every path alike
+	exact    map[string]bool // entity IDs of URLs whose answer was the control's own page
 	controls map[string][]fetch.Control
 }
 
@@ -48,7 +49,7 @@ type Folder struct {
 // for a catch-all origin and which control requests its catch-all answers
 // were compared with.
 func NewFolder(obs []types.StoredObservation) *Folder {
-	f := &Folder{held: CatchAllHeldIDs(obs), controls: map[string][]fetch.Control{}}
+	f := &Folder{held: CatchAllHeldIDs(obs), exact: map[string]bool{}, controls: map[string][]fetch.Control{}}
 	seen := map[string]bool{}
 	for _, o := range obs {
 		if o.Kind != "application" {
@@ -58,9 +59,13 @@ func NewFolder(obs []types.StoredObservation) *Folder {
 			URL      string         `json:"url"`
 			CatchAll bool           `json:"catchall"`
 			Control  *fetch.Control `json:"control"`
+			Exact    bool           `json:"control_exact"`
 		}
 		if json.Unmarshal(o.Payload, &p) != nil || !p.CatchAll || p.Control == nil || p.Control.URL == "" {
 			continue
+		}
+		if p.Exact {
+			f.exact[o.EntityID] = true
 		}
 		origin := originOf(p.URL)
 		if k := origin + " " + p.Control.URL; !seen[k] {
@@ -80,7 +85,10 @@ func (f *Folder) Class(r MapEntry) string {
 		return ""
 	}
 	switch {
-	case r.Coverage == "catchall", r.Coverage == "skipped" && f != nil && f.held[r.Entity.ID]:
+	case r.Coverage == "catchall" && f != nil && f.exact[r.Entity.ID], r.Coverage == "skipped" && f != nil && f.held[r.Entity.ID]:
+		// Only an answer that is the control's page itself is proved to say
+		// nothing; one that merely has its shape (a templated page whose
+		// numbers differ) may be a route of its own, and stays listed.
 		return FoldCatchAll
 	case r.Coverage == "gone", scriptsOnly404(r):
 		return FoldNotFound

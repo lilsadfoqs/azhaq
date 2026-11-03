@@ -401,3 +401,37 @@ func TestCrawlFoldsNothingConfirmedOnDVNA(t *testing.T) {
 		t.Errorf("folds %v, the control comparison finds %d 404", folds, notFound)
 	}
 }
+
+// A family of real pages that a control of the same shape matches by title,
+// size and lines (an item page that prints its own path and a number that
+// follows from it) is not the control's page: it is listed, not folded, and
+// its rows are not counted as catch-all folds.
+func TestCrawlListsATemplatedRouteThatOnlyHasTheControlsShape(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		switch p := r.URL.Path; {
+		case p == "/":
+			io.WriteString(w, `<html><title>home</title><a href="/catalog">catalog</a></html>`)
+		case p == "/catalog":
+			io.WriteString(w, `<html><title>catalog</title><body>`)
+			for i := 1; i <= 12; i++ {
+				fmt.Fprintf(w, `<a href="/item/%d">item</a> `, i)
+			}
+			io.WriteString(w, `</body></html>`)
+		case strings.HasPrefix(p, "/item/"):
+			fmt.Fprintf(w, "<html><title>%s</title><body><h1>Item %s</h1><p>stock: %d</p></body></html>", p, p, len(p)*7)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	out, errOut := crawlOut(t, srv, "-silent")
+	for i := 1; i <= 12; i++ {
+		if !strings.Contains(out, fmt.Sprintf("%s/item/%d\n", srv.URL, i)) {
+			t.Errorf("the default list lacks /item/%d:\n%s", i, out)
+		}
+	}
+	if strings.Contains(errOut, "folded catchall") {
+		t.Errorf("pages of their own were folded as the control: %s", errOut)
+	}
+}
