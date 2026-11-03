@@ -75,7 +75,7 @@ var helpSpecs = map[string]helpSpec{
 	},
 	"report": {
 		groups: []helpGroup{
-			{"", `dir url method owner format o redact`},
+			{"", `findings db dir url method owner format o redact`},
 		},
 	},
 	"subs": {

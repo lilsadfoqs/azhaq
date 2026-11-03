@@ -2034,7 +2034,7 @@ func newRunID() string {
 func cmdExport(args []string) error {
 	fs := newFlags("export")
 	dbPath := fs.String("db", "", "sqlite path (default: last run)")
-	format := fs.String("format", "jsonl", "jsonl (everything), urls, hosts (names that resolve), names (every name), targets (web services, for nuclei -l), openapi, graphql (introspection JSON), sdl (GraphQL schema), burp (the run's scope), html, graphml, secrets")
+	format := fs.String("format", "jsonl", "jsonl (everything), urls, hosts (names that resolve), names (every name), targets (web services, for nuclei -l), openapi, graphql (introspection JSON), sdl (GraphQL schema), burp (the run's scope), html, graphml, secrets, findings (one record per qualifying stored row, JSON Lines; an empty workspace writes an explicit empty record set), findings-md (the same records in Markdown)")
 	origin := fs.String("origin", "", "openapi: the origin to describe (default: the one with most API routes); graphql, sdl: the endpoints of an origin, or one endpoint's URL")
 	safe := fs.Bool("safe", false, "openapi: leave out the routes the run did not request, such as those -deny-path kept out (otherwise they carry x-azhaq-skipped: true)")
 	if err := parse(fs, args); err != nil {
