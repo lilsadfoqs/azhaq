@@ -134,12 +134,12 @@ func benchDomain(d string) domainRow {
 	}
 	ar := azRun(d, 30*time.Minute, dir, aa...)
 	az := map[string]bool{}
+	var tierRows []tierRow
 	for _, l := range lines([]byte(ar.stdout)) {
-		var o struct {
-			Host string `json:"host"`
-		}
+		var o tierRow
 		if json.Unmarshal([]byte(l), &o) == nil && o.Host != "" && inDomain(o.Host, d) {
 			az[strings.ToLower(o.Host)] = true
+			tierRows = append(tierRows, o)
 		}
 	}
 	row.AzhaqSeconds, row.AzhaqSubs, row.AzhaqNames, row.AzhaqLive = ar.seconds, ar.seconds, len(az), len(az)
@@ -228,6 +228,27 @@ func benchDomain(d string) domainRow {
 			share(row.SharedLive, refOK), len(az), len(sub), len(dx), azOK, refOK, row.SharedLive, sm.Seconds, dm.Seconds, ratios(ar.seconds, refSecs, row.memPair), azErr(runMeasureOf(ar))))
 	addCheck("subs -live "+d+": every confirmed live name subfinder | dnsx finds is in azhaq's list or its source is named as failed", unexplained == 0,
 		"%d gaps, %d unexplained: %s", len(gaps), unexplained, clipList(why, 8))
+	// The tiers: what the sources gave is the raw candidates, and only what
+	// resolved is DNS-confirmed; raw candidates are never counted as confirmed.
+	counts := map[string]int{}
+	if c, ok := summary["counts"].(map[string]any); ok {
+		for k, v := range c {
+			if f, ok := v.(float64); ok {
+				counts[k] = int(f)
+			}
+		}
+	}
+	refConfirmed := map[string]bool{}
+	for n := range conf {
+		if dx[n] {
+			refConfirmed[n] = true
+		}
+	}
+	problems := tierProblems(tierRows, counts, refConfirmed)
+	addCheck("subs -live "+d+": rows are DNS-confirmed, raw candidates are counted apart and the confirmed set reaches the reference's", len(problems) == 0,
+		"raw candidates %d, DNS-confirmed %d, reference confirmed %d: %s", counts["raw candidates"], counts["DNS-confirmed"], len(refConfirmed), clipList(problems, 8))
+	addCheck("subs -live "+d+": raw candidates reach the names the reference listed", counts["raw candidates"] >= len(sub),
+		"azhaq %d raw candidates, subfinder %d names", counts["raw candidates"], len(sub))
 	addCheck("subdomain sources: no silent zeros ("+d+")", silent, "every empty result is a failure flagged as error or degraded, or a zero every source answered")
 	return row
 }

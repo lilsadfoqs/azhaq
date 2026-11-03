@@ -200,7 +200,7 @@ var observer func(types.Entity, types.Observation)
 // collector in this process: a function that gets each URL as it
 // arrives, and a urlscan.io key from a config file.
 var (
-	urlSink    func(url, source string)
+	urlSink    func(urlcol.Row)
 	urlscanKey string
 )
 
@@ -251,7 +251,8 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	noTech := fs.Bool("no-tech", false, "skip technology fingerprints (saves about 30 MB of memory)")
 	noFavicon := fs.Bool("no-favicon", false, "do not hash the favicon of front pages (one or two requests less per web service)")
 	urlsOut := fs.String("urls", "", "write every archived URL of the run's domains to this file, one per line")
-	urlsFrom := fs.Bool("urls-source", false, "with -urls: each line is the URL, a tab, and the archive that gave it")
+	urlsFrom := fs.Bool("urls-source", false, "with -urls: each line is the URL, then after tabs the archive that gave it, when it captured it, and the junk class and reason of a URL that looks like noise")
+	urlsKeepJunk := fs.Bool("urls-keep-junk", false, "list the archived URLs left out as junk too, each labelled with its class and reason (-json), instead of only counting them")
 	urlsSubs := fs.Bool("urls-subs", true, "ask the archives for the subdomains of each domain too (false: only the name itself, as gau does without --subs)")
 	urlsSources := fs.String("urls-sources", "", "ask only these archives, comma-separated: wayback, commoncrawl, otx, urlscan, arquivo (default: all)")
 	urlsMC := fs.String("urls-mc", "", "keep only URLs the archive recorded with these HTTP status codes, comma-separated (200,301); OTX and urlscan.io record a status for most URLs, and a URL with none is not kept")
@@ -1080,7 +1081,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	}
 	opts.URLs = urlcol.Options{Keys: urlKeys, Out: *urlsOut, OutFrom: *urlsFrom, Timeout: *urlsTimeout,
 		Apex: !*urlsSubs, Only: splitList(*urlsSources), FirstPath: *urlsFP, Blacklist: splitList(*urlsBlacklist), Proxy: *urlsProxy,
-		MaxPages: *urlsPages, MaxURLs: *urlsMax, Raw: *urlsRaw, OnURL: urlSink}
+		MaxPages: *urlsPages, MaxURLs: *urlsMax, Raw: *urlsRaw, KeepJunk: *urlsKeepJunk, OnRow: urlSink}
 	if *urlsPages == 0 {
 		opts.URLs.MaxPages = math.MaxInt32
 	}
