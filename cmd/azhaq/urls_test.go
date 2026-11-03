@@ -93,14 +93,17 @@ func TestURLsApexStreamAndSort(t *testing.T) {
 
 func TestURLsJSONAndPositionalDomains(t *testing.T) {
 	flags, _ := archiveMirror(t)
-	got, errOut, err := urlsRun(t, append([]string{"example.org", "-json", "-urls-pause", "0", "-providers", "wayback"}, flags...)...)
+	out, errOut, err := captureBoth(t, func() error {
+		return run(append([]string{"urls", "example.org", "-json", "-urls-pause", "0", "-providers", "wayback"}, flags...))
+	})
+	got := strings.Split(strings.TrimSpace(out), "\n")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(got) != 5 {
 		t.Fatalf("%v", got)
 	}
-	out := strings.Join(got, "")
+	out = strings.Join(got, "")
 	if !strings.Contains(out, `"url":"http://example.org/a?x=1"`) || !strings.Contains(out, `"source":"wayback"`) {
 		t.Errorf("%s", out)
 	}
