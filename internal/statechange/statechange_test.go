@@ -20,7 +20,7 @@ func TestWord(t *testing.T) {
 		{[]string{"/users/v1"}, ""},
 		{[]string{"List users"}, ""},
 		{[]string{"created_at of the user"}, "create"}, // a word of the set, whole
-		{[]string{"accredited deletions"}, ""},          // no substring match
+		{[]string{"accredited deletions"}, ""},         // no substring match
 		{[]string{"population statistics"}, ""},
 	} {
 		if got := Word(c.texts...); got != c.want {
