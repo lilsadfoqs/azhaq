@@ -75,25 +75,33 @@ func TestSilentUDPPortOfOneAddressIsARow(t *testing.T) {
 	}
 }
 
-// In a range, an address that answered nothing on UDP is not a row (a
-// dead address would be a screenful); the range's row and the summary
-// count its silent ports. One that refused another port is listed.
+// In a range, an address that answered nothing on UDP has no row to print (a
+// dead address would be a screenful): the range's row and the summary count
+// its silent ports, and the workspace keeps them in a row of the address that
+// is marked silent-only. One that refused another port is listed.
 func TestSilentUDPPortsOfARange(t *testing.T) {
 	port := silentUDP(t, "127.0.0.2:0")
 	obs := runUDPPrefix(t, "127.0.0.0/30", []int{port})
 	var addrRows int
 	var rng map[string]any
+	var kept []any
 	for _, o := range obs {
 		var r map[string]any
 		_ = json.Unmarshal(o.Payload, &r)
-		if r["range"] == true {
+		switch {
+		case r["range"] == true:
 			rng = r
-		} else {
+		case r[SilentOnlyKey] == true && r["ip"] == "127.0.0.2":
+			kept, _ = r["udp_open_filtered"].([]any)
+		default:
 			addrRows++
 		}
 	}
 	if addrRows != 0 || rng == nil || rng["udp_silent_addresses"] != float64(1) || rng["udp_silent_ports"] != float64(1) {
 		t.Fatalf("%d address rows, range row %v", addrRows, rng)
+	}
+	if len(kept) != 1 || kept[0] != float64(port) {
+		t.Errorf("the silent port %d is not in the stored row of its address: %v", port, kept)
 	}
 	// The other addresses of the block refuse the port: counted, not rows.
 	n := Notes(obs)

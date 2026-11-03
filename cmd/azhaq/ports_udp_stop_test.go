@@ -50,7 +50,7 @@ func TestPortsUDPStoppedScanKeepsRowsAndResumeFinishes(t *testing.T) {
 	if code != exitLimit {
 		t.Fatalf("exit %d, want %d\n%+v", code, exitLimit, rep)
 	}
-	if !strings.Contains(out, fmt.Sprintf(`"port":%d`, answering)) || rep.Results != 3 || rep.Counts["open"] != 1 || rep.Counts["open|filtered"] != 2 {
+	if !strings.Contains(out, fmt.Sprintf(`"port":%d`, answering)) || rep.Results != 2 || rep.Counts["open"] != 1 || rep.Counts["open|filtered"] != 2 {
 		t.Errorf("a stopped scan printed %d results, counts %v\n%s", rep.Results, rep.Counts, out)
 	}
 	if !strings.Contains(strings.Join(rep.Notes, "\n"), "not final") {

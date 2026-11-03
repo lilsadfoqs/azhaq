@@ -28,6 +28,7 @@ type portsRow struct {
 	NaabuOnly    []string   `json:"naabu_only,omitempty"`
 	Legs         []portsLeg `json:"legs,omitempty"`
 	NaabuMissing bool       `json:"naabu_missing,omitempty"`
+	CPU          *portsCPU  `json:"cpu,omitempty"`
 }
 
 type portsLeg struct {
@@ -71,6 +72,9 @@ func listensOn(snap map[string]bool, port string) bool {
 
 func benchPorts() *portsRow {
 	row := &portsRow{Profile: prof, Hosts: []string{"scanme.nmap.org", "127.0.0.1", "127.0.0.0/28"}}
+	if !polite() { // the polite profile paces both tools to a crawl: its CPU says nothing
+		row.CPU = benchPortsCPU()
+	}
 	naabu := ref("naabu")
 	if !fileExists(naabu) {
 		row.NaabuMissing = true

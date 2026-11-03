@@ -208,7 +208,7 @@ var helpSpecs = map[string]helpSpec{
 			{"Scope and safety", `allow sweep deny kill-file ledger`},
 			{"Pace and limits", `rate min-rate workers connect-timeout dns-rate retries max-requests timeout`},
 			{"Network", `proxy resolvers`},
-			{"Output", `db json o oA oX silent v`},
+			{"Output", `db json o oA oX silent udp-rows v`},
 		},
 		hidden: map[string]string{
 			"compat:naabu": `

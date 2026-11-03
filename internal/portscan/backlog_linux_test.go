@@ -3,6 +3,7 @@ package portscan
 import (
 	"context"
 	"net"
+	"slices"
 	"strconv"
 	"sync/atomic"
 	"syscall"
@@ -71,5 +72,46 @@ func TestTimedOutConnectIsAskedAgainAfterTheQueueDrains(t *testing.T) {
 	}
 	if takes.Load() != 2 {
 		t.Errorf("%d connects counted, want 2 (the first and the second ask)", takes.Load())
+	}
+}
+
+// A scan whose connects go out in batches, one poll for each, finds what one
+// connect at a time finds: the open ports, and the port that never answered
+// as silent and slow. Each connect is counted, in a batch as alone.
+func TestBatchedConnectsFindWhatSingleOnesDo(t *testing.T) {
+	var open []int
+	for i := 0; i < 4; i++ {
+		p, stop := listener(t)
+		defer stop()
+		open = append(open, p)
+	}
+	gone, stop := listener(t)
+	stop()
+	time.Sleep(20 * time.Millisecond)
+	stuck, _ := fullListener(t)
+	ports := append(append([]int(nil), open...), gone, stuck)
+	for _, tt := range []struct {
+		name string
+		rate float64
+	}{{"one connect at a time", 200}, {"in batches", 10000}} {
+		var takes atomic.Int32
+		s := &Scanner{Rate: tt.rate, Detect: DetectNone, Retries: -1, Timeout: 300 * time.Millisecond, Take: func() error { takes.Add(1); return nil }}
+		r, err := s.ScanEach(context.Background(), "", "127.0.0.1", ports)
+		if err != nil {
+			t.Fatalf("%s: %v", tt.name, err)
+		}
+		var found []int
+		for _, o := range r.Open {
+			found = append(found, o.Port)
+		}
+		slices.Sort(found)
+		want := slices.Clone(open)
+		slices.Sort(want)
+		if !slices.Equal(found, want) || len(r.Silent) != 1 || r.Silent[0] != stuck {
+			t.Errorf("%s: open %v silent %v, want open %v silent [%d]", tt.name, found, r.Silent, want, stuck)
+		}
+		if takes.Load() != int32(len(ports)) {
+			t.Errorf("%s: %d connects counted, want %d", tt.name, takes.Load(), len(ports))
+		}
 	}
 }
