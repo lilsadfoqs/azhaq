@@ -137,7 +137,7 @@ A service that speaks first (`ssh`, `ftp`, `smtp`, `telnet`, `irc`, …) is name
 - A port that accepts a connection and closes it without a word is `tcpwrapped`.
 - Raw printing ports (9100–9107) are never asked anything.
 - A service on a port that usually speaks first (22, 21, 25, 3306, …) gets a second wait for its greeting before it is asked anything. A greeting that arrives in reply to the `HEAD` is read as one.
-- When no greeting came at all, the port gets one more connect after the scan. sshd drops greetings when many connects arrive at once.
+- When no greeting came at all, the port gets one more connect after the scan, and that one waits six seconds for it (twice the connect and banner wait), as nmap's first probe does. sshd drops greetings when many connects arrive at once, and a server that looks the client up before it greets is late by the lookup. On a port with no service of its own that stayed silent to every request, the list included, the connect of the last `GET /` listens the same six seconds first, so a greeting that came late names it too; that costs no connect beyond the 25.
 - A second name on the same address has its web and TLS ports asked again under its own name.
 - After six open ports of one address that no request could name, the remaining silent ports of that address are not asked the whole list. `-unnamed N` changes the six, `run -port-unnamed N` does the same in `run`, and `-1` means no limit. A workspace row says how many in `unprobed`, and the summary names them.
 
@@ -255,8 +255,8 @@ Each open TCP port gets `product` and `version` next to `service`, from what it 
 
 | Source | Example | Product, version |
 | --- | --- | --- |
-| SSH greeting | `SSH-2.0-OpenSSH_9.6p1 Ubuntu-3ubuntu13.20` | OpenSSH, 9.6p1 |
-| FTP, SMTP, POP3, IMAP greeting | `220 (vsFTPd 3.0.5)`, `ESMTP Exim 4.96`, `Dovecot` | vsftpd 3.0.5, Exim 4.96, Dovecot |
+| SSH greeting | `SSH-2.0-OpenSSH_9.6p1 Ubuntu-3ubuntu13.20`, `SSH-2.0-Cisco-1.25`, `SSH-2.0-ROSSSH`, a Bitvise `FlowSsh: Bitvise SSH Server (WinSSHD) 8.49` | OpenSSH, 9.6p1 (the distribution's part is in `extrainfo`); Cisco SSH 1.25; MikroTik RouterOS sshd; Bitvise WinSSHD 8.49 |
+| FTP, SMTP, POP3, IMAP greeting | `220 (vsFTPd 3.0.5)`, `220 Serv-U FTP Server v15.1`, `ESMTP Exim 4.96`, `ESMTP MDaemon 21.5.1`, `Dovecot`, `Microsoft Exchange Server 2016 POP3 server version 15.01.2308.008` | vsftpd 3.0.5, Serv-U ftpd 15.1, Exim 4.96, MDaemon smtpd 21.5.1, Dovecot, Microsoft Exchange pop3d 15.01.2308.008 |
 | FTP greeting naming no product: `SYST` before login (`-detect all` only) | vsftpd 2.0.8 and later refuses it with `530 Please login with USER and PASS.` | vsftpd, no version (the greeting states none) |
 | MySQL, MariaDB handshake | server version in the first packet | MySQL 8.0.35, MariaDB 10.11.6 |
 | HTTP `Server` | `Werkzeug/2.2.3 Python/3.11`, `Apache/2.4.25 (Debian)`, `CUPS/2.4` | Werkzeug 2.2.3, Apache httpd 2.4.25, CUPS 2.4 |

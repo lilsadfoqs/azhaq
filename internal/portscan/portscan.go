@@ -636,6 +636,12 @@ func (s *Scanner) probe(ctx context.Context, host, ip string, port int) (Open, p
 	return o, portOpen
 }
 
+// lateGreeting is how long a connect that sends nothing waits for a greeting:
+// twice the connect and banner wait, six seconds by default, as long as nmap's
+// first probe listens. A server that looks the client up before it greets is
+// slow by that lookup.
+func (s *Scanner) lateGreeting() time.Duration { return 2 * (s.Timeout + s.Banner) }
+
 // secondLook connects once more to each server-first port that said
 // nothing, and waits longer for its greeting. Each connect is paced,
 // counted and recorded like any other; what the first one found stands
@@ -690,7 +696,7 @@ func (s *Scanner) greetAgain(ctx context.Context, host, ip string, o *Open) {
 		return
 	}
 	defer conn.Close()
-	_ = conn.SetReadDeadline(time.Now().Add(s.Timeout + 2*s.Banner))
+	_ = conn.SetReadDeadline(time.Now().Add(s.lateGreeting()))
 	buf := make([]byte, 256)
 	n, _ := conn.Read(buf)
 	if n == 0 {
