@@ -122,18 +122,19 @@ found in
 
 - With `-stream`, `run` prints each URL, name that resolves, address and open port as it is found. They come before the map.
 - One line for each key the map has a row for: a URL found by the crawl and answered later, or the front page found twice, prints once, as the first way it was found (its status is in the map). The address of an IP host is a row and a line too (`found  address 127.0.0.1`).
-- Not streamed: names that do not resolve, which the map folds into a summary row. An open-ports line is one line for a host and stands for its port rows (`address:port/tcp`); the same host's ports print again only when a later scan finds others.
+- An open port is a line of its own, under its row's key: `address:port/protocol`, printed once, when a scan reports the port (`found  port    127.0.0.1:3001/tcp  open http`). A later scan that lists the same port does not print it again.
+- Not streamed: names that do not resolve, which the map folds into a summary row.
 - An answer line looks like `found  answer http://app/openapi.json  [200]`. An answer that is the page every unknown path gets ends with `(catch-all: the page any unknown path gets)`.
 - With `-json`, each is an object with `"type":"found"` and these fields:
 
 | Field | Meaning |
 | --- | --- |
-| `kind` | `name`, `url`, `answer`, `address` or `ports`. |
-| `key` | The name, the URL, the address, or the host of the ports. For `name`, `url`, `answer` and `address`, the key of the map row. |
+| `kind` | `name`, `url`, `answer`, `address` or `port`. |
+| `key` | The name, the URL, the address, or `address:port/protocol` of a port: the key of the map row. |
 | `collector` | The collector that found it. |
 | `status`, `title` | For an answer. |
 | `catchall` | For an answer: `true` when it is the page every unknown path gets. |
-| `ip`, `open` | For ports: the address and the list of open ports. |
+| `ip`, `host`, `port`, `protocol`, `state`, `service` | For a port: the address, the name it was scanned under (empty for an address given as such), the port number, `tcp` or `udp`, `open` (UDP also `open\|filtered`) and the service when one was named. |
 
 ### Coverage
 
