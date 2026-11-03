@@ -86,3 +86,32 @@ mcp.lifecycle-refused	docs/commands/mcp.md	Before `initialize` the server answer
 mcp.lifecycle-once	docs/commands/mcp.md	A second `initialize` on the same connection is refused	test:cmd/azhaq:TestMCPLifecycle
 mcp.lifecycle-order	docs/commands/mcp.md	requests sent back to back get their answers in the order they were sent	test:cmd/azhaq:TestMCPLifecycle
 mcp.lifecycle-scope	docs/commands/mcp.md	The scope, the budget and the pace hold for every call, however the requests are ordered	test:cmd/azhaq:TestMCPScopeHoldsAfterInitialize,TestMCPConcurrentCallsShareTheBudget
+readme.adds-what-the-chain-does-not	README.md	It adds what that chain does not do.	note:introduces the three sentences after it, each proved on its own row
+readme.install-script-folder	README.md	The script is in the repository's `scripts` folder, not at its root.	file:scripts/install.sh
+readme.summary-counts-by-kind	README.md	The summary also counts the rows by kind	test:internal/contract:TestRunCountsAddUpToTheRows;test:cmd/azhaq:TestContractInvariantsOnDemo
+readme.roles-never-asked	README.md	A `-` is a role that was never asked.	test:cmd/azhaq:TestRolesTableCellsReadAsTheREADMESays
+readme.exit-codes	README.md	Exit codes: `0` complete, `1` error, `2` usage (nothing sent), `3` finished with failures, `4` stopped by a limit or the kill file.	test:internal/contract:TestExitCodeFollowsTheOutcome;test:cmd/azhaq:TestMissingArgumentsExitUsage
+readme.scope-stays-on-the-site	README.md	Without a scope, requests stay on the site.	test:internal/contract:TestDocumentedPromisesAreKept
+readme.write-gates	README.md	A write means a method other than GET, HEAD or OPTIONS: POST, PUT, PATCH, DELETE, POST forms, a page's own writes in Chrome and role write replays go only with their flags.	test:internal/contract:TestEveryWriteWaitsForItsFlag,TestWireIsLedgerIsSummary;test:cmd/azhaq:TestCrawlWithoutSubmitFormsSendsNoPost,TestPlanChromeWrites;test:internal/collectors/rendercol:TestRenderWrites
+readme.guesses-on-request	README.md	Guesses, ports, UDP and wordlists go out only when you ask.	test:internal/contract:TestGuessesAndProbesGoOutOnlyWhenAsked
+readme.mcp-deny-path	README.md	`azhaq_map` asks every GET it finds in scope, and only the `-deny-path` rules set when the server starts keep a URL out: a client cannot add one per call.	test:internal/contract:TestMCPHoldsWhatItWasStartedWith
+readme.bench-record	README.md	The record, with every check and the commands, is `bench/history/*.json`.	file:bench/history
+readme.bench-polite-list	README.md	The polite path and fuzz sweeps send a short list, not 4,747 words, because at 5 requests per second that is 16 minutes a tool and app.	note:the reason for a bench setting, whose lists and rate the bench README states and the bench runs
+ledger.no-class-is-target	docs/commands/ledger.md	A line without a class, from a ledger written before classes, counts as a `target`.	test:internal/ledger:TestALedgerFromBeforeClassesStillVerifies;test:cmd/azhaq:TestLedgerSummaryCountsByClass
+ledger.older-azhaq	docs/commands/ledger.md	The other way does not hold: an older azhaq cannot verify a ledger whose lines have a `class`.	note:describes releases older than this one, which no test of this one can run
+mcp.shared-budget-and-pace	docs/commands/mcp.md	All tool calls together share the `-max-requests` budget and the `-rate` pace.	test:cmd/azhaq:TestMCPConcurrentCallsShareTheBudget,TestMCPScopeHoldsAfterInitialize
+mcp.call-cannot-change-held	docs/commands/mcp.md	A call cannot set or change them.	test:cmd/azhaq:TestMCPHeldRunOptionsReachTheCommands,TestMCPRefusesBadHeldOptions;test:internal/contract:TestMCPHoldsWhatItWasStartedWith
+plan.every-collector-flag	docs/commands/plan.md	Every flag of `run` that asks for a collector is named here or under the active techniques.	test:cmd/azhaq:TestPlanListsEveryCollectorFlag
+plan.found-domains-scope	docs/commands/plan.md	Without a scope, they are asked about within `-depth`.	test:cmd/azhaq:TestPlanRequests
+plan.names-known-by-asking	docs/commands/plan.md	How many names resolve and answer is known only by asking.	test:cmd/azhaq:TestPlanRequests
+plan.per-service-not-links	docs/commands/plan.md	It does not cover what its links, scripts and archived URLs lead to.	test:cmd/azhaq:TestPlanRequests
+plan.daily-requests	docs/commands/plan.md	With `-daily-requests`, a plan does not take off what the day's runs already spent.	test:cmd/azhaq:TestPlanRequests
+query.failed-newest-run	docs/commands/query.md	A workspace is shared by every command that writes to it, so a later `probe` or `ports` is the newest run	test:cmd/azhaq:TestFailedTargetsOfAnEarlierRunAreNamedAndRetried
+worker.cookie-not-renewed	docs/commands/worker.md	A session given with `-cookie` or `-header` cannot be renewed: the run ends its signed-in work with a failure, exit 3.	test:engine:TestWorkersSessionLostIsNotRenewed;test:cmd/azhaq:TestWorkersSessionGivenByCookieEndsTheRun
+readme.juice-measured-number	README.md	The number measured for the pinned build	bench:juice-shop: ≥ 90% of the server routes its frontend calls;test:bench:TestKnownRoutesRowNamesTheAppBuild
+readme.get-can-change-data	README.md	A GET can change data or end a session, and azhaq asks it	test:engine:TestEveryFoundGetIsRequestedAndDenyPathIsListed
+readme.deny-path-any-collector	README.md	`-deny-path REGEX` does, for any collector and Chrome.	test:cmd/azhaq:TestDenyPathHoldsInRunDirsAndFuzz;test:internal/fetch:TestDenyPathKeepsAPathOut;test:internal/collectors/dirscol:TestSweepDenyPathHoldsAWordBackAndListsIt;test:internal/egress:TestTargetClientStopsAtTheKillFileAndDenyPath;test:internal/browser:TestRefusedPageGivesItsCountBack
+readme.port-connect-head	README.md	A port (`-ports`) gets a TCP connect, and one that says nothing also a `HEAD /`.	test:internal/portscan:TestIdentifySilentPorts,TestSilentToHeadIsAskedOneGet
+mcp.chrome-no-sandbox-held	docs/commands/mcp.md	`-chrome-no-sandbox` is held too: Chrome, which a tool uses with `browser` or `login`, does not start without its sandbox	test:cmd/azhaq:TestMCPHoldsChromeNoSandbox,TestChromeIsNotRunWithoutItsSandboxUnlessAllowed
+plan.no-crawl-urls	docs/commands/plan.md	It does not list the URLs a crawl will find	test:cmd/azhaq:TestPlanRequests,TestPlanSendsNameWhatIsPlanned
+readme.plan-and-ledger-list	README.md	`azhaq plan` lists the kinds of request and the seeds, and the ledger lists every URL sent.	test:cmd/azhaq:TestPlanSendsNameWhatIsPlanned;test:internal/contract:TestWireIsLedgerIsSummary
