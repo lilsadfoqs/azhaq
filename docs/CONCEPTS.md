@@ -176,7 +176,7 @@ The budget holds for each run: `azhaq roles` is one run whose budget (the run op
 - The run exits 4. Its `stopped` says `the kill switch: kill file PATH exists, N tasks known and not done (remove it, then azhaq resume)`.
 - Remove the file, then run `azhaq resume -db DB` to continue.
 - A drop-in command without `-db` has no default kill file.
-- `azhaq roles` uses `roles.stop` in its `-dir`. It stops the runs of the roles, and `roles` exits 4. The replay that follows does not look for it.
+- `azhaq roles` uses `roles.stop` in its `-dir`. It stops the runs of the roles and the history reads and replay after them, and `roles` exits 4.
 
 ### Signals
 
