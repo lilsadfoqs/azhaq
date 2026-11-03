@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -19,32 +20,34 @@ import (
 // writes them (retryabledns' DNSData): a record kind is left out when the
 // name has none of it.
 type Data struct {
-	Host           string    `json:"host,omitempty"`
-	TTL            uint32    `json:"ttl,omitempty"` // of the first record that has one
-	Resolver       []string  `json:"resolver,omitempty"`
-	A              []string  `json:"a,omitempty"`
-	AAAA           []string  `json:"aaaa,omitempty"`
-	CNAME          []string  `json:"cname,omitempty"`
-	MX             []string  `json:"mx,omitempty"`
-	PTR            []string  `json:"ptr,omitempty"`
-	SOA            []SOA     `json:"soa,omitempty"`
-	NS             []string  `json:"ns,omitempty"`
-	TXT            []string  `json:"txt,omitempty"`
-	SRV            []string  `json:"srv,omitempty"`
-	CAA            []string  `json:"caa,omitempty"`
-	AllRecords     []string  `json:"all,omitempty"`
-	Raw            string    `json:"raw,omitempty"`
-	HasInternalIPs bool      `json:"has_internal_ips,omitempty"`
-	InternalIPs    []string  `json:"internal_ips,omitempty"`
-	StatusCode     string    `json:"status_code,omitempty"`
-	StatusCodeRaw  int       `json:"status_code_raw,omitempty"`
-	TraceData      *Chain    `json:"trace,omitempty"`
-	AXFRData       *Chain    `json:"axfr,omitempty"`
-	Timestamp      time.Time `json:"timestamp,omitempty"`
-	HostsFile      bool      `json:"hosts_file,omitempty"`
-	Failures       []Failure `json:"-"`
-	answered       bool      // some resolver answered
-	rcodes         map[uint16]int
+	Host           string         `json:"host,omitempty"`
+	TTL            uint32         `json:"ttl,omitempty"` // of the first record that has one
+	Resolver       []string       `json:"resolver,omitempty"`
+	A              []string       `json:"a,omitempty"`
+	AAAA           []string       `json:"aaaa,omitempty"`
+	CNAME          []string       `json:"cname,omitempty"`
+	MX             []string       `json:"mx,omitempty"`
+	PTR            []string       `json:"ptr,omitempty"`
+	SOA            []SOA          `json:"soa,omitempty"`
+	NS             []string       `json:"ns,omitempty"`
+	TXT            []string       `json:"txt,omitempty"`
+	SRV            []string       `json:"srv,omitempty"`
+	CAA            []string       `json:"caa,omitempty"`
+	AllRecords     []string       `json:"all,omitempty"`
+	Raw            string         `json:"raw,omitempty"`
+	HasInternalIPs bool           `json:"has_internal_ips,omitempty"`
+	InternalIPs    []string       `json:"internal_ips,omitempty"`
+	StatusCode     string         `json:"status_code,omitempty"`
+	StatusCodeRaw  int            `json:"status_code_raw,omitempty"`
+	CNAMEStatus    string         `json:"cname_status,omitempty"` // the code of the CNAME's target, when it is not NOERROR
+	TraceData      *Chain         `json:"trace,omitempty"`
+	AXFRData       *Chain         `json:"axfr,omitempty"`
+	Timestamp      time.Time      `json:"timestamp,omitempty"`
+	HostsFile      bool           `json:"hosts_file,omitempty"`
+	Failures       []Failure      `json:"-"`
+	answered       bool           // some resolver answered
+	rcodes         map[uint16]int // the code of the name asked, by type
+	chainRcodes    map[uint16]int // the code of the whole answer, the end of a CNAME chain's by type
 }
 
 // Chain is a list of answers under a host: the steps of a trace, or the
@@ -79,6 +82,14 @@ func (d *Data) Answered() bool { return d.answered }
 // whether there was one.
 func (d *Data) Rcode(qtype uint16) (int, bool) {
 	c, ok := d.rcodes[qtype]
+	return c, ok
+}
+
+// ChainRcode is the code the resolver gave the whole answer to the question of
+// type qtype: for a name that is a CNAME, the code of the name the chain
+// ends at (NXDOMAIN when the target does not exist), and whether there was one.
+func (d *Data) ChainRcode(qtype uint16) (int, bool) {
+	c, ok := d.chainRcodes[qtype]
 	return c, ok
 }
 
@@ -208,9 +219,21 @@ func hasAnswer(m *dns.Msg, qtype uint16) bool {
 func (d *Data) add(m *dns.Msg, from string, qtype uint16, raw bool) {
 	d.parse(m.Answer)
 	d.answered = true
-	d.rcodes[qtype] = m.Rcode
-	d.StatusCode = dns.RcodeToString[m.Rcode]
-	d.StatusCodeRaw = m.Rcode
+	// The code of a response is that of the last name of a CNAME chain
+	// (RFC 6604), so a name that is a CNAME exists and is NOERROR whatever the
+	// target is; the target's own code is kept apart.
+	own := m.Rcode
+	if own != dns.RcodeSuccess && ownsCNAME(m) {
+		own = dns.RcodeSuccess
+		d.CNAMEStatus = rcodeName(m.Rcode)
+	}
+	if d.chainRcodes == nil {
+		d.chainRcodes = map[uint16]int{}
+	}
+	d.rcodes[qtype] = own
+	d.chainRcodes[qtype] = m.Rcode
+	d.StatusCode = dns.RcodeToString[own]
+	d.StatusCodeRaw = own
 	d.Timestamp = time.Now()
 	if from != "" {
 		d.Resolver = append(d.Resolver, from)
@@ -218,6 +241,26 @@ func (d *Data) add(m *dns.Msg, from string, qtype uint16, raw bool) {
 	if raw {
 		d.Raw += m.String()
 	}
+}
+
+// ownsCNAME says whether the answer holds a CNAME owned by the name asked.
+func ownsCNAME(m *dns.Msg) bool {
+	if len(m.Question) == 0 {
+		return false
+	}
+	for _, rr := range m.Answer {
+		if _, ok := rr.(*dns.CNAME); ok && strings.EqualFold(rr.Header().Name, m.Question[0].Name) {
+			return true
+		}
+	}
+	return false
+}
+
+func rcodeName(c int) string {
+	if s, ok := dns.RcodeToString[c]; ok {
+		return s
+	}
+	return strconv.Itoa(c)
 }
 
 // parse reads records as dnsx does: names without their final dot, the

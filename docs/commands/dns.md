@@ -70,8 +70,9 @@ The `-json` fields are dnsx's, in its order:
 | `all` | Every record as text. `-omit-raw` drops it. |
 | `raw` | The raw answer, with `-raw`. |
 | `has_internal_ips`, `internal_ips` | An answer in a private, loopback, link-local, documentation or multicast range. |
-| `status_code` | `NOERROR`, `NXDOMAIN`, `SERVFAIL`, `REFUSED`, … |
+| `status_code` | The code of the name asked: `NOERROR`, `NXDOMAIN`, `SERVFAIL`, `REFUSED`, … A name that is a CNAME exists, so it is `NOERROR` even when its target does not. |
 | `status_code_raw` | The code as a number. Left out for 0. |
+| `cname_status` | Not a dnsx field: the code of a CNAME's target when it is not `NOERROR`, such as `NXDOMAIN` for a dangling CNAME. |
 | `takeover` | Not a dnsx field: a name whose CNAME points at what is gone. |
 | `trace`, `axfr` | `{host, chain: [rows]}`, with `-trace` and `-axfr`. |
 | `timestamp` | The time of the query. |
@@ -107,7 +108,7 @@ The summary also lists failures per kind of error, and takeover candidates: a CN
 - Text and `-json` both give a row only to a name that has a record of the types asked. A is the type when no flag names one, as in dnsx. A name that does not exist, or has no such record, such as a TXT-only name when A is asked, gets no row and is counted as `did not resolve`. So `asked` minus `did not resolve` is the number of rows.
 - A name no resolver answered gets no row in either form. It is counted as `no answer`.
 - With a type flag (`-mx`, `-txt`, …), the types are those flags'.
-- With `-rcode`, only the names whose answer has that code get a row, with its `status_code`. That is how to list the names that do not exist.
+- With `-rcode`, only the names whose answer has that code get a row, with its `status_code`. That is how to list the names that do not exist. A name whose CNAME points at what is gone is not one of them: its own code is `NOERROR`, and the target's `NXDOMAIN` is its `cname_status`.
 - With `-all`, `-any` or `-axfr`, `-json` gives a row to every name a resolver answered, including one with no record at all.
 - With `-response-type-filter` and no type flag, `-json` gives a row to every answered name that has none of the records filtered, as dnsx does: `-rtf a` keeps the names that have only AAAA, TXT, MX or SRV, that have no record (NODATA), that do not exist, and the CNAME-only ones, and leaves out the names with an A. In text, a kept name prints the records it has, so one with none prints nothing. With a type flag too (`-a -txt -rtf a`), a name needs a record of a type a flag asked.
 - A name whose CNAME points at what is gone also gets its `-json` row, with `takeover`, whatever the types asked: it is a finding, and it is not counted as `did not resolve`.

@@ -496,3 +496,38 @@ func TestProxyCarriesDNSOverTCP(t *testing.T) {
 		t.Error("an http proxy was accepted for DNS")
 	}
 }
+
+func TestLookupOfADanglingCNAMEIsNoErrorWithTheTargetsCodeApart(t *testing.T) {
+	pc, err := net.ListenPacket("udp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := &dns.Server{PacketConn: pc, Handler: dns.HandlerFunc(func(w dns.ResponseWriter, r *dns.Msg) {
+		m := new(dns.Msg)
+		m.SetReply(r)
+		if r.Question[0].Name == "dangle.test." {
+			rr, _ := dns.NewRR("dangle.test. 60 IN CNAME gone.example.")
+			m.Answer = append(m.Answer, rr)
+		}
+		m.Rcode = dns.RcodeNameError
+		_ = w.WriteMsg(m)
+	})}
+	go srv.ActivateAndServe()
+	t.Cleanup(func() { srv.Shutdown() })
+	p := New(Options{Resolvers: []string{pc.LocalAddr().String()}, PerSecond: -1})
+	d := p.Lookup(context.Background(), "dangle.test", LookupOptions{})
+	if d.StatusCode != "NOERROR" || d.StatusCodeRaw != 0 || d.CNAMEStatus != "NXDOMAIN" {
+		t.Errorf("%q %d %q", d.StatusCode, d.StatusCodeRaw, d.CNAMEStatus)
+	}
+	if c, ok := d.Rcode(dns.TypeA); !ok || c != dns.RcodeSuccess {
+		t.Errorf("rcode %d %v", c, ok)
+	}
+	if c, ok := d.ChainRcode(dns.TypeA); !ok || c != dns.RcodeNameError {
+		t.Errorf("chain rcode %d %v", c, ok)
+	}
+	// a name with no CNAME at all keeps NXDOMAIN
+	d = p.Lookup(context.Background(), "nothing.test", LookupOptions{})
+	if d.StatusCode != "NXDOMAIN" || d.CNAMEStatus != "" {
+		t.Errorf("%q %q", d.StatusCode, d.CNAMEStatus)
+	}
+}
