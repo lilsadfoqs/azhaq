@@ -7,7 +7,7 @@ Every command follows the same contract, so a script or an assistant can read an
 - **stdout** carries results only: one per line, or one JSON object per line with `-json`.
 - **stderr** carries progress, failures as they happen (the first three of each kind) and a **summary** at the end.
 - With `-json`, every stderr line is JSON, and the summary is one object with `"type":"summary"`.
-- With `-silent`, the summary is printed only when something failed or was cut short. A source or archive that failed counts, and the exit code is 3.
+- With `-silent`, the summary is printed only when something failed or was cut short. A source or archive that failed counts, whatever the exit code is.
 - The **exit code** says whether the work is complete: see [Exit codes](#exit-codes).
 
 With `-json`, the drop-in commands use the field names of the tool they stand in for, so existing `jq` filters keep working.
@@ -49,10 +49,10 @@ A run paced slowly says so as it starts: `-rate 1 paces requests to 1/s: the cap
 
 | Code | Meaning | What to do |
 | --- | --- | --- |
-| 0 | Complete, and nothing failed. An open port that closes or resets at once on `run`'s HTTP request, and was not named HTTP, is an answer (not a web service), not a failure. | Use the results. |
+| 0 | Complete: nothing failed, or the run did its job and its summary names every failure (`failures` counts them). An open port that closes or resets at once on `run`'s HTTP request, and was not named HTTP, is an answer (not a web service), not a failure. | Use the results. Read `failures` and `failed` when it is above 0. |
 | 1 | Error: the command could not do its job, or its summary disagreed with its rows (an internal error). | Read the message. |
 | 2 | Usage: bad flags or input. Nothing was sent. | `azhaq help COMMAND`. For a scope refusal, check the target, `-allow` or `-scope`. |
-| 3 | Finished, but some sources or requests failed. The results are usable. | The summary lists each failure, whether it is worth retrying, and its targets. |
+| 3 | The run's own job failed or is incomplete: nothing it was given answered, a failure names no target, or a note says the results are short or misleading. With `-strict-exit`, any failure. See [Exit 3](#exit-3). | The summary lists each failure, whether it is worth retrying, and its targets. |
 | 4 | Stopped with work left, by a limit, the kill file or a signal. | `azhaq resume -db FILE` continues where it stopped. With a kill file, remove it first. |
 
 `watch` and `ledger` add their own rules: see [watch](commands/watch.md#summary-and-exit-codes) and [ledger](commands/ledger.md#summary-and-exit-codes).
@@ -72,7 +72,28 @@ A run paced slowly says so as it starts: `-rate 1 paces requests to 1/s: the cap
 
 ### Exit 3
 
-Some work failed and did not get its answer: a source that failed, a target that did not answer, a degraded or partial result, one target among many. Every failure makes it 3, a `fanout` or `partial` one and a source that failed while others answered included. `-fail-on-errors` is accepted and has no effect of its own: it is the default, and no flag turns a failure into exit 0. The summary lists what failed and why: see [Failures](CONCEPTS.md#failures-fan-out-partial-and-degraded).
+One rule decides it, for every command, in one place of the code: the step that writes the summary. A run **did its job** when at least one target it was given answered and each failure is named in the summary (`failed`, `unreachable`, or a row without an answer): it exits 0 with `complete: true`, and `failures` says how many failed. A run **failed** (exit 3, `complete: false`) when any of these holds:
+
+1. **Nothing it was given answered.** Every target the command can count failed: a `probe` of two dead hosts, a `run` whose only URL refused, `subs` for a domain no source answered, a `dns` run in which no resolver answered any name, a `fuzz` run in which every request failed.
+2. **A failure is the run's own.** It names no target: a signed-in run that lost its session (`azhaq-session`), a report that could not be written. Or it is a bug (`panic:`), or the failure of the `-exec` connector you gave.
+3. **A note says the results are short or misleading.** Names cut at `-max-names`, names `-live` could not check or got no answer for, a role whose session is dead, a picture short of its page, a `fuzz` run that stopped on a target that stopped answering, a calibration that filtered nothing, wildcard answers among a sweep's paths. A count in a note cannot name each one, so these are not "done with failures".
+4. **The command was given nothing it can count.** An address list, a range or a file of ports has no answer to tell from a failure, so any failure exits 3 (`ports`, `asn`, `notify`, `watch`, `roles`, and `run` with only addresses, ranges or an organisation; `gallery` and `ledger` have rules of their own).
+
+What a command counts as a target it was given, and so as a failed one:
+
+| Command | A target is | It failed when |
+| --- | --- | --- |
+| `probe` | each input row (a port or a path of an input is a row of its own) | the row has no answer (a refused connection, a timeout, a name that does not resolve): `failures` counts these rows |
+| `run`, `crawl`, `dirs`, `shots`, `urls`, `params` | each URL and each domain given | the URL is `unreachable` (every request failed), or no third-party source answered for the domain. A page it found that fails is a failure, not a target |
+| `subs` | each domain | no source answered for it |
+| `dns` | each name asked and finished | no resolver answered (with `-axfr`, no server transferred the zone) |
+| `fuzz` | each input asked | its request failed after one retry |
+
+`failures` is the sum of `count` over `failed`, plus each `unreachable` target no entry of `failed` names (`probe` counts its rows without an answer). It is in every summary, `0` when nothing failed, under both behaviours.
+
+`-strict-exit` restores the rule before 0.15 for one release: any failure exits 3, a target among many included. `-fail-on-errors` is the same flag. Without it the exit code is the rule above, and a script that must alarm on any failure reads `failures` or passes `-strict-exit`. The summary says which part of the rule it met on its last line. `partial` and `fanout` failures are failures of a target like any other: they are counted and listed, and do not alone make a run fail. See [Failures](CONCEPTS.md#failures-fan-out-partial-and-degraded).
+
+An [internal error](#exit-1) comes before this rule: a summary that disagrees with its rows exits 1, whatever the outcome of the run was, and is never a run that did its job. `failures` counts what failed in the work and `error` says the summary itself is wrong; they are different fields, and a run can have either, both or neither.
 
 ### Exit 4
 
@@ -99,7 +120,8 @@ Some work failed and did not get its answer: a source that failed, a target that
 | Field | Meaning |
 | --- | --- |
 | `type`, `command`, `version`, `seconds` | Always `summary`, the command, azhaq's version, and the run time in seconds. |
-| `complete`, `exit` | As in the exit codes above: `complete` is true when `exit` is 0. |
+| `complete`, `exit` | As in the exit codes above: `complete` is true when `exit` is 0, a run that did its job and names its failures included. |
+| `failures` | Always present: how many failures the run has, 0 when none. The sum of `count` over `failed`, plus the `unreachable` targets no entry of `failed` names (`probe`: its rows without an answer). It is there under `-strict-exit` too. |
 | `results` | What the command printed on stdout: names, web services, map rows. |
 | `counts` | A breakdown of the results, per command. For `run` the counts are disjoint and cover every stored map row: see [run's counts](#run-counts). |
 | `stored` | `run` only: the map rows the database holds. The counts add up to it. `results` is smaller when templated URLs and dead or wildcard names fold into one row. |
@@ -115,7 +137,7 @@ Some work failed and did not get its answer: a source that failed, a target that
 | `junk` | `urls` only: the URLs left out as junk, by reason. See [urls](commands/urls.md#junk). |
 | `sources` | `subs` and `urls`: which sources answered, which failed and why, and what each gave. See [subs](commands/subs.md#the-sources-block) and [urls](commands/urls.md#summary-and-exit-codes). |
 | `partial` (in `failed`) | A third-party source failed while other sources answered for the same target. |
-| `degraded` | `subs` only: a source the run relies on did not answer, so the names may be incomplete, and the exit code is 3. See [subs](commands/subs.md#degraded). |
+| `degraded` | `subs` only: a source the run relies on did not answer, so the names may be incomplete; the exit code is 3 when no source answered, or with `-strict-exit`. See [subs](commands/subs.md#degraded). |
 | `degraded_by` | `subs` only, with `degraded`: an array of `{source, error, domains}`, one for each failed source of the default set. |
 | `stopped`, `resume` | The limit that stopped the work and the command that continues it. |
 | `notes` | Caps that were hit and other things worth knowing that are not failures. See [notes](#notes). |
@@ -167,7 +189,7 @@ The URL keys other than `catchall` and `skipped` count rows of the other coverag
 - `source` names a third-party source, such as `crtsh` or `wayback`.
 - `targets` names up to 100. `azhaq query -db FILE -failed` lists every failed target of the newest run (`-run ID` reads another by its `run_id`): the list to retry.
 - `azhaq-session` is a signed-in run whose session ended and could not be renewed (`the session ended: after /logout was requested …`). Every request after the check noticed the loss was refused, so nothing after that was answered as an anonymous visitor. The exit code is 3: see [Sessions](CONCEPTS.md#sessions).
-- `partial` and `fanout` failures make the exit code 3 like any other: see [Failures](CONCEPTS.md#failures-fan-out-partial-and-degraded).
+- `partial` and `fanout` failures are counted in `failures` like any other: see [Failures](CONCEPTS.md#failures-fan-out-partial-and-degraded) and [Exit 3](#exit-3).
 
 ### skipped
 

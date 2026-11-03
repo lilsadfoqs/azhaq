@@ -693,7 +693,7 @@ func (o *probeOut) settle(rep *report, st *store.Store, fs *flag.FlagSet) {
 	sort.Strings(found)
 	order = append(order, found...)
 	var gaps []string
-	noAnswer, notAsked := 0, 0
+	noAnswer, notAsked, rows := 0, 0, 0
 	for _, in := range order {
 		units := o.units[in]
 		if len(units) == 0 {
@@ -706,6 +706,10 @@ func (o *probeOut) settle(rep *report, st *store.Store, fs *flag.FlagSet) {
 			for _, a := range unanswered[k] {
 				o.failedRow(in, a.url, a.why)
 				noAnswer++
+				rows++
+			}
+			if answered {
+				rows++
 			}
 			if answered || len(unanswered[k]) > 0 {
 				continue
@@ -735,6 +739,7 @@ func (o *probeOut) settle(rep *report, st *store.Store, fs *flag.FlagSet) {
 			}
 			o.failedRow(in, u.line, why)
 			noAnswer++
+			rows++
 		}
 	}
 	if len(gaps) > 0 {
@@ -743,6 +748,10 @@ func (o *probeOut) settle(rep *report, st *store.Store, fs *flag.FlagSet) {
 	if noAnswer > 0 {
 		rep.Counts = map[string]int{"without an answer": noAnswer}
 	}
+	// A row without an answer is a failure, one for each, and a run in which
+	// every row is one did not do its job.
+	rep.failedRows = &noAnswer
+	rep.units(rows, noAnswer)
 	if notAsked > 0 {
 		if rep.Counts == nil {
 			rep.Counts = map[string]int{}

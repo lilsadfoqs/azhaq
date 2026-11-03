@@ -200,7 +200,8 @@ func TestDirsReportsFullLength(t *testing.T) {
 	}
 }
 
-// probe keeps a failed target, and query -failed lists it for a retry.
+// probe keeps a failed target, and query -failed lists it for a retry. One
+// target answered, so the run did its job: exit 0.
 func TestProbeFailedList(t *testing.T) {
 	s := site(1)
 	defer s.Close()
@@ -212,7 +213,7 @@ func TestProbeFailedList(t *testing.T) {
 	}
 	_, _, code := smoke(t, dir, "probe", "-l", list, "-db", "p.db", "-json", "-silent")
 	out, _, _ := smoke(t, dir, "query", "-db", "p.db", "-failed")
-	if code != 3 || !strings.Contains(out, fmt.Sprintf("127.0.0.1:%d", closed)) {
+	if code != 0 || !strings.Contains(out, fmt.Sprintf("127.0.0.1:%d", closed)) {
 		t.Fatalf("probe exit %d; query -failed: %q", code, out)
 	}
 }

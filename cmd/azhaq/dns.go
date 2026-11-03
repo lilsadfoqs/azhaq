@@ -1529,6 +1529,15 @@ func (r *dnsRun) summarize(ctx context.Context, args []string, maxtime float64) 
 	for _, k := range keys {
 		rep.Failed = append(rep.Failed, *r.failed[k])
 	}
+	// The names asked and finished, and those with a question no resolver (or, with
+	// -axfr, no server) answered: a run in which every name failed did not do its job.
+	failedNames := map[string]bool{}
+	for _, f := range rep.Failed {
+		for _, t := range f.Targets {
+			failedNames[t] = true
+		}
+	}
+	rep.units(int(r.counts.done.Load()), max(len(failedNames), int(r.counts.failed.Load())))
 	sort.Slice(r.takeovers, func(i, j int) bool { return r.takeovers[i].Host < r.takeovers[j].Host })
 	rep.Takeover = append(rep.Takeover, r.takeovers...)
 	rep.Notes = append(rep.Notes, r.axfrNotes...)

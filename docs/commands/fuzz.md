@@ -287,6 +287,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 | `-quiet` | bool |  | print no matches and no progress, only the summary (on stderr); the matches are still kept by -db and -o |
 | `-v` | bool |  | print the full URL and redirect location with each result |
 | `-c` | bool |  | colour the status of each result in the text output |
+| `-strict-exit` | bool |  | exit 3 for any failure, a target among many included (the rule before 0.15); without it a run that did its job exits 0 and its summary counts and lists the failures |
 
 <details>
 <summary>Flags familiar from ffuf, other names and flags accepted with no effect (42)</summary>

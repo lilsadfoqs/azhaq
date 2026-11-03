@@ -168,10 +168,39 @@ func (h *sourceHealth) line(exit int, archives bool) string {
 		what = "archives"
 	}
 	s := fmt.Sprintf("%d of %d %s answered, %d failed (listed above)", h.Answered, h.Asked, what, h.failures())
-	if exit == exitPartial {
-		s += "; exit 3 because a failed source is a failure even when others answered for the same domain: the names they gave stand, and the failed source's may be missing"
+	switch {
+	case exit == exitPartial && strictExit:
+		s += "; exit 3 because -strict-exit makes a failed source a failure even when others answered for the same domain: the names they gave stand, and the failed source's may be missing"
+	case exit == exitPartial && h.Answered == 0:
+		s += "; exit 3 because no source answered"
+	case exit == exitOK:
+		s += "; exit 0 because the run did its job: the names the others gave stand, and a failed source's may be missing (-strict-exit makes it 3)"
 	}
 	return s
+}
+
+// archiveDomains counts the domains of a urls run and those no archive
+// answered for: every archive asked for it failed.
+func archiveDomains(ps []map[string]any) (domains, silent int) {
+	for _, p := range ps {
+		srcs, _ := p["sources"].(map[string]any)
+		asked, failed := 0, 0
+		for name, v := range srcs {
+			row, _ := v.(map[string]any)
+			if row["skipped"] != nil || name == "history" {
+				continue
+			}
+			asked++
+			if row["error"] != nil {
+				failed++
+			}
+		}
+		domains++
+		if asked > 0 && failed == asked {
+			silent++
+		}
+	}
+	return domains, silent
 }
 
 // archiveHealth is the block for urls: its archives are the sources.

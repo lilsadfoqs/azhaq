@@ -36,7 +36,8 @@ func TestResumeRetriesTheFailedTargetsTheSummaryCallsRetryable(t *testing.T) {
 	flags := []string{"-allow", "127.0.0.1", "-sources", "none", "-no-takeover", "-no-paths", "-no-favicon", "-no-tech", "-db", db, "-ledger", "off", "-json"}
 	_, errOut, err := captureBoth(t, func() error { return run(append([]string{"run", "-url", srv.URL + "/"}, flags...)) })
 	rep := lastReport(t, errOut)
-	if exitCode(err) != exitPartial || len(rep.Failed) == 0 || !rep.Failed[0].Retryable {
+	// The page answered and two it linked to did not: the run did its job, and counts them.
+	if exitCode(err) != exitOK || len(rep.Failed) == 0 || !rep.Failed[0].Retryable || rep.Failures != 2 {
 		t.Fatalf("first run: exit %d, failed %+v\n%s", exitCode(err), rep.Failed, errOut)
 	}
 	// Nothing is left to run, and the failures are retryable: say it.
@@ -44,10 +45,10 @@ func TestResumeRetriesTheFailedTargetsTheSummaryCallsRetryable(t *testing.T) {
 	if err == nil || strings.Contains(err.Error(), "every run finished") || !strings.Contains(err.Error(), "-retry-failed") || !strings.Contains(err.Error(), "retryable") {
 		t.Fatalf("resume with only retryable failures: %v", err)
 	}
-	// Asked again while the server still fails: the summary says so, exit 3.
+	// Asked again while the server still fails: the summary says so.
 	_, errOut, err = captureBoth(t, func() error { return cmdResume([]string{"-db", db, "-retry-failed", "-json"}) })
 	rep = lastReport(t, errOut)
-	if exitCode(err) != exitPartial || !strings.Contains(strings.Join(rep.Notes, "\n"), "-retry-failed: 2 failed targets of run "+rep.RunID+" asked again, 2 still fail") {
+	if exitCode(err) != exitOK || !strings.Contains(strings.Join(rep.Notes, "\n"), "-retry-failed: 2 failed targets of run "+rep.RunID+" asked again, 2 still fail") {
 		t.Fatalf("a retry that fails again: exit %d, notes %v, failed %+v", exitCode(err), rep.Notes, rep.Failed)
 	}
 	for _, f := range rep.Failed {
@@ -105,7 +106,7 @@ func TestFailedTargetsOfAnEarlierRunAreNamedAndRetried(t *testing.T) {
 		return run(append([]string{"run", "-url", bad.URL + "/", "-url", good.URL + "/"}, flags...))
 	})
 	first := lastReport(t, errOut)
-	if exitCode(err) != exitPartial || first.RunID == "" {
+	if exitCode(err) != exitOK || first.RunID == "" || first.Failures != 1 {
 		t.Fatalf("first run: exit %d\n%s", exitCode(err), errOut)
 	}
 	if _, errOut, err = captureBoth(t, func() error {
@@ -133,7 +134,7 @@ func TestFailedTargetsOfAnEarlierRunAreNamedAndRetried(t *testing.T) {
 		return cmdResume([]string{"-db", db, "-retry-failed", "-retry-run", first.RunID, "-json"})
 	})
 	rep = lastReport(t, errOut)
-	if exitCode(err) != exitPartial || asked.Load() <= before || !strings.Contains(strings.Join(rep.Notes, "\n"), "-retry-failed: 1 failed targets of run "+first.RunID+" asked again") {
+	if exitCode(err) != exitOK || asked.Load() <= before || !strings.Contains(strings.Join(rep.Notes, "\n"), "-retry-failed: 1 failed targets of run "+first.RunID+" asked again") {
 		t.Errorf("-retry-run: exit %d, asked %d -> %d, notes %v", exitCode(err), before, asked.Load(), rep.Notes)
 	}
 }

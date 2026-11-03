@@ -739,6 +739,7 @@ func cmdURLs(args []string) error {
 		urlsJunk(rep, payloads(st, "azhaq-urls"))
 	}
 	rep.Sources = archiveHealth(payloads(st, "azhaq-urls"))
+	rep.units(archiveDomains(payloads(st, "azhaq-urls"))) // a domain no archive answered for failed
 	if n := rep.Sources.archivesNote(); n != "" {
 		rep.Notes = append(rep.Notes, n)
 	}

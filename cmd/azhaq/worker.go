@@ -56,7 +56,7 @@ var coordinatorOnly = map[string]bool{
 	"urls-proxy": true, "urls-max": true, "urls-archive": true, "urls-raw": true, "urls-keep-junk": true, "screenshots": true, "browser": true, "browser-writes": true, "tabs": true,
 	"max-requests": true, "daily-requests": true, "json": true, "quiet": true, "obs": true,
 	"providers": true, "sources": true, "exclude-sources": true, "all-sources": true,
-	"allow": true, "deny": true, "deny-path": true, "parallel": true, "fail-on-errors": true, "fail-on-capped": true,
+	"allow": true, "deny": true, "deny-path": true, "parallel": true, "fail-on-errors": true, "strict-exit": true, "fail-on-capped": true,
 }
 
 // isFile says whether s names a file that exists.

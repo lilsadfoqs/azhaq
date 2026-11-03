@@ -14,7 +14,8 @@ import (
 )
 
 // The -json summary of subs says how many sources answered, which failed
-// and why, and what each gave. A failed source exits 3.
+// and why, and what each gave. A failed source is counted in failures and
+// the run exits 0 while one answered.
 func TestSubsSummaryHasSourceHealth(t *testing.T) {
 	t.Chdir(t.TempDir())
 	defer subcol.UseTestSources(
@@ -23,7 +24,7 @@ func TestSubsSummaryHasSourceHealth(t *testing.T) {
 		subcol.TestSource{Name: "flaky", Default: false, Err: errors.New("connection refused")},
 	)()
 	_, rep, code := runContract(t, "subs", "-d", "example.org", "-all-sources", "-no-history")
-	if code != exitPartial {
+	if code != exitOK || rep.Failures != 2 {
 		t.Fatalf("exit %d %+v", code, rep)
 	}
 	h := rep.Sources
@@ -56,33 +57,50 @@ func TestSubsHealthNamesTheDomainsOfAFailure(t *testing.T) {
 	}
 }
 
-// The text summary says it plainly, and why the exit code is 3.
+// The text summary says it plainly, and why the exit code is what it is: 0
+// while a source answered, 3 when none did or with -strict-exit.
 func TestSubsSummaryLineSaysWhatTheExitCodeMeans(t *testing.T) {
 	t.Chdir(t.TempDir())
+	was := strictExit
+	t.Cleanup(func() { strictExit = was })
 	defer subcol.UseTestSources(
 		subcol.TestSource{Name: "good", Default: true, Names: []string{"a.example.org"}},
 		subcol.TestSource{Name: "bad", Default: true, Err: errors.New("boom")},
 	)()
 	t.Setenv("AZHAQ_DATA_DIR", t.TempDir())
 	_, errOut, err := captureBoth(t, func() error { return run([]string{"subs", "-d", "example.org", "-no-history"}) })
-	if exitCode(err) != exitPartial {
-		t.Fatalf("exit %d, want 3", exitCode(err))
+	if err != nil {
+		t.Fatalf("exit %d, want 0: one source answered", exitCode(err))
 	}
-	want := "1 of 2 sources answered, 1 failed (listed above); exit 3 because a failed source is a failure even when others answered for the same domain"
+	want := "1 of 2 sources answered, 1 failed (listed above); exit 0 because the run did its job"
 	if !strings.Contains(errOut, want) {
 		t.Errorf("no %q in\n%s", want, errOut)
 	}
 	// -silent still says a source failed: something failed.
 	_, errOut, err = captureBoth(t, func() error { return run([]string{"subs", "-d", "example.org", "-no-history", "-silent"}) })
-	if exitCode(err) != exitPartial || !strings.Contains(errOut, want) {
+	if err != nil || !strings.Contains(errOut, want) {
 		t.Errorf("-silent hid it (%v):\n%s", err, errOut)
 	}
-	// -fail-on-errors is accepted and changes nothing.
-	_, errOut2, err := captureBoth(t, func() error {
-		return run([]string{"subs", "-d", "example.org", "-no-history", "-silent", "-fail-on-errors"})
-	})
-	if exitCode(err) != exitPartial || !strings.Contains(errOut2, want) {
-		t.Errorf("-fail-on-errors (%v):\n%s", err, errOut2)
+	// -strict-exit, and -fail-on-errors, which is the same: a failed source is a failure.
+	wantStrict := "1 of 2 sources answered, 1 failed (listed above); exit 3 because -strict-exit makes a failed source a failure even when others answered for the same domain"
+	for _, flag := range []string{"-strict-exit", "-fail-on-errors"} {
+		strictExit = false
+		_, errOut2, err := captureBoth(t, func() error {
+			return run([]string{"subs", "-d", "example.org", "-no-history", "-silent", flag})
+		})
+		if exitCode(err) != exitPartial || !strings.Contains(errOut2, wantStrict) {
+			t.Errorf("%s (%v):\n%s", flag, err, errOut2)
+		}
+	}
+	strictExit = false
+	// No source answered: the run did not do its job.
+	subcol.UseTestSources(
+		subcol.TestSource{Name: "bad", Default: true, Err: errors.New("boom")},
+		subcol.TestSource{Name: "worse", Default: true, Err: errors.New("boom")},
+	)
+	_, errOut, err = captureBoth(t, func() error { return run([]string{"subs", "-d", "example.org", "-no-history", "-silent"}) })
+	if exitCode(err) != exitPartial || !strings.Contains(errOut, "0 of 2 sources answered, 2 failed (listed above); exit 3 because no source answered") {
+		t.Errorf("all failed (%v):\n%s", err, errOut)
 	}
 	// A clean run stays quiet under -silent.
 	defer subcol.UseTestSources(subcol.TestSource{Name: "good", Default: true, Names: []string{"a.example.org"}})()
@@ -106,15 +124,15 @@ func TestURLsSummaryHasArchiveHealth(t *testing.T) {
 	args := []string{"-d", "example.org", "-providers", "wayback,otx", "-retries", "0", "-urls-pause", "0",
 		"-archive", "wayback=" + srv.URL + "/wayback", "-archive", "otx=" + srv.URL + "/otx"}
 	_, errOut, err := urlsRun(t, append(args, "-json")...)
-	if exitCode(err) != exitPartial {
-		t.Fatalf("exit %d", exitCode(err))
+	if err != nil || lastReport(t, errOut).Failures != 1 {
+		t.Fatalf("exit %d, want 0 with 1 failure: an archive answered\n%s", exitCode(err), errOut)
 	}
 	h := lastReport(t, errOut).Sources
 	if h == nil || h.Asked != 2 || h.Answered != 1 || h.Failed != 1 || h.URLs["otx"] != 2 || !strings.Contains(h.FailedSources["wayback"], "429") {
 		t.Fatalf("health %+v", h)
 	}
 	_, errOut, _ = urlsRun(t, args...)
-	if !strings.Contains(errOut, "1 of 2 archives answered, 1 failed (listed above); exit 3 because a failed source is a failure even when others answered for the same domain") {
+	if !strings.Contains(errOut, "1 of 2 archives answered, 1 failed (listed above); exit 0 because the run did its job") {
 		t.Errorf("summary:\n%s", errOut)
 	}
 	// B3: the counts per archive and the failure with its tries.
@@ -124,22 +142,22 @@ func TestURLsSummaryHasArchiveHealth(t *testing.T) {
 }
 
 // crt.sh is a source like the others: its failure, with other sources
-// answering, is listed as partial and the exit code is 3.
-func TestCrtshFailureMakesExit3(t *testing.T) {
+// answering, is listed as partial and counted, and the exit code is 0.
+func TestCrtshFailureIsPartialAndExits0(t *testing.T) {
 	t.Chdir(t.TempDir())
 	defer subcol.UseTestSources(
 		subcol.TestSource{Name: "certspotter", Default: true, Names: []string{"a.example.org"}},
 		subcol.TestSource{Name: "crtsh", Default: true, Err: errors.New("crt.sh 502")},
 	)()
 	_, rep, code := runContract(t, "subs", "-d", "example.org", "-no-history")
-	if failed, partial := failedSource(rep, "crtsh"); code != exitPartial || !failed || !partial {
+	if failed, partial := failedSource(rep, "crtsh"); code != exitOK || !failed || !partial || rep.Failures != 1 {
 		t.Errorf("exit %d, failed %+v", code, rep.Failed)
 	}
 	if rep.Sources == nil || rep.Sources.FailedSources["crtsh"] != "crt.sh 502" {
 		t.Errorf("health %+v", rep.Sources)
 	}
-	if _, _, code = runContract(t, "subs", "-d", "example.org", "-no-history", "-fail-on-errors"); code != exitPartial {
-		t.Errorf("-fail-on-errors: exit %d", code)
+	if _, _, code = runContract(t, "subs", "-d", "example.org", "-no-history", "-strict-exit"); code != exitPartial {
+		t.Errorf("-strict-exit: exit %d", code)
 	}
 	for _, f := range rep.Failed {
 		if f.Source == "crtsh" && f.Fanout {
