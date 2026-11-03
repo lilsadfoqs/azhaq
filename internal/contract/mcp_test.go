@@ -153,3 +153,94 @@ func TestMCPHoldsWhatItWasStartedWith(t *testing.T) {
 		t.Errorf("refused calls sent %d requests", got-before)
 	}
 }
+
+// A server started with -unlocked refuses port scans, and no tool scans UDP
+// or sends a write, a wordlist or a DNS brute force: they have no argument
+// for it.
+func TestMCPUnlockedRefusesPortScansAndNoToolTakesWhatItLeavesOut(t *testing.T) {
+	l := newLabs(t)
+	l.Ports = newPortLab(t)
+	c := startMCP(t, l.Dir, "-unlocked")
+	if msg := c.Refused("azhaq_ports", map[string]any{"hosts": []string{"127.0.0.1"}, "ports": portOf(l.Ports.Banner)}); !strings.Contains(msg, "unlocked") && !strings.Contains(msg, "scope") {
+		t.Errorf("the port scan was refused, but not for the scope: %q", msg)
+	}
+	if n := l.Ports.Wire.Total(); n != 0 {
+		t.Errorf("%d connections reached the port after the refusal", n)
+	}
+	scoped := startMCP(t, l.Dir, "-allow", "127.0.0.1")
+	for tool, args := range map[string]map[string]any{
+		"azhaq_ports": {"hosts": []string{"127.0.0.1"}, "ports": portOf(l.Ports.Banner), "udp": "53"},
+		"azhaq_map":   {"url": l.Site.URL, "replay_writes": "post"},
+		"azhaq_probe": {"targets": []string{l.Site.URL}, "method": "POST"},
+	} {
+		if msg := scoped.Refused(tool, args); !strings.Contains(msg, "argument") {
+			t.Errorf("%s with an argument it does not take: %q", tool, msg)
+		}
+	}
+	if n := l.Ports.Wire.Total() + l.Site.Wire.Total(); n != 0 {
+		t.Errorf("%d requests were sent by calls that were refused", n)
+	}
+}
+
+// No tool that sends takes an argument for what the page leaves out of the
+// tools: UDP, a write or a body of the client's, a wordlist, DNS brute force.
+func TestNoMCPToolThatSendsTakesWhatTheToolsLeaveOut(t *testing.T) {
+	l := newLabs(t)
+	c := startMCP(t, l.Dir, "-allow", l.Allow())
+	var list struct {
+		Tools []struct {
+			Name        string
+			InputSchema struct {
+				Properties map[string]any `json:"properties"`
+			} `json:"inputSchema"`
+		}
+	}
+	must(t, json.Unmarshal(c.call("tools/list", map[string]any{}), &list))
+	sends := map[string]bool{"azhaq_plan": true, "azhaq_map": true, "azhaq_resume": true, "azhaq_subdomains": true, "azhaq_probe": true, "azhaq_ports": true, "azhaq_roles": true}
+	seen := 0
+	for _, tool := range list.Tools {
+		if !sends[tool.Name] {
+			continue
+		}
+		seen++
+		for name := range tool.InputSchema.Properties {
+			for _, left := range []string{"udp", "write", "method", "body", "data", "wordlist", "words", "dirs", "params", "brute", "permut", "fuzz"} {
+				if strings.Contains(strings.ToLower(name), left) {
+					t.Errorf("%s takes %q, which the page says the tools leave out", tool.Name, name)
+				}
+			}
+		}
+	}
+	if seen != len(sends) {
+		t.Errorf("%d of the %d tools that send were listed", seen, len(sends))
+	}
+}
+
+// A kill file in the server's -dir stops a call that uses the workspace, which
+// sends nothing and says so; the list of targets the call was given stays
+// while the run can be resumed, and azhaq_resume goes on once the file is
+// removed, after which the list is gone.
+func TestMCPKillFileStopsTheWorkspaceAndResumeGoesOn(t *testing.T) {
+	l := newLabs(t)
+	c := startMCP(t, l.Dir, "-allow", l.Allow())
+	ws := filepath.Join(l.Dir, "ws")
+	lists := func() []string { m, _ := filepath.Glob(filepath.Join(ws, ".targets-*")); return m }
+	must(t, os.MkdirAll(ws, 0o755))
+	stop := filepath.Join(ws, "w.db.stop")
+	must(t, os.WriteFile(stop, nil, 0o644))
+	s := c.Tool("azhaq_map", map[string]any{"targets": []string{l.Site.URL}, "workspace": "w"})
+	if !strings.Contains(s.Stopped, "the kill switch") || s.Requests != 0 || l.Site.Wire.Total() != 0 {
+		t.Errorf("stopped %q, %d requests, %d reached the site", s.Stopped, s.Requests, l.Site.Wire.Total())
+	}
+	if len(lists()) == 0 {
+		t.Error("the list of targets of a run that can be resumed is gone")
+	}
+	must(t, os.Remove(stop))
+	s = c.Tool("azhaq_resume", map[string]any{"workspace": "w"})
+	if s.Stopped != "" || s.Requests == 0 {
+		t.Errorf("resume after removing the file: stopped %q, %d requests", s.Stopped, s.Requests)
+	}
+	if got := lists(); len(got) != 0 {
+		t.Errorf("the run is complete and its list of targets is still there: %v", got)
+	}
+}

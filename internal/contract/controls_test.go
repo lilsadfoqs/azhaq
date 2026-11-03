@@ -1,6 +1,7 @@
 package contract
 
 import (
+	"fmt"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -214,5 +215,29 @@ func TestADeniedHostIsNotAskedEvenAsATarget(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// A -role-cmd command's own requests are not azhaq's: a request it sends to
+// a host outside the scope goes out, and is in no ledger. Only what azhaq
+// sends is held and recorded.
+func TestARoleCommandsOwnRequestsAreNotHeldNorRecorded(t *testing.T) {
+	if _, err := exec.LookPath("bash"); err != nil {
+		t.Skip("no bash for /dev/tcp")
+	}
+	l := newLabs(t)
+	l.Other = newSite(t)
+	script := fmt.Sprintf(`exec 3<>/dev/tcp/%s; printf 'GET /from-the-command HTTP/1.0\r\nHost: x\r\n\r\n' >&3; cat <&3 >/dev/null; echo 'Authorization: Bearer t-bob'`, strings.Replace(l.Other.Host(), ":", "/", 1))
+	r := RunRaw(t, l.Dir, nil, "roles", "-role", "anon", "-role-cmd", "bob=bash "+l.File("cmd.sh", script), "-dir", "rd", "-json", "--", "-url", l.Site.URL, "-allow", l.Allow())
+	if _, ok := l.Other.Wire.HTTP()[canon("GET", l.Other.URL+"/from-the-command")]; !ok {
+		t.Fatalf("the command's request did not go out (exit %d): the lab saw %v\n%s", r.Code, l.Other.Wire.HTTP(), r.Stderr)
+	}
+	for _, line := range readLedger(t, filepath.Join(l.Dir, "rd", "roles.ledger.jsonl")) {
+		if strings.Contains(line.Target, l.Other.Host()) {
+			t.Errorf("the ledger lists the command's own request: %+v", line)
+		}
+	}
+	if sent := ledgerSent(readLedger(t, filepath.Join(l.Dir, "rd", "roles.ledger.jsonl"))); int64(sent.N) != r.Summary.Requests {
+		t.Errorf("the summary counts %d requests and the ledger lists %d", r.Summary.Requests, sent.N)
 	}
 }
