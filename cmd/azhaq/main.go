@@ -340,6 +340,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	sourceRate := fs.Float64("source-rate", 0, "requests per second to each subdomain source, as subfinder -rl (0: each source's own pace); a source's lower own pace stays")
 	sourceRates := fs.String("source-rates", "", "pace single subdomain sources, as subfinder -rls: name=N/unit, comma-separated, unit s, m or h (hackertarget=10/m,crtsh=1/s)")
 	maxResults := fs.Int("max-results", 0, "most names one paging subdomain source gives (0: no cap), as subfinder -mr")
+	extraWait := fs.Duration("extra-wait", subcol.DefaultExtraWait, "how long the sources azhaq adds to subfinder's default set (commoncrawl, hudsonrock, rapiddns, sitedossier, thc, waybackarchive) may go on after every source of that set has answered; one still running then is cut, listed as failed, and its names so far are kept; 0 waits for them as long as -source-timeout; a source named with -sources is not cut")
 	maxTime := fs.Duration("max-time", 0, "how long the run may take: subs stops after this long, in any phase (the sources, subdomain.center's guesses, the DNS checks of -live, -w and -permute), exits 4 and leaves the rest for azhaq resume; run and plan only wait this long for the sources of a domain, then go on with what they gave (0: -source-timeout and a short grace bound the wait; -timeout bounds a run), as subfinder -max-time")
 	maxBody := fs.Int64("max-body", 0, "largest response body read from a subdomain source, in bytes (default 33554432), as subfinder -rsr")
 	sourceProxy := fs.String("source-proxy", "", "send every subdomain source request through this proxy URL, as subfinder -proxy (else HTTP_PROXY and HTTPS_PROXY)")
@@ -1079,10 +1080,13 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	if err != nil {
 		return usagef("-source-rates: %v", err)
 	}
+	if *extraWait < 0 {
+		return usagef("-extra-wait is not negative")
+	}
 	if *sourceRate < 0 || *maxResults < 0 || *maxBody < 0 || *maxTime < 0 {
 		return usagef("-source-rate, -max-results, -max-time and -max-body are not negative")
 	}
-	opts.Subdomains = subcol.Options{Keys: keys, Only: splitList(*sourcesList), Exclude: splitList(*excludeSources), All: *allSources, NoHistory: *noHistory, SourceTimeout: *sourceTimeout,
+	opts.Subdomains = subcol.Options{Keys: keys, Only: splitList(*sourcesList), Exclude: splitList(*excludeSources), All: *allSources, NoHistory: *noHistory, SourceTimeout: *sourceTimeout, ExtraWait: extraWaitOf(*extraWait),
 		SourceRate: *sourceRate, SourceRates: rates, MaxResults: *maxResults, MaxTime: *maxTime, MaxBody: *maxBody, MaxNames: *maxNames, NoCheck: subsMode.NoCheck, GuessSamples: subsMode.GuessSamples, Recursive: subsMode.Recursive, Proxy: *sourceProxy}
 	urlKeys := maps.Clone(keys)
 	if urlKeys == nil {
@@ -3191,4 +3195,12 @@ func parseProxy(s string) (*url.URL, error) {
 		return nil, usagef("-proxy wants http://host:port, https://host:port or socks5://host:port, got %q", s)
 	}
 	return pu, nil
+}
+
+// extraWaitOf is -extra-wait as the sources take it: 0 is no bound (negative).
+func extraWaitOf(d time.Duration) time.Duration {
+	if d == 0 {
+		return -1
+	}
+	return d
 }

@@ -58,6 +58,13 @@ const (
 	// listed, retryable and non-fatal while the others answered. It is
 	// subfinder's per-request limit.
 	DefaultSourceTimeout = 30 * time.Second
+	// DefaultExtraWait is how long the sources azhaq adds to subfinder's
+	// default set (-extra-wait) may go on after every source of that set has
+	// answered. The ones that answer did so in 1 to 3 s (rapiddns, thc and
+	// hudsonrock, 2026-11-04); the slow ones (sitedossier pages at 8 a
+	// minute, waybackarchive waits out 429s) would hold the run to the
+	// full -source-timeout.
+	DefaultExtraWait = 5 * time.Second
 	// lateGrace is how long after a source's deadline Run still waits for
 	// it: some sources ignore the context (subfinder's crt.sh tries a
 	// Postgres connection first).
@@ -88,6 +95,12 @@ type Options struct {
 	// DefaultSourceTimeout). It is not the run's -timeout: a source past it
 	// is abandoned and listed as failed, and the others' names are kept.
 	SourceTimeout time.Duration
+	// ExtraWait is how long the sources outside subfinder's default set
+	// (commoncrawl, hudsonrock, rapiddns, sitedossier, thc, waybackarchive)
+	// may go on once every source of that set has answered (-extra-wait;
+	// default DefaultExtraWait). A source named with -sources is not
+	// bounded by it. Negative: no bound but -source-timeout.
+	ExtraWait time.Duration
 	// Verify returns the names that resolve, not to a wildcard of domain
 	// (what is kept of the names only a padding source gave or the history
 	// holds), and the ones it could not check (the resolvers failed). Nil
@@ -143,6 +156,9 @@ func New(o Options) *Collector {
 	o.Client = &cl
 	if o.SourceTimeout <= 0 {
 		o.SourceTimeout = DefaultSourceTimeout
+	}
+	if o.ExtraWait == 0 {
+		o.ExtraWait = DefaultExtraWait
 	}
 	if o.MaxNames <= 0 {
 		o.MaxNames = DefaultMaxNames
@@ -297,13 +313,51 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 	if c.opts.Verify != nil && !c.opts.NoCheck {
 		chk = newChecker(ctx, domain, c.opts.Verify, h.pass)
 	}
-	var cancels []context.CancelFunc
+	cancels := make([]context.CancelFunc, len(run))
 	var wgFetch, wgSample sync.WaitGroup
 	var mu sync.Mutex // results, reported
 	reported := make([]bool, len(run))
 	closed := false
 	hold := &holdState{}
 	hold.pending.Store(int32(len(run)))
+	// The sources azhaq adds to subfinder's set are waited for until that
+	// set has answered, and ExtraWait after: a slow extra does not hold the
+	// run. extrasEnd is closed when that wait ends with some still running.
+	extra := make([]bool, len(run))
+	extraCut := make([]atomic.Bool, len(run))
+	coreLeft := atomic.Int32{}
+	named0 := set(c.opts.Only)
+	for i, s := range run {
+		extra[i] = s.extra && !named0[s.name] && c.opts.ExtraWait > 0
+		if !extra[i] && !s.sampler {
+			coreLeft.Add(1)
+		}
+	}
+	nExtra := 0
+	for _, e := range extra {
+		if e {
+			nExtra++
+		}
+	}
+	extrasEnd := make(chan struct{})
+	launched := make(chan struct{})
+	errExtra := fmt.Errorf("no answer %s after the other sources had answered (-extra-wait)", c.opts.ExtraWait)
+	endExtras := func() {
+		<-launched
+		mu.Lock()
+		cutSome := false
+		for i := range run {
+			if extra[i] && !reported[i] {
+				extraCut[i].Store(true)
+				cancels[i]()
+				cutSome = true
+			}
+		}
+		mu.Unlock()
+		if cutSome {
+			close(extrasEnd)
+		}
+	}
 	for i, s := range run {
 		var sctx context.Context
 		var cancel context.CancelFunc
@@ -316,7 +370,7 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		} else {
 			sctx, cancel = context.WithTimeout(ctx, timeout)
 		}
-		cancels = append(cancels, cancel)
+		cancels[i] = cancel
 		sctx = context.WithValue(sctx, callsKey{}, &calls[i])
 		sctx = context.WithValue(sctx, roundsKey{}, &rounds[i])
 		sctx = context.WithValue(sctx, partialKey{}, &partials[i])
@@ -348,6 +402,9 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 			done()
 			if !s.sampler && sctx.Err() != nil && ctx.Err() == nil && (err == nil || contextEnded(err)) {
 				err = errSource // the names it gave by then are kept
+				if extraCut[i].Load() {
+					err = errExtra
+				}
 			}
 			mu.Lock()
 			if !closed {
@@ -359,12 +416,16 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 				hold.gave.Add(1)
 			}
 			hold.pending.Add(-1)
+			if nExtra > 0 && !extra[i] && !s.sampler && coreLeft.Add(-1) == 0 {
+				time.AfterFunc(c.opts.ExtraWait, endExtras)
+			}
 			if !s.verify {
 				chk.know(cleaned(names, domain))
 				h.pass(names) // a padding source's names wait for their check
 			}
 		}(i, s, sctx, wg)
 	}
+	close(launched)
 	fetched := make(chan struct{})
 	go func() { wgFetch.Wait(); close(fetched) }()
 	sampled := make(chan struct{})
@@ -379,6 +440,13 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 	maxTime := fmt.Sprintf("stopped by -max-time %s", c.opts.MaxTime)
 	select {
 	case <-fetched:
+	case <-extrasEnd:
+		// The cut sources return what they had; one that ignores the context is left.
+		select {
+		case <-fetched:
+		case <-time.After(lateGrace):
+		case <-ctx.Done():
+		}
 	case <-ctx.Done():
 	case <-timer.C:
 		late, cut = errLate, errLate != errSource
@@ -436,6 +504,9 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 			stopped = sampleLate
 		}
 		switch {
+		case !reported[i] && extraCut[i].Load() && ctx.Err() == nil:
+			// Cut on purpose, with the others answered: not the run's cut.
+			results[i] = outcome{names: partials[i].snapshot(), err: errExtra, took: time.Since(t0)}
 		case !reported[i]:
 			results[i] = outcome{names: partials[i].snapshot(), err: stopped, took: time.Since(t0)}
 			partial = partial || cut
