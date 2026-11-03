@@ -24,6 +24,8 @@ type PortDialer struct {
 	timeout time.Duration
 	src     net.IP
 	via     proxy.ContextDialer // SOCKS5 for the connects of the scan itself; nil: direct
+	socks   string              // its address, and the user:password it takes
+	auth    string
 	preMu   sync.Mutex
 	pre     map[string]int // connects Reserve recorded for an address, until their TCP calls
 }
@@ -33,7 +35,7 @@ type PortDialer struct {
 // asked from the system's) and, when socks5 is host:port, through that
 // SOCKS5 proxy (auth is "user:password" for it).
 func NewPortDialer(timeout time.Duration, src net.IP, socks5, auth string) *PortDialer {
-	d := &PortDialer{timeout: timeout, src: src}
+	d := &PortDialer{timeout: timeout, src: src, socks: socks5, auth: auth}
 	if socks5 != "" {
 		var a *proxy.Auth
 		if u, p, ok := strings.Cut(auth, ":"); ok || u != "" {
@@ -98,33 +100,63 @@ func hostOfAddr(addr string) string {
 }
 
 // TCP connects to addr (ip:port) of host ("" when only the address is
-// known), through the proxy when there is one.
+// known), through the proxy when there is one. Its ledger line is made as
+// the connect begins; a connect that never began (the scope, the kill file or
+// the end of ctx came first) has none and is given back to the budget, which
+// the caller counted.
 func (d *PortDialer) TCP(ctx context.Context, host, addr string) (net.Conn, error) {
-	if d.takeReserved(addr) {
-		// Reserve checked the scope and recorded the line: the kill file only.
-		if err := Current().Killed(); err != nil {
-			return nil, err
-		}
-	} else {
+	reserved := d.takeReserved(addr)
+	if !reserved {
 		if err := d.allowed(host, addr); err != nil {
+			Refund()
 			return nil, err
 		}
-		ledger.TCP(ctx, host, addr)
 	}
-	if d.via != nil {
-		cctx, cancel := context.WithTimeout(ctx, d.timeout)
-		defer cancel()
-		return d.via.DialContext(cctx, "tcp", addr)
+	return d.connect(ctx, host, addr, reserved, false)
+}
+
+// connect makes the connect to addr: its line is the ledger's when the
+// socket is about to connect (reserved: Reserve wrote it, and a stop that
+// came since waits until the connect has begun), and a connect that never
+// begun is given back.
+func (d *PortDialer) connect(ctx context.Context, host, addr string, reserved, direct bool) (net.Conn, error) {
+	rec := func() { ledger.TCP(ctx, host, addr) }
+	if reserved {
+		rec = func() {}
 	}
-	nd := d.netDialer(hostOfAddr(addr))
-	return dialResolvedWith(ctx, Current(), &nd, "tcp", addr)
+	c, began, err := connectTracked(ctx, d.netDialer(hostOfAddr(addr)), reserved, rec, func(dctx context.Context, nd *net.Dialer) (net.Conn, error) {
+		if d.socks != "" && !direct {
+			var a *proxy.Auth
+			if u, p, ok := strings.Cut(d.auth, ":"); ok || u != "" {
+				a = &proxy.Auth{User: u, Password: p}
+			}
+			pd, err := proxy.SOCKS5("tcp", d.socks, a, &net.Dialer{Timeout: d.timeout, Control: nd.Control})
+			if err != nil {
+				return nil, err
+			}
+			cctx, cancel := context.WithTimeout(dctx, d.timeout)
+			defer cancel()
+			return pd.(proxy.ContextDialer).DialContext(cctx, "tcp", addr)
+		}
+		return dialResolvedWith(dctx, Current(), nd, "tcp", addr)
+	})
+	if !began {
+		Refund() // counted by the caller, never connected
+	}
+	return c, err
 }
 
 // Reserve records the connects a scan is about to make to addrs (ip:port),
-// those the scope allows, in one write of the ledger: each is a line before
-// its connect goes, and the TCP call for it does not record it again. The
-// kill file still stops each connect at its TCP call.
+// those the scope allows, in one write of the ledger, and does not stop
+// them after: a connect a line was made for goes out even if the kill file
+// or the end of ctx comes first, and is held by neither until its connect has
+// begun. Nothing is recorded once either has come: the scan's connects are
+// then refused one by one at their TCP call and given back. The scanner counts
+// the connects before it reserves them.
 func (d *PortDialer) Reserve(ctx context.Context, host string, addrs []string) {
+	if ctx.Err() != nil || Current().Killed() != nil {
+		return
+	}
 	ok := make([]string, 0, len(addrs))
 	for _, a := range addrs {
 		if d.inScope(host, a) == nil {
@@ -157,11 +189,10 @@ func (d *PortDialer) takeReserved(addr string) bool {
 // dial on their own.
 func (d *PortDialer) TCPDirect(ctx context.Context, host, addr string) (net.Conn, error) {
 	if err := d.allowed(host, addr); err != nil {
+		Refund()
 		return nil, err
 	}
-	ledger.TCP(ctx, host, addr)
-	nd := d.netDialer(hostOfAddr(addr))
-	return dialResolvedWith(ctx, Current(), &nd, "tcp", addr)
+	return d.connect(ctx, host, addr, false, true)
 }
 
 // TLS is TCPDirect with a TLS handshake that waits at most handshake.
@@ -178,14 +209,13 @@ func (d *PortDialer) TLSLegacy(ctx context.Context, host, addr string, cfg *tls.
 
 func (d *PortDialer) tls(ctx context.Context, host, addr string, cfg *tls.Config, handshake time.Duration, legacy bool) (net.Conn, error) {
 	if err := d.allowed(host, addr); err != nil {
+		Refund()
 		return nil, err
 	}
-	ledger.TCP(ctx, host, addr)
-	nd := d.netDialer(hostOfAddr(addr))
 	hctx, cancel := context.WithTimeout(ctx, handshake)
 	defer cancel()
 	// The name is looked up by the run's resolver, not the dialer's.
-	c, err := dialResolvedWith(hctx, Current(), &nd, "tcp", addr)
+	c, err := d.connectTLS(hctx, host, addr)
 	if err != nil {
 		return nil, err
 	}
@@ -209,24 +239,52 @@ func (d *PortDialer) tls(ctx context.Context, host, addr string, cfg *tls.Config
 	return tc, nil
 }
 
+// connectTLS is the connect of a handshake: the line of a plain direct one.
+func (d *PortDialer) connectTLS(ctx context.Context, host, addr string) (net.Conn, error) {
+	return d.connect(ctx, host, addr, false, true)
+}
+
 // UDP opens a socket connected to raddr, which is a datagram about to be
-// sent to it: the ledger has it first.
+// sent to it: its ledger line is made once the socket is open, and the caller
+// writes the datagram at once, which nothing stops. A socket that could not
+// be opened has no line and is given back to the budget, which the caller
+// counted.
 func (d *PortDialer) UDP(ctx context.Context, host string, raddr *net.UDPAddr) (*net.UDPConn, error) {
 	if err := d.allowed(host, raddr.String()); err != nil {
+		Refund()
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
+		Refund()
+		return nil, err
+	}
+	c, err := net.DialUDP("udp", nil, raddr)
+	if err != nil {
+		Refund()
 		return nil, err
 	}
 	ledger.UDP(ctx, host, raddr.String())
-	return net.DialUDP("udp", nil, raddr)
+	return c, nil
 }
 
 // UDPAnySource is UDP for a service that answers from a port of its own: the
 // socket is not connected to raddr.
 func (d *PortDialer) UDPAnySource(ctx context.Context, host string, raddr *net.UDPAddr) (*net.UDPConn, error) {
 	if err := d.allowed(host, raddr.String()); err != nil {
+		Refund()
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
+		Refund()
+		return nil, err
+	}
+	c, err := listenAnySource(raddr)
+	if err != nil {
+		Refund()
 		return nil, err
 	}
 	ledger.UDP(ctx, host, raddr.String())
-	return listenAnySource(raddr)
+	return c, nil
 }
 
 // DialTLS connects to addr (host:port) of a target and runs the TLS

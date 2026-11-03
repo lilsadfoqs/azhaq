@@ -43,10 +43,10 @@ func flagOn(fs *flag.FlagSet, name string) bool {
 // tally is what a command knows of the targets it was given: how many it
 // could count and how many of them got no answer at all. A run whose every
 // counted target failed did not do its job; one with a single answer did.
-type tally struct{ given, failed int }
+type targetTally struct{ given, failed int }
 
 // units records the targets a command was given and how many got no answer.
-func (r *report) units(given, failed int) { r.tally = tally{given, failed} }
+func (r *report) units(given, failed int) { r.targets = targetTally{given, failed} }
 
 // failureCount is the summary's `failures`: the sum of `count` over `failed`,
 // plus each unreachable target no entry of `failed` names (a list holds at most
@@ -100,10 +100,10 @@ func (r *report) jobFailed() bool {
 			return true
 		}
 	}
-	if r.tally.given == 0 || r.Degraded && len(r.Failed) == 0 {
+	if r.targets.given == 0 || r.Degraded && len(r.Failed) == 0 {
 		return true // nothing to count, or degraded and no failure names what failed
 	}
-	return r.tally.failed >= r.tally.given
+	return r.targets.failed >= r.targets.given
 }
 
 // ownFailure says a failure is the run's own, not a target's: it names no
@@ -126,7 +126,7 @@ func (r *report) decide() int {
 // tallySeeds counts the targets a run was given that it can tell answered
 // from failed: a URL fails when none of its requests got an answer
 // (unreachable), a domain when no third-party source answered for it.
-func tallySeeds(command string, seeds []types.Seed, unreachable []string, failed []engine.Failure) tally {
+func tallySeeds(command string, seeds []types.Seed, unreachable []string, failed []engine.Failure) targetTally {
 	down := map[string]bool{}
 	for _, u := range unreachable {
 		down[u] = true
@@ -152,7 +152,7 @@ func tallySeeds(command string, seeds []types.Seed, unreachable []string, failed
 			silent[normalize.Hostname(t)] = true
 		}
 	}
-	var t tally
+	var t targetTally
 	seen := map[string]bool{}
 	for _, s := range seeds {
 		if s = normalize.Seed(s); s.Derived() || (s.Type != types.TypeURL && s.Type != types.TypeDomain) || seen[string(s.Type)+s.Key()] {
@@ -189,8 +189,8 @@ func (r *report) failedBecause() string {
 		return "finished, but a note above says what to check first"
 	case r.warned:
 		return "the results are short or misleading (a note above says why), and what is marked ! failed"
-	case r.tally.given > 0 && r.tally.failed >= r.tally.given:
-		return fmt.Sprintf("nothing the run was given answered (%d of %d failed); what is marked ! failed", r.tally.failed, r.tally.given)
+	case r.targets.given > 0 && r.targets.failed >= r.targets.given:
+		return fmt.Sprintf("nothing the run was given answered (%d of %d failed); what is marked ! failed", r.targets.failed, r.targets.given)
 	}
 	for _, f := range r.Failed {
 		if ownFailure(f) {

@@ -120,10 +120,10 @@ func TestTallySeeds(t *testing.T) {
 		{Collector: "azhaq-subdomains", Error: "timeout", Count: 1, Targets: []string{"y.example"}, Partial: true},
 		fail("azhaq-params", "HTTP 429", "http://a/"),
 	}
-	if got := tallySeeds("run", seeds, []string{"http://b/"}, failed); got != (tally{4, 2}) {
+	if got := tallySeeds("run", seeds, []string{"http://b/"}, failed); got != (targetTally{4, 2}) {
 		t.Errorf("run: %+v, want 4 given, 2 failed", got)
 	}
-	if got := tallySeeds("params", seeds, []string{"http://b/"}, failed); got != (tally{4, 3}) {
+	if got := tallySeeds("params", seeds, []string{"http://b/"}, failed); got != (targetTally{4, 3}) {
 		t.Errorf("params: %+v, want 4 given, 3 failed", got)
 	}
 }
@@ -163,5 +163,30 @@ func TestFuzzExitRule(t *testing.T) {
 				t.Errorf("exit %d (summary %d), failures %d, complete %v; want exit %d, failures %d", exitCode(err), rep.Exit, rep.Failures, rep.Complete, c.exit, c.failed)
 			}
 		})
+	}
+}
+
+// An internal error (the summary disagrees with its rows) is exit 1 whatever
+// the run's outcome; `failures` and `error` are separate fields.
+func TestAnInternalErrorComesBeforeTheExitRule(t *testing.T) {
+	for _, strict := range []bool{false, true} {
+		r := exitOf(t, strict, func(r *report) {
+			r.units(3, 1) // a run that did its job, with one failure
+			r.Failed = []engine.Failure{fail("azhaq-http", "connection refused", "http://c/")}
+			r.Results = 5
+			r.emitted().add("", 1) // one row emitted, five published
+		})
+		if r.Exit != exitError || r.Complete || r.Error == "" || r.Failures != 1 {
+			t.Errorf("strict %v: exit %d, complete %v, error %q, failures %d; want exit 1, not complete, an error and 1 failure", strict, r.Exit, r.Complete, r.Error, r.Failures)
+		}
+	}
+	// Stopped by a limit, the same: the error wins.
+	r := exitOf(t, false, func(r *report) {
+		r.Stopped = "the request budget is spent"
+		r.Results = 2
+		r.emitted().add("", 1)
+	})
+	if r.Exit != exitError {
+		t.Errorf("a limit with an internal error: exit %d, want 1", r.Exit)
 	}
 }

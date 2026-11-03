@@ -421,3 +421,38 @@ func TestProxiedRequestLineNamesTheURLNotTheHostHeader(t *testing.T) {
 		}
 	}
 }
+
+// A request counted and cancelled before it left (a stop landed after the
+// count) is not listed and not counted.
+func TestACancelledRequestIsNeitherListedNorCounted(t *testing.T) {
+	Reset()
+	t.Cleanup(Reset)
+	srv, hits := counting(t)
+	lines := withLedger(t)
+	c := TargetClient(TargetOptions{})
+	ctx, cancel := context.WithCancel(context.Background())
+	if err := Spend(ctx); err != nil {
+		t.Fatal(err)
+	}
+	cancel() // after the count, before the send
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, srv.URL+"/x", nil)
+	if _, err := c.Do(req); err == nil {
+		t.Fatal("a cancelled request was sent")
+	}
+	if got := lines(); len(got) != 0 {
+		t.Fatalf("lines %v for a request that never left", got)
+	}
+	if n := Sent(); n != 0 || hits.Load() != 0 {
+		t.Fatalf("counted %d, server saw %d: want 0 and 0", n, hits.Load())
+	}
+	// And one that is sent is both.
+	if err := Spend(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if err := get(c, srv.URL+"/y"); err != nil {
+		t.Fatal(err)
+	}
+	if got := lines(); len(got) != 1 || Sent() != 1 || hits.Load() != 1 {
+		t.Fatalf("lines %v, counted %d, server saw %d: want 1 each", got, Sent(), hits.Load())
+	}
+}

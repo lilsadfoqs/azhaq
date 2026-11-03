@@ -542,6 +542,7 @@ type portsSink struct {
 	silentUDP  bool // a row is open|filtered: the rows are not all open ports
 	open       int  // rows in the open state
 	filtered   int  // rows in the open|filtered state
+	printed    int  // rows handed to the output, whatever their state
 }
 
 func newPortsSink(out *portOut) *portsSink {
@@ -561,6 +562,9 @@ func (k *portsSink) replay(obs []types.StoredObservation) {
 // settle puts the sink's counts in the summary, after the rows are written.
 func (k *portsSink) settle(rep *report, sn bool) {
 	rep.Results = k.out.w.count()
+	k.mu.Lock()
+	rep.holds("results, against the rows handed to the output", rep.Results, k.printed)
+	k.mu.Unlock()
 	rep.Counts = map[string]int{"addresses": int(k.scanned)}
 	if k.unresolved > 0 {
 		rep.Counts["did not resolve"] = k.unresolved
@@ -584,6 +588,7 @@ func (k *portsSink) visit(o types.Observation, print bool) {
 		if print {
 			out.add(r)
 			k.mu.Lock()
+			k.printed++
 			switch r.State {
 			case "open":
 				k.open++
