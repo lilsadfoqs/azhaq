@@ -85,6 +85,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 - The plan gives a bound, not a count. How many names resolve and answer is known only by asking.
 - At most `max_names` names are looked up.
 - `per_web_service` covers a web service's page, the favicon and the built-in paths. It does not cover what its links, scripts and archived URLs lead to.
+- `guesses_per_host` says what each technique that guesses names (the built-in paths, `-dirs`, `-params`, `-graphql`) sends to one host, before any answer shortens it, and `host_guesses` is the cap `-host-guesses` sets (0: none).
 - `cap` is set by `cap_by`. With `-daily-requests`, a plan does not take off what the day's runs already spent.
 
 ### The estimate
@@ -225,6 +226,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 | `-timeout` | duration |  | stop after this long and keep what was found; azhaq resume continues (0: no limit) |
 | `-max-requests` | int |  | requests to targets this run may send (0: no cap); the work left over is for azhaq resume |
 | `-max-host-requests` | int |  | requests one host may be sent (0: no cap); the rest of its work is left for azhaq resume |
+| `-host-guesses` | int |  | most guesses one host is sent (0: no cap): requests for the built-in paths, a -dirs or -params wordlist or GraphQL field names; the rest are not asked and the summary lists them, the run exits 4 and azhaq resume asks them with a larger value |
 | `-daily-requests` | int |  | requests a day to the program's targets (-program, else this run's targets), counted over the runs in -db |
 | `-max-items` | int |  | most collector tasks (a name, a URL, an address each, per collector) this run starts (default: no cap, katana's and httpx's); the work left is for azhaq resume, which starts as many more |
 | `-max-names` | int |  | most hostnames this run resolves (default 200000, as many as subs keeps for a domain); the names left are for azhaq resume. A value you give also caps the names -dns-brute and -permute ask, together: the guesses past it are not asked, the run exits 4 and says how many (a larger -max-names asks them) |
@@ -258,6 +260,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 | `-sr` | bool |  | also write each answer a target gave, headers and body as read, to the -srd directory as DIR/HOST/SHA1.txt with an index.txt (katana's -sr); query -fields response_file says where a row's is |
 | `-srd` | string | `azhaq_response` | directory for -sr |
 | `-no-catchall` | bool |  | leave out URLs that answer with the page every unknown path gets (client-side routes of a single-page app) from the rows printed |
+| `-all-rows` | bool |  | list every row, as run printed before: by default the rows that answer as the control request for a path that cannot exist does, the 404s, the assets no request asked for and the hints only scripts name are counted in one line of their class each (-json lists every row with its fold class) |
 | `-fail-on-errors` | bool |  | the same as -strict-exit |
 | `-fail-on-capped` | bool |  | exit 4 also when the run hit -depth with hints left |
 | `-strict-exit` | bool |  | exit 3 for any failure, a target among many included (the rule before 0.15); without it a run that did its job exits 0 and its summary counts and lists the failures |
@@ -269,7 +272,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 | `-axfr` | bool |  | also plan the zone transfers azhaq dns -axfr would try for the domain and host targets: the name servers' lookups, and which name servers the scope would let it ask |
 
 <details>
-<summary>Other names, flags accepted with no effect and rarely used flags (79)</summary>
+<summary>Other names, flags accepted with no effect and rarely used flags (80)</summary>
 
 | Flag | Type | Default | Meaning | Kind |
 | --- | --- | --- | --- | --- |
@@ -293,6 +296,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 | `-facts` | string |  | JSONL connector facts to ingest before native collectors | rarely needed |
 | `-ob` | bool |  | with -sr: write the status line and headers only | rarely needed |
 | `-obs` | bool |  | also print the observation log | rarely needed |
+| `-params-all` | bool |  | with -params, also search the pages a request of the run showed to read no name: one that answered as a path that cannot exist does, or refused (401, 403, 405); by default a note lists them | rarely needed |
 | `-params-chunk` | int |  | names per parameter request at most (0: 500, and about 7.6 KB in a query; fewer where the server refuses a long query) | rarely needed |
 | `-params-delay` | duration |  | wait before each parameter request, one at a time (arjun -d) | rarely needed |
 | `-params-include` | string |  | sent with every parameter request: a query for GET; for a body a form, a JSON object or XML, or a template with $arjun$ where the names go | rarely needed |

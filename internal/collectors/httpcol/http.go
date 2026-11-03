@@ -742,10 +742,21 @@ func (c *Collector) fetchFirst(ctx context.Context, raw string, rq *fetch.Req, f
 	dres.Body = data
 	row := describe(reqURL, final, dres, title, c.NoTech, c.Spec != nil)
 	bare := first && res.Status == http.StatusBadRequest
-	catchAll := !c.Probe && !bare && fetch.CatchAll(ctx, c.Client, res)
+	var control *fetch.Control
+	catchAll := false
+	if !c.Probe && !bare {
+		catchAll, control = fetch.CatchAllControl(ctx, c.Client, res)
+	}
 	if catchAll {
 		// Same answer as a path that does not exist: not a page of its own.
 		row["catchall"] = true
+		if control != nil {
+			row["control"] = control // the request it was compared with, for the map's folded groups
+			row["control_exact"] = control.Exact
+		}
+	}
+	if !c.Probe {
+		learnAnswer(reqURL, res.Status, catchAll, control)
 	}
 	if !c.NoFavicon && !catchAll && !bare && (isRoot(reqURL) || isRoot(final)) {
 		if hash, from, icon := c.favicon(ctx, final, res); hash != "" {
@@ -1137,4 +1148,24 @@ func groups0(groups [][]string) string {
 		return groups[0][0]
 	}
 	return ""
+}
+
+// learnAnswer tells the parameter search what the answer to a bare page
+// showed: a page that answers as a path that cannot exist does, or one that
+// refuses (401, 403, 405), reads no name a search could find.
+func learnAnswer(reqURL string, status int, catchAll bool, ctl *fetch.Control) {
+	u, err := url.Parse(reqURL)
+	if err != nil || u.RawQuery != "" {
+		return
+	}
+	switch {
+	case catchAll:
+		why := "its answer is the one the origin gives a path that cannot exist"
+		if ctl != nil {
+			why += " (" + ctl.String() + ")"
+		}
+		fetch.Learn(fetch.PageAnswerFact(reqURL), why)
+	case status == http.StatusUnauthorized || status == http.StatusForbidden || status == http.StatusMethodNotAllowed:
+		fetch.Learn(fetch.PageAnswerFact(reqURL), fmt.Sprintf("it refused the request: it answered %d", status))
+	}
 }

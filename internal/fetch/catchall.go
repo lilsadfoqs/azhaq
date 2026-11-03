@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"html"
 	"net/http"
 	"net/url"
@@ -236,12 +237,19 @@ type baseline struct {
 	ready atomic.Bool // the probe has answered or failed
 	ok    bool
 	fp    fingerprint
+	url   string // the path that cannot exist, as asked
+	ctype string
+}
+
+func (b *baseline) control() *Control {
+	return &Control{URL: b.url, Status: b.fp.status, Type: b.ctype, Size: b.fp.size, Title: b.fp.title}
 }
 
 type fingerprint struct {
 	status   int
 	location string
 	hash     string
+	raw      string // the hash of the body as it came, before the requested path is taken out
 	title    string
 	lines    int
 	words    int
@@ -320,49 +328,78 @@ func resetProbes() {
 // dismissed as the shell, and its answer does not depend on how many
 // directories were probed before it.
 func CatchAll(ctx context.Context, c *http.Client, res Result) bool {
+	shell, _ := CatchAllControl(ctx, c, res)
+	return shell
+}
+
+// Control is the request for a path that cannot exist, and the answer an
+// origin gave it: what a catch-all row was compared with.
+type Control struct {
+	URL    string `json:"url"`
+	Status int    `json:"status"`
+	Type   string `json:"type,omitempty"` // the Content-Type, without parameters
+	Size   int    `json:"size"`           // body bytes
+	Title  string `json:"title,omitempty"`
+	// Exact says the answer that matched it was the control's own page, byte
+	// for byte once the requested path is taken out of both; not by shape
+	// (same title, size and lines). It is a property of the answer, not of the
+	// control, so it is not part of what is stored for the control.
+	Exact bool `json:"-"`
+}
+
+// CatchAllControl is CatchAll, and for a catch-all answer also the control
+// it matched.
+func CatchAllControl(ctx context.Context, c *http.Client, res Result) (bool, *Control) {
 	if res.Status == 0 {
-		return false
+		return false, nil
 	}
-	shell, judged := catchAllVerdict(ctx, c, res)
+	shell, judged, ctl := catchAllVerdict(ctx, c, res)
 	if u, err := url.Parse(res.RequestURL); err == nil && u.Host != "" && judged {
 		noteAnswer(u.Scheme+"://"+u.Host, u.EscapedPath(), shell && res.Status < 400)
 	}
-	return shell
+	if !shell {
+		ctl = nil
+	}
+	return shell, ctl
 }
 
 // catchAllVerdict says whether res is the catch-all page, and whether that
 // was judged: an answer whose control failed (refused by a budget, no
 // answer) is no verdict, and says nothing of its directory.
-func catchAllVerdict(ctx context.Context, c *http.Client, res Result) (shell, judged bool) {
+func catchAllVerdict(ctx context.Context, c *http.Client, res Result) (shell, judged bool, ctl *Control) {
 	switch res.Status {
 	case http.StatusNotFound, http.StatusGone, http.StatusUnauthorized, http.StatusForbidden:
-		return false, true
+		return false, true, nil
 	}
 	u, err := url.Parse(res.RequestURL)
 	if err != nil || u.Host == "" {
-		return false, false
+		return false, false, nil
 	}
 	path := u.EscapedPath()
 	if path == "" || path == "/" {
-		return false, false
+		return false, false, nil
 	}
 	origin := u.Scheme + "://" + u.Host
 	dir := parentDir(path)
 	fp := fingerprintOf(res, origin, requestTarget(u))
 	if root := rootShell(origin, dir, fp); root != nil {
-		return true, true
+		rc := root.control()
+		rc.Exact = true
+		return true, true, rc
 	}
 	b := baselineFor(ctx, c, origin, dir)
 	if b == nil || !b.ok {
-		return false, false
+		return false, false, nil
 	}
-	return b.fp.matches(fp), true
+	ctl = b.control()
+	ctl.Exact = b.fp.status == fp.status && (isRedirect(fp.status) && b.fp.location == fp.location || !isRedirect(fp.status) && (b.fp.hash == fp.hash || b.fp.raw == fp.raw))
+	return b.fp.matches(fp), true, ctl
 }
 
 // rootShell: a page byte for byte the site root's answer for an unknown
 // path (the single-page app's shell) is that answer in any directory not
 // yet asked, so its own baseline request is saved.
-func rootShell(origin, dir string, fp fingerprint) *fingerprint {
+func rootShell(origin, dir string, fp fingerprint) *baseline {
 	if dir == "/" {
 		return nil
 	}
@@ -373,7 +410,7 @@ func rootShell(origin, dir string, fp fingerprint) *fingerprint {
 		return nil
 	}
 	if root.ok && root.fp.status == fp.status && root.fp.hash == fp.hash && fp.size > 0 {
-		return &root.fp
+		return root
 	}
 	return nil
 }
@@ -416,6 +453,10 @@ func baselineFor(ctx context.Context, c *http.Client, origin, dir string) *basel
 		}
 		u, _ := url.Parse(target)
 		b.fp = fingerprintOf(res, origin, requestTarget(u))
+		b.url = target
+		if res.Header != nil {
+			b.ctype = strings.TrimSpace(strings.SplitN(res.Header.Get("Content-Type"), ";", 2)[0])
+		}
 		b.ok = true
 	})
 	return b
@@ -471,6 +512,8 @@ func fingerprintBy(res Result, origin string, strip func(string) string) fingerp
 	body := strip(string(res.Body))
 	sum := sha256.Sum256([]byte(body))
 	fp.hash = hex.EncodeToString(sum[:8])
+	rawSum := sha256.Sum256(res.Body)
+	fp.raw = hex.EncodeToString(rawSum[:8])
 	if m := titleRE.FindStringSubmatch(body); len(m) == 2 {
 		fp.title = strings.Join(strings.Fields(m[1]), " ")
 	}
@@ -551,4 +594,21 @@ func (b fingerprint) matches(o fingerprint) bool {
 	}
 	// Pages with a CSRF token or timestamp differ byte-wise but keep their shape.
 	return b.title == o.title && b.lines == o.lines && b.words == o.words && b.words > 0 && near(b.size, o.size, 0.2)
+}
+
+// String is the control as a line says it: GET /path → 200 text/html, 3748 bytes, "title".
+func (c Control) String() string {
+	path := c.URL
+	if u, err := url.Parse(c.URL); err == nil && u.Path != "" {
+		path = u.EscapedPath()
+	}
+	s := fmt.Sprintf("GET %s → %d", path, c.Status)
+	if c.Type != "" {
+		s += " " + c.Type
+	}
+	s += fmt.Sprintf(", %d bytes", c.Size)
+	if c.Title != "" {
+		s += fmt.Sprintf(", %q", c.Title)
+	}
+	return s
 }

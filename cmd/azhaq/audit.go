@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	"github.com/lilsadfoqs/azhaq/engine"
 )
 
 // A summary says nothing its rows do not say. Each command that emits rows
@@ -33,6 +35,20 @@ func (t *tally) add(class string, held int) {
 	t.n++
 	t.held += held
 	t.by[class] += held
+}
+
+// addGroup counts one emitted line that stands for several stored rows, each
+// of which belongs to the count classOf names: the line is one row emitted, and
+// its members are held by it, class by class.
+func (t *tally) addGroup(members []engine.MapEntry, classOf func(engine.MapEntry) string) {
+	if t.by == nil {
+		t.by = map[string]int{}
+	}
+	t.n++
+	t.held += len(members)
+	for _, m := range members {
+		t.by[classOf(m)]++
+	}
 }
 
 // emitted is the tally of the command's rows, made on first use.

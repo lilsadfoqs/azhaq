@@ -169,6 +169,7 @@ The summary and the exit codes are `run`'s: see [run](run.md#summary-and-exit-co
 | `-timeout` | duration |  | stop after this long and keep what was found; azhaq resume continues (0: no limit) |
 | `-max-requests` | int |  | requests to targets this run may send (0: no cap); the work left over is for azhaq resume |
 | `-max-host-requests` | int |  | requests one host may be sent (0: no cap); the rest of its work is left for azhaq resume |
+| `-host-guesses` | int |  | most guesses one host is sent (0: no cap): requests for the built-in paths, a -dirs or -params wordlist or GraphQL field names; the rest are not asked and the summary lists them, the run exits 4 and azhaq resume asks them with a larger value |
 | `-daily-requests` | int |  | requests a day to the program's targets (-program, else this run's targets), counted over the runs in -db |
 | `-max-items` | int |  | most collector tasks (a name, a URL, an address each, per collector) this run starts (default: no cap, katana's and httpx's); the work left is for azhaq resume, which starts as many more |
 | `-max-names` | int |  | most hostnames this run resolves (default 200000, as many as subs keeps for a domain); the names left are for azhaq resume. A value you give also caps the names -dns-brute and -permute ask, together: the guesses past it are not asked, the run exits 4 and says how many (a larger -max-names asks them) |
@@ -202,12 +203,13 @@ The summary and the exit codes are `run`'s: see [run](run.md#summary-and-exit-co
 | `-sr` | bool |  | also write each answer a target gave, headers and body as read, to the -srd directory as DIR/HOST/SHA1.txt with an index.txt (katana's -sr); query -fields response_file says where a row's is |
 | `-srd` | string | `azhaq_response` | directory for -sr |
 | `-no-catchall` | bool |  | leave out URLs that answer with the page every unknown path gets (client-side routes of a single-page app) from the rows printed |
+| `-all-rows` | bool |  | list every row, as run printed before: by default the rows that answer as the control request for a path that cannot exist does, the 404s, the assets no request asked for and the hints only scripts name are counted in one line of their class each (-json lists every row with its fold class) |
 | `-fail-on-errors` | bool |  | the same as -strict-exit |
 | `-fail-on-capped` | bool |  | exit 4 also when the run hit -depth with hints left |
 | `-strict-exit` | bool |  | exit 3 for any failure, a target among many included (the rule before 0.15); without it a run that did its job exits 0 and its summary counts and lists the failures |
 
 <details>
-<summary>Other names, flags accepted with no effect and rarely used flags (79)</summary>
+<summary>Other names, flags accepted with no effect and rarely used flags (80)</summary>
 
 | Flag | Type | Default | Meaning | Kind |
 | --- | --- | --- | --- | --- |
@@ -231,6 +233,7 @@ The summary and the exit codes are `run`'s: see [run](run.md#summary-and-exit-co
 | `-facts` | string |  | JSONL connector facts to ingest before native collectors | rarely needed |
 | `-ob` | bool |  | with -sr: write the status line and headers only | rarely needed |
 | `-obs` | bool |  | also print the observation log | rarely needed |
+| `-params-all` | bool |  | with -params, also search the pages a request of the run showed to read no name: one that answered as a path that cannot exist does, or refused (401, 403, 405); by default a note lists them | rarely needed |
 | `-params-chunk` | int |  | names per parameter request at most (0: 500, and about 7.6 KB in a query; fewer where the server refuses a long query) | rarely needed |
 | `-params-delay` | duration |  | wait before each parameter request, one at a time (arjun -d) | rarely needed |
 | `-params-include` | string |  | sent with every parameter request: a query for GET; for a body a form, a JSON object or XML, or a template with $arjun$ where the names go | rarely needed |

@@ -29,35 +29,36 @@ import (
 // what failed, what was left alone and why, and whether the work is
 // complete. With -json it is one JSON object with "type":"summary".
 type report struct {
-	Type        string           `json:"type"`
-	Command     string           `json:"command"`
-	Version     string           `json:"version"`
-	Complete    bool             `json:"complete"`
-	Exit        int              `json:"exit"`
-	Results     int              `json:"results"`
-	LeftOut     int              `json:"left_out,omitempty"` // run -no-catchall: stored rows left out of the output and of results
-	Stored      int              `json:"stored,omitempty"`   // run: the map rows the database holds, before templates fold; the counts add up to it
-	Folded      *int             `json:"folded,omitempty"`   // run: stored rows a printed row holds (templated URLs, dead names): results + folded + left_out = stored
-	Counts      map[string]int   `json:"counts,omitempty"`
-	Seconds     float64          `json:"seconds"`
-	Requests    int64            `json:"requests"`              // sent to targets
-	DNSQueries  int64            `json:"dns_queries,omitempty"` // sent to resolvers, retries and wildcard probes included; the ledger's dns lines
-	DB          string           `json:"db,omitempty"`
-	RunID       string           `json:"run_id,omitempty"`
-	Unreachable []string         `json:"unreachable,omitempty"`
-	Failures    int              `json:"failures"` // the sum of count over failed, plus unreachable targets it does not name: see decide
-	Failed      []engine.Failure `json:"failed,omitempty"`
-	Skipped     []engine.Skip    `json:"skipped,omitempty"`
-	Takeover    []takeoverRow    `json:"takeover,omitempty"`    // names another party may take over
-	Degraded    bool             `json:"degraded,omitempty"`    // a source the run depends on failed (subs); the exit code is 3
-	DegradedBy  []degradedBy     `json:"degraded_by,omitempty"` // with degraded: each failed source, its reason and how many domains
-	Junk        map[string]int   `json:"junk,omitempty"`        // urls: URLs left out as junk, by reason (-raw keeps them)
-	Sources     *sourceHealth    `json:"sources,omitempty"`     // subs and urls: how many sources answered, which failed and why, what each gave
-	Stopped     string           `json:"stopped,omitempty"`     // the limit that stopped the work
-	Resume      string           `json:"resume,omitempty"`
-	Notes       []string         `json:"notes,omitempty"`
-	Next        []string         `json:"next,omitempty"`
-	Error       string           `json:"error,omitempty"` // an internal error: the summary disagrees with its rows (audit.go); exit 1
+	Type        string             `json:"type"`
+	Command     string             `json:"command"`
+	Version     string             `json:"version"`
+	Complete    bool               `json:"complete"`
+	Exit        int                `json:"exit"`
+	Results     int                `json:"results"`
+	LeftOut     int                `json:"left_out,omitempty"` // run -no-catchall: stored rows left out of the output and of results
+	Stored      int                `json:"stored,omitempty"`   // run: the map rows the database holds, before templates fold; the counts add up to it
+	Folded      *int               `json:"folded,omitempty"`   // run: stored rows a printed row holds (templated URLs, dead names): results + folded + left_out = stored
+	Counts      map[string]int     `json:"counts,omitempty"`
+	Folds       []engine.FoldGroup `json:"folds,omitempty"` // run: the rows by fold class, with the control a catch-all answer was compared with
+	Seconds     float64            `json:"seconds"`
+	Requests    int64              `json:"requests"`              // sent to targets
+	DNSQueries  int64              `json:"dns_queries,omitempty"` // sent to resolvers, retries and wildcard probes included; the ledger's dns lines
+	DB          string             `json:"db,omitempty"`
+	RunID       string             `json:"run_id,omitempty"`
+	Unreachable []string           `json:"unreachable,omitempty"`
+	Failures    int                `json:"failures"` // the sum of count over failed, plus unreachable targets it does not name: see decide
+	Failed      []engine.Failure   `json:"failed,omitempty"`
+	Skipped     []engine.Skip      `json:"skipped,omitempty"`
+	Takeover    []takeoverRow      `json:"takeover,omitempty"`    // names another party may take over
+	Degraded    bool               `json:"degraded,omitempty"`    // a source the run depends on failed (subs); the exit code is 3
+	DegradedBy  []degradedBy       `json:"degraded_by,omitempty"` // with degraded: each failed source, its reason and how many domains
+	Junk        map[string]int     `json:"junk,omitempty"`        // urls: URLs left out as junk, by reason (-raw keeps them)
+	Sources     *sourceHealth      `json:"sources,omitempty"`     // subs and urls: how many sources answered, which failed and why, what each gave
+	Stopped     string             `json:"stopped,omitempty"`     // the limit that stopped the work
+	Resume      string             `json:"resume,omitempty"`
+	Notes       []string           `json:"notes,omitempty"`
+	Next        []string           `json:"next,omitempty"`
+	Error       string             `json:"error,omitempty"` // an internal error: the summary disagrees with its rows (audit.go); exit 1
 	// StateChanging are the GET requests whose own name or description
 	// declares a state change: the ones among the targets, named before
 	// anything was sent, and the ones found on the way (an API
@@ -103,6 +104,7 @@ type report struct {
 	targets    targetTally // the targets the run was given and how many of them got no answer (exit.go)
 
 	noCatchAll bool // run -no-catchall: its rows of the catch-all page are left out of results
+	foldView   bool // run's text view: the folded rows are counted in a line of their class each, and results counts those lines
 	start      time.Time
 
 	// hints are measured suggestions, printed as "next:" lines for a person
@@ -197,6 +199,9 @@ func (r *report) print(w io.Writer) {
 			// A templated row holds many URLs, a dead-names row many names:
 			// the counts are of the stored rows, so they add up to more.
 			list = fmt.Sprintf("%d stored: %s; %d folded into templated rows", r.Stored, list, *r.Folded)
+			if r.foldView && len(r.Folds) > 0 {
+				list += ", and into the lines of the folded classes"
+			}
 		}
 		head[0] += " (" + list + ")"
 	}
@@ -404,6 +409,7 @@ func fillReport(rep *report, path string, seeds []types.Seed, ents []types.Entit
 		rep.warned = rep.warned || loose // wildcard answers among the paths: not a calibrated list
 	}
 	rep.Notes = append(rep.Notes, fetch.Notes()...)
+	rep.Notes = append(rep.Notes, egress.GuessNotes()...)
 	if partialShots(obs) {
 		rep.warned = true // a picture short of its page is not a result to take as whole
 	}
@@ -427,7 +433,33 @@ func fillReport(rep *report, path string, seeds []types.Seed, ents []types.Entit
 	if rep.noCatchAll {
 		shown = withoutCatchAll(rows, engine.CatchAllHeldIDs(obs))
 	}
-	rep.Results = len(engine.GroupTemplates(shown))
+	folder := engine.NewFolder(obs)
+	listed, foldedRows := folder.Split(shown)
+	rep.Folds = folder.Groups(foldedRows)
+	if rep.foldView {
+		rep.Results = len(engine.GroupTemplates(listed)) + len(rep.Folds)
+	} else {
+		rep.Results = len(engine.GroupTemplates(shown))
+	}
+	if len(foldedRows) > 0 {
+		var parts []string
+		for _, class := range engine.FoldClasses {
+			n := 0
+			for _, g := range rep.Folds {
+				if g.Class == class {
+					n += g.Count
+				}
+			}
+			if n > 0 {
+				parts = append(parts, fmt.Sprintf("%d %s", n, class))
+			}
+		}
+		how := fmt.Sprintf("%d rows are counted in %d lines of the output", len(foldedRows), len(rep.Folds))
+		if !rep.foldView {
+			how = "each row's fold names its class"
+		}
+		rep.Notes = append(rep.Notes, fmt.Sprintf("folded by what the run's requests measured: %s (%s; -all-rows lists every row; the summary's folds name the control each catch-all answer matched)", strings.Join(parts, ", "), how))
+	}
 	if rep.noCatchAll {
 		shownBy := map[string]int{}
 		for _, r := range shown {

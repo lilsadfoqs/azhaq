@@ -99,13 +99,57 @@ func TestIDERecoveryStopsWhenTheOriginsSchemaArrives(t *testing.T) {
 	}
 }
 
-// Alone on its origin, a page that validates queries is recovered in full.
-func TestIDERecoveryWithoutAnotherEndpoint(t *testing.T) {
+// A page that refuses the schema query and its short form the same way, in
+// words that say nothing of GraphQL's own rules, is dropped after those two
+// POSTs, alone on its origin or not, and the summary names it.
+func TestIDEPageThatRefusesTwiceTheSameWayIsDropped(t *testing.T) {
 	fetch.Reset()
 	srv, idePosts := ideServer(t, nil)
 	detect(t, srv, "/graphiql")
 	got, _ := run(t, NewSchema(srv.Client()), srv.URL+"/graphiql")
-	if got["recovered"] != "suggestions" || idePosts.Load() < 4 {
-		t.Errorf("recovery of a lone IDE page: %d POSTs, %v", idePosts.Load(), got)
+	if got != nil || idePosts.Load() != 2 {
+		t.Errorf("a page refusing alike: %d POSTs, %v", idePosts.Load(), got)
+	}
+	var noted bool
+	for _, n := range fetch.Notes() {
+		noted = noted || strings.Contains(n, "/graphiql") && strings.Contains(n, "refused the schema query twice the same way (400") && strings.Contains(n, "GraphiQL Access Rejected")
+	}
+	if !noted {
+		t.Errorf("no note names the dropped page: %v", fetch.Notes())
+	}
+}
+
+// A refusal that names introspection is the server's own rule, not a gate:
+// the page is still recovered from what its errors say.
+func TestPageThatBlocksIntrospectionByRuleIsRecovered(t *testing.T) {
+	fetch.Reset()
+	var posts atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			w.Header().Set("Content-Type", "text/html")
+			_, _ = w.Write([]byte(`<html><title>GraphiQL</title></html>`))
+			return
+		}
+		posts.Add(1)
+		var q struct{ Query string }
+		_ = json.NewDecoder(r.Body).Decode(&q)
+		w.WriteHeader(http.StatusBadRequest)
+		var errs []map[string]string
+		if strings.Contains(q.Query, "__schema") {
+			errs = append(errs, map[string]string{"message": `Cannot query field "__schema" on type "Query".`})
+		}
+		for _, f := range strings.Fields(strings.Trim(strings.SplitN(q.Query, "{", 2)[1], " }")) {
+			if f != "me" && f != "users" && f != "__schema" {
+				errs = append(errs, map[string]string{"message": `Cannot query field "` + f + `" on type "Query".`})
+			}
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"errors": errs})
+	}))
+	t.Cleanup(srv.Close)
+	p := "/graphql"
+	detect(t, srv, p)
+	got, _ := run(t, NewSchema(srv.Client()), srv.URL+p)
+	if got["recovered"] != "suggestions" || posts.Load() < 4 {
+		t.Errorf("recovery of a page that blocks introspection by rule: %d POSTs, %v", posts.Load(), got)
 	}
 }

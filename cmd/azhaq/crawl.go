@@ -37,7 +37,7 @@ func cmdCrawl(args []string) error {
 	fs.Var(&urls, "u", "start URL (repeatable, or comma-separated)")
 	list := onceString(fs, "l", "file of start URLs (- for stdin)")
 	given := inherit(fs, append([]string{"depth", "max-items", "parallel", "host-parallel", "delay", "paths", "browser", "browser-writes", "chrome-no-sandbox",
-		"login", "login-user", "login-pass", "per-template", "proxy", "retry", "backoff", "cookie-jar", "host-rate", "max-host-requests", "request-timeout", "max-response-size", "submit-forms", "path-climb", "no-map-guess", "interact", "interact-clicks", "resolvers", "no-follow",
+		"login", "login-user", "login-pass", "per-template", "proxy", "retry", "backoff", "cookie-jar", "host-rate", "max-host-requests", "request-timeout", "max-response-size", "submit-forms", "host-guesses", "path-climb", "no-map-guess", "interact", "interact-clicks", "resolvers", "no-follow",
 		"kf=known-files", "fs=crawl-scope", "ns=crawl-any-host", "c=host-parallel", "p=parallel", "rl=rate", "ct=timeout", "dr=no-follow", "r=resolvers"},
 		targetFlags...)...)
 	var inScope, outScope stringsFlag
@@ -61,6 +61,7 @@ func cmdCrawl(args []string) error {
 	d := fs.Int("d", -1, "katana's -d: link levels below the start URL to visit (3 by default); -depth N is -d N-1")
 	assets := fs.Bool("assets", false, "also list the images, fonts and media pages load (listed as linked: the crawl does not request them), and the source maps and build manifests azhaq reads (scripts and stylesheets are listed by default, as katana lists them)")
 	noShell := fs.Bool("no-catchall", false, "leave out URLs that answer with the page every unknown path gets (client-side routes of a single-page app)")
+	allRows := fs.Bool("all-rows", false, "list every row, as katana does: by default the rows that answer as the control request for a path that cannot exist does, the 404s and the assets no request asked for are counted in the summary in one line of their class each (-json lists every row with its fold class)")
 	sweep := fs.Bool("sweep", false, "also ask each web service for the 51 built-in paths (robots.txt, sitemaps, API descriptions, .git/HEAD, admin, …) and for the source map next to each script, as run does; crawl asks only what a crawler does")
 	showOut := fs.Bool("do", false, "also list the URLs found and left out of the crawl's scope (never requested)")
 	hints := fs.Bool("hints", false, "also list the hints (routes with a parameter, views and sockets, routes scripts or descriptions give a method other than GET) and the named URLs (named by scripts or descriptions, or only in scripts); by default the URLs the crawl requested and the URLs pages link to or load are listed")
@@ -213,6 +214,12 @@ func cmdCrawl(args []string) error {
 		return err
 	}
 	facts, rejected, offsite := crawlFacts(obs)
+	// A text list leaves out the rows the crawl's own requests show to say
+	// nothing of a route, and the summary counts each class apart; -json
+	// lists every row and marks it. What the user asked to list stays.
+	folder := engine.NewFolder(obs)
+	foldView := !*allRows && !c.json && !outOpts.jsonl
+	var foldedRows, classed []engine.MapEntry // the rows left out of the list; every listed or left out row with a class
 	counts := map[string]int{}
 	var otherMethod, scriptsOnly, linkedListed, extLeft, filterLeft int
 	// Every URL row has one fate: listed, or left out for one reason, so the
@@ -245,6 +252,13 @@ func cmdCrawl(args []string) error {
 			notURLs++
 			continue // a view the app draws, a socket: no page a GET gets; -json lists them
 		}
+		fc := folder.Class(r)
+		// A hint or a named URL is listed only because -hints asks for it.
+		if fc != "" && foldView && listedClass(r) && !(fc == engine.FoldBeyondDepth && (outOpts.showAssets || outOpts.assets)) && out.keep(r.Entity.Key) {
+			foldedRows = append(foldedRows, r)
+			classed = append(classed, r)
+			continue
+		}
 		if !out.keep(r.Entity.Key) {
 			if out.byDefaultList(r.Entity.Key) {
 				extLeft++
@@ -267,7 +281,11 @@ func cmdCrawl(args []string) error {
 		case r.Coverage == "hint" && len(r.Methods) == 0 && strings.HasSuffix(r.Proof, engine.ProofScriptsOnly):
 			scriptsOnly++
 		}
-		out.write(r, facts[r.Entity.Key])
+		fact := facts[r.Entity.Key]
+		if fact.fold = fc; fc != "" {
+			classed = append(classed, r)
+		}
+		out.write(r, fact)
 	}
 	if *showOut {
 		for _, o := range offsite {
@@ -300,6 +318,19 @@ func cmdCrawl(args []string) error {
 	}
 	if extLeft > 0 {
 		counts["left out by the extension list"] = extLeft
+	}
+	rep.Folds = folder.Groups(classed)
+	for _, g := range folder.Groups(foldedRows) {
+		counts["folded "+g.Class] += g.Count
+	}
+	if len(foldedRows) > 0 {
+		for _, g := range folder.Groups(foldedRows) {
+			note := fmt.Sprintf("%s (-all-rows lists them; -json marks each row's fold)", g.Line())
+			rep.Notes = append(rep.Notes, note)
+			if c.silent && !c.json {
+				fmt.Fprintln(os.Stderr, "azhaq crawl: "+note)
+			}
+		}
 	}
 	if filterLeft > 0 {
 		counts["left out by -em, -ef, -mr, -fr"] = filterLeft
@@ -349,8 +380,8 @@ func cmdCrawl(args []string) error {
 	// scope is listed or left out for one reason, and the kinds are one split of
 	// the same rows.
 	byClass := kinds.observed + kinds.linked + kinds.hints + kinds.named
-	rep.holds("the URL rows counted by class, against the rows listed and the rows left out", byClass,
-		listedRows+extLeft+filterLeft+hintsHeld+namedHeld+notURLs)
+	rep.holds("the URL rows counted by class, against the rows listed, the rows folded and the rows left out", byClass,
+		listedRows+extLeft+filterLeft+hintsHeld+namedHeld+notURLs+len(foldedRows))
 	rep.holds("requested + not requested + templates, against the URL rows counted by class", kinds.requested+kinds.notRequested+kinds.templates, byClass)
 	if !outOpts.jsonl && outOpts.tmpl == "" && len(outOpts.fields) == 0 {
 		rep.holds("results, against the rows listed and the other lines printed", rep.Results, listedRows+extraLines)
@@ -448,6 +479,7 @@ type crawlFact struct {
 	tag, attr, source string
 	tech              []string
 	length            int
+	fold              string // -json: the row's fold class
 }
 
 type outLink struct{ url, source, tag, attr string }
@@ -816,6 +848,9 @@ func (c *crawlOutput) write(r engine.MapEntry, f crawlFact) {
 		row := mapRowJSON(r)
 		row["url"] = key
 		row["class"] = crawlClass(r)
+		if f.fold != "" {
+			row["fold"] = f.fold
+		}
 		delete(row, "key")
 		delete(row, "type")
 		if len(f.tech) > 0 {
@@ -1102,4 +1137,11 @@ func askedNote(by map[int]int) string {
 		parts[i] = fmt.Sprintf("%d answered %d", by[c], c)
 	}
 	return " (asked: " + strings.Join(parts, ", ") + ")"
+}
+
+// listedClass: the row is one the default list holds, a URL the crawl requested
+// or a page links or loads.
+func listedClass(r engine.MapEntry) bool {
+	c := crawlClass(r)
+	return c == classObserved || c == classLinked
 }

@@ -1,7 +1,6 @@
 package ledger
 
 import (
-	"context"
 	"sync"
 	"sync/atomic"
 )
@@ -75,6 +74,3 @@ func Stage() string {
 // SignIn is the collector Chrome's sign-in requests are sent under: the account
 // keeps them apart from the work they were made for.
 const SignIn = "sign-in"
-
-// CollectorOf is the collector ctx was marked with (WithCollector), or "".
-func CollectorOf(ctx context.Context) string { return collectorOf(ctx) }

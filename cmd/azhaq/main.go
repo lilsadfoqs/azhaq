@@ -300,6 +300,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	maxItems := fs.Int("max-items", 0, "most collector tasks (a name, a URL, an address each, per collector) this run starts (default: no cap, katana's and httpx's); the work left is for azhaq resume, which starts as many more")
 	catchAfter := fs.Int("catchall-after", fetch.CatchAllStop, "stop asking the paths scripts name in a directory once this many of them have answered with the page every unknown path gets, before as many have answered anything else; they stay in the map as skipped (0: ask them all)")
 	noCatchAll := fs.Bool("no-catchall", false, "leave out URLs that answer with the page every unknown path gets (client-side routes of a single-page app) from the rows printed")
+	allRows := fs.Bool("all-rows", false, "list every row, as run printed before: by default the rows that answer as the control request for a path that cannot exist does, the 404s, the assets no request asked for and the hints only scripts name are counted in one line of their class each (-json lists every row with its fold class)")
 	perTmpl := fs.Int("per-template", 0, "URLs of one template (/product?id={n}) to request; the rest are listed (default: all)")
 	maxRequests := fs.Int64("max-requests", 0, "requests to targets this run may send (0: no cap); the work left over is for azhaq resume")
 	rateFlag := fs.Float64("rate", 0, "requests per second to targets, over all hosts (0: no pace)")
@@ -323,6 +324,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	backoff := fs.Bool("backoff", false, "when a host answers 429 or 503, wait (1 s doubling to 30 s, or its Retry-After) and ask again, up to 3 times; the summary says which hosts did")
 	cookieJar := fs.Bool("cookie-jar", false, "carry the cookies targets set (Set-Cookie) on the requests that follow, as a browser does; -cookie and -header values go first")
 	hostRate := fs.Float64("host-rate", 0, "requests per second to each host, besides -rate over all (0: none)")
+	hostGuesses := fs.Int64("host-guesses", 0, "most guesses one host is sent (0: no cap): requests for the built-in paths, a -dirs or -params wordlist or GraphQL field names; the rest are not asked and the summary lists them, the run exits 4 and azhaq resume asks them with a larger value")
 	maxHostReq := fs.Int64("max-host-requests", 0, "requests one host may be sent (0: no cap); the rest of its work is left for azhaq resume")
 	reqTimeout := fs.Duration("request-timeout", 0, "time one request gets, headers and body (default: 10 s for headers, 30 s in all; not -timeout, the run's bound)")
 	maxResp := fs.Int("max-response-size", 0, "bytes read of a page or document (default 2097152; scripts and JSON get 16 MiB)")
@@ -376,6 +378,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	dirsRate := fs.Float64("dirs-rate", 0, "path guesses per second per host (0: no limit but -dirs-threads, as ffuf)")
 	paramsFile := fs.String("params", "", "find query parameters pages read, from this wordlist or small, medium or large for a built-in one (active; the targets given are the scope unless -allow)")
 	paramsPerHost := fs.Int("params-per-host", 20, "pages searched for parameters per host")
+	paramsAll := fs.Bool("params-all", false, "with -params, also search the pages a request of the run showed to read no name: one that answered as a path that cannot exist does, or refused (401, 403, 405); by default a note lists them")
 	paramsRate := fs.Float64("params-rate", 0, "parameter requests per second per host (0: no limit, as arjun)")
 	paramsThreads := fs.Int("params-threads", 5, "parameter requests in flight per page (as arjun -t); 1 with -params-delay and -params-stable")
 	paramsChunk := fs.Int("params-chunk", 0, "names per parameter request at most (0: 500, and about 7.6 KB in a query; fewer where the server refuses a long query)")
@@ -469,6 +472,8 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	fetch.UseJar(*cookieJar)
 	fetch.SetHostRate(*hostRate)
 	fetch.MaxPerHost = *maxHostReq
+	egress.SetHostGuesses(*hostGuesses)
+	defer egress.SetHostGuesses(0)
 	fetch.RequestTimeout = *reqTimeout
 	if *maxResp > 0 {
 		fetch.MaxBody = *maxResp
@@ -992,7 +997,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		}
 		opts.Params = paramcol.Options{Words: words, PerHost: *paramsPerHost, Rate: *paramsRate,
 			Threads: *paramsThreads, Chunk: *paramsChunk, Method: method, Writes: *paramsWrites, Include: *paramsInclude,
-			Delay: *paramsDelay, Stable: *paramsStable, Timeout: *paramsTimeout, Targets: targets}
+			Delay: *paramsDelay, Stable: *paramsStable, Timeout: *paramsTimeout, Targets: targets, All: *paramsAll}
 	}
 	if *dirsFile != "" {
 		var words []string
@@ -1183,6 +1188,8 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	send.dirsWords, send.dirsExts, send.paramsN, send.bruteN = len(opts.Dirs.Words), len(opts.Dirs.Extensions), len(opts.Params.Words), len(opts.BruteWords)
 	send.dirsNoCal = opts.Dirs.NoCalibration
 	send.verify = verifyFl.on
+	send.hostGuesses = *hostGuesses
+	send.paramsWords, send.paramsPages = len(opts.Params.Words), *paramsPerHost
 	// The GETs among the targets whose own name declares a state change
 	// are named before anything is sent: in a plan's list, and in a run's
 	// first lines and summary. Nothing is withheld by naming them.
@@ -1398,12 +1405,26 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	if *noCatchAll {
 		shown = withoutCatchAll(rows, engine.CatchAllHeldIDs(obs))
 	}
+	// The default text view counts the rows the run's own requests show
+	// to say nothing of a route in a line of their class each.
+	foldView := !*allRows && !*jsonOut
+	folder := engine.NewFolder(obs)
+	var foldGroups []engine.FoldGroup
+	if foldView {
+		var folded []engine.MapEntry
+		shown, folded = folder.Split(shown)
+		foldGroups = folder.Groups(folded)
+	}
 	switch {
 	case *quiet || out.embedded:
 	case *jsonOut:
 		enc := json.NewEncoder(os.Stdout)
 		for _, r := range engine.GroupTemplates(shown) {
-			if err := enc.Encode(mapRowJSON(r)); err != nil {
+			row := mapRowJSON(r)
+			if c := folder.Class(r); c != "" {
+				row["fold"] = c
+			}
+			if err := enc.Encode(row); err != nil {
 				return err
 			}
 			rep.emitted().add(countKey(r), heldBy(r))
@@ -1435,6 +1456,10 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		}
 	default:
 		printMap(shown, rep)
+		for _, g := range foldGroups {
+			rep.emitted().addGroup(g.Rows, countKey)
+			fmt.Printf("  %s\n", g.Line())
+		}
 		for _, lead := range advLeads {
 			fmt.Printf("  %s\n", lead.Line())
 		}
@@ -1449,6 +1474,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		}
 	}
 	rep.noCatchAll = *noCatchAll
+	rep.foldView = foldView
 	fillReport(rep, path, seeds, ents, obs, rows)
 	if !out.plan {
 		// The ones found on the way: an API description's GET whose own

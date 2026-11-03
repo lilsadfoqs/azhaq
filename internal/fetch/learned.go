@@ -1,6 +1,10 @@
 package fetch
 
-import "sync"
+import (
+	"net/url"
+	"strings"
+	"sync"
+)
 
 var (
 	learnedMu sync.Mutex
@@ -38,4 +42,15 @@ func resetLearned() {
 	learnedMu.Lock()
 	learned = map[string]string{}
 	learnedMu.Unlock()
+}
+
+// PageAnswerFact is where a run keeps what the answer to a page asked bare
+// (no query) showed of it: that it was the one its origin gives a path that
+// cannot exist, or a refusal. The key is the page's scheme, host and path.
+func PageAnswerFact(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return ""
+	}
+	return "page answer " + strings.ToLower(u.Scheme+"://"+u.Host) + u.EscapedPath()
 }

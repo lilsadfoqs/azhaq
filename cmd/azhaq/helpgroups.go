@@ -34,9 +34,9 @@ var helpSpecs = map[string]helpSpec{
 			{"Names and sources", `sources all-sources exclude-sources providers resolvers dns-rate source-proxy source-rate source-rates source-timeout max-time max-body max-results urls-timeout no-history`},
 			{"Browser", `browser interact interact-clicks screenshots chrome chrome-profile chrome-proxy chrome-no-sandbox chrome-require-sandbox tabs unsafe-ports`},
 			{"Scope and safety", `allow sweep deny deny-path kill-file ledger seal-to submit-forms browser-writes params-writes`},
-			{"Pace and limits", `rate host-rate host-parallel parallel delay backoff retry request-timeout timeout max-requests max-host-requests daily-requests max-items max-names max-ips max-response-size depth retry-failed retry-run`},
+			{"Pace and limits", `rate host-rate host-parallel parallel delay backoff retry request-timeout timeout max-requests max-host-requests host-guesses daily-requests max-items max-names max-ips max-response-size depth retry-failed retry-run`},
 			{"Session", `cookie cookie-jar header login login-user login-pass proxy`},
-			{"Output", `db json quiet v stream sr srd no-catchall fail-on-errors fail-on-capped strict-exit`},
+			{"Output", `db json quiet v stream sr srd no-catchall all-rows fail-on-errors fail-on-capped strict-exit`},
 		},
 		hidden: map[string]string{
 			"alias":    `H`,
@@ -45,7 +45,7 @@ var helpSpecs = map[string]helpSpec{
 				ob
 				port-exclude-cdn serve worker-token dirs-ac dirs-depth dirs-ext dirs-fc dirs-fl dirs-fr dirs-fs dirs-fw dirs-mc dirs-ml dirs-mr dirs-ms
 				dirs-mw dirs-rate dirs-threads facts obs params-chunk params-delay params-include params-method
-				params-per-host params-rate params-stable params-targets params-threads params-timeout
+				params-all params-per-host params-rate params-stable params-targets params-threads params-timeout
 				port-all-ips port-detect port-discover port-ip port-min-rate port-order port-payload port-proxy
 				port-proxy-auth port-rate port-retries port-seed port-source-ip port-threshold port-timeout
 				port-unnamed port-workers shot-codes shot-format shot-fullpage shot-html shot-js shot-quality
@@ -164,9 +164,9 @@ var helpSpecs = map[string]helpSpec{
 		groups: []helpGroup{
 			{"Targets and input", `u l scope program`},
 			{"What to ask", `d paths sweep no-form-fill per-template no-follow no-map-guess browser interact interact-clicks fs kf`},
-			{"What to list", `assets hints no-catchall rejected em ndef do`},
+			{"What to list", `assets hints no-catchall all-rows rejected em ndef do`},
 			{"Scope and safety", `allow deny deny-path kill-file ledger submit-forms browser-writes chrome-no-sandbox`},
-			{"Pace and limits", `rl delay backoff retry host-rate hrl host-parallel parallel request-timeout ct max-requests max-host-requests max-items max-response-size`},
+			{"Pace and limits", `rl delay backoff retry host-rate hrl host-parallel parallel request-timeout ct max-requests max-host-requests host-guesses max-items max-response-size`},
 			{"Session and network", `H cookie cookie-jar login login-user login-pass proxy resolvers`},
 			{"Output", `db o json jsonl f ot silent v strict-exit`},
 		},

@@ -10,6 +10,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -205,11 +206,18 @@ func (s *Schema) Run(ctx context.Context, seed types.Seed, emit func(types.Obser
 		// Refused for its depth or cost, cut short, blocked for its size or
 		// one of its fields: the names are still worth a second ask. A
 		// server that turned introspection off is not asked again.
+		firstStatus, firstData := status, data
 		if status, data, err = s.post(ctx, raw, short); err != nil {
 			return failed(err)
 		}
 		_, sc, ok = gqlschema.Read(data)
 		full = nil
+		if !ok && refusedAlike(firstStatus, firstData, status, data) {
+			// A refusal that does not depend on the query is the page's, not
+			// a schema's: more queries would get it again.
+			fetch.Note(fmt.Sprintf("GraphQL %s: refused the schema query twice the same way (%d %s): dropped, nothing more was sent to it", raw, status, snippet(data)))
+			return types.RunMeta{Status: types.StatusOK}, nil
+		}
 	}
 	if !ok {
 		// Introspection is off or refused: the fields the server's errors
@@ -227,6 +235,27 @@ func (s *Schema) Run(ctx context.Context, seed types.Seed, emit func(types.Obser
 	}
 	row["url"], row["role"], row["status"] = raw, "graphql", status
 	return one(emit, raw, "graphql", row)
+}
+
+// refusedAlike says whether two refusals of different queries are one: the
+// same status (an error) and the same body, which says nothing of GraphQL's
+// own validation or of introspection (a server that blocks introspection says
+// which field or feature it blocks). It is a gate in front of the endpoint.
+func refusedAlike(s1 int, b1 []byte, s2 int, b2 []byte) bool {
+	if s1 < 400 || s1 != s2 || !bytes.Equal(bytes.TrimSpace(b1), bytes.TrimSpace(b2)) {
+		return false
+	}
+	low := bytes.ToLower(b1)
+	return !bytes.Contains(low, []byte("__schema")) && !bytes.Contains(low, []byte("introspection")) && !bytes.Contains(low, []byte("cannot query field"))
+}
+
+// snippet is the start of an answer, for a note.
+func snippet(b []byte) string {
+	s := strings.Join(strings.Fields(string(b)), " ")
+	if len(s) > 80 {
+		s = s[:80] + "…"
+	}
+	return fmt.Sprintf("%q", s)
 }
 
 // MaxRecoveryPOSTs is how many validation queries recovering a schema may

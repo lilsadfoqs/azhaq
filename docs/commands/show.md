@@ -75,7 +75,9 @@ Three kinds of word are tried, in this order:
 - The exports mark it as partial (see [export](export.md#graphql-and-sdl)). A whole schema read by introspection is not marked.
 - Every document asked carries a field no schema has, so none passes validation and nothing runs.
 - Recovery sends at most 96 documents to one endpoint: 48 for the query type and 48 for the mutation type. `azhaq plan -graphql` says so.
-- A GraphiQL or Playground page (one whose GET served the IDE) is not asked for a schema once another URL of its origin gave one whole by introspection: no POST goes to it, or its recovery stops before the next document, and the summary notes `an IDE page, not asked for its schema`. With no such schema on its origin, the page is recovered as any endpoint is. A resume keeps what the run it continues learned.
+- A candidate whose answers to the introspection query and to its shorter form are the same refusal (the same error status and the same body, which names neither `__schema` nor introspection) is a gate in front of the endpoint, not a schema: it is sent those two POSTs and no more, dropped, and the summary names it (`refused the schema query twice the same way (400 "…"): dropped, nothing more was sent to it`). A server that blocks introspection by a rule of its own (its error names `__schema` or introspection, or says `Cannot query field`) is recovered as below.
+- Endpoints a script or a description names are asked before the ones only a path sweep found (`/graphql` before `/graphiql`), so a budget reads their schemas first.
+- A GraphiQL or Playground page (one whose GET served the IDE) is not asked for a schema once another URL of its origin gave one whole by introspection: no POST goes to it, or its recovery stops before the next document, and the summary notes `an IDE page, not asked for its schema`. With no such schema on its origin, the page is recovered as any endpoint is, unless it refuses twice the same way (above). A resume keeps what the run it continues learned.
 
 ## Flags
 
