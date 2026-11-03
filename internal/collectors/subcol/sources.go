@@ -157,7 +157,7 @@ func allSources() []source {
 		pd(func() subscraping.Source { return &c99.Source{} }, 0),
 		pd(func() subscraping.Source { return &censys.Source{} }, 0),
 		pd(func() subscraping.Source { return &chinaz.Source{} }, 0),
-		pd(func() subscraping.Source { return &commoncrawl.Source{} }, 0),
+		on(pd(func() subscraping.Source { return &commoncrawl.Source{} }, 0)),
 		pd(func() subscraping.Source { return &crtname.Source{} }, 0),
 		pd(func() subscraping.Source { return &digitalyama.Source{} }, 0),
 		off(pd(func() subscraping.Source { return &digitorus.Source{} }, 0)),
@@ -191,16 +191,16 @@ func allSources() []source {
 		pd(func() subscraping.Source { return &securitytrails.Source{} }, 2),
 		pd(func() subscraping.Source { return &shodan.Source{} }, 1),
 		pd(func() subscraping.Source { return &shodanct.Source{} }, 0),
-		pd(func() subscraping.Source { return &sitedossier.Source{} }, 8*perMinute),
+		on(pd(func() subscraping.Source { return &sitedossier.Source{} }, 8*perMinute)),
 		sampled(verified(pd(func() subscraping.Source { return &subdomaincenter.Source{} }, 0))),
 		off(pd(func() subscraping.Source { return &submd.Source{} }, 0)),
 		on(pd(func() subscraping.Source { return &thc.Source{} }, 0)),
 		pd(func() subscraping.Source { return &threatbook.Source{} }, 0),
-		pd(func() subscraping.Source { return &threatcrowd.Source{} }, 0),
+		off(pd(func() subscraping.Source { return &threatcrowd.Source{} }, 0)),
 		off(pd(func() subscraping.Source { return &threatminer.Source{} }, 0)),
 		pd(func() subscraping.Source { return &urlscan.Source{} }, 1),
 		pd(func() subscraping.Source { return &virustotal.Source{} }, 4*perMinute),
-		pd(func() subscraping.Source { return &waybackarchive.Source{} }, 15*perMinute),
+		on(pd(func() subscraping.Source { return &waybackarchive.Source{} }, 15*perMinute)),
 		pd(func() subscraping.Source { return &whoisxmlapi.Source{} }, 50),
 		pd(func() subscraping.Source { return &windvane.Source{} }, 0),
 		pd(func() subscraping.Source { return &zoomeyeapi.Source{} }, 0),
@@ -212,17 +212,22 @@ func allSources() []source {
 }
 
 // off takes a source out of the default set: it was dead or refused
-// every request when last checked (2026-10-26), and a run that always
-// reports the same failures teaches its reader to ignore failures.
-// -sources NAME or -all-sources still runs it.
+// every request when last checked (2026-11-03: digitorus answered 403,
+// threatminer 522, submd 523, and reconcloud, riddler and threatcrowd no
+// longer resolve), and a run that always reports the same failures
+// teaches its reader to ignore failures. -sources NAME or -all-sources
+// still runs it.
 func off(s source) source {
 	s.deflt = false
 	return s
 }
 
 // on puts a keyless source that answers into the default set, although
-// subfinder leaves it out of its own (checked 2026-10-27: rapiddns, thc
-// and hudsonrock answered for tesla.com with names the others lacked).
+// subfinder leaves it out of its own: rapiddns, thc and hudsonrock
+// answered for tesla.com with names the others lacked (2026-10-27), and
+// commoncrawl, sitedossier and waybackarchive are slow, not dead: each is
+// bounded by -source-timeout, so one of them cannot hold the run, and a
+// failure of one is a failed source of the summary, not of the result.
 func on(s source) source {
 	s.deflt = true
 	return s
@@ -313,9 +318,11 @@ func sampled(s source) source {
 			case len(fresh) == 0:
 				recordStop(ctx, stopSaturated)
 				return names, nil
-			case chk == nil:
+			case chk == nil && (n <= 1 || poolCovered(calls, len(seen))):
 				// Nothing to check them against: a second sample would only
-				// add more guesses.
+				// add more guesses, so one is taken, as subfinder takes it,
+				// unless -guess-samples asks for more, until the names seen
+				// are most of the pool.
 				recordStop(ctx, stopUnchecked)
 				return names, nil
 			}
@@ -325,10 +332,12 @@ func sampled(s source) source {
 				pending, cancelPending = ask()
 			}
 			t1 := time.Now()
-			before, _ := chk.totals()
-			st.Live = chk.check(cleaned(fresh, domain))
-			after, _ := chk.totals()
-			st.Asked = after - before
+			if chk != nil {
+				before, _ := chk.totals()
+				st.Live = chk.check(cleaned(fresh, domain))
+				after, _ := chk.totals()
+				st.Asked = after - before
+			}
 			took := time.Since(t1)
 			st.Seconds = round(took.Seconds())
 			recordStat(ctx, st)
@@ -370,7 +379,7 @@ func sampled(s source) source {
 // The last is a bound, not a finding: more samples may hold more names.
 const (
 	stopSaturated = "a call gave no name it had not given"
-	stopUnchecked = "the names are not looked up (no -live), so more samples would only add guesses"
+	stopUnchecked = "the names are not looked up (no -live), so more samples would only add guesses (-guess-samples N takes up to N)"
 	stopNoLive    = "the last sample had no new name that resolves, and the names seen are most of its estimated pool"
 	stopTime      = "its time was used"
 	stopBudget    = "another sample would not fit the 20 s budget for further samples"

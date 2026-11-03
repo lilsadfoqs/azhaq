@@ -408,7 +408,7 @@ httpx -l hosts.txt -json | azhaq ingest - -db acme.db
 ```
 azhaq subs -d example.com -live -dns-rate 5 -resolvers two.txt -source-rate 2 -db subs.db -json > names.jsonl
 azhaq subs -d example.com -live -m '*.dev.example.com' -oI
-azhaq subs -d example.com,example.org -guesses -json | jq 'select(.unverified | not)'
+azhaq subs -d example.com,example.org -json | jq 'select(.unverified | not)'
 ```
 
 The first line is `subfinder | dnsx` at a pace.
@@ -417,9 +417,9 @@ The first line is `subfinder | dnsx` at a pace.
 - `-source-rate` is requests a second to each passive source.
 - The summary's `counts` add up. `from sources`, less `did not resolve`, plus what DNS found as CNAME targets and the names `-w` asked, is `results`. The `count:` note writes the sum out.
 
-Without `-live` nothing is looked up in DNS. Names that only subdomain.center guessed, which no source asserted, are held back: they are not printed, and the summary counts them as `guesses held back`. `-guesses` prints them, with `"unverified": true`. A name that only the name history held, because no source gave it this run, is printed with `"unverified": true` too.
+Without `-live` nothing is looked up in DNS: every name the sources gave is printed as a raw candidate (`"tier": "candidate"`), and the summary counts none of them as confirmed. Names that only subdomain.center guessed, which no source asserted, carry `"unverified": true`; so does a name that only the name history held, because no source gave it this run. With `-live` the rows are the DNS-confirmed tier (`"tier": "dns"`), and the summary's `raw candidates` and `DNS-confirmed` show how many of the names the sources gave resolve.
 
-The last command prints the guesses and leaves every unverified name out. A name that is only a CNAME is listed with `-live` too, with `cname` and no `a`, as `dnsx -a -cname` lists it.
+The last command leaves every unverified name out. A name that is only a CNAME is listed with `-live` too, with `cname` and no `a`, as `dnsx -a -cname` lists it.
 
 **Catch:** subdomain.center answers a random 500 names per call, and its real names differ between calls. Two runs list different names. A run asks it again while a round gives a new name that resolves, and until the names seen are most of the pool its repeats estimate: a round with no new live name says little while a name in twenty is unseen. The name history brings back names an earlier run found.
 

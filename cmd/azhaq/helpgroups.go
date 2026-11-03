@@ -81,9 +81,9 @@ var helpSpecs = map[string]helpSpec{
 	"subs": {
 		groups: []helpGroup{
 			{"Targets and input", `d dL`},
-			{"What to ask", `live guesses guess-samples w permute all-sources sources m providers`},
+			{"What to ask", `live http guesses guess-samples w permute all-sources sources m providers`},
 			{"Pace and limits", `source-rate source-rates source-timeout max-time max-body max-results max-names dns-rate t timeout`},
-			{"Network", `resolvers proxy`},
+			{"Network", `resolvers proxy web-ports http-proxy`},
 			{"Output", `db ledger json o oI silent v fail-on-errors ls stats no-history`},
 		},
 		hidden: map[string]string{
