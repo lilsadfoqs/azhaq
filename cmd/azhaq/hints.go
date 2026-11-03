@@ -19,7 +19,7 @@ import (
 // -json or -jsonl, nor when stderr is not a terminal unless -v is given.
 
 // maxHints is how many hint lines a summary holds.
-const maxHints = 2
+const maxHints = 3
 
 // hintTerminal says whether stderr is a terminal; a test replaces it.
 var hintTerminal = stderrIsTerminal

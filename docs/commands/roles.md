@@ -166,6 +166,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 - A role whose run could not be done, such as a failed sign-in, ends `roles` with a summary whose `notes` say why.
 - `requests` in the summary is every request `roles` sent to the targets: the roles' runs, the Chrome sign-ins (the first and each renewal), the replays and every redirect hop they followed. It equals the target lines of `roles.ledger.jsonl`, or of the file `-ledger` names in the run options (`-- -ledger FILE`): one ledger for the whole command, written by the runs and by everything `roles` sends between them, sealed at the end. `-ledger off` writes none. A role's own summary line counts that role's run only, so they add up to less.
 - `cost` sets the estimate of each stage beside what it sent, as for [run](run.md#summary-and-exit-codes): see [Cost by stage](#cost-by-stage).
+- A run that replayed no write, whose `-har` or `-burp` histories hold POST, PUT or PATCH requests, ends its `next` with `azhaq roles … -replay-writes post,put,patch   (next pass, not run: N writes in the histories were not replayed with the other roles' sessions: about R more requests, and each changes data on the target)`. `R` is each write sent with every other role's session and the owner's object read around it, as [Cost by stage](#cost-by-stage) counts them. It is a line: nothing is replayed for it.
 - With `-json`, stderr holds the summary only. The roles' runs print nothing. The summary says what they did not finish: `failed`, `unreachable`, `skipped` and `notes`.
 
 ## Details

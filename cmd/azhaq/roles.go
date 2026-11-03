@@ -731,6 +731,11 @@ func cmdRoles(args []string) error {
 		rep.Notes = append(rep.Notes, fmt.Sprintf("%d more endpoints compared and not listed (%s); -all lists them", n, strings.Join(parts, ", ")))
 	}
 	rep.Results, rep.Counts = len(shown), counts
+	if methods == nil && rep.Stopped == "" && !rep.warned {
+		if why, _ := writesPass(costIn, own); why != "" {
+			rep.nextPass(writesPassCommand(args), why)
+		}
+	}
 	counted()
 	rep.Cost = accountCost(rep.estimate, rep.spentFrom, rolesStages)
 	if cmdMax > 0 {

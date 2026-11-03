@@ -169,7 +169,7 @@ func sweepSeeds(allow []string, have []types.Seed) (seeds []types.Seed, v6 []net
 // sweepLead is the note for a run whose targets name some addresses of the
 // range its scope allows and not the rest, or "". It counts what the scope
 // allows less what it denies, and says what -sweep would add.
-func sweepLead(allow, deny []string, named []ipRange) string {
+func sweepLead(allow, deny []string, named []ipRange, ports int) string {
 	allowed, _ := allowedAddrs(allow)
 	denied, _ := allowedAddrs(deny)
 	open := subtractRanges(allowed, denied)
@@ -178,6 +178,11 @@ func sweepLead(allow, deny []string, named []ipRange) string {
 	if have == 0 || total <= have {
 		return ""
 	}
-	return fmt.Sprintf("the scope (-allow, -scope) holds %s addresses and the targets name %s of them: -sweep covers the other %s, within -deny, -rate and -max-requests",
-		humanCount(float64(total)), humanCount(float64(have)), humanCount(float64(total-have)))
+	rest := total - have
+	cost := fmt.Sprintf("at least %s requests, one to each (on 443, then 80)", humanCount(float64(rest)))
+	if ports > 0 {
+		cost = fmt.Sprintf("about %s connects (%s asked of each)", humanCount(float64(rest)*float64(ports)), plural(ports, "port"))
+	}
+	return fmt.Sprintf("the scope (-allow, -scope) holds %s addresses and the targets name %s of them: -sweep covers the other %s, within -deny, -rate and -max-requests; it would send %s",
+		humanCount(float64(total)), humanCount(float64(have)), humanCount(float64(rest)), cost)
 }

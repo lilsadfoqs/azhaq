@@ -139,6 +139,9 @@ func run(args []string) error {
 	}
 	c, ok := lookup(args[0])
 	if !ok {
+		if _, _, isTarget := guidedTarget(args[0]); isTarget {
+			return cmdQuickstart(args)
+		}
 		if near := suggest(args[0]); len(near) > 0 {
 			return usagef("unknown command %q; did you mean %s? (azhaq help lists every command)", args[0], strings.Join(near, " or "))
 		}
@@ -186,6 +189,7 @@ func resumeHint(db string, cut, signedIn bool, user string) string {
 // so nothing is kept for azhaq resume.
 type runOut struct {
 	json, quiet, embedded, plan, scratch bool
+	estimated                            bool     // the command already said the estimate: run does not say it again
 	planInto                             *runPlan // plan: the plan is put here, not printed
 	axfr                                 bool     // plan: also the zone transfers of dns -axfr
 	// progress is how a drop-in wants the lines of a long run: "json" for
@@ -574,7 +578,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 				rep.Notes = append(rep.Notes, fmt.Sprintf("-sweep leaves the IPv6 range %s alone: name it as a target to scan it", pf))
 			}
 			seeds = append(seeds, more...)
-		} else if lead := sweepLead(allow, deny, namedAddrs(seeds)); lead != "" {
+		} else if lead := sweepLead(allow, deny, namedAddrs(seeds), portsRangeAsked(*portsSpec)); lead != "" {
 			rep.Notes = append(rep.Notes, lead)
 		}
 		if len(seeds) == 0 && *factsPath == "" && *execCmd == "" && *workerOf == "" {
@@ -1316,10 +1320,17 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	// What the run will send, counted before it sends: said first when it is
 	// not small, and kept for the summary to set beside what was sent.
 	var estimate *costEstimate
+	var portHosts []string // the names and addresses the port scan was planned on
 	if *resumeRun == "" {
-		ep := planFor(cat, seeds, budgets, paths, limitsOf(budgets, *maxRequests, *rateFlag, *timeout, *daily), send, rep).Estimate
+		pl := planFor(cat, seeds, budgets, paths, limitsOf(budgets, *maxRequests, *rateFlag, *timeout, *daily), send, rep)
+		ep := pl.Estimate
 		estimate = &ep
-		if !*quiet && !*jsonOut && !out.embedded && ep.Total.contacts() > trivialRun {
+		for _, t := range pl.Targets {
+			if slices.Contains(t.Collectors, "azhaq-ports") {
+				portHosts = append(portHosts, t.Key)
+			}
+		}
+		if !*quiet && !*jsonOut && !out.embedded && !out.estimated && ep.Total.contacts() > trivialRun {
 			printEstimate(os.Stderr, "azhaq: before sending, the run is estimated at ", ep)
 		}
 	}
@@ -1528,6 +1539,28 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		rep.Notes = append(rep.Notes, fmt.Sprintf("-max-names %d held back %d guesses: the -w words and -permute variations beyond it were not asked (a larger -max-names asks them)", *maxNames, n))
 		if rep.Stopped == "" {
 			rep.Stopped = fmt.Sprintf("-max-names %d reached, %d guesses not asked (-max-names raises it)", *maxNames, n)
+		}
+	}
+	if rep.Stopped == "" && !out.embedded && rep.Command == "run" && len(opts.Ports) > 0 {
+		// The ports were asked of the addresses the run scanned: the rest of the range is the next pass.
+		per := len(opts.Ports)
+		if portCfg.Discover == portcol.DiscoverFirst {
+			per += 2
+		}
+		addresses := 0
+		if rep.Cost != nil {
+			for _, st := range rep.Cost.Stages {
+				if st.Stage == "ports" && st.Actual != nil {
+					addresses = int(st.Actual.Connects) / per
+				}
+			}
+		}
+		if why, _ := portsPass(len(opts.Ports), addresses, rep.Counts["ports"]); why != "" {
+			cmd := "azhaq run " + shellJoin(append(withoutFlag(args, "ports"), "-ports", "full", "-db", path))
+			if n := len(portHosts); n > 0 && n <= 8 {
+				cmd = "azhaq ports -host " + hostsOf(portHosts) + " -p full -db " + path
+			}
+			rep.nextPass(cmd, why)
 		}
 	}
 	if remember && !*demo && input != "" {

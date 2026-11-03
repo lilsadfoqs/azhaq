@@ -9,6 +9,7 @@
 
 @cover README.md docs/commands/mcp.md docs/commands/plan.md docs/commands/worker.md docs/commands/query.md docs/commands/ledger.md
 
+readme.first-map	README.md	A name, an address or a URL with its scheme is the whole command	test:cmd/azhaq:TestGuidedRunMakesTheSameMapAsTheExplicitRun,TestAWordThatIsATargetStartsTheGuidedRun,TestATopPortsScanNamesTheUnaskedRange
 readme.drop-in	README.md	with their flags and JSON field names	test:cmd/azhaq:TestMigratingCoversTheTools,TestDocsNameOnlyFlagsThatExist;bench:drop-in: azhaq probe reads stdin and writes httpx's JSON fields
 readme.maps-and-compares	README.md	It maps the routes an app's JavaScript calls and compares what each of your accounts may read and write	bench:juice-shop: ≥ 90% of the server routes its frontend calls;bench:roles: Juice Shop anonymous → user
 readme.scope-budget-ledger	README.md	It holds every request to a scope and a budget, and records what it sent	bench:scope: no request leaves the program's scope;bench:summary = ledger = what arrived;test:internal/egress:TestTargetClientRefusesWhatLeavesTheScope;test:internal/contract:TestWireIsLedgerIsSummary

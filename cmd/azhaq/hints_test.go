@@ -44,22 +44,26 @@ func subsSources(t *testing.T, names ...string) {
 	t.Cleanup(subcol.UseTestSources(subcol.TestSource{Name: "s", Default: true, Names: names}))
 }
 
-// subs that found names suggests -permute with the names it measured, then
-// run, and says nothing where a person is not reading.
+// subs that found names, and looked none up, suggests -live with what it
+// would send, then -permute with the names it measured, then run, and says
+// nothing where a person is not reading.
 func TestSubsNextPermuteThenRun(t *testing.T) {
 	t.Chdir(t.TempDir())
 	subsSources(t, "api.example.org", "www.example.org", "mail.example.org")
 	atTerminal(t)
 	_, errOut := runText(t, "subs", "-d", "example.org", "-no-history")
 	next := nextLines(errOut)
-	if len(next) != 2 {
-		t.Fatalf("want two next lines, got %q\n%s", next, errOut)
+	if len(next) != 3 {
+		t.Fatalf("want three next lines, got %q\n%s", next, errOut)
 	}
-	if !strings.HasPrefix(next[0], "azhaq subs -d example.org -permute   (try variations of the 3 names found, such as api1.example.org and api-dev.example.org for api.example.org)") {
-		t.Errorf("permute hint: %q", next[0])
+	if !strings.HasPrefix(next[0], "azhaq subs -d example.org -no-history -live   (next pass, not run: 3 names listed by the sources were not looked up, so some may not exist; -live asks about 6 DNS queries)") {
+		t.Errorf("live hint: %q", next[0])
 	}
-	if !strings.HasPrefix(next[1], "azhaq run -domain example.org   (one command: names, services, crawl, files and a ranked map, in one workspace)") {
-		t.Errorf("run hint: %q", next[1])
+	if !strings.HasPrefix(next[1], "azhaq subs -d example.org -permute   (try variations of the 3 names found, such as api1.example.org and api-dev.example.org for api.example.org)") {
+		t.Errorf("permute hint: %q", next[1])
+	}
+	if !strings.HasPrefix(next[2], "azhaq run -domain example.org   (one command: names, services, crawl, files and a ranked map, in one workspace)") {
+		t.Errorf("run hint: %q", next[2])
 	}
 }
 

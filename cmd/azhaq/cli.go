@@ -29,19 +29,29 @@ type command struct {
 }
 
 const (
+	groupStart  = "Start here"
 	groupMap    = "Map a target"
-	groupDropIn = "One job each, output like the tool you know"
+	groupDropIn = "Find one thing, output like the tool you know"
 	groupWS     = "Read and compare results"
 	groupOther  = "Other"
 )
 
-var groups = []string{groupMap, groupDropIn, groupWS, groupOther}
+var groups = []string{groupStart, groupMap, groupDropIn, groupWS, groupOther}
 
 // commands is filled in init: the help command reads the table it is in.
 var commands []command
 
 func init() {
 	commands = []command{
+		{name: "quickstart", group: groupStart, run: cmdQuickstart,
+			summary: "a first map of one target, guided: the plan and its cost first, then the map, then the commands to go deeper (azhaq TARGET is the same)",
+			usage:   "TARGET [run flags]",
+			output:  "what plan prints (on stderr), then what run prints: a ranked map on stdout, the summary and the commands to go deeper on stderr",
+			examples: []string{
+				"azhaq example.com",
+				"azhaq https://app.example.com/",
+				"azhaq quickstart example.com -passive",
+			}},
 		{name: "run", group: groupMap, run: cmdRun,
 			summary: "map a target: names, services, pages, scripts, APIs, forms, parameters, in one graph",
 			usage:   "(-url URL | -domain D | -list FILE | -scope FILE|PLATFORM -program P | -asn AS | -cidr NET | -in seeds.jsonl) [flags]",
@@ -589,7 +599,7 @@ func printHelp(w io.Writer, name string, fs *flag.FlagSet, all bool) {
 // all lists the commands left out of the list too (azhaq help all).
 func printOverview(w io.Writer, all bool) {
 	fmt.Fprintf(w, "azhaq %s: one recon engine for names, services, applications and APIs, in one graph\n\n", version)
-	fmt.Fprintf(w, "usage: azhaq COMMAND [flags]    azhaq help COMMAND    azhaq help -json    azhaq docs\n")
+	fmt.Fprintf(w, "usage: azhaq TARGET (a first map: the plan and its cost, the map, how to go deeper)\n       azhaq COMMAND [flags]    azhaq help COMMAND    azhaq help -json    azhaq docs\n")
 	for _, g := range groups {
 		fmt.Fprintf(w, "\n%s:\n", g)
 		for _, c := range commands {
