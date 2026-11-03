@@ -331,7 +331,8 @@ var egressContract = map[string]egressEntry{
 			t.Errorf("plan: exit %d, the target was asked %d times", code, h.served.Load())
 		}
 	}},
-	"scope": {sends: "delegates", via: "run", why: "reads a file; only -scope PLATFORM asks the platform, through egress.SourceClient like every source (rules_test.go, scopefile_test)"},
+	"quickstart": {sends: "delegates", via: "run", why: "plans, then runs, with the flags given: what azhaq run sends (quickstart_test.go)"},
+	"scope":      {sends: "delegates", via: "run", why: "reads a file; only -scope PLATFORM asks the platform, through egress.SourceClient like every source (rules_test.go, scopefile_test)"},
 	"roles": {sends: "direct", run: func(t *testing.T, h *egressHarness) {
 		// A history file and -replay-writes: the runs, the history reads, the
 		// replay and the POST are one number at the server, in the summary and

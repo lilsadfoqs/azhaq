@@ -38,7 +38,7 @@ func specOf(name string) (*parsedSpec, bool) {
 		return v.(*parsedSpec), true
 	}
 	key := name
-	if name == "plan" {
+	if name == "plan" || name == "quickstart" {
 		key = "run"
 	}
 	raw, ok := helpSpecs[key]

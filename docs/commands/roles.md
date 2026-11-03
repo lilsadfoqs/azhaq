@@ -167,9 +167,26 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 - **Exit 2:** a header names a host outside the scope rule. Nothing is sent. See [Headers that name a host](#headers-that-name-a-host).
 - A role whose run could not be done, such as a failed sign-in, ends `roles` with a summary whose `notes` say why.
 - `requests` in the summary is every request `roles` sent to the targets: the roles' runs, the Chrome sign-ins (the first and each renewal), the replays and every redirect hop they followed. It equals the target lines of `roles.ledger.jsonl`, or of the file `-ledger` names in the run options (`-- -ledger FILE`): one ledger for the whole command, written by the runs and by everything `roles` sends between them, sealed at the end. `-ledger off` writes none. A role's own summary line counts that role's run only, so they add up to less.
+- `cost` sets the estimate of each stage beside what it sent, as for [run](run.md#summary-and-exit-codes): see [Cost by stage](#cost-by-stage).
+- A run that replayed no write, whose `-har` or `-burp` histories hold POST, PUT or PATCH requests, ends its `next` with `azhaq roles … -replay-writes post,put,patch   (next pass, not run: N writes in the histories were not replayed with the other roles' sessions: about R more requests, and each changes data on the target)`. `R` is each write sent with every other role's session and the owner's object read around it, as [Cost by stage](#cost-by-stage) counts them. It is a line: nothing is replayed for it.
 - With `-json`, stderr holds the summary only. The roles' runs print nothing. The summary says what they did not finish: `failed`, `unreachable`, `skipped` and `notes`.
 
 ## Details
+
+### Cost by stage
+
+`azhaq roles -plan …` (or `azhaq plan roles …`) prints what the command would send, by stage, and sends nothing. The summary of a run gives the same stages, each with its estimate and what it sent (`cost`, and a `cost:` line for each stage in the text summary). The stages are:
+
+| Stage | What it sends | Estimate |
+| --- | --- | --- |
+| `sign-in` | Chrome's sign-ins, the first of each `-role-login` and each renewal | 3 requests a sign-in (the page, the form's POST, the page it ends on), not counting its scripts, styles and images |
+| `role maps` | each role's run | the run's own estimate for each role ([plan](plan.md#the-estimate)) |
+| `history reads` | the pages of each role's `-har` and `-burp` files, read as the role | exact: one request for each page |
+| `replay` | every endpoint asked with every role that did not reach it, and the checks of the sessions | each page the histories reached, asked of the roles that did not; the objects the answers name and the checks come on top. With the run options, the pages the runs reach are not known before |
+| `controls` | one request with a made-up identifier for each cross read | not counted before |
+| `write replay`, `verification` | with `-replay-writes`, each write of the histories sent with every other role's session, and the owner's object read before and after | the history's writes for each other role; the PUT, PATCH and DELETE of the runs' routes come on top |
+
+Stages that cannot be counted before say `not_counted`. `-replay-max` caps the replay and the stages after it. With `-max-requests` in the run options, the plan names the stage whose estimate passes the budget, and the budget's stop in the summary names the stage that sent its last request and what each stage had sent: a run that dies while Chrome signs in says `the budget was reached in the sign-in stage; by stage: sign-in 4, role maps 5`.
 
 ### Verdict details
 
@@ -629,6 +646,7 @@ The diff lines look like this:
 | --- | --- | --- | --- |
 | `-dir` | string |  | directory for one database per role (default: azhaq-roles-<time>) |
 | `-json` | bool |  | one JSON object per endpoint, and only the summary, as JSON, on stderr |
+| `-plan` | bool |  | print what roles would send, by stage (sign-ins, each role's map, the history reads, the replay, the controls, the write replay and its verification) and send nothing; azhaq plan roles is the same |
 
 <details>
 <summary>Other names (1)</summary>

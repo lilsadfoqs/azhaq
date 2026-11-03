@@ -103,6 +103,14 @@ Only scan systems you are allowed to test.
 - `$TA` and `$TB` hold two accounts' tokens. `alice.har` and `alice.xml` are those accounts' saved browsing.
 - `-program` names a program in the platform's public list: `tesla` on Bugcrowd, `security` on HackerOne. `acme` in other examples stands for yours.
 
+### First map
+
+```
+$ azhaq https://app.example.com/ -db app.db
+```
+
+A name, an address or a URL with its scheme is the whole command. [`azhaq quickstart`](docs/commands/quickstart.md) (the same) prints the plan and its estimate of what it will send, then maps the target as `azhaq run` does, and ends with the commands that go deeper in the workspace and the wider passes it did not make, each with what it would send.
+
 ### Map an app
 
 ```
@@ -203,6 +211,7 @@ Every tool's own command lines, flag by flag, are in [docs/MIGRATING.md](docs/MI
 
 | Command | What it does |
 | --- | --- |
+| [`quickstart`](docs/commands/quickstart.md) | A first map of one target: the plan and its cost, the map, how to go deeper. `azhaq TARGET` is the same. |
 | [`run`](docs/commands/run.md) | Map a target into one graph. |
 | [`plan`](docs/commands/plan.md) | Show what a run would send, without sending. |
 | [`scope`](docs/commands/scope.md) | Read a program's scope. |

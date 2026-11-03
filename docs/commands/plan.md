@@ -30,6 +30,9 @@ azhaq plan -scope bugcrowd -program tesla -dirs words.txt
 4. The kinds of request sent to the targets: the GET requests for pages, and besides them each port scan, UDP probe, POST body, sign-in and Chrome load (`-screenshots`, `-browser`) that is planned. Every flag of `run` that asks for a collector is named here or under the active techniques. It does not list the URLs a crawl will find (`/createdb` is known only after an API description is read): the ledger lists those, as they are sent.
 5. The third-party source queries, counted.
 6. A bound on the requests to the targets: what each web service costs, and the cap.
+7. The estimate: the requests, connects, DNS queries and source queries the run would send, for each stage and each collector. See [The estimate](#the-estimate).
+
+`azhaq plan roles …` is `azhaq roles -plan …`: the same estimate for a roles command, by its own stages (see [roles](roles.md#cost-by-stage)).
 
 ## Output
 
@@ -45,6 +48,7 @@ Plain text prints the same parts, one block each. `-json` prints one object.
 | `limits` | The options that bound the run. |
 | `sends` | What goes to the targets, one line for each kind. |
 | `requests` | What is known of the requests before any is sent. See below. |
+| `estimate` | What the run would send, by stage and collector: `total`, `stages` and `basis`. See [The estimate](#the-estimate). |
 | `axfr` | With `-axfr`: for each domain and host target, the lookups that find its name servers and the connections the transfer makes. The name servers' addresses are not known before they are looked up, so the plan says how they are chosen: under a scope, only an address it allows is asked. |
 
 `requests` has these fields:
@@ -80,6 +84,15 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 - At most `max_names` names are looked up.
 - `per_web_service` covers a web service's page, the favicon and the built-in paths. It does not cover what its links, scripts and archived URLs lead to.
 - `cap` is set by `cap_by`. With `-daily-requests`, a plan does not take off what the day's runs already spent.
+
+### The estimate
+
+`estimate` is the number a run would send, counted before it starts, by the same code that sends it: the wordlists, port lists and built-in checks the flags name. `run` prints it before it sends when it is more than 1000 requests, connects and DNS queries together (never with `-quiet` or `-json`; there is no confirmation and no cap: `-max-requests` and `-rate` are yours to set), and the summary of every `run` sets each stage's estimate beside what it sent.
+
+- `total` and each stage's `estimate` have `requests` (HTTP and Chrome), `connects` (TCP connections and UDP datagrams), `dns_queries` and `source_queries` (third parties). The first two add up to the summary's `requests`.
+- The stages are `sign-in` (`-login`), `sources` (subdomain, archive, RDAP and search sources), `names` (DNS: `-dns-brute` is one query for each word), `map` (the page, the favicon and the built-in path checks of each web service, the TLS handshake), `ports` (one connect for each port of each address, and the two connects of `-port-discover` first), `dirs` (each word and each `-dirs-ext` extension of the wordlist, and the probes that calibrate a directory), `params`, and in a summary `screenshots`, `advisories` and `other` (requests sent with no collector named). Each lists its `collectors`.
+- The estimate counts what the flags and the targets fix, as if every target answers: a name that does not resolve costs less. It does not count what an answer leads to: the links, scripts and API calls of a page, the names and archived URLs found, the banner and protocol probes of an open port, the directories a sweep finds. A stage that leaves something out says `estimate_at_least` and names it in `not_counted`, and `total` is a floor for the run (`at_least`). A stage with nothing in `not_counted` is the number the run sends (a port scan with `-port-detect none`, a wordlist sweep).
+- On the Juice Shop, VAmPI and DVWA-shaped fixtures of the tests, the counted stages are exact (`ports`, `dirs`, `names`), the `sign-in` estimate is within 3 times of what Chrome sent, and the `map` estimate within 4 times of what was sent (it was 53 requests for 83 sent on the Juice Shop-shaped fixture).
 
 ## Flags
 

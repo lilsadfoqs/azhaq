@@ -99,6 +99,9 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 - A target given with no port (a name or an address) is asked on 443, then 80, or on `-web-ports`. So is the name of a URL given with its own port, and a name found on the way. A guess nothing listens on, refused, is a note (`no web service on 443 or 80`), not a failure, and so is a refused connection on 443 to read a name's certificate; a `-web-ports` port that refuses is one, and so is a URL given that refuses. A refused URL is one failed target: the other targets of the run are mapped as usual and the exit code is 3.
 - A port the scan found open that answers the HTTP stage with something other than HTTP (an FTP or SSH banner) is a service, not a failed target: it keeps its `Port` row and the run names it in a note (`open, but not a web service`). Its plain-HTTP request is its only one when the reply is not TLS either. A port the scan found open and did not name as HTTP that closes or resets at once on the request is an answer too, as `tcpwrapped` is in `ports`: no failure, the same note, exit 0. A timeout, a refused connect after the port was seen open, a TLS error, and a port named `http` or `https` that resets or closes without answering are still failures.
 - It counts the path checks it skipped, as a note ([Path checks](#path-checks-stop-at-their-answer)).
+- `cost` is what the run was estimated to send, stage by stage, beside what each stage sent (`sign-in`, `sources`, `names`, `map`, `ports`, `dirs`, `params`, …, each with its collectors): the text summary has a `cost:` line for each stage. The estimate is `plan`'s ([The estimate](plan.md#the-estimate)) and `run` prints it on stderr before it sends when it is more than 1000 requests, connects and DNS queries together. The stages' `actual` add up to `requests` and `dns_queries`. A resumed run has no estimate, only what it sent.
+- A run that finished, with no limit stopping it, ends its `next` with the wider passes it did not make that its flags and findings point to, each a command to copy with what it would send beyond this run, marked `next pass, not run`: after `-ports` with fewer than all 65535 ports, the rest of the range (`azhaq ports -host … -p full`: the ports not asked, the addresses scanned, the connects it would send, and the open ports found in the range asked). It is a line, never a request; see [Next in the summary](#next-in-the-summary).
+- A run stopped by `-max-requests` says in `stopped` which stage the last request of the budget was sent by, which collector was refused first when that is another, and what each stage had sent; `resume` is the command that continues it.
 
 ## Details
 
@@ -286,18 +289,19 @@ A client route is a view that a single-page app's router draws.
 ### Notes in the summary
 Examples of what `notes` holds for a run:
 
-- `the scope (-allow, -scope) holds 256 addresses and the targets name 1 of them: -sweep covers the other 255, …`: see [Sweeping the scope](#sweeping-the-scope).
+- `the scope (-allow, -scope) holds 256 addresses and the targets name 1 of them: -sweep covers the other 255, …; it would send at least 255 requests`: see [Sweeping the scope](#sweeping-the-scope).
 
 - `path checks: 28 skipped (an API description was already found)`: see [Path checks](#path-checks-stop-at-their-answer).
 - `screenshot of URL not taken: the page needs about 26 requests and 8 were left (raise -max-requests)`, or `the budget was spent before the page loaded`: see [shots](shots.md#screenshots-and-the-budget).
 - `GraphQL URL: introspection disabled: schema recovered (partial: query Query: 2 fields (1 client, 1 probe), 140 words tried; not proof there is nothing more)`, or `introspection: full schema`. `GraphQL URL: an IDE page, not asked for its schema: URL on the same origin gave it whole` says why a GraphiQL page got no POST: see [show](show.md#recovering-a-schema-when-introspection-is-off).
 
 ### Next in the summary
-`next` suggests a command in three cases:
+`next` suggests a command in these cases. The first three are measured from the run; the next-pass lines follow from the flags it was given:
 
 - A run without `-browser` whose target pages leave their links to their scripts gets `azhaq run -url ORIGIN/ -browser …`, with the page that showed it. The signs are three or more `{{templates}}` in the text, or Markdown in the text whose links are read as text, or an empty shell of a front page. The last two count only when fewer than 10 routes were found on the page's origin. Example: `(/learn/vulnerability/a1_injection and 11 more pages: Markdown its scripts turn into links; read as text here, Chrome sees the page as rendered)`.
 - A run that found a GraphQL endpoint and did not read its schema gets `azhaq run -url ORIGIN/ -graphql -allow HOST …   (/graphql and /graphiql answer like GraphQL; -graphql reads the schema by introspection)`. That is a run with no `-graphql`, or with the endpoint's host outside the scope.
 - A run without a session (`-login`, `-cookie`, `-header`) whose target site shows a sign-in form gets `azhaq run -url ORIGIN/ -login PAGE -login-user USER -login-pass PASS -allow HOST …`. A sign-in form is a form that takes a password.
+- A run that scanned some TCP ports (`-ports top-100`, `-ports top-1000`, a list) and not all 65535 gets `azhaq ports -host HOSTS -p full -db DB   (next pass, not run: the other N of the 65535 TCP ports were not asked on A addresses: C connects; O open ports found in the K asked)`. `C` is `N` times the addresses the scan asked, counted as [plan](plan.md#the-estimate) counts connects, and the banner and protocol probes of any new open port come on top. With more than 8 target names, or a scan of names found on the way, the command is the run's own line with `-ports full`. Nothing is run for it, and a finished scan of every port suggests nothing.
 
 ### Known-issue matching
 

@@ -18,6 +18,7 @@ import (
 	"github.com/lilsadfoqs/azhaq/internal/collectors/subcol"
 	"github.com/lilsadfoqs/azhaq/internal/egress"
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
+	"github.com/lilsadfoqs/azhaq/internal/ledger"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"github.com/lilsadfoqs/azhaq/internal/takeover"
 	"github.com/lilsadfoqs/azhaq/internal/verify"
@@ -56,6 +57,9 @@ type report struct {
 	Notes       []string         `json:"notes,omitempty"`
 	Next        []string         `json:"next,omitempty"`
 	Error       string           `json:"error,omitempty"` // an internal error: the summary disagrees with its rows (audit.go); exit 1
+	// Cost is what the run was estimated to send before it started, by
+	// stage, beside what each stage sent (see cost.go).
+	Cost *costReport `json:"cost,omitempty"`
 	// Advisories are the -advisories leads: one per stored advisory row,
 	// each with its advisory id and URL, its match label and, when a
 	// confirmation ran, its confidence. They are leads, not map rows:
@@ -69,7 +73,9 @@ type report struct {
 	// without them, and the notes say how their counts are derived.
 	Verify []verify.Result `json:"verify,omitempty"`
 
-	dnsFrom int64 // egress.DNSTotal when the command began: dns_queries are its own
+	estimate  *costEstimate             // what the command was estimated to send, for Cost
+	dnsFrom   int64                     // egress.DNSTotal when the command began: dns_queries are its own
+	spentFrom map[ledger.SpentKey]int64 // ledger.Account when it began: the cost is what it sent since
 
 	what string // the unit of Results: "names", "web services"
 
@@ -92,10 +98,13 @@ type report struct {
 	hints              []string
 	late               []func() string
 	hintsOff, hintsVrb bool
+
+	hushCost  bool     // an embedded run: the command that owns it says the cost
+	refusedBy []string // run: the collectors whose work the request budget refused, first first
 }
 
 func newReport(command string) *report {
-	return &report{Type: "summary", Command: command, Version: version, start: time.Now(), dnsFrom: egress.DNSTotal()}
+	return &report{Type: "summary", Command: command, Version: version, start: time.Now(), dnsFrom: egress.DNSTotal(), spentFrom: ledger.Account()}
 }
 
 // settle fills the exit code and seconds.
@@ -264,6 +273,11 @@ func (r *report) print(w io.Writer) {
 	}
 	for _, n := range r.Notes {
 		fmt.Fprintf(w, "  note: %s\n", n)
+	}
+	if r.Cost != nil && !r.hushCost && (r.Command == "run" || r.Command == "roles") {
+		for _, l := range r.Cost.lines() {
+			fmt.Fprintf(w, "  cost: %s\n", l)
+		}
 	}
 	if r.Stopped != "" {
 		line := "  stopped: " + r.Stopped

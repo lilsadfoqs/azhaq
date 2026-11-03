@@ -93,6 +93,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 | `open ports whose protocol was not probed, …` | The open ports that `-unnamed` stopped asking. |
 | `ports that neither accepted nor refused a connect, asked twice: scanme.nmap.org (45.33.32.156) port 80; …` | Ports where an open port may hide. |
 | UDP lines | What `open\|filtered` means, and the closed ports: see [UDP](#udp-ports-and-their-states). |
+| `next`: `next pass, not run: the other N of the 65535 TCP ports were not asked` | A scan of fewer than all 65535 ports names the rest of the range, the addresses it asked, the connects it would send (N for each address) and the open ports found in the range asked, with the command: the same `ports` line with `-p full`. A scan that stopped at a limit, `-sn`, and targets read from stdin suggest nothing. It is a line: nothing is run. |
 
 ## Details
 
