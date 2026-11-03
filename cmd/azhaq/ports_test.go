@@ -152,9 +152,11 @@ func TestRowJSONShape(t *testing.T) {
 	}
 }
 
-// A UDP port that stays silent is a result: a row with the state
-// open|filtered in -json, a line with the state in plain output, counted
-// in the summary, and a note says what the state means.
+// The UDP ports of an address that stay silent are one result: a row with
+// the state open|filtered, their list, how many were asked and how many the
+// address refused, in -json and in plain output; the summary counts them as
+// ports and a note says what the state means. -udp-rows prints each as a row
+// of its own, as it was before.
 func TestPortsListsSilentUDPPort(t *testing.T) {
 	t.Chdir(t.TempDir())
 	pc, err := net.ListenPacket("udp", "127.0.0.1:0")
@@ -178,11 +180,16 @@ func TestPortsListsSilentUDPPort(t *testing.T) {
 
 	out, errOut, code := cli(t, "ports", "-host", "127.0.0.1", "-p", "none", "-pu", pu, "-connect-timeout", "200ms", "-json")
 	var row struct {
-		Port  int    `json:"port"`
-		Proto string `json:"protocol"`
-		State string `json:"state"`
+		Port    *int   `json:"port"`
+		Proto   string `json:"protocol"`
+		State   string `json:"state"`
+		Ports   string `json:"ports"`
+		Silent  int    `json:"silent"`
+		Asked   int    `json:"asked"`
+		Refused int    `json:"refused"`
 	}
-	if n := len(lines(out)); n != 1 || json.Unmarshal([]byte(lines(out)[0]), &row) != nil || row.Port != port || row.Proto != "udp" || row.State != "open|filtered" {
+	if n := len(lines(out)); n != 1 || json.Unmarshal([]byte(lines(out)[0]), &row) != nil || row.Port != nil || row.Proto != "udp" || row.State != "open|filtered" ||
+		row.Ports != fmt.Sprint(port) || row.Silent != 1 || row.Asked != 2 || row.Refused != 1 {
 		t.Fatalf("rows %q", out)
 	}
 	sum := sumMap(t, errOut)
@@ -195,8 +202,12 @@ func TestPortsListsSilentUDPPort(t *testing.T) {
 	}
 
 	out, _, _ = cli(t, "ports", "-host", "127.0.0.1", "-p", "none", "-pu", pu, "-connect-timeout", "200ms", "-silent")
-	if want := fmt.Sprintf("127.0.0.1:%d/udp open|filtered", port); strings.TrimSpace(out) != want {
+	if want := fmt.Sprintf("127.0.0.1/udp open|filtered 1 of 2 ports: %d (1 refused)", port); strings.TrimSpace(out) != want {
 		t.Errorf("plain output %q, want %q", out, want)
+	}
+	out, _, _ = cli(t, "ports", "-host", "127.0.0.1", "-p", "none", "-pu", pu, "-connect-timeout", "200ms", "-silent", "-udp-rows")
+	if want := fmt.Sprintf("127.0.0.1:%d/udp open|filtered", port); strings.TrimSpace(out) != want {
+		t.Errorf("plain output with -udp-rows %q, want %q", out, want)
 	}
 }
 

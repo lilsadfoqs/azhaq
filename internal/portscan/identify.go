@@ -8,6 +8,7 @@ import (
 	"errors"
 	"maps"
 	"net"
+	"os"
 	"strconv"
 	"sync"
 	"time"
@@ -490,6 +491,20 @@ func (id *ident) getRoot() {
 	}
 	defer c.Close()
 	defer id.guard(c)()
+	// First listen, as nmap's first probe does: a service that greets first
+	// may be late, and this connect is the one left to hear it on.
+	var greet [512]byte
+	_ = c.SetReadDeadline(time.Now().Add(s.lateGreeting()))
+	if n, err := c.Read(greet[:]); n > 0 {
+		o.Banner = bannerOf(greet[:n])
+		s.greeted(o, greet[:n])
+		if o.Service == "" {
+			passiveRead(greet[:n], o)
+		}
+		return
+	} else if err != nil && !errors.Is(err, os.ErrDeadlineExceeded) {
+		return // closed without a word: nothing to ask on this connection
+	}
 	resp := s.talk(c, s.httpRequest("GET", id.host, o.Port, 80), nil, id.patience(500*time.Millisecond))
 	status, banner, ok := httpAnswer(resp)
 	if !ok {

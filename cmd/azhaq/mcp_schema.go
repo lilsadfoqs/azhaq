@@ -17,7 +17,7 @@ import (
 // server publishes and nothing else, so what tools/list tells a client
 // and what a call is held to cannot drift apart. The schemas use a small
 // part of JSON Schema: type, properties, required, additionalProperties,
-// items, enum, minimum, minItems, dependentRequired and examples.
+// items, enum, minimum, minItems, maxItems, dependentRequired and examples.
 
 var errUnknownTool = errors.New("unknown tool")
 
@@ -75,6 +75,9 @@ func (c argCheck) value(s map[string]any, v any, at string) error {
 	case []any:
 		if n, ok := number(s["minItems"]); ok && float64(len(v)) < n {
 			return fmt.Errorf("%s must hold at least %g items, not %d", c.name(at), n, len(v))
+		}
+		if n, ok := number(s["maxItems"]); ok && float64(len(v)) > n {
+			return fmt.Errorf("%s must hold at most %g items, not %d", c.name(at), n, len(v))
 		}
 		if items, ok := s["items"].(map[string]any); ok {
 			for i, x := range v {

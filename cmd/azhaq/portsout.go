@@ -31,12 +31,27 @@ type portRow struct {
 	CDN      string
 	At       time.Time
 	Fields   map[string]any // service, product, version, extrainfo, banner, title, tls_version, cipher, subject_cn, subject_an
+	Silent   *silentUDP     // set on the one row that stands for an address's silent UDP ports
+	nmapOnly bool           // a silent port the stream prints as part of its address's one row: for the nmap files only
+}
+
+// silentUDP is what the one row of an address's silent UDP ports says: which
+// ports (as azhaq resume reads a list: 1-24,60), how many, how many of the
+// address's ports were asked, and how many it refused (ICMP port unreachable,
+// which a silent port did not).
+type silentUDP struct {
+	Ports             string
+	N, Asked, Refused int
 }
 
 func (r portRow) str(k string) string { s, _ := r.Fields[k].(string); return s }
 
 // the fields a row of -json and -csv has, in the order -csv writes them.
-var portFields = []string{"host", "ip", "port", "protocol", "state", "tls", "cdn", "cdn-name", "timestamp", "service", "product", "version", "extrainfo", "banner", "title", "tls_version", "cipher", "subject_cn", "subject_an"}
+var portFields = []string{"host", "ip", "port", "protocol", "state", "tls", "cdn", "cdn-name", "timestamp", "service", "product", "version", "extrainfo", "banner", "title", "tls_version", "cipher", "subject_cn", "subject_an", "ports", "silent", "asked", "refused"}
+
+// udpOnlyFields are the columns of portFields that only a row of silent UDP
+// ports has: -csv writes them when the scan asks UDP ports.
+var udpOnlyFields = map[string]bool{"ports": true, "silent": true, "asked": true, "refused": true}
 
 // jsonRow is the row as -json prints it: naabu's fields (cdn is whether
 // the address is a CDN's, cdn-name whose), and azhaq's service ones.
@@ -45,6 +60,14 @@ func (r portRow) jsonRow() map[string]any {
 	if r.State == "up" {
 		delete(row, "protocol")
 		row["up"] = true
+		return row
+	}
+	if r.Silent != nil {
+		row["state"] = r.State
+		row["ports"], row["silent"], row["asked"] = r.Silent.Ports, r.Silent.N, r.Silent.Asked
+		if r.Silent.Refused > 0 {
+			row["refused"] = r.Silent.Refused
+		}
 		return row
 	}
 	row["port"] = r.Port
@@ -97,6 +120,8 @@ type portOut struct {
 	gnmapOut string
 	jsonPath string // -oA's JSON lines
 	quiet    bool   // the text lines are not printed: stdout holds an XML or greppable document
+	udpRows  bool   // each silent UDP port is a row of its own (-udp-rows); else one row for each address
+	udpCols  bool   // the scan asks UDP ports: -csv has the columns of a silent-ports row
 
 	mu   sync.Mutex
 	rows []portRow
@@ -108,11 +133,21 @@ type portOut struct {
 func (o *portOut) columns() []string {
 	var cols []string
 	for _, c := range portFields {
-		if !o.exclude[c] {
+		if !o.exclude[c] && (o.udpCols || !udpOnlyFields[c]) {
 			cols = append(cols, c)
 		}
 	}
 	return cols
+}
+
+// note keeps a row for the nmap files without printing it.
+func (o *portOut) note(r portRow) {
+	r.nmapOnly = true
+	if o.keep {
+		o.mu.Lock()
+		o.rows = append(o.rows, r)
+		o.mu.Unlock()
+	}
 }
 
 func (o *portOut) add(r portRow) {
@@ -138,6 +173,12 @@ func (o *portOut) add(r portRow) {
 		o.w.obj(row)
 	case r.State == "up":
 		o.w.line(r.IP)
+	case r.Silent != nil:
+		line := fmt.Sprintf("%s/udp %s %d of %d ports: %s", r.Host, r.State, r.Silent.N, r.Silent.Asked, r.Silent.Ports)
+		if r.Silent.Refused > 0 {
+			line += fmt.Sprintf(" (%d refused)", r.Silent.Refused)
+		}
+		o.w.line(line)
 	case r.Proto == "udp":
 		line := r.Host + ":" + strconv.Itoa(r.Port) + "/udp"
 		if r.State != "open" {
@@ -170,7 +211,13 @@ func (w *writer) record(cols, rec []string) {
 // and the JSON lines of -oA.
 func (o *portOut) finish(args []string, start, end time.Time) error {
 	rows := append([]portRow(nil), o.rows...)
-	hosts := nmapHosts(rows)
+	var nmapRows []portRow
+	for _, r := range rows {
+		if r.Silent == nil {
+			nmapRows = append(nmapRows, r)
+		}
+	}
+	hosts := nmapHosts(nmapRows)
 	var err error
 	emit := func(path string, write func(io.Writer) error) {
 		if path == "" || err != nil {
@@ -198,6 +245,9 @@ func (o *portOut) finish(args []string, start, end time.Time) error {
 	emit(o.gnmapOut, func(w io.Writer) error { return writeGreppable(w, hosts, start, end) })
 	emit(o.jsonPath, func(w io.Writer) error {
 		for _, r := range rows {
+			if r.nmapOnly {
+				continue
+			}
 			row := r.jsonRow()
 			for k := range o.exclude {
 				delete(row, k)

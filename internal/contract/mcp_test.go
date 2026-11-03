@@ -154,9 +154,9 @@ func TestMCPHoldsWhatItWasStartedWith(t *testing.T) {
 	}
 }
 
-// A server started with -unlocked refuses port scans, and no tool scans UDP
-// or sends a write, a wordlist or a DNS brute force: they have no argument
-// for it.
+// A server started with -unlocked refuses port scans, and a tool refuses an
+// argument it does not name (a UDP list under another name, a write replay, a
+// method on a probe) before anything is sent.
 func TestMCPUnlockedRefusesPortScansAndNoToolTakesWhatItLeavesOut(t *testing.T) {
 	l := newLabs(t)
 	l.Ports = newPortLab(t)
@@ -183,7 +183,9 @@ func TestMCPUnlockedRefusesPortScansAndNoToolTakesWhatItLeavesOut(t *testing.T) 
 }
 
 // No tool that sends takes an argument for what the page leaves out of the
-// tools: UDP, a write or a body of the client's, a wordlist, DNS brute force.
+// tools: a write or a body the client chooses, a Chrome page write, a fuzz,
+// permutations. The two tools that declare writes, azhaq_params (a body method)
+// and azhaq_roles_writes, are held by the server's -allow-writes instead.
 func TestNoMCPToolThatSendsTakesWhatTheToolsLeaveOut(t *testing.T) {
 	l := newLabs(t)
 	c := startMCP(t, l.Dir, "-allow", l.Allow())
@@ -196,7 +198,7 @@ func TestNoMCPToolThatSendsTakesWhatTheToolsLeaveOut(t *testing.T) {
 		}
 	}
 	must(t, json.Unmarshal(c.call("tools/list", map[string]any{}), &list))
-	sends := map[string]bool{"azhaq_plan": true, "azhaq_map": true, "azhaq_resume": true, "azhaq_subdomains": true, "azhaq_probe": true, "azhaq_ports": true, "azhaq_roles": true}
+	sends := map[string]bool{"azhaq_plan": true, "azhaq_map": true, "azhaq_resume": true, "azhaq_subdomains": true, "azhaq_probe": true, "azhaq_ports": true, "azhaq_roles": true, "azhaq_dirs": true, "azhaq_dns_brute": true}
 	seen := 0
 	for _, tool := range list.Tools {
 		if !sends[tool.Name] {
@@ -204,7 +206,7 @@ func TestNoMCPToolThatSendsTakesWhatTheToolsLeaveOut(t *testing.T) {
 		}
 		seen++
 		for name := range tool.InputSchema.Properties {
-			for _, left := range []string{"udp", "write", "method", "body", "data", "wordlist", "words", "dirs", "params", "brute", "permut", "fuzz"} {
+			for _, left := range []string{"write", "method", "body", "data", "browser_write", "submit", "permut", "fuzz"} {
 				if strings.Contains(strings.ToLower(name), left) {
 					t.Errorf("%s takes %q, which the page says the tools leave out", tool.Name, name)
 				}

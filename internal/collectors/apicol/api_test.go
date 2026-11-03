@@ -22,7 +22,7 @@ const openapi3 = `{
     "/users/v1": {"get": {}},
     "/users/v1/login": {"post": {"requestBody": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/Login"}}}}}},
     "/users/v1/{username}": {"parameters": [{"name": "username", "in": "path"}], "get": {}, "delete": {}},
-    "/createdb": {"get": {}}
+    "/createdb": {"get": {"description": "Creates and populates the database"}}
   },
   "components": {"schemas": {"Login": {"properties": {"username": {}, "password": {}}}}}
 }`
@@ -47,6 +47,11 @@ type op struct {
 	URL     string   `json:"url"`
 	Methods []string `json:"methods"`
 	Params  []string `json:"params"`
+	Ops     []struct {
+		Method      string `json:"method"`
+		Description string `json:"description"`
+		StateChange string `json:"state_change"`
+	} `json:"ops"`
 }
 
 func runSpec(t *testing.T, path, ctype, body string) (map[string]op, types.RunMeta, int) {
@@ -95,6 +100,15 @@ func TestOpenAPI3(t *testing.T) {
 	}
 	if got := strings.Join(ops["/users/v1/login"].Params, ","); got != "password,username" {
 		t.Errorf("body params %q", got)
+	}
+	// The description is kept and the GET it declares a state change is
+	// marked, so plan and run can name it; nothing is withheld by it.
+	created := ops["/createdb"]
+	if len(created.Ops) != 1 || created.Ops[0].Description != "Creates and populates the database" || created.Ops[0].StateChange == "" {
+		t.Errorf("GET /createdb is not marked with its description: %+v", created.Ops)
+	}
+	if len(ops["/users/v1"].Ops) != 1 || ops["/users/v1"].Ops[0].StateChange != "" {
+		t.Errorf("a plain read is marked: %+v", ops["/users/v1"].Ops)
 	}
 	// GETs that need no parameter are handed on: the run asks them, or
 	// lists one whose name says it does something as skipped.

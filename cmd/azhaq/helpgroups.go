@@ -208,7 +208,7 @@ var helpSpecs = map[string]helpSpec{
 			{"Scope and safety", `allow sweep deny kill-file ledger`},
 			{"Pace and limits", `rate min-rate workers connect-timeout dns-rate retries max-requests timeout`},
 			{"Network", `proxy resolvers`},
-			{"Output", `db json o oA oX silent v`},
+			{"Output", `db json o oA oX silent udp-rows v`},
 		},
 		hidden: map[string]string{
 			"compat:naabu": `
@@ -229,7 +229,7 @@ var helpSpecs = map[string]helpSpec{
 			{"Matchers and filters", `mc fc fs`},
 			{"Scope and safety", `allow deny deny-path kill-file ledger`},
 			{"Pace and limits", `rate t max-requests timeout`},
-			{"Session and network", `H cookie proxy`},
+			{"Session and network", `H cookie proxy resolvers`},
 			{"Output", `db json o silent v strict-exit`},
 		},
 		hidden: map[string]string{
@@ -271,7 +271,7 @@ var helpSpecs = map[string]helpSpec{
 			{"What to ask", `w X c casing passive`},
 			{"Scope and safety", `allow deny deny-path kill-file ledger`},
 			{"Pace and limits", `rate t d T max-requests timeout urls-timeout`},
-			{"Session and network", `H cookie proxy`},
+			{"Session and network", `H cookie proxy resolvers`},
 			{"Output", `db json o oB oJ oT silent v strict-exit`},
 		},
 		hidden: map[string]string{
@@ -380,8 +380,8 @@ var helpSpecs = map[string]helpSpec{
 	},
 	"mcp": {
 		groups: []helpGroup{
-			{"Scope and safety", `scope program allow deny deny-path unlocked`},
-			{"What a map asks", `resolvers sources skip no-takeover chrome-no-sandbox`},
+			{"Scope and safety", `scope program allow deny deny-path unlocked allow-writes`},
+			{"What a map asks", `resolvers sources history skip no-takeover chrome-no-sandbox`},
 			{"Pace and limits", `rate max-requests`},
 			{"Output", `dir`},
 		},
