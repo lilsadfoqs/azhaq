@@ -1183,6 +1183,19 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	send.dirsWords, send.dirsExts, send.paramsN, send.bruteN = len(opts.Dirs.Words), len(opts.Dirs.Extensions), len(opts.Params.Words), len(opts.BruteWords)
 	send.dirsNoCal = opts.Dirs.NoCalibration
 	send.verify = verifyFl.on
+	// The GETs among the targets whose own name declares a state change
+	// are named before anything is sent: in a plan's list, and in a run's
+	// first lines and summary. Nothing is withheld by naming them.
+	preState := stateChangesOfSeeds(seeds, rules)
+	if !out.plan && len(preState) > 0 {
+		rep.StateChanging = append(rep.StateChanging, preState...)
+		for _, e := range preState {
+			rep.Notes = append(rep.Notes, e.line())
+			if !*quiet && !*jsonOut && !out.embedded {
+				fmt.Fprintf(os.Stderr, "azhaq %s: %s\n", rep.Command, e.line())
+			}
+		}
+	}
 	if out.plan {
 		if *daily > 0 && (send.max == 0 || *daily < send.max) {
 			// A plan reads no database: what today's runs spent is not
@@ -1437,6 +1450,36 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	}
 	rep.noCatchAll = *noCatchAll
 	fillReport(rep, path, seeds, ents, obs, rows)
+	if !out.plan {
+		// The ones found on the way: an API description's GET whose own
+		// description declares a state change, and a found URL whose name
+		// does. They were sent in this run; the rule named keeps them out
+		// of the next one.
+		var likes []mapRowLike
+		for _, r := range rows {
+			if r.Entity.Type == types.TypeURL {
+				likes = append(likes, mapRowLike{key: r.Entity.Key, skipped: r.Coverage == "skipped"})
+			}
+		}
+		found := mergeStateChanges(stateChangesOfOps(obs), stateChangesOfRows(likes))
+		for _, e := range found {
+			if rules.DeniedPath(e.URL) != "" {
+				continue // kept out by the user's rule: listed as skipped, not as sent
+			}
+			known := false
+			for _, p := range rep.StateChanging {
+				known = known || p.Method == e.Method && p.URL == e.URL
+			}
+			if known {
+				continue
+			}
+			rep.StateChanging = append(rep.StateChanging, e)
+			rep.Notes = append(rep.Notes, e.line()+"; found on the way, so this run sent it: the rule keeps it out of a later run")
+		}
+		if len(found) > 0 {
+			rep.StateChanging = mergeStateChanges(rep.StateChanging)
+		}
+	}
 	if advFlags.on {
 		rep.Advisories = advLeads
 		rep.Failed = append(rep.Failed, advFailures...)

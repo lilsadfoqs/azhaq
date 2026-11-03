@@ -798,7 +798,7 @@ func cmdDirs(args []string) error {
 	list := onceString(fs, "l", "file of services (- for stdin)")
 	words := fs.String("w", "", "wordlist (default: SecLists' common.txt, built in: "+strconv.Itoa(dirscol.WordCount())+" words)")
 	specs := []string{"ac=dirs-ac", "e=dirs-ext", "depth=dirs-depth", "t=dirs-threads", "rate=dirs-rate",
-		"H=header", "cookie", "max-requests", "timeout", "v", "scope", "program", "allow", "deny", "deny-path", "ledger", "kill-file", "proxy"}
+		"H=header", "cookie", "max-requests", "timeout", "v", "scope", "program", "allow", "deny", "deny-path", "ledger", "kill-file", "proxy", "resolvers"}
 	for _, m := range dirsMatchers {
 		specs = append(specs, m.flag+"=dirs-"+m.flag)
 	}

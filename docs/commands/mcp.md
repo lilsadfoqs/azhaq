@@ -5,7 +5,7 @@ Serve azhaq to MCP clients over stdio, with the scope and the request budget fix
 ## Synopsis
 
 ```
-azhaq mcp [-scope FILE|PLATFORM -program P] [-allow D] [-deny D] [-deny-path RE] [-resolvers LIST] [-sources LIST|none] [-skip LIST] [-no-takeover] [-chrome-no-sandbox] [-max-requests N] [-rate N] [-dir DIR]
+azhaq mcp [-scope FILE|PLATFORM -program P] [-allow D] [-deny D] [-deny-path RE] [-resolvers LIST] [-sources LIST|none] [-history] [-allow-writes] [-skip LIST] [-no-takeover] [-chrome-no-sandbox] [-max-requests N] [-rate N] [-dir DIR]
 ```
 
 ## Examples
@@ -25,8 +25,9 @@ claude mcp add azhaq -- azhaq mcp -allow example.com -max-requests 5000
 
 1. Starts a Model Context Protocol server that talks JSON-RPC on stdin and stdout.
 2. Holds every tool to the scope given by `-scope`, `-allow`, `-deny` and `-deny-path`. All tool calls together share the `-max-requests` budget and the `-rate` pace.
-3. Holds every tool to the resolvers and sources given by `-resolvers`, `-sources`, `-skip` and `-no-takeover`, as `run` takes them. A call cannot set or change them. `-chrome-no-sandbox` is held too: Chrome, which a tool uses with `browser` or `login`, does not start without its sandbox, and the tool answers with an error naming the flag, unless the server was started with it. `azhaq_scope` and `azhaq_status` show them as `run_options`, and `azhaq_resume` keeps them. With `-sources none`, `azhaq_plan` lists no collector that asks a third party and `azhaq_subdomains` is refused.
-4. Writes the workspaces the tools make into `-dir`.
+3. Holds every tool to the resolvers and sources given by `-resolvers`, `-sources`, `-skip` and `-no-takeover`, as `run` takes them. A call cannot set or change them. `-sources` defaults to none: the server asks no third party at all, and reads or writes no name history either, unless it was started with `-sources` naming sources to ask or with `-history`. `azhaq_subdomains`, which is itself a third-party lookup, is refused unless the server was started with `-sources` naming some. `-chrome-no-sandbox` is held too: Chrome, which a tool uses with `browser` or `login`, does not start without its sandbox, and the tool answers with an error naming the flag, unless the server was started with it. `azhaq_scope` and `azhaq_status` show them as `run_options`, and `azhaq_resume` keeps them.
+4. Holds the tools that send writes to a flag of the server's: `azhaq_params` with a body method and `azhaq_roles_writes` are refused before anything is sent unless the server was started with `-allow-writes`.
+5. Writes the workspaces the tools make into `-dir`.
 
 The tools and their arguments are listed in [MCP.md](../MCP.md).
 
@@ -57,13 +58,15 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 | `-deny` | string, repeatable |  | a domain or host the tools must not touch |
 | `-deny-path` | string, repeatable |  | a regular expression on a URL's path and query: a URL it matches is never requested by any tool |
 | `-unlocked` | bool |  | serve without a scope: any target a tool is given may be touched (port scans stay refused) |
+| `-allow-writes` | bool |  | let tools send writes: azhaq_params with a body method (POST, JSON or XML) and azhaq_roles_writes; without it those calls are refused before anything is sent; fixed at start |
 
 **What a map asks**
 
 | Flag | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `-resolvers` | string |  | DNS resolvers every tool uses (a comma list or a file, as run -resolvers): fixed at start, no tool argument sets them |
-| `-sources` | string |  | subdomain sources every tool may ask, comma-separated; none: no third party at all (no source, archive, RDAP or search engine), only the resolvers and the targets are asked; fixed at start |
+| `-sources` | string |  | subdomain sources every tool may ask, comma-separated (default none: no third party at all — no source, archive, RDAP or search engine — only the resolvers and the targets are asked; name the sources at start to ask them); fixed at start |
+| `-history` | bool |  | read and write the name history (names earlier runs found): without it no tool reads or writes it; fixed at start |
 | `-skip` | string |  | collectors no tool runs, comma-separated (azhaq plan lists them): fixed at start |
 | `-no-takeover` | bool |  | no tool checks CNAMEs for a takeover: fixed at start |
 | `-chrome-no-sandbox` | bool |  | let Chrome run without its sandbox where the system gives it none (the tools that load pages in Chrome, such as azhaq_map with browser, and sign in with it): fixed at start. The pages are the targets' and untrusted: use a throwaway environment. By default Chrome does not start then |

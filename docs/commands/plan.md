@@ -27,10 +27,11 @@ azhaq plan -scope bugcrowd -program tesla -dirs words.txt
 1. The collectors that would run on each seed.
 2. The seeds left out of scope.
 3. The active techniques you asked for.
-4. The kinds of request sent to the targets: the GET requests for pages, and besides them each port scan, UDP probe, POST body, sign-in and Chrome load (`-screenshots`, `-browser`) that is planned. Every flag of `run` that asks for a collector is named here or under the active techniques. It does not list the URLs a crawl will find (`/createdb` is known only after an API description is read): the ledger lists those, as they are sent.
-5. The third-party source queries, counted.
-6. A bound on the requests to the targets: what each web service costs, and the cap.
-7. The estimate: the requests, connects, DNS queries and source queries the run would send, for each stage and each collector. See [The estimate](#the-estimate).
+4. The kinds of request sent to the targets: the GET requests for pages, and besides them each port scan, UDP probe, POST body, sign-in and Chrome load (`-screenshots`, `-browser`) that is planned. Every flag of `run` that asks for a collector is named here or under the active techniques. It does not list the URLs a crawl will find: the ledger lists those, as they are sent.
+5. The requests among the targets that may change state: a GET whose own name carries a word that declares one (create, createdb, delete, remove, reset, populate, logout, signout, clear, wipe, drop, truncate, purge, destroy, erase, seed), each with the `-deny-path` rule that would keep it out. The list informs and withholds nothing; the run's summary names the others a crawl found on the way, whose API descriptions declare one (VAmPI's `GET /createdb` is the kind: its description says it creates and populates the database).
+6. The third-party source queries, counted.
+7. A bound on the requests to the targets: what each web service costs, and the cap.
+8. The estimate: the requests, connects, DNS queries and source queries the run would send, for each stage and each collector. See [The estimate](#the-estimate).
 
 `azhaq plan roles …` is `azhaq roles -plan …`: the same estimate for a roles command, by its own stages (see [roles](roles.md#cost-by-stage)).
 
@@ -46,6 +47,7 @@ Plain text prints the same parts, one block each. `-json` prints one object.
 | `active` | The active techniques asked for. |
 | `builtin_paths` | The built-in path checks on each web service. |
 | `limits` | The options that bound the run. |
+| `state_changing` | The requests among the targets that may change state, each with its URL, the word, and the `-deny-path` rule that would keep it out (`deny_path`). Requests already kept out by a rule are not listed. |
 | `sends` | What goes to the targets, one line for each kind. |
 | `requests` | What is known of the requests before any is sent. See below. |
 | `estimate` | What the run would send, by stage and collector: `total`, `stages` and `basis`. See [The estimate](#the-estimate). |

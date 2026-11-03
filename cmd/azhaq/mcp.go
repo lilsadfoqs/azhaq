@@ -22,6 +22,7 @@ import (
 	"github.com/lilsadfoqs/azhaq/internal/collectors/subcol"
 	"github.com/lilsadfoqs/azhaq/internal/dnsr"
 	"github.com/lilsadfoqs/azhaq/internal/lazyre"
+	"github.com/lilsadfoqs/azhaq/internal/portscan"
 	"github.com/lilsadfoqs/azhaq/scope"
 	"github.com/lilsadfoqs/azhaq/store"
 )
@@ -61,11 +62,28 @@ type mcpServer struct {
 // change them.
 type heldRun struct {
 	Resolvers  string `json:"resolvers,omitempty"`   // -resolvers: a list or a file, as given
-	Sources    string `json:"sources,omitempty"`     // -sources: "none" asks no third party
+	Sources    string `json:"sources,omitempty"`     // -sources: the sources named at start; "" means none
 	Skip       string `json:"skip,omitempty"`        // -skip: collectors never run
 	NoTakeover bool   `json:"no_takeover,omitempty"` // -no-takeover
 	// ChromeNoSandbox is -chrome-no-sandbox: Chrome may run without its sandbox.
 	ChromeNoSandbox bool `json:"chrome_no_sandbox,omitempty"`
+	// History is -history at start: the name history is read and
+	// written. Without it no tool reads or writes it.
+	History bool `json:"history,omitempty"`
+	// AllowWrites is -allow-writes at start: tools may send writes
+	// (azhaq_params with a body method, azhaq_roles_writes). Without
+	// it those calls are refused before anything is sent.
+	AllowWrites bool `json:"allow_writes,omitempty"`
+}
+
+// sources is the effective -sources of every call: none, unless the
+// server was started with -sources naming the ones to ask. A locked-
+// down start asks no third party and reads no name history.
+func (h heldRun) sources() string {
+	if h.Sources == "" {
+		return "none"
+	}
+	return h.Sources
 }
 
 // serverLedgerName is the ledger of the calls that name no workspace, in -dir.
@@ -109,8 +127,9 @@ func (h heldRun) options(command string) []string {
 	var out []string
 	switch command {
 	case "run", "plan", "resume", "roles":
-		if h.Sources != "" {
-			out = append(out, "-sources", h.Sources)
+		out = append(out, "-sources", h.sources())
+		if !h.History {
+			out = append(out, "-no-history")
 		}
 		if h.Skip != "" {
 			out = append(out, "-skip", h.Skip)
@@ -122,13 +141,16 @@ func (h heldRun) options(command string) []string {
 			out = append(out, "-chrome-no-sandbox")
 		}
 		fallthrough
-	case "probe", "ports":
+	case "probe", "ports", "dirs", "params", "dns":
 		if h.Resolvers != "" {
 			out = append(out, "-resolvers", h.Resolvers)
 		}
 	case "subs":
-		if h.Sources != "" && h.Sources != "none" {
-			out = append(out, "-sources", h.Sources)
+		if h.sources() != "none" {
+			out = append(out, "-sources", h.sources())
+		}
+		if !h.History {
+			out = append(out, "-no-history")
 		}
 		if h.Resolvers != "" {
 			out = append(out, "-resolvers", h.Resolvers)
@@ -147,11 +169,13 @@ func (h heldRun) view() map[string]any {
 		return v
 	}
 	return map[string]any{
-		"resolvers":   or(h.Resolvers, "default public resolvers"),
-		"sources":     or(h.Sources, "default set"),
-		"skip":        splitList(h.Skip),
-		"no_takeover": h.NoTakeover,
-		"chrome":      map[bool]string{false: "needs its sandbox: where the system gives none, Chrome does not start (-chrome-no-sandbox at start allows it)", true: "may run without its sandbox (-chrome-no-sandbox)"}[h.ChromeNoSandbox],
+		"resolvers":    or(h.Resolvers, "default public resolvers"),
+		"sources":      h.sources(),
+		"skip":         splitList(h.Skip),
+		"no_takeover":  h.NoTakeover,
+		"history":      h.History,
+		"allow_writes": h.AllowWrites,
+		"chrome":       map[bool]string{false: "needs its sandbox: where the system gives none, Chrome does not start (-chrome-no-sandbox at start allows it)", true: "may run without its sandbox (-chrome-no-sandbox)"}[h.ChromeNoSandbox],
 	}
 }
 
@@ -161,8 +185,11 @@ func (h heldRun) text() string {
 	if h.Resolvers != "" {
 		out = append(out, "resolvers "+h.Resolvers)
 	}
-	if h.Sources != "" {
-		out = append(out, "sources "+h.Sources)
+	out = append(out, "sources "+h.sources())
+	if h.History {
+		out = append(out, "name history read and written")
+	} else {
+		out = append(out, "no name history")
 	}
 	if h.Skip != "" {
 		out = append(out, "skip "+h.Skip)
@@ -173,8 +200,8 @@ func (h heldRun) text() string {
 	if h.ChromeNoSandbox {
 		out = append(out, "Chrome may run without its sandbox")
 	}
-	if len(out) == 0 {
-		return "default resolvers and sources"
+	if h.AllowWrites {
+		out = append(out, "writes allowed (-allow-writes)")
 	}
 	return strings.Join(out, ", ")
 }
@@ -191,7 +218,9 @@ func cmdMCP(args []string) error {
 	rate := fs.Float64("rate", 0, "requests per second to targets in every tool call (0: no pace)")
 	dir := fs.String("dir", "azhaq-mcp", "directory for the workspaces the tools write")
 	resolvers := fs.String("resolvers", "", "DNS resolvers every tool uses (a comma list or a file, as run -resolvers): fixed at start, no tool argument sets them")
-	sources := fs.String("sources", "", "subdomain sources every tool may ask, comma-separated; none: no third party at all (no source, archive, RDAP or search engine), only the resolvers and the targets are asked; fixed at start")
+	sources := fs.String("sources", "", "subdomain sources every tool may ask, comma-separated (default none: no third party at all — no source, archive, RDAP or search engine — only the resolvers and the targets are asked; name the sources at start to ask them); fixed at start")
+	history := fs.Bool("history", false, "read and write the name history (names earlier runs found): without it no tool reads or writes it; fixed at start")
+	allowWrites := fs.Bool("allow-writes", false, "let tools send writes: azhaq_params with a body method (POST, JSON or XML) and azhaq_roles_writes; without it those calls are refused before anything is sent; fixed at start")
 	skip := fs.String("skip", "", "collectors no tool runs, comma-separated (azhaq plan lists them): fixed at start")
 	noTakeover := fs.Bool("no-takeover", false, "no tool checks CNAMEs for a takeover: fixed at start")
 	chromeNoSandbox := fs.Bool("chrome-no-sandbox", false, "let Chrome run without its sandbox where the system gives it none (the tools that load pages in Chrome, such as azhaq_map with browser, and sign in with it): fixed at start. The pages are the targets' and untrusted: use a throwaway environment. By default Chrome does not start then")
@@ -212,6 +241,8 @@ func cmdMCP(args []string) error {
 		return err
 	}
 	held.ChromeNoSandbox = *chromeNoSandbox
+	held.History = *history
+	held.AllowWrites = *allowWrites
 	exe, err := os.Executable()
 	if err != nil {
 		return err
@@ -593,7 +624,7 @@ func (s *mcpServer) run(ctx context.Context, progress any, touches bool, args ..
 			return cmdResult{}, ctx.Err()
 		}
 		defer func() { <-sem }()
-		args = append(args, s.lock...)
+		args = append(args, s.lockFor(args[0])...)
 		if s.rate > 0 {
 			args = append(args, "-rate", fmt.Sprint(s.rate))
 		}
@@ -902,64 +933,11 @@ func (s *mcpServer) call(ctx context.Context, name string, a map[string]any, pro
 		}
 		return result(r, extra)
 	}
-	// targets are the run flags for the targets the arguments name; list
-	// is the file that holds a list of them, "" when there is none.
-	targets := func() (args []string, list string, err error) {
-		for _, u := range strList(a, "url") {
-			args = append(args, "-url", u)
-		}
-		for _, d := range strList(a, "domain") {
-			args = append(args, "-domain", d)
-		}
-		if boolean(a, "program_scope") {
-			if !s.locked {
-				return nil, "", errors.New("program_scope needs the server started with -scope")
-			}
-			args = append(args, s.scopeSeeds()...)
-		}
-		if ts := strList(a, "targets"); len(ts) > 0 {
-			f, err := os.CreateTemp(s.dir, listPrefix+"*.txt")
-			if err != nil {
-				return nil, "", err
-			}
-			_, _ = f.WriteString(strings.Join(ts, "\n") + "\n")
-			f.Close()
-			args, list = append(args, "-list", f.Name()), f.Name()
-		}
-		if len(args) == 0 {
-			return nil, "", errors.New("give url, domain or targets")
-		}
-		return args, list, nil
-	}
-	session := func() []string {
-		var f []string
-		if t := num(a, "timeout_seconds", 0); t > 0 {
-			f = append(f, "-timeout", fmt.Sprintf("%ds", t))
-		}
-		if l, ok := a["login"].(map[string]any); ok && str(l, "url") != "" {
-			f = append(f, "-login", str(l, "url"), "-login-user", str(l, "user"), "-login-pass", str(l, "password"))
-		}
-		for _, h := range strList(a, "headers") {
-			f = append(f, "-header", h)
-		}
-		return f
-	}
-	runFlags := func() []string {
-		var f []string
-		if boolean(a, "passive") {
-			f = append(f, "-passive")
-		}
-		if boolean(a, "browser") {
-			f = append(f, "-browser")
-		}
-		if boolean(a, "graphql") {
-			f = append(f, "-graphql")
-		}
-		if d, ok := a["depth"].(float64); ok && d >= 0 && d <= 1<<30 {
-			f = append(f, "-depth", fmt.Sprint(int(d))) // 0 too: the targets alone
-		}
-		return append(f, session()...)
-	}
+	// targets, session and runFlags are the shared helpers below: a plan
+	// and the call it plans are built by the one code path (mapCallArgs).
+	targets := func() (args []string, list string, err error) { return s.targetArgs(a) }
+	session := func() []string { return sessionArgs(a) }
+	runFlags := func() []string { return mapFlags(a) }
 	switch name {
 	case "azhaq_scope":
 		s.mu.Lock()
@@ -968,14 +946,14 @@ func (s *mcpServer) call(ctx context.Context, name string, a map[string]any, pro
 		raw, _ := json.Marshal(map[string]any{"about": s.instructions(), "locked": s.locked, "rules": s.lock, "run_options": s.held.view(), "budget": s.budget, "used": used, "rate": s.rate})
 		return toolText(string(raw), false), nil
 	case "azhaq_plan":
-		t, list, err := targets()
+		args, list, err := s.mapCallArgs(a, "plan", "")
 		if err != nil {
 			return nil, err
 		}
 		if list != "" {
 			defer os.Remove(list)
 		}
-		r, err := s.run(ctx, progress, true, append(append([]string{"plan", "-json"}, t...), runFlags()...)...)
+		r, err := s.run(ctx, progress, true, args...)
 		if err != nil {
 			return nil, err
 		}
@@ -986,11 +964,11 @@ func (s *mcpServer) call(ctx context.Context, name string, a map[string]any, pro
 		if err != nil {
 			return nil, err
 		}
-		t, list, err := targets()
+		args, list, err := s.mapCallArgs(a, "run", db)
 		if err != nil {
 			return nil, err
 		}
-		r, err := s.run(ctx, progress, true, append(append([]string{"run", "-quiet", "-json", "-db", db}, t...), runFlags()...)...)
+		r, err := s.run(ctx, progress, true, args...)
 		if list != "" && (err != nil || r.summary["resume"] == nil) {
 			os.Remove(list) // nothing will read it again
 		}
@@ -1020,9 +998,6 @@ func (s *mcpServer) call(ctx context.Context, name string, a map[string]any, pro
 		if len(ds) == 0 {
 			return nil, errors.New("give domain")
 		}
-		if s.held.Sources == "none" {
-			return nil, errors.New("this server was started with -sources none: no third party is asked, and every subdomain source is one")
-		}
 		args := []string{"subs", "-json", "-silent"}
 		for _, d := range ds {
 			// Passive, but the sources learn what the assistant asks about:
@@ -1031,6 +1006,9 @@ func (s *mcpServer) call(ctx context.Context, name string, a map[string]any, pro
 				return nil, fmt.Errorf("%s is outside the scope this server was started with", d)
 			}
 			args = append(args, "-d", d)
+		}
+		if s.held.sources() == "none" {
+			return nil, errors.New("this server asks no third party (it was not started with -sources naming any): every subdomain source is one")
 		}
 		if boolean(a, "live") {
 			args = append(args, "-live")
@@ -1083,6 +1061,12 @@ func (s *mcpServer) call(ctx context.Context, name string, a map[string]any, pro
 		if p := str(a, "ports"); p != "" {
 			args = append(args, "-p", p)
 		}
+		if u := str(a, "udp_ports"); u != "" {
+			if _, err := portscan.UDPPorts(u); err != nil {
+				return nil, fmt.Errorf("udp_ports: %v", err)
+			}
+			args = append(args, "-pu", u)
+		}
 		for _, h := range hs {
 			if !s.allows(h) {
 				return nil, fmt.Errorf("%s is outside the scope this server was started with", h)
@@ -1091,6 +1075,139 @@ func (s *mcpServer) call(ctx context.Context, name string, a map[string]any, pro
 		// The lock is the scope; each connect counts against the server's
 		// request budget and is paced at its -rate.
 		r, err := s.runLedgered(ctx, progress, true, args...)
+		if err != nil {
+			return nil, err
+		}
+		return listed(r)
+	case "azhaq_dirs":
+		ts := strList(a, "targets")
+		if len(ts) == 0 {
+			return nil, errors.New("give targets: web services such as https://app.example.com/")
+		}
+		if err := s.checkTargetsInScope(ts); err != nil {
+			return nil, err
+		}
+		args := []string{"dirs", "-json", "-silent"}
+		for _, t := range ts {
+			args = append(args, "-u", t)
+		}
+		wf, done, err := s.wordsFile(a, "words")
+		if err != nil {
+			return nil, err
+		}
+		defer done()
+		if wf != "" {
+			args = append(args, "-w", wf)
+		}
+		if ext := strList(a, "extensions"); len(ext) > 0 {
+			args = append(args, "-e", strings.Join(ext, ","))
+		}
+		run := s.runLedgered
+		if a["workspace"] != nil {
+			db, err := s.workspace(a)
+			if err != nil {
+				return nil, err
+			}
+			args = append(args, "-db", db)
+			run = s.run
+		}
+		r, err := run(ctx, progress, true, args...)
+		if err != nil {
+			return nil, err
+		}
+		return listed(r)
+	case "azhaq_params":
+		ts := strList(a, "targets")
+		if len(ts) == 0 {
+			return nil, errors.New("give targets: page URLs")
+		}
+		if err := s.checkTargetsInScope(ts); err != nil {
+			return nil, err
+		}
+		method := strings.ToUpper(str(a, "method"))
+		if method == "" {
+			method = "GET"
+		}
+		switch method {
+		case "GET", "POST", "JSON", "XML":
+		default:
+			return nil, fmt.Errorf("method %q: use GET, POST, JSON or XML", method)
+		}
+		if method != "GET" && !s.held.AllowWrites {
+			return nil, errors.New("method " + method + " sends names in a body, which may change data: this server was not started with -allow-writes, so azhaq_params sends GET only")
+		}
+		if len(strList(a, "words")) > 0 && str(a, "wordlist") != "" {
+			return nil, errors.New("give words or wordlist, not both")
+		}
+		args := []string{"params", "-json", "-silent", "-X", method}
+		for _, t := range ts {
+			args = append(args, "-u", t)
+		}
+		wf, done, err := s.wordsFile(a, "words")
+		if err != nil {
+			return nil, err
+		}
+		defer done()
+		if wf != "" {
+			args = append(args, "-w", wf)
+		} else if wl := str(a, "wordlist"); wl != "" {
+			args = append(args, "-w", wl)
+		}
+		run := s.runLedgered
+		if a["workspace"] != nil {
+			db, err := s.workspace(a)
+			if err != nil {
+				return nil, err
+			}
+			args = append(args, "-db", db)
+			run = s.run
+		}
+		r, err := run(ctx, progress, true, args...)
+		if err != nil {
+			return nil, err
+		}
+		return listed(r)
+	case "azhaq_dns_brute":
+		ds := strList(a, "domain")
+		if len(ds) == 0 {
+			return nil, errors.New("give domain")
+		}
+		if len(strList(a, "words")) == 0 {
+			return nil, errors.New("give words: the names to guess under each domain (at most 5000; the schema bounds the list)")
+		}
+		if err := s.checkTargetsInScope(ds); err != nil {
+			return nil, err
+		}
+		if err := s.budgetSpent(); err != nil {
+			return nil, err
+		}
+		wf, done, err := s.wordsFile(a, "words")
+		if err != nil {
+			return nil, err
+		}
+		defer done()
+		args := []string{"dns", "-json", "-silent", "-w", wf}
+		for _, d := range ds {
+			args = append(args, "-d", d)
+		}
+		if s.rate > 0 {
+			args = append(args, "-rl", fmt.Sprint(s.rate))
+		}
+		run := s.runLedgered
+		if a["workspace"] != nil {
+			db, err := s.workspace(a)
+			if err != nil {
+				return nil, err
+			}
+			args = append(args, "-db", db)
+			run = s.run
+		}
+		// dns takes no -rate or -max-requests: the budget was checked
+		// above, the pace is -rl, and its scope is the lock's allow and
+		// deny rules (lockFor leaves the URL path rules out for dns).
+		args = append(args, s.lockFor("dns")...)
+		args = append(args, s.held.options("dns")...)
+		r, err := run(ctx, progress, false, args...)
 		if err != nil {
 			return nil, err
 		}
@@ -1150,7 +1267,7 @@ func (s *mcpServer) call(ctx context.Context, name string, a map[string]any, pro
 			raw, _ = json.Marshal(data)
 		}
 		return toolText(string(raw), false), nil
-	case "azhaq_roles":
+	case "azhaq_roles", "azhaq_roles_writes":
 		roles, _ := a["roles"].([]any)
 		if len(roles) < 2 {
 			return nil, errors.New("give at least two roles: [" + roleAnon + "," + roleHeader + "," + roleLogin + "]")
@@ -1160,6 +1277,25 @@ func (s *mcpServer) call(ctx context.Context, name string, a map[string]any, pro
 			return nil, err
 		}
 		args := []string{"roles", "-json", "-dir", strings.TrimSuffix(db, ".db") + "-roles"}
+		if name == "azhaq_roles_writes" {
+			spec := str(a, "replay_writes")
+			if spec == "" {
+				return nil, errors.New("give replay_writes: the write methods to replay, such as post,put,patch (add delete to delete objects)")
+			}
+			if _, err := writeMethods(spec); err != nil {
+				return nil, err
+			}
+			if !s.held.AllowWrites && !boolean(a, "dry_writes") {
+				return nil, errors.New("role write replay sends writes, which change data: this server was not started with -allow-writes, so azhaq_roles_writes is refused (dry_writes lists the writes and sends none)")
+			}
+			args = append(args, "-replay-writes", spec)
+			if boolean(a, "dry_writes") {
+				args = append(args, "-dry-writes")
+			}
+			if boolean(a, "canary") {
+				args = append(args, "-replay-writes-canary")
+			}
+		}
 		if u := str(a, "login_url"); u != "" {
 			args = append(args, "-login", u)
 		}
@@ -1281,6 +1417,121 @@ func (s *mcpServer) call(ctx context.Context, name string, a map[string]any, pro
 		return s.status()
 	}
 	return nil, fmt.Errorf("%w %q", errUnknownTool, name)
+}
+
+// targetArgs are the run flags for the targets the arguments name; list
+// is the file that holds a list of them, "" when there is none.
+func (s *mcpServer) targetArgs(a map[string]any) (args []string, list string, err error) {
+	for _, u := range strList(a, "url") {
+		args = append(args, "-url", u)
+	}
+	for _, d := range strList(a, "domain") {
+		args = append(args, "-domain", d)
+	}
+	if boolean(a, "program_scope") {
+		if !s.locked {
+			return nil, "", errors.New("program_scope needs the server started with -scope")
+		}
+		args = append(args, s.scopeSeeds()...)
+	}
+	if ts := strList(a, "targets"); len(ts) > 0 {
+		f, err := os.CreateTemp(s.dir, listPrefix+"*.txt")
+		if err != nil {
+			return nil, "", err
+		}
+		_, _ = f.WriteString(strings.Join(ts, "\n") + "\n")
+		f.Close()
+		args, list = append(args, "-list", f.Name()), f.Name()
+	}
+	if len(args) == 0 {
+		return nil, "", errors.New("give url, domain or targets")
+	}
+	return args, list, nil
+}
+
+// sessionArgs are the session and time flags of a call's arguments.
+func sessionArgs(a map[string]any) []string {
+	var f []string
+	if t := num(a, "timeout_seconds", 0); t > 0 {
+		f = append(f, "-timeout", fmt.Sprintf("%ds", t))
+	}
+	if l, ok := a["login"].(map[string]any); ok && str(l, "url") != "" {
+		f = append(f, "-login", str(l, "url"), "-login-user", str(l, "user"), "-login-pass", str(l, "password"))
+	}
+	for _, h := range strList(a, "headers") {
+		f = append(f, "-header", h)
+	}
+	return f
+}
+
+// mapFlags are the run flags of a map call's arguments besides its targets.
+func mapFlags(a map[string]any) []string {
+	var f []string
+	if boolean(a, "passive") {
+		f = append(f, "-passive")
+	}
+	if boolean(a, "browser") {
+		f = append(f, "-browser")
+	}
+	if boolean(a, "graphql") {
+		f = append(f, "-graphql")
+	}
+	if d, ok := a["depth"].(float64); ok && d >= 0 && d <= 1<<30 {
+		f = append(f, "-depth", fmt.Sprint(int(d))) // 0 too: the targets alone
+	}
+	return append(f, sessionArgs(a)...)
+}
+
+// mapCallArgs is the one request-planning code path of azhaq_plan and
+// azhaq_map: the same targets and flags, planned by "plan" or sent by
+// "run" into db. The server's lock, pace, budget and held options are
+// added to both by run, so what a plan lists is what the call sends.
+func (s *mcpServer) mapCallArgs(a map[string]any, command, db string) ([]string, string, error) {
+	t, list, err := s.targetArgs(a)
+	if err != nil {
+		return nil, "", err
+	}
+	head := []string{"plan", "-json"}
+	if command == "run" {
+		head = []string{"run", "-quiet", "-json", "-db", db}
+	}
+	return append(append(head, t...), mapFlags(a)...), list, nil
+}
+
+// checkTargetsInScope refuses targets outside the server's lock before
+// any network activity, for the tools whose commands would otherwise
+// take the targets given as their own scope (dirs, params, dns).
+func (s *mcpServer) checkTargetsInScope(targets []string) error {
+	if !s.locked {
+		return nil
+	}
+	for _, t := range targets {
+		host, ok := hostOf(t)
+		if !ok || host == "" {
+			return fmt.Errorf("%s is not a target the scope can be checked against", t)
+		}
+		if !s.allows(host) {
+			return fmt.Errorf("%s is outside the scope this server was started with", t)
+		}
+	}
+	return nil
+}
+
+// wordsFile writes a call's word list to a file in the server's
+// directory, for the commands that take a wordlist file. The list is
+// bounded by the tool's schema (maxItems), so the file is bounded too.
+func (s *mcpServer) wordsFile(a map[string]any, key string) (string, func(), error) {
+	words := strList(a, key)
+	if len(words) == 0 {
+		return "", func() {}, nil
+	}
+	f, err := os.CreateTemp(s.dir, ".words-*.txt")
+	if err != nil {
+		return "", func() {}, err
+	}
+	_, _ = f.WriteString(strings.Join(words, "\n") + "\n")
+	f.Close()
+	return f.Name(), func() { os.Remove(f.Name()) }, nil
 }
 
 // mapped is what azhaq_map and azhaq_resume return: the run's summary and
@@ -1435,7 +1686,13 @@ var mcpRunFlags = map[string]bool{
 	"url": true, "domain": true, "cidr": true, "passive": true, "browser": true, "graphql": true, "depth": true, "timeout": true,
 	"header": true, "login": true, "login-user": true, "max-requests": true, "rate": true, "deny": true, "deny-path": true, "quiet": true,
 	"json": true, "probe": true, "no-favicon": true, "skip": true, "port-rate": true, "max-items": true, "live": true,
-	"resolvers": true, "sources": true, "no-takeover": true, "chrome-no-sandbox": true,
+	"resolvers": true, "sources": true, "no-takeover": true, "chrome-no-sandbox": true, "no-history": true,
+	// The runs azhaq_dirs, azhaq_params and azhaq_dns_brute start, for a
+	// workspace a resume continues.
+	"dirs": true, "dirs-ext": true, "dirs-depth": true, "dirs-threads": true, "dirs-rate": true,
+	"params": true, "params-method": true, "params-writes": true, "params-include": true, "params-per-host": true,
+	"params-threads": true, "params-rate": true, "params-chunk": true, "params-timeout": true,
+	"dns-brute": true, "ports-udp": true, "no-tech": true,
 }
 
 // forMCP rewrites what a summary says for the command line into what a
@@ -1533,6 +1790,38 @@ func exportExt(format string) string {
 		return ".jsonl"
 	}
 	return ".txt"
+}
+
+// lockFor is the server's lock as a command takes it. A -deny-path rule
+// is a rule on a URL's path: the commands that send no URL request
+// (ports connects to ports, dns asks resolvers) do not take the flag,
+// and the rule cannot apply to them, so it is left out for those alone.
+// Their scope is still the -allow and -deny rules, checked before the
+// command runs and held by it.
+func (s *mcpServer) lockFor(command string) []string {
+	if command != "ports" && command != "dns" {
+		return s.lock
+	}
+	var out []string
+	for i := 0; i < len(s.lock); i += 2 {
+		if s.lock[i] == "-deny-path" {
+			continue
+		}
+		out = append(out, s.lock[i:i+2]...)
+	}
+	return out
+}
+
+// budgetSpent refuses a call when the server's budget is spent, for the
+// commands whose own flags take no -max-requests (dns): the same
+// refusal s.run makes for the others, before anything is sent.
+func (s *mcpServer) budgetSpent() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.budget > 0 && s.used >= s.budget {
+		return fmt.Errorf("the request budget of this server (%d) is spent; restart azhaq mcp with a larger -max-requests", s.budget)
+	}
+	return nil
 }
 
 // allowRules are the -allow rules of the server's lock.

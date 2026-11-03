@@ -265,7 +265,7 @@ func TestMCPMapAndResume(t *testing.T) {
 	raw, _ := os.ReadFile(filepath.Join(dir, "args"))
 	last := strings.Split(strings.TrimSpace(string(raw)), "\n")
 	got := last[len(last)-2] // the resume; the query of the highlights follows
-	want := "resume -db " + filepath.Join(dir, "w.db") + " -quiet -json -header Cookie: sid=1 -allow 127.0.0.1 -rate 5 -max-requests 30"
+	want := "resume -db " + filepath.Join(dir, "w.db") + " -quiet -json -header Cookie: sid=1 -allow 127.0.0.1 -rate 5 -max-requests 30 -sources none -no-history"
 	if got != want {
 		t.Errorf("resume ran\n %s\nwant\n %s", got, want)
 	}

@@ -58,6 +58,14 @@ type report struct {
 	Notes       []string         `json:"notes,omitempty"`
 	Next        []string         `json:"next,omitempty"`
 	Error       string           `json:"error,omitempty"` // an internal error: the summary disagrees with its rows (audit.go); exit 1
+	// StateChanging are the GET requests whose own name or description
+	// declares a state change: the ones among the targets, named before
+	// anything was sent, and the ones found on the way (an API
+	// description's operation, a link named /logout), named in this
+	// summary. Each names the -deny-path rule that would keep it out;
+	// none was withheld by the list.
+	StateChanging []stateChangeEntry `json:"state_changing,omitempty"`
+
 	// Cost is what the run was estimated to send before it started, by
 	// stage, beside what each stage sent (see cost.go).
 	Cost *costReport `json:"cost,omitempty"`

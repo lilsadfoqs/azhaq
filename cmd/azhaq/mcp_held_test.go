@@ -48,7 +48,7 @@ func TestMCPHeldRunOptionsReachTheCommands(t *testing.T) {
 	}
 	// A resumed run and roles' runs get them too.
 	for _, cmd := range []string{"resume", "roles"} {
-		if got := strings.Join(s.held.options(cmd), " "); got != "-sources crtsh -skip rdap -no-takeover -resolvers 127.0.0.1:5399" {
+		if got := strings.Join(s.held.options(cmd), " "); got != "-sources crtsh -no-history -skip rdap -no-takeover -resolvers 127.0.0.1:5399" {
 			t.Errorf("%s gets %q", cmd, got)
 		}
 	}
@@ -69,11 +69,15 @@ func TestMCPHeldRunOptionsReachTheCommands(t *testing.T) {
 		t.Errorf("azhaq_status does not show the held options: %s", text)
 	}
 
-	// -sources none: no third party, so the subdomain tool, which is one, is refused.
-	s.held = heldRun{Sources: "none"}
-	if text, isErr := callText(t, s, "azhaq_subdomains", map[string]any{"domain": "lab.test"}); !isErr || !strings.Contains(text, "-sources none") {
-		t.Errorf("azhaq_subdomains under -sources none: %v %s", isErr, text)
+	// No sources named at start: no third party, so the subdomain tool,
+	// which is one, is refused. That is the default, not only -sources none.
+	for _, held := range []heldRun{{Sources: "none"}, {}} {
+		s.held = held
+		if text, isErr := callText(t, s, "azhaq_subdomains", map[string]any{"domain": "lab.test"}); !isErr || !strings.Contains(text, "asks no third party") {
+			t.Errorf("azhaq_subdomains with sources %q: %v %s", held.Sources, isErr, text)
+		}
 	}
+	s.held = heldRun{Resolvers: "127.0.0.1:5399", Sources: "crtsh", Skip: "rdap", NoTakeover: true}
 }
 
 // A run this server started comes back through azhaq_resume with the options

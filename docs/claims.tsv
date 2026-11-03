@@ -68,6 +68,7 @@ readme.docs-pointer-troubleshooting	README.md	a URL that is `hint`, a thin map, 
 readme.docs-pointer-architecture	README.md	every collector, how the engine works, limitations	test:cmd/azhaq:TestDocLinksLeadToHeadings
 readme.juice-routes	README.md	azhaq finds 70 of the 77 routes	bench:juice-shop: ≥ 90% of the server routes its frontend calls;test:bench:TestKnownRoutesRowNamesTheAppBuild
 mcp.scope-budget-pace	docs/commands/mcp.md	Holds every tool to the scope given by `-scope`, `-allow`, `-deny` and `-deny-path`	test:cmd/azhaq:TestMCPMapAndResume,TestMCPConcurrentCallsShareTheBudget,TestMCPRefusesHostHeaders,TestRegressSAF09MCPPortsHonourTheBudget
+mcp.sources-default-none	docs/commands/mcp.md	`-sources` defaults to none: the server asks no third party at all	test:cmd/azhaq:TestMCPNewToolsListedBoundedAndAnnotated,TestMCPHeldRunOptionsReachTheCommands,TestMCPMapHeldToResolversAndNoSources
 mcp.held-options	docs/commands/mcp.md	Holds every tool to the resolvers and sources given by	test:cmd/azhaq:TestMCPHeldRunOptionsReachTheCommands,TestMCPMapHeldToResolversAndNoSources,TestMCPResumeKeepsTheHeldOptions,TestMCPRefusesBadHeldOptions
 mcp.signal-exit	docs/commands/mcp.md	A signal ends it with exit 0, after the commands in flight stop	test:cmd/azhaq:TestMCPServerStopsOnSIGTERM,TestMCPStopInterruptsCallsInFlight
 plan.sends-nothing	docs/commands/plan.md	without sending anything	test:cmd/azhaq:TestEgressContract
@@ -84,6 +85,8 @@ plan.max-names	docs/commands/plan.md	At most `max_names` names are looked up	tes
 plan.per-web-service	docs/commands/plan.md	`per_web_service` covers a web service's page, the favicon and the built-in paths	test:cmd/azhaq:TestPlanRequests,TestDocsCountTheBuiltInPathsAsThePlanDoes
 plan.cap	docs/commands/plan.md	`cap` is set by `cap_by`	test:cmd/azhaq:TestPlanRequests
 plan.sources-none	docs/commands/plan.md	With `-sources none` no collector that asks a third party is in the plan	test:cmd/azhaq:TestPlanSourcesNoneListsNoThirdParty
+plan.state-changing	docs/commands/plan.md	The requests among the targets that may change state	test:cmd/azhaq:TestPlanNamesStateChangingGETBeforeAnyRequest,TestStateChangesFromVAmPIDescription,TestRunNamesStateChangingGETsAndDenyKeepsThemOut
+plan.state-changing-informs	docs/commands/plan.md	The list informs and withholds nothing	test:cmd/azhaq:TestPlanNamesStateChangingGETBeforeAnyRequest,TestRunNamesStateChangingGETsAndDenyKeepsThemOut,TestMCPPlanAndWireAgreeOnStateChangingGET
 worker.deny-path	docs/commands/worker.md	A URL a `-deny-path` rule keeps out is never sent	test:cmd/azhaq:TestWorkerHoldsDenyPathAndReportsIt
 worker.session	docs/commands/worker.md	In a signed-in run it reports a 401, a redirect to the sign-in page or a cleared session cookie	test:engine:TestWorkersSessionEndsAndIsRenewed,TestWorkersSessionLostIsNotRenewed;test:cmd/azhaq:TestWorkersSessionGivenByCookieEndsTheRun
 query.every-row	docs/commands/query.md	`query` prints every row that matches, unless `-limit` says otherwise	test:cmd/azhaq:TestRegressOUT03QueryPrintsEveryRow;test:bench:TestQueryDefaultUnlimited
@@ -211,6 +214,7 @@ docs-concepts.held-scanner-test-file	docs/CONCEPTS.md	A scanner's own test file 
 docs-concepts.held-without-scope	docs/CONCEPTS.md	Without a scope, requests stay on the site.	test:internal/contract:TestDocumentedPromisesAreKept
 docs-concepts.promise-is-the-method	docs/CONCEPTS.md	What azhaq promises is about the method, and nothing more:	note:states the scope of the three promises after it, each proved on its own row
 docs-concepts.method-not-effect	docs/CONCEPTS.md	That says what the method is, not that nothing changes.	note:a limit of what the method promise says, not a behaviour a test can hold
+docs-concepts.state-named-in-advance	docs/CONCEPTS.md	What is named in advance, without being withheld, is narrower	test:cmd/azhaq:TestPlanNamesStateChangingGETBeforeAnyRequest,TestStateChangesFromVAmPIDescription,TestRunNamesStateChangingGETsAndDenyKeepsThemOut
 docs-mcp.held-intro	docs/MCP.md	No tool argument can widen or change them	test:cmd/azhaq:TestMCPScopeHoldsAfterInitialize,TestMCPHeldRunOptionsReachTheCommands;test:internal/contract:TestMCPHoldsWhatItWasStartedWith
 docs-mcp.out-of-scope-skipped	docs/MCP.md	Targets outside the scope are skipped and listed in the summary.	test:cmd/azhaq:TestMCPProtocol,TestMCPScopeHoldsAfterInitialize
 docs-mcp.deny-path	docs/MCP.md	Paths a `-deny-path` rule matches are never requested by any tool, and are listed as skipped.	test:internal/contract:TestMCPHoldsWhatItWasStartedWith;test:engine:TestEveryFoundGetIsRequestedAndDenyPathIsListed
@@ -219,14 +223,16 @@ docs-mcp.subdomain-outside	docs/MCP.md	A subdomain lookup for a domain outside t
 docs-mcp.budget-spent	docs/MCP.md	Once the budget is spent, every tool that sends requests refuses.	test:cmd/azhaq:TestMCPProtocol,TestMCPConcurrentCallsShareTheBudget,TestRegressSAF09MCPPortsHonourTheBudget
 docs-mcp.chrome-sandbox	docs/MCP.md	Chrome is not run without its sandbox	test:cmd/azhaq:TestMCPHoldsChromeNoSandbox,TestChromeIsNotRunWithoutItsSandboxUnlessAllowed
 docs-mcp.resolvers-sources	docs/MCP.md	`-resolvers`, `-sources`, `-skip` and `-no-takeover` are held for every call that takes them	test:cmd/azhaq:TestMCPHeldRunOptionsReachTheCommands,TestMCPMapHeldToResolversAndNoSources,TestMCPResumeKeepsTheHeldOptions
-docs-mcp.sources-none	docs/MCP.md	With `-sources none` it asks no third party at all	test:cmd/azhaq:TestMCPMapHeldToResolversAndNoSources
+docs-mcp.sources-none	docs/MCP.md	it asks no third party at all (sources `none`	test:cmd/azhaq:TestMCPMapHeldToResolversAndNoSources,TestMCPNewToolsListedBoundedAndAnnotated,TestMCPHeldRunOptionsReachTheCommands
+docs-mcp.locked-down-default	docs/MCP.md	The server is locked down by default	test:cmd/azhaq:TestMCPNewToolsListedBoundedAndAnnotated,TestMCPHeldRunOptionsReachTheCommands,TestMCPMapHeldToResolversAndNoSources
+docs-mcp.no-history-default	docs/MCP.md	reads or writes no name history, unless the server was started with	test:cmd/azhaq:TestMCPNewToolsListedBoundedAndAnnotated,TestMCPHeldRunOptionsReachTheCommands
 docs-mcp.flags-listed	docs/MCP.md	Every flag is described on the [`azhaq mcp` page]	test:cmd/azhaq:TestDocsNameOnlyFlagsThatExist,TestEveryCommandHasAPage
 docs-mcp.needs-a-scope	docs/MCP.md	Without `-allow` or `-scope` the server does not start (exit 2), unless `-unlocked` says so.	test:cmd/azhaq:TestMCPNeedsAScope
 docs-mcp.unlocked-ports	docs/MCP.md	Then any target a tool is given may be touched, and port scans are refused.	test:internal/contract:TestMCPUnlockedRefusesPortScansAndNoToolTakesWhatItLeavesOut
 docs-mcp.allow-port	docs/MCP.md	An `-allow HOST:PORT` holds the tools to that port of the host	test:cmd/azhaq:TestProbeAllowWithAPortRefusesAnotherPort,TestPortsAllowWithAPortScansThatPortOnly
-docs-mcp.left-out-writes	docs/MCP.md	Anything that sends a write (a method other than GET, HEAD or OPTIONS) or a body the client chooses	test:internal/contract:TestNoMCPToolThatSendsTakesWhatTheToolsLeaveOut,TestMCPUnlockedRefusesPortScansAndNoToolTakesWhatItLeavesOut
-docs-mcp.left-out-wordlists	docs/MCP.md	Path and parameter wordlists: `-dirs` and `-params`	test:internal/contract:TestNoMCPToolThatSendsTakesWhatTheToolsLeaveOut
-docs-mcp.left-out-dns-udp	docs/MCP.md	DNS brute force and permutations.	test:internal/contract:TestNoMCPToolThatSendsTakesWhatTheToolsLeaveOut
+docs-mcp.left-out-writes	docs/MCP.md	A client-chosen request body or method beyond what a tool declares	test:internal/contract:TestNoMCPToolThatSendsTakesWhatTheToolsLeaveOut,TestMCPUnlockedRefusesPortScansAndNoToolTakesWhatItLeavesOut
+docs-mcp.declared-writes	docs/MCP.md	The writes a tool does send are the ones its own description names	test:cmd/azhaq:TestMCPNewToolsListedBoundedAndAnnotated,TestMCPNewToolsUnderLockBudgetAndLedger;test:internal/contract:TestNoMCPToolThatSendsTakesWhatTheToolsLeaveOut
+docs-mcp.left-out-permutations	docs/MCP.md	`azhaq_dns_brute` guesses the call's words only	test:cmd/azhaq:TestMCPNewToolsUnderLockBudgetAndLedger;test:internal/contract:TestNoMCPToolThatSendsTakesWhatTheToolsLeaveOut
 docs-mcp.workspace-targets-kept	docs/MCP.md	It is kept only while the run it started can be resumed.	test:internal/contract:TestMCPKillFileStopsTheWorkspaceAndResumeGoesOn
 docs-mcp.kill-file	docs/MCP.md	While it exists, a call that uses the workspace sends nothing more and ends stopped	test:internal/contract:TestMCPKillFileStopsTheWorkspaceAndResumeGoesOn,TestTheKillFileStopsTheRunAndResumeGoesOn
 docs-mcp.server-ledger	docs/MCP.md	The calls that name no workspace have a ledger of the server's	test:cmd/azhaq:TestMCPStatelessToolsWriteTheServerLedger,TestMCPServerLedgerHasOneWriterAtATime;test:internal/contract:TestMCPLedgersHoldEveryRequestTheToolsSent
@@ -237,7 +243,7 @@ docs-mcp.refused-wrong-type	docs/MCP.md	a value of the wrong type, such as a str
 docs-mcp.check-any-depth	docs/MCP.md	The check applies at any depth.	test:cmd/azhaq:TestMCPArgumentTypes
 docs-mcp.progress	docs/MCP.md	Calls send progress notifications when the client gives a `progressToken`	test:cmd/azhaq:TestMCPCancelAndProgress
 docs-mcp.client-cannot-add-deny-path	docs/MCP.md	A client cannot add one per call.	test:internal/contract:TestMCPHoldsWhatItWasStartedWith
-docs-mcp.default-sources	docs/MCP.md	Without them a map asks the default public resolvers and the passive third-party sources	test:cmd/azhaq:TestPlanRequests,TestPlanSourcesNoneListsNoThirdParty,TestMCPMapHeldToResolversAndNoSources
+docs-mcp.default-sources	docs/MCP.md	Without `-resolvers` a map asks the default public resolvers	test:cmd/azhaq:TestPlanRequests,TestPlanSourcesNoneListsNoThirdParty,TestMCPMapHeldToResolversAndNoSources
 docs-output.exit-1	docs/OUTPUT.md	The command could not do its job: a database it cannot open, or Chrome missing for `-browser`.	test:internal/contract:TestExitOneIsACommandThatCouldNotDoItsJob
 docs-output.exit-2-outside-scope	docs/OUTPUT.md	The targets are all outside the scope given	test:internal/contract:TestExitCodeFollowsTheOutcome;test:cmd/azhaq:TestPortsSweepNeedsARange
 docs-output.exit-2-message-names-them	docs/OUTPUT.md	The message names them. A range that no allow rule touches counts. `ports` and `dns` say it too.	test:cmd/azhaq:TestDNSStopsWithAnExitAndSaysWhereToGoOn

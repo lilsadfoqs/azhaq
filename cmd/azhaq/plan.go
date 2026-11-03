@@ -61,6 +61,13 @@ type runPlan struct {
 	Requests   planRequests      `json:"requests"`
 	Estimate   costEstimate      `json:"estimate"`       // what the run would send, by stage
 	AXFR       []planAXFR        `json:"axfr,omitempty"` // -axfr: the zone transfers dns -axfr would try
+	// StateChanging are the in-scope GET requests among the targets
+	// whose own name declares a state change, each with the -deny-path
+	// rule that would keep it out. They are still sent: the list
+	// informs, the user decides. Requests a crawl would only find by
+	// reading an API description are not known to a plan, which sends
+	// nothing; a run names those in its summary as it finds them.
+	StateChanging []stateChangeEntry `json:"state_changing,omitempty"`
 }
 
 // planAXFR is the zone transfer of one name, as dns -axfr would go about it.
@@ -273,6 +280,7 @@ func planTransfers(seeds []types.Seed, b engine.Budgets, resolvers []string) []p
 
 func planFor(cat *catalog.Catalog, seeds []types.Seed, b engine.Budgets, paths []string, limits map[string]string, send sendLimits, rep *report) runPlan {
 	p := runPlan{Collectors: map[string]string{}, Limits: limits, Skipped: slices.Clone(rep.Skipped)}
+	p.StateChanging = stateChangesOfSeeds(seeds, b.Scope)
 	p.Requests = planRequests{Sources: map[string]int{}, Cap: send.max, scoped: !b.Scope.Empty()}
 	if send.max > 0 {
 		p.Requests.CapBy = send.by
@@ -430,6 +438,12 @@ func printPlanText(w io.Writer, p runPlan) {
 		fmt.Fprintf(w, "left out (%d)\n", len(p.Skipped))
 		for _, s := range p.Skipped {
 			fmt.Fprintf(w, "  %s: %s\n", s.Target, s.Reason)
+		}
+	}
+	if len(p.StateChanging) > 0 {
+		fmt.Printf("requests that may change state (%d; named by their own name or description, and still sent unless a -deny-path rule keeps them out)\n", len(p.StateChanging))
+		for _, e := range p.StateChanging {
+			fmt.Printf("  %s\n", e.line())
 		}
 	}
 	names := make([]string, 0, len(p.Collectors))
