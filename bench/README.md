@@ -43,7 +43,7 @@ go run ./bench -units default:dirs       # one row; -profile polite -units polit
 
 | Checked | How |
 | --- | --- |
-| Exit codes: 0 complete, 2 usage, 3 failure, 4 limit | a plain map, a dead target, an unknown flag, `-max-requests 4`, `-cookie` whose session ends |
+| Exit codes: 0 complete, 2 usage, 3 the job failed, 4 limit | a plain map, a dead target, one target that answers and one that does not (0, and 3 with `-strict-exit`), an unknown flag, `-max-requests 4`, `-cookie` whose session ends |
 | The summary's requests = the ledger's lines = what arrived | every run above, and the claims cases (the site, or a counting proxy in front of Juice Shop) |
 | Every row inside the scope | a link, a script, a form and `-dirs`/`-graphql` toward 127.0.0.2: none arrives; a target outside `-allow` is refused (exit 2) |
 | GET-only mapping by default | the page, its script and its API description name POST, PUT and DELETE routes and a GraphQL endpoint: only GET, HEAD and OPTIONS arrive |

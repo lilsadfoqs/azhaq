@@ -4,7 +4,7 @@ Every case is a defect a trial or a hunter found in a release. The contract test
 
 The contract:
 
-- **Exit codes:** 0 complete, 1 error, 2 usage, 3 finished with failures, 4 stopped by a limit (resumable).
+- **Exit codes:** 0 complete (a run that did its job names its failures; `failures` counts them), 1 error, 2 usage, 3 the job failed or is incomplete (`-strict-exit`: any failure), 4 stopped by a limit (resumable).
 - **Summary:** the JSON summary on stderr (`-json`) must agree with the rows the run wrote, and `stopped` must agree with the exit code.
 
 | # | Found in | Command and condition | Must hold |
@@ -19,7 +19,7 @@ The contract:
 | C8 | trial 9 (reviewer A) | `subs -all-sources`, where off-by-default sources fail | the summary says how many sources answered out of how many asked (`sources answered`/`sources asked`); off-by-default sources that fail are counted apart (`off-by-default failed`) and do not make `degraded` true on their own |
 | C9 | every trial | any command with an unknown flag | exit 2; summary `exit:2` under `-json` |
 | C10 | trial 9 (reviewer B) | MCP `azhaq_subdomains` for a domain outside `-allow` | a JSON-RPC result with `isError:true`; no subdomain source is asked |
-| C11 | every trial | `subs`, where one source fails while the others answered | exit 3, with or without `-fail-on-errors`; the failure is listed as partial |
+| C11 | every trial | `subs`, where one source fails while the others answered | exit 0 with `failures` above 0 and the failure listed as partial; exit 3 with `-strict-exit` |
 | C12 | trial 9 (reviewer A) | a `roles` run stopped by `-replay-max` | exit 4; `stopped` names `-replay-max` |
 
 **Invariants for every command and every case:**
@@ -27,6 +27,7 @@ The contract:
 - **I1.** `exit` in the JSON summary equals the process exit code.
 - **I2.** `stopped` is non-empty if and only if the exit code is 4.
 - **I3.** `complete` is true if and only if the exit code is 0.
+- **I5.** `failures` is in every summary: above 0 when `failed` or `unreachable` lists anything, and the exit code is 3 for such a run only when its job failed or with `-strict-exit`.
 - **I4.** An exit of 3 has at least one entry in `failed` or `unreachable`, or a warning note that says why.
 - **I5.** `results` equals the number of result lines on stdout (JSONL objects under `-json`), except `run`, whose stdout is the map.
 

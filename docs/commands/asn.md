@@ -42,7 +42,7 @@ Plain output is one prefix per line. With `-json` you get one object per prefix.
 
 ## Summary and exit codes
 
-The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.md#the-summary) and [exit codes](../OUTPUT.md#exit-codes).
+The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.md#the-summary) and [exit codes](../OUTPUT.md#exit-codes). Any failure exits 3 here: a prefix or an address has no answer to tell from a failure (see [Exit 3](../OUTPUT.md#exit-3)).
 
 ## Flags
 
