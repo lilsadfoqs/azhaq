@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/lilsadfoqs/azhaq/engine"
+	"github.com/lilsadfoqs/azhaq/internal/advisory"
 	"github.com/lilsadfoqs/azhaq/internal/browser"
 	"github.com/lilsadfoqs/azhaq/internal/collectors/dirscol"
 	"github.com/lilsadfoqs/azhaq/internal/collectors/pathscol"
@@ -53,6 +54,12 @@ type report struct {
 	Resume      string           `json:"resume,omitempty"`
 	Notes       []string         `json:"notes,omitempty"`
 	Next        []string         `json:"next,omitempty"`
+	// Advisories are the -advisories leads: one per stored advisory row,
+	// each with its advisory id and URL, its match label and, when a
+	// confirmation ran, its confidence. They are leads, not map rows:
+	// Counts still adds up to Stored without them, and the notes say
+	// how their counts are derived (one lead per line printed).
+	Advisories []advisory.Lead `json:"advisories,omitempty"`
 
 	dnsFrom int64 // egress.DNSTotal when the command began: dns_queries are its own
 

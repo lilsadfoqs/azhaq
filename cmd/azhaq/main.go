@@ -31,6 +31,7 @@ import (
 	"github.com/lilsadfoqs/azhaq/catalog"
 	"github.com/lilsadfoqs/azhaq/collectors"
 	"github.com/lilsadfoqs/azhaq/engine"
+	"github.com/lilsadfoqs/azhaq/internal/advisory"
 	"github.com/lilsadfoqs/azhaq/internal/browser"
 	"github.com/lilsadfoqs/azhaq/internal/collectors/apicol"
 	"github.com/lilsadfoqs/azhaq/internal/collectors/asncol"
@@ -381,6 +382,8 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	for _, m := range dirsMatchers {
 		dirsMatch[m.flag] = fs.String("dirs-"+m.flag, "", m.help)
 	}
+	var advFlags advisoryFlags
+	advFlags.register(fs)
 	graphql := fs.Bool("graphql", false, "read the schema of GraphQL endpoints with an introspection query (active; the targets given are the scope unless -allow)")
 	graphqlWordlist := fs.String("graphql-wordlist", "", "extra probe words (one per line), tried and recombined with the built-in ones when a GraphQL endpoint's introspection is off and its schema has to be recovered from validation errors")
 	skip := fs.String("skip", "", "collectors not to run, comma-separated: azhaq-ports or ports, subs for the subdomain collector (azhaq plan lists them); a name that is none is an error; azhaq resume leaves out the tasks the run kept for them")
@@ -404,6 +407,12 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	}
 	if *retryFailed || *retryRun != "" {
 		return usagef("-retry-failed and -retry-run continue a run: give them to azhaq resume -db FILE")
+	}
+	if err := advFlags.check(); err != nil {
+		return err
+	}
+	if advFlags.on && out.plan {
+		return usagef("-advisories matches what a run confirmed: a plan sends nothing and confirms nothing to match, so run without plan")
 	}
 	if err := scope.CompilePaths(denyPath); err != nil {
 		return usagef("%v", err)
@@ -577,7 +586,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	// Everything that can make this a usage error is checked before a
 	// database is created.
 	scopeNamed := len(allow) > 0
-	active := *bruteFile != "" || *permute || *graphql || *portsSpec != "" || *portsUDP != "" || *dirsFile != "" || *paramsFile != ""
+	active := *bruteFile != "" || *permute || *graphql || *portsSpec != "" || *portsUDP != "" || *dirsFile != "" || *paramsFile != "" || advFlags.confirm
 	if *paramsFile != "" {
 		switch m := strings.ToUpper(*paramsMethod); m {
 		case "GET":
@@ -651,7 +660,10 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		return usagef("the screenshot directory %s is a file: -dir (shots) or -screenshots (run) names a directory", *shots)
 	}
 	if active && len(allow) == 0 {
-		return usagef("-dns-brute, -permute, -graphql, -ports, -dirs and -params need a target that names a host, domain or address (an ASN or organisation does not), or -allow / -scope")
+		return usagef("-dns-brute, -permute, -graphql, -ports, -dirs, -params and -advisories-confirm need a target that names a host, domain or address (an ASN or organisation does not), or -allow / -scope")
+	}
+	if advFlags.confirm && rules.Empty() {
+		return usagef("-advisories-confirm sends its reads only inside a scope: give -allow, -scope or a target that names a host or address")
 	}
 	ports, err := parsePorts(*webPorts)
 	if err != nil {
@@ -1301,6 +1313,17 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	stopTicker()
 	ents, _ := st.Entities()
 	obs, _ := st.Observations()
+	// -advisories: Part 1 matches what the run already confirmed and
+	// sends nothing more; Part 2's reads, with -advisories-confirm, go
+	// through egress here, while the run's ledger and budget are still
+	// the run's, and count in rep.Requests below.
+	var advLeads []advisory.Lead
+	var advFailures []engine.Failure
+	advNote := ""
+	if advFlags.on {
+		advLeads, advFailures, advNote = advisoryStage(ctx, st, obs, advFlags)
+		obs, _ = st.Observations()
+	}
 	edges, _ := st.Edges()
 	leftover, _ := st.LoadLeftover()
 	scope := engine.ScopeSeeds(seeds, ents, edges)
@@ -1326,6 +1349,11 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 				return err
 			}
 		}
+		for _, lead := range advLeads {
+			if err := enc.Encode(leadRow(lead)); err != nil {
+				return err
+			}
+		}
 	case *probe:
 		for _, r := range engine.ProbeRows(obs) {
 			fmt.Println(r.Line())
@@ -1335,8 +1363,14 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 				fmt.Println(r.Line())
 			}
 		}
+		for _, lead := range advLeads {
+			fmt.Println(lead.Line())
+		}
 	default:
 		printMap(shown)
+		for _, lead := range advLeads {
+			fmt.Printf("  %s\n", lead.Line())
+		}
 		if *showObs {
 			fmt.Println("observations")
 			for _, o := range obs {
@@ -1346,6 +1380,13 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	}
 	rep.noCatchAll = *noCatchAll
 	fillReport(rep, path, seeds, ents, obs, rows)
+	if advFlags.on {
+		rep.Advisories = advLeads
+		rep.Failed = append(rep.Failed, advFailures...)
+		if advNote != "" {
+			rep.Notes = append(rep.Notes, advNote)
+		}
+	}
 	if n := opts.DNS.TakeoverNote("-no-takeover"); n != "" {
 		rep.Notes = append(rep.Notes, n)
 	}

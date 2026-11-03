@@ -84,6 +84,8 @@ func cmdPorts(args []string) error {
 	fs := newFlags("ports")
 	var c common
 	c.register(fs)
+	var advFlags advisoryFlags
+	advFlags.register(fs)
 	fs.BoolVar(&c.json, "j", false, "same as -json")
 	var hosts stringsFlag
 	fs.Var(&hosts, "host", "hosts, addresses, CIDR ranges, AS numbers or host:port, comma-separated and repeatable")
@@ -135,6 +137,9 @@ func cmdPorts(args []string) error {
 	lof := fs.Bool("lof", false, "list the fields of -json and -csv, and stop")
 	given := inherit(fs, "rate=port-rate", "max-requests", "dns-rate", "timeout", "v", "scope", "program", "allow", "deny", "ledger", "kill-file")
 	if err := parse(fs, args); err != nil {
+		return err
+	}
+	if err := advFlags.check(); err != nil {
 		return err
 	}
 	if *lof {
@@ -297,6 +302,12 @@ func cmdPorts(args []string) error {
 		tcp = "top-100"
 	}
 	run := []string{"-list", path, "-passive", "-depth", "0", "-skip", skipAllBut("azhaq-ports"), "-ports", tcp}
+	if advFlags.on {
+		run = append(run, "-advisories", "-advisory-source="+advFlags.source)
+		if advFlags.confirm {
+			run = append(run, "-advisories-confirm")
+		}
+	}
 	if len(udpPorts) > 0 {
 		run = append(run, "-ports-udp", portscan.Spec(udpPorts))
 	}
@@ -453,7 +464,7 @@ func cmdPorts(args []string) error {
 	if *wn && *sn {
 		return usagef("-sn lists the addresses that are up, -wn scans them: give one")
 	}
-	_, done, err := runPreset(&c, append(run, extra...), rep, sink.see)
+	st, done, err := runPreset(&c, append(run, extra...), rep, sink.see)
 	if err != nil {
 		return err
 	}
@@ -461,10 +472,28 @@ func cmdPorts(args []string) error {
 	if err := out.finish(args, start, time.Now()); err != nil {
 		return err
 	}
+	sink.settle(rep, *sn)
+	if advFlags.on {
+		// The leads the run stored, after the port rows: one line each
+		// (a JSON object with -json), counted apart from the open ports
+		// in the summary's advisory counts, never as ports.
+		obs, _ := st.Observations()
+		leads := advisoryLeadsOf(obs)
+		for _, lead := range leads {
+			if c.json {
+				w.obj(leadRow(lead))
+			} else {
+				w.line(lead.Line())
+			}
+		}
+		if rep.Counts == nil {
+			rep.Counts = map[string]int{}
+		}
+		rep.Counts["advisory leads"] = len(leads)
+	}
 	if err := w.close(); err != nil {
 		return err
 	}
-	sink.settle(rep, *sn)
 	return rep.finish(c.json, c.silent)
 }
 
