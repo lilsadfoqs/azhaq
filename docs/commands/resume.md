@@ -42,7 +42,7 @@ A request that failed is a finished task, so a plain `resume` does not ask it ag
 
 - It reads the newest run of the workspace, and says which run on stderr and in the summary's note. `-retry-run ID` (the `run_id` of an earlier run's summary, or the start of it) asks the failed targets of that run instead: a later command on the workspace is the newest run, and its own failures, or none, are what a plain `-retry-failed` finds. When the newest run has nothing retryable and an earlier run has, the error names it: `run ID has 1 retryable failed target: azhaq resume -db FILE -retry-failed -retry-run ID`. The run asked again is the one continued, whichever run is the newest.
 - It asks again the failed targets the summary marks `retryable`: a timeout, a closed connection, an answer cut short, a 429 or a 5xx. Each target's task runs again with the failure it recorded dropped, and a stored 429 or 5xx answer is not read back. Targets that failed in a way a retry cannot fix are not asked, and stay in `failed` as they were. It exits 1 with `nothing to retry` when none is retryable.
-- It goes with the tasks a limit left: both run in one resume. The summary's `notes` says `-retry-failed: N failed targets of run ID asked again, M still fail`, and what still fails is in `failed` again, with exit 3. A limit that stops the resume first leaves the rest as tasks, which the next `resume` continues.
+- It goes with the tasks a limit left: both run in one resume. The summary's `notes` says `-retry-failed: N failed targets of run ID asked again, M still fail`, and what still fails is in `failed` again; the exit code is the shared rule's, 3 when nothing the run was given answered and 0 when something did. A limit that stops the resume first leaves the rest as tasks, which the next `resume` continues.
 - The retried requests count against `-max-requests` and are in the ledger like any other.
 - It applies to the run's own tasks. A `ports` or `dirs` sweep continues its unfinished addresses and words with a plain `resume`.
 
@@ -53,7 +53,7 @@ A request that failed is a finished task, so a plain `resume` does not ask it ag
 - `resume` takes run's flags, and gives them to a stopped `fuzz` as it spells them: `-quiet` prints no matches and no progress, only the summary, and run's `-timeout` (the run's bound, a duration) is `fuzz`'s `-maxtime`.
 - Files and directories are stored as full paths, so `resume` works from another directory.
 - A `-list` file is also copied into the workspace. If the file is gone or changed, the run continues the copy, and a note says so.
-- `-all-gets` and `-get-words` are dropped from a run an older azhaq stored, with a note: every GET found in scope is requested now.
+- `-all-gets` and `-get-words` are dropped from a run an older azhaq stored, with a line on stderr (`-json` leaves it out): every GET found in scope is requested now.
 
 ## Flags
 
