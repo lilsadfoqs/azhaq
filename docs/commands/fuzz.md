@@ -65,7 +65,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 - Five unanswered requests in a row stop the run, because the target is down. The exit code is 3 and the origin is listed under "did not answer".
 - With `-se` the run stops after twice `-t` failures of any kind in a row, as in ffuf. `-se-after N` names that number.
 - `-sf`, `-sa` and `-maxtime-job` say what they did in the summary. The first two end with exit 4, the last adds a note.
-  - `-sf` stops when over 95% of the first 50 or more answers are 403: `over 95% of the first 50 answers were 403 (-sf/-sa): the target is refusing, or the run is blocked`.
+  - `-sf` stops when over 95% of the first 50 or more answers are 403: `over 95% of the first N answers were 403 (-sf/-sa): the target is refusing, or the run is blocked`, where N is the number of inputs asked when the check ran: 51 or more.
   - `-sa` adds a stop at over 20% 429, which says the target is rate limiting: lower `-rate` or `-t`.
   - The summary gives the command that goes on, with `-start N`.
 - A report that cannot be written is a `failed` entry, not a silent loss. The exit code is 3. The place is tested before the first request.
@@ -134,7 +134,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 - They carry your `-H` and `-b`. Each goes through the scope, the budget, the pace and the ledger.
 - A value read from an answer can never change the scheme, host or port of a request. ffuf's `-preflight-anyhost` does not exist here.
   - Values come from the target, and the request carries your cookies and headers. A `Host: TOKEN` line or a `TOKEN/path` is refused: `preflight/postflight failed … cannot choose where requests go`. The failure makes exit 3.
-  - Put the host in the request file. `… is outside the scope` means the file names a host the run may not touch: `-allow HOST` adds it.
+  - Put the host in the request file. `… is outside the scope` means the file names a host the run may not touch: `-allow HOST` adds it, next to the host of `-u`, which `-allow` no longer adds for you.
 
 ### Steering a run
 - `-control FILE` steers a run that goes, in place of ffuf's console. A line added to the file is a command: `echo 'rate 2' >> FILE`.
