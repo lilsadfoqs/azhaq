@@ -1655,19 +1655,18 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 			rep.Stopped = fmt.Sprintf("-max-names %d reached, %d guesses not asked (-max-names raises it)", *maxNames, n)
 		}
 	}
+	if !out.embedded && rep.Command == "run" && len(opts.Ports) > 0 {
+		if obs, err := st.Observations(); err == nil {
+			if scanned, open := portAddresses(obs); scanned > 0 {
+				rep.AddressesScanned, rep.AddressesOpen = &scanned, &open
+			}
+		}
+	}
 	if rep.Stopped == "" && !out.embedded && rep.Command == "run" && len(opts.Ports) > 0 {
 		// The ports were asked of the addresses the run scanned: the rest of the range is the next pass.
-		per := len(opts.Ports)
-		if portCfg.Discover == portcol.DiscoverFirst {
-			per += 2
-		}
 		addresses := 0
-		if rep.Cost != nil {
-			for _, st := range rep.Cost.Stages {
-				if st.Stage == "ports" && st.Actual != nil {
-					addresses = int(st.Actual.Connects) / per
-				}
-			}
+		if rep.AddressesScanned != nil {
+			addresses = *rep.AddressesScanned
 		}
 		if why, _ := portsPass(len(opts.Ports), addresses, rep.Counts["ports"]); why != "" {
 			cmd := "azhaq run " + shellJoin(append(withoutFlag(args, "ports"), "-ports", "full", "-db", path))
