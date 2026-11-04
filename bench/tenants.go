@@ -24,7 +24,7 @@ type tenantsRow struct {
 	Matched  int      `json:"matched"`
 	Extra    []string `json:"extra,omitempty"`   // rows not in the table
 	Wrong    []string `json:"wrong,omitempty"`   // rows with other statuses
-	Logouts  int64    `json:"signed_in_logouts"` // /logout requested with a session: the map asks every GET, the check renews
+	Logouts  int64    `json:"signed_in_logouts"` // /logout requested with a session: held back by default, so 0 unless a run sends it
 	Seconds  float64  `json:"seconds"`
 }
 

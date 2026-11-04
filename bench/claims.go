@@ -642,7 +642,7 @@ func (c *claims) caseShots() {
 }
 
 // 4. DVWA, signed in; with and without Chrome. A found GET is requested,
-// logout.php included, and a session it ends is never lost without a word:
+// logout.php included (-send-state-changing), and a session it ends is never lost without a word:
 // the summary says the session ended and was signed in again. No request
 // Chrome answered from its cache.
 func (c *claims) caseDVWA() {
@@ -655,7 +655,7 @@ func (c *claims) caseDVWA() {
 			name = "run -login -browser"
 		}
 		c.httpCase(name, claimDVWA, paces3, func(o, db string, p claimPace) []string {
-			a := []string{"run", "-url", o + "/", "-db", db, "-json", "-login", o + "/login.php", "-login-user", "admin", "-login-pass", "password", "-chrome-no-sandbox"}
+			a := []string{"run", "-url", o + "/", "-db", db, "-json", "-login", o + "/login.php", "-login-user", "admin", "-login-pass", "password", "-chrome-no-sandbox", "-send-state-changing"}
 			if browser {
 				a = append(a, "-browser")
 			}

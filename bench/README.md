@@ -48,8 +48,9 @@ go run ./bench -units default:dirs       # one row; -profile polite -units polit
 | Every row inside the scope | a link, a script, a form and `-dirs`/`-graphql` toward 127.0.0.2: none arrives; a target outside `-allow` is refused (exit 2) |
 | GET-only mapping by default | the page, its script and its API description name POST, PUT and DELETE routes and a GraphQL endpoint: only GET, HEAD and OPTIONS arrive |
 | Writes only with their flags | `-submit-forms`, `-graphql`, `-params-writes`, `roles -replay-writes put`: that method arrives and no other; without the flag none |
-| `-deny-path` | `/logout` and `/admin/purge` are asked without the rule and never with it, and the summary lists what was skipped |
-| A lost session never goes on as an anonymous run | `-cookie`, a `/logout` link ends it: exit 3, the summary says so, no request without the session follows |
+| `-deny-path` | `/logout` and `/admin/purge` are asked (with `-send-state-changing`) without the rule and never with it, and the summary lists what was skipped |
+| A found state-changing GET is held back | a default run never asks a found `/logout` or `/admin/purge`, and the summary lists them as held back with the flag that sends them |
+| A lost session never goes on as an anonymous run | `-cookie`, a `/logout` link (sent with `-send-state-changing`) ends it: exit 3, the summary says so, no request without the session follows |
 | The MCP lock | no `-allow` or `-scope`: exit 2; a call for a URL outside `-allow` sends nothing; `-unlocked` refuses port scans; the budget holds over calls (`claims:8`) |
 | The request budget and the kill switch | `claims:9`, `claims:10`: the cap, the 0.6 s limit after the file, resume |
 | Ledger | `ledger -verify` accepts a run's ledger and refuses an edited one with exit 3 |
