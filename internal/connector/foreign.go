@@ -398,6 +398,9 @@ func ffufFacts(r map[string]any, method string) []Fact {
 	if ns, ok := r["duration"].(float64); ok {
 		payload["ms"] = int64(ns) / int64(time.Millisecond)
 	}
+	if cut, _ := r["truncated"].(bool); cut {
+		payload["truncated"] = true // a stream that never ends, cut by the run that read it
+	}
 	kind := "url"
 	if st, _ := payload["status"].(int); st > 0 {
 		kind = "application"

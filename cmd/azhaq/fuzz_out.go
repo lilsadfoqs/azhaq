@@ -220,6 +220,9 @@ func (l fuzzLook) normal(r fuzz.Result) string {
 	if c := controlText(r); c != "" {
 		extra += ", Control: " + c
 	}
+	if r.Truncated {
+		extra += ", Body: cut (a stream that never ends; the size is what was read)"
+	}
 	return fmt.Sprintf("%s%-23s [Status: %d, Size: %d, Words: %d, Lines: %d, Duration: %dms%s]%s", on, l.inputs(r), r.Status, r.Length, r.Words, r.Lines, r.Duration/int64(time.Millisecond), extra, off)
 }
 

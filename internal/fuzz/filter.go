@@ -28,6 +28,9 @@ type Response struct {
 	Request     *Request
 	// RawRequest and RawResponse are the exchange as text, kept for -od.
 	RawRequest, RawResponse string
+	// Truncated: a stream that never ends, cut at 64 KiB or 2 s; the size,
+	// words and lines are of what was read.
+	Truncated bool
 }
 
 // Filter says whether a response has some property: a status in a list, a

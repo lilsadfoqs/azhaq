@@ -218,6 +218,8 @@ type hit struct {
 	Words    int    `json:"words"`
 	Lines    int    `json:"lines"`
 	Location string `json:"location,omitempty"`
+	// Truncated: the body was a stream that never ends, cut by the read.
+	Truncated bool `json:"truncated,omitempty"`
 	// Control is set for a hit whose answer is, byte for byte, what its
 	// directory gave a name that cannot exist: the hit says nothing of a
 	// route, and the map folds it.
@@ -249,6 +251,9 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 			row := map[string]any{"url": h.URL, "via": "dirs", "status": h.Status, "length": h.Length, "words": h.Words, "lines": h.Lines}
 			if h.Location != "" {
 				row["location"] = h.Location
+			}
+			if h.Truncated {
+				row["truncated"] = true
 			}
 			if h.Control != nil {
 				row["catchall"], row["control"], row["control_exact"] = true, h.Control, true
@@ -490,7 +495,7 @@ func (c *Collector) sweep(ctx context.Context, dir string, note *sweepNote, foun
 			}
 			return nil
 		}
-		h := hit{URL: target, Status: r.Status, Length: r.Length, Words: r.Words, Lines: r.Lines, Location: r.Location}
+		h := hit{URL: target, Status: r.Status, Length: r.Length, Words: r.Words, Lines: r.Lines, Location: r.Location, Truncated: r.Truncated}
 		if nested {
 			inDirsMu.Lock()
 			inDirs = append(inDirs, exactHit{h, r})
@@ -754,6 +759,9 @@ type response struct {
 	Loc    string      `json:",omitempty"`
 	Header http.Header `json:"-"`
 	Body   []byte      `json:"-"`
+	// Truncated: a stream that never ends, cut at 64 KiB or 2 s; its length,
+	// words and lines are of what was read.
+	Truncated bool `json:",omitempty"`
 }
 
 // pace waits for a pace slot before target is asked, unless its answer is
@@ -824,6 +832,7 @@ func (c *Collector) send(ctx context.Context, target, probe string, page, exact 
 	if err != nil {
 		return response{}, err
 	}
+	cut := fetch.Bound(resp) // a stream that never ends is cut, not read to its end
 	defer resp.Body.Close()
 	// Counted as it streams, as ffuf counts the body: words are spaces+1
 	// and lines newlines+1 of the whole of it.
@@ -859,6 +868,7 @@ func (c *Collector) send(ctx context.Context, target, probe string, page, exact 
 			return response{}, fmt.Errorf("%w: %v", errCutOff, err)
 		}
 	}
+	r.Truncated = cut()
 	if c.needBody {
 		r.Header, r.Body = resp.Header, kept
 	}
