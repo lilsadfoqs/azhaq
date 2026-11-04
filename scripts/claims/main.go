@@ -299,9 +299,12 @@ func readDir(root, dir, suffix string, cache map[string]string) string {
 }
 
 // isCovered says whether a line of file, in section, must have its claims
-// proved: its whole page is under @cover, or its "## " section is
-// (FILE#Section).
+// proved: the file is the README or a command page (always), its whole page is
+// under @cover, or its "## " section is (FILE#Section).
 func isCovered(covered []string, file, section string) bool {
+	if file == "README.md" || strings.HasPrefix(file, "docs/commands/") {
+		return true // a new command page cannot start with an unproved claim
+	}
 	return slices.Contains(covered, file) || slices.Contains(covered, file+"#"+section)
 }
 

@@ -1,13 +1,14 @@
 # What the README and the command pages claim, and what proves it. CI runs
 # `go run ./scripts/claims`: it fails on a claim with no proof, a claim whose text
-# is gone from its page, a proof that is gone from the code, and, for the pages
-# named by @cover, any line that reads as a claim and is not here.
+# is gone from its page, a proof that is gone from the code, and, for the README, the command pages and
+# the sections named by @cover, any line that reads as a claim and is not here.
 #
 # id <TAB> page <TAB> a piece of the claim's own text <TAB> proof
 # proof: test:DIR:TestName[,TestName] | bench:TEXT of a bench check | file:PATH | note:WHY
 # The id starts with the page it is about (README.md: readme., docs/commands/plan.md: plan.).
 
-@cover README.md docs/commands/mcp.md docs/commands/plan.md docs/commands/worker.md docs/commands/query.md docs/commands/ledger.md
+# The README and every page of docs/commands are covered without a line here: a new page cannot
+# start with a claim that has no proof. Pages of docs/ are covered by section, as named below.
 @cover docs/CONCEPTS.md#Scope
 @cover docs/CONCEPTS.md#Budget, pace and the kill switch
 @cover docs/CONCEPTS.md#The ledger and its seal

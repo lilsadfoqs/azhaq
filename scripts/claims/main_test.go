@@ -74,6 +74,25 @@ func TestAPageNotCoveredIsListedNotFailed(t *testing.T) {
 	}
 }
 
+// The README and every command page are covered with no @cover line: a page
+// added later cannot begin with a claim that has no proof.
+func TestACommandPageIsAlwaysCovered(t *testing.T) {
+	root := tree(t, "# azhaq\n\nIt never sends a write.\n", page, "")
+	if err := os.WriteFile(filepath.Join(root, "docs", "commands", "new.md"), []byte("# azhaq new\n\n## What it does\n\nIt writes nothing else.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	rep, err := check(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := strings.Join(rep.Problems, "\n")
+	for _, want := range []string{"README.md:3: a claim with no proof", "run.md:5: a claim with no proof", "new.md:5: a claim with no proof"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("no problem says %q:\n%s", want, got)
+		}
+	}
+}
+
 func TestARewordedClaimFails(t *testing.T) {
 	ledger := "@cover docs/commands/run.md\nrun.no-writes\tdocs/commands/run.md\tNever sends a POST without its flag\ttest:cmd/azhaq:TestKeepsScope\n"
 	if got := problems(t, "# azhaq\n", page, ledger); !strings.Contains(got, "no longer in docs/commands/run.md") {
