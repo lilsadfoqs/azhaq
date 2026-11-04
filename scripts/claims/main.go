@@ -19,14 +19,26 @@ import (
 )
 
 func main() {
-	root := "."
-	if len(os.Args) > 1 {
-		root = os.Args[1]
+	root, list := ".", []string(nil)
+	args := os.Args[1:]
+	if len(args) > 0 && args[0] == "-list" {
+		list, args = args[1:], nil // the pages whose unproved sentences to print
+	}
+	if len(args) > 0 {
+		root = args[0]
 	}
 	rep, err := check(root)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "claims:", err)
 		os.Exit(2)
+	}
+	if list != nil {
+		for _, f := range list {
+			for _, o := range rep.Open[f] {
+				fmt.Printf("%s:%d: [%s] %s\n", f, o.n, o.section, o.text)
+			}
+		}
+		return
 	}
 	fmt.Print(rep.text())
 	if len(rep.Problems) > 0 {
@@ -44,7 +56,8 @@ type report struct {
 	Claims   int
 	Proved   map[string]int // proof kind → claims
 	Problems []string
-	Backlog  map[string]int // page not yet covered → lines that read as claims
+	Backlog  map[string]int         // page not yet covered → lines that read as claims
+	Open     map[string][]claimLine // page → its sentences that read as claims and have no claim (-list)
 }
 
 func (r *report) text() string {
@@ -207,7 +220,7 @@ func readClaims(root string) (claims []claim, covered []string, problems []strin
 }
 
 // A proof is one spec or several joined by ";" (each must hold). The kinds:
-// test:DIR:Name[,Name] (each a Test function in DIR's tests),
+// test:DIR:Name[,Name] (each a Test function in DIR's tests, none that always skips),
 // bench:TEXT (TEXT is in a check name of the bench), file:PATH (a script or
 // a record that exists), note:WHY (the line is advice, a pointer or a
 // definition, not a behaviour a test can hold).
@@ -234,8 +247,16 @@ func checkSpec(root, spec string, cache map[string]string) (kind, problem string
 		}
 		src := readDir(root, dir, "_test.go", cache)
 		for _, n := range strings.Split(names, ",") {
-			if !regexp.MustCompile(`(?m)^func ` + regexp.QuoteMeta(n) + `\(`).MatchString(src) {
+			at := regexp.MustCompile(`(?m)^func ` + regexp.QuoteMeta(n) + `\(`).FindStringIndex(src)
+			if at == nil {
 				return kind, fmt.Sprintf("its proof %s is not a test in %s", n, dir)
+			}
+			body := src[at[0]:]
+			if end := strings.Index(body[1:], "\nfunc "); end >= 0 {
+				body = body[:end+1]
+			}
+			if regexp.MustCompile(`(?m)^\tt\.Skip`).MatchString(body) {
+				return kind, fmt.Sprintf("its proof %s always skips: a test that does not run proves nothing", n)
 			}
 		}
 	case "bench":
@@ -320,7 +341,7 @@ func check(root string) (*report, error) {
 	if err != nil {
 		return nil, err
 	}
-	rep := &report{Claims: len(claims), Proved: map[string]int{}, Problems: problems, Backlog: map[string]int{}}
+	rep := &report{Claims: len(claims), Proved: map[string]int{}, Problems: problems, Backlog: map[string]int{}, Open: map[string][]claimLine{}}
 	files := claimFiles(root)
 	pages := map[string][]claimLine{}
 	texts := map[string]string{}
@@ -360,6 +381,7 @@ func check(root string) (*report, error) {
 			if len(open) == 0 {
 				continue
 			}
+			rep.Open[f] = append(rep.Open[f], claimLine{l.n, strings.Join(open, " "), l.section})
 			if isCovered(covered, f, l.section) {
 				rep.Problems = append(rep.Problems, fmt.Sprintf("%s:%d: a claim with no proof (add it to docs/claims.tsv with a test, or reword it): %s", f, l.n, clip(open[0])))
 			} else {
