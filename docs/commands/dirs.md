@@ -45,6 +45,7 @@ Plain output is one URL per line with its status, size, words and lines. With `-
 | `words` | The number of spaces in the whole body, plus one. |
 | `lines` | The number of newlines in the whole body, plus one. |
 | `redirectlocation` | Where a redirect points. |
+| `truncated` | `true` when the path streams for ever (server-sent events, `multipart/x-mixed-replace`): it is read for 64 KiB or 2 seconds and then closed, and `length`, `words` and `lines` are of what was read. |
 
 ## Summary and exit codes
 

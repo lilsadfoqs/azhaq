@@ -162,6 +162,7 @@ type jsonResult struct {
 	ResultFile       string              `json:"resultfile"`
 	Url              string              `json:"url"`
 	Host             string              `json:"host"`
+	Truncated        bool                `json:"truncated,omitempty"` // a stream that never ends, cut
 }
 
 // ejsonResult is the same with the inputs in base64, as -json prints them.
@@ -181,6 +182,7 @@ type ejsonResult struct {
 	Host             string              `json:"host"`
 	Matched          []Match             `json:"matched,omitempty"`
 	Control          *ControlRef         `json:"control,omitempty"`
+	Truncated        bool                `json:"truncated,omitempty"`
 }
 
 // StdoutJSON is a result as one line of -json shows it: ffuf's fields, the
@@ -192,7 +194,7 @@ func StdoutJSON(r Result) ejsonResult {
 	}
 	return ejsonResult{Input: in, Position: r.Position, StatusCode: r.Status, ContentLength: r.Length, ContentWords: r.Words, ContentLines: r.Lines,
 		ContentType: r.ContentType, RedirectLocation: r.RedirectLocation, Url: r.URL, Duration: r.Duration, ScraperData: map[string][]string{},
-		ResultFile: r.ResultFile, Host: r.Host, Matched: r.Matched, Control: r.Control}
+		ResultFile: r.ResultFile, Host: r.Host, Matched: r.Matched, Control: r.Control, Truncated: r.Truncated}
 }
 
 // WriteReport writes the report in format (json, ejson, html, md, csv, ecsv),
@@ -232,7 +234,7 @@ func writeJSON(path string, r Report) error {
 	for _, x := range r.Results {
 		rows = append(rows, jsonResult{Input: x.Input, Position: x.Position, StatusCode: x.Status, ContentLength: x.Length, ContentWords: x.Words,
 			ContentLines: x.Lines, ContentType: x.ContentType, RedirectLocation: x.RedirectLocation, ScraperData: map[string][]string{},
-			Duration: x.Duration, ResultFile: x.ResultFile, Url: x.URL, Host: x.Host})
+			Duration: x.Duration, ResultFile: x.ResultFile, Url: x.URL, Host: x.Host, Truncated: x.Truncated})
 	}
 	return writeJSONFile(path, struct {
 		CommandLine string        `json:"commandline"`

@@ -807,26 +807,70 @@ func endless(resp *http.Response) bool {
 	return strings.Contains(ct, "text/event-stream") || strings.Contains(ct, "multipart/x-mixed-replace")
 }
 
+// Bound makes resp.Body of a stream that never ends stop after streamLimit
+// bytes or streamWindow, whichever comes first, as an ordinary end of body;
+// cut then says it was cut. Any other answer is left as it is (cut stays
+// false). Every command that reads an answer uses it, or readResponse.
+func Bound(resp *http.Response) (cut func() bool) {
+	if !endless(resp) {
+		return func() bool { return false }
+	}
+	b := &boundBody{rc: resp.Body}
+	b.timer = time.AfterFunc(streamWindow, func() {
+		b.cut.Store(true)
+		_ = b.rc.Close()
+	})
+	resp.Body = b
+	return b.cut.Load
+}
+
+type boundBody struct {
+	rc    io.ReadCloser
+	timer *time.Timer
+	cut   atomic.Bool
+	n     int
+}
+
+func (b *boundBody) Read(p []byte) (int, error) {
+	if b.n >= streamLimit {
+		// At the limit: the stream is cut if it has one byte more.
+		var one [1]byte
+		if k, _ := b.rc.Read(one[:]); k > 0 {
+			b.cut.Store(true)
+		}
+		return 0, io.EOF
+	}
+	if len(p) > streamLimit-b.n {
+		p = p[:streamLimit-b.n]
+	}
+	n, err := b.rc.Read(p)
+	b.n += n
+	if err != nil && err != io.EOF && b.cut.Load() {
+		err = io.EOF // the window closed the body: what came is the answer
+	}
+	return n, err
+}
+
+func (b *boundBody) Close() error {
+	b.timer.Stop()
+	return b.rc.Close()
+}
+
 // readResponse reads resp's body up to limit, or, of a stream that never
 // ends, the first streamLimit bytes it sends within streamWindow; the body
 // is then marked truncated. It does not close the body.
 func readResponse(resp *http.Response, limit int) ([]byte, bool, error) {
-	if !endless(resp) {
-		return readBody(resp.Body, limit)
-	}
-	var cut atomic.Bool
-	t := time.AfterFunc(streamWindow, func() {
-		cut.Store(true)
-		_ = resp.Body.Close()
-	})
-	defer t.Stop()
-	n := min(limit, streamLimit)
-	body, err := io.ReadAll(io.LimitReader(resp.Body, int64(n)))
-	if cut.Load() || len(body) >= n {
-		// What came is the answer, and the stream went on.
-		return body, true, nil
-	}
-	return body, false, err
+	cut := Bound(resp)
+	body, trunc, err := readBody(resp.Body, limit)
+	return body, trunc || cut(), err
+}
+
+// ReadAnswer is for a command that reads its own answers: the body up to
+// limit bytes, or, of a stream that never ends, its first streamLimit bytes
+// within streamWindow, and whether the body was cut (at limit, or as a
+// stream). It does not close the body.
+func ReadAnswer(resp *http.Response, limit int) ([]byte, bool, error) {
+	return readResponse(resp, limit)
 }
 
 func bodyLimit(resp *http.Response) int {

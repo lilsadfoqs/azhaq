@@ -314,3 +314,4 @@ dns.cname-target-checked	docs/commands/dns.md	A name with a CNAME gets its targe
 dns.cname-alone-asks-a	docs/commands/dns.md	so the name is asked for A once more, and only the end of the chain is kept from that answer	test:cmd/azhaq:TestDNSCNAMEAloneChecksTheTarget
 dns.takeover-counts-apart	docs/commands/dns.md	`takeover_candidates` and `takeover_verified` count them apart, and add up to the rows under `takeover`.	test:cmd/azhaq:TestTakeoverSummaryCountsCandidatesAndVerified
 docs-concepts.takeover-status	docs/CONCEPTS.md	a `dangling` row stays a `candidate`	test:internal/takeover:TestFindingStatus
+docs-output.depth-note-counts-only-depth	docs/OUTPUT.md	The URLs counted are those the scheduler kept because they were found past `-depth`: a URL a budget such as `-max-items` left unasked is `capped` in the map too, but the note does not count it, and a stop by `-max-items` is not blamed on `-depth`.	test:cmd/azhaq:TestCrawlStoppedByMaxItemsDoesNotBlameDepth

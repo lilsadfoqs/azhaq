@@ -51,6 +51,7 @@ A match is one line: the input and `[Status, Size, Words, Lines, Duration]`, the
 | `scraper` | Always `{}`. |
 | `resultfile` | The `-od` file of the match. |
 | `host` | The host and port asked. |
+| `truncated` | `true` when the answer streams for ever (server-sent events, `multipart/x-mixed-replace`): it is read for 64 KiB or 2 seconds and then closed, and the size, words and lines are of what was read. A text line says `Body: cut`. |
 | `matched` | The matchers that held and what each held on, in the order `-mc -ms -mw -ml -mr -mt`. Each has `matcher` (the flag), `value` (as given) and, for `-mc -ms -mw -ml -mt`, `got`: the answer's status, size, words, lines or milliseconds. For `-mr` it has `in` (`headers` or `body`), `text` (what matched) and `context` (the text with up to 24 bytes of the answer on either side). |
 | `control` | Only with `-ac`, and only when the answer is the same as a calibration answer: its `url`, `status` and `size`. |
 

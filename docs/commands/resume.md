@@ -38,10 +38,13 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 
 ### Retrying failed targets
 
+A resume's `-max-items` holds for that run, as `-max-requests` does. Tasks that send no request still count against it, so a resume can end with the cap spent and nothing sent; its notes say so, and the next `azhaq resume` goes on from there.
+
 A request that failed is a finished task, so a plain `resume` does not ask it again. `azhaq resume -db FILE -retry-failed` does:
 
 - It reads the newest run of the workspace, and says which run on stderr and in the summary's note. `-retry-run ID` (the `run_id` of an earlier run's summary, or the start of it) asks the failed targets of that run instead: a later command on the workspace is the newest run, and its own failures, or none, are what a plain `-retry-failed` finds. When the newest run has nothing retryable and an earlier run has, the error names it: `run ID has 1 retryable failed target: azhaq resume -db FILE -retry-failed -retry-run ID`. The run asked again is the one continued, whichever run is the newest.
 - It asks again the failed targets the summary marks `retryable`: a timeout, a closed connection, an answer cut short, a 429 or a 5xx. Each target's task runs again with the failure it recorded dropped, and a stored 429 or 5xx answer is not read back. Targets that failed in a way a retry cannot fix are not asked, and stay in `failed` as they were. It exits 1 with `nothing to retry` when none is retryable.
+- A URL that failed and answers on the retry shows that answer in the map, in its `status` and its `proof`, not the failure's.
 - It goes with the tasks a limit left: both run in one resume. The summary's `notes` says `-retry-failed: N failed targets of run ID asked again, M still fail`, and what still fails is in `failed` again, with exit 3. A limit that stops the resume first leaves the rest as tasks, which the next `resume` continues.
 - The retried requests count against `-max-requests` and are in the ledger like any other.
 - It applies to the run's own tasks. A `ports` or `dirs` sweep continues its unfinished addresses and words with a plain `resume`.

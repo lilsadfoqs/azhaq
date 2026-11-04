@@ -684,7 +684,7 @@ func replayToProxy(hostport string, rows []paramsRow, rate float64) string {
 			last = err
 			continue
 		}
-		io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20))
+		fetch.ReadAnswer(resp, 1<<20) // the answer is dropped; a stream that never ends is cut
 		resp.Body.Close()
 		sent++
 	}

@@ -29,6 +29,10 @@ type answer struct {
 	// SessionSuspect: asked after the role's session last proved alive,
 	// and not proved alive again after it (see canaries).
 	SessionSuspect bool `json:"session_suspect,omitempty"`
+	// Truncated: the body was cut (a stream that never ends, read for
+	// 64 KiB or 2 s, or longer than the read limit); Length and Hash are of
+	// what was read.
+	Truncated bool `json:"truncated,omitempty"`
 
 	said    string              // what a short answer says: a JSON message, an HTML title and first heading
 	nested  bool                // Keys are nested paths read from the body, not the stored top-level fields
