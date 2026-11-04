@@ -278,6 +278,7 @@ A session can die during the replay: a token that lives minutes, or a server tha
 - A role's session is renewed at most 5 times. It is not renewed again once a new session fails its first check.
 - What was asked since the last good check is asked again.
 - A session that cannot be renewed (`-role` headers) or does not come back leaves the answers asked after its last good check `session_suspect`, with a note, and pauses that role: the rest of its replay is not attempted (status `0` for that role), so the budget is not spent on near-anonymous answers. A note names what is unproven for it and separates its `proved`, `suspect` and `not-attempted` answers; give a renewed session (a `-role-cmd` that prints a fresh one, a `-role-login` sign-in, or new `-role` headers on a rerun) and run `roles` again to prove them.
+- A note names a renewal only when one ran and gave a session that passed its check (`its -role-cmd gave a new one`, `it signed in again`). A role with no `-role-cmd` or `-role-login` says it could not be renewed; a command that failed says its renewal failed; a new session that failed its check says so (`was not renewed: the new session failed its check too`).
 - A signed-in role with nothing to check it by is named in a note.
 - The checks and the requests asked again count against `-replay-max`.
 

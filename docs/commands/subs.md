@@ -59,7 +59,7 @@ Plain output is one name per line, as subfinder prints it. The domain you give i
 | `cdn` | With `-live`, the CDN or WAF in front. |
 | `ip` | With `-live -oI`. |
 | `cname_only` | With `-live`, `true` on a name that is a CNAME whose chain ends without an address (`a` is empty). It exists in DNS; one whose target is gone is a takeover lead. |
-| `takeover` | `service`, `target`, `evidence` and `strength`, on a name that is a takeover candidate: a CNAME to what is gone, or a page that names an unclaimed service. |
+| `takeover` | `service`, `target`, `evidence`, `strength` and `status` (`candidate` or `verified`), on a name that is a takeover candidate: a CNAME to what is gone, or a page that names an unclaimed service. |
 
 `sources` holds the names of the sources, and these values:
 
@@ -67,7 +67,7 @@ Plain output is one name per line, as subfinder prints it. The domain you give i
 - `history` for a name an earlier run kept: see [Name history](#name-history).
 - `cname` for a live name DNS met as another name's CNAME target.
 
-Every takeover candidate is also in the summary, under `takeover`, with `host`, `service`, `target`, `evidence` and `strength`. With `-live`, a name whose CNAME chain ends without an address (a CNAME to a deleted service or domain) is listed like the others, as `dnsx -a -cname` lists it. It has `"cname_only": true` and no `a`, it is counted as `CNAME only`, and a note names how many there are. The summary's `takeover` list and the `[takeover] …` line on stderr carry it when its target is gone.
+Every takeover candidate is also in the summary, under `takeover`, with `host`, `service`, `target`, `evidence`, `strength` and `status`, and `takeover_candidates` and `takeover_verified` count them apart. With `-live`, a name whose CNAME chain ends without an address (a CNAME to a deleted service or domain) is listed like the others, as `dnsx -a -cname` lists it. It has `"cname_only": true` and no `a`, it is counted as `CNAME only`, and a note names how many there are. The summary's `takeover` list and the `[takeover] …` line on stderr carry it when its target is gone.
 
 ## Summary and exit codes
 
