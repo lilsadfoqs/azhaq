@@ -668,14 +668,15 @@ func TestRolesNextPassNamesTheWritesOfTheHistoriesNotReplayed(t *testing.T) {
 			t.Errorf("a write without -replay-writes: %s %s", r.method, r.path)
 		}
 	}
-	// 3 writes, 3 roles (anon, alice, bob): 3 × 2 other roles, and 3 × 3 reads of the owner's object around them.
+	// 3 writes, 3 roles (anon, alice, bob): at least 3 × 2 other roles; the
+	// reads of the owner's object around them depend on the answers.
 	var next string
 	for _, n := range rep.Next {
 		if strings.Contains(n, "-replay-writes post,put,patch") {
 			next = n
 		}
 	}
-	want := "   (next pass, not run: 3 writes in the histories were not replayed with the other roles' sessions: about 15 requests more, and each changes data on the target)"
+	want := "   (next pass, not run: 3 writes in the histories were not replayed with the other roles' sessions: at least 6 requests more (one for each write and other role, a floor: the reads that check them come on top), and each changes data on the target)"
 	if !strings.HasSuffix(next, want) || !strings.HasPrefix(next, "azhaq roles ") || !strings.Contains(next, "-har alice="+alice) {
 		t.Errorf("next %q\nwant ...%s", rep.Next, want)
 	}
@@ -696,12 +697,12 @@ func TestRolesNextPassNamesTheWritesOfTheHistoriesNotReplayed(t *testing.T) {
 	}
 	var planned int64
 	for _, s := range plan.Estimate.Stages {
-		if s.Stage == stageWrites || s.Stage == stageVerify {
+		if s.Stage == stageWrites {
 			planned += s.Estimate.Requests
 		}
 	}
-	if planned != 15 {
-		t.Errorf("the plan of the write pass counts %d requests, the next line says 15", planned)
+	if planned != 6 {
+		t.Errorf("the plan's write stage of that pass counts %d requests, the next line's floor says 6", planned)
 	}
 }
 
@@ -919,7 +920,8 @@ func TestRolesTheListedColumnOfTheWriteVerdictsIsWhatListedSays(t *testing.T) {
 	_, table, _ := strings.Cut(string(raw), "#### Write verdicts")
 	table, _, _ = strings.Cut(table, "\n## ")
 	all := []string{verdictWriteAnyone, verdictWriteCross, verdictWriteUnread, verdictWriteDry, verdictWriteNoChange, verdictWriteCreate, verdictWriteAccepted,
-		verdictWriteUnverifiable, verdictWriteOwner, verdictWriteVoid, verdictWriteRefused, verdictWriteFailed, verdictWriteMixed}
+		verdictWriteUnverifiable, verdictWriteOwner, verdictWriteVoid, verdictWriteRefused, verdictWriteFailed, verdictWriteMixed,
+		verdictWriteRedirected, verdictWriteMixedRedirect}
 	seen := 0
 	for _, l := range strings.Split(table, "\n") {
 		cells := strings.Split(l, "|")

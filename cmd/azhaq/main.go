@@ -405,7 +405,8 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	graphqlWordlist := fs.String("graphql-wordlist", "", "extra probe words (one per line), tried and recombined with the built-in ones when a GraphQL endpoint's introspection is off and its schema has to be recovered from validation errors")
 	skip := fs.String("skip", "", "collectors not to run, comma-separated: azhaq-ports or ports, subs for the subdomain collector (azhaq plan lists them); a name that is none is an error; azhaq resume leaves out the tasks the run kept for them")
 	noPaths := fs.Bool("no-paths", false, "do not ask each web service for the 51 built-in paths (robots.txt, sitemaps, API descriptions, .git/HEAD, backup, admin, …): some programs count that as scanning")
-	knownFiles := fs.String("known-files", "", "ask each web service only for its robots.txt and sitemaps and read every entry (all, robotstxt or sitemapxml); replaces the 51 built-in paths")
+	knownFiles := new(string)
+	fs.Var((*knownFilesFlag)(knownFiles), "known-files", "ask each web service only for its robots.txt and sitemaps and read every entry (all, robotstxt or sitemapxml); replaces the 51 built-in paths")
 	proxyFlag := fs.String("proxy", "", "send requests to targets through this proxy (http://, https:// or socks5://); Chrome too (default: $HTTP_PROXY, $HTTPS_PROXY, except for loopback targets, which stay direct)")
 	crawlScope := fs.String("crawl-scope", "", "the hosts a crawl follows links to: rdn (the start host's registrable domain and its subdomains), fqdn (the host only), dn (hosts that name its domain keyword) or a regex on the host (default: rdn for a name, the origin itself for an address)")
 	crawlAny := fs.Bool("crawl-any-host", false, "follow links to any host, within -allow and -deny (katana's -ns)")
@@ -480,9 +481,6 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	fetch.RequestTimeout = *reqTimeout
 	if *maxResp > 0 {
 		fetch.MaxBody = *maxResp
-	}
-	if k := strings.ToLower(*knownFiles); !slices.Contains([]string{"", "all", "robotstxt", "robots", "sitemapxml", "sitemap"}, k) {
-		return usagef("-known-files is all, robotstxt or sitemapxml, got %q", *knownFiles)
 	}
 	if *proxyFlag != "" {
 		pu, err := parseProxy(*proxyFlag)
@@ -3234,4 +3232,20 @@ func extraWaitOf(d time.Duration) time.Duration {
 		return -1
 	}
 	return d
+}
+
+// knownFilesFlag is -known-files: one value, which the flag parser checks, so
+// a comma list (katana's -kf takes one value too) is refused at the flag.
+type knownFilesFlag string
+
+func (k *knownFilesFlag) String() string { return string(*k) }
+
+func (k *knownFilesFlag) fresh() flag.Value { return new(knownFilesFlag) }
+
+func (k *knownFilesFlag) Set(v string) error {
+	if !slices.Contains([]string{"", "all", "robotstxt", "robots", "sitemapxml", "sitemap"}, strings.ToLower(v)) {
+		return errors.New("takes one value: all, robotstxt or sitemapxml")
+	}
+	*k = knownFilesFlag(v)
+	return nil
 }

@@ -58,6 +58,10 @@ func (c *common) register(fs *flag.FlagSet) {
 // flags on to it.
 var runFlags = sync.OnceValue(func() *flag.FlagSet { return flagsOf("run") })
 
+// checkedValue is a flag value that refuses what its flag cannot take: a
+// flag inherited from run keeps that check.
+type checkedValue interface{ fresh() flag.Value }
+
 // inherit gives fs run's flags of these names, with run's types, defaults
 // and help. A name may be "local=run-name" (dirs -e is run's -dirs-ext).
 // The function returned lists the ones given, as run flags.
@@ -88,6 +92,8 @@ func inherit(fs *flag.FlagSet, specs ...string) func() []string {
 		})
 		if _, ok := f.Value.(*stringsFlag); ok {
 			fs.Var(new(stringsFlag), p.local, usage)
+		} else if c, ok := f.Value.(checkedValue); ok {
+			fs.Var(c.fresh(), p.local, usage) // the value is checked where it is given, too
 		} else {
 			var v any
 			if g, ok := f.Value.(flag.Getter); ok {

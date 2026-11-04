@@ -23,8 +23,9 @@ import (
 // dnsLab is a zone with every record type, a reverse zone and a zone
 // transfer, on loopback (UDP and TCP). asked counts the questions.
 type dnsLab struct {
-	addr  string
-	asked atomic.Int64
+	addr   string
+	asked  atomic.Int64
+	qtypes sync.Map // the types asked, uint16 → true
 }
 
 func nowMs() int64 { return time.Now().UnixMilli() }
@@ -75,6 +76,7 @@ var labZone = map[string][]string{
 func (lab *dnsLab) handle(w dns.ResponseWriter, r *dns.Msg) {
 	lab.asked.Add(1)
 	q := r.Question[0]
+	lab.qtypes.Store(q.Qtype, true)
 	name := strings.ToLower(q.Name)
 	m := new(dns.Msg)
 	m.SetReply(r)

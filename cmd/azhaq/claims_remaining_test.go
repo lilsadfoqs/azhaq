@@ -84,52 +84,10 @@ func TestPortsGOMAXPROCSInTheEnvironmentIsYours(t *testing.T) {
 	}
 }
 
-// -replay-max limits the history reads over all roles, and the replay that
-// follows gets the whole count again: four reads of the owners' own pages
-// and four cross reads are sent under -replay-max 4, and the run is not
-// stopped by it.
-func TestRolesReplayMaxIsSpentByTheHistoryReadsAndTheReplayEachInFull(t *testing.T) {
-	var log reqLog
-	site := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log.add(r)
-		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprintf(w, `{"path":%q}`, r.URL.Path)
-	}))
-	defer site.Close()
-	browse := func(file, user string) string {
-		var es []map[string]any
-		for i := 1; i <= 2; i++ {
-			es = append(es, harEntry(fmt.Sprintf("2026-10-29T10:00:0%d.000Z", i), "GET", fmt.Sprintf("%s/%s/%d", site.URL, user, i), "", 200, "Authorization", "Bearer "+user))
-		}
-		return writeHAR(t, file, es...)
-	}
-	_, rep, err := rolesRows(t, site.URL, "-no-anon", "-replay-max", "4", "-har", "alice="+browse("a.har", "alice"), "-har", "bob="+browse("b.har", "bob"))
-	own, cross := 0, 0
-	for _, r := range log.all() {
-		switch {
-		case r.path == "/alice/1" || r.path == "/alice/2":
-			if r.auth == "Bearer alice" {
-				own++
-			} else if r.auth == "Bearer bob" {
-				cross++
-			}
-		case r.path == "/bob/1" || r.path == "/bob/2":
-			if r.auth == "Bearer bob" {
-				own++
-			} else if r.auth == "Bearer alice" {
-				cross++
-			}
-		}
-	}
-	if own != 4 || cross != 4 || rep.Requests != 8 || exitCode(err) != exitOK || rep.Stopped != "" {
-		t.Errorf("own reads %d, cross reads %d, requests %d, exit %d, stopped %q: want 4 and 4 under -replay-max 4, 8 in all, not stopped", own, cross, rep.Requests, exitCode(err), rep.Stopped)
-	}
-}
-
-// A write's verdict `only its owner writes it` is given when no other
-// role's write was accepted (2xx) and none was answered 5xx: each answer is a
-// 4xx, a redirect or a 2xx that says it was denied. A 5xx among them is not
-// that verdict.
+// A write's verdict `only its owner writes it` is given when every other
+// role's answer is a refusal (a 4xx or a 2xx that says it was denied). A
+// redirect is not a refusal: it has verdicts of its own, alone or among
+// refusals and 5xx; a 5xx among refusals is the mixed verdict.
 func TestRolesOnlyItsOwnerWritesItAlsoWhenTheOthersAreRedirectedOrDenied(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet {
@@ -165,12 +123,14 @@ func TestRolesOnlyItsOwnerWritesItAlsoWhenTheOthersAreRedirectedOrDenied(t *test
 		}
 		return rows[0]
 	}
-	row := run(bob, carol)
-	if row.Verdict != verdictWriteOwner || row.Answers["bob"].Status != 302 || row.Answers["anon"].Status != 404 || !(row.Answers["carol"].Error || row.Answers["carol"].Refusal) {
-		t.Errorf("verdict %q, answers %+v: want %q with a 302, a 404 and a denied 2xx", row.Verdict, row.Answers, verdictWriteOwner)
+	if row := run(carol); row.Verdict != verdictWriteOwner || row.Answers["anon"].Status != 404 || !(row.Answers["carol"].Error || row.Answers["carol"].Refusal) {
+		t.Errorf("verdict %q, answers %+v: want %q with a 404 and a denied 2xx", row.Verdict, row.Answers, verdictWriteOwner)
 	}
-	if row := run(bob, dave); row.Verdict == verdictWriteOwner || row.Verdict != verdictWriteMixed {
-		t.Errorf("a 5xx among the answers: verdict %q, want %q", row.Verdict, verdictWriteMixed)
+	if row := run(bob, carol); row.Verdict != verdictWriteMixedRedirect || row.Answers["bob"].Status != 302 {
+		t.Errorf("a redirect among refusals: verdict %q, want %q", row.Verdict, verdictWriteMixedRedirect)
+	}
+	if row := run(carol, dave); row.Verdict != verdictWriteMixed {
+		t.Errorf("a 5xx among refusals: verdict %q, want %q", row.Verdict, verdictWriteMixed)
 	}
 }
 

@@ -112,7 +112,7 @@ func cmdDNS(args []string) error {
 		kinds[i] = fs.Bool(k.flag, false, usage)
 	}
 	axfr := fs.Bool("axfr", false, "ask each name server of the name, and the -resolvers you gave, for the whole zone over TCP (active; a name server is asked at an address the scope allows: -allow, -scope)")
-	all := fs.Bool("all", false, "ask every type but AXFR and print the records (-resp); an address gets only PTR")
+	all := fs.Bool("all", false, "ask A, AAAA, CNAME, SOA, TXT, SRV, MX, NS and CAA (not ANY, not AXFR) and print the records (-resp); an address gets only PTR")
 	alias("all", "recon", "same as -all")
 	var exclude stringsFlag
 	fs.Var(&exclude, "e", "types not to ask with -all, comma-separated (repeatable)")

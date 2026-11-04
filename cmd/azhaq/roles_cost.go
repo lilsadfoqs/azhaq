@@ -80,8 +80,10 @@ func estimateRoles(in rolesCostIn) costEstimate {
 		if in.crawl {
 			open = "each URL a role's run reaches, asked of the roles whose run did not"
 		}
-		if in.max > 0 && need > int64(in.max) {
-			need, open = int64(in.max), "capped by -replay-max; "+open
+		// -replay-max is shared: the history reads take what they need of
+		// it first, the replay gets what is left.
+		if left := int64(in.max) - min(reads, int64(in.max)); in.max > 0 && need > left {
+			need, open = left, "capped by -replay-max, which the history reads share; "+open
 		}
 		e.put(stageReplay, "", amount{Requests: need}, open)
 		e.put(stageControls, "", amount{}, "one request with a made-up identifier for each cross read the replay finds")

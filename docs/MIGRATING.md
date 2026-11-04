@@ -110,7 +110,7 @@ Behaviour, fields and edge cases: [`azhaq dns`](commands/dns.md).
 | `-w FILE` | `-w FILE` | |
 | `-a -aaaa -cname -ns -txt -srv -ptr -mx -soa -caa -any -axfr` | the same | `-a` is the default. |
 | `-rtf a` | `-rtf a` (or `-response-type-filter`) | Every answered name with no A, in `-json` too: NODATA, other types only, NXDOMAIN, CNAME-only. |
-| `-recon` | `-all` (or `-recon`) | Every type but AXFR. `-e TYPES` leaves some out. |
+| `-recon` | `-all` (or `-recon`) | A, AAAA, CNAME, SOA, TXT, SRV, MX, NS and CAA, not ANY and not AXFR. `-e TYPES` leaves some out. |
 | `-resp`, `-resp-only` | `-resp`, `-resp-only` | `NAME [TYPE] [VALUE]`. |
 | `-rc noerror,nxdomain` | `-rcode noerror,nxdomain` | `-rc` is accepted too. |
 | `-j` | `-json` (or `-j`) | dnsx's field names. |
@@ -247,7 +247,7 @@ Behaviour, fields and edge cases: [`azhaq crawl`](commands/crawl.md).
 | (none) | `-hints` | katana lists the routes its `-jsl` finds in scripts with the pages it fetched. azhaq lists the URLs it requested and the URLs pages link to or load, as katana does (a link past `-d` too, marked `linked`); `-hints` adds the ones no page holds (a route a script calls with POST, a route with a parameter, a string a script only names). `-json` marks each row `observed`, `linked`, `hint` or `named`. |
 | `-o FILE`, `-silent`, `-nc`, `-v` | the same | |
 | `-sr -srd DIR`, `-ob` | the same | |
-| `-kf robotstxt,sitemapxml` | `-kf robotstxt,sitemapxml` | |
+| `-kf all` (or `robotstxt`, `sitemapxml`) | `-kf all` (or `robotstxt`, `sitemapxml`) | One value, as in katana: `all`, `robotstxt` or `sitemapxml`. A comma list is refused. |
 | `-iqp`, `-pc` | `-iqp`, `-path-climb` (or `-pc`) | `-iqp` keeps one URL for each path, whatever its query values. `-path-climb` adds the parent directories of each link. |
 | `-rl 150`, `-rlm`, `-hrl`, `-hrlm`, `-rd` | the same | |
 | `-c 10`, `-p 10` | `-c 10`, `-p 16` | Requests in flight per host; work items in flight. |

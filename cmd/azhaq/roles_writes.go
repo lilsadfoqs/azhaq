@@ -47,7 +47,13 @@ const (
 	// Some other roles were refused and some got a 5xx, none was let: only
 	// the refused are known to be kept out.
 	verdictWriteMixed = "the other roles' writes were refused or failed with a server error (5xx): neither accepted"
-	verdictWriteDry   = "would be sent (-dry-writes)"
+	// Every other role's write was answered with a redirect, which no write
+	// follows: not a refusal, and nothing was let through.
+	verdictWriteRedirected = "the other roles' writes were redirected (3xx, not followed): neither refused nor accepted"
+	// A redirect and a refusal or a 5xx are among the answers: none was let
+	// through.
+	verdictWriteMixedRedirect = "the other roles' writes were redirected (3xx, not followed) and refused or failed with a server error (5xx): neither accepted"
+	verdictWriteDry           = "would be sent (-dry-writes)"
 	// A write another role sent was answered 2xx, and nothing the owner's
 	// object shows can tell whether it took.
 	verdictWriteUnread = "writes another role's object: accepted; the change cannot be read back to confirm"
@@ -75,17 +81,21 @@ func init() {
 	verdictOrder[verdictWriteRefused] = 20
 	verdictOrder[verdictWriteFailed] = 19
 	verdictOrder[verdictWriteMixed] = 19
+	verdictOrder[verdictWriteRedirected] = 19
+	verdictOrder[verdictWriteMixedRedirect] = 19
 }
 
-// serverFailed counts the other roles that were asked and got a 5xx, and
-// those that got anything else (a refusal: a role that was let never gets
-// here).
-func serverFailed(row *roleRow) (failed, other int) {
+// writeAnswers counts the other roles that were asked and got a 5xx, a 3xx
+// (a redirect, which no write follows) and anything else (a refusal: a role
+// that was let never gets here).
+func writeAnswers(row *roleRow) (failed, redirected, other int) {
 	for name, a := range row.Answers {
 		switch {
 		case name == row.Owner || a.Status == 0:
 		case a.Status >= 500:
 			failed++
+		case a.Status >= 300 && a.Status < 400:
+			redirected++
 		default:
 			other++
 		}
@@ -94,16 +104,21 @@ func serverFailed(row *roleRow) (failed, other int) {
 }
 
 // serverVerdict is the verdict of a write nobody else was let to send, when
-// a 5xx is among the answers: failed when every other role got one, mixed
-// when some were refused. "" when there is no 5xx.
+// a 5xx or a redirect is among the answers: failed when every other role got
+// a 5xx, redirected when every one got a 3xx, mixed when they differ. "" when
+// every answer is a refusal.
 func serverVerdict(row *roleRow) string {
-	switch failed, other := serverFailed(row); {
-	case failed > 0 && other == 0:
+	switch failed, redirected, other := writeAnswers(row); {
+	case failed == 0 && redirected == 0:
+		return ""
+	case redirected == 0 && other == 0:
 		return verdictWriteFailed
-	case failed > 0:
+	case redirected == 0:
 		return verdictWriteMixed
+	case failed == 0 && other == 0:
+		return verdictWriteRedirected
 	}
-	return ""
+	return verdictWriteMixedRedirect
 }
 
 // writeOp is a write a route takes, as a role's run found it: PUT
