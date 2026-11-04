@@ -1354,5 +1354,7 @@ fuzz.filter-modes	docs/commands/fuzz.md	Several matchers join with `-mmode or` (
 diff.route-new-or-gone	docs/commands/diff.md	A route that is new or gone is an entity added or removed, not a change.	test:cmd/azhaq:TestDiffANewOrGoneRouteIsAddedOrRemovedNotChanged,TestDiffCountsRoutesWhoseMethodsOrFieldsChanged
 
 # docs/commands/report.md
+report.dir-slash-same	docs/commands/report.md	Without a slash, `-o out` and `-o out/` act the same for several reports.	test:cmd/azhaq:TestReportOutputIsADirectoryOrAFile
+report.one-report-to-file	docs/commands/report.md	`-o PATH` for exactly one report, when `PATH` is not a directory: that report is written to the file `PATH`.	test:cmd/azhaq:TestReportOutputIsADirectoryOrAFile
 
 # docs/commands/roles.md
