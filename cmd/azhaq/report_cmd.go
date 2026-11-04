@@ -135,7 +135,7 @@ func cmdReport(args []string) error {
 	method := fs.String("method", "", "the method of a write row (-replay-writes); a read's row by default")
 	owner := fs.String("owner", "", "with -url: only the row of this owner, when several owners' requests share the URL and method (two roles creating in one collection); a report for each owner by default")
 	format := fs.String("format", "md", "md or json")
-	out := fs.String("o", "", "FILE for the reports (one file, or a directory with a report per file); without -url, DIR/reports; with -url, standard output")
+	out := fs.String("o", "", "FILE or DIR for the reports: a directory (it exists, ends in a slash, or several reports go to it) gets a file per report, any other path is the file of a single report; without -url, DIR/reports; with -url, standard output")
 	redact := fs.Bool("redact", false, "also mask hosts and identifiers (a report to share outside the engagement)")
 	if err := parse(fs, args); err != nil {
 		return err
@@ -286,7 +286,9 @@ func emitReports(docs []reportDoc, format, out, dir string, single bool) error {
 	list := func(path string, d reportDoc) {
 		fmt.Printf("  %s  [%s] %s\n", path, d.Confidence, d.Title)
 	}
-	asDir := out != "" && (strings.HasSuffix(out, "/") || isDir(out))
+	// -o is a directory when it ends in a slash, exists as one, or several
+	// reports go to it; one report to any other path is a file.
+	asDir := out != "" && (strings.HasSuffix(out, "/") || isDir(out) || len(docs) > 1)
 	switch {
 	case out == "" && single:
 		b, err := render(docs[0])
@@ -296,34 +298,23 @@ func emitReports(docs []reportDoc, format, out, dir string, single bool) error {
 		_, err = os.Stdout.Write(b)
 		return err
 	case out != "" && !asDir:
-		var all [][]byte
-		for _, d := range docs {
-			b, err := render(d)
-			if err != nil {
-				return err
-			}
-			all = append(all, b)
-		}
-		sep := "\n---\n\n"
-		if format == "json" {
-			sep = ""
-		}
-		body := bytes.Join(all, []byte(sep))
-		if format == "json" && !single {
-			body = []byte("[" + strings.Join(splitJSONLines(all), ",") + "]\n")
-		}
-		if err := os.WriteFile(out, body, 0o644); err != nil {
+		b, err := render(docs[0])
+		if err != nil {
 			return err
 		}
-		fmt.Printf("azhaq report: %s in %s\n", plural(len(docs), "report"), out)
-		for _, d := range docs {
-			list(out, d)
+		if err := os.WriteFile(out, b, 0o644); err != nil {
+			return err
 		}
+		fmt.Printf("azhaq report: %s in %s\n", plural(1, "report"), out)
+		list(out, docs[0])
 		return nil
 	}
 	to := out
 	if to == "" {
 		to = filepath.Join(dir, "reports")
+	}
+	if st, err := os.Stat(to); err == nil && !st.IsDir() {
+		return usagef("-o %s is a file and %s go to a directory: give a directory", to, plural(len(docs), "report"))
 	}
 	if err := os.MkdirAll(to, 0o755); err != nil {
 		return err
@@ -344,14 +335,6 @@ func emitReports(docs []reportDoc, format, out, dir string, single bool) error {
 }
 
 func isDir(p string) bool { st, err := os.Stat(p); return err == nil && st.IsDir() }
-
-func splitJSONLines(all [][]byte) []string {
-	out := make([]string, len(all))
-	for i, b := range all {
-		out[i] = strings.TrimSpace(string(b))
-	}
-	return out
-}
 
 var slugCut = lazyre.New(`[^a-z0-9]+`)
 
