@@ -57,7 +57,7 @@ func subsNotes(ps []map[string]any, tiers []tierSet) []string {
 	var notes []string
 	notes = append(notes, historyNotes(ps)...)
 	for _, t := range tiers {
-		var observed int
+		var observed, f1, f2 int
 		var estimated float64
 		for _, p := range ps {
 			foundBy := map[string][]string{}
@@ -69,9 +69,11 @@ func subsNotes(ps []map[string]any, tiers []tierSet) []string {
 			if t.names != nil {
 				filter = func(n string) bool { return t.names[n] }
 			}
-			if s, est, ok := subcol.Chao1(foundBy, dep, filter); ok {
+			if s, est, a, b, ok := subcol.Chao1Basis(foundBy, dep, filter); ok {
 				observed += s
 				estimated += est
+				f1 += a
+				f2 += b
 			}
 		}
 		if observed == 0 {
@@ -86,6 +88,10 @@ func subsNotes(ps []map[string]any, tiers []tierSet) []string {
 			// independent source to estimate from.
 			note += fmt.Sprintf(". Apart from the pool, the other %d of the %d names in this tier came from the name history, from guesses checked in DNS or as CNAME targets", len(t.names)-observed, len(t.names))
 		}
+		// An estimate, and what it rests on: the pool is Chao1's S + f1²/(2·f2)
+		// over the names the independent sources gave, so it is as good as the
+		// overlap of those sources.
+		note += fmt.Sprintf(". This is an estimate (Chao1) from the %d names the independent sources gave: %d came from one source and %d from two", observed, f1, f2)
 		notes = append(notes, note)
 	}
 	return notes
@@ -115,9 +121,22 @@ func historyNotes(ps []map[string]any) []string {
 		}
 	}
 	if len(paths) > 0 && len(ps) > 3 {
-		notes = append(notes, fmt.Sprintf("name history (%s, one file per domain): %d names read for %d domains, %d written; %s", filepath.Join(subcol.DataDir(), "names"), read, len(paths), wrote, namesKept))
+		notes = append(notes, fmt.Sprintf("name history (%s, one file per domain): %d names read for %d domains, %d written; %s", filepath.Dir(paths[0]), read, len(paths), wrote, namesKept))
 	}
 	return notes
+}
+
+// historyWrote lists the history files a run wrote: the ones it stored a
+// name in.
+func historyWrote(ps []map[string]any) []string {
+	var paths []string
+	for _, p := range ps {
+		if h, _ := p[subcol.HistoryKey].(map[string]any); h != nil && intOf(h["stored"]) > 0 {
+			path, _ := h["path"].(string)
+			paths = append(paths, path)
+		}
+	}
+	return paths
 }
 
 // subdomainPayloads are the newest payload of azhaq-subdomains for each

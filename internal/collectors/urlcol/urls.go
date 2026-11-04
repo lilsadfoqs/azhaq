@@ -139,7 +139,7 @@ func (c *Collector) Outputs() []string { return []string{"url"} }
 // unfiltered).
 func (c *Collector) Asks(seed types.Seed) []string {
 	domain := normalize.Hostname(seed.Keys["domain"])
-	if domain == "" || normalize.SpecialUse(domain) {
+	if domain == "" || normalize.SpecialUse(domain) || normalize.Unlisted(domain) {
 		return nil
 	}
 	out := make([]string, 0, len(c.sources))

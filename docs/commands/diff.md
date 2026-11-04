@@ -1,6 +1,6 @@
 # azhaq diff
 
-Compare two runs: the entities added and removed, and the new observations.
+Compare two runs: the entities added and removed, what was there in both and changed, and the new observations.
 
 ## Synopsis
 
@@ -24,7 +24,7 @@ azhaq diff -db acme.db -json
 ## What it does
 
 1. Takes two runs: the last two recorded in a workspace (`-db`), or `-a` (old) and `-b` (new, default the last run).
-2. Lists the entities that were added and removed, and the new observations. `-quiet` prints entities and counts only.
+2. Lists the entities that were added and removed, what changed, and the new observations. `-quiet` prints entities, changes and counts only.
 3. Compares a web page's answer by its status and title.
 4. Compares a JSON listing's answer by its status, its title and how many items it holds (`json_items`). `watch` reports it as `/users/v1: [200] 5 items → [200] 6 items`.
 
@@ -39,9 +39,10 @@ The text report lists the entities added and removed and the new observations.
 | Row | Meaning |
 | --- | --- |
 | `added` | An entity in the newer run and not in the older. |
+| `changed` | Something that was there in both runs and differs. See Details. |
 | `removed` | Something that answered in the older run and is gone from the newer. See Details. |
 | `not_seen_again` | Something the older run only heard of and never checked. See Details. |
-| `summary` | The totals. It names the `failed_sources` of the newer run. |
+| `summary` | The totals, `changed` among them. It names the `failed_sources` of the newer run. |
 
 ## Summary and exit codes
 
@@ -58,6 +59,14 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 
 - `not_seen_again` is what the older run only heard of: from a subdomain source, an archive or a link. The run never checked it.
 - Sources answer differently from day to day, and they fail. Its absence says little.
+
+### What counts as changed
+
+`changed` is what `watch` lists under `~`, counted the same way, so `diff` and `watch` agree on the same two runs. Each `changed` row has a `what`:
+
+- `route`: an API route a script calls whose methods or whose query and body names changed (`change` says `methods` or `fields`). A route that is new or gone is an entity added or removed, not a change.
+- `page`: a page that answered in both runs with another status or title, or a JSON listing with another item count.
+- `ports`: a host whose open ports differ between two runs that both scanned it.
 
 ### What is not compared
 

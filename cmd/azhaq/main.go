@@ -329,13 +329,15 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	reqTimeout := fs.Duration("request-timeout", 0, "time one request gets, headers and body (default: 10 s for headers, 30 s in all; not -timeout, the run's bound)")
 	maxResp := fs.Int("max-response-size", 0, "bytes read of a page or document (default 2097152; scripts and JSON get 16 MiB)")
 	noMapGuess := fs.Bool("no-map-guess", false, "do not ask for main.js.map next to a script that names no source map (a map a script or a header names is still read)")
-	fillForms := fs.Bool("fill-forms", false, "ask the action of each GET form with neutral values in its fields (a search box gets a word): one GET request per form, even one that deletes or logs out (-deny-path keeps its action out); a form that posts is not sent unless -submit-forms; crawl does this by default (-no-form-fill turns it off)")
+	fillForms := fs.Bool("fill-forms", false, "ask the action of each GET form with neutral values in its fields (a search box gets a word): one GET request per form, unless the action's own path declares a state change (it is held back, and -send-state-changing sends it); -deny-path keeps its action out; a form that posts is not sent unless -submit-forms; crawl does this by default (-no-form-fill turns it off)")
 	pathClimb := fs.Bool("path-climb", false, "also list and ask the parent directories of each link a page names (/a/b/c: /a/b/ and /a/)")
+	sendState := fs.Bool("send-state-changing", false, "send the GETs found on the way whose own path or API operation declares a state change (create, delete, reset, logout, and the other words of the documented set): a crawl's link, a script's route, an API description's operation, a built-in -dirs word. By default they are held back and listed as skipped; a target you give, a wordlist you give and -deny-path rules are not affected")
 	submitForms := fs.Bool("submit-forms", false, "also submit POST forms with neutral values (crawl): CHANGES DATA on the target, each submission counts as a request and is in the ledger, the summary says how many; held to -allow, -deny and the crawl's scope")
 	sourcesList := fs.String("sources", "", "subdomain sources to run, comma-separated (default: the default set; none: no source, and no archive, RDAP, search engine or RIPEstat lookup either: only the resolvers and the targets are asked)")
 	excludeSources := fs.String("exclude-sources", "", "subdomain sources never to run, comma-separated")
 	allSources := fs.Bool("all-sources", false, "also run slower subdomain sources outside the default set")
-	noHistory := fs.Bool("no-history", false, "do not read or write the name history (names earlier runs found, kept under $AZHAQ_DATA_DIR, else ~/.local/share/azhaq; with -live each is checked by DNS in the run)")
+	noHistory := fs.Bool("no-history", false, "do not read or write the name history (the names earlier runs found, kept in "+historyDirHelp+"; with -live each is checked by DNS in the run)")
+	historyDir := fs.String("history-dir", "", "keep the name history under DIR/names, shared by every run that names it (default $AZHAQ_DATA_DIR, else azhaq-data/ in the workspace's folder: beside -db, or the current directory)")
 	sourceTimeout := fs.Duration("source-timeout", subcol.DefaultSourceTimeout, "give each subdomain source this long, 30s as subfinder does; a slower one (crt.sh) is abandoned, listed as failed, and the names the others gave are kept; -source-timeout 60s or more waits for crt.sh on a large domain (not -timeout, the run's bound)")
 	sourceRate := fs.Float64("source-rate", 0, "requests per second to each subdomain source, as subfinder -rl (0: each source's own pace); a source's lower own pace stays")
 	sourceRates := fs.String("source-rates", "", "pace single subdomain sources, as subfinder -rls: name=N/unit, comma-separated, unit s, m or h (hackertarget=10/m,crtsh=1/s)")
@@ -349,7 +351,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	dnsRate := fs.Float64("dns-rate", 0, "DNS queries per second per resolver (0: no pace but the queries in flight, as dnsx)")
 	bruteFile := fs.String("dns-brute", "", "resolve WORD.domain for each word in this file (active; the targets given are the scope unless -allow)")
 	permute := fs.Bool("permute", false, "resolve variations of found names (active; the targets given are the scope unless -allow)")
-	portsSpec := fs.String("ports", "", "scan TCP ports: top-100, top-1000, full or a list of ports, ranges and these names, such as 22,80,8000-8100 or top-100,8888 (active; the targets given are the scope unless -allow)")
+	portsSpec := fs.String("ports", "", "scan TCP ports: default (the top 100 and the usual ports of the services azhaq names and checks), top-100, top-1000, full or a list of ports, ranges and these names, such as 22,80,8000-8100 or top-100,8888 (active; the targets given are the scope unless -allow)")
 	portsUDP := fs.String("ports-udp", "", "ask UDP ports (active): top (about 25 common ones), full or a list of ports, ranges and these names, such as 53,123,161,1-1024 or top,5354; a reply is open, an ICMP unreachable closed, neither open|filtered (-ports none: UDP only)")
 	portRate := fs.Float64("port-rate", 0, "port connection attempts per second, a ceiling (0: 1500, as naabu's connect scan, and 127.0.0.1 unpaced)")
 	portMinRate := fs.Float64("port-min-rate", 0, "port connection attempts per second at least, as nmap's --min-rate: raises -port-rate to this when lower, and sets no ceiling")
@@ -725,6 +727,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		if err := os.WriteFile(lastDBFile, []byte(path+"\n"), 0o644); err != nil {
 			return err
 		}
+		rep.wrote(lastDBFile)
 	}
 
 	open := store.Open
@@ -797,6 +800,10 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	}
 	if len(budgets.Scope.DenyPath) > 0 {
 		egress.SetDenyPath(budgets.Scope.DeniedPath)
+	}
+	if !out.plan {
+		holdStateChanging(seeds, !*sendState)
+		defer egress.SetStateWords(nil, nil, false)
 	}
 	if *crawlScope != "" || *crawlAny || len(crawlIn) > 0 || len(crawlOut) > 0 {
 		var roots []string
@@ -876,7 +883,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		return usagef("-web-scheme is http or https, got %q", *webScheme)
 	}
 	opts := collectors.Options{Client: client, HTTP: spec, WebPorts: ports, WebScheme: *webScheme, NoTech: *noTech, NoTakeover: *noTakeover, NoFavicon: *noFavicon, Probe: *probe, PortRate: *portRate, MaxIPs: *maxIPs, Shots: *shots, Render: *render, KnownFiles: *knownFiles, FillForms: *fillForms, NoMapGuess: *noMapGuess, SubmitForms: *submitForms, PathClimb: *pathClimb}
-	opts.ShotHTML = *shotHTML
+	opts.ShotHTML, opts.AskedOnly = *shotHTML, askedOnly
 	if *browserWrites && *shots == "" && !*render {
 		return usagef("-browser-writes lets the pages Chrome loads send writes: give it with -browser or -screenshots")
 	}
@@ -1014,7 +1021,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 				return err
 			}
 		}
-		opts.Dirs = dirscol.Options{Words: words, Extensions: splitList(*dirsExt), Depth: *dirsDepth, Threads: *dirsThreads, Rate: *dirsRate}
+		opts.Dirs = dirscol.Options{Words: words, Extensions: splitList(*dirsExt), Depth: *dirsDepth, Threads: *dirsThreads, Rate: *dirsRate, UserWords: *dirsFile != dirscol.Builtin}
 		given := map[string]string{}
 		for k, v := range dirsMatch {
 			given[k] = *v
@@ -1090,8 +1097,8 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	if *sourceRate < 0 || *maxResults < 0 || *maxBody < 0 || *maxTime < 0 {
 		return usagef("-source-rate, -max-results, -max-time and -max-body are not negative")
 	}
-	opts.Subdomains = subcol.Options{Keys: keys, Only: splitList(*sourcesList), Exclude: splitList(*excludeSources), All: *allSources, NoHistory: *noHistory, SourceTimeout: *sourceTimeout, ExtraWait: extraWaitOf(*extraWait),
-		SourceRate: *sourceRate, SourceRates: rates, MaxResults: *maxResults, MaxTime: *maxTime, MaxBody: *maxBody, MaxNames: *maxNames, NoCheck: subsMode.NoCheck, GuessSamples: subsMode.GuessSamples, Recursive: subsMode.Recursive, Proxy: *sourceProxy}
+	opts.Subdomains = subcol.Options{Keys: keys, Only: splitList(*sourcesList), Exclude: splitList(*excludeSources), All: *allSources, NoHistory: *noHistory, DataDir: historyDirOf(*historyDir, path, out.scratch || out.plan), SourceTimeout: *sourceTimeout, ExtraWait: extraWaitOf(*extraWait),
+		SourceRate: *sourceRate, SourceRates: rates, MaxResults: *maxResults, MaxTime: *maxTime, MaxBody: *maxBody, MaxNames: *maxNames, NoCheck: subsMode.NoCheck, GuessSamples: subsMode.GuessSamples, Recursive: subsMode.Recursive, Proxy: *sourceProxy, NoGuessCheck: subsMode.NoGuessCheck}
 	urlKeys := maps.Clone(keys)
 	if urlKeys == nil {
 		urlKeys = map[string][]string{}
@@ -1185,6 +1192,9 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		}
 	}
 	paths := append(append([]string{}, pathscol.DefaultWordlist...), opts.Paths...)
+	if *knownFiles != "" {
+		paths = pathscol.KnownFiles(*knownFiles) // these replace the built-in checks
+	}
 	send := sendLimits{noThirdParty: *sourcesList == "none", max: *maxRequests, by: "-max-requests", noFavicon: *noFavicon, chrome: *shots != "" || *render, shots: *shots, render: *render, chromeWrites: *browserWrites,
 		interact: *interact, dirs: *dirsFile != "", params: *paramsFile != "", login: *login, loginUser: *loginUser, graphql: *graphql, submitForms: *submitForms,
 		portsOn: len(portsOn) > 0, portDetect: portCfg.Detect, portPayload: len(portCfg.Payload) > 0, portDiscover: portCfg.Discover}
@@ -1192,9 +1202,17 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		send.paramsBody = m
 	}
 	send.tcpPorts, send.udpPorts = len(opts.Ports), len(opts.UDPPorts)
+	send.portList, send.portUDPList, send.portsFor = opts.Ports, opts.UDPPorts, portCfg.PortsFor
+	send.portExcludeCDN, send.portThreshold = portCfg.ExcludeCDN, portCfg.Threshold
+	send.dirsWordList, send.dirsExtList, send.guessBudget, send.bruteList = opts.Dirs.Words, opts.Dirs.Extensions, *maxNames, opts.BruteWords
 	send.axfr, send.resolvers = out.axfr, resolvers
-	send.dirsWords, send.dirsExts, send.paramsN, send.bruteN = len(opts.Dirs.Words), len(opts.Dirs.Extensions), len(opts.Params.Words), len(opts.BruteWords)
+	send.dirsWords, send.dirsExts, send.paramsN = len(opts.Dirs.Words), len(opts.Dirs.Extensions), len(opts.Params.Words)
 	send.dirsNoCal = opts.Dirs.NoCalibration
+	send.sendState = *sendState
+	if !*sendState && !opts.Dirs.UserWords {
+		send.dirsHold = true
+		send.dirsHeld = dirscol.HeldWords(opts.Dirs.Words, opts.Dirs.Extensions)
+	}
 	send.verify = verifyFl.on
 	send.hostGuesses = *hostGuesses
 	send.paramsWords, send.paramsPages = len(opts.Params.Words), *paramsPerHost
@@ -1241,7 +1259,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		if err != nil {
 			return err
 		}
-		cfg.DenyPath, cfg.SignIn = budgets.Scope.DenyPath, *login
+		cfg.DenyPath, cfg.SignIn, cfg.Given = budgets.Scope.DenyPath, *login, givenURLs(seeds)
 		eng.Workers = engine.NewWorkers()
 		stopServe, err := serveWorkers(*serve, *workerToken, eng.Workers, cfg, func(rep fetch.SessionReport) {
 			// Made now, though the work is lent: the run's own requests would not.
@@ -1486,33 +1504,18 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	fillReport(rep, path, seeds, ents, obs, rows)
 	if !out.plan {
 		// The ones found on the way: an API description's GET whose own
-		// description declares a state change, and a found URL whose name
-		// does. They were sent in this run; the rule named keeps them out
-		// of the next one.
+		// path, operationId or summary declares a state change, and a found
+		// URL whose path does. Each says what became of it: held back, or
+		// sent (a request this run recorded), never "sent" for one it did not.
+		held := heldTargets(rep.Skipped)
 		var likes []mapRowLike
 		for _, r := range rows {
 			if r.Entity.Type == types.TypeURL {
-				likes = append(likes, mapRowLike{key: r.Entity.Key, skipped: r.Coverage == "skipped"})
+				_, isHeld := held[normKey(r.Entity.Key)]
+				likes = append(likes, mapRowLike{key: r.Entity.Key, skipped: r.Coverage == "skipped", held: isHeld})
 			}
 		}
-		found := mergeStateChanges(stateChangesOfOps(obs), stateChangesOfRows(likes))
-		for _, e := range found {
-			if rules.DeniedPath(e.URL) != "" {
-				continue // kept out by the user's rule: listed as skipped, not as sent
-			}
-			known := false
-			for _, p := range rep.StateChanging {
-				known = known || p.Method == e.Method && p.URL == e.URL
-			}
-			if known {
-				continue
-			}
-			rep.StateChanging = append(rep.StateChanging, e)
-			rep.Notes = append(rep.Notes, e.line()+"; found on the way, so this run sent it: the rule keeps it out of a later run")
-		}
-		if len(found) > 0 {
-			rep.StateChanging = mergeStateChanges(rep.StateChanging)
-		}
+		settleStateChanges(rep, preState, mergeStateChanges(stateChangesOfOps(obs), stateChangesOfRows(likes)), rules, *serve != "")
 	}
 	if advFlags.on {
 		rep.Advisories = advLeads
@@ -1555,6 +1558,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		}
 	}
 	if err := fetch.SessionLost(); err != nil {
+		rep.SessionLost = sessionLoss(err)
 		// Said once, as a failure of its own: exit 3, never a quiet anonymous run.
 		if !slices.ContainsFunc(rep.Failed, func(f engine.Failure) bool { return strings.HasPrefix(f.Error, "the session ended") }) {
 			rep.Failed = append(rep.Failed, engine.Failure{Collector: "azhaq-session", Error: err.Error(), Count: 1})
@@ -1598,6 +1602,8 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	_ = st.AddRunRequests(rep.Requests)
 	rep.estimate, rep.refusedBy = estimate, eng.Refused()
 	rep.Cost = accountCostBy(estimate, rep.spentFrom, nil, true)
+	rep.RequestsBy = purposesOf(accountSince(rep.spentFrom))
+	rep.holds("requests by purpose, added together, against the requests", sumOf(rep.RequestsBy), int(rep.Requests))
 	rep.hushCost = out.embedded
 	// Work the -timeout cut short (a source still asking) is not done:
 	// resume runs it again.
@@ -1676,7 +1682,14 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		}
 	}
 	if remember && !*demo && input != "" {
-		_ = recordRun(input, path)
+		if recordRun(input, path) == nil {
+			rep.wrote(runIndexFile)
+		}
+	}
+	if !out.scratch && !out.plan {
+		if fi, err := os.Stat(urlcol.ArchivePath(path)); err == nil && !fi.ModTime().Before(rep.start) {
+			rep.wrote(urlcol.ArchivePath(path))
+		}
 	}
 	if !*quiet && !*jsonOut && !out.embedded && !*demo && prevDB != "" && prevDB != path {
 		if err := printDiff(prevDB, path, diffOpts{}); err != nil {
@@ -1990,7 +2003,7 @@ func cmdDiff(args []string) error {
 		if len(runs) < 2 {
 			// Nothing to compare yet: said, not silent.
 			if *jsonl {
-				return json.NewEncoder(os.Stdout).Encode(map[string]any{"kind": "summary", "runs": len(runs), "added": 0, "removed": 0, "not_seen_again": 0, "observations": 0, "note": "one run so far: a diff needs two"})
+				return json.NewEncoder(os.Stdout).Encode(map[string]any{"kind": "summary", "runs": len(runs), "added": 0, "removed": 0, "not_seen_again": 0, "observations": 0, "changed": 0, "note": "one run so far: a diff needs two"})
 			}
 			fmt.Printf("%s holds %d run so far: a diff needs two (run the same target into it again)\n", *ws, len(runs))
 			return nil
@@ -2081,6 +2094,12 @@ func printDiffStores(old, neu *store.Store, oldLabel string, opts diffOpts) erro
 		}
 	}
 	failed := failedSources(neu)
+	// What was there in both runs and differs: the same rows watch lists.
+	ch, err := changesBetween(old, neu, d, changes{})
+	if err != nil {
+		return err
+	}
+	changed := changedRows(ch)
 	if opts.JSONL {
 		enc := json.NewEncoder(os.Stdout)
 		for _, e := range d.Added {
@@ -2098,6 +2117,11 @@ func printDiffStores(old, neu *store.Store, oldLabel string, opts diffOpts) erro
 				return err
 			}
 		}
+		for _, c := range changed {
+			if err := enc.Encode(c.json()); err != nil {
+				return err
+			}
+		}
 		if !opts.Quiet {
 			for _, o := range d.NewObs {
 				if err := enc.Encode(map[string]any{"kind": "observation", "collector": o.Collector, "obs_kind": o.Kind, "payload": o.Payload}); err != nil {
@@ -2111,6 +2135,7 @@ func printDiffStores(old, neu *store.Store, oldLabel string, opts diffOpts) erro
 			"removed":        len(removed),
 			"not_seen_again": len(unseen),
 			"observations":   len(d.NewObs),
+			"changed":        len(changed),
 		}
 		if len(failed) > 0 {
 			sum["failed_sources"] = failed
@@ -2125,9 +2150,9 @@ func printDiffStores(old, neu *store.Store, oldLabel string, opts diffOpts) erro
 		fmt.Printf("  ! the runs had different seeds; this compares two targets, not two scans of one\n")
 		fmt.Printf("    old: %s\n    new: %s\n", strings.ReplaceAll(oldIn, "\n", ", "), strings.ReplaceAll(newIn, "\n", ", "))
 	}
-	if len(d.Added) == 0 && len(d.Removed) == 0 && len(d.NewObs) == 0 {
+	if len(d.Added) == 0 && len(d.Removed) == 0 && len(d.NewObs) == 0 && len(changed) == 0 {
 		fmt.Println("  (no new entities or observations)")
-		fmt.Println("added=0 removed=0 observations=0")
+		fmt.Println("added=0 removed=0 observations=0 changed=0")
 		return nil
 	}
 	for _, e := range d.Added {
@@ -2135,6 +2160,9 @@ func printDiffStores(old, neu *store.Store, oldLabel string, opts diffOpts) erro
 	}
 	for _, e := range removed {
 		fmt.Printf("  - %s %s\n", e.Type, e.Key)
+	}
+	for _, c := range changed {
+		fmt.Println(c.line())
 	}
 	if !opts.Quiet {
 		for _, o := range d.NewObs {
@@ -2148,7 +2176,7 @@ func printDiffStores(old, neu *store.Store, oldLabel string, opts diffOpts) erro
 		}
 		fmt.Println(line + "; -json lists them")
 	}
-	fmt.Printf("added=%d removed=%d not_seen_again=%d observations=%d\n", len(d.Added), len(removed), len(unseen), len(d.NewObs))
+	fmt.Printf("added=%d removed=%d not_seen_again=%d observations=%d changed=%d\n", len(d.Added), len(removed), len(unseen), len(d.NewObs), len(changed))
 	return nil
 }
 

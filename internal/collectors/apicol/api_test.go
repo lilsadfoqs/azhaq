@@ -10,7 +10,9 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/lilsadfoqs/azhaq/internal/egress"
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
+	"github.com/lilsadfoqs/azhaq/internal/statechange"
 	"github.com/lilsadfoqs/azhaq/types"
 )
 
@@ -43,6 +45,9 @@ paths:
           in: formData
 `
 
+// holding makes runSpec run with the policy that holds state-changing GETs.
+var holding bool
+
 type op struct {
 	URL     string   `json:"url"`
 	Methods []string `json:"methods"`
@@ -57,6 +62,10 @@ type op struct {
 func runSpec(t *testing.T, path, ctype, body string) (map[string]op, types.RunMeta, int) {
 	t.Helper()
 	fetch.Reset()
+	if holding {
+		egress.SetStateWords(statechange.OfURL, nil, true)
+		t.Cleanup(egress.Reset)
+	}
 	calls := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != path {
@@ -228,5 +237,59 @@ func TestSwaggerUIWithEmbeddedDocumentAsksNoSiblings(t *testing.T) {
 	}
 	if !fetch.Described(srv.URL) {
 		t.Error("the origin is not marked as described")
+	}
+}
+
+// VAmPI's root operation has a description that says the app "was created":
+// that is prose about the app, not the request's own name, so GET / is not
+// marked. An operation named by its operationId is, and the run is told to
+// hold that GET back though its path says nothing.
+const vampiShaped = `{
+  "openapi": "3.0.1",
+  "info": {"title": "VAmPI", "version": "0.1", "description": "VAmPI was created to be vulnerable"},
+  "servers": [{"url": ""}],
+  "paths": {
+    "/": {"get": {"operationId": "home", "summary": "VAmPI home", "description": "VAmPI was created as a vulnerable API"}},
+    "/createdb": {"get": {"summary": "Creates and populates the database"}},
+    "/books/v1": {"get": {"operationId": "deleteBooks"}},
+    "/users/v1": {"get": {"summary": "List users"}}
+  }
+}`
+
+func TestOperationNameNotAppProseMarksStateChange(t *testing.T) {
+	holding = true
+	t.Cleanup(func() { holding = false })
+	ops, meta, _ := runSpec(t, "/openapi.json", "application/json", vampiShaped)
+	got := map[string]string{}
+	for path, o := range ops {
+		for _, x := range o.Ops {
+			got[path] = x.StateChange
+		}
+	}
+	want := map[string]string{"/": "", "/createdb": "createdb", "/books/v1": "delete", "/users/v1": ""}
+	for path, w := range want {
+		if got[path] != w {
+			t.Errorf("GET %s is marked %q, want %q", path, got[path], w)
+		}
+	}
+	// The operationId's word reached the policy: the run holds /books/v1 back
+	// though its path has no such word, and holds nothing else of it.
+	for _, h := range meta.NextHints {
+		u := h.Keys["url"]
+		w := egress.HeldWord(u)
+		switch {
+		case strings.HasSuffix(u, "/books/v1"):
+			if w != "delete" {
+				t.Errorf("%s is held for %q, want delete", u, w)
+			}
+		case strings.HasSuffix(u, "/createdb"):
+			if w != "createdb" {
+				t.Errorf("%s is held for %q, want createdb", u, w)
+			}
+		default:
+			if w != "" {
+				t.Errorf("%s is held for %q", u, w)
+			}
+		}
 	}
 }

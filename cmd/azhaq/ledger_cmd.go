@@ -140,7 +140,7 @@ func ledgerSummary(path string, asJSON bool) error {
 		fmt.Println(string(raw))
 		return nil
 	}
-	fmt.Printf("%s: %d requests, connections and queries\n", path, n)
+	fmt.Printf("%s: %d requests, connections, probes and queries\n", path, n)
 	if n == 0 {
 		return nil
 	}
@@ -187,9 +187,9 @@ func sortedByCount(m map[string]int) []string {
 
 func ledgerCSV(path string) error {
 	w := csv.NewWriter(os.Stdout)
-	_ = w.Write([]string{"seq", "time", "class", "kind", "method", "target", "host", "rule", "collector", "hash"})
+	_ = w.Write([]string{"seq", "time", "class", "kind", "method", "target", "host", "rule", "collector", "hash", "proto"})
 	err := ledger.Read(path, func(e ledger.Entry) error {
-		return w.Write([]string{strconv.FormatInt(e.Seq, 10), e.Time.Format(time.RFC3339Nano), entryClass(e), e.Kind, e.Method, e.Target, e.Host, e.Rule, e.Collector, e.Hash})
+		return w.Write([]string{strconv.FormatInt(e.Seq, 10), e.Time.Format(time.RFC3339Nano), entryClass(e), e.Kind, e.Method, e.Target, e.Host, e.Rule, e.Collector, e.Hash, e.Proto})
 	})
 	w.Flush()
 	if err != nil {

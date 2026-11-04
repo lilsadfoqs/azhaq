@@ -196,8 +196,10 @@ func checkLedgerInvariants(t *testing.T, what string, args []string, rep report)
 	rules := scopeOf(args)
 	targets := 0
 	for _, e := range lines {
-		if e.IsTarget() {
+		if e.Counted() {
 			targets++
+		}
+		if e.IsTarget() {
 			if rules != nil && !ledgerLineInScope(rules, e) {
 				t.Errorf("S %s: the ledger has a line to %s %s, outside the scope", what, e.Kind, e.Target)
 			}

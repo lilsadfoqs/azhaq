@@ -26,6 +26,8 @@ var subsMode struct {
 	Recursive    bool // only the sources that handle subdomains of subdomains
 	// MaxTimeBoundsRun makes -max-time the whole run's wall-clock bound, the DNS checks included.
 	MaxTimeBoundsRun bool
+	// NoGuessCheck is -live -guesses=false: subdomain.center's guesses are not looked up.
+	NoGuessCheck bool
 }
 
 // subsOut writes the names subs prints: text, subfinder's host,[sources] and
@@ -128,7 +130,7 @@ func cmdSubs(args []string) error {
 	fs.Var(&domains, "d", "domain (repeatable; a comma list, a URL or a name with a trailing dot is cleaned, as subfinder does)")
 	list := onceString(fs, "dL", "file of domains (- for stdin)")
 	live := fs.Bool("live", false, "only names that resolve (wildcard answers left out, tier \"dns\"); without it nothing is looked up and every name the sources gave is printed as a candidate (-json: \"tier\": \"candidate\"), the ones no source asserted (subdomain.center's guesses, the name history's) marked \"unverified\": true")
-	guesses := fs.Bool("guesses", true, "print the names only subdomain.center guessed, which no source asserted and no lookup checked, as candidates marked \"unverified\": true; -guesses=false holds them back and counts them; not with -live, which looks them up")
+	guesses := fs.Bool("guesses", true, "print the names only subdomain.center guessed, which no source asserted and no lookup checked, as candidates marked \"unverified\": true; -guesses=false holds them back and counts them, and with -live leaves them unlooked (no query is sent for them); an explicit -guesses cannot go with -live, which looks them up by default")
 	nW := fs.Bool("nW", false, "same as -live (subfinder's name)")
 	httpTier := fs.Bool("http", false, "also ask each live name's web service one request (GET /, as azhaq probe does) and mark the names that answered \"tier\": \"http\"; sends requests to the names, so it is off by default; implies -live (-web-ports names the ports)")
 	words := fs.String("w", "", "also resolve WORD.domain for each word in this file, like puredns bruteforce (active DNS; the names found are live)")
@@ -144,11 +146,12 @@ func cmdSubs(args []string) error {
 	fs.Var(&filter, "f", "leave out names matching these (comma list or file), as subfinder -f")
 	fs.Var(&matchRe, "match-regex", "only names matching this regular expression (repeatable)")
 	fs.Var(&filterRe, "filter-regex", "leave out names matching this regular expression (repeatable)")
+	fresh := fs.Bool("fresh", false, "with -db: start a run of its own and ask the sources again, where the workspace holds a stopped -live run of these domains whose unchecked names the command would otherwise check without asking the sources")
 	_ = fs.Bool("ei", false, "accepted for subfinder's sake: an IP address given as a domain is always left out with a note")
 	recursive := fs.Bool("recursive", false, "only sources that look for subdomains of subdomains, as subfinder -recursive (see -ls)")
 	stats := fs.Bool("stats", false, "after the run, one note per source: requests, names, errors and seconds, as subfinder -stats")
 	showVersion := fs.Bool("version", false, "print the version and exit")
-	given := inherit(fs, "sources", "exclude-sources", "all-sources", "no-history", "source-timeout", "extra-wait", "providers", "resolvers", "dns-rate", "timeout", "v", "fail-on-errors",
+	given := inherit(fs, "sources", "exclude-sources", "all-sources", "no-history", "history-dir", "source-timeout", "extra-wait", "providers", "resolvers", "dns-rate", "timeout", "v", "fail-on-errors",
 		"source-rate", "source-rates", "max-results", "max-time", "max-body", "proxy=source-proxy", "t=parallel", "ledger", "web-ports", "http-proxy=proxy")
 	maxNames := fs.Int("max-names", 0, fmt.Sprintf("most names kept per domain, and looked up with -live (default %d); a value you give also caps the names -w and -permute ask, together: the guesses past it are not asked, the run exits 4 and says how many", subcol.DefaultMaxNames))
 	if err := parse(fs, args); err != nil {
@@ -166,7 +169,7 @@ func cmdSubs(args []string) error {
 		return nil
 	}
 	if hasFlag(args, "guesses") && *guesses && (*live || *nW) {
-		return usagef("-guesses prints names that no lookup checked, and -live looks them up and keeps the ones that resolve: use one of them")
+		return usagef("-guesses prints names that no lookup checked, and -live looks them up and keeps the ones that resolve: use one of them (-live -guesses=false leaves the guesses out unlooked)")
 	}
 	if *guessSamples < 0 {
 		return usagef("-guess-samples is not negative")
@@ -235,7 +238,14 @@ func cmdSubs(args []string) error {
 	if *maxNames > 0 {
 		extra = append(extra, "-max-names="+fmt.Sprint(*maxNames))
 	}
+	// A stopped run of this workspace keeps the names it did not check: the
+	// run goes on from them, and the sources, which answered, are not asked.
+	if sr, ok := stoppedSubsRun(c.db, apexes, skipAllBut(keep...)); ok && (*live || active) && !*fresh {
+		extra = append(extra, "-resume-run", sr.run)
+		rep.Notes = append(rep.Notes, sr.note(c.db))
+	}
 	subsMode.NoCheck, subsMode.Recursive, subsMode.GuessSamples, subsMode.MaxTimeBoundsRun = !*live && !active, *recursive, *guessSamples, true
+	subsMode.NoGuessCheck = (*live || active) && !*guesses
 	// The output is opened before anything is sent: a bad -o is not found out
 	// after the run. Without -live a domain's names are printed when its
 	// sources have answered, as subfinder prints a domain when it ends.
@@ -261,6 +271,7 @@ func cmdSubs(args []string) error {
 	collected := map[string]bool{} // every passive name, before the -live filter
 	bySource := map[string]int{}   // how many each source returned
 	var union, dropped, unverified, heldBack, notChecked, filtered, dup, cut, didNot, itself, notAsked, noAnswer int
+	var poolKept, poolDropped int         // of the names only a padding source or the history held, how many resolved and how many did not
 	lookupsFailed := false                // a source says its names were not checked because the lookups failed
 	notCheckedWhy := map[string]bool{}    // why names no lookup checked were not (the run's own words)
 	var answers map[string]map[string]any // every name DNS was asked: a name missing was not
@@ -308,7 +319,9 @@ func cmdSubs(args []string) error {
 			}
 			if row["skipped"] == nil {
 				ran++
-				if row["error"] == nil {
+				if row["error"] == nil || (intOf(row[subcol.NotCheckedKey]) > 0 && allAnswered(answers, strs(p["unverified"]))) {
+					// Names it left unchecked, that a continued run has since
+					// looked up, are not a failure of the source.
 					answered++
 				} else if row["default"] == false {
 					failedOff++ // -all-sources reaches for flaky ones: counted apart
@@ -324,6 +337,13 @@ func cmdSubs(args []string) error {
 				rep.Notes = append(rep.Notes, rateLimitNote(input, name, row))
 			}
 		}
+		kept, gone := 0, 0
+		for _, v := range srcs {
+			if row, _ := v.(map[string]any); row["dropped_unresolved"] != nil {
+				kept, gone = max(kept, intOf(row["kept"])), max(gone, intOf(row["dropped_unresolved"])) // one pool, shared by its rows
+			}
+		}
+		poolKept, poolDropped = poolKept+kept, poolDropped+gone
 		if verbose {
 			rep.Notes = append(rep.Notes, sourceDetail(input, srcs))
 		}
@@ -362,13 +382,13 @@ func cmdSubs(args []string) error {
 			case !filt.keep(name):
 				filtered++
 				continue
-			case alive == nil && guess[name] && !*guesses:
+			case guess[name] && !*guesses:
 				// No source asserted it and nothing looked it up: not printed.
 				heldBack++
 				continue
 			case alive != nil && alive[name] == nil && dangling[name] == nil:
 				switch ans := answers[name]; {
-				case unver[name]:
+				case unver[name] && (ans == nil || ans["degraded"] == true):
 					notChecked++
 				case ans == nil:
 					notAsked++ // the run stopped before its answer came
@@ -434,7 +454,7 @@ func cmdSubs(args []string) error {
 		}
 	}
 	st, done, err := runPreset(&c, append(run, extra...), rep, observe)
-	subsMode.NoCheck, subsMode.Recursive, subsMode.GuessSamples, subsMode.MaxTimeBoundsRun = false, false, 0, false
+	subsMode.NoCheck, subsMode.Recursive, subsMode.GuessSamples, subsMode.MaxTimeBoundsRun, subsMode.NoGuessCheck = false, false, 0, false, false
 	if err != nil {
 		w.close()
 		return err
@@ -596,7 +616,11 @@ func cmdSubs(args []string) error {
 		rep.warned = true
 	}
 	if heldBack > 0 {
-		rep.Notes = append(rep.Notes, fmt.Sprintf("%d names are held back: only subdomain.center guessed them, no source asserted them and no DNS lookup was made; -guesses (the default) prints them as unverified candidates, -live looks them up and prints the ones that resolve", heldBack))
+		then := "-guesses (the default) prints them as unverified candidates, -live looks them up and prints the ones that resolve"
+		if *live || active {
+			then = "without -guesses=false they are looked up, at -dns-rate, and the ones that resolve are printed"
+		}
+		rep.Notes = append(rep.Notes, fmt.Sprintf("%d names are held back: only subdomain.center guessed them, no source asserted them and no DNS lookup was made; %s", heldBack, then))
 	}
 	if unverified > 0 {
 		rep.Notes = append(rep.Notes, fmt.Sprintf("%d names are listed unverified (-json: \"unverified\": true): only the name history or subdomain.center's guesses held them and no DNS lookup was made; -live checks them", unverified))
@@ -616,6 +640,9 @@ func cmdSubs(args []string) error {
 			how = "this run kept no database: run again with -db FILE to keep them for azhaq resume, or without -live to list them unverified"
 		}
 		rep.Notes = append(rep.Notes, fmt.Sprintf("%d names could not be checked (%s) and are left out of the list; %s", notChecked, why, how))
+		if n := poolKept + poolDropped; n > 0 {
+			rep.Notes = append(rep.Notes, uncheckedEstimate(notChecked, poolKept, n))
+		}
 		rep.warned = true
 	}
 	if noAnswer > 0 {
@@ -641,6 +668,7 @@ func cmdSubs(args []string) error {
 	}
 	rep.Notes = append(rep.Notes, tierNote(rep.Counts, *live || active)...)
 	rep.Notes = append(rep.Notes, subsNotes(payloads(st, "azhaq-subdomains"), tiers)...)
+	rep.wrote(historyWrote(payloads(st, "azhaq-subdomains"))...)
 	if c.db != "" {
 		rep.Next = append(rep.Next, "azhaq query -db "+c.db+" -type Hostname")
 	}
@@ -805,4 +833,28 @@ func cnameNames(st *store.Store) map[string]map[string]any {
 		}
 	}
 	return out
+}
+
+// allAnswered says whether the resolvers answered every one of names, the
+// answers being those of the lookups made (nil: none were).
+func allAnswered(answers map[string]map[string]any, names []string) bool {
+	if answers == nil {
+		return false
+	}
+	for _, n := range names {
+		if a := answers[n]; a == nil || a["degraded"] == true {
+			return false
+		}
+	}
+	return true
+}
+
+// uncheckedEstimate is the estimate of how many of the names a run left
+// unchecked would resolve: of the looked up names that only a source that
+// guesses or the name history held, resolved did, in a sample of looked up
+// names. It rests on that share holding for the rest, and is labelled so.
+func uncheckedEstimate(unchecked, resolved, lookedUp int) string {
+	est := (unchecked*resolved + lookedUp/2) / lookedUp
+	return fmt.Sprintf("estimate, not a count: of the %d names looked up that only subdomain.center or the name history held, %d resolved; the %d left unchecked are of the same kind, so about %d of them would resolve if that share held (a sample of %d names)",
+		lookedUp, resolved, unchecked, est, lookedUp)
 }

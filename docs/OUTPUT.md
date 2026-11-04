@@ -23,7 +23,7 @@ With `-json`, the drop-in commands use the field names of the tool they stand in
 A takeover candidate is a finding, not a note. `-silent` prints one line for each on stderr, and stdout stays one result per line:
 
 ```
-[takeover] shop.example.org -> gone.azurewebsites.net (Azure, dangling)
+[takeover] shop.example.org -> gone.azurewebsites.net (Azure, dangling, candidate)
 ```
 
 ### Progress lines
@@ -125,14 +125,16 @@ An [internal error](#exit-1) comes before this rule: a summary that disagrees wi
 | `results` | What the command printed on stdout: names, web services, map rows. |
 | `counts` | A breakdown of the results, per command. For `run` the counts are disjoint and cover every stored map row: see [run's counts](#run-counts). |
 | `stored` | `run` only: the map rows the database holds. The counts add up to it. `results` is smaller when templated URLs and dead or wildcard names fold into one row. |
-| `folds` | `run` and `crawl`: the URL rows by fold class (`catchall`, `not-found`, `beyond-depth`, `unrequested`), each with its `count`; a catch-all entry has its `origin` and the `controls` its answers matched (`url`, `status`, `type`, `size`, `title`), a not-found entry its `templates`. The text view prints one line for each entry in place of its rows, `-all-rows` and `-json` print the rows. See [run](commands/run.md#folded-rows). |
+| `folds` | `run`, `crawl` and `dirs` (its catch-all entries only, one for each directory): the URL rows by fold class (`catchall`, `not-found`, `beyond-depth`, `unrequested`), each with its `count`; a catch-all entry has its `origin` and the `controls` its answers matched (`url`, `status`, `type`, `size`, `title`), a not-found entry its `templates`. The text view prints one line for each entry in place of its rows, `-all-rows` and `-json` print the rows. See [run](commands/run.md#folded-rows). |
 | `folded` | `run` only, always present: the stored rows a printed row holds (templated URLs, dead and wildcard names, and in the text view the lines of the folded classes). `results + folded + left_out = stored`, with `left_out` (`-no-catchall`) absent when 0. |
 | `requests` | Requests sent to targets, port connects included. DNS queries and requests to third-party sources are not in it: the queries are in `dns_queries`, and a source's requests are in `sources` (`subs`, `urls`) and in the ledger's `source` lines. |
+| `requests_by_purpose` | `run` and `crawl`: what the requests were for, by name: `pages`, `scripts` (scripts, stylesheets and source maps), `assets` (images, fonts, media), `controls` (the requests for a path that cannot exist, which answers are compared with), `description checks` (the places an API description or a GraphQL endpoint is guessed at, and the description read), `path checks` (the built-in paths: `robots.txt`, sitemaps, `.git/HEAD`, admin pages), `wordlist sweep`, `parameter probes`, `browser` (Chrome's requests), `connections`, `sent by workers` (requests another process of the run sent, which has no purpose to name here) and `other`. A name appears when it has a request. They add up to `requests`, and each line of the ledger carries its own `purpose`. |
 | `dns_queries` | Queries sent to resolvers: every question, retries and wildcard probes included, and the ones to the system resolver. It is the ledger's `DNS queries` class, with or without a ledger. Absent when none was sent. |
 | `cost` | `run` and `roles`: what the command was estimated to send, by stage, beside what each stage sent. `estimate` is the total (absent for a resumed run), `actual` the total sent, and each of `stages` has `stage`, `estimate`, `actual`, `collectors` and, where the estimate leaves out what answers lead to, `estimate_at_least` and `not_counted`. Each amount has `requests`, `connects`, `dns_queries` and `source_queries`: the stages' requests and connects add up to `requests`, their DNS queries to `dns_queries`. See [plan](commands/plan.md#the-estimate) and [roles](commands/roles.md#cost-by-stage). |
 | `db` | The database the results are in. Absent when it was temporary. |
 | `unreachable` | Targets you gave that never answered. |
-| `takeover` | Names another party may take over: `host`, `service`, `target` (the CNAME target), `evidence`, `strength` and, for `dangling`, `list` (the public list's entry and when azhaq read it). See [takeover](#takeover). |
+| `takeover` | Names another party may take over: `host`, `service`, `target` (the CNAME target), `evidence`, `strength`, `status` (`candidate` or `verified`) and, for `dangling`, `list` (the public list's entry and when azhaq read it). See [takeover](#takeover). |
+| `takeover_candidates`, `takeover_verified` | How many of the `takeover` rows have each `status`; they add up to the rows. A count of 0 is absent. |
 | `failed` | Work that did not get its answer, grouped by collector, source and error, most frequent first. See [failed](#failed). |
 | `skipped` | Targets and requests azhaq did not send, with the reason. See [skipped](#skipped). |
 | `junk` | `urls` only: the URLs left out as junk, by reason. See [urls](commands/urls.md#junk). |
@@ -142,6 +144,7 @@ An [internal error](#exit-1) comes before this rule: a summary that disagrees wi
 | `degraded_by` | `subs` only, with `degraded`: an array of `{source, error, domains}`, one for each failed source of the default set. |
 | `stopped`, `resume` | The limit that stopped the work and the command that continues it. |
 | `notes` | Caps that were hit and other things worth knowing that are not failures. See [notes](#notes). |
+| `wrote` | The files the run wrote besides the database and the files you named with `-o` and the like: the ledger, the name history files, `.azhaq-last` and `.azhaq-index`, and the archived URLs. See [the workspace](#the-workspace). |
 | `next` | Commands worth running next. See [next](#next). |
 | `advisories` | With `-advisories`: the known-issue leads, one per lead line printed and per stored `advisory` row: `advisory_id`, `url` (its source), `target`, `product`, `version_seen`, `affected_range`, `label` (`affected`, `not affected` or `conditional`), `precondition` when one is named, and with `-advisories-confirm` also `confidence` (`observed`, `inferred` or `claimed`) and `read` (what was read, or why nothing was). They are leads, not map rows: `counts` still adds up to `stored` without them, and a note counts them by label from these rows. See [Known-issue matching](CONCEPTS.md#known-issue-matching--advisories). |
 
@@ -180,8 +183,9 @@ The URL keys other than `catchall` and `skipped` count rows of the other coverag
 ### takeover
 
 - Strengths, services and what each means: see [Takeover candidates](CONCEPTS.md#takeover-candidates). Confirm each by hand before reporting.
-- The text summary prints each candidate as `! takeover candidate`.
-- With `-silent` and nothing else to report, each is printed alone on stderr as `[takeover] name -> target (service, strength)`.
+- `status` says how far a row is shown. `verified`: the service itself answered, from the name's own front page, with its documented "nothing here" page, and the name's CNAME is on that service. `candidate`: what was observed does not show the name is free, such as a target that answered NXDOMAIN or a page with no CNAME known. `evidence` begins with what was observed.
+- The text summary prints each as `! takeover candidate` or `! takeover verified`.
+- With `-silent` and nothing else to report, each is printed alone on stderr as `[takeover] name -> target (service, strength, status)`.
 - `dns` and `subs -live` rows carry the same object as `takeover`.
 
 ### failed
@@ -189,7 +193,7 @@ The URL keys other than `catchall` and `skipped` count rows of the other coverag
 - `retryable` is true for timeouts, dropped connections, answers cut short, 429 and 5xx: a later try may work. `azhaq resume -db FILE -retry-failed` asks those targets again, and only those (see [resume](commands/resume.md#retrying-failed-targets)). Failures that are not retryable (a refused connection, a certificate error, a 4xx other than 429) are not asked again: the same request would fail the same way, so they are for you to read and fix. A plain `resume` continues only the tasks a limit or a kill left, never a failed one.
 - `source` names a third-party source, such as `crtsh` or `wayback`.
 - `targets` names up to 100. `azhaq query -db FILE -failed` lists every failed target of the newest run (`-run ID` reads another by its `run_id`): the list to retry.
-- `azhaq-session` is a signed-in run whose session ended and could not be renewed (`the session ended: after /logout was requested …`). Every request after the check noticed the loss was refused, so nothing after that was answered as an anonymous visitor. The exit code is 3: see [Sessions](CONCEPTS.md#sessions).
+- `azhaq-session` is a signed-in run whose session ended and could not be renewed (`the session ended: after /logout was requested …`). Every request after the check noticed the loss was refused, so nothing after that was answered as an anonymous visitor. The summary's `session_lost` has the URL whose answer first looked like the end (`first_answer`), the GETs answered after it, which were already in flight (`in_flight`, `in_flight_urls`), and the GETs asked since the last check that held (`asked_since_good_check`). The exit code is 3: see [Sessions](CONCEPTS.md#sessions).
 - `partial` and `fanout` failures are counted in `failures` like any other: see [Failures](CONCEPTS.md#failures-fan-out-partial-and-degraded) and [Exit 3](#exit-3).
 
 ### skipped
@@ -243,17 +247,20 @@ A line has:
 | `seq` | The line's number, from 1. |
 | `time` | When it was sent, UTC. |
 | `class` | What it was sent to: `target`, `source`, `dns` or `own`. A line without one, from a ledger written before classes, is a `target`. |
-| `kind` | `http`, `tcp`, `udp`, `dns`, `chrome` or `seal`. See below. |
-| `method` | The HTTP method. For `dns`, the record type (`A`). Not on `tcp` and `udp` lines. |
-| `target` | The URL as sent, query string included, for `http` and `chrome`. `ip:port` for `tcp` and `udp`. The resolver (`ip:port`, or its URL for DoH) for `dns`. |
+| `kind` | `http`, `tcp`, `udp`, `probe`, `dns`, `chrome` or `seal`. See below. |
+| `method` | The HTTP method. For `dns`, the record type (`A`). On a `probe` line, the method of an HTTP request. Not on `tcp` and `udp` lines. |
+| `proto` | On a `probe` line only: `http` or `https` for an HTTP request, else the protocol the bytes speak (`redis`, `smtp`, `payload`, …), `raw` when none is named. |
+| `target` | The URL as sent, query string included, for `http` and `chrome`, and for a `probe` that is an HTTP request. `ip:port` for `tcp`, `udp` and the other `probe` lines. The resolver (`ip:port`, or its URL for DoH) for `dns`. |
 | `host` | The host the request was for. For `dns`, the name asked. |
 | `vhost` | The `Host` header sent, when it is not the URL's. |
-| `body` | The first 16 hex digits of the sha256 of the request body, on an `http` line that has one: [resume](CONCEPTS.md#workspaces-runs-and-resuming) uses it to tell two writes to one URL apart. |
+| `body` | The first 16 hex digits of the sha256 of the request body, on an `http` line that has one (on a `probe` line, of the bytes sent): [resume](CONCEPTS.md#workspaces-runs-and-resuming) uses it to tell two writes to one URL apart. |
 | `rule` | The scope rule that allowed it (`-allow`, `-scope`). Empty when the run has no rules. |
 | `collector` | What sent it, for the lines that say. |
+| `purpose` | What a request to a target was for, on the lines of a run that says: `pages`, `scripts`, `assets`, `controls`, `description checks`, `path checks`… The summary's `requests_by_purpose` counts them. |
 | `prev`, `hash` | The previous line's hash, and the hex sha256 of `prev` and this line's JSON without `hash`. |
 
 - `tcp`: a connect of `ports`, or a TLS handshake of `ports` or `azhaq-tls`; for a `source`, the connection to crt.sh's database or a mail server.
+- `probe`: what `ports` writes to a connection it opened to name the service on it, one line for each write, after the `tcp` line of that connection. An HTTP probe has its `method`, its `target` as `http://IP:PORT/PATH` (`https` inside TLS) and, when the `Host` header it sent is another, its `vhost`; any other has its protocol in `proto` and the start of the sha256 of the bytes in `body`. A probe is not a request or a connection of its own: the summary's `requests` counts the `tcp` line of its connection, and the run's ledger note says how many probes went on those connections. The handshake of a TLS connection is the `tcp` line, not a probe.
 - `dns`: a query to a resolver, a zone transfer or a trace step. A retry or a second opinion is a line of its own.
 - `source` lines are `http` or `tcp`, with no `rule`: the scope holds targets, not the third parties asked about them.
 - `chrome`: a request Chrome sent, listed once it left. One that Chrome dropped before sending is not listed, and not counted.
@@ -268,6 +275,7 @@ A line says the request or connection left, and the summary's `requests` counts 
 | `http` | The request has been written to its connection. Also when it failed with no stop to blame: a connect was attempted and failed, a TLS handshake began, the name had no address, or the other end dropped the connection before the write. | A request a stop cancelled before any of that: before a connection was tried, or on a connection that never took the write. |
 | `tcp` | The socket is about to connect (`connect(2)`), so a stop that lands earlier leaves no line. A fast port scan (`-rate` of 1,000 or more) writes the lines of up to 32 connects together just before they start; those connects are not stopped by a kill file or a deadline that comes after the lines, and a stop that comes before them records none. | A connect refused by the scope or the kill file, with no address, or stopped before its socket connected. |
 | `udp` | The socket to the port is open and the datagram is written at once. | A socket that could not be opened. |
+| `probe` | The bytes of one probe are about to be written to a connection a port identification opened: the HEAD / it sends to a port that said nothing, a protocol's own request, the `SYST` of an FTP check. One line for each write. | A write that was never made. |
 | `chrome` | Chrome says the request's headers went out. A request Chrome was let send and nothing was heard of afterwards is listed when its tab closes, since it may have left. | A request Chrome dropped or answered from its cache. |
 | `dns` | The query goes to the resolver. | A query refused by the kill file or after the context ended. |
 
@@ -286,6 +294,9 @@ A workspace is one SQLite file, set with `-db`. Its files:
 | `DB` | The workspace. |
 | `DB.ledger.jsonl` | The [ledger](CONCEPTS.md#the-ledger-and-its-seal), next to the workspace. |
 | `DB.stop` | The default [kill file](CONCEPTS.md#the-kill-file). |
+| `azhaq-data/names/DOMAIN.json` | The [name history](commands/subs.md#name-history), in the folder of `DB` (the current directory when the database is temporary). |
+
+A run writes nothing under your home or XDG directories and leaves nothing in the temporary directory. The files it writes besides the database are in the summary's `wrote`. A history shared between workspaces is one you name with `-history-dir DIR` or `$AZHAQ_DATA_DIR`.
 
 - A drop-in command (`subs`, `probe`, `dirs`, …) without `-db` uses a temporary database and cannot be resumed.
 - `run` without `-db` writes `azhaq-TIME-PID.db` in the current directory, or uses the file `$AZHAQ_DB` names.

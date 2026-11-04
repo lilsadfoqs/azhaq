@@ -33,7 +33,7 @@ azhaq crawl -u https://app.example.com/ -json -rejected
 ## What it does
 
 1. Starts from the URLs you give and follows links to the depth `-d`: 3 link levels below the start URL by default, as katana does.
-2. Reads forms, scripts and API descriptions for more URLs and routes. Library scripts are not read for routes. Every URL they give is requested, a GET operation of an API description (one that needs no path parameter and no required query parameter) and a GET form included, whatever the name: an endpoint that resets data or logs out is asked like any other. `-deny-path` keeps one out.
+2. Reads forms, scripts and API descriptions for more URLs and routes. Library scripts are not read for routes. Every URL they give is requested, a GET operation of an API description (one that needs no path parameter and no required query parameter) and a GET form included, except one whose own path or API operation declares a state change (`/logout`, `/user/delete`, a `GET /createdb`): that one is held back, listed as skipped, and sent with `-send-state-changing`. An endpoint that resets data under another name is asked like any other. `-deny-path` keeps one out.
 3. Asks only what a crawler does. The built-in path checks of `run` are off unless you add `-sweep`. `-kf all`, `-kf robotstxt` or `-kf sitemapxml` asks each web service only for its `robots.txt` and sitemaps and reads every entry.
 4. Tells the page every unknown path gets from a real page with one request for a path that does not exist at the root and in each top-level directory (`/api/`, `/rest/`), not in every directory: `/rest/user/` is compared with the answer of `/rest/`. A directory below the first level whose own answer to an unknown path differs from the one above it then has its generic answers listed as `visited` where they would be `catchall`. `-sweep` asks every directory, as `run` does (up to 24 per origin). katana asks none.
 5. Lists the URLs it requested, each distinct URL once: every page, script and stylesheet it asked, less those that answered 404 or 410 and those that answered as the control does ([Folded rows](#folded-rows) counts them in the summary; `-all-rows` lists them), and the URLs pages link to or load (anchors, forms, scripts, stylesheets), as katana lists them. A URL a page holds that the crawl did not request (past `-d`, a limit, a `-deny-path` rule, or a library script, an image or a font no step fetches) is listed too, marked `linked`, and the summary says how many.
@@ -187,7 +187,8 @@ These filters limit what is printed, not what is crawled.
 ### Rejected strings
 
 - `-rejected` lists the strings read from scripts and pages and kept out of the URLs. They are never asked.
-- The reasons include a pattern with a wildcard (a line of `robots.txt`), an expression, unquoted script code, the start of a path a script joins more to, and a key of a module map or a case label (`{"./components/locale/zh_CN": 1}` in a bundle is a module id, not a route).
+- The summary splits the crawl's `requests` by purpose (`pages`, `scripts`, `assets`, `controls`, `description checks`…): see [run](run.md#where-the-requests-go). A page already asked under another spelling of its URL is not asked again.
+- The reasons include a pattern with a wildcard (a line of `robots.txt`), an expression, unquoted script code, the start of a path a script joins more to, a route a script's client asks under its declared base, and a key of a module map or a case label (`{"./components/locale/zh_CN": 1}` in a bundle is a module id, not a route).
 - Text output is `string`, a tab, and the reason.
 - `-json` output is `{"rejected", "reason", "url", "source", "via"}`. `url` is what the string makes against the page.
 
@@ -223,7 +224,7 @@ These filters limit what is printed, not what is crawled.
 | `-d` | int | `-1` | katana's -d: link levels below the start URL to visit (3 by default); -depth N is -d N-1 |
 | `-paths` | string |  | extra path wordlist (one path per line) |
 | `-sweep` | bool |  | also ask each web service for the 51 built-in paths (robots.txt, sitemaps, API descriptions, .git/HEAD, admin, …) and for the source map next to each script, as run does; crawl asks only what a crawler does |
-| `-no-form-fill` | bool |  | do not ask the action of GET forms with neutral values (by default each is asked, even one that deletes or logs out; -deny-path keeps its action out) |
+| `-no-form-fill` | bool |  | do not ask the action of GET forms with neutral values (by default each is asked, unless its action's own path declares a state change: it is held back, and -send-state-changing sends it; -deny-path keeps its action out) |
 | `-per-template` | int |  | URLs of one template (/product?id={n}) to request; the rest are listed (default: all) |
 | `-no-follow` | bool |  | do not follow redirects: each URL is asked once and its redirect recorded with the Location (httpx's default) |
 | `-no-map-guess` | bool |  | do not ask for main.js.map next to a script that names no source map (a map a script or a header names is still read) |
@@ -253,6 +254,7 @@ These filters limit what is printed, not what is crawled.
 | `-allow` | string, repeatable |  | a domain, host or address range the run may touch; HOST:PORT allows that host on that port only; with any -allow, nothing else is requested |
 | `-deny` | string, repeatable |  | a domain, host or address range the run must not touch, even when given as a target |
 | `-deny-path` | string, repeatable |  | a regular expression on a URL's path and query: a URL it matches is never requested, by any collector or Chrome, and is listed as not requested (repeatable; azhaq decides nothing by itself) |
+| `-send-state-changing` | bool |  | send the GETs found on the way whose own path or API operation declares a state change (create, delete, reset, logout, and the other words of the documented set): a crawl's link, a script's route, an API description's operation, a built-in -dirs word. By default they are held back and listed as skipped; a target you give, a wordlist you give and -deny-path rules are not affected |
 | `-kill-file` | string |  | stop all sending when this file exists, so that no request starts after it, and exit 4; azhaq resume works once it is removed (default DB.stop) |
 | `-ledger` | string |  | write every request, connection and DNS query the run sends (to targets, third-party sources and resolvers) to this file, a chain of hashes that azhaq ledger -verify checks (default DB.ledger.jsonl next to the workspace; off: none; with a temporary database, only when given) |
 | `-submit-forms` | bool |  | also submit POST forms with neutral values (crawl): CHANGES DATA on the target, each submission counts as a request and is in the ledger, the summary says how many; held to -allow, -deny and the crawl's scope |

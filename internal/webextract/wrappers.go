@@ -629,9 +629,10 @@ func (w wrapper) calls(script string, relative bool) []Call {
 		if dot := b >= 0 && script[b] == '.'; dot != w.dotted {
 			continue
 		}
-		at := i
+		at, recv := i, ""
 		if w.dotted {
 			at = receiverStart(script, b)
+			recv = script[at:b]
 		} else if word, _ := wordBefore(script, i); word == "function" {
 			continue // function name(…){: the wrapper itself
 		}
@@ -657,6 +658,7 @@ func (w wrapper) calls(script string, relative bool) []Call {
 			continue
 		}
 		c.Body = w.bodyAt(args)
+		c.Client, c.Recv = !w.pageRel, recv
 		c.Query = append(c.Query, w.query...)
 		if w.dataQuery && (c.Method == "GET" || c.Method == "HEAD") {
 			c.Query, c.Body = append(c.Query, c.Body...), nil

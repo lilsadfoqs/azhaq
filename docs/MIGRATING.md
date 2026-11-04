@@ -75,7 +75,7 @@ Behaviour, fields and edge cases: [`azhaq subs`](commands/subs.md).
 - A run in which every source failed is `degraded` and exits 3, not 0 with an empty list. One in which some answered exits 0, and the summary names the sources that failed (`-strict-exit` makes it 3). The summary names each source that failed.
 - azhaq keeps the names it found for a domain and checks them again in the next run. `-no-history` turns this off. See [Name history](commands/subs.md#name-history).
 - With `-live`, a name that no longer resolves drops out.
-- Without `-live`, a stored name that no source gave this run is listed with `"unverified": true`. subdomain.center's guesses, which subfinder prints, are held back and counted (`guesses held back`): `-guesses` prints them, flagged the same way, and `-live` checks them.
+- Without `-live`, a stored name that no source gave this run is listed with `"unverified": true`. subdomain.center's guesses, which subfinder prints, are held back and counted (`guesses held back`): `-guesses` prints them, flagged the same way, and `-live` checks them (`-live -guesses=false` leaves them unlooked).
 
 ### Examples
 
@@ -262,7 +262,7 @@ Behaviour, fields and edge cases: [`azhaq crawl`](commands/crawl.md).
 <!-- azhaq: crawl -->
 
 - **Hosts followed.** Without `-fs`, a crawl of a name follows its registrable domain and subdomains, as `rdn` does. A crawl of an address stays on that address and port. Redirects are followed inside the site, not to any host.
-- **Every URL found is asked.** Like katana and Burp's crawler, `crawl` requests every GET URL it finds in scope, `/logout` and `/delete?id=1` included: azhaq cannot know what a GET does on the server, so no name keeps a URL out. A write (a method other than GET, HEAD or OPTIONS) goes only with its flag, and a GET operation named in an API description is requested too. `-deny-path REGEX` is the only thing that keeps paths out of every request. With a session, a request that ends it is noticed and the session is renewed or the run stops: [Sessions](CONCEPTS.md#sessions).
+- **Every URL found is asked, except one that names a state change.** Like katana and Burp's crawler, `crawl` requests every GET URL it finds in scope, with one exception that katana does not have: a GET found on the way whose own path or API operation declares a state change (`/logout`, `/delete?id=1`) is held back and listed as skipped, and `-send-state-changing` sends it. Otherwise azhaq cannot know what a GET does on the server, so no other name keeps a URL out. A write (a method other than GET, HEAD or OPTIONS) goes only with its flag, and a GET operation named in an API description is requested too. `-deny-path REGEX` keeps any path out of every request. With a session, a request that ends it is noticed and the session is renewed or the run stops: [Sessions](CONCEPTS.md#sessions).
 - A URL with a scanner's payload in it never enters the map.
 - Chrome sends only GET, HEAD and OPTIONS unless you give `-browser-writes`.
 - A page with many query variants, such as `/item?id=N`, is asked for every URL, as katana does. `-per-template N` limits it (the rest are listed) and `-iqp` asks one for each path.
@@ -340,6 +340,9 @@ azhaq crawl -u https://app.example.com/ -fs rdn -do -f rdn,path -rl 5
 
 - **Calibration.** `dirs` calibrates by default, as ffuf does with `-ac`. `fuzz` does not calibrate unless you give `-ac`, as in ffuf, so a command line moved over returns ffuf's matches.
 - `dirs` keeps calibration on when you give `-fc`, `-fs`, `-fw`, `-fl` or `-fr` (`dirs` has no `-ft`), as ffuf's `-ac -fs` does: your filters add to the calibration. `-ac=false` turns it off; then the filters are yours alone, no calibration guess is sent, and the summary says so.
+- **A catch-all inside a directory.** ffuf's `-ac` calibrates the directory it starts in, so an API that answers every unknown `api/…` word with one error lists a row for each. `dirs` asks one name that cannot exist in each directory two hits are found in and folds the hits that answer as it did, byte for byte, into one line with their count: [details](commands/dirs.md#a-catch-all-inside-a-directory).
+- **A blank wordlist line** asks the base URL in both tools. ffuf calibrates on the size alone and so drops a base that answers `200` with the size of the `404` page unknown paths get; `dirs` compares the status too and lists it.
+- **What matched.** A `fuzz` match says which matchers held (`-mc`, `-mr`, …) and what each held on, and, with `-ac`, when it is a calibration answer's own: [Output](commands/fuzz.md#output). `-mc 302 -mr 'Location: index.php'` lists every 302 answer in both tools, since `-mmode` is `or` by default.
 - Either command needs the keyword `FUZZ`, or the one `-ack` names. Without it a note says nothing was calibrated.
 - **Scope.** The host in `-u` is the scope, unless `-allow`, `-deny` or `-scope` say otherwise. An input that would go to another host is counted and not sent.
 - A header that names a host is held to the scope too, because a front end routes by it. These are `Host`, `X-Forwarded-Host`, `X-Host` and `X-Original-Host`. With no `-allow`, `-deny` or `-scope`, a host you name in a header joins the targets you named. With a rule, a header naming a host outside it, or the allowed host on another port than `-allow HOST:PORT` gives, is refused before anything is sent. See [Concepts](CONCEPTS.md).
@@ -505,7 +508,7 @@ Behaviour, fields and edge cases: [`azhaq ports`](commands/ports.md).
 | --- | --- | --- |
 | `-host a,b`, `-l FILE` | `-host a,b`, `-l FILE` | Names, addresses, `host:port`, URLs, CIDR ranges and AS numbers such as `AS13335`. Also as arguments or on stdin. |
 | `-p 80,443,8000-9000`, `-p -` | the same | `-p -` or `-p full` is every port. |
-| `-tp 100`, `-tp 1000`, `-tp full` | the same | Also `-p top-100`. The default is the top 100. |
+| `-tp 100`, `-tp 1000`, `-tp full` | the same | Also `-p top-100`, which is naabu's default. The default here is the top 100 and the usual ports of the services azhaq checks: 163 ports. |
 | `-pf FILE`, `-ep LIST` | `-pf FILE`, `-ep LIST` | Ports to add, and ports to take out. |
 | `-eh`, `-ef` | `-eh`, `-ef` | Hosts not to scan. `-deny` does the same. |
 | `-rate 1000` | `-rate 1000` | Connects per second. The default is 1500, as naabu's connect scan. `127.0.0.1` is not paced unless a rate is given. |

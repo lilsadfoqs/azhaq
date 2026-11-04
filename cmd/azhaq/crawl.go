@@ -37,7 +37,7 @@ func cmdCrawl(args []string) error {
 	fs.Var(&urls, "u", "start URL (repeatable, or comma-separated)")
 	list := onceString(fs, "l", "file of start URLs (- for stdin)")
 	given := inherit(fs, append([]string{"depth", "max-items", "parallel", "host-parallel", "delay", "paths", "browser", "browser-writes", "chrome-no-sandbox",
-		"login", "login-user", "login-pass", "per-template", "proxy", "retry", "backoff", "cookie-jar", "host-rate", "max-host-requests", "request-timeout", "max-response-size", "submit-forms", "host-guesses", "path-climb", "no-map-guess", "interact", "interact-clicks", "resolvers", "no-follow",
+		"login", "login-user", "login-pass", "send-state-changing", "per-template", "proxy", "retry", "backoff", "cookie-jar", "host-rate", "max-host-requests", "request-timeout", "max-response-size", "submit-forms", "host-guesses", "path-climb", "no-map-guess", "interact", "interact-clicks", "resolvers", "no-follow",
 		"kf=known-files", "fs=crawl-scope", "ns=crawl-any-host", "c=host-parallel", "p=parallel", "rl=rate", "ct=timeout", "dr=no-follow", "r=resolvers"},
 		targetFlags...)...)
 	var inScope, outScope stringsFlag
@@ -57,7 +57,7 @@ func cmdCrawl(args []string) error {
 	omitBody := fs.Bool("ob", false, "with -sr: write the status line and headers only")
 	listFields := fs.Bool("lof", false, "list the fields -f, -sf and -ot take, and the fields of -jsonl lines, and exit")
 	excludeFields := fs.String("eof", "", "leave these fields out of -json and -jsonl lines, comma-separated (request.tag, response.forms, tech, …)")
-	noFill := fs.Bool("no-form-fill", false, "do not ask the action of GET forms with neutral values (by default each is asked, even one that deletes or logs out; -deny-path keeps its action out)")
+	noFill := fs.Bool("no-form-fill", false, "do not ask the action of GET forms with neutral values (by default each is asked, unless its action's own path declares a state change: it is held back, and -send-state-changing sends it; -deny-path keeps its action out)")
 	d := fs.Int("d", -1, "katana's -d: link levels below the start URL to visit (3 by default); -depth N is -d N-1")
 	assets := fs.Bool("assets", false, "also list the images, fonts and media pages load (listed as linked: the crawl does not request them), and the source maps and build manifests azhaq reads (scripts and stylesheets are listed by default, as katana lists them)")
 	noShell := fs.Bool("no-catchall", false, "leave out URLs that answer with the page every unknown path gets (client-side routes of a single-page app)")

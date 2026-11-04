@@ -55,10 +55,10 @@ func TestDanglingCNAME(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if f, _ := got["azure.example.org"]["takeover"].(map[string]any); f["service"] != "Azure" || f["strength"] != "dangling" {
+	if f, _ := got["azure.example.org"]["takeover"].(map[string]any); f["service"] != "Azure" || f["strength"] != "dangling" || f["status"] != "candidate" {
 		t.Errorf("azure %v", got["azure.example.org"])
 	}
-	if f, _ := got["vendor.example.org"]["takeover"].(map[string]any); f["service"] != "domain" || f["strength"] != "strong" {
+	if f, _ := got["vendor.example.org"]["takeover"].(map[string]any); f["service"] != "domain" || f["strength"] != "strong" || f["status"] != "candidate" {
 		t.Errorf("vendor %v", got["vendor.example.org"])
 	}
 	if got["own.example.org"]["takeover"] != nil {

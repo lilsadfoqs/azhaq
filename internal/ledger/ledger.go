@@ -32,15 +32,17 @@ type Kind3 struct{ Class, Kind, Collector string }
 type Entry struct {
 	Seq       int64     `json:"seq"`
 	Time      time.Time `json:"time"`
-	Kind      string    `json:"kind"`            // http, tcp, udp, dns, chrome, or seal: the end of a run
+	Kind      string    `json:"kind"`            // http, tcp, udp, probe, dns, chrome, or seal: the end of a run
 	Class     string    `json:"class,omitempty"` // target, source, dns or own; empty in a ledger from before classes: a target
 	Method    string    `json:"method,omitempty"`
-	Target    string    `json:"target"`          // the URL (http, chrome), ip:port (tcp, udp) or the resolver (dns)
+	Proto     string    `json:"proto,omitempty"` // probe: the protocol of the bytes sent (http, https, redis, ...)
+	Target    string    `json:"target"`          // the URL (http, chrome, and a probe's HTTP request), ip:port (tcp, udp, a probe of another protocol) or the resolver (dns)
 	Host      string    `json:"host,omitempty"`  // for dns, the name asked
 	VHost     string    `json:"vhost,omitempty"` // the Host header sent, when it is not the URL's
 	Body      string    `json:"body,omitempty"`  // the start of the sha256 of the request body, when it has one
 	Rule      string    `json:"rule,omitempty"`  // the scope rule that allowed it
 	Collector string    `json:"collector,omitempty"`
+	Purpose   string    `json:"purpose,omitempty"` // what a request to a target was for: pages, scripts, controls, description checks…
 	Prev      string    `json:"prev,omitempty"`
 	Hash      string    `json:"hash,omitempty"`
 }
@@ -56,6 +58,11 @@ const (
 
 // IsTarget says the entry was sent to a target.
 func (e Entry) IsTarget() bool { return e.Class == "" || e.Class == ClassTarget }
+
+// Counted says the summary's requests count the entry: a request or a
+// connection to a target. A probe is listed apart, as bytes sent on a
+// connection that is counted itself.
+func (e Entry) Counted() bool { return e.IsTarget() && e.Kind != KindProbe && e.Kind != KindSeal }
 
 // sum is the entry's hash: sha256 over Prev and the JSON of the entry
 // without its Hash.
@@ -92,7 +99,7 @@ func appendPlain(b []byte, e Entry) ([]byte, bool) {
 	if y := e.Time.Year(); y < 0 || y > 9999 {
 		return nil, false
 	}
-	for _, s := range [...]string{e.Kind, e.Class, e.Method, e.Target, e.Host, e.VHost, e.Body, e.Rule, e.Collector, e.Prev, e.Hash} {
+	for _, s := range [...]string{e.Kind, e.Class, e.Method, e.Proto, e.Target, e.Host, e.VHost, e.Body, e.Rule, e.Collector, e.Purpose, e.Prev, e.Hash} {
 		if !plain(s) {
 			return nil, false
 		}
@@ -104,7 +111,7 @@ func appendPlain(b []byte, e Entry) ([]byte, bool) {
 	b = append(b, `","kind":"`...)
 	b = append(b, e.Kind...)
 	b = append(b, '"')
-	for _, f := range [...]struct{ name, val string }{{"class", e.Class}, {"method", e.Method}} {
+	for _, f := range [...]struct{ name, val string }{{"class", e.Class}, {"method", e.Method}, {"proto", e.Proto}} {
 		if f.val != "" {
 			b = append(append(append(b, `,"`...), f.name...), `":"`...)
 			b = append(append(b, f.val...), '"')
@@ -112,7 +119,7 @@ func appendPlain(b []byte, e Entry) ([]byte, bool) {
 	}
 	b = append(b, `,"target":"`...)
 	b = append(append(b, e.Target...), '"')
-	for _, f := range [...]struct{ name, val string }{{"host", e.Host}, {"vhost", e.VHost}, {"body", e.Body}, {"rule", e.Rule}, {"collector", e.Collector}, {"prev", e.Prev}, {"hash", e.Hash}} {
+	for _, f := range [...]struct{ name, val string }{{"host", e.Host}, {"vhost", e.VHost}, {"body", e.Body}, {"rule", e.Rule}, {"collector", e.Collector}, {"purpose", e.Purpose}, {"prev", e.Prev}, {"hash", e.Hash}} {
 		if f.val != "" {
 			b = append(append(append(b, `,"`...), f.name...), `":"`...)
 			b = append(append(b, f.val...), '"')
@@ -418,6 +425,10 @@ func (l *Ledger) Path() string { return l.path }
 
 // KindSeal is the line a run ends the file with.
 const KindSeal = "seal"
+
+// KindProbe is a line for bytes a port identification sent on a connection
+// it had already opened: the connection has its own tcp line.
+const KindProbe = "probe"
 
 // Close seals the file, flushes and syncs it, and returns the first write
 // error.

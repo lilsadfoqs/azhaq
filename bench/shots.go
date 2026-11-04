@@ -7,10 +7,13 @@ import (
 	_ "image/png"
 	"net"
 	"net/http"
+	"net/http/httputil"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -28,6 +31,62 @@ type shotsRow struct {
 	GowitnessSecs float64 `json:"gowitness_seconds"`
 	memPair
 	Unpaced bool `json:"gowitness_unpaced,omitempty"` // polite: gowitness has no rate option, so the times are not compared
+	// Requests the targets received from each tool, the median of its runs.
+	AzhaqRequests     int `json:"azhaq_requests,omitempty"`
+	GowitnessRequests int `json:"gowitness_requests,omitempty"`
+}
+
+// shotFronts puts a counting reverse proxy in front of each page: both tools
+// are given the proxy's address, so what it receives is every request the
+// page's server would have got from the tool, Chrome's own included. A forward
+// proxy given to Chrome would not do: Chrome sends loopback pages around it.
+type shotFronts struct {
+	total atomic.Int64
+	marks map[string][]int64 // tool → the total when each of its runs began, and when the last ended
+	stops []func()
+}
+
+// front is the address of a counting proxy for target, which keeps its path.
+func (f *shotFronts) front(target string) string {
+	u, err := url.Parse(target)
+	must(err)
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	must(err)
+	up := httputil.NewSingleHostReverseProxy(&url.URL{Scheme: u.Scheme, Host: u.Host})
+	srv := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		f.total.Add(1)
+		up.ServeHTTP(w, r)
+	})}
+	go srv.Serve(ln)
+	f.stops = append(f.stops, func() { _ = srv.Close() })
+	u.Host = ln.Addr().String()
+	return u.String()
+}
+
+// begin notes that a run of tool starts; end that its last run is over.
+func (f *shotFronts) begin(tool string) {
+	if f.marks == nil {
+		f.marks = map[string][]int64{}
+	}
+	f.marks[tool] = append(f.marks[tool], f.total.Load())
+}
+
+func (f *shotFronts) end(tool string) { f.begin(tool) }
+
+// median is the requests of a run of tool, the middle of its runs.
+func (f *shotFronts) median(tool string) int {
+	var per []float64
+	m := f.marks[tool]
+	for i := 1; i < len(m); i++ {
+		per = append(per, float64(m[i]-m[i-1]))
+	}
+	return int(median(per))
+}
+
+func (f *shotFronts) close() {
+	for _, stop := range f.stops {
+		stop()
+	}
 }
 
 // shotPages serves three pages with content a blank screenshot would lack.
@@ -71,6 +130,12 @@ func benchShots() *shotsRow {
 		// At 5 requests per second the eight pages took over seven minutes a tool.
 		targets = []string{juiceURL, base + "/login", base + "/nginx", base + "/admin"}
 	}
+	// The pages are asked through counting proxies, the same for both tools.
+	fronts := &shotFronts{}
+	defer fronts.close()
+	for i, t := range targets {
+		targets[i] = fronts.front(t)
+	}
 	dir, _ := filepath.Abs(filepath.Join(work, "shots-"+time.Now().Format("150405")+"-"+prof))
 	must(os.MkdirAll(dir, 0o755))
 	list := filepath.Join(dir, "targets.txt")
@@ -78,19 +143,24 @@ func benchShots() *shotsRow {
 	row := &shotsRow{Profile: prof, Targets: len(targets)}
 
 	azArgs := func(i int) []string {
+		fronts.begin("azhaq")
 		a := []string{"shots", "-l", list, "-dir", filepath.Join(dir, fmt.Sprintf("azhaq%d", i)), "-silent", "-chrome-no-sandbox"}
 		return append(a, pick([]string(nil), []string{"-rate", politeHTTP})...)
 	}
 	// gowitness has no rate option, so it runs with its defaults in both
 	// profiles (with -t 1 it shoots the first page and times out on the rest).
 	gwArgs := func(i int) []string {
+		fronts.begin("gowitness")
 		return []string{"scan", "file", "-f", list, "--chrome-path", chrome, "-s", filepath.Join(dir, fmt.Sprintf("gowitness%d", i)), "-q"}
 	}
 	out, m := timedArgs("shots", 20*time.Minute, dir, azhaq, azArgs)
+	fronts.end("azhaq")
 	row.Azhaq, row.AzhaqSeconds = len(lines(out)), m.Seconds
 	row.AzhaqOK = countShots(filepath.Join(dir, "azhaq0"))
 	_, gm := timedArgs("shots", 20*time.Minute, dir, ref("gowitness"), gwArgs)
+	fronts.end("gowitness")
 	row.GowitnessSecs = gm.Seconds
+	row.AzhaqRequests, row.GowitnessRequests = fronts.median("azhaq"), fronts.median("gowitness")
 	row.set(m, gm)
 	row.GowitnessOK = countShots(filepath.Join(dir, "gowitness0"))
 	row.Gowitness = row.GowitnessOK
@@ -99,15 +169,37 @@ func benchShots() *shotsRow {
 	}
 	cmds := cmdLine(azhaq, azArgs(0)...) + " vs " + cmdLine("gowitness", gwArgs(0)...)
 	note := fmt.Sprintf("%s; %d targets; azhaq listed %d, gowitness wrote %d files; %s%s", share(row.AzhaqOK, row.GowitnessOK), row.Targets, row.Azhaq, row.Gowitness, ratios(row.AzhaqSeconds, row.GowitnessSecs, row.memPair), azErr(m))
+	cost := shotCost(row, cmds)
 	if polite() {
 		// gowitness cannot be paced: its time at full speed is no polite reference.
+		cost()
 		addCheck("screenshots: results ≥ the reference's, confirmed by the image files: each decodes and is not one colour", row.AzhaqOK >= row.GowitnessOK,
 			"azhaq %d, reference %d; %s | %s", row.AzhaqOK, row.GowitnessOK, note, cmds)
 		row.Unpaced = true
 		return row
 	}
+	cost()
 	barOne("screenshots", row.AzhaqOK, row.GowitnessOK, row.AzhaqSeconds, row.GowitnessSecs, "the image files: each decodes and is not one colour", cmds, note)
 	return row
+}
+
+// shotCostBar is how many times the reference's requests azhaq may send for
+// the same pictures. The time bar of barOne is tighter.
+const shotCostBar = 1.25
+
+// shotCost is the check that azhaq asks the pages for at most shotCostBar
+// times what gowitness does. It is run once the row is filled.
+func shotCost(row *shotsRow, cmds string) func() {
+	return func() {
+		name := fmt.Sprintf("screenshots: requests to the targets ≤ %.2f× the reference's", shotCostBar)
+		if why, gone := refGone[vsTool(cmds)]; gone {
+			addCheck(name, false, "the reference did not run: %s | %s", why, cmds)
+			return
+		}
+		ok := row.GowitnessRequests > 0 && float64(row.AzhaqRequests) <= shotCostBar*float64(row.GowitnessRequests)
+		addCheck(name, ok, "azhaq %d, reference %d (what the targets received, the median of the runs; each page asked through a counting proxy) | %s",
+			row.AzhaqRequests, row.GowitnessRequests, cmds)
+	}
 }
 
 // countShots counts the image files in dir that decode and hold more than

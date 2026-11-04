@@ -8,7 +8,7 @@ import (
 // UDP records a datagram about to be sent to addr (ip:port), as TCP does
 // a connect.
 func UDP(ctx context.Context, host, addr string) {
-	spend(ClassTarget, "udp", collectorOf(ctx), 1)
+	spend(ClassTarget, "udp", collectorOf(ctx), purposeFor(ctx, "udp", "", nil), 1)
 	l := Active()
 	if l == nil {
 		return
@@ -25,5 +25,5 @@ func UDP(ctx context.Context, host, addr string) {
 	if rule == "" && name != ip {
 		rule = l.rule(ip)
 	}
-	l.Record(Entry{Kind: "udp", Class: ClassTarget, Target: addr, Host: host, Rule: rule, Collector: collectorOf(ctx)})
+	l.Record(Entry{Kind: "udp", Class: ClassTarget, Target: addr, Host: host, Rule: rule, Collector: collectorOf(ctx), Purpose: purposeFor(ctx, "udp", "", nil)})
 }

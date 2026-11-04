@@ -402,7 +402,7 @@ func TestMarshalIsJSONMarshal(t *testing.T) {
 	for ti, tm := range times {
 		for i, a := range strs {
 			for j, b := range strs {
-				e := Entry{Seq: int64(i*100 + j), Time: tm, Kind: "tcp", Class: a, Method: b, Target: strs[(i+j)%len(strs)], Host: b, VHost: a, Body: strs[(ti+j)%len(strs)], Rule: a, Collector: b, Prev: a, Hash: b}
+				e := Entry{Seq: int64(i*100 + j), Time: tm, Kind: "probe", Class: a, Method: b, Proto: strs[(i*3+j)%len(strs)], Target: strs[(i+j)%len(strs)], Host: b, VHost: a, Body: strs[(ti+j)%len(strs)], Rule: a, Collector: b, Prev: a, Hash: b}
 				want, err := json.Marshal(e)
 				if err != nil {
 					t.Fatal(err)

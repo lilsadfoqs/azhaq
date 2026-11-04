@@ -112,7 +112,7 @@ func (d *PortDialer) TCP(ctx context.Context, host, addr string) (net.Conn, erro
 			return nil, err
 		}
 	}
-	return d.connect(ctx, host, addr, reserved, false)
+	return d.listed(ctx, host, addr, false)(d.connect(ctx, host, addr, reserved, false))
 }
 
 // connect makes the connect to addr: its line is the ledger's when the
@@ -192,7 +192,18 @@ func (d *PortDialer) TCPDirect(ctx context.Context, host, addr string) (net.Conn
 		Refund()
 		return nil, err
 	}
-	return d.connect(ctx, host, addr, false, true)
+	return d.listed(ctx, host, addr, false)(d.connect(ctx, host, addr, false, true))
+}
+
+// listed wraps the connection a dial returns so that what is written to it
+// is entered in the ledger, probe by probe; secure says it is inside TLS.
+func (d *PortDialer) listed(ctx context.Context, host, addr string, secure bool) func(net.Conn, error) (net.Conn, error) {
+	return func(c net.Conn, err error) (net.Conn, error) {
+		if err != nil || c == nil {
+			return c, err
+		}
+		return ledger.WrapProbes(ctx, ledger.ClassTarget, host, addr, secure, c), nil
+	}
 }
 
 // TLS is TCPDirect with a TLS handshake that waits at most handshake.
@@ -229,14 +240,14 @@ func (d *PortDialer) tls(ctx context.Context, host, addr string, cfg *tls.Config
 			c.Close()
 			return nil, err
 		}
-		return lc, nil
+		return d.listed(ctx, host, addr, true)(lc, nil)
 	}
 	tc := tls.Client(c, cfg)
 	if err := tc.HandshakeContext(hctx); err != nil {
 		c.Close()
 		return nil, err
 	}
-	return tc, nil
+	return d.listed(ctx, host, addr, true)(tc, nil)
 }
 
 // connectTLS is the connect of a handshake: the line of a plain direct one.

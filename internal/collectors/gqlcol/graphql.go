@@ -23,6 +23,7 @@ import (
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
 	"github.com/lilsadfoqs/azhaq/internal/gqlschema"
 	"github.com/lilsadfoqs/azhaq/internal/lazyre"
+	"github.com/lilsadfoqs/azhaq/internal/ledger"
 	"github.com/lilsadfoqs/azhaq/internal/neterr"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"github.com/lilsadfoqs/azhaq/internal/webextract"
@@ -68,6 +69,7 @@ func looksGraphQL(raw string) bool {
 }
 
 func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Observation) error) (types.RunMeta, error) {
+	ctx = ledger.WithPurpose(ctx, ledger.PurposeDescriptions)
 	raw, err := normalize.URL(seed.Keys["url"])
 	if err != nil {
 		return types.RunMeta{Status: types.StatusError, Error: err.Error()}, err

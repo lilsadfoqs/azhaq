@@ -327,7 +327,7 @@ type cacheEnt struct {
 func Cached(raw string) (Result, bool) {
 	cacheMu.Lock()
 	defer cacheMu.Unlock()
-	e, ok := cache[raw]
+	e, ok := cache[canonical(raw)]
 	return e.res, ok && e.err == nil
 }
 
@@ -423,6 +423,15 @@ func GET(ctx context.Context, c *http.Client, raw string) (*http.Response, []byt
 	return resp, res.Body, nil
 }
 
+// respelled is res, an answer kept under another spelling of raw, as asked
+// for raw.
+func respelled(res Result, raw string) Result {
+	if res.RequestURL != raw && res.RequestURL != "" && canonical(res.RequestURL) == canonical(raw) {
+		res.RequestURL = raw
+	}
+	return res
+}
+
 func Do(ctx context.Context, c *http.Client, raw string) (Result, bool, error) {
 	return DoReq(ctx, c, raw, nil)
 }
@@ -437,11 +446,14 @@ func DoReq(ctx context.Context, c *http.Client, raw string, rq *Req) (Result, bo
 	if err := denied(raw); err != nil {
 		return Result{}, false, err
 	}
+	if err := egress.CheckHeld(ctx, rq.method(), raw); err != nil {
+		return Result{}, false, err
+	}
 	cacheMu.Lock()
 	if e, ok := cache[key]; ok {
 		cacheMu.Unlock()
 		markStopped(ctx, e.err)
-		return e.res, true, e.err
+		return respelled(e.res, raw), true, e.err
 	}
 	if wait, ok := inflight[key]; ok {
 		cacheMu.Unlock()
@@ -457,7 +469,7 @@ func DoReq(ctx context.Context, c *http.Client, raw string, rq *Req) (Result, bo
 		e := cache[key]
 		cacheMu.Unlock()
 		markStopped(ctx, e.err)
-		return e.res, true, e.err
+		return respelled(e.res, raw), true, e.err
 	}
 	if err := originRefused(ctx, raw); err != nil {
 		cacheMu.Unlock()
@@ -539,7 +551,7 @@ func DoReq(ctx context.Context, c *http.Client, raw string, rq *Req) (Result, bo
 	if err == nil && !res.cut && ctx.Err() == nil && Keep != nil {
 		Keep.Keep(key, res)
 		for _, hop := range hops {
-			Keep.Keep(hop.RequestURL, hop)
+			Keep.Keep(canonical(hop.RequestURL), hop)
 		}
 	}
 	return res, false, err
@@ -551,8 +563,8 @@ func DoReq(ctx context.Context, c *http.Client, raw string, rq *Req) (Result, bo
 func cacheHopsLocked(res Result) []Result {
 	var added []Result
 	for _, hop := range hopResults(res) {
-		if _, ok := cache[hop.RequestURL]; !ok {
-			cache[hop.RequestURL] = cacheEnt{res: hop}
+		if _, ok := cache[canonical(hop.RequestURL)]; !ok {
+			cache[canonical(hop.RequestURL)] = cacheEnt{res: hop}
 			added = append(added, hop)
 		}
 	}
@@ -670,7 +682,7 @@ func do(ctx context.Context, c *http.Client, raw string, rq *Req) (Result, error
 			break
 		}
 		next, err := resp.Request.URL.Parse(loc)
-		if err != nil || !inScope(next.String()) || !followable(raw, next.String()) || denied(next.String()) != nil {
+		if err != nil || !inScope(next.String()) || !followable(raw, next.String()) || denied(next.String()) != nil || egress.CheckHeld(ctx, method, next.String()) != nil {
 			break // the hop is recorded with its Location; the target is not requested
 		}
 		if RespectHSTS && next.Scheme == "http" && resp.Header.Get("Strict-Transport-Security") != "" {

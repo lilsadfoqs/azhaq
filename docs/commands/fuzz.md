@@ -39,7 +39,7 @@ A word is asked whatever it says, `/logout` included; `-deny-path REGEX` keeps a
 
 ## Output
 
-A match is one line: the input and `[Status, Size, Words, Lines, Duration]`. `-v` adds the URL, `-s` prints the inputs only, and several keywords print one block each. With `-input-cmd` the position is shown, not the command's output. With `-json` you get one object per match, with ffuf's fields. `-o FILE` writes a report: see [Reports](#reports).
+A match is one line: the input and `[Status, Size, Words, Lines, Duration]`, then which matchers held: `Matched: -mc 302; -mr Location: index.php found in the headers: "…"`. `-v` adds the URL, `-s` prints the inputs only, and several keywords print one block each. With `-input-cmd` the position is shown, not the command's output. With `-json` you get one object per match, with ffuf's fields. `-o FILE` writes a report: see [Reports](#reports).
 
 | Field | Meaning |
 | --- | --- |
@@ -51,12 +51,16 @@ A match is one line: the input and `[Status, Size, Words, Lines, Duration]`. `-v
 | `scraper` | Always `{}`. |
 | `resultfile` | The `-od` file of the match. |
 | `host` | The host and port asked. |
+| `matched` | The matchers that held and what each held on, in the order `-mc -ms -mw -ml -mr -mt`. Each has `matcher` (the flag), `value` (as given) and, for `-mc -ms -mw -ml -mt`, `got`: the answer's status, size, words, lines or milliseconds. For `-mr` it has `in` (`headers` or `body`), `text` (what matched) and `context` (the text with up to 24 bytes of the answer on either side). |
+| `control` | Only with `-ac`, and only when the answer is the same as a calibration answer: its `url`, `status` and `size`. |
 
 One line looks like this:
 
 ```
-{"input":{"FFUFHASH":"YzdjOGEz","FUZZ":"YWRtaW4="},"position":12,"status":200,"length":483,"words":51,"lines":7,"content-type":"text/plain","redirectlocation":"","url":"…","duration":7596361,"scraper":{},"resultfile":"","host":"127.0.0.1:3001"}
+{"input":{"FFUFHASH":"YzdjOGEz","FUZZ":"YWRtaW4="},"position":12,"status":200,"length":483,"words":51,"lines":7,"content-type":"text/plain","redirectlocation":"","url":"…","duration":7596361,"scraper":{},"resultfile":"","host":"127.0.0.1:3001","matched":[{"matcher":"-mc","value":"200-299,301,302,307,401,403,405,500","got":"200"}]}
 ```
+
+With the default `-mmode or` an answer is listed when any matcher holds, and `matched` names the ones that did: `-mc 302 -mr 'Location: index.php'` lists every 302 answer, as ffuf does, and only the one with that header has an `-mr` entry. `-mmode and` lists the answers every matcher holds for. A match that has no `control` was not compared with one: without `-ac` the run asks for no name that cannot exist. With `-ac`, an answer that has a calibration answer's status and the same bytes (the same once each one's own input is taken out, when the body was read) says which one; a filter set by calibration usually removes such an answer, so it shows when the filters you chose let it through (`-fmode and`).
 
 ## Summary and exit codes
 
@@ -155,6 +159,8 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 - With `-ac` on, answers are read into memory until calibration is done (and for the whole run with `-ach`, or when a page shape was learned), where ffuf only counts them.
 
 ### Matching and wordlists
+- `-mr` and `-fr` read the response headers, one `Name: value` line each, followed by the body, as ffuf does: `-mr 'Location: index.php'` matches a header.
+- Several matchers join with `-mmode or` (the default: any one holds) or `-mmode and` (every one holds), and several filters with `-fmode or` (any one drops the answer) or `-fmode and` (every one must), as ffuf does.
 - The default matcher is `-mc 200-299,301,302,307,401,403,405,500`, unless `-ms`, `-mw`, `-ml`, `-mr` or `-mt` is given alone, as in ffuf.
 - An empty line of a wordlist is a word: `FUZZ` is replaced by nothing, so a wordlist that starts with a blank line asks the base URL (as in ffuf).
 - With several wordlists, `-mode pitchfork` runs as long as the longest list. The shorter ones start over. 4 users and 3 passwords make 4 requests, as in ffuf 2.3.

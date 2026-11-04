@@ -104,8 +104,8 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 ### Where the reports go
 
 - Default: `DIR/reports`, one Markdown file per report.
-- `-o PATH` as a file: the reports one after another. With `-format json` the file holds a JSON array.
-- `-o PATH` as a directory (`out/`, or an existing one): one file per report.
+- `-o PATH` is a directory when it ends in a slash, already exists as a directory, or when several reports go to it: one file per report. Without a slash, `-o out` and `-o out/` act the same for several reports. If `PATH` is an existing file and several reports go to it, `report` refuses and says so.
+- `-o PATH` for exactly one report, when `PATH` is not a directory: that report is written to the file `PATH`.
 - With `-url`, the default is standard output; `-o` sends the report to a file or directory instead.
 
 ### What a report never claims
@@ -144,6 +144,6 @@ Read a redacted report once before sharing it. An identifier that no kept body n
 | `-method` | string |  | the method of a write row (-replay-writes); a read's row by default |
 | `-owner` | string |  | with -url: only the row of this owner, when several owners' requests share the URL and method (two roles creating in one collection); a report for each owner by default |
 | `-format` | string | `md` | md or json |
-| `-o` | string |  | FILE for the reports (one file, or a directory with a report per file); without -url, DIR/reports; with -url, standard output |
+| `-o` | string |  | FILE or DIR for the reports: a directory (it exists, ends in a slash, or several reports go to it) gets a file per report, any other path is the file of a single report; without -url, DIR/reports; with -url, standard output |
 | `-redact` | bool |  | also mask hosts and identifiers (a report to share outside the engagement) |
 <!-- flags:end -->

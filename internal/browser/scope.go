@@ -300,9 +300,10 @@ func (b *Browser) decide(root context.Context, ev cdpfetch.EventRequestPaused, t
 		b.done(t)
 		b.fail(root, ev.RequestID) // a window a page opened, being closed
 		return
-	case raw != "" && egress.CheckDenied(raw) != nil:
-		// The user's own -deny-path rule: never requested, and listed with
-		// the rule by fetch (not as a refusal of the scope).
+	case raw != "" && (egress.CheckDenied(raw) != nil || !write && egress.CheckHeld(root, ev.Request.Method, raw) != nil):
+		// The user's own -deny-path rule, or a GET found on the way whose own
+		// name declares a state change: never requested, and listed with
+		// the reason by fetch (not as a refusal of the scope).
 		b.done(t)
 		b.fail(root, ev.RequestID)
 		return
@@ -391,6 +392,9 @@ func (b *Browser) watch(ctx context.Context, t *tab, also func(*network.EventReq
 			}
 			if also != nil {
 				also(&ev)
+			}
+			if r := ev.RedirectResponse; r != nil && !t.signin {
+				fetch.SawAnswer(r.URL, int(r.Status), headerValue(r.Headers, "Location"))
 			}
 			if t.log != nil {
 				t.log.requestSent(&ev)
@@ -492,6 +496,9 @@ func (b *Browser) watch(ctx context.Context, t *tab, also func(*network.EventReq
 			}
 			if t.log != nil {
 				t.log.responded(&ev)
+			}
+			if r := ev.Response; r != nil && !t.signin {
+				fetch.SawAnswer(r.URL, int(r.Status), headerValue(r.Headers, "Location"))
 			}
 			if r := ev.Response; r != nil && (r.FromDiskCache || r.FromPrefetchCache || r.FromServiceWorker) {
 				b.fromCache(ev.RequestID)
@@ -862,4 +869,16 @@ func (b *Browser) GuardDenied() (n int, hosts []string) {
 		return 0, nil
 	}
 	return b.guard.Denied()
+}
+
+// headerValue is the value of the header called name in h, however Chrome
+// spells its name.
+func headerValue(h network.Headers, name string) string {
+	for k, v := range h {
+		if strings.EqualFold(k, name) {
+			s, _ := v.(string)
+			return s
+		}
+	}
+	return ""
 }

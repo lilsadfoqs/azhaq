@@ -25,8 +25,8 @@ func TestDocsStateWhatTheGETPromiseIs(t *testing.T) {
 	for file, want := range map[string]string{
 		"../../README.md":                 "A GET can change data or end a session",
 		"../../docs/commands/run.md":      "A GET can change data or end a session",
-		"../../docs/commands/crawl.md":    "an endpoint that resets data or logs out is asked like any other",
-		"../../docs/TROUBLESHOOTING.md":   "a GET that deletes or logs out is asked",
+		"../../docs/commands/crawl.md":    "An endpoint that resets data under another name is asked like any other",
+		"../../docs/TROUBLESHOOTING.md":   "a GET that deletes or logs out under another name is asked",
 		"../../docs/MIGRATING.md":         "a GET operation named in an API description is requested too",
 		"../../docs/MCP.md":               "asks every GET it finds in scope",
 		"../../docs/commands/plan.md":     "It does not list the URLs a crawl will find",

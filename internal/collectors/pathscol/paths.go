@@ -14,8 +14,10 @@ import (
 
 	"github.com/lilsadfoqs/azhaq/catalog"
 	"github.com/lilsadfoqs/azhaq/internal/crawlscope"
+	"github.com/lilsadfoqs/azhaq/internal/egress"
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
 	"github.com/lilsadfoqs/azhaq/internal/lazyre"
+	"github.com/lilsadfoqs/azhaq/internal/ledger"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"github.com/lilsadfoqs/azhaq/internal/webextract"
 	"github.com/lilsadfoqs/azhaq/types"
@@ -207,6 +209,8 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		list = c.Wordlist
 		if len(list) == 0 {
 			list = DefaultWordlist
+		} else {
+			ctx = egress.WithAsked(ctx) // a path list of the user's: every word is asked
 		}
 	case !c.Known && b != "" && b != "/api/" && c.owner(origin+b, raw) == raw && c.bases(origin) <= maxBases:
 		// The root sweep asks /api/swagger.json and /api/openapi.json.
@@ -222,7 +226,11 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 	// probe asks one location and emits what it finds; it says whether the
 	// answer was an API description.
 	probe := func(target, path string) bool {
-		res, _, err := fetch.Do(ctx, c.Client, target)
+		purpose := ledger.PurposePathChecks
+		if isDescLoc(path) || isGraphQLLoc(path) {
+			purpose = ledger.PurposeDescriptions
+		}
+		res, _, err := fetch.Do(ledger.WithPurpose(ctx, purpose), c.Client, target)
 		if err != nil || !(interesting(res.Status) || isGraphQLLoc(path) && refusesGET(res.Status)) || fetch.CatchAll(ctx, c.Client, res) {
 			return false
 		}
@@ -293,27 +301,9 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		}
 		return isDescLoc(path) && res.Status < 400 && describes(res.Body)
 	}
-	var locs, descs []string
-	for _, path := range list {
-		path = strings.TrimPrefix(path, "/")
-		if path == "" {
-			continue
-		}
-		if isDescLoc(path) {
-			descs = append(descs, path)
-		} else {
-			locs = append(locs, path)
-		}
-	}
-	// The guesses of an API description go one at a time, likeliest first,
-	// and stop at the first that is one.
-	slices.SortStableFunc(descs, func(a, b string) int { return descRank(a) - descRank(b) })
+	locs, descs := sweepWords(list)
 	targetOf := func(path string) string {
-		target := base.Scheme + "://" + base.Host + prefix + path
-		if u, err := normalize.URL(target); err == nil {
-			target = u
-		}
-		return target
+		return locationOf(base, prefix, path)
 	}
 	if len(descs) > 0 {
 		wg.Add(1)
@@ -371,6 +361,60 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		}
 	}
 	return meta, ctx.Err()
+}
+
+// sweepWords splits a wordlist into the locations asked in any order and the
+// guesses of an API description, which go one at a time, likeliest first.
+func sweepWords(list []string) (locs, descs []string) {
+	for _, path := range list {
+		path = strings.TrimPrefix(path, "/")
+		if path == "" {
+			continue
+		}
+		if isDescLoc(path) {
+			descs = append(descs, path)
+		} else {
+			locs = append(locs, path)
+		}
+	}
+	slices.SortStableFunc(descs, func(a, b string) int { return descRank(a) - descRank(b) })
+	return locs, descs
+}
+
+// locationOf is the URL a word of the sweep asks, under prefix.
+func locationOf(base *url.URL, prefix, path string) string {
+	target := base.Scheme + "://" + base.Host + prefix + path
+	if u, err := normalize.URL(target); err == nil {
+		target = u
+	}
+	return target
+}
+
+// Sweep is what the sweep of the origin of raw asks of list, as URLs: the
+// locations every sweep asks, and the guesses of an API description, which
+// stop at the first that is one. The URL itself is not among them.
+func Sweep(raw string, list []string) (locs, descs []string) {
+	raw, err := normalize.URL(raw)
+	if err != nil {
+		return nil, nil
+	}
+	base, err := url.Parse(raw)
+	if err != nil {
+		return nil, nil
+	}
+	words, guesses := sweepWords(list)
+	prefix := probePrefix(base.Path)
+	for _, w := range words {
+		if t := locationOf(base, prefix, w); t != raw {
+			locs = append(locs, t)
+		}
+	}
+	for _, w := range guesses {
+		if t := locationOf(base, prefix, w); t != raw {
+			descs = append(descs, t)
+		}
+	}
+	return locs, descs
 }
 
 var locRE = lazyre.New(`(?i)<loc>\s*([^<\s]+)\s*</loc>`)
