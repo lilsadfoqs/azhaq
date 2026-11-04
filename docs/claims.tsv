@@ -276,3 +276,7 @@ docs-output.exit-1-before-rule	docs/OUTPUT.md	a summary that disagrees with its 
 shots.rows-add-up	docs/commands/shots.md	Each ends as one row, and the rows add up	test:cmd/azhaq:TestShotMissesGiveEveryTargetItsRow,TestShotsBatchGivesEveryTargetARow
 shots.redirect-one-row	docs/commands/shots.md	the destination is not a second target, row or file	test:cmd/azhaq:TestShotsRedirectIsOneRowWithTheDestinationInFinalURL;test:internal/collectors/shotcol:TestSkipLeavesWhereAPageRedirectedTo
 shots.failed-row	docs/commands/shots.md	A target with no picture has a row of its own	test:cmd/azhaq:TestShotMissesGiveEveryTargetItsRow,TestShotsBatchGivesEveryTargetARow,TestShotsEveryTargetFailedExits3WithRows
+dns.cname-target-checked	docs/commands/dns.md	A name with a CNAME gets its target checked, whichever types were asked.	test:cmd/azhaq:TestDNSCNAMEAloneChecksTheTarget
+dns.cname-alone-asks-a	docs/commands/dns.md	so the name is asked for A once more, and only the end of the chain is kept from that answer	test:cmd/azhaq:TestDNSCNAMEAloneChecksTheTarget
+dns.takeover-counts-apart	docs/commands/dns.md	`takeover_candidates` and `takeover_verified` count them apart, and add up to the rows under `takeover`.	test:cmd/azhaq:TestTakeoverSummaryCountsCandidatesAndVerified
+docs-concepts.takeover-status	docs/CONCEPTS.md	a `dangling` row stays a `candidate`	test:internal/takeover:TestFindingStatus

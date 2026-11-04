@@ -52,3 +52,61 @@ func TestTakeoverPageAndCNAME(t *testing.T) {
 		t.Errorf("%+v", got)
 	}
 }
+
+// The summary counts candidates and verified apart, and each is what its row
+// says: a CNAME to a name that did not resolve is a candidate whatever the
+// provider; the provider's own page beside a CNAME to it is verified.
+func TestTakeoverSummaryCountsCandidatesAndVerified(t *testing.T) {
+	page := func(host string) types.StoredObservation {
+		raw, _ := json.Marshal(map[string]any{"url": "https://" + host + "/", "takeover": map[string]any{"service": "GitHub Pages", "strength": "page",
+			"evidence": `GitHub Pages's page for a name nobody claimed: "There isn't a GitHub Pages site here."`}})
+		return types.StoredObservation{Observation: types.Observation{Collector: "azhaq-http", Payload: raw}}
+	}
+	dnsObs := func(host string, f map[string]any, cnames ...string) types.StoredObservation {
+		p := map[string]any{"fqdn": host, "cnames": cnames}
+		if f != nil {
+			p["takeover"] = f
+		}
+		raw, _ := json.Marshal(p)
+		return types.StoredObservation{Observation: types.Observation{Collector: "azhaq-dns", Payload: raw}}
+	}
+	dangling := map[string]any{"service": "Azure", "target": "gone.azurewebsites.net", "strength": "dangling", "status": "candidate", "evidence": "observed: CNAME to gone.azurewebsites.net"}
+	rep := newReport("run")
+	rep.Takeover = takeovers(nil, []types.StoredObservation{
+		page("a.example.com"), dnsObs("a.example.com", nil, "acme.github.io"), // the service's page beside a CNAME to it
+		dnsObs("b.example.com", dangling, "gone.azurewebsites.net"),
+		page("c.example.com"), // a page, no CNAME known
+	})
+	rep.settle()
+	if rep.TakeoverVerified != 1 || rep.TakeoverCandidates != 2 || len(rep.Takeover) != 3 {
+		t.Fatalf("verified %d, candidates %d, rows %d", rep.TakeoverVerified, rep.TakeoverCandidates, len(rep.Takeover))
+	}
+	status := map[string]string{}
+	for _, r := range rep.Takeover {
+		status[r.Host] = r.Status
+	}
+	if status["a.example.com"] != "verified" || status["b.example.com"] != "candidate" || status["c.example.com"] != "candidate" {
+		t.Errorf("statuses %v", status)
+	}
+	raw, _ := json.Marshal(rep)
+	var back struct {
+		Candidates int `json:"takeover_candidates"`
+		Verified   int `json:"takeover_verified"`
+	}
+	if json.Unmarshal(raw, &back) != nil || back.Candidates != 2 || back.Verified != 1 {
+		t.Errorf("the summary JSON: %s", raw)
+	}
+	var b strings.Builder
+	rep.print(&b)
+	for _, want := range []string{"! takeover verified (strong): a.example.com", "! takeover candidate (dangling): b.example.com", "! takeover candidate (page): c.example.com"} {
+		if !strings.Contains(b.String(), want) {
+			t.Errorf("the text summary lacks %q:\n%s", want, b.String())
+		}
+	}
+	// A summary with none says no count.
+	empty := newReport("run")
+	empty.settle()
+	if raw, _ := json.Marshal(empty); strings.Contains(string(raw), "takeover_") {
+		t.Errorf("counts with no takeover: %s", raw)
+	}
+}
