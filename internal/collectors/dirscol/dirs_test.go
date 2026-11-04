@@ -560,3 +560,23 @@ func TestSweepAsksEveryWordWithOrWithoutASession(t *testing.T) {
 		})
 	}
 }
+
+// A word in the list twice is two inputs with a position each, counted as
+// ffuf counts them (extensions after their word, held inputs included), and
+// repeated says how many ask a path an earlier input asked.
+func TestSweepTargetsHavePositionsAndRepeatsAreCounted(t *testing.T) {
+	deny := func(u string) string {
+		if strings.HasSuffix(u, "/secret") {
+			return "rule"
+		}
+		return ""
+	}
+	none := func(string) string { return "" }
+	targets, held, at := sweepTargets("http://h/", []string{"", "a", "secret", "a", ""}, []string{"php"}, deny, none)
+	if fmt.Sprintf("%q", targets) != `["" ".php" "a" "a.php" "secret.php" "a" "a.php" "" ".php"]` || fmt.Sprint(at) != "[1 2 3 4 6 7 8 9 10]" || len(held) != 1 {
+		t.Errorf("targets %q at %v held %v", targets, at, held)
+	}
+	if n := repeated(targets); n != 4 {
+		t.Errorf("repeated %d, want 4", n)
+	}
+}
