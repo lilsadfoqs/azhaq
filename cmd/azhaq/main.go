@@ -727,7 +727,11 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		}
 	}
 
-	st, err := store.Open(path)
+	open := store.Open
+	if out.scratch || out.plan {
+		open = store.OpenScratch // deleted when the command ends: nothing to keep durable
+	}
+	st, err := open(path)
 	if err != nil {
 		return err
 	}
