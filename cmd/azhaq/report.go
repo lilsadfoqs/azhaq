@@ -82,6 +82,11 @@ type report struct {
 	// leads they are not map rows: Counts still adds up to Stored
 	// without them, and the notes say how their counts are derived.
 	Verify []verify.Result `json:"verify,omitempty"`
+	// SessionLost is how a signed-in run's session ended when it could not
+	// be renewed: the first answer that looked like its end, the GETs that
+	// were already in flight when it was read, and how many were asked
+	// since the last check that held.
+	SessionLost *sessionLossReport `json:"session_lost,omitempty"`
 
 	estimate  *costEstimate             // what the command was estimated to send, for Cost
 	dnsFrom   int64                     // egress.DNSTotal when the command began: dns_queries are its own
