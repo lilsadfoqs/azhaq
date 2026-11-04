@@ -229,8 +229,8 @@ func sameSite(ctx context.Context, c *http.Client, host string) bool {
 	plain, _, err := fetch.Do(ctx, c, "http://"+host+"/")
 	if err != nil && dialTimeout(err) && ctx.Err() == nil {
 		// One connect timed out may be the network; two are a port that
-		// drops them. The first error is cached under the other key.
-		plain, _, err = fetch.Do(ctx, c, "http://"+host)
+		// drops them.
+		plain, _, err = fetch.Again(ctx, c, "http://"+host+"/")
 	}
 	if err != nil {
 		return ctx.Err() == nil && nothingListens(err)

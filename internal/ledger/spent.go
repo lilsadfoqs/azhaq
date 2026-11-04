@@ -12,8 +12,9 @@ import (
 
 // SpentKey is one line of the account: the class an entry was sent to (see
 // ClassTarget), its kind (http, tcp, udp, dns, chrome), the collector that
-// sent it, and the stage the command was in (SetStage), "" when it names none.
-type SpentKey struct{ Class, Kind, Collector, Stage string }
+// sent it, the stage the command was in (SetStage), "" when it names none, and
+// what a request to a target was for (see PurposePages), "" for another class.
+type SpentKey struct{ Class, Kind, Collector, Stage, Purpose string }
 
 var (
 	last     atomic.Pointer[SpentKey]
@@ -21,8 +22,11 @@ var (
 	stageNow atomic.Value
 )
 
-func spend(class, kind, collector string, n int64) {
-	k := SpentKey{class, kind, collector, Stage()}
+func spend(class, kind, collector, purpose string, n int64) {
+	if class != ClassTarget {
+		purpose = ""
+	}
+	k := SpentKey{class, kind, collector, Stage(), purpose}
 	if class == ClassTarget {
 		last.Store(&k) // the sender of the request that spent the budget is the last
 	}

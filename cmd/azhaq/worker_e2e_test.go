@@ -13,6 +13,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/lilsadfoqs/azhaq/internal/ledger"
 )
 
 // serveWithWorker runs `azhaq run -serve` and one `azhaq worker`, each as its
@@ -166,7 +168,13 @@ func TestWorkerHoldsDenyPathAndReportsIt(t *testing.T) {
 		}
 	}
 	mu.Unlock()
-	listed := skippedFor(lastReport(t, runErr), "-deny-path "+rule)
+	// What a worker sent is in the requests and in the split by purpose as
+	// what it is: sent by workers, with no purpose of its own to name.
+	rep := lastReport(t, runErr)
+	if rep.RequestsBy[ledger.PurposeWorkers] == 0 || sumOf(rep.RequestsBy) != int(rep.Requests) {
+		t.Errorf("requests_by_purpose %v does not add up to the %d requests with the worker's own", rep.RequestsBy, rep.Requests)
+	}
+	listed := skippedFor(rep, "-deny-path "+rule)
 	for _, s := range sites {
 		for _, u := range []string{"/admin", "/.git/HEAD"} {
 			if !slices.Contains(listed, s.URL+u) {

@@ -131,6 +131,11 @@ type report struct {
 	TakeoverCandidates int `json:"takeover_candidates,omitempty"`
 	TakeoverVerified   int `json:"takeover_verified,omitempty"`
 
+	// RequestsBy is what the requests and connections to targets were for:
+	// pages, scripts, assets, controls, description checks… They add up to
+	// Requests, and each ledger line names its purpose.
+	RequestsBy map[string]int `json:"requests_by_purpose,omitempty"`
+
 	// Wrote are the files the run wrote besides its database and the ones
 	// the user named with -o and the like: the ledger, the name history,
 	// the pointers to the last workspace, the archived URLs.
@@ -327,6 +332,9 @@ func (r *report) print(w io.Writer) {
 	}
 	for _, n := range r.Notes {
 		fmt.Fprintf(w, "  note: %s\n", n)
+	}
+	if len(r.RequestsBy) > 0 && (r.Command == "crawl" || r.Command == "run" && !r.hushCost) {
+		fmt.Fprintf(w, "  requests by purpose: %s\n", purposeLine(r.RequestsBy))
 	}
 	if len(r.Wrote) > 0 {
 		fmt.Fprintf(w, "  wrote: %s\n", strings.Join(r.Wrote, ", "))

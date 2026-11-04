@@ -10,6 +10,7 @@ import (
 	"github.com/lilsadfoqs/azhaq/internal/egress"
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
 	"github.com/lilsadfoqs/azhaq/internal/guard"
+	"github.com/lilsadfoqs/azhaq/internal/ledger"
 	"github.com/lilsadfoqs/azhaq/internal/neterr"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"github.com/lilsadfoqs/azhaq/types"
@@ -107,6 +108,7 @@ func (e *Engine) Record(item types.WorkItem, o Outcome) (types.RunMeta, error) {
 	idKey := workID(col.Name(), seed)
 	meta := types.RunMeta{ItemID: item.ID, Status: types.StatusOK}
 	egress.Count(o.Requests) // the run's budget counts every process's requests
+	ledger.Remote(o.Requests)
 	for _, d := range o.Denied {
 		e.noteDenied(d.URL, d.Rule) // listed as not requested, as one the run kept out itself
 	}

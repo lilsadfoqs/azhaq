@@ -28,6 +28,14 @@ type Call struct {
 	Body   []string // field names of an object literal body
 	At     int      // where the call starts in the script
 	End    int      // and where it ends
+	// Client: made through an HTTP client, which joins a path onto its
+	// base; Recv is the object it is called on (this.http, o).
+	Client bool
+	Recv   string
+	// Base is the base the script declares for the client, and Route the
+	// path the call names: Path is Route joined onto Base.
+	Base  string
+	Route string
 }
 
 var (
@@ -115,6 +123,7 @@ func calls(script string, relative bool) []Call {
 		// An HTTP client may have a base URL of its own: only fetch and
 		// XMLHttpRequest resolve a relative path against the page.
 		c, ok := callOf(script, m[0], method, args[0], false)
+		c.Client, c.Recv = true, script[at:m[0]]
 		if ok && len(args) > 1 {
 			opts := strings.TrimSpace(args[1])
 			switch method {
@@ -227,6 +236,9 @@ func calls(script string, relative bool) []Call {
 			sh.body = evaluator{src: script}.bodyNames(sh.bodyEx, m[0], 0)
 		}
 		c, ok := callOf(script, m[0], sh.method, url, relative)
+		if strings.Contains(script[m[0]:m[1]], "axios") {
+			c.Client, c.Recv = true, "axios"
+		}
 		c.Body, c.Query = sh.body, append(c.Query, sh.query...)
 		if sh.dataQuery && (c.Method == "GET" || c.Method == "HEAD") {
 			c.Query, c.Body = append(c.Query, c.Body...), nil
@@ -254,7 +266,7 @@ func calls(script string, relative bool) []Call {
 		}
 		out = kept
 	}
-	return out
+	return withBases(script, out)
 }
 
 // truncated: the URL argument at pos evaluates to what comes before an
@@ -633,7 +645,7 @@ func MergeCalls(calls []Call) []Call {
 		i, ok := idx[k]
 		if !ok {
 			idx[k] = len(out)
-			out = append(out, Call{Method: c.Method, Path: c.Path})
+			out = append(out, Call{Method: c.Method, Path: c.Path, Base: c.Base, Route: c.Route})
 			i = len(out) - 1
 		}
 		out[i].Query = union(out[i].Query, c.Query)
