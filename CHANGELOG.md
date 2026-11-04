@@ -1,5 +1,99 @@
 # Changelog
 
+## v0.16.0
+
+### Added
+
+- `takeover` rows have `status`: `candidate` (what was observed does not show the name is free) or `verified` (the service's own documented "nothing here" page, read from the name's front page, beside a CNAME to that service). The summary counts them apart: `takeover_candidates`, `takeover_verified`.
+- The `run` summary has `session_lost` when a signed-in session ended and could not be renewed: the URL whose answer first looked like the end, the GETs answered after it (already in flight) with their URLs, and the GETs asked since the last check that held.
+- `subs -live -guesses=false` leaves subdomain.center's guesses unlooked (no query, none printed, counted as `guesses held back`).
+- `subs -fresh`: with `-db`, ask the sources again instead of continuing a stopped run.
+- `subs` on a workspace that holds a stopped `-live` run of the same domains continues it: the names with no DNS answer yet are looked up, the sources are not asked again, and the summary says so. `azhaq resume` of a subs run no longer asks the sources again.
+- `subs` says how many guesses were looked up, in how long, and how many resolved. A stopped run labels its estimate of the unchecked names that would resolve and gives its basis. The coverage estimate says it is an estimate (Chao1) and from how many names.
+- `fuzz`: a match says which matchers held and what each held on (`matched` in `-json`, `Matched:` in the line): the status, size, words, lines or time for `-mc -ms -mw -ml -mt`, and for `-mr` the text with 24 bytes around it and whether it is in the headers or the body. With `-ac`, a match that is a calibration answer's own says so (`control`).
+- `dirs`, `run -dirs`: a catch-all inside a directory is folded. One name that cannot exist is asked in each directory two hits are found in, and the hits that answer as it does, byte for byte, fold into one line with their count and the control; `-json` keeps every row, marked `fold`.
+- `-send-state-changing` on `run`, `crawl`, `dirs`, `params`, `urls -live` and `azhaq mcp` sends the GETs found on the way whose own path or API operation declares a state change. By default such a GET is held back: not sent, listed as skipped with the word and the flag, and counted in the summary's `state_changing_held`.
+- `state_changing` entries in the summary carry `status` (`sent`, `held back`, `not requested`) and `send`.
+- `diff` lists what changed between two runs (a route whose methods or fields changed, a page that answers differently, a host whose open ports changed) as `changed` rows and counts them in its summary, the same changes `watch` reports.
+- The summary's `wrote` names every file a run wrote besides its database (ledger, name history, `.azhaq-last`, `.azhaq-index`, archived URLs).
+- `-history-dir DIR` for the name history.
+- The ledger lists each probe a port identification writes on its connection as a `probe` line (new `proto` field; `ledger -csv` gets a `proto` column).
+- A run's summary splits its requests by purpose (`requests_by_purpose`: pages, scripts, assets, controls, description checks, path checks, sent by workers), adding up to `requests`; each ledger line carries its `purpose`.
+- `docs/claims.tsv` ties every claim of the README and of every command page to a passing test (about 1,280 rows, with about 450 new tests); the claims check covers every command page with no list, lists unproved sentences with `-list PAGE`, and fails a proof whose test always skips.
+- Bench rows for small one-shot jobs: `dirs` on six words against ffuf, and `ports` 1-1000 of one address against `nmap -sT` and `nmap -sT -sV`.
+- `run` with `-ports`: the summary has `addresses_scanned` and `addresses_open`.
+- The `-rejected` reason "the end of a route with a placeholder".
+- A test runs the azhaq column of docs/MIGRATING.md through each command's flag parser.
+- `dirs -json` rows have `position`, the place of the input among the sweep's inputs, from 1, as ffuf counts it. The `dirs` summary observation has `repeats`.
+
+### Changed
+
+- The evidence of a `dangling` or unregistered-domain row begins with what was observed and says it is a candidate; the text summary prints `! takeover candidate|verified`, `-silent` prints `[takeover] name -> target (service, strength, status)`.
+- `dns -cname` alone asks a name that has a CNAME for A once more to see where the chain ends.
+- The failure of a lost session says which requests may have been answered without it: those answered after the first answer that looked like its end, or, with no such answer, the GETs asked since the last good check. It no longer counts every GET since the last check as answered without the session.
+- With a `-dns-rate`, the guess lookups of `subs -live` keep at most four seconds of the rate in flight, so a name a source gave is no longer queued behind the whole batch.
+- `dirs`: `results` counts the rows that are listed; the folded ones are in the summary's `folds`.
+- The note "answered N URLs with the one page every unknown path gets" says "the page it gives a path that cannot exist".
+- The screenshot bench row also holds azhaq to 1.25 times gowitness's requests, counted at a proxy in front of each page. A forward proxy given to Chrome is bypassed by loopback pages, so it cannot count them.
+- A GET found on the way (a link, a script's route, an API description's operation, a GET form's action, a built-in `-dirs` word) whose own path, operationId or summary names create, delete, reset, logout and the other documented words is no longer sent unless `-send-state-changing` is given. A target you give, a wordlist you give (`dirs -w`, `-dirs FILE`, `-paths FILE`, `fuzz`) and `-deny-path` rules are unchanged.
+- The `-dirs` estimate and `plan` leave out the built-in words that are held back.
+- The classifier reads a request's own name only: its path (not its query, not a static file), and an operation's operationId and summary. Descriptions are never read.
+- The name history defaults to `azhaq-data/` beside `-db` (the current directory without one) instead of `$XDG_DATA_HOME/azhaq` or `~/.local/share/azhaq`. `$AZHAQ_DATA_DIR` or `-history-dir` name a shared one. A history kept in the old place is not read.
+- `report -o` with several reports is always a directory (an existing file is refused). One report to a path that is not a directory is written as a file, not an array.
+- The ledger note of a run with probes says how many went on the counted connections. `ledger -summary` counts them as kind `probe`.
+- A scan with no ports named asks the top 100 plus the usual port of every service azhaq can name and check (163 ports, including Redis 6379, MongoDB 27017, memcached 11211). `-p top-100` is the old default. `default` is a list name in `-p` and `-ports`.
+- A page is asked once under every spelling that names the same resource (RFC 3986 normalisation: case of scheme, host and escapes, `%61` for `a`, the default port, an empty path, a fragment).
+- A command that keeps no workspace opens a scratch one without fsync, and a workspace's schema is made once (stamped), not checked on every open: a small `dirs` run went from 55 ms to 36 ms.
+- The command pages say what the code does where they said more (roles, show, gallery, subs, dns, probe, params, crawl, fuzz, shots, export, report, ingest, resume, urls, ports, run).
+- `ports -min-rate N` is a floor under the pace: the pace is the higher of the default (or `-rate`) and `-min-rate`. It no longer sets loopback to N.
+- `-detect none` (`-port-detect none`) puts no service name on any row, TCP or UDP. The other modes still mark a name taken from the port number with `?`.
+- The next-pass line of a `run -ports` takes its address count from `addresses_scanned`, not from connects divided by ports per address.
+- The `-source-timeout` help says any duration holds to the millisecond.
+- Bench: `subs D: -source-timeout 800ms ends the run within 4 s`.
+- `cost.*.connects` no longer includes UDP datagrams; they are in `cost.*.datagrams`. The purpose of a UDP line is now `datagrams`, not `connections`.
+
+### Fixed
+
+- `dns -cname` (and `-aaaa`, `-txt`, ... without `-a`) gave a dangling CNAME no `cname_status` and no `takeover`; the target is now checked whichever types were asked.
+- A signed-in run reads a relative `Location` (`login.php`, as DVWA sends it) against the page asked, so a redirect to the sign-in page ends the session check at once, not at the next check 50 requests later.
+- While a signed-in run signs in again, no other request is sent with the session that ended; they wait for the new one. A request that finds a check running waits for its verdict.
+- A 401 or a redirect to the sign-in page answered to a page Chrome loads (`-browser`) sets the session check.
+- `roles`: a note says `its -role-cmd gave a new one` only when a renewal ran and gave a session that passed its check; a role with no `-role-cmd` or `-role-login` says it could not be renewed, and a failed renewal says so.
+- A `-live` run stopped by a limit kept none of the answers of the batch it was checking, and judged live answers against wildcards after the stop. `looked_up` counted names never sent.
+- A continued `subs` run no longer counts names a later lookup answered as "not checked", nor the source that left them as failed (exit 3).
+- The "looked up in DNS" note no longer sums the shared pool of subdomain.center and the history twice.
+- `run -dirs`: a path the sweep found that the http check proved to be its directory's catch-all page stays `visited` no longer: the sweep's own row does not override it.
+- `shots` of a URL or a `host:port` asks it as given. It no longer also asks the name in it on ports 443 and 80 (two requests nobody asked for, and the note "no web service on 443 or 80"). A bare name, an address, a range or a scan file are asked on 443 and 80 as before.
+- `GET /` of an API whose description says the app "was created" was named as changing state; it is no longer named.
+- A summary said "this run sent it" for GETs it never sent. `sent` is now said only for a request the run recorded, and held back or not requested otherwise.
+- `report -o DIR` without a trailing slash no longer joins the reports into one file while naming that file for each.
+- A run no longer writes under the home or XDG directories by default.
+- `plan` and `run` estimate a port scan of a range (`-cidr`, `-sweep`, a range given to `ports`) over every address it holds after `-allow`, `-scope` and `-deny`. A /24 with the top 1000 ports is 256,000 connects, not 1,000. An address given with its own port (`host:port`, `-ports-on`) is counted by those ports. `-port-discover only` counts no UDP.
+- An estimate marked as a floor is never above what the run sends. It leaves out the favicon, the guesses of an API description (the stage says how many), paths a `-deny-path` rule holds back, the same URL counted twice, and a second path sweep for a name and its URL. It uses the right paths under `-known-files`.
+- Every DNS query is counted in the names stage of the summary, whichever collector sent it.
+- Routes a script calls through a client with a declared base (`baseURL`, `prefixUrl`, `defaults.baseURL`, a query-string dispatcher such as `index.php?s=`) are joined onto that base instead of being asked at the site root.
+- A connection error on a URL containing "429" is no longer listed as a rate limit.
+- `ports -proxy` with a proxy that cannot be reached is a failure named in the summary (exit 3), not closed ports and exit 0. `-wn` no longer calls an address up on it.
+- A `-source-ip` that is not an address of this machine is a usage error before anything is sent.
+- A single address's scan error and a range's error now reach the summary's failures.
+- `dirs`, `params`, `fuzz` and `roles` cut an answer that never ends (an event stream) at 64 KiB or 2 s, as `probe` and `crawl` do, instead of holding the run until the timeout. The row says the body was cut.
+- A script route with a placeholder (`"/y/${id}/z.php"`, `"/y/{id}/z.php"`, `"/y/"+id+"/z.php"`) no longer makes a request for its tail (`/z.php`). The tail is listed with `-rejected` and never asked.
+- A crawl or run stopped by `-max-items` no longer says `-depth` left URLs unasked; the note counts only URLs found past `-depth`. A resume at the same cap that sends no request says so.
+- A URL that failed and answers on `resume -retry-failed` shows the new answer in its status and proof.
+- The 429/503 note says azhaq waited only when it waited; with `-backoff` off it says it did not.
+- `subs -source-timeout` under one second is honoured by every source; the sampled source (subdomain.center) kept whole seconds and ran 30 s.
+- crt.sh's "no answer in" says milliseconds under ten seconds.
+- `diff` and `watch` no longer report a change between two runs of an unchanged site. A catch-all row's control is compared by its answer (status, type, title), not by the directory it was asked in, which depended on which request finished first (about 1 run in 10).
+- `roles`: `-replay-max` is one count for the history reads and the replay together, as its help says; the replay used to get the whole count after the history reads had used it, and the plan now caps the replay the same way.
+- `roles`: a replayed write answered with a redirect (not followed) is no longer called refused; it has its own verdicts, `the other roles' writes were redirected (3xx, not followed): neither refused nor accepted` and one for redirects among refusals or 5xx.
+- `roles`: the next pass for the histories' writes says "at least N requests more" and counts only what is always sent (each write once for each other role); it used to count reads the answers may make unnecessary.
+- `-known-files` (`crawl -kf`): a comma list is refused at the flag; the MIGRATING row names the one-value forms.
+- `dns -all` help and docs name the nine types it asks.
+- `urls`: a run in which no archive answered in full (an archive that failed after giving some URLs counts as failed) is a partial set: it exits 3 with `complete: false`, and a note says so. It exited 0 whenever the run had found URLs. One archive answering in full keeps exit 0.
+- `dirs`: a word that is in the wordlist twice, or two blank lines, is listed once for each input that matched, as ffuf lists it, so `results` is ffuf's count for the same list. Each row has a `position`, and the summary says how many inputs repeated an earlier one. The workspace still keeps one entity for each URL.
+- `-max-requests` no longer stops a port sweep it has room for. A budget that was not reached used to make a finished `run` exit 4 with "N tasks known and not done" because the reserve for web mapping (54 requests per open port) refused the sweep's last connects; only a budget smaller than the sweep stops it now.
+- UDP probes are datagrams, not connections. The ledger note lists `U UDP datagrams` apart from connections, `cost` amounts have a `datagrams` field and `connects` counts TCP only; the parts add up to `requests`.
+
 ## v0.15.0
 
 ### Added
@@ -47,7 +141,7 @@
 - A port that accepted `run`'s HTTP request and then closed or reset at once, and was not named http or https, is a not-a-web-service answer (what `ports` calls tcpwrapped), not a retryable failure.
 - `-detect banner` sends nothing after the connection: a bare 220 greeting stays `ftp-or-smtp` with its banner, and only `-detect all` asks EHLO or SYST. `-detect none` asks a UDP port one datagram.
 - A TLS failure reads `TLS error:` followed by what the handshake said, and failures group by reason.
-- Generated names (brute force, permutations, a source's guesses, the name history) are asked 2 times, as dnsx does, unless `-retry` is given. On a zone whose servers do not answer, `subs -live -dns-rate 10` takes 25 s where it took 39 s (dnsx 26 s).
+- Generated names (brute force, permutations, a source's guesses, the name history) are asked 2 times, as dnsx does (`azhaq dns -retry N` sets the count for the `dns` command; `subs` has no such flag). On a zone whose servers do not answer, `subs -live -dns-rate 10` takes 25 s where it took 39 s (dnsx 26 s).
 - A fast `ports` scan writes the ledger lines of a batch of up to 32 connects in one write, takes their pace in one wait, reuses idle workers and collects garbage less often: a full-range scan at `-rate 10000` uses 1.84 CPU-seconds where v0.14.0 used 2.34 (nmap -sT 1.28).
 - The addresses of a range are asked UDP on as many at once as the rate keeps busy.
 - `plan -graphql` says how many POSTs schema recovery may send: 2 per endpoint and up to 96 more.
