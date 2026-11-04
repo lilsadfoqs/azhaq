@@ -1192,3 +1192,9 @@ diff.one-run	docs/commands/diff.md	A workspace with only one run says so: a diff
 diff.not-seen-again	docs/commands/diff.md	`not_seen_again` is what the older run only heard of: from a subdomain source, an archive or a link. The run never checked it.	test:cmd/azhaq:TestDiffNotSeenAgainIsWhatTheOlderRunOnlyHeardOf
 diff.bodies-not-compared	docs/commands/diff.md	Bodies are not compared byte for byte. Timestamps and tokens would make every run a change.	test:cmd/azhaq:TestTwoIdenticalRunsDiffEmpty;test:store:TestCompareIgnoresVolatileFields
 diff.control-by-answer	docs/commands/diff.md	A catch-all row's control is compared by its answer (status, type, title) and the directory it was asked in. The random path it was asked for, and the size an echoing page gives it, are not compared.	test:store:TestCompareIgnoresTheControlsRandomPath;test:cmd/azhaq:TestTwoIdenticalRunsDiffEmpty
+
+# docs/commands/ingest.md
+ingest.without-db-new-file	docs/commands/ingest.md	Without `-db` it makes a new `azhaq-TIME-PID.db` in the current directory, or uses the file `$AZHAQ_DB` names.	test:cmd/azhaq:TestIngestWithoutDBMakesANewFileAndPrintsNoRows
+ingest.prints-no-rows	docs/commands/ingest.md	`ingest` prints no rows, only its summary.	test:cmd/azhaq:TestIngestWithoutDBMakesANewFileAndPrintsNoRows
+ingest.naabu-repeats-fold	docs/commands/ingest.md	The lines naabu repeats fold into one row. naabu says nothing of the service, so the row has none until `ports` or `probe` asks.	test:cmd/azhaq:TestIngestNaabuLinesFoldIntoOnePortRowWithNoService,TestIngestNaabuMakesPortRows
+ingest.unreadable-line-note	docs/commands/ingest.md	A line that cannot be read is skipped and named in a note, never a failure: the exit code stays 0.	test:cmd/azhaq:TestIngestUnreadableLineIsSkippedAndNotedNeverAFailure
