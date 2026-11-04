@@ -118,7 +118,7 @@ func newPortLab(t *testing.T) *PortLab {
 		defer c.Close()
 		_ = c.SetReadDeadline(time.Now().Add(3 * time.Second))
 		if req, err := http.ReadRequest(bufio.NewReader(c)); err == nil {
-			p.Asked.addHTTP(req.Method, "http://"+p.Web+req.URL.RequestURI())
+			p.Asked.addHTTP(req.Method, "http://"+c.LocalAddr().String()+req.URL.RequestURI())
 			_, _ = c.Write([]byte("HTTP/1.0 200 OK\r\nServer: lab\r\nContent-Type: text/html\r\n\r\n<title>x</title>"))
 		}
 	}).Addr
