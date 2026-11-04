@@ -3,6 +3,7 @@ package engine_test
 import (
 	"encoding/json"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -64,5 +65,40 @@ func TestRetryFailedDropsTheStoredAnswersOfTheTargetsItAsksAgain(t *testing.T) {
 	obs, _ = st.Observations()
 	if still := engine.FailedTargets(ents, obs); len(still) < 1 {
 		t.Errorf("what a retry cannot fix is not in failed any more: %+v", still)
+	}
+}
+
+// A text row that is not answered ends with its evidence in brackets, one
+// of the seven the page names; an answered row has none.
+func TestTextRowsEndWithTheirEvidenceTag(t *testing.T) {
+	const h = "https://shop.test"
+	keys := []string{h + "/answered", h + "/browser", h + "/described", h + "/called", h + "/linked", h + "/archived", h + "/guessed", h + "/given"}
+	obs := []types.StoredObservation{
+		httpObs("a", `{"status":200,"url":"`+h+`/answered"}`),
+		urlObs("azhaq-render", `{"url":"`+h+`/browser","via":"browser","seen":"request","role":"api"}`),
+		urlObs("azhaq-openapi", `{"url":"`+h+`/described","via":"openapi","methods":["GET"]}`),
+		urlObs("azhaq-js", `{"url":"`+h+`/called","via":"js-call","methods":["POST"]}`),
+		urlObs("azhaq-crawl", `{"url":"`+h+`/linked","via":"html"}`),
+		urlObs("azhaq-urls", `{"url":"`+h+`/archived","via":"archive"}`),
+		urlObs("azhaq-dirs", `{"url":"`+h+`/guessed","via":"dirs","status":404}`),
+		{EntityID: "g", Observation: types.Observation{Collector: "azhaq-http", Kind: "error", Payload: []byte(`{"url":"` + h + `/given","error":"connection refused"}`)}},
+	}
+	var ents []types.Entity
+	for i, k := range keys {
+		ents = append(ents, types.Entity{ID: string(rune('a' + i)), Type: types.TypeURL, Key: k})
+	}
+	obs[len(obs)-1].EntityID = ents[len(ents)-1].ID
+	seeds := []types.Seed{{Type: types.TypeURL, Keys: map[string]string{"url": h + "/given"}}}
+	got := map[string]engine.MapEntry{}
+	for _, m := range engine.BuildMap(ents, seeds, obs, nil, false) {
+		got[m.Entity.Key] = m
+	}
+	for _, tag := range []string{"browser", "described", "called", "linked", "archived", "guessed", "given"} {
+		if l := got[h+"/"+tag].Line(); !strings.HasSuffix(l, "["+tag+"]") {
+			t.Errorf("/%s: %q does not end with [%s]", tag, l, tag)
+		}
+	}
+	if l := got[h+"/answered"].Line(); strings.Contains(l, "[") {
+		t.Errorf("an answered row has a tag: %s", l)
 	}
 }

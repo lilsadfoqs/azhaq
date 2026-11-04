@@ -672,3 +672,112 @@ ports.verify-labels	docs/commands/ports.md	Each answer is labelled `proved`	test
 ports.verify-through-egress	docs/commands/ports.md	Every read goes through the scope, the kill file, `-max-requests` and the pace, and is a ledger line of the collector `azhaq-verify`.	test:cmd/azhaq:TestVerifyStageBudgetStopsReads,TestVerifyPortsEndToEnd,TestVerifyDenyPathKeepsConfirmationOut
 ports.verify-never-payload	docs/commands/ports.md	Never a payload, a write, a credential or a request that tries to trigger a flaw.	test:internal/verify:TestChecksEnumeratePreconditions,TestRedisUnauthenticatedIsProved,TestMemcachedUnauthenticatedIsProved,TestMongoUnauthenticatedIsProved
 ports.verify-pointer	docs/commands/ports.md	The checks, the labels and the boundary are in [Read-only verification]	note:a pointer to the concepts page
+
+# docs/commands/run.md
+run.permute-names	docs/commands/run.md	`-permute` still varies the names `-dns-brute` found, whatever `-depth	test:cmd/azhaq:TestRunPermutesTheNamesTheBruteForceFound,TestRunKeepsTheAnswersOfTheNamesItGuessed
+run.permute-unvaried	docs/commands/run.md	A name found past `-depth` and not resolved is not varied, and a note 	test:cmd/azhaq:TestUnvariedCountsNamesPastDepthThatNothingResolved
+run.builtin-paths	docs/commands/run.md	Asks each web service for the built-in paths unless `-no-paths` says n	test:cmd/azhaq:TestRunNoPathsTurnsTheBuiltInPathsOff,TestHostGuessesCapsTheSweepAndListsWhatWasNotAsked
+run.every-get	docs/commands/run.md	Requests every GET URL it finds in scope.	test:cmd/azhaq:TestRunRequestsEveryGETFoundInALinkAScriptADescriptionAndAForm,TestRunPerTemplateDefaultAsksAll,TestRunListsEveryLinkedQueryURL
+run.no-name-keeps-out	docs/commands/run.md	It cannot know what a GET does on the server, so no name keeps a URL o	test:cmd/azhaq:TestRunNamesStateChangingGETsAndDenyKeepsThemOut,TestRunRequestsEveryGETFoundInALinkAScriptADescriptionAndAForm,TestDocsStateWhatTheGETPromiseIs
+run.state-change-named	docs/commands/run.md	But a GET whose own name or API description declares a state change (a	test:cmd/azhaq:TestRunNamesStateChangingGETsAndDenyKeepsThemOut,TestPlanNamesStateChangingGETBeforeAnyRequest,TestStateChangesFromVAmPIDescription,TestMCPPlanAndWireAgreeOnStateChangingGET;test:internal/statechange:TestWord
+run.get-can-change	docs/commands/run.md	A GET can change data or end a session (`/createdb`, `/logout`), and a	test:cmd/azhaq:TestRunRequestsEveryGETFoundInALinkAScriptADescriptionAndAForm;test:engine:TestMapSignsInAgainWhenALinkEndsTheSession
+run.write-only-with-flag	docs/commands/run.md	A write, a request with a method other than GET, HEAD or OPTIONS, goes	test:internal/contract:TestEveryWriteWaitsForItsFlag
+run.deny-path-only	docs/commands/run.md	`-deny-path REGEX` is the only thing that keeps paths out (they get th	test:cmd/azhaq:TestRunNamesStateChangingGETsAndDenyKeepsThemOut,TestPlanSkipsASeedADenyPathRuleKeepsOut,TestRunRequestsEveryGETFoundInALinkAScriptADescriptionAndAForm
+run.nothing-outside-scope	docs/commands/run.md	Sends nothing to a host outside the scope, Chrome's requests included.	test:internal/contract:TestDocumentedPromisesAreKept;bench:scope: no request leaves the program's scope;test:internal/egress:TestTargetClientRefusesWhatLeavesTheScope
+run.passive	docs/commands/run.md	`-passive` sends nothing to the targets at all.	test:internal/contract:TestDocumentedPromisesAreKept;test:cmd/azhaq:TestRunDemoPassive
+run.sources-none	docs/commands/run.md	`-sources none` asks no third party at all: no subdomain source, archi	test:cmd/azhaq:TestRunSourcesNoneAsksNoThirdParty
+run.only-resolvers-and-targets	docs/commands/run.md	Only the resolvers and the targets get requests, and `azhaq plan` says	test:cmd/azhaq:TestRunSourcesNoneAsksNoThirdParty,TestMCPMapHeldToResolversAndNoSources
+run.probe-turns-off	docs/commands/run.md	`-probe` turns off every collector but DNS and HTTP: the crawl, script	test:cmd/azhaq:TestRunProbeRunsTheCollectorsFlagsAskFor,TestPlanProbeListsTheCollectorsFlagsAskFor,TestRunProbePrintsTheRowsTheSummaryCounts
+run.probe-flag-usage-error	docs/commands/run.md	A flag that only a collector `-probe` turns off reads (`-fill-forms`, 	test:cmd/azhaq:TestRunProbeRefusesFlagsOfWhatItTurnsOff
+run.one-value-flags	docs/commands/run.md	`-list`, `-in` and `-org` take one value: a second, different one is a	test:cmd/azhaq:TestSingleValueFlagsRefuseASecondValue
+run.sends-pointer	docs/commands/run.md	[What azhaq sends](../CONCEPTS.md#what-azhaq-sends) lists every reques	note:a pointer to the concepts page
+run.quiet	docs/commands/run.md	`-quiet`: no map and no progress lines, only the summary.	test:cmd/azhaq:TestRunQuietPrintsOnlyTheSummary
+run.counts-disjoint	docs/commands/run.md	The summary's `counts` are disjoint and add up to `stored`, the map ro	test:cmd/azhaq:TestCountsCoverEveryKindOfRow,TestQueryPortStatesAreApart;test:internal/contract:TestRunCountsAddUpToTheRows,TestRunCountsAreDerivedFromTheRowsEmitted
+run.no-port-guesses	docs/commands/run.md	A guess nothing listens on, refused, is a note (`no web service on 443	test:cmd/azhaq:TestRunWebPortsOfABareAddress,TestRefusedGuessOfADerivedNameIsNotAFailure,TestRunPortsRowsAndProbeOfFoundServices,TestOneRefusedTargetDoesNotStopTheOthers;test:internal/collectors/tlscol:TestRefusedTLSPortIsNotAFailure;test:internal/contract:TestExitCodeFollowsTheOutcome
+run.non-http-service	docs/commands/run.md	A port the scan found open that answers the HTTP stage with something 	test:cmd/azhaq:TestRunPortsNonHTTPServicesAreNotFailures;test:internal/collectors/portcol:TestHintMarksPortsNotNamedHTTP
+run.plain-http-only-one	docs/commands/run.md	Its plain-HTTP request is its only one when the reply is not TLS eithe	test:cmd/azhaq:TestRunPortsNonHTTPServicesAreNotFailures
+run.closes-at-once	docs/commands/run.md	A port the scan found open and did not name as HTTP that closes or res	test:internal/collectors/httpcol:TestClosedAtOnceOnAnUnnamedPortIsAnAnswer;test:cmd/azhaq:TestRunPortThatClosesOnTheRequestIsNotAFailure
+run.still-failures	docs/commands/run.md	A timeout, a refused connect after the port was seen open, a TLS error	test:internal/collectors/httpcol:TestClosedAtOnceOnAnUnnamedPortIsAnAnswer;test:internal/collectors/portcol:TestHintMarksPortsNotNamedHTTP
+run.resumed-no-estimate	docs/commands/run.md	A resumed run has no estimate, only what it sent.	test:cmd/azhaq:TestAResumedRunHasNoEstimateOnlyWhatItSent
+run.next-passes	docs/commands/run.md	A run that finished, with no limit stopping it, ends its `next` with t	test:cmd/azhaq:TestATopPortsScanNamesTheUnaskedRange,TestOtherNextPassesCountWhatTheyWouldSend,TestHintsNeverInJSONSummary
+run.next-is-a-line	docs/commands/run.md	It is a line, never a request; see [Next in the summary](#next-in-the-	test:cmd/azhaq:TestATopPortsScanNamesTheUnaskedRange,TestOtherNextPassesCountWhatTheyWouldSend
+run.evidence-tags	docs/commands/run.md	A row that is not `answered` ends with its evidence: `[browser]`, `[de	test:engine:TestTextRowsEndWithTheirEvidenceTag,TestEvidenceTagOnTextRows,TestEvidenceBrowserIsApartFromCalled,TestEvidenceGivenSeed
+run.answer-500	docs/commands/run.md	A row that has an `answer` shows `500 without input` after its proof.	test:engine:TestAnswerWithoutInput
+run.fold-by-measure	docs/commands/run.md	A row folds only for what the run's own requests measured; no name dec	test:cmd/azhaq:TestCrawlListsATemplatedRouteThatOnlyHasTheControlsShape,TestCrawlFoldsNothingConfirmedOnDVNA,TestCrawlFoldsWhatTheControlProves
+run.all-rows	docs/commands/run.md	`-all-rows` prints one line for each row, as `run` did.	test:cmd/azhaq:TestRunFoldsInTheDefaultView,TestFoldViewsPassTheSummaryAudit
+run.json-every-row	docs/commands/run.md	`-json` prints every row, each folded one with its class as `fold`.	test:cmd/azhaq:TestCrawlJSONMarksTheFoldOfEachRow,TestRunFoldedViewAddsUp
+run.folds-entry	docs/commands/run.md	The summary's `folds` has one entry for each line of the text view: `c	test:cmd/azhaq:TestRunFoldsInTheDefaultView,TestRunSummaryCarriesFolded;test:engine:TestFolderGroups
+run.folded-stay	docs/commands/run.md	Folded rows stay in the workspace: `query` lists them, `-all-rows` and	test:cmd/azhaq:TestRunNoCatchAllLeavesTheRowsOut,TestRunFoldedViewAddsUp,TestRunFoldsInTheDefaultView
+run.template-count	docs/commands/run.md	A folded template shows its count: `(30 urls, 27 not asked)`.	test:engine:TestGroupTemplatesCountsTheUrlsNotAsked
+run.port-once	docs/commands/run.md	A later scan that lists the same port does not print it again.	test:cmd/azhaq:TestStreamFoundPortRows,TestRunStreamPortKeysAreTheMapsKeys
+run.stream-catchall	docs/commands/run.md	An answer that is the page every unknown path gets ends with `(catch-a	test:cmd/azhaq:TestStreamFound
+run.gone	docs/commands/run.md	`gone` is a URL found in an archive or a link that answered 404 or 410	test:engine:TestScriptRoutesAreNotGone
+run.never-capped	docs/commands/run.md	It is never `capped` for that.	test:cmd/azhaq:TestRunDirsRowsAreNotCappedWhenNoLimitWasHit
+run.hint	docs/commands/run.md	`hint` means found, in a script, an API description or an archive, but	test:engine:TestMapLeftoverWithoutCapIsHint,TestPassiveURLSeedNotCapped
+run.archive-assets	docs/commands/run.md	An archive's static assets, such as images and fonts, are never reques	test:internal/collectors/urlcol:TestStaticArchivedURLs;test:cmd/azhaq:TestURLsJunkIsCountedAndAssetsAreLabelled
+run.post-put-routes	docs/commands/run.md	A route that scripts call only with POST or PUT.	test:cmd/azhaq:TestMapRowsSayHowKnownAndListNoPrefix;test:engine:TestScriptRoutesAreNotGone
+run.script-only-404	docs/commands/run.md	A route named only in scripts, with no GET call among them, while a GE	test:engine:TestScriptRoutesAreNotGone
+run.script-only-proof	docs/commands/run.md	Its `proof` says `GET answers 404; found only in scripts, method unkno	test:engine:TestScriptRoutesAreNotGone
+run.skipped-means	docs/commands/run.md	`skipped` means found by a link, a script's call, an API description o	test:cmd/azhaq:TestRunNamesStateChangingGETsAndDenyKeepsThemOut,TestPlanSkipsASeedADenyPathRuleKeepsOut,TestRunStopsAskingScriptPathsOnACatchAllOrigin
+run.sweep-asks-every-word	docs/commands/run.md	A wordlist sweep (`dirs`, `-dirs`, `fuzz`) asks every word, `/logout` 	test:internal/collectors/dirscol:TestSweepAsksEveryWordWithOrWithoutASession;test:cmd/azhaq:TestRunRequestsEveryGETFoundInALinkAScriptADescriptionAndAForm
+run.version-prefix	docs/commands/run.md	A version prefix alone that only a script's strings name (`/v3`) is le	test:engine:TestVersionPrefixesNeedAnAnswer
+run.origin-same-page	docs/commands/run.md	An origin that answers every path with the same page (a single-page ap	test:internal/fetch:TestCatchAllSPA,TestCatchAllRootShellAsksOneBaseline
+run.control-request	docs/commands/run.md	`run` tells the page from a real one by a control request for a path t	test:internal/fetch:TestCatchAllControlNamesTheRequestItMatched,TestCatchAllProbeDepthSharesTheBaselineAbove
+run.stop-after-3	docs/commands/run.md	Once 3 of a directory's script-named paths have answered with that pag	test:cmd/azhaq:TestRunCatchAllStopIsExactInOneDirectory;test:internal/fetch:TestCatchAllHeld,TestCatchAllHeldGivesWayToRealAnswers,TestCatchAllHeldAsksAfterAnErrorPage,TestCatchAllHeldAsksRealRoutesInAShellDirectory
+run.directory-decides	docs/commands/run.md	The directory's own paths decide: one nothing was asked in is no excep	test:cmd/azhaq:TestRunCatchAllStopIsExactInOneDirectory;test:internal/fetch:TestCatchAllHeld
+run.always-asked	docs/commands/run.md	The links of a page, the root, the scripts the run loaded to read and 	test:cmd/azhaq:TestRunLoadedScriptsDoNotKeepClientRoutesAsked,TestRunAsksRealRoutesOfDirectoriesTheCatchAllCouldCover
+run.resumed-keeps-rule	docs/commands/run.md	A resumed run goes on from what the stopped run had learned, kept with	test:cmd/azhaq:TestResumeKeepsTheCatchAllRule;test:internal/fetch:TestCatchAllRuleIsRestored
+run.catchall-summary	docs/commands/run.md	The summary names how many and the origin (`http://app: 600 URLs that 	test:cmd/azhaq:TestRunStopsAskingScriptPathsOnACatchAllOrigin;test:engine:TestCatchAllNotesNameTheOrigin
+run.catchall-after	docs/commands/run.md	`-catchall-after N` sets the number (0 asks every path).	test:cmd/azhaq:TestRunCatchAllAfterZeroAsksEveryPath
+run.held-is-inference	docs/commands/run.md	A held path that is a real page of its own in a directory the catch-al	test:cmd/azhaq:TestRunStopsAskingScriptPathsOnACatchAllOrigin,TestRunAsksRealRoutesOfDirectoriesTheCatchAllCouldCover
+run.text-view-catchall	docs/commands/run.md	The text view counts the catch-all rows in one line, with the control 	test:cmd/azhaq:TestRunFoldsInTheDefaultView
+run.no-catchall	docs/commands/run.md	`-no-catchall` leaves the rows that answered with the catch-all page, 	test:cmd/azhaq:TestRunNoCatchAllLeavesTheRowsOut
+run.answer-field	docs/commands/run.md	`answer` is `500 without input` for a 5xx that azhaq's plain request g	test:engine:TestAnswerWithoutInput;test:cmd/azhaq:TestMapRowsSayHowKnownAndListNoPrefix
+run.hash-views	docs/commands/run.md	A view after the hash is never requested: the server answers every one	test:engine:TestSPAOnTwoHosts
+run.template-view	docs/commands/run.md	A template such as `/reports/{id}` is not requested.	test:engine:TestPathRoutedViews
+run.view-string	docs/commands/run.md	A string in a script that names a view is that view's, listed in its `	test:engine:TestPathRoutedViews;test:internal/collectors/jscol:TestClientRoutesInThePath
+run.websocket-never-requested	docs/commands/run.md	It is never requested.	test:engine:TestSPAOnTwoHosts
+run.socketio-default	docs/commands/run.md	When the app's call cannot be read, the library's default path, `/sock	test:internal/webextract:TestSocketIO
+run.browser-op-names	docs/commands/run.md	It carries the names its query and body held, never their values.	test:internal/collectors/rendercol:TestRenderWrites;test:engine:TestMapOpsOnce
+run.redirect-in-site	docs/commands/run.md	Without a scope, a redirect is followed only within the site: the same	test:internal/fetch:TestFollowableSite,TestScopeStopsRequestsAndRedirects,TestRedirectLoopCachedOnce
+run.redirect-in-scope	docs/commands/run.md	With a scope, it is followed only inside it.	test:internal/fetch:TestScopeStopsRequestsAndRedirects,TestScopeHoldsThePortOfARequestAndARedirect;test:internal/contract:TestDocumentedPromisesAreKept
+run.post-form-flag	docs/commands/run.md	A POST form is not sent without `-submit-forms`.	test:internal/contract:TestEveryWriteWaitsForItsFlag;test:cmd/azhaq:TestRunRequestsEveryGETFoundInALinkAScriptADescriptionAndAForm
+run.template-fold	docs/commands/run.md	Pages that differ only by an ID are folded: `/product?id={n}`.	test:engine:TestGroupTemplatesFoldsShapesOfOneRoute,TestMapTemplatesAndForms
+run.not-asked	docs/commands/run.md	`not_asked` is how many of them were found and not requested.	test:engine:TestGroupTemplatesCountsTheUrlsNotAsked
+run.params-every-name	docs/commands/run.md	Its `params` lists every name.	test:engine:TestGroupTemplatesFoldsShapesOfOneRoute
+run.value-names-page	docs/commands/run.md	A query value that names a page, such as `index.jsp?content=about.htm`	test:engine:TestGroupTemplatesFoldsShapesOfOneRoute;test:internal/webextract:TestTemplateKeepsPageSelectors
+run.template-every-url	docs/commands/run.md	Every URL of a template is requested, as `crawl` and katana do.	test:cmd/azhaq:TestRunPerTemplateDefaultAsksAll,TestRunListsEveryLinkedQueryURL
+run.string-prefix	docs/commands/run.md	A string in a script that is only the start of a path, `"/rest/user/" 	test:internal/collectors/jscol:TestStringPrefixesAreNotRoutes
+run.prefix-no-row	docs/commands/run.md	It has no row and is never requested.	test:internal/collectors/jscol:TestStringPrefixesAreNotRoutes
+run.module-key	docs/commands/run.md	A `./name` that is a key of an object or a `case` label, as in a webpa	test:internal/collectors/jscol:TestModuleMapKeysAreNotRoutes
+run.module-key-rejected	docs/commands/run.md	It is never requested and is kept as a rejected string with the reason	test:internal/collectors/jscol:TestModuleMapKeysAreNotRoutes
+run.description-skips-others	docs/commands/run.md	Once an origin has served a description, here or through `azhaq-openap	test:internal/collectors/pathscol:TestDescriptionFoundSkipsOtherLocations,TestDescribedOriginSkipsAPIBaseSweep,TestNoDescriptionSkipsNothing
+run.other-checks-asked	docs/commands/run.md	Every other check is still asked: `robots.txt`, `login`, `admin`, `gra	test:internal/collectors/pathscol:TestOtherChecksRunAfterDescription
+run.baseline-not-requested	docs/commands/run.md	That makes it the catch-all answer of a directory whose own baseline w	test:internal/fetch:TestCatchAllRootShellAsksOneBaseline
+run.allow-fences	docs/commands/run.md	`-allow` and `-scope` fence a run; they do not add targets.	test:cmd/azhaq:TestRunSweepCoversTheAllowedRange,TestPortsSweepCoversTheAllowedRange
+run.allow-maps-one	docs/commands/run.md	`-url http://10.0.0.5/ -allow 10.0.0.0/24` maps 10.0.0.5 only, and a n	test:cmd/azhaq:TestRunSweepCoversTheAllowedRange,TestSweepLeadCountsWhatSweepWouldSend
+run.ledger-counts-every-address	docs/commands/run.md	The ledger and the summary count every address.	test:cmd/azhaq:TestRunSweepCoversTheAllowedRange,TestPortsSweepCoversTheAllowedRange
+run.sweep-lead	docs/commands/run.md	`the scope (-allow, -scope) holds 256 addresses and the targets name 1	test:cmd/azhaq:TestSweepLeadCountsWhatSweepWouldSend
+run.screenshot-not-taken	docs/commands/run.md	`screenshot of URL not taken: the page needs about 26 requests and 8 w	test:internal/collectors/shotcol:TestNotTakenSaysWhatThePageNeeds
+run.graphql-note	docs/commands/run.md	`GraphQL URL: introspection disabled: schema recovered (partial: query	test:cmd/azhaq:TestRecoveredGraphQLSchemaIsMarked,TestWholeGraphQLSchemaIsNotMarkedPartial,TestRecoveredGraphQLSchemaShowsCounts
+run.graphql-ide	docs/commands/run.md	`GraphQL URL: an IDE page, not asked for its schema: URL on the same o	test:internal/collectors/gqlcol:TestIDEPageSkippedAfterTheOriginsSchema
+run.state-change-intro	docs/commands/run.md	A GET azhaq sends can itself change state: follow its link and a datab	test:cmd/azhaq:TestRunNamesStateChangingGETsAndDenyKeepsThemOut,TestStateChangesFromVAmPIDescription
+run.state-change-words	docs/commands/run.md	The words are read whole, never as substrings: create, createdb, delet	test:internal/statechange:TestWord
+run.state-change-before-run	docs/commands/run.md	Before a run starts, the targets among them are printed (first lines o	test:cmd/azhaq:TestRunNamesStateChangingGETsAndDenyKeepsThemOut,TestPlanNamesStateChangingGETBeforeAnyRequest
+run.state-change-deny-rule	docs/commands/run.md	Each entry names the `-deny-path` rule that would keep it out: rules d	test:cmd/azhaq:TestRunNamesStateChangingGETsAndDenyKeepsThemOut,TestPlanNamesStateChangingGETBeforeAnyRequest
+run.state-change-plan	docs/commands/run.md	`azhaq plan` prints the same list for the targets, and cannot know the	test:cmd/azhaq:TestPlanNamesStateChangingGETBeforeAnyRequest,TestMCPPlanAndWireAgreeOnStateChangingGET,TestRunNamesStateChangingGETsAndDenyKeepsThemOut
+run.next-browser	docs/commands/run.md	A run without `-browser` whose target pages leave their links to their	test:cmd/azhaq:TestCrawlAndRunNextBrowserInteractOnCatchAll,TestRunNextBrowserNotTwice;test:engine:TestBrowserHint
+run.next-graphql	docs/commands/run.md	A run that found a GraphQL endpoint and did not read its schema gets `	test:engine:TestGraphQLHint
+run.next-login	docs/commands/run.md	A run without a session (`-login`, `-cookie`, `-header`) whose target 	test:cmd/azhaq:TestRunAndHuntNextRolesWhenSignedIn;test:engine:TestLoginHint
+run.next-ports	docs/commands/run.md	A run that scanned some TCP ports (`-ports top-100`, `-ports top-1000`	test:cmd/azhaq:TestATopPortsScanNamesTheUnaskedRange
+run.next-ports-nothing-run	docs/commands/run.md	Nothing is run for it, and a finished scan of every port suggests noth	test:cmd/azhaq:TestATopPortsScanNamesTheUnaskedRange
+run.advisory-matched	docs/commands/run.md	With `-advisories -advisory-source FILE`, every product and version th	test:cmd/azhaq:TestAdvisoriesRunEndToEnd,TestAdvisoryStagePart1SendsNothing
+run.advisory-part1	docs/commands/run.md	Part 1 sends nothing to any target.	test:cmd/azhaq:TestAdvisoryStagePart1SendsNothing
+run.verify-fixed-list	docs/commands/run.md	With `-verify`, each service the run named gets at most one more read,	test:cmd/azhaq:TestVerifyStageRedisWithAndWithoutAuth,TestVerifyPortsEndToEnd;test:internal/verify:TestChecksEnumeratePreconditions
+run.verify-label-one-of	docs/commands/run.md	Every result is labelled exactly one of:	test:internal/verify:TestRedisUnauthenticatedIsProved,TestRedisAuthRequiredIsVersionOnlyNotProved,TestAdvisoryPreconditionAbsentIsConditional
+run.version-only	docs/commands/run.md	`version-only` — only the product and version identification stands: t	test:internal/verify:TestRedisAuthRequiredIsVersionOnlyNotProved,TestMongoAuthRequiredIsNotProved
+run.conditional	docs/commands/run.md	`conditional` — the result depends on a precondition the read did not 	test:internal/verify:TestAdvisoryPreconditionAbsentIsConditional
+run.verify-result	docs/commands/run.md	Each result carries the exact request sent and an excerpt of the answe	test:cmd/azhaq:TestVerifyPortsEndToEnd
+run.verify-through-egress	docs/commands/run.md	Every read goes through the scope, `-deny-path`, the kill file, `-max-	test:cmd/azhaq:TestVerifyStageBudgetStopsReads,TestVerifyPortsEndToEnd,TestVerifyDenyPathKeepsConfirmationOut
+run.verify-boundary-pointer	docs/commands/run.md	The boundary is stated once, in [Read-only verification](../CONCEPTS.m	note:a pointer to the concepts page
+run.names-not-streamed	docs/commands/run.md	Not streamed: names that do not resolve	test:cmd/azhaq:TestStreamSaysNamesThatResolveNotThoseThatDoNot
