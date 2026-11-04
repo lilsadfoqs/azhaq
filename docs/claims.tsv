@@ -521,3 +521,8 @@ gallery.a-zero-port-takes-any-free-port	docs/commands/gallery.md	`127.0.0.1:0` t
 gallery.a-loopback-gallery-answers-only-loopback-hosts	docs/commands/gallery.md	- A gallery bound to a loopback address answers only requests that name a	test:internal/gallery:TestHostGuard;test:cmd/azhaq:TestGalleryListenTakesAFreePortAndAnswersOnlyLoopbackHostsUnlessBoundElsewhere
 gallery.bound-elsewhere-it-shows-every-page-to-anyone	docs/commands/gallery.md	- Bound elsewhere (`-listen 0.0.0.0:7180`), it shows every page in the	test:internal/gallery:TestHostGuard;test:cmd/azhaq:TestGalleryListenTakesAFreePortAndAnswersOnlyLoopbackHostsUnlessBoundElsewhere
 gallery.every-response-is-json-except-the-pictures	docs/commands/gallery.md	Every response is JSON except the pictures.	test:internal/gallery:TestEveryResponseOfTheAPIIsJSONExceptThePictures
+
+# docs/commands/asn.md
+asn.nothing-is-sent-to-the-addresses-of-the-as	docs/commands/asn.md	Nothing is sent to the addresses of the AS: the prefixes are listed, not	test:cmd/azhaq:TestASNAsksRIPEstatOnlyListsEachPrefixOnceAndAnyFailureIsExit3
+asn.silent-prints-the-prefixes-only	docs/commands/asn.md	`-silent` prints the prefixes only, with no progress.	test:cmd/azhaq:TestASNAsksRIPEstatOnlyListsEachPrefixOnceAndAnyFailureIsExit3
+asn.any-failure-exits-3	docs/commands/asn.md	Any failure exits 3 here: a prefix or an address has no answer to tell from a	test:cmd/azhaq:TestASNAsksRIPEstatOnlyListsEachPrefixOnceAndAnyFailureIsExit3
