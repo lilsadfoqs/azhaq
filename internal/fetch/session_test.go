@@ -5,7 +5,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 )
 
 // A response ends the session when it expires a cookie the run sends, and
@@ -211,5 +213,93 @@ func TestProbeFindsTheCheckPage(t *testing.T) {
 	page, want := guardP.Load().page()
 	if page != srv.URL+"/me" || want.Status != 200 {
 		t.Errorf("check page %q answering %v, want /me answering 200", page, want)
+	}
+}
+
+// While the run signs in again, no other request is sent with the session
+// that ended: it waits for the new one. The requests the sign-in makes with
+// the context it was given pass.
+func TestRequestsWaitForTheNewSessionWhileSigningInAgain(t *testing.T) {
+	var mu sync.Mutex
+	var seen []string // the cookie of each request, in the order they arrived
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		c, _ := r.Cookie("sid")
+		mu.Lock()
+		if r.URL.Path != "/me" {
+			seen = append(seen, r.URL.Path+" "+c.Value)
+		}
+		mu.Unlock()
+		if c == nil || c.Value != "new" && r.URL.Path == "/me" {
+			w.WriteHeader(http.StatusUnauthorized)
+		}
+	}))
+	defer srv.Close()
+	Reset()
+	defer Reset()
+	Extra = http.Header{"Cookie": {"sid=old"}}
+	inSignIn, release := make(chan struct{}), make(chan struct{})
+	WatchSession(Session{Check: srv.URL + "/me", Want: Print{Status: 200}, Every: 1000, Renew: func(ctx context.Context) error {
+		close(inSignIn)
+		// the sign-in's own request, made with its context, is not held
+		if _, _, err := Do(ctx, srv.Client(), srv.URL+"/signin"); err != nil {
+			return err
+		}
+		<-release
+		SetExtra(http.Header{"Cookie": {"sid=new"}})
+		return nil
+	}})
+	AbsorbReport(&SessionReport{Due: true}, 1, true)
+	checked := make(chan error, 1)
+	go func() { checked <- CheckDue(context.Background()) }()
+	<-inSignIn
+	var wg sync.WaitGroup
+	for i := 0; i < 5; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, _, _ = Do(context.Background(), srv.Client(), srv.URL+"/other")
+		}()
+	}
+	time.Sleep(150 * time.Millisecond) // long enough for a request that is not held to arrive
+	mu.Lock()
+	during := append([]string(nil), seen...)
+	mu.Unlock()
+	close(release)
+	if err := <-checked; err != nil {
+		t.Fatal(err)
+	}
+	wg.Wait()
+	if len(during) != 1 || during[0] != "/signin old" {
+		t.Errorf("sent while signing in again: %v, want only the sign-in's own request", during)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	for _, s := range seen[1:] {
+		if s != "/other new" {
+			t.Errorf("a request went out with the old session: %s (all %v)", s, seen)
+		}
+	}
+}
+
+// A Chrome page's answer that redirects to the sign-in page, or answers
+// 401, makes the next request wait for the check, as one of the run's own.
+func TestSawAnswerSetsTheCheck(t *testing.T) {
+	Reset()
+	defer Reset()
+	WatchSession(Session{Check: "http://h/me", Want: Print{Status: 200}, Every: 1000, SignIn: "http://h/login.php"})
+	g := guardP.Load()
+	SawAnswer("http://h/v/1.php", 302, "../other.php")
+	if g.due.Load() {
+		t.Fatal("a redirect elsewhere set the check")
+	}
+	SawAnswer("http://h/v/1.php", 302, "../login.php")
+	if !g.due.Load() || g.endAns != "http://h/v/1.php" || g.signal != "/v/1.php answered 302 to /login.php" {
+		t.Errorf("a redirect to the sign-in page: due %v, first answer %q, signal %q", g.due.Load(), g.endAns, g.signal)
+	}
+	g.due.Store(false)
+	g.endAns, g.signal = "", ""
+	SawAnswer("http://h/api", 401, "")
+	if !g.due.Load() || g.signal != "/api answered 401" {
+		t.Errorf("a 401: due %v, signal %q", g.due.Load(), g.signal)
 	}
 }

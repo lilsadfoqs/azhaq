@@ -23,7 +23,7 @@ With `-json`, the drop-in commands use the field names of the tool they stand in
 A takeover candidate is a finding, not a note. `-silent` prints one line for each on stderr, and stdout stays one result per line:
 
 ```
-[takeover] shop.example.org -> gone.azurewebsites.net (Azure, dangling)
+[takeover] shop.example.org -> gone.azurewebsites.net (Azure, dangling, candidate)
 ```
 
 ### Progress lines
@@ -132,7 +132,8 @@ An [internal error](#exit-1) comes before this rule: a summary that disagrees wi
 | `cost` | `run` and `roles`: what the command was estimated to send, by stage, beside what each stage sent. `estimate` is the total (absent for a resumed run), `actual` the total sent, and each of `stages` has `stage`, `estimate`, `actual`, `collectors` and, where the estimate leaves out what answers lead to, `estimate_at_least` and `not_counted`. Each amount has `requests`, `connects`, `dns_queries` and `source_queries`: the stages' requests and connects add up to `requests`, their DNS queries to `dns_queries`. See [plan](commands/plan.md#the-estimate) and [roles](commands/roles.md#cost-by-stage). |
 | `db` | The database the results are in. Absent when it was temporary. |
 | `unreachable` | Targets you gave that never answered. |
-| `takeover` | Names another party may take over: `host`, `service`, `target` (the CNAME target), `evidence`, `strength` and, for `dangling`, `list` (the public list's entry and when azhaq read it). See [takeover](#takeover). |
+| `takeover` | Names another party may take over: `host`, `service`, `target` (the CNAME target), `evidence`, `strength`, `status` (`candidate` or `verified`) and, for `dangling`, `list` (the public list's entry and when azhaq read it). See [takeover](#takeover). |
+| `takeover_candidates`, `takeover_verified` | How many of the `takeover` rows have each `status`; they add up to the rows. A count of 0 is absent. |
 | `failed` | Work that did not get its answer, grouped by collector, source and error, most frequent first. See [failed](#failed). |
 | `skipped` | Targets and requests azhaq did not send, with the reason. See [skipped](#skipped). |
 | `junk` | `urls` only: the URLs left out as junk, by reason. See [urls](commands/urls.md#junk). |
@@ -180,8 +181,9 @@ The URL keys other than `catchall` and `skipped` count rows of the other coverag
 ### takeover
 
 - Strengths, services and what each means: see [Takeover candidates](CONCEPTS.md#takeover-candidates). Confirm each by hand before reporting.
-- The text summary prints each candidate as `! takeover candidate`.
-- With `-silent` and nothing else to report, each is printed alone on stderr as `[takeover] name -> target (service, strength)`.
+- `status` says how far a row is shown. `verified`: the service itself answered, from the name's own front page, with its documented "nothing here" page, and the name's CNAME is on that service. `candidate`: what was observed does not show the name is free, such as a target that answered NXDOMAIN or a page with no CNAME known. `evidence` begins with what was observed.
+- The text summary prints each as `! takeover candidate` or `! takeover verified`.
+- With `-silent` and nothing else to report, each is printed alone on stderr as `[takeover] name -> target (service, strength, status)`.
 - `dns` and `subs -live` rows carry the same object as `takeover`.
 
 ### failed
@@ -189,7 +191,7 @@ The URL keys other than `catchall` and `skipped` count rows of the other coverag
 - `retryable` is true for timeouts, dropped connections, answers cut short, 429 and 5xx: a later try may work. `azhaq resume -db FILE -retry-failed` asks those targets again, and only those (see [resume](commands/resume.md#retrying-failed-targets)). Failures that are not retryable (a refused connection, a certificate error, a 4xx other than 429) are not asked again: the same request would fail the same way, so they are for you to read and fix. A plain `resume` continues only the tasks a limit or a kill left, never a failed one.
 - `source` names a third-party source, such as `crtsh` or `wayback`.
 - `targets` names up to 100. `azhaq query -db FILE -failed` lists every failed target of the newest run (`-run ID` reads another by its `run_id`): the list to retry.
-- `azhaq-session` is a signed-in run whose session ended and could not be renewed (`the session ended: after /logout was requested …`). Every request after the check noticed the loss was refused, so nothing after that was answered as an anonymous visitor. The exit code is 3: see [Sessions](CONCEPTS.md#sessions).
+- `azhaq-session` is a signed-in run whose session ended and could not be renewed (`the session ended: after /logout was requested …`). Every request after the check noticed the loss was refused, so nothing after that was answered as an anonymous visitor. The summary's `session_lost` has the URL whose answer first looked like the end (`first_answer`), the GETs answered after it, which were already in flight (`in_flight`, `in_flight_urls`), and the GETs asked since the last check that held (`asked_since_good_check`). The exit code is 3: see [Sessions](CONCEPTS.md#sessions).
 - `partial` and `fanout` failures are counted in `failures` like any other: see [Failures](CONCEPTS.md#failures-fan-out-partial-and-degraded) and [Exit 3](#exit-3).
 
 ### skipped

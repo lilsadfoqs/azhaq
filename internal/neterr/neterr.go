@@ -57,7 +57,18 @@ func (e *Denied) Is(target error) bool { return target == ErrDenied }
 var ErrSessionLost = errors.New("the session ended")
 
 // SessionLost is ErrSessionLost saying how the session ended.
-type SessionLost struct{ Msg string }
+type SessionLost struct {
+	Msg string
+	// Answer is the URL of the first answer that looked like the end of the
+	// session, empty when none did and a check found it.
+	Answer string
+	// InFlight are the GETs answered after that answer: they were already in
+	// the air when it was read, and may have been answered without the session.
+	// With no such answer it is empty.
+	InFlight []string
+	// Asked is how many GETs were asked since the last check that held.
+	Asked int
+}
 
 func (e *SessionLost) Error() string { return e.Msg }
 

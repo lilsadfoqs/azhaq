@@ -1545,6 +1545,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		}
 	}
 	if err := fetch.SessionLost(); err != nil {
+		rep.SessionLost = sessionLoss(err)
 		// Said once, as a failure of its own: exit 3, never a quiet anonymous run.
 		if !slices.ContainsFunc(rep.Failed, func(f engine.Failure) bool { return strings.HasPrefix(f.Error, "the session ended") }) {
 			rep.Failed = append(rep.Failed, engine.Failure{Collector: "azhaq-session", Error: err.Error(), Count: 1})
