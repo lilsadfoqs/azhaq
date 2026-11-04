@@ -181,6 +181,9 @@ func printSet(w *tabwriter.Writer, title string, ps *profileSet) {
 	if s := ps.Shots; s != nil {
 		fmt.Fprintf(w, "\n%s: screenshots (%d targets)\tazhaq\tgowitness\tazhaq time\tgowitness time\n", title, s.Targets)
 		fmt.Fprintf(w, "not blank\t%d\t%d\t%.1fs%s\t%.1fs%s\n", s.AzhaqOK, s.GowitnessOK, s.AzhaqSeconds, mem(s.AzhaqRSS), s.GowitnessSecs, mem(s.RefRSS))
+		if s.GowitnessRequests > 0 {
+			fmt.Fprintf(w, "requests to the pages\t%d\t%d\t\t\n", s.AzhaqRequests, s.GowitnessRequests)
+		}
 	}
 	if n := ps.Notify; n != nil {
 		fmt.Fprintf(w, "\n%s: notify (%d messages, 2 providers)\tazhaq\tnotify\tazhaq time\tnotify time\n", title, n.Messages)

@@ -43,6 +43,9 @@ const (
 	// HistoryKey is the payload's account of the name history: the file, how
 	// many names were read from it and how many were written.
 	HistoryKey = "history"
+	// NotLookedUp is the reason UncheckedWhyKey gives for guesses a run was
+	// told not to look up (-live -guesses=false).
+	NotLookedUp = "not looked up: -guesses=false"
 )
 
 // fanoutTimeout bounds each source for a domain derived from a URL: the
@@ -133,6 +136,10 @@ type Options struct {
 	GuessSamples int
 	// Recursive runs only the sources that handle subdomains of a subdomain.
 	Recursive bool
+	// NoGuessCheck leaves the names only a padding source guessed unlooked-up
+	// (-live -guesses=false): the names of the other sources and of the name
+	// history are checked as ever.
+	NoGuessCheck bool
 	// Proxy sends every source request through this URL (-proxy).
 	Proxy string
 }
@@ -383,8 +390,8 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		sctx = context.WithValue(sctx, answerKey{}, &answers[i])
 		sctx = context.WithValue(sctx, holdKey{}, hold)
 		sctx = context.WithValue(sctx, samplesKey{}, c.opts.GuessSamples)
-		if chk != nil {
-			sctx = context.WithValue(sctx, checkerKey{}, chk)
+		if chk != nil && !c.opts.NoGuessCheck {
+			sctx = context.WithValue(sctx, checkerKey{}, chk) // its rounds are looked up as they come
 		}
 		wg.Add(1)
 		go func(i int, s source, sctx context.Context, wg *sync.WaitGroup) {
@@ -523,6 +530,7 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 	h.stop()
 	if chk != nil {
 		chk.close()
+		chk.drain(lateGrace)
 	}
 	for _, cancel := range cancels {
 		cancel() // a source still checking stops asking
@@ -688,8 +696,14 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		}
 		return meta, err
 	}
+	unlooked := map[string]bool{} // guesses a run was told not to look up are not asked later either
+	if c.opts.NoGuessCheck && chk != nil {
+		for _, n := range st.guesses {
+			unlooked[n] = true
+		}
+	}
 	for _, n := range names {
-		if !h.was(n) {
+		if !h.was(n) && !unlooked[n] {
 			meta.NextHints = append(meta.NextHints, types.Seed{Type: types.TypeHostname, Keys: map[string]string{"fqdn": n}})
 		}
 	}
@@ -746,6 +760,9 @@ func (c *Collector) settle(ctx context.Context, domain string, run []source, nam
 		_, took = chk.totals()
 		var more []string // not asked by the rounds, or the resolvers failed
 		for _, n := range check {
+			if c.opts.NoGuessCheck && !slices.Contains(foundBy[n], historyName) {
+				continue // a guess, left unlooked-up on purpose
+			}
 			if v := chk.verdict(n); v == 0 || v == nameUnchecked {
 				more = append(more, n)
 			}
@@ -811,10 +828,19 @@ func (c *Collector) settle(ctx context.Context, domain string, run []source, nam
 		}
 	}
 	st.dropped = len(drop)
+	// The guesses a run was told not to look up are not a failure to look
+	// them up: only the other names left unchecked are.
+	failedToCheck := len(st.unverified)
+	if c.opts.NoGuessCheck && chk != nil {
+		failedToCheck -= len(st.guesses)
+	}
 	if len(st.unverified) > 0 {
 		st.why = why
 		if why == "" {
 			st.why = "the DNS lookups failed"
+		}
+		if failedToCheck == 0 {
+			st.why = NotLookedUp
 		}
 	}
 	kept := names[:0]
@@ -833,14 +859,14 @@ func (c *Collector) settle(ctx context.Context, domain string, run []source, nam
 			if chk != nil {
 				row["checked_seconds"] = round(took.Seconds()) // all the guesses at once, shared
 			}
-			if why != "" && chk != nil && len(st.unverified) > 0 {
+			if why != "" && chk != nil && failedToCheck > 0 {
 				// Said, not silent: these may hold a real name. azhaq resume
 				// checks them.
-				row["error"] = fmt.Sprintf("%d of its names not checked: %s; azhaq resume checks them", len(st.unverified), why)
-				row[NotCheckedKey] = len(st.unverified)
-			} else if chk != nil && len(st.unverified) > 0 {
-				row["error"] = fmt.Sprintf("%d of its names not checked: the DNS lookups failed; azhaq resume checks them", len(st.unverified))
-				row[NotCheckedKey] = len(st.unverified)
+				row["error"] = fmt.Sprintf("%d of its names not checked: %s; azhaq resume checks them", failedToCheck, why)
+				row[NotCheckedKey] = failedToCheck
+			} else if chk != nil && failedToCheck > 0 {
+				row["error"] = fmt.Sprintf("%d of its names not checked: the DNS lookups failed; azhaq resume checks them", failedToCheck)
+				row[NotCheckedKey] = failedToCheck
 			}
 		}
 	}

@@ -874,7 +874,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		return usagef("-web-scheme is http or https, got %q", *webScheme)
 	}
 	opts := collectors.Options{Client: client, HTTP: spec, WebPorts: ports, WebScheme: *webScheme, NoTech: *noTech, NoTakeover: *noTakeover, NoFavicon: *noFavicon, Probe: *probe, PortRate: *portRate, MaxIPs: *maxIPs, Shots: *shots, Render: *render, KnownFiles: *knownFiles, FillForms: *fillForms, NoMapGuess: *noMapGuess, SubmitForms: *submitForms, PathClimb: *pathClimb}
-	opts.ShotHTML = *shotHTML
+	opts.ShotHTML, opts.AskedOnly = *shotHTML, askedOnly
 	if *browserWrites && *shots == "" && !*render {
 		return usagef("-browser-writes lets the pages Chrome loads send writes: give it with -browser or -screenshots")
 	}
@@ -1089,7 +1089,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		return usagef("-source-rate, -max-results, -max-time and -max-body are not negative")
 	}
 	opts.Subdomains = subcol.Options{Keys: keys, Only: splitList(*sourcesList), Exclude: splitList(*excludeSources), All: *allSources, NoHistory: *noHistory, DataDir: historyDirOf(*historyDir, path, out.scratch || out.plan), SourceTimeout: *sourceTimeout, ExtraWait: extraWaitOf(*extraWait),
-		SourceRate: *sourceRate, SourceRates: rates, MaxResults: *maxResults, MaxTime: *maxTime, MaxBody: *maxBody, MaxNames: *maxNames, NoCheck: subsMode.NoCheck, GuessSamples: subsMode.GuessSamples, Recursive: subsMode.Recursive, Proxy: *sourceProxy}
+		SourceRate: *sourceRate, SourceRates: rates, MaxResults: *maxResults, MaxTime: *maxTime, MaxBody: *maxBody, MaxNames: *maxNames, NoCheck: subsMode.NoCheck, GuessSamples: subsMode.GuessSamples, Recursive: subsMode.Recursive, Proxy: *sourceProxy, NoGuessCheck: subsMode.NoGuessCheck}
 	urlKeys := maps.Clone(keys)
 	if urlKeys == nil {
 		urlKeys = map[string][]string{}

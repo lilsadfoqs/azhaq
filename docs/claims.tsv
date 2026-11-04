@@ -274,8 +274,23 @@ docs-output.exit-3-script-alarm	docs/OUTPUT.md	Without it the exit code is the r
 docs-output.internal-error	docs/OUTPUT.md	the rows already printed are as they were, and the numbers beside them are not to be relied on	test:cmd/azhaq:TestASummaryThatDisagreesWithItsRowsIsAnInternalError,TestASummaryThatAgreesWithItsRowsIsComplete
 docs-output.exit-1-before-rule	docs/OUTPUT.md	a summary that disagrees with its rows exits 1, whatever the outcome of the run was, and is never a run that did its job.	test:cmd/azhaq:TestAnInternalErrorComesBeforeTheExitRule
 shots.rows-add-up	docs/commands/shots.md	Each ends as one row, and the rows add up	test:cmd/azhaq:TestShotMissesGiveEveryTargetItsRow,TestShotsBatchGivesEveryTargetARow
+shots.asked-as-given	docs/commands/shots.md	the name in it is not also asked on 443 and 80	test:cmd/azhaq:TestShotsAsksOnlyThePageGiven,TestShotsBareNameIsStillAskedOnTheWebPorts
 shots.redirect-one-row	docs/commands/shots.md	the destination is not a second target, row or file	test:cmd/azhaq:TestShotsRedirectIsOneRowWithTheDestinationInFinalURL;test:internal/collectors/shotcol:TestSkipLeavesWhereAPageRedirectedTo
 shots.failed-row	docs/commands/shots.md	A target with no picture has a row of its own	test:cmd/azhaq:TestShotMissesGiveEveryTargetItsRow,TestShotsBatchGivesEveryTargetARow,TestShotsEveryTargetFailedExits3WithRows
+fuzz.mr-reads-headers	docs/commands/fuzz.md	`-mr` and `-fr` read the response headers, one `Name: value` line each, followed by the body, as ffuf does	test:cmd/azhaq:TestFuzzMatcherModesFollowFfuf
+fuzz.mmode-or-and	docs/commands/fuzz.md	`-mc 302 -mr 'Location: index.php'` lists every 302 answer, as ffuf does	test:cmd/azhaq:TestFuzzMatcherModesFollowFfuf
+fuzz.mmode-and	docs/commands/fuzz.md	`-mmode and` lists the answers every matcher holds for	test:cmd/azhaq:TestFuzzMatcherModesFollowFfuf
+fuzz.matched-evidence	docs/commands/fuzz.md	`matched` names the ones that did	test:cmd/azhaq:TestFuzzMatchRowSaysWhatMatched
+fuzz.control-label	docs/commands/fuzz.md	With `-ac`, an answer that has a calibration answer's status and the same bytes	test:cmd/azhaq:TestFuzzMatchRowSaysItIsTheControl
+dirs.blank-line-base	docs/commands/dirs.md	An empty line asks the base URL, as ffuf's does, and the base is judged as any word	test:cmd/azhaq:TestDirsBlankWordAsksTheBase;test:internal/collectors/dirscol:TestBlankWordIsJudgedLikeAnyWord
+dirs.blank-line-status	docs/commands/dirs.md	`dirs` compares the status as well, and lists that base	test:internal/collectors/dirscol:TestBlankWordIsJudgedLikeAnyWord
+dirs.dir-control-fold	docs/commands/dirs.md	is folded: it is not listed, and the summary counts the hits of the directory in one line, with the control's URL	test:cmd/azhaq:TestDirsFoldsACatchAllInsideADirectory;test:internal/collectors/dirscol:TestSweepFoldsHitsThatAreTheirDirectorysControl
+dirs.dir-control-one-hit	docs/commands/dirs.md	A hit that answers anything else stays listed, and so does the only hit of a directory	test:internal/collectors/dirscol:TestSweepFoldsHitsThatAreTheirDirectorysControl
+dirs.dir-control-counted	docs/commands/dirs.md	it counts in `requests`, goes in the ledger and in `-max-requests`, and is paced by `-rate`	test:cmd/azhaq:TestDirsFoldsACatchAllInsideADirectory;test:internal/collectors/dirscol:TestSweepFoldsHitsThatAreTheirDirectorysControl
+dirs.dir-control-json	docs/commands/dirs.md	`-json` prints every row. A folded one has `"fold":"catchall"` and `"control"`	test:cmd/azhaq:TestDirsFoldsACatchAllInsideADirectory
+dirs.dir-control-no-descent	docs/commands/dirs.md	A path that is folded is not swept into when `-depth` asks for the directories found.	test:internal/collectors/dirscol:TestSweepDoesNotDescendIntoAFoldedHit
+dirs.dir-control-ac-off	docs/commands/dirs.md	`-ac=false` asks no control: every hit is listed.	test:internal/collectors/dirscol:TestSweepFoldsHitsThatAreTheirDirectorysControl
+dirs.dir-control-run	docs/commands/dirs.md	`azhaq run -dirs` folds the same hits in its map	test:cmd/azhaq:TestRunDirsFoldsACatchAllInsideADirectory;test:engine:TestSweepFoldsTheAnswerOfItsDirectorysControl
 dns.cname-target-checked	docs/commands/dns.md	A name with a CNAME gets its target checked, whichever types were asked.	test:cmd/azhaq:TestDNSCNAMEAloneChecksTheTarget
 dns.cname-alone-asks-a	docs/commands/dns.md	so the name is asked for A once more, and only the end of the chain is kept from that answer	test:cmd/azhaq:TestDNSCNAMEAloneChecksTheTarget
 dns.takeover-counts-apart	docs/commands/dns.md	`takeover_candidates` and `takeover_verified` count them apart, and add up to the rows under `takeover`.	test:cmd/azhaq:TestTakeoverSummaryCountsCandidatesAndVerified
