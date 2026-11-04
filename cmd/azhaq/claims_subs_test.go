@@ -153,21 +153,52 @@ func TestSubsTakeoverCandidateIsInTheSummaryWithItsFields(t *testing.T) {
 		nxGone: true,
 	})
 	defer subcol.UseTestSources(subcol.TestSource{Name: "s", Default: true, Names: []string{"www.example.org", "cdn.example.org", "shop.example.org"}})()
-	_, errOut, code := cli(t, "subs", "-d", "example.org", "-live", "-resolvers", resolvers, "-no-history", "-json")
+	out, errOut, code := cli(t, "subs", "-d", "example.org", "-live", "-resolvers", resolvers, "-no-history", "-json")
 	if code != exitOK {
 		t.Fatalf("exit %d\n%s", code, errOut)
 	}
-	list, _ := sumMap(t, errOut)["takeover"].([]any)
+	sum := sumMap(t, errOut)
+	list, _ := sum["takeover"].([]any)
 	if len(list) != 2 {
 		t.Fatalf("takeover %v", list)
 	}
+	inSummary := map[string]bool{}
 	for _, x := range list {
 		row, _ := x.(map[string]any)
-		for _, k := range []string{"host", "service", "target", "evidence", "strength"} {
+		for _, k := range []string{"host", "service", "target", "evidence", "strength", "status"} {
 			if s, _ := row[k].(string); s == "" {
 				t.Errorf("takeover row %v lacks %s", row, k)
 			}
 		}
+		if row["status"] != "candidate" {
+			t.Errorf("row %v: a CNAME to what is gone is a candidate", row)
+		}
+		inSummary[row["host"].(string)] = true
+	}
+	// Every row that carries a takeover candidate is in the summary's list.
+	rows := 0
+	for _, l := range lines(out) {
+		var row struct {
+			Host     string         `json:"host"`
+			Takeover map[string]any `json:"takeover"`
+		}
+		if json.Unmarshal([]byte(l), &row) != nil || row.Takeover == nil {
+			continue
+		}
+		rows++
+		if !inSummary[row.Host] {
+			t.Errorf("%s is a candidate on stdout and not in the summary: %v", row.Host, list)
+		}
+	}
+	if rows != len(list) {
+		t.Errorf("%d rows carry a takeover, the summary lists %d", rows, len(list))
+	}
+	// The two counts split the list.
+	if c, _ := sum["takeover_candidates"].(float64); int(c) != 2 {
+		t.Errorf("takeover_candidates %v, want 2", sum["takeover_candidates"])
+	}
+	if v := sum["takeover_verified"]; v != nil {
+		t.Errorf("takeover_verified %v with no verified name", v)
 	}
 }
 
