@@ -1203,3 +1203,8 @@ ingest.unreadable-line-note	docs/commands/ingest.md	A line that cannot be read i
 new.db-required	docs/commands/new.md	Opens the workspace given with `-db`, which is required: without it the command exits 2.	test:cmd/azhaq:TestMissingArgumentsExitUsage
 new.newest-run	docs/commands/new.md	Leaves out what the newest run no longer saw: a page removed since is not new.	test:cmd/azhaq:TestNewLeavesOutWhatTheNewestRunDidNotSeeCatchAllsAndAssets
 new.leaves-out-catchall-assets	docs/commands/new.md	Leaves out URLs that answer with the catch-all page, and scripts, assets and source maps, whether the run read them as such or their address says so.	test:cmd/azhaq:TestNewLeavesOutWhatTheNewestRunDidNotSeeCatchAllsAndAssets
+
+# docs/commands/quickstart.md
+quickstart.nothing-sent-yet	docs/commands/quickstart.md	Nothing is sent yet.	test:cmd/azhaq:TestQuickstartSendsNothingBeforeThePlanIsPrinted
+quickstart.next-commands-not-run	docs/commands/quickstart.md	Ends the summary's `next` with the commands that go on in the workspace (`hunt`, `query`, `show`) and the wider passes it did not make, each a command to copy with what it would send beyond this run (`-ports top-1000`, `-dirs @common`). Nothing is run for them.	test:cmd/azhaq:TestQuickstartNextCommandsAreNotRunAndQuietOrJSONPrintNoPlan,TestGuidedRunMakesTheSameMapAsTheExplicitRun,TestATopPortsScanNamesTheUnaskedRange,TestOtherNextPassesCountWhatTheyWouldSend
+quickstart.quiet-json-no-plan	docs/commands/quickstart.md	With `-quiet` or `-json` the plan is not printed: stderr holds the summary alone, as it does for `run`.	test:cmd/azhaq:TestQuickstartNextCommandsAreNotRunAndQuietOrJSONPrintNoPlan,TestQuickstartKeepsRunsOutputContracts
