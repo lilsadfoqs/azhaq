@@ -138,6 +138,10 @@ type Open struct {
 	SubjectCN string   `json:"subject_cn,omitempty"`
 	SubjectAN []string `json:"subject_an,omitempty"`
 
+	// Usual is the registered name of the port, kept when -detect none leaves
+	// Service empty: it only tells a web port from another, and is not output.
+	Usual string `json:"-"`
+
 	again bool // a server-first port that said nothing: asked once more after the pass
 }
 
@@ -691,7 +695,11 @@ func (s *Scanner) probeConn(ctx context.Context, host, ip string, port int, conn
 		o.again = s.Detect == DetectAll && silentGreeter && o.Banner == "" && o.Service == ""
 	}
 	if o.Service == "" {
-		o.Service = guess(port, o.Banner)
+		if s.Detect == DetectNone {
+			o.Usual = guess(port, "") // nothing was asked: no row names the port's service
+		} else {
+			o.Service = guess(port, o.Banner)
+		}
 	}
 	return o, portOpen
 }
@@ -881,7 +889,11 @@ func printable(b []byte) string {
 // Web is true for an open port worth an HTTP probe: one that said nothing
 // or answered like HTTP, and is not a known non-web service.
 func (o Open) Web() bool {
-	switch strings.TrimSuffix(o.Service, "?") {
+	name := o.Service
+	if name == "" {
+		name = o.Usual
+	}
+	switch strings.TrimSuffix(name, "?") {
 	case "", "http", "https", "tls", "elasticsearch", "docker", "kubernetes", "http-proxy":
 		return true // tls: a handshake answered, HTTP inside it may be slow
 	}

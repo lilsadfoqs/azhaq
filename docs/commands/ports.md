@@ -67,7 +67,7 @@ The fields of a `-json` row, which are naabu's plus azhaq's:
 | `cdn-name` | The CDN or WAF. |
 | `timestamp` | UTC, RFC 3339. |
 | `ports`, `silent`, `asked`, `refused` | On the one row of an address's silent UDP ports (no `port`): the ports, how many, how many UDP ports were asked, how many the address refused. See [UDP rows and lines](#udp-rows-and-lines). |
-| `service` | The service the port answered as. A name ending in `?` is only the port's usual service. |
+| `service` | The service the port answered as. A name ending in `?` is only the registered name of the port, taken from its number: nothing answered as that service, so it is not an identification. With `-detect none` no row has a `service`: nothing is named from the port number. |
 | `product`, `version` | What the service states: see [Products and versions](#products-and-versions-of-tcp-ports). |
 | `extrainfo` | What the answer says beside the product and its version, as it was sent: the rest of a `Server` header (`Python/3.11.15`, `(Ubuntu)`), or an SSH line's comment and protocol (`Ubuntu-2ubuntu2.13; protocol 2.0`). nmap calls it `extrainfo` too, and `-oX` and `-oG` carry it. |
 | `title` | The `<title>` of a web page that names no product. |
@@ -159,7 +159,7 @@ A service that speaks first (`ssh`, `ftp`, `smtp`, `telnet`, `irc`, …) is name
 - A CDN or WAF address is scanned in full, as naabu does. The row has `cdn` and a `note`. `-ec` (`-exclude-cdn`) asks it only ports 80, 443, 8080 and 8443, which is naabu's two ports plus 8080 and 8443, because its other ports are the provider's other customers'. The summary then names the addresses. `-cdn-full` is accepted and does nothing; it is the default.
 - `-pts N` stops asking a host after N open ports, for a host that answers every port. The row has `"threshold":true` and the summary names the host. Ports already in flight are still asked, so a few more than N may be listed.
 - `-detect` says what is asked of an open port:
-  - `none` connects and closes: one connect per port, as naabu without `-sV`.
+  - `none` connects and closes: one connect per port, as naabu without `-sV`. No row names a service, not even by its port number (no `service` field, and no name in the `-oX` and `-oG` files), as naabu prints only `host:port`; the other modes mark a name taken from the port number with `?`.
   - `banner` reads what the service says on that connection and sends nothing after it: a bare `220` greeting stays `ftp-or-smtp` with its banner, and an FTP greeting that names no product is not asked `SYST`. Only `all` sends `EHLO` or `SYST`.
   - `all` is the default, and costs a second or two on top of the connect scan. `-detect none` (`-port-detect none` in `run`) matches naabu's time and output. It also asks a silent port for HTTP and TLS, then one request of each protocol that waits to be asked. Each goes on a connection of its own, several at once while the scan has workers free.
 - `-proxy host:port` (SOCKS5) and `-source-ip` make the TCP connects go through that proxy or from that address. The service probes beyond the first connection dial on their own, so with either the scan asks the banner only, and the summary says so.

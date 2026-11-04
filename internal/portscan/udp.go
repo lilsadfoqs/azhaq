@@ -239,7 +239,7 @@ func (s *Scanner) ScanUDPFrom(ctx context.Context, host, ip string, ports []int,
 	}
 	silent = append(silent, spent...)
 	for _, p := range silent {
-		r.OpenFiltered = append(r.OpenFiltered, UDPPort{Port: p, State: UDPOpenFiltered, Service: udpGuess(p)})
+		r.OpenFiltered = append(r.OpenFiltered, UDPPort{Port: p, State: UDPOpenFiltered, Service: s.udpGuess(p)})
 	}
 	sort.Slice(r.Open, func(i, j int) bool { return r.Open[i].Port < r.Open[j].Port })
 	sort.Slice(r.OpenFiltered, func(i, j int) bool { return r.OpenFiltered[i].Port < r.OpenFiltered[j].Port })
@@ -405,7 +405,7 @@ func (s *Scanner) udpProbe(ctx context.Context, host, ip string, port, pass int)
 		u.Service, u.Product, u.Version, u.Banner = info.service, info.product, info.version, info.banner
 	} else {
 		// Something answered, but not in the protocol asked for.
-		if g := udpGuess(port); g != "" {
+		if g := s.udpGuess(port); g != "" {
 			u.Service = g
 		}
 		u.Banner = printable(buf[:n])
@@ -431,8 +431,11 @@ var udpNames = map[int]string{
 }
 
 // udpGuess names what a silent or unvalidated port usually runs, marked
-// as a guess.
-func udpGuess(port int) string {
+// as a guess. -detect none names nothing from a port number.
+func (s *Scanner) udpGuess(port int) string {
+	if s.Detect == DetectNone {
+		return ""
+	}
 	if n, ok := udpNames[port]; ok {
 		return n + "?"
 	}
