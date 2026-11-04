@@ -97,7 +97,7 @@ func ledgerTargets(t *testing.T, path string) (int64, int) {
 	t.Helper()
 	var lines int64
 	if err := ledger.Read(path, func(e ledger.Entry) error {
-		if e.IsTarget() {
+		if e.Counted() {
 			lines++
 		}
 		return nil

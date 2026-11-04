@@ -219,10 +219,14 @@ type ledgerLine struct {
 	Method string `json:"method"`
 	Target string `json:"target"`
 	Host   string `json:"host"`
+	Proto  string `json:"proto"`
 }
 
+// toTarget says the line is a request or connection to a target that the
+// summary counts. A probe is listed apart: its bytes went on a connection
+// that has a line of its own.
 func (l ledgerLine) toTarget() bool {
-	return l.Kind != "seal" && (l.Class == "" || l.Class == "target")
+	return l.Kind != "seal" && l.Kind != "probe" && (l.Class == "" || l.Class == "target")
 }
 
 // readLedger reads every line of a ledger file.
@@ -251,11 +255,23 @@ func readLedger(t testing.TB, path string) []ledgerLine {
 type Sent struct {
 	HTTP, TCP, UDP map[string]int
 	N              int
+	// Probes are the HTTP requests port identifications wrote on their
+	// connections, as "METHOD URL", and Other the probes of other protocols.
+	Probes map[string]int
+	Other  int
 }
 
 func ledgerSent(lines []ledgerLine) Sent {
-	s := Sent{HTTP: map[string]int{}, TCP: map[string]int{}, UDP: map[string]int{}}
+	s := Sent{HTTP: map[string]int{}, TCP: map[string]int{}, UDP: map[string]int{}, Probes: map[string]int{}}
 	for _, l := range lines {
+		if l.Kind == "probe" && (l.Class == "" || l.Class == "target") {
+			if l.Proto == "http" || l.Proto == "https" {
+				s.Probes[canon(l.Method, l.Target)]++
+			} else {
+				s.Other++
+			}
+			continue
+		}
 		if !l.toTarget() {
 			continue
 		}

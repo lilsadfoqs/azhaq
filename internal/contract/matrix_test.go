@@ -177,6 +177,7 @@ func checkRow(t *testing.T, v *Inv, l *Labs, r row, outs []outcome) {
 		s := ledgerSent(lines)
 		sent.N += s.N
 		sent.HTTP, sent.TCP, sent.UDP = merge(sent.HTTP, s.HTTP), merge(sent.TCP, s.TCP), merge(sent.UDP, s.UDP)
+		sent.Probes = merge(sent.Probes, s.Probes)
 		for _, ln := range lines {
 			if ln.Kind == "dns" {
 				dnsLines++
@@ -213,6 +214,10 @@ func checkRow(t *testing.T, v *Inv, l *Labs, r row, outs []outcome) {
 			v.Errorf("the closed port %s has no line in the ledger", l.Ports.Gone)
 		}
 		v.Equal("the ledger's lines to targets, against the TCP lines", int64(sent.N), int64(sumMap(sent.TCP)+sumMap(sent.HTTP)+sumMap(sent.UDP)))
+		// What a logging server in front of the web port counted is listed as probe lines.
+		if d := diff("ledger probes", sent.Probes, "asked at the port", l.Ports.Asked.HTTP()); d != "" {
+			v.Errorf("the ledger's probe lines and the requests the web port saw differ:\n%s", d)
+		}
 	}
 	if l.UDP != "" {
 		v.Equal("packets to "+l.UDP+": the ledger's udp lines, against received", int64(sent.UDP[l.UDP]), int64(l.Ports.Wire.UDP()[l.UDP]))

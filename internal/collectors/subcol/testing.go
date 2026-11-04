@@ -41,7 +41,7 @@ func UseTestSources(srcs ...TestSource) (restore func()) {
 	fake := []source{}
 	for _, ts := range srcs {
 		if ts.Name == historyName {
-			fake = append(fake, historySource()) // the real one: a file in $AZHAQ_DATA_DIR
+			fake = append(fake, historySource()) // the real one: a file under the run's data directory
 			continue
 		}
 		var calls atomic.Int32

@@ -151,7 +151,7 @@ func cmdSubs(args []string) error {
 	recursive := fs.Bool("recursive", false, "only sources that look for subdomains of subdomains, as subfinder -recursive (see -ls)")
 	stats := fs.Bool("stats", false, "after the run, one note per source: requests, names, errors and seconds, as subfinder -stats")
 	showVersion := fs.Bool("version", false, "print the version and exit")
-	given := inherit(fs, "sources", "exclude-sources", "all-sources", "no-history", "source-timeout", "extra-wait", "providers", "resolvers", "dns-rate", "timeout", "v", "fail-on-errors",
+	given := inherit(fs, "sources", "exclude-sources", "all-sources", "no-history", "history-dir", "source-timeout", "extra-wait", "providers", "resolvers", "dns-rate", "timeout", "v", "fail-on-errors",
 		"source-rate", "source-rates", "max-results", "max-time", "max-body", "proxy=source-proxy", "t=parallel", "ledger", "web-ports", "http-proxy=proxy")
 	maxNames := fs.Int("max-names", 0, fmt.Sprintf("most names kept per domain, and looked up with -live (default %d); a value you give also caps the names -w and -permute ask, together: the guesses past it are not asked, the run exits 4 and says how many", subcol.DefaultMaxNames))
 	if err := parse(fs, args); err != nil {
@@ -668,6 +668,7 @@ func cmdSubs(args []string) error {
 	}
 	rep.Notes = append(rep.Notes, tierNote(rep.Counts, *live || active)...)
 	rep.Notes = append(rep.Notes, subsNotes(payloads(st, "azhaq-subdomains"), tiers)...)
+	rep.wrote(historyWrote(payloads(st, "azhaq-subdomains"))...)
 	if c.db != "" {
 		rep.Next = append(rep.Next, "azhaq query -db "+c.db+" -type Hostname")
 	}

@@ -210,14 +210,14 @@ A source that answered 429 is asked again after its `Retry-After`, up to three t
 ### Name history
 Passive sources answer differently each run. subdomain.center, for one, returns a random sample of its names on each call. So `subs` keeps what it found.
 
-- Azhaq keeps the names of a domain that a source gave, and the names of the history itself that resolved, in `names/DOMAIN.json`. A name that only `-w` or `-permute` guessed, and a CNAME target, is not stored: those can be asked again, and the history is the memory of what passive sources answered. The directory is `$AZHAQ_DATA_DIR`, else `$XDG_DATA_HOME/azhaq`, else `~/.local/share/azhaq`.
+- Azhaq keeps the names of a domain that a source gave, and the names of the history itself that resolved, in `names/DOMAIN.json`. A name that only `-w` or `-permute` guessed, and a CNAME target, is not stored: those can be asked again, and the history is the memory of what passive sources answered. The directory is the one you name with `-history-dir DIR` or `$AZHAQ_DATA_DIR`, else `azhaq-data/` in the workspace's folder: beside `-db`, or the current directory when the run has no `-db`. Nothing is written under your home or XDG directories, and a history is shared between workspaces only when you name one directory for them.
 - Each name has its first and last time seen (`first_seen`, `last_seen`) and the sources that gave it (`sources`).
 - At most 200,000 names are kept per domain. The ones unseen the longest go first.
 - The next run asks this file as a source called `history`.
 - With `-live`, a stored name counts only if it resolves now, and not to a wildcard. Stale names drop out, and a name a source missed this time comes back.
 - Without `-live` no DNS lookup is made. A stored name that no source gave this run is listed with `"unverified": true`, and its `source` is `history`. The names are stored only once a source gave them or DNS confirmed them, so they are not guesses.
 - A stored name that a source gave again is not flagged: its `source` is that source, and `history` comes last in `sources`. Every name a source gave and a run kept is stored, so flagging them all would flag nearly every name after the first run.
-- A run that read names from the file or wrote to it says so in its summary, in `subs` and in `run`: `name history /home/me/.local/share/azhaq/names/example.com.json: 303 names read, 2 written; …`. It gives the path, the names the file gave the run (before any check) and the names the run wrote (a name no lookup checked is not written). For more than three domains one note counts them all.
+- A run that read names from the file or wrote to it says so in its summary, in `subs` and in `run`: `name history azhaq-data/names/example.com.json: 303 names read, 2 written; …`. A file the run wrote is also in the summary's `wrote`. It gives the path, the names the file gave the run (before any check) and the names the run wrote (a name no lookup checked is not written). For more than three domains one note counts them all.
 - `-no-history` neither reads nor writes the file, and the summary says nothing of it. A file that cannot be written is a note: `name history not saved: …`.
 - A resolver check (`-live`) that was stopped leaves its names unchecked and out of the list. The summary says how many, why, and, with `-db`, the commands that check them (`azhaq resume`) and list them (`azhaq query -db FILE -type Hostname -role unresolved`: `unresolved` is a name no lookup has asked, and its `proof` says `not checked:` and why). Without `-db` there is nothing to resume, and the note says to run again with `-db FILE`, or without `-live` to list them unverified.
 
@@ -358,7 +358,8 @@ On tesla.com, `subs -live -dns-rate 10` with two resolvers took 161 s and listed
 | `-fail-on-errors` | bool |  | the same as -strict-exit |
 | `-ls` | bool |  | list the sources and exit: name, then * if a key is required and ~ if one improves the answer; with -json one object each (name, default, recursive, keyRequirement) |
 | `-stats` | bool |  | after the run, one note per source: requests, names, errors and seconds, as subfinder -stats |
-| `-no-history` | bool |  | do not read or write the name history (names earlier runs found, kept under $AZHAQ_DATA_DIR, else ~/.local/share/azhaq; with -live each is checked by DNS in the run) |
+| `-no-history` | bool |  | do not read or write the name history (the names earlier runs found, kept in $AZHAQ_DATA_DIR if set, else azhaq-data/ beside -db (the current directory for a run with a temporary database); with -live each is checked by DNS in the run) |
+| `-history-dir` | string |  | keep the name history under DIR/names, shared by every run that names it (default $AZHAQ_DATA_DIR, else azhaq-data/ in the workspace's folder: beside -db, or the current directory) |
 | `-strict-exit` | bool |  | exit 3 for any failure, a target among many included (the rule before 0.15); without it a run that did its job exits 0 and its summary counts and lists the failures |
 
 <details>

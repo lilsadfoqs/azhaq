@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -134,6 +135,20 @@ type report struct {
 	// pages, scripts, assets, controls, description checks… They add up to
 	// Requests, and each ledger line names its purpose.
 	RequestsBy map[string]int `json:"requests_by_purpose,omitempty"`
+
+	// Wrote are the files the run wrote besides its database and the ones
+	// the user named with -o and the like: the ledger, the name history,
+	// the pointers to the last workspace, the archived URLs.
+	Wrote []string `json:"wrote,omitempty"`
+}
+
+// wrote lists a file the run wrote besides its database.
+func (r *report) wrote(paths ...string) {
+	for _, p := range paths {
+		if p != "" && !slices.Contains(r.Wrote, p) {
+			r.Wrote = append(r.Wrote, p)
+		}
+	}
 }
 
 func newReport(command string) *report {
@@ -321,6 +336,9 @@ func (r *report) print(w io.Writer) {
 	if len(r.RequestsBy) > 0 && (r.Command == "crawl" || r.Command == "run" && !r.hushCost) {
 		fmt.Fprintf(w, "  requests by purpose: %s\n", purposeLine(r.RequestsBy))
 	}
+	if len(r.Wrote) > 0 {
+		fmt.Fprintf(w, "  wrote: %s\n", strings.Join(r.Wrote, ", "))
+	}
 	if r.Cost != nil && !r.hushCost && (r.Command == "run" || r.Command == "roles") {
 		for _, l := range r.Cost.lines() {
 			fmt.Fprintf(w, "  cost: %s\n", l)
@@ -423,6 +441,7 @@ func fillReport(rep *report, path string, seeds []types.Seed, ents []types.Entit
 	rep.Notes = append(rep.Notes, portcol.Notes(obs)...)
 	if rep.Command == "run" {
 		rep.Notes = append(rep.Notes, historyNotes(subdomainPayloads(obs))...)
+		rep.wrote(historyWrote(subdomainPayloads(obs))...)
 	}
 	if n := engine.NoWebNote(obs); n != "" {
 		rep.Notes = append(rep.Notes, n)

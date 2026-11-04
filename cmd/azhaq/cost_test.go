@@ -20,6 +20,10 @@ import (
 // in not_counted), so the estimate is the lower one.
 const costFactor = 4
 
+// roleMapsFactor is the same for the maps of the roles of a fixture with a
+// sign-in: its pages draw their styles, scripts and images, which no floor counts.
+const roleMapsFactor = 6
+
 // juiceShaped is a single-page app like Juice Shop: one page, one script that
 // names a route table and API calls, and a REST API behind it. hits counts
 // every request the server gets: the count a proxy in front would log.
@@ -150,7 +154,7 @@ func TestPlanEstimatesEachStage(t *testing.T) {
 		stage, field string
 		want         float64
 	}{
-		{"map", "requests", 53},     // the page, the favicon, 51 built-in paths
+		{"map", "requests", 26},     // the page and the 25 built-in paths that no answer skips; the favicon and the 26 guesses of an API description are not certain
 		{"ports", "connects", 602},  // 601 ports and the one that is named twice is once; the port of the URL's host
 		{"dirs", "requests", 126},   // 40 words and 2 extensions, and 6 calibration probes
 		{"names", "dns_queries", 5}, // one query for each word
@@ -175,15 +179,15 @@ func TestPlanEstimatesEachStage(t *testing.T) {
 	if _, ok := byStage["sources"]; ok {
 		t.Errorf("-sources none asks no source, and the estimate has a sources stage")
 	}
-	// -no-favicon is one request less; the text plan says the same.
+	// The favicon is not in a floor (it is one of the paths, or an icon the page names, or none), so -no-favicon changes nothing in it.
 	var q map[string]any
 	out, _, _ = cli(t, "plan", "-url", srv.URL+"/", "-allow", "127.0.0.1", "-sources", "none", "-no-favicon", "-json")
 	_ = json.Unmarshal([]byte(out), &q)
-	if got := stageAmount(q["estimate"].(map[string]any)["stages"].([]any)[0].(map[string]any), "estimate", "requests"); got != 52 {
-		t.Errorf("-no-favicon: the map stage is estimated at %v requests, want 52", got)
+	if got := stageAmount(q["estimate"].(map[string]any)["stages"].([]any)[0].(map[string]any), "estimate", "requests"); got != 26 {
+		t.Errorf("-no-favicon: the map stage is estimated at %v requests, want 26", got)
 	}
 	text, _, _ := cli(t, "plan", "-url", srv.URL+"/", "-allow", "127.0.0.1", "-sources", "none")
-	if !strings.Contains(text, "estimate: 53 requests") || !strings.Contains(text, "map ") {
+	if !strings.Contains(text, "estimate: 26 requests") || !strings.Contains(text, "map ") {
 		t.Errorf("the text plan does not print the estimate by stage:\n%s", text)
 	}
 	if hits.Load() != 0 {
@@ -230,7 +234,7 @@ func TestRunSummaryTextHasTheCostByStage(t *testing.T) {
 	srv := juiceShaped(&hits)
 	defer srv.Close()
 	_, errOut, _ := cli(t, "run", "-url", srv.URL+"/", "-allow", "127.0.0.1", "-sources", "none", "-db", filepath.Join(t.TempDir(), "w.db"), "-ledger", "off")
-	if !strings.Contains(errOut, "cost: map: sent 83 requests (estimated 53 requests and what the answers lead to)") {
+	if !strings.Contains(errOut, "cost: map: sent 83 requests (estimated 26 requests and what the answers lead to)") {
 		t.Errorf("the summary does not set the estimate beside what was sent:\n%s", errOut)
 	}
 }
@@ -429,8 +433,8 @@ func TestRolesCostByStageOnADVWAShapedApp(t *testing.T) {
 		t.Errorf("sign-in: estimated %v requests, sent %v: not within a factor of %d, from above", est, got, costFactor)
 	}
 	maps := st["role maps"]
-	if est, got := stageAmount(maps, "estimate", "requests"), stageAmount(maps, "actual", "requests"); est == 0 || got < est || got > costFactor*est {
-		t.Errorf("role maps: estimated %v requests, sent %v: not within a factor of %d, from above", est, got, costFactor)
+	if est, got := stageAmount(maps, "estimate", "requests"), stageAmount(maps, "actual", "requests"); est == 0 || got < est || got > roleMapsFactor*est {
+		t.Errorf("role maps: estimated %v requests, sent %v: not within a factor of %d, from above", est, got, roleMapsFactor)
 	}
 }
 

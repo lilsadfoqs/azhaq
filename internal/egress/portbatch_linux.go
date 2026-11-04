@@ -33,6 +33,14 @@ func (d *PortDialer) CanBatch(ip string) bool {
 // the error (a refusal wraps ECONNREFUSED, a timeout is a net.Error that says
 // so) and how long the connect took.
 func (d *PortDialer) TCPBatch(ctx context.Context, host, ip string, ports []int, done func(i int, c net.Conn, rtt time.Duration, err error)) {
+	// What a connection is then written is listed in the ledger, probe by probe.
+	opened := done
+	done = func(i int, c net.Conn, rtt time.Duration, err error) {
+		if err == nil && c != nil {
+			c = ledger.WrapProbes(ctx, ledger.ClassTarget, host, net.JoinHostPort(ip, itoa(ports[i])), false, c)
+		}
+		opened(i, c, rtt, err)
+	}
 	ap, _ := netip.ParseAddr(ip)
 	ap = ap.Unmap()
 	family := syscall.AF_INET

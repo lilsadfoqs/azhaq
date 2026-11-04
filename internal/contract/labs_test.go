@@ -1,15 +1,18 @@
 package contract
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/miekg/dns"
 )
@@ -94,14 +97,18 @@ func (l *Labs) File(name, body string) string {
 // PortLab is TCP listeners that count each connection: one that closes at
 // once, one that speaks first, one that answers HTTP, and a closed port.
 type PortLab struct {
-	Wire                       *Wire
+	Wire *Wire
+	// Asked is the HTTP requests the web port was sent, by method and URL:
+	// the requests a logging server in front of the port counts. They are
+	// bytes written on a connection Wire counts, so Wire.Total leaves them out.
+	Asked                      *Wire
 	Closing, Banner, Web, Gone string // host:port
 	goneAsked                  bool
 }
 
 func newPortLab(t *testing.T) *PortLab {
 	t.Helper()
-	p := &PortLab{Wire: newWire()}
+	p := &PortLab{Wire: newWire(), Asked: newWire()}
 	p.Closing = listenCounted(t, p.Wire, nil).Addr
 	p.Banner = listenCounted(t, p.Wire, func(c net.Conn) {
 		defer c.Close()
@@ -109,8 +116,9 @@ func newPortLab(t *testing.T) *PortLab {
 	}).Addr
 	p.Web = listenCounted(t, p.Wire, func(c net.Conn) {
 		defer c.Close()
-		buf := make([]byte, 4096)
-		if n, _ := c.Read(buf); n > 0 {
+		_ = c.SetReadDeadline(time.Now().Add(3 * time.Second))
+		if req, err := http.ReadRequest(bufio.NewReader(c)); err == nil {
+			p.Asked.addHTTP(req.Method, "http://"+c.LocalAddr().String()+req.URL.RequestURI())
 			_, _ = c.Write([]byte("HTTP/1.0 200 OK\r\nServer: lab\r\nContent-Type: text/html\r\n\r\n<title>x</title>"))
 		}
 	}).Addr

@@ -114,6 +114,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 - For `-wn` and `-sn`, an address is up when a connect to 80 or 443 is accepted or refused, asked twice. A host that drops both is called down.
 
 ### Ports, order and pace
+- With no `-p`, `-tp` or `-pf`, a scan asks the default set: 163 ports, the top 100 and 63 more, the usual ports of the services azhaq can name and check (Redis 6379, MongoDB 27017, memcached 11211, Kafka 9092 and the like). They are read from the protocols azhaq identifies, plain and TLS, and the ports it names a silent port by, so a service azhaq learns to name is scanned by default with no edit to a list. The top 100 alone leaves those out, which is why a default scan that asked it found them only in a wider scan. `-p top-100` asks the top 100 alone, `-p default,8888` adds a port to the default set, and the plan counts all 163.
 - `-p`, `-tp 100|1000|full` and `-pf FILE` add ports. `-ep LIST|FILE` takes ports out.
 - `-p -` is every port, `-p u:53` is a UDP port, and `-p none` leaves the TCP ports out.
 - The ports of a host are asked in a random order, the likeliest first: nmap's top 100, then its top 1000. `-order asc` asks them by number, and `-seed N` repeats an order.
@@ -136,6 +137,7 @@ A service that speaks first (`ssh`, `ftp`, `smtp`, `telnet`, `irc`, …) is name
 
 - A `HEAD` that stays unanswered for half a second is waited on while the handshake and the list are asked beside it. A port that answers neither is done when the `HEAD`'s wait ends, not after a wait for each protocol.
 - Every connect, whatever its purpose, counts against `-max-requests`, takes a token of the pace and is in the ledger.
+- Every probe written to a connection (the `HEAD /`, a protocol's request, the `GET /` of step 5) is a `probe` line of its own in the ledger, after the line of its connection: its `proto` and, for HTTP, its `method` and its `target` with the path. It is not counted again as a request or a connection: the summary's `requests` counts the connection's line, and the ledger note says how many probes went on them. See [what a line means](../OUTPUT.md#what-a-line-means).
 - An open port costs at most 25 connects after the first, the `GET /` of step 5 included. A port named by a late protocol may cost a few more than asking the protocols one by one would. Several are asked at once.
 - A port that accepts a connection and closes it without a word is `tcpwrapped`.
 - Raw printing ports (9100–9107) are never asked anything.
@@ -175,7 +177,7 @@ A service that speaks first (`ssh`, `ftp`, `smtp`, `telnet`, `irc`, …) is name
 #### UDP ports
 - `ports -udp` asks the 25 common UDP ports. `-pu top` asks the same: 53, 67, 69, 111, 123, 137, 161, 500, 514, 520, 623, 1194, 1434, 1900, 3478, 4500, 5060, 5351, 5353, 5683, 10001, 11211, 27015, 47808 and 51820.
 - `-pu LIST` asks a list instead, such as `-pu 1-1024` or `-pu top,5354`. List names and numbers combine, in `-p` too.
-- `-p none` leaves the TCP ports out. `-pu LIST` without `-p`, `-tp` or `-pf` does the same: only those UDP ports are asked, as `nmap -sU` does, so that a low `-rate` under `-timeout` is not spent on the default TCP top-100 first. `-udp` alone still asks TCP too. In `run` it is `-ports-udp SPEC`, with `top`, `full` or a list.
+- `-p none` leaves the TCP ports out. `-pu LIST` without `-p`, `-tp` or `-pf` does the same: only those UDP ports are asked, as `nmap -sU` does, so that a low `-rate` under `-timeout` is not spent on the default TCP ports first. `-udp` alone still asks TCP too. In `run` it is `-ports-udp SPEC`, with `top`, `full` or a list.
 - What each UDP port is sent, in one rule: a port with a protocol of its own (the list above) is asked that request, and 161 a second one (SNMPv3 discovery); any other port is asked a DNS query, an SNMP get, memcached's version and an empty datagram, in that order. The scan stops asking a port at its first answer or ICMP port unreachable, so a silent port costs 2 datagrams on a known port and 4 on any other: a full range of N addresses is up to 4 x 65,535 x N datagrams. `-detect all` and `-detect banner` follow that rule.
 - `-detect none` (`-port-detect none` in `run`) asks each UDP port one datagram: the request of its protocol on a port that has one, an empty datagram on any other. A silent port then costs 1 datagram, and the summary says the `open|filtered` ports were asked once. An empty datagram is answered by few services, so `none` finds fewer open ports than the default and is for sizing or for a full-range sweep that must stay small.
 - No privileges are needed. Each port gets one datagram on a connected socket, and the kernel tells an ICMP port unreachable from silence.
@@ -312,7 +314,7 @@ azhaq ports -host 192.0.2.10 -p top-100 -advisories -advisory-source osv.json -j
 
 ### Read-only verification
 
-With `-verify`, each data-store service the scan named (Redis, MongoDB, memcached — a version need not be known first) gets one more read from the fixed list of checks: `INFO server` to Redis, an `isMaster` hello to MongoDB, `version` to memcached, each sent with no credential, exactly as a client with no credentials reads what the service already gives anyone. Each answer is labelled `proved` (it answered with no credential), `version-only` (it asked for authentication, so only the identification stands) or `conditional` (a precondition the read did not show, which the result names), printed after the port rows with the exact request sent and an excerpt of the answer, counted in the summary as `verify results`, and stored as one `verify` observation per result. With `-advisories`, advisory leads are labelled the same way from their confirmation reads. Every read goes through the scope, the kill file, `-max-requests` and the pace, and is a ledger line of the collector `azhaq-verify`. Never a payload, a write, a credential or a request that tries to trigger a flaw. The checks, the labels and the boundary are in [Read-only verification](../CONCEPTS.md#read-only-verification--verify).
+With `-verify`, each data-store service the scan named (Redis, MongoDB, memcached — a version need not be known first) gets one more read from the fixed list of checks: `INFO server` to Redis, an `isMaster` hello to MongoDB, `version` to memcached, each sent with no credential, exactly as a client with no credentials reads what the service already gives anyone. Each answer is labelled `proved` (it answered with no credential), `version-only` (it asked for authentication, so only the identification stands) or `conditional` (a precondition the read did not show, which the result names), printed after the port rows with the exact request sent and an excerpt of the answer, counted in the summary as `verify results`, and stored as one `verify` observation per result. With `-advisories`, advisory leads are labelled the same way from their confirmation reads. Every read goes through the scope, the kill file, `-max-requests` and the pace, and is a ledger line of the collector `azhaq-verify`: the `tcp` line of its connection and a `probe` line of the read. Never a payload, a write, a credential or a request that tries to trigger a flaw. The checks, the labels and the boundary are in [Read-only verification](../CONCEPTS.md#read-only-verification--verify).
 
 ```
 azhaq ports -host 192.0.2.10 -p top-1000 -verify -json
@@ -327,7 +329,7 @@ azhaq ports -host 192.0.2.10 -p top-1000 -verify -json
 | --- | --- | --- | --- |
 | `-host` | string, repeatable |  | hosts, addresses, CIDR ranges, AS numbers or host:port, comma-separated and repeatable |
 | `-l` | string |  | file of targets (- for stdin) |
-| `-p` | string | `top-100` | ports: top-100, top-1000, full, - (all), none, or a list of ports, ranges and these names, such as 22,80,8000-8100 or top-100,8888; u:53 is a UDP port |
+| `-p` | string | `default` | ports: default (the top 100 and the usual ports of the services azhaq names and checks), top-100, top-1000, full, - (all), none, or a list of ports, ranges and these names, such as 22,80,8000-8100 or top-100,8888; u:53 is a UDP port |
 | `-tp` | string |  | the most common TCP ports: 100, 1000 or full (added to -p) |
 | `-ep` | string |  | ports not to scan: a list or a file |
 | `-no-stdin` | bool |  | do not read targets from stdin when none is given |

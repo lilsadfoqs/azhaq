@@ -51,7 +51,7 @@ The text lists the counts by `class`, `kind`, `method`, `host` and `rule`, with 
 
 ### -csv
 
-One row per line, with the columns `seq`, `time`, `class`, `kind`, `method`, `target`, `host`, `rule`, `collector` and `hash`.
+One row per line, with the columns `seq`, `time`, `class`, `kind`, `method`, `target`, `host`, `rule`, `collector`, `hash` and `proto`.
 
 ## Summary and exit codes
 

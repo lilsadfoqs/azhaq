@@ -30,7 +30,7 @@ const (
 
 // Ports parses a comma-separated list whose parts are each a name
 // (top-100, top-1000, full), a port or a range: "top-100,8888-8890". "none"
-// alone is no ports; an empty spec is top-100.
+// alone is no ports; an empty spec is the default set (DefaultPorts).
 // Compact writes ports as Ports reads them, runs as ranges: 1-1000,8080.
 func Compact(ports []int) string {
 	ps := slices.Clone(ports)
@@ -56,8 +56,10 @@ func Compact(ports []int) string {
 }
 
 func Ports(spec string) ([]int, error) {
-	return parseList(spec, top100, func(w string) (string, bool) {
+	return parseList(spec, DefaultName, func(w string) (string, bool) {
 		switch w {
+		case DefaultName:
+			return Compact(DefaultPorts()), true
 		case "top-100", "top100":
 			return top100, true
 		case "top-1000", "top1000":
@@ -66,7 +68,7 @@ func Ports(spec string) ([]int, error) {
 			return "1-65535", true
 		}
 		return "", false
-	}, "TCP takes top-100, top-1000 or full", map[string]string{"top": "the UDP list", "top-udp": "the UDP list"})
+	}, "TCP takes default, top-100, top-1000 or full", map[string]string{"top": "the UDP list", "top-udp": "the UDP list"})
 }
 
 // parseList reads a port spec for Ports and UDPPorts: def stands for an
@@ -648,6 +650,7 @@ func (s *Scanner) probeConn(ctx context.Context, host, ip string, port int, conn
 	if s.Detect != DetectNone && s.Banner > 0 {
 		if len(s.Payload) > 0 {
 			_ = conn.SetWriteDeadline(time.Now().Add(s.Timeout))
+			label(conn, "payload")
 			_, _ = conn.Write(s.Payload)
 		}
 		_ = conn.SetReadDeadline(time.Now().Add(s.Banner))
@@ -670,6 +673,7 @@ func (s *Scanner) probeConn(ctx context.Context, host, ip string, port int, conn
 				s.settle220(conn, &o)
 			case "ftp":
 				// Already known to be FTP: SYST alone, no EHLO guess.
+				label(conn, "ftp")
 				ftpSYSTProduct(s.talk(conn, []byte("SYST\r\n"), nil, s.Banner), &o)
 			}
 		}

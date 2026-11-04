@@ -210,7 +210,7 @@ func readLedger(path string) []ledger.Entry {
 	var out []ledger.Entry
 	// The claims compare what went to the origin: DNS and source lines are not its.
 	if err := ledger.Read(path, func(e ledger.Entry) error {
-		if e.IsTarget() {
+		if e.Counted() {
 			out = append(out, e)
 		}
 		return nil

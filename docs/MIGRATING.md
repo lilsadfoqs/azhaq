@@ -508,7 +508,7 @@ Behaviour, fields and edge cases: [`azhaq ports`](commands/ports.md).
 | --- | --- | --- |
 | `-host a,b`, `-l FILE` | `-host a,b`, `-l FILE` | Names, addresses, `host:port`, URLs, CIDR ranges and AS numbers such as `AS13335`. Also as arguments or on stdin. |
 | `-p 80,443,8000-9000`, `-p -` | the same | `-p -` or `-p full` is every port. |
-| `-tp 100`, `-tp 1000`, `-tp full` | the same | Also `-p top-100`. The default is the top 100. |
+| `-tp 100`, `-tp 1000`, `-tp full` | the same | Also `-p top-100`, which is naabu's default. The default here is the top 100 and the usual ports of the services azhaq checks: 163 ports. |
 | `-pf FILE`, `-ep LIST` | `-pf FILE`, `-ep LIST` | Ports to add, and ports to take out. |
 | `-eh`, `-ef` | `-eh`, `-ef` | Hosts not to scan. `-deny` does the same. |
 | `-rate 1000` | `-rate 1000` | Connects per second. The default is 1500, as naabu's connect scan. `127.0.0.1` is not paced unless a rate is given. |

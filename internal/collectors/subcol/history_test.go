@@ -45,20 +45,45 @@ func resolving(live ...string) func(context.Context, string, []string) ([]string
 func TestHistoryDir(t *testing.T) {
 	t.Setenv("AZHAQ_DATA_DIR", "/data/a")
 	t.Setenv("XDG_DATA_HOME", "/xdg")
-	if got := DataDir(); got != "/data/a" {
+	t.Setenv("HOME", "/home/u")
+	if got := (Options{}).dataDir(); got != "/data/a" {
 		t.Errorf("AZHAQ_DATA_DIR: %q", got)
 	}
+	if got := (Options{DataDir: "/given"}).dataDir(); got != "/given" {
+		t.Errorf("DataDir: %q", got)
+	}
+	// Nothing named: no history, never a place in the home or XDG directories.
 	t.Setenv("AZHAQ_DATA_DIR", "")
-	if got := DataDir(); got != "/xdg/azhaq" {
-		t.Errorf("XDG_DATA_HOME: %q", got)
+	if got := (Options{}).dataDir(); got != "" {
+		t.Errorf("nothing named gave %q", got)
 	}
-	t.Setenv("XDG_DATA_HOME", "")
-	t.Setenv("HOME", "/home/u")
-	if got := DataDir(); got != "/home/u/.local/share/azhaq" {
-		t.Errorf("home: %q", got)
+	if historyPath("", "example.org") != "" {
+		t.Error("an empty directory got a path")
 	}
-	if historyPath("../x") != "" || historyPath("a/b") != "" {
+	if historyPath("/d", "../x") != "" || historyPath("/d", "a/b") != "" {
 		t.Error("a domain that is not a name got a path")
+	}
+	if got := historyPath("/d", "example.org"); got != "/d/names/example.org.json" {
+		t.Errorf("path %q", got)
+	}
+}
+
+// A run with a DataDir writes there and nowhere else, whatever the
+// environment says; with none named it writes nothing.
+func TestHistoryWritesOnlyWhereItWasNamed(t *testing.T) {
+	env, home, named := t.TempDir(), t.TempDir(), t.TempDir()
+	t.Setenv("AZHAQ_DATA_DIR", env)
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_DATA_HOME", home)
+	c := collector(Options{DataDir: named, Verify: resolving("www.example.org")}, fake("a", noKey, true, []string{"www.example.org"}, nil), historySource())
+	run(t, c, context.Background())
+	if _, err := os.Stat(filepath.Join(named, "names", "example.org.json")); err != nil {
+		t.Errorf("not written where named: %v", err)
+	}
+	for _, d := range []string{env, home} {
+		if ents, _ := os.ReadDir(d); len(ents) != 0 {
+			t.Errorf("%s was written to: %v", d, ents)
+		}
 	}
 }
 
@@ -162,7 +187,7 @@ func TestHistoryOnlyHoldsVerifiedNames(t *testing.T) {
 	// A padding name that did not resolve is dropped, so it is not stored.
 	c := collector(Options{Verify: resolving("real.example.org")}, pad, fake("a", noKey, true, []string{"www.example.org"}, nil))
 	run(t, c, context.Background())
-	m, err := loadHistory(historyPath("example.org"))
+	m, err := loadHistory(historyPath(os.Getenv("AZHAQ_DATA_DIR"), "example.org"))
 	if err != nil || len(m) != 2 || m["junk.example.org"].Last != "" {
 		t.Errorf("stored %v (%v)", m, err)
 	}
@@ -170,7 +195,7 @@ func TestHistoryOnlyHoldsVerifiedNames(t *testing.T) {
 	t.Setenv("AZHAQ_DATA_DIR", t.TempDir())
 	c = collector(Options{}, pad, fake("a", noKey, true, []string{"www.example.org"}, nil))
 	run(t, c, context.Background())
-	m, _ = loadHistory(historyPath("example.org"))
+	m, _ = loadHistory(historyPath(os.Getenv("AZHAQ_DATA_DIR"), "example.org"))
 	if len(m) != 1 || m["www.example.org"].Last == "" {
 		t.Errorf("unchecked padding names stored: %v", m)
 	}
@@ -215,11 +240,11 @@ func TestHistoryCapDropsOldest(t *testing.T) {
 		at := time.Date(2026, 10, 1+i, 0, 0, 0, 0, time.UTC)
 		now = func() time.Time { return at }
 		name := n + ".example.org"
-		if _, err := remember("example.org", []string{name}, map[string][]string{name: {"x"}}, nil); err != nil {
+		if _, err := remember(os.Getenv("AZHAQ_DATA_DIR"), "example.org", []string{name}, map[string][]string{name: {"x"}}, nil); err != nil {
 			t.Fatal(err)
 		}
 	}
-	m, err := loadHistory(historyPath("example.org"))
+	m, err := loadHistory(historyPath(os.Getenv("AZHAQ_DATA_DIR"), "example.org"))
 	if err != nil || len(m) != 3 {
 		t.Fatalf("%v %v", m, err)
 	}
@@ -230,7 +255,7 @@ func TestHistoryCapDropsOldest(t *testing.T) {
 
 func TestCorruptHistoryIsSetAside(t *testing.T) {
 	t.Setenv("AZHAQ_DATA_DIR", t.TempDir())
-	path := historyPath("example.org")
+	path := historyPath(os.Getenv("AZHAQ_DATA_DIR"), "example.org")
 	os.MkdirAll(filepath.Dir(path), 0o755)
 	os.WriteFile(path, []byte("{not json"), 0o644)
 	c := collector(Options{}, fake("a", noKey, true, []string{"www.example.org"}, nil), historySource())
