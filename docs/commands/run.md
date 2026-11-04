@@ -165,11 +165,11 @@ found in
 - `hint` means found, in a script, an API description or an archive, but not requested. It also covers these cases:
   - An archive's static assets, such as images and fonts, are never requested, whatever hides their extension.
   - A route that scripts call only with POST or PUT.
-  - A route that only a page in Chrome writes to. A GET that answers 404, 405 or the catch-all page says nothing about such a route.
+  - A route that only a page in Chrome writes to. A GET that answers 404 or the catch-all page says nothing about such a route, and it stays `hint`; a GET that answers 405 makes it `visited`, with the 405.
   - A route named only in scripts, with no GET call among them, while a GET answers 404. Its `proof` says `GET answers 404; found only in scripts, method unknown`.
 - `skipped` means found by a link, a script's call, an API description or an archive, and not requested because a `-deny-path` rule of yours keeps its path out, or because its origin answers every path alike: see [Catch-all origins](#catch-all-origins).
   - The row's `skipped` field and the summary say which rule: `-deny-path ^/admin/`.
-  - Nothing else makes a URL `skipped`. A wordlist sweep (`dirs`, `-dirs`, `fuzz`) asks every word, `/logout` included, as ffuf does, and so does the map.
+  - Nothing else makes a row `skipped`. A URL on a host `-allow` lists with another port only has no row: the summary's `skipped` names it, with the reason `outside the scope: -allow lists this host with another port only`. A wordlist sweep (`dirs`, `-dirs`, `fuzz`) asks every word, `/logout` included, as ffuf does, and so does the map.
 - `capped` means left when a limit was hit, or when its origin stopped answering.
   - An origin has stopped answering after 5 connects or timeouts in a row with no answer between them.
   - The rest of that origin's work is left for `azhaq resume`. It is listed under `skipped` as `ORIGIN stopped answering after 5 timeouts`, and `stopped` names the origin.
@@ -183,7 +183,7 @@ An origin that answers every path with the same page (a single-page app's shell)
 - The links of a page, the root, the scripts the run loaded to read and everything you give are always asked. Paths lent to workers (`-serve`) are asked too: the rule needs the answers in one process.
 - A resumed run goes on from what the stopped run had learned, kept with its answers: it holds what the first held, and does not ask again the paths the first had settled.
 - Their rows stay in the map with coverage `skipped`. The summary names how many and the origin (`http://app: 600 URLs that scripts name were not asked, because it had answered paths with the one page every unknown path gets`), the `skipped` list has one line for the origin, and `counts` has `skipped` for them (and `catchall` for the answers), each row counted once.
-- `-catchall-after N` sets the number (0 asks every path). `crawl` asks every path, as katana does, and lists catch-all answers.
+- `-catchall-after N` sets the number (0 asks every path). `crawl` asks every path, as katana does, and keeps the catch-all answers as rows of coverage `catchall`, which its default list folds into a line.
 - A held path that is a real page of its own in a directory the catch-all covers would have answered a different page: this is an inference from the controls, not a request. Ask it with `-catchall-after 0`, or by hand.
 - The text view counts the catch-all rows in one line, with the control ([Folded rows](#folded-rows)); `-all-rows` lists them. `-no-catchall` leaves the rows that answered with the catch-all page, and those not asked for that reason, out of the rows printed and out of `results`. `stored` and `counts` still hold them, and `left_out` says how many, so what `run` prints is what `results` counts: `results + folded + left_out = stored`.
 
@@ -211,7 +211,7 @@ A client route is a view that a single-page app's router draws.
   - A view the shell answers stays `client-route`, with coverage `catchall`.
   - A template such as `/reports/{id}` is not requested.
 - A string in a script that names a view is that view's, listed in its `found_in`, not a page of its own. A router link and `router.navigate(['/order-completion', id])` are examples.
-- With `-browser`, Chrome does not open the views.
+- With `-browser`, Chrome opens a view in the path like any page the run found, once; it does not open a view after the hash.
 
 `guard` is what the router checks before it draws the view. A parent's guard holds for its children.
 
