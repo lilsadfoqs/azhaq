@@ -3,6 +3,8 @@ package main
 import (
 	"encoding/json"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,20 +15,11 @@ import (
 // and how many it found a port open on, apart from counts.addresses (the rows
 // the map holds), and the first is the ledger's: every address connected to.
 func TestRunPortsNamesAddressesScannedAndOpen(t *testing.T) {
-	l, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { l.Close() })
-	go func() {
-		for {
-			c, err := l.Accept()
-			if err != nil {
-				return
-			}
-			c.Close()
-		}
-	}()
+	// A web server, so the map that follows the open port gets an answer:
+	// a listener that hangs up at once makes the web probe fail now and then.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("ok")) }))
+	t.Cleanup(srv.Close)
+	l := srv.Listener
 	_, port, _ := net.SplitHostPort(l.Addr().String())
 	t.Chdir(t.TempDir())
 	_, rep, code := runContract(t, "run", "-cidr", "127.0.0.0/29", "-ports", port, "-port-detect", "none", "-allow", "127.0.0.0/29", "-sources", "none", "-db", "r.db")
