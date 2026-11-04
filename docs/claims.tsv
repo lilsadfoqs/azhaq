@@ -274,5 +274,6 @@ docs-output.exit-3-script-alarm	docs/OUTPUT.md	Without it the exit code is the r
 docs-output.internal-error	docs/OUTPUT.md	the rows already printed are as they were, and the numbers beside them are not to be relied on	test:cmd/azhaq:TestASummaryThatDisagreesWithItsRowsIsAnInternalError,TestASummaryThatAgreesWithItsRowsIsComplete
 docs-output.exit-1-before-rule	docs/OUTPUT.md	a summary that disagrees with its rows exits 1, whatever the outcome of the run was, and is never a run that did its job.	test:cmd/azhaq:TestAnInternalErrorComesBeforeTheExitRule
 shots.rows-add-up	docs/commands/shots.md	Each ends as one row, and the rows add up	test:cmd/azhaq:TestShotMissesGiveEveryTargetItsRow,TestShotsBatchGivesEveryTargetARow
+shots.asked-as-given	docs/commands/shots.md	the name in it is not also asked on 443 and 80	test:cmd/azhaq:TestShotsAsksOnlyThePageGiven,TestShotsBareNameIsStillAskedOnTheWebPorts
 shots.redirect-one-row	docs/commands/shots.md	the destination is not a second target, row or file	test:cmd/azhaq:TestShotsRedirectIsOneRowWithTheDestinationInFinalURL;test:internal/collectors/shotcol:TestSkipLeavesWhereAPageRedirectedTo
 shots.failed-row	docs/commands/shots.md	A target with no picture has a row of its own	test:cmd/azhaq:TestShotMissesGiveEveryTargetItsRow,TestShotsBatchGivesEveryTargetARow,TestShotsEveryTargetFailedExits3WithRows

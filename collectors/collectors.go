@@ -62,6 +62,7 @@ type Options struct {
 	SubmitForms     bool             // azhaq-crawl submits POST forms (changes data)
 	KnownFiles      string           // azhaq-paths: ask only robots.txt and sitemaps (all, robotstxt, sitemapxml)
 	HTTP            *httpcol.Spec    // azhaq probe's httpx flags; nil outside probe
+	AskedOnly       bool             // azhaq-http asks the targets as given: not the name of a URL on 443 and 80
 	GraphQLWordlist []string         // -graphql-wordlist: extra probe words for a schema recovered without introspection
 }
 
@@ -78,6 +79,7 @@ func Register(cat *catalog.Catalog, o Options) {
 	hc.Probe = o.Probe
 	hc.NoFavicon = o.NoFavicon
 	hc.Spec = o.HTTP
+	hc.AskedOnly = o.AskedOnly
 	cat.MustRegister(hc)
 	cc := crawlcol.New(client)
 	cc.FillForms, cc.SubmitForms, cc.Climb = o.FillForms, o.SubmitForms, o.PathClimb

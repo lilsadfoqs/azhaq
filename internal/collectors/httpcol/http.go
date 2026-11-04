@@ -58,6 +58,9 @@ type Collector struct {
 	Probe bool
 	// Spec is azhaq probe's own: httpx's flags. Nil answers as a run does.
 	Spec *Spec
+	// AskedOnly: the targets are asked as given, so the name met in a URL or a
+	// host:port is not also asked on the web ports nobody named (shots).
+	AskedOnly bool
 
 	emitted sync.Map // URLs already reported in this run
 	ownURL  sync.Map // URLs reported by their own URL task
@@ -98,6 +101,9 @@ func (c *Collector) Inputs() []types.SeedType {
 // Skip: an address is probed when it came from a network (-asn, -cidr);
 // the address behind a URL is probed through the URL.
 func (c *Collector) Skip(seed types.Seed) bool {
+	if c.AskedOnly && seed.Type == types.TypeHostname && seed.Keys[types.FromURLKey] != "" {
+		return true
+	}
 	if c.Spec != nil && seed.Type == types.TypeHostname && !slices.Contains(c.Spec.Bare, strings.ToLower(seed.Keys["fqdn"])) {
 		return true // probe: a name met in a URL given is not asked on ports nobody named
 	}
