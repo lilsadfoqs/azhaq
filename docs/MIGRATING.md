@@ -75,7 +75,7 @@ Behaviour, fields and edge cases: [`azhaq subs`](commands/subs.md).
 - A run in which every source failed is `degraded` and exits 3, not 0 with an empty list. One in which some answered exits 0, and the summary names the sources that failed (`-strict-exit` makes it 3). The summary names each source that failed.
 - azhaq keeps the names it found for a domain and checks them again in the next run. `-no-history` turns this off. See [Name history](commands/subs.md#name-history).
 - With `-live`, a name that no longer resolves drops out.
-- Without `-live`, a stored name that no source gave this run is listed with `"unverified": true`. subdomain.center's guesses, which subfinder prints, are held back and counted (`guesses held back`): `-guesses` prints them, flagged the same way, and `-live` checks them.
+- Without `-live`, a stored name that no source gave this run is listed with `"unverified": true`. subdomain.center's guesses, which subfinder prints, are held back and counted (`guesses held back`): `-guesses` prints them, flagged the same way, and `-live` checks them (`-live -guesses=false` leaves them unlooked).
 
 ### Examples
 
