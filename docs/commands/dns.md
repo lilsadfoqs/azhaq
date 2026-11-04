@@ -111,14 +111,14 @@ The summary also lists failures per kind of error, and takeover findings: a CNAM
 - With `-rcode`, only the names whose answer has that code get a row, with its `status_code`. That is how to list the names that do not exist. A name whose CNAME points at what is gone is not one of them: its own code is `NOERROR`, and the target's `NXDOMAIN` is its `cname_status`.
 - With `-all`, `-any` or `-axfr`, `-json` gives a row to every name a resolver answered, including one with no record at all.
 - With `-response-type-filter` and no type flag, `-json` gives a row to every answered name that has none of the records filtered, as dnsx does: `-rtf a` keeps the names that have only AAAA, TXT, MX or SRV, that have no record (NODATA), that do not exist, and the CNAME-only ones, and leaves out the names with an A. In text, a kept name prints the records it has, so one with none prints nothing. With a type flag too (`-a -txt -rtf a`), a name needs a record of a type a flag asked.
-- A name whose CNAME points at what is gone also gets its `-json` row, with `takeover`, whatever the types asked: it is a finding, and it is not counted as `did not resolve`.
+- A name whose CNAME points at what is gone also gets its `-json` row, with `takeover`, whichever types are asked, unless `-no-takeover` is given (see [A CNAME's target](#a-cnames-target)): it is a finding, and it is not counted as `did not resolve`.
 
 ### A CNAME's target
 - A name with a CNAME gets its target checked, whichever types were asked. A type whose answer follows the chain (`-a`, `-aaaa`, `-txt`, `-mx`, …) already says where the chain ends. `-cname` alone does not: a question for CNAME gets the record and stops, so the name is asked for A once more, and only the end of the chain is kept from that answer (`cname_status`, and `takeover` when the target is gone). That is one more query for each name that has a CNAME, in `dns_queries` and the ledger like the others.
 - `-no-takeover` leaves that question out. Then `-cname` alone gives no `cname_status` and no `takeover`.
 
 ### Types
-- `-all` asks A, AAAA, CNAME, SOA, TXT, SRV, MX, NS and CAA, not ANY and not AXFR. AXFR is asked with `-axfr` only, because it connects to the name servers.
+- `-all` asks A, AAAA, CNAME, MX, NS, SOA, TXT, SRV and CAA of a name: not PTR (`-ptr`) and not ANY (`-any`). AXFR is asked with `-axfr` only, because it connects to the name servers.
 - An address gets PTR only.
 
 ### Zone transfer
@@ -144,7 +144,7 @@ The summary also lists failures per kind of error, and takeover findings: a CNAM
 ### Time and pace
 - `-timeout` is how long one DNS answer is waited for, 3 s by default, as in dnsx. In `run` and the other commands `-timeout` is the time of the whole run.
 - `-maxtime SECONDS` bounds the run. It exits 4, and the summary says which `-start N` to go on from.
-- `-retry N` is the attempts per question on other resolvers. The default is 3, where dnsx's is 2, and 2 for the names `-w` generates (made-up names mostly do not exist, and an unanswered one costs every attempt as a paced query); `-retry N` given sets it for every name. A name no resolver answers is counted as `no answer`, listed under `failed`, and the exit code is 3. A name no resolver answered is asked again in a second pass at a quarter of the concurrency, when others of the batch were answered; the second pass asks 16 of them first, spread over the list and once each, and ends there when none is answered, because the rest would fail alike.
+- `-retry N` is the attempts per question on other resolvers. The default is 3, where dnsx's is 2, and 2 for the names `-w` generates (made-up names mostly do not exist, and an unanswered one costs every attempt as a paced query); `-retry N` given sets it for every name. A name no resolver answers is counted as `no answer`, listed under `failed`, and the exit code is 3. A name no resolver answered is asked again in a second pass at a quarter of the concurrency. When none of a batch of 16 names or more was answered, the resolvers are down, not busy, and there is no second pass. The second pass asks 16 of them first, spread over the list and once each, and ends there when none is answered, because the rest would fail alike.
 - `-rl N` is names a second over all resolvers, as in dnsx. `-t N` is names in flight, 100 by default.
 - `-dns-rate N` is queries a second to each resolver. A second's worth may go out at once after a pause, so the total is N times the number of resolvers: six by default. A name asked for several types sends one query for each.
 - With one `-r` resolver, or with `-rl`, the total is the rate you gave. For a polite run give `-rl 5` and `-t 5`.

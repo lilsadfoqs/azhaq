@@ -38,7 +38,7 @@ azhaq report -findings -db app.db -format jsonl
 3. Orders the reports by confidence: `proved`, `likely`, `guess`, then rows that carry none.
 4. Writes one Markdown report per row. Every piece of a report comes from the evidence; what the evidence does not hold is named in the report.
 
-With `-url URL`, `report` writes that row's report to standard output (a report for each owner when several owners' requests share the URL and method: see below). A write or create row also needs `-method M`. A row whose verdict is not one of the six is refused, with exit 1, and a `-url` that matches no row is exit 1 too.
+With `-url URL`, `report` writes that row's report to standard output (a report for each owner when several owners' requests share the URL and method: see below). A write or create row also needs `-method M`. A row whose verdict is not one of the seven is refused, with exit 1, and a `-url` that matches no row is exit 1 too.
 
 When no row qualifies, `report` prints a note on stderr, writes nothing and exits 0.
 

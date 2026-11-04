@@ -33,7 +33,7 @@ azhaq urls -d example.com -json -keep-junk -live -live-max 200 -live-rate 5
 
 ## Output
 
-By default URLs are printed as each archive page arrives, unsorted, when stdout is not a terminal. On a terminal, or with `-sort`, they are sorted and printed at the end. `-raw` prints every row the archives gave, as they gave it. `-o` appends to the file. With `-json` you get one object per URL. With `-db`, the workspace keeps every URL in `DB.urls.jsonl` beside it (one JSON object a line: `run`, `url`, `source`), written as the pages arrive, so a stopped run keeps what it read and `azhaq resume` adds to it. Its graph holds one example for each URL shape, 200 a domain at most: `export -format urls` writes all of them, and `query` lists the graph's rows and says how many archived URLs they stand for. The list is not kept for a run with no `-db`.
+By default URLs are printed as each archive page arrives, unsorted, when stdout is not a terminal. On a terminal, or with `-sort`, they are sorted and printed at the end. `-raw` prints every row of the domain the archives gave, as they gave it: no normalising, no junk filter, no deduplication (`-blacklist` and `-fp` still apply). `-o` appends to the file. With `-json` you get one object per URL. With `-db`, the workspace keeps every URL in `DB.urls.jsonl` beside it (one JSON object a line: `run`, `url`, `source`), written as the pages arrive, so a stopped run keeps what it read and `azhaq resume` adds to it. Its graph holds one example for each URL shape, 200 a domain at most: `export -format urls` writes all of them, and `query` lists the graph's rows and says how many archived URLs they stand for. The list is not kept for a run with no `-db`.
 
 | Field | Meaning |
 | --- | --- |
@@ -93,8 +93,8 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 - `"script placeholder (NaN, undefined, null)"`.
 - `"dot segment"`.
 - `"malformed link (wildcard, quote, bracket, ellipsis)"`: the ellipsis is `…` or a `...` that ends the path or is a segment of its own.
-- `"fuzzing placeholder or request-line fragment"`: a path segment, or a query name or value, that is a fuzzer's keyword in capitals (`FUZZ`, `FUZ2Z`, `FUZZFUZ2Z`, with or without an extension; with a fuzzer log's number and result, `FUZZ000003:C=200`; with a capitalised word, `FUZZMultiple`; after stray symbols such as a mis-decoded arrow, `%CB%93%E2%86%92FUZZ`) or a `{payload}` or `{FUZZ}` slot, or a path or query value that ends in `HTTP/1.0` or `HTTP/1.1` (`/HTTP/1.1`, `/index.php%20HTTP/1.1`, `?artist=1HTTP/1.1`). `/fuzz`, `?q=fuzz`, `/FUZZY`, `/FUZZ-list.txt`, `?proto=HTTP/1.1`, `/users/{id}` and `/docs/http/1.1` stay.
-- `"link cut at the end of its sentence"`: a path or query that ends in `.`, `,`, `;`, `'` or an unmatched `)` or `]`.
+- `"fuzzing placeholder or request-line fragment"`: a path segment, or a query name or value, that is a fuzzer's keyword in capitals (`FUZZ`, `FUZ2Z`, and in a query `FUZZFUZ2Z`, with or without an extension; with a fuzzer log's number and result, `FUZZ000003:C=200`; with a capitalised word, `FUZZMultiple`; after stray symbols such as a mis-decoded arrow, `%CB%93%E2%86%92FUZZ`) or a `{payload}` or `{FUZZ}` slot, or a path that ends in a request line's `HTTP/1.0` or `HTTP/1.1` (`/HTTP/1.1`, `/index.php%20HTTP/1.1`), or a query value that ends in one after other text (`?artist=1HTTP/1.1`). `/fuzz`, `?q=fuzz`, `/FUZZY`, `/FUZZ-list.txt`, `?proto=HTTP/1.1`, `/users/{id}` and `/docs/http/1.1` stay.
+- `"link cut at the end of its sentence"`: a path that ends in `.`, `,`, `;`, `'` or an unmatched `)` or `]`, or a query that ends in `.`.
 
 Every source's URLs go through these rules, OTX's too.
 

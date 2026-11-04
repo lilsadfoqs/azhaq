@@ -44,7 +44,7 @@ Plain output is the URL and the parameter names, one line per page. With `-json`
 | `why` | An object: each name found, with what changed in the answer. The values are below. |
 | `values` | The value a name needed, such as `{"debug":"true"}`, when it answered only to that one. |
 
-`params -json` prints only these fields. The workspace row of a page also keeps `requests`, and `writes` (the body requests sent) for a body method: `azhaq show` prints them. A note in the summary says how many body requests were sent.
+`params -json` prints only these fields. The workspace row of a page also keeps `requests`, and `writes` (the body requests sent) for a body method: `azhaq show -json` prints them. A note in the summary says how many body requests were sent.
 
 What `why` says for a name:
 
@@ -70,8 +70,8 @@ Two files can be written as well:
 
 The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.md#the-summary) and [exit codes](../OUTPUT.md#exit-codes). These cases are specific to `params`.
 
-- A page that rate-limits (429, 418, 503) or leaves requests unanswered fails. The failure is listed as `failed` and retryable, with a note, and counted in `failures`. The run exits 3 when every page failed, and 0 when others gave their names (`-strict-exit` makes it 3).
-- A page not searched has a note that says why: it changes by itself, is not text, is past `-params-per-host`, or a `-deny-path` rule matches its address. In `run -params`, a page that answered the run's own request as the origin answers a path that cannot exist, or with 401, 403 or 405, is not searched either (`-params-all` searches it); `azhaq params` asks the pages you give it all.
+- A page that rate-limits (429, 418, 503) fails. The failure is listed as `failed` and retryable, with a note, and counted in `failures`. A page that leaves requests unanswered fails too: listed as `failed`, not as retryable, with a note, and counted in `failures`. The run exits 3 when every page failed, and 0 when others gave their names (`-strict-exit` makes it 3).
+- A page not searched has a note that says why: it changes by itself, is not text, or is past `-params-per-host`. A page a `-deny-path` rule matches is listed under `skipped` with the rule, and nothing is sent to it. In `run -params`, a page that answered the run's own request as the origin answers a path that cannot exist, or with 401, 403 or 405, is not searched either (`-params-all` searches it); `azhaq params` asks the pages you give it all.
 - A page that answers names it does not read is listed in the summary's `notes`: see Details.
 - A page the request budget (`-max-requests`) ends is not lost: its row has the names established so far, the summary's `notes` say how many of the names were judged (`the request budget ended the search with 4 of 8 names judged (1 found so far)`), and the exit is 4. `azhaq resume` searches the page again, from the start. Each pass costs a fixed part (4 requests to measure the page, 4 for the switch names such as `debug`) besides the names: a page that answers 400 until a required field is given is searched up to 3 more passes with the fields found, so a short list can need over 30 requests.
 
@@ -90,7 +90,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 - The built-in list is 6,500 names, `-w large`. arjun's `large` is longer. Use `-w FILE` for your own list.
 - Names are sent in the order given, without duplicates. Every name is sent, with a session or without one.
 - A group of names the server refuses with another status than the baseline's, such as 414 for a long query, is cut down until the server answers as before. That size is then the group.
-- A page that `-deny-path REGEX` matches is not searched, and a note says so.
+- A page that `-deny-path REGEX` matches is not searched, and the summary lists it under `skipped` with the rule.
 - A page that prints the query string back or counts the names is told apart by random names of the same lengths. Reflection is told apart by a random token.
 
 ## Flags

@@ -685,11 +685,20 @@ func (b *Browser) capture(tab context.Context) ([]byte, error) {
 		return nil, err
 	}
 	if !b.FullPage {
-		if w, h, ok := imageSize(r.Data); ok && (w != b.Width || h != b.Height) {
-			return nil, fmt.Errorf("the picture came out %dx%d, not the %dx%d -shot-size asked for", w, h, b.Width, b.Height)
+		if err := sizeError(r.Data, b.Width, b.Height); err != nil {
+			return nil, err
 		}
 	}
 	return r.Data, nil
+}
+
+// sizeError is the failure of a picture that is not the size -shot-size
+// asked for: a smaller one is not passed off as the picture.
+func sizeError(data []byte, width, height int) error {
+	if w, h, ok := imageSize(data); ok && (w != width || h != height) {
+		return fmt.Errorf("the picture came out %dx%d, not the %dx%d -shot-size asked for", w, h, width, height)
+	}
+	return nil
 }
 
 // imageSize is a PNG or JPEG's pixel size, without decoding its pixels.

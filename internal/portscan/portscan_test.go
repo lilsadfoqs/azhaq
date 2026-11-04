@@ -248,13 +248,8 @@ func TestSilentPortsAskedTwice(t *testing.T) {
 	closed.Close()
 	var taken atomic.Int32
 	s := &Scanner{Rate: 1000, Timeout: 200 * time.Millisecond, Banner: -1, Take: func() error { taken.Add(1); return nil }}
-	// TEST-NET-1 has no host: a timeout or an unreachable, never a refusal.
-	r, err := s.ScanEach(context.Background(), "", "192.0.2.1", []int{81})
-	if err != nil || len(r.Open) != 0 || !reflect.DeepEqual(r.Silent, []int{81}) || taken.Load() != 2 {
-		t.Fatalf("silent %+v err %v, %d connects", r, err, taken.Load())
-	}
-	taken.Store(0)
-	r, err = s.ScanEach(context.Background(), "", "127.0.0.1", []int{closedPort})
+	// The silent port is TestSilentPortAskedTwiceOnALoopbackQueue's (Linux).
+	r, err := s.ScanEach(context.Background(), "", "127.0.0.1", []int{closedPort})
 	if err != nil || len(r.Open)+len(r.Silent) != 0 || taken.Load() != 1 {
 		t.Fatalf("closed %+v err %v, %d connects", r, err, taken.Load())
 	}

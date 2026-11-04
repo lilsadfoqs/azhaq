@@ -28,7 +28,12 @@ type Store struct {
 	tx      *batchTx   // the open Batch's transaction, under mu
 
 	recorded map[string]bool // run and entity pairs already in run_entities, under mu
+
+	scratch bool // opened by OpenScratch
 }
+
+// Scratch says the workspace was opened by OpenScratch.
+func (s *Store) Scratch() bool { return s.scratch }
 
 // queryer is what a statement runs on: the pool, or a Batch's transaction.
 type queryer interface {
@@ -138,6 +143,15 @@ func (s *Store) Batch(fn func()) {
 }
 
 func OpenExisting(path string) (*Store, error) {
+	return openExisting(path, false)
+}
+
+// OpenExistingScratch is OpenExisting for a scratch workspace (see OpenScratch).
+func OpenExistingScratch(path string) (*Store, error) {
+	return openExisting(path, true)
+}
+
+func openExisting(path string, scratch bool) (*Store, error) {
 	st, err := os.Stat(path)
 	if err != nil {
 		return nil, fmt.Errorf("no such db %s", path)
@@ -145,26 +159,47 @@ func OpenExisting(path string) (*Store, error) {
 	if st.IsDir() {
 		return nil, fmt.Errorf("%s is a directory", path)
 	}
-	return Open(path)
+	return open(path, scratch)
 }
 
-func Open(path string) (*Store, error) {
-	db, err := sql.Open("sqlite", path+"?_pragma=busy_timeout(5000)&_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)")
+func Open(path string) (*Store, error) { return open(path, false) }
+
+// OpenScratch opens a workspace that is deleted when its command ends: it is
+// never resumed, so nothing is made durable (no fsync) and the pages a run
+// gives back are not tracked.
+func OpenScratch(path string) (*Store, error) { return open(path, true) }
+
+// schemaVersion is stamped in the file (user_version) once migrate has made
+// it whole, so a later open skips the statements: bump it with any change to
+// migrate.
+const schemaVersion = 1
+
+func open(path string, scratch bool) (*Store, error) {
+	durable := "NORMAL"
+	if scratch {
+		durable = "OFF"
+	}
+	db, err := sql.Open("sqlite", path+"?_pragma=busy_timeout(5000)&_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=synchronous("+durable+")")
 	if err != nil {
 		return nil, err
 	}
-	s := &Store{db: db}
+	s := &Store{db: db, scratch: scratch}
+	var version int
+	if db.QueryRow(`PRAGMA user_version`).Scan(&version) == nil && version == schemaVersion {
+		return s, nil
+	}
 	// A new database gives back the pages freed when a run's kept answers
 	// are dropped (DropResponses); the mode can only be set before the
 	// first table.
 	var tables int
-	if db.QueryRow(`SELECT COUNT(*) FROM sqlite_master`).Scan(&tables) == nil && tables == 0 {
+	if !scratch && db.QueryRow(`SELECT COUNT(*) FROM sqlite_master`).Scan(&tables) == nil && tables == 0 {
 		_, _ = db.Exec(`PRAGMA auto_vacuum = INCREMENTAL`)
 	}
 	if err := s.migrate(); err != nil {
 		_ = db.Close()
 		return nil, err
 	}
+	_, _ = db.Exec(fmt.Sprintf(`PRAGMA user_version = %d`, schemaVersion))
 	return s, nil
 }
 
