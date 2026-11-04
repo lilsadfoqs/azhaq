@@ -36,7 +36,7 @@ azhaq probe -u https://app.example.com -x GET,POST -body 'a=1'
 2. Asks each name at the ports `-p` names, and prints one line per web service as it answers.
 3. Reads status, title, technologies, CDN, certificate and hashes from the answers. The flags choose which.
 4. Keeps or drops rows with matchers (`-mc`, `-ms`, `-ml`, `-mr`) and filters (`-fc`, `-fs`, `-fl`, `-fe`).
-5. Gives every target a row, a failure or a skip included.
+5. Accounts for every target: it ends as a row, a failure (a row with `failed: true`) or a skip (named under `skipped` in the summary, with no row).
 6. Sends other methods or your own request only when you ask: `-x` adds methods, `-request` sends a request file. Both can change data on the target.
 
 ## Output
@@ -45,7 +45,7 @@ One web service per line, as it answers. `-json` prints httpx's fields, one obje
 
 A target with no answer is a row with `failed: true` (`-probe` prints `[FAILED]`). See [Targets with no answer](#targets-with-no-answer).
 
-Always present:
+Always present on an answered row (a failed row has `input`, `host`, `url`, `port`, `scheme`, `timestamp`, `failed` and `error`):
 
 | Field | Meaning |
 | --- | --- |
