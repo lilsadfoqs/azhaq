@@ -174,7 +174,9 @@ func TestFuzzStopFlagsSayWhatTheyDid(t *testing.T) {
 	}
 	// -sf alone does not look at 429; -sa does.
 	status.Store(429)
-	_, rep, err := fuzzRows(t, append(append([]string(nil), base...), "-sf")...)
+	// 200 matches with their evidence overfill the pipe the test reads
+	// stdout from, so -quiet keeps them off it; the summary counts them.
+	_, rep, err := fuzzRows(t, append(append([]string(nil), base...), "-sf", "-quiet")...)
 	if err != nil || rep.Stopped != "" || rep.Requests != 200 {
 		t.Errorf("-sf on 429: exit %d, stopped %q, %d requests", exitCode(err), rep.Stopped, rep.Requests)
 	}
@@ -875,5 +877,68 @@ func TestFuzzFlightFileOutsideTheScope(t *testing.T) {
 	_, _, err = fuzzRows(t, append(base, "-allow", "127.0.0.2")...)
 	if exitCode(err) != exitUsage {
 		t.Errorf("-allow 127.0.0.2 alone: exit %d, want a usage error: -u's host is outside it", exitCode(err))
+	}
+}
+
+// Without -ac the run asks for no name that cannot exist: it sends one request
+// for each word, and no match has a control. With -ac the guesses are sent
+// besides.
+func TestFuzzWithoutACAsksNoNameThatCannotExistAndNoMatchHasAControl(t *testing.T) {
+	t.Cleanup(egress.Reset)
+	var seen atomic.Int64
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen.Add(1)
+		if r.URL.Path == "/real" {
+			fmt.Fprint(w, "a real page of its own")
+			return
+		}
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprintf(w, "no such item: %s", strings.TrimPrefix(r.URL.Path, "/"))
+	}))
+	t.Cleanup(srv.Close)
+	words := wlist(t, "real", "foo", "bar")
+	_, rows := fuzzWords(t, "-u", srv.URL+"/FUZZ", "-w", words, "-mc", "all")
+	if got := seen.Load(); got != 3 {
+		t.Errorf("without -ac the server saw %d requests, want the 3 words", got)
+	}
+	for w, row := range rows {
+		if row["control"] != nil {
+			t.Errorf("%s has a control and no calibration was asked: %v", w, row["control"])
+		}
+	}
+	if len(rows) != 3 {
+		t.Errorf("%d matches, want 3", len(rows))
+	}
+	seen.Store(0)
+	fuzzWords(t, "-u", srv.URL+"/FUZZ", "-w", words, "-mc", "all", "-ac")
+	if got := seen.Load(); got <= 3 {
+		t.Errorf("with -ac the server saw %d requests: the calibration guesses were not asked", got)
+	}
+}
+
+// Several matchers join with -mmode or (any one holds) or and (every one
+// holds), and several filters with -fmode or (any one drops the answer) or
+// and (every one must). The stand-in has four 302 answers, one of them with
+// Location: index.php.
+func TestFuzzFilterModesOrDropsOnAnyFilterAndAndOnEveryFilter(t *testing.T) {
+	srv := matcherServer(t)
+	words := wlist(t, "a", "b", "c", "d", "ok", "plain", "zzz")
+	for _, c := range []struct {
+		name  string
+		flags []string
+		want  string
+	}{
+		{"-fmode or by default: -fc 302 drops four, -fr index.php the same one", []string{"-mc", "all", "-fc", "302", "-fr", "index.php"}, "ok plain zzz"},
+		{"-fmode or named", []string{"-mc", "all", "-fc", "302", "-fr", "index.php", "-fmode", "or"}, "ok plain zzz"},
+		{"-fmode and: only what both filters hold for is dropped", []string{"-mc", "all", "-fc", "302", "-fr", "index.php", "-fmode", "and"}, "b c d ok plain zzz"},
+		{"-fmode or: -fc 404 or -fr needle", []string{"-mc", "all", "-fc", "404", "-fr", "needle"}, "a b c d plain"},
+		{"-fmode and: -fc 404 and -fr needle drops nothing", []string{"-mc", "all", "-fc", "404", "-fr", "needle", "-fmode", "and"}, "a b c d ok plain zzz"},
+		{"-mmode or by default", []string{"-mc", "200", "-mr", "Location: index.php"}, "a ok plain"},
+		{"-mmode and", []string{"-mc", "200", "-mr", "needle", "-mmode", "and"}, "ok"},
+	} {
+		got, _ := fuzzWords(t, append([]string{"-u", srv.URL + "/FUZZ", "-w", words}, c.flags...)...)
+		if g := strings.Join(got, " "); g != c.want {
+			t.Errorf("%s: %v listed %q, want %q", c.name, c.flags, g, c.want)
+		}
 	}
 }

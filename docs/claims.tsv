@@ -1347,6 +1347,8 @@ dirs.builtin-holds-state-words	docs/commands/dirs.md	With the built-in list, a w
 dirs.deny-path-word	docs/commands/dirs.md	A word whose URL a `-deny-path` rule matches is not sent and is listed under `skipped` with the rule.	test:internal/collectors/dirscol:TestSweepDenyPathHoldsAWordBackAndListsIt;test:cmd/azhaq:TestDenyPathHoldsInRunDirsAndFuzz
 
 # docs/commands/fuzz.md
+fuzz.no-control-without-ac	docs/commands/fuzz.md	A match that has no `control` was not compared with one: without `-ac` the run asks for no name that cannot exist.	test:cmd/azhaq:TestFuzzWithoutACAsksNoNameThatCannotExistAndNoMatchHasAControl,TestFuzzMatchRowSaysItIsTheControl
+fuzz.filter-modes	docs/commands/fuzz.md	Several matchers join with `-mmode or` (the default: any one holds) or `-mmode and` (every one holds), and several filters with `-fmode or`	test:cmd/azhaq:TestFuzzMatcherModesFollowFfuf,TestFuzzFilterModesOrDropsOnAnyFilterAndAndOnEveryFilter
 
 # docs/commands/diff.md
 
