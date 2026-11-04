@@ -24,6 +24,7 @@ import (
 	"go.yaml.in/yaml/v3"
 
 	"github.com/lilsadfoqs/azhaq/catalog"
+	"github.com/lilsadfoqs/azhaq/internal/egress"
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
 	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 	"github.com/lilsadfoqs/azhaq/internal/neterr"
@@ -214,16 +215,18 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 			}
 			if m == "get" {
 				summary, _ := x["summary"].(string)
-				description, _ := x["description"].(string)
 				operationID, _ := x["operation_id"].(string)
-				if word, ok := statechange.Declares(p, summary, description, operationID); ok {
-					x["state_change"] = word
+				if word, where := statechange.OfOperation(p, operationID, summary); word != "" {
+					x["state_change"], x["state_change_in"] = word, where
+					if u, err := normalize.URL(strings.TrimSuffix(base, "/") + "/" + strings.TrimPrefix(p, "/")); err == nil && !strings.Contains(u, "{") {
+						egress.DeclareStateChange(u, word) // the run holds this GET back
+					}
 				}
 			}
 			ops = append(ops, x)
 			if m == "get" && len(in["path"]) == 0 && len(requiredQuery(item, op, d)) == 0 {
-				// A read that needs nothing: asked, to see who may read it. Its
-				// name decides nothing: only -deny-path keeps a URL out.
+				// A read that needs nothing: asked, to see who may read it, unless
+				// its own name declares a state change (the run holds it back).
 				if u, err := normalize.URL(strings.TrimSuffix(base, "/") + "/" + strings.TrimPrefix(p, "/")); err == nil && !strings.Contains(u, "{") {
 					meta.NextHints = append(meta.NextHints, types.Seed{Type: types.TypeURL, Keys: map[string]string{"url": u}})
 				}

@@ -14,35 +14,52 @@ import (
 	"github.com/lilsadfoqs/azhaq/types"
 )
 
-// VAmPI's own description of GET /createdb ("creates and populates the
-// database") produces its entry from the description alone: the pure
-// read of the operations requests nothing.
-func TestStateChangesFromVAmPIDescription(t *testing.T) {
-	payload, _ := json.Marshal(map[string]any{
-		"url": "http://vampi.test/createdb", "via": "openapi", "methods": []string{"GET"},
-		"ops": []map[string]any{
-			{"method": "GET", "description": "Creates and populates the database", "state_change": "create"},
-			{"method": "POST", "description": "Deletes everything", "state_change": "delete"},
-		},
+// An operation is named by its path, operationId or summary: the pure read
+// of the operations requests nothing, and a description of the app or of an
+// operation ("the app was created") names nothing.
+func TestStateChangesOfOperationsReadTheNameNotProse(t *testing.T) {
+	obs := func(url, path string, ops ...map[string]any) types.StoredObservation {
+		payload, _ := json.Marshal(map[string]any{"url": url, "path": path, "via": "openapi", "methods": []string{"GET"}, "ops": ops})
+		return types.StoredObservation{Observation: types.Observation{Collector: "azhaq-openapi", Kind: "url", Payload: payload}}
+	}
+	got := stateChangesOfOps([]types.StoredObservation{
+		obs("http://vampi.test/createdb", "/createdb", map[string]any{"method": "GET", "description": "Creates and populates the database"}),
+		obs("http://vampi.test/books/v1", "/books/v1", map[string]any{"method": "GET", "operation_id": "deleteBooks"}),
+		obs("http://vampi.test/users/v1/reset", "/users/v1/x", map[string]any{"method": "GET", "summary": "Resets a password"}),
+		obs("http://vampi.test/", "/", map[string]any{"method": "GET", "operation_id": "home", "summary": "VAmPI home", "description": "VAmPI was created as a vulnerable API"}),
+		obs("http://vampi.test/users/v1", "/users/v1", map[string]any{"method": "GET", "summary": "List users"}, map[string]any{"method": "POST", "summary": "Deletes everything"}),
 	})
-	payload2, _ := json.Marshal(map[string]any{
-		"url": "http://vampi.test/users/v1", "via": "openapi", "methods": []string{"GET"},
-		"ops": []map[string]any{{"method": "GET", "summary": "List users"}},
-	})
-	obs := []types.StoredObservation{
-		{Observation: types.Observation{Collector: "azhaq-openapi", Kind: "url", Payload: payload}},
-		{Observation: types.Observation{Collector: "azhaq-openapi", Kind: "url", Payload: payload2}},
+	want := map[string]string{
+		"http://vampi.test/createdb":       "createdb",
+		"http://vampi.test/books/v1":       "delete",
+		"http://vampi.test/users/v1/reset": "reset",
 	}
-	got := stateChangesOfOps(obs)
-	if len(got) != 1 {
-		t.Fatalf("entries %+v, want only the GET /createdb", got)
+	if len(got) != len(want) {
+		t.Fatalf("entries %+v, want only %v", got, want)
 	}
-	e := got[0]
-	if e.URL != "http://vampi.test/createdb" || e.Word != "create" || e.DenyPath != "-deny-path ^/createdb$" || !strings.Contains(e.Description, "populates") {
-		t.Errorf("entry %+v", e)
+	for _, e := range got {
+		if want[e.URL] != e.Word {
+			t.Errorf("entry %+v, want word %q", e, want[e.URL])
+		}
+		if !strings.Contains(e.line(), "-deny-path") && e.Status != "" {
+			t.Errorf("line %q", e.line())
+		}
 	}
-	if !strings.Contains(e.line(), "-deny-path ^/createdb$") {
-		t.Errorf("line %q names no rule that keeps it out", e.line())
+	for _, e := range got {
+		switch e.URL {
+		case "http://vampi.test/createdb":
+			if e.Source != "its path" {
+				t.Errorf("source %q", e.Source)
+			}
+		case "http://vampi.test/books/v1":
+			if !strings.Contains(e.Source, "operationId deleteBooks") {
+				t.Errorf("source %q", e.Source)
+			}
+		case "http://vampi.test/users/v1/reset":
+			if e.Description != "Resets a password" {
+				t.Errorf("description %q", e.Description)
+			}
+		}
 	}
 }
 
@@ -113,14 +130,15 @@ func TestPlanNamesStateChangingGETBeforeAnyRequest(t *testing.T) {
 	}
 }
 
-// A run names them too: among its targets before anything is sent, and
-// the ones its API description and links name in its summary. With a
-// deny rule for /createdb, the proxy (the recording server) is asked
-// for it zero times and it is no longer listed as sent.
+// A run names the ones among its targets before anything is sent and sends
+// them (the user gave them); the ones it finds on the way (the description's
+// /createdb, the /logout link) are held back and named as held. With a deny
+// rule for /createdb, the server is asked for it zero times and it is listed
+// as skipped for the rule, not as held.
 func TestRunNamesStateChangingGETsAndDenyKeepsThemOut(t *testing.T) {
 	srv, seen := vampiApp(t)
 
-	// The target itself: named, and still sent (the list informs).
+	// The target itself: named, and sent, because the user gave it.
 	_, errOut, err := captureBoth(t, func() error {
 		return run([]string{"run", "-url", srv.URL + "/createdb", "-sources", "none", "-depth", "0", "-no-paths", "-quiet", "-json", "-ledger", "off", "-db", filepath.Join(t.TempDir(), "w.db")})
 	})
@@ -128,11 +146,11 @@ func TestRunNamesStateChangingGETsAndDenyKeepsThemOut(t *testing.T) {
 		t.Fatalf("%v\n%s", err, errOut)
 	}
 	rep := lastReport(t, errOut)
-	if got := stateURLs(rep); len(got) != 1 || got[0] != srv.URL+"/createdb" {
+	if got := stateURLs(rep); len(got) != 1 || got[0] != srv.URL+"/createdb" || rep.StateChanging[0].Status != stateSent {
 		t.Errorf("state_changing %v\n%s", got, errOut)
 	}
 	if !slices.Contains(seen(), "/createdb") {
-		t.Errorf("naming it withheld it: asked %v", seen())
+		t.Errorf("a target of the user's was withheld: asked %v", seen())
 	}
 
 	// Found on the way: the description's /createdb and the /logout link.
@@ -148,17 +166,13 @@ func TestRunNamesStateChangingGETsAndDenyKeepsThemOut(t *testing.T) {
 	if !slices.Contains(got, srv2.URL+"/createdb") || !slices.Contains(got, srv2.URL+"/logout") {
 		t.Errorf("state_changing %v\n%s", got, errOut)
 	}
-	var created *stateChangeEntry
-	for i := range rep.StateChanging {
-		if rep.StateChanging[i].URL == srv2.URL+"/createdb" {
-			created = &rep.StateChanging[i]
+	for _, e := range rep.StateChanging {
+		if e.Status != stateHeld {
+			t.Errorf("%s found on the way is %q, want held back", e.URL, e.Status)
 		}
 	}
-	if created == nil || created.Description == "" || created.DenyPath != "-deny-path ^/createdb$" {
-		t.Errorf("the description's entry %+v", created)
-	}
-	if !slices.Contains(seen2(), "/createdb") || !slices.Contains(seen2(), "/logout") {
-		t.Errorf("asked %v", seen2())
+	if slices.Contains(seen2(), "/createdb") || slices.Contains(seen2(), "/logout") {
+		t.Errorf("a GET found on the way that names a state change was asked: %v", seen2())
 	}
 
 	// The deny rule the list names: zero such requests at the server.
@@ -174,7 +188,7 @@ func TestRunNamesStateChangingGETsAndDenyKeepsThemOut(t *testing.T) {
 	}
 	rep = lastReport(t, errOut)
 	if slices.Contains(stateURLs(rep), srv3.URL+"/createdb") {
-		t.Errorf("a kept-out GET is listed as sent: %v", stateURLs(rep))
+		t.Errorf("a kept-out GET is listed: %v", stateURLs(rep))
 	}
 	if len(skippedFor(rep, "-deny-path ^/createdb$")) == 0 {
 		t.Errorf("the kept-out GET is not listed as skipped: %+v", rep.Skipped)

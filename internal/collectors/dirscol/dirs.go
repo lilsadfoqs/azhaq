@@ -30,6 +30,7 @@ import (
 	"github.com/lilsadfoqs/azhaq/internal/neterr"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"github.com/lilsadfoqs/azhaq/internal/pagesim"
+	"github.com/lilsadfoqs/azhaq/internal/statechange"
 	"github.com/lilsadfoqs/azhaq/types"
 )
 
@@ -89,6 +90,11 @@ type Options struct {
 	// NoCalibration skips the guesses at paths that cannot exist (-ac=false):
 	// the filters are the user's alone.
 	NoCalibration bool
+	// UserWords says the words are the user's own wordlist: every one is
+	// asked, as ffuf does. With the built-in list a word whose own name
+	// declares a state change (logout, reset, delete, ...) is held back
+	// unless -send-state-changing is given, and listed as skipped.
+	UserWords bool
 }
 
 // DefaultStatus is ffuf's default -mc.
@@ -218,6 +224,9 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 	}
 	u, _ := url.Parse(start)
 	base := u.Scheme + "://" + u.Host + dirPath(u.Path)
+	// Which words are held back is decided here, by the word alone (see
+	// HeldWords): the base path they are asked under says nothing about them.
+	ctx = egress.WithAsked(ctx)
 	meta := types.RunMeta{Status: types.StatusOK}
 	queue := []dirLevel{{url: base, depth: 1}}
 	var all []hit
@@ -319,6 +328,39 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 	return meta, nil
 }
 
+// heldWord is the word that makes the built-in list's guess t a state
+// change by its own name, while the run holds those back; "" for any guess
+// of the user's own wordlist.
+func (c *Collector) heldWord(t string) string {
+	if c.Opts.UserWords || !egress.Current().Holding() {
+		return ""
+	}
+	return statechange.OfPath("/" + t)
+}
+
+// HeldWords is how many of the requests the built-in list's words and
+// extensions make would be held back as state-changing: the number a plan and
+// an estimate leave out. Every word is asked bare and with each extension.
+func HeldWords(words, exts []string) int {
+	n := 0
+	for _, w := range words {
+		w = strings.TrimPrefix(strings.TrimSpace(w), "/")
+		if w == "" || strings.HasPrefix(w, "#") {
+			continue
+		}
+		forms := []string{w}
+		for _, ext := range exts {
+			forms = append(forms, w+"."+strings.TrimPrefix(ext, "."))
+		}
+		for _, t := range forms {
+			if statechange.OfPath("/"+t) != "" {
+				n++
+			}
+		}
+	}
+	return n
+}
+
 // heldURL is a word's URL a -deny-path rule keeps out, and the rule.
 type heldURL struct{ url, rule string }
 
@@ -384,6 +426,10 @@ func (c *Collector) sweep(ctx context.Context, dir string, note *sweepNote, foun
 		for _, t := range words {
 			if rule := egress.DeniedBy(dir + escapeWord(t)); rule != "" {
 				held = append(held, heldURL{dir + escapeWord(t), rule})
+				continue
+			}
+			if w := c.heldWord(t); w != "" {
+				held = append(held, heldURL{dir + escapeWord(t), neterr.HeldRule(w)})
 				continue
 			}
 			targets = append(targets, t)

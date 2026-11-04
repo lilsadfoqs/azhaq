@@ -437,6 +437,9 @@ func DoReq(ctx context.Context, c *http.Client, raw string, rq *Req) (Result, bo
 	if err := denied(raw); err != nil {
 		return Result{}, false, err
 	}
+	if err := egress.CheckHeld(ctx, rq.method(), raw); err != nil {
+		return Result{}, false, err
+	}
 	cacheMu.Lock()
 	if e, ok := cache[key]; ok {
 		cacheMu.Unlock()
@@ -670,7 +673,7 @@ func do(ctx context.Context, c *http.Client, raw string, rq *Req) (Result, error
 			break
 		}
 		next, err := resp.Request.URL.Parse(loc)
-		if err != nil || !inScope(next.String()) || !followable(raw, next.String()) || denied(next.String()) != nil {
+		if err != nil || !inScope(next.String()) || !followable(raw, next.String()) || denied(next.String()) != nil || egress.CheckHeld(ctx, method, next.String()) != nil {
 			break // the hop is recorded with its Location; the target is not requested
 		}
 		if RespectHSTS && next.Scheme == "http" && resp.Header.Get("Strict-Transport-Security") != "" {
