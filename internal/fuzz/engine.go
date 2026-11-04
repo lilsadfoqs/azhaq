@@ -128,6 +128,10 @@ type Result struct {
 	Job              int               `json:"-"` // 1 for the first job; each directory found is another
 	// RawRequest and RawResponse are set when the sender keeps them (-od).
 	RawRequest, RawResponse string `json:"-"`
+	// Matched are the matchers that held and what each held on; Control is
+	// the -ac answer this one is the same as, when it is.
+	Matched []Match     `json:"matched,omitempty"`
+	Control *ControlRef `json:"control,omitempty"`
 }
 
 // Stats says how the run went.
@@ -178,8 +182,9 @@ type engine struct {
 	calibrated map[string]bool // by host and directory with -ach, else "" once
 	calGroups  [][]string
 	shapeMu    sync.RWMutex
-	shapes     map[string][]calShape // by the same key: pages the calibration answers had in common
-	wantBody   atomic.Bool           // answers are read into memory, for calibration's page shape
+	shapes     map[string][]calShape      // by the same key: pages the calibration answers had in common
+	wantBody   atomic.Bool                // answers are read into memory, for calibration's page shape
+	controls   map[string][]controlAnswer // by the same key: what each calibration request answered
 
 	outMu sync.Mutex // Stats, results and the queue
 	stats Stats
@@ -211,7 +216,7 @@ func Run(ctx context.Context, cfg Config) Stats {
 	if cfg.Progress == nil {
 		cfg.Progress = new(Progress)
 	}
-	e := &engine{cfg: cfg, downOrigs: map[string]bool{}, calibrated: map[string]bool{}, shapes: map[string][]calShape{}}
+	e := &engine{cfg: cfg, downOrigs: map[string]bool{}, calibrated: map[string]bool{}, shapes: map[string][]calShape{}, controls: map[string][]controlAnswer{}}
 	e.wantBody.Store(cfg.Calibrate)
 	e.calGroups = cfg.CalGroups
 	if len(e.calGroups) == 0 {
@@ -606,6 +611,7 @@ func (e *engine) emit(r *Response, req *Request, jobNum int) {
 		ContentType: r.ContentType, RedirectLocation: RedirectLocation(r, false), URL: req.URL, Duration: r.Duration,
 		Host: hostHeaderOf(req), Method: req.Method, Job: jobNum,
 		RawRequest: r.RawRequest, RawResponse: r.RawResponse,
+		Matched: e.cfg.Set.Evidence(r), Control: e.sameAsControl(r, req),
 	}
 	e.outMu.Lock()
 	e.stats.Matches++
@@ -758,6 +764,9 @@ func (e *engine) calibrate(ctx context.Context, t Template, input map[string]str
 				continue
 			}
 			resp, err := e.send(ctx, &req)
+			if err == nil {
+				e.noteControl(key, &req, resp, s)
+			}
 			if err != nil || !e.cfg.Set.Matches(resp) {
 				continue
 			}

@@ -25,6 +25,7 @@ import (
 	"github.com/lilsadfoqs/azhaq/internal/collectors/dirscol"
 	"github.com/lilsadfoqs/azhaq/internal/collectors/shotcol"
 	"github.com/lilsadfoqs/azhaq/internal/collectors/urlcol"
+	"github.com/lilsadfoqs/azhaq/internal/fetch"
 	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"github.com/lilsadfoqs/azhaq/internal/targets"
@@ -884,7 +885,7 @@ func cmdDirs(args []string) error {
 	if err := w.close(); err != nil {
 		return err
 	}
-	rep.Results = w.count()
+	rep.Results = sink.listed
 	sink.settle(rep)
 	return rep.finish(c.json, c.silent)
 }
@@ -899,6 +900,15 @@ type dirsSink struct {
 	mu                        sync.Mutex
 	printed                   map[string]bool
 	failed, limited, requests int
+	// listed are the paths the output lists; folded the ones the sweep's
+	// answers show to say nothing (the answer of their directory to a name
+	// that cannot exist), by that control; -json still prints them.
+	listed int
+	folded map[string]*engine.FoldGroup
+	order  []string
+	// controls are the requests asked for a name that cannot exist in a
+	// directory that held hits, and the hits of them that were folded.
+	controls, foldedHits int
 }
 
 func (d *dirsSink) see(_ types.Entity, o types.Observation) {
@@ -912,17 +922,31 @@ func (d *dirsSink) see(_ types.Entity, o types.Observation) {
 		d.failed += intOf(p["failed"])
 		d.limited += intOf(p["rate_limited"])
 		d.requests += intOf(p["requests"])
+		d.controls += intOf(p["controls"])
+		d.foldedHits += intOf(p["folded"])
 		d.mu.Unlock()
 	case "url":
 		u, _ := p["url"].(string)
 		if u == "" || !d.first(u) {
 			return
 		}
+		ctl := d.fold(u, p)
+		if ctl != nil && !d.w.json {
+			return // counted in the summary's line of its directory
+		}
+		d.mu.Lock()
+		if ctl == nil {
+			d.listed++
+		}
+		d.mu.Unlock()
 		switch {
 		case d.w.json:
 			row := map[string]any{"url": u, "status": p["status"], "length": p["length"], "words": p["words"], "lines": p["lines"]}
 			if loc, ok := p["location"]; ok {
 				row["redirectlocation"] = loc
+			}
+			if ctl != nil {
+				row["fold"], row["control"] = engine.FoldCatchAll, ctl.URL
 			}
 			d.w.obj(row)
 		case d.silent:
@@ -931,6 +955,33 @@ func (d *dirsSink) see(_ types.Entity, o types.Observation) {
 			d.w.line(fmt.Sprintf("%s [Status: %d, Size: %d, Words: %d, Lines: %d]", u, intOf(p["status"]), intOf(p["length"]), intOf(p["words"]), intOf(p["lines"])))
 		}
 	}
+}
+
+// fold says u is a hit whose answer is its directory's control's, byte for
+// byte, and counts it in the line of that directory.
+func (d *dirsSink) fold(u string, p map[string]any) *fetch.Control {
+	if p["catchall"] != true {
+		return nil
+	}
+	raw, _ := json.Marshal(p["control"])
+	var ctl fetch.Control
+	if json.Unmarshal(raw, &ctl) != nil || ctl.URL == "" {
+		return nil
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.folded == nil {
+		d.folded = map[string]*engine.FoldGroup{}
+	}
+	g := d.folded[ctl.URL]
+	if g == nil {
+		dir := ctl.URL[:strings.LastIndex(ctl.URL, "/")+1]
+		g = &engine.FoldGroup{Class: engine.FoldCatchAll, Origin: dir, Controls: []fetch.Control{ctl}}
+		d.folded[ctl.URL] = g
+		d.order = append(d.order, ctl.URL)
+	}
+	g.Count++
+	return &ctl
 }
 
 // first says u is new to the output, and notes it.
@@ -946,6 +997,30 @@ func (d *dirsSink) first(u string) bool {
 
 // settle adds to rep what the sweep's answers say.
 func (d *dirsSink) settle(rep *report) {
+	if len(d.order) > 0 {
+		folded := 0
+		for _, k := range d.order {
+			g := d.folded[k]
+			rep.Folds = append(rep.Folds, *g)
+			folded += g.Count
+			note := g.Line() + " (-json lists them, marked fold)"
+			rep.Notes = append(rep.Notes, note)
+			if d.silent && !d.w.json {
+				fmt.Fprintln(os.Stderr, "azhaq dirs: "+note)
+			}
+		}
+		// One control for each directory that held hits, as many requests
+		// as lines: the ledger counts them with the sweep's.
+		rep.holds("folded hits, against the folds' counts", d.foldedHits, folded)
+	}
+	// Text lists the paths that are not folded; -json prints the folded rows too.
+	printed := d.listed
+	for _, g := range d.folded {
+		if d.w.json {
+			printed += g.Count
+		}
+	}
+	rep.holds("rows printed, against the paths listed and the folded rows -json adds", d.w.count(), printed)
 	if d.failed > 0 {
 		rep.Notes = append(rep.Notes, fmt.Sprintf("%d paths got no whole answer, after one retry: they were not judged (a service under load cuts answers off; run again or lower -t)", d.failed))
 		rep.warned = true
@@ -1014,7 +1089,7 @@ func resumeDirs(db, id string, runArgs, rest []string) error {
 	if err := w.close(); err != nil {
 		return err
 	}
-	rep.Results = w.count()
+	rep.Results = sink.listed
 	sink.settle(rep)
 	return rep.finish(c.json, c.silent)
 }
