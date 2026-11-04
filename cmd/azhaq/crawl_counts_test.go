@@ -44,7 +44,8 @@ func TestCrawlSummaryCountsEachKindOfRow(t *testing.T) {
 	_, errOut := crawlOut(t, srv, "-json", "-assets", "-hints")
 	sum := sumMap(t, errOut)
 	counts, _ := sum["counts"].(map[string]any)
-	want := map[string]float64{"requested": 4, "answered": 4, "not requested": 1, "templates": 1, "assets": 1, "rejected strings": 1,
+	// rejected: "/rest/items/" and the "/detail" joined to it
+	want := map[string]float64{"requested": 4, "answered": 4, "not requested": 1, "templates": 1, "assets": 1, "rejected strings": 2,
 		"observed routes": 3, "linked routes": 1, "hint routes": 2}
 	for k, v := range want {
 		if counts[k] != v {

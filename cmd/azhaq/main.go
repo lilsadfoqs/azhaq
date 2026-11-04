@@ -1530,18 +1530,13 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	if n := opts.DNS.TakeoverNote("-no-takeover"); n != "" {
 		rep.Notes = append(rep.Notes, n)
 	}
-	// The URLs are those the map holds as coverage capped: the number is
-	// what `query -coverage capped` lists, each URL once.
-	capped := 0
-	for _, r := range rows {
-		if r.Entity.Type == types.TypeURL && r.Coverage == "capped" {
-			capped++
-		}
-	}
-	if c := eng.Caps(); capped+c.DepthNames > 0 {
+	// The URLs are those the scheduler kept because they were found past
+	// -depth: a URL left unasked by -max-items or another cap is capped in
+	// the map too, but not by the depth.
+	if c := eng.Caps(); c.DepthURLs+c.DepthNames > 0 {
 		var what []string
-		if capped > 0 {
-			what = append(what, fmt.Sprintf("%d URLs", capped))
+		if c.DepthURLs > 0 {
+			what = append(what, fmt.Sprintf("%d URLs", c.DepthURLs))
 		}
 		if c.DepthNames > 0 {
 			what = append(what, fmt.Sprintf("%d names", c.DepthNames))
@@ -1636,6 +1631,11 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 			}
 		}
 		rep.Resume = resumeHint(path, cut > 0, *login != "", *loginUser)
+		if *resumeRun != "" && rep.Requests == 0 && strings.HasPrefix(rep.Stopped, "-max-items ") {
+			// The cap holds for each run: this one spent it on tasks that
+			// asked nothing, and the next goes on from them.
+			rep.Notes = append(rep.Notes, fmt.Sprintf("this resume sent no request: -max-items %d was spent on tasks that sent none (azhaq resume goes on from them; a larger -max-items reaches the tasks that ask)", budgets.MaxItems))
+		}
 		if *resumeRun != "" && st.TasksDone() == doneBefore && egress.Spent() && egress.Killed() == nil {
 			rep.Notes = append(rep.Notes, noTaskFinished(rep.Command, egress.MaxRequests()))
 		}
