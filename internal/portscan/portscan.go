@@ -648,6 +648,7 @@ func (s *Scanner) probeConn(ctx context.Context, host, ip string, port int, conn
 	if s.Detect != DetectNone && s.Banner > 0 {
 		if len(s.Payload) > 0 {
 			_ = conn.SetWriteDeadline(time.Now().Add(s.Timeout))
+			label(conn, "payload")
 			_, _ = conn.Write(s.Payload)
 		}
 		_ = conn.SetReadDeadline(time.Now().Add(s.Banner))
@@ -670,6 +671,7 @@ func (s *Scanner) probeConn(ctx context.Context, host, ip string, port int, conn
 				s.settle220(conn, &o)
 			case "ftp":
 				// Already known to be FTP: SYST alone, no EHLO guess.
+				label(conn, "ftp")
 				ftpSYSTProduct(s.talk(conn, []byte("SYST\r\n"), nil, s.Banner), &o)
 			}
 		}

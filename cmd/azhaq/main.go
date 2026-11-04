@@ -336,7 +336,8 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	sourcesList := fs.String("sources", "", "subdomain sources to run, comma-separated (default: the default set; none: no source, and no archive, RDAP, search engine or RIPEstat lookup either: only the resolvers and the targets are asked)")
 	excludeSources := fs.String("exclude-sources", "", "subdomain sources never to run, comma-separated")
 	allSources := fs.Bool("all-sources", false, "also run slower subdomain sources outside the default set")
-	noHistory := fs.Bool("no-history", false, "do not read or write the name history (names earlier runs found, kept under $AZHAQ_DATA_DIR, else ~/.local/share/azhaq; with -live each is checked by DNS in the run)")
+	noHistory := fs.Bool("no-history", false, "do not read or write the name history (the names earlier runs found, kept in "+historyDirHelp+"; with -live each is checked by DNS in the run)")
+	historyDir := fs.String("history-dir", "", "keep the name history under DIR/names, shared by every run that names it (default $AZHAQ_DATA_DIR, else azhaq-data/ in the workspace's folder: beside -db, or the current directory)")
 	sourceTimeout := fs.Duration("source-timeout", subcol.DefaultSourceTimeout, "give each subdomain source this long, 30s as subfinder does; a slower one (crt.sh) is abandoned, listed as failed, and the names the others gave are kept; -source-timeout 60s or more waits for crt.sh on a large domain (not -timeout, the run's bound)")
 	sourceRate := fs.Float64("source-rate", 0, "requests per second to each subdomain source, as subfinder -rl (0: each source's own pace); a source's lower own pace stays")
 	sourceRates := fs.String("source-rates", "", "pace single subdomain sources, as subfinder -rls: name=N/unit, comma-separated, unit s, m or h (hackertarget=10/m,crtsh=1/s)")
@@ -726,6 +727,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		if err := os.WriteFile(lastDBFile, []byte(path+"\n"), 0o644); err != nil {
 			return err
 		}
+		rep.wrote(lastDBFile)
 	}
 
 	st, err := store.Open(path)
@@ -1091,7 +1093,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	if *sourceRate < 0 || *maxResults < 0 || *maxBody < 0 || *maxTime < 0 {
 		return usagef("-source-rate, -max-results, -max-time and -max-body are not negative")
 	}
-	opts.Subdomains = subcol.Options{Keys: keys, Only: splitList(*sourcesList), Exclude: splitList(*excludeSources), All: *allSources, NoHistory: *noHistory, SourceTimeout: *sourceTimeout, ExtraWait: extraWaitOf(*extraWait),
+	opts.Subdomains = subcol.Options{Keys: keys, Only: splitList(*sourcesList), Exclude: splitList(*excludeSources), All: *allSources, NoHistory: *noHistory, DataDir: historyDirOf(*historyDir, path, out.scratch || out.plan), SourceTimeout: *sourceTimeout, ExtraWait: extraWaitOf(*extraWait),
 		SourceRate: *sourceRate, SourceRates: rates, MaxResults: *maxResults, MaxTime: *maxTime, MaxBody: *maxBody, MaxNames: *maxNames, NoCheck: subsMode.NoCheck, GuessSamples: subsMode.GuessSamples, Recursive: subsMode.Recursive, Proxy: *sourceProxy, NoGuessCheck: subsMode.NoGuessCheck}
 	urlKeys := maps.Clone(keys)
 	if urlKeys == nil {
@@ -1667,7 +1669,14 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		}
 	}
 	if remember && !*demo && input != "" {
-		_ = recordRun(input, path)
+		if recordRun(input, path) == nil {
+			rep.wrote(runIndexFile)
+		}
+	}
+	if !out.scratch && !out.plan {
+		if fi, err := os.Stat(urlcol.ArchivePath(path)); err == nil && !fi.ModTime().Before(rep.start) {
+			rep.wrote(urlcol.ArchivePath(path))
+		}
 	}
 	if !*quiet && !*jsonOut && !out.embedded && !*demo && prevDB != "" && prevDB != path {
 		if err := printDiff(prevDB, path, diffOpts{}); err != nil {
@@ -1981,7 +1990,7 @@ func cmdDiff(args []string) error {
 		if len(runs) < 2 {
 			// Nothing to compare yet: said, not silent.
 			if *jsonl {
-				return json.NewEncoder(os.Stdout).Encode(map[string]any{"kind": "summary", "runs": len(runs), "added": 0, "removed": 0, "not_seen_again": 0, "observations": 0, "note": "one run so far: a diff needs two"})
+				return json.NewEncoder(os.Stdout).Encode(map[string]any{"kind": "summary", "runs": len(runs), "added": 0, "removed": 0, "not_seen_again": 0, "observations": 0, "changed": 0, "note": "one run so far: a diff needs two"})
 			}
 			fmt.Printf("%s holds %d run so far: a diff needs two (run the same target into it again)\n", *ws, len(runs))
 			return nil
@@ -2072,6 +2081,12 @@ func printDiffStores(old, neu *store.Store, oldLabel string, opts diffOpts) erro
 		}
 	}
 	failed := failedSources(neu)
+	// What was there in both runs and differs: the same rows watch lists.
+	ch, err := changesBetween(old, neu, d, changes{})
+	if err != nil {
+		return err
+	}
+	changed := changedRows(ch)
 	if opts.JSONL {
 		enc := json.NewEncoder(os.Stdout)
 		for _, e := range d.Added {
@@ -2089,6 +2104,11 @@ func printDiffStores(old, neu *store.Store, oldLabel string, opts diffOpts) erro
 				return err
 			}
 		}
+		for _, c := range changed {
+			if err := enc.Encode(c.json()); err != nil {
+				return err
+			}
+		}
 		if !opts.Quiet {
 			for _, o := range d.NewObs {
 				if err := enc.Encode(map[string]any{"kind": "observation", "collector": o.Collector, "obs_kind": o.Kind, "payload": o.Payload}); err != nil {
@@ -2102,6 +2122,7 @@ func printDiffStores(old, neu *store.Store, oldLabel string, opts diffOpts) erro
 			"removed":        len(removed),
 			"not_seen_again": len(unseen),
 			"observations":   len(d.NewObs),
+			"changed":        len(changed),
 		}
 		if len(failed) > 0 {
 			sum["failed_sources"] = failed
@@ -2116,9 +2137,9 @@ func printDiffStores(old, neu *store.Store, oldLabel string, opts diffOpts) erro
 		fmt.Printf("  ! the runs had different seeds; this compares two targets, not two scans of one\n")
 		fmt.Printf("    old: %s\n    new: %s\n", strings.ReplaceAll(oldIn, "\n", ", "), strings.ReplaceAll(newIn, "\n", ", "))
 	}
-	if len(d.Added) == 0 && len(d.Removed) == 0 && len(d.NewObs) == 0 {
+	if len(d.Added) == 0 && len(d.Removed) == 0 && len(d.NewObs) == 0 && len(changed) == 0 {
 		fmt.Println("  (no new entities or observations)")
-		fmt.Println("added=0 removed=0 observations=0")
+		fmt.Println("added=0 removed=0 observations=0 changed=0")
 		return nil
 	}
 	for _, e := range d.Added {
@@ -2126,6 +2147,9 @@ func printDiffStores(old, neu *store.Store, oldLabel string, opts diffOpts) erro
 	}
 	for _, e := range removed {
 		fmt.Printf("  - %s %s\n", e.Type, e.Key)
+	}
+	for _, c := range changed {
+		fmt.Println(c.line())
 	}
 	if !opts.Quiet {
 		for _, o := range d.NewObs {
@@ -2139,7 +2163,7 @@ func printDiffStores(old, neu *store.Store, oldLabel string, opts diffOpts) erro
 		}
 		fmt.Println(line + "; -json lists them")
 	}
-	fmt.Printf("added=%d removed=%d not_seen_again=%d observations=%d\n", len(d.Added), len(removed), len(unseen), len(d.NewObs))
+	fmt.Printf("added=%d removed=%d not_seen_again=%d observations=%d changed=%d\n", len(d.Added), len(removed), len(unseen), len(d.NewObs), len(changed))
 	return nil
 }
 

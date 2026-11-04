@@ -169,6 +169,9 @@ func (c Check) Execute(ctx context.Context, svc advisory.Service, dial DialFunc)
 	}
 	defer conn.Close()
 	_ = conn.SetDeadline(time.Now().Add(10 * time.Second))
+	if l, ok := conn.(interface{ Label(proto string) }); ok {
+		l.Label(c.Service) // the ledger's probe line names the protocol
+	}
 	if _, err := conn.Write(c.build()); err != nil {
 		return r, err
 	}

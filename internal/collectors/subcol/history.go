@@ -33,24 +33,21 @@ type seenName struct {
 	Sources []string `json:"sources,omitempty"`
 }
 
-// DataDir is where Azhaq keeps what it learns across runs.
-func DataDir() string {
-	if d := os.Getenv("AZHAQ_DATA_DIR"); d != "" {
-		return d
+// dataDirKey carries the data directory of a run to the history source.
+type dataDirKey struct{}
+
+// dataDir is where this run keeps the name history: Options.DataDir, else
+// $AZHAQ_DATA_DIR, else nowhere: a history is shared between runs only
+// when the user names its directory.
+func (o Options) dataDir() string {
+	if o.DataDir != "" {
+		return o.DataDir
 	}
-	if d := os.Getenv("XDG_DATA_HOME"); d != "" {
-		return filepath.Join(d, "azhaq")
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return ""
-	}
-	return filepath.Join(home, ".local", "share", "azhaq")
+	return os.Getenv("AZHAQ_DATA_DIR")
 }
 
-// historyPath is the file of an apex, or "" when there is no place for it.
-func historyPath(apex string) string {
-	dir := DataDir()
+// historyPath is the file of an apex under dir, or "" when there is no place for it.
+func historyPath(dir, apex string) string {
 	if dir == "" || apex == "" || strings.ContainsAny(apex, `/\`) || strings.HasPrefix(apex, ".") {
 		return ""
 	}
@@ -79,8 +76,9 @@ func loadHistory(path string) (map[string]seenName, error) {
 func historySource() source {
 	return source{
 		name: historyName, need: noKey, deflt: true, verify: true,
-		collect: func(_ context.Context, domain string, _ []string, _ *subscraping.Session) ([]string, error) {
-			path := historyPath(domain)
+		collect: func(ctx context.Context, domain string, _ []string, _ *subscraping.Session) ([]string, error) {
+			dir, _ := ctx.Value(dataDirKey{}).(string)
+			path := historyPath(dir, domain)
 			if path == "" {
 				return nil, nil
 			}
@@ -104,8 +102,8 @@ func historySource() source {
 // through a temp file and a rename so a crash leaves the old file whole.
 // A name in unverified was never seen to resolve and is not stored. It
 // returns how many names it wrote.
-func remember(domain string, names []string, foundBy map[string][]string, unverified map[string]bool) (int, error) {
-	path := historyPath(domain)
+func remember(dir, domain string, names []string, foundBy map[string][]string, unverified map[string]bool) (int, error) {
+	path := historyPath(dir, domain)
 	if path == "" || len(names) == 0 {
 		return 0, nil
 	}
@@ -139,6 +137,9 @@ func remember(domain string, names []string, foundBy map[string][]string, unveri
 		}
 		sort.Strings(e.Sources)
 		m[n] = e
+	}
+	if stored == 0 {
+		return 0, nil // nothing new to keep: the file is not written
 	}
 	if len(m) > maxHistory {
 		old := make([]string, 0, len(m))

@@ -377,11 +377,13 @@ func passiveRead(raw []byte, o *Open) bool {
 // "220 ...": SMTP answers EHLO with 250, an FTP server answers SYST with
 // its system type or a request to log in.
 func (s *Scanner) settle220(conn net.Conn, o *Open) {
+	label(conn, "smtp")
 	r := s.talk(conn, []byte("EHLO azhaq.invalid\r\n"), nil, s.Banner)
 	if bytes.HasPrefix(r, []byte("250")) {
 		o.Service = "smtp"
 		return
 	}
+	label(conn, "ftp")
 	r = s.talk(conn, []byte("SYST\r\n"), nil, s.Banner)
 	switch {
 	case bytes.HasPrefix(r, []byte("215")), bytes.HasPrefix(r, []byte("530")), bytes.HasPrefix(r, []byte("331")):

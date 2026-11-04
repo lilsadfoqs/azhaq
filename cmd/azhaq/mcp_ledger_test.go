@@ -75,7 +75,7 @@ func TestMCPStatelessToolsWriteTheServerLedger(t *testing.T) {
 	}
 	var lines int64
 	if err := ledger.Read(files[0], func(e ledger.Entry) error {
-		if e.IsTarget() {
+		if e.Counted() {
 			lines++
 		}
 		return nil

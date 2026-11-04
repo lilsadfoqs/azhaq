@@ -484,7 +484,7 @@ func TestNoCheckListsGuessesUnverified(t *testing.T) {
 	if got := strings.Join(strs(payload["unverified"]), ","); got != "junk.example.org,real.example.org" {
 		t.Errorf("unverified %s", got)
 	}
-	if m, _ := loadHistory(historyPath("example.org")); len(m) != 1 || m["www.example.org"].Last == "" {
+	if m, _ := loadHistory(historyPath(os.Getenv("AZHAQ_DATA_DIR"), "example.org")); len(m) != 1 || m["www.example.org"].Last == "" {
 		t.Errorf("history holds %v", m)
 	}
 }
@@ -796,13 +796,13 @@ func TestCheckCutByTheLimitIsNotAFailedLookup(t *testing.T) {
 // read and how many it wrote; -w and -permute names are not among them.
 func TestRunReportsTheNameHistoryItUsed(t *testing.T) {
 	t.Setenv("AZHAQ_DATA_DIR", t.TempDir())
-	if _, err := remember("example.org", []string{"old.example.org"}, map[string][]string{"old.example.org": {"x"}}, nil); err != nil {
+	if _, err := remember(os.Getenv("AZHAQ_DATA_DIR"), "example.org", []string{"old.example.org"}, map[string][]string{"old.example.org": {"x"}}, nil); err != nil {
 		t.Fatal(err)
 	}
 	c := collector(Options{Verify: allLive}, historySource(), fake("a", noKey, true, []string{"www.example.org"}, nil))
 	payload, _ := run(t, c, context.Background())
 	h, _ := payload[HistoryKey].(map[string]any)
-	if h == nil || h["path"] != historyPath("example.org") || h["read"] != float64(1) || h["stored"] != float64(2) {
+	if h == nil || h["path"] != historyPath(os.Getenv("AZHAQ_DATA_DIR"), "example.org") || h["read"] != float64(1) || h["stored"] != float64(2) {
 		t.Errorf("history account %v", h)
 	}
 	c = collector(Options{NoHistory: true, Verify: allLive}, historySource(), fake("a", noKey, true, []string{"www.example.org"}, nil))

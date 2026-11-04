@@ -121,9 +121,22 @@ func historyNotes(ps []map[string]any) []string {
 		}
 	}
 	if len(paths) > 0 && len(ps) > 3 {
-		notes = append(notes, fmt.Sprintf("name history (%s, one file per domain): %d names read for %d domains, %d written; %s", filepath.Join(subcol.DataDir(), "names"), read, len(paths), wrote, namesKept))
+		notes = append(notes, fmt.Sprintf("name history (%s, one file per domain): %d names read for %d domains, %d written; %s", filepath.Dir(paths[0]), read, len(paths), wrote, namesKept))
 	}
 	return notes
+}
+
+// historyWrote lists the history files a run wrote: the ones it stored a
+// name in.
+func historyWrote(ps []map[string]any) []string {
+	var paths []string
+	for _, p := range ps {
+		if h, _ := p[subcol.HistoryKey].(map[string]any); h != nil && intOf(h["stored"]) > 0 {
+			path, _ := h["path"].(string)
+			paths = append(paths, path)
+		}
+	}
+	return paths
 }
 
 // subdomainPayloads are the newest payload of azhaq-subdomains for each
