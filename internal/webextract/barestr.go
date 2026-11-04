@@ -169,6 +169,8 @@ func Candidates(text string, page, src *url.URL, script bool) []Cand {
 				c.Link, c.Reason = "", ReasonSearched
 			} else if i < nScript && s.Start > 0 && s.End < len(text) && text[s.Start-1] == text[s.End] && HeadAt(text, s.Start-1, s.End+1) {
 				c.Link, c.Reason = "", ReasonPrefix
+			} else if endOfRoute(text, s, i < nScript) {
+				c.Link, c.Reason = "", ReasonFragment
 			}
 		}
 		c.Resolved = c.Link
@@ -185,6 +187,20 @@ func Candidates(text string, page, src *url.URL, script bool) []Cand {
 		out = append(out, c)
 	}
 	return out
+}
+
+// endOfRoute says whether the string s of a script is the end of a route with
+// a placeholder: a quoted string joined to a path ("/y/"+id+"/z.php"), or
+// one the body pattern took from after a placeholder of a longer string
+// ("/y/${id}/z.php", "/y/{id}/z.php", "/y/[id]/z.php").
+func endOfRoute(text string, s Str, quoted bool) bool {
+	if s.Start == 0 {
+		return false
+	}
+	if quoted {
+		return s.End < len(text) && text[s.Start-1] == text[s.End] && partOfRoute(text, s.Start-1)
+	}
+	return text[s.Start-1] == '}' || text[s.Start-1] == ']'
 }
 
 // anchored says whether a string is a path a script could only mean as one:

@@ -45,7 +45,7 @@ func JSURLs(script string, base *url.URL) []string {
 	seen := map[string]bool{}
 	var out []string
 	for _, r := range JSURLRefs(script, base) {
-		if !seen[r.URL] && !r.Key {
+		if !seen[r.URL] && !r.Key && !r.Fragment {
 			seen[r.URL] = true
 			out = append(out, r.URL)
 		}
@@ -68,6 +68,9 @@ type Ref struct {
 	// ({"./Filter":2}, case "./Filter":): a module id of the bundler's
 	// source tree, not a path of the app. It is not in JSURLs.
 	Key bool
+	// Fragment says the string is the end of a route built at run time
+	// ("/y/"+id+"/z.php"): no route of its own. It is not in JSURLs.
+	Fragment bool
 }
 
 // JSURLRefs is JSURLs with every place each URL is named, in the order
@@ -83,7 +86,7 @@ func JSURLRefs(script string, base *url.URL) []Ref {
 			if le < len(script) && ls > 0 && strings.ContainsRune("\"'`", rune(script[le])) && script[ls-1] == script[le] {
 				ls, le = ls-1, le+1
 			}
-			out = append(out, Ref{URL: u, Start: start, End: end, Joined: joined(script, start), Head: HeadAt(script, ls, le), Key: key})
+			out = append(out, Ref{URL: u, Start: start, End: end, Joined: joined(script, start), Head: HeadAt(script, ls, le), Key: key, Fragment: strings.ContainsRune("\"'`", rune(script[ls])) && partOfRoute(script, ls)})
 		}
 	}
 	for _, m := range absURL.FindAllStringIndex(script, -1) {
@@ -143,6 +146,58 @@ func HeadAt(script string, start, end int) bool {
 			return false
 		}
 		return true
+	}
+	return false
+}
+
+// partOfRoute says whether the string literal whose opening quote is at i
+// is the right operand of a + chain that holds, further left, a string that
+// is a path: "/y/"+id+"/z.php". It is the end of a route built at run time,
+// not a route of its own. A chain with no path in it (base+"/health") is
+// not: its base may be a host.
+func partOfRoute(script string, i int) bool {
+	for n := 0; n < 8; n++ {
+		j := skipSpaceBack(script, i)
+		if j < 0 || script[j] != '+' || j > 0 && script[j-1] == '+' {
+			return false
+		}
+		k := skipSpaceBack(script, j) // the last byte of the left operand
+		if k < 0 {
+			return false
+		}
+		if strings.ContainsRune("\"'`", rune(script[k])) {
+			open := strings.LastIndexByte(script[:k], script[k])
+			if open < 0 {
+				return false
+			}
+			if lit := script[open+1 : k]; strings.HasPrefix(lit, "/") && !strings.Contains(lit, "${") {
+				return true
+			}
+			i = open
+			continue
+		}
+		// An identifier, a member path or a call: id, this.id, enc(x).
+		depth := 0
+		m := k
+		for ; m >= 0; m-- {
+			c := script[m]
+			switch {
+			case c == ')' || c == ']':
+				depth++
+			case c == '(' || c == '[':
+				depth--
+			case depth == 0 && !isIdentByte(c) && c != '.':
+				goto operand
+			}
+			if depth < 0 {
+				return false
+			}
+		}
+	operand:
+		if m == k {
+			return false
+		}
+		i = m + 1
 	}
 	return false
 }
@@ -425,3 +480,6 @@ func braceBody(s string, open int) (body string, ok bool) {
 	}
 	return "", false
 }
+
+// PartOfRoute is partOfRoute for the tests of the packages that read scripts.
+func PartOfRoute(script string, i int) bool { return partOfRoute(script, i) }

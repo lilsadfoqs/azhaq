@@ -648,6 +648,8 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 	var socks []socket
 	sockAt := map[string]int{}
 	hash := false
+	type fragment struct{ text, url string }
+	var frags []fragment
 	for i := 0; i < len(queue); i++ {
 		if ctx.Err() != nil {
 			return types.RunMeta{Status: types.StatusCancelled}, ctx.Err()
@@ -680,6 +682,10 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		for _, r := range sc.refs {
 			if r.Key {
 				continue // a module id; Candidates gives it a rejected row
+			}
+			if r.Fragment {
+				frags = append(frags, fragment{strings.Trim(s.body[r.Start:r.End], "\"'`"), r.URL})
+				continue // the end of "/y/"+id+"/z.php": no route of its own
 			}
 			if r.URL == raw || inRoutes(routes, r.Start) || webextract.InSocket(ws, r.Start) || !keepString(raw, r.URL) {
 				continue
@@ -820,6 +826,15 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 				}
 				meta.EmitCount++
 			}
+		}
+	}
+	for _, f := range frags {
+		if k := f.text + "\x00" + webextract.ReasonFragment; !rejSeen[k] {
+			rejSeen[k] = true
+			if err := emit(webextract.RejectedObs(Name, raw, f.text, webextract.ReasonFragment, "js", f.url)); err != nil {
+				return meta, err
+			}
+			meta.EmitCount++
 		}
 	}
 	emitRow := func(row map[string]any, conf float64) error {
