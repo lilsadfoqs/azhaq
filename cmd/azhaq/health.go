@@ -183,7 +183,10 @@ func (h *sourceHealth) line(exit int, archives bool) string {
 // answered for: every archive asked for it failed.
 func archiveDomains(ps []map[string]any) (domains, silent int) {
 	for _, p := range ps {
-		srcs, _ := p["sources"].(map[string]any)
+		srcs, ok := p["sources"].(map[string]any)
+		if !ok {
+			continue // a url row of the archives, not a domain's source block
+		}
 		asked, failed := 0, 0
 		for name, v := range srcs {
 			row, _ := v.(map[string]any)
@@ -246,6 +249,8 @@ func (h *sourceHealth) archivesNote() string {
 		}
 		if h.Answered > 0 {
 			note += fmt.Sprintf("; the set is partial: %s failed, so the URLs only they hold are missing and those of the others are listed", strings.Join(failed, ", "))
+		} else {
+			note += fmt.Sprintf("; the set is partial: no archive answered in full (%s failed), so what they gave before failing is listed and the rest of what they hold is missing", strings.Join(failed, ", "))
 		}
 	}
 	return note
