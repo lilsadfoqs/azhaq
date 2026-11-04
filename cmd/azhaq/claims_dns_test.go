@@ -244,9 +244,8 @@ func TestDNSResponseTypeFilterKeepsTheFiveKindsAndTextPrintsWhatItHas(t *testing
 }
 
 // A name whose CNAME points at what is gone gets its -json row with takeover
-// when A is among the types asked (the default, -a, -all), and is not counted
-// as not resolving; the check reads the A chain, so with only another type
-// asked there is none to read.
+// whichever types are asked, unless -no-takeover leaves the check out, and is
+// not counted as not resolving.
 func TestDNSDanglingCNAMEGetsItsRowWhenAIsAsked(t *testing.T) {
 	t.Chdir(t.TempDir())
 	pc, err := net.ListenPacket("udp", "127.0.0.1:0")
@@ -272,7 +271,8 @@ func TestDNSDanglingCNAMEGetsItsRowWhenAIsAsked(t *testing.T) {
 		row  bool
 	}{
 		{nil, true}, {[]string{"-a"}, true}, {[]string{"-all"}, true}, {[]string{"-a", "-mx"}, true},
-		{[]string{"-mx"}, false}, {[]string{"-txt"}, false}, {[]string{"-cname"}, false}, {[]string{"-aaaa"}, false},
+		{[]string{"-mx"}, true}, {[]string{"-txt"}, true}, {[]string{"-cname"}, true}, {[]string{"-aaaa"}, true},
+		{[]string{"-no-takeover"}, false}, {[]string{"-cname", "-no-takeover"}, false},
 	} {
 		ls, rep, _ := dnsOut(t, append([]string{"-d", "dangling.lab.zz", "-r", addr, "-j", "-allow", "lab.zz"}, tc.args...)...)
 		row := dnsRows(t, ls)["dangling.lab.zz"]
