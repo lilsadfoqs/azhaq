@@ -3,13 +3,18 @@ package main
 import (
 	"fmt"
 	"io"
+	"net"
+	"net/netip"
 	"sort"
 	"strings"
 
 	"github.com/lilsadfoqs/azhaq/internal/collectors/brutecol"
 	"github.com/lilsadfoqs/azhaq/internal/collectors/dirscol"
+	"github.com/lilsadfoqs/azhaq/internal/collectors/pathscol"
 	"github.com/lilsadfoqs/azhaq/internal/collectors/portcol"
 	"github.com/lilsadfoqs/azhaq/internal/ledger"
+	"github.com/lilsadfoqs/azhaq/internal/normalize"
+	"github.com/lilsadfoqs/azhaq/scope"
 	"github.com/lilsadfoqs/azhaq/types"
 )
 
@@ -156,12 +161,9 @@ func stageRank(s string) int {
 // each wordlist and port list is, from the same values the run sends.
 type costEnv struct {
 	sendLimits
-	paths     int // built-in path checks on each web service; 0 when azhaq-paths does not run
-	favicon   bool
-	dirsWords int // words of -dirs
-	dirsExts  int // -dirs-ext extensions
-	paramsN   int // names of -params
-	bruteN    int // words of -dns-brute
+	// What the floors are counted against.
+	rules    scope.Rules
+	pathList []string // the built-in path checks and -paths ones; none when azhaq-paths does not run
 }
 
 // estimator accumulates the estimate: stage → collector → amount.
@@ -237,6 +239,13 @@ func (e *estimator) result() costEstimate {
 	return out
 }
 
+// An estimate is a floor: each stage counts what the run sends whatever the
+// answers are, and says what it leaves out. Work an answer can skip is not
+// in it: an API description found ends the guesses of one, a URL that was
+// asked already is not asked again, a request the scope or -deny-path holds
+// back is not sent. A request is counted once however many collectors would
+// make it.
+
 // estimateCost is what a run of seeds would send, for the collectors planned
 // on each. planned[i] are the collectors planFor found for seeds[i]; runs says
 // whether a collector would run on a web service found.
@@ -251,7 +260,39 @@ func estimateCost(seeds []types.Seed, planned [][]string, runs func(string) bool
 		return false
 	}
 	permuteNoted := false
-	services := 0 // web services known: the URLs given, and the names given, which are asked to answer
+	guessLeft := env.guessBudget // -max-names holds the guesses of -dns-brute and -permute together
+	guess := func(n int) int64 {
+		if env.guessBudget > 0 {
+			n = min(n, guessLeft)
+			guessLeft -= n
+		}
+		return int64(n)
+	}
+	ports := newPortModel(env.rules, env)
+	var ranges []netip.Prefix // the ranges that are scanned: an address in one is scanned there
+	for i, s := range seeds {
+		if pf, err := netip.ParsePrefix(s.Key()); err == nil && s.Type == types.TypePrefix && has(i, "azhaq-ports") {
+			ranges = append(ranges, pf.Masked())
+		}
+	}
+	pageHosts := map[string]bool{} // hosts of the URLs asked
+	for i, s := range seeds {
+		if s.Type == types.TypeURL && has(i, "azhaq-http") {
+			pageHosts[normalize.HostFromURL(s.Key())] = true
+		}
+	}
+	const portsOpen = "banner and protocol probes of each open port"
+	nameScanned := false // a name is scanned: whether it is behind a CDN or WAF is not known
+	var (
+		pages     = map[string]bool{} // the URLs of the web map the run asks whatever the answers are
+		sweepSeen = map[string]bool{} // origins whose path sweep is planned
+		sweeps    []string            // the URLs the sweeps ask
+		descs     int                 // the guesses of an API description they leave out
+		hostPages int                 // names asked for their page: its URL is not known before
+		dirsBases = map[string]bool{}
+		dirsReqs  int64
+		names     = map[string]bool{} // the names looked up
+	)
 	for i, s := range seeds {
 		for _, c := range planned[i] {
 			switch c {
@@ -260,28 +301,57 @@ func estimateCost(seeds []types.Seed, planned [][]string, runs func(string) bool
 					e.add(c, amount{Sources: int64(n)}, "names and archived URLs found are asked about too")
 				}
 			case "azhaq-dns":
-				e.add(c, amount{DNS: 2}, "wildcard checks and CNAME chains")
+				names[s.Key()] = true
 			case "azhaq-dns-brute":
-				e.add(c, amount{DNS: int64(env.bruteN)}, "")
+				e.add(c, amount{DNS: guess(brutecol.BruteCount(env.bruteList, s.Key()))}, "")
 			case "azhaq-permute":
 				// The variations of a name given are known; the names a source or
 				// a lookup gives later bring variations of their own.
-				e.add(c, amount{DNS: int64(brutecol.PermuteCount(s.Key()))}, permuteOpen)
+				e.add(c, amount{DNS: guess(brutecol.PermuteCount(s.Key()))}, permuteOpen)
 				permuteNoted = true
 			case "azhaq-tls":
-				e.add(c, amount{Connects: 1}, "")
+				if env.rules.AllowsAddr(s.Key(), "443") {
+					e.add(c, amount{Connects: 1}, "")
+				}
 			case "azhaq-ports":
-				e.add(c, portCost(env), "banner and protocol probes of each open port")
+				e.add(c, portsOf(ports, s, ranges), portsOpen)
+				nameScanned = nameScanned || s.Type == types.TypeHostname && net.ParseIP(s.Key()) == nil
+			case "azhaq-http":
+				switch {
+				case s.Type == types.TypeURL && env.rules.AllowsURL(s.Key()):
+					pages[s.Key()] = true
+				case s.Type == types.TypeHostname && !pageHosts[s.Key()] && env.rules.Allows(s.Key()):
+					hostPages++
+				}
+			case "azhaq-paths":
+				if s.Type != types.TypeURL || !env.rules.AllowsURL(s.Key()) {
+					continue
+				}
+				origin := originOf(s.Key())
+				if sweepSeen[origin] {
+					continue // an API base of the origin: its guesses are all of a description
+				}
+				sweepSeen[origin] = true
+				locs, guesses := pathscol.Sweep(s.Key(), env.pathList)
+				for _, u := range locs {
+					if env.rules.DeniedPath(u) == "" {
+						sweeps = append(sweeps, u)
+					}
+				}
+				descs += len(guesses)
+			case "azhaq-dirs":
+				if s.Type != types.TypeURL || !env.rules.AllowsURL(s.Key()) {
+					continue
+				}
+				if base := dirscol.Base(s.Key()); base != "" && !dirsBases[base] {
+					dirsBases[base] = true
+					dirsReqs += int64(dirscol.Requests(s.Key(), env.dirsWordList, env.dirsExtList, !env.dirsNoCal, env.rules.DeniedPath))
+				}
 			}
 		}
-		switch s.Type {
-		case types.TypeURL:
-			services++
-		case types.TypeHostname:
-			if has(i, "azhaq-http") {
-				services++
-			}
-		}
+	}
+	if n := dnsFloor(names); n > 0 {
+		e.add("azhaq-dns", amount{DNS: n}, "wildcard checks past the first of a zone, CNAME chains, and a second resolver asked about a name that does not answer")
 	}
 	if active["permute"] && !permuteNoted {
 		for _, s := range seeds {
@@ -291,25 +361,45 @@ func estimateCost(seeds []types.Seed, planned [][]string, runs func(string) bool
 			}
 		}
 	}
-	if runs("azhaq-http") && services > 0 {
-		n := int64(services)
-		per := int64(1)
-		if env.favicon {
-			per++
+	if active["ports"] {
+		for _, s := range seeds {
+			if s.Type == types.TypeASN {
+				e.add("azhaq-ports", amount{}, "the addresses of the ranges an AS number holds, known when RIPEstat answers")
+				break
+			}
 		}
-		e.add("azhaq-http", amount{Requests: n * per}, "what its pages, scripts and archived URLs lead to")
-	}
-	if runs("azhaq-paths") && services > 0 && env.paths > 0 {
-		e.add("azhaq-paths", amount{Requests: int64(services) * int64(env.paths)}, "the documentation paths under each API prefix the pages name")
-	}
-	if active["dirs"] && services > 0 && env.dirsWords > 0 {
-		per := int64(env.dirsWords) * int64(1+env.dirsExts)
-		if !env.dirsNoCal {
-			per += int64(dirscol.CalibrationProbes(env.dirsExts))
+		if len(ranges) > 0 && env.portDiscover == portcol.DiscoverFirst {
+			e.add("azhaq-ports", amount{}, "the ports of the addresses of a range that answer the connects to 80 and 443 (-port-discover first)")
 		}
-		e.add("azhaq-dirs", amount{Requests: int64(services) * per}, "each directory found is swept and calibrated too")
+		if len(env.portUDPList) > 0 && nameScanned {
+			e.add("azhaq-ports", amount{}, "UDP datagrams to a name, which may be behind a CDN or WAF: none go to those addresses")
+		}
 	}
-	if active["params"] && services > 0 && env.paramsN > 0 {
+	// The page of each URL, then each path the sweeps ask; one that is both is
+	// one request, and the favicon is /favicon.ico, one of the paths, or an
+	// icon the page names, which only the answer tells.
+	if runs("azhaq-http") && len(pages)+hostPages > 0 {
+		e.add("azhaq-http", amount{Requests: int64(len(pages) + hostPages)}, "what its pages, scripts and archived URLs lead to")
+	}
+	if runs("azhaq-paths") && len(sweeps) > 0 {
+		own := 0
+		seen := map[string]bool{}
+		for _, u := range sweeps {
+			if !seen[u] && !pages[u] {
+				own++
+			}
+			seen[u] = true
+		}
+		note := "the documentation paths under each API prefix the pages name"
+		if descs > 0 {
+			note += "; the " + nOf(descs, "guess", "guesses") + " of an API description, which stop at the first found"
+		}
+		e.add("azhaq-paths", amount{Requests: int64(own)}, note)
+	}
+	if dirsReqs > 0 {
+		e.add("azhaq-dirs", amount{Requests: dirsReqs}, "each directory found is swept and calibrated too")
+	}
+	if active["params"] && len(pages) > 0 && env.paramsN > 0 {
 		e.add("azhaq-params", amount{}, "pages searched, up to -params-per-host a host, each asked in batches of the wordlist")
 	}
 	if env.login != "" {
@@ -318,22 +408,60 @@ func estimateCost(seeds []types.Seed, planned [][]string, runs func(string) bool
 	return e.result()
 }
 
+// dnsFloor is the queries the lookup of names sends if each answers: one
+// for each name, one for each zone above a name that a wildcard is looked for
+// in (a random label of it, once for the run), and for a registrable domain
+// its MX, TXT and NS.
+func dnsFloor(names map[string]bool) int64 {
+	var n int64
+	zones := map[string]bool{}
+	for h := range names {
+		n++
+		apex := normalize.RegistrableDomain(h)
+		switch {
+		case apex == "":
+		case h == apex:
+			n += 3
+		default:
+			for p := parentName(h); p == apex || strings.HasSuffix(p, "."+apex); p = parentName(p) {
+				zones[p] = true
+			}
+		}
+	}
+	return n + int64(len(zones))
+}
+
+// parentName is a name without its first label.
+func parentName(h string) string {
+	_, rest, _ := strings.Cut(h, ".")
+	return rest
+}
+
+// portsOf is what the port scan costs at least on one target: a range is every
+// address of it the scope allows; an address inside a range that is scanned is
+// scanned there, and not again.
+func portsOf(m portModel, s types.Seed, ranges []netip.Prefix) amount {
+	switch s.Type {
+	case types.TypePrefix:
+		if pf, err := netip.ParsePrefix(s.Key()); err == nil {
+			return m.span(pf)
+		}
+	case types.TypeIPAddress, types.TypeHostname:
+		if a, err := netip.ParseAddr(s.Key()); err == nil {
+			for _, pf := range ranges {
+				if pf.Contains(a.Unmap()) {
+					return amount{}
+				}
+			}
+		}
+		return m.host(s.Key())
+	}
+	return amount{}
+}
+
 // permuteOpen is what -permute's estimate leaves out: the names the sources
 // and the lookups give are not known before they answer.
 const permuteOpen = "variations of the names the sources and lookups find (-permute)"
-
-// portCost is what one address costs the port scan: a connect for each port,
-// the two that tell whether it is up first, the datagrams of -ports-udp.
-func portCost(env costEnv) amount {
-	n := int64(env.tcpPorts)
-	switch env.portDiscover {
-	case portcol.DiscoverFirst:
-		n += 2
-	case portcol.DiscoverOnly:
-		n = 2
-	}
-	return amount{Connects: n + int64(env.udpPorts)}
-}
 
 // printEstimate says the estimate in plain text, one line a stage.
 func printEstimate(w io.Writer, lead string, est costEstimate) {
@@ -407,6 +535,12 @@ func stageOfKey(k ledger.SpentKey) string {
 	}
 	if k.Stage != "" {
 		return k.Stage
+	}
+	if k.Class == ledger.ClassDNS {
+		// Any query to a resolver is the names stage's: the resolver's cache
+		// gives an answer to whichever collector asked first, so the collector
+		// that sent a query says nothing of the stage that needed it.
+		return "names"
 	}
 	return stageOfCollector(k.Collector)
 }

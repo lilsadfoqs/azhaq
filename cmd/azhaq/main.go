@@ -1181,6 +1181,9 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		}
 	}
 	paths := append(append([]string{}, pathscol.DefaultWordlist...), opts.Paths...)
+	if *knownFiles != "" {
+		paths = pathscol.KnownFiles(*knownFiles) // these replace the built-in checks
+	}
 	send := sendLimits{noThirdParty: *sourcesList == "none", max: *maxRequests, by: "-max-requests", noFavicon: *noFavicon, chrome: *shots != "" || *render, shots: *shots, render: *render, chromeWrites: *browserWrites,
 		interact: *interact, dirs: *dirsFile != "", params: *paramsFile != "", login: *login, loginUser: *loginUser, graphql: *graphql, submitForms: *submitForms,
 		portsOn: len(portsOn) > 0, portDetect: portCfg.Detect, portPayload: len(portCfg.Payload) > 0, portDiscover: portCfg.Discover}
@@ -1188,8 +1191,11 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		send.paramsBody = m
 	}
 	send.tcpPorts, send.udpPorts = len(opts.Ports), len(opts.UDPPorts)
+	send.portList, send.portUDPList, send.portsFor = opts.Ports, opts.UDPPorts, portCfg.PortsFor
+	send.portExcludeCDN, send.portThreshold = portCfg.ExcludeCDN, portCfg.Threshold
+	send.dirsWordList, send.dirsExtList, send.guessBudget, send.bruteList = opts.Dirs.Words, opts.Dirs.Extensions, *maxNames, opts.BruteWords
 	send.axfr, send.resolvers = out.axfr, resolvers
-	send.dirsWords, send.dirsExts, send.paramsN, send.bruteN = len(opts.Dirs.Words), len(opts.Dirs.Extensions), len(opts.Params.Words), len(opts.BruteWords)
+	send.dirsWords, send.dirsExts, send.paramsN = len(opts.Dirs.Words), len(opts.Dirs.Extensions), len(opts.Params.Words)
 	send.dirsNoCal = opts.Dirs.NoCalibration
 	send.verify = verifyFl.on
 	send.hostGuesses = *hostGuesses

@@ -369,26 +369,7 @@ func (c *Collector) sweep(ctx context.Context, dir string, note *sweepNote, foun
 		}
 		note.loose(dir, cal.unfiltered)
 	}
-	var targets []string
-	for _, w := range c.Opts.Words {
-		// An empty word asks for the base URL itself, as in ffuf.
-		blank := w == ""
-		w = strings.TrimPrefix(strings.TrimSpace(w), "/")
-		if (w == "" && !blank) || strings.HasPrefix(w, "#") {
-			continue
-		}
-		words := []string{w}
-		for _, ext := range c.Opts.Extensions {
-			words = append(words, w+"."+strings.TrimPrefix(ext, "."))
-		}
-		for _, t := range words {
-			if rule := egress.DeniedBy(dir + escapeWord(t)); rule != "" {
-				held = append(held, heldURL{dir + escapeWord(t), rule})
-				continue
-			}
-			targets = append(targets, t)
-		}
-	}
+	targets, held := sweepTargets(dir, c.Opts.Words, c.Opts.Extensions, egress.DeniedBy)
 	var hits []hit
 	var filtered, nfailed, nlimited atomic.Int64
 	var out, halt atomic.Bool
@@ -499,6 +480,69 @@ func (c *Collector) sweep(ctx context.Context, dir string, note *sweepNote, foun
 		err = dead
 	}
 	return hits, len(targets), int(filtered.Load()), int(nfailed.Load()), int(nlimited.Load()), held, out.Load(), err
+}
+
+// sweepTargets are the words one directory is asked, each with each extension
+// besides, less those deniedBy keeps out (it names the rule that does).
+func sweepTargets(dir string, words, exts []string, deniedBy func(string) string) (targets []string, held []heldURL) {
+	for _, w := range words {
+		// An empty word asks for the base URL itself, as in ffuf.
+		blank := w == ""
+		w = strings.TrimPrefix(strings.TrimSpace(w), "/")
+		if (w == "" && !blank) || strings.HasPrefix(w, "#") {
+			continue
+		}
+		each := []string{w}
+		for _, ext := range exts {
+			each = append(each, w+"."+strings.TrimPrefix(ext, "."))
+		}
+		for _, t := range each {
+			if rule := deniedBy(dir + escapeWord(t)); rule != "" {
+				held = append(held, heldURL{dir + escapeWord(t), rule})
+				continue
+			}
+			targets = append(targets, t)
+		}
+	}
+	return targets, held
+}
+
+// Requests is how many requests the sweep of the directory of raw (a URL
+// the user gave) sends at least: the words and their extensions that
+// deniedBy leaves, and the probes that calibrate it. A directory a sweep
+// finds is swept too; that is not counted.
+func Requests(raw string, words, exts []string, calibrate bool, deniedBy func(string) string) int {
+	dir := Base(raw)
+	if dir == "" {
+		return 0
+	}
+	targets, _ := sweepTargets(dir, words, exts, deniedBy)
+	n := len(targets)
+	if calibrate {
+		// The names are random: a rule that holds back one is judged on the
+		// shape (admin…, .htaccess…) with a name of the same kind.
+		_, shapes := calibrationShapes(exts, func(i int) string { return "q0w1e2r3t4y5"[:10+i%3] })
+		for _, sh := range shapes {
+			if deniedBy(dir+sh) == "" {
+				n++
+			}
+		}
+	}
+	return n
+}
+
+// Base is the directory a sweep that starts at raw asks: its scheme, host
+// and path as far as the last slash.
+func Base(raw string) string {
+	raw, err := normalize.URL(raw)
+	if err != nil {
+		return ""
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return ""
+	}
+	return u.Scheme + "://" + u.Host + dirPath(u.Path)
 }
 
 // escapeWord puts a word in a URL as ffuf does: a "?" starts the query
@@ -687,19 +731,27 @@ func (n *sweepNote) unfiltered() []string {
 // the four shapes and one for each extension (see calibrate).
 func CalibrationProbes(extensions int) int { return 4 + extensions }
 
+// calibrationShapes are the random names calibration asks for and the paths
+// they make: a word, admin…, .htaccess…, a directory, and one for each
+// extension. rand gives the name for each place.
+func calibrationShapes(exts []string, rand func(int) string) (probes, shapes []string) {
+	probes = []string{rand(0), rand(1), rand(2), rand(3)}
+	shapes = []string{probes[0], "admin" + probes[1], ".htaccess" + probes[2], probes[3] + "/"}
+	for _, ext := range exts {
+		p := rand(len(probes))
+		probes = append(probes, p)
+		shapes = append(shapes, p+"."+strings.TrimPrefix(ext, "."))
+	}
+	return probes, shapes
+}
+
 // calibrate asks for random names of the shapes ffuf's -ac uses (a word,
 // admin…, .htaccess…, a directory) and one per extension, at the sweep's
 // pace. A file that exists keeps its place even when its content equals
 // the catch-all page.
 func (c *Collector) calibrate(ctx context.Context, dir, host string) (cal calibration, dead error) {
 	cal = calibration{echo: map[int]bool{}, vary: map[int]bool{}}
-	probes := []string{randWord(0), randWord(1), randWord(2), randWord(3)}
-	shapes := []string{probes[0], "admin" + probes[1], ".htaccess" + probes[2], probes[3] + "/"}
-	for _, ext := range c.Opts.Extensions {
-		p := randWord(len(probes))
-		probes = append(probes, p)
-		shapes = append(shapes, p+"."+strings.TrimPrefix(ext, "."))
-	}
+	probes, shapes := calibrationShapes(c.Opts.Extensions, randWord)
 	// Asked together, up to the sweep's threads (a round trip, not one per
 	// shape), and read in the order of the shapes.
 	type answer struct {

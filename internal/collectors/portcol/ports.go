@@ -1046,3 +1046,7 @@ func withPrior(s *scan, prior Prior) *scan {
 	sort.Slice(m.open, func(i, j int) bool { return m.open[i].Port < m.open[j].Port })
 	return &m
 }
+
+// CDNPorts are the ports a CDN or WAF address is asked when the scan is told
+// to exclude them (-port-exclude-cdn).
+func CDNPorts() []int { return slices.Clone(cdnPorts) }

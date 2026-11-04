@@ -80,6 +80,13 @@ plan.estimate-said-first	docs/commands/plan.md	`run` prints it before it sends w
 plan.estimate-not-counted	docs/commands/plan.md	It does not count what an answer leads to	test:cmd/azhaq:TestPlanEstimatesEachStage
 plan.estimate-at-least	docs/commands/plan.md	A stage that leaves something out says `estimate_at_least`	test:cmd/azhaq:TestPlanEstimatesEachStage
 plan.estimate-exact	docs/commands/plan.md	A stage with nothing in `not_counted` is the number the run sends	test:cmd/azhaq:TestRunCostByStageOnAJuiceShopShapedApp
+plan.estimate-stages	docs/commands/plan.md	The stages are `sign-in`	test:cmd/azhaq:TestPlanEstimatesEachStage,TestNamesFloorAndItsQueries,TestPortsEstimateCountsEveryAddressOfARange
+plan.estimate-floor	docs/commands/plan.md	A floor is never above what the run sends	test:cmd/azhaq:TestEstimateIsAFloorOnStandIns,TestNamesFloorAndItsQueries,TestPortsFloorOfADiscoveredRangeAndOfUDP
+plan.estimate-range	docs/commands/plan.md	counts every address of it that `-allow`, `-scope` and `-deny` leave	test:cmd/azhaq:TestPortsEstimateCountsEveryAddressOfARange,TestPortsFloorOfADiscoveredRangeAndOfUDP,TestPortsEstimateKnowsTheCDNAddressesOfARange,TestPortsEstimateOfAHugeRange
+plan.estimate-denied	docs/commands/plan.md	A request the scope or a `-deny-path` rule holds back is not counted	test:cmd/azhaq:TestEstimateIsAFloorOnStandIns
+plan.estimate-discover	docs/commands/plan.md	With `-port-discover first` the estimate counts the two discovery connects of each address of a range	test:cmd/azhaq:TestPortsFloorOfADiscoveredRangeAndOfUDP
+plan.estimate-udp-cdn	docs/commands/plan.md	A CDN or WAF address is sent no UDP datagram	test:cmd/azhaq:TestPortsEstimateKnowsTheCDNAddressesOfARange
+plan.estimate-fixtures	docs/commands/plan.md	the counted stages are exact (`ports`, `dirs`)	test:cmd/azhaq:TestRunCostByStageOnAJuiceShopShapedApp,TestNamesFloorAndItsQueries
 plan.bound-not-count	docs/commands/plan.md	The plan gives a bound, not a count	test:cmd/azhaq:TestPlanRequests
 plan.max-names	docs/commands/plan.md	At most `max_names` names are looked up	test:cmd/azhaq:TestPlanRequests
 plan.per-web-service	docs/commands/plan.md	`per_web_service` covers a web service's page, the favicon and the built-in paths	test:cmd/azhaq:TestPlanRequests,TestDocsCountTheBuiltInPathsAsThePlanDoes

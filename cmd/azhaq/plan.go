@@ -142,8 +142,15 @@ type sendLimits struct {
 	verify       bool     // -verify: the enumerated read-only verification checks
 	resolvers    []string // the resolvers named (-resolvers)
 	paramsN      int      // names of -params
-	bruteN       int      // words of -dns-brute
 	dirsNoCal    bool     // -dirs-calibrate=false
+	// What the cost estimate counts from: the lists themselves, not their sizes.
+	portList, portUDPList     []int
+	portsFor                  map[string][]int // -ports-on
+	portExcludeCDN            bool
+	portThreshold             int
+	dirsWordList, dirsExtList []string
+	guessBudget               int      // -max-names: the most names -dns-brute and -permute ask, 0: no cap
+	bruteList                 []string // the words of -dns-brute
 }
 
 // planSends are the lines on what a run sends besides the GET requests for
@@ -364,11 +371,10 @@ func planFor(cat *catalog.Catalog, seeds []types.Seed, b engine.Budgets, paths [
 		}
 		return 0
 	}
-	env := costEnv{sendLimits: send, favicon: !send.noFavicon}
+	env := costEnv{sendLimits: send, rules: b.Scope}
 	if runs("azhaq-paths") {
-		env.paths = len(p.Paths)
+		env.pathList = p.Paths
 	}
-	env.dirsWords, env.dirsExts, env.paramsN, env.bruteN = send.dirsWords, send.dirsExts, send.paramsN, send.bruteN
 	p.Estimate = estimateCost(kept, planned, runs, b.Active, env, asks)
 	gets, others := planSends(b, send)
 	switch {
