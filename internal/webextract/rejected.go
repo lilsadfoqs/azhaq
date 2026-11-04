@@ -23,6 +23,7 @@ const (
 	ReasonCode       = "unquoted script code the page pattern read as a path (a.number/t.doc), not a string"
 	ReasonSearched   = "a string a script searches for (indexOf, includes, replace), not a URL it requests"
 	ReasonPrefix     = "the start of a path a script joins more to (\"/rest/user/\"+id, a base other routes are built on), not a route"
+	ReasonBased      = "a route a script's client asks under the base the script declares (baseURL), never at the site's root"
 	ReasonModuleKey  = "a key of a module map or a case label (a path in the bundler's source tree), not a route of the app"
 )
 

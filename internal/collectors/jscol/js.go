@@ -193,19 +193,24 @@ func startScan(ctx context.Context, s script, page string, base, appRoot *url.UR
 		}
 	})
 	run(func(v *scanned) {
+		// A base without a leading slash ("server/index.php?s=") is the
+		// page's, as a browser takes it; a script run alone has no page.
+		ref := base
+		if looksLikeJS(page) {
+			ref = appRoot
+		}
 		if !s.inline {
-			v.calls = webextract.Calls(s.body)
+			for _, c := range webextract.Calls(s.body) {
+				if c, ok := pageRelative(c, ref); ok {
+					v.calls = append(v.calls, c)
+				}
+			}
 			return
 		}
 		for _, c := range webextract.PageCalls(s.body) {
-			if !strings.HasPrefix(c.Path, "/") && !strings.HasPrefix(c.Path, "http://") && !strings.HasPrefix(c.Path, "https://") {
-				ref, err := s.url.Parse(c.Path)
-				if err != nil {
-					continue
-				}
-				c.Path = ref.String()
+			if c, ok := pageRelative(c, s.url); ok {
+				v.calls = append(v.calls, c)
 			}
-			v.calls = append(v.calls, c)
 		}
 	})
 	run(func(v *scanned) {
@@ -228,6 +233,27 @@ func startScan(ctx context.Context, s script, page string, base, appRoot *url.UR
 		close(f.done)
 	}()
 	return f
+}
+
+// pageRelative resolves the path and the base of a call that are relative
+// to the page, as the browser does; false when one cannot be.
+func pageRelative(c webextract.Call, ref *url.URL) (webextract.Call, bool) {
+	rooted := func(p string) bool {
+		return strings.HasPrefix(p, "/") || strings.HasPrefix(p, "http://") || strings.HasPrefix(p, "https://")
+	}
+	if !rooted(c.Path) {
+		u, err := ref.Parse(c.Path)
+		if err != nil {
+			return c, false
+		}
+		c.Path = u.String()
+	}
+	if c.Base != "" && !rooted(c.Base) {
+		if u, err := ref.Parse(c.Base); err == nil {
+			c.Base = u.String()
+		}
+	}
+	return c, true
 }
 
 // site is where in s the bytes start..end lie, as a reader finds them:
@@ -908,10 +934,27 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 	var opOrder []string
 	gets := map[string]bool{}
 	params, body := map[string][]string{}, map[string][]string{} // route → names sent, whatever the method
+	baseOf := map[string]string{}                                // route → the base its calls are joined onto
+	unbased := map[string]string{}                               // the route as named, without the base → that base
+	baseKeys := map[string]bool{}                                // the bases themselves: strings the calls are built on
+	atRoot := map[string]bool{}                                  // routes some call asks without any base
 	for _, c := range webextract.MergeCalls(calls) {
 		k, ok := callRoute(c, origin, raw)
 		if !ok {
 			continue
+		}
+		if c.Base != "" {
+			b := c.Base
+			if strings.HasPrefix(b, "/") {
+				b = origin + b
+			}
+			baseOf[k] = b
+			baseKeys[webextract.RouteKey(b)] = true
+			if rk := webextract.RouteKey(origin + c.Route); rk != k {
+				unbased[rk] = k
+			}
+		} else {
+			atRoot[k] = true
 		}
 		if _, ok := callOps[k]; !ok {
 			callOps[k] = nil
@@ -951,6 +994,9 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		}
 		if len(body[k]) > 0 {
 			row["body"] = body[k]
+		}
+		if b := baseOf[k]; b != "" {
+			row["base"] = b
 		}
 		if len(called[k]) > 0 {
 			row["found_in"] = called[k]
@@ -997,6 +1043,37 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		role := webextract.ClassifyURL(link)
 		if role == "asset" || role == "script" {
 			continue // scripts that loaded are listed above
+		}
+		if joined, ok := unbased[webextract.RouteKey(link)]; ok && !atRoot[webextract.RouteKey(link)] {
+			// A route the script's client asks under its base: at the
+			// root it is a path nothing serves.
+			text := asWritten[webextract.RouteKey(link)]
+			if text == "" {
+				text = strings.TrimPrefix(webextract.RouteKey(link), origin)
+			}
+			if k := text + "\x00based"; !rejSeen[k] {
+				rejSeen[k] = true
+				if err := emit(webextract.RejectedObs(Name, raw, text, webextract.ReasonBased, "js", joined)); err != nil {
+					return meta, err
+				}
+				meta.EmitCount++
+			}
+			continue
+		}
+		if hk := webextract.RouteKey(link); baseKeys[hk] && !atRoot[hk] {
+			// The base the script declares: what its calls are built on.
+			text := asWritten[hk]
+			if text == "" {
+				text = strings.TrimPrefix(hk, origin)
+			}
+			if k := text + "\x00prefix"; !rejSeen[k] {
+				rejSeen[k] = true
+				if err := emit(webextract.RejectedObs(Name, raw, text, webextract.ReasonPrefix, "js", link)); err != nil {
+					return meta, err
+				}
+				meta.EmitCount++
+			}
+			continue
 		}
 		if tails[link] && tailOf(link, callOps) {
 			continue // this.host+`/orders`: the call says where its base put it
@@ -1285,6 +1362,9 @@ func callRoute(c webextract.Call, origin, page string) (string, bool) {
 	n, err := normalize.URL(link)
 	if err != nil || !fetch.SameSite(page, n) {
 		return "", false
+	}
+	if c.Base != "" && strings.Contains(c.Path, "?") {
+		return n, true // the base's query is the route: server/index.php?s=/item/list
 	}
 	return webextract.RouteKey(n), true
 }
