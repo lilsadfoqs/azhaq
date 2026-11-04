@@ -1358,3 +1358,5 @@ report.dir-slash-same	docs/commands/report.md	Without a slash, `-o out` and `-o 
 report.one-report-to-file	docs/commands/report.md	`-o PATH` for exactly one report, when `PATH` is not a directory: that report is written to the file `PATH`.	test:cmd/azhaq:TestReportOutputIsADirectoryOrAFile
 
 # docs/commands/roles.md
+roles.note-names-renewal	docs/commands/roles.md	A note names a renewal only when one ran and gave a session that passed its check	test:cmd/azhaq:TestRoleNotesNoCommandSaysItCouldNotBeRenewed,TestRoleNotesFailingCommandSaysRenewalFailed,TestRoleNotesCommandThatRenewsIsNamed,TestRoleNotesCommandWhoseNewSessionFailsIsNotCalledARenewal,TestRoleNotesASignInThatPassedItsCheckIsNamed
+roles.note-says-why-not-renewed	docs/commands/roles.md	A role with no `-role-cmd` or `-role-login` says it could not be renewed; a command that failed says its renewal failed	test:cmd/azhaq:TestRoleNotesNoCommandSaysItCouldNotBeRenewed,TestRoleNotesFailingCommandSaysRenewalFailed,TestRoleNotesCommandWhoseNewSessionFailsIsNotCalledARenewal
