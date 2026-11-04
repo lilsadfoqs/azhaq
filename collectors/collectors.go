@@ -4,6 +4,7 @@ package collectors
 import (
 	"context"
 	"net/http"
+	"sync"
 
 	"github.com/lilsadfoqs/azhaq/catalog"
 	"github.com/lilsadfoqs/azhaq/internal/browser"
@@ -137,13 +138,31 @@ func Register(cat *catalog.Catalog, o Options) {
 			}
 		}
 		// Mostly made-up names: one resolver's NXDOMAIN is enough, as in brute.
-		for _, a := range pool.ResolveMany(dnsr.Bulk(ctx), ask, 128) {
+		// A live answer is judged against a wildcard as it arrives, while the
+		// run is live: a run that stops mid-batch keeps what it had answered.
+		var mu sync.Mutex
+		judged := map[string]bool{}                                                // name → resolves, not to a wildcard
+		exists := func(a dnsr.Answer) bool { return a.Live() || len(a.CNAME) > 0 } // a CNAME-only name exists too (dnsx -a -cname lists it)
+		each := func(a dnsr.Answer) {
+			if a.Status == dnsr.StatusFailed || !exists(a) || ctx.Err() != nil {
+				return
+			}
+			v := !dnsc.Wild.Match(ctx, a.Name, apex, a)
+			mu.Lock()
+			judged[a.Name] = v
+			mu.Unlock()
+		}
+		for _, a := range pool.ResolveMany(dnsr.WithEach(dnsr.Bulk(ctx), each), ask, pool.Window(128)) {
 			switch {
-			case a.Status == dnsr.StatusFailed || ctx.Err() != nil:
+			case a.Status == dnsr.StatusFailed:
 				failed = append(failed, a.Name)
-			// A name that is only a CNAME exists too (dnsx -a -cname lists it).
-			case (a.Live() || len(a.CNAME) > 0) && !dnsc.Wild.Match(ctx, a.Name, apex, a):
+			case !exists(a):
+			case judged[a.Name]:
 				live = append(live, a.Name)
+			default:
+				if _, ok := judged[a.Name]; !ok {
+					failed = append(failed, a.Name) // answered, but the run ended before a wildcard could be ruled out
+				}
 			}
 		}
 		return live, failed

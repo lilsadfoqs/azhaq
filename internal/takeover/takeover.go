@@ -24,6 +24,30 @@ type Finding struct {
 	// for the service and when azhaq read it. The name not resolving is the
 	// whole evidence.
 	List string `json:"list,omitempty"`
+	// Status says how far the finding is shown: "verified" when the service
+	// itself answered, from the name's own front page, with its documented
+	// "nothing here" page; "candidate" when what was seen (a name that did
+	// not resolve, a domain with no DNS) does not show the name is free.
+	Status string `json:"status"`
+}
+
+// The two statuses of a Finding.
+const (
+	Candidate = "candidate"
+	Verified  = "verified"
+)
+
+// Settled is f with its Status filled in when it is empty, as a finding
+// stored by an earlier version has it: only a service's own page beside a
+// CNAME to that service was ever a verified one.
+func (f Finding) Settled() Finding {
+	if f.Status == "" {
+		f.Status = Candidate
+		if f.Strength == "strong" && f.Service != "domain" {
+			f.Status = Verified
+		}
+	}
+	return f
 }
 
 // ListRead is when the public takeover list's entries for the dangling
@@ -114,13 +138,15 @@ func ByCNAME(host string, chain []string, targetGone, registered bool) (Finding,
 	for _, s := range services {
 		if s.on(target) && s.dangling {
 			e := entryOf(target)
-			return Finding{Service: s.name, Target: target, Strength: "dangling", List: "can-i-take-over-xyz, entry " + e + ", read " + ListRead,
-				Evidence: "CNAME to " + target + ", which does not resolve: the name on " + s.name + " may be free to create (unverified: NXDOMAIN does not show it is free)"}, true
+			return Finding{Service: s.name, Target: target, Strength: "dangling", Status: Candidate, List: "can-i-take-over-xyz, entry " + e + ", read " + ListRead,
+				Evidence: "observed: CNAME to " + target + "; " + target + " answered NXDOMAIN; " + target + " is on " + s.name + " (the public list's entry). " +
+					"Candidate, unverified: NXDOMAIN does not show the name is free, and no check with " + s.name + " was made"}, true
 		}
 	}
 	if !registered {
-		return Finding{Service: "domain", Target: target, Strength: "strong",
-			Evidence: "CNAME to " + target + ", whose domain " + Domain(target) + " does not exist: anyone may register it"}, true
+		return Finding{Service: "domain", Target: target, Strength: "strong", Status: Candidate,
+			Evidence: "observed: CNAME to " + target + "; " + target + " answered NXDOMAIN; the SOA of " + Domain(target) + " answered NXDOMAIN. " +
+				"Candidate, unverified: " + Domain(target) + " may be free to register; no registry was asked"}, true
 	}
 	return Finding{}, false
 }
@@ -144,9 +170,9 @@ func ByPage(chain []string, body []byte) (Finding, bool) {
 		evidence := s.name + "'s page for a name nobody claimed: " + quote(s.page.Find(body))
 		switch {
 		case target != "" && s.on(target):
-			return Finding{Service: s.name, Target: target, Strength: "strong", Evidence: "CNAME to " + target + "; " + evidence}, true
+			return Finding{Service: s.name, Target: target, Strength: "strong", Status: Verified, Evidence: "CNAME to " + target + "; " + evidence + " (verified: the service's own documented answer)"}, true
 		case target == "" && s.alone:
-			return Finding{Service: s.name, Strength: "page", Evidence: evidence + " (no CNAME known: check where the name points)"}, true
+			return Finding{Service: s.name, Strength: "page", Status: Candidate, Evidence: evidence + " (candidate: no CNAME known, so the name is not shown to be on the service; check where it points)"}, true
 		}
 		return Finding{}, false
 	}

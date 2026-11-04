@@ -111,6 +111,9 @@ func cmdResume(args []string) error {
 	command := ""
 	if ok {
 		command = st.GetMeta("command:" + id)
+		if command == "subs" {
+			keepSubsAnswers(st, id) // the sources that answered are not asked again
+		}
 	}
 	st.Close()
 	if err != nil {

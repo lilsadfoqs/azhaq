@@ -72,8 +72,8 @@ The `-json` fields are dnsx's, in its order:
 | `has_internal_ips`, `internal_ips` | An answer in a private, loopback, link-local, documentation or multicast range. |
 | `status_code` | The code of the name asked: `NOERROR`, `NXDOMAIN`, `SERVFAIL`, `REFUSED`, … A name that is a CNAME exists, so it is `NOERROR` even when its target does not. |
 | `status_code_raw` | The code as a number. Left out for 0. |
-| `cname_status` | Not a dnsx field: the code of a CNAME's target when it is not `NOERROR`, such as `NXDOMAIN` for a dangling CNAME. |
-| `takeover` | Not a dnsx field: a name whose CNAME points at what is gone. |
+| `cname_status` | Not a dnsx field: the code of a CNAME's target when it is not `NOERROR`, such as `NXDOMAIN` for a dangling CNAME. Whichever types were asked: see [A CNAME's target](#a-cnames-target). |
+| `takeover` | Not a dnsx field: a name whose CNAME points at what is gone. It says what was observed and has `status`: `candidate` until the service itself shows the name is free. See [Takeover candidates](../CONCEPTS.md#takeover-candidates). |
 | `trace`, `axfr` | `{host, chain: [rows]}`, with `-trace` and `-axfr`. |
 | `timestamp` | The time of the query. |
 | `hosts_file` | With `-hf`. |
@@ -100,7 +100,7 @@ The summary counts names: `12 names`. When a line is a record (`-resp`, `-resp-o
 
 `requests` is 0 for `dns`: its questions go to resolvers, not targets. `dns_queries` counts them (the retries and the wildcard probes too, so it is more than `asked`), and equals the ledger's `DNS queries` line count, with or without `-ledger`.
 
-The summary also lists failures per kind of error, and takeover candidates: a CNAME to a name that no longer exists.
+The summary also lists failures per kind of error, and takeover findings: a CNAME to a name that no longer exists. `takeover_candidates` and `takeover_verified` count them apart, and add up to the rows under `takeover`.
 
 ## Details
 
@@ -112,6 +112,10 @@ The summary also lists failures per kind of error, and takeover candidates: a CN
 - With `-all`, `-any` or `-axfr`, `-json` gives a row to every name a resolver answered, including one with no record at all.
 - With `-response-type-filter` and no type flag, `-json` gives a row to every answered name that has none of the records filtered, as dnsx does: `-rtf a` keeps the names that have only AAAA, TXT, MX or SRV, that have no record (NODATA), that do not exist, and the CNAME-only ones, and leaves out the names with an A. In text, a kept name prints the records it has, so one with none prints nothing. With a type flag too (`-a -txt -rtf a`), a name needs a record of a type a flag asked.
 - A name whose CNAME points at what is gone also gets its `-json` row, with `takeover`, whatever the types asked: it is a finding, and it is not counted as `did not resolve`.
+
+### A CNAME's target
+- A name with a CNAME gets its target checked, whichever types were asked. A type whose answer follows the chain (`-a`, `-aaaa`, `-txt`, `-mx`, …) already says where the chain ends. `-cname` alone does not: a question for CNAME gets the record and stops, so the name is asked for A once more, and only the end of the chain is kept from that answer (`cname_status`, and `takeover` when the target is gone). That is one more query for each name that has a CNAME, in `dns_queries` and the ledger like the others.
+- `-no-takeover` leaves that question out. Then `-cname` alone gives no `cname_status` and no `takeover`.
 
 ### Types
 - `-all` asks every type but AXFR. AXFR is asked with `-axfr` only, because it connects to the name servers.

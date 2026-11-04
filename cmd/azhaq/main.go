@@ -1087,7 +1087,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		return usagef("-source-rate, -max-results, -max-time and -max-body are not negative")
 	}
 	opts.Subdomains = subcol.Options{Keys: keys, Only: splitList(*sourcesList), Exclude: splitList(*excludeSources), All: *allSources, NoHistory: *noHistory, SourceTimeout: *sourceTimeout, ExtraWait: extraWaitOf(*extraWait),
-		SourceRate: *sourceRate, SourceRates: rates, MaxResults: *maxResults, MaxTime: *maxTime, MaxBody: *maxBody, MaxNames: *maxNames, NoCheck: subsMode.NoCheck, GuessSamples: subsMode.GuessSamples, Recursive: subsMode.Recursive, Proxy: *sourceProxy}
+		SourceRate: *sourceRate, SourceRates: rates, MaxResults: *maxResults, MaxTime: *maxTime, MaxBody: *maxBody, MaxNames: *maxNames, NoCheck: subsMode.NoCheck, GuessSamples: subsMode.GuessSamples, Recursive: subsMode.Recursive, Proxy: *sourceProxy, NoGuessCheck: subsMode.NoGuessCheck}
 	urlKeys := maps.Clone(keys)
 	if urlKeys == nil {
 		urlKeys = map[string][]string{}
@@ -1551,6 +1551,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		}
 	}
 	if err := fetch.SessionLost(); err != nil {
+		rep.SessionLost = sessionLoss(err)
 		// Said once, as a failure of its own: exit 3, never a quiet anonymous run.
 		if !slices.ContainsFunc(rep.Failed, func(f engine.Failure) bool { return strings.HasPrefix(f.Error, "the session ended") }) {
 			rep.Failed = append(rep.Failed, engine.Failure{Collector: "azhaq-session", Error: err.Error(), Count: 1})

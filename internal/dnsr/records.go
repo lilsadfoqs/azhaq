@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -91,6 +92,44 @@ func (d *Data) Rcode(qtype uint16) (int, bool) {
 func (d *Data) ChainRcode(qtype uint16) (int, bool) {
 	c, ok := d.chainRcodes[qtype]
 	return c, ok
+}
+
+// TargetRcode is the code at the end of the name's CNAME chain, from a
+// question that followed the chain: any type but CNAME (a CNAME question
+// stops at the first record). It says whether there was one; A is read
+// first.
+func (d *Data) TargetRcode() (int, bool) {
+	if c, ok := d.chainRcodes[dns.TypeA]; ok {
+		return c, true
+	}
+	types := make([]int, 0, len(d.chainRcodes))
+	for qt := range d.chainRcodes {
+		if qt != dns.TypeCNAME {
+			types = append(types, int(qt))
+		}
+	}
+	if len(types) == 0 {
+		return 0, false
+	}
+	sort.Ints(types)
+	return d.chainRcodes[uint16(types[0])], true
+}
+
+// TakeTarget adds what a lookup of the same name for A says of the CNAME
+// chain's end: its code, and its status when that is not NOERROR. The
+// records of that answer are not added.
+func (d *Data) TakeTarget(from *Data) {
+	c, ok := from.chainRcodes[dns.TypeA]
+	if !ok {
+		return
+	}
+	if d.chainRcodes == nil {
+		d.chainRcodes = map[uint16]int{}
+	}
+	d.chainRcodes[dns.TypeA] = c
+	if d.CNAMEStatus == "" {
+		d.CNAMEStatus = from.CNAMEStatus
+	}
 }
 
 // Has says whether the name has a record of the kind (as dns type).

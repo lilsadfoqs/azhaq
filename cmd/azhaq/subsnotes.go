@@ -57,7 +57,7 @@ func subsNotes(ps []map[string]any, tiers []tierSet) []string {
 	var notes []string
 	notes = append(notes, historyNotes(ps)...)
 	for _, t := range tiers {
-		var observed int
+		var observed, f1, f2 int
 		var estimated float64
 		for _, p := range ps {
 			foundBy := map[string][]string{}
@@ -69,9 +69,11 @@ func subsNotes(ps []map[string]any, tiers []tierSet) []string {
 			if t.names != nil {
 				filter = func(n string) bool { return t.names[n] }
 			}
-			if s, est, ok := subcol.Chao1(foundBy, dep, filter); ok {
+			if s, est, a, b, ok := subcol.Chao1Basis(foundBy, dep, filter); ok {
 				observed += s
 				estimated += est
+				f1 += a
+				f2 += b
 			}
 		}
 		if observed == 0 {
@@ -86,6 +88,10 @@ func subsNotes(ps []map[string]any, tiers []tierSet) []string {
 			// independent source to estimate from.
 			note += fmt.Sprintf(". Apart from the pool, the other %d of the %d names in this tier came from the name history, from guesses checked in DNS or as CNAME targets", len(t.names)-observed, len(t.names))
 		}
+		// An estimate, and what it rests on: the pool is Chao1's S + f1²/(2·f2)
+		// over the names the independent sources gave, so it is as good as the
+		// overlap of those sources.
+		note += fmt.Sprintf(". This is an estimate (Chao1) from the %d names the independent sources gave: %d came from one source and %d from two", observed, f1, f2)
 		notes = append(notes, note)
 	}
 	return notes
