@@ -220,6 +220,9 @@ type hit struct {
 	Location string `json:"location,omitempty"`
 	// Truncated: the body was a stream that never ends, cut by the read.
 	Truncated bool `json:"truncated,omitempty"`
+	// Position is the place of the input that asked it among the inputs of
+	// its sweep, from 1, as ffuf counts them: a word asked twice is two hits.
+	Position int `json:"position,omitempty"`
 	// Control is set for a hit whose answer is, byte for byte, what its
 	// directory gave a name that cannot exist: the hit says nothing of a
 	// route, and the map folds it.
@@ -240,7 +243,7 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 	queue := []dirLevel{{url: base, depth: 1}}
 	var all []hit
 	var skipped []heldURL // guesses not sent: nobody saw them exist, so they are no URLs of the map
-	requests, filtered, failed, limited := 0, 0, 0, 0
+	requests, filtered, failed, limited, repeats := 0, 0, 0, 0, 0
 	// Each hit is kept as it is found, as ffuf prints it: a run stopped by
 	// Ctrl-C or the budget keeps what it found so far. Hits are handed over
 	// in batches; the engine writes a batch in one transaction.
@@ -254,6 +257,9 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 			}
 			if h.Truncated {
 				row["truncated"] = true
+			}
+			if h.Position > 0 {
+				row["position"] = h.Position
 			}
 			if h.Control != nil {
 				row["catchall"], row["control"], row["control_exact"] = true, h.Control, true
@@ -288,7 +294,7 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		if _, done := c.swept.LoadOrStore(d.url, true); done {
 			continue
 		}
-		hits, n, f, x, lim, held, spent, err := c.sweep(ctx, d.url, &note, found)
+		hits, n, f, x, lim, held, spent, err := c.sweep(ctx, d.url, &note, found, &repeats)
 		if err != nil {
 			emitErr = err
 		}
@@ -319,7 +325,7 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 	summary, _ := json.Marshal(map[string]any{
 		"base": base, "words": len(c.Opts.Words), "extensions": c.Opts.Extensions, "requests": requests,
 		"hits": len(all), "filtered": filtered, "failed": failed, "rate_limited": limited, "depth": c.Opts.Depth,
-		"held": note.shaped.Load(), "unfiltered": note.unfiltered(),
+		"repeats": repeats, "held": note.shaped.Load(), "unfiltered": note.unfiltered(),
 		"controls": note.controls.Load(), "folded": note.folded.Load(),
 	})
 	if err := emit(types.Observation{Collector: Name, Source: base, Kind: "dirs", Payload: summary, Confidence: 0.9, ObservedAt: time.Now().UTC()}); err != nil {
@@ -420,7 +426,7 @@ const (
 // spent says the request budget ran out before it was
 // through; limited counts the answers that were 429, which no default
 // matcher keeps; err is what found returned.
-func (c *Collector) sweep(ctx context.Context, dir string, note *sweepNote, found func([]hit) error) (_ []hit, _ int, _ int, failed, limited int, held []heldURL, spent bool, err error) {
+func (c *Collector) sweep(ctx context.Context, dir string, note *sweepNote, found func([]hit) error, repeats *int) (_ []hit, _ int, _ int, failed, limited int, held []heldURL, spent bool, err error) {
 	host := schemeHost(dir)
 	cal := calibration{echo: map[int]bool{}, vary: map[int]bool{}}
 	if !c.Opts.NoCalibration {
@@ -430,7 +436,8 @@ func (c *Collector) sweep(ctx context.Context, dir string, note *sweepNote, foun
 		}
 		note.loose(dir, cal.unfiltered)
 	}
-	targets, held := sweepTargets(dir, c.Opts.Words, c.Opts.Extensions, egress.DeniedBy, c.heldWord)
+	targets, held, at := sweepTargets(dir, c.Opts.Words, c.Opts.Extensions, egress.DeniedBy, c.heldWord)
+	*repeats += repeated(targets)
 	var hits []hit
 	var filtered, nfailed, nlimited atomic.Int64
 	var out, halt atomic.Bool
@@ -469,7 +476,7 @@ func (c *Collector) sweep(ctx context.Context, dir string, note *sweepNote, foun
 	}()
 	// ask sends one word and judges the answer; it returns the error of a
 	// request that got none.
-	ask := func(word string) error {
+	ask := func(word string, position int) error {
 		target := dir + escapeWord(word)
 		nested := !c.Opts.NoCalibration && inOwnDir(word)
 		r, err := c.get(ctx, target, "", len(cal.shapes) > 0, nested)
@@ -495,7 +502,7 @@ func (c *Collector) sweep(ctx context.Context, dir string, note *sweepNote, foun
 			}
 			return nil
 		}
-		h := hit{URL: target, Status: r.Status, Length: r.Length, Words: r.Words, Lines: r.Lines, Location: r.Location, Truncated: r.Truncated}
+		h := hit{URL: target, Status: r.Status, Length: r.Length, Words: r.Words, Lines: r.Lines, Location: r.Location, Truncated: r.Truncated, Position: position}
 		if nested {
 			inDirsMu.Lock()
 			inDirs = append(inDirs, exactHit{h, r})
@@ -516,7 +523,7 @@ func (c *Collector) sweep(ctx context.Context, dir string, note *sweepNote, foun
 			if c.pace(ctx, host, dir+escapeWord(targets[first])) != nil {
 				break
 			}
-			err := ask(targets[first])
+			err := ask(targets[first], at[first])
 			first++
 			if err == nil || errors.Is(err, neterr.ErrBudget) || errors.Is(err, neterr.ErrDenied) || ctx.Err() != nil {
 				lost = nil
@@ -528,7 +535,7 @@ func (c *Collector) sweep(ctx context.Context, dir string, note *sweepNote, foun
 	}
 	sem := make(chan struct{}, c.Opts.Threads)
 	var wg sync.WaitGroup
-	for _, t := range targets[first:] {
+	for i, t := range targets[first:] {
 		if ctx.Err() != nil || out.Load() || halt.Load() || dead != nil {
 			break
 		}
@@ -537,12 +544,12 @@ func (c *Collector) sweep(ctx context.Context, dir string, note *sweepNote, foun
 		}
 		sem <- struct{}{}
 		wg.Add(1)
-		go func(word string) {
+		go func(word string, position int) {
 			defer guard.Recover(ctx)
 			defer wg.Done()
 			defer func() { <-sem }()
-			_ = ask(word)
-		}(t)
+			_ = ask(word, position)
+		}(t, at[first+i])
 	}
 	wg.Wait()
 	// The hits in a directory the sweep did not start in are judged by an
@@ -560,8 +567,11 @@ func (c *Collector) sweep(ctx context.Context, dir string, note *sweepNote, foun
 
 // sweepTargets are the words one directory is asked, each with each extension
 // besides, less those deniedBy keeps out (it names the rule that does) and
-// those heldWord names a state change in.
-func sweepTargets(dir string, words, exts []string, deniedBy, heldWord func(string) string) (targets []string, held []heldURL) {
+// those heldWord names a state change in. at is the position of each target
+// (from 1, counting the inputs held back too): a word that is in the list
+// twice is asked twice, as ffuf asks it, and each has its own.
+func sweepTargets(dir string, words, exts []string, deniedBy, heldWord func(string) string) (targets []string, held []heldURL, at []int) {
+	pos := 0
 	for _, w := range words {
 		// An empty word asks for the base URL itself, as in ffuf.
 		blank := w == ""
@@ -574,6 +584,7 @@ func sweepTargets(dir string, words, exts []string, deniedBy, heldWord func(stri
 			each = append(each, w+"."+strings.TrimPrefix(ext, "."))
 		}
 		for _, t := range each {
+			pos++
 			if rule := deniedBy(dir + escapeWord(t)); rule != "" {
 				held = append(held, heldURL{dir + escapeWord(t), rule})
 				continue
@@ -583,9 +594,23 @@ func sweepTargets(dir string, words, exts []string, deniedBy, heldWord func(stri
 				continue
 			}
 			targets = append(targets, t)
+			at = append(at, pos)
 		}
 	}
-	return targets, held
+	return targets, held, at
+}
+
+// repeated is how many of the inputs ask a path an earlier one asked.
+func repeated(targets []string) int {
+	seen := make(map[string]bool, len(targets))
+	n := 0
+	for _, t := range targets {
+		if seen[t] {
+			n++
+		}
+		seen[t] = true
+	}
+	return n
 }
 
 // Requests is how many requests the sweep of the directory of raw (a URL
@@ -602,7 +627,7 @@ func Requests(raw string, words, exts []string, calibrate, holdState bool, denie
 	if holdState {
 		held = HeldWord
 	}
-	targets, _ := sweepTargets(dir, words, exts, deniedBy, held)
+	targets, _, _ := sweepTargets(dir, words, exts, deniedBy, held)
 	n := len(targets)
 	if calibrate {
 		// The names are random: a rule that holds back one is judged on the

@@ -912,6 +912,9 @@ type dirsSink struct {
 	mu                        sync.Mutex
 	printed                   map[string]bool
 	failed, limited, requests int
+	// repeats are the inputs of the wordlist that ask a path an earlier input
+	// asked: each is listed with its position, as ffuf lists it.
+	repeats int
 	// listed are the paths the output lists; folded the ones the sweep's
 	// answers show to say nothing (the answer of their directory to a name
 	// that cannot exist), by that control; -json still prints them.
@@ -934,12 +937,13 @@ func (d *dirsSink) see(_ types.Entity, o types.Observation) {
 		d.failed += intOf(p["failed"])
 		d.limited += intOf(p["rate_limited"])
 		d.requests += intOf(p["requests"])
+		d.repeats += intOf(p["repeats"])
 		d.controls += intOf(p["controls"])
 		d.foldedHits += intOf(p["folded"])
 		d.mu.Unlock()
 	case "url":
 		u, _ := p["url"].(string)
-		if u == "" || !d.first(u) {
+		if u == "" || !d.first(u, intOf(p["position"])) {
 			return
 		}
 		ctl := d.fold(u, p)
@@ -956,6 +960,9 @@ func (d *dirsSink) see(_ types.Entity, o types.Observation) {
 			row := map[string]any{"url": u, "status": p["status"], "length": p["length"], "words": p["words"], "lines": p["lines"]}
 			if loc, ok := p["location"]; ok {
 				row["redirectlocation"] = loc
+			}
+			if pos := intOf(p["position"]); pos > 0 {
+				row["position"] = pos
 			}
 			if ctl != nil {
 				row["fold"], row["control"] = engine.FoldCatchAll, ctl.URL
@@ -996,15 +1003,26 @@ func (d *dirsSink) fold(u string, p map[string]any) *fetch.Control {
 	return &ctl
 }
 
-// first says u is new to the output, and notes it.
-func (d *dirsSink) first(u string) bool {
+// first says the hit of u at position (0 when the answer has none) is new to
+// the output, and notes it. Two inputs that ask one path are two hits, as in
+// ffuf; a path an earlier run printed with no position is printed once.
+func (d *dirsSink) first(u string, position int) bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	if d.printed[u] {
+	k := printedKey(u, position)
+	if d.printed[k] || position > 0 && d.printed[u] {
 		return false
 	}
-	d.printed[u] = true
+	d.printed[k] = true
 	return true
+}
+
+// printedKey is how printed names a hit: its URL, and its position when it has one.
+func printedKey(u string, position int) string {
+	if position <= 0 {
+		return u
+	}
+	return fmt.Sprintf("%s\x00%d", u, position)
 }
 
 // settle adds to rep what the sweep's answers say.
@@ -1033,6 +1051,9 @@ func (d *dirsSink) settle(rep *report) {
 		}
 	}
 	rep.holds("rows printed, against the paths listed and the folded rows -json adds", d.w.count(), printed)
+	if d.repeats > 0 {
+		rep.Notes = append(rep.Notes, fmt.Sprintf("%d inputs of the wordlist repeat an earlier input (a blank line or a word twice): each is asked and each hit is listed with its position, as ffuf does, and the workspace keeps one entity for each URL", d.repeats))
+	}
 	if d.failed > 0 {
 		rep.Notes = append(rep.Notes, fmt.Sprintf("%d paths got no whole answer, after one retry: they were not judged (a service under load cuts answers off; run again or lower -t)", d.failed))
 		rep.warned = true
@@ -1068,8 +1089,9 @@ func resumeDirs(db, id string, runArgs, rest []string) error {
 	}
 	for _, o := range obs {
 		if o.Collector == "azhaq-dirs" && o.Kind == "url" {
-			if u, _ := payloadOf(types.Observation{Payload: o.Payload})["url"].(string); u != "" {
-				sink.printed[u] = true
+			p := payloadOf(types.Observation{Payload: o.Payload})
+			if u, _ := p["url"].(string); u != "" {
+				sink.printed[printedKey(u, intOf(p["position"]))] = true
 			}
 		}
 	}

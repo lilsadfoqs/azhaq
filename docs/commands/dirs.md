@@ -35,7 +35,7 @@ The request is ffuf's, so a ffuf command line carries over: [Details](#details) 
 
 ## Output
 
-Plain output is one URL per line with its status, size, words and lines. With `-json` you get one object per URL. The sizes, words and lines are counted as ffuf counts them, so a `-fs` or `-fl` value carries over. `-mc` defaults to ffuf's `200-299,301,302,307,401,403,405,500`.
+Plain output is one URL per line with its status, size, words and lines. With `-json` you get one object for each input that matched. The sizes, words and lines are counted as ffuf counts them, so a `-fs` or `-fl` value carries over. `-mc` defaults to ffuf's `200-299,301,302,307,401,403,405,500`.
 
 | Field | Meaning |
 | --- | --- |
@@ -44,6 +44,7 @@ Plain output is one URL per line with its status, size, words and lines. With `-
 | `length` | The size of the whole body, as ffuf counts it, up to 64 MB. |
 | `words` | The number of spaces in the whole body, plus one. |
 | `lines` | The number of newlines in the whole body, plus one. |
+| `position` | The place of the input among the sweep's inputs, from 1, as ffuf counts it. |
 | `redirectlocation` | Where a redirect points. |
 | `truncated` | `true` when the path streams for ever (server-sent events, `multipart/x-mixed-replace`): it is read for 64 KiB or 2 seconds and then closed, and `length`, `words` and `lines` are of what was read. |
 
@@ -91,6 +92,9 @@ When two or more hits are found in the same directory, `dirs` asks one name that
 ### A blank wordlist line
 - An empty line asks the base URL, as ffuf's does, and the base is judged as any word: it is not listed when it answers like a path that cannot exist (a single-page app that gives its shell for everything).
 - ffuf calibrates on the size alone, so its `-ac` drops a base that answers `200` with the very page that unknown paths get with `404`. `dirs` compares the status as well, and lists that base: it answers where a missing path does not.
+
+### A word twice
+- An input that matched is a row, as in ffuf: a word that is in the wordlist twice (or two blank lines) is asked twice and listed twice, each row with its own `position`, so `results` is ffuf's count for the same list. The workspace keeps one entity for each URL, and a note says how many inputs repeated an earlier one.
 
 ### Which words are asked
 - A sweep asks every word of a wordlist you give, `/logout` and `/delete` included, as ffuf does.
