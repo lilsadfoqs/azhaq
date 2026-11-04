@@ -226,6 +226,10 @@ func benchDomain(d string) domainRow {
 	barOne("subs -live "+d, azOK, refOK, ar.seconds, refSecs, "a name resolving at 9.9.9.9 or 208.67.222.222 (A, AAAA or CNAME)", cmds,
 		fmt.Sprintf("%s; azhaq printed %d, subfinder %d names, dnsx %d live; azhaq %d, reference %d confirmed, both %d; subfinder %.0fs + dnsx %.0fs; %s%s",
 			share(row.SharedLive, refOK), len(az), len(sub), len(dx), azOK, refOK, row.SharedLive, sm.Seconds, dm.Seconds, ratios(ar.seconds, refSecs, row.memPair), azErr(runMeasureOf(ar))))
+	// -source-timeout under a second bounds every source, the sampled one too.
+	tr := azRun(d, 2*time.Minute, dir, "subs", "-d", d, "-source-timeout", "800ms", "-no-history", "-json", "-silent")
+	addCheck("subs "+d+": -source-timeout 800ms ends the run within 4 s (every source is held to it)", tr.seconds <= 4,
+		"azhaq subs -d %s -source-timeout 800ms took %.1fs", d, tr.seconds)
 	addCheck("subs -live "+d+": every confirmed live name subfinder | dnsx finds is in azhaq's list or its source is named as failed", unexplained == 0,
 		"%d gaps, %d unexplained: %s", len(gaps), unexplained, clipList(why, 8))
 	// The tiers: what the sources gave is the raw candidates, and only what

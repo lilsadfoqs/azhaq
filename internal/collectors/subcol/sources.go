@@ -262,10 +262,7 @@ func sampled(s source) source {
 		if len(keys) > 0 {
 			return collect(ctx, domain, keys, sess) // a key pages the whole set
 		}
-		timeout := DefaultSourceTimeout
-		if sess != nil && sess.Timeout > 0 {
-			timeout = time.Duration(sess.Timeout) * time.Second
-		}
+		timeout := sourceTimeoutOf(ctx)
 		chk, _ := ctx.Value(checkerKey{}).(*checker)
 		n, _ := ctx.Value(samplesKey{}).(int)
 		ceiling := sampleCeiling(n)
@@ -419,6 +416,17 @@ func recordStat(ctx context.Context, st roundStat) {
 		l.stats = append(l.stats, st)
 		l.mu.Unlock()
 	}
+}
+
+// timeoutKey carries a run's -source-timeout to a source that keeps its own
+// time: the session holds whole seconds, which lose a bound under one.
+type timeoutKey struct{}
+
+func sourceTimeoutOf(ctx context.Context) time.Duration {
+	if d, ok := ctx.Value(timeoutKey{}).(time.Duration); ok && d > 0 {
+		return d
+	}
+	return DefaultSourceTimeout
 }
 
 type partialKey struct{}
