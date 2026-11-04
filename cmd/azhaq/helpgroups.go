@@ -31,7 +31,7 @@ var helpSpecs = map[string]helpSpec{
 			{"Targets and input", `url domain list in asn cidr org scope program exec demo`},
 			{"What to ask", `probe passive skip dirs params ports ports-on ports-udp dns-brute permute no-takeover graphql graphql-wordlist known-files paths no-paths path-climb fill-forms per-template catchall-after web-ports web-scheme no-favicon no-tech no-map-guess no-follow advisories advisories-confirm advisory-source verify`},
 			{"Crawl scope", `crawl-scope crawl-any-host crawl-in crawl-out`},
-			{"Names and sources", `sources all-sources exclude-sources providers resolvers dns-rate source-proxy source-rate source-rates source-timeout extra-wait max-time max-body max-results urls-timeout no-history`},
+			{"Names and sources", `sources all-sources exclude-sources providers resolvers dns-rate source-proxy source-rate source-rates source-timeout extra-wait max-time max-body max-results urls-timeout no-history history-dir`},
 			{"Browser", `browser interact interact-clicks screenshots chrome chrome-profile chrome-proxy chrome-no-sandbox chrome-require-sandbox tabs unsafe-ports`},
 			{"Scope and safety", `allow sweep deny deny-path kill-file ledger seal-to submit-forms browser-writes params-writes`},
 			{"Pace and limits", `rate host-rate host-parallel parallel delay backoff retry request-timeout timeout max-requests max-host-requests host-guesses daily-requests max-items max-names max-ips max-response-size depth retry-failed retry-run`},
@@ -84,7 +84,7 @@ var helpSpecs = map[string]helpSpec{
 			{"What to ask", `live http guesses guess-samples w permute all-sources sources m providers`},
 			{"Pace and limits", `source-rate source-rates source-timeout extra-wait max-time max-body max-results max-names dns-rate t timeout`},
 			{"Network", `resolvers proxy web-ports http-proxy`},
-			{"Output", `db ledger json o oI silent v fail-on-errors ls stats no-history strict-exit`},
+			{"Output", `db ledger json o oI silent v fail-on-errors ls stats no-history history-dir strict-exit`},
 		},
 		hidden: map[string]string{
 			"compat:subfinder": `

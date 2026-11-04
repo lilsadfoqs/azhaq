@@ -226,7 +226,7 @@ func (r *runLedger) close(rep *report) {
 // were sent to, as a format taking the file's path, and how many of them
 // went to targets: the number the summary's requests is checked against.
 func (r *runLedger) recorded(path string) (what string, targets, dnsLines int) {
-	var reqs, conns, sources, dns, own, all int
+	var reqs, conns, probes, sources, dns, own, all int
 	spent := map[string]*stageSpend{}
 	count := func(class, kind, collector string, n int) {
 		all += n
@@ -238,6 +238,10 @@ func (r *runLedger) recorded(path string) (what string, targets, dnsLines int) {
 		case ledger.ClassOwn:
 			own += n
 		default:
+			if kind == ledger.KindProbe {
+				probes += n // bytes sent on a connection that has its own line: not a request or connection
+				return
+			}
 			if kind == "tcp" || kind == "udp" {
 				conns += n
 			} else {
@@ -276,7 +280,11 @@ func (r *runLedger) recorded(path string) (what string, targets, dnsLines int) {
 	targets = reqs + conns
 	var parts []string
 	if targets > 0 {
-		parts = append(parts, fmt.Sprintf("%d to targets (%s, %s)", targets, nOf(reqs, "request", "requests"), nOf(conns, "connection", "connections")))
+		counted := nOf(reqs, "request", "requests") + ", " + nOf(conns, "connection", "connections")
+		if probes > 0 {
+			counted += ", and " + nOf(probes, "probe", "probes") + " sent on those connections, not counted again"
+		}
+		parts = append(parts, fmt.Sprintf("%d to targets (%s)", targets, counted))
 	}
 	if sources > 0 {
 		parts = append(parts, nOf(sources, "to a third-party source", "to third-party sources"))

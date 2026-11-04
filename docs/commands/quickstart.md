@@ -123,6 +123,7 @@ The summary and the exit codes are `run`'s: see [run](run.md#summary-and-exit-co
 | `-max-results` | int |  | most names one paging subdomain source gives (0: no cap), as subfinder -mr |
 | `-urls-timeout` | duration | `3m0s` | time each archive source gets per domain (the Wayback Machine's answer for a large domain takes several minutes) |
 | `-no-history` | bool |  | do not read or write the name history (the names earlier runs found, kept in $AZHAQ_DATA_DIR if set, else azhaq-data/ beside -db (the current directory for a run with a temporary database); with -live each is checked by DNS in the run) |
+| `-history-dir` | string |  | keep the name history under DIR/names, shared by every run that names it (default $AZHAQ_DATA_DIR, else azhaq-data/ in the workspace's folder: beside -db, or the current directory) |
 
 **Browser**
 
@@ -208,12 +209,6 @@ The summary and the exit codes are `run`'s: see [run](run.md#summary-and-exit-co
 | `-fail-on-errors` | bool |  | the same as -strict-exit |
 | `-fail-on-capped` | bool |  | exit 4 also when the run hit -depth with hints left |
 | `-strict-exit` | bool |  | exit 3 for any failure, a target among many included (the rule before 0.15); without it a run that did its job exits 0 and its summary counts and lists the failures |
-
-**Other**
-
-| Flag | Type | Default | Meaning |
-| --- | --- | --- | --- |
-| `-history-dir` | string |  | keep the name history under DIR/names, shared by every run that names it (default $AZHAQ_DATA_DIR, else azhaq-data/ in the workspace's folder: beside -db, or the current directory) |
 
 <details>
 <summary>Other names, flags accepted with no effect and rarely used flags (80)</summary>

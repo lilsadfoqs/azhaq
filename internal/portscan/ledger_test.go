@@ -1,12 +1,20 @@
 package portscan
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"net"
+	"net/url"
 	"path/filepath"
+	"sort"
 	"strconv"
+	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/lilsadfoqs/azhaq/internal/ledger"
 )
@@ -99,5 +107,108 @@ func TestFastScanWritesItsConnectsInBatches(t *testing.T) {
 		if seen[net.JoinHostPort("127.0.0.1", strconv.Itoa(p))] != 1 {
 			t.Fatalf("port %d is in the ledger %d times", p, seen[net.JoinHostPort("127.0.0.1", strconv.Itoa(p))])
 		}
+	}
+}
+
+// Every write a port's identification makes on a connection has a probe
+// line: behind a listener that logs what it receives, the hashes of what
+// arrived are the lines' bodies, and the HTTP ones are listed by method and
+// path. A TLS handshake is the connection's tcp line, not a probe.
+func TestEveryProbeWrittenIsListed(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "l.jsonl")
+	l, err := ledger.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ledger.Use(l)
+	defer ledger.Use(nil)
+
+	var mu sync.Mutex
+	var got []string // the hash of what each connection received
+	var reqs []string
+	serve := func(answer bool) int {
+		ln, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { ln.Close() })
+		go func() {
+			for {
+				c, err := ln.Accept()
+				if err != nil {
+					return
+				}
+				go func() {
+					defer c.Close()
+					var all []byte
+					buf := make([]byte, 4096)
+					for {
+						_ = c.SetReadDeadline(time.Now().Add(1200 * time.Millisecond))
+						n, err := c.Read(buf)
+						all = append(all, buf[:n]...)
+						if n > 0 && answer && bytes.HasPrefix(all, []byte("HEAD ")) {
+							c.Write([]byte("HTTP/1.0 200 OK\r\nServer: probe-test\r\n\r\n"))
+						}
+						if err != nil {
+							break
+						}
+					}
+					if len(all) == 0 || all[0] == 0x16 { // nothing, or a TLS handshake
+						return
+					}
+					sum := sha256.Sum256(all)
+					mu.Lock()
+					got = append(got, hex.EncodeToString(sum[:])[:16])
+					if bytes.HasPrefix(all, []byte("HEAD ")) || bytes.HasPrefix(all, []byte("GET ")) {
+						reqs = append(reqs, strings.Fields(string(all))[0]+" /")
+					}
+					mu.Unlock()
+				}()
+			}
+		}()
+		return ln.Addr().(*net.TCPAddr).Port
+	}
+	web, silent := serve(true), serve(false)
+	s := &Scanner{Banner: 100 * time.Millisecond, Timeout: 400 * time.Millisecond}
+	if _, err := s.ScanEach(context.Background(), "", "127.0.0.1", []int{web, silent}); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(1500 * time.Millisecond) // the listeners read until their deadline
+	l.Close()
+
+	var bodies, listed []string
+	protos := map[string]int{}
+	conns := 0
+	_ = ledger.Read(path, func(e ledger.Entry) error {
+		switch e.Kind {
+		case "tcp":
+			conns++
+		case ledger.KindProbe:
+			bodies = append(bodies, e.Body)
+			protos[e.Proto]++
+			if e.Proto == "http" {
+				u, _ := url.Parse(e.Target)
+				listed = append(listed, e.Method+" "+u.Path)
+			}
+		}
+		return nil
+	})
+	mu.Lock()
+	defer mu.Unlock()
+	sort.Strings(got)
+	sort.Strings(bodies)
+	if len(got) < 10 || strings.Join(got, ",") != strings.Join(bodies, ",") {
+		t.Fatalf("the listeners received %d writes, the ledger lists %d probes:\nreceived %v\nlisted   %v", len(got), len(bodies), got, bodies)
+	}
+	sort.Strings(reqs)
+	sort.Strings(listed)
+	if len(reqs) != 3 || strings.Join(reqs, ",") != strings.Join(listed, ",") {
+		t.Errorf("HTTP requests received %v, listed %v", reqs, listed)
+	}
+	if protos["redis"] == 0 || protos["http"] != 3 {
+		t.Errorf("probe protocols %v", protos)
+	}
+	if conns < len(got) {
+		t.Errorf("%d tcp lines for %d connections that were written to", conns, len(got))
 	}
 }

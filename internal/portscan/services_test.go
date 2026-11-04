@@ -286,12 +286,19 @@ func TestScanReadsTheBodyWhenTheHeadsSayNothing(t *testing.T) {
 		t.Errorf("a page named a product or a title: %+v", o)
 	}
 	l.Close()
-	n := 0
-	ledger.Read(path, func(e ledger.Entry) error { n++; return nil })
-	// Three connects and the three HEADs on them, plus a GET for each of
-	// the JSON, plain-text and HTML answers.
-	if want := 3 + 3; n != want || int(takes.Load()) != want {
-		t.Errorf("%d ledger entries, %d takes, want %d", n, takes.Load(), want)
+	n, probes := 0, 0
+	ledger.Read(path, func(e ledger.Entry) error {
+		if e.Kind == ledger.KindProbe {
+			probes++ // bytes written on a connection that has its own line
+		} else {
+			n++
+		}
+		return nil
+	})
+	// Three connects and a GET for each of the JSON, plain-text and HTML
+	// answers; the three HEADs and the three GETs are probe lines.
+	if want := 3 + 3; n != want || int(takes.Load()) != want || probes != 6 {
+		t.Errorf("%d ledger entries, %d takes, %d probes, want %d, %d, 6", n, takes.Load(), probes, want, want)
 	}
 }
 

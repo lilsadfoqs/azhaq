@@ -336,13 +336,8 @@ On tesla.com, `subs -live -dns-rate 10` with two resolvers took 161 s and listed
 | `-ls` | bool |  | list the sources and exit: name, then * if a key is required and ~ if one improves the answer; with -json one object each (name, default, recursive, keyRequirement) |
 | `-stats` | bool |  | after the run, one note per source: requests, names, errors and seconds, as subfinder -stats |
 | `-no-history` | bool |  | do not read or write the name history (the names earlier runs found, kept in $AZHAQ_DATA_DIR if set, else azhaq-data/ beside -db (the current directory for a run with a temporary database); with -live each is checked by DNS in the run) |
-| `-strict-exit` | bool |  | exit 3 for any failure, a target among many included (the rule before 0.15); without it a run that did its job exits 0 and its summary counts and lists the failures |
-
-**Other**
-
-| Flag | Type | Default | Meaning |
-| --- | --- | --- | --- |
 | `-history-dir` | string |  | keep the name history under DIR/names, shared by every run that names it (default $AZHAQ_DATA_DIR, else azhaq-data/ in the workspace's folder: beside -db, or the current directory) |
+| `-strict-exit` | bool |  | exit 3 for any failure, a target among many included (the rule before 0.15); without it a run that did its job exits 0 and its summary counts and lists the failures |
 
 <details>
 <summary>Flags familiar from subfinder, other names and flags accepted with no effect (11)</summary>

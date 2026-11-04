@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/lilsadfoqs/azhaq/internal/egress"
+	"github.com/lilsadfoqs/azhaq/internal/ledger"
 )
 
 // maxProbes is how many more connects an open port that said nothing may
@@ -107,6 +108,14 @@ func ladder() []*protocol {
 		}
 	}
 	return out
+}
+
+// label names the protocol of what is written to conn from now on, for the
+// ledger's probe lines.
+func label(conn net.Conn, proto string) {
+	if l, ok := conn.(ledger.Labeler); ok {
+		l.Label(proto)
+	}
 }
 
 // ident is one open port's identification: the connects it may still make.
@@ -288,6 +297,7 @@ func (s *Scanner) talk(conn net.Conn, req []byte, frame func([]byte) int, wait t
 func (id *ident) try(conn net.Conn, p *protocol) bool {
 	s := id.s
 	id.tried[p.name] = true
+	label(conn, p.name)
 	defer id.guard(conn)()
 	reply := s.talk(conn, p.request(target{id.host, id.o.Port}), p.frame, id.patience(500*time.Millisecond))
 	return id.accept(conn, p, reply)

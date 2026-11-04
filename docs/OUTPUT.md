@@ -244,17 +244,19 @@ A line has:
 | `seq` | The line's number, from 1. |
 | `time` | When it was sent, UTC. |
 | `class` | What it was sent to: `target`, `source`, `dns` or `own`. A line without one, from a ledger written before classes, is a `target`. |
-| `kind` | `http`, `tcp`, `udp`, `dns`, `chrome` or `seal`. See below. |
-| `method` | The HTTP method. For `dns`, the record type (`A`). Not on `tcp` and `udp` lines. |
-| `target` | The URL as sent, query string included, for `http` and `chrome`. `ip:port` for `tcp` and `udp`. The resolver (`ip:port`, or its URL for DoH) for `dns`. |
+| `kind` | `http`, `tcp`, `udp`, `probe`, `dns`, `chrome` or `seal`. See below. |
+| `method` | The HTTP method. For `dns`, the record type (`A`). On a `probe` line, the method of an HTTP request. Not on `tcp` and `udp` lines. |
+| `proto` | On a `probe` line only: `http` or `https` for an HTTP request, else the protocol the bytes speak (`redis`, `smtp`, `payload`, …), `raw` when none is named. |
+| `target` | The URL as sent, query string included, for `http` and `chrome`, and for a `probe` that is an HTTP request. `ip:port` for `tcp`, `udp` and the other `probe` lines. The resolver (`ip:port`, or its URL for DoH) for `dns`. |
 | `host` | The host the request was for. For `dns`, the name asked. |
 | `vhost` | The `Host` header sent, when it is not the URL's. |
-| `body` | The first 16 hex digits of the sha256 of the request body, on an `http` line that has one: [resume](CONCEPTS.md#workspaces-runs-and-resuming) uses it to tell two writes to one URL apart. |
+| `body` | The first 16 hex digits of the sha256 of the request body, on an `http` line that has one (on a `probe` line, of the bytes sent): [resume](CONCEPTS.md#workspaces-runs-and-resuming) uses it to tell two writes to one URL apart. |
 | `rule` | The scope rule that allowed it (`-allow`, `-scope`). Empty when the run has no rules. |
 | `collector` | What sent it, for the lines that say. |
 | `prev`, `hash` | The previous line's hash, and the hex sha256 of `prev` and this line's JSON without `hash`. |
 
 - `tcp`: a connect of `ports`, or a TLS handshake of `ports` or `azhaq-tls`; for a `source`, the connection to crt.sh's database or a mail server.
+- `probe`: what `ports` writes to a connection it opened to name the service on it, one line for each write, after the `tcp` line of that connection. An HTTP probe has its `method`, its `target` as `http://IP:PORT/PATH` (`https` inside TLS) and, when the `Host` header it sent is another, its `vhost`; any other has its protocol in `proto` and the start of the sha256 of the bytes in `body`. A probe is not a request or a connection of its own: the summary's `requests` counts the `tcp` line of its connection, and the run's ledger note says how many probes went on those connections. The handshake of a TLS connection is the `tcp` line, not a probe.
 - `dns`: a query to a resolver, a zone transfer or a trace step. A retry or a second opinion is a line of its own.
 - `source` lines are `http` or `tcp`, with no `rule`: the scope holds targets, not the third parties asked about them.
 - `chrome`: a request Chrome sent, listed once it left. One that Chrome dropped before sending is not listed, and not counted.
@@ -269,6 +271,7 @@ A line says the request or connection left, and the summary's `requests` counts 
 | `http` | The request has been written to its connection. Also when it failed with no stop to blame: a connect was attempted and failed, a TLS handshake began, the name had no address, or the other end dropped the connection before the write. | A request a stop cancelled before any of that: before a connection was tried, or on a connection that never took the write. |
 | `tcp` | The socket is about to connect (`connect(2)`), so a stop that lands earlier leaves no line. A fast port scan (`-rate` of 1,000 or more) writes the lines of up to 32 connects together just before they start; those connects are not stopped by a kill file or a deadline that comes after the lines, and a stop that comes before them records none. | A connect refused by the scope or the kill file, with no address, or stopped before its socket connected. |
 | `udp` | The socket to the port is open and the datagram is written at once. | A socket that could not be opened. |
+| `probe` | The bytes of one probe are about to be written to a connection a port identification opened: the HEAD / it sends to a port that said nothing, a protocol's own request, the `SYST` of an FTP check. One line for each write. | A write that was never made. |
 | `chrome` | Chrome says the request's headers went out. A request Chrome was let send and nothing was heard of afterwards is listed when its tab closes, since it may have left. | A request Chrome dropped or answered from its cache. |
 | `dns` | The query goes to the resolver. | A query refused by the kill file or after the context ended. |
 
