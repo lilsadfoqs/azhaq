@@ -233,7 +233,11 @@ func runPreset(c *common, args []string, rep *report, see func(types.Entity, typ
 		}
 		return nil, nil, err
 	}
-	st, err := store.OpenExisting(db)
+	reopen := store.OpenExisting
+	if dir != "" {
+		reopen = store.OpenExistingScratch
+	}
+	st, err := reopen(db)
 	if err != nil {
 		return nil, nil, err
 	}

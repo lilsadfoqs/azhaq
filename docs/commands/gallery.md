@@ -72,7 +72,7 @@ The summary and the other exit codes are the shared ones: see [the summary](../O
 - `-workspace DIR` takes every `*.db` file of a directory and of the directories directly in it.
 - The pages are merged in one view, each labelled with its workspace.
 - A page shot in more than one run is listed once, with its newest picture.
-- The workspace is opened read-only and read once at start. Start the gallery again to see pages taken since.
+- The workspace is opened read-only. The pages are read once at start, so a page taken since is not listed; what the workspace holds of a page's URL (`/api/shots/{id}/show`) is read when it is asked for. Start the gallery again to see pages taken since.
 - A database that is not a workspace is skipped with a note. One that cannot be read is skipped and the exit code is 3.
 
 ### Pages

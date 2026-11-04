@@ -115,3 +115,15 @@ func TestBatchedConnectsFindWhatSingleOnesDo(t *testing.T) {
 		}
 	}
 }
+
+// A port that never answers (a full accept queue drops the connect) is silent
+// and asked twice; the connects are counted. Only 127.0.0.1 is touched.
+func TestSilentPortAskedTwiceOnALoopbackQueue(t *testing.T) {
+	port, _ := fullListener(t)
+	var taken atomic.Int32
+	s := &Scanner{Rate: 1000, Timeout: 200 * time.Millisecond, Banner: -1, Take: func() error { taken.Add(1); return nil }}
+	r, err := s.ScanEach(context.Background(), "", "127.0.0.1", []int{port})
+	if err != nil || len(r.Open) != 0 || !slices.Equal(r.Silent, []int{port}) || taken.Load() != 2 {
+		t.Fatalf("silent %+v err %v, %d connects", r, err, taken.Load())
+	}
+}

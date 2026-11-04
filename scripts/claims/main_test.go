@@ -55,9 +55,41 @@ func TestACoveredPageClaimWithNoProofFails(t *testing.T) {
 }
 
 func TestAPageNotCoveredIsListedNotFailed(t *testing.T) {
-	rep, err := check(tree(t, "# azhaq\n", page, ""))
-	if err != nil || len(rep.Problems) != 0 || rep.Backlog["docs/commands/run.md"] != 1 {
+	root := tree(t, "# azhaq\n", page, "")
+	if err := os.WriteFile(filepath.Join(root, "docs", "CONCEPTS.md"), []byte("# Concepts\n\n## Scope\n\nNo request goes outside it.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	rep, err := check(root)
+	if err != nil || rep.Backlog["docs/CONCEPTS.md"] != 1 {
 		t.Errorf("%v %+v", err, rep)
+	}
+	// -list prints the sentences of a page that have no claim, covered or not.
+	if open := rep.Open["docs/CONCEPTS.md"]; len(open) != 1 || open[0].n != 5 || open[0].section != "Scope" || !strings.Contains(open[0].text, "No request goes outside it") {
+		t.Errorf("the sentences with no claim: %+v", open)
+	}
+	for _, p := range rep.Problems {
+		if strings.Contains(p, "CONCEPTS") {
+			t.Errorf("a page not covered fails: %s", p)
+		}
+	}
+}
+
+// The README and every command page are covered with no @cover line: a page
+// added later cannot begin with a claim that has no proof.
+func TestACommandPageIsAlwaysCovered(t *testing.T) {
+	root := tree(t, "# azhaq\n\nIt never sends a write.\n", page, "")
+	if err := os.WriteFile(filepath.Join(root, "docs", "commands", "new.md"), []byte("# azhaq new\n\n## What it does\n\nIt writes nothing else.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	rep, err := check(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := strings.Join(rep.Problems, "\n")
+	for _, want := range []string{"README.md:3: a claim with no proof", "run.md:5: a claim with no proof", "new.md:5: a claim with no proof"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("no problem says %q:\n%s", want, got)
+		}
 	}
 }
 
@@ -141,7 +173,8 @@ func TestASectionCoverHoldsOnlyThatSection(t *testing.T) {
 // The pages of docs/ are claim pages, and their ids start with docs-.
 func TestAPageOfDocsTakesClaims(t *testing.T) {
 	pg := "# Concepts\n\n## Scope\n\nNo request goes outside it.\n"
-	root := tree(t, "# azhaq\n", page, "concepts.scope\tdocs/CONCEPTS.md\tNo request goes outside it\ttest:cmd/azhaq:TestKeepsScope\n")
+	run := "run.no-writes\tdocs/commands/run.md\tNever sends a write without its flag\ttest:cmd/azhaq:TestKeepsScope\n"
+	root := tree(t, "# azhaq\n", page, run+"concepts.scope\tdocs/CONCEPTS.md\tNo request goes outside it\ttest:cmd/azhaq:TestKeepsScope\n")
 	if err := os.WriteFile(filepath.Join(root, "docs", "CONCEPTS.md"), []byte(pg), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -149,7 +182,7 @@ func TestAPageOfDocsTakesClaims(t *testing.T) {
 	if got := strings.Join(rep.Problems, "\n"); !strings.Contains(got, "the id starts with the page it is about, docs-concepts.") {
 		t.Errorf("a docs page id with the wrong prefix passes:\n%s", got)
 	}
-	if err := os.WriteFile(filepath.Join(root, "docs", "claims.tsv"), []byte("docs-concepts.scope\tdocs/CONCEPTS.md\tNo request goes outside it\ttest:cmd/azhaq:TestKeepsScope\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(root, "docs", "claims.tsv"), []byte(run+"docs-concepts.scope\tdocs/CONCEPTS.md\tNo request goes outside it\ttest:cmd/azhaq:TestKeepsScope\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if rep, _ = check(root); len(rep.Problems) != 0 {
@@ -169,5 +202,31 @@ func TestRepositoryClaimsHaveProof(t *testing.T) {
 	}
 	if rep.Claims == 0 {
 		t.Error("the ledger is empty")
+	}
+}
+
+// A test that skips every time proves nothing; one that skips only where a
+// tool is missing is still a proof where it runs.
+func TestAProofThatAlwaysSkipsFails(t *testing.T) {
+	ledger := "run.no-writes\tdocs/commands/run.md\tNever sends a write without its flag\ttest:cmd/azhaq:TestSkipped\n"
+	root := tree(t, "# azhaq\n", "# azhaq run\n\n## What it does\n\nNever sends a write without its flag.\n", ledger)
+	body := "package main\n\nfunc TestSkipped(t *testing.T) {\n\tt.Skip(\"later\")\n}\n\nfunc TestSometimes(t *testing.T) {\n\tif noChrome {\n\t\tt.Skip(\"no chrome\")\n\t}\n}\n"
+	if err := os.WriteFile(filepath.Join(root, "cmd", "azhaq", "b_test.go"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	rep, err := check(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(rep.Problems, "\n"); !strings.Contains(got, "TestSkipped always skips") {
+		t.Errorf("a test that always skips proves a claim:\n%s", got)
+	}
+	ledger = strings.Replace(ledger, "TestSkipped", "TestSometimes", 1)
+	if err := os.WriteFile(filepath.Join(root, "docs", "claims.tsv"), []byte(ledger), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	rep, _ = check(root)
+	if got := strings.Join(rep.Problems, "\n"); strings.Contains(got, "skips") {
+		t.Errorf("a test that skips only without Chrome is no proof:\n%s", got)
 	}
 }

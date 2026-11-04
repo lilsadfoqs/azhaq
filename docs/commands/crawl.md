@@ -38,7 +38,7 @@ azhaq crawl -u https://app.example.com/ -json -rejected
 4. Tells the page every unknown path gets from a real page with one request for a path that does not exist at the root and in each top-level directory (`/api/`, `/rest/`), not in every directory: `/rest/user/` is compared with the answer of `/rest/`. A directory below the first level whose own answer to an unknown path differs from the one above it then has its generic answers listed as `visited` where they would be `catchall`. `-sweep` asks every directory, as `run` does (up to 24 per origin). katana asks none.
 5. Lists the URLs it requested, each distinct URL once: every page, script and stylesheet it asked, less those that answered 404 or 410 and those that answered as the control does ([Folded rows](#folded-rows) counts them in the summary; `-all-rows` lists them), and the URLs pages link to or load (anchors, forms, scripts, stylesheets), as katana lists them. A URL a page holds that the crawl did not request (past `-d`, a limit, a `-deny-path` rule, or a library script, an image or a font no step fetches) is listed too, marked `linked`, and the summary says how many.
 6. Keeps apart what no page holds: routes that scripts call with POST, PUT or another method, routes with a parameter, views and sockets, and strings that scripts only name. `-hints` lists them, each marked with its class; the summary counts them apart.
-7. Never drops links without a word. When a limit stops the crawl, it exits 4 and `azhaq resume` continues it.
+7. Never drops links without a word: the summary says how many it folded, left out of the list, kept out of the URLs or found outside the scope. When a limit stops the crawl, it exits 4 and `azhaq resume` continues it.
 
 ## Output
 
@@ -82,7 +82,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 - counts what the rows are, apart: see [What the counts compare](#what-the-counts-compare);
 - says how many POST forms `-submit-forms` sent, and which POST forms it did not send and why.
 
-A crawl never drops links without a word. When `-max-items`, `-max-requests`, `-mdp` or the run's `-timeout` stops it, the run exits 4 and `azhaq resume` continues it.
+A crawl never drops links without a word: the summary says what became of them (`-silent` prints the notes on the list, and not the ones on rejected strings and on links outside the scope). When `-max-items`, `-max-requests`, `-mdp` or the run's `-timeout` stops it, the run exits 4 and `azhaq resume` continues it.
 
 ## Details
 
@@ -92,7 +92,7 @@ A crawl never drops links without a word. When `-max-items`, `-max-requests`, `-
 - A link's URL with its query is its own line: `/item?id=7`. A route a script names, `/catalog?category=Gin` in an object on `/catalog`, is a line when the crawl asked for it: at `-d 2` it is requested, so it is `observed`; past the depth it is not requested, so it is `named` and `-hints` lists it. A link is a line either way: at `-d 1` the links of the pages at depth 1 are not requested, katana prints them with `"error":"max depth reached"` and no response, and azhaq lists them as `linked` rows.
 - `-per-template N` limits how many URLs of one template (`/item?id={n}`) are asked, not how many are listed. `crawl` and `run` ask every one by default, as katana does, and neither caps the tasks a run starts unless `-max-items` says so. `-iqp` asks one URL for each path.
 - Every script a page loads or a script imports is listed once the crawl has requested it, when it is in the crawl's scope. Examples are `/main.js` and a lazy `chunk-*.js`. A stylesheet a page loads (`<link rel=stylesheet>`) is requested, as a browser and katana do: a GET, in scope, paced and counted like the rest. It is an `observed` row in the default list, and the URLs it names with `url()` and `@import` are listed: an imported stylesheet is requested too, one level further down as a link is, and an image or font it names is `linked`. A library script (`jquery-3.2.1.min.js`, `bootstrap.min.js`, which azhaq does not read for routes) and an image or font a page loads are requested by no crawl step, so the library is a `linked` row in the default list; images, fonts and media are on katana's default extension list and wait for `-assets`.
-- `-json` is the map's rows, the observed and linked ones, each with its `class`. The extension list does not cut it. Its script and stylesheet rows are there by default, and an image's with `-assets`.
+- `-json` is the map's rows, the observed and linked ones, each with its `class`. The extension list leaves out only the images, fonts and media of it (`-assets` lists them): the `.pdf` and `.txt` URLs are rows. Its script and stylesheet rows are there by default.
 - `run`'s map lists every row, scripts and images included.
 - Views (`client-route`) and sockets (`websocket`) are `hint` rows, listed with `-json -hints` only, as routes with a parameter are. No GET gets them.
 
@@ -188,7 +188,7 @@ These filters limit what is printed, not what is crawled.
 
 - `-rejected` lists the strings read from scripts and pages and kept out of the URLs. They are never asked.
 - The summary splits the crawl's `requests` by purpose (`pages`, `scripts`, `assets`, `controls`, `description checks`…): see [run](run.md#where-the-requests-go). A page already asked under another spelling of its URL is not asked again.
-- The reasons include a pattern with a wildcard, a library's code, an expression, the start of a path a script joins more to, the end of a route with a placeholder (`"/y/${id}/z.php"` and `"/y/"+id+"/z.php"` make no request for `/z.php`), a route a script's client asks under its declared base, and a key of a module map or a case label (`{"./components/locale/zh_CN": 1}` in a bundle is a module id, not a route).
+- The reasons include a pattern with a wildcard (a line of `robots.txt`), an expression, unquoted script code, the start of a path a script joins more to, the end of a route with a placeholder (`"/y/${id}/z.php"` and `"/y/"+id+"/z.php"` make no request for `/z.php`), a route a script's client asks under its declared base, and a key of a module map or a case label (`{"./components/locale/zh_CN": 1}` in a bundle is a module id, not a route).
 - Text output is `string`, a tab, and the reason.
 - `-json` output is `{"rejected", "reason", "url", "source", "via"}`. `url` is what the string makes against the page.
 

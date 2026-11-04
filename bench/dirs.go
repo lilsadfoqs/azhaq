@@ -19,20 +19,21 @@ import (
 // the same wordlist and settings: the default flags of both, or both at
 // -rate 5.
 type dirsRow struct {
-	Profile    string   `json:"profile,omitempty"`
-	AppDowns   int      `json:"app_down_during_sweep,omitempty"` // an app crashed under the sweep: the row is not a measure
-	Words      int      `json:"words"`
-	Apps       []string `json:"apps"`
-	AzhaqHits  int      `json:"azhaq_hits"`
-	FfufHits   int      `json:"ffuf_hits"`
-	Shared     int      `json:"shared"`
-	AzhaqFalse int      `json:"azhaq_false"` // hits that answer like a path that does not exist
-	FfufFalse  int      `json:"ffuf_false"`
-	AzhaqSecs  float64  `json:"azhaq_seconds"`
-	FfufSecs   float64  `json:"ffuf_seconds"`
-	memPair             // the largest peak of any app's run
-	FfufOnly   []string `json:"ffuf_only,omitempty"`
-	AzhaqOnly  []string `json:"azhaq_only,omitempty"`
+	Profile    string    `json:"profile,omitempty"`
+	AppDowns   int       `json:"app_down_during_sweep,omitempty"` // an app crashed under the sweep: the row is not a measure
+	Words      int       `json:"words"`
+	Apps       []string  `json:"apps"`
+	AzhaqHits  int       `json:"azhaq_hits"`
+	FfufHits   int       `json:"ffuf_hits"`
+	Shared     int       `json:"shared"`
+	AzhaqFalse int       `json:"azhaq_false"` // hits that answer like a path that does not exist
+	FfufFalse  int       `json:"ffuf_false"`
+	AzhaqSecs  float64   `json:"azhaq_seconds"`
+	FfufSecs   float64   `json:"ffuf_seconds"`
+	memPair              // the largest peak of any app's run
+	FfufOnly   []string  `json:"ffuf_only,omitempty"`
+	AzhaqOnly  []string  `json:"azhaq_only,omitempty"`
+	Small      *smallRow `json:"small,omitempty"` // a job of six words: its start-up and exit show
 }
 
 // realPaths are paths the bench apps serve, kept in a polite sweep's short
@@ -129,6 +130,9 @@ func benchDirs(apps []string) *dirsRow {
 	barOne("dirs", azOK, ffOK, row.AzhaqSecs, row.FfufSecs, "a request that is not the app's catch-all answer", azCmd+" vs "+ffCmd, note)
 	addCheck("dirs: no more false positives than ffuf", row.AzhaqFalse <= row.FfufFalse,
 		"hits that answer like a missing path: azhaq %d, ffuf %d", row.AzhaqFalse, row.FfufFalse)
+	if !polite() && len(apps) > 0 { // the pace of the polite profile is no start-up cost
+		row.Small = benchDirsSmall(apps[0])
+	}
 	return row
 }
 
