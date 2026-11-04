@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"net"
+	"net/netip"
 	"os"
 	"os/exec"
 	"reflect"
@@ -112,4 +113,34 @@ func TestCheckEdgeAllocatesLittle(t *testing.T) {
 		t.Errorf("CheckEdge allocated %d bytes", n)
 	}
 	t.Logf("CheckEdge allocated %d bytes", n)
+}
+
+// EdgeOverlaps agrees with asking CheckEdge of each address of a range.
+func TestEdgeOverlapsAgreesWithCheckEdge(t *testing.T) {
+	for _, c := range []struct {
+		pf   string
+		want bool
+	}{
+		{"104.16.0.0/24", true},   // Cloudflare
+		{"104.0.0.0/8", true},     // holds Cloudflare's
+		{"127.0.0.0/8", false},    // loopback
+		{"10.0.0.0/24", false},    // private
+		{"2606:4700::/120", true}, // Cloudflare's IPv6
+	} {
+		pf := netip.MustParsePrefix(c.pf)
+		if got := EdgeOverlaps(pf); got != c.want {
+			t.Errorf("EdgeOverlaps(%s) = %v, want %v", c.pf, got, c.want)
+		}
+		if pf.Bits() >= 24 && pf.Addr().Is4() || pf.Bits() >= 120 {
+			any := false
+			for a := pf.Addr(); pf.Contains(a); a = a.Next() {
+				if m, _, _, _ := CheckEdge(net.IP(a.AsSlice())); m {
+					any = true
+				}
+			}
+			if any != c.want {
+				t.Errorf("%s: CheckEdge finds an edge address: %v, want %v", c.pf, any, c.want)
+			}
+		}
+	}
 }

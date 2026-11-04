@@ -358,7 +358,7 @@ func (e *Engine) RunBatch(ctx context.Context, name string, seeds []types.Seed) 
 		return nil
 	}
 	done := timing.Start(ctx, name, fmt.Sprintf("%d seeds", len(todo)))
-	wctx, panicked, stop := guard.Watch(ctx)
+	wctx, panicked, stop := guard.Watch(ledger.WithCollector(ctx, name))
 	defer stop()
 	var metas []types.RunMeta
 	err := guard.Call(func() (err error) {

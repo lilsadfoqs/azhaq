@@ -30,7 +30,7 @@ func UDPPorts(spec string) ([]int, error) {
 		}
 		return "", false
 	}, "UDP takes top or full", map[string]string{
-		"top-100": "a TCP list", "top100": "a TCP list", "top-1000": "a TCP list", "top1000": "a TCP list",
+		"default": "a TCP list", "top-100": "a TCP list", "top100": "a TCP list", "top-1000": "a TCP list", "top1000": "a TCP list",
 	})
 }
 

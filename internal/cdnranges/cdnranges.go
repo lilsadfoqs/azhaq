@@ -184,3 +184,17 @@ func split(name string) (suffix, label string, err error) {
 	}
 	return suffix, left, nil
 }
+
+// EdgeOverlaps says whether a CDN or WAF range holds an address of pf, or
+// pf holds one of theirs: whether any address of pf can be CheckEdge's.
+func EdgeOverlaps(pf netip.Prefix) bool {
+	for _, k := range []*kind{cdn, waf} {
+		t := k.tables()
+		for _, name := range t.names {
+			if t.by[name].OverlapsPrefix(pf) {
+				return true
+			}
+		}
+	}
+	return false
+}

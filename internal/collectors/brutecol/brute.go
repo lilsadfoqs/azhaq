@@ -99,9 +99,26 @@ func (b *Brute) Outputs() []string { return []string{"subdomains"} }
 
 func (b *Brute) Run(ctx context.Context, seed types.Seed, emit func(types.Observation) error) (types.RunMeta, error) {
 	domain := normalize.Hostname(seed.Keys["domain"])
+	names := bruteNames(b.Words, domain)
+	names = b.Budget.take(names)
+	answers := resolveFound(ctx, b.Pool, b.Wild, domain, names, b.Workers)
+	found := nameList(answers)
+	wild := b.Wild.Zone(ctx, domain)
+	meta, err := report(ctx, emit, BruteName, domain, map[string]any{
+		"domain": domain, "names": found, "answers": answerList(answers), "count": len(found), "tried": len(names), "wildcard_zone": wild,
+	}, found)
+	for _, h := range meta.NextHints {
+		h.Keys[types.LiveKey] = "1"
+	}
+	return meta, err
+}
+
+// bruteNames are the names the words of a wordlist make under domain: a word
+// that is no label, and one already made, is left out.
+func bruteNames(words []string, domain string) []string {
 	seen := map[string]bool{}
 	var names []string
-	for _, w := range b.Words {
+	for _, w := range words {
 		w = strings.ToLower(strings.Trim(strings.TrimSpace(w), "."))
 		if w == "" || strings.HasPrefix(w, "#") {
 			continue
@@ -115,17 +132,13 @@ func (b *Brute) Run(ctx context.Context, seed types.Seed, emit func(types.Observ
 			names = append(names, n)
 		}
 	}
-	names = b.Budget.take(names)
-	answers := resolveFound(ctx, b.Pool, b.Wild, domain, names, b.Workers)
-	found := nameList(answers)
-	wild := b.Wild.Zone(ctx, domain)
-	meta, err := report(ctx, emit, BruteName, domain, map[string]any{
-		"domain": domain, "names": found, "answers": answerList(answers), "count": len(found), "tried": len(names), "wildcard_zone": wild,
-	}, found)
-	for _, h := range meta.NextHints {
-		h.Keys[types.LiveKey] = "1"
-	}
-	return meta, err
+	return names
+}
+
+// BruteCount is how many names the words ask under domain, before a limit
+// (-max-names) holds some back.
+func BruteCount(words []string, domain string) int {
+	return len(bruteNames(words, normalize.Hostname(domain)))
 }
 
 // Permute resolves variations of each live hostname it is given: numbers
