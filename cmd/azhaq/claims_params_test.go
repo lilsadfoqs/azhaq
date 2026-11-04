@@ -147,18 +147,7 @@ func TestParamsExitWhenAPageFails(t *testing.T) {
 		}
 		return a
 	}
-	// A page that limits requests (429): it waits out its backoff, 7 s, and fails.
-	if !testing.Short() {
-		fetch.Reset()
-		out, rep, code := runContract(t, args(site("/limited"), "/ok", "/limited")...)
-		if code != exitOK || !strings.Contains(out, `"params":["q"]`) || rep.Failures != 1 || len(rep.Failed) != 1 || !rep.Failed[0].Retryable {
-			t.Errorf("one page limited, one gave its names: exit %d, failures %d, failed %+v\n%s", code, rep.Failures, rep.Failed, out)
-		}
-		if !strings.Contains(strings.Join(rep.Notes, "\n"), "not fully searched") {
-			t.Errorf("notes %q", rep.Notes)
-		}
-	}
-	// A page that leaves requests unanswered.
+	// A page that leaves requests unanswered (before the 429 block: the host's backoff outlives fetch.Reset).
 	fetch.Reset()
 	lost := site("/lost")
 	out, rep, code := runContract(t, args(lost, "/ok", "/lost")...)
@@ -172,6 +161,17 @@ func TestParamsExitWhenAPageFails(t *testing.T) {
 	fetch.Reset()
 	if _, rep, code := runContract(t, args(lost, "/lost")...); code != exitPartial || rep.Failures != 1 {
 		t.Errorf("every page failed: exit %d, failures %d", code, rep.Failures)
+	}
+	// A page that limits requests (429): it waits out its backoff, 7 s, and fails.
+	if !testing.Short() {
+		fetch.Reset()
+		out, rep, code := runContract(t, args(site("/limited"), "/ok", "/limited")...)
+		if code != exitOK || !strings.Contains(out, `"params":["q"]`) || rep.Failures != 1 || len(rep.Failed) != 1 || !rep.Failed[0].Retryable {
+			t.Errorf("one page limited, one gave its names: exit %d, failures %d, failed %+v\n%s", code, rep.Failures, rep.Failed, out)
+		}
+		if !strings.Contains(strings.Join(rep.Notes, "\n"), "not fully searched") {
+			t.Errorf("notes %q", rep.Notes)
+		}
 	}
 }
 

@@ -415,7 +415,7 @@ func TestResumeDropsTheFlagsAnOlderAzhaqStored(t *testing.T) {
 	}
 	st.Close()
 	_, errOut, err = captureBoth(t, func() error { return cmdResume([]string{"-db", db, "-max-requests", "0"}) })
-	if err != nil || !strings.Contains(errOut, "the run was started with -all-gets, -get-words, which azhaq no longer has: every GET found in scope is requested, whatever its name says; ignored") {
+	if err != nil || !strings.Contains(errOut, "the run was started with -all-gets, -get-words, which azhaq no longer has: a GET found on the way whose own path or API operation declares a state change is held back unless -send-state-changing is given; ignored") {
 		t.Errorf("exit %d; stderr:\n%s", exitCode(err), errOut)
 	}
 }

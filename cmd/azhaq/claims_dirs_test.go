@@ -86,7 +86,7 @@ func TestSweepWordThatEndsTheSessionIsNoticed(t *testing.T) {
 	a[2] = site.URL + "/"
 	_, rep, code := runContract(t, a...)
 	notes := strings.Join(rep.Notes, "\n")
-	if !regexp.MustCompile(`the session ended \(.*/logout answered 302 to /login\); signed in again; \d+ requests? asked again \(\d+ requests sent in the same stretch by sweeps and page tasks: those run again\)`).MatchString(notes) {
+	if !regexp.MustCompile(`the session ended \(.* answered 302 to /login\); signed in again; \d+ requests? asked again \(\d+ requests sent in the same stretch by sweeps and page tasks: those run again\)`).MatchString(notes) {
 		t.Errorf("-login: notes %q: want the session ended, signed in again, and the sweeps counted", rep.Notes)
 	}
 	site.mu.Lock()

@@ -329,7 +329,8 @@ func ShortError(s string) string {
 		return "connection reset"
 	case strings.Contains(l, "no such host"):
 		return "no such host"
-	case strings.Contains(l, "rate limit") || strings.Contains(l, "429"):
+	case strings.Contains(l, "rate limit") || strings.Contains(quotedRE.ReplaceAllString(l, "…"), "429"):
+		// The URL an error quotes is no status: a port or a query value holding 429 is not one.
 		return "HTTP 429 (rate limited)"
 	}
 	if m := statusRE.FindStringSubmatch(s); m != nil {
