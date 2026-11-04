@@ -27,25 +27,27 @@ import (
 // roles has its own (see rolesStages). Each stage lists its collectors.
 
 // amount is what a stage sends: requests to targets (HTTP, Chrome), connects
-// (TCP connections and UDP datagrams) to them, DNS queries to resolvers, and
-// questions to third-party sources. The first two add up to the summary's
+// (TCP connections) and datagrams (UDP) to them, DNS queries to resolvers, and
+// questions to third-party sources. The first three add up to the summary's
 // requests.
 type amount struct {
-	Requests int64 `json:"requests,omitempty"`
-	Connects int64 `json:"connects,omitempty"`
-	DNS      int64 `json:"dns_queries,omitempty"`
-	Sources  int64 `json:"source_queries,omitempty"`
+	Requests  int64 `json:"requests,omitempty"`
+	Connects  int64 `json:"connects,omitempty"`
+	Datagrams int64 `json:"datagrams,omitempty"`
+	DNS       int64 `json:"dns_queries,omitempty"`
+	Sources   int64 `json:"source_queries,omitempty"`
 }
 
 func (a amount) zero() bool { return a == amount{} }
 
 // contacts is everything that goes to a target or a resolver, the number the
 // size of a run is judged by.
-func (a amount) contacts() int64 { return a.Requests + a.Connects + a.DNS }
+func (a amount) contacts() int64 { return a.Requests + a.Connects + a.Datagrams + a.DNS }
 
 func (a *amount) add(b amount) {
 	a.Requests += b.Requests
 	a.Connects += b.Connects
+	a.Datagrams += b.Datagrams
 	a.DNS += b.DNS
 	a.Sources += b.Sources
 }
@@ -55,7 +57,7 @@ func (a amount) String() string {
 	for _, p := range []struct {
 		n         int64
 		one, many string
-	}{{a.Requests, "request", "requests"}, {a.Connects, "connect", "connects"}, {a.DNS, "DNS query", "DNS queries"}, {a.Sources, "source query", "source queries"}} {
+	}{{a.Requests, "request", "requests"}, {a.Connects, "connect", "connects"}, {a.Datagrams, "datagram", "datagrams"}, {a.DNS, "DNS query", "DNS queries"}, {a.Sources, "source query", "source queries"}} {
 		if p.n > 0 {
 			parts = append(parts, nOf(int(p.n), p.one, p.many))
 		}
@@ -99,7 +101,7 @@ const rolesBasis = "from the roles, their histories and the run options: each st
 const estimateBasis = "from the flags and the targets given, as if each target answers: the same wordlists, port lists and built-in checks the run sends; what a page, a script or a source's answer leads to is not known before it is read, and each stage says what it leaves out"
 
 // trivialRun is the size under which run does not print its estimate before it
-// sends: requests, connects and DNS queries together.
+// sends: requests, connects, datagrams and DNS queries together.
 const trivialRun = 1000
 
 // signInStage is the name Chrome's sign-ins send under: a stage of their own.
@@ -493,7 +495,7 @@ func atLeastWord(atLeast bool) string {
 }
 
 // spentAmount is what an account (ledger.Account, as a difference) holds for
-// one stage and collector: the requests, connects, DNS queries and source
+// one stage and collector: the requests, connects, datagrams, DNS queries and source
 // queries its keys add up to.
 func spentAmount(acc map[ledger.SpentKey]int64, keep func(ledger.SpentKey) bool) amount {
 	var a amount
@@ -507,8 +509,10 @@ func spentAmount(acc map[ledger.SpentKey]int64, keep func(ledger.SpentKey) bool)
 		case k.Class == ledger.ClassSource:
 			a.Sources += n
 		case k.Class == ledger.ClassOwn:
-		case k.Kind == "tcp" || k.Kind == "udp":
+		case k.Kind == "tcp":
 			a.Connects += n
+		case k.Kind == "udp":
+			a.Datagrams += n
 		default:
 			a.Requests += n
 		}

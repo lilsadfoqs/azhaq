@@ -36,7 +36,7 @@ func planCost(t *testing.T, args ...string) map[string]map[string]any {
 
 // estimated is what a plan counted for a stage, requests and connects.
 func estimated(st map[string]any) float64 {
-	return stageAmount(st, "estimate", "requests") + stageAmount(st, "estimate", "connects") + stageAmount(st, "estimate", "dns_queries")
+	return stageAmount(st, "estimate", "requests") + stageAmount(st, "estimate", "connects") + stageAmount(st, "estimate", "datagrams") + stageAmount(st, "estimate", "dns_queries")
 }
 
 // loopbackPort is a TCP listener on 127.0.0.3 and the port it holds.
@@ -110,24 +110,25 @@ func TestPortsFloorOfADiscoveredRangeAndOfUDP(t *testing.T) {
 		name  string
 		extra []string
 		want  float64
+		what  string // the amount counted: connects (TCP) or datagrams (UDP)
 	}{
-		{"discover first", []string{"-ports", open + ",1,2", "-port-discover", "first"}, 16 * 2},
-		{"discover only", []string{"-ports", open + ",1,2", "-ports-udp", "9,10", "-port-discover", "only"}, 16 * 2},
-		{"udp", []string{"-ports", "none", "-ports-udp", "9,10,11"}, 16 * 3},
-		{"-port-threshold", []string{"-ports", open + ",1,2,3,4,5,6", "-port-threshold", "2"}, 16 * 2},
+		{"discover first", []string{"-ports", open + ",1,2", "-port-discover", "first"}, 16 * 2, "connects"},
+		{"discover only", []string{"-ports", open + ",1,2", "-ports-udp", "9,10", "-port-discover", "only"}, 16 * 2, "connects"},
+		{"udp", []string{"-ports", "none", "-ports-udp", "9,10,11"}, 16 * 3, "datagrams"},
+		{"-port-threshold", []string{"-ports", open + ",1,2,3,4,5,6", "-port-threshold", "2"}, 16 * 2, "connects"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			all := append(append([]string{}, args...), c.extra...)
 			est := planCost(t, all...)["ports"]
-			if est == nil || stageAmount(est, "estimate", "connects") != c.want {
-				t.Fatalf("the plan estimates %v, want %v connects", est, c.want)
+			if est == nil || stageAmount(est, "estimate", c.what) != c.want {
+				t.Fatalf("the plan estimates %v, want %v %s", est, c.want, c.what)
 			}
 			if est["estimate_at_least"] != true {
 				t.Errorf("a floor is not marked: %v", est)
 			}
 			sum := runJSON(t, append([]string{"run", "-db", filepath.Join(t.TempDir(), "w.db")}, all...)...)
-			if got := stageAmount(stagesOf(t, sum)["ports"], "actual", "connects"); got < c.want {
-				t.Errorf("the floor is %v connects, the run made %v", c.want, got)
+			if got := stageAmount(stagesOf(t, sum)["ports"], "actual", c.what); got < c.want {
+				t.Errorf("the floor is %v %s, the run made %v", c.want, c.what, got)
 			}
 		})
 	}

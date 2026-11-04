@@ -20,6 +20,7 @@ const (
 	PurposeParams       = "parameter probes"
 	PurposeBrowser      = "browser" // a request Chrome sent
 	PurposeConnections  = "connections"
+	PurposeDatagrams    = "datagrams"
 	PurposeWorkers      = "sent by workers" // by another process of the run: it does not say what they were for
 	PurposeOther        = "other"
 )
@@ -49,8 +50,10 @@ func purposeFor(ctx context.Context, kind, collector string, u *url.URL) string 
 		return p
 	}
 	switch kind {
-	case "tcp", "udp":
+	case "tcp":
 		return PurposeConnections
+	case "udp":
+		return PurposeDatagrams
 	case "chrome":
 		return PurposeBrowser
 	}

@@ -84,7 +84,7 @@ func edgeOf(ip string) edge {
 func (m portModel) one(host, ip string, e edge, asUp bool) amount {
 	if e == edgeMaybe {
 		a, b := m.one(host, ip, edgeNo, asUp), m.one(host, ip, edgeYes, asUp)
-		return amount{Connects: min(a.Connects, b.Connects)} // no datagram is certain
+		return amount{Connects: min(a.Connects, b.Connects), Datagrams: min(a.Datagrams, b.Datagrams)} // no datagram is certain
 	}
 	list := m.tcp
 	if own, ok := m.own[host]; ok {
@@ -113,7 +113,7 @@ func (m portModel) one(host, ip string, e edge, asUp bool) amount {
 		k, _ := m.kept(host, ip, m.udp)
 		udp = int64(k)
 	}
-	return amount{Connects: tcp + udp}
+	return amount{Connects: tcp, Datagrams: udp}
 }
 
 // capped is the ports a host is asked of n when -port-threshold stops it
@@ -185,5 +185,5 @@ func (m portModel) span(pf netip.Prefix) amount {
 }
 
 func scaled(a amount, n uint64) amount {
-	return amount{Connects: a.Connects * int64(n)}
+	return amount{Connects: a.Connects * int64(n), Datagrams: a.Datagrams * int64(n)}
 }

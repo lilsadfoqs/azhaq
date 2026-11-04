@@ -104,11 +104,11 @@ A line says the request or connection left. One cancelled before it did (by `-ti
 The summary of a run that wrote a ledger has this note:
 
 ```
-ledger: N recorded in FILE: T to targets (R requests, C connections), S to third-party sources, D DNS queries, sealed HASH (azhaq ledger -verify FILE -seal HASH; the seal alone proves no line was later removed and the rest re-chained)
+ledger: N recorded in FILE: T to targets (R requests, C connections, U UDP datagrams), S to third-party sources, D DNS queries, sealed HASH (azhaq ledger -verify FILE -seal HASH; the seal alone proves no line was later removed and the rest re-chained)
 ```
 
 - `N` counts this run's lines, by what each was sent to. A class with no line is left out.
-- `T` is what the summary's `requests` counts: the requests and the connects (port scans, raw probes) sent to targets. The two numbers are one.
+- `T` is what the summary's `requests` counts: the requests, the TCP connections (port scans, raw probes) and the UDP datagrams sent to targets, which `R`, `C` and `U` add up to. `U` is left out when no datagram was sent. The two numbers are one.
 - If they differ, a second note says so: `the summary counts 213 requests to targets and the ledger lists 214 lines to them`.
 - A run that continues a workspace adds a note that the file holds the lines of the runs before it too.
 

@@ -1370,6 +1370,8 @@ params.stream-cut	docs/commands/params.md	is read for 64 KiB or 2 seconds and th
 diff.control-path-and-directory	docs/commands/diff.md	The path it was asked for, the directory that path was in	test:store:TestCompareIgnoresTheControlsRandomPath
 ports.source-ip-usage-error	docs/commands/ports.md	A `-source-ip` that is not an address of this machine is a usage error	test:cmd/azhaq:TestPortsSourceIPThatCannotBeBoundIsAUsageError
 resume.cap-spent-nothing-sent	docs/commands/resume.md	Tasks that send no request still count against it	test:cmd/azhaq:TestCrawlStoppedByMaxItemsDoesNotBlameDepth
+ledger.udp-datagrams	docs/commands/ledger.md	`U` is left out when no datagram was sent.	test:cmd/azhaq:TestPortsCountUDPAsDatagramsAndTCPAsConnections
+plan.estimate-datagrams	docs/commands/plan.md	`datagrams` (UDP)	test:cmd/azhaq:TestPortsCountUDPAsDatagramsAndTCPAsConnections,TestPortsFloorOfADiscoveredRangeAndOfUDP
 urls.none-answered-in-full	docs/commands/urls.md	the exit code is 0 while another archive answered in full, 3 with `-strict-exit` or when none did: an archive that failed after giving URLs did not answer in full, and the summary's `complete` is then false	test:cmd/azhaq:TestURLsNoArchiveAnsweredInFullIsPartial;test:cmd/azhaq:TestURLsExitCodeOfAFailedArchive
 dirs.row-per-input	docs/commands/dirs.md	With `-json` you get one object for each input that matched.	test:cmd/azhaq:TestDirsListsEachRepeatedInputAsFfufDoes
 dirs.position-field	docs/commands/dirs.md	The place of the input among the sweep's inputs, from 1, as ffuf counts it.	test:cmd/azhaq:TestDirsListsEachRepeatedInputAsFfufDoes
