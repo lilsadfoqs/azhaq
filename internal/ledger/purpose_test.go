@@ -42,8 +42,9 @@ func TestLinesNameWhatTheirRequestsWereFor(t *testing.T) {
 		resp.Body.Close()
 	}
 	TCP(WithCollector(context.Background(), "azhaq-ports"), "", "192.0.2.1:80")
+	UDP(WithCollector(context.Background(), "azhaq-ports"), "", "192.0.2.1:53")
 	want := []string{PurposePages, PurposeScripts, PurposeScripts, PurposeScripts, PurposeAssets, PurposeControls,
-		PurposeDescriptions, PurposePathChecks, PurposeSweep, PurposeOther, PurposeConnections}
+		PurposeDescriptions, PurposePathChecks, PurposeSweep, PurposeOther, PurposeConnections, PurposeDatagrams}
 	var got []Entry
 	for _, e := range linesOf(t, l, path) {
 		if e.Kind != KindSeal {

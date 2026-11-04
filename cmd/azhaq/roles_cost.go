@@ -132,7 +132,7 @@ func budgetStage(est costEstimate, budget int64) string {
 	}
 	var sum int64
 	for _, st := range est.Stages {
-		sum += st.Estimate.Requests + st.Estimate.Connects
+		sum += st.Estimate.Requests + st.Estimate.Connects + st.Estimate.Datagrams
 		if sum > budget {
 			return fmt.Sprintf("-max-requests %d, the budget of the whole command, would be reached in the %s stage (%d requests and connects estimated by then, before what the answers lead to)", budget, st.Stage, sum)
 		}

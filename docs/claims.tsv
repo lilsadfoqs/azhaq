@@ -1370,3 +1370,5 @@ params.stream-cut	docs/commands/params.md	is read for 64 KiB or 2 seconds and th
 diff.control-path-and-directory	docs/commands/diff.md	The path it was asked for, the directory that path was in	test:store:TestCompareIgnoresTheControlsRandomPath
 ports.source-ip-usage-error	docs/commands/ports.md	A `-source-ip` that is not an address of this machine is a usage error	test:cmd/azhaq:TestPortsSourceIPThatCannotBeBoundIsAUsageError
 resume.cap-spent-nothing-sent	docs/commands/resume.md	Tasks that send no request still count against it	test:cmd/azhaq:TestCrawlStoppedByMaxItemsDoesNotBlameDepth
+ledger.udp-datagrams	docs/commands/ledger.md	`U` is left out when no datagram was sent.	test:cmd/azhaq:TestPortsCountUDPAsDatagramsAndTCPAsConnections
+plan.estimate-datagrams	docs/commands/plan.md	`datagrams` (UDP)	test:cmd/azhaq:TestPortsCountUDPAsDatagramsAndTCPAsConnections,TestPortsFloorOfADiscoveredRangeAndOfUDP

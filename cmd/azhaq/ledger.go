@@ -226,7 +226,7 @@ func (r *runLedger) close(rep *report) {
 // were sent to, as a format taking the file's path, and how many of them
 // went to targets: the number the summary's requests is checked against.
 func (r *runLedger) recorded(path string) (what string, targets, dnsLines int) {
-	var reqs, conns, probes, sources, dns, own, all int
+	var reqs, conns, datagrams, probes, sources, dns, own, all int
 	spent := map[string]*stageSpend{}
 	count := func(class, kind, collector string, n int) {
 		all += n
@@ -242,8 +242,10 @@ func (r *runLedger) recorded(path string) (what string, targets, dnsLines int) {
 				probes += n // bytes sent on a connection that has its own line: not a request or connection
 				return
 			}
-			if kind == "tcp" || kind == "udp" {
+			if kind == "tcp" {
 				conns += n
+			} else if kind == "udp" {
+				datagrams += n
 			} else {
 				reqs += n
 			}
@@ -277,10 +279,13 @@ func (r *runLedger) recorded(path string) (what string, targets, dnsLines int) {
 	if err != nil {
 		return "recorded in %s, not counted (" + strings.ReplaceAll(err.Error(), "%", "%%") + ")", int(r.l.Count() - r.from), -1
 	}
-	targets = reqs + conns
+	targets = reqs + conns + datagrams
 	var parts []string
 	if targets > 0 {
 		counted := nOf(reqs, "request", "requests") + ", " + nOf(conns, "connection", "connections")
+		if datagrams > 0 {
+			counted += ", " + nOf(datagrams, "UDP datagram", "UDP datagrams")
+		}
 		if probes > 0 {
 			counted += ", and " + nOf(probes, "probe", "probes") + " sent on those connections, not counted again"
 		}

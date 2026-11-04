@@ -129,7 +129,8 @@ func passLine(runArgs []string, db, flagName, value, what string) string {
 	var more amount
 	more.Requests = wide.Estimate.Total.Requests - base.Estimate.Total.Requests
 	more.Connects = wide.Estimate.Total.Connects - base.Estimate.Total.Connects
-	if more.Requests <= 0 && more.Connects <= 0 {
+	more.Datagrams = wide.Estimate.Total.Datagrams - base.Estimate.Total.Datagrams
+	if more.Requests <= 0 && more.Connects <= 0 && more.Datagrams <= 0 {
 		return ""
 	}
 	cmd := "azhaq run " + shellJoin(append(with, "-db", db))
