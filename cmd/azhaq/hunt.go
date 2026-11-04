@@ -135,7 +135,7 @@ func takeoverDetail(f takeover.Finding) string {
 		// What the claim rests on, and where to check it.
 		return "unverified: NXDOMAIN does not show the name is free: " + f.Service + " candidate, CNAME " + f.Target + " does not resolve (" + f.List + ")"
 	}
-	d := f.Service + " takeover, " + f.Strength
+	d := f.Service + " takeover, " + f.Strength + ", " + f.Settled().Status
 	if f.Target != "" {
 		d += ": CNAME " + f.Target
 	}

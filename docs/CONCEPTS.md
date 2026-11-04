@@ -274,13 +274,20 @@ A run is degraded when every source or archive failed, so an empty answer is not
 
 ## Takeover candidates
 
-A takeover candidate is a name whose CNAME points at something gone, or whose front page is a hosting service's page for an unclaimed name. The target is a service name anyone may create, or a domain nobody holds. Confirm each by hand before reporting it.
+A takeover finding is a name whose CNAME points at something gone, or whose front page is a hosting service's page for an unclaimed name. Each has a `status`:
+
+| Status | Meaning |
+| --- | --- |
+| `candidate` | What was observed (the CNAME, its target, the answer for the target, the service it matched) does not show the name is free. The row says so. |
+| `verified` | The service itself answered, from the name's own front page, with its documented "nothing here" page, and the name's CNAME is on that service. |
+
+Only the services whose pages are listed below under `strong` have such an answer to read. The `dangling` services (Azure, Elastic Beanstalk, Fly.io) have none that needs no account, so a `dangling` row stays a `candidate`, and so does a domain no DNS answer shows (the check asks no registry). The summary counts the two apart (`takeover_candidates`, `takeover_verified`). Confirm each by hand before reporting it.
 
 | Strength | Meaning |
 | --- | --- |
-| `strong` | The CNAME points at a hosting service whose own page says nobody claimed the name, or at a name whose ICANN domain is not registered. |
+| `strong` | The CNAME points at a hosting service whose own page says nobody claimed the name (`verified`), or at a name whose ICANN domain has no DNS answer (`candidate`: no registry was asked). |
 | `dangling` | The CNAME points at a web name on Azure, Elastic Beanstalk or Fly.io that does not resolve. It rests on that one DNS answer: see [What a dangling row rests on](#what-a-dangling-row-rests-on). |
-| `page` | One of those services' own pages, with no CNAME known. Where DNS shows the name points elsewhere, nothing is said. |
+| `page` | One of those services' own pages, with no CNAME known (`candidate`: the name is not shown to be on that service). Where DNS shows the name points elsewhere, nothing is said. |
 
 - The hosting pages that make a name `strong`: GitHub Pages' "There isn't a GitHub Pages site here.", S3's `NoSuchBucket`, Heroku's no-such-app page, Pantheon, Ghost, WordPress.com, Help Scout, ReadMe, ngrok, Bitbucket and Surge.
 - A cloud's shared suffix such as `elb.amazonaws.com` is no registry and never counts as an unregistered domain.
@@ -291,7 +298,7 @@ A takeover candidate is a name whose CNAME points at something gone, or whose fr
 
 ### What a dangling row rests on
 
-A `dangling` row is a candidate. Its only evidence is that the CNAME target answered NXDOMAIN, and NXDOMAIN does not show the name is free: a disabled Traffic Manager profile or a deleted database answers it while its owner still holds the name. The row, the `-json` row and `hunt` say so (`unverified: NXDOMAIN does not show the name is free`), and `hunt` ranks it after every row a server answered and every `strong` row. The check sends nothing to the provider.
+A `dangling` row is a `candidate`. Its `evidence` states what was observed: the CNAME, its target, the NXDOMAIN answer and the service it matched. Its only evidence is that the CNAME target answered NXDOMAIN, and NXDOMAIN does not show the name is free: a disabled Traffic Manager profile or a deleted database answers it while its owner still holds the name. The row, the `-json` row and `hunt` say so (`unverified: NXDOMAIN does not show the name is free`), and `hunt` ranks it after every row a server answered and every `strong` row. The check sends nothing to the provider.
 
 Each service rests on its entry in the public takeover list (can-i-take-over-xyz), which azhaq's table copies. The entries were read on 2026-10-28, the `list` field of the row names the entry and that date, and the list changes as providers change: open the entry and read its status before relying on the row.
 
