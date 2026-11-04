@@ -118,7 +118,7 @@ The summary also lists failures per kind of error, and takeover findings: a CNAM
 - `-no-takeover` leaves that question out. Then `-cname` alone gives no `cname_status` and no `takeover`.
 
 ### Types
-- `-all` asks every type but AXFR. AXFR is asked with `-axfr` only, because it connects to the name servers.
+- `-all` asks A, AAAA, CNAME, SOA, TXT, SRV, MX, NS and CAA, not ANY and not AXFR. AXFR is asked with `-axfr` only, because it connects to the name servers.
 - An address gets PTR only.
 
 ### Zone transfer
@@ -178,7 +178,7 @@ The summary also lists failures per kind of error, and takeover findings: a CNAM
 | `-caa` | bool |  | ask CAA records and print the names that have one |
 | `-any` | bool |  | ask ANY records and print the names that have one |
 | `-axfr` | bool |  | ask each name server of the name, and the -resolvers you gave, for the whole zone over TCP (active; a name server is asked at an address the scope allows: -allow, -scope) |
-| `-all` | bool |  | ask every type but AXFR and print the records (-resp); an address gets only PTR |
+| `-all` | bool |  | ask A, AAAA, CNAME, SOA, TXT, SRV, MX, NS and CAA (not ANY, not AXFR) and print the records (-resp); an address gets only PTR |
 | `-e` | string, repeatable |  | types not to ask with -all, comma-separated |
 
 **What to ask**
