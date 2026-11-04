@@ -3,9 +3,12 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -132,5 +135,92 @@ func TestDiffNotSeenAgainIsWhatTheOlderRunOnlyHeardOf(t *testing.T) {
 	if slices(kinds["removed"]) != "answered.test http://page.test/" || slices(kinds["not_seen_again"]) != "heard.test http://link.test/" ||
 		sum["removed"] != 2.0 || sum["not_seen_again"] != 2.0 {
 		t.Errorf("removed %v, not_seen_again %v, summary %v", kinds["removed"], kinds["not_seen_again"], sum)
+	}
+}
+
+// -quiet keeps the changed rows: it drops the observation lines and nothing
+// else, and the summary still counts them.
+func TestDiffQuietKeepsTheChangedRowsAndDropsTheObservations(t *testing.T) {
+	page := func(title string) [][3]string {
+		return [][3]string{{"azhaq-http", "http", `{"url":"http://a.test/page","status":200,"title":"` + title + `"}`}}
+	}
+	oldDB := diffDB(t, "a.db", map[string][][3]string{"http://a.test/page": page("Old")})
+	newDB := diffDB(t, "b.db", map[string][][3]string{
+		"http://a.test/page": page("New"),
+		"b.test":             {{"azhaq-dns", "dns", `{"fqdn":"b.test","ips":["192.0.2.2"]}`}},
+	})
+	for _, quiet := range []bool{false, true} {
+		out, _, err := captureBoth(t, func() error { return printDiff(oldDB, newDB, diffOpts{JSONL: true, Quiet: quiet}) })
+		if err != nil {
+			t.Fatal(err)
+		}
+		kinds, sum := diffRows(t, out)
+		if len(kinds["changed"]) != 1 || len(kinds["added"]) != 1 || sum["changed"] != 1.0 {
+			t.Errorf("quiet=%v: rows %v summary %v, want one added and one changed row", quiet, kinds, sum)
+		}
+		if got := len(kinds["observation"]); (got == 0) != quiet || sum["observations"] == 0.0 {
+			t.Errorf("quiet=%v: %d observation lines, summary %v", quiet, got, sum["observations"])
+		}
+		text, _, err := captureBoth(t, func() error { return printDiff(oldDB, newDB, diffOpts{Quiet: quiet}) })
+		if err != nil || !strings.Contains(text, "~ page http://a.test/page: [200] Old → [200] New") || !strings.Contains(text, "changed=1") {
+			t.Errorf("quiet=%v: text report %q (%v)", quiet, text, err)
+		}
+	}
+}
+
+// A route that is new or gone is an entity added or removed, not a change:
+// two runs of an app whose script drops one route and calls another give an
+// added row, a removed row and no changed row.
+func TestDiffANewOrGoneRouteIsAddedOrRemovedNotChanged(t *testing.T) {
+	var mu sync.Mutex
+	v2 := false
+	site := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
+		switch {
+		case r.URL.Path == "/":
+			w.Header().Set("Content-Type", "text/html")
+			w.Write([]byte(`<html><title>app</title><script src="/main.js"></script></html>`))
+		case r.URL.Path == "/main.js":
+			w.Header().Set("Content-Type", "application/javascript")
+			js := `fetch("/api/keep"); fetch("/api/old");`
+			if v2 {
+				js = `fetch("/api/keep"); fetch("/api/fresh");`
+			}
+			w.Write([]byte(js))
+		case strings.HasPrefix(r.URL.Path, "/api/"):
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`{"ok":true}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer site.Close()
+	db := filepath.Join(t.TempDir(), "ws.db")
+	watch := func() {
+		capture(t, func() error {
+			return cmdWatch([]string{"-db", db, "-json", "--", "-url", site.URL + "/", "-skip", "azhaq-paths"})
+		})
+	}
+	watch()
+	mu.Lock()
+	v2 = true
+	mu.Unlock()
+	watch()
+	out, errOut, err := captureBoth(t, func() error { return cmdDiff([]string{"-db", db, "-json", "-quiet"}) })
+	if err != nil {
+		t.Fatalf("%v\n%s", err, errOut)
+	}
+	kinds, sum := diffRows(t, out)
+	has := func(rows []string, suffix string) bool {
+		for _, r := range rows {
+			if strings.HasSuffix(r, suffix) {
+				return true
+			}
+		}
+		return false
+	}
+	if !has(kinds["added"], "/api/fresh") || !has(kinds["removed"], "/api/old") || len(kinds["changed"]) != 0 || sum["changed"] != 0.0 {
+		t.Errorf("rows %v, summary %v: want /api/fresh added, /api/old removed, nothing changed", kinds, sum)
 	}
 }
