@@ -179,6 +179,8 @@ type ejsonResult struct {
 	ScraperData      map[string][]string `json:"scraper"`
 	ResultFile       string              `json:"resultfile"`
 	Host             string              `json:"host"`
+	Matched          []Match             `json:"matched,omitempty"`
+	Control          *ControlRef         `json:"control,omitempty"`
 }
 
 // StdoutJSON is a result as one line of -json shows it: ffuf's fields, the
@@ -190,7 +192,7 @@ func StdoutJSON(r Result) ejsonResult {
 	}
 	return ejsonResult{Input: in, Position: r.Position, StatusCode: r.Status, ContentLength: r.Length, ContentWords: r.Words, ContentLines: r.Lines,
 		ContentType: r.ContentType, RedirectLocation: r.RedirectLocation, Url: r.URL, Duration: r.Duration, ScraperData: map[string][]string{},
-		ResultFile: r.ResultFile, Host: r.Host}
+		ResultFile: r.ResultFile, Host: r.Host, Matched: r.Matched, Control: r.Control}
 }
 
 // WriteReport writes the report in format (json, ejson, html, md, csv, ecsv),

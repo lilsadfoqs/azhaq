@@ -7,7 +7,9 @@ import (
 	"compress/gzip"
 	"compress/zlib"
 	"context"
+	"crypto/sha256"
 	"crypto/tls"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"net/http"
@@ -233,14 +235,14 @@ func (s *httpSender) Send(ctx context.Context, req *Request, keepBody bool) (*Re
 		r.RawRequest, r.RawResponse = string(rawReq), string(raw)
 	}
 	dec, release := decoded(resp)
-	body, length, words, lines, ok, err := readCounting(dec, keepBody)
+	body, length, words, lines, sum, ok, err := readHashed(dec, keepBody)
 	release()
 	if err != nil {
 		// Cut off: its size is no answer's, and would pass a size filter.
 		return nil, fmt.Errorf("answer cut off after %d bytes: %w", length, err)
 	}
 	if ok {
-		r.Length, r.Words, r.Lines, r.Body = length, words, lines, body
+		r.Length, r.Words, r.Lines, r.Body, r.Sum = length, words, lines, body, sum
 	} else {
 		r.RawResponse = "" // cut at the cap: not kept as if it were whole
 	}
@@ -329,29 +331,39 @@ var (
 // ok is false when the body was longer than the most read; err says the
 // body ended early.
 func readCounting(r io.Reader, keep bool) (body []byte, length, words, lines int64, ok bool, err error) {
+	body, length, words, lines, _, ok, err = readHashed(r, keep)
+	return
+}
+
+// readHashed is readCounting that also gives the sum of the body (the first
+// eight bytes of its SHA-256, in hex), which says two answers are the same
+// bytes without keeping either.
+func readHashed(r io.Reader, keep bool) (body []byte, length, words, lines int64, sum string, ok bool, err error) {
 	bp := chunks.Get().(*[]byte)
 	defer chunks.Put(bp)
 	buf := *bp
+	h := sha256.New()
 	var spaces, newlines int64
 	for {
 		n, rerr := r.Read(buf)
 		if n > 0 {
 			chunk := buf[:n]
 			if length+int64(n) > MaxBody {
-				return nil, 0, 0, 0, false, nil
+				return nil, 0, 0, 0, "", false, nil
 			}
 			length += int64(n)
 			spaces += int64(bytes.Count(chunk, []byte{' '}))
 			newlines += int64(bytes.Count(chunk, []byte{'\n'}))
+			h.Write(chunk)
 			if keep {
 				body = append(body, chunk...)
 			}
 		}
 		if rerr == io.EOF {
-			return body, length, spaces + 1, newlines + 1, true, nil
+			return body, length, spaces + 1, newlines + 1, hex.EncodeToString(h.Sum(nil)[:8]), true, nil
 		}
 		if rerr != nil {
-			return nil, length, 0, 0, false, rerr
+			return nil, length, 0, 0, "", false, rerr
 		}
 	}
 }

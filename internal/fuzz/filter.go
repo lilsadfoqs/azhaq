@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -19,6 +20,7 @@ type Response struct {
 	Header      http.Header
 	Body        []byte // kept only when a regexp reads it
 	Length      int64
+	Sum         string // the body's sum, to say two answers are the same bytes
 	Words       int64
 	Lines       int64
 	ContentType string
@@ -34,6 +36,30 @@ type Filter interface {
 	Match(*Response) bool
 	// Repr is the value as given, so a second value can be added to it.
 	Repr() string
+}
+
+// Match is one matcher that held for an answer, and what it held on: the
+// answer's value for a status, size, word, line or time matcher, the text
+// and its surroundings for a pattern.
+type Match struct {
+	Matcher string `json:"matcher"`           // the flag: -mc, -ms, -mw, -ml, -mr, -mt
+	Value   string `json:"value"`             // the matcher as given
+	Got     string `json:"got,omitempty"`     // what the answer has: its status, size, words, lines or milliseconds
+	In      string `json:"in,omitempty"`      // -mr: headers or body
+	Text    string `json:"text,omitempty"`    // -mr: the text that matched
+	Context string `json:"context,omitempty"` // -mr: the text with up to evidenceContext bytes either side
+}
+
+// evidenceContext is how many bytes of an answer are shown either side of a
+// pattern's match; evidenceText is the most of the match itself.
+const (
+	evidenceContext = 24
+	evidenceText    = 160
+)
+
+// evidencer is a filter that can say what it held on.
+type evidencer interface {
+	Evidence(*Response) Match
 }
 
 type span struct{ min, max int64 }
@@ -98,6 +124,10 @@ func (n *numeric) Match(r *Response) bool {
 
 func (n *numeric) Repr() string { return n.raw }
 
+func (n *numeric) Evidence(r *Response) Match {
+	return Match{Value: n.raw, Got: strconv.FormatInt(n.of(r), 10)}
+}
+
 // timed is -mt and -ft: the time to the first byte, over or under a number of
 // milliseconds.
 type timed struct {
@@ -128,6 +158,10 @@ func (t *timed) Match(r *Response) bool {
 
 func (t *timed) Repr() string { return t.raw }
 
+func (t *timed) Evidence(r *Response) Match {
+	return Match{Value: t.raw, Got: strconv.FormatInt(r.Duration/int64(time.Millisecond), 10) + "ms"}
+}
+
 // pattern matches the response headers (as "Name: value" lines) followed
 // by the body; a keyword in it stands for the input's value, quoted.
 type pattern struct {
@@ -149,27 +183,71 @@ func newPattern(flag, value string, keywords []string) (*pattern, error) {
 	return p, nil
 }
 
-func (p *pattern) Match(r *Response) bool {
-	re := p.fixed
-	if re == nil {
-		src := p.raw
-		if r.Request != nil {
-			for k, v := range r.Request.Input {
-				src = strings.ReplaceAll(src, k, regexp.QuoteMeta(v))
-			}
-		}
-		var err error
-		if re, err = regexp.Compile(src); err != nil {
-			return false
+// regexpOf is the pattern as it applies to r: a keyword in it stands for the
+// input's value.
+func (p *pattern) regexpOf(r *Response) *regexp.Regexp {
+	if p.fixed != nil {
+		return p.fixed
+	}
+	src := p.raw
+	if r.Request != nil {
+		for k, v := range r.Request.Input {
+			src = strings.ReplaceAll(src, k, regexp.QuoteMeta(v))
 		}
 	}
-	var data []byte
-	for k, vs := range r.Header {
-		for _, v := range vs {
+	re, err := regexp.Compile(src)
+	if err != nil {
+		return nil
+	}
+	return re
+}
+
+// subject is what a pattern reads: the headers as "Name: value" lines, in the
+// order of their names, and the body after them. headers is where they end.
+func subject(r *Response) (data []byte, headers int) {
+	names := make([]string, 0, len(r.Header))
+	for k := range r.Header {
+		names = append(names, k)
+	}
+	slices.Sort(names)
+	for _, k := range names {
+		for _, v := range r.Header[k] {
 			data = append(data, k+": "+v+"\r\n"...)
 		}
 	}
-	return re.Match(append(data, r.Body...))
+	headers = len(data)
+	return append(data, r.Body...), headers
+}
+
+func (p *pattern) Match(r *Response) bool {
+	re := p.regexpOf(r)
+	if re == nil {
+		return false
+	}
+	data, _ := subject(r)
+	return re.Match(data)
+}
+
+func (p *pattern) Evidence(r *Response) Match {
+	m := Match{Value: p.raw}
+	re := p.regexpOf(r)
+	if re == nil {
+		return m
+	}
+	data, headers := subject(r)
+	loc := re.FindIndex(data)
+	if loc == nil {
+		return m
+	}
+	m.In = "body"
+	if loc[0] < headers {
+		m.In = "headers"
+	}
+	end := min(loc[1], loc[0]+evidenceText)
+	m.Text = strings.ToValidUTF8(string(data[loc[0]:end]), "\ufffd")
+	from, to := max(0, loc[0]-evidenceContext), min(len(data), end+evidenceContext)
+	m.Context = strings.ToValidUTF8(string(data[from:to]), "\ufffd")
+	return m
 }
 
 func (p *pattern) Repr() string { return p.raw }
@@ -374,6 +452,29 @@ func (s *Set) Matches(r *Response) bool {
 		}
 	}
 	return !(len(filters) > 0 && s.FilterAnd)
+}
+
+// Evidence is the matchers that hold for r and what each held on, in the
+// order -mc -ms -mw -ml -mr -mt. With the default "or" the ones that did not
+// hold are not listed; with "and" every matcher is.
+func (s *Set) Evidence(r *Response) []Match {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []Match
+	for _, kind := range []string{"status", "size", "word", "line", "regexp", "time"} {
+		f := s.matchers[kind]
+		if f == nil || !f.Match(r) {
+			continue
+		}
+		ev, ok := f.(evidencer)
+		if !ok {
+			continue
+		}
+		m := ev.Evidence(r)
+		m.Matcher = flagOf[kind][0]
+		out = append(out, m)
+	}
+	return out
 }
 
 // filtered says some current filter holds for r.
