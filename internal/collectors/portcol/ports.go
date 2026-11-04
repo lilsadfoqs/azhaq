@@ -86,6 +86,7 @@ type Collector struct {
 	udpGate chan struct{}   // the addresses whose UDP ports are being asked
 	ranged  map[string]bool // addresses a range scan handed on as it found them
 	held    map[string]bool // endpoints whose web mapping the budget has a reserve for
+	fits    map[string]int  // addresses whose whole sweep the budget has room for: no reserve is held for them
 
 	// Swept holds, by prefix, the blocks a limit stopped: the addresses of
 	// those the run had finished are not asked again (azhaq resume).
@@ -116,7 +117,8 @@ func New(pool *dnsr.Pool, ports []int, rate float64) *Collector {
 // (egress.Reserve) the moment a port accepts a connection, once for each
 // address and port: a sweep that would spend the whole budget leaves them,
 // though the port is not yet named. A port that proves no web service gives
-// them back (reserveWeb).
+// them back (reserveWeb). A sweep the budget has room for whole holds
+// nothing: only a budget smaller than the sweep stops it (fitSweep).
 func (c *Collector) holdWeb(ip string, port int) {
 	if c.WebCost <= 0 {
 		return
@@ -124,6 +126,9 @@ func (c *Collector) holdWeb(ip string, port int) {
 	key := net.JoinHostPort(ip, strconv.Itoa(port))
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if c.fits[ip] > 0 {
+		return
+	}
 	if c.held == nil {
 		c.held = map[string]bool{}
 	}
@@ -149,6 +154,27 @@ func (c *Collector) reserveWeb(ip string, o portscan.Open) {
 	c.mu.Unlock()
 	if held {
 		egress.Reserve(-int64(c.WebCost))
+	}
+}
+
+// fitSweep says that the budget has room for the connects of asking n ports
+// of ip, so the reserve for web work (holdWeb) must not cut them: a sweep
+// that the budget covers is finished, and the web stage spends what is left.
+// The returned func ends it.
+func (c *Collector) fitSweep(ip string, n int) func() {
+	if m := egress.MaxRequests(); m <= 0 || egress.Sent()+int64(n) > m {
+		return func() {}
+	}
+	c.mu.Lock()
+	if c.fits == nil {
+		c.fits = map[string]int{}
+	}
+	c.fits[ip]++
+	c.mu.Unlock()
+	return func() {
+		c.mu.Lock()
+		c.fits[ip]--
+		c.mu.Unlock()
 	}
 }
 
@@ -750,6 +776,7 @@ const maxListed = 64
 
 // scanOnce asks an address's ports, once however many names point to it.
 func (c *Collector) scanOnce(ctx context.Context, host, ip string, ports []int, found func(portscan.Open)) (*scan, error) {
+	defer c.fitSweep(ip, len(ports))()
 	return c.once(ctx, host, ip, func() *scan {
 		r, err := c.Scanner.ScanEachFn(ctx, host, ip, ports, found)
 		return &scan{open: r.Open, silent: r.Silent, unprobed: r.Unprobed, up: true, capped: r.Threshold, asked: r.Asked, err: err}
@@ -762,6 +789,7 @@ func (c *Collector) scanOnce(ctx context.Context, host, ip string, ports []int, 
 // discoverOnce is scanOnce for a scan that first asks whether the address
 // is up, and stops there when told to (-sn).
 func (c *Collector) discoverOnce(ctx context.Context, host, ip string, ports []int, found func(portscan.Open)) (*scan, error) {
+	defer c.fitSweep(ip, len(ports))()
 	return c.once(ctx, host, ip, func() *scan {
 		up, err := c.Scanner.Up(ctx, host, ip)
 		if err != nil || !up || c.Discover == DiscoverOnly {
