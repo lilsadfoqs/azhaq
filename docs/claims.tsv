@@ -686,12 +686,12 @@ ports.verify-pointer	docs/commands/ports.md	The checks, the labels and the bound
 run.permute-names	docs/commands/run.md	`-permute` still varies the names `-dns-brute` found, whatever `-depth	test:cmd/azhaq:TestRunPermutesTheNamesTheBruteForceFound,TestRunKeepsTheAnswersOfTheNamesItGuessed
 run.permute-unvaried	docs/commands/run.md	A name found past `-depth` and not resolved is not varied, and a note 	test:cmd/azhaq:TestUnvariedCountsNamesPastDepthThatNothingResolved
 run.builtin-paths	docs/commands/run.md	Asks each web service for the built-in paths unless `-no-paths` says n	test:cmd/azhaq:TestRunNoPathsTurnsTheBuiltInPathsOff,TestHostGuessesCapsTheSweepAndListsWhatWasNotAsked
-run.every-get	docs/commands/run.md	Requests every GET URL it finds in scope.	test:cmd/azhaq:TestRunRequestsEveryGETFoundInALinkAScriptADescriptionAndAForm,TestRunPerTemplateDefaultAsksAll,TestRunListsEveryLinkedQueryURL
-run.no-name-keeps-out	docs/commands/run.md	It cannot know what a GET does on the server, so no name keeps a URL o	test:cmd/azhaq:TestRunNamesStateChangingGETsAndDenyKeepsThemOut,TestRunRequestsEveryGETFoundInALinkAScriptADescriptionAndAForm,TestDocsStateWhatTheGETPromiseIs
-run.state-change-named	docs/commands/run.md	But a GET whose own name or API description declares a state change (a	test:cmd/azhaq:TestRunNamesStateChangingGETsAndDenyKeepsThemOut,TestPlanNamesStateChangingGETBeforeAnyRequest,TestStateChangesFromVAmPIDescription,TestMCPPlanAndWireAgreeOnStateChangingGET;test:internal/statechange:TestWord
-run.get-can-change	docs/commands/run.md	A GET can change data or end a session (`/createdb`, `/logout`), and a	test:cmd/azhaq:TestRunRequestsEveryGETFoundInALinkAScriptADescriptionAndAForm;test:engine:TestMapSignsInAgainWhenALinkEndsTheSession
+run.every-get	docs/commands/run.md	Requests every GET URL it finds in scope, except a GET found on the way whose own path or API operation declares a state change	test:cmd/azhaq:TestRunRequestsEveryGETFoundInALinkAScriptADescriptionAndAForm,TestRunPerTemplateDefaultAsksAll,TestRunListsEveryLinkedQueryURL,TestFoundStateChangingGETsAreHeldBack,TestRunHoldsAFoundGETOfEveryKindThatDeclaresAStateChange;test:engine:TestEveryFoundGetIsRequestedAndDenyPathIsListed
+run.no-name-keeps-out	docs/commands/run.md	every other URL in a link, a script, an API description or a GET form is requested	test:cmd/azhaq:TestRunRequestsEveryGETFoundInALinkAScriptADescriptionAndAForm,TestRunHoldsAFoundGETOfEveryKindThatDeclaresAStateChange,TestDocsStateWhatTheGETPromiseIs
+run.state-change-named	docs/commands/run.md	declares a state change (a word like create, delete, reset or logout)	test:cmd/azhaq:TestFoundStateChangingGETsAreHeldBack,TestStateChangesOfOperationsReadTheNameNotProse,TestPlanNamesStateChangingGETBeforeAnyRequest,TestMCPPlanAndWireAgreeOnStateChangingGET;test:internal/statechange:TestWord
+run.get-can-change	docs/commands/run.md	A GET can change data or end a session under any other name, and azhaq asks it	test:cmd/azhaq:TestRunHoldsAFoundGETOfEveryKindThatDeclaresAStateChange,TestRunRequestsEveryGETFoundInALinkAScriptADescriptionAndAForm;test:engine:TestMapSignsInAgainWhenALinkEndsTheSession
 run.write-only-with-flag	docs/commands/run.md	A write, a request with a method other than GET, HEAD or OPTIONS, goes	test:internal/contract:TestEveryWriteWaitsForItsFlag
-run.deny-path-only	docs/commands/run.md	`-deny-path REGEX` is the only thing that keeps paths out (they get th	test:cmd/azhaq:TestRunNamesStateChangingGETsAndDenyKeepsThemOut,TestPlanSkipsASeedADenyPathRuleKeepsOut,TestRunRequestsEveryGETFoundInALinkAScriptADescriptionAndAForm
+run.deny-path-only	docs/commands/run.md	`-deny-path REGEX` keeps any path out (it gets the coverage `skipped`)	test:cmd/azhaq:TestRunNamesStateChangingGETsAndDenyKeepsThemOut,TestPlanSkipsASeedADenyPathRuleKeepsOut;test:engine:TestEveryFoundGetIsRequestedAndDenyPathIsListed
 run.nothing-outside-scope	docs/commands/run.md	Sends nothing to a host outside the scope, Chrome's requests included.	test:internal/contract:TestDocumentedPromisesAreKept;bench:scope: no request leaves the program's scope;test:internal/egress:TestTargetClientRefusesWhatLeavesTheScope
 run.passive	docs/commands/run.md	`-passive` sends nothing to the targets at all.	test:internal/contract:TestDocumentedPromisesAreKept;test:cmd/azhaq:TestRunDemoPassive
 run.sources-none	docs/commands/run.md	`-sources none` asks no third party at all: no subdomain source, archi	test:cmd/azhaq:TestRunSourcesNoneAsksNoThirdParty
@@ -727,8 +727,8 @@ run.archive-assets	docs/commands/run.md	An archive's static assets, such as imag
 run.post-put-routes	docs/commands/run.md	A route that scripts call only with POST or PUT.	test:cmd/azhaq:TestMapRowsSayHowKnownAndListNoPrefix;test:engine:TestScriptRoutesAreNotGone
 run.script-only-404	docs/commands/run.md	A route named only in scripts, with no GET call among them, while a GE	test:engine:TestScriptRoutesAreNotGone
 run.script-only-proof	docs/commands/run.md	Its `proof` says `GET answers 404; found only in scripts, method unkno	test:engine:TestScriptRoutesAreNotGone
-run.skipped-means	docs/commands/run.md	`skipped` means found by a link, a script's call, an API description o	test:cmd/azhaq:TestRunNamesStateChangingGETsAndDenyKeepsThemOut,TestPlanSkipsASeedADenyPathRuleKeepsOut,TestRunStopsAskingScriptPathsOnACatchAllOrigin
-run.sweep-asks-every-word	docs/commands/run.md	A wordlist sweep (`dirs`, `-dirs`, `fuzz`) asks every word, `/logout` 	test:internal/collectors/dirscol:TestSweepAsksEveryWordWithOrWithoutASession;test:cmd/azhaq:TestRunRequestsEveryGETFoundInALinkAScriptADescriptionAndAForm
+run.skipped-means	docs/commands/run.md	`skipped` means found by a link, a script's call, an API description o	test:cmd/azhaq:TestRunNamesStateChangingGETsAndDenyKeepsThemOut,TestPlanSkipsASeedADenyPathRuleKeepsOut,TestRunStopsAskingScriptPathsOnACatchAllOrigin,TestFoundStateChangingGETsAreHeldBack
+run.sweep-asks-every-word	docs/commands/run.md	A wordlist sweep of a wordlist you give (`dirs -w`, `-dirs FILE`, `fuzz`) asks every word, `/logout` 	test:internal/collectors/dirscol:TestSweepAsksEveryWordWithOrWithoutASession;test:cmd/azhaq:TestRunDoesNotHoldWhatTheUserChose
 run.version-prefix	docs/commands/run.md	A version prefix alone that only a script's strings name (`/v3`) is le	test:engine:TestVersionPrefixesNeedAnAnswer
 run.origin-same-page	docs/commands/run.md	An origin that answers every path with the same page (a single-page ap	test:internal/fetch:TestCatchAllSPA,TestCatchAllRootShellAsksOneBaseline
 run.control-request	docs/commands/run.md	`run` tells the page from a real one by a control request for a path t	test:internal/fetch:TestCatchAllControlNamesTheRequestItMatched,TestCatchAllProbeDepthSharesTheBaselineAbove
@@ -750,7 +750,7 @@ run.socketio-default	docs/commands/run.md	When the app's call cannot be read, th
 run.browser-op-names	docs/commands/run.md	It carries the names its query and body held, never their values.	test:internal/collectors/rendercol:TestRenderWrites;test:engine:TestMapOpsOnce
 run.redirect-in-site	docs/commands/run.md	Without a scope, a redirect is followed only within the site: the same	test:internal/fetch:TestFollowableSite,TestScopeStopsRequestsAndRedirects,TestRedirectLoopCachedOnce
 run.redirect-in-scope	docs/commands/run.md	With a scope, it is followed only inside it.	test:internal/fetch:TestScopeStopsRequestsAndRedirects,TestScopeHoldsThePortOfARequestAndARedirect;test:internal/contract:TestDocumentedPromisesAreKept
-run.post-form-flag	docs/commands/run.md	A POST form is not sent without `-submit-forms`.	test:internal/contract:TestEveryWriteWaitsForItsFlag;test:cmd/azhaq:TestRunRequestsEveryGETFoundInALinkAScriptADescriptionAndAForm
+run.post-form-flag	docs/commands/run.md	A POST form is not sent without `-submit-forms`.	test:internal/contract:TestEveryWriteWaitsForItsFlag;test:cmd/azhaq:TestRunRequestsEveryGETFoundInALinkAScriptADescriptionAndAForm,TestRunHoldsAFoundGETOfEveryKindThatDeclaresAStateChange
 run.template-fold	docs/commands/run.md	Pages that differ only by an ID are folded: `/product?id={n}`.	test:engine:TestGroupTemplatesFoldsShapesOfOneRoute,TestMapTemplatesAndForms
 run.not-asked	docs/commands/run.md	`not_asked` is how many of them were found and not requested.	test:engine:TestGroupTemplatesCountsTheUrlsNotAsked
 run.params-every-name	docs/commands/run.md	Its `params` lists every name.	test:engine:TestGroupTemplatesFoldsShapesOfOneRoute
@@ -770,10 +770,10 @@ run.sweep-lead	docs/commands/run.md	`the scope (-allow, -scope) holds 256 addres
 run.screenshot-not-taken	docs/commands/run.md	`screenshot of URL not taken: the page needs about 26 requests and 8 w	test:internal/collectors/shotcol:TestNotTakenSaysWhatThePageNeeds
 run.graphql-note	docs/commands/run.md	`GraphQL URL: introspection disabled: schema recovered (partial: query	test:cmd/azhaq:TestRecoveredGraphQLSchemaIsMarked,TestWholeGraphQLSchemaIsNotMarkedPartial,TestRecoveredGraphQLSchemaShowsCounts
 run.graphql-ide	docs/commands/run.md	`GraphQL URL: an IDE page, not asked for its schema: URL on the same o	test:internal/collectors/gqlcol:TestIDEPageSkippedAfterTheOriginsSchema
-run.state-change-intro	docs/commands/run.md	A GET azhaq sends can itself change state: follow its link and a datab	test:cmd/azhaq:TestRunNamesStateChangingGETsAndDenyKeepsThemOut,TestStateChangesFromVAmPIDescription
+run.state-change-intro	docs/commands/run.md	A GET azhaq sends can itself change state: follow its link and a datab	test:cmd/azhaq:TestRunNamesStateChangingGETsAndDenyKeepsThemOut,TestStateChangesOfOperationsReadTheNameNotProse
 run.state-change-words	docs/commands/run.md	The words are read whole, never as substrings: create, createdb, delet	test:internal/statechange:TestWord
-run.state-change-before-run	docs/commands/run.md	Before a run starts, the targets among them are printed (first lines o	test:cmd/azhaq:TestRunNamesStateChangingGETsAndDenyKeepsThemOut,TestPlanNamesStateChangingGETBeforeAnyRequest
-run.state-change-deny-rule	docs/commands/run.md	Each entry names the `-deny-path` rule that would keep it out: rules d	test:cmd/azhaq:TestRunNamesStateChangingGETsAndDenyKeepsThemOut,TestPlanNamesStateChangingGETBeforeAnyRequest
+run.state-change-before-run	docs/commands/run.md	Before a run starts, the targets among them are printed (first lines o	test:cmd/azhaq:TestRunNamesStateChangingGETsAndDenyKeepsThemOut,TestPlanNamesStateChangingGETBeforeAnyRequest,TestRunNamesTheStateChangingTargetFirstAndSaysWhatBecameOfEach
+run.state-change-deny-rule	docs/commands/run.md	Each entry names the `-deny-path` rule that would keep it out of every later run	test:cmd/azhaq:TestRunNamesStateChangingGETsAndDenyKeepsThemOut,TestPlanNamesStateChangingGETBeforeAnyRequest,TestRunStateChangingEntriesNameTheRuleThatKeepsThemOut
 run.state-change-plan	docs/commands/run.md	`azhaq plan` prints the same list for the targets, and cannot know the	test:cmd/azhaq:TestPlanNamesStateChangingGETBeforeAnyRequest,TestMCPPlanAndWireAgreeOnStateChangingGET,TestRunNamesStateChangingGETsAndDenyKeepsThemOut
 run.next-browser	docs/commands/run.md	A run without `-browser` whose target pages leave their links to their	test:cmd/azhaq:TestCrawlAndRunNextBrowserInteractOnCatchAll,TestRunNextBrowserNotTwice;test:engine:TestBrowserHint
 run.next-graphql	docs/commands/run.md	A run that found a GraphQL endpoint and did not read its schema gets `	test:engine:TestGraphQLHint
@@ -1316,3 +1316,29 @@ ports.top-hundred-leaves-out	docs/commands/ports.md	The top 100 alone leaves tho
 ports.top-100-default-plan	docs/commands/ports.md	`-p top-100` asks the top 100 alone, `-p default,8001` adds a port to the default set, and the plan counts all 163.	test:cmd/azhaq:TestPortsTopHundredAsksTheTopHundredAndDefaultPlusAPortAsksOneMore,TestPortsDefaultSetIsAskedAndCounted
 ports.probe-lines	docs/commands/ports.md	Every probe written to a connection (the `HEAD /`, a protocol's request, the `GET /` of step 5) is a `probe` line of its own in the ledger, after the line of its connection: its `proto` and, for HTTP, its `method` and its `target` with the path.	test:internal/portscan:TestEveryProbeLineComesAfterItsConnectionAndNamesWhatWasSent,TestEveryProbeWrittenIsListed;test:cmd/azhaq:TestPortProbesAreInTheLedger
 ports.probe-not-counted-again	docs/commands/ports.md	It is not counted again as a request or a connection: the summary's `requests` counts the connection's line, and the ledger note says how many probes went on them.	test:cmd/azhaq:TestPortProbesAreInTheLedger
+
+# docs/commands/run.md (state-changing GETs, controls, spellings, bases)
+run.target-never-held	docs/commands/run.md	A target you give is never held back; the targets among those that declare one are printed before the run starts.	test:cmd/azhaq:TestGivenStateChangingTargetIsSent,TestRunNamesStateChangingGETsAndDenyKeepsThemOut,TestRunNamesTheStateChangingTargetFirstAndSaysWhatBecameOfEach
+run.controls-are	docs/commands/run.md	`controls` are the requests for a path that cannot exist	test:cmd/azhaq:TestRunSplitsItsRequestsByPurpose
+run.one-resource-asked-once	docs/commands/run.md	A page is asked once whichever way its URL is written when the standard says the spellings name one resource	test:internal/fetch:TestCanonicalFoldsOnlyWhatTheStandardSaysIsTheSame,TestOnePageUnderManySpellingsIsAskedOnce;test:cmd/azhaq:TestCrawlAsksAPageOnceWhateverSpellingNamesIt
+run.base-without-slash	docs/commands/run.md	A base without a leading slash is the page's, as a browser resolves it.	test:internal/collectors/jscol:TestABaseWithoutALeadingSlashIsThePages
+run.call-joins-its-clients-base	docs/commands/run.md	A call joins the base given to the client it is made on; a call on a client the script gives no base by name joins the only base the script declares, and none when it declares several.	test:internal/webextract:TestBases
+run.route-as-written-not-a-route	docs/commands/run.md	The route as the script writes it is not a route of the site's root, and the base itself is not a route.	test:internal/collectors/jscol:TestRoutesJoinOntoTheBaseTheScriptDeclares
+run.route-also-at-root	docs/commands/run.md	A route the script also asks without any base, `fetch("/orders/list")`, stays a route at the root.	test:internal/collectors/jscol:TestBaseDoesNotHideWhatIsAskedAtTheRoot
+run.description-prose-never-read	docs/commands/run.md	A description's prose is never read: an API whose `info.description` says the app "was created" names nothing, and neither does a root operation's long description.	test:cmd/azhaq:TestStateChangesOfOperationsReadTheNameNotProse,TestFoundStateChangingGETsAreHeldBack
+run.static-file-names-nothing	docs/commands/run.md	A path whose last segment is a static file (`clear.gif`, `delete-icon.svg`, a script or a stylesheet) names nothing.	test:internal/statechange:TestOfPathAndOfURL
+run.found-held-back	docs/commands/run.md	A GET that declares one and was found on the way (a link, a script's route, an API description's operation, a built-in `-dirs` word, a GET form's action) is **held back**	test:cmd/azhaq:TestFoundStateChangingGETsAreHeldBack,TestRunHoldsAFoundGETOfEveryKindThatDeclaresAStateChange,TestDirsBuiltinHoldsStateChangingWordsAndUserListDoesNot
+run.not-held-back	docs/commands/run.md	Not held back: a URL you gave as a target, a word of a wordlist you gave (`dirs -w`, `-dirs FILE`, `fuzz`), a write you asked for with its flag, and anything a `-deny-path` rule covers, which stays a deny and is listed under that rule.	test:cmd/azhaq:TestGivenStateChangingTargetIsSent,TestRunDoesNotHoldWhatTheUserChose,TestDirsBuiltinHoldsStateChangingWordsAndUserListDoesNot
+run.state-status	docs/commands/run.md	`sent` only when a request for it is in the run's ledger	test:cmd/azhaq:TestSendStateChangingSendsThemAndSaysSentOnlyForLedgerLines,TestFoundStateChangingGETsAreHeldBack,TestRunNamesTheStateChangingTargetFirstAndSaysWhatBecameOfEach
+
+# docs/commands/crawl.md (state-changing GETs, spellings, reasons)
+
+# docs/commands/dirs.md (directory control, built-in list)
+
+# docs/commands/fuzz.md
+
+# docs/commands/diff.md
+
+# docs/commands/report.md
+
+# docs/commands/roles.md

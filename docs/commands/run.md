@@ -167,9 +167,9 @@ found in
   - A route that scripts call only with POST or PUT.
   - A route that only a page in Chrome writes to. A GET that answers 404 or the catch-all page says nothing about such a route, and it stays `hint`; a GET that answers 405 makes it `visited`, with the 405.
   - A route named only in scripts, with no GET call among them, while a GET answers 404. Its `proof` says `GET answers 404; found only in scripts, method unknown`.
-- `skipped` means found by a link, a script's call, an API description or an archive, and not requested because a `-deny-path` rule of yours keeps its path out, or because its origin answers every path alike: see [Catch-all origins](#catch-all-origins).
+- `skipped` means found by a link, a script's call, an API description or an archive, and not requested because a `-deny-path` rule of yours keeps its path out, because its own name declares a state change and `-send-state-changing` is not given ([State-changing requests](#state-changing-requests)), or because its origin answers every path alike: see [Catch-all origins](#catch-all-origins).
   - The row's `skipped` field and the summary say which rule: `-deny-path ^/admin/`.
-  - Nothing else makes a row `skipped`. A URL on a host `-allow` lists with another port only has no row: the summary's `skipped` names it, with the reason `outside the scope: -allow lists this host with another port only`. A wordlist sweep (`dirs`, `-dirs`, `fuzz`) asks every word, `/logout` included, as ffuf does, and so does the map.
+  - Nothing else makes a row `skipped`. A URL on a host `-allow` lists with another port only has no row: the summary's `skipped` names it, with the reason `outside the scope: -allow lists this host with another port only`. A wordlist sweep of a wordlist you give (`dirs -w`, `-dirs FILE`, `fuzz`) asks every word, `/logout` included, as ffuf does, and so does the map.
 - `capped` means left when a limit was hit, or when its origin stopped answering.
   - An origin has stopped answering after 5 connects or timeouts in a row with no answer between them.
   - The rest of that origin's work is left for `azhaq resume`. It is listed under `skipped` as `ORIGIN stopped answering after 5 timeouts`, and `stopped` names the origin.

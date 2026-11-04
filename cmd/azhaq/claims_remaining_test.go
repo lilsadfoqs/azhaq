@@ -316,9 +316,9 @@ func TestRunFoldsNeverTheLeadsOrTheEffectOfADenyPathRule(t *testing.T) {
 	}
 }
 
-// A row's coverage is `skipped` only for a path a -deny-path rule keeps out
-// or a script-named path the catch-all rule held back: a state-changing GET,
-// a POST form, an address outside the scope and a page of another port are
+// A row's coverage is `skipped` only for a path a -deny-path rule keeps out,
+// a script-named path the catch-all rule held back, or a GET found on the way
+// whose own name declares a state change (held back): a POST form, an address outside the scope and a page of another port are
 // not. A URL of a host -allow lists with another port only has no row, and
 // the summary's skipped names it with that reason.
 func TestRunNothingElseMakesARowSkipped(t *testing.T) {
@@ -370,15 +370,16 @@ func TestRunNothingElseMakesARowSkipped(t *testing.T) {
 		case p == "/denied":
 		case strings.HasPrefix(p, "/spa/"):
 			held++
+		case p == "/logout":
 		default:
-			t.Errorf("%s is skipped: only a -deny-path rule or the catch-all hold does that", p)
+			t.Errorf("%s is skipped: only a -deny-path rule, the catch-all hold or a held state-changing GET does that", p)
 		}
 	}
 	if covered["/denied"] != "skipped" || held == 0 {
 		t.Errorf("coverage %v: want /denied skipped and some of /spa/ held", covered)
 	}
-	if covered["/logout"] != "visited" {
-		t.Errorf("the state-changing GET /logout: coverage %q, want visited", covered["/logout"])
+	if covered["/logout"] != "skipped" {
+		t.Errorf("the state-changing GET /logout found on the way: coverage %q, want skipped (held back)", covered["/logout"])
 	}
 	for p := range covered {
 		if strings.Contains(p, "outside.invalid") || strings.Contains(p, "/other") || p == "/post" {
@@ -391,7 +392,7 @@ func TestRunNothingElseMakesARowSkipped(t *testing.T) {
 	reasons := map[string]bool{}
 	for _, s := range rep.Skipped {
 		reasons[s.Reason] = true
-		if s.Reason != neterr.OutOfPortReason && s.Reason != engine.CatchAllHeldReason && s.Reason != "-deny-path ^/denied$" {
+		if s.Reason != neterr.OutOfPortReason && s.Reason != engine.CatchAllHeldReason && s.Reason != "-deny-path ^/denied$" && !egress.IsHeldReason(s.Reason) {
 			t.Errorf("the summary's skipped holds %+v", s)
 		}
 	}

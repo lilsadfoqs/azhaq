@@ -58,7 +58,7 @@ func newSeenServer(t *testing.T) *seenServer {
 		case "/":
 			w.Header().Set("Content-Type", "text/html")
 			fmt.Fprint(w, `<html><head><title>app</title><script src="/app.js"></script></head><body>
-<a href="/createdb">set up</a><a href="/logout">out</a>
+<a href="/createdb">set up</a><a href="/logout">out</a><a href="/flush">flush</a>
 <form method="get" action="/search"><input name="q" type="text"></form>
 <form method="post" action="/contact"><input name="msg" type="text"></form>
 </body></html>`)
@@ -68,7 +68,7 @@ func newSeenServer(t *testing.T) *seenServer {
 		case "/openapi.json":
 			w.Header().Set("Content-Type", "application/json")
 			fmt.Fprint(w, `{"openapi":"3.0.0","info":{"title":"t","version":"1"},"paths":{"/api/described":{"get":{"summary":"lists","responses":{"200":{"description":"ok"}}}}}}`)
-		case "/createdb", "/logout", "/search", "/api/from-script", "/api/described", "/robots.txt":
+		case "/createdb", "/logout", "/flush", "/search", "/api/from-script", "/api/described", "/robots.txt":
 			w.Header().Set("Content-Type", "text/html")
 			fmt.Fprint(w, "<title>"+r.URL.Path+"</title>")
 		default:
@@ -79,9 +79,12 @@ func newSeenServer(t *testing.T) *seenServer {
 	return s
 }
 
-// run asks every GET URL it finds in scope, whatever its name says: a link
-// (/createdb, /logout), a script's call, an API description's route and a GET
-// form (filled with -fill-forms) are all requested; a POST form is not sent.
+// run asks every GET URL it finds in scope under any name that declares no
+// state change: a link (/flush), a script's call, an API description's route
+// and a GET form (filled with -fill-forms) are all requested; a POST form is
+// not sent. A link whose own name declares a state change (/createdb,
+// /logout) is held back: not sent, listed as skipped with the flag that sends
+// it.
 func TestRunRequestsEveryGETFoundInALinkAScriptADescriptionAndAForm(t *testing.T) {
 	srv := newSeenServer(t)
 	t.Chdir(t.TempDir())
@@ -91,9 +94,9 @@ func TestRunRequestsEveryGETFoundInALinkAScriptADescriptionAndAForm(t *testing.T
 	if err != nil {
 		t.Fatalf("%v\n%s", err, errOut)
 	}
-	for _, path := range []string{"/createdb", "/logout", "/api/from-script", "/api/described"} {
+	for _, path := range []string{"/flush", "/api/from-script", "/api/described"} {
 		if srv.asked("GET", path) == 0 {
-			t.Errorf("GET %s was not requested", path)
+			t.Errorf("GET %s declares no state change and was not requested", path)
 		}
 	}
 	if !srv.any("GET /search?") {
@@ -102,8 +105,19 @@ func TestRunRequestsEveryGETFoundInALinkAScriptADescriptionAndAForm(t *testing.T
 	if srv.any("POST ") {
 		t.Errorf("a POST was sent without -submit-forms: %v", srv.seen)
 	}
-	if rep := lastReport(t, errOut); len(rep.Skipped) > 0 {
-		t.Errorf("a URL was kept out with no -deny-path rule: %+v", rep.Skipped)
+	rep := lastReport(t, errOut)
+	for _, path := range []string{"/createdb", "/logout"} {
+		if srv.asked("GET", path) != 0 {
+			t.Errorf("GET %s declares a state change and was requested", path)
+		}
+	}
+	if len(rep.Skipped) != 2 {
+		t.Errorf("only the two held links are kept out, with no -deny-path rule: %+v", rep.Skipped)
+	}
+	for _, s := range rep.Skipped {
+		if !strings.Contains(s.Reason, "-send-state-changing") {
+			t.Errorf("%s is skipped for %q, want the flag that sends it", s.Target, s.Reason)
+		}
 	}
 }
 
