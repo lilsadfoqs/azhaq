@@ -268,3 +268,28 @@ func TestLabImagesPinnedFromOneList(t *testing.T) {
 		}
 	}
 }
+
+// Requests per route are compared cross-multiplied, so that no division
+// rounds: azhaq is held to katana's ratio, and a tool that found nothing has
+// none.
+func TestPerRouteAtMost(t *testing.T) {
+	for _, c := range []struct {
+		az, azr, ref, refr int
+		want               bool
+	}{
+		{29, 29, 29, 29, true},  // the same ratio
+		{94, 80, 29, 25, false}, // 1.175 against 1.16
+		{93, 80, 29, 25, false}, // 1.1625 against 1.16: 93*25 = 2325 > 29*80 = 2320
+		{92, 80, 29, 25, true},  // 1.15 against 1.16
+		{16, 12, 19, 13, true},  // 1.33 against 1.46
+		{10, 0, 29, 25, false},  // azhaq found no route
+		{10, 5, 0, 0, false},    // the reference found none
+	} {
+		if got := perRouteAtMost(c.az, c.azr, c.ref, c.refr); got != c.want {
+			t.Errorf("%d requests for %d routes against %d for %d: %v, want %v", c.az, c.azr, c.ref, c.refr, got, c.want)
+		}
+	}
+	if perRoute(0, 0) != "no route" || perRoute(29, 25) != "1.16" {
+		t.Errorf("perRoute: %q, %q", perRoute(0, 0), perRoute(29, 25))
+	}
+}

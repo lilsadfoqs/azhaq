@@ -79,6 +79,10 @@ type toolScore struct {
 	Styles  int     `json:"styles,omitempty"` // distinct stylesheets listed, which Routes leaves out (the crawl comparison)
 	Seconds float64 `json:"seconds"`
 	RSSMB   float64 `json:"rss_mb"`
+	// Requests is what the tool sent in one more run through a counting
+	// proxy, and RequestRoutes the routes that run found (a crawl on a local app).
+	Requests      int `json:"requests,omitempty"`
+	RequestRoutes int `json:"request_routes,omitempty"`
 }
 
 // ffufRow compares the wordlist sweep with ffuf on the same list.
@@ -788,4 +792,60 @@ func crawlCompare(a *appResult, truth map[string]bool, shell string) {
 	barOne("crawl "+a.Name, az.Truth, kt.Truth, az.Seconds, kt.Seconds, "the app's own routes (its server code or OpenAPI document, or the routes only its page scripts hold)",
 		cmdLine(azhaq, aa...)+" vs "+cmdLine("katana", ka...),
 		fmt.Sprintf("routes found azhaq %d, katana %d; stylesheets listed azhaq %d, katana %d; known %d and %d of %d; %s%s", az.Routes, kt.Routes, az.Styles, kt.Styles, az.Truth, kt.Truth, len(truth), ratios(az.Seconds, kt.Seconds, memPair{az.RSSMB, kt.RSSMB}), azErr(m)))
+	if !slowTarget(a.URL) {
+		crawlTraffic(a, aa, ka)
+	}
+}
+
+// crawlTraffic runs azhaq crawl and katana once more, to the same depth,
+// through a proxy that counts every request that reaches the app, and holds
+// azhaq to no more requests for each route it found than katana sent for
+// each of its own. The counted run is not timed and is never replayed from
+// an earlier one.
+func crawlTraffic(a *appResult, aa, ka []string) {
+	px, err := newCountProxy(strings.TrimSuffix(a.URL, "/"))
+	if err != nil {
+		addCheck("crawl "+a.Name+": requests per route found ≤ katana's", false, "no counting proxy: %v", err)
+		return
+	}
+	defer px.close()
+	target := px.origin + "/"
+	count := func(name string, args []string) (reqs, found int) {
+		before := px.n()
+		args = append([]string(nil), args...)
+		for i, x := range args {
+			if x == a.URL {
+				args[i] = target
+			}
+		}
+		cmd := exec.Command(name, args...)
+		cmd.Dir = work
+		out, _ := cmd.Output()
+		var urls []string
+		for _, l := range lines(out) {
+			urls = append(urls, firstField(l))
+		}
+		return px.n() - before, len(routes(urls, px.origin))
+	}
+	azReq, azRoutes := count(azhaq, aa)
+	kaReq, kaRoutes := count(ref("katana"), ka)
+	a.Crawl.Requests, a.Crawl.RequestRoutes = azReq, azRoutes
+	a.CrawlKatana.Requests, a.CrawlKatana.RequestRoutes = kaReq, kaRoutes
+	addCheck("crawl "+a.Name+": requests per route found ≤ katana's", perRouteAtMost(azReq, azRoutes, kaReq, kaRoutes),
+		"azhaq %d requests for %d routes (%s a route), katana %d for %d (%s) | %s vs %s", azReq, azRoutes, perRoute(azReq, azRoutes), kaReq, kaRoutes, perRoute(kaReq, kaRoutes),
+		cmdLine(azhaq, aa...), cmdLine("katana", ka...))
+}
+
+// perRouteAtMost says azhaq's requests for each route are not more than the
+// reference's: cross-multiplied, so that no division rounds. A tool that
+// found no route has no ratio to be within.
+func perRouteAtMost(azReq, azRoutes, refReq, refRoutes int) bool {
+	return azRoutes > 0 && refRoutes > 0 && azReq*refRoutes <= refReq*azRoutes
+}
+
+func perRoute(reqs, routes int) string {
+	if routes == 0 {
+		return "no route"
+	}
+	return fmt.Sprintf("%.2f", float64(reqs)/float64(routes))
 }
