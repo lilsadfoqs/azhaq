@@ -33,7 +33,7 @@ var helpSpecs = map[string]helpSpec{
 			{"Crawl scope", `crawl-scope crawl-any-host crawl-in crawl-out`},
 			{"Names and sources", `sources all-sources exclude-sources providers resolvers dns-rate source-proxy source-rate source-rates source-timeout extra-wait max-time max-body max-results urls-timeout no-history`},
 			{"Browser", `browser interact interact-clicks screenshots chrome chrome-profile chrome-proxy chrome-no-sandbox chrome-require-sandbox tabs unsafe-ports`},
-			{"Scope and safety", `allow sweep deny deny-path kill-file ledger seal-to submit-forms browser-writes params-writes`},
+			{"Scope and safety", `allow sweep deny deny-path send-state-changing kill-file ledger seal-to submit-forms browser-writes params-writes`},
 			{"Pace and limits", `rate host-rate host-parallel parallel delay backoff retry request-timeout timeout max-requests max-host-requests host-guesses daily-requests max-items max-names max-ips max-response-size depth retry-failed retry-run`},
 			{"Session", `cookie cookie-jar header login login-user login-pass proxy`},
 			{"Output", `db json quiet v stream sr srd no-catchall all-rows fail-on-errors fail-on-capped strict-exit`},
@@ -81,7 +81,7 @@ var helpSpecs = map[string]helpSpec{
 	"subs": {
 		groups: []helpGroup{
 			{"Targets and input", `d dL`},
-			{"What to ask", `live http guesses guess-samples w permute all-sources sources m providers`},
+			{"What to ask", `live http guesses guess-samples w permute all-sources sources m providers fresh`},
 			{"Pace and limits", `source-rate source-rates source-timeout extra-wait max-time max-body max-results max-names dns-rate t timeout`},
 			{"Network", `resolvers proxy web-ports http-proxy`},
 			{"Output", `db ledger json o oI silent v fail-on-errors ls stats no-history strict-exit`},
@@ -165,7 +165,7 @@ var helpSpecs = map[string]helpSpec{
 			{"Targets and input", `u l scope program`},
 			{"What to ask", `d paths sweep no-form-fill per-template no-follow no-map-guess browser interact interact-clicks fs kf`},
 			{"What to list", `assets hints no-catchall all-rows rejected em ndef do`},
-			{"Scope and safety", `allow deny deny-path kill-file ledger submit-forms browser-writes chrome-no-sandbox`},
+			{"Scope and safety", `allow deny deny-path send-state-changing kill-file ledger submit-forms browser-writes chrome-no-sandbox`},
 			{"Pace and limits", `rl delay backoff retry host-rate hrl host-parallel parallel request-timeout ct max-requests max-host-requests host-guesses max-items max-response-size`},
 			{"Session and network", `H cookie cookie-jar login login-user login-pass proxy resolvers`},
 			{"Output", `db o json jsonl f ot silent v strict-exit`},
@@ -187,7 +187,7 @@ var helpSpecs = map[string]helpSpec{
 			{"Targets and input", `d dL`},
 			{"What to ask", `providers provider-config archive raw subs keep-junk`},
 			{"Matchers and filters", `mc mt ft blacklist fp from to`},
-			{"Spot-check the live site", `live live-rate live-max live-proxy`},
+			{"Spot-check the live site", `live live-rate live-max live-proxy send-state-changing`},
 			{"Pace and limits", `urls-max urls-pages urls-pause urls-threads urls-timeout retries timeout`},
 			{"Network", `proxy`},
 			{"Output", `db o json silent v sort stream fail-on-capped fail-on-errors strict-exit`},
@@ -227,7 +227,7 @@ var helpSpecs = map[string]helpSpec{
 			{"Targets and input", `u l scope program`},
 			{"What to ask", `w e depth ac`},
 			{"Matchers and filters", `mc fc fs`},
-			{"Scope and safety", `allow deny deny-path kill-file ledger`},
+			{"Scope and safety", `allow deny deny-path send-state-changing kill-file ledger`},
 			{"Pace and limits", `rate t max-requests timeout`},
 			{"Session and network", `H cookie proxy resolvers`},
 			{"Output", `db json o silent v strict-exit`},
@@ -269,7 +269,7 @@ var helpSpecs = map[string]helpSpec{
 		groups: []helpGroup{
 			{"Targets and input", `u l i scope program`},
 			{"What to ask", `w X c casing passive`},
-			{"Scope and safety", `allow deny deny-path kill-file ledger`},
+			{"Scope and safety", `allow deny deny-path send-state-changing kill-file ledger`},
 			{"Pace and limits", `rate t d T max-requests timeout urls-timeout`},
 			{"Session and network", `H cookie proxy resolvers`},
 			{"Output", `db json o oB oJ oT silent v strict-exit`},
@@ -380,7 +380,7 @@ var helpSpecs = map[string]helpSpec{
 	},
 	"mcp": {
 		groups: []helpGroup{
-			{"Scope and safety", `scope program allow deny deny-path unlocked allow-writes`},
+			{"Scope and safety", `scope program allow deny deny-path send-state-changing unlocked allow-writes`},
 			{"What a map asks", `resolvers sources history skip no-takeover chrome-no-sandbox`},
 			{"Pace and limits", `rate max-requests`},
 			{"Output", `dir`},

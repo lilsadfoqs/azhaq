@@ -345,7 +345,7 @@ func estimateCost(seeds []types.Seed, planned [][]string, runs func(string) bool
 				}
 				if base := dirscol.Base(s.Key()); base != "" && !dirsBases[base] {
 					dirsBases[base] = true
-					dirsReqs += int64(dirscol.Requests(s.Key(), env.dirsWordList, env.dirsExtList, !env.dirsNoCal, env.rules.DeniedPath))
+					dirsReqs += int64(dirscol.Requests(s.Key(), env.dirsWordList, env.dirsExtList, !env.dirsNoCal, env.dirsHold, env.rules.DeniedPath))
 				}
 			}
 		}
@@ -397,7 +397,7 @@ func estimateCost(seeds []types.Seed, planned [][]string, runs func(string) bool
 		e.add("azhaq-paths", amount{Requests: int64(own)}, note)
 	}
 	if dirsReqs > 0 {
-		e.add("azhaq-dirs", amount{Requests: dirsReqs}, "each directory found is swept and calibrated too")
+		e.add("azhaq-dirs", amount{Requests: dirsReqs}, "each directory found is swept and calibrated too, and a directory two hits are found in (words with a slash) gets one more request")
 	}
 	if active["params"] && len(pages) > 0 && env.paramsN > 0 {
 		e.add("azhaq-params", amount{}, "pages searched, up to -params-per-host a host, each asked in batches of the wordlist")

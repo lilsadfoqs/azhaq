@@ -7,7 +7,9 @@ import (
 
 	"github.com/lilsadfoqs/azhaq/internal/collectors/httpcol"
 	"github.com/lilsadfoqs/azhaq/internal/collectors/urlcol"
+	"github.com/lilsadfoqs/azhaq/internal/neterr"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
+	"github.com/lilsadfoqs/azhaq/internal/statechange"
 )
 
 // liveCheck is what urls -live found out about the URLs it asked: for each,
@@ -19,6 +21,7 @@ type liveCheck struct {
 	failed   map[string]string // asked, no answer: why
 	junk     int               // not asked: looks like junk
 	notAsked int               // not asked: past -live-max
+	held     int               // not asked: its own path declares a state change (-send-state-changing asks them)
 }
 
 // answered reports whether the live site still serves the URL: it answered
@@ -43,13 +46,19 @@ func (o *urlOut) verdict(c *liveCheck, u string) {
 // verifyURLs asks the live site for each URL once, at rate requests a second:
 // a GET, not followed, so a redirect is the answer. At most max are asked
 // when max is above 0, spread evenly over the sorted list. A URL that looks
-// like junk (a scanner's payload) is never sent.
-func verifyURLs(c *common, rows []urlcol.Row, rate float64, max int, proxy string, rep *report) (*liveCheck, error) {
+// like junk (a scanner's payload) is never sent, and one whose own path
+// declares a state change (/logout) is held back unless sendState says to
+// ask it: an archive found it, nobody gave it.
+func verifyURLs(c *common, rows []urlcol.Row, rate float64, max int, proxy string, sendState bool, rep *report) (*liveCheck, error) {
 	chk := &liveCheck{rate: rate, asked: map[string]bool{}, status: map[string]int{}, failed: map[string]string{}}
 	var eligible []string
 	for _, r := range rows {
 		if r.Junk != "" && r.Junk != "asset" {
 			chk.junk++
+			continue
+		}
+		if !sendState && statechange.OfURL(r.URL) != "" {
+			chk.held++
 			continue
 		}
 		if n, err := normalize.URL(r.URL); err == nil {
@@ -149,12 +158,18 @@ func (c *liveCheck) note(rep *report) {
 	if c.junk > 0 {
 		rep.Counts["not asked (junk)"] = c.junk
 	}
+	if c.held > 0 {
+		rep.Counts["not asked (state-changing)"] = c.held
+	}
 	parts := []string{fmt.Sprintf("%d asked at %g requests a second (-live-rate): %d answered and are verified, %d are gone (404 or 410), %d gave no answer", len(c.asked), c.rate, live, gone, silent)}
 	if c.notAsked > 0 {
 		parts = append(parts, fmt.Sprintf("%d not asked (-live-max)", c.notAsked))
 	}
 	if c.junk > 0 {
 		parts = append(parts, fmt.Sprintf("%d not asked because they look like junk", c.junk))
+	}
+	if c.held > 0 {
+		parts = append(parts, fmt.Sprintf("%d not asked because their own path declares a state change (%s asks them)", c.held, neterr.SendFlag))
 	}
 	rep.Notes = append(rep.Notes, "-live: "+strings.Join(parts, "; ")+"; rows without \"verified\" were not asked")
 }

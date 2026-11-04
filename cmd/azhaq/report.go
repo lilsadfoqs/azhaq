@@ -49,7 +49,7 @@ type report struct {
 	Failures    int                `json:"failures"` // the sum of count over failed, plus unreachable targets it does not name: see decide
 	Failed      []engine.Failure   `json:"failed,omitempty"`
 	Skipped     []engine.Skip      `json:"skipped,omitempty"`
-	Takeover    []takeoverRow      `json:"takeover,omitempty"`    // names another party may take over
+	Takeover    []takeoverRow      `json:"takeover,omitempty"`    // names another party may take over: each is a candidate or verified
 	Degraded    bool               `json:"degraded,omitempty"`    // a source the run depends on failed (subs); the exit code is 3
 	DegradedBy  []degradedBy       `json:"degraded_by,omitempty"` // with degraded: each failed source, its reason and how many domains
 	Junk        map[string]int     `json:"junk,omitempty"`        // urls: URLs left out as junk, by reason (-raw keeps them)
@@ -59,12 +59,12 @@ type report struct {
 	Notes       []string           `json:"notes,omitempty"`
 	Next        []string           `json:"next,omitempty"`
 	Error       string             `json:"error,omitempty"` // an internal error: the summary disagrees with its rows (audit.go); exit 1
-	// StateChanging are the GET requests whose own name or description
+	// StateChanging are the GET requests whose own path (or API operation)
 	// declares a state change: the ones among the targets, named before
 	// anything was sent, and the ones found on the way (an API
-	// description's operation, a link named /logout), named in this
-	// summary. Each names the -deny-path rule that would keep it out;
-	// none was withheld by the list.
+	// description's operation, a link named /logout). Each says what became
+	// of it: sent (this run recorded a request for it), held back (found on
+	// the way, not sent: -send-state-changing sends it) or not requested.
 	StateChanging []stateChangeEntry `json:"state_changing,omitempty"`
 
 	// Cost is what the run was estimated to send before it started, by
@@ -82,6 +82,14 @@ type report struct {
 	// leads they are not map rows: Counts still adds up to Stored
 	// without them, and the notes say how their counts are derived.
 	Verify []verify.Result `json:"verify,omitempty"`
+	// StateChangingHeld is how many of those were held back, not sent: the
+	// skipped list names each, and the flag that sends them (see settleStateChanges).
+	StateChangingHeld int `json:"state_changing_held,omitempty"`
+	// SessionLost is how a signed-in run's session ended when it could not
+	// be renewed: the first answer that looked like its end, the GETs that
+	// were already in flight when it was read, and how many were asked
+	// since the last check that held.
+	SessionLost *sessionLossReport `json:"session_lost,omitempty"`
 
 	estimate  *costEstimate             // what the command was estimated to send, for Cost
 	dnsFrom   int64                     // egress.DNSTotal when the command began: dns_queries are its own
@@ -115,6 +123,12 @@ type report struct {
 
 	hushCost  bool     // an embedded run: the command that owns it says the cost
 	refusedBy []string // run: the collectors whose work the request budget refused, first first
+
+	// TakeoverCandidates and TakeoverVerified split len(Takeover): a candidate is
+	// what was observed (a target that does not resolve); verified, the service
+	// itself answered that nothing is there.
+	TakeoverCandidates int `json:"takeover_candidates,omitempty"`
+	TakeoverVerified   int `json:"takeover_verified,omitempty"`
 }
 
 func newReport(command string) *report {
@@ -129,6 +143,15 @@ func (r *report) settle() {
 	r.Seconds = float64(time.Since(r.start).Milliseconds()) / 1000
 	r.DNSQueries = egress.DNSTotal() - r.dnsFrom
 	r.Failures = r.failureCount()
+	r.TakeoverCandidates, r.TakeoverVerified = 0, 0
+	for i, t := range r.Takeover {
+		r.Takeover[i].Finding = t.Finding.Settled()
+		if r.Takeover[i].Status == takeover.Verified {
+			r.TakeoverVerified++
+		} else {
+			r.TakeoverCandidates++
+		}
+	}
 	r.audit()
 	switch {
 	case len(r.problems) > 0:
@@ -281,7 +304,7 @@ func (r *report) print(w io.Writer) {
 		}
 	}
 	for _, t := range r.Takeover {
-		line := fmt.Sprintf("  ! takeover candidate (%s): %s · %s", t.Strength, t.Host, t.Evidence)
+		line := fmt.Sprintf("  ! takeover %s (%s): %s · %s", t.Status, t.Strength, t.Host, t.Evidence)
 		if t.List != "" {
 			line += " [" + t.List + "]"
 		}
@@ -645,13 +668,13 @@ func stillWaiting() string {
 }
 
 // takeoverLine is a candidate as -silent prints it on stderr, one per line:
-// [takeover] name -> cname (service, strength).
+// [takeover] name -> cname (service, strength, status).
 func takeoverLine(t takeoverRow) string {
 	line := "[takeover] " + t.Host
 	if t.Target != "" {
 		line += " -> " + t.Target
 	}
-	return line + " (" + t.Service + ", " + t.Strength + ")"
+	return line + " (" + t.Service + ", " + t.Strength + ", " + t.Status + ")"
 }
 
 // takeoverRow is a name another party may take over, and why.
@@ -700,7 +723,7 @@ func takeovers(ents []types.Entity, obs []types.StoredObservation) []takeoverRow
 		if host == "" {
 			host = normalize.HostFromURL(p.URL)
 		}
-		f := *p.Takeover
+		f := p.Takeover.Settled()
 		if f.Strength == "page" {
 			// A service's page, judged again by where DNS says the name
 			// points: to that service, strong; elsewhere, nothing.

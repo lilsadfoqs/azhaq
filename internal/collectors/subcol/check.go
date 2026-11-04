@@ -36,6 +36,7 @@ type checker struct {
 	closed bool            // Run has stopped waiting: nothing more is asked
 	asked  int             // names sent to the resolvers
 	took   time.Duration   // time spent in them
+	flight sync.WaitGroup  // lookups of names in progress
 }
 
 func newChecker(ctx context.Context, domain string, verify func(context.Context, string, []string) ([]string, []string), hint func([]string)) *checker {
@@ -66,6 +67,21 @@ func (k *checker) close() {
 	k.stop() // a round still being looked up stops using the resolvers
 }
 
+// drain waits up to d for the lookups in progress to return after close:
+// they stop at once and hand back the names they had answered, which are
+// then known to resolve or not instead of left unchecked.
+func (k *checker) drain(d time.Duration) {
+	if k == nil {
+		return
+	}
+	done := make(chan struct{})
+	go func() { k.flight.Wait(); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(d):
+	}
+}
+
 // check resolves the names it has not checked, bar the ones a real source
 // gave, and returns how many of them are new live names.
 func (k *checker) check(names []string) int { return k.checkWith(k.ctx, names, false) }
@@ -86,10 +102,16 @@ func (k *checker) checkWith(ctx context.Context, names []string, final bool) int
 		return 0
 	}
 	t0 := time.Now()
+	k.flight.Add(1)
 	live, failed := k.verify(ctx, k.domain, ask)
+	k.flight.Done()
 	took := time.Since(t0)
 	k.mu.Lock()
-	k.asked += len(ask)
+	if ctx.Err() != nil {
+		k.asked += len(ask) - len(failed) // the rest were cut off before they were sent
+	} else {
+		k.asked += len(ask)
+	}
 	k.took += took
 	for _, n := range ask {
 		k.state[n] = nameDead

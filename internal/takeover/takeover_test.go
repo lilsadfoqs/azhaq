@@ -69,7 +69,7 @@ func TestDanglingFindingNamesWhatItRestsOn(t *testing.T) {
 		if !strings.Contains(f.List, c.entry) || !strings.Contains(f.List, ListRead) {
 			t.Errorf("%s: list %q", c.target, f.List)
 		}
-		if !strings.Contains(f.Evidence, "unverified: NXDOMAIN does not show it is free") {
+		if !strings.Contains(f.Evidence, "Candidate, unverified: NXDOMAIN does not show the name is free") {
 			t.Errorf("%s: evidence %q", c.target, f.Evidence)
 		}
 	}
@@ -81,6 +81,40 @@ func TestDanglingFindingNamesWhatItRestsOn(t *testing.T) {
 			if listEntry[suf] == "" {
 				t.Errorf("%s has no list entry", suf)
 			}
+		}
+	}
+}
+
+// A finding says what it is: a candidate, unless the service itself answered
+// that nothing is there (and the name is known to be on that service).
+func TestFindingStatus(t *testing.T) {
+	d, _ := ByCNAME("x.example.com", []string{"a.azurewebsites.net"}, true, true)
+	if d.Status != Candidate || !strings.HasPrefix(d.Evidence, "observed: CNAME to a.azurewebsites.net; a.azurewebsites.net answered NXDOMAIN; ") ||
+		!strings.Contains(d.Evidence, "is on Azure") || !strings.Contains(d.Evidence, "no check with Azure was made") {
+		t.Errorf("dangling: %+v", d)
+	}
+	g, _ := ByCNAME("x.example.com", []string{"cdn.nobody-holds-this.io"}, true, false)
+	if g.Status != Candidate || g.Strength != "strong" || !strings.Contains(g.Evidence, "may be free to register; no registry was asked") {
+		t.Errorf("domain: %+v", g)
+	}
+	page := []byte(`<p>There isn't a GitHub Pages site here.</p>`)
+	if v, _ := ByPage([]string{"acme.github.io"}, page); v.Status != Verified {
+		t.Errorf("the service's own page beside a CNAME to it: %+v", v)
+	}
+	if p, _ := ByPage(nil, page); p.Status != Candidate || p.Strength != "page" {
+		t.Errorf("a page with no CNAME known: %+v", p)
+	}
+	// A finding stored by an earlier version has no status: it is read as what it was.
+	for _, c := range []struct {
+		f    Finding
+		want string
+	}{
+		{Finding{Strength: "dangling"}, Candidate}, {Finding{Strength: "page"}, Candidate},
+		{Finding{Service: "domain", Strength: "strong"}, Candidate}, {Finding{Service: "GitHub Pages", Strength: "strong"}, Verified},
+		{Finding{Strength: "strong", Status: Candidate}, Candidate},
+	} {
+		if got := c.f.Settled().Status; got != c.want {
+			t.Errorf("%+v settles to %q, want %q", c.f, got, c.want)
 		}
 	}
 }

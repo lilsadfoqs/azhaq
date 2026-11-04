@@ -15,10 +15,39 @@ import (
 // -deny-path rule keeps out. Denied carries the rule.
 var ErrDenied = errors.New("not requested: -deny-path")
 
-// Denied is ErrDenied naming the rule that matched.
+// Denied is ErrDenied naming the rule that matched. A rule made by
+// HeldRule stands for a GET held back because its own name declares a
+// state change, not for a -deny-path rule.
 type Denied struct{ Rule string }
 
-func (e *Denied) Error() string { return "not requested: -deny-path " + e.Rule }
+func (e *Denied) Error() string {
+	if w, ok := HeldWord(e.Rule); ok {
+		return "not requested: " + HeldReason(w)
+	}
+	return "not requested: -deny-path " + e.Rule
+}
+
+// heldMark starts the rule of a held GET: no -deny-path rule a user types
+// starts with a control character.
+const heldMark = "\x01held:"
+
+// SendFlag is the flag that sends the GETs held back as state-changing.
+const SendFlag = "-send-state-changing"
+
+// HeldRule is the Denied rule of a GET held back for the word its own name
+// declares.
+func HeldRule(word string) string { return heldMark + word }
+
+// HeldWord is the word of a rule made by HeldRule.
+func HeldWord(rule string) (string, bool) {
+	w, ok := strings.CutPrefix(rule, heldMark)
+	return w, ok
+}
+
+// HeldReason is how a held GET is named in a list of what was not requested.
+func HeldReason(word string) string {
+	return fmt.Sprintf("a GET found on the way whose own name declares a state change (the word %q); %s sends it", word, SendFlag)
+}
 
 func (e *Denied) Is(target error) bool { return target == ErrDenied }
 
@@ -28,7 +57,18 @@ func (e *Denied) Is(target error) bool { return target == ErrDenied }
 var ErrSessionLost = errors.New("the session ended")
 
 // SessionLost is ErrSessionLost saying how the session ended.
-type SessionLost struct{ Msg string }
+type SessionLost struct {
+	Msg string
+	// Answer is the URL of the first answer that looked like the end of the
+	// session, empty when none did and a check found it.
+	Answer string
+	// InFlight are the GETs answered after that answer: they were already in
+	// the air when it was read, and may have been answered without the session.
+	// With no such answer it is empty.
+	InFlight []string
+	// Asked is how many GETs were asked since the last check that held.
+	Asked int
+}
 
 func (e *SessionLost) Error() string { return e.Msg }
 

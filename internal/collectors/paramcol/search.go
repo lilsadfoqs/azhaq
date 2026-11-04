@@ -711,7 +711,11 @@ func (s *search) once(base *url.URL, q []pair, quiet bool) (a answer, wait time.
 	if err := s.c.limiter.Wait(s.ctx, s.base.Host); err != nil {
 		return answer{}, 0, false
 	}
-	if rule := egress.DeniedBy(s.base.String()); rule != "" {
+	rule := egress.DeniedBy(s.base.String())
+	if w := egress.HeldWord(s.base.String()); rule == "" && w != "" && s.method == GET {
+		rule = neterr.HeldRule(w) // a page found on the way whose own name declares a state change
+	}
+	if rule != "" {
 		s.mu.Lock()
 		s.skip = egress.DenyReason(rule)
 		s.mu.Unlock()

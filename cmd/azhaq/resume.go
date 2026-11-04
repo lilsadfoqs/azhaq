@@ -111,6 +111,9 @@ func cmdResume(args []string) error {
 	command := ""
 	if ok {
 		command = st.GetMeta("command:" + id)
+		if command == "subs" {
+			keepSubsAnswers(st, id) // the sources that answered are not asked again
+		}
 	}
 	st.Close()
 	if err != nil {
@@ -353,7 +356,7 @@ var removedFlags = map[string]bool{"all-gets": false, "get-words": true, "cloud"
 func removedWhy(gone []string) string {
 	var why []string
 	for _, g := range gone {
-		w := "every GET found in scope is requested, whatever its name says"
+		w := "a GET found on the way whose own path or API operation declares a state change is held back unless -send-state-changing is given"
 		if g == "-cloud" {
 			w = "-l FILE takes its domains, hosts and URLs, one per line"
 		}

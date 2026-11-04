@@ -14,6 +14,7 @@ import (
 
 	"github.com/lilsadfoqs/azhaq/catalog"
 	"github.com/lilsadfoqs/azhaq/internal/crawlscope"
+	"github.com/lilsadfoqs/azhaq/internal/egress"
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
 	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
@@ -207,6 +208,8 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		list = c.Wordlist
 		if len(list) == 0 {
 			list = DefaultWordlist
+		} else {
+			ctx = egress.WithAsked(ctx) // a path list of the user's: every word is asked
 		}
 	case !c.Known && b != "" && b != "/api/" && c.owner(origin+b, raw) == raw && c.bases(origin) <= maxBases:
 		// The root sweep asks /api/swagger.json and /api/openapi.json.

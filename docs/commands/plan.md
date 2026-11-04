@@ -28,7 +28,7 @@ azhaq plan -scope bugcrowd -program tesla -dirs words.txt
 2. The seeds left out of scope.
 3. The active techniques you asked for.
 4. The kinds of request sent to the targets: the GET requests for pages, and besides them each port scan, UDP probe, POST body, sign-in and Chrome load (`-screenshots`, `-browser`) that is planned. Every flag of `run` that asks for a collector is named here or under the active techniques. It does not list the URLs a crawl will find: the ledger lists those, as they are sent.
-5. The requests among the targets that may change state: a GET whose own name carries a word that declares one (create, createdb, delete, remove, reset, populate, logout, signout, clear, wipe, drop, truncate, purge, destroy, erase, seed), each with the `-deny-path` rule that would keep it out. The list informs and withholds nothing; the run's summary names the others a crawl found on the way, whose API descriptions declare one (VAmPI's `GET /createdb` is the kind: its description says it creates and populates the database).
+5. The requests among the targets that may change state: a GET whose own path carries a word that declares one (create, createdb, delete, remove, reset, populate, logout, signout, clear, wipe, drop, truncate, purge, destroy, erase, seed), each with the `-deny-path` rule that would keep it out. The list informs and withholds nothing, for a target is a URL you gave. The run holds back the others it finds on the way, unless `-send-state-changing` is given (VAmPI's `GET /createdb` is the kind: its path says it), and its summary names them with what became of each.
 6. The third-party source queries, counted.
 7. A bound on the requests to the targets: what each web service costs, and the cap.
 8. The estimate: the requests, connects, DNS queries and source queries the run would send, for each stage and each collector. See [The estimate](#the-estimate).
@@ -47,7 +47,7 @@ Plain text prints the same parts, one block each. `-json` prints one object.
 | `active` | The active techniques asked for. |
 | `builtin_paths` | The built-in path checks on each web service. |
 | `limits` | The options that bound the run. |
-| `state_changing` | The requests among the targets that may change state, each with its URL, the word, and the `-deny-path` rule that would keep it out (`deny_path`). Requests already kept out by a rule are not listed. |
+| `state_changing` | The requests among the targets that may change state, each with its URL, the word, and the `-deny-path` rule that would keep it out (`deny_path`). They are targets you gave, so they are sent. Requests already kept out by a rule are not listed. |
 | `sends` | What goes to the targets, one line for each kind. |
 | `requests` | What is known of the requests before any is sent. See below. |
 | `estimate` | What the run would send, by stage and collector: `total`, `stages` and `basis`. See [The estimate](#the-estimate). |
@@ -139,7 +139,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 | `-paths` | string |  | extra path wordlist (one path per line) |
 | `-no-paths` | bool |  | do not ask each web service for the 51 built-in paths (robots.txt, sitemaps, API descriptions, .git/HEAD, backup, admin, …): some programs count that as scanning |
 | `-path-climb` | bool |  | also list and ask the parent directories of each link a page names (/a/b/c: /a/b/ and /a/) |
-| `-fill-forms` | bool |  | ask the action of each GET form with neutral values in its fields (a search box gets a word): one GET request per form, even one that deletes or logs out (-deny-path keeps its action out); a form that posts is not sent unless -submit-forms; crawl does this by default (-no-form-fill turns it off) |
+| `-fill-forms` | bool |  | ask the action of each GET form with neutral values in its fields (a search box gets a word): one GET request per form, unless the action's own path declares a state change (it is held back, and -send-state-changing sends it); -deny-path keeps its action out; a form that posts is not sent unless -submit-forms; crawl does this by default (-no-form-fill turns it off) |
 | `-per-template` | int |  | URLs of one template (/product?id={n}) to request; the rest are listed (default: all) |
 | `-catchall-after` | int | `3` | stop asking the paths scripts name in a directory once this many of them have answered with the page every unknown path gets, before as many have answered anything else; they stay in the map as skipped (0: ask them all) |
 | `-web-ports` | string |  | ports to probe on each hostname or address of the list, comma-separated (default: 443, falling back to 80; a target given with no port and nothing there is a note, not a failure) |
@@ -207,6 +207,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 | `-sweep` | bool |  | cover the whole scope: the IPv4 ranges and addresses -allow and -scope hold are targets too, not only the ones named (without it a note says how much of a range the targets leave); -deny, -deny-path, -rate, -max-requests and the kill file hold as for any target, and a range is expanded up to -max-ips unless -ports scans it |
 | `-deny` | string, repeatable |  | a domain, host or address range the run must not touch, even when given as a target |
 | `-deny-path` | string, repeatable |  | a regular expression on a URL's path and query: a URL it matches is never requested, by any collector or Chrome, and is listed as not requested (repeatable; azhaq decides nothing by itself) |
+| `-send-state-changing` | bool |  | send the GETs found on the way whose own path or API operation declares a state change (create, delete, reset, logout, and the other words of the documented set): a crawl's link, a script's route, an API description's operation, a built-in -dirs word. By default they are held back and listed as skipped; a target you give, a wordlist you give and -deny-path rules are not affected |
 | `-kill-file` | string |  | stop all sending when this file exists, so that no request starts after it, and exit 4; azhaq resume works once it is removed (default DB.stop) |
 | `-ledger` | string |  | write every request, connection and DNS query the run sends (to targets, third-party sources and resolvers) to this file, a chain of hashes that azhaq ledger -verify checks (default DB.ledger.jsonl next to the workspace; off: none; with a temporary database, only when given) |
 | `-seal-to` | string |  | when the run ends, append the ledger's seal as one JSON line ({"time","ledger","seal","entries"}) to this file, or POST it to this URL: kept where the run's own files are not, so azhaq ledger -verify -seal can tell the ledger from one with lines removed and the rest re-chained to look intact |

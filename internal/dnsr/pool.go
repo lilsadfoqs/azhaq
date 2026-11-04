@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/lilsadfoqs/azhaq/internal/guard"
+	"math"
 	"net"
 	"slices"
 	"strings"
@@ -101,6 +102,7 @@ type Pool struct {
 	retries int
 	fixed   bool                 // the retries were asked for (-retry): generated names keep them
 	paced   bool                 // PerSecond is set: the user's rate bounds the queries sent
+	rate    float64              // PerSecond, for Window
 	x       *egress.DNSExchanger // sends the queries: the only code here that opens a connection
 	rtt     rtts                 // how long answers took, for when a query is late
 	proto   map[string]Server    // by key
@@ -267,12 +269,31 @@ func New(o Options) *Pool {
 		retries: o.Retries,
 		fixed:   fixed,
 		paced:   o.PerSecond > 0,
+		rate:    o.PerSecond,
 		x:       egress.NewDNSExchanger(o.Timeout, o.Proxy),
 		cache:   map[string]*entry{},
 		six:     map[string]*entry{},
 		wild:    map[string]bool{},
 	}
 	return p
+}
+
+// WindowSeconds is how many seconds of its rate a lookup that is not in a
+// hurry holds in flight (see Window).
+const WindowSeconds = 4
+
+// Window is how many lookups a bulk caller that is not in a hurry (the
+// guesses of subs -live) keeps in flight: up to most, and with a -dns-rate
+// WindowSeconds of the pool's whole rate, at least 8, which keeps the rate
+// used while answers take up to that long. A query that arrives meanwhile
+// (a name a source gave) waits behind at most that many, not behind every
+// guess of the batch, which would otherwise be queued at once.
+func (p *Pool) Window(most int) int {
+	if !p.paced {
+		return most
+	}
+	w := int(math.Ceil(p.rate * float64(len(p.servers)) * WindowSeconds))
+	return min(most, max(w, 8))
 }
 
 func cmpBurst(o Options) int {
@@ -504,6 +525,9 @@ func (p *Pool) resolveMany(ctx context.Context, names []string, workers int) []A
 			}
 			defer func() { <-sem }()
 			out[i] = p.Resolve(ctx, n)
+			if fn, ok := ctx.Value(eachKey{}).(func(Answer)); ok {
+				fn(out[i])
+			}
 		}(i, n)
 	}
 	wg.Wait()
@@ -816,6 +840,16 @@ func (p *Pool) retriesFor(ctx context.Context) int {
 }
 
 type bulkKey struct{}
+
+type eachKey struct{}
+
+// WithEach makes ResolveMany on ctx call fn for each answer as it arrives
+// (from the goroutines asking, so fn is safe for concurrent use): work that
+// needs the run live, such as judging a wildcard, is done before a stop can
+// cut it off.
+func WithEach(ctx context.Context, fn func(Answer)) context.Context {
+	return context.WithValue(ctx, eachKey{}, fn)
+}
 
 // Bulk marks ctx as a bulk resolve (DNS brute force, permutations), where
 // a plain NXDOMAIN, or a NODATA with no CNAME, is taken at its word: see

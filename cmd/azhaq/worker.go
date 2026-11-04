@@ -41,6 +41,9 @@ type workerConfig struct {
 	DenyPath []string          `json:"deny_path,omitempty"`
 	SignIn   string            `json:"sign_in,omitempty"`
 	Session  int               `json:"session,omitempty"`
+	// Given are the URLs the user gave as targets: a worker never holds one
+	// back as state-changing (see holdStateChanging).
+	Given []string `json:"given,omitempty"`
 }
 
 // Options a worker never takes: seeds, outputs, the database, sessions
@@ -97,7 +100,9 @@ func forWorkers(fs *flag.FlagSet, args, allow, deny []string) (workerConfig, err
 		case name == "params" && builtinNames(val):
 			cfg.Args = append(cfg.Args, "-params="+val)
 		case name == "dirs" && val == dirscol.Builtin:
-			cfg.Files[name] = []byte(strings.Join(dirscol.DefaultWords(), "\n") + "\n")
+			// Named, not copied to a file: the worker must know the words are the
+			// built-in ones, of which the state-changing are held back.
+			cfg.Args = append(cfg.Args, "-dirs="+val)
 		case fileOptions[name]:
 			raw, err := os.ReadFile(val)
 			if err != nil {
@@ -212,6 +217,7 @@ var (
 	workerHeaders []string
 	workerSignIn  string
 	workerGen     int
+	workerGiven   []string
 )
 
 // cmdWorker joins a run started with -serve and runs the work it hands out.
@@ -249,7 +255,7 @@ func cmdWorker(args []string) error {
 		}
 		runArgs = append(runArgs, "-"+name+"="+p)
 	}
-	workerHeaders, workerSignIn, workerGen = cfg.Headers, cfg.SignIn, cfg.Session
+	workerHeaders, workerSignIn, workerGen, workerGiven = cfg.Headers, cfg.SignIn, cfg.Session, cfg.Given
 	for _, r := range cfg.DenyPath {
 		runArgs = append(runArgs, "-deny-path="+r)
 	}

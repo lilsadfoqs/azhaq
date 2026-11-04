@@ -51,7 +51,8 @@ func skippedFor(rep report, reason string) []string {
 
 // The user's own rule keeps a path out of every command that sends: the
 // map never requests it and lists it as not requested with the rule,
-// while the link named /logout, which no rule covers, is requested.
+// while the link named /logout, which no rule covers, is requested (the run
+// is asked to send state-changing GETs: its name is not what is tested).
 func TestDenyPathHoldsInRunDirsAndFuzz(t *testing.T) {
 	const rule = `^/(secret|admin/)`
 	reason := "-deny-path " + rule
@@ -59,7 +60,7 @@ func TestDenyPathHoldsInRunDirsAndFuzz(t *testing.T) {
 	t.Run("run", func(t *testing.T) {
 		srv, seen := pathLog(t, `<a href="/ok">ok</a> <a href="/secret">s</a> <a href="/admin/users">a</a> <a href="/logout">out</a>`)
 		_, errOut, err := captureBoth(t, func() error {
-			return run([]string{"run", "-url", srv.URL + "/", "-no-paths", "-quiet", "-json", "-ledger", "off", "-db", filepath.Join(t.TempDir(), "w.db"), "-deny-path", rule})
+			return run([]string{"run", "-url", srv.URL + "/", "-no-paths", "-quiet", "-json", "-ledger", "off", "-db", filepath.Join(t.TempDir(), "w.db"), "-deny-path", rule, "-send-state-changing"})
 		})
 		if err != nil {
 			t.Fatalf("%v\n%s", err, errOut)
