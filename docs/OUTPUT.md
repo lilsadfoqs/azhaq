@@ -142,6 +142,7 @@ An [internal error](#exit-1) comes before this rule: a summary that disagrees wi
 | `degraded_by` | `subs` only, with `degraded`: an array of `{source, error, domains}`, one for each failed source of the default set. |
 | `stopped`, `resume` | The limit that stopped the work and the command that continues it. |
 | `notes` | Caps that were hit and other things worth knowing that are not failures. See [notes](#notes). |
+| `wrote` | The files the run wrote besides the database and the files you named with `-o` and the like: the ledger, the name history files, `.azhaq-last` and `.azhaq-index`, and the archived URLs. See [the workspace](#the-workspace). |
 | `next` | Commands worth running next. See [next](#next). |
 | `advisories` | With `-advisories`: the known-issue leads, one per lead line printed and per stored `advisory` row: `advisory_id`, `url` (its source), `target`, `product`, `version_seen`, `affected_range`, `label` (`affected`, `not affected` or `conditional`), `precondition` when one is named, and with `-advisories-confirm` also `confidence` (`observed`, `inferred` or `claimed`) and `read` (what was read, or why nothing was). They are leads, not map rows: `counts` still adds up to `stored` without them, and a note counts them by label from these rows. See [Known-issue matching](CONCEPTS.md#known-issue-matching--advisories). |
 
@@ -286,6 +287,9 @@ A workspace is one SQLite file, set with `-db`. Its files:
 | `DB` | The workspace. |
 | `DB.ledger.jsonl` | The [ledger](CONCEPTS.md#the-ledger-and-its-seal), next to the workspace. |
 | `DB.stop` | The default [kill file](CONCEPTS.md#the-kill-file). |
+| `azhaq-data/names/DOMAIN.json` | The [name history](commands/subs.md#name-history), in the folder of `DB` (the current directory when the database is temporary). |
+
+A run writes nothing under your home or XDG directories and leaves nothing in the temporary directory. The files it writes besides the database are in the summary's `wrote`. A history shared between workspaces is one you name with `-history-dir DIR` or `$AZHAQ_DATA_DIR`.
 
 - A drop-in command (`subs`, `probe`, `dirs`, …) without `-db` uses a temporary database and cannot be resumed.
 - `run` without `-db` writes `azhaq-TIME-PID.db` in the current directory, or uses the file `$AZHAQ_DB` names.

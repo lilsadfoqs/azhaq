@@ -91,6 +91,10 @@ type Options struct {
 	All     bool                // also run sources outside the default set
 	// NoHistory neither reads nor writes the name history (-no-history).
 	NoHistory bool
+	// DataDir is the directory whose names/ folder holds the name history
+	// (-history-dir). Empty: $AZHAQ_DATA_DIR; with neither, no history is
+	// read or written.
+	DataDir string
 	// SourceTimeout bounds each source (-source-timeout; default
 	// DefaultSourceTimeout). It is not the run's -timeout: a source past it
 	// is abandoned and listed as failed, and the others' names are kept.
@@ -397,7 +401,7 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 			done := timing.Start(ctx, "source."+s.name)
 			t0 := time.Now()
 			answered := begin(s.name, domain)
-			names, err := s.collect(sctx, domain, c.opts.Keys[s.name], sess)
+			names, err := s.collect(context.WithValue(sctx, dataDirKey{}, c.opts.dataDir()), domain, c.opts.Keys[s.name], sess)
 			answered()
 			done()
 			if !s.sampler && sctx.Err() != nil && ctx.Err() == nil && (err == nil || contextEnded(err)) {
@@ -644,11 +648,11 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		payload["coverage"] = cov
 	}
 	if !c.opts.NoHistory {
-		stored, err := remember(domain, names, foundBy, st.skip)
+		stored, err := remember(c.opts.dataDir(), domain, names, foundBy, st.skip)
 		if err != nil {
 			payload["history_error"] = shorten(err.Error())
 		}
-		if path := historyPath(domain); path != "" {
+		if path := historyPath(c.opts.dataDir(), domain); path != "" {
 			read := 0
 			if row, ok := status[historyName].(map[string]any); ok {
 				read, _ = row["count"].(int)

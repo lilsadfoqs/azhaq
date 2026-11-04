@@ -377,7 +377,7 @@ A real page that is byte-for-byte the not-found page cannot be told apart by any
 
 **Why:** Some passive sources answer differently each time. subdomain.center returns a random sample of its names on each call.
 
-azhaq keeps the names it found in `names/DOMAIN.json`. The file is under `$AZHAQ_DATA_DIR`, else `$XDG_DATA_HOME/azhaq`, else `~/.local/share/azhaq`. azhaq asks those names again as the `history` source, so a name that resolves still comes back. The `coverage:` note says how much of what the sources know the run holds: see [Coverage estimate](commands/subs.md#coverage-estimate). [Name history](commands/subs.md#name-history) has the file and its limits.
+azhaq keeps the names it found in `names/DOMAIN.json`. The file is under `-history-dir`, else `$AZHAQ_DATA_DIR`, else `azhaq-data/` beside `-db` (the current directory without one). azhaq asks those names again as the `history` source, so a name that resolves still comes back. The `coverage:` note says how much of what the sources know the run holds: see [Coverage estimate](commands/subs.md#coverage-estimate). [Name history](commands/subs.md#name-history) has the file and its limits.
 
 **Fix:** `-no-history` turns the file off.
 

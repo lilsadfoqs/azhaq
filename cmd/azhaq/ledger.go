@@ -198,6 +198,7 @@ func (r *runLedger) close(rep *report) {
 		rep.Notes = append(rep.Notes, fmt.Sprintf("ledger %s could not be written (%v): what the run sent may be missing from it", path, err))
 		return
 	}
+	rep.wrote(path)
 	seal := r.l.Last()
 	what, targets, dnsLines := r.recorded(path)
 	rep.Notes = append(rep.Notes, fmt.Sprintf("ledger: %s, sealed %s (azhaq ledger -verify %s -seal %s; the seal alone proves no line was later removed and the rest re-chained)", fmt.Sprintf(what, path), seal, path, seal))

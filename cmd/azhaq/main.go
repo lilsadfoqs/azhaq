@@ -335,7 +335,8 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	sourcesList := fs.String("sources", "", "subdomain sources to run, comma-separated (default: the default set; none: no source, and no archive, RDAP, search engine or RIPEstat lookup either: only the resolvers and the targets are asked)")
 	excludeSources := fs.String("exclude-sources", "", "subdomain sources never to run, comma-separated")
 	allSources := fs.Bool("all-sources", false, "also run slower subdomain sources outside the default set")
-	noHistory := fs.Bool("no-history", false, "do not read or write the name history (names earlier runs found, kept under $AZHAQ_DATA_DIR, else ~/.local/share/azhaq; with -live each is checked by DNS in the run)")
+	noHistory := fs.Bool("no-history", false, "do not read or write the name history (the names earlier runs found, kept in "+historyDirHelp+"; with -live each is checked by DNS in the run)")
+	historyDir := fs.String("history-dir", "", "keep the name history under DIR/names, shared by every run that names it (default $AZHAQ_DATA_DIR, else azhaq-data/ in the workspace's folder: beside -db, or the current directory)")
 	sourceTimeout := fs.Duration("source-timeout", subcol.DefaultSourceTimeout, "give each subdomain source this long, 30s as subfinder does; a slower one (crt.sh) is abandoned, listed as failed, and the names the others gave are kept; -source-timeout 60s or more waits for crt.sh on a large domain (not -timeout, the run's bound)")
 	sourceRate := fs.Float64("source-rate", 0, "requests per second to each subdomain source, as subfinder -rl (0: each source's own pace); a source's lower own pace stays")
 	sourceRates := fs.String("source-rates", "", "pace single subdomain sources, as subfinder -rls: name=N/unit, comma-separated, unit s, m or h (hackertarget=10/m,crtsh=1/s)")
@@ -725,6 +726,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		if err := os.WriteFile(lastDBFile, []byte(path+"\n"), 0o644); err != nil {
 			return err
 		}
+		rep.wrote(lastDBFile)
 	}
 
 	st, err := store.Open(path)
@@ -1086,7 +1088,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	if *sourceRate < 0 || *maxResults < 0 || *maxBody < 0 || *maxTime < 0 {
 		return usagef("-source-rate, -max-results, -max-time and -max-body are not negative")
 	}
-	opts.Subdomains = subcol.Options{Keys: keys, Only: splitList(*sourcesList), Exclude: splitList(*excludeSources), All: *allSources, NoHistory: *noHistory, SourceTimeout: *sourceTimeout, ExtraWait: extraWaitOf(*extraWait),
+	opts.Subdomains = subcol.Options{Keys: keys, Only: splitList(*sourcesList), Exclude: splitList(*excludeSources), All: *allSources, NoHistory: *noHistory, DataDir: historyDirOf(*historyDir, path, out.scratch || out.plan), SourceTimeout: *sourceTimeout, ExtraWait: extraWaitOf(*extraWait),
 		SourceRate: *sourceRate, SourceRates: rates, MaxResults: *maxResults, MaxTime: *maxTime, MaxBody: *maxBody, MaxNames: *maxNames, NoCheck: subsMode.NoCheck, GuessSamples: subsMode.GuessSamples, Recursive: subsMode.Recursive, Proxy: *sourceProxy}
 	urlKeys := maps.Clone(keys)
 	if urlKeys == nil {
@@ -1672,7 +1674,14 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		}
 	}
 	if remember && !*demo && input != "" {
-		_ = recordRun(input, path)
+		if recordRun(input, path) == nil {
+			rep.wrote(runIndexFile)
+		}
+	}
+	if !out.scratch && !out.plan {
+		if fi, err := os.Stat(urlcol.ArchivePath(path)); err == nil && !fi.ModTime().Before(rep.start) {
+			rep.wrote(urlcol.ArchivePath(path))
+		}
 	}
 	if !*quiet && !*jsonOut && !out.embedded && !*demo && prevDB != "" && prevDB != path {
 		if err := printDiff(prevDB, path, diffOpts{}); err != nil {
