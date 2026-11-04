@@ -71,7 +71,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 ### What is not compared
 
 - Bodies are not compared byte for byte. Timestamps and tokens would make every run a change.
-- A catch-all row's control is compared by its answer (status, type, title) and the directory it was asked in. The random path it was asked for, and the size an echoing page gives it, are not compared.
+- A catch-all row's control is compared by its answer (status, type, title). The path it was asked for, the directory that path was in (a page's control is the site root's or its own directory's, whichever was asked first), and the size an echoing page gives it, are not compared.
 
 ## Flags
 
