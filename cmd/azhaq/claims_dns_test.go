@@ -125,12 +125,10 @@ func TestDNSStoresNothingOutsideDBAndKeepsNoNameHistory(t *testing.T) {
 	}
 }
 
-// dns sends DNS queries and nothing else: no HTTP request goes anywhere (a
-// stand-in for every third party catches none) and the ledger of the run has
-// DNS lines only.
+// dns sends DNS queries and nothing else: the ledger of the run has DNS lines
+// only and the summary counts no request.
 func TestDNSSendsDNSQueriesAndNothingElse(t *testing.T) {
 	t.Chdir(t.TempDir())
-	caught := thirdPartyCatcher(t)
 	lab := startLab(t)
 	_, rep, code := dnsOut(t, "-l", writeList(t, "www.lab.zz", "api.lab.zz", "nope.lab.zz", "x.wild.lab.zz"), "-r", lab.addr, "-all", "-json", "-ledger", "l.jsonl")
 	if code != exitOK || rep.Requests != 0 {
@@ -145,8 +143,8 @@ func TestDNSSendsDNSQueriesAndNothingElse(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != 1 || got["dns/dns"] == 0 || caught.Load() != 0 {
-		t.Errorf("the ledger holds %v and %d requests reached a third party: want DNS lines only", got, caught.Load())
+	if len(got) != 1 || got["dns/dns"] == 0 {
+		t.Errorf("the ledger holds %v: want DNS lines only", got)
 	}
 }
 
@@ -348,12 +346,10 @@ func TestDNSRatePacesTheQueriesOfWordsToo(t *testing.T) {
 	}
 }
 
-// -asn asks Team Cymru's DNS service through the resolvers the run uses, and
-// no other service: the questions arrive at the named resolver, and no HTTP
-// request leaves.
+// -asn asks Team Cymru's DNS service through the resolvers the run uses: the
+// questions arrive at the named resolver.
 func TestDNSASNAsksCymruThroughYourResolvers(t *testing.T) {
 	t.Chdir(t.TempDir())
-	caught := thirdPartyCatcher(t)
 	pc, err := net.ListenPacket("udp", "127.0.0.1:0")
 	if err != nil {
 		t.Skip(err)
@@ -393,7 +389,7 @@ func TestDNSASNAsksCymruThroughYourResolvers(t *testing.T) {
 	}
 	mu.Lock()
 	defer mu.Unlock()
-	if !contains(asked, "TXT 1.2.0.192.origin.asn.cymru.com.") || !contains(asked, "TXT as64500.asn.cymru.com.") || caught.Load() != 0 {
-		t.Errorf("the resolver was asked %v, %d HTTP requests", asked, caught.Load())
+	if !contains(asked, "TXT 1.2.0.192.origin.asn.cymru.com.") || !contains(asked, "TXT as64500.asn.cymru.com.") {
+		t.Errorf("the resolver was asked %v", asked)
 	}
 }

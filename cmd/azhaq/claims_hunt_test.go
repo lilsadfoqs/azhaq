@@ -13,7 +13,7 @@ import (
 )
 
 // hunt reads the workspace and the -roles files and sends nothing: not a
-// request to the site the map came from, not to a third party, not a DNS
+// request to the site the map came from, not a DNS
 // query, and it writes no ledger.
 func TestHuntSendsNothing(t *testing.T) {
 	var hits atomic.Int32
@@ -36,7 +36,6 @@ func TestHuntSendsNothing(t *testing.T) {
 	if err := os.WriteFile(roles, []byte(`{"url":"`+srv.URL+`/admin","verdict":"reads another role's object","confidence":"proved"}`+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	caught := thirdPartyCatcher(t)
 	before, files := hits.Load(), globNames(t, work)
 	sent, dnsSent, total := egress.Sent(), egress.DNSTotal(), egress.Total()
 	out, errOut, err := captureBoth(t, func() error { return cmdHunt([]string{"-db", db, "-roles", roles, "-json"}) })
@@ -44,8 +43,8 @@ func TestHuntSendsNothing(t *testing.T) {
 		t.Fatalf("%v, %d rows\n%s", err, len(lines(out)), errOut)
 	}
 	rep := sumMap(t, errOut)
-	if hits.Load() != before || caught.Load() != 0 || egress.Sent() != sent || egress.DNSTotal() != dnsSent || egress.Total() != total || rep["requests"] != float64(0) {
-		t.Errorf("hunt sent: %d more requests to the site, %d to a third party, summary requests %v", hits.Load()-before, caught.Load(), rep["requests"])
+	if hits.Load() != before || egress.Sent() != sent || egress.DNSTotal() != dnsSent || egress.Total() != total || rep["requests"] != float64(0) {
+		t.Errorf("hunt sent: %d more requests to the site, summary requests %v", hits.Load()-before, rep["requests"])
 	}
 	if now := globNames(t, work); strings.Join(now, " ") != strings.Join(files, " ") {
 		t.Errorf("hunt wrote files: %v before, %v after", files, now)

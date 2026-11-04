@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/lilsadfoqs/azhaq/internal/fetch"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -111,34 +112,35 @@ func TestParamsExitWhenAPageFails(t *testing.T) {
 		ws = append(ws, fmt.Sprintf("name%d", i))
 	}
 	words := wlist(t, append(ws, "q")...)
-	var mu sync.Mutex
-	limited := 0
-	srv := newParamServer(t, func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/limited":
-			mu.Lock()
-			limited++
-			over := limited > 2
-			mu.Unlock()
-			if over {
-				w.Header().Set("Retry-After", "0")
-				http.Error(w, "slow down", http.StatusTooManyRequests)
-				return
-			}
-		case "/lost":
-			if r.URL.Query().Has("name150") {
+	// A server of its own for each kind of failure: a host that limited requests is held back for a while.
+	site := func(path string) *paramServer {
+		var mu sync.Mutex
+		n := 0
+		return newParamServer(t, func(w http.ResponseWriter, r *http.Request) {
+			switch {
+			case r.URL.Path == "/limited" && path == "/limited":
+				mu.Lock()
+				n++
+				over := n > 2
+				mu.Unlock()
+				if over {
+					w.Header().Set("Retry-After", "0")
+					http.Error(w, "slow down", http.StatusTooManyRequests)
+					return
+				}
+			case r.URL.Path == "/lost" && r.URL.Query().Has("name150"):
 				c, _, _ := w.(http.Hijacker).Hijack()
 				c.Close()
 				return
 			}
-		}
-		body := "<html><body>results"
-		if r.URL.Query().Get("q") != "" {
-			body += strings.Repeat(" <li>row</li>", 30)
-		}
-		fmt.Fprint(w, body+"</body></html>")
-	})
-	args := func(pages ...string) []string {
+			body := "<html><body>results"
+			if r.URL.Query().Get("q") != "" {
+				body += strings.Repeat(" <li>row</li>", 30)
+			}
+			fmt.Fprint(w, body+"</body></html>")
+		})
+	}
+	args := func(srv *paramServer, pages ...string) []string {
 		a := []string{"params", "-w", words, "-rate", "10000", "-allow", "127.0.0.1"}
 		for _, p := range pages {
 			a = append(a, "-u", srv.URL+p)
@@ -147,7 +149,8 @@ func TestParamsExitWhenAPageFails(t *testing.T) {
 	}
 	// A page that limits requests (429): it waits out its backoff, 7 s, and fails.
 	if !testing.Short() {
-		out, rep, code := runContract(t, args("/ok", "/limited")...)
+		fetch.Reset()
+		out, rep, code := runContract(t, args(site("/limited"), "/ok", "/limited")...)
 		if code != exitOK || !strings.Contains(out, `"params":["q"]`) || rep.Failures != 1 || len(rep.Failed) != 1 || !rep.Failed[0].Retryable {
 			t.Errorf("one page limited, one gave its names: exit %d, failures %d, failed %+v\n%s", code, rep.Failures, rep.Failed, out)
 		}
@@ -156,14 +159,18 @@ func TestParamsExitWhenAPageFails(t *testing.T) {
 		}
 	}
 	// A page that leaves requests unanswered.
-	out, rep, code := runContract(t, args("/ok", "/lost")...)
+	fetch.Reset()
+	lost := site("/lost")
+	out, rep, code := runContract(t, args(lost, "/ok", "/lost")...)
 	if code != exitOK || !strings.Contains(out, `"params":["q"]`) || rep.Failures != 1 || len(rep.Failed) != 1 || rep.Failed[0].Retryable || !strings.Contains(strings.Join(rep.Notes, "\n"), "got no answer") {
 		t.Errorf("one page lost requests, one gave its names: exit %d, failures %d, failed %+v, notes %q", code, rep.Failures, rep.Failed, rep.Notes)
 	}
-	if _, rep, code := runContract(t, append(args("/ok", "/lost"), "-strict-exit")...); code != exitPartial || rep.Failures != 1 {
+	fetch.Reset()
+	if _, rep, code := runContract(t, append(args(lost, "/ok", "/lost"), "-strict-exit")...); code != exitPartial || rep.Failures != 1 {
 		t.Errorf("-strict-exit: exit %d, failures %d", code, rep.Failures)
 	}
-	if _, rep, code := runContract(t, args("/lost")...); code != exitPartial || rep.Failures != 1 {
+	fetch.Reset()
+	if _, rep, code := runContract(t, args(lost, "/lost")...); code != exitPartial || rep.Failures != 1 {
 		t.Errorf("every page failed: exit %d, failures %d", code, rep.Failures)
 	}
 }

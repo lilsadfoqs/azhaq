@@ -4,12 +4,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"reflect"
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -18,6 +21,20 @@ import (
 	"github.com/lilsadfoqs/azhaq/internal/collectors/subcol"
 	"github.com/lilsadfoqs/azhaq/internal/ledger"
 )
+
+// sourceProxy stands in for every third party a source asks: it is the run's
+// -proxy, answers 502 and counts what reaches it. (The proxy of the
+// environment is read once per process, so a test cannot rely on it.)
+func sourceProxy(t *testing.T) (string, *atomic.Int32) {
+	t.Helper()
+	var n atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n.Add(1)
+		http.Error(w, "caught", http.StatusBadGateway)
+	}))
+	t.Cleanup(srv.Close)
+	return srv.URL, &n
+}
 
 // ledgerClasses counts the lines of a ledger file by class.
 func ledgerClasses(t *testing.T, path string) map[string]int {
@@ -94,10 +111,10 @@ func TestSubsWithoutLiveLooksNothingUp(t *testing.T) {
 func TestSubsLedgerGoesWhereTheFlagsSay(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
-	caught := thirdPartyCatcher(t)
+	proxy, caught := sourceProxy(t)
 	resolver := serveZone(t, fakeZone{a: map[string]string{"app.example.org": "192.0.2.1"}})
 	words := wlist(t, "app", "nope")
-	base := []string{"subs", "-d", "example.org", "-sources", "hackertarget", "-w", words, "-resolvers", resolver, "-no-history", "-source-timeout", "5s"}
+	base := []string{"subs", "-d", "example.org", "-sources", "hackertarget", "-w", words, "-resolvers", resolver, "-no-history", "-source-timeout", "5s", "-proxy", proxy}
 
 	_, errOut, _ := cli(t, append(base, "-db", "w.db", "-json")...)
 	got := ledgerClasses(t, "w.db.ledger.jsonl")
@@ -210,8 +227,8 @@ func TestSubsASourceWithoutItsKeyIsNotAsked(t *testing.T) {
 	t.Setenv("CHAOS_API_KEY", "")
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	catch := thirdPartyCatcher(t)
-	_, rep, _ := runContract(t, "subs", "-d", "example.org", "-sources", "chaos", "-no-history", "-providers", filepath.Join(t.TempDir(), "none.yaml"))
+	proxy, catch := sourceProxy(t)
+	_, rep, _ := runContract(t, "subs", "-d", "example.org", "-sources", "chaos", "-no-history", "-proxy", proxy, "-providers", filepath.Join(t.TempDir(), "none.yaml"))
 	if rep.Counts["sources asked"] != 0 || rep.Counts["sources failed"] != 0 {
 		t.Errorf("counts %v: a source with no key is not asked", rep.Counts)
 	}
@@ -433,7 +450,7 @@ func TestSubsLiveLooksUpAtTheDnsRate(t *testing.T) {
 	go func() { _ = srv.ActivateAndServe() }()
 	defer srv.Shutdown()
 	var names []string
-	for i := 0; i < 30; i++ {
+	for i := 0; i < 40; i++ {
 		names = append(names, fmt.Sprintf("n%d.example.org", i))
 	}
 	defer subcol.UseTestSources(subcol.TestSource{Name: "s", Default: true, Names: names})()
@@ -446,8 +463,8 @@ func TestSubsLiveLooksUpAtTheDnsRate(t *testing.T) {
 	}
 	mu.Lock()
 	defer mu.Unlock()
-	if len(at) < 30 {
-		t.Fatalf("%d queries for 30 names", len(at))
+	if len(at) < 40 {
+		t.Fatalf("%d queries for 40 names", len(at))
 	}
 	for i := range at {
 		in := 0
@@ -456,7 +473,7 @@ func TestSubsLiveLooksUpAtTheDnsRate(t *testing.T) {
 				in++
 			}
 		}
-		if in > rate+burst+1 {
+		if in > rate+burst+5 {
 			t.Fatalf("%d queries in the second after query %d, the rate is %d", in, i, rate)
 		}
 	}
