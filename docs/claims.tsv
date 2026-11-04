@@ -502,3 +502,22 @@ watch.a-failed-delivery-is-printed-without-the-url	docs/commands/watch.md	- A de
 watch.every-notification-request-is-in-the-ledger-and-counted	docs/commands/watch.md	- Every notification request is in the ledger and counted.	test:cmd/azhaq:TestWatchNotificationsAreInTheLedgerAndTheSummary
 watch.each-try-is-a-source-line-listed-by-host	docs/commands/watch.md	Each try of each delivery is a line of class `source`, listed by the webhook's	test:cmd/azhaq:TestWatchNotificationsAreInTheLedgerAndTheSummary
 watch.ledger-off-keeps-nothing-and-still-counts	docs/commands/watch.md	With `-ledger off` after `--` nothing is kept, and the requests are still	test:cmd/azhaq:TestWatchDeliveriesGoThroughOneSenderAndAreCounted
+
+# docs/commands/gallery.md
+gallery.it-sends-nothing-to-any-target	docs/commands/gallery.md	It sends nothing to any target.	test:internal/gallery:TestMakesNoOutgoingConnection
+gallery.the-page-is-embedded-and-works-offline	docs/commands/gallery.md	- The page is embedded in the binary and works offline: no CDN, no external	test:internal/gallery:TestNothingExternalInTheSource,TestMakesNoOutgoingConnection
+gallery.the-csp-lets-the-browser-load-only-its-own-script-and-style	docs/commands/gallery.md	- The page's `Content-Security-Policy` lets the browser load only its own	test:internal/gallery:TestCSPLetsTheBrowserLoadOnlyItsOwnScriptAndStyle,TestHostGuard
+gallery.everything-comes-from-the-workspace-and-the-picture-files	docs/commands/gallery.md	- Pictures, headers, TLS, console and network log all come from the workspace	test:internal/gallery:TestDetailAndImages,TestMakesNoOutgoingConnection
+gallery.what-the-gallery-cannot-show-it-says	docs/commands/gallery.md	What the gallery cannot show, it says.	test:internal/gallery:TestWhatTheGalleryCannotShowIsSaidAndCounted
+gallery.the-picture-file-is-gone-partial-exit-3	docs/commands/gallery.md	- the picture file is gone from disk (partial: exit 3)	test:internal/gallery:TestWhatTheGalleryCannotShowIsSaidAndCounted,TestDetailAndImages;test:cmd/azhaq:TestGalleryRefusals
+gallery.the-text-was-not-kept	docs/commands/gallery.md	- the text was not kept	test:internal/gallery:TestWhatTheGalleryCannotShowIsSaidAndCounted
+gallery.workspace-takes-every-db-of-a-directory-and-the-ones-in-it	docs/commands/gallery.md	- `-workspace DIR` takes every `*.db` file of a directory and of the	test:cmd/azhaq:TestGalleryWorkspaceTakesTheDatabasesOfADirectoryAndTheOnesDirectlyInIt,TestGalleryServesAndStops
+gallery.read-only-and-read-once-at-start	docs/commands/gallery.md	- The workspace is opened read-only.	test:internal/gallery:TestWorkspaceIsOpenedReadOnlyAndItsPagesAreReadOnceAtStart
+gallery.pages-are-read-once-the-urls-entry-when-asked	docs/commands/gallery.md	The pages are read once at start, so a page taken since is not listed; what the	test:internal/gallery:TestWorkspaceIsOpenedReadOnlyAndItsPagesAreReadOnceAtStart
+gallery.a-database-that-is-not-a-workspace-is-skipped-with-a-note	docs/commands/gallery.md	- A database that is not a workspace is skipped with a note.	test:internal/gallery:TestWorkspaces;test:cmd/azhaq:TestGalleryWorkspaceTakesTheDatabasesOfADirectoryAndTheOnesDirectlyInIt
+gallery.one-that-cannot-be-read-is-skipped-exit-3	docs/commands/gallery.md	One that cannot be read is skipped and the exit code is 3.	test:internal/gallery:TestWorkspaces;test:cmd/azhaq:TestGalleryWorkspaceTakesTheDatabasesOfADirectoryAndTheOnesDirectlyInIt
+gallery.a-page-holds-its-show-command	docs/commands/gallery.md	- what the workspace holds of its URL (entity, links, observations), with the	test:internal/gallery:TestDetailAndImages
+gallery.a-zero-port-takes-any-free-port	docs/commands/gallery.md	`127.0.0.1:0` takes any free port.	test:cmd/azhaq:TestGalleryListenTakesAFreePortAndAnswersOnlyLoopbackHostsUnlessBoundElsewhere
+gallery.a-loopback-gallery-answers-only-loopback-hosts	docs/commands/gallery.md	- A gallery bound to a loopback address answers only requests that name a	test:internal/gallery:TestHostGuard;test:cmd/azhaq:TestGalleryListenTakesAFreePortAndAnswersOnlyLoopbackHostsUnlessBoundElsewhere
+gallery.bound-elsewhere-it-shows-every-page-to-anyone	docs/commands/gallery.md	- Bound elsewhere (`-listen 0.0.0.0:7180`), it shows every page in the	test:internal/gallery:TestHostGuard;test:cmd/azhaq:TestGalleryListenTakesAFreePortAndAnswersOnlyLoopbackHostsUnlessBoundElsewhere
+gallery.every-response-is-json-except-the-pictures	docs/commands/gallery.md	Every response is JSON except the pictures.	test:internal/gallery:TestEveryResponseOfTheAPIIsJSONExceptThePictures
