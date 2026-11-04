@@ -117,8 +117,9 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 - `-p`, `-tp 100|1000|full` and `-pf FILE` add ports. `-ep LIST|FILE` takes ports out.
 - `-p -` is every port, `-p u:53` is a UDP port, and `-p none` leaves the TCP ports out.
 - The ports of a host are asked in a random order, the likeliest first: nmap's top 100, then its top 1000. `-order asc` asks them by number, and `-seed N` repeats an order.
-- `-rate` paces the scan: it is a ceiling. The default is 1500 connects a second. This machine's loopback is not paced unless you give `-rate`, and then 20,000 ports at `-rate 500` take 40 seconds. nmap's `--min-rate 500` is a floor, which is `-min-rate 500` here: no ceiling, so a loopback scan of 20,000 ports with `-detect none` takes a fraction of a second, as nmap's does.
-- With `-rate`, the scan runs on as many cores as that rate needs, one for each 15,000 connects a second, never more than the machine has: a scan on one core costs about the CPU nmap's does for the same rate, where the same scan spread over 20 cores cost several times as much. `-min-rate` has no ceiling and keeps every core; `GOMAXPROCS` in the environment sets the number yourself.
+- `-rate` paces the scan: it is a ceiling. The default is 1500 connects a second. This machine's loopback is not paced unless you give `-rate`, and then 20,000 ports at `-rate 500` take 40 seconds.
+  nmap's `--min-rate 500` is a floor, which is `-min-rate 500` here: no ceiling, so a loopback scan of 20,000 ports with `-detect none` takes a fraction of a second, as nmap's does.
+- With `-rate`, the scan runs on as many cores as that rate needs, one for each 15,000 connects a second, never more than the machine has: a scan on one core costs about the CPU nmap's does for the same rate. `-min-rate` has no ceiling and keeps every core; `GOMAXPROCS` in the environment sets the number yourself.
 - From `-rate 1000` up, the connects go out in batches of up to 32 (`rate / 500`), each batch waited on by one poll on one goroutine, not one goroutine and one poller entry for each connect. A port that accepted gets a goroutine of its own to be named. The benchmark takes a full-range scan of 127.0.0.1 at `-rate 10000` with the workspace and the ledger on against `nmap -sT --max-rate 10000`, and holds its CPU and its time to 1.25 times nmap's, with the open ports of nmap's all found. Below `-rate 1000`, and through a proxy, each connect is its own dial.
 - `-T0` to `-T5` set the rate, the connect timeout and the retries as nmap's templates do. An explicit flag wins.
 - `-c` is how many connects are in flight.
@@ -159,7 +160,7 @@ A service that speaks first (`ssh`, `ftp`, `smtp`, `telnet`, `irc`, …) is name
 - `-detect` says what is asked of an open port:
   - `none` connects and closes: one connect per port, as naabu without `-sV`.
   - `banner` reads what the service says on that connection and sends nothing after it: a bare `220` greeting stays `ftp-or-smtp` with its banner, and an FTP greeting that names no product is not asked `SYST`. Only `all` sends `EHLO` or `SYST`.
-  - `all` is the default, and costs a second or two on top of the connect scan. `-detect none` (`-port-detect none` in `run`) matches naabu's time and output. It also asks a silent port for HTTP and TLS, then one request of each protocol that waits to be asked. Each goes on a connection of its own, several at once while the scan has workers free.
+  - `all` is the default. `-detect none` (`-port-detect none` in `run`) matches naabu's time and output. It also asks a silent port for HTTP and TLS, then one request of each protocol that waits to be asked. Each goes on a connection of its own, several at once while the scan has workers free.
 - `-proxy host:port` (SOCKS5) and `-source-ip` make the TCP connects go through that proxy or from that address. The service probes beyond the first connection dial on their own, so with either the scan asks the banner only, and the summary says so.
 - UDP is not sent through a proxy. `-proxy` with `-udp` is refused.
 
@@ -298,7 +299,7 @@ Each open TCP port gets `product` and `version` next to `service`, from what it 
 - `product` and `version` are the first token of the `Server` header (`Werkzeug/2.2.3`); the rest of the header is `extrainfo`, and the header as sent stays the `banner`. A version is only ever one the answer states.
 - A web page that names no product gets its `<title>` in `title`, and its `<meta name="generator">` as the product.
 - The `GET /` for a body is one more connection on a web port. It is made when the `HEAD` answer gave no product and is a 200 or 401 of type JSON or text. It is also made when the `HEAD` was refused (403, 404, 405, 501). It counts, is paced and is recorded like a connect.
-- Every request above is sent only to a port that said nothing and is not one of the raw printing ports (9100–9107). None logs in, sends a credential or changes anything.
+- Every request above, but the `SYST` and `EHLO` that `-detect all` sends to a greeting that names no product, is sent only to a port that said nothing and is not one of the raw printing ports (9100–9107). None logs in, sends a credential or changes anything.
 - Elasticsearch's transport ping is answered by a node of 7.x or later. An older node ignores it, and a silent 9300 then reads `elasticsearch-transport?`: a guess by port, marked with the question mark like every guess. The ping carries no version, so a confirmed port has none.
 - A binary answer is read by the protocols' readers, and by none that does not recognise it. So a port with no recognised protocol keeps its banner and stays `service` empty.
 
