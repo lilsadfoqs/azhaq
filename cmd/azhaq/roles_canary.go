@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -229,7 +230,7 @@ func renewer(roles []role, loginURL string, quiet bool, left func() int64) func(
 			roles[i].session = s
 			return nil
 		}
-		return errors.New("its session was given with -role, and roles cannot renew it")
+		return errors.New("its session was given with -role or -har, with no -role-cmd or -role-login, and roles cannot renew it")
 	}
 }
 
@@ -253,7 +254,9 @@ type roleReplay struct {
 
 	since    []string // asked since the last good check
 	good     bool     // the last check found the session alive
-	renewals int      // new sessions it got
+	renewals int      // renewals tried
+	renewed  int      // new sessions that passed their check
+	noRenew  string   // why the last renewal did not give a working session
 	paused   bool     // the session did not come back: the rest was not attempted
 	notTried int      // URLs not attempted because the session was paused
 	total    int      // URLs this role was to be asked
@@ -316,6 +319,10 @@ func (rr *roleReplay) renew() bool {
 	rr.renewals++
 	if err := rr.w.renew(rr.i); err != nil {
 		rr.w.notes = append(rr.w.notes, fmt.Sprintf("role %s: its session could not be renewed during the replay: %v", rr.roles[rr.i].name, err))
+		rr.noRenew = "its renewal failed"
+		if r := rr.roles[rr.i]; r.cmd == "" && r.user == "" {
+			rr.noRenew = "it has no -role-cmd or -role-login to renew it"
+		}
 		rr.spent = true
 		rr.setup()
 		return false
@@ -323,6 +330,11 @@ func (rr *roleReplay) renew() bool {
 	rr.setup() // the new session, and an empty cache: what is asked again is sent again
 	ok := rr.check()
 	rr.spent = !ok
+	if ok {
+		rr.renewed++
+	} else {
+		rr.noRenew = "the new session failed its check too"
+	}
 	return ok
 }
 
@@ -433,8 +445,8 @@ func (rr *roleReplay) note() {
 	if rr.roles[rr.i].user != "" {
 		how = "it signed in again"
 	}
-	if rr.renewals > 1 {
-		how += fmt.Sprintf(" (%d times)", rr.renewals)
+	if rr.renewed > 1 {
+		how += fmt.Sprintf(" (%d times)", rr.renewed)
 	}
 	if rr.paused && rr.notTried > 0 {
 		rr.w.failed = true
@@ -447,10 +459,12 @@ func (rr *roleReplay) note() {
 		rr.w.failed = true
 		rr.w.notes = append(rr.w.notes, fmt.Sprintf("role %s's session failed its check (%s) during the replay and did not come back: %s asked after it was last seen alive (session_suspect)",
 			name, rr.failedAt, plural(rr.suspect, "answer")))
-	case rr.renewals > 0 && rr.failedAt != "" && rr.retried == 0:
+	case rr.renewed > 0 && rr.failedAt != "" && rr.retried == 0:
 		rr.w.notes = append(rr.w.notes, fmt.Sprintf("role %s's session failed its check (%s) during the replay; %s", name, rr.failedAt, how))
-	case rr.renewals > 0 && rr.failedAt != "":
+	case rr.renewed > 0 && rr.failedAt != "":
 		rr.w.notes = append(rr.w.notes, fmt.Sprintf("role %s's session failed its check (%s) during the replay; %s, and the %s asked since the last good check were asked again",
 			name, rr.failedAt, how, plural(rr.retried, "request")))
+	case rr.failedAt != "":
+		rr.w.notes = append(rr.w.notes, fmt.Sprintf("role %s's session failed its check (%s) during the replay and was not renewed: %s", name, rr.failedAt, cmp.Or(rr.noRenew, "no renewal was tried")))
 	}
 }

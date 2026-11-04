@@ -985,3 +985,121 @@ func TestDNSRcodeOfACNAMEOwnerIsItsOwn(t *testing.T) {
 		t.Errorf("a name that does not exist: %v", row)
 	}
 }
+
+// serveCNAMEZone is a resolver stand-in as a recursive one answers: dang
+// is a CNAME to an Azure name that does not exist (a CNAME question gets
+// the record and NOERROR, every other type the record and NXDOMAIN), fine
+// a CNAME to a name that has an address, plain no CNAME. It counts the
+// questions by type.
+func serveCNAMEZone(t *testing.T) (addr string, asked func(qtype uint16) int64) {
+	t.Helper()
+	pc, err := net.ListenPacket("udp", "127.0.0.1:0")
+	if err != nil {
+		t.Skipf("no UDP: %v", err)
+	}
+	var mu sync.Mutex
+	by := map[uint16]int64{}
+	srv := &dns.Server{PacketConn: pc, Handler: dns.HandlerFunc(func(w dns.ResponseWriter, r *dns.Msg) {
+		q := r.Question[0]
+		mu.Lock()
+		by[q.Qtype]++
+		mu.Unlock()
+		m := new(dns.Msg)
+		m.SetReply(r)
+		add := func(s string) {
+			rr, _ := dns.NewRR(s)
+			m.Answer = append(m.Answer, rr)
+		}
+		switch strings.ToLower(q.Name) {
+		case "dang.lab.zz.":
+			add("dang.lab.zz. 60 IN CNAME gone-app.azurewebsites.net.")
+			if q.Qtype != dns.TypeCNAME {
+				m.Rcode = dns.RcodeNameError
+			}
+		case "fine.lab.zz.":
+			add("fine.lab.zz. 60 IN CNAME www.lab.zz.")
+			if q.Qtype == dns.TypeA {
+				add("www.lab.zz. 60 IN A 192.0.2.1")
+			}
+		case "plain.lab.zz.":
+			if q.Qtype == dns.TypeA {
+				add("plain.lab.zz. 60 IN A 192.0.2.2")
+			}
+		default:
+			m.Rcode = dns.RcodeNameError
+		}
+		_ = w.WriteMsg(m)
+	})}
+	go srv.ActivateAndServe()
+	t.Cleanup(func() { srv.Shutdown() })
+	return pc.LocalAddr().String(), func(qt uint16) int64 {
+		mu.Lock()
+		defer mu.Unlock()
+		return by[qt]
+	}
+}
+
+// -cname alone asks for the record and no more, so it does not see where the
+// chain ends: the name with a CNAME is then asked for A once, and a CNAME to
+// what does not exist gets its cname_status and takeover as it does with -a.
+// Types whose answer follows the chain (-txt, -aaaa) need no such question.
+func TestDNSCNAMEAloneChecksTheTarget(t *testing.T) {
+	t.Chdir(t.TempDir())
+	addr, asked := serveCNAMEZone(t)
+	l := writeList(t, "dang.lab.zz", "fine.lab.zz", "plain.lab.zz")
+	wantRow := func(what string, ls []string) {
+		t.Helper()
+		rows := dnsRows(t, ls)
+		d := rows["dang.lab.zz"]
+		tk, _ := d["takeover"].(map[string]any)
+		if d["cname_status"] != "NXDOMAIN" || d["status_code"] != "NOERROR" || tk == nil || tk["service"] != "Azure" || tk["status"] != "candidate" {
+			t.Errorf("%s: dangling row %v", what, d)
+		}
+		if f := rows["fine.lab.zz"]; f != nil && (f["cname_status"] != nil || f["takeover"] != nil) {
+			t.Errorf("%s: a CNAME to a name that resolves has %v", what, f)
+		}
+	}
+	ls, rep, code := dnsOut(t, "-l", l, "-r", addr, "-cname", "-resp", "-json", "-no-wildcard")
+	wantRow("-cname", ls)
+	if code != exitOK || len(rep.Takeover) != 1 || rep.Takeover[0].Host != "dang.lab.zz" {
+		t.Errorf("exit %d, summary takeover %+v", code, rep.Takeover)
+	}
+	if len(dnsRows(t, ls)) != 2 {
+		t.Errorf("rows %v: the name with no CNAME has none", ls)
+	}
+	// 3 CNAME questions, and A for the two names that are CNAMEs; plain has none.
+	if got := asked(dns.TypeCNAME); got != 3 {
+		t.Errorf("%d CNAME questions", got)
+	}
+	if got := asked(dns.TypeA); got != 2 {
+		t.Errorf("%d A questions: one for each name with a CNAME, none for the other", got)
+	}
+	if rep.DNSQueries != 5 {
+		t.Errorf("dns_queries %d, want the 5 asked", rep.DNSQueries)
+	}
+	// The same names with -a -cname: the same fields, and no extra question.
+	before := asked(dns.TypeA)
+	ls, _, _ = dnsOut(t, "-l", l, "-r", addr, "-a", "-cname", "-resp", "-json", "-no-wildcard")
+	wantRow("-a -cname", ls)
+	if got := asked(dns.TypeA) - before; got != 3 {
+		t.Errorf("-a -cname asked %d A questions, want one for each of the 3 names", got)
+	}
+	// A type that follows the chain says where it ends: no A question is added.
+	before = asked(dns.TypeA)
+	ls, _, _ = dnsOut(t, "-l", l, "-r", addr, "-aaaa", "-json", "-no-wildcard")
+	if r := dnsRows(t, ls); r["dang.lab.zz"]["takeover"] == nil {
+		t.Errorf("-aaaa: %v", ls)
+	}
+	if got := asked(dns.TypeA) - before; got != 0 {
+		t.Errorf("-aaaa asked %d A questions", got)
+	}
+	// -no-takeover: nothing is asked beyond the types, and the row says no more.
+	before = asked(dns.TypeA)
+	ls, rep, _ = dnsOut(t, "-l", l, "-r", addr, "-cname", "-json", "-no-takeover", "-no-wildcard")
+	if d := dnsRows(t, ls)["dang.lab.zz"]; d["cname_status"] != nil || d["takeover"] != nil || len(rep.Takeover) != 0 {
+		t.Errorf("-no-takeover: %v %+v", d, rep.Takeover)
+	}
+	if got := asked(dns.TypeA) - before; got != 0 {
+		t.Errorf("-no-takeover asked %d A questions", got)
+	}
+}

@@ -976,12 +976,25 @@ func shortDNSError(s string) string {
 	return s
 }
 
-// takeover notes a name whose CNAME points at what no longer exists.
+// takeover notes a name whose CNAME points at what no longer exists. Any
+// type asked whose answer followed the chain says where it ended; when
+// none did (-cname alone asks only for the record itself), the name is
+// asked for A once, and only the end of the chain is kept from it.
 func (r *dnsRun) takeover(ctx context.Context, host string, d *dnsr.Data) *takeover.Finding {
-	if !r.cf.selected["a"] || len(d.CNAME) == 0 || r.cf.noTakeover {
+	if len(d.CNAME) == 0 || r.cf.noTakeover {
 		return nil
 	}
-	if rc, ok := d.ChainRcode(dns.TypeA); !ok || rc != dns.RcodeNameError {
+	rc, ok := d.TargetRcode()
+	if !ok {
+		t := r.pool.Lookup(ctx, host, dnsr.LookupOptions{Types: []uint16{dns.TypeA}})
+		if ctx.Err() != nil {
+			return nil
+		}
+		r.failures(host, t)
+		d.TakeTarget(t)
+		rc, ok = d.TargetRcode()
+	}
+	if !ok || rc != dns.RcodeNameError {
 		return nil
 	}
 	target := d.CNAME[len(d.CNAME)-1]

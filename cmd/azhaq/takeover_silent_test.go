@@ -48,7 +48,7 @@ func danglingZone(t *testing.T) string {
 	return path
 }
 
-const takeoverLineWant = "[takeover] shop.example.org -> gone.azurewebsites.net (Azure, dangling)"
+const takeoverLineWant = "[takeover] shop.example.org -> gone.azurewebsites.net (Azure, dangling, candidate)"
 
 // A takeover candidate is a finding: on the row in -json, and under -silent
 // a [takeover] line on stderr, with stdout still one name per line.
@@ -57,8 +57,11 @@ func TestDNSTakeoverIsNotLostUnderSilent(t *testing.T) {
 	ls, rep, code := dnsOut(t, "-d", "shop.example.org,www.example.org", "-r", res, "-json")
 	rows := dnsRows(t, ls)
 	tk, _ := rows["shop.example.org"]["takeover"].(map[string]any)
-	if code != exitOK || tk == nil || tk["service"] != "Azure" || tk["target"] != "gone.azurewebsites.net" || tk["strength"] != "dangling" {
+	if code != exitOK || tk == nil || tk["service"] != "Azure" || tk["target"] != "gone.azurewebsites.net" || tk["strength"] != "dangling" || tk["status"] != "candidate" {
 		t.Fatalf("exit %d row %v", code, rows["shop.example.org"])
+	}
+	if rep.TakeoverCandidates != 1 || rep.TakeoverVerified != 0 {
+		t.Errorf("summary counts: %d candidates, %d verified", rep.TakeoverCandidates, rep.TakeoverVerified)
 	}
 	if rows["www.example.org"]["takeover"] != nil || len(rep.Takeover) != 1 {
 		t.Errorf("rows %v takeover %+v", rows, rep.Takeover)
@@ -103,7 +106,7 @@ func TestSubsTakeoverIsNotLostUnderSilent(t *testing.T) {
 			t.Errorf("cname_only on %v", r)
 		}
 	}
-	if tk := rep.Takeover[0]; tk.Host != "shop.example.org" || tk.Service != "Azure" || tk.Target != "gone.azurewebsites.net" || tk.Evidence == "" {
+	if tk := rep.Takeover[0]; tk.Host != "shop.example.org" || tk.Service != "Azure" || tk.Target != "gone.azurewebsites.net" || tk.Evidence == "" || tk.Status != "candidate" {
 		t.Errorf("summary takeover %+v", tk)
 	}
 	t.Setenv("AZHAQ_DATA_DIR", t.TempDir())

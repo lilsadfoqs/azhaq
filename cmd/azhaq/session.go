@@ -2,10 +2,12 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
+	"github.com/lilsadfoqs/azhaq/internal/neterr"
 	"github.com/lilsadfoqs/azhaq/types"
 )
 
@@ -52,4 +54,21 @@ func watchSession(ctx context.Context, seeds []types.Seed, home, loginURL string
 		rep.Notes = append(rep.Notes, fmt.Sprintf("session check: %s answered the same with the session and without it, so the run looks for a JSON answer that tells, tests a 401 by signing in again, and notices a response that clears the session cookie", strings.Join(tried, ", ")))
 	}
 	fetch.WatchSession(s)
+}
+
+// sessionLossReport is the summary's account of a session that ended and
+// was not renewed.
+type sessionLossReport struct {
+	FirstAnswer  string   `json:"first_answer,omitempty"` // the URL whose answer first looked like the end; empty when a check found it
+	InFlight     int      `json:"in_flight"`              // GETs answered after that answer: already in the air, possibly answered without the session
+	InFlightURLs []string `json:"in_flight_urls,omitempty"`
+	Asked        int      `json:"asked_since_good_check"` // GETs asked since the last check that held
+}
+
+func sessionLoss(err error) *sessionLossReport {
+	var sl *neterr.SessionLost
+	if !errors.As(err, &sl) {
+		return nil
+	}
+	return &sessionLossReport{FirstAnswer: sl.Answer, InFlight: len(sl.InFlight), InFlightURLs: sl.InFlight, Asked: sl.Asked}
 }

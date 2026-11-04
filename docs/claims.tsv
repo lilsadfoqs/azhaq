@@ -290,3 +290,7 @@ dirs.dir-control-json	docs/commands/dirs.md	`-json` prints every row. A folded o
 dirs.dir-control-no-descent	docs/commands/dirs.md	A path that is folded is not swept into when `-depth` asks for the directories found.	test:internal/collectors/dirscol:TestSweepDoesNotDescendIntoAFoldedHit
 dirs.dir-control-ac-off	docs/commands/dirs.md	`-ac=false` asks no control: every hit is listed.	test:internal/collectors/dirscol:TestSweepFoldsHitsThatAreTheirDirectorysControl
 dirs.dir-control-run	docs/commands/dirs.md	`azhaq run -dirs` folds the same hits in its map	test:cmd/azhaq:TestRunDirsFoldsACatchAllInsideADirectory;test:engine:TestSweepFoldsTheAnswerOfItsDirectorysControl
+dns.cname-target-checked	docs/commands/dns.md	A name with a CNAME gets its target checked, whichever types were asked.	test:cmd/azhaq:TestDNSCNAMEAloneChecksTheTarget
+dns.cname-alone-asks-a	docs/commands/dns.md	so the name is asked for A once more, and only the end of the chain is kept from that answer	test:cmd/azhaq:TestDNSCNAMEAloneChecksTheTarget
+dns.takeover-counts-apart	docs/commands/dns.md	`takeover_candidates` and `takeover_verified` count them apart, and add up to the rows under `takeover`.	test:cmd/azhaq:TestTakeoverSummaryCountsCandidatesAndVerified
+docs-concepts.takeover-status	docs/CONCEPTS.md	a `dangling` row stays a `candidate`	test:internal/takeover:TestFindingStatus
