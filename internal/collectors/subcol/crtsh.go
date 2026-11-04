@@ -79,7 +79,7 @@ func crtshDatabase(ctx context.Context, domain string, client *http.Client, shar
 	case r := <-done:
 		return r.names, r.rows, r.err
 	case <-qctx.Done():
-		return nil, 0, fmt.Errorf("no answer in %s", budget.Round(time.Second))
+		return nil, 0, fmt.Errorf("no answer in %s", roundBudget(budget))
 	}
 }
 
@@ -148,4 +148,12 @@ func namesFromDB(ctx context.Context, db *sql.DB, domain string, budget time.Dur
 		names = append(names, strings.Split(v, "\n")...)
 	}
 	return names, n, rows.Err()
+}
+
+// roundBudget says a time in whole seconds, or in milliseconds under ten.
+func roundBudget(d time.Duration) time.Duration {
+	if d < 10*time.Second {
+		return d.Round(time.Millisecond)
+	}
+	return d.Round(time.Second)
 }
