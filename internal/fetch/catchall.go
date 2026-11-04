@@ -16,6 +16,7 @@ import (
 	"sync/atomic"
 
 	"github.com/lilsadfoqs/azhaq/internal/lazyre"
+	"github.com/lilsadfoqs/azhaq/internal/ledger"
 )
 
 // A catch-all response is what an origin returns for a path that does not
@@ -447,7 +448,7 @@ func baselineFor(ctx context.Context, c *http.Client, origin, dir string) *basel
 	b.once.Do(func() {
 		defer b.ready.Store(true)
 		target := origin + dir + ProbeToken()
-		res, _, err := Do(ctx, c, target)
+		res, _, err := Do(ledger.WithPurpose(ctx, ledger.PurposeControls), c, target)
 		if err != nil || res.Status == 0 {
 			return
 		}

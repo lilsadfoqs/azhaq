@@ -16,6 +16,7 @@ import (
 	"github.com/lilsadfoqs/azhaq/internal/crawlscope"
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
 	"github.com/lilsadfoqs/azhaq/internal/lazyre"
+	"github.com/lilsadfoqs/azhaq/internal/ledger"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"github.com/lilsadfoqs/azhaq/internal/webextract"
 	"github.com/lilsadfoqs/azhaq/types"
@@ -222,7 +223,11 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 	// probe asks one location and emits what it finds; it says whether the
 	// answer was an API description.
 	probe := func(target, path string) bool {
-		res, _, err := fetch.Do(ctx, c.Client, target)
+		purpose := ledger.PurposePathChecks
+		if isDescLoc(path) || isGraphQLLoc(path) {
+			purpose = ledger.PurposeDescriptions
+		}
+		res, _, err := fetch.Do(ledger.WithPurpose(ctx, purpose), c.Client, target)
 		if err != nil || !(interesting(res.Status) || isGraphQLLoc(path) && refusesGET(res.Status)) || fetch.CatchAll(ctx, c.Client, res) {
 			return false
 		}

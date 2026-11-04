@@ -1594,6 +1594,8 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	_ = st.AddRunRequests(rep.Requests)
 	rep.estimate, rep.refusedBy = estimate, eng.Refused()
 	rep.Cost = accountCostBy(estimate, rep.spentFrom, nil, true)
+	rep.RequestsBy = purposesOf(accountSince(rep.spentFrom))
+	rep.holds("requests by purpose, added together, against the requests", sumOf(rep.RequestsBy), int(rep.Requests))
 	rep.hushCost = out.embedded
 	// Work the -timeout cut short (a source still asking) is not done:
 	// resume runs it again.

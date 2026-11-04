@@ -115,6 +115,11 @@ type report struct {
 
 	hushCost  bool     // an embedded run: the command that owns it says the cost
 	refusedBy []string // run: the collectors whose work the request budget refused, first first
+
+	// RequestsBy is what the requests and connections to targets were for:
+	// pages, scripts, assets, controls, description checks… They add up to
+	// Requests, and each ledger line names its purpose.
+	RequestsBy map[string]int `json:"requests_by_purpose,omitempty"`
 }
 
 func newReport(command string) *report {
@@ -289,6 +294,9 @@ func (r *report) print(w io.Writer) {
 	}
 	for _, n := range r.Notes {
 		fmt.Fprintf(w, "  note: %s\n", n)
+	}
+	if len(r.RequestsBy) > 0 && (r.Command == "crawl" || r.Command == "run" && !r.hushCost) {
+		fmt.Fprintf(w, "  requests by purpose: %s\n", purposeLine(r.RequestsBy))
 	}
 	if r.Cost != nil && !r.hushCost && (r.Command == "run" || r.Command == "roles") {
 		for _, l := range r.Cost.lines() {

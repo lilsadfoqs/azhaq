@@ -388,6 +388,52 @@ func spentAmount(acc map[ledger.SpentKey]int64, keep func(ledger.SpentKey) bool)
 	return a
 }
 
+// purposesOf is what the requests and connections an account holds to
+// targets were for, by purpose; a line with none names "other".
+func purposesOf(acc map[ledger.SpentKey]int64) map[string]int {
+	out := map[string]int{}
+	for k, n := range acc {
+		if n > 0 && k.Class == ledger.ClassTarget {
+			p := k.Purpose
+			if p == "" {
+				p = ledger.PurposeOther
+			}
+			out[p] += int(n)
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func sumOf(m map[string]int) int {
+	n := 0
+	for _, v := range m {
+		n += v
+	}
+	return n
+}
+
+// purposeLine says the purposes in a line, the most requests first.
+func purposeLine(m map[string]int) string {
+	names := make([]string, 0, len(m))
+	for k := range m {
+		names = append(names, k)
+	}
+	sort.Slice(names, func(i, j int) bool {
+		if m[names[i]] != m[names[j]] {
+			return m[names[i]] > m[names[j]]
+		}
+		return names[i] < names[j]
+	})
+	parts := make([]string, len(names))
+	for i, k := range names {
+		parts[i] = fmt.Sprintf("%s %d", k, m[k])
+	}
+	return strings.Join(parts, ", ")
+}
+
 // accountSince is the account of what a command sent: now less then.
 func accountSince(then map[ledger.SpentKey]int64) map[ledger.SpentKey]int64 {
 	out := map[ledger.SpentKey]int64{}

@@ -290,6 +290,12 @@ A client route is a view that a single-page app's router draws.
 - A string with a query, `"/search?q=" + q`, names its route and stays.
 - A `./name` that is a key of an object or a `case` label, as in a webpack module map (`{"./components/locale/zh_CN": 1}`), is a module id in the bundler's source tree, not a path of the app. It is never requested and is kept as a rejected string with the reason `a key of a module map or a case label`. A `./name` written as a value, `"./redirect?to="`, is still a route.
 
+### Where the requests go
+
+- The summary splits `requests` by purpose, in `requests_by_purpose` and in a text line: `requests by purpose: description checks 42, path checks 19, pages 11, scripts 9, controls 6, assets 1`. The numbers add up to `requests` and to the ledger's lines to targets, and each line of the ledger names its `purpose`.
+- `controls` are the requests for a path that cannot exist, whose answers the others are compared with. `description checks` are the places an API description or a GraphQL endpoint is guessed at, and a description that is read. `path checks` are the built-in paths. `crawl` has the same line.
+- A page is asked once whichever way its URL is written when the standard says the spellings name one resource: the case of the scheme and host, the case of the hex digits of an escape, an escaped letter or digit (`/%61bout` for `/about`), the default port, an empty path and a fragment, which is never sent. A trailing slash, an empty query (`/about?`), the order of the parameters and a dot segment are other requests, and are sent.
+
 ### Routes under a client's base
 
 - A script that gives its HTTP client a base, `axios.create({baseURL: "/api/v2"})`, `axios.defaults.baseURL = ...` or a `baseURL`/`prefixUrl` set to a constant, sends its routes through that base. A route `/orders/list` it calls is `/api/v2/orders/list`, and that is the route's row and the URL asked.

@@ -41,6 +41,7 @@ type Entry struct {
 	Body      string    `json:"body,omitempty"`  // the start of the sha256 of the request body, when it has one
 	Rule      string    `json:"rule,omitempty"`  // the scope rule that allowed it
 	Collector string    `json:"collector,omitempty"`
+	Purpose   string    `json:"purpose,omitempty"` // what a request to a target was for: pages, scripts, controls, description checks…
 	Prev      string    `json:"prev,omitempty"`
 	Hash      string    `json:"hash,omitempty"`
 }
@@ -92,7 +93,7 @@ func appendPlain(b []byte, e Entry) ([]byte, bool) {
 	if y := e.Time.Year(); y < 0 || y > 9999 {
 		return nil, false
 	}
-	for _, s := range [...]string{e.Kind, e.Class, e.Method, e.Target, e.Host, e.VHost, e.Body, e.Rule, e.Collector, e.Prev, e.Hash} {
+	for _, s := range [...]string{e.Kind, e.Class, e.Method, e.Target, e.Host, e.VHost, e.Body, e.Rule, e.Collector, e.Purpose, e.Prev, e.Hash} {
 		if !plain(s) {
 			return nil, false
 		}
@@ -112,7 +113,7 @@ func appendPlain(b []byte, e Entry) ([]byte, bool) {
 	}
 	b = append(b, `,"target":"`...)
 	b = append(append(b, e.Target...), '"')
-	for _, f := range [...]struct{ name, val string }{{"host", e.Host}, {"vhost", e.VHost}, {"body", e.Body}, {"rule", e.Rule}, {"collector", e.Collector}, {"prev", e.Prev}, {"hash", e.Hash}} {
+	for _, f := range [...]struct{ name, val string }{{"host", e.Host}, {"vhost", e.VHost}, {"body", e.Body}, {"rule", e.Rule}, {"collector", e.Collector}, {"purpose", e.Purpose}, {"prev", e.Prev}, {"hash", e.Hash}} {
 		if f.val != "" {
 			b = append(append(append(b, `,"`...), f.name...), `":"`...)
 			b = append(append(b, f.val...), '"')

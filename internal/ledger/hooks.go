@@ -81,7 +81,8 @@ func HTTPAs(class string, req *http.Request) {
 		return
 	}
 	counter(class).Add(1)
-	spend(class, "http", collectorOf(req.Context()), 1)
+	purpose := purposeFor(req.Context(), "http", collectorOf(req.Context()), req.URL)
+	spend(class, "http", collectorOf(req.Context()), purpose, 1)
 	l := Active()
 	if l == nil {
 		return
@@ -102,7 +103,7 @@ func HTTPAs(class string, req *http.Request) {
 	e := Entry{Kind: "http", Class: class, Method: method, Target: target, Host: host, VHost: vhost,
 		Body: bodySum(req), Collector: collectorOf(req.Context())}
 	if class == ClassTarget {
-		e.Rule = l.rule(host)
+		e.Rule, e.Purpose = l.rule(host), purpose
 	}
 	l.Record(e)
 }
@@ -139,7 +140,8 @@ func Chrome(ctx context.Context, method, raw string) { ChromeAt(ctx, method, raw
 
 // ChromeAt is Chrome for a request sent at a time already past; zero is now.
 func ChromeAt(ctx context.Context, method, raw string, at time.Time) {
-	spend(ClassTarget, "chrome", collectorOf(ctx), 1)
+	purpose := purposeFor(ctx, "chrome", collectorOf(ctx), nil)
+	spend(ClassTarget, "chrome", collectorOf(ctx), purpose, 1)
 	l := Active()
 	if l == nil {
 		return
@@ -153,7 +155,7 @@ func ChromeAt(ctx context.Context, method, raw string, at time.Time) {
 		method = http.MethodGet
 	}
 	l.Record(Entry{Time: at, Kind: "chrome", Class: ClassTarget, Method: method, Target: raw, Host: host,
-		Rule: l.rule(host), Collector: collectorOf(ctx)})
+		Rule: l.rule(host), Collector: collectorOf(ctx), Purpose: purpose})
 }
 
 // TCP records a connection about to be made to a target at addr (ip:port).
@@ -163,7 +165,7 @@ func TCP(ctx context.Context, host, addr string) { TCPAs(ctx, ClassTarget, host,
 // TCPAs is TCP for a connection of another class.
 func TCPAs(ctx context.Context, class, host, addr string) {
 	counter(class).Add(1)
-	spend(class, "tcp", collectorOf(ctx), 1)
+	spend(class, "tcp", collectorOf(ctx), purposeFor(ctx, "tcp", "", nil), 1)
 	l := Active()
 	if l == nil {
 		return
@@ -181,20 +183,21 @@ func tcpEntry(l *Ledger, ctx context.Context, class, host, addr string) Entry {
 	if name == "" {
 		name = ip
 	}
-	var rule string
+	var rule, purpose string
 	if class == ClassTarget {
+		purpose = purposeFor(ctx, "tcp", "", nil)
 		if rule = l.rule(name); rule == "" && name != ip {
 			rule = l.rule(ip)
 		}
 	}
-	return Entry{Kind: "tcp", Class: class, Target: addr, Host: host, Rule: rule, Collector: collectorOf(ctx)}
+	return Entry{Kind: "tcp", Class: class, Target: addr, Host: host, Rule: rule, Collector: collectorOf(ctx), Purpose: purpose}
 }
 
 // TCPBatch records connections about to be made to the targets at addrs
 // (ip:port), in one write: each is a line before its connect goes.
 func TCPBatch(ctx context.Context, host string, addrs []string) {
 	counter(ClassTarget).Add(int64(len(addrs)))
-	spend(ClassTarget, "tcp", collectorOf(ctx), int64(len(addrs)))
+	spend(ClassTarget, "tcp", collectorOf(ctx), purposeFor(ctx, "tcp", "", nil), int64(len(addrs)))
 	l := Active()
 	if l == nil || len(addrs) == 0 {
 		return
@@ -209,7 +212,7 @@ func TCPBatch(ctx context.Context, host string, addrs []string) {
 // DNS records a query about to be sent to a resolver: the name, its type
 // ("A") and the resolver's address or URL.
 func DNS(ctx context.Context, name, qtype, server string) {
-	spend(ClassDNS, "dns", collectorOf(ctx), 1)
+	spend(ClassDNS, "dns", collectorOf(ctx), "", 1)
 	l := Active()
 	if l == nil {
 		return

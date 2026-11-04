@@ -32,10 +32,10 @@ func TestAccountCountsWithoutALedger(t *testing.T) {
 	wg.Wait()
 	got := func(k SpentKey) int64 { return Account()[k] - then[k] }
 	for k, want := range map[SpentKey]int64{
-		{ClassTarget, "tcp", "azhaq-ports", "scan"}:  8 * 102,
-		{ClassTarget, "http", "azhaq-http", "scan"}:  8,
-		{ClassDNS, "dns", "azhaq-ports", "scan"}:     8,
-		{ClassTarget, "tcp", "azhaq-ports", "other"}: 0,
+		{ClassTarget, "tcp", "azhaq-ports", "scan", PurposeConnections}:  8 * 102,
+		{ClassTarget, "http", "azhaq-http", "scan", PurposePages}:        8,
+		{ClassDNS, "dns", "azhaq-ports", "scan", ""}:                     8,
+		{ClassTarget, "tcp", "azhaq-ports", "other", PurposeConnections}: 0,
 	} {
 		if g := got(k); g != want {
 			t.Errorf("%+v: %d, want %d", k, g, want)
