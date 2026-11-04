@@ -559,3 +559,26 @@ func TestRegisteredCountsQuestionsOutsideTheScope(t *testing.T) {
 		t.Errorf("note %q, want %q", n, want)
 	}
 }
+
+// Window keeps the bulk lookups of a paced run to a few seconds of its rate
+// in flight, so a name asked meanwhile waits behind few of them; with no
+// pace it is the caller's number.
+func TestWindowIsSecondsOfTheRate(t *testing.T) {
+	one := []string{"192.0.2.1"}
+	cases := []struct {
+		opts Options
+		most int
+		want int
+	}{
+		{Options{}, 128, 128},
+		{Options{PerSecond: 10, Resolvers: one}, 128, 40},
+		{Options{PerSecond: 1, Resolvers: one}, 128, 8},
+		{Options{PerSecond: 100, Resolvers: one}, 128, 128},
+		{Options{PerSecond: 10, Resolvers: []string{"192.0.2.1", "192.0.2.2"}}, 128, 80},
+	}
+	for _, c := range cases {
+		if got := New(c.opts).Window(c.most); got != c.want {
+			t.Errorf("-dns-rate %v, %d resolvers: Window(%d) = %d, want %d", c.opts.PerSecond, len(c.opts.Resolvers), c.most, got, c.want)
+		}
+	}
+}

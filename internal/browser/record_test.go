@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"slices"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -144,5 +145,43 @@ func TestScriptFaultsAndThrew(t *testing.T) {
 	}
 	if got := r.Threw(); got != "TypeError: x is not a function" {
 		t.Errorf("threw %q", got)
+	}
+}
+
+// A page Chrome loads that is redirected to the sign-in page (a relative
+// Location, as many PHP apps send) tells the session guard, so the run
+// checks its session before it sends anything else.
+func TestChromeRedirectToSignInSetsTheSessionCheck(t *testing.T) {
+	b := startChrome(t)
+	b.Wait = -1
+	var checks atomic.Int64
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/me":
+			checks.Add(1)
+			fmt.Fprint(w, "me")
+		case "/login.php":
+			fmt.Fprint(w, `<html><body>sign in</body></html>`)
+		default:
+			w.Header().Set("Location", "login.php")
+			w.WriteHeader(http.StatusFound)
+		}
+	}))
+	defer srv.Close()
+	fetch.Reset()
+	defer fetch.Reset()
+	fetch.Extra = http.Header{"Cookie": {"sid=abc"}}
+	egress.SetScope(func(h string) bool { return h == "127.0.0.1" })
+	fetch.WatchSession(fetch.Session{Check: srv.URL + "/me", Want: fetch.Print{Status: 200}, Every: 1000, SignIn: srv.URL + "/login.php"})
+	ctx, cancel := context.WithTimeout(context.Background(), 40*time.Second)
+	defer cancel()
+	if err := fetch.CheckDue(ctx); err != nil || checks.Load() != 0 {
+		t.Fatalf("before any page: %v, %d checks", err, checks.Load())
+	}
+	if _, err := b.Load(ctx, srv.URL+"/", false); err != nil {
+		t.Fatal(err)
+	}
+	if err := fetch.CheckDue(ctx); err != nil || checks.Load() != 1 {
+		t.Errorf("after a page redirected to the sign-in page: %v, %d checks, want 1", err, checks.Load())
 	}
 }

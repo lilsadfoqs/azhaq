@@ -1416,12 +1416,14 @@ func slowSource(domain string, srcs map[string]any) string {
 	return fmt.Sprintf("%s: %s took %.0f s, the next slowest source %.0f s, so it held the run (-source-timeout bounds each source: a shorter one ends the wait sooner and its names are then missing; -exclude-sources %s drops it; -v lists them all)", domain, slow, first, second, slow)
 }
 
-// guessCheck says where the time went when the DNS check of the names
-// sources only guess (subdomain.center's) took long: its pace is -dns-rate.
+// guessCheck says how many of the names only the sources that guess
+// (subdomain.center) or the name history held were looked up in DNS, how long
+// it took and what came of them: -dns-rate paces it. Those rows share one
+// pool of names, so the counts are taken once, not summed.
 func guessCheck(domain string, srcs map[string]any) string {
 	var names []string
 	var sec float64
-	checked := 0
+	kept, dropped := 0, 0
 	for _, name := range slices.Sorted(maps.Keys(srcs)) {
 		row, _ := srcs[name].(map[string]any)
 		s, ok := row["checked_seconds"].(float64)
@@ -1430,13 +1432,17 @@ func guessCheck(domain string, srcs map[string]any) string {
 		}
 		names = append(names, name)
 		sec = max(sec, s)
-		checked += intOf(row["kept"]) + intOf(row["dropped_unresolved"])
+		kept, dropped = max(kept, intOf(row["kept"])), max(dropped, intOf(row["dropped_unresolved"]))
 	}
-	if sec < 20 {
+	if kept+dropped == 0 {
 		return ""
 	}
-	return fmt.Sprintf("%s: checking the %d names %s guessed in DNS took %.0f s, before they were kept or dropped (-dns-rate paces it; -exclude-sources %s leaves them out)",
-		domain, checked, strings.Join(names, ", "), sec, strings.Join(names, ","))
+	note := fmt.Sprintf("%s: the %d names only %s held were looked up in DNS in %.0f s: %d resolved, %d did not exist",
+		domain, kept+dropped, strings.Join(names, ", "), sec, kept, dropped)
+	if sec >= 20 {
+		note += fmt.Sprintf(" (-dns-rate paces it; -live -guesses=false leaves the guesses unlooked; -exclude-sources %s leaves the source out)", strings.Join(names, ","))
+	}
+	return note
 }
 
 // samplingNote says when a source that answers a random sample per call
