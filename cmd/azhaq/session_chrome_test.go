@@ -99,11 +99,13 @@ func TestChromeSessionRunsStopAtTheAnswerThatEndsTheSession(t *testing.T) {
 		name     string
 		expireAt int
 		cookie   bool
+		held     bool // the logout link is held back (no -send-state-changing)
 	}{
-		{"-login, a logout link", 0, false},
-		{"-login, expiry", 14, false},
-		{"-cookie, a logout link", 0, true},
-		{"-cookie, expiry", 14, true},
+		{"-login, a logout link", 0, false, false},
+		{"-login, expiry", 14, false, false},
+		{"-cookie, a logout link", 0, true, false},
+		{"-cookie, expiry", 14, true, false},
+		{"-cookie, a logout link held back", 0, true, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			app := &dvwaSessions{expireAt: tc.expireAt, live: map[string]int{}, dead: map[string]bool{}, late: map[string][]string{}}
@@ -116,6 +118,11 @@ func TestChromeSessionRunsStopAtTheAnswerThatEndsTheSession(t *testing.T) {
 				args = append(args, "-cookie", "PHPSESSID=sess-0")
 			} else {
 				args = append(args, "-login", srv.URL+"/login.php", "-login-user", "admin", "-login-pass", "password")
+			}
+			if tc.expireAt == 0 && !tc.held {
+				// The link ends the session only when it is sent: a found
+				// logout is held back by default.
+				args = append(args, "-send-state-changing")
 			}
 			_, errOut, code := cli(t, args...)
 			sum := sumMap(t, errOut)
@@ -132,6 +139,15 @@ func TestChromeSessionRunsStopAtTheAnswerThatEndsTheSession(t *testing.T) {
 				}
 			}
 			loss, _ := sum["session_lost"].(map[string]any)
+			if tc.held {
+				app.mu.Lock()
+				dead := len(app.dead)
+				app.mu.Unlock()
+				if dead != 0 || loss != nil || code != exitOK {
+					t.Errorf("held logout: %d sessions ended, session_lost %v, exit %d", dead, loss, code)
+				}
+				return
+			}
 			if !tc.cookie {
 				if loss != nil || code != exitOK {
 					t.Errorf("signed in again: exit %d, session_lost %v", code, loss)
