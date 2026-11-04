@@ -966,7 +966,7 @@ params.unanswered-fails	docs/commands/params.md	A page that leaves requests unan
 
 # docs/commands/crawl.md
 crawl.library-not-read	docs/commands/crawl.md	Library scripts are not read for routes.	test:cmd/azhaq:TestCrawlDoesNotReadVersionedLibraryScripts,TestCrawlDoesNotReadReactJQueryAndAngularBuilds
-crawl.every-url-asked	docs/commands/crawl.md	Every URL they give is requested, a GET operation of an API description (one that needs no path parameter and no required query parameter) and a GET form included, whatever the name: an endpoint that resets data or logs out is asked like any other.	test:cmd/azhaq:TestCrawlAsksEveryURLFoundWhateverItsName;test:engine:TestEveryFoundGetIsRequestedAndDenyPathIsListed
+crawl.every-url-asked	docs/commands/crawl.md	Every URL they give is requested, a GET operation of an API description (one that needs no path parameter and no required query parameter) and a GET form included, except one whose own path or API operation declares a state change	test:cmd/azhaq:TestCrawlAsksEveryURLButHoldsTheOnesThatDeclareAStateChange;test:engine:TestEveryFoundGetIsRequestedAndDenyPathIsListed
 crawl.asks-only-a-crawler	docs/commands/crawl.md	Asks only what a crawler does. The built-in path checks of `run` are off unless you add `-sweep`.	test:cmd/azhaq:TestCrawlAsksOnlyWhatACrawlerDoesAndKFAsksTheKnownFiles
 crawl.kf-known-files	docs/commands/crawl.md	`-kf all`, `-kf robotstxt` or `-kf sitemapxml` asks each web service only for its `robots.txt` and sitemaps and reads every entry.	test:cmd/azhaq:TestCrawlAsksOnlyWhatACrawlerDoesAndKFAsksTheKnownFiles
 crawl.control-top-level	docs/commands/crawl.md	Tells the page every unknown path gets from a real page with one request for a path that does not exist at the root and in each top-level directory (`/api/`, `/rest/`), not in every directory	test:cmd/azhaq:TestCrawlAsksTheCatchAllBaselineOfTopLevelDirectoriesOnly,TestCrawlSweepAsksTheControlInAtMost24Directories
@@ -1011,7 +1011,7 @@ crawl.silent-hints	docs/commands/crawl.md	`-silent -hints` adds the routes only 
 crawl.filters-print-only	docs/commands/crawl.md	These filters limit what is printed, not what is crawled.	test:cmd/azhaq:TestCrawlFiltersLimitWhatIsPrintedNotWhatIsCrawled
 crawl.em-none	docs/commands/crawl.md	`-em php,html` lists only those extensions. `none` stands for URLs without one.	test:cmd/azhaq:TestCrawlOutputFilters
 crawl.forms-entries	docs/commands/crawl.md	Every form is a `forms` entry of its page: `method`, `action`, `enctype`, `fields`, `files`.	test:cmd/azhaq:TestCrawlFormsEntriesAndGETFormsAreAskedWithNeutralValues
-crawl.get-form-asked	docs/commands/crawl.md	A GET form can delete or log out: it is asked like any link, and `-deny-path` keeps its action out.	test:cmd/azhaq:TestCrawlFormsEntriesAndGETFormsAreAskedWithNeutralValues,TestCrawlAsksEveryURLFoundWhateverItsName
+crawl.get-form-asked	docs/commands/crawl.md	A GET form can delete or log out: it is asked like any link, and `-deny-path` keeps its action out.	test:cmd/azhaq:TestCrawlFormsEntriesAndGETFormsAreAskedWithNeutralValues,TestCrawlAsksEveryURLButHoldsTheOnesThatDeclareAStateChange
 crawl.no-form-fill	docs/commands/crawl.md	`-no-form-fill` does not fill GET forms.	test:cmd/azhaq:TestCrawlFormsEntriesAndGETFormsAreAskedWithNeutralValues
 crawl.post-form-flag	docs/commands/crawl.md	A POST form is sent only with `-submit-forms`, with the same values, urlencoded.	test:cmd/azhaq:TestCrawlWithoutSubmitFormsSendsNoPost,TestCrawlSubmitFormsSendsThePostForms,TestCrawlSubmitFormsOwnPageAndNothingToSend
 crawl.post-form-not-sent	docs/commands/crawl.md	A POST form is not sent when it uploads a file (`multipart`), has nothing to send, posts outside the crawl's scope, or its address matches a `-deny-path` rule. Its name decides nothing.	test:cmd/azhaq:TestCrawlSubmitFormsNamesTheFormsItDoesNotSend,TestCrawlSubmitFormsOwnPageAndNothingToSend
@@ -1022,7 +1022,7 @@ crawl.named-proof	docs/commands/crawl.md	A string that a script only names, with
 crawl.library-names	docs/commands/crawl.md	Library scripts are not read for routes: `react`, `jquery` and `angular`, also under a versioned name such as `angular_1-7-7.js`.	test:cmd/azhaq:TestCrawlDoesNotReadReactJQueryAndAngularBuilds,TestCrawlDoesNotReadVersionedLibraryScripts
 crawl.jsonl-no-response	docs/commands/crawl.md	A URL that was found and not asked has no `response`.	test:cmd/azhaq:TestCrawlJSONLLineOfAURLNotAskedHasNoResponse
 crawl.rejected-never-asked	docs/commands/crawl.md	`-rejected` lists the strings read from scripts and pages and kept out of the URLs. They are never asked.	test:cmd/azhaq:TestCrawlRejectedStringsAreNeverAskedAndSayWhy
-crawl.rejected-reasons	docs/commands/crawl.md	The reasons include a pattern with a wildcard (a line of `robots.txt`), an expression, unquoted script code, the start of a path a script joins more to, and a key of a module map or a case label	test:cmd/azhaq:TestCrawlRejectedStringsAreNeverAskedAndSayWhy;test:internal/collectors/jscol:TestModuleMapKeysAreNotRoutes
+crawl.rejected-reasons	docs/commands/crawl.md	a route a script's client asks under its declared base, and a key of a module map or a case label	test:cmd/azhaq:TestCrawlRejectedStringsAreNeverAskedAndSayWhy;test:internal/collectors/jscol:TestModuleMapKeysAreNotRoutes,TestRoutesJoinOntoTheBaseTheScriptDeclares
 crawl.do-never-asked	docs/commands/crawl.md	`-do` lists the URLs found outside the crawl's scope. They are never asked.	test:cmd/azhaq:TestCrawlDoListsTheURLsOutsideTheScopeAndNeverAsksThem
 crawl.counts-sort-every-row	docs/commands/crawl.md	The summary's `counts` sort every URL row of the crawl's scope:	test:cmd/azhaq:TestCrawlSummaryCountsEachKindOfRow;test:internal/contract:TestCrawlCountsAddUpToTheRows
 # docs/commands/fuzz.md
@@ -1332,6 +1332,8 @@ run.not-held-back	docs/commands/run.md	Not held back: a URL you gave as a target
 run.state-status	docs/commands/run.md	`sent` only when a request for it is in the run's ledger	test:cmd/azhaq:TestSendStateChangingSendsThemAndSaysSentOnlyForLedgerLines,TestFoundStateChangingGETsAreHeldBack,TestRunNamesTheStateChangingTargetFirstAndSaysWhatBecameOfEach
 
 # docs/commands/crawl.md (state-changing GETs, spellings, reasons)
+crawl.other-name-asked	docs/commands/crawl.md	An endpoint that resets data under another name is asked like any other.	test:cmd/azhaq:TestCrawlAsksEveryURLButHoldsTheOnesThatDeclareAStateChange
+crawl.page-asked-once	docs/commands/crawl.md	A page already asked under another spelling of its URL is not asked again.	test:cmd/azhaq:TestCrawlAsksAPageOnceWhateverSpellingNamesIt;test:internal/fetch:TestOnePageUnderManySpellingsIsAskedOnce
 
 # docs/commands/dirs.md (directory control, built-in list)
 

@@ -82,31 +82,42 @@ func (s *askedSite) reset() {
 	s.mu.Unlock()
 }
 
-// Every URL a script gives is requested, a GET form and a link that logs out
-// too, whatever the name; a GET operation of an API description that needs no
-// path parameter and no required query parameter is requested, and the others
-// are not; -deny-path keeps a URL out.
-func TestCrawlAsksEveryURLFoundWhateverItsName(t *testing.T) {
+// Every URL a link, a script, a GET form or an API description gives is
+// requested under any name that declares no state change, and a GET operation
+// of a description that needs a path parameter or a required query parameter
+// is not; one whose own path or operation declares a state change (a link
+// /logout, a script's /api/delete-everything, a form's /reset-all, an
+// operation GET /createdb) is held back: not asked, listed as skipped with
+// the flag that sends it, and asked with -send-state-changing. An endpoint
+// that resets data under another name (/api/flush-all) is asked like any
+// other; -deny-path keeps a URL out.
+func TestCrawlAsksEveryURLButHoldsTheOnesThatDeclareAStateChange(t *testing.T) {
 	pages := map[string]string{
 		"/": `<html><body><a href="/logout">out</a><a href="/openapi.json">spec</a><script src="/app.js"></script>
-<form action="/reset-all" method="get"><input name="confirm" value="yes"></form></body></html>`,
-		"/app.js":                `fetch("/api/delete-everything");`,
+<form action="/reset-all" method="get"><input name="confirm" value="yes"></form>
+<form action="/lookup" method="get"><input name="q" type="text"></form></body></html>`,
+		"/app.js":                `fetch("/api/delete-everything"); fetch("/api/flush-all");`,
 		"/logout":                "bye",
 		"/reset-all":             "reset",
+		"/lookup":                "found",
 		"/api/delete-everything": "gone",
+		"/api/flush-all":         "flushed",
+		"/createdb":              "made",
 		"/openapi.json": `{"openapi":"3.0.1","info":{"title":"t","version":"1"},"paths":{
+"/createdb":{"get":{}},
 "/spec/free":{"get":{}},
 "/spec/item/{id}":{"get":{}},
 "/spec/search":{"get":{"parameters":[{"name":"q","in":"query","required":true}]}},
 "/spec/optional":{"get":{"parameters":[{"name":"q","in":"query","required":false}]}}}}`,
 		"/spec/free": "x", "/spec/optional": "x",
 	}
+	held := []string{"/logout", "/reset-all", "/api/delete-everything", "/createdb"}
 	srv := newAskedSite(t, pages, nil)
-	crawlOut(t, srv.httptestServer(), "-silent")
+	_, errOut := crawlOut(t, srv.httptestServer(), "-silent", "-json")
 	got := srv.asked()
-	for _, p := range []string{"/logout", "/reset-all", "/api/delete-everything", "/spec/free", "/spec/optional"} {
+	for _, p := range []string{"/api/flush-all", "/lookup", "/spec/free", "/spec/optional", "/openapi.json", "/app.js"} {
 		if !got[p] {
-			t.Errorf("%s was not asked: %v", p, got)
+			t.Errorf("%s declares nothing and was not asked: %v", p, got)
 		}
 	}
 	for _, p := range []string{"/spec/search", "/spec/item/{id}", "/spec/item/%7Bid%7D"} {
@@ -114,11 +125,49 @@ func TestCrawlAsksEveryURLFoundWhateverItsName(t *testing.T) {
 			t.Errorf("%s was asked: it needs a parameter", p)
 		}
 	}
+	rep := lastReport(t, errOut)
+	for _, p := range held {
+		if got[p] {
+			t.Errorf("%s declares a state change and was asked", p)
+		}
+		listed := false
+		for _, s := range rep.Skipped {
+			if urlPath(s.Target) == p && strings.Contains(s.Reason, "-send-state-changing") {
+				listed = true
+			}
+		}
+		if !listed {
+			t.Errorf("%s is not listed as skipped with the flag: %+v", p, rep.Skipped)
+		}
+	}
+	if rep.StateChangingHeld != len(held) {
+		t.Errorf("state_changing_held %d, want %d", rep.StateChangingHeld, len(held))
+	}
+
 	srv.reset()
-	crawlOut(t, srv.httptestServer(), "-silent", "-deny-path", "^/(logout|reset-all)$")
+	crawlOut(t, srv.httptestServer(), "-silent", "-send-state-changing")
 	got = srv.asked()
-	if got["/logout"] || got["/reset-all"] || !got["/api/delete-everything"] {
+	for _, p := range held {
+		if !got[p] {
+			t.Errorf("-send-state-changing: %s was not asked: %v", p, got)
+		}
+	}
+
+	srv.reset()
+	_, errOut = crawlOut(t, srv.httptestServer(), "-silent", "-json", "-deny-path", "^/(api/flush-all|lookup)$")
+	got = srv.asked()
+	if got["/api/flush-all"] || got["/lookup"] {
 		t.Errorf("with -deny-path: asked %v", got)
+	}
+	rep = lastReport(t, errOut)
+	denied := 0
+	for _, s := range rep.Skipped {
+		if strings.Contains(s.Reason, "-deny-path") {
+			denied++
+		}
+	}
+	if denied != 2 {
+		t.Errorf("-deny-path: %d URLs listed under the rule, want 2: %+v", denied, rep.Skipped)
 	}
 }
 
@@ -556,7 +605,7 @@ func pathSet(m map[string]bool) []string {
 func TestCrawlRejectedStringsAreNeverAskedAndSayWhy(t *testing.T) {
 	pages := map[string]string{
 		"/":           `<html><script src="/app.js"></script></html>`,
-		"/app.js":     `var d = {"./components/locale/zh_CN": 1}; var e = "/rest/user/" + id; fetch("/x/list"); var f="a\\b/c.php"; var h = "/ok/page.php";`,
+		"/app.js":     `var d = {"./components/locale/zh_CN": 1}; var e = "/rest/user/" + id; fetch("/x/list"); var f="a\\b/c.php"; var h = "/ok/page.php"; var api = axios.create({baseURL: "/api/v2"}); api.get("/orders/list");`,
 		"/robots.txt": "User-agent: *\nDisallow: /*.json$\nDisallow: /secret/*\nDisallow: /hidden\n",
 	}
 	srv := newAskedSite(t, pages, nil)
@@ -572,6 +621,7 @@ func TestCrawlRejectedStringsAreNeverAskedAndSayWhy(t *testing.T) {
 		"/secret/*":                 "a pattern with a wildcard",
 		"/rest/user/":               "the start of a path a script joins more to",
 		"./components/locale/zh_CN": "a key of a module map or a case label",
+		"/orders/list":              "a route a script's client asks under the base",
 		`a\\b/c.php`:                "an expression or a template",
 	} {
 		if !strings.Contains(reasons[s], want) {
@@ -579,7 +629,7 @@ func TestCrawlRejectedStringsAreNeverAskedAndSayWhy(t *testing.T) {
 		}
 	}
 	got := srv.asked()
-	for _, p := range []string{"/rest/user/", "/components/locale/zh_CN", "/*.json$", "/secret/*", "/secret/", "/a%5C%5Cb/c.php", "/a%5C%5C%5Cb/c.php"} {
+	for _, p := range []string{"/rest/user/", "/orders/list", "/components/locale/zh_CN", "/*.json$", "/secret/*", "/secret/", "/a%5C%5Cb/c.php", "/a%5C%5C%5Cb/c.php"} {
 		if got[p] {
 			t.Errorf("the rejected string %s was asked: %v", p, got)
 		}
@@ -833,5 +883,32 @@ func TestCrawlANamedURLIsNotFoldedWhenHintsListsIt(t *testing.T) {
 	_, errOut = crawlOut(t, srv.Server, "-silent")
 	if !strings.Contains(errOut, "1 named URLs were left out of the list") {
 		t.Errorf("without -hints:\n%s", errOut)
+	}
+}
+
+// A page linked under several spellings that name one resource (an escaped
+// letter, a fragment, the default port, the case of the host) is asked once;
+// a trailing slash or an empty query is another request.
+func TestCrawlAsksAPageOnceWhateverSpellingNamesIt(t *testing.T) {
+	pages := map[string]string{
+		"/":      "",
+		"/about": "about us",
+	}
+	srv := newAskedSite(t, pages, nil)
+	host := strings.TrimPrefix(srv.URL, "http://")
+	pages["/"] = `<html><body><a href="/about">1</a><a href="/%61bout">2</a><a href="/about#team">3</a>` +
+		`<a href="http://` + strings.ToUpper(host) + `/about">4</a><a href="/about/">5</a><a href="/about?">6</a></body></html>`
+	crawlOut(t, srv.httptestServer(), "-silent")
+	srv.mu.Lock()
+	defer srv.mu.Unlock()
+	n := map[string]int{}
+	for _, p := range srv.paths {
+		n[p]++
+	}
+	if got := n["/about"] + n["/%61bout"]; got != 1 {
+		t.Errorf("/about is one resource under four spellings and was asked %d times (%v)", got, n)
+	}
+	if n["/about/"] != 1 || n["/about?"] != 1 {
+		t.Errorf("a trailing slash and an empty query are other requests: %v", n)
 	}
 }
