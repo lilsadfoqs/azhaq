@@ -63,20 +63,14 @@ func TestFuzzEncodersAreTheListTheDocsName(t *testing.T) {
 	}
 }
 
-// -min-rate paces a loopback scan as -rate does (1,500 ports at 500 a
-// second take about 3 s), and keeps every core; with GOMAXPROCS in the
-// environment -rate leaves the number alone, without it -rate sizes it.
-func TestPortsMinRatePacesTheLoopbackAndGOMAXPROCSIsYours(t *testing.T) {
+// With GOMAXPROCS in the environment -rate leaves the number of cores alone,
+// without it -rate sizes it.
+func TestPortsGOMAXPROCSInTheEnvironmentIsYours(t *testing.T) {
 	t.Chdir(t.TempDir())
 	args := []string{"ports", "-host", "127.0.0.1", "-p", "1-1500", "-detect", "none", "-silent", "-ledger", "off"}
 	was := runtime.GOMAXPROCS(0)
 	gc := debug.SetGCPercent(100)
 	t.Cleanup(func() { runtime.GOMAXPROCS(was); debug.SetGCPercent(gc) })
-	t0 := time.Now()
-	cli(t, append(slices.Clone(args), "-min-rate", "500")...)
-	if d := time.Since(t0); d < 2500*time.Millisecond {
-		t.Errorf("-min-rate 500 took %v for 1,500 ports on the loopback: it paces them over about 3 s", d)
-	}
 	runtime.GOMAXPROCS(3)
 	t.Setenv("GOMAXPROCS", "3")
 	cli(t, append(slices.Clone(args), "-rate", "5000")...)
@@ -87,71 +81,6 @@ func TestPortsMinRatePacesTheLoopbackAndGOMAXPROCSIsYours(t *testing.T) {
 	cli(t, append(slices.Clone(args), "-rate", "5000")...)
 	if got := runtime.GOMAXPROCS(0); got != 1 {
 		t.Errorf("without GOMAXPROCS in the environment -rate 5000 left %d cores: one core is what 5,000 a second needs", got)
-	}
-}
-
-// A route that streams for ever is cut by probe and crawl (status and the
-// first part of the body, then closed); dirs, params and fuzz read an
-// answer to its end, so the stream of 3 s runs out under them.
-func TestOnlyProbeAndCrawlCutAStreamTheOthersReadToItsEnd(t *testing.T) {
-	for _, c := range []struct {
-		name string
-		cuts bool
-		run  func(t *testing.T, url string)
-	}{
-		{"probe", true, func(t *testing.T, url string) {
-			runContract(t, "probe", "-u", url+"/events", "-req-timeout", "30s")
-		}},
-		{"crawl", true, func(t *testing.T, url string) {
-			runContract(t, "crawl", "-u", url+"/events", "-allow", "127.0.0.1", "-db", filepath.Join(t.TempDir(), "w.db"))
-		}},
-		{"dirs", false, func(t *testing.T, url string) {
-			runContract(t, "dirs", "-u", url+"/", "-w", wlist(t, "events"), "-ac=false", "-ledger", "off", "-allow", "127.0.0.1")
-		}},
-		{"params", false, func(t *testing.T, url string) {
-			runContract(t, "params", "-u", url+"/events", "-w", wlist(t, "q"), "-rate", "10000", "-allow", "127.0.0.1", "-db", filepath.Join(t.TempDir(), "w.db"))
-		}},
-		{"fuzz", false, func(t *testing.T, url string) {
-			runContract(t, "fuzz", "-u", url+"/FUZZ", "-w", wlist(t, "events"), "-ac=false", "-mc", "all")
-		}},
-	} {
-		t.Run(c.name, func(t *testing.T) {
-			t.Chdir(t.TempDir())
-			var first atomic.Bool
-			var whole, cut atomic.Int32
-			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if first.Swap(true) {
-					fmt.Fprint(w, "ok") // only the first request is the stream
-					return
-				}
-				w.Header().Set("Content-Type", "text/event-stream")
-				for i := 0; i < 8; i++ { // 8 x 400 ms: past the 2 s a stream is given
-					if _, err := fmt.Fprint(w, "data: tick\n\n"); err != nil || r.Context().Err() != nil {
-						cut.Add(1)
-						return
-					}
-					w.(http.Flusher).Flush()
-					select {
-					case <-r.Context().Done():
-						cut.Add(1)
-						return
-					case <-time.After(400 * time.Millisecond):
-					}
-				}
-				whole.Add(1)
-			}))
-			defer srv.Close()
-			c.run(t, srv.URL)
-			for i := 0; i < 50 && cut.Load()+whole.Load() == 0; i++ {
-				time.Sleep(50 * time.Millisecond) // the handler sees the close a moment later
-			}
-			if c.cuts && (cut.Load() != 1 || whole.Load() != 0) {
-				t.Errorf("%s: the stream was read to its end (cut %d, whole %d): it is cut after 2 s", c.name, cut.Load(), whole.Load())
-			}
-			if !c.cuts && (cut.Load() != 0 || whole.Load() != 1) {
-				t.Errorf("%s: cut %d, whole %d: it reads the stream to its end", c.name, cut.Load(), whole.Load())
-			}
-		})
 	}
 }
 

@@ -634,7 +634,7 @@ ports.pts	docs/commands/ports.md	`-pts N` stops asking a host after N open ports
 ports.detect-none	docs/commands/ports.md	`none` connects and closes: one connect per port, as naabu without `-sV`.	test:internal/portscan:TestDetectNoneIsOneConnectPerPort
 ports.detect-banner	docs/commands/ports.md	`banner` reads what the service says on that connection and sends nothing after it	test:internal/portscan:TestDetectBannerSendsNothing
 ports.only-all-sends	docs/commands/ports.md	Only `all` sends `EHLO` or `SYST`.	test:internal/portscan:TestAGreetingIsNotAnsweredWithARequestExceptSYSTAndEHLO,TestDetectBannerSendsNothing
-ports.detect-all-default	docs/commands/ports.md	`all` is the default.	test:cmd/azhaq:TestPortsProxyAndSourceIPAskTheBannerOnlyAndSayIt
+ports.detect-all-default	docs/commands/ports.md	`all` is the default. `-detect none`	test:cmd/azhaq:TestPortsProxyAndSourceIPAskTheBannerOnlyAndSayIt
 ports.proxy-banner-only	docs/commands/ports.md	The service probes beyond the first connection dial on their own, so with either the scan asks the banner only, and the summary says so.	test:cmd/azhaq:TestPortsProxyAndSourceIPAskTheBannerOnlyAndSayIt
 ports.udp-not-through-proxy	docs/commands/ports.md	UDP is not sent through a proxy.	test:cmd/azhaq:TestPortsProxyAndSourceIPAskTheBannerOnlyAndSayIt
 ports.pu-without-p	docs/commands/ports.md	`-pu LIST` without `-p`, `-tp` or `-pf` does the same	test:cmd/azhaq:TestPortsUDPAloneFindsDNSOnAnOddPortAtALowRate
@@ -765,7 +765,7 @@ run.other-checks-asked	docs/commands/run.md	Every other check is still asked: `r
 run.baseline-not-requested	docs/commands/run.md	That makes it the catch-all answer of a directory whose own baseline w	test:internal/fetch:TestCatchAllRootShellAsksOneBaseline
 run.allow-fences	docs/commands/run.md	`-allow` and `-scope` fence a run; they do not add targets.	test:cmd/azhaq:TestRunSweepCoversTheAllowedRange,TestPortsSweepCoversTheAllowedRange
 run.allow-maps-one	docs/commands/run.md	`-url http://10.0.0.5/ -allow 10.0.0.0/24` maps 10.0.0.5 only, and a n	test:cmd/azhaq:TestRunSweepCoversTheAllowedRange,TestSweepLeadCountsWhatSweepWouldSend
-run.ledger-counts-every-address	docs/commands/run.md	The ledger and the summary count every address.	test:cmd/azhaq:TestRunSweepCoversTheAllowedRange,TestPortsSweepCoversTheAllowedRange
+run.ledger-counts-every-address	docs/commands/run.md	`counts.addresses` is another number, the address rows of the map	test:cmd/azhaq:TestRunPortsNamesAddressesScannedAndOpen
 run.sweep-lead	docs/commands/run.md	`the scope (-allow, -scope) holds 256 addresses and the targets name 1	test:cmd/azhaq:TestSweepLeadCountsWhatSweepWouldSend
 run.screenshot-not-taken	docs/commands/run.md	`screenshot of URL not taken: the page needs about 26 requests and 8 w	test:internal/collectors/shotcol:TestNotTakenSaysWhatThePageNeeds
 run.graphql-note	docs/commands/run.md	`GraphQL URL: introspection disabled: schema recovered (partial: query	test:cmd/azhaq:TestRecoveredGraphQLSchemaIsMarked,TestWholeGraphQLSchemaIsNotMarkedPartial,TestRecoveredGraphQLSchemaShowsCounts
@@ -1200,7 +1200,7 @@ diff.quiet	docs/commands/diff.md	`-quiet` prints entities, changes and counts on
 diff.one-run	docs/commands/diff.md	A workspace with only one run says so: a diff needs two.	test:cmd/azhaq:TestDiffOfAWorkspaceWithOneRunSaysSo
 diff.not-seen-again	docs/commands/diff.md	`not_seen_again` is what the older run only heard of: from a subdomain source, an archive or a link. The run never checked it.	test:cmd/azhaq:TestDiffNotSeenAgainIsWhatTheOlderRunOnlyHeardOf
 diff.bodies-not-compared	docs/commands/diff.md	Bodies are not compared byte for byte. Timestamps and tokens would make every run a change.	test:cmd/azhaq:TestTwoIdenticalRunsDiffEmpty;test:store:TestCompareIgnoresVolatileFields
-diff.control-by-answer	docs/commands/diff.md	A catch-all row's control is compared by its answer (status, type, title) and the directory it was asked in. The random path it was asked for, and the size an echoing page gives it, are not compared.	test:store:TestCompareIgnoresTheControlsRandomPath;test:cmd/azhaq:TestTwoIdenticalRunsDiffEmpty
+diff.control-by-answer	docs/commands/diff.md	A catch-all row's control is compared by its answer (status, type, title).	test:store:TestCompareIgnoresTheControlsRandomPath;test:cmd/azhaq:TestTwoIdenticalRunsDiffEmpty
 
 # docs/commands/ingest.md
 ingest.without-db-new-file	docs/commands/ingest.md	Without `-db` it makes a new `azhaq-TIME-PID.db` in the current directory, or uses the file `$AZHAQ_DB` names.	test:cmd/azhaq:TestIngestWithoutDBMakesANewFileAndPrintsNoRows
@@ -1228,11 +1228,10 @@ docs.flags-take-no-topic	docs/commands/docs.md	`-flags` and `-flags-into` take n
 # the remaining sentences
 fuzz.encoder-list	docs/commands/fuzz.md	run in process, and a `.tmpl` file with `#PAYLOAD#` is one too	test:cmd/azhaq:TestFuzzEncodersAreTheListTheDocsName;test:internal/fuzz:TestEncodersMatchFfuf
 fuzz.no-html-encoders	docs/commands/fuzz.md	ffuf's `htmlescape` and `htmlunescape` are not available: they are refused.	test:cmd/azhaq:TestFuzzEncodersAreTheListTheDocsName
-ports.min-rate-pace	docs/commands/ports.md	it sets the pace to 500 connects a second when no `-rate` is given or `-rate` is lower	test:internal/collectors/portcol:TestMinRateSetsThePaceWhenNoRateIsGivenOrItIsLower
-ports.min-rate-loopback	docs/commands/ports.md	It paces the loopback too, so a loopback scan of 1,500 ports with `-detect none` takes about 3 seconds	test:cmd/azhaq:TestPortsMinRatePacesTheLoopbackAndGOMAXPROCSIsYours
-ports.min-rate-every-core	docs/commands/ports.md	`-min-rate` keeps every core; `GOMAXPROCS` in the environment sets the number yourself.	test:cmd/azhaq:TestPortsRateIsACeilingAndMinRateKeepsEveryCore,TestPortsMinRatePacesTheLoopbackAndGOMAXPROCSIsYours
-probe.crawl-cuts-too	docs/commands/probe.md	`crawl` does the same.	test:cmd/azhaq:TestOnlyProbeAndCrawlCutAStreamTheOthersReadToItsEnd
-probe.others-read-to-end	docs/commands/probe.md	`dirs`, `params` and `fuzz` do not cut a stream: they read an answer to its end.	test:cmd/azhaq:TestOnlyProbeAndCrawlCutAStreamTheOthersReadToItsEnd
+ports.min-rate-pace	docs/commands/ports.md	it only ever raises the pace, to the higher of the default 1500 (or `-rate`) and `-min-rate`	test:internal/collectors/portcol:TestMinRateOnlyRaisesThePace;test:cmd/azhaq:TestPortsMinRateNeverLowersThePace
+ports.min-rate-loopback	docs/commands/ports.md	a loopback scan of 20,000 ports with `-detect none` takes a fraction of a second	test:cmd/azhaq:TestPortsMinRateNeverLowersThePace
+ports.min-rate-every-core	docs/commands/ports.md	`-min-rate` keeps every core; `GOMAXPROCS` in the environment sets the number yourself.	test:cmd/azhaq:TestPortsRateIsACeilingAndMinRateKeepsEveryCore,TestPortsGOMAXPROCSInTheEnvironmentIsYours
+probe.crawl-cuts-too	docs/commands/probe.md	`crawl`, `dirs`, `params`, `fuzz` and `roles` do the same, and their rows say the body was cut	test:cmd/azhaq:TestFuzzCutsAnEndlessAnswerAndSaysSo,TestFuzzTextRowSaysTheBodyWasCut,TestParamsCutsAnEndlessAnswerAndSaysSo,TestRolesCutsAnEndlessAnswerAndSaysSo,TestRolesReplayReadersCutAnEndlessAnswer;test:internal/collectors/dirscol:TestSweepCutsAnEndlessAnswerAndSaysSo
 roles.replay-max-whole-again	docs/commands/roles.md	`-replay-max` limits the history reads over all roles, and then the replay, which gets the whole count again.	test:cmd/azhaq:TestRolesReplayMaxLimitsTheHistoryReadsOverAllRoles,TestRolesReplayMaxIsSpentByTheHistoryReadsAndTheReplayEachInFull,TestRolesReplayTakesAURLOnlyWhileTheBudgetHoldsEveryRole
 roles.owner-verdict-answers	docs/commands/roles.md	are used only when no other role's write was accepted (2xx) and none was answered 5xx: each answer is a 4xx, a redirect, or a 2xx that says it was denied.	test:cmd/azhaq:TestRolesOnlyItsOwnerWritesItAlsoWhenTheOthersAreRedirectedOrDenied,TestReplayWriteDeleteRefused
 run.fold-leads-stay-listed	docs/commands/run.md	stays listed, as does every row under `-deny-path`: those are leads or the effect of a setting you chose	test:cmd/azhaq:TestRunFoldsNeverTheLeadsOrTheEffectOfADenyPathRule;test:engine:TestFolderClass
@@ -1361,3 +1360,11 @@ report.one-report-to-file	docs/commands/report.md	`-o PATH` for exactly one repo
 roles.note-names-renewal	docs/commands/roles.md	A note names a renewal only when one ran and gave a session that passed its check	test:cmd/azhaq:TestRoleNotesNoCommandSaysItCouldNotBeRenewed,TestRoleNotesFailingCommandSaysRenewalFailed,TestRoleNotesCommandThatRenewsIsNamed,TestRoleNotesCommandWhoseNewSessionFailsIsNotCalledARenewal,TestRoleNotesASignInThatPassedItsCheckIsNamed
 roles.note-says-why-not-renewed	docs/commands/roles.md	A role with no `-role-cmd` or `-role-login` says it could not be renewed; a command that failed says its renewal failed	test:cmd/azhaq:TestRoleNotesNoCommandSaysItCouldNotBeRenewed,TestRoleNotesFailingCommandSaysRenewalFailed,TestRoleNotesCommandWhoseNewSessionFailsIsNotCalledARenewal
 docs-output.depth-note-counts-only-depth	docs/OUTPUT.md	The URLs counted are those the scheduler kept because they were found past `-depth`: a URL a budget such as `-max-items` left unasked is `capped` in the map too, but the note does not count it, and a stop by `-max-items` is not blamed on `-depth`.	test:cmd/azhaq:TestCrawlStoppedByMaxItemsDoesNotBlameDepth
+# merged claims of the later streams
+ports.detect-none-names-nothing	docs/commands/ports.md	No row names a service, not even by its port number	test:cmd/azhaq:TestPortsDetectNoneRowsNameNoService;test:internal/portscan:TestDetectNoneNamesNoService,TestDetectNoneNamesNoUDPService
+ports.dead-proxy-failure	docs/commands/ports.md	A proxy that cannot be reached, or that breaks the SOCKS exchange	test:cmd/azhaq:TestPortsProxyFailureIsNotClosedPorts;test:internal/portscan:TestDeadProxyStopsTheScanAndCallsNothingUp
+resume.retry-shows-new-answer	docs/commands/resume.md	A URL that failed and answers on the retry shows that answer in the map	test:cmd/azhaq:TestRetryFailedShowsTheNewAnswerAndNoWaitNoteWithoutBackoff
+params.stream-cut	docs/commands/params.md	is read for 64 KiB or 2 seconds and then closed, as `probe` does	test:cmd/azhaq:TestParamsCutsAnEndlessAnswerAndSaysSo
+diff.control-path-and-directory	docs/commands/diff.md	The path it was asked for, the directory that path was in	test:store:TestCompareIgnoresTheControlsRandomPath
+ports.source-ip-usage-error	docs/commands/ports.md	A `-source-ip` that is not an address of this machine is a usage error	test:cmd/azhaq:TestPortsSourceIPThatCannotBeBoundIsAUsageError
+resume.cap-spent-nothing-sent	docs/commands/resume.md	Tasks that send no request still count against it	test:cmd/azhaq:TestCrawlStoppedByMaxItemsDoesNotBlameDepth

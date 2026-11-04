@@ -25,7 +25,7 @@ var resumeFlags = []string{"-allow", "127.0.0.1", "-sources", "none", "-no-takeo
 
 // closedPort is an address nothing listens on: a request to it is refused,
 // which no later try fixes.
-func closedPort(t *testing.T) string {
+func claimsClosedPort(t *testing.T) string {
 	t.Helper()
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -95,7 +95,7 @@ func TestResumeOfAFinishedRunExitsOneAndNamesWhatIsRetryable(t *testing.T) {
 // and exits 1 with nothing to retry when none is left.
 func TestResumeRetryFailedAsksOnlyWhatIsRetryable(t *testing.T) {
 	srv, asked, heal := rateLimited(t)
-	dead := closedPort(t)
+	dead := claimsClosedPort(t)
 	t.Chdir(t.TempDir())
 	db := filepath.Join(t.TempDir(), "r.db")
 	l := filepath.Join(t.TempDir(), "r.jsonl")
