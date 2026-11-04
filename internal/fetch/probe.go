@@ -44,6 +44,7 @@ func (r *Req) Plain() bool {
 
 // Key is what the answer to r is kept under.
 func (r *Req) Key(raw string) string {
+	raw = canonical(raw)
 	if r.Plain() {
 		return raw
 	}

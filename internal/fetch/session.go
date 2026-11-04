@@ -673,9 +673,9 @@ func pathOf(raw string) string {
 // evict forgets the answer to raw, so that asking again sends it.
 func evict(raw string) {
 	cacheMu.Lock()
-	delete(cache, raw)
+	delete(cache, canonical(raw))
 	cacheMu.Unlock()
-	redoKeys.Store(raw, true)
+	redoKeys.Store(canonical(raw), true)
 }
 
 // redoKeys are the URLs asked again: a kept answer of an earlier run is not
