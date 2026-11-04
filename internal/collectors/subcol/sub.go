@@ -390,6 +390,7 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		sctx = context.WithValue(sctx, answerKey{}, &answers[i])
 		sctx = context.WithValue(sctx, holdKey{}, hold)
 		sctx = context.WithValue(sctx, samplesKey{}, c.opts.GuessSamples)
+		sctx = context.WithValue(sctx, timeoutKey{}, timeout)
 		if chk != nil && !c.opts.NoGuessCheck {
 			sctx = context.WithValue(sctx, checkerKey{}, chk) // its rounds are looked up as they come
 		}
