@@ -300,9 +300,10 @@ func (b *Browser) decide(root context.Context, ev cdpfetch.EventRequestPaused, t
 		b.done(t)
 		b.fail(root, ev.RequestID) // a window a page opened, being closed
 		return
-	case raw != "" && egress.CheckDenied(raw) != nil:
-		// The user's own -deny-path rule: never requested, and listed with
-		// the rule by fetch (not as a refusal of the scope).
+	case raw != "" && (egress.CheckDenied(raw) != nil || !write && egress.CheckHeld(root, ev.Request.Method, raw) != nil):
+		// The user's own -deny-path rule, or a GET found on the way whose own
+		// name declares a state change: never requested, and listed with
+		// the reason by fetch (not as a refusal of the scope).
 		b.done(t)
 		b.fail(root, ev.RequestID)
 		return

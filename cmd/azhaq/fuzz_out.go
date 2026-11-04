@@ -189,9 +189,38 @@ func (l fuzzLook) colorOf(status int) (on, off string) {
 	return c, "\x1b[0m"
 }
 
+// matchedText is what made a result a match, in a line: each matcher that
+// held and, for a pattern, the text it found with what is around it.
+func matchedText(r fuzz.Result) string {
+	var parts []string
+	for _, m := range r.Matched {
+		s := m.Matcher + " " + m.Value
+		if m.Context != "" {
+			s += " found in the " + m.In + ": " + strconv.Quote(m.Context)
+		}
+		parts = append(parts, s)
+	}
+	return strings.Join(parts, "; ")
+}
+
+// controlText says a result is the same answer as a calibration request's.
+func controlText(r fuzz.Result) string {
+	if r.Control == nil {
+		return ""
+	}
+	return fmt.Sprintf("the same answer as the -ac control %s (%d, %d bytes)", r.Control.URL, r.Control.Status, r.Control.Size)
+}
+
 func (l fuzzLook) normal(r fuzz.Result) string {
 	on, off := l.colorOf(r.Status)
-	return fmt.Sprintf("%s%-23s [Status: %d, Size: %d, Words: %d, Lines: %d, Duration: %dms]%s", on, l.inputs(r), r.Status, r.Length, r.Words, r.Lines, r.Duration/int64(time.Millisecond), off)
+	extra := ""
+	if m := matchedText(r); m != "" {
+		extra += ", Matched: " + m
+	}
+	if c := controlText(r); c != "" {
+		extra += ", Control: " + c
+	}
+	return fmt.Sprintf("%s%-23s [Status: %d, Size: %d, Words: %d, Lines: %d, Duration: %dms%s]%s", on, l.inputs(r), r.Status, r.Length, r.Words, r.Lines, r.Duration/int64(time.Millisecond), extra, off)
 }
 
 func (l fuzzLook) multiline(r fuzz.Result) string {
@@ -206,6 +235,12 @@ func (l fuzzLook) multiline(r fuzz.Result) string {
 	}
 	if r.ResultFile != "" {
 		fmt.Fprintf(&b, "| RES | %s\n", r.ResultFile)
+	}
+	if m := matchedText(r); m != "" {
+		fmt.Fprintf(&b, "| MATCHED | %s\n", m)
+	}
+	if c := controlText(r); c != "" {
+		fmt.Fprintf(&b, "| CONTROL | %s\n", c)
 	}
 	for _, k := range l.keywords {
 		v := r.Input[k]

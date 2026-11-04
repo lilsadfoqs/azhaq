@@ -227,7 +227,7 @@ func TestWorkersSessionGivenByCookieEndsTheRun(t *testing.T) {
 		}
 	}))
 	t.Cleanup(srv.Close)
-	runErr, workerErr, code := serveWithWorker(t, "-url", srv.URL+"/", "-allow", "127.0.0.1", "-cookie", "sid=s1", "-depth", "3")
+	runErr, workerErr, code := serveWithWorker(t, "-url", srv.URL+"/", "-allow", "127.0.0.1", "-cookie", "sid=s1", "-depth", "3", "-send-state-changing")
 	if code != exitPartial {
 		t.Fatalf("exit %d, want %d\n%s", code, exitPartial, runErr)
 	}

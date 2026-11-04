@@ -1,17 +1,27 @@
-// Package statechange names the GET requests whose own name or
-// description declares a state change: a word such as create, delete,
-// reset, populate or logout in the URL's path, in an operation's
-// summary or description, or in its operationId.
+// Package statechange names the GET requests whose own name declares a
+// state change: a word such as create, delete, reset, populate or logout
+// in the URL's path, or in an API description's operationId or summary
+// for that operation.
 //
 // The match is a whole word of the documented set below, never a
-// substring, and it decides nothing by itself: azhaq still sends every
-// GET in scope, and only a user's -deny-path rule keeps one out. The
-// set is the verbs an API description or a path uses to say it changes
-// data or ends a session; it is stated here and in the docs so a user
-// can tell exactly which requests will be named.
+// substring. Only what names the request counts: its path segments (not
+// its query), and, for an operation of an API description, its
+// operationId and summary. Prose about the application or the service
+// (an info description, an operation's long description) is never read:
+// "the app was created" says nothing about the request.
+//
+// A path whose last segment is a static file (logo.png, clear.gif, a
+// script or a stylesheet) is not a request that declares anything, so it
+// is left out of the match.
+//
+// The set is the verbs a path or an operation uses to say it changes data
+// or ends a session; it is stated here and in the docs so a user can tell
+// exactly which requests are named, and held back unless
+// -send-state-changing is given.
 package statechange
 
 import (
+	"net/url"
 	"strings"
 	"unicode"
 )
@@ -32,10 +42,8 @@ var verbSet = func() map[string]bool {
 }()
 
 // Word returns the verb a text declares, or "" when none of its words
-// is in the set. Texts are the name and description of one request:
-// its path, its operation's summary, description and operationId.
-// The first matching word, in the order the texts are given, is
-// returned in its base form ("logout" for "logs out").
+// is in the set. The first matching word, in the order the texts are
+// given, is returned in its base form ("logout" for "logs out").
 func Word(texts ...string) string {
 	for _, text := range texts {
 		words := tokens(text)
@@ -53,8 +61,8 @@ func Word(texts ...string) string {
 	return ""
 }
 
-// Declares says whether a request with these texts declares a state
-// change, and the word that says so.
+// Declares says whether these texts declare a state change, and the word
+// that says so.
 func Declares(texts ...string) (string, bool) {
 	w := Word(texts...)
 	return w, w != ""
@@ -119,4 +127,53 @@ func tokens(text string) []string {
 	}
 	flush()
 	return out
+}
+
+// OfPath is the verb a URL's path declares, or "": the path alone, its
+// query and host left out, and nothing for a static file.
+func OfPath(path string) string {
+	if static(path) {
+		return ""
+	}
+	return Word(path)
+}
+
+// OfURL is OfPath of a URL's path ("" for a URL that does not parse).
+func OfURL(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return ""
+	}
+	return OfPath(u.Path)
+}
+
+// OfOperation is the verb an API description's operation declares, and
+// where the word is ("path", "operationId" or "summary"): its path, then
+// its operationId, then its summary. Its description, and the description
+// of the API, are never read.
+func OfOperation(path, operationID, summary string) (word, where string) {
+	if w := OfPath(path); w != "" {
+		return w, "path"
+	}
+	if w := Word(operationID); w != "" {
+		return w, "operationId"
+	}
+	if w := Word(summary); w != "" {
+		return w, "summary"
+	}
+	return "", ""
+}
+
+// staticExt are the extensions of a file served as it is.
+var staticExt = map[string]bool{
+	".png": true, ".jpg": true, ".jpeg": true, ".gif": true, ".svg": true, ".ico": true, ".webp": true, ".avif": true, ".bmp": true,
+	".css": true, ".js": true, ".mjs": true, ".map": true,
+	".woff": true, ".woff2": true, ".ttf": true, ".otf": true, ".eot": true,
+}
+
+// static says the path's last segment is a static file.
+func static(path string) bool {
+	last := path[strings.LastIndex(path, "/")+1:]
+	i := strings.LastIndex(last, ".")
+	return i > 0 && staticExt[strings.ToLower(last[i:])]
 }

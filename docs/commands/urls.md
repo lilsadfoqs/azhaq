@@ -157,6 +157,7 @@ The classes, in the order of the rules above: `scanner-payload`, `scanner-probe`
 | `-live-rate` | float | `10` | with -live, requests a second to the live site |
 | `-live-max` | int |  | with -live, check at most N URLs, spread evenly over the sorted list; the rest are listed unchecked and counted (0: every URL) |
 | `-live-proxy` | string |  | with -live, send the requests through this proxy (http://, https:// or socks5://; default: $HTTP_PROXY, $HTTPS_PROXY, except for loopback targets) |
+| `-send-state-changing` | bool |  | with -live, also ask the URLs whose own path declares a state change (create, delete, reset, logout, ...); by default an archived /logout is not asked, and is counted as not asked (state-changing) |
 
 **Pace and limits**
 

@@ -134,19 +134,19 @@ func TestExitCodeFollowsTheOutcome(t *testing.T) {
 		}},
 		// A failure on a URL the crawl found: a failed target among the pages it asked.
 		{name: "crawl: a page it found closes the connection", want: 0, failures: 1, shape: func(l *Labs) []string {
-			l.Site.SetBroken("/reset")
+			l.Site.SetBroken("/broken")
 			return []string{"crawl", "-u", l.Site.URL, "-d", "2"}
 		}},
 		{name: "crawl -strict-exit: a page it found closes the connection", want: 3, failures: 1, shape: func(l *Labs) []string {
-			l.Site.SetBroken("/reset")
+			l.Site.SetBroken("/broken")
 			return []string{"crawl", "-u", l.Site.URL, "-d", "2", "-strict-exit"}
 		}},
 		{name: "run: a page it found closes the connection", want: 0, failures: 1, shape: func(l *Labs) []string {
-			l.Site.SetBroken("/reset")
+			l.Site.SetBroken("/broken")
 			return []string{"run", "-url", l.Site.URL, "-allow", l.Allow(), "-sources", "none", "-db", "w.db"}
 		}},
 		{name: "run -strict-exit: a page it found closes the connection", want: 3, failures: 1, shape: func(l *Labs) []string {
-			l.Site.SetBroken("/reset")
+			l.Site.SetBroken("/broken")
 			return []string{"run", "-url", l.Site.URL, "-allow", l.Allow(), "-sources", "none", "-db", "w.db", "-strict-exit"}
 		}},
 		{name: "dirs: every request fails", want: 3, shape: func(l *Labs) []string {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -11,6 +12,7 @@ import (
 
 	"github.com/lilsadfoqs/azhaq/internal/ledger"
 	"github.com/lilsadfoqs/azhaq/internal/neterr"
+	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"github.com/lilsadfoqs/azhaq/scope"
 )
 
@@ -41,6 +43,12 @@ type Policy struct {
 	allowAddr   func(host, port string) bool // allow for a connection to a port; nil: allow's answer for the host
 	openHeaders map[string]bool
 	denyPath    func(raw string) string
+	word        func(raw string) string // the word a URL's own name declares as a state change; nil: none is looked for
+	holding     bool                    // the GETs word names are held back
+	asked       func(raw string) bool   // the user gave raw as a target: never held
+	declared    sync.Map                // normalized URL -> the word an API description's operation declares for it
+	nDeclared   atomic.Int64
+	sentKeys    sync.Map // the keys of watched URLs that were sent
 	onDenied    func(raw, rule string)
 	onPort      func(raw string) // hears of a URL kept out for its port
 	proxy       *url.URL
@@ -105,6 +113,8 @@ func init() {
 	current.Store(New(Config{}))
 	ledger.Unsent = Refund
 	ledger.Deny = CheckDenied
+	ledger.Hold = func(req *http.Request) error { return CheckHeld(req.Context(), req.Method, req.URL.String()) }
+	ledger.OnSent = func(method, raw string) { Current().noteSent(method, raw) }
 }
 
 // Use makes p the policy of the run.
@@ -121,6 +131,10 @@ func Reset() { Current().Reset() }
 func (p *Policy) Reset() {
 	p.mu.Lock()
 	p.allow, p.allowAddr, p.openHeaders, p.denyPath, p.onDenied, p.onPort, p.proxy, p.resolver, p.only = nil, nil, nil, nil, nil, nil, nil, nil, false
+	p.word, p.asked, p.holding = nil, nil, false
+	p.sentKeys.Clear()
+	p.declared.Clear()
+	p.nDeclared.Store(0)
 	p.mu.Unlock()
 	p.maxReq.Store(0)
 	p.gone.Add(p.sent.Swap(0))
@@ -347,7 +361,143 @@ func (p *Policy) CheckDenied(raw string) error {
 }
 
 // DenyReason is how a rule is named in a list of what was not requested.
-func DenyReason(rule string) string { return "-deny-path " + rule }
+func DenyReason(rule string) string {
+	if w, ok := neterr.HeldWord(rule); ok {
+		return neterr.HeldReason(w)
+	}
+	return "-deny-path " + rule
+}
+
+// IsHeldReason says a reason from DenyReason names a held GET, not a rule.
+func IsHeldReason(reason string) bool {
+	return strings.HasPrefix(reason, "a GET found on the way whose own name declares a state change")
+}
+
+type askedKey struct{}
+
+// WithAsked marks ctx: the requests made with it are ones the user asked for
+// by name (a word of their own wordlist), so none is held back for what its
+// own name declares.
+func WithAsked(ctx context.Context) context.Context {
+	return context.WithValue(ctx, askedKey{}, true)
+}
+
+// SetStateWords has the policy look for the GETs and HEADs whose own name
+// declares a state change: word returns the verb a URL's name declares, or
+// "". Those sent are remembered (WasSent). With hold, they are also held
+// back, unless the user gave the URL (asked) or the request is made with a
+// WithAsked context. A nil word lifts all of it.
+func (p *Policy) SetStateWords(word func(raw string) string, asked func(raw string) bool, hold bool) {
+	p.mu.Lock()
+	p.word, p.asked, p.holding = word, asked, hold
+	p.mu.Unlock()
+	p.sentKeys.Clear()
+}
+
+// Holding says the run holds back the GETs whose own name declares a state
+// change (without -send-state-changing).
+func (p *Policy) Holding() bool {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.holding
+}
+
+// Declares is the word a GET of raw declares as a state change, by its path
+// or by an API description's operation, or "".
+func (p *Policy) Declares(raw string) string {
+	p.mu.RLock()
+	word := p.word
+	p.mu.RUnlock()
+	if word == nil {
+		return ""
+	}
+	if w := word(raw); w != "" {
+		return w
+	}
+	if p.nDeclared.Load() > 0 {
+		if n, err := normalize.URL(raw); err == nil {
+			if v, ok := p.declared.Load(n); ok {
+				return v.(string)
+			}
+		}
+	}
+	return ""
+}
+
+// DeclareStateChange records that an API description's operation names this
+// GET as one that changes state (by its operationId or summary: the path
+// alone is read from the URL). raw is a normalized URL.
+func (p *Policy) DeclareStateChange(raw, word string) {
+	if _, dup := p.declared.LoadOrStore(raw, word); !dup {
+		p.nDeclared.Add(1)
+	}
+}
+
+// HeldWord is the word that makes a GET of raw held back, or "": what
+// CheckHeld would refuse it for, without the context.
+func (p *Policy) HeldWord(raw string) string {
+	p.mu.RLock()
+	hold, asked := p.holding, p.asked
+	p.mu.RUnlock()
+	if !hold {
+		return ""
+	}
+	w := p.Declares(raw)
+	if w == "" || asked != nil && asked(raw) {
+		return ""
+	}
+	return w
+}
+
+// CheckHeld is nil for a request that is not held back, else the error to
+// refuse it with; it tells OnDenied. Nothing has been spent or sent.
+func (p *Policy) CheckHeld(ctx context.Context, method, raw string) error {
+	if method != "" && method != http.MethodGet && method != http.MethodHead {
+		return nil
+	}
+	if ctx != nil {
+		if ok, _ := ctx.Value(askedKey{}).(bool); ok {
+			return nil
+		}
+	}
+	w := p.HeldWord(raw)
+	if w == "" {
+		return nil
+	}
+	rule := neterr.HeldRule(w)
+	p.mu.RLock()
+	f := p.onDenied
+	p.mu.RUnlock()
+	switch {
+	case f != nil:
+		f(raw, rule)
+	case Noter != nil:
+		Noter(raw + " was not requested: " + DenyReason(rule))
+	}
+	return &neterr.Denied{Rule: rule}
+}
+
+// noteSent remembers a GET to a target whose name declares a state change:
+// the requests heard are the ones the ledger records, so WasSent says what
+// the ledger holds.
+func (p *Policy) noteSent(method, raw string) {
+	if method != "" && method != http.MethodGet {
+		return
+	}
+	if p.Declares(raw) == "" {
+		return
+	}
+	if n, err := normalize.URL(raw); err == nil {
+		p.sentKeys.Store(n, true)
+	}
+}
+
+// WasSent says a GET of the normalized URL was recorded as sent, among the
+// URLs whose names declare a state change.
+func (p *Policy) WasSent(key string) bool {
+	_, ok := p.sentKeys.Load(key)
+	return ok
+}
 
 // Package-level forms for the policy in use.
 
@@ -390,6 +540,28 @@ func SetOnPortSkip(f func(raw string)) { Current().SetOnPortSkip(f) }
 
 // SetOnDenied is Current().SetOnDenied.
 func SetOnDenied(f func(raw, rule string)) { Current().SetOnDenied(f) }
+
+// SetStateWords is Current().SetStateWords.
+func SetStateWords(word func(raw string) string, asked func(raw string) bool, hold bool) {
+	Current().SetStateWords(word, asked, hold)
+}
+
+// Declares is Current().Declares.
+func Declares(raw string) string { return Current().Declares(raw) }
+
+// DeclareStateChange is Current().DeclareStateChange.
+func DeclareStateChange(raw, word string) { Current().DeclareStateChange(raw, word) }
+
+// HeldWord is Current().HeldWord.
+func HeldWord(raw string) string { return Current().HeldWord(raw) }
+
+// CheckHeld is Current().CheckHeld.
+func CheckHeld(ctx context.Context, method, raw string) error {
+	return Current().CheckHeld(ctx, method, raw)
+}
+
+// WasSent is Current().WasSent.
+func WasSent(key string) bool { return Current().WasSent(key) }
 
 // SetDenyPath is Current().SetDenyPath.
 func SetDenyPath(f func(raw string) string) { Current().SetDenyPath(f) }

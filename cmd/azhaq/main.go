@@ -329,8 +329,9 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	reqTimeout := fs.Duration("request-timeout", 0, "time one request gets, headers and body (default: 10 s for headers, 30 s in all; not -timeout, the run's bound)")
 	maxResp := fs.Int("max-response-size", 0, "bytes read of a page or document (default 2097152; scripts and JSON get 16 MiB)")
 	noMapGuess := fs.Bool("no-map-guess", false, "do not ask for main.js.map next to a script that names no source map (a map a script or a header names is still read)")
-	fillForms := fs.Bool("fill-forms", false, "ask the action of each GET form with neutral values in its fields (a search box gets a word): one GET request per form, even one that deletes or logs out (-deny-path keeps its action out); a form that posts is not sent unless -submit-forms; crawl does this by default (-no-form-fill turns it off)")
+	fillForms := fs.Bool("fill-forms", false, "ask the action of each GET form with neutral values in its fields (a search box gets a word): one GET request per form, unless the action's own path declares a state change (it is held back, and -send-state-changing sends it); -deny-path keeps its action out; a form that posts is not sent unless -submit-forms; crawl does this by default (-no-form-fill turns it off)")
 	pathClimb := fs.Bool("path-climb", false, "also list and ask the parent directories of each link a page names (/a/b/c: /a/b/ and /a/)")
+	sendState := fs.Bool("send-state-changing", false, "send the GETs found on the way whose own path or API operation declares a state change (create, delete, reset, logout, and the other words of the documented set): a crawl's link, a script's route, an API description's operation, a built-in -dirs word. By default they are held back and listed as skipped; a target you give, a wordlist you give and -deny-path rules are not affected")
 	submitForms := fs.Bool("submit-forms", false, "also submit POST forms with neutral values (crawl): CHANGES DATA on the target, each submission counts as a request and is in the ledger, the summary says how many; held to -allow, -deny and the crawl's scope")
 	sourcesList := fs.String("sources", "", "subdomain sources to run, comma-separated (default: the default set; none: no source, and no archive, RDAP, search engine or RIPEstat lookup either: only the resolvers and the targets are asked)")
 	excludeSources := fs.String("exclude-sources", "", "subdomain sources never to run, comma-separated")
@@ -794,6 +795,10 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	if len(budgets.Scope.DenyPath) > 0 {
 		egress.SetDenyPath(budgets.Scope.DeniedPath)
 	}
+	if !out.plan {
+		holdStateChanging(seeds, !*sendState)
+		defer egress.SetStateWords(nil, nil, false)
+	}
 	if *crawlScope != "" || *crawlAny || len(crawlIn) > 0 || len(crawlOut) > 0 {
 		var roots []string
 		for _, sd := range seeds {
@@ -872,7 +877,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		return usagef("-web-scheme is http or https, got %q", *webScheme)
 	}
 	opts := collectors.Options{Client: client, HTTP: spec, WebPorts: ports, WebScheme: *webScheme, NoTech: *noTech, NoTakeover: *noTakeover, NoFavicon: *noFavicon, Probe: *probe, PortRate: *portRate, MaxIPs: *maxIPs, Shots: *shots, Render: *render, KnownFiles: *knownFiles, FillForms: *fillForms, NoMapGuess: *noMapGuess, SubmitForms: *submitForms, PathClimb: *pathClimb}
-	opts.ShotHTML = *shotHTML
+	opts.ShotHTML, opts.AskedOnly = *shotHTML, askedOnly
 	if *browserWrites && *shots == "" && !*render {
 		return usagef("-browser-writes lets the pages Chrome loads send writes: give it with -browser or -screenshots")
 	}
@@ -1010,7 +1015,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 				return err
 			}
 		}
-		opts.Dirs = dirscol.Options{Words: words, Extensions: splitList(*dirsExt), Depth: *dirsDepth, Threads: *dirsThreads, Rate: *dirsRate}
+		opts.Dirs = dirscol.Options{Words: words, Extensions: splitList(*dirsExt), Depth: *dirsDepth, Threads: *dirsThreads, Rate: *dirsRate, UserWords: *dirsFile != dirscol.Builtin}
 		given := map[string]string{}
 		for k, v := range dirsMatch {
 			given[k] = *v
@@ -1191,6 +1196,10 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	send.axfr, send.resolvers = out.axfr, resolvers
 	send.dirsWords, send.dirsExts, send.paramsN, send.bruteN = len(opts.Dirs.Words), len(opts.Dirs.Extensions), len(opts.Params.Words), len(opts.BruteWords)
 	send.dirsNoCal = opts.Dirs.NoCalibration
+	send.sendState = *sendState
+	if !*sendState && !opts.Dirs.UserWords {
+		send.dirsHeld = dirscol.HeldWords(opts.Dirs.Words, opts.Dirs.Extensions)
+	}
 	send.verify = verifyFl.on
 	send.hostGuesses = *hostGuesses
 	send.paramsWords, send.paramsPages = len(opts.Params.Words), *paramsPerHost
@@ -1237,7 +1246,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		if err != nil {
 			return err
 		}
-		cfg.DenyPath, cfg.SignIn = budgets.Scope.DenyPath, *login
+		cfg.DenyPath, cfg.SignIn, cfg.Given = budgets.Scope.DenyPath, *login, givenURLs(seeds)
 		eng.Workers = engine.NewWorkers()
 		stopServe, err := serveWorkers(*serve, *workerToken, eng.Workers, cfg, func(rep fetch.SessionReport) {
 			// Made now, though the work is lent: the run's own requests would not.
@@ -1482,33 +1491,18 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	fillReport(rep, path, seeds, ents, obs, rows)
 	if !out.plan {
 		// The ones found on the way: an API description's GET whose own
-		// description declares a state change, and a found URL whose name
-		// does. They were sent in this run; the rule named keeps them out
-		// of the next one.
+		// path, operationId or summary declares a state change, and a found
+		// URL whose path does. Each says what became of it: held back, or
+		// sent (a request this run recorded), never "sent" for one it did not.
+		held := heldTargets(rep.Skipped)
 		var likes []mapRowLike
 		for _, r := range rows {
 			if r.Entity.Type == types.TypeURL {
-				likes = append(likes, mapRowLike{key: r.Entity.Key, skipped: r.Coverage == "skipped"})
+				_, isHeld := held[normKey(r.Entity.Key)]
+				likes = append(likes, mapRowLike{key: r.Entity.Key, skipped: r.Coverage == "skipped", held: isHeld})
 			}
 		}
-		found := mergeStateChanges(stateChangesOfOps(obs), stateChangesOfRows(likes))
-		for _, e := range found {
-			if rules.DeniedPath(e.URL) != "" {
-				continue // kept out by the user's rule: listed as skipped, not as sent
-			}
-			known := false
-			for _, p := range rep.StateChanging {
-				known = known || p.Method == e.Method && p.URL == e.URL
-			}
-			if known {
-				continue
-			}
-			rep.StateChanging = append(rep.StateChanging, e)
-			rep.Notes = append(rep.Notes, e.line()+"; found on the way, so this run sent it: the rule keeps it out of a later run")
-		}
-		if len(found) > 0 {
-			rep.StateChanging = mergeStateChanges(rep.StateChanging)
-		}
+		settleStateChanges(rep, preState, mergeStateChanges(stateChangesOfOps(obs), stateChangesOfRows(likes)), rules, *serve != "")
 	}
 	if advFlags.on {
 		rep.Advisories = advLeads

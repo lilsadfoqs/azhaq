@@ -303,11 +303,11 @@ func estimateCost(seeds []types.Seed, planned [][]string, runs func(string) bool
 		e.add("azhaq-paths", amount{Requests: int64(services) * int64(env.paths)}, "the documentation paths under each API prefix the pages name")
 	}
 	if active["dirs"] && services > 0 && env.dirsWords > 0 {
-		per := int64(env.dirsWords) * int64(1+env.dirsExts)
+		per := int64(env.dirsWords)*int64(1+env.dirsExts) - int64(env.dirsHeld)
 		if !env.dirsNoCal {
 			per += int64(dirscol.CalibrationProbes(env.dirsExts))
 		}
-		e.add("azhaq-dirs", amount{Requests: int64(services) * per}, "each directory found is swept and calibrated too")
+		e.add("azhaq-dirs", amount{Requests: int64(services) * per}, "each directory found is swept and calibrated too, and a directory two hits are found in (words with a slash) gets one more request")
 	}
 	if active["params"] && services > 0 && env.paramsN > 0 {
 		e.add("azhaq-params", amount{}, "pages searched, up to -params-per-host a host, each asked in batches of the wordlist")

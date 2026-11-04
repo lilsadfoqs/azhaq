@@ -48,8 +48,9 @@ go run ./bench -units default:dirs       # one row; -profile polite -units polit
 | Every row inside the scope | a link, a script, a form and `-dirs`/`-graphql` toward 127.0.0.2: none arrives; a target outside `-allow` is refused (exit 2) |
 | GET-only mapping by default | the page, its script and its API description name POST, PUT and DELETE routes and a GraphQL endpoint: only GET, HEAD and OPTIONS arrive |
 | Writes only with their flags | `-submit-forms`, `-graphql`, `-params-writes`, `roles -replay-writes put`: that method arrives and no other; without the flag none |
-| `-deny-path` | `/logout` and `/admin/purge` are asked without the rule and never with it, and the summary lists what was skipped |
-| A lost session never goes on as an anonymous run | `-cookie`, a `/logout` link ends it: exit 3, the summary says so, no request without the session follows |
+| `-deny-path` | `/logout` and `/admin/purge` are asked (with `-send-state-changing`) without the rule and never with it, and the summary lists what was skipped |
+| A found state-changing GET is held back | a default run never asks a found `/logout` or `/admin/purge`, and the summary lists them as held back with the flag that sends them |
+| A lost session never goes on as an anonymous run | `-cookie`, a `/logout` link (sent with `-send-state-changing`) ends it: exit 3, the summary says so, no request without the session follows |
 | The MCP lock | no `-allow` or `-scope`: exit 2; a call for a URL outside `-allow` sends nothing; `-unlocked` refuses port scans; the budget holds over calls (`claims:8`) |
 | The request budget and the kill switch | `claims:9`, `claims:10`: the cap, the 0.6 s limit after the file, resume |
 | Ledger | `ledger -verify` accepts a run's ledger and refuses an edited one with exit 3 |
@@ -146,7 +147,7 @@ The command fails when one of these does not hold. Rows marked "both" are measur
 - Parameters (both): the parameters a planted server reads (and none it does not) against arjun; ginandjuice.shop, two pages and 1,000 names at 5 requests per second, in at most 1.05 times arjun's time.
 - Ports (both): open ports of scanme.nmap.org (once), of 127.0.0.1 confirmed by `ss -ltn` taken before and after, and of 127.0.0.0/28 against listeners the bench opened, against naabu `-scan-type c`.
 - Services (both): the lab's fifteen daemons, each named by what it says (the lab's own list in `bench/services.yaml`), against `nmap -sV`; at least 90% named.
-- Screenshots (both): image files that decode and are not one colour, against gowitness, on the five local apps and three pages the bench serves.
+- Screenshots (both): image files that decode and are not one colour, against gowitness, on the five local apps and three pages the bench serves; and at most 1.25 times its requests to the pages, counted by a proxy in front of each page that both tools are pointed at (a forward proxy given to Chrome would be bypassed by loopback pages).
 - Probing (both): the hosts that answer (the local apps, the services lab's web ports and 100 local servers), confirmed by a GET to the host; status, title and technologies agree on at least 95% of shared hosts; three public test sites at 5 requests per second; and every input is a row, a failure or a skip.
 - Domains (both): `subs -live` against `subfinder | dnsx`, on live names a third resolver confirms, in the time of the two together; every confirmed name only the reference finds is in azhaq's list or its source is named as failed; no empty subdomain or archive result without an error or `degraded` flag.
 - URLs (both): `urls` against gau on vulnweb.com, and every URL gau lists is in azhaq's list or was dropped as junk with a reason (nothing is lost silently); azhaq's list and its junk together are at least gau's. The row reads `azhaq N listed, J dropped as junk (reasons), gau M, missing K`. After a change, rerun `-only urls`.

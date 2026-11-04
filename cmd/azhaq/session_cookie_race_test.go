@@ -58,7 +58,7 @@ func TestCookieRunSendsNothingWithoutItsSessionAfterALogout(t *testing.T) {
 	defer srv.Close()
 	_, errOut, err := captureBoth(t, func() error {
 		return run([]string{"run", "-url", srv.URL + "/", "-allow", "127.0.0.1", "-sources", "none", "-no-takeover", "-no-paths",
-			"-no-favicon", "-no-tech", "-cookie", "sid=good", "-parallel", "8", "-db", "s.db", "-ledger", "off", "-json"})
+			"-no-favicon", "-no-tech", "-cookie", "sid=good", "-parallel", "8", "-db", "s.db", "-ledger", "off", "-json", "-send-state-changing"})
 	})
 	if exitCode(err) != exitPartial || !strings.Contains(errOut, neterr.ErrSessionLost.Error()) {
 		t.Fatalf("exit %d, the session ended is not said:\n%s", exitCode(err), errOut)
@@ -122,7 +122,7 @@ func TestSessionMeasureWaitsForRequestsInTheAir(t *testing.T) {
 	defer srv.Close()
 	_, errOut, err := captureBoth(t, func() error {
 		return run([]string{"run", "-url", srv.URL + "/", "-allow", "127.0.0.1", "-sources", "none", "-no-takeover", "-no-paths",
-			"-no-favicon", "-no-tech", "-cookie", "sid=good", "-parallel", "8", "-db", "s.db", "-ledger", "off", "-json"})
+			"-no-favicon", "-no-tech", "-cookie", "sid=good", "-parallel", "8", "-db", "s.db", "-ledger", "off", "-json", "-send-state-changing"})
 	})
 	if exitCode(err) != exitPartial || !strings.Contains(errOut, neterr.ErrSessionLost.Error()) {
 		t.Fatalf("exit %d, the session ended is not said:\n%s", exitCode(err), errOut)

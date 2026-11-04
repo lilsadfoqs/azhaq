@@ -97,11 +97,11 @@ func (c *checklist) writesOnlyWithFlags() {
 func (c *checklist) denyPath() {
 	c.fresh("control")
 	db := c.fresh("allow")
-	azExec(c.dir, 5*time.Minute, "run", "-url", c.site.origin+"/", "-db", db, "-json")
+	azExec(c.dir, 5*time.Minute, "run", "-url", c.site.origin+"/", "-db", db, "-json", "-send-state-changing")
 	settle()
 	before := c.site.count("/logout") + c.site.count("/admin")
 	db = c.fresh("deny")
-	r := azExec(c.dir, 5*time.Minute, "run", "-url", c.site.origin+"/", "-db", db, "-json", "-deny-path", "^/(logout|admin)")
+	r := azExec(c.dir, 5*time.Minute, "run", "-url", c.site.origin+"/", "-db", db, "-json", "-send-state-changing", "-deny-path", "^/(logout|admin)")
 	settle()
 	var probs []string
 	if before < 2 {
@@ -117,6 +117,23 @@ func (c *checklist) denyPath() {
 		probs = append(probs, "no ledger")
 	}
 	clCheck("-deny-path keeps /logout and /admin out of every request and the summary says so", probs, "asked without the rule: %d; with it: 0", before)
+}
+
+// 3b. A found GET whose own path names a state change is held back by
+// default: never asked, listed as skipped with the flag that sends it.
+func (c *checklist) heldStateChanging() {
+	c.fresh("held-control")
+	db := c.fresh("held")
+	r := azExec(c.dir, 5*time.Minute, "run", "-url", c.site.origin+"/", "-db", db, "-json")
+	settle()
+	var probs []string
+	if n := c.site.count("/logout") + c.site.count("/admin/purge"); n > 0 {
+		probs = append(probs, fmt.Sprintf("%d requests to a found GET that names a state change: %v", n, c.site.keys()))
+	}
+	if !strings.Contains(r.stderr, "-send-state-changing") || !strings.Contains(r.stderr, `"state_changing_held"`) {
+		probs = append(probs, "the summary does not list the held GETs and the flag that sends them")
+	}
+	clCheck("a found logout or purge GET is not asked by default and the summary lists it as held back", probs, "asked: %d", c.site.count("/logout")+c.site.count("/admin/purge"))
 }
 
 // 4. Nothing leaves the scope, and a target outside it is refused.
@@ -146,7 +163,7 @@ func (c *checklist) scope() {
 // 5. A session that ends is never gone on with as an anonymous run.
 func (c *checklist) lostSession() {
 	db := c.fresh("session")
-	r := azExec(c.dir, 5*time.Minute, "run", "-url", c.site.origin+"/", "-db", db, "-json", "-cookie", clHasCookie)
+	r := azExec(c.dir, 5*time.Minute, "run", "-url", c.site.origin+"/", "-db", db, "-json", "-cookie", clHasCookie, "-send-state-changing")
 	settle()
 	c.site.mu.Lock()
 	ended := c.site.revokedAt
