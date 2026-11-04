@@ -20,6 +20,7 @@ const (
 	PurposeParams       = "parameter probes"
 	PurposeBrowser      = "browser" // a request Chrome sent
 	PurposeConnections  = "connections"
+	PurposeWorkers      = "sent by workers" // by another process of the run: it does not say what they were for
 	PurposeOther        = "other"
 )
 
@@ -87,4 +88,13 @@ func purposeOfURL(u *url.URL) string {
 		}
 	}
 	return PurposePages
+}
+
+// Remote counts n requests to targets that another process of the run (a
+// worker) sent: this process has no lines for them, and the summary says
+// they were not its own.
+func Remote(n int) {
+	if n > 0 {
+		spend(ClassTarget, "http", "", PurposeWorkers, int64(n))
+	}
 }

@@ -670,6 +670,14 @@ func pathOf(raw string) string {
 	return u.Path
 }
 
+// Again asks raw once more whatever the cache holds for it, as Do does: a
+// retry of a request that failed, which a URL's other spelling would no
+// longer be.
+func Again(ctx context.Context, c *http.Client, raw string) (Result, bool, error) {
+	evict(raw)
+	return Do(ctx, c, raw)
+}
+
 // evict forgets the answer to raw, so that asking again sends it.
 func evict(raw string) {
 	cacheMu.Lock()

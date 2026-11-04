@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 )
 
@@ -93,5 +94,26 @@ func TestOnePageUnderManySpellingsIsAskedOnce(t *testing.T) {
 	}
 	if total != 5 {
 		t.Errorf("the server got %d requests (%v), want 5: /about and the four that are other requests", total, hits)
+	}
+}
+
+// Again is the retry that a URL's other spelling used to be: the same URL is
+// sent a second time.
+func TestAgainSendsTheSameURLOnceMore(t *testing.T) {
+	Reset()
+	t.Cleanup(Reset)
+	var n atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { n.Add(1) }))
+	t.Cleanup(srv.Close)
+	for i := 0; i < 2; i++ {
+		if _, _, err := Do(context.Background(), srv.Client(), srv.URL+"/"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if n.Load() != 1 {
+		t.Fatalf("two asks sent %d requests, want 1", n.Load())
+	}
+	if _, cached, err := Again(context.Background(), srv.Client(), srv.URL); err != nil || cached || n.Load() != 2 {
+		t.Errorf("Again: cached=%v err=%v, the server got %d requests, want 2", cached, err, n.Load())
 	}
 }
