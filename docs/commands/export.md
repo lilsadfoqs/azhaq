@@ -57,7 +57,7 @@ The output is the format you chose, on stdout.
 
 ## Summary and exit codes
 
-A format that finds nothing writes nothing and says why on stderr; `openapi` writes a description with no paths instead (below), and `findings`/`findings-md` write an explicit empty record set. The exit code is 0.
+A format that finds nothing writes nothing and says why on stderr; `openapi` writes a description with no paths instead (below), and `findings`/`findings-md` write an explicit empty record set. The exit code is 0, except for `graphql` and `sdl`: when no GraphQL schema was read they write nothing, fail with `no GraphQL schema in DB: map with -graphql …` and exit 1.
 
 ```
 azhaq export: nothing to write: the workspace holds no host names (a run of a URL or an address has none: …)
