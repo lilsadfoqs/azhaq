@@ -29,6 +29,7 @@ type portsRow struct {
 	Legs         []portsLeg `json:"legs,omitempty"`
 	NaabuMissing bool       `json:"naabu_missing,omitempty"`
 	CPU          *portsCPU  `json:"cpu,omitempty"`
+	Small        []smallRow `json:"small,omitempty"` // a thousand ports of this machine: its start-up and exit show
 }
 
 type portsLeg struct {
@@ -185,6 +186,9 @@ func benchPorts() *portsRow {
 	barOne("ports 127.0.0.0/28", l.AzhaqOK-(len(az)-l.AzhaqOK), l.NaabuOK-(len(nb)-l.NaabuOK), l.AzhaqSecs, l.NaabuSecs, "the listeners the bench opened (a port that is not one counts against)",
 		azCmd+" vs "+nbCmd, fmt.Sprintf("planted %d; azhaq %d of them, %d reported; naabu %d, %d reported%s", len(truth), l.AzhaqOK, len(az), l.NaabuOK, len(nb), "")+"; "+ratios(l.AzhaqSecs, l.NaabuSecs, l.memPair)+azFailed)
 	row.Shared = overlap(az, nb)
+	if !polite() {
+		row.Small = benchPortsSmall()
+	}
 	return row
 }
 
