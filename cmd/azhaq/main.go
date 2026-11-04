@@ -354,7 +354,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	portsSpec := fs.String("ports", "", "scan TCP ports: default (the top 100 and the usual ports of the services azhaq names and checks), top-100, top-1000, full or a list of ports, ranges and these names, such as 22,80,8000-8100 or top-100,8888 (active; the targets given are the scope unless -allow)")
 	portsUDP := fs.String("ports-udp", "", "ask UDP ports (active): top (about 25 common ones), full or a list of ports, ranges and these names, such as 53,123,161,1-1024 or top,5354; a reply is open, an ICMP unreachable closed, neither open|filtered (-ports none: UDP only)")
 	portRate := fs.Float64("port-rate", 0, "port connection attempts per second, a ceiling (0: 1500, as naabu's connect scan, and 127.0.0.1 unpaced)")
-	portMinRate := fs.Float64("port-min-rate", 0, "port connection attempts per second at least, as nmap's --min-rate: raises -port-rate to this when lower, and sets no ceiling")
+	portMinRate := fs.Float64("port-min-rate", 0, "port connection attempts per second at least, as nmap's --min-rate: raises the pace to this when the pace (-port-rate, or the default 1500) is lower, and never lowers it")
 	portTimeout := fs.Duration("port-timeout", 0, "wait this long for one port to accept or refuse a connect (0: 1.5s)")
 	portRetries := fs.Int("port-retries", -1, "more passes over the ports that neither accepted nor refused: n passes over all of them, 0 none (default: one, when few did not answer)")
 	portWorkers := fs.Int("port-workers", 0, "port connects in flight at once, over all hosts (0: as many as the rate allows, up to 20000)")
