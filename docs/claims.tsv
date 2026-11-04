@@ -1213,3 +1213,6 @@ quickstart.quiet-json-no-plan	docs/commands/quickstart.md	With `-quiet` or `-jso
 scope.several-programs-exit-1	docs/commands/scope.md	A list of several with no `-program` is an error, exit 1.	test:cmd/azhaq:TestScopeCommandExitCodes,TestMissingArgumentsExitUsage;test:internal/scopefile:TestProgramLists
 scope.prints-how-a-run-reads-it	docs/commands/scope.md	Prints how a run would read it: the allow and deny rules, the domains to enumerate, the targets to probe, and the entries that cannot be used.	test:cmd/azhaq:TestScopeCommandPrintsHowARunWouldReadIt
 scope.exit-codes	docs/commands/scope.md	Without `-scope`, and with a platform and no `-program`, the command exits 2. A scope with no in-scope web target (`no in-scope web targets found`) is an error, exit 1.	test:cmd/azhaq:TestScopeCommandExitCodes,TestMissingArgumentsExitUsage
+
+# docs/commands/docs.md
+docs.flags-take-no-topic	docs/commands/docs.md	`-flags` and `-flags-into` take no topic and are not used together. A name that is no topic or command is a usage error, exit 2.	test:cmd/azhaq:TestDocsFlagsTakeNoTopicAndAnUnknownNameIsAUsageError
