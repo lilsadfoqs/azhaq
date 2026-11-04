@@ -373,8 +373,10 @@ func cmdRoles(args []string) error {
 	}
 	// stageBudget is what a stage may send: what -replay-max leaves, or less
 	// when the command's budget leaves less (byCmd).
+	stageLeft := *replayMax
 	stageBudget := func(replayLeft int) (n int, byCmd bool) {
 		replayLeft = max(replayLeft, 0)
+		stageLeft = replayLeft
 		if cmdMax <= 0 || budgetLeft() >= int64(replayLeft) {
 			return replayLeft, false
 		}
@@ -383,8 +385,18 @@ func cmdRoles(args []string) error {
 	// capErr says an errReplayMax of a stage that ran on the command's budget
 	// is that budget's, not -replay-max's.
 	capErr := func(err error, byCmd bool) error {
-		if !byCmd || !errors.Is(err, errReplayMax) {
+		if !errors.Is(err, errReplayMax) {
 			return err
+		}
+		if !byCmd {
+			// -replay-max is shared by the stages: the stage's own cap is
+			// what the stages before it left.
+			if stageLeft >= *replayMax {
+				return err
+			}
+			msg := strings.TrimPrefix(err.Error(), errReplayMax.Error()+": ")
+			msg = regexp.MustCompile(`-replay-max \d+ requests`).ReplaceAllString(msg, fmt.Sprintf("-replay-max %d requests (the stages before it sent %d of them)", *replayMax, *replayMax-stageLeft))
+			return fmt.Errorf("%w: %s", errReplayMax, msg)
 		}
 		msg := strings.TrimPrefix(err.Error(), errReplayMax.Error()+": ")
 		msg = strings.ReplaceAll(msg, "raise -replay-max", "raise -max-requests")
@@ -613,11 +625,11 @@ func cmdRoles(args []string) error {
 				}
 			}
 		}
-		bud, byCmd := stageBudget(*replayMax)
+		bud, byCmd := stageBudget(*replayMax - replayed)
 		endStage := ledger.SetStage(stageReplay)
 		n, err := replayAll(roles, answers, found, rank, own, rate, bud, watch)
 		endStage()
-		replayed = n
+		replayed += n
 		pausedRoles = watch.pausedRoles
 		rep.Notes = append(rep.Notes, watch.notes...)
 		rep.warned = rep.warned || watch.failed

@@ -91,8 +91,10 @@ func livePassCommand(args []string) string {
 func hostsOf(hosts []string) string { return strings.Join(hosts, ",") }
 
 // writesPass says, after a roles run that replayed no write, what replaying
-// the writes the histories hold would send: each write with every other
-// role's session, and the owner's object read around it. "" when they hold none.
+// the writes the histories hold would send: at least each write once with
+// every other role's session. The reads of the owner's object around it are
+// not counted: how many a write gets depends on the answers. "" when they
+// hold none.
 func writesPass(in rolesCostIn, own map[string]bool) (why string, cost amount) {
 	in.methods = map[string]bool{"POST": true, "PUT": true, "PATCH": true}
 	writes := 0
@@ -104,11 +106,11 @@ func writesPass(in rolesCostIn, own map[string]bool) (why string, cost amount) {
 	}
 	est := estimateRoles(in)
 	for _, st := range est.Stages {
-		if st.Stage == stageWrites || st.Stage == stageVerify {
+		if st.Stage == stageWrites {
 			cost.add(*st.Estimate)
 		}
 	}
-	return fmt.Sprintf("%s in the histories were not replayed with the other roles' sessions: about %s more, and each changes data on the target", plural(writes, "write"), moreOf(cost)), cost
+	return fmt.Sprintf("%s in the histories were not replayed with the other roles' sessions: at least %s more (one for each write and other role, a floor: the reads that check them come on top), and each changes data on the target", plural(writes, "write"), moreOf(cost)), cost
 }
 
 // writesPassCommand is the roles command line with -replay-writes, before

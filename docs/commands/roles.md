@@ -154,6 +154,8 @@ With `-replay-writes`, these verdicts join the list. Proved cross writes keep th
 | `the other roles were refused` | `-all` | A DELETE, never asked of its owner, that no other role was let to send. |
 | `the other roles' writes failed with a server error (5xx): neither refused nor accepted` | `-all` | Every other role's write was answered 5xx: nothing is said about who may write. |
 | `the other roles' writes were refused or failed with a server error (5xx): neither accepted` | `-all` | No other role was let, some were refused (401, 403 and the like) and some got a 5xx. Only the refused are known to be kept out. |
+| `the other roles' writes were redirected (3xx, not followed): neither refused nor accepted` | `-all` | Every other role's write was answered with a redirect, which no write follows: nothing is said about who may write. |
+| `the other roles' writes were redirected (3xx, not followed) and refused or failed with a server error (5xx): neither accepted` | `-all` | No other role was let, some were redirected and some were refused or got a 5xx. Only the refused are known to be kept out. |
 
 ## Summary and exit codes
 
@@ -169,7 +171,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 - A role whose run could not be done, such as a failed sign-in, ends `roles` with a summary whose `notes` say why.
 - `requests` in the summary is every request `roles` sent to the targets: the roles' runs, the Chrome sign-ins (the first and each renewal), the replays and every redirect hop they followed. It equals the target lines of `roles.ledger.jsonl`, or of the file `-ledger` names in the run options (`-- -ledger FILE`): one ledger for the whole command, written by the runs and by everything `roles` sends between them, sealed at the end. `-ledger off` writes none. A role's own summary line counts that role's run only, so they add up to less.
 - `cost` sets the estimate of each stage beside what it sent, as for [run](run.md#summary-and-exit-codes): see [Cost by stage](#cost-by-stage).
-- A run that replayed no write, whose `-har` or `-burp` histories hold POST, PUT or PATCH requests, ends its `next` with `azhaq roles … -replay-writes post,put,patch   (next pass, not run: N writes in the histories were not replayed with the other roles' sessions: about R more requests, and each changes data on the target)`. `R` is each write sent with every other role's session and the owner's object read around it, as [Cost by stage](#cost-by-stage) counts them. It is a line: nothing is replayed for it.
+- A run that replayed no write, whose `-har` or `-burp` histories hold POST, PUT or PATCH requests, ends its `next` with `azhaq roles … -replay-writes post,put,patch   (next pass, not run: N writes in the histories were not replayed with the other roles' sessions: at least R requests more (one for each write and other role, a floor: the reads that check them come on top), and each changes data on the target)`. `R` is each write sent once with every other role's session; the reads of the owner's object around it depend on the answers and are not in it. It is a line: nothing is replayed for it.
 - With `-json`, stderr holds the summary only. The roles' runs print nothing. The summary says what they did not finish: `failed`, `unreachable`, `skipped` and `notes`.
 
 ## Details
@@ -558,6 +560,7 @@ Replaying the owner's own recorded body is idempotent when the value it sets is 
 - `answered 2xx but changed nothing of the owner's`: the owner's object did not change the way the write asked, or could not be read to verify it. Not a finding; check by hand.
 - `the other roles' writes failed with a server error (5xx)`: every other role's write was answered 5xx. Examples are a unique key the server already held, and a crash.
 - `the other roles' writes were refused or failed with a server error (5xx)`: no other role was let, and the answers are a mix: the anonymous role gets a 401 and another role a 500. `the other roles were refused` and `only its owner writes it` are used only when every other role's answer is a refusal.
+- `the other roles' writes were redirected (3xx, not followed)`: every other role's write was answered with a redirect, such as one to a sign-in page. A redirect is not a refusal: the write is not followed, so nothing shows whether it would have been let.
 - A write row's `owner_by` says what proved it. Examples: `after bob's PUT the owner's object changed to match it` and `after bob's DELETE the owner's object is gone (404)`.
 - `confidence` is `proved` on a proven cross write, and `evidence` says who was let.
 - `azhaq roles show -dir DIR -method PUT URL` prints each role's curl line with the write's body.
