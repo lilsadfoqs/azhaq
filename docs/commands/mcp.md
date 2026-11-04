@@ -38,7 +38,7 @@ JSON-RPC (Model Context Protocol) on stdin and stdout, in the order the protocol
 - A client sends `initialize` first and waits for its answer, then sends `notifications/initialized`.
 - Before `initialize` the server answers `ping` and refuses every other request with an error (`the server is not initialized`).
 - A second `initialize` on the same connection is refused (`already initialized`).
-- Everything but a tool call is answered as soon as it is read, so requests sent back to back get their answers in the order they were sent. A tool call runs while the next lines are read: its answer comes when it ends, and a `notifications/cancelled` stops it.
+- Everything but a tool call is answered as soon as it is read, so requests sent back to back get their answers in the order they were sent. A tool call runs while the next lines are read: its answer comes when it ends, so two tool calls sent back to back may answer in either order (match each answer to its call by `id`), and a `notifications/cancelled` stops it.
 - The scope, the budget and the pace hold for every call, however the requests are ordered.
 
 ## Summary and exit codes
