@@ -38,7 +38,7 @@ azhaq roles show -dir azhaq-roles-20261028-101500 https://app/rest/basket/6
 
 `-max-requests` in the run options is the budget of the whole command, as it is for every other command: the runs, the Chrome sign-ins, the history reads, the replay, the controls and the writes together send no more. Each role's run gets what the runs before it left, a history read, the replay, the controls and the writes stop at what is left, and a run that has no budget left does not start. When it is spent the command exits 4 and `stopped` names `-max-requests` and the stage it ended in. The summary says `request budget N for the whole command ... M sent`. `-replay-max` still limits the replay and the history reads, over all roles. The Chrome sign-in that renews a session in the replay is held to what is left too.
 2. Reads the requests an account sent, if you give a history file with `-har` or `-burp`. See [History files](#history-files).
-3. Asks every endpoint any role reached with every other role's session. This is the replay. It sends the GETs that change nothing.
+3. Asks every endpoint any role reached with every other role's session. This is the replay. It sends GET requests only, and a GET is sent whatever its path is called: a page found as `/logout` is asked like any other. `-deny-path` keeps a path out.
 4. Fills `{id}` routes with each role's own objects. The identifiers come from the sessions and the answers, or from `-id`.
 5. Compares the answers and gives each endpoint a verdict. A cross-role read or write also gets a `confidence` and the evidence for it.
 6. Asks each cross-role read again with a made-up identifier, to catch a route that answers any identifier. See [Negative controls](#negative-controls).
@@ -168,7 +168,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 - A role whose run could not be done, such as a failed sign-in, ends `roles` with a summary whose `notes` say why.
 - `requests` in the summary is every request `roles` sent to the targets: the roles' runs, the Chrome sign-ins (the first and each renewal), the replays and every redirect hop they followed. It equals the target lines of `roles.ledger.jsonl`, or of the file `-ledger` names in the run options (`-- -ledger FILE`): one ledger for the whole command, written by the runs and by everything `roles` sends between them, sealed at the end. `-ledger off` writes none. A role's own summary line counts that role's run only, so they add up to less.
 - `cost` sets the estimate of each stage beside what it sent, as for [run](run.md#summary-and-exit-codes): see [Cost by stage](#cost-by-stage).
-- A run that replayed no write, whose `-har` or `-burp` histories hold POST, PUT or PATCH requests, ends its `next` with `azhaq roles … -replay-writes post,put,patch   (next pass, not run: N writes in the histories were not replayed with the other roles' sessions: about R more requests, and each changes data on the target)`. `R` is each write sent with every other role's session and the owner's object read around it, as [Cost by stage](#cost-by-stage) counts them. It is a line: nothing is replayed for it.
+- A run that replayed no write, whose `-har` or `-burp` histories hold POST, PUT or PATCH requests, ends its `next` with `azhaq roles … -replay-writes post,put,patch   (next pass, not run: N writes in the histories were not replayed with the other roles' sessions: about R requests more, and each changes data on the target)`. `R` is each write sent with every other role's session and the owner's object read around it, as [Cost by stage](#cost-by-stage) counts them. It is a line: nothing is replayed for it.
 - With `-json`, stderr holds the summary only. The roles' runs print nothing. The summary says what they did not finish: `failed`, `unreachable`, `skipped` and `notes`.
 
 ## Details
@@ -202,7 +202,7 @@ Stages that cannot be counted before say `not_counted`. `-replay-max` caps the r
 
 A role reads an endpoint when it gets a 2xx answer that is not an error. A refusal is any of these:
 
-- any 4xx
+- any 4xx status
 - an error answered with a 2xx status
 - a 2xx page that is its origin's refusal, such as `200 Access denied` (see [Refusal pages](#refusal-pages))
 - a redirect to a sign-in page: a path such as `/login`, `/users/sign_in` or `/auth/…`, another site's sign-in service, or the `-login` page
@@ -262,7 +262,7 @@ A role is judged dead when both of these hold:
 
 When no signed-in role reads anything the anonymous role is refused, each role is judged alone. This happens when tokens copied at the same time expire together. A role is then dead when it was refused on every endpoint the anonymous role is refused, and given nothing more than the anonymous role anywhere.
 
-A role that read an endpoint the anonymous role did not is known to the site and alive. So is a role that was forbidden (403) where the anonymous role was asked to sign in (401).
+When roles are judged alone, a role that read an endpoint the anonymous role did not is known to the site and alive. So is a role that was forbidden (403) where the anonymous role was asked to sign in (401).
 
 Every value the role sent is taken out of the quoted reason: its headers, its cookie values and the credential after `Bearer` or `Basic`. So is anything shaped like a credential.
 
@@ -335,7 +335,7 @@ http://app refuses with a 200 page saying "Access denied" (the anonymous role go
 - **After the read.** Replay, identity, controls, evidence and `roles show` work as after a crawl.
 - **Without run options.** Without `--` run options nothing is crawled, and the target is the history's origins. With them, the crawl's pages are added.
 - **Flags.** `-no-anon` leaves the anonymous role out. `-rate N` paces the history reads and the replay. The history reads count against `-replay-max`.
-- **Writes.** With `-replay-writes`, the history's writes of the methods named are replayed. They go to the target's origins only, and DELETE only when named. A name decides nothing: a logout the history sent is replayed like any write you asked for, and the role's session check says when it ended that role's session.
+- **Writes.** With `-replay-writes`, the history's writes of the methods named are replayed. They go to the target's origins only, and DELETE only when named. A name decides nothing: a logout the history sent is replayed like any write you asked for, with each other role's session.
 - **Proof.** A write is proved in the field it sets, against the object as the owner's last write left it. A short 2xx answer that says no, such as `Only Admins may delete users!` or `forbidden`, is a refusal.
 
 ### Identifiers you give
