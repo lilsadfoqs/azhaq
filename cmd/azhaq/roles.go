@@ -121,6 +121,10 @@ type roleRow struct {
 	// accepted-not-verified or refuted. Distinct words on purpose: an
 	// accepted write is not a proved one.
 	WriteVerification string `json:"write_verification,omitempty"`
+	// Truncated: the roles whose answer body was cut (a stream that never
+	// ends, read for 64 KiB or 2 s, or longer than the read limit): its size
+	// and hash are of what was read.
+	Truncated []string `json:"truncated,omitempty"`
 
 	given   bool             // Owner was given with -id
 	value   string           // the identifier filled into the route
@@ -918,6 +922,9 @@ func printRoles(roles []role, rows []roleRow, compared int, dir string) {
 		if row.SessionSuspect {
 			line += " · session suspect: " + strings.Join(row.suspect, ", ")
 		}
+		if len(row.Truncated) > 0 {
+			line += " · body cut: " + strings.Join(row.Truncated, ", ")
+		}
 		if row.WriteVerification != "" {
 			line += " · write_verification: " + row.WriteVerification
 		}
@@ -941,6 +948,9 @@ func answerCell(a answer) string {
 		c = fmt.Sprintf("%d:%s", a.Status, size(a.Length))
 	default: // a status without its body: what a HAR recorded
 		c = strconv.Itoa(a.Status)
+	}
+	if a.Truncated {
+		c += ":cut"
 	}
 	if a.SessionSuspect {
 		c += "?"
@@ -1205,6 +1215,7 @@ func contentType(res fetch.Result) string {
 // the role; the body is kept as evidence.
 func resultAnswer(res fetch.Result) (answer, *jsonFacts) {
 	a, f := readAnswer(res.Status, res.Body, contentType(res))
+	a.Truncated = res.Truncated
 	if res.Status >= 300 && res.Status < 400 {
 		a.Location = bareLocation(res.Header.Get("Location"))
 	}
@@ -1301,6 +1312,9 @@ func roleRows(roles []role, answers map[string]map[string]answer, found map[stri
 			if a.SessionSuspect {
 				row.SessionSuspect = true
 				row.suspect = append(row.suspect, r.name)
+			}
+			if a.Truncated {
+				row.Truncated = append(row.Truncated, r.name)
 			}
 		}
 		row.Verdict = verdict(roles, &row)
@@ -1733,6 +1747,7 @@ func endpointAnswers(db string) (map[string]answer, map[string]string, []string,
 			Title    string      `json:"title"`
 			Location string      `json:"location"`
 			Hops     []fetch.Hop `json:"hops"`
+			Cut      bool        `json:"truncated"` // the probe cut the body (a stream that never ends, or the read limit)
 		}
 		if json.Unmarshal(o.Payload, &p) != nil || p.URL == "" || p.Status == 0 || p.CatchAll {
 			continue
@@ -1748,6 +1763,7 @@ func endpointAnswers(db string) (map[string]answer, map[string]string, []string,
 		// a status only, and the probe of the same URL comes later.
 		if old, ok := out[u]; !ok || old.Hash == "" && p.Hash != "" {
 			a := storedAnswer(p.Status, p.Length, p.Hash, p.Keys, p.Title)
+			a.Truncated = p.Cut
 			if a.Status >= 300 && a.Status < 400 {
 				a.Location = bareLocation(p.Location)
 				if a.Location == "" && len(p.Hops) > 0 {

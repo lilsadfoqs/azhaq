@@ -88,6 +88,7 @@ The text table names the roles and fields in brackets after the verdict. With `-
 | `evidence` | Why, in one line. See [evidence and control](#evidence-and-control). |
 | `control` | What its readers got for a made-up identifier on the same route. |
 | `failed` | On a write row: the requests that got no answer, and why. See [Summary and exit codes](#summary-and-exit-codes). |
+| `truncated` | The roles whose answer body was cut: a route that streams for ever (server-sent events, `multipart/x-mixed-replace`) is read for 64 KiB or 2 seconds and then closed, as `probe` does, and a body past the read limit is cut there. The answer has `truncated` too, and its size and hash are of what was read. The text table marks the answer `:cut` and the row `· body cut: bob`. |
 | `both_ways` | The owner reads one of its reader's objects on the same route too. |
 | `session_suspect` | An answer was asked after its role's session last proved alive. See [Canaries](#canaries). |
 | `write_verification` | On a write row: `proved`, `accepted-not-verified`, `refuted` or `unverifiable` (a create whose object could not be located). See [Verifying a write](#verifying-a-write). |

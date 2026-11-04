@@ -132,6 +132,8 @@ type Result struct {
 	// the -ac answer this one is the same as, when it is.
 	Matched []Match     `json:"matched,omitempty"`
 	Control *ControlRef `json:"control,omitempty"`
+	// Truncated: the body was a stream that never ends, cut by the read.
+	Truncated bool `json:"truncated,omitempty"`
 }
 
 // Stats says how the run went.
@@ -611,7 +613,7 @@ func (e *engine) emit(r *Response, req *Request, jobNum int) {
 		ContentType: r.ContentType, RedirectLocation: RedirectLocation(r, false), URL: req.URL, Duration: r.Duration,
 		Host: hostHeaderOf(req), Method: req.Method, Job: jobNum,
 		RawRequest: r.RawRequest, RawResponse: r.RawResponse,
-		Matched: e.cfg.Set.Evidence(r), Control: e.sameAsControl(r, req),
+		Matched: e.cfg.Set.Evidence(r), Control: e.sameAsControl(r, req), Truncated: r.Truncated,
 	}
 	e.outMu.Lock()
 	e.stats.Matches++

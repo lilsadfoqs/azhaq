@@ -238,7 +238,9 @@ func TestCompareIgnoresVolatileFields(t *testing.T) {
 
 // A catch-all row names the random path its control asked for; two runs of
 // the same app differ in it and in the size an echoing page gives it. A
-// control that answers differently, or in another directory, is a change.
+// control that answers differently is a change; the directory it was asked in is not
+// (the site root's control serves a page whose own directory was not asked yet,
+// by which request finished first).
 func TestCompareIgnoresTheControlsRandomPath(t *testing.T) {
 	dir := t.TempDir()
 	open := func(name string) *Store {
@@ -268,14 +270,18 @@ func TestCompareIgnoresTheControlsRandomPath(t *testing.T) {
 		t.Fatalf("the control's path and size reported as a change: %v %+v", err, d.NewObs)
 	}
 	for name, ctl := range map[string]string{
-		"status":    `{"url":"http://127.0.0.1:3001/qz81xk2mpl","status":404,"type":"text/html","title":"Shop"}`,
-		"title":     `{"url":"http://127.0.0.1:3001/qz81xk2mpl","status":200,"type":"text/html","title":"Other"}`,
-		"directory": `{"url":"http://127.0.0.1:3001/api/qz81xk2mpl","status":200,"type":"text/html","title":"Shop"}`,
+		"status": `{"url":"http://127.0.0.1:3001/qz81xk2mpl","status":404,"type":"text/html","title":"Shop"}`,
+		"title":  `{"url":"http://127.0.0.1:3001/qz81xk2mpl","status":200,"type":"text/html","title":"Other"}`,
 	} {
 		c := open(name + ".db")
 		add(c, ctl)
 		if d, _ := Compare(a, c); len(d.NewObs) != 1 {
 			t.Errorf("a control with another %s missed: %+v", name, d.NewObs)
 		}
+	}
+	d := open("directory.db")
+	add(d, `{"url":"http://127.0.0.1:3001/api/qz81xk2mpl","status":200,"type":"text/html","size":1083,"title":"Shop"}`)
+	if got, _ := Compare(a, d); len(got.NewObs) != 0 {
+		t.Errorf("the directory a control was asked in reported as a change: %+v", got.NewObs)
 	}
 }

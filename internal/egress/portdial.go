@@ -3,6 +3,7 @@ package egress
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"net"
 	"strings"
 	"sync"
@@ -46,6 +47,62 @@ func NewPortDialer(timeout time.Duration, src net.IP, socks5, auth string) *Port
 		}
 	}
 	return d
+}
+
+// ProxyError is a connect that failed at the proxy, not at its target: the
+// proxy was not reached, or it broke the SOCKS exchange. It is no answer of
+// the port, so a scan stops on it instead of calling every port closed.
+type ProxyError struct {
+	Proxy string
+	Err   error
+}
+
+func (e *ProxyError) Error() string { return "-proxy " + e.Proxy + " failed: " + proxyReason(e.Err) }
+func (e *ProxyError) Unwrap() error { return e.Err }
+
+// proxyReason is what went wrong at the proxy, without the layers of the
+// SOCKS client's wrapping.
+func proxyReason(err error) string {
+	var oe *net.OpError
+	for errors.As(err, &oe) && oe.Err != nil {
+		err = oe.Err
+	}
+	return err.Error()
+}
+
+// proxyFailed tells an error of the proxy from the proxy's report of its
+// target: a SOCKS reply ("connection refused", "host unreachable") and a wait
+// that timed out are the target's; a refused dial of the proxy, a closed
+// connection or a protocol or authentication error are the proxy's.
+func proxyFailed(err error) bool {
+	var oe *net.OpError
+	if !errors.As(err, &oe) || !strings.HasPrefix(oe.Op, "socks") {
+		return false
+	}
+	var inner *net.OpError
+	if errors.As(oe.Err, &inner) && inner.Op == "dial" {
+		return true // the proxy itself, even when it timed out
+	}
+	if strings.HasPrefix(oe.Err.Error(), "unknown error ") {
+		return false // the proxy's reply about the target
+	}
+	var ne net.Error
+	return !(errors.As(oe.Err, &ne) && ne.Timeout()) && !errors.Is(oe.Err, context.DeadlineExceeded)
+}
+
+// CanBindSource says ip can be the source of a scan's connects: a socket binds
+// to it. An address that is not one of this machine's cannot, and no port
+// would be asked from it.
+func CanBindSource(ip net.IP) error {
+	l, err := net.ListenUDP("udp", &net.UDPAddr{IP: ip})
+	if err != nil {
+		var oe *net.OpError
+		if errors.As(err, &oe) && oe.Err != nil {
+			return oe.Err // the system's words, without the address again
+		}
+		return err
+	}
+	return l.Close()
 }
 
 // Proxied says the scan's own connects go through a proxy.
@@ -136,7 +193,11 @@ func (d *PortDialer) connect(ctx context.Context, host, addr string, reserved, d
 			}
 			cctx, cancel := context.WithTimeout(dctx, d.timeout)
 			defer cancel()
-			return pd.(proxy.ContextDialer).DialContext(cctx, "tcp", addr)
+			c, err := pd.(proxy.ContextDialer).DialContext(cctx, "tcp", addr)
+			if err != nil && dctx.Err() == nil && proxyFailed(err) {
+				err = &ProxyError{Proxy: d.socks, Err: err}
+			}
+			return c, err
 		}
 		return dialResolvedWith(dctx, Current(), nd, "tcp", addr)
 	})

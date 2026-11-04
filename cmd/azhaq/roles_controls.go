@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"math/rand/v2"
 	"net/http"
 	"net/url"
@@ -313,12 +312,13 @@ func askFresh(ctx context.Context, h http.Header, u string, own map[string]bool)
 		return answer{}, nil, err
 	}
 	defer resp.Body.Close()
-	body, err := io.ReadAll(io.LimitReader(resp.Body, int64(fetch.MaxBody)))
+	body, cut, err := fetch.ReadAnswer(resp, fetch.MaxBody) // a stream that never ends is cut
 	if err != nil {
 		return answer{}, nil, fmt.Errorf("the answer was cut: %w", err)
 	}
 	ctype := resp.Header.Get("Content-Type")
 	a, _ := readAnswer(resp.StatusCode, body, ctype)
+	a.Truncated = cut
 	if loc := resp.Header.Get("Location"); loc != "" {
 		a.Location = bareLocation(loc)
 	}

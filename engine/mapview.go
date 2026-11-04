@@ -272,9 +272,12 @@ func outsideByPort(obs []types.StoredObservation) bool {
 }
 
 // answerOf is the status and title a URL answered with: a real page
-// first, else the catch-all answer.
+// first, else the catch-all answer. Of several real answers the latest is
+// the URL's: a target asked again (resume -retry-failed) shows what it
+// answered then, not the 429 it answered before.
 func answerOf(obs []types.StoredObservation) (int, string) {
 	status, title := 0, ""
+	real := false
 	for _, o := range obs {
 		if o.Kind == "error" || (o.Collector != "azhaq-http" && !probed(o) && o.Kind != "application") {
 			continue
@@ -288,9 +291,10 @@ func answerOf(obs []types.StoredObservation) (int, string) {
 		}
 		_ = json.Unmarshal(o.Payload, &p)
 		if !isCatchAll(o) {
-			return st, p.Title
+			status, title, real = st, p.Title, true
+			continue
 		}
-		if status == 0 {
+		if status == 0 && !real {
 			status, title = st, p.Title
 		}
 	}
@@ -674,6 +678,16 @@ func proofOf(e types.Entity, obs []types.StoredObservation) string {
 			}
 		}
 		vals["addresses_open"] = strconv.Itoa(n)
+	}
+	if e.Type == types.TypeURL {
+		// The status and title are the answer the row shows, not the first
+		// any observation named (a 429 before a retry that answered 200).
+		if st, title := answerOf(obs); st > 0 {
+			vals["status"] = strconv.Itoa(st)
+			if title != "" {
+				vals["title"] = title
+			}
+		}
 	}
 	var parts []string
 	for _, k := range keys {

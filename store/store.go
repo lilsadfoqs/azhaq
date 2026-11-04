@@ -1025,7 +1025,7 @@ var volatile = []string{"body_hash", "auth", "length", "words", "lines", "ms", "
 // stablePayload is the payload as diff compares it: volatile fields
 // dropped, per-source timings dropped, response headers reduced to
 // their names (rate-limit counters and request IDs change on every
-// request) and a catch-all control reduced to its directory and answer.
+// request) and a catch-all control reduced to its answer.
 func stablePayload(raw json.RawMessage) string {
 	var m map[string]any
 	if json.Unmarshal(raw, &m) != nil {
@@ -1042,14 +1042,12 @@ func stablePayload(raw json.RawMessage) string {
 		}
 	}
 	if c, ok := m["control"].(map[string]any); ok {
-		// The control's path is random in every run, and its size follows
-		// the name when the page echoes it: what it proved is its status,
-		// type and title, in the directory it was asked in.
-		if u, ok := c["url"].(string); ok {
-			if i := strings.LastIndex(u, "/"); i >= 0 {
-				c["url"] = u[:i+1]
-			}
-		}
+		// The control's path is random in every run, its size follows the
+		// name when the page echoes it, and its directory is whichever
+		// baseline was ready when the row was judged (the site root's, or
+		// the row's own directory): none of them is a fact about the app.
+		// What it proved is its status, type and title.
+		delete(c, "url")
 		delete(c, "size")
 	}
 	if h, ok := m["headers"].(map[string]any); ok {

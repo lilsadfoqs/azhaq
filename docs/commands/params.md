@@ -82,6 +82,10 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 - The names of that group are dropped and the search stops there. Names found in earlier groups stay.
 - The summary's `notes` list the page.
 
+### A route that never ends
+- A page that streams for ever (server-sent events, `multipart/x-mixed-replace`) is read for 64 KiB or 2 seconds and then closed, as `probe` does, not held until the timeout. An answer longer than 2 MiB is cut there.
+- The page's row has `"truncated": true` and a note says an answer body was cut, so its size is of what was read.
+
 ### Names and groups
 - The built-in list is 6,500 names, `-w large`. arjun's `large` is longer. Use `-w FILE` for your own list.
 - Names are sent in the order given, without duplicates. Every name is sent, with a session or without one.

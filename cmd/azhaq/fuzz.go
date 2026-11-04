@@ -884,6 +884,9 @@ func keepFuzzHits(path string, hits []fuzz.Result, method string, argv []string,
 			"input": in, "position": h.Position, "status": h.Status, "length": h.Length, "words": h.Words, "lines": h.Lines,
 			"content-type": h.ContentType, "redirectlocation": h.RedirectLocation, "url": h.URL, "duration": h.Duration, "host": h.Host,
 		})
+		if h.Truncated {
+			rows[len(rows)-1]["truncated"] = true
+		}
 	}
 	raw, err := json.Marshal(map[string]any{"commandline": strings.Join(argv, " "), "results": rows, "config": map[string]any{"method": method}})
 	if err != nil {

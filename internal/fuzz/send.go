@@ -10,6 +10,7 @@ import (
 	"crypto/sha256"
 	"crypto/tls"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -213,6 +214,7 @@ func (s *httpSender) Send(ctx context.Context, req *Request, keepBody bool) (*Re
 	if err != nil {
 		return nil, err
 	}
+	cut := fetch.Bound(resp) // a stream that never ends is cut, not read to its end
 	defer resp.Body.Close()
 	r := &Response{Status: resp.StatusCode, Header: resp.Header, ContentType: resp.Header.Get("Content-Type"), Request: req}
 	if n, err := strconv.Atoi(resp.Header.Get("Content-Length")); err == nil {
@@ -237,7 +239,17 @@ func (s *httpSender) Send(ctx context.Context, req *Request, keepBody bool) (*Re
 	dec, release := decoded(resp)
 	body, length, words, lines, sum, ok, err := readHashed(dec, keepBody)
 	release()
-	if err != nil {
+	if cut() {
+		// The read stopped the stream: what came is the answer, and a
+		// compressed one ends inside a block.
+		if err != nil && !errors.Is(err, io.ErrUnexpectedEOF) {
+			return nil, fmt.Errorf("answer cut off after %d bytes: %w", length, err)
+		}
+		r.Truncated = true
+		if err != nil {
+			r.Length = length // decoded up to the cut
+		}
+	} else if err != nil {
 		// Cut off: its size is no answer's, and would pass a size filter.
 		return nil, fmt.Errorf("answer cut off after %d bytes: %w", length, err)
 	}
@@ -278,7 +290,7 @@ func (s *httpSender) Replay(ctx context.Context, req *Request) error {
 	if err != nil {
 		return err
 	}
-	io.Copy(io.Discard, io.LimitReader(resp.Body, MaxBody))
+	fetch.ReadAnswer(resp, MaxBody) // the answer is dropped; a stream that never ends is cut
 	return resp.Body.Close()
 }
 
