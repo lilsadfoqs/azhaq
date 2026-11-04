@@ -7,11 +7,14 @@ package dirscol
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	_ "embed"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/lilsadfoqs/azhaq/internal/guard"
+	"hash"
 	"io"
 	"net/http"
 	"net/url"
@@ -209,6 +212,10 @@ type hit struct {
 	Words    int    `json:"words"`
 	Lines    int    `json:"lines"`
 	Location string `json:"location,omitempty"`
+	// Control is set for a hit whose answer is, byte for byte, what its
+	// directory gave a name that cannot exist: the hit says nothing of a
+	// route, and the map folds it.
+	Control *fetch.Control `json:"-"`
 }
 
 func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Observation) error) (types.RunMeta, error) {
@@ -233,6 +240,9 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 			row := map[string]any{"url": h.URL, "via": "dirs", "status": h.Status, "length": h.Length, "words": h.Words, "lines": h.Lines}
 			if h.Location != "" {
 				row["location"] = h.Location
+			}
+			if h.Control != nil {
+				row["catchall"], row["control"], row["control_exact"] = true, h.Control, true
 			}
 			raw, _ := json.Marshal(row)
 			obs = append(obs, types.Observation{Collector: Name, Source: base, Kind: "url", Payload: raw, Confidence: 0.8, ObservedAt: time.Now().UTC()})
@@ -281,7 +291,7 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		all = append(all, hits...)
 		skipped = append(skipped, held...)
 		for _, h := range hits {
-			if d.depth < c.Opts.Depth && isDir(h) {
+			if d.depth < c.Opts.Depth && isDir(h) && h.Control == nil {
 				queue = append(queue, dirLevel{url: strings.TrimSuffix(h.URL, "/") + "/", depth: d.depth + 1})
 			}
 		}
@@ -296,6 +306,7 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		"base": base, "words": len(c.Opts.Words), "extensions": c.Opts.Extensions, "requests": requests,
 		"hits": len(all), "filtered": filtered, "failed": failed, "rate_limited": limited, "depth": c.Opts.Depth,
 		"held": note.shaped.Load(), "unfiltered": note.unfiltered(),
+		"controls": note.controls.Load(), "folded": note.folded.Load(),
 	})
 	if err := emit(types.Observation{Collector: Name, Source: base, Kind: "dirs", Payload: summary, Confidence: 0.9, ObservedAt: time.Now().UTC()}); err != nil {
 		return meta, err
@@ -392,6 +403,8 @@ func (c *Collector) sweep(ctx context.Context, dir string, note *sweepNote, foun
 	var hits []hit
 	var filtered, nfailed, nlimited atomic.Int64
 	var out, halt atomic.Bool
+	var inDirs []exactHit // hits for words in a directory of their own, judged when the sweep is through
+	var inDirsMu sync.Mutex
 	pending := make(chan hit, maxPending)
 	written := make(chan struct{})
 	go func() {
@@ -427,7 +440,8 @@ func (c *Collector) sweep(ctx context.Context, dir string, note *sweepNote, foun
 	// request that got none.
 	ask := func(word string) error {
 		target := dir + escapeWord(word)
-		r, err := c.get(ctx, target, "", len(cal.shapes) > 0)
+		nested := !c.Opts.NoCalibration && inOwnDir(word)
+		r, err := c.get(ctx, target, "", len(cal.shapes) > 0, nested)
 		if errors.Is(err, neterr.ErrBudget) {
 			out.Store(true)
 		}
@@ -450,7 +464,14 @@ func (c *Collector) sweep(ctx context.Context, dir string, note *sweepNote, foun
 			}
 			return nil
 		}
-		pending <- hit{URL: target, Status: r.Status, Length: r.Length, Words: r.Words, Lines: r.Lines, Location: r.Location}
+		h := hit{URL: target, Status: r.Status, Length: r.Length, Words: r.Words, Lines: r.Lines, Location: r.Location}
+		if nested {
+			inDirsMu.Lock()
+			inDirs = append(inDirs, exactHit{h, r})
+			inDirsMu.Unlock()
+			return nil
+		}
+		pending <- h
 		return nil
 	}
 	// With no calibration the first words ask whether the service answers
@@ -493,12 +514,103 @@ func (c *Collector) sweep(ctx context.Context, dir string, note *sweepNote, foun
 		}(t)
 	}
 	wg.Wait()
+	// The hits in a directory the sweep did not start in are judged by an
+	// answer of that directory, and only then handed on.
+	for _, h := range c.judgeInDirs(ctx, host, inDirs, note, &out, &halt) {
+		pending <- h
+	}
 	close(pending)
 	<-written
 	if dead != nil && err == nil {
 		err = dead
 	}
 	return hits, len(targets), int(filtered.Load()), int(nfailed.Load()), int(nlimited.Load()), held, out.Load(), err
+}
+
+// exactHit is a hit with the answer it got.
+type exactHit struct {
+	hit hit
+	r   response
+}
+
+// inOwnDir says a word names a path in a directory of its own (api/users),
+// not one of the swept directory itself (users, or admin/, which is the
+// directory).
+func inOwnDir(word string) bool {
+	path, _, _ := strings.Cut(word, "?")
+	return strings.Contains(strings.TrimSuffix(path, "/"), "/")
+}
+
+// dirOf is the directory a URL's path is in, with its slash.
+func dirOf(target string) string {
+	path, _, _ := strings.Cut(target, "?")
+	if i := strings.LastIndex(path, "/"); i >= 0 {
+		return path[:i+1]
+	}
+	return path
+}
+
+// judgeInDirs gives the hits found in directories the sweep was not started
+// in, each marked with the control of its directory when its answer is
+// that control's, byte for byte. A directory that holds two hits or more is
+// asked one name that cannot exist, at the sweep's pace and counted like its
+// requests; the hit of a directory that holds only one is kept as it is.
+// When the budget runs out, the run is stopped or a control fails to answer,
+// the hits are handed on unmarked: they were found.
+func (c *Collector) judgeInDirs(ctx context.Context, host string, hs []exactHit, note *sweepNote, out, halt *atomic.Bool) []hit {
+	byDir := map[string][]int{}
+	var dirs []string
+	for i, h := range hs {
+		d := dirOf(h.hit.URL)
+		if _, ok := byDir[d]; !ok {
+			dirs = append(dirs, d)
+		}
+		byDir[d] = append(byDir[d], i)
+	}
+	out2 := make([]hit, len(hs))
+	for i, h := range hs {
+		out2[i] = h.hit
+	}
+	for _, d := range dirs {
+		idx := byDir[d]
+		if len(idx) < 2 || ctx.Err() != nil || out.Load() || halt.Load() {
+			continue
+		}
+		name := fetch.ProbeName("dirs control " + d)
+		target := d + name
+		if c.pace(ctx, host, target) != nil {
+			continue
+		}
+		ctl, err := c.get(ctx, target, name, false, true)
+		if errors.Is(err, neterr.ErrBudget) {
+			out.Store(true)
+		}
+		if err != nil {
+			continue
+		}
+		note.controls.Add(1)
+		ref := &fetch.Control{URL: target, Status: ctl.Status, Size: ctl.Length}
+		for _, i := range idx {
+			if ctl.sameAs(hs[i].r) {
+				out2[i].Control = ref
+				note.folded.Add(1)
+			}
+		}
+	}
+	return out2
+}
+
+// sameAs says r is the answer c is, byte for byte: the same status and the
+// same body (or, for a redirect, the same Location), once the path each was
+// asked for is taken out of it.
+func (c response) sameAs(r response) bool {
+	if c.Status != r.Status {
+		return false
+	}
+	if c.Status >= 300 && c.Status < 400 {
+		return c.Loc != "" && c.Loc == r.Loc
+	}
+	return c.Sum != "" && c.Sum == r.Sum || c.Free != "" && c.Free == r.Free
 }
 
 // escapeWord puts a word in a URL as ffuf does: a "?" starts the query
@@ -534,8 +646,15 @@ type response struct {
 	Location                     string
 	Echo                         bool          `json:",omitempty"` // calibration: the body names the path asked
 	Page                         *pagesim.Page `json:",omitempty"` // what the body is, when calibration needs the shape of pages
-	Header                       http.Header   `json:"-"`
-	Body                         []byte        `json:"-"`
+	// Sum, Free and Loc say what the answer is byte for byte, for a hit in a
+	// directory of its own: the sum of the body, the sum and the Location with
+	// the path asked taken out (an error page that echoes it). Empty when
+	// they were not asked for.
+	Sum    string      `json:",omitempty"`
+	Free   string      `json:",omitempty"`
+	Loc    string      `json:",omitempty"`
+	Header http.Header `json:"-"`
+	Body   []byte      `json:"-"`
 }
 
 // pace waits for a pace slot before target is asked, unless its answer is
@@ -560,7 +679,7 @@ func (c *Collector) recalled(target string) bool {
 
 // get asks for target. probe, set for calibration, is the name asked: the
 // answer says whether its body repeats it.
-func (c *Collector) get(ctx context.Context, target, probe string, page bool) (response, error) {
+func (c *Collector) get(ctx context.Context, target, probe string, page, exact bool) (response, error) {
 	// A guess the run made before it was stopped is not sent again (not
 	// with a pattern: the memo holds no body).
 	memo := fetch.Memos != nil && !c.needBody
@@ -572,9 +691,9 @@ func (c *Collector) get(ctx context.Context, target, probe string, page bool) (r
 			}
 		}
 	}
-	r, err := c.send(ctx, target, probe, page)
+	r, err := c.send(ctx, target, probe, page, exact)
 	if errors.Is(err, errCutOff) && ctx.Err() == nil {
-		r, err = c.send(ctx, target, probe, page)
+		r, err = c.send(ctx, target, probe, page, exact)
 	}
 	if err == nil && memo {
 		if raw, err := json.Marshal(r); err == nil {
@@ -593,7 +712,7 @@ const keepBody = 1 << 20
 
 var chunks = sync.Pool{New: func() any { b := make([]byte, 32<<10); return &b }}
 
-func (c *Collector) send(ctx context.Context, target, probe string, page bool) (response, error) {
+func (c *Collector) send(ctx context.Context, target, probe string, page, exact bool) (response, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
 	if err != nil {
 		return response{}, err
@@ -610,8 +729,12 @@ func (c *Collector) send(ctx context.Context, target, probe string, page bool) (
 	// Counted as it streams, as ffuf counts the body: words are spaces+1
 	// and lines newlines+1 of the whole of it.
 	r := response{Status: resp.StatusCode, Location: resp.Header.Get("Location"), Words: 1, Lines: 1}
-	keep := c.needBody || probe != "" || page
+	keep := c.needBody || probe != "" || page || exact
 	var kept []byte
+	var sum hash.Hash
+	if exact {
+		sum = sha256.New()
+	}
 	buf := chunks.Get().(*[]byte)
 	defer chunks.Put(buf)
 	for r.Length < maxBody {
@@ -621,6 +744,9 @@ func (c *Collector) send(ctx context.Context, target, probe string, page bool) (
 			r.Words += bytes.Count(chunk, []byte{' '})
 			r.Lines += bytes.Count(chunk, []byte{'\n'})
 			r.Length += n
+			if sum != nil {
+				sum.Write(chunk)
+			}
 			if keep && len(kept) < keepBody {
 				kept = append(kept, chunk[:min(n, keepBody-len(kept))]...)
 			}
@@ -644,6 +770,14 @@ func (c *Collector) send(ctx context.Context, target, probe string, page bool) (
 		p := pagesim.Of(kept)
 		r.Page = &p
 	}
+	if exact {
+		r.Sum = hex.EncodeToString(sum.Sum(nil)[:8])
+		if len(kept) == r.Length { // the whole body, to take the path out of
+			free := sha256.Sum256([]byte(fetch.EchoFree(target, string(kept))))
+			r.Free = hex.EncodeToString(free[:8])
+		}
+		r.Loc = fetch.EchoFree(target, r.Location)
+	}
 	return r, nil
 }
 
@@ -663,9 +797,11 @@ type calibration struct {
 // the answers held back for being the calibration's page, and the
 // directories where calibration could filter nothing.
 type sweepNote struct {
-	shaped atomic.Int64
-	mu     sync.Mutex
-	dirs   []string
+	shaped   atomic.Int64
+	controls atomic.Int64 // requests for a name that cannot exist, one for each directory hits were found in
+	folded   atomic.Int64 // hits whose answer was the control's own
+	mu       sync.Mutex
+	dirs     []string
 }
 
 func (n *sweepNote) loose(dir string, statuses []int) {
@@ -719,7 +855,7 @@ func (c *Collector) calibrate(ctx context.Context, dir, host string) (cal calibr
 			defer guard.Recover(ctx)
 			defer wg.Done()
 			defer func() { <-sem }()
-			r, err := c.get(ctx, dir+s, probes[i], false)
+			r, err := c.get(ctx, dir+s, probes[i], false, false)
 			answers[i] = answer{r, err}
 		}()
 	}

@@ -308,6 +308,9 @@ func coverageOf(e types.Entity, obs []types.StoredObservation, leftover map[stri
 	if e.Type != types.TypeURL {
 		return ""
 	}
+	if sweptShell(obs) {
+		return "catchall" // the sweep's own answer was its directory's control's
+	}
 	if fetched(obs) {
 		if st := gone(obs); st {
 			return "gone" // found somewhere, and the server says it is not there
@@ -494,9 +497,37 @@ func gone(obs []types.StoredObservation) bool {
 	return false
 }
 
-func fetched(obs []types.StoredObservation) bool {
+// sweptShell is a URL a path sweep (-dirs) found whose answer was, byte for
+// byte, what its directory gave a name that cannot exist (the hit says it:
+// the control it was compared with), and which no fetch of the URL answered
+// with anything else. The sweep's answer then says nothing of a route.
+func sweptShell(obs []types.StoredObservation) bool {
+	status := 0
 	for _, o := range obs {
-		if isCatchAll(o) || o.Kind == "error" {
+		if probed(o) && isCatchAll(o) {
+			status = statusOf(o.Payload)
+		}
+	}
+	if status == 0 {
+		return false
+	}
+	for _, o := range obs {
+		if o.Kind != "application" || isCatchAll(o) {
+			continue
+		}
+		if st := statusOf(o.Payload); st > 0 && st != status {
+			return false
+		}
+	}
+	return true
+}
+
+func fetched(obs []types.StoredObservation) bool {
+	// A fetch that found the URL to be its directory's catch-all page says
+	// what the sweep's row, which asked for the same thing, says.
+	shell := slices.ContainsFunc(obs, func(o types.StoredObservation) bool { return o.Kind == "application" && isCatchAll(o) })
+	for _, o := range obs {
+		if isCatchAll(o) || o.Kind == "error" || shell && probed(o) {
 			continue
 		}
 		if (o.Collector == "azhaq-http" || o.Kind == "application") && statusOf(o.Payload) > 0 {
