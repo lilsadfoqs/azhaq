@@ -382,7 +382,7 @@ func (c *Collector) runPrefix(ctx context.Context, seed types.Seed, emit func(ty
 		return types.RunMeta{Status: types.StatusCapped, EmitCount: meta.EmitCount}, first
 	}
 	if first != nil {
-		return types.RunMeta{Status: types.StatusError, Error: first.Error()}, nil
+		return types.RunMeta{Status: types.StatusError, Error: first.Error()}, first
 	}
 	rng := counts()
 	rng["range"], rng["prefix"], rng["addresses"], rng["scanned"], rng["open"] = true, pf.String(), len(addrs)-out, len(c.portsOf("")), []int{}

@@ -138,6 +138,10 @@ type Open struct {
 	SubjectCN string   `json:"subject_cn,omitempty"`
 	SubjectAN []string `json:"subject_an,omitempty"`
 
+	// Usual is the registered name of the port, kept when -detect none leaves
+	// Service empty: it only tells a web port from another, and is not output.
+	Usual string `json:"-"`
+
 	again bool // a server-first port that said nothing: asked once more after the pass
 }
 
@@ -201,6 +205,7 @@ type Scanner struct {
 	unnamed map[string]int // per address: open ports no probe could name
 	skipped map[string]int // per address: ports not run down the ladder after that
 	stop    error          // the budget error a probe of a service met
+	dead    error          // the proxy failed: no port is answered while it does
 }
 
 // Detect says how much a scan asks of a port that accepted.
@@ -539,6 +544,9 @@ func (s *Scanner) pass(ctx context.Context, host, ip string, ports []int, found 
 		if full() {
 			break
 		}
+		if stop = s.proxyDead(); stop != nil {
+			break
+		}
 		if paid == 0 {
 			// The pace is taken for the next batch at once: one wake-up of the
 			// timer for all of them, not one each.
@@ -583,10 +591,21 @@ func (s *Scanner) pass(ctx context.Context, host, ip string, ports []int, found 
 	if prog != nil {
 		prog.last(&mu, asked)
 	}
+	if stop == nil {
+		stop = s.proxyDead()
+	}
 	if stop != nil {
 		return open, silent, asked, slow, stop
 	}
 	return open, silent, asked, slow, ctx.Err()
+}
+
+// proxyDead is the failure of the proxy a connect met, which ends the scan:
+// the ports it left unasked are not closed.
+func (s *Scanner) proxyDead() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.dead
 }
 
 type portState int
@@ -609,6 +628,10 @@ func selfConnect(c net.Conn) bool {
 // refused says a failed dial was an answer: nothing listens. Through a
 // proxy the refusal is the proxy's text.
 func refused(err error) bool {
+	var pe *egress.ProxyError
+	if errors.As(err, &pe) {
+		return false // the proxy was not reached: nothing was asked of the port
+	}
 	return errors.Is(err, syscall.ECONNREFUSED) || strings.Contains(err.Error(), "connection refused")
 }
 
@@ -626,6 +649,15 @@ func (s *Scanner) probe(ctx context.Context, host, ip string, port int) (Open, p
 // failed is what a connect that did not connect says of its port: refused
 // (closed), no answer within the timeout, or no answer either way.
 func (s *Scanner) failed(ctx context.Context, err error) portState {
+	var pe *egress.ProxyError
+	if errors.As(err, &pe) && ctx.Err() == nil {
+		s.mu.Lock()
+		if s.dead == nil {
+			s.dead = pe
+		}
+		s.mu.Unlock()
+		return portSilent
+	}
 	if refused(err) || ctx.Err() != nil {
 		return portClosed
 	}
@@ -691,7 +723,11 @@ func (s *Scanner) probeConn(ctx context.Context, host, ip string, port int, conn
 		o.again = s.Detect == DetectAll && silentGreeter && o.Banner == "" && o.Service == ""
 	}
 	if o.Service == "" {
-		o.Service = guess(port, o.Banner)
+		if s.Detect == DetectNone {
+			o.Usual = guess(port, "") // nothing was asked: no row names the port's service
+		} else {
+			o.Service = guess(port, o.Banner)
+		}
 	}
 	return o, portOpen
 }
@@ -881,7 +917,11 @@ func printable(b []byte) string {
 // Web is true for an open port worth an HTTP probe: one that said nothing
 // or answered like HTTP, and is not a known non-web service.
 func (o Open) Web() bool {
-	switch strings.TrimSuffix(o.Service, "?") {
+	name := o.Service
+	if name == "" {
+		name = o.Usual
+	}
+	switch strings.TrimSuffix(name, "?") {
 	case "", "http", "https", "tls", "elasticsearch", "docker", "kubernetes", "http-proxy":
 		return true // tls: a handshake answered, HTTP inside it may be slow
 	}

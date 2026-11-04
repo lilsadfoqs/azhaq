@@ -68,6 +68,7 @@ type throttle struct {
 	hits        int // answers of 429 or 503
 	status      int
 	gaveUp      int // requests that still got one after the retries
+	waited      int // times a request was held for the host's pause before it was asked again
 }
 
 // UseJar makes the run carry the cookies targets set (the way a browser or
@@ -188,6 +189,16 @@ func afterAnswer(raw string, status int, retryAfter string) (wait time.Duration,
 	return wait, true
 }
 
+// waitedOn counts a wait for a throttled host, the only thing the run's note
+// about it may say azhaq did.
+func waitedOn(raw string) {
+	politeMu.Lock()
+	if t := throttles[hostKey(raw)]; t != nil {
+		t.waited++
+	}
+	politeMu.Unlock()
+}
+
 func gaveUp(raw string) {
 	politeMu.Lock()
 	if t := throttles[hostKey(raw)]; t != nil {
@@ -215,7 +226,10 @@ func politeNotes() []string {
 	sort.Strings(hosts)
 	for _, h := range hosts {
 		t := throttles[h]
-		line := fmt.Sprintf("%s answered %d with %d requests: azhaq waited (1 s doubling to 30 s) and asked again", h, t.status, t.hits)
+		line := fmt.Sprintf("%s answered %d with %d requests: azhaq waited %d times (1 s doubling to 30 s) and asked again", h, t.status, t.hits, t.waited)
+		if t.waited == 0 {
+			line = fmt.Sprintf("%s answered %d with %d requests: azhaq did not wait or ask again (-backoff is off), so they are listed with that status", h, t.status, t.hits)
+		}
 		if t.gaveUp > 0 {
 			line += fmt.Sprintf("; %d requests still got it after %d tries and are listed with that status", t.gaveUp, backoffTries)
 		}
@@ -323,6 +337,7 @@ func attempt(ctx, rctx context.Context, c *http.Client, method, raw string, sent
 		wait, throttled := afterAnswer(raw, resp.StatusCode, resp.Header.Get("Retry-After"))
 		if throttled && Backoff {
 			if try < backoffTries {
+				waitedOn(raw)
 				select {
 				case <-ctx.Done():
 					return resp, body, trunc, reqDump, nil

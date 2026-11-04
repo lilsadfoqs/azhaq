@@ -19,6 +19,7 @@ import (
 
 	"golang.org/x/net/html"
 
+	"github.com/lilsadfoqs/azhaq/internal/fetch"
 	"github.com/lilsadfoqs/azhaq/scope"
 )
 
@@ -464,7 +465,7 @@ func (f *flightSender) step(ctx context.Context, st FlightStep, vars map[string]
 		return fmt.Errorf("%s: %w", st.File, err)
 	}
 	jar.take(hr.URL.Hostname(), resp.Header)
-	body, err := io.ReadAll(io.LimitReader(resp.Body, MaxBody+1))
+	body, _, err := fetch.ReadAnswer(resp, MaxBody+1) // a stream that never ends is cut
 	resp.Body.Close()
 	if err != nil {
 		return fmt.Errorf("%s: reading the answer: %w", st.File, err)

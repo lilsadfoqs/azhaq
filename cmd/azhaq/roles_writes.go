@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"slices"
@@ -1451,11 +1450,12 @@ func readAs(ctx context.Context, client *http.Client, r role, u string) (answer,
 		return answer{}, err
 	}
 	defer resp.Body.Close()
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	body, cut, err := fetch.ReadAnswer(resp, 1<<20) // a stream that never ends is cut
 	if err != nil {
 		return answer{}, fmt.Errorf("the answer was cut: %w", err)
 	}
 	a, _ := readAnswer(resp.StatusCode, body, resp.Header.Get("Content-Type"))
+	a.Truncated = cut
 	if loc := resp.Header.Get("Location"); loc != "" {
 		a.Location = bareLocation(loc)
 	}
@@ -1493,8 +1493,9 @@ func sendWrite(ctx context.Context, client *http.Client, r role, w writeReq) (an
 		return answer{}, &noAnswerError{err: err}
 	}
 	defer resp.Body.Close()
-	body, rerr := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	body, cut, rerr := fetch.ReadAnswer(resp, 1<<20) // a stream that never ends is cut
 	a, _ := readAnswer(resp.StatusCode, body, resp.Header.Get("Content-Type"))
+	a.Truncated = cut
 	if loc := resp.Header.Get("Location"); loc != "" {
 		a.Location = bareLocation(loc)
 	}

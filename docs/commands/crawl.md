@@ -188,7 +188,7 @@ These filters limit what is printed, not what is crawled.
 
 - `-rejected` lists the strings read from scripts and pages and kept out of the URLs. They are never asked.
 - The summary splits the crawl's `requests` by purpose (`pages`, `scripts`, `assets`, `controls`, `description checks`…): see [run](run.md#where-the-requests-go). A page already asked under another spelling of its URL is not asked again.
-- The reasons include a pattern with a wildcard, a library's code, an expression, the start of a path a script joins more to, a route a script's client asks under its declared base, and a key of a module map or a case label (`{"./components/locale/zh_CN": 1}` in a bundle is a module id, not a route).
+- The reasons include a pattern with a wildcard, a library's code, an expression, the start of a path a script joins more to, the end of a route with a placeholder (`"/y/${id}/z.php"` and `"/y/"+id+"/z.php"` make no request for `/z.php`), a route a script's client asks under its declared base, and a key of a module map or a case label (`{"./components/locale/zh_CN": 1}` in a bundle is a module id, not a route).
 - Text output is `string`, a tab, and the reason.
 - `-json` output is `{"rejected", "reason", "url", "source", "via"}`. `url` is what the string makes against the page.
 

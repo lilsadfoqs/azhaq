@@ -269,6 +269,10 @@ func (s *search) give(page string, emit func(types.Observation) error, found map
 			notes = append(notes, fmt.Sprintf("%s: %d of %d requests got no answer (%s); the names in those groups were not judged", page, lost, s.requests.Load(), lostWhy))
 		}
 	}
+	if s.cut.Load() {
+		row["truncated"] = true
+		notes = append(notes, fmt.Sprintf("%s: %s", page, cutNote))
+	}
 	if s.method != GET {
 		row["writes"] = s.requests.Load()
 		notes = append(notes, fmt.Sprintf("%s: %d %s requests were sent with the names in the body; they may have changed data on the target", page, s.requests.Load(), s.method))
@@ -286,20 +290,36 @@ func (s *search) give(page string, emit func(types.Observation) error, found map
 	return types.RunMeta{Status: types.StatusOK, EmitCount: 1}, nil
 }
 
+// cutNote says what a cut answer does to a page's row.
+const cutNote = "an answer body was cut (a stream that never ends, read for 64 KiB or 2 s, or longer than 2 MiB), so its size is of what was read"
+
 // skipped says the page was not searched and why.
 func (s *search) skipped(emit func(types.Observation) error, page string) error {
 	why := s.skip
 	if why == "" {
 		why = "the page changes by itself"
 	}
-	return noted(emit, page, fmt.Sprintf("%s: not searched, %s", page, why))
+	note := fmt.Sprintf("%s: not searched, %s", page, why)
+	if s.cut.Load() {
+		note += "; " + cutNote
+		return notedRow(emit, page, note, map[string]any{"truncated": true})
+	}
+	return noted(emit, page, note)
 }
 
 // noted emits a page's row with no parameters and a note for the summary: a
 // page not searched is said, not dropped. (The summary's list of requests
 // not sent omits pages the run asked, so a note carries it.)
 func noted(emit func(types.Observation) error, page, note string) error {
-	payload, _ := json.Marshal(map[string]any{"url": page, "requests": 0, "params": []string{}, "note": note})
+	return notedRow(emit, page, note, nil)
+}
+
+func notedRow(emit func(types.Observation) error, page, note string, more map[string]any) error {
+	row := map[string]any{"url": page, "requests": 0, "params": []string{}, "note": note}
+	for k, v := range more {
+		row[k] = v
+	}
+	payload, _ := json.Marshal(row)
 	return emit(types.Observation{Collector: Name, Source: page, Kind: "params", Payload: payload, Confidence: 0.8, ObservedAt: time.Now().UTC()})
 }
 

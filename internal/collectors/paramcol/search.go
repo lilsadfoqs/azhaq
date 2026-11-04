@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/lilsadfoqs/azhaq/internal/guard"
-	"io"
 	"math"
 	"net"
 	"net/http"
@@ -22,6 +21,7 @@ import (
 
 	"github.com/lilsadfoqs/azhaq/engine"
 	"github.com/lilsadfoqs/azhaq/internal/egress"
+	"github.com/lilsadfoqs/azhaq/internal/fetch"
 	"github.com/lilsadfoqs/azhaq/internal/neterr"
 	"github.com/lilsadfoqs/azhaq/types"
 )
@@ -105,6 +105,8 @@ type search struct {
 	note    string // said in the page's row
 	floodAt int    // the first chunk of a page that answers any name
 	badXML  int    // names that cannot be XML elements
+
+	cut atomic.Bool // an answer body was cut: a stream that never ends, or past 2 MiB
 }
 
 func newSearch(c *Collector, ctx context.Context, u *url.URL, tg Target) *search {
@@ -742,8 +744,12 @@ func (s *search) once(base *url.URL, q []pair, quiet bool) (a answer, wait time.
 		rctx, cancel := context.WithTimeout(s.ctx, timeout)
 		resp, err = s.c.Client.Do(req.WithContext(rctx))
 		if err == nil {
-			body, err = io.ReadAll(io.LimitReader(resp.Body, 2<<20))
+			var cut bool
+			body, cut, err = fetch.ReadAnswer(resp, 2<<20) // a stream that never ends is cut
 			resp.Body.Close()
+			if cut {
+				s.cut.Store(true)
+			}
 			if err != nil {
 				err = fmt.Errorf("answer cut off: %w", err)
 			}

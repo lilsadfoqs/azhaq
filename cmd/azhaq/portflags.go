@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/lilsadfoqs/azhaq/internal/collectors/portcol"
+	"github.com/lilsadfoqs/azhaq/internal/egress"
 	"github.com/lilsadfoqs/azhaq/internal/portscan"
 )
 
@@ -77,6 +78,9 @@ func portConfig(f portFlags) (portcol.Config, error) {
 		}
 		if cfg.SourceIP = net.ParseIP(f.source); cfg.SourceIP == nil {
 			return cfg, usagef("-port-source-ip wants an address, got %q", f.source)
+		}
+		if err := egress.CanBindSource(cfg.SourceIP); err != nil {
+			return cfg, usagef("-source-ip %s is not an address this machine can connect from: %v (run: -port-source-ip)", f.source, err)
 		}
 	}
 	if f.payload != "" {

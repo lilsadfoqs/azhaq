@@ -338,7 +338,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	allSources := fs.Bool("all-sources", false, "also run slower subdomain sources outside the default set")
 	noHistory := fs.Bool("no-history", false, "do not read or write the name history (the names earlier runs found, kept in "+historyDirHelp+"; with -live each is checked by DNS in the run)")
 	historyDir := fs.String("history-dir", "", "keep the name history under DIR/names, shared by every run that names it (default $AZHAQ_DATA_DIR, else azhaq-data/ in the workspace's folder: beside -db, or the current directory)")
-	sourceTimeout := fs.Duration("source-timeout", subcol.DefaultSourceTimeout, "give each subdomain source this long, 30s as subfinder does; a slower one (crt.sh) is abandoned, listed as failed, and the names the others gave are kept; -source-timeout 60s or more waits for crt.sh on a large domain (not -timeout, the run's bound)")
+	sourceTimeout := fs.Duration("source-timeout", subcol.DefaultSourceTimeout, "give each subdomain source this long, 30s as subfinder does (any duration: 800ms holds to the millisecond for every source); a slower one (crt.sh) is abandoned, listed as failed, and the names the others gave are kept; -source-timeout 60s or more waits for crt.sh on a large domain (not -timeout, the run's bound)")
 	sourceRate := fs.Float64("source-rate", 0, "requests per second to each subdomain source, as subfinder -rl (0: each source's own pace); a source's lower own pace stays")
 	sourceRates := fs.String("source-rates", "", "pace single subdomain sources, as subfinder -rls: name=N/unit, comma-separated, unit s, m or h (hackertarget=10/m,crtsh=1/s)")
 	maxResults := fs.Int("max-results", 0, "most names one paging subdomain source gives (0: no cap), as subfinder -mr")
@@ -354,7 +354,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	portsSpec := fs.String("ports", "", "scan TCP ports: default (the top 100 and the usual ports of the services azhaq names and checks), top-100, top-1000, full or a list of ports, ranges and these names, such as 22,80,8000-8100 or top-100,8888 (active; the targets given are the scope unless -allow)")
 	portsUDP := fs.String("ports-udp", "", "ask UDP ports (active): top (about 25 common ones), full or a list of ports, ranges and these names, such as 53,123,161,1-1024 or top,5354; a reply is open, an ICMP unreachable closed, neither open|filtered (-ports none: UDP only)")
 	portRate := fs.Float64("port-rate", 0, "port connection attempts per second, a ceiling (0: 1500, as naabu's connect scan, and 127.0.0.1 unpaced)")
-	portMinRate := fs.Float64("port-min-rate", 0, "port connection attempts per second at least, as nmap's --min-rate: raises -port-rate to this when lower, and sets no ceiling")
+	portMinRate := fs.Float64("port-min-rate", 0, "port connection attempts per second at least, as nmap's --min-rate: raises the pace to this when the pace (-port-rate, or the default 1500) is lower, and never lowers it")
 	portTimeout := fs.Duration("port-timeout", 0, "wait this long for one port to accept or refuse a connect (0: 1.5s)")
 	portRetries := fs.Int("port-retries", -1, "more passes over the ports that neither accepted nor refused: n passes over all of them, 0 none (default: one, when few did not answer)")
 	portWorkers := fs.Int("port-workers", 0, "port connects in flight at once, over all hosts (0: as many as the rate allows, up to 20000)")
@@ -368,7 +368,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	portDiscover := fs.String("port-discover", "", "ask first whether an address is up, by a connect to 80 and 443: first (scan the ones that answer) or only (list them, scan nothing)")
 	portIP := fs.String("port-ip", "", "the address families of a name to scan: 4 or 6 (default both)")
 	portAllIPs := fs.Bool("port-all-ips", false, "scan every address of a name, not the first two of each family")
-	portSource := fs.String("port-source-ip", "", "connect from this local address")
+	portSource := fs.String("port-source-ip", "", "connect from this local address, one of this machine's (any other is refused)")
 	portProxy := fs.String("port-proxy", "", "connect to TCP ports through this SOCKS5 proxy (host:port); a port is then asked its banner only, and UDP is not sent")
 	portProxyAuth := fs.String("port-proxy-auth", "", "user:password for -port-proxy")
 	portPayload := fs.String("port-payload", "", "send this to each open TCP port before reading what it says (\\r and \\n are CR and LF)")
@@ -1530,18 +1530,13 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	if n := opts.DNS.TakeoverNote("-no-takeover"); n != "" {
 		rep.Notes = append(rep.Notes, n)
 	}
-	// The URLs are those the map holds as coverage capped: the number is
-	// what `query -coverage capped` lists, each URL once.
-	capped := 0
-	for _, r := range rows {
-		if r.Entity.Type == types.TypeURL && r.Coverage == "capped" {
-			capped++
-		}
-	}
-	if c := eng.Caps(); capped+c.DepthNames > 0 {
+	// The URLs are those the scheduler kept because they were found past
+	// -depth: a URL left unasked by -max-items or another cap is capped in
+	// the map too, but not by the depth.
+	if c := eng.Caps(); c.DepthURLs+c.DepthNames > 0 {
 		var what []string
-		if capped > 0 {
-			what = append(what, fmt.Sprintf("%d URLs", capped))
+		if c.DepthURLs > 0 {
+			what = append(what, fmt.Sprintf("%d URLs", c.DepthURLs))
 		}
 		if c.DepthNames > 0 {
 			what = append(what, fmt.Sprintf("%d names", c.DepthNames))
@@ -1636,6 +1631,11 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 			}
 		}
 		rep.Resume = resumeHint(path, cut > 0, *login != "", *loginUser)
+		if *resumeRun != "" && rep.Requests == 0 && strings.HasPrefix(rep.Stopped, "-max-items ") {
+			// The cap holds for each run: this one spent it on tasks that
+			// asked nothing, and the next goes on from them.
+			rep.Notes = append(rep.Notes, fmt.Sprintf("this resume sent no request: -max-items %d was spent on tasks that sent none (azhaq resume goes on from them; a larger -max-items reaches the tasks that ask)", budgets.MaxItems))
+		}
 		if *resumeRun != "" && st.TasksDone() == doneBefore && egress.Spent() && egress.Killed() == nil {
 			rep.Notes = append(rep.Notes, noTaskFinished(rep.Command, egress.MaxRequests()))
 		}
@@ -1655,19 +1655,18 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 			rep.Stopped = fmt.Sprintf("-max-names %d reached, %d guesses not asked (-max-names raises it)", *maxNames, n)
 		}
 	}
+	if !out.embedded && rep.Command == "run" && len(opts.Ports) > 0 {
+		if obs, err := st.Observations(); err == nil {
+			if scanned, open := portAddresses(obs); scanned > 0 {
+				rep.AddressesScanned, rep.AddressesOpen = &scanned, &open
+			}
+		}
+	}
 	if rep.Stopped == "" && !out.embedded && rep.Command == "run" && len(opts.Ports) > 0 {
 		// The ports were asked of the addresses the run scanned: the rest of the range is the next pass.
-		per := len(opts.Ports)
-		if portCfg.Discover == portcol.DiscoverFirst {
-			per += 2
-		}
 		addresses := 0
-		if rep.Cost != nil {
-			for _, st := range rep.Cost.Stages {
-				if st.Stage == "ports" && st.Actual != nil {
-					addresses = int(st.Actual.Connects) / per
-				}
-			}
+		if rep.AddressesScanned != nil {
+			addresses = *rep.AddressesScanned
 		}
 		if why, _ := portsPass(len(opts.Ports), addresses, rep.Counts["ports"]); why != "" {
 			cmd := "azhaq run " + shellJoin(append(withoutFlag(args, "ports"), "-ports", "full", "-db", path))

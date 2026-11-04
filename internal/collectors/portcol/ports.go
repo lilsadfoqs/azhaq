@@ -318,6 +318,12 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 			}
 			return types.RunMeta{Status: types.StatusCapped}, err
 		}
+		if err != nil {
+			// A scan that failed (a proxy that cannot be reached) has no ports to
+			// call closed.
+			c.forget(ip)
+			return types.RunMeta{Status: types.StatusError, Error: err.Error()}, err
+		}
 		if resumed {
 			s, ports = withPrior(s, prior), all
 		}

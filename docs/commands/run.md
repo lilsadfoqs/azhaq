@@ -314,7 +314,7 @@ A client route is a view that a single-page app's router draws.
 - A page that is byte for byte what the site root answers for a made-up path is a single-page app's shell. That makes it the catch-all answer of a directory whose own baseline was not asked, so that baseline is not requested. A directory with answers of its own is still asked.
 
 ### Sweeping the scope
-`-allow` and `-scope` fence a run; they do not add targets. `-url http://10.0.0.5/ -allow 10.0.0.0/24` maps 10.0.0.5 only, and a note says how much of the range that leaves. `-sweep` adds the IPv4 ranges and addresses `-allow` and `-scope` hold to the targets, as `-cidr` does for each: with `-ports` they are scanned in blocks with no size limit, and without it a range is expanded up to `-max-ips` (the summary says when it is cut). `-sweep` needs no target named alongside it. For example `azhaq run -allow 10.0.0.0/24 -sweep -ports top-100`. The sweep asks what the named targets are asked and holds to `-deny`, `-deny-path`, `-rate`, `-max-requests` and the kill file. A tighter `-allow` bounds it. The ledger and the summary count every address. IPv6 ranges are left alone, with a note. See [scope](../CONCEPTS.md#scope).
+`-allow` and `-scope` fence a run; they do not add targets. `-url http://10.0.0.5/ -allow 10.0.0.0/24` maps 10.0.0.5 only, and a note says how much of the range that leaves. `-sweep` adds the IPv4 ranges and addresses `-allow` and `-scope` hold to the targets, as `-cidr` does for each: with `-ports` they are scanned in blocks with no size limit, and without it a range is expanded up to `-max-ips` (the summary says when it is cut). `-sweep` needs no target named alongside it. For example `azhaq run -allow 10.0.0.0/24 -sweep -ports top-100`. The sweep asks what the named targets are asked and holds to `-deny`, `-deny-path`, `-rate`, `-max-requests` and the kill file. A tighter `-allow` bounds it. The ledger holds a connect to every address the scan asked, and the summary says how many that is (`addresses_scanned`) and how many had a port open (`addresses_open`); `counts.addresses` is another number, the address rows of the map. IPv6 ranges are left alone, with a note. See [scope](../CONCEPTS.md#scope).
 
 ### Notes in the summary
 Examples of what `notes` holds for a run:
@@ -448,7 +448,7 @@ azhaq run -url https://app.example.com/ -ports top-1000 -verify -db app.db
 | `-source-proxy` | string |  | send every subdomain source request through this proxy URL, as subfinder -proxy (else HTTP_PROXY and HTTPS_PROXY) |
 | `-source-rate` | float |  | requests per second to each subdomain source, as subfinder -rl (0: each source's own pace); a source's lower own pace stays |
 | `-source-rates` | string |  | pace single subdomain sources, as subfinder -rls: name=N/unit, comma-separated, unit s, m or h (hackertarget=10/m,crtsh=1/s) |
-| `-source-timeout` | duration | `30s` | give each subdomain source this long, 30s as subfinder does; a slower one (crt.sh) is abandoned, listed as failed, and the names the others gave are kept; -source-timeout 60s or more waits for crt.sh on a large domain (not -timeout, the run's bound) |
+| `-source-timeout` | duration | `30s` | give each subdomain source this long, 30s as subfinder does (any duration: 800ms holds to the millisecond for every source); a slower one (crt.sh) is abandoned, listed as failed, and the names the others gave are kept; -source-timeout 60s or more waits for crt.sh on a large domain (not -timeout, the run's bound) |
 | `-extra-wait` | duration | `5s` | how long the sources azhaq adds to subfinder's default set (commoncrawl, hudsonrock, rapiddns, sitedossier, thc, waybackarchive) may go on after every source of that set has answered; one still running then is cut, listed as failed, and its names so far are kept; 0 waits for them as long as -source-timeout; a source named with -sources is not cut |
 | `-max-time` | duration |  | how long the run may take: subs stops after this long, in any phase (the sources, subdomain.center's guesses, the DNS checks of -live, -w and -permute), exits 4 and leaves the rest for azhaq resume; run and plan only wait this long for the sources of a domain, then go on with what they gave (0: -source-timeout and a short grace bound the wait; -timeout bounds a run), as subfinder -max-time |
 | `-max-body` | int |  | largest response body read from a subdomain source, in bytes (default 33554432), as subfinder -rsr |
@@ -584,7 +584,7 @@ azhaq run -url https://app.example.com/ -ports top-1000 -verify -db app.db
 | `-port-discover` | string |  | ask first whether an address is up, by a connect to 80 and 443: first (scan the ones that answer) or only (list them, scan nothing) | rarely needed |
 | `-port-exclude-cdn` | bool |  | ask a CDN or WAF address only ports 80, 443, 8080 and 8443 (naabu -ec asks 80 and 443; this adds 8080 and 8443) | rarely needed |
 | `-port-ip` | string |  | the address families of a name to scan: 4 or 6 (default both) | rarely needed |
-| `-port-min-rate` | float |  | port connection attempts per second at least, as nmap's --min-rate: raises -port-rate to this when lower, and sets no ceiling | rarely needed |
+| `-port-min-rate` | float |  | port connection attempts per second at least, as nmap's --min-rate: raises the pace to this when the pace (-port-rate, or the default 1500) is lower, and never lowers it | rarely needed |
 | `-port-order` | string | `random` | the order a host's ports are asked in: random (the likeliest ports first, each tier shuffled) or asc | rarely needed |
 | `-port-payload` | string |  | send this to each open TCP port before reading what it says (\r and \n are CR and LF) | rarely needed |
 | `-port-proxy` | string |  | connect to TCP ports through this SOCKS5 proxy (host:port); a port is then asked its banner only, and UDP is not sent | rarely needed |
@@ -592,7 +592,7 @@ azhaq run -url https://app.example.com/ -ports top-1000 -verify -db app.db
 | `-port-rate` | float |  | port connection attempts per second, a ceiling (0: 1500, as naabu's connect scan, and 127.0.0.1 unpaced) | rarely needed |
 | `-port-retries` | int | `-1` | more passes over the ports that neither accepted nor refused: n passes over all of them, 0 none (default: one, when few did not answer) | rarely needed |
 | `-port-seed` | int |  | make the random port order repeat (0: a new one each run) | rarely needed |
-| `-port-source-ip` | string |  | connect from this local address | rarely needed |
+| `-port-source-ip` | string |  | connect from this local address, one of this machine's (any other is refused) | rarely needed |
 | `-port-threshold` | int |  | stop asking a host after this many open ports: it answers every port (0: no limit) | rarely needed |
 | `-port-timeout` | duration |  | wait this long for one port to accept or refuse a connect (0: 1.5s) | rarely needed |
 | `-port-unnamed` | int |  | after this many open ports of an address that no protocol probe could name, ask its other silent ports their banner only (0: 6; -1: no limit; each probe is a connect) | rarely needed |
