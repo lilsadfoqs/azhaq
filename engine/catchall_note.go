@@ -92,7 +92,7 @@ func CatchAllNotes(rows []MapEntry) []string {
 		if i == most {
 			break
 		}
-		note := fmt.Sprintf("%s answered %d URLs with the one page every unknown path gets (coverage catchall): a 200 there does not show that a route exists", o, n[o])
+		note := fmt.Sprintf("%s answered %d URLs with the page it gives a path that cannot exist (coverage catchall): a 200 there does not show that a route exists", o, n[o])
 		if u, err := url.Parse(o); err == nil && net.ParseIP(u.Hostname()) != nil {
 			note += "; an address may serve another site than its name does, so ask it with the name (-H 'Host: NAME')"
 		}

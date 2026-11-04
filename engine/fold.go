@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
+	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"github.com/lilsadfoqs/azhaq/internal/webextract"
 	"github.com/lilsadfoqs/azhaq/types"
 )
@@ -42,6 +43,7 @@ var FoldClasses = []string{FoldCatchAll, FoldNotFound, FoldBeyondDepth, FoldUnre
 type Folder struct {
 	held     map[string]bool // entity IDs of URLs not asked: their origin answers every path alike
 	exact    map[string]bool // entity IDs of URLs whose answer was the control's own page
+	exactURL map[string]bool // the same for the URLs a path sweep found, by URL: its rows are stored on the page swept
 	controls map[string][]fetch.Control
 }
 
@@ -49,10 +51,10 @@ type Folder struct {
 // for a catch-all origin and which control requests its catch-all answers
 // were compared with.
 func NewFolder(obs []types.StoredObservation) *Folder {
-	f := &Folder{held: CatchAllHeldIDs(obs), exact: map[string]bool{}, controls: map[string][]fetch.Control{}}
+	f := &Folder{held: CatchAllHeldIDs(obs), exact: map[string]bool{}, exactURL: map[string]bool{}, controls: map[string][]fetch.Control{}}
 	seen := map[string]bool{}
 	for _, o := range obs {
-		if o.Kind != "application" {
+		if o.Kind != "application" && !probed(o) {
 			continue
 		}
 		var p struct {
@@ -64,7 +66,11 @@ func NewFolder(obs []types.StoredObservation) *Folder {
 		if json.Unmarshal(o.Payload, &p) != nil || !p.CatchAll || p.Control == nil || p.Control.URL == "" {
 			continue
 		}
-		if p.Exact {
+		if p.Exact && probed(o) {
+			if u, err := normalize.URL(p.URL); err == nil {
+				f.exactURL[u] = true
+			}
+		} else if p.Exact {
 			f.exact[o.EntityID] = true
 		}
 		origin := originOf(p.URL)
@@ -85,7 +91,7 @@ func (f *Folder) Class(r MapEntry) string {
 		return ""
 	}
 	switch {
-	case r.Coverage == "catchall" && f != nil && f.exact[r.Entity.ID], r.Coverage == "skipped" && f != nil && f.held[r.Entity.ID]:
+	case r.Coverage == "catchall" && f != nil && (f.exact[r.Entity.ID] || f.exactURL[r.Entity.Key]), r.Coverage == "skipped" && f != nil && f.held[r.Entity.ID]:
 		// Only an answer that is the control's page itself is proved to say
 		// nothing; one that merely has its shape (a templated page whose
 		// numbers differ) may be a route of its own, and stays listed.

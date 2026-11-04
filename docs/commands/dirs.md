@@ -27,6 +27,7 @@ azhaq dirs -l services.txt -json
 2. Asks every word of the wordlist, with each `-e` extension if you give any. An empty line is a word too: it asks the base URL itself, as in ffuf, and is counted like the rest.
 3. Calibrates on paths that cannot exist, as ffuf's `-ac` does, and keeps it on when you give filters (`-fc`, `-fs`, `-fw`, `-fl` or `-fr`): an answer your filters hide is hidden, and an answer that looks like the catch-all is hidden as well, as with ffuf's `-ac -fs`. `-ac=false` turns calibration off: no guess is sent, the filters are yours alone, and every answer they do not remove and a matcher keeps is listed, catch-all answers included. The summary says so in a note.
 4. Applies the matchers and filters to the answers and prints the paths that pass.
+5. Asks one more name that cannot exist in each directory that two hits are found in, when the wordlist has words with a slash (`api/users`): see [A catch-all inside a directory](#a-catch-all-inside-a-directory).
 
 Nothing else is sent: no front page is asked first, so with `-ac=false` a sweep of N words is N requests, and `-max-requests N` is enough. The calibration guesses (or, with `-ac=false`, the first two words) double as the check that the service answers: if none of them gets an answer, the sweep stops there, the service is listed under `unreachable`, and the exit is 3.
 
@@ -60,6 +61,18 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 
 ffuf's calibration filters one exact size, word count or line count that all its answers share. When the page changes size on every request (a nonce, a counter, a build stamp) they share none, and ffuf lists every word. `dirs` then reads what the page is, from the answers of one status: the title they all have, the tag names they use and the words they all show. An answer of that status that has the same title, uses only those tags and shows at least 80% of those words is held back as the catch-all page, and the summary counts them (`7 paths answered with the page that names that cannot exist get … and were held back`). A path that answers a page of its own (another title, other tags, other words) is listed. This needs a title or at least 3 shared words; without them the answers are listed and the exit is 3, as above. `-ac=false` lists them all.
 
+### A catch-all inside a directory
+
+The calibration above is of the directory the sweep starts in. A word with a slash (`api/users`, `rest/user/login`) lands in a directory the sweep did not calibrate, and that directory may answer every unknown name alike: an API that gives `500 Error: Unexpected path` for any path under `/api/`, a `/priv/` that refuses everything with the same 403. ffuf's `-ac` lists all of them, one row for each word.
+
+When two or more hits are found in the same directory, `dirs` asks one name that cannot exist there (a random name under that directory) once the sweep is through. A hit whose answer is that control's, byte for byte (the same status and body, or the same `Location` for a redirect, once the path asked is taken out of the body), is folded: it is not listed, and the summary counts the hits of the directory in one line, with the control's URL: `folded catchall: 4 URLs of http://app/api/ answer as the control does: GET /api/k2x9 → 500, 22 bytes`. A hit that answers anything else stays listed, and so does the only hit of a directory.
+
+- The control is a request like the others: it counts in `requests`, goes in the ledger and in `-max-requests`, and is paced by `-rate`. The cost estimate before a `run` is a floor: it says a directory two hits are found in gets one more request, and cannot say how many there will be.
+- `-json` prints every row. A folded one has `"fold":"catchall"` and `"control"` (the URL of the control); the summary's `folds` lists each directory with its count and control. `results` counts the rows that are not folded.
+- A path that is folded is not swept into when `-depth` asks for the directories found.
+- `-ac=false` asks no control: every hit is listed. `azhaq run -dirs` folds the same hits in its map, in the line of its catch-all fold.
+- Hits that answer 403 or 404 fold the same way: only when the directory's control answered them byte for byte.
+
 ## Details
 
 ### What a match is
@@ -73,6 +86,10 @@ ffuf's calibration filters one exact size, word count or line count that all its
 - It sends `Accept-Encoding: gzip` and decodes the answer before counting.
 - A `-H` of yours wins over these headers.
 - The `User-Agent` is a current Chrome's, not `Fuzz Faster U Fool`. Sizes do not change with it unless the app answers by it. `-H 'User-Agent: …'` sends another.
+
+### A blank wordlist line
+- An empty line asks the base URL, as ffuf's does, and the base is judged as any word: it is not listed when it answers like a path that cannot exist (a single-page app that gives its shell for everything).
+- ffuf calibrates on the size alone, so its `-ac` drops a base that answers `200` with the very page that unknown paths get with `404`. `dirs` compares the status as well, and lists that base: it answers where a missing path does not.
 
 ### Which words are asked
 - A sweep asks every word, `/logout` and `/delete` included, as ffuf does.

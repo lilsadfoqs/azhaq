@@ -612,3 +612,14 @@ func (c Control) String() string {
 	}
 	return s
 }
+
+// EchoFree is s with the path of requestURL taken out, in the forms an error
+// page echoes it: two answers for two paths of one directory are the same
+// page when their EchoFree bodies (or Location headers) are equal.
+func EchoFree(requestURL, s string) string {
+	u, err := url.Parse(requestURL)
+	if err != nil || u.Host == "" {
+		return s
+	}
+	return stripEcho(s, u.Scheme+"://"+u.Host, requestTarget(u))
+}

@@ -75,7 +75,7 @@ Behaviour, fields and edge cases: [`azhaq subs`](commands/subs.md).
 - A run in which every source failed is `degraded` and exits 3, not 0 with an empty list. One in which some answered exits 0, and the summary names the sources that failed (`-strict-exit` makes it 3). The summary names each source that failed.
 - azhaq keeps the names it found for a domain and checks them again in the next run. `-no-history` turns this off. See [Name history](commands/subs.md#name-history).
 - With `-live`, a name that no longer resolves drops out.
-- Without `-live`, a stored name that no source gave this run is listed with `"unverified": true`. subdomain.center's guesses, which subfinder prints, are held back and counted (`guesses held back`): `-guesses` prints them, flagged the same way, and `-live` checks them.
+- Without `-live`, a stored name that no source gave this run is listed with `"unverified": true`. subdomain.center's guesses, which subfinder prints, are held back and counted (`guesses held back`): `-guesses` prints them, flagged the same way, and `-live` checks them (`-live -guesses=false` leaves them unlooked).
 
 ### Examples
 
@@ -340,6 +340,9 @@ azhaq crawl -u https://app.example.com/ -fs rdn -do -f rdn,path -rl 5
 
 - **Calibration.** `dirs` calibrates by default, as ffuf does with `-ac`. `fuzz` does not calibrate unless you give `-ac`, as in ffuf, so a command line moved over returns ffuf's matches.
 - `dirs` keeps calibration on when you give `-fc`, `-fs`, `-fw`, `-fl` or `-fr` (`dirs` has no `-ft`), as ffuf's `-ac -fs` does: your filters add to the calibration. `-ac=false` turns it off; then the filters are yours alone, no calibration guess is sent, and the summary says so.
+- **A catch-all inside a directory.** ffuf's `-ac` calibrates the directory it starts in, so an API that answers every unknown `api/…` word with one error lists a row for each. `dirs` asks one name that cannot exist in each directory two hits are found in and folds the hits that answer as it did, byte for byte, into one line with their count: [details](commands/dirs.md#a-catch-all-inside-a-directory).
+- **A blank wordlist line** asks the base URL in both tools. ffuf calibrates on the size alone and so drops a base that answers `200` with the size of the `404` page unknown paths get; `dirs` compares the status too and lists it.
+- **What matched.** A `fuzz` match says which matchers held (`-mc`, `-mr`, …) and what each held on, and, with `-ac`, when it is a calibration answer's own: [Output](commands/fuzz.md#output). `-mc 302 -mr 'Location: index.php'` lists every 302 answer in both tools, since `-mmode` is `or` by default.
 - Either command needs the keyword `FUZZ`, or the one `-ack` names. Without it a note says nothing was calibrated.
 - **Scope.** The host in `-u` is the scope, unless `-allow`, `-deny` or `-scope` say otherwise. An input that would go to another host is counted and not sent.
 - A header that names a host is held to the scope too, because a front end routes by it. These are `Host`, `X-Forwarded-Host`, `X-Host` and `X-Original-Host`. With no `-allow`, `-deny` or `-scope`, a host you name in a header joins the targets you named. With a rule, a header naming a host outside it, or the allowed host on another port than `-allow HOST:PORT` gives, is refused before anything is sent. See [Concepts](CONCEPTS.md).

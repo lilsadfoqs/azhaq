@@ -288,6 +288,20 @@ docs-mcp.state-client-cannot-lift	docs/MCP.md	A client cannot lift the exception
 readme.state-held	README.md	it is held back, listed as skipped, and `-send-state-changing` sends it	test:cmd/azhaq:TestFoundStateChangingGETsAreHeldBack,TestSendStateChangingSendsThemAndSaysSentOnlyForLedgerLines
 readme.state-target-sent	README.md	A target you give is always sent.	test:cmd/azhaq:TestGivenStateChangingTargetIsSent
 docs-concepts.state-flag-sends	docs/CONCEPTS.md	`-send-state-changing` sends them; a target you give is never held back.	test:cmd/azhaq:TestSendStateChangingSendsThemAndSaysSentOnlyForLedgerLines,TestGivenStateChangingTargetIsSent
+fuzz.mr-reads-headers	docs/commands/fuzz.md	`-mr` and `-fr` read the response headers, one `Name: value` line each, followed by the body, as ffuf does	test:cmd/azhaq:TestFuzzMatcherModesFollowFfuf
+fuzz.mmode-or-and	docs/commands/fuzz.md	`-mc 302 -mr 'Location: index.php'` lists every 302 answer, as ffuf does	test:cmd/azhaq:TestFuzzMatcherModesFollowFfuf
+fuzz.mmode-and	docs/commands/fuzz.md	`-mmode and` lists the answers every matcher holds for	test:cmd/azhaq:TestFuzzMatcherModesFollowFfuf
+fuzz.matched-evidence	docs/commands/fuzz.md	`matched` names the ones that did	test:cmd/azhaq:TestFuzzMatchRowSaysWhatMatched
+fuzz.control-label	docs/commands/fuzz.md	With `-ac`, an answer that has a calibration answer's status and the same bytes	test:cmd/azhaq:TestFuzzMatchRowSaysItIsTheControl
+dirs.blank-line-base	docs/commands/dirs.md	An empty line asks the base URL, as ffuf's does, and the base is judged as any word	test:cmd/azhaq:TestDirsBlankWordAsksTheBase;test:internal/collectors/dirscol:TestBlankWordIsJudgedLikeAnyWord
+dirs.blank-line-status	docs/commands/dirs.md	`dirs` compares the status as well, and lists that base	test:internal/collectors/dirscol:TestBlankWordIsJudgedLikeAnyWord
+dirs.dir-control-fold	docs/commands/dirs.md	is folded: it is not listed, and the summary counts the hits of the directory in one line, with the control's URL	test:cmd/azhaq:TestDirsFoldsACatchAllInsideADirectory;test:internal/collectors/dirscol:TestSweepFoldsHitsThatAreTheirDirectorysControl
+dirs.dir-control-one-hit	docs/commands/dirs.md	A hit that answers anything else stays listed, and so does the only hit of a directory	test:internal/collectors/dirscol:TestSweepFoldsHitsThatAreTheirDirectorysControl
+dirs.dir-control-counted	docs/commands/dirs.md	it counts in `requests`, goes in the ledger and in `-max-requests`, and is paced by `-rate`	test:cmd/azhaq:TestDirsFoldsACatchAllInsideADirectory;test:internal/collectors/dirscol:TestSweepFoldsHitsThatAreTheirDirectorysControl
+dirs.dir-control-json	docs/commands/dirs.md	`-json` prints every row. A folded one has `"fold":"catchall"` and `"control"`	test:cmd/azhaq:TestDirsFoldsACatchAllInsideADirectory
+dirs.dir-control-no-descent	docs/commands/dirs.md	A path that is folded is not swept into when `-depth` asks for the directories found.	test:internal/collectors/dirscol:TestSweepDoesNotDescendIntoAFoldedHit
+dirs.dir-control-ac-off	docs/commands/dirs.md	`-ac=false` asks no control: every hit is listed.	test:internal/collectors/dirscol:TestSweepFoldsHitsThatAreTheirDirectorysControl
+dirs.dir-control-run	docs/commands/dirs.md	`azhaq run -dirs` folds the same hits in its map	test:cmd/azhaq:TestRunDirsFoldsACatchAllInsideADirectory;test:engine:TestSweepFoldsTheAnswerOfItsDirectorysControl
 dns.cname-target-checked	docs/commands/dns.md	A name with a CNAME gets its target checked, whichever types were asked.	test:cmd/azhaq:TestDNSCNAMEAloneChecksTheTarget
 dns.cname-alone-asks-a	docs/commands/dns.md	so the name is asked for A once more, and only the end of the chain is kept from that answer	test:cmd/azhaq:TestDNSCNAMEAloneChecksTheTarget
 dns.takeover-counts-apart	docs/commands/dns.md	`takeover_candidates` and `takeover_verified` count them apart, and add up to the rows under `takeover`.	test:cmd/azhaq:TestTakeoverSummaryCountsCandidatesAndVerified
