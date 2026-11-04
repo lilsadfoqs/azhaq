@@ -103,7 +103,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
   - `-w FILE[:KEYWORD]` is repeatable. `-w a.txt,b.txt` takes two lists, and `-` reads stdin.
   - `-mode clusterbomb|pitchfork|sniper` combines the lists. `§…§` marks the places.
   - `-e` adds extensions, `-ic` ignores comments, and `-D` reads dirsearch lists, where `%EXT%` stands for each extension.
-  - `-enc 'FUZZ:urlencode b64encode'` encodes a keyword. All of ffuf's encoders are available, run in process.
+  - `-enc 'FUZZ:urlencode b64encode'` encodes a keyword. The encoders are `b64decode`, `b64encode`, `hexdecode`, `hexencode`, `jsonescape`, `jsonunescape`, `lower`, `md5`, `sha1`, `sha224`, `sha256`, `sha384`, `sha512`, `unicodedecode`, `unicodeencodeall`, `upper`, `urldecode`, `urlencode`, `urlencodeall`, `utf16`, `utf16be`, `xmlescape` and `xmlunescape`, run in process, and a `.tmpl` file with `#PAYLOAD#` is one too. ffuf's `htmlescape` and `htmlunescape` are not available: they are refused.
   - `-input-cmd`, `-input-num` and `-input-shell` take the words from a command.
   - `-request FILE` reads a raw request as Burp saves it, and `-request-proto` gives its protocol. `-u`, `-X`, `-d`, `-H` and `-b` replace parts of it.
 - **Request**

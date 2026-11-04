@@ -1216,3 +1216,13 @@ scope.exit-codes	docs/commands/scope.md	Without `-scope`, and with a platform an
 
 # docs/commands/docs.md
 docs.flags-take-no-topic	docs/commands/docs.md	`-flags` and `-flags-into` take no topic and are not used together. A name that is no topic or command is a usage error, exit 2.	test:cmd/azhaq:TestDocsFlagsTakeNoTopicAndAnUnknownNameIsAUsageError
+# the remaining sentences
+fuzz.encoder-list	docs/commands/fuzz.md	run in process, and a `.tmpl` file with `#PAYLOAD#` is one too	test:cmd/azhaq:TestFuzzEncodersAreTheListTheDocsName;test:internal/fuzz:TestEncodersMatchFfuf
+fuzz.no-html-encoders	docs/commands/fuzz.md	ffuf's `htmlescape` and `htmlunescape` are not available: they are refused.	test:cmd/azhaq:TestFuzzEncodersAreTheListTheDocsName
+ports.min-rate-pace	docs/commands/ports.md	it sets the pace to 500 connects a second when no `-rate` is given or `-rate` is lower	test:internal/collectors/portcol:TestMinRateSetsThePaceWhenNoRateIsGivenOrItIsLower
+ports.min-rate-loopback	docs/commands/ports.md	It paces the loopback too, so a loopback scan of 1,500 ports with `-detect none` takes about 3 seconds	test:cmd/azhaq:TestPortsMinRatePacesTheLoopbackAndGOMAXPROCSIsYours
+ports.min-rate-every-core	docs/commands/ports.md	`-min-rate` keeps every core; `GOMAXPROCS` in the environment sets the number yourself.	test:cmd/azhaq:TestPortsRateIsACeilingAndMinRateKeepsEveryCore,TestPortsMinRatePacesTheLoopbackAndGOMAXPROCSIsYours
+probe.crawl-cuts-too	docs/commands/probe.md	`crawl` does the same.	test:cmd/azhaq:TestOnlyProbeAndCrawlCutAStreamTheOthersReadToItsEnd
+probe.others-read-to-end	docs/commands/probe.md	`dirs`, `params` and `fuzz` do not cut a stream: they read an answer to its end.	test:cmd/azhaq:TestOnlyProbeAndCrawlCutAStreamTheOthersReadToItsEnd
+roles.replay-max-whole-again	docs/commands/roles.md	`-replay-max` limits the history reads over all roles, and then the replay, which gets the whole count again.	test:cmd/azhaq:TestRolesReplayMaxLimitsTheHistoryReadsOverAllRoles,TestRolesReplayMaxIsSpentByTheHistoryReadsAndTheReplayEachInFull,TestRolesReplayTakesAURLOnlyWhileTheBudgetHoldsEveryRole
+roles.owner-verdict-answers	docs/commands/roles.md	are used only when no other role's write was accepted (2xx) and none was answered 5xx: each answer is a 4xx, a redirect, or a 2xx that says it was denied.	test:cmd/azhaq:TestRolesOnlyItsOwnerWritesItAlsoWhenTheOthersAreRedirectedOrDenied,TestReplayWriteDeleteRefused
