@@ -82,6 +82,9 @@ func HTTPAs(class string, req *http.Request) {
 	}
 	counter(class).Add(1)
 	spend(class, "http", collectorOf(req.Context()), 1)
+	if f := OnSent; f != nil && class == ClassTarget {
+		f(req.Method, req.URL.String())
+	}
 	l := Active()
 	if l == nil {
 		return
@@ -130,6 +133,16 @@ func bodySum(req *http.Request) string {
 // Transport, so no collector steps round the rule.
 var Deny func(raw string) error
 
+// Hold, when set, is asked about each GET or HEAD before it is sent, after
+// Deny: an error holds it back (a GET found on the way whose own name
+// declares a state change). The request's context says who asked for it.
+var Hold func(req *http.Request) error
+
+// OnSent, when set, hears of each request to a target as it is recorded
+// (the same moment the ledger line is made, with or without a ledger file):
+// what a summary calls sent is what this heard.
+var OnSent func(method, raw string)
+
 // Unsent is called for a request Transport held back after it was counted
 // (fetch gives it back to the budget).
 var Unsent func()
@@ -140,6 +153,9 @@ func Chrome(ctx context.Context, method, raw string) { ChromeAt(ctx, method, raw
 // ChromeAt is Chrome for a request sent at a time already past; zero is now.
 func ChromeAt(ctx context.Context, method, raw string, at time.Time) {
 	spend(ClassTarget, "chrome", collectorOf(ctx), 1)
+	if f := OnSent; f != nil {
+		f(method, raw)
+	}
 	l := Active()
 	if l == nil {
 		return
@@ -254,6 +270,17 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 	}
 	if f := Deny; f != nil && req.URL != nil && class == ClassTarget {
 		if err := f(req.URL.String()); err != nil {
+			if req.Body != nil {
+				req.Body.Close()
+			}
+			if Unsent != nil {
+				Unsent()
+			}
+			return nil, err
+		}
+	}
+	if f := Hold; f != nil && req.URL != nil && class == ClassTarget {
+		if err := f(req); err != nil {
 			if req.Body != nil {
 				req.Body.Close()
 			}

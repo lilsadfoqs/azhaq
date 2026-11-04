@@ -53,7 +53,7 @@ A request that failed is a finished task, so a plain `resume` does not ask it ag
 - `resume` takes run's flags, and gives them to a stopped `fuzz` as it spells them: `-quiet` prints no matches and no progress, only the summary, and run's `-timeout` (the run's bound, a duration) is `fuzz`'s `-maxtime`.
 - Files and directories are stored as full paths, so `resume` works from another directory.
 - A `-list` file is also copied into the workspace. If the file is gone or changed, the run continues the copy, and a note says so.
-- `-all-gets` and `-get-words` are dropped from a run an older azhaq stored, with a note: every GET found in scope is requested now.
+- `-all-gets` and `-get-words` are dropped from a run an older azhaq stored, with a note: a GET found on the way whose own path or API operation declares a state change is held back unless `-send-state-changing` is given, and every other GET found in scope is requested.
 
 ## Flags
 

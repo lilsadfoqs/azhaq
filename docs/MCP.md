@@ -7,7 +7,7 @@
 The **scope**, the **request budget**, the **pace** and the **resolvers and sources** are fixed at start. No tool argument can widen or change them:
 
 - Targets outside the scope are skipped and listed in the summary.
-- Paths a `-deny-path` rule matches are never requested by any tool, and are listed as skipped. azhaq has no path rule of its own: `azhaq_map` asks every GET it finds in scope, `/logout` and an API description's `GET /createdb` included, and the `-deny-path` rules set when the server starts are the only thing that keeps a URL out. A client cannot add one per call.
+- Paths a `-deny-path` rule matches are never requested by any tool, and are listed as skipped. azhaq's one name rule is the decided exception: `azhaq_map` asks every GET it finds in scope except one whose own path or API operation declares a state change (`/logout`, an API description's `GET /createdb`), which is held back and listed as skipped unless the server was started with `-send-state-changing`. Besides that, the `-deny-path` rules set when the server starts are the only thing that keeps a URL out. A client cannot add one per call. A client cannot lift the exception either.
 - A subdomain lookup for a domain outside the scope is refused, because the passive sources would learn what the assistant asks about.
 - Once the budget is spent, every tool that sends requests refuses.
 - Chrome is not run without its sandbox: where the system gives it none, a tool that needs Chrome (`browser`, `login`, `azhaq_roles` with a login) answers with an error that names `-chrome-no-sandbox`, before any request. Start the server with that flag to allow it, in a throwaway environment.
@@ -21,7 +21,7 @@ azhaq mcp -scope hackerone -program security -max-requests 20000 -rate 5
 azhaq mcp -allow example.com -deny admin.example.com -max-requests 5000
 ```
 
-Every flag is described on the [`azhaq mcp` page](commands/mcp.md#flags): `-scope` with `-program`, `-allow`, `-deny`, `-deny-path`, `-resolvers`, `-sources`, `-history`, `-allow-writes`, `-skip`, `-no-takeover`, `-chrome-no-sandbox`, `-max-requests`, `-rate`, `-dir` (default `azhaq-mcp`) and `-unlocked`.
+Every flag is described on the [`azhaq mcp` page](commands/mcp.md#flags): `-scope` with `-program`, `-allow`, `-deny`, `-deny-path`, `-resolvers`, `-sources`, `-history`, `-allow-writes`, `-send-state-changing`, `-skip`, `-no-takeover`, `-chrome-no-sandbox`, `-max-requests`, `-rate`, `-dir` (default `azhaq-mcp`) and `-unlocked`.
 
 To see what the tools send in a proxy, start the server with `HTTP_PROXY` and `HTTPS_PROXY` set (Go's rule: loopback targets stay direct, as the server has no `-proxy` to send them): the server has no `-proxy` flag. See [Proxies](CONCEPTS.md#proxies).
 
@@ -81,12 +81,12 @@ Any client that takes a JSON configuration:
 **`azhaq_plan`**
 
 - Built by the same code path that builds `azhaq_map`'s call (the same targets and flags, the same lock, pace, budget and held options), so the plan is what the call would send; it sends nothing itself.
-- `state_changing` names, per target, the GET requests among the targets whose own name declares a state change — a whole word of the documented set (create, createdb, delete, remove, reset, populate, logout, signout, clear, wipe, drop, truncate, purge, destroy, erase, seed) in the URL's path or query — each with the `-deny-path` rule that would keep it out. Nothing is withheld by the list. What a crawl would only find by reading an API description (VAmPI's `GET /createdb`, whose description says it creates and populates its database) is not known to a plan; a run names those in its summary's `state_changing` as it finds them.
+- `state_changing` names, per target, the GET requests among the targets whose own path declares a state change — a whole word of the documented set (create, createdb, delete, remove, reset, populate, logout, signout, clear, wipe, drop, truncate, purge, destroy, erase, seed) in the URL's path — each with the `-deny-path` rule that would keep it out. A target is a URL you gave, so it is sent. What a crawl would only find by reading an API description (VAmPI's `GET /createdb`, whose description says it creates and populates its database) is not known to a plan; a run names those in its summary's `state_changing` as it finds them.
 
 **`azhaq_map`**
 
 - Returns the summary and the highlights: auth-gated routes, forbidden routes and API routes.
-- Asks every GET it finds in scope, a GET operation of an API description and a GET form included. A GET can change data or end a session; only the server's `-deny-path` rules keep a URL out.
+- Asks every GET it finds in scope, a GET operation of an API description and a GET form included, except one whose own path or API operation declares a state change: that one is held back and listed as skipped unless the server was started with `-send-state-changing`. A GET can change data or end a session; besides that exception only the server's `-deny-path` rules keep a URL out.
 - `browser` loads pages in Chrome too.
 - `graphql` asks each GraphQL endpoint for its schema. That is an introspection POST, and it is counted. Where introspection is off, the schema is recovered from validation errors.
 

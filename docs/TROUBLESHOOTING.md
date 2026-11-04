@@ -33,11 +33,11 @@ Entries are grouped by what you were doing:
 
 **Fix:** [Coverage](CONCEPTS.md#coverage-what-azhaq-did-with-a-url) says what to try next.
 
-### Why was `/logout` (or `/exec`, `/createdb`) requested?
+### Why was `/logout` (or `/exec`, `/createdb`) requested, or not?
 
-**Why:** azhaq sends a GET to every URL it finds in scope. It cannot know what a GET does on the server: a name says nothing reliable, and the same name is a read-only page on one app and a state change on another. So no name keeps a URL out, and a GET that deletes or logs out is asked. Writes are different: a write is a request with a method other than GET, HEAD or OPTIONS (POST, PUT, PATCH, DELETE), and it is sent only with its flag. That is a promise about the method, not that nothing changes: see [what azhaq sends](CONCEPTS.md#what-azhaq-sends-and-what-it-cannot-know).
+**Why:** azhaq sends a GET to every URL it finds in scope, except a GET found on the way whose own path or API operation declares a state change (`/logout`, `/createdb`, `/user/delete`): that one is held back and listed as skipped, and `-send-state-changing` sends it. A target you give, and a word of a wordlist you give, are always sent. Other names, `/exec` among them, keep nothing out: azhaq cannot know what a GET does on the server, and the same name is a read-only page on one app and a state change on another, so a GET that deletes or logs out under another name is asked. Writes are different: a write is a request with a method other than GET, HEAD or OPTIONS (POST, PUT, PATCH, DELETE), and it is sent only with its flag. That is a promise about the method, not that nothing changes: see [what azhaq sends](CONCEPTS.md#what-azhaq-sends-and-what-it-cannot-know).
 
-**Fix:** Say which paths must not be requested, with your own rule.
+**Fix:** Say which paths must not be requested whatever their name, with your own rule.
 
 - `-deny-path '^/(logout|createdb)'` keeps those paths out of every request, Chrome's included. The URL stays in the map as `skipped`, and the summary lists it as `-deny-path ^/(logout|createdb)`.
 - `azhaq plan` lists the rules a run would hold to, and the ledger records everything that was sent.

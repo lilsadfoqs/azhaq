@@ -74,6 +74,10 @@ type heldRun struct {
 	// (azhaq_params with a body method, azhaq_roles_writes). Without
 	// it those calls are refused before anything is sent.
 	AllowWrites bool `json:"allow_writes,omitempty"`
+	// SendStateChanging is -send-state-changing at start: the GETs a tool
+	// finds on the way whose own path or operation declares a state change are
+	// sent. Without it they are held back and listed as skipped.
+	SendStateChanging bool `json:"send_state_changing,omitempty"`
 }
 
 // sources is the effective -sources of every call: none, unless the
@@ -140,8 +144,14 @@ func (h heldRun) options(command string) []string {
 		if h.ChromeNoSandbox {
 			out = append(out, "-chrome-no-sandbox")
 		}
+		if h.SendStateChanging && command != "roles" {
+			out = append(out, "-send-state-changing")
+		}
 		fallthrough
 	case "probe", "ports", "dirs", "params", "dns":
+		if h.SendStateChanging && (command == "dirs" || command == "params") {
+			out = append(out, "-send-state-changing")
+		}
 		if h.Resolvers != "" {
 			out = append(out, "-resolvers", h.Resolvers)
 		}
@@ -169,13 +179,14 @@ func (h heldRun) view() map[string]any {
 		return v
 	}
 	return map[string]any{
-		"resolvers":    or(h.Resolvers, "default public resolvers"),
-		"sources":      h.sources(),
-		"skip":         splitList(h.Skip),
-		"no_takeover":  h.NoTakeover,
-		"history":      h.History,
-		"allow_writes": h.AllowWrites,
-		"chrome":       map[bool]string{false: "needs its sandbox: where the system gives none, Chrome does not start (-chrome-no-sandbox at start allows it)", true: "may run without its sandbox (-chrome-no-sandbox)"}[h.ChromeNoSandbox],
+		"resolvers":           or(h.Resolvers, "default public resolvers"),
+		"sources":             h.sources(),
+		"skip":                splitList(h.Skip),
+		"no_takeover":         h.NoTakeover,
+		"history":             h.History,
+		"allow_writes":        h.AllowWrites,
+		"state_changing_gets": map[bool]string{false: "held back: a GET found on the way whose own path or API operation declares a state change is listed as skipped, not sent (-send-state-changing at start sends them)", true: "sent (-send-state-changing)"}[h.SendStateChanging],
+		"chrome":              map[bool]string{false: "needs its sandbox: where the system gives none, Chrome does not start (-chrome-no-sandbox at start allows it)", true: "may run without its sandbox (-chrome-no-sandbox)"}[h.ChromeNoSandbox],
 	}
 }
 
@@ -203,6 +214,9 @@ func (h heldRun) text() string {
 	if h.AllowWrites {
 		out = append(out, "writes allowed (-allow-writes)")
 	}
+	if h.SendStateChanging {
+		out = append(out, "state-changing GETs found on the way are sent (-send-state-changing)")
+	}
 	return strings.Join(out, ", ")
 }
 
@@ -224,6 +238,7 @@ func cmdMCP(args []string) error {
 	skip := fs.String("skip", "", "collectors no tool runs, comma-separated (azhaq plan lists them): fixed at start")
 	noTakeover := fs.Bool("no-takeover", false, "no tool checks CNAMEs for a takeover: fixed at start")
 	chromeNoSandbox := fs.Bool("chrome-no-sandbox", false, "let Chrome run without its sandbox where the system gives it none (the tools that load pages in Chrome, such as azhaq_map with browser, and sign in with it): fixed at start. The pages are the targets' and untrusted: use a throwaway environment. By default Chrome does not start then")
+	sendState := fs.Bool("send-state-changing", false, "let the tools send the GETs they find on the way whose own path or API operation declares a state change (create, delete, reset, logout, ...): without it they are held back and listed as skipped; fixed at start, no tool argument sets it")
 	unlocked := fs.Bool("unlocked", false, "serve without a scope: any target a tool is given may be touched (port scans stay refused)")
 	if err := parse(fs, args); err != nil {
 		return err
@@ -243,6 +258,7 @@ func cmdMCP(args []string) error {
 	held.ChromeNoSandbox = *chromeNoSandbox
 	held.History = *history
 	held.AllowWrites = *allowWrites
+	held.SendStateChanging = *sendState
 	exe, err := os.Executable()
 	if err != nil {
 		return err
@@ -1692,7 +1708,7 @@ var mcpRunFlags = map[string]bool{
 	"dirs": true, "dirs-ext": true, "dirs-depth": true, "dirs-threads": true, "dirs-rate": true,
 	"params": true, "params-method": true, "params-writes": true, "params-include": true, "params-per-host": true,
 	"params-threads": true, "params-rate": true, "params-chunk": true, "params-timeout": true,
-	"dns-brute": true, "ports-udp": true, "no-tech": true,
+	"dns-brute": true, "ports-udp": true, "no-tech": true, "send-state-changing": true,
 }
 
 // forMCP rewrites what a summary says for the command line into what a

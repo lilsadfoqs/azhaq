@@ -267,7 +267,7 @@ func benchChecklist() {
 	dir, _ := filepath.Abs(filepath.Join(work, "checklist"))
 	must(os.MkdirAll(dir, 0o755))
 	c := &checklist{dir: dir, site: site}
-	for _, step := range []func(){c.mapAndCounts, c.writesOnlyWithFlags, c.denyPath, c.scope, c.lostSession, c.exitCodes,
+	for _, step := range []func(){c.mapAndCounts, c.writesOnlyWithFlags, c.denyPath, c.heldStateChanging, c.scope, c.lostSession, c.exitCodes,
 		c.webAndAPI, c.rolesAndWrites, c.outputs, c.mcpLock, c.services} {
 		step()
 	}

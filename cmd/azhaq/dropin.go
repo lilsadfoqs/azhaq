@@ -592,6 +592,7 @@ func cmdURLs(args []string) error {
 	liveRate := fs.Float64("live-rate", 10, "with -live, requests a second to the live site")
 	liveProxy := fs.String("live-proxy", "", "with -live, send the requests through this proxy (http://, https:// or socks5://; default: $HTTP_PROXY, $HTTPS_PROXY, except for loopback targets)")
 	liveMax := fs.Int("live-max", 0, "with -live, check at most N URLs, spread evenly over the sorted list; the rest are listed unchecked and counted (0: every URL)")
+	sendState := fs.Bool("send-state-changing", false, "with -live, also ask the URLs whose own path declares a state change (create, delete, reset, logout, ...); by default an archived /logout is not asked, and is counted as not asked (state-changing)")
 	given := inherit(fs, "provider-config=providers", "keep-junk=urls-keep-junk", "mc=urls-mc", "fc=urls-fc", "mt=urls-mt", "ft=urls-ft", "from=urls-from", "to=urls-to",
 		"blacklist=urls-blacklist", "fp=urls-fp", "retries=urls-retries", "urls-pages", "urls-pause", "proxy=urls-proxy", "urls-max",
 		"archive=urls-archive", "raw=urls-raw", "urls-timeout", "timeout", "v", "fail-on-errors")
@@ -633,8 +634,8 @@ func cmdURLs(args []string) error {
 		return usagef("-live-max is not negative")
 	case keepJunk && !c.json:
 		return usagef("-keep-junk labels each URL with its class and reason, which only -json can carry")
-	case (hasFlag(args, "live-rate", "live-max", "live-proxy")) && !*live:
-		return usagef("-live-rate, -live-max and -live-proxy are for -live")
+	case (hasFlag(args, "live-rate", "live-max", "live-proxy", "send-state-changing")) && !*live:
+		return usagef("-live-rate, -live-max, -live-proxy and -send-state-changing are for -live")
 	}
 	var run []string
 	if *providers != "" {
@@ -717,7 +718,7 @@ func cmdURLs(args []string) error {
 	flush()
 	var checked *liveCheck
 	if err == nil && *live && len(rows) > 0 && rep.Stopped == "" {
-		checked, err = verifyURLs(&c, rows, *liveRate, *liveMax, *liveProxy, rep)
+		checked, err = verifyURLs(&c, rows, *liveRate, *liveMax, *liveProxy, *sendState, rep)
 	}
 	for _, r := range rows {
 		o := urlOut{Row: r}
@@ -800,7 +801,7 @@ func cmdDirs(args []string) error {
 	list := onceString(fs, "l", "file of services (- for stdin)")
 	words := fs.String("w", "", "wordlist (default: SecLists' common.txt, built in: "+strconv.Itoa(dirscol.WordCount())+" words)")
 	specs := []string{"ac=dirs-ac", "e=dirs-ext", "depth=dirs-depth", "t=dirs-threads", "rate=dirs-rate",
-		"H=header", "cookie", "max-requests", "timeout", "v", "scope", "program", "allow", "deny", "deny-path", "ledger", "kill-file", "proxy", "resolvers"}
+		"H=header", "cookie", "max-requests", "timeout", "v", "scope", "program", "allow", "deny", "deny-path", "ledger", "kill-file", "proxy", "resolvers", "send-state-changing"}
 	for _, m := range dirsMatchers {
 		specs = append(specs, m.flag+"=dirs-"+m.flag)
 	}

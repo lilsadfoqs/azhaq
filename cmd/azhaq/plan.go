@@ -17,6 +17,7 @@ import (
 	"github.com/lilsadfoqs/azhaq/internal/collectors/gqlcol"
 	"github.com/lilsadfoqs/azhaq/internal/collectors/portcol"
 	"github.com/lilsadfoqs/azhaq/internal/egress"
+	"github.com/lilsadfoqs/azhaq/internal/neterr"
 	"github.com/lilsadfoqs/azhaq/internal/portscan"
 	"github.com/lilsadfoqs/azhaq/internal/verify"
 	"github.com/lilsadfoqs/azhaq/types"
@@ -144,6 +145,11 @@ type sendLimits struct {
 	paramsN      int      // names of -params
 	bruteN       int      // words of -dns-brute
 	dirsNoCal    bool     // -dirs-calibrate=false
+	// sendState is -send-state-changing: GETs found on the way whose own name
+	// declares a state change are sent, not held back. dirsHeld is how many of
+	// the -dirs requests the built-in list makes are held back for it.
+	sendState bool
+	dirsHeld  int
 }
 
 // planSends are the lines on what a run sends besides the GET requests for
@@ -383,7 +389,11 @@ func planFor(cat *catalog.Catalog, seeds []types.Seed, b engine.Budgets, paths [
 	default:
 		p.Sends = []string{"GET requests to the targets and what they lead to inside the scope"}
 	}
-	p.Sends = append(p.Sends, "azhaq cannot know what a GET does on the server: every URL found in scope is requested, and writes (POST, PUT, PATCH, DELETE) only with their flags")
+	if send.sendState {
+		p.Sends = append(p.Sends, "azhaq cannot know what a GET does on the server: every URL found in scope is requested, those whose own name declares a state change too (-send-state-changing), and writes (POST, PUT, PATCH, DELETE) only with their flags")
+	} else {
+		p.Sends = append(p.Sends, "azhaq cannot know what a GET does on the server: every URL found in scope is requested, except a GET found on the way whose own path or API operation declares a state change (create, delete, reset, logout, ...): it is held back and listed as skipped ("+neterr.SendFlag+" sends it), and writes (POST, PUT, PATCH, DELETE) only with their flags")
+	}
 	for _, rule := range b.Scope.DenyPath {
 		p.Sends = append(p.Sends, "never requested, by any collector or Chrome: a URL whose path or query matches -deny-path "+rule)
 	}
@@ -413,7 +423,11 @@ func planGuesses(paths []string, send sendLimits) []string {
 		out = append(out, fmt.Sprintf("%s, one each, on each web service (-no-paths turns them off)", plural(len(paths), "built-in path check")))
 	}
 	if send.dirs {
-		out = append(out, fmt.Sprintf("-dirs: %s on each web service (every word, and each of %s)", plural(send.dirsWords*(1+send.dirsExts), "request"), plural(send.dirsExts, "extension")))
+		line := fmt.Sprintf("-dirs: %s on each web service (every word, and each of %s)", plural(send.dirsWords*(1+send.dirsExts)-send.dirsHeld, "request"), plural(send.dirsExts, "extension"))
+		if send.dirsHeld > 0 {
+			line += fmt.Sprintf("; %d more of the built-in list name a state change and are held back (%s sends them)", send.dirsHeld, neterr.SendFlag)
+		}
+		out = append(out, line)
 	}
 	if send.params {
 		per := 3 + (send.paramsWords+499)/500
@@ -475,7 +489,7 @@ func printPlanText(w io.Writer, p runPlan) {
 		}
 	}
 	if len(p.StateChanging) > 0 {
-		fmt.Printf("requests that may change state (%d; named by their own name or description, and still sent unless a -deny-path rule keeps them out)\n", len(p.StateChanging))
+		fmt.Printf("requests that may change state (%d; named by their own path, and sent because you gave them as targets)\n", len(p.StateChanging))
 		for _, e := range p.StateChanging {
 			fmt.Printf("  %s\n", e.line())
 		}

@@ -59,12 +59,12 @@ type report struct {
 	Notes       []string           `json:"notes,omitempty"`
 	Next        []string           `json:"next,omitempty"`
 	Error       string             `json:"error,omitempty"` // an internal error: the summary disagrees with its rows (audit.go); exit 1
-	// StateChanging are the GET requests whose own name or description
+	// StateChanging are the GET requests whose own path (or API operation)
 	// declares a state change: the ones among the targets, named before
 	// anything was sent, and the ones found on the way (an API
-	// description's operation, a link named /logout), named in this
-	// summary. Each names the -deny-path rule that would keep it out;
-	// none was withheld by the list.
+	// description's operation, a link named /logout). Each says what became
+	// of it: sent (this run recorded a request for it), held back (found on
+	// the way, not sent: -send-state-changing sends it) or not requested.
 	StateChanging []stateChangeEntry `json:"state_changing,omitempty"`
 
 	// Cost is what the run was estimated to send before it started, by
@@ -82,6 +82,9 @@ type report struct {
 	// leads they are not map rows: Counts still adds up to Stored
 	// without them, and the notes say how their counts are derived.
 	Verify []verify.Result `json:"verify,omitempty"`
+	// StateChangingHeld is how many of those were held back, not sent: the
+	// skipped list names each, and the flag that sends them (see settleStateChanges).
+	StateChangingHeld int `json:"state_changing_held,omitempty"`
 	// SessionLost is how a signed-in run's session ended when it could not
 	// be renewed: the first answer that looked like its end, the GETs that
 	// were already in flight when it was read, and how many were asked

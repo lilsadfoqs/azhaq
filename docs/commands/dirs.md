@@ -93,7 +93,7 @@ When two or more hits are found in the same directory, `dirs` asks one name that
 
 ### Which words are asked
 - A sweep asks every word, `/logout` and `/delete` included, as ffuf does.
-- No word is held back, with a session or without one: what a GET does on the server cannot be known from its name. A word whose URL a `-deny-path` rule matches is not sent and is listed under `skipped` with the rule.
+- With a wordlist you give (`-w FILE`), no word is held back, with a session or without one: you chose it. With the built-in list, a word whose own name declares a state change (`logout`, `delete`, `reset`, `create`, `populate`, … and the same word with an extension, `logout.php`) is not sent: it is listed under `skipped` with the flag that sends it, `-send-state-changing`, and `plan` and the estimate leave it out. A word whose URL a `-deny-path` rule matches is not sent and is listed under `skipped` with the rule.
 - With a session, the run checks it as it goes. A word that ended the session is noticed: a `-login` run signs in again, a `-cookie` or `-H` run stops with a failure and exit 3. The sweeps that ran since the last good check run again with the new session, and the note counts the words they sent: [Sessions](../CONCEPTS.md#sessions).
 - `-u https://h/api/` asks `https://h/api/WORD`. A query or fragment on the URL is dropped, and a note says so.
 
@@ -140,6 +140,7 @@ When two or more hits are found in the same directory, `dirs` asks one name that
 | `-allow` | string, repeatable |  | a domain, host or address range the run may touch; HOST:PORT allows that host on that port only; with any -allow, nothing else is requested |
 | `-deny` | string, repeatable |  | a domain, host or address range the run must not touch, even when given as a target |
 | `-deny-path` | string, repeatable |  | a regular expression on a URL's path and query: a URL it matches is never requested, by any collector or Chrome, and is listed as not requested (repeatable; azhaq decides nothing by itself) |
+| `-send-state-changing` | bool |  | send the GETs found on the way whose own path or API operation declares a state change (create, delete, reset, logout, and the other words of the documented set): a crawl's link, a script's route, an API description's operation, a built-in -dirs word. By default they are held back and listed as skipped; a target you give, a wordlist you give and -deny-path rules are not affected |
 | `-kill-file` | string |  | stop all sending when this file exists, so that no request starts after it, and exit 4; azhaq resume works once it is removed (default DB.stop) |
 | `-ledger` | string |  | write every request, connection and DNS query the run sends (to targets, third-party sources and resolvers) to this file, a chain of hashes that azhaq ledger -verify checks (default DB.ledger.jsonl next to the workspace; off: none; with a temporary database, only when given) |
 
