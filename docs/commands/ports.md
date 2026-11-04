@@ -90,6 +90,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 | CDN or WAF | With `-ec`, the addresses that were asked only ports 80, 443, 8080 and 8443. |
 | the host `-pts` stopped on | The host that `-pts` stopped asking: it answers every port. |
 | `-proxy` or `-source-ip` | The scan asked the banner only. |
+| `-proxy HOST:PORT failed: …` | A proxy that cannot be reached: a failure, exit 3. |
 | `-wn` or `-sn` | How many hosts were called down. |
 | `open ports whose protocol was not probed, …` | The open ports that `-unnamed` stopped asking. |
 | `ports that neither accepted nor refused a connect, asked twice: scanme.nmap.org (45.33.32.156) port 80; …` | Ports where an open port may hide. |
@@ -162,7 +163,7 @@ A service that speaks first (`ssh`, `ftp`, `smtp`, `telnet`, `irc`, …) is name
   - `none` connects and closes: one connect per port, as naabu without `-sV`. No row names a service, not even by its port number (no `service` field, and no name in the `-oX` and `-oG` files), as naabu prints only `host:port`; the other modes mark a name taken from the port number with `?`.
   - `banner` reads what the service says on that connection and sends nothing after it: a bare `220` greeting stays `ftp-or-smtp` with its banner, and an FTP greeting that names no product is not asked `SYST`. Only `all` sends `EHLO` or `SYST`.
   - `all` is the default, and costs a second or two on top of the connect scan. `-detect none` (`-port-detect none` in `run`) matches naabu's time and output. It also asks a silent port for HTTP and TLS, then one request of each protocol that waits to be asked. Each goes on a connection of its own, several at once while the scan has workers free.
-- `-proxy host:port` (SOCKS5) and `-source-ip` make the TCP connects go through that proxy or from that address. The service probes beyond the first connection dial on their own, so with either the scan asks the banner only, and the summary says so.
+- `-proxy host:port` (SOCKS5) and `-source-ip` make the TCP connects go through that proxy or from that address. The service probes beyond the first connection dial on their own, so with either the scan asks the banner only, and the summary says so. A proxy that cannot be reached, or that breaks the SOCKS exchange, is a failure the summary names (`-proxy HOST:PORT failed: …`, exit 3), and the scan stops: its ports are not called closed. A proxy that works and says the target refused leaves the port closed, as a refusal does. A `-source-ip` that is not an address of this machine is a usage error (exit 2) before anything is sent.
 - UDP is not sent through a proxy. `-proxy` with `-udp` is refused.
 
 ### More on formats
@@ -415,7 +416,7 @@ azhaq ports -host 192.0.2.10 -p top-1000 -verify -json
 | `-proxy-auth` | string |  | user:password for -proxy | naabu's name |
 | `-pts` | int |  | stop asking a host after this many open ports: it answers every port (default: no limit) | naabu's name |
 | `-sa` | bool |  | scan every address of a name, not the first two of each family | naabu's name |
-| `-source-ip` | string |  | connect from this local address | naabu's name |
+| `-source-ip` | string |  | connect from this local address, one of this machine's (any other is refused) | naabu's name |
 | `-c` | int |  | same as -workers | other name |
 | `-ec` | bool |  | same as -exclude-cdn | other name |
 | `-j` | bool |  | same as -json | other name |

@@ -260,7 +260,7 @@ The summary and the exit codes are `run`'s: see [run](run.md#summary-and-exit-co
 | `-port-rate` | float |  | port connection attempts per second, a ceiling (0: 1500, as naabu's connect scan, and 127.0.0.1 unpaced) | rarely needed |
 | `-port-retries` | int | `-1` | more passes over the ports that neither accepted nor refused: n passes over all of them, 0 none (default: one, when few did not answer) | rarely needed |
 | `-port-seed` | int |  | make the random port order repeat (0: a new one each run) | rarely needed |
-| `-port-source-ip` | string |  | connect from this local address | rarely needed |
+| `-port-source-ip` | string |  | connect from this local address, one of this machine's (any other is refused) | rarely needed |
 | `-port-threshold` | int |  | stop asking a host after this many open ports: it answers every port (0: no limit) | rarely needed |
 | `-port-timeout` | duration |  | wait this long for one port to accept or refuse a connect (0: 1.5s) | rarely needed |
 | `-port-unnamed` | int |  | after this many open ports of an address that no protocol probe could name, ask its other silent ports their banner only (0: 6; -1: no limit; each probe is a connect) | rarely needed |

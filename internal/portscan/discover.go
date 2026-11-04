@@ -2,9 +2,12 @@ package portscan
 
 import (
 	"context"
+	"errors"
 	"net"
 	"strconv"
 	"sync"
+
+	"github.com/lilsadfoqs/azhaq/internal/egress"
 )
 
 // DiscoveryPorts are the ports a host is asked on to tell it is there: a
@@ -22,7 +25,7 @@ func (s *Scanner) Up(ctx context.Context, host, ip string) (bool, error) {
 		var wg sync.WaitGroup
 		var mu sync.Mutex
 		var up bool
-		var stop error
+		var stop, deadProxy error
 		for _, p := range DiscoveryPorts {
 			if err := s.wait(ctx, ip); err != nil {
 				return false, err
@@ -49,6 +52,14 @@ func (s *Scanner) Up(ctx context.Context, host, ip string) (bool, error) {
 				if err == nil {
 					c.Close()
 				}
+				if err != nil && !self && !refused(err) {
+					var pe *egress.ProxyError
+					if errors.As(err, &pe) && ctx.Err() == nil {
+						mu.Lock()
+						deadProxy = pe
+						mu.Unlock()
+					}
+				}
 				if err == nil || refused(err) || self {
 					mu.Lock()
 					up = true
@@ -59,6 +70,9 @@ func (s *Scanner) Up(ctx context.Context, host, ip string) (bool, error) {
 		wg.Wait()
 		if stop != nil {
 			return false, stop
+		}
+		if deadProxy != nil {
+			return false, deadProxy
 		}
 		if err := ctx.Err(); err != nil {
 			return false, err

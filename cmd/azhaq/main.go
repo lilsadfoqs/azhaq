@@ -368,7 +368,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	portDiscover := fs.String("port-discover", "", "ask first whether an address is up, by a connect to 80 and 443: first (scan the ones that answer) or only (list them, scan nothing)")
 	portIP := fs.String("port-ip", "", "the address families of a name to scan: 4 or 6 (default both)")
 	portAllIPs := fs.Bool("port-all-ips", false, "scan every address of a name, not the first two of each family")
-	portSource := fs.String("port-source-ip", "", "connect from this local address")
+	portSource := fs.String("port-source-ip", "", "connect from this local address, one of this machine's (any other is refused)")
 	portProxy := fs.String("port-proxy", "", "connect to TCP ports through this SOCKS5 proxy (host:port); a port is then asked its banner only, and UDP is not sent")
 	portProxyAuth := fs.String("port-proxy-auth", "", "user:password for -port-proxy")
 	portPayload := fs.String("port-payload", "", "send this to each open TCP port before reading what it says (\\r and \\n are CR and LF)")

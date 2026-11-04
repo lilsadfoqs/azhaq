@@ -321,6 +321,9 @@ func ShortError(s string) string {
 		return s
 	case strings.Contains(s, types.CutShort):
 		return types.CutShort
+	case strings.HasPrefix(s, "-proxy "):
+		// The proxy failed, not the port: the name keeps it from "connection refused".
+		return s
 	case strings.Contains(l, "timeout") || strings.Contains(l, "deadline exceeded") || strings.Contains(l, "timed out"):
 		return "timeout"
 	case strings.Contains(l, "connection refused"):

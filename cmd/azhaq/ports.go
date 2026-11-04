@@ -126,7 +126,7 @@ func cmdPorts(args []string) error {
 	wn := fs.Bool("wn", false, "scan only the addresses that are up (by -sn's test); the default scans every address")
 	fs.Bool("Pn", false, "accepted: addresses are scanned without asking whether they are up, which is the default")
 	fs.Bool("cdn", false, "accepted: a CDN address is marked in the output, always")
-	source := fs.String("source-ip", "", "connect from this local address")
+	source := fs.String("source-ip", "", "connect from this local address, one of this machine's (any other is refused)")
 	payload := fs.String("cp", "", "send this to each open TCP port before reading what it says (\\r and \\n are CR and LF)")
 	proxyFlag := fs.String("proxy", "", "connect to TCP ports through this SOCKS5 proxy (host:port); a port is then asked its banner only, and UDP is not sent")
 	proxyAuth := fs.String("proxy-auth", "", "user:password for -proxy")
