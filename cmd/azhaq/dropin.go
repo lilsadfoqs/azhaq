@@ -9,6 +9,7 @@ import (
 	"io"
 	"maps"
 	"math/rand"
+	"net"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -1351,6 +1352,9 @@ func cmdShots(args []string) error {
 	case *noHTTPS:
 		run = append(run, "-web-scheme", "http")
 	}
+	// A page or a host:port given is asked as given: the name in it is not also asked on 443 and 80.
+	askedOnly = len(prefixes)+len(*fs.Lookup("cidr").Value.(*stringsFlag))+len(nmapFiles)+len(nessusFiles)+len(portList) == 0 && !*noHTTP && !*noHTTPS && namedTargets(targs)
+	defer func() { askedOnly = false }()
 	st, done, err := runPreset(&c, append(run, given()...), rep, see)
 	if err != nil {
 		return err
@@ -1410,6 +1414,22 @@ func cmdShots(args []string) error {
 		rep.Notes = append(rep.Notes, n)
 	}
 	return rep.finish(c.json, c.silent)
+}
+
+// askedOnly says the run asks the targets as given (see cmdShots): set only
+// while shots runs.
+var askedOnly bool
+
+// namedTargets says every target is a URL or has a port: none is a bare name
+// or address, whose services are to be found.
+func namedTargets(targs []string) bool {
+	return len(targs) > 0 && !slices.ContainsFunc(targs, func(t string) bool {
+		if strings.Contains(t, "://") {
+			return false
+		}
+		_, port, err := net.SplitHostPort(t)
+		return err != nil || port == ""
+	})
 }
 
 // guessedFanout takes the ports nmap did not name a web service out of
