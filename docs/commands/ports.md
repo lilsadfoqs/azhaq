@@ -67,7 +67,7 @@ The fields of a `-json` row, which are naabu's plus azhaq's:
 | `cdn-name` | The CDN or WAF. |
 | `timestamp` | UTC, RFC 3339. |
 | `ports`, `silent`, `asked`, `refused` | On the one row of an address's silent UDP ports (no `port`): the ports, how many, how many UDP ports were asked, how many the address refused. See [UDP rows and lines](#udp-rows-and-lines). |
-| `service` | The service the port answered as. A name ending in `?` is only the port's usual service. |
+| `service` | The service the port answered as. A name ending in `?` is only the registered name of the port, taken from its number: nothing answered as that service, so it is not an identification. With `-detect none` no row has a `service`: nothing is named from the port number. |
 | `product`, `version` | What the service states: see [Products and versions](#products-and-versions-of-tcp-ports). |
 | `extrainfo` | What the answer says beside the product and its version, as it was sent: the rest of a `Server` header (`Python/3.11.15`, `(Ubuntu)`), or an SSH line's comment and protocol (`Ubuntu-2ubuntu2.13; protocol 2.0`). nmap calls it `extrainfo` too, and `-oX` and `-oG` carry it. |
 | `title` | The `<title>` of a web page that names no product. |
@@ -90,6 +90,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 | CDN or WAF | With `-ec`, the addresses that were asked only ports 80, 443, 8080 and 8443. |
 | the host `-pts` stopped on | The host that `-pts` stopped asking: it answers every port. |
 | `-proxy` or `-source-ip` | The scan asked the banner only. |
+| `-proxy HOST:PORT failed: …` | A proxy that cannot be reached: a failure, exit 3. |
 | `-wn` or `-sn` | How many hosts were called down. |
 | `open ports whose protocol was not probed, …` | The open ports that `-unnamed` stopped asking. |
 | `ports that neither accepted nor refused a connect, asked twice: scanme.nmap.org (45.33.32.156) port 80; …` | Ports where an open port may hide. |
@@ -118,8 +119,8 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 - `-p`, `-tp 100|1000|full` and `-pf FILE` add ports. `-ep LIST|FILE` takes ports out.
 - `-p -` is every port, `-p u:53` is a UDP port, and `-p none` leaves the TCP ports out.
 - The ports of a host are asked in a random order, the likeliest first: nmap's top 100, then its top 1000. `-order asc` asks them by number, and `-seed N` repeats an order.
-- `-rate` paces the scan: it is a ceiling. The default is 1500 connects a second. This machine's loopback is not paced unless you give `-rate`, and then 20,000 ports at `-rate 500` take 40 seconds. nmap's `--min-rate 500` is a floor, which is `-min-rate 500` here: no ceiling, so a loopback scan of 20,000 ports with `-detect none` takes a fraction of a second, as nmap's does.
-- With `-rate`, the scan runs on as many cores as that rate needs, one for each 15,000 connects a second, never more than the machine has: a scan on one core costs about the CPU nmap's does for the same rate, where the same scan spread over 20 cores cost several times as much. `-min-rate` has no ceiling and keeps every core; `GOMAXPROCS` in the environment sets the number yourself.
+- `-rate` paces the scan: it is a ceiling. The default is 1500 connects a second. This machine's loopback is not paced unless you give `-rate`, and then 20,000 ports at `-rate 500` take 40 seconds. nmap's `--min-rate 500` is a floor, which is `-min-rate 500` here: it only ever raises the pace, to the higher of the default 1500 (or `-rate`) and `-min-rate`. So `-min-rate 500` leaves the default pace alone, and a loopback scan of 20,000 ports with `-detect none` takes a fraction of a second, as nmap's does; `-min-rate 5000` asks 5,000 connects a second.
+- With `-rate`, the scan runs on as many cores as that rate needs, one for each 15,000 connects a second, never more than the machine has: a scan on one core costs about the CPU nmap's does for the same rate, where the same scan spread over 20 cores cost several times as much. `-min-rate` keeps every core; `GOMAXPROCS` in the environment sets the number yourself.
 - From `-rate 1000` up, the connects go out in batches of up to 32 (`rate / 500`), each batch waited on by one poll on one goroutine, not one goroutine and one poller entry for each connect. A port that accepted gets a goroutine of its own to be named. The benchmark takes a full-range scan of 127.0.0.1 at `-rate 10000` with the workspace and the ledger on against `nmap -sT --max-rate 10000`, and holds its CPU and its time to 1.25 times nmap's, with the open ports of nmap's all found. Below `-rate 1000`, and through a proxy, each connect is its own dial.
 - `-T0` to `-T5` set the rate, the connect timeout and the retries as nmap's templates do. An explicit flag wins.
 - `-c` is how many connects are in flight.
@@ -159,10 +160,10 @@ A service that speaks first (`ssh`, `ftp`, `smtp`, `telnet`, `irc`, …) is name
 - A CDN or WAF address is scanned in full, as naabu does. The row has `cdn` and a `note`. `-ec` (`-exclude-cdn`) asks it only ports 80, 443, 8080 and 8443, which is naabu's two ports plus 8080 and 8443, because its other ports are the provider's other customers'. The summary then names the addresses. `-cdn-full` is accepted and does nothing; it is the default.
 - `-pts N` stops asking a host after N open ports, for a host that answers every port. The row has `"threshold":true` and the summary names the host. Ports already in flight are still asked, so a few more than N may be listed.
 - `-detect` says what is asked of an open port:
-  - `none` connects and closes: one connect per port, as naabu without `-sV`.
+  - `none` connects and closes: one connect per port, as naabu without `-sV`. No row names a service, not even by its port number (no `service` field, and no name in the `-oX` and `-oG` files), as naabu prints only `host:port`; the other modes mark a name taken from the port number with `?`.
   - `banner` reads what the service says on that connection and sends nothing after it: a bare `220` greeting stays `ftp-or-smtp` with its banner, and an FTP greeting that names no product is not asked `SYST`. Only `all` sends `EHLO` or `SYST`.
   - `all` is the default, and costs a second or two on top of the connect scan. `-detect none` (`-port-detect none` in `run`) matches naabu's time and output. It also asks a silent port for HTTP and TLS, then one request of each protocol that waits to be asked. Each goes on a connection of its own, several at once while the scan has workers free.
-- `-proxy host:port` (SOCKS5) and `-source-ip` make the TCP connects go through that proxy or from that address. The service probes beyond the first connection dial on their own, so with either the scan asks the banner only, and the summary says so.
+- `-proxy host:port` (SOCKS5) and `-source-ip` make the TCP connects go through that proxy or from that address. The service probes beyond the first connection dial on their own, so with either the scan asks the banner only, and the summary says so. A proxy that cannot be reached, or that breaks the SOCKS exchange, is a failure the summary names (`-proxy HOST:PORT failed: …`, exit 3), and the scan stops: its ports are not called closed. A proxy that works and says the target refused leaves the port closed, as a refusal does. A `-source-ip` that is not an address of this machine is a usage error (exit 2) before anything is sent.
 - UDP is not sent through a proxy. `-proxy` with `-udp` is refused.
 
 ### More on formats
@@ -369,7 +370,7 @@ azhaq ports -host 192.0.2.10 -p top-1000 -verify -json
 | Flag | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `-rate` | float |  | port connection attempts per second, a ceiling (0: 1500, as naabu's connect scan, and 127.0.0.1 unpaced) |
-| `-min-rate` | float |  | connects per second at least, as nmap's --min-rate: raises -rate to this when lower, and sets no ceiling |
+| `-min-rate` | float |  | connects per second at least, as nmap's --min-rate: raises the pace to this when the pace (-rate, or the default 1500) is lower, and never lowers it |
 | `-workers` | int |  | connects in flight at once, over all hosts (default: as many as the rate allows, up to 20000) |
 | `-connect-timeout` | string |  | wait this long for one port to accept or refuse a connect: 1500, 1500ms or 2s (default 1.5s; -timeout is the run's limit) |
 | `-dns-rate` | float |  | DNS queries per second per resolver (0: no pace but the queries in flight, as dnsx) |
@@ -415,7 +416,7 @@ azhaq ports -host 192.0.2.10 -p top-1000 -verify -json
 | `-proxy-auth` | string |  | user:password for -proxy | naabu's name |
 | `-pts` | int |  | stop asking a host after this many open ports: it answers every port (default: no limit) | naabu's name |
 | `-sa` | bool |  | scan every address of a name, not the first two of each family | naabu's name |
-| `-source-ip` | string |  | connect from this local address | naabu's name |
+| `-source-ip` | string |  | connect from this local address, one of this machine's (any other is refused) | naabu's name |
 | `-c` | int |  | same as -workers | other name |
 | `-ec` | bool |  | same as -exclude-cdn | other name |
 | `-j` | bool |  | same as -json | other name |

@@ -140,6 +140,12 @@ type report struct {
 	// the user named with -o and the like: the ledger, the name history,
 	// the pointers to the last workspace, the archived URLs.
 	Wrote []string `json:"wrote,omitempty"`
+
+	// AddressesScanned and AddressesOpen are run -ports: the addresses the
+	// port scan asked, and those it found a port open on. counts.addresses is
+	// another count, the address rows the map holds.
+	AddressesScanned *int `json:"addresses_scanned,omitempty"`
+	AddressesOpen    *int `json:"addresses_open,omitempty"`
 }
 
 // wrote lists a file the run wrote besides its database.

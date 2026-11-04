@@ -354,7 +354,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	portsSpec := fs.String("ports", "", "scan TCP ports: default (the top 100 and the usual ports of the services azhaq names and checks), top-100, top-1000, full or a list of ports, ranges and these names, such as 22,80,8000-8100 or top-100,8888 (active; the targets given are the scope unless -allow)")
 	portsUDP := fs.String("ports-udp", "", "ask UDP ports (active): top (about 25 common ones), full or a list of ports, ranges and these names, such as 53,123,161,1-1024 or top,5354; a reply is open, an ICMP unreachable closed, neither open|filtered (-ports none: UDP only)")
 	portRate := fs.Float64("port-rate", 0, "port connection attempts per second, a ceiling (0: 1500, as naabu's connect scan, and 127.0.0.1 unpaced)")
-	portMinRate := fs.Float64("port-min-rate", 0, "port connection attempts per second at least, as nmap's --min-rate: raises -port-rate to this when lower, and sets no ceiling")
+	portMinRate := fs.Float64("port-min-rate", 0, "port connection attempts per second at least, as nmap's --min-rate: raises the pace to this when the pace (-port-rate, or the default 1500) is lower, and never lowers it")
 	portTimeout := fs.Duration("port-timeout", 0, "wait this long for one port to accept or refuse a connect (0: 1.5s)")
 	portRetries := fs.Int("port-retries", -1, "more passes over the ports that neither accepted nor refused: n passes over all of them, 0 none (default: one, when few did not answer)")
 	portWorkers := fs.Int("port-workers", 0, "port connects in flight at once, over all hosts (0: as many as the rate allows, up to 20000)")
@@ -368,7 +368,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	portDiscover := fs.String("port-discover", "", "ask first whether an address is up, by a connect to 80 and 443: first (scan the ones that answer) or only (list them, scan nothing)")
 	portIP := fs.String("port-ip", "", "the address families of a name to scan: 4 or 6 (default both)")
 	portAllIPs := fs.Bool("port-all-ips", false, "scan every address of a name, not the first two of each family")
-	portSource := fs.String("port-source-ip", "", "connect from this local address")
+	portSource := fs.String("port-source-ip", "", "connect from this local address, one of this machine's (any other is refused)")
 	portProxy := fs.String("port-proxy", "", "connect to TCP ports through this SOCKS5 proxy (host:port); a port is then asked its banner only, and UDP is not sent")
 	portProxyAuth := fs.String("port-proxy-auth", "", "user:password for -port-proxy")
 	portPayload := fs.String("port-payload", "", "send this to each open TCP port before reading what it says (\\r and \\n are CR and LF)")
@@ -1655,19 +1655,18 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 			rep.Stopped = fmt.Sprintf("-max-names %d reached, %d guesses not asked (-max-names raises it)", *maxNames, n)
 		}
 	}
+	if !out.embedded && rep.Command == "run" && len(opts.Ports) > 0 {
+		if obs, err := st.Observations(); err == nil {
+			if scanned, open := portAddresses(obs); scanned > 0 {
+				rep.AddressesScanned, rep.AddressesOpen = &scanned, &open
+			}
+		}
+	}
 	if rep.Stopped == "" && !out.embedded && rep.Command == "run" && len(opts.Ports) > 0 {
 		// The ports were asked of the addresses the run scanned: the rest of the range is the next pass.
-		per := len(opts.Ports)
-		if portCfg.Discover == portcol.DiscoverFirst {
-			per += 2
-		}
 		addresses := 0
-		if rep.Cost != nil {
-			for _, st := range rep.Cost.Stages {
-				if st.Stage == "ports" && st.Actual != nil {
-					addresses = int(st.Actual.Connects) / per
-				}
-			}
+		if rep.AddressesScanned != nil {
+			addresses = *rep.AddressesScanned
 		}
 		if why, _ := portsPass(len(opts.Ports), addresses, rep.Counts["ports"]); why != "" {
 			cmd := "azhaq run " + shellJoin(append(withoutFlag(args, "ports"), "-ports", "full", "-db", path))

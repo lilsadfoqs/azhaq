@@ -13,7 +13,7 @@ type Config struct {
 	Timeout          time.Duration // per connect
 	Retries          int           // portscan.Scanner.Retries
 	Workers          int           // connects in flight
-	MinRate          float64       // the pace is at least this
+	MinRate          float64       // the pace is at least this, and never lowers the default or -rate
 	Order            portscan.Order
 	Seed             int64
 	Threshold        int
@@ -42,7 +42,9 @@ func (c *Collector) Apply(cfg Config) {
 	s.Order, s.Seed, s.Threshold, s.Detect, s.Unnamed = cfg.Order, cfg.Seed, cfg.Threshold, cfg.Detect, cfg.Unnamed
 	s.SourceIP, s.Payload = cfg.SourceIP, cfg.Payload
 	s.Proxy, s.ProxyAuth = cfg.Proxy, cfg.ProxyAuth
-	if cfg.MinRate > 0 && s.Rate < cfg.MinRate {
+	// A floor under the pace the scan would have anyway: -rate, or the default
+	// (which leaves this machine's loopback unpaced), never lower than it.
+	if base := s.Rate; cfg.MinRate > 0 && cfg.MinRate > base && (base > 0 || cfg.MinRate > portscan.DefaultRate) {
 		s.Rate = cfg.MinRate
 	}
 	c.ExcludeCDN, c.Discover = cfg.ExcludeCDN, cfg.Discover
