@@ -65,8 +65,8 @@ Three kinds of word are tried, in this order:
 
 1. `client`: the field, argument and type names of GraphQL operations that the map already found in the HTML and scripts on the endpoint's origin. `client_words` counts them.
 2. `probe`: the built-in wordlist of verbs and nouns, the words of `-graphql-wordlist`, and the parts of names already recovered.
-   - The wordlist holds `get`, `list`, `all`, `create`, `update`, `delete`, `import`, `upload`, `system`, `health`, `diagnostics`, `user`, `paste`, …
-   - The parts are recombined pairwise and with an "All" infix for CRUD conventions: `delete` + `all` + `pastes` tries `deleteAllPastes`.
+   - The wordlist holds `get`, `list`, `all`, `create`, `update`, `delete`, `import`, `upload`, `system`, `health`, `diagnostics`, `user`, …
+   - The parts are recombined pairwise and with an "All" infix for CRUD conventions: `delete` + `all` + `pastes` tries `deleteAllPastes`. At most 4000 words are made, taking the parts in alphabetical order.
 3. `suggestion`: a name that a validation error names outright.
 
 - The payload's `recovery` object gives each root type's field count, how many fields were found each way (`"by":{"client":1,"probe":6}`) and how many words were tried (`words_tried`).
