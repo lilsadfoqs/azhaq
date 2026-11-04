@@ -588,7 +588,7 @@ urls.live-max-spread	docs/commands/urls.md	`-live-max N` asks only N URLs, sprea
 
 # docs/commands/ports.md
 ports.names-by-answer	docs/commands/ports.md	It names each service by what the port answers, on any port, and gives products and versions.	test:internal/portscan:TestLadderFindsServicesOnOtherPorts,TestScanNamesProducts,TestScanFindsRedisAndPostgresOnOtherPorts,TestProtocolReaders
-ports.silent-asked-again	docs/commands/ports.md	Asks the ports that neither accepted nor refused a connect once more, when few did not answer.	test:internal/portscan:TestSilentPortsAskedTwice,TestAgainRule,TestTimedOutConnectIsAskedAgainAfterTheQueueDrains
+ports.silent-asked-again	docs/commands/ports.md	Asks the ports that neither accepted nor refused a connect once more, when few did not answer.	test:internal/portscan:TestSilentPortsAskedTwice,TestSilentPortAskedTwiceOnALoopbackQueue,TestAgainRule,TestTimedOutConnectIsAskedAgainAfterTheQueueDrains
 ports.silent-request-of-own-protocol	docs/commands/ports.md	A port that says nothing is asked the request of its own protocol, an HTTP `HEAD /` and a TLS handshake.	test:internal/portscan:TestUsualPortAsksItsOwnProtocolFirst,TestIdentifySilentPorts
 ports.at-most-25	docs/commands/ports.md	That is at most 25 connects after the first.	test:internal/portscan:TestASilentPortCostsAtMostTwentyFiveMoreConnects
 ports.nothing-logs-in	docs/commands/ports.md	Nothing logs in, sends a credential or changes anything.	test:internal/portscan:TestEveryRequestOfTheLadderIsHarmless,TestEveryUDPDatagramIsARead,TestAGreetingIsNotAnsweredWithARequestExceptSYSTAndEHLO
