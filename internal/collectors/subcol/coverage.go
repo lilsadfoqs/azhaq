@@ -26,7 +26,13 @@ func Dependent() map[string]bool {
 // fewer than two independent sources in play: with one, nothing overlaps and
 // there is nothing to estimate from.
 func Chao1(foundBy map[string][]string, dependent map[string]bool, keep func(string) bool) (observed int, estimated float64, ok bool) {
-	var f1, f2 int
+	observed, estimated, _, _, ok = Chao1Basis(foundBy, dependent, keep)
+	return observed, estimated, ok
+}
+
+// Chao1Basis is Chao1 with what it rests on: f1 names given by one
+// independent source and f2 by two.
+func Chao1Basis(foundBy map[string][]string, dependent map[string]bool, keep func(string) bool) (observed int, estimated float64, f1, f2 int, ok bool) {
 	srcs := map[string]bool{}
 	for name, by := range foundBy {
 		if keep != nil && !keep(name) {
@@ -50,7 +56,7 @@ func Chao1(foundBy map[string][]string, dependent map[string]bool, keep func(str
 		observed++
 	}
 	if len(srcs) < 2 {
-		return observed, float64(observed), false
+		return observed, float64(observed), f1, f2, false
 	}
 	estimated = float64(observed)
 	if f2 > 0 {
@@ -58,7 +64,7 @@ func Chao1(foundBy map[string][]string, dependent map[string]bool, keep func(str
 	} else {
 		estimated += float64(f1*(f1-1)) / 2
 	}
-	return observed, estimated, true
+	return observed, estimated, f1, f2, true
 }
 
 // coverage is the payload's "coverage".

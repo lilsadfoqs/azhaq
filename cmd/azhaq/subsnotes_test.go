@@ -6,6 +6,8 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/lilsadfoqs/azhaq/internal/collectors/subcol"
 )
 
 const teslaTruth = "../../bench/truth/subs/"
@@ -31,8 +33,24 @@ func TestCoverageNoteTesla(t *testing.T) {
 	}
 	t.Log(notes[0])
 	want := "coverage (raw candidates): what the independent sources know, not every name that exists. Their pool holds about 1609 names and this run has 1400 of them"
-	if notes[0] != want {
-		t.Errorf("note %q", notes[0])
+	// The note says what the estimate rests on, counted from the payload.
+	dep := subcol.Dependent()
+	by, _ := p["found_by"].(map[string]any)
+	var f1, f2, observed int
+	for _, srcs := range by {
+		n := 0
+		for _, s := range strs(srcs) {
+			if !dep[s] {
+				n++
+			}
+		}
+		observed += min(n, 1)
+		f1 += map[bool]int{true: 1}[n == 1]
+		f2 += map[bool]int{true: 1}[n == 2]
+	}
+	basis := fmt.Sprintf(". This is an estimate (Chao1) from the %d names the independent sources gave: %d came from one source and %d from two", observed, f1, f2)
+	if notes[0] != want+basis {
+		t.Errorf("note %q, want %q", notes[0], want+basis)
 	}
 
 	// -live: only the printed names count.
@@ -91,12 +109,19 @@ func TestGuessCheckSaysWhereTheTimeWent(t *testing.T) {
 		"crtsh":           map[string]any{"seconds": 14.5},
 	}
 	n := guessCheck("hackerone.com", srcs)
-	if !strings.Contains(n, "checking the 1591 names subdomaincenter guessed in DNS took 452 s") {
+	if !strings.Contains(n, "the 1591 names only subdomaincenter held were looked up in DNS in 452 s: 16 resolved, 1575 did not exist") || !strings.Contains(n, "-live -guesses=false leaves the guesses unlooked") {
 		t.Errorf("note %q", n)
 	}
+	// A quick check is said too, without the advice on its cost.
 	srcs["subdomaincenter"].(map[string]any)["checked_seconds"] = 3.0
-	if n := guessCheck("hackerone.com", srcs); n != "" {
+	n = guessCheck("hackerone.com", srcs)
+	if !strings.Contains(n, "in 3 s: 16 resolved, 1575 did not exist") || strings.Contains(n, "-dns-rate") {
 		t.Errorf("a quick check: %q", n)
+	}
+	// The history's row shares the pool: the names are not counted twice.
+	srcs["history"] = map[string]any{"kept": 16.0, "dropped_unresolved": 1575.0, "checked_seconds": 3.0}
+	if n := guessCheck("hackerone.com", srcs); !strings.Contains(n, "the 1591 names only history, subdomaincenter held") {
+		t.Errorf("two rows of one pool: %q", n)
 	}
 }
 
