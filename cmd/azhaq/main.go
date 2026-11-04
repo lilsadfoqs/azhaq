@@ -1986,7 +1986,7 @@ func cmdDiff(args []string) error {
 		if len(runs) < 2 {
 			// Nothing to compare yet: said, not silent.
 			if *jsonl {
-				return json.NewEncoder(os.Stdout).Encode(map[string]any{"kind": "summary", "runs": len(runs), "added": 0, "removed": 0, "not_seen_again": 0, "observations": 0, "note": "one run so far: a diff needs two"})
+				return json.NewEncoder(os.Stdout).Encode(map[string]any{"kind": "summary", "runs": len(runs), "added": 0, "removed": 0, "not_seen_again": 0, "observations": 0, "changed": 0, "note": "one run so far: a diff needs two"})
 			}
 			fmt.Printf("%s holds %d run so far: a diff needs two (run the same target into it again)\n", *ws, len(runs))
 			return nil
@@ -2077,6 +2077,12 @@ func printDiffStores(old, neu *store.Store, oldLabel string, opts diffOpts) erro
 		}
 	}
 	failed := failedSources(neu)
+	// What was there in both runs and differs: the same rows watch lists.
+	ch, err := changesBetween(old, neu, d, changes{})
+	if err != nil {
+		return err
+	}
+	changed := changedRows(ch)
 	if opts.JSONL {
 		enc := json.NewEncoder(os.Stdout)
 		for _, e := range d.Added {
@@ -2094,6 +2100,11 @@ func printDiffStores(old, neu *store.Store, oldLabel string, opts diffOpts) erro
 				return err
 			}
 		}
+		for _, c := range changed {
+			if err := enc.Encode(c.json()); err != nil {
+				return err
+			}
+		}
 		if !opts.Quiet {
 			for _, o := range d.NewObs {
 				if err := enc.Encode(map[string]any{"kind": "observation", "collector": o.Collector, "obs_kind": o.Kind, "payload": o.Payload}); err != nil {
@@ -2107,6 +2118,7 @@ func printDiffStores(old, neu *store.Store, oldLabel string, opts diffOpts) erro
 			"removed":        len(removed),
 			"not_seen_again": len(unseen),
 			"observations":   len(d.NewObs),
+			"changed":        len(changed),
 		}
 		if len(failed) > 0 {
 			sum["failed_sources"] = failed
@@ -2121,9 +2133,9 @@ func printDiffStores(old, neu *store.Store, oldLabel string, opts diffOpts) erro
 		fmt.Printf("  ! the runs had different seeds; this compares two targets, not two scans of one\n")
 		fmt.Printf("    old: %s\n    new: %s\n", strings.ReplaceAll(oldIn, "\n", ", "), strings.ReplaceAll(newIn, "\n", ", "))
 	}
-	if len(d.Added) == 0 && len(d.Removed) == 0 && len(d.NewObs) == 0 {
+	if len(d.Added) == 0 && len(d.Removed) == 0 && len(d.NewObs) == 0 && len(changed) == 0 {
 		fmt.Println("  (no new entities or observations)")
-		fmt.Println("added=0 removed=0 observations=0")
+		fmt.Println("added=0 removed=0 observations=0 changed=0")
 		return nil
 	}
 	for _, e := range d.Added {
@@ -2131,6 +2143,9 @@ func printDiffStores(old, neu *store.Store, oldLabel string, opts diffOpts) erro
 	}
 	for _, e := range removed {
 		fmt.Printf("  - %s %s\n", e.Type, e.Key)
+	}
+	for _, c := range changed {
+		fmt.Println(c.line())
 	}
 	if !opts.Quiet {
 		for _, o := range d.NewObs {
@@ -2144,7 +2159,7 @@ func printDiffStores(old, neu *store.Store, oldLabel string, opts diffOpts) erro
 		}
 		fmt.Println(line + "; -json lists them")
 	}
-	fmt.Printf("added=%d removed=%d not_seen_again=%d observations=%d\n", len(d.Added), len(removed), len(unseen), len(d.NewObs))
+	fmt.Printf("added=%d removed=%d not_seen_again=%d observations=%d changed=%d\n", len(d.Added), len(removed), len(unseen), len(d.NewObs), len(changed))
 	return nil
 }
 

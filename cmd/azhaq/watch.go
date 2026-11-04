@@ -160,6 +160,13 @@ func diffRuns(path string) (changes, error) {
 	if err != nil {
 		return ch, err
 	}
+	return changesBetween(old, neu, d, ch)
+}
+
+// changesBetween sorts what differs between two runs the way watch reports
+// it; diff counts the same rows. ch holds the runs' dates and Baseline.
+func changesBetween(old, neu *store.Store, d store.Diff, ch changes) (changes, error) {
+	var err error
 	if !ch.Baseline {
 		if ch.Routes, err = diffRoutes(old, neu); err != nil {
 			return ch, err
