@@ -54,7 +54,7 @@ func TestPortsCompose(t *testing.T) {
 		t.Fatalf("none,22: %v", err)
 	}
 	_, err = Ports("22,top")
-	if err == nil || err.Error() != `bad port "top": TCP takes top-100, top-1000 or full (top is the UDP list)` {
+	if err == nil || err.Error() != `bad port "top": TCP takes default, top-100, top-1000 or full (top is the UDP list)` {
 		t.Fatalf("top on TCP: %v", err)
 	}
 	if _, err = Ports("22,nope"); err == nil || err.Error() != `bad port "nope"` {
