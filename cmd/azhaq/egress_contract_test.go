@@ -393,6 +393,8 @@ var egressContract = map[string]egressEntry{
 	"query":   {sends: "silent", why: "reads a workspace"},
 	"show":    {sends: "silent", why: "reads a workspace"},
 	"gallery": {sends: "silent", why: "serves a workspace to the user's own browser; no outbound connection"},
+	"runs":    {sends: "silent", why: "lists and removes the kept run folders"},
+	"ui":      {sends: "silent", why: "serves the kept runs to the user's own browser; no outbound connection"},
 	"hunt":    {sends: "silent", why: "reads a workspace"},
 	"watch":   {sends: "delegates", via: "run", why: "runs `run` again on a schedule and notifies through source clients"},
 	"new":     {sends: "silent", why: "reads a workspace"},
