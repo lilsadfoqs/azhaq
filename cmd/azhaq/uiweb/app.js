@@ -560,8 +560,10 @@ function collectorFacts(name) {
   const lines = Array.isArray(ledger.entries) ? ledger.entries.filter(e => e.collector === name).length : null;
   const aggregate = ledger.by_collector?.[name];
   const ledgerCount = typeof aggregate === 'number' ? aggregate : typeof aggregate?.count === 'number' ? aggregate.count : lines;
-  const used = entries.some(e => Object.hasOwn(e, 'actual') && e.actual != null) || (ledgerCount != null && ledgerCount > 0);
-  return {entries, failures, ledgerCount, used};
+  // A collector can work without sending: crawl and js read the pages http fetched.
+  const observations = current?.graph?.observations_by_collector?.[name] ?? 0;
+  const used = entries.some(e => Object.hasOwn(e, 'actual') && e.actual != null) || (ledgerCount != null && ledgerCount > 0) || observations > 0;
+  return {entries, failures, ledgerCount, observations, used};
 }
 function appendCollectorFacts(body, name) {
   const facts = collectorFacts(name);
@@ -578,7 +580,8 @@ function appendCollectorFacts(body, name) {
       body.append(el('p', null, sentence));
     }
   }
-  if (!hasRequests && !(facts.ledgerCount > 0)) body.append(el('p', 'muted', 'No request recorded for this collector in this run.'));
+  if (!hasRequests && !(facts.ledgerCount > 0)) body.append(el('p', 'muted', facts.observations > 0 ? 'Sent no request of its own: it read what other collectors fetched.' : 'No request recorded for this collector in this run.'));
+  if (facts.observations > 0) body.append(el('p', null, `Produced ${facts.observations} ${facts.observations === 1 ? 'observation' : 'observations'}`));
   if (facts.ledgerCount != null && facts.ledgerCount > 0) body.append(el('p', null, `${facts.ledgerCount} ledger lines recorded for this collector`));
   for (const failure of facts.failures) {
     const reason = String(failure.error || 'failure');
