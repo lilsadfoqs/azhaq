@@ -1,6 +1,78 @@
-# azhaq
+<p align="center">
+  <a href="https://lilsadfoqs.github.io/azhaq/"><picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/media/lockup-light.svg">
+    <img alt="azhaq" src="docs/media/lockup-dark.svg" width="260">
+  </picture></a>
+</p>
+
+<p align="center"><b>Open-source reconnaissance. Domains, services, routes and access, in one graph. One Go binary.</b></p>
+
+<p align="center">
+  <a href="https://github.com/lilsadfoqs/azhaq/releases"><img alt="Release" src="https://img.shields.io/github/v/release/lilsadfoqs/azhaq?label=release&color=366a54"></a>
+  <a href="go.mod"><img alt="Go version" src="https://img.shields.io/github/go-mod/go-version/lilsadfoqs/azhaq?color=366a54"></a>
+  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-366a54"></a>
+  <a href="https://github.com/lilsadfoqs/azhaq/releases"><img alt="Linux, macOS, Windows" src="https://img.shields.io/badge/platforms-linux%20%C2%B7%20macOS%20%C2%B7%20windows-555"></a>
+  <a href="#install"><img alt="Signed releases" src="https://img.shields.io/badge/releases-signed%20with%20sigstore-555"></a>
+  <a href="docs/claims.tsv"><img alt="Documentation claims" src="https://img.shields.io/badge/docs-each%20claim%20has%20a%20test-555"></a>
+</p>
+
+<p align="center">
+  <a href="https://lilsadfoqs.github.io/azhaq/">Website</a> ·
+  <a href="#install">Install</a> ·
+  <a href="docs/">Documentation</a> ·
+  <a href="#benchmark">Benchmark</a> ·
+  <a href="https://github.com/lilsadfoqs/azhaq/releases">Releases</a>
+</p>
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: light)" srcset="docs/media/ui-results-light.png">
+    <img alt="azhaq ui: a run told in three sentences, and the graph of what it found" src="docs/media/ui-results-dark.png" width="900">
+  </picture>
+</p>
 
 azhaq is one Go binary for reconnaissance. It stands in for subfinder, dnsx, httpx, katana, ffuf, gau, arjun, naabu, gowitness, asnmap and notify, with their flags and JSON field names. It adds what that chain does not do. It maps the routes an app's JavaScript calls and compares what each of your accounts may read and write. It holds every request to a scope and a budget, and records what it sent. Everything lands in one SQLite workspace you can query, export and diff.
+
+## Try it
+
+```
+go install github.com/lilsadfoqs/azhaq/cmd/azhaq@main   # azhaq ui is in main; the next release ships it
+azhaq run -demo      # maps a small fixture site that azhaq serves itself on 127.0.0.1
+azhaq ui             # http://127.0.0.1:7190/: what the run asked, did and got
+```
+
+Each run is kept in its own folder under `~/.azhaq/runs`: the command line, its summary, the workspace and the ledger. `azhaq runs` lists them, and `azhaq ui` shows them in a browser on this machine. See [runs](docs/commands/runs.md) and [ui](docs/commands/ui.md).
+
+## How it works
+
+```mermaid
+flowchart LR
+  C["Command<br/>run · subs · ports · roles …"] --> E["Engine"]
+  E --> K["8 capabilities<br/>23 collectors"]
+  K -- "what one finds feeds the next" --> E
+  K --> G["Egress chokepoint<br/>scope · budget · pace · kill file"]
+  G --> W["Targets · third-party sources · resolvers"]
+  G --> L[("Ledger<br/>hash-chained, sealed")]
+  K --> S[("Workspace<br/>one SQLite graph per run")]
+  S --> R["query · show · export · report · ui"]
+```
+
+A command hands its targets to the engine. The engine runs the collectors of eight capabilities, and what one collector finds becomes the input of the next. Every request and connection goes through one chokepoint that holds the scope, the request budget and the pace, and the ledger records each one. What the run found lands in one SQLite graph that `query`, `show`, `export`, `report` and `ui` read.
+
+## Capabilities
+
+| | Capability | What it does | Replaces |
+| --- | --- | --- | --- |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/glyphs/sources-dark.svg"><img src="docs/media/glyphs/sources-light.svg" width="22" height="22" alt=""></picture> | **Sources** | Query public sources for names, archived URLs, ownership and search records. | subfinder, gau |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/glyphs/names-dark.svg"><img src="docs/media/glyphs/names-light.svg" width="22" height="22" alt=""></picture> | **Names** | Resolve names; expand subdomains; find ASN prefixes and reverse DNS names. | dnsx, asnmap |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/glyphs/web-dark.svg"><img src="docs/media/glyphs/web-light.svg" width="22" height="22" alt=""></picture> | **Web** | Inspect HTTP and TLS; find routes in pages, scripts and API specs. | httpx, katana, jsluice |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/glyphs/ports-dark.svg"><img src="docs/media/glyphs/ports-light.svg" width="22" height="22" alt=""></picture> | **Ports** | Find open TCP and UDP ports and identify their services. | naabu, nmap (port and service discovery) |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/glyphs/fuzz-dark.svg"><img src="docs/media/glyphs/fuzz-light.svg" width="22" height="22" alt=""></picture> | **Fuzz** | Discover directories and parameters from wordlists; fold catch-all responses. | ffuf, arjun |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/glyphs/shots-dark.svg"><img src="docs/media/glyphs/shots-light.svg" width="22" height="22" alt=""></picture> | **Shots** | Take screenshots of web services and group visually similar images. | gowitness |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/glyphs/roles-dark.svg"><img src="docs/media/glyphs/roles-light.svg" width="22" height="22" alt=""></picture> | **Roles** | Replay requests across signed-in roles to compare read and write access. | manual work, Autorize |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/glyphs/verify-dark.svg"><img src="docs/media/glyphs/verify-light.svg" width="22" height="22" alt=""></picture> | **Verify** | Match versions to advisories and label results by available evidence. | manual work |
+
+A comparison covers the capability described. Flag-by-flag differences from each tool are in [MIGRATING.md](docs/MIGRATING.md).
 
 ## One workflow
 
