@@ -16,9 +16,10 @@
     <p class="muted">Pick a run on the left.</p>
   </section>
   <div id="toolbar">
-    <button id="collapse-runs" type="button" aria-controls="runs" aria-expanded="true" aria-label="Toggle run list">☰</button>
-    <button id="collapse-story" type="button" aria-controls="story" aria-expanded="true" aria-label="Toggle run story">≡</button>
+    <button id="collapse-runs" type="button" aria-controls="runs" aria-expanded="true" aria-label="Toggle run list">Runs</button>
+    <button id="collapse-story" type="button" aria-controls="story" aria-expanded="true" aria-label="Toggle run story">Story</button>
     <select id="theme" aria-label="Theme"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select>
+    <div class="views" role="group" aria-label="Graph view"><button id="execution" type="button" aria-pressed="false">Execution</button><button id="results" type="button" aria-pressed="true">Results</button></div>
     <input id="search" type="search" placeholder="Find a host, address, route…" autocomplete="off">
     <button id="fit" type="button">Fit</button>
     <button id="unfold" type="button">Unfold all</button>
@@ -31,7 +32,7 @@
     </span>
   </div>
   <div id="stage">
-    <canvas id="canvas"></canvas>
+    <canvas id="canvas" tabindex="0" aria-label="Graph. Use arrow keys to choose a node and Enter to open it."></canvas><span id="graph-focus" class="sr-only" role="status" aria-live="polite"></span>
     <p id="empty" class="muted" hidden></p>
   </div>
 </main>

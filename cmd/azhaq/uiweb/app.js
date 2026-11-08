@@ -37,12 +37,15 @@ const NODE_W = 230, NODE_H = 24, COL_GAP = 300, ROW_GAP = 32;
 
 let current = null; // { id, graph, nodes, edges, expanded:Set, layout }
 let view = { s: 1, x: 40, y: 40 };
-let hover = null, searchHits = new Set();
+let hover = null, searchHits = new Set(), selectedGraph = null, graphMode = "results", executionNodes = [];
 
 // ---------- runs list ----------
 async function loadRuns() {
   const data = await getJSON("/api/runs");
-  $("home").textContent = data.home;
+  const home = String(data.home || '');
+  const parts = home.split('/').filter(Boolean);
+  $('home').textContent = parts.length > 2 ? '…/' + parts.slice(-2).join('/') : home;
+  $('home').title = home;
   const ol = $("runlist");
   ol.replaceChildren();
   if (!data.runs.length) {
@@ -69,6 +72,7 @@ async function selectRun(id) {
   location.hash = encodeURIComponent(id);
   for (const li of $("runlist").children) li.classList.toggle("on", li.dataset.id === id);
   closePanel();
+  selectedGraph = null;
   $("story").replaceChildren(el("p", "muted", "Reading the run…"));
   const [run, graph] = await Promise.all([getJSON(`/api/runs/${encodeURIComponent(id)}`), getJSON(`/api/runs/${encodeURIComponent(id)}/graph`)]);
   current = { id, run, graph, expanded: new Set() };
@@ -98,12 +102,12 @@ function renderStory(run, graph) {
     if (L.by_class.dns) parts.push(plural(L.by_class.dns, "DNS query", "DNS queries"));
     did = parts.join(", ");
   } else if (s) {
-    did = plural(s.requests || 0, "request") + " to targets" + (s.dns_queries ? `, ${plural(s.dns_queries, "DNS query", "DNS queries")}` : "") + " (the summary's count; no ledger kept)";
+    did = (s.requests == null ? "requests not recorded" : plural(s.requests, "request") + " to targets") + (s.dns_queries ? `, ${plural(s.dns_queries, "DNS query", "DNS queries")}` : "") + " (the summary's count; no ledger kept)";
   } else {
     did = "what it sent was not recorded";
   }
   did += `, in ${run.time}. `;
-  did += run.status === "ok" ? "It finished with nothing failed." :
+  did += run.status === "ok" ? "It finished: " + (run.exit_meaning || "exit 0") :
     run.status === "running" ? "It is still running." :
     run.status === "did not finish" ? "It did not finish: the process stopped before it could say how it ended." :
     `It ended with ${run.status}: ${run.exit_meaning || ""}`;
@@ -341,6 +345,7 @@ function shortURL(u) {
 }
 
 function draw() {
+  if (graphMode === "execution") { drawExecution(); return; }
   const d = window.devicePixelRatio || 1;
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -381,13 +386,15 @@ function draw() {
     ctx.globalAlpha = dim ? 0.3 : 1;
     ctx.fillStyle = n.lead ? C.leadbg : n.fold ? C.line : C.card;
     const fresh = n.new && !current.allNew;
-    ctx.strokeStyle = n.lead ? C.lead : fresh ? C.accent : n.fold ? C.fold : C.muted;
-    ctx.lineWidth = (n.lead || fresh ? 2 : 1) / Math.max(view.s, 0.5);
+    ctx.strokeStyle = n.lead ? C.lead : n.fold ? C.fold : C.muted;
+    ctx.lineWidth = (n.lead || n.id === selectedGraph ? 2 : 1) / Math.max(view.s, 0.5);
     ctx.setLineDash(n.passive ? [4, 3] : []);
     ctx.beginPath();
     ctx.roundRect(n.x, n.y, NODE_W, NODE_H, 6);
     ctx.fill(); ctx.stroke();
     ctx.setLineDash([]);
+    if (fresh) { ctx.strokeStyle=C.accent;ctx.lineWidth=2/Math.max(view.s,.5);ctx.beginPath();ctx.moveTo(n.x+2,n.y+4);ctx.lineTo(n.x+2,n.y+NODE_H-4);ctx.stroke(); }
+    if (n.id === selectedGraph) { ctx.strokeStyle=C.accent;ctx.lineWidth=2/Math.max(view.s,.5);ctx.strokeRect(n.x-3,n.y-3,NODE_W+6,NODE_H+6); }
     if (n.hint && !n.lead) { // a map hint: a small dot, not a finding's colour
       ctx.fillStyle = C.hi; ctx.beginPath(); ctx.arc(n.x + NODE_W - 9, n.y + NODE_H / 2, 3.5, 0, 7); ctx.fill();
     }
@@ -397,7 +404,10 @@ function draw() {
     }
     if (!small) {
       ctx.fillStyle = n.noise ? C.muted : n.lead ? C.lead : C.fg;
-      ctx.fillText(label(n), n.x + 8, n.y + NODE_H / 2, NODE_W - 16);
+      const caps=Array.isArray(n.capabilities)?n.capabilities.filter(id=>CAP_PATHS[id]):[];
+      if(caps.length){ ctx.save();ctx.translate(n.x+6,n.y+5);ctx.scale(.5,.5);ctx.strokeStyle=C.fg;ctx.lineWidth=2;ctx.stroke(new Path2D(CAP_PATHS[caps[0]]));ctx.restore(); }
+      const suffix=caps.length>1?' +'+(caps.length-1):'';
+      ctx.fillText(label(n)+suffix, n.x + (caps.length?26:8), n.y + NODE_H / 2, NODE_W-(caps.length?34:16));
     }
   }
   ctx.globalAlpha = 1;
@@ -416,6 +426,7 @@ function draw() {
 // ---------- interaction ----------
 function at(ev) {
   const r = canvas.getBoundingClientRect();
+  if (graphMode === 'execution') { const x=ev.clientX-r.left,y=ev.clientY-r.top; return executionNodes.find(n=>Math.hypot(x-n.x,y-n.y)<n.radius)||null; }
   const x = (ev.clientX - r.left - view.x) / view.s, y = (ev.clientY - r.top - view.y) / view.s;
   if (!current || !current.model) return null;
   for (const n of current.model.nodes.values()) if (x >= n.x && x <= n.x + NODE_W && y >= n.y && y <= n.y + NODE_H) return n;
@@ -482,6 +493,8 @@ function closePanel() { $("panel").hidden = true; }
 $("close").onclick = closePanel;
 
 async function openNode(n) {
+  if (n.execution) { showExecution(n); return; }
+  selectedGraph = n.id;
   if (n.fold) {
     current.expanded.add(n.id);
     relayout(false);
@@ -519,6 +532,8 @@ async function openNode(n) {
     body.append(el("pre", null, data.curl));
   }
   const obs = data.observations || [];
+  const attributed=[...new Set(obs.map(o=>COLLECTOR_CAP[o.collector]).filter(Boolean))].sort((a,b)=>CAPABILITIES.findIndex(c=>c.id===a)-CAPABILITIES.findIndex(c=>c.id===b));
+  if(attributed.length){ n.capabilities=attributed; const graphNode=current.graph.nodes.find(x=>x.id===n.id);if(graphNode)graphNode.capabilities=attributed;draw(); }
   body.append(el("p", "muted", `${plural(obs.length, "observation")}: what saw it, from where, and what it recorded (secrets masked).`));
   for (const o of obs) {
     const d = el("div", "obs");
@@ -528,6 +543,30 @@ async function openNode(n) {
     body.append(d);
   }
 }
+
+
+// Capability attribution is read from observations or explicit node metadata; never infer it from an entity type.
+const CAPABILITIES = [{"id":"sources","name":"Sources","description":"Query public sources for names, archived URLs, ownership and search records.","description_words":11,"replaces":["subfinder","gau"],"replacement_scope":"Only the capability described; no claim of full feature parity.","glyph":{"viewBox":"0 0 28 28","path":"M4 5h4v4H4Z M4 19h4v4H4Z M20 12h4v4h-4Z M8 7h5l5 7h2 M8 21h5l5-7","fill":"none","stroke":"currentColor","strokeWidth":2,"strokeLinecap":"square","strokeLinejoin":"miter"},"concept":"Converging sources","collectors":["subdomains","urls","rdap","search"],"commands":["subs","urls"],"capability_color":null},{"id":"names","name":"Names","description":"Resolve names; expand subdomains; find ASN prefixes and reverse DNS names.","description_words":11,"replaces":["dnsx","asnmap"],"replacement_scope":"Only the capability described; no claim of full feature parity.","glyph":{"viewBox":"0 0 28 28","path":"M11 3h6v6h-6Z M4 19h6v6H4Z M18 19h6v6h-6Z M14 9v5 M7 19v-5h14v5","fill":"none","stroke":"currentColor","strokeWidth":2,"strokeLinecap":"square","strokeLinejoin":"miter"},"concept":"Name hierarchy","collectors":["dns","dns-brute","permute","asn","prefix","ptr"],"commands":["dns","asn","subs -live"],"capability_color":null},{"id":"web","name":"Web","description":"Inspect HTTP and TLS; find routes in pages, scripts and API specs.","description_words":12,"replaces":["httpx","katana","jsluice"],"replacement_scope":"Only the capability described; no claim of full feature parity.","glyph":{"viewBox":"0 0 28 28","path":"M4 4h16l4 4v16H4Z M4 10h20 M9 7h1 M8 17h4l3-3h5 M12 17l3 4h5","fill":"none","stroke":"currentColor","strokeWidth":2,"strokeLinecap":"square","strokeLinejoin":"miter"},"concept":"Browser and branching routes","collectors":["http","paths","crawl","js","render","tls","openapi","graphql","graphql-schema"],"commands":["run","probe","crawl"],"capability_color":null},{"id":"ports","name":"Ports","description":"Find open TCP and UDP ports and identify their services.","description_words":10,"replaces":["naabu","nmap (port and service discovery)"],"replacement_scope":"Only the capability described; no claim of full feature parity.","glyph":{"viewBox":"0 0 28 28","path":"M4 5h20v7H4Z M4 17h20v7H4Z M9 8v1 M19 8v1 M9 20v1 M19 20v1","fill":"none","stroke":"currentColor","strokeWidth":2,"strokeLinecap":"square","strokeLinejoin":"miter"},"concept":"Paired service sockets","collectors":["ports"],"commands":["ports"],"capability_color":null},{"id":"fuzz","name":"Fuzz","description":"Discover directories and parameters from wordlists; fold catch-all responses.","description_words":9,"replaces":["ffuf","arjun"],"replacement_scope":"Only the capability described; no claim of full feature parity.","glyph":{"viewBox":"0 0 28 28","path":"M4 5h8 M4 11h8 M4 17h8 M4 23h8 M16 4v20 M16 14h8 M21 11l3 3-3 3","fill":"none","stroke":"currentColor","strokeWidth":2,"strokeLinecap":"square","strokeLinejoin":"miter"},"concept":"Wordlist through a gate","collectors":["dirs","params"],"commands":["dirs","fuzz","params"],"capability_color":null},{"id":"shots","name":"Shots","description":"Take screenshots of web services and group visually similar images.","description_words":10,"replaces":["gowitness"],"replacement_scope":"Only the capability described; no claim of full feature parity.","glyph":{"viewBox":"0 0 28 28","path":"M4 10V4h6 M18 4h6v6 M24 18v6h-6 M10 24H4v-6 M14 9l5 5-5 5-5-5Z","fill":"none","stroke":"currentColor","strokeWidth":2,"strokeLinecap":"square","strokeLinejoin":"miter"},"concept":"Capture frame","collectors":["shots"],"commands":["shots","gallery"],"capability_color":null},{"id":"roles","name":"Roles","description":"Replay requests across signed-in roles to compare read and write access.","description_words":11,"replaces":["manual work","Autorize"],"replacement_scope":"Only the capability described; no claim of full feature parity.","glyph":{"viewBox":"0 0 28 28","path":"M6 4h5l2 2v5l-2 2H6l-2-2V6Z M17 15h5l2 2v5l-2 2h-5l-2-2v-5Z M15 7h5v5 M13 21H8v-5","fill":"none","stroke":"currentColor","strokeWidth":2,"strokeLinecap":"square","strokeLinejoin":"miter"},"concept":"Cross-role replay","commands":["roles","report"],"capability_color":null,"stages":["the roles stages"]},{"id":"verify","name":"Verify","description":"Match versions to advisories and label results by available evidence.","description_words":10,"replaces":["manual work"],"replacement_scope":"Only the capability described; no claim of full feature parity.","glyph":{"viewBox":"0 0 28 28","path":"M17 4H8L4 8v9l4 4h9l4-4V8Z M20 20l5 5 M9 12h7 M9 16h4","fill":"none","stroke":"currentColor","strokeWidth":2,"strokeLinecap":"square","strokeLinejoin":"miter"},"concept":"Inspect evidence, without a proof checkmark","commands":["run -advisories","run -verify"],"capability_color":null,"stages":["advisories","verify"]}];
+const CAP_PATHS = {"sources":"M4 5h4v4H4Z M4 19h4v4H4Z M20 12h4v4h-4Z M8 7h5l5 7h2 M8 21h5l5-7","names":"M11 3h6v6h-6Z M4 19h6v6H4Z M18 19h6v6h-6Z M14 9v5 M7 19v-5h14v5","web":"M4 4h16l4 4v16H4Z M4 10h20 M9 7h1 M8 17h4l3-3h5 M12 17l3 4h5","ports":"M4 5h20v7H4Z M4 17h20v7H4Z M9 8v1 M19 8v1 M9 20v1 M19 20v1","fuzz":"M4 5h8 M4 11h8 M4 17h8 M4 23h8 M16 4v20 M16 14h8 M21 11l3 3-3 3","shots":"M4 10V4h6 M18 4h6v6 M24 18v6h-6 M10 24H4v-6 M14 9l5 5-5 5-5-5Z","roles":"M6 4h5l2 2v5l-2 2H6l-2-2V6Z M17 15h5l2 2v5l-2 2h-5l-2-2v-5Z M15 7h5v5 M13 21H8v-5","verify":"M17 4H8L4 8v9l4 4h9l4-4V8Z M20 20l5 5 M9 12h7 M9 16h4"};
+const COLLECTORS = [{"name":"azhaq-asn","kind":"passive","inputs":["ASN"],"outputs":["prefixes"]},{"name":"azhaq-crawl","kind":"touch","after":"azhaq-http","inputs":["URL"],"outputs":["url"]},{"name":"azhaq-dirs","kind":"active","flag":"dirs","after":"azhaq-http","inputs":["URL"],"outputs":["url"]},{"name":"azhaq-dns","kind":"passive","inputs":["Hostname"],"outputs":["dns"],"batch":true},{"name":"azhaq-dns-brute","kind":"active","flag":"dns-brute","inputs":["Domain"],"outputs":["subdomains"]},{"name":"azhaq-graphql","kind":"touch","after":"azhaq-http","inputs":["URL"],"outputs":["graphql"]},{"name":"azhaq-graphql-schema","kind":"active","flag":"graphql","after":"azhaq-graphql","inputs":["URL"],"outputs":["graphql"]},{"name":"azhaq-http","kind":"touch","after":"azhaq-dns","inputs":["URL","Hostname","IPAddress"],"outputs":["application"]},{"name":"azhaq-js","kind":"touch","after":"azhaq-http","inputs":["URL"],"outputs":["url"]},{"name":"azhaq-openapi","kind":"touch","after":"azhaq-http","inputs":["URL"],"outputs":["api","url"]},{"name":"azhaq-params","kind":"active","flag":"params","after":"azhaq-http","inputs":["URL"],"outputs":["params"]},{"name":"azhaq-paths","kind":"touch","after":"azhaq-http","inputs":["URL"],"outputs":["url"]},{"name":"azhaq-permute","kind":"active","flag":"permute","after":"azhaq-dns","inputs":["Hostname"],"outputs":["subdomains"]},{"name":"azhaq-ports","kind":"active","flag":"ports","after":"azhaq-dns","inputs":["Hostname","IPAddress","Prefix"],"outputs":["ports"]},{"name":"azhaq-prefix","kind":"passive","inputs":["Prefix"],"outputs":["addresses"]},{"name":"azhaq-ptr","kind":"passive","inputs":["IPAddress"],"outputs":["ptr"],"batch":true},{"name":"azhaq-rdap","kind":"passive","inputs":["Domain","Organization"],"outputs":["rdap","organization","domain"]},{"name":"azhaq-render","kind":"touch","after":"azhaq-http","inputs":["URL"],"outputs":["url"]},{"name":"azhaq-search","kind":"passive","inputs":["Domain"],"outputs":["services"]},{"name":"azhaq-shots","kind":"touch","after":"azhaq-http","inputs":["URL","Hostname","IPAddress"],"outputs":["screenshot"]},{"name":"azhaq-subdomains","kind":"passive","inputs":["Domain"],"outputs":["subdomains"]},{"name":"azhaq-tls","kind":"touch","after":"azhaq-dns","inputs":["Hostname","IPAddress"],"outputs":["certificate"]},{"name":"azhaq-urls","kind":"passive","inputs":["Domain"],"outputs":["url"]}];
+const COLLECTOR_CAP = {"azhaq-subdomains":"sources","azhaq-urls":"sources","azhaq-rdap":"sources","azhaq-search":"sources","azhaq-dns":"names","azhaq-dns-brute":"names","azhaq-permute":"names","azhaq-asn":"names","azhaq-prefix":"names","azhaq-ptr":"names","azhaq-http":"web","azhaq-paths":"web","azhaq-crawl":"web","azhaq-js":"web","azhaq-render":"web","azhaq-tls":"web","azhaq-openapi":"web","azhaq-graphql":"web","azhaq-graphql-schema":"web","azhaq-ports":"ports","azhaq-dirs":"fuzz","azhaq-params":"fuzz","azhaq-shots":"shots"};
+function drawExecution(){
+ const d=window.devicePixelRatio||1,r=canvas.getBoundingClientRect();ctx.setTransform(d,0,0,d,0,0);ctx.clearRect(0,0,r.width,r.height);executionNodes=[];if(!current)return;
+ const cx=r.width/2,cy=r.height/2,rx=Math.max(80,Math.min(300,(r.width-180)/2)),ry=Math.max(65,Math.min(200,(r.height-100)/2));
+ ctx.strokeStyle=css('--line');ctx.lineWidth=1;ctx.beginPath();ctx.ellipse(cx,cy,rx,ry,0,0,Math.PI*2);ctx.stroke();
+ ctx.fillStyle=css('--fg');ctx.font='600 22px Hubot, sans-serif';ctx.textAlign='center';ctx.fillText('azhaq',cx,cy+8);
+ CAPABILITIES.forEach((cap,i)=>{const a=-Math.PI/2+i*Math.PI/4,x=cx+rx*Math.cos(a),y=cy+ry*Math.sin(a),active=selectedGraph==='cap:'+cap.id;executionNodes.push({id:'cap:'+cap.id,key:cap.name,type:'Capability',execution:true,capability:cap,x,y,radius:30});ctx.fillStyle=css('--card');ctx.strokeStyle=active?css('--accent'):css('--muted');ctx.lineWidth=active?2:1;ctx.beginPath();ctx.roundRect(x-28,y-28,56,56,7);ctx.fill();ctx.stroke();ctx.save();ctx.translate(x-14,y-14);ctx.strokeStyle=css('--fg');ctx.lineWidth=2;ctx.stroke(new Path2D(CAP_PATHS[cap.id]));ctx.restore();ctx.fillStyle=css('--fg');ctx.font='12px Hubot, sans-serif';ctx.fillText(cap.name,x,y+44)});ctx.textAlign='start';
+}
+function showExecution(node){
+ selectedGraph=node.id;draw();$('panel').hidden=false;$('ptitle').textContent=node.key;const body=$('pbody');body.replaceChildren();
+ const run=current.run.record||{},summary=run.summary||{},cost=summary.cost||{},stages=cost.stages||[];
+ const entries=stages.flatMap(stage=>(stage.collectors||[]).map(item=>({stage:stage.stage,...item})));
+ const names=node.capability.collectors||[];if(!names.length){body.append(el('p','muted','Stage details: not recorded'));return}
+ for(const short of names){const full='azhaq-'+short,meta=COLLECTORS.find(c=>c.name===full)||{},matches=entries.filter(c=>c.collector===full),failed=(summary.failed||[]).filter(f=>f.collector===full);const item=el('div','obs'),title=el('button',null,full);title.type='button';title.onclick=()=>{body.replaceChildren();const back=el('button',null,'← '+node.key);back.type='button';back.onclick=()=>showExecution(node);body.append(back,el('h3',null,full),el('p',null,'Kind: '+(meta.kind||'not recorded')),el('p',null,'Inputs: '+(meta.inputs?.join(', ')||'not recorded')),el('p',null,'Outputs: '+(meta.outputs?.join(', ')||'not recorded')),el('p',null,'Declared after: '+(meta.after||'not recorded')),el('p','muted','Attempt status, reason, inputs consumed, times and fed-by: not recorded'));if(matches.length)body.append(el('pre',null,JSON.stringify(matches,null,2)));if(failed.length)body.append(el('pre',null,JSON.stringify(failed.map(({collector,error,count})=>({collector,error,count})),null,2)))};item.append(title);const previewStatus=window.AZHAQ_PREVIEW?summary._previewCollectorStatus?.[full]:null;item.append(el('p','muted','Kind: '+(meta.kind||'not recorded')+' · Attempt status: '+(previewStatus||'not recorded')));if(meta.after)item.append(el('p','muted','Declared after: '+meta.after));if(matches.length)item.append(el('pre',null,JSON.stringify(matches,null,2)));if(failed.length)item.append(el('pre',null,JSON.stringify(failed.map(({collector,error,count})=>({collector,error,count})),null,2)));item.append(el('p','muted','Reason, inputs, attempts and fed-by: not recorded'));body.append(item)}
+}
+$('execution').addEventListener('click',()=>{graphMode='execution';selectedGraph=null;$('execution').setAttribute('aria-pressed','true');$('results').setAttribute('aria-pressed','false');closePanel();draw()});
+$('results').addEventListener('click',()=>{graphMode='results';selectedGraph=null;$('execution').setAttribute('aria-pressed','false');$('results').setAttribute('aria-pressed','true');closePanel();draw()});
+canvas.addEventListener('keydown',event=>{if(!current)return;const nodes=graphMode==='execution'?executionNodes:[...current.model.nodes.values()];if(!nodes.length)return;const currentNode=nodes.find(n=>n.id===selectedGraph);let next=null;if(['ArrowRight','ArrowLeft','ArrowUp','ArrowDown'].includes(event.key)){const vector={ArrowRight:[1,0],ArrowLeft:[-1,0],ArrowDown:[0,1],ArrowUp:[0,-1]}[event.key];if(!currentNode)next=nodes[0];else{const options=nodes.filter(n=>n.id!==currentNode.id).map(n=>{const dx=n.x-currentNode.x,dy=n.y-currentNode.y,forward=dx*vector[0]+dy*vector[1],side=Math.abs(dx*vector[1]-dy*vector[0]);return {n,forward,score:forward+2*side}}).filter(v=>v.forward>0).sort((a,b)=>a.score-b.score);next=options[0]?.n}event.preventDefault();if(next){selectedGraph=next.id;hover=next.id;if(graphMode==='results'){const r=canvas.getBoundingClientRect();view.x=r.width/2-(next.x+NODE_W/2)*view.s;view.y=r.height/2-(next.y+NODE_H/2)*view.s} $('graph-focus').textContent=next.key;draw()}}else if((event.key==='Enter'||event.key===' ')&&currentNode){event.preventDefault();openNode(currentNode)}});
 
 resize();
 loadRuns().catch((e) => $("story").replaceChildren(el("p", null, "Could not read the runs: " + e.message)));
@@ -545,6 +584,7 @@ loadRuns().catch((e) => $("story").replaceChildren(el("p", null, "Could not read
   applyTheme(['system','light','dark'].includes(saved) ? saved : 'system');
   theme.addEventListener('change', () => applyTheme(theme.value));
   const runs = document.getElementById('collapse-runs');
+  runs.setAttribute('aria-expanded', String(!matchMedia('(max-width:720px)').matches));
   runs.addEventListener('click', () => {
     const mobile = matchMedia('(max-width:720px)').matches;
     const open = mobile ? document.body.classList.toggle('mobile-runs') : !document.body.classList.toggle('runs-collapsed');
