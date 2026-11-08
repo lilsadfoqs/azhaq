@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -192,6 +193,11 @@ func TestUINothingExternalInThePage(t *testing.T) {
 	err := fs.WalkDir(uiWeb, "uiweb", func(p string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return err
+		}
+		switch path.Ext(p) {
+		case ".html", ".css", ".js":
+		default:
+			return nil // fonts and their license texts are not read by the page for links
 		}
 		raw, _ := uiWeb.ReadFile(p)
 		for _, bad := range []string{"http://", "https://", "//cdn", "@import"} {

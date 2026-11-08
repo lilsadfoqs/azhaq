@@ -27,6 +27,11 @@ const TYPE_NAME = {
   IPAddress: "addresses", Port: "ports", Application: "web services", URL: "routes", Certificate: "certificates",
   Email: "emails", CloudAccount: "cloud accounts",
 };
+const TYPE_ONE = {
+  Organization: "organization", ASN: "ASN", Prefix: "prefix", Domain: "domain", Hostname: "host",
+  IPAddress: "address", Port: "port", Application: "web service", URL: "route", Certificate: "certificate",
+  Email: "email", CloudAccount: "cloud account",
+};
 const FOLD_OVER = 8; // a host with more routes than this shows them as one node until opened
 const NODE_W = 230, NODE_H = 24, COL_GAP = 300, ROW_GAP = 32;
 
@@ -114,7 +119,7 @@ function renderStory(run, graph) {
       if (n.lead) leads++;
     }
     const order = Object.keys(by).sort((a, b) => (RANK[a] ?? 9) - (RANK[b] ?? 9));
-    const got = order.map((t) => `${by[t]} ${TYPE_NAME[t] || t}` + (fresh[t] && fresh[t] !== by[t] ? ` (${fresh[t]} new)` : ""));
+    const got = order.map((t) => `${by[t]} ${by[t] === 1 ? TYPE_ONE[t] || t : TYPE_NAME[t] || t}` + (fresh[t] && fresh[t] !== by[t] ? ` (${fresh[t]} new)` : ""));
     if (nodes.every((n) => n.new)) got.push("all first seen in this run");
     const hints = nodes.filter((n) => n.hint && !n.lead).length;
     line("Got", got.join(", ") + (leads ? `; ${plural(leads, "finding or lead", "findings or leads")} in red` : "; no findings or leads") +
@@ -526,3 +531,30 @@ async function openNode(n) {
 
 resize();
 loadRuns().catch((e) => $("story").replaceChildren(el("p", null, "Could not read the runs: " + e.message)));
+
+// Shell controls retain the original application IDs and API code.
+(() => {
+  const root = document.documentElement, theme = document.getElementById('theme');
+  const saved = (() => { try { return localStorage.getItem('azhaq-ui-theme') || 'system'; } catch { return 'system'; } })();
+  function applyTheme(value) {
+    if (value === 'system') delete root.dataset.theme; else root.dataset.theme = value;
+    theme.value = value;
+    try { localStorage.setItem('azhaq-ui-theme', value); } catch {}
+    window.dispatchEvent(new Event('resize'));
+  }
+  applyTheme(['system','light','dark'].includes(saved) ? saved : 'system');
+  theme.addEventListener('change', () => applyTheme(theme.value));
+  const runs = document.getElementById('collapse-runs');
+  runs.addEventListener('click', () => {
+    const mobile = matchMedia('(max-width:720px)').matches;
+    const open = mobile ? document.body.classList.toggle('mobile-runs') : !document.body.classList.toggle('runs-collapsed');
+    runs.setAttribute('aria-expanded', String(open));
+    window.dispatchEvent(new Event('resize'));
+  });
+  const story = document.getElementById('collapse-story');
+  story.addEventListener('click', () => {
+    const open = !document.body.classList.toggle('story-collapsed');
+    story.setAttribute('aria-expanded', String(open));
+    window.dispatchEvent(new Event('resize'));
+  });
+})();

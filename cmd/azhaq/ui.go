@@ -28,7 +28,7 @@ var uiWeb embed.FS
 
 // uiCSP lets the page load only its own script and style and talk only
 // to this server: the browser enforces it.
-const uiCSP = "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+const uiCSP = "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
 
 // cmdUI serves the kept runs to a browser on this machine. It reads the
 // run home and the runs' workspaces and ledgers, and sends nothing to any target.
@@ -87,6 +87,7 @@ func uiHandler(home string) http.Handler {
 	mux.Handle("GET /{$}", static)
 	mux.Handle("GET /app.js", static)
 	mux.Handle("GET /app.css", static)
+	mux.Handle("GET /fonts/", static)
 	mux.HandleFunc("GET /api/runs", func(w http.ResponseWriter, r *http.Request) { uiRuns(w, home) })
 	mux.HandleFunc("GET /api/runs/{id}", func(w http.ResponseWriter, r *http.Request) { uiRun(w, home, r.PathValue("id")) })
 	mux.HandleFunc("GET /api/runs/{id}/graph", func(w http.ResponseWriter, r *http.Request) { uiGraph(w, home, r.PathValue("id")) })
