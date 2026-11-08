@@ -119,7 +119,10 @@ const (
 
 var rolesStages = []string{signInStage, stageRoleMaps, stageHistory, stageReplay, stageControls, stageWrites, stageVerify}
 
-// stageOfCollector groups a collector into the stage of a run that it works in.
+// stageOfCollector groups a collector into the stage of a run that it works
+// in. The stages carry the names of azhaq's capabilities (sources, names,
+// web, ports, fuzz, shots, verify), so the summary, the plan and the ui
+// say the same words.
 func stageOfCollector(name string) string {
 	switch strings.TrimPrefix(name, "azhaq-") {
 	case "subdomains", "urls", "rdap", "search":
@@ -127,17 +130,15 @@ func stageOfCollector(name string) string {
 	case "dns", "dns-brute", "permute", "asn", "prefix", "ptr":
 		return "names"
 	case "http", "paths", "crawl", "js", "tls", "openapi", "graphql", "graphql-schema", "render":
-		return "map"
+		return "web"
 	case "ports":
 		return "ports"
-	case "dirs":
-		return "dirs"
-	case "params":
-		return "params"
+	case "dirs", "params":
+		return "fuzz"
 	case "shots":
-		return "screenshots"
-	case "advisories":
-		return "advisories"
+		return "shots"
+	case "advisories", "verify":
+		return "verify"
 	case "notify":
 		return "notify"
 	case signInStage:
@@ -147,7 +148,7 @@ func stageOfCollector(name string) string {
 }
 
 // stageOrder is how stages are listed: the order a run goes through them.
-var stageOrder = []string{signInStage, "sources", "names", "map", "ports", "dirs", "params", "screenshots", "advisories", "notify",
+var stageOrder = []string{signInStage, "sources", "names", "web", "ports", "fuzz", "shots", "verify", "notify",
 	stageRoleMaps, stageHistory, stageReplay, stageControls, stageWrites, stageVerify, "other"}
 
 func stageRank(s string) int {

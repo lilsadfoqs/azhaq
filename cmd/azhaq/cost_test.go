@@ -154,9 +154,9 @@ func TestPlanEstimatesEachStage(t *testing.T) {
 		stage, field string
 		want         float64
 	}{
-		{"map", "requests", 26},     // the page and the 25 built-in paths that no answer skips; the favicon and the 26 guesses of an API description are not certain
+		{"web", "requests", 26},     // the page and the 25 built-in paths that no answer skips; the favicon and the 26 guesses of an API description are not certain
 		{"ports", "connects", 602},  // 601 ports and the one that is named twice is once; the port of the URL's host
-		{"dirs", "requests", 126},   // 40 words and 2 extensions, and 6 calibration probes
+		{"fuzz", "requests", 126},   // 40 words and 2 extensions, and 6 calibration probes
 		{"names", "dns_queries", 5}, // one query for each word
 	} {
 		st := byStage[c.stage]
@@ -168,12 +168,12 @@ func TestPlanEstimatesEachStage(t *testing.T) {
 			t.Errorf("%s stage: %s estimated %v, want %v", c.stage, c.field, got, c.want)
 		}
 	}
-	if st := byStage["map"]; st != nil {
+	if st := byStage["web"]; st != nil {
 		if cols, _ := st["collectors"].([]any); len(cols) != 2 {
-			t.Errorf("the map stage lists its collectors, http and paths: %v", st["collectors"])
+			t.Errorf("the web stage lists its collectors, http and paths: %v", st["collectors"])
 		}
 		if st["not_counted"] == nil || st["estimate_at_least"] != true {
-			t.Errorf("the map stage does not say what it leaves out: %v", st)
+			t.Errorf("the web stage does not say what it leaves out: %v", st)
 		}
 	}
 	if _, ok := byStage["sources"]; ok {
@@ -184,10 +184,10 @@ func TestPlanEstimatesEachStage(t *testing.T) {
 	out, _, _ = cli(t, "plan", "-url", srv.URL+"/", "-allow", "127.0.0.1", "-sources", "none", "-no-favicon", "-json")
 	_ = json.Unmarshal([]byte(out), &q)
 	if got := stageAmount(q["estimate"].(map[string]any)["stages"].([]any)[0].(map[string]any), "estimate", "requests"); got != 26 {
-		t.Errorf("-no-favicon: the map stage is estimated at %v requests, want 26", got)
+		t.Errorf("-no-favicon: the web stage is estimated at %v requests, want 26", got)
 	}
 	text, _, _ := cli(t, "plan", "-url", srv.URL+"/", "-allow", "127.0.0.1", "-sources", "none")
-	if !strings.Contains(text, "estimate: 26 requests") || !strings.Contains(text, "map ") {
+	if !strings.Contains(text, "estimate: 26 requests") || !strings.Contains(text, "web ") {
 		t.Errorf("the text plan does not print the estimate by stage:\n%s", text)
 	}
 	if hits.Load() != 0 {
@@ -209,21 +209,21 @@ func TestRunCostByStageOnAJuiceShopShapedApp(t *testing.T) {
 	// The server saw the web stages' requests, and the open port's connect that
 	// is answered (-port-detect none sends nothing on it).
 	var web float64
-	for _, name := range []string{"map", "dirs"} {
+	for _, name := range []string{"web", "fuzz"} {
 		web += sentIn(st[name])
 	}
 	if int64(web) != hits.Load() {
 		t.Errorf("the map and dirs stages sent %v requests, the server saw %d", web, hits.Load())
 	}
 	stagesAddUp(t, sum, -1)
-	m := st["map"]
+	m := st["web"]
 	if est, got := stageAmount(m, "estimate", "requests"), stageAmount(m, "actual", "requests"); got < est || got > costFactor*est {
 		t.Errorf("map stage: estimated %v requests, sent %v: not within a factor of %d, from above", est, got, costFactor)
 	}
 	if est, got := stageAmount(st["ports"], "estimate", "connects"), stageAmount(st["ports"], "actual", "connects"); got != est {
 		t.Errorf("ports stage: estimated %v connects, sent %v", est, got)
 	}
-	if est, got := stageAmount(st["dirs"], "estimate", "requests"), stageAmount(st["dirs"], "actual", "requests"); got != est {
+	if est, got := stageAmount(st["fuzz"], "estimate", "requests"), stageAmount(st["fuzz"], "actual", "requests"); got != est {
 		t.Errorf("dirs stage: estimated %v requests, sent %v", est, got)
 	}
 }
@@ -234,7 +234,7 @@ func TestRunSummaryTextHasTheCostByStage(t *testing.T) {
 	srv := juiceShaped(&hits)
 	defer srv.Close()
 	_, errOut, _ := cli(t, "run", "-url", srv.URL+"/", "-allow", "127.0.0.1", "-sources", "none", "-db", filepath.Join(t.TempDir(), "w.db"), "-ledger", "off")
-	if !strings.Contains(errOut, "cost: map: sent 83 requests (estimated 26 requests and what the answers lead to)") {
+	if !strings.Contains(errOut, "cost: web: sent 83 requests (estimated 26 requests and what the answers lead to)") {
 		t.Errorf("the summary does not set the estimate beside what was sent:\n%s", errOut)
 	}
 }
@@ -470,7 +470,7 @@ func TestStagesAddUpToWhatTheCountProxyLogged(t *testing.T) {
 	proxy, logged := startCountProxy(t, srv)
 	sum := runJSON(t, "run", "-url", "http://"+proxy+"/", "-allow", "127.0.0.1", "-sources", "none", "-db", filepath.Join(t.TempDir(), "w.db"))
 	stagesAddUp(t, sum, int64(logged()))
-	m := stagesOf(t, sum)["map"]
+	m := stagesOf(t, sum)["web"]
 	if est, got := stageAmount(m, "estimate", "requests"), float64(logged()); got < est || got > costFactor*est {
 		t.Errorf("map stage: estimated %v requests, the proxy logged %v: not within a factor of %d, from above", est, got, costFactor)
 	}

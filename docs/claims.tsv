@@ -87,7 +87,7 @@ plan.estimate-range	docs/commands/plan.md	counts every address of it that `-allo
 plan.estimate-denied	docs/commands/plan.md	A request the scope or a `-deny-path` rule holds back is not counted	test:cmd/azhaq:TestEstimateIsAFloorOnStandIns
 plan.estimate-discover	docs/commands/plan.md	With `-port-discover first` the estimate counts the two discovery connects of each address of a range	test:cmd/azhaq:TestPortsFloorOfADiscoveredRangeAndOfUDP
 plan.estimate-udp-cdn	docs/commands/plan.md	A CDN or WAF address is sent no UDP datagram	test:cmd/azhaq:TestPortsEstimateKnowsTheCDNAddressesOfARange
-plan.estimate-fixtures	docs/commands/plan.md	the counted stages are exact (`ports`, `dirs`)	test:cmd/azhaq:TestRunCostByStageOnAJuiceShopShapedApp,TestNamesFloorAndItsQueries
+plan.estimate-fixtures	docs/commands/plan.md	the counted stages are exact (`ports`, `fuzz`)	test:cmd/azhaq:TestRunCostByStageOnAJuiceShopShapedApp,TestNamesFloorAndItsQueries
 plan.bound-not-count	docs/commands/plan.md	The plan gives a bound, not a count	test:cmd/azhaq:TestPlanRequests
 plan.max-names	docs/commands/plan.md	At most `max_names` names are looked up	test:cmd/azhaq:TestPlanRequests
 plan.per-web-service	docs/commands/plan.md	`per_web_service` covers a web service's page, the favicon and the built-in paths	test:cmd/azhaq:TestPlanRequests,TestDocsCountTheBuiltInPathsAsThePlanDoes

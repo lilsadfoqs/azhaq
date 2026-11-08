@@ -11,6 +11,7 @@
 ### Changed
 
 - With no `-db`, `run` keeps its workspace in its run folder instead of `azhaq-TIME-PID.db` in the current directory, and the drop-in commands, `dns` and `fuzz` keep theirs there instead of a temporary one (so `resume` works on them). `roles` puts its databases in the run folder's `roles/` instead of `azhaq-roles-TIME/`.
+- The stages of the summary's `cost`, of `plan`'s estimate and of their text lines carry the names of azhaq's capabilities: `map` is `web`, `dirs` and `params` are one `fuzz` stage, `screenshots` is `shots`, and `advisories` is `verify`, which also holds the `-verify` reads (they were counted under `other`). `sources`, `names`, `ports`, `sign-in`, `notify` and the roles stages keep their names.
 
 ## v0.16.0
 
