@@ -198,7 +198,7 @@ The summary and the exit codes are `run`'s: see [run](run.md#summary-and-exit-co
 
 | Flag | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `-db` | string |  | the workspace, a SQLite file (default: a new azhaq-TIME-PID.db in the current directory, or $AZHAQ_DB; query, show and export read it afterwards) |
+| `-db` | string |  | the workspace, a SQLite file (default: workspace.db in the run's folder under $AZHAQ_HOME/runs, ~/.azhaq/runs unless set; with AZHAQ_HOME=none a new azhaq-TIME-PID.db in the current directory; or $AZHAQ_DB; query, show and export read it afterwards) |
 | `-json` | bool |  | print the map as JSON lines, and the summary as one JSON object on stderr |
 | `-quiet` | bool |  | print no map and no progress lines (a line every 10 s while the run works), only the summary (on stderr) |
 | `-v` | bool |  | print a line for every finished task, not only failures |

@@ -1,0 +1,63 @@
+:root {
+  --bg: #f7f7f5; --fg: #1d1d1b; --muted: #6b6b66; --line: #d9d8d3; --card: #ffffff;
+  --accent: #1f6feb; --lead: #d1242f; --leadbg: #ffebe9; --fold: #8a8a84; --edge: #b9b8b2; --hi: #f0b400;
+  --sel: #e8f0fe;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #121212; --fg: #e8e6e3; --muted: #9a9893; --line: #2c2c2a; --card: #1b1b1a;
+    --accent: #58a6ff; --lead: #ff7b72; --leadbg: #3a1d1d; --fold: #7a7975; --edge: #45443f; --hi: #f2cc60;
+    --sel: #1d2a3a;
+  }
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  display: grid; grid-template-columns: 300px 1fr auto; background: var(--bg); color: var(--fg);
+  font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+.muted { color: var(--muted); }
+#runs { border-right: 1px solid var(--line); overflow: auto; }
+#runs header { padding: 14px 16px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--bg); }
+#home { display: block; font-size: 11px; word-break: break-all; margin-top: 2px; }
+#runlist { list-style: none; margin: 0; padding: 0; }
+#runlist li { padding: 10px 16px; border-bottom: 1px solid var(--line); cursor: pointer; }
+#runlist li:hover { background: var(--card); }
+#runlist li.on { background: var(--sel); }
+#runlist .t { font-weight: 600; word-break: break-all; }
+#runlist .m { font-size: 12px; color: var(--muted); }
+.badge { display: inline-block; font-size: 11px; padding: 0 6px; border-radius: 8px; border: 1px solid var(--line); margin-left: 4px; }
+.badge.ok { color: #1a7f37; border-color: #1a7f37; }
+.badge.bad { color: var(--lead); border-color: var(--lead); }
+main { display: flex; flex-direction: column; min-width: 0; height: 100vh; }
+#story { padding: 14px 18px; border-bottom: 1px solid var(--line); }
+#story p { margin: 2px 0; }
+#story b { display: inline-block; min-width: 52px; }
+#story details { margin-top: 6px; font-size: 13px; }
+#story details ul { margin: 4px 0; padding-left: 18px; columns: 2; }
+#toolbar { display: flex; gap: 8px; align-items: center; padding: 8px 18px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+#toolbar input { flex: 0 1 280px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--card); color: var(--fg); }
+button { padding: 5px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--card); color: var(--fg); cursor: pointer; }
+#legend { font-size: 12px; color: var(--muted); display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.key { display: inline-block; width: 14px; height: 10px; border-radius: 3px; border: 2px solid var(--line); margin-left: 8px; }
+.key.lead { border-color: var(--lead); background: var(--leadbg); }
+.key.new { border-color: var(--accent); }
+.key.passive { border-style: dashed; }
+.key.hint { width: 9px; height: 9px; border-radius: 50%; border: 0; background: var(--hi); }
+.key.fold { border-color: var(--fold); background: var(--line); }
+#stage { position: relative; flex: 1; min-height: 0; }
+#canvas { position: absolute; inset: 0; width: 100%; height: 100%; cursor: grab; }
+#canvas.drag { cursor: grabbing; }
+#empty { position: absolute; top: 40%; width: 100%; text-align: center; }
+#panel { width: 400px; border-left: 1px solid var(--line); overflow: auto; height: 100vh; background: var(--card); }
+#panel header { position: sticky; top: 0; background: var(--card); padding: 12px 14px; border-bottom: 1px solid var(--line); font-weight: 600; word-break: break-all; }
+#close { float: right; padding: 0 8px; }
+#pbody { padding: 12px 14px; font-size: 13px; }
+#pbody pre { white-space: pre-wrap; word-break: break-all; background: var(--bg); padding: 8px; border-radius: 6px; font-size: 12px; max-height: 280px; overflow: auto; }
+#pbody .obs { border-top: 1px solid var(--line); padding-top: 8px; margin-top: 8px; }
+#pbody code { word-break: break-all; }
+@media (max-width: 800px) {
+  body { grid-template-columns: 1fr; }
+  #runs { max-height: 30vh; }
+  #panel { position: fixed; inset: auto 0 0 0; width: auto; height: 50vh; }
+}

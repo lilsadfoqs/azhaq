@@ -207,6 +207,7 @@ func (r *report) err() error {
 // and complete. It returns the command's error.
 func (r *report) finish(asJSON, silent bool) error {
 	r.settle()
+	recordSummary(r)
 	r.hintsOff = r.hintsOff || asJSON || silent
 	switch {
 	case asJSON:

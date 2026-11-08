@@ -141,7 +141,10 @@ func run(args []string) error {
 	c, ok := lookup(args[0])
 	if !ok {
 		if _, _, isTarget := guidedTarget(args[0]); isTarget {
-			return cmdQuickstart(args)
+			startRun("quickstart", args)
+			err := cmdQuickstart(args)
+			endRun(args, err)
+			return err
 		}
 		if near := suggest(args[0]); len(near) > 0 {
 			return usagef("unknown command %q; did you mean %s? (azhaq help lists every command)", args[0], strings.Join(near, " or "))
@@ -149,7 +152,10 @@ func run(args []string) error {
 		return usagef("unknown command %q (azhaq help lists every command)", args[0])
 	}
 	strictExit = false // this command's own -strict-exit sets it
-	return c.run(args[1:])
+	startRun(c.name, args[1:])
+	err := c.run(args[1:])
+	endRun(args[1:], err)
+	return err
 }
 
 func cmdRun(args []string) error { return cmdRunAs("run", args) }
@@ -281,7 +287,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	webPorts := fs.String("web-ports", "", "ports to probe on each hostname or address of the list, comma-separated (default: 443, falling back to 80; a target given with no port and nothing there is a note, not a failure)")
 	factsPath := fs.String("facts", "", "JSONL connector facts to ingest before native collectors")
 	execCmd := fs.String("exec", "", "connector command (seeds on stdin, facts on stdout)")
-	dbPath := fs.String("db", "", "the workspace, a SQLite file (default: a new azhaq-TIME-PID.db in the current directory, or $AZHAQ_DB; query, show and export read it afterwards)")
+	dbPath := fs.String("db", "", "the workspace, a SQLite file (default: workspace.db in the run's folder under $AZHAQ_HOME/runs, ~/.azhaq/runs unless set; with AZHAQ_HOME=none a new azhaq-TIME-PID.db in the current directory; or $AZHAQ_DB; query, show and export read it afterwards)")
 	demo := fs.Bool("demo", false, "run against the built-in fixture server (no internet)")
 	pathsFile := fs.String("paths", "", "extra path wordlist (one path per line)")
 	quiet := fs.Bool("quiet", false, "print no map and no progress lines (a line every 10 s while the run works), only the summary (on stderr)")
@@ -722,10 +728,10 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	prevDB := ""
 	if remember {
 		prevDB = previousRun(input)
-		if err := os.WriteFile(lastDBFile, []byte(path+"\n"), 0o644); err != nil {
+		if err := writeHomeFile(lastDBPath(), []byte(path+"\n")); err != nil {
 			return err
 		}
-		rep.wrote(lastDBFile)
+		rep.wrote(lastDBPath())
 	}
 
 	open := store.Open
@@ -1680,7 +1686,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	}
 	if remember && !*demo && input != "" {
 		if recordRun(input, path) == nil {
-			rep.wrote(runIndexFile)
+			rep.wrote(runIndexPath())
 		}
 	}
 	if !out.scratch && !out.plan {
@@ -1778,7 +1784,7 @@ func previousRun(input string) string {
 
 func readRunIndex() map[string]string {
 	idx := map[string]string{}
-	raw, err := os.ReadFile(runIndexFile)
+	raw, err := os.ReadFile(runIndexPath())
 	if err != nil {
 		return idx
 	}
@@ -1793,7 +1799,7 @@ func recordRun(input, path string) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(runIndexFile, append(raw, '\n'), 0o644)
+	return writeHomeFile(runIndexPath(), append(raw, '\n'))
 }
 
 func normalizeSeeds(seeds []types.Seed) []types.Seed {
@@ -1879,7 +1885,7 @@ func cmdIngest(args []string) error {
 	}
 	path, remember := resolveDB(*dbPath)
 	if remember {
-		if err := os.WriteFile(lastDBFile, []byte(path+"\n"), 0o644); err != nil {
+		if err := writeHomeFile(lastDBPath(), []byte(path+"\n")); err != nil {
 			return err
 		}
 	}
@@ -2020,10 +2026,14 @@ func cmdDiff(args []string) error {
 	return printDiff(*a, newPath, diffOpts{JSONL: *jsonl, Quiet: *quiet})
 }
 
+// readLastDB is the last run's workspace: the run home's record of it,
+// else the one a run before the run home left in the current directory.
 func readLastDB() string {
-	raw, err := os.ReadFile(lastDBFile)
+	raw, err := os.ReadFile(lastDBPath())
 	if err != nil {
-		return ""
+		if raw, err = os.ReadFile(lastDBFile); err != nil {
+			return ""
+		}
 	}
 	return strings.TrimSpace(string(raw))
 }
@@ -2231,11 +2241,10 @@ func cmdExport(args []string) error {
 	}
 	path := *dbPath
 	if path == "" {
-		b, err := os.ReadFile(lastDBFile)
-		if err != nil {
+		path = readLastDB()
+		if path == "" {
 			return fmt.Errorf("need -db (no %s from a previous run)", lastDBFile)
 		}
-		path = strings.TrimSpace(string(b))
 	}
 	st, err := store.OpenExisting(path)
 	if err != nil {
@@ -2551,6 +2560,9 @@ func resolveDB(flag string) (path string, remember bool) {
 	}
 	if v := os.Getenv("AZHAQ_DB"); v != "" {
 		return v, false
+	}
+	if p := runFolderDB(); p != "" {
+		return p, true
 	}
 	return uniqueDB(), true
 }

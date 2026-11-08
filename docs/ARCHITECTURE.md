@@ -1633,7 +1633,7 @@ Diffs compare facts, not bytes. These are left out:
 
 Header names, statuses, titles and everything else count.
 
-Each database records the seeds it was run with. After a run, the CLI diffs against the previous run of the same seeds in the current directory, tracked in `.azhaq-index`. `azhaq diff` on two runs with different seeds says so before the result.
+Each database records the seeds it was run with. After a run, the CLI diffs against the previous run of the same seeds, tracked in the run home's `index.json` (`.azhaq-index` in the current directory with `AZHAQ_HOME=none`). `azhaq diff` on two runs with different seeds says so before the result.
 
 ## The map
 

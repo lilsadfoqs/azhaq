@@ -228,6 +228,8 @@ Every tool's own command lines, flag by flag, are in [docs/MIGRATING.md](docs/MI
 | [`ingest`](docs/commands/ingest.md) | Add other tools' results to a database. |
 | [`ledger`](docs/commands/ledger.md) | Check, count or export what a run sent. |
 | [`gallery`](docs/commands/gallery.md) | Browse a workspace's screenshots. |
+| [`runs`](docs/commands/runs.md) | List the kept runs: what each asked, sent and found. |
+| [`ui`](docs/commands/ui.md) | See the kept runs in a browser, each with its graph on a canvas. |
 | [`asn`](docs/commands/asn.md) | The prefixes autonomous systems announce. |
 | [`mcp`](docs/commands/mcp.md) | Serve azhaq to MCP clients. |
 | [`worker`](docs/commands/worker.md) | Take work from a run started with `-serve`. |

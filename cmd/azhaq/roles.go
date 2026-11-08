@@ -176,7 +176,7 @@ func cmdRoles(args []string) error {
 	fs.Var(&logins, "role-login", "NAME=USER:PASSWORD: a role that signs in on the -login page with Chrome, and sends the cookies and the token the login left")
 	fs.Var(&idSpecs, "id", "[ROLE:]NAME=VALUE: also fill routes with this identifier. NAME is a path parameter (book_title), a JSON field holding such values (basket_id) or a route (/rest/basket/{id}); with ROLE, VALUE names ROLE's own object, and another role that reads it is listed")
 	loginURL := fs.String("login", "", "the login page for -role-login")
-	dir := fs.String("dir", "", "directory for one database per role (default: azhaq-roles-<time>)")
+	dir := fs.String("dir", "", "directory for one database per role (default: roles/ in the run's folder under ~/.azhaq/runs; with AZHAQ_HOME=none azhaq-roles-<time>)")
 	jsonl := fs.Bool("jsonl", false, "one JSON object per endpoint (same as -json)")
 	asJSON := fs.Bool("json", false, "one JSON object per endpoint, and only the summary, as JSON, on stderr")
 	replay := fs.Bool("replay", true, "ask every endpoint one session reached with every other session, and each role's objects with the others (reads only, by method: GET; a write is replayed only with -replay-writes)")
@@ -334,6 +334,9 @@ func cmdRoles(args []string) error {
 	}
 	if *dir == "" {
 		*dir = "azhaq-roles-" + time.Now().Format("20060102-150405")
+		if p := runFolderPath("roles"); p != "" {
+			*dir = p
+		}
 	}
 	if err := os.MkdirAll(*dir, 0o755); err != nil {
 		return err

@@ -51,7 +51,7 @@ func (c *common) register(fs *flag.FlagSet) {
 	fs.BoolVar(&c.json, "json", false, "JSONL output, and the summary as one JSON object on stderr")
 	fs.BoolVar(&c.silent, "silent", false, "results only: no progress; the summary only when something failed (a source that failed, a takeover candidate as a [takeover] line on stderr); stdout stays one result per line")
 	fs.StringVar(&c.out, "o", "", "also write results to this file")
-	fs.StringVar(&c.db, "db", "", "keep the graph in this database for query, show, export and diff (default: a temporary one)")
+	fs.StringVar(&c.db, "db", "", "keep the graph in this database for query, show, export and diff (default: workspace.db in the run's folder under ~/.azhaq/runs; with AZHAQ_HOME=none a temporary one)")
 }
 
 // runFlags is run's flag set, read once, for the commands that pass
@@ -209,6 +209,9 @@ func skipAllBut(keep ...string) string {
 // see, when set, gets every observation as it is stored.
 func runPreset(c *common, args []string, rep *report, see func(types.Entity, types.Observation)) (*store.Store, func(), error) {
 	db, dir := c.db, ""
+	if db == "" {
+		db = runFolderDB() // kept in the run folder when runs are kept
+	}
 	if db == "" {
 		d, err := os.MkdirTemp("", "azhaq-")
 		if err != nil {

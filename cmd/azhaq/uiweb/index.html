@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>azhaq runs</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<aside id="runs">
+  <header><strong>azhaq</strong> runs <span id="home" class="muted"></span></header>
+  <ol id="runlist"></ol>
+</aside>
+<main>
+  <section id="story" aria-live="polite">
+    <p class="muted">Pick a run on the left.</p>
+  </section>
+  <div id="toolbar">
+    <input id="search" type="search" placeholder="Find a host, address, route…" autocomplete="off">
+    <button id="fit" type="button">Fit</button>
+    <button id="unfold" type="button">Unfold all</button>
+    <span id="legend">
+      <span class="key lead"></span>lead or finding
+      <span class="key new"></span>new in this run
+      <span class="key passive"></span>from third-party sources only
+      <span class="key hint"></span>map hint (a place to look)
+      <span class="key fold"></span>folded: click to open
+    </span>
+  </div>
+  <div id="stage">
+    <canvas id="canvas"></canvas>
+    <p id="empty" class="muted" hidden></p>
+  </div>
+</main>
+<aside id="panel" hidden>
+  <header><button id="close" type="button" aria-label="Close">×</button><span id="ptitle"></span></header>
+  <div id="pbody"></div>
+</aside>
+<script src="app.js"></script>
+</body>
+</html>
