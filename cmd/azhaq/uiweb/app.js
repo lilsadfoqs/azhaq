@@ -489,7 +489,7 @@ $("search").addEventListener("input", (ev) => {
 });
 
 // ---------- side panel ----------
-function closePanel() { $("panel").hidden = true; }
+function closePanel() { $("panel").hidden = true; if (graphMode === "execution") requestAnimationFrame(resize); }
 $("close").onclick = closePanel;
 
 async function openNode(n) {
@@ -550,24 +550,101 @@ const CAPABILITIES = [{"id":"sources","name":"Sources","description":"Query publ
 const CAP_PATHS = {"sources":"M4 5h4v4H4Z M4 19h4v4H4Z M20 12h4v4h-4Z M8 7h5l5 7h2 M8 21h5l5-7","names":"M11 3h6v6h-6Z M4 19h6v6H4Z M18 19h6v6h-6Z M14 9v5 M7 19v-5h14v5","web":"M4 4h16l4 4v16H4Z M4 10h20 M9 7h1 M8 17h4l3-3h5 M12 17l3 4h5","ports":"M4 5h20v7H4Z M4 17h20v7H4Z M9 8v1 M19 8v1 M9 20v1 M19 20v1","fuzz":"M4 5h8 M4 11h8 M4 17h8 M4 23h8 M16 4v20 M16 14h8 M21 11l3 3-3 3","shots":"M4 10V4h6 M18 4h6v6 M24 18v6h-6 M10 24H4v-6 M14 9l5 5-5 5-5-5Z","roles":"M6 4h5l2 2v5l-2 2H6l-2-2V6Z M17 15h5l2 2v5l-2 2h-5l-2-2v-5Z M15 7h5v5 M13 21H8v-5","verify":"M17 4H8L4 8v9l4 4h9l4-4V8Z M20 20l5 5 M9 12h7 M9 16h4"};
 const COLLECTORS = [{"name":"azhaq-asn","kind":"passive","inputs":["ASN"],"outputs":["prefixes"]},{"name":"azhaq-crawl","kind":"touch","after":"azhaq-http","inputs":["URL"],"outputs":["url"]},{"name":"azhaq-dirs","kind":"active","flag":"dirs","after":"azhaq-http","inputs":["URL"],"outputs":["url"]},{"name":"azhaq-dns","kind":"passive","inputs":["Hostname"],"outputs":["dns"],"batch":true},{"name":"azhaq-dns-brute","kind":"active","flag":"dns-brute","inputs":["Domain"],"outputs":["subdomains"]},{"name":"azhaq-graphql","kind":"touch","after":"azhaq-http","inputs":["URL"],"outputs":["graphql"]},{"name":"azhaq-graphql-schema","kind":"active","flag":"graphql","after":"azhaq-graphql","inputs":["URL"],"outputs":["graphql"]},{"name":"azhaq-http","kind":"touch","after":"azhaq-dns","inputs":["URL","Hostname","IPAddress"],"outputs":["application"]},{"name":"azhaq-js","kind":"touch","after":"azhaq-http","inputs":["URL"],"outputs":["url"]},{"name":"azhaq-openapi","kind":"touch","after":"azhaq-http","inputs":["URL"],"outputs":["api","url"]},{"name":"azhaq-params","kind":"active","flag":"params","after":"azhaq-http","inputs":["URL"],"outputs":["params"]},{"name":"azhaq-paths","kind":"touch","after":"azhaq-http","inputs":["URL"],"outputs":["url"]},{"name":"azhaq-permute","kind":"active","flag":"permute","after":"azhaq-dns","inputs":["Hostname"],"outputs":["subdomains"]},{"name":"azhaq-ports","kind":"active","flag":"ports","after":"azhaq-dns","inputs":["Hostname","IPAddress","Prefix"],"outputs":["ports"]},{"name":"azhaq-prefix","kind":"passive","inputs":["Prefix"],"outputs":["addresses"]},{"name":"azhaq-ptr","kind":"passive","inputs":["IPAddress"],"outputs":["ptr"],"batch":true},{"name":"azhaq-rdap","kind":"passive","inputs":["Domain","Organization"],"outputs":["rdap","organization","domain"]},{"name":"azhaq-render","kind":"touch","after":"azhaq-http","inputs":["URL"],"outputs":["url"]},{"name":"azhaq-search","kind":"passive","inputs":["Domain"],"outputs":["services"]},{"name":"azhaq-shots","kind":"touch","after":"azhaq-http","inputs":["URL","Hostname","IPAddress"],"outputs":["screenshot"]},{"name":"azhaq-subdomains","kind":"passive","inputs":["Domain"],"outputs":["subdomains"]},{"name":"azhaq-tls","kind":"touch","after":"azhaq-dns","inputs":["Hostname","IPAddress"],"outputs":["certificate"]},{"name":"azhaq-urls","kind":"passive","inputs":["Domain"],"outputs":["url"]}];
 const COLLECTOR_CAP = {"azhaq-subdomains":"sources","azhaq-urls":"sources","azhaq-rdap":"sources","azhaq-search":"sources","azhaq-dns":"names","azhaq-dns-brute":"names","azhaq-permute":"names","azhaq-asn":"names","azhaq-prefix":"names","azhaq-ptr":"names","azhaq-http":"web","azhaq-paths":"web","azhaq-crawl":"web","azhaq-js":"web","azhaq-render":"web","azhaq-tls":"web","azhaq-openapi":"web","azhaq-graphql":"web","azhaq-graphql-schema":"web","azhaq-ports":"ports","azhaq-dirs":"fuzz","azhaq-params":"fuzz","azhaq-shots":"shots"};
-function drawExecution(){
- const d=window.devicePixelRatio||1,r=canvas.getBoundingClientRect();ctx.setTransform(d,0,0,d,0,0);ctx.clearRect(0,0,r.width,r.height);executionNodes=[];if(!current)return;
- const cx=r.width/2,cy=r.height/2,rx=Math.max(80,Math.min(300,(r.width-180)/2)),ry=Math.max(65,Math.min(200,(r.height-100)/2));
- ctx.strokeStyle=css('--line');ctx.lineWidth=1;ctx.beginPath();ctx.ellipse(cx,cy,rx,ry,0,0,Math.PI*2);ctx.stroke();
- ctx.fillStyle=css('--fg');ctx.font='600 22px Hubot, sans-serif';ctx.textAlign='center';ctx.fillText('azhaq',cx,cy+8);
- CAPABILITIES.forEach((cap,i)=>{const a=-Math.PI/2+i*Math.PI/4,x=cx+rx*Math.cos(a),y=cy+ry*Math.sin(a),active=selectedGraph==='cap:'+cap.id;executionNodes.push({id:'cap:'+cap.id,key:cap.name,type:'Capability',execution:true,capability:cap,x,y,radius:30});ctx.fillStyle=css('--card');ctx.strokeStyle=active?css('--accent'):css('--muted');ctx.lineWidth=active?2:1;ctx.beginPath();ctx.roundRect(x-28,y-28,56,56,7);ctx.fill();ctx.stroke();ctx.save();ctx.translate(x-14,y-14);ctx.strokeStyle=css('--fg');ctx.lineWidth=2;ctx.stroke(new Path2D(CAP_PATHS[cap.id]));ctx.restore();ctx.fillStyle=css('--fg');ctx.font='12px Hubot, sans-serif';ctx.fillText(cap.name,x,y+44)});ctx.textAlign='start';
+let focusCapability = null;
+function collectorFacts(name) {
+  const summary = current?.run?.record?.summary || {};
+  const entries = (summary.cost?.stages || []).flatMap(stage => (stage.collectors || []).filter(c => c.collector === name).map(c => ({stage: stage.stage, ...c})));
+  const failures = (summary.failed || []).filter(f => f.collector === name);
+  const ledger = current?.run?.ledger || {};
+  // API variants may expose lines as entries or pre-aggregated by_collector.
+  const lines = Array.isArray(ledger.entries) ? ledger.entries.filter(e => e.collector === name).length : null;
+  const aggregate = ledger.by_collector?.[name];
+  const ledgerCount = typeof aggregate === 'number' ? aggregate : typeof aggregate?.count === 'number' ? aggregate.count : lines;
+  const used = entries.some(e => Object.hasOwn(e, 'actual') && e.actual != null) || (ledgerCount != null && ledgerCount > 0);
+  return {entries, failures, ledgerCount, used};
 }
-function showExecution(node){
- selectedGraph=node.id;draw();$('panel').hidden=false;$('ptitle').textContent=node.key;const body=$('pbody');body.replaceChildren();
- const run=current.run.record||{},summary=run.summary||{},cost=summary.cost||{},stages=cost.stages||[];
- const entries=stages.flatMap(stage=>(stage.collectors||[]).map(item=>({stage:stage.stage,...item})));
- const names=node.capability.collectors||[];if(!names.length){body.append(el('p','muted','Stage details: not recorded'));return}
- for(const short of names){const full='azhaq-'+short,meta=COLLECTORS.find(c=>c.name===full)||{},matches=entries.filter(c=>c.collector===full),failed=(summary.failed||[]).filter(f=>f.collector===full);const item=el('div','obs'),title=el('button',null,full);title.type='button';title.onclick=()=>{body.replaceChildren();const back=el('button',null,'← '+node.key);back.type='button';back.onclick=()=>showExecution(node);body.append(back,el('h3',null,full),el('p',null,'Kind: '+(meta.kind||'not recorded')),el('p',null,'Inputs: '+(meta.inputs?.join(', ')||'not recorded')),el('p',null,'Outputs: '+(meta.outputs?.join(', ')||'not recorded')),el('p',null,'Declared after: '+(meta.after||'not recorded')),el('p','muted','Attempt status, reason, inputs consumed, times and fed-by: not recorded'));if(matches.length)body.append(el('pre',null,JSON.stringify(matches,null,2)));if(failed.length)body.append(el('pre',null,JSON.stringify(failed.map(({collector,error,count})=>({collector,error,count})),null,2)))};item.append(title);const previewStatus=window.AZHAQ_PREVIEW?summary._previewCollectorStatus?.[full]:null;item.append(el('p','muted','Kind: '+(meta.kind||'not recorded')+' · Attempt status: '+(previewStatus||'not recorded')));if(meta.after)item.append(el('p','muted','Declared after: '+meta.after));if(matches.length)item.append(el('pre',null,JSON.stringify(matches,null,2)));if(failed.length)item.append(el('pre',null,JSON.stringify(failed.map(({collector,error,count})=>({collector,error,count})),null,2)));item.append(el('p','muted','Reason, inputs, attempts and fed-by: not recorded'));body.append(item)}
+function appendCollectorFacts(body, name) {
+  const facts = collectorFacts(name);
+  const units = {requests: 'requests', dns_queries: 'DNS queries', source_queries: 'source queries', connects: 'connections'};
+  let hasRequests = false;
+  for (const entry of facts.entries) {
+    for (const [key, unit] of Object.entries(units)) {
+      const actual = entry.actual?.[key], estimate = entry.estimate?.[key];
+      if (typeof actual !== 'number' && typeof estimate !== 'number') continue;
+      if (typeof actual === 'number' && actual > 0) hasRequests = true;
+      let sentence = typeof actual === 'number' ? `${key === 'requests' ? 'Sent' : 'Recorded'} ${actual} ${unit}` : `${unit}: not recorded`;
+      if (typeof estimate === 'number') sentence += ` (estimated ${estimate})`;
+      if (entry.stage) sentence += ` · ${entry.stage}`;
+      body.append(el('p', null, sentence));
+    }
+  }
+  if (!hasRequests && !(facts.ledgerCount > 0)) body.append(el('p', 'muted', 'No request recorded for this collector in this run.'));
+  if (facts.ledgerCount != null && facts.ledgerCount > 0) body.append(el('p', null, `${facts.ledgerCount} ledger lines recorded for this collector`));
+  for (const failure of facts.failures) {
+    const reason = String(failure.error || 'failure');
+    const count = typeof failure.count === 'number' ? failure.count : null;
+    body.append(el('p', null, count == null ? reason : `${count} ${reason === 'timeout' ? (count === 1 ? 'timeout' : 'timeouts') : reason}`));
+  }
 }
-$('execution').addEventListener('click',()=>{graphMode='execution';selectedGraph=null;$('execution').setAttribute('aria-pressed','true');$('results').setAttribute('aria-pressed','false');closePanel();draw()});
-$('results').addEventListener('click',()=>{graphMode='results';selectedGraph=null;$('execution').setAttribute('aria-pressed','false');$('results').setAttribute('aria-pressed','true');closePanel();draw()});
+function drawExecution() {
+  const d=window.devicePixelRatio||1, r=canvas.getBoundingClientRect();
+  ctx.setTransform(d,0,0,d,0,0);ctx.clearRect(0,0,r.width,r.height);executionNodes=[];if(!current)return;
+  const cx=r.width/2, cy=r.height/2, rx=Math.max(40,Math.min(300,(r.width-150)/2)), ry=Math.max(40,Math.min(180,(r.height-130)/2));
+  const focused=CAPABILITIES.find(c=>c.id===focusCapability), caps=focused?[focused]:CAPABILITIES;
+  const nodes=[];
+  if(focused) {
+    nodes.push({id:'cap:'+focused.id,key:focused.name,type:'Capability',execution:true,capability:focused,x:cx,y:cy,radius:31});
+    const own=(focused.collectors||[]).map(name=>'azhaq-'+name), external=[];
+    for(const name of own){const parent=COLLECTORS.find(c=>c.name===name)?.after;if(parent&&!own.includes(parent)&&!external.includes(parent))external.push(parent)}
+    [...own,...external].forEach((name,i,all)=>{const a=-Math.PI/2+i*Math.PI*2/all.length;nodes.push({id:'collector:'+name,key:name,type:'Collector',execution:true,collector:name,capability:focused,external:!own.includes(name),x:cx+rx*Math.cos(a),y:cy+ry*Math.sin(a),radius:24})});
+  } else {
+    ctx.strokeStyle=css('--line');ctx.lineWidth=1;ctx.beginPath();ctx.ellipse(cx,cy,rx,ry,0,0,Math.PI*2);ctx.stroke();
+    ctx.fillStyle=css('--fg');ctx.font='600 22px Arial, sans-serif';ctx.textAlign='center';ctx.fillText('azhaq',cx,cy+8);
+    caps.forEach((cap,i)=>{const a=-Math.PI/2+i*Math.PI/4;nodes.push({id:'cap:'+cap.id,key:cap.name,type:'Capability',execution:true,capability:cap,x:cx+rx*Math.cos(a),y:cy+ry*Math.sin(a),radius:28})});
+  }
+  const nodeMap=new Map(nodes.filter(n=>n.collector).map(n=>[n.collector,n]));
+  if(focused)for(const n of nodes.filter(n=>n.collector)) {
+    const meta=COLLECTORS.find(c=>c.name===n.collector), parent=meta?.after&&nodeMap.get(meta.after);
+    if(!parent)continue;
+    const dx=n.x-parent.x,dy=n.y-parent.y,len=Math.hypot(dx,dy)||1,ux=dx/len,uy=dy/len,ex=n.x-ux*n.radius,ey=n.y-uy*n.radius;ctx.strokeStyle=css('--muted');ctx.fillStyle=css('--muted');ctx.globalAlpha=.45;ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(parent.x+ux*parent.radius,parent.y+uy*parent.radius);ctx.lineTo(ex,ey);ctx.stroke();ctx.beginPath();ctx.moveTo(ex,ey);ctx.lineTo(ex-ux*7-uy*3,ey-uy*7+ux*3);ctx.lineTo(ex-ux*7+uy*3,ey-uy*7-ux*3);ctx.closePath();ctx.fill();ctx.globalAlpha=1;
+  }
+  ctx.textAlign='center';
+  for(const n of nodes) {
+    const active=selectedGraph===n.id, used=n.collector?collectorFacts(n.collector).used:(n.capability.collectors||[]).some(name=>collectorFacts('azhaq-'+name).used);
+    n.used=used;executionNodes.push(n);ctx.fillStyle=css('--card');ctx.strokeStyle=active?css('--accent'):used?css('--fg'):css('--line');ctx.lineWidth=active?2:1;
+    ctx.beginPath();ctx.roundRect(n.x-n.radius,n.y-n.radius,n.radius*2,n.radius*2,6);ctx.fill();ctx.stroke();
+    if(used){ctx.strokeStyle=css('--fg');ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(n.x-n.radius,n.y-8);ctx.lineTo(n.x-n.radius,n.y+8);ctx.stroke()}
+    if(n.collector){const meta=COLLECTORS.find(c=>c.name===n.collector);ctx.fillStyle=used?css('--fg'):css('--muted');ctx.font='12px Arial,sans-serif';ctx.fillText(meta?.kind==='passive'?'○':meta?.kind==='touch'?'●':'◇',n.x,n.y+4)}
+    else{ctx.save();ctx.translate(n.x-14,n.y-14);ctx.strokeStyle=used?css('--fg'):css('--muted');ctx.lineWidth=2;ctx.stroke(new Path2D(CAP_PATHS[n.capability.id]));ctx.restore()}
+    ctx.fillStyle=used?css('--fg'):css('--muted');ctx.font='12px Arial,sans-serif';ctx.fillText(n.collector?n.key.replace('azhaq-','')+(n.external?' · external':''):n.key,n.x,n.y+n.radius+16);
+  }
+  ctx.textAlign='start';
+}
+function showExecution(node) {
+  selectedGraph=node.id;
+  if(!node.collector) focusCapability=focusCapability===node.capability.id?null:node.capability.id;
+  $('execution-back').hidden=!focusCapability;
+  $('panel').hidden=false;$('ptitle').textContent=node.key;
+  const body=$('pbody');body.replaceChildren();
+  if(node.collector) {
+    const meta=COLLECTORS.find(c=>c.name===node.collector)||{};
+    body.append(el('p',null,'Kind: '+(meta.kind||'not recorded')),el('p',null,'Inputs: '+(meta.inputs?.join(', ')||'not recorded')),el('p',null,'Outputs: '+(meta.outputs?.join(', ')||'not recorded')),el('p',null,'Declared after: '+(meta.after||'none')));
+    appendCollectorFacts(body,node.collector);
+    body.append(el('p','muted','Attempt reason, actual inputs, times and fed-by: not recorded.'));
+  } else {
+    const names=node.capability.collectors||[];
+    if(!names.length) body.append(el('p','muted','Stage details: not recorded.'));
+    for(const short of names) {const full='azhaq-'+short,meta=COLLECTORS.find(c=>c.name===full)||{},item=el('div','obs');item.append(el('strong',null,full),el('p','muted',(meta.kind||'not recorded')+' · '+(collectorFacts(full).used?'Used':'Available')));appendCollectorFacts(item,full);body.append(item)}
+  }
+  // Grid tracks change when the panel opens; wait until layout has settled.
+  requestAnimationFrame(resize);
+}
+$('execution').addEventListener('click',()=>{graphMode='execution';focusCapability=null;selectedGraph=null;for(const id of ['search','fit','unfold','legend'])$(id).hidden=true;$('execution-back').hidden=true;$('execution').setAttribute('aria-pressed','true');$('results').setAttribute('aria-pressed','false');closePanel();draw()});
+$('execution-back').addEventListener('click',()=>{focusCapability=null;selectedGraph=null;$('execution-back').hidden=true;closePanel();draw()});
+$('results').addEventListener('click',()=>{graphMode='results';selectedGraph=null;for(const id of ['search','fit','unfold','legend'])$(id).hidden=false;$('execution-back').hidden=true;$('execution').setAttribute('aria-pressed','false');$('results').setAttribute('aria-pressed','true');closePanel();draw()});
 canvas.addEventListener('keydown',event=>{if(!current)return;const nodes=graphMode==='execution'?executionNodes:[...current.model.nodes.values()];if(!nodes.length)return;const currentNode=nodes.find(n=>n.id===selectedGraph);let next=null;if(['ArrowRight','ArrowLeft','ArrowUp','ArrowDown'].includes(event.key)){const vector={ArrowRight:[1,0],ArrowLeft:[-1,0],ArrowDown:[0,1],ArrowUp:[0,-1]}[event.key];if(!currentNode)next=nodes[0];else{const options=nodes.filter(n=>n.id!==currentNode.id).map(n=>{const dx=n.x-currentNode.x,dy=n.y-currentNode.y,forward=dx*vector[0]+dy*vector[1],side=Math.abs(dx*vector[1]-dy*vector[0]);return {n,forward,score:forward+2*side}}).filter(v=>v.forward>0).sort((a,b)=>a.score-b.score);next=options[0]?.n}event.preventDefault();if(next){selectedGraph=next.id;hover=next.id;if(graphMode==='results'){const r=canvas.getBoundingClientRect();view.x=r.width/2-(next.x+NODE_W/2)*view.s;view.y=r.height/2-(next.y+NODE_H/2)*view.s} $('graph-focus').textContent=next.key;draw()}}else if((event.key==='Enter'||event.key===' ')&&currentNode){event.preventDefault();openNode(currentNode)}});
 
+new ResizeObserver(() => resize()).observe(canvas.parentElement);
 resize();
 loadRuns().catch((e) => $("story").replaceChildren(el("p", null, "Could not read the runs: " + e.message)));
 

@@ -10,6 +10,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -154,6 +155,23 @@ func TestUIGraphAndLedgerAreTheRunsOwn(t *testing.T) {
 	st.Close()
 	if len(g.Nodes) != len(ents) || len(ents) == 0 {
 		t.Fatalf("graph has %d nodes, the workspace %d entities", len(g.Nodes), len(ents))
+	}
+	// A node's capabilities come from the collectors of its observations.
+	web := 0
+	for _, n := range g.Nodes {
+		if slices.Contains(n.Capabilities, "web") {
+			web++
+		}
+	}
+	if web == 0 {
+		t.Fatalf("no node of a web map names the web capability: %+v", g.Nodes)
+	}
+	byCol := 0
+	for _, n := range one.Ledger.ByCollector {
+		byCol += n
+	}
+	if byCol == 0 || byCol > one.Ledger.Lines {
+		t.Fatalf("by_collector counts %d lines of %d", byCol, one.Ledger.Lines)
 	}
 	var node struct {
 		Entity       map[string]any

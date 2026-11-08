@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -158,13 +159,14 @@ func uiRuns(w http.ResponseWriter, home string) {
 
 // uiLedger is what the run sent, counted from its ledger lines.
 type uiLedger struct {
-	Path      string         `json:"path"`
-	Lines     int            `json:"lines"`
-	ByClass   map[string]int `json:"by_class"`
-	ByKind    map[string]int `json:"by_kind"`
-	ByPurpose map[string]int `json:"by_purpose"`
-	Hosts     []uiCount      `json:"hosts"` // targets, by host or address, the most asked first
-	Sources   []uiCount      `json:"sources"`
+	Path        string         `json:"path"`
+	Lines       int            `json:"lines"`
+	ByClass     map[string]int `json:"by_class"`
+	ByKind      map[string]int `json:"by_kind"`
+	ByPurpose   map[string]int `json:"by_purpose"`
+	ByCollector map[string]int `json:"by_collector"` // every line that names its collector, whatever its class
+	Hosts       []uiCount      `json:"hosts"`        // targets, by host or address, the most asked first
+	Sources     []uiCount      `json:"sources"`
 }
 
 type uiCount struct {
@@ -209,7 +211,7 @@ func readRunLedger(rec runs.Record) (*uiLedger, error) {
 	if rec.Ended != nil {
 		end = *rec.Ended
 	}
-	l := &uiLedger{Path: path, ByClass: map[string]int{}, ByKind: map[string]int{}, ByPurpose: map[string]int{}}
+	l := &uiLedger{Path: path, ByClass: map[string]int{}, ByKind: map[string]int{}, ByPurpose: map[string]int{}, ByCollector: map[string]int{}}
 	hosts, sources := map[string]int{}, map[string]int{}
 	err := ledger.Read(path, func(e ledger.Entry) error {
 		if e.Kind == "seal" || e.Time.Before(rec.Started) || e.Time.After(end) {
@@ -222,6 +224,9 @@ func readRunLedger(rec runs.Record) (*uiLedger, error) {
 		l.Lines++
 		l.ByClass[class]++
 		l.ByKind[e.Kind]++
+		if e.Collector != "" {
+			l.ByCollector[e.Collector]++
+		}
 		switch class {
 		case ledger.ClassTarget:
 			if e.Purpose != "" {
@@ -272,6 +277,9 @@ type uiGraphNode struct {
 	Lead    string `json:"lead,omitempty"` // a finding's label (proved, version-only, conditional), or lead for a lead above info
 	Hint    string `json:"hint,omitempty"` // a map hint on it (severity info): what to look at, not a finding
 	Obs     int    `json:"obs"`
+	// Capabilities are the capabilities of the collectors that observed
+	// it, in run order: recorded on its observations, never from its type.
+	Capabilities []string `json:"capabilities,omitempty"`
 }
 
 type uiGraphEdge struct {
@@ -333,6 +341,7 @@ func uiGraph(w http.ResponseWriter, home, id string) {
 		nodes = append(nodes, uiGraphNode{ID: e.ID, Type: string(e.Type), Key: e.Key, New: !e.FirstSeen.Before(rec.Started), Passive: true})
 	}
 	active := map[string]bool{}
+	byCollector := map[string]int{} // observations of this run's entities, by the collector that made them
 	for _, o := range obs {
 		i, ok := index[o.EntityID]
 		if !ok {
@@ -340,6 +349,10 @@ func uiGraph(w http.ResponseWriter, home, id string) {
 		}
 		n := &nodes[i]
 		n.Obs++
+		byCollector[o.Collector]++
+		if c := capabilityOf(o.Collector); c != "" && !slices.Contains(n.Capabilities, c) {
+			n.Capabilities = append(n.Capabilities, c)
+		}
 		if !passive[o.Collector] {
 			active[n.ID] = true
 		}
@@ -348,6 +361,7 @@ func uiGraph(w http.ResponseWriter, home, id string) {
 		}
 	}
 	for i := range nodes {
+		slices.SortFunc(nodes[i].Capabilities, func(a, b string) int { return slices.Index(capabilityOrder, a) - slices.Index(capabilityOrder, b) })
 		nodes[i].Passive = nodes[i].Obs > 0 && !active[nodes[i].ID]
 	}
 	if g, err := readGraph(rec.Workspace); err == nil {
@@ -366,7 +380,7 @@ func uiGraph(w http.ResponseWriter, home, id string) {
 		}
 		outEdges = append(outEdges, uiGraphEdge{From: e.From, To: e.To, Type: e.Type})
 	}
-	uiJSON(w, http.StatusOK, map[string]any{"nodes": nodes, "edges": outEdges})
+	uiJSON(w, http.StatusOK, map[string]any{"nodes": nodes, "edges": outEdges, "observations_by_collector": byCollector})
 }
 
 // payloadStatus is the HTTP status an observation records: its own, else
@@ -487,4 +501,30 @@ func markFinding(nodes []uiGraphNode, byKey map[string]int, r findingRecord) {
 	case n.Hint == "":
 		n.Hint = r.Evidence
 	}
+}
+
+// capabilityOrder is azhaq's eight capabilities in the order a run goes
+// through them.
+var capabilityOrder = []string{"sources", "names", "web", "ports", "fuzz", "shots", "roles", "verify"}
+
+// capabilityOf is the capability a collector belongs to, "" for one that
+// belongs to none (a stage of a command, an unknown name).
+func capabilityOf(collector string) string {
+	switch strings.TrimPrefix(collector, "azhaq-") {
+	case "subdomains", "urls", "rdap", "search":
+		return "sources"
+	case "dns", "dns-brute", "permute", "asn", "prefix", "ptr":
+		return "names"
+	case "http", "paths", "crawl", "js", "tls", "openapi", "graphql", "graphql-schema", "render":
+		return "web"
+	case "ports":
+		return "ports"
+	case "dirs", "params":
+		return "fuzz"
+	case "shots":
+		return "shots"
+	case "advisories", "verify":
+		return "verify"
+	}
+	return ""
 }
