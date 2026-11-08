@@ -291,9 +291,9 @@ func TestDirsEstimateCountsTheHeldWordsOut(t *testing.T) {
 		egress.Reset()
 		args := append([]string{"-url", app.srv.URL + "/", "-allow", "127.0.0.1", "-sources", "none", "-no-paths", "-no-favicon", "-depth", "1", "-dirs", "@common"}, flags...)
 		out, _, _ := cli(t, append([]string{"plan", "-json"}, args...)...)
-		plan := planStageRequests(t, out, "dirs")
+		plan := planStageRequests(t, out, "fuzz")
 		sum := runJSON(t, append([]string{"run", "-db", filepath.Join(t.TempDir(), "w.db")}, args...)...)
-		got := stageAmount(stagesOf(t, sum)["dirs"], "actual", "requests")
+		got := stageAmount(stagesOf(t, sum)["fuzz"], "actual", "requests")
 		if plan != got {
 			t.Errorf("flags %v: the plan estimates %v dirs requests, the run sent %v", flags, plan, got)
 		}

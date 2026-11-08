@@ -61,14 +61,14 @@ func TestDirsEstimateIsAFloorThatNamesTheControlOfADirectory(t *testing.T) {
 	wl := wlist(t, strings.Fields(foldWords)...)
 	args := []string{"-url", srv.URL + "/", "-allow", "127.0.0.1", "-sources", "none", "-no-paths", "-no-favicon", "-depth", "1", "-dirs", wl}
 	out, _, _ := cli(t, append([]string{"plan", "-json"}, args...)...)
-	plan := planStageRequests(t, out, "dirs")
+	plan := planStageRequests(t, out, "fuzz")
 	stage := map[string]any{}
 	var planned map[string]any
 	if err := json.Unmarshal([]byte(out), &planned); err != nil {
 		t.Fatal(err)
 	}
 	for _, s := range planned["estimate"].(map[string]any)["stages"].([]any) {
-		if st := s.(map[string]any); st["stage"] == "dirs" {
+		if st := s.(map[string]any); st["stage"] == "fuzz" {
 			stage = st
 		}
 	}
@@ -76,7 +76,7 @@ func TestDirsEstimateIsAFloorThatNamesTheControlOfADirectory(t *testing.T) {
 		t.Errorf("the plan does not call the dirs estimate a floor that names the control: %v", stage)
 	}
 	sum := runJSON(t, append([]string{"run", "-db", filepath.Join(t.TempDir(), "w.db")}, args...)...)
-	got := stageAmount(stagesOf(t, sum)["dirs"], "actual", "requests")
+	got := stageAmount(stagesOf(t, sum)["fuzz"], "actual", "requests")
 	// /api/ and /priv/ each hold two hits or more: one control each.
 	if got != plan+2 {
 		t.Errorf("the plan counts %v dirs requests, the run sent %v: want the plan plus the 2 controls", plan, got)
