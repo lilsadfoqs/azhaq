@@ -1203,7 +1203,7 @@ diff.bodies-not-compared	docs/commands/diff.md	Bodies are not compared byte for 
 diff.control-by-answer	docs/commands/diff.md	A catch-all row's control is compared by its answer (status, type, title).	test:store:TestCompareIgnoresTheControlsRandomPath;test:cmd/azhaq:TestTwoIdenticalRunsDiffEmpty
 
 # docs/commands/ingest.md
-ingest.without-db-new-file	docs/commands/ingest.md	Without `-db` it makes a new `azhaq-TIME-PID.db` in the current directory, or uses the file `$AZHAQ_DB` names.	test:cmd/azhaq:TestIngestWithoutDBMakesANewFileAndPrintsNoRows
+ingest.without-db-new-file	docs/commands/ingest.md	Without `-db` it uses the file `$AZHAQ_DB` names, else makes `workspace.db` in its [run folder](runs.md)	test:cmd/azhaq:TestIngestWithoutDBMakesANewFileAndPrintsNoRows,TestRunHomeKeepsTheWorkspaceInTheRunFolder
 ingest.prints-no-rows	docs/commands/ingest.md	`ingest` prints no rows, only its summary.	test:cmd/azhaq:TestIngestWithoutDBMakesANewFileAndPrintsNoRows
 ingest.naabu-repeats-fold	docs/commands/ingest.md	The lines naabu repeats fold into one row. naabu says nothing of the service, so the row has none until `ports` or `probe` asks.	test:cmd/azhaq:TestIngestNaabuLinesFoldIntoOnePortRowWithNoService,TestIngestNaabuMakesPortRows
 ingest.unreadable-line-note	docs/commands/ingest.md	A line that cannot be read is skipped and named in a note, never a failure: the exit code stays 0.	test:cmd/azhaq:TestIngestUnreadableLineIsSkippedAndNotedNeverAFailure
@@ -1376,3 +1376,17 @@ urls.none-answered-in-full	docs/commands/urls.md	the exit code is 0 while anothe
 dirs.row-per-input	docs/commands/dirs.md	With `-json` you get one object for each input that matched.	test:cmd/azhaq:TestDirsListsEachRepeatedInputAsFfufDoes
 dirs.position-field	docs/commands/dirs.md	The place of the input among the sweep's inputs, from 1, as ffuf counts it.	test:cmd/azhaq:TestDirsListsEachRepeatedInputAsFfufDoes
 dirs.repeat-rows	docs/commands/dirs.md	a word that is in the wordlist twice (or two blank lines) is asked twice and listed twice, each row with its own `position`, so `results` is ffuf's count for the same list. The workspace keeps one entity for each URL, and a note says how many inputs repeated an earlier one.	test:cmd/azhaq:TestDirsListsEachRepeatedInputAsFfufDoes
+
+# docs/commands/runs.md
+runs.read-only-commands-are-not-kept	docs/commands/runs.md	The commands that read a workspace or serve are not kept.	test:cmd/azhaq:TestRunHomeSkipsReadOnlyCommands
+runs.a-refused-command-leaves-no-folder	docs/commands/runs.md	- A command refused for its flags (exit 2) leaves no folder.	test:cmd/azhaq:TestRunHomeUsageErrorLeavesNoFolder
+
+# docs/commands/ui.md
+ui.it-sends-nothing-to-any-target	docs/commands/ui.md	It sends nothing to any target.	test:cmd/azhaq:TestUISendsNothingToAnyTarget
+ui.the-csp-lets-the-browser-load-only-its-own	docs/commands/ui.md	- The page's `Content-Security-Policy` lets the browser load only its own	test:cmd/azhaq:TestUINothingExternalInThePage
+ui.listen-takes-a-loopback-address-only	docs/commands/ui.md	- `-listen` takes a loopback address only	test:cmd/azhaq:TestUIRefusesANonLoopbackAddress,TestUIRefusesOtherHostsAndPaths
+ui.a-red-node-holds-a-finding	docs/commands/ui.md	- A red node holds a finding	test:cmd/azhaq:TestUIMarksFindingsLeadsAndHints
+ui.a-yellow-dot-is-a-map-hint	docs/commands/ui.md	- A yellow dot is a map hint	test:cmd/azhaq:TestUIMarksFindingsLeadsAndHints
+ui.a-dashed-outline-is-third-party-only	docs/commands/ui.md	- A dashed outline is an entity seen through third-party sources only.	test:cmd/azhaq:TestUIMarksPassiveOnlyEntities
+ui.every-number-is-a-count-of-the-run	docs/commands/ui.md	Every number on the page is a count of the run's summary, workspace or ledger.	test:cmd/azhaq:TestUIGraphAndLedgerAreTheRunsOwn
+ui.not-recorded-is-said	docs/commands/ui.md	A number the run did not record is said to be not recorded.	test:cmd/azhaq:TestRunsSaysNotRecorded

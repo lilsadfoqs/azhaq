@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>azhaq runs</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<aside id="runs">
+  <header><strong>azhaq</strong> runs <span id="home" class="muted"></span></header>
+  <ol id="runlist"></ol>
+</aside>
+<main>
+  <section id="story" aria-live="polite">
+    <p class="muted">Pick a run on the left.</p>
+  </section>
+  <div id="toolbar">
+    <button id="collapse-runs" type="button" aria-controls="runs" aria-expanded="true" aria-label="Toggle run list">Runs</button>
+    <button id="collapse-story" type="button" aria-controls="story" aria-expanded="true" aria-label="Toggle run story">Story</button>
+    <select id="theme" aria-label="Theme"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select>
+    <div class="views" role="group" aria-label="Graph view"><button id="execution" type="button" aria-pressed="false">Execution</button><button id="results" type="button" aria-pressed="true">Results</button></div>
+    <button id="execution-back" type="button" hidden>← All capabilities</button>
+    <input id="search" type="search" placeholder="Find a host, address, route…" autocomplete="off">
+    <button id="fit" type="button">Fit</button>
+    <button id="unfold" type="button">Unfold all</button>
+    <span id="legend">
+      <span class="key lead"></span>lead or finding
+      <span class="key new"></span>new in this run
+      <span class="key passive"></span>from third-party sources only
+      <span class="key hint"></span>map hint (a place to look)
+      <span class="key fold"></span>folded: click to open
+    </span>
+  </div>
+  <div id="stage">
+    <canvas id="canvas" tabindex="0" aria-label="Graph. Use arrow keys to choose a node and Enter to open it."></canvas><span id="graph-focus" class="sr-only" role="status" aria-live="polite"></span>
+    <p id="empty" class="muted" hidden></p>
+  </div>
+</main>
+<aside id="panel" hidden>
+  <header><button id="close" type="button" aria-label="Close">×</button><span id="ptitle"></span></header>
+  <div id="pbody"></div>
+</aside>
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Every run is kept in one place: `~/.azhaq/runs/<time>-<command>-<target>/` (or `$AZHAQ_HOME/runs`), one folder per run of `run`, `quickstart`, `resume`, `roles`, `watch`, `ingest` and the drop-in commands. A folder holds `run.json` (the command line with secrets masked, the version, start and end, the exit code and the command's own summary), the workspace and its ledger. Folders are mode 0700; a command refused for its flags leaves none. `AZHAQ_HOME=none` keeps the old places.
+- `azhaq runs` lists the kept runs, newest first, with how each ended, the requests it sent and what it found; `-rm ID` and `-older 30d` remove them.
+- `azhaq ui` shows the kept runs in a browser on this machine: what each asked, did and got, in three sentences counted from its summary, workspace and ledger, and its graph on a canvas in columns (domains, hosts, addresses, ports, routes). Routes fold per host, findings are red, map hints are a dot, third-party-only entities are dashed, and each node carries the glyph of the capability that observed it; a click shows an entity's observations with secrets masked and a `curl` line. An Execution view puts azhaq's eight capabilities around it, marks the ones the run used, and opens each to its collectors with what they sent, observed and failed. System, light and dark themes. Loopback only, read-only, embedded and offline.
+
+### Changed
+
+- With no `-db`, `run` keeps its workspace in its run folder instead of `azhaq-TIME-PID.db` in the current directory, and the drop-in commands, `dns` and `fuzz` keep theirs there instead of a temporary one (so `resume` works on them). `roles` puts its databases in the run folder's `roles/` instead of `azhaq-roles-TIME/`.
+
 ## v0.16.0
 
 ### Added

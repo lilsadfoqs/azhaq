@@ -219,7 +219,7 @@ note: screenshot of http://127.0.0.1:3001/ not taken: the page needs about 26 re
 | --- | --- | --- | --- |
 | `-dir` | string | `screenshots` | directory for the picture files |
 | `-csv` | string |  | also write one row per page to this CSV file (url, final_url, response_code, title, technologies, file, phash, partial, error) |
-| `-db` | string |  | keep the graph in this database for query, show, export and diff (default: a temporary one) |
+| `-db` | string |  | keep the graph in this database for query, show, export and diff (default: workspace.db in the run's folder under ~/.azhaq/runs; with AZHAQ_HOME=none a temporary one) |
 | `-json` | bool |  | JSONL output, and the summary as one JSON object on stderr |
 | `-o` | string |  | also write results to this file |
 | `-silent` | bool |  | results only: no progress; the summary only when something failed (a source that failed, a takeover candidate as a [takeover] line on stderr); stdout stays one result per line |

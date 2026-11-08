@@ -286,7 +286,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 
 | Flag | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `-db` | string |  | keep the matches in this database for query, show, export and diff (none by default) |
+| `-db` | string |  | keep the matches in this database for query, show, export and diff (default: workspace.db in the run's folder under ~/.azhaq/runs; with AZHAQ_HOME=none none) |
 | `-json` | bool |  | JSONL output, and the summary as one JSON object on stderr |
 | `-o` | string |  | write the report to this file, in the format -of says (json by default; a name ending .txt gets what stdout shows, as before) |
 | `-of` | string |  | the format of -o: json, ejson, html, md, csv, ecsv, all (all writes one file for each, with the suffixes) |

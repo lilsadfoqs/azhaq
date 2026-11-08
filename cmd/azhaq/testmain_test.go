@@ -14,6 +14,10 @@ func TestMain(m *testing.M) {
 	// is the user's say (also for the commands run again as a process) that it
 	// may run without one. A test of the refusal clears it.
 	os.Setenv("AZHAQ_CHROME_NO_SANDBOX", "1")
+	// Tests never keep runs in the user's home; a test of the run home sets its own.
+	if os.Getenv("AZHAQ_HOME") == "" {
+		os.Setenv("AZHAQ_HOME", "none")
+	}
 	if os.Getenv("AZHAQ_TEST_AS_MAIN") == "1" {
 		if names := os.Getenv("AZHAQ_TEST_SUBS_NAMES"); names != "" {
 			// A subs run in its own process, on one source that gives these names.

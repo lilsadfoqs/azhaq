@@ -96,7 +96,7 @@ func cmdDNS(args []string) error {
 	fs := newFlags("dns")
 	var c common
 	c.register(fs)
-	fs.Lookup("db").Usage = "keep the names that have records in this database for query, show and export (default: nothing is kept)"
+	fs.Lookup("db").Usage = "keep the names that have records in this database for query, show and export (default: workspace.db in the run's folder under ~/.azhaq/runs; with AZHAQ_HOME=none nothing is kept)"
 	alias := func(name, as, usage string) { fs.Var(fs.Lookup(name).Value, as, usage) }
 	alias("json", "j", "same as -json")
 	var names, hostsArg, wordsArg stringsFlag
@@ -165,6 +165,9 @@ func cmdDNS(args []string) error {
 	alias("resolvers", "r", "same as -resolvers")
 	if err := parse(fs, args); err != nil {
 		return err
+	}
+	if c.db == "" {
+		c.db = runFolderDB() // a kept run keeps its rows
 	}
 
 	cf := &dnsConf{selected: map[string]bool{}, axfr: *axfr, all: *all, resp: *resp, ro: *ro, json: c.json, omitRaw: *omitRaw,

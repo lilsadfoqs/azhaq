@@ -335,6 +335,16 @@ var helpSpecs = map[string]helpSpec{
 			{"", `db workspace listen`},
 		},
 	},
+	"runs": {
+		groups: []helpGroup{
+			{"", `json home limit rm older`},
+		},
+	},
+	"ui": {
+		groups: []helpGroup{
+			{"", `listen home`},
+		},
+	},
 	"hunt": {
 		groups: []helpGroup{
 			{"", `db roles limit since json`},
