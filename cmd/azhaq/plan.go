@@ -158,6 +158,11 @@ type sendLimits struct {
 	sendState bool
 	dirsHeld  int
 	dirsHold  bool // the built-in -dirs words that declare a state change are held back
+	// What the ceilings are counted with.
+	portPasses    int  // the most times a port is asked: 1, and one more for each pass over the silent ones
+	portNameAddrs int  // the most addresses of a name that are scanned; 0: every one it has
+	dirsDepth     int  // -dirs-depth
+	paramsWrites  bool // -params-writes
 }
 
 // planSends are the lines on what a run sends besides the GET requests for

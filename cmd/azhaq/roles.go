@@ -318,6 +318,9 @@ func cmdRoles(args []string) error {
 		}
 	}
 	costIn := rolesCostIn{roles: roles, logins: len(logins), crawl: crawl, hist: hist, sc: sc, replay: *replay, max: *replayMax, methods: methods}
+	if v, ok := flagValue(runArgs, "max-requests"); ok {
+		costIn.budget, _ = strconv.ParseInt(v, 10, 64)
+	}
 	if *planOnly {
 		if crawl {
 			var p runPlan

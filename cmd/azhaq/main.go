@@ -1223,6 +1223,8 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	send.tcpPorts, send.udpPorts = len(opts.Ports), len(opts.UDPPorts)
 	send.portList, send.portUDPList, send.portsFor = opts.Ports, opts.UDPPorts, portCfg.PortsFor
 	send.portExcludeCDN, send.portThreshold = portCfg.ExcludeCDN, portCfg.Threshold
+	send.portPasses, send.portNameAddrs = portPasses(portCfg.Retries), portNameAddrs(portCfg)
+	send.dirsDepth, send.paramsWrites = *dirsDepth, *paramsWrites
 	send.dirsWordList, send.dirsExtList, send.guessBudget, send.bruteList = opts.Dirs.Words, opts.Dirs.Extensions, *maxNames, opts.BruteWords
 	send.axfr, send.resolvers = out.axfr, resolvers
 	send.dirsWords, send.dirsExts, send.paramsN = len(opts.Dirs.Words), len(opts.Dirs.Extensions), len(opts.Params.Words)

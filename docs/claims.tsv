@@ -1492,3 +1492,12 @@ subs.coverage-says-why-not	docs/commands/subs.md	When a tier has no estimate, it
 subs.coverage-says-why-not-domains	docs/commands/subs.md	With several domains and no estimate for any, there is one such line for each domain, labelled with it.	test:cmd/azhaq:TestSubsNotesSayWhyForEachDomainWithoutEstimate
 subs.scope-holds-names-out	docs/commands/subs.md	`-allow`, `-deny` and `-scope` (with `-program`) hold names out, as in [dns](dns.md): a name they hold out gets no DNS query under `-live`, `-w` or `-permute`, is not listed, and is counted as `held out by scope`.	test:cmd/azhaq:TestSubsDenyKeepsANameOutOfEveryQuery,TestSubsCountsTheNamesHeldOutByScope
 urls.scope-holds-urls-out	docs/commands/urls.md	Holds out the URLs that `-allow`, `-deny` or `-scope` (with `-program`) do not allow, as in [dns](dns.md): they are not listed, `-live` sends them no request, and the summary counts them as `held out by scope`.	test:cmd/azhaq:TestURLsDenyKeepsAHostOutOfTheLiveCheck
+plan.ceiling-where-flags-bound	docs/commands/plan.md	Where the flags bound a stage, the estimate has a ceiling beside the floor	test:cmd/azhaq:TestPortsCeilingArithmetic,TestCeilingHoldsOnStandIns,TestCeilingFromMaxRequests,TestCeilingOpenWhenTargetsAreFound
+plan.params-estimate	docs/commands/plan.md	`-params` has an estimate: for each page you gave	test:cmd/azhaq:TestParamsEstimateIsAFloor
+ports.second-connect-is-26	docs/commands/ports.md	The second connect of a greeter that said nothing (below) is one more, so 26 in all	test:internal/portscan:TestSpareTakesFromTheOpenPortsAllowance
+roles.ceiling-beside-floor	docs/commands/roles.md	The estimate has a ceiling beside its floor where the flags bound a stage	test:cmd/azhaq:TestCeilingFromMaxRequests
+plan.ceiling-counts-the-most	docs/commands/plan.md	It counts the most the stage sends for the targets given	test:cmd/azhaq:TestPortsCeilingArithmetic,TestCeilingDNSHasNone
+plan.ceiling-max-requests	docs/commands/plan.md	`-max-requests` is the ceiling of what the stage sends to targets	test:cmd/azhaq:TestCeilingFromMaxRequests
+plan.ceiling-open	docs/commands/plan.md	Where nothing bounds a stage (a crawl	test:cmd/azhaq:TestCeilingFromMaxRequests,TestCeilingOpenWhenTargetsAreFound
+plan.ceiling-found-targets	docs/commands/plan.md	A domain, an organisation or an AS number among the targets	test:cmd/azhaq:TestCeilingOpenWhenTargetsAreFound
+plan.ceiling-no-dns	docs/commands/plan.md	DNS queries have no ceiling	test:cmd/azhaq:TestCeilingDNSHasNone
