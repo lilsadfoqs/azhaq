@@ -68,7 +68,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 
 - The summary has a `sources` block with a row for each archive. It reads as the one of `subs` ([The sources block](subs.md#the-sources-block)), with `urls` where `subs` has `names`.
 - The summary's top-level `requests` is what reached the targets, as in every command. `urls` sends none, so it is 0, unless `-live` asks the live site: then the requests it sent are counted. The archives are third parties: their requests, retries included, are `requests` in each archive row and in the `sources` block, and a note adds them up.
-- It has `junk`, the URLs left out and why: see [Junk](#junk).
+- It has `junk`, the URLs left out and why: see [Junk](#junk). `counts` has `dropped as junk` (URLs left out) and `static files listed` (rows labelled `asset`, which are listed): see [Static files](#static-files).
 - The summary's `sources` block says, for each archive, what it was asked (`queries`), what it gave (`urls`), whether it failed (`failed_sources`, with the archive's words, such as `127.0.0.1:8080 answered 504`) and whether it gave URLs before failing (`partial_sources`). A failed archive leaves a partial set: the URLs of the others are listed, the failure is counted in `failures` (the exit code is 0 while another archive answered in full, 3 with `-strict-exit` or when none did: an archive that failed after giving URLs did not answer in full, and the summary's `complete` is then false), and a note says `the set is partial: wayback failed, so the URLs only they hold are missing and those of the others are listed`. It does not need stderr to be read.
 
 ## Details
@@ -100,7 +100,14 @@ Every source's URLs go through these rules, OTX's too.
 
 `counts` has the total as `dropped as junk`, and a note says it: `7 URLs dropped as junk (…; -raw keeps them)`. `-raw` prints them and drops none. `-keep-junk` (with `-json`) lists them too, each row labelled with its class in `junk` and the rule's words in `junk_reason`; they stay in `dropped as junk`, and `-live` never asks one of them.
 
-The classes, in the order of the rules above: `scanner-payload`, `scanner-probe`, `listing-sort`, `placeholder`, `dot-segment`, `malformed`, `fuzzing`, `cut-link`. A row that is not junk but is a static file (an image, a font, a style sheet, or anything on a media host with an opaque name) is listed with `"junk": "asset"` and the reason `static file (by extension or media host): no route sits behind it`: a reader who wants pages filters on an absent `junk`.
+The classes, in the order of the rules above: `scanner-payload`, `scanner-probe`, `listing-sort`, `placeholder`, `dot-segment`, `malformed`, `fuzzing`, `cut-link`. A row that is not junk but is a static file (an image, a font, a style sheet, or anything on a media host with an opaque name) is listed with `"junk": "asset"` and the reason `static file (by extension or media host): no route sits behind it`: a reader who wants pages filters on an absent `junk`. See [Static files](#static-files).
+
+### Static files
+A static file is listed, not dropped. `counts` has `static files listed`, the number of rows labelled `asset`, and a note says that they are in `results` and not in `dropped as junk`. The count is left out when no row is one.
+
+- A URL is in one of the two: a junk URL is left out and counted in `dropped as junk`, a static file is a row and counted in `results`. So `results` + `dropped as junk` is the unique URLs of the domains (less what `-blacklist`, `-fp` and `-urls-max` hold back), and `static files listed` is at most `results`.
+- With `-keep-junk` the junk rows are listed too, labelled with their class, and `results` counts them as rows: `results` - `dropped as junk` is then the URLs listed that are not junk.
+- With `-raw` every row is printed as the archive gave it and none is dropped: `static files listed` counts the rows labelled `asset` among them.
 
 ### Live spot-check
 `-live` asks the live site for each URL once, after every archive has answered: one GET, not followed (a redirect is its own answer), at `-live-rate` requests a second (10 by default; a note states it). It sends requests to the domain's hosts, so it is off unless you give it, and the rows are printed when the check is done. `-live-max N` asks only N URLs, spread evenly over the sorted list, so a long list can be spot-checked; the others are listed without `verified` and counted as `not asked (-live-max)`. `-live-proxy` sends the requests through a proxy.

@@ -453,3 +453,70 @@ func TestURLsSummaryCountsTheArchiveRequests(t *testing.T) {
 		t.Errorf("requests %d, notes %v", r.Requests, r.Notes)
 	}
 }
+
+// A static file is listed, labelled asset, and counted as such in the
+// summary: it is part of results, never of "dropped as junk", so
+// results + dropped as junk = unique URLs and static files listed <= results.
+func TestURLsSummaryCountsStaticFilesListed(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"has_next":false,"url_list":[`+
+			`{"url":"http://example.org/ok?id=1"},`+
+			`{"url":"http://example.org/about"},`+
+			`{"url":"http://example.org/img/logo.png"},`+
+			`{"url":"http://example.org/css/site.css"},`+
+			`{"url":"http://example.org/css/site.css"},`+
+			`{"url":"http://example.org/x?q=<script>alert(1)</script>"},`+
+			`{"url":"http://example.org/rest/basket/NaN"}]}`)
+	}))
+	defer srv.Close()
+	args := []string{"-d", "example.org", "-providers", "otx", "-urls-pause", "0", "-archive", "otx=" + srv.URL, "-json"}
+	for _, extra := range [][]string{nil, {"-sort"}, {"-keep-junk"}} {
+		lines, errOut, err := urlsRun(t, append(args, extra...)...)
+		if err != nil {
+			t.Fatalf("%v: %v\n%s", extra, err, errOut)
+		}
+		rep := lastReport(t, errOut)
+		assets := 0
+		for _, l := range lines {
+			if strings.Contains(l, `"junk":"asset"`) {
+				assets++
+			}
+		}
+		listed := 4 // 2 pages and 2 static files, each once
+		if len(extra) > 0 && extra[0] == "-keep-junk" {
+			listed += rep.Counts["dropped as junk"] // the junk rows are listed too, labelled
+		}
+		if assets != 2 || rep.Counts["static files listed"] != assets {
+			t.Errorf("%v: %d rows labelled asset, counts %v", extra, assets, rep.Counts)
+		}
+		if rep.Counts["dropped as junk"] != 2 || rep.Results != listed || rep.Counts["static files listed"] > rep.Results {
+			t.Errorf("%v: results %d (listed %d), counts %v", extra, rep.Results, listed, rep.Counts)
+		}
+		if !strings.Contains(errOut, "2 static files listed, labelled asset: they are in the results, not in dropped as junk") {
+			t.Errorf("%v: no note\n%s", extra, errOut)
+		}
+	}
+	// -raw drops nothing: the count is the rows labelled asset it printed.
+	lines, errOut, err := urlsRun(t, append(args, "-raw")...)
+	if err != nil {
+		t.Fatalf("-raw: %v\n%s", err, errOut)
+	}
+	raws := 0
+	for _, l := range lines {
+		if strings.Contains(l, `"junk":"asset"`) {
+			raws++
+		}
+	}
+	if rep := lastReport(t, errOut); raws == 0 || rep.Counts["static files listed"] != raws {
+		t.Errorf("-raw: %d rows labelled asset, counts %v", raws, rep.Counts)
+	}
+	// No static file: no count.
+	srv2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"has_next":false,"url_list":[{"url":"http://example.org/about"}]}`)
+	}))
+	defer srv2.Close()
+	_, errOut, err = urlsRun(t, "-d", "example.org", "-providers", "otx", "-urls-pause", "0", "-archive", "otx="+srv2.URL, "-json")
+	if _, ok := lastReport(t, errOut).Counts["static files listed"]; err != nil || ok {
+		t.Errorf("a run with no static file counted some: %v\n%s", err, errOut)
+	}
+}
