@@ -1513,7 +1513,7 @@ func TestRolesTheCanaryFieldIsTheFirstThatNoRuleLeavesOut(t *testing.T) {
 	if out, f, ok := withCanary(only, "azhaq-1"); ok || f != "" || string(out) != string(only) {
 		t.Errorf("no field qualifies: %s %q %v", out, f, ok)
 	}
-	if out, f, ok := withCanary(only, "azhaq-1", "email"); !ok || f != "email" || !strings.Contains(string(out), `"email":"azhaq-1"`) {
+	if out, f, ok := withCanary(only, "azhaq-1", "email"); !ok || f != "email" || !strings.Contains(string(out), `"email":"azhaq-1@x.test"`) {
 		t.Errorf("a named field: %s %q %v", out, f, ok)
 	}
 }

@@ -540,6 +540,8 @@ Replaying the owner's own recorded body is idempotent when the value it sets is 
 - It is never on by default, since it changes data on the target.
 - The field is not restored afterward.
 - The row's evidence says which field changed and that it was a canary.
+- The value keeps the shape of the recorded one, so a server that checks the field's format still takes it. A value with one `@` and a domain gets a unique local part and keeps its domain (`azhaq-<16 hex>@x.test`). A value of digits only gets unique digits of the same length. Any other value gets `azhaq-<16 hex>`.
+- A write with a canary that is answered 400 or 422 is listed as `canary rejected`, with the role, the field, the status and the start of what the server said. It is not a refusal and not a negative: the server did not accept the value, so the write path was not exercised and nothing is said about who may write. The summary's `notes` says so, and names the writes. `-replay-writes-field NAME` takes another field; leaving `-replay-writes-canary` off replays the recorded value.
 
 #### Order and limits
 
