@@ -68,7 +68,7 @@ func TestCrawlSweepIsHeldToHostGuesses(t *testing.T) {
 	crawl := func(extra ...string) (string, int64) {
 		hits.Store(0)
 		_, errOut, _ := captureBoth(t, func() error {
-			return cmdCrawl(append([]string{"-u", srv.URL + "/", "-allow", "127.0.0.1", "-json", "-sweep", "-db", filepath.Join(t.TempDir(), "w.db")}, extra...))
+			return cmdCrawl(append([]string{"-u", srv.URL + "/", "-allow", "127.0.0.1", "-json", "-builtin-paths", "-db", filepath.Join(t.TempDir(), "w.db")}, extra...))
 		})
 		return errOut, hits.Load()
 	}

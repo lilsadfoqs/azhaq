@@ -607,7 +607,7 @@ The target is an app of yours with forms on port 5030, such as a DVWA container,
   - a form that posts outside the crawl's scope;
   - a form whose address a `-deny-path` rule matches.
 - A form that posts to its own page, with an empty action, is sent.
-- Without `-sweep`, `crawl` does not ask the built-in paths: `/admin`, `/.git/HEAD` and API description names.
+- Without `-builtin-paths`, `crawl` does not ask the built-in paths: `/admin`, `/.git/HEAD` and API description names.
 - `-kf all` asks only `robots.txt` and the sitemaps, and reads every entry.
 
 ## Probe web services like httpx

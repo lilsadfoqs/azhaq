@@ -675,7 +675,7 @@ A route keeps up to three places per page, calls first. A route read from a sour
 - the favicon;
 - the source-map guesses, which ask `main.js.map` next to a script that names none.
 
-`-sweep` turns them back on. So `crawl` sends what a crawler sends: the pages it finds, the scripts they load and the routes they name.
+`-builtin-paths` turns them back on. So `crawl` sends what a crawler sends: the pages it finds, the scripts they load and the routes they name.
 
 #### Sinks
 
@@ -785,7 +785,7 @@ Before a non-root URL counts as visited, `fetch.CatchAll` compares its response 
 
 - The responses match when the status is the same, and either the redirect target or the body is the same once the requested path is removed from it. So error pages that echo the path still match.
 - Bodies that differ only by a token or timestamp match on title, line count and word count.
-- Each directory is probed once per run, up to 24 directories per origin. `crawl` probes only the root and the directories one level down (`/api/`, `/rest/`); a deeper directory is compared with the one above it. `crawl -sweep` probes every directory.
+- Each directory is probed once per run, up to 24 directories per origin. `crawl` probes only the root and the directories one level down (`/api/`, `/rest/`); a deeper directory is compared with the one above it. `crawl -builtin-paths` probes every directory.
 
 A matching response is stored with `"catchall": true` and shown as `catchall` in the map. The crawler and the JavaScript reader skip such pages, and the path sweep drops them.
 

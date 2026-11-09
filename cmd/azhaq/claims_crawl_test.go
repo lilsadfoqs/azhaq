@@ -174,7 +174,7 @@ func TestCrawlAsksEveryURLButHoldsTheOnesThatDeclareAStateChange(t *testing.T) {
 func (s *askedSite) httptestServer() *httptest.Server { return s.Server }
 
 // A crawl asks only what a crawler does: none of run's built-in paths without
-// -sweep, which asks them; -kf asks each web service only for its robots.txt
+// -builtin-paths, which asks them; -kf asks each web service only for its robots.txt
 // and sitemaps, and reads every entry.
 func TestCrawlAsksOnlyWhatACrawlerDoesAndKFAsksTheKnownFiles(t *testing.T) {
 	pages := map[string]string{
@@ -200,10 +200,10 @@ func TestCrawlAsksOnlyWhatACrawlerDoesAndKFAsksTheKnownFiles(t *testing.T) {
 		}
 	}
 	srv.reset()
-	crawlOut(t, srv.Server, "-silent", "-sweep")
+	crawlOut(t, srv.Server, "-silent", "-builtin-paths")
 	got = srv.asked()
 	if !got["/.git/HEAD"] || !got["/robots.txt"] || !got["/admin"] {
-		t.Errorf("-sweep asked %v", got)
+		t.Errorf("-builtin-paths asked %v", got)
 	}
 	for _, tc := range []struct {
 		kf         string
@@ -229,7 +229,7 @@ func TestCrawlAsksOnlyWhatACrawlerDoesAndKFAsksTheKnownFiles(t *testing.T) {
 	}
 }
 
-// With -sweep the catch-all control is asked in every directory, up to 24 an
+// With -builtin-paths the catch-all control is asked in every directory, up to 24 an
 // origin; a crawl asks it at the root and in the top-level directories only.
 func TestCrawlSweepAsksTheControlInAtMost24Directories(t *testing.T) {
 	var calls strings.Builder
@@ -254,13 +254,13 @@ func TestCrawlSweepAsksTheControlInAtMost24Directories(t *testing.T) {
 	crawlOut(t, srv.Server, "-silent", "-d", "1")
 	shallow := probes()
 	srv.reset()
-	crawlOut(t, srv.Server, "-silent", "-d", "1", "-sweep")
+	crawlOut(t, srv.Server, "-silent", "-d", "1", "-builtin-paths")
 	deep := probes()
 	if shallow > 3 || deep <= shallow {
-		t.Fatalf("%d control requests by default (the root and /top/) and %d with -sweep", shallow, deep)
+		t.Fatalf("%d control requests by default (the root and /top/) and %d with -builtin-paths", shallow, deep)
 	}
 	if deep > 24+1 {
-		t.Errorf("-sweep asked the control %d times for one origin, want at most 24 (and the root)", deep)
+		t.Errorf("-builtin-paths asked the control %d times for one origin, want at most 24 (and the root)", deep)
 	}
 }
 
