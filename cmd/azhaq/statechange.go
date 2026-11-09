@@ -26,7 +26,7 @@ type stateChangeEntry struct {
 	Method      string `json:"method"`                // always GET: the requests azhaq sends without a write flag
 	URL         string `json:"url"`                   // the request that would be (or was) sent
 	Word        string `json:"word"`                  // the word that declares the change: create, delete, reset, populate, logout, …
-	Source      string `json:"source"`                // where the word is: its path, or its operationId or summary in an API description
+	Source      string `json:"source"`                // where the word is: its path, its query, or its operationId or summary in an API description
 	Description string `json:"description,omitempty"` // the operation's summary, when it gave the word
 	DenyPath    string `json:"deny_path"`             // the -deny-path rule that would keep this request out
 	// Status is what became of the request: stateGiven (a plan: a target you
@@ -103,15 +103,11 @@ func stateChangesOfSeeds(seeds []types.Seed, rules scope.Rules) []stateChangeEnt
 		if rules.DeniedPath(u) != "" {
 			continue // kept out already: the plan lists it under skipped
 		}
-		parsed, err := url.Parse(u)
-		if err != nil {
-			continue
-		}
-		word := statechange.OfPath(parsed.Path)
+		word, where := statechange.Of(u)
 		if word == "" {
 			continue
 		}
-		out = append(out, stateChangeEntry{Target: u, Method: "GET", URL: u, Word: word, Source: "its path", DenyPath: denyRuleFor(u), Status: stateGiven})
+		out = append(out, stateChangeEntry{Target: u, Method: "GET", URL: u, Word: word, Source: "its " + where, DenyPath: denyRuleFor(u), Status: stateGiven})
 	}
 	return out
 }
@@ -188,11 +184,11 @@ func stateChangesOfRows(rows []mapRowLike) []stateChangeEntry {
 			continue
 		}
 		seen[r.key] = true
-		word := statechange.OfURL(r.key)
+		word, where := statechange.Of(r.key)
 		if word == "" {
 			continue
 		}
-		out = append(out, stateChangeEntry{Target: r.key, Method: "GET", URL: r.key, Word: word, Source: "its path", DenyPath: denyRuleFor(r.key)})
+		out = append(out, stateChangeEntry{Target: r.key, Method: "GET", URL: r.key, Word: word, Source: "its " + where, DenyPath: denyRuleFor(r.key)})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].URL < out[j].URL })
 	return out
@@ -302,7 +298,11 @@ func settleStateChanges(rep *report, pre, found []stateChangeEntry, rules scope.
 			continue
 		}
 		delete(held, key)
-		all = append(all, stateChangeEntry{Target: s.Target, Method: "GET", URL: s.Target, Word: w, Source: "its path",
+		_, where := statechange.Of(s.Target)
+		if where == "" {
+			where = "path"
+		}
+		all = append(all, stateChangeEntry{Target: s.Target, Method: "GET", URL: s.Target, Word: w, Source: "its " + where,
 			DenyPath: denyRuleFor(s.Target), Status: stateHeld, Send: neterr.SendFlag})
 	}
 	all = mergeStateChanges(all)

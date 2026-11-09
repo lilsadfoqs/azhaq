@@ -238,7 +238,7 @@ func cmdMCP(args []string) error {
 	skip := fs.String("skip", "", "collectors no tool runs, comma-separated (azhaq plan lists them): fixed at start")
 	noTakeover := fs.Bool("no-takeover", false, "no tool checks CNAMEs for a takeover: fixed at start")
 	chromeNoSandbox := fs.Bool("chrome-no-sandbox", false, "let Chrome run without its sandbox where the system gives it none (the tools that load pages in Chrome, such as azhaq_map with browser, and sign in with it): fixed at start. The pages are the targets' and untrusted: use a throwaway environment. By default Chrome does not start then")
-	sendState := fs.Bool("send-state-changing", false, "let the tools send the GETs they find on the way whose own path or API operation declares a state change (create, delete, reset, logout, ...): without it they are held back and listed as skipped; fixed at start, no tool argument sets it")
+	sendState := fs.Bool("send-state-changing", false, "let the tools send the GETs they find on the way whose own path, query or API operation declares a state change (create, delete, reset, logout, action=stop, ...): without it they are held back and listed as skipped; fixed at start, no tool argument sets it")
 	unlocked := fs.Bool("unlocked", false, "serve without a scope: any target a tool is given may be touched (port scans stay refused)")
 	if err := parse(fs, args); err != nil {
 		return err

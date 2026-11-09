@@ -605,7 +605,7 @@ func cmdURLs(args []string) error {
 	liveRate := fs.Float64("live-rate", 10, "with -live, requests a second to the live site")
 	liveProxy := fs.String("live-proxy", "", "with -live, send the requests through this proxy (http://, https:// or socks5://; default: $HTTP_PROXY, $HTTPS_PROXY, except for loopback targets)")
 	liveMax := fs.Int("live-max", 0, "with -live, check at most N URLs, spread evenly over the sorted list; the rest are listed unchecked and counted (0: every URL)")
-	sendState := fs.Bool("send-state-changing", false, "with -live, also ask the URLs whose own path declares a state change (create, delete, reset, logout, ...); by default an archived /logout is not asked, and is counted as not asked (state-changing)")
+	sendState := fs.Bool("send-state-changing", false, "with -live, also ask the URLs whose own path or query declares a state change (create, delete, reset, logout, ...); by default an archived /logout is not asked, and is counted as not asked (state-changing)")
 	given := inherit(fs, "provider-config=providers", "keep-junk=urls-keep-junk", "mc=urls-mc", "fc=urls-fc", "mt=urls-mt", "ft=urls-ft", "from=urls-from", "to=urls-to",
 		"blacklist=urls-blacklist", "fp=urls-fp", "retries=urls-retries", "urls-pages", "urls-pause", "proxy=urls-proxy", "urls-max",
 		"archive=urls-archive", "raw=urls-raw", "urls-timeout", "timeout", "v", "fail-on-errors")

@@ -67,3 +67,42 @@ func TestOfOperation(t *testing.T) {
 		}
 	}
 }
+
+// A query parameter that names an action, with a value that is a verb,
+// names the request (a process control page's ?action=stop); any other
+// parameter says nothing, whatever its value.
+func TestOfQuery(t *testing.T) {
+	for _, c := range []struct{ raw, want string }{
+		{"http://h/index.html?processname=x&action=stop", "stop"},
+		{"http://h/index.html?processname=x&action=restart", "restart"},
+		{"http://h/index.html?action=clear", "clear"},
+		{"http://h/p?cmd=delete", "delete"},
+		{"http://h/p?cmd=delete_user&id=1", "delete"},
+		{"http://h/p?op=reset", "reset"},
+		{"http://h/p?do=shutdown", "shutdown"},
+		{"http://h/p?task=purge", "purge"},
+		{"http://h/p?ajax_action=Stop", "stop"},
+		{"http://h/p?action=log%20out", "logout"},
+		{"http://h/p?a=1&action=stop%20all", "stop"},
+		{"http://h/p?action=view", ""},                 // not a verb
+		{"http://h/p?action=list&sort=delete", ""},     // not an action parameter
+		{"http://h/p?q=delete", ""},                    // a search
+		{"http://h/p?reaction=stop", ""},               // not the word action
+		{"http://h/p?processname=stop", ""},            // not an action parameter
+		{"http://h/p?action", ""},                      // no value
+		{"http://h/logo.png?action=delete", "delete"},  // the query names it
+		{"http://h/user/delete?action=view", "delete"}, // the path first
+		{"http://h/p?action=%zz", ""},                  // a bad escape names nothing
+		{"http://h/stop", ""},                          // stop is no path verb
+	} {
+		if got := OfURL(c.raw); got != c.want {
+			t.Errorf("OfURL(%q) = %q, want %q", c.raw, got, c.want)
+		}
+	}
+	if w, where := OfTarget("p?action=stop"); w != "stop" || where != "query" {
+		t.Errorf("OfTarget query: %q %q", w, where)
+	}
+	if w, where := OfTarget("delete?id=1"); w != "delete" || where != "path" {
+		t.Errorf("OfTarget path: %q %q", w, where)
+	}
+}
