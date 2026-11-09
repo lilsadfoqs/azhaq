@@ -337,3 +337,20 @@ func urlsJunk(rep *report, ps []map[string]any) {
 	}
 	rep.Notes = append(rep.Notes, fmt.Sprintf("%d %s dropped as junk (%s; -raw keeps them)", total, word, strings.Join(reasons, ", ")))
 }
+
+// urlsStatics says how many of the rows listed are static files (junk
+// "asset"): they are part of results, not of dropped as junk.
+func urlsStatics(rep *report, n int) {
+	if n == 0 {
+		return
+	}
+	if rep.Counts == nil {
+		rep.Counts = map[string]int{}
+	}
+	rep.Counts["static files listed"] = n
+	word := "static files"
+	if n == 1 {
+		word = "static file"
+	}
+	rep.Notes = append(rep.Notes, fmt.Sprintf("%d %s listed, labelled asset: they are in the results, not in dropped as junk", n, word))
+}

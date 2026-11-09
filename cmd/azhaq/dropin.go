@@ -18,6 +18,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/lilsadfoqs/azhaq/catalog"
@@ -678,7 +679,8 @@ func cmdURLs(args []string) error {
 	}
 	run = append(run, "-passive", "-depth", "0", "-skip", skipAllBut("azhaq-urls"), "-urls-subs="+strconv.FormatBool(*subs))
 	flush := func() {}
-	var rows []urlcol.Row // the sorted path: every row, for -live and the output
+	var rows []urlcol.Row    // the sorted path: every row, for -live and the output
+	var statics atomic.Int64 // rows printed with junk "asset": listed, not dropped
 	if streaming {
 		// Each URL is printed from the goroutine that reads its page: a
 		// stop keeps what was already printed.
@@ -693,6 +695,9 @@ func cmdURLs(args []string) error {
 				if dup {
 					return
 				}
+			}
+			if r.Junk == "asset" {
+				statics.Add(1)
 			}
 			printURL(w, urlOut{Row: r}, raw)
 		}
@@ -738,6 +743,9 @@ func cmdURLs(args []string) error {
 		if checked != nil {
 			o.verdict(checked, r.URL)
 		}
+		if r.Junk == "asset" {
+			statics.Add(1)
+		}
 		printURL(w, o, raw)
 	}
 	if cerr := w.close(); err == nil {
@@ -763,6 +771,7 @@ func cmdURLs(args []string) error {
 		rep.Notes = append(rep.Notes, n)
 	}
 	rep.Results = w.count()
+	urlsStatics(rep, int(statics.Load()))
 	return rep.finish(c.json, c.silent)
 }
 
