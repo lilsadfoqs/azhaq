@@ -649,7 +649,7 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 	sockAt := map[string]int{}
 	hash := false
 	type fragment struct{ text, url string }
-	var frags []fragment
+	var frags, keys []fragment
 	for i := 0; i < len(queue); i++ {
 		if ctx.Err() != nil {
 			return types.RunMeta{Status: types.StatusCancelled}, ctx.Err()
@@ -681,7 +681,10 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		specStart, specEnd := sc.specStart, sc.specEnd
 		for _, r := range sc.refs {
 			if r.Key {
-				continue // a module id; Candidates gives it a rejected row
+				// A module id: no route. Candidates gives a "./x" one a
+				// rejected row; the others get theirs below.
+				keys = append(keys, fragment{strings.Trim(s.body[r.Start:r.End], "\"'`"), r.URL})
+				continue
 			}
 			if r.Fragment {
 				frags = append(frags, fragment{strings.Trim(s.body[r.Start:r.End], "\"'`"), r.URL})
@@ -826,6 +829,18 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 				}
 				meta.EmitCount++
 			}
+		}
+	}
+	for _, f := range keys {
+		if have[f.url] {
+			continue // the string is a route where it is written another way
+		}
+		if k := f.text + "\x00" + webextract.ReasonModuleKey; !rejSeen[k] {
+			rejSeen[k] = true
+			if err := emit(webextract.RejectedObs(Name, raw, f.text, webextract.ReasonModuleKey, "js", f.url)); err != nil {
+				return meta, err
+			}
+			meta.EmitCount++
 		}
 	}
 	for _, f := range frags {

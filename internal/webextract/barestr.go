@@ -163,7 +163,7 @@ func Candidates(text string, page, src *url.URL, script bool) []Cand {
 				// Taken by the body pattern from unquoted code
 				// (a.number/t.doc), not from a string.
 				c.Link, c.Reason = "", ReasonCode
-			} else if strings.HasPrefix(s.Text, "./") && s.Start > 0 && s.End < len(text) && text[s.Start-1] == text[s.End] && mapKeyAt(text, s.Start-1, s.End+1) {
+			} else if s.Start > 0 && s.End < len(text) && text[s.Start-1] == text[s.End] && (strings.HasPrefix(s.Text, "./") && mapKeyAt(text, s.Start-1, s.End+1) || onlyFuncKey(text, s)) {
 				c.Link, c.Reason, key = "", ReasonModuleKey, true
 			} else if searchedFor(text, s.Start) {
 				c.Link, c.Reason = "", ReasonSearched
@@ -187,6 +187,27 @@ func Candidates(text string, page, src *url.URL, script bool) []Cand {
 		out = append(out, c)
 	}
 	return out
+}
+
+// onlyFuncKey says whether the quoted string s of a script is a key of an
+// object whose value is a function everywhere it is written: a string that is
+// also a call argument, a link or part of a URL somewhere else is kept.
+func onlyFuncKey(text string, s Str) bool {
+	if !FuncKeyAt(text, s.Start-1, s.End+1) {
+		return false
+	}
+	lit := string(text[s.Start-1]) + s.Text + string(text[s.Start-1])
+	for from := 0; ; {
+		i := strings.Index(text[from:], lit)
+		if i < 0 {
+			return true
+		}
+		i += from
+		from = i + len(lit)
+		if i != s.Start-1 && !FuncKeyAt(text, i, from) {
+			return false
+		}
+	}
 }
 
 // endOfRoute says whether the string s of a script is the end of a route with
