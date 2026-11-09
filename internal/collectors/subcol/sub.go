@@ -818,7 +818,7 @@ func (c *Collector) settle(ctx context.Context, domain string, run []source, nam
 			v = chk.verdict(n)
 		}
 		switch v {
-		case nameLive:
+		case nameLive, nameHeld:
 			if !slices.Contains(foundBy[n], historyName) {
 				st.liveGuess = append(st.liveGuess, n)
 			}

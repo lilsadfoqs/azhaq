@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"net/netip"
 	"os"
@@ -133,4 +134,36 @@ func outsideScope(targets []string, hint ...string) error {
 		list += fmt.Sprintf(" and %d more", len(names)-len(shown))
 	}
 	return usagef("every target is outside the scope (%d left out): %s; check -allow, -deny and -scope%s", len(names), list, strings.Join(hint, ""))
+}
+
+// flagScope is the rules of the -allow, -deny and -scope a command that
+// inherits them was given: the names and URLs they hold out are not sent.
+func flagScope(fs *flag.FlagSet) (scope.Rules, error) {
+	allow, deny := flagStrings(fs, "allow"), flagStrings(fs, "deny")
+	if spec := fs.Lookup("scope").Value.String(); spec != "" {
+		sc, err := loadScope(spec, fs.Lookup("program").Value.String())
+		if err != nil {
+			return scope.Rules{}, err
+		}
+		allow, deny = append(allow, sc.Allow...), append(deny, sc.Deny...)
+	}
+	return scope.Rules{Allow: allow, Deny: deny}.Compile(), nil
+}
+
+// scopeArgs are the -allow, -deny, -scope and -program among args, as given.
+func scopeArgs(args []string) []string {
+	var out []string
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		k, _, hasVal := strings.Cut(strings.TrimLeft(a, "-"), "=")
+		if !strings.HasPrefix(a, "-") || !slices.Contains([]string{"allow", "deny", "scope", "program"}, k) {
+			continue
+		}
+		out = append(out, a)
+		if !hasVal && i+1 < len(args) {
+			i++
+			out = append(out, args[i])
+		}
+	}
+	return out
 }

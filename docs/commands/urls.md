@@ -30,6 +30,7 @@ azhaq urls -d example.com -json -keep-junk -live -live-max 200 -live-rate 5
 2. Asks each archive for the URLs of the domain. `-providers` chooses the archives, and `-subs` adds the subdomains. Without `-subs`, `www.DOMAIN` counts as the domain itself, as the Wayback Machine's index files it.
 3. Reads pages from each archive, and asks again when an archive answers 429 or 503.
 4. Applies your filters, and prints each URL once unless you give `-raw`.
+5. Holds out the URLs that `-allow`, `-deny` or `-scope` (with `-program`) do not allow, as in [dns](dns.md): they are not listed, `-live` sends them no request, and the summary counts them as `held out by scope`.
 
 ## Output
 
@@ -177,6 +178,16 @@ A static file is listed, not dropped. `counts` has `static files listed`, the nu
 | `-urls-timeout` | duration | `3m0s` | time each archive source gets per domain (the Wayback Machine's answer for a large domain takes several minutes) |
 | `-retries` | int |  | times an archive request is asked again after a 429, 503 or network error, after its Retry-After (seconds or a date, however long) or 2, 5, 10, 20, then 30 s; 0 makes the first refusal final (default: a 429 or 503 is asked again until the archive's time, -urls-timeout, or the run's is spent, a network error 3 times; a wait longer than the time left ends the request at once, with the reason) |
 | `-timeout` | duration |  | stop after this long and keep what was found; azhaq resume continues (0: no limit) |
+
+**Scope and safety**
+
+| Flag | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `-allow` | string, repeatable |  | a domain, host or address range the run may touch; HOST:PORT allows that host on that port only; with any -allow, nothing else is requested |
+| `-deny` | string, repeatable |  | a domain, host or address range the run must not touch, even when given as a target |
+| `-scope` | string |  | a program's scope: a file (HackerOne CSV, bounty-targets JSON, Burp options, lines) or hackerone, bugcrowd, intigriti, yeswehack |
+| `-program` | string |  | the program to take from a -scope list (handle, name or URL) |
+| `-ledger` | string |  | write every request, connection and DNS query the run sends (to targets, third-party sources and resolvers) to this file, a chain of hashes that azhaq ledger -verify checks (default DB.ledger.jsonl next to the workspace; off: none; with a temporary database, only when given) |
 
 **Network**
 

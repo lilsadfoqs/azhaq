@@ -150,7 +150,8 @@ func cmdSubs(args []string) error {
 	stats := fs.Bool("stats", false, "after the run, one note per source: requests, names, errors and seconds, as subfinder -stats")
 	showVersion := fs.Bool("version", false, "print the version and exit")
 	given := inherit(fs, "sources", "exclude-sources", "all-sources", "no-history", "history-dir", "source-timeout", "extra-wait", "providers", "resolvers", "dns-rate", "timeout", "v", "fail-on-errors",
-		"source-rate", "source-rates", "max-results", "max-time", "max-body", "proxy=source-proxy", "t=parallel", "ledger", "web-ports", "http-proxy=proxy")
+		"source-rate", "source-rates", "max-results", "max-time", "max-body", "proxy=source-proxy", "t=parallel", "ledger", "web-ports", "http-proxy=proxy",
+		"scope", "program", "allow", "deny")
 	maxNames := fs.Int("max-names", 0, fmt.Sprintf("most names kept per domain, and looked up with -live (default %d); a value you give also caps the names -w and -permute ask, together: the guesses past it are not asked, the run exits 4 and says how many", subcol.DefaultMaxNames))
 	if err := parse(fs, args); err != nil {
 		return err
@@ -220,11 +221,16 @@ func cmdSubs(args []string) error {
 	}
 	run = append(run, "-skip", skipAllBut(keep...))
 	var apexes []string
+	userScope := hasFlag(args, "allow", "scope")
+	rules, err := flagScope(fs)
+	if err != nil {
+		return err
+	}
 	for _, d := range ds {
 		apexes = append(apexes, d)
 		run = append(run, "-domain", d)
-		if active {
-			// The domains given are the scope of the guesses.
+		if active && !userScope {
+			// The domains given are the scope of the guesses, unless the user gave one.
 			run = append(run, "-allow", d)
 		}
 	}
@@ -268,7 +274,7 @@ func cmdSubs(args []string) error {
 	private := map[string]bool{}
 	collected := map[string]bool{} // every passive name, before the -live filter
 	bySource := map[string]int{}   // how many each source returned
-	var union, dropped, unverified, heldBack, notChecked, filtered, dup, cut, didNot, itself, notAsked, noAnswer int
+	var union, dropped, unverified, heldBack, notChecked, filtered, dup, cut, didNot, itself, notAsked, noAnswer, heldOut int
 	var poolKept, poolDropped int         // of the names only a padding source or the history held, how many resolved and how many did not
 	lookupsFailed := false                // a source says its names were not checked because the lookups failed
 	notCheckedWhy := map[string]bool{}    // why names no lookup checked were not (the run's own words)
@@ -374,6 +380,9 @@ func cmdSubs(args []string) error {
 			}
 			collected[name] = true
 			switch {
+			case !rules.Empty() && !rules.Allows(name):
+				heldOut++ // the user's -allow, -deny or -scope: no query, no row
+				continue
 			case seen[name]:
 				dup++
 				continue
@@ -478,10 +487,11 @@ func cmdSubs(args []string) error {
 		process(p) // the ones not printed yet: every one with -live
 	}
 	// Names the guesses found.
-	guessed, guessTried, guessHeld, guessDead, guessFiltered := 0, 0, 0, 0, 0
+	guessed, guessTried, guessHeld, guessDead, guessFiltered, guessOut := 0, 0, 0, 0, 0, 0
 	for _, g := range []struct{ collector, source string }{{"azhaq-dns-brute", "dns-brute"}, {"azhaq-permute", "permute"}} {
 		for _, p := range payloads(st, g.collector) {
 			names := strs(p["names"])
+			guessOut += intOf(p[brutecol.HeldOutKey])
 			// Every guess is accounted for: found and printed, found but
 			// already given, left out by a filter or by the -live check, or
 			// not found (it did not resolve, or only a wildcard answered).
@@ -587,6 +597,7 @@ func cmdSubs(args []string) error {
 		rep.Counts[countHTTP] = len(httpTier2)
 	}
 	set("the domain itself", itself)
+	set("held out by scope", heldOut)
 	set("did not resolve", dropped+didNot+guessDead)
 	if *live {
 		// Show the live/dead split: a raw subdomain count is mostly names
@@ -611,6 +622,7 @@ func cmdSubs(args []string) error {
 	}
 	set("cut by -max-names", cut)
 	set("guesses held back by -max-names", guessBudget.Held())
+	set("guesses held out by scope", guessOut)
 	if cut > 0 {
 		rep.Notes = append(rep.Notes, fmt.Sprintf("%d names were cut at -max-names: raise it to keep them", cut))
 		rep.warned = true
@@ -721,6 +733,7 @@ func nameSum(c map[string]int, results int, filtering bool) string {
 		}
 	}
 	minus("the domain itself", "the domain itself, not a subdomain")
+	minus("held out by scope", "held out by scope (-allow, -deny, -scope)")
 	minus("did not resolve", "did not resolve")
 	minus("guesses held back", "guesses held back (-guesses=false)")
 	minus("not checked", "not checked")
@@ -739,7 +752,7 @@ func nameSum(c map[string]int, results int, filtering bool) string {
 // the sum nameSum writes out.
 func namesFromCounts(c map[string]int) int {
 	n := c["from sources"] + c["asked by guessing"] + c["found as CNAME targets"]
-	for _, k := range []string{"the domain itself", "did not resolve", "guesses held back", "not checked", "no answer", "not asked",
+	for _, k := range []string{"the domain itself", "held out by scope", "did not resolve", "guesses held back", "not checked", "no answer", "not asked",
 		"left out by -m/-f", "listed under another domain", "cut by -max-names"} {
 		n -= c[k]
 	}

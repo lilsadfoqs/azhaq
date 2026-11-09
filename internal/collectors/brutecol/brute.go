@@ -14,6 +14,7 @@ import (
 
 	"github.com/lilsadfoqs/azhaq/catalog"
 	"github.com/lilsadfoqs/azhaq/internal/dnsr"
+	"github.com/lilsadfoqs/azhaq/internal/egress"
 	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"github.com/lilsadfoqs/azhaq/types"
@@ -36,6 +37,27 @@ type Budget struct {
 	left  int
 	asked map[string]bool
 	held  map[string]bool
+}
+
+// HeldOutKey is the payload's count of guesses the scope held out: no query
+// is sent for them, and they are not in tried.
+const HeldOutKey = "held_out_by_scope"
+
+// inScope splits names by the run's scope (-allow, -deny, -scope): the ones it
+// allows, and how many it holds out.
+func inScope(names []string) (kept []string, held int) {
+	if !egress.HasScope() {
+		return names, 0
+	}
+	kept = make([]string, 0, len(names))
+	for _, n := range names {
+		if egress.Allows(n) {
+			kept = append(kept, n)
+		} else {
+			held++
+		}
+	}
+	return kept, held
 }
 
 // NewBudget is a budget of n guesses, or nil for n <= 0.
@@ -99,14 +121,18 @@ func (b *Brute) Outputs() []string { return []string{"subdomains"} }
 
 func (b *Brute) Run(ctx context.Context, seed types.Seed, emit func(types.Observation) error) (types.RunMeta, error) {
 	domain := normalize.Hostname(seed.Keys["domain"])
-	names := bruteNames(b.Words, domain)
+	names, held := inScope(bruteNames(b.Words, domain))
 	names = b.Budget.take(names)
 	answers := resolveFound(ctx, b.Pool, b.Wild, domain, names, b.Workers)
 	found := nameList(answers)
 	wild := b.Wild.Zone(ctx, domain)
-	meta, err := report(ctx, emit, BruteName, domain, map[string]any{
+	payload := map[string]any{
 		"domain": domain, "names": found, "answers": answerList(answers), "count": len(found), "tried": len(names), "wildcard_zone": wild,
-	}, found)
+	}
+	if held > 0 {
+		payload[HeldOutKey] = held
+	}
+	meta, err := report(ctx, emit, BruteName, domain, payload, found)
 	for _, h := range meta.NextHints {
 		h.Keys[types.LiveKey] = "1"
 	}
@@ -226,27 +252,38 @@ func (p *Permute) Run(ctx context.Context, seed types.Seed, emit func(types.Obse
 	if p.tried == nil {
 		p.tried = map[string]bool{}
 	}
+	held := 0
 	for _, n := range variants(host, words) {
 		if limit > 0 && len(names) >= limit {
 			break
 		}
-		if n != host && !p.tried[n] {
-			names = append(names, n)
+		if n == host || p.tried[n] {
+			continue
 		}
+		if egress.HasScope() && !egress.Allows(n) {
+			p.tried[n] = true // held out once, not again for the next host
+			held++
+			continue
+		}
+		names = append(names, n)
 	}
 	names = p.Budget.take(names)
 	for _, n := range names {
 		p.tried[n] = true
 	}
 	p.mu.Unlock()
-	if len(names) == 0 {
+	if len(names) == 0 && held == 0 {
 		return types.RunMeta{Status: types.StatusOK}, nil
 	}
 	answers := resolveFound(ctx, p.Pool, p.Wild, domain, names, p.Workers)
 	found := nameList(answers)
-	meta, err := report(ctx, emit, PermuteName, host, map[string]any{
+	payload := map[string]any{
 		"fqdn": host, "names": found, "answers": answerList(answers), "count": len(found), "tried": len(names),
-	}, found)
+	}
+	if held > 0 {
+		payload[HeldOutKey] = held
+	}
+	meta, err := report(ctx, emit, PermuteName, host, payload, found)
 	for _, h := range meta.NextHints {
 		h.Keys[types.ViaKey] = types.ViaPermute
 	}

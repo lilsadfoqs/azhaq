@@ -609,7 +609,8 @@ func cmdURLs(args []string) error {
 	sendState := fs.Bool("send-state-changing", false, "with -live, also ask the URLs whose own path or query declares a state change (create, delete, reset, logout, ...); by default an archived /logout is not asked, and is counted as not asked (state-changing)")
 	given := inherit(fs, "provider-config=providers", "keep-junk=urls-keep-junk", "mc=urls-mc", "fc=urls-fc", "mt=urls-mt", "ft=urls-ft", "from=urls-from", "to=urls-to",
 		"blacklist=urls-blacklist", "fp=urls-fp", "retries=urls-retries", "urls-pages", "urls-pause", "proxy=urls-proxy", "urls-max",
-		"archive=urls-archive", "raw=urls-raw", "urls-timeout", "timeout", "v", "fail-on-errors")
+		"archive=urls-archive", "raw=urls-raw", "urls-timeout", "timeout", "v", "fail-on-errors",
+		"scope", "program", "allow", "deny", "ledger")
 	if err := parse(fs, args); err != nil {
 		return err
 	}
@@ -651,6 +652,23 @@ func cmdURLs(args []string) error {
 	case (hasFlag(args, "live-rate", "live-max", "live-proxy", "send-state-changing")) && !*live:
 		return usagef("-live-rate, -live-max, -live-proxy and -send-state-changing are for -live")
 	}
+	rules, err := flagScope(fs)
+	if err != nil {
+		return err
+	}
+	// The URLs the user's -allow, -deny or -scope hold out are not listed and
+	// not asked with -live: they are counted instead.
+	var heldMu sync.Mutex
+	heldOut := map[string]bool{}
+	held := func(u string) bool {
+		if rules.Empty() || rules.AllowsURL(u) {
+			return false
+		}
+		heldMu.Lock()
+		heldOut[u] = true
+		heldMu.Unlock()
+		return true
+	}
 	var run []string
 	if *providers != "" {
 		if isKeyFile(*providers) {
@@ -687,6 +705,9 @@ func cmdURLs(args []string) error {
 		var mu sync.Mutex
 		seen := map[string]bool{}
 		urlSink = func(r urlcol.Row) {
+			if held(r.URL) {
+				return
+			}
 			if !raw {
 				mu.Lock()
 				dup := seen[r.URL]
@@ -720,7 +741,7 @@ func cmdURLs(args []string) error {
 				for len(parts) < 6 {
 					parts = append(parts, "")
 				}
-				if seen[parts[0]] {
+				if seen[parts[0]] || held(parts[0]) {
 					continue
 				}
 				seen[parts[0]] = true
@@ -736,7 +757,7 @@ func cmdURLs(args []string) error {
 	flush()
 	var checked *liveCheck
 	if err == nil && *live && len(rows) > 0 && rep.Stopped == "" {
-		checked, err = verifyURLs(&c, rows, *liveRate, *liveMax, *liveProxy, *sendState, rep)
+		checked, err = verifyURLs(&c, rows, *liveRate, *liveMax, *liveProxy, *sendState, rep, scopeArgs(args)...)
 	}
 	for _, r := range rows {
 		o := urlOut{Row: r}
@@ -759,6 +780,13 @@ func cmdURLs(args []string) error {
 		checked.note(rep)
 	}
 	urlsNotes(rep, payloads(st, "azhaq-urls"), *failCapped)
+	if n := len(heldOut); n > 0 {
+		if rep.Counts == nil {
+			rep.Counts = map[string]int{}
+		}
+		rep.Counts["held out by scope"] = n
+		rep.Notes = append(rep.Notes, fmt.Sprintf("%d URLs are held out by scope (-allow, -deny, -scope): not listed and, with -live, not asked", n))
+	}
 	if !raw {
 		urlsJunk(rep, payloads(st, "azhaq-urls"))
 	}

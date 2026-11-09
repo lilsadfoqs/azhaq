@@ -33,6 +33,8 @@ azhaq subs -ls -json
 5. With `-http`, asks each live name's web service one request (`GET /`) and marks the names that answered.
 6. Prints each name once, then the summary with its counts and a coverage estimate for each tier.
 
+`-allow`, `-deny` and `-scope` (with `-program`) hold names out, as in [dns](dns.md): a name they hold out gets no DNS query under `-live`, `-w` or `-permute`, is not listed, and is counted as `held out by scope`. With `-w` or `-permute` and no `-allow` or `-scope` of your own, the domains given are the scope of the guesses.
+
 With `-db` the requests and queries go in `DB.ledger.jsonl`; without it, in the file `-ledger FILE` names, and nowhere otherwise. `azhaq mcp` gives `azhaq_subdomains` calls with no workspace one of its own.
 
 ## Output
@@ -133,6 +135,7 @@ The counts also say what became of the names, so a reader can add them up:
 | `raw candidates` | `from sources` less `the domain itself`: the first tier. See [Tiers](#tiers). |
 | `DNS-confirmed` | With `-live`, `-w` or `-permute`: the rows a DNS lookup confirmed, those of `resolved from sources` and the ones found by guessing or as CNAME targets. The second tier. |
 | `the domain itself` | The domain given, when a source returned it. It is not printed. |
+| `held out by scope` | Names the sources gave that `-allow`, `-deny` or `-scope` hold out: no query is sent for them and they are not printed. |
 | `did not resolve` | Names DNS says do not exist: guesses and history names that did not resolve, and with `-live` every other name that did not. A guess that only a wildcard answered is one of them. |
 | `collected` | With `-live`: `from sources` less the domain itself and the guesses that did not resolve. |
 | `resolved from sources` | With `-live`: names from sources that resolved to an address and were printed. |
@@ -147,6 +150,7 @@ The counts also say what became of the names, so a reader can add them up:
 | `left out by -m/-f` | Names a `-m`, `-f`, `-match-regex` or `-filter-regex` removed. |
 | `listed under another domain` | A name under two of the domains given, printed once. |
 | `cut by -max-names` | Names past `-max-names` (default 200,000), left out. The run ends with exit 3. |
+| `guesses held out by scope` | The `-w` words and `-permute` variations that `-allow`, `-deny` or `-scope` hold out: they were not asked. They are no row and not in `asked by guessing`. |
 | `guesses held back by -max-names` | With a `-max-names` you gave: the `-w` words and `-permute` variations past it, which were not asked. They are no row and not in `asked by guessing`. The run ends with exit 4, and a note names the cap. |
 
 - `subs` lists subdomains, as subfinder does, so it does not print the domain itself. `run`'s map has it as the target it is.
@@ -154,7 +158,7 @@ The counts also say what became of the names, so a reader can add them up:
 
 The number of results is `from sources`, less some counts and plus others:
 
-- Less: `the domain itself`, `did not resolve`, `guesses held back` (with `-guesses=false`), `not checked`, `no answer`, `not asked`, `left out by -m/-f`, `listed under another domain` and `cut by -max-names`.
+- Less: `the domain itself`, `held out by scope`, `did not resolve`, `guesses held back` (with `-guesses=false`), `not checked`, `no answer`, `not asked`, `left out by -m/-f`, `listed under another domain` and `cut by -max-names`.
 - Plus: `found as CNAME targets` and `asked by guessing` (the guesses that did not resolve are in `did not resolve`).
 
 The run prints the sum as a note:
@@ -334,6 +338,15 @@ On tesla.com, `subs -live -dns-rate 10` with two resolvers took 161 s and listed
 | `-dns-rate` | float |  | DNS queries per second per resolver (0: no pace but the queries in flight, as dnsx) |
 | `-t` | int |  | work items in flight (default 16) |
 | `-timeout` | duration |  | stop after this long and keep what was found; azhaq resume continues (0: no limit) |
+
+**Scope and safety**
+
+| Flag | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `-allow` | string, repeatable |  | a domain, host or address range the run may touch; HOST:PORT allows that host on that port only; with any -allow, nothing else is requested |
+| `-deny` | string, repeatable |  | a domain, host or address range the run must not touch, even when given as a target |
+| `-scope` | string |  | a program's scope: a file (HackerOne CSV, bounty-targets JSON, Burp options, lines) or hackerone, bugcrowd, intigriti, yeswehack |
+| `-program` | string |  | the program to take from a -scope list (handle, name or URL) |
 
 **Network**
 

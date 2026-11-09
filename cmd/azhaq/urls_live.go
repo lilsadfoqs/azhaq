@@ -49,7 +49,7 @@ func (o *urlOut) verdict(c *liveCheck, u string) {
 // like junk (a scanner's payload) is never sent, and one whose own path
 // declares a state change (/logout) is held back unless sendState says to
 // ask it: an archive found it, nobody gave it.
-func verifyURLs(c *common, rows []urlcol.Row, rate float64, max int, proxy string, sendState bool, rep *report) (*liveCheck, error) {
+func verifyURLs(c *common, rows []urlcol.Row, rate float64, max int, proxy string, sendState bool, rep *report, scope ...string) (*liveCheck, error) {
 	chk := &liveCheck{rate: rate, asked: map[string]bool{}, status: map[string]int{}, failed: map[string]string{}}
 	var eligible []string
 	for _, r := range rows {
@@ -87,6 +87,7 @@ func verifyURLs(c *common, rows []urlcol.Row, rate float64, max int, proxy strin
 	if proxy != "" {
 		args = append(args, "-proxy", proxy)
 	}
+	args = append(args, scope...) // the same -allow, -deny and -scope hold the check
 	st, done, err := runPreset(c, args, probeRep, nil)
 	if err != nil {
 		return nil, err
