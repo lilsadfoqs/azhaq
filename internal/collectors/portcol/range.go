@@ -422,7 +422,7 @@ func ipSeed(ip string) types.Seed {
 }
 
 func (e *earlyAddr) found(o portscan.Open) {
-	e.c.reserveWeb(e.ip, o)
+	e.c.reserveWeb(e.ip, e.ip, o)
 	if !catalog.Hint(e.ctx) {
 		return // nothing listens: the hints come with the block's result
 	}

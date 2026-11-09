@@ -142,3 +142,66 @@ func TestKeptRowIsWrittenAtOnceUnderABudget(t *testing.T) {
 		t.Errorf("after the task the workspace holds %d rows, want both", len(obs))
 	}
 }
+
+// The reserve a sweep holds for each web service it finds goes back to the
+// sweep once that service is mapped: two services that reserved 2 x 30 and
+// used a handful of requests leave nothing held, and the sweep spends the rest
+// of the budget.
+func TestBudgetGivesBackTheReserveOfAMappedService(t *testing.T) {
+	fetch.Reset()
+	egress.Reset()
+	t.Cleanup(egress.Reset)
+	var webs []int
+	for i := 0; i < 2; i++ {
+		l, err := net.Listen("tcp", "127.0.0.2:0")
+		if err != nil {
+			t.Skip(err)
+		}
+		srv := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "text/html")
+			_, _ = w.Write([]byte("<title>lab</title>"))
+		})}
+		go srv.Serve(l)
+		t.Cleanup(func() { _ = srv.Close() })
+		webs = append(webs, l.Addr().(*net.TCPAddr).Port)
+	}
+	// Closed ports first, then the two web ports, then a long tail.
+	var ports []int
+	for p := 20000; len(ports) < 10; p++ {
+		ports = append(ports, p)
+	}
+	ports = append(ports, webs...)
+	for p := 30000; len(ports) < 600; p++ {
+		ports = append(ports, p)
+	}
+
+	cat := catalog.New()
+	pc := portcol.New(nil, ports, 300)
+	pc.Scanner.Detect = portscan.DetectAll
+	pc.Scanner.Banner = 50 * time.Millisecond
+	pc.Apply(portcol.Config{WebCost: 30, Detect: portscan.DetectAll})
+	cat.MustRegister(pc)
+	cat.MustRegister(&pathscol.Collector{Client: http.DefaultClient, Wordlist: []string{"a", "b"}})
+	httpcol.Register(cat, http.DefaultClient)
+	st, err := store.Open(filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	_ = st.BeginRun("r", 3, 0)
+	const budget = 300
+	egress.SetMaxRequests(budget)
+	eng := &engine.Engine{Cat: cat, Store: st}
+	rules := scope.Rules{Allow: []string{"127.0.0.0/24"}}.Compile()
+	seed := types.Seed{Type: types.TypePrefix, Keys: map[string]string{"prefix": "127.0.0.2/32"}}
+	if err := eng.RunLocal(context.Background(), []types.Seed{seed}, engine.Budgets{MaxDepth: 3, Scope: rules, Active: map[string]bool{"ports": true}}); err != nil {
+		t.Fatal(err)
+	}
+	if egress.Reserved() != 0 {
+		t.Errorf("%d requests are still held for 2 services that were mapped", egress.Reserved())
+	}
+	// Held back for the services, the sweep would stop 60 short of the budget.
+	if egress.Sent() < budget-10 {
+		t.Errorf("%d of %d requests were sent: the reserve of the mapped services was not given back to the sweep", egress.Sent(), budget)
+	}
+}

@@ -169,6 +169,8 @@ type scheduler struct {
 	schemes map[string]bool       // host → its http URLs are the https site's
 	asked   map[string]bool       // hosts whose http://host/ was asked
 	waiting map[string][]heldHint // hints held for that answer
+
+	rw reserveWatch // the tasks the web reserve of a service waits for
 }
 
 // stretchEnt is a task of the stretch the session check has not vouched for:
@@ -186,6 +188,7 @@ type lease struct {
 
 // record notes a planned task for the store.
 func (s *scheduler) record(t task) {
+	s.noteRecorded(t)
 	if s.e.Store != nil {
 		s.planned = append(s.planned, store.Task{ID: workID(t.col, t.seed), Collector: t.col, Seed: t.seed, Depth: t.depth, Prio: t.prio})
 	}
@@ -193,6 +196,7 @@ func (s *scheduler) record(t task) {
 
 // finish notes a task that will not run again in this run.
 func (s *scheduler) finish(t task) {
+	s.noteFinished(t)
 	if s.e.Store != nil {
 		s.done = append(s.done, workID(t.col, t.seed))
 	}
@@ -572,6 +576,7 @@ func (s *scheduler) loop(ctx context.Context) {
 		s.leases = map[string]lease{}
 	}
 	for {
+		s.releaseMapped()
 		if ctx.Err() == nil {
 			s.redoSession()
 			s.dispatch(ctx)

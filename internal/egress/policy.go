@@ -62,6 +62,7 @@ type Policy struct {
 	// reserve is the requests set aside for web work already known (Reserve):
 	// a port sweep does not spend them, and the web requests sent use them up.
 	reserve atomic.Int64
+	resv    reserves     // what each service holds of it (ReserveFor)
 	gone    atomic.Int64 // what sent held when Reset last put it back to zero, summed
 	held    atomic.Int64 // counted, and not yet known to have left (waiting for the pace, let go in Chrome)
 
@@ -136,6 +137,7 @@ func (p *Policy) Reset() {
 	p.declared.Clear()
 	p.nDeclared.Store(0)
 	p.mu.Unlock()
+	p.resv.clear()
 	p.maxReq.Store(0)
 	p.gone.Add(p.sent.Swap(0))
 	p.dnsAll.Add(p.dnsq.Swap(0))
