@@ -81,6 +81,10 @@ func TestChromeIsNotRunWithoutItsSandboxUnlessAllowed(t *testing.T) {
 		t.Errorf("the summary does not say Chrome ran without its sandbox:\n%s", errOut)
 	}
 
+	if strings.Contains(errOut, "Chrome ran with its sandbox") {
+		t.Errorf("the summary says both modes:\n%s", errOut)
+	}
+
 	// -chrome-require-sandbox is still accepted, and cannot go with the opt-in.
 	_, errOut, code = cli(t, "shots", "-u", site.URL+"/", "-dir", tmp("s3"), "-db", tmp("s3.db"), "-chrome-require-sandbox", "-chrome-no-sandbox", "-json")
 	if code != exitUsage || !strings.Contains(errOut, "contradict") {
@@ -99,5 +103,40 @@ func TestMCPHoldsChromeNoSandbox(t *testing.T) {
 	}
 	if got := (heldRun{}).options("run"); strings.Contains(strings.Join(got, " "), "-chrome-no-sandbox") {
 		t.Errorf("run options without it: %v", got)
+	}
+}
+
+// The summary names the mode Chrome ran in, so a reader need not read ps (a
+// sandboxed Chrome still starts a --no-zygote-sandbox zygote for its GPU
+// process): "Chrome ran with its sandbox" or "Chrome ran without its
+// sandbox", and neither when Chrome never started.
+func TestSummaryNamesTheModeChromeRanIn(t *testing.T) {
+	t.Setenv("AZHAQ_CHROME_NO_SANDBOX", "")
+	t.Setenv("AZHAQ_CHROME", "")
+	if _, err := browser.Find(); err != nil {
+		t.Skip(err)
+	}
+	site := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		fmt.Fprint(w, `<html><title>home</title><a href="/a">a</a></html>`)
+	}))
+	defer site.Close()
+	tmp := func(n string) string { return filepath.Join(t.TempDir(), n) }
+	_, errOut, code := cli(t, "shots", "-u", site.URL+"/", "-dir", tmp("s"), "-db", tmp("s.db"), "-json")
+	if code == exitUsage && strings.Contains(errOut, "-chrome-no-sandbox") {
+		t.Skip("this system gives Chrome no sandbox")
+	}
+	if code != exitOK && code != exitPartial {
+		t.Fatalf("shots: exit %d\n%s", code, errOut)
+	}
+	if !strings.Contains(errOut, "Chrome ran with its sandbox") || strings.Contains(errOut, "without its sandbox") {
+		t.Errorf("the summary does not say Chrome ran with its sandbox:\n%s", errOut)
+	}
+	_, errOut, code = cli(t, "run", "-url", site.URL+"/", "-allow", "127.0.0.1", "-sources", "none", "-depth", "0", "-no-paths", "-db", tmp("r.db"), "-json")
+	if code != exitOK && code != exitPartial {
+		t.Fatalf("run: exit %d\n%s", code, errOut)
+	}
+	if strings.Contains(errOut, "Chrome ran") {
+		t.Errorf("a run that started no Chrome names a mode:\n%s", errOut)
 	}
 }

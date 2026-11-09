@@ -2830,6 +2830,8 @@ func chromeRefused(rep *report, b *browser.Browser) {
 	}
 	if why := b.Unsandboxed(); why != "" {
 		rep.Notes = append(rep.Notes, "Chrome ran without its sandbox ("+why+"), as -chrome-no-sandbox or AZHAQ_CHROME_NO_SANDBOX=1 allowed: the pages it loaded are the targets' and untrusted")
+	} else if b.Sandboxed() {
+		rep.Notes = append(rep.Notes, "Chrome ran with its sandbox")
 	}
 	if n, hosts := b.GuardDenied(); n > 0 {
 		rep.Notes = append(rep.Notes, fmt.Sprintf("Chrome's own services reached for %d connections outside the scope (%s); all were refused, none was sent", n, listOfHosts(hosts, 3)))
