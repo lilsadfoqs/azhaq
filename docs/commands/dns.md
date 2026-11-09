@@ -135,6 +135,7 @@ The summary also lists failures per kind of error, and takeover findings: a CNAM
 
 ### Words and inputs left out
 - With `-d DOMAIN -w WORDS` it resolves `WORD.DOMAIN` for each word, as `dnsx -d -w` does.
+- `-all` goes with `-w`: each generated name is asked every type `-all` lists (PTR is for addresses, so a name is not asked it). `-axfr` and `-ptr` do not: a wordlist makes names, not zones or addresses, and they exit 2.
 - `-dns-rate N` holds back the queries of `-d` with `-w` too: see [Time and pace](#time-and-pace).
 - `left out` counts inputs that were not asked about:
   - an address or range without `-ptr`

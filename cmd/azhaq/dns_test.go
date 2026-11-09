@@ -1105,3 +1105,30 @@ func TestDNSCNAMEAloneChecksTheTarget(t *testing.T) {
 		t.Errorf("-no-takeover asked %d A questions", got)
 	}
 }
+
+// -all goes with -w: every generated name is asked its types (an address
+// type, PTR, is not asked of a name), and only a flag of its own that cannot
+// go with a wordlist is refused.
+func TestDNSAllGoesWithAWordlist(t *testing.T) {
+	t.Chdir(t.TempDir())
+	lab := startLab(t)
+	w := writeList(t, "www", "zzz")
+	ls, _, code := dnsOut(t, "-d", "lab.zz", "-w", w, "-all", "-resp", "-json", "-r", lab.addr)
+	r := dnsRows(t, ls)
+	if code != exitOK || r["www.lab.zz"] == nil {
+		t.Fatalf("exit %d rows %v", code, ls)
+	}
+	for _, q := range []uint16{dns.TypeA, dns.TypeAAAA, dns.TypeTXT, dns.TypeMX, dns.TypeCAA} {
+		if _, ok := lab.qtypes.Load(q); !ok {
+			t.Errorf("type %s was not asked", dns.TypeToString[q])
+		}
+	}
+	if _, ok := lab.qtypes.Load(dns.TypePTR); ok {
+		t.Errorf("PTR was asked of a name")
+	}
+	for _, f := range []string{"-axfr", "-ptr"} {
+		if _, _, code := dnsOut(t, "-d", "lab.zz", "-w", w, f, "-r", lab.addr); code != exitUsage {
+			t.Errorf("%s with -w: exit %d, want the usage code", f, code)
+		}
+	}
+}

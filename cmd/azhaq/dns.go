@@ -85,6 +85,7 @@ type dnsConf struct {
 	noTakeover bool
 	wd         string
 	ptrHosts   bool // IPs are looked up (-ptr or -all)
+	ptrFlag    bool // -ptr itself was given, not only -all
 	stream     bool
 	start      int
 	rules      scope.Rules
@@ -225,6 +226,7 @@ func cmdDNS(args []string) error {
 		cf.noTypeFlag = true
 	}
 	cf.ptrHosts = cf.selected["ptr"]
+	cf.ptrFlag = *kinds[3]
 	if *rcode != "" {
 		cf.rcodes = map[int]bool{}
 		for _, r := range splitList(*rcode) {
@@ -449,7 +451,7 @@ func newDNSInput(cf *dnsConf, names, lists, words []string) (*dnsInput, error) {
 		if len(in.domains) == 0 || len(in.words) == 0 {
 			return nil, usagef("-w and -d each need at least one entry")
 		}
-		if cf.axfr || cf.ptrHosts {
+		if cf.axfr || cf.ptrFlag { // -all asks its types of each name: PTR is for addresses only
 			return nil, usagef("-axfr and -ptr go with names, not with -w")
 		}
 		return in, nil
