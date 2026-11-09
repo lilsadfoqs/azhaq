@@ -305,6 +305,7 @@ func (b *Browser) decide(root context.Context, ev cdpfetch.EventRequestPaused, t
 		// name declares a state change: never requested, and listed with
 		// the reason by fetch (not as a refusal of the scope).
 		b.done(t)
+		ledger.ChromeBlocked(1)
 		b.fail(root, ev.RequestID)
 		return
 	case !b.allowed(raw):
@@ -321,6 +322,7 @@ func (b *Browser) decide(root context.Context, ev cdpfetch.EventRequestPaused, t
 		// the run that was killed sent is not sent again.
 		b.wrote(t, ev.FrameID, writeOf(ev.Request))
 		b.done(t)
+		ledger.ChromeBlocked(1)
 		if r.doc {
 			// A form posted: stopped as a user stops it, the page stays
 			// as it was. Blocked, Chrome would show its error instead,
@@ -340,6 +342,7 @@ func (b *Browser) decide(root context.Context, ev cdpfetch.EventRequestPaused, t
 	if refuse {
 		b.refuse(t, r)
 		b.done(t)
+		ledger.ChromeBlocked(1)
 		b.fail(root, ev.RequestID)
 		return
 	}
@@ -393,8 +396,11 @@ func (b *Browser) watch(ctx context.Context, t *tab, also func(*network.EventReq
 			if also != nil {
 				also(&ev)
 			}
-			if r := ev.RedirectResponse; r != nil && !t.signin {
-				fetch.SawAnswer(r.URL, int(r.Status), headerValue(r.Headers, "Location"))
+			if r := ev.RedirectResponse; r != nil {
+				b.answered(ev.RequestID) // the hop before it was answered with this redirect
+				if !t.signin {
+					fetch.SawAnswer(r.URL, int(r.Status), headerValue(r.Headers, "Location"))
+				}
 			}
 			if t.log != nil {
 				t.log.requestSent(&ev)
@@ -497,6 +503,7 @@ func (b *Browser) watch(ctx context.Context, t *tab, also func(*network.EventReq
 			if t.log != nil {
 				t.log.responded(&ev)
 			}
+			b.answered(ev.RequestID)
 			if r := ev.Response; r != nil && !t.signin {
 				fetch.SawAnswer(r.URL, int(r.Status), headerValue(r.Headers, "Location"))
 			}
@@ -522,6 +529,7 @@ func (b *Browser) watch(ctx context.Context, t *tab, also func(*network.EventReq
 				continue
 			}
 			b.refuse(t, r)
+			ledger.ChromeBlocked(1)
 		}
 	})
 	return func() {

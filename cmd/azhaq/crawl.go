@@ -37,7 +37,7 @@ func cmdCrawl(args []string) error {
 	fs.Var(&urls, "u", "start URL (repeatable, or comma-separated)")
 	list := onceString(fs, "l", "file of start URLs (- for stdin)")
 	given := inherit(fs, append([]string{"depth", "max-items", "parallel", "host-parallel", "delay", "paths", "browser", "browser-writes", "chrome-no-sandbox",
-		"login", "login-user", "login-pass", "send-state-changing", "per-template", "proxy", "retry", "backoff", "cookie-jar", "host-rate", "max-host-requests", "request-timeout", "max-response-size", "submit-forms", "host-guesses", "path-climb", "no-map-guess", "interact", "interact-clicks", "resolvers", "no-follow",
+		"login", "login-user", "login-pass", "send-state-changing", "per-template", "proxy", "retry", "backoff", "cookie-jar", "host-rate", "max-host-requests", "request-timeout", "max-response-size", "submit-forms", "sweep", "host-guesses", "path-climb", "no-map-guess", "interact", "interact-clicks", "resolvers", "no-follow",
 		"kf=known-files", "fs=crawl-scope", "ns=crawl-any-host", "c=host-parallel", "p=parallel", "rl=rate", "ct=timeout", "dr=no-follow", "r=resolvers"},
 		targetFlags...)...)
 	var inScope, outScope stringsFlag
@@ -62,7 +62,7 @@ func cmdCrawl(args []string) error {
 	assets := fs.Bool("assets", false, "also list the images, fonts and media pages load (listed as linked: the crawl does not request them), and the source maps and build manifests azhaq reads (scripts and stylesheets are listed by default, as katana lists them)")
 	noShell := fs.Bool("no-catchall", false, "leave out URLs that answer with the page every unknown path gets (client-side routes of a single-page app)")
 	allRows := fs.Bool("all-rows", false, "list every row, as katana does: by default the rows that answer as the control request for a path that cannot exist does, the 404s and the assets no request asked for are counted in the summary in one line of their class each (-json lists every row with its fold class)")
-	sweep := fs.Bool("sweep", false, "also ask each web service for the 51 built-in paths (robots.txt, sitemaps, API descriptions, .git/HEAD, admin, …) and for the source map next to each script, as run does; crawl asks only what a crawler does")
+	builtin := fs.Bool("builtin-paths", false, "also ask each web service for the 51 built-in paths (robots.txt, sitemaps, API descriptions, .git/HEAD, admin, …) and for the source map next to each script, as run does; crawl asks only what a crawler does")
 	showOut := fs.Bool("do", false, "also list the URLs found and left out of the crawl's scope (never requested)")
 	hints := fs.Bool("hints", false, "also list the hints (routes with a parameter, views and sockets, routes scripts or descriptions give a method other than GET) and the named URLs (named by scripts or descriptions, or only in scripts); by default the URLs the crawl requested and the URLs pages link to or load are listed")
 	showRejected := fs.Bool("rejected", false, "also list the strings read from scripts and pages and kept out of the URLs, each with its reason (text: string, a tab, the reason; -json: one object each)")
@@ -114,11 +114,17 @@ func cmdCrawl(args []string) error {
 			}
 		}
 	}
-	targets, err := inputs(more, *list)
-	if err != nil {
-		return err
+	sweeping := fs.Lookup("sweep").Value.String() == "true"
+	var targets []string
+	if !(sweeping && len(more) == 0 && *list == "") { // -sweep alone does not wait for stdin
+		if targets, err = inputs(more, *list); err != nil {
+			return err
+		}
 	}
-	if len(targets) == 0 {
+	if sweeping && len(flagStrings(fs, "allow")) == 0 && fs.Lookup("scope").Value.String() == "" {
+		return usagef("-sweep covers the IPv4 ranges and addresses -allow and -scope hold, and they hold none: give -allow 192.0.2.0/24 (the built-in paths are -builtin-paths)")
+	}
+	if len(targets) == 0 && !sweeping {
 		return usagef("give -u URL, -l FILE or URLs on stdin")
 	}
 	for i, t := range targets {
@@ -131,8 +137,15 @@ func cmdCrawl(args []string) error {
 	defer rm()
 	rep := newReport("crawl")
 	rep.what = "URLs"
+	if sweeping && !*builtin {
+		// -sweep asked for the built-in paths before it meant run's.
+		rep.Notes = append(rep.Notes, "-sweep covers the scope's ranges, as on run; the built-in paths are -builtin-paths")
+	}
 	// The application only: no subdomain, archive or certificate fan-out.
-	run := []string{"-list", path, "-skip", "azhaq-subdomains,azhaq-urls,azhaq-rdap,azhaq-tls", "-no-favicon", "-backoff", "-retry=1", "-cookie-jar"}
+	run := []string{"-skip", "azhaq-subdomains,azhaq-urls,azhaq-rdap,azhaq-tls", "-no-favicon", "-backoff", "-retry=1", "-cookie-jar"}
+	if len(targets) > 0 {
+		run = append(run, "-list", path) // -sweep alone: the scope's ranges are the targets
+	}
 	if !*noFill {
 		run = append(run, "-fill-forms")
 	}
@@ -161,10 +174,10 @@ func cmdCrawl(args []string) error {
 	if !explicit["fs"] {
 		run = append(run, "-crawl-scope=rdn-origin")
 	}
-	if !*sweep {
+	if !*builtin {
 		run = append(run, "-no-map-guess")
 	}
-	if !*sweep && !explicit["kf"] && !explicit["paths"] {
+	if !*builtin && !explicit["kf"] && !explicit["paths"] {
 		run = append(run, "-no-paths")
 	}
 	// A crawler asks every page it finds: no template fold unless -per-template
@@ -190,7 +203,7 @@ func cmdCrawl(args []string) error {
 		answerDir, _ = filepath.Abs(*storeRespDir)
 		defer func() { answerTap, answerDir = nil, "" }()
 	}
-	if !*sweep {
+	if !*builtin {
 		// A crawler asks what a crawler asks: the baseline of the root and of
 		// each top-level directory, not one more for every directory below.
 		fetch.SetProbeDepth(1)

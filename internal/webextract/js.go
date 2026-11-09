@@ -65,8 +65,9 @@ type Ref struct {
 	Joined     bool
 	Head       bool
 	// Key says the string is a key of an object or a case label
-	// ({"./Filter":2}, case "./Filter":): a module id of the bundler's
-	// source tree, not a path of the app. It is not in JSURLs.
+	// ({"./Filter":2}, case "./Filter":), or a key whose value is a function
+	// ({"/21U":function(t,e,n){…}}): a module id of the bundler, not a path of
+	// the app. It is not in JSURLs.
 	Key bool
 	// Fragment says the string is the end of a route built at run time
 	// ("/y/"+id+"/z.php"): no route of its own. It is not in JSURLs.
@@ -86,7 +87,7 @@ func JSURLRefs(script string, base *url.URL) []Ref {
 			if le < len(script) && ls > 0 && strings.ContainsRune("\"'`", rune(script[le])) && script[ls-1] == script[le] {
 				ls, le = ls-1, le+1
 			}
-			out = append(out, Ref{URL: u, Start: start, End: end, Joined: joined(script, start), Head: HeadAt(script, ls, le), Key: key, Fragment: strings.ContainsRune("\"'`", rune(script[ls])) && partOfRoute(script, ls)})
+			out = append(out, Ref{URL: u, Start: start, End: end, Joined: joined(script, start), Head: HeadAt(script, ls, le), Key: key || FuncKeyAt(script, ls, le), Fragment: strings.ContainsRune("\"'`", rune(script[ls])) && partOfRoute(script, ls)})
 		}
 	}
 	for _, m := range absURL.FindAllStringIndex(script, -1) {
@@ -124,6 +125,47 @@ func mapKeyAt(script string, start, end int) bool {
 		i--
 	}
 	return i > 0 && (script[i-1] == '{' || script[i-1] == ',' || (strings.HasSuffix(script[:i], "case") && (i == 4 || !isIdentByte(script[i-5]))))
+}
+
+// FuncKeyAt says whether the string literal script[start:end] (quotes
+// included) is the key of an object literal whose value is a function
+// expression: the module table of a bundle ({"21U":function(t,e,n){…},
+// "KAi":(t,e)=>{…}, "x"(t){…}}). It names a module, not a route.
+func FuncKeyAt(script string, start, end int) bool {
+	if start <= 0 || end > len(script) || end-start < 2 || !strings.ContainsRune("\"'`", rune(script[end-1])) {
+		return false
+	}
+	i := skipSpaceBack(script, start)
+	if i < 0 || script[i] != '{' && script[i] != ',' {
+		return false
+	}
+	j := skipSpace(script, end)
+	if j >= len(script) {
+		return false
+	}
+	switch script[j] {
+	case '(': // "x"(t){…}: a method
+		k := closeParen(script, j)
+		m := skipSpace(script, k+1)
+		return k >= 0 && m < len(script) && script[m] == '{'
+	case ':':
+		j = skipSpace(script, j+1)
+	default:
+		return false
+	}
+	v := script[j:]
+	if rest, ok := strings.CutPrefix(v, "async"); ok && rest != "" && !isIdentByte(rest[0]) {
+		v = strings.TrimLeft(rest, " \t\r\n")
+	}
+	switch {
+	case strings.HasPrefix(v, "function") && len(v) > 8 && !isIdentByte(v[8]):
+		return true
+	case strings.HasPrefix(v, "("):
+		k := closeParen(script, len(script)-len(v))
+		return k >= 0 && strings.HasPrefix(strings.TrimLeft(script[k+1:], " \t\r\n"), "=>")
+	}
+	id, n := identAt(v, 0)
+	return id != "" && strings.HasPrefix(strings.TrimLeft(v[n:], " \t\r\n"), "=>")
 }
 
 // HeadAt says whether the string literal script[start:end] (quotes

@@ -62,17 +62,17 @@ func crawlRows(t *testing.T, args ...string) (rows int, probes int32) {
 
 // A crawl asks the root and each top-level directory what an unknown path
 // answers, not every directory down the tree: 4 requests here, not 11. The
-// URLs it lists are the same, and -sweep keeps the check of every directory.
+// URLs it lists are the same, and -builtin-paths keeps the check of every directory.
 func TestCrawlAsksTheCatchAllBaselineOfTopLevelDirectoriesOnly(t *testing.T) {
 	shallow, np := crawlRows(t)
-	full, nf := crawlRows(t, "-sweep")
+	full, nf := crawlRows(t, "-builtin-paths")
 	if np > 4 {
 		t.Errorf("%d baseline requests, want at most 4 (the root, /rest/, /api/, /assets/)", np)
 	}
 	if nf <= np {
-		t.Errorf("-sweep sent %d baseline requests, the default %d: -sweep keeps one for every directory", nf, np)
+		t.Errorf("-builtin-paths sent %d baseline requests, the default %d: -builtin-paths keeps one for every directory", nf, np)
 	}
 	if shallow < 10 || shallow < full-8 {
-		t.Errorf("default crawl listed %d URLs, -sweep %d", shallow, full)
+		t.Errorf("default crawl listed %d URLs, -builtin-paths %d", shallow, full)
 	}
 }

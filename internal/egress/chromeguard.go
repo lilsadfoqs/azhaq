@@ -273,7 +273,11 @@ func (g *ChromeGuard) handle(c net.Conn) {
 		closeWrite(up)
 		close(done)
 	}()
-	_, _ = io.Copy(c, up)
+	var from io.Reader = up
+	if ws {
+		from = &firstByte{r: up, f: func() { ledger.ChromeAnswered(1) }} // the handshake's line got an answer
+	}
+	_, _ = io.Copy(c, from)
 	closeWrite(c)
 	<-done
 }
@@ -550,3 +554,18 @@ type bufConn struct {
 }
 
 func (c *bufConn) Read(p []byte) (int, error) { return c.r.Read(p) }
+
+// firstByte calls f once, when r first gives a byte.
+type firstByte struct {
+	r    io.Reader
+	f    func()
+	once sync.Once
+}
+
+func (b *firstByte) Read(p []byte) (int, error) {
+	n, err := b.r.Read(p)
+	if n > 0 {
+		b.once.Do(b.f)
+	}
+	return n, err
+}

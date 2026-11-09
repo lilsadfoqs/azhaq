@@ -675,7 +675,7 @@ A route keeps up to three places per page, calls first. A route read from a sour
 - the favicon;
 - the source-map guesses, which ask `main.js.map` next to a script that names none.
 
-`-sweep` turns them back on. So `crawl` sends what a crawler sends: the pages it finds, the scripts they load and the routes they name.
+`-builtin-paths` turns them back on. So `crawl` sends what a crawler sends: the pages it finds, the scripts they load and the routes they name.
 
 #### Sinks
 
@@ -785,7 +785,7 @@ Before a non-root URL counts as visited, `fetch.CatchAll` compares its response 
 
 - The responses match when the status is the same, and either the redirect target or the body is the same once the requested path is removed from it. So error pages that echo the path still match.
 - Bodies that differ only by a token or timestamp match on title, line count and word count.
-- Each directory is probed once per run, up to 24 directories per origin. `crawl` probes only the root and the directories one level down (`/api/`, `/rest/`); a deeper directory is compared with the one above it. `crawl -sweep` probes every directory.
+- Each directory is probed once per run, up to 24 directories per origin. `crawl` probes only the root and the directories one level down (`/api/`, `/rest/`); a deeper directory is compared with the one above it. `crawl -builtin-paths` probes every directory.
 
 A matching response is stored with `"catchall": true` and shown as `catchall` in the map. The crawler and the JavaScript reader skip such pages, and the path sweep drops them.
 
@@ -1186,6 +1186,8 @@ The writes a page sends, such as a POST, a DELETE or a beacon, are not sent but 
 `-interact`, with `-browser`, clicks each rendered page's buttons, links, tabs and menus. It makes up to `-interact-clicks` clicks, 12 by default. It puts the page back after each, by history, else by loading it again.
 
 A page that shows nothing to click is looked at again for up to 2.4 s while it is still drawing. If it shows nothing, the `-interact:` note says so, with 0 clicks, instead of leaving the note out.
+
+A run given `-interact` that clicked no page says so in a note, `-interact did not run: no page was clicked`, and why: the run stopped first (a request budget, `-timeout`, the kill file) before Chrome reached a page, Chrome failed to load the pages it tried, or no page of the targets was loaded.
 
 With `-browser`, a script of a page that did not load as JavaScript is named in a `-browser:` note, with why: the network failed it, the server answered an error, or it answered an HTML page, which Chrome does not run. An app whose scripts fail draws no menu and calls no route. The usual cause is an origin that cannot map the script's address, for example Express behind a proxy that sends it the full address (`http://host/x`) instead of the path. The `-interact:` note adds the first error a script of the page threw when there were 0 clicks.
 
