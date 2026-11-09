@@ -39,6 +39,8 @@ type runLedger struct {
 	dnsSet   bool           // dnsFrom was taken: the DNS queries sent since can be checked against the lines
 	writes   []ledger.Entry // writes of a killed run that a resume does not send again
 	stages   string         // what this run's requests to targets went to, by collector
+	// Of this run's lines to targets: the tcp, udp and probe ones (what recorded counted).
+	conns, datagrams, probes int
 }
 
 // unsentKey holds, in a workspace, the writes a killed run sent whose
@@ -201,6 +203,7 @@ func (r *runLedger) close(rep *report) {
 	rep.wrote(path)
 	seal := r.l.Last()
 	what, targets, dnsLines := r.recorded(path)
+	rep.Connections, rep.Datagrams, rep.Probes = int64(r.conns), int64(r.datagrams), int64(r.probes)
 	rep.Notes = append(rep.Notes, fmt.Sprintf("ledger: %s, sealed %s (azhaq ledger -verify %s -seal %s; the seal alone proves no line was later removed and the rest re-chained)", fmt.Sprintf(what, path), seal, path, seal))
 	if r.from > 0 {
 		rep.Notes = append(rep.Notes, fmt.Sprintf("ledger: %s holds %d lines in all, the lines of the runs before this one included", path, r.l.Count()))
@@ -276,6 +279,7 @@ func (r *runLedger) recorded(path string) (what string, targets, dnsLines int) {
 		})
 	}
 	r.stages = stagesLine(spent)
+	r.conns, r.datagrams, r.probes = conns, datagrams, probes
 	if err != nil {
 		return "recorded in %s, not counted (" + strings.ReplaceAll(err.Error(), "%", "%%") + ")", int(r.l.Count() - r.from), -1
 	}

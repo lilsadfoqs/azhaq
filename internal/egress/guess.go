@@ -65,7 +65,7 @@ func admitGuess(req *http.Request) error {
 		}
 		guessLeft[h][col]++
 		MarkRefused(req.Context())
-		return neterr.ErrBudget
+		return neterr.ErrGuessCap
 	}
 	guessSent[h]++
 	return nil

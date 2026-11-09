@@ -42,7 +42,10 @@ type report struct {
 	Counts      map[string]int     `json:"counts,omitempty"`
 	Folds       []engine.FoldGroup `json:"folds,omitempty"` // run: the rows by fold class, with the control a catch-all answer was compared with
 	Seconds     float64            `json:"seconds"`
-	Requests    int64              `json:"requests"`              // sent to targets
+	Requests    int64              `json:"requests"`              // sent to targets, connections and datagrams included
+	Connections int64              `json:"connections,omitempty"` // of requests: the TCP connections
+	Datagrams   int64              `json:"datagrams,omitempty"`   // of requests: the UDP datagrams
+	Probes      int64              `json:"probes,omitempty"`      // written on a connection, one ledger line each; not in requests
 	DNSQueries  int64              `json:"dns_queries,omitempty"` // sent to resolvers, retries and wildcard probes included; the ledger's dns lines
 	DB          string             `json:"db,omitempty"`
 	RunID       string             `json:"run_id,omitempty"`
@@ -136,14 +139,20 @@ type report struct {
 	// Requests, and each ledger line names its purpose.
 	RequestsBy map[string]int `json:"requests_by_purpose,omitempty"`
 
+	// PathChecks is, for each web service, what became of the built-in path
+	// checks the plan lists for it: sent, answered by an earlier request, or
+	// skipped with the reason. The ones sent are in requests_by_purpose.
+	PathChecks []pathCheck `json:"path_checks,omitempty"`
+	pathList   []string    // the built-in path checks the run plans for each service; none when the sweep does not run
+
 	// Wrote are the files the run wrote besides its database and the ones
 	// the user named with -o and the like: the ledger, the name history,
 	// the pointers to the last workspace, the archived URLs.
 	Wrote []string `json:"wrote,omitempty"`
 
-	// AddressesScanned and AddressesOpen are run -ports: the addresses the
-	// port scan asked, and those it found a port open on. counts.addresses is
-	// another count, the address rows the map holds.
+	// AddressesScanned and AddressesOpen are run -ports: the distinct addresses
+	// the port scan asked, and those it found a port open on. counts.addresses
+	// is another count, the address rows the map holds.
 	AddressesScanned *int `json:"addresses_scanned,omitempty"`
 	AddressesOpen    *int `json:"addresses_open,omitempty"`
 }
@@ -265,6 +274,9 @@ func (r *report) print(w io.Writer) {
 	}
 	if r.Requests > 0 {
 		head = append(head, fmt.Sprintf("%d requests", r.Requests))
+	}
+	if r.Probes > 0 {
+		head = append(head, fmt.Sprintf("%d probes (not in the requests)", r.Probes))
 	}
 	if r.DNSQueries > 0 {
 		head = append(head, fmt.Sprintf("%d DNS queries", r.DNSQueries))
@@ -461,6 +473,8 @@ func fillReport(rep *report, path string, seeds []types.Seed, ents []types.Entit
 	rep.Notes = append(rep.Notes, portcol.StoppedNotes()...)
 	rep.Notes = append(rep.Notes, engine.GraphQLNotes(obs)...)
 	rep.Notes = append(rep.Notes, pathscol.Notes(obs)...)
+	rep.PathChecks = pathChecks(obs, rep.pathList, failedPaths(rep.Failed))
+	rep.Notes = append(rep.Notes, pathCheckNotes(rep.PathChecks)...)
 	if notes, loose := dirscol.Notes(obs); len(notes) > 0 {
 		rep.Notes = append(rep.Notes, notes...)
 		rep.warned = rep.warned || loose // wildcard answers among the paths: not a calibrated list

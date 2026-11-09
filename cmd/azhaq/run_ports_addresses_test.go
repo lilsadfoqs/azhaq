@@ -55,3 +55,66 @@ func TestRunPortsNamesAddressesScannedAndOpen(t *testing.T) {
 		t.Errorf("the next pass does not count 8 addresses: %s", next)
 	}
 }
+
+// An address that is in the range and also given on its own is one address.
+// Every total of the summary is the ledger's: lines to targets are requests,
+// the probes written on a connection are their own total beside it, and the
+// addresses are the distinct ones the ledger connected to.
+func TestRunPortsTotalsReconcileWithLedger(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("ok")) }))
+	t.Cleanup(srv.Close)
+	_, port, _ := net.SplitHostPort(srv.Listener.Addr().String())
+	t.Chdir(t.TempDir())
+	if err := os.WriteFile("l.txt", []byte("127.0.0.1\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, rep, code := runContract(t, "run", "-list", "l.txt", "-cidr", "127.0.0.0/29", "-ports", port, "-allow", "127.0.0.0/29", "-sources", "none", "-db", "r.db")
+	if code != exitOK {
+		t.Fatalf("exit %d: failed %+v notes %q", code, rep.Failed, rep.Notes)
+	}
+	raw, err := os.ReadFile("r.db.ledger.jsonl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	by := map[string]int64{}
+	hosts := map[string]bool{}
+	for _, line := range strings.Split(string(raw), "\n") {
+		var e struct{ Kind, Class, Host, Collector string }
+		if json.Unmarshal([]byte(line), &e) != nil || e.Kind == "seal" || e.Kind == "" {
+			continue
+		}
+		switch {
+		case e.Class == "dns":
+			by["dns"]++
+		case e.Kind == "probe":
+			by["probe"]++
+		case e.Class == "target":
+			by["target"]++
+			if e.Kind == "tcp" {
+				by["tcp"]++
+			}
+			if e.Kind == "tcp" && e.Collector == "azhaq-ports" {
+				hosts[e.Host] = true
+			}
+		}
+	}
+	if by["probe"] == 0 {
+		t.Fatalf("the scan wrote no probe: the test does not reach the case (%v)", by)
+	}
+	if rep.Requests != by["target"] || rep.Probes != by["probe"] || rep.Connections != by["tcp"] || rep.DNSQueries != by["dns"] {
+		t.Errorf("summary requests %d connections %d probes %d dns %d, ledger %v", rep.Requests, rep.Connections, rep.Probes, rep.DNSQueries, by)
+	}
+	if rep.AddressesScanned == nil || *rep.AddressesScanned != len(hosts) || len(hosts) != 8 {
+		t.Errorf("addresses_scanned %v, the ledger connected to %d distinct addresses (want 8): %v", deref(rep.AddressesScanned), len(hosts), hosts)
+	}
+	if rep.AddressesOpen == nil || *rep.AddressesOpen != 1 {
+		t.Errorf("addresses_open %v, want 1", deref(rep.AddressesOpen))
+	}
+}
+
+func deref(p *int) any {
+	if p == nil {
+		return nil
+	}
+	return *p
+}

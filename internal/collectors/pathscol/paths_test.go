@@ -37,6 +37,9 @@ func TestFindsInterestingPaths(t *testing.T) {
 		Type: types.TypeURL,
 		Keys: map[string]string{"url": srv.URL + "/"},
 	}, func(o types.Observation) error {
+		if o.Kind == SweepKind {
+			return nil
+		}
 		var p struct {
 			URL    string `json:"url"`
 			Status int    `json:"status"`
@@ -68,6 +71,9 @@ func TestProbeUnderPrefix(t *testing.T) {
 		Type: types.TypeURL,
 		Keys: map[string]string{"url": srv.URL + "/app/sub"},
 	}, func(o types.Observation) error {
+		if o.Kind == SweepKind {
+			return nil
+		}
 		var p struct {
 			URL string `json:"url"`
 		}

@@ -5,7 +5,7 @@ Everything known about one URL, host or name: what found it, what it leads to, e
 ## Synopsis
 
 ```
-azhaq show -db FILE [-json] KEY
+azhaq show -db FILE [-json] [-run ID] KEY
 ```
 
 ## Examples
@@ -16,11 +16,16 @@ azhaq show -db app.db https://app.example.com/api/users
 
 # A host, as JSON
 azhaq show -db app.db -json app.example.com
+
+# A page an earlier run of the workspace saw (the run_id of its summary, or its first 4 characters)
+azhaq show -db app.db -run 3883752b https://app.example.com/
 ```
 
 ## What it does
 
 `azhaq show` looks up KEY in a workspace (`-db`, default the last run's) and prints the entity's row, its links and its observations. KEY is a URL, a host or a name.
+
+A workspace keeps every run, and `show` reads the newest. A KEY the newest run did not see is looked up in the earlier runs, newest first: the run it read is named on stderr and in `-json` (`run`). `-run ID` reads that run only, by the `run_id` of its summary (at least 4 characters); `azhaq query -db FILE -runs` lists them.
 
 ## Output
 
@@ -33,6 +38,7 @@ The text form prints the entity's row, its links and its observations.
 | `row` | The map row, with `found_in`. |
 | `links` | Each link: `rel`, `dir` (`in` or `out`), `type` and `key`. |
 | `observations` | Each observation: `collector`, `kind`, `source`, `observed_at` and `payload`. |
+| `run` | The `run_id` of the run read. |
 | `services` | For a hostname: its front pages, with `coverage`, `status`, `title` and the `error` of one that failed. |
 
 An `azhaq-js` observation's payload holds the `found_in` of the page it read.
@@ -86,4 +92,5 @@ Three kinds of word are tried, in this order:
 | --- | --- | --- | --- |
 | `-db` | string |  | the database (default: the last run's) |
 | `-json` | bool |  | one JSON object |
+| `-run` | string |  | the run to read, by the run_id of its summary (default: the newest run of the workspace that has it) |
 <!-- flags:end -->

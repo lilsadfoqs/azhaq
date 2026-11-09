@@ -44,7 +44,8 @@ Plain output is the matching rows of the map. `-json` prints one JSON object per
 | `-json` | Map rows as `run -json` prints them, with `found_in`. |
 | `-json -fields A,B` | Only the fields you ask for. |
 | `-failed` | Every failed target instead of map rows. See the table below. |
-| `-run ID` | With `-failed`: the run to read, by the `run_id` of its summary (or the start of it, at least 4 characters). The default is the newest run of the workspace. |
+| `-run ID` | The run to read, by the `run_id` of its summary (or the start of it, at least 4 characters): its rows, or with `-failed` its failed targets. The default is the newest run of the workspace. |
+| `-runs` | List the runs the workspace holds, newest first: the `run_id`, when it started, how many entities it saw and the requests it sent. With `-json`, one object for each. |
 
 `query -failed` reads the newest run of the workspace unless `-run ID` names another, and says which run it read in a note. A workspace is shared by every command that writes to it, so a later `probe` or `ports` is the newest run and leaves the earlier run's failures out of this list: when the run read has none and earlier runs of the workspace have, the note names them (`run ID has 1 failed target: azhaq query -db FILE -failed -run ID`). It prints one line for each failed target, sorted by target, once for each collector, source and error. A line is tab separated: the target, the collector (`COLLECTOR source NAME` for a source), the error, and the word `retryable` when a later try may work. With `-json` each row has these fields:
 
@@ -80,7 +81,8 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 | `-new` | bool |  | only what the last run saw that the run before it did not (a workspace) |
 | `-re` | bool |  | -match is a regular expression |
 | `-role` | string |  | roles, comma-separated: app, auth, forbidden, api, page, client-route, websocket, live, sibling, unresolved, dead, … |
-| `-run` | string |  | with -failed: the run to read, by the run_id of its summary (default: the newest run of the workspace) |
+| `-run` | string |  | the run to read, by the run_id of its summary (default: the newest run of the workspace) |
+| `-runs` | bool |  | list the runs the workspace holds, newest first, with the run_id each is read by |
 | `-scope` | string |  | target (what was asked about) or fanout (found on the way) |
 | `-since` | duration |  | only what was first seen within this long |
 | `-status` | string |  | statuses, comma-separated: 200, 401, 4xx, 5xx |

@@ -5,7 +5,7 @@ Compare two runs: the entities added and removed, what was there in both and cha
 ## Synopsis
 
 ```
-azhaq diff -a OLD.db -b NEW.db | -db WORKSPACE.db  [-json] [-quiet]
+azhaq diff -a OLD.db -b NEW.db | -db WORKSPACE.db [-run ID]  [-json] [-quiet]
 ```
 
 ## Examples
@@ -23,7 +23,7 @@ azhaq diff -db acme.db -json
 
 ## What it does
 
-1. Takes two runs: the last two recorded in a workspace (`-db`), or `-a` (old) and `-b` (new, default the last run).
+1. Takes two runs: the last two recorded in a workspace (`-db`; `-run ID` takes the run its `run_id` names and the run before it), or `-a` (old) and `-b` (new, default the last run).
 2. Lists the entities that were added and removed, what changed, and the new observations. `-quiet` prints entities, changes and counts only.
 3. Compares a web page's answer by its status and title.
 4. Compares a JSON listing's answer by its status, its title and how many items it holds (`json_items`). `watch` reports it as `/users/v1: [200] 5 items → [200] 6 items`.
@@ -83,6 +83,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 | `-b` | string |  | new sqlite (default: last run) |
 | `-json` | bool |  | JSON lines instead of a text report, the summary last |
 | `-quiet` | bool |  | entities and counts only (skip observation lines) |
+| `-run` | string |  | with -db: the run to compare with the run before it, by the run_id of its summary (default: the last) |
 
 <details>
 <summary>Other names (1)</summary>

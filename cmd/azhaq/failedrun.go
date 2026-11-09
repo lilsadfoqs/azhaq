@@ -30,7 +30,7 @@ func pickRun(runs []store.Run, want string) (store.Run, error) {
 	case 1:
 		return hit[0], nil
 	case 0:
-		return store.Run{}, usagef("-run %s: no such run in the workspace (a summary's run_id names one; azhaq query -db FILE -failed prints the newest run's id)", want)
+		return store.Run{}, usagef("-run %s: no such run in the workspace (a summary's run_id names one; azhaq query -db FILE -runs lists them)", want)
 	}
 	return store.Run{}, usagef("-run %s starts %d runs: give more of the id", want, len(hit))
 }
