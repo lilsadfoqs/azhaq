@@ -340,10 +340,9 @@ func TestResumeOfAStoppedSubsRunPrintsTheMapRowsAndKeepsTheSources(t *testing.T)
 // What a stopped -live run did not check is kept in the workspace: query
 // -role unresolved lists it (the guesses and the names the sources gave that
 // DNS was not asked about), every name listed is in the azhaq-subdomains
-// payload, and the guesses among them are in its guesses list: in its
-// unverified list too when no lookup reached them (the summary's not checked),
-// and not when the guess check saw them resolve and DNS had not recorded them
-// yet (its not asked). Whatever the timing, the two agree.
+// payload, and the guesses among them are in its guesses list, which is what
+// the summary's not checked counts. The guess check may have seen a guess
+// resolve before the stop: it is a guess no stored lookup answered all the same.
 func TestSubsStoppedRunKeepsTheUncheckedNamesInTheWorkspace(t *testing.T) {
 	_, rep, _ := stoppedSubsWorld(t)
 	st, err := store.OpenExisting("w.db")
@@ -354,10 +353,7 @@ func TestSubsStoppedRunKeepsTheUncheckedNamesInTheWorkspace(t *testing.T) {
 	runs, _ := st.Runs()
 	st.UseRun(runs[len(runs)-1].ID)
 	p := payloads(st, "azhaq-subdomains")[0]
-	unverified, guessList, names := map[string]bool{}, map[string]bool{}, map[string]bool{}
-	for _, n := range strs(p["unverified"]) {
-		unverified[n] = true
-	}
+	guessList, names := map[string]bool{}, map[string]bool{}
 	for _, n := range strs(p["guesses"]) {
 		guessList[n] = true
 	}
@@ -365,7 +361,7 @@ func TestSubsStoppedRunKeepsTheUncheckedNamesInTheWorkspace(t *testing.T) {
 		names[n] = true
 	}
 	out, _, _ := runContract(t, "query", "-db", "w.db", "-type", "Hostname", "-role", "unresolved")
-	listed, guesses, guessesAsked := 0, 0, 0
+	listed, guesses := 0, 0
 	for _, r := range jsonRows(t, out) {
 		listed++
 		key, _ := r["key"].(string)
@@ -373,19 +369,13 @@ func TestSubsStoppedRunKeepsTheUncheckedNamesInTheWorkspace(t *testing.T) {
 			t.Errorf("query lists %s as unresolved and the payload does not hold it", key)
 		}
 		if strings.HasPrefix(key, "g") {
+			guesses++
 			if !guessList[key] {
 				t.Errorf("the guess %s is unresolved and not in the payload's guesses list", key)
 			}
-			if unverified[key] {
-				guesses++
-			} else {
-				guessesAsked++
-			}
 		}
 	}
-	// Not checked is the unverified names no lookup answered; the guesses
-	// among them are the payload's unverified guesses, none more or less.
-	if left := rep.Counts["not checked"] + rep.Counts["not asked"]; listed == 0 || listed != left || guesses != rep.Counts["not checked"] || guessesAsked > rep.Counts["not asked"] {
-		t.Errorf("query lists %d names (%d unverified guesses, %d resolved ones), the run left %d (counts %v)", listed, guesses, guessesAsked, left, rep.Counts)
+	if left := rep.Counts["not checked"] + rep.Counts["not asked"]; listed == 0 || listed != left || guesses != rep.Counts["not checked"] {
+		t.Errorf("query lists %d names (%d guesses), the run left %d (counts %v)", listed, guesses, left, rep.Counts)
 	}
 }

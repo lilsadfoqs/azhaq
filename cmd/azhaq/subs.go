@@ -386,7 +386,9 @@ func cmdSubs(args []string) error {
 				continue
 			case alive != nil && alive[name] == nil && dangling[name] == nil:
 				switch ans := answers[name]; {
-				case unver[name] && (ans == nil || ans["degraded"] == true):
+				case (unver[name] || guess[name]) && (ans == nil || ans["degraded"] == true):
+					// A guess is checked only by a lookup stored in the run: one the guess
+					// check saw resolve, that the run stopped before recording, is not.
 					notChecked++
 				case ans == nil:
 					notAsked++ // the run stopped before its answer came
