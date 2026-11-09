@@ -79,7 +79,7 @@ func TestSweepWordThatEndsTheSessionIsNoticed(t *testing.T) {
 	}
 	words = append(words[:6], append([]string{"logout"}, words[6:]...)...)
 	args := func(extra ...string) []string {
-		return append([]string{"run", "-url", "", "-dirs", wlist(t, words...), "-dirs-ac=false", "-json", "-no-paths", "-no-tech", "-no-favicon", "-depth", "0", "-ledger", "off", "-db", filepath.Join(t.TempDir(), "d.db")}, extra...)
+		return append([]string{"run", "-url", "", "-dirs", wlist(t, words...), "-dirs-ac=false", "-send-state-changing", "-json", "-no-paths", "-no-tech", "-no-favicon", "-depth", "0", "-ledger", "off", "-db", filepath.Join(t.TempDir(), "d.db")}, extra...)
 	}
 	site := newSessionSite(t)
 	a := args("-login", site.URL+"/login", "-login-user", "u", "-login-pass", "p")

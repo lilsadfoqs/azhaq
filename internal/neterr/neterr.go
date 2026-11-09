@@ -46,7 +46,7 @@ func HeldWord(rule string) (string, bool) {
 
 // HeldReason is how a held GET is named in a list of what was not requested.
 func HeldReason(word string) string {
-	return fmt.Sprintf("a GET found on the way whose own name declares a state change (the word %q); %s sends it", word, SendFlag)
+	return fmt.Sprintf("a GET whose own name declares a state change (the word %q); %s sends it", word, SendFlag)
 }
 
 func (e *Denied) Is(target error) bool { return target == ErrDenied }

@@ -240,8 +240,8 @@ func TestGivenStateChangingTargetIsSent(t *testing.T) {
 }
 
 // The built-in -dirs list holds back its state-changing words (and their
-// extensions) and says how many; a wordlist the user gives is asked in full.
-func TestDirsBuiltinHoldsStateChangingWordsAndUserListDoesNot(t *testing.T) {
+// extensions) and says how many; so does a wordlist the user gives.
+func TestDirsHoldsStateChangingWordsOfTheBuiltinListAndOfYours(t *testing.T) {
 	app := newStateApp(t)
 	egress.Reset()
 	t.Cleanup(egress.Reset)
@@ -268,8 +268,8 @@ func TestDirsBuiltinHoldsStateChangingWordsAndUserListDoesNot(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("%v\n%s", err, errOut)
 	}
-	if app2.count("GET /logout") == 0 || app2.count("GET /reset") == 0 {
-		t.Errorf("a wordlist of the user's was held back: %v", app2.asked())
+	if app2.count("GET /logout") != 0 || app2.count("GET /reset") != 0 || app2.count("GET /users") != 1 {
+		t.Errorf("a wordlist of the user's was not held back like the built-in one: %v", app2.asked())
 	}
 	app3 := newStateApp(t)
 	egress.Reset()
@@ -362,23 +362,33 @@ func TestMCPHeldStateChangingFlag(t *testing.T) {
 	}
 }
 
-// A path list the user gives with -paths is asked in full, /logout included.
-func TestUserPathListIsAsked(t *testing.T) {
-	app := newStateApp(t)
+// A path list the user gives with -paths holds its words that name an action
+// like any other GET, and -send-state-changing asks it.
+func TestUserPathListHoldsAnActionWord(t *testing.T) {
 	list := filepath.Join(t.TempDir(), "paths.txt")
-	if err := os.WriteFile(list, []byte("logout\n"), 0o644); err != nil {
+	if err := os.WriteFile(list, []byte("logout\nstatus\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	runState(t, app, "-paths", list, "-depth", "0")
-	if app.count("GET /logout") == 0 {
-		t.Errorf("a path of the user's own list was held back: %v", app.asked())
+	app := newStateApp(t)
+	rep, _ := runState(t, app, "-paths", list, "-depth", "0")
+	if app.count("GET /logout") != 0 || app.count("GET /status") == 0 {
+		t.Errorf("a path of the user's own list: %v", app.asked())
+	}
+	if rep.StateChangingHeld != 1 {
+		t.Errorf("state_changing_held = %d, want 1", rep.StateChangingHeld)
+	}
+	app2 := newStateApp(t)
+	runState(t, app2, "-paths", list, "-depth", "0", "-send-state-changing")
+	if app2.count("GET /logout") == 0 {
+		t.Errorf("-send-state-changing did not send the path: %v", app2.asked())
 	}
 }
 
 // Through the MCP server, azhaq_map and azhaq_dirs do not send a GET found
 // on the way whose own path or operation declares a state change; it is
-// listed as held back. A server started with -send-state-changing sends it,
-// and a words list the client gives is asked in full.
+// listed as held back, and holds back the words of the built-in list and of
+// a list the client gives alike. A server started with -send-state-changing
+// sends them.
 func TestMCPDoesNotSendTheGETsItHoldsBack(t *testing.T) {
 	app := newStateApp(t)
 	s := realMCPServer(t, []string{"-allow", "127.0.0.1"}, heldRun{}, 100000)
@@ -413,8 +423,8 @@ func TestMCPDoesNotSendTheGETsItHoldsBack(t *testing.T) {
 	if text, isErr = callText(t, s, "azhaq_dirs", map[string]any{"targets": []any{own.srv.URL + "/"}, "words": []any{"logout", "reset"}}); isErr {
 		t.Fatalf("azhaq_dirs with words: %s", text)
 	}
-	if own.count("GET /logout") == 0 || own.count("GET /reset") == 0 {
-		t.Errorf("azhaq_dirs held back the client's own words: %v", own.asked())
+	if own.count("GET /logout") != 0 || own.count("GET /reset") != 0 || !strings.Contains(text, "-send-state-changing") {
+		t.Errorf("azhaq_dirs sent the client's own words that declare a state change, or did not list them as held: %v\n%s", own.asked(), text)
 	}
 
 	open := newStateApp(t)
@@ -426,6 +436,13 @@ func TestMCPDoesNotSendTheGETsItHoldsBack(t *testing.T) {
 		if open.count("GET "+p) == 0 {
 			t.Errorf("a server started with -send-state-changing did not send GET %s: %v", p, open.asked())
 		}
+	}
+	sentOwn := newStateApp(t)
+	if text, isErr = callText(t, sends, "azhaq_dirs", map[string]any{"targets": []any{sentOwn.srv.URL + "/"}, "words": []any{"logout", "reset"}}); isErr {
+		t.Fatalf("azhaq_dirs with words, -send-state-changing: %s", text)
+	}
+	if sentOwn.count("GET /logout") == 0 || sentOwn.count("GET /reset") == 0 {
+		t.Errorf("a server started with -send-state-changing did not send the client's words: %v", sentOwn.asked())
 	}
 }
 
@@ -441,6 +458,9 @@ func TestMCPToolDescriptionsSayWhatIsHeldBack(t *testing.T) {
 		if !strings.Contains(d, "held back") || !strings.Contains(d, "-send-state-changing") {
 			t.Errorf("%s does not say a state-changing GET is held back and what sends it: %s", name, d)
 		}
+	}
+	if d := byName["azhaq_dirs"]; !strings.Contains(d, "one of the words you give") || strings.Contains(d, "asked in full") {
+		t.Errorf("azhaq_dirs does not say the client's words are held too: %s", d)
 	}
 	if d := byName["azhaq_map"]; strings.Contains(d, "Only the -deny-path rules") {
 		t.Errorf("azhaq_map says only -deny-path keeps a URL out: %s", d)

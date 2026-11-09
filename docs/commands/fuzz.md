@@ -180,6 +180,11 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
   - `-u https://10.0.0.5/ -H 'Host: app.example.com'` and `-H 'Host: FUZZ.example.com'` run as in ffuf. With `-allow 10.0.0.5`, a word that names another host is counted and not sent.
   - A `Host` from a `-request` file is not typed by you. One that differs from `-u` is refused unless `-allow` names it.
 
+### State-changing words
+- One difference from ffuf: a GET or HEAD whose own path or query names a state change (`/logout`, `/delete`, `/reset`, `?action=stop`: [the words](run.md#state-changing-requests)) because of a word of a wordlist is held back, not sent. A note before the first request says how many words of each list are held, each held input is listed under `skipped` and as a row of `state_changing` with the status `held back`, and the summary counts them in `state_changing_held`. `-send-state-changing` sends every input, as ffuf does.
+- The URL you type is yours: when it names a state change by itself (`-u https://h/logout?x=FUZZ`), no word is held. A write (`-X POST`, `-d`) is not held: it is a request you asked for by its method.
+- With several lists the note counts the words of each list tried alone in the URL; the summary counts every input held. A line that starts with `#` is a word, unless `-ic` is given.
+
 ### Scope, budget and pace
 - The host in `-u` is the scope unless `-allow`, `-deny` or `-scope` say otherwise. When the keyword starts the host, as in `FUZZ.example.com`, the scope is its domain.
 - A request to a host outside the scope is not sent, and the summary counts it.
@@ -257,6 +262,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 | `-allow` | string, repeatable |  | a domain, host or address range the run may touch; HOST:PORT allows that host on that port only (repeatable); default: the host of -u |
 | `-deny` | string, repeatable |  | a domain, host or address range the run must not touch |
 | `-deny-path` | string, repeatable |  | a regular expression on a URL's path and query: an input whose URL it matches is never sent, and is listed as not requested |
+| `-send-state-changing` | bool |  | send the GETs and HEADs whose own path or query names a state change (create, delete, reset, logout, ... or ?action=stop) because of a word of a wordlist; by default each is held back, listed as skipped, as the other commands do (ffuf sends every word) |
 | `-kill-file` | string |  | stop all sending when this file exists, so that no request starts after it, and exit 4; azhaq resume works once it is removed (default DB.stop) |
 | `-ledger` | string |  | write every request, connection and DNS query the run sends (to targets, third-party sources and resolvers) to this file, a chain of hashes that azhaq ledger -verify checks (default DB.ledger.jsonl next to the workspace; off: none; with a temporary database, only when given) |
 | `-seal-to` | string |  | when the run ends, append the ledger's seal as one JSON line ({"time","ledger","seal","entries"}) to this file, or POST it to this URL: kept where the run's own files are not, so azhaq ledger -verify -seal can tell the ledger from one with lines removed and the rest re-chained to look intact |

@@ -43,7 +43,7 @@ var helpSpecs = map[string]helpSpec{
 			"accepted": `port-cdn-full`,
 			"rare": `
 				ob
-				port-exclude-cdn serve worker-token dirs-ac dirs-depth dirs-ext dirs-fc dirs-fl dirs-fr dirs-fs dirs-fw dirs-mc dirs-ml dirs-mr dirs-ms
+				port-exclude-cdn serve worker-token dirs-ac dirs-depth dirs-ext dirs-ic dirs-fc dirs-fl dirs-fr dirs-fs dirs-fw dirs-mc dirs-ml dirs-mr dirs-ms
 				dirs-mw dirs-rate dirs-threads facts obs params-chunk params-delay params-include params-method
 				params-all params-per-host params-rate params-stable params-targets params-threads params-timeout
 				port-all-ips port-detect port-discover port-ip port-min-rate port-order port-payload port-proxy
@@ -225,7 +225,7 @@ var helpSpecs = map[string]helpSpec{
 	"dirs": {
 		groups: []helpGroup{
 			{"Targets and input", `u l scope program`},
-			{"What to ask", `w e depth ac`},
+			{"What to ask", `w ic e depth ac`},
 			{"Matchers and filters", `mc fc fs`},
 			{"Scope and safety", `allow deny deny-path send-state-changing kill-file ledger`},
 			{"Pace and limits", `rate t max-requests timeout`},
@@ -246,7 +246,7 @@ var helpSpecs = map[string]helpSpec{
 			{"Matchers and filters", `mc mr fc fs fl fw ac`},
 			{"The request", `X d H r request request-proto`},
 			{"Before and after each request", `preflight preflight-mode preflight-error preflight-var preflight-var-auto postflight postflight-var postflight-var-auto`},
-			{"Scope and safety", `allow deny deny-path kill-file ledger seal-to`},
+			{"Scope and safety", `allow deny deny-path send-state-changing kill-file ledger seal-to`},
 			{"Pace and limits", `rate t p timeout maxtime max-requests se-after control`},
 			{"Session and network", `x proxy replay-proxy`},
 			{"Output", `db json o of silent quiet v c strict-exit`},

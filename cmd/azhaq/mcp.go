@@ -185,7 +185,7 @@ func (h heldRun) view() map[string]any {
 		"no_takeover":         h.NoTakeover,
 		"history":             h.History,
 		"allow_writes":        h.AllowWrites,
-		"state_changing_gets": map[bool]string{false: "held back: a GET found on the way whose own path or API operation declares a state change is listed as skipped, not sent (-send-state-changing at start sends them)", true: "sent (-send-state-changing)"}[h.SendStateChanging],
+		"state_changing_gets": map[bool]string{false: "held back: a GET whose own path, query or API operation declares a state change (found on the way, or a word of a wordlist) is listed as skipped, not sent (-send-state-changing at start sends them)", true: "sent (-send-state-changing)"}[h.SendStateChanging],
 		"chrome":              map[bool]string{false: "needs its sandbox: where the system gives none, Chrome does not start (-chrome-no-sandbox at start allows it)", true: "may run without its sandbox (-chrome-no-sandbox)"}[h.ChromeNoSandbox],
 	}
 }
@@ -238,7 +238,7 @@ func cmdMCP(args []string) error {
 	skip := fs.String("skip", "", "collectors no tool runs, comma-separated (azhaq plan lists them): fixed at start")
 	noTakeover := fs.Bool("no-takeover", false, "no tool checks CNAMEs for a takeover: fixed at start")
 	chromeNoSandbox := fs.Bool("chrome-no-sandbox", false, "let Chrome run without its sandbox where the system gives it none (the tools that load pages in Chrome, such as azhaq_map with browser, and sign in with it): fixed at start. The pages are the targets' and untrusted: use a throwaway environment. By default Chrome does not start then")
-	sendState := fs.Bool("send-state-changing", false, "let the tools send the GETs they find on the way whose own path or API operation declares a state change (create, delete, reset, logout, ...): without it they are held back and listed as skipped; fixed at start, no tool argument sets it")
+	sendState := fs.Bool("send-state-changing", false, "let the tools send the GETs they find on the way whose own path, query or API operation declares a state change (create, delete, reset, logout, action=stop, ...): without it they are held back and listed as skipped; fixed at start, no tool argument sets it")
 	unlocked := fs.Bool("unlocked", false, "serve without a scope: any target a tool is given may be touched (port scans stay refused)")
 	if err := parse(fs, args); err != nil {
 		return err
@@ -1705,7 +1705,7 @@ var mcpRunFlags = map[string]bool{
 	"resolvers": true, "sources": true, "no-takeover": true, "chrome-no-sandbox": true, "no-history": true,
 	// The runs azhaq_dirs, azhaq_params and azhaq_dns_brute start, for a
 	// workspace a resume continues.
-	"dirs": true, "dirs-ext": true, "dirs-depth": true, "dirs-threads": true, "dirs-rate": true,
+	"dirs": true, "dirs-ext": true, "dirs-ic": true, "dirs-depth": true, "dirs-threads": true, "dirs-rate": true,
 	"params": true, "params-method": true, "params-writes": true, "params-include": true, "params-per-host": true,
 	"params-threads": true, "params-rate": true, "params-chunk": true, "params-timeout": true,
 	"dns-brute": true, "ports-udp": true, "no-tech": true, "send-state-changing": true,

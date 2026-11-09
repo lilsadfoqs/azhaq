@@ -4,9 +4,11 @@
 // for that operation.
 //
 // The match is a whole word of the documented set below, never a
-// substring. Only what names the request counts: its path segments (not
-// its query), and, for an operation of an API description, its
-// operationId and summary. Prose about the application or the service
+// substring. Only what names the request counts: its path segments, the
+// query parameters that name an action (ActionParams) with a value that
+// is a verb (Verbs and ActionVerbs), and, for an operation of an API
+// description, its operationId and summary. Other query parameters are not
+// read: ?q=delete searches for a word. Prose about the application or the service
 // (an info description, an operation's long description) is never read:
 // "the app was created" says nothing about the request.
 //
@@ -33,18 +35,45 @@ var Verbs = []string{
 	"purge", "destroy", "erase", "seed",
 }
 
-var verbSet = func() map[string]bool {
-	m := make(map[string]bool, len(Verbs))
-	for _, v := range Verbs {
+// ActionParams are the names of the query parameters that name an action,
+// as a whole word of the parameter's name (action, and so ajax_action).
+var ActionParams = []string{"action", "act", "cmd", "command", "op", "operation", "do", "task"}
+
+// ActionVerbs are the words a value of an action parameter declares besides
+// Verbs: what a process or service control page says in its links
+// (?action=stop). They are read in a query's value only, never in a path.
+var ActionVerbs = []string{
+	"stop", "start", "restart", "kill", "shutdown", "reboot", "halt",
+	"terminate", "flush", "disable", "enable",
+}
+
+var verbSet = setOf(Verbs)
+
+// actionSet is what an action parameter's value may name.
+var actionSet = func() map[string]bool {
+	m := setOf(Verbs)
+	for _, v := range ActionVerbs {
 		m[v] = true
 	}
 	return m
 }()
 
+var paramSet = setOf(ActionParams)
+
+func setOf(words []string) map[string]bool {
+	m := make(map[string]bool, len(words))
+	for _, v := range words {
+		m[v] = true
+	}
+	return m
+}
+
 // Word returns the verb a text declares, or "" when none of its words
 // is in the set. The first matching word, in the order the texts are
 // given, is returned in its base form ("logout" for "logs out").
-func Word(texts ...string) string {
+func Word(texts ...string) string { return wordIn(verbSet, texts...) }
+
+func wordIn(set map[string]bool, texts ...string) string {
 	for _, text := range texts {
 		words := tokens(text)
 		for i, w := range words {
@@ -53,7 +82,7 @@ func Word(texts ...string) string {
 					return "logout"
 				}
 			}
-			if v := stem(w); v != "" {
+			if v := stem(w, set); v != "" {
 				return v
 			}
 		}
@@ -70,8 +99,8 @@ func Declares(texts ...string) (string, bool) {
 
 // stem is w in its base form when w is a form of one of the verbs:
 // creates, created and creating are create; populated is populate.
-func stem(w string) string {
-	if verbSet[w] {
+func stem(w string, set map[string]bool) string {
+	if set[w] {
 		return w
 	}
 	for _, cand := range []string{
@@ -81,10 +110,10 @@ func stem(w string) string {
 		trimSuffix2(w, "d"),
 		trimSuffix2(w, "ing"),
 	} {
-		if cand != w && verbSet[cand] {
+		if cand != w && set[cand] {
 			return cand
 		}
-		if cand != w && verbSet[cand+"e"] {
+		if cand != w && set[cand+"e"] {
 			return cand + "e"
 		}
 	}
@@ -138,13 +167,66 @@ func OfPath(path string) string {
 	return Word(path)
 }
 
-// OfURL is OfPath of a URL's path ("" for a URL that does not parse).
-func OfURL(raw string) string {
+// OfQuery is the verb a raw query string declares, or "": a parameter whose
+// name has one of ActionParams as a word and whose value has a word of Verbs
+// or ActionVerbs (?action=stop, ?cmd=delete_user, ?do=restart). A parameter
+// of any other name says nothing, whatever its value.
+func OfQuery(rawQuery string) string {
+	for _, pair := range strings.Split(rawQuery, "&") {
+		name, value, _ := strings.Cut(pair, "=")
+		if name, err := url.QueryUnescape(name); err == nil && namesAction(name) {
+			if v, err := url.QueryUnescape(value); err == nil {
+				if w := wordIn(actionSet, v); w != "" {
+					return w
+				}
+			}
+		}
+	}
+	return ""
+}
+
+func namesAction(name string) bool {
+	for _, w := range tokens(name) {
+		if paramSet[w] {
+			return true
+		}
+	}
+	return false
+}
+
+// OfTarget is the verb a request target (a path with its query, as a
+// wordlist word asks it) declares, and where: "path" or "query".
+func OfTarget(target string) (word, where string) {
+	pathPart, query, _ := strings.Cut(target, "?")
+	if w := OfPath(pathPart); w != "" {
+		return w, "path"
+	}
+	if w := OfQuery(query); w != "" {
+		return w, "query"
+	}
+	return "", ""
+}
+
+// Of is the verb a URL declares and where ("path" or "query"), or "".
+func Of(raw string) (word, where string) {
 	u, err := url.Parse(raw)
 	if err != nil {
-		return ""
+		return "", ""
 	}
-	return OfPath(u.Path)
+	if w := OfPath(u.Path); w != "" {
+		return w, "path"
+	}
+	if w := OfQuery(u.RawQuery); w != "" {
+		return w, "query"
+	}
+	return "", ""
+}
+
+// OfURL is the verb a URL's path or query declares ("" for a URL that does
+// not parse).
+func OfURL(raw string) string {
+	w, _ := Of(raw)
+	return w
 }
 
 // OfOperation is the verb an API description's operation declares, and

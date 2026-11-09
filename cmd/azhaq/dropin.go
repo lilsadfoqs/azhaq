@@ -605,7 +605,7 @@ func cmdURLs(args []string) error {
 	liveRate := fs.Float64("live-rate", 10, "with -live, requests a second to the live site")
 	liveProxy := fs.String("live-proxy", "", "with -live, send the requests through this proxy (http://, https:// or socks5://; default: $HTTP_PROXY, $HTTPS_PROXY, except for loopback targets)")
 	liveMax := fs.Int("live-max", 0, "with -live, check at most N URLs, spread evenly over the sorted list; the rest are listed unchecked and counted (0: every URL)")
-	sendState := fs.Bool("send-state-changing", false, "with -live, also ask the URLs whose own path declares a state change (create, delete, reset, logout, ...); by default an archived /logout is not asked, and is counted as not asked (state-changing)")
+	sendState := fs.Bool("send-state-changing", false, "with -live, also ask the URLs whose own path or query declares a state change (create, delete, reset, logout, ...); by default an archived /logout is not asked, and is counted as not asked (state-changing)")
 	given := inherit(fs, "provider-config=providers", "keep-junk=urls-keep-junk", "mc=urls-mc", "fc=urls-fc", "mt=urls-mt", "ft=urls-ft", "from=urls-from", "to=urls-to",
 		"blacklist=urls-blacklist", "fp=urls-fp", "retries=urls-retries", "urls-pages", "urls-pause", "proxy=urls-proxy", "urls-max",
 		"archive=urls-archive", "raw=urls-raw", "urls-timeout", "timeout", "v", "fail-on-errors")
@@ -813,7 +813,7 @@ func cmdDirs(args []string) error {
 	fs.Var(&urls, "u", "web service, such as https://app.example.com/ (repeatable)")
 	list := onceString(fs, "l", "file of services (- for stdin)")
 	words := fs.String("w", "", "wordlist (default: SecLists' common.txt, built in: "+strconv.Itoa(dirscol.WordCount())+" words)")
-	specs := []string{"ac=dirs-ac", "e=dirs-ext", "depth=dirs-depth", "t=dirs-threads", "rate=dirs-rate",
+	specs := []string{"ac=dirs-ac", "e=dirs-ext", "ic=dirs-ic", "depth=dirs-depth", "t=dirs-threads", "rate=dirs-rate",
 		"H=header", "cookie", "max-requests", "timeout", "v", "scope", "program", "allow", "deny", "deny-path", "ledger", "kill-file", "proxy", "resolvers", "send-state-changing"}
 	for _, m := range dirsMatchers {
 		specs = append(specs, m.flag+"=dirs-"+m.flag)

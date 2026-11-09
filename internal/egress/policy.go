@@ -370,14 +370,16 @@ func DenyReason(rule string) string {
 
 // IsHeldReason says a reason from DenyReason names a held GET, not a rule.
 func IsHeldReason(reason string) bool {
-	return strings.HasPrefix(reason, "a GET found on the way whose own name declares a state change")
+	// The older wording is read too: a workspace kept it in its skipped list.
+	return strings.HasPrefix(reason, "a GET whose own name declares a state change") ||
+		strings.HasPrefix(reason, "a GET found on the way whose own name declares a state change")
 }
 
 type askedKey struct{}
 
-// WithAsked marks ctx: the requests made with it are ones the user asked for
-// by name (a word of their own wordlist), so none is held back for what its
-// own name declares.
+// WithAsked marks ctx: the caller has already decided which of the requests
+// made with it are held back for what their own name declares (a wordlist
+// sweep lists its held words), so the transport does not hold them again.
 func WithAsked(ctx context.Context) context.Context {
 	return context.WithValue(ctx, askedKey{}, true)
 }

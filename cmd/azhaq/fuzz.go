@@ -116,6 +116,7 @@ func cmdFuzz(args []string) error {
 	fs.Var(&allow, "allow", "a domain, host or address range the run may touch; HOST:PORT allows that host on that port only (repeatable); default: the host of -u")
 	fs.Var(&deny, "deny", "a domain, host or address range the run must not touch (repeatable)")
 	fs.Var(&denyPath, "deny-path", "a regular expression on a URL's path and query: an input whose URL it matches is never sent, and is listed as not requested (repeatable)")
+	sendState := fs.Bool("send-state-changing", false, "send the GETs and HEADs whose own path or query names a state change (create, delete, reset, logout, ... or ?action=stop) because of a word of a wordlist; by default each is held back, listed as skipped, as the other commands do (ffuf sends every word)")
 	flights := &flightFlags{}
 	fs.Var(flightFile{flights, false}, "preflight", "a raw request file sent before each fuzzing request (repeatable, in order); it carries -H and -b of the command, and is held to the scope, budget and pace")
 	fs.Var(flightVar{flights, false, false}, "preflight-var", "a value read from the answer of the -preflight before it: NAME:regexp (the first group; the body, then the headers); NAME in later requests stands for it (repeatable)")
@@ -390,6 +391,15 @@ func cmdFuzz(args []string) error {
 		StopOn403: *sf || *sa, StopOnAll: *sa, Allow: rules.Allows, AllowAddr: rules.AllowsAddr, DenyPath: rules.DeniedPath, OpenHeaders: openHeaders, OriginTrips: trips, TripOnAnyError: anyErr, Start: *start,
 		Progress: new(fuzz.Progress),
 	}
+	var holdNotes []string
+	if !*sendState {
+		cfg.Hold, holdNotes = fuzzHold(tmpl, kept, md)
+		for _, n := range holdNotes {
+			if !c.json && !c.silent {
+				fmt.Fprintf(os.Stderr, "azhaq: %s\n", n)
+			}
+		}
+	}
 	cfg.Skip, cfg.SkipTotal = takeFuzzSkip(tmpl)
 	if *replayProxy != "" {
 		cfg.Replay = sender.(fuzz.Replayer)
@@ -585,6 +595,10 @@ func cmdFuzz(args []string) error {
 	for _, rule := range slices.Sorted(maps.Keys(st.Denied)) {
 		rep.Skipped = append(rep.Skipped, engine.Skip{Target: fmt.Sprintf("%d inputs, the first %s", st.Denied[rule], st.DeniedURL[rule]), Reason: egress.DenyReason(rule)})
 	}
+	if len(st.StateHeld) > 0 {
+		heldFuzzRows(rep, st.StateHeld)
+	}
+	rep.Notes = append(rep.Notes, holdNotes...)
 	if len(st.Filters) > 0 {
 		rep.Notes = append(rep.Notes, "auto-calibration filtered out answers with "+strings.Join(st.Filters, ", "))
 	}

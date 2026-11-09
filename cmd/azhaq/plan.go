@@ -399,7 +399,7 @@ func planFor(cat *catalog.Catalog, seeds []types.Seed, b engine.Budgets, paths [
 	if send.sendState {
 		p.Sends = append(p.Sends, "azhaq cannot know what a GET does on the server: every URL found in scope is requested, those whose own name declares a state change too (-send-state-changing), and writes (POST, PUT, PATCH, DELETE) only with their flags")
 	} else {
-		p.Sends = append(p.Sends, "azhaq cannot know what a GET does on the server: every URL found in scope is requested, except a GET found on the way whose own path or API operation declares a state change (create, delete, reset, logout, ...): it is held back and listed as skipped ("+neterr.SendFlag+" sends it), and writes (POST, PUT, PATCH, DELETE) only with their flags")
+		p.Sends = append(p.Sends, "azhaq cannot know what a GET does on the server: every URL found in scope is requested, except a GET whose own path, query or API operation declares a state change (create, delete, reset, logout, action=stop, ...), found on the way or a word of a wordlist you give: it is held back and listed as skipped ("+neterr.SendFlag+" sends it), and writes (POST, PUT, PATCH, DELETE) only with their flags")
 	}
 	for _, rule := range b.Scope.DenyPath {
 		p.Sends = append(p.Sends, "never requested, by any collector or Chrome: a URL whose path or query matches -deny-path "+rule)
@@ -432,7 +432,7 @@ func planGuesses(paths []string, send sendLimits) []string {
 	if send.dirs {
 		line := fmt.Sprintf("-dirs: %s on each web service (every word, and each of %s)", plural(send.dirsWords*(1+send.dirsExts)-send.dirsHeld, "request"), plural(send.dirsExts, "extension"))
 		if send.dirsHeld > 0 {
-			line += fmt.Sprintf("; %d more of the built-in list name a state change and are held back (%s sends them)", send.dirsHeld, neterr.SendFlag)
+			line += fmt.Sprintf("; %d more of the wordlist name a state change and are held back (%s sends them)", send.dirsHeld, neterr.SendFlag)
 		}
 		out = append(out, line)
 	}

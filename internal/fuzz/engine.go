@@ -75,6 +75,10 @@ type Config struct {
 	// DenyPath, when set, returns the user's -deny-path rule a request's
 	// URL matches, or "": that request is not sent.
 	DenyPath func(raw string) string
+	// Hold, when set, returns the word that makes a GET or HEAD of this URL
+	// a state change by its own name, or "": that input is not sent, and
+	// Stats.StateHeld lists it.
+	Hold func(raw string) string
 	// OriginTrips unanswered requests in a row stop the run: the target is
 	// down. Zero: never. With TripOnAnyError every error counts, not only a
 	// missing answer (-se).
@@ -146,6 +150,7 @@ type Stats struct {
 	OutOfScope  int               // inputs not sent for their host
 	Denied      map[string]int    // inputs not sent for a -deny-path rule, by rule
 	DeniedURL   map[string]string // the first URL each rule kept out
+	StateHeld   []HeldInput       // inputs not sent: a GET whose own name declares a state change
 	Jobs        int               // the start and each directory recursion followed
 	Spent       bool              // the request budget ran out
 	Down        []string          // origins that stopped answering
@@ -168,6 +173,13 @@ type Stats struct {
 	// answers came in.
 	Asked Spans
 	Total int
+}
+
+// HeldInput is an input Config.Hold kept from being sent.
+type HeldInput struct {
+	URL      string
+	Word     string // the state-changing word its name declares
+	Position int    // its place in its job's inputs, from 1
 }
 
 type job struct {
@@ -491,7 +503,7 @@ func (e *engine) task(ctx context.Context, j job, tmpl Template, input map[strin
 		e.count(func(s *Stats) { s.OutOfScope++ })
 		return true
 	}
-	if e.denied(&req) {
+	if e.denied(&req) || e.held(&req) {
 		return true
 	}
 	resp, err := e.send(ctx, &req)
@@ -929,6 +941,21 @@ func (e *engine) denied(req *Request) bool {
 			s.DeniedURL[rule] = req.URL
 		}
 	})
+	return true
+}
+
+// held says whether req is a GET or HEAD whose own name declares a state
+// change (Config.Hold), and lists it.
+func (e *engine) held(req *Request) bool {
+	if e.cfg.Hold == nil || req.Method != "" && req.Method != "GET" && req.Method != "HEAD" {
+		return false
+	}
+	word := e.cfg.Hold(req.URL)
+	if word == "" {
+		return false
+	}
+	h := HeldInput{URL: req.URL, Word: word, Position: req.Position}
+	e.count(func(s *Stats) { s.StateHeld = append(s.StateHeld, h) })
 	return true
 }
 

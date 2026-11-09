@@ -337,7 +337,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	noMapGuess := fs.Bool("no-map-guess", false, "do not ask for main.js.map next to a script that names no source map (a map a script or a header names is still read)")
 	fillForms := fs.Bool("fill-forms", false, "ask the action of each GET form with neutral values in its fields (a search box gets a word): one GET request per form, unless the action's own path declares a state change (it is held back, and -send-state-changing sends it); -deny-path keeps its action out; a form that posts is not sent unless -submit-forms; crawl does this by default (-no-form-fill turns it off)")
 	pathClimb := fs.Bool("path-climb", false, "also list and ask the parent directories of each link a page names (/a/b/c: /a/b/ and /a/)")
-	sendState := fs.Bool("send-state-changing", false, "send the GETs found on the way whose own path or API operation declares a state change (create, delete, reset, logout, and the other words of the documented set): a crawl's link, a script's route, an API description's operation, a built-in -dirs word. By default they are held back and listed as skipped; a target you give, a wordlist you give and -deny-path rules are not affected")
+	sendState := fs.Bool("send-state-changing", false, "send the GETs whose own path or query declares a state change (create, delete, reset, logout, and the other words of the documented set; a query's action=stop and the like): a crawl's link, a script's route, an API description's operation, a word of a -dirs or -paths wordlist (ffuf sends every word). By default they are held back and listed as skipped; a target you give and -deny-path rules are not affected")
 	submitForms := fs.Bool("submit-forms", false, "also submit POST forms with neutral values (crawl): CHANGES DATA on the target, each submission counts as a request and is in the ledger, the summary says how many; held to -allow, -deny and the crawl's scope")
 	sourcesList := fs.String("sources", "", "subdomain sources to run, comma-separated (default: the default set; none: no source, and no archive, RDAP, search engine or RIPEstat lookup either: only the resolvers and the targets are asked)")
 	excludeSources := fs.String("exclude-sources", "", "subdomain sources never to run, comma-separated")
@@ -382,6 +382,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	fs.Var(&portsOn, "ports-on", "scan only these ports on a host: HOST=22,80 (repeatable)")
 	dirsFile := fs.String("dirs", "", "guess paths on each web service from this wordlist, or @common for the built-in one (active; the targets given are the scope unless -allow)")
 	dirsExt := fs.String("dirs-ext", "", "also try each word with these extensions, comma-separated (php,bak)")
+	dirsIC := fs.Bool("dirs-ic", false, "ignore the lines of the wordlist that start with # (and a trailing ' # note'), as ffuf's -ic does; without it they are asked like any word")
 	dirsDepth := fs.Int("dirs-depth", 1, "directory levels to sweep; 2 also sweeps directories found")
 	dirsThreads := fs.Int("dirs-threads", 40, "path guesses in flight per service (as ffuf)")
 	dirsRate := fs.Float64("dirs-rate", 0, "path guesses per second per host (0: no limit but -dirs-threads, as ffuf)")
@@ -1021,11 +1022,11 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 			words = dirscol.DefaultWords()
 		} else {
 			var err error
-			if words, err = loadWordlist(*dirsFile); err != nil {
+			if words, err = loadWordlist(*dirsFile, *dirsIC); err != nil {
 				return err
 			}
 		}
-		opts.Dirs = dirscol.Options{Words: words, Extensions: splitList(*dirsExt), Depth: *dirsDepth, Threads: *dirsThreads, Rate: *dirsRate, UserWords: *dirsFile != dirscol.Builtin}
+		opts.Dirs = dirscol.Options{Words: words, Extensions: splitList(*dirsExt), Depth: *dirsDepth, Threads: *dirsThreads, Rate: *dirsRate}
 		given := map[string]string{}
 		for k, v := range dirsMatch {
 			given[k] = *v
@@ -1213,7 +1214,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	send.dirsWords, send.dirsExts, send.paramsN = len(opts.Dirs.Words), len(opts.Dirs.Extensions), len(opts.Params.Words)
 	send.dirsNoCal = opts.Dirs.NoCalibration
 	send.sendState = *sendState
-	if !*sendState && !opts.Dirs.UserWords {
+	if !*sendState {
 		send.dirsHold = true
 		send.dirsHeld = dirscol.HeldWords(opts.Dirs.Words, opts.Dirs.Extensions)
 	}
@@ -1230,6 +1231,18 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 			rep.Notes = append(rep.Notes, e.line())
 			if !*quiet && !*jsonOut && !out.embedded {
 				fmt.Fprintf(os.Stderr, "azhaq %s: %s\n", rep.Command, e.line())
+			}
+		}
+	}
+	if !out.plan && !*sendState {
+		dirsHeld, dirsAll, pathsHeld := send.dirsHeld, send.dirsWords*(1+send.dirsExts), 0
+		if *pathsFile != "" && !budgets.Skip["azhaq-paths"] {
+			pathsHeld = pathscol.HeldWords(opts.Paths)
+		}
+		for _, n := range heldListNotes(dirsHeld, dirsAll, pathsHeld) {
+			rep.Notes = append(rep.Notes, n)
+			if !*quiet && !*jsonOut && !out.embedded {
+				fmt.Fprintf(os.Stderr, "azhaq %s: %s\n", rep.Command, n)
 			}
 		}
 	}
@@ -2645,9 +2658,11 @@ func loadLines(path string) ([]string, error) {
 	return readLines(f)
 }
 
-// loadWordlist is loadLines for a wordlist: an empty line stays, as in
-// ffuf, where the empty word asks for the base URL itself.
-func loadWordlist(path string) ([]string, error) {
+// loadWordlist is loadLines for a wordlist, read as ffuf reads it: an empty
+// line stays (the empty word asks for the base URL itself) and a line that
+// starts with # is a word like any other, unless ignoreComments (-ic) drops
+// it and the " # note" after a word.
+func loadWordlist(path string, ignoreComments bool) ([]string, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil || len(raw) == 0 {
 		return nil, err
@@ -2655,7 +2670,13 @@ func loadWordlist(path string) ([]string, error) {
 	var out []string
 	for _, line := range strings.Split(strings.TrimSuffix(string(raw), "\n"), "\n") {
 		line = strings.TrimRight(line, "\r")
-		if t := strings.TrimSpace(line); line == "" || (t != "" && !strings.HasPrefix(t, "#")) {
+		if ignoreComments {
+			var ok bool
+			if line, ok = fuzz.StripComment(line); !ok {
+				continue
+			}
+		}
+		if t := strings.TrimSpace(line); line == "" || t != "" {
 			out = append(out, t)
 		}
 	}

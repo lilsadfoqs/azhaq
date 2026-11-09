@@ -57,7 +57,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 | `-allow` | string, repeatable |  | a domain or host the tools may touch; HOST:PORT allows that host on that port only (repeatable); with -scope, added to it |
 | `-deny` | string, repeatable |  | a domain or host the tools must not touch |
 | `-deny-path` | string, repeatable |  | a regular expression on a URL's path and query: a URL it matches is never requested by any tool |
-| `-send-state-changing` | bool |  | let the tools send the GETs they find on the way whose own path or API operation declares a state change (create, delete, reset, logout, ...): without it they are held back and listed as skipped; fixed at start, no tool argument sets it |
+| `-send-state-changing` | bool |  | let the tools send the GETs they find on the way whose own path, query or API operation declares a state change (create, delete, reset, logout, action=stop, ...): without it they are held back and listed as skipped; fixed at start, no tool argument sets it |
 | `-unlocked` | bool |  | serve without a scope: any target a tool is given may be touched (port scans stay refused) |
 | `-allow-writes` | bool |  | let tools send writes: azhaq_params with a body method (POST, JSON or XML) and azhaq_roles_writes; without it those calls are refused before anything is sent; fixed at start |
 

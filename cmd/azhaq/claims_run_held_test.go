@@ -125,41 +125,16 @@ func TestRunHoldsAFoundGETOfEveryKindThatDeclaresAStateChange(t *testing.T) {
 	}
 }
 
-// What the user chose is not held back: a write named by its flag, a word of
-// a -dirs file, a word of a fuzz wordlist and a -deny-path rule that covers
-// the URL (which stays a deny and is listed under the rule).
-func TestRunDoesNotHoldWhatTheUserChose(t *testing.T) {
+// What the user chose by a flag is not held back: a write named by its flag
+// is sent, and a -deny-path rule that covers the URL stays a deny, listed
+// under the rule. (A word of a wordlist is held like a link: see
+// TestRunDirsFileHoldsAListedWordThatNamesAnAction.)
+func TestRunDoesNotHoldAWriteAskedForByItsFlag(t *testing.T) {
 	// A POST form whose action declares a state change, with -submit-forms.
 	app := newHeldApp(t)
 	app.runWith(t, "-submit-forms")
 	if app.count("POST /remove-item") == 0 {
 		t.Errorf("a write asked for with -submit-forms was held back: %v", app.got)
-	}
-
-	// A word of a -dirs file.
-	app2 := newHeldApp(t)
-	words := wlist(t, "logout", "users")
-	rep, _ := app2.runWith(t, "-dirs", words, "-no-paths", "-depth", "1")
-	if app2.count("GET /logout") == 0 {
-		t.Errorf("a word of the user's -dirs file was held back: %v", app2.got)
-	}
-	for _, s := range rep.Skipped {
-		if strings.HasSuffix(s.Target, "/logout") {
-			t.Errorf("/logout of the user's file is listed as skipped: %+v", s)
-		}
-	}
-
-	// A word of a fuzz wordlist.
-	app3 := newHeldApp(t)
-	egress.Reset()
-	t.Cleanup(egress.Reset)
-	if _, errOut, err := captureBoth(t, func() error {
-		return cmdFuzz([]string{"-u", app3.srv.URL + "/FUZZ", "-w", words, "-json"})
-	}); err != nil {
-		t.Fatalf("%v\n%s", err, errOut)
-	}
-	if app3.count("GET /logout") == 0 {
-		t.Errorf("a word of a fuzz wordlist was held back: %v", app3.got)
 	}
 
 	// A -deny-path rule keeps a held-name URL out as a deny, listed under the rule.
