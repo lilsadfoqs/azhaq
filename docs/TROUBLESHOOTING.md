@@ -122,6 +122,14 @@ In `roles` the file is `roles.stop` in the `-dir`. There it stops the runs of th
 - `AZHAQ_CHROME_NO_SANDBOX=1` is the same say, as an environment variable, and runs Chrome without a sandbox from the start, with no first try.
 - `-chrome-require-sandbox` is the default now, so it changes nothing. It is accepted, and it cannot go with `-chrome-no-sandbox` or `AZHAQ_CHROME_NO_SANDBOX=1`.
 
+### Is Chrome running sandboxed?
+
+**Why:** `ps` cannot tell. A sandboxed Chrome still starts one process as `chrome --type=zygote --no-zygote-sandbox` for its GPU process, which reads like an unsandboxed start; that is Chrome's own, not azhaq's, and the sandbox of the pages (the renderers) is the one that matters.
+
+**Check:** read the summary. A command that started Chrome says `Chrome ran with its sandbox` when the system gave Chrome one, which is what azhaq asks for and needs no flag. It says `Chrome ran without its sandbox` and why when `-chrome-no-sandbox` or `AZHAQ_CHROME_NO_SANDBOX=1` allowed it and the system gave none. A summary with neither line means no Chrome was started in that run.
+
+**When it is refused:** where the system gives Chrome no sandbox (a container, AppArmor, no unprivileged user namespaces) and neither the flag nor the variable is given, Chrome does not start and the command exits 2 before any request, as [above](#chrome-does-not-start) says.
+
 ### The summary says Chrome's own services reached for connections
 
 **Why:** Chrome started with a profile that already exists (`-chrome-profile`) and one of its services, such as sign-in or safe browsing, is on in that profile. The guard refused each connection and none was sent. A new profile has them off.

@@ -19,6 +19,7 @@
 <p align="center">
   <a href="https://lilsadfoqs.github.io/azhaq/">Website</a> ·
   <a href="#install">Install</a> ·
+  <a href="docs/START.md">Start here</a> ·
   <a href="docs/">Documentation</a> ·
   <a href="#benchmark">Benchmark</a> ·
   <a href="https://github.com/lilsadfoqs/azhaq/releases">Releases</a>
@@ -34,6 +35,8 @@
 azhaq is one Go binary for reconnaissance. It stands in for subfinder, dnsx, httpx, katana, ffuf, gau, arjun, naabu, gowitness, asnmap and notify, with their flags and JSON field names. It adds what that chain does not do. It maps the routes an app's JavaScript calls and compares what each of your accounts may read and write. It holds every request to a scope and a budget, and records what it sent. Everything lands in one SQLite workspace you can query, export and diff.
 
 ## Try it
+
+New here? [Start here](docs/START.md) walks the four first jobs in order: a first map, a comparison of two sessions, a check of one service and the hand-over, each with its commands, what to look at and the exit codes to expect. `azhaq docs start` prints it.
 
 ```
 go install github.com/lilsadfoqs/azhaq/cmd/azhaq@main   # azhaq ui is in main; the next release ships it

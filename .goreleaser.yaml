@@ -34,6 +34,7 @@ archives:
       - LICENSE
       - README.md
       - CHANGELOG.md
+      - docs/START.md
       - docs/OUTPUT.md
       - docs/MCP.md
       - docs/CONNECTOR.md

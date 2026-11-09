@@ -374,3 +374,87 @@ func TestUserPathListIsAsked(t *testing.T) {
 		t.Errorf("a path of the user's own list was held back: %v", app.asked())
 	}
 }
+
+// Through the MCP server, azhaq_map and azhaq_dirs do not send a GET found
+// on the way whose own path or operation declares a state change; it is
+// listed as held back. A server started with -send-state-changing sends it,
+// and a words list the client gives is asked in full.
+func TestMCPDoesNotSendTheGETsItHoldsBack(t *testing.T) {
+	app := newStateApp(t)
+	s := realMCPServer(t, []string{"-allow", "127.0.0.1"}, heldRun{}, 100000)
+	text, isErr := callText(t, s, "azhaq_map", map[string]any{"url": app.srv.URL + "/", "workspace": "held"})
+	if isErr {
+		t.Fatalf("azhaq_map: %s", text)
+	}
+	for _, p := range declared {
+		if n := app.count("GET " + p); n != 0 {
+			t.Errorf("azhaq_map sent GET %s %d times", p, n)
+		}
+	}
+	for _, p := range []string{"/", "/openapi.json", "/users/v1"} {
+		if app.count("GET "+p) == 0 {
+			t.Errorf("azhaq_map did not send GET %s: %v", p, app.asked())
+		}
+	}
+	for _, p := range declared {
+		if !strings.Contains(text, p) || !strings.Contains(text, "-send-state-changing") {
+			t.Errorf("the summary does not list %s as held back with the flag:\n%s", p, text)
+		}
+	}
+
+	dirs := newStateApp(t)
+	if text, isErr = callText(t, s, "azhaq_dirs", map[string]any{"targets": []any{dirs.srv.URL + "/"}}); isErr {
+		t.Fatalf("azhaq_dirs: %s", text)
+	}
+	if n := dirs.count("GET /logout"); n != 0 {
+		t.Errorf("azhaq_dirs sent the built-in list's /logout %d times", n)
+	}
+	own := newStateApp(t)
+	if text, isErr = callText(t, s, "azhaq_dirs", map[string]any{"targets": []any{own.srv.URL + "/"}, "words": []any{"logout", "reset"}}); isErr {
+		t.Fatalf("azhaq_dirs with words: %s", text)
+	}
+	if own.count("GET /logout") == 0 || own.count("GET /reset") == 0 {
+		t.Errorf("azhaq_dirs held back the client's own words: %v", own.asked())
+	}
+
+	open := newStateApp(t)
+	sends := realMCPServer(t, []string{"-allow", "127.0.0.1"}, heldRun{SendStateChanging: true}, 100000)
+	if text, isErr = callText(t, sends, "azhaq_map", map[string]any{"url": open.srv.URL + "/", "workspace": "sent"}); isErr {
+		t.Fatalf("azhaq_map with -send-state-changing: %s", text)
+	}
+	for _, p := range declared {
+		if open.count("GET "+p) == 0 {
+			t.Errorf("a server started with -send-state-changing did not send GET %s: %v", p, open.asked())
+		}
+	}
+}
+
+// What the tool list says about the held GETs is what the map does and what
+// plan says.
+func TestMCPToolDescriptionsSayWhatIsHeldBack(t *testing.T) {
+	byName := map[string]string{}
+	for _, tool := range mcpTools() {
+		byName[tool["name"].(string)], _ = tool["description"].(string)
+	}
+	for _, name := range []string{"azhaq_map", "azhaq_dirs"} {
+		d := byName[name]
+		if !strings.Contains(d, "held back") || !strings.Contains(d, "-send-state-changing") {
+			t.Errorf("%s does not say a state-changing GET is held back and what sends it: %s", name, d)
+		}
+	}
+	if d := byName["azhaq_map"]; strings.Contains(d, "Only the -deny-path rules") {
+		t.Errorf("azhaq_map says only -deny-path keeps a URL out: %s", d)
+	}
+	if d := byName["azhaq_plan"]; strings.Contains(d, "They are still sent") {
+		t.Errorf("azhaq_plan says the list is sent whatever it is: %s", d)
+	}
+	app := newStateApp(t)
+	s := realMCPServer(t, []string{"-allow", "127.0.0.1"}, heldRun{}, 100000)
+	text, isErr := callText(t, s, "azhaq_plan", map[string]any{"url": app.srv.URL + "/", "depth": float64(0)})
+	if isErr {
+		t.Fatalf("azhaq_plan: %s", text)
+	}
+	if !strings.Contains(text, "held back and listed as skipped") {
+		t.Errorf("the plan does not say what is held back:\n%s", text)
+	}
+}

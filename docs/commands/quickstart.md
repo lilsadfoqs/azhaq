@@ -28,7 +28,7 @@ azhaq quickstart example.com -passive
 
 1. Prints the [plan](plan.md) of the run on stderr: the collectors, what is sent to the targets, the source queries, and the [estimate](plan.md#the-estimate) of the requests, connects and DNS queries by stage. Nothing is sent yet.
 2. Runs the map. It is `azhaq run` with `-url`, `-domain` or `-cidr` and the flags you gave, the scoped default mapping: the target given is the scope (`-allow` widens it), and no wordlist, port scan, login or Chrome is added. The rows on stdout are `run`'s, and the summary is `run`'s.
-3. Ends the summary's `next` with the commands that go on in the workspace (`hunt`, `query`, `show`) and the wider passes it did not make, each a command to copy with what it would send beyond this run (`-ports top-1000`, `-dirs @common`). Nothing is run for them.
+3. Ends the summary's `next` with the commands that go on in the workspace (`hunt`, `query`, `show`) and the wider passes it did not make, each a command to copy with what it would send beyond this run (`-ports top-1000`, `-dirs @common`). Nothing is run for them. The last line of the summary is `azhaq docs start`, the page that walks the four first jobs in order.
 
 With `-quiet` or `-json` the plan is not printed: stderr holds the summary alone, as it does for `run`.
 

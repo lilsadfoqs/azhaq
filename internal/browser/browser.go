@@ -350,6 +350,10 @@ func sandboxReason(err error) string {
 // Unsandboxed is why Chrome runs without its sandbox, or "" when it has one.
 func (b *Browser) Unsandboxed() string { return b.unsandboxed }
 
+// Sandboxed is true when Chrome was started and runs with its sandbox: false
+// when it never started and when it runs without one (Unsandboxed says why).
+func (b *Browser) Sandboxed() bool { return b.root != nil && b.unsandboxed == "" }
+
 // dropTmp removes the temporary profile, once Chrome has stopped.
 func (b *Browser) dropTmp() {
 	if b.tmp != "" {

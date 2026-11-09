@@ -13,6 +13,7 @@ import (
 // topics are the documents azhaq docs prints, in the order it lists them.
 var topics = []struct{ name, file, about string }{
 	{"readme", "", "what Azhaq does, install, examples, benchmarks"},
+	{"start", "START.md", "the four first jobs in order: map, compare two sessions, verify a service, hand over findings"},
 	{"migrating", "MIGRATING.md", "coming from subfinder, dnsx, httpx, katana, ffuf, gau, arjun, naabu, nmap, gowitness, asnmap or notify: their flags next to Azhaq's"},
 	{"recipes", "RECIPES.md", "how do I…: map an app, log in, find IDOR, test writes, map a program, resume, watch, export, GraphQL, MCP, live subdomains"},
 	{"concepts", "CONCEPTS.md", "what the words mean: a map row, coverage, evidence, kinds, scope, budget, the ledger, roles verdicts, what Azhaq sends"},
