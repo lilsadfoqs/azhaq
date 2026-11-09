@@ -863,28 +863,37 @@ func serveDanglingSOA(t *testing.T, asked, soa *atomic.Int64) string {
 	return pc.LocalAddr().String()
 }
 
-// The takeover check asks the user's resolver whether a CNAME target's
-// domain exists. That question about a domain outside the scope is counted
-// in the summary, with the flag that turns the check off; the flag stops it.
-func TestDNSCountsTakeoverQuestionsOutsideTheScope(t *testing.T) {
+// A name outside the scope is never asked, a CNAME target's domain included:
+// the takeover check leaves it, says so in the row and in the summary, and
+// makes no finding from what it did not ask. With the domain in the scope, or
+// no scope given, it asks, as before; -no-takeover asks nothing.
+func TestDNSTakeoverDoesNotAskOutsideTheScope(t *testing.T) {
 	t.Chdir(t.TempDir())
 	var asked, soa atomic.Int64
 	addr := serveDanglingSOA(t, &asked, &soa)
-	_, rep, _ := dnsOut(t, "-d", "dangling.lab.zz", "-r", addr, "-a", "-j", "-allow", "lab.zz")
+	ls, rep, code := dnsOut(t, "-d", "dangling.lab.zz", "-r", addr, "-a", "-j", "-allow", "lab.zz")
+	if got := soa.Load(); got != 0 {
+		t.Errorf("%d SOA questions went out about a domain outside the scope", got)
+	}
 	n := strings.Join(rep.Notes, "\n")
-	if !strings.Contains(n, "asked the resolver about 1 CNAME target outside the scope for the takeover check (gone-co.com): -no-takeover turns the check off") {
-		t.Errorf("the question outside the scope is not counted: %v", rep.Notes)
+	if !strings.Contains(n, "not asked: 1 CNAME target on a domain outside the scope (gone-co.com)") {
+		t.Errorf("the target left out is not in the summary: %v", rep.Notes)
 	}
-	if len(rep.Takeover) != 1 {
-		t.Errorf("the dangling CNAME is not a finding: %+v", rep.Takeover)
+	if len(rep.Takeover) != 0 || code != exitOK {
+		t.Errorf("exit %d, a finding was made from what was not asked: %+v", code, rep.Takeover)
 	}
-	// Inside the scope, or with no scope, there is nothing to say.
+	row := dnsRows(t, ls)["dangling.lab.zz"]
+	if why, _ := row["takeover-not-asked"].(string); !strings.Contains(why, "gone-co.com is outside the scope") || row["takeover"] != nil {
+		t.Errorf("the row does not say the target was not asked: %v", row)
+	}
+	// With the domain in the scope, it is asked.
+	before := soa.Load()
 	_, rep, _ = dnsOut(t, "-d", "dangling.lab.zz", "-r", addr, "-a", "-j", "-allow", "lab.zz", "-allow", "gone-co.com")
-	if strings.Contains(strings.Join(rep.Notes, "\n"), "takeover check") {
-		t.Errorf("a target inside the scope is noted: %v", rep.Notes)
+	if soa.Load() == before || len(rep.Takeover) != 1 || strings.Contains(strings.Join(rep.Notes, "\n"), "takeover check") {
+		t.Errorf("a target inside the scope: %d questions, %+v, %v", soa.Load()-before, rep.Takeover, rep.Notes)
 	}
 	// -no-takeover asks nothing about the target.
-	before := soa.Load()
+	before = soa.Load()
 	_, rep, _ = dnsOut(t, "-d", "dangling.lab.zz", "-r", addr, "-a", "-j", "-allow", "lab.zz", "-no-takeover")
 	if len(rep.Takeover) != 0 || strings.Contains(strings.Join(rep.Notes, "\n"), "takeover check") {
 		t.Errorf("-no-takeover still checked: %+v %v", rep.Takeover, rep.Notes)
@@ -920,7 +929,7 @@ func TestDNSJSONRowOfADanglingCNAMEHasTakeoverAndNoA(t *testing.T) {
 	t.Chdir(t.TempDir())
 	var asked, soa atomic.Int64
 	addr := serveDanglingSOA(t, &asked, &soa)
-	ls, _, _ := dnsOut(t, "-d", "dangling.lab.zz", "-r", addr, "-a", "-j", "-allow", "lab.zz")
+	ls, _, _ := dnsOut(t, "-d", "dangling.lab.zz", "-r", addr, "-a", "-j", "-allow", "lab.zz", "-allow", "gone-co.com")
 	row := dnsRows(t, ls)["dangling.lab.zz"]
 	if row == nil || row["takeover"] == nil || row["a"] != nil {
 		t.Fatalf("the row of a dangling CNAME: %v", row)
@@ -975,7 +984,7 @@ func TestDNSRcodeOfACNAMEOwnerIsItsOwn(t *testing.T) {
 	if !reflect.DeepEqual(ls, []string{"dangling.lab.zz [NOERROR]"}) || rep.Counts["other codes"] != 0 {
 		t.Errorf("-rcode noerror: %v %v", ls, rep.Counts)
 	}
-	ls, _, _ = dnsOut(t, "-d", "dangling.lab.zz", "-r", addr, "-a", "-j", "-allow", "lab.zz")
+	ls, _, _ = dnsOut(t, "-d", "dangling.lab.zz", "-r", addr, "-a", "-j", "-allow", "lab.zz", "-allow", "gone-co.com")
 	row := dnsRows(t, ls)["dangling.lab.zz"]
 	if row["status_code"] != "NOERROR" || row["status_code_raw"] != nil || row["cname_status"] != "NXDOMAIN" || row["takeover"] == nil {
 		t.Errorf("the row: %v", row)

@@ -114,13 +114,16 @@ type Pool struct {
 	TraceRoots []string
 	TracePort  string
 
-	// Outside says whether a domain is outside the run's scope; nil: the egress
-	// scope's. Registered counts the questions it asks about such domains.
+	// Outside says whether a name is outside the run's scope; nil: the egress
+	// scope's. A name outside it is never asked: Registered and the wildcard
+	// probes count what they left out.
 	Outside func(domain string) bool
 
-	askMu   sync.Mutex
-	asked   int      // registration questions about domains outside the scope
-	askedAt []string // the first few of those domains
+	askMu     sync.Mutex
+	left      int      // registration questions left out: the domain is outside the scope
+	leftAt    []string // the first few of those domains
+	wildLeft  int      // wildcard zones not probed: outside the scope
+	wildLeftA []string // the first few of those zones
 
 	mu    sync.Mutex
 	cache map[string]*entry
@@ -456,49 +459,75 @@ type onceKey struct{}
 // once marks ctx for one attempt a query.
 func once(ctx context.Context) context.Context { return context.WithValue(ctx, onceKey{}, true) }
 
+// outside says whether name is outside the run's scope (false when it has none).
+func (p *Pool) outside(name string) bool {
+	if p.Outside != nil {
+		return p.Outside(name)
+	}
+	return egress.HasScope() && !egress.Allows(name)
+}
+
 // Registered says whether a registrable domain exists in DNS: its SOA is
 // answered, or anything but NXDOMAIN is (a failure is taken as existing,
-// so nothing is called free that may not be).
-func (p *Pool) Registered(ctx context.Context, domain string) bool {
-	p.noteAsk(domain)
+// so nothing is called free that may not be). A domain outside the scope is
+// not asked: asked is false, registered true, and the question is counted.
+func (p *Pool) Registered(ctx context.Context, domain string) (registered, asked bool) {
+	if p.outside(domain) {
+		p.askMu.Lock()
+		p.left++
+		if len(p.leftAt) < 3 && !slices.Contains(p.leftAt, domain) {
+			p.leftAt = append(p.leftAt, domain)
+		}
+		p.askMu.Unlock()
+		return true, false
+	}
 	m, err := p.Query(ctx, domain, dns.TypeSOA)
-	return err != nil || m.Rcode != dns.RcodeNameError
+	return err != nil || m.Rcode != dns.RcodeNameError, true
 }
 
-// noteAsk counts a question about a domain outside the scope.
-func (p *Pool) noteAsk(domain string) {
-	out := p.Outside
-	if out == nil {
-		out = func(d string) bool { return egress.HasScope() && !egress.Allows(d) }
-	}
-	if !out(domain) {
-		return
-	}
-	p.askMu.Lock()
-	defer p.askMu.Unlock()
-	p.asked++
-	if len(p.askedAt) < 3 && !slices.Contains(p.askedAt, domain) {
-		p.askedAt = append(p.askedAt, domain)
-	}
-}
-
-// TakeoverNote says how many questions the takeover check put to the
-// resolvers about CNAME targets outside the scope, "" when none: asking the
-// resolver is how the check tells a free domain from a taken one, and the
-// user should be told it left the scope. off is the flag that turns the
-// check off.
+// TakeoverNote says how many CNAME targets the takeover check did not ask
+// about because their domain is outside the scope, "" when none: telling a
+// free domain from a taken one takes a question about it. off is the flag
+// that turns the check off.
 func (p *Pool) TakeoverNote(off string) string {
 	p.askMu.Lock()
 	defer p.askMu.Unlock()
-	if p.asked == 0 {
+	if p.left == 0 {
 		return ""
 	}
 	s := "s"
-	if p.asked == 1 {
+	if p.left == 1 {
 		s = ""
 	}
-	return fmt.Sprintf("asked the resolver about %d CNAME target%s outside the scope for the takeover check (%s): %s turns the check off",
-		p.asked, s, strings.Join(p.askedAt, ", "), off)
+	return fmt.Sprintf("not asked: %d CNAME target%s on a domain outside the scope (%s): the takeover check cannot tell a free domain from a taken one without asking, so no free-domain finding is made for it; add the domain to -allow to ask it, or %s turns the check off",
+		p.left, s, strings.Join(p.leftAt, ", "), off)
+}
+
+// WildcardNote says how many zones were not probed for a wildcard because
+// they are outside the scope, "" when none: a name there that only a wildcard
+// answers is not told from a real one.
+func (p *Pool) WildcardNote() string {
+	p.askMu.Lock()
+	defer p.askMu.Unlock()
+	if p.wildLeft == 0 {
+		return ""
+	}
+	s := "s"
+	if p.wildLeft == 1 {
+		s = ""
+	}
+	return fmt.Sprintf("not asked: %d parent zone%s outside the scope (%s) not probed for a wildcard, so a name only a wildcard there answers is kept: add the zone to -allow to probe it",
+		p.wildLeft, s, strings.Join(p.wildLeftA, ", "))
+}
+
+// leaveWild counts a zone left unprobed for a wildcard.
+func (p *Pool) leaveWild(zone string) {
+	p.askMu.Lock()
+	defer p.askMu.Unlock()
+	p.wildLeft++
+	if len(p.wildLeftA) < 3 && !slices.Contains(p.wildLeftA, zone) {
+		p.wildLeftA = append(p.wildLeftA, zone)
+	}
 }
 
 // forget drops a cached answer so the next Resolve asks again.

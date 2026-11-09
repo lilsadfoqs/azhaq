@@ -159,7 +159,7 @@ func cmdDNS(args []string) error {
 	alias("auto-wildcard", "aw", "same as -auto-wildcard")
 	wd := fs.String("wildcard-domain", "", "also probe this zone for a wildcard (a zone the registrable domain does not reach, such as corp.internal)")
 	alias("wildcard-domain", "wd", "same as -wildcard-domain")
-	noTakeover := fs.Bool("no-takeover", false, "do not check CNAMEs for a takeover: no question is asked about the domain of a CNAME target, in scope or not")
+	noTakeover := fs.Bool("no-takeover", false, "do not check CNAMEs for a takeover: no question is asked about the domain of a CNAME target (without it, a domain outside the scope is not asked either, and the summary says so)")
 	noWild := fs.Bool("no-wildcard", false, "print names even when they only resolve because their zone has a wildcard")
 	proxyURL := fs.String("proxy", "", "send DNS through this socks5 proxy (socks5://host:port), over TCP")
 	inherit(fs, "resolvers", "dns-rate", "scope", "program", "allow", "deny", "ledger")
@@ -888,7 +888,7 @@ func (r *dnsRun) one(ctx context.Context, name string) bool {
 	if cf.omitRaw {
 		d.AllRecords = nil
 	}
-	row.Takeover = r.takeover(ctx, name, d)
+	row.Takeover, row.TakeoverNotAsked = r.takeover(ctx, name, d)
 	r.keepRow(name, d, row)
 	selected := r.hasSelected(d)
 	printed := r.output(name, d, row, selected)
@@ -985,37 +985,40 @@ func shortDNSError(s string) string {
 // type asked whose answer followed the chain says where it ended; when
 // none did (-cname alone asks only for the record itself), the name is
 // asked for A once, and only the end of the chain is kept from it.
-func (r *dnsRun) takeover(ctx context.Context, host string, d *dnsr.Data) *takeover.Finding {
+func (r *dnsRun) takeover(ctx context.Context, host string, d *dnsr.Data) (*takeover.Finding, string) {
 	if len(d.CNAME) == 0 || r.cf.noTakeover {
-		return nil
+		return nil, ""
 	}
 	rc, ok := d.TargetRcode()
 	if !ok {
 		t := r.pool.Lookup(ctx, host, dnsr.LookupOptions{Types: []uint16{dns.TypeA}})
 		if ctx.Err() != nil {
-			return nil
+			return nil, ""
 		}
 		r.failures(host, t)
 		d.TakeTarget(t)
 		rc, ok = d.TargetRcode()
 	}
 	if !ok || rc != dns.RcodeNameError {
-		return nil
+		return nil, ""
 	}
 	target := d.CNAME[len(d.CNAME)-1]
 	registered := true
 	if takeover.Service(target) == "" && !normalize.SameSite(host, target) {
 		if dom := takeover.Domain(target); dom != "" {
-			registered = r.pool.Registered(ctx, dom)
+			var asked bool
+			if registered, asked = r.pool.Registered(ctx, dom); !asked {
+				return nil, dom + " is outside the scope: its registration was not asked (add it to -allow to ask)"
+			}
 		}
 	}
 	if f, ok := takeover.ByCNAME(host, d.CNAME, true, registered); ok {
 		r.mu.Lock()
 		r.takeovers = append(r.takeovers, takeoverRow{Host: host, Finding: f})
 		r.mu.Unlock()
-		return &f
+		return &f, ""
 	}
-	return nil
+	return nil, ""
 }
 
 // keepRow remembers what -db keeps: every name asked (the guesses of -w
@@ -1087,6 +1090,8 @@ type dnsRow struct {
 	QueryTime string  `json:"query-time,omitempty"`
 	// Takeover is set on a name whose CNAME points at what is gone (not a dnsx field).
 	Takeover *takeover.Finding `json:"takeover,omitempty"`
+	// TakeoverNotAsked says why the takeover check left a CNAME target's domain unasked.
+	TakeoverNotAsked string `json:"takeover-not-asked,omitempty"`
 }
 
 type dnsASN struct {
@@ -1138,7 +1143,7 @@ func (r *dnsRun) output(host string, d *dnsr.Data, row *dnsRow, selected bool) (
 	// those are the rows, whatever their type.
 	askedByRTF := len(cf.rtf) > 0 && cf.noTypeFlag
 	// A dangling CNAME is a finding: its row goes out with the takeover on it.
-	if whole && !askedByRTF && !cf.all && !cf.axfr && len(cf.rcodes) == 0 && !selected && !cf.selected["any"] && row.Takeover == nil {
+	if whole && !askedByRTF && !cf.all && !cf.axfr && len(cf.rcodes) == 0 && !selected && !cf.selected["any"] && row.Takeover == nil && row.TakeoverNotAsked == "" {
 		return
 	}
 	if len(cf.rtf) > 0 && r.hasAny(d, cf.rtf) {
@@ -1560,6 +1565,9 @@ func (r *dnsRun) summarize(ctx context.Context, args []string, maxtime float64) 
 	rep.Takeover = append(rep.Takeover, r.takeovers...)
 	rep.Notes = append(rep.Notes, r.axfrNotes...)
 	if n := r.pool.TakeoverNote("-no-takeover"); n != "" {
+		rep.Notes = append(rep.Notes, n)
+	}
+	if n := r.pool.WildcardNote(); n != "" {
 		rep.Notes = append(rep.Notes, n)
 	}
 	if r.reservedN > 0 {

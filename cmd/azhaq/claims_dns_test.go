@@ -274,7 +274,7 @@ func TestDNSDanglingCNAMEGetsItsRowWhenAIsAsked(t *testing.T) {
 		{[]string{"-mx"}, true}, {[]string{"-txt"}, true}, {[]string{"-cname"}, true}, {[]string{"-aaaa"}, true},
 		{[]string{"-no-takeover"}, false}, {[]string{"-cname", "-no-takeover"}, false},
 	} {
-		ls, rep, _ := dnsOut(t, append([]string{"-d", "dangling.lab.zz", "-r", addr, "-j", "-allow", "lab.zz"}, tc.args...)...)
+		ls, rep, _ := dnsOut(t, append([]string{"-d", "dangling.lab.zz", "-r", addr, "-j", "-allow", "lab.zz", "-allow", "gone-co.com"}, tc.args...)...)
 		row := dnsRows(t, ls)["dangling.lab.zz"]
 		if got := row != nil && row["takeover"] != nil; got != tc.row || (tc.row && rep.Counts["did not resolve"] != 0) {
 			t.Errorf("%v: row %v, counts %v, want a row with takeover: %v", tc.args, row, rep.Counts, tc.row)
