@@ -116,6 +116,7 @@ The summary also lists failures per kind of error, and takeover findings: a CNAM
 ### A CNAME's target
 - A name with a CNAME gets its target checked, whichever types were asked. A type whose answer follows the chain (`-a`, `-aaaa`, `-txt`, `-mx`, …) already says where the chain ends. `-cname` alone does not: a question for CNAME gets the record and stops, so the name is asked for A once more, and only the end of the chain is kept from that answer (`cname_status`, and `takeover` when the target is gone). That is one more query for each name that has a CNAME, in `dns_queries` and the ledger like the others.
 - `-no-takeover` leaves that question out. Then `-cname` alone gives no `cname_status` and no `takeover`.
+- With a scope (`-allow`, `-scope`), the domain of a CNAME target outside it is never asked: the row says `takeover-not-asked` and why, no free-domain finding is made, and the summary counts these in a note (`not asked: N CNAME targets on a domain outside the scope`). Add the domain to `-allow` to ask it.
 
 ### Types
 - `-all` asks A, AAAA, CNAME, MX, NS, SOA, TXT, SRV and CAA of a name: not PTR (`-ptr`) and not ANY (`-any`). AXFR is asked with `-axfr` only, because it connects to the name servers.
@@ -132,9 +133,11 @@ The summary also lists failures per kind of error, and takeover findings: a CNAM
 ### Wildcards
 - A name that only resolves through a wildcard zone is left out of `a`, `aaaa` and `cname`.
 - `-no-wildcard` keeps it.
+- A zone outside the scope (`-allow`, `-scope`) is not probed for a wildcard: no random label of it is asked, and the summary counts these zones in a note (`not asked: N parent zones outside the scope`).
 
 ### Words and inputs left out
 - With `-d DOMAIN -w WORDS` it resolves `WORD.DOMAIN` for each word, as `dnsx -d -w` does.
+- `-all` goes with `-w`: each generated name is asked every type `-all` lists (PTR is for addresses, so a name is not asked it). `-axfr` and `-ptr` do not: a wordlist makes names, not zones or addresses, and they exit 2.
 - `-dns-rate N` holds back the queries of `-d` with `-w` too: see [Time and pace](#time-and-pace).
 - `left out` counts inputs that were not asked about:
   - an address or range without `-ptr`
@@ -186,7 +189,7 @@ The summary also lists failures per kind of error, and takeover findings: a CNAM
 | Flag | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `-no-wildcard` | bool |  | print names even when they only resolve because their zone has a wildcard |
-| `-no-takeover` | bool |  | do not check CNAMEs for a takeover: no question is asked about the domain of a CNAME target, in scope or not |
+| `-no-takeover` | bool |  | do not check CNAMEs for a takeover: no question is asked about the domain of a CNAME target (without it, a domain outside the scope is not asked either, and the summary says so) |
 
 **Answer format and filters**
 

@@ -293,7 +293,7 @@ Only the services whose pages are listed below under `strong` have such an answe
 - A cloud's shared suffix such as `elb.amazonaws.com` is no registry and never counts as an unregistered domain.
 - The Azure services for `dangling`: App Service, Cloud Services, CDN, API Management, Container Instances, HDInsight, Blob Storage and a virtual machine's public IP name.
 - azhaq reads DNS answers (`subs -live`, `dns`, `run`) and front pages (`probe`, `run`). Even a plain `subs -live` flags a candidate.
-- To tell a free domain from a taken one, the check asks your resolvers for the SOA of a CNAME target's registrable domain (a known hosting service is not asked). When that domain is outside the scope, the summary counts the questions in a note: `asked the resolver about N CNAME targets outside the scope for the takeover check`. `-no-takeover` (`run`, `dns`) turns the check off, and with it the question.
+- To tell a free domain from a taken one, the check asks your resolvers for the SOA of a CNAME target's registrable domain (a known hosting service is not asked). A domain outside the scope (`-allow`, `-scope`) is never asked: the row says `takeover-not-asked` and why, no free-domain finding is made for it, and the summary counts these targets in a note: `not asked: N CNAME targets on a domain outside the scope`. Add the domain to `-allow` to have it asked. `-no-takeover` (`run`, `dns`) turns the check off, and with it the question.
 - How a candidate is printed: see the `takeover` field in [OUTPUT](OUTPUT.md#the-summary).
 
 ### What a dangling row rests on

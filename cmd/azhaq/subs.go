@@ -24,8 +24,6 @@ var subsMode struct {
 	// GuessSamples is -guess-samples: the most samples of guesses taken, with no time budget.
 	GuessSamples int
 	Recursive    bool // only the sources that handle subdomains of subdomains
-	// MaxTimeBoundsRun makes -max-time the whole run's wall-clock bound, the DNS checks included.
-	MaxTimeBoundsRun bool
 	// NoGuessCheck is -live -guesses=false: subdomain.center's guesses are not looked up.
 	NoGuessCheck bool
 }
@@ -244,7 +242,7 @@ func cmdSubs(args []string) error {
 		extra = append(extra, "-resume-run", sr.run)
 		rep.Notes = append(rep.Notes, sr.note(c.db))
 	}
-	subsMode.NoCheck, subsMode.Recursive, subsMode.GuessSamples, subsMode.MaxTimeBoundsRun = !*live && !active, *recursive, *guessSamples, true
+	subsMode.NoCheck, subsMode.Recursive, subsMode.GuessSamples = !*live && !active, *recursive, *guessSamples
 	subsMode.NoGuessCheck = (*live || active) && !*guesses
 	// The output is opened before anything is sent: a bad -o is not found out
 	// after the run. Without -live a domain's names are printed when its
@@ -454,7 +452,7 @@ func cmdSubs(args []string) error {
 		}
 	}
 	st, done, err := runPreset(&c, append(run, extra...), rep, observe)
-	subsMode.NoCheck, subsMode.Recursive, subsMode.GuessSamples, subsMode.MaxTimeBoundsRun, subsMode.NoGuessCheck = false, false, 0, false, false
+	subsMode.NoCheck, subsMode.Recursive, subsMode.GuessSamples, subsMode.NoGuessCheck = false, false, 0, false
 	if err != nil {
 		w.close()
 		return err

@@ -63,6 +63,10 @@ func (w *Wildcards) zone(ctx context.Context, name string) *zone {
 	}
 	w.mu.Unlock()
 	z.once.Do(func() {
+		if w.pool.outside(name) {
+			w.pool.leaveWild(name) // the probes are names of the zone: not asked outside the scope
+			return
+		}
 		for i := 0; i < 2; i++ {
 			a := w.pool.Resolve(ctx, randomLabel()+"."+name)
 			if !a.Live() && len(a.CNAME) == 0 {

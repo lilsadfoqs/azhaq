@@ -260,7 +260,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	scopeSpec := fs.String("scope", "", "a program's scope: a file (HackerOne CSV, bounty-targets JSON, Burp options, lines) or hackerone, bugcrowd, intigriti, yeswehack")
 	program := fs.String("program", "", "the program to take from a -scope list (handle, name or URL)")
 	probe := fs.Bool("probe", false, "resolve and fetch each target once, print one line per web service and per path -dirs found: no crawl, scripts, path checks, TLS, subdomain or archive sources, and depth 1; a flag that asks for a collector (-dirs, -params, -ports, -ports-udp, -screenshots, -browser, -dns-brute, -permute, -graphql) still runs it, and a flag for what -probe turns off (-fill-forms, -submit-forms, -path-climb, -known-files) is a usage error")
-	noTakeover := fs.Bool("no-takeover", false, "do not check CNAMEs for a takeover: no question is asked about the domain of a CNAME target, in scope or not")
+	noTakeover := fs.Bool("no-takeover", false, "do not check CNAMEs for a takeover: no question is asked about the domain of a CNAME target (without it, a domain outside the scope is not asked either, and the summary says so)")
 	noTech := fs.Bool("no-tech", false, "skip technology fingerprints (saves about 30 MB of memory)")
 	noFavicon := fs.Bool("no-favicon", false, "do not hash the favicon of front pages (one or two requests less per web service)")
 	urlsOut := fs.String("urls", "", "write every archived URL of the run's domains to this file, one per line")
@@ -349,7 +349,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	sourceRates := fs.String("source-rates", "", "pace single subdomain sources, as subfinder -rls: name=N/unit, comma-separated, unit s, m or h (hackertarget=10/m,crtsh=1/s)")
 	maxResults := fs.Int("max-results", 0, "most names one paging subdomain source gives (0: no cap), as subfinder -mr")
 	extraWait := fs.Duration("extra-wait", subcol.DefaultExtraWait, "how long the sources azhaq adds to subfinder's default set (commoncrawl, hudsonrock, rapiddns, sitedossier, thc, waybackarchive) may go on after every source of that set has answered; one still running then is cut, listed as failed, and its names so far are kept; 0 waits for them as long as -source-timeout; a source named with -sources is not cut")
-	maxTime := fs.Duration("max-time", 0, "how long the run may take: subs stops after this long, in any phase (the sources, subdomain.center's guesses, the DNS checks of -live, -w and -permute), exits 4 and leaves the rest for azhaq resume; run and plan only wait this long for the sources of a domain, then go on with what they gave (0: -source-timeout and a short grace bound the wait; -timeout bounds a run), as subfinder -max-time")
+	maxTime := fs.Duration("max-time", 0, "how long the run may take: it stops after this long, in any phase (the sources, subdomain.center's guesses, the DNS checks of -live, the brute force and the permutations, probing), exits 4 and keeps what was answered for azhaq resume; it also bounds the wait for the sources of a domain (0: -source-timeout and a short grace bound the wait; -timeout bounds a run), as subfinder -max-time")
 	maxBody := fs.Int64("max-body", 0, "largest response body read from a subdomain source, in bytes (default 33554432), as subfinder -rsr")
 	sourceProxy := fs.String("source-proxy", "", "send every subdomain source request through this proxy URL, as subfinder -proxy (else HTTP_PROXY and HTTPS_PROXY)")
 	providersFile := fs.String("providers", "", "API keys per source, YAML (default ~/.config/azhaq/providers.yaml, else subfinder's provider-config.yaml)")
@@ -1294,10 +1294,10 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 
 	ctx, stop := stopContext()
 	defer stop()
-	// The run's wall-clock bound: -timeout, or for subs -max-time when that is
-	// shorter, which then bounds every phase and not only the wait on the sources.
+	// The run's wall-clock bound: -timeout, or -max-time when that is shorter,
+	// which then bounds every phase and not only the wait on the sources.
 	bound, boundBy := *timeout, "-timeout"
-	if subsMode.MaxTimeBoundsRun && *maxTime > 0 && (bound == 0 || *maxTime < bound) {
+	if *maxTime > 0 && (bound == 0 || *maxTime < bound) {
 		bound, boundBy = *maxTime, "-max-time"
 	}
 	if bound > 0 {
@@ -1552,6 +1552,9 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		}
 	}
 	if n := opts.DNS.TakeoverNote("-no-takeover"); n != "" {
+		rep.Notes = append(rep.Notes, n)
+	}
+	if n := opts.DNS.WildcardNote(); n != "" {
 		rep.Notes = append(rep.Notes, n)
 	}
 	// The URLs are those the scheduler kept because they were found past

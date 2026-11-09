@@ -150,7 +150,11 @@ func (c *Collector) describe(ctx context.Context, host string, a dnsr.Answer, pa
 		registered := true
 		if gone && takeover.Service(target) == "" && !normalize.SameSite(host, target) {
 			if d := takeover.Domain(target); d != "" {
-				registered = c.Pool.Registered(ctx, d)
+				var asked bool
+				if registered, asked = c.Pool.Registered(ctx, d); !asked {
+					payload["takeover_not_asked"] = d + " is outside the scope: its registration was not asked (add it to -allow to ask)"
+					registered = true // not shown free
+				}
 			}
 		}
 		if f, ok := takeover.ByCNAME(host, a.CNAME, gone, registered); ok {

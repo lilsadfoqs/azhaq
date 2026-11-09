@@ -7,6 +7,7 @@ import (
 	"net"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -541,22 +542,73 @@ func TestDefaultResolversLeaveSpecialUseNamesToTheSystem(t *testing.T) {
 	}
 }
 
-// Registration questions about a domain outside the scope are counted, with
-// the domains, for the summary; a domain inside it is not.
-func TestRegisteredCountsQuestionsOutsideTheScope(t *testing.T) {
-	p := New(Options{Resolvers: []string{serve(t, testZone)}, PerSecond: -1, Timeout: time.Second})
+// spyPool is a pool whose every question is recorded and answered NXDOMAIN.
+func spyPool(asked *[]string, mu *sync.Mutex) *Pool {
+	p := New(Options{Resolvers: []string{"192.0.2.1:53"}, PerSecond: -1, Timeout: time.Second})
+	p.Exchange = func(ctx context.Context, m *dns.Msg, server string) (*dns.Msg, error) {
+		mu.Lock()
+		*asked = append(*asked, strings.TrimSuffix(strings.ToLower(m.Question[0].Name), "."))
+		mu.Unlock()
+		r := new(dns.Msg)
+		r.SetReply(m)
+		r.Rcode = dns.RcodeNameError
+		return r, nil
+	}
+	return p
+}
+
+// A registration question about a domain outside the scope is not asked: it
+// is counted, with the domain, for the summary and answered "not shown free";
+// a domain inside the scope is asked.
+func TestRegisteredDoesNotAskOutsideTheScope(t *testing.T) {
+	var asked []string
+	var mu sync.Mutex
+	p := spyPool(&asked, &mu)
 	p.Outside = func(d string) bool { return d != "example.org" }
 	ctx := context.Background()
-	p.Registered(ctx, "example.org")
+	if reg, ok := p.Registered(ctx, "example.org"); reg || !ok {
+		t.Fatalf("a domain inside the scope: registered %v asked %v, want asked and NXDOMAIN", reg, ok)
+	}
 	if n := p.TakeoverNote("-no-takeover"); n != "" {
 		t.Fatalf("a domain inside the scope is noted: %s", n)
 	}
-	p.Registered(ctx, "gone.example.com")
-	p.Registered(ctx, "gone.example.com")
-	p.Registered(ctx, "other.example.net")
-	want := "asked the resolver about 3 CNAME targets outside the scope for the takeover check (gone.example.com, other.example.net): -no-takeover turns the check off"
+	asked = nil
+	for _, d := range []string{"gone.example.com", "gone.example.com", "other.example.net"} {
+		if reg, ok := p.Registered(ctx, d); ok || !reg {
+			t.Errorf("%s: registered %v asked %v, want true and not asked", d, reg, ok)
+		}
+	}
+	if len(asked) != 0 {
+		t.Errorf("questions went out about domains outside the scope: %v", asked)
+	}
+	want := "not asked: 3 CNAME targets on a domain outside the scope (gone.example.com, other.example.net): the takeover check cannot tell a free domain from a taken one without asking, so no free-domain finding is made for it; add the domain to -allow to ask it, or -no-takeover turns the check off"
 	if n := p.TakeoverNote("-no-takeover"); n != want {
 		t.Errorf("note %q, want %q", n, want)
+	}
+}
+
+// A zone outside the scope is not probed for a wildcard: no random label of it
+// is asked, and the summary counts the zone.
+func TestWildcardProbeSkipsZonesOutsideTheScope(t *testing.T) {
+	var asked []string
+	var mu sync.Mutex
+	p := spyPool(&asked, &mu)
+	p.Outside = func(d string) bool { return d == "example.com" }
+	NewWildcards(p).Match(context.Background(), "a.app.example.com", "example.com", Answer{A: []string{"192.0.2.9"}})
+	var inside, outside int
+	for _, q := range asked {
+		switch {
+		case strings.HasSuffix(q, ".app.example.com"):
+			inside++
+		case strings.HasSuffix(q, ".example.com"):
+			outside++
+		}
+	}
+	if inside == 0 || outside != 0 {
+		t.Errorf("probes inside the scope %d, outside %d: %v", inside, outside, asked)
+	}
+	if n := p.WildcardNote(); !strings.Contains(n, "1 parent zone outside the scope (example.com) not probed") {
+		t.Errorf("note %q", n)
 	}
 }
 
