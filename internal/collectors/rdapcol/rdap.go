@@ -250,6 +250,7 @@ func (c *Collector) pull(ctx context.Context, rawURL, span string) (json.RawMess
 			current = next.String()
 			continue
 		}
+		fetch.BoundNote(resp, "RDAP "+hostOf(current)) // a stream that never ends is cut, and the run says so
 		body, err := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
 		resp.Body.Close()
 		if err != nil {

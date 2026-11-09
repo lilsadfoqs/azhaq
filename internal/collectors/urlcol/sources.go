@@ -256,6 +256,7 @@ func (g *getter) open(ctx context.Context, raw string) (io.ReadCloser, error) {
 			}
 			continue
 		}
+		fetch.BoundNote(resp, "archive "+hostOf(raw)) // a stream that never ends is cut, and the run says so
 		if resp.StatusCode == http.StatusOK {
 			body, why := answer.Screen(resp.Body)
 			if why != "" {

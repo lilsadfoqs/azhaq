@@ -406,6 +406,7 @@ func (s *Schema) post(ctx context.Context, raw, query string) (int, []byte, erro
 	if err != nil {
 		return 0, nil, err
 	}
+	fetch.BoundNote(resp, "GraphQL "+raw) // a stream that never ends is cut, and the run says so
 	defer resp.Body.Close()
 	data, _ := io.ReadAll(io.LimitReader(resp.Body, fetch.MaxScriptBody))
 	return resp.StatusCode, data, nil

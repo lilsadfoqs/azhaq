@@ -104,7 +104,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 
 ### A route that never ends
 
-A route that streams for ever (server-sent events, `multipart/x-mixed-replace`) is answered with its status, headers and the first part of its body (up to 64 KiB, or what comes in 2 seconds), and then closed, not held until the timeout. Its body counts as truncated. `crawl`, `dirs`, `params`, `fuzz` and `roles` do the same, and their rows say the body was cut.
+A route that streams for ever (server-sent events, `multipart/x-mixed-replace`) is answered with its status, headers and the first part of its body (up to 64 KiB, or what comes in 2 seconds), and then closed, not held until the timeout. Its body counts as truncated. `crawl`, `dirs`, `params`, `fuzz` and `roles` do the same, and their rows say the body was cut. So does every other read of a target's answer: the GraphQL schema query, the RDAP and archive lookups, the h2c and HTTP/2 probes and an advisory's confirmation read; where there is no row to say it, a note names the read that was cut.
 
 ### Targets with no answer
 
