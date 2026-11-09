@@ -1439,3 +1439,4 @@ docs-concepts.state-others-asked	docs/CONCEPTS.md	The words that do not are aske
 fuzz.state-flag-sends	docs/commands/fuzz.md	`-send-state-changing` sends every input, as ffuf does.	test:cmd/azhaq:TestFuzzHoldsAListedWordThatNamesAnAction
 run.state-path-first-list	docs/commands/run.md	The path is read for the first list only: `/stop` names nothing.	test:internal/statechange:TestOfQuery
 run.state-flag-sends-words	docs/commands/run.md	`-send-state-changing` sends them (on `run`, `crawl`, `dirs`, `fuzz`, `params`, `urls -live` and `azhaq mcp`); with it every word is sent, as ffuf sends every word.	test:cmd/azhaq:TestSendStateChangingSendsThemAndSaysSentOnlyForLedgerLines,TestDirsHoldsAListedWordThatNamesAnAction,TestFuzzHoldsAListedWordThatNamesAnAction
+resume.resolvers-list	docs/commands/resume.md	`-resolvers` given as a list (`-resolvers 1.1.1.1,8.8.8.8:53`) is stored as that list	test:cmd/azhaq:TestPortsResumeKeepsTheResolversItWasStartedWith

@@ -420,11 +420,10 @@ func cmdPorts(args []string) error {
 		run = append(run, "-port-payload", *payload)
 	}
 	if *resolvers != "" {
-		rf, rmr, err := resolverFile(*resolvers)
+		rf, err := resolverArg(*resolvers)
 		if err != nil {
 			return err
 		}
-		defer rmr()
 		run = append(run, "-resolvers", rf)
 	}
 	exFile, err := exclusions(*exclFile)
@@ -809,25 +808,27 @@ func once(mu *sync.Mutex, seen map[string]bool, key string) bool {
 	return true
 }
 
-// resolverFile is the file of resolvers run takes: -resolvers is a list on
-// the command line or a file.
-func resolverFile(v string) (string, func(), error) {
+// resolverArg is the -resolvers value run takes: a file as it is, a list on
+// the command line as the list itself, checked and without its blanks. It is
+// not written to a temporary file: the run's stored arguments keep it, so that
+// azhaq resume asks the same resolvers.
+func resolverArg(v string) (string, error) {
 	if _, err := os.Stat(v); err == nil {
-		return v, func() {}, nil
+		return v, nil
 	}
 	var rs []string
 	for _, r := range strings.Split(v, ",") {
 		if r = strings.TrimSpace(r); r != "" {
 			if strings.ContainsAny(r, "/\\") {
-				return "", nil, usagef("-resolvers %q is neither a file nor a list of resolvers", v)
+				return "", usagef("-resolvers %q is neither a file nor a list of resolvers", v)
 			}
 			rs = append(rs, r)
 		}
 	}
 	if len(rs) == 0 {
-		return "", nil, usagef("-resolvers is empty")
+		return "", usagef("-resolvers is empty")
 	}
-	return tempList(rs)
+	return strings.Join(rs, ","), nil
 }
 
 // exclusions are the lines of -ef.
