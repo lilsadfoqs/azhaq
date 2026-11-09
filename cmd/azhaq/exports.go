@@ -232,12 +232,12 @@ func exportToList(path, format, origin string, safe bool, lo listOpts, w io.Writ
 		// same records `azhaq report -findings` writes. An empty
 		// workspace writes the explicit empty record set, so there is
 		// always a line to read.
-		found, leads := buildFindings(g)
-		_, err := w.Write(findingsJSONL(found, leads))
+		found, leads, folds := buildFindings(g)
+		_, err := w.Write(findingsJSONL(found, leads, folds))
 		return err
 	case "findings-md":
-		found, leads := buildFindings(g)
-		_, err := w.Write(findingsMarkdown(found, leads))
+		found, leads, folds := buildFindings(g)
+		_, err := w.Write(findingsMarkdown(found, leads, folds))
 		return err
 	default:
 		return usagef("unknown -format %q (jsonl, urls, hosts, names, targets, openapi, graphql, sdl, burp, html, graphml, secrets, findings, findings-md)", format)

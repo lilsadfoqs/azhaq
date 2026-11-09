@@ -270,7 +270,7 @@ func TestBuildFindings(t *testing.T) {
 			{Entity: types.Entity{Type: types.TypeURL, Key: "http://app.test/"}, Coverage: "visited", Proof: "answered 200"},
 		},
 	}
-	findings, leads := buildFindings(g)
+	findings, leads, _ := buildFindings(g)
 	if len(findings) != 3 {
 		t.Fatalf("%d findings, want 3 (redis proved, CVE-1 proved once, CVE-2 conditional): %+v", len(findings), findings)
 	}

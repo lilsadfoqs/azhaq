@@ -212,14 +212,14 @@ func TestFindingsLeadsHaveTheirOwnTypeAndHeading(t *testing.T) {
 	g := &graphView{args: []string{"-url", "http://app.test/"}, rows: []engine.MapEntry{
 		{Entity: types.Entity{Type: types.TypeURL, Key: "http://app.test/api/things"}, Coverage: "hint", Proof: "GET answers 404; called with POST"},
 	}}
-	found, leads := buildFindings(g)
+	found, leads, folds := buildFindings(g)
 	if len(found) != 0 || len(leads) != 1 {
 		t.Fatalf("%d findings, %d leads", len(found), len(leads))
 	}
-	if !strings.Contains(string(findingsJSONL(found, leads)), `"type":"lead"`) {
-		t.Errorf("jsonl: %s", findingsJSONL(found, leads))
+	if !strings.Contains(string(findingsJSONL(found, leads, folds)), `"type":"lead"`) {
+		t.Errorf("jsonl: %s", findingsJSONL(found, leads, folds))
 	}
-	if md := string(findingsMarkdown(found, leads)); !strings.Contains(md, "## Leads — unproved hints") || strings.Contains(md, "## Proved") {
+	if md := string(findingsMarkdown(found, leads, folds)); !strings.Contains(md, "## Leads — unproved hints") || strings.Contains(md, "## Proved") {
 		t.Errorf("markdown:\n%s", md)
 	}
 }
