@@ -645,6 +645,35 @@ func Requests(raw string, words, exts []string, calibrate, holdState bool, denie
 	return n
 }
 
+// MaxRequests is the most the sweep of the directory of raw sends when it
+// goes no deeper (-dirs-depth 1): Requests, and the control a directory gets
+// that two of the words with a slash in them share. Each word is one request
+// whatever the answer is, and none is asked again.
+func MaxRequests(raw string, words, exts []string, calibrate, holdState bool, deniedBy func(string) string) int {
+	n := Requests(raw, words, exts, calibrate, holdState, deniedBy)
+	dir := Base(raw)
+	if dir == "" || !calibrate {
+		return n
+	}
+	held := func(string) string { return "" }
+	if holdState {
+		held = HeldWord
+	}
+	targets, _, _ := sweepTargets(dir, words, exts, deniedBy, held)
+	perDir := map[string]int{}
+	for _, t := range targets {
+		if inOwnDir(t) {
+			perDir[dirOf(dir+escapeWord(t))]++
+		}
+	}
+	for _, k := range perDir {
+		if k >= 2 {
+			n++
+		}
+	}
+	return n
+}
+
 // Base is the directory a sweep that starts at raw asks: its scheme, host
 // and path as far as the last slash.
 func Base(raw string) string {

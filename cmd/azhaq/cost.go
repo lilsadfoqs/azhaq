@@ -5,6 +5,8 @@ import (
 	"io"
 	"net"
 	"net/netip"
+	"net/url"
+	"slices"
 	"sort"
 	"strings"
 
@@ -77,6 +79,15 @@ type costStage struct {
 	NotCounted string          `json:"not_counted,omitempty"`
 	Actual     *amount         `json:"actual,omitempty"`
 	Collectors []costCollector `json:"collectors,omitempty"`
+	// AtMost is the most the stage sends to the targets and the resolvers
+	// (requests, connects, datagrams and DNS queries) whatever the answers are,
+	// from the flags that bound it. It is absent when nothing does: NoCeiling
+	// says what is open, and AtMostBy names the option that gives it when
+	// that is -max-requests, not the stage's own flags.
+	AtMost    *int64 `json:"at_most,omitempty"`
+	AtMostBy  string `json:"at_most_by,omitempty"`
+	NoCeiling string `json:"no_ceiling,omitempty"`
+	ceil      ceiling
 }
 
 // costCollector is the same for one collector of a stage.
@@ -84,6 +95,7 @@ type costCollector struct {
 	Collector string  `json:"collector"`
 	Estimate  *amount `json:"estimate,omitempty"`
 	Actual    *amount `json:"actual,omitempty"`
+	ceil      ceiling
 }
 
 // costEstimate is what a run would send, by stage, from its flags and targets.
@@ -92,8 +104,106 @@ type costEstimate struct {
 	Stages []costStage `json:"stages"`
 	// AtLeast: some stage leaves out what its answers lead to (the links of
 	// a page, the names a source gives), so a run may send more than Total.
-	AtLeast bool   `json:"at_least,omitempty"`
-	Basis   string `json:"basis"`
+	AtLeast bool `json:"at_least,omitempty"`
+	// AtMost, NoCeiling and AtMostBy are the total's, as a stage's are.
+	AtMost    *int64 `json:"at_most,omitempty"`
+	AtMostBy  string `json:"at_most_by,omitempty"`
+	NoCeiling string `json:"no_ceiling,omitempty"`
+	Basis     string `json:"basis"`
+	ceil      ceiling
+	cap       int64 // -max-requests: the most requests, connects and datagrams a run sends to its targets
+}
+
+// ceiling is the most a part of an estimate sends, from the flags that bound
+// it: contacts with the targets (requests, connects, datagrams) and queries to
+// resolvers. A part with reasons in tOpen or dOpen has no ceiling of its own;
+// -max-requests bounds the first, which the DNS queries are not part of.
+type ceiling struct {
+	target, dns  int64
+	tOpen, dOpen []string
+}
+
+// dnsAgain is why the queries of a lookup have no ceiling: a lookup that gets
+// no answer is asked again on another resolver, and an answer leads to more.
+const dnsAgain = "a lookup that gets no answer is asked again on another resolver (-retry), and a name that answers is asked for its other records"
+
+func (c *ceiling) add(o ceiling) {
+	c.target += o.target
+	c.dns += o.dns
+	c.tOpen = mergeReasons(c.tOpen, o.tOpen)
+	c.dOpen = mergeReasons(c.dOpen, o.dOpen)
+}
+
+func (c ceiling) times(n int64) ceiling {
+	return ceiling{target: c.target * n, dns: c.dns * n, tOpen: c.tOpen, dOpen: c.dOpen}
+}
+
+func mergeReasons(a, b []string) []string {
+	for _, r := range b {
+		if !slices.Contains(a, r) {
+			a = append(a, r)
+		}
+	}
+	return a
+}
+
+// ceilingOf is the ceiling of what a floor leaves nothing out of (open is
+// empty): as much as it counts; with something left out, no flag bounds it
+// unless the caller says so. The sources stage asks third parties, which no
+// flag of the targets bounds and no ceiling covers.
+func ceilingOf(stage string, a amount, open string) ceiling {
+	if stage == "sources" {
+		return ceiling{}
+	}
+	c := ceiling{target: a.Requests + a.Connects + a.Datagrams, dns: a.DNS}
+	switch {
+	case open == "" && a.DNS > 0:
+		c.dOpen = []string{dnsAgain}
+	case open == "":
+	case stage == "names":
+		c.dOpen = []string{open}
+	default:
+		c.tOpen = []string{open}
+	}
+	return c
+}
+
+// atMost is what the flags bound: the most sent, which option sets it when
+// that is -max-requests, or what leaves it open. Nothing at all to bound is
+// no ceiling and no reason.
+func (c ceiling) atMost(cap int64) (at *int64, by, open string) {
+	t := c.target
+	var why []string
+	switch {
+	case len(c.tOpen) > 0 && cap > 0:
+		t, by = cap, "-max-requests"
+	case len(c.tOpen) > 0:
+		why = append(why, c.tOpen...)
+	case cap > 0 && t > cap:
+		t, by = cap, "-max-requests"
+	}
+	why = append(why, c.dOpen...)
+	if len(why) > 0 {
+		sort.Strings(why)
+		return nil, "", strings.Join(why, "; ")
+	}
+	if c.target == 0 && c.dns == 0 {
+		return nil, "", ""
+	}
+	v := t + c.dns
+	return &v, by, ""
+}
+
+// seal sets the ceilings printed, stage by stage and for the whole, from what
+// each was counted with.
+func (e *costEstimate) seal() {
+	e.ceil = ceiling{}
+	for i := range e.Stages {
+		st := &e.Stages[i]
+		e.ceil.add(st.ceil)
+		st.AtMost, st.AtMostBy, st.NoCeiling = st.ceil.atMost(e.cap)
+	}
+	e.AtMost, e.AtMostBy, e.NoCeiling = e.ceil.atMost(e.cap)
 }
 
 const rolesBasis = "from the roles, their histories and the run options: each stage counts what they fix, as if each target answers, and says what it leaves out"
@@ -174,11 +284,13 @@ type estimator struct {
 	stages  map[string]*costStage
 	notes   map[string]map[string]bool
 	coll    map[string]map[string]*amount
+	collCap map[string]map[string]*ceiling
 	atLeast bool
+	cap     int64 // -max-requests
 }
 
 func newEstimator() *estimator {
-	return &estimator{stages: map[string]*costStage{}, notes: map[string]map[string]bool{}, coll: map[string]map[string]*amount{}}
+	return &estimator{stages: map[string]*costStage{}, notes: map[string]map[string]bool{}, coll: map[string]map[string]*amount{}, collCap: map[string]map[string]*ceiling{}}
 }
 
 // add puts a into the stage of collector, with what it leaves out (open).
@@ -187,17 +299,119 @@ func (e *estimator) add(collector string, a amount, open string) {
 	e.put(st, collector, a, open)
 }
 
+// has says whether a stage has an entry.
+func (e *estimator) has(stage string) bool { return e.stages[stage] != nil }
+
+// addBound is add with the ceiling the flags give it.
+func (e *estimator) addBound(collector string, a amount, open string, cl ceiling) {
+	e.putBound(stageOfCollector(collector), collector, a, open, cl)
+}
+
+// growsBeyond says why a ceiling counted from the seeds may be passed: a
+// seed that names more than itself (a domain, an organisation, an AS number),
+// or a scope that allows hosts that are not seeds, finds targets on the way.
+func growsBeyond(seeds []types.Seed, rules scope.Rules) string {
+	own := map[string]bool{}
+	var spans []netip.Prefix
+	for _, s := range seeds {
+		switch s.Type {
+		case types.TypeURL:
+			own[normalize.HostFromURL(s.Key())] = true
+		case types.TypeHostname, types.TypeIPAddress:
+			own[strings.ToLower(s.Key())] = true
+		case types.TypePrefix:
+			if pf, err := netip.ParsePrefix(s.Key()); err == nil {
+				spans = append(spans, pf.Masked())
+			}
+		default:
+			return "names, addresses and web services found under the domains, organisations and AS numbers given are asked too"
+		}
+	}
+	inSpans := func(a string) bool {
+		if pf, err := netip.ParsePrefix(a); err == nil {
+			for _, sp := range spans {
+				if sp.Bits() <= pf.Bits() && sp.Contains(pf.Addr()) {
+					return true
+				}
+			}
+		} else if ip, err := netip.ParseAddr(a); err == nil {
+			for _, sp := range spans {
+				if sp.Contains(ip.Unmap()) {
+					return true
+				}
+			}
+		}
+		return false
+	}
+	for _, a := range rules.Allow {
+		host := normalize.Hostname(a)
+		if h, _, err := net.SplitHostPort(a); err == nil {
+			host = normalize.Hostname(h)
+		}
+		if !own[host] && !own[strings.ToLower(a)] && !inSpans(a) && !inSpans(host) {
+			return "-allow or -scope names hosts that are not targets: the ones a page links to there are asked too"
+		}
+	}
+	return ""
+}
+
+// paramsPerPage is what searching one page asks at least: the questions that
+// tell how the page answers, and the groups of 500 names (see planGuesses).
+func paramsPerPage(names int) int64 { return int64(3 + (names+499)/500) }
+
+// paramsPages is how many pages azhaq-params is sure to search: the pages the
+// user gave, one for each path, up to -params-per-host of a host, when a body
+// is not what it sends or writes were asked for.
+func paramsPages(seeds []types.Seed, planned [][]string, env costEnv) int64 {
+	if env.paramsBody != "" && !env.paramsWrites {
+		return 0
+	}
+	perHost := map[string]int{}
+	paths := map[string]bool{}
+	var n int64
+	for i, s := range seeds {
+		if s.Type != types.TypeURL || !slices.Contains(planned[i], "azhaq-params") || !env.rules.AllowsURL(s.Key()) || env.rules.DeniedPath(s.Key()) != "" {
+			continue
+		}
+		raw, err := normalize.URL(s.Key())
+		if err != nil {
+			continue
+		}
+		u, err := url.Parse(raw)
+		if err != nil {
+			continue
+		}
+		page := u.Scheme + "://" + u.Host + u.Path
+		if paths[page] || (env.paramsPages > 0 && perHost[u.Host] >= env.paramsPages) {
+			continue
+		}
+		paths[page] = true
+		perHost[u.Host]++
+		n++
+	}
+	return n
+}
+
 func (e *estimator) put(stage, collector string, a amount, open string) {
+	e.putBound(stage, collector, a, open, ceilingOf(stage, a, open))
+}
+
+// putBound is put with the ceiling the flags give it.
+func (e *estimator) putBound(stage, collector string, a amount, open string, cl ceiling) {
 	if e.stages[stage] == nil {
 		e.stages[stage] = &costStage{Stage: stage, Estimate: &amount{}}
 		e.coll[stage] = map[string]*amount{}
+		e.collCap[stage] = map[string]*ceiling{}
 		e.notes[stage] = map[string]bool{}
 	}
 	e.stages[stage].Estimate.add(a)
+	e.stages[stage].ceil.add(cl)
 	if e.coll[stage][collector] == nil {
 		e.coll[stage][collector] = &amount{}
+		e.collCap[stage][collector] = &ceiling{}
 	}
 	e.coll[stage][collector].add(a)
+	e.collCap[stage][collector].add(cl)
 	if open != "" {
 		e.notes[stage][open] = true
 		e.stages[stage].AtLeast = true
@@ -206,7 +420,7 @@ func (e *estimator) put(stage, collector string, a amount, open string) {
 }
 
 func (e *estimator) result() costEstimate {
-	out := costEstimate{AtLeast: e.atLeast, Basis: estimateBasis}
+	out := costEstimate{AtLeast: e.atLeast, Basis: estimateBasis, cap: e.cap}
 	var names []string
 	for n := range e.stages {
 		names = append(names, n)
@@ -233,12 +447,13 @@ func (e *estimator) result() costEstimate {
 		if len(cols) > 1 || (len(cols) == 1 && cols[0] != "") {
 			for _, c := range cols {
 				a := *e.coll[n][c]
-				st.Collectors = append(st.Collectors, costCollector{Collector: c, Estimate: &a})
+				st.Collectors = append(st.Collectors, costCollector{Collector: c, Estimate: &a, ceil: *e.collCap[n][c]})
 			}
 		}
 		out.Total.add(*st.Estimate)
 		out.Stages = append(out.Stages, st)
 	}
+	out.seal()
 	return out
 }
 
@@ -254,6 +469,8 @@ func (e *estimator) result() costEstimate {
 // whether a collector would run on a web service found.
 func estimateCost(seeds []types.Seed, planned [][]string, runs func(string) bool, active map[string]bool, env costEnv, asks func(collector string, s types.Seed) int) costEstimate {
 	e := newEstimator()
+	e.cap = env.max
+	grows := growsBeyond(seeds, env.rules)
 	has := func(i int, c string) bool {
 		for _, n := range planned[i] {
 			if n == c {
@@ -294,6 +511,7 @@ func estimateCost(seeds []types.Seed, planned [][]string, runs func(string) bool
 		hostPages int                 // names asked for their page: its URL is not known before
 		dirsBases = map[string]bool{}
 		dirsReqs  int64
+		dirsMax   int64               // the most the sweeps send at depth 1
 		names     = map[string]bool{} // the names looked up
 	)
 	for i, s := range seeds {
@@ -317,7 +535,11 @@ func estimateCost(seeds []types.Seed, planned [][]string, runs func(string) bool
 					e.add(c, amount{Connects: 1}, "")
 				}
 			case "azhaq-ports":
-				e.add(c, portsOf(ports, s, ranges), portsOpen)
+				cl := ports.ceilOf(s, ranges)
+				if grows != "" {
+					cl.tOpen = mergeReasons(cl.tOpen, []string{grows})
+				}
+				e.addBound(c, portsOf(ports, s, ranges), portsOpen, cl)
 				nameScanned = nameScanned || s.Type == types.TypeHostname && net.ParseIP(s.Key()) == nil
 			case "azhaq-http":
 				switch {
@@ -349,6 +571,7 @@ func estimateCost(seeds []types.Seed, planned [][]string, runs func(string) bool
 				if base := dirscol.Base(s.Key()); base != "" && !dirsBases[base] {
 					dirsBases[base] = true
 					dirsReqs += int64(dirscol.Requests(s.Key(), env.dirsWordList, env.dirsExtList, !env.dirsNoCal, env.dirsHold, env.rules.DeniedPath))
+					dirsMax += int64(dirscol.MaxRequests(s.Key(), env.dirsWordList, env.dirsExtList, !env.dirsNoCal, env.dirsHold, env.rules.DeniedPath))
 				}
 			}
 		}
@@ -364,6 +587,16 @@ func estimateCost(seeds []types.Seed, planned [][]string, runs func(string) bool
 			}
 		}
 	}
+	if grows != "" {
+		// Targets found on the way are asked by these stages too, whether or
+		// not a seed has them yet: a stage with no seed says so.
+		if active["ports"] && !e.has("ports") {
+			e.addBound("azhaq-ports", amount{}, grows, ceiling{tOpen: []string{grows}})
+		}
+		if active["dirs"] && len(env.dirsWordList) > 0 && !e.has("fuzz") {
+			e.addBound("azhaq-dirs", amount{}, grows, ceiling{tOpen: []string{grows}})
+		}
+	}
 	if active["ports"] {
 		for _, s := range seeds {
 			if s.Type == types.TypeASN {
@@ -371,11 +604,12 @@ func estimateCost(seeds []types.Seed, planned [][]string, runs func(string) bool
 				break
 			}
 		}
+		// The ceiling counts the ports of every address and every datagram.
 		if len(ranges) > 0 && env.portDiscover == portcol.DiscoverFirst {
-			e.add("azhaq-ports", amount{}, "the ports of the addresses of a range that answer the connects to 80 and 443 (-port-discover first)")
+			e.addBound("azhaq-ports", amount{}, "the ports of the addresses of a range that answer the connects to 80 and 443 (-port-discover first)", ceiling{})
 		}
 		if len(env.portUDPList) > 0 && nameScanned {
-			e.add("azhaq-ports", amount{}, "UDP datagrams to a name, which may be behind a CDN or WAF: none go to those addresses")
+			e.addBound("azhaq-ports", amount{}, "UDP datagrams to a name, which may be behind a CDN or WAF: none go to those addresses", ceiling{})
 		}
 	}
 	// The page of each URL, then each path the sweeps ask; one that is both is
@@ -400,13 +634,27 @@ func estimateCost(seeds []types.Seed, planned [][]string, runs func(string) bool
 		e.add("azhaq-paths", amount{Requests: int64(own)}, note)
 	}
 	if dirsReqs > 0 {
-		e.add("azhaq-dirs", amount{Requests: dirsReqs}, "each directory found is swept and calibrated too, and a directory two hits are found in (words with a slash) gets one more request")
+		cl := ceiling{target: dirsMax}
+		switch {
+		case env.dirsDepth > 1:
+			cl.tOpen = []string{"each directory found is swept too (-dirs-depth " + fmt.Sprint(env.dirsDepth) + ")"}
+		case grows != "":
+			cl.tOpen = []string{grows}
+		}
+		e.addBound("azhaq-dirs", amount{Requests: dirsReqs}, "each directory found is swept and calibrated too, and a directory two hits are found in (words with a slash) gets one more request", cl)
 	}
 	if active["params"] && len(pages) > 0 && env.paramsN > 0 {
-		e.add("azhaq-params", amount{}, "pages searched, up to -params-per-host a host, each asked in batches of the wordlist")
+		// A page the user gave is searched whatever it answers (up to
+		// -params-per-host of a host): its first questions are the floor, and
+		// a group that changes the answer is narrowed down, which no flag bounds.
+		if n := paramsPages(seeds, planned, env); n > 0 {
+			e.add("azhaq-params", amount{Requests: n * paramsPerPage(env.paramsN)}, "groups that change the answer are narrowed down, and pages the run finds are searched too, up to -params-per-host a host")
+		} else {
+			e.add("azhaq-params", amount{}, "pages searched, up to -params-per-host a host, each asked in batches of the wordlist")
+		}
 	}
 	if env.login != "" {
-		e.put("sign-in", "chrome", amount{Requests: 3}, "the sign-in page's scripts, styles and images")
+		e.put("sign-in", "chrome", amount{Requests: 3}, "the sign-in page's scripts, styles and images, which Chrome asks for as the page names them")
 	}
 	return e.result()
 }
@@ -468,7 +716,7 @@ const permuteOpen = "variations of the names the sources and lookups find (-perm
 
 // printEstimate says the estimate in plain text, one line a stage.
 func printEstimate(w io.Writer, lead string, est costEstimate) {
-	fmt.Fprintln(w, lead+est.Total.String()+atLeastWord(est.AtLeast))
+	fmt.Fprintln(w, lead+est.Total.String()+atLeastWord(est.AtLeast)+ceilingWord(est.AtMost, est.AtMostBy, est.NoCeiling, "", est.cap))
 	for _, st := range est.Stages {
 		line := fmt.Sprintf("  %-12s %s", st.Stage, st.Estimate)
 		var by []string
@@ -480,12 +728,50 @@ func printEstimate(w io.Writer, lead string, est costEstimate) {
 		if len(by) > 0 {
 			line += " (" + strings.Join(by, ", ") + ")"
 		}
+		line += ceilingWord(st.AtMost, st.AtMostBy, st.NoCeiling, st.NotCounted, est.cap)
 		if st.NotCounted != "" {
 			line += "; not counted: " + st.NotCounted
 		}
 		fmt.Fprintln(w, line)
 	}
 	fmt.Fprintln(w, "  "+est.Basis)
+}
+
+// ceilingWord says what bounds an estimate beside its floor: "; at most N"
+// (and the option that gives it when that is the budget), or "; no ceiling"
+// with what is open. A reason a stage lists under not counted is not said twice.
+func ceilingWord(at *int64, by, no, counted string, cap int64) string {
+	return ceilingWordIn(at, by, no, counted, cap, false)
+}
+
+// ceilingWordIn is ceilingWord; short leaves the reasons out, for a line that
+// has no room for them (the summary's: they are in the plan).
+func ceilingWordIn(at *int64, by, no, counted string, cap int64, short bool) string {
+	switch {
+	case at != nil && by != "":
+		return fmt.Sprintf("; at most %s (%s)", commas(*at), by)
+	case at != nil:
+		return "; at most " + commas(*at)
+	case no == "":
+		return ""
+	}
+	hint := ""
+	if cap == 0 {
+		hint = " (-max-requests sets one)"
+	}
+	if no == counted || short {
+		return "; no ceiling" + hint
+	}
+	return "; no ceiling: " + no + hint
+}
+
+// commas writes n with a comma between each three digits.
+func commas(n int64) string {
+	s := fmt.Sprint(n)
+	for i := len(s) - 3; i > 0; i -= 3 {
+		s = s[:i] + "," + s[i:]
+	}
+	return s
 }
 
 func atLeastWord(atLeast bool) string {
@@ -599,10 +885,15 @@ func stageOfKey(k ledger.SpentKey) string {
 // costReport is the summary's account of the cost: what each stage was
 // estimated to send, and what it sent.
 type costReport struct {
-	Estimate *amount     `json:"estimate,omitempty"` // the total, when the command estimated
-	AtLeast  bool        `json:"estimate_at_least,omitempty"`
-	Actual   amount      `json:"actual"`
-	Stages   []costStage `json:"stages"`
+	cap      int64
+	Estimate *amount `json:"estimate,omitempty"` // the total, when the command estimated
+	AtLeast  bool    `json:"estimate_at_least,omitempty"`
+	// AtMost: the most the command was bounded to send, as the estimate has it.
+	AtMost    *int64      `json:"at_most,omitempty"`
+	AtMostBy  string      `json:"at_most_by,omitempty"`
+	NoCeiling string      `json:"no_ceiling,omitempty"`
+	Actual    amount      `json:"actual"`
+	Stages    []costStage `json:"stages"`
 }
 
 // accountCost builds the cost account of a command from the estimate it made
@@ -634,6 +925,7 @@ func accountCostBy(est *costEstimate, then map[ledger.SpentKey]int64, order []st
 	if est != nil {
 		out.Estimate, out.AtLeast = &amount{}, est.AtLeast
 		*out.Estimate = est.Total
+		out.AtMost, out.AtMostBy, out.NoCeiling, out.cap = est.AtMost, est.AtMostBy, est.NoCeiling, est.cap
 		for _, st := range est.Stages {
 			c := st
 			byStage[st.Stage] = &c
@@ -718,7 +1010,7 @@ func (c *costReport) lines() []string {
 		}
 		line := fmt.Sprintf("%s: sent %s", st.Stage, act)
 		if st.Estimate != nil {
-			line += fmt.Sprintf(" (estimated %s%s)", st.Estimate, map[bool]string{true: " and what the answers lead to"}[st.AtLeast])
+			line += fmt.Sprintf(" (estimated %s%s%s)", st.Estimate, map[bool]string{true: " and what the answers lead to"}[st.AtLeast], ceilingWordIn(st.AtMost, st.AtMostBy, st.NoCeiling, st.NotCounted, c.cap, true))
 		}
 		out = append(out, line)
 	}

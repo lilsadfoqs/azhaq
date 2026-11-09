@@ -172,3 +172,19 @@ func TestIdentificationWidthFollowsTheFreeWorkers(t *testing.T) {
 		t.Errorf("the default had %d connections open at once, want the ladder asked several at a time", n)
 	}
 }
+
+// A connect that is not a probe is never held to an open port's allowance, and
+// one made for an open port's identification comes out of it.
+func TestSpareTakesFromTheOpenPortsAllowance(t *testing.T) {
+	if !spare(context.Background()) {
+		t.Fatal("a context with no allowance refuses a connect")
+	}
+	b := &probeBudget{n: 2}
+	ctx := context.WithValue(context.Background(), probeKey{}, b)
+	if !spare(ctx) || !spare(ctx) || spare(ctx) {
+		t.Errorf("an allowance of 2 gave a different number of connects")
+	}
+	if MaxConnectsPerOpenPort != maxProbes+1 {
+		t.Errorf("MaxConnectsPerOpenPort is %d", MaxConnectsPerOpenPort)
+	}
+}

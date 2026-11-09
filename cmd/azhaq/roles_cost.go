@@ -25,6 +25,7 @@ type rolesCostIn struct {
 	replay   bool
 	max      int // -replay-max
 	methods  map[string]bool
+	budget   int64    // -max-requests of the run options, the command's budget
 	mapsPlan *runPlan // what one role's run would send, from plan; nil outside plan
 }
 
@@ -33,6 +34,7 @@ type rolesCostIn struct {
 // leaves out named.
 func estimateRoles(in rolesCostIn) costEstimate {
 	e := newEstimator()
+	e.cap = in.budget
 	n := len(in.roles)
 	if in.logins > 0 {
 		e.put(signInStage, "", amount{Requests: int64(in.logins * signInCost)}, "the sign-in page's scripts, styles and images; a sign-in again each time a session ends")
@@ -50,7 +52,7 @@ func estimateRoles(in rolesCostIn) costEstimate {
 				for i := 0; i < n; i++ {
 					each.add(*c.Estimate)
 				}
-				e.put(stageRoleMaps, c.Collector, each, st.NotCounted)
+				e.putBound(stageRoleMaps, c.Collector, each, st.NotCounted, c.ceil.times(int64(n)))
 			}
 		}
 	}
@@ -69,7 +71,7 @@ func estimateRoles(in rolesCostIn) costEstimate {
 		if in.crawl {
 			open = "the pages the role's run reached are not read again"
 		}
-		e.put(stageHistory, "", amount{Requests: reads}, open)
+		e.putBound(stageHistory, "", amount{Requests: reads}, open, ceiling{target: reads}) // each page is asked at most once
 	}
 	if in.replay {
 		var need int64
@@ -157,6 +159,7 @@ func addRunEstimate(e *costEstimate, sub *report) {
 		}
 		merge(e, stage, st)
 	}
+	e.seal()
 }
 
 // merge adds the estimate of one stage of a run to stage of e.
@@ -172,6 +175,7 @@ func merge(e *costEstimate, stage string, st costStage) {
 		dst = &e.Stages[len(e.Stages)-1]
 	}
 	dst.Estimate.add(*st.Estimate)
+	dst.ceil.add(st.ceil)
 	e.Total.add(*st.Estimate)
 	if st.AtLeast {
 		dst.AtLeast, e.AtLeast = true, true
@@ -195,7 +199,7 @@ func merge(e *costEstimate, stage string, st costStage) {
 		}
 		if !done {
 			a := *c.Estimate
-			dst.Collectors = append(dst.Collectors, costCollector{Collector: c.Collector, Estimate: &a})
+			dst.Collectors = append(dst.Collectors, costCollector{Collector: c.Collector, Estimate: &a, ceil: c.ceil})
 		}
 	}
 }

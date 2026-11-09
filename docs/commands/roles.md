@@ -189,7 +189,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 | `controls` | one request with a made-up identifier for each cross read; with and without the session for each page a `-role-login` sign-in loaded, until a role has a session check | not counted before |
 | `write replay`, `verification` | with `-replay-writes`, each write of the histories sent with every other role's session, and the owner's object read before and after | the history's writes for each other role; the PUT, PATCH and DELETE of the runs' routes come on top |
 
-Stages that cannot be counted before say `not_counted`. `-replay-max` caps the replay and the stages after it. With `-max-requests` in the run options, the plan names the stage whose estimate passes the budget, and the budget's stop in the summary names the stage that sent its last request and what each stage had sent: a run that dies while Chrome signs in says `the budget was reached in the sign-in stage; by stage: sign-in 4, role maps 5`.
+Stages that cannot be counted before say `not_counted`. The estimate has a ceiling beside its floor where the flags bound a stage, as [plan](plan.md#the-estimate) has: the history reads are at most one request for each page, and a sign-in, the replay and the controls say `no_ceiling` (`-max-requests` of the run options sets one). `-replay-max` caps the replay and the stages after it. With `-max-requests` in the run options, the plan names the stage whose estimate passes the budget, and the budget's stop in the summary names the stage that sent its last request and what each stage had sent: a run that dies while Chrome signs in says `the budget was reached in the sign-in stage; by stage: sign-in 4, role maps 5`.
 
 ### Verdict details
 

@@ -234,7 +234,7 @@ func TestRunSummaryTextHasTheCostByStage(t *testing.T) {
 	srv := juiceShaped(&hits)
 	defer srv.Close()
 	_, errOut, _ := cli(t, "run", "-url", srv.URL+"/", "-allow", "127.0.0.1", "-sources", "none", "-db", filepath.Join(t.TempDir(), "w.db"), "-ledger", "off")
-	if !strings.Contains(errOut, "cost: web: sent 83 requests (estimated 26 requests and what the answers lead to)") {
+	if !strings.Contains(errOut, "cost: web: sent 83 requests (estimated 26 requests and what the answers lead to; no ceiling (-max-requests sets one))") {
 		t.Errorf("the summary does not set the estimate beside what was sent:\n%s", errOut)
 	}
 }

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"math"
 	"net"
 	"net/netip"
 	"strconv"
@@ -8,7 +9,9 @@ import (
 	"github.com/lilsadfoqs/azhaq/internal/cdnranges"
 	"github.com/lilsadfoqs/azhaq/internal/collectors/portcol"
 	"github.com/lilsadfoqs/azhaq/internal/fingerprint"
+	"github.com/lilsadfoqs/azhaq/internal/portscan"
 	"github.com/lilsadfoqs/azhaq/scope"
+	"github.com/lilsadfoqs/azhaq/types"
 )
 
 // What the port scan sends at least, counted as the collector asks: the ports
@@ -34,11 +37,132 @@ type portModel struct {
 	discover   portcol.Discovery
 	excludeCDN bool
 	threshold  int // -port-threshold: a host is left after this many open ports
+	// What the ceiling is counted with.
+	passes    int // the most times a port is asked: 1, and each pass over the ones that did not answer
+	nameAddrs int // the most addresses of a name that are scanned; 0: every one it has (-port-all-ips)
+	probes    int // the most connects an open port costs after the one that found it
 }
 
 func newPortModel(rules scope.Rules, env costEnv) portModel {
-	return portModel{rules: rules, tcp: env.portList, udp: env.portUDPList, own: env.portsFor, discover: env.portDiscover,
-		excludeCDN: env.portExcludeCDN, threshold: env.portThreshold}
+	m := portModel{rules: rules, tcp: env.portList, udp: env.portUDPList, own: env.portsFor, discover: env.portDiscover,
+		excludeCDN: env.portExcludeCDN, threshold: env.portThreshold, passes: max(env.portPasses, 1), nameAddrs: env.portNameAddrs}
+	if env.portDetect == portscan.DetectAll {
+		m.probes = portscan.MaxConnectsPerOpenPort
+	}
+	return m
+}
+
+// The ceiling of the port scan is counted as the floor is, with what the
+// answers decide given its most: every port asked on every pass, each of them
+// open and costing all it may, every datagram asked in each of its four
+// passes, and a range's every address up. A CDN or WAF address is counted as
+// any other.
+
+// satAdd and satMul keep a ceiling of a very large range from wrapping.
+func satAdd(a, b int64) int64 {
+	if a > math.MaxInt64-b {
+		return math.MaxInt64
+	}
+	return a + b
+}
+
+func satMul(a, b int64) int64 {
+	if a != 0 && b > math.MaxInt64/a {
+		return math.MaxInt64
+	}
+	return a * b
+}
+
+// ceilOne is the most one address is sent: connects, datagrams.
+func (m portModel) ceilOne(host, ip string) (tcp, udp int64) {
+	list := m.tcp
+	if own, ok := m.own[host]; ok {
+		list = own
+	}
+	discovery := int64(2 * len(portscan.DiscoveryPorts)) // two tries of each port
+	if m.discover == portcol.DiscoverOnly {
+		tcp = discovery
+	} else if kept, _ := m.kept(host, ip, list); kept > 0 {
+		tcp = satMul(int64(kept), int64(m.passes+m.probes))
+		if m.discover == portcol.DiscoverFirst {
+			tcp += discovery
+		}
+	}
+	if len(m.udp) > 0 && m.discover != portcol.DiscoverOnly {
+		k, _ := m.kept(host, ip, m.udp)
+		udp = int64(k) * portscan.MaxUDPAsks
+	}
+	return tcp, udp
+}
+
+// ceilHost is the ceiling of a name or an address given as a target: the
+// first two addresses of each family of a name, or every one with
+// -port-all-ips (open: not known before the name is looked up).
+func (m portModel) ceilHost(host string) (c ceiling) {
+	if ip := net.ParseIP(host); ip != nil {
+		t, u := m.ceilOne(host, ip.String())
+		return ceiling{target: t + u}
+	}
+	if m.nameAddrs == 0 {
+		return ceiling{tOpen: []string{"every address of a name is scanned (-port-all-ips)"}}
+	}
+	t, u := m.ceilOne(host, "")
+	return ceiling{target: satMul(t+u, int64(m.nameAddrs))}
+}
+
+// ceilSpan is the ceiling of a range given as a target.
+func (m portModel) ceilSpan(pf netip.Prefix) ceiling {
+	pf = pf.Masked()
+	if pf.Addr().Is6() && pf.Bits() < 104 {
+		return ceiling{} // portcol refuses it: nothing finishes it
+	}
+	total := m.rules.CountAddrs(pf)
+	var sum int64
+	special := map[netip.Addr]bool{}
+	for _, a := range m.rules.PortedAddrs(pf) {
+		special[a] = true
+	}
+	for h := range m.own {
+		if a, err := netip.ParseAddr(h); err == nil && pf.Contains(a.Unmap()) && m.rules.Allows(a.String()) {
+			special[a.Unmap()] = true
+		}
+	}
+	for a := range special {
+		t, u := m.ceilOne(a.String(), a.String())
+		sum = satAdd(sum, t+u)
+		total--
+	}
+	if total > 0 {
+		free := m
+		free.rules = scope.Rules{}
+		t, u := free.ceilOne("", "")
+		if total > math.MaxInt64 {
+			total = math.MaxInt64
+		}
+		sum = satAdd(sum, satMul(t+u, int64(total)))
+	}
+	return ceiling{target: sum}
+}
+
+// ceilOf is the ceiling of the port scan of one target, as portsOf is its
+// floor.
+func (m portModel) ceilOf(s types.Seed, ranges []netip.Prefix) ceiling {
+	switch s.Type {
+	case types.TypePrefix:
+		if pf, err := netip.ParsePrefix(s.Key()); err == nil {
+			return m.ceilSpan(pf)
+		}
+	case types.TypeIPAddress, types.TypeHostname:
+		if a, err := netip.ParseAddr(s.Key()); err == nil {
+			for _, pf := range ranges {
+				if pf.Contains(a.Unmap()) {
+					return ceiling{}
+				}
+			}
+		}
+		return m.ceilHost(s.Key())
+	}
+	return ceiling{}
 }
 
 // kept are the ports of list that may be asked of host at ip; out are the ones
@@ -186,4 +310,29 @@ func (m portModel) span(pf netip.Prefix) amount {
 
 func scaled(a amount, n uint64) amount {
 	return amount{Connects: a.Connects * int64(n), Datagrams: a.Datagrams * int64(n)}
+}
+
+// portPasses is the most times a port is asked with retries as portscan reads
+// it: none is one pass, the default policy one more over the ports that did
+// not answer, n is n more.
+func portPasses(retries int) int {
+	switch {
+	case retries < 0:
+		return 1
+	case retries == 0:
+		return 2
+	}
+	return 1 + retries
+}
+
+// portNameAddrs is the most addresses of a name the scan asks: two of each
+// family (one with -port-ip), every one it has with -port-all-ips (0).
+func portNameAddrs(cfg portcol.Config) int {
+	switch {
+	case cfg.AllIPs:
+		return 0
+	case cfg.IPv4Only || cfg.IPv6Only:
+		return 2
+	}
+	return 4
 }

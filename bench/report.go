@@ -91,6 +91,11 @@ func printSet(w *tabwriter.Writer, title string, ps *profileSet) {
 			}
 		}
 		for _, a := range ps.Apps {
+			if c := a.RunCPU; c != nil && c.Runs > 0 {
+				fmt.Fprintf(w, "\nrun, CPU (%s)\tazhaq\tkatana -jc -jsl\n", a.Name)
+				fmt.Fprintf(w, "CPU seconds\t%.2f\t%.2f\n", c.AzhaqCPU, c.KatanaCPU)
+				fmt.Fprintf(w, "time\t%.1fs\t%.1fs\n", c.AzhaqWall, c.KatanaWall)
+			}
 			if b := a.Browser; b != nil {
 				fmt.Fprintf(w, "\nwith a browser (%s)\troutes\tknown\tshell\ttime\tRSS\n", a.Name)
 				fmt.Fprintf(w, "azhaq -browser\t%d\t%s\t%d\t%.1fs\t%.0fMB\n", b.Azhaq.Routes, known(b.Azhaq), b.Azhaq.Shell, b.Azhaq.Seconds, b.Azhaq.RSSMB)
