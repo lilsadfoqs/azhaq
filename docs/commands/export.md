@@ -5,7 +5,7 @@ Write a database in another tool's format.
 ## Synopsis
 
 ```
-azhaq export [-db FILE] [-format jsonl|urls|hosts|names|targets|openapi|graphql|sdl|burp|html|graphml|secrets|findings|findings-md] [-origin ORIGIN|URL] [-safe]
+azhaq export [-db FILE] [-format jsonl|urls|hosts|names|targets|openapi|graphql|sdl|burp|html|graphml|secrets|findings|findings-md] [-origin ORIGIN|URL] [-safe] [-coverage LIST] [-json]
 ```
 
 ## Examples
@@ -28,6 +28,12 @@ azhaq export -db h1.db -format targets | nuclei -l -
 
 # The findings records of a run, one JSON object per record
 azhaq export -db app.db -format findings > findings.jsonl
+
+# Only the URLs a request answered, for another tool
+azhaq export -db app.db -format urls -coverage visited > answered.txt
+
+# Every URL with how the run knows it
+azhaq export -db app.db -format urls -json > urls.jsonl
 ```
 
 ## What it does
@@ -41,9 +47,9 @@ The output is the format you chose, on stdout.
 | Format | Output |
 | --- | --- |
 | `jsonl` | Everything: one object per map row (`"kind":"entity"`, with `evidence` and `evidence_from`), observation and edge. |
-| `urls` | Every URL the workspace learned, one per line: the map's URL rows, and every URL the archives gave for the run, which the workspace keeps in `DB.urls.jsonl` beside it (the graph holds one example for each URL shape, 200 a domain). Each URL once. A workspace made before the list was kept holds only the examples, and stderr says how many archived URLs they stand for. |
+| `urls` | Every URL the workspace learned, one per line: the map's URL rows, and every URL the archives gave for the run, which the workspace keeps in `DB.urls.jsonl` beside it (the graph holds one example for each URL shape, 200 a domain). Each URL once. A workspace made before the list was kept holds only the examples, and stderr says how many archived URLs they stand for. `-coverage` and `-json` say which were visited and which were only named: see [Lists with coverage](#lists-with-coverage). |
 | `hosts` | One per line: names that resolve, and addresses given as targets or serving the web. |
-| `names` | Every name, one per line. |
+| `names` | Every name, one per line. `-coverage` and `-json` as for `urls`. |
 | `targets` | Web services, one per line, for `nuclei -l` and `httpx`. See Details. |
 | `openapi` | OpenAPI 3 JSON of one origin. See [openapi](#openapi). |
 | `graphql` | The introspection result of each GraphQL endpoint read with `-graphql`. See [graphql and sdl](#graphql-and-sdl). |
@@ -66,6 +72,19 @@ azhaq export: nothing to write: the workspace holds no host names (a run of a UR
 The summary and the other exit codes are the shared ones: see [the summary](../OUTPUT.md#the-summary) and [exit codes](../OUTPUT.md#exit-codes).
 
 ## Details
+
+### Lists with coverage
+
+A bare `urls` or `names` list does not say which entries were requested and which were only named: a URL a request answered, one a script only names, one a rule kept out and one beyond the depth look alike. Two flags say it. The plain list, with neither, is unchanged.
+
+- `-coverage visited,hint,…` keeps the entries of those coverages, as [query](query.md) `-coverage` does: `visited`, `catchall`, `error`, `gone`, `hint`, `skipped`, `capped`. A value that is not one is a usage error, so a typo does not give an empty list. Both flags are for `-format urls` and `names` only; with another format they are a usage error.
+- `-json` writes one JSON object per line: `{"url", "coverage", "status", "source"}` for `urls`, `{"name", …}` for `names`. `status` is the answer's status (0 when nothing answered). `source` is the collectors that found the entry, comma-separated: for a URL the archives gave and the graph does not hold, the archive.
+
+For `urls`, the coverage is the map row's. A URL that only an archive gave is a `hint`: no request was made for it. The count of a coverage is what `azhaq query -type URL -coverage C` lists, except that `query` folds URLs of one shape into a template row and the export lists each URL.
+
+A name has no coverage of its own. It takes that of the URLs the run holds on it, the best one first: `visited`, `catchall`, `gone`, `error`, `skipped`, `capped`; a name no URL was asked on is a `hint` (named by a source, a list or a certificate). Its `status` is that URL's, its front page's when there is a tie.
+
+When `-coverage` matches nothing, stderr says `nothing to write: no entry has coverage C` and the exit code is 0.
 
 ### targets
 
@@ -194,4 +213,6 @@ Rules look like this:
 | `-format` | string | `jsonl` | jsonl (everything), urls, hosts (names that resolve), names (every name), targets (web services, for nuclei -l), openapi, graphql (introspection JSON), sdl (GraphQL schema), burp (the run's scope), html, graphml, secrets, findings (one record per qualifying stored row, JSON Lines; an empty workspace writes an explicit empty record set), findings-md (the same records in Markdown) |
 | `-origin` | string |  | openapi: the origin to describe (default: the one with most API routes); graphql, sdl: the endpoints of an origin, or one endpoint's URL |
 | `-safe` | bool |  | openapi: leave out the routes the run did not request, such as those -deny-path kept out (otherwise they carry x-azhaq-skipped: true) |
+| `-coverage` | string |  | urls, names: only these coverages, comma-separated: visited, catchall, error, gone, hint, skipped, capped |
+| `-json` | bool |  | urls, names: one {url\|name, coverage, status, source} object per line |
 <!-- flags:end -->

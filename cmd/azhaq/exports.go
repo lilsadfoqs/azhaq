@@ -26,7 +26,6 @@ import (
 
 	"github.com/lilsadfoqs/azhaq/engine"
 	"github.com/lilsadfoqs/azhaq/internal/collectors/shotcol"
-	"github.com/lilsadfoqs/azhaq/internal/collectors/urlcol"
 	"github.com/lilsadfoqs/azhaq/internal/gqlschema"
 	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
@@ -129,6 +128,17 @@ func emptyExport(format string) string {
 }
 
 func exportTo(path, format, origin string, safe bool, w io.Writer) error {
+	return exportToList(path, format, origin, safe, listOpts{}, w)
+}
+
+// exportToList is exportTo with the options of the urls and names lists.
+func exportToList(path, format, origin string, safe bool, lo listOpts, w io.Writer) error {
+	if (lo.coverage != "" || lo.json) && format != "urls" && format != "names" {
+		return usagef("-coverage and -json are for -format urls or names")
+	}
+	if err := checkCoverage(lo.coverage); err != nil {
+		return err
+	}
 	if safe && format != "openapi" {
 		return usagef("-safe is for -format openapi")
 	}
@@ -138,42 +148,9 @@ func exportTo(path, format, origin string, safe bool, w io.Writer) error {
 	}
 	switch format {
 	case "urls":
-		// The graph's rows, then the rest of what the archives gave: the
-		// workspace keeps those in a list beside it.
-		seen := map[string]bool{}
-		for _, r := range g.rows {
-			if r.Entity.Type == types.TypeURL && !seen[r.Entity.Key] {
-				seen[r.Entity.Key] = true
-				fmt.Fprintln(w, r.Entity.Key)
-			}
-		}
-		listed := false
-		if err := urlcol.ReadArchive(urlcol.ArchivePath(path), g.run, func(u, _ string) {
-			listed = true
-			if !seen[u] {
-				seen[u] = true
-				fmt.Fprintln(w, u)
-			}
-		}); err != nil {
-			return err
-		}
-		if !listed {
-			if n := urlcol.Held(g.obs, false); n != "" {
-				fmt.Fprintf(os.Stderr, "azhaq export: %s\n", n)
-			}
-		}
+		return exportURLs(g, path, lo, w)
 	case "names":
-		// Every hostname in the graph, resolved or not.
-		var names []string
-		for _, r := range g.rows {
-			if r.Entity.Type == types.TypeHostname {
-				names = append(names, r.Entity.Key)
-			}
-		}
-		sort.Strings(names)
-		for _, n := range names {
-			fmt.Fprintln(w, n)
-		}
+		exportNames(g, lo, w)
 	case "hosts":
 		names := make([]string, 0, len(g.live))
 		for n := range g.live {

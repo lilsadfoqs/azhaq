@@ -375,7 +375,7 @@ var helpSpecs = map[string]helpSpec{
 	},
 	"export": {
 		groups: []helpGroup{
-			{"", `db format origin safe`},
+			{"", `db format origin safe coverage json`},
 		},
 	},
 	"ingest": {

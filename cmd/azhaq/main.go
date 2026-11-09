@@ -2288,8 +2288,13 @@ func cmdExport(args []string) error {
 	format := fs.String("format", "jsonl", "jsonl (everything), urls, hosts (names that resolve), names (every name), targets (web services, for nuclei -l), openapi, graphql (introspection JSON), sdl (GraphQL schema), burp (the run's scope), html, graphml, secrets, findings (one record per qualifying stored row, JSON Lines; an empty workspace writes an explicit empty record set), findings-md (the same records in Markdown)")
 	origin := fs.String("origin", "", "openapi: the origin to describe (default: the one with most API routes); graphql, sdl: the endpoints of an origin, or one endpoint's URL")
 	safe := fs.Bool("safe", false, "openapi: leave out the routes the run did not request, such as those -deny-path kept out (otherwise they carry x-azhaq-skipped: true)")
+	cov := fs.String("coverage", "", "urls, names: only these coverages, comma-separated: visited, catchall, error, gone, hint, skipped, capped")
+	asJSON := fs.Bool("json", false, "urls, names: one {url|name, coverage, status, source} object per line")
 	if err := parse(fs, args); err != nil {
 		return err
+	}
+	if *format == "jsonl" && (*cov != "" || *asJSON) {
+		return usagef("-coverage and -json are for -format urls or names")
 	}
 	if *format != "jsonl" {
 		path := *dbPath
@@ -2300,11 +2305,15 @@ func cmdExport(args []string) error {
 			return fmt.Errorf("need -db (no %s from a previous run)", lastDBFile)
 		}
 		cw := &countWriter{w: os.Stdout}
-		if err := exportTo(path, *format, *origin, *safe, cw); err != nil {
+		if err := exportToList(path, *format, *origin, *safe, listOpts{coverage: *cov, json: *asJSON}, cw); err != nil {
 			return err
 		}
 		if cw.n == 0 {
-			fmt.Fprintf(os.Stderr, "azhaq export: nothing to write: %s\n", emptyExport(*format))
+			why := emptyExport(*format)
+			if *cov != "" {
+				why = "no entry has coverage " + *cov
+			}
+			fmt.Fprintf(os.Stderr, "azhaq export: nothing to write: %s\n", why)
 		}
 		return nil
 	}
