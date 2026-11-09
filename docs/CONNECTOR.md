@@ -86,12 +86,13 @@ A line that is not valid JSON, or has an unknown `kind`, is rejected with `line 
 
 `azhaq ingest` also reads what the usual tools write, so their results can join a graph without a connector. It reads:
 
-- subfinder, dnsx, httpx, katana, naabu, nuclei and gau JSON lines;
+- subfinder, dnsx, httpx, katana, naabu, nuclei, gau, gowitness and asnmap JSON lines;
 - an ffuf JSON report (`-of json`) or its `-json` lines;
+- arjun's JSON file (`-oJ`) and nmap's XML (`-oX`);
 - Azhaq's own `export`: entities and their observations come back, and edges are rebuilt from the observations;
 - plain lines of URLs, hostnames and addresses.
 
-Each line is read by its fields, and the summary counts the lines of each format. A naabu line adds an open port to the map, a `Port` row as `ports` makes it. Into a workspace, the facts join its newest run.
+Each line is read by its fields, and the summary counts the lines of each format. A naabu line adds an open port to the map, a `Port` row as `ports` makes it; an nmap file adds the same rows with the service, product, version and script output nmap gave. What arjun, gowitness, asnmap and nmap say is taken in as their word: no row of it is `visited`, and each says its tool (see [ingest](commands/ingest.md#tools-azhaq-asks-nothing-for)). Into a workspace, the facts join its newest run.
 
 ```
 subfinder -d example.com -json | azhaq ingest - -db example.db

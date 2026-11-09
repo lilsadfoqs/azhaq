@@ -68,6 +68,10 @@ func evidenceLevel(collector, kind, via, seen string, p evidenceFields) string {
 		return EvLinked
 	case "azhaq-urls":
 		return EvArchived
+	case "gowitness":
+		return EvBrowser // a browser loaded it: taken in, not a request of this run
+	case "arjun":
+		return EvGiven // the page was named to the tool: its names are the tool's word
 	case "azhaq-paths", "azhaq-dirs", "ffuf":
 		return EvGuessed
 	}
@@ -119,6 +123,14 @@ func evidenceIndex(obs []types.StoredObservation) map[string]*evidenceSource {
 			}
 			f := evidenceFields{Status: p.Status, CatchAll: p.CatchAll}
 			add(p.URL, p.Role, o.Collector, evidenceLevel(o.Collector, o.Kind, p.Via, p.Seen, f))
+		case "params":
+			var p struct {
+				URL string `json:"url"`
+			}
+			if json.Unmarshal(o.Payload, &p) != nil || p.URL == "" {
+				continue
+			}
+			add(p.URL, "", o.Collector, evidenceLevel(o.Collector, o.Kind, "", "", evidenceFields{}))
 		case "form":
 			var p struct {
 				Action string `json:"action"`

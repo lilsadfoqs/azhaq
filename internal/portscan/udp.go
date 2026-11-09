@@ -45,12 +45,13 @@ const (
 
 // UDPPort is one UDP port that was not closed.
 type UDPPort struct {
-	Port    int    `json:"port"`
-	State   string `json:"state"`
-	Service string `json:"service,omitempty"`
-	Product string `json:"product,omitempty"`
-	Version string `json:"version,omitempty"`
-	Banner  string `json:"banner,omitempty"`
+	Port    int      `json:"port"`
+	State   string   `json:"state"`
+	Service string   `json:"service,omitempty"`
+	Product string   `json:"product,omitempty"`
+	Version string   `json:"version,omitempty"`
+	Banner  string   `json:"banner,omitempty"`
+	Scripts []Script `json:"scripts,omitempty"` // an imported nmap scan's script output for the port
 }
 
 // UDPReport is what one address's UDP scan found.

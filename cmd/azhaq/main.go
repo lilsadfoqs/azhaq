@@ -1880,7 +1880,7 @@ func printMap(rows []engine.MapEntry, rep *report) {
 // output, Azhaq's own export, connector facts or plain lists.
 func cmdIngest(args []string) error {
 	fs := newFlags("ingest")
-	in := fs.String("in", "", "a file of results (- for stdin): subfinder, dnsx, httpx, katana, naabu, nuclei or gau JSON lines, an ffuf JSON report or -json lines, azhaq export, connector facts, or lines of URLs, hostnames and addresses; files may also be given as arguments, several at once")
+	in := fs.String("in", "", "a file of results (- for stdin): subfinder, dnsx, httpx, katana, naabu, nuclei, gau, gowitness or asnmap JSON lines, an ffuf JSON report or -json lines, an arjun JSON file, an nmap XML file (-oX), azhaq export, connector facts, or lines of URLs, hostnames and addresses; files may also be given as arguments, several at once")
 	dbPath := fs.String("db", "", "the database to add to (default: a new file)")
 	asJSON := fs.Bool("json", false, "the summary as JSON")
 	if err := parse(fs, args); err != nil {

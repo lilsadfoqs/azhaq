@@ -1,0 +1,2 @@
+{"url":"http://app.test/","probed_at":"2026-01-01T00:00:00Z","final_url":"http://app.test/","response_code":200,"response_reason":"OK","protocol":"HTTP/1.1","content_length":1234,"title":"Shop","perception_hash":"p:abc123","file_name":"http---app.test.jpeg","is_pdf":false,"technologies":[{"value":"nginx"},{"value":"React"}],"failed":false,"failed_reason":""}
+{"url":"http://down.test/","probed_at":"2026-01-01T00:00:01Z","response_code":0,"failed":true,"failed_reason":"net::ERR_CONNECTION_REFUSED"}
