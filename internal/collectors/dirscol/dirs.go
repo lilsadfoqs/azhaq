@@ -370,7 +370,7 @@ func HeldWords(words, exts []string) int {
 	n := 0
 	for _, w := range words {
 		w = strings.TrimPrefix(strings.TrimSpace(w), "/")
-		if w == "" || strings.HasPrefix(w, "#") {
+		if w == "" {
 			continue
 		}
 		forms := []string{w}
@@ -576,7 +576,7 @@ func sweepTargets(dir string, words, exts []string, deniedBy, heldWord func(stri
 		// An empty word asks for the base URL itself, as in ffuf.
 		blank := w == ""
 		w = strings.TrimPrefix(strings.TrimSpace(w), "/")
-		if (w == "" && !blank) || strings.HasPrefix(w, "#") {
+		if w == "" && !blank {
 			continue
 		}
 		each := []string{w}

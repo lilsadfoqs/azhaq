@@ -47,6 +47,18 @@ type ListOptions struct {
 	Chain          Chain    // -enc: applied to each word, extensions included
 }
 
+// StripComment is a wordlist line as -ic reads it: false for a line that
+// starts with # (after any spaces), else the line without a trailing " # note".
+func StripComment(text string) (string, bool) {
+	if strings.HasPrefix(strings.TrimLeft(text, " "), "#") {
+		return "", false
+	}
+	if i := strings.Index(text, " #"); i >= 0 {
+		text = text[:i]
+	}
+	return text, true
+}
+
 // ReadList reads path ("-" is stdin), one word per line, empty lines and
 // all (an empty word asks for the URL itself, as in ffuf). Lines starting
 // with # are dropped with IgnoreComments; a trailing " # note" goes too.
@@ -72,11 +84,9 @@ func ReadList(path, keyword string, o ListOptions) (List, error) {
 			continue
 		}
 		if o.IgnoreComments {
-			if strings.HasPrefix(strings.TrimLeft(text, " "), "#") {
+			var ok bool
+			if text, ok = StripComment(text); !ok {
 				continue
-			}
-			if i := strings.Index(text, " #"); i >= 0 {
-				text = text[:i]
 			}
 		}
 		l.Words = append(l.Words, text)

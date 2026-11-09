@@ -1705,7 +1705,7 @@ var mcpRunFlags = map[string]bool{
 	"resolvers": true, "sources": true, "no-takeover": true, "chrome-no-sandbox": true, "no-history": true,
 	// The runs azhaq_dirs, azhaq_params and azhaq_dns_brute start, for a
 	// workspace a resume continues.
-	"dirs": true, "dirs-ext": true, "dirs-depth": true, "dirs-threads": true, "dirs-rate": true,
+	"dirs": true, "dirs-ext": true, "dirs-ic": true, "dirs-depth": true, "dirs-threads": true, "dirs-rate": true,
 	"params": true, "params-method": true, "params-writes": true, "params-include": true, "params-per-host": true,
 	"params-threads": true, "params-rate": true, "params-chunk": true, "params-timeout": true,
 	"dns-brute": true, "ports-udp": true, "no-tech": true, "send-state-changing": true,
