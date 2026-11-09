@@ -13,6 +13,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/miekg/dns"
 
@@ -297,6 +298,11 @@ var egressContract = map[string]egressEntry{
 		port := fmt.Sprint(ln.Addr().(*net.TCPAddr).Port)
 		_, errOut, code := cli(t, "ports", "-host", "127.0.0.1", "-p", port, "-detect", "none", "-ledger", h.ledger, "-json")
 		rep := lastReport(t, errOut)
+		// The kernel completes the handshake before Accept returns: under load the
+		// listener's goroutine may count the connection after the command ends.
+		for deadline := time.Now().Add(3 * time.Second); accepted.Load() < rep.Requests && time.Now().Before(deadline); {
+			time.Sleep(10 * time.Millisecond)
+		}
 		if code != exitOK || accepted.Load() == 0 {
 			t.Fatalf("exit %d, %d connections: %+v", code, accepted.Load(), rep)
 		}
