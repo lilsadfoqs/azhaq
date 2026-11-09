@@ -88,7 +88,7 @@ A line that is not valid JSON, or has an unknown `kind`, is rejected with `line 
 
 - subfinder, dnsx, httpx, katana, naabu, nuclei, gau, gowitness and asnmap JSON lines;
 - an ffuf JSON report (`-of json`) or its `-json` lines;
-- arjun's JSON file (`-oJ`) and nmap's XML (`-oX`);
+- arjun's JSON file (`arjun -oJ`) and nmap's XML (`nmap -oX`);
 - Azhaq's own `export`: entities and their observations come back, and edges are rebuilt from the observations;
 - plain lines of URLs, hostnames and addresses.
 

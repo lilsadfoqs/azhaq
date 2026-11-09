@@ -56,12 +56,12 @@ arjun, gowitness, asnmap and nmap ran outside azhaq: what they say is taken in a
 
 | Tool | File | What a row holds |
 | --- | --- | --- |
-| arjun | the JSON file of `-oJ` | A URL row with the parameter names arjun found. A `GET` page's are its `params`; a `POST`, `JSON` or `XML` page's are the body fields of a POST (the media type follows the method). `evidence_from` says `arjun`, and the evidence is `given`. |
-| gowitness | JSON lines (`--write-jsonl`) | A URL row (`hint`) with the status, title, final URL and technologies gowitness saw on the row's proof, and the screenshot's file name in the observation. A page gowitness could not load has the reason. The evidence is `browser`. |
-| asnmap | `-json` lines, or `azhaq asn -json` lines | An `ASN` row with its holder and the count of prefixes, and a `Prefix` row for each prefix. |
-| nmap | the XML of `-oX` | A `Port` row for each port nmap found `open` (TCP) or `open` and `open\|filtered` (UDP): the service nmap named, the product and version it read, the extra info and whether it found TLS. What each NSE script printed is on the row as `script:ID="…"`, as nmap said it, cut to 200 characters (the whole output is in `export -format jsonl`). The host's addresses and names are rows too. A host that is down, and a port that is closed or filtered, give no row. |
+| arjun | the JSON file of `arjun -oJ` | A URL row with the parameter names arjun found. A `GET` page's are its `params`; a `POST`, `JSON` or `XML` page's are the body fields of a POST (the media type follows the method). `evidence_from` says `arjun`, and the evidence is `given`. |
+| gowitness | JSON lines (`gowitness scan --write-jsonl`) | A URL row (`hint`) with the status, title, final URL and technologies gowitness saw on the row's proof, and the screenshot's file name in the observation. A page gowitness could not load has the reason. The evidence is `browser`. |
+| asnmap | `asnmap -json` lines, or `azhaq asn -json` lines | An `ASN` row with its holder and the count of prefixes, and a `Prefix` row for each prefix. |
+| nmap | the XML of `nmap -oX` | A `Port` row for each port nmap found `open` (TCP) or `open` and `open\|filtered` (UDP): the service nmap named, the product and version it read, the extra info and whether it found TLS. What each NSE script printed is on the row as `script:ID="…"`, as nmap said it, cut to 200 characters (the whole output is in `export -format jsonl`). The host's addresses and names are rows too. A host that is down, and a port that is closed or filtered, give no row. |
 
-An nmap script's output, a service name or a version is nmap's reading, kept as evidence and listed as nothing else: no finding is made from it, and nmap's guess of a service from its port number is not told apart from a probed one. Run nmap with `-sV` for products and versions.
+An nmap script's output, a service name or a version is nmap's reading, kept as evidence and listed as nothing else: no finding is made from it, and nmap's guess of a service from its port number is not told apart from a probed one. Run `nmap -sV` for products and versions.
 
 The summary counts what each format gave: the pages (arjun), lines (gowitness, asnmap) or ports (nmap) read.
 
