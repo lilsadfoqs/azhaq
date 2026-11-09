@@ -3,6 +3,7 @@ package pathscol
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"github.com/lilsadfoqs/azhaq/internal/guard"
 	"net/http"
 	"net/url"
@@ -17,6 +18,7 @@ import (
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
 	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 	"github.com/lilsadfoqs/azhaq/internal/ledger"
+	"github.com/lilsadfoqs/azhaq/internal/neterr"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"github.com/lilsadfoqs/azhaq/internal/statechange"
 	"github.com/lilsadfoqs/azhaq/internal/webextract"
@@ -24,6 +26,9 @@ import (
 )
 
 const Name = "azhaq-paths"
+
+// SweepKind is the observation that says what became of the checks of an origin's sweep.
+const SweepKind = "sweep"
 
 const parallel = 6
 
@@ -204,8 +209,10 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 	prefix := probePrefix(base.Path)
 	origin := base.Scheme + "://" + base.Host
 	var list []string
+	root := false // the sweep of the origin's built-in checks, not of an API base
 	switch b := apiBase(base.Path); {
 	case c.owner(origin, raw) == raw:
+		root = true
 		list = c.Wordlist
 		if len(list) == 0 {
 			list = DefaultWordlist
@@ -221,6 +228,25 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 	sem := make(chan struct{}, parallel)
 	var wg sync.WaitGroup
 	var skipped atomic.Int32
+	// What became of each check of the sweep: asked, answered by a request
+	// sent before, or refused by the run's limits (and why).
+	var sent, answered atomic.Int32
+	refused := map[string]int{}
+	tally := func(cached bool, err error) {
+		switch {
+		case err == nil || !stoppedBefore(err):
+			if cached {
+				answered.Add(1)
+			} else {
+				sent.Add(1)
+			}
+		case errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded):
+		default:
+			mu.Lock()
+			refused[refusal(err)]++
+			mu.Unlock()
+		}
+	}
 	// probe asks one location and emits what it finds; it says whether the
 	// answer was an API description.
 	probe := func(target, path string) bool {
@@ -228,7 +254,8 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		if isDescLoc(path) || isGraphQLLoc(path) {
 			purpose = ledger.PurposeDescriptions
 		}
-		res, _, err := fetch.Do(ledger.WithPurpose(ctx, purpose), c.Client, target)
+		res, cached, err := fetch.Do(ledger.WithPurpose(ctx, purpose), c.Client, target)
+		tally(cached, err)
 		if err != nil || !(interesting(res.Status) || isGraphQLLoc(path) && refusesGET(res.Status)) || fetch.CatchAll(ctx, c.Client, res) {
 			return false
 		}
@@ -303,6 +330,12 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 	targetOf := func(path string) string {
 		return locationOf(base, prefix, path)
 	}
+	planned := 0 // the checks of the sweep: its own URL is the page, not one of them
+	for _, path := range append(slices.Clone(locs), descs...) {
+		if targetOf(path) != raw {
+			planned++
+		}
+	}
 	if len(descs) > 0 {
 		wg.Add(1)
 		go func() {
@@ -358,7 +391,52 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 			meta.EmitCount++
 		}
 	}
+	if root {
+		// What became of each check of the origin's sweep: the summary's path_checks.
+		done := map[string]any{"origin": origin, "planned": planned, "sent": sent.Load(), "answered": answered.Load(), "described": skipped.Load()}
+		if len(refused) > 0 {
+			done["refused"] = refused
+		}
+		payload, _ := json.Marshal(done)
+		if err := emit(types.Observation{Collector: Name, Source: raw, Kind: SweepKind, Payload: payload, Confidence: 1, ObservedAt: time.Now().UTC()}); err == nil {
+			meta.EmitCount++
+		}
+	}
 	return meta, ctx.Err()
+}
+
+// refusal is why a request was refused, without the URL the error wraps.
+func refusal(err error) string {
+	var d *neterr.Denied
+	var k *neterr.Killed
+	switch {
+	case errors.As(err, &d):
+		return strings.TrimPrefix(d.Error(), "not requested: ")
+	case errors.As(err, &k):
+		return "stopped: kill file " + k.Path + " exists"
+	case errors.Is(err, neterr.ErrGuessCap):
+		return "-host-guesses reached for this host"
+	case errors.Is(err, neterr.ErrBudget):
+		return "the request budget is spent"
+	case errors.Is(err, neterr.ErrOutOfPort):
+		return neterr.OutOfPortReason
+	case errors.Is(err, neterr.ErrOutOfScope):
+		return "outside the scope"
+	case errors.Is(err, neterr.ErrNotRepeated):
+		return "sent before the run was killed, and not sent again"
+	case errors.Is(err, neterr.ErrOriginDown):
+		return "the origin stopped answering"
+	}
+	return err.Error()
+}
+
+// stoppedBefore says a request was refused before it left: the scope, a
+// -deny-path rule, the budget, the kill file or an origin that stopped
+// answering, or the run was interrupted.
+func stoppedBefore(err error) bool {
+	return errors.Is(err, neterr.ErrDenied) || errors.Is(err, neterr.ErrOutOfScope) || errors.Is(err, neterr.ErrBudget) ||
+		errors.Is(err, neterr.ErrNotRepeated) || errors.Is(err, neterr.ErrOriginDown) ||
+		errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
 }
 
 // sweepWords splits a wordlist into the locations asked in any order and the

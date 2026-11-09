@@ -95,6 +95,15 @@ var ErrNotRepeated = errors.New("not sent again: sent before the run was killed,
 // work is left for azhaq resume.
 var ErrBudget = errors.New("not requested: the request budget is spent")
 
+// ErrGuessCap is ErrBudget for a guess a host was sent its share of
+// (-host-guesses): it says which limit refused, and is an ErrBudget too.
+var ErrGuessCap error = guessCap{}
+
+type guessCap struct{}
+
+func (guessCap) Error() string        { return "not requested: -host-guesses reached for this host" }
+func (guessCap) Is(target error) bool { return target == ErrBudget }
+
 // ErrKilled is what a kill file refuses with: a file named by -kill-file
 // (default DB.stop) exists, so nothing more is sent. Killed carries the
 // path; like ErrBudget it leaves the work for azhaq resume, once the file

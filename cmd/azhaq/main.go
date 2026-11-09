@@ -1518,6 +1518,9 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	}
 	rep.noCatchAll = *noCatchAll
 	rep.foldView = foldView
+	if col, ok := cat.Get("azhaq-paths"); ok && budgets.Allows(col, types.Seed{Type: types.TypeURL, Keys: map[string]string{"url": "https://service.invalid/"}}) {
+		rep.pathList = paths
+	}
 	fillReport(rep, path, seeds, ents, obs, rows)
 	if !out.plan {
 		// The ones found on the way: an API description's GET whose own
@@ -1599,12 +1602,12 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		runHints(rep, rows, obs, *interact, signedIn(*login, cookies, headers))
 	}
 	rep.RunID = stats.RunID
-	if runs, err := st.Runs(); err == nil && len(runs) > 0 && runs[len(runs)-1].ID != stats.RunID {
-		// A resumed earlier run: query -failed reads the newest unless told.
-		for i, n := range rep.Next {
 	if runs, err := st.Runs(); err == nil && len(runs) > 1 && !out.embedded && !out.scratch {
 		rep.Notes = append(rep.Notes, fmt.Sprintf("%s holds %d runs; this one is %s, and the counts above are its own (azhaq query -db %s -runs lists them; query, show and diff -run ID read an earlier one)", path, len(runs), stats.RunID, path))
 	}
+	if runs, err := st.Runs(); err == nil && len(runs) > 0 && runs[len(runs)-1].ID != stats.RunID {
+		// A resumed earlier run: query -failed reads the newest unless told.
+		for i, n := range rep.Next {
 			rep.Next[i] = strings.Replace(n, " -failed   (", " -failed -run "+stats.RunID+"   (", 1)
 		}
 	}
@@ -2005,10 +2008,10 @@ func cmdDiff(args []string) error {
 	a := fs.String("a", "", "old sqlite")
 	b := fs.String("b", "", "new sqlite (default: last run)")
 	ws := fs.String("db", "", "workspace: compare the last two runs recorded in this database")
+	runF := fs.String("run", "", "with -db: the run to compare with the run before it, by the run_id of its summary (default: the last)")
 	asJSON := fs.Bool("json", false, "JSON lines instead of a text report, the summary last")
 	jsonl := fs.Bool("jsonl", false, "same as -json")
 	quiet := fs.Bool("quiet", false, "entities and counts only (skip observation lines)")
-	runF := fs.String("run", "", "with -db: the run to compare with the run before it, by the run_id of its summary (default: the last)")
 	if err := parse(fs, args); err != nil {
 		return err
 	}
@@ -2020,9 +2023,6 @@ func cmdDiff(args []string) error {
 		}
 		runs, _ := st.Runs()
 		st.Close()
-		if len(runs) < 2 {
-			// Nothing to compare yet: said, not silent.
-			if *jsonl {
 		if *runF != "" {
 			run, err := pickRun(runs, *runF)
 			if err != nil {
@@ -2037,6 +2037,9 @@ func cmdDiff(args []string) error {
 		if len(runs) < 2 && *runF != "" {
 			return fmt.Errorf("run %s is the first of %s: no run before it to compare", *runF, *ws)
 		}
+		if len(runs) < 2 {
+			// Nothing to compare yet: said, not silent.
+			if *jsonl {
 				return json.NewEncoder(os.Stdout).Encode(map[string]any{"kind": "summary", "runs": len(runs), "added": 0, "removed": 0, "not_seen_again": 0, "observations": 0, "changed": 0, "note": "one run so far: a diff needs two"})
 			}
 			fmt.Printf("%s holds %d run so far: a diff needs two (run the same target into it again)\n", *ws, len(runs))
@@ -2103,9 +2106,6 @@ func printRunDiff(path, last string, opts diffOpts) error {
 	if err != nil {
 		return err
 	}
-	neu, err := store.OpenExisting(path)
-	if err != nil {
-		return err
 	if last != "" {
 		for i, r := range runs {
 			if r.ID == last {
@@ -2116,6 +2116,9 @@ func printRunDiff(path, last string, opts diffOpts) error {
 	if len(runs) < 2 {
 		return nil
 	}
+	neu, err := store.OpenExisting(path)
+	if err != nil {
+		return err
 	}
 	defer neu.Close()
 	prev, newest := runs[len(runs)-2], runs[len(runs)-1]
