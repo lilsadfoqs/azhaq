@@ -1391,3 +1391,7 @@ ui.a-yellow-dot-is-a-map-hint	docs/commands/ui.md	- A yellow dot is a map hint	t
 ui.a-dashed-outline-is-third-party-only	docs/commands/ui.md	- A dashed outline is an entity seen through third-party sources only.	test:cmd/azhaq:TestUIMarksPassiveOnlyEntities
 ui.every-number-is-a-count-of-the-run	docs/commands/ui.md	Every number on the page is a count of the run's summary, workspace or ledger.	test:cmd/azhaq:TestUIGraphAndLedgerAreTheRunsOwn
 ui.not-recorded-is-said	docs/commands/ui.md	A number the run did not record is said to be not recorded.	test:cmd/azhaq:TestRunsSaysNotRecorded
+docs-mcp.target-never-held	docs/MCP.md	A URL a call gives as a target is never held back.	test:cmd/azhaq:TestMCPPlanAndWireAgreeOnStateChangingGET
+docs-mcp.map-held-kinds	docs/MCP.md	a link, a script's route, an API operation or a GET form's action like that is held back and listed as skipped	test:cmd/azhaq:TestMCPDoesNotSendTheGETsItHoldsBack,TestFoundStateChangingGETsAreHeldBack
+docs-mcp.dirs-builtin-held	docs/MCP.md	The built-in list's words that declare a state change (logout, reset, delete and the like) are held back	test:cmd/azhaq:TestMCPDoesNotSendTheGETsItHoldsBack,TestDirsBuiltinHoldsStateChangingWordsAndUserListDoesNot
+docs-mcp.tool-descriptions-held	docs/MCP.md	azhaq_dirs` holds back the words of its built-in list	test:cmd/azhaq:TestMCPToolDescriptionsSayWhatIsHeldBack
