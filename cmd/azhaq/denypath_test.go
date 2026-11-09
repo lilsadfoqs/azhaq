@@ -85,7 +85,7 @@ func TestDenyPathHoldsInRunDirsAndFuzz(t *testing.T) {
 		srv, seen := pathLog(t, "")
 		wl := wlist(t, "secret", "open", "logout")
 		_, errOut, err := captureBoth(t, func() error {
-			return cmdDirs([]string{"-u", srv.URL + "/", "-w", wl, "-mc", "200", "-json", "-ledger", "off", "-deny-path", rule})
+			return cmdDirs([]string{"-u", srv.URL + "/", "-w", wl, "-mc", "200", "-json", "-ledger", "off", "-deny-path", rule, "-send-state-changing"})
 		})
 		if err != nil {
 			t.Fatalf("%v\n%s", err, errOut)
@@ -104,7 +104,7 @@ func TestDenyPathHoldsInRunDirsAndFuzz(t *testing.T) {
 		srv, seen := pathLog(t, "")
 		wl := wlist(t, "secret", "open", "logout")
 		_, errOut, err := captureBoth(t, func() error {
-			return cmdFuzz([]string{"-u", srv.URL + "/FUZZ", "-w", wl, "-ac=false", "-mc", "200", "-json", "-deny-path", rule})
+			return cmdFuzz([]string{"-u", srv.URL + "/FUZZ", "-w", wl, "-ac=false", "-mc", "200", "-json", "-deny-path", rule, "-send-state-changing"})
 		})
 		if err != nil {
 			t.Fatalf("%v\n%s", err, errOut)

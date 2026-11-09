@@ -185,7 +185,7 @@ func (h heldRun) view() map[string]any {
 		"no_takeover":         h.NoTakeover,
 		"history":             h.History,
 		"allow_writes":        h.AllowWrites,
-		"state_changing_gets": map[bool]string{false: "held back: a GET found on the way whose own path or API operation declares a state change is listed as skipped, not sent (-send-state-changing at start sends them)", true: "sent (-send-state-changing)"}[h.SendStateChanging],
+		"state_changing_gets": map[bool]string{false: "held back: a GET whose own path, query or API operation declares a state change (found on the way, or a word of a wordlist) is listed as skipped, not sent (-send-state-changing at start sends them)", true: "sent (-send-state-changing)"}[h.SendStateChanging],
 		"chrome":              map[bool]string{false: "needs its sandbox: where the system gives none, Chrome does not start (-chrome-no-sandbox at start allows it)", true: "may run without its sandbox (-chrome-no-sandbox)"}[h.ChromeNoSandbox],
 	}
 }

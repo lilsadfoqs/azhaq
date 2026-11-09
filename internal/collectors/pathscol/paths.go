@@ -14,11 +14,11 @@ import (
 
 	"github.com/lilsadfoqs/azhaq/catalog"
 	"github.com/lilsadfoqs/azhaq/internal/crawlscope"
-	"github.com/lilsadfoqs/azhaq/internal/egress"
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
 	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 	"github.com/lilsadfoqs/azhaq/internal/ledger"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
+	"github.com/lilsadfoqs/azhaq/internal/statechange"
 	"github.com/lilsadfoqs/azhaq/internal/webextract"
 	"github.com/lilsadfoqs/azhaq/types"
 )
@@ -209,8 +209,6 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		list = c.Wordlist
 		if len(list) == 0 {
 			list = DefaultWordlist
-		} else {
-			ctx = egress.WithAsked(ctx) // a path list of the user's: every word is asked
 		}
 	case !c.Known && b != "" && b != "/api/" && c.owner(origin+b, raw) == raw && c.bases(origin) <= maxBases:
 		// The root sweep asks /api/swagger.json and /api/openapi.json.
@@ -379,6 +377,21 @@ func sweepWords(list []string) (locs, descs []string) {
 	}
 	slices.SortStableFunc(descs, func(a, b string) int { return descRank(a) - descRank(b) })
 	return locs, descs
+}
+
+// HeldWords is how many words of list name a state change by their own path
+// or query: the run holds those GETs back unless -send-state-changing is given.
+func HeldWords(list []string) int {
+	n := 0
+	for _, w := range list {
+		if w = strings.TrimPrefix(w, "/"); w == "" {
+			continue
+		}
+		if word, _ := statechange.OfTarget("/" + w); word != "" {
+			n++
+		}
+	}
+	return n
 }
 
 // locationOf is the URL a word of the sweep asks, under prefix.

@@ -18,6 +18,8 @@ import (
 	"github.com/lilsadfoqs/azhaq/internal/egress"
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
 	"github.com/lilsadfoqs/azhaq/internal/fuzz"
+	"github.com/lilsadfoqs/azhaq/internal/neterr"
+	"github.com/lilsadfoqs/azhaq/internal/statechange"
 	"github.com/lilsadfoqs/azhaq/scope"
 	"github.com/lilsadfoqs/azhaq/types"
 )
@@ -91,8 +93,8 @@ func TestSweepCalibratesAndRecurses(t *testing.T) {
 	}
 }
 
-// No word is held back, with a session or without: what a GET does on the
-// server is not told by its name.
+// With no hold in force (-send-state-changing), no word is held back, with a
+// session or without: every word is asked, as ffuf asks it.
 func TestSweepHoldsNoWordBackWithASession(t *testing.T) {
 	fetch.Reset()
 	defer fetch.Reset()
@@ -530,8 +532,8 @@ func TestResumeDoesNotPaceStoredWords(t *testing.T) {
 	}
 }
 
-// A wordlist sweep asks every word, /logout included, as ffuf does, with a
-// session or without one: no name keeps a word out.
+// With no hold in force (-send-state-changing) a wordlist sweep asks every
+// word, /logout included, as ffuf does, with a session or without one.
 func TestSweepAsksEveryWordWithOrWithoutASession(t *testing.T) {
 	for _, session := range []bool{false, true} {
 		t.Run(fmt.Sprintf("session %v", session), func(t *testing.T) {
@@ -578,5 +580,57 @@ func TestSweepTargetsHavePositionsAndRepeatsAreCounted(t *testing.T) {
 	}
 	if n := repeated(targets); n != 4 {
 		t.Errorf("repeated %d, want 4", n)
+	}
+}
+
+// With the run holding state-changing GETs back, a word of any list that
+// names one (a path word, a query action) is not asked, with an extension too,
+// and the sweep lists each as skipped with the word that held it.
+func TestSweepHoldsAWordThatNamesAStateChange(t *testing.T) {
+	fetch.Reset()
+	defer fetch.Reset()
+	egress.Reset()
+	defer egress.Reset()
+	egress.SetStateWords(statechange.OfURL, nil, true)
+	var mu sync.Mutex
+	asked := map[string]bool{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		asked[r.URL.RequestURI()] = true
+		mu.Unlock()
+		http.NotFound(w, r)
+	}))
+	t.Cleanup(srv.Close)
+	words := []string{"logout", "admin", "console?action=stop", "#top", "view?action=list"}
+	c := New(srv.Client(), Options{Words: words, Extensions: []string{"php"}, Rate: 1000, NoCalibration: true})
+	held := map[string]bool{}
+	_, err := c.Run(context.Background(), types.Seed{Type: types.TypeURL, Keys: map[string]string{"url": srv.URL + "/"}}, func(o types.Observation) error {
+		if o.Kind == "skipped" {
+			var m struct{ URLs []string }
+			_ = json.Unmarshal(o.Payload, &m)
+			for _, u := range m.URLs {
+				held[strings.TrimPrefix(u, srv.URL)] = true
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range []string{"/logout", "/logout.php", "/console?action=stop", "/console?action=stop.php"} {
+		if asked[p] || !held[p] {
+			t.Errorf("%s: asked %v, listed as held %v", p, asked[p], held[p])
+		}
+	}
+	for _, p := range []string{"/admin", "/admin.php", "/view?action=list", "/%23top"} {
+		if !asked[p] || held[p] {
+			t.Errorf("%s: asked %v, listed as held %v", p, asked[p], held[p])
+		}
+	}
+	if n := HeldWords(words, []string{"php"}); n != 4 {
+		t.Errorf("HeldWords = %d, want 4", n)
+	}
+	if !egress.IsHeldReason(egress.DenyReason(neterr.HeldRule("logout"))) {
+		t.Error("the held reason is not recognised")
 	}
 }

@@ -5,7 +5,7 @@ Sweeps a wordlist of paths and reports those that answer unlike a path that cann
 ## Synopsis
 
 ```
-azhaq dirs -u URL | -l FILE | stdin  [-w WORDLIST] [-e EXT] [-depth N] [-mc/-ms/-mw/-ml/-mr LIST] [-fc/-fs/-fw/-fl/-fr LIST] [-ac=false] [-rate N] [-proxy URL] [-json]
+azhaq dirs -u URL | -l FILE | stdin  [-w WORDLIST] [-ic] [-e EXT] [-depth N] [-mc/-ms/-mw/-ml/-mr LIST] [-fc/-fs/-fw/-fl/-fr LIST] [-ac=false] [-rate N] [-proxy URL] [-json]
 ```
 
 ## Examples
@@ -24,7 +24,7 @@ azhaq dirs -l services.txt -json
 ## What it does
 
 1. Takes each service from `-u`, `-l` or stdin. A URL with a path is swept from that path.
-2. Asks every word of the wordlist, with each `-e` extension if you give any; the built-in list holds back the words that declare a state change ([Which words are asked](#which-words-are-asked)). An empty line is a word too: it asks the base URL itself, as in ffuf, and is counted like the rest.
+2. Asks every word of the wordlist, with each `-e` extension if you give any; a word that declares a state change is held back unless `-send-state-changing` is given ([Which words are asked](#which-words-are-asked)). An empty line is a word too: it asks the base URL itself, as in ffuf, and is counted like the rest.
 3. Calibrates on paths that cannot exist, as ffuf's `-ac` does, and keeps it on when you give filters (`-fc`, `-fs`, `-fw`, `-fl` or `-fr`): an answer your filters hide is hidden, and an answer that looks like the catch-all is hidden as well, as with ffuf's `-ac -fs`. `-ac=false` turns calibration off: no guess is sent, the filters are yours alone, and every answer they do not remove and a matcher keeps is listed, catch-all answers included. The summary says so in a note.
 4. Applies the matchers and filters to the answers and prints the paths that pass.
 5. Asks one more name that cannot exist in each directory that two hits are found in, when the wordlist has words with a slash (`api/users`): see [A catch-all inside a directory](#a-catch-all-inside-a-directory).
@@ -97,8 +97,8 @@ When two or more hits are found in the same directory, `dirs` asks one name that
 - An input that matched is a row, as in ffuf: a word that is in the wordlist twice (or two blank lines) is asked twice and listed twice, each row with its own `position`, so `results` is ffuf's count for the same list. The workspace keeps one entity for each URL, and a note says how many inputs repeated an earlier one.
 
 ### Which words are asked
-- A sweep asks every word of a wordlist you give, `/logout` and `/delete` included, as ffuf does.
-- With a wordlist you give (`-w FILE`), no word is held back, with a session or without one: you chose it. With the built-in list, a word whose own name declares a state change (`logout`, `delete`, `reset`, `create`, `populate`, … and the same word with an extension, `logout.php`) is not sent: it is listed under `skipped` with the flag that sends it, `-send-state-changing`, and `plan` and the estimate leave it out. A word whose URL a `-deny-path` rule matches is not sent and is listed under `skipped` with the rule.
+- A word whose own name declares a state change is held back, from the built-in list and from a wordlist you give (`-w FILE`) alike: a path word such as `logout`, `delete`, `reset`, `create`, `populate`, … (and the same word with an extension, `logout.php`), or a query whose action parameter names one (`console?action=stop`; [the words](run.md#state-changing-requests)). Before the first request a note says how many words of the list are held and that `-send-state-changing` sends every word, as ffuf does. Each held word is a row of the summary's `state_changing` with the status `held back` and is listed under `skipped` with the flag, so no word is dropped silently; `plan` and the estimate leave them out. A word whose URL a `-deny-path` rule matches is not sent and is listed under `skipped` with the rule.
+- A line that starts with `#` is a word like any other, as in ffuf; `-ic` ignores those lines (and a trailing ` # note`).
 - With a session, the run checks it as it goes. A word that ended the session is noticed: a `-login` run signs in again, a `-cookie` or `-H` run stops with a failure and exit 3. The sweeps that ran since the last good check run again with the new session, and the note counts the words they sent: [Sessions](../CONCEPTS.md#sessions).
 - `-u https://h/api/` asks `https://h/api/WORD`. A query or fragment on the URL is dropped, and a note says so.
 
@@ -126,6 +126,7 @@ When two or more hits are found in the same directory, `dirs` asks one name that
 | Flag | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `-w` | string |  | wordlist (default: SecLists' common.txt, built in: 4747 words) |
+| `-ic` | bool |  | ignore the lines of the wordlist that start with # (and a trailing ' # note'), as ffuf's -ic does; without it they are asked like any word |
 | `-e` | string |  | also try each word with these extensions, comma-separated (php,bak) |
 | `-depth` | int | `1` | directory levels to sweep; 2 also sweeps directories found |
 | `-ac` | bool | `true` | calibrate on paths that cannot exist, as ffuf's -ac does, so a catch-all answer is not listed even with a filter of your own; -ac=false sends no guesses and lists what the filters leave |
@@ -145,7 +146,7 @@ When two or more hits are found in the same directory, `dirs` asks one name that
 | `-allow` | string, repeatable |  | a domain, host or address range the run may touch; HOST:PORT allows that host on that port only; with any -allow, nothing else is requested |
 | `-deny` | string, repeatable |  | a domain, host or address range the run must not touch, even when given as a target |
 | `-deny-path` | string, repeatable |  | a regular expression on a URL's path and query: a URL it matches is never requested, by any collector or Chrome, and is listed as not requested (repeatable; azhaq decides nothing by itself) |
-| `-send-state-changing` | bool |  | send the GETs found on the way whose own path or API operation declares a state change (create, delete, reset, logout, and the other words of the documented set): a crawl's link, a script's route, an API description's operation, a built-in -dirs word. By default they are held back and listed as skipped; a target you give, a wordlist you give and -deny-path rules are not affected |
+| `-send-state-changing` | bool |  | send the GETs whose own path or query declares a state change (create, delete, reset, logout, and the other words of the documented set; a query's action=stop and the like): a crawl's link, a script's route, an API description's operation, a word of a -dirs or -paths wordlist (ffuf sends every word). By default they are held back and listed as skipped; a target you give and -deny-path rules are not affected |
 | `-kill-file` | string |  | stop all sending when this file exists, so that no request starts after it, and exit 4; azhaq resume works once it is removed (default DB.stop) |
 | `-ledger` | string |  | write every request, connection and DNS query the run sends (to targets, third-party sources and resolvers) to this file, a chain of hashes that azhaq ledger -verify checks (default DB.ledger.jsonl next to the workspace; off: none; with a temporary database, only when given) |
 

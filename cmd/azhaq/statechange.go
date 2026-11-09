@@ -3,13 +3,16 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"net/url"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 
 	"github.com/lilsadfoqs/azhaq/engine"
 	"github.com/lilsadfoqs/azhaq/internal/egress"
+	"github.com/lilsadfoqs/azhaq/internal/fuzz"
 	"github.com/lilsadfoqs/azhaq/internal/neterr"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"github.com/lilsadfoqs/azhaq/internal/statechange"
@@ -324,7 +327,7 @@ func settleStateChanges(rep *report, pre, found []stateChangeEntry, rules scope.
 		rep.Notes = append(rep.Notes, e.line())
 	}
 	if n := rep.StateChangingHeld; n > 0 {
-		rep.Notes = append(rep.Notes, fmt.Sprintf("%s found on the way declare a state change by their own name and were held back, not sent (listed as skipped): %s sends them", plural(n, "GET"), neterr.SendFlag))
+		rep.Notes = append(rep.Notes, fmt.Sprintf("%s declare a state change by their own name (found on the way, or a word of a wordlist) and were held back, not sent (listed as skipped): %s sends them", plural(n, "GET"), neterr.SendFlag))
 	}
 	rep.StateChanging = all
 	rep.holds("state-changing GETs held back, against the held URLs the skipped list names", rep.StateChangingHeld, listed)
@@ -351,4 +354,78 @@ func givenURLs(seeds []types.Seed) []string {
 		}
 	}
 	return out
+}
+
+// heldListNotes name, before the first request, how many requests of the
+// wordlists the user gave name a state change and are held back: nothing of
+// a list is dropped silently, and the flag that sends every word is named.
+// dirsHeld counts the -dirs requests (each word, and with each extension),
+// pathsHeld the -paths words.
+func heldListNotes(dirsHeld, dirsTotal, pathsHeld int) []string {
+	var out []string
+	if dirsHeld > 0 {
+		out = append(out, fmt.Sprintf("-dirs: %d of the %s the wordlist makes name a state change by their own path or query and are held back, not sent (each is listed as skipped): %s sends every word, as ffuf does", dirsHeld, plural(dirsTotal, "request"), neterr.SendFlag))
+	}
+	if pathsHeld > 0 {
+		out = append(out, fmt.Sprintf("-paths: %s of the wordlist name a state change by their own path or query and are held back, not sent (each is listed as skipped): %s sends every word, as ffuf does", plural(pathsHeld, "word"), neterr.SendFlag))
+	}
+	return out
+}
+
+// fuzzHold is fuzz's hold on the GETs a word of a wordlist makes name a state
+// change, and the notes that say so before the first request. The URL the
+// user typed is theirs: when it names one by itself no word is held. Else
+// each word is tried alone in the URL (the other keywords as a neutral x) to
+// count the words of each list that are held; a run that combines lists can
+// hold more inputs than that, and its summary counts them.
+func fuzzHold(tmpl fuzz.Template, lists []fuzz.List, mode fuzz.Mode) (func(string) string, []string) {
+	if w, _ := statechange.Of(tmpl.URL); w != "" {
+		return nil, []string{fmt.Sprintf("the URL you gave names a state change itself (the word %q): it is yours, so no word of a wordlist is held back", w)}
+	}
+	hold := statechange.OfURL
+	if mode == fuzz.Sniper {
+		return hold, []string{"-mode sniper: an input whose URL names a state change is held back, not sent (each is listed as skipped): " + neterr.SendFlag + " sends every input, as ffuf does"}
+	}
+	var notes []string
+	base := map[string]string{"FFUFHASH": "0"}
+	for _, l := range lists {
+		base[l.Keyword] = "x"
+	}
+	for _, l := range lists {
+		if l.Gen != nil {
+			continue
+		}
+		n := 0
+		for _, w := range l.Words {
+			in := maps.Clone(base)
+			in[l.Keyword] = w
+			if hold(tmpl.Expand(in).URL) != "" {
+				n++
+			}
+		}
+		if n > 0 {
+			notes = append(notes, fmt.Sprintf("%d of the %s of the %s wordlist name a state change in the URL and are held back, not sent (each is listed as skipped): %s sends every word, as ffuf does", n, plural(len(l.Words), "word"), l.Keyword, neterr.SendFlag))
+		}
+	}
+	return hold, notes
+}
+
+// heldFuzzRows lists each input fuzz held back: as skipped, and in the
+// summary's state_changing with the status held back.
+func heldFuzzRows(rep *report, held []fuzz.HeldInput) {
+	slices.SortFunc(held, func(a, b fuzz.HeldInput) int {
+		if a.Position != b.Position {
+			return a.Position - b.Position
+		}
+		return strings.Compare(a.URL, b.URL)
+	})
+	for _, h := range held {
+		_, where := statechange.Of(h.URL)
+		rep.Skipped = append(rep.Skipped, engine.Skip{Target: h.URL, Reason: neterr.HeldReason(h.Word)})
+		rep.StateChanging = append(rep.StateChanging, stateChangeEntry{Target: h.URL, Method: "GET", URL: h.URL, Word: h.Word, Source: "its " + where,
+			DenyPath: denyRuleFor(h.URL), Status: stateHeld, Send: neterr.SendFlag})
+	}
+	rep.StateChangingHeld = len(held)
+	rep.Notes = append(rep.Notes, fmt.Sprintf("%s declare a state change by their own name (a word of a wordlist) and were held back, not sent (listed as skipped): %s sends them", plural(len(held), "GET"), neterr.SendFlag))
+	rep.holds("state-changing GETs held back, against the held URLs the skipped list names", len(held), len(held))
 }

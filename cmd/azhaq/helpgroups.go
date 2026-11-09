@@ -246,7 +246,7 @@ var helpSpecs = map[string]helpSpec{
 			{"Matchers and filters", `mc mr fc fs fl fw ac`},
 			{"The request", `X d H r request request-proto`},
 			{"Before and after each request", `preflight preflight-mode preflight-error preflight-var preflight-var-auto postflight postflight-var postflight-var-auto`},
-			{"Scope and safety", `allow deny deny-path kill-file ledger seal-to`},
+			{"Scope and safety", `allow deny deny-path send-state-changing kill-file ledger seal-to`},
 			{"Pace and limits", `rate t p timeout maxtime max-requests se-after control`},
 			{"Session and network", `x proxy replay-proxy`},
 			{"Output", `db json o of silent quiet v c strict-exit`},

@@ -93,11 +93,6 @@ type Options struct {
 	// NoCalibration skips the guesses at paths that cannot exist (-ac=false):
 	// the filters are the user's alone.
 	NoCalibration bool
-	// UserWords says the words are the user's own wordlist: every one is
-	// asked, as ffuf does. With the built-in list a word whose own name
-	// declares a state change (logout, reset, delete, ...) is held back
-	// unless -send-state-changing is given, and listed as skipped.
-	UserWords bool
 }
 
 // DefaultStatus is ffuf's default -mc.
@@ -350,22 +345,24 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 	return meta, nil
 }
 
-// heldWord is the word that makes the built-in list's guess t a state
-// change by its own name, while the run holds those back; "" for any guess
-// of the user's own wordlist.
+// heldWord is the word that makes the guess t (of any list, the user's too) a
+// state change by its own name, while the run holds those back.
 func (c *Collector) heldWord(t string) string {
-	if c.Opts.UserWords || !egress.Current().Holding() {
+	if !egress.Current().Holding() {
 		return ""
 	}
-	return statechange.OfPath("/" + t)
+	return HeldWord(t)
 }
 
-// HeldWord is the state-changing word a built-in word's path declares, or "".
-func HeldWord(t string) string { return statechange.OfPath("/" + t) }
+// HeldWord is the state-changing word a word's path or query declares, or "".
+func HeldWord(t string) string {
+	w, _ := statechange.OfTarget("/" + t)
+	return w
+}
 
-// HeldWords is how many of the requests the built-in list's words and
-// extensions make would be held back as state-changing: the number a plan and
-// an estimate leave out. Every word is asked bare and with each extension.
+// HeldWords is how many of the requests a wordlist's words and extensions
+// make would be held back as state-changing: the number a plan and an
+// estimate leave out. Every word is asked bare and with each extension.
 func HeldWords(words, exts []string) int {
 	n := 0
 	for _, w := range words {
@@ -378,7 +375,7 @@ func HeldWords(words, exts []string) int {
 			forms = append(forms, w+"."+strings.TrimPrefix(ext, "."))
 		}
 		for _, t := range forms {
-			if statechange.OfPath("/"+t) != "" {
+			if HeldWord(t) != "" {
 				n++
 			}
 		}

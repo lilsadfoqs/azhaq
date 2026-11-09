@@ -149,7 +149,7 @@ The summary and the exit codes are `run`'s: see [run](run.md#summary-and-exit-co
 | `-sweep` | bool |  | cover the whole scope: the IPv4 ranges and addresses -allow and -scope hold are targets too, not only the ones named (without it a note says how much of a range the targets leave); -deny, -deny-path, -rate, -max-requests and the kill file hold as for any target, and a range is expanded up to -max-ips unless -ports scans it |
 | `-deny` | string, repeatable |  | a domain, host or address range the run must not touch, even when given as a target |
 | `-deny-path` | string, repeatable |  | a regular expression on a URL's path and query: a URL it matches is never requested, by any collector or Chrome, and is listed as not requested (repeatable; azhaq decides nothing by itself) |
-| `-send-state-changing` | bool |  | send the GETs found on the way whose own path or API operation declares a state change (create, delete, reset, logout, and the other words of the documented set): a crawl's link, a script's route, an API description's operation, a built-in -dirs word. By default they are held back and listed as skipped; a target you give, a wordlist you give and -deny-path rules are not affected |
+| `-send-state-changing` | bool |  | send the GETs whose own path or query declares a state change (create, delete, reset, logout, and the other words of the documented set; a query's action=stop and the like): a crawl's link, a script's route, an API description's operation, a word of a -dirs or -paths wordlist (ffuf sends every word). By default they are held back and listed as skipped; a target you give and -deny-path rules are not affected |
 | `-kill-file` | string |  | stop all sending when this file exists, so that no request starts after it, and exit 4; azhaq resume works once it is removed (default DB.stop) |
 | `-ledger` | string |  | write every request, connection and DNS query the run sends (to targets, third-party sources and resolvers) to this file, a chain of hashes that azhaq ledger -verify checks (default DB.ledger.jsonl next to the workspace; off: none; with a temporary database, only when given) |
 | `-seal-to` | string |  | when the run ends, append the ledger's seal as one JSON line ({"time","ledger","seal","entries"}) to this file, or POST it to this URL: kept where the run's own files are not, so azhaq ledger -verify -seal can tell the ledger from one with lines removed and the rest re-chained to look intact |
@@ -212,7 +212,7 @@ The summary and the exit codes are `run`'s: see [run](run.md#summary-and-exit-co
 | `-strict-exit` | bool |  | exit 3 for any failure, a target among many included (the rule before 0.15); without it a run that did its job exits 0 and its summary counts and lists the failures |
 
 <details>
-<summary>Other names, flags accepted with no effect and rarely used flags (80)</summary>
+<summary>Other names, flags accepted with no effect and rarely used flags (81)</summary>
 
 | Flag | Type | Default | Meaning | Kind |
 | --- | --- | --- | --- | --- |
@@ -226,6 +226,7 @@ The summary and the exit codes are `run`'s: see [run](run.md#summary-and-exit-co
 | `-dirs-fr` | string |  | hide answers whose headers or body match this regular expression | rarely needed |
 | `-dirs-fs` | string |  | hide these response sizes | rarely needed |
 | `-dirs-fw` | string |  | hide these word counts | rarely needed |
+| `-dirs-ic` | bool |  | ignore the lines of the wordlist that start with # (and a trailing ' # note'), as ffuf's -ic does; without it they are asked like any word | rarely needed |
 | `-dirs-mc` | string |  | report only these statuses (comma-separated, ranges, or all; default ffuf's: 200-299,301,302,307,401,403,405,500) | rarely needed |
 | `-dirs-ml` | string |  | report only these line counts | rarely needed |
 | `-dirs-mr` | string |  | report only answers whose headers or body match this regular expression | rarely needed |
