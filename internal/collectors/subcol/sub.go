@@ -402,7 +402,7 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 				Extractor:           ext,
 				Client:              c.opts.Client,
 				RequestLimiter:      c.limiter,
-				Timeout:             int(timeout / time.Second),
+				Timeout:             int((timeout + time.Second - 1) / time.Second), // whole seconds, never 0 (0 reads as no limit)
 				MaxResponseBodySize: c.opts.MaxBody,
 				MaxResults:          c.opts.MaxResults,
 			}
