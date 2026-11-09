@@ -83,6 +83,7 @@ setTimeout(() => {
     localStorage.setItem('token', j.token);
     sessionStorage.setItem('bid', j.bid);
     history.pushState({}, '', '/dashboard');
+    fetch('/api/me', {headers: {Authorization: 'Bearer ' + j.token}});
     document.getElementById('app').innerHTML = '<h1>Welcome</h1>';
   });
 }, 300);
@@ -103,6 +104,8 @@ func TestLogin(t *testing.T) {
 			}
 			http.SetCookie(w, &http.Cookie{Name: "sid", Value: "abc123", Path: "/", HttpOnly: true})
 			fmt.Fprintf(w, `{"token":%q,"bid":7}`, jwt)
+		case "/api/me":
+			fmt.Fprint(w, `{"email":"member@x.test"}`)
 		default:
 			fmt.Fprint(w, loginPage)
 		}
@@ -141,6 +144,11 @@ func TestLogin(t *testing.T) {
 	}
 	if len(s.Cookies) != 1 || s.Cookies[0] != "sid=abc123" {
 		t.Errorf("cookies %v", s.Cookies)
+	}
+	// The calls the signed-in page made, for a check of the session: not the
+	// sign-in page, not the form's own POST.
+	if len(s.Gets) != 1 || s.Gets[0] != srv.URL+"/api/me" {
+		t.Errorf("GETs after signing in: %v", s.Gets)
 	}
 	if s.URL != srv.URL+"/dashboard" {
 		t.Errorf("ended on %s", s.URL)

@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/lilsadfoqs/azhaq/internal/guard"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -18,6 +18,7 @@ import (
 
 	"github.com/lilsadfoqs/azhaq/internal/egress"
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
+	"github.com/lilsadfoqs/azhaq/internal/guard"
 	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 	"github.com/lilsadfoqs/azhaq/internal/neterr"
 )
@@ -31,7 +32,15 @@ type Session struct {
 	Storage []string // what localStorage and sessionStorage held: storage.key, value, storage.key, value…
 	Answers [][]byte // the JSON answers to the requests submitting the form sent (the login's own answer)
 	Blocked []string // URLs the sign-in asked for outside the scope, to list (Reason); not sent
+	// Gets are the pages and calls (documents, XHR, fetch) the browser asked
+	// for with GET from the moment the form was submitted: the signed-in
+	// app's own reads, the session on each. In the order asked, once each,
+	// without the sign-in page itself.
+	Gets []string
 }
+
+// maxGets caps what one sign-in keeps of the GETs it saw.
+const maxGets = 200
 
 // OnLogin, when set, is told of every session a login left: azhaq roles
 // learns from it who each role is (a user id, a basket id).
@@ -207,6 +216,7 @@ func (b *Browser) Login(ctx context.Context, loginURL, user, pass string) (_ Ses
 	// who signed in.
 	var sentMu sync.Mutex
 	var sent []network.RequestID
+	var gets []string
 	listen, stopListen := context.WithCancel(tab)
 	defer stopListen()
 	events := chromedp.Events(listen, network.RequestWillBeSent)
@@ -215,6 +225,13 @@ func (b *Browser) Login(ctx context.Context, loginURL, user, pass string) (_ Ses
 		for ev, err := range events {
 			if err != nil {
 				return
+			}
+			if ev.Request != nil && ev.Request.Method == "GET" && (ev.Type == network.ResourceTypeXHR || ev.Type == network.ResourceTypeFetch || ev.Type == network.ResourceTypeDocument) {
+				sentMu.Lock()
+				if u := ev.Request.URL; u != loginURL && len(gets) < maxGets && !slices.Contains(gets, u) {
+					gets = append(gets, u)
+				}
+				sentMu.Unlock()
 			}
 			if ev.Request != nil && ev.Request.Method != "GET" && ev.Request.Method != "OPTIONS" {
 				sentMu.Lock()
@@ -289,6 +306,7 @@ func (b *Browser) Login(ctx context.Context, loginURL, user, pass string) (_ Ses
 	stopListen()
 	sentMu.Lock()
 	ids := append([]network.RequestID(nil), sent...)
+	s.Gets = append([]string(nil), gets...)
 	sentMu.Unlock()
 	for _, id := range ids {
 		// A page that navigated away has dropped the body: nothing to read.
