@@ -3,9 +3,6 @@ package portscan
 import (
 	"slices"
 	"testing"
-
-	"github.com/lilsadfoqs/azhaq/internal/advisory"
-	"github.com/lilsadfoqs/azhaq/internal/verify"
 )
 
 // A default scan asks the usual port of every service azhaq can name or
@@ -36,22 +33,6 @@ func TestDefaultPortsHoldThePortOfEveryServiceInTheCatalog(t *testing.T) {
 	}
 	if n == 0 {
 		t.Fatal("the catalog lists no port")
-	}
-	// The services the verification checks read, by the name the scan gives them.
-	for _, c := range verify.Checks() {
-		if _, ok := verify.ForService(advisory.Service{Service: c.Service}); !ok {
-			t.Errorf("%s: no check for the service it names", c.ID)
-		}
-		p := protocolNamed(c.Service)
-		if p == nil || len(p.ports) == 0 {
-			t.Errorf("%s: the identification catalog has no usual port for %s", c.ID, c.Service)
-			continue
-		}
-		for _, q := range p.ports {
-			if !slices.Contains(def, q) {
-				t.Errorf("the default set lacks %d, a port of %s, which -verify checks", q, c.Service)
-			}
-		}
 	}
 	for _, q := range []int{6379, 27017, 11211} {
 		if !slices.Contains(def, q) {

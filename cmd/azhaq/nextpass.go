@@ -5,7 +5,10 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/lilsadfoqs/azhaq/internal/advisory"
 	"github.com/lilsadfoqs/azhaq/internal/portscan"
+	"github.com/lilsadfoqs/azhaq/internal/verify"
+	"github.com/lilsadfoqs/azhaq/types"
 )
 
 // A next pass is a wider pass than the one a finished command made, which it
@@ -45,6 +48,97 @@ func portsPass(asked, addresses, open int) (why string, cost amount) {
 	}
 	return fmt.Sprintf("the other %d of the %d TCP ports were not asked on %s: %s; %s in the %d asked",
 		rest, allTCPPorts, nOf(addresses, "address", "addresses"), moreOf(cost), found, asked), cost
+}
+
+// catalogLeft is the ports of the default set (portscan.DefaultPorts: the top
+// 100 and portscan.CatalogPorts, the usual ports of the services azhaq names
+// and checks) that a scan of asked did not ask, less excluded (an -ep list
+// the user gave, which stays out). nil when asked is empty, since a scan of no
+// TCP port was no choice of a list.
+func catalogLeft(asked []int, excluded string) []int {
+	if len(asked) == 0 {
+		return nil
+	}
+	have := make(map[int]bool, len(asked))
+	for _, p := range asked {
+		have[p] = true
+	}
+	var left []int
+	for _, p := range portscan.DefaultPorts() {
+		if !have[p] {
+			left = append(left, p)
+		}
+	}
+	if excluded != "" {
+		if rest, err := portscan.Exclude(left, excluded); err == nil {
+			left = rest
+		}
+	}
+	return left
+}
+
+// catalogPass says, after a TCP scan of a list that left out ports of the
+// default set, what asking them would cost: the connects are the ports left
+// out times the addresses scanned. "" when it left none out.
+func catalogPass(left []int, addresses int) (why string, cost amount) {
+	if len(left) == 0 || addresses <= 0 {
+		return "", amount{}
+	}
+	cost = amount{Connects: int64(len(left)) * int64(addresses)}
+	return fmt.Sprintf("%s of the default set (the top 100 and the usual ports of the services azhaq names and checks) were not asked on %s: %s",
+		plural(len(left), "port"), nOf(addresses, "address", "addresses"), moreOf(cost)), cost
+}
+
+// catalogPassCommand is the ports command line that asks the default set as
+// well: the -p list with ",default" added, or -p default beside -tp and -pf
+// (they add to it).
+func catalogPassCommand(args []string, db string) string {
+	rest := slices.Clone(args)
+	if v, ok := flagValue(args, "p"); ok {
+		rest = append(withoutFlag(rest, "p"), "-p", strings.TrimRight(v+",default", ","))
+	} else {
+		rest = append(rest, "-p", "default")
+	}
+	if db != "" && !hasFlag(rest, "db") {
+		rest = append(rest, "-db", db)
+	}
+	return "azhaq ports " + shellJoin(rest)
+}
+
+// verifyPass says, after a run that named services and did not give -verify,
+// which of them a read-only check reads, what each check sends (and no
+// credential), and what the reads cost: one connect a service, each read being
+// one connection with one request on it. "" when no service found has a check.
+func verifyPass(obs []types.StoredObservation) (why string, cost amount) {
+	n := 0
+	var sends []string
+	seen := map[string]bool{}
+	for _, svc := range advisory.ServicesAnyVersion(obs) {
+		c, ok := verify.ForService(svc)
+		if !ok {
+			continue
+		}
+		n++
+		if !seen[c.ID] {
+			seen[c.ID] = true
+			sends = append(sends, c.Request+" to "+c.Service)
+		}
+	}
+	if n == 0 {
+		return "", amount{}
+	}
+	cost = amount{Connects: int64(n)}
+	return fmt.Sprintf("%s found with a read-only check; -verify sends %s, no credential, one connect a service: %s more",
+		plural(n, "service"), strings.Join(sends, "; "), moreOf(cost)), cost
+}
+
+// verifyPassCommand is the ports command line with -verify.
+func verifyPassCommand(args []string, db string) string {
+	rest := append(slices.Clone(args), "-verify")
+	if db != "" && !hasFlag(rest, "db") {
+		rest = append(rest, "-db", db)
+	}
+	return "azhaq ports " + shellJoin(rest)
 }
 
 // portsPassCommand is the command that asks the whole port range of the

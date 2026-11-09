@@ -340,6 +340,8 @@ The summary's `state_changing` lists each one with its `status`: `sent` only whe
 - A run without `-browser` whose target pages leave their links to their scripts gets `azhaq run -url ORIGIN/ -browser …`, with the page that showed it. The signs are three or more `{{templates}}` in the text, or Markdown in the text whose links are read as text, or an empty shell of a front page. The last two count only when fewer than 10 routes were found on the page's origin. Example: `(/learn/vulnerability/a1_injection and 11 more pages: Markdown its scripts turn into links; read as text here, Chrome sees the page as rendered)`.
 - A run that found a GraphQL endpoint and did not read its schema gets `azhaq run -url ORIGIN/ -graphql -allow HOST …   (/graphql and /graphiql answer like GraphQL; -graphql reads the schema by introspection)`. That is a run with no `-graphql`, or with the endpoint's host outside the scope.
 - A run without a session (`-login`, `-cookie`, `-header`) whose target site shows a sign-in form gets `azhaq run -url ORIGIN/ -login PAGE -login-user USER -login-pass PASS -allow HOST …`. A sign-in form is a form that takes a password.
+- A run that named a service with a read-only check (see [Read-only verification](#read-only-verification)) and was not given `-verify` gets `azhaq run … -verify -db DB   (next pass, not run: N services found with a read-only check; -verify sends INFO server to redis; …, no credential, one connect a service: N connects more)`. Each check is named once, with what it sends. No line when no service found has a check.
+- A run that scanned a list of TCP ports (`-ports top-100`, a list) that leaves out ports of the default set (the top 100 and the usual ports of the services azhaq names and checks) gets, before the line below, `azhaq ports -host HOSTS -p LIST,default -db DB   (next pass, not run: N ports of the default set … were not asked on A addresses: C connects)`, with `-ports LIST,default` for the run's own line as below. `N` counts the ports of the default set the scan did not ask, and `C` is `N` times the addresses the scan asked. A scan of the whole default set suggests nothing.
 - A run that scanned some TCP ports (`-ports top-100`, `-ports top-1000`, a list) and not all 65535 gets `azhaq ports -host HOSTS -p full -db DB   (next pass, not run: the other N of the 65535 TCP ports were not asked on A addresses: C connects; O open ports found in the K asked)`. `C` is `N` times the addresses the scan asked, counted as [plan](plan.md#the-estimate) counts connects, and the banner and protocol probes of any new open port come on top. With more than 8 target names, or a scan of names found on the way, the command is the run's own line with `-ports full`. Nothing is run for it, and a finished scan of every port suggests nothing.
 
 ### Known-issue matching
@@ -353,13 +355,39 @@ azhaq run -url https://app.example.com/ -ports top-100 -advisories -advisories-c
 
 ### Read-only verification
 
-With `-verify`, each service the run named gets at most one more read, from a fixed list of checks — there is no way to name another request. Each check sends only what a client with no credentials sends to read what the service already gives anyone:
+With `-verify`, each service the run named that has a check gets at most one more read, from a fixed list of checks — there is no way to name another request. Each check sends only what a client with no credentials sends to read what the service already gives anyone:
 
 | Check | Sends exactly | Settles |
 | --- | --- | --- |
 | Redis | `INFO server` | whether the data store answers a read with no credential, and the version it states |
 | MongoDB | an `isMaster` OP_MSG (`{$db: "admin"}`) | whether the server answers a hello with no credential, and the version it states |
 | memcached | `version` | whether the service answers with no credential, and the version it states |
+| ZooKeeper | `srvr` | whether it answers its state command with no credential, and its version |
+| PostgreSQL | a StartupMessage of protocol version 1.0, no user | the protocol versions it speaks, which bound its major version |
+| Kafka | `ApiVersions` v0 | whether the broker answers its first request with no credential |
+| SQL Server | a TDS PRELOGIN | the version token of the answer |
+| Cassandra | an `OPTIONS` frame | what the server supports |
+| Oracle TNS | a Connect with `(COMMAND=ping)` | the listener's version |
+| LDAP | an anonymous search of the root DSE, no bind | the vendor, version and naming contexts it states |
+| DNS | `version.bind` CHAOS TXT, length-prefixed over TCP | the version a BIND, dnsmasq or Unbound server states |
+| RTSP | `OPTIONS * RTSP/1.0` | the methods it supports and its `Server` header |
+| SIP | an `OPTIONS` request over TCP | what it supports and its `Server` header |
+| SOCKS5 | the method selection (version 5, one method, no authentication) | the method the proxy accepts |
+| SMB | an SMB2 `NEGOTIATE`, no session | the dialect and the signing it requires |
+| NetBIOS session | a session request to `*SMBSERVER` | whether the service takes a session |
+| RDP | an X.224 connection request with a negotiation request | the protocol it selects |
+| X11 | a connection setup with no authorization | an open server's vendor and release, or its refusal |
+| JDWP | `JDWP-Handshake` | whether a debug port answers the handshake |
+| Java RMI | the stream header `JRMI`, version 2, StreamProtocol | whether a registry acknowledges it, and the host it sees the asker as |
+| Elasticsearch transport | the keep-alive ping (`ES` and a length of -1) | whether a node of 7.x or later answers it |
+| AFP | a DSI `GetStatus`, no login | the server's status block |
+| Minecraft | a handshake and a status request | the version and players the status states |
+| MQTT | a `CONNECT` without user name or password | whether the broker accepts an anonymous connection |
+| AMQP | the protocol header `AMQP 0-9-1` | the product and version in Connection.Start |
+| STOMP | a `CONNECT` frame without credentials | whether the broker accepts it, and the server it states |
+| XMPP | the opening of a stream | whether the server answers with its own stream |
+
+Every other service the scan names has no check, and the reason is stated once, in [the services with no check](../CONCEPTS.md#services-with-no-check). A check reads the service on the port it was found on, inside TLS when the scan found it there; a service seen over UDP has none, since the scan's own datagram is its read.
 
 With `-advisories`, each advisory lead is labelled from its one confirmation read as well (the read itself is `-advisories-confirm`'s; `-verify` sends nothing more for a lead). Every result is labelled exactly one of:
 
@@ -367,7 +395,7 @@ With `-advisories`, each advisory lead is labelled from its one confirmation rea
 - `version-only` — only the product and version identification stands: the service asked for authentication, or no confirmation read settled more. No unauthenticated read is claimed.
 - `conditional` — the result depends on a precondition the read did not show, which the result names.
 
-Each result carries the exact request sent and an excerpt of the answer, is printed after the map (one `{"type":"verify", …}` object with `-json`), held in the summary's `verify`, and stored as one `verify` observation (azhaq `show` lists them), so every count derives from the stored rows. The severity printed is a stated ranking of how directly the read shows the fact (an unauthenticated data-store read is `high`, a settled advisory `medium`, a conditional `low`, the rest `info`); it is not a CVSS score. Every read goes through the scope, `-deny-path`, the kill file, `-max-requests` and the pace, and is a ledger line of the collector `azhaq-verify`. A read the scope refuses, a rule keeps out or a limit stops is a note, not a failure; a read that gets no answer is a failure (exit 3). Never a payload, never a write or state change, never a credential or a guessed password, never a request that tries to trigger a flaw. The boundary is stated once, in [Read-only verification](../CONCEPTS.md#read-only-verification--verify).
+Each result carries the exact request sent and an excerpt of the answer, is printed after the map (one `{"type":"verify", …}` object with `-json`), held in the summary's `verify`, and stored as one `verify` observation (azhaq `show` lists them), so every count derives from the stored rows. The severity printed is a stated ranking of how directly the read shows the fact (an unauthenticated read of a data store's state, which are Redis `INFO`, MongoDB `isMaster`, memcached `version` and ZooKeeper `srvr`, is `high`; any other proved read, such as a version a protocol states, is `info`; a settled advisory is `medium`, a conditional `low`, the rest `info`); it is not a CVSS score. Every read goes through the scope, `-deny-path`, the kill file, `-max-requests` and the pace, and is a ledger line of the collector `azhaq-verify`. A read the scope refuses, a rule keeps out or a limit stops is a note, not a failure; a read that gets no answer is a failure (exit 3). Never a payload, never a write or state change, never a credential or a guessed password, never a request that tries to trigger a flaw. The boundary is stated once, in [Read-only verification](../CONCEPTS.md#read-only-verification--verify).
 
 ```
 azhaq run -url https://app.example.com/ -ports top-1000 -verify -db app.db
@@ -425,7 +453,7 @@ azhaq run -url https://app.example.com/ -ports top-1000 -verify -db app.db
 | `-advisories` | bool |  | match the products and versions this run already confirmed against the advisory records of -advisory-source, as labelled leads (affected, not affected or conditional, each with its advisory id and URL): a pure lookup over what the run already holds, nothing more is sent to a target |
 | `-advisories-confirm` | bool |  | with -advisories: for each affected or conditional lead, also make the one benign read the advisory names (a GET of its documented version or info path, or of / to read the version it states): no payload, no login, no state change, never a request that could trigger the issue; each read is in the ledger and counts against -max-requests, and each lead is labelled observed, inferred or claimed (with -advisories; reads only within the run's scope: the targets given, -allow or -scope) |
 | `-advisory-source` | string |  | the advisory records to match against, OSV JSON (a record, a list, {"vulns": [...]}, or JSON lines): a file the user downloaded (works offline), or an http(s) URL asked once as a third-party source; azhaq vendors no snapshot and fetches none it was not given |
-| `-verify` | bool |  | with the services this run confirmed: make each enumerated safe read-only verification (Redis INFO server, MongoDB isMaster, memcached version, each sent with no credential, and, with -advisories, each advisory lead labelled from its confirmation read) and label the results proved, version-only or conditional, each with the exact request sent and an excerpt of the answer; every read goes through the scope, -deny-path (for the advisory GET), -max-requests, the pace, the kill file and the ledger; no payload, no credential, no write and no request that tries to trigger an issue |
+| `-verify` | bool |  | with the services this run confirmed: make each enumerated safe read-only verification (one fixed request a client with no credentials sends, listed by plan: Redis INFO server, MongoDB isMaster, memcached version, ZooKeeper srvr and so on; with -advisories, each advisory lead is labelled from its confirmation read) and label the results proved, version-only or conditional, each with the exact request sent and an excerpt of the answer; every read goes through the scope, -deny-path (for the advisory GET), -max-requests, the pace, the kill file and the ledger; no payload, no credential, no write and no request that tries to trigger an issue |
 
 **Crawl scope**
 

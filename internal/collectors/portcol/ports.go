@@ -134,26 +134,31 @@ func (c *Collector) holdWeb(ip string, port int) {
 	}
 	if !c.held[key] {
 		c.held[key] = true
-		egress.Reserve(int64(c.WebCost))
+		egress.ReserveFor(key, int64(c.WebCost))
 	}
 }
 
-// reserveWeb keeps the reserve of a port named a web service, and gives back
-// that of any other: its one probe is paid from the budget as any request is.
-func (c *Collector) reserveWeb(ip string, o portscan.Open) {
+// reserveWeb keeps the reserve of a port named a web service, until its
+// mapping ends (the scheduler gives back what is left, see egress.ReleaseFor):
+// host is the name the port was asked under, whose web work the key's is
+// done under as well as the address's. The reserve of any other port is given
+// back at once: its one probe is paid from the budget as any request is.
+func (c *Collector) reserveWeb(host, ip string, o portscan.Open) {
 	if c.WebCost <= 0 {
 		return
 	}
+	key := net.JoinHostPort(ip, strconv.Itoa(o.Port))
 	if svc := strings.TrimSuffix(o.Service, "?"); svc == "http" || svc == "https" {
+		port := strconv.Itoa(o.Port)
+		egress.MapsUnder(key, strings.ToLower(key), strings.ToLower(net.JoinHostPort(host, port)))
 		return
 	}
-	key := net.JoinHostPort(ip, strconv.Itoa(o.Port))
 	c.mu.Lock()
 	held := c.held[key]
 	c.held[key] = false
 	c.mu.Unlock()
 	if held {
-		egress.Reserve(-int64(c.WebCost))
+		egress.ReleaseFor(key)
 	}
 }
 
@@ -302,7 +307,7 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 	}
 	for _, ip := range ips {
 		found := func(o portscan.Open) {
-			c.reserveWeb(ip, o)
+			c.reserveWeb(host, ip, o)
 			found(o)
 		}
 		ports := c.portsOf(host)

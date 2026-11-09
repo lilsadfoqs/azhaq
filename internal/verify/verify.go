@@ -24,6 +24,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"net"
 	"strings"
@@ -31,6 +32,7 @@ import (
 
 	"github.com/lilsadfoqs/azhaq/internal/advisory"
 	"github.com/lilsadfoqs/azhaq/internal/lazyre"
+	"github.com/lilsadfoqs/azhaq/internal/portscan"
 )
 
 // Labels of a verification result.
@@ -97,47 +99,167 @@ type Check struct {
 	Request      string `json:"request"` // as printed: the exact bytes, escapes shown
 	Precondition string `json:"precondition"`
 
-	build func() []byte
-	parse func(resp []byte, svc advisory.Service, r *Result)
+	// High: the read shows the state of a data store, so a proved result
+	// ranks high; any other proved read is info.
+	High bool `json:"high,omitempty"`
+
+	// prepare is the request for svc and the reader of its answer.
+	prepare func(svc advisory.Service) (req []byte, parse func(resp []byte, r *Result))
 }
 
-// Checks lists every data-store verification, in the order they run.
+// Checks lists every verification, in the order they run.
 func Checks() []Check { return append([]Check(nil), checks...) }
+
+// fixed is a prepare for a check whose request does not depend on the
+// service.
+func fixed(req func() []byte, parse func(resp []byte, svc advisory.Service, r *Result)) func(advisory.Service) ([]byte, func([]byte, *Result)) {
+	return func(svc advisory.Service) ([]byte, func([]byte, *Result)) {
+		return req(), func(resp []byte, r *Result) { parse(resp, svc, r) }
+	}
+}
 
 var checks = []Check{
 	{
-		ID: "redis-info", Service: "redis", Request: "INFO server",
+		ID: "redis-info", Service: "redis", Request: "INFO server", High: true,
 		Precondition: "the service answers INFO server, a read of what it already exposes, with no credential sent",
-		build:        func() []byte { return []byte("INFO server\r\n") },
-		parse:        parseRedis,
+		prepare:      fixed(func() []byte { return []byte("INFO server\r\n") }, parseRedis),
 	},
 	{
-		ID: "mongodb-isMaster", Service: "mongodb", Request: "isMaster (OP_MSG, $db admin)",
+		ID: "mongodb-isMaster", Service: "mongodb", Request: "isMaster (OP_MSG, $db admin)", High: true,
 		Precondition: "the service answers isMaster, its hello, with no credential sent",
-		build:        func() []byte { return mongoCommand("isMaster") },
-		parse:        parseMongo,
+		prepare:      fixed(func() []byte { return mongoCommand("isMaster") }, parseMongo),
 	},
 	{
-		ID: "memcached-version", Service: "memcached", Request: "version",
+		ID: "memcached-version", Service: "memcached", Request: "version", High: true,
 		Precondition: "the service answers version, a read of what it already exposes, with no credential sent",
-		build:        func() []byte { return []byte("version\r\n") },
-		parse:        parseMemcached,
+		prepare:      fixed(func() []byte { return []byte("version\r\n") }, parseMemcached),
 	},
+	probeCheck("zookeeper-srvr", "zookeeper", "srvr (the four-letter command)", "its own state command srvr", true, nil),
+	probeCheck("postgresql-startup", "postgresql", "a StartupMessage of protocol version 1.0 with no user", "a startup message of a protocol version that does not exist, whose error names the versions it speaks", false, nil),
+	probeCheck("kafka-apiversions", "kafka", "ApiVersions v0", "ApiVersions, the first request of every client", false, nil),
+	probeCheck("mssql-prelogin", "mssql", "a TDS PRELOGIN", "a TDS prelogin, the first packet of every client, whose answer holds the version", false, nil),
+	probeCheck("cassandra-options", "cassandra", "an OPTIONS frame (CQL native protocol v4)", "OPTIONS, which lists what the server supports", false, nil),
+	probeCheck("oracle-tns-ping", "oracle-tns", "a TNS Connect with (COMMAND=ping)", "the listener ping tnsping sends, whose answer holds the version", false, nil),
+	probeCheck("ldap-rootdse", "ldap", "an anonymous search of the root DSE, no bind", "an anonymous search of the root DSE, which RFC 4512 has every server answer", false, nil),
+	probeCheck("dns-version-bind", "dns", "version.bind CHAOS TXT, length-prefixed over TCP", "a CHAOS TXT query for version.bind", false, nil),
+	probeCheck("rtsp-options", "rtsp", "OPTIONS * RTSP/1.0", "OPTIONS, which lists the methods it supports", false, refusedStatus),
+	probeCheck("sip-options", "sip", "an OPTIONS request over TCP", "OPTIONS, which a SIP server answers with what it supports", false, refusedStatus),
+	probeCheck("socks5-methods", "socks5", "the method selection: version 5, one method, no authentication", "the method selection, which names the method it accepts", false, refusedSocks),
+	probeCheck("smb-negotiate", "smb", "an SMB2 NEGOTIATE, no session", "a NEGOTIATE, which lists the dialect and the signing it requires", false, nil),
+	probeCheck("netbios-ssn-request", "netbios-ssn", "a NetBIOS session request to *SMBSERVER", "a session request, which the service answers positively or not", false, nil),
+	probeCheck("rdp-x224", "rdp", "an X.224 connection request with a negotiation request", "the X.224 connection request, which names the protocol it selects", false, nil),
+	probeCheck("x11-setup", "x11", "a connection setup with no authorization", "a connection setup, which an X server answers with its vendor and release, or with a refusal", false, refusedX11),
+	probeCheck("jdwp-handshake", "jdwp", "JDWP-Handshake", "the handshake, which a debug port answers with itself", false, nil),
+	probeCheck("java-rmi-header", "java-rmi", "the stream header JRMI, version 2, StreamProtocol", "the stream header, which a registry acknowledges", false, nil),
+	probeCheck("elasticsearch-transport-ping", "elasticsearch-transport", "the keep-alive ping (ES and a length of -1)", "the keep-alive ping, which a node of 7.x or later returns", false, nil),
+	probeCheck("afp-getstatus", "afp", "a DSI GetStatus, no login", "DSIGetStatus, which an AFP server answers before any login", false, nil),
+	probeCheck("minecraft-status", "minecraft", "a handshake and a status request (Server List Ping)", "the status request every game client sends to list a server", false, nil),
+	probeCheck("mqtt-connect", "mqtt", "a CONNECT without user name or password", "a CONNECT, which the broker accepts or refuses in its CONNACK", false, refusedMQTT),
+	probeCheck("amqp-header", "amqp", "the protocol header AMQP 0-9-1", "the protocol header, which a broker answers with its Connection.Start", false, nil),
+	probeCheck("stomp-connect", "stomp", "a CONNECT frame without credentials", "a CONNECT, which the broker accepts or refuses", false, refusedSTOMP),
+	probeCheck("xmpp-stream", "xmpp", "the opening of a stream", "the opening of a stream, which a server answers with its own", false, nil),
 }
 
-// ForService is the check for a confirmed service, by the service or
-// product the scan named (redis, mongodb, memcached).
+// probeCheck is a check whose request and reader are the identification's
+// own for the protocol (portscan.ProbeFor): it sends nothing the scan does
+// not already send to a port that waits. refused says an answer is the
+// service asking for a credential, which stands as version-only.
+func probeCheck(id, service, request, what string, high bool, refused func(resp []byte) bool) Check {
+	return Check{
+		ID: id, Service: service, Request: request, High: high,
+		Precondition: "the service answers " + what + " with no credential sent",
+		prepare: func(svc advisory.Service) ([]byte, func([]byte, *Result)) {
+			host := firstNonEmpty(svc.Host, svc.IP)
+			pr, ok := portscan.ProbeFor(service, host, svc.Port)
+			if !ok {
+				return nil, nil
+			}
+			return pr.Request, func(resp []byte, r *Result) {
+				a, ok := pr.Read(resp)
+				switch {
+				case !ok:
+					r.Label = Conditional
+					r.Precondition = "the answer is not a " + service + " answer the check can read"
+				case refused != nil && refused(resp):
+					r.Label = VersionOnly
+				default:
+					r.Label = Proved
+					if svc.Product == "" && a.Product != "" {
+						r.Product = a.Product
+					}
+					if a.Version != "" {
+						r.Version = a.Version
+					}
+				}
+			}
+		},
+	}
+}
+
+// refusedStatus: an RTSP or SIP status line that asks for a credential.
+func refusedStatus(resp []byte) bool {
+	f := strings.Fields(string(resp))
+	return len(f) > 1 && (f[1] == "401" || f[1] == "403" || f[1] == "407")
+}
+
+func refusedSocks(resp []byte) bool { return len(resp) == 2 && resp[1] == 0xff }
+
+func refusedMQTT(resp []byte) bool { return len(resp) >= 4 && resp[3] != 0 }
+
+func refusedSTOMP(resp []byte) bool { return bytes.HasPrefix(resp, []byte("ERROR")) }
+
+// refusedX11: a setup the server refused (0) or wants authorization for (2).
+func refusedX11(resp []byte) bool { return len(resp) > 0 && resp[0] != 1 }
+
+// byService maps the name a scan gives a service to its check.
+var byService = func() map[string]int {
+	m := map[string]int{}
+	for i, c := range checks {
+		m[c.Service] = i
+	}
+	m["mongo"] = m["mongodb"]
+	return m
+}()
+
+// ForService is the check for a confirmed TCP service, by the service or
+// product the scan named. A service seen over UDP has none: the scan's own
+// datagram is its read.
 func ForService(svc advisory.Service) (Check, bool) {
+	if svc.Proto == "udp" {
+		return Check{}, false
+	}
 	name := strings.ToLower(strings.TrimSuffix(firstNonEmpty(svc.Service, svc.Product), "?"))
-	switch name {
-	case "redis":
-		return checks[0], true
-	case "mongodb", "mongo":
-		return checks[1], true
-	case "memcached":
-		return checks[2], true
+	if i, ok := byService[name]; ok {
+		return checks[i], true
 	}
 	return Check{}, false
+}
+
+// NoCheck lists every TCP service a scan names that has no check, with the
+// reason it has none. Every service the scan names is in Checks or here
+// (a test holds that), so no service is left out unsaid.
+var NoCheck = map[string]string{
+	"ssh":         "states its software and version in its first line, which the scan reads: there is no further no-credential read",
+	"ftp":         "states its software in its greeting, which the scan reads; SYST and FEAT are asked only by -detect all, where the greeting names no product",
+	"smtp":        "states its software in its greeting, which the scan reads; its commands after it (EHLO, HELP) add a capability list, not a version",
+	"ftp-or-smtp": "only a 220 greeting that names neither: there is nothing to read that the greeting did not say",
+	"pop3":        "states its software in its greeting, which the scan reads",
+	"imap":        "states its software in its greeting, which the scan reads",
+	"mysql":       "states its server version in its first packet, which the scan reads; any request after it is a login",
+	"telnet":      "opens with its option negotiation, which the scan reads; the next thing it wants is a login",
+	"vnc":         "states its protocol version in its first line, which the scan reads; the next message is a security handshake",
+	"irc":         "opens with its notice, which the scan reads; its version is read after a registration with a nick",
+	"nntp":        "states its software in its greeting, which the scan reads",
+	"sieve":       "sends its capability list, with its implementation, on connect, which the scan reads",
+	"icy":         "states its server in its first line, which the scan reads",
+	"nping-echo":  "opens with its binary handshake, which the scan reads; the next message is a client handshake that starts an echo session",
+	"kerberos":    "the only request without a credential is an AS-REQ that names an account, which asks the KDC about a principal; it states no version",
+	"finger":      "its only request lists a user or the logged-in users, data of the host rather than a version or info of the service",
+	"gopher":      "its only request lists the menu it serves, its content rather than a version or info of the service",
+	"http":        "the scan's own HEAD and GET already read its Server header and page; a version or info path belongs to a product, not to the protocol",
+	"https":       "the scan's own HEAD and GET already read its Server header and page; a version or info path belongs to a product, not to the protocol",
+	"tls":         "a handshake is the whole of what a client with no credentials says, and the scan reads its version, suite and certificate",
+	"tcpwrapped":  "closes the connection without a word: it answers nothing to read",
 }
 
 // DialFunc opens one connection to a service. The caller holds it to
@@ -161,6 +283,10 @@ func (c Check) Execute(ctx context.Context, svc advisory.Service, dial DialFunc)
 	if dial == nil {
 		return r, fmt.Errorf("verification of %s has no dialer: ask egress for one", r.Target)
 	}
+	req, parse := c.prepare(svc)
+	if req == nil {
+		return r, fmt.Errorf("check %s has no request for %s", c.ID, r.Target)
+	}
 	dctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	conn, err := dial(dctx, host, svc.IP, svc.Port)
@@ -172,7 +298,7 @@ func (c Check) Execute(ctx context.Context, svc advisory.Service, dial DialFunc)
 	if l, ok := conn.(interface{ Label(proto string) }); ok {
 		l.Label(c.Service) // the ledger's probe line names the protocol
 	}
-	if _, err := conn.Write(c.build()); err != nil {
+	if _, err := conn.Write(req); err != nil {
 		return r, err
 	}
 	var buf bytes.Buffer
@@ -190,8 +316,14 @@ func (c Check) Execute(ctx context.Context, svc advisory.Service, dial DialFunc)
 		return r, fmt.Errorf("no answer from %s", r.Target)
 	}
 	r.Evidence = excerpt(buf.Bytes())
-	c.parse(buf.Bytes(), svc, &r)
+	if r.Evidence == "" { // a binary answer: its first bytes
+		r.Evidence = "(binary) " + hex.EncodeToString(buf.Bytes()[:min(buf.Len(), 24)])
+	}
+	parse(buf.Bytes(), &r)
 	r.Severity = severityOf(r)
+	if r.Label == Proved && !c.High {
+		r.Severity = "info" // it answered, but its state is not a data store's
+	}
 	return r, nil
 }
 

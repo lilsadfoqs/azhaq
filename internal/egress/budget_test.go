@@ -171,3 +171,41 @@ func TestSweepLeavesTheReserveForWebRequests(t *testing.T) {
 		t.Error("a request past the budget was let through")
 	}
 }
+
+// A service's share of the reserve goes back when its mapping ends: what the
+// services still mapping hold stays, and what the web requests have used is
+// not given back twice.
+func TestReleaseForGivesBackWhatIsLeftOfAShare(t *testing.T) {
+	Reset()
+	defer Reset()
+	SetMaxRequests(1000)
+	ReserveFor("10.0.0.1:8080", 54)
+	ReserveFor("10.0.0.1:8080", 54) // held once
+	ReserveFor("10.0.0.2:8080", 54)
+	if Reserved() != 108 {
+		t.Fatalf("reserved %d, want 108", Reserved())
+	}
+	for i := 0; i < 4; i++ {
+		if err := Spend(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ReleaseFor("10.0.0.1:8080")
+	if Reserved() != 54 {
+		t.Errorf("one of two mapped: %d held, want the other's 54", Reserved())
+	}
+	ReleaseFor("10.0.0.1:8080")
+	if Reserved() != 54 {
+		t.Errorf("released twice: %d held", Reserved())
+	}
+	ReleaseFor("10.0.0.2:8080")
+	if Reserved() != 0 {
+		t.Errorf("both mapped: %d held, want 0", Reserved())
+	}
+	// A sweep may now spend what the reserve held.
+	for i := 0; i < 996; i++ {
+		if err := TakeSweep(); err != nil {
+			t.Fatalf("connect %d: %v", i, err)
+		}
+	}
+}
