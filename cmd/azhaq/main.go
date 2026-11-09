@@ -292,6 +292,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	pathsFile := fs.String("paths", "", "extra path wordlist (one path per line)")
 	quiet := fs.Bool("quiet", false, "print no map and no progress lines (a line every 10 s while the run works), only the summary (on stderr)")
 	jsonOut := fs.Bool("json", false, "print the map as JSON lines, and the summary as one JSON object on stderr")
+	outFile := fs.String("o", "", "also write the rows to this file, as printed (JSON lines with -json), replacing it; with -quiet the file still gets them")
 	storeResp := fs.Bool("sr", false, "also write each answer a target gave, headers and body as read, to the -srd directory as DIR/HOST/SHA1.txt with an index.txt (katana's -sr); query -fields response_file says where a row's is")
 	storeRespDir := fs.String("srd", "azhaq_response", "directory for -sr")
 	omitBody := fs.Bool("ob", false, "with -sr: write the status line and headers only")
@@ -443,6 +444,19 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		return usagef("%v", err)
 	}
 	out.json, out.quiet = *jsonOut, *quiet
+	var rowsOut *rowsFile
+	if *outFile != "" && !out.plan && !out.embedded {
+		var err error
+		if rowsOut, err = openRunOut(*outFile); err != nil {
+			return err
+		}
+		rep.wrote(*outFile)
+		defer func() {
+			if err := rowsOut.close(); err != nil && runErr == nil {
+				runErr = err
+			}
+		}()
+	}
 	rep.hintsOff, rep.hintsVrb = *jsonOut, *verbose
 	// Port lists are checked before anything is sent (a sign-in comes first).
 	if _, err := portscan.Ports(*portsSpec); *portsSpec != "" && err != nil {
@@ -1458,10 +1472,11 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		shown, folded = folder.Split(shown)
 		foldGroups = folder.Groups(folded)
 	}
+	sink := runSink(!*quiet && !out.embedded, rowsOut)
 	switch {
-	case *quiet || out.embedded:
+	case sink == nil:
 	case *jsonOut:
-		enc := json.NewEncoder(os.Stdout)
+		enc := json.NewEncoder(sink)
 		for _, r := range engine.GroupTemplates(shown) {
 			row := mapRowJSON(r)
 			if c := folder.Class(r); c != "" {
@@ -1484,35 +1499,35 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		}
 	case *probe:
 		for _, r := range engine.ProbeRows(obs) {
-			fmt.Println(r.Line())
+			fmt.Fprintln(sink, r.Line())
 		}
 		for _, r := range rows {
 			if r.Entity.Type == types.TypePort {
-				fmt.Println(r.Line())
+				fmt.Fprintln(sink, r.Line())
 			}
 		}
 		for _, lead := range advLeads {
-			fmt.Println(lead.Line())
+			fmt.Fprintln(sink, lead.Line())
 		}
 		for _, r := range verifyResults {
-			fmt.Println(r.Line())
+			fmt.Fprintln(sink, r.Line())
 		}
 	default:
-		printMap(shown, rep)
+		printMap(sink, shown, rep)
 		for _, g := range foldGroups {
 			rep.emitted().addGroup(g.Rows, countKey)
-			fmt.Printf("  %s\n", g.Line())
+			fmt.Fprintf(sink, "  %s\n", g.Line())
 		}
 		for _, lead := range advLeads {
-			fmt.Printf("  %s\n", lead.Line())
+			fmt.Fprintf(sink, "  %s\n", lead.Line())
 		}
 		for _, r := range verifyResults {
-			fmt.Printf("  %s\n", r.Line())
+			fmt.Fprintf(sink, "  %s\n", r.Line())
 		}
 		if *showObs {
-			fmt.Println("observations")
+			fmt.Fprintln(sink, "observations")
 			for _, o := range obs {
-				fmt.Printf("  %s %s %s\n", o.Collector, o.Kind, compact(o.Payload))
+				fmt.Fprintf(sink, "  %s %s %s\n", o.Collector, o.Kind, compact(o.Payload))
 			}
 		}
 	}
@@ -1863,15 +1878,15 @@ func heldBy(r engine.MapEntry) int {
 	return 1
 }
 
-func printMap(rows []engine.MapEntry, rep *report) {
+func printMap(w io.Writer, rows []engine.MapEntry, rep *report) {
 	for _, row := range engine.GroupTemplates(rows) {
 		rep.emitted().add(countKey(row), heldBy(row))
-		fmt.Printf("  %s\n", row.Line())
+		fmt.Fprintf(w, "  %s\n", row.Line())
 		for _, d := range row.Details() {
-			fmt.Printf("      %s\n", d)
+			fmt.Fprintf(w, "      %s\n", d)
 		}
-		if w := engine.Watch(row); len(w) > 0 {
-			fmt.Printf("      watch: %s\n", strings.Join(w, ", "))
+		if wt := engine.Watch(row); len(wt) > 0 {
+			fmt.Fprintf(w, "      watch: %s\n", strings.Join(wt, ", "))
 		}
 	}
 }
