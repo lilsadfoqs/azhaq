@@ -42,6 +42,7 @@ type appResult struct {
 	Ffuf        *ffufRow    `json:"ffuf,omitempty"`
 	Roles       *rolesRow   `json:"roles,omitempty"`
 	Browser     *browserRow `json:"browser,omitempty"`
+	RunCPU      *runCPU     `json:"run_cpu,omitempty"`
 }
 
 // browserRow is the crawl that runs the app's scripts: azhaq -browser
@@ -342,6 +343,7 @@ func benchApps() []appResult {
 		juice.Azhaq.Truth, len(truth), juice.Katana.Truth, len(truth), juice.Jsluice.Truth, len(truth))
 	addCheck("juice-shop: no catch-all page reported as visited", juice.Azhaq.Shell == 0, "%d visited URLs return the SPA index", juice.Azhaq.Shell)
 	crawlCompare(&juice, truth, shell)
+	juice.RunCPU = benchRunCPU(juiceURL)
 	juice.Roles = benchRoles(juiceURL, dir)
 	juice.Browser = compareBrowsers(juiceURL, db("juice-browser"), truth, shell)
 	addCheck("juice-shop: -browser finds the known routes katana -headless finds", juice.Browser.Azhaq.Truth >= juice.Browser.Katana.Truth,
