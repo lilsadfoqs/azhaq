@@ -219,6 +219,7 @@ The URL keys other than `catchall` and `skipped` count rows of the other coverag
 
 - `ledger: 148 recorded in app.db.ledger.jsonl: 146 to targets (141 requests, 4 connections, 1 UDP datagram), 2 DNS queries, sealed … (azhaq ledger -verify app.db.ledger.jsonl …)`: the lines to targets are the summary's `requests`.
 - `path checks: 28 skipped (an API description was already found)`: see [run](commands/run.md#notes-in-the-summary).
+- `app.db holds 3 runs; this one is ID, and the counts above are its own (azhaq query -db app.db -runs lists them; query, show and diff -run ID read an earlier one)`: a run into a workspace that already holds runs. The earlier runs are kept.
 - `screenshot of URL not taken: …`: see [shots](commands/shots.md#screenshots-and-the-budget).
 - `GraphQL URL: introspection disabled: schema recovered (…)`: see [run](commands/run.md#notes-in-the-summary).
 - For `subs`, the `coverage` line: see [subs](commands/subs.md#coverage-estimate).

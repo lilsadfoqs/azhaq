@@ -39,7 +39,8 @@ func cmdQuery(args []string) error {
 	limit := fs.Int("limit", 0, "rows at most, best first (default 0: all)")
 	asJSON := fs.Bool("json", false, "one JSON object per row, and the summary as JSON on stderr")
 	failed := fs.Bool("failed", false, "list every target whose work failed (timeouts, refusals, a source's errors): the list to retry")
-	failedRun := fs.String("run", "", "with -failed: the run to read, by the run_id of its summary (default: the newest run of the workspace)")
+	failedRun := fs.String("run", "", "the run to read, by the run_id of its summary (default: the newest run of the workspace)")
+	runsF := fs.Bool("runs", false, "list the runs the workspace holds, newest first, with the run_id each is read by")
 	if err := parse(fs, args); err != nil {
 		return err
 	}
@@ -51,13 +52,16 @@ func cmdQuery(args []string) error {
 	}
 	rep := newReport("query")
 	rep.what = "rows"
-	if *failedRun != "" && !*failed {
-		return usagef("-run picks the run -failed reads: add -failed")
+	if *isNew && *failedRun != "" {
+		return usagef("-new compares the last two runs: it cannot be read from one named run")
+	}
+	if *runsF {
+		return queryRuns(path, *asJSON, rep)
 	}
 	if *failed {
 		return queryFailed(path, *failedRun, *asJSON, rep)
 	}
-	g, err := readGraph(path)
+	g, err := readGraphRun(path, *failedRun)
 	if err != nil {
 		return err
 	}
@@ -148,6 +152,33 @@ func cmdQuery(args []string) error {
 		}
 	}
 	return rep.finish(*asJSON, false)
+}
+
+// queryRuns lists the runs a workspace holds, newest first: each is read by
+// its run_id (query -run, show -run, diff -run).
+func queryRuns(path string, asJSON bool, rep *report) error {
+	st, err := store.OpenExisting(path)
+	if err != nil {
+		return err
+	}
+	defer st.Close()
+	runs, err := st.Runs()
+	if err != nil {
+		return err
+	}
+	for i := len(runs) - 1; i >= 0; i-- {
+		r := runs[i]
+		if asJSON {
+			raw, _ := json.Marshal(map[string]any{"run_id": r.ID, "started": r.Started.UTC(), "entities": r.Entities, "requests": r.Requests})
+			fmt.Println(string(raw))
+			continue
+		}
+		fmt.Printf("%s\t%s\t%d entities\t%d requests\n", r.ID, r.Started.Local().Format(time.DateTime), r.Entities, r.Requests)
+	}
+	rep.what = "runs"
+	rep.Results = len(runs)
+	rep.DB = path
+	return rep.finish(asJSON, false)
 }
 
 // queryFailed prints every failed target of a run (the newest, unless one
@@ -309,6 +340,7 @@ func cmdShow(args []string) error {
 	fs := newFlags("show")
 	db := fs.String("db", "", "the database (default: the last run's)")
 	asJSON := fs.Bool("json", false, "one JSON object")
+	runF := fs.String("run", "", "the run to read, by the run_id of its summary (default: the newest run of the workspace that has it)")
 	if err := parse(fs, args); err != nil {
 		return err
 	}
@@ -321,7 +353,7 @@ func cmdShow(args []string) error {
 			return usagef("give -db FILE")
 		}
 	}
-	g, err := readGraph(path)
+	g, err := readGraphRun(path, *runF)
 	if err != nil {
 		return err
 	}
@@ -337,17 +369,31 @@ func cmdShow(args []string) error {
 		}
 	}
 	keys = append(keys, normalize.Hostname(want), want)
-	var row *engine.MapEntry
-	for _, k := range keys {
-		for i := range g.rows {
-			if g.rows[i].Entity.Key == k {
-				row = &g.rows[i]
-				break
+	find := func(g *graphView) *engine.MapEntry {
+		for _, k := range keys {
+			for i := range g.rows {
+				if g.rows[i].Entity.Key == k {
+					return &g.rows[i]
+				}
 			}
 		}
-		if row != nil {
-			break
+		return nil
+	}
+	row := find(g)
+	newest := g.run
+	if row == nil && *runF == "" {
+		// Not in the newest run: the newest earlier run of the workspace that has it.
+		for _, id := range earlierRuns(path, g.run) {
+			if g2, err := readGraphRun(path, id); err == nil {
+				if row = find(g2); row != nil {
+					g = g2
+					break
+				}
+			}
 		}
+	}
+	if row != nil && g.run != newest {
+		fmt.Fprintf(os.Stderr, "azhaq show: not in the newest run (%s): read from run %s, the newest that has it; -run ID reads another\n", newest, g.run)
 	}
 	if row == nil {
 		var near []string
@@ -370,8 +416,8 @@ func cmdShow(args []string) error {
 		return err
 	}
 	defer st.Close()
-	if runs, err := st.Runs(); err == nil && len(runs) > 0 {
-		st.UseRun(runs[len(runs)-1].ID)
+	if g.run != "" {
+		st.UseRun(g.run)
 	}
 	ents, _ := st.Entities()
 	edges, _ := st.Edges()
@@ -446,6 +492,9 @@ func cmdShow(args []string) error {
 			obs = append(obs, map[string]any{"collector": o.Collector, "kind": o.Kind, "source": o.Source, "observed_at": o.ObservedAt, "payload": o.Payload})
 		}
 		out := map[string]any{"row": mapRowJSON(*row), "links": links, "observations": obs}
+		if g.run != "" {
+			out["run"] = g.run
+		}
 		if len(services) > 0 {
 			out["services"] = services
 		}
@@ -497,6 +546,23 @@ func cmdShow(args []string) error {
 		fmt.Printf("  %s %s %s\n", o.Collector, o.Kind, compact(o.Payload))
 	}
 	return nil
+}
+
+// earlierRuns are the run ids of a workspace before the one named, newest first.
+func earlierRuns(path, before string) []string {
+	st, err := store.OpenExisting(path)
+	if err != nil {
+		return nil
+	}
+	defer st.Close()
+	runs, _ := st.Runs()
+	var out []string
+	for i := len(runs) - 1; i >= 0; i-- {
+		if runs[i].ID != before {
+			out = append(out, runs[i].ID)
+		}
+	}
+	return out
 }
 
 func payloadURLIs(raw json.RawMessage, key string) bool {

@@ -1602,6 +1602,9 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	if runs, err := st.Runs(); err == nil && len(runs) > 0 && runs[len(runs)-1].ID != stats.RunID {
 		// A resumed earlier run: query -failed reads the newest unless told.
 		for i, n := range rep.Next {
+	if runs, err := st.Runs(); err == nil && len(runs) > 1 && !out.embedded && !out.scratch {
+		rep.Notes = append(rep.Notes, fmt.Sprintf("%s holds %d runs; this one is %s, and the counts above are its own (azhaq query -db %s -runs lists them; query, show and diff -run ID read an earlier one)", path, len(runs), stats.RunID, path))
+	}
 			rep.Next[i] = strings.Replace(n, " -failed   (", " -failed -run "+stats.RunID+"   (", 1)
 		}
 	}
@@ -1714,7 +1717,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	}
 	if !*quiet && !*jsonOut && !out.embedded && !*demo && !remember {
 		// -db names a workspace: compare with its previous run, if any.
-		if err := printRunDiff(path, diffOpts{}); err != nil {
+		if err := printRunDiff(path, "", diffOpts{}); err != nil {
 			fmt.Fprintf(os.Stderr, "azhaq: diff vs the previous run in %s: %v\n", path, err)
 		}
 	}
@@ -2005,6 +2008,7 @@ func cmdDiff(args []string) error {
 	asJSON := fs.Bool("json", false, "JSON lines instead of a text report, the summary last")
 	jsonl := fs.Bool("jsonl", false, "same as -json")
 	quiet := fs.Bool("quiet", false, "entities and counts only (skip observation lines)")
+	runF := fs.String("run", "", "with -db: the run to compare with the run before it, by the run_id of its summary (default: the last)")
 	if err := parse(fs, args); err != nil {
 		return err
 	}
@@ -2019,12 +2023,29 @@ func cmdDiff(args []string) error {
 		if len(runs) < 2 {
 			// Nothing to compare yet: said, not silent.
 			if *jsonl {
+		if *runF != "" {
+			run, err := pickRun(runs, *runF)
+			if err != nil {
+				return err
+			}
+			for i, r := range runs {
+				if r.ID == run.ID {
+					runs = runs[:i+1] // the run named is the one compared, with the run before it
+				}
+			}
+		}
+		if len(runs) < 2 && *runF != "" {
+			return fmt.Errorf("run %s is the first of %s: no run before it to compare", *runF, *ws)
+		}
 				return json.NewEncoder(os.Stdout).Encode(map[string]any{"kind": "summary", "runs": len(runs), "added": 0, "removed": 0, "not_seen_again": 0, "observations": 0, "changed": 0, "note": "one run so far: a diff needs two"})
 			}
 			fmt.Printf("%s holds %d run so far: a diff needs two (run the same target into it again)\n", *ws, len(runs))
 			return nil
 		}
-		return printRunDiff(*ws, diffOpts{JSONL: *jsonl, Quiet: *quiet})
+		return printRunDiff(*ws, runs[len(runs)-1].ID, diffOpts{JSONL: *jsonl, Quiet: *quiet})
+	}
+	if *runF != "" {
+		return usagef("-run reads a run of a workspace: give -db")
 	}
 	if *a == "" {
 		return usagef("need -a OLD.db, or -db WORKSPACE.db")
@@ -2070,26 +2091,36 @@ func printDiff(oldPath, newPath string, opts diffOpts) error {
 	return printDiffStores(old, neu, oldPath, opts)
 }
 
-// printRunDiff compares the last two runs recorded in one database (a
-// workspace). It prints nothing when there is only one run.
-func printRunDiff(path string, opts diffOpts) error {
+// printRunDiff compares a run of a workspace (the last, when last is empty)
+// with the run before it. It prints nothing when there is no run before it.
+func printRunDiff(path, last string, opts diffOpts) error {
 	old, err := store.OpenExisting(path)
 	if err != nil {
 		return err
 	}
 	defer old.Close()
 	runs, err := old.Runs()
-	if err != nil || len(runs) < 2 {
+	if err != nil {
 		return err
 	}
 	neu, err := store.OpenExisting(path)
 	if err != nil {
 		return err
+	if last != "" {
+		for i, r := range runs {
+			if r.ID == last {
+				runs = runs[:i+1]
+			}
+		}
+	}
+	if len(runs) < 2 {
+		return nil
+	}
 	}
 	defer neu.Close()
-	prev, last := runs[len(runs)-2], runs[len(runs)-1]
+	prev, newest := runs[len(runs)-2], runs[len(runs)-1]
 	old.UseRun(prev.ID)
-	neu.UseRun(last.ID)
+	neu.UseRun(newest.ID)
 	return printDiffStores(old, neu, fmt.Sprintf("the run of %s in %s", prev.Started.Format("2006-01-02 15:04"), path), opts)
 }
 

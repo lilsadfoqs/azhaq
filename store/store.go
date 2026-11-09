@@ -347,15 +347,17 @@ func (s *Store) BeginRun(id string, depth, maxItems int) error {
 
 // Run is one run recorded in a database.
 type Run struct {
-	ID      string
-	Started time.Time
+	ID       string
+	Started  time.Time
+	Entities int   // rows the run saw
+	Requests int64 // sent to targets, all its attempts
 }
 
 // Runs lists the runs in the database, oldest first.
 func (s *Store) Runs() ([]Run, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	rows, err := s.q().Query(`SELECT id, started FROM runs ORDER BY started`)
+	rows, err := s.q().Query(`SELECT id, started, requests, (SELECT COUNT(*) FROM run_entities e WHERE e.run_id = runs.id) FROM runs ORDER BY started, rowid`)
 	if err != nil {
 		return nil, err
 	}
@@ -364,7 +366,7 @@ func (s *Store) Runs() ([]Run, error) {
 	for rows.Next() {
 		var r Run
 		var ts int64
-		if err := rows.Scan(&r.ID, &ts); err != nil {
+		if err := rows.Scan(&r.ID, &ts, &r.Requests, &r.Entities); err != nil {
 			return nil, err
 		}
 		r.Started = time.Unix(0, ts)

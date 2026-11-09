@@ -469,6 +469,9 @@ roles.show-body-prints-the-body-and-nothing-else	docs/commands/roles.md	- `-body
 
 # docs/commands/show.md
 show.shows-what-found-it-what-it-leads-to-every-observation	docs/commands/show.md	Everything known about one URL, host or name: what found it, what it leads to,	test:cmd/azhaq:TestShowPrintsWhatFoundItWhatItLeadsToAndEveryObservation
+show.keeps-every-run	docs/commands/show.md	A workspace keeps every run, and `show` reads the newest.	test:cmd/azhaq:TestWorkspaceKeepsEarlierRuns
+show.looks-in-earlier-runs	docs/commands/show.md	A KEY the newest run did not see is looked up in the earlier runs, newest first: the run it read is named on stderr and in `-json` (`run`).	test:cmd/azhaq:TestWorkspaceKeepsEarlierRuns
+show.run-flag	docs/commands/show.md	`-run ID` reads that run only, by the `run_id` of its summary (at least 4 characters); `azhaq query -db FILE -runs` lists them.	test:cmd/azhaq:TestWorkspaceKeepsEarlierRuns
 show.a-schema-over-8-mb-loses-its-descriptions	docs/commands/show.md	A schema over 8 MB is kept without its descriptions.	test:internal/collectors/gqlcol:TestSchemaOver8MBIsKeptWithoutItsDescriptions;test:internal/gqlschema:TestBound
 show.a-server-that-refuses-the-depth-is-asked-for-names	docs/commands/show.md	- A server that refuses the full introspection query for its depth is asked for	test:internal/collectors/gqlcol:TestIntrospectionRefused
 show.the-wordlist-holds	docs/commands/show.md	- The wordlist holds `get`, `list`, `all`, `create`, `update`, `delete`,	test:internal/collectors/gqlcol:TestWordlistAndDerivedWords

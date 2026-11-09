@@ -50,7 +50,11 @@ type graphView struct {
 	rules *scope.Rules // the run's scope as resolved when it started, if it had one
 }
 
-func readGraph(path string) (*graphView, error) {
+func readGraph(path string) (*graphView, error) { return readGraphRun(path, "") }
+
+// readGraphRun reads one run of a workspace: the newest when want is empty,
+// else the run its run_id (or the start of it) names.
+func readGraphRun(path, want string) (*graphView, error) {
 	st, err := store.OpenExisting(path)
 	if err != nil {
 		return nil, err
@@ -58,7 +62,11 @@ func readGraph(path string) (*graphView, error) {
 	defer st.Close()
 	// A workspace exports its newest run; a one-run database is the same.
 	if runs, err := st.Runs(); err == nil && len(runs) > 0 {
-		st.UseRun(runs[len(runs)-1].ID)
+		run, err := pickRun(runs, want)
+		if err != nil {
+			return nil, err
+		}
+		st.UseRun(run.ID)
 	}
 	ents, err := st.Entities()
 	if err != nil {

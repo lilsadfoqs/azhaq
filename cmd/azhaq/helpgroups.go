@@ -321,13 +321,13 @@ var helpSpecs = map[string]helpSpec{
 	},
 	"query": {
 		groups: []helpGroup{
-			{"Which rows", `coverage evidence failed host match method new re role run scope since status type`},
+			{"Which rows", `coverage evidence failed host match method new re role run runs scope since status type`},
 			{"Output", `db fields json limit`},
 		},
 	},
 	"show": {
 		groups: []helpGroup{
-			{"", `db json`},
+			{"", `db json run`},
 		},
 	},
 	"gallery": {
@@ -367,7 +367,7 @@ var helpSpecs = map[string]helpSpec{
 	},
 	"diff": {
 		groups: []helpGroup{
-			{"", `db a b json quiet`},
+			{"", `db a b json quiet run`},
 		},
 		hidden: map[string]string{
 			"alias": `jsonl`,
