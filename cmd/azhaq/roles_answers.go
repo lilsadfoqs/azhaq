@@ -34,6 +34,7 @@ type answer struct {
 	// what was read.
 	Truncated bool `json:"truncated,omitempty"`
 
+	excerpt string              // a write's 400 or 422 answer, cut short: what the server said it did not accept
 	said    string              // what a short answer says: a JSON message, an HTML title and first heading
 	nested  bool                // Keys are nested paths read from the body, not the stored top-level fields
 	top     []string            // the top-level fields, as the run stores them

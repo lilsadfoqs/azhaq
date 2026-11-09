@@ -621,10 +621,23 @@ func cmdRoles(args []string) error {
 			}
 		}
 		watch := &replayWatch{every: *canaryEvery, canaries: pickCanaries(roles, answers, made, canaries, own), renew: renewer(roles, *loginURL, *asJSON, renewLeft), refusal: refusalRE}
+		var triedCanary map[string]int
 		if watch.every > 0 {
+			bud, byCmd := stageBudget(*replayMax - replayed)
+			endStage := ledger.SetStage(stageControls)
+			n, cn, tried, err := signInCanaries(roles, watch.canaries, signedIn, *loginURL, answers, own, rate, bud, refusalRE)
+			endStage()
+			replayed += n
+			noteCap(rep, "session checks", capErr(err, byCmd))
+			rep.Notes = append(rep.Notes, cn...)
+			triedCanary = tried
 			for _, r := range roles {
 				if !r.anonymous() && watch.canaries[r.name] == nil {
-					rep.Notes = append(rep.Notes, fmt.Sprintf("role %s: nothing only its session reads was found to check it by during the replay; -canary URL gives one", r.name))
+					note := fmt.Sprintf("role %s: nothing only its session reads was found to check it by during the replay", r.name)
+					if n := triedCanary[r.name]; n > 0 {
+						note += fmt.Sprintf(" (%s the browser asked for after signing in %s asked without the session, and none told it apart)", plural(n, "page"), map[bool]string{true: "was", false: "were"}[n == 1])
+					}
+					rep.Notes = append(rep.Notes, note+"; -canary URL gives one")
 				}
 			}
 		}
@@ -734,6 +747,7 @@ func cmdRoles(args []string) error {
 			}
 			wn, failed := writeNotes(wrows)
 			rep.Notes = append(rep.Notes, wn...)
+			rep.Notes = append(rep.Notes, canaryRejections(wrows)...)
 			rep.warned = rep.warned || failed
 		}
 		if len(reqs) == 0 {
@@ -888,7 +902,7 @@ func rolesFailed(rep *report, asJSON bool, err error) error {
 // listed: the verdicts worth a reader's time by default.
 func listed(v string) bool {
 	switch v {
-	case verdictWriteAnyone, verdictWriteCross, verdictWriteUnread, verdictWriteCreate, verdictWriteAccepted, verdictWriteUnverifiable, verdictWriteDry, verdictAnyoneSecrets, verdictCross, verdictAnyID, verdictObject, verdictSecrets, verdictShared, verdictSignedIn, verdictOnly,
+	case verdictWriteAnyone, verdictWriteCross, verdictWriteUnread, verdictWriteCreate, verdictWriteAccepted, verdictWriteUnverifiable, verdictWriteDry, verdictWriteCanaryRejected, verdictAnyoneSecrets, verdictCross, verdictAnyID, verdictObject, verdictSecrets, verdictShared, verdictSignedIn, verdictOnly,
 		verdictRoleGated, verdictFields, verdictPublicObj, verdictStatus:
 		return true
 	}
@@ -916,7 +930,7 @@ func printRoles(roles []role, rows []roleRow, compared int, dir string) {
 			line += " found by " + strings.Join(row.FoundBy, ", ")
 		case verdictWriteAnyone, verdictWriteCross:
 			line += " " + row.Confidence + " · " + row.Evidence
-		case verdictWriteUnread:
+		case verdictWriteUnread, verdictWriteCanaryRejected:
 			line += " · " + row.Evidence
 		case verdictWriteDry:
 			line += " · " + row.Owner + "'s, by " + row.OwnerBy

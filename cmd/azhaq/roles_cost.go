@@ -86,7 +86,7 @@ func estimateRoles(in rolesCostIn) costEstimate {
 			need, open = left, "capped by -replay-max, which the history reads share; "+open
 		}
 		e.put(stageReplay, "", amount{Requests: need}, open)
-		e.put(stageControls, "", amount{}, "one request with a made-up identifier for each cross read the replay finds")
+		e.put(stageControls, "", amount{}, "one request with a made-up identifier for each cross read the replay finds; for a role signed in with Chrome and with no check, a request with and one without the session for each page the sign-in loaded, until one tells the session apart")
 	}
 	if in.methods != nil {
 		var writes int64

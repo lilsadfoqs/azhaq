@@ -186,7 +186,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 | `role maps` | each role's run | the run's own estimate for each role ([plan](plan.md#the-estimate)) |
 | `history reads` | the pages of each role's `-har` and `-burp` files, read as the role | exact: one request for each page |
 | `replay` | every endpoint asked with every role that did not reach it, and the checks of the sessions | each page the histories reached, asked of the roles that did not; the objects the answers name and the checks come on top. With the run options, the pages the runs reach are not known before |
-| `controls` | one request with a made-up identifier for each cross read | not counted before |
+| `controls` | one request with a made-up identifier for each cross read; with and without the session for each page a `-role-login` sign-in loaded, until a role has a session check | not counted before |
 | `write replay`, `verification` | with `-replay-writes`, each write of the histories sent with every other role's session, and the owner's object read before and after | the history's writes for each other role; the PUT, PATCH and DELETE of the runs' routes come on top |
 
 Stages that cannot be counted before say `not_counted`. `-replay-max` caps the replay and the stages after it. With `-max-requests` in the run options, the plan names the stage whose estimate passes the budget, and the budget's stop in the summary names the stage that sent its last request and what each stage had sent: a run that dies while Chrome signs in says `the budget was reached in the sign-in stage; by stage: sign-in 4, role maps 5`.
@@ -275,6 +275,7 @@ A session can die during the replay: a token that lives minutes, or a server tha
 
 - `-canary [ROLE:]URL[=REGEX]` names the endpoint. Without ROLE it applies to every signed-in role not given one of its own. With REGEX, a live session's body must match it.
 - Without `-canary`, `roles` picks the role's own `/me`-like answer, one of its own objects, or an endpoint the anonymous role was refused. It never picks one the anonymous role reads alike. It prefers JSON, then the shortest URL.
+- When a `-role-login` role still has no check, `roles` looks at what Chrome asked for with GET after the sign-in form was submitted (the pages and calls of the signed-in app, not its images or scripts). It asks each candidate once with the session, unless the role's run already did, and once without it, as the anonymous role is asked. This control is a request, counted in the `controls` stage and in the ledger. A candidate whose control answers the same is not chosen. One is chosen when the control was refused or redirected, or when the URL is `/me`-like and the answers differ. Candidates are asked in the order `/me`-like first, then the shortest URL, and the first that qualifies ends the search. The summary's `notes` names the URL chosen and what the control answered.
 - The check runs before each role's replay, every `-canary-every` requests, and after the replay. The default is 50. `0` means no checks.
 - The check must answer as the role's run got it: the same body, the same JSON fields, or the same page title.
 - When a check fails, the session is renewed. `-role-cmd` runs again, or `-role-login` signs in again with Chrome.
@@ -282,7 +283,7 @@ A session can die during the replay: a token that lives minutes, or a server tha
 - What was asked since the last good check is asked again.
 - A session that cannot be renewed (`-role` headers) or does not come back leaves the answers asked after its last good check `session_suspect`, with a note, and pauses that role: the rest of its replay is not attempted (status `0` for that role), so the budget is not spent on near-anonymous answers. A note names what is unproven for it and separates its `proved`, `suspect` and `not-attempted` answers; give a renewed session (a `-role-cmd` that prints a fresh one, a `-role-login` sign-in, or new `-role` headers on a rerun) and run `roles` again to prove them.
 - A note names a renewal only when one ran and gave a session that passed its check (`its -role-cmd gave a new one`, `it signed in again`). A role with no `-role-cmd` or `-role-login` says it could not be renewed; a command that failed says its renewal failed; a new session that failed its check says so (`was not renewed: the new session failed its check too`).
-- A signed-in role with nothing to check it by is named in a note.
+- A signed-in role with nothing to check it by is named in a note. After a Chrome sign-in the note says how many of its pages were asked without the session and none told it apart.
 - The checks and the requests asked again count against `-replay-max`.
 
 The notes read:
@@ -540,6 +541,8 @@ Replaying the owner's own recorded body is idempotent when the value it sets is 
 - It is never on by default, since it changes data on the target.
 - The field is not restored afterward.
 - The row's evidence says which field changed and that it was a canary.
+- The value keeps the shape of the recorded one, so a server that checks the field's format still takes it. A value with one `@` and a domain gets a unique local part and keeps its domain (`azhaq-<16 hex>@x.test`). A value of digits only gets unique digits of the same length. Any other value gets `azhaq-<16 hex>`.
+- A write with a canary that is answered 400 or 422 is listed as `canary rejected`, with the role, the field, the status and the start of what the server said. It is not a refusal and not a negative: the server did not accept the value, so the write path was not exercised and nothing is said about who may write. The summary's `notes` says so, and names the writes. `-replay-writes-field NAME` takes another field; leaving `-replay-writes-canary` off replays the recorded value.
 
 #### Order and limits
 

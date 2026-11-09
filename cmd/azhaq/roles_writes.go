@@ -54,6 +54,10 @@ const (
 	// through.
 	verdictWriteMixedRedirect = "the other roles' writes were redirected (3xx, not followed) and refused or failed with a server error (5xx): neither accepted"
 	verdictWriteDry           = "would be sent (-dry-writes)"
+	// The canary value was answered 400 or 422: the server did not accept it
+	// as a value, so the write path was not exercised and nothing is said
+	// about who may write.
+	verdictWriteCanaryRejected = "canary rejected: the server did not accept the value, so the write path was not exercised"
 	// A write another role sent was answered 2xx, and nothing the owner's
 	// object shows can tell whether it took.
 	verdictWriteUnread = "writes another role's object: accepted; the change cannot be read back to confirm"
@@ -72,6 +76,7 @@ func init() {
 	verdictOrder[verdictWriteCross] = -1
 	verdictOrder[verdictWriteUnread] = 0
 	verdictOrder[verdictWriteDry] = -3
+	verdictOrder[verdictWriteCanaryRejected] = 18
 	verdictOrder[verdictWriteNoChange] = 15
 	verdictOrder[verdictWriteCreate] = 16
 	verdictOrder[verdictWriteAccepted] = 16
@@ -420,7 +425,7 @@ func replayWritesPaused(who map[string]identity, roles []role, reqs []writeReq, 
 			_, canaryField, canaryable = withCanary(w.body, "azhaqcanaryprobe", allow...)
 		}
 		already := haveBefore && !w.empty && w.method != http.MethodDelete && !canaryable && alreadySet(before, w.body)
-		var let, proven []string
+		var let, proven, rejected []string
 		anon := map[string]bool{}
 		for _, r := range otherRoles(roles, w.owner) {
 			if paused[r.name] {
@@ -437,6 +442,10 @@ func replayWritesPaused(who map[string]identity, roles []role, reqs []writeReq, 
 				break
 			}
 			row.Answers[r.name] = a
+			if canaryable && (a.Status == http.StatusBadRequest || a.Status == http.StatusUnprocessableEntity) {
+				rejected = append(rejected, r.name)
+				row.OwnerBy += "; " + canaryRejection(r.name, canaryField, a)
+			}
 			if !reads(a) {
 				continue
 			}
@@ -499,6 +508,10 @@ func replayWritesPaused(who map[string]identity, roles []role, reqs []writeReq, 
 			}
 		}
 		row.Verdict = writeVerdict(&row, let, proven, anon, ownerLet, ownerAsked, vu != "", why, already)
+		if len(let) == 0 && len(rejected) > 0 {
+			row.Verdict = verdictWriteCanaryRejected
+			row.Evidence = canaryRejection(rejected[0], canaryField, row.Answers[rejected[0]])
+		}
 		switch {
 		case len(proven) > 0 && row.WriteVerification == "":
 			row.WriteVerification = verifyProved
@@ -1334,6 +1347,38 @@ func canaryToken() string {
 	return "azhaq-" + hex.EncodeToString(b[:])
 }
 
+// digitsOnly: a recorded value that is a number written as text (an id, a
+// phone number), which a server may check for its shape.
+var digitsOnly = lazyre.New(`^[0-9]+$`)
+
+// canaryLike makes the value a canary sets in place of recorded, in the same
+// shape, so a server that checks the field's format still takes it: an email
+// (one @ and a domain) gets token for its local part and keeps its domain; a
+// run of digits gets other digits of the same length; anything else gets
+// token as it is.
+func canaryLike(recorded, token string) string {
+	if local, domain, ok := strings.Cut(recorded, "@"); ok && local != "" && domain != "" && !strings.Contains(domain, "@") {
+		return token + "@" + domain
+	}
+	if digitsOnly.MatchString(recorded) {
+		var b [32]byte
+		out := make([]byte, 0, len(recorded))
+		for len(out) < len(recorded) {
+			_, _ = rand.Read(b[:])
+			for _, c := range b {
+				if c < 250 && len(out) < len(recorded) { // 250 = 25 * 10: no bias
+					out = append(out, '0'+c%10)
+				}
+			}
+		}
+		if string(out) == recorded {
+			out[len(out)-1] = '0' + (out[len(out)-1]-'0'+1)%10
+		}
+		return string(out)
+	}
+	return token
+}
+
 // fieldLeft is a field of a write body the canary leaves alone, and why.
 type fieldLeft struct{ name, why string }
 
@@ -1382,8 +1427,9 @@ func canaryField(m map[string]any, allow []string) (field string, left []fieldLe
 	return field, left
 }
 
-// withCanary changes one short string field of a JSON write body to
-// token (see canaryField). ok is false, and body is given back unchanged,
+// withCanary changes one short string field of a JSON write body to a
+// value only this replay sends, shaped like the recorded one (see
+// canaryLike; token is the unique part) and chosen as in canaryField. ok is false, and body is given back unchanged,
 // when the body is not a JSON object or no field qualifies: the write is
 // then sent as recorded, proving nothing new.
 func withCanary(body []byte, token string, allow ...string) (out []byte, field string, ok bool) {
@@ -1395,7 +1441,8 @@ func withCanary(body []byte, token string, allow ...string) (out []byte, field s
 	if field == "" {
 		return body, "", false
 	}
-	m[field] = token
+	recorded, _ := m[field].(string)
+	m[field] = canaryLike(recorded, token)
 	if raw, err := json.Marshal(m); err == nil {
 		return raw, field, true
 	}
@@ -1514,6 +1561,9 @@ func sendWrite(ctx context.Context, client *http.Client, r role, w writeReq) (an
 	if loc := resp.Header.Get("Location"); loc != "" {
 		a.Location = bareLocation(loc)
 	}
+	if a.Status == http.StatusBadRequest || a.Status == http.StatusUnprocessableEntity {
+		a.excerpt = excerptOf(body)
+	}
 	if ok2xx(a.Status) && len(body) <= 300 && deniedText.Match(body) {
 		a.Refusal = true // a short 2xx answer that says no ("Only Admins may delete users!")
 	}
@@ -1524,6 +1574,45 @@ func sendWrite(ctx context.Context, client *http.Client, r role, w writeReq) (an
 		return a, &noAnswerError{err: fmt.Errorf("the answer was cut: %w", rerr), a: a}
 	}
 	return a, nil
+}
+
+// canaryRejection says a role's canary write was answered 400 or 422, with
+// what the answer said.
+func canaryRejection(role, field string, a answer) string {
+	s := fmt.Sprintf("%s's write with a canary in %s was answered %d", role, field, a.Status)
+	if a.excerpt != "" {
+		s += ": " + a.excerpt
+	}
+	return s
+}
+
+// excerptOf is the start of an answer's body on one line, for a row to
+// quote.
+func excerptOf(body []byte) string {
+	s := strings.Join(strings.Fields(string(body)), " ")
+	if r := []rune(s); len(r) > 160 {
+		s = string(r[:160]) + "..."
+	}
+	return s
+}
+
+// canaryRejections are the write rows whose canary value the server did not
+// accept: the summary says their write path was not exercised.
+func canaryRejections(rows []roleRow) []string {
+	n := 0
+	var out []string
+	for _, row := range rows {
+		if row.Verdict == verdictWriteCanaryRejected {
+			n++
+			if id := row.Method + " " + pathOf(row.URL); !slices.Contains(out, id) {
+				out = append(out, id)
+			}
+		}
+	}
+	if n == 0 {
+		return nil
+	}
+	return []string{fmt.Sprintf("canary: %s answered 400 or 422 to the canary value, so the write path was not exercised for %s; it says nothing about who may write: -replay-writes-field NAME takes another field, or leave -replay-writes-canary off", plural(n, "write"), strings.Join(out, ", "))}
 }
 
 // noAnswerError is a write the target did not answer, or answered with a

@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/lilsadfoqs/azhaq/internal/browser"
 	"github.com/lilsadfoqs/azhaq/internal/egress"
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
 	"github.com/lilsadfoqs/azhaq/internal/neterr"
@@ -143,6 +144,107 @@ func pickCanaries(roles []role, answers map[string]map[string]answer, made map[s
 		}
 	}
 	return out
+}
+
+// signInCanaries finds a check for each signed-in role that has none, from
+// its Chrome sign-in: each GET the browser sent after submitting the form,
+// with the session, is a candidate. A candidate is read once with the
+// session (unless the role's run already did) and once without it, as the
+// anonymous role is asked, a control. It is chosen when the session tells
+// the two apart by the rules pickCanaries uses: the answers differ, and
+// the URL is a "/me" or the control was refused. The candidates are asked in
+// the order of those rules, a "/me" first then the shortest, and the first
+// to qualify is the role's check. It returns the requests sent, a note per
+// role given a check naming it and what the control answered, and for each
+// role whose candidates were tried and none qualified, how many were.
+func signInCanaries(roles []role, picked map[string]*canary, signed map[string]browser.Session, loginURL string, answers map[string]map[string]answer, own map[string]bool, rate float64, budget int, refusal *regexp.Regexp) (sent int, notes []string, tried map[string]int, err error) {
+	tried = map[string]int{}
+	ctx, stop := stopContext()
+	defer stop()
+	fetch.Reset()
+	defer fetch.Reset()
+	egress.SetRate(rate)
+	egress.SetTargetProxy(rolesProxy)
+	egress.SetScope(func(h string) bool { return own[normalize.Hostname(h)] })
+	holdDeny()
+	anon := http.Header{}
+	for _, r := range roles {
+		if r.anonymous() {
+			if r.session != nil {
+				anon = r.session.Clone()
+			}
+			break
+		}
+	}
+	ask := func(h http.Header, u string) (answer, error) {
+		if sent >= budget {
+			return answer{}, fmt.Errorf("%w: some sign-in pages were not asked to find a session check", errReplayMax)
+		}
+		sent++
+		a, body, err := askFresh(ctx, h, u, own)
+		if err == nil && ok2xx(a.Status) && refusal != nil && refusal.Match(body) {
+			a.Refusal = true
+		}
+		return a, err
+	}
+	for _, r := range roles {
+		if r.anonymous() || picked[r.name] != nil {
+			continue
+		}
+		var cands []string
+		for _, u := range signed[r.name].Gets {
+			if u != loginURL && replayable(u, own) && !slices.Contains(cands, u) {
+				cands = append(cands, u)
+			}
+		}
+		slices.SortFunc(cands, func(a, b string) int {
+			if c := cmp.Compare(boolInt(!meLike(a)), boolInt(!meLike(b))); c != 0 {
+				return c
+			}
+			return cmp.Or(cmp.Compare(len(a), len(b)), cmp.Compare(a, b))
+		})
+		for _, u := range cands {
+			a, have := answers[r.name][u]
+			if !have {
+				if a, err = ask(r.session, u); err != nil {
+					if errors.Is(err, errReplayMax) || errors.Is(err, neterr.ErrBudget) {
+						return sent, notes, tried, err
+					}
+					continue
+				}
+			}
+			if !reads(a) || len(a.Keys) == 0 && a.Title == "" {
+				continue // not read with the session, or nothing to tell a live answer by but its bytes
+			}
+			b, err := ask(anon, u)
+			if err != nil {
+				if errors.Is(err, errReplayMax) || errors.Is(err, neterr.ErrBudget) {
+					return sent, notes, tried, err
+				}
+				tried[r.name]++
+				continue
+			}
+			tried[r.name]++
+			if reads(b) && b.Hash == a.Hash {
+				continue // the session tells nothing here
+			}
+			if !meLike(u) && reads(b) {
+				continue // a different body is not enough to know a dead session from a changed page
+			}
+			picked[r.name] = &canary{url: u, want: a}
+			notes = append(notes, fmt.Sprintf("role %s: its session is checked on %s, a page the browser asked for after signing in; asked without the session it answered %s", r.name, pathOf(u), answerCell(b)))
+			delete(tried, r.name)
+			break
+		}
+	}
+	return sent, notes, tried, nil
+}
+
+func boolInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
 }
 
 // alive asks the canary with the session h: a live session reads it, and
