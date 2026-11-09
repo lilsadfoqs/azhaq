@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -26,7 +27,7 @@ type verifyFlags struct {
 }
 
 func (v *verifyFlags) register(fs *flag.FlagSet) {
-	fs.BoolVar(&v.on, "verify", false, "with the services this run confirmed: make each enumerated safe read-only verification (Redis INFO server, MongoDB isMaster, memcached version, each sent with no credential, and, with -advisories, each advisory lead labelled from its confirmation read) and label the results proved, version-only or conditional, each with the exact request sent and an excerpt of the answer; every read goes through the scope, -deny-path (for the advisory GET), -max-requests, the pace, the kill file and the ledger; no payload, no credential, no write and no request that tries to trigger an issue")
+	fs.BoolVar(&v.on, "verify", false, "with the services this run confirmed: make each enumerated safe read-only verification (one fixed request a client with no credentials sends, listed by plan: Redis INFO server, MongoDB isMaster, memcached version, ZooKeeper srvr and so on; with -advisories, each advisory lead is labelled from its confirmation read) and label the results proved, version-only or conditional, each with the exact request sent and an excerpt of the answer; every read goes through the scope, -deny-path (for the advisory GET), -max-requests, the pace, the kill file and the ledger; no payload, no credential, no write and no request that tries to trigger an issue")
 }
 
 // verifyStage is the whole of -verify after a run. The data-store
@@ -73,7 +74,11 @@ func verifyStage(ctx context.Context, st *store.Store, obs []types.StoredObserva
 			if addrHost == "" {
 				addrHost = host
 			}
-			return dialer.TCPDirect(ctx, host, net.JoinHostPort(addrHost, strconv.Itoa(port)))
+			addr := net.JoinHostPort(addrHost, strconv.Itoa(port))
+			if svc.TLS { // a service the scan found inside TLS is read inside it
+				return dialer.TLS(ctx, host, addr, &tls.Config{InsecureSkipVerify: true, MinVersion: tls.VersionTLS10}, 10*time.Second)
+			}
+			return dialer.TCPDirect(ctx, host, addr)
 		}
 		r, err := check.Execute(cctx, svc, dial)
 		if err != nil {

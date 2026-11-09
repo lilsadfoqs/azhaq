@@ -332,11 +332,40 @@ azhaq names a service's product and version from the wire (an SSH greeting, an H
 
 `-verify` (on `run` and `ports`) takes one step past naming a service, and no further: for each service the run named, it makes at most one read from a fixed, enumerated list of checks, and labels what the answer settles. There is no way to name another request, and the list is printed, with the exact request and the precondition of each check, by `azhaq plan` and in the `run` docs before anything is sent.
 
-- **The fence is exact.** A check sends only what a client with no credentials would send to read information the service already gives anyone: a protocol info or hello command (`INFO server` to Redis, an `isMaster` OP_MSG to MongoDB, `version` to memcached), or the one benign read an advisory names. Never a payload, never a write or state-changing command, never a credential or a guessed password, never a request that tries to trigger a flaw. If settling a question would need any of those, azhaq does not ask it: the result stays at the label the read supports and names the precondition left open.
+- **The fence is exact.** A check sends only what a client with no credentials would send to read information the service already gives anyone: a protocol info or hello command (`INFO server` to Redis, an `isMaster` OP_MSG to MongoDB, `version` to memcached, and the others in [the table of checks](commands/run.md#read-only-verification)), or the one benign read an advisory names. Never a payload, never a write or state-changing command, never a credential or a guessed password, never a request that tries to trigger a flaw. If settling a question would need any of those, azhaq does not ask it: the result stays at the label the read supports and names the precondition left open.
 - **Three labels, never merged.** `proved`: the read answered with no credential sent, or an advisory's version and named precondition were both settled by its read — proved names that read only, never exploitability, which is never tested. `version-only`: only the product and version identification stands (the service asked for authentication, or no read settled more); no unauthenticated read is claimed. `conditional`: the result depends on a precondition the read did not show, which the result names. Each result carries the exact request sent and an excerpt of the answer as its evidence, so every claim in it can be checked against the row it came from.
-- **Severity is a stated ranking, not a score.** An unauthenticated data-store read ranks `high`, an advisory settled by its read `medium`, a conditional `low`, the rest `info`: the ranking says how directly the read itself shows the fact. azhaq holds no data to rate a CVSS score and does not print one.
+- **Severity is a stated ranking, not a score.** An unauthenticated read of a data store's state (Redis, MongoDB, memcached, ZooKeeper) ranks `high`, an advisory settled by its read `medium`, a conditional `low`, the rest `info`, any other proved read among them: the ranking says how directly the read itself shows the fact. azhaq holds no data to rate a CVSS score and does not print one.
+- **Every service the scan names has a check or a stated reason.** A check is one fixed request a client with no credentials sends: the protocol's own version, info or hello command. It is the request the scan already sends to a port that waits, read by the same reader, so a check asks nothing the scan does not. The services with none are listed [below](#services-with-no-check).
 - **Like every request, and counted.** A verification read is not a side channel: it goes through egress — scope, `-deny-path` (for the advisory GET), the kill file, `-max-requests`, the pace — and is a ledger line of the collector `azhaq-verify`. Each result is one stored `verify` observation, one line of output and one entry of the summary's `verify`; the counts derive from the stored rows, as the advisory counts do. A read the scope refuses, a `-deny-path` rule keeps out or a limit stops is a note (those are the user's own settings), never a failure; a read that gets no answer is a failure (exit 3). `-verify` is off unless given: a plain run sends no verification read beyond naming the service.
 - **The findings record.** `azhaq report -findings -db WORKSPACE.db` (or `azhaq export -format findings` / `findings-md`) writes one record per qualifying stored row — kind, severity, host, port, URL, product and version where confirmed, advisory id where matched, evidence excerpt, and the command that produced it — proved first, `version-only` and `conditional` kept distinct. Rows that prove nothing (a map `hint`) are listed as leads, separately. A workspace with no qualifying rows writes an explicit empty record set and exits 0.
+
+### Services with no check
+
+Every TCP service the scan names has a check (the table in [run](commands/run.md#read-only-verification)) or is in this list with its reason. A test fails when a service is in neither. A service seen over UDP has none: the scan's own datagram is its read.
+
+| Service | Why it has none |
+| --- | --- |
+| `ssh` | states its software and version in its first line, which the scan reads: there is no further no-credential read |
+| `ftp` | states its software in its greeting, which the scan reads; SYST and FEAT are asked only by -detect all, where the greeting names no product |
+| `smtp` | states its software in its greeting, which the scan reads; its commands after it (EHLO, HELP) add a capability list, not a version |
+| `ftp-or-smtp` | only a 220 greeting that names neither: there is nothing to read that the greeting did not say |
+| `pop3` | states its software in its greeting, which the scan reads |
+| `imap` | states its software in its greeting, which the scan reads |
+| `mysql` | states its server version in its first packet, which the scan reads; any request after it is a login |
+| `telnet` | opens with its option negotiation, which the scan reads; the next thing it wants is a login |
+| `vnc` | states its protocol version in its first line, which the scan reads; the next message is a security handshake |
+| `irc` | opens with its notice, which the scan reads; its version is read after a registration with a nick |
+| `nntp` | states its software in its greeting, which the scan reads |
+| `sieve` | sends its capability list, with its implementation, on connect, which the scan reads |
+| `icy` | states its server in its first line, which the scan reads |
+| `nping-echo` | opens with its binary handshake, which the scan reads; the next message is a client handshake that starts an echo session |
+| `kerberos` | the only request without a credential is an AS-REQ that names an account, which asks the KDC about a principal; it states no version |
+| `finger` | its only request lists a user or the logged-in users, data of the host rather than a version or info of the service |
+| `gopher` | its only request lists the menu it serves, its content rather than a version or info of the service |
+| `http` | the scan's own HEAD and GET already read its Server header and page; a version or info path belongs to a product, not to the protocol |
+| `https` | the scan's own HEAD and GET already read its Server header and page; a version or info path belongs to a product, not to the protocol |
+| `tls` | a handshake is the whole of what a client with no credentials says, and the scan reads its version, suite and certificate |
+| `tcpwrapped` | closes the connection without a word: it answers nothing to read |
 
 ## Access control (`azhaq roles`)
 

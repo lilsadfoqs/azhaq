@@ -7,6 +7,7 @@ import (
 	"math"
 	"net"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -17,7 +18,15 @@ import (
 // records the exact bytes it was sent.
 type fixture struct {
 	port int
+	mu   sync.Mutex
 	sent [][]byte
+}
+
+// requests are the requests received so far.
+func (f *fixture) requests() [][]byte {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([][]byte(nil), f.sent...)
 }
 
 func listen(t *testing.T, fn func(req []byte) []byte) *fixture {
@@ -41,7 +50,9 @@ func listen(t *testing.T, fn func(req []byte) []byte) *fixture {
 				buf := make([]byte, 4096)
 				n, _ := c.Read(buf)
 				req := append([]byte(nil), buf[:n]...)
+				f.mu.Lock()
 				f.sent = append(f.sent, req)
+				f.mu.Unlock()
 				if resp := fn(req); resp != nil {
 					_, _ = c.Write(resp)
 				}
