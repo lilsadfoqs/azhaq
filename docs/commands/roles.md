@@ -144,6 +144,7 @@ With `-replay-writes`, these verdicts join the list. Proved cross writes keep th
 | `anyone writes another role's object` | yes | The anonymous role's write changed the owner's object. Proven. |
 | `writes another role's object` | yes | A signed-in role's write changed the owner's object. Proven. The row has `readers`. |
 | `writes another role's object: accepted; the change cannot be read back to confirm` | yes | Another role's write was answered 2xx, and nothing shows whether the owner's object changed. See Details. |
+| `canary rejected: the server did not accept the value, so the write path was not exercised` | yes | With `-replay-writes-canary`: the server answered 400 or 422 to the canary value, so the write path was not tested. The row names the role, the field, the status and the start of the answer. |
 | `would be sent (-dry-writes)` | yes | `-dry-writes`: nothing was sent. |
 | `answered 2xx but changed nothing of the owner's` | `-all` | A 2xx answer, but the owner's object did not change as the write asked, or could not be read. Not a finding. |
 | `creates in another role's collection` | yes | A POST another role was let to send, and something shows it crosses roles: the anonymous role was let to send it, or the object the create made (read from the answer to the create and from the read-back) belongs to the role whose request was replayed, by what that role's session says. A create, never another role's object written. |
