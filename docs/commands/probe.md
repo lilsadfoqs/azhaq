@@ -61,6 +61,7 @@ Present when there is something to say:
 | --- | --- |
 | `a`, `aaaa` | The addresses the name resolved to. |
 | `cname`, `resolvers`, `title`, `webserver`, `content_type`, `location`, `tech`, `cdn`, `cdn_name`, `cdn_type`, `catchall` | As httpx. |
+| `stack_trace` | `runtime`, `exception` and `frames` of a stack trace the answer's body holds: three or more consecutive frame lines of one runtime. `azhaq report -findings` lists it as an `error-disclosure`; the patterns are in [report](report.md#stack-traces-in-answers). |
 | `favicon`, `favicon_md5`, `favicon_path`, `favicon_url` | With `-favicon`. |
 | `final_url`, `chain_status_codes` | With `-fr`. |
 

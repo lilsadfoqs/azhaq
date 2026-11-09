@@ -828,6 +828,11 @@ func describe(reqURL, final string, res fetch.Result, title string, noTech, ever
 	if n := len(res.Hops); n > 1 {
 		out["final_status"] = res.Hops[n-1].Status
 	}
+	// A stack trace in the answer, whatever its status: the runtime, the
+	// first exception line and the frames. Nothing more is sent for it.
+	if tr, ok := webextract.StackTrace(res.Body); ok {
+		out["stack_trace"] = tr
+	}
 	if res.Status >= 500 {
 		// What a failed answer gives away (an SQL error, a stack trace, a
 		// debug page): its kind, and the 100 bytes that say so.

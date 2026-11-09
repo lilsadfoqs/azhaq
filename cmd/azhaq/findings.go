@@ -103,6 +103,7 @@ func buildFindings(g *graphView) (findings, leads []findingRecord, folds []engin
 			Evidence: r.Evidence, Command: command, Collector: "azhaq-advisories",
 		})
 	}
+	findings = append(findings, traceFindingsOf(g.obs, command)...)
 	folder := engine.NewFolder(g.obs)
 	var folded []engine.MapEntry
 	for _, row := range g.rows {
