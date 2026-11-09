@@ -268,6 +268,7 @@ func cmdPorts(args []string) error {
 			return usagef("-pu: %v", err)
 		}
 	}
+	exSpec := ""
 	if *exclPorts != "" {
 		ex := *exclPorts
 		if _, err := os.Stat(ex); err == nil {
@@ -277,6 +278,7 @@ func cmdPorts(args []string) error {
 			}
 			ex = strings.Join(lines, ",")
 		}
+		exSpec = ex
 		if ports, err = portscan.Exclude(ports, ex); err != nil {
 			return usagef("-ep: %v", err)
 		}
@@ -480,6 +482,9 @@ func cmdPorts(args []string) error {
 	}
 	sink.settle(rep, *sn)
 	if stdin := *list == "" && len(hosts)+len(fs.Args()) == 0 && !scopeOnly; !*sn && !stdin && rep.Stopped == "" {
+		if why, _ := catalogPass(catalogLeft(ports, exSpec), int(sink.scanned)); why != "" {
+			rep.nextPass(catalogPassCommand(args, rep.DB), why)
+		}
 		if why, _ := portsPass(len(ports), int(sink.scanned), sink.open); why != "" {
 			rep.nextPass(portsPassCommand(args, rep.DB), why)
 		}
