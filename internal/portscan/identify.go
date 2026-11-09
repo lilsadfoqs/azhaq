@@ -23,6 +23,28 @@ import (
 // a web page's body is counted apart (at most two).
 const maxProbes = 25
 
+// MaxConnectsPerOpenPort is the most connects an open port costs after the
+// one that found it: its probes (maxProbes, the GETs for a page's body and
+// a legacy TLS fallback included) and the second wait of a greeter that said
+// nothing. A plan prints it as the allowance of each open port.
+const MaxConnectsPerOpenPort = maxProbes + 1
+
+// MaxUDPAsks is the most datagrams a UDP port is sent: its protocol's
+// request, then each other request it has, over four passes.
+const MaxUDPAsks = 4
+
+// probeKey carries the probeBudget of an open port on the context of its
+// identification, so a connect that does not go through ident (the GET for a
+// page's body, a fallback handshake) is counted against the same allowance.
+type probeKey struct{}
+
+// spare takes one connect of the open port's allowance, if ctx has one; a
+// context with none (a connect that is not a probe) always may.
+func spare(ctx context.Context) bool {
+	b, _ := ctx.Value(probeKey{}).(*probeBudget)
+	return b == nil || b.take()
+}
+
 // ladderLimit: by default, after this many open ports of one address that
 // no probe could name, the rest of that address's silent ports are not run
 // down the ladder (a firewall or tarpit that accepts every connect would
@@ -242,8 +264,9 @@ func (s *Scanner) dialWait(ctx context.Context, host, ip string, port int, secur
 	}
 	// The server answered with an alert crypto/tls takes for no TLS it can do
 	// (RSA key exchange only, DHE): one more connect, as paced, counted and
-	// recorded as any, with the fallback client.
-	if werr := s.wait(ctx, ip); werr != nil {
+	// recorded as any, with the fallback client. An open port's probes have
+	// an allowance, and it comes out of it.
+	if werr := s.wait(ctx, ip); werr != nil || !spare(ctx) {
 		return nil, err
 	}
 	if s.Take != nil {
@@ -372,7 +395,9 @@ func (s *Scanner) identify(ctx context.Context, o *Open, conn net.Conn, host, ip
 	if host == "" {
 		host = ip
 	}
-	id := &ident{s: s, ctx: ctx, o: o, host: host, ip: ip, left: &probeBudget{n: maxProbes}, tried: map[string]bool{}, rtt: rtt}
+	left := &probeBudget{n: maxProbes}
+	ctx = context.WithValue(ctx, probeKey{}, left)
+	id := &ident{s: s, ctx: ctx, o: o, host: host, ip: ip, left: left, tried: map[string]bool{}, rtt: rtt}
 	defer id.getRoot()
 	for _, p := range protocolsOn(o.Port, false) {
 		if id.try(conn, p) {

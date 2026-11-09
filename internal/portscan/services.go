@@ -583,6 +583,9 @@ func (s *Scanner) getPath(ctx context.Context, port int, host, ip string, https 
 	if host == "" {
 		host = ip
 	}
+	if !spare(ctx) {
+		return nil
+	}
 	conn, err := s.dial(ctx, host, ip, port, https)
 	if err != nil {
 		return nil
