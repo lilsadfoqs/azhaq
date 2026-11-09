@@ -37,7 +37,8 @@ const (
 
 // ReadAny reads facts from what the usual recon tools write: connector
 // facts, Azhaq's own export, subfinder, dnsx, httpx, katana, naabu,
-// nuclei and gau JSON lines, ffuf's JSON report, or plain lines of URLs,
+// nuclei, gau, gowitness and asnmap JSON lines, ffuf's JSON report,
+// arjun's JSON file, nmap's XML, or plain lines of URLs,
 // hostnames and addresses. It returns the facts and, for each format
 // seen, how many lines were read as it.
 func ReadAny(raw []byte) ([]Fact, map[string]int, error) {
@@ -62,6 +63,21 @@ func ReadLines(raw []byte) ([]Fact, map[string]int, []string, error) {
 	}
 	formats := map[string]int{}
 	trimmed := bytes.TrimSpace(raw)
+	if isNmapXML(trimmed) {
+		facts, n, err := nmapFacts(trimmed)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		return facts, map[string]int{FormatNmap: n}, nil, nil
+	}
+	if bytes.HasPrefix(trimmed, []byte("<")) {
+		return nil, nil, nil, fmt.Errorf("an XML document that is not an nmap -oX file")
+	}
+	if bytes.HasPrefix(trimmed, []byte("{")) {
+		if facts, n, ok := arjunFacts(trimmed); ok {
+			return facts, map[string]int{FormatArjun: n}, nil, nil
+		}
+	}
 	if bytes.HasPrefix(trimmed, []byte("{")) && !bytes.Contains(trimmed, []byte("\n{")) {
 		var report struct {
 			Results []map[string]any `json:"results"`
@@ -147,6 +163,10 @@ func lineFacts(raw []byte, m map[string]any, exported map[string][2]string) ([]F
 		return []Fact{observation(urlOrHost(target), "nuclei", "finding", payload)}, FormatNuclei, nil
 	case isObject(m["request"]) && (has("timestamp") || text(m["request"].(map[string]any)["endpoint"]) != ""): // httpx -irr writes request as a string
 		return katanaFacts(m), FormatKatana, nil
+	case has("url") && has("response_code"):
+		return gowitnessFacts(m), FormatGowitness, nil
+	case has("as_number") && (has("as_range") || has("prefix")):
+		return asnmapFacts(m), FormatAsnmap, nil
 	case has("url") && (has("status_code") || has("webserver") || has("tech")):
 		return httpxFacts(m), FormatHTTPX, nil
 	case has("url") && has("status") && has("redirectlocation"):

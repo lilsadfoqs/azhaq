@@ -151,8 +151,8 @@ type report struct {
 	BrowserRequests *browserRequests `json:"browser_requests,omitempty"`
 
 	// Wrote are the files the run wrote besides its database and the ones
-	// the user named with -o and the like: the ledger, the name history,
-	// the pointers to the last workspace, the archived URLs.
+	// the user named with -o and the like (run lists its -o file): the ledger,
+	// the name history, the pointers to the last workspace, the archived URLs.
 	Wrote []string `json:"wrote,omitempty"`
 
 	// AddressesScanned and AddressesOpen are run -ports: the distinct addresses

@@ -85,6 +85,10 @@ func seedFor(t types.SeedType, key string) types.Seed {
 		s.Keys["domain"] = key
 	case types.TypeIPAddress:
 		s.Keys["ip"] = key
+	case types.TypePrefix:
+		s.Keys["prefix"] = key
+	case types.TypeASN:
+		s.Keys["asn"] = key
 	case types.TypeOrganization:
 		s.Keys["name"] = key
 	case types.TypeCloudAccount:

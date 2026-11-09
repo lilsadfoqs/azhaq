@@ -292,6 +292,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	pathsFile := fs.String("paths", "", "extra path wordlist (one path per line)")
 	quiet := fs.Bool("quiet", false, "print no map and no progress lines (a line every 10 s while the run works), only the summary (on stderr)")
 	jsonOut := fs.Bool("json", false, "print the map as JSON lines, and the summary as one JSON object on stderr")
+	outFile := fs.String("o", "", "also write the rows to this file, as printed (JSON lines with -json), replacing it; with -quiet the file still gets them")
 	storeResp := fs.Bool("sr", false, "also write each answer a target gave, headers and body as read, to the -srd directory as DIR/HOST/SHA1.txt with an index.txt (katana's -sr); query -fields response_file says where a row's is")
 	storeRespDir := fs.String("srd", "azhaq_response", "directory for -sr")
 	omitBody := fs.Bool("ob", false, "with -sr: write the status line and headers only")
@@ -443,6 +444,19 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		return usagef("%v", err)
 	}
 	out.json, out.quiet = *jsonOut, *quiet
+	var rowsOut *rowsFile
+	if *outFile != "" && !out.plan && !out.embedded {
+		var err error
+		if rowsOut, err = openRunOut(*outFile); err != nil {
+			return err
+		}
+		rep.wrote(*outFile)
+		defer func() {
+			if err := rowsOut.close(); err != nil && runErr == nil {
+				runErr = err
+			}
+		}()
+	}
 	rep.hintsOff, rep.hintsVrb = *jsonOut, *verbose
 	// Port lists are checked before anything is sent (a sign-in comes first).
 	if _, err := portscan.Ports(*portsSpec); *portsSpec != "" && err != nil {
@@ -1458,10 +1472,11 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		shown, folded = folder.Split(shown)
 		foldGroups = folder.Groups(folded)
 	}
+	sink := runSink(!*quiet && !out.embedded, rowsOut)
 	switch {
-	case *quiet || out.embedded:
+	case sink == nil:
 	case *jsonOut:
-		enc := json.NewEncoder(os.Stdout)
+		enc := json.NewEncoder(sink)
 		for _, r := range engine.GroupTemplates(shown) {
 			row := mapRowJSON(r)
 			if c := folder.Class(r); c != "" {
@@ -1484,35 +1499,35 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		}
 	case *probe:
 		for _, r := range engine.ProbeRows(obs) {
-			fmt.Println(r.Line())
+			fmt.Fprintln(sink, r.Line())
 		}
 		for _, r := range rows {
 			if r.Entity.Type == types.TypePort {
-				fmt.Println(r.Line())
+				fmt.Fprintln(sink, r.Line())
 			}
 		}
 		for _, lead := range advLeads {
-			fmt.Println(lead.Line())
+			fmt.Fprintln(sink, lead.Line())
 		}
 		for _, r := range verifyResults {
-			fmt.Println(r.Line())
+			fmt.Fprintln(sink, r.Line())
 		}
 	default:
-		printMap(shown, rep)
+		printMap(sink, shown, rep)
 		for _, g := range foldGroups {
 			rep.emitted().addGroup(g.Rows, countKey)
-			fmt.Printf("  %s\n", g.Line())
+			fmt.Fprintf(sink, "  %s\n", g.Line())
 		}
 		for _, lead := range advLeads {
-			fmt.Printf("  %s\n", lead.Line())
+			fmt.Fprintf(sink, "  %s\n", lead.Line())
 		}
 		for _, r := range verifyResults {
-			fmt.Printf("  %s\n", r.Line())
+			fmt.Fprintf(sink, "  %s\n", r.Line())
 		}
 		if *showObs {
-			fmt.Println("observations")
+			fmt.Fprintln(sink, "observations")
 			for _, o := range obs {
-				fmt.Printf("  %s %s %s\n", o.Collector, o.Kind, compact(o.Payload))
+				fmt.Fprintf(sink, "  %s %s %s\n", o.Collector, o.Kind, compact(o.Payload))
 			}
 		}
 	}
@@ -1863,15 +1878,15 @@ func heldBy(r engine.MapEntry) int {
 	return 1
 }
 
-func printMap(rows []engine.MapEntry, rep *report) {
+func printMap(w io.Writer, rows []engine.MapEntry, rep *report) {
 	for _, row := range engine.GroupTemplates(rows) {
 		rep.emitted().add(countKey(row), heldBy(row))
-		fmt.Printf("  %s\n", row.Line())
+		fmt.Fprintf(w, "  %s\n", row.Line())
 		for _, d := range row.Details() {
-			fmt.Printf("      %s\n", d)
+			fmt.Fprintf(w, "      %s\n", d)
 		}
-		if w := engine.Watch(row); len(w) > 0 {
-			fmt.Printf("      watch: %s\n", strings.Join(w, ", "))
+		if wt := engine.Watch(row); len(wt) > 0 {
+			fmt.Fprintf(w, "      watch: %s\n", strings.Join(wt, ", "))
 		}
 	}
 }
@@ -1880,7 +1895,7 @@ func printMap(rows []engine.MapEntry, rep *report) {
 // output, Azhaq's own export, connector facts or plain lists.
 func cmdIngest(args []string) error {
 	fs := newFlags("ingest")
-	in := fs.String("in", "", "a file of results (- for stdin): subfinder, dnsx, httpx, katana, naabu, nuclei or gau JSON lines, an ffuf JSON report or -json lines, azhaq export, connector facts, or lines of URLs, hostnames and addresses; files may also be given as arguments, several at once")
+	in := fs.String("in", "", "a file of results (- for stdin): subfinder, dnsx, httpx, katana, naabu, nuclei, gau, gowitness or asnmap JSON lines, an ffuf JSON report or -json lines, an arjun JSON file, an nmap XML file (-oX), azhaq export, connector facts, or lines of URLs, hostnames and addresses; files may also be given as arguments, several at once")
 	dbPath := fs.String("db", "", "the database to add to (default: a new file)")
 	asJSON := fs.Bool("json", false, "the summary as JSON")
 	if err := parse(fs, args); err != nil {
@@ -2288,8 +2303,13 @@ func cmdExport(args []string) error {
 	format := fs.String("format", "jsonl", "jsonl (everything), urls, hosts (names that resolve), names (every name), targets (web services, for nuclei -l), openapi, graphql (introspection JSON), sdl (GraphQL schema), burp (the run's scope), html, graphml, secrets, findings (one record per qualifying stored row, JSON Lines; an empty workspace writes an explicit empty record set), findings-md (the same records in Markdown)")
 	origin := fs.String("origin", "", "openapi: the origin to describe (default: the one with most API routes); graphql, sdl: the endpoints of an origin, or one endpoint's URL")
 	safe := fs.Bool("safe", false, "openapi: leave out the routes the run did not request, such as those -deny-path kept out (otherwise they carry x-azhaq-skipped: true)")
+	cov := fs.String("coverage", "", "urls, names: only these coverages, comma-separated: visited, catchall, error, gone, hint, skipped, capped")
+	asJSON := fs.Bool("json", false, "urls, names: one {url|name, coverage, status, source} object per line")
 	if err := parse(fs, args); err != nil {
 		return err
+	}
+	if *format == "jsonl" && (*cov != "" || *asJSON) {
+		return usagef("-coverage and -json are for -format urls or names")
 	}
 	if *format != "jsonl" {
 		path := *dbPath
@@ -2300,11 +2320,15 @@ func cmdExport(args []string) error {
 			return fmt.Errorf("need -db (no %s from a previous run)", lastDBFile)
 		}
 		cw := &countWriter{w: os.Stdout}
-		if err := exportTo(path, *format, *origin, *safe, cw); err != nil {
+		if err := exportToList(path, *format, *origin, *safe, listOpts{coverage: *cov, json: *asJSON}, cw); err != nil {
 			return err
 		}
 		if cw.n == 0 {
-			fmt.Fprintf(os.Stderr, "azhaq export: nothing to write: %s\n", emptyExport(*format))
+			why := emptyExport(*format)
+			if *cov != "" {
+				why = "no entry has coverage " + *cov
+			}
+			fmt.Fprintf(os.Stderr, "azhaq export: nothing to write: %s\n", why)
 		}
 		return nil
 	}

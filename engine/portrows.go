@@ -26,6 +26,7 @@ func portRows(e types.Entity, scope string, obs []types.StoredObservation) []Map
 		at   time.Time
 		tcp  []portscan.Open
 		udp  []portscan.UDPPort
+		via  map[string]string // an imported scan's ports: the tool that listed each, by "proto/port"
 	}
 	newest := map[string]scan{}
 	imported := map[string]scan{}
@@ -37,6 +38,8 @@ func portRows(e types.Entity, scope string, obs []types.StoredObservation) []Map
 		}
 		var p struct {
 			Host     string             `json:"host"`
+			Names    []string           `json:"names"`
+			Via      string             `json:"via"`
 			IP       string             `json:"ip"`
 			Range    bool               `json:"range"`
 			Services []portscan.Open    `json:"services"`
@@ -61,6 +64,11 @@ func portRows(e types.Entity, scope string, obs []types.StoredObservation) []Map
 		if host != "" && host != p.IP {
 			names[id] = addName(names[id], host)
 		}
+		for _, n := range p.Names {
+			if n != "" && n != p.IP {
+				names[id] = addName(names[id], n)
+			}
+		}
 		if o.Collector != "azhaq-ports" {
 			// Each imported line adds its ports to the address's.
 			s := imported[id]
@@ -70,6 +78,17 @@ func portRows(e types.Entity, scope string, obs []types.StoredObservation) []Map
 			s.host, s.ip = host, p.IP
 			s.tcp = append(s.tcp, p.Services...)
 			s.udp = append(s.udp, p.UDP...)
+			if p.Via != "" {
+				if s.via == nil {
+					s.via = map[string]string{}
+				}
+				for _, o := range p.Services {
+					s.via["tcp/"+strconv.Itoa(o.Port)] = p.Via
+				}
+				for _, u := range p.UDP {
+					s.via["udp/"+strconv.Itoa(u.Port)] = p.Via
+				}
+			}
 			imported[id] = s
 			continue
 		}
@@ -103,16 +122,37 @@ func portRows(e types.Entity, scope string, obs []types.StoredObservation) []Map
 			}
 			s.tcp = append(s.tcp[:len(s.tcp):len(s.tcp)], im.tcp...)
 			s.udp = append(s.udp[:len(s.udp):len(s.udp)], im.udp...)
+			s.via = im.via
 		}
 		sort.SliceStable(s.tcp, func(i, j int) bool { return s.tcp[i].Port < s.tcp[j].Port })
 		for _, o := range s.tcp {
-			add(id, s, o.Port, "tcp", "open", o.Service, o.Product, o.Version, portProof("open", o.Service, o.Product, o.Version, o.Extra, o.TLS, o.TLSVers, o.Cipher, o.Title, o.Banner))
+			add(id, s, o.Port, "tcp", "open", o.Service, o.Product, o.Version, importedProof(portProof("open", o.Service, o.Product, o.Version, o.Extra, o.TLS, o.TLSVers, o.Cipher, o.Title, o.Banner), s.via["tcp/"+strconv.Itoa(o.Port)], o.Scripts))
 		}
 		for _, u := range s.udp {
-			add(id, s, u.Port, "udp", u.State, u.Service, u.Product, u.Version, portProof(u.State, u.Service, u.Product, u.Version, "", false, "", "", "", u.Banner))
+			add(id, s, u.Port, "udp", u.State, u.Service, u.Product, u.Version, importedProof(portProof(u.State, u.Service, u.Product, u.Version, "", false, "", "", "", u.Banner), s.via["udp/"+strconv.Itoa(u.Port)], u.Scripts))
 		}
 	}
 	return out
+}
+
+// maxScriptProof caps the script output a port row's proof quotes; the whole
+// output stays in the stored observation (export -format jsonl).
+const maxScriptProof = 200
+
+// importedProof adds to an imported port's facts the tool that listed it
+// and the output of its scripts, as that tool said it.
+func importedProof(proof []string, via string, scripts []portscan.Script) []string {
+	if via != "" {
+		proof = append(proof, "via="+via)
+	}
+	for _, sc := range scripts {
+		out := strings.Join(strings.Fields(sc.Output), " ")
+		if r := []rune(out); len(r) > maxScriptProof {
+			out = string(r[:maxScriptProof]) + "…"
+		}
+		proof = append(proof, "script:"+sc.ID+"="+strconv.Quote(out))
+	}
+	return proof
 }
 
 // portProof is a port row's facts, in the order a reader looks for them.

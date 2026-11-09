@@ -1,0 +1,22 @@
+{
+    "http://app.test/search": {
+        "headers": {
+            "User-Agent": "Mozilla/5.0"
+        },
+        "method": "GET",
+        "params": [
+            "q",
+            "debug"
+        ]
+    },
+    "http://app.test/api/login": {
+        "headers": {
+            "Content-Type": "application/json"
+        },
+        "method": "JSON",
+        "params": [
+            "user",
+            "pass"
+        ]
+    }
+}

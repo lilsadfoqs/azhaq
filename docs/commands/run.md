@@ -47,6 +47,7 @@ The map has one row per entity, best first: the target's own pages and APIs, the
 - Plain: one row per line, with forms and parameters indented below ([The text map](#the-text-map)).
 - `-json`: one JSON object per row, and the summary as one JSON object on stderr.
 - `-quiet`: no map and no progress lines, only the summary.
+- `-o FILE`: also writes the rows to FILE, as they are printed (JSON lines with `-json`, the text map without), replacing it, as `crawl`, `probe` and `ports` do. The file is made before anything is sent, so a path that cannot be written fails at once with exit 1, and a directory is a usage error. With `-quiet` nothing is printed and the file still gets the rows. The summary lists the file under `wrote`.
 - `-stream`: also prints each name, address, URL and open port as it is found, before the map ([Streaming found lines](#streaming-found-lines)).
 
 ```json
@@ -562,6 +563,7 @@ azhaq run -url https://app.example.com/ -ports top-1000 -verify -db app.db
 | --- | --- | --- | --- |
 | `-db` | string |  | the workspace, a SQLite file (default: workspace.db in the run's folder under $AZHAQ_HOME/runs, ~/.azhaq/runs unless set; with AZHAQ_HOME=none a new azhaq-TIME-PID.db in the current directory; or $AZHAQ_DB; query, show and export read it afterwards) |
 | `-json` | bool |  | print the map as JSON lines, and the summary as one JSON object on stderr |
+| `-o` | string |  | also write the rows to this file, as printed (JSON lines with -json), replacing it; with -quiet the file still gets them |
 | `-quiet` | bool |  | print no map and no progress lines (a line every 10 s while the run works), only the summary (on stderr) |
 | `-v` | bool |  | print a line for every finished task, not only failures |
 | `-stream` | bool |  | also print each name, address, URL and open port as it is found, once per map row (found lines, before the ranked map) |

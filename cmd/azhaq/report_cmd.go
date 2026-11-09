@@ -151,19 +151,22 @@ func cmdReport(args []string) error {
 		if err != nil {
 			return err
 		}
-		found, leads := buildFindings(g)
+		found, leads, folds := buildFindings(g)
 		var body []byte
 		if *format == "md" {
-			body = findingsMarkdown(found, leads)
+			body = findingsMarkdown(found, leads, folds)
 		} else {
-			body = findingsJSONL(found, leads)
+			body = findingsJSONL(found, leads, folds)
 		}
 		if *out != "" {
 			if err := os.WriteFile(*out, body, 0o644); err != nil {
 				return err
 			}
-			fmt.Fprintf(os.Stderr, "azhaq report: %s and %s in %s\n", plural(len(found), "finding"), plural(len(leads), "lead"), *out)
+			fmt.Fprintf(os.Stderr, "azhaq report: %s and %s%s in %s\n", plural(len(found), "finding"), plural(len(leads), "lead"), foldedNote(folds), *out)
 			return nil
+		}
+		if len(folds) > 0 {
+			fmt.Fprintf(os.Stderr, "azhaq report: %s and %s%s\n", plural(len(found), "finding"), plural(len(leads), "lead"), foldedNote(folds))
 		}
 		_, err = os.Stdout.Write(body)
 		return err
