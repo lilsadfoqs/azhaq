@@ -3,7 +3,9 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/lilsadfoqs/azhaq/internal/collectors/subcol"
@@ -77,6 +79,7 @@ func subsNotes(ps []map[string]any, tiers []tierSet) []string {
 			}
 		}
 		if observed == 0 {
+			notes = append(notes, noEstimate(ps, t, dep)...)
 			continue
 		}
 		// What the sources know comes first, and no lone percentage that
@@ -92,6 +95,50 @@ func subsNotes(ps []map[string]any, tiers []tierSet) []string {
 		// over the names the independent sources gave, so it is as good as the
 		// overlap of those sources.
 		note += fmt.Sprintf(". This is an estimate (Chao1) from the %d names the independent sources gave: %d came from one source and %d from two", observed, f1, f2)
+		notes = append(notes, note)
+	}
+	return notes
+}
+
+// noEstimate says why a tier has no coverage note: how many independent
+// sources gave names for it, which, and the sources that failed with their
+// error. One line for each domain when the run had several.
+func noEstimate(ps []map[string]any, t tierSet, dep map[string]bool) []string {
+	var notes []string
+	for _, p := range ps {
+		gave := map[string]bool{}
+		raw, _ := p["found_by"].(map[string]any)
+		for name, by := range raw {
+			if t.names != nil && !t.names[name] {
+				continue
+			}
+			for _, src := range strs(by) {
+				if !dep[src] {
+					gave[src] = true
+				}
+			}
+		}
+		who := "none"
+		if len(gave) > 0 {
+			who = strings.Join(slices.Sorted(maps.Keys(gave)), ", ")
+		}
+		label := t.name
+		if len(ps) > 1 {
+			d, _ := p["domain"].(string)
+			label += ", " + d
+		}
+		note := fmt.Sprintf("coverage (%s): not estimated: %d independent source(s) gave names (%s); an estimate needs two", label, len(gave), who)
+		srcs, _ := p["sources"].(map[string]any)
+		var failed []string
+		for _, name := range slices.Sorted(maps.Keys(srcs)) {
+			row, _ := srcs[name].(map[string]any)
+			if e, _ := row["error"].(string); e != "" && row["skipped"] == nil && name != "history" {
+				failed = append(failed, name+": "+e)
+			}
+		}
+		if len(failed) > 0 {
+			note += "; failed: " + strings.Join(failed, "; ")
+		}
 		notes = append(notes, note)
 	}
 	return notes

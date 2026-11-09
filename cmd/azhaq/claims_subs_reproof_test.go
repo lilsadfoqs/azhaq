@@ -105,8 +105,9 @@ func TestSubsStoppedRunPrintsTheGuessesItAnsweredAndCountsTheOthers(t *testing.T
 		}
 	}
 	// The 20 names the source gave all exist: each is printed or not asked, so
-	// what did not resolve, and what was not checked, are guesses.
-	if printed == 0 || rep.Results < printed || rep.Results != c["DNS-confirmed"] || rep.Results-printed+c["not asked"] != 20 {
+	// what did not resolve, and what was not checked, are guesses. How many
+	// guesses were printed depends on how far DNS got before the stop: none is fine.
+	if rep.Results < printed || rep.Results != c["DNS-confirmed"] || rep.Results-printed+c["not asked"] != 20 {
 		t.Fatalf("%d guesses printed, %d rows, counts %v", printed, rep.Results, c)
 	}
 	if c["did not resolve"] == 0 || c["not checked"] == 0 {
@@ -340,7 +341,9 @@ func TestResumeOfAStoppedSubsRunPrintsTheMapRowsAndKeepsTheSources(t *testing.T)
 // What a stopped -live run did not check is kept in the workspace: query
 // -role unresolved lists it (the guesses and the names the sources gave that
 // DNS was not asked about), every name listed is in the azhaq-subdomains
-// payload, and the guesses among them are in its unverified list.
+// payload, and the guesses among them are in its guesses list, which is what
+// the summary's not checked counts. The guess check may have seen a guess
+// resolve before the stop: it is a guess no stored lookup answered all the same.
 func TestSubsStoppedRunKeepsTheUncheckedNamesInTheWorkspace(t *testing.T) {
 	_, rep, _ := stoppedSubsWorld(t)
 	st, err := store.OpenExisting("w.db")
@@ -351,9 +354,9 @@ func TestSubsStoppedRunKeepsTheUncheckedNamesInTheWorkspace(t *testing.T) {
 	runs, _ := st.Runs()
 	st.UseRun(runs[len(runs)-1].ID)
 	p := payloads(st, "azhaq-subdomains")[0]
-	unverified, names := map[string]bool{}, map[string]bool{}
-	for _, n := range strs(p["unverified"]) {
-		unverified[n] = true
+	guessList, names := map[string]bool{}, map[string]bool{}
+	for _, n := range strs(p["guesses"]) {
+		guessList[n] = true
 	}
 	for _, n := range strs(p["names"]) {
 		names[n] = true
@@ -368,8 +371,8 @@ func TestSubsStoppedRunKeepsTheUncheckedNamesInTheWorkspace(t *testing.T) {
 		}
 		if strings.HasPrefix(key, "g") {
 			guesses++
-			if !unverified[key] {
-				t.Errorf("the guess %s is unresolved and not in the payload's unverified list", key)
+			if !guessList[key] {
+				t.Errorf("the guess %s is unresolved and not in the payload's guesses list", key)
 			}
 		}
 	}

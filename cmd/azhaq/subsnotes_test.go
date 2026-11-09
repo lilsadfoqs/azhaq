@@ -75,14 +75,46 @@ func TestCoverageNoteTesla(t *testing.T) {
 	}
 }
 
-func TestSubsNotesQuietWithoutEstimate(t *testing.T) {
+func TestSubsNotesSayWhyWithoutEstimate(t *testing.T) {
 	p := map[string]any{"found_by": map[string]any{"a.example.org": []any{"crtsh"}}}
-	if n := subsNotes([]map[string]any{p}, []tierSet{{countRaw, nil}}); len(n) != 0 {
-		t.Errorf("one source: %q", n)
+	n := subsNotes([]map[string]any{p}, []tierSet{{countRaw, nil}})
+	if want := "coverage (raw candidates): not estimated: 1 independent source(s) gave names (crtsh); an estimate needs two"; len(n) != 1 || n[0] != want {
+		t.Errorf("one source: %q, want %q", n, want)
 	}
 	p["history_error"] = "disk full"
-	if n := subsNotes([]map[string]any{p}, []tierSet{{countRaw, nil}}); len(n) != 1 || !strings.Contains(n[0], "disk full") {
+	if n := subsNotes([]map[string]any{p}, []tierSet{{countRaw, nil}}); len(n) != 2 || !strings.Contains(n[0], "disk full") || !strings.HasPrefix(n[1], "coverage (raw candidates): not estimated") {
 		t.Errorf("history error: %q", n)
+	}
+}
+
+// A run whose tiers have no estimate says why, for the one source that
+// answered and for none, in the summary's notes (the JSON summary has the same).
+func TestSubsSaysWhyItHasNoCoverageEstimate(t *testing.T) {
+	t.Chdir(t.TempDir())
+	boom := fmt.Errorf("unexpected status code 502 received from https://crt.example/")
+	restore := subcol.UseTestSources(
+		subcol.TestSource{Name: "crtsh", Default: true, Names: []string{"www.example.org", "app.example.org"}},
+		subcol.TestSource{Name: "certspotter", Default: true, Err: boom},
+	)
+	defer func() { restore() }()
+	_, rep, _ := runContract(t, "subs", "-d", "example.org", "-no-history", "-guesses=false")
+	notes := strings.Join(rep.Notes, "\n")
+	if want := "coverage (raw candidates): not estimated: 1 independent source(s) gave names (crtsh); an estimate needs two; failed: certspotter: " + boom.Error(); !strings.Contains(notes, want) {
+		t.Errorf("one source answered: want %q in\n%s", want, notes)
+	}
+	if strings.Contains(notes, "coverage (raw candidates): what the independent") {
+		t.Errorf("an estimate with one source:\n%s", notes)
+	}
+
+	restore()
+	restore = subcol.UseTestSources(
+		subcol.TestSource{Name: "crtsh", Default: true, Err: boom},
+		subcol.TestSource{Name: "certspotter", Default: true, Err: boom},
+	)
+	_, rep, _ = runContract(t, "subs", "-d", "example.org", "-no-history", "-guesses=false")
+	notes = strings.Join(rep.Notes, "\n")
+	if want := "coverage (raw candidates): not estimated: 0 independent source(s) gave names (none); an estimate needs two; failed: certspotter: " + boom.Error() + "; crtsh: " + boom.Error(); !strings.Contains(notes, want) {
+		t.Errorf("no source answered: want %q in\n%s", want, notes)
 	}
 }
 
@@ -142,5 +174,15 @@ func TestSamplingNoteSaysWhatABoundLeftUntaken(t *testing.T) {
 	delete(srcs["subdomaincenter"].(map[string]any), "sampling_bounded")
 	if n := samplingNote("vulnweb.com", srcs); n != "" {
 		t.Errorf("a stop that was a finding: %q", n)
+	}
+}
+
+// With several domains and no estimate for any, each has its own line.
+func TestSubsNotesSayWhyForEachDomainWithoutEstimate(t *testing.T) {
+	a := map[string]any{"domain": "a.example", "found_by": map[string]any{"www.a.example": []any{"crtsh"}}}
+	b := map[string]any{"domain": "b.example", "found_by": map[string]any{}}
+	n := subsNotes([]map[string]any{a, b}, []tierSet{{countRaw, nil}})
+	if len(n) != 2 || !strings.HasPrefix(n[0], "coverage (raw candidates, a.example): not estimated: 1 independent") || !strings.HasPrefix(n[1], "coverage (raw candidates, b.example): not estimated: 0 independent") {
+		t.Errorf("notes %q", n)
 	}
 }

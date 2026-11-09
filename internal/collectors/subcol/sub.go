@@ -402,7 +402,7 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 				Extractor:           ext,
 				Client:              c.opts.Client,
 				RequestLimiter:      c.limiter,
-				Timeout:             int(timeout / time.Second),
+				Timeout:             int((timeout + time.Second - 1) / time.Second), // whole seconds, never 0 (0 reads as no limit)
 				MaxResponseBodySize: c.opts.MaxBody,
 				MaxResults:          c.opts.MaxResults,
 			}
@@ -628,9 +628,11 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		payload["unverified"] = st.unverified
 		payload[UncheckedWhyKey] = st.why
 	}
-	if len(st.guesses) > 0 {
-		sort.Strings(st.guesses)
-		payload["guesses"] = st.guesses
+	if all := append(slices.Clone(st.guesses), st.liveGuess...); len(all) > 0 {
+		// Every guess kept, the unverified ones and the ones the check saw
+		// resolve: a stopped run may have no DNS row for the second kind yet.
+		sort.Strings(all)
+		payload["guesses"] = all
 	}
 	if st.asked > 0 {
 		payload["checked"] = st.asked
@@ -716,6 +718,7 @@ type settled struct {
 	dropped    int             // did not resolve: left out
 	unverified []string        // not checked: listed, flagged
 	guesses    []string        // of those, the names only a padding source gave: no source asserted them
+	liveGuess  []string        // guesses the check saw resolve: kept, not unverified, and DNS may not have recorded them yet
 	asked      int             // names sent to the resolvers, in all
 	skip       map[string]bool // not stored in the history: never seen to resolve
 	why        string          // why the unverified names were not checked
@@ -815,7 +818,10 @@ func (c *Collector) settle(ctx context.Context, domain string, run []source, nam
 			v = chk.verdict(n)
 		}
 		switch v {
-		case nameLive:
+		case nameLive, nameHeld:
+			if !slices.Contains(foundBy[n], historyName) {
+				st.liveGuess = append(st.liveGuess, n)
+			}
 		case nameDead:
 			drop[n] = true
 			delete(foundBy, n)

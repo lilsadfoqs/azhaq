@@ -859,3 +859,36 @@ func TestDefaultSetHoldsTheKeylessSourcesThatAnswer(t *testing.T) {
 		}
 	}
 }
+
+// Every guess a run keeps is in the payload's guesses list: the ones no lookup
+// answered (also unverified) and the ones the check saw resolve, which a run
+// stopped before DNS recorded them would otherwise leave in no list.
+func TestPayloadListsEveryGuessItKeeps(t *testing.T) {
+	pad := fake("pad", noKey, true, []string{"live.example.org", "slow.example.org", "dead.example.org"}, nil)
+	pad.verify = true
+	verify := func(_ context.Context, _ string, names []string) ([]string, []string) {
+		var live, failed []string
+		for _, n := range names {
+			switch n {
+			case "live.example.org":
+				live = append(live, n)
+			case "slow.example.org":
+				failed = append(failed, n)
+			}
+		}
+		return live, failed
+	}
+	c := collector(Options{SourceTimeout: 5 * time.Second, NoHistory: true, Verify: verify}, pad, fake("real", noKey, true, []string{"www.example.org"}, nil))
+	var payload map[string]any
+	if _, err := c.Run(context.Background(), types.Seed{Type: types.TypeDomain, Keys: map[string]string{"domain": "example.org"}}, func(o types.Observation) error {
+		return json.Unmarshal(o.Payload, &payload)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(strs(payload["guesses"]), ","); got != "live.example.org,slow.example.org" {
+		t.Errorf("guesses %q: want the one that resolved and the one no lookup answered, not the dead one", got)
+	}
+	if got := strings.Join(strs(payload["unverified"]), ","); got != "slow.example.org" {
+		t.Errorf("unverified %q: want only the one no lookup answered", got)
+	}
+}

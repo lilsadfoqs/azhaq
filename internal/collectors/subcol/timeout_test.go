@@ -54,3 +54,20 @@ func TestRoundBudget(t *testing.T) {
 		}
 	}
 }
+
+// The session's whole seconds, which sources such as crt.sh's database read as
+// a connect and statement limit, round up: a bound under a second is never 0,
+// which they read as no limit.
+func TestSessionTimeoutIsNeverZero(t *testing.T) {
+	for in, want := range map[time.Duration]int{300 * time.Millisecond: 1, time.Second: 1, 1500 * time.Millisecond: 2, 30 * time.Second: 30} {
+		var got int
+		probe := source{name: "probe", need: noKey, deflt: true, collect: func(_ context.Context, _ string, _ []string, sess *subscraping.Session) ([]string, error) {
+			got = sess.Timeout
+			return nil, nil
+		}}
+		run(t, collector(Options{SourceTimeout: in, NoHistory: true}, probe), context.Background())
+		if got != want {
+			t.Errorf("-source-timeout %s: the session holds %d s, want %d", in, got, want)
+		}
+	}
+}

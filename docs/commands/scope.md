@@ -20,7 +20,7 @@ azhaq scope -scope scope.csv
 
 ## What it does
 
-1. Reads the scope from a file or from a platform: `hackerone`, `bugcrowd`, `intigriti` or `yeswehack`. A platform needs `-program`. `run -scope` reads it the same way.
+1. Reads the scope from a file or from a platform: `hackerone`, `bugcrowd`, `intigriti` or `yeswehack`. A platform needs `-program`. `-scope` of `run`, `subs`, `urls` and the other commands that take it reads it the same way.
 2. A file is one of four formats, told apart by its start:
    - a HackerOne CSV, whose first line has an `identifier` column;
    - a JSON list of programs, as bounty-targets publishes it;

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/lilsadfoqs/azhaq/catalog"
+	"github.com/lilsadfoqs/azhaq/internal/egress"
 	"github.com/lilsadfoqs/azhaq/types"
 )
 
@@ -14,6 +15,7 @@ const (
 	nameLive      = 1 // resolves, not to a wildcard
 	nameDead      = 2 // does not resolve
 	nameUnchecked = 3 // the resolvers failed, or the run ended first
+	nameHeld      = 4 // the scope holds it out: no query is sent for it
 )
 
 type checkerKey struct{}
@@ -93,6 +95,10 @@ func (k *checker) checkWith(ctx context.Context, names []string, final bool) int
 	var ask []string
 	for _, n := range names {
 		if _, done := k.state[n]; !done && !k.known[n] && (!k.closed || final) {
+			if !egress.Allows(n) {
+				k.state[n] = nameHeld // the user's -allow, -deny or -scope: never asked
+				continue
+			}
 			k.state[n] = nameUnchecked // taken: no one else asks it
 			ask = append(ask, n)
 		}
