@@ -482,6 +482,12 @@ func cmdPorts(args []string) error {
 	}
 	sink.settle(rep, *sn)
 	if stdin := *list == "" && len(hosts)+len(fs.Args()) == 0 && !scopeOnly; !*sn && !stdin && rep.Stopped == "" {
+		if !verifyFl.on {
+			obs, _ := st.Observations()
+			if why, _ := verifyPass(obs); why != "" {
+				rep.nextPass(verifyPassCommand(args, rep.DB), why)
+			}
+		}
 		if why, _ := catalogPass(catalogLeft(ports, exSpec), int(sink.scanned)); why != "" {
 			rep.nextPass(catalogPassCommand(args, rep.DB), why)
 		}

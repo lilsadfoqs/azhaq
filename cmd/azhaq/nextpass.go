@@ -5,7 +5,10 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/lilsadfoqs/azhaq/internal/advisory"
 	"github.com/lilsadfoqs/azhaq/internal/portscan"
+	"github.com/lilsadfoqs/azhaq/internal/verify"
+	"github.com/lilsadfoqs/azhaq/types"
 )
 
 // A next pass is a wider pass than the one a finished command made, which it
@@ -96,6 +99,42 @@ func catalogPassCommand(args []string, db string) string {
 	} else {
 		rest = append(rest, "-p", "default")
 	}
+	if db != "" && !hasFlag(rest, "db") {
+		rest = append(rest, "-db", db)
+	}
+	return "azhaq ports " + shellJoin(rest)
+}
+
+// verifyPass says, after a run that named services and did not give -verify,
+// which of them a read-only check reads, what each check sends (and no
+// credential), and what the reads cost: one connect a service, each read being
+// one connection with one request on it. "" when no service found has a check.
+func verifyPass(obs []types.StoredObservation) (why string, cost amount) {
+	n := 0
+	var sends []string
+	seen := map[string]bool{}
+	for _, svc := range advisory.ServicesAnyVersion(obs) {
+		c, ok := verify.ForService(svc)
+		if !ok {
+			continue
+		}
+		n++
+		if !seen[c.ID] {
+			seen[c.ID] = true
+			sends = append(sends, c.Request+" to "+c.Service)
+		}
+	}
+	if n == 0 {
+		return "", amount{}
+	}
+	cost = amount{Connects: int64(n)}
+	return fmt.Sprintf("%s found with a read-only check; -verify sends %s, no credential, one connect a service: %s more",
+		plural(n, "service"), strings.Join(sends, "; "), moreOf(cost)), cost
+}
+
+// verifyPassCommand is the ports command line with -verify.
+func verifyPassCommand(args []string, db string) string {
+	rest := append(slices.Clone(args), "-verify")
 	if db != "" && !hasFlag(rest, "db") {
 		rest = append(rest, "-db", db)
 	}

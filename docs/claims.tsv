@@ -787,6 +787,8 @@ run.state-change-plan	docs/commands/run.md	`azhaq plan` prints the same list for
 run.next-browser	docs/commands/run.md	A run without `-browser` whose target pages leave their links to their	test:cmd/azhaq:TestCrawlAndRunNextBrowserInteractOnCatchAll,TestRunNextBrowserNotTwice;test:engine:TestBrowserHint
 run.next-graphql	docs/commands/run.md	A run that found a GraphQL endpoint and did not read its schema gets `	test:engine:TestGraphQLHint
 run.next-login	docs/commands/run.md	A run without a session (`-login`, `-cookie`, `-header`) whose target 	test:cmd/azhaq:TestRunAndHuntNextRolesWhenSignedIn;test:engine:TestLoginHint
+run.next-verify	docs/commands/run.md	A run that named a service with a read-only check (see [Read-only verification](#read-only-verification)) and was not given `-verify` gets	test:cmd/azhaq:TestRunNamesVerifyWhenAServiceWithACheckWasFound,TestPortsNamesVerifyAndItsCostIsMeasured
+run.next-verify-once	docs/commands/run.md	Each check is named once, with what it sends. No line when no service found has a check.	test:cmd/azhaq:TestVerifyPassNamesEachCheckedKind
 run.next-default-set	docs/commands/run.md	A run that scanned a list of TCP ports (`-ports top-100`, a list) that leaves out	test:cmd/azhaq:TestRunNamesTheCatalogPortsItsListLeftOut
 run.next-default-set-count	docs/commands/run.md	`N` counts the ports of the default set the scan did not ask, and `C` is `N` times the addresses the scan asked.	test:cmd/azhaq:TestRunNamesTheCatalogPortsItsListLeftOut
 run.next-default-set-nothing	docs/commands/run.md	A scan of the whole default set suggests nothing.	test:cmd/azhaq:TestNoCatalogPassWhenNothingIsLeftOut

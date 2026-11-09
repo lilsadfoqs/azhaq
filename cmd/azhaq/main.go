@@ -1695,6 +1695,12 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		if rep.AddressesScanned != nil {
 			addresses = *rep.AddressesScanned
 		}
+		if obs, err := st.Observations(); err == nil && !verifyFl.on {
+			if why, _ := verifyPass(obs); why != "" {
+				cmd := "azhaq run " + shellJoin(append(slices.Clone(args), "-verify", "-db", path))
+				rep.nextPass(cmd, why)
+			}
+		}
 		if why, _ := catalogPass(catalogLeft(opts.Ports, ""), addresses); why != "" {
 			spec := strings.TrimRight(*portsSpec+",default", ",")
 			cmd := "azhaq run " + shellJoin(append(withoutFlag(args, "ports"), "-ports", spec, "-db", path))

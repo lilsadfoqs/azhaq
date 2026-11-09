@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"net"
 	"path/filepath"
 	"slices"
@@ -10,6 +11,8 @@ import (
 	"testing"
 
 	"github.com/lilsadfoqs/azhaq/internal/portscan"
+	"github.com/lilsadfoqs/azhaq/internal/verify"
+	"github.com/lilsadfoqs/azhaq/types"
 )
 
 // nextOf are the next lines of a JSON summary.
@@ -150,5 +153,104 @@ func TestRunNamesTheCatalogPortsItsListLeftOut(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("no default-set pass in %q", errOut)
+	}
+}
+
+func servicesObs(services ...map[string]any) []types.StoredObservation {
+	raw, _ := json.Marshal(map[string]any{"host": "127.0.0.1", "ip": "127.0.0.1", "services": services})
+	return []types.StoredObservation{{Observation: types.Observation{Collector: "azhaq-ports", Kind: "ports", Payload: raw}}}
+}
+
+// Each service a check reads is named by the -verify pass with what its check
+// sends; a service with no check is not, and a run that found none says
+// nothing.
+func TestVerifyPassNamesEachCheckedKind(t *testing.T) {
+	for _, c := range verify.Checks() {
+		why, cost := verifyPass(servicesObs(map[string]any{"port": 1000, "service": c.Service}))
+		if !strings.Contains(why, c.Request+" to "+c.Service) || !strings.Contains(why, "no credential") || cost.Connects != 1 {
+			t.Errorf("%s: %q, %v", c.ID, why, cost)
+		}
+	}
+	for name := range verify.NoCheck {
+		if why, _ := verifyPass(servicesObs(map[string]any{"port": 1000, "service": name})); why != "" {
+			t.Errorf("%s has no check and the pass says %q", name, why)
+		}
+	}
+	two, cost := verifyPass(servicesObs(
+		map[string]any{"port": 1, "service": "redis"}, map[string]any{"port": 2, "service": "redis"}, map[string]any{"port": 3, "service": "memcached"}, map[string]any{"port": 4, "service": "ssh"}))
+	if cost.Connects != 3 || !strings.Contains(two, "3 services found") || strings.Count(two, "INFO server") != 1 {
+		t.Errorf("%q %v: want 3 services, each check named once", two, cost)
+	}
+	if why, _ := verifyPass(nil); why != "" {
+		t.Errorf("no service: %q", why)
+	}
+}
+
+// ports names -verify when it found a service with a check and was not given
+// it, with the connects it adds: the reads are what the run sent more with
+// -verify, one connect for each service.
+func TestPortsNamesVerifyAndItsCostIsMeasured(t *testing.T) {
+	fx := newRedisFixture(t, redisInfoResp())
+	scan := func(extra ...string) map[string]any {
+		t.Chdir(t.TempDir())
+		args := append([]string{"ports", "-host", "127.0.0.1", "-p", strconv.Itoa(fx.port), "-db", filepath.Join(t.TempDir(), "w.db"), "-json", "-ledger", "off"}, extra...)
+		_, errOut, code := cli(t, args...)
+		if code != exitOK {
+			t.Fatalf("exit %d\n%s", code, errOut)
+		}
+		return sumMap(t, errOut)
+	}
+	plain := scan()
+	var line string
+	for _, n := range nextOf(plain) {
+		if strings.Contains(n, "read-only check") {
+			line = n
+		}
+	}
+	if line == "" || !strings.Contains(line, " -verify") || !strings.Contains(line, "INFO server to redis") || !strings.Contains(line, "no credential") || !strings.Contains(line, "1 connect more") {
+		t.Fatalf("no -verify pass in %q", nextOf(plain))
+	}
+	with := scan("-verify")
+	for _, n := range nextOf(with) {
+		if strings.Contains(n, "read-only check") {
+			t.Errorf("-verify was given and the run names it: %q", n)
+		}
+	}
+	if more := with["requests"].(float64) - plain["requests"].(float64); more != 1 {
+		t.Errorf("-verify sent %v requests more for one service, the pass says 1 connect", more)
+	}
+	// Nothing found: nothing said.
+	dead, _ := strconv.Atoi(deadPort(t))
+	t.Chdir(t.TempDir())
+	_, errOut, _ := cli(t, "ports", "-host", "127.0.0.1", "-p", strconv.Itoa(dead), "-json", "-ledger", "off", "-db", filepath.Join(t.TempDir(), "d.db"))
+	for _, n := range nextOf(sumMap(t, errOut)) {
+		if strings.Contains(n, "read-only check") {
+			t.Errorf("no service was found and the run names -verify: %q", n)
+		}
+	}
+}
+
+// run names it too, with its own command line.
+func TestRunNamesVerifyWhenAServiceWithACheckWasFound(t *testing.T) {
+	var hits atomic.Int64
+	srv := juiceShaped(&hits)
+	defer srv.Close()
+	fx := newRedisFixture(t, redisInfoResp())
+	t.Chdir(t.TempDir())
+	_, errOut, code := cli(t, "run", "-url", srv.URL+"/", "-allow", "127.0.0.1", "-sources", "none", "-no-paths", "-no-tech", "-no-favicon", "-ledger", "off", "-db", "n.db", "-ports", "top-100,"+strconv.Itoa(fx.port), "-quiet", "-json")
+	if code != exitOK {
+		t.Fatalf("exit %d\n%s", code, errOut)
+	}
+	found := false
+	for _, n := range nextOf(sumMap(t, errOut)) {
+		if strings.Contains(n, "read-only check") {
+			found = true
+			if !strings.Contains(n, "INFO server to redis") || !strings.Contains(n, "-verify") || !strings.Contains(n, "1 connect more") {
+				t.Errorf("%q", n)
+			}
+		}
+	}
+	if !found {
+		t.Errorf("no -verify pass in %q", errOut)
 	}
 }
