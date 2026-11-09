@@ -12,5 +12,5 @@ import "embed"
 // Files are the documents, by file name; commands/NAME.md is the page of
 // one command.
 //
-//go:embed ARCHITECTURE.md CONNECTOR.md OUTPUT.md MCP.md CONCEPTS.md RECIPES.md TROUBLESHOOTING.md MIGRATING.md commands/*.md
+//go:embed START.md ARCHITECTURE.md CONNECTOR.md OUTPUT.md MCP.md CONCEPTS.md RECIPES.md TROUBLESHOOTING.md MIGRATING.md commands/*.md
 var Files embed.FS

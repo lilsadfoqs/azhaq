@@ -100,6 +100,10 @@ func cmdQuickstart(args []string) error {
 // deeper adds to the summary the commands that go on from the map: read the
 // workspace, and the wider passes, each with what it would send.
 func deeper(rep *report, runArgs []string) {
+	// The last line: the page that walks the four first jobs.
+	defer func() {
+		rep.Next = append(rep.Next, "azhaq docs start   (the four first jobs in order, each with its commands, what to look at and the exit codes to expect)")
+	}()
 	if rep.DB == "" {
 		return
 	}
