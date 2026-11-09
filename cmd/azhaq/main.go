@@ -1676,6 +1676,11 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 			rep.Stopped = fmt.Sprintf("-depth %d reached with hints left", stats.Depth)
 		}
 	}
+	if *interact {
+		if n := interactNotRun(obs, rep.Stopped); n != "" {
+			rep.Notes = append(rep.Notes, n)
+		}
+	}
 	if n := guessBudget.Held(); n > 0 {
 		rep.Notes = append(rep.Notes, fmt.Sprintf("-max-names %d held back %d guesses: the -w words and -permute variations beyond it were not asked (a larger -max-names asks them)", *maxNames, n))
 		if rep.Stopped == "" {
