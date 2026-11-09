@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/lilsadfoqs/azhaq/internal/fetch"
 	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 	"github.com/lilsadfoqs/azhaq/types"
 )
@@ -194,6 +195,7 @@ func (c Confirmer) Confirm(ctx context.Context, adv Advisory, svc Service) (conf
 	if err != nil {
 		return Claimed, "", err
 	}
+	fetch.BoundNote(resp, "GET "+path) // a stream that never ends is cut, and the run says so
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
 	what := fmt.Sprintf("GET %s answered %d", path, resp.StatusCode)

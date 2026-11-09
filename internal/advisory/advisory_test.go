@@ -8,6 +8,9 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
+
+	"github.com/lilsadfoqs/azhaq/internal/fetch"
 )
 
 const fixture = `[
@@ -199,5 +202,47 @@ func TestProductVersion(t *testing.T) {
 		if [2]string{p, v} != want {
 			t.Errorf("ProductVersion(%q) = %q,%q want %v", line, p, v, want)
 		}
+	}
+}
+
+// The read of a confirmation is bounded as every read of a target answer
+// is: a stream that never ends is cut at 64 KiB or 2 s, and the run says so.
+func TestConfirmCutsAnEndlessAnswerAndSaysSo(t *testing.T) {
+	fetch.Reset()
+	defer fetch.Reset()
+	advs := loadFixture(t)
+	done := make(chan struct{})
+	defer close(done)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		for {
+			if _, err := w.Write([]byte("data: tick\n")); err != nil {
+				return
+			}
+			w.(http.Flusher).Flush()
+			select {
+			case <-done:
+				return
+			case <-r.Context().Done():
+				return
+			case <-time.After(300 * time.Millisecond):
+			}
+		}
+	}))
+	defer srv.Close()
+	svc := Service{Host: "h.test", Port: 80, Service: "http", Product: "nginx", Version: "1.18.0", Origin: srv.URL}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	t0 := time.Now()
+	_, _, _ = Confirmer{Client: srv.Client()}.Confirm(ctx, advs[0], svc)
+	if took := time.Since(t0); took > 5*time.Second {
+		t.Errorf("the stream held the read for %s", took)
+	}
+	said := false
+	for _, n := range fetch.Notes() {
+		said = said || strings.Contains(n, "stream that never ends")
+	}
+	if !said {
+		t.Errorf("no note says the answer was cut: %q", fetch.Notes())
 	}
 }

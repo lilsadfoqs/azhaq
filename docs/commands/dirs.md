@@ -83,6 +83,10 @@ When two or more hits are found in the same directory, `dirs` asks one name that
 - The matchers `-ms -mw -ml -mr` and the filters `-fc -fs -fw -fl -fr` read these numbers.
 - With `-mr` they read the response headers and the first MB of the body.
 
+### A stack trace in an answer
+
+The start of every body is checked for a runtime's stack trace as it is read: a hit whose body holds one is stored with a `stack_trace` and listed by `azhaq report -findings` as an `error-disclosure`. Nothing more is sent for it, and a page the calibration filters is not listed. The patterns are in [report](report.md#stack-traces-in-answers).
+
 ### The request
 - The request is ffuf's, with no `Accept` header. An app that picks its answer by that header, such as Express's redirect body, answers with the same size as to ffuf.
 - It sends `Accept-Encoding: gzip` and decodes the answer before counting.

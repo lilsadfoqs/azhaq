@@ -44,13 +44,30 @@ When no row qualifies, `report` prints a note on stderr, writes nothing and exit
 
 ### Findings records (`-findings`)
 
-With `-findings -db WORKSPACE.db`, `report` writes the findings records of a run's workspace instead of roles reports, and sends nothing. One record is written per qualifying stored row: the `verify` results a `-verify` run stored, and the advisory leads a `-advisories` run stored (labelled as `-verify` labels them), restricted to rows whose label supports a record. A `not affected` lead is no record, and a verify row covers its own lead, so no lead is recorded twice. Each record carries the kind, the severity, the host, port and URL, the product and version where confirmed, the advisory id and URL where matched, the precondition where one is open, the exact request where one was sent, an excerpt of the evidence, the command that produced it, and the collector of the stored row it is read from — every field traceable to that row.
+With `-findings -db WORKSPACE.db`, `report` writes the findings records of a run's workspace instead of roles reports, and sends nothing. One record is written per qualifying stored row: the `verify` results a `-verify` run stored, the advisory leads a `-advisories` run stored (labelled as `-verify` labels them), restricted to rows whose label supports a record, and the web answers whose body held a stack trace (see below). A `not affected` lead is no record, and a verify row covers its own lead, so no lead is recorded twice. Each record carries the kind, the severity, the host, port and URL, the product and version where confirmed, the advisory id and URL where matched, the precondition where one is open, the exact request where one was sent, an excerpt of the evidence, the command that produced it, and the collector of the stored row it is read from — every field traceable to that row.
 
 The labels are kept distinct, never merged: `proved` records come first, then `version-only`, then `conditional`. Rows that prove nothing — a map row whose coverage is `hint` and that the map lists — are written as leads, after the findings, under their own type in JSONL and their own heading in Markdown. In JSONL (`-format jsonl`, the same as `json`) each finding is one `{"type":"finding", …}` line and each lead one `{"type":"lead", …}` line; in Markdown (`-format md`) the records are grouped under `## Proved (n)`, `## Version-only (n)`, `## Conditional (n)` and `## Leads — unproved hints`. The counts in those headings are the numbers of records under them, read from the stored rows. A workspace with no qualifying rows writes an explicit empty record set — `{"type":"findings","findings":0,"leads":0}` in JSONL, a sentence saying no qualifying rows in Markdown — and exits 0. The same records are in `azhaq export -format findings` and `-format findings-md`. The labels and the fence behind them are in [Read-only verification](../CONCEPTS.md#read-only-verification--verify).
 
 A hint the map's default view folds is not a lead: an image, font or media file no request asked for (`beyond-depth`), a string only scripts name that nothing requested (`unrequested`), or a route only scripts name whose GET answered 404 or 410 (`not-found`), as in [Folded rows](run.md#folded-rows). The report counts them by class, one line each: `{"type":"folded","class":…,"count":N,"line":…}` in JSONL, a `## Folded hints (N)` section in Markdown, and `N hints folded (class N, …)` after the counts on stderr.
 
 Leads plus the folded counts are the URL rows of `azhaq query -type URL -coverage hint`, a templated row counting for its `count` URLs. A workspace whose hints all fold writes the explicit line with `"folded":N` first, then the fold lines.
+
+#### Stack traces in answers
+
+A web row (`probe`, `run` or `dirs`) whose answer body holds a runtime's stack trace carries a `stack_trace` object (`runtime`, `exception`, `frames`), and `-findings` writes it as a record of kind `error-disclosure`, label `proved`, severity `low`: the answer itself shows the trace, and no more than an error shows. The record has the URL, the status and the first exception line in its evidence, with the frame count and the runtime; one record per URL and exception. The record is read from the answer azhaq already received: nothing more is sent for it.
+
+A trace is three or more consecutive lines of the first 256 KiB of the body, each line wholly shaped like a frame of the same runtime (HTML tags and entities, and the `\n` of a JSON string, are read as the text they stand for):
+
+| Runtime | A frame line |
+| --- | --- |
+| `java` | `at pkg.Class.method(File.java:N)`, also `.kt`, `.scala`, `.groovy`, `(Native Method)` and `(Unknown Source)` |
+| `python` | `File "x.py", line N, in f`; the source line and the caret line under a frame belong to the trace |
+| `node` | `at fn (file.js:L:C)` and `at file.js:L:C`, with `async` and `new` |
+| `php` | `#N file.php(M): call`, `#N [internal function]: call` and `#N {main}` |
+| `dotnet` | `at Ns.Class.Method(args) in C:\\path\\File.cs:line N` |
+| `ruby` | `file.rb:N:in 'method'`, with `from` |
+
+The exception line is the line before the frames (for Python, the line after them). A frame named inside a sentence is not a line of its own, and fewer than three frames, or frames of different runtimes, are not a trace; a page that merely describes a trace in prose gives none. `frames` counts the frame lines of the runs of three or more.
 
 ## Output
 
@@ -141,7 +158,7 @@ Read a redacted report once before sharing it. An identifier that no kept body n
 <!-- flags:begin report -->
 | Flag | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `-findings` | bool |  | write the findings records of a workspace instead of roles reports: one record per stored row whose label supports it (a -verify run's results and a -advisories run's leads), proved first, version-only and conditional kept distinct, unproved hints listed as leads; a workspace with no qualifying rows writes an explicit empty record set and exits 0 |
+| `-findings` | bool |  | write the findings records of a workspace instead of roles reports: one record per stored row whose label supports it (a -verify run's results, a -advisories run's leads and a web answer's stack trace as an error-disclosure), proved first, version-only and conditional kept distinct, unproved hints listed as leads; a workspace with no qualifying rows writes an explicit empty record set and exits 0 |
 | `-db` | string |  | with -findings: the workspace database the records are read from |
 | `-dir` | string |  | the -dir of the roles run (it holds roles.db) |
 | `-url` | string |  | write up this one row (its URL as roles lists it); every cross-role finding by default |

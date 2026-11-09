@@ -186,3 +186,42 @@ func TestDescribeWhileTheSessionIsRenewed(t *testing.T) {
 	close(stop)
 	<-done
 }
+
+// An answer whose body holds a runtime's stack trace carries it in its row,
+// whatever its status; prose about a trace and a plain error page do not.
+func TestStackTraceInAnAnswerIsInItsRow(t *testing.T) {
+	fetch.Reset()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/boom":
+			w.WriteHeader(500)
+			_, _ = w.Write([]byte("java.lang.IllegalStateException: no cart\n\tat a.B.c(B.java:1)\n\tat a.B.d(B.java:2)\n\tat a.B.e(B.java:3)\n\tat a.B.f(B.java:4)\n"))
+		case "/debug": // a debug page answers 200
+			_, _ = w.Write([]byte("<pre>TypeError: x is undefined\n    at f (/app/a.js:1:2)\n    at g (/app/a.js:3:4)\n    at h (/app/a.js:5:6)</pre>"))
+		case "/prose":
+			w.WriteHeader(500)
+			_, _ = w.Write([]byte("<p>A trace has lines such as at a.B.c(B.java:1) and at a.B.d(B.java:2).</p>"))
+		default:
+			w.WriteHeader(500)
+			_, _ = w.Write([]byte("<html><title>Error</title>Internal Server Error</html>"))
+		}
+	}))
+	defer srv.Close()
+	c := New(srv.Client())
+	for path, want := range map[string]struct {
+		runtime string
+		frames  float64
+	}{"/boom": {"java", 4}, "/debug": {"node", 3}, "/prose": {}, "/plain": {}} {
+		p := payloadOf(t, c, types.Seed{Type: types.TypeURL, Keys: map[string]string{"url": srv.URL + path}})
+		tr, _ := p["stack_trace"].(map[string]any)
+		if want.runtime == "" {
+			if tr != nil {
+				t.Errorf("%s: stack_trace %v, want none", path, tr)
+			}
+			continue
+		}
+		if tr["runtime"] != want.runtime || tr["frames"] != want.frames || tr["exception"] == "" {
+			t.Errorf("%s: stack_trace %v, want %s with %v frames", path, tr, want.runtime, want.frames)
+		}
+	}
+}

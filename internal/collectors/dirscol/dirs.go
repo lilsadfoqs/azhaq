@@ -34,6 +34,7 @@ import (
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"github.com/lilsadfoqs/azhaq/internal/pagesim"
 	"github.com/lilsadfoqs/azhaq/internal/statechange"
+	"github.com/lilsadfoqs/azhaq/internal/webextract"
 	"github.com/lilsadfoqs/azhaq/types"
 )
 
@@ -215,6 +216,8 @@ type hit struct {
 	Location string `json:"location,omitempty"`
 	// Truncated: the body was a stream that never ends, cut by the read.
 	Truncated bool `json:"truncated,omitempty"`
+	// Trace: the answer holds a stack trace (webextract.StackTrace).
+	Trace *webextract.Trace `json:"-"`
 	// Position is the place of the input that asked it among the inputs of
 	// its sweep, from 1, as ffuf counts them: a word asked twice is two hits.
 	Position int `json:"position,omitempty"`
@@ -255,6 +258,9 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 			}
 			if h.Position > 0 {
 				row["position"] = h.Position
+			}
+			if h.Trace != nil {
+				row["stack_trace"] = h.Trace
 			}
 			if h.Control != nil {
 				row["catchall"], row["control"], row["control_exact"] = true, h.Control, true
@@ -499,7 +505,7 @@ func (c *Collector) sweep(ctx context.Context, dir string, note *sweepNote, foun
 			}
 			return nil
 		}
-		h := hit{URL: target, Status: r.Status, Length: r.Length, Words: r.Words, Lines: r.Lines, Location: r.Location, Truncated: r.Truncated, Position: position}
+		h := hit{URL: target, Status: r.Status, Length: r.Length, Words: r.Words, Lines: r.Lines, Location: r.Location, Truncated: r.Truncated, Trace: r.Trace, Position: position}
 		if nested {
 			inDirsMu.Lock()
 			inDirs = append(inDirs, exactHit{h, r})
@@ -784,6 +790,8 @@ type response struct {
 	// Truncated: a stream that never ends, cut at 64 KiB or 2 s; its length,
 	// words and lines are of what was read.
 	Truncated bool `json:",omitempty"`
+	// Trace: the stack trace the body holds, if it does.
+	Trace *webextract.Trace `json:",omitempty"`
 }
 
 // pace waits for a pace slot before target is asked, unless its answer is
@@ -839,6 +847,8 @@ const maxBody = 64 << 20
 // keepBody is the most of a body kept, for a pattern or an echo check.
 const keepBody = 1 << 20
 
+var heads = sync.Pool{New: func() any { b := make([]byte, 0, webextract.TraceWindow); return &b }}
+
 var chunks = sync.Pool{New: func() any { b := make([]byte, 32<<10); return &b }}
 
 func (c *Collector) send(ctx context.Context, target, probe string, page, exact bool) (response, error) {
@@ -867,6 +877,10 @@ func (c *Collector) send(ctx context.Context, target, probe string, page, exact 
 	}
 	buf := chunks.Get().(*[]byte)
 	defer chunks.Put(buf)
+	// The start of every body is kept to look for a stack trace in it.
+	head := heads.Get().(*[]byte)
+	defer heads.Put(head)
+	*head = (*head)[:0]
 	for r.Length < maxBody {
 		n, err := resp.Body.Read(*buf)
 		if n > 0 {
@@ -876,6 +890,9 @@ func (c *Collector) send(ctx context.Context, target, probe string, page, exact 
 			r.Length += n
 			if sum != nil {
 				sum.Write(chunk)
+			}
+			if len(*head) < webextract.TraceWindow {
+				*head = append(*head, chunk[:min(n, webextract.TraceWindow-len(*head))]...)
 			}
 			if keep && len(kept) < keepBody {
 				kept = append(kept, chunk[:min(n, keepBody-len(kept))]...)
@@ -891,6 +908,9 @@ func (c *Collector) send(ctx context.Context, target, probe string, page, exact 
 		}
 	}
 	r.Truncated = cut()
+	if tr, ok := webextract.StackTrace(*head); ok {
+		r.Trace = &tr
+	}
 	if c.needBody {
 		r.Header, r.Body = resp.Header, kept
 	}

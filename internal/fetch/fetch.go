@@ -856,6 +856,28 @@ func (b *boundBody) Close() error {
 	return b.rc.Close()
 }
 
+// BoundNote is Bound for a reader that reads resp.Body itself: a stream that
+// never ends is cut at streamLimit bytes or streamWindow, and the run's
+// summary says so, naming what, when the body is closed.
+func BoundNote(resp *http.Response, what string) {
+	cut := Bound(resp)
+	resp.Body = &notedBody{ReadCloser: resp.Body, cut: cut, what: what}
+}
+
+type notedBody struct {
+	io.ReadCloser
+	cut  func() bool
+	what string
+}
+
+func (n *notedBody) Close() error {
+	err := n.ReadCloser.Close()
+	if n.cut() {
+		Note(n.what + ": the answer is a stream that never ends: read for 64 KiB or 2 s and cut, so only what came was used")
+	}
+	return err
+}
+
 // readResponse reads resp's body up to limit, or, of a stream that never
 // ends, the first streamLimit bytes it sends within streamWindow; the body
 // is then marked truncated. It does not close the body.

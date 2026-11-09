@@ -61,6 +61,7 @@ Present when there is something to say:
 | --- | --- |
 | `a`, `aaaa` | The addresses the name resolved to. |
 | `cname`, `resolvers`, `title`, `webserver`, `content_type`, `location`, `tech`, `cdn`, `cdn_name`, `cdn_type`, `catchall` | As httpx. |
+| `stack_trace` | `runtime`, `exception` and `frames` of a stack trace the answer's body holds: three or more consecutive frame lines of one runtime. `azhaq report -findings` lists it as an `error-disclosure`; the patterns are in [report](report.md#stack-traces-in-answers). |
 | `favicon`, `favicon_md5`, `favicon_path`, `favicon_url` | With `-favicon`. |
 | `final_url`, `chain_status_codes` | With `-fr`. |
 
@@ -104,7 +105,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 
 ### A route that never ends
 
-A route that streams for ever (server-sent events, `multipart/x-mixed-replace`) is answered with its status, headers and the first part of its body (up to 64 KiB, or what comes in 2 seconds), and then closed, not held until the timeout. Its body counts as truncated. `crawl`, `dirs`, `params`, `fuzz` and `roles` do the same, and their rows say the body was cut.
+A route that streams for ever (server-sent events, `multipart/x-mixed-replace`) is answered with its status, headers and the first part of its body (up to 64 KiB, or what comes in 2 seconds), and then closed, not held until the timeout. Its body counts as truncated. `crawl`, `dirs`, `params`, `fuzz` and `roles` do the same, and their rows say the body was cut. So does every other read of a target's answer: the GraphQL schema query, the RDAP and archive lookups, the h2c and HTTP/2 probes and an advisory's confirmation read; where there is no row to say it, a note names the read that was cut.
 
 ### Targets with no answer
 
