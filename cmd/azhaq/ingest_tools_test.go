@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -38,8 +39,9 @@ func rowsOf(t *testing.T, db string, args ...string) map[string]map[string]any {
 
 func from(r map[string]any) []string {
 	var out []string
-	for _, v := range r["evidence_from"].([]any) {
-		out = append(out, v.(string))
+	vs, _ := r["evidence_from"].([]any)
+	for _, v := range vs {
+		out = append(out, fmt.Sprint(v))
 	}
 	return out
 }
@@ -69,7 +71,7 @@ func TestIngestReadsArjun(t *testing.T) {
 		if r["coverage"] == "visited" {
 			t.Errorf("%s is visited: azhaq asked nothing", u)
 		}
-		if !slices.Contains(from(r), "arjun") || !strings.Contains(r["proof"].(string), "via=arjun") {
+		if !slices.Contains(from(r), "arjun") || !strings.Contains(fmt.Sprint(r["proof"]), "via=arjun") {
 			t.Errorf("%s does not say it came from arjun: %v", u, r)
 		}
 	}
@@ -90,7 +92,7 @@ func TestIngestReadsGowitness(t *testing.T) {
 		if r["coverage"] != "hint" {
 			t.Errorf("%s coverage %v, want hint: gowitness asked, azhaq did not", u, r["coverage"])
 		}
-		if !slices.Contains(from(r), "gowitness") || !strings.Contains(r["proof"].(string), "via=gowitness") {
+		if !slices.Contains(from(r), "gowitness") || !strings.Contains(fmt.Sprint(r["proof"]), "via=gowitness") {
 			t.Errorf("%s does not say it came from gowitness: %v", u, r)
 		}
 	}

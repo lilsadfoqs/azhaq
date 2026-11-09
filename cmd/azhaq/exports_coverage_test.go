@@ -178,7 +178,7 @@ func TestExportCoverageIsForLists(t *testing.T) {
 		{"-format", "openapi", "-coverage", "hint"},
 		{"-format", "urls", "-coverage", "seen"},
 	} {
-		if err := run(append([]string{"export", "-db", db}, args...)); exitCode(err) != exitUsage {
+		if err := run(append([]string{"export", "-db", db}, args...)); exitCode(err) != exitUsage || !strings.Contains(err.Error(), "urls") && !strings.Contains(err.Error(), "visited") {
 			t.Errorf("%v: %v", args, err)
 		}
 	}
