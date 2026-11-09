@@ -97,6 +97,7 @@ type report struct {
 
 	estimate  *costEstimate             // what the command was estimated to send, for Cost
 	dnsFrom   int64                     // egress.DNSTotal when the command began: dns_queries are its own
+	chromeAt  ledger.ChromeTally        // ledger.ChromeOutcomes when it began
 	spentFrom map[ledger.SpentKey]int64 // ledger.Account when it began: the cost is what it sent since
 
 	what string // the unit of Results: "names", "web services"
@@ -144,6 +145,10 @@ type report struct {
 	// skipped with the reason. The ones sent are in requests_by_purpose.
 	PathChecks []pathCheck `json:"path_checks,omitempty"`
 	pathList   []string    // the built-in path checks the run plans for each service; none when the sweep does not run
+	// BrowserRequests is what became of the requests Chrome was asked to send
+	// (commands that drive it): the ledger's Chrome lines, split into answered and
+	// unanswered, and the requests it was not let send (see browser_requests.go).
+	BrowserRequests *browserRequests `json:"browser_requests,omitempty"`
 
 	// Wrote are the files the run wrote besides its database and the ones
 	// the user named with -o and the like: the ledger, the name history,
@@ -167,7 +172,7 @@ func (r *report) wrote(paths ...string) {
 }
 
 func newReport(command string) *report {
-	return &report{Type: "summary", Command: command, Version: version, start: time.Now(), dnsFrom: egress.DNSTotal(), spentFrom: ledger.Account()}
+	return &report{Type: "summary", Command: command, Version: version, start: time.Now(), dnsFrom: egress.DNSTotal(), spentFrom: ledger.Account(), chromeAt: ledger.ChromeOutcomes()}
 }
 
 // settle fills the exit code and seconds.
@@ -177,6 +182,7 @@ func (r *report) settle() {
 	}
 	r.Seconds = float64(time.Since(r.start).Milliseconds()) / 1000
 	r.DNSQueries = egress.DNSTotal() - r.dnsFrom
+	r.BrowserRequests = browserRequestsSince(r.spentFrom, r.chromeAt)
 	r.Failures = r.failureCount()
 	r.TakeoverCandidates, r.TakeoverVerified = 0, 0
 	for i, t := range r.Takeover {
@@ -354,6 +360,9 @@ func (r *report) print(w io.Writer) {
 	}
 	if len(r.RequestsBy) > 0 && (r.Command == "crawl" || r.Command == "run" && !r.hushCost) {
 		fmt.Fprintf(w, "  requests by purpose: %s\n", purposeLine(r.RequestsBy))
+	}
+	if b := r.BrowserRequests; b != nil {
+		fmt.Fprintf(w, "  %s\n", b.line())
 	}
 	if len(r.Wrote) > 0 {
 		fmt.Fprintf(w, "  wrote: %s\n", strings.Join(r.Wrote, ", "))

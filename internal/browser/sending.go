@@ -10,6 +10,44 @@ import (
 	"github.com/lilsadfoqs/azhaq/internal/ledger"
 )
 
+// hops is what one network ID has had: the requests of it listed in the ledger
+// and the answers it got (a redirect answers a hop, a response the last one).
+// A hop is answered when both exist for it, whichever came first.
+type hops struct{ listed, answers int }
+
+func (h *hops) settled() int { return min(h.listed, h.answers) }
+
+// tally changes what id has had, and counts the hops that are answered now.
+func (b *Browser) tally(id network.RequestID, listed, answers int) {
+	if id == "" {
+		return
+	}
+	if b.hops == nil {
+		b.hops = map[network.RequestID]*hops{}
+	}
+	h := b.hops[id]
+	if h == nil {
+		h = &hops{}
+		b.hops[id] = h
+	}
+	before := h.settled()
+	h.listed += listed
+	h.answers += answers
+	if d := h.settled() - before; d > 0 {
+		ledger.ChromeAnswered(d)
+	}
+	if h.listed > 0 && h.listed == h.answers {
+		delete(b.hops, id) // all of it is settled
+	}
+}
+
+// answered notes a response or a redirect for id.
+func (b *Browser) answered(id network.RequestID) {
+	b.sendMu.Lock()
+	defer b.sendMu.Unlock()
+	b.tally(id, 0, 1)
+}
+
 // letGo is a request Chrome was let send, not yet seen leaving.
 type letGo struct {
 	ctx         context.Context
@@ -58,6 +96,9 @@ func (b *Browser) pausedAgain(id network.RequestID, raw string) {
 	default:
 		egress.Release(1)
 		ledger.ChromeAt(g.ctx, g.method, g.url, g.at)
+		b.sendMu.Lock()
+		b.tally(id, 1, 0)
+		b.sendMu.Unlock()
 	}
 }
 
@@ -79,6 +120,9 @@ func (b *Browser) sentOff(id network.RequestID) {
 	b.sendMu.Unlock()
 	if ok {
 		ledger.Chrome(g.ctx, g.method, g.url)
+		b.sendMu.Lock()
+		b.tally(id, 1, 0)
+		b.sendMu.Unlock()
 	}
 }
 
@@ -106,9 +150,11 @@ func (b *Browser) fromCache(id network.RequestID) {
 func (b *Browser) unheard(t *tab) {
 	b.sendMu.Lock()
 	var left []letGo
+	var ids []network.RequestID
 	for id, g := range b.out {
 		if t == nil || g.t == t {
 			left = append(left, g)
+			ids = append(ids, id)
 			delete(b.out, id)
 		}
 	}
@@ -119,7 +165,10 @@ func (b *Browser) unheard(t *tab) {
 	}
 	b.sendMu.Unlock()
 	egress.Release(len(left))
-	for _, g := range left {
+	for i, g := range left {
 		ledger.ChromeAt(g.ctx, g.method, g.url, g.at)
+		b.sendMu.Lock()
+		b.tally(ids[i], 1, 0)
+		b.sendMu.Unlock()
 	}
 }

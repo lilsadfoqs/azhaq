@@ -84,6 +84,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 - A page whose own in-scope assets did not load is `partial`, and the run exits 3.
 - A page that is partial only because assets of hosts outside the scope were blocked is marked and noted. The run still exits 0, because the scope is yours.
 - A failure in a run kept in a database is listed by `azhaq query -db FILE -failed`, and the summary says so. There is one row for each name.
+- The summary counts the requests Chrome made: `browser requests: N sent, A answered, U unanswered, B blocked by scope or held`. `N` is the ledger's Chrome lines, and `A + U = N`. A request that left and got no answer before its page was taken (a long poll the server holds open) is unanswered; it is not a failure. `B` counts the requests Chrome was not let send.
 
 ## Details
 
