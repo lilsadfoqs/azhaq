@@ -1509,3 +1509,4 @@ dirs.the-summary-counts-the-filtered-answers	docs/commands/dirs.md	The summary c
 roles.verification-ceiling-counts-reads	docs/commands/roles.md	The `verification` ceiling counts the reads the write replay can send to check a write	test:cmd/azhaq:TestRolesWriteReplayStagesStayUnderTheirCeilings
 roles.verification-ceiling-open-for-posts	docs/commands/roles.md	A POST's created object is looked for where the create's answer and the collection name it	test:cmd/azhaq:TestRolesCreateVerificationCeilingIsOpenUntilBounded
 fuzz.held-input-skipped	docs/commands/fuzz.md	A GET or HEAD input whose own path or query names a state change	test:cmd/azhaq:TestFuzzHoldsAListedWordThatNamesAnAction
+query.coverage-refused	docs/commands/query.md	`-coverage` refuses a value no row can have (`-coverage visitd`) with a usage error that names the values it takes, as `export -coverage` does.	test:cmd/azhaq:TestQueryRefusesAnUnknownCoverage

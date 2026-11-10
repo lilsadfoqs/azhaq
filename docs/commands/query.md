@@ -33,6 +33,8 @@ azhaq query -db app.db -failed
 
 The filters are `-type`, `-role`, `-coverage`, `-evidence`, `-status`, `-method`, `-host`, `-scope`, `-since`, `-new` and `-match`. Each takes the values listed in Flags. `-match` is a case-insensitive text match on the key, or a regular expression with `-re`.
 
+`-coverage` refuses a value no row can have (`-coverage visitd`) with a usage error that names the values it takes, as `export -coverage` does.
+
 A port row (`-type Port`) has a `state` field: `open`, or `open|filtered` for a UDP port that neither answered nor was refused. The summary counts `open ports` and `open|filtered ports` apart, as nmap does, and a port is one row for each host, port and protocol.
 
 ## Output
