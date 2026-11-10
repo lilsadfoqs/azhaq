@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/lilsadfoqs/azhaq/internal/egress"
 )
 
 // endlessApp serves a path that streams events for ever next to ordinary
@@ -196,6 +198,8 @@ func TestRolesCutsAnEndlessAnswerAndSaysSo(t *testing.T) {
 // The replay's own readers (a role asked for a URL its run did not reach, a
 // control, a write) cut a stream that never ends and mark the answer.
 func TestRolesReplayReadersCutAnEndlessAnswer(t *testing.T) {
+	egress.Reset() // the readers are called alone: no budget an earlier command left
+	t.Cleanup(egress.Reset)
 	srv := endlessApp(t)
 	u := srv.URL + "/events"
 	ctx := context.Background()

@@ -35,7 +35,7 @@ azhaq fuzz -u 'https://app.example.com/api/§v1§/users/§1§' -w ids.txt -mode 
 4. Counts each answer as ffuf does and applies the matchers, filters and calibration.
 5. Prints one line for each match. `-o FILE` also writes ffuf's report.
 
-A word is asked whatever it says, `/logout` included; `-deny-path REGEX` keeps an input whose URL it matches from being sent, and lists it under `skipped`. A request to a host outside the scope is not sent.
+A GET or HEAD input whose own path or query names a state change (`/logout`, `?action=stop`) is held back, not sent, and listed under `skipped`: see [the one difference from ffuf](#scope-budget-and-pace) below; `-send-state-changing` sends it. `-deny-path REGEX` keeps an input whose URL it matches from being sent, and lists it under `skipped`. A request to a host outside the scope is not sent.
 
 ## Output
 
