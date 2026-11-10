@@ -278,7 +278,7 @@ func init() {
 			examples: []string{"azhaq diff -db acme.db"}},
 		{name: "export", group: groupWS, run: cmdExport,
 			summary: "write a database in another tool's format",
-			usage:   "[-db FILE] [-format jsonl|urls|hosts|names|targets|openapi|graphql|sdl|burp|html|graphml|secrets|findings|findings-md] [-origin ORIGIN|URL] [-safe]",
+			usage:   "[-db FILE] [-format jsonl|urls|hosts|names|targets|openapi|graphql|sdl|burp|html|graphml|secrets|findings|findings-md] [-origin ORIGIN|URL] [-safe] [-run ID]",
 			output:  "the chosen format; graphql: {\"data\":{\"__schema\":…}} of a GraphQL endpoint read with -graphql (keyed by URL when there are several; -origin picks one), sdl: its schema in GraphQL SDL, burp: the run's scope, allow rules as include and deny rules as exclude, findings: the findings records of the workspace (the same as azhaq report -findings), findings-md the same in Markdown; an empty workspace writes an explicit empty record set",
 			examples: []string{
 				"azhaq export -db app.db -format openapi > app.openapi.json",

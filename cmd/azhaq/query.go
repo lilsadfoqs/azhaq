@@ -44,6 +44,9 @@ func cmdQuery(args []string) error {
 	if err := parse(fs, args); err != nil {
 		return err
 	}
+	if err := checkCoverage(*cov); err != nil {
+		return err
+	}
 	path := *db
 	if path == "" {
 		if path = readLastDB(); path == "" {

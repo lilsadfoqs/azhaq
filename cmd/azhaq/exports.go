@@ -60,7 +60,7 @@ func readGraphRun(path, want string) (*graphView, error) {
 	}
 	defer st.Close()
 	// A workspace exports its newest run; a one-run database is the same.
-	if runs, err := st.Runs(); err == nil && len(runs) > 0 {
+	if runs, err := st.Runs(); err == nil && (len(runs) > 0 || want != "") {
 		run, err := pickRun(runs, want)
 		if err != nil {
 			return nil, err
@@ -142,7 +142,7 @@ func exportToList(path, format, origin string, safe bool, lo listOpts, w io.Writ
 	if safe && format != "openapi" {
 		return usagef("-safe is for -format openapi")
 	}
-	g, err := readGraph(path)
+	g, err := readGraphRun(path, lo.run)
 	if err != nil {
 		return err
 	}
@@ -222,7 +222,7 @@ func exportToList(path, format, origin string, safe bool, lo listOpts, w io.Writ
 	case "html":
 		return htmlReport(g, w)
 	case "graphml":
-		return graphML(path, g.rules, w)
+		return graphML(path, g.run, g.rules, w)
 	case "secrets":
 		for _, s := range secretRows(g.obs) {
 			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n", s.Severity, s.Kind, s.Value, s.Where, s.Name, s.Rule)
@@ -1398,14 +1398,14 @@ func sortedKeys(m map[string]bool) []string {
 // graphML writes the graph for Gephi, yEd or Cytoscape: entities are
 // nodes with their type and first sighting, relations are edges. A URL the
 // run's scope refused is not a node: it was named, never touched.
-func graphML(path string, rules *scope.Rules, w io.Writer) error {
+func graphML(path, run string, rules *scope.Rules, w io.Writer) error {
 	st, err := store.OpenExisting(path)
 	if err != nil {
 		return err
 	}
 	defer st.Close()
-	if runs, err := st.Runs(); err == nil && len(runs) > 0 {
-		st.UseRun(runs[len(runs)-1].ID)
+	if run != "" {
+		st.UseRun(run)
 	}
 	ents, err := st.Entities()
 	if err != nil {

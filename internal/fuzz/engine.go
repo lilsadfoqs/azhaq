@@ -494,7 +494,8 @@ func (e *engine) checkStop() string {
 }
 
 // task sends one input; false when a stop (budget, kill file, the run's
-// end) kept it from being asked, so a resume asks it again.
+// end) or the state-change hold kept it from being asked, so a resume asks it
+// again.
 func (e *engine) task(ctx context.Context, j job, tmpl Template, input map[string]string, pos int) bool {
 	input["FFUFHASH"] = j.hash + strconv.FormatInt(int64(pos), 16)
 	req := tmpl.Expand(input)
@@ -503,8 +504,11 @@ func (e *engine) task(ctx context.Context, j job, tmpl Template, input map[strin
 		e.count(func(s *Stats) { s.OutOfScope++ })
 		return true
 	}
-	if e.denied(&req) || e.held(&req) {
+	if e.denied(&req) {
 		return true
+	}
+	if e.held(&req) {
+		return false // not asked: a resume that sends state changes asks it
 	}
 	resp, err := e.send(ctx, &req)
 	if err != nil {

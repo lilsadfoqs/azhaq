@@ -656,6 +656,7 @@ func cmdFuzz(args []string) error {
 	if err := out.write(snapshot, rep); err != nil {
 		rep.Failed = append(rep.Failed, engine.Failure{Collector: "azhaq-fuzz", Error: "the report " + out.file + " was not written: " + err.Error()})
 	}
+	held := len(st.StateHeld) > 0
 	if rep.Stopped != "" {
 		// Go on from the first input not answered; azhaq resume -db runs it.
 		next := resumeArgs(origArgs, *start+st.Done)
@@ -663,10 +664,14 @@ func cmdFuzz(args []string) error {
 		if st.Queued > 0 {
 			rep.Notes = append(rep.Notes, fmt.Sprintf("%d directories found for -recursion were not swept: run fuzz on each (they are in the results)", st.Queued))
 		}
-		if c.db != "" {
-			if err := setFuzzResume(c.db, resumeArgs(keptA, *start+st.Done), fuzzAsked{Key: fuzzSkipKey(tmpl), Total: st.Total, Spans: st.Asked}); err != nil {
-				return err
-			}
+	}
+	if c.db != "" && (rep.Stopped != "" || held) {
+		// The inputs held back stay open: a resume with -send-state-changing asks them.
+		if err := setFuzzResume(c.db, resumeArgs(keptA, *start+st.Done), fuzzAsked{Key: fuzzSkipKey(tmpl), Total: st.Total, Spans: st.Asked}); err != nil {
+			return err
+		}
+		if rep.Stopped == "" {
+			rep.Next = append(rep.Next, fmt.Sprintf("azhaq resume -db %s %s   (asks the %s held back)", c.db, neterr.SendFlag, plural(len(st.StateHeld), "input")))
 		}
 	} else if c.db != "" {
 		if err := setFuzzResume(c.db, nil, fuzzAsked{}); err != nil {

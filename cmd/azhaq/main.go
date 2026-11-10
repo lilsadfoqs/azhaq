@@ -2314,6 +2314,7 @@ func cmdExport(args []string) error {
 	safe := fs.Bool("safe", false, "openapi: leave out the routes the run did not request, such as those -deny-path kept out (otherwise they carry x-azhaq-skipped: true)")
 	cov := fs.String("coverage", "", "urls, names: only these coverages, comma-separated: visited, catchall, error, gone, hint, skipped, capped")
 	asJSON := fs.Bool("json", false, "urls, names: one {url|name, coverage, status, source} object per line")
+	runID := fs.String("run", "", "the run to write, by the run_id of its summary (default: the newest run of the workspace; jsonl: every run)")
 	if err := parse(fs, args); err != nil {
 		return err
 	}
@@ -2329,7 +2330,7 @@ func cmdExport(args []string) error {
 			return fmt.Errorf("need -db (no %s from a previous run)", lastDBFile)
 		}
 		cw := &countWriter{w: os.Stdout}
-		if err := exportToList(path, *format, *origin, *safe, listOpts{coverage: *cov, json: *asJSON}, cw); err != nil {
+		if err := exportToList(path, *format, *origin, *safe, listOpts{coverage: *cov, json: *asJSON, run: *runID}, cw); err != nil {
 			return err
 		}
 		if cw.n == 0 {
@@ -2353,6 +2354,17 @@ func cmdExport(args []string) error {
 		return err
 	}
 	defer st.Close()
+	if *runID != "" {
+		runs, err := st.Runs()
+		if err != nil {
+			return err
+		}
+		r, err := pickRun(runs, *runID)
+		if err != nil {
+			return err
+		}
+		st.UseRun(r.ID)
+	}
 	enc := json.NewEncoder(os.Stdout)
 	ents, err := st.Entities()
 	if err != nil {
