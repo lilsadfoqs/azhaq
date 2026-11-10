@@ -14,6 +14,7 @@ import (
 
 	"github.com/lilsadfoqs/azhaq/engine"
 	"github.com/lilsadfoqs/azhaq/internal/collectors/dirscol"
+	"github.com/lilsadfoqs/azhaq/internal/dnsr"
 	"github.com/lilsadfoqs/azhaq/internal/scopefile"
 	"github.com/lilsadfoqs/azhaq/store"
 )
@@ -388,7 +389,8 @@ func dropRemovedFlags(args []string) (out, gone []string) {
 // database and the values that carry a session or a secret (cookies, a
 // password, the worker token, headers whose name sounds like a
 // credential). A -scope file is kept by its full path, so a resume or an
-// export started in another directory reads the same file.
+// export started in another directory reads the same file; a -resolvers file
+// is kept as the resolvers it holds.
 func keptArgs(args []string) []string {
 	var out []string
 	for i := 0; i < len(args); i++ {
@@ -429,6 +431,14 @@ func keptArgs(args []string) []string {
 			if !inline && takesValue {
 				val = args[i+1]
 				i++
+			}
+			if name == "resolvers" && isFile(val) {
+				// The list, not the path: a moved or edited file must not change
+				// what a resume asks.
+				if keys, err := dnsr.ParseResolvers(val); err == nil && !strings.Contains(strings.Join(keys, ""), ",") {
+					out = append(out, "-resolvers="+strings.Join(keys, ","))
+					continue
+				}
 			}
 			if val != "-" && val != "" && !(name == "ledger" && val == "off") && (name != "resolvers" || isFile(val)) && !(name == "params" && builtinNames(val)) && !(name == "dirs" && val == dirscol.Builtin) {
 				if abs, err := filepath.Abs(val); err == nil {
