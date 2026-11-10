@@ -89,7 +89,7 @@ func timedArgs(target string, timeout time.Duration, dir, name string, mk func(i
 	if m.Error != "" && !benignExit(m.Error) || m.Seconds >= slowRun {
 		return out, m
 	}
-	secs, rss := []float64{m.Seconds}, []float64{m.RSSMB}
+	secs, rss, anon := []float64{m.Seconds}, []float64{m.RSSMB}, []float64{m.AnonMB}
 	noCache = true
 	for i := 1; i < 3; i++ {
 		if beforeEach != nil {
@@ -97,11 +97,11 @@ func timedArgs(target string, timeout time.Duration, dir, name string, mk func(i
 		}
 		_, m2 := run(target, timeout, dir, name, mk(i)...)
 		if m2.Error == "" || benignExit(m2.Error) {
-			secs, rss = append(secs, m2.Seconds), append(rss, m2.RSSMB)
+			secs, rss, anon = append(secs, m2.Seconds), append(rss, m2.RSSMB), append(anon, m2.AnonMB)
 		}
 	}
 	noCache = false
-	m.Seconds, m.RSSMB = median(secs), median(rss)
+	m.Seconds, m.RSSMB, m.AnonMB = median(secs), median(rss), median(anon)
 	return out, m
 }
 
@@ -127,23 +127,25 @@ func timedPair(target string, timeout time.Duration, dir, a, b string, aArgs, bA
 	bOut, bm = once(b, bArgs)
 	aSecs, bSecs := []float64{am.Seconds}, []float64{bm.Seconds}
 	aRSS, bRSS := []float64{am.RSSMB}, []float64{bm.RSSMB}
+	aAnon, bAnon := []float64{am.AnonMB}, []float64{bm.AnonMB}
 	runA, runB := again(am), again(bm)
 	noCache = true
 	for i := 1; i < 3; i++ {
 		if runA {
 			if _, m := once(a, aArgs); m.Error == "" || benignExit(m.Error) {
-				aSecs, aRSS = append(aSecs, m.Seconds), append(aRSS, m.RSSMB)
+				aSecs, aRSS, aAnon = append(aSecs, m.Seconds), append(aRSS, m.RSSMB), append(aAnon, m.AnonMB)
 			}
 		}
 		if runB {
 			if _, m := once(b, bArgs); m.Error == "" || benignExit(m.Error) {
-				bSecs, bRSS = append(bSecs, m.Seconds), append(bRSS, m.RSSMB)
+				bSecs, bRSS, bAnon = append(bSecs, m.Seconds), append(bRSS, m.RSSMB), append(bAnon, m.AnonMB)
 			}
 		}
 	}
 	noCache = false
 	am.Seconds, bm.Seconds = median(aSecs), median(bSecs)
 	am.RSSMB, bm.RSSMB = median(aRSS), median(bRSS)
+	am.AnonMB, bm.AnonMB = median(aAnon), median(bAnon)
 	return
 }
 

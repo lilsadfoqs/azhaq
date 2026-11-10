@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestSmallBarIsOneQuarterInTimeAndTwiceInMemory(t *testing.T) {
+func TestSmallBarIsOneQuarterInTimeAndTwiceInPrivateMemory(t *testing.T) {
 	old, oldProf, oldGone := rec, prof, refGone
 	defer func() { rec, prof, refGone = old, oldProf, oldGone }()
 	prof = profDefault
@@ -15,11 +15,14 @@ func TestSmallBarIsOneQuarterInTimeAndTwiceInMemory(t *testing.T) {
 		r    smallRow
 		pass [3]bool // results, time, memory
 	}{
-		{"within every bar", smallRow{Azhaq: 3, Ref: 3, AzhaqSecs: 0.625, RefSecs: 0.5, memPair: memPair{26, 13}}, [3]bool{true, true, true}},
-		{"slower than 1.25×", smallRow{Azhaq: 3, Ref: 3, AzhaqSecs: 0.63, RefSecs: 0.5, memPair: memPair{26, 13}}, [3]bool{true, false, true}},
-		{"more than twice the memory", smallRow{Azhaq: 3, Ref: 3, AzhaqSecs: 0.5, RefSecs: 0.5, memPair: memPair{27, 13}}, [3]bool{true, true, false}},
-		{"fewer results", smallRow{Azhaq: 2, Ref: 3, AzhaqSecs: 0.5, RefSecs: 0.5, memPair: memPair{10, 13}}, [3]bool{false, true, true}},
-		{"a peak not measured", smallRow{Azhaq: 3, Ref: 3, AzhaqSecs: 0.5, RefSecs: 0.5, memPair: memPair{10, 0}}, [3]bool{true, true, false}},
+		{"within every bar", smallRow{Azhaq: 3, Ref: 3, AzhaqSecs: 0.625, RefSecs: 0.5, AzhaqAnon: 10, RefAnon: 5}, [3]bool{true, true, true}},
+		{"slower than 1.25×", smallRow{Azhaq: 3, Ref: 3, AzhaqSecs: 0.63, RefSecs: 0.5, AzhaqAnon: 10, RefAnon: 5}, [3]bool{true, false, true}},
+		{"more than twice the private memory", smallRow{Azhaq: 3, Ref: 3, AzhaqSecs: 0.5, RefSecs: 0.5, AzhaqAnon: 10.1, RefAnon: 5}, [3]bool{true, true, false}},
+		// The resident peak counts the binary's file pages: thrice the
+		// reference's there, with the private memory within the bar, passes.
+		{"a resident peak thrice the reference's", smallRow{Azhaq: 3, Ref: 3, AzhaqSecs: 0.5, RefSecs: 0.5, memPair: memPair{39, 13}, AzhaqAnon: 9, RefAnon: 5}, [3]bool{true, true, true}},
+		{"fewer results", smallRow{Azhaq: 2, Ref: 3, AzhaqSecs: 0.5, RefSecs: 0.5, AzhaqAnon: 4, RefAnon: 5}, [3]bool{false, true, true}},
+		{"a peak not measured", smallRow{Azhaq: 3, Ref: 3, AzhaqSecs: 0.5, RefSecs: 0.5, memPair: memPair{10, 13}, AzhaqAnon: 4}, [3]bool{true, true, false}},
 	}
 	for _, c := range cases {
 		rec = record{}

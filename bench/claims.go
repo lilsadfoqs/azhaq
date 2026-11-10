@@ -400,7 +400,7 @@ func azStart(dir string, args ...string) *azProc {
 		return p
 	}
 	stop := make(chan struct{})
-	go func() { p.peak <- watchHWM(p.cmd.Process.Pid, stop) }()
+	go func() { hwm, _ := watchMem(p.cmd.Process.Pid, stop); p.peak <- hwm }()
 	go func() { _ = p.cmd.Wait(); close(stop); close(p.done) }()
 	return p
 }
