@@ -3,6 +3,7 @@ package egress
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net"
 	"strings"
@@ -116,16 +117,25 @@ func dialResolvedWith(ctx context.Context, p *Policy, d *net.Dialer, network, ad
 			v4 = append(v4, ip)
 		}
 	}
-	primary, fallback := v4, v6
-	if ipv6Routable() && len(v6) > 0 {
-		primary, fallback = v6, v4
-	} else if !ipv6Routable() {
-		fallback = nil
-	}
-	if len(primary) == 0 {
-		primary, fallback = fallback, nil
-	}
+	primary, fallback := dialOrder(v4, v6, ipv6Routable())
 	return dialEither(ctx, d, network, port, primary, fallback)
+}
+
+// dialOrder is which addresses are tried first and which alongside after
+// fallbackDelay: IPv6 first where it is routable. Without a route for it,
+// IPv4 alone, unless the name has only IPv6 addresses: they are tried
+// (loopback ::1 needs no route), so the dial fails as the system says.
+func dialOrder(v4, v6 []string, routable bool) (primary, fallback []string) {
+	switch {
+	case len(v4) == 0:
+		return v6, nil
+	case len(v6) == 0:
+		return v4, nil
+	case routable:
+		return v6, v4
+	default:
+		return v4, nil
+	}
 }
 
 // dialLoopbackName is the dial of a name the user's resolvers have no
@@ -161,7 +171,7 @@ func dialEither(ctx context.Context, d *net.Dialer, network, port string, primar
 			case <-time.After(wait):
 			}
 		}
-		var last error
+		last := errors.New("no address to dial")
 		for _, ip := range ips {
 			c, err := d.DialContext(ctx, network, net.JoinHostPort(ip, port))
 			if err == nil {

@@ -52,6 +52,11 @@ func runCommand(g *graphView) string {
 	if len(g.args) == 0 {
 		return ""
 	}
+	if strings.HasPrefix(g.args[0], "-") {
+		// run keeps its flags alone (dns, fuzz and ingest keep their name
+		// first): the command line that reproduces it names run.
+		return "azhaq run " + strings.Join(g.args, " ")
+	}
 	return "azhaq " + strings.Join(g.args, " ")
 }
 
