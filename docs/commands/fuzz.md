@@ -184,6 +184,8 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 - One difference from ffuf: a GET or HEAD whose own path or query names a state change (`/logout`, `/delete`, `/reset`, `?action=stop`: [the words](run.md#state-changing-requests)) because of a word of a wordlist is held back, not sent. A note before the first request says how many words of each list are held, each held input is listed under `skipped` and as a row of `state_changing` with the status `held back`, and the summary counts them in `state_changing_held`. `-send-state-changing` sends every input, as ffuf does.
 - The URL you type is yours: when it names a state change by itself (`-u https://h/logout?x=FUZZ`), no word is held. A write (`-X POST`, `-d`) is not held: it is a request you asked for by its method.
 - With several lists the note counts the words of each list tried alone in the URL; the summary counts every input held. A line that starts with `#` is a word, unless `-ic` is given.
+- A held input is not asked, so with `-db` the workspace keeps the run open for it: `azhaq resume -db FILE -send-state-changing` asks the inputs held back and nothing else, and the summary's `next` names that command. A plain `resume` holds them again.
+- `-e` adds each extension after the whole word, its query included (`console?action=stop` is also asked as `console?action=stop.php`), and an input made so is held as its word is; the note counts both.
 
 ### Scope, budget and pace
 - The host in `-u` is the scope unless `-allow`, `-deny` or `-scope` say otherwise. When the keyword starts the host, as in `FUZZ.example.com`, the scope is its domain.
