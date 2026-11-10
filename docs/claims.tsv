@@ -793,6 +793,8 @@ run.sweep-lead	docs/commands/run.md	`the scope (-allow, -scope) holds 256 addres
 run.screenshot-not-taken	docs/commands/run.md	`screenshot of URL not taken: the page needs about 26 requests and 8 w	test:internal/collectors/shotcol:TestNotTakenSaysWhatThePageNeeds
 run.graphql-note	docs/commands/run.md	`GraphQL URL: introspection disabled: schema recovered (partial: query	test:cmd/azhaq:TestRecoveredGraphQLSchemaIsMarked,TestWholeGraphQLSchemaIsNotMarkedPartial,TestRecoveredGraphQLSchemaShowsCounts
 run.graphql-ide	docs/commands/run.md	`GraphQL URL: an IDE page, not asked for its schema: URL on the same o	test:internal/collectors/gqlcol:TestIDEPageSkippedAfterTheOriginsSchema
+run.graphql-at-depth-limit	docs/commands/run.md	`-graphql` likewise reads the schema of a GraphQL endpoint	test:engine:TestGraphQLNamedByAScriptAtTheDepthLimitIsIntrospected,TestGraphQLNamedByAScriptAtTheDepthLimitIsNotAskedWithoutTheFlag
+run.graphql-at-depth-limit-flag	docs/commands/run.md	Without `-graphql` it stays a `hint`.	test:engine:TestGraphQLNamedByAScriptAtTheDepthLimitIsNotAskedWithoutTheFlag
 run.state-change-intro	docs/commands/run.md	A GET azhaq sends can itself change state: follow its link and a datab	test:cmd/azhaq:TestRunNamesStateChangingGETsAndDenyKeepsThemOut,TestStateChangesOfOperationsReadTheNameNotProse
 run.state-change-words	docs/commands/run.md	The words are read whole, never as substrings: create, createdb, delet	test:internal/statechange:TestWord
 run.state-change-before-run	docs/commands/run.md	Before a run starts, the targets among them are printed (first lines o	test:cmd/azhaq:TestRunNamesStateChangingGETsAndDenyKeepsThemOut,TestPlanNamesStateChangingGETBeforeAnyRequest,TestRunNamesTheStateChangingTargetFirstAndSaysWhatBecameOfEach
