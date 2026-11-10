@@ -1,0 +1,362 @@
+=== parts/bench-p1.log
+go: downloading go.yaml.in/yaml/v3 v3.0.5
+bench: building azhaq
+bench: http://127.0.0.1:5002 does not answer
+bench: claims: roles unpaced: true
+bench: claims: roles rate 10: true
+bench: claims: roles rate 2: true
+bench: claims: roles -replay-writes put unpaced: true
+bench: claims: roles -replay-writes put rate 10: true
+bench: claims: roles -replay-writes put rate 2: true
+bench: claims: case 5 took 95s
+
+claims (95s)              pace     summary  ledger  counter  pass
+roles                     unpaced  159      159     159      true
+roles                     rate 10  161      161     161      true
+roles                     rate 2   60       60      60       true
+roles -replay-writes put  unpaced  172      172     172      true
+roles -replay-writes put  rate 10  174      174     174      true
+roles -replay-writes put  rate 2   60       60      60       true
+
+checks
+  PASS  claims: roles unpaced: summary = ledger = what arrived  (summary 159, ledger 159 (http 159), counter 159)
+  PASS  claims: roles rate 10: summary = ledger = what arrived  (summary 161, ledger 161 (http 161), counter 161)
+  PASS  claims: roles rate 2: summary = ledger = what arrived  (summary 60, ledger 60 (http 60), counter 60)
+  PASS  claims: roles -replay-writes put unpaced: summary = ledger = what arrived  (summary 172, ledger 172 (http 172), counter 172)
+  PASS  claims: roles -replay-writes put rate 10: summary = ledger = what arrived  (summary 174, ledger 174 (http 174), counter 174)
+  PASS  claims: roles -replay-writes put rate 2: summary = ledger = what arrived  (summary 60, ledger 60 (http 60), counter 60)
+
+6 of 6 checks pass
+
+record bench/history/2026-11-10T190742-13b1ed82.json
+=== parts/bench-p10.log
+go: downloading go.yaml.in/yaml/v3 v3.0.5
+bench: building azhaq
+bench: http://127.0.0.1:3001 does not answer
+bench: claims: mcp budget 60 unpaced: true
+bench: claims: mcp budget 2 unpaced: true
+bench: claims: case 8 took 4s
+
+claims (4s)                                            pace     summary  ledger  counter  pass
+mcp budget 60 (first azhaq_map)                        unpaced  60       60      60       true
+mcp budget 60 (second azhaq_map)                       unpaced  0        0       0        true
+mcp budget 60 (azhaq_ports after the budget is spent)  unpaced  0        0       0        true
+mcp budget 2 (two calls at once)                       unpaced  2        2       2        true
+
+checks
+  PASS  claims: mcp budget 60 unpaced: summary = ledger = what arrived  (first azhaq_map: summary 60, ledger 60 (http 60), counter 60; second azhaq_map: summary 0, ledger 0 (), counter 0; azhaq_ports after the budget is spent: summary 0, ledger 0 (), counter 0; result: the request budget of this server (60) is spent; restart azhaq mcp with a larger -max-requests; together: summary 60, ledger 60, counter 60)
+  PASS  claims: mcp budget 2 unpaced: summary = ledger = what arrived  (two calls at once: summary 2, ledger 2 (http 2), counter 2; call 1: 0 (refused: budget spent); call 2: 2 ({"highlights":[{"coverage":"visited","key":"http://127.0.0.1:36613/","role":"app","status":200,"title":"OWASP Juice Shop…))
+
+2 of 2 checks pass
+
+record bench/history/2026-11-10T190616-13b1ed82.json
+=== parts/bench-p11.log
+go: downloading go.yaml.in/yaml/v3 v3.0.5
+bench: building azhaq
+bench: http://127.0.0.1:3001 does not answer
+bench: claims: budget -max-requests 40 unpaced: true
+bench: claims: case 9 took 4s
+
+claims (4s)                       pace     summary  ledger  counter  pass
+budget -max-requests 40 (run)     unpaced  40       40      40       true
+budget -max-requests 40 (resume)  unpaced  40       40      40       true
+
+checks
+  PASS  claims: budget -max-requests 40 unpaced: summary = ledger = what arrived  (run: summary 40, ledger 40 (http 40), counter 40; resume: summary 40, ledger 40 (http 40), counter 40; together: summary 80, ledger 80, counter 80)
+
+1 of 1 checks pass
+
+record bench/history/2026-11-10T190611-13b1ed82.json
+=== parts/bench-p2.log
+go: downloading go.yaml.in/yaml/v3 v3.0.5
+bench: building azhaq
+bench: http://127.0.0.1:5030 does not answer
+bench: claims: run -login unpaced: true
+bench: claims: run -login rate 10: true
+bench: claims: run -login rate 2: true
+bench: claims: run -login -browser unpaced: true
+bench: claims: run -login -browser rate 10: true
+bench: claims: run -login -browser rate 2: true
+bench: claims: case 4 took 139s
+
+claims (139s)        pace     summary  ledger  counter  pass
+run -login           unpaced  108      108     108      true
+run -login           rate 10  108      108     108      true
+run -login           rate 2   60       60      60       true
+run -login -browser  unpaced  122      122     122      true
+run -login -browser  rate 10  122      122     122      true
+run -login -browser  rate 2   60       60      60       true
+
+checks
+  PASS  claims: run -login unpaced: summary = ledger = what arrived  (summary 108, ledger 108 (chrome 20, http 88), counter 108)
+  PASS  claims: run -login rate 10: summary = ledger = what arrived  (summary 108, ledger 108 (chrome 20, http 88), counter 108)
+  PASS  claims: run -login rate 2: summary = ledger = what arrived  (summary 60, ledger 60 (chrome 16, http 44), counter 60)
+  PASS  claims: run -login -browser unpaced: summary = ledger = what arrived  (summary 122, ledger 122 (chrome 34, http 88), counter 122)
+  PASS  claims: run -login -browser rate 10: summary = ledger = what arrived  (summary 122, ledger 122 (chrome 34, http 88), counter 122)
+  PASS  claims: run -login -browser rate 2: summary = ledger = what arrived  (summary 60, ledger 60 (chrome 18, http 42), counter 60)
+
+6 of 6 checks pass
+
+record bench/history/2026-11-10T190824-13b1ed82.json
+=== parts/bench-p3.log
+go: downloading go.yaml.in/yaml/v3 v3.0.5
+bench: building azhaq
+bench: http://127.0.0.1:5002 does not answer
+bench: http://127.0.0.1:3001 does not answer
+bench: claims: dirs unpaced: true
+bench: claims: dirs rate 10: true
+bench: claims: dirs rate 2: true
+bench: claims: fuzz unpaced: true
+bench: claims: fuzz rate 10: true
+bench: claims: fuzz rate 2: true
+bench: claims: params unpaced: true
+bench: claims: params rate 10: true
+bench: claims: params rate 2: true
+bench: claims: case 6 took 114s
+
+claims (114s)  pace     summary  ledger  counter  pass
+dirs           unpaced  504      504     504      true
+dirs           rate 10  200      200     200      true
+dirs           rate 2   60       60      60       true
+fuzz           unpaced  506      506     506      true
+fuzz           rate 10  200      200     200      true
+fuzz           rate 2   60       60      60       true
+params         unpaced  8        8       8        true
+params         rate 10  8        8       8        true
+params         rate 2   8        8       8        true
+
+checks
+  PASS  claims: dirs unpaced: summary = ledger = what arrived  (summary 504, ledger 504 (http 504), counter 504)
+  PASS  claims: dirs rate 10: summary = ledger = what arrived  (summary 200, ledger 200 (http 200), counter 200)
+  PASS  claims: dirs rate 2: summary = ledger = what arrived  (summary 60, ledger 60 (http 60), counter 60)
+  PASS  claims: fuzz unpaced: summary = ledger = what arrived  (summary 506, ledger 506 (http 506), counter 506)
+  PASS  claims: fuzz rate 10: summary = ledger = what arrived  (summary 200, ledger 200 (http 200), counter 200)
+  PASS  claims: fuzz rate 2: summary = ledger = what arrived  (summary 60, ledger 60 (http 60), counter 60)
+  PASS  claims: params unpaced: summary = ledger = what arrived  (summary 8, ledger 8 (http 8), counter 8)
+  PASS  claims: params rate 10: summary = ledger = what arrived  (summary 8, ledger 8 (http 8), counter 8)
+  PASS  claims: params rate 2: summary = ledger = what arrived  (summary 8, ledger 8 (http 8), counter 8)
+
+9 of 9 checks pass
+
+record bench/history/2026-11-10T190758-13b1ed82.json
+=== parts/bench-p4.log
+go: downloading go.yaml.in/yaml/v3 v3.0.5
+bench: building azhaq
+bench: http://127.0.0.1:3001 does not answer
+bench: claims: run -browser unpaced: true
+bench: claims: run -browser rate 10: true
+bench: claims: run -browser rate 2: true
+bench: claims: case 2 took 73s
+
+claims (73s)  pace     summary  ledger  counter  pass
+run -browser  unpaced  292      292     292      true
+run -browser  rate 10  200      200     200      true
+run -browser  rate 2   60       60      60       true
+
+checks
+  PASS  claims: run -browser unpaced: summary = ledger = what arrived  (summary 292, ledger 292 (chrome 130, http 162), counter 292; socket.io requests at the counter 0, WebSocket upgrades 0)
+  PASS  claims: run -browser rate 10: summary = ledger = what arrived  (summary 200, ledger 200 (chrome 62, http 138), counter 200; socket.io requests at the counter 0, WebSocket upgrades 0)
+  PASS  claims: run -browser rate 2: summary = ledger = what arrived  (summary 60, ledger 60 (chrome 13, http 47), counter 60; socket.io requests at the counter 0, WebSocket upgrades 0)
+
+3 of 3 checks pass
+
+record bench/history/2026-11-10T190719-13b1ed82.json
+=== parts/bench-p5.log
+go: downloading go.yaml.in/yaml/v3 v3.0.5
+bench: building azhaq
+bench: http://127.0.0.1:3001 does not answer
+bench: claims: kill switch run rate 10: true
+bench: claims: kill switch run rate 2: true
+bench: claims: case 10 took 56s
+
+claims (56s)              pace     summary  ledger  counter  pass
+kill switch run (run)     rate 10  31       31      31       true
+kill switch run (resume)  rate 10  80       80      80       true
+kill switch run (run)     rate 2   6        6       6        true
+kill switch run (resume)  rate 2   80       80      80       true
+
+checks
+  PASS  claims: kill switch run rate 10: summary = ledger = what arrived  (run: summary 31, ledger 31 (http 31), counter 31; last request 0.00s after the file, exit 4; resume: summary 80, ledger 80 (http 80), counter 80; together: summary 111, ledger 111, counter 111)
+  PASS  claims: kill switch run rate 2: summary = ledger = what arrived  (run: summary 6, ledger 6 (http 6), counter 6; last request 0.00s after the file, exit 4; resume: summary 80, ledger 80 (http 80), counter 80; together: summary 86, ledger 86, counter 86)
+
+2 of 2 checks pass
+
+record bench/history/2026-11-10T190716-13b1ed82.json
+=== parts/bench-p6.log
+go: downloading go.yaml.in/yaml/v3 v3.0.5
+bench: building azhaq
+bench: http://127.0.0.1:3001 does not answer
+bench: claims: run unpaced: true
+bench: claims: run rate 10: true
+bench: claims: run rate 2: true
+bench: claims: case 1 took 50s
+
+claims (50s)  pace     summary  ledger  counter  pass
+run           unpaced  156      156     156      true
+run           rate 10  156      156     156      true
+run           rate 2   60       60      60       true
+
+checks
+  PASS  claims: the counter forwards and logs a WebSocket upgrade (Juice Shop socket.io)  (answer "HTTP/1.1 101 Switching Protocols", logged 1 requests, upgrade flag true )
+  PASS  claims: run unpaced: summary = ledger = what arrived  (summary 156, ledger 156 (http 156), counter 156)
+  PASS  claims: run rate 10: summary = ledger = what arrived  (summary 156, ledger 156 (http 156), counter 156)
+  PASS  claims: run rate 2: summary = ledger = what arrived  (summary 60, ledger 60 (http 60), counter 60)
+
+4 of 4 checks pass
+
+record bench/history/2026-11-10T190711-13b1ed82.json
+=== parts/bench-p7.log
+go: downloading go.yaml.in/yaml/v3 v3.0.5
+bench: building azhaq
+bench: claims: ports -p unpaced: true
+bench: claims: ports -pu unpaced: true
+bench: claims: ports -p rate 5: true
+bench: claims: ports -pu rate 5: true
+bench: claims: case 7 took 52s
+
+claims (52s)  pace     summary  ledger  counter  pass
+ports -p      unpaced  83       83      80       true
+ports -pu     unpaced  14       14      13       true
+ports -p      rate 5   83       83      80       true
+ports -pu     rate 5   14       14      13       true
+
+checks
+  PASS  claims: ports -p unpaced: summary = ledger = what arrived  (summary 83, ledger 83 (tcp 83), counter 80; accepts map[127.0.0.1:33019:26 127.0.0.1:40045:26 127.0.0.1:40811:1 127.0.0.1:40835:26 127.0.0.1:45075:1]; HTTP requests answered 1, http ledger lines 0)
+  PASS  claims: ports -pu unpaced: summary = ledger = what arrived  (summary 14, ledger 14 (udp 14), counter 13; datagrams map[127.0.0.1:33852:1 127.0.0.1:50659:4 127.0.0.1:55248:4 127.0.0.1:56999:4])
+  PASS  claims: ports -p rate 5: summary = ledger = what arrived  (summary 83, ledger 83 (tcp 83), counter 80; accepts map[127.0.0.1:35253:1 127.0.0.1:36031:26 127.0.0.1:38619:26 127.0.0.1:43921:26 127.0.0.1:44875:1]; HTTP requests answered 1, http ledger lines 0)
+  PASS  claims: ports -pu rate 5: summary = ledger = what arrived  (summary 14, ledger 14 (udp 14), counter 13; datagrams map[127.0.0.1:43108:4 127.0.0.1:46551:4 127.0.0.1:48315:1 127.0.0.1:60713:4])
+
+4 of 4 checks pass
+
+record bench/history/2026-11-10T190705-13b1ed82.json
+=== parts/bench-p8.log
+go: downloading go.yaml.in/yaml/v3 v3.0.5
+bench: building azhaq
+bench: http://127.0.0.1:3001 does not answer
+bench: claims: shots unpaced: true
+bench: claims: shots rate 2: true
+bench: claims: case 3 took 35s
+
+claims (35s)  pace     summary  ledger  counter  pass
+shots         unpaced  49       49      49       true
+shots         rate 2   48       48      48       true
+
+checks
+  PASS  claims: shots unpaced: summary = ledger = what arrived  (summary 49, ledger 49 (chrome 48, http 1), counter 49)
+  PASS  claims: shots rate 2: summary = ledger = what arrived  (summary 48, ledger 48 (chrome 47, http 1), counter 48)
+
+2 of 2 checks pass
+
+record bench/history/2026-11-10T190646-13b1ed82.json
+=== parts/bench-p9.log
+go: downloading go.yaml.in/yaml/v3 v3.0.5
+bench: building azhaq
+bench: http://127.0.0.1:3001 does not answer
+bench: claims: kill switch shots rate 5: true
+bench: claims: case 11 took 17s
+
+claims (17s)                pace    summary  ledger  counter  pass
+kill switch shots (run)     rate 5  11       11      11       true
+kill switch shots (resume)  rate 5  51       51      51       true
+
+checks
+  PASS  claims: kill switch shots rate 5: summary = ledger = what arrived  (run: summary 11, ledger 11 (chrome 10, http 1), counter 11; last request 0.00s after the file, exit 4; resume: summary 51, ledger 51 (chrome 51), counter 51; together: summary 62, ledger 62, counter 62)
+
+1 of 1 checks pass
+
+record bench/history/2026-11-10T190615-13b1ed82.json
+=== join
+go: downloading go.yaml.in/yaml/v3 v3.0.5
+
+claims (641s)                                          pace     summary  ledger  counter  pass
+run                                                    unpaced  156      156     156      true
+run                                                    rate 10  156      156     156      true
+run                                                    rate 2   60       60      60       true
+run -browser                                           unpaced  292      292     292      true
+run -browser                                           rate 10  200      200     200      true
+run -browser                                           rate 2   60       60      60       true
+shots                                                  unpaced  49       49      49       true
+shots                                                  rate 2   48       48      48       true
+run -login                                             unpaced  108      108     108      true
+run -login                                             rate 10  108      108     108      true
+run -login                                             rate 2   60       60      60       true
+run -login -browser                                    unpaced  122      122     122      true
+run -login -browser                                    rate 10  122      122     122      true
+run -login -browser                                    rate 2   60       60      60       true
+roles                                                  unpaced  159      159     159      true
+roles                                                  rate 10  161      161     161      true
+roles                                                  rate 2   60       60      60       true
+roles -replay-writes put                               unpaced  172      172     172      true
+roles -replay-writes put                               rate 10  174      174     174      true
+roles -replay-writes put                               rate 2   60       60      60       true
+dirs                                                   unpaced  504      504     504      true
+dirs                                                   rate 10  200      200     200      true
+dirs                                                   rate 2   60       60      60       true
+fuzz                                                   unpaced  506      506     506      true
+fuzz                                                   rate 10  200      200     200      true
+fuzz                                                   rate 2   60       60      60       true
+params                                                 unpaced  8        8       8        true
+params                                                 rate 10  8        8       8        true
+params                                                 rate 2   8        8       8        true
+ports -p                                               unpaced  83       83      80       true
+ports -pu                                              unpaced  14       14      13       true
+ports -p                                               rate 5   83       83      80       true
+ports -pu                                              rate 5   14       14      13       true
+mcp budget 60 (first azhaq_map)                        unpaced  60       60      60       true
+mcp budget 60 (second azhaq_map)                       unpaced  0        0       0        true
+mcp budget 60 (azhaq_ports after the budget is spent)  unpaced  0        0       0        true
+mcp budget 2 (two calls at once)                       unpaced  2        2       2        true
+budget -max-requests 40 (run)                          unpaced  40       40      40       true
+budget -max-requests 40 (resume)                       unpaced  40       40      40       true
+kill switch run (run)                                  rate 10  31       31      31       true
+kill switch run (resume)                               rate 10  80       80      80       true
+kill switch run (run)                                  rate 2   6        6       6        true
+kill switch run (resume)                               rate 2   80       80      80       true
+kill switch shots (run)                                rate 5   11       11      11       true
+kill switch shots (resume)                             rate 5   51       51      51       true
+
+checks
+  PASS  claims: the counter forwards and logs a WebSocket upgrade (Juice Shop socket.io)  (answer "HTTP/1.1 101 Switching Protocols", logged 1 requests, upgrade flag true )
+  PASS  claims: run unpaced: summary = ledger = what arrived  (summary 156, ledger 156 (http 156), counter 156)
+  PASS  claims: run rate 10: summary = ledger = what arrived  (summary 156, ledger 156 (http 156), counter 156)
+  PASS  claims: run rate 2: summary = ledger = what arrived  (summary 60, ledger 60 (http 60), counter 60)
+  PASS  claims: run -browser unpaced: summary = ledger = what arrived  (summary 292, ledger 292 (chrome 130, http 162), counter 292; socket.io requests at the counter 0, WebSocket upgrades 0)
+  PASS  claims: run -browser rate 10: summary = ledger = what arrived  (summary 200, ledger 200 (chrome 62, http 138), counter 200; socket.io requests at the counter 0, WebSocket upgrades 0)
+  PASS  claims: run -browser rate 2: summary = ledger = what arrived  (summary 60, ledger 60 (chrome 13, http 47), counter 60; socket.io requests at the counter 0, WebSocket upgrades 0)
+  PASS  claims: shots unpaced: summary = ledger = what arrived  (summary 49, ledger 49 (chrome 48, http 1), counter 49)
+  PASS  claims: shots rate 2: summary = ledger = what arrived  (summary 48, ledger 48 (chrome 47, http 1), counter 48)
+  PASS  claims: run -login unpaced: summary = ledger = what arrived  (summary 108, ledger 108 (chrome 20, http 88), counter 108)
+  PASS  claims: run -login rate 10: summary = ledger = what arrived  (summary 108, ledger 108 (chrome 20, http 88), counter 108)
+  PASS  claims: run -login rate 2: summary = ledger = what arrived  (summary 60, ledger 60 (chrome 16, http 44), counter 60)
+  PASS  claims: run -login -browser unpaced: summary = ledger = what arrived  (summary 122, ledger 122 (chrome 34, http 88), counter 122)
+  PASS  claims: run -login -browser rate 10: summary = ledger = what arrived  (summary 122, ledger 122 (chrome 34, http 88), counter 122)
+  PASS  claims: run -login -browser rate 2: summary = ledger = what arrived  (summary 60, ledger 60 (chrome 18, http 42), counter 60)
+  PASS  claims: roles unpaced: summary = ledger = what arrived  (summary 159, ledger 159 (http 159), counter 159)
+  PASS  claims: roles rate 10: summary = ledger = what arrived  (summary 161, ledger 161 (http 161), counter 161)
+  PASS  claims: roles rate 2: summary = ledger = what arrived  (summary 60, ledger 60 (http 60), counter 60)
+  PASS  claims: roles -replay-writes put unpaced: summary = ledger = what arrived  (summary 172, ledger 172 (http 172), counter 172)
+  PASS  claims: roles -replay-writes put rate 10: summary = ledger = what arrived  (summary 174, ledger 174 (http 174), counter 174)
+  PASS  claims: roles -replay-writes put rate 2: summary = ledger = what arrived  (summary 60, ledger 60 (http 60), counter 60)
+  PASS  claims: dirs unpaced: summary = ledger = what arrived  (summary 504, ledger 504 (http 504), counter 504)
+  PASS  claims: dirs rate 10: summary = ledger = what arrived  (summary 200, ledger 200 (http 200), counter 200)
+  PASS  claims: dirs rate 2: summary = ledger = what arrived  (summary 60, ledger 60 (http 60), counter 60)
+  PASS  claims: fuzz unpaced: summary = ledger = what arrived  (summary 506, ledger 506 (http 506), counter 506)
+  PASS  claims: fuzz rate 10: summary = ledger = what arrived  (summary 200, ledger 200 (http 200), counter 200)
+  PASS  claims: fuzz rate 2: summary = ledger = what arrived  (summary 60, ledger 60 (http 60), counter 60)
+  PASS  claims: params unpaced: summary = ledger = what arrived  (summary 8, ledger 8 (http 8), counter 8)
+  PASS  claims: params rate 10: summary = ledger = what arrived  (summary 8, ledger 8 (http 8), counter 8)
+  PASS  claims: params rate 2: summary = ledger = what arrived  (summary 8, ledger 8 (http 8), counter 8)
+  PASS  claims: ports -p unpaced: summary = ledger = what arrived  (summary 83, ledger 83 (tcp 83), counter 80; accepts map[127.0.0.1:33019:26 127.0.0.1:40045:26 127.0.0.1:40811:1 127.0.0.1:40835:26 127.0.0.1:45075:1]; HTTP requests answered 1, http ledger lines 0)
+  PASS  claims: ports -pu unpaced: summary = ledger = what arrived  (summary 14, ledger 14 (udp 14), counter 13; datagrams map[127.0.0.1:33852:1 127.0.0.1:50659:4 127.0.0.1:55248:4 127.0.0.1:56999:4])
+  PASS  claims: ports -p rate 5: summary = ledger = what arrived  (summary 83, ledger 83 (tcp 83), counter 80; accepts map[127.0.0.1:35253:1 127.0.0.1:36031:26 127.0.0.1:38619:26 127.0.0.1:43921:26 127.0.0.1:44875:1]; HTTP requests answered 1, http ledger lines 0)
+  PASS  claims: ports -pu rate 5: summary = ledger = what arrived  (summary 14, ledger 14 (udp 14), counter 13; datagrams map[127.0.0.1:43108:4 127.0.0.1:46551:4 127.0.0.1:48315:1 127.0.0.1:60713:4])
+  PASS  claims: mcp budget 60 unpaced: summary = ledger = what arrived  (first azhaq_map: summary 60, ledger 60 (http 60), counter 60; second azhaq_map: summary 0, ledger 0 (), counter 0; azhaq_ports after the budget is spent: summary 0, ledger 0 (), counter 0; result: the request budget of this server (60) is spent; restart azhaq mcp with a larger -max-requests; together: summary 60, ledger 60, counter 60)
+  PASS  claims: mcp budget 2 unpaced: summary = ledger = what arrived  (two calls at once: summary 2, ledger 2 (http 2), counter 2; call 1: 0 (refused: budget spent); call 2: 2 ({"highlights":[{"coverage":"visited","key":"http://127.0.0.1:36613/","role":"app","status":200,"title":"OWASP Juice Shop…))
+  PASS  claims: budget -max-requests 40 unpaced: summary = ledger = what arrived  (run: summary 40, ledger 40 (http 40), counter 40; resume: summary 40, ledger 40 (http 40), counter 40; together: summary 80, ledger 80, counter 80)
+  PASS  claims: kill switch run rate 10: summary = ledger = what arrived  (run: summary 31, ledger 31 (http 31), counter 31; last request 0.00s after the file, exit 4; resume: summary 80, ledger 80 (http 80), counter 80; together: summary 111, ledger 111, counter 111)
+  PASS  claims: kill switch run rate 2: summary = ledger = what arrived  (run: summary 6, ledger 6 (http 6), counter 6; last request 0.00s after the file, exit 4; resume: summary 80, ledger 80 (http 80), counter 80; together: summary 86, ledger 86, counter 86)
+  PASS  claims: kill switch shots rate 5: summary = ledger = what arrived  (run: summary 11, ledger 11 (chrome 10, http 1), counter 11; last request 0.00s after the file, exit 4; resume: summary 51, ledger 51 (chrome 51), counter 51; together: summary 62, ledger 62, counter 62)
+
+40 of 40 checks pass
+
+record bench/joined/2026-11-10T190519-13b1ed82.json (joined from 11)

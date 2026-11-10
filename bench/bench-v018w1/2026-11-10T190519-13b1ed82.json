@@ -1,0 +1,958 @@
+{
+  "date": "2026-11-10T19:05:19Z",
+  "commit": "13b1ed82",
+  "version": "azhaq 0.17.1-0.20261110190348-13b1ed828777+dirty",
+  "go": "go1.27.3",
+  "tools": [
+    {
+      "name": "katana",
+      "version": "1.8.0"
+    },
+    {
+      "name": "subfinder",
+      "version": "2.17.0"
+    },
+    {
+      "name": "httpx",
+      "version": "1.12.0"
+    },
+    {
+      "name": "dnsx",
+      "version": "1.3.1"
+    },
+    {
+      "name": "naabu",
+      "version": "2.6.1"
+    },
+    {
+      "name": "gau",
+      "version": "2.2.4"
+    },
+    {
+      "name": "ffuf",
+      "version": "2.3.0"
+    },
+    {
+      "name": "alterx",
+      "version": "0.1.0"
+    },
+    {
+      "name": "gowitness",
+      "version": "3.2.2"
+    },
+    {
+      "name": "jsluice",
+      "version": "v0.0.0-20240110145140-0ddfab153e06"
+    },
+    {
+      "name": "notify",
+      "version": "v1.0.7"
+    }
+  ],
+  "profile": "both",
+  "polite": {},
+  "claims": {
+    "rows": [
+      {
+        "case": "run",
+        "pace": "unpaced",
+        "summary": 156,
+        "ledger": 156,
+        "counter": 156,
+        "pass": true,
+        "detail": "summary 156, ledger 156 (http 156), counter 156"
+      },
+      {
+        "case": "run",
+        "pace": "rate 10",
+        "summary": 156,
+        "ledger": 156,
+        "counter": 156,
+        "pass": true,
+        "detail": "summary 156, ledger 156 (http 156), counter 156"
+      },
+      {
+        "case": "run",
+        "pace": "rate 2",
+        "summary": 60,
+        "ledger": 60,
+        "counter": 60,
+        "pass": true,
+        "detail": "summary 60, ledger 60 (http 60), counter 60"
+      },
+      {
+        "case": "run -browser",
+        "pace": "unpaced",
+        "summary": 292,
+        "ledger": 292,
+        "counter": 292,
+        "pass": true,
+        "detail": "summary 292, ledger 292 (chrome 130, http 162), counter 292; socket.io requests at the counter 0, WebSocket upgrades 0"
+      },
+      {
+        "case": "run -browser",
+        "pace": "rate 10",
+        "summary": 200,
+        "ledger": 200,
+        "counter": 200,
+        "pass": true,
+        "detail": "summary 200, ledger 200 (chrome 62, http 138), counter 200; socket.io requests at the counter 0, WebSocket upgrades 0"
+      },
+      {
+        "case": "run -browser",
+        "pace": "rate 2",
+        "summary": 60,
+        "ledger": 60,
+        "counter": 60,
+        "pass": true,
+        "detail": "summary 60, ledger 60 (chrome 13, http 47), counter 60; socket.io requests at the counter 0, WebSocket upgrades 0"
+      },
+      {
+        "case": "shots",
+        "pace": "unpaced",
+        "summary": 49,
+        "ledger": 49,
+        "counter": 49,
+        "pass": true,
+        "detail": "summary 49, ledger 49 (chrome 48, http 1), counter 49"
+      },
+      {
+        "case": "shots",
+        "pace": "rate 2",
+        "summary": 48,
+        "ledger": 48,
+        "counter": 48,
+        "pass": true,
+        "detail": "summary 48, ledger 48 (chrome 47, http 1), counter 48"
+      },
+      {
+        "case": "run -login",
+        "pace": "unpaced",
+        "summary": 108,
+        "ledger": 108,
+        "counter": 108,
+        "pass": true,
+        "detail": "summary 108, ledger 108 (chrome 20, http 88), counter 108"
+      },
+      {
+        "case": "run -login",
+        "pace": "rate 10",
+        "summary": 108,
+        "ledger": 108,
+        "counter": 108,
+        "pass": true,
+        "detail": "summary 108, ledger 108 (chrome 20, http 88), counter 108"
+      },
+      {
+        "case": "run -login",
+        "pace": "rate 2",
+        "summary": 60,
+        "ledger": 60,
+        "counter": 60,
+        "pass": true,
+        "detail": "summary 60, ledger 60 (chrome 16, http 44), counter 60"
+      },
+      {
+        "case": "run -login -browser",
+        "pace": "unpaced",
+        "summary": 122,
+        "ledger": 122,
+        "counter": 122,
+        "pass": true,
+        "detail": "summary 122, ledger 122 (chrome 34, http 88), counter 122"
+      },
+      {
+        "case": "run -login -browser",
+        "pace": "rate 10",
+        "summary": 122,
+        "ledger": 122,
+        "counter": 122,
+        "pass": true,
+        "detail": "summary 122, ledger 122 (chrome 34, http 88), counter 122"
+      },
+      {
+        "case": "run -login -browser",
+        "pace": "rate 2",
+        "summary": 60,
+        "ledger": 60,
+        "counter": 60,
+        "pass": true,
+        "detail": "summary 60, ledger 60 (chrome 18, http 42), counter 60"
+      },
+      {
+        "case": "roles",
+        "pace": "unpaced",
+        "summary": 159,
+        "ledger": 159,
+        "counter": 159,
+        "pass": true,
+        "detail": "summary 159, ledger 159 (http 159), counter 159"
+      },
+      {
+        "case": "roles",
+        "pace": "rate 10",
+        "summary": 161,
+        "ledger": 161,
+        "counter": 161,
+        "pass": true,
+        "detail": "summary 161, ledger 161 (http 161), counter 161"
+      },
+      {
+        "case": "roles",
+        "pace": "rate 2",
+        "summary": 60,
+        "ledger": 60,
+        "counter": 60,
+        "pass": true,
+        "detail": "summary 60, ledger 60 (http 60), counter 60"
+      },
+      {
+        "case": "roles -replay-writes put",
+        "pace": "unpaced",
+        "summary": 172,
+        "ledger": 172,
+        "counter": 172,
+        "pass": true,
+        "detail": "summary 172, ledger 172 (http 172), counter 172"
+      },
+      {
+        "case": "roles -replay-writes put",
+        "pace": "rate 10",
+        "summary": 174,
+        "ledger": 174,
+        "counter": 174,
+        "pass": true,
+        "detail": "summary 174, ledger 174 (http 174), counter 174"
+      },
+      {
+        "case": "roles -replay-writes put",
+        "pace": "rate 2",
+        "summary": 60,
+        "ledger": 60,
+        "counter": 60,
+        "pass": true,
+        "detail": "summary 60, ledger 60 (http 60), counter 60"
+      },
+      {
+        "case": "dirs",
+        "pace": "unpaced",
+        "summary": 504,
+        "ledger": 504,
+        "counter": 504,
+        "pass": true,
+        "detail": "summary 504, ledger 504 (http 504), counter 504"
+      },
+      {
+        "case": "dirs",
+        "pace": "rate 10",
+        "summary": 200,
+        "ledger": 200,
+        "counter": 200,
+        "pass": true,
+        "detail": "summary 200, ledger 200 (http 200), counter 200"
+      },
+      {
+        "case": "dirs",
+        "pace": "rate 2",
+        "summary": 60,
+        "ledger": 60,
+        "counter": 60,
+        "pass": true,
+        "detail": "summary 60, ledger 60 (http 60), counter 60"
+      },
+      {
+        "case": "fuzz",
+        "pace": "unpaced",
+        "summary": 506,
+        "ledger": 506,
+        "counter": 506,
+        "pass": true,
+        "detail": "summary 506, ledger 506 (http 506), counter 506"
+      },
+      {
+        "case": "fuzz",
+        "pace": "rate 10",
+        "summary": 200,
+        "ledger": 200,
+        "counter": 200,
+        "pass": true,
+        "detail": "summary 200, ledger 200 (http 200), counter 200"
+      },
+      {
+        "case": "fuzz",
+        "pace": "rate 2",
+        "summary": 60,
+        "ledger": 60,
+        "counter": 60,
+        "pass": true,
+        "detail": "summary 60, ledger 60 (http 60), counter 60"
+      },
+      {
+        "case": "params",
+        "pace": "unpaced",
+        "summary": 8,
+        "ledger": 8,
+        "counter": 8,
+        "pass": true,
+        "detail": "summary 8, ledger 8 (http 8), counter 8"
+      },
+      {
+        "case": "params",
+        "pace": "rate 10",
+        "summary": 8,
+        "ledger": 8,
+        "counter": 8,
+        "pass": true,
+        "detail": "summary 8, ledger 8 (http 8), counter 8"
+      },
+      {
+        "case": "params",
+        "pace": "rate 2",
+        "summary": 8,
+        "ledger": 8,
+        "counter": 8,
+        "pass": true,
+        "detail": "summary 8, ledger 8 (http 8), counter 8"
+      },
+      {
+        "case": "ports -p",
+        "pace": "unpaced",
+        "summary": 83,
+        "ledger": 83,
+        "counter": 80,
+        "pass": true,
+        "detail": "summary 83, ledger 83 (tcp 83), counter 80; accepts map[127.0.0.1:33019:26 127.0.0.1:40045:26 127.0.0.1:40811:1 127.0.0.1:40835:26 127.0.0.1:45075:1]; HTTP requests answered 1, http ledger lines 0"
+      },
+      {
+        "case": "ports -pu",
+        "pace": "unpaced",
+        "summary": 14,
+        "ledger": 14,
+        "counter": 13,
+        "pass": true,
+        "detail": "summary 14, ledger 14 (udp 14), counter 13; datagrams map[127.0.0.1:33852:1 127.0.0.1:50659:4 127.0.0.1:55248:4 127.0.0.1:56999:4]"
+      },
+      {
+        "case": "ports -p",
+        "pace": "rate 5",
+        "summary": 83,
+        "ledger": 83,
+        "counter": 80,
+        "pass": true,
+        "detail": "summary 83, ledger 83 (tcp 83), counter 80; accepts map[127.0.0.1:35253:1 127.0.0.1:36031:26 127.0.0.1:38619:26 127.0.0.1:43921:26 127.0.0.1:44875:1]; HTTP requests answered 1, http ledger lines 0"
+      },
+      {
+        "case": "ports -pu",
+        "pace": "rate 5",
+        "summary": 14,
+        "ledger": 14,
+        "counter": 13,
+        "pass": true,
+        "detail": "summary 14, ledger 14 (udp 14), counter 13; datagrams map[127.0.0.1:43108:4 127.0.0.1:46551:4 127.0.0.1:48315:1 127.0.0.1:60713:4]"
+      },
+      {
+        "case": "mcp budget 60 (first azhaq_map)",
+        "pace": "unpaced",
+        "summary": 60,
+        "ledger": 60,
+        "counter": 60,
+        "pass": true,
+        "detail": "first azhaq_map: summary 60, ledger 60 (http 60), counter 60; second azhaq_map: summary 0, ledger 0 (), counter 0; azhaq_ports after the budget is spent: summary 0, ledger 0 (), counter 0; result: the request budget of this server (60) is spent; restart azhaq mcp with a larger -max-requests; together: summary 60, ledger 60, counter 60"
+      },
+      {
+        "case": "mcp budget 60 (second azhaq_map)",
+        "pace": "unpaced",
+        "summary": 0,
+        "ledger": 0,
+        "counter": 0,
+        "pass": true
+      },
+      {
+        "case": "mcp budget 60 (azhaq_ports after the budget is spent)",
+        "pace": "unpaced",
+        "summary": 0,
+        "ledger": 0,
+        "counter": 0,
+        "pass": true
+      },
+      {
+        "case": "mcp budget 2 (two calls at once)",
+        "pace": "unpaced",
+        "summary": 2,
+        "ledger": 2,
+        "counter": 2,
+        "pass": true,
+        "detail": "two calls at once: summary 2, ledger 2 (http 2), counter 2; call 1: 0 (refused: budget spent); call 2: 2 ({\"highlights\":[{\"coverage\":\"visited\",\"key\":\"http://127.0.0.1:36613/\",\"role\":\"app\",\"status\":200,\"title\":\"OWASP Juice Shop…)"
+      },
+      {
+        "case": "budget -max-requests 40 (run)",
+        "pace": "unpaced",
+        "summary": 40,
+        "ledger": 40,
+        "counter": 40,
+        "pass": true,
+        "detail": "run: summary 40, ledger 40 (http 40), counter 40; resume: summary 40, ledger 40 (http 40), counter 40; together: summary 80, ledger 80, counter 80"
+      },
+      {
+        "case": "budget -max-requests 40 (resume)",
+        "pace": "unpaced",
+        "summary": 40,
+        "ledger": 40,
+        "counter": 40,
+        "pass": true
+      },
+      {
+        "case": "kill switch run (run)",
+        "pace": "rate 10",
+        "summary": 31,
+        "ledger": 31,
+        "counter": 31,
+        "pass": true,
+        "detail": "run: summary 31, ledger 31 (http 31), counter 31; last request 0.00s after the file, exit 4; resume: summary 80, ledger 80 (http 80), counter 80; together: summary 111, ledger 111, counter 111"
+      },
+      {
+        "case": "kill switch run (resume)",
+        "pace": "rate 10",
+        "summary": 80,
+        "ledger": 80,
+        "counter": 80,
+        "pass": true
+      },
+      {
+        "case": "kill switch run (run)",
+        "pace": "rate 2",
+        "summary": 6,
+        "ledger": 6,
+        "counter": 6,
+        "pass": true,
+        "detail": "run: summary 6, ledger 6 (http 6), counter 6; last request 0.00s after the file, exit 4; resume: summary 80, ledger 80 (http 80), counter 80; together: summary 86, ledger 86, counter 86"
+      },
+      {
+        "case": "kill switch run (resume)",
+        "pace": "rate 2",
+        "summary": 80,
+        "ledger": 80,
+        "counter": 80,
+        "pass": true
+      },
+      {
+        "case": "kill switch shots (run)",
+        "pace": "rate 5",
+        "summary": 11,
+        "ledger": 11,
+        "counter": 11,
+        "pass": true,
+        "detail": "run: summary 11, ledger 11 (chrome 10, http 1), counter 11; last request 0.00s after the file, exit 4; resume: summary 51, ledger 51 (chrome 51), counter 51; together: summary 62, ledger 62, counter 62"
+      },
+      {
+        "case": "kill switch shots (resume)",
+        "pace": "rate 5",
+        "summary": 51,
+        "ledger": 51,
+        "counter": 51,
+        "pass": true
+      }
+    ],
+    "seconds": 640.778016534
+  },
+  "checks": [
+    {
+      "name": "claims: the counter forwards and logs a WebSocket upgrade (Juice Shop socket.io)",
+      "pass": true,
+      "detail": "answer \"HTTP/1.1 101 Switching Protocols\", logged 1 requests, upgrade flag true "
+    },
+    {
+      "name": "claims: run unpaced: summary = ledger = what arrived",
+      "pass": true,
+      "detail": "summary 156, ledger 156 (http 156), counter 156"
+    },
+    {
+      "name": "claims: run rate 10: summary = ledger = what arrived",
+      "pass": true,
+      "detail": "summary 156, ledger 156 (http 156), counter 156"
+    },
+    {
+      "name": "claims: run rate 2: summary = ledger = what arrived",
+      "pass": true,
+      "detail": "summary 60, ledger 60 (http 60), counter 60"
+    },
+    {
+      "name": "claims: run -browser unpaced: summary = ledger = what arrived",
+      "pass": true,
+      "detail": "summary 292, ledger 292 (chrome 130, http 162), counter 292; socket.io requests at the counter 0, WebSocket upgrades 0"
+    },
+    {
+      "name": "claims: run -browser rate 10: summary = ledger = what arrived",
+      "pass": true,
+      "detail": "summary 200, ledger 200 (chrome 62, http 138), counter 200; socket.io requests at the counter 0, WebSocket upgrades 0"
+    },
+    {
+      "name": "claims: run -browser rate 2: summary = ledger = what arrived",
+      "pass": true,
+      "detail": "summary 60, ledger 60 (chrome 13, http 47), counter 60; socket.io requests at the counter 0, WebSocket upgrades 0"
+    },
+    {
+      "name": "claims: shots unpaced: summary = ledger = what arrived",
+      "pass": true,
+      "detail": "summary 49, ledger 49 (chrome 48, http 1), counter 49"
+    },
+    {
+      "name": "claims: shots rate 2: summary = ledger = what arrived",
+      "pass": true,
+      "detail": "summary 48, ledger 48 (chrome 47, http 1), counter 48"
+    },
+    {
+      "name": "claims: run -login unpaced: summary = ledger = what arrived",
+      "pass": true,
+      "detail": "summary 108, ledger 108 (chrome 20, http 88), counter 108"
+    },
+    {
+      "name": "claims: run -login rate 10: summary = ledger = what arrived",
+      "pass": true,
+      "detail": "summary 108, ledger 108 (chrome 20, http 88), counter 108"
+    },
+    {
+      "name": "claims: run -login rate 2: summary = ledger = what arrived",
+      "pass": true,
+      "detail": "summary 60, ledger 60 (chrome 16, http 44), counter 60"
+    },
+    {
+      "name": "claims: run -login -browser unpaced: summary = ledger = what arrived",
+      "pass": true,
+      "detail": "summary 122, ledger 122 (chrome 34, http 88), counter 122"
+    },
+    {
+      "name": "claims: run -login -browser rate 10: summary = ledger = what arrived",
+      "pass": true,
+      "detail": "summary 122, ledger 122 (chrome 34, http 88), counter 122"
+    },
+    {
+      "name": "claims: run -login -browser rate 2: summary = ledger = what arrived",
+      "pass": true,
+      "detail": "summary 60, ledger 60 (chrome 18, http 42), counter 60"
+    },
+    {
+      "name": "claims: roles unpaced: summary = ledger = what arrived",
+      "pass": true,
+      "detail": "summary 159, ledger 159 (http 159), counter 159"
+    },
+    {
+      "name": "claims: roles rate 10: summary = ledger = what arrived",
+      "pass": true,
+      "detail": "summary 161, ledger 161 (http 161), counter 161"
+    },
+    {
+      "name": "claims: roles rate 2: summary = ledger = what arrived",
+      "pass": true,
+      "detail": "summary 60, ledger 60 (http 60), counter 60"
+    },
+    {
+      "name": "claims: roles -replay-writes put unpaced: summary = ledger = what arrived",
+      "pass": true,
+      "detail": "summary 172, ledger 172 (http 172), counter 172"
+    },
+    {
+      "name": "claims: roles -replay-writes put rate 10: summary = ledger = what arrived",
+      "pass": true,
+      "detail": "summary 174, ledger 174 (http 174), counter 174"
+    },
+    {
+      "name": "claims: roles -replay-writes put rate 2: summary = ledger = what arrived",
+      "pass": true,
+      "detail": "summary 60, ledger 60 (http 60), counter 60"
+    },
+    {
+      "name": "claims: dirs unpaced: summary = ledger = what arrived",
+      "pass": true,
+      "detail": "summary 504, ledger 504 (http 504), counter 504"
+    },
+    {
+      "name": "claims: dirs rate 10: summary = ledger = what arrived",
+      "pass": true,
+      "detail": "summary 200, ledger 200 (http 200), counter 200"
+    },
+    {
+      "name": "claims: dirs rate 2: summary = ledger = what arrived",
+      "pass": true,
+      "detail": "summary 60, ledger 60 (http 60), counter 60"
+    },
+    {
+      "name": "claims: fuzz unpaced: summary = ledger = what arrived",
+      "pass": true,
+      "detail": "summary 506, ledger 506 (http 506), counter 506"
+    },
+    {
+      "name": "claims: fuzz rate 10: summary = ledger = what arrived",
+      "pass": true,
+      "detail": "summary 200, ledger 200 (http 200), counter 200"
+    },
+    {
+      "name": "claims: fuzz rate 2: summary = ledger = what arrived",
+      "pass": true,
+      "detail": "summary 60, ledger 60 (http 60), counter 60"
+    },
+    {
+      "name": "claims: params unpaced: summary = ledger = what arrived",
+      "pass": true,
+      "detail": "summary 8, ledger 8 (http 8), counter 8"
+    },
+    {
+      "name": "claims: params rate 10: summary = ledger = what arrived",
+      "pass": true,
+      "detail": "summary 8, ledger 8 (http 8), counter 8"
+    },
+    {
+      "name": "claims: params rate 2: summary = ledger = what arrived",
+      "pass": true,
+      "detail": "summary 8, ledger 8 (http 8), counter 8"
+    },
+    {
+      "name": "claims: ports -p unpaced: summary = ledger = what arrived",
+      "pass": true,
+      "detail": "summary 83, ledger 83 (tcp 83), counter 80; accepts map[127.0.0.1:33019:26 127.0.0.1:40045:26 127.0.0.1:40811:1 127.0.0.1:40835:26 127.0.0.1:45075:1]; HTTP requests answered 1, http ledger lines 0"
+    },
+    {
+      "name": "claims: ports -pu unpaced: summary = ledger = what arrived",
+      "pass": true,
+      "detail": "summary 14, ledger 14 (udp 14), counter 13; datagrams map[127.0.0.1:33852:1 127.0.0.1:50659:4 127.0.0.1:55248:4 127.0.0.1:56999:4]"
+    },
+    {
+      "name": "claims: ports -p rate 5: summary = ledger = what arrived",
+      "pass": true,
+      "detail": "summary 83, ledger 83 (tcp 83), counter 80; accepts map[127.0.0.1:35253:1 127.0.0.1:36031:26 127.0.0.1:38619:26 127.0.0.1:43921:26 127.0.0.1:44875:1]; HTTP requests answered 1, http ledger lines 0"
+    },
+    {
+      "name": "claims: ports -pu rate 5: summary = ledger = what arrived",
+      "pass": true,
+      "detail": "summary 14, ledger 14 (udp 14), counter 13; datagrams map[127.0.0.1:43108:4 127.0.0.1:46551:4 127.0.0.1:48315:1 127.0.0.1:60713:4]"
+    },
+    {
+      "name": "claims: mcp budget 60 unpaced: summary = ledger = what arrived",
+      "pass": true,
+      "detail": "first azhaq_map: summary 60, ledger 60 (http 60), counter 60; second azhaq_map: summary 0, ledger 0 (), counter 0; azhaq_ports after the budget is spent: summary 0, ledger 0 (), counter 0; result: the request budget of this server (60) is spent; restart azhaq mcp with a larger -max-requests; together: summary 60, ledger 60, counter 60"
+    },
+    {
+      "name": "claims: mcp budget 2 unpaced: summary = ledger = what arrived",
+      "pass": true,
+      "detail": "two calls at once: summary 2, ledger 2 (http 2), counter 2; call 1: 0 (refused: budget spent); call 2: 2 ({\"highlights\":[{\"coverage\":\"visited\",\"key\":\"http://127.0.0.1:36613/\",\"role\":\"app\",\"status\":200,\"title\":\"OWASP Juice Shop…)"
+    },
+    {
+      "name": "claims: budget -max-requests 40 unpaced: summary = ledger = what arrived",
+      "pass": true,
+      "detail": "run: summary 40, ledger 40 (http 40), counter 40; resume: summary 40, ledger 40 (http 40), counter 40; together: summary 80, ledger 80, counter 80"
+    },
+    {
+      "name": "claims: kill switch run rate 10: summary = ledger = what arrived",
+      "pass": true,
+      "detail": "run: summary 31, ledger 31 (http 31), counter 31; last request 0.00s after the file, exit 4; resume: summary 80, ledger 80 (http 80), counter 80; together: summary 111, ledger 111, counter 111"
+    },
+    {
+      "name": "claims: kill switch run rate 2: summary = ledger = what arrived",
+      "pass": true,
+      "detail": "run: summary 6, ledger 6 (http 6), counter 6; last request 0.00s after the file, exit 4; resume: summary 80, ledger 80 (http 80), counter 80; together: summary 86, ledger 86, counter 86"
+    },
+    {
+      "name": "claims: kill switch shots rate 5: summary = ledger = what arrived",
+      "pass": true,
+      "detail": "run: summary 11, ledger 11 (chrome 10, http 1), counter 11; last request 0.00s after the file, exit 4; resume: summary 51, ledger 51 (chrome 51), counter 51; together: summary 62, ledger 62, counter 62"
+    }
+  ],
+  "runs": [
+    {
+      "tool": "azhaq",
+      "target": "claims",
+      "seconds": 2.881404832,
+      "rss_mb": 103.46875
+    },
+    {
+      "tool": "azhaq",
+      "target": "claims",
+      "seconds": 15.532840112,
+      "rss_mb": 97.76171875
+    },
+    {
+      "tool": "azhaq",
+      "target": "claims",
+      "seconds": 29.557466403,
+      "rss_mb": 92.80859375
+    },
+    {
+      "tool": "azhaq",
+      "target": "claims",
+      "seconds": 14.554460786,
+      "rss_mb": 127.1796875
+    },
+    {
+      "tool": "azhaq",
+      "target": "claims",
+      "seconds": 21.139371971,
+      "rss_mb": 107.19921875
+    },
+    {
+      "tool": "azhaq",
+      "target": "claims",
+      "seconds": 35.399941587,
+      "rss_mb": 89.08203125
+    },
+    {
+      "tool": "azhaq",
+      "target": "claims",
+      "seconds": 9.284101415,
+      "rss_mb": 86.46875
+    },
+    {
+      "tool": "azhaq",
+      "target": "claims",
+      "seconds": 24.653797153,
+      "rss_mb": 77.87890625
+    },
+    {
+      "tool": "azhaq",
+      "target": "claims",
+      "seconds": 18.360050135,
+      "rss_mb": 91.453125
+    },
+    {
+      "tool": "azhaq",
+      "target": "claims",
+      "seconds": 14.225139552,
+      "rss_mb": 85.09375
+    },
+    {
+      "tool": "azhaq",
+      "target": "claims",
+      "seconds": 30.874121945,
+      "rss_mb": 80.82421875
+    },
+    {
+      "tool": "azhaq",
+      "target": "claims",
+      "seconds": 14.272073554,
+      "rss_mb": 95.0546875
+    },
+    {
+      "tool": "azhaq",
+      "target": "claims",
+      "seconds": 19.721945404,
+      "rss_mb": 86.41796875
+    },
+    {
+      "tool": "azhaq",
+      "target": "claims",
+      "seconds": 37.550259752,
+      "rss_mb": 85.5546875
+    },
+    {
+      "tool": "azhaq",
+      "target": "claims",
+      "seconds": 0.790945681,
+      "rss_mb": 86.6328125
+    },
+    {
+      "tool": "azhaq",
+      "target": "claims",
+      "seconds": 15.063036753,
+      "rss_mb": 82.2578125
+    },
+    {
+      "tool": "azhaq",
+      "target": "claims",
+      "seconds": 29.063657973,
+      "rss_mb": 76.51171875
+    },
+    {
+      "tool": "azhaq",
+      "target": "claims",
+      "seconds": 0.842659842,
+      "rss_mb": 92.56640625
+    },
+    {
+      "tool": "azhaq",
+      "target": "claims",
+      "seconds": 16.178803666,
+      "rss_mb": 77.96484375
+    },
+    {
+      "tool": "azhaq",
+      "target": "claims",
+      "seconds": 29.066651739,
+      "rss_mb": 77.80078125
+    },
+    {
+      "tool": "azhaq",
+      "target": "claims",
+      "seconds": 2.844728033,
+      "rss_mb": 61.7578125
+    },
+    {
+      "tool": "azhaq",
+      "target": "claims",
+      "seconds": 20.27109596,
+      "rss_mb": 52.81640625
+    },
+    {
+      "tool": "azhaq",
+      "target": "claims",
+      "seconds": 30.526000848,
+      "rss_mb": 48.625
+    },
+    {
+      "tool": "azhaq",
+      "target": "claims",
+      "seconds": 0.640265818,
+      "rss_mb": 47.45703125
+    },
+    {
+      "tool": "azhaq",
+      "target": "claims",
+      "seconds": 19.829290242,
+      "rss_mb": 44.5859375
+    },
+    {
+      "tool": "azhaq",
+      "target": "claims",
+      "seconds": 29.528009106,
+      "rss_mb": 43.5
+    },
+    {
+      "tool": "azhaq",
+      "target": "claims",
+      "seconds": 0.152224429,
+      "rss_mb": 44.91015625
+    },
+    {
+      "tool": "azhaq",
+      "target": "claims",
+      "seconds": 0.632773295,
+      "rss_mb": 44.6640625
+    },
+    {
+      "tool": "azhaq",
+      "target": "claims",
+      "seconds": 3.53580389,
+      "rss_mb": 44.54296875
+    },
+    {
+      "tool": "azhaq",
+      "target": "claims",
+      "seconds": 10.611416821,
+      "rss_mb": 47.46875
+    },
+    {
+      "tool": "azhaq",
+      "target": "claims",
+      "seconds": 6.035095673,
+      "rss_mb": 45.29296875
+    },
+    {
+      "tool": "azhaq",
+      "target": "claims",
+      "seconds": 23.036557695,
+      "rss_mb": 46.234375
+    },
+    {
+      "tool": "azhaq",
+      "target": "claims",
+      "seconds": 8.037090502,
+      "rss_mb": 44.6875
+    },
+    {
+      "tool": "azhaq",
+      "target": "claims",
+      "seconds": 1.277666472,
+      "rss_mb": 93.9921875
+    },
+    {
+      "tool": "azhaq",
+      "target": "claims",
+      "seconds": 1.142714494,
+      "rss_mb": 93.2734375
+    },
+    {
+      "tool": "azhaq",
+      "target": "claims",
+      "seconds": 7.904260249,
+      "rss_mb": 94.18359375
+    },
+    {
+      "tool": "azhaq",
+      "target": "claims",
+      "seconds": 39.568384633,
+      "rss_mb": 87.97265625
+    },
+    {
+      "tool": "azhaq",
+      "target": "claims",
+      "seconds": 11.130914671,
+      "rss_mb": 79.05859375
+    }
+  ],
+  "units": [
+    {
+      "name": "claims:1",
+      "checks": 4,
+      "runs": 3,
+      "rows": 3
+    },
+    {
+      "name": "claims:2",
+      "checks": 3,
+      "runs": 3,
+      "rows": 3
+    },
+    {
+      "name": "claims:3",
+      "checks": 2,
+      "runs": 2,
+      "rows": 2
+    },
+    {
+      "name": "claims:4",
+      "checks": 6,
+      "runs": 6,
+      "rows": 6
+    },
+    {
+      "name": "claims:5",
+      "checks": 6,
+      "runs": 6,
+      "rows": 6
+    },
+    {
+      "name": "claims:6",
+      "checks": 9,
+      "runs": 9,
+      "rows": 9
+    },
+    {
+      "name": "claims:7",
+      "checks": 4,
+      "runs": 4,
+      "rows": 4
+    },
+    {
+      "name": "claims:8",
+      "checks": 2,
+      "runs": 0,
+      "rows": 4
+    },
+    {
+      "name": "claims:9",
+      "checks": 1,
+      "runs": 2,
+      "rows": 2
+    },
+    {
+      "name": "claims:10",
+      "checks": 2,
+      "runs": 2,
+      "rows": 4
+    },
+    {
+      "name": "claims:11",
+      "checks": 1,
+      "runs": 1,
+      "rows": 2
+    }
+  ]
+}
