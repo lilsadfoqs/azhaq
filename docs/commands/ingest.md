@@ -36,7 +36,7 @@ Files are arguments (`azhaq ingest a.jsonl b.jsonl`). `-` is stdin, and `-in FIL
 | Summary field | Meaning |
 | --- | --- |
 | `results` | The facts read, of every file given. |
-| `counts` | The lines read, per format. |
+| `counts` | The lines taken in, per format (one line can give several facts), and `skipped`: the lines read that gave nothing. |
 | `notes` | The first 5 lines it could not read and skipped, when there were any. |
 | `next` | Commands to look at the result: `azhaq query`, and `azhaq dns` for names taken in without addresses. |
 
@@ -69,7 +69,7 @@ The summary counts what each format gave: the pages (arjun), lines (gowitness, a
 
 - Into an existing workspace, they go to its newest run, so `query`, `show` and `export` see them with what that run found.
 - A new file gets a run of its own.
-- A line that cannot be read is skipped and named in a note, never a failure: the exit code stays 0.
+- A line that cannot be read, or gives nothing to keep (a `url` that does not parse), is skipped and named in a note, never a failure: the exit code stays 0.
 
 ## Flags
 

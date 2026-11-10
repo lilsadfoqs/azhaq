@@ -91,11 +91,25 @@ func ReadLines(raw []byte) ([]Fact, map[string]int, []string, error) {
 		}
 		if err == nil && report.Results != nil {
 			var out []Fact
-			for _, r := range report.Results {
-				out = append(out, ffufFacts(r, report.Config.Method)...)
+			for i, r := range report.Results {
+				ff := ffufFacts(r, report.Config.Method)
+				if len(ff) == 0 {
+					nSkipped++
+					if len(skipped) < 5 {
+						skipped = append(skipped, fmt.Sprintf("result %d: a url Azhaq cannot read: %q", i+1, clip(text(r["url"]))))
+					}
+					continue
+				}
+				formats[FormatFFUF]++
+				out = append(out, ff...)
 			}
-			formats[FormatFFUF] = len(report.Results)
-			return out, formats, nil, nil
+			if nSkipped > 0 {
+				if len(out) == 0 {
+					return nil, nil, nil, errors.New(skipped[0] + " (and every other result: nothing ingest reads)")
+				}
+				formats["skipped"] = nSkipped
+			}
+			return out, formats, skipped, nil
 		}
 	}
 	var out []Fact
@@ -125,6 +139,10 @@ func ReadLines(raw []byte) ([]Fact, map[string]int, []string, error) {
 			continue
 		}
 		facts, format, err := lineFacts([]byte(line), m, exported)
+		if err == nil && len(facts) == 0 && format != FormatExport {
+			// Counted, it would tell a total no fact backs (an export's edge lines are rebuilt from its facts).
+			err = fmt.Errorf("a %s line with nothing Azhaq can keep (its URL or host does not parse): %q", format, clip(line))
+		}
 		if err != nil {
 			skip(lineNo, err)
 			continue

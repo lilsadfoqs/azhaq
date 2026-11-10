@@ -1237,7 +1237,7 @@ diff.control-by-answer	docs/commands/diff.md	A catch-all row's control is compar
 ingest.without-db-new-file	docs/commands/ingest.md	Without `-db` it uses the file `$AZHAQ_DB` names, else makes `workspace.db` in its [run folder](runs.md)	test:cmd/azhaq:TestIngestWithoutDBMakesANewFileAndPrintsNoRows,TestRunHomeKeepsTheWorkspaceInTheRunFolder
 ingest.prints-no-rows	docs/commands/ingest.md	`ingest` prints no rows, only its summary.	test:cmd/azhaq:TestIngestWithoutDBMakesANewFileAndPrintsNoRows
 ingest.naabu-repeats-fold	docs/commands/ingest.md	The lines naabu repeats fold into one row. naabu says nothing of the service, so the row has none until `ports` or `probe` asks.	test:cmd/azhaq:TestIngestNaabuLinesFoldIntoOnePortRowWithNoService,TestIngestNaabuMakesPortRows
-ingest.unreadable-line-note	docs/commands/ingest.md	A line that cannot be read is skipped and named in a note, never a failure: the exit code stays 0.	test:cmd/azhaq:TestIngestUnreadableLineIsSkippedAndNotedNeverAFailure
+ingest.unreadable-line-note	docs/commands/ingest.md	A line that cannot be read, or gives nothing to keep (a `url` that does not parse), is skipped and named in a note, never a failure: the exit code stays 0.	test:cmd/azhaq:TestIngestUnreadableLineIsSkippedAndNotedNeverAFailure;test:internal/connector:TestReadLinesSkipsALineThatGivesNothing
 
 # docs/commands/new.md
 new.db-required	docs/commands/new.md	Opens the workspace given with `-db`, which is required: without it the command exits 2.	test:cmd/azhaq:TestMissingArgumentsExitUsage
