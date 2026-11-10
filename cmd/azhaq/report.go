@@ -490,6 +490,7 @@ func fillReport(rep *report, path string, seeds []types.Seed, ents []types.Entit
 	}
 	rep.Notes = append(rep.Notes, fetch.Notes()...)
 	rep.Notes = append(rep.Notes, egress.GuessNotes()...)
+	rep.wrote(shotFiles(obs, rep.start.Truncate(time.Second))...) // a stored time may keep whole seconds only
 	if partialShots(obs) {
 		rep.warned = true // a picture short of its page is not a result to take as whole
 	}
@@ -818,6 +819,30 @@ func pageWords(f takeover.Finding) string {
 // partialShots says a screenshot was taken before its page was loaded. A
 // picture that is partial only because the scope blocked assets of other
 // hosts is not one: the scope is the user's, and the row and a note say so.
+// shotFiles are the screenshot files (and their saved HTML) this run wrote:
+// the screenshots it observed since it started, not an earlier run's of the
+// same workspace.
+func shotFiles(obs []types.StoredObservation, since time.Time) []string {
+	var out []string
+	for _, o := range obs {
+		if o.Collector != "azhaq-shots" || o.Kind != "screenshot" || o.ObservedAt.Before(since) {
+			continue
+		}
+		var p struct {
+			File     string `json:"file"`
+			HTMLFile string `json:"html_file"`
+		}
+		if json.Unmarshal(o.Payload, &p) == nil {
+			for _, f := range []string{p.File, p.HTMLFile} {
+				if f != "" {
+					out = append(out, f)
+				}
+			}
+		}
+	}
+	return out
+}
+
 func partialShots(obs []types.StoredObservation) bool {
 	for _, o := range obs {
 		if o.Collector != "azhaq-shots" || o.Kind != "screenshot" {

@@ -155,7 +155,9 @@ func (c *Collector) reserveWeb(host, ip string, o portscan.Open) {
 	}
 	c.mu.Lock()
 	held := c.held[key]
-	c.held[key] = false
+	if held { // no reserve was held (the map may not exist yet): nothing to give back
+		c.held[key] = false
+	}
 	c.mu.Unlock()
 	if held {
 		egress.ReleaseFor(key)
