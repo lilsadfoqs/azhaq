@@ -53,7 +53,7 @@ func (c *Collector) Name() string { return Name }
 
 // Info: one GET to the target.
 func (c *Collector) Info() catalog.Info {
-	return catalog.Info{Kind: catalog.Touch, After: "azhaq-http"}
+	return catalog.Info{Kind: catalog.Touch, After: "azhaq-http", AtLimit: true}
 }
 
 func (c *Collector) Inputs() []types.SeedType { return []types.SeedType{types.TypeURL} }
@@ -162,7 +162,7 @@ func NewSchema(client *http.Client) *Schema { return &Schema{Client: fetch.Clien
 func (s *Schema) Name() string { return SchemaName }
 
 func (s *Schema) Info() catalog.Info {
-	return catalog.Info{Kind: catalog.Active, Flag: "graphql", After: Name}
+	return catalog.Info{Kind: catalog.Active, Flag: "graphql", After: Name, AtLimit: true}
 }
 
 func (s *Schema) Inputs() []types.SeedType { return []types.SeedType{types.TypeURL} }

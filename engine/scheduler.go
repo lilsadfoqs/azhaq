@@ -422,23 +422,44 @@ func (s *scheduler) pastDepth(seed types.Seed, k string) {
 	}
 }
 
-// atDepthLimit runs the collectors that ask DNS only on a name an active
-// technique found and resolved, so -permute varies what -dns-brute found
-// whatever -depth says. Other work on the name stays past the limit.
+// atDepthLimit runs, past -depth, the collectors that opt in (AtLimit): the
+// ones that ask DNS only on a name an active technique found and resolved,
+// so -permute varies what -dns-brute found; and, on a URL a usual GraphQL
+// path names, the ones of -graphql, which is asked of every endpoint the
+// run finds. Other work on the seed stays past the limit.
 func (s *scheduler) atDepthLimit(seed types.Seed, depth int, k string) {
-	if seed.Type != types.TypeHostname || seed.Keys[types.LiveKey] == "" || s.atLimit[k] {
+	isURL := seed.Type == types.TypeURL
+	if s.atLimit[k] || !isURL && (seed.Type != types.TypeHostname || seed.Keys[types.LiveKey] == "") {
 		return
 	}
+	planned := map[string]bool{}
+	active := false
 	for _, col := range s.e.Cat.Where(seed.Type) {
-		if !catalog.InfoOf(col).AtLimit || !s.allowed(col, seed) {
+		if !catalog.InfoOf(col).AtLimit || !s.allowed(col, seed) || isURL && s.skip(task{col: col.Name(), seed: seed}) {
 			continue
 		}
-		if s.atLimit == nil {
-			s.atLimit = map[string]bool{}
+		planned[col.Name()] = true
+		active = active || catalog.InfoOf(col).Kind == catalog.Active
+	}
+	// A URL's recognising GET belongs to the technique: no flag, no ask.
+	if len(planned) == 0 || isURL && !active {
+		return
+	}
+	if s.atLimit == nil {
+		s.atLimit = map[string]bool{}
+	}
+	s.atLimit[k] = true
+	for _, col := range s.e.Cat.Where(seed.Type) {
+		if !planned[col.Name()] {
+			continue
 		}
-		s.atLimit[k] = true
 		t := task{col: col.Name(), seed: seed, depth: depth, prio: 1}
 		s.record(t)
+		if after := catalog.InfoOf(col).After; after != "" && planned[after] {
+			pk := k + "\x00" + after
+			s.parked[pk] = append(s.parked[pk], t)
+			continue
+		}
 		s.enqueue(t)
 	}
 }
