@@ -1502,3 +1502,5 @@ plan.ceiling-open	docs/commands/plan.md	Where nothing bounds a stage (a crawl	te
 plan.ceiling-found-targets	docs/commands/plan.md	A domain, an organisation or an AS number among the targets	test:cmd/azhaq:TestCeilingOpenWhenTargetsAreFound
 plan.ceiling-no-dns	docs/commands/plan.md	DNS queries have no ceiling	test:cmd/azhaq:TestCeilingDNSHasNone
 dirs.the-summary-counts-the-filtered-answers	docs/commands/dirs.md	The summary counts the answers the calibration filtered	test:cmd/azhaq:TestDirsCountsTheAnswersTheCalibrationFilters
+roles.verification-ceiling-counts-reads	docs/commands/roles.md	The `verification` ceiling counts the reads the write replay can send to check a write	test:cmd/azhaq:TestRolesWriteReplayStagesStayUnderTheirCeilings
+roles.verification-ceiling-open-for-posts	docs/commands/roles.md	A POST's created object is looked for where the create's answer and the collection name it	test:cmd/azhaq:TestRolesCreateVerificationCeilingIsOpenUntilBounded

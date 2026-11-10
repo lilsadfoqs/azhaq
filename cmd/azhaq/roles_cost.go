@@ -4,7 +4,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/url"
 	"os"
+	"slices"
 	"strings"
 
 	"github.com/lilsadfoqs/azhaq/internal/neterr"
@@ -25,8 +28,9 @@ type rolesCostIn struct {
 	replay   bool
 	max      int // -replay-max
 	methods  map[string]bool
-	budget   int64    // -max-requests of the run options, the command's budget
-	mapsPlan *runPlan // what one role's run would send, from plan; nil outside plan
+	budget   int64         // -max-requests of the run options, the command's budget
+	verify   []verifyWrite // -replay-writes-verify steps
+	mapsPlan *runPlan      // what one role's run would send, from plan; nil outside plan
 }
 
 // estimateRoles is what roles would send, by stage, from the roles, the
@@ -91,17 +95,98 @@ func estimateRoles(in rolesCostIn) costEstimate {
 		e.put(stageControls, "", amount{}, "one request with a made-up identifier for each cross read the replay finds; for a role signed in with Chrome and with no check, a request with and one without the session for each page the sign-in loaded, until one tells the session apart")
 	}
 	if in.methods != nil {
-		var writes int64
+		var writes, floor, most int64
+		var reasons []string
 		for _, h := range in.hist {
-			writes += int64(len(historyWrites(h, in.sc, in.methods, own)))
+			for _, w := range historyWrites(h, in.sc, in.methods, own) {
+				writes++
+				others := int64(len(otherRoles(in.roles, w.owner)))
+				f, m, open := verifyReads(w, others, int64(n-1), in.verify, slices.ContainsFunc(in.roles, func(r role) bool { return r.name == w.owner }))
+				floor += f
+				most += m
+				if open != "" && !slices.Contains(reasons, open) {
+					reasons = append(reasons, open)
+				}
+			}
 		}
 		others := int64(max(n-1, 0))
 		e.put(stageWrites, "", amount{Requests: writes * others}, "the PUT, PATCH and DELETE the roles' routes take on each role's objects")
-		e.put(stageVerify, "", amount{Requests: writes * (1 + others)}, "")
+		cl := ceiling{target: most, tOpen: reasons}
+		if in.crawl {
+			// What each role's run found: its PUT, PATCH and DELETE on the
+			// role's objects are read back too, and are not known before.
+			cl.tOpen = mergeReasons(cl.tOpen, []string{crawlWrites})
+		}
+		open := strings.Join(cl.tOpen, "; ")
+		e.putBound(stageVerify, "", amount{Requests: floor}, open, cl)
 	}
 	out := e.result()
 	out.Basis = rolesBasis
 	return out
+}
+
+// crawlWrites is why the verification of a run with role maps has no
+// ceiling of its own: the writes its maps find are read back too.
+const crawlWrites = "the reads that check the PUT, PATCH and DELETE the role maps find on each role's objects"
+
+// createLocates is why a create's verification has no ceiling of its own:
+// where its object is looked for depends on the answers.
+const createLocates = "the places a create's answer and the collection name for its object are read until one answers"
+
+// verifyReads are the reads of the verification stage that one write can
+// send: floor is what it sends at least (its owner's object once, each
+// other role's check after it), most the most it sends from what is known
+// before the run, and open says what the answers decide on top of it.
+// others are the roles the write is sent with, n1 the other roles of the
+// create's creator, steps the user's -replay-writes-verify steps.
+func verifyReads(w writeReq, others, n1 int64, steps []verifyWrite, ownerThere bool) (floor, most int64, open string) {
+	if !ownerThere {
+		return 0, 0, "" // the replay skips a write whose owner is not a role
+	}
+	if w.method == http.MethodPost {
+		// Each role that sends it reads the collection before and after,
+		// the member each identifier of the body names as its recorded
+		// owner and again with a made-up identifier, and then every other
+		// role reads the object it made.
+		k := int64(len(bodyCandidates(w)))
+		return others, others * (2 + 2*k + n1), createLocates
+	}
+	var reads int64
+	for _, v := range steps {
+		if v.kind == "read" {
+			reads++
+		}
+	}
+	// The owner's object before (the write's own URL, then each parent
+	// the replay tries, or the one the history read), a read-back the map
+	// knows, one more after an empty write, then each sender's read after
+	// its write and each step's read as the sender.
+	before := max(int64(liveVerifyReads(w)), 1)
+	most = before + 1 + others*(1+reads)
+	if w.empty {
+		most++
+	}
+	return 1 + others, most, ""
+}
+
+// liveVerifyReads is how many URLs liveVerify tries for a write: its own and
+// each parent down to two segments, but a version segment.
+func liveVerifyReads(w writeReq) int {
+	pu, err := url.Parse(w.url)
+	if err != nil {
+		return 0
+	}
+	path := strings.TrimRight(pu.Path, "/")
+	n := 0
+	for first := true; ; first = false {
+		if last := path[strings.LastIndex(path, "/")+1:]; first || !versionSeg.MatchString(norm(last)) {
+			n++
+		}
+		if strings.Count(path, "/") < 3 {
+			return n
+		}
+		path = path[:strings.LastIndex(path, "/")]
+	}
 }
 
 // planRoles prints what roles would send, by stage, and sends nothing.
