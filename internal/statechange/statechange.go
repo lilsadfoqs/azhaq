@@ -47,7 +47,17 @@ var ActionVerbs = []string{
 	"terminate", "flush", "disable", "enable",
 }
 
+// ReadVerbs are the words an operation opens with when it reads: an
+// operationId or summary that starts with one (listRecordingRules, "Lists
+// all rules: active or deleted") reads, and its later words say what.
+var ReadVerbs = []string{
+	"get", "list", "read", "fetch", "find", "search", "show", "return",
+	"retrieve", "view", "query", "count", "describe", "export", "download", "lookup", "check",
+}
+
 var verbSet = setOf(Verbs)
+
+var readSet = setOf(ReadVerbs)
 
 // actionSet is what an action parameter's value may name.
 var actionSet = func() map[string]bool {
@@ -231,11 +241,15 @@ func OfURL(raw string) string {
 
 // OfOperation is the verb an API description's operation declares, and
 // where the word is ("path", "operationId" or "summary"): its path, then
-// its operationId, then its summary. Its description, and the description
-// of the API, are never read.
+// its operationId, then its summary. An operationId or summary that opens
+// with a read verb (ReadVerbs) declares a read, whatever follows. Its
+// description, and the description of the API, are never read.
 func OfOperation(path, operationID, summary string) (word, where string) {
 	if w := OfPath(path); w != "" {
 		return w, "path"
+	}
+	if opensWithRead(operationID) || opensWithRead(summary) {
+		return "", ""
 	}
 	if w := Word(operationID); w != "" {
 		return w, "operationId"
@@ -244,6 +258,11 @@ func OfOperation(path, operationID, summary string) (word, where string) {
 		return w, "summary"
 	}
 	return "", ""
+}
+
+func opensWithRead(text string) bool {
+	words := tokens(text)
+	return len(words) > 0 && stem(words[0], readSet) != ""
 }
 
 // staticExt are the extensions of a file served as it is.

@@ -60,6 +60,10 @@ func TestOfOperation(t *testing.T) {
 		{"/users/v1", "deleteUser", "", "delete", "operationId"},
 		{"/users/v1", "", "Resets the password", "reset", "summary"},
 		{"/books/v1", "listBooks", "List books", "", ""},
+		// It lists: "deleted" says what, not what the GET does.
+		{"/api/recording-rules", "listRecordingRules", "Lists all rules in the database: active or deleted.", "", ""},
+		{"/api/rules", "", "Returns the rules a user created", "", ""},
+		{"/logout", "getLogout", "", "logout", "path"}, // the path still decides first
 	} {
 		w, where := OfOperation(c.path, c.id, c.summary)
 		if w != c.word || where != c.where {

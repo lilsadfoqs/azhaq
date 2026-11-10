@@ -206,6 +206,30 @@ not a url at all
 	}
 }
 
+// A line read whose URL does not parse gives nothing: it is skipped with its
+// reason, not counted under its format, so the counts add up to what was
+// taken in. The same for an ffuf report's results.
+func TestReadLinesSkipsALineThatGivesNothing(t *testing.T) {
+	in := `{"url":"http://a.test/x"}
+{"url":"http://[::1"}
+{"url":"http://a.test/y"}
+`
+	facts, formats, skipped, err := ReadLines([]byte(in))
+	if err != nil || formats[FormatURLs] != 2 || formats["skipped"] != 1 || len(facts) != 2 ||
+		len(skipped) != 1 || !strings.HasPrefix(skipped[0], "line 2: a urls line with nothing") {
+		t.Fatalf("facts %d formats %v skipped %q err %v", len(facts), formats, skipped, err)
+	}
+	report := `{"config":{"method":"GET"},"results":[{"url":"http://a.test/x","status":200},{"url":"http://[::1","status":200}]}`
+	facts, formats, skipped, err = ReadLines([]byte(report))
+	if err != nil || formats[FormatFFUF] != 1 || formats["skipped"] != 1 || len(facts) == 0 ||
+		len(skipped) != 1 || !strings.HasPrefix(skipped[0], "result 2: ") {
+		t.Fatalf("ffuf report: facts %d formats %v skipped %q err %v", len(facts), formats, skipped, err)
+	}
+	if _, _, _, err := ReadLines([]byte(`{"url":"http://[::1"}` + "\n")); err == nil {
+		t.Error("a file of lines that give nothing ingested")
+	}
+}
+
 // naabu given an address writes no "host": the line is still naabu's.
 func TestReadNaabuAddressOnly(t *testing.T) {
 	in := `{"ip":"127.0.0.1","timestamp":"2026-10-30T21:24:37.9532617Z","port":22,"protocol":"tcp","tls":false}` + "\n" +
