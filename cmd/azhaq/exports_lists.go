@@ -15,10 +15,12 @@ import (
 	"github.com/lilsadfoqs/azhaq/types"
 )
 
-// listOpts narrows and shapes the urls and names exports.
+// listOpts narrows and shapes the exports: -coverage and -json for the urls and
+// names lists, -run for any format.
 type listOpts struct {
 	coverage string // as query -coverage: only rows of these coverages
 	json     bool   // one {url|name, coverage, status, source} object per line
+	run      string // the run to read, by its run_id: the newest when empty
 }
 
 var coverages = []string{"visited", "catchall", "error", "gone", "hint", "skipped", "capped"}

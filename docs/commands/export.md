@@ -5,7 +5,7 @@ Write a database in another tool's format.
 ## Synopsis
 
 ```
-azhaq export [-db FILE] [-format jsonl|urls|hosts|names|targets|openapi|graphql|sdl|burp|html|graphml|secrets|findings|findings-md] [-origin ORIGIN|URL] [-safe] [-coverage LIST] [-json]
+azhaq export [-db FILE] [-format jsonl|urls|hosts|names|targets|openapi|graphql|sdl|burp|html|graphml|secrets|findings|findings-md] [-origin ORIGIN|URL] [-safe] [-coverage LIST] [-json] [-run ID]
 ```
 
 ## Examples
@@ -38,7 +38,7 @@ azhaq export -db app.db -format urls -json > urls.jsonl
 
 ## What it does
 
-`azhaq export -db FILE -format F` writes the newest run of a workspace in one format on stdout. Without `-db` it uses the last run's database. `-format` defaults to `jsonl`.
+`azhaq export -db FILE -format F` writes the newest run of a workspace in one format on stdout. Without `-db` it uses the last run's database. `-format` defaults to `jsonl`. `-run ID` writes an earlier run instead: the `run_id` of its summary, or the start of it (at least 4 characters), as `query -run` takes it; `azhaq query -db FILE -runs` lists them. `jsonl` without `-run` writes every run of the workspace.
 
 ## Output
 
@@ -215,4 +215,5 @@ Rules look like this:
 | `-safe` | bool |  | openapi: leave out the routes the run did not request, such as those -deny-path kept out (otherwise they carry x-azhaq-skipped: true) |
 | `-coverage` | string |  | urls, names: only these coverages, comma-separated: visited, catchall, error, gone, hint, skipped, capped |
 | `-json` | bool |  | urls, names: one {url\|name, coverage, status, source} object per line |
+| `-run` | string |  | the run to write, by the run_id of its summary (default: the newest run of the workspace; jsonl: every run) |
 <!-- flags:end -->
