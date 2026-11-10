@@ -7,6 +7,7 @@ package brutecol
 import (
 	"context"
 	"encoding/json"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -37,6 +38,44 @@ type Budget struct {
 	left  int
 	asked map[string]bool
 	held  map[string]bool
+	done  map[string]bool // asked by the run azhaq resume continues: not asked again
+}
+
+// AskedKey is the payload's list of the guesses a task asked when the
+// budget held some of its back: azhaq resume asks the rest, not these.
+const AskedKey = "asked"
+
+// HeldKey is the payload's count of a task's guesses the budget held back.
+const HeldKey = "held_by_max_names"
+
+// Asked are the guesses the stopped tasks of a workspace asked (AskedKey).
+func Asked(obs []types.StoredObservation) map[string]bool {
+	out := map[string]bool{}
+	for _, o := range obs {
+		if o.Collector != BruteName && o.Collector != PermuteName {
+			continue
+		}
+		var p struct {
+			Asked []string `json:"asked"`
+		}
+		if json.Unmarshal(o.Payload, &p) == nil {
+			for _, n := range p.Asked {
+				out[n] = true
+			}
+		}
+	}
+	return out
+}
+
+// AskedBefore takes the guesses an earlier try of this run asked: they
+// are left out, neither asked again nor charged.
+func (b *Budget) AskedBefore(names map[string]bool) {
+	if b == nil {
+		return
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.done = names
 }
 
 // HeldOutKey is the payload's count of guesses the scope held out: no query
@@ -68,13 +107,17 @@ func NewBudget(n int) *Budget {
 	return &Budget{left: n, asked: map[string]bool{}, held: map[string]bool{}}
 }
 
-// take returns the first names that fit what is left and holds back the rest.
-func (b *Budget) take(names []string) []string {
+// take returns the first names that fit what is left and holds back the
+// rest, and how many it held; names an earlier try asked are left out.
+func (b *Budget) take(names []string) ([]string, int) {
 	if b == nil {
-		return names
+		return names, 0
 	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	if len(b.done) > 0 {
+		names = slices.DeleteFunc(slices.Clone(names), func(n string) bool { return b.done[n] })
+	}
 	n := min(len(names), b.left)
 	b.left -= n
 	for _, x := range names[:n] {
@@ -83,7 +126,16 @@ func (b *Budget) take(names []string) []string {
 	for _, x := range names[n:] {
 		b.held[x] = true
 	}
-	return names[:n]
+	return names[:n], len(names) - n
+}
+
+// capped marks the meta of a task the budget held guesses of back, so that
+// azhaq resume runs it again for the rest (its payload lists what it asked).
+func capped(meta types.RunMeta, err error, held int) types.RunMeta {
+	if held > 0 && err == nil && meta.Status == types.StatusOK {
+		meta.Status = types.StatusCapped
+	}
+	return meta
 }
 
 // Held is how many different guesses the budget kept from being asked.
@@ -122,7 +174,7 @@ func (b *Brute) Outputs() []string { return []string{"subdomains"} }
 func (b *Brute) Run(ctx context.Context, seed types.Seed, emit func(types.Observation) error) (types.RunMeta, error) {
 	domain := normalize.Hostname(seed.Keys["domain"])
 	names, held := inScope(bruteNames(b.Words, domain))
-	names = b.Budget.take(names)
+	names, over := b.Budget.take(names)
 	answers := resolveFound(ctx, b.Pool, b.Wild, domain, names, b.Workers)
 	found := nameList(answers)
 	wild := b.Wild.Zone(ctx, domain)
@@ -132,7 +184,11 @@ func (b *Brute) Run(ctx context.Context, seed types.Seed, emit func(types.Observ
 	if held > 0 {
 		payload[HeldOutKey] = held
 	}
+	if over > 0 {
+		payload[HeldKey], payload[AskedKey] = over, names
+	}
 	meta, err := report(ctx, emit, BruteName, domain, payload, found)
+	meta = capped(meta, err, over)
 	for _, h := range meta.NextHints {
 		h.Keys[types.LiveKey] = "1"
 	}
@@ -267,12 +323,12 @@ func (p *Permute) Run(ctx context.Context, seed types.Seed, emit func(types.Obse
 		}
 		names = append(names, n)
 	}
-	names = p.Budget.take(names)
+	names, over := p.Budget.take(names)
 	for _, n := range names {
 		p.tried[n] = true
 	}
 	p.mu.Unlock()
-	if len(names) == 0 && held == 0 {
+	if len(names) == 0 && held == 0 && over == 0 {
 		return types.RunMeta{Status: types.StatusOK}, nil
 	}
 	answers := resolveFound(ctx, p.Pool, p.Wild, domain, names, p.Workers)
@@ -283,7 +339,11 @@ func (p *Permute) Run(ctx context.Context, seed types.Seed, emit func(types.Obse
 	if held > 0 {
 		payload[HeldOutKey] = held
 	}
+	if over > 0 {
+		payload[HeldKey], payload[AskedKey] = over, names
+	}
 	meta, err := report(ctx, emit, PermuteName, host, payload, found)
+	meta = capped(meta, err, over)
 	for _, h := range meta.NextHints {
 		h.Keys[types.ViaKey] = types.ViaPermute
 	}

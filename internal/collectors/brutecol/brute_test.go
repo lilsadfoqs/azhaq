@@ -308,7 +308,7 @@ func TestBudgetCapsWhatGuessingAsks(t *testing.T) {
 		t.Errorf("held %d after the same name again, want %d", got, want)
 	}
 	var none *Budget
-	if none.Held() != 0 || len(none.take([]string{"a", "b"})) != 2 {
+	if none.Held() != 0 || func() bool { got, _ := none.take([]string{"a", "b"}); return len(got) != 2 }() {
 		t.Error("a nil budget caps nothing")
 	}
 }
