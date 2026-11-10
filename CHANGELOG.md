@@ -1,17 +1,89 @@
 # Changelog
 
-## Unreleased
+## v0.17.0
 
 ### Added
 
 - Every run is kept in one place: `~/.azhaq/runs/<time>-<command>-<target>/` (or `$AZHAQ_HOME/runs`), one folder per run of `run`, `quickstart`, `resume`, `roles`, `watch`, `ingest` and the drop-in commands. A folder holds `run.json` (the command line with secrets masked, the version, start and end, the exit code and the command's own summary), the workspace and its ledger. Folders are mode 0700; a command refused for its flags leaves none. `AZHAQ_HOME=none` keeps the old places.
 - `azhaq runs` lists the kept runs, newest first, with how each ended, the requests it sent and what it found; `-rm ID` and `-older 30d` remove them.
 - `azhaq ui` shows the kept runs in a browser on this machine: what each asked, did and got, in three sentences counted from its summary, workspace and ledger, and its graph on a canvas in columns (domains, hosts, addresses, ports, routes). Routes fold per host, findings are red, map hints are a dot, third-party-only entities are dashed, and each node carries the glyph of the capability that observed it; a click shows an entity's observations with secrets masked and a `curl` line. An Execution view puts azhaq's eight capabilities around it, marks the ones the run used, and opens each to its collectors with what they sent, observed and failed. System, light and dark themes. Loopback only, read-only, embedded and offline.
+- The summary says `Chrome ran with its sandbox` when a command started Chrome with its sandbox.
+- `azhaq docs start`, a page of at most 800 words that walks the four first jobs in order; the README links it and the last line of `azhaq quickstart` names it.
+- `fuzz -send-state-changing`.
+- `dirs -ic` and `run -dirs-ic`, which ignore wordlist lines that start with `#`.
+- Summary `connections`, `datagrams` and `probes` (the ledger's probe lines, apart from `requests`).
+- Summary `path_checks`, per web service: the built-in path checks listed, sent, already answered and skipped, with the reason.
+- `azhaq query -runs` lists the runs of a workspace; `query -run ID`, `show -run ID` and `diff -db W -run ID` read an earlier run; `show` finds a key in an earlier run when the newest has not seen it.
+- A run into a workspace that holds earlier runs says so in its notes.
+- `-verify` checks every service the scan names that answers a no-credential version or info read: ZooKeeper, PostgreSQL, Kafka, SQL Server, Cassandra, Oracle TNS, LDAP, DNS, RTSP, SIP, SOCKS5, SMB, NetBIOS, RDP, X11, JDWP, Java RMI, Elasticsearch transport, AFP, Minecraft, MQTT, AMQP, STOMP and XMPP, besides Redis, MongoDB and memcached; the services with none are listed with their reasons in CONCEPTS.
+- `ports` and `run` name `-p LIST,default` in `next:` when a list left out ports azhaq names and checks, with the number of ports and the connects.
+- `ports` and `run` name `-verify` in `next:` when a service with a read-only check was found and `-verify` was not given.
+- `shots`, `run -browser` and `crawl -browser` summaries carry `browser_requests` and the line `browser requests: N sent, A answered, U unanswered, B blocked by scope or held`; N is the ledger's Chrome lines and A + U = N; an unanswered request (a long poll) is counted and is not a failure.
+- `crawl -builtin-paths` asks the 51 built-in paths and the source map next to each script.
+- A run given `-interact` that clicked no page says so in a note, with the reason.
+- `dns` rows carry `takeover-not-asked`, and the summary notes the CNAME targets and wildcard zones left unasked because they are outside the scope.
+- The `urls` summary's `counts` has `static files listed`, the rows labelled `asset`, and a note says they are in `results`, not in `dropped as junk`; the docs state how `results`, `dropped as junk` and `static files listed` relate.
+- `export -format urls|names` take `-coverage visited,hint,…` and `-json` (`{url|name, coverage, status, source}`), so a list says which entries were visited or only named.
+- `ingest` reads arjun's JSON, gowitness's JSON lines, asnmap's JSON and nmap's XML (services, versions and script output kept as evidence); every row names its tool and none is `visited`.
+- `run -o FILE` writes the rows it prints, as `crawl`, `probe` and `ports` do; the summary lists it under `wrote`.
+- A stack trace in an answer already received (3 or more consecutive frame lines of one runtime: Java, Python, Node, PHP, .NET, Ruby) is stored as `stack_trace` on the `probe`, `run` and `dirs` row and listed by `report -findings` as a proved `error-disclosure` of low severity, with the URL, status, first exception line and frame count; nothing more is sent.
+- `subs` and `urls` take `-allow`, `-deny`, `-scope` and `-program`; a held-out name or URL gets no query or request (also under `-w`, `-permute` and `urls -live`), is not listed, and is counted as `held out by scope`; `subs` reports `guesses held out by scope`.
+- `urls` takes `-ledger`.
+- `subs` says why a tier has no coverage estimate: `coverage (TIER): not estimated: N independent source(s) gave names (NAMES); an estimate needs two`, with failed sources and their errors.
+- `plan`, the pre-run line, the summary's cost line and `roles` print `at most N` beside the floor where flags bound a stage (`at_most`, `at_most_by`, `no_ceiling` in the JSON); `-max-requests` is the ceiling of a stage nothing else bounds; `-params` has an estimate.
+- Bench: a `run` row on Juice Shop holds azhaq's CPU seconds at or below katana `-jc -jsl`'s
 
 ### Changed
 
 - With no `-db`, `run` keeps its workspace in its run folder instead of `azhaq-TIME-PID.db` in the current directory, and the drop-in commands, `dns` and `fuzz` keep theirs there instead of a temporary one (so `resume` works on them). `roles` puts its databases in the run folder's `roles/` instead of `azhaq-roles-TIME/`.
 - The stages of the summary's `cost`, of `plan`'s estimate and of their text lines carry the names of azhaq's capabilities: `map` is `web`, `dirs` and `params` are one `fuzz` stage, `screenshots` is `shots`, and `advisories` is `verify`, which also holds the `-verify` reads (they were counted under `other`). `sources`, `names`, `ports`, `sign-in`, `notify` and the roles stages keep their names.
+- `docs/TROUBLESHOOTING.md` says when Chrome runs sandboxed, what refuses it and how to tell.
+- A word of a wordlist (`dirs -w`, `-dirs FILE`, `-paths FILE`, `fuzz -w`) whose own path or query names a state change is held back like a GET found on the way: a note before the first request, one `held back` row per word, and `-send-state-changing` sends every word, as ffuf does; the one difference from ffuf is in docs/MIGRATING.md.
+- The held-back reason no longer says "found on the way".
+- `addresses_scanned` and `addresses_open` count distinct addresses.
+- A proved `-verify` read ranks `high` only for a data store's state (Redis, MongoDB, memcached, ZooKeeper), `info` for the others; a binary answer's evidence is its first bytes in hex.
+- A service the scan found inside TLS is verified inside TLS.
+- `crawl -sweep` means what it means on `run`, `plan`, `quickstart` and `ports`: the IPv4 ranges in `-allow` and `-scope` are start URLs; the built-in paths moved to `-builtin-paths`; `crawl -sweep` without a range is a usage error naming the new flag.
+- `run -max-time` bounds the whole run, brute force, permutations and probing included, and exits 4 with the rest resumable (it bounded only the wait for sources before).
+- The takeover check no longer asks the registration of a CNAME target outside the scope; add the domain to `-allow` to ask it. A zone outside the scope is no longer probed for a wildcard.
+- The leads of `report -findings` and `export -format findings` leave out the hints the map folds; they are counted by class (`folded` records, a "Folded hints" section), and leads plus folds equal `query -coverage hint`.
+- A guess with no stored DNS answer in a stopped `subs -live` run is counted as `not checked`, and the stored row's `guesses` list holds every guess kept, so the summary and the row agree.
+- The `-w` and `-permute` implicit `-allow` of the domains given applies only without your own `-allow` or `-scope`.
+- The connects an open port's identification makes (page-body GETs, the fallback TLS handshake) come out of its 25-connect allowance, so an open port costs at most 26 after the first.
+- Reading the scripts of a single-page app uses about 30% less CPU on a Juice-shaped fixture (3.52 s to 2.49 s user, median of 3): a pattern with a literal in every match is tried only where one is; the map's rows are unchanged.
+- Bench: the small jobs' memory bar is 2 times the reference's peak private memory (RssAnon); the resident peak, which counts the binary's shared file pages, is printed beside it.
+- Bench: a hit of ffuf's that azhaq holds back by default as a state-changing GET is named in the `dirs` and `fuzz` rows and counted on neither side.
+
+### Fixed
+
+- The `azhaq_map`, `azhaq_plan` and `azhaq_dirs` tool descriptions and `docs/MCP.md` say a found GET declaring a state change is held back and listed as skipped (sent only by a server started with `-send-state-changing`), as `plan` does.
+- A GET whose query names an action (`?action=stop`, `?cmd=delete`, …) is held back like one whose path does.
+- `dirs` and `run -dirs` no longer drop lines that start with `#`; they are words, as in ffuf.
+- An address in a `-cidr` range that was also given on its own was counted twice in `addresses_scanned` and `addresses_open`.
+- The summary left the built-in path checks of a service unaccounted for when fewer than listed were sent.
+- The graph of an earlier run of a workspace could not be read after a later run.
+- A UDP service no longer gets a TCP `-verify` read.
+- A sweep with a budget smaller than itself gives a web service's reserve back once the service is mapped.
+- `azhaq resume` of a stopped `ports` run given `-resolvers` as a list no longer exits 2 on a deleted temporary file.
+- `run` and `crawl` no longer request the keys of a bundle's module table (`{"/HAE":function(t,e,n){…}}`); they are counted under rejected strings as module keys.
+- `dns -all -w` exited 2; it now asks every type of each generated name.
+- A run made a DNS lookup of a name outside its scope (a CNAME target's registration, a parent zone's wildcard probe).
+- ASN and Prefix entities given to `ingest` were dropped.
+- The GraphQL schema query, the RDAP and archive lookups, the h2c and HTTP/2 probes and the advisory confirmation read held a stream that never ends until their timeout; they cut it at 64 KiB or 2 s, as the other readers do, and the summary says which read was cut.
+- A `-source-timeout` under one second is no longer 0 in a source's session.
+- After a Chrome sign-in, `roles` looks for a role's session check among the GETs the signed-in page made (a "who am I" call), read with the session and once without it (a control counted in the controls stage and the ledger); the summary names the URL and the control's answer.
+- A write canary keeps the shape of the recorded value (an email stays an email, digits stay digits of the same length), so a format check no longer answers 400; a canary write answered 400 or 422 is listed as "canary rejected".
+- The `dirs` and `run -dirs` summaries count the answers the calibration filtered (`N answers matched the calibration's …`), so the words asked are the paths listed, folded and filtered.
+- An MCP call with a `Host`, `X-Forwarded-Host`, `X-Host` or `X-Original-Host` header inside the scope sends it, and one outside is refused with the scope's reason, as on the command line; before, the tools refused every one.
+- The `verification` stage of `roles -replay-writes` counts every read it can send in its ceiling (the owner's object before a write, the read-backs, the steps' reads); a create's verification, whose reads the answers decide, says `no_ceiling` instead of a number it passes.
+- `run -stream` with ports panicked when the request budget was spent before the ports stage held a reserve for web work; it stops with exit 4, its summary and a sealed ledger.
+- The summary's `wrote` names the screenshots (and saved HTML) `shots` and `run -screenshots` wrote in this run.
+- A name with only IPv6 addresses, on a machine with no IPv6 route, made the web stage panic in the TLS handshake; it is dialed at those addresses, and a dial with no address is an error.
+- The `command` of a finding names `run` for a run's flags, so the line reproduces it.
+- A stop at `-max-names` that held guesses back is one `azhaq resume` continues: it asks the rest, up to its own `-max-names`, and not the guesses the stopped run asked.
+- A request the kill file refused at its dial was listed in the ledger and counted, and the run exited 3; it is given back, and a request let go before the file that is made again after a dead pooled connection is sent and listed once.
+- `roles` reads a body that is a JSON object or array as JSON whatever its content type, so a 2xx answer that says it failed (`{"status":"fail"}`) is a refusal, not an accepted write.
+- `probe` names a target whose name has no address in the summary's `failed`, as it counts it in `failures`.
 
 ## v0.16.0
 
