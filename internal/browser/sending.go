@@ -2,6 +2,7 @@ package browser
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/chromedp/cdproto/network"
@@ -54,6 +55,56 @@ type letGo struct {
 	method, url string
 	at          time.Time
 	t           *tab
+	id          network.RequestID // its network ID, for a plain HTTP request the wire settles
+}
+
+// plain: a plain HTTP URL, whose requests the guard reads on the wire
+// (wireSent); that, not Chrome's events, says when one left. Chrome's
+// events cannot tell a retry that reached the server from one that did
+// not, nor see a request no pause held.
+func plain(raw string) bool { return strings.HasPrefix(raw, "http://") }
+
+func wireKeyOf(method, raw string) string { return method + " " + raw }
+
+// wireSent lists a plain HTTP request the guard saw leave: the oldest let
+// go for that method and URL, or one Chrome took for a cache hit, or, when
+// none waits for it (a retry whose count was given back, a request no
+// pause held), one counted now. The ledger holds what reached the wire.
+func (b *Browser) wireSent(method, raw string) {
+	k := wireKeyOf(method, raw)
+	b.sendMu.Lock()
+	var g letGo
+	var waited, cached bool
+	if q := b.onWire[k]; len(q) > 0 {
+		g, waited = q[0], true
+		if b.onWire[k] = q[1:]; len(q) == 1 {
+			delete(b.onWire, k)
+		}
+	} else if q := b.wireHit[k]; len(q) > 0 {
+		g, cached = q[0], true
+		if b.wireHit[k] = q[1:]; len(q) == 1 {
+			delete(b.wireHit, k)
+		}
+	}
+	b.sendMu.Unlock()
+	switch {
+	case waited:
+		egress.Release(1)
+	case cached:
+		egress.Count(1) // taken for a cache hit, it left after all (a revalidation)
+	default:
+		egress.Count(1)
+		g = letGo{ctx: b.root, method: method, url: raw}
+		if g.ctx == nil {
+			g.ctx = context.Background()
+		}
+	}
+	ledger.Chrome(g.ctx, g.method, g.url)
+	if g.id != "" {
+		b.sendMu.Lock()
+		b.tally(g.id, 1, 0)
+		b.sendMu.Unlock()
+	}
 }
 
 // sending notes a request just before it is continued. The ledger lists it
@@ -61,6 +112,21 @@ type letGo struct {
 // retry on a dead connection) is neither listed nor counted. Without a
 // network ID nothing would say so: it is listed now.
 func (b *Browser) sending(id network.RequestID, g letGo) {
+	if plain(g.url) && b.guard != nil {
+		b.sendMu.Lock()
+		defer b.sendMu.Unlock()
+		if b.onWire == nil {
+			b.onWire, b.wireKey = map[string][]letGo{}, map[network.RequestID]string{}
+		}
+		egress.Hold(1) // counted, not yet seen on the wire
+		g.id = id
+		k := wireKeyOf(g.method, g.url)
+		b.onWire[k] = append(b.onWire[k], g)
+		if id != "" {
+			b.wireKey[id] = k
+		}
+		return
+	}
 	if id == "" {
 		ledger.Chrome(g.ctx, g.method, g.url)
 		return
@@ -132,6 +198,26 @@ func (b *Browser) sentOff(id network.RequestID) {
 func (b *Browser) fromCache(id network.RequestID) {
 	b.sendMu.Lock()
 	defer b.sendMu.Unlock()
+	if k, ok := b.wireKey[id]; ok {
+		q := b.onWire[k]
+		for i := len(q) - 1; i >= 0; i-- {
+			if q[i].id == id {
+				g := q[i]
+				b.onWire[k] = append(q[:i:i], q[i+1:]...)
+				if len(b.onWire[k]) == 0 {
+					delete(b.onWire, k)
+				}
+				if b.wireHit == nil {
+					b.wireHit = map[string][]letGo{}
+				}
+				b.wireHit[k] = append(b.wireHit[k], g)
+				egress.Refund()
+				egress.Release(1)
+				return
+			}
+		}
+		return
+	}
 	g, ok := b.out[id]
 	if !ok {
 		return
@@ -163,7 +249,41 @@ func (b *Browser) unheard(t *tab) {
 			delete(b.cached, id)
 		}
 	}
+	// A plain HTTP request the wire did not see did not leave: given back.
+	notSent := 0
+	for k, q := range b.onWire {
+		var keep []letGo
+		for _, g := range q {
+			if t == nil || g.t == t {
+				notSent++
+			} else {
+				keep = append(keep, g)
+			}
+		}
+		if len(keep) == 0 {
+			delete(b.onWire, k)
+		} else {
+			b.onWire[k] = keep
+		}
+	}
+	for k, q := range b.wireHit {
+		var keep []letGo
+		for _, g := range q {
+			if t != nil && g.t != t {
+				keep = append(keep, g)
+			}
+		}
+		if len(keep) == 0 {
+			delete(b.wireHit, k)
+		} else {
+			b.wireHit[k] = keep
+		}
+	}
 	b.sendMu.Unlock()
+	for i := 0; i < notSent; i++ {
+		egress.Refund()
+	}
+	egress.Release(notSent)
 	egress.Release(len(left))
 	for i, g := range left {
 		ledger.ChromeAt(g.ctx, g.method, g.url, g.at)

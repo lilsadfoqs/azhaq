@@ -42,7 +42,8 @@ type ChromeGuard struct {
 	peers   peers
 	ctx     context.Context
 	stop    context.CancelFunc
-	via     *url.URL // the proxy for Chrome's connections when it is not the environment's (SetProxy)
+	via     *url.URL                    // the proxy for Chrome's connections when it is not the environment's (SetProxy)
+	wire    func(method, rawURL string) // told of each plain HTTP request as it leaves (OnWire)
 
 	mu     sync.Mutex
 	closed bool
@@ -53,6 +54,11 @@ type ChromeGuard struct {
 // SetProxy sends Chrome's connections through p (-chrome-proxy); nil: -proxy's,
 // else the environment's.
 func (g *ChromeGuard) SetProxy(p *url.URL) { g.via = p }
+
+// OnWire has f told of every plain HTTP request Chrome sends through the
+// guard, read off the connection as it passes: what reached the wire,
+// whatever Chrome's events say of it. A request inside TLS cannot be read.
+func (g *ChromeGuard) OnWire(f func(method, rawURL string)) { g.wire = f }
 
 // refuse counts a connection to a host outside the scope.
 func (g *ChromeGuard) refuse(host string) {
@@ -269,7 +275,17 @@ func (g *ChromeGuard) handle(c net.Conn) {
 	defer stop()
 	done := make(chan struct{})
 	go func() {
-		_, _ = io.Copy(up, r)
+		var src io.Reader = r
+		var heads *io.PipeWriter
+		if !tls && !ws && g.wire != nil {
+			pr, pw := io.Pipe()
+			src, heads = io.TeeReader(r, pw), pw
+			go g.readHeads(pr, addr)
+		}
+		_, _ = io.Copy(up, src)
+		if heads != nil {
+			_ = heads.Close()
+		}
 		closeWrite(up)
 		close(done)
 	}()
@@ -449,6 +465,29 @@ func dialOut(ctx context.Context, p *url.URL, addr string) (net.Conn, error) {
 	return nil, fmt.Errorf("proxy %s: Chrome's connections go through http and socks5 proxies only", p.Redacted())
 }
 
+// readHeads reads the plain HTTP requests passing on one connection (the
+// bytes relayed are not changed) and tells g.wire of each. What it cannot
+// read is drained, so the relay never waits for it.
+func (g *ChromeGuard) readHeads(r io.Reader, addr string) {
+	defer func() { _, _ = io.Copy(io.Discard, r) }()
+	br := bufio.NewReader(r)
+	for {
+		req, err := http.ReadRequest(br)
+		if err != nil {
+			return
+		}
+		host := req.Host
+		if host == "" {
+			host = addr
+		}
+		g.wire(req.Method, "http://"+host+req.URL.RequestURI())
+		if req.Body != nil {
+			_, _ = io.Copy(io.Discard, req.Body)
+			_ = req.Body.Close()
+		}
+	}
+}
+
 // forward relays the plain HTTP requests Chrome sends on c to the HTTP
 // proxy p, each as the absolute URI a proxy reads (what the run's own
 // client sends it): a CONNECT tunnel would hide the request from the proxy,
@@ -473,6 +512,7 @@ func (g *ChromeGuard) forward(c net.Conn, r *bufio.Reader, p *url.URL, addr stri
 		if err != nil {
 			return
 		}
+		uri := req.URL.RequestURI()
 		req.URL.Scheme = "http"
 		if req.Host == "" {
 			req.Host = addr
@@ -483,6 +523,9 @@ func (g *ChromeGuard) forward(c net.Conn, r *bufio.Reader, p *url.URL, addr stri
 		}
 		if err := req.WriteProxy(up); err != nil {
 			return
+		}
+		if g.wire != nil {
+			g.wire(req.Method, "http://"+req.Host+uri)
 		}
 		res, err := http.ReadResponse(from, req)
 		if err != nil {

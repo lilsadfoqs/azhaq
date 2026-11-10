@@ -134,6 +134,13 @@ type Browser struct {
 	out    map[network.RequestID]letGo // let send, not yet seen leaving
 	cached map[network.RequestID]letGo // let send, answered from Chrome's cache
 	hops   map[network.RequestID]*hops // listed in the ledger and answered, by network ID
+	// Plain HTTP requests, which the guard reads on the wire (wireSent):
+	// let send and not yet seen there, by method and URL, oldest first;
+	// those Chrome said it answered from its cache; and the key of each
+	// network ID.
+	onWire  map[string][]letGo
+	wireHit map[string][]letGo
+	wireKey map[network.RequestID]string
 
 	mu      sync.Mutex
 	session map[string]string            // sessionStorage a login left, for every tab
@@ -331,6 +338,7 @@ func (b *Browser) newGuard() error {
 		}
 		g.SetProxy(pu)
 	}
+	g.OnWire(b.wireSent)
 	b.guard = g
 	return nil
 }
