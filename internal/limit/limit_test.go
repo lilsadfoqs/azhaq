@@ -99,3 +99,19 @@ func TestWaitNTakesPlacesAtTheRate(t *testing.T) {
 		t.Errorf("more than the burst: %v", err)
 	}
 }
+
+// A strict Limiter holds a key to its rate in every second even with a
+// burst that would let more through.
+func TestStrictHoldsEverySecond(t *testing.T) {
+	l := New(10, 10).Strict()
+	var ts []time.Time
+	for i := 0; i < 15; i++ {
+		if err := l.Wait(context.Background(), "k"); err != nil {
+			t.Fatal(err)
+		}
+		ts = append(ts, time.Now())
+	}
+	if d := ts[10].Sub(ts[0]); d < time.Second {
+		t.Errorf("11 sends in %v at 10 a second", d)
+	}
+}

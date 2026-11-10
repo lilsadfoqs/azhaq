@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -251,7 +252,7 @@ func TestHedgingKeepsTheAttemptCount(t *testing.T) {
 // takes what the pace says (600 queries at 200 a second: 3 s), not longer
 // because hedges spent slots.
 func TestPacedQueriesAreNotHedgedWhileTheyWaitForASlot(t *testing.T) {
-	p := New(Options{Resolvers: []string{"192.0.2.1:53"}, PerSecond: 200, Burst: 1, Timeout: 2 * time.Second})
+	p := New(Options{Resolvers: []string{"192.0.2.1:53"}, PerSecond: 200, Timeout: 2 * time.Second})
 	var asked atomic.Int32
 	p.Exchange = slowLive(time.Millisecond, &asked)
 	t0 := time.Now()
@@ -407,6 +408,38 @@ func TestResolveManySecondPassGoesOnWhenItsFirstNamesAnswer(t *testing.T) {
 	for _, a := range p.ResolveMany(context.Background(), names(200), 128) {
 		if a.Status != StatusOK {
 			t.Fatalf("%s: %s %s: a name the second pass could answer was not asked", a.Name, a.Status, a.Err)
+		}
+	}
+}
+
+// -dns-rate N is at most N queries to a resolver in any second, from the
+// first query on: a bucket that starts full sent N at once and N more
+// within the same second.
+func TestPaceHoldsEverySecondFromTheFirstQuery(t *testing.T) {
+	const rate, total = 20, 50
+	p := New(Options{Resolvers: []string{"192.0.2.1:53", "192.0.2.2:53"}, PerSecond: rate, Timeout: 5 * time.Second})
+	var mu sync.Mutex
+	seen := map[string][]time.Time{}
+	p.Exchange = func(_ context.Context, q *dns.Msg, server string) (*dns.Msg, error) {
+		mu.Lock()
+		seen[server] = append(seen[server], time.Now())
+		mu.Unlock()
+		m := new(dns.Msg)
+		m.SetReply(q)
+		rr, _ := dns.NewRR(q.Question[0].Name + " 60 IN A 192.0.2.1")
+		m.Answer = append(m.Answer, rr)
+		return m, nil
+	}
+	p.ResolveMany(context.Background(), names(2*total), 128)
+	for server, ts := range seen {
+		sort.Slice(ts, func(i, j int) bool { return ts[i].Before(ts[j]) })
+		if len(ts) < total/2 {
+			t.Fatalf("%s got %d queries, want a paced run of them", server, len(ts))
+		}
+		for i := 0; i+rate < len(ts); i++ {
+			if d := ts[i+rate].Sub(ts[i]); d < time.Second {
+				t.Fatalf("%s: queries %d..%d went out in %s, over %d a second", server, i, i+rate, d, rate)
+			}
 		}
 	}
 }

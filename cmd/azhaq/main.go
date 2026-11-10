@@ -1133,6 +1133,14 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	opts.URLs = urlcol.Options{Keys: urlKeys, Out: *urlsOut, OutFrom: *urlsFrom, Timeout: *urlsTimeout,
 		Apex: !*urlsSubs, Only: splitList(*urlsSources), FirstPath: *urlsFP, Blacklist: splitList(*urlsBlacklist), Proxy: *urlsProxy,
 		MaxPages: *urlsPages, MaxURLs: *urlsMax, Raw: *urlsRaw, KeepJunk: *urlsKeepJunk, OnRow: urlSink}
+	if !rules.Empty() {
+		// -allow www.example.org names a host and not its domain: no domain is
+		// queued, so the archives are asked for the host itself.
+		opts.URLs.Hosts = func(h string) bool {
+			d := normalize.RegistrableDomain(h)
+			return rules.Allows(h) && (d == "" || !rules.Allows(d))
+		}
+	}
 	if *urlsPages == 0 {
 		opts.URLs.MaxPages = math.MaxInt32
 	}

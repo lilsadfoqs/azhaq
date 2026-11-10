@@ -6,9 +6,15 @@ package limit
 import (
 	"context"
 	"sync"
+	"time"
 
 	"golang.org/x/time/rate"
 )
+
+// windowMargin is added to the second a strict Limiter holds: a send
+// stamped a little after its slot must not let the next one in less than
+// a second after it.
+const windowMargin = 2 * time.Millisecond
 
 // Limiter is a set of token buckets, one per key, created on first use.
 // A zero or negative rate means no limit.
@@ -18,6 +24,15 @@ type Limiter struct {
 	burst     int
 	overrides map[string]float64
 	buckets   map[string]*rate.Limiter
+	strict    bool
+	rings     map[string]*ring
+}
+
+// ring holds the times of a key's last sends, for a strict Limiter.
+type ring struct {
+	mu sync.Mutex
+	n  int
+	ts []time.Time
 }
 
 // New returns a Limiter allowing perSecond requests per key with the given
@@ -31,7 +46,18 @@ func New(perSecond float64, burst int) *Limiter {
 		burst:     burst,
 		overrides: map[string]float64{},
 		buckets:   map[string]*rate.Limiter{},
+		rings:     map[string]*ring{},
 	}
+}
+
+// Strict makes Wait hold each key to its rate in every window of one
+// second: a bucket alone lets a wake-up that ran late and the next one on
+// time land less than a second apart, one send over the rate. Returns l.
+func (l *Limiter) Strict() *Limiter {
+	l.mu.Lock()
+	l.strict = true
+	l.mu.Unlock()
+	return l
 }
 
 // Set gives one key its own rate. It applies to buckets created after the
@@ -50,7 +76,66 @@ func (l *Limiter) Wait(ctx context.Context, key string) error {
 	if l == nil {
 		return ctx.Err()
 	}
-	return Wait(ctx, l.bucket(key))
+	if err := Wait(ctx, l.bucket(key)); err != nil {
+		return err
+	}
+	return l.slide(ctx, key)
+}
+
+// slide waits until the key has sent fewer than its rate in the last second
+// (a strict Limiter only), and counts this send.
+func (l *Limiter) slide(ctx context.Context, key string) error {
+	rg := l.ring(key)
+	if rg == nil {
+		return nil
+	}
+	for {
+		rg.mu.Lock()
+		now := time.Now()
+		for len(rg.ts) > 0 && !rg.ts[0].Add(time.Second+windowMargin).After(now) {
+			rg.ts = rg.ts[1:]
+		}
+		if len(rg.ts) < rg.n {
+			rg.ts = append(rg.ts, now)
+			rg.mu.Unlock()
+			return nil
+		}
+		d := rg.ts[0].Add(time.Second + windowMargin).Sub(now)
+		rg.mu.Unlock()
+		if dl, ok := ctx.Deadline(); ok && time.Until(dl) < d {
+			<-ctx.Done()
+			return ctx.Err()
+		}
+		select {
+		case <-time.After(d):
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+}
+
+// ring is the key's send times, nil when the Limiter is not strict or the
+// key has no rate.
+func (l *Limiter) ring(key string) *ring {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if !l.strict {
+		return nil
+	}
+	r := l.perSecond
+	if o, ok := l.overrides[key]; ok {
+		r = o
+	}
+	if r <= 0 {
+		return nil
+	}
+	rg, ok := l.rings[key]
+	if !ok {
+		rg = &ring{}
+		l.rings[key] = rg
+	}
+	rg.n = max(1, int(r))
+	return rg
 }
 
 // WaitN blocks until key may send n requests at once (n at most the burst).

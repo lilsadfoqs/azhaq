@@ -48,7 +48,11 @@ type Options struct {
 	MaxPages int                 // per source; default none, as gau reads every page
 	MaxURLs  int                 // kept per domain; default 500,000
 
-	Apex      bool              // the domain's own host only, not its subdomains
+	Apex bool // the domain's own host only, not its subdomains
+	// Hosts says whether the archives are asked for a host the run's scope
+	// names when it does not hold the host's domain (-allow www.example.org):
+	// the host alone, as with Apex. Nil asks for domains only.
+	Hosts     func(host string) bool
 	Only      []string          // ask only these sources; default all
 	Filters   Filters           // sent to the archives that can apply them
 	Blacklist []string          // drop URLs whose path ends in one of these extensions
@@ -130,7 +134,30 @@ func (c *Collector) Name() string { return Name }
 // Info: this collector only asks third parties.
 func (c *Collector) Info() catalog.Info { return catalog.Info{Kind: catalog.Passive} }
 
-func (c *Collector) Inputs() []types.SeedType { return []types.SeedType{types.TypeDomain} }
+func (c *Collector) Inputs() []types.SeedType {
+	if c.opts.Hosts == nil {
+		return []types.SeedType{types.TypeDomain}
+	}
+	return []types.SeedType{types.TypeDomain, types.TypeHostname}
+}
+
+// target is what the archives are asked for: a domain, or the host of a
+// scope that names the host and not its domain (see Options.Hosts). Other
+// hostnames are not asked: their domain is, when the scope holds it.
+func (c *Collector) target(seed types.Seed) (name string, host, ok bool) {
+	if seed.Type != types.TypeHostname {
+		return normalize.Hostname(seed.Keys["domain"]), false, true
+	}
+	name = normalize.Hostname(seed.Keys["fqdn"])
+	ok = c.opts.Hosts != nil && name != "" && seed.Keys["from"] != "prefix" && c.opts.Hosts(name)
+	return name, true, ok
+}
+
+// Skip: a hostname the scope does not name alone has no archive to ask.
+func (c *Collector) Skip(seed types.Seed) bool {
+	_, _, ok := c.target(seed)
+	return !ok
+}
 
 func (c *Collector) Outputs() []string { return []string{"url"} }
 
@@ -138,8 +165,8 @@ func (c *Collector) Outputs() []string { return []string{"url"} }
 // not. A filter an archive cannot apply does not leave it out (see
 // unfiltered).
 func (c *Collector) Asks(seed types.Seed) []string {
-	domain := normalize.Hostname(seed.Keys["domain"])
-	if domain == "" || normalize.SpecialUse(domain) || normalize.Unlisted(domain) {
+	domain, _, ok := c.target(seed)
+	if !ok || domain == "" || normalize.SpecialUse(domain) || normalize.Unlisted(domain) {
 		return nil
 	}
 	out := make([]string, 0, len(c.sources))
@@ -189,7 +216,12 @@ type outcome struct {
 const cutGrace = 3 * time.Second
 
 func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Observation) error) (types.RunMeta, error) {
-	domain := normalize.Hostname(seed.Keys["domain"])
+	domain, hostSeed, ok := c.target(seed)
+	if !ok {
+		return types.RunMeta{Status: types.StatusOK}, nil
+	}
+	// A host is asked for alone, whatever -urls-subs says.
+	apexRun := c.opts.Apex || hostSeed
 	if domain == "" {
 		return types.RunMeta{Status: types.StatusError, Error: "empty domain"}, nil
 	}
@@ -204,10 +236,10 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		})
 	}
 
-	// A domain derived from a URL gets 15 s per source: the run is about
-	// the application.
+	// A domain derived from a URL gets 15 s per source: the run is about the
+	// application. A host the scope names is the target: it gets them all.
 	timeout := c.opts.Timeout
-	if seed.Derived() && timeout > 15*time.Second {
+	if seed.Derived() && !hostSeed && timeout > 15*time.Second {
 		timeout = 15 * time.Second
 	}
 	// The sources stop a little before the run's -timeout, so the summary
@@ -251,7 +283,7 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 				byRun = true
 			}
 			g := &getter{client: c.opts.Client, pause: c.pauses[s.name], maxPages: c.opts.MaxPages, retries: -1,
-				apex: c.opts.Apex, filters: c.opts.Filters, base: c.opts.Bases[s.name], raw: c.opts.Raw}
+				apex: apexRun, filters: c.opts.Filters, base: c.opts.Bases[s.name], raw: c.opts.Raw}
 			if c.opts.Retries != nil {
 				g.retries = *c.opts.Retries
 			}
@@ -263,7 +295,7 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 			// The host alone is how wayback, Common Crawl and arquivo are
 			// asked; otx and urlscan answer for the domain with its
 			// subdomains, and gau prints those too.
-			apex := c.opts.Apex && s.name != "otx" && s.name != "urlscan"
+			apex := apexRun && s.name != "otx" && s.name != "urlscan"
 			add := func(urls []rec) {
 				mu.Lock()
 				defer mu.Unlock()
@@ -376,7 +408,7 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 	var failed, capped []string
 	for i, s := range c.sources {
 		r := results[i]
-		row := map[string]any{"asked": c.askedOf(s, domain), "count": r.count, "pages": r.pages, "seconds": float64(r.took.Milliseconds()/100) / 10}
+		row := map[string]any{"asked": c.askedOf(s, domain, apexRun), "count": r.count, "pages": r.pages, "seconds": float64(r.took.Milliseconds()/100) / 10}
 		if what, flags := c.unfiltered(s); what != "" {
 			row["unfiltered"], row["unfiltered_by"] = what, flags
 		}
@@ -463,15 +495,15 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 
 // askedOf says what the archive was asked for: the host pattern of a CDX
 // archive, OTX's indicator, urlscan.io's search.
-func (c *Collector) askedOf(s source, domain string) string {
+func (c *Collector) askedOf(s source, domain string, apex bool) string {
 	switch s.name {
 	case "otx":
-		category, name := otxTarget(domain, c.opts.Apex)
+		category, name := otxTarget(domain, apex)
 		return category + " " + name
 	case "urlscan":
 		return urlscanQuery(domain, c.opts.Filters)
 	}
-	g := &getter{apex: c.opts.Apex}
+	g := &getter{apex: apex}
 	return g.pattern(domain)
 }
 

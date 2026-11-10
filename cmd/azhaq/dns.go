@@ -272,7 +272,7 @@ func cmdDNS(args []string) error {
 	}
 	rate, _ := strconv.ParseFloat(fs.Lookup("dns-rate").Value.String(), 64)
 	// -retry unset: 3 attempts per name, 2 for the names -w and -wl generate.
-	pool := dnsr.New(dnsr.Options{Resolvers: resolvers, PerSecond: rate, Burst: int(rate), Timeout: *timeout, Attempts: *retry, Proxy: *proxyURL})
+	pool := dnsr.New(dnsr.Options{Resolvers: resolvers, PerSecond: rate, Timeout: *timeout, Attempts: *retry, Proxy: *proxyURL})
 	pool.Outside = func(d string) bool { return cf.scoped && !cf.rules.Allows(d) }
 	if *hc {
 		return healthCheck(pool, c.json)
