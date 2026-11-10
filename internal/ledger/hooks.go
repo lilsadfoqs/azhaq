@@ -347,7 +347,11 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 			},
 			GotFirstResponseByte: func() { answered.Store(true) },
 		}
-		sent := req.WithContext(httptrace.WithClientTrace(req.Context(), trace))
+		ctx := req.Context()
+		if try > 0 {
+			ctx = context.WithValue(ctx, replayKey{}, true)
+		}
+		sent := req.WithContext(httptrace.WithClientTrace(ctx, trace))
 		if try > 0 && req.GetBody != nil {
 			body, err := req.GetBody()
 			if err != nil {
@@ -373,9 +377,9 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 		// It was answered (the write's report may come late), or it was tried: a
 		// connect failed, a handshake began, or it failed for a reason no stop is
 		// to blame for (a name with no address, a connection the other end dropped
-		// before the write). Only a request a stop cancelled before it left is not
-		// listed.
-		if resp != nil || (err != nil && (reached.Load() || req.Context().Err() == nil)) {
+		// before the write). Only a request a stop cancelled, or the kill file
+		// refused, before it left is not listed.
+		if resp != nil || (err != nil && (reached.Load() || req.Context().Err() == nil && !errors.Is(err, neterr.ErrKilled))) {
 			record()
 		}
 		finish()
@@ -385,6 +389,15 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 		return resp, err
 	}
 }
+
+// replayKey marks the context of a request made again after a pooled
+// connection turned out closed (see IsReplay).
+type replayKey struct{}
+
+// IsReplay says ctx is that of a request made again on a connection of its
+// own after a pooled one turned out closed: the request was let go, and
+// listed, before any stop; the kill file does not stop it halfway.
+func IsReplay(ctx context.Context) bool { return ctx.Value(replayKey{}) != nil }
 
 // maxReplays is how many times a request is made again after a pooled
 // connection turned out closed: the replay is on a connection of its own,
