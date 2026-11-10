@@ -27,7 +27,11 @@ func TestSubsLiveTakesNoLongerThanItsSlowestSource(t *testing.T) {
 	if code != exitOK {
 		t.Fatalf("exit %d %+v", code, rep)
 	}
-	if limit := slowest*105/100 + 500*time.Millisecond; took > limit {
+	limit := slowest*105/100 + 500*time.Millisecond
+	if raceOn {
+		limit += 500 * time.Millisecond // the detector slows the handling of ~700 answers
+	}
+	if took > limit {
 		t.Errorf("the run took %s, its slowest source %s: the bar is the source's time and the DNS of the names, %s", took, slowest, limit)
 	}
 }
