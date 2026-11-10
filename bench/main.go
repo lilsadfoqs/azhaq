@@ -65,6 +65,7 @@ type runMeasure struct {
 	Target  string  `json:"target"`
 	Seconds float64 `json:"seconds"`
 	RSSMB   float64 `json:"rss_mb"`
+	AnonMB  float64 `json:"anon_mb,omitempty"` // the peak private memory (RssAnon), sampled
 	Error   string  `json:"error,omitempty"`
 	Cached  bool    `json:"cached,omitempty"`  // replayed from today's run (refcache.go)
 	Profile string  `json:"profile,omitempty"` // default or polite, for a comparison
@@ -416,11 +417,12 @@ func run(target string, timeout time.Duration, dir string, name string, args ...
 	}
 	if err == nil {
 		done := make(chan struct{})
-		peak := make(chan int64)
-		go func() { peak <- watchHWM(cmd.Process.Pid, done) }()
+		peak := make(chan [2]int64)
+		go func() { hwm, anon := watchMem(cmd.Process.Pid, done); peak <- [2]int64{hwm, anon} }()
 		err = cmd.Wait()
 		close(done)
-		m.RSSMB = float64(<-peak) / 1024
+		p := <-peak
+		m.RSSMB, m.AnonMB = float64(p[0])/1024, float64(p[1])/1024
 	}
 	m.Seconds = time.Since(t0).Seconds()
 	if err != nil {
@@ -451,28 +453,38 @@ func freshCopy(path string) error {
 	return os.Rename(tmp, path)
 }
 
-// watchHWM samples the peak resident size (VmHWM, KB) of a running process.
+// watchMem samples a running process's peak resident size (VmHWM, KB) and
+// its peak private memory (RssAnon, KB: the resident size less the pages of
+// files, such as the binary's own, that the system shares and can drop).
 // rusage is no use here: a child started with vfork inherits the parent's
-// high-water mark at exec.
-func watchHWM(pid int, done <-chan struct{}) int64 {
-	var peak int64
+// high-water mark at exec. RssAnon has no high-water mark, so it is read
+// every 2 ms for the first 2 s (a small job's whole life), every 20 ms after.
+func watchMem(pid int, done <-chan struct{}) (hwm, anon int64) {
 	path := fmt.Sprintf("/proc/%d/status", pid)
-	tick := time.NewTicker(20 * time.Millisecond)
-	defer tick.Stop()
+	fast := time.Now().Add(2 * time.Second)
 	for {
 		if raw, err := os.ReadFile(path); err == nil {
 			for _, l := range strings.Split(string(raw), "\n") {
-				if strings.HasPrefix(l, "VmHWM:") {
-					var kb int64
-					fmt.Sscanf(strings.TrimSpace(strings.TrimPrefix(l, "VmHWM:")), "%d", &kb)
-					peak = max(peak, kb)
+				for _, f := range []struct {
+					key  string
+					peak *int64
+				}{{"VmHWM:", &hwm}, {"RssAnon:", &anon}} {
+					if strings.HasPrefix(l, f.key) {
+						var kb int64
+						fmt.Sscanf(strings.TrimSpace(strings.TrimPrefix(l, f.key)), "%d", &kb)
+						*f.peak = max(*f.peak, kb)
+					}
 				}
 			}
 		}
+		wait := 20 * time.Millisecond
+		if time.Now().Before(fast) {
+			wait = 2 * time.Millisecond
+		}
 		select {
 		case <-done:
-			return peak
-		case <-tick.C:
+			return hwm, anon
+		case <-time.After(wait):
 		}
 	}
 }

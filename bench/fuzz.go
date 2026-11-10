@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/lilsadfoqs/azhaq/internal/statechange"
 )
 
 // fuzzRow compares `azhaq fuzz` with ffuf on the bench apps: the same
@@ -34,6 +36,22 @@ type fuzzLeg struct {
 	ReportEqual   *bool    `json:"report_equal,omitempty"`
 	ReportProblem string   `json:"report_problem,omitempty"`
 	FfufOnly      []string `json:"ffuf_only,omitempty"`
+	Held          []string `json:"held_back,omitempty"` // ffuf's hits azhaq holds back by default: see heldBack
+}
+
+// heldBack is whether a hit of ffuf's is a GET azhaq holds back by default:
+// its own path or query names a state change (/createdb, /logout,
+// ?action=stop), which azhaq lists as held and sends with
+// -send-state-changing. Such a hit is named in the row and counted on
+// neither side: the rule is internal/statechange's, the one azhaq applies.
+func heldBack(u string) bool { return statechange.OfURL(u) != "" }
+
+// heldNote names the hits held back, or nothing when there are none.
+func heldNote(held []string) string {
+	if len(held) == 0 {
+		return ""
+	}
+	return fmt.Sprintf("; held back by default as state-changing GETs (-send-state-changing sends them), counted on neither side: %v", clipList(held, 5))
 }
 
 func benchFuzz(apps []string) *fuzzRow {
@@ -81,6 +99,10 @@ func benchFuzz(apps []string) *fuzzRow {
 				}
 			}
 			for h := range ff {
+				if !az[h] && heldBack(h) {
+					leg.Held = append(leg.Held, h)
+					continue
+				}
 				if !softHit(h) {
 					leg.FfufOK++
 				}
@@ -89,6 +111,7 @@ func benchFuzz(apps []string) *fuzzRow {
 				}
 			}
 			sort.Strings(leg.FfufOnly)
+			sort.Strings(leg.Held)
 			// The JSON report, once per app, outside the timing.
 			if !polite() && lg.name[0] == 'c' {
 				leg.reportEqual(u, words)
@@ -98,7 +121,7 @@ func benchFuzz(apps []string) *fuzzRow {
 			name := "fuzz " + filepath.Base(strings.TrimSuffix(strings.TrimPrefix(app, "http://"), "/")) + " " + lg.name
 			barOne(name, leg.AzhaqOK, leg.FfufOK, leg.AzhaqSecs, leg.FfufSecs, "a request that is not the app's catch-all answer",
 				cmds, fmt.Sprintf("%s; hits azhaq %d, ffuf %d, shared %d; %d words; %s; ffuf only %v%s", share(leg.Shared, leg.FfufHits), leg.AzhaqHits,
-					leg.FfufHits, leg.Shared, n, ratios(leg.AzhaqSecs, leg.FfufSecs, leg.memPair), clipList(leg.FfufOnly, 5), azErr(am))+downNote(appRestarts-downs0))
+					leg.FfufHits, leg.Shared, n, ratios(leg.AzhaqSecs, leg.FfufSecs, leg.memPair), clipList(leg.FfufOnly, 5), azErr(am))+heldNote(leg.Held)+downNote(appRestarts-downs0))
 			if leg.ReportEqual != nil {
 				addCheck("fuzz "+app+": the JSON report equals ffuf's (duration dropped)", *leg.ReportEqual, "%s", leg.ReportProblem)
 			}

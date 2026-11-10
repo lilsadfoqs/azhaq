@@ -32,6 +32,7 @@ type dirsRow struct {
 	FfufSecs   float64   `json:"ffuf_seconds"`
 	memPair              // the largest peak of any app's run
 	FfufOnly   []string  `json:"ffuf_only,omitempty"`
+	Held       []string  `json:"held_back,omitempty"` // ffuf's hits azhaq holds back by default: see heldBack
 	AzhaqOnly  []string  `json:"azhaq_only,omitempty"`
 	Small      *smallRow `json:"small,omitempty"` // a job of six words: its start-up and exit show
 }
@@ -114,6 +115,10 @@ func benchDirs(apps []string) *dirsRow {
 		}
 	}
 	for u := range ff {
+		if !az[u] && heldBack(u) {
+			row.Held = append(row.Held, u)
+			continue
+		}
 		if softHit(u) {
 			row.FfufFalse++
 		} else {
@@ -125,8 +130,9 @@ func benchDirs(apps []string) *dirsRow {
 	}
 	sort.Strings(row.FfufOnly)
 	sort.Strings(row.AzhaqOnly)
+	sort.Strings(row.Held)
 	note := fmt.Sprintf("%s; hits azhaq %d, ffuf %d, shared %d; %d words, %d apps; %s; ffuf only %v", share(row.Shared, row.FfufHits), row.AzhaqHits, row.FfufHits,
-		row.Shared, row.Words, len(apps), ratios(row.AzhaqSecs, row.FfufSecs, row.memPair), clipList(row.FfufOnly, 6)) + azBad + downNote(appRestarts-downs0)
+		row.Shared, row.Words, len(apps), ratios(row.AzhaqSecs, row.FfufSecs, row.memPair), clipList(row.FfufOnly, 6)) + heldNote(row.Held) + azBad + downNote(appRestarts-downs0)
 	barOne("dirs", azOK, ffOK, row.AzhaqSecs, row.FfufSecs, "a request that is not the app's catch-all answer", azCmd+" vs "+ffCmd, note)
 	addCheck("dirs: no more false positives than ffuf", row.AzhaqFalse <= row.FfufFalse,
 		"hits that answer like a missing path: azhaq %d, ffuf %d", row.AzhaqFalse, row.FfufFalse)

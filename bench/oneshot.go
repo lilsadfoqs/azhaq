@@ -15,7 +15,7 @@ import (
 // a bar that does not bend for the size of the job.
 const (
 	smallTime = 1.25 // times the reference's time
-	smallMem  = 2.0  // times the reference's peak memory
+	smallMem  = 2.0  // times the reference's peak private memory
 )
 
 // smallRow is one small case against its reference tool.
@@ -26,11 +26,24 @@ type smallRow struct {
 	AzhaqSecs float64 `json:"azhaq_seconds"`
 	RefSecs   float64 `json:"reference_seconds"`
 	memPair
+	// The peak private memory (RssAnon) in MB: what the job itself holds.
+	// The resident peaks of memPair also count the binary's file pages,
+	// shared and dropped by the system as needed, so they grow with the
+	// size of the binary, not with the job.
+	AzhaqAnon float64 `json:"azhaq_anon_mb,omitempty"`
+	RefAnon   float64 `json:"reference_anon_mb,omitempty"`
+}
+
+// setMem takes both peaks of each tool from the runs that were timed.
+func (r *smallRow) setMem(az, ref runMeasure) {
+	r.set(az, ref)
+	r.AzhaqAnon, r.RefAnon = az.AnonMB, ref.AnonMB
 }
 
 // barSmall holds a small job to its bar: at least the reference's results, at
-// most smallTime of its time and smallMem of its memory. A peak that was not
-// measured is a failed check, not a pass.
+// most smallTime of its time and smallMem of its private memory; the resident
+// peaks are printed beside it. A peak that was not measured is a failed
+// check, not a pass.
 func barSmall(name string, r smallRow, evidence, cmds, note string) {
 	if why, gone := refGone[vsTool(cmds)]; gone {
 		for _, what := range []string{"results ≥ the reference's", "time", "memory"} {
@@ -46,9 +59,10 @@ func barSmall(name string, r smallRow, evidence, cmds, note string) {
 		"azhaq %d, reference %d%s | %s", r.Azhaq, r.Ref, note, cmds)
 	addCheck(fmt.Sprintf("%s: time ≤ %.2f× the reference's", name, smallTime), r.AzhaqSecs <= r.RefSecs*smallTime && !failed,
 		"azhaq %.2fs, reference %.2fs (%.2f×, the median of 3)%s | %s", r.AzhaqSecs, r.RefSecs, safeRatio(r.AzhaqSecs, r.RefSecs), failedNote(failed), cmds)
-	measured := r.AzhaqRSS > 0 && r.RefRSS > 0
-	addCheck(fmt.Sprintf("%s: memory ≤ %.0f× the reference's", name, smallMem), measured && r.AzhaqRSS <= r.RefRSS*smallMem,
-		"azhaq %.0f MB, reference %.0f MB (%.2f×, the larger peak of 3) | %s", r.AzhaqRSS, r.RefRSS, safeRatio(r.AzhaqRSS, r.RefRSS), cmds)
+	measured := r.AzhaqAnon > 0 && r.RefAnon > 0
+	addCheck(fmt.Sprintf("%s: private memory ≤ %.0f× the reference's", name, smallMem), measured && r.AzhaqAnon <= r.RefAnon*smallMem,
+		"private (RssAnon) azhaq %.1f MB, reference %.1f MB (%.2f×); resident with the binary's shared file pages (VmHWM) azhaq %.0f MB, reference %.0f MB (%.2f×); the median of 3 | %s",
+		r.AzhaqAnon, r.RefAnon, safeRatio(r.AzhaqAnon, r.RefAnon), r.AzhaqRSS, r.RefRSS, safeRatio(r.AzhaqRSS, r.RefRSS), cmds)
 }
 
 func safeRatio(a, b float64) float64 {
@@ -80,7 +94,7 @@ func benchDirsSmall(app string) *smallRow {
 	}
 	row.Azhaq, row.Ref = len(az), len(ff)
 	row.AzhaqSecs, row.RefSecs = am.Seconds, fm.Seconds
-	row.set(am, fm)
+	row.setMem(am, fm)
 	barSmall("dirs 6 words", *row, "the paths ffuf lists", cmdLine(azhaq, aa...)+" vs "+cmdLine("ffuf", fa...), azFail(am))
 	return row
 }
@@ -109,7 +123,7 @@ func benchPortsSmall() []smallRow {
 		aOut, am, nOut, nm := timedPair("127.0.0.1", 10*time.Minute, work, azhaq, nmap, c.az, c.nm)
 		az, nb := portSet(aOut), nmapOpen(nOut)
 		r := smallRow{Case: c.name, Azhaq: len(az), Ref: len(nb), AzhaqSecs: am.Seconds, RefSecs: nm.Seconds}
-		r.set(am, nm)
+		r.setMem(am, nm)
 		barSmall(strings.Replace(c.name, " on 127.0.0.1", "", 1), r, c.evidence, cmdLine(azhaq, c.az...)+" vs "+cmdLine("nmap", c.nm...), azFail(am))
 		rows = append(rows, r)
 	}

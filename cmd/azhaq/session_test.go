@@ -230,8 +230,21 @@ func TestParallelRunSendsNothingNewAfterTheSessionEnds(t *testing.T) {
 			}
 			mu.Lock()
 			defer mu.Unlock()
-			if len(anon) > workers {
-				t.Errorf("%d requests reached the server without the session, more than the %d in the air: %v", len(anon), workers, anon)
+			// The guard asks its check page once to confirm the end; that is
+			// not new work, so it is counted apart.
+			var work, checks []string
+			for _, p := range anon {
+				if p == "/index.php" {
+					checks = append(checks, p)
+				} else {
+					work = append(work, p)
+				}
+			}
+			if len(work) > workers {
+				t.Errorf("%d requests reached the server without the session, more than the %d in the air: %v", len(work), workers, work)
+			}
+			if len(checks) > 1 {
+				t.Errorf("the check page was asked %d times after the session ended, not once: %v", len(checks), anon)
 			}
 			var sl *neterr.SessionLost
 			if !errors.As(fetch.SessionLost(), &sl) {
