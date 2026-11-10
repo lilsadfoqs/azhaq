@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -918,19 +919,11 @@ func (s *mcpServer) call(ctx context.Context, name string, a map[string]any, pro
 	}
 	limit := min(num(a, "limit", 100), maxLimit)
 	ws := wsName(a)
-	// A header that names a host would reach it through an address the lock
-	// allows: the target is named by url or targets, never by a header.
-	named := strList(a, "headers")
-	roleList, _ := a["roles"].([]any)
-	for _, x := range roleList {
-		r, _ := x.(map[string]any)
-		named = append(named, strList(r, "header")...)
-	}
-	for _, h := range named {
-		k, _, _ := strings.Cut(h, ":")
-		if scope.NamesHost(k) {
-			return nil, fmt.Errorf("headers: %s is not accepted: it names the host a front end serves; give the target in url or targets", strings.TrimSpace(k))
-		}
+	// A header that names a host is held to the lock as the CLI holds it
+	// (hostHeadersFrom): in scope it is sent, outside it is refused here,
+	// before any command starts. Without a lock the command decides.
+	if err := s.hostHeadersInScope(a); err != nil {
+		return nil, err
 	}
 	result := func(r cmdResult, extra map[string]any) (map[string]any, error) {
 		s.forMCP(r.summary, ws)
@@ -1849,6 +1842,39 @@ func (s *mcpServer) allowRules() []string {
 		}
 	}
 	return out
+}
+
+// hostHeadersInScope refuses a call whose headers (and roles' headers) name
+// a host, or a host and port, the server's lock leaves out: the CLI's own
+// check and message, so a client reads the same reason.
+func (s *mcpServer) hostHeadersInScope(a map[string]any) error {
+	if !s.locked {
+		return nil
+	}
+	named := strList(a, "headers")
+	roleList, _ := a["roles"].([]any)
+	for _, x := range roleList {
+		r, _ := x.(map[string]any)
+		named = append(named, strList(r, "header")...)
+	}
+	h := http.Header{}
+	for _, raw := range named {
+		if k, v, ok := strings.Cut(raw, ":"); ok {
+			h.Add(strings.TrimSpace(k), strings.TrimSpace(v))
+		}
+	}
+	var deny []string
+	for i := 0; i+1 < len(s.lock); i += 2 {
+		if s.lock[i] == "-deny" {
+			deny = append(deny, s.lock[i+1])
+		}
+	}
+	err := hostHeadersFrom("headers", h, scopeRules(s.allowRules(), deny).Compile())
+	var ue usageErr
+	if errors.As(err, &ue) {
+		return ue.err
+	}
+	return err
 }
 
 // allows: a host the server's lock lets a tool touch.

@@ -494,13 +494,13 @@ func TestMCPConcurrentCallsShareTheBudget(t *testing.T) {
 	}
 }
 
-// A role's headers are held to the same refusal as the call's.
+// A role's headers are held to the scope as the call's are.
 func TestMCPRefusesHostHeadersOfRoles(t *testing.T) {
 	dir := t.TempDir()
 	s := &mcpServer{exe: fakeAzhaq(t, dir), dir: dir, lock: []string{"-allow", "127.0.0.1", "-deny", "secret.lab"}, locked: true, budget: 50}
 	roles := []any{map[string]any{"name": "anon"}, map[string]any{"name": "bob", "header": []any{"X-Forwarded-Host: secret.lab"}}}
 	text, isErr := callText(t, s, "azhaq_roles", map[string]any{"url": "http://127.0.0.1:18090/", "roles": roles})
-	if !isErr || !strings.Contains(text, "not accepted") {
+	if !isErr || !strings.Contains(text, "outside the scope") {
 		t.Errorf("%v %s", isErr, text)
 	}
 	if _, err := os.Stat(filepath.Join(dir, "args")); err == nil {
@@ -523,18 +523,47 @@ func TestMCPShutdownAnswered(t *testing.T) {
 	}
 }
 
-// A header that names a host never reaches azhaq from an MCP call: the lock
-// names targets, and a Host header would route past it.
+// A header that names a host outside the scope never reaches azhaq from an
+// MCP call: the lock names targets, and a Host header would route past it.
+// The refusal is the scope's, as the CLI gives it.
 func TestMCPRefusesHostHeaders(t *testing.T) {
 	dir := t.TempDir()
-	s := &mcpServer{exe: fakeAzhaq(t, dir), dir: dir, lock: []string{"-allow", "127.0.0.1", "-deny", "secret.lab"}, locked: true, budget: 50}
-	for _, h := range []string{"Host: secret.lab", "x-forwarded-host: secret.lab"} {
-		text, isErr := callText(t, s, "azhaq_map", map[string]any{"url": "http://127.0.0.1:18090/", "headers": []any{h}})
-		if !isErr || !strings.Contains(text, "not accepted") {
+	s := &mcpServer{exe: fakeAzhaq(t, dir), dir: dir, lock: []string{"-allow", "127.0.0.1:5002", "-deny", "secret.lab"}, locked: true, budget: 50}
+	for _, h := range []string{"Host: secret.lab", "x-forwarded-host: secret.lab", "X-Host: 10.9.9.9", "Host: 127.0.0.1:3001"} {
+		text, isErr := callText(t, s, "azhaq_map", map[string]any{"url": "http://127.0.0.1:5002/", "headers": []any{h}})
+		if !isErr || !strings.Contains(text, "outside the scope") && !strings.Contains(text, "port the scope leaves out") {
 			t.Errorf("%s: %v %s", h, isErr, text)
 		}
 	}
 	if _, err := os.Stat(filepath.Join(dir, "args")); err == nil {
 		t.Error("azhaq ran")
+	}
+}
+
+// A Host header inside the scope is sent: the call reaches azhaq with the
+// header, as `probe -H 'Host: 127.0.0.1:5002' -allow 127.0.0.1:5002` does.
+func TestMCPSendsHostHeadersInScope(t *testing.T) {
+	dir := t.TempDir()
+	s := &mcpServer{exe: fakeAzhaq(t, dir), dir: dir, lock: []string{"-allow", "127.0.0.1:5002"}, locked: true, budget: 50}
+	t.Setenv("FAKE_SUMMARY", `{"type":"summary","command":"run","exit":0,"requests":1}`)
+	roles := []any{map[string]any{"name": "anon"}, map[string]any{"name": "bob", "header": []any{"X-Forwarded-Host: 127.0.0.1:5002"}}}
+	for _, c := range []struct {
+		tool string
+		args map[string]any
+		want string
+	}{
+		{"azhaq_map", map[string]any{"url": "http://127.0.0.1:5002/", "headers": []any{"Host: 127.0.0.1:5002"}}, "-header Host: 127.0.0.1:5002"},
+		{"azhaq_map", map[string]any{"url": "http://127.0.0.1:5002/", "headers": []any{"x-forwarded-host: 127.0.0.1"}}, "-header x-forwarded-host: 127.0.0.1"},
+		{"azhaq_roles", map[string]any{"url": "http://127.0.0.1:5002/", "roles": roles}, "X-Forwarded-Host: 127.0.0.1:5002"},
+	} {
+		text, isErr := callText(t, s, c.tool, c.args)
+		if isErr {
+			t.Errorf("%s: refused: %s", c.want, text)
+			continue
+		}
+		raw, _ := os.ReadFile(filepath.Join(dir, "args"))
+		if !strings.Contains(string(raw), c.want) {
+			t.Errorf("%s: not sent to azhaq:\n%s", c.want, raw)
+		}
 	}
 }
