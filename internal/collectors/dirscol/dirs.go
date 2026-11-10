@@ -1204,7 +1204,7 @@ func randWord(n int) string { return fetch.ProbeName("dirs " + strconv.Itoa(n)) 
 // directories where calibration could filter nothing, so their wildcard
 // answers are among the paths listed (the second result is true then).
 func Notes(obs []types.StoredObservation) ([]string, bool) {
-	held := 0
+	held, matched := 0, 0
 	var loose []string
 	for _, o := range obs {
 		if o.Collector != Name || o.Kind != "dirs" {
@@ -1212,12 +1212,14 @@ func Notes(obs []types.StoredObservation) ([]string, bool) {
 		}
 		var p struct {
 			Held       int      `json:"held"`
+			Filtered   int      `json:"filtered"`
 			Unfiltered []string `json:"unfiltered"`
 		}
 		if json.Unmarshal(o.Payload, &p) != nil {
 			continue
 		}
 		held += p.Held
+		matched += max(0, p.Filtered-p.Held) // filtered counts the held ones too
 		for _, d := range p.Unfiltered {
 			if !slices.Contains(loose, d) {
 				loose = append(loose, d)
@@ -1225,6 +1227,9 @@ func Notes(obs []types.StoredObservation) ([]string, bool) {
 		}
 	}
 	var out []string
+	if matched > 0 {
+		out = append(out, fmt.Sprintf("%s the calibration's: the status with the size, word count or line count that names that cannot exist get in their directory, and were filtered, not listed (-ac=false lists them)", map[bool]string{true: "1 answer matched", false: fmt.Sprintf("%d answers matched", matched)}[matched == 1]))
+	}
 	if held > 0 {
 		out = append(out, fmt.Sprintf("%d paths answered with the page that names that cannot exist get (the same status, title and words, though no size, word count or line count is shared) and were held back, not listed (-ac=false lists them)", held))
 	}

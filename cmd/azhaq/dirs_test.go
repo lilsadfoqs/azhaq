@@ -483,3 +483,36 @@ func TestDirsThatCannotCalibrateIsNotExit0(t *testing.T) {
 		t.Errorf("exit %d (%v), summary %+v, out %q", rep.Exit, err, rep, out)
 	}
 }
+
+// The answers the calibration filters are counted in the summary of dirs
+// and of run -dirs: the words asked are the paths listed and those filtered.
+func TestDirsCountsTheAnswersTheCalibrationFilters(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/robots.txt":
+			fmt.Fprint(w, "User-agent: *\nDisallow: /x\n")
+		case "/api":
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprint(w, "Error: Unexpected path: /api and a longer body")
+		default:
+			fmt.Fprint(w, "<html><title>Shop</title><body>the one page of the shop</body></html>")
+		}
+	}))
+	t.Cleanup(srv.Close)
+	wl := wlist(t, "robots.txt", "api", "login.php", "nothere")
+	const note = "2 answers matched the calibration's"
+	_, errOut, err := captureBoth(t, func() error { return cmdDirs([]string{"-u", srv.URL + "/", "-w", wl, "-json"}) })
+	rep := lastReport(t, errOut)
+	if err != nil || rep.Results != 2 || !strings.Contains(strings.Join(rep.Notes, "\n"), note) {
+		t.Errorf("dirs: results %d, want 2 and the note %q: %v (%v)", rep.Results, note, rep.Notes, err)
+	}
+	_, errOut, err = captureBoth(t, func() error {
+		return cmdRun([]string{"-url", srv.URL + "/", "-dirs", wl, "-no-paths", "-ledger", "off", "-json", "-db", t.TempDir() + "/r.db"})
+	})
+	if err != nil {
+		t.Fatalf("%v\n%s", err, errOut)
+	}
+	if rep := lastReport(t, errOut); !strings.Contains(strings.Join(rep.Notes, "\n"), note) {
+		t.Errorf("run -dirs: no note %q: %v", note, rep.Notes)
+	}
+}

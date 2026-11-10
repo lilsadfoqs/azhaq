@@ -1501,3 +1501,4 @@ plan.ceiling-max-requests	docs/commands/plan.md	`-max-requests` is the ceiling o
 plan.ceiling-open	docs/commands/plan.md	Where nothing bounds a stage (a crawl	test:cmd/azhaq:TestCeilingFromMaxRequests,TestCeilingOpenWhenTargetsAreFound
 plan.ceiling-found-targets	docs/commands/plan.md	A domain, an organisation or an AS number among the targets	test:cmd/azhaq:TestCeilingOpenWhenTargetsAreFound
 plan.ceiling-no-dns	docs/commands/plan.md	DNS queries have no ceiling	test:cmd/azhaq:TestCeilingDNSHasNone
+dirs.the-summary-counts-the-filtered-answers	docs/commands/dirs.md	The summary counts the answers the calibration filtered	test:cmd/azhaq:TestDirsCountsTheAnswersTheCalibrationFilters
