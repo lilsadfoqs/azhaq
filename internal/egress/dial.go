@@ -38,7 +38,7 @@ func DialProxy(ctx context.Context, network, addr string) (net.Conn, error) {
 // for each request, not for a connection, which may be to a proxy.
 func dialThrough(ctx context.Context, network, addr string) (net.Conn, error) {
 	p := Current()
-	if err := p.Killed(); err != nil {
+	if err := p.Killed(); err != nil && !ledger.IsReplay(ctx) { // a replay finishes a request let go before the stop
 		return nil, err
 	}
 	return dialResolved(ctx, p, network, addr)

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -66,6 +67,13 @@ func bareLocation(loc string) string {
 		return loc[:i]
 	}
 	return loc
+}
+
+// jsonBody: a body that is a JSON object or array whatever its content type
+// says (an API that answers {"status":"fail"} as text/html).
+func jsonBody(body []byte) bool {
+	t := bytes.TrimSpace(body)
+	return len(t) > 0 && (t[0] == '{' || t[0] == '[') && json.Valid(t)
 }
 
 // answerOf summarizes a response the way roles compares them.
@@ -173,7 +181,7 @@ const (
 
 // inspect reads a JSON answer: nil when the body is not JSON.
 func inspect(body []byte, contentType string) *jsonFacts {
-	if !strings.Contains(strings.ToLower(contentType), "json") {
+	if !strings.Contains(strings.ToLower(contentType), "json") && !jsonBody(body) {
 		return nil
 	}
 	var v any
