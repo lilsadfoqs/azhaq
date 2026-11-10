@@ -322,7 +322,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	workerToken := fs.String("worker-token", os.Getenv("AZHAQ_WORKER_TOKEN"), "the token workers give (default $AZHAQ_WORKER_TOKEN, else a new one)")
 	workerOf := fs.String("worker-of", "", "internal: run as a worker of the run at this address (azhaq worker sets it)")
 	daily := fs.Int64("daily-requests", 0, "requests a day to the program's targets (-program, else this run's targets), counted over the runs in -db")
-	maxNames := fs.Int("max-names", 0, "most hostnames this run resolves (default 200000, as many as subs keeps for a domain); the names left are for azhaq resume. A value you give also caps the names -dns-brute and -permute ask, together: the guesses past it are not asked, the run exits 4 and says how many (a larger -max-names asks them)")
+	maxNames := fs.Int("max-names", 0, "most hostnames this run resolves (default 200000, as many as subs keeps for a domain); the names left are for azhaq resume. A value you give also caps the names -dns-brute and -permute ask, together: the guesses past it are not asked, the run exits 4 and says how many, and azhaq resume asks them")
 	parallel := fs.Int("parallel", 0, "work items in flight (default 16)")
 	delay := fs.Duration("delay", 0, "pause before each uncached fetch")
 	noFollow := fs.Bool("no-follow", false, "do not follow redirects: each URL is asked once and its redirect recorded with the Location (httpx's default)")
@@ -1078,6 +1078,11 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	// A -max-names the user gave also caps the names guessing asks; the default
 	// cap is for the names looked up, and never cuts a wordlist.
 	guessBudget = brutecol.NewBudget(*maxNames)
+	if guessBudget != nil && *resumeRun != "" {
+		if obs, err := st.Observations(); err == nil {
+			guessBudget.AskedBefore(brutecol.Asked(obs)) // the stopped run's guesses: resume asks the rest
+		}
+	}
 	opts.GuessBudget = guessBudget
 	providerPaths := subcol.ProviderPaths()
 	if *providersFile != "" {
@@ -1673,6 +1678,8 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 				rep.Stopped = fmt.Sprintf("-max-names %d reached, %d names not looked up, %d tasks known and not done (-max-names raises it)", budgets.MaxNames, caps.NamesLeft, left)
 			case budgets.MaxItems > 0:
 				rep.Stopped = fmt.Sprintf("-max-items %d reached, %d tasks known and not done (-max-items raises it)", budgets.MaxItems, left)
+			case guessBudget.Held() > 0:
+				rep.Stopped = fmt.Sprintf("-max-names %d reached, %d guesses not asked, %d tasks known and not done (azhaq resume asks them)", *maxNames, guessBudget.Held(), left)
 			default:
 				rep.Stopped = fmt.Sprintf("%d tasks known and not done", left)
 			}
@@ -1702,9 +1709,9 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		}
 	}
 	if n := guessBudget.Held(); n > 0 {
-		rep.Notes = append(rep.Notes, fmt.Sprintf("-max-names %d held back %d guesses: the -w words and -permute variations beyond it were not asked (a larger -max-names asks them)", *maxNames, n))
+		rep.Notes = append(rep.Notes, fmt.Sprintf("-max-names %d held back %d guesses: the -w words and -permute variations beyond it were not asked; azhaq resume asks them, up to its own -max-names", *maxNames, n))
 		if rep.Stopped == "" {
-			rep.Stopped = fmt.Sprintf("-max-names %d reached, %d guesses not asked (-max-names raises it)", *maxNames, n)
+			rep.Stopped = fmt.Sprintf("-max-names %d reached, %d guesses not asked (azhaq resume asks them)", *maxNames, n)
 		}
 	}
 	if !out.embedded && rep.Command == "run" && len(opts.Ports) > 0 {

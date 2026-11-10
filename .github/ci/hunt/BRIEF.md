@@ -9,7 +9,7 @@ Do not read azhaq's Go source and do not review diffs: judge only by behaviour, 
 - Reference tools, ready to run, in /home/runner/ref/bin/: subfinder, dnsx, httpx, katana, ffuf, gau, naabu, gowitness, notify, jsluice and arjun. nmap is installed (`nmap`); run it without sudo (`-sT -sV`).
 - Independent request log: `python3 -I /home/runner/work/azhaq/azhaq/bench/truth/ledger/countproxy.py LISTEN_PORT TARGET_PORT LOG.jsonl` is a reverse proxy that logs every request as it arrives (method, and path with query). Run it in the background on a free port, put it in front of a lab app, and point azhaq at the proxy port. It also works as `-proxy` (it sends the origin the path, as a forward proxy does). Do not edit it.
 - This machine is yours alone: no other reviewer shares the labs.
-- The runner's kernel gives Chrome no sandbox, and it is a throwaway machine: every azhaq command that starts Chrome (`shots`, `crawl` or `run` with `-browser`, `-screenshots` or `-login`, `roles` with `-role-login`) needs `-chrome-no-sandbox` here, as the error says.
+- This is a throwaway machine, and its kernel may refuse Chrome its sandbox: give every azhaq command that starts Chrome (`shots`, `crawl` or `run` with `-browser`, `-screenshots` or `-login`, `roles` with `-role-login`) `-chrome-no-sandbox`, as the error says. The flag only allows Chrome to run without its sandbox when the system refuses one: where the system gives one, Chrome keeps it, and the summary's `Chrome ran with its sandbox` is then true.
 
 ## Allowed targets (hard rules)
 

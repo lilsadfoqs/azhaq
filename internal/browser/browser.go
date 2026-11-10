@@ -131,9 +131,9 @@ type Browser struct {
 	working sync.WaitGroup // requests being decided
 
 	sendMu sync.Mutex
-	out    map[network.RequestID][]letGo // let send, not yet seen leaving, oldest first
-	cached map[network.RequestID]letGo   // let send, answered from Chrome's cache
-	hops   map[network.RequestID]*hops   // listed in the ledger and answered, by network ID
+	out    map[network.RequestID]letGo // let send, not yet seen leaving
+	cached map[network.RequestID]letGo // let send, answered from Chrome's cache
+	hops   map[network.RequestID]*hops // listed in the ledger and answered, by network ID
 
 	mu      sync.Mutex
 	session map[string]string            // sessionStorage a login left, for every tab

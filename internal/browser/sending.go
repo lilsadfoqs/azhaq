@@ -58,8 +58,8 @@ type letGo struct {
 
 // sending notes a request just before it is continued. The ledger lists it
 // once Chrome says it went out (sentOff); one Chrome drops after all (a
-// retry on a dead connection) is listed when its page ends (unheard): it
-// may have left. Without a network ID nothing would say so: it is listed now.
+// retry on a dead connection) is neither listed nor counted. Without a
+// network ID nothing would say so: it is listed now.
 func (b *Browser) sending(id network.RequestID, g letGo) {
 	if id == "" {
 		ledger.Chrome(g.ctx, g.method, g.url)
@@ -68,32 +68,33 @@ func (b *Browser) sending(id network.RequestID, g letGo) {
 	b.sendMu.Lock()
 	defer b.sendMu.Unlock()
 	if b.out == nil {
-		b.out = map[network.RequestID][]letGo{}
+		b.out = map[network.RequestID]letGo{}
 	}
-	egress.Hold(1) // counted, not yet seen leaving
-	b.out[id] = append(b.out[id], g)
+	if _, ok := b.out[id]; !ok {
+		egress.Hold(1) // counted, not yet seen leaving
+	}
+	b.out[id] = g
 }
 
 // pausedAgain settles what was let go under id before Chrome paused it
-// again. Another URL is a redirect's next hop: what went before left, and
-// is listed. The same URL is a retry, and nothing says whether the try
-// before it left (a dead keep-alive connection may have carried it to the
-// server): it stays let go, listed when Chrome says it went out or when
-// its page ends, never given back.
+// again: the same URL is a retry, so the first try never left (Chrome
+// retries what got no answer) and its count is given back; another URL is
+// a redirect's next hop, so the first one left.
 func (b *Browser) pausedAgain(id network.RequestID, raw string) {
 	if id == "" {
 		return
 	}
 	b.sendMu.Lock()
-	q := b.out[id]
-	if len(q) == 0 || q[len(q)-1].url == raw {
-		b.sendMu.Unlock()
-		return
-	}
+	g, ok := b.out[id]
 	delete(b.out, id)
 	b.sendMu.Unlock()
-	egress.Release(len(q))
-	for _, g := range q {
+	switch {
+	case !ok:
+	case g.url == raw:
+		egress.Refund()
+		egress.Release(1)
+	default:
+		egress.Release(1)
 		ledger.ChromeAt(g.ctx, g.method, g.url, g.at)
 		b.sendMu.Lock()
 		b.tally(id, 1, 0)
@@ -101,27 +102,13 @@ func (b *Browser) pausedAgain(id network.RequestID, raw string) {
 	}
 }
 
-// take removes and returns the oldest request let go under id.
-func (b *Browser) take(id network.RequestID) (letGo, bool) {
-	q := b.out[id]
-	if len(q) == 0 {
-		return letGo{}, false
-	}
-	if len(q) == 1 {
-		delete(b.out, id)
-	} else {
-		b.out[id] = q[1:]
-	}
-	return q[0], true
-}
-
 // sentOff lists the request Chrome sent under id (Network's
-// requestWillBeSentExtraInfo: its headers went out), the oldest let go.
-// One already taken for a cache hit left after all (a revalidation): it is
-// counted again.
+// requestWillBeSentExtraInfo: its headers went out). One already taken
+// for a cache hit left after all (a revalidation): it is counted again.
 func (b *Browser) sentOff(id network.RequestID) {
 	b.sendMu.Lock()
-	g, ok := b.take(id)
+	g, ok := b.out[id]
+	delete(b.out, id)
 	if ok {
 		egress.Release(1)
 	} else {
@@ -140,22 +127,16 @@ func (b *Browser) sentOff(id network.RequestID) {
 }
 
 // fromCache takes back a request Chrome answered from its cache (Network's
-// requestServedFromCache): the latest let go under id did not leave, so it
-// is neither listed nor counted. It is kept aside in case its headers are
-// heard of late.
+// requestServedFromCache): nothing left, so it is neither listed nor
+// counted. It is kept aside in case its headers are heard of late.
 func (b *Browser) fromCache(id network.RequestID) {
 	b.sendMu.Lock()
 	defer b.sendMu.Unlock()
-	q := b.out[id]
-	if len(q) == 0 {
+	g, ok := b.out[id]
+	if !ok {
 		return
 	}
-	g := q[len(q)-1]
-	if len(q) == 1 {
-		delete(b.out, id)
-	} else {
-		b.out[id] = q[:len(q)-1]
-	}
+	delete(b.out, id)
 	if b.cached == nil {
 		b.cached = map[network.RequestID]letGo{}
 	}
@@ -170,20 +151,11 @@ func (b *Browser) unheard(t *tab) {
 	b.sendMu.Lock()
 	var left []letGo
 	var ids []network.RequestID
-	for id, q := range b.out {
-		var keep []letGo
-		for _, g := range q {
-			if t == nil || g.t == t {
-				left = append(left, g)
-				ids = append(ids, id)
-			} else {
-				keep = append(keep, g)
-			}
-		}
-		if len(keep) == 0 {
+	for id, g := range b.out {
+		if t == nil || g.t == t {
+			left = append(left, g)
+			ids = append(ids, id)
 			delete(b.out, id)
-		} else {
-			b.out[id] = keep
 		}
 	}
 	for id, g := range b.cached {
