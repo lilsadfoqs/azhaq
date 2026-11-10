@@ -354,6 +354,10 @@ func flagNear(name string, names []string) []string {
 		if len(name) >= 3 && strings.HasPrefix(ln, lower) {
 			d = min(d, 1)
 		}
+		// plan and run name a collector's flag with its prefix: -detect is -port-detect there.
+		if len(name) >= 3 && strings.HasSuffix(ln, "-"+lower) {
+			d = min(d, 1)
+		}
 		if d <= limit {
 			cs = append(cs, cand{n, d})
 		}

@@ -343,6 +343,8 @@ func TestMistypedFlagSuggestsClosestName(t *testing.T) {
 		{[]string{"run", "-dirs-extt"}, "-dirs-ext"},       // hidden: a rare one
 		{[]string{"fuzz", "-recursio"}, "-recursion"},
 		{[]string{"crawl", "-rate-limitt"}, "-rate-limit"},
+		{[]string{"plan", "-cidr", "127.0.0.0/30", "-detect", "none"}, "-port-detect"}, // the ports flag, prefixed in plan
+		{[]string{"run", "-url", "http://127.0.0.1:9/", "-ext", "php"}, "-dirs-ext"},
 	} {
 		_, errOut, code := cli(t, c.args...)
 		if code != exitUsage || !strings.Contains(errOut, "flag provided but not defined") || !strings.Contains(errOut, c.want) {
