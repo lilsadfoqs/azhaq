@@ -2,6 +2,7 @@ package limit
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 )
@@ -114,4 +115,28 @@ func TestStrictHoldsEverySecond(t *testing.T) {
 	if d := ts[10].Sub(ts[0]); d < time.Second {
 		t.Errorf("11 sends in %v at 10 a second", d)
 	}
+}
+
+// A strict Limiter is waited on by many senders at once, one key or
+// several, while Set changes a rate: go test -race sees no race.
+func TestStrictWaitFromManySendersAtOnce(t *testing.T) {
+	l := New(200, 1).Strict()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	var wg sync.WaitGroup
+	for i := range 16 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			key := []string{"a", "b"}[i%2]
+			for range 5 {
+				if err := l.Wait(ctx, key); err != nil {
+					t.Error(err)
+					return
+				}
+			}
+		}()
+	}
+	l.Set("a", 300)
+	wg.Wait()
 }

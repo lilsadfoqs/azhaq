@@ -31,7 +31,6 @@ type Limiter struct {
 // ring holds the times of a key's last sends, for a strict Limiter.
 type ring struct {
 	mu sync.Mutex
-	n  int
 	ts []time.Time
 }
 
@@ -85,7 +84,7 @@ func (l *Limiter) Wait(ctx context.Context, key string) error {
 // slide waits until the key has sent fewer than its rate in the last second
 // (a strict Limiter only), and counts this send.
 func (l *Limiter) slide(ctx context.Context, key string) error {
-	rg := l.ring(key)
+	rg, n := l.ring(key)
 	if rg == nil {
 		return nil
 	}
@@ -95,7 +94,7 @@ func (l *Limiter) slide(ctx context.Context, key string) error {
 		for len(rg.ts) > 0 && !rg.ts[0].Add(time.Second+windowMargin).After(now) {
 			rg.ts = rg.ts[1:]
 		}
-		if len(rg.ts) < rg.n {
+		if len(rg.ts) < n {
 			rg.ts = append(rg.ts, now)
 			rg.mu.Unlock()
 			return nil
@@ -114,28 +113,28 @@ func (l *Limiter) slide(ctx context.Context, key string) error {
 	}
 }
 
-// ring is the key's send times, nil when the Limiter is not strict or the
-// key has no rate.
-func (l *Limiter) ring(key string) *ring {
+// ring is the key's send times and how many a second may hold, nil when
+// the Limiter is not strict or the key has no rate. The count is returned,
+// not kept on the ring: Set may change it while a send waits on rg.mu.
+func (l *Limiter) ring(key string) (*ring, int) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if !l.strict {
-		return nil
+		return nil, 0
 	}
 	r := l.perSecond
 	if o, ok := l.overrides[key]; ok {
 		r = o
 	}
 	if r <= 0 {
-		return nil
+		return nil, 0
 	}
 	rg, ok := l.rings[key]
 	if !ok {
 		rg = &ring{}
 		l.rings[key] = rg
 	}
-	rg.n = max(1, int(r))
-	return rg
+	return rg, max(1, int(r))
 }
 
 // WaitN blocks until key may send n requests at once (n at most the burst).
