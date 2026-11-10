@@ -252,11 +252,23 @@ func TestSampledDoesNotCountALiveNameAnotherSourceGave(t *testing.T) {
 	rounds := [][]string{span(0, 100), span(1, 101), span(2, 102)}
 	known := name(100)
 	asked := 0
+	realGave := make(chan struct{})
 	pad := sampled(verified(source{name: "pad", deflt: true, collect: func(context.Context, string, []string, *subscraping.Session) ([]string, error) {
+		if asked == 1 {
+			// The scene: the real source gave the name before the second
+			// sample is checked. Its names reach the checker just after its
+			// call returns.
+			<-realGave
+			time.Sleep(50 * time.Millisecond)
+		}
 		r := rounds[min(asked, len(rounds)-1)]
 		asked++
 		return r, nil
 	}}))
+	realSrc := source{name: "real", need: noKey, deflt: true, collect: func(context.Context, string, []string, *subscraping.Session) ([]string, error) {
+		defer close(realGave)
+		return []string{known}, nil
+	}}
 	c := collector(Options{SourceTimeout: 5 * time.Second, NoHistory: true, Verify: func(_ context.Context, _ string, names []string) ([]string, []string) {
 		var out []string
 		for _, n := range names {
@@ -265,7 +277,7 @@ func TestSampledDoesNotCountALiveNameAnotherSourceGave(t *testing.T) {
 			}
 		}
 		return out, nil
-	}}, pad, fake("real", noKey, true, []string{known}, nil))
+	}}, pad, realSrc)
 	payload, _ := run(t, c, context.Background())
 	row := payload["sources"].(map[string]any)["pad"].(map[string]any)
 	if got := len(row["rounds"].([]any)); got != 2 || row["sampling_stopped"] != stopNoLive {
