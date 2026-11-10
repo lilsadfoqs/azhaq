@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -101,6 +102,11 @@ func TestRunProbeTakesTheScreenshotsAskedFor(t *testing.T) {
 	pics, _ := filepath.Glob(filepath.Join(dir, "shots", "*"))
 	if len(pics) == 0 {
 		t.Errorf("-screenshots was given with -probe and no picture was taken (notes %q)", rep.Notes)
+	}
+	for _, p := range pics {
+		if !slices.Contains(rep.Wrote, filepath.Join("shots", filepath.Base(p))) {
+			t.Errorf("wrote %q does not name the screenshot %s", rep.Wrote, p)
+		}
 	}
 }
 
