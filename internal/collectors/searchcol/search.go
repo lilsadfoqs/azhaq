@@ -189,6 +189,7 @@ func getJSON(ctx context.Context, c *http.Client, raw string, header http.Header
 	if err != nil {
 		return err
 	}
+	fetch.BoundNote(resp, "search "+req.URL.Host) // a stream that never ends is cut, and the run says so
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 32<<20))
 	if resp.StatusCode != http.StatusOK {

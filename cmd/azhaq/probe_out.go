@@ -927,6 +927,7 @@ func ripeASN(ip string) *asnInfo {
 		if err != nil {
 			return false
 		}
+		fetch.BoundNote(resp, "RIPEstat "+req.URL.Host) // a stream that never ends is cut, and the run says so
 		defer resp.Body.Close()
 		return resp.StatusCode == 200 && json.NewDecoder(io.LimitReader(resp.Body, 4<<20)).Decode(v) == nil
 	}

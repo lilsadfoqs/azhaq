@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/lilsadfoqs/azhaq/internal/answer"
+	"github.com/lilsadfoqs/azhaq/internal/fetch"
 )
 
 // A source that answers 429 is asked again after the Retry-After it names
@@ -85,6 +86,10 @@ func (t *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 			th.requests.Add(1)
 		}
 		resp, err := t.next.RoundTrip(req)
+		if err == nil {
+			// Before anything reads the body, a source's own reader included.
+			fetch.BoundNote(resp, "source "+req.URL.Host)
+		}
 		if err != nil || resp.StatusCode != http.StatusTooManyRequests {
 			if err == nil && resp.StatusCode == http.StatusOK {
 				screenAnswer(req, resp)

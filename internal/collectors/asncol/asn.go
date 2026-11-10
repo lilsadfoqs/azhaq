@@ -153,6 +153,7 @@ func (a *ASN) get(ctx context.Context, path string, v any) error {
 	if err != nil {
 		return err
 	}
+	fetch.BoundNote(resp, "RIPEstat "+req.URL.Host) // a stream that never ends is cut, and the run says so
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("RIPEstat answered %d", resp.StatusCode)
