@@ -23,12 +23,13 @@ type pathCheck struct {
 	Answered int    `json:"already_answered,omitempty"`
 	Skipped  int    `json:"skipped,omitempty"`
 	Reason   string `json:"reason,omitempty"` // why the skipped were, with how many each
+	left     bool   // its sweep is among the work the run left for azhaq resume
 }
 
 // pathChecks says, for each web service the run reached, what became of the
 // checks the plan lists for it (list). A service whose sweep left no record
 // says so: its checks were listed and no request of the sweep is on record.
-func pathChecks(obs []types.StoredObservation, list []string, failed map[string]string) []pathCheck {
+func pathChecks(obs []types.StoredObservation, list []string, failed map[string]string, left map[string]bool) []pathCheck {
 	if len(list) == 0 {
 		return nil
 	}
@@ -95,6 +96,9 @@ func pathChecks(obs []types.StoredObservation, list []string, failed map[string]
 		locs, descs := pathscol.Sweep(origin+"/", list)
 		c.Listed = len(locs) + len(descs)
 		c.Reason = "its sweep left no record: it did not run, or the run ended before it finished (see stopped and failed)"
+		if left[origin] {
+			c.Reason, c.left = "its sweep is among the work the run left (found past -depth or over a cap, see notes): azhaq resume sweeps it", true
+		}
 		if e := failed[origin]; e != "" {
 			c.Reason = "its sweep failed: " + e
 		}
@@ -148,7 +152,7 @@ func (r *report) failUnrecordedSweeps() {
 		}
 	}
 	for _, c := range r.PathChecks {
-		if c.Sent != nil || named[c.Service] || strings.HasPrefix(c.Reason, "its sweep failed") {
+		if c.Sent != nil || c.left || named[c.Service] || strings.HasPrefix(c.Reason, "its sweep failed") {
 			continue
 		}
 		r.Failed = append(r.Failed, engine.Failure{
@@ -157,6 +161,21 @@ func (r *report) failUnrecordedSweeps() {
 		})
 		r.warned = true
 	}
+}
+
+// leftOrigins are the web services with a URL among the work a run left
+// (past -depth, over a cap): their sweep is for azhaq resume, not missing.
+func leftOrigins(left []types.Seed) map[string]bool {
+	out := map[string]bool{}
+	for _, s := range left {
+		if s.Type != types.TypeURL {
+			continue
+		}
+		if u, err := url.Parse(s.Keys["url"]); err == nil && u.Host != "" {
+			out[u.Scheme+"://"+u.Host] = true
+		}
+	}
+	return out
 }
 
 // failedPaths are the errors of the path sweeps that failed, by origin.

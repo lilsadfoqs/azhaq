@@ -143,8 +143,9 @@ type report struct {
 	// PathChecks is, for each web service, what became of the built-in path
 	// checks the plan lists for it: sent, answered by an earlier request, or
 	// skipped with the reason. The ones sent are in requests_by_purpose.
-	PathChecks []pathCheck `json:"path_checks,omitempty"`
-	pathList   []string    // the built-in path checks the run plans for each service; none when the sweep does not run
+	PathChecks  []pathCheck     `json:"path_checks,omitempty"`
+	pathList    []string        // the built-in path checks the run plans for each service; none when the sweep does not run
+	leftOrigins map[string]bool // the services with a URL among the work the run left for azhaq resume
 	// BrowserRequests is what became of the requests Chrome was asked to send
 	// (commands that drive it): the ledger's Chrome lines, split into answered and
 	// unanswered, and the requests it was not let send (see browser_requests.go).
@@ -483,7 +484,7 @@ func fillReport(rep *report, path string, seeds []types.Seed, ents []types.Entit
 	rep.Notes = append(rep.Notes, portcol.StoppedNotes()...)
 	rep.Notes = append(rep.Notes, engine.GraphQLNotes(obs)...)
 	rep.Notes = append(rep.Notes, pathscol.Notes(obs)...)
-	rep.PathChecks = pathChecks(obs, rep.pathList, failedPaths(rep.Failed))
+	rep.PathChecks = pathChecks(obs, rep.pathList, failedPaths(rep.Failed), rep.leftOrigins)
 	rep.Notes = append(rep.Notes, pathCheckNotes(rep.PathChecks)...)
 	if notes, loose := dirscol.Notes(obs); len(notes) > 0 {
 		rep.Notes = append(rep.Notes, notes...)

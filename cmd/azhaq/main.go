@@ -1551,6 +1551,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	if col, ok := cat.Get("azhaq-paths"); ok && budgets.Allows(col, types.Seed{Type: types.TypeURL, Keys: map[string]string{"url": "https://service.invalid/"}}) {
 		rep.pathList = paths
 	}
+	rep.leftOrigins = leftOrigins(leftover)
 	fillReport(rep, path, seeds, ents, obs, rows)
 	if !out.plan {
 		// The ones found on the way: an API description's GET whose own

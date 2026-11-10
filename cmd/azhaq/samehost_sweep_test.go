@@ -8,6 +8,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/lilsadfoqs/azhaq/types"
 )
 
 // vhostServer is one web server for many names: it counts, by Host, the
@@ -97,5 +99,25 @@ func TestUnrecordedPathSweepOfAStoppedRunIsNotAFailure(t *testing.T) {
 	done.settle()
 	if done.Exit != exitOK || !done.Complete || len(done.Failed) != 0 {
 		t.Errorf("recorded sweep: exit %d, failed %+v", done.Exit, done.Failed)
+	}
+}
+
+// A sweep whose service has a URL among the work the run left (past
+// -depth, over a cap) is for azhaq resume, not one that did not run: the
+// row says so and the run is not failed for it.
+func TestPathSweepLeftForResumeIsNotFailed(t *testing.T) {
+	obs := []types.StoredObservation{{Observation: types.Observation{Collector: "azhaq-http", Kind: "application", Payload: []byte(`{"url":"http://lab.zz/"}`)}}}
+	left := leftOrigins([]types.Seed{{Type: types.TypeURL, Keys: map[string]string{"url": "http://lab.zz/"}}})
+	cs := pathChecks(obs, []string{"/.git/HEAD"}, nil, left)
+	if len(cs) != 1 || cs[0].Sent != nil || !strings.Contains(cs[0].Reason, "azhaq resume sweeps it") {
+		t.Fatalf("path_checks: %+v", cs)
+	}
+	rep := &report{Command: "run", PathChecks: cs}
+	rep.settle()
+	if rep.Exit != exitOK || len(rep.Failed) != 0 {
+		t.Errorf("exit %d, failed %+v: a sweep left for resume is no failure", rep.Exit, rep.Failed)
+	}
+	if cs := pathChecks(obs, []string{"/.git/HEAD"}, nil, nil); len(cs) != 1 || !strings.Contains(cs[0].Reason, "left no record") {
+		t.Errorf("with nothing left: %+v", cs)
 	}
 }
