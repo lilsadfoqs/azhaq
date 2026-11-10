@@ -1,5 +1,33 @@
 # Changelog
 
+## v0.18.0
+
+### Added
+
+- `export -run ID` writes an earlier run of a workspace, as `query -run`, `show -run` and `diff -run` read one.
+- A run whose scope names a host and not its domain (`-allow www.example.org`) asks the archives for that host and lists its archived URLs.
+
+### Fixed
+
+- A `-resolvers` file is stored in the run as the resolvers it holds, so `azhaq resume` asks the same ones when the file is moved, edited or gone.
+- The subdomain sources, search engines, RIPEstat, program lists and advisory feeds cut an answer that never ends at 64 KiB or 2 s, and the summary names the read that was cut.
+- `-allow www.example.org` no longer stores a Domain row for example.org, which the scope does not hold.
+- `azhaq resume -send-state-changing` asks the fuzz inputs a run held back as state-changing GETs; the summary's `next` names it.
+- `query -coverage` refuses a value no row can have, with a usage error naming the accepted values.
+- `-dns-rate N` sends at most N queries to a resolver in any one second from the first query on; the pace no longer starts with a burst.
+- A plain `http://` request Chrome sends is listed and counted as the guard reads it on the wire: a retry that reached the server is two requests, a try that did not is none, a request let go and never sent is given back. Chrome's events could not tell these apart: the ledger missed a retried try, or listed one that never left.
+- `azhaq_roles` passes `-send-state-changing` on when the MCP server was started with it, as the other tools do.
+- An MCP server holds a `-resolvers FILE` as the resolvers the file held, so a file changed or removed later changes nothing a held run asks.
+- A crawl with `-browser` folds a script address answered with the app's catch-all page as the catch-all, counted with the control it matched, not a script hint.
+- A hostname that answers is mapped like a URL given: its pages, scripts and built-in path checks are asked, each name on its own, virtual hosts on one address too. A name from `-list`, `-domain` or `-dns-brute` was probed and never crawled or swept; a run of names now sends those requests too.
+- A path sweep the run listed that left no record, with no stop to explain it, makes the run incomplete (exit 3) and names the service in `failed`; a sweep left for `azhaq resume` is not a failure.
+- `ingest` skips a line that gives nothing to keep (a `url` that does not parse) with its line and reason; the per-format counts no longer run past `results` unexplained.
+- An unknown flag that ends a prefixed flag is hinted: `plan -detect` names `-port-detect`.
+- An API operation whose operationId or summary opens with a read verb is a read, not held back for a later word of its summary ("Lists all rules: active or deleted").
+- Webpack chunks of a relative public path are asked where the browser asks them, against the page; no doubled `public/build/public/build/` paths and their redirects.
+- With `-graphql`, a GraphQL endpoint at a usual path named at the last wave is introspected; without the flag it stays a hint.
+- The strict `-dns-rate` limiter no longer shares a key's count between two locks, a data race.
+
 ## v0.17.0
 
 ### Added
