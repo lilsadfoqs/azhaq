@@ -668,6 +668,7 @@ func (o *probeOut) settle(rep *report, st *store.Store, fs *flag.FlagSet) {
 	sort.Strings(found)
 	order = append(order, found...)
 	var gaps []string
+	dnsFails := map[string][]string{} // why a name has no address: the targets it failed
 	noAnswer, notAsked, rows := 0, 0, 0
 	for _, in := range order {
 		units := o.units[in]
@@ -689,15 +690,17 @@ func (o *probeOut) settle(rep *report, st *store.Store, fs *flag.FlagSet) {
 			if answered || len(unanswered[k]) > 0 {
 				continue
 			}
-			why := failed[k]
+			why, byDNS := failed[k], false
 			if why == "" && k != "" {
 				why = dnsErr[normalize.HostFromURL(k)]
+				byDNS = why != ""
 			}
 			if why == "" {
 				why = skipped[k]
 			}
 			if why == "" {
 				why = dnsErr[in]
+				byDNS = why != ""
 			}
 			if why == "" && rep.Stopped != "" {
 				notAsked++ // the run stopped before it came to this target: azhaq resume asks it
@@ -712,10 +715,23 @@ func (o *probeOut) settle(rep *report, st *store.Store, fs *flag.FlagSet) {
 			if why == "outside the scope" {
 				continue // not sent by choice: the summary's skipped list names it, as no failure
 			}
+			if byDNS {
+				dnsFails[why] = append(dnsFails[why], u.line)
+			}
 			o.failedRow(in, u.line, why)
 			noAnswer++
 			rows++
 		}
+	}
+	// A name with no address is a failure like a refused connection: the
+	// summary names it, as its row does.
+	whys := make([]string, 0, len(dnsFails))
+	for why := range dnsFails {
+		whys = append(whys, why)
+	}
+	sort.Strings(whys)
+	for _, why := range whys {
+		rep.Failed = append(rep.Failed, engine.Failure{Collector: "azhaq-dns", Error: why, Count: len(dnsFails[why]), Targets: dnsFails[why]})
 	}
 	if len(gaps) > 0 {
 		rep.Failed = append(rep.Failed, engine.Failure{Collector: "azhaq-http", Error: "no answer and no failure recorded", Retryable: true, Count: len(gaps), Targets: gaps})
