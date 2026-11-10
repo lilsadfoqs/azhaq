@@ -7,6 +7,9 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -159,3 +162,89 @@ func TestLogin(t *testing.T) {
 }
 
 func decodeJSON(r *http.Request, v any) error { return json.NewDecoder(r.Body).Decode(v) }
+
+// dvwa copies DVWA's login.php: a session cookie, a per-session CSRF token
+// in a hidden field, and a login only when the submit button's name came
+// with a matching token; a refusal goes back to the form with a new token.
+type dvwa struct {
+	mu       sync.Mutex
+	sessions map[string]string // PHPSESSID -> the token the form holds
+	n        int
+	posts    []url.Values
+}
+
+func (d *dvwa) session(w http.ResponseWriter, r *http.Request) string {
+	if c, err := r.Cookie("PHPSESSID"); err == nil && d.sessions[c.Value] != "" || err == nil && c.Value != "" {
+		return c.Value
+	}
+	d.n++
+	id := fmt.Sprintf("sess%d", d.n)
+	http.SetCookie(w, &http.Cookie{Name: "PHPSESSID", Value: id, Path: "/", HttpOnly: true})
+	http.SetCookie(w, &http.Cookie{Name: "security", Value: "low", Path: "/"})
+	return id
+}
+
+func (d *dvwa) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	id := d.session(w, r)
+	switch r.URL.Path {
+	case "/login.php":
+		if r.Method == http.MethodPost {
+			r.ParseForm()
+			d.posts = append(d.posts, r.PostForm)
+			ok := r.PostForm.Get("Login") != "" && r.PostForm.Get("user_token") == d.sessions[id] &&
+				r.PostForm.Get("username") == "admin" && r.PostForm.Get("password") == "password"
+			if ok {
+				http.SetCookie(w, &http.Cookie{Name: "PHPSESSID", Value: id + "-in", Path: "/", HttpOnly: true})
+				http.Redirect(w, r, "index.php", http.StatusFound)
+				return
+			}
+			http.Redirect(w, r, "login.php", http.StatusFound)
+			return
+		}
+		tok := fmt.Sprintf("tok%d", d.n*100+len(d.sessions))
+		d.sessions[id] = tok
+		w.Header().Set("Content-Type", "text/html")
+		fmt.Fprintf(w, `<html><head><title>Login</title></head><body><form action="login.php" method="post">
+<fieldset><label for="user">Username</label> <input type="text" class="loginInput" size="20" name="username"><br />
+<label for="pass">Password</label> <input type="password" class="loginInput" AUTOCOMPLETE="off" size="20" name="password"><br />
+<p class="submit"><input type="submit" value="Login" name="Login"></p></fieldset>
+<input type='hidden' name='user_token' value='%s' /></form></body></html>`, tok)
+	case "/index.php":
+		w.Header().Set("Content-Type", "text/html")
+		if c, err := r.Cookie("PHPSESSID"); err != nil || !strings.HasSuffix(c.Value, "-in") {
+			http.Redirect(w, r, "login.php", http.StatusFound)
+			return
+		}
+		fmt.Fprint(w, `<html><title>Welcome</title><body><a href="logout.php">Logout</a></body></html>`)
+	}
+}
+
+// A form that wants its submit button's name and a hidden token from the
+// same session (DVWA's login) signs in.
+func TestLoginSendsTheSubmitButtonAndTheHiddenTokenOfTheSession(t *testing.T) {
+	if _, err := Find(); err != nil {
+		t.Skip(err)
+	}
+	d := &dvwa{sessions: map[string]string{}}
+	srv := httptest.NewServer(d)
+	defer srv.Close()
+	b := &Browser{}
+	defer b.Close()
+	if err := b.Start(); errors.Is(err, ErrNoSandbox) {
+		t.Skip(err)
+	} else if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	s, err := b.Login(ctx, srv.URL+"/login.php", "admin", "password")
+	if err != nil {
+		d.mu.Lock()
+		t.Fatalf("%v; the form posts were %v", err, d.posts)
+	}
+	if s.URL != srv.URL+"/index.php" {
+		t.Errorf("ended on %s", s.URL)
+	}
+}

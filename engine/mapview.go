@@ -298,7 +298,24 @@ func answerOf(obs []types.StoredObservation) (int, string) {
 			status, title = st, p.Title
 		}
 	}
+	if status == 0 {
+		status = gqlAnswer(obs) // asked by -graphql past -depth, not by azhaq-http
+	}
 	return status, title
+}
+
+// gqlAnswer is the status a GraphQL collector read at the URL, for a URL
+// no fetch of the run answered: -graphql asks an endpoint found at the
+// depth limit, which nothing else does.
+func gqlAnswer(obs []types.StoredObservation) int {
+	for _, o := range obs {
+		if o.Kind == "graphql" && (o.Collector == "azhaq-graphql" || o.Collector == "azhaq-graphql-schema") {
+			if st := statusOf(o.Payload); st > 0 {
+				return st
+			}
+		}
+	}
+	return 0
 }
 
 func scopeLabel(e types.Entity, hosts, domains, ips map[string]bool) string {
@@ -542,7 +559,7 @@ func fetched(obs []types.StoredObservation) bool {
 			return true
 		}
 	}
-	return false
+	return gqlAnswer(obs) > 0
 }
 
 func roleOf(e types.Entity, obs []types.StoredObservation, hosts, domains map[string]bool) string {

@@ -54,9 +54,11 @@ type Info struct {
 	// not among the URLs asked again when the session ended (sweeps, Chrome):
 	// its tasks that ran since the last good check run again.
 	Redo bool
-	// AtLimit lets the collector run on a hostname an active DNS technique
-	// found (types.LiveKey) even when -depth leaves no wave for it: it asks
-	// DNS only, and the names are known to exist.
+	// AtLimit lets the collector run past -depth: on a hostname an active
+	// DNS technique found (types.LiveKey), which it asks DNS only; on a URL,
+	// when it, or one that runs with it, is an active technique the user
+	// turned on (-graphql): -depth limits the pages followed, not the
+	// technique asked of an endpoint found.
 	AtLimit bool
 }
 
