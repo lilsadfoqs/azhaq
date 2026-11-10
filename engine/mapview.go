@@ -473,9 +473,10 @@ func isCatchAll(o types.StoredObservation) bool {
 }
 
 // probed is an answer a path sweep (-paths, -dirs) got to a URL it asked
-// for itself.
+// for itself, or the catch-all page a script address was answered with when
+// the JavaScript reader or the browser's pass asked for it.
 func probed(o types.StoredObservation) bool {
-	return (o.Collector == "azhaq-paths" || o.Collector == "azhaq-dirs") && o.Kind == "url"
+	return (o.Collector == "azhaq-paths" || o.Collector == "azhaq-dirs" || (o.Collector == "azhaq-js" || o.Collector == "azhaq-render") && isCatchAll(o)) && o.Kind == "url"
 }
 
 // gone: the URL's own answer is 404 or 410. A sweep's answer counts when

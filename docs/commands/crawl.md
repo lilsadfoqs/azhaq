@@ -104,7 +104,7 @@ The plain list holds the URLs that answer for themselves. The summary counts the
 - `not-found`: URLs the crawl requested and the server answered 404 or 410, with their templates (`/api/Feedbacks/{n} ×12`).
 - `beyond-depth`: images, fonts and media a page holds that no step requested. `-assets`, `-ndef` and `-em` list them, as they ask for them.
 
-A URL a script or a description names stays out of the list unless `-hints` lists it, and is not folded then. The counts `folded catchall`, `folded not-found` and `folded beyond-depth` are the rows each class left out of the list; the rest of `counts` is of the rows printed, and the summary's `folds` says the same as `-json`'s. `-no-catchall` leaves the catch-all rows out of every view.
+A URL a script or a description names stays out of the list unless `-hints` lists it, and is not folded then. The counts `folded catchall`, `folded not-found` and `folded beyond-depth` are the rows each class left out of the list; the rest of `counts` is of the rows printed, and the summary's `folds` says the same as `-json`'s. `-no-catchall` leaves the catch-all rows out of every view. A script address a single-page app answers with its shell page is one of them (`-browser` run too), with the control it matched.
 
 ### What the counts compare
 
