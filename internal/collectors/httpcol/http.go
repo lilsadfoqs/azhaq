@@ -210,6 +210,11 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 			if hint.Key() != "" && c.Spec == nil {
 				meta.NextHints = append(meta.NextHints, hint)
 			}
+			if c.Spec == nil && seed.Type == types.TypeHostname && seed.Keys[types.FromURLKey] == "" {
+				// A name that answered is a web service: its URL goes on to the
+				// crawl, the scripts and the path checks, which take URLs only.
+				meta.NextHints = append(meta.NextHints, types.Seed{Type: types.TypeURL, Keys: map[string]string{"url": raw, types.SameTargetKey: "1"}})
+			}
 			for _, n := range TakeNames(obs.Source) {
 				meta.NextHints = append(meta.NextHints, types.Seed{Type: types.TypeHostname, Keys: map[string]string{"fqdn": n}})
 			}

@@ -132,6 +132,33 @@ func pathCheckNotes(cs []pathCheck) []string {
 	return out
 }
 
+// failUnrecordedSweeps fails closed: a sweep the run listed that left no
+// record, with no stop to explain it, is a failure that makes the run
+// incomplete (exit 3). A stopped run has the work left to resume instead.
+func (r *report) failUnrecordedSweeps() {
+	if r.Stopped != "" {
+		return
+	}
+	named := map[string]bool{}
+	for _, f := range r.Failed {
+		if f.Collector == pathscol.Name {
+			for _, t := range f.Targets {
+				named[t] = true
+			}
+		}
+	}
+	for _, c := range r.PathChecks {
+		if c.Sent != nil || named[c.Service] || strings.HasPrefix(c.Reason, "its sweep failed") {
+			continue
+		}
+		r.Failed = append(r.Failed, engine.Failure{
+			Collector: pathscol.Name, Error: "its sweep left no record, and no limit stopped the run: it did not run",
+			Retryable: true, Count: 1, Targets: []string{c.Service},
+		})
+		r.warned = true
+	}
+}
+
 // failedPaths are the errors of the path sweeps that failed, by origin.
 func failedPaths(failed []engine.Failure) map[string]string {
 	out := map[string]string{}

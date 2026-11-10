@@ -183,6 +183,7 @@ func (r *report) settle() {
 	r.Seconds = float64(time.Since(r.start).Milliseconds()) / 1000
 	r.DNSQueries = egress.DNSTotal() - r.dnsFrom
 	r.BrowserRequests = browserRequestsSince(r.spentFrom, r.chromeAt)
+	r.failUnrecordedSweeps()
 	r.Failures = r.failureCount()
 	r.TakeoverCandidates, r.TakeoverVerified = 0, 0
 	for i, t := range r.Takeover {
