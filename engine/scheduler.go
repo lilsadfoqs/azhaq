@@ -46,6 +46,7 @@ func (e *Engine) RunLocal(ctx context.Context, seeds []types.Seed, b Budgets) er
 	if b.MaxNames <= 0 {
 		b.MaxNames = DefaultBudgets().MaxNames
 	}
+	e.scope = b.Scope
 	s := &scheduler{
 		e:         e,
 		b:         b,
@@ -81,6 +82,9 @@ func (e *Engine) RunLocal(ctx context.Context, seeds []types.Seed, b Budgets) er
 		}
 	} else {
 		expanded := expandDerived(seeds, map[string]bool{})
+		// A domain the engine derived from a host or URL is a target only when
+		// the scope holds it: -allow www.example.org does not make example.org one.
+		expanded = slices.DeleteFunc(expanded, func(s types.Seed) bool { return s.Derived() && !b.Scope.AllowsSeed(s) })
 		e.persistSeeds(expanded)
 		for _, seed := range expanded {
 			s.add(seed, 0, false)

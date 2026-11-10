@@ -25,6 +25,7 @@ import (
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"github.com/lilsadfoqs/azhaq/internal/timing"
 	"github.com/lilsadfoqs/azhaq/internal/webextract"
+	"github.com/lilsadfoqs/azhaq/scope"
 	"github.com/lilsadfoqs/azhaq/store"
 	"github.com/lilsadfoqs/azhaq/types"
 )
@@ -49,6 +50,8 @@ type Engine struct {
 	recent  sync.Map // entities upserted a moment ago (upsertRecent)
 	denied  sync.Map // URLs a -deny-path rule kept out, noted once
 	ported  sync.Map // URLs the scope's port kept out, noted once
+
+	scope scope.Rules // the run's, set by RunLocal before any task starts
 }
 
 // Caps are the limits that held work back in the last run: how many tasks
@@ -734,7 +737,8 @@ func (e *Engine) linkInDomain(seed types.Seed, ent types.Entity, now time.Time) 
 		return
 	}
 	d := normalize.RegistrableDomain(host)
-	if d == "" {
+	// -allow www.example.org does not hold example.org: no row for it.
+	if d == "" || !e.scope.Allows(d) {
 		return
 	}
 	de, err := e.Store.UpsertEntity(types.TypeDomain, d, now)
