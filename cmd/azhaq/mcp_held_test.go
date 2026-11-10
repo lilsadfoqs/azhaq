@@ -167,3 +167,35 @@ func TestMCPRolesGetsSendStateChangingLikeTheOtherTools(t *testing.T) {
 		}
 	}
 }
+
+// A -resolvers file is held as the resolvers it holds, as resume keeps it: a
+// file removed after the start changes nothing a held run asks.
+func TestMCPHeldKeepsTheResolversOfAFileThatIsGone(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "resolvers.txt")
+	if err := os.WriteFile(file, []byte("# mine\n127.0.0.1:5399\n\ntcp:127.0.0.2:5399\n127.0.0.1:5399\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	h, err := checkHeld(file, "none", "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(file); err != nil {
+		t.Fatal(err)
+	}
+	const want = "127.0.0.1:5399,tcp:127.0.0.2:5399"
+	if h.Resolvers != want {
+		t.Fatalf("held resolvers %q, want %q", h.Resolvers, want)
+	}
+	for _, cmd := range []string{"run", "resume", "dns", "subs"} {
+		if got := strings.Join(h.options(cmd), " "); !strings.Contains(got, "-resolvers "+want) {
+			t.Errorf("%s gets %q", cmd, got)
+		}
+	}
+	if v := h.view()["resolvers"]; v != want {
+		t.Errorf("azhaq_scope shows %v", v)
+	}
+	// A list stays as given.
+	if h, err = checkHeld("8.8.8.8", "none", "", false); err != nil || h.Resolvers != "8.8.8.8" {
+		t.Errorf("a list: %q %v", h.Resolvers, err)
+	}
+}
