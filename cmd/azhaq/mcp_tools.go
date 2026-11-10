@@ -149,7 +149,7 @@ func mcpTools() []map[string]any {
 			"annotations": annotations(true, false, "Show one entity")},
 		{"name": "azhaq_roles", "title": "Compare sessions",
 			"description": "Map the target once per role, ask every endpoint any role reached with every other role, fill path parameters with identifiers the roles' answers held (each role's own objects first), and list where the answers differ, worst first: anyone reads sensitive fields (passwords, secrets, keys), a role reads another role's object, an object every signed-in role reads alike, the same answer for a session that never found the URL, signed-in only, only one role reads it, some roles refused, different fields. Each role is an object: " +
-				roleAnon + " is anonymous, " + roleHeader + " sends those headers, " + roleLogin + " signs in at login_url with Chrome.",
+				roleAnon + " is anonymous, " + roleHeader + " sends those headers, " + roleLogin + " signs in at login_url with Chrome. A GET found on the way whose own path, query or API operation declares a state change is held back in each role's map and listed as skipped, as azhaq_map holds it, unless the server's -send-state-changing at start sends it.",
 			"inputSchema": obj(map[string]any{"url": pURL, "targets": pTargets, "program_scope": pScope,
 				"workspace": prop("string", "where the roles' maps are kept: a database per role in <workspace>-roles in the server's directory; default \"default\""),
 				"roles":     map[string]any{"type": "array", "description": "two or more sessions", "minItems": 2, "items": pRole},

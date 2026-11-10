@@ -143,3 +143,27 @@ func TestMCPMapHeldToResolversAndNoSources(t *testing.T) {
 		t.Errorf("the lab resolver was never asked: %s", text)
 	}
 }
+
+// A server started with -send-state-changing gives it to azhaq_roles as to
+// the other tools, and without it roles holds the GETs back.
+func TestMCPRolesGetsSendStateChangingLikeTheOtherTools(t *testing.T) {
+	roles := []any{map[string]any{"name": "anon"}, map[string]any{"name": "user", "header": []any{"Authorization: Bearer x"}}}
+	for _, on := range []bool{true, false} {
+		dir := t.TempDir()
+		s := &mcpServer{exe: fakeAzhaq(t, dir), dir: dir, lock: []string{"-allow", "127.0.0.1"}, locked: true, budget: 100,
+			held: heldRun{SendStateChanging: on}}
+		t.Setenv("FAKE_SUMMARY", `{"type":"summary","command":"roles","exit":0,"requests":1}`)
+		callText(t, s, "azhaq_roles", map[string]any{"url": "http://127.0.0.1/", "roles": roles})
+		raw, _ := os.ReadFile(filepath.Join(dir, "args"))
+		line := strings.SplitN(string(raw), "\n", 2)[0]
+		if !strings.HasPrefix(line, "roles ") {
+			t.Fatalf("not a roles call: %s", line)
+		}
+		if got := strings.Contains(line+" ", " -send-state-changing "); got != on {
+			t.Errorf("send-state-changing at start %v: roles got it %v: %s", on, got, line)
+		}
+		if on && strings.Index(line, " -- ") > strings.Index(line, "-send-state-changing") {
+			t.Errorf("the flag is a run option and goes after --: %s", line)
+		}
+	}
+}

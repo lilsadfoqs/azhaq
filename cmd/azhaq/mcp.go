@@ -145,7 +145,7 @@ func (h heldRun) options(command string) []string {
 		if h.ChromeNoSandbox {
 			out = append(out, "-chrome-no-sandbox")
 		}
-		if h.SendStateChanging && command != "roles" {
+		if h.SendStateChanging {
 			out = append(out, "-send-state-changing")
 		}
 		fallthrough
