@@ -236,10 +236,10 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		})
 	}
 
-	// A domain derived from a URL, or a host, gets 15 s per source: the run
-	// is about the application.
+	// A domain derived from a URL gets 15 s per source: the run is about the
+	// application. A host the scope names is the target: it gets them all.
 	timeout := c.opts.Timeout
-	if (seed.Derived() || hostSeed) && timeout > 15*time.Second {
+	if seed.Derived() && !hostSeed && timeout > 15*time.Second {
 		timeout = 15 * time.Second
 	}
 	// The sources stop a little before the run's -timeout, so the summary
