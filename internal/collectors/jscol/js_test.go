@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 
@@ -216,6 +217,50 @@ func TestVendorScripts(t *testing.T) {
 	} {
 		if got := vendorScript.MatchString(p); got != want {
 			t.Errorf("%s: %v", p, got)
+		}
+	}
+}
+
+// A webpack runtime with a relative public path (Grafana's "public/build/")
+// loads its chunks from the page's folder, as the browser resolves the
+// <script src> it adds: never from the runtime script's own folder, which
+// would ask public/build/public/build/.
+func TestChunksOfARelativePublicPathAreThePages(t *testing.T) {
+	fetch.Reset()
+	var mu sync.Mutex
+	asked := map[string]int{}
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		asked[r.URL.Path]++
+		mu.Unlock()
+		switch r.URL.Path {
+		case "/login":
+			w.Header().Set("Content-Type", "text/html")
+			_, _ = w.Write([]byte(`<!doctype html><title>Sign in</title><script src="public/build/runtime.js"></script>`))
+		case "/public/build/runtime.js":
+			w.Header().Set("Content-Type", "application/javascript")
+			_, _ = w.Write([]byte(`n.p="public/build/",n.u=e=>e+"."+{12:"ab12",34:"cd34"}[e]+".js";`))
+		case "/public/build/12.ab12.js", "/public/build/34.cd34.js":
+			w.Header().Set("Content-Type", "application/javascript")
+			_, _ = w.Write([]byte(`fetch("/api/lazy")`))
+		default:
+			http.Redirect(w, r, "/login", http.StatusFound) // every unknown path signs in
+		}
+	})
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	got := run(t, New(srv.Client()), srv.URL+"/login")
+	for _, want := range []string{"/public/build/12.ab12.js", "/public/build/34.cd34.js", "/api/lazy"} {
+		if !has(got, want) {
+			t.Errorf("missing %s in %v", want, got)
+		}
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	for p := range asked {
+		if strings.Contains(p, "/public/build/public/build/") {
+			t.Errorf("asked %s: the chunk was resolved against the script's folder (%v)", p, asked)
 		}
 	}
 }

@@ -744,9 +744,11 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		for _, ref := range sc.scriptRefs {
 			load(ref, true)
 		}
-		// Chunks the loader names at run time (webpack chunk maps).
+		// Chunks the loader names at run time (webpack chunk maps). The
+		// loader adds them as <script src>, so a relative public path
+		// ("public/build/") is the page's, not the script's.
 		for _, ch := range sc.chunks {
-			if ref, err := s.url.Parse(ch); err == nil {
+			if ref, err := base.Parse(ch); err == nil {
 				load(ref.String(), true)
 			}
 		}
