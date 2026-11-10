@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/miekg/dns"
 
@@ -327,9 +328,8 @@ func TestDNSDefaultAttemptsAreThreeAndTwoForGeneratedNames(t *testing.T) {
 	}
 }
 
-// -dns-rate holds back the queries of -d with -w: a second's worth go out at
-// once and the rest at the rate, so 9 words at 4 a second take over a second,
-// and without it they take no time at all.
+// -dns-rate holds back the queries of -d with -w: 9 words at 4 a second take
+// over a second, and without it they take no time at all.
 func TestDNSRatePacesTheQueriesOfWordsToo(t *testing.T) {
 	t.Chdir(t.TempDir())
 	lab := startLab(t)
@@ -343,6 +343,37 @@ func TestDNSRatePacesTheQueriesOfWordsToo(t *testing.T) {
 	dnsOut(t, "-d", "lab.zz", "-w", words, "-r", lab.addr, "-silent", "-no-wildcard", "-dns-rate", "4", "-t", "9")
 	if d := nowMs() - start; d < 1100 {
 		t.Errorf("9 queries at -dns-rate 4 took %d ms: 5 of them wait for the rate, 250 ms each", d)
+	}
+}
+
+// -dns-rate N is at most N queries to a resolver in any one second, the first
+// second too: the ledger times of a paced brute force hold every window.
+func TestDNSRateHoldsEverySecondFromTheFirstQuery(t *testing.T) {
+	t.Chdir(t.TempDir())
+	lab := startLab(t)
+	var ws []string
+	for i := 0; i < 26; i++ {
+		ws = append(ws, fmt.Sprintf("w%d", i))
+	}
+	dnsOut(t, "-d", "lab.zz", "-w", wlist(t, ws...), "-r", lab.addr, "-silent", "-no-wildcard", "-dns-rate", "10", "-t", "30", "-ledger", "l.jsonl")
+	var ts []time.Time
+	if err := ledger.Read("l.jsonl", func(e ledger.Entry) error {
+		if e.Class == ledger.ClassDNS {
+			ts = append(ts, e.Time)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	sort.Slice(ts, func(i, j int) bool { return ts[i].Before(ts[j]) })
+	if len(ts) < 26 {
+		t.Fatalf("%d queries in the ledger, want one for each of 26 names", len(ts))
+	}
+	// The ledger stamps a query as it is sent: a few ms of scheduling is not a burst.
+	for i := 0; i+10 < len(ts); i++ {
+		if d := ts[i+10].Sub(ts[i]); d < time.Second-30*time.Millisecond {
+			t.Fatalf("queries %d..%d went out in %s: over 10 a second", i, i+10, d)
+		}
 	}
 }
 

@@ -214,7 +214,6 @@ type entry struct {
 type Options struct {
 	Resolvers []string      // as ParseResolvers gives them; default DefaultResolvers
 	PerSecond float64       // queries per second per resolver; 0 is no pace but the callers' workers
-	Burst     int           // queries a resolver may be sent at once after a pause; default a fifth of PerSecond, at least 1
 	Timeout   time.Duration // per query; default 2s
 	Retries   int           // extra attempts on other resolvers; default 2
 	Attempts  int           // when set, attempts in all per query (Retries+1), as dnsx -retry
@@ -267,7 +266,7 @@ func New(o Options) *Pool {
 		health:  hs,
 		proto:   proto,
 		named:   named,
-		limit:   limit.New(o.PerSecond, cmpBurst(o)),
+		limit:   limit.New(o.PerSecond, 1).Strict(), // no burst: a start holds the rate too
 		timeout: o.Timeout,
 		retries: o.Retries,
 		fixed:   fixed,
@@ -297,13 +296,6 @@ func (p *Pool) Window(most int) int {
 	}
 	w := int(math.Ceil(p.rate * float64(len(p.servers)) * WindowSeconds))
 	return min(most, max(w, 8))
-}
-
-func cmpBurst(o Options) int {
-	if o.Burst > 0 {
-		return o.Burst
-	}
-	return max(1, int(o.PerSecond/5))
 }
 
 // ProxyError says whether proxy is a URL New can use for DNS.
