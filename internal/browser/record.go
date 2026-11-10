@@ -259,8 +259,9 @@ func (r *pageLog) addConsole(kind, value string) {
 
 // ScriptFault is a script of a page that did not load as code.
 type ScriptFault struct {
-	URL string `json:"url"`
-	Why string `json:"why"`
+	URL  string `json:"url"`
+	Why  string `json:"why"`
+	Page bool   `json:"page,omitempty"` // answered 200 with an HTML page
 }
 
 // ScriptFaults lists the page's scripts that did not load as code: the
@@ -273,17 +274,17 @@ func (r Record) ScriptFaults() []ScriptFault {
 		if e.rt != network.ResourceTypeScript || e.blocked {
 			continue
 		}
-		why := ""
+		why, page := "", false
 		switch {
 		case e.Error != "":
 			why = e.Error
 		case e.Status >= 400:
 			why = "answered " + strconv.Itoa(e.Status)
 		case strings.HasPrefix(strings.ToLower(e.MIME), "text/html"):
-			why = "answered a page (" + e.MIME + "), not JavaScript"
+			why, page = "answered a page ("+e.MIME+"), not JavaScript", e.Status == 200
 		}
 		if why != "" {
-			out = append(out, ScriptFault{URL: e.URL, Why: why})
+			out = append(out, ScriptFault{URL: e.URL, Why: why, Page: page})
 		}
 	}
 	return out

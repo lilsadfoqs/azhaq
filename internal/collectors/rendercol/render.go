@@ -9,6 +9,7 @@ package rendercol
 import (
 	"context"
 	"encoding/json"
+	"net/http"
 	"net/url"
 	"strings"
 	"sync"
@@ -193,6 +194,22 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 			return meta, err
 		}
 		meta.EmitCount++
+		// A script answered with the app's catch-all page is that answer, not
+		// a script: asked as a page, it is folded with the control it matched.
+		for n, f := range faults {
+			if n >= maxShellChecks {
+				break
+			}
+			if f.Page && webextract.SameOrigin(raw, f.URL) {
+				if row := shellRow(ctx, f.URL); row != nil {
+					payload, _ := json.Marshal(row)
+					if err := emit(types.Observation{Collector: Name, Source: raw, Kind: "url", Payload: payload, Confidence: 0.8, ObservedAt: time.Now().UTC()}); err != nil {
+						return meta, err
+					}
+					meta.EmitCount++
+				}
+			}
+		}
 	}
 	if in := p.Interaction; c.Browser.Interact > 0 {
 		for _, h := range in.Snapshots {
@@ -269,4 +286,28 @@ func spaRoute(ctx context.Context, raw string) bool {
 	client := fetch.Client(nil)
 	res, _, err := fetch.Do(ctx, client, raw)
 	return err == nil && fetch.FinalCatchAll(ctx, client, res)
+}
+
+// maxShellChecks caps the scripts of one page asked whether their HTML answer
+// is the catch-all page.
+const maxShellChecks = 20
+
+// shellRow is the url row of a script address Chrome was answered a page for,
+// when that page is the origin's catch-all one: nil for any other answer.
+func shellRow(ctx context.Context, raw string) map[string]any {
+	n, err := normalize.URL(raw)
+	if err != nil {
+		return nil
+	}
+	client := fetch.Client(nil)
+	res, _, err := fetch.Do(ctx, client, n)
+	if err != nil || res.Status != http.StatusOK {
+		return nil
+	}
+	shell, ctl := fetch.CatchAllControl(ctx, client, res)
+	if !shell || ctl == nil {
+		return nil
+	}
+	return map[string]any{"url": n, "via": "browser", "seen": "request", "role": "script", "status": res.Status,
+		"catchall": true, "control": ctl, "control_exact": ctl.Exact}
 }

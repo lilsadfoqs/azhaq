@@ -143,3 +143,59 @@ func TestMCPMapHeldToResolversAndNoSources(t *testing.T) {
 		t.Errorf("the lab resolver was never asked: %s", text)
 	}
 }
+
+// A server started with -send-state-changing gives it to azhaq_roles as to
+// the other tools, and without it roles holds the GETs back.
+func TestMCPRolesGetsSendStateChangingLikeTheOtherTools(t *testing.T) {
+	roles := []any{map[string]any{"name": "anon"}, map[string]any{"name": "user", "header": []any{"Authorization: Bearer x"}}}
+	for _, on := range []bool{true, false} {
+		dir := t.TempDir()
+		s := &mcpServer{exe: fakeAzhaq(t, dir), dir: dir, lock: []string{"-allow", "127.0.0.1"}, locked: true, budget: 100,
+			held: heldRun{SendStateChanging: on}}
+		t.Setenv("FAKE_SUMMARY", `{"type":"summary","command":"roles","exit":0,"requests":1}`)
+		callText(t, s, "azhaq_roles", map[string]any{"url": "http://127.0.0.1/", "roles": roles})
+		raw, _ := os.ReadFile(filepath.Join(dir, "args"))
+		line := strings.SplitN(string(raw), "\n", 2)[0]
+		if !strings.HasPrefix(line, "roles ") {
+			t.Fatalf("not a roles call: %s", line)
+		}
+		if got := strings.Contains(line+" ", " -send-state-changing "); got != on {
+			t.Errorf("send-state-changing at start %v: roles got it %v: %s", on, got, line)
+		}
+		if on && strings.Index(line, " -- ") > strings.Index(line, "-send-state-changing") {
+			t.Errorf("the flag is a run option and goes after --: %s", line)
+		}
+	}
+}
+
+// A -resolvers file is held as the resolvers it holds, as resume keeps it: a
+// file removed after the start changes nothing a held run asks.
+func TestMCPHeldKeepsTheResolversOfAFileThatIsGone(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "resolvers.txt")
+	if err := os.WriteFile(file, []byte("# mine\n127.0.0.1:5399\n\ntcp:127.0.0.2:5399\n127.0.0.1:5399\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	h, err := checkHeld(file, "none", "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(file); err != nil {
+		t.Fatal(err)
+	}
+	const want = "127.0.0.1:5399,tcp:127.0.0.2:5399"
+	if h.Resolvers != want {
+		t.Fatalf("held resolvers %q, want %q", h.Resolvers, want)
+	}
+	for _, cmd := range []string{"run", "resume", "dns", "subs"} {
+		if got := strings.Join(h.options(cmd), " "); !strings.Contains(got, "-resolvers "+want) {
+			t.Errorf("%s gets %q", cmd, got)
+		}
+	}
+	if v := h.view()["resolvers"]; v != want {
+		t.Errorf("azhaq_scope shows %v", v)
+	}
+	// A list stays as given.
+	if h, err = checkHeld("8.8.8.8", "none", "", false); err != nil || h.Resolvers != "8.8.8.8" {
+		t.Errorf("a list: %q %v", h.Resolvers, err)
+	}
+}

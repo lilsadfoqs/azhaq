@@ -145,7 +145,7 @@ func (h heldRun) options(command string) []string {
 		if h.ChromeNoSandbox {
 			out = append(out, "-chrome-no-sandbox")
 		}
-		if h.SendStateChanging && command != "roles" {
+		if h.SendStateChanging {
 			out = append(out, "-send-state-changing")
 		}
 		fallthrough
@@ -304,18 +304,18 @@ func cmdMCP(args []string) error {
 }
 
 // checkHeld refuses a held option no run would accept, at start rather than
-// in each call, and makes a resolvers file absolute: a command may run from
-// elsewhere.
+// in each call, and keeps a resolvers file as the resolvers it holds, as
+// resume does: a file that changes or goes away later must not change what
+// a held run asks.
 func checkHeld(resolvers, sources, skip string, noTakeover bool) (heldRun, error) {
 	h := heldRun{Resolvers: resolvers, Sources: sources, Skip: skip, NoTakeover: noTakeover}
 	if resolvers != "" {
-		if _, err := dnsr.ParseResolvers(resolvers); err != nil {
+		keys, err := dnsr.ParseResolvers(resolvers)
+		if err != nil {
 			return h, usagef("-resolvers: %v", err)
 		}
 		if isFile(resolvers) {
-			if abs, err := filepath.Abs(resolvers); err == nil {
-				h.Resolvers = abs
-			}
+			h.Resolvers = strings.Join(keys, ",")
 		}
 	}
 	if sources != "" && sources != "none" {

@@ -545,8 +545,9 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 			queue[started].scan = startScan(ctx, queue[started], raw, base, appRoot)
 		}
 	}
+	shells := map[string]*fetch.Control{} // script URL → the control its HTML answer matched
 	load := func(src string, needExt bool) {
-		queue = c.load(ctx, raw, src, needExt, queue, &fetched)
+		queue = c.load(ctx, raw, src, needExt, queue, &fetched, shells)
 		kick()
 	}
 	// readManifests reads the build manifests a page or a script points
@@ -1046,6 +1047,20 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 			return meta, err
 		}
 	}
+	// A script address answered with the app's own catch-all page is that
+	// answer, not a script: the map folds it with the control it matched.
+	shellURLs := make([]string, 0, len(shells))
+	for u := range shells {
+		shellURLs = append(shellURLs, u)
+	}
+	sort.Strings(shellURLs)
+	for _, u := range shellURLs {
+		ctl := shells[u]
+		if err := emitRow(map[string]any{"url": u, "via": "js", "role": "script", "status": http.StatusOK,
+			"catchall": true, "control": ctl, "control_exact": ctl.Exact}, 0.8); err != nil {
+			return meta, err
+		}
+	}
 	for _, src := range fetched {
 		if err := put(src, "script"); err != nil {
 			return meta, err
@@ -1275,8 +1290,9 @@ var vendorScript = lazyre.New(`(?i)(^|/)(react(-dom)?|jquery(-ui|-migrate)?|boot
 
 // load fetches a script on the page's site the run has not parsed yet and
 // queues it. Names found inside scripts must end in .js; <script src>
-// need not.
-func (c *Collector) load(ctx context.Context, page, src string, needExt bool, queue []script, fetched *[]string) []script {
+// need not. A script address answered with the catch-all page is noted in
+// shells with the control it matched.
+func (c *Collector) load(ctx context.Context, page, src string, needExt bool, queue []script, fetched *[]string, shells map[string]*fetch.Control) []script {
 	if len(*fetched) >= maxScripts || !fetch.SameSite(page, src) || (needExt && !looksLikeJS(src)) {
 		return queue
 	}
@@ -1292,7 +1308,13 @@ func (c *Collector) load(ctx context.Context, page, src string, needExt bool, qu
 	}
 	ct := strings.ToLower(res.Header.Get("Content-Type"))
 	if strings.Contains(ct, "html") {
-		return queue // an SPA index served for a missing chunk
+		// An SPA index served for a missing chunk.
+		if shell, ctl := fetch.CatchAllControl(ctx, c.Client, res); shell && ctl != nil {
+			if n, err := normalize.URL(src); err == nil {
+				shells[n] = ctl
+			}
+		}
+		return queue
 	}
 	u, err := url.Parse(src)
 	if err != nil {
