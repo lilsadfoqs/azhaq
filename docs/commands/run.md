@@ -316,6 +316,9 @@ A client route is a view that a single-page app's router draws.
 - A Swagger UI whose script holds the document (Juice Shop's `/api-docs/`) is read from the script. The names next to it are not guessed.
 - A page that is byte for byte what the site root answers for a made-up path is a single-page app's shell. That makes it the catch-all answer of a directory whose own baseline was not asked, so that baseline is not requested. A directory with answers of its own is still asked.
 
+### Archives of one host
+The archives are asked for domains. When `-allow` names a host and not its domain (`-allow www.example.org`), the domain is outside the scope and is not asked: the archives are asked for the host itself (`www.example.org/*`) and its archived URLs are listed. A scope that holds the domain asks for the domain and its subdomains as before.
+
 ### Sweeping the scope
 `-allow` and `-scope` fence a run; they do not add targets. `-url http://10.0.0.5/ -allow 10.0.0.0/24` maps 10.0.0.5 only, and a note says how much of the range that leaves. `-sweep` adds the IPv4 ranges and addresses `-allow` and `-scope` hold to the targets, as `-cidr` does for each: with `-ports` they are scanned in blocks with no size limit, and without it a range is expanded up to `-max-ips` (the summary says when it is cut). `-sweep` needs no target named alongside it. For example `azhaq run -allow 10.0.0.0/24 -sweep -ports top-100`. The sweep asks what the named targets are asked and holds to `-deny`, `-deny-path`, `-rate`, `-max-requests` and the kill file. A tighter `-allow` bounds it. The ledger holds a connect to every address the scan asked, and the summary says how many that is (`addresses_scanned`) and how many had a port open (`addresses_open`); `counts.addresses` is another number, the address rows of the map. IPv6 ranges are left alone, with a note. See [scope](../CONCEPTS.md#scope).
 
