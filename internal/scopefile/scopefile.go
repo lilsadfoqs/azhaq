@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/lilsadfoqs/azhaq/internal/egress"
+	"github.com/lilsadfoqs/azhaq/internal/fetch"
 	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 )
 
@@ -57,6 +58,7 @@ func Fetch(ctx context.Context, platform string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	fetch.BoundNote(resp, "scope list "+req.URL.Host) // a stream that never ends is cut, and the run says so
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("%s: %s", u, resp.Status)

@@ -15,6 +15,7 @@ import (
 	"github.com/lilsadfoqs/azhaq/engine"
 	"github.com/lilsadfoqs/azhaq/internal/advisory"
 	"github.com/lilsadfoqs/azhaq/internal/egress"
+	"github.com/lilsadfoqs/azhaq/internal/fetch"
 	"github.com/lilsadfoqs/azhaq/internal/ledger"
 	"github.com/lilsadfoqs/azhaq/internal/neterr"
 	"github.com/lilsadfoqs/azhaq/store"
@@ -74,6 +75,7 @@ func loadAdvisories(ctx context.Context, source string) ([]advisory.Advisory, er
 		if err != nil {
 			return nil, fmt.Errorf("advisory source %s: %w", source, err)
 		}
+		fetch.BoundNote(resp, "advisory source "+req.URL.Host) // a stream that never ends is cut, and the run says so
 		defer resp.Body.Close()
 		if resp.StatusCode != http.StatusOK {
 			return nil, fmt.Errorf("advisory source %s answered %d", source, resp.StatusCode)
