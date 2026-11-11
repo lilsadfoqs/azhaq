@@ -89,6 +89,7 @@ type Collector struct {
 	mu    sync.Mutex
 	byIP  map[string]*scan // one scan per address, however many names point to it
 	maxIP int              // addresses scanned per name
+	quiet map[netip.Prefix]*quietBlock
 
 	udpByIP map[string]*udpScan
 	udpGate chan struct{}   // the addresses whose UDP ports are being asked
@@ -117,6 +118,9 @@ type scan struct {
 	pass2  bool
 	rest   []int
 	asked2 int
+	// first are the ports of the first pass: with rest, every port the scan
+	// asked, so that another task for the address asks only the others.
+	first []int
 }
 
 func New(pool *dnsr.Pool, ports []int, rate float64) *Collector {
@@ -817,15 +821,17 @@ func (c *Collector) scanOnce(ctx context.Context, host, ip string, ports []int, 
 	defer c.fitSweep(ip, len(ports))()
 	return c.once(ctx, host, ip, func() *scan {
 		r, err := c.Scanner.ScanEachFn(ctx, host, ip, ports, found)
-		s := &scan{open: r.Open, silent: r.Silent, unprobed: r.Unprobed, up: true, capped: r.Threshold, asked: r.Asked, err: err}
+		s := &scan{open: r.Open, silent: r.Silent, unprobed: r.Unprobed, up: true, capped: r.Threshold, asked: r.Asked, err: err, first: ports}
 		if err == nil && after != nil {
 			after(s)
 		}
 		return s
 	}, func(s *scan) (*scan, error) {
 		open, err := c.askAgain(ctx, host, ip, s.open)
-		return &scan{open: open, silent: s.silent, unprobed: s.unprobed, up: s.up, capped: s.capped}, err
-	})
+		out := *s
+		out.open = open
+		return &out, err
+	}, ports, found)
 }
 
 // discoverOnce is scanOnce for a scan that first asks whether the address
@@ -838,7 +844,7 @@ func (c *Collector) discoverOnce(ctx context.Context, host, ip string, ports []i
 			return &scan{up: up, err: err}
 		}
 		r, err := c.Scanner.ScanEachFn(ctx, host, ip, ports, found)
-		s := &scan{open: r.Open, silent: r.Silent, unprobed: r.Unprobed, up: true, capped: r.Threshold, err: err}
+		s := &scan{open: r.Open, silent: r.Silent, unprobed: r.Unprobed, up: true, capped: r.Threshold, err: err, first: ports}
 		if err == nil && after != nil {
 			after(s)
 		}
@@ -848,35 +854,35 @@ func (c *Collector) discoverOnce(ctx context.Context, host, ip string, ports []i
 			return s, nil
 		}
 		open, err := c.askAgain(ctx, host, ip, s.open)
-		return &scan{open: open, silent: s.silent, unprobed: s.unprobed, up: s.up, capped: s.capped}, err
-	})
+		out := *s
+		out.open = open
+		return &out, err
+	}, ports, found)
 }
 
 // once runs scan for an address the first time it is asked for and shares
 // the answer; another name on it gets again, which asks its web ports
-// under that name.
-func (c *Collector) once(ctx context.Context, host, ip string, run func() *scan, again func(*scan) (*scan, error)) (*scan, error) {
-	c.mu.Lock()
-	s, ok := c.byIP[ip]
-	if !ok {
-		s = &scan{done: make(chan struct{}), host: host}
-		c.byIP[ip] = s
-	}
-	c.mu.Unlock()
-	if ok {
+// under that name. A task that comes later, a range's or a name's, asks
+// only the ports (of ports) the first did not.
+func (c *Collector) once(ctx context.Context, host, ip string, run func() *scan, again func(*scan) (*scan, error), ports []int, found func(portscan.Open)) (*scan, error) {
+	s, mine := c.claim(host, ip)
+	if !mine {
 		select {
 		case <-s.done:
 		case <-ctx.Done():
 			return &scan{}, ctx.Err()
 		}
+		if s.err != nil {
+			return s, s.err
+		}
+		s = c.topUp(ctx, host, ip, s, ports, found)
 		if s.err != nil || s.host == host {
 			return s, s.err
 		}
 		return again(s)
 	}
 	r := run()
-	s.open, s.silent, s.unprobed, s.up, s.capped, s.asked, s.err = r.open, r.silent, r.unprobed, r.up, r.capped, r.asked, r.err
-	s.pass2, s.rest, s.asked2 = r.pass2, r.rest, r.asked2
+	s.fill(r)
 	close(s.done)
 	return s, s.err
 }

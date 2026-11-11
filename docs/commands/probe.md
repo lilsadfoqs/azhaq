@@ -214,7 +214,7 @@ A route that streams for ever (server-sent events, `multipart/x-mixed-replace`) 
 
 | Flag | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `-rate` | float |  | requests per second to targets, over all hosts (0: no pace) |
+| `-rate` | float |  | requests, port connects, UDP datagrams and DNS queries to the targets' name servers per second, over all hosts (0: no pace) |
 | `-rl` | float |  | services asked per second, as httpx -rl: each target's first request waits its turn, its favicon, redirects and second scheme do not (-rate paces every request) |
 | `-delay` | duration |  | time between requests to targets: a pace of one request per DELAY over all hosts (as -rate 1/DELAY) |
 | `-host-parallel` | int |  | requests in flight per host (default 10, as katana) |

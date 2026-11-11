@@ -386,15 +386,27 @@ func (s *Scanner) again(try, silent, ports int) bool {
 }
 
 // wait paces a connect. This machine's loopback is not paced unless a rate
-// was given: no network to spare (a full scan of 127.0.0.1 took 218 s at 300/s).
+// was given, the scan's own or the run's -rate: no network to spare (a full
+// scan of 127.0.0.1 took 218 s at 300/s).
 func (s *Scanner) wait(ctx context.Context, ip string) error { return s.waitN(ctx, ip, 1) }
 
 // waitN paces n connects at once: one wake-up of the timer for all of them.
+// The run's -rate paces them too, as it does every request to a target, so
+// that the connects and the requests share it.
 func (s *Scanner) waitN(ctx context.Context, ip string, n int) error {
+	loop := false
 	if a := net.ParseIP(ip); a != nil && a.IsLoopback() && !s.loopPaced {
-		return ctx.Err()
+		loop = true
 	}
-	return s.limiter.WaitN(ctx, "", n)
+	if !loop {
+		if err := s.limiter.WaitN(ctx, "", n); err != nil {
+			return err
+		}
+	}
+	if egress.Rate() > 0 {
+		return egress.PaceN(ctx, n)
+	}
+	return ctx.Err()
 }
 
 // batch is how many connects of a pass have their ledger lines written
