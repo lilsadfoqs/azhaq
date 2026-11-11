@@ -88,7 +88,7 @@ func endRun(args []string, err error) {
 	}
 	code := exitCode(err)
 	if code == exitUsage && !hasWorkspace(r) {
-		_ = os.RemoveAll(r.Dir)
+		_ = r.Discard()
 		return
 	}
 	text := ""

@@ -117,3 +117,33 @@ func TestHomeDefaultsToTheWorkingDirectory(t *testing.T) {
 		t.Fatalf("%q %v, want %s", h, ok, filepath.Join(dir, ".azhaq"))
 	}
 }
+
+// A run discarded leaves no folder that Start made for it, and keeps a home
+// that was there before.
+func TestDiscardRemovesTheFoldersItMade(t *testing.T) {
+	dir := t.TempDir()
+	home := filepath.Join(dir, ".azhaq")
+	r, err := Start(home, "run", []string{"-url", "http://a.test/"}, "dev")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Discard(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(home); !os.IsNotExist(err) {
+		t.Fatalf("the home Start made is left: %v", err)
+	}
+	if err := os.MkdirAll(Dir(home), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	r, err = Start(home, "run", nil, "dev")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Discard(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(Dir(home)); err != nil {
+		t.Fatalf("a home that was there before went: %v", err)
+	}
+}
