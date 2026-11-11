@@ -106,6 +106,10 @@ The start of every body is checked for a runtime's stack trace as it is read: a 
 - With a session, the run checks it as it goes. A word that ended the session is noticed: a `-login` run signs in again, a `-cookie` or `-H` run stops with a failure and exit 3. The sweeps that ran since the last good check run again with the new session, and the note counts the words they sent: [Sessions](../CONCEPTS.md#sessions).
 - `-u https://h/api/` asks `https://h/api/WORD`. A query or fragment on the URL is dropped, and a note says so.
 
+### Words are paths
+- A word is always a path below the URL, so it is encoded as a path: `#` is sent as `%23` (the word `#note` asks `/%23note`), a space as `%20` and a `%` as `%25` (`a%20b` asks `/a%2520b`). A `?` starts the query, as in ffuf (`q?a=1` asks `/q?a=1`), and in the query a space and a `#` are encoded too (`c?d e#f` asks `/c?d%20e%23f`).
+- ffuf with `-u http://host/FUZZ` puts the word in the URL as written, so `#note` becomes a fragment and ffuf asks `/`. `dirs` asks the path the word names, so the rows differ from ffuf's for such a word: on a server that answers unknown paths alike, `/%23note` gets the not-found answer, which calibration filters. `-ic` drops `#` lines, as in ffuf. For ffuf's behaviour use [`fuzz`](fuzz.md), where the word goes into the URL as written.
+
 ### Proxy
 - `-proxy http://127.0.0.1:8080` (or an `https://` or `socks5://` URL) sends every request through that proxy, loopback targets included: the calibration guesses and the retries too.
 - Without `-proxy`, `HTTP_PROXY` and `HTTPS_PROXY` apply by Go's rule: a loopback target (`127.0.0.1`, `localhost`, `::1`) stays direct, and `NO_PROXY` keeps other hosts direct. This is the rule of every command that sends HTTP to a target: [Proxies](../CONCEPTS.md#proxies).

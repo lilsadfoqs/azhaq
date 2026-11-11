@@ -106,6 +106,8 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 
 - **Input**
   - `-w FILE[:KEYWORD]` is repeatable. `-w a.txt,b.txt` takes two lists, and `-` reads stdin.
+  - Two lists on one keyword (`-w a.txt -w b.txt` or `-w a.txt,b.txt`, both `FUZZ`) are one list, a then b, whatever the `-mode`: 8 and 3 words are 11 requests. ffuf combines them in `-mode clusterbomb`: 24 requests. The summary says so (`2 wordlists share the keyword FUZZ (8 and 3 words): joined into one list of 11 words …`). Give each list its own keyword (`-w a.txt:FUZZ -w b.txt:W2`) to combine them.
+  - A word that is in a list twice is asked twice: no request is left out because it was sent before.
   - `-mode clusterbomb|pitchfork|sniper` combines the lists. `§…§` marks the places.
   - `-e` adds extensions, `-ic` ignores comments, and `-D` reads dirsearch lists, where `%EXT%` stands for each extension.
   - `-enc 'FUZZ:urlencode b64encode'` encodes a keyword. The encoders are `b64decode`, `b64encode`, `hexdecode`, `hexencode`, `jsonescape`, `jsonunescape`, `lower`, `md5`, `sha1`, `sha224`, `sha256`, `sha384`, `sha512`, `unicodedecode`, `unicodeencodeall`, `upper`, `urldecode`, `urlencode`, `urlencodeall`, `utf16`, `utf16be`, `xmlescape` and `xmlunescape`, run in process, and a `.tmpl` file with `#PAYLOAD#` is one too. ffuf's `htmlescape` and `htmlunescape` are not available: they are refused.
@@ -113,6 +115,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
   - `-request FILE` reads a raw request as Burp saves it, and `-request-proto` gives its protocol. `-u`, `-X`, `-d`, `-H` and `-b` replace parts of it.
 - **Request**
   - `-u`, `-X`, `-d` (also `-data`, `-data-ascii`, `-data-binary`), `-H`, `-b` (also `-cookie`), `-r` and `-timeout`.
+  - A word goes into the URL as written, as in ffuf, so where `FUZZ` stands decides what it is: in the path, a `#` starts a fragment that is never sent (`#note` asks `/`, `x#y` asks `/x`), a `?` starts the query, a space is sent as `%20` and a `%` that is not an escape (`50%`) makes a request that cannot be built, counted as a failure. After `?q=` the word is the value and is sent as written. `-raw` sends the path and query as written, `#` included. `dirs` is different: its word is always a path ([dirs](dirs.md#words-are-paths)).
   - A `-d` body goes out with `Content-Type: application/x-www-form-urlencoded`, as ffuf sends it, unless `-H` (or the `-request` file) gives a Content-Type.
   - `-timeout` is seconds per request, as in ffuf.
   - `-x` sends every request through an http, https, socks5 or socks5h proxy.
