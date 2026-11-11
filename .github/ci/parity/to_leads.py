@@ -318,7 +318,7 @@ def names_by_ip(obs):
     return m
 
 
-def surface(obs):
+def surface(obs, ents=None):
     """Hosts, open ports and services as azhaq lists them: one line per address
     and port, and one per name that points at the address."""
     names = names_by_ip(obs)
@@ -331,6 +331,16 @@ def surface(obs):
     for ip, ns in sorted(names.items()):
         for n in sorted(ns):
             add("%s %s" % (n, ip))
+    # Every open port azhaq kept, service named or not: a port the second pass found
+    # has its entity before any service detection says what it is.
+    for e in sorted((ents or {}).values(), key=lambda e: e.get("key") or ""):
+        if e.get("type") != "Port":
+            continue
+        addr, _, rest = (e.get("key") or "").rpartition(":")
+        port, _, proto = rest.partition("/")
+        if addr and port.isdigit():
+            for h in [addr] + sorted(names.get(addr, ())):
+                add("%s:%s/%s" % (h, port, proto or "tcp"))
     for o in obs:
         p = o["payload"]
         if o.get("collector") != "azhaq-ports" or not isinstance(p.get("services"), list):
@@ -367,7 +377,7 @@ def write(args, ents, obs, last):
         for d in leads:
             f.write(json.dumps({k: v for k, v in d.items() if k != "_t"}) + "\n")
     with open(os.path.join(args.out, "surface-1.txt"), "w", encoding="utf-8") as f:
-        f.write("\n".join(surface(obs)) + "\n")
+        f.write("\n".join(surface(obs, ents)) + "\n")
     with open(os.path.join(args.out, "phases.log"), "w", encoding="utf-8") as f:
         f.write("phase 1 start %s\nphase 1 end %s\n" % (stamp(start), stamp(max(end, start))))
     return len(leads)

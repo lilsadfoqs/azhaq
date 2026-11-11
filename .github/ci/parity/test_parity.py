@@ -239,6 +239,15 @@ class ToLeads(Fixture):
         self.assertIn("wiki.acme.test:80/tcp http nginx", s)
         self.assertIn("app1.acme.test 127.31.0.20", s)
 
+    def test_a_port_with_no_service_is_in_the_surface(self):
+        # The second port pass keeps an open port before any service detection names it.
+        with tempfile.TemporaryDirectory() as t:
+            write_jsonl(os.path.join(t, "e.jsonl"), EXPORT + [ent("p-bare", "Port", "127.31.0.20:50070/tcp", 40)])
+            convert(["--export", os.path.join(t, "e.jsonl"), "--out", os.path.join(t, "o"), "--start", iso(0)])
+            s = read(os.path.join(t, "o", "surface-1.txt")).splitlines()
+            self.assertIn("127.31.0.20:50070/tcp", s)
+            self.assertIn("app1.acme.test:50070/tcp", s)
+
     def test_a_time_before_the_start_is_held_at_the_start(self):
         with tempfile.TemporaryDirectory() as t:
             write_jsonl(os.path.join(t, "e.jsonl"), EXPORT)
