@@ -1,6 +1,8 @@
 #!/bin/bash
-# history.sh [N]: prints the history of the review scores: each item across the
-# last N reviews (default 10), with the spread between the samples of a review.
+# history.sh [N] [--with-control]: prints the history of the review scores: each
+# item across the last N reviews (default 10), with the spread between the
+# samples of a review. The control's records (trial kind control) are left out;
+# --with-control shows them.
 # The records are the scores.json.age files the trial workflow puts beside a
 # review's results on ci-results, encrypted to the maintainer's key (AZHAQ_AGE_KEY,
 # default ~/.config/azhaq/age.key); only they are fetched, not the reviews' archives.
@@ -8,7 +10,14 @@
 # `python3 .github/ci/range/scores.py history DIR` reads its REPORT.md.
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
-last=${1:-10}
+last=10
+extra=()
+for arg in "$@"; do
+  case $arg in
+  --with-control) extra+=(--with-control) ;;
+  *) last=$arg ;;
+  esac
+done
 key=${AZHAQ_AGE_KEY:-$HOME/.config/azhaq/age.key}
 age=$(command -v age || echo "$HOME/go/bin/age")
 repo=${AZHAQ_REPO:-lilsadfoqs/azhaq}
@@ -25,4 +34,4 @@ while IFS= read -r path; do
   n=$((n + 1))
 done < <(git -C "$tmp/tree" ls-tree -r --name-only HEAD trial | grep '/scores\.json\.age$')
 [ "$n" -gt 0 ] || { echo "history.sh: no scores record on ci-results yet (the review workflow writes one for each part)" >&2; exit 1; }
-python3 -I "$here/range/scores.py" history "$tmp/records" --last "$last"
+python3 -I "$here/range/scores.py" history "$tmp/records" --last "$last" ${extra[@]+"${extra[@]}"}

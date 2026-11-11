@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""merge_gate.py DIR [--samples N] [--out OUT.md]: merges the gate's
+"""merge_gate.py DIR [--samples N] [--control] [--out OUT.md]: merges the gate's
 scorecards into one table. DIR is what `fetch.sh trial NAME DIR` wrote:
 DIR/a (part A, REPORT.md and, when graded, grade.json) and DIR/b (part B,
 REPORT.md).
@@ -17,6 +17,12 @@ falls into, part B's switch areas first, then part A's, then one overall
 (the lowest of every score read: the gate needs all of them at 9 or more).
 Part A's grade.json, when it holds a `baseline_comparison` (grade.py
 --baseline), is summarised beside the scorecard.
+
+A control's folder (a `control` trial: the same brief, another candidate;
+.github/ci/trial/README.md) is merged the same way. It is found by the kind
+in its scores.json records, or forced with --control. Its title says
+"Control scorecard" and it has no gate verdict: the per-item medians are what
+is read, against 9 in the areas where the control is the usual tools.
 
 Rows GATE.md did not ask for, or a REPORT.md with no parseable table, are
 listed for a person to judge instead of guessed at.
@@ -49,6 +55,8 @@ PART_B_ITEMS = ["install and first run", "docs", "subdomain recon", "host and po
                 "output and integration (including assistants)",
                 "reliability (crashes, hangs, wrong data, silent failures)",
                 "performance (time, memory and cpu, and the requests it sends to the target for the same result)"]
+
+CONTROL_NAME = "orvel"
 
 ROW_RE = re.compile(r"^\|\s*(?P<item>[^|]+?)\s*\|\s*(?P<score>\d{1,2})\s*(?:/\s*10)?\s*\|\s*(?P<reason>.*?)\s*\|\s*$")
 
@@ -129,7 +137,7 @@ def load_grade(a_dir):
         return json.load(f)
 
 
-def baseline_table(entries):
+def baseline_table(entries, candidate="azhaq"):
     """Part A's grade beside its baseline: a table of (sample, comparison)
     entries, one row per sample and phase; the Sample column is left out when
     no entry has a sample label."""
@@ -143,14 +151,14 @@ def baseline_table(entries):
             c["first_match_s"][0], c["first_match_s"][1], c["commands_total"][0], c["commands_total"][1],
             "yes" if c["same_seed"] else "NO, not a fair comparison")
         o.append("| " + (label + " | " if labelled else "") + row + " |")
-    o += ["", "Each column reads \"azhaq vs baseline\"."]
+    o += ["", "Each column reads \"%s vs baseline\"." % candidate]
     return o
 
 
 NO_BASELINE = "Part A was graded, but with no --baseline: run grade.py again with the pool estate's baseline grade.json to compare."
 
 
-def one_pair(a_dir, b_dir, label="", with_grade=True):
+def one_pair(a_dir, b_dir, label="", with_grade=True, control=False):
     a_text = read(os.path.join(a_dir, "REPORT.md"))
     b_text = read(os.path.join(b_dir, "REPORT.md"))
     a_rows, _ = parse_scorecard(a_text or "")
@@ -170,8 +178,8 @@ def one_pair(a_dir, b_dir, label="", with_grade=True):
         else:
             o.append("| %s | %d | %s | %s |" % (item, score, anchor_for(score), reason or ""))
     if overall is not None:
-        o.append("| **overall** | **%d** | %s | the lowest of the rows above: the gate needs every one at 9 or more |"
-                  % (overall, anchor_for(overall)))
+        o.append("| **overall** | **%d** | %s | the lowest of the rows above%s |"
+                  % (overall, anchor_for(overall), "" if control else ": the gate needs every one at 9 or more"))
     else:
         o.append("| **overall** | not scored | - | no scorecard row parsed from either REPORT.md |")
     leftover = a_left + b_left
@@ -185,7 +193,7 @@ def one_pair(a_dir, b_dir, label="", with_grade=True):
         o += ["", "No %sREPORT.md for part B." % (label + " " if label else "")]
     if with_grade and grade and grade.get("baseline_comparison"):
         o += ["", "### Part A's grade beside its baseline", ""]
-        o += baseline_table([("", c) for c in grade["baseline_comparison"]])
+        o += baseline_table([("", c) for c in grade["baseline_comparison"]], CONTROL_NAME if control else "azhaq")
     elif with_grade and grade:
         o += ["", NO_BASELINE]
     return "\n".join(o) + "\n", overall
@@ -200,6 +208,19 @@ def find_pairs(d):
         if os.path.isdir(ak) and os.path.isdir(bk):
             pairs.append((ak, bk, "sample %d" % k))
     return pairs or [(os.path.join(d, "a"), os.path.join(d, "b"), "")]
+
+
+def is_control_dir(pairs):
+    """True when a sample's scores.json (fetch.sh decrypts it beside REPORT.md) says kind control-a or control-b."""
+    for a_dir, b_dir, _ in pairs:
+        for d in (a_dir, b_dir):
+            try:
+                with open(os.path.join(d, "scores.json"), encoding="utf-8") as f:
+                    if str(json.load(f).get("kind", "")).startswith("control"):
+                        return True
+            except (OSError, ValueError, AttributeError):
+                continue
+    return False
 
 
 def missing_samples(d, pairs, expected=0):
@@ -232,13 +253,17 @@ def num(x):
     return "%g" % x
 
 
-def medians_section(per_sample):
+def medians_section(per_sample, control=False):
     """The per-item table over PER_SAMPLE, a list of item_scores lists (one per
     sample); returns its lines. Medians and spreads use the scored cells only."""
     n = len(per_sample)
+    why = ("The gate verdict is not made from these: it is still the lowest score of every sample "
+           "(9 or more to pass); the medians are reported, not used for it.")
+    if control:
+        why = ("There is no gate verdict. Read each median against 9 in the areas where the control is identical "
+               "to the usual tools (.github/ci/trial/README.md).")
     o = ["## Per-item medians", "",
-         "Across %d samples. The gate verdict is not made from these: it is still the lowest score of every sample "
-         "(9 or more to pass); the medians are reported, not used for it." % n, "",
+         "Across %d samples. %s" % (n, why), "",
          "| Item | Scores (sample 1 to %d) | Median | Spread |" % n, "|---|---|---|---|"]
     medians = []
     for i, (item, _) in enumerate(per_sample[0]):
@@ -263,13 +288,15 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("dir")
     ap.add_argument("--samples", type=int, default=0, help="how many samples the review ran: fewer found is not a pass")
+    ap.add_argument("--control", action="store_true", help="a control's folder (found by its scores.json records when not given)")
     ap.add_argument("--out", help="where to write the Markdown (default: stdout)")
     a = ap.parse_args(argv)
     pairs = find_pairs(a.dir)
+    control = a.control or is_control_dir(pairs)
     many = len(pairs) > 1
     sections, overalls, per_sample, grades = [], [], [], []
     for a_dir, b_dir, label in pairs:
-        text, overall = one_pair(a_dir, b_dir, label, with_grade=not many)
+        text, overall = one_pair(a_dir, b_dir, label, with_grade=not many, control=control)
         sections.append(text)
         overalls.append(overall)
         per_sample.append(item_scores(a_dir, b_dir))
@@ -282,20 +309,26 @@ def main(argv=None):
         verdict = "PASS: every sample scored every item at 9 or more"
     else:
         verdict = "not a pass: a sample is missing a score, or scored below 9"
+    if control:
+        verdict = ("a measurement of the scale, not a gate or a review of azhaq: %s" % ("every sample scored every item at 9 or more" if passed
+                   else "not every sample scored every item at 9 or more"))
+        if notes:
+            verdict += "; " + "; ".join(notes)
     head = []
     if many:
-        head += medians_section(per_sample) + [""]
+        head += medians_section(per_sample, control) + [""]
         graded = [(label, g) for label, g in grades if g]
         if graded:
             head += ["## Part A's grade beside its baseline", ""]
             entries = [(label, c) for label, g in graded for c in g.get("baseline_comparison") or []]
             if entries:
-                head += baseline_table(entries)
+                head += baseline_table(entries, CONTROL_NAME if control else "azhaq")
             ungraded = [label for label, g in graded if not g.get("baseline_comparison")]
             if ungraded:
                 head += ["", "Sample %s: %s" % (", ".join(ungraded), NO_BASELINE)]
             head.append("")
-    out = "# Gate scorecard\n\n%s\n\n" % verdict + ("\n".join(head) + "\n" if head else "") + "\n".join(sections)
+    out = ("# %s scorecard\n\n%s\n\n" % ("Control" if control else "Gate", verdict)
+           + ("\n".join(head) + "\n" if head else "") + "\n".join(sections))
     if a.out:
         with open(a.out, "w", encoding="utf-8") as f:
             f.write(out)

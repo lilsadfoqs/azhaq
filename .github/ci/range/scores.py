@@ -1,19 +1,20 @@
 #!/usr/bin/env python3
 """scores.py: the private history of review scores.
 
-  scores.py extract REPORT.md --kind gate-a|gate-b|baseline|switch --tag TAG
+  scores.py extract REPORT.md --kind gate-a|gate-b|baseline|switch|control-a|control-b --tag TAG
             [--part a1] [--version V] [--run ID] --out scores.json
       reads the scorecard of a review's REPORT.md (the rows merge_gate.py
       reads) into one small JSON record: each item's score, the overall.
       The workflow encrypts it to the maintainer's age key and publishes it
       beside the review's results (trial/TAG/PART/scores.json.age).
 
-  scores.py history DIR... [--last N] [--json]
+  scores.py history DIR... [--last N] [--json] [--with-control]
       DIR is a folder of such records (scores.json) or of fetched reviews
       (their REPORT.md is read when there is no record): prints each item
       across the reviews, newest last, with every sample of a review
       (up to four) and the spread between them, and the spread across the
-      reviews (the range of their means).
+      reviews (the range of their means). Records of kinds control-a and
+      control-b are left out unless --with-control is given (README.md).
 
 Nothing here is public: the record is only ever written encrypted.
 """
@@ -35,7 +36,13 @@ KIND_ITEMS = {
     "gate-b": merge_gate.PART_B_ITEMS,
     "baseline": merge_gate.PART_A_ITEMS,
     "switch": None,
+    "control-a": merge_gate.PART_A_ITEMS,
+    "control-b": merge_gate.PART_B_ITEMS,
 }
+
+
+def is_control(record):
+    return record["kind"].startswith("control")
 
 
 def extract(report_text, kind, tag, part="", version="", run="", now=None):
@@ -164,6 +171,7 @@ def main(argv=None):
     h.add_argument("dirs", nargs="+")
     h.add_argument("--last", type=int, default=0)
     h.add_argument("--json", action="store_true")
+    h.add_argument("--with-control", action="store_true", help="also show the control's records (left out by default)")
     a = ap.parse_args(argv)
     if a.cmd == "extract":
         try:
@@ -180,7 +188,7 @@ def main(argv=None):
             json.dump(rec, f, indent=1, sort_keys=True)
             f.write("\n")
         return 0
-    reviews = build(load(a.dirs), a.last)
+    reviews = build([r for r in load(a.dirs) if a.with_control or not is_control(r)], a.last)
     if a.json:
         out = [{"tag": r["tag"], "time": r["time"], "version": r["version"],
                 "items": {"%s: %s" % k: sorted(v) for k, v in r["items"].items()}} for r in reviews]

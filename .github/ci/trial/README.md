@@ -1,11 +1,12 @@
 # Workflow trials
 
-`trial.yml` runs five kinds. The first line of the tag's message picks one;
+`trial.yml` runs six kinds. The first line of the tag's message picks one;
 `.github/ci/run.sh trial NAME KIND` writes it.
 
 | Kind | What happens | Brief |
 | --- | --- | --- |
 | `gate` | The current trial: one persona, one build, two parts - part A (`gate-a`), an engagement on one Vulhub estate drawn from the fixed pool, graded against the estate's baseline; part B (`gate-b`), the switch checklist head-to-head on the local labs. `samples=N` (N from 1 to 4) runs both parts N times, part A on N different pool estates, two sessions at a time (`max-parallel: 2` on each part, because the jobs share one Codex sign-in). The release review runs `samples=4`. | `GATE.md` |
+| `control` | The gate's review with a different candidate: `orvel`, a thin front end over the very tools the reviewer already uses, to measure what the scale can give (the section "The control"). The same two parts, estates and publish paths as `gate`; `samples=N` as for `gate`. A one-off measurement, not a review of azhaq. | `GATE.md`, rendered for the control |
 | `baseline` | Part A's engagement again, usual tools only, azhaq off, on one pool estate: measures that estate's baseline once. `samples=N` measures N pool estates, two at a time (parts `a1`..`aN`). | `GATE.md` (usual tools) |
 | `switch` (default) | Older, kept working: a blind review of the latest release against five training apps, one build, one job. | `BRIEF.md` |
 | `research` | Older, kept working: a researcher does two phases of an engagement on two fresh estates. Phase 1, estate 1: usual tools only, azhaq not run. Phase 2, estate 2: azhaq used as the main tool; every fallback to another tool is logged with its reason. | `RESEARCH.md` |
@@ -14,6 +15,7 @@
 ```
 .github/ci/run.sh trial 20 gate                  # tag trial-20, kind gate, one estate
 .github/ci/run.sh trial 21 gate seed=gate-alpha samples=4   # four estates, four samples
+.github/ci/run.sh trial control1 control samples=4  # the control: orvel over the usual tools, four samples
 .github/ci/run.sh trial b-alpha baseline seed=gate-alpha    # the pool estate's baseline
 .github/ci/run.sh trial b-all baseline samples=4            # all four pool estates, two at a time
 .github/ci/run.sh trial dry1 gate dryrun         # build, estate, isolation and briefs, no agent
@@ -90,6 +92,80 @@ the medians: every sample must show a pass for the gate to pass, and a missing
 sample (a gap, one part only, or fewer than `--samples N`) is not a pass.
 While a run goes, only two sessions run at a time, so `watch.sh` needs
 `WATCH_EXPECT="a1 a2 a3 a4 b1 b2 b3 b4"` to wait for the queued parts.
+
+## The control
+
+**What it measures.** The ceiling of the scale. The control asks whether the
+ruler can give 9 at all when the candidate is the reviewer's own stack. It
+is the gate's review (the same persona, brief, anchors, coverage rules,
+estates, labs, isolation, timeouts and publish paths), but the candidate is
+`orvel` (`.github/ci/control/`): a thin front end that runs the reviewer's own
+stack (subfinder, dnsx, httpx, katana, ffuf, arjun, gau, naabu, nmap, nuclei,
+gowitness) 1:1, with the arguments and exit codes passed through, and a default
+`orvel run` pipeline. Its README (shipped as `./bin/orvel-README.md`) says that
+it is a front end, lists the exact tool and version behind each subcommand and
+makes no claim of its own: no scope enforcement, no ledger, no safety features.
+If the control cannot reach 9 in the areas where it is identical to the stack,
+no build of azhaq can in those areas, and the scale, not the tool, is what
+holds the score down.
+
+**The brief** is `GATE.md` rendered by `range/render_brief.py` as `control-a`
+and `control-b`, by a mechanical change whose rules are written at the top of
+the control section there and tested (`range/test_control_brief.py` renders
+both and diffs them against `gate-a` and `gate-b`; only these lines differ):
+
+1. the candidate's name: every `azhaq` becomes `orvel` (`./bin/orvel`);
+2. the first paragraph's claim becomes "claims it can replace that stack: it
+   is one front end over those same tools" (no repository address, no
+   claim of added capabilities or of safety);
+3. where the candidate is: part A's tools line and part B's first line say it is
+   in `./bin` beside the tools it runs, and part B drops the note about a
+   separate job checking an install script;
+4. part B's safety-claim cap is dropped: orvel makes no safety claim.
+
+Where the brief had to differ, the variant that can only help the control was
+chosen. Every item, anchor, coverage rule, the scorecard format and the persona
+are the gate's, word for word. Checklist lines naming features only azhaq has
+(the coverage estimate, the ledger, `watch`, the MCP server, ...) stay: the
+reviewer marks them untested or failed, and those areas are not what the
+control measures.
+
+**Running it and fetching it.** The tag's first word is `control`; the jobs
+are the gate's `gate-a` and `gate-b` (shown as `control-a` and `control-b`),
+with `orvel` and the pinned stack installed in `./bin` by
+`.github/ci/control/install-stack.sh` instead of azhaq. No `build` job runs.
+The pins are the ones `bench/tools.go` has (nuclei's is its own), nmap comes
+from apt as in the gate, and nuclei fetches its templates as it normally does.
+
+```
+.github/ci/run.sh trial control1 control samples=4        # a1..a4, b1..b4
+.github/ci/run.sh trial control1 control seed=gate-alpha samples=2
+.github/ci/fetch.sh trial control1 /tmp/control1
+python3 .github/ci/range/merge_gate.py /tmp/control1 --samples 4   # "Control scorecard"
+```
+
+`merge_gate.py` finds a control folder by the kind in its `scores.json`
+(or `--control`), titles it "Control scorecard" and has no gate verdict.
+`scores.py` writes the records as `control-a` and `control-b`;
+`history.sh` and `scores.py history` leave them out, and `--with-control`
+shows them.
+
+**Reading it.** Compare the control's per-item medians (the first table of the
+merge) with 9 in the areas where orvel is identical to the stack:
+
+- subdomain recon, host and port discovery, web and API mapping (part B);
+- performance (part B);
+- part A's findings and time to the first finding.
+
+A median of 9 or more there says the scale can give 9 to an equal; a lower
+median there is the ruler's ceiling in that area: no build of azhaq can be
+scored above it where it does the same as the stack. The areas orvel does not
+have (signed-in and multi-role testing, integration with assistants, the
+engagement controls) are expected to score low and say nothing about the scale.
+
+**It is a one-off measurement of the ruler, not a review of azhaq.** Run it
+once (or again only when GATE.md's anchors change), do not mix its records into
+the history, and do not read its scores as azhaq's.
 
 ## The estates
 
@@ -221,6 +297,9 @@ review (`7/9 (spread 2)`) and the range of the reviews' means. Two samples of on
 build have differed by two points on the same item: a change inside that
 spread is no trend. A review from before the records has none: fetch it and
 `python3 .github/ci/range/scores.py history DIR` reads its `REPORT.md`.
+
+The control's records (`control-a`, `control-b`) are left out of the history;
+`history.sh 10 --with-control` shows them.
 
 ```
 .github/ci/history.sh 10
