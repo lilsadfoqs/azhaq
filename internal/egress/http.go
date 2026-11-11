@@ -147,13 +147,16 @@ func (g *guarded) check(req *http.Request) error {
 // the scope: neterr.ErrOutOfScope. Without a scope it holds nothing back.
 func (p *Policy) checkRequest(req *http.Request, sni string) error {
 	allow, open := p.scope()
-	if allow == nil || req.URL == nil {
+	if req.URL == nil {
 		return nil
 	}
-	if h := req.URL.Hostname(); h != "" {
+	if h := req.URL.Hostname(); h != "" && (allow != nil || p.heldByTargets(h, scope.URLPort(req.URL))) {
 		if err := p.CheckAddr(h, scope.URLPort(req.URL)); err != nil {
 			return err
 		}
+	}
+	if allow == nil {
+		return nil
 	}
 	addr := p.ScopeAddr()
 	if req.Host != "" && !open["host"] {
@@ -181,6 +184,9 @@ func (p *Policy) checkRequest(req *http.Request, sni string) error {
 // scope on another, else the scope.
 func (p *Policy) outOf(host string) error {
 	if p.Allows(host) {
+		if p.namedByTargets(host) {
+			return neterr.ErrOutOfTargetPort
+		}
 		return neterr.ErrOutOfPort
 	}
 	return neterr.ErrOutOfScope

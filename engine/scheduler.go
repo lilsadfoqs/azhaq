@@ -338,7 +338,7 @@ func (s *scheduler) add(raw types.Seed, depth int, hint bool) {
 	if seed.Key() == "" {
 		return
 	}
-	if hint && !s.b.Scope.AllowsSeed(seed) {
+	if hint && (!s.b.Scope.AllowsSeed(seed) || seed.Type == types.TypeURL && !egress.AllowsURL(seed.Key())) {
 		if seed.Type == types.TypeURL {
 			egress.NotePortSkip(seed.Key())
 		}

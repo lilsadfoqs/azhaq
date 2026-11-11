@@ -264,7 +264,7 @@ func outsideByPort(obs []types.StoredObservation) bool {
 		var p struct {
 			Skipped string `json:"skipped"`
 		}
-		if json.Unmarshal(o.Payload, &p) == nil && p.Skipped == neterr.OutOfPortReason {
+		if json.Unmarshal(o.Payload, &p) == nil && (p.Skipped == neterr.OutOfPortReason || p.Skipped == neterr.OutOfTargetPortReason) {
 			return true
 		}
 	}

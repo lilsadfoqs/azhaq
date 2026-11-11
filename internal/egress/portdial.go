@@ -121,12 +121,21 @@ func (d *PortDialer) allowed(host, addr string) error {
 // inScope is allowed without the kill file.
 func (d *PortDialer) inScope(host, addr string) error {
 	p := Current()
-	if p.Scope() == nil {
-		return nil
-	}
 	ip, port, err := net.SplitHostPort(addr)
 	if err != nil {
 		ip = addr
+	}
+	if p.Scope() == nil {
+		// No rule: only a host the targets name with other ports is held, by
+		// the name asked for, else by the address.
+		name := ip
+		if host != "" {
+			name = host
+		}
+		if p.heldByTargets(name, port) {
+			return neterr.ErrOutOfTargetPort
+		}
+		return nil
 	}
 	// A name is in scope by its rule, an address by its own or its range's.
 	if p.AllowsAddr(ip, port) || (host != "" && p.AllowsAddr(host, port)) {

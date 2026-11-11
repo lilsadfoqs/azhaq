@@ -85,6 +85,20 @@ var ErrOutOfPort = fmt.Errorf("%w: %s", ErrOutOfScope, OutOfPortReason)
 // OutOfPortReason is how a run's summary lists what ErrOutOfPort kept out.
 const OutOfPortReason = "outside the scope: -allow lists this host with another port only"
 
+// ErrOutOfTargetPort is ErrOutOfPort for a run with no rule, where the URL
+// targets name the host with another port only.
+var ErrOutOfTargetPort = &targetPort{msg: "not requested: " + OutOfTargetPortReason}
+
+// OutOfTargetPortReason is how a run's summary lists what ErrOutOfTargetPort
+// kept out.
+const OutOfTargetPortReason = "outside the scope: the targets name this host with another port only"
+
+type targetPort struct{ msg string }
+
+func (e *targetPort) Error() string { return e.msg }
+
+func (*targetPort) Is(target error) bool { return target == ErrOutOfPort || target == ErrOutOfScope }
+
 // ErrNotRepeated is returned instead of sending a write again that a run
 // sent before it was killed: the ledger holds the request, nothing holds
 // its answer, and sending it twice could do its work twice.

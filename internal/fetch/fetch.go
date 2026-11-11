@@ -987,6 +987,10 @@ func followable(raw, next string) bool {
 // itself). A bundle on cdn.example.com and an API on api.example.com
 // belong to www.example.com; a library on a third-party CDN does not.
 func SameSite(page, other string) bool {
+	if !egress.HasScope() && !egress.AllowsURL(other) {
+		egress.NotePortSkip(other) // the targets hold its host to another port
+		return false
+	}
 	if egress.HasScope() {
 		if !inScope(other) {
 			egress.NotePortSkip(other)
