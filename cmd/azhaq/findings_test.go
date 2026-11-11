@@ -303,3 +303,18 @@ func TestBuildFindings(t *testing.T) {
 		}
 	}
 }
+
+// A handshake result keeps its own kind in the record and in Markdown, and
+// ranks below a data-store read.
+func TestFindingsKeepAHandshakeKind(t *testing.T) {
+	raw, _ := json.Marshal(verify.Result{Kind: verify.KindUnauthenticatedHandshake, Label: verify.Proved, Severity: "info",
+		Host: "10.0.0.5", Port: 5005, Target: "10.0.0.5:5005", Request: "JDWP-Handshake", Evidence: "JDWP-Handshake", Command: "azhaq ports -verify"})
+	g := &graphView{obs: []types.StoredObservation{{Observation: types.Observation{Collector: "azhaq-verify", Kind: "verify", Payload: raw}}}}
+	findings, _, _ := buildFindings(g)
+	if len(findings) != 1 || findings[0].Kind != "unauthenticated-handshake" || findings[0].Severity != "info" {
+		t.Fatalf("%+v, want one unauthenticated-handshake record, info", findings)
+	}
+	if md := findingMarkdown(findings[0]); !strings.Contains(md, "**info** unauthenticated-handshake on 10.0.0.5:5005") {
+		t.Errorf("markdown %q", md)
+	}
+}

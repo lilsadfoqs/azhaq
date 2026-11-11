@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"math"
 	"net"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -96,7 +98,7 @@ func TestRedisUnauthenticatedIsProved(t *testing.T) {
 	if r.Version != "7.2.0" || !strings.Contains(r.Evidence, "redis_version:7.2.0") {
 		t.Fatalf("version/evidence: %+v", r)
 	}
-	if r.Kind != "unauthenticated-read" || r.Severity != "high" {
+	if r.Kind != "unauthenticated-read" || r.Severity != "high" { // a read, not a handshake
 		t.Fatalf("kind/severity: %+v", r)
 	}
 }
@@ -242,5 +244,127 @@ func TestChecksEnumeratePreconditions(t *testing.T) {
 		if c.ID == "" || c.Request == "" || c.Precondition == "" {
 			t.Errorf("check %+v does not print its precondition and exact request", c)
 		}
+	}
+}
+
+func TestHandshakeChecksAreTheirOwnKind(t *testing.T) {
+	rmi := append([]byte{0x4e, 0, 9}, "172.22.0.1"[:9]...)
+	rmi = append(rmi, 0, 0, 0xd4, 0x31)
+	for _, tt := range []struct {
+		service string
+		answer  []byte
+	}{
+		{"jdwp", []byte("JDWP-Handshake")},
+		{"java-rmi", rmi},
+	} {
+		f := listen(t, func([]byte) []byte { return tt.answer })
+		r := runOne(t, advisory.Service{Service: tt.service}, f)
+		if r.Kind != "unauthenticated-handshake" || r.Label != Proved || r.Severity != "info" {
+			t.Errorf("%s: %+v, want an unauthenticated-handshake, proved, info", tt.service, r)
+		}
+	}
+}
+
+// Every check names its kind, and the data-store reads stay reads.
+func TestEveryCheckNamesItsKind(t *testing.T) {
+	for _, c := range Checks() {
+		switch c.Kind {
+		case KindUnauthenticatedRead, KindUnauthenticatedHandshake:
+		default:
+			t.Errorf("%s: kind %q", c.ID, c.Kind)
+		}
+		if c.High && c.Kind != KindUnauthenticatedRead {
+			t.Errorf("%s ranks high but is a %s", c.ID, c.Kind)
+		}
+	}
+}
+
+// dnsAnswer is a TCP-framed answer to version.bind with the given rcode
+// and answer count.
+func dnsAnswer(rcode byte, an byte) []byte {
+	m := []byte{0x12, 0x34, 0x81, 0x80 | rcode, 0, 1, 0, an, 0, 0, 0, 0}
+	m = append(m, 7, 'v', 'e', 'r', 's', 'i', 'o', 'n', 4, 'b', 'i', 'n', 'd', 0, 0, 16, 0, 3)
+	return append([]byte{0, byte(len(m))}, m...)
+}
+
+func TestDNSRefusalIsVersionOnly(t *testing.T) {
+	for name, tt := range map[string]struct {
+		answer []byte
+		evid   string
+	}{
+		"refused":  {dnsAnswer(5, 0), "rcode REFUSED"},
+		"notimp":   {dnsAnswer(4, 0), "rcode NOTIMP"},
+		"servfail": {dnsAnswer(2, 0), "rcode SERVFAIL"},
+		"noanswer": {dnsAnswer(0, 0), "rcode NOERROR"},
+	} {
+		f := listen(t, func([]byte) []byte { return tt.answer })
+		r := runOne(t, advisory.Service{Service: "dns"}, f)
+		if r.Label != VersionOnly || r.Severity != "info" || !strings.Contains(r.Evidence, tt.evid) {
+			t.Errorf("%s: %+v, want version-only, info, evidence %q", name, r, tt.evid)
+		}
+		if strings.ContainsRune(r.Evidence, '\uFFFD') || strings.Contains(r.Evidence, "versionbind") {
+			t.Errorf("%s: raw reply in evidence %q", name, r.Evidence)
+		}
+	}
+}
+
+func TestExcerptEscapesBinary(t *testing.T) {
+	got := excerpt([]byte("PR\x80\xff\x00\x01version\r\nbind\x7f"))
+	if got != `PR\x80\xff\x00\x01version bind\x7f` {
+		t.Errorf("excerpt: %q", got)
+	}
+	if e := excerpt([]byte("héllo wörld")); e != "héllo wörld" {
+		t.Errorf("valid UTF-8 text changed: %q", e)
+	}
+	if e := excerpt([]byte(strings.Repeat("\x01", 300))); len([]rune(e)) > 200 || !strings.HasPrefix(e, `\x01`) {
+		t.Errorf("cap: %d runes", len([]rune(e)))
+	}
+	for _, c := range excerpt([]byte{0xc3, 0x28, 0xfe}) {
+		if c == '\uFFFD' {
+			t.Error("U+FFFD in excerpt")
+		}
+	}
+}
+
+func TestDNSTXTAnswerStaysProved(t *testing.T) {
+	m := dnsAnswer(0, 1)[2:]
+	m = append(m, 0xc0, 0x0c, 0, 16, 0, 3, 0, 0, 0, 0, 0, 7, 6)
+	m = append(m, "9.18.24"[:6]...)
+	f := listen(t, func(req []byte) []byte {
+		a := append([]byte(nil), m...)
+		copy(a, req[2:4]) // the answer repeats the query's id
+		return append([]byte{0, byte(len(a))}, a...)
+	})
+	r := runOne(t, advisory.Service{Service: "dns"}, f)
+	if r.Label != Proved || r.Kind != KindUnauthenticatedRead || r.Version != "9.18.2" {
+		t.Errorf("%+v, want a proved read of version 9.18.2", r)
+	}
+}
+
+// The run docs' table of checks names the kind each check gives.
+func TestDocsKindColumnMatchesTheChecks(t *testing.T) {
+	b, err := os.ReadFile(filepath.Join("..", "..", "docs", "commands", "run.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var reads, handshakes int
+	for _, l := range strings.Split(string(b), "\n") {
+		switch {
+		case strings.HasPrefix(l, "| ") && strings.HasSuffix(l, "| `unauthenticated-read` |"):
+			reads++
+		case strings.HasPrefix(l, "| ") && strings.HasSuffix(l, "| `unauthenticated-handshake` |"):
+			handshakes++
+		}
+	}
+	var wantR, wantH int
+	for _, c := range Checks() {
+		if c.Kind == KindUnauthenticatedRead {
+			wantR++
+		} else {
+			wantH++
+		}
+	}
+	if reads != wantR || handshakes != wantH {
+		t.Errorf("docs table: %d reads and %d handshakes, checks: %d and %d", reads, handshakes, wantR, wantH)
 	}
 }
