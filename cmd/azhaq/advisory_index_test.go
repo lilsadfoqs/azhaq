@@ -89,16 +89,11 @@ type advRef struct {
 	Index bool    `json:"index"`
 }
 
-func advRows(out string) []advRow {
+// advRows are the leads of a run's summary: the advisories are not rows of
+// the JSON stream (results are the rows printed), so the summary holds them.
+func advRows(rep report) []advRow {
 	var rows []advRow
-	for _, line := range strings.Split(out, "\n") {
-		var r struct {
-			Type string `json:"type"`
-			advisory.Lead
-		}
-		if json.Unmarshal([]byte(line), &r) != nil || r.Type != "advisory" {
-			continue
-		}
+	for _, r := range rep.Advisories {
 		row := advRow{ID: r.AdvisoryID, Label: r.Label, URL: r.URL, Range: r.AffectedRange, Source: r.Source, Product: r.Product,
 			Version: r.VersionSeen, Target: r.Target, KEV: r.KEV, CVSS: r.CVSS, Counts: r.Counts, KEVCount: r.KEVCount, MaxCVSS: r.MaxCVSS}
 		for _, a := range r.Advisories {
@@ -150,10 +145,11 @@ func TestRunNamesTheAdvisoriesOfAConfirmedVersionByDefault(t *testing.T) {
 	useBuiltinIndex(t)
 	srv := apacheServer(t, "2.4.49")
 	out, rep := runDefault(t, "-url", srv.URL+"/")
-	rows := advRows(out)
+	rows := advRows(rep)
 	// Exactly one advisory line for the one service, however many advisories it has.
-	if len(rows) != 1 {
-		t.Fatalf("%d advisory lines for one service, want 1:\n%s", len(rows), out)
+	// One lead for the one service, in the summary; none is a row of the stream.
+	if len(rows) != 1 || strings.Contains(out, `"type":"advisory"`) {
+		t.Fatalf("%d leads for one service, want 1 and no row of the stream:\n%s", len(rows), out)
 	}
 	l := rows[0]
 	if l.ID != "CVE-2021-41773" || l.Label != "affected" || l.URL != "https://nvd.nist.gov/vuln/detail/CVE-2021-41773" || !l.KEV || l.CVSS != 9.8 ||
@@ -212,7 +208,7 @@ func TestOneAdvisoryLinePerService(t *testing.T) {
 		t.Fatal(err)
 	}
 	out, rep := runDefault(t, "-list", list)
-	rows := advRows(out)
+	rows := advRows(rep)
 	if len(rows) != 2 || len(rep.Advisories) != 2 {
 		t.Fatalf("%d advisory lines and %d leads for two services, want 2 and 2:\n%s", len(rows), len(rep.Advisories), out)
 	}
@@ -226,8 +222,8 @@ func TestOneAdvisoryLinePerService(t *testing.T) {
 func TestRunLabelsAVersionOutsideTheRange(t *testing.T) {
 	useBuiltinIndex(t)
 	srv := apacheServer(t, "2.4.51")
-	out, rep := runDefault(t, "-url", srv.URL+"/")
-	rows := advRows(out)
+	_, rep := runDefault(t, "-url", srv.URL+"/")
+	rows := advRows(rep)
 	r := ref(rows, "CVE-2021-41773")
 	if r == nil || r.Label != "not affected" || !r.KEV {
 		t.Fatalf("advisory %+v, want CVE-2021-41773 not affected (a KEV advisory is listed even when it does not apply)", r)
@@ -253,12 +249,12 @@ func TestPortsNamesTheAdvisoriesOfAConfirmedVersionByDefault(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ports: %v\n%s", err, errOut)
 	}
-	rows := advRows(out)
-	r := ref(rows, "CVE-2015-3306")
-	if len(rows) != 1 || r == nil || r.Label != "affected" || rows[0].Product != "ProFTPD" || rows[0].Version != "1.3.5" {
-		t.Fatalf("%d lead lines, advisory %+v in\n%s", len(rows), r, out)
-	}
 	rep := lastReport(t, errOut)
+	rows := advRows(rep)
+	r := ref(rows, "CVE-2015-3306")
+	if len(rows) != 1 || r == nil || r.Label != "affected" || rows[0].Product != "ProFTPD" || rows[0].Version != "1.3.5" || strings.Contains(out, `"type":"advisory"`) {
+		t.Fatalf("%d leads, advisory %+v, stream:\n%s", len(rows), r, out)
+	}
 	if rep.Results != 1 || rep.Counts["advisory leads"] != 1 || len(rep.Advisories) != 1 {
 		t.Errorf("results %d counts %v advisories %d, lead lines %d", rep.Results, rep.Counts, len(rep.Advisories), len(rows))
 	}
@@ -269,7 +265,7 @@ func TestAdvisoriesFalseTurnsTheMatchingOff(t *testing.T) {
 	useBuiltinIndex(t)
 	srv := apacheServer(t, "2.4.49")
 	out, rep := runDefault(t, "-url", srv.URL+"/", "-advisories=false")
-	if rows := advRows(out); len(rows) != 0 || len(rep.Advisories) != 0 {
+	if rows := advRows(rep); len(rows) != 0 || strings.Contains(out, `"type":"advisory"`) {
 		t.Errorf("run matched with -advisories=false: %d lines, %d in the summary", len(rows), len(rep.Advisories))
 	}
 	for _, n := range rep.Notes {
@@ -285,8 +281,8 @@ func TestAdvisoriesFalseTurnsTheMatchingOff(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ports: %v\n%s", err, perr)
 	}
-	if rows := advRows(pout); len(rows) != 0 {
-		t.Errorf("ports matched with -advisories=false: %d lines", len(rows))
+	if rows := advRows(lastReport(t, perr)); len(rows) != 0 || strings.Contains(pout, `"type":"advisory"`) {
+		t.Errorf("ports matched with -advisories=false: %d leads", len(rows))
 	}
 }
 
@@ -297,8 +293,8 @@ func TestAdvisorySourceAddsToTheIndex(t *testing.T) {
 	fixture := `[{"id":"CVE-TEST-0100","summary":"a record of mine",
 	  "affected":[{"package":{"name":"Apache httpd"},"ranges":[{"type":"ECOSYSTEM","events":[{"introduced":"2.4.0"},{"fixed":"2.4.50"}]}]}],
 	  "references":[{"type":"ADVISORY","url":"https://example.test/CVE-TEST-0100"}]}]`
-	out, _ := runDefault(t, "-url", srv.URL+"/", "-advisory-source", writeAdvFixture(t, fixture))
-	rows := advRows(out)
+	_, rep := runDefault(t, "-url", srv.URL+"/", "-advisory-source", writeAdvFixture(t, fixture))
+	rows := advRows(rep)
 	mine, idx := ref(rows, "CVE-TEST-0100"), ref(rows, "CVE-2021-41773")
 	if len(rows) != 1 || mine == nil || mine.Label != "affected" || mine.Index || mine.URL != "https://example.test/CVE-TEST-0100" {
 		t.Errorf("%d lines; the user's advisory %+v", len(rows), mine)

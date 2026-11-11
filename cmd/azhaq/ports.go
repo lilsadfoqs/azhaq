@@ -533,15 +533,14 @@ func cmdPorts(args []string) error {
 		}
 	}
 	if advFlags.on {
-		// The leads the run stored, after the port rows: one line each
-		// (a JSON object with -json), counted apart from the open ports
-		// in the summary's advisory counts, never as ports.
+		// The leads the run stored: one line a service after the port rows
+		// in text, counted apart from the open ports in the summary's advisory
+		// counts, never as ports. With -json they are not rows of the stream
+		// (results are the rows printed): the summary's advisories hold them.
 		obs, _ := st.Observations()
 		leads := advisoryLeadsOf(obs)
 		for _, lead := range leads {
-			if c.json {
-				w.obj(leadRow(lead))
-			} else {
+			if !c.json {
 				w.line(lead.Line())
 			}
 		}

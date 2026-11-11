@@ -62,12 +62,12 @@ func TestBuildPinnedSnapshot(t *testing.T) {
 	if m.Generator != advisory.IndexGenerator || m.Built != "2026-11-12" {
 		t.Errorf("meta %+v", m)
 	}
-	if len(m.Sources) != 2 || m.Sources[0].Date != "2026-11-10" || m.Sources[0].N != 14 || m.Sources[1].N != 15 {
-		t.Errorf("sources %+v, want KEV of 2026-11-10 with 14 and 15 NVD records", m.Sources)
+	if len(m.Sources) != 2 || m.Sources[0].Date != "2026-11-10" || m.Sources[0].N != 15 || m.Sources[1].N != 16 {
+		t.Errorf("sources %+v, want KEV of 2026-11-10 with 15 and 16 NVD records", m.Sources)
 	}
 	// 15 records read; the Redis one has only a "-" version: nothing to index.
-	if m.Records != 14 || m.Products < 11 || m.Entries < m.Records {
-		t.Errorf("records %d products %d entries %d, want 14, at least 11 and at least 14", m.Records, m.Products, m.Entries)
+	if m.Records != 15 || m.Products < 12 || m.Entries < m.Records {
+		t.Errorf("records %d products %d entries %d, want 15, at least 12 and at least 15", m.Records, m.Products, m.Entries)
 	}
 	httpd := product(res, "apache:http_server")
 	v, ok := vuln(httpd, "CVE-2021-41773")
@@ -80,8 +80,14 @@ func TestBuildPinnedSnapshot(t *testing.T) {
 	}
 	// Not on KEV, and the configuration also names a platform.
 	v, ok = vuln(httpd, "CVE-2010-0425")
-	if !ok || v.KEV || v.Cond != advisory.CondPlatform || !slices.Contains(v.Ranges, "[2.0.37|2.0.64)") {
+	if !ok || v.KEV || v.Cond != advisory.CondPlatform || !slices.Contains(v.Ranges, "[2.0.37|2.0.64)") || len(v.Plat) == 0 {
 		t.Errorf("CVE-2010-0425 %+v", v)
+	}
+	// A KEV record for OpenSSH that holds only where it runs on Alpine: the
+	// platform is named, and the version 10.6 is listed beside the range.
+	v, _ = vuln(product(res, "openbsd:openssh"), "CVE-2026-123158")
+	if !v.KEV || v.Cond != advisory.CondPlatform || !slices.Equal(v.Plat, []string{"alpinelinux:alpine_linux"}) || !slices.Contains(v.Ranges, "[|10.6)") || !slices.Equal(v.Versions, []string{"10.6", "10.6-p1"}) {
+		t.Errorf("CVE-2026-123158 %+v", v)
 	}
 	// One range for each branch, and an open start.
 	v, _ = vuln(product(res, "apache:tomcat"), "CVE-2020-1938")
@@ -136,7 +142,7 @@ func TestIndexRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if ix.Meta().Records != res.Meta.Records || ix.Meta().Label() != "advisory index 2026-11-12 (14 records)" {
+	if ix.Meta().Records != res.Meta.Records || ix.Meta().Label() != "advisory index 2026-11-12 (15 records)" {
 		t.Errorf("meta %+v", ix.Meta())
 	}
 	meta, err := advisory.ReadIndexMeta(buf.Bytes())
@@ -236,8 +242,8 @@ func TestBuildCountsWhatItLeavesOut(t *testing.T) {
 		t.Errorf("mismatch %v", r.KEVMismatch)
 	}
 	// Every KEV CVE of the file is missing from this feed, and said so.
-	if len(r.KEVMissing) != 14 {
-		t.Errorf("KEV missing %d, want 14", len(r.KEVMissing))
+	if len(r.KEVMissing) != 15 {
+		t.Errorf("KEV missing %d, want 15", len(r.KEVMissing))
 	}
 	if _, ok := vuln(product(res, "apache:http_server"), "CVE-2021-0001"); ok {
 		t.Error("a rejected record was indexed")

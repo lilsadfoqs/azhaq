@@ -354,15 +354,6 @@ func advisoryLeadsIn(obs []types.StoredObservation, expand bool) []advisory.Lead
 	return out
 }
 
-// leadRow is a lead as a -json line: the lead's fields and its type.
-func leadRow(l advisory.Lead) map[string]any {
-	raw, _ := json.Marshal(l)
-	var row map[string]any
-	_ = json.Unmarshal(raw, &row)
-	row["type"] = "advisory"
-	return row
-}
-
 // advisoryPlan is what a plan says of the matching: the index in use with
 // its date and size, any records of the user's added, and that the match
 // is a lookup over what the run confirms. Off, it says so.

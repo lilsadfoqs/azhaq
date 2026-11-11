@@ -109,6 +109,11 @@ var pairs = []pair{
 	{"Joomla", "4.2.7", "CVE-2023-23752", "affected"},
 	{"Joomla", "4.2.8", "CVE-2023-23752", "not affected"},
 	{"Joomla", "3.10.11", "CVE-2023-23752", "not affected"},
+	// SSH server: a KEV record that holds on Alpine only, so conditional where the version is in range
+	{"OpenSSH", "9.6p1", "CVE-2026-123158", "conditional"},
+	{"OpenSSH", "10.6", "CVE-2026-123158", "conditional"}, // listed
+	{"OpenSSH", "10.6p1", "CVE-2026-123158", "conditional"},
+	{"OpenSSH", "10.7", "CVE-2026-123158", "not affected"},
 }
 
 func TestIndexMatchesProductAndVersionPairs(t *testing.T) {
@@ -161,6 +166,15 @@ func TestIndexLeadsCarryTheirEvidence(t *testing.T) {
 	leads, _ = advisory.MatchIndex([]advisory.Service{{Host: "h", Port: 80, Product: "Jenkins", Version: "2.441"}}, ix)
 	if len(leads) != 1 || leads[0].Label != "conditional" || !strings.Contains(leads[0].Precondition, "long-term") {
 		t.Errorf("jenkins leads %+v", leads)
+	}
+	// A conditional lead says which: the range as the record states it, and
+	// the platform that makes it conditional.
+	leads, _ = advisory.MatchIndex([]advisory.Service{{Host: "h", Port: 22, Product: "OpenSSH", Version: "9.6p1"}}, ix)
+	if len(leads) != 1 || leads[0].AffectedRange != "<10.6; =10.6, =10.6-p1" || leads[0].Label != "conditional" || !strings.Contains(leads[0].Precondition, "alpinelinux:alpine_linux") {
+		t.Fatalf("openssh leads %+v", leads)
+	}
+	if line := leads[0].Line(); !strings.Contains(line, "is conditional (range <10.6; =10.6, =10.6-p1)") || !strings.Contains(line, "precondition: the advisory's configuration also names what the product runs on or with (alpinelinux:alpine_linux)") {
+		t.Errorf("line %q", line)
 	}
 	// A confirmation reads the record as an advisory of the product seen.
 	adv, ok := ix.Advisory("Apache Tomcat", "CVE-2020-1938")

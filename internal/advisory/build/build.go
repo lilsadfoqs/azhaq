@@ -257,6 +257,34 @@ type entry struct {
 	versions map[string]bool
 	platform bool            // every configuration that names the product also names a platform
 	editions map[string]bool // the editions and targets the matches name ("" for none)
+	plats    map[string]bool // what the configurations say the product runs on or with (vendor:product)
+}
+
+// siblings are the products of a configuration that stand beside the node
+// ni (a platform the product runs on, a component it needs), and, within an
+// AND node, the other products of the node: what the version alone does not show.
+func siblings(cfg nvdConfig, ni int, own string) map[string]bool {
+	out := map[string]bool{}
+	add := func(m nvdMatch) {
+		if f, err := SplitCPE(m.Criteria); err == nil && f[3] != "" && f[4] != "" && f[3] != "*" && f[4] != "*" && f[3]+":"+f[4] != own {
+			out[f[3]+":"+f[4]] = true
+		}
+	}
+	if cfg.Operator == "AND" {
+		for j, n := range cfg.Nodes {
+			if j != ni {
+				for _, m := range n.Match {
+					add(m)
+				}
+			}
+		}
+	}
+	if n := cfg.Nodes[ni]; n.Operator == "AND" {
+		for _, m := range n.Match {
+			add(m)
+		}
+	}
+	return out
 }
 
 type acc struct {
@@ -312,6 +340,11 @@ func Build(o Options) (*Result, error) {
 			v := advisory.IndexVuln{ID: id, CVSS: a.cvss[id], KEV: kevIDs[id]}
 			if e.platform {
 				v.Cond |= advisory.CondPlatform
+				// The first few of what it runs on, so a lead can name them.
+				v.Plat = keys(e.plats)
+				if len(v.Plat) > 4 {
+					v.Plat = v.Plat[:4]
+				}
 			}
 			// Ranges for several editions or targets (a long-term release
 			// line and the weekly one), or for one named edition: the version
@@ -502,7 +535,7 @@ func (a *acc) add(c nvdCVE, wanted map[string]bool, rep *Report) error {
 	kept := 0
 	for _, cfg := range c.Configurations {
 		cond := cfg.Operator == "AND" && len(cfg.Nodes) > 1
-		for _, n := range cfg.Nodes {
+		for ni, n := range cfg.Nodes {
 			if n.Negate {
 				continue
 			}
@@ -544,12 +577,17 @@ func (a *acc) add(c nvdCVE, wanted map[string]bool, rep *Report) error {
 				}
 				e := byCVE[c.ID]
 				if e == nil {
-					e = &entry{ranges: map[string]bool{}, versions: map[string]bool{}, platform: true, editions: map[string]bool{}}
+					e = &entry{ranges: map[string]bool{}, versions: map[string]bool{}, platform: true, editions: map[string]bool{}, plats: map[string]bool{}}
 					byCVE[c.ID] = e
 				}
 				// A record is conditional on a platform only when every
 				// configuration that names the product also names one.
 				e.platform = e.platform && nodeCond
+				if nodeCond {
+					for k := range siblings(cfg, ni, key) {
+						e.plats[k] = true
+					}
+				}
 				e.editions[edition] = true
 				if rng != "" {
 					e.ranges[rng] = true

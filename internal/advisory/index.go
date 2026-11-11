@@ -62,6 +62,7 @@ type IndexVuln struct {
 	ID       string   `json:"i"`
 	CVSS     float64  `json:"s,omitempty"`
 	KEV      bool     `json:"k,omitempty"`
+	Plat     []string `json:"p,omitempty"` // with CondPlatform: what the record says it runs on or with (vendor:product), the first few
 	Cond     int      `json:"c,omitempty"` // CondPlatform and CondEdition: what the version alone cannot settle
 	Ranges   []string `json:"r,omitempty"`
 	Versions []string `json:"v,omitempty"`
@@ -280,10 +281,14 @@ const (
 	condEditionText  = "the advisory gives its ranges for a named edition or target of the product, or for several (a long-term release line and the weekly one): the version seen does not say which the service is"
 )
 
-func condText(c int) string {
+func condText(c int, plat []string) string {
 	var t []string
 	if c&CondPlatform != 0 {
-		t = append(t, condPlatformText)
+		if len(plat) > 0 {
+			t = append(t, "the advisory's configuration also names what the product runs on or with ("+strings.Join(plat, ", ")+"): azhaq does not see whether the service does")
+		} else {
+			t = append(t, condPlatformText)
+		}
 	}
 	if c&CondEdition != 0 {
 		t = append(t, condEditionText)
@@ -296,7 +301,7 @@ func condText(c int) string {
 func advisoryOf(cpe string, v IndexVuln) (Advisory, Affected, error) {
 	adv := Advisory{ID: v.ID, References: []Reference{{Type: "WEB", URL: NVDURL(v.ID)}}}
 	if v.Cond != 0 {
-		adv.Precondition = condText(v.Cond)
+		adv.Precondition = condText(v.Cond, v.Plat)
 	}
 	aff := Affected{Package: Package{Name: cpe, Ecosystem: "cpe"}, Versions: v.Versions}
 	for _, r := range v.Ranges {

@@ -266,33 +266,27 @@ func TestAdvisoriesPortsConfirmEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ports: %v\n%s", err, errOut)
 	}
-	var leads, ports int
+	// The stream holds the port row alone: results are the rows printed, and
+	// the lead is in the summary, which counts it apart.
+	var ports int
 	for _, line := range strings.Split(out, "\n") {
 		var row map[string]any
 		if json.Unmarshal([]byte(line), &row) != nil {
 			continue
 		}
-		switch row["type"] {
-		case "advisory":
-			leads++
-			if row["label"] != "affected" || row["confidence"] != "observed" || row["advisory_id"] != "CVE-TEST-0009" {
-				t.Errorf("lead line %s, want affected/observed CVE-TEST-0009", line)
-			}
-		default:
-			if _, ok := row["port"]; ok {
-				ports++
-			}
+		if row["type"] == "advisory" {
+			t.Errorf("an advisory row in the stream: %s", line)
+		}
+		if _, ok := row["port"]; ok {
+			ports++
 		}
 	}
-	if leads != 1 || ports != 1 {
-		t.Fatalf("stdout: %d advisory lines, %d port rows, want 1 and 1:\n%s", leads, ports, out)
-	}
 	rep := lastReport(t, errOut)
-	if rep.Results != 1 || rep.Counts["advisory leads"] != 1 || len(rep.Advisories) != 1 {
-		// ports counts its own results (the port alone); the leads are
-		// counted apart in counts, printed above, and held in the
-		// summary's advisories, one per line printed.
-		t.Fatalf("summary results=%d counts=%v advisories=%v, want the port alone in results and 1 advisory lead in counts", rep.Results, rep.Counts, rep.Advisories)
+	if ports != 1 || rep.Results != 1 || rep.Counts["advisory leads"] != 1 || len(rep.Advisories) != 1 {
+		t.Fatalf("%d port rows; summary results=%d counts=%v advisories=%v, want the port alone in results and 1 advisory lead in counts", ports, rep.Results, rep.Counts, rep.Advisories)
+	}
+	if l := rep.Advisories[0]; l.Label != "affected" || l.Confidence != "observed" || l.AdvisoryID != "CVE-TEST-0009" {
+		t.Errorf("lead %+v, want affected/observed CVE-TEST-0009", l)
 	}
 	versionReads := 0
 	for _, hit := range cs.requests() {
@@ -362,28 +356,16 @@ func TestAdvisoriesRunEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatalf("run: %v\n%s", err, errOut)
 	}
-	var leadLines int
-	for _, line := range strings.Split(out, "\n") {
-		var row map[string]any
-		if json.Unmarshal([]byte(line), &row) != nil || row["type"] != "advisory" {
-			continue
-		}
-		leadLines++
-		if row["advisory_id"] == "CVE-TEST-0001" { // the top advisory of the service
-			if row["label"] != "affected" || row["version_seen"] != "1.18.0" || row["url"] != "https://example.test/CVE-TEST-0001" {
-				t.Errorf("lead line %s", line)
-			}
-			if _, ok := row["confidence"]; ok {
-				t.Errorf("lead line carries a confidence without confirmation: %s", line)
-			}
-		}
-	}
-	if leadLines != 1 {
-		t.Fatalf("stdout holds %d advisory lines, want 1 for the service:\n%s", leadLines, out)
+	// The leads are in the summary, not rows of the stream.
+	if strings.Contains(out, `"type":"advisory"`) {
+		t.Errorf("an advisory row in the stream:\n%s", out)
 	}
 	rep := lastReport(t, errOut)
 	if len(rep.Advisories) != 1 || len(rep.Advisories[0].Advisories) != 2 {
 		t.Fatalf("summary advisories %+v, want 1 lead holding both advisories", rep.Advisories)
+	}
+	if l := rep.Advisories[0]; l.AdvisoryID != "CVE-TEST-0001" || l.Label != "affected" || l.VersionSeen != "1.18.0" || l.URL != "https://example.test/CVE-TEST-0001" || l.Confidence != "" {
+		t.Errorf("lead %+v: the top advisory, with no confidence without confirmation", l)
 	}
 	for _, hit := range cs.requests() {
 		if hit == "GET /version" {

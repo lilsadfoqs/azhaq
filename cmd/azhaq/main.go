@@ -1542,11 +1542,9 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 			}
 			rep.emitted().add(countKey(r), heldBy(r))
 		}
-		for _, lead := range advLeads {
-			if err := enc.Encode(leadRow(lead)); err != nil {
-				return err
-			}
-		}
+		// The advisory leads are not rows of the stream: each is a service's
+		// whole list, held in the summary's advisories (and stored), so the
+		// results the summary counts are the rows printed.
 		for _, r := range verifyResults {
 			if err := enc.Encode(verifyRow(r)); err != nil {
 				return err

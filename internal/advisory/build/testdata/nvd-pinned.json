@@ -1,7 +1,7 @@
 {
- "resultsPerPage": 15,
+ "resultsPerPage": 16,
  "startIndex": 0,
- "totalResults": 15,
+ "totalResults": 16,
  "format": "NVD_CVE",
  "version": "2.0",
  "timestamp": "2026-11-11T03:00:02.418822",
@@ -1739,6 +1739,78 @@
      }
     ],
     "cisaExploitAdd": "2025-12-29"
+   }
+  },
+  {
+   "cve": {
+    "id": "CVE-2026-123158",
+    "vulnStatus": "Analyzed",
+    "metrics": {
+     "cvssMetricV31": [
+      {
+       "type": "Secondary",
+       "cvssData": {
+        "baseScore": 8.1
+       }
+      }
+     ]
+    },
+    "configurations": [
+     {
+      "operator": "AND",
+      "nodes": [
+       {
+        "operator": "OR",
+        "negate": false,
+        "cpeMatch": [
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:openbsd:openssh:*:*:*:*:*:*:*:*",
+          "versionEndExcluding": "10.6"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:openbsd:openssh:10.6:-:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:openbsd:openssh:10.6:p1:*:*:*:*:*:*"
+         }
+        ]
+       },
+       {
+        "operator": "OR",
+        "negate": false,
+        "cpeMatch": [
+         {
+          "vulnerable": false,
+          "criteria": "cpe:2.3:o:alpinelinux:alpine_linux:*:*:*:*:*:*:*:*",
+          "versionEndExcluding": "3.21.10"
+         },
+         {
+          "vulnerable": false,
+          "criteria": "cpe:2.3:o:alpinelinux:alpine_linux:*:*:*:*:*:*:*:*",
+          "versionStartIncluding": "3.22.0",
+          "versionEndExcluding": "3.22.8"
+         },
+         {
+          "vulnerable": false,
+          "criteria": "cpe:2.3:o:alpinelinux:alpine_linux:*:*:*:*:*:*:*:*",
+          "versionStartIncluding": "3.23.0",
+          "versionEndExcluding": "3.23.8"
+         },
+         {
+          "vulnerable": false,
+          "criteria": "cpe:2.3:o:alpinelinux:alpine_linux:*:*:*:*:*:*:*:*",
+          "versionStartIncluding": "3.24.0",
+          "versionEndExcluding": "3.24.4"
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "cisaExploitAdd": "2026-11-09"
    }
   }
  ]

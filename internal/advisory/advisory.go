@@ -440,8 +440,13 @@ func evalAffected(aff Affected, version string) (state, string, string) {
 		return stateUncertain, "no range given", "the advisory gives neither a range nor a list of versions for this product"
 	}
 	var texts []string
-	if listed != "" {
-		texts = append(texts, listed)
+	// What the record states, ranges first and then its listed versions.
+	text := func() string {
+		parts := append([]string(nil), texts...)
+		if listed != "" {
+			parts = append(parts, listed)
+		}
+		return strings.Join(parts, "; ")
 	}
 	uncertain := ""
 	for _, r := range aff.Ranges {
@@ -453,15 +458,15 @@ func evalAffected(aff Affected, version string) (state, string, string) {
 		st, why := evalRange(r, version)
 		switch st {
 		case stateIn:
-			return stateIn, strings.Join(texts, "; "), ""
+			return stateIn, text(), ""
 		case stateUncertain:
 			uncertain = why
 		}
 	}
 	if uncertain != "" {
-		return stateUncertain, strings.Join(texts, "; "), uncertain
+		return stateUncertain, text(), uncertain
 	}
-	return stateOut, strings.Join(texts, "; "), ""
+	return stateOut, text(), ""
 }
 
 // sameVersion says two versions are the same release: equal by Compare
@@ -473,16 +478,25 @@ func sameVersion(a, b string) bool {
 	return strings.EqualFold(strings.TrimSpace(a), strings.TrimSpace(b))
 }
 
-// versionsText names the versions an advisory lists as affected: "only
-// 2.4.49, 2.4.50", cut after eight.
+// versionsText names the versions an advisory lists as affected, one by
+// one: "=2.4.49, =2.4.50", cut after eight.
 func versionsText(vs []string) string {
 	if len(vs) == 0 {
 		return ""
 	}
+	shown := vs
 	if len(vs) > 8 {
-		return fmt.Sprintf("only %s and %d more", strings.Join(vs[:8], ", "), len(vs)-8)
+		shown = vs[:8]
 	}
-	return "only " + strings.Join(vs, ", ")
+	parts := make([]string, len(shown))
+	for i, v := range shown {
+		parts[i] = "=" + v
+	}
+	s := strings.Join(parts, ", ")
+	if len(vs) > 8 {
+		s += fmt.Sprintf(" and %d more", len(vs)-8)
+	}
+	return s
 }
 
 // evalRange walks one range's events in order: the version is in from

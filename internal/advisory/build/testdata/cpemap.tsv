@@ -11,3 +11,4 @@ TeamCity	jetbrains:teamcity	hand
 Drupal	drupal:drupal	service
 Joomla	joomla:joomla!	hand
 Redis	redis:redis	service
+OpenSSH	openbsd:openssh	service

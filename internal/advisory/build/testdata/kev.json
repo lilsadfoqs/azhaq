@@ -2,8 +2,15 @@
  "title": "CISA Catalog of Known Exploited Vulnerabilities (pinned subset for a test)",
  "catalogVersion": "2026.11.10",
  "dateReleased": "2026-11-10T19:03:29.8375Z",
- "count": 14,
+ "count": 15,
  "vulnerabilities": [
+  {
+   "cveID": "CVE-2026-123158",
+   "vendorProject": "OpenBSD",
+   "product": "OpenSSH",
+   "vulnerabilityName": "OpenBSD OpenSSH Unexpected Status Code or Return Value Vulnerability",
+   "dateAdded": "2026-11-09"
+  },
   {
    "cveID": "CVE-2025-14847",
    "vendorProject": "MongoDB",
