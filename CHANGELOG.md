@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.20.0
+
+### Fixed
+
+- `fuzz` with `-preflight` or `-postflight` runs each input's preflight, request and postflight as one sequence, one at a time, so a session's CSRF token is no longer replaced by a later preflight and the right password is found at the default `-t`; the summary says so.
+- `run -stream` prints a page the map folds into a templated row (`/redirect?to={v}`) once, as that row, just before the map, not each concrete URL; the stream's keys are the map's keys.
+- `fuzz` says when two wordlists share a keyword: they are joined into one list (8 and 3 words are 11 requests), where ffuf's clusterbomb combines them (24); name a keyword for each list to combine them.
+- The docs say a `dirs` word is always a path (`#`, a space and `%` are encoded, `?` starts the query) and a `fuzz` word goes into the URL as written, so `#` starts a fragment that is not sent.
+- `urls`: an archived URL with a second URL glued into its path or query (`/admin/create.sqlA01http://example.org/artists.php`) is junk, labelled `glued-url` and never asked by `-live`; the URL it holds is listed on its own when in scope.
+- A GET whose action value or path is a verb run into `all` (Supervisor's `?action=stopall` and `?action=restartall`, `/api/deleteall`) declares a state change and is held back by default; both Supervisor links were sent before.
+- A `-login` run whose session ended right after the sign-in is noticed at the first check (the page the sign-in ended on answered 2xx in Chrome; a 401 or a redirect to the sign-in page with the session means it ended), and a run that cannot sign in again stops with the session failure, exit 3, instead of going on as a visitor.
+
 ## v0.19.0
 
 ### Fixed
