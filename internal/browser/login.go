@@ -26,6 +26,8 @@ import (
 // Session is what signing in left in the browser.
 type Session struct {
 	URL     string   // the page the login ended on
+	Status  int      // what Chrome got for that page's document, 0 when not known
+	Sent    int64    // requests sent when that answer came: what follows had the session of the page
 	Cookies []string // name=value, the cookies the site sends
 	Bearer  string   // a token the page keeps in localStorage or sessionStorage
 	From    string   // where the token was, as storage.key
@@ -284,6 +286,7 @@ func (b *Browser) Login(ctx context.Context, loginURL, user, pass string) (_ Ses
 	if s.URL == "" {
 		s.URL, _ = chromedp.Run(tab, chromedp.Location())
 	}
+	s.Status, s.Sent = shown.answerAt(s.URL)
 	s.Blocked = b.list(refused())
 	for _, r := range refused() {
 		if r.download {
@@ -411,6 +414,8 @@ func (b *Browser) dialNote() string {
 type document struct {
 	mu     sync.Mutex
 	status int64  // the last answer to the main frame's document request; 0: none
+	url    string // the URL that answer was for
+	sent   int64  // requests sent when it came
 	failed string // the last document load Chrome gave up on: net::ERR_…
 }
 
@@ -427,7 +432,7 @@ func (b *Browser) watchDocument(ctx context.Context, main cdp.FrameID) *document
 			}
 			if ev.Type == network.ResourceTypeDocument && ev.FrameID == main && ev.Response != nil {
 				d.mu.Lock()
-				d.status = ev.Response.Status
+				d.status, d.url, d.sent = ev.Response.Status, ev.Response.URL, egress.Departed()
 				d.mu.Unlock()
 			}
 		}
@@ -446,6 +451,23 @@ func (b *Browser) watchDocument(ctx context.Context, main cdp.FrameID) *document
 		}
 	}()
 	return d
+}
+
+// answerAt is what Chrome got for the main document when it is the one at
+// raw (a fragment aside), and how many requests had been sent when it came;
+// 0 when it is another page or none was answered.
+func (d *document) answerAt(raw string) (status int, sent int64) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.status == 0 || trimFragment(d.url) != trimFragment(raw) {
+		return 0, 0
+	}
+	return int(d.status), d.sent
+}
+
+func trimFragment(raw string) string {
+	raw, _, _ = strings.Cut(raw, "#")
+	return raw
 }
 
 // pageFacts is the title, the size of the HTML and the inputs of the page.

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/lilsadfoqs/azhaq/internal/egress"
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
 	"github.com/lilsadfoqs/azhaq/internal/neterr"
 	"github.com/lilsadfoqs/azhaq/types"
@@ -17,8 +18,9 @@ import (
 // session (a 401, a response that clears a session cookie, a redirect to the
 // sign-in page: -login's, else the one the check page sends a visitor to).
 // renew signs in again (-login); nil for a session given with -cookie or
-// -header, which the run cannot renew.
-func watchSession(ctx context.Context, seeds []types.Seed, home, loginURL string, renew func(context.Context) error, rep *report) {
+// -header, which the run cannot renew. landed is what the sign-in saw of the
+// page it ended on (nil without -login).
+func watchSession(ctx context.Context, seeds []types.Seed, home, loginURL string, renew func(context.Context) error, landed *landing, rep *report) {
 	if !fetch.HasSession() {
 		return
 	}
@@ -37,6 +39,34 @@ func watchSession(ctx context.Context, seeds []types.Seed, home, loginURL string
 	}
 	var tried []string
 	for _, c := range candidates {
+		if landed != nil && c == home && landed.ok() {
+			// Chrome's own answer is the "with" side: the page answered 2xx
+			// with the session moments ago.
+			sent := egress.Departed() - landed.At
+			got, err := fetch.Ask(ctx, c, true)
+			if err != nil {
+				continue
+			}
+			if fetch.LooksEnded(got, s.SignIn) {
+				s.Check, s.Want = c, fetch.Print{Status: landed.Status}
+				fetch.WatchSession(s)
+				_ = fetch.EndedAtStart(ctx, c, landed.Status, got, sent)
+				return
+			}
+			without, err := fetch.Ask(ctx, c, false)
+			if err != nil {
+				continue
+			}
+			if got != without && got.Status != 0 {
+				s.Check, s.Want = c, got
+				if s.SignIn == "" {
+					s.SignIn = without.Loc
+				}
+				break
+			}
+			tried = append(tried, c)
+			continue
+		}
 		with, without, err := fetch.Measure(ctx, c)
 		if err != nil {
 			continue
@@ -55,6 +85,16 @@ func watchSession(ctx context.Context, seeds []types.Seed, home, loginURL string
 	}
 	fetch.WatchSession(s)
 }
+
+// landing is what a sign-in saw of the page it ended on.
+type landing struct {
+	URL    string
+	Status int   // what Chrome got for that page's document; 0: not known
+	At     int64 // requests departed when that page was answered
+}
+
+// ok says Chrome got a 2xx for the page: a session that was live then.
+func (l landing) ok() bool { return l.Status >= 200 && l.Status < 300 }
 
 // sessionLossReport is the summary's account of a session that ended and
 // was not renewed.

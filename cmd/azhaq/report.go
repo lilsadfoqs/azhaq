@@ -200,6 +200,8 @@ func (r *report) settle() {
 	case len(r.problems) > 0:
 		r.Error = r.internalError()
 		r.Exit = exitError
+	case r.SessionLost != nil:
+		r.Exit = exitPartial // a lost session says more than a limit that came with it
 	case r.Stopped != "":
 		r.Exit = exitLimit
 	default:

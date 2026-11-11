@@ -50,7 +50,7 @@ func TestCookieRunStopsAtTheRequestThatEndedItsSession(t *testing.T) {
 	fetch.Extra = http.Header{"Cookie": {"SID=good"}}
 	ctx := context.Background()
 	rep := &report{}
-	watchSession(ctx, []types.Seed{{Type: types.TypeURL, Keys: map[string]string{"url": srv.URL + "/"}}}, "", "", nil, rep)
+	watchSession(ctx, []types.Seed{{Type: types.TypeURL, Keys: map[string]string{"url": srv.URL + "/"}}}, "", "", nil, nil, rep)
 	if got := fetch.SignInPath(); got != "/login" {
 		t.Fatalf("sign-in page %q, want /login (where the check page sends a visitor)", got)
 	}
@@ -125,7 +125,7 @@ func TestRelativeRedirectToSignInStopsTheRun(t *testing.T) {
 			defer fetch.Reset()
 			fetch.Extra = http.Header{"Cookie": {"SID=good"}}
 			ctx := context.Background()
-			watchSession(ctx, []types.Seed{{Type: types.TypeURL, Keys: map[string]string{"url": srv.URL + "/index.php"}}}, "", tc.login(srv.URL), nil, &report{})
+			watchSession(ctx, []types.Seed{{Type: types.TypeURL, Keys: map[string]string{"url": srv.URL + "/index.php"}}}, "", tc.login(srv.URL), nil, nil, &report{})
 			mu.Lock()
 			anon = nil
 			mu.Unlock()
@@ -200,7 +200,7 @@ func TestParallelRunSendsNothingNewAfterTheSessionEnds(t *testing.T) {
 			defer fetch.Reset()
 			fetch.Extra = http.Header{"Cookie": {"SID=good"}}
 			ctx := context.Background()
-			watchSession(ctx, []types.Seed{{Type: types.TypeURL, Keys: map[string]string{"url": srv.URL + "/index.php"}}}, "", srv.URL+"/login.php", nil, &report{})
+			watchSession(ctx, []types.Seed{{Type: types.TypeURL, Keys: map[string]string{"url": srv.URL + "/index.php"}}}, "", srv.URL+"/login.php", nil, nil, &report{})
 			mu.Lock()
 			anon, served = nil, 0
 			mu.Unlock()
@@ -268,4 +268,52 @@ func plural1(n int, noun string) string {
 		return "1 " + noun
 	}
 	return fmt.Sprintf("%d %ss", n, noun)
+}
+
+// A -login run with no check page that is answered like a session that
+// ended (a 401) and cannot sign in again to find out stops with the session
+// failure: it does not go on as a visitor.
+func TestLoginRunThatCannotSignInAgainToTestA401StopsSending(t *testing.T) {
+	var mu sync.Mutex
+	var paths []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		paths = append(paths, r.URL.Path)
+		mu.Unlock()
+		if r.URL.Path == "/admin" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		_, _ = w.Write([]byte("page"))
+	}))
+	defer srv.Close()
+	fetch.Reset()
+	defer fetch.Reset()
+	fetch.Extra = http.Header{"Cookie": {"SID=good"}}
+	ctx := context.Background()
+	signIns := 0
+	renew := func(context.Context) error { signIns++; return errors.New("the request budget is spent") }
+	watchSession(ctx, []types.Seed{{Type: types.TypeURL, Keys: map[string]string{"url": srv.URL + "/"}}}, "", srv.URL+"/login", renew, nil, &report{})
+	if _, _, err := fetch.Do(ctx, srv.Client(), srv.URL+"/admin"); err != nil {
+		t.Fatal(err)
+	}
+	mu.Lock()
+	paths = nil
+	mu.Unlock()
+	_, _, err := fetch.Do(ctx, srv.Client(), srv.URL+"/next")
+	var sl *neterr.SessionLost
+	if !errors.As(err, &sl) || signIns != 1 {
+		t.Fatalf("err %v after %d sign-ins, want the session failure", err, signIns)
+	}
+	if !strings.Contains(sl.Msg, "/admin answered 401") || !strings.Contains(sl.Msg, "signing in again to find out failed: the request budget is spent") || !strings.Contains(sl.Msg, "GET asked since the last good check") {
+		t.Errorf("the failure does not say why: %s", sl.Msg)
+	}
+	if _, _, err := fetch.Do(ctx, srv.Client(), srv.URL+"/after"); !errors.Is(err, neterr.ErrSessionLost) {
+		t.Errorf("a request after the failure: %v", err)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(paths) != 0 {
+		t.Errorf("sent after the answer that may have ended the session: %v", paths)
+	}
 }
