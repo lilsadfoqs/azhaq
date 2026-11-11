@@ -44,6 +44,9 @@ func TestOfPathAndOfURL(t *testing.T) {
 		{"http://h/static/delete-icon.svg", ""}, // a static file
 		{"http://h/js/seed.min.js", ""},         // a static file
 		{"http://h/app/clear", "clear"},
+		{"http://h/api/deleteall", "delete"}, // a verb run into all
+		{"http://h/firewall", ""},            // all ends a word that is no verb
+		{"http://h/stall", ""},
 	} {
 		if got := OfURL(c.raw); got != c.want {
 			t.Errorf("OfURL(%q) = %q, want %q", c.raw, got, c.want)
@@ -88,6 +91,10 @@ func TestOfQuery(t *testing.T) {
 		{"http://h/p?ajax_action=Stop", "stop"},
 		{"http://h/p?action=log%20out", "logout"},
 		{"http://h/p?a=1&action=stop%20all", "stop"},
+		{"http://h/index.html?action=stopall", "stop"},       // Supervisor's links
+		{"http://h/index.html?action=restartall", "restart"}, // a verb run into all
+		{"http://h/p?action=startAll", "start"},
+		{"http://h/p?action=install", ""},              // not a verb before all
 		{"http://h/p?action=view", ""},                 // not a verb
 		{"http://h/p?action=list&sort=delete", ""},     // not an action parameter
 		{"http://h/p?q=delete", ""},                    // a search
