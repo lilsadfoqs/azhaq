@@ -1,0 +1,106 @@
+{
+ "title": "CISA Catalog of Known Exploited Vulnerabilities (pinned subset for a test)",
+ "catalogVersion": "2026.11.10",
+ "dateReleased": "2026-11-10T19:03:29.8375Z",
+ "count": 14,
+ "vulnerabilities": [
+  {
+   "cveID": "CVE-2025-14847",
+   "vendorProject": "MongoDB",
+   "product": "MongoDB and MongoDB Server",
+   "vulnerabilityName": "MongoDB and MongoDB Server Improper Handling of Length Parameter Inconsistency Vulnerability",
+   "dateAdded": "2025-12-29"
+  },
+  {
+   "cveID": "CVE-2024-23897",
+   "vendorProject": "Jenkins",
+   "product": "Jenkins Command Line Interface (CLI)",
+   "vulnerabilityName": "Jenkins Command Line Interface (CLI) Path Traversal Vulnerability",
+   "dateAdded": "2024-08-19"
+  },
+  {
+   "cveID": "CVE-2024-27198",
+   "vendorProject": "JetBrains",
+   "product": "TeamCity",
+   "vulnerabilityName": "JetBrains TeamCity Authentication Bypass Vulnerability",
+   "dateAdded": "2024-03-07"
+  },
+  {
+   "cveID": "CVE-2023-23752",
+   "vendorProject": "Joomla!",
+   "product": "Joomla!",
+   "vulnerabilityName": "Joomla! Improper Access Control Vulnerability",
+   "dateAdded": "2024-01-08"
+  },
+  {
+   "cveID": "CVE-2023-46604",
+   "vendorProject": "Apache",
+   "product": "ActiveMQ",
+   "vulnerabilityName": "Apache ActiveMQ Deserialization of Untrusted Data Vulnerability",
+   "dateAdded": "2023-11-02"
+  },
+  {
+   "cveID": "CVE-2022-24706",
+   "vendorProject": "Apache",
+   "product": "CouchDB",
+   "vulnerabilityName": "Apache CouchDB Insecure Default Initialization of Resource Vulnerability",
+   "dateAdded": "2022-08-25"
+  },
+  {
+   "cveID": "CVE-2022-0543",
+   "vendorProject": "Redis",
+   "product": "Debian-specific Redis Servers",
+   "vulnerabilityName": "Debian-specific Redis Server Lua Sandbox Escape Vulnerability",
+   "dateAdded": "2022-03-28"
+  },
+  {
+   "cveID": "CVE-2015-1427",
+   "vendorProject": "Elastic",
+   "product": "Elasticsearch",
+   "vulnerabilityName": "Elasticsearch Groovy Scripting Engine Remote Code Execution Vulnerability",
+   "dateAdded": "2022-03-25"
+  },
+  {
+   "cveID": "CVE-2020-1938",
+   "vendorProject": "Apache",
+   "product": "Tomcat",
+   "vulnerabilityName": "Apache Tomcat Improper Privilege Management Vulnerability",
+   "dateAdded": "2022-03-03"
+  },
+  {
+   "cveID": "CVE-2016-3088",
+   "vendorProject": "Apache",
+   "product": "ActiveMQ",
+   "vulnerabilityName": "Apache ActiveMQ Improper Input Validation Vulnerability",
+   "dateAdded": "2022-02-10"
+  },
+  {
+   "cveID": "CVE-2021-41773",
+   "vendorProject": "Apache",
+   "product": "HTTP Server",
+   "vulnerabilityName": "Apache HTTP Server Path Traversal Vulnerability",
+   "dateAdded": "2021-11-03"
+  },
+  {
+   "cveID": "CVE-2019-0211",
+   "vendorProject": "Apache",
+   "product": "HTTP Server",
+   "vulnerabilityName": "Apache HTTP Server Privilege Escalation Vulnerability",
+   "dateAdded": "2021-11-03"
+  },
+  {
+   "cveID": "CVE-2018-7600",
+   "vendorProject": "Drupal",
+   "product": "Drupal Core",
+   "vulnerabilityName": "Drupal Core Remote Code Execution Vulnerability",
+   "dateAdded": "2021-11-03"
+  },
+  {
+   "cveID": "CVE-2020-14882",
+   "vendorProject": "Oracle",
+   "product": "WebLogic Server",
+   "vulnerabilityName": "Oracle WebLogic Server Remote Code Execution Vulnerability",
+   "dateAdded": "2021-11-03"
+  }
+ ]
+}

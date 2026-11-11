@@ -1,0 +1,13 @@
+# the product map of the generator test: name, NVD vendor:product, source
+Apache httpd	apache:http_server	service
+Apache Tomcat	apache:tomcat	service
+Oracle WebLogic Server	oracle:weblogic_server	hand
+MongoDB	mongodb:mongodb	service
+Apache CouchDB	apache:couchdb	hand
+Elasticsearch	elastic:elasticsearch	service
+ActiveMQ	apache:activemq	service
+Jenkins	jenkins:jenkins	service
+TeamCity	jetbrains:teamcity	hand
+Drupal	drupal:drupal	service
+Joomla	joomla:joomla!	hand
+Redis	redis:redis	service

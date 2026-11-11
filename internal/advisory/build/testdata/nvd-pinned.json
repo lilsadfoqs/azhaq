@@ -1,0 +1,1745 @@
+{
+ "resultsPerPage": 15,
+ "startIndex": 0,
+ "totalResults": 15,
+ "format": "NVD_CVE",
+ "version": "2.0",
+ "timestamp": "2026-11-11T03:00:02.418822",
+ "vulnerabilities": [
+  {
+   "cve": {
+    "id": "CVE-2010-0425",
+    "vulnStatus": "Analyzed",
+    "metrics": {
+     "cvssMetricV2": [
+      {
+       "type": "Primary",
+       "cvssData": {
+        "baseScore": 10.0
+       }
+      }
+     ]
+    },
+    "configurations": [
+     {
+      "nodes": [
+       {
+        "operator": "OR",
+        "negate": false,
+        "cpeMatch": [
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:ibm:websphere_application_server:*:*:*:*:*:z\\/os:*:*",
+          "versionStartIncluding": "6.1",
+          "versionEndExcluding": "6.1.0.31"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "operator": "AND",
+      "nodes": [
+       {
+        "operator": "OR",
+        "negate": false,
+        "cpeMatch": [
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:apache:http_server:*:*:*:*:*:*:*:*",
+          "versionStartIncluding": "2.0.37",
+          "versionEndExcluding": "2.0.64"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:apache:http_server:*:*:*:*:*:*:*:*",
+          "versionStartIncluding": "2.2.0",
+          "versionEndExcluding": "2.2.15"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:apache:http_server:*:*:*:*:*:*:*:*",
+          "versionStartIncluding": "2.3.0",
+          "versionEndExcluding": "2.3.7"
+         }
+        ]
+       },
+       {
+        "operator": "OR",
+        "negate": false,
+        "cpeMatch": [
+         {
+          "vulnerable": false,
+          "criteria": "cpe:2.3:o:microsoft:windows:-:*:*:*:*:*:*:*"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "operator": "AND",
+      "nodes": [
+       {
+        "operator": "OR",
+        "negate": false,
+        "cpeMatch": [
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:ibm:http_server:6.0.2:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:ibm:http_server:6.0.2.1:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:ibm:http_server:6.0.2.3:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:ibm:http_server:6.0.2.7:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:ibm:http_server:6.0.2.9:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:ibm:http_server:6.0.2.11:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:ibm:http_server:6.0.2.13:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:ibm:http_server:6.0.2.15:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:ibm:http_server:6.0.2.19:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:ibm:http_server:6.0.2.21:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:ibm:http_server:6.0.2.23:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:ibm:http_server:6.0.2.25:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:ibm:http_server:6.0.2.27:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:ibm:http_server:6.0.2.29:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:ibm:http_server:6.0.2.31:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:ibm:http_server:6.0.2.33:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:ibm:http_server:6.0.2.35:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:ibm:http_server:6.0.2.37:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:ibm:http_server:6.0.2.39:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:ibm:http_server:6.1:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:ibm:http_server:6.1.0.2:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:ibm:http_server:6.1.0.3:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:ibm:http_server:6.1.0.5:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:ibm:http_server:6.1.0.7:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:ibm:http_server:6.1.0.9:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:ibm:http_server:6.1.0.11:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:ibm:http_server:6.1.0.13:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:ibm:http_server:6.1.0.15:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:ibm:http_server:6.1.0.17:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:ibm:http_server:6.1.0.19:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:ibm:http_server:6.1.0.21:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:ibm:http_server:6.1.0.23:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:ibm:http_server:6.1.0.25:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:ibm:http_server:6.1.0.27:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:ibm:http_server:6.1.0.29:*:*:*:*:*:*:*"
+         }
+        ]
+       },
+       {
+        "operator": "OR",
+        "negate": false,
+        "cpeMatch": [
+         {
+          "vulnerable": false,
+          "criteria": "cpe:2.3:o:microsoft:windows:-:*:*:*:*:*:*:*"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "nodes": [
+       {
+        "operator": "OR",
+        "negate": false,
+        "cpeMatch": [
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:oracle:http_server:10.1.3.5.0:*:*:*:*:*:*:*"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "nodes": [
+       {
+        "operator": "OR",
+        "negate": false,
+        "cpeMatch": [
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:broadcom:vmware_ace_management_server:*:*:*:*:*:*:*:*",
+          "versionEndExcluding": "2.7.2"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "cve": {
+    "id": "CVE-2015-1427",
+    "vulnStatus": "Analyzed",
+    "metrics": {
+     "cvssMetricV31": [
+      {
+       "type": "Primary",
+       "cvssData": {
+        "baseScore": 9.8
+       }
+      },
+      {
+       "type": "Secondary",
+       "cvssData": {
+        "baseScore": 9.8
+       }
+      }
+     ],
+     "cvssMetricV2": [
+      {
+       "type": "Primary",
+       "cvssData": {
+        "baseScore": 7.5
+       }
+      }
+     ]
+    },
+    "configurations": [
+     {
+      "nodes": [
+       {
+        "operator": "OR",
+        "negate": false,
+        "cpeMatch": [
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:elastic:elasticsearch:*:*:*:*:*:*:*:*",
+          "versionEndExcluding": "1.3.8"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:elastic:elasticsearch:*:*:*:*:*:*:*:*",
+          "versionStartIncluding": "1.4.0",
+          "versionEndExcluding": "1.4.3"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "nodes": [
+       {
+        "operator": "OR",
+        "negate": false,
+        "cpeMatch": [
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:redhat:fuse:1.0.0:*:*:*:*:*:*:*"
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "cisaExploitAdd": "2022-03-25"
+   }
+  },
+  {
+   "cve": {
+    "id": "CVE-2016-3088",
+    "vulnStatus": "Analyzed",
+    "metrics": {
+     "cvssMetricV31": [
+      {
+       "type": "Primary",
+       "cvssData": {
+        "baseScore": 9.8
+       }
+      },
+      {
+       "type": "Secondary",
+       "cvssData": {
+        "baseScore": 9.8
+       }
+      }
+     ],
+     "cvssMetricV2": [
+      {
+       "type": "Primary",
+       "cvssData": {
+        "baseScore": 7.5
+       }
+      }
+     ]
+    },
+    "configurations": [
+     {
+      "nodes": [
+       {
+        "operator": "OR",
+        "negate": false,
+        "cpeMatch": [
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:apache:activemq:*:*:*:*:*:*:*:*",
+          "versionStartIncluding": "5.0.0",
+          "versionEndExcluding": "5.14.0"
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "cisaExploitAdd": "2022-02-10"
+   }
+  },
+  {
+   "cve": {
+    "id": "CVE-2018-7600",
+    "vulnStatus": "Analyzed",
+    "metrics": {
+     "cvssMetricV31": [
+      {
+       "type": "Primary",
+       "cvssData": {
+        "baseScore": 9.8
+       }
+      },
+      {
+       "type": "Secondary",
+       "cvssData": {
+        "baseScore": 9.8
+       }
+      }
+     ],
+     "cvssMetricV2": [
+      {
+       "type": "Primary",
+       "cvssData": {
+        "baseScore": 7.5
+       }
+      }
+     ]
+    },
+    "configurations": [
+     {
+      "nodes": [
+       {
+        "operator": "OR",
+        "negate": false,
+        "cpeMatch": [
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:drupal:drupal:*:*:*:*:*:*:*:*",
+          "versionEndIncluding": "7.57"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:drupal:drupal:*:*:*:*:*:*:*:*",
+          "versionStartIncluding": "8.0.0",
+          "versionEndExcluding": "8.3.9"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:drupal:drupal:*:*:*:*:*:*:*:*",
+          "versionStartIncluding": "8.4.0",
+          "versionEndExcluding": "8.4.6"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:drupal:drupal:*:*:*:*:*:*:*:*",
+          "versionStartIncluding": "8.5.0",
+          "versionEndExcluding": "8.5.1"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "nodes": [
+       {
+        "operator": "OR",
+        "negate": false,
+        "cpeMatch": [
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:o:debian:debian_linux:7.0:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:o:debian:debian_linux:8.0:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:o:debian:debian_linux:9.0:*:*:*:*:*:*:*"
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "cisaExploitAdd": "2021-11-03"
+   }
+  },
+  {
+   "cve": {
+    "id": "CVE-2019-0211",
+    "vulnStatus": "Analyzed",
+    "metrics": {
+     "cvssMetricV31": [
+      {
+       "type": "Primary",
+       "cvssData": {
+        "baseScore": 7.8
+       }
+      },
+      {
+       "type": "Secondary",
+       "cvssData": {
+        "baseScore": 7.8
+       }
+      }
+     ],
+     "cvssMetricV2": [
+      {
+       "type": "Primary",
+       "cvssData": {
+        "baseScore": 7.2
+       }
+      }
+     ]
+    },
+    "configurations": [
+     {
+      "nodes": [
+       {
+        "operator": "OR",
+        "negate": false,
+        "cpeMatch": [
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:apache:http_server:*:*:*:*:*:*:*:*",
+          "versionStartIncluding": "2.4.17",
+          "versionEndIncluding": "2.4.38"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "nodes": [
+       {
+        "operator": "OR",
+        "negate": false,
+        "cpeMatch": [
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:o:fedoraproject:fedora:28:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:o:fedoraproject:fedora:29:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:o:fedoraproject:fedora:30:*:*:*:*:*:*:*"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "nodes": [
+       {
+        "operator": "OR",
+        "negate": false,
+        "cpeMatch": [
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:o:canonical:ubuntu_linux:14.04:*:*:*:esm:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:o:canonical:ubuntu_linux:16.04:*:*:*:esm:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:o:canonical:ubuntu_linux:18.04:*:*:*:esm:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:o:canonical:ubuntu_linux:18.10:*:*:*:*:*:*:*"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "nodes": [
+       {
+        "operator": "OR",
+        "negate": false,
+        "cpeMatch": [
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:o:debian:debian_linux:9.0:*:*:*:*:*:*:*"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "nodes": [
+       {
+        "operator": "OR",
+        "negate": false,
+        "cpeMatch": [
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:o:opensuse:leap:15.0:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:o:opensuse:leap:42.3:*:*:*:*:*:*:*"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "nodes": [
+       {
+        "operator": "OR",
+        "negate": false,
+        "cpeMatch": [
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:netapp:oncommand_unified_manager:-:*:*:*:*:7-mode:*:*"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "nodes": [
+       {
+        "operator": "OR",
+        "negate": false,
+        "cpeMatch": [
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:redhat:jboss_core_services:1.0:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:redhat:openshift_container_platform:3.11:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:redhat:openshift_container_platform_for_power:3.11_ppc64le:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:redhat:software_collections:1.0:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:o:redhat:enterprise_linux:8.0:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:o:redhat:enterprise_linux_eus:8.1:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:o:redhat:enterprise_linux_eus:8.2:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:o:redhat:enterprise_linux_eus:8.4:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:o:redhat:enterprise_linux_eus:8.6:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:o:redhat:enterprise_linux_eus:8.8:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:o:redhat:enterprise_linux_for_arm_64:8.0_aarch64:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:o:redhat:enterprise_linux_for_arm_64_eus:8.1_aarch64:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:o:redhat:enterprise_linux_for_arm_64_eus:8.2_aarch64:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:o:redhat:enterprise_linux_for_arm_64_eus:8.4_aarch64:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:o:redhat:enterprise_linux_for_arm_64_eus:8.6_aarch64:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:o:redhat:enterprise_linux_for_arm_64_eus:8.8_aarch64:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:o:redhat:enterprise_linux_for_ibm_z_systems:8.0_s390x:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:o:redhat:enterprise_linux_for_ibm_z_systems_eus:8.1_s390x:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:o:redhat:enterprise_linux_for_ibm_z_systems_eus:8.2_s390x:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:o:redhat:enterprise_linux_for_ibm_z_systems_eus:8.4_s390x:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:o:redhat:enterprise_linux_for_ibm_z_systems_eus:8.6_s390x:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:o:redhat:enterprise_linux_for_ibm_z_systems_eus:8.8_s390x:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:o:redhat:enterprise_linux_for_power_little_endian:8.0_ppc64le:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:o:redhat:enterprise_linux_for_power_little_endian_eus:8.1_ppc64le:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:o:redhat:enterprise_linux_for_power_little_endian_eus:8.2_ppc64le:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:o:redhat:enterprise_linux_for_power_little_endian_eus:8.4_ppc64le:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:o:redhat:enterprise_linux_for_power_little_endian_eus:8.6_ppc64le:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:o:redhat:enterprise_linux_for_power_little_endian_eus:8.8_ppc64le:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:o:redhat:enterprise_linux_server_aus:8.2:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:o:redhat:enterprise_linux_server_aus:8.4:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:o:redhat:enterprise_linux_server_aus:8.6:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:o:redhat:enterprise_linux_server_tus:8.2:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:o:redhat:enterprise_linux_server_tus:8.4:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:o:redhat:enterprise_linux_server_tus:8.6:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:o:redhat:enterprise_linux_server_tus:8.8:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:o:redhat:enterprise_linux_update_services_for_sap_solutions:8.0:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:o:redhat:enterprise_linux_update_services_for_sap_solutions:8.1:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:o:redhat:enterprise_linux_update_services_for_sap_solutions:8.4:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:o:redhat:enterprise_linux_update_services_for_sap_solutions:8.6:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:o:redhat:enterprise_linux_update_services_for_sap_solutions:8.8:*:*:*:*:*:*:*"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "nodes": [
+       {
+        "operator": "OR",
+        "negate": false,
+        "cpeMatch": [
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:oracle:communications_session_report_manager:8.0.0:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:oracle:communications_session_report_manager:8.1.0:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:oracle:communications_session_report_manager:8.1.1:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:oracle:communications_session_report_manager:8.2.0:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:oracle:communications_session_route_manager:8.0.0:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:oracle:communications_session_route_manager:8.1.0:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:oracle:communications_session_route_manager:8.1.1:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:oracle:communications_session_route_manager:8.2.0:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:oracle:enterprise_manager_ops_center:12.3.3:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:oracle:enterprise_manager_ops_center:12.4.0:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:oracle:http_server:12.2.1.3.0:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:oracle:instantis_enterprisetrack:17.1:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:oracle:instantis_enterprisetrack:17.2:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:oracle:instantis_enterprisetrack:17.3:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:oracle:retail_xstore_point_of_service:7.0:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:oracle:retail_xstore_point_of_service:7.1:*:*:*:*:*:*:*"
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "cisaExploitAdd": "2021-11-03"
+   }
+  },
+  {
+   "cve": {
+    "id": "CVE-2020-14882",
+    "vulnStatus": "Analyzed",
+    "metrics": {
+     "cvssMetricV31": [
+      {
+       "type": "Secondary",
+       "cvssData": {
+        "baseScore": 9.8
+       }
+      }
+     ],
+     "cvssMetricV2": [
+      {
+       "type": "Primary",
+       "cvssData": {
+        "baseScore": 10.0
+       }
+      }
+     ]
+    },
+    "configurations": [
+     {
+      "nodes": [
+       {
+        "operator": "OR",
+        "negate": false,
+        "cpeMatch": [
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:oracle:weblogic_server:10.3.6.0.0:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:oracle:weblogic_server:12.1.3.0.0:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:oracle:weblogic_server:12.2.1.3.0:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:oracle:weblogic_server:12.2.1.4.0:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:oracle:weblogic_server:14.1.1.0.0:*:*:*:*:*:*:*"
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "cisaExploitAdd": "2021-11-03"
+   }
+  },
+  {
+   "cve": {
+    "id": "CVE-2020-1938",
+    "vulnStatus": "Analyzed",
+    "metrics": {
+     "cvssMetricV31": [
+      {
+       "type": "Primary",
+       "cvssData": {
+        "baseScore": 9.8
+       }
+      },
+      {
+       "type": "Secondary",
+       "cvssData": {
+        "baseScore": 9.8
+       }
+      }
+     ],
+     "cvssMetricV2": [
+      {
+       "type": "Primary",
+       "cvssData": {
+        "baseScore": 7.5
+       }
+      }
+     ]
+    },
+    "configurations": [
+     {
+      "nodes": [
+       {
+        "operator": "OR",
+        "negate": false,
+        "cpeMatch": [
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:apache:geode:1.12.0:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:apache:tomcat:*:*:*:*:*:*:*:*",
+          "versionStartIncluding": "7.0.0",
+          "versionEndExcluding": "7.0.100"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:apache:tomcat:*:*:*:*:*:*:*:*",
+          "versionStartIncluding": "8.5.0",
+          "versionEndExcluding": "8.5.51"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:apache:tomcat:*:*:*:*:*:*:*:*",
+          "versionStartIncluding": "9.0.0",
+          "versionEndExcluding": "9.0.31"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "nodes": [
+       {
+        "operator": "OR",
+        "negate": false,
+        "cpeMatch": [
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:o:fedoraproject:fedora:30:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:o:fedoraproject:fedora:31:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:o:fedoraproject:fedora:32:*:*:*:*:*:*:*"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "nodes": [
+       {
+        "operator": "OR",
+        "negate": false,
+        "cpeMatch": [
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:oracle:agile_engineering_data_management:6.2.1.0:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:oracle:agile_product_lifecycle_management:9.3.3:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:oracle:agile_product_lifecycle_management:9.3.5:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:oracle:agile_product_lifecycle_management:9.3.6:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:oracle:communications_element_manager:8.1.1:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:oracle:communications_element_manager:8.2.0:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:oracle:communications_element_manager:8.2.1:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:oracle:communications_instant_messaging_server:10.0.1.4.0:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:oracle:health_sciences_empirica_inspections:1.0.1.2:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:oracle:health_sciences_empirica_signal:7.3.3:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:oracle:hospitality_guest_access:4.2.0:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:oracle:hospitality_guest_access:4.2.1:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:oracle:instantis_enterprisetrack:*:*:*:*:*:*:*:*",
+          "versionStartIncluding": "17.1",
+          "versionEndIncluding": "17.3"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:oracle:mysql_enterprise_monitor:*:*:*:*:*:*:*:*",
+          "versionEndIncluding": "4.0.12"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:oracle:mysql_enterprise_monitor:*:*:*:*:*:*:*:*",
+          "versionStartIncluding": "8.0.0",
+          "versionEndIncluding": "8.0.20"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:oracle:siebel_ui_framework:*:*:*:*:*:*:*:*",
+          "versionEndIncluding": "20.5"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:oracle:transportation_management:6.3.7:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:oracle:workload_manager:12.2.0.1:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:oracle:workload_manager:18c:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:oracle:workload_manager:19c:*:*:*:*:*:*:*"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "nodes": [
+       {
+        "operator": "OR",
+        "negate": false,
+        "cpeMatch": [
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:o:debian:debian_linux:8.0:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:o:debian:debian_linux:9.0:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:o:debian:debian_linux:10.0:*:*:*:*:*:*:*"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "nodes": [
+       {
+        "operator": "OR",
+        "negate": false,
+        "cpeMatch": [
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:o:opensuse:leap:15.1:*:*:*:*:*:*:*"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "nodes": [
+       {
+        "operator": "OR",
+        "negate": false,
+        "cpeMatch": [
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:blackberry:good_control:*:*:*:*:*:*:*:*",
+          "versionEndIncluding": "5.2.58.38"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:blackberry:workspaces_server:7.0.1:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:blackberry:workspaces_server:7.1.2:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:blackberry:workspaces_server:8.1.0:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:blackberry:workspaces_server:9.0:*:*:*:*:*:*:*"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "nodes": [
+       {
+        "operator": "OR",
+        "negate": false,
+        "cpeMatch": [
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:netapp:data_availability_services:-:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:netapp:oncommand_system_manager:*:*:*:*:*:*:*:*",
+          "versionStartIncluding": "3.0.0",
+          "versionEndIncluding": "3.1.3"
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "cisaExploitAdd": "2022-03-03"
+   }
+  },
+  {
+   "cve": {
+    "id": "CVE-2021-41773",
+    "vulnStatus": "Analyzed",
+    "metrics": {
+     "cvssMetricV31": [
+      {
+       "type": "Primary",
+       "cvssData": {
+        "baseScore": 9.8
+       }
+      },
+      {
+       "type": "Secondary",
+       "cvssData": {
+        "baseScore": 7.5
+       }
+      }
+     ],
+     "cvssMetricV2": [
+      {
+       "type": "Primary",
+       "cvssData": {
+        "baseScore": 4.3
+       }
+      }
+     ]
+    },
+    "configurations": [
+     {
+      "nodes": [
+       {
+        "operator": "OR",
+        "negate": false,
+        "cpeMatch": [
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:apache:http_server:2.4.49:*:*:*:*:*:*:*"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "nodes": [
+       {
+        "operator": "OR",
+        "negate": false,
+        "cpeMatch": [
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:o:fedoraproject:fedora:34:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:o:fedoraproject:fedora:35:*:*:*:*:*:*:*"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "nodes": [
+       {
+        "operator": "OR",
+        "negate": false,
+        "cpeMatch": [
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:oracle:instantis_enterprisetrack:17.1:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:oracle:instantis_enterprisetrack:17.2:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:oracle:instantis_enterprisetrack:17.3:*:*:*:*:*:*:*"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "nodes": [
+       {
+        "operator": "OR",
+        "negate": false,
+        "cpeMatch": [
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:netapp:cloud_backup:-:*:*:*:*:*:*:*"
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "cisaExploitAdd": "2021-11-03"
+   }
+  },
+  {
+   "cve": {
+    "id": "CVE-2022-0543",
+    "vulnStatus": "Analyzed",
+    "metrics": {
+     "cvssMetricV31": [
+      {
+       "type": "Primary",
+       "cvssData": {
+        "baseScore": 10.0
+       }
+      },
+      {
+       "type": "Secondary",
+       "cvssData": {
+        "baseScore": 10.0
+       }
+      }
+     ],
+     "cvssMetricV2": [
+      {
+       "type": "Primary",
+       "cvssData": {
+        "baseScore": 10.0
+       }
+      }
+     ]
+    },
+    "configurations": [
+     {
+      "operator": "AND",
+      "nodes": [
+       {
+        "operator": "OR",
+        "negate": false,
+        "cpeMatch": [
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:redis:redis:-:*:*:*:*:*:*:*"
+         }
+        ]
+       },
+       {
+        "operator": "OR",
+        "negate": false,
+        "cpeMatch": [
+         {
+          "vulnerable": false,
+          "criteria": "cpe:2.3:o:canonical:ubuntu_linux:20.04:*:*:*:lts:*:*:*"
+         },
+         {
+          "vulnerable": false,
+          "criteria": "cpe:2.3:o:canonical:ubuntu_linux:21.10:*:*:*:-:*:*:*"
+         },
+         {
+          "vulnerable": false,
+          "criteria": "cpe:2.3:o:debian:debian_linux:9.0:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": false,
+          "criteria": "cpe:2.3:o:debian:debian_linux:10.0:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": false,
+          "criteria": "cpe:2.3:o:debian:debian_linux:11.0:*:*:*:*:*:*:*"
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "cisaExploitAdd": "2022-03-28"
+   }
+  },
+  {
+   "cve": {
+    "id": "CVE-2022-24706",
+    "vulnStatus": "Analyzed",
+    "metrics": {
+     "cvssMetricV31": [
+      {
+       "type": "Primary",
+       "cvssData": {
+        "baseScore": 9.8
+       }
+      },
+      {
+       "type": "Secondary",
+       "cvssData": {
+        "baseScore": 9.8
+       }
+      }
+     ],
+     "cvssMetricV2": [
+      {
+       "type": "Primary",
+       "cvssData": {
+        "baseScore": 10.0
+       }
+      }
+     ]
+    },
+    "configurations": [
+     {
+      "nodes": [
+       {
+        "operator": "OR",
+        "negate": false,
+        "cpeMatch": [
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:apache:couchdb:*:*:*:*:*:*:*:*",
+          "versionEndExcluding": "3.2.2"
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "cisaExploitAdd": "2022-08-25"
+   }
+  },
+  {
+   "cve": {
+    "id": "CVE-2023-23752",
+    "vulnStatus": "Analyzed",
+    "metrics": {
+     "cvssMetricV31": [
+      {
+       "type": "Primary",
+       "cvssData": {
+        "baseScore": 5.3
+       }
+      },
+      {
+       "type": "Secondary",
+       "cvssData": {
+        "baseScore": 5.3
+       }
+      }
+     ]
+    },
+    "configurations": [
+     {
+      "nodes": [
+       {
+        "operator": "OR",
+        "negate": false,
+        "cpeMatch": [
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:joomla:joomla\\!:*:*:*:*:*:*:*:*",
+          "versionStartIncluding": "4.0.0",
+          "versionEndExcluding": "4.2.8"
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "cisaExploitAdd": "2024-01-08"
+   }
+  },
+  {
+   "cve": {
+    "id": "CVE-2023-46604",
+    "vulnStatus": "Analyzed",
+    "metrics": {
+     "cvssMetricV31": [
+      {
+       "type": "Secondary",
+       "cvssData": {
+        "baseScore": 10.0
+       }
+      },
+      {
+       "type": "Primary",
+       "cvssData": {
+        "baseScore": 9.8
+       }
+      }
+     ]
+    },
+    "configurations": [
+     {
+      "nodes": [
+       {
+        "operator": "OR",
+        "negate": false,
+        "cpeMatch": [
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:apache:activemq:*:*:*:*:*:*:*:*",
+          "versionEndExcluding": "5.15.16"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:apache:activemq:*:*:*:*:*:*:*:*",
+          "versionStartIncluding": "5.16.0",
+          "versionEndExcluding": "5.16.7"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:apache:activemq:*:*:*:*:*:*:*:*",
+          "versionStartIncluding": "5.17.0",
+          "versionEndExcluding": "5.17.6"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:apache:activemq:*:*:*:*:*:*:*:*",
+          "versionStartIncluding": "5.18.0",
+          "versionEndExcluding": "5.18.3"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "nodes": [
+       {
+        "operator": "OR",
+        "negate": false,
+        "cpeMatch": [
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:apache:activemq_legacy_openwire_module:*:*:*:*:*:*:*:*",
+          "versionEndExcluding": "5.15.16"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:apache:activemq_legacy_openwire_module:*:*:*:*:*:*:*:*",
+          "versionStartIncluding": "5.16.0",
+          "versionEndExcluding": "5.16.7"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:apache:activemq_legacy_openwire_module:*:*:*:*:*:*:*:*",
+          "versionStartIncluding": "5.17.0",
+          "versionEndExcluding": "5.17.6"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:apache:activemq_legacy_openwire_module:*:*:*:*:*:*:*:*",
+          "versionStartIncluding": "5.18.0",
+          "versionEndExcluding": "5.18.3"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "nodes": [
+       {
+        "operator": "OR",
+        "negate": false,
+        "cpeMatch": [
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:o:debian:debian_linux:10.0:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:o:debian:debian_linux:11.0:*:*:*:*:*:*:*"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "nodes": [
+       {
+        "operator": "OR",
+        "negate": false,
+        "cpeMatch": [
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:netapp:e-series_santricity_unified_manager:-:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:netapp:e-series_santricity_web_services_proxy:-:*:*:*:*:*:*:*"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:netapp:santricity_storage_plugin:-:*:*:*:*:vcenter:*:*"
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "cisaExploitAdd": "2023-11-02"
+   }
+  },
+  {
+   "cve": {
+    "id": "CVE-2024-23897",
+    "vulnStatus": "Analyzed",
+    "metrics": {
+     "cvssMetricV31": [
+      {
+       "type": "Primary",
+       "cvssData": {
+        "baseScore": 9.8
+       }
+      },
+      {
+       "type": "Secondary",
+       "cvssData": {
+        "baseScore": 9.8
+       }
+      }
+     ]
+    },
+    "configurations": [
+     {
+      "nodes": [
+       {
+        "operator": "OR",
+        "negate": false,
+        "cpeMatch": [
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:jenkins:jenkins:*:*:*:*:lts:*:*:*",
+          "versionEndExcluding": "2.426.3"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:jenkins:jenkins:*:*:*:*:-:*:*:*",
+          "versionEndExcluding": "2.442"
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "cisaExploitAdd": "2024-08-19"
+   }
+  },
+  {
+   "cve": {
+    "id": "CVE-2024-27198",
+    "vulnStatus": "Analyzed",
+    "metrics": {
+     "cvssMetricV31": [
+      {
+       "type": "Secondary",
+       "cvssData": {
+        "baseScore": 9.8
+       }
+      },
+      {
+       "type": "Primary",
+       "cvssData": {
+        "baseScore": 9.8
+       }
+      }
+     ]
+    },
+    "configurations": [
+     {
+      "nodes": [
+       {
+        "operator": "OR",
+        "negate": false,
+        "cpeMatch": [
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:jetbrains:teamcity:*:*:*:*:*:*:*:*",
+          "versionEndExcluding": "2023.11.4"
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "cisaExploitAdd": "2024-03-07"
+   }
+  },
+  {
+   "cve": {
+    "id": "CVE-2025-14847",
+    "vulnStatus": "Analyzed",
+    "metrics": {
+     "cvssMetricV40": [
+      {
+       "type": "Secondary",
+       "cvssData": {
+        "baseScore": 8.7
+       }
+      }
+     ],
+     "cvssMetricV31": [
+      {
+       "type": "Secondary",
+       "cvssData": {
+        "baseScore": 7.5
+       }
+      }
+     ]
+    },
+    "configurations": [
+     {
+      "nodes": [
+       {
+        "operator": "OR",
+        "negate": false,
+        "cpeMatch": [
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:mongodb:mongodb:*:*:*:*:*:*:*:*",
+          "versionStartIncluding": "3.6.0",
+          "versionEndExcluding": "4.4.30"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:mongodb:mongodb:*:*:*:*:*:*:*:*",
+          "versionStartIncluding": "5.0.0",
+          "versionEndExcluding": "5.0.32"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:mongodb:mongodb:*:*:*:*:-:*:*:*",
+          "versionStartIncluding": "6.0.0",
+          "versionEndExcluding": "6.0.27"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:mongodb:mongodb:*:*:*:*:-:*:*:*",
+          "versionStartIncluding": "7.0.0",
+          "versionEndExcluding": "7.0.28"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:mongodb:mongodb:*:*:*:*:-:*:*:*",
+          "versionStartIncluding": "8.0.0",
+          "versionEndExcluding": "8.0.17"
+         },
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:mongodb:mongodb:*:*:*:*:-:*:*:*",
+          "versionStartIncluding": "8.2.0",
+          "versionEndExcluding": "8.2.3"
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "cisaExploitAdd": "2025-12-29"
+   }
+  }
+ ]
+}

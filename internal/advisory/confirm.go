@@ -48,7 +48,7 @@ func services(obs []types.StoredObservation, needVersion bool) []Service {
 			// A verification check keys on the service name alone.
 			return
 		}
-		key := fmt.Sprintf("%s|%d|%s|%s|%s", s.Target(), s.Port, s.Proto, s.Product, s.Version)
+		key := fmt.Sprintf("%s|%d|%s|%s|%s", s.Target(), s.Port, s.Proto, ProductKey(s.Product), s.Version)
 		if seen[key] {
 			return
 		}
@@ -93,13 +93,13 @@ func services(obs []types.StoredObservation, needVersion bool) []Service {
 			}
 		case "azhaq-http":
 			var row struct {
-				URL    string `json:"url"`
-				Server string `json:"server"`
+				URL    string   `json:"url"`
+				Server string   `json:"server"`
+				Tech   []string `json:"tech"`
 			}
-			if json.Unmarshal(o.Payload, &row) != nil || row.Server == "" {
+			if json.Unmarshal(o.Payload, &row) != nil || (row.Server == "" && len(row.Tech) == 0) {
 				continue
 			}
-			product, version := ProductVersion(row.Server)
 			u, err := url.Parse(row.URL)
 			if err != nil || u.Hostname() == "" {
 				continue
@@ -112,8 +112,21 @@ func services(obs []types.StoredObservation, needVersion bool) []Service {
 			} else {
 				port = 80
 			}
-			add(Service{Host: u.Hostname(), Port: port, Proto: "tcp", Service: u.Scheme,
-				Product: product, Version: version, Origin: u.Scheme + "://" + u.Host})
+			web := func(product, version string) Service {
+				return Service{Host: u.Hostname(), Port: port, Proto: "tcp", Service: u.Scheme,
+					Product: product, Version: version, Origin: u.Scheme + "://" + u.Host}
+			}
+			if row.Server != "" {
+				product, version := ProductVersion(row.Server)
+				add(web(product, version))
+			}
+			// The technologies the page's own markup and headers name with a
+			// version ("WordPress:6.4.2"): what the site itself states.
+			for _, t := range row.Tech {
+				if name, version, ok := strings.Cut(t, ":"); ok && name != "" && version != "" && version[0] >= '0' && version[0] <= '9' {
+					add(web(name, version))
+				}
+			}
 		}
 	}
 	return out
