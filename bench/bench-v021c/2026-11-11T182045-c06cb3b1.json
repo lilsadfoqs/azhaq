@@ -1,0 +1,528 @@
+{
+  "date": "2026-11-11T18:20:45Z",
+  "commit": "c06cb3b1",
+  "version": "azhaq 0.20.1-0.20261111181520-c06cb3b110c2+dirty",
+  "go": "go1.27.4",
+  "tools": [
+    {
+      "name": "katana",
+      "version": "1.8.0"
+    },
+    {
+      "name": "subfinder",
+      "version": "2.17.0"
+    },
+    {
+      "name": "httpx",
+      "version": "1.12.0"
+    },
+    {
+      "name": "dnsx",
+      "version": "1.3.1"
+    },
+    {
+      "name": "naabu",
+      "version": "2.6.1"
+    },
+    {
+      "name": "gau",
+      "version": "2.2.4"
+    },
+    {
+      "name": "ffuf",
+      "version": "2.3.0"
+    },
+    {
+      "name": "alterx",
+      "version": "0.1.0"
+    },
+    {
+      "name": "gowitness",
+      "version": "3.2.2"
+    },
+    {
+      "name": "jsluice",
+      "version": "v0.0.0-20240110145140-0ddfab153e06"
+    },
+    {
+      "name": "notify",
+      "version": "v1.0.7"
+    }
+  ],
+  "profile": "both",
+  "domains": [
+    {
+      "domain": "hackerone.com",
+      "azhaq_names": 15,
+      "subfinder_names": 529,
+      "live": 3,
+      "azhaq_live": 3,
+      "subfinder_live": 0,
+      "shared_live": 0,
+      "azhaq_seconds": 25.028490225,
+      "azhaq_subs_seconds": 25.028490225,
+      "subfinder_seconds": 29.800790042,
+      "gau_seconds": 0,
+      "ct": "7 answered (seconds 0, failed_sources 0, asked 0), 0 failed",
+      "azhaq_urls": 0,
+      "gau_urls": 0,
+      "gau_shared": 0,
+      "archives": "",
+      "profile": "default",
+      "reference_seconds": 54.67495528,
+      "azhaq_rss_mb": 67.93359375,
+      "reference_rss_mb": 50.07421875
+    },
+    {
+      "domain": "tesla.com",
+      "azhaq_names": 593,
+      "subfinder_names": 1373,
+      "live": 593,
+      "azhaq_live": 593,
+      "subfinder_live": 456,
+      "shared_live": 456,
+      "azhaq_seconds": 22.066040748,
+      "azhaq_subs_seconds": 22.066040748,
+      "subfinder_seconds": 33.662085391,
+      "gau_seconds": 0,
+      "ct": "7 answered (requests 0, seconds 0, failed_sources 0), 0 failed",
+      "azhaq_urls": 0,
+      "gau_urls": 0,
+      "gau_shared": 0,
+      "archives": "",
+      "profile": "default",
+      "reference_seconds": 52.428546274,
+      "azhaq_rss_mb": 79.0546875,
+      "reference_rss_mb": 52.72265625
+    },
+    {
+      "domain": "vulnweb.com",
+      "azhaq_names": 7,
+      "subfinder_names": 518,
+      "live": 7,
+      "azhaq_live": 7,
+      "subfinder_live": 6,
+      "shared_live": 6,
+      "azhaq_seconds": 18.152707397,
+      "azhaq_subs_seconds": 18.152707397,
+      "subfinder_seconds": 33.584184344,
+      "gau_seconds": 0,
+      "ct": "7 answered (asked 0, answered 0, failed 0), 0 failed",
+      "azhaq_urls": 0,
+      "gau_urls": 0,
+      "gau_shared": 0,
+      "archives": "",
+      "profile": "default",
+      "reference_seconds": 37.781053172,
+      "azhaq_rss_mb": 68.83203125,
+      "reference_rss_mb": 53.9296875
+    }
+  ],
+  "polite": {
+    "domains": [
+      {
+        "domain": "hackerone.com",
+        "azhaq_names": 14,
+        "subfinder_names": 527,
+        "live": 15,
+        "azhaq_live": 14,
+        "subfinder_live": 13,
+        "shared_live": 12,
+        "azhaq_seconds": 28.646604522,
+        "azhaq_subs_seconds": 28.646604522,
+        "subfinder_seconds": 30.564484718,
+        "gau_seconds": 0,
+        "ct": "7 answered (seconds 0, failed_sources 0, asked 0), 0 failed",
+        "azhaq_urls": 0,
+        "gau_urls": 0,
+        "gau_shared": 0,
+        "archives": "",
+        "profile": "polite",
+        "reference_seconds": 83.261981721,
+        "azhaq_rss_mb": 59.42578125,
+        "reference_rss_mb": 52.4453125,
+        "gaps": [
+          "fsdkim.hackerone.com"
+        ]
+      },
+      {
+        "domain": "vulnweb.com",
+        "azhaq_names": 7,
+        "subfinder_names": 519,
+        "live": 7,
+        "azhaq_live": 7,
+        "subfinder_live": 6,
+        "shared_live": 6,
+        "azhaq_seconds": 27.078529698,
+        "azhaq_subs_seconds": 27.078529698,
+        "subfinder_seconds": 41.004002623,
+        "gau_seconds": 0,
+        "ct": "7 answered (names 0, requests 0, seconds 0), 0 failed",
+        "azhaq_urls": 0,
+        "gau_urls": 0,
+        "gau_shared": 0,
+        "archives": "",
+        "profile": "polite",
+        "reference_seconds": 92.70445600400001,
+        "azhaq_rss_mb": 61.015625,
+        "reference_rss_mb": 48.30859375
+      }
+    ]
+  },
+  "checks": [
+    {
+      "name": "[default] subs -live hackerone.com: results ≥ the reference's, confirmed by a name resolving at 9.9.9.9 or 208.67.222.222 (A, AAAA or CNAME)",
+      "pass": true,
+      "detail": "azhaq 3, reference 0; old bar: reference found none; azhaq printed 15, subfinder 529 names, dnsx 4 live; azhaq 3, reference 0 confirmed, both 0; subfinder 30s + dnsx 25s; time ×0.46 of the reference, memory ×1.36 of the reference (68 MB against 50 MB) | azhaq subs -d hackerone.com -live -json -silent -resolvers /home/runner/work/azhaq/azhaq/bench/.work/domains/resolvers.txt vs subfinder -d hackerone.com -silent -json -cs | dnsx -l /home/runner/work/azhaq/azhaq/bench/.work/domains/hackerone.com-default-names.txt -silent -a -aaaa -cname -r 1.1.1.1,8.8.8.8"
+    },
+    {
+      "name": "[default] subs -live hackerone.com: time ≤ 1.05× the reference's",
+      "pass": true,
+      "detail": "azhaq 25.0s, reference 54.7s (the median of 3 below 20 s, one run above) | azhaq subs -d hackerone.com -live -json -silent -resolvers /home/runner/work/azhaq/azhaq/bench/.work/domains/resolvers.txt vs subfinder -d hackerone.com -silent -json -cs | dnsx -l /home/runner/work/azhaq/azhaq/bench/.work/domains/hackerone.com-default-names.txt -silent -a -aaaa -cname -r 1.1.1.1,8.8.8.8"
+    },
+    {
+      "name": "[default] subs hackerone.com: -source-timeout 800ms ends the run within 4 s (every source is held to it)",
+      "pass": true,
+      "detail": "azhaq subs -d hackerone.com -source-timeout 800ms took 0.8s"
+    },
+    {
+      "name": "[default] subs -live hackerone.com: every confirmed live name subfinder | dnsx finds is in azhaq's list or its source is named as failed",
+      "pass": true,
+      "detail": "0 gaps, 0 unexplained: []"
+    },
+    {
+      "name": "[default] subs -live hackerone.com: rows are DNS-confirmed, raw candidates are counted apart and the confirmed set reaches the reference's",
+      "pass": true,
+      "detail": "raw candidates 1441, DNS-confirmed 15, reference confirmed 0: []"
+    },
+    {
+      "name": "[default] subs -live hackerone.com: raw candidates reach the names the reference listed",
+      "pass": true,
+      "detail": "azhaq 1441 raw candidates, subfinder 529 names"
+    },
+    {
+      "name": "[default] subdomain sources: no silent zeros (hackerone.com)",
+      "pass": true,
+      "detail": "every empty result is a failure flagged as error or degraded, or a zero every source answered"
+    },
+    {
+      "name": "[default] subs -live tesla.com: results ≥ the reference's, confirmed by a name resolving at 9.9.9.9 or 208.67.222.222 (A, AAAA or CNAME)",
+      "pass": true,
+      "detail": "azhaq 593, reference 456; old bar: 456 of 456 = 100%; azhaq printed 593, subfinder 1373 names, dnsx 456 live; azhaq 593, reference 456 confirmed, both 456; subfinder 34s + dnsx 19s; time ×0.42 of the reference, memory ×1.50 of the reference (79 MB against 53 MB) | azhaq subs -d tesla.com -live -json -silent -resolvers /home/runner/work/azhaq/azhaq/bench/.work/domains/resolvers.txt vs subfinder -d tesla.com -silent -json -cs | dnsx -l /home/runner/work/azhaq/azhaq/bench/.work/domains/tesla.com-default-names.txt -silent -a -aaaa -cname -r 1.1.1.1,8.8.8.8"
+    },
+    {
+      "name": "[default] subs -live tesla.com: time ≤ 1.05× the reference's",
+      "pass": true,
+      "detail": "azhaq 22.1s, reference 52.4s (the median of 3 below 20 s, one run above) | azhaq subs -d tesla.com -live -json -silent -resolvers /home/runner/work/azhaq/azhaq/bench/.work/domains/resolvers.txt vs subfinder -d tesla.com -silent -json -cs | dnsx -l /home/runner/work/azhaq/azhaq/bench/.work/domains/tesla.com-default-names.txt -silent -a -aaaa -cname -r 1.1.1.1,8.8.8.8"
+    },
+    {
+      "name": "[default] subs tesla.com: -source-timeout 800ms ends the run within 4 s (every source is held to it)",
+      "pass": true,
+      "detail": "azhaq subs -d tesla.com -source-timeout 800ms took 1.0s"
+    },
+    {
+      "name": "[default] subs -live tesla.com: every confirmed live name subfinder | dnsx finds is in azhaq's list or its source is named as failed",
+      "pass": true,
+      "detail": "0 gaps, 0 unexplained: []"
+    },
+    {
+      "name": "[default] subs -live tesla.com: rows are DNS-confirmed, raw candidates are counted apart and the confirmed set reaches the reference's",
+      "pass": true,
+      "detail": "raw candidates 3614, DNS-confirmed 593, reference confirmed 456: []"
+    },
+    {
+      "name": "[default] subs -live tesla.com: raw candidates reach the names the reference listed",
+      "pass": true,
+      "detail": "azhaq 3614 raw candidates, subfinder 1373 names"
+    },
+    {
+      "name": "[default] subdomain sources: no silent zeros (tesla.com)",
+      "pass": true,
+      "detail": "every empty result is a failure flagged as error or degraded, or a zero every source answered"
+    },
+    {
+      "name": "[default] subs -live vulnweb.com: results ≥ the reference's, confirmed by a name resolving at 9.9.9.9 or 208.67.222.222 (A, AAAA or CNAME)",
+      "pass": true,
+      "detail": "azhaq 7, reference 6; old bar: 6 of 6 = 100%; azhaq printed 7, subfinder 518 names, dnsx 6 live; azhaq 7, reference 6 confirmed, both 6; subfinder 34s + dnsx 4s; time ×0.48 of the reference, memory ×1.28 of the reference (69 MB against 54 MB) | azhaq subs -d vulnweb.com -live -json -silent -resolvers /home/runner/work/azhaq/azhaq/bench/.work/domains/resolvers.txt vs subfinder -d vulnweb.com -silent -json -cs | dnsx -l /home/runner/work/azhaq/azhaq/bench/.work/domains/vulnweb.com-default-names.txt -silent -a -aaaa -cname -r 1.1.1.1,8.8.8.8"
+    },
+    {
+      "name": "[default] subs -live vulnweb.com: time ≤ 1.05× the reference's",
+      "pass": true,
+      "detail": "azhaq 18.2s, reference 37.8s (the median of 3 below 20 s, one run above) | azhaq subs -d vulnweb.com -live -json -silent -resolvers /home/runner/work/azhaq/azhaq/bench/.work/domains/resolvers.txt vs subfinder -d vulnweb.com -silent -json -cs | dnsx -l /home/runner/work/azhaq/azhaq/bench/.work/domains/vulnweb.com-default-names.txt -silent -a -aaaa -cname -r 1.1.1.1,8.8.8.8"
+    },
+    {
+      "name": "[default] subs vulnweb.com: -source-timeout 800ms ends the run within 4 s (every source is held to it)",
+      "pass": true,
+      "detail": "azhaq subs -d vulnweb.com -source-timeout 800ms took 1.2s"
+    },
+    {
+      "name": "[default] subs -live vulnweb.com: every confirmed live name subfinder | dnsx finds is in azhaq's list or its source is named as failed",
+      "pass": true,
+      "detail": "0 gaps, 0 unexplained: []"
+    },
+    {
+      "name": "[default] subs -live vulnweb.com: rows are DNS-confirmed, raw candidates are counted apart and the confirmed set reaches the reference's",
+      "pass": true,
+      "detail": "raw candidates 2014, DNS-confirmed 7, reference confirmed 6: []"
+    },
+    {
+      "name": "[default] subs -live vulnweb.com: raw candidates reach the names the reference listed",
+      "pass": true,
+      "detail": "azhaq 2014 raw candidates, subfinder 518 names"
+    },
+    {
+      "name": "[default] subdomain sources: no silent zeros (vulnweb.com)",
+      "pass": true,
+      "detail": "every empty result is a failure flagged as error or degraded, or a zero every source answered"
+    },
+    {
+      "name": "[polite] subs -live hackerone.com: results ≥ the reference's, confirmed by a name resolving at 9.9.9.9 or 208.67.222.222 (A, AAAA or CNAME)",
+      "pass": true,
+      "detail": "azhaq 14, reference 13; old bar: 12 of 13 = 92%; azhaq printed 14, subfinder 527 names, dnsx 13 live; azhaq 14, reference 13 confirmed, both 12; subfinder 31s + dnsx 53s; time ×0.34 of the reference, memory ×1.13 of the reference (59 MB against 52 MB) | azhaq subs -d hackerone.com -live -json -silent -resolvers /home/runner/work/azhaq/azhaq/bench/.work/domains/resolvers.txt -dns-rate 10 vs subfinder -d hackerone.com -silent -json -cs | dnsx -l /home/runner/work/azhaq/azhaq/bench/.work/domains/hackerone.com-polite-names.txt -silent -a -aaaa -cname -r 1.1.1.1,8.8.8.8 -rl 10"
+    },
+    {
+      "name": "[polite] subs -live hackerone.com: time ≤ 1.05× the reference's",
+      "pass": true,
+      "detail": "azhaq 28.6s, reference 83.3s (the median of 3 below 20 s, one run above) | azhaq subs -d hackerone.com -live -json -silent -resolvers /home/runner/work/azhaq/azhaq/bench/.work/domains/resolvers.txt -dns-rate 10 vs subfinder -d hackerone.com -silent -json -cs | dnsx -l /home/runner/work/azhaq/azhaq/bench/.work/domains/hackerone.com-polite-names.txt -silent -a -aaaa -cname -r 1.1.1.1,8.8.8.8 -rl 10"
+    },
+    {
+      "name": "[polite] subs hackerone.com: -source-timeout 800ms ends the run within 4 s (every source is held to it)",
+      "pass": true,
+      "detail": "azhaq subs -d hackerone.com -source-timeout 800ms took 0.8s"
+    },
+    {
+      "name": "[polite] subs -live hackerone.com: every confirmed live name subfinder | dnsx finds is in azhaq's list or its source is named as failed",
+      "pass": true,
+      "detail": "1 gaps, 0 unexplained: [fsdkim.hackerone.com (subfinder: subdomaincenter)]"
+    },
+    {
+      "name": "[polite] subs -live hackerone.com: rows are DNS-confirmed, raw candidates are counted apart and the confirmed set reaches the reference's",
+      "pass": false,
+      "detail": "raw candidates 41, DNS-confirmed 14, reference confirmed 13: [1 names the reference's lookups confirmed are not DNS-confirmed here]"
+    },
+    {
+      "name": "[polite] subs -live hackerone.com: raw candidates reach the names the reference listed",
+      "pass": false,
+      "detail": "azhaq 41 raw candidates, subfinder 527 names"
+    },
+    {
+      "name": "[polite] subdomain sources: no silent zeros (hackerone.com)",
+      "pass": true,
+      "detail": "every empty result is a failure flagged as error or degraded, or a zero every source answered"
+    },
+    {
+      "name": "[polite] subs -live vulnweb.com: results ≥ the reference's, confirmed by a name resolving at 9.9.9.9 or 208.67.222.222 (A, AAAA or CNAME)",
+      "pass": true,
+      "detail": "azhaq 7, reference 6; old bar: 6 of 6 = 100%; azhaq printed 7, subfinder 519 names, dnsx 6 live; azhaq 7, reference 6 confirmed, both 6; subfinder 41s + dnsx 52s; time ×0.29 of the reference, memory ×1.26 of the reference (61 MB against 48 MB) | azhaq subs -d vulnweb.com -live -json -silent -resolvers /home/runner/work/azhaq/azhaq/bench/.work/domains/resolvers.txt -dns-rate 10 vs subfinder -d vulnweb.com -silent -json -cs | dnsx -l /home/runner/work/azhaq/azhaq/bench/.work/domains/vulnweb.com-polite-names.txt -silent -a -aaaa -cname -r 1.1.1.1,8.8.8.8 -rl 10"
+    },
+    {
+      "name": "[polite] subs -live vulnweb.com: time ≤ 1.05× the reference's",
+      "pass": true,
+      "detail": "azhaq 27.1s, reference 92.7s (the median of 3 below 20 s, one run above) | azhaq subs -d vulnweb.com -live -json -silent -resolvers /home/runner/work/azhaq/azhaq/bench/.work/domains/resolvers.txt -dns-rate 10 vs subfinder -d vulnweb.com -silent -json -cs | dnsx -l /home/runner/work/azhaq/azhaq/bench/.work/domains/vulnweb.com-polite-names.txt -silent -a -aaaa -cname -r 1.1.1.1,8.8.8.8 -rl 10"
+    },
+    {
+      "name": "[polite] subs vulnweb.com: -source-timeout 800ms ends the run within 4 s (every source is held to it)",
+      "pass": true,
+      "detail": "azhaq subs -d vulnweb.com -source-timeout 800ms took 0.8s"
+    },
+    {
+      "name": "[polite] subs -live vulnweb.com: every confirmed live name subfinder | dnsx finds is in azhaq's list or its source is named as failed",
+      "pass": true,
+      "detail": "0 gaps, 0 unexplained: []"
+    },
+    {
+      "name": "[polite] subs -live vulnweb.com: rows are DNS-confirmed, raw candidates are counted apart and the confirmed set reaches the reference's",
+      "pass": true,
+      "detail": "raw candidates 179, DNS-confirmed 7, reference confirmed 6: []"
+    },
+    {
+      "name": "[polite] subs -live vulnweb.com: raw candidates reach the names the reference listed",
+      "pass": false,
+      "detail": "azhaq 179 raw candidates, subfinder 519 names"
+    },
+    {
+      "name": "[polite] subdomain sources: no silent zeros (vulnweb.com)",
+      "pass": true,
+      "detail": "every empty result is a failure flagged as error or degraded, or a zero every source answered"
+    }
+  ],
+  "runs": [
+    {
+      "tool": "azhaq",
+      "target": "hackerone.com",
+      "seconds": 25.028490225,
+      "rss_mb": 67.93359375,
+      "profile": "default"
+    },
+    {
+      "tool": "subfinder",
+      "target": "hackerone.com",
+      "seconds": 29.800790042,
+      "rss_mb": 46.6171875,
+      "anon_mb": 22.4765625,
+      "profile": "default"
+    },
+    {
+      "tool": "dnsx",
+      "target": "hackerone.com",
+      "seconds": 24.874165238,
+      "rss_mb": 50.07421875,
+      "anon_mb": 26.93359375,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "hackerone.com",
+      "seconds": 0.83478487,
+      "rss_mb": 48.828125,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "tesla.com",
+      "seconds": 22.066040748,
+      "rss_mb": 79.0546875,
+      "profile": "default"
+    },
+    {
+      "tool": "subfinder",
+      "target": "tesla.com",
+      "seconds": 33.662085391,
+      "rss_mb": 46.70703125,
+      "anon_mb": 22.9375,
+      "profile": "default"
+    },
+    {
+      "tool": "dnsx",
+      "target": "tesla.com",
+      "seconds": 18.766460883,
+      "rss_mb": 52.72265625,
+      "anon_mb": 29.5859375,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "tesla.com",
+      "seconds": 1.025506847,
+      "rss_mb": 56.5625,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "vulnweb.com",
+      "seconds": 18.152707397,
+      "rss_mb": 68.83203125,
+      "profile": "default"
+    },
+    {
+      "tool": "subfinder",
+      "target": "vulnweb.com",
+      "seconds": 33.584184344,
+      "rss_mb": 44.8125,
+      "anon_mb": 20.7421875,
+      "profile": "default"
+    },
+    {
+      "tool": "dnsx",
+      "target": "vulnweb.com",
+      "seconds": 4.196868828,
+      "rss_mb": 53.9296875,
+      "anon_mb": 30.484375,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "vulnweb.com",
+      "seconds": 1.246558215,
+      "rss_mb": 48.95703125,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "hackerone.com",
+      "seconds": 28.646604522,
+      "rss_mb": 59.42578125,
+      "profile": "polite"
+    },
+    {
+      "tool": "subfinder",
+      "target": "hackerone.com",
+      "seconds": 30.564484718,
+      "rss_mb": 45.24609375,
+      "anon_mb": 21.0546875,
+      "profile": "polite"
+    },
+    {
+      "tool": "dnsx",
+      "target": "hackerone.com",
+      "seconds": 52.697497003,
+      "rss_mb": 52.4453125,
+      "anon_mb": 29.12109375,
+      "profile": "polite"
+    },
+    {
+      "tool": "azhaq",
+      "target": "hackerone.com",
+      "seconds": 0.822856003,
+      "rss_mb": 49.26953125,
+      "profile": "polite"
+    },
+    {
+      "tool": "azhaq",
+      "target": "vulnweb.com",
+      "seconds": 27.078529698,
+      "rss_mb": 61.015625,
+      "profile": "polite"
+    },
+    {
+      "tool": "subfinder",
+      "target": "vulnweb.com",
+      "seconds": 41.004002623,
+      "rss_mb": 47.04296875,
+      "anon_mb": 22.7734375,
+      "profile": "polite"
+    },
+    {
+      "tool": "dnsx",
+      "target": "vulnweb.com",
+      "seconds": 51.700453381,
+      "rss_mb": 48.30859375,
+      "anon_mb": 25.04296875,
+      "profile": "polite"
+    },
+    {
+      "tool": "azhaq",
+      "target": "vulnweb.com",
+      "seconds": 0.825842535,
+      "rss_mb": 48.96875,
+      "profile": "polite"
+    }
+  ],
+  "units": [
+    {
+      "name": "default:domains/hackerone.com",
+      "checks": 7,
+      "runs": 4
+    },
+    {
+      "name": "default:domains/tesla.com",
+      "checks": 7,
+      "runs": 4
+    },
+    {
+      "name": "default:domains/vulnweb.com",
+      "checks": 7,
+      "runs": 4
+    },
+    {
+      "name": "polite:domains/hackerone.com",
+      "checks": 7,
+      "runs": 4
+    },
+    {
+      "name": "polite:domains/vulnweb.com",
+      "checks": 7,
+      "runs": 4
+    }
+  ]
+}
