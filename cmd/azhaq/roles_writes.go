@@ -302,7 +302,7 @@ func replayWritesPaused(who map[string]identity, roles []role, reqs []writeReq, 
 	fetch.Reset()
 	defer fetch.Reset()
 	egress.SetRate(rate)
-	egress.SetTargetProxy(rolesProxy)
+	rolesEgress()
 	egress.SetScope(func(h string) bool { return own[normalize.Hostname(h)] })
 	holdDeny()
 	client := *fetch.Client(nil)

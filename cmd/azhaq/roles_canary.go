@@ -164,7 +164,7 @@ func signInCanaries(roles []role, picked map[string]*canary, signed map[string]b
 	fetch.Reset()
 	defer fetch.Reset()
 	egress.SetRate(rate)
-	egress.SetTargetProxy(rolesProxy)
+	rolesEgress()
 	egress.SetScope(func(h string) bool { return own[normalize.Hostname(h)] })
 	holdDeny()
 	anon := http.Header{}
@@ -376,7 +376,7 @@ type roleReplay struct {
 func (rr *roleReplay) setup() {
 	fetch.Reset()
 	egress.SetRate(rr.rate)
-	egress.SetTargetProxy(rolesProxy)
+	rolesEgress()
 	own := rr.own
 	egress.SetScope(func(h string) bool { return own[normalize.Hostname(h)] })
 	holdDeny()

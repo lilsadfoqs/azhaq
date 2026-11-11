@@ -38,6 +38,15 @@ var rolesProxy *url.URL
 // them, and a renewal's sign-in must resolve names as the runs did.
 var rolesResolvers func()
 
+// rolesEgress sends the requests between the runs as the runs sent theirs:
+// through their -proxy, to the addresses their -resolvers give.
+func rolesEgress() {
+	egress.SetTargetProxy(rolesProxy)
+	if rolesResolvers != nil {
+		rolesResolvers()
+	}
+}
+
 // role is one session: a name and the headers its requests carry, or the
 // account it signs in with. A role with neither is anonymous.
 type role struct {
@@ -446,7 +455,7 @@ func cmdRoles(args []string) error {
 		if r, _ := strconv.ParseFloat(fs.Lookup("rate").Value.String(), 64); r > 0 {
 			rate = r
 		}
-		if rs, err := dnsr.ParseResolvers(fs.Lookup("resolvers").Value.String()); err == nil && len(rs) > 0 {
+		if rs, err := dnsr.ParseResolvers(fs.Lookup("resolvers").Value.String()); err == nil {
 			dnsRate, _ := strconv.ParseFloat(fs.Lookup("dns-rate").Value.String(), 64)
 			rolesResolvers = func() { useResolvers(rs, dnsRate) }
 		}
@@ -681,7 +690,7 @@ func cmdRoles(args []string) error {
 		// answers it alike answers anything.
 		fetch.Reset()
 		egress.SetRate(rate)
-		egress.SetTargetProxy(rolesProxy)
+		rolesEgress()
 		holdDeny()
 		bud, byCmd := stageBudget(*replayMax - replayed)
 		endStage := ledger.SetStage(stageControls)
@@ -743,7 +752,7 @@ func cmdRoles(args []string) error {
 				// made-up identifier too, as every cross read is.
 				fetch.Reset()
 				egress.SetRate(rate)
-				egress.SetTargetProxy(rolesProxy)
+				rolesEgress()
 				holdDeny()
 				bud, byCmd := stageBudget(*replayMax - replayed)
 				endStage := ledger.SetStage(stageControls)
