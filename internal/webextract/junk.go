@@ -1,6 +1,7 @@
 package webextract
 
 import (
+	"encoding/hex"
 	"net/url"
 	"strings"
 	"unicode"
@@ -146,7 +147,51 @@ const (
 	JunkSentence    = "link cut at the end of its sentence"
 	JunkNotURL      = "not a URL"
 	JunkTemplate    = "fuzzing placeholder or request-line fragment"
+	JunkGlued       = "another URL glued into the path or query"
 )
+
+var embeddedURL = lazyRE(`(?i)https?://`)
+
+// gluedSep are the bytes an embedded URL may follow: a path segment
+// boundary, a query name or value, a list (?urls=http://a,http://b) or
+// a space. Anything else (sqlA01http://…) is a second URL an archive
+// ran into the first. In a query + is a space too.
+const gluedSep = "/=?&;,| \t"
+
+// GluedURL returns the URL an archive record had glued after a character
+// that is no separator (/admin/create.sqlA01http://h/artists.php gives
+// http://h/artists.php); "" when there is none. The authority and the
+// fragment are not looked at, and an encoded separator (%2F) counts.
+func GluedURL(raw string) string {
+	i := strings.Index(raw, "://")
+	if i < 0 {
+		return ""
+	}
+	tail := raw[i+3:]
+	j := strings.IndexAny(tail, "/?#")
+	if j < 0 || tail[j] == '#' {
+		return ""
+	}
+	tail = tail[j:]
+	if k := strings.IndexByte(tail, '#'); k >= 0 {
+		tail = tail[:k]
+	}
+	q := strings.IndexByte(tail, '?')
+	for _, m := range embeddedURL.FindAllStringIndex(tail, -1) {
+		at := m[0]
+		prev := tail[at-1] // tail starts with / or ?, so at > 0
+		if at >= 3 && tail[at-3] == '%' {
+			if b, err := hex.DecodeString(tail[at-2 : at]); err == nil {
+				prev = b[0]
+			}
+		}
+		if strings.IndexByte(gluedSep, prev) >= 0 || (prev == '+' && q >= 0 && at > q) {
+			continue
+		}
+		return tail[at:]
+	}
+	return ""
+}
 
 // fuzzSegment is a path segment a fuzzer's wordlist keyword left in an
 // archive: ffuf's FUZZ and FUZ2Z (capitals; /fuzz in lower case is a
@@ -226,6 +271,9 @@ func JunkReason(raw string) string {
 	p := u.EscapedPath()
 	if templateJunk(p) || queryTemplate(u.RawQuery) {
 		return JunkTemplate
+	}
+	if GluedURL(raw) != "" {
+		return JunkGlued
 	}
 	lp := strings.ToLower(p)
 	for _, seg := range strings.Split(lp, "/") {

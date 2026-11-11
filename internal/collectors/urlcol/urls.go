@@ -306,9 +306,19 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 						archiveErr = err
 					}
 				}()
-				for _, r := range urls {
+				owned := false // urls is the source's slice until a glued URL is added
+				for k := 0; k < len(urls); k++ {
+					r := urls[k]
 					raw := r.url
 					u, junk, ok := cleanWhy(raw, domain, apex)
+					// The URL glued into a broken record is listed on its
+					// own, under the same source and date, if it is in scope.
+					if inner := webextract.GluedURL(strings.TrimSpace(raw)); junk != "" && inner != "" && !c.opts.Raw {
+						if !owned {
+							urls, owned = slices.Clone(urls), true
+						}
+						urls = append(urls, rec{url: inner, at: r.at})
+					}
 					row := Row{Source: s.name, Archived: r.at}
 					if c.opts.Raw && (c.opts.OnURL != nil || c.opts.OnRow != nil) && onDomain(raw, domain, apex) && !out.blocked(raw) && !out.repeat(raw) {
 						row.URL = raw
@@ -776,6 +786,7 @@ var junkClasses = map[string]string{
 	webextract.JunkSentence:    "cut-link",
 	webextract.JunkNotURL:      "not-url",
 	webextract.JunkTemplate:    "fuzzing",
+	webextract.JunkGlued:       "glued-url",
 }
 
 // JunkClasses are the values of a row's junk, besides "asset".

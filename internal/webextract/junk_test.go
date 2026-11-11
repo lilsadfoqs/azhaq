@@ -348,3 +348,52 @@ func TestJunkFuzzerLogsTraversalAndGluedSQL(t *testing.T) {
 		}
 	}
 }
+
+// A second URL that follows a character that is no separator is two
+// archive records run into one; after / = ? & ; , | or a space it is a
+// redirect, a parameter or a list.
+func TestJunkGluedURL(t *testing.T) {
+	for _, tc := range []struct {
+		raw   string
+		inner string // "" when the URL is not junk
+	}{
+		{"http://h/admin/create.sqlA01http://h/artists.php", "http://h/artists.php"},
+		{"http://h/a.phpA01http://h/b", "http://h/b"},
+		{"http://h/a.php1https://h/b?x=1", "https://h/b?x=1"},
+		{"http://h/a.phpHTTP://h/b", "HTTP://h/b"},
+		{"http://h/a.phpA01Http://h/b", "Http://h/b"},
+		{"http://h/x%3Ahttp://h/b", "http://h/b"}, // %3A is a colon: not a separator
+		{"http://h/x:http://h/b", "http://h/b"},
+		{"http://h/a?id=1http://h/b", "http://h/b"},
+		{"http://h/a?id=1&u=2https://h/b", "https://h/b"},
+		{"http://h/a?q=x+http://h/b", ""},
+		{"http://h/a?q=1+2http://h/b", "http://h/b"},
+		{"http://h/go/http://h/b", ""},
+		{"http://h/go/HTTP://h/b", ""},
+		{"http://h/go%2Fhttp://h/b", ""},
+		{"http://h/go=http://h/b", ""},
+		{"http://h/?u=http://h", ""},
+		{"http://h/?u=http%3A%2F%2Fh", ""},
+		{"http://h/a?x=1&next=https://h/b", ""},
+		{"http://h/a?urls=http://h/b,http://h/c", ""},
+		{"http://h/a?q=see%20http://h/b", ""},
+		{"http://h/a.php#A01http://h/b", ""},
+		{"http://h/a.php?x=1#frag/http://h/b", ""},
+		{"http://h/go/http://h/b2http://h/c", "http://h/c"}, // the first is a redirect, the second is glued
+		{"http://h/httpd/index.html", ""},
+		{"http://h/a.php?next=http", ""},
+		{"http://h/", ""},
+		{"http://h", ""},
+	} {
+		if got := GluedURL(tc.raw); got != tc.inner {
+			t.Errorf("GluedURL(%s) = %q, want %q", tc.raw, got, tc.inner)
+		}
+		want := ""
+		if tc.inner != "" {
+			want = JunkGlued
+		}
+		if got := JunkReason(tc.raw); got != want {
+			t.Errorf("JunkReason(%s) = %q, want %q", tc.raw, got, want)
+		}
+	}
+}
