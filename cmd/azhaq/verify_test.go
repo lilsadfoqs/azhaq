@@ -257,17 +257,23 @@ func TestVerifyDenyPathKeepsConfirmationOut(t *testing.T) {
 		}
 	}
 	rep := lastReport(t, errOut)
-	var conditionalOrVersionOnly bool
-	for _, r := range rep.Verify {
-		if r.AdvisoryID == "CVE-TEST-0002" && r.Label != verify.Proved {
-			conditionalOrVersionOnly = true
+	// The advisory whose read was denied stays claimed: no confirmation says more
+	// than the version range, and no verify result calls it proved.
+	var denied bool
+	for _, l := range rep.Advisories {
+		for _, r := range l.Advisories {
+			if r.ID == "CVE-TEST-0002" {
+				denied = r.Confidence == "claimed"
+			}
 		}
+	}
+	if !denied {
+		t.Errorf("advisories %+v, want CVE-TEST-0002 kept claimed", rep.Advisories)
+	}
+	for _, r := range rep.Verify {
 		if r.Label == verify.Proved && r.AdvisoryID == "CVE-TEST-0002" {
 			t.Errorf("a denied precondition read labelled proved: %+v", r)
 		}
-	}
-	if !conditionalOrVersionOnly {
-		t.Errorf("verify results %+v, want the conditional advisory kept unproved", rep.Verify)
 	}
 	joined := strings.Join(rep.Notes, " ")
 	if !strings.Contains(joined, "-deny-path") {

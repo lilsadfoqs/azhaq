@@ -36,7 +36,7 @@ azhaq run -url https://app.example.com/ -ports top-100 -allow app.example.com -d
 azhaq run -url https://app.example.com/ -ports top-100 -advisories-confirm -advisory-source osv.json -allow app.example.com -db app.db
 ```
 
-azhaq carries an advisory index, built from public records and dated (`azhaq version` names its date). The first command matches each product and version the run confirmed against it, with no flag, and sends nothing more. The second adds the one read-only request each lead names, and matches the records in `osv.json` (OSV advisory records of your own) as well as the index. Look at the `advisory:` lines after the rows, each a lead with its label and advisory id, and the `note: advisories:` line that counts them. A lead is never a proven finding. Expect `0`.
+azhaq carries an advisory index, built from public records and dated (`azhaq version` names its date). The first command matches each product and version the run confirmed against it, with no flag, and sends nothing more. The second adds the one read-only request each lead names, and matches the records in `osv.json` (OSV advisory records of your own) as well as the index. Look at the `advisory:` lines after the rows, one for each service, with the count of its advisories by label and its top advisory's id, and the `note: advisories:` line that counts them. A lead is never a proven finding. Expect `0`.
 
 Next: [Known-issue matching](CONCEPTS.md#known-issue-matching--advisories), which says what the index holds and how to refresh it.
 

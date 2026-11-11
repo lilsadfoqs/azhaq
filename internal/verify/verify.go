@@ -489,6 +489,11 @@ func AdvisoryResult(lead advisory.Lead, request string) (Result, bool) {
 	if ev == "" {
 		ev = "version " + lead.VersionSeen + " is in range " + lead.AffectedRange + " of " + lead.AdvisoryID
 	}
+	if n := len(lead.Advisories); n > 1 {
+		// One result for the service: the top advisory's, and how many more
+		// the same version has (all of them are in the run's advisory lead).
+		ev += fmt.Sprintf("; %d advisories in all match this version (%s)", n, lead.CountsText())
+	}
 	r.Evidence = excerpt([]byte(ev))
 	r.Severity = severityOf(r)
 	return r, true

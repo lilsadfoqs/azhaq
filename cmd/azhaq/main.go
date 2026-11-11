@@ -3252,6 +3252,13 @@ func compact(raw json.RawMessage) string {
 	if err := json.Unmarshal(raw, &m); err != nil {
 		return string(raw)
 	}
+	if _, ok := m["advisory_id"]; ok && m["version_seen"] != nil {
+		// A service's advisory lead: one short line, not a URL.
+		var lead advisory.Lead
+		if json.Unmarshal(raw, &lead) == nil {
+			return lead.Brief()
+		}
+	}
 	parts := make([]string, 0, 4)
 	for _, k := range []string{"status", "catchall", "title", "url", "via", "methods", "path", "fqdn", "ips", "params", "role", "count", "not_after", "error", "skipped", "registrar", "registrant", "name", "id", "method", "action", "fields", "auth", "final_url", "extracted", "warning", "note"} {
 		if v, ok := m[k]; ok && v != nil && fmt.Sprint(v) != "" {

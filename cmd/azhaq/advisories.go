@@ -139,14 +139,18 @@ func advisoryStage(ctx context.Context, st *store.Store, obs []types.StoredObser
 			failures = append(failures, engine.Failure{Collector: "azhaq-advisories", Error: "the built-in advisory index: " + err.Error(), Count: 1})
 		}
 	}
-	leads, quiet, err := advisory.MatchAll(services, advs, ix)
+	all, quiet, err := advisory.MatchAll(services, advs, ix)
 	if err != nil {
 		failures = append(failures, engine.Failure{Collector: "azhaq-advisories", Error: "the built-in advisory index: " + err.Error(), Count: 1})
 	}
 	if fl.source == "" && ix == nil && len(failures) == 0 && len(services) == 0 {
 		return nil, nil, ""
 	}
+	// One lead a service: the advisories of a product and version are one
+	// line, with the count by label and the list in the lead's fields.
+	leads = advisory.Group(all)
 	var deferNote []string
+	var reads int
 	if fl.confirm {
 		confirmer := advisory.Confirmer{
 			Client: egress.TargetClient(egress.TargetOptions{Timeout: 15 * time.Second}),
@@ -158,37 +162,71 @@ func advisoryStage(ctx context.Context, st *store.Store, obs []types.StoredObser
 		}
 		cctx := ledger.WithCollector(ctx, "azhaq-advisories")
 		failed, refused, stopped, denied := 0, 0, 0, 0
-		for i, lead := range leads {
-			leads[i].Confidence = advisory.Claimed
-			leads[i].Read = "nothing read: a range match only"
-			if lead.Label == advisory.LabelNotAffected {
-				continue
-			}
+		// One read for each origin and path, whatever the number of advisories
+		// that name it: each is judged against the answer. A read that was
+		// refused or failed is counted once, and its answer stands for them all.
+		type readKey struct{ origin, path string }
+		type readResult struct {
+			sig  advisory.Signal
+			err  error
+			text string // what a lead that was not read says
+		}
+		cache := map[readKey]readResult{}
+		for i := range leads {
+			lead := &leads[i]
 			svc := svcByTarget[lead.Target+"\x00"+lead.Product]
-			adv := byID[lead.AdvisoryID]
-			if lead.Source != "" && ix != nil {
-				adv, _ = ix.Advisory(lead.Product, lead.AdvisoryID)
-			}
-			conf, read, err := confirmer.Confirm(cctx, adv, svc)
-			switch {
-			case err == nil:
-				leads[i].Confidence, leads[i].Read = conf, read
-			case isDenied(err):
-				// A -deny-path rule of the user's keeps the read out:
-				// a note, not a failure, and the lead stays claimed.
-				denied++
-				leads[i].Read = "not read: " + err.Error() + " (a -deny-path rule of yours keeps its path out)"
-			case isScopeRefusal(err):
-				// A scope that refuses a target is a note, not a failure:
-				// the scope is the user's, and the lead stays claimed.
-				refused++
-				leads[i].Read = "not read: outside the scope (-allow, -scope)"
-			case isStop(err):
-				stopped++
-				leads[i].Read = "not read: " + err.Error()
-			default:
-				failed++
-				leads[i].Read = "the confirmation read failed: " + err.Error()
+			for j := range lead.Advisories {
+				ref := &lead.Advisories[j]
+				read, conf := "nothing read: a range match only", advisory.Claimed
+				if ref.Label != advisory.LabelNotAffected {
+					adv := byID[ref.ID]
+					if ref.Index && ix != nil {
+						adv, _ = ix.Advisory(lead.Product, ref.ID)
+					}
+					if c, why, no := advisory.NoRead(svc); no {
+						conf, read = c, why
+					} else {
+						path := adv.ReadPath()
+						k := readKey{svc.Origin, path}
+						res, seen := cache[k]
+						if !seen {
+							res.sig, res.err = confirmer.Read(cctx, svc, path)
+							reads++
+							switch {
+							case res.err == nil:
+							case isDenied(res.err):
+								// A -deny-path rule of the user's keeps the read out:
+								// a note, not a failure, and the lead stays claimed.
+								denied++
+								res.text = "not read: " + res.err.Error() + " (a -deny-path rule of yours keeps its path out)"
+							case isScopeRefusal(res.err):
+								// A scope that refuses a target is a note, not a failure:
+								// the scope is the user's, and the lead stays claimed.
+								refused++
+								res.text = "not read: outside the scope (-allow, -scope)"
+							case isStop(res.err):
+								stopped++
+								res.text = "not read: " + res.err.Error()
+							default:
+								failed++
+								res.text = "the confirmation read failed: " + res.err.Error()
+							}
+							cache[k] = res
+						}
+						if res.err == nil {
+							conf, read = res.sig.Judge(adv, svc)
+							ref.ConfirmReq = "GET " + path
+						} else {
+							read = res.text
+						}
+					}
+				}
+				ref.Confidence = conf
+				if j == 0 {
+					lead.Confidence, lead.Read = conf, read
+				} else if read != lead.Read {
+					ref.Read = read // only where it says something the lead's does not
+				}
 			}
 		}
 		if failed > 0 {
@@ -204,8 +242,8 @@ func advisoryStage(ctx context.Context, st *store.Store, obs []types.StoredObser
 			deferNote = append(deferNote, fmt.Sprintf("advisories-confirm: %d confirmation reads were not sent: the run's limit stopped them", stopped))
 		}
 	}
-	// Stored, one observation per lead, on its host's entity: the lines
-	// below and in -json are these rows, and azhaq show lists them.
+	// Stored, one observation per service lead, on its host's entity: the
+	// lines below and in -json are these rows, and azhaq show lists them.
 	now := time.Now().UTC()
 	for _, lead := range leads {
 		raw, _ := json.Marshal(lead)
@@ -223,23 +261,22 @@ func advisoryStage(ctx context.Context, st *store.Store, obs []types.StoredObser
 			Payload: raw, Confidence: 0.9, ObservedAt: now,
 		})
 	}
-	var affected, notAffected, conditional, observed, inferred, claimed int
+	var matches, affected, notAffected, conditional, kev, observed, inferred, claimed int
 	for _, l := range leads {
-		switch l.Label {
-		case advisory.LabelAffected:
-			affected++
-		case advisory.LabelNotAffected:
-			notAffected++
-		case advisory.LabelConditional:
-			conditional++
-		}
-		switch l.Confidence {
-		case advisory.Observed:
-			observed++
-		case advisory.Inferred:
-			inferred++
-		case advisory.Claimed:
-			claimed++
+		matches += len(l.Advisories)
+		affected += l.Counts[advisory.LabelAffected]
+		notAffected += l.Counts[advisory.LabelNotAffected]
+		conditional += l.Counts[advisory.LabelConditional]
+		kev += l.KEVCount
+		for _, r := range l.Advisories {
+			switch r.Confidence {
+			case advisory.Observed:
+				observed++
+			case advisory.Inferred:
+				inferred++
+			case advisory.Claimed:
+				claimed++
+			}
 		}
 	}
 	against := ""
@@ -253,13 +290,13 @@ func advisoryStage(ctx context.Context, st *store.Store, obs []types.StoredObser
 		}
 		against += fmt.Sprintf("%d advisory records of %s", len(advs), fl.source)
 	}
-	note = fmt.Sprintf("advisories: %d leads (%d affected, %d not affected, %d conditional) from %d confirmed product versions against %s; each lead is a stored advisory row and a line of the output, never a proven finding",
-		len(leads), affected, notAffected, conditional, len(services), against)
+	note = fmt.Sprintf("advisories: %d leads, one for each of %d confirmed product versions, holding %d advisories (%d affected, %d not affected, %d conditional; %d of those that apply on the CISA KEV catalogue) against %s; each lead is a stored advisory row and a line of the output, never a proven finding",
+		len(leads), len(services), matches, affected, notAffected, conditional, kev, against)
 	if quiet > 0 {
 		note += fmt.Sprintf("; %d more not-affected records of the index matched a product seen and are not listed (the version is outside their ranges and none is on the CISA KEV catalogue)", quiet)
 	}
 	if fl.confirm {
-		note += fmt.Sprintf("; confirmation: %d observed, %d inferred, %d claimed (range match only)", observed, inferred, claimed)
+		note += fmt.Sprintf("; confirmation: %d reads for %d advisories: %d observed, %d inferred, %d claimed (range match only)", reads, matches, observed, inferred, claimed)
 	}
 	for _, n := range deferNote {
 		note += "; " + n
@@ -290,6 +327,16 @@ func isStop(err error) bool {
 // after the run that made them: the rows of the workspace, in the order
 // they were matched.
 func advisoryLeadsOf(obs []types.StoredObservation) []advisory.Lead {
+	return advisoryLeadsIn(obs, false)
+}
+
+// advisoryLeadsExpanded is the stored leads with each advisory a lead of
+// its own: the findings list them all.
+func advisoryLeadsExpanded(obs []types.StoredObservation) []advisory.Lead {
+	return advisoryLeadsIn(obs, true)
+}
+
+func advisoryLeadsIn(obs []types.StoredObservation, expand bool) []advisory.Lead {
 	var out []advisory.Lead
 	for _, o := range obs {
 		if o.Collector != "azhaq-advisories" || o.Kind != "advisory" {
@@ -297,7 +344,11 @@ func advisoryLeadsOf(obs []types.StoredObservation) []advisory.Lead {
 		}
 		var lead advisory.Lead
 		if json.Unmarshal(o.Payload, &lead) == nil {
-			out = append(out, lead)
+			if expand {
+				out = append(out, lead.Expand()...)
+			} else {
+				out = append(out, lead)
+			}
 		}
 	}
 	return out

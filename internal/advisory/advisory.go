@@ -246,20 +246,33 @@ type Lead struct {
 	AffectedRange string  `json:"affected_range"`
 	Label         string  `json:"label"` // affected, not affected or conditional
 	Precondition  string  `json:"precondition,omitempty"`
-	KEV           bool    `json:"kev,omitempty"`             // CISA lists the advisory as exploited in the wild
-	CVSS          float64 `json:"cvss,omitempty"`            // the base score the record states
-	Source        string  `json:"source,omitempty"`          // the built-in index (with its date), when the record came from it
-	Confidence    string  `json:"confidence,omitempty"`      // observed, inferred or claimed, when confirmation ran
-	Read          string  `json:"read,omitempty"`            // what the confirmation read, or why it read nothing
-	Origin        string  `json:"origin,omitempty"`          // the web origin of the service, when it is a web one
-	ConfirmReq    string  `json:"confirm_request,omitempty"` // the exact request a confirmation sent or would send ("GET /version")
+	KEV           bool    `json:"kev,omitempty"`    // CISA lists the advisory as exploited in the wild
+	CVSS          float64 `json:"cvss,omitempty"`   // the base score the record states
+	Source        string  `json:"source,omitempty"` // the built-in index (with its date), when the record came from it
+	// A lead is one service: the fields above are those of its top advisory
+	// (the exploited and best scored of those that apply), and these hold
+	// the whole list, so nothing is lost by listing one line a service.
+	Counts     map[string]int `json:"counts,omitempty"`          // advisories by label
+	Advisories []Ref          `json:"advisories,omitempty"`      // all of them, the top first
+	KEVCount   int            `json:"kev_count,omitempty"`       // of those that apply, how many CISA lists as exploited
+	MaxCVSS    float64        `json:"max_cvss,omitempty"`        // the highest score among those that apply
+	IndexLabel string         `json:"index_source,omitempty"`    // the built-in index, for the advisories that came from it
+	Confidence string         `json:"confidence,omitempty"`      // observed, inferred or claimed, when confirmation ran
+	Read       string         `json:"read,omitempty"`            // what the confirmation read, or why it read nothing
+	Origin     string         `json:"origin,omitempty"`          // the web origin of the service, when it is a web one
+	ConfirmReq string         `json:"confirm_request,omitempty"` // the exact request a confirmation sent or would send ("GET /version")
 }
 
 // Line is the lead as one line of text output: the label, the product
 // and version seen, the advisory and its source, and, when a
 // confirmation ran, its confidence and what was read.
 func (l Lead) Line() string {
-	s := fmt.Sprintf("advisory: %s %s on %s is %s (range %s) — %s %s", l.Product, l.VersionSeen, l.Target, l.Label, l.AffectedRange, l.AdvisoryID, l.URL)
+	var s string
+	if len(l.Advisories) > 1 {
+		s = fmt.Sprintf("advisory: %s %s on %s: %s; top %s is %s (range %s) — %s", l.Product, l.VersionSeen, l.Target, l.CountsText(), l.AdvisoryID, l.Label, l.AffectedRange, l.URL)
+	} else {
+		s = fmt.Sprintf("advisory: %s %s on %s is %s (range %s) — %s %s", l.Product, l.VersionSeen, l.Target, l.Label, l.AffectedRange, l.AdvisoryID, l.URL)
+	}
 	if l.KEV {
 		s += "; known exploited (CISA KEV)"
 	}

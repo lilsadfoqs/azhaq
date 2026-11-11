@@ -204,7 +204,7 @@ func TestStartPageCommandsRun(t *testing.T) {
 			"azhaq roles -dir": {"azhaq roles: ", "endpoints listed"},
 			"azhaq roles show": {"curl"},
 			"azhaq run -url https://app.example.com/ -ports top-100 -allow":              {"advisory: nginx 1.18.0", "note: advisories: "},
-			"azhaq run -url https://app.example.com/ -ports top-100 -advisories-confirm": {"advisory: nginx 1.18.0", "CVE-TEST-0001", "note: advisories: "},
+			"azhaq run -url https://app.example.com/ -ports top-100 -advisories-confirm": {"advisory: nginx 1.18.0", "advisory records of osv.json", "note: advisories: "},
 			"azhaq ledger -verify": {"the chain is intact and sealed"},
 		} {
 			if !strings.HasPrefix(l, cmd) {
