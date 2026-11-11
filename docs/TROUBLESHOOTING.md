@@ -103,9 +103,9 @@ In `roles` the file is `roles.stop` in the `-dir`. There it stops the runs of th
 
 ### Where did my database go?
 
-**Why:** without `-db`, `run` and the drop-ins (`subs`, `probe`, `dirs`, …) keep `workspace.db` in the run's folder under `~/.azhaq/runs`. The last one is remembered for `query` and `show`: see [the workspace](OUTPUT.md#the-workspace). With `AZHAQ_HOME=none`, `run` writes `azhaq-TIME-PID.db` in the current directory and the drop-ins use a temporary one, gone when they end.
+**Why:** without `-db`, `run` and the drop-ins (`subs`, `probe`, `dirs`, …) keep `workspace.db` in the run's folder under `./.azhaq/runs` in the current directory. The last one is remembered for `query` and `show`, which read the folder you are in: see [the workspace](OUTPUT.md#the-workspace). With `AZHAQ_HOME=none`, `run` writes `azhaq-TIME-PID.db` in the current directory and the drop-ins use a temporary one, gone when they end.
 
-**Fix:** `azhaq runs` lists every kept run with its folder; `azhaq ui` shows them.
+**Fix:** `azhaq runs` lists every run kept in this folder with its path; `azhaq ui` shows them. Runs made from another folder are in that folder's `.azhaq`: `azhaq runs -home DIR/.azhaq` reads them.
 
 ## Chrome
 

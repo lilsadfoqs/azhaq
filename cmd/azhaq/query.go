@@ -50,7 +50,7 @@ func cmdQuery(args []string) error {
 	path := *db
 	if path == "" {
 		if path = readLastDB(); path == "" {
-			return usagef("give -db FILE")
+			return usagef("give -db FILE: %s", noLastText())
 		}
 	}
 	rep := newReport("query")
@@ -353,7 +353,7 @@ func cmdShow(args []string) error {
 	path := *db
 	if path == "" {
 		if path = readLastDB(); path == "" {
-			return usagef("give -db FILE")
+			return usagef("give -db FILE: %s", noLastText())
 		}
 	}
 	g, err := readGraphRun(path, *runF)

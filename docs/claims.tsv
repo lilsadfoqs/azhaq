@@ -1426,6 +1426,12 @@ dirs.repeat-rows	docs/commands/dirs.md	a word that is in the wordlist twice (or 
 
 # docs/commands/runs.md
 runs.read-only-commands-are-not-kept	docs/commands/runs.md	The commands that read a workspace or serve are not kept.	test:cmd/azhaq:TestRunHomeSkipsReadOnlyCommands
+runs.home-is-the-working-directory	docs/commands/runs.md	- The home is `$AZHAQ_HOME`, else `.azhaq` in the current directory, so each folder keeps its own runs.	test:cmd/azhaq:TestRunHomeDefaultsToTheWorkingDirectory;test:internal/runs:TestHomeDefaultsToTheWorkingDirectory
+runs.commands-read-the-folder-you-are-in	docs/commands/runs.md	- `runs`, `ui`, and `query`, `show`, `export` and `diff` without `-db` read the folder you are in. `-home DIR` reads another folder's.	test:cmd/azhaq:TestRunsReadTheFolderYouAreIn;test:cmd/azhaq:TestRunHomeDefaultsToTheWorkingDirectory
+runs.azhaq-home-gives-the-machine-wide-home	docs/commands/runs.md	- `AZHAQ_HOME=~/.azhaq` gives back one home for the whole machine.	test:cmd/azhaq:TestRunsReadTheFolderYouAreIn
+runs.home-none-turns-keeping-off	docs/commands/runs.md	- `AZHAQ_HOME=none` turns keeping off: each command then works as it did before, in the current directory or a temporary folder.	test:cmd/azhaq:TestRunHomeNoneKeepsTheOldPlace
+runs.unwritable-folder-fails-before-sending	docs/commands/runs.md	- When the current directory cannot be written and no `-db` or `-dir` was given, the run fails before it sends anything and the message names `-db DIR/x.db` and `AZHAQ_HOME`. It does not keep the run somewhere else.	test:cmd/azhaq:TestRunFailsWhereTheFolderCannotKeepItBeforeSending
+runs.empty-folder-says-so	docs/commands/runs.md	- In a folder with no runs, `runs` says no runs are kept there and names `-home DIR` and `AZHAQ_HOME`; `ui` says the same and exits 1.	test:cmd/azhaq:TestRunsReadTheFolderYouAreIn
 runs.a-refused-command-leaves-no-folder	docs/commands/runs.md	- A command refused for its flags (exit 2) leaves no folder.	test:cmd/azhaq:TestRunHomeUsageErrorLeavesNoFolder
 
 # docs/commands/ui.md

@@ -653,7 +653,7 @@ The diff lines look like this:
 
 | Flag | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `-dir` | string |  | directory for one database per role (default: roles/ in the run's folder under ~/.azhaq/runs; with AZHAQ_HOME=none azhaq-roles-<time>) |
+| `-dir` | string |  | directory for one database per role (default: roles/ in the run's folder under ./.azhaq/runs; with AZHAQ_HOME=none azhaq-roles-<time>) |
 | `-json` | bool |  | one JSON object per endpoint, and only the summary, as JSON, on stderr |
 | `-plan` | bool |  | print what roles would send, by stage (sign-ins, each role's map, the history reads, the replay, the controls, the write replay and its verification) and send nothing; azhaq plan roles is the same |
 

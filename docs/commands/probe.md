@@ -237,7 +237,7 @@ A route that streams for ever (server-sent events, `multipart/x-mixed-replace`) 
 
 | Flag | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `-db` | string |  | keep the graph in this database for query, show, export and diff (default: workspace.db in the run's folder under ~/.azhaq/runs; with AZHAQ_HOME=none a temporary one) |
+| `-db` | string |  | keep the graph in this database for query, show, export and diff (default: workspace.db in the run's folder under ./.azhaq/runs; with AZHAQ_HOME=none a temporary one) |
 | `-json` | bool |  | JSONL output, and the summary as one JSON object on stderr |
 | `-o` | string |  | also write results to this file |
 | `-silent` | bool |  | results only: no progress; the summary only when something failed (a source that failed, a takeover candidate as a [takeover] line on stderr); stdout stays one result per line |

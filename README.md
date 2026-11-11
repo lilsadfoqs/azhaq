@@ -44,7 +44,7 @@ azhaq run -demo      # maps a small fixture site that azhaq serves itself on 127
 azhaq ui             # http://127.0.0.1:7190/: what the run asked, did and got
 ```
 
-Each run is kept in its own folder under `~/.azhaq/runs`: the command line, its summary, the workspace and the ledger. `azhaq runs` lists them, and `azhaq ui` shows them in a browser on this machine. See [runs](docs/commands/runs.md) and [ui](docs/commands/ui.md).
+Each run is kept in its own folder under `./.azhaq/runs` in the folder you work in, so an engagement's runs stay with it: the command line, its summary, the workspace and the ledger. `azhaq runs` lists the runs of the folder you are in, and `azhaq ui` shows them in a browser on this machine. See [runs](docs/commands/runs.md) and [ui](docs/commands/ui.md).
 
 ## How it works
 

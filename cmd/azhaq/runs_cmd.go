@@ -17,7 +17,7 @@ import (
 func cmdRuns(args []string) error {
 	fs := newFlags("runs")
 	asJSON := fs.Bool("json", false, "one JSON object per run: its run.json")
-	homeFlag := fs.String("home", "", "the run home to read (default $AZHAQ_HOME, else ~/.azhaq)")
+	homeFlag := fs.String("home", "", "the run home to read (default $AZHAQ_HOME, else .azhaq in the current directory)")
 	var rm stringsFlag
 	fs.Var(&rm, "rm", "remove this run's folder (repeatable): its workspace and files go with it")
 	older := fs.String("older", "", "remove the runs that started more than this long ago (30d, 12h)")
@@ -74,7 +74,7 @@ func cmdRuns(args []string) error {
 		return nil
 	}
 	if len(list) == 0 {
-		fmt.Fprintf(os.Stderr, "azhaq: no runs kept in %s yet\n", runs.Dir(home))
+		fmt.Fprintf(os.Stderr, "azhaq: %s\n", noRunsText(home))
 		return nil
 	}
 	tw := tabwriter.NewWriter(os.Stdout, 0, 2, 2, ' ', 0)
@@ -100,6 +100,11 @@ func runHome(flag string) (string, error) {
 		return "", usagef("runs are not kept (AZHAQ_HOME=%s): give -home DIR", os.Getenv("AZHAQ_HOME"))
 	}
 	return home, nil
+}
+
+// noRunsText says the home holds no runs, and where another one is named.
+func noRunsText(home string) string {
+	return fmt.Sprintf("no runs kept in %s yet (this folder's home is ./.azhaq; -home DIR reads another folder's, AZHAQ_HOME sets the home)", runs.Dir(home))
 }
 
 // parseAge is a duration that also takes days: 30d, 36h, 90m.

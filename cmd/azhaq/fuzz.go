@@ -36,7 +36,7 @@ func cmdFuzz(args []string) error {
 	fs := newFlags("fuzz")
 	var c common
 	c.register(fs)
-	fs.Lookup("db").Usage = "keep the matches in this database for query, show, export and diff (default: workspace.db in the run's folder under ~/.azhaq/runs; with AZHAQ_HOME=none none)"
+	fs.Lookup("db").Usage = "keep the matches in this database for query, show, export and diff (default: workspace.db in the run's folder under ./.azhaq/runs; with AZHAQ_HOME=none none)"
 	fs.Lookup("silent").Usage = "print the input values only, no progress; the summary only when something failed"
 	fs.Lookup("o").Usage = "write the report to this file, in the format -of says (json by default; a name ending .txt gets what stdout shows, as before)"
 	fs.BoolVar(&c.silent, "s", false, "ffuf's name for -silent")

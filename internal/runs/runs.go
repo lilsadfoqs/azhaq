@@ -1,5 +1,5 @@
 // Package runs keeps one folder per command a person ran, under one home
-// ($AZHAQ_HOME, else ~/.azhaq): what was asked, when, how it ended, the
+// ($AZHAQ_HOME, else ./.azhaq in the working directory): what was asked, when, how it ended, the
 // command's own summary and where its workspace and files are. azhaq runs
 // lists them and azhaq ui shows them.
 package runs
@@ -47,17 +47,19 @@ const (
 )
 
 // Home is where runs are kept, and false when $AZHAQ_HOME turns it off.
+// With none set it is .azhaq in the working directory, so an engagement's
+// runs stay in its folder.
 func Home() (string, bool) {
 	v := os.Getenv("AZHAQ_HOME")
 	switch strings.ToLower(v) {
 	case "none", "off", "0", "false":
 		return "", false
 	case "":
-		h, err := os.UserHomeDir()
-		if err != nil || h == "" {
+		abs, err := filepath.Abs(".azhaq")
+		if err != nil {
 			return "", false
 		}
-		return filepath.Join(h, ".azhaq"), true
+		return abs, true
 	}
 	if abs, err := filepath.Abs(v); err == nil {
 		v = abs
@@ -70,9 +72,10 @@ func Dir(home string) string { return filepath.Join(home, "runs") }
 
 // Run is the folder of the command running now.
 type Run struct {
-	Dir string
-	mu  sync.Mutex
-	rec Record
+	Dir  string
+	mu   sync.Mutex
+	rec  Record
+	made []string // the home folders Start made, outermost first
 }
 
 // Start makes the run's folder (0700) and writes run.json with status running.
@@ -82,6 +85,12 @@ func Start(home, command string, args []string, version string) (*Run, error) {
 	base := now.Format("20060102-150405") + "-" + command
 	if s := Slug(target); s != "" {
 		base += "-" + s
+	}
+	var made []string
+	for _, d := range []string{home, Dir(home)} {
+		if _, err := os.Stat(d); os.IsNotExist(err) {
+			made = append(made, d)
+		}
 	}
 	if err := os.MkdirAll(Dir(home), 0o700); err != nil {
 		return nil, err
@@ -109,8 +118,19 @@ func Start(home, command string, args []string, version string) (*Run, error) {
 	r := &Run{Dir: dir, rec: Record{
 		ID: id, Command: command, Args: Mask(args), Target: target, Cwd: cwd,
 		Version: version, Pid: os.Getpid(), Started: now.UTC(), Status: StatusRunning,
-	}}
+	}, made: made}
 	return r, r.save()
+}
+
+// Discard removes the run's folder, and the home folders Start made for it
+// when nothing else is in them: a command refused for its usage leaves no
+// trace in the folder it was typed in.
+func (r *Run) Discard() error {
+	err := os.RemoveAll(r.Dir)
+	for i := len(r.made) - 1; i >= 0; i-- {
+		_ = os.Remove(r.made[i]) // only an empty folder goes
+	}
+	return err
 }
 
 // SetSummary keeps the command's summary, its workspace and the files it wrote.

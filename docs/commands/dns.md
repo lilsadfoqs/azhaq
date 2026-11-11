@@ -232,7 +232,7 @@ The summary also lists failures per kind of error, and takeover findings: a CNAM
 
 | Flag | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `-db` | string |  | keep the names that have records in this database for query, show and export (default: workspace.db in the run's folder under ~/.azhaq/runs; with AZHAQ_HOME=none nothing is kept) |
+| `-db` | string |  | keep the names that have records in this database for query, show and export (default: workspace.db in the run's folder under ./.azhaq/runs; with AZHAQ_HOME=none nothing is kept) |
 | `-json` | bool |  | JSONL output, and the summary as one JSON object on stderr |
 | `-o` | string |  | also write results to this file |
 | `-silent` | bool |  | results only: no progress; the summary only when something failed (a source that failed, a takeover candidate as a [takeover] line on stderr); stdout stays one result per line |

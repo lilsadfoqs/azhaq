@@ -36,7 +36,7 @@ const uiCSP = "default-src 'none'; script-src 'self'; style-src 'self'; img-src 
 func cmdUI(args []string) error {
 	fs := newFlags("ui")
 	listen := fs.String("listen", "127.0.0.1:7190", "the loopback address to serve on (127.0.0.1:0 takes any free port); another address is refused")
-	homeFlag := fs.String("home", "", "the run home to show (default $AZHAQ_HOME, else ~/.azhaq)")
+	homeFlag := fs.String("home", "", "the run home to show (default $AZHAQ_HOME, else .azhaq in the current directory)")
 	if err := parse(fs, args); err != nil {
 		return err
 	}
@@ -49,6 +49,9 @@ func cmdUI(args []string) error {
 	home, err := runHome(*homeFlag)
 	if err != nil {
 		return err
+	}
+	if _, err := os.Stat(runs.Dir(home)); os.IsNotExist(err) {
+		return fmt.Errorf("%s (ui shows kept runs)", noRunsText(home))
 	}
 	l, err := net.Listen("tcp", *listen)
 	if err != nil {

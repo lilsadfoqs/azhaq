@@ -392,7 +392,7 @@ azhaq ports -host 192.0.2.10 -p top-1000 -verify -json
 
 | Flag | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `-db` | string |  | keep the graph in this database for query, show, export and diff (default: workspace.db in the run's folder under ~/.azhaq/runs; with AZHAQ_HOME=none a temporary one) |
+| `-db` | string |  | keep the graph in this database for query, show, export and diff (default: workspace.db in the run's folder under ./.azhaq/runs; with AZHAQ_HOME=none a temporary one) |
 | `-json` | bool |  | JSONL output, and the summary as one JSON object on stderr |
 | `-o` | string |  | also write results to this file |
 | `-oA` | string |  | write JSON lines, XML and greppable output to BASE.json, BASE.xml and BASE.gnmap |

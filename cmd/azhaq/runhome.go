@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 
 	"github.com/lilsadfoqs/azhaq/internal/runs"
 )
@@ -25,21 +26,56 @@ var recordedCommands = map[string]bool{
 // not recorded or $AZHAQ_HOME is none.
 var currentRun *runs.Run
 
-func startRun(name string, args []string) {
+// startRun makes the folder of a recorded command. When the run home
+// cannot be made the run fails, before it sends
+// anything, unless the person named where the workspace goes (-db, -dir
+// or $AZHAQ_DB): then the run goes on, not kept in the home. It never
+// falls back to another folder on its own.
+func startRun(name string, args []string) error {
 	currentRun = nil
 	if !recordedCommands[name] || asksHelp(args) {
-		return
+		return nil
 	}
 	home, ok := runs.Home()
 	if !ok {
-		return
+		return nil
 	}
 	r, err := runs.Start(home, name, args, version)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "azhaq: the run is not kept in %s: %v (AZHAQ_HOME=none turns keeping off)\n", runs.Dir(home), err)
-		return
+		if namesWorkspace(args) {
+			fmt.Fprintf(os.Stderr, "azhaq: the run is not kept in %s: %v (AZHAQ_HOME=none turns keeping off)\n", runs.Dir(home), err)
+			return nil
+		}
+		return fmt.Errorf("cannot keep the run in %s: %v; nothing was sent. Give -db DIR/x.db to keep the workspace in a folder you can write, "+
+			"or set AZHAQ_HOME=DIR to keep runs there (AZHAQ_HOME=none keeps none)", runs.Dir(home), err)
 	}
 	currentRun = r
+	return nil
+}
+
+// namesWorkspace says the arguments, or $AZHAQ_DB, say where the workspace goes.
+func namesWorkspace(args []string) bool {
+	if os.Getenv("AZHAQ_DB") != "" {
+		return true
+	}
+	for _, a := range args {
+		if a == "--" {
+			break
+		}
+		a = strings.TrimLeft(a, "-")
+		if a == "db" || a == "dir" || strings.HasPrefix(a, "db=") || strings.HasPrefix(a, "dir=") {
+			return true
+		}
+	}
+	return false
+}
+
+// noLastText is why a command without -db found no workspace to read.
+func noLastText() string {
+	if h, ok := runs.Home(); ok {
+		return fmt.Sprintf("no run was kept in this folder (%s); run one here first, or set AZHAQ_HOME to the run home that holds it", runs.Dir(h))
+	}
+	return fmt.Sprintf("no %s in this folder (AZHAQ_HOME=none keeps no run home)", lastDBFile)
 }
 
 // endRun records how the command ended. A command refused for its usage
@@ -52,7 +88,7 @@ func endRun(args []string, err error) {
 	}
 	code := exitCode(err)
 	if code == exitUsage && !hasWorkspace(r) {
-		_ = os.RemoveAll(r.Dir)
+		_ = r.Discard()
 		return
 	}
 	text := ""

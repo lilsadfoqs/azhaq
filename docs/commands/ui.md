@@ -11,7 +11,7 @@ azhaq ui [-listen 127.0.0.1:7190] [-home DIR]
 ## Examples
 
 ```
-# serve the runs of ~/.azhaq, then browse to http://127.0.0.1:7190/
+# serve the runs of ./.azhaq, then browse to http://127.0.0.1:7190/
 azhaq ui
 
 # on any free port
@@ -79,6 +79,7 @@ Every number on the page is a count of the run's summary, workspace or ledger. A
 | Exit | When |
 | --- | --- |
 | 0 | Stopped with Ctrl-C. The ui is a server: a signal is its normal end. |
+| 1 | The home holds no runs yet (no `runs` folder in it). |
 | 2 | `-listen` is not a loopback address, or keeping is off (`AZHAQ_HOME=none`) and no `-home` was given. |
 
 ## Flags
@@ -87,5 +88,5 @@ Every number on the page is a count of the run's summary, workspace or ledger. A
 | Flag | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `-listen` | string | `127.0.0.1:7190` | the loopback address to serve on (127.0.0.1:0 takes any free port); another address is refused |
-| `-home` | string |  | the run home to show (default $AZHAQ_HOME, else ~/.azhaq) |
+| `-home` | string |  | the run home to show (default $AZHAQ_HOME, else .azhaq in the current directory) |
 <!-- flags:end -->

@@ -299,7 +299,7 @@ These filters limit what is printed, not what is crawled.
 
 | Flag | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `-db` | string |  | keep the graph in this database for query, show, export and diff (default: workspace.db in the run's folder under ~/.azhaq/runs; with AZHAQ_HOME=none a temporary one) |
+| `-db` | string |  | keep the graph in this database for query, show, export and diff (default: workspace.db in the run's folder under ./.azhaq/runs; with AZHAQ_HOME=none a temporary one) |
 | `-o` | string |  | also write results to this file |
 | `-json` | bool |  | JSONL output, and the summary as one JSON object on stderr |
 | `-jsonl` | bool |  | katana's JSON lines: {timestamp, request{method, endpoint, tag, attribute, source}, response{status_code, technologies, forms, content_length}, error} |
