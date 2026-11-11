@@ -637,6 +637,7 @@ func cmdFuzz(args []string) error {
 		}
 	}
 	if ran, failed, first := fuzz.FlightStats(cfg.Sender); ran > 0 || failed > 0 {
+		rep.Notes = append(rep.Notes, "-preflight/-postflight: each input's preflight, request and postflight ran as one sequence, one at a time, whatever -t says (a flight's token belongs to the session)")
 		rep.Notes = append(rep.Notes, fmt.Sprintf("%d preflight/postflight requests were sent (counted in the request total)", ran))
 		if failed > 0 {
 			rep.Failed = append(rep.Failed, engine.Failure{Collector: "azhaq-fuzz", Error: "preflight/postflight failed: " + first, Retryable: true, Count: failed})

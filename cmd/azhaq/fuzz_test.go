@@ -624,3 +624,53 @@ func TestFuzzAutoCalibrationThatFiltersNothingIsNotExit0(t *testing.T) {
 		t.Errorf("notes: %q", rep.Notes)
 	}
 }
+
+// DVWA's login: the CSRF token belongs to the session cookie, and each GET of
+// the page rotates it. Preflights that overlapped would spend each other's
+// token, so the right word must still log in at the default -t.
+func TestFuzzFlightSequencesOfOneSessionDoNotInterleave(t *testing.T) {
+	var mu sync.Mutex
+	tokens := map[string]string{} // session cookie → its current token
+	n := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		c, _ := r.Cookie("PHPSESSID")
+		sid := ""
+		if c != nil {
+			sid = c.Value
+		}
+		if r.Method == http.MethodGet {
+			mu.Lock()
+			n++
+			tokens[sid] = fmt.Sprintf("tok%d", n)
+			tok := tokens[sid]
+			mu.Unlock()
+			time.Sleep(20 * time.Millisecond) // lets a concurrent sequence rotate it before this answer is used
+			fmt.Fprintf(w, `<input type="hidden" name="user_token" value="%s">`, tok)
+			return
+		}
+		r.ParseForm()
+		mu.Lock()
+		ok := tokens[sid] != "" && tokens[sid] == r.Form.Get("user_token") && r.Form.Get("password") == "password"
+		mu.Unlock()
+		loc := "login.php"
+		if ok {
+			loc = "index.php"
+		}
+		w.Header().Set("Location", loc)
+		w.WriteHeader(http.StatusFound)
+	}))
+	defer srv.Close()
+	dir := t.TempDir()
+	pre, post := filepath.Join(dir, "pre.req"), filepath.Join(dir, "post.req")
+	os.WriteFile(pre, []byte("GET /login.php HTTP/1.1\n\n"), 0o644)
+	os.WriteFile(post, []byte("GET /login.php HTTP/1.1\n\n"), 0o644)
+	rows, rep, err := fuzzRows(t, "-u", srv.URL+"/login.php", "-X", "POST", "-d", "username=admin&password=FUZZ&Login=Login&user_token=TOKEN",
+		"-b", "PHPSESSID=abc", "-w", wlist(t, "admin", "letmein", "qwerty", "12345", "root", "toor", "guest", "test", "password", "abc123", "dragon", "monkey"), "-ac=false", "-mr", "Location: index.php",
+		"-preflight", pre, "-preflight-var-auto", "TOKEN:form:user_token", "-postflight", post)
+	if err != nil || len(rows) != 1 || !strings.Contains(rows[0], "password") {
+		t.Errorf("rows %q err %v, want the one word that logs in", rows, err)
+	}
+	if !strings.Contains(strings.Join(rep.Notes, "\n"), "ran as one sequence, one at a time") {
+		t.Errorf("notes %q", rep.Notes)
+	}
+}
