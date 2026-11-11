@@ -196,6 +196,7 @@ These filters limit what is printed, not what is crawled.
 
 - `-do` lists the URLs found outside the crawl's scope. They are never asked.
 - A link to another port of a host that `-allow HOST:PORT` lists with one port is outside the scope too: it is no row of the output, `-do` lists it, and the summary's `skipped` names it.
+- With no `-allow` and no `-scope`, `-u http://HOST:PORT/` holds the host to that port the same way: a link or a script's URL to another port of HOST is outside the scope, whatever `-fs` says, and the summary's `skipped` names it with the reason `outside the scope: the targets name this host with another port only`. A URL on the scheme's default port (`-u https://HOST/`) holds the host to 80 and 443.
 - Text output is the URL.
 - `-json` output is `{"url", "coverage":"out-of-scope", "source", "tag", "attribute"}`.
 

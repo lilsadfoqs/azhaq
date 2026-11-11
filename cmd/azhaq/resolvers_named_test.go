@@ -80,7 +80,7 @@ func TestRunSummaryCountsTheTLSHandshakeTheLedgerLists(t *testing.T) {
 	lab := serveCountingZone(t, &asked, map[string]string{"app.lab.test": "127.0.0.1"})
 	dir := t.TempDir()
 	led := filepath.Join(dir, "run.ledger.jsonl")
-	_, errOut, _ := cli(t, "run", "-url", "http://app.lab.test:"+srvPort(t, srv)+"/", "-resolvers", lab, "-sources", "none",
+	_, errOut, _ := cli(t, "run", "-url", "http://app.lab.test:"+srvPort(t, srv)+"/", "-resolvers", lab, "-sources", "none", "-allow", "app.lab.test", // the 443 handshake is another port of the host
 		"-ledger", led, "-db", filepath.Join(dir, "run.db"), "-json")
 	rep := lastReport(t, errOut)
 	targets, tcp := 0, 0

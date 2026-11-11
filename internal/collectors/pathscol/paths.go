@@ -418,6 +418,8 @@ func refusal(err error) string {
 		return "-host-guesses reached for this host"
 	case errors.Is(err, neterr.ErrBudget):
 		return "the request budget is spent"
+	case errors.Is(err, neterr.ErrOutOfTargetPort):
+		return neterr.OutOfTargetPortReason
 	case errors.Is(err, neterr.ErrOutOfPort):
 		return neterr.OutOfPortReason
 	case errors.Is(err, neterr.ErrOutOfScope):

@@ -639,6 +639,12 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 			return usagef("-params-method %q: use GET, POST, JSON or XML", *paramsMethod)
 		}
 	}
+	// With no -allow and no -scope the URL targets hold their hosts to their ports
+	// (a port scan is asked for every port of the host, so it lifts the hold).
+	var targetPorts map[string]map[string]bool
+	if len(allow) == 0 && *portsSpec == "" && *portsUDP == "" {
+		targetPorts = targetPortsOf(seeds)
+	}
 	if active && len(allow) == 0 {
 		noRule := len(deny) == 0 && *scopeSpec == ""
 		allow = seedScope(seeds) // the targets given are the scope, as in the drop-ins
@@ -820,6 +826,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	if len(budgets.Scope.DenyPath) > 0 {
 		egress.SetDenyPath(budgets.Scope.DeniedPath)
 	}
+	egress.SetTargetPorts(targetPorts)
 	if !out.plan {
 		holdStateChanging(seeds, !*sendState, holdGivenTargets(*sendState))
 		defer egress.SetStateWords(nil, nil, false)
@@ -3207,6 +3214,31 @@ func compact(raw json.RawMessage) string {
 		}
 	}
 	return strings.Join(parts, " ")
+}
+
+// targetPortsOf is what a run with no rule holds each URL target's host to
+// (scope.TargetPorts). A URL counts when the user wrote it with a scheme or a
+// port: a bare name or address, which gets its ports by guess, keeps them all.
+func targetPortsOf(seeds []types.Seed) map[string]map[string]bool {
+	var urls, bare []string
+	for _, s := range seeds {
+		s = normalize.Seed(s)
+		switch s.Type {
+		case types.TypeURL:
+			u, err := url.Parse(s.Key())
+			if err != nil {
+				continue
+			}
+			if s.Keys[types.BareKey] == "" && (s.Keys[types.GivenKey] != "" || u.Port() != "") {
+				urls = append(urls, s.Key())
+			} else {
+				bare = append(bare, u.Hostname())
+			}
+		case types.TypeHostname, types.TypeDomain, types.TypeIPAddress, types.TypePrefix:
+			bare = append(bare, s.Key())
+		}
+	}
+	return scope.TargetPorts(urls, bare)
 }
 
 // seedScope is the scope the targets themselves name. An ASN or an

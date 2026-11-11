@@ -41,6 +41,7 @@ type Policy struct {
 	mu          sync.RWMutex
 	allow       func(host string) bool
 	allowAddr   func(host, port string) bool // allow for a connection to a port; nil: allow's answer for the host
+	targetPorts map[string]map[string]bool   // no rule: a URL target's host and the ports the targets give it; others unheld
 	openHeaders map[string]bool
 	denyPath    func(raw string) string
 	word        func(raw string) string // the word a URL's own name declares as a state change; nil: none is looked for
@@ -50,7 +51,7 @@ type Policy struct {
 	nDeclared   atomic.Int64
 	sentKeys    sync.Map // the keys of watched URLs that were sent
 	onDenied    func(raw, rule string)
-	onPort      func(raw string) // hears of a URL kept out for its port
+	onPort      func(raw, reason string) // hears of a URL kept out for its port
 	proxy       *url.URL
 	resolver    func(ctx context.Context, host string) []string
 	only        bool // the resolver is the only one: a name it cannot answer is not looked up elsewhere
@@ -132,6 +133,7 @@ func Reset() { Current().Reset() }
 func (p *Policy) Reset() {
 	p.mu.Lock()
 	p.allow, p.allowAddr, p.openHeaders, p.denyPath, p.onDenied, p.onPort, p.proxy, p.resolver, p.only = nil, nil, nil, nil, nil, nil, nil, nil, false
+	p.targetPorts = nil
 	p.word, p.asked, p.holding = nil, nil, false
 	p.sentKeys.Clear()
 	p.declared.Clear()
@@ -162,6 +164,43 @@ func (p *Policy) SetScopeAddr(allow func(host, port string) bool) {
 	p.mu.Unlock()
 }
 
+// SetTargetPorts holds the hosts it names to the ports it gives them, as the
+// URL targets of a run with no rule do (scope.TargetPorts). It is not a scope:
+// a host it does not name, and any host with no rule, is judged as before.
+func (p *Policy) SetTargetPorts(m map[string]map[string]bool) {
+	p.mu.Lock()
+	p.targetPorts = m
+	p.mu.Unlock()
+}
+
+// heldByTargets says the targets name host with other ports than port.
+func (p *Policy) heldByTargets(host, port string) bool {
+	p.mu.RLock()
+	m := p.targetPorts
+	p.mu.RUnlock()
+	if len(m) == 0 || port == "" {
+		return false
+	}
+	ports, ok := m[normalize.Hostname(host)]
+	return ok && !ports[port]
+}
+
+// namedByTargets says the targets hold host to ports.
+func (p *Policy) namedByTargets(host string) bool {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.targetPorts[normalize.Hostname(host)] != nil
+}
+
+// PortReason is why a URL on a host in scope is left out for its port, and the
+// error to refuse it with.
+func (p *Policy) PortReason(host, port string) (string, error) {
+	if p.heldByTargets(host, port) {
+		return neterr.OutOfTargetPortReason, neterr.ErrOutOfTargetPort
+	}
+	return neterr.OutOfPortReason, neterr.ErrOutOfPort
+}
+
 // SetDenyPath sets the user's -deny-path rules; nil lifts them.
 func (p *Policy) SetDenyPath(f func(raw string) string) {
 	p.mu.Lock()
@@ -178,7 +217,7 @@ func (p *Policy) SetOnDenied(f func(raw, rule string)) {
 
 // SetOnPortSkip sets who hears of a URL found on a host that is in scope on
 // another port only (-allow HOST:PORT), and so left out; nil: the run's notes.
-func (p *Policy) SetOnPortSkip(f func(raw string)) {
+func (p *Policy) SetOnPortSkip(f func(raw, reason string)) {
 	p.mu.Lock()
 	p.onPort = f
 	p.mu.Unlock()
@@ -192,14 +231,15 @@ func (p *Policy) NotePortSkip(raw string) {
 	if err != nil || u.Hostname() == "" || p.AllowsAddr(u.Hostname(), scope.URLPort(u)) || !p.Allows(u.Hostname()) {
 		return
 	}
+	reason, _ := p.PortReason(u.Hostname(), scope.URLPort(u))
 	p.mu.RLock()
 	f := p.onPort
 	p.mu.RUnlock()
 	switch {
 	case f != nil:
-		f(raw)
+		f(raw, reason)
 	case Noter != nil:
-		Noter(raw + " was not requested: " + neterr.OutOfPortReason)
+		Noter(raw + " was not requested: " + reason)
 	}
 }
 
@@ -250,20 +290,22 @@ func (p *Policy) Scope() func(host string) bool {
 // none; a scope that names no ports judges the host alone.
 func (p *Policy) ScopeAddr() func(host, port string) bool {
 	p.mu.RLock()
-	a, f := p.allow, p.allowAddr
+	a, f, t := p.allow, p.allowAddr, len(p.targetPorts) > 0
 	p.mu.RUnlock()
 	switch {
-	case a == nil:
+	case a == nil && !t:
 		return nil
+	case a == nil:
+		return func(host, port string) bool { return !p.heldByTargets(host, port) }
 	case f != nil:
 		return func(host, port string) bool {
 			if port == "" {
 				return a(host)
 			}
-			return f(host, port)
+			return f(host, port) && !p.heldByTargets(host, port)
 		}
 	}
-	return func(host, _ string) bool { return a(host) }
+	return func(host, port string) bool { return a(host) && !p.heldByTargets(host, port) }
 }
 
 // Allows says whether a target host is in scope: always without a scope.
@@ -279,6 +321,9 @@ func (p *Policy) AllowsAddr(host, port string) bool {
 	p.mu.RLock()
 	a, f := p.allow, p.allowAddr
 	p.mu.RUnlock()
+	if p.heldByTargets(host, port) {
+		return false
+	}
 	switch {
 	case a == nil:
 		return true
@@ -296,7 +341,8 @@ func (p *Policy) CheckAddr(host, port string) error {
 		return nil
 	}
 	if p.Allows(host) {
-		return neterr.ErrOutOfPort
+		_, err := p.PortReason(host, port)
+		return err
 	}
 	return neterr.ErrOutOfScope
 }
@@ -514,6 +560,9 @@ func HasScope() bool { return Current().Scope() != nil }
 // Allows is Current().Allows.
 func Allows(host string) bool { return Current().Allows(host) }
 
+// SetTargetPorts is Current().SetTargetPorts.
+func SetTargetPorts(m map[string]map[string]bool) { Current().SetTargetPorts(m) }
+
 // SetScopeAddr is Current().SetScopeAddr.
 func SetScopeAddr(allow func(host, port string) bool) { Current().SetScopeAddr(allow) }
 
@@ -540,7 +589,7 @@ func CheckDenied(raw string) error { return Current().CheckDenied(raw) }
 func NotePortSkip(raw string) { Current().NotePortSkip(raw) }
 
 // SetOnPortSkip is Current().SetOnPortSkip.
-func SetOnPortSkip(f func(raw string)) { Current().SetOnPortSkip(f) }
+func SetOnPortSkip(f func(raw, reason string)) { Current().SetOnPortSkip(f) }
 
 // SetOnDenied is Current().SetOnDenied.
 func SetOnDenied(f func(raw, rule string)) { Current().SetOnDenied(f) }

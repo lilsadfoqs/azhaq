@@ -668,9 +668,9 @@ func (e *Engine) noteDenied(raw, rule string) {
 	e.noteSkip(types.Seed{Type: types.TypeURL, Keys: map[string]string{"url": raw}}, egress.DenyReason(rule))
 }
 
-// notePortSkip records a URL found on a host that -allow lists with another
+// notePortSkip records a URL found on a host that the scope holds to another
 // port only: it is listed as not requested, with the reason.
-func (e *Engine) notePortSkip(raw string) {
+func (e *Engine) notePortSkip(raw, reason string) {
 	if e == nil || e.Store == nil {
 		return
 	}
@@ -680,7 +680,7 @@ func (e *Engine) notePortSkip(raw string) {
 	if _, dup := e.ported.LoadOrStore(raw, true); dup {
 		return
 	}
-	e.noteSkip(types.Seed{Type: types.TypeURL, Keys: map[string]string{"url": raw}}, neterr.OutOfPortReason)
+	e.noteSkip(types.Seed{Type: types.TypeURL, Keys: map[string]string{"url": raw}}, reason)
 }
 
 // noteSkip records a URL the run found and did not request, and why.
