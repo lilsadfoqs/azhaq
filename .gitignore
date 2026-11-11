@@ -4,6 +4,7 @@
 /dist/
 
 # run graphs and CLI pointer
+.azhaq/
 .azhaq-last
 .azhaq-index
 *.db

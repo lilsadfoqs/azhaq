@@ -141,7 +141,9 @@ func run(args []string) error {
 	c, ok := lookup(args[0])
 	if !ok {
 		if _, _, isTarget := guidedTarget(args[0]); isTarget {
-			startRun("quickstart", args)
+			if err := startRun("quickstart", args); err != nil {
+				return err
+			}
 			err := cmdQuickstart(args)
 			endRun(args, err)
 			return err
@@ -152,7 +154,9 @@ func run(args []string) error {
 		return usagef("unknown command %q (azhaq help lists every command)", args[0])
 	}
 	strictExit = false // this command's own -strict-exit sets it
-	startRun(c.name, args[1:])
+	if err := startRun(c.name, args[1:]); err != nil {
+		return err
+	}
 	err := c.run(args[1:])
 	endRun(args[1:], err)
 	return err
@@ -287,7 +291,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	webPorts := fs.String("web-ports", "", "ports to probe on each hostname or address of the list, comma-separated (default: 443, falling back to 80; a target given with no port and nothing there is a note, not a failure)")
 	factsPath := fs.String("facts", "", "JSONL connector facts to ingest before native collectors")
 	execCmd := fs.String("exec", "", "connector command (seeds on stdin, facts on stdout)")
-	dbPath := fs.String("db", "", "the workspace, a SQLite file (default: workspace.db in the run's folder under $AZHAQ_HOME/runs, ~/.azhaq/runs unless set; with AZHAQ_HOME=none a new azhaq-TIME-PID.db in the current directory; or $AZHAQ_DB; query, show and export read it afterwards)")
+	dbPath := fs.String("db", "", "the workspace, a SQLite file (default: workspace.db in the run's folder under $AZHAQ_HOME/runs, ./.azhaq/runs in the current directory unless set; with AZHAQ_HOME=none a new azhaq-TIME-PID.db in the current directory; or $AZHAQ_DB; query, show and export read it afterwards)")
 	demo := fs.Bool("demo", false, "run against the built-in fixture server (no internet)")
 	pathsFile := fs.String("paths", "", "extra path wordlist (one path per line)")
 	quiet := fs.Bool("quiet", false, "print no map and no progress lines (a line every 10 s while the run works), only the summary (on stderr)")
@@ -2117,7 +2121,7 @@ func cmdDiff(args []string) error {
 	if newPath == "" {
 		newPath = readLastDB()
 		if newPath == "" {
-			return fmt.Errorf("need -b (no %s)", lastDBFile)
+			return fmt.Errorf("need -b: %s", noLastText())
 		}
 	}
 	return printDiff(*a, newPath, diffOpts{JSONL: *jsonl, Quiet: *quiet})
@@ -2341,7 +2345,7 @@ func cmdExport(args []string) error {
 			path = readLastDB()
 		}
 		if path == "" {
-			return fmt.Errorf("need -db (no %s from a previous run)", lastDBFile)
+			return fmt.Errorf("need -db: %s", noLastText())
 		}
 		cw := &countWriter{w: os.Stdout}
 		if err := exportToList(path, *format, *origin, *safe, listOpts{coverage: *cov, json: *asJSON, run: *runID}, cw); err != nil {
@@ -2360,7 +2364,7 @@ func cmdExport(args []string) error {
 	if path == "" {
 		path = readLastDB()
 		if path == "" {
-			return fmt.Errorf("need -db (no %s from a previous run)", lastDBFile)
+			return fmt.Errorf("need -db: %s", noLastText())
 		}
 	}
 	st, err := store.OpenExisting(path)

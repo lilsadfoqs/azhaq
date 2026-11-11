@@ -29,7 +29,7 @@ func cmdHunt(args []string) error {
 	path := *db
 	if path == "" {
 		if path = readLastDB(); path == "" {
-			return usagef("give -db FILE")
+			return usagef("give -db FILE: %s", noLastText())
 		}
 	}
 	if *limit < 1 {

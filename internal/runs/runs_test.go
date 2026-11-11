@@ -106,3 +106,14 @@ func TestHomeOff(t *testing.T) {
 		t.Fatalf("%q %v", h, ok)
 	}
 }
+
+func TestHomeDefaultsToTheWorkingDirectory(t *testing.T) {
+	t.Setenv("AZHAQ_HOME", "")
+	t.Setenv("HOME", t.TempDir())
+	dir := t.TempDir()
+	t.Chdir(dir)
+	h, ok := Home()
+	if !ok || h != filepath.Join(dir, ".azhaq") {
+		t.Fatalf("%q %v, want %s", h, ok, filepath.Join(dir, ".azhaq"))
+	}
+}

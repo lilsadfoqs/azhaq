@@ -52,7 +52,7 @@ func (c *common) register(fs *flag.FlagSet) {
 	fs.BoolVar(&c.json, "json", false, "JSONL output, and the summary as one JSON object on stderr")
 	fs.BoolVar(&c.silent, "silent", false, "results only: no progress; the summary only when something failed (a source that failed, a takeover candidate as a [takeover] line on stderr); stdout stays one result per line")
 	fs.StringVar(&c.out, "o", "", "also write results to this file")
-	fs.StringVar(&c.db, "db", "", "keep the graph in this database for query, show, export and diff (default: workspace.db in the run's folder under ~/.azhaq/runs; with AZHAQ_HOME=none a temporary one)")
+	fs.StringVar(&c.db, "db", "", "keep the graph in this database for query, show, export and diff (default: workspace.db in the run's folder under ./.azhaq/runs; with AZHAQ_HOME=none a temporary one)")
 }
 
 // runFlags is run's flag set, read once, for the commands that pass

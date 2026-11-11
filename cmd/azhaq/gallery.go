@@ -39,7 +39,7 @@ func cmdGallery(args []string) error {
 	if len(paths) == 0 {
 		last := readLastDB()
 		if last == "" {
-			return usagef("give -db FILE or -workspace DIR")
+			return usagef("give -db FILE or -workspace DIR: %s", noLastText())
 		}
 		paths = []string{last}
 	}

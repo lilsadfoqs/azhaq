@@ -1,5 +1,5 @@
 // Package runs keeps one folder per command a person ran, under one home
-// ($AZHAQ_HOME, else ~/.azhaq): what was asked, when, how it ended, the
+// ($AZHAQ_HOME, else ./.azhaq in the working directory): what was asked, when, how it ended, the
 // command's own summary and where its workspace and files are. azhaq runs
 // lists them and azhaq ui shows them.
 package runs
@@ -47,17 +47,19 @@ const (
 )
 
 // Home is where runs are kept, and false when $AZHAQ_HOME turns it off.
+// With none set it is .azhaq in the working directory, so an engagement's
+// runs stay in its folder.
 func Home() (string, bool) {
 	v := os.Getenv("AZHAQ_HOME")
 	switch strings.ToLower(v) {
 	case "none", "off", "0", "false":
 		return "", false
 	case "":
-		h, err := os.UserHomeDir()
-		if err != nil || h == "" {
+		abs, err := filepath.Abs(".azhaq")
+		if err != nil {
 			return "", false
 		}
-		return filepath.Join(h, ".azhaq"), true
+		return abs, true
 	}
 	if abs, err := filepath.Abs(v); err == nil {
 		v = abs
