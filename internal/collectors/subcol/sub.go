@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/lilsadfoqs/azhaq/internal/guard"
+	"maps"
 	"net/http"
 	"net/url"
 	"slices"
@@ -113,6 +114,9 @@ type Options struct {
 	// holds), and the ones it could not check (the resolvers failed). Nil
 	// checks nothing.
 	Verify func(ctx context.Context, domain string, names []string) (live, failed []string)
+	// WildLog is where Verify notes the names only a wildcard answered, so
+	// that they are counted apart from the ones that did not resolve.
+	WildLog *WildLog
 	// NoCheck sends no DNS query for those names, whatever Verify is: they
 	// are listed unverified (subs without -live).
 	NoCheck bool
@@ -623,6 +627,9 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 	if st.dropped > 0 {
 		payload["dropped"] = st.dropped
 	}
+	if len(st.wild.by) > 0 {
+		payload[WildcardsKey] = st.wild.list()
+	}
 	if len(st.unverified) > 0 {
 		sort.Strings(st.unverified)
 		payload["unverified"] = st.unverified
@@ -716,6 +723,7 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 // settled is what became of the names a padding source or the history gave.
 type settled struct {
 	dropped    int             // did not resolve: left out
+	wild       wildCount       // left out too, but only a wildcard answered them
 	unverified []string        // not checked: listed, flagged
 	guesses    []string        // of those, the names only a padding source gave: no source asserted them
 	liveGuess  []string        // guesses the check saw resolve: kept, not unverified, and DNS may not have recorded them yet
@@ -825,6 +833,9 @@ func (c *Collector) settle(ctx context.Context, domain string, run []source, nam
 		case nameDead:
 			drop[n] = true
 			delete(foundBy, n)
+			if zone, answer, ok := c.opts.WildLog.Get(n); ok {
+				st.wild.add(zone, answer)
+			}
 		default:
 			st.unverified = append(st.unverified, n)
 			st.skip[n] = true
@@ -834,7 +845,7 @@ func (c *Collector) settle(ctx context.Context, domain string, run []source, nam
 			}
 		}
 	}
-	st.dropped = len(drop)
+	st.dropped = len(drop) - st.wild.total
 	// The guesses a run was told not to look up are not a failure to look
 	// them up: only the other names left unchecked are.
 	failedToCheck := len(st.unverified)
@@ -859,7 +870,7 @@ func (c *Collector) settle(ctx context.Context, domain string, run []source, nam
 	for name := range padding {
 		if row, ok := status[name].(map[string]any); ok {
 			row["kept"] = len(check) - len(drop) - len(st.unverified)
-			row["dropped_unresolved"] = len(drop)
+			row["dropped_unresolved"] = len(drop) - st.wild.total
 			if len(st.unverified) > 0 {
 				row["unverified"] = len(st.unverified)
 			}
@@ -940,3 +951,60 @@ func shorten(s string) string {
 // there (Shodan's ?key=, hackertarget's &apikey=) name the URL in an error,
 // and the error goes to the summary and the workspace.
 var keyParam = lazyre.New(`(?i)([?&](?:api[_-]?key|apikey|key|token|access_token|auth|password|secret)=)[^&\s"')]+`)
+
+// WildcardsKey is the payload's names a wildcard answered: a list of
+// {zone, answer, count}, one for each wildcard. The guesses of -w and
+// -permute use the same key.
+const WildcardsKey = "wildcards"
+
+// WildLog remembers which wildcard answered each name, from Verify to settle.
+type WildLog struct {
+	mu sync.Mutex
+	m  map[string][2]string // name → zone, answer
+}
+
+// Add notes that the wildcard of zone, with answer, answered name.
+func (w *WildLog) Add(name, zone, answer string) {
+	if w == nil {
+		return
+	}
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.m == nil {
+		w.m = map[string][2]string{}
+	}
+	w.m[name] = [2]string{zone, answer}
+}
+
+// Get is the wildcard that answered name, if one did.
+func (w *WildLog) Get(name string) (zone, answer string, ok bool) {
+	if w == nil {
+		return "", "", false
+	}
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	v, ok := w.m[name]
+	return v[0], v[1], ok
+}
+
+// wildCount counts the names each wildcard answered.
+type wildCount struct {
+	total int
+	by    map[[2]string]int
+}
+
+func (w *wildCount) add(zone, answer string) {
+	if w.by == nil {
+		w.by = map[[2]string]int{}
+	}
+	w.total++
+	w.by[[2]string{zone, answer}]++
+}
+
+func (w *wildCount) list() []map[string]any {
+	var out []map[string]any
+	for _, k := range slices.SortedFunc(maps.Keys(w.by), func(a, b [2]string) int { return strings.Compare(a[0]+"\x00"+a[1], b[0]+"\x00"+b[1]) }) {
+		out = append(out, map[string]any{"zone": k[0], "answer": k[1], "count": w.by[k]})
+	}
+	return out
+}

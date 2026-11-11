@@ -164,8 +164,10 @@ func (c *Collector) describe(ctx context.Context, host string, a dnsr.Answer, pa
 	if len(a.CNAME) > 0 && !a.Live() && (a.Status == dnsr.StatusCNAME || a.Status == dnsr.StatusNXDomain) {
 		// A name that is only a CNAME exists in DNS: a wildcard's is told
 		// from a real one, as for a name with an address.
-		if apex := normalize.RegistrableDomain(host); apex != "" && host != apex && c.Wild.Match(ctx, host, apex, a) {
-			payload["wildcard"] = true
+		if apex := normalize.RegistrableDomain(host); apex != "" && host != apex {
+			if zone, answer, ok := c.Wild.Which(ctx, host, apex, a); ok {
+				payload["wildcard"], payload["wildcard_of"], payload["wildcard_answer"] = true, zone, answer
+			}
 		}
 	}
 	switch a.Status {
@@ -192,8 +194,8 @@ func (c *Collector) describe(ctx context.Context, host string, a dnsr.Answer, pa
 			payload["cdn"], payload["cdn_type"] = name, kind
 		}
 		apex := normalize.RegistrableDomain(host)
-		if apex != "" && host != apex && c.Wild.Match(ctx, host, apex, a) {
-			payload["wildcard"] = true
+		if zone, answer, ok := c.Wild.Which(ctx, host, apex, a); apex != "" && host != apex && ok {
+			payload["wildcard"], payload["wildcard_of"], payload["wildcard_answer"] = true, zone, answer
 			if c.KeepWild {
 				return
 			}

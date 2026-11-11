@@ -152,7 +152,8 @@ func TestWatchTextHasAtMost20LinesOfAKindAndSaysNoChange(t *testing.T) {
 	}
 }
 
-// -every runs again after that long, until a signal stops it, which exits 0;
+// -every runs again after that long, until a signal stops it, which exits 0
+// when it lands between two cycles;
 // a run that ended 3 or 4 does not end the loop; a notification that did not
 // arrive stays on stderr.
 func TestWatchEveryRunsAgainUntilASignalAndOnlyASignalEndsIt(t *testing.T) {
@@ -171,15 +172,16 @@ func TestWatchEveryRunsAgainUntilASignalAndOnlyASignalEndsIt(t *testing.T) {
 	} {
 		db := filepath.Join(t.TempDir(), "ws.db")
 		file := filepath.Join(t.TempDir(), "n")
-		// The third run's notification signals watch from outside the run, as ^C does.
-		cmd := "echo x >> " + file + "; [ $(wc -l < " + file + ") -ge 3 ] && kill -TERM $PPID; true"
+		// The third cycle signals watch from outside, as ^C does, while it waits
+		// for the next one: nothing is cut, so the exit is 0.
+		cmd := "echo x >> " + file + "; P=$PPID; [ $(wc -l < " + file + ") -ge 3 ] && { (sleep 0.4; kill -TERM $P) >/dev/null 2>&1 & }; true"
 		var errOut string
 		var err error
 		done := make(chan struct{})
 		go func() {
 			defer close(done)
 			_, errOut, err = captureAll(t, func() error {
-				return cmdWatch(append([]string{"-db", db, "-every", "100ms", "-always", "-notify", dead, "-notify-rate", "0", "-notify-cmd", cmd, "--"}, c.run...))
+				return cmdWatch(append([]string{"-db", db, "-every", "1s", "-always", "-notify", dead, "-notify-rate", "0", "-notify-cmd", cmd, "--"}, c.run...))
 			})
 		}()
 		select {

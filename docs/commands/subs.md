@@ -136,7 +136,8 @@ The counts also say what became of the names, so a reader can add them up:
 | `DNS-confirmed` | With `-live`, `-w` or `-permute`: the rows a DNS lookup confirmed, those of `resolved from sources` and the ones found by guessing or as CNAME targets. The second tier. |
 | `the domain itself` | The domain given, when a source returned it. It is not printed. |
 | `held out by scope` | Names the sources gave that `-allow`, `-deny` or `-scope` hold out: no query is sent for them and they are not printed. |
-| `did not resolve` | Names DNS says do not exist: guesses and history names that did not resolve, and with `-live` every other name that did not. A guess that only a wildcard answered is one of them. |
+| `did not resolve` | Names DNS says do not exist (NXDOMAIN or no address): guesses and history names that did not resolve, and with `-live` every other name that did not. A name that only a wildcard answered is not one of them. |
+| `wildcard answers left out` | Names that only a wildcard answered: they got the address or CNAME that a random label of the zone gets. They are not printed and not `did not resolve`. A note names the wildcard and its answer (`3 names answered like *.zone (127.0.0.2)`), as `dns` does. |
 | `collected` | With `-live`: `from sources` less the domain itself and the guesses that did not resolve. |
 | `resolved from sources` | With `-live`: names from sources that resolved to an address and were printed. |
 | `CNAME only` | With `-live`: printed names whose CNAME chain ends without an address. They are in `results` and not taken away from it. The takeover candidates among them are in `takeover`. |
@@ -158,8 +159,8 @@ The counts also say what became of the names, so a reader can add them up:
 
 The number of results is `from sources`, less some counts and plus others:
 
-- Less: `the domain itself`, `held out by scope`, `did not resolve`, `guesses held back` (with `-guesses=false`), `not checked`, `no answer`, `not asked`, `left out by -m/-f`, `listed under another domain` and `cut by -max-names`.
-- Plus: `found as CNAME targets` and `asked by guessing` (the guesses that did not resolve are in `did not resolve`).
+- Less: `the domain itself`, `held out by scope`, `did not resolve`, `wildcard answers left out`, `guesses held back` (with `-guesses=false`), `not checked`, `no answer`, `not asked`, `left out by -m/-f`, `listed under another domain` and `cut by -max-names`.
+- Plus: `found as CNAME targets` and `asked by guessing` (the guesses that did not resolve are in `did not resolve`, the ones only a wildcard answered in `wildcard answers left out`).
 
 The run prints the sum as a note:
 
@@ -218,7 +219,7 @@ Passive sources answer differently each run. subdomain.center, for one, returns 
 - Each name has its first and last time seen (`first_seen`, `last_seen`) and the sources that gave it (`sources`).
 - At most 200,000 names are kept per domain. The ones unseen the longest go first.
 - The next run asks this file as a source called `history`.
-- With `-live`, a stored name counts only if it resolves now, and not to a wildcard. Stale names drop out, and a name a source missed this time comes back.
+- With `-live`, a stored name counts only if it resolves now, and not to a wildcard. Stale names drop out (one only a wildcard answers is counted in `wildcard answers left out`), and a name a source missed this time comes back.
 - Without `-live` no DNS lookup is made. A stored name that no source gave this run is listed with `"unverified": true`, and its `source` is `history`. The names are stored only once a source gave them or DNS confirmed them, so they are not guesses.
 - A stored name that a source gave again is not flagged: its `source` is that source, and `history` comes last in `sources`. Every name a source gave and a run kept is stored, so flagging them all would flag nearly every name after the first run.
 - A run that read names from the file or wrote to it says so in its summary, in `subs` and in `run`: `name history azhaq-data/names/example.com.json: 303 names read, 2 written; …`. A file the run wrote is also in the summary's `wrote`. It gives the path, the names the file gave the run (before any check) and the names the run wrote (a name no lookup checked is not written). For more than three domains one note counts them all.

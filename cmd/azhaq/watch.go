@@ -76,10 +76,15 @@ func cmdWatch(args []string) error {
 	}
 	ctx, stop := stopContext()
 	defer stop()
-	for {
+	for cycle := 1; ; cycle++ {
 		rep, err := runEmbeddedAs(append(append([]string(nil), runArgs...), "-db", *db, "-quiet"), *jsonOut)
 		if err != nil {
 			return err
+		}
+		if ctx.Err() != nil && strings.HasPrefix(rep.Stopped, "interrupted") {
+			// The run is partial: comparing it would call what it did not
+			// reach gone, and a notification would say so.
+			return watchInterrupted(cycle, "its run was cut ("+rep.Stopped+")", nt.client != nil, *jsonOut)
 		}
 		ch, err := diffRuns(*db)
 		if err != nil {
@@ -91,12 +96,14 @@ func cmdWatch(args []string) error {
 			fmt.Print(ch.text())
 		}
 		// The first run is the baseline, not a change: -always sends it too.
-		lost := false
+		lost, cut, cutSend := false, 0, 0
 		if (ch.any() && !ch.Baseline) || *always {
-			lostMsgs, err := nt.sendRecorded(ctx, ch, runArgs, *db, *jsonOut)
+			lostMsgs, cutMsgs, err := nt.sendRecorded(ctx, cycle, ch, runArgs, *db, *jsonOut)
 			if err != nil {
 				return err
 			}
+			cut += cutMsgs
+			cutSend = cutMsgs
 			for _, msg := range lostMsgs {
 				fmt.Fprintf(os.Stderr, "azhaq watch: %s\n", msg)
 				lost = true
@@ -107,10 +114,21 @@ func cmdWatch(args []string) error {
 				cmd.Stdin = strings.NewReader(string(raw) + "\n")
 				cmd.Stdout, cmd.Stderr = os.Stderr, os.Stderr
 				if err := cmd.Run(); err != nil {
-					fmt.Fprintf(os.Stderr, "azhaq watch: -notify-cmd: %v\n", err)
-					lost = true
+					if ctx.Err() != nil {
+						cut++ // the signal ended it: not a fault of the command
+						fmt.Fprintln(os.Stderr, "azhaq watch: -notify-cmd was cut because the watch was interrupted")
+					} else {
+						fmt.Fprintf(os.Stderr, "azhaq watch: -notify-cmd: %v\n", err)
+						lost = true
+					}
 				}
 			}
+		}
+		if cut > 0 {
+			if cutSend > 0 {
+				return exitErr{code: exitLimit} // sendRecorded printed the summary of the cut
+			}
+			return watchInterrupted(cycle, "its notification was cut", false, *jsonOut)
 		}
 		if *every <= 0 {
 			// The run's exit code: 3 when something failed, 4 when a
@@ -127,6 +145,17 @@ func cmdWatch(args []string) error {
 		case <-time.After(*every):
 		}
 	}
+}
+
+// watchInterrupted ends a watch a signal cut during a cycle: stopped, exit
+// 4, with the summary naming the cycle.
+func watchInterrupted(cycle int, what string, notifying, asJSON bool) error {
+	rep := newReport("watch")
+	rep.Stopped = fmt.Sprintf("interrupted (Ctrl-C, kill) during cycle %d: %s", cycle, what)
+	if notifying {
+		rep.Notes = append(rep.Notes, "no notification of this cycle was sent because the watch was interrupted")
+	}
+	return rep.finish(asJSON, false)
 }
 
 // diffRuns compares the last two runs of a workspace.

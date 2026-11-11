@@ -4,6 +4,8 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"maps"
+	"slices"
 	"strings"
 	"sync"
 
@@ -36,17 +38,24 @@ func NewWildcards(pool *Pool) *Wildcards {
 // Match reports whether a, the answer for name, is what a wildcard in one
 // of name's parent zones (up to and including apex) returns.
 func (w *Wildcards) Match(ctx context.Context, name, apex string, a Answer) bool {
+	_, _, ok := w.Which(ctx, name, apex, a)
+	return ok
+}
+
+// Which is Match with the wildcard named: the zone it is in and the answer
+// its random labels got (addresses, then CNAME targets).
+func (w *Wildcards) Which(ctx context.Context, name, apex string, a Answer) (zone, answer string, ok bool) {
 	if !a.Live() && len(a.CNAME) == 0 {
-		return false
+		return "", "", false
 	}
 	name, apex = normalize.Hostname(name), normalize.Hostname(apex)
 	for p := parent(name); p != "" && (p == apex || strings.HasSuffix(p, "."+apex)); p = parent(p) {
 		z := w.zone(ctx, p)
 		if z.on && z.covers(a) {
-			return true
+			return p, z.answer(), true
 		}
 	}
-	return false
+	return "", "", false
 }
 
 // Zone reports whether zone answers for random labels.
@@ -86,6 +95,14 @@ func (w *Wildcards) zone(ctx context.Context, name string) *zone {
 		}
 	})
 	return z
+}
+
+func (z *zone) answer() string {
+	var out []string
+	for _, m := range []map[string]bool{z.ips, z.cnames} {
+		out = append(out, slices.Sorted(maps.Keys(m))...)
+	}
+	return strings.Join(out, ", ")
 }
 
 func (z *zone) covers(a Answer) bool {

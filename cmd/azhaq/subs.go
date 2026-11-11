@@ -274,6 +274,7 @@ func cmdSubs(args []string) error {
 	private := map[string]bool{}
 	collected := map[string]bool{} // every passive name, before the -live filter
 	bySource := map[string]int{}   // how many each source returned
+	var wildBy wildAnswers
 	var union, dropped, unverified, heldBack, notChecked, filtered, dup, cut, didNot, itself, notAsked, noAnswer, heldOut int
 	var poolKept, poolDropped int         // of the names only a padding source or the history held, how many resolved and how many did not
 	lookupsFailed := false                // a source says its names were not checked because the lookups failed
@@ -296,6 +297,7 @@ func cmdSubs(args []string) error {
 		health.add(input, srcs)
 		union += intOf(p["from_sources"])
 		dropped += intOf(p["dropped"])
+		wildBy.addPayload(p)
 		cut += intOf(p["names_cut"])
 		if why, _ := p[subcol.UncheckedWhyKey].(string); why != "" {
 			notCheckedWhy[why] = true
@@ -405,6 +407,8 @@ func cmdSubs(args []string) error {
 					noAnswer++
 					resolver, why := dnsAnswerText(ans)
 					noAnswerBy[[2]string{resolver, why}]++
+				case ans["wildcard"] == true:
+					wildBy.add(fmt.Sprint(ans["wildcard_of"]), fmt.Sprint(ans["wildcard_answer"]), 1)
 				default:
 					didNot++
 				}
@@ -497,6 +501,9 @@ func cmdSubs(args []string) error {
 			// not found (it did not resolve, or only a wildcard answered).
 			guessTried += max(intOf(p["tried"]), len(names))
 			guessDead += max(intOf(p["tried"]), len(names)) - len(names)
+			// The ones a wildcard answered did resolve, to what any name
+			// there gets: they are not "did not resolve".
+			guessDead -= wildBy.addPayload(p)
 			for _, name := range names {
 				switch {
 				case seen[name]:
@@ -599,6 +606,8 @@ func cmdSubs(args []string) error {
 	set("the domain itself", itself)
 	set("held out by scope", heldOut)
 	set("did not resolve", dropped+didNot+guessDead)
+	set("wildcard answers left out", wildBy.total)
+	rep.Notes = append(rep.Notes, wildBy.notes()...)
 	if *live {
 		// Show the live/dead split: a raw subdomain count is mostly names
 		// that do not resolve (stale certificate logs, wildcard noise). The
@@ -735,6 +744,7 @@ func nameSum(c map[string]int, results int, filtering bool) string {
 	minus("the domain itself", "the domain itself, not a subdomain")
 	minus("held out by scope", "held out by scope (-allow, -deny, -scope)")
 	minus("did not resolve", "did not resolve")
+	minus("wildcard answers left out", "answered only by a wildcard")
 	minus("guesses held back", "guesses held back (-guesses=false)")
 	minus("not checked", "not checked")
 	minus("no answer", "no answer from the resolvers")
@@ -752,7 +762,7 @@ func nameSum(c map[string]int, results int, filtering bool) string {
 // the sum nameSum writes out.
 func namesFromCounts(c map[string]int) int {
 	n := c["from sources"] + c["asked by guessing"] + c["found as CNAME targets"]
-	for _, k := range []string{"the domain itself", "held out by scope", "did not resolve", "guesses held back", "not checked", "no answer", "not asked",
+	for _, k := range []string{"the domain itself", "held out by scope", "did not resolve", "wildcard answers left out", "guesses held back", "not checked", "no answer", "not asked",
 		"left out by -m/-f", "listed under another domain", "cut by -max-names"} {
 		n -= c[k]
 	}
@@ -870,4 +880,44 @@ func uncheckedEstimate(unchecked, resolved, lookedUp int) string {
 	est := (unchecked*resolved + lookedUp/2) / lookedUp
 	return fmt.Sprintf("estimate, not a count: of the %d names looked up that only subdomain.center or the name history held, %d resolved; the %d left unchecked are of the same kind, so about %d of them would resolve if that share held (a sample of %d names)",
 		lookedUp, resolved, unchecked, est, lookedUp)
+}
+
+// wildAnswers counts the names only a wildcard answered, by the wildcard.
+type wildAnswers struct {
+	total int
+	by    map[[2]string]int // zone, answer
+}
+
+func (w *wildAnswers) add(zone, answer string, n int) {
+	if n <= 0 {
+		return
+	}
+	if w.by == nil {
+		w.by = map[[2]string]int{}
+	}
+	w.total += n
+	w.by[[2]string{zone, answer}] += n
+}
+
+// addPayload takes the wildcards a collector's payload lists, and returns
+// how many names they answered.
+func (w *wildAnswers) addPayload(p map[string]any) int {
+	n := 0
+	hits, _ := p[brutecol.WildcardsKey].([]any)
+	for _, h := range hits {
+		m, _ := h.(map[string]any)
+		w.add(fmt.Sprint(m["zone"]), fmt.Sprint(m["answer"]), intOf(m["count"]))
+		n += intOf(m["count"])
+	}
+	return n
+}
+
+// notes says which wildcard answered how many names, and with what.
+func (w *wildAnswers) notes() []string {
+	var out []string
+	for _, k := range slices.SortedFunc(maps.Keys(w.by), func(a, b [2]string) int { return strings.Compare(a[0]+a[1], b[0]+b[1]) }) {
+		out = append(out, fmt.Sprintf("%s answered like *.%s (%s): the wildcard's answer, not a name of its own; left out and not counted as unresolved",
+			plural(w.by[k], "name"), k[0], k[1]))
+	}
+	return out
 }

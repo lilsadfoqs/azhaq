@@ -514,7 +514,7 @@ func TestSubsLiveLooksUpAtTheDnsRate(t *testing.T) {
 }
 
 // With -live a stored name counts only if it resolves now and not to a
-// wildcard; a name that did not is not printed, and counted as not resolving.
+// wildcard; a name that did not is not printed, and counted as a wildcard answer.
 func TestSubsLiveAStoredNameThatOnlyAWildcardAnswersIsNotKept(t *testing.T) {
 	t.Chdir(t.TempDir())
 	pc, err := net.ListenPacket("udp", "127.0.0.1:0")
@@ -550,8 +550,8 @@ func TestSubsLiveAStoredNameThatOnlyAWildcardAnswersIsNotKept(t *testing.T) {
 	if got := hosts(t, out); code != exitOK || !reflect.DeepEqual(got, []string{"www.example.org"}) {
 		t.Errorf("exit %d, printed %v: old resolves only to the wildcard", code, got)
 	}
-	if rep.Counts["did not resolve"] != 1 {
-		t.Errorf("counts %v", rep.Counts)
+	if rep.Counts["did not resolve"] != 0 || rep.Counts["wildcard answers left out"] != 1 {
+		t.Errorf("counts %v: old got the wildcard's answer, it is not a name that did not resolve", rep.Counts)
 	}
 }
 
