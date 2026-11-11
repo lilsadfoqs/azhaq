@@ -39,7 +39,8 @@ EOF
   table
   cat <<EOF
 
-  run TARGET...   a default pipeline over those tools: subfinder, dnsx, naabu
+  run [-r RESOLVERS] TARGET...
+                  a default pipeline over those tools: subfinder, dnsx, naabu
                   (top 100 ports), httpx, katana; each tool's JSON lines go to a
                   folder (orvel-run-DATE, or ORVEL_OUT) and the script prints where
   version         this version and the tool versions behind the subcommands
@@ -74,7 +75,8 @@ stage() {
   shift 2
   p=$(need "$tool") || exit $?
   echo "orvel run: $name ($tool)" >&2
-  "$p" "$@" || { rc=$?; echo "orvel run: $tool exited $rc; stopping" >&2; exit "$rc"; }
+  # </dev/null: the tools read targets from a stdin that is not a terminal and would wait on it.
+  "$p" "$@" </dev/null || { rc=$?; echo "orvel run: $tool exited $rc; stopping" >&2; exit "$rc"; }
 }
 
 # hostports FILE: "host:port" lines from naabu's JSON lines.
@@ -101,20 +103,28 @@ stop_if_empty() {
 }
 
 run() {
-  [ $# -gt 0 ] || { echo "usage: orvel run TARGET..." >&2; exit 2; }
+  # -r RESOLVERS (an address or a file of them) goes to the tools that resolve names.
+  # -duc: an update check that cannot reach its server otherwise holds a stage.
+  local res=()
+  if [ "${1:-}" = -r ]; then
+    [ $# -ge 2 ] || { echo "usage: orvel run [-r RESOLVERS] TARGET..." >&2; exit 2; }
+    res=(-r "$2")
+    shift 2
+  fi
+  [ $# -gt 0 ] || { echo "usage: orvel run [-r RESOLVERS] TARGET..." >&2; exit 2; }
   local out=${ORVEL_OUT:-orvel-run-$(date -u +%Y%m%dT%H%M%SZ)}
   mkdir -p "$out" || exit 1
   printf '%s\n' "$@" | sort -u > "$out/targets.txt"
   # A target is a domain or an address. subfinder takes domains; an address skips it.
   grep -Ev '^[0-9.:]+(/[0-9]+)?$' "$out/targets.txt" > "$out/domains.txt" || true
   if [ -s "$out/domains.txt" ]; then
-    stage "subdomains" subfinder -dL "$out/domains.txt" -silent -oJ -o "$out/subfinder.jsonl"
+    stage "subdomains" subfinder -dL "$out/domains.txt" "${res[@]}" -duc -silent -oJ -o "$out/subfinder.jsonl"
   else
     : > "$out/subfinder.jsonl"
   fi
   { cat "$out/domains.txt"; field host "$out/subfinder.jsonl"; } | sort -u > "$out/hosts.txt"
   if [ -s "$out/hosts.txt" ]; then
-    stage "resolve" dnsx -l "$out/hosts.txt" -silent -json -a -resp -o "$out/dnsx.jsonl"
+    stage "resolve" dnsx -l "$out/hosts.txt" "${res[@]}" -duc -silent -json -a -resp -o "$out/dnsx.jsonl"
   else
     : > "$out/dnsx.jsonl"
   fi
@@ -123,13 +133,13 @@ run() {
   grep -E '^[0-9.:]+(/[0-9]+)?$' "$out/targets.txt" >> "$out/resolved.txt" || true
   sort -u -o "$out/resolved.txt" "$out/resolved.txt"
   stop_if_empty "$out/resolved.txt" resolve
-  stage "ports (top 100)" naabu -list "$out/resolved.txt" -top-ports 100 -silent -json -o "$out/naabu.jsonl"
+  stage "ports (top 100)" naabu -list "$out/resolved.txt" -top-ports 100 -duc -silent -json -o "$out/naabu.jsonl"
   hostports "$out/naabu.jsonl" > "$out/hostports.txt"
   stop_if_empty "$out/hostports.txt" ports
-  stage "probe" httpx -l "$out/hostports.txt" -silent -json -o "$out/httpx.jsonl"
+  stage "probe" httpx -l "$out/hostports.txt" -duc -silent -json -o "$out/httpx.jsonl"
   field url "$out/httpx.jsonl" > "$out/urls.txt"
   stop_if_empty "$out/urls.txt" probe
-  stage "crawl" katana -list "$out/urls.txt" -silent -jsonl -o "$out/katana.jsonl"
+  stage "crawl" katana -list "$out/urls.txt" -duc -silent -jsonl -o "$out/katana.jsonl"
   echo "orvel run: results in $out" >&2
   wc -l "$out"/*.jsonl | sed 's/^/  /'
 }

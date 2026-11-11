@@ -35,20 +35,21 @@ orvel scan -sV -p 80,443 192.0.2.10        # nmap -sV -p 80,443 192.0.2.10
 orvel version | orvel help
 ```
 
-## `orvel run TARGET...`
+## `orvel run [-r RESOLVERS] TARGET...`
 
 A simple default pipeline, nothing more than the commands below. TARGET is a
 domain, an address or a range. The output goes to the folder `orvel-run-DATE`
 (or the folder in `ORVEL_OUT`), each tool's output as JSON lines, and the
-script prints where.
+script prints where. `-r` (an address, or a file of addresses) is passed to
+subfinder and dnsx as their `-r`.
 
-1. `subfinder -dL domains.txt -silent -oJ -o subfinder.jsonl` (domains only)
-2. `dnsx -l hosts.txt -silent -json -a -resp -o dnsx.jsonl` (the domains and
+1. `subfinder -dL domains.txt [-r RESOLVERS] -duc -silent -oJ -o subfinder.jsonl` (domains only)
+2. `dnsx -l hosts.txt [-r RESOLVERS] -duc -silent -json -a -resp -o dnsx.jsonl` (the domains and
    the names subfinder found)
-3. `naabu -list resolved.txt -top-ports 100 -silent -json -o naabu.jsonl`
+3. `naabu -list resolved.txt -top-ports 100 -duc -silent -json -o naabu.jsonl`
    (the names dnsx resolved, and any address or range given)
-4. `httpx -l hostports.txt -silent -json -o httpx.jsonl` (`host:port` from naabu)
-5. `katana -list urls.txt -silent -jsonl -o katana.jsonl` (the URLs httpx found)
+4. `httpx -l hostports.txt -duc -silent -json -o httpx.jsonl` (`host:port` from naabu)
+5. `katana -list urls.txt -duc -silent -jsonl -o katana.jsonl` (the URLs httpx found)
 
 A tool that exits non-zero stops the run, with its exit code. A stage that
 finds nothing stops it with exit 0 and says so on stderr.

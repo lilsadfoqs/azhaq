@@ -122,7 +122,7 @@ class Orvel(unittest.TestCase):
             self.assertIn("no scope enforcement, no request ledger, no\nsafety features", r.stdout)
             for sub, tool in SUBS.items():
                 self.assertRegex(r.stdout, r"\n  %s +%s " % (sub, tool))
-            self.assertIn("run TARGET...", r.stdout)
+            self.assertIn("run [-r RESOLVERS] TARGET...", r.stdout)
         r = self.orvel("version")
         self.assertTrue(r.stdout.startswith("orvel 0.1.0 "), r.stdout)
         for sub, tool, version, *_ in table():
@@ -133,7 +133,9 @@ class Orvel(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertEqual([c.split()[0] for c in self.calls()], ["subfinder", "dnsx", "naabu", "httpx", "katana"])
         calls = self.calls()
-        self.assertIn("naabu -list out/resolved.txt -top-ports 100 -silent -json -o out/naabu.jsonl", calls[2])
+        self.assertIn("naabu -list out/resolved.txt -top-ports 100 -duc -silent -json -o out/naabu.jsonl", calls[2])
+        for c in calls:
+            self.assertIn(" -duc ", c)
         out = os.path.join(self.tmp, "out")
         for f in ("subfinder.jsonl", "dnsx.jsonl", "naabu.jsonl", "httpx.jsonl", "katana.jsonl"):
             self.assertGreater(os.path.getsize(os.path.join(out, f)), 0, f)
@@ -145,6 +147,16 @@ class Orvel(unittest.TestCase):
             self.assertEqual(f.read().split(), ["http://10.0.0.1:80", "http://example.test:8080"])
         self.assertIn("results in out", r.stderr)
         self.assertIn("naabu.jsonl", r.stdout)
+
+    def test_run_passes_resolvers_to_the_tools_that_resolve(self):
+        r = self.orvel("run", "-r", "10.9.9.9", "example.test", env={"ORVEL_OUT": "out"})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        calls = self.calls()
+        self.assertIn("-r 10.9.9.9", calls[0])
+        self.assertIn("-r 10.9.9.9", calls[1])
+        self.assertNotIn("-r 10.9.9.9", calls[2])
+        r = self.orvel("run", "-r")
+        self.assertEqual(r.returncode, 2)
 
     def test_run_names_a_folder_by_the_date_when_none_is_given(self):
         r = self.orvel("run", "example.test")

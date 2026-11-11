@@ -244,6 +244,8 @@ jobs:
         run: |
           if [ "$KIND" = control ]; then
             python3 -I "$HOME/ci/render_brief.py" control-a "$(cat "$HOME/ci/orvel.version")" "$HOME/ci/vars.json" "$HOME/ci" > "$HOME/ci/brief.md"
+            # The reviewer can read $HOME/ci: nothing there may say this is a control.
+            rm -f "$HOME/ci/render_brief.py" "$HOME/ci/GATE.md" "$HOME/ci/merge_gate.py"
           else
             python3 -I "$HOME/ci/render_brief.py" gate-a "$(cat "$HOME/ci/azhaq.version")" "$HOME/ci/vars.json" "$HOME/ci" "$(cat "$HOME/ci/azhaq.origin")" > "$HOME/ci/brief.md"
           fi
@@ -392,6 +394,8 @@ jobs:
           echo '{}' > "$HOME/ci/vars.json"
           if [ "$KIND" = control ]; then
             python3 -I "$HOME/ci/render_brief.py" control-b "$(cat "$HOME/ci/orvel.version")" "$HOME/ci/vars.json" "$HOME/ci" > "$HOME/ci/brief.md"
+            # The reviewer can read $HOME/ci: nothing there may say this is a control.
+            rm -f "$HOME/ci/render_brief.py" "$HOME/ci/GATE.md" "$HOME/ci/merge_gate.py"
           else
             python3 -I "$HOME/ci/render_brief.py" gate-b "$(cat "$HOME/ci/azhaq.version")" "$HOME/ci/vars.json" "$HOME/ci" "$(cat "$HOME/ci/azhaq.origin")" > "$HOME/ci/brief.md"
           fi

@@ -13,10 +13,8 @@
       (their REPORT.md is read when there is no record): prints each item
       across the reviews, newest last, with every sample of a review
       (up to four) and the spread between them, and the spread across the
-      reviews (the range of their means). The control's records (kinds
-      control-a, control-b: a one-off measurement of the scale with another
-      candidate, .github/ci/trial/README.md) are left out unless
-      --with-control is given.
+      reviews (the range of their means). Records of kinds control-a and
+      control-b are left out unless --with-control is given (README.md).
 
 Nothing here is public: the record is only ever written encrypted.
 """
