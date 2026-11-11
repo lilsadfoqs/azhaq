@@ -966,6 +966,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	probePool = opts.DNS
 	var loginHome string
 	var loginRenew func(context.Context) error
+	var loginLanded *landing
 	if *login != "" && out.plan {
 		rep.Notes = append(rep.Notes, fmt.Sprintf("the run signs in at %s as %s with Chrome first", *login, *loginUser))
 	} else if *login != "" {
@@ -973,11 +974,12 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		if base == nil {
 			base = http.Header{} // not nil: signIn reads nil as "the headers now sent"
 		}
-		home, err := signIn(opts.Browser, *login, *loginUser, *loginPass, rep, base)
+		landed, err := signIn(opts.Browser, *login, *loginUser, *loginPass, rep, base)
 		if err != nil {
 			return err
 		}
-		loginHome = home
+		home := landed.URL
+		loginHome, loginLanded = home, &landed
 		loginRenew = func(context.Context) error {
 			// The requests going on meanwhile keep the old session until the
 			// new one is set: a stripped one would answer them as a visitor.
@@ -1411,7 +1413,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		stopKeep = engine.KeepResponses(st, *resumeRun != "")
 	}
 	if !out.plan {
-		watchSession(ctx, seeds, loginHome, *login, loginRenew, rep)
+		watchSession(ctx, seeds, loginHome, *login, loginRenew, loginLanded, rep)
 	}
 	// What the run will send, counted before it sends: said first when it is
 	// not small, and kept for the summary to set beside what was sent.
@@ -1610,7 +1612,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	if err := fetch.SessionLost(); err != nil {
 		rep.SessionLost = sessionLoss(err)
 		// Said once, as a failure of its own: exit 3, never a quiet anonymous run.
-		if !slices.ContainsFunc(rep.Failed, func(f engine.Failure) bool { return strings.HasPrefix(f.Error, "the session ended") }) {
+		if !slices.ContainsFunc(rep.Failed, func(f engine.Failure) bool { return strings.HasPrefix(f.Error, "the session ") }) {
 			rep.Failed = append(rep.Failed, engine.Failure{Collector: "azhaq-session", Error: err.Error(), Count: 1})
 		}
 	}
@@ -2891,12 +2893,12 @@ func hasHost(seeds []types.Seed, raw string) bool {
 // signIn signs in on loginURL with Chrome (b, or a browser of its own) and
 // adds the session to every request; it returns the page the login ended
 // on. What Chrome was refused on the way is listed in rep.
-func signIn(b *browser.Browser, loginURL, user, pass string, rep *report, base http.Header) (string, error) {
+func signIn(b *browser.Browser, loginURL, user, pass string, rep *report, base http.Header) (landing, error) {
 	if pass == "" {
 		pass = os.Getenv("AZHAQ_LOGIN_PASS")
 	}
 	if user == "" || pass == "" {
-		return "", fmt.Errorf("-login needs -login-user and -login-pass (or AZHAQ_LOGIN_PASS)")
+		return landing{}, fmt.Errorf("-login needs -login-user and -login-pass (or AZHAQ_LOGIN_PASS)")
 	}
 	if b == nil {
 		b = &browser.Browser{UserAgent: browserAgent()}
@@ -2911,10 +2913,10 @@ func signIn(b *browser.Browser, loginURL, user, pass string, rep *report, base h
 		rep.Skipped = append(rep.Skipped, engine.Skip{Target: u, Reason: browser.Reason()})
 	}
 	if err != nil {
-		return "", chromeStartErr(fmt.Errorf("-login %s: %w", loginURL, err))
+		return landing{}, chromeStartErr(fmt.Errorf("-login %s: %w", loginURL, err))
 	}
 	if len(s.Cookies) == 0 && s.Bearer == "" {
-		return "", fmt.Errorf("-login %s: signed in, but the site set no cookie and stored no token", loginURL)
+		return landing{}, fmt.Errorf("-login %s: signed in, but the site set no cookie and stored no token", loginURL)
 	}
 	// Built apart and set whole: requests in flight read fetch.Extra, and keep
 	// the old session until the new one is ready. base is the headers the new
@@ -2944,7 +2946,11 @@ func signIn(b *browser.Browser, loginURL, user, pass string, rep *report, base h
 		what += ", a token from " + s.From
 	}
 	fmt.Fprintf(os.Stderr, "azhaq: signed in as %s (%s); now on %s\n", user, what, s.URL)
-	return s.URL, nil
+	at := s.Sent
+	if at == 0 {
+		at = egress.Departed()
+	}
+	return landing{URL: s.URL, Status: s.Status, At: at}, nil
 }
 
 // chromeStartErr is err, as a usage error when Chrome did not start because

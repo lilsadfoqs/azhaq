@@ -94,6 +94,8 @@ type sessionGuard struct {
 	proven   map[string]bool // suspects that answered alike once signed in again
 	verifies int
 	enders   map[string]bool // requests that end the session whenever they are sent
+	start    string          // set when the check at the start found the session ended: how, for the failure
+	pre      int64           // requests sent between the sign-in and that check
 	stretch  int64           // the oldest stretch a renewal made worth asking again, not taken yet
 	stretchN bool
 }
@@ -345,6 +347,47 @@ func Measure(ctx context.Context, raw string) (with, without Print, err error) {
 	return
 }
 
+// Ask requests raw once, not followed, with the run's session or without it,
+// and gives its answer. It is counted like any request.
+func Ask(ctx context.Context, raw string, session bool) (Print, error) {
+	return askPrint(ctx, raw, session)
+}
+
+// LooksEnded says an answer is one a live session does not get: a 401, or a
+// redirect to the sign-in page.
+func LooksEnded(p Print, signIn string) bool {
+	return p.Status == http.StatusUnauthorized || isRedirect(p.Status) && signIn != "" && p.Loc == pathOf(signIn)
+}
+
+// EndedAtStart is the first check when the sign-in's own answer says the
+// session ended at once: the page the sign-in ended on answered chrome
+// (a 2xx) in Chrome, and got moments later, with the session, the answer got
+// (a 401 or a redirect to the sign-in page). The check page is that page and
+// its answer is the one Chrome got. The run signs in again as for any
+// failed check, or stops with the session failure. sent is how many requests
+// the run sent since the sign-in, Chrome's included: those may have been
+// answered without the session.
+func EndedAtStart(ctx context.Context, page string, chrome int, got Print, sent int64) error {
+	g := guardP.Load()
+	if g == nil || g.remote {
+		return nil
+	}
+	g.runMu.Lock()
+	defer g.runMu.Unlock()
+	g.checking.Store(true)
+	g.gate.Lock()
+	defer func() {
+		g.gate.Unlock()
+		g.checking.Store(false)
+	}()
+	g.mu.Lock()
+	g.s.Check, g.s.Want = page, Print{Status: chrome}
+	g.start = fmt.Sprintf("the page the sign-in ended on, %s, answered %d in Chrome and then %s with the session", pathOf(page), chrome, describe(got))
+	g.pre = max(sent, 0)
+	g.mu.Unlock()
+	return g.lose(ctx, got, "", "", 0)
+}
+
 // askPrint requests raw once, not followed, and gives its print. It is
 // counted in the budget and the ledger like any request, but not checked
 // by the guard itself.
@@ -484,6 +527,12 @@ func (g *sessionGuard) lose(ctx context.Context, got Print, endedBy, signal stri
 	if page == "" {
 		how = "a response cleared the session cookie"
 	}
+	g.mu.Lock()
+	start, pre := g.start, g.pre
+	g.mu.Unlock()
+	if start != "" {
+		how = start
+	}
 	what := fmt.Sprintf("the session ended (%s)", how)
 	if endedBy != "" {
 		what = fmt.Sprintf("the session ended after %s was requested (%s)", pathOf(endedBy), how)
@@ -491,25 +540,7 @@ func (g *sessionGuard) lose(ctx context.Context, got Print, endedBy, signal stri
 		what = fmt.Sprintf("the session ended (%s; the first answer that looked like its end was %s)", how, signal)
 	}
 	fail := func(why string) error {
-		g.mu.Lock()
-		answer := g.endAns
-		inflight := slices.Clone(g.afterEnd)
-		g.mu.Unlock()
-		var sent string // what is true of the requests sent while it was gone
-		if answer != "" {
-			sent = fmt.Sprintf("%s answered after that answer, already in flight, may have been answered without it", plural(len(inflight), "GET"))
-			if len(inflight) == 0 {
-				sent = "no GET was in flight when that answer was read"
-			}
-		} else {
-			sent = fmt.Sprintf("no answer looked like its end, so the %s asked since the last good check may have been answered without it", plural(n, "GET"))
-		}
-		err := &neterr.SessionLost{Msg: fmt.Sprintf("the session ended: %s; %s; %s", strings.TrimPrefix(what, "the session ended "), why, sent), Answer: answer, InFlight: inflight, Asked: n}
-		g.mu.Lock()
-		g.lost = err
-		g.mu.Unlock()
-		Note(err.Error())
-		return err
+		return g.failLost("the session ended", strings.TrimPrefix(what, "the session ended "), why, n, pre, start != "")
 	}
 	if g.s.Renew == nil {
 		return fail("the run cannot sign in again (" + g.s.Why + ")")
@@ -529,6 +560,38 @@ func (g *sessionGuard) lose(ctx context.Context, got Print, endedBy, signal stri
 	}
 	g.resume(ctx, what, endedBy, unrecorded)
 	return nil
+}
+
+// failLost ends the run's signed-in work: every later request is refused with
+// the error, which says what is true of the requests sent meanwhile. n is
+// the GETs asked since the last good check; atStart: the check was the first,
+// and pre requests (Chrome's included) were sent since the sign-in.
+func (g *sessionGuard) failLost(lead, what, why string, n int, pre int64, atStart bool) error {
+	g.mu.Lock()
+	answer := g.endAns
+	inflight := slices.Clone(g.afterEnd)
+	g.mu.Unlock()
+	var sent string // what is true of the requests sent while it was gone
+	switch {
+	case atStart && pre == 0:
+		sent = "no request was sent since the sign-in"
+	case atStart:
+		sent = fmt.Sprintf("the %s sent since the sign-in, Chrome's included, may have been answered without the session", plural(int(pre), "request"))
+		n = int(pre)
+	case answer != "":
+		sent = fmt.Sprintf("%s answered after that answer, already in flight, may have been answered without it", plural(len(inflight), "GET"))
+		if len(inflight) == 0 {
+			sent = "no GET was in flight when that answer was read"
+		}
+	default:
+		sent = fmt.Sprintf("no answer looked like its end, so the %s asked since the last good check may have been answered without it", plural(n, "GET"))
+	}
+	err := &neterr.SessionLost{Msg: fmt.Sprintf("%s: %s; %s; %s", lead, what, why, sent), Answer: answer, InFlight: inflight, Asked: n}
+	g.mu.Lock()
+	g.lost = err
+	g.mu.Unlock()
+	Note(err.Error())
+	return err
 }
 
 type renewKey struct{}
@@ -603,8 +666,17 @@ func (g *sessionGuard) verify(ctx context.Context, sent int) error {
 		sus = sus[len(sus)-6:] // the latest are the likeliest to follow the end
 	}
 	g.mu.Unlock()
-	if g.renew(ctx) != nil {
-		return nil // nothing is judged from a sign-in that failed
+	if err := g.renew(ctx); err != nil {
+		if ctx.Err() != nil {
+			return nil // the run is ending, not the session
+		}
+		// An answer that may be the end, and no way to find out: the run does
+		// not go on as a visitor.
+		last := sus[len(sus)-1]
+		g.mu.Lock()
+		n := len(g.asked)
+		g.mu.Unlock()
+		return g.failLost("the session may have ended", pathOf(last.url)+" answered "+describe(last.was), fmt.Sprintf("signing in again to find out failed: %v; the %s asked since the last good check may have been answered without the session", err, plural(n, "GET")), n, 0, false)
 	}
 	for _, sp := range sus {
 		p, err := askPrint(ctx, sp.url, true)
