@@ -186,7 +186,8 @@ func (h heldRun) view() map[string]any {
 		"no_takeover":         h.NoTakeover,
 		"history":             h.History,
 		"allow_writes":        h.AllowWrites,
-		"state_changing_gets": map[bool]string{false: "held back: a GET whose own path, query or API operation declares a state change (found on the way, or a word of a wordlist) is listed as skipped, not sent (-send-state-changing at start sends them)", true: "sent (-send-state-changing)"}[h.SendStateChanging],
+		"writes":              map[bool]string{false: "refused before anything is sent: azhaq_params with a body method, azhaq_roles_writes and graphql (an introspection POST) need -allow-writes at start; the one POST a call may send is the sign-in of login", true: "allowed (-allow-writes): azhaq_params with a body method, azhaq_roles_writes and graphql"}[h.AllowWrites],
+		"state_changing_gets": map[bool]string{false: "held back: a GET whose own path, query or API operation declares a state change (a target a call names, found on the way, or a word of a wordlist) is listed as skipped, not sent (-send-state-changing at start sends them)", true: "sent (-send-state-changing)"}[h.SendStateChanging],
 		"chrome":              map[bool]string{false: "needs its sandbox: where the system gives none, Chrome does not start (-chrome-no-sandbox at start allows it)", true: "may run without its sandbox (-chrome-no-sandbox)"}[h.ChromeNoSandbox],
 	}
 }
@@ -235,11 +236,11 @@ func cmdMCP(args []string) error {
 	resolvers := fs.String("resolvers", "", "DNS resolvers every tool uses (a comma list or a file, as run -resolvers): fixed at start, no tool argument sets them")
 	sources := fs.String("sources", "", "subdomain sources every tool may ask, comma-separated (default none: no third party at all — no source, archive, RDAP or search engine — only the resolvers and the targets are asked; name the sources at start to ask them); fixed at start")
 	history := fs.Bool("history", false, "read and write the name history (names earlier runs found): without it no tool reads or writes it; fixed at start")
-	allowWrites := fs.Bool("allow-writes", false, "let tools send writes: azhaq_params with a body method (POST, JSON or XML) and azhaq_roles_writes; without it those calls are refused before anything is sent; fixed at start")
+	allowWrites := fs.Bool("allow-writes", false, "let tools send writes: azhaq_params with a body method (POST, JSON or XML), azhaq_roles_writes and graphql (the introspection POST of azhaq_map and azhaq_plan); without it those calls are refused before anything is sent; the sign-in POST of login is not one of them; fixed at start")
 	skip := fs.String("skip", "", "collectors no tool runs, comma-separated (azhaq plan lists them): fixed at start")
 	noTakeover := fs.Bool("no-takeover", false, "no tool checks CNAMEs for a takeover: fixed at start")
 	chromeNoSandbox := fs.Bool("chrome-no-sandbox", false, "let Chrome run without its sandbox where the system gives it none (the tools that load pages in Chrome, such as azhaq_map with browser, and sign in with it): fixed at start. The pages are the targets' and untrusted: use a throwaway environment. By default Chrome does not start then")
-	sendState := fs.Bool("send-state-changing", false, "let the tools send the GETs they find on the way whose own path, query or API operation declares a state change (create, delete, reset, logout, action=stop, ...): without it they are held back and listed as skipped; fixed at start, no tool argument sets it")
+	sendState := fs.Bool("send-state-changing", false, "let the tools send the GETs whose own path, query or API operation declares a state change (create, delete, reset, logout, action=stop, ...), a target a call names included: without it they are held back and listed as skipped; fixed at start, no tool argument sets it")
 	unlocked := fs.Bool("unlocked", false, "serve without a scope: any target a tool is given may be touched (port scans stay refused)")
 	if err := parse(fs, args); err != nil {
 		return err
@@ -657,6 +658,9 @@ func (s *mcpServer) run(ctx context.Context, progress any, touches bool, args ..
 	}
 	args = append(args, s.held.options(args[0])...)
 	cmd := exec.Command(s.exe, args...)
+	// The targets are the client's: a state-changing GET among them is held
+	// back like a found one (see holdGivenTargets).
+	cmd.Env = append(os.Environ(), holdGivenEnv+"=1")
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	if err := cmd.Start(); err != nil {
@@ -1496,6 +1500,9 @@ func mapFlags(a map[string]any) []string {
 // "run" into db. The server's lock, pace, budget and held options are
 // added to both by run, so what a plan lists is what the call sends.
 func (s *mcpServer) mapCallArgs(a map[string]any, command, db string) ([]string, string, error) {
+	if err := s.checkGraphQL(a); err != nil {
+		return nil, "", err
+	}
 	t, list, err := s.targetArgs(a)
 	if err != nil {
 		return nil, "", err
@@ -1506,6 +1513,18 @@ func (s *mcpServer) mapCallArgs(a map[string]any, command, db string) ([]string,
 	}
 	return append(append(head, t...), mapFlags(a)...), list, nil
 }
+
+// checkGraphQL refuses graphql before anything is sent unless the server
+// was started with -allow-writes: the introspection and the schema
+// recovery are POSTs.
+func (s *mcpServer) checkGraphQL(a map[string]any) error {
+	if boolean(a, "graphql") && !s.held.AllowWrites {
+		return errors.New(graphQLRefused)
+	}
+	return nil
+}
+
+const graphQLRefused = "graphql asks each GraphQL endpoint for its schema with a POST (an introspection query, and where it is off, queries that recover the schema from validation errors), which this server sends only when started with -allow-writes"
 
 // checkTargetsInScope refuses targets outside the server's lock before
 // any network activity, for the tools whose commands would otherwise
@@ -1678,6 +1697,10 @@ func (s *mcpServer) resumable(db string) (string, error) {
 		case "ports":
 			if !s.locked {
 				return "", errors.New("the run scans ports, which need a scope: start azhaq mcp with -allow or -scope")
+			}
+		case "graphql":
+			if !s.held.AllowWrites {
+				return "", fmt.Errorf("the run in workspace %q was started with -graphql: %s", ws, graphQLRefused)
 			}
 		default:
 			// Only what the tools of a server start comes back: a run started

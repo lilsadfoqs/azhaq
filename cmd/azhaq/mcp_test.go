@@ -284,7 +284,12 @@ func TestMCPMapAndResume(t *testing.T) {
 		t.Errorf("resume of no workspace: %s", text)
 	}
 
-	// A complete map leaves no list behind; graphql asks for the schemas.
+	// A complete map leaves no list behind; graphql asks for the schemas, with
+	// POSTs a server without -allow-writes refuses.
+	if text, isErr := callText(t, s, "azhaq_map", map[string]any{"targets": []any{"127.0.0.1:3001"}, "workspace": "w2", "graphql": true}); !isErr || !strings.Contains(text, "-allow-writes") {
+		t.Errorf("graphql without -allow-writes: %v %s", isErr, text)
+	}
+	s.held.AllowWrites = true
 	if _, isErr := callText(t, s, "azhaq_map", map[string]any{"targets": []any{"127.0.0.1:3001"}, "workspace": "w2", "graphql": true}); isErr {
 		t.Fatal("map failed")
 	}
