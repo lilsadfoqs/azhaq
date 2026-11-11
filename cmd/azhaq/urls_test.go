@@ -194,9 +194,9 @@ func TestURLsFiltersAndNotes(t *testing.T) {
 	}
 }
 
-// OTX records a status for each URL (httpcode, 0 when unknown): -mc keeps
-// the URLs of that status only, -fc drops the ones it names, and neither
-// says OTX has no status.
+// OTX records a status for most URLs (httpcode, 0 when unknown): -mc keeps
+// the URLs of that status and -fc drops the ones it names, and a URL with no
+// status is not judged by either: it stays, as it does in gau.
 func TestURLsMCJudgesOTXByItsHTTPCode(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, `{"has_next":false,"url_list":[{"url":"http://example.org/ok","httpcode":200},{"url":"http://example.org/gone","httpcode":404},{"url":"http://example.org/unknown","httpcode":0}]}`)
@@ -208,10 +208,10 @@ func TestURLsMCJudgesOTXByItsHTTPCode(t *testing.T) {
 		want  []string
 	}{
 		{nil, []string{"http://example.org/gone", "http://example.org/ok", "http://example.org/unknown"}},
-		{[]string{"-mc", "200"}, []string{"http://example.org/ok"}},
-		{[]string{"-mc", "200,404"}, []string{"http://example.org/gone", "http://example.org/ok"}},
+		{[]string{"-mc", "200"}, []string{"http://example.org/ok", "http://example.org/unknown"}},
+		{[]string{"-mc", "200,404"}, []string{"http://example.org/gone", "http://example.org/ok", "http://example.org/unknown"}},
 		{[]string{"-fc", "404"}, []string{"http://example.org/ok", "http://example.org/unknown"}},
-		{[]string{"-mc", "301"}, nil},
+		{[]string{"-mc", "301"}, []string{"http://example.org/unknown"}},
 	} {
 		got, errOut, err := urlsRun(t, append(append([]string{}, base...), append(c.flags, "-silent")...)...)
 		if err != nil || !slices.Equal(got, c.want) {
@@ -223,7 +223,7 @@ func TestURLsMCJudgesOTXByItsHTTPCode(t *testing.T) {
 	}
 	// A filter OTX cannot apply is still said.
 	_, errOut, err := urlsRun(t, append(append([]string{}, base...), "-mc", "200", "-mt", "text/html", "-json")...)
-	if err != nil || !strings.Contains(errOut, "otx has no type of its captures: its 1 URL is not filtered by -mt") {
+	if err != nil || !strings.Contains(errOut, "otx has no type of its captures: its 2 URLs are not filtered by -mt") {
 		t.Errorf("%v\n%s", err, errOut)
 	}
 }

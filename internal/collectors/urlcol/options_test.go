@@ -263,8 +263,10 @@ func TestFiltersAreSentAndTheRestAreUnfiltered(t *testing.T) {
 }
 
 // OTX records the status of each URL (httpcode, 0 when it has none) and
-// urlscan.io that of each page: -mc and -fc judge them, a status that is not
-// known is not matched by -mc and is not named by -fc.
+// urlscan.io that of each page: -mc and -fc judge the rows that have one. A
+// row with no status is not judged and stays, as gau keeps what it cannot
+// ask the archive to filter; the source's row counts the rows left out and
+// the rows not judged.
 func TestOTXAndUrlscanAreJudgedByTheirStatus(t *testing.T) {
 	otxBody := `{"has_next":false,"url_list":[{"url":"http://example.org/o200","httpcode":200},{"url":"http://example.org/o404","httpcode":404},{"url":"http://example.org/o0","httpcode":0},{"url":"http://example.org/onone"}]}`
 	usBody := `{"has_more":false,"results":[` +
@@ -278,10 +280,10 @@ func TestOTXAndUrlscanAreJudgedByTheirStatus(t *testing.T) {
 		us   []string
 	}{
 		{"none", Filters{}, []string{"o0", "o200", "o404", "onone"}, []string{"u0", "u200", "u404", "ut"}},
-		{"mc 200", Filters{MatchStatus: []string{"200"}}, []string{"o200"}, []string{"u200"}},
-		{"mc 200 and 404", Filters{MatchStatus: []string{"200", "404"}}, []string{"o200", "o404"}, []string{"u200", "u404"}},
+		{"mc 200", Filters{MatchStatus: []string{"200"}}, []string{"o0", "o200", "onone"}, []string{"u0", "u200", "ut"}},
+		{"mc 200 and 404", Filters{MatchStatus: []string{"200", "404"}}, []string{"o0", "o200", "o404", "onone"}, []string{"u0", "u200", "u404", "ut"}},
 		{"fc 404", Filters{DropStatus: []string{"404"}}, []string{"o0", "o200", "onone"}, []string{"u0", "u200", "ut"}},
-		{"mt html", Filters{MatchMime: []string{"TEXT/html"}}, []string{"o0", "o200", "o404", "onone"}, []string{"u200"}},
+		{"mt html", Filters{MatchMime: []string{"TEXT/html"}}, []string{"o0", "o200", "o404", "onone"}, []string{"u0", "u200", "ut"}},
 		{"ft png", Filters{DropMime: []string{"image/png"}}, []string{"o0", "o200", "o404", "onone"}, []string{"u0", "u200", "ut"}},
 	} {
 		m := newMirror(t, pages)
@@ -308,6 +310,16 @@ func TestOTXAndUrlscanAreJudgedByTheirStatus(t *testing.T) {
 		srcs := summary["sources"].(map[string]any)
 		if row := srcs["otx"].(map[string]any); row["unfiltered_by"] != nil && strings.Contains(row["unfiltered_by"].(string), "-mc") {
 			t.Errorf("%s: otx has a status, its row says it has none: %v", c.name, row)
+		}
+		if c.name == "mc 200" {
+			row := srcs["otx"].(map[string]any)
+			out, _ := row["left_out"].(map[string]any)
+			if out["-mc"] != float64(1) || row["no_status"] != float64(2) || row["no_status_by"] != "-mc" {
+				t.Errorf("otx row does not count what -mc did: %v", row)
+			}
+			if us := srcs["urlscan"].(map[string]any); us["left_out"].(map[string]any)["-mc"] != float64(1) || us["no_status"] != float64(1) {
+				t.Errorf("urlscan row does not count what -mc did: %v", us)
+			}
 		}
 	}
 }

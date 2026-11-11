@@ -670,7 +670,7 @@ azhaq run -url https://app.example.com/ -ports top-1000 -verify -db app.db
 | `-urls-ft` | string |  | leave out URLs the archive recorded with these MIME types, comma-separated; OTX, which keeps no type, is asked all the same and its URLs kept, with a note | rarely needed |
 | `-urls-keep-junk` | bool |  | list the archived URLs left out as junk too, each labelled with its class and reason (-json), instead of only counting them | rarely needed |
 | `-urls-max` | int | `500000` | URLs kept for each domain (0: no cap); the summary counts the ones past it | rarely needed |
-| `-urls-mc` | string |  | keep only URLs the archive recorded with these HTTP status codes, comma-separated (200,301); OTX and urlscan.io record a status for most URLs, and a URL with none is not kept | rarely needed |
+| `-urls-mc` | string |  | keep only URLs the archive recorded with these HTTP status codes, comma-separated (200,301); OTX and urlscan.io record a status for most URLs; a URL with none is not judged and stays, as in gau | rarely needed |
 | `-urls-mt` | string |  | keep only URLs the archive recorded with these MIME types, comma-separated (text/html); OTX, which keeps no type, is asked all the same and its URLs kept, with a note | rarely needed |
 | `-urls-pages` | int |  | stop reading an archive after this many pages for a domain (default 0: no cap, as gau reads every page); an archive that stops at the cap says so in the summary | rarely needed |
 | `-urls-pause` | duration |  | pause between the requests of one archive (default: none, as gau asks; an archive that answers 429 or 503 is waited out) | rarely needed |

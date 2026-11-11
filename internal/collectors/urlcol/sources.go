@@ -23,10 +23,11 @@ import (
 // page. add receives each page as it comes, so a source that fails half
 // way keeps what it got.
 type source struct {
-	name  string
-	needs string // provider key name; "" when none is needed
-	can   int    // the filters it applies (by*); the others are not applied to its URLs
-	fetch func(ctx context.Context, g *getter, domain string, key string, add func([]rec)) (pages int, err error)
+	name   string
+	needs  string // provider key name; "" when none is needed
+	can    int    // the filters it applies (by*); the others are not applied to its URLs
+	server bool   // it applies them in its own query, so its answer holds only what passed
+	fetch  func(ctx context.Context, g *getter, domain string, key string, add func([]rec)) (pages int, err error)
 }
 
 // rec is one URL an archive gave, with the time of its capture as the
@@ -72,11 +73,11 @@ func captureTime(s string) string {
 
 func allSources() []source {
 	return []source{
-		{name: "wayback", can: byStatus | byMime | byDate, fetch: wayback},
-		{name: "commoncrawl", can: byStatus | byMime | byDate, fetch: commonCrawl},
+		{name: "wayback", can: byStatus | byMime | byDate, server: true, fetch: wayback},
+		{name: "commoncrawl", can: byStatus | byMime | byDate, server: true, fetch: commonCrawl},
 		{name: "otx", can: byStatus, fetch: otx},
 		{name: "urlscan", can: byStatus | byMime | byDate, fetch: urlscan},
-		{name: "arquivo", can: byStatus | byMime | byDate, fetch: arquivo},
+		{name: "arquivo", can: byStatus | byMime | byDate, server: true, fetch: arquivo},
 	}
 }
 
@@ -98,6 +99,10 @@ type getter struct {
 	base    string  // replaces the source's address
 	capped  bool    // the source stopped at its page cap with more to read
 	raw     bool    // only what gau would print: urlscan's page URLs, not its task URLs
+	// What the filters did to the rows, for the source's row: the rows left
+	// out by flag, and the rows with no status or type to judge.
+	out              map[string]int
+	noStatus, noType int
 }
 
 // at is the source's address: the override, or def.
@@ -535,7 +540,7 @@ func otx(ctx context.Context, g *getter, domain, _ string, add func([]rec)) (int
 			if u.HTTPCode > 0 {
 				code = strconv.Itoa(u.HTTPCode)
 			}
-			if g.filters.keepStatus(code) {
+			if g.judge(code, "", byStatus) {
 				urls = append(urls, rec{url: u.URL, at: captureTime(u.Date)})
 			}
 		}
@@ -588,12 +593,13 @@ func urlscan(ctx context.Context, g *getter, domain, key string, add func([]rec)
 		var urls []rec
 		for _, x := range r.Results {
 			at := captureTime(x.Task.Time)
-			if g.filters.keepStatus(x.Page.Status) && g.filters.keepMime(x.Page.MimeType) {
+			// The scan's status and type are those of its page, and of the
+			// URL that was submitted for it.
+			if g.judge(x.Page.Status, x.Page.MimeType, byStatus|byMime) {
 				urls = append(urls, rec{url: x.Page.URL, at: at})
-			}
-			// The submitted URL has no status or type of its own.
-			if !g.raw && g.filters.keepStatus("") && g.filters.keepMime("") {
-				urls = append(urls, rec{url: x.Task.URL, at: at})
+				if !g.raw {
+					urls = append(urls, rec{url: x.Task.URL, at: at})
+				}
 			}
 		}
 		add(urls)

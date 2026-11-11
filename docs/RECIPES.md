@@ -545,7 +545,7 @@ azhaq urls -d example.com -urls-pause 1s -urls-pages 20 -retries 5      # a seco
 
 [MIGRATING.md](MIGRATING.md#gau-azhaq-urls) sets each gau flag beside its azhaq flag, and [commands/urls.md](commands/urls.md#flags) lists every azhaq flag. Its "What differs on purpose" lists where azhaq departs from gau. In short:
 
-- OTX records a status for its URLs and urlscan.io a status and a type, so `-mc` and `-fc` judge them; a URL with no recorded status is not kept by `-mc`. OTX keeps no type or date: it is asked all the same and its URLs are kept unfiltered, with a note such as `otx has no type of its captures: its 13 URLs are not filtered by -mt`.
+- OTX records a status for its URLs and urlscan.io a status and a type, so `-mc` and `-fc` judge the rows that have one; a URL with no recorded status is not judged and stays, as in gau. The summary counts the URLs each filter left out, by archive. OTX keeps no type or date: it is asked all the same and its URLs are kept unfiltered, with a note such as `otx has no type of its captures: its 13 URLs are not filtered by -mt`.
 - URLs are normalized and the scanner junk archives hold is dropped. `-raw` turns both off, and the deduplication too.
 - A URL that two archives hold is printed once.
 - TLS certificates are checked.

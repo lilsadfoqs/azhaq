@@ -202,13 +202,24 @@ func (c *Collector) unfiltered(s source) (what, flags string) {
 	return what, strings.Join(c.opts.Filters.flagsFor(lack), ", ")
 }
 
+// byArchive names the flags the archive applies in its own query: it gives
+// only what passed them, so the rows they left out are not counted.
+func (c *Collector) byArchive(s source) string {
+	if !s.server {
+		return ""
+	}
+	return strings.Join(c.opts.Filters.flagsFor(c.opts.Filters.needs()&s.can), ", ")
+}
+
 type outcome struct {
-	count, pages   int
-	err            error
-	took           time.Duration
-	capped         bool
-	tries, retried int // requests sent, and sent again
-	waited         time.Duration
+	count, pages     int
+	err              error
+	took             time.Duration
+	capped           bool
+	tries, retried   int // requests sent, and sent again
+	waited           time.Duration
+	out              map[string]int // rows the filters left out, by flag
+	noStatus, noType int            // rows with no status or type for a filter to judge
 }
 
 // cutGrace is how long before the run's deadline the sources stop, so
@@ -384,7 +395,8 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 			}
 			mu.Lock()
 			results[i] = outcome{count: count, pages: pages, err: err, took: time.Since(t0), capped: g.capped && err == nil,
-				tries: g.tries, retried: g.retried, waited: g.waited}
+				tries: g.tries, retried: g.retried, waited: g.waited,
+				out: g.out, noStatus: g.noStatus, noType: g.noType}
 			mu.Unlock()
 		}(i, s)
 	}
@@ -421,6 +433,18 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		row := map[string]any{"asked": c.askedOf(s, domain, apexRun), "count": r.count, "pages": r.pages, "seconds": float64(r.took.Milliseconds()/100) / 10}
 		if what, flags := c.unfiltered(s); what != "" {
 			row["unfiltered"], row["unfiltered_by"] = what, flags
+		}
+		if len(r.out) > 0 {
+			row["left_out"] = r.out
+		}
+		if r.noStatus > 0 {
+			row["no_status"], row["no_status_by"] = r.noStatus, strings.Join(c.opts.Filters.flagsFor(byStatus), ", ")
+		}
+		if r.noType > 0 {
+			row["no_type"], row["no_type_by"] = r.noType, strings.Join(c.opts.Filters.flagsFor(byMime), ", ")
+		}
+		if by := c.byArchive(s); by != "" {
+			row["filtered_by_archive"] = by
 		}
 		if r.tries > 0 {
 			row["requests"] = r.tries

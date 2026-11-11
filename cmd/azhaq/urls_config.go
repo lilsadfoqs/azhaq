@@ -253,6 +253,9 @@ func urlsNotes(rep *report, ps []map[string]any, failCapped bool) {
 		urls     int
 	}
 	loose := map[string]*unfiltered{}
+	cut := map[string]map[string]int{}   // archive -> flag -> URLs left out
+	blind := map[string]map[string]int{} // archive -> "status (-mc)" -> URLs with none
+	server := map[string]string{}        // archive -> flags it applied itself
 	for _, p := range ps {
 		domain, _ := p["domain"].(string)
 		if caps, _ := p["capped"].([]any); len(caps) > 0 {
@@ -275,6 +278,24 @@ func urlsNotes(rep *report, ps []map[string]any, failCapped bool) {
 		srcs, _ := p["sources"].(map[string]any)
 		for name, v := range srcs {
 			row, _ := v.(map[string]any)
+			for flag, n := range asMap(row["left_out"]) {
+				if cut[name] == nil {
+					cut[name] = map[string]int{}
+				}
+				cut[name][flag] += intOf(n)
+			}
+			for _, k := range []string{"status", "type"} {
+				if n := intOf(row["no_"+k]); n > 0 {
+					if blind[name] == nil {
+						blind[name] = map[string]int{}
+					}
+					by, _ := row["no_"+k+"_by"].(string)
+					blind[name][k+" ("+by+")"] += n
+				}
+			}
+			if by, _ := row["filtered_by_archive"].(string); by != "" {
+				server[name] = by
+			}
 			if what, _ := row["unfiltered"].(string); what != "" {
 				u := loose[name]
 				if u == nil {
@@ -294,6 +315,56 @@ func urlsNotes(rep *report, ps []map[string]any, failCapped bool) {
 			rep.Notes = append(rep.Notes, unfilteredNote(n, u.what, u.by, u.urls))
 		}
 	}
+	filterNotes(rep, cut, blind, server)
+}
+
+// filterNotes says what the filters did to the rows of each archive that
+// gave a status or a type: the URLs they left out (counted by flag), the
+// URLs that carried none and were kept unjudged, and the flags an archive
+// applied in its own query, whose rejects nobody sees.
+func filterNotes(rep *report, cut, blind map[string]map[string]int, server map[string]string) {
+	for _, a := range slices.Sorted(maps.Keys(cut)) {
+		for _, flag := range slices.Sorted(maps.Keys(cut[a])) {
+			n := cut[a][flag]
+			if n == 0 {
+				continue
+			}
+			if rep.Counts == nil {
+				rep.Counts = map[string]int{}
+			}
+			rep.Counts["left out by "+flag] += n
+			rep.Notes = append(rep.Notes, fmt.Sprintf("%s: %s left out %s", a, flag, urlWord(n)))
+		}
+	}
+	for _, a := range slices.Sorted(maps.Keys(blind)) {
+		for _, k := range slices.Sorted(maps.Keys(blind[a])) {
+			field, by, _ := strings.Cut(strings.TrimSuffix(k, ")"), " (")
+			n, has, they := blind[a][k], "have", "they are"
+			if n == 1 {
+				has, they = "has", "it is"
+			}
+			rep.Notes = append(rep.Notes, fmt.Sprintf("%s: %s %s no recorded %s, which %s needs: %s kept, not judged", a, urlWord(n), has, field, by, they))
+		}
+	}
+	if len(server) > 0 {
+		var parts []string
+		for _, a := range slices.Sorted(maps.Keys(server)) {
+			parts = append(parts, a+" "+server[a])
+		}
+		rep.Notes = append(rep.Notes, "applied in the archive's own query, so the URLs they left out are not counted: "+strings.Join(parts, "; "))
+	}
+}
+
+func urlWord(n int) string {
+	if n == 1 {
+		return "1 URL"
+	}
+	return fmt.Sprintf("%d URLs", n)
+}
+
+func asMap(v any) map[string]any {
+	m, _ := v.(map[string]any)
+	return m
 }
 
 // unfilteredNote says that an archive keeps no status, type or date of its
