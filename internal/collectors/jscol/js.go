@@ -1204,6 +1204,12 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 				if sec.Entropy > 0 {
 					row["entropy"] = sec.Entropy
 				}
+				if sec.Context != "" {
+					row["context"] = sec.Context
+					if !s.inline && !s.fromMap { // an inline script's or a source map's offset is not the page's
+						row["offset"] = sec.Offset
+					}
+				}
 				secrets = append(secrets, row)
 			}
 		}

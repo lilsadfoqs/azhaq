@@ -40,6 +40,7 @@ import (
 	"github.com/lilsadfoqs/azhaq/internal/advisory"
 	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 	"github.com/lilsadfoqs/azhaq/internal/portscan"
+	"github.com/lilsadfoqs/azhaq/internal/proof"
 )
 
 // Labels of a verification result.
@@ -79,6 +80,9 @@ type Result struct {
 	Request      string `json:"request"`
 	Evidence     string `json:"evidence"`
 	Command      string `json:"command,omitempty"`
+	// Proof is what was sent and what came back, bounded, with the command
+	// that shows it without azhaq. A result stored before it existed has none.
+	Proof *proof.Proof `json:"proof,omitempty"`
 }
 
 // Line is the result as one line of text output.
@@ -372,6 +376,14 @@ func (c Check) Execute(ctx context.Context, svc advisory.Service, dial DialFunc)
 	if r.Evidence == "" { // only whitespace: its first bytes
 		r.Evidence = "(binary) " + hex.EncodeToString(buf.Bytes()[:min(buf.Len(), 24)])
 	}
+	r.Proof = &proof.Proof{
+		ObservedAt: time.Now().UTC().Format(time.RFC3339), Method: c.Request, Target: r.Target,
+		RequestBytes: proof.EscapeBytes(req), Excerpt: proof.Printable(buf.Bytes(), proof.MaxExcerpt),
+		ExcerptPart: "response", ExcerptOffset: proof.Offset(0), How: "azhaq-verify", Reproduce: proof.NC(host, svc.Port, req),
+	}
+	if svc.TLS {
+		r.Proof.Reproduce = proof.OpenSSL(host, svc.Port, req)
+	}
 	parse(buf.Bytes(), &r)
 	r.Severity = severityOf(r)
 	if r.Label == Proved && !c.High {
@@ -636,4 +648,15 @@ func firstNonEmpty(a, b string) string {
 		return a
 	}
 	return b
+}
+
+// RequestFor is the bytes the one read of svc's check sends, nil when the
+// service has no check: what a reader sends to see the service's own answer.
+func RequestFor(svc advisory.Service) []byte {
+	c, ok := ForService(svc)
+	if !ok {
+		return nil
+	}
+	req, _ := c.prepare(svc)
+	return req
 }

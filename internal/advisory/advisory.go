@@ -23,6 +23,7 @@ import (
 	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 	"sort"
 	"strings"
+	"time"
 )
 
 // Labels of a Part-1 match.
@@ -215,6 +216,10 @@ type Service struct {
 	Banner  string `json:"banner,omitempty"`
 	TLS     bool   `json:"tls,omitempty"`
 	Origin  string `json:"origin,omitempty"`
+	// ObservedAt is when the answer that named it was received, and From the
+	// URL it came from when it was a web answer (the proof of an identification).
+	ObservedAt time.Time `json:"-"`
+	From       string    `json:"-"`
 }
 
 // Target names the service for a summary line: host:port.

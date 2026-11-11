@@ -83,13 +83,13 @@ func services(obs []types.StoredObservation, needVersion bool) []Service {
 			host := row.Host
 			for _, s := range row.Services {
 				svc := Service{Host: host, IP: row.IP, Port: s.Port, Proto: "tcp", Service: strings.TrimSuffix(s.Service, "?"),
-					Product: s.Product, Version: s.Version, Banner: s.Banner, TLS: s.TLS}
+					Product: s.Product, Version: s.Version, Banner: s.Banner, TLS: s.TLS, ObservedAt: o.ObservedAt}
 				svc.Origin = webOrigin(svc)
 				add(svc)
 			}
 			for _, s := range row.UDP {
 				add(Service{Host: host, IP: row.IP, Port: s.Port, Proto: "udp", Service: strings.TrimSuffix(s.Service, "?"),
-					Product: s.Product, Version: s.Version, Banner: s.Banner})
+					Product: s.Product, Version: s.Version, Banner: s.Banner, ObservedAt: o.ObservedAt})
 			}
 		case "azhaq-http":
 			var row struct {
@@ -112,19 +112,20 @@ func services(obs []types.StoredObservation, needVersion bool) []Service {
 			} else {
 				port = 80
 			}
-			web := func(product, version string) Service {
+			web := func(product, version, banner string) Service {
 				return Service{Host: u.Hostname(), Port: port, Proto: "tcp", Service: u.Scheme,
-					Product: product, Version: version, Origin: u.Scheme + "://" + u.Host}
+					Product: product, Version: version, Origin: u.Scheme + "://" + u.Host,
+					Banner: banner, ObservedAt: o.ObservedAt, From: row.URL}
 			}
 			if row.Server != "" {
 				product, version := ProductVersion(row.Server)
-				add(web(product, version))
+				add(web(product, version, "Server: "+row.Server))
 			}
 			// The technologies the page's own markup and headers name with a
 			// version ("WordPress:6.4.2"): what the site itself states.
 			for _, t := range row.Tech {
 				if name, version, ok := strings.Cut(t, ":"); ok && name != "" && version != "" && version[0] >= '0' && version[0] <= '9' {
-					add(web(name, version))
+					add(web(name, version, "technology: "+t))
 				}
 			}
 		}
