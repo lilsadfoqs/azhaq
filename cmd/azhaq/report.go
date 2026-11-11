@@ -30,39 +30,44 @@ import (
 // what failed, what was left alone and why, and whether the work is
 // complete. With -json it is one JSON object with "type":"summary".
 type report struct {
-	Type        string             `json:"type"`
-	Command     string             `json:"command"`
-	Version     string             `json:"version"`
-	Complete    bool               `json:"complete"`
-	Exit        int                `json:"exit"`
-	Results     int                `json:"results"`
-	LeftOut     int                `json:"left_out,omitempty"` // run -no-catchall: stored rows left out of the output and of results
-	Stored      int                `json:"stored,omitempty"`   // run: the map rows the database holds, before templates fold; the counts add up to it
-	Folded      *int               `json:"folded,omitempty"`   // run: stored rows a printed row holds (templated URLs, dead names): results + folded + left_out = stored
-	Counts      map[string]int     `json:"counts,omitempty"`
-	Folds       []engine.FoldGroup `json:"folds,omitempty"` // run: the rows by fold class, with the control a catch-all answer was compared with
-	Seconds     float64            `json:"seconds"`
-	Requests    int64              `json:"requests"`              // sent to targets, connections and datagrams included
-	Connections int64              `json:"connections,omitempty"` // of requests: the TCP connections
-	Datagrams   int64              `json:"datagrams,omitempty"`   // of requests: the UDP datagrams
-	Probes      int64              `json:"probes,omitempty"`      // written on a connection, one ledger line each; not in requests
-	DNSQueries  int64              `json:"dns_queries,omitempty"` // sent to resolvers, retries and wildcard probes included; the ledger's dns lines
-	DB          string             `json:"db,omitempty"`
-	RunID       string             `json:"run_id,omitempty"`
-	Unreachable []string           `json:"unreachable,omitempty"`
-	Failures    int                `json:"failures"` // the sum of count over failed, plus unreachable targets it does not name: see decide
-	Failed      []engine.Failure   `json:"failed,omitempty"`
-	Skipped     []engine.Skip      `json:"skipped,omitempty"`
-	Takeover    []takeoverRow      `json:"takeover,omitempty"`    // names another party may take over: each is a candidate or verified
-	Degraded    bool               `json:"degraded,omitempty"`    // a source the run depends on failed (subs); the exit code is 3
-	DegradedBy  []degradedBy       `json:"degraded_by,omitempty"` // with degraded: each failed source, its reason and how many domains
-	Junk        map[string]int     `json:"junk,omitempty"`        // urls: URLs left out as junk, by reason (-raw keeps them)
-	Sources     *sourceHealth      `json:"sources,omitempty"`     // subs and urls: how many sources answered, which failed and why, what each gave
-	Stopped     string             `json:"stopped,omitempty"`     // the limit that stopped the work
-	Resume      string             `json:"resume,omitempty"`
-	Notes       []string           `json:"notes,omitempty"`
-	Next        []string           `json:"next,omitempty"`
-	Error       string             `json:"error,omitempty"` // an internal error: the summary disagrees with its rows (audit.go); exit 1
+	Type     string             `json:"type"`
+	Command  string             `json:"command"`
+	Version  string             `json:"version"`
+	Complete bool               `json:"complete"`
+	Exit     int                `json:"exit"`
+	Results  int                `json:"results"`
+	LeftOut  int                `json:"left_out,omitempty"` // run -no-catchall: stored rows left out of the output and of results
+	Stored   int                `json:"stored,omitempty"`   // run: the map rows the database holds, before templates fold; the counts add up to it
+	Folded   *int               `json:"folded,omitempty"`   // run: stored rows a printed row holds (templated URLs, dead names): results + folded + left_out = stored
+	Counts   map[string]int     `json:"counts,omitempty"`
+	Folds    []engine.FoldGroup `json:"folds,omitempty"` // run: the rows by fold class, with the control a catch-all answer was compared with
+	// Tiers counts the rows of the findings output by tier, apart: findings
+	// (proven), identifications (a product and version, with the advisory match
+	// where there is one) and leads (inferred from a name, a path or a guess).
+	// run counts the findings output of its workspace; hunt, the rows it printed.
+	Tiers       *tierCounts      `json:"tiers,omitempty"`
+	Seconds     float64          `json:"seconds"`
+	Requests    int64            `json:"requests"`              // sent to targets, connections and datagrams included
+	Connections int64            `json:"connections,omitempty"` // of requests: the TCP connections
+	Datagrams   int64            `json:"datagrams,omitempty"`   // of requests: the UDP datagrams
+	Probes      int64            `json:"probes,omitempty"`      // written on a connection, one ledger line each; not in requests
+	DNSQueries  int64            `json:"dns_queries,omitempty"` // sent to resolvers, retries and wildcard probes included; the ledger's dns lines
+	DB          string           `json:"db,omitempty"`
+	RunID       string           `json:"run_id,omitempty"`
+	Unreachable []string         `json:"unreachable,omitempty"`
+	Failures    int              `json:"failures"` // the sum of count over failed, plus unreachable targets it does not name: see decide
+	Failed      []engine.Failure `json:"failed,omitempty"`
+	Skipped     []engine.Skip    `json:"skipped,omitempty"`
+	Takeover    []takeoverRow    `json:"takeover,omitempty"`    // names another party may take over: each is a candidate or verified
+	Degraded    bool             `json:"degraded,omitempty"`    // a source the run depends on failed (subs); the exit code is 3
+	DegradedBy  []degradedBy     `json:"degraded_by,omitempty"` // with degraded: each failed source, its reason and how many domains
+	Junk        map[string]int   `json:"junk,omitempty"`        // urls: URLs left out as junk, by reason (-raw keeps them)
+	Sources     *sourceHealth    `json:"sources,omitempty"`     // subs and urls: how many sources answered, which failed and why, what each gave
+	Stopped     string           `json:"stopped,omitempty"`     // the limit that stopped the work
+	Resume      string           `json:"resume,omitempty"`
+	Notes       []string         `json:"notes,omitempty"`
+	Next        []string         `json:"next,omitempty"`
+	Error       string           `json:"error,omitempty"` // an internal error: the summary disagrees with its rows (audit.go); exit 1
 	// StateChanging are the GET requests whose own path (or API operation)
 	// declares a state change: the ones among the targets, named before
 	// anything was sent, and the ones found on the way (an API
@@ -297,6 +302,9 @@ func (r *report) print(w io.Writer) {
 		head = append(head, "db "+r.DB)
 	}
 	fmt.Fprintf(w, "azhaq %s: %s\n", r.Command, strings.Join(head, " · "))
+	if r.Tiers != nil {
+		fmt.Fprintf(w, "  tiers: %s\n", r.Tiers)
+	}
 	for _, u := range r.Unreachable {
 		fmt.Fprintf(w, "  ! did not answer: %s\n", u)
 	}
@@ -749,6 +757,7 @@ func takeoverLine(t takeoverRow) string {
 type takeoverRow struct {
 	Host string `json:"host"`
 	takeover.Finding
+	at time.Time // when the answer that showed it was received
 }
 
 // takeovers are the names whose DNS answer (a CNAME to something gone) or
@@ -764,6 +773,7 @@ func takeovers(ents []types.Entity, obs []types.StoredObservation) []takeoverRow
 		URL      string            `json:"url"`
 		CNAMEs   []string          `json:"cnames"`
 		Takeover *takeover.Finding `json:"takeover"`
+		at       time.Time
 	}
 	var found []finding
 	chains := map[string][]string{} // host → its CNAME chain, from DNS
@@ -782,6 +792,7 @@ func takeovers(ents []types.Entity, obs []types.StoredObservation) []takeoverRow
 			chains[normalize.Hostname(p.FQDN)] = p.CNAMEs
 		}
 		if p.Takeover != nil {
+			p.at = o.ObservedAt
 			found = append(found, p)
 		}
 	}
@@ -805,7 +816,7 @@ func takeovers(ents []types.Entity, obs []types.StoredObservation) []takeoverRow
 		if old, ok := byHost[host]; ok && old.Strength == "strong" {
 			continue
 		}
-		byHost[host] = takeoverRow{Host: host, Finding: f}
+		byHost[host] = takeoverRow{Host: host, Finding: f, at: p.at}
 	}
 	out := make([]takeoverRow, 0, len(byHost))
 	for _, t := range byHost {

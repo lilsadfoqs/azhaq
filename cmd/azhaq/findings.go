@@ -4,30 +4,38 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"net/url"
 	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/lilsadfoqs/azhaq/engine"
 	"github.com/lilsadfoqs/azhaq/internal/advisory"
+	"github.com/lilsadfoqs/azhaq/internal/proof"
 	"github.com/lilsadfoqs/azhaq/internal/verify"
 	"github.com/lilsadfoqs/azhaq/types"
 )
 
 // A findings record is one row of `azhaq report -findings` (and of
-// `azhaq export -format findings`/`findings-md`): one record per
-// stored row whose label supports it, never more than the row holds.
-// The labels are the verification labels of internal/verify — proved
-// first, version-only and conditional kept distinct, never merged
-// into proved — and a record carries the kind, the severity, the
-// host, port and URL, the product and version where confirmed, the
-// advisory id where matched, an excerpt of the evidence, and the
-// command that produced it. A row that proves nothing (a map hint) is
-// a lead, listed separately, never among the findings, unless the
-// map's own view folds it (see foldedHint): then it is counted in the
-// line of its fold class.
+// `azhaq export -format findings`/`findings-md`), in one of three tiers:
+//
+//   - finding: a proven row. The answer azhaq received shows the thing the
+//     row names (a file's own signature, a panel's own title, a data store's
+//     answer to a read with no credential, a stack trace, a key of a known
+//     format, a service's own page for an unclaimed name). It carries its
+//     proof (internal/proof): when it was observed, the request, the excerpt
+//     of the answer with its offset, the stage that found it and a command
+//     that shows the same without azhaq.
+//   - identification: a product and version a service stated, with the
+//     advisory match where there is one, and the answer that stated it.
+//   - lead: anything inferred from a name, a path or a guess, with the
+//     check that would prove it.
+//
+// A row with no proof is never a finding. The labels of internal/verify
+// (proved, version-only, conditional) stay on the rows that have one. A map
+// hint is a lead, listed separately, unless the map's own view folds it (see
+// foldedHint): then it is counted in the line of its fold class.
 type findingRecord struct {
+	Tier         string  `json:"tier"` // finding, identification or lead
 	Kind         string  `json:"kind"`
 	Label        string  `json:"label"` // proved, version-only, conditional; lead for a lead
 	Severity     string  `json:"severity"`
@@ -45,6 +53,12 @@ type findingRecord struct {
 	Evidence     string  `json:"evidence"`
 	Command      string  `json:"command"`
 	Collector    string  `json:"collector,omitempty"` // the collector of the stored row this record is read from
+	// Check is, for a lead, what would prove it.
+	Check string `json:"check,omitempty"`
+	// Proof: observed_at, method, target, request_bytes, status, content_type,
+	// excerpt, excerpt_part, excerpt_offset, how and reproduce, on a finding and
+	// on an identification that has the answer it was read from.
+	*proof.Proof
 }
 
 // runCommand is the command that produced a workspace's rows, as the
@@ -65,25 +79,61 @@ func runCommand(g *graphView) string {
 
 var labelRank = map[string]int{verify.Proved: 0, verify.VersionOnly: 1, verify.Conditional: 2}
 
-// buildFindings reads a workspace's findings and leads from its
-// stored rows: the verify rows a -verify run stored, the advisory
-// leads a -advisories run stored (labelled as internal/verify labels
-// them; a verify row covers its own lead, so no lead is recorded
-// twice), and the map's hint rows as leads, except the ones the map's
-// default view folds (engine.Folder: assets no request asked for, routes
-// only scripts name, 404s): those are counted by class in folds. Counts
-// in every rendering are the lengths of these lists and the folds' counts:
-// derivable by counting the stored rows of those collectors, and the hint
-// rows of the map (leads + the folds' counts = query -type URL -coverage hint).
-func buildFindings(g *graphView) (findings, leads []findingRecord, folds []engine.FoldGroup) {
+// findingSet is a workspace's rows in their three tiers, and the hints the
+// map's view folds. Every stored row that has a record is in exactly one tier.
+type findingSet struct {
+	Findings        []findingRecord
+	Identifications []findingRecord
+	Leads           []findingRecord
+	Folds           []engine.FoldGroup
+}
+
+func (s findingSet) counts() tierCounts {
+	return tierCounts{len(s.Findings), len(s.Identifications), len(s.Leads)}
+}
+
+// buildFindings reads a workspace's rows into their tiers, from what the run
+// stored and nothing more: the verify rows a -verify run stored, the advisory
+// leads (a verify row covers its own lead, so none is recorded twice), the
+// services whose product and version a stage read, the stack traces and the
+// path checks' answers, the secrets the scripts carried, the names another
+// party may claim, and the map's hint rows as leads, except the ones the map's
+// default view folds (engine.Folder: assets no request asked for, routes only
+// scripts name, 404s): those are counted by class in folds. Counts in every
+// rendering are the lengths of the tiers and the folds' counts: derivable by
+// counting the stored rows (leads + the folds' counts = query -type URL
+// -coverage hint, for the hints).
+func buildFindings(g *graphView) findingSet {
 	command := runCommand(g)
-	covered := map[string]bool{} // advisory id + target a verify row already records
+	var set findingSet
+	services := servicesByTarget(g.obs)
+	add := func(rec findingRecord) {
+		switch rec.Tier {
+		case proof.TierFinding:
+			set.Findings = append(set.Findings, rec)
+		case proof.TierIdentification:
+			set.Identifications = append(set.Identifications, rec)
+		default:
+			set.Leads = append(set.Leads, rec)
+		}
+	}
+	ident := func(rec findingRecord) findingRecord {
+		rec.Tier = proof.TierIdentification
+		if rec.Proof == nil {
+			if svc, ok := services[targetOf(rec)+"\x00"+advisory.ProductKey(rec.Product)]; ok {
+				rec.Proof = identProof(svc)
+			}
+		}
+		return rec
+	}
+	covered := map[string]bool{}    // advisory id + target a verify row already records
+	identified := map[string]bool{} // host:port + product a record already identifies
 	for _, r := range verifyResultsOf(g.obs) {
 		rec := findingRecord{
 			Kind: r.Kind, Label: r.Label, Severity: r.Severity, Host: r.Host, Port: r.Port,
 			URL: r.URL, Product: r.Product, Version: r.Version, AdvisoryID: r.AdvisoryID,
 			AdvisoryURL: r.AdvisoryURL, Precondition: r.Precondition, Request: r.Request,
-			Evidence: r.Evidence, Command: r.Command, Collector: "azhaq-verify",
+			Evidence: r.Evidence, Command: r.Command, Collector: "azhaq-verify", Proof: r.Proof,
 		}
 		if rec.Command == "" {
 			rec.Command = command
@@ -91,15 +141,27 @@ func buildFindings(g *graphView) (findings, leads []findingRecord, folds []engin
 		if rec.AdvisoryID != "" {
 			covered[rec.AdvisoryID+"|"+r.Target] = true
 		}
-		findings = append(findings, rec)
+		identified[targetOf(rec)+"\x00"+advisory.ProductKey(rec.Product)] = true
+		switch {
+		case r.Kind == verify.KindUnauthenticatedRead && r.Label == verify.Proved && r.Proof.Complete():
+			rec.Tier = proof.TierFinding
+			add(rec)
+		case r.Kind == verify.KindUnauthenticatedRead && r.Label == verify.Proved:
+			// Stored without its request and answer (an older azhaq): no proof, no finding.
+			rec.Tier, rec.Label, rec.Check = proof.TierLead, "lead", "run the read again: "+r.Request+" on "+r.Target
+			rec.Evidence = "unauthenticated read recorded without the answer that proves it; " + r.Evidence
+			add(rec)
+		default:
+			add(ident(rec))
+		}
 	}
 	stats := map[string]advisory.Lead{} // advisory id + target → its lead, for the flags and the score
 	for _, lead := range advisoryLeadsExpanded(g.obs) {
 		stats[lead.AdvisoryID+"|"+lead.Target] = lead
 	}
-	for i := range findings {
-		if l, ok := stats[findings[i].AdvisoryID+"|"+targetOf(findings[i])]; ok && findings[i].AdvisoryID != "" {
-			findings[i].KEV, findings[i].CVSS = l.KEV, l.CVSS
+	for i := range set.Identifications {
+		if l, ok := stats[set.Identifications[i].AdvisoryID+"|"+targetOf(set.Identifications[i])]; ok && set.Identifications[i].AdvisoryID != "" {
+			set.Identifications[i].KEV, set.Identifications[i].CVSS = l.KEV, l.CVSS
 		}
 	}
 	for _, lead := range advisoryLeadsExpanded(g.obs) {
@@ -113,14 +175,52 @@ func buildFindings(g *graphView) (findings, leads []findingRecord, folds []engin
 		if !ok || covered[r.AdvisoryID+"|"+r.Target] {
 			continue
 		}
-		findings = append(findings, findingRecord{
+		rec := findingRecord{
 			Kind: r.Kind, Label: r.Label, Severity: r.Severity, Host: r.Host, Port: r.Port,
 			URL: r.URL, Product: r.Product, Version: r.Version, AdvisoryID: r.AdvisoryID,
 			AdvisoryURL: r.AdvisoryURL, Precondition: r.Precondition, Request: r.Request,
 			Evidence: r.Evidence, Command: command, Collector: "azhaq-advisories", KEV: lead.KEV, CVSS: lead.CVSS,
-		})
+		}
+		identified[targetOf(rec)+"\x00"+advisory.ProductKey(rec.Product)] = true
+		add(ident(rec))
 	}
-	findings = append(findings, traceFindingsOf(g.obs, command)...)
+	// The services a stage read a product and version of, with no advisory
+	// matched: still an identification, with the answer that stated it.
+	for _, svc := range advisory.Services(g.obs) {
+		k := svc.Target() + "\x00" + advisory.ProductKey(svc.Product)
+		if identified[k] {
+			continue
+		}
+		identified[k] = true
+		host := svc.Host
+		if host == "" {
+			host = svc.IP
+		}
+		p := identProof(svc)
+		add(findingRecord{Tier: proof.TierIdentification, Kind: "software-version", Label: verify.VersionOnly, Severity: "info",
+			Host: host, Port: svc.Port, URL: svc.Origin, Product: svc.Product, Version: svc.Version,
+			Request: p.Method + " " + p.Target, Evidence: p.Excerpt, Command: command, Collector: p.How, Proof: p})
+	}
+	for _, t := range traceFindingsOf(g.obs, command) {
+		add(t)
+	}
+	for _, s := range secretRows(g.obs) {
+		add(secretRecord(s, command))
+	}
+	ents := make([]types.Entity, 0, len(g.rows))
+	for _, r := range g.rows {
+		ents = append(ents, r.Entity)
+	}
+	for _, t := range takeovers(ents, g.obs) {
+		add(takeoverRecord(t, command))
+	}
+	answered := map[string]bool{} // the URLs a path check judged
+	for url, v := range proof.Judge(proof.AnswersOf(g.obs)) {
+		answered[url] = true
+		if rec, ok := pathRecord(v, command); ok {
+			add(rec)
+		}
+	}
 	folder := engine.NewFolder(g.obs)
 	var folded []engine.MapEntry
 	for _, row := range g.rows {
@@ -131,43 +231,52 @@ func buildFindings(g *graphView) (findings, leads []findingRecord, folds []engin
 			folded = append(folded, row)
 			continue
 		}
-		rec := findingRecord{Kind: "hint", Label: "lead", Severity: "info", URL: row.Entity.Key,
-			Evidence: row.Proof, Command: command}
+		if answered[row.Entity.Key] {
+			continue // a path check judged its answer
+		}
+		rec := findingRecord{Tier: proof.TierLead, Kind: "hint", Label: "lead", Severity: "info", URL: row.Entity.Key,
+			Evidence: row.Proof, Command: command, Check: "request it and read the answer: " + proof.Curl("GET", row.Entity.Key)}
 		if rec.Evidence == "" {
 			rec.Evidence = row.Evidence
 		}
-		if u, err := url.Parse(row.Entity.Key); err == nil {
-			rec.Host = u.Hostname()
-			if p, err := strconv.Atoi(u.Port()); err == nil {
-				rec.Port = p
-			}
-		}
-		leads = append(leads, rec)
+		rec.Host, rec.Port = hostPort(row.Entity.Key)
+		add(rec)
 	}
-	sort.SliceStable(findings, func(i, j int) bool {
-		a, b := findings[i], findings[j]
-		if ra, rb := labelRank[a.Label], labelRank[b.Label]; ra != rb {
-			return ra < rb
+	sort.SliceStable(set.Findings, func(i, j int) bool { return findingLess(set.Findings[i], set.Findings[j]) })
+	sort.SliceStable(set.Identifications, func(i, j int) bool { return findingLess(set.Identifications[i], set.Identifications[j]) })
+	sort.SliceStable(set.Leads, func(i, j int) bool {
+		if set.Leads[i].URL != set.Leads[j].URL {
+			return set.Leads[i].URL < set.Leads[j].URL
 		}
-		if a.Host != b.Host {
-			return a.Host < b.Host
-		}
-		if a.Port != b.Port {
-			return a.Port < b.Port
-		}
-		if a.KEV != b.KEV {
-			return a.KEV
-		}
-		if a.CVSS != b.CVSS {
-			return a.CVSS > b.CVSS
-		}
-		if a.AdvisoryID != b.AdvisoryID {
-			return a.AdvisoryID < b.AdvisoryID
-		}
-		return a.URL < b.URL
+		return set.Leads[i].Kind < set.Leads[j].Kind
 	})
-	sort.SliceStable(leads, func(i, j int) bool { return leads[i].URL < leads[j].URL })
-	return findings, leads, folder.Groups(folded)
+	set.Folds = folder.Groups(folded)
+	return set
+}
+
+func findingLess(a, b findingRecord) bool {
+	if ra, rb := labelRank[a.Label], labelRank[b.Label]; ra != rb {
+		return ra < rb
+	}
+	if a.Host != b.Host {
+		return a.Host < b.Host
+	}
+	if a.Port != b.Port {
+		return a.Port < b.Port
+	}
+	if a.KEV != b.KEV {
+		return a.KEV
+	}
+	if a.CVSS != b.CVSS {
+		return a.CVSS > b.CVSS
+	}
+	if a.AdvisoryID != b.AdvisoryID {
+		return a.AdvisoryID < b.AdvisoryID
+	}
+	if a.Kind != b.Kind {
+		return a.Kind < b.Kind
+	}
+	return a.URL < b.URL
 }
 
 // foldedCount is the hints the folds stand for.
@@ -192,38 +301,42 @@ func foldedNote(folds []engine.FoldGroup) string {
 	return ", " + plural(foldedCount(folds), "hint") + " folded (" + strings.Join(parts, ", ") + ")"
 }
 
-// findingLine is a record as one JSONL line, typed so a reader can
-// tell a finding from a lead without reading the label.
+// findingLine is a record as one JSONL line, typed so a reader can tell the
+// tiers apart without reading the label: finding, identification or lead.
 type findingLine struct {
 	Type string `json:"type"`
 	findingRecord
 }
 
-// findingsJSONL is the findings as JSON Lines: one finding per line,
-// then one lead per line, then one {"type":"folded"} line for each fold
-// class of the hints the map's view counts and does not list. A set with
-// no finding and no lead is one explicit line saying so (with the count
-// folded, when there are folds), so a pipeline reading the output can tell
-// "no qualifying rows" from a broken export.
-func findingsJSONL(findings, leads []findingRecord, folds []engine.FoldGroup) []byte {
+// findingsJSONL is the rows as JSON Lines: one finding per line, then one
+// identification per line, then one lead per line, then one {"type":"folded"}
+// line for each fold class of the hints the map's view counts and does not
+// list. A set with no row at all is one explicit line saying so (with the
+// count folded, when there are folds), so a pipeline reading the output can
+// tell "no qualifying rows" from a broken export.
+func findingsJSONL(set findingSet) []byte {
 	var b bytes.Buffer
 	enc := json.NewEncoder(&b)
 	enc.SetEscapeHTML(false)
-	if len(findings) == 0 && len(leads) == 0 {
+	if len(set.Findings)+len(set.Identifications)+len(set.Leads) == 0 {
 		_ = enc.Encode(struct {
-			Type     string `json:"type"`
-			Findings int    `json:"findings"`
-			Leads    int    `json:"leads"`
-			Folded   int    `json:"folded,omitempty"`
-		}{"findings", 0, 0, foldedCount(folds)})
+			Type            string `json:"type"`
+			Findings        int    `json:"findings"`
+			Identifications int    `json:"identifications"`
+			Leads           int    `json:"leads"`
+			Folded          int    `json:"folded,omitempty"`
+		}{"findings", 0, 0, 0, foldedCount(set.Folds)})
 	}
-	for _, f := range findings {
+	for _, f := range set.Findings {
 		_ = enc.Encode(findingLine{Type: "finding", findingRecord: f})
 	}
-	for _, l := range leads {
+	for _, f := range set.Identifications {
+		_ = enc.Encode(findingLine{Type: "identification", findingRecord: f})
+	}
+	for _, l := range set.Leads {
 		_ = enc.Encode(findingLine{Type: "lead", findingRecord: l})
 	}
-	for _, g := range folds {
+	for _, g := range set.Folds {
 		_ = enc.Encode(struct {
 			Type  string `json:"type"`
 			Class string `json:"class"`
@@ -234,51 +347,63 @@ func findingsJSONL(findings, leads []findingRecord, folds []engine.FoldGroup) []
 	return b.Bytes()
 }
 
-// findingsMarkdown is the findings as Markdown: a section per label,
-// proved first, and the leads apart under their own heading. An empty
-// set says so in words, with the counts at zero.
-func findingsMarkdown(findings, leads []findingRecord, folds []engine.FoldGroup) []byte {
+// findingsMarkdown is the rows as Markdown: a Findings section, an
+// Identifications section (by label), and the Leads under their own heading,
+// each with its count. Under every finding and identification are the request,
+// the excerpt of the answer and the command that shows it. An empty set says
+// so in words, with the counts at zero.
+func findingsMarkdown(set findingSet) []byte {
 	var b strings.Builder
 	b.WriteString("# Findings\n\n")
-	if len(findings) == 0 && len(leads) == 0 && len(folds) == 0 {
-		b.WriteString("No qualifying rows: the workspace holds no verify result and no advisory lead a label supports, and no unproved hint. 0 findings, 0 leads.\n")
+	rows := len(set.Findings) + len(set.Identifications) + len(set.Leads)
+	if rows == 0 && len(set.Folds) == 0 {
+		b.WriteString("No qualifying rows: the workspace holds no verify result, no advisory lead, no proven path answer and no unproved hint. 0 findings, 0 identifications, 0 leads.\n")
 		return []byte(b.String())
 	}
-	if len(findings) == 0 && len(leads) == 0 {
-		b.WriteString("No qualifying rows: the workspace holds no verify result and no advisory lead a label supports, and no unproved hint the map lists. 0 findings, 0 leads.\n\n")
+	if rows == 0 {
+		b.WriteString("No qualifying rows: the workspace holds nothing a tier lists, and no unproved hint the map lists. 0 findings, 0 identifications, 0 leads.\n\n")
 	} else {
-		fmt.Fprintf(&b, "%s and %s, each read from a stored row of the workspace; proved names the read that settled it, version-only the product and version alone, conditional a precondition the read did not show.\n\n",
-			plural(len(findings), "finding"), plural(len(leads), "lead"))
+		fmt.Fprintf(&b, "%s, each read from a stored row of the workspace. A finding is proven: its answer shows the thing named. An identification is a product and version a service stated, with the advisory match where there is one (proved names the read that settled it, version-only the product and version alone, conditional a precondition the read did not show). A lead is inferred from a name, a path or a guess, and names the check that would prove it.\n\n", set.counts())
 	}
-	for _, label := range []string{verify.Proved, verify.VersionOnly, verify.Conditional} {
-		var rs []findingRecord
-		for _, f := range findings {
-			if f.Label == label {
-				rs = append(rs, f)
-			}
-		}
-		if len(rs) == 0 {
-			continue
-		}
-		title := map[string]string{verify.Proved: "Proved", verify.VersionOnly: "Version-only", verify.Conditional: "Conditional"}[label]
-		fmt.Fprintf(&b, "## %s (%d)\n\n", title, len(rs))
-		for _, r := range groupAdvisoryFindings(rs) {
-			b.WriteString(findingMarkdown(r.rec, r.ids...))
-		}
-		b.WriteString("\n")
-	}
-	if len(leads) > 0 {
-		b.WriteString("## Leads — unproved hints\n\n")
-		b.WriteString("Hints the run did not prove: a route or service something named but no read settled. They are leads to look at, not findings.\n\n")
-		for _, r := range leads {
+	if len(set.Findings) > 0 {
+		fmt.Fprintf(&b, "## Findings (%d)\n\n", len(set.Findings))
+		for _, r := range set.Findings {
 			b.WriteString(findingMarkdown(r))
 		}
 		b.WriteString("\n")
 	}
-	if len(folds) > 0 {
-		fmt.Fprintf(&b, "## Folded hints (%d)\n\n", foldedCount(folds))
+	if len(set.Identifications) > 0 {
+		fmt.Fprintf(&b, "## Identifications (%d)\n\n", len(set.Identifications))
+		for _, label := range []string{verify.Proved, verify.VersionOnly, verify.Conditional} {
+			var rs []findingRecord
+			for _, f := range set.Identifications {
+				if f.Label == label {
+					rs = append(rs, f)
+				}
+			}
+			if len(rs) == 0 {
+				continue
+			}
+			title := map[string]string{verify.Proved: "Proved", verify.VersionOnly: "Version-only", verify.Conditional: "Conditional"}[label]
+			fmt.Fprintf(&b, "### %s (%d)\n\n", title, len(rs))
+			for _, r := range groupAdvisoryFindings(rs) {
+				b.WriteString(findingMarkdown(r.rec, r.ids...))
+			}
+			b.WriteString("\n")
+		}
+	}
+	if len(set.Leads) > 0 {
+		fmt.Fprintf(&b, "## Leads (%d)\n\n", len(set.Leads))
+		b.WriteString("Inferred from a name, a path or a guess, or an answer that did not show what the name says. They are leads to look at, not findings; each names the check that would prove it.\n\n")
+		for _, r := range set.Leads {
+			b.WriteString(findingMarkdown(r))
+		}
+		b.WriteString("\n")
+	}
+	if len(set.Folds) > 0 {
+		fmt.Fprintf(&b, "## Folded hints (%d)\n\n", foldedCount(set.Folds))
 		b.WriteString("Hints the map's own view counts and does not list, for what the run's requests showed of them (`azhaq run -all-rows` and `azhaq query -coverage hint` list them). They are not leads:\n\n")
-		for _, g := range folds {
+		for _, g := range set.Folds {
 			fmt.Fprintf(&b, "- %s\n", g.Line())
 		}
 		b.WriteString("\n")
@@ -286,9 +411,10 @@ func findingsMarkdown(findings, leads []findingRecord, folds []engine.FoldGroup)
 	return []byte(b.String())
 }
 
-// findingMarkdown is one record as a Markdown bullet: the severity,
-// what and where it is, what settles it, and the command that
-// produced it.
+// findingMarkdown is one record as a Markdown bullet: the severity, what and
+// where it is, what settles it, and the command that produced it; under it,
+// the proof: when it was observed, the request, the excerpt of the answer
+// and the command that shows it without azhaq (a lead: the check instead).
 func findingMarkdown(r findingRecord, ids ...string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "- **%s** %s", r.Severity, r.Kind)
@@ -328,6 +454,26 @@ func findingMarkdown(r findingRecord, ids ...string) string {
 		b.WriteString("; command: " + r.Command)
 	}
 	b.WriteString("\n")
+	if p := r.Proof; p != nil {
+		fmt.Fprintf(&b, "  - observed %s by %s: %s %s", p.ObservedAt, p.How, p.Method, p.Target)
+		if p.RequestBytes != "" {
+			fmt.Fprintf(&b, " (request bytes `%s`)", p.RequestBytes)
+		}
+		b.WriteString("\n")
+		at := ""
+		if p.ExcerptOffset != nil {
+			at = fmt.Sprintf(" at byte %d", *p.ExcerptOffset)
+		}
+		status := ""
+		if p.Status != 0 {
+			status = fmt.Sprintf("%d %s, ", p.Status, p.ContentType)
+		}
+		fmt.Fprintf(&b, "  - answer (%s%s%s): `%s`\n", status, p.ExcerptPart, at, strings.ReplaceAll(p.Excerpt, "`", "'"))
+		fmt.Fprintf(&b, "  - reproduce: `%s`\n", p.Reproduce)
+	}
+	if r.Check != "" {
+		fmt.Fprintf(&b, "  - check: %s\n", r.Check)
+	}
 	return b.String()
 }
 

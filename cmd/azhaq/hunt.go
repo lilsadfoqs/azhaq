@@ -62,7 +62,8 @@ func cmdHunt(args []string) error {
 	}
 	in := hunt.Input{DB: path, Rows: g.rows, Obs: g.obs, Roles: rows, Now: time.Now(), Since: *since}
 	for _, s := range secretRows(g.obs) {
-		in.Secrets = append(in.Secrets, hunt.Secret{Kind: s.Kind, Severity: s.Severity, Where: s.Where, Name: s.Name, Preview: s.Redacted, Rule: s.Rule, Entropy: s.Entropy})
+		in.Secrets = append(in.Secrets, hunt.Secret{Kind: s.Kind, Severity: s.Severity, Where: s.Where, Name: s.Name, Preview: s.Redacted, Rule: s.Rule, Entropy: s.Entropy,
+			Known: s.Rule == "known key format" && s.Severity != "info"})
 	}
 	ents := make([]types.Entity, 0, len(g.rows))
 	for _, r := range g.rows {
@@ -77,6 +78,15 @@ func cmdHunt(args []string) error {
 		list = list[:*limit]
 	}
 	enc := json.NewEncoder(os.Stdout)
+	var tiers tierCounts
+	for _, r := range list {
+		if r.Tier == "finding" {
+			tiers.Findings++
+		} else {
+			tiers.Leads++
+		}
+	}
+	tier := ""
 	for _, r := range list {
 		if *asJSON {
 			if err := enc.Encode(r); err != nil {
@@ -84,16 +94,30 @@ func cmdHunt(args []string) error {
 			}
 			continue
 		}
+		if r.Tier != tier {
+			// Findings first, then the leads apart, each with the check that would prove it.
+			tier = r.Tier
+			if tier == "finding" {
+				fmt.Printf("findings (%d): proven, the answer shows the thing named\n", tiers.Findings)
+			} else {
+				fmt.Printf("leads (%d): inferred from a name, a path or a guess; each names the check that would prove it\n", tiers.Leads)
+			}
+		}
 		parts := make([]string, len(r.Reasons))
 		for i, x := range r.Reasons {
 			parts[i] = x.Signal + ": " + x.Detail
 		}
-		fmt.Printf("%3d  %3d  %s  %s  → next: %s\n", r.Rank, r.Score, r.Key, strings.Join(parts, "; "), r.Next)
+		line := fmt.Sprintf("%3d  %3d  %s  %s", r.Rank, r.Score, r.Key, strings.Join(parts, "; "))
+		if r.Tier != "finding" {
+			line += "  → check: " + r.Check
+		}
+		fmt.Printf("%s  → next: %s\n", line, r.Next)
 	}
 	rep := newReport("hunt")
 	rep.what = "rows"
 	rep.Results = len(list)
 	rep.DB = path
+	rep.Tiers = &tiers
 	if matched > len(list) {
 		rep.Notes = append(rep.Notes, fmt.Sprintf("%d rows have a signal; -limit %d printed the first %d (best first)", matched, *limit, len(list)))
 	}

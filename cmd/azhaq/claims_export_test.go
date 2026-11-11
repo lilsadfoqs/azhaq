@@ -84,11 +84,11 @@ func TestExportOfAWorkspaceWithNothingToWrite(t *testing.T) {
 		}
 	}
 	out, _, err := captureBoth(t, func() error { return cmdExport([]string{"-db", db, "-format", "findings"}) })
-	if err != nil || strings.TrimSpace(out) != `{"type":"findings","findings":0,"leads":0}` {
+	if err != nil || strings.TrimSpace(out) != `{"type":"findings","findings":0,"identifications":0,"leads":0}` {
 		t.Errorf("findings: %q %v", out, err)
 	}
 	out, _, err = captureBoth(t, func() error { return cmdExport([]string{"-db", db, "-format", "findings-md"}) })
-	if err != nil || !strings.Contains(out, "No qualifying rows") || !strings.Contains(out, "0 findings, 0 leads") {
+	if err != nil || !strings.Contains(out, "No qualifying rows") || !strings.Contains(out, "0 findings, 0 identifications, 0 leads") {
 		t.Errorf("findings-md: %q %v", out, err)
 	}
 	for _, format := range []string{"graphql", "sdl"} {

@@ -166,7 +166,7 @@ func TestIngestReadsNmap(t *testing.T) {
 	if err := exportAs(db, "findings", "", &found); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(found.String(), `"findings":0`) {
+	if strings.Contains(found.String(), `"type":"finding"`) {
 		t.Errorf("nmap's output made findings: %s", found.String())
 	}
 	// A host nmap found down gives no row.

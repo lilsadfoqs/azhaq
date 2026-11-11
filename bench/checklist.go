@@ -268,7 +268,7 @@ func benchChecklist() {
 	must(os.MkdirAll(dir, 0o755))
 	c := &checklist{dir: dir, site: site}
 	for _, step := range []func(){c.mapAndCounts, c.writesOnlyWithFlags, c.denyPath, c.heldStateChanging, c.scope, c.lostSession, c.exitCodes,
-		c.webAndAPI, c.rolesAndWrites, c.outputs, c.mcpLock, c.services} {
+		c.webAndAPI, c.rolesAndWrites, c.outputs, c.tiers, c.mcpLock, c.services} {
 		step()
 	}
 	logf("checklist coverage:\n%s", checklistTable())

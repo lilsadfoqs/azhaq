@@ -196,7 +196,7 @@ func TestReportFindingsSendsNothingAndJSONIsJSONL(t *testing.T) {
 		t.Fatal(err)
 	}
 	asJSON, _, err := captureBoth(t, func() error { return cmdReport([]string{"-findings", "-db", db, "-format", "json"}) })
-	if err != nil || asJSON != jsonl || strings.TrimSpace(jsonl) != `{"type":"findings","findings":0,"leads":0}` {
+	if err != nil || asJSON != jsonl || strings.TrimSpace(jsonl) != `{"type":"findings","findings":0,"identifications":0,"leads":0}` {
 		t.Errorf("-format json %q, jsonl %q (%v)", asJSON, jsonl, err)
 	}
 	if _, _, err := captureBoth(t, func() error { return cmdReport([]string{"-findings", "-db", db, "-format", "md"}) }); err != nil {
@@ -213,14 +213,14 @@ func TestFindingsLeadsHaveTheirOwnTypeAndHeading(t *testing.T) {
 	g := &graphView{args: []string{"-url", "http://app.test/"}, rows: []engine.MapEntry{
 		{Entity: types.Entity{Type: types.TypeURL, Key: "http://app.test/api/things"}, Coverage: "hint", Proof: "GET answers 404; called with POST"},
 	}}
-	found, leads, folds := buildFindings(g)
-	if len(found) != 0 || len(leads) != 1 {
-		t.Fatalf("%d findings, %d leads", len(found), len(leads))
+	set := buildFindings(g)
+	if len(set.Findings) != 0 || len(set.Leads) != 1 {
+		t.Fatalf("%d findings, %d leads", len(set.Findings), len(set.Leads))
 	}
-	if !strings.Contains(string(findingsJSONL(found, leads, folds)), `"type":"lead"`) {
-		t.Errorf("jsonl: %s", findingsJSONL(found, leads, folds))
+	if !strings.Contains(string(findingsJSONL(set)), `"type":"lead"`) {
+		t.Errorf("jsonl: %s", findingsJSONL(set))
 	}
-	if md := string(findingsMarkdown(found, leads, folds)); !strings.Contains(md, "## Leads — unproved hints") || strings.Contains(md, "## Proved") {
+	if md := string(findingsMarkdown(set)); !strings.Contains(md, "## Leads (1)") || strings.Contains(md, "## Findings") {
 		t.Errorf("markdown:\n%s", md)
 	}
 }

@@ -13,6 +13,7 @@ import (
 	"github.com/lilsadfoqs/azhaq/engine"
 	"github.com/lilsadfoqs/azhaq/internal/advisory"
 	"github.com/lilsadfoqs/azhaq/internal/egress"
+	"github.com/lilsadfoqs/azhaq/internal/proof"
 	"github.com/lilsadfoqs/azhaq/internal/verify"
 	"github.com/lilsadfoqs/azhaq/store"
 	"github.com/lilsadfoqs/azhaq/types"
@@ -54,7 +55,9 @@ const findingsAdvFixture = `[
    "references":[{"type":"ADVISORY","url":"https://example.test/CVE-TEST-0003"}]}
 ]`
 
-func parseFindingLines(t *testing.T, body []byte) (findings, leads []map[string]any) {
+// parseTiers reads the findings output by tier: the lines of type finding, of
+// type identification and of type lead.
+func parseTiers(t *testing.T, body []byte) (findings, idents, leads []map[string]any) {
 	t.Helper()
 	for _, line := range strings.Split(strings.TrimSpace(string(body)), "\n") {
 		if line == "" {
@@ -67,13 +70,23 @@ func parseFindingLines(t *testing.T, body []byte) (findings, leads []map[string]
 		switch row["type"] {
 		case "finding":
 			findings = append(findings, row)
+		case "identification":
+			idents = append(idents, row)
 		case "lead":
 			leads = append(leads, row)
 		default:
 			t.Fatalf("unexpected line in findings output: %s", line)
 		}
 	}
-	return findings, leads
+	return findings, idents, leads
+}
+
+// parseFindingLines is the proven rows and the identifications together (the
+// records a label of verify applies to), and the leads.
+func parseFindingLines(t *testing.T, body []byte) (findings, leads []map[string]any) {
+	t.Helper()
+	f, i, l := parseTiers(t, body)
+	return append(f, i...), l
 }
 
 // A Juice Shop + VAmPI style pair in one run: report -findings writes
@@ -137,9 +150,14 @@ func TestFindingsReportFromAStoredRun(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	findings, leads := parseFindingLines(t, body)
-	if len(findings) != 3 || len(leads) != 0 {
-		t.Fatalf("%d findings, %d leads; want 3 and 0:\n%s", len(findings), len(leads), body)
+	proven, findings, leads := parseTiers(t, body)
+	if len(proven) != 0 || len(findings) != 3 || len(leads) != 0 {
+		t.Fatalf("%d findings, %d identifications, %d leads; want 0, 3 and 0 (a version in a header is an identification):\n%s", len(proven), len(findings), len(leads), body)
+	}
+	for _, f := range findings {
+		if f["tier"] != "identification" || f["observed_at"] == "" || f["reproduce"] == "" || f["excerpt"] == "" || f["how"] == "" || f["method"] == "" || f["target"] == "" {
+			t.Errorf("identification %v has no complete proof: %v", f["advisory_id"], f)
+		}
 	}
 	// Proved first; the three labels distinct and in rank order.
 	wantLabels := []string{"proved", "version-only", "conditional"}
@@ -190,7 +208,7 @@ func TestFindingsReportFromAStoredRun(t *testing.T) {
 		t.Fatal(err)
 	}
 	md := buf.String()
-	for _, want := range []string{"# Findings", "## Proved (1)", "## Version-only (1)", "## Conditional (1)", "CVE-TEST-0001", "CVE-TEST-0003", "CVE-TEST-0002"} {
+	for _, want := range []string{"# Findings", "## Identifications (3)", "### Proved (1)", "### Version-only (1)", "### Conditional (1)", "CVE-TEST-0001", "CVE-TEST-0003", "CVE-TEST-0002"} {
 		if !strings.Contains(md, want) {
 			t.Errorf("findings markdown lacks %q:\n%s", want, md)
 		}
@@ -218,7 +236,7 @@ func TestFindingsEmptyRecordSet(t *testing.T) {
 	if err != nil {
 		t.Fatalf("report -findings on an empty run: %v\n%s (want exit 0)", err, errOut)
 	}
-	if strings.TrimSpace(out) != `{"type":"findings","findings":0,"leads":0}` {
+	if strings.TrimSpace(out) != `{"type":"findings","findings":0,"identifications":0,"leads":0}` {
 		t.Errorf("empty JSONL record set is %q, want the explicit empty line", strings.TrimSpace(out))
 	}
 	out, _, err = captureBoth(t, func() error {
@@ -234,7 +252,7 @@ func TestFindingsEmptyRecordSet(t *testing.T) {
 	if err := exportAs(db, "findings", "", &buf); err != nil {
 		t.Fatal(err)
 	}
-	if strings.TrimSpace(buf.String()) != `{"type":"findings","findings":0,"leads":0}` {
+	if strings.TrimSpace(buf.String()) != `{"type":"findings","findings":0,"identifications":0,"leads":0}` {
 		t.Errorf("empty export is %q, want the explicit empty line", strings.TrimSpace(buf.String()))
 	}
 }
@@ -256,7 +274,10 @@ func TestBuildFindings(t *testing.T) {
 		obs: []types.StoredObservation{
 			verifyObs(verify.Result{Kind: verify.KindUnauthenticatedRead, Label: verify.Proved, Severity: "high",
 				Host: "127.0.0.1", Port: 6379, Target: "127.0.0.1:6379", Product: "Redis", Version: "7.2.0",
-				Request: "INFO server", Evidence: "# Server redis_version:7.2.0", Command: "azhaq run -verify"}),
+				Request: "INFO server", Evidence: "# Server redis_version:7.2.0", Command: "azhaq run -verify",
+				Proof: &proof.Proof{ObservedAt: "2026-11-12T10:00:00Z", Method: "INFO server", Target: "127.0.0.1:6379", RequestBytes: "INFO server\\r\\n",
+					Excerpt: "$900\\r\\n# Server\\r\\nredis_version:7.2.0", ExcerptPart: "response", How: "azhaq-verify",
+					Reproduce: "printf '%b' 'INFO server\\r\\n' | nc -w 3 127.0.0.1 6379"}}),
 			verifyObs(verify.Result{Kind: verify.KindAdvisoryPrecond, Label: verify.Proved, Severity: "medium",
 				Host: "app.test", Port: 80, Target: "app.test", Product: "nginx", Version: "1.18.0",
 				AdvisoryID: "CVE-1", AdvisoryURL: "https://example.test/CVE-1",
@@ -277,13 +298,16 @@ func TestBuildFindings(t *testing.T) {
 			{Entity: types.Entity{Type: types.TypeURL, Key: "http://app.test/"}, Coverage: "visited", Proof: "answered 200"},
 		},
 	}
-	findings, leads, _ := buildFindings(g)
-	if len(findings) != 3 {
-		t.Fatalf("%d findings, want 3 (redis proved, CVE-1 proved once, CVE-2 conditional): %+v", len(findings), findings)
+	set := buildFindings(g)
+	findings, leads := set.Findings, set.Leads
+	if len(findings) != 1 || findings[0].Product != "Redis" || findings[0].Tier != "finding" {
+		t.Fatalf("%d findings, want 1 (the redis read, with its proof): %+v", len(findings), findings)
 	}
-	if findings[0].Label != verify.Proved || findings[1].Label != verify.Proved || findings[2].Label != verify.Conditional {
-		t.Errorf("labels %q %q %q, want proved, proved, conditional", findings[0].Label, findings[1].Label, findings[2].Label)
+	idents := set.Identifications
+	if len(idents) != 2 || idents[0].Label != verify.Proved || idents[1].Label != verify.Conditional {
+		t.Fatalf("%d identifications, want 2 (CVE-1 proved once, CVE-2 conditional): %+v", len(idents), idents)
 	}
+	findings = append(findings, idents...)
 	byID := map[string]findingRecord{}
 	for _, f := range findings {
 		byID[f.AdvisoryID] = f
@@ -317,9 +341,10 @@ func TestFindingsKeepAHandshakeKind(t *testing.T) {
 	raw, _ := json.Marshal(verify.Result{Kind: verify.KindUnauthenticatedHandshake, Label: verify.Proved, Severity: "info",
 		Host: "10.0.0.5", Port: 5005, Target: "10.0.0.5:5005", Request: "JDWP-Handshake", Evidence: "JDWP-Handshake", Command: "azhaq ports -verify"})
 	g := &graphView{obs: []types.StoredObservation{{Observation: types.Observation{Collector: "azhaq-verify", Kind: "verify", Payload: raw}}}}
-	findings, _, _ := buildFindings(g)
-	if len(findings) != 1 || findings[0].Kind != "unauthenticated-handshake" || findings[0].Severity != "info" {
-		t.Fatalf("%+v, want one unauthenticated-handshake record, info", findings)
+	set := buildFindings(g)
+	findings := set.Identifications
+	if len(findings) != 1 || len(set.Findings) != 0 || findings[0].Kind != "unauthenticated-handshake" || findings[0].Severity != "info" {
+		t.Fatalf("%+v, want one unauthenticated-handshake record, info, an identification", set)
 	}
 	if md := findingMarkdown(findings[0]); !strings.Contains(md, "**info** unauthenticated-handshake on 10.0.0.5:5005") {
 		t.Errorf("markdown %q", md)

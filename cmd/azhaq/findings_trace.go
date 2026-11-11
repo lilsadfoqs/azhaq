@@ -4,9 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"net/url"
-	"strconv"
 
+	"github.com/lilsadfoqs/azhaq/internal/proof"
 	"github.com/lilsadfoqs/azhaq/internal/webextract"
 	"github.com/lilsadfoqs/azhaq/types"
 )
@@ -18,35 +17,43 @@ import (
 // an error does. Nothing is asked again.
 func traceFindingsOf(obs []types.StoredObservation, command string) []findingRecord {
 	var out []findingRecord
-	seen := map[string]bool{}
+	at := map[string]int{} // URL and exception → its place in out
 	for _, o := range obs {
 		if !bytes.Contains(o.Payload, []byte(`"stack_trace"`)) {
 			continue
 		}
 		var row struct {
-			URL    string           `json:"url"`
-			Status int              `json:"status"`
-			Trace  webextract.Trace `json:"stack_trace"`
+			URL         string           `json:"url"`
+			Status      int              `json:"status"`
+			ContentType string           `json:"content_type"`
+			Trace       webextract.Trace `json:"stack_trace"`
+			Excerpt     string           `json:"trace_excerpt"`
+			Offset      *int             `json:"trace_offset"`
 		}
 		if json.Unmarshal(o.Payload, &row) != nil || row.URL == "" || row.Trace.Frames == 0 {
 			continue
 		}
 		key := row.URL + "|" + row.Trace.Exception
-		if seen[key] {
-			continue
+		excerpt := row.Excerpt
+		if excerpt == "" {
+			excerpt = proof.Printable([]byte(row.Trace.Exception), proof.MaxExcerpt)
 		}
-		seen[key] = true
 		rec := findingRecord{
-			Kind: "error-disclosure", Label: "proved", Severity: "low", URL: row.URL, Command: command,
+			Tier: proof.TierFinding, Kind: "error-disclosure", Label: "proved", Severity: "low", URL: row.URL, Command: command,
+			Request:   "GET " + row.URL,
 			Evidence:  fmt.Sprintf("HTTP %d: %s (%d %s frames)", row.Status, row.Trace.Exception, row.Trace.Frames, row.Trace.Runtime),
 			Collector: o.Collector,
+			Proof:     traceProof(row.URL, o.Collector, row.Status, o.ObservedAt, excerpt, row.Offset, row.ContentType),
 		}
-		if u, err := url.Parse(row.URL); err == nil {
-			rec.Host = u.Hostname()
-			if p, err := strconv.Atoi(u.Port()); err == nil {
-				rec.Port = p
+		rec.Host, rec.Port = hostPort(row.URL)
+		if i, seen := at[key]; seen {
+			// One record per URL and exception: the answer that kept the bytes wins.
+			if row.Excerpt != "" && out[i].Proof.ExcerptOffset == nil {
+				out[i] = rec
 			}
+			continue
 		}
+		at[key] = len(out)
 		out = append(out, rec)
 	}
 	return out
