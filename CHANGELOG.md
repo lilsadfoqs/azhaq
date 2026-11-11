@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.19.0
+
+### Fixed
+
+- `report` writes up `roles read the same sensitive fields`, the same values of sensitive fields several signed-in roles read, as excessive data exposure to those roles, low to start; it was skipped, and refused with `-url`.
+- `dns -axfr` notes each server that transferred the zone and its record count before the ones that refused; a zone the resolver gave no longer reads as a failed transfer.
+- An address of `-cidr`, `-asn` or `-list` that answers HTTP is crawled, its scripts read and its built-in path checks asked, like a URL given; the run no longer fails with `its sweep left no record` for it.
+- `azhaq resume -retry-failed` asks again a path sweep the run listed and left no record of, and clears that failure once the sweep records; `query -failed` lists it as retryable.
+- `run -login`, `roles -role-login` and the MCP `login` resolve names through `-resolvers`, as the run's own requests do; a name only those resolvers answer no longer fails with `net::ERR_EMPTY_RESPONSE`, and a connection Chrome's guard cannot open is named in the error with its address and reason.
+- The requests `roles` sends between the runs (the replay, history reads, controls, writes and a renewal's sign-in) go to the addresses the runs' `-resolvers` give.
+- A sign-in whose page has no password field says what Chrome showed: the final URL, its status, title, size and inputs, or Chrome's own load error.
+- On an MCP server started without `-allow-writes`, `azhaq_map` and `azhaq_plan` with `graphql: true`, and `azhaq_resume` of a workspace started with `-graphql`, are refused before anything is sent; the introspection and schema-recovery POSTs were sent before.
+- A target an MCP call names whose own path or query declares a state change (`/api/user/logout`) is held back and listed as skipped, and `azhaq_plan` lists it as held back, unless the server was started with `-send-state-changing`; a URL you type on the command line is still never held back.
+- `ports -verify` labels a protocol handshake (JDWP, Java RMI, Kafka, SQL Server, SMB, RDP, Oracle TNS, AMQP and the rest) `unauthenticated-handshake`, not `unauthenticated-read`, which stays for the checks that read state or information (Redis, MongoDB, memcached, ZooKeeper, LDAP, DNS, AFP, Minecraft); findings records and exports carry the kind.
+- A DNS server that refuses `version.bind` (REFUSED, NOTIMP, SERVFAIL, or no TXT answer) is `version-only`, severity info, with evidence such as `rcode REFUSED`, not `conditional`/low with the raw reply; evidence that is not text is printed as `\xNN`.
+- An API base a page's inline script builds from `window.location` (ShowDoc's `DocConfig.server`) is evaluated against the page; the calls, the app's request helper and the URL values built on it are listed under it (`/server/index.php?s=/api/item/info`) with their method and body fields, not at the origin root.
+
 ## v0.18.0
 
 ### Added
