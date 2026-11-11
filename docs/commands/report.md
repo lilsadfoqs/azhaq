@@ -27,7 +27,7 @@ azhaq report -findings -db app.db -format jsonl
 ## What it does
 
 1. Opens `DIR/roles.db`, the evidence store of an `azhaq roles` run. `-dir` is that run's `-dir`.
-2. Picks the rows to write up. Without `-url`, a row gets a report when its verdict is one of these seven:
+2. Picks the rows to write up. Without `-url`, a row gets a report when its verdict is one of these eight:
    - `reads another role's object`
    - `writes another role's object`
    - `writes another role's object: accepted; the change cannot be read back to confirm`
@@ -35,10 +35,11 @@ azhaq report -findings -db app.db -format jsonl
    - `creates in another role's collection`
    - `create accepted: nothing shows it crosses roles`
    - `anyone reads sensitive fields`
+   - `roles read the same sensitive fields`: the same values of sensitive fields come back to several signed-in roles, written up as excessive data exposure to those roles
 3. Orders the reports by confidence: `proved`, `likely`, `guess`, then rows that carry none.
 4. Writes one Markdown report per row. Every piece of a report comes from the evidence; what the evidence does not hold is named in the report.
 
-With `-url URL`, `report` writes that row's report to standard output (a report for each owner when several owners' requests share the URL and method: see below). A write or create row also needs `-method M`. A row whose verdict is not one of the seven is refused, with exit 1, and a `-url` that matches no row is exit 1 too.
+With `-url URL`, `report` writes that row's report to standard output (a report for each owner when several owners' requests share the URL and method: see below). A write or create row also needs `-method M`. A row whose verdict is not one of the eight is refused, with exit 1, and a `-url` that matches no row is exit 1 too.
 
 When no row qualifies, `report` prints a note on stderr, writes nothing and exits 0.
 
@@ -83,7 +84,7 @@ azhaq report: 3 reports in azhaq-roles-20261028-101500/reports
 
 ### The parts of a report
 
-1. **Title.** It names the bug class. A read is broken object level authorization, and a write adds "(write)", or "(write accepted, not read back)" when the change could not be read back. A create is "Missing authorization on create" only when something shows it: the anonymous role was let to create, or the object it made belongs to the role whose request was replayed. Any other create another role sent is "Create accepted: bob's POST to /books/v1 was accepted", which says what was observed and names no vulnerability. Sensitive fields anyone reads are excessive data exposure.
+1. **Title.** It names the bug class. A read is broken object level authorization, and a write adds "(write)", or "(write accepted, not read back)" when the change could not be read back. A create is "Missing authorization on create" only when something shows it: the anonymous role was let to create, or the object it made belongs to the role whose request was replayed. Any other create another role sent is "Create accepted: bob's POST to /books/v1 was accepted", which says what was observed and names no vulnerability. Sensitive fields anyone reads are excessive data exposure, and the same sensitive values several signed-in roles read are excessive data exposure to those roles.
 2. **Summary.** Two sentences.
 3. **Severity.** A level labelled a guess, with the reason. Sensitive fields and a write raise it. A create starts low (an accepted create stays a guess at low), and a create rises to medium when a request that carries no credential was let to create.
 4. **Steps.** Numbered, with the curl commands from the evidence. The sessions are shell variables: `$ALICE_TOKEN`, `$BOB_TOKEN`.

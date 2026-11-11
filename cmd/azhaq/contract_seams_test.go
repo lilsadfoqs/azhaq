@@ -63,7 +63,6 @@ func verdicts(t *testing.T) map[string]string {
 // the reason: no finding, or a finding the evidence does not carry.
 var notReportable = map[string]string{
 	"verdictObject":              "every role reads it: a comparison, not a broken control",
-	"verdictSecrets":             "the same fields for every role: no role reads more than another",
 	"verdictShared":              "a session that did not find it gets the same answer: no proof either way",
 	"verdictSignedIn":            "signed in only: access control working",
 	"verdictOnly":                "one role reads it: access control working",

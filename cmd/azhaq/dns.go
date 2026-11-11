@@ -1319,6 +1319,12 @@ func (r *dnsRun) transfer(ctx context.Context, host string, d *dnsr.Data) {
 		return
 	}
 	chain, fails := r.pool.Transfer(ctx, host, servers)
+	// The servers that gave the zone first: a refusal alone reads as a failed transfer.
+	for _, z := range chain.Data {
+		if len(z.Resolver) > 0 {
+			r.noteAXFR(fmt.Sprintf("-axfr %s: %s transferred the zone (%d records)", host, z.Resolver[0], len(z.AllRecords)))
+		}
+	}
 	for _, f := range fails {
 		r.noteAXFR(fmt.Sprintf("-axfr %s: %s did not transfer the zone: %v", host, f.Type, f.Err))
 	}
