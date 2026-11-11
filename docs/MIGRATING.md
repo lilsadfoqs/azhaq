@@ -303,7 +303,7 @@ azhaq crawl -u https://app.example.com/ -fs rdn -do -f rdn,path -rl 5
 | ffuf | azhaq `fuzz` | Note |
 | --- | --- | --- |
 | `-u URL`, `-w FILE[:KEYWORD]` | `-u URL`, `-w FILE[:KEYWORD]` | Repeatable. `-w -` is stdin. |
-| `-mode clusterbomb` | `-mode clusterbomb` | Also `pitchfork` and `sniper`. |
+| `-mode clusterbomb` | `-mode clusterbomb` | Also `pitchfork` and `sniper`. Two `-w` that are both `FUZZ` (no `:KEYWORD`) are joined into one list, whatever the mode: 8 and 3 words are 11 requests, where ffuf's clusterbomb asks 24. The summary says so. Give each list its own keyword (`-w a.txt:FUZZ -w b.txt:W2`) to combine them. |
 | `-X`, `-d`, `-H`, `-b` | `-X`, `-d`, `-H`, `-b` | `-data`, `-data-ascii`, `-data-binary` and `-cookie` too. |
 | `-request FILE`, `-request-proto` | the same | A raw request as Burp saves it. |
 | `-e .php,.bak`, `-D`, `-ic` | the same | |
@@ -355,6 +355,7 @@ azhaq crawl -u https://app.example.com/ -fs rdn -do -f rdn,path -rl 5
 - **`dirs` follows ffuf's counting and its defaults.** That is 40 guesses in flight, no pace, and the matcher `-mc 200-299,301,302,307,401,403,405,500`.
 - **Headers.** `fuzz` and `dirs` send what ffuf sends: no `Accept`, `Accept-Encoding: gzip` and your `-H` headers. The `User-Agent` is a current Chrome's, not `Fuzz Faster U Fool`. A size does not depend on it unless the app answers by it, so a `-fs` taken from ffuf filters the same answers.
 - **One difference: a word that names a state change is held back.** ffuf sends every word of a list, `/logout`, `/delete` and `/reset` included. `dirs` and `fuzz` hold back a GET whose own path or query names a state change (the words under [State-changing requests](commands/run.md#state-changing-requests)): a note before the first request says how many words are held, each is listed as skipped and as a row with the status `held back`, and `-send-state-changing` sends every word, as ffuf does. The other words are asked as in ffuf, with a session or without one. `-deny-path REGEX` holds back a word of your own choosing.
+- **A `dirs` word is a path; a `fuzz` word is as written.** `dirs` asks the path the word names: `#` is sent as `%23`, a space as `%20` and a `%` as `%25`, and a `?` starts the query as in ffuf. In ffuf `http://host/FUZZ` puts the word in the URL as written, so `#note` is a fragment and ffuf asks `/`; `dirs` asks `/%23note`, so its rows differ from ffuf's for such a word. `fuzz` puts the word in the URL as written, as ffuf does. See [dirs](commands/dirs.md#words-are-paths).
 - **`#` lines are words.** A line that starts with `#` is asked like any other word, as in ffuf; `dirs -ic` and `fuzz -ic` ignore those lines and a trailing ` # note`.
 
 ### Examples

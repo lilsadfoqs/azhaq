@@ -239,6 +239,7 @@ func cmdFuzz(args []string) error {
 	}
 	extList := splitList(*exts)
 	var all []fuzz.List
+	sizes := map[string][]int{} // words of each list that shares a keyword, in order
 	for _, spec := range fuzz.SplitWordlists(lists) {
 		path, kw := fuzz.ParseWordlist(spec)
 		if md == fuzz.Sniper {
@@ -254,6 +255,10 @@ func cmdFuzz(args []string) error {
 		// Two lists of one keyword (-w a.txt,b.txt) are one list, a then b:
 		// as two they would be a product in which the second hides the first.
 		if i := slices.IndexFunc(all, func(x fuzz.List) bool { return x.Keyword == kw && x.Gen == nil }); i >= 0 {
+			if sizes[kw] == nil {
+				sizes[kw] = []int{all[i].Len()}
+			}
+			sizes[kw] = append(sizes[kw], l.Len())
 			all[i].Words = append(all[i].Words, l.Words...)
 			continue
 		}
@@ -327,6 +332,11 @@ func cmdFuzz(args []string) error {
 	// As ffuf's help says, -acs, -acc and -ach imply -ac.
 	calibrate := *ac || !given["ac"] && (given["acs"] || given["acc"] || given["ach"])
 	var notes []string
+	for _, l := range kept {
+		if n := sizes[l.Keyword]; len(n) > 0 {
+			notes = append(notes, joinedNote(l.Keyword, n, l.Len(), md))
+		}
+	}
 	if rcNote != "" {
 		notes = append(notes, rcNote)
 	}
@@ -1147,4 +1157,20 @@ func shellJoin(args []string) string {
 		out[i] = a
 	}
 	return strings.Join(out, " ")
+}
+
+// joinedNote says that lists sharing a keyword were joined, not combined as
+// ffuf combines them: the requests are the sum of the lists, not the product.
+func joinedNote(kw string, sizes []int, total int, md fuzz.Mode) string {
+	parts := make([]string, len(sizes))
+	prod := 1
+	for i, n := range sizes {
+		parts[i] = strconv.Itoa(n)
+		prod *= n
+	}
+	note := fmt.Sprintf("%d wordlists share the keyword %s (%s words): joined into one list of %d words", len(sizes), kw, strings.Join(parts, " and "), total)
+	if md == fuzz.Clusterbomb {
+		note += fmt.Sprintf("; ffuf combines them, %d requests (name a keyword for each list, -w FILE:KEYWORD, to combine them here)", prod)
+	}
+	return note
 }
