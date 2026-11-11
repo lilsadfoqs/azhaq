@@ -112,7 +112,9 @@ func TestOnlyEgressOpensConnections(t *testing.T) {
 		rel, _ := filepath.Rel(root, p)
 		rel = filepath.ToSlash(rel)
 		switch {
-		case d.IsDir() && (rel == "bench" || rel == "internal/egress" || strings.HasPrefix(d.Name(), ".") && rel != "."):
+		// scripts/advindex is the maintainer's generator of the advisory index: it
+		// downloads public records and is never built into azhaq, like bench.
+		case d.IsDir() && (rel == "bench" || rel == "internal/egress" || rel == "scripts/advindex" || strings.HasPrefix(d.Name(), ".") && rel != "."):
 			return fs.SkipDir
 		case d.IsDir() || !strings.HasSuffix(p, ".go") || strings.HasSuffix(p, "_test.go"):
 			return nil
