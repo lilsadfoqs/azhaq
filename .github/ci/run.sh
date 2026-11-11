@@ -1,5 +1,5 @@
 #!/bin/bash
-# run.sh bench|hunt|gate|trial|range-smoke|checklist NAME [WORDS...]: starts a CI run
+# run.sh bench|hunt|gate|trial|range-smoke|checklist|parity NAME [WORDS...]: starts a CI run
 # by pushing the annotated tag KIND-NAME on HEAD. A checklist (the review's
 # capability checklist as commands, under 20 minutes) takes no words; run it
 # on the commit to be tagged: the release workflow wants a passing run of it.
@@ -12,13 +12,16 @@
 # 1 to 4) to run each part N times, two sessions at a time. "gate" as this script's
 # own first positional KIND is a different thing: it starts the bench
 # (default flags) and the hunt (WORDS as for a hunt) on this commit at once;
-# fetch.sh gate NAME brings back both. A hunt, a gate or a trial also carries
+# fetch.sh gate NAME brings back both. A parity run (an agent-free replay of the
+# documented flow on fresh estates, .github/ci/parity/README.md) takes "count=N
+# minutes=M" (1 to 4 estates, a cap in minutes) and carries no Codex session;
+# parity/fetch.sh NAME DIR brings back its aggregates. A hunt, a gate or a trial also carries
 # this machine's Codex session, encrypted to the CI's key (its private half
 # is the secret CODEX_AUTH_KEY). fetch.sh brings back what the run wrote;
 # beat.sh reads a trial's heartbeat while it runs.
 set -euo pipefail
-kind=${1:?usage: run.sh bench|hunt|gate|trial|range-smoke|checklist NAME [WORDS...]}
-name=${2:?usage: run.sh bench|hunt|gate|trial|range-smoke|checklist NAME [WORDS...]}
+kind=${1:?usage: run.sh bench|hunt|gate|trial|range-smoke|checklist|parity NAME [WORDS...]}
+name=${2:?usage: run.sh bench|hunt|gate|trial|range-smoke|checklist|parity NAME [WORDS...]}
 shift 2
 ci_recipient=age1s5k75wkcjwpps44lup59t048lxtsmc48l2lkg42mly922kj6g3ks3flrqj
 age=$(command -v age || echo "$HOME/go/bin/age")
@@ -28,6 +31,7 @@ case $kind in
 bench) printf '%s\n' "${*:--profile both}" > "$msg" ;;
 range-smoke) printf '%s\n' "${*:-all}" > "$msg" ;;
 checklist) printf '%s\n' "${*:-checklist}" > "$msg" ;;
+parity) printf '%s\n' "${*:-count=3 minutes=30}" > "$msg" ;;
 hunt | gate | trial)
   if [ "$kind" = trial ]; then
     case "${1:-switch}" in
@@ -42,7 +46,7 @@ hunt | gate | trial)
   "$age" -a -r "$ci_recipient" "${CODEX_HOME:-$HOME/.codex}/auth.json" >> "$msg"
   ;;
 *)
-  echo "run.sh: KIND is bench, hunt, gate, trial, range-smoke or checklist" >&2
+  echo "run.sh: KIND is bench, hunt, gate, trial, range-smoke, checklist or parity" >&2
   exit 2
   ;;
 esac

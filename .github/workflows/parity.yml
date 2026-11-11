@@ -1,0 +1,172 @@
+name: parity
+
+# A cheap, unattended replay of the documented default flow on freshly built
+# estates, graded by the range grader (.github/ci/parity/README.md). Push a tag
+# parity-NAME; the first line of its message takes "count=N" (1 to 4 estates,
+# default 3) and "minutes=M" (the cap on each replay, default 30).
+# Each sample builds its estate from a secret seed that is not a pool entry's
+# (seed.sh), runs azhaq on it from replay.sh, and publishes under
+# parity/NAME/sK/ on the ci-results branch: everything but the log is
+# encrypted to the maintainer's age key, and the log shows no result.
+on:
+  push:
+    tags: ["parity-*"]
+
+permissions:
+  contents: write
+
+env:
+  AGE_RECIPIENT: age10llepsf6tflh3wjlfu8awk203049vfsn5vxw9uc3y23qlq9dhy7sm20pex
+
+jobs:
+  params:
+    runs-on: ubuntu-latest
+    outputs:
+      minutes: ${{ steps.p.outputs.minutes }}
+      samples_json: ${{ steps.p.outputs.samples_json }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: p
+        run: |
+          git fetch -q --force origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
+          msg=$(git for-each-ref --format='%(contents:subject)' "refs/tags/$GITHUB_REF_NAME")
+          count=$(echo " $msg " | sed -n 's/.* count=\([0-9]*\) .*/\1/p')
+          minutes=$(echo " $msg " | sed -n 's/.* minutes=\([0-9]*\) .*/\1/p')
+          count=${count:-3}
+          minutes=${minutes:-30}
+          if [ "$count" -lt 1 ] || [ "$count" -gt 4 ]; then
+            echo "::error title=parity::count=$count: it is 1 to 4"
+            exit 1
+          fi
+          if [ "$minutes" -lt 1 ] || [ "$minutes" -gt 120 ]; then
+            echo "::error title=parity::minutes=$minutes: it is 1 to 120"
+            exit 1
+          fi
+          echo "minutes=$minutes" >> "$GITHUB_OUTPUT"
+          echo "samples_json=[$(seq -s, 1 "$count")]" >> "$GITHUB_OUTPUT"
+          echo "parity: $count samples, $minutes minutes each"
+  build:
+    needs: params
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # git describe names the build from the last release tag
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+      - name: build azhaq
+        # The build under test: this tagged commit, as the trial's build job does.
+        run: |
+          v=$(git describe --tags --match 'v[0-9]*' --always)
+          CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=$v" -o azhaq ./cmd/azhaq
+          ./azhaq version
+      - uses: actions/upload-artifact@v7
+        with:
+          name: parity-azhaq
+          path: azhaq
+          retention-days: 2
+  replay:
+    needs: [params, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        sample: ${{ fromJSON(needs.params.outputs.samples_json) }}
+    env:
+      MINUTES: ${{ needs.params.outputs.minutes }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: disk
+        run: .github/ci/range/check-disk.sh
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+      - name: packages
+        run: sudo apt-get update -q && sudo apt-get install -y -q age jq
+      - uses: actions/download-artifact@v7
+        with:
+          name: parity-azhaq
+          path: _bin
+      - name: azhaq
+        run: |
+          mkdir -p "$HOME/parity/bin"
+          install -m 755 _bin/azhaq "$HOME/parity/bin/azhaq"
+          "$HOME/parity/bin/azhaq" version
+      - name: estate
+        # One fresh estate, built and started as the trial's gate-a does. Its seed is
+        # a keyed hash of this tag and sample (seed.sh), so the public tag name does not give the estate away.
+        env:
+          CODEX_AUTH_KEY: ${{ secrets.CODEX_AUTH_KEY }}
+        run: |
+          seed=$(.github/ci/parity/seed.sh "$GITHUB_REF_NAME" "${{ matrix.sample }}")
+          echo "::add-mask::$seed"
+          range="$RUNNER_TEMP/range"
+          mkdir -p "$range" "$HOME/parity/keep" "$HOME/parity/pub"
+          sudo sysctl -q -w vm.max_map_count=262144 # Elasticsearch
+          CGO_ENABLED=0 go build -o "$RUNNER_TEMP/dnsd" ./bench/labdns
+          sudo install -m 755 "$RUNNER_TEMP/dnsd" /usr/local/sbin/dnsd
+          sudo setcap cap_net_bind_service=+ep /usr/local/sbin/dnsd
+          getcap /usr/local/sbin/dnsd | grep -q cap_net_bind_service
+          .github/ci/range/fetch-vulhub.sh "$RUNNER_TEMP/vulhub" > /dev/null 2>&1
+          python3 .github/ci/range/build.py "$seed" --out "$range" --count 1
+          python3 .github/ci/range/up.py "$range" --vulhub "$RUNNER_TEMP/vulhub" --labdns /usr/local/sbin/dnsd --run-as nobody
+          age -r "$AGE_RECIPIENT" -o "$HOME/parity/pub/key.json.age" "$range/key.json"
+          # The key stays for grading below, readable by this user alone; azhaq is never given its path.
+          install -m 600 "$range/key.json" "$HOME/parity/keep/key.json"
+          cp "$range/vars.json" "$HOME/parity/vars.json"
+          shred -u "$range/key.json" 2>/dev/null || rm -f "$range/key.json"
+          rm -rf "$range" "$RUNNER_TEMP/vulhub" "$RUNNER_TEMP/dnsd"
+      - name: replay
+        # Nothing it prints is a result; the files go to $HOME/parity/out.
+        run: |
+          vars="$HOME/parity/vars.json"
+          AZHAQ="$HOME/parity/bin/azhaq" .github/ci/parity/replay.sh "$HOME/parity/out" \
+            "$(jq -r .DOMAIN1 "$vars")" "$(jq -r .NET1 "$vars")" "$(jq -r .DNS1 "$vars")" "$MINUTES"
+          rc=$(jq -r .run_exit "$HOME/parity/out/replay.json")
+          case $rc in 0 | 4) ;; *) echo "::warning title=parity::azhaq run exited $rc" ;; esac
+      - name: grade
+        run: |
+          out="$HOME/parity/out"
+          g="$out/graded"
+          python3 -I .github/ci/parity/to_leads.py --export "$out/export.jsonl" --hunt "$out/hunt.jsonl" --out "$g" \
+            --start "$(jq -r .start "$out/replay.json")" --end "$(jq -r .end "$out/replay.json")"
+          python3 -I .github/ci/range/grade.py "$HOME/parity/keep/key.json" "$g" --json "$g/grade.json" --md "$g/grade.md"
+          python3 -I .github/ci/parity/summary.py sample "$HOME/parity/keep/key.json" "$g/grade.json" "$g/leads.jsonl" \
+            --cap-seconds "$(jq -r .cap_seconds "$out/replay.json")" --out "$out/summary.json"
+          echo "graded"
+      - name: publish
+        if: always()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          out="$HOME/parity/out"
+          pub="$HOME/parity/pub"
+          mkdir -p "$out" "$pub"
+          cd "$out"
+          files=()
+          list=()
+          for f in plan.txt run.out run.err hunt.jsonl hunt.err export.jsonl export.err findings.jsonl findings.err replay.json graded; do
+            [ -e "$f" ] && list+=("$f")
+          done
+          if [ "${#list[@]}" -gt 0 ]; then
+            tar czf "$pub/sample.tgz" "${list[@]}"
+            # A workspace export of a whole range can be large: the rest stays, the export goes.
+            if [ "$(stat -c %s "$pub/sample.tgz")" -gt 41943040 ]; then
+              tar czf "$pub/sample.tgz" --exclude=export.jsonl "${list[@]}"
+            fi
+            age -r "$AGE_RECIPIENT" -o "$pub/sample.tgz.age" "$pub/sample.tgz"
+            files+=("$pub/sample.tgz.age")
+          fi
+          [ -s "$pub/key.json.age" ] && files+=("$pub/key.json.age")
+          if [ -s summary.json ]; then
+            age -r "$AGE_RECIPIENT" -o "$pub/summary.json.age" summary.json
+            files+=("$pub/summary.json.age")
+          else
+            echo "::warning title=parity::no summary for this sample"
+          fi
+          [ "${#files[@]}" -gt 0 ] || exit 0
+          "$GITHUB_WORKSPACE/.github/ci/publish.sh" "parity/${GITHUB_REF_NAME#parity-}/s${{ matrix.sample }}" "${files[@]}"
