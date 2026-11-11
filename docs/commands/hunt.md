@@ -30,17 +30,21 @@ azhaq hunt -db app.db -roles roles.jsonl -limit 10
 2. Folds URLs into route templates, so `/rest/basket/6` and `/rest/basket/7` are one row.
 3. Raises signals on each row, such as an identifier in the path, a backup file or a role reading another role's object. [Signals](#signals) lists them.
 4. Scores each row as the sum of its signals, and drops rows with no signal.
-5. Sorts by score and prints the best `-limit` rows (default 25), each with a command to run next.
+5. Puts each row in a tier: a **finding** when a signal of it is proven (see [Findings and leads](#findings-and-leads)), a **lead** otherwise.
+6. Sorts the findings before the leads, each by score, and prints the best `-limit` rows (default 25). A lead names the check that would prove it, and every row a command to run next.
 
 ## Output
 
-Text form: one row per line.
+Text form: one row per line, the findings first under `findings (N)` and the leads apart under `leads (N)`.
 
 ```
+findings (N): proven, the answer shows the thing named
 rank  score  key  reason; reason  → next: COMMAND
+leads (N): inferred from a name, a path or a guess; each names the check that would prove it
+rank  score  key  reason; reason  → check: WHAT WOULD PROVE IT  → next: COMMAND
 ```
 
-A reason is `signal: detail`. With `-json`, stdout holds one object per row. The summary goes to stderr, as JSON with `-json`, and counts `rows`. A note says how many rows had a signal when `-limit` cut the list.
+A reason is `signal: detail`. With `-json`, stdout holds one object per row. The summary goes to stderr, as JSON with `-json`, and counts `rows` and, apart, the `tiers` of the rows printed: `findings` and `leads` (`identifications` is 0: a product and version is not a row of the map). A note says how many rows had a signal when `-limit` cut the list.
 
 ```
 $ azhaq hunt -db app.db
@@ -55,6 +59,9 @@ $ azhaq hunt -db app.db
 | `key` | A route template, host or file. A template folds several URLs and holds `{n}`, `{uuid}`, `{hex}` or `={v}`. A key seen once is the URL. |
 | `type` | `URL` or `Hostname`. |
 | `reasons` | An array of `{signal, detail}`, one per signal. |
+| `tier` | `finding` or `lead`: see [Findings and leads](#findings-and-leads). |
+| `check` | On a lead, the check that would prove it: what an answer must show. |
+| `proof` | On a finding of a path check, the proof fields of [report](report.md#what-a-finding-carries): the request, the excerpt of the answer with its offset, the command that shows it again. |
 | `next` | The command to run next. [The next command](#the-next-command) says how it is chosen. |
 | `template` | Only on the row of an input the pages of an origin carry in common: `{"input", "pages", "of"}`, the input and how many of the origin's fetched pages carry it. |
 
@@ -67,7 +74,8 @@ $ azhaq hunt -db app.db
 | `takeover-candidate` | A CNAME to a cloud name that does not resolve (`dangling`). It rests on NXDOMAIN alone: `unverified: NXDOMAIN does not show the name is free`. See [Takeover candidates](../CONCEPTS.md#what-a-dangling-row-rests-on). |
 | `secret` | A credential a script carries. The reason names the file and gives the evidence: the name it was assigned to, the value redacted, the rule that listed it and, for a generic secret, its entropy. See [Secret candidates](#secret-candidates). |
 | `sourcemap` | A source map served. |
-| `exposed-file` | A backup, key, database or archive file, or a `.git` directory, served: see [Exposed files](#exposed-files). |
+| `exposed-file` | A backup, key, database or archive file, or a `.git` directory, whose path is requested: a finding when its answer is the file's own, a lead otherwise: see [Exposed files](#exposed-files). |
+| `exposed-panel` | An admin panel, dashboard, console, actuator, phpinfo, Swagger UI or GraphQL IDE whose own page answered, shown by its title or its content: see [Exposed files](#exposed-files). |
 | `listing` | A directory listing. |
 | `api-description` | An API description served. |
 | `graphql` | A GraphQL endpoint: its schema was read, its IDE answers, or it answers like GraphQL. |
@@ -97,6 +105,15 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 - A row whose only signal is `new` never ranks.
 - Static assets, scripts, catch-all pages and pages that are gone are never rows.
 - An input name that most pages of an origin carry belongs to the site's template, such as a search box or a sign-in form in every page's header. The rule: at least 5 of the origin's fetched pages carry the name, and at least 40% of them. The numbers come from the v0.12 hunter evidence, where one search box was 77 of the top 100 rows. The pages that only carry it have no signal for it and are left out. The input is not lost, since it can be the injection point: it is one row for each origin and name, on the page it was first seen on, with a reason such as `input q on 312 of 340 pages of http://host:8080 (the site's template)`, ranked by its own signals like any other input. Its `-json` row has `template: {input, pages, of}`. A route that takes the name in its own query keeps it as its own signal.
+
+### Findings and leads
+
+A row is a **finding** when one of its signals is proven by what was received, and a **lead** when none is. A path or a name is never proof.
+
+- Proven: `cross-role` (a `-roles` verdict of `proved` confidence, or with none), `takeover` of strength `strong`, a `secret` whose own format names it (a key with a known shape, severity above `info`), `exposed-file` and `exposed-panel` when the answer shows the file or the panel ([Exposed files](#exposed-files)), `listing` (the page's own title is a directory listing), `api-description` when the run parsed the description, `graphql` when its schema was read or its IDE answers, and `server-error` when the body shows SQL error text, a framework's debug page or a stack trace.
+- Leads: every other signal, such as a word in a path, `input`, a `param-*`, `object-id`, `gated`, `unauth-write`, `upload`, `sourcemap`, `takeover-candidate`, a generic or bundler secret, a role's 5xx that differs from another's, and a `named` route no server confirmed.
+
+`hunt` lists the findings first, then the leads, each group by score. Each lead carries `check`, what an answer must show for it to be a finding.
 
 ### Score and order
 
@@ -140,11 +157,13 @@ These rows have the heaviest weights, 95 to 110. The row's confidence scales the
 
 ### Exposed files
 
-`exposed-file` covers a `.kdbx`, `.pem`, `.key`, `.env`, `.sql`, `.db`, `.bak`, `.old`, `.orig`, `.swp`, `.zip` or `.tar.gz` file, or a `.git` directory, served. A file that is named or refused weighs less than one that is served.
+`exposed-file` covers a `.kdbx`, `.pem`, `.key`, `.env`, `.sql`, `.db`, `.bak`, `.old`, `.orig`, `.swp`, `.zip` or `.tar.gz` file, or a `.git` directory. A file that is named or refused weighs less than one that is served.
+
+A path that names a file or a panel is judged by its answer, which azhaq already holds (nothing is asked again), the same way `azhaq report -findings` judges it ([Path checks](report.md#path-checks)): the row is a finding when the answer holds the file's own bytes or the panel's own title; a lead when it does not (a redirect, a 401 or 403, a login form, a page that is not the file); and it is not a row at all when its answer equals the host's baselines: the answer a path that does not exist gets, its index page, one body that answers three or more paths, its login page. A served file whose bytes were not judged (a workspace made before the answers were kept) is a lead.
 
 ### Server errors
 
-A 5xx is a lead, not a finding. Its weight depends on what shows beside it:
+A 5xx alone is a lead, not a finding; the body showing SQL error text, a framework's debug page or a stack trace makes the row a finding. Its weight depends on what shows beside it:
 
 - SQL error text in the body: 50.
 - Another role's answer to the same route, a 5xx for one role and an answer for another: 40.

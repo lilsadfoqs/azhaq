@@ -45,17 +45,54 @@ When no row qualifies, `report` prints a note on stderr, writes nothing and exit
 
 ### Findings records (`-findings`)
 
-With `-findings -db WORKSPACE.db`, `report` writes the findings records of a run's workspace instead of roles reports, and sends nothing. One record is written per qualifying stored row: the `verify` results a `-verify` run stored, the advisory leads a `-advisories` run stored (labelled as `-verify` labels them), restricted to rows whose label supports a record, and the web answers whose body held a stack trace (see below). A `not affected` lead is no record, and a verify row covers its own lead, so no lead is recorded twice. Each record carries the kind (`unauthenticated-read`, `unauthenticated-handshake` or `advisory-precondition` for a verify row, as stored: a row of an older run keeps the kind it was stored with), the severity, the host, port and URL, the product and version where confirmed, the advisory id and URL where matched, the precondition where one is open, the exact request where one was sent, an excerpt of the evidence, the command that produced it, and the collector of the stored row it is read from — every field traceable to that row.
+With `-findings -db WORKSPACE.db`, `report` writes the findings records of a run's workspace instead of roles reports, and sends nothing. Every record is in one of three tiers, which are counted and listed apart:
 
-The labels are kept distinct, never merged: `proved` records come first, then `version-only`, then `conditional`. Rows that prove nothing — a map row whose coverage is `hint` and that the map lists — are written as leads, after the findings, under their own type in JSONL and their own heading in Markdown. In JSONL (`-format jsonl`, the same as `json`) each finding is one `{"type":"finding", …}` line and each lead one `{"type":"lead", …}` line; in Markdown (`-format md`) the records are grouped under `## Proved (n)`, `## Version-only (n)`, `## Conditional (n)` and `## Leads — unproved hints`. The counts in those headings are the numbers of records under them, read from the stored rows. A workspace with no qualifying rows writes an explicit empty record set — `{"type":"findings","findings":0,"leads":0}` in JSONL, a sentence saying no qualifying rows in Markdown — and exits 0. The same records are in `azhaq export -format findings` and `-format findings-md`. The labels and the fence behind them are in [Read-only verification](../CONCEPTS.md#read-only-verification--verify).
+- **findings** are proven rows. The answer azhaq received shows the thing the row names: a file's own signature (`/.env` is `NAME=value` lines, `/.git/HEAD` is `ref: refs/…`, a `.zip` starts with `PK`), a panel's own title, a data store's answer to a read with no credential, a stack trace, a key of a known format, a service's own page for a name nobody claimed.
+- **identifications** are a product and version a service stated (a banner, a `Server` header, a technology a page names with its version), with the advisory match where there is one. The advisories of one service are the records of that service, each with its own advisory id; the label (`proved`, `version-only` or `conditional`) stays on them.
+- **leads** are inferred from a name, a path or a guess: a hint the map lists, a path whose answer does not show what its name says, a credential found by the name it was assigned to. A lead names the check that would prove it.
+
+A row with no proof is never a finding. A `-verify` read stored by an earlier azhaq, without the request and the answer, is a lead for that reason.
+
+#### What a finding carries
+
+A finding, and an identification that has the answer it was read from, carries its proof in fixed fields, added to the fields every record has:
+
+| Field | Meaning |
+| --- | --- |
+| `observed_at` | When the answer was received, in UTC. |
+| `method`, `target` | The request sent: `GET` and the URL, `connect` and `host:port`, or the protocol's request. |
+| `request_bytes` | For a probe that is not HTTP, the bytes sent, with every byte that is not printable written `\xNN`. |
+| `status`, `content_type` | For a web answer, its status and content type. |
+| `excerpt` | The part of the answer that proves it, cut to 240 characters: what was received, never fetched again. |
+| `excerpt_part`, `excerpt_offset` | Where it is from (`body`, `header`, `banner`, `response`) and its byte offset in the body where the bytes were at hand to count it. |
+| `how` | The stage that found it (`azhaq-paths`, `azhaq-dirs`, `azhaq-http`, `azhaq-js`, `azhaq-ports`, `azhaq-verify`). |
+| `reproduce` | One shell command, `curl …`, `printf … \| nc …` or `openssl s_client …`, that shows the same thing with no azhaq. |
+
+Each record also carries the `tier`, the kind (`unauthenticated-read` and `advisory-precondition` as stored, `unauthenticated-handshake`, `software-version`, `error-disclosure`, `exposed-file`, `exposed-panel`, `secret`, `takeover`, `hint`), the severity, the host, port and URL, the product and version where confirmed, the advisory id and URL where matched, the precondition where one is open, the request, an excerpt of the evidence, the command that produced it and the collector of the stored row it is read from. A secret's value is never in its record: the excerpt holds the text before it and the value redacted.
+
+#### Path checks
+
+A path that names a file or a panel (`/.env`, `/.git/HEAD`, `/config`, `/backup`, `/admin`, `/actuator`, `/swagger-ui.html`, …) is a finding only when its answer shows what the path names and is not one of the host's own baselines:
+
+- it is **dropped**, neither finding nor lead, when its answer equals a baseline: the answer a path that does not exist gets (the soft 404, a 200 page titled "not found"), the host's index page, one body that answers three or more paths, the host's login page, or the redirect to the login that other paths get;
+- it is a **finding** when its status is 2xx and the bytes it holds are the file's own (a signature or a content type, such as `NAME=value` lines for `.env`, `PK` for a zip, `-----BEGIN` for a key) or the panel's own title (the admin page titled "Admin", `phpMyAdmin`, Swagger UI), not a login form;
+- it is a **lead** otherwise: a redirect, a 401 or 403, a login form of its own, a page that is not the file, a path whose name no answer can show (`/config`), or an answer whose body azhaq did not keep. Its record names the check: for example `GET it: the body is NAME=value lines, not a page`.
+
+The judged answers are the ones azhaq already received: the web stage keeps the first 1024 bytes of the body of an answer to such a path, and nothing is asked again.
+
+#### Formats
+
+The labels are kept distinct, never merged: `proved` identifications come first, then `version-only`, then `conditional`. In JSONL (`-format jsonl`, the same as `json`) each finding is one `{"type":"finding", …}` line, each identification one `{"type":"identification", …}` line and each lead one `{"type":"lead", …}` line, in that order; in Markdown (`-format md`) the records are grouped under `## Findings (n)`, `## Identifications (n)` (with `### Proved`, `### Version-only` and `### Conditional` under it) and `## Leads (n)`, and under every finding and identification are its request, its excerpt and its `reproduce` command. The counts in those headings are the numbers of records under them, read from the stored rows, and `report` says them on stderr as `N findings, N identifications, N leads`. A workspace with no qualifying rows writes an explicit empty record set — `{"type":"findings","findings":0,"identifications":0,"leads":0}` in JSONL, a sentence saying no qualifying rows in Markdown — and exits 0. The same records are in `azhaq export -format findings` and `-format findings-md`. The labels and the fence behind them are in [Read-only verification](../CONCEPTS.md#read-only-verification--verify).
+
+Before this version the JSONL held only the `-verify` results, the advisory leads and the stack traces as `finding`, and had no time or proof fields; the advisory and version rows are now `identification` lines, and `finding` lines are the proven rows only. The Markdown headings changed with them.
 
 A hint the map's default view folds is not a lead: an image, font or media file no request asked for (`beyond-depth`), a string only scripts name that nothing requested (`unrequested`), or a route only scripts name whose GET answered 404 or 410 (`not-found`), as in [Folded rows](run.md#folded-rows). The report counts them by class, one line each: `{"type":"folded","class":…,"count":N,"line":…}` in JSONL, a `## Folded hints (N)` section in Markdown, and `N hints folded (class N, …)` after the counts on stderr.
 
-Leads plus the folded counts are the URL rows of `azhaq query -type URL -coverage hint`, a templated row counting for its `count` URLs. A workspace whose hints all fold writes the explicit line with `"folded":N` first, then the fold lines.
+Leads plus the folded counts of the hints are the URL rows of `azhaq query -type URL -coverage hint`, a templated row counting for its `count` URLs. A workspace whose hints all fold writes the explicit line with `"folded":N` first, then the fold lines.
 
 #### Stack traces in answers
 
-A web row (`probe`, `run` or `dirs`) whose answer body holds a runtime's stack trace carries a `stack_trace` object (`runtime`, `exception`, `frames`), and `-findings` writes it as a record of kind `error-disclosure`, label `proved`, severity `low`: the answer itself shows the trace, and no more than an error shows. The record has the URL, the status and the first exception line in its evidence, with the frame count and the runtime; one record per URL and exception. The record is read from the answer azhaq already received: nothing more is sent for it.
+A web row (`probe`, `run` or `dirs`) whose answer body holds a runtime's stack trace carries a `stack_trace` object (`runtime`, `exception`, `frames`), and `-findings` writes it as a finding of kind `error-disclosure`, label `proved`, severity `low`: the answer itself shows the trace, and no more than an error shows. The record has the URL, the status and the first exception line in its evidence, with the frame count and the runtime, and the bytes that name the exception as its excerpt, with their offset in the body; one record per URL and exception. The record is read from the answer azhaq already received: nothing more is sent for it.
 
 A trace is three or more consecutive lines of the first 256 KiB of the body, each line wholly shaped like a frame of the same runtime (HTML tags and entities, and the `\n` of a JSON string, are read as the text they stand for):
 
@@ -159,7 +196,7 @@ Read a redacted report once before sharing it. An identifier that no kept body n
 <!-- flags:begin report -->
 | Flag | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `-findings` | bool |  | write the findings records of a workspace instead of roles reports: one record per stored row whose label supports it (a -verify run's results, a -advisories run's leads and a web answer's stack trace as an error-disclosure), proved first, version-only and conditional kept distinct, unproved hints listed as leads; a workspace with no qualifying rows writes an explicit empty record set and exits 0 |
+| `-findings` | bool |  | write the findings records of a workspace instead of roles reports, in three tiers counted apart: findings (proven rows, each with its request, the excerpt of the answer, the stage that found it and a command that reproduces it), identifications (a product and version, with the advisory match where there is one) and leads (inferred from a name, a path or a guess, each with the check that would prove it); a workspace with no qualifying rows writes an explicit empty record set and exits 0 |
 | `-db` | string |  | with -findings: the workspace database the records are read from |
 | `-dir` | string |  | the -dir of the roles run (it holds roles.db) |
 | `-url` | string |  | write up this one row (its URL as roles lists it); every cross-role finding by default |
