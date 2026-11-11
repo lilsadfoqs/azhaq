@@ -150,27 +150,68 @@ func (f Filters) params(q url.Values, flavour int) {
 	}
 }
 
-// keepStatus judges a capture by the status its archive recorded, "" when it
-// recorded none. A status that is not known cannot be matched by -mc, and
-// is not one that -fc names: it stays.
-func (f Filters) keepStatus(code string) bool {
+// statusVerdict judges a status an archive recorded: whether the row stays,
+// and the flag that left it out when it does not.
+func (f Filters) statusVerdict(code string) (bool, string) {
 	if len(f.MatchStatus) > 0 && !slices.Contains(f.MatchStatus, code) {
-		return false
+		return false, "-mc"
 	}
-	return !slices.Contains(f.DropStatus, code)
+	if slices.Contains(f.DropStatus, code) {
+		return false, "-fc"
+	}
+	return true, ""
 }
 
-// keepMime is keepStatus for the content type, compared without its
+// mimeVerdict is statusVerdict for the content type, compared without its
 // parameters and in lower case.
-func (f Filters) keepMime(mime string) bool {
+func (f Filters) mimeVerdict(mime string) (bool, string) {
 	mime = strings.ToLower(strings.TrimSpace(strings.SplitN(mime, ";", 2)[0]))
 	in := func(list []string) bool {
 		return slices.ContainsFunc(list, func(m string) bool { return strings.ToLower(m) == mime })
 	}
 	if len(f.MatchMime) > 0 && !in(f.MatchMime) {
-		return false
+		return false, "-mt"
 	}
-	return !in(f.DropMime)
+	if in(f.DropMime) {
+		return false, "-ft"
+	}
+	return true, ""
+}
+
+// judge says whether a row stays, by the status and the type its archive
+// recorded for it ("" for none). Like gau's, a filter judges only what the
+// archive gave: a row with no status is not judged by -mc or -fc and stays,
+// and one with no type is not judged by -mt or -ft. can is the filters the
+// source applies to its rows (by*). The rows left out and the rows not
+// judged are counted for the source's row.
+func (g *getter) judge(status, mime string, can int) bool {
+	f, need := g.filters, g.filters.needs()&can
+	if need&byStatus != 0 {
+		switch ok, by := f.statusVerdict(status); {
+		case status == "":
+			g.noStatus++
+		case !ok:
+			g.leftOut(by)
+			return false
+		}
+	}
+	if need&byMime != 0 {
+		switch ok, by := f.mimeVerdict(mime); {
+		case mime == "":
+			g.noType++
+		case !ok:
+			g.leftOut(by)
+			return false
+		}
+	}
+	return true
+}
+
+func (g *getter) leftOut(flag string) {
+	if g.out == nil {
+		g.out = map[string]int{}
+	}
+	g.out[flag]++
 }
 
 // ParseProxy reads a proxy address: http, https or socks5.

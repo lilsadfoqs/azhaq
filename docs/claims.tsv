@@ -610,10 +610,12 @@ urls.assets-labelled	docs/commands/urls.md	A row that is not junk but is a stati
 urls.live-once-after-archives	docs/commands/urls.md	`-live` asks the live site for each URL once, after every archive has answered	test:cmd/azhaq:TestURLsLiveAsksOnceAfterTheArchivesAndSaysWhatItDid,TestURLsLiveVerifiesAtAStatedRate
 urls.live-rows-not-asked	docs/commands/urls.md	Rows with no `verified` were not asked.	test:cmd/azhaq:TestURLsLiveAsksOnceAfterTheArchivesAndSaysWhatItDid
 urls.live-junk-never-sent	docs/commands/urls.md	A URL that looks like junk (a scanner's payload) is never sent	test:cmd/azhaq:TestURLsLiveAsksOnceAfterTheArchivesAndSaysWhatItDid,TestURLsLiveVerifiesAtAStatedRate
-urls.no-status-mc-fc	docs/commands/urls.md	A URL with no recorded status is not kept by `-mc` and is not left out by `-fc`.	test:internal/collectors/urlcol:TestOTXAndUrlscanAreJudgedByTheirStatus;test:cmd/azhaq:TestURLsMCJudgesOTXByItsHTTPCode
+urls.no-status-mc-fc	docs/commands/urls.md	A URL with no recorded status is not judged by `-mc` or `-fc`: it stays.	test:internal/collectors/urlcol:TestOTXAndUrlscanAreJudgedByTheirStatus;test:cmd/azhaq:TestURLsMCJudgesOTXByItsHTTPCode
 urls.unfiltered-by	docs/commands/urls.md	When you give a filter it cannot apply, `unfiltered_by` names the filter	test:internal/collectors/urlcol:TestFiltersAreSentAndTheRestAreUnfiltered
 urls.asked-all-the-same	docs/commands/urls.md	The archive is asked all the same and its URLs are kept, as gau keeps them	test:internal/collectors/urlcol:TestFiltersAreSentAndTheRestAreUnfiltered;test:cmd/azhaq:TestURLsRowsAreURLsAndTheDocumentedFields
 urls.filter-notes	docs/commands/urls.md	The notes say the same in words	test:cmd/azhaq:TestURLsFiltersAndNotes,TestURLsMCJudgesOTXByItsHTTPCode,TestURLsRowsAreURLsAndTheDocumentedFields
+urls.filter-counts	docs/commands/urls.md	Notes say so: `otx: -mc left out 22 URLs` and `otx: 33 URLs have no recorded status, which -mc needs: they are kept, not judged`.	test:cmd/azhaq:TestURLsFiltersJudgeOnlyTheRowsThatHaveTheField
+urls.filter-by-archive	docs/commands/urls.md	The Wayback Machine, Common Crawl and arquivo.pt apply the filters themselves and give only what passed, so what they left out cannot be counted	test:cmd/azhaq:TestURLsFiltersSentToWaybackAreSaidNotCounted
 urls.live-max-spread	docs/commands/urls.md	`-live-max N` asks only N URLs, spread evenly over the sorted list	test:cmd/azhaq:TestURLsLiveAsksOnceAfterTheArchivesAndSaysWhatItDid
 
 # docs/commands/ports.md

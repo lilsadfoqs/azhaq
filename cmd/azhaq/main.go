@@ -272,7 +272,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	urlsKeepJunk := fs.Bool("urls-keep-junk", false, "list the archived URLs left out as junk too, each labelled with its class and reason (-json), instead of only counting them")
 	urlsSubs := fs.Bool("urls-subs", true, "ask the archives for the subdomains of each domain too (false: only the name itself, as gau does without --subs)")
 	urlsSources := fs.String("urls-sources", "", "ask only these archives, comma-separated: wayback, commoncrawl, otx, urlscan, arquivo (default: all)")
-	urlsMC := fs.String("urls-mc", "", "keep only URLs the archive recorded with these HTTP status codes, comma-separated (200,301); OTX and urlscan.io record a status for most URLs, and a URL with none is not kept")
+	urlsMC := fs.String("urls-mc", "", "keep only URLs the archive recorded with these HTTP status codes, comma-separated (200,301); OTX and urlscan.io record a status for most URLs; a URL with none is not judged and stays, as in gau")
 	urlsFC := fs.String("urls-fc", "", "leave out URLs the archive recorded with these HTTP status codes, comma-separated; a URL whose status the archive did not record is kept")
 	urlsMT := fs.String("urls-mt", "", "keep only URLs the archive recorded with these MIME types, comma-separated (text/html); OTX, which keeps no type, is asked all the same and its URLs kept, with a note")
 	urlsFT := fs.String("urls-ft", "", "leave out URLs the archive recorded with these MIME types, comma-separated; OTX, which keeps no type, is asked all the same and its URLs kept, with a note")

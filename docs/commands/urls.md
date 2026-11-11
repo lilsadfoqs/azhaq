@@ -62,6 +62,7 @@ The summary lists one row for each archive:
 | `partial` | Set with `error` when the archive gave URLs before it failed: what it gave is in the set. |
 | `capped` | Set when the archive stopped at `-urls-pages` with more to read. |
 | `unfiltered`, `unfiltered_by` | What the archive keeps none of, and the filter that could not apply: see Details. |
+| `left_out`, `no_status`, `no_type`, `filtered_by_archive` | What the filters did to its rows, and the flags the archive applied in its own query: see Details. |
 
 ## Summary and exit codes
 
@@ -94,7 +95,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 `urls` counts the URLs on the domains that it left out as junk, by reason. Each URL is counted once.
 
 - `"scanner payload"`: for example 3. It covers `/../` in a query name (`?.tst5-Name/../Gen`; a value such as `next=../home` stays) and an injection glued to a value (`artist=1union select …`, `… from information_schema.…`).
-- `"scanner probe"`: a scanner's own file or tag, a NUL byte (`%00`) in the path or query, or a query that is only punctuation or a dot and an extension (`?.`, `?.tst`, `?.bak`).
+- `"scanner probe"`: a scanner's own file or tag (`acunetix_xsl_inclusion_test.xsl`, a random-named executable at the root such as `/7zSo1DIz.exe`; gau lists them), a NUL byte (`%00`) in the path or query, or a query that is only punctuation or a dot and an extension (`?.`, `?.tst`, `?.bak`).
 - `"directory listing sort link"`.
 - `"script placeholder (NaN, undefined, null)"`.
 - `"dot segment"`.
@@ -124,11 +125,14 @@ A static file is listed, not dropped. `counts` has `static files listed`, the nu
 - The counts are `verified live`, `gone (404, 410)` and `no answer`, and they add up to the URLs asked. A note says how many were asked, the rate and the counts.
 
 ### Filters an archive cannot apply
-- OTX records a status for each URL (`httpcode`) and urlscan.io for each page (`status`, with its `mimeType`). `-mc`, `-fc`, and for urlscan.io `-mt` and `-ft`, judge them. A URL with no recorded status is not kept by `-mc` and is not left out by `-fc`.
+- A filter judges the rows that carry what it needs, and keeps the others, as gau does. gau sends `-mc`, `-fc`, `-mt`, `-ft`, `-from` and `-to` to the Wayback Machine and Common Crawl in the query and applies none to OTX or urlscan.io. azhaq sends them to those two and to arquivo.pt, and also judges the rows of the archives that record a status or a type: OTX's `httpcode` and urlscan.io's page `status` and `mimeType` (the scan's page URL and the URL that was submitted for it share them).
+- A URL with no recorded status is not judged by `-mc` or `-fc`: it stays. Likewise a URL with no recorded type with `-mt` and `-ft`. This is a change from before 0.22, when `-mc` dropped it.
 - `unfiltered` lists what an archive keeps none of: for OTX `type` and `date`, for none of the others.
 - When you give a filter it cannot apply, `unfiltered_by` names the filter, such as `-mt` or `-from`.
 - The archive is asked all the same and its URLs are kept, as gau keeps them, with no type on the row.
 - The notes say the same in words: `otx has no type of its captures: its 13 URLs are not filtered by -mt`.
+- The summary counts what the filters did, for each archive that is judged row by row. `left_out` in its row has the rows each flag left out (`{"-mc": 22}`) and `counts` has them as `left out by -mc`. `no_status` and `no_type` count the rows that had none to judge and stayed, with `no_status_by` and `no_type_by` naming the flags. Notes say so: `otx: -mc left out 22 URLs` and `otx: 33 URLs have no recorded status, which -mc needs: they are kept, not judged`.
+- The Wayback Machine, Common Crawl and arquivo.pt apply the filters themselves and give only what passed, so what they left out cannot be counted: their row says `filtered_by_archive` with the flags, and a note says it.
 
 ## Flags
 
@@ -155,7 +159,7 @@ A static file is listed, not dropped. `counts` has `static files listed`, the nu
 
 | Flag | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `-mc` | string |  | keep only URLs the archive recorded with these HTTP status codes, comma-separated (200,301); OTX and urlscan.io record a status for most URLs, and a URL with none is not kept |
+| `-mc` | string |  | keep only URLs the archive recorded with these HTTP status codes, comma-separated (200,301); OTX and urlscan.io record a status for most URLs; a URL with none is not judged and stays, as in gau |
 | `-mt` | string |  | keep only URLs the archive recorded with these MIME types, comma-separated (text/html); OTX, which keeps no type, is asked all the same and its URLs kept, with a note |
 | `-ft` | string |  | leave out URLs the archive recorded with these MIME types, comma-separated; OTX, which keeps no type, is asked all the same and its URLs kept, with a note |
 | `-blacklist` | string |  | leave out URLs whose path ends in these extensions, comma-separated (png,jpg,svg) |
