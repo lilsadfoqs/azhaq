@@ -50,6 +50,8 @@ func classOf(verdict string) (class, label string) {
 		return classAccepted, "Create accepted"
 	case verdictAnyoneSecrets:
 		return classExposure, "Excessive data exposure"
+	case verdictSecrets:
+		return classExposure, "Excessive data exposure to signed-in roles"
 	}
 	return "", ""
 }
@@ -202,7 +204,7 @@ func cmdReport(args []string) error {
 				return err
 			}
 			if c, _ := classOf(row.Verdict); c == "" {
-				return exitErr{code: exitError, msg: fmt.Sprintf("%s is [%s]: report writes up a role reading, writing or creating in another role's object or collection, or sensitive fields anyone reads", *target, row.Verdict)}
+				return exitErr{code: exitError, msg: fmt.Sprintf("%s is [%s]: report writes up a role reading, writing or creating in another role's object or collection, or sensitive fields anyone or several roles alike read", *target, row.Verdict)}
 			}
 			rows = append(rows, er)
 		}
@@ -242,7 +244,7 @@ func cmdReport(args []string) error {
 	}
 	sortReports(docs)
 	if len(docs) == 0 {
-		fmt.Fprintf(os.Stderr, "azhaq report: no row in %s is a role reading, writing or creating in another role's object or collection, or sensitive fields anyone reads\n", filepath.Join(*dir, evidenceFile))
+		fmt.Fprintf(os.Stderr, "azhaq report: no row in %s is a role reading, writing or creating in another role's object or collection, or sensitive fields anyone or several roles alike read\n", filepath.Join(*dir, evidenceFile))
 		return nil
 	}
 	return emitReports(docs, *format, *out, *dir, *target != "" && len(docs) == 1)
@@ -701,6 +703,9 @@ func buildReport(er store.EvidenceRow, order []string, saved time.Time, savedOK,
 	switch class {
 	case classExposure:
 		d.Title = fmt.Sprintf("%s: anyone reads %s via %s %s", label, joinNames(row.Sensitive), verb, route)
+		if row.Verdict == verdictSecrets {
+			d.Title = fmt.Sprintf("%s: %s read the same %s via %s %s", label, joinNames(readers), joinNames(row.Sensitive), verb, route)
+		}
 		if len(row.Sensitive) == 0 {
 			d.Title = fmt.Sprintf("%s: anyone reads sensitive fields via %s %s", label, verb, route)
 		}
@@ -1022,6 +1027,9 @@ func summaryOf(row roleRow, class, verb, route string, answers []store.EvidenceA
 	switch class {
 	case classExposure:
 		s2 = "azhaq roles lists it because the anonymous role reads them; it gives no confidence for this kind of row, which is about fields, not about whose object it is."
+		if row.Verdict == verdictSecrets {
+			s2 = "azhaq roles lists it because these signed-in roles read the same values of the sensitive fields, which are then not each one's own; it gives no confidence for this kind of row, which is about fields, not about whose object it is."
+		}
 	case classCreate:
 		s2 = "azhaq roles lists it because something shows the create crosses roles: the anonymous role was let to send it, or the object it made belongs to the role whose request was replayed (see \"Where the create comes from\"). It is a create, not another role's object written, and it gives no confidence for this kind of row."
 	case classAccepted:
@@ -1062,6 +1070,10 @@ func severityOf(row roleRow, class string, anyone bool) reportSeverty {
 		why = append(why, "a role's create was accepted (low, a guess: nothing shows the server ignores who may create)")
 	case classExposure:
 		why = append(why, "sensitive fields come back to a role with no more access than anyone (medium to start)")
+		if row.Verdict == verdictSecrets {
+			lvl = 0
+			why[len(why)-1] = "the same sensitive values come back to several signed-in roles (low to start: a value every account shares may be meant to)"
+		}
 	}
 	if len(row.Sensitive) > 0 {
 		lvl++
@@ -1104,6 +1116,14 @@ func impactOf(class string, row roleRow, owner string) (impact, remediation stri
 		}
 		impact += ", signed in or not, which can be used to take over accounts or read other people's data."
 		remediation = "Do not return fields that hold secrets, or return them only to the role that owns them; require a session on the route; mask or drop the values in debug and listing endpoints."
+		if row.Verdict == verdictSecrets {
+			impact = "Several signed-in accounts read the same values of the sensitive fields the route returns"
+			if len(row.Sensitive) > 0 {
+				impact += " (" + strings.Join(row.Sensitive, ", ") + ")"
+			}
+			impact += ": an account's secrets reach other accounts, which can be used to take over accounts or read other people's data."
+			remediation = "Do not return fields that hold secrets, or return them only to the role that owns them; mask or drop the values in debug and listing endpoints."
+		}
 	default:
 		impact = "An account can read another account's data by changing the identifier in the request: the server does not check that the object belongs to the session that asks for it"
 		if len(row.Sensitive) > 0 {
@@ -1183,6 +1203,8 @@ func (d reportDoc) markdown() string {
 		w("## Why the object is the owner's\n\n")
 	}
 	switch {
+	case d.Class == classExposure && d.Verdict == verdictSecrets:
+		w("Not applicable: this finding is about fields that come back alike to several roles, not about whose object it is.\n\n")
 	case d.Class == classExposure:
 		w("Not applicable: this finding is about fields that come back to anyone, not about whose object it is.\n\n")
 	case d.OwnerReason == "" && isCreateClass(d.Class):

@@ -28,7 +28,7 @@ func evidenceDir(t *testing.T, rows ...store.EvidenceRow) string {
 	return dir
 }
 
-// A row gets a report when its verdict is one of the seven listed; a -url
+// A row gets a report when its verdict is one of the eight listed; a -url
 // whose row is none of them, or that matches no row, is exit 1; report sends
 // nothing.
 func TestReportSevenVerdictsAndNothingSent(t *testing.T) {
@@ -42,6 +42,7 @@ func TestReportSevenVerdictsAndNothingSent(t *testing.T) {
 		"creates in another role's collection",
 		"create accepted: nothing shows it crosses roles",
 		"anyone reads sensitive fields",
+		"roles read the same sensitive fields",
 	}
 	classes := map[string]bool{}
 	for _, v := range seven {

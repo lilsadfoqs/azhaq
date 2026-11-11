@@ -127,7 +127,7 @@ The summary also lists failures per kind of error, and takeover findings: a CNAM
 - With `-allow`, `-scope` or `-deny` given, a name server is asked only at an address the scope allows: its name being in the scope does not vouch for where it points. A name server whose address is outside is not contacted. The summary names it, and adding its address to `-allow` allows the transfer. Without any scope flag, the name given is the scope, as before.
 - `azhaq plan -axfr` lists these connections before anything is sent.
 - `-json` gives the name's row with `axfr`: its `chain` holds one entry for each server that transferred the zone. An `axfr` with no `chain` says the transfer was tried and no server gave it.
-- A note names each server that did not transfer the zone.
+- A note names each server that transferred the zone and how many records it gave, then each server that did not.
 - When no server transferred it, the summary lists `-axfr: no server transferred the zone` under `failed` and the exit code is 3: the technique was asked for and gave nothing.
 
 ### Wildcards

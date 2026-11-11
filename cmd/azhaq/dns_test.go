@@ -636,8 +636,9 @@ func TestDNSAXFRJSONAndTextAskTheSameServers(t *testing.T) {
 	if !strings.Contains(strings.Join(ts, "\n"), "ns.lab.zz. 60 IN A 127.0.0.1") {
 		t.Errorf("the text form lost the zone: %v", ts)
 	}
-	if len(jrep.Notes) != 1 || !strings.Contains(jrep.Notes[0], "127.0.0.1:53 did not transfer") {
-		t.Errorf("the notes name only the server that failed: %v", jrep.Notes)
+	// The server that gave the zone is named before the one that refused.
+	if len(jrep.Notes) != 2 || !strings.Contains(jrep.Notes[0], lab.addr+" transferred the zone (") || !strings.Contains(jrep.Notes[1], "127.0.0.1:53 did not transfer") {
+		t.Errorf("the notes do not name who gave the zone and who did not: %v", jrep.Notes)
 	}
 	// The lab refuses the zone of another name: every server fails.
 	for _, form := range []string{"-json", "-resp"} {
@@ -963,7 +964,8 @@ func TestDNSAXFRAsksTheResolverAtItsPortAndTheNameServerAtTheTransferPort(t *tes
 	if code != exitOK || !reflect.DeepEqual(from, []string{"127.0.0.1:" + nsPort, resolver.addr}) {
 		t.Errorf("exit %d, the zone came from %v, want the name server at 127.0.0.1:%s then the resolver at %s\n%v", code, from, nsPort, resolver.addr, rep.Notes)
 	}
-	if len(rep.Notes) != 0 {
+	// Each server that gave the zone is named; none refused.
+	if len(rep.Notes) != 2 || !strings.Contains(rep.Notes[0], "127.0.0.1:"+nsPort+" transferred the zone (") || !strings.Contains(rep.Notes[1], resolver.addr+" transferred the zone (") {
 		t.Errorf("notes %v", rep.Notes)
 	}
 }

@@ -67,6 +67,7 @@ func TestReportClassAndTitle(t *testing.T) {
 		{verdictWriteAnyone, classWrite, "Broken object level authorization (write): anyone writes alice's basket via GET /rest/basket/{id}", []string{"anon", "bob"}},
 		{verdictWriteCreate, classCreate, "Missing authorization on create: bob creates in alice's basket collection via GET /rest/basket/{id}", []string{"bob"}},
 		{verdictAnyoneSecrets, classExposure, "Excessive data exposure: anyone reads password and token via GET /rest/basket/{id}", nil},
+		{verdictSecrets, classExposure, "Excessive data exposure to signed-in roles: alice and bob read the same password and token via GET /rest/basket/{id}", []string{"alice", "bob"}},
 	} {
 		row := roleRow{URL: "https://s.test/rest/basket/6", From: "https://s.test/rest/basket/{id}", Owner: "alice", Readers: c.readers, Verdict: c.verdict, Confidence: confLikely, Sensitive: []string{"password", "token"},
 			Answers: map[string]answer{}}
@@ -77,6 +78,18 @@ func TestReportClassAndTitle(t *testing.T) {
 		if d.Class != c.class || d.Title != c.title {
 			t.Errorf("%s: class %q title %q, want %q %q", c.verdict, d.Class, d.Title, c.class, c.title)
 		}
+	}
+	// The same secrets several signed-in roles read: not said to be anyone's, and lower to start.
+	shared := roleRow{URL: "https://s.test/users/v1/_debug", Readers: []string{"alice", "bob"}, Verdict: verdictSecrets, Sensitive: []string{"password"}, Answers: map[string]answer{}}
+	d, err := buildReport(evRow(t, shared), nil, time.Time{}, false, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(d.Summary+d.Impact, "anyone") || strings.Contains(d.Summary+d.Impact, "anonymous") || !strings.Contains(d.Impact, "Several signed-in accounts") {
+		t.Errorf("summary %q\nimpact %q", d.Summary, d.Impact)
+	}
+	if anyone := severityOf(roleRow{Verdict: verdictAnyoneSecrets, Sensitive: []string{"password"}}, classExposure, false); d.Severity.Level == anyone.Level {
+		t.Errorf("shared secrets rank %s, as secrets anyone reads do", d.Severity.Level)
 	}
 	// A verdict that is not a cross-role read or write has no report.
 	for _, v := range []string{verdictAnyID, verdictObject, verdictSignedIn, verdictWriteNoChange, verdictPublicObj} {
