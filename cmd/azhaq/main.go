@@ -1289,8 +1289,9 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	if *workerOf != "" {
 		return runWorker(cat, *workerOf, *workerToken, budgets.Parallel)
 	}
+	var streamEnd func([]engine.MapEntry)
 	if *stream && observer == nil {
-		observer = streamFound(*jsonOut)
+		observer, streamEnd = newStream(*jsonOut)
 		defer func() { observer = nil }()
 	}
 	eng := &engine.Engine{Cat: cat, Store: st, Observe: observer, Client: client}
@@ -1483,6 +1484,9 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		var folded []engine.MapEntry
 		shown, folded = folder.Split(shown)
 		foldGroups = folder.Groups(folded)
+	}
+	if streamEnd != nil {
+		streamEnd(engine.GroupTemplates(shown))
 	}
 	sink := runSink(!*quiet && !out.embedded, rowsOut)
 	switch {

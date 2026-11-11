@@ -15,26 +15,89 @@ import (
 	"github.com/lilsadfoqs/azhaq/types"
 )
 
+// line is one found line: more is its tail, fields the same as fields for
+// -json.
+type line struct {
+	kind, key, more string
+	fields          map[string]any
+}
+
+const catchAllNote = "  (catch-all: the page any unknown path gets)"
+
 // streamFound prints what a run finds as it finds it, once per map row: a
 // long run is not silent for minutes before its map. A URL, a name that
 // resolves and an address each print one line, under the key its map row
 // has, however many collectors found it, and an open port prints one line
 // under its row's key (address:port/tcp), when the scan reports it. Lines go
 // to stdout before the map; with -json each is an object with "type":"found".
+//
+// A URL the map folds into a templated row (/redirect?to={v}) is not a row
+// of its own, and which template a row ends with is known only at the end:
+// those are held, and end prints each templated row once, under the key the
+// map gives it, before the map.
 func streamFound(asJSON bool) func(types.Entity, types.Observation) {
+	see, _ := newStream(asJSON)
+	return see
+}
+
+// newStream is streamFound with the end of the run: end takes the map's rows
+// and prints the templated ones.
+func newStream(asJSON bool) (see func(types.Entity, types.Observation), end func([]engine.MapEntry)) {
 	var mu sync.Mutex
 	seen := map[string]bool{}
+	heldBy := map[string]string{} // a templated URL, or its template, held back -> the collector that found it first
 	enc := json.NewEncoder(os.Stdout)
-	return func(_ types.Entity, o types.Observation) {
+	emit := func(kind, key, more, collector string, fields map[string]any) {
+		if seen[key] {
+			return
+		}
+		seen[key] = true
+		if asJSON {
+			row := map[string]any{"type": "found", "kind": kind, "key": key, "collector": collector}
+			for k, v := range fields {
+				row[k] = v
+			}
+			_ = enc.Encode(row)
+			return
+		}
+		fmt.Fprintln(os.Stdout, strings.TrimSpace(fmt.Sprintf("found  %-7s %s  %s", kind, key, more)))
+	}
+	end = func(rows []engine.MapEntry) {
+		mu.Lock()
+		defer mu.Unlock()
+		for _, r := range rows {
+			if r.Entity.Type != types.TypeURL || r.Template == "" {
+				continue
+			}
+			key := r.Entity.Key
+			if r.Count > 1 {
+				key = r.Template
+			}
+			coll, ok := heldBy[r.Entity.Key]
+			if !ok {
+				if coll, ok = heldBy[r.Template]; !ok {
+					continue
+				}
+			}
+			if r.Status <= 0 {
+				emit("url", key, "", coll, nil)
+				continue
+			}
+			l := line{kind: "answer", more: fmt.Sprintf("[%d] %s", r.Status, r.Title),
+				fields: map[string]any{"status": r.Status, "title": r.Title}}
+			if r.Coverage == "catchall" {
+				l.more += catchAllNote
+				l.fields["catchall"] = true
+			}
+			emit(l.kind, key, l.more, coll, l.fields)
+		}
+	}
+	see = func(_ types.Entity, o types.Observation) {
 		var p map[string]any
 		if json.Unmarshal(o.Payload, &p) != nil {
 			return
 		}
 		str := func(k string) string { s, _ := p[k].(string); return s }
-		type line struct {
-			kind, key, more string
-			fields          map[string]any // more, as fields, for -json
-		}
 		var lines []line
 		// A URL with an address for a host is also the address's row.
 		urlLines := func(l line) {
@@ -62,7 +125,7 @@ func streamFound(asJSON bool) func(types.Entity, types.Observation) {
 					fields: map[string]any{"status": int(st), "title": str("title")}}
 				if p["catchall"] == true {
 					// The page every unknown path gets: not a page of its own.
-					l.more += "  (catch-all: the page any unknown path gets)"
+					l.more += catchAllNote
 					l.fields["catchall"] = true
 				}
 				urlLines(l)
@@ -132,20 +195,18 @@ func streamFound(asJSON bool) func(types.Entity, types.Observation) {
 			if l.key == "" {
 				continue
 			}
-			// A key is printed once, whichever way it was found first.
-			if seen[l.key] {
-				continue
-			}
-			seen[l.key] = true
-			if asJSON {
-				row := map[string]any{"type": "found", "kind": l.kind, "key": l.key, "collector": o.Collector}
-				for k, v := range l.fields {
-					row[k] = v
+			if (l.kind == "url" || l.kind == "answer") && webextract.Templated(l.key) {
+				if _, ok := heldBy[l.key]; !ok {
+					heldBy[l.key] = o.Collector
 				}
-				_ = enc.Encode(row)
+				if _, ok := heldBy[webextract.Template(l.key)]; !ok {
+					heldBy[webextract.Template(l.key)] = o.Collector
+				}
 				continue
 			}
-			fmt.Fprintln(os.Stdout, strings.TrimSpace(fmt.Sprintf("found  %-7s %s  %s", l.kind, l.key, l.more)))
+			// A key is printed once, whichever way it was found first.
+			emit(l.kind, l.key, l.more, o.Collector, l.fields)
 		}
 	}
+	return see, end
 }

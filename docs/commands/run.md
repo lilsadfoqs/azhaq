@@ -147,6 +147,7 @@ found in
 - One line for each key the map has a row for: a URL found by the crawl and answered later, or the front page found twice, prints once, as the first way it was found (its status is in the map). The address of an IP host is a row and a line too (`found  address 127.0.0.1`).
 - An open port is a line of its own, under its row's key: `address:port/protocol`, printed once, when a scan reports the port (`found  port    127.0.0.1:3001/tcp  open http`). A later scan that lists the same port does not print it again.
 - Not streamed: names that do not resolve, which the map folds into a summary row.
+- A page the map folds into a templated row (`/redirect?to={v}`, from 2 URLs on) is streamed as that row: one line, under the template key, none for its members. These lines are held until the run ends, because which URLs fold is known only then, and they print just before the map (`found  answer http://app/redirect?to={v}  [200]`), with the status and title of the map row. A templated page found once is no fold and prints under its own URL, at the end too. The keys of the lines are the keys of the map's rows.
 - An answer line looks like `found  answer http://app/openapi.json  [200]`. An answer that is the page every unknown path gets ends with `(catch-all: the page any unknown path gets)`.
 - With `-json`, each is an object with `"type":"found"` and these fields:
 
