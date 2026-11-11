@@ -120,6 +120,10 @@ func (h *hunter) roles() {
 		if r.Method != "" {
 			d = r.Method + " " + d
 		}
-		c.addW("cross-role", w, d)
+		if r.Confidence == "" || r.Confidence == "proved" {
+			c.addProved("cross-role", w, d)
+		} else {
+			c.addW("cross-role", w, d)
+		}
 	}
 }

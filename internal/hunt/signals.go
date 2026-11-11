@@ -9,6 +9,7 @@ import (
 
 	"github.com/lilsadfoqs/azhaq/engine"
 	"github.com/lilsadfoqs/azhaq/internal/lazyre"
+	"github.com/lilsadfoqs/azhaq/internal/proof"
 	"github.com/lilsadfoqs/azhaq/internal/webextract"
 	"github.com/lilsadfoqs/azhaq/types"
 )
@@ -103,6 +104,12 @@ func (h *hunter) url(r engine.MapEntry) {
 	if err != nil {
 		return
 	}
+	// The answer to a path that names a file or a panel equals a baseline of
+	// the host (its soft 404, its login, its index): it says nothing of the path.
+	verdict, judged := h.verdicts[raw]
+	if judged && verdict.Dropped() {
+		return
+	}
 	key := GroupKey(raw, r.Role == "client-route")
 	c := h.get("URL", key, r.Scope)
 	c.instances = append(c.instances, raw)
@@ -188,21 +195,38 @@ func (h *hunter) url(r engine.MapEntry) {
 	case st >= 500:
 		h.serverError(c, r, raw)
 	}
-	// Backup and secret-bearing files.
-	if w, what := exposedFile(path); w > 0 {
+	// Backup and secret-bearing files, and panels: a finding only when the
+	// answer's own bytes show what the path names (internal/proof), else a lead.
+	w, what := exposedFile(path)
+	switch {
+	case judged && verdict.Tier == proof.TierFinding:
+		c.proof = verdict.Proof
+		sig := "exposed-file"
+		if verdict.Kind == "exposed-panel" {
+			sig = "exposed-panel"
+		}
+		c.addProved(sig, max(w, weights[sig]), verdict.What+" served: "+verdict.Proof.Excerpt)
+	case judged:
+		c.check = verdict.Check
+		if w > 0 {
+			c.addW("exposed-file", w/2, what+" named, "+verdict.Reason)
+		}
+	case w > 0:
 		switch {
 		case ok:
-			c.addW("exposed-file", w, what+" served")
+			c.addW("exposed-file", w, what+" served, its bytes not judged")
 		case named404:
 		case st == 401 || st == 403 || unfetched:
 			c.addW("exposed-file", w*fileUnseen/100, what+" named, "+map[bool]string{true: "answers " + fmt.Sprint(st), false: "not requested"}[st != 0])
 		}
 	}
 	if ok && isListing(r.Title) {
-		c.add("listing", "directory listing: "+clip(r.Title, 60))
+		c.addProved("listing", weights["listing"], "directory listing: "+clip(r.Title, 60))
 	}
-	if ok && (h.apiDoc[r.Entity.ID] || apiDocPath(path)) {
-		c.add("api-description", "API description served at "+path)
+	if ok && h.apiDoc[r.Entity.ID] {
+		c.addProved("api-description", weights["api-description"], "API description served at "+path)
+	} else if ok && apiDocPath(path) {
+		c.add("api-description", "API description named at "+path)
 	}
 	h.graphql(c, r, path)
 	h.objects(c, r, path)
@@ -269,15 +293,15 @@ func (h *hunter) serverError(c *cand, r engine.MapEntry, raw string) {
 	without := r.Answer != ""
 	switch {
 	case e.kind == webextract.ErrSQL:
-		c.addW("server-error", serverErrorSQL, fmt.Sprintf("answers %d and the body has SQL error text: %q", st, e.sample))
+		c.addProved("server-error", serverErrorSQL, fmt.Sprintf("answers %d and the body has SQL error text: %q", st, e.sample))
 	case e.kind == webextract.ErrDebug:
-		c.addW("server-error", serverErrorDebug, fmt.Sprintf("answers %d with a framework's debug page: %q", st, e.sample))
+		c.addProved("server-error", serverErrorDebug, fmt.Sprintf("answers %d with a framework's debug page: %q", st, e.sample))
 	case h.reflected[webextract.RouteKey(raw)]:
 		c.addW("server-error", serverErrorReflected, fmt.Sprintf("answers %d, and a parameter's value comes back in the answer", st))
 	case e.kind == webextract.ErrStack && without:
-		c.addW("server-error", serverErrorStackBare, fmt.Sprintf("answers %d to a request without its input, with a stack trace: %q", st, e.sample))
+		c.addProved("server-error", serverErrorStackBare, fmt.Sprintf("answers %d to a request without its input, with a stack trace: %q", st, e.sample))
 	case e.kind == webextract.ErrStack:
-		c.addW("server-error", serverErrorStack, fmt.Sprintf("answers %d with a stack trace: %q", st, e.sample))
+		c.addProved("server-error", serverErrorStack, fmt.Sprintf("answers %d with a stack trace: %q", st, e.sample))
 	case without:
 		c.addW("server-error", serverErrorBare, fmt.Sprintf("answers %d to a request without the input it takes (%s): a lead, nothing in the answer points further", st, join(h.own(r, inputNames(r)), 3)))
 	default:
@@ -333,9 +357,9 @@ func (h *hunter) graphql(c *cand, r engine.MapEntry, path string) {
 	}
 	switch p := strings.ToLower(path); {
 	case schema:
-		c.addW("graphql", graphqlStrong, "GraphQL endpoint, schema read by introspection")
+		c.addProved("graphql", graphqlStrong, "GraphQL endpoint, schema read by introspection")
 	case strings.Contains(r.Proof, "role=graphql") && strings.Contains(p, "graphiql"), strings.Contains(strings.ToLower(r.Title), "graphiql"):
-		c.addW("graphql", graphqlStrong, "GraphQL IDE answers at "+path)
+		c.addProved("graphql", graphqlStrong, "GraphQL IDE answers at "+path)
 	case strings.Contains(r.Proof, "role=graphql"):
 		c.add("graphql", "answers like GraphQL at "+path)
 	}
@@ -620,7 +644,11 @@ func (h *hunter) secrets() {
 		}
 		c := h.get("URL", s.Where, "target")
 		c.instances = append(c.instances, s.Where)
-		c.addW("secret", w, secretDetail(s))
+		if s.Known {
+			c.addProved("secret", w, secretDetail(s))
+		} else {
+			c.addW("secret", w, secretDetail(s))
+		}
 	}
 }
 
@@ -636,7 +664,11 @@ func (h *hunter) takeovers() {
 		if t.Strong {
 			w = takeoverStrong
 		}
-		c.addW("takeover", w, t.Detail)
+		if t.Strong {
+			c.addProved("takeover", w, t.Detail)
+		} else {
+			c.addW("takeover", w, t.Detail)
+		}
 	}
 }
 
