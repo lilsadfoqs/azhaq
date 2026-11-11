@@ -11,8 +11,9 @@
   scores.py history DIR... [--last N] [--json]
       DIR is a folder of such records (scores.json) or of fetched reviews
       (their REPORT.md is read when there is no record): prints each item
-      across the reviews, newest last, with the spread between the samples
-      of a review and across the reviews.
+      across the reviews, newest last, with every sample of a review
+      (up to four) and the spread between them, and the spread across the
+      reviews (the range of their means).
 
 Nothing here is public: the record is only ever written encrypted.
 """
@@ -143,7 +144,7 @@ def render(reviews):
     lines = ["  ".join(c.ljust(widths[i]) for i, c in enumerate(r)).rstrip() for r in rows]
     lines.insert(1, "  ".join("-" * w for w in widths))
     lines.append("")
-    lines.append("Cells list the samples of one review (a1/a2, b1/b2) as score/score; \"spread across\" is the range of the reviews' means.")
+    lines.append("Cells list every sample of one review (a1..a4, b1..b4) as score/score/... with their spread (highest minus lowest); \"spread across\" is the range of the reviews' means.")
     lines.append("Read a change in an item against the spread between samples of one build (same review): a move inside it is no trend.")
     return "\n".join(lines) + "\n"
 

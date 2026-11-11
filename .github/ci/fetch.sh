@@ -10,7 +10,7 @@
 # A gate (run.sh gate NAME) is two runs on one commit, bench/gate-NAME and
 # hunt/gate-NAME: they are fetched into DIR/bench and DIR/hunt.
 # A trial's gate or baseline kind publishes under a part instead of flat
-# (trial/trial-NAME/a, /b, or /a1 /a2 /b1 /b2 for samples=2 -
+# (trial/trial-NAME/a, /b, or /a1../a4 and /b1../b4 for samples=N -
 # .github/ci/trial/README.md): fetch.sh trial NAME DIR brings every part back
 # into DIR/a, DIR/b (and so on), each decrypted and unpacked the same way:
 # trial.tgz.age is unpacked, key.json.age and scores.json.age are decrypted

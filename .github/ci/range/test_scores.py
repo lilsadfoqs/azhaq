@@ -103,6 +103,36 @@ class History(unittest.TestCase):
             self.assertEqual(docs[3], "0.0")  # the means, 8 and 8, did not move
             self.assertIn("(spread 2)", scores.render(reviews))
 
+    def test_four_samples_list_every_cell_with_their_spread(self):
+        with tempfile.TemporaryDirectory() as root:
+            for k, docs in enumerate((6, 7, 5, 8), 1):
+                self.write(root, "trial-1", "b%d" % k, "gate-b", [("docs", docs)], 100 + k)
+            self.write(root, "trial-2", "b", "gate-b", [("docs", 9)], 200)
+            reviews = scores.build(scores.load([root]))
+            docs = [r for r in scores.table(reviews) if r[0].endswith("docs")][0]
+            self.assertEqual(docs[1], "6/7/5/8 (spread 3)")
+            self.assertEqual(docs[2], "9")
+            self.assertEqual(docs[3], "2.5")  # the means, 6.5 and 9
+            out = scores.render(reviews)
+            self.assertIn("6/7/5/8 (spread 3)", out)
+            self.assertIn("a1..a4", out)
+
+    def test_samples_stay_in_part_order(self):
+        with tempfile.TemporaryDirectory() as root:
+            for k in (3, 1, 4, 2):
+                self.write(root, "trial-1", "a%d" % k, "gate-a", [("trust", k + 4)], 100 + k)
+            reviews = scores.build(scores.load([root]))
+            self.assertEqual(scores.table(reviews)[1][1], "5/6/7/8 (spread 3)")
+
+    def test_old_records_with_one_or_two_samples_still_render(self):
+        with tempfile.TemporaryDirectory() as root:
+            self.write(root, "trial-1", "b1", "gate-b", [("docs", 7)], 100)
+            self.write(root, "trial-1", "b2", "gate-b", [("docs", 9)], 101)
+            self.write(root, "trial-0", "b", "gate-b", [("docs", 8)], 50)
+            out = scores.render(scores.build(scores.load([root])))
+            self.assertIn("7/9 (spread 2)", out)
+            self.assertRegex(out, r"gate-b: docs\s+8\s+7/9 \(spread 2\)")
+
     def test_last_keeps_the_newest_reviews(self):
         with tempfile.TemporaryDirectory() as root:
             for i in range(4):

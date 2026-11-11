@@ -36,10 +36,13 @@ def load_pool(path=POOL):
 
 def pick_pool_seed(pool, run_number, requested=None, sample=1):
     """The pool seed for SAMPLE (1-based) of this run: REQUESTED (a tag's
-    seed=WORD) fixes sample 1 when it names a pool entry; sample 2 and later
-    are the next pool entries after it, so `samples=2` always draws two
-    different estates. Without REQUESTED, sample 1 is chosen round robin by
-    RUN_NUMBER, so repeated gate runs cycle through the whole pool."""
+    seed=WORD) fixes sample 1 when it names a pool entry; samples 2 and later
+    are the next pool entries after it, so up to len(pool) samples are
+    different estates (more is refused). Without REQUESTED, sample 1 is
+    chosen round robin by RUN_NUMBER, so repeated gate runs cycle through
+    the whole pool."""
+    if not 1 <= sample <= len(pool):
+        raise SystemExit("sample %d is outside 1..%d: each sample needs its own pool entry" % (sample, len(pool)))
     if requested:
         if requested not in pool:
             raise SystemExit("seed %r is not in the pool: %s" % (requested, ", ".join(pool)))
