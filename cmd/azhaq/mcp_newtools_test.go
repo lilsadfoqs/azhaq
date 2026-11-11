@@ -328,40 +328,107 @@ func TestMCPNewToolsRefuseSpentBudgetAndOutsideScope(t *testing.T) {
 	}
 }
 
-// Plan and wire agree on the state-changing GET: the plan names it and
-// sends nothing; the map then sends that very request.
+// Plan and wire agree on the state-changing GET a call names as its target:
+// the client named it, not the person who started the server, so the plan
+// lists it as held back and sends nothing, and the map does not send it
+// either; a server started with -send-state-changing plans it as sent and
+// the map sends that very request.
 func TestMCPPlanAndWireAgreeOnStateChangingGET(t *testing.T) {
+	planned := func(s *mcpServer, app *wireApp) stateChangeEntry {
+		t.Helper()
+		text, isErr := callText(t, s, "azhaq_plan", map[string]any{"targets": []any{app.srv.URL + "/createdb"}, "depth": float64(0)})
+		if isErr {
+			t.Fatalf("azhaq_plan: %s", text)
+		}
+		var got struct {
+			Plan []struct {
+				StateChanging []stateChangeEntry `json:"state_changing"`
+			} `json:"plan"`
+		}
+		if err := json.Unmarshal([]byte(text), &got); err != nil || len(got.Plan) != 1 || len(got.Plan[0].StateChanging) != 1 {
+			t.Fatalf("the plan names no state-changing GET: %v %s", err, text)
+		}
+		if got := app.asked(); len(got) != 0 {
+			t.Fatalf("the plan sent %v", got)
+		}
+		return got.Plan[0].StateChanging[0]
+	}
+
 	app := newWireApp(t)
 	s := realMCPServer(t, []string{"-allow", "127.0.0.1"}, heldRun{}, 100000)
-	text, isErr := callText(t, s, "azhaq_plan", map[string]any{"targets": []any{app.srv.URL + "/createdb"}, "depth": float64(0)})
-	if isErr {
-		t.Fatalf("azhaq_plan: %s", text)
+	if e := planned(s, app); e.URL != app.srv.URL+"/createdb" || e.DenyPath != "-deny-path ^/createdb$" || e.Status != stateHeld || e.Send != "-send-state-changing" {
+		t.Errorf("planned %+v, want it held back with the flag that sends it", e)
 	}
-	var planned struct {
-		Plan []struct {
-			StateChanging []stateChangeEntry `json:"state_changing"`
-		} `json:"plan"`
-	}
-	if err := json.Unmarshal([]byte(text), &planned); err != nil || len(planned.Plan) != 1 || len(planned.Plan[0].StateChanging) != 1 {
-		t.Fatalf("the plan names no state-changing GET: %v %s", err, text)
-	}
-	if e := planned.Plan[0].StateChanging[0]; e.URL != app.srv.URL+"/createdb" || e.DenyPath != "-deny-path ^/createdb$" {
-		t.Errorf("planned %+v", e)
-	}
-	if got := app.asked(); len(got) != 0 {
-		t.Fatalf("the plan sent %v", got)
-	}
-	text, isErr = callText(t, s, "azhaq_map", map[string]any{"url": app.srv.URL + "/createdb", "workspace": "eq", "depth": float64(0)})
+	text, isErr := callText(t, s, "azhaq_map", map[string]any{"url": app.srv.URL + "/createdb", "workspace": "held", "depth": float64(0)})
 	if isErr {
 		t.Fatalf("azhaq_map: %s", text)
 	}
-	if n := app.count("GET /createdb"); n == 0 {
-		t.Errorf("the map never sent the GET the plan named: %v", app.asked())
+	if slices.Contains(app.asked(), "GET /createdb") {
+		t.Errorf("the map sent a target that declares a state change: %v", app.asked())
+	}
+	if !strings.Contains(text, app.srv.URL+"/createdb") || !strings.Contains(text, `"held back"`) || !strings.Contains(text, "-send-state-changing") {
+		t.Errorf("the summary does not list the target as held back: %s", text)
+	}
+
+	open := newWireApp(t)
+	sends := realMCPServer(t, []string{"-allow", "127.0.0.1"}, heldRun{SendStateChanging: true}, 100000)
+	if e := planned(sends, open); e.Status != stateGiven {
+		t.Errorf("planned %+v, want it sent", e)
+	}
+	text, isErr = callText(t, sends, "azhaq_map", map[string]any{"url": open.srv.URL + "/createdb", "workspace": "eq", "depth": float64(0)})
+	if isErr {
+		t.Fatalf("azhaq_map: %s", text)
+	}
+	if !slices.Contains(open.asked(), "GET /createdb") {
+		t.Errorf("a server started with -send-state-changing never sent the GET the plan named: %v", open.asked())
 	}
 	if sum := toolSummary(t, text); !strings.Contains(text, `"state_changing"`) || sum["requests"] == nil {
 		t.Errorf("the map's summary does not name it: %s", text)
 	}
-	if !slices.Contains(app.asked(), "GET /createdb") {
-		t.Errorf("asked %v", app.asked())
+}
+
+// graphql sends POSTs: introspection, and where it is off, the queries that
+// recover the schema. Without -allow-writes the call is refused before
+// anything is sent, map and plan alike; with it the POST goes.
+func TestMCPRefusesGraphQLWithoutAllowWrites(t *testing.T) {
+	srv, posts, ide := dvga(t)
+	call := map[string]any{"url": srv.URL + "/", "graphql": true, "depth": float64(1)}
+	s := realMCPServer(t, []string{"-allow", "127.0.0.1"}, heldRun{}, 100000)
+	for _, tool := range []string{"azhaq_map", "azhaq_plan"} {
+		text, isErr := callText(t, s, tool, call)
+		if !isErr || !strings.Contains(text, "-allow-writes") || !strings.Contains(text, "graphql") {
+			t.Errorf("%s with graphql and no -allow-writes: %v %s", tool, isErr, text)
+		}
+	}
+	if posts.Load() != 0 || ide.Load() != 0 {
+		t.Errorf("a refused graphql call sent %d POSTs to /graphql and %d to /graphiql", posts.Load(), ide.Load())
+	}
+
+	writes := realMCPServer(t, []string{"-allow", "127.0.0.1"}, heldRun{AllowWrites: true}, 100000)
+	if text, isErr := callText(t, writes, "azhaq_map", map[string]any{"url": srv.URL + "/", "graphql": true, "workspace": "gql"}); isErr {
+		t.Fatalf("azhaq_map with graphql and -allow-writes: %s", text)
+	}
+	if posts.Load() == 0 {
+		t.Error("a server started with -allow-writes did not send the introspection POST")
+	}
+	if text, isErr := callText(t, writes, "azhaq_plan", call); isErr {
+		t.Errorf("azhaq_plan with graphql and -allow-writes: %s", text)
+	}
+}
+
+// The tool list says what the server does about graphql and the sign-in.
+func TestMCPToolDescriptionsSayWhatGraphQLAndLoginSend(t *testing.T) {
+	for _, tool := range mcpTools() {
+		props, _ := tool["inputSchema"].(map[string]any)["properties"].(map[string]any)
+		if g, ok := props["graphql"].(map[string]any); ok {
+			if d, _ := g["description"].(string); !strings.Contains(d, "POST") || !strings.Contains(d, "-allow-writes") {
+				t.Errorf("%s: graphql does not say it is a POST sent only with -allow-writes: %s", tool["name"], d)
+			}
+		}
+		if l, ok := props["login"].(map[string]any); ok {
+			if d, _ := l["description"].(string); !strings.Contains(d, "one POST") || !strings.Contains(d, "-allow-writes") {
+				t.Errorf("%s: login does not say it is the one POST sent without -allow-writes: %s", tool["name"], d)
+			}
+		}
 	}
 }
