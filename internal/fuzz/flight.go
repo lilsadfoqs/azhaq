@@ -262,6 +262,7 @@ type flightSender struct {
 	keywords []string
 	allow    func(host string) bool
 	lanes    sync.Pool
+	seq      chan struct{} // one sequence at a time: a flight's token belongs to the session
 
 	mu     sync.Mutex
 	failed int
@@ -277,7 +278,7 @@ func WithFlights(s Sender, fl *Flights, main Template, keywords []string, allow 
 	if !ok {
 		return nil, fmt.Errorf("this sender cannot send flights")
 	}
-	return &flightSender{Sender: s, fl: fl, ex: ex, template: main, keywords: keywords, allow: allow}, nil
+	return &flightSender{Sender: s, fl: fl, ex: ex, template: main, keywords: keywords, allow: allow, seq: make(chan struct{}, 1)}, nil
 }
 
 // Replay passes on to the wrapped sender.
@@ -309,6 +310,14 @@ func (f *flightSender) fail(err error) {
 }
 
 func (f *flightSender) Send(ctx context.Context, req *Request, keepBody bool) (resp *Response, err error) {
+	// The requests share the session of -b (a GET rotates its CSRF token), so
+	// a sequence that overlapped another would send a token already replaced.
+	select {
+	case f.seq <- struct{}{}:
+		defer func() { <-f.seq }()
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 	var applied map[string]string
 	var jar cookieJar
 	var l *lane
