@@ -314,7 +314,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	allRows := fs.Bool("all-rows", false, "list every row, as run printed before: by default the rows that answer as the control request for a path that cannot exist does, the 404s, the assets no request asked for and the hints only scripts name are counted in one line of their class each (-json lists every row with its fold class)")
 	perTmpl := fs.Int("per-template", 0, "URLs of one template (/product?id={n}) to request; the rest are listed (default: all)")
 	maxRequests := fs.Int64("max-requests", 0, "requests to targets this run may send (0: no cap); the work left over is for azhaq resume")
-	rateFlag := fs.Float64("rate", 0, "requests per second to targets, over all hosts (0: no pace)")
+	rateFlag := fs.Float64("rate", 0, "requests, port connects, UDP datagrams and DNS queries to the targets' name servers per second, over all hosts (0: no pace)")
 	ledgerFlag := fs.String("ledger", "", ledgerHelp)
 	killFile := fs.String("kill-file", "", killFileHelp)
 	sealTo := fs.String("seal-to", "", sealToHelp)
@@ -920,7 +920,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	if *webScheme != "" && *webScheme != "http" && *webScheme != "https" {
 		return usagef("-web-scheme is http or https, got %q", *webScheme)
 	}
-	opts := collectors.Options{Client: client, HTTP: spec, WebPorts: ports, WebScheme: *webScheme, NoTech: *noTech, NoTakeover: *noTakeover, NoFavicon: *noFavicon, Probe: *probe, PortRate: *portRate, MaxIPs: *maxIPs, Shots: *shots, Render: *render, KnownFiles: *knownFiles, FillForms: *fillForms, NoMapGuess: *noMapGuess, SubmitForms: *submitForms, PathClimb: *pathClimb}
+	opts := collectors.Options{Client: client, HTTP: spec, WebPorts: ports, WebScheme: *webScheme, NoTech: *noTech, NoTakeover: *noTakeover, NoFavicon: *noFavicon, Probe: *probe, PortRate: portPace(*rateFlag, *portRate), MaxIPs: *maxIPs, Shots: *shots, Render: *render, KnownFiles: *knownFiles, FillForms: *fillForms, NoMapGuess: *noMapGuess, SubmitForms: *submitForms, PathClimb: *pathClimb}
 	opts.ShotHTML, opts.AskedOnly = *shotHTML, askedOnly
 	if *browserWrites && *shots == "" && !*render {
 		return usagef("-browser-writes lets the pages Chrome loads send writes: give it with -browser or -screenshots")
@@ -1317,7 +1317,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 			// taken off.
 			send.max, send.by = *daily, "-daily-requests; what today's runs spent is not counted"
 		}
-		plan := buildPlan(cat, seeds, budgets, paths, limitsOf(budgets, *maxRequests, *rateFlag, *timeout, *daily), send, rep)
+		plan := buildPlan(cat, seeds, budgets, paths, paceLimits(limitsOf(budgets, *maxRequests, *rateFlag, *timeout, *daily), *rateFlag, *portRate, *portMinRate), send, rep)
 		rep.Results, rep.what = len(plan.Targets), "targets"
 		if out.planInto != nil {
 			*out.planInto = plan
@@ -1457,7 +1457,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	var estimate *costEstimate
 	var portHosts []string // the names and addresses the port scan was planned on
 	if *resumeRun == "" {
-		pl := planFor(cat, seeds, budgets, paths, limitsOf(budgets, *maxRequests, *rateFlag, *timeout, *daily), send, rep)
+		pl := planFor(cat, seeds, budgets, paths, paceLimits(limitsOf(budgets, *maxRequests, *rateFlag, *timeout, *daily), *rateFlag, *portRate, *portMinRate), send, rep)
 		ep := pl.Estimate
 		estimate = &ep
 		for _, t := range pl.Targets {

@@ -113,11 +113,18 @@ func (p *Policy) SpendCounted(ctx context.Context, paced bool) error {
 //
 // The kill file ends the wait: a request counted before it appeared and
 // still waiting its turn is not sent after it.
-func (p *Policy) Pace(ctx context.Context) error {
+func (p *Policy) Pace(ctx context.Context) error { return p.pace1(ctx, 1, true) }
+
+// PaceN waits for the places of n sends at once (a port scan's batch of
+// connects, a datagram), counting none: the caller counts them as it sends.
+// Without a pace it only looks for the kill file.
+func (p *Policy) PaceN(ctx context.Context, n int) error { return p.pace1(ctx, n, false) }
+
+func (p *Policy) pace1(ctx context.Context, n int, hold bool) error {
 	p.paceMu.Lock()
 	lim := p.pace
 	p.paceMu.Unlock()
-	if lim != nil {
+	if lim != nil && hold {
 		p.held.Add(1) // counted, and waiting for its turn: not sent yet
 		defer p.held.Add(-1)
 	}
@@ -136,7 +143,12 @@ func (p *Policy) Pace(ctx context.Context) error {
 			}()
 			stop = cancel
 		}
-		err := lim.Wait(wctx)
+		var err error
+		for n > 0 && err == nil { // a batch larger than the burst goes in parts
+			k := min(n, max(lim.Burst(), 1))
+			err = lim.WaitN(wctx, k)
+			n -= k
+		}
 		stop()
 		if k := p.Killed(); k != nil {
 			return k
@@ -337,6 +349,7 @@ func Spend(ctx context.Context) error                    { return Current().Spen
 func SpendUnpaced(ctx context.Context) error             { return Current().SpendUnpaced(ctx) }
 func SpendCounted(ctx context.Context, paced bool) error { return Current().SpendCounted(ctx, paced) }
 func Pace(ctx context.Context) error                     { return Current().Pace(ctx) }
+func PaceN(ctx context.Context, n int) error             { return Current().PaceN(ctx, n) }
 func Take() error                                        { return Current().Take() }
 func TakeSweep() error                                   { return Current().TakeSweep() }
 func Reserve(n int64)                                    { Current().Reserve(n) }

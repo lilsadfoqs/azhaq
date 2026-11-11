@@ -545,6 +545,10 @@ func printPlanText(w io.Writer, p runPlan) {
 		lim = append(lim, k+" "+p.Limits[k])
 	}
 	fmt.Fprintf(w, "limits: %s\n", strings.Join(lim, ", "))
+	if p.Limits["connects-pace"] != "" {
+		fmt.Fprintf(w, "pace: requests %s, connects %s, datagrams %s, DNS queries to the targets' name servers %s\n",
+			p.Limits["requests-pace"], p.Limits["connects-pace"], p.Limits["datagrams-pace"], p.Limits["dns-pace"])
+	}
 	for _, s := range p.Sends {
 		fmt.Fprintf(w, "sends: %s\n", s)
 	}

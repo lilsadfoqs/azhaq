@@ -161,7 +161,7 @@ The summary and the exit codes are `run`'s: see [run](run.md#summary-and-exit-co
 
 | Flag | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `-rate` | float |  | requests per second to targets, over all hosts (0: no pace) |
+| `-rate` | float |  | requests, port connects, UDP datagrams and DNS queries to the targets' name servers per second, over all hosts (0: no pace) |
 | `-host-rate` | float |  | requests per second to each host, besides -rate over all (0: none) |
 | `-host-parallel` | int |  | requests in flight per host (default 10, as katana) |
 | `-parallel` | int |  | work items in flight (default 16) |

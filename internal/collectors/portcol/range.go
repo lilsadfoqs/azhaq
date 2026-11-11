@@ -1,6 +1,7 @@
 package portcol
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -123,7 +124,10 @@ func (c *Collector) runPrefix(ctx context.Context, seed types.Seed, emit func(ty
 		// The addresses that answered the first pass of the default scan: their second
 		// pass goes on when every address has had the first.
 		later []func()
-		phase = 1
+		// The addresses another task holds: they are waited for after every first and second pass.
+		waiting []func()
+		claims  []*claimRec
+		phase   = 1
 	)
 	down, out, filtAddrs, edgeAddrs = sweep.Counts["down"], sweep.Counts["outside_scope"], sweep.Counts["filtered_addresses"], sweep.Counts["cdn_addresses"]
 	udpFilt, udpSilent, withOpen = sweep.Counts["udp_silent_ports"], sweep.Counts["udp_silent_addresses"], sweep.Counts["with_open"]
@@ -239,6 +243,18 @@ func (c *Collector) runPrefix(ctx context.Context, seed types.Seed, emit func(ty
 			s := &scan{up: true}
 			var uerr error
 			early := &earlyAddr{c: c, ctx: ctx, ip: ip}
+			// The address is asked once: when a name has it, or another range, this
+			// task waits for that scan, after the first pass of every other address.
+			entry, mine := c.claim(ip, ip)
+			var rec *claimRec
+			settle := func(*scan) {}
+			if mine {
+				rec = &claimRec{c: c, ip: ip, e: entry}
+				mu.Lock()
+				claims = append(claims, rec)
+				mu.Unlock()
+				settle = rec.settle
+			}
 			sctx := ctx
 			if single {
 				// One address is one long scan: it keeps what it has finished as it goes.
@@ -248,35 +264,40 @@ func (c *Collector) runPrefix(ctx context.Context, seed types.Seed, emit func(ty
 					return emit(o)
 				}, ip, ip, all, prior, resumed, edgeName, edge, pf.String(), c.passOf(1)))
 			}
-			switch {
-			case len(ports) == 0:
-			case c.Discover != DiscoverOff && outScope == 0:
-				if s.up, s.err = c.Scanner.Up(ctx, ip, ip); s.err == nil && s.up && c.Discover == DiscoverFirst {
+			if mine {
+				switch {
+				case len(ports) == 0:
+				case c.Discover != DiscoverOff && outScope == 0:
+					if s.up, s.err = c.Scanner.Up(ctx, ip, ip); s.err == nil && s.up && c.Discover == DiscoverFirst {
+						s = c.scanRange(sctx, ip, ports, early.found)
+					}
+				default:
 					s = c.scanRange(sctx, ip, ports, early.found)
 				}
-			default:
-				s = c.scanRange(sctx, ip, ports, early.found)
-			}
-			if s.err != nil {
-				res := result{err: s.err}
-				if stopped(s.err) {
-					if s.asked > 0 {
-						mu.Lock()
-						asked++
-						mu.Unlock()
+				s.first = all
+				if s.err != nil {
+					settle(s)
+					res := result{err: s.err}
+					if stopped(s.err) {
+						if s.asked > 0 {
+							mu.Lock()
+							asked++
+							mu.Unlock()
+						}
+						// What it found is kept; azhaq resume asks the rest.
+						if res.row = c.partialRow(ip, ip, all, ports, s, prior, resumed, edgeName, edge); res.row != nil {
+							res.row["prefix"] = pf.String()
+						}
 					}
-					// What it found is kept; azhaq resume asks the rest.
-					if res.row = c.partialRow(ip, ip, all, ports, s, prior, resumed, edgeName, edge); res.row != nil {
-						res.row["prefix"] = pf.String()
-					}
+					record(res)
+					return
 				}
-				record(res)
-				return
+				mu.Lock()
+				asked++
+				mu.Unlock()
 			}
-			mu.Lock()
-			asked++
-			mu.Unlock()
 			finish := func(s *scan, ports []int) {
+				defer func() { settle(s) }()
 				if resumed {
 					s, ports = withPrior(s, prior), all
 				}
@@ -365,10 +386,35 @@ func (c *Collector) runPrefix(ctx context.Context, seed types.Seed, emit func(ty
 				follow := len(s.open) > 0 || len(udp.Open) > 0
 				if follow {
 					// The address seed that follows finds its scan done.
-					c.remember(ip, s, udp, len(c.UDPPorts) > 0 && !edge && s.up && c.Discover != DiscoverOnly)
+					c.remember(ip, udp, len(c.UDPPorts) > 0 && !edge && s.up && c.Discover != DiscoverOnly)
 				}
 				record(result{row: row, open: s.open, ip: ip, follow: follow, sent: &early.sent})
 				apply()
+			}
+			if !mine {
+				job := func() {
+					select {
+					case <-entry.done:
+					case <-ctx.Done():
+						return
+					}
+					s := entry
+					if s.err == nil {
+						s = c.topUp(sctx, ip, ip, entry, ports, early.found)
+					}
+					if s.err != nil {
+						record(result{err: s.err})
+						return
+					}
+					mu.Lock()
+					asked++
+					mu.Unlock()
+					finish(s, ports)
+				}
+				mu.Lock()
+				waiting = append(waiting, job)
+				mu.Unlock()
+				return
 			}
 			if c.escalates(ip, edge, s, prior) {
 				// An address that answered goes on to the second pass, once every
@@ -380,6 +426,7 @@ func (c *Collector) runPrefix(ctx context.Context, seed types.Seed, emit func(ty
 						return emit(o)
 					}, ip, ip, all, ports, prior, resumed, s, edgeName, edge, pf.String(), early.found)
 					if s.err != nil {
+						settle(s)
 						res := result{err: s.err}
 						if stopped(s.err) {
 							if res.row = c.partialRow(ip, ip, all, ports, s, prior, resumed, edgeName, edge); res.row != nil {
@@ -403,9 +450,18 @@ func (c *Collector) runPrefix(ctx context.Context, seed types.Seed, emit func(ty
 	mu.Lock()
 	run2 := first == nil && ctx.Err() == nil
 	mu.Unlock()
-	if run2 && len(later) > 0 {
+	// A claim not settled by now (a stop came first) is given up: a name
+	// waiting for it is not held for good.
+	defer func() {
+		mu.Lock()
+		defer mu.Unlock()
+		for _, r := range claims {
+			r.settle(&scan{err: cmp.Or(first, ctx.Err(), errRangeStopped)})
+		}
+	}()
+	if run2 && len(later)+len(waiting) > 0 {
 		phase = 2
-		for _, job := range later {
+		for _, job := range append(later, waiting...) {
 			mu.Lock()
 			stop := first != nil
 			mu.Unlock()
@@ -500,18 +556,19 @@ func (e *earlyAddr) found(o portscan.Open) {
 	e.sent.hand(e.ctx, hintsOf(e.ip, []portscan.Open{o}))
 }
 
-// remember keeps the scan of an address that answered, so the seed that
-// follows it (a name, an address) is not scanned again.
-func (c *Collector) remember(ip string, s *scan, udp portscan.UDPReport, withUDP bool) {
+// remember keeps the UDP scan of an address that answered, so the seed that
+// follows it (a name, an address) is not scanned again; its TCP scan is the
+// claim the range holds (claimRec).
+func (c *Collector) remember(ip string, udp portscan.UDPReport, withUDP bool) {
+	if !withUDP {
+		return
+	}
 	done := make(chan struct{})
 	close(done)
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.byIP[ip] = &scan{done: done, host: ip, open: s.open, silent: s.silent, up: s.up, capped: s.capped}
-	if withUDP {
-		if c.udpByIP == nil {
-			c.udpByIP = map[string]*udpScan{}
-		}
-		c.udpByIP[ip] = &udpScan{done: done, rep: udp}
+	if c.udpByIP == nil {
+		c.udpByIP = map[string]*udpScan{}
 	}
+	c.udpByIP[ip] = &udpScan{done: done, rep: udp}
 }

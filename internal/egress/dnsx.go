@@ -139,6 +139,9 @@ func (x *DNSExchanger) Exchange(ctx context.Context, q *dns.Msg, srv DNSServer) 
 // ExchangeAt asks one server directly over UDP, and over TCP when the
 // answer is cut: a name server being followed, not one of the pool's.
 func (x *DNSExchanger) ExchangeAt(ctx context.Context, q *dns.Msg, server string) (*dns.Msg, error) {
+	if err := Pace(ctx); err != nil { // a target's own server: the run's -rate holds
+		return nil, err
+	}
 	if err := record(ctx, q, server); err != nil {
 		return nil, err
 	}
@@ -269,6 +272,9 @@ func SystemLookup(ctx context.Context, name string) ([]net.IPAddr, error) {
 func (x *DNSExchanger) Transfer(ctx context.Context, domain, server string) ([]dns.RR, error) {
 	m := new(dns.Msg)
 	m.SetAxfr(dns.Fqdn(domain))
+	if err := Pace(ctx); err != nil { // a target's own server: the run's -rate holds
+		return nil, err
+	}
 	if err := record(ctx, m, server); err != nil {
 		return nil, err
 	}

@@ -267,7 +267,7 @@ These filters limit what is printed, not what is crawled.
 
 | Flag | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `-rl` | float |  | requests per second to targets, over all hosts (0: no pace) |
+| `-rl` | float |  | requests, port connects, UDP datagrams and DNS queries to the targets' name servers per second, over all hosts (0: no pace) |
 | `-delay` | duration |  | pause before each uncached fetch |
 | `-backoff` | bool |  | when a host answers 429 or 503, wait (1 s doubling to 30 s, or its Retry-After) and ask again, up to 3 times; the summary says which hosts did |
 | `-retry` | int |  | ask again this many times when a host that answered before gives no answer (a timeout, a reset) |
@@ -343,7 +343,7 @@ These filters limit what is printed, not what is crawled.
 | `-p` | int |  | work items in flight (default 16) | other name |
 | `-pc` | bool |  | same as -path-climb (katana's -pc) | other name |
 | `-r` | string |  | DNS resolvers: a file with one per line, or a comma list; each is ADDR, ADDR:PORT or udp:, tcp:, dot:, doh:URL[:get] and then the address (default: public resolvers). Named resolvers answer every name, special-use ones (.test, .local, localhost) included; the system resolver is never asked | other name |
-| `-rate` | float |  | requests per second to targets, over all hosts (0: no pace) | other name |
+| `-rate` | float |  | requests, port connects, UDP datagrams and DNS queries to the targets' name servers per second, over all hosts (0: no pace) | other name |
 | `-timeout` | duration |  | stop after this long and keep what was found; azhaq resume continues (0: no limit) | other name |
 | `-duc` | bool |  | accepted for katana's command lines; azhaq always reads scripts, forms and technologies | accepted, no effect |
 | `-fx` | bool |  | accepted for katana's command lines; azhaq always reads scripts, forms and technologies | accepted, no effect |

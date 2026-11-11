@@ -202,7 +202,7 @@ note: screenshot of http://127.0.0.1:3001/ not taken: the page needs about 26 re
 
 | Flag | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `-rate` | float |  | requests per second to targets, over all hosts (0: no pace) |
+| `-rate` | float |  | requests, port connects, UDP datagrams and DNS queries to the targets' name servers per second, over all hosts (0: no pace) |
 | `-max-requests` | int |  | requests to targets this run may send (0: no cap); the work left over is for azhaq resume |
 | `-timeout` | duration |  | stop after this long and keep what was found; azhaq resume continues (0: no limit) |
 
