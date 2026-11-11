@@ -108,12 +108,15 @@ func Declares(texts ...string) (string, bool) {
 }
 
 // stem is w in its base form when w is a form of one of the verbs:
-// creates, created and creating are create; populated is populate.
+// creates, created and creating are create; populated is populate; and
+// a verb run into "all", as a control page names it (?action=stopall,
+// restartall, deleteall), is that verb.
 func stem(w string, set map[string]bool) string {
 	if set[w] {
 		return w
 	}
 	for _, cand := range []string{
+		trimSuffix2(w, "all"),
 		strings.TrimSuffix(w, "s"),
 		strings.TrimSuffix(w, "es"),
 		trimSuffix2(w, "ed"),
