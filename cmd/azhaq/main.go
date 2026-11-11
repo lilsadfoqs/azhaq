@@ -821,7 +821,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		egress.SetDenyPath(budgets.Scope.DeniedPath)
 	}
 	if !out.plan {
-		holdStateChanging(seeds, !*sendState)
+		holdStateChanging(seeds, !*sendState, holdGivenTargets(*sendState))
 		defer egress.SetStateWords(nil, nil, false)
 	}
 	if *crawlScope != "" || *crawlAny || len(crawlIn) > 0 || len(crawlOut) > 0 {
@@ -1242,7 +1242,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	send.axfr, send.resolvers = out.axfr, resolvers
 	send.dirsWords, send.dirsExts, send.paramsN = len(opts.Dirs.Words), len(opts.Dirs.Extensions), len(opts.Params.Words)
 	send.dirsNoCal = opts.Dirs.NoCalibration
-	send.sendState = *sendState
+	send.sendState, send.holdGiven = *sendState, holdGivenTargets(*sendState)
 	if !*sendState {
 		send.dirsHold = true
 		send.dirsHeld = dirscol.HeldWords(opts.Dirs.Words, opts.Dirs.Extensions)
@@ -1253,7 +1253,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	// The GETs among the targets whose own name declares a state change
 	// are named before anything is sent: in a plan's list, and in a run's
 	// first lines and summary. Nothing is withheld by naming them.
-	preState := stateChangesOfSeeds(seeds, rules)
+	preState := stateChangesOfSeeds(seeds, rules, holdGivenTargets(*sendState))
 	if !out.plan && len(preState) > 0 {
 		rep.StateChanging = append(rep.StateChanging, preState...)
 		for _, e := range preState {

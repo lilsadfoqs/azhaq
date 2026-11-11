@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"maps"
 	"net/url"
+	"os"
 	"regexp"
 	"slices"
 	"sort"
@@ -87,8 +88,10 @@ func denyRuleFor(raw string) string {
 
 // stateChangesOfSeeds are the entries among the targets given: a URL
 // seed whose own path names a state change, in scope and not already
-// kept out by a -deny-path rule (those are listed as skipped).
-func stateChangesOfSeeds(seeds []types.Seed, rules scope.Rules) []stateChangeEntry {
+// kept out by a -deny-path rule (those are listed as skipped). With held
+// (a client named the targets, see holdGivenTargets) each is held back,
+// not sent.
+func stateChangesOfSeeds(seeds []types.Seed, rules scope.Rules, held bool) []stateChangeEntry {
 	var out []stateChangeEntry
 	seen := map[string]bool{}
 	for _, s := range seeds {
@@ -110,7 +113,11 @@ func stateChangesOfSeeds(seeds []types.Seed, rules scope.Rules) []stateChangeEnt
 		if word == "" {
 			continue
 		}
-		out = append(out, stateChangeEntry{Target: u, Method: "GET", URL: u, Word: word, Source: "its " + where, DenyPath: denyRuleFor(u), Status: stateGiven})
+		e := stateChangeEntry{Target: u, Method: "GET", URL: u, Word: word, Source: "its " + where, DenyPath: denyRuleFor(u), Status: stateGiven}
+		if held {
+			e.Status, e.Send = stateHeld, neterr.SendFlag
+		}
+		out = append(out, e)
 	}
 	return out
 }
@@ -336,13 +343,28 @@ func settleStateChanges(rep *report, pre, found []stateChangeEntry, rules scope.
 // holdStateChanging has the run look for the GETs whose own path or API
 // operation declares a state change, to remember which it sent and, with
 // hold, to hold back the ones found on the way. The URLs among the seeds
-// are the user's targets: they are never held back.
-func holdStateChanging(seeds []types.Seed, hold bool) {
+// are the user's targets: they are never held back, unless a client named
+// them (holdGiven): then they are held like a found URL.
+func holdStateChanging(seeds []types.Seed, hold, holdGiven bool) {
 	given := map[string]bool{}
-	for _, u := range append(givenURLs(seeds), workerGiven...) {
-		given[normKey(u)] = true
+	if !holdGiven {
+		for _, u := range append(givenURLs(seeds), workerGiven...) {
+			given[normKey(u)] = true
+		}
 	}
 	egress.SetStateWords(statechange.OfURL, func(raw string) bool { return given[normKey(raw)] }, hold)
+}
+
+// holdGivenEnv is set by azhaq mcp on the commands it starts: the targets
+// of a call come from a client, not from the person who started the
+// server, so only the server's -send-state-changing sends a state-changing
+// GET among them.
+const holdGivenEnv = "AZHAQ_HOLD_TARGETS"
+
+// holdGivenTargets says the targets are a client's, and held back as found
+// ones are, unless -send-state-changing was given.
+func holdGivenTargets(sendState bool) bool {
+	return os.Getenv(holdGivenEnv) != "" && !sendState
 }
 
 // givenURLs are the URL targets among seeds.

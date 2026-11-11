@@ -156,6 +156,7 @@ type sendLimits struct {
 	// declares a state change are sent, not held back. dirsHeld is how many of
 	// the -dirs requests the built-in list makes are held back for it.
 	sendState bool
+	holdGiven bool // the targets are a client's: those that declare a state change are held back too
 	dirsHeld  int
 	dirsHold  bool // the built-in -dirs words that declare a state change are held back
 	// What the ceilings are counted with.
@@ -306,7 +307,7 @@ func planTransfers(seeds []types.Seed, b engine.Budgets, resolvers []string) []p
 
 func planFor(cat *catalog.Catalog, seeds []types.Seed, b engine.Budgets, paths []string, limits map[string]string, send sendLimits, rep *report) runPlan {
 	p := runPlan{Collectors: map[string]string{}, Limits: limits, Skipped: slices.Clone(rep.Skipped)}
-	p.StateChanging = stateChangesOfSeeds(seeds, b.Scope)
+	p.StateChanging = stateChangesOfSeeds(seeds, b.Scope, send.holdGiven)
 	p.Requests = planRequests{Sources: map[string]int{}, Cap: send.max, scoped: !b.Scope.Empty()}
 	if send.max > 0 {
 		p.Requests.CapBy = send.by
@@ -406,6 +407,9 @@ func planFor(cat *catalog.Catalog, seeds []types.Seed, b engine.Budgets, paths [
 	} else {
 		p.Sends = append(p.Sends, "azhaq cannot know what a GET does on the server: every URL found in scope is requested, except a GET whose own path, query or API operation declares a state change (create, delete, reset, logout, action=stop, ...), found on the way or a word of a wordlist you give: it is held back and listed as skipped ("+neterr.SendFlag+" sends it), and writes (POST, PUT, PATCH, DELETE) only with their flags")
 	}
+	if send.holdGiven {
+		p.Sends = append(p.Sends, "a target whose own path or query declares a state change is held back too, not sent: this server's client named it, not the person who started the server")
+	}
 	for _, rule := range b.Scope.DenyPath {
 		p.Sends = append(p.Sends, "never requested, by any collector or Chrome: a URL whose path or query matches -deny-path "+rule)
 	}
@@ -501,7 +505,11 @@ func printPlanText(w io.Writer, p runPlan) {
 		}
 	}
 	if len(p.StateChanging) > 0 {
-		fmt.Printf("requests that may change state (%d; named by their own path, and sent because you gave them as targets)\n", len(p.StateChanging))
+		why := "and sent because you gave them as targets"
+		if p.StateChanging[0].Status == stateHeld {
+			why = "and held back, not sent: " + neterr.SendFlag + " sends them"
+		}
+		fmt.Printf("requests that may change state (%d; named by their own path, %s)\n", len(p.StateChanging), why)
 		for _, e := range p.StateChanging {
 			fmt.Printf("  %s\n", e.line())
 		}
