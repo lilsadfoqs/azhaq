@@ -11,8 +11,9 @@
 #             -domain D -cidr NET   the seeds: a domain and an address range
 #             -allow D -allow NET   the fence START.md puts on every run
 #             -resolvers DNS        the resolver the client gave (run.md: named resolvers answer .test too)
-#             -ports default        run.md: "default (the top 100 and the usual ports of the services azhaq names
-#                                   and checks)"; with no -ports a run scans none
+#             -ports default        run.md: the top 1000 and the usual ports of the services azhaq names
+#                                   and checks, then every TCP port of each address that answered; it is what a
+#                                   range or an address among the targets gets with no -ports
 #             -verify               run.md and docs/CONCEPTS.md "Read-only verification": the read-only checks of
 #                                   the services found; no payload, no credential
 #             -max-time             the cap on the whole replay (run.md: stops in any phase, exit 4)

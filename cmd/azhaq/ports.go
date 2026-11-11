@@ -93,7 +93,7 @@ func cmdPorts(args []string) error {
 	fs.Var(&hosts, "host", "hosts, addresses, CIDR ranges, AS numbers or host:port, comma-separated and repeatable")
 	list := onceString(fs, "l", "file of targets (- for stdin)")
 	noStdin := fs.Bool("no-stdin", false, "do not read targets from stdin when none is given")
-	spec := fs.String("p", portscan.DefaultName, "ports: default (the top 100 and the usual ports of the services azhaq names and checks), top-100, top-1000, full, - (all), none, or a list of ports, ranges and these names, such as 22,80,8000-8100 or top-100,8888; u:53 is a UDP port")
+	spec := fs.String("p", portscan.DefaultName, "ports: default (the top 1000 and the usual ports of the services azhaq names and checks, then every TCP port of each host that answered), top-100, top-1000, full, - (all), none, or a list of ports, ranges and these names, such as 22,80,8000-8100 or top-100,8888; u:53 is a UDP port")
 	topPorts := fs.String("tp", "", "the most common TCP ports: 100, 1000 or full (added to -p)")
 	portsFile := fs.String("pf", "", "file of ports, one spec a line (added to -p)")
 	exclPorts := fs.String("ep", "", "ports not to scan: a list or a file")
@@ -321,7 +321,16 @@ func cmdPorts(args []string) error {
 	} else if len(udpPorts) == 0 || *sn {
 		tcp = "top-100"
 	}
+	// A list with the name default goes on, past its first pass, to every port of each
+	// address that answered: run is given the list as written, and what -ep leaves out.
+	escalating := len(ports) > 0 && portscan.Escalates(strings.Join(tcpSpec, ","))
+	if escalating {
+		tcp = strings.Join(tcpSpec, ",")
+	}
 	run := []string{"-list", path, "-passive", "-depth", "0", "-skip", skipAllBut("azhaq-ports"), "-ports", tcp}
+	if escalating && exSpec != "" {
+		run = append(run, "-port-skip", exSpec)
+	}
 	if advFlags.on {
 		run = append(run, "-advisories", "-advisory-source="+advFlags.source)
 		if advFlags.confirm {
@@ -504,10 +513,18 @@ func cmdPorts(args []string) error {
 		}
 		// Ports the scope holds out were not asked, and a wider pass would
 		// be refused the same way: no count or suggestion for them.
-		if why, _ := catalogPass(catalogLeft(ports, exSpec), int(sink.scanned)); why != "" && !portsHeld {
-			rep.nextPass(catalogPassCommand(args, rep.DB), why)
+		left := catalogLeft(ports, exSpec)
+		if why, _ := catalogPass(left, int(sink.scanned)); why != "" && !portsHeld {
+			rep.nextPass(catalogPassCommand(args, rep.DB, left), why)
 		}
-		if why, _ := portsPass(len(ports), int(sink.scanned), sink.open); why != "" && !portsHeld {
+		// With a second pass, the addresses that answered have had every port: the rest is the others'.
+		unanswered, firstPass := int(sink.scanned), len(ports)
+		if escalating {
+			obs, _ := st.Observations()
+			_, answered := portAddresses(obs)
+			unanswered = max(unanswered-answered, 0)
+		}
+		if why, _ := portsPass(firstPass, unanswered, sink.open); why != "" && !portsHeld {
 			rep.nextPass(portsPassCommand(args, rep.DB), why)
 		}
 	}

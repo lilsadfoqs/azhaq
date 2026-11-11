@@ -174,7 +174,7 @@ This list says which part of Azhaq each group of options drives:
 - **Subdomain sources:** `-sources`, `-exclude-sources`, `-all-sources`, `-providers`, `-source-rate`, `-source-rates`, `-max-results`, `-max-time`, `-max-body`, `-source-proxy`, `-no-history`. See [Subdomain sources](#subdomain-sources).
 - **DNS:** `-resolvers`, `-dns-rate`. See [DNS](#dns).
 - **Paths you rule out:** `-deny-path REGEX` (repeatable). See [Paths you rule out](#paths-you-rule-out).
-- **Active techniques:** `-dns-brute`, `-permute`, `-dirs`, `-params`, `-ports`, `-ports-udp`, `-graphql`. Each is held to the targets given, or to the scope `-allow` or `-scope` names.
+- **Active techniques:** `-dns-brute`, `-permute`, `-dirs`, `-params`, `-ports`, `-ports-udp`, `-graphql`. Each is held to the targets given, or to the scope `-allow` or `-scope` names. A `run` with a range or an address among its targets and no `-ports` also scans `-ports default`: see [Default port scan](commands/run.md#default-port-scan).
 - **Ledger and kill switch:** `-ledger`, `-kill-file`. See [The request ledger and the kill switch](#the-request-ledger-and-the-kill-switch).
 - **Scheduling:** `-depth`, `-max-items`, `-parallel`, `-host-parallel`, `-delay`, `-v`. See [Scheduling](#scheduling-runlocal).
 

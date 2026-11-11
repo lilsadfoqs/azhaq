@@ -5,15 +5,15 @@ import (
 	"testing"
 )
 
-// A default scan asks the usual port of every service azhaq can name or
-// check: of each protocol it identifies, plain and TLS, of each port it names
-// a silent port by, and of each service a -verify check reads.
+// The first pass of the default scan asks the usual port of every service azhaq
+// can name or check: of each protocol it identifies, plain and TLS, of each port
+// it names a silent port by, and of each service a -verify check reads.
 func TestDefaultPortsHoldThePortOfEveryServiceInTheCatalog(t *testing.T) {
 	def := DefaultPorts()
-	top, _ := Ports("top-100")
+	top, _ := Ports("top-1000")
 	for _, p := range top {
 		if !slices.Contains(def, p) {
-			t.Errorf("the default set lacks %d, a port of the top 100", p)
+			t.Errorf("the default set lacks %d, a port of the top 1000", p)
 		}
 	}
 	n := 0
@@ -39,7 +39,7 @@ func TestDefaultPortsHoldThePortOfEveryServiceInTheCatalog(t *testing.T) {
 			t.Errorf("the default set lacks %d", q)
 		}
 	}
-	// The set is the top 100 and the catalog, each port once, in order.
+	// The set is the top 1000 and the catalog, each port once, in order.
 	want := map[int]bool{}
 	for _, p := range top {
 		want[p] = true
@@ -48,7 +48,7 @@ func TestDefaultPortsHoldThePortOfEveryServiceInTheCatalog(t *testing.T) {
 		want[p] = true
 	}
 	if len(def) != len(want) || !slices.IsSorted(def) || len(slices.Compact(slices.Clone(def))) != len(def) {
-		t.Errorf("the default set has %d ports, the top 100 and the catalog make %d", len(def), len(want))
+		t.Errorf("the default set has %d ports, the top 1000 and the catalog make %d", len(def), len(want))
 	}
 	if got, _ := Ports(""); !slices.Equal(got, def) {
 		t.Errorf("an empty list is not the default set")
@@ -61,5 +61,31 @@ func TestDefaultPortsHoldThePortOfEveryServiceInTheCatalog(t *testing.T) {
 	}
 	if _, err := UDPPorts("default"); err == nil {
 		t.Errorf("UDP takes no list named default")
+	}
+}
+
+// The usual set, which a scan with no ports asked before it had a second pass, is
+// the top 100 and the catalog; only a list holding the name default goes on to a
+// second pass.
+func TestUsualPortsAndEscalation(t *testing.T) {
+	top, _ := Ports("top-100")
+	want := map[int]bool{}
+	for _, p := range top {
+		want[p] = true
+	}
+	for _, p := range CatalogPorts() {
+		want[p] = true
+	}
+	if got := UsualPorts(); len(got) != len(want) || len(got) != 163 {
+		t.Errorf("the usual set has %d ports, want %d (163)", len(got), len(want))
+	}
+	if got, want := len(DefaultPorts()), 1040; got != want {
+		t.Errorf("the first pass has %d ports, want %d", got, want)
+	}
+	for spec, want := range map[string]bool{"": false, "default": true, " Default ": true, "top-100,default": true, "default,8888": true,
+		"top-1000": false, "full": false, "22,80": false, "none": false} {
+		if got := Escalates(spec); got != want {
+			t.Errorf("Escalates(%q) = %v, want %v", spec, got, want)
+		}
 	}
 }

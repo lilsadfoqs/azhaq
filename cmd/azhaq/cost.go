@@ -501,7 +501,15 @@ func estimateCost(seeds []types.Seed, planned [][]string, runs func(string) bool
 			pageHosts[normalize.HostFromURL(s.Key())] = true
 		}
 	}
-	const portsOpen = "banner and protocol probes of each open port"
+	portsOpen := "banner and protocol probes of each open port"
+	if env.portEscalate {
+		for _, s := range seeds {
+			if pf, err := netip.ParsePrefix(s.Key()); err == nil && s.Type == types.TypePrefix && !pf.IsSingleIP() {
+				portsOpen = fmt.Sprintf("pass 2 of -ports default on each address of a range that answers pass 1 (%d connects each), and the banner and protocol probes of each open port", secondPortsOf(len(env.portList), env.portSkip))
+				break
+			}
+		}
+	}
 	nameScanned := false // a name is scanned: whether it is behind a CDN or WAF is not known
 	var (
 		pages     = map[string]bool{} // the URLs of the web map the run asks whatever the answers are

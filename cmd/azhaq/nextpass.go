@@ -50,7 +50,7 @@ func portsPass(asked, addresses, open int) (why string, cost amount) {
 		rest, allTCPPorts, nOf(addresses, "address", "addresses"), moreOf(cost), found, asked), cost
 }
 
-// catalogLeft is the ports of the default set (portscan.DefaultPorts: the top
+// catalogLeft is the ports of the usual set (portscan.UsualPorts: the top
 // 100 and portscan.CatalogPorts, the usual ports of the services azhaq names
 // and checks) that a scan of asked did not ask, less excluded (an -ep list
 // the user gave, which stays out). nil when asked is empty, since a scan of no
@@ -64,7 +64,7 @@ func catalogLeft(asked []int, excluded string) []int {
 		have[p] = true
 	}
 	var left []int
-	for _, p := range portscan.DefaultPorts() {
+	for _, p := range portscan.UsualPorts() {
 		if !have[p] {
 			left = append(left, p)
 		}
@@ -78,26 +78,27 @@ func catalogLeft(asked []int, excluded string) []int {
 }
 
 // catalogPass says, after a TCP scan of a list that left out ports of the
-// default set, what asking them would cost: the connects are the ports left
+// usual set, what asking them would cost: the connects are the ports left
 // out times the addresses scanned. "" when it left none out.
 func catalogPass(left []int, addresses int) (why string, cost amount) {
 	if len(left) == 0 || addresses <= 0 {
 		return "", amount{}
 	}
 	cost = amount{Connects: int64(len(left)) * int64(addresses)}
-	return fmt.Sprintf("%s of the default set (the top 100 and the usual ports of the services azhaq names and checks) were not asked on %s: %s",
+	return fmt.Sprintf("%s of the usual set (the top 100 and the usual ports of the services azhaq names and checks) were not asked on %s: %s",
 		plural(len(left), "port"), nOf(addresses, "address", "addresses"), moreOf(cost)), cost
 }
 
-// catalogPassCommand is the ports command line that asks the default set as
-// well: the -p list with ",default" added, or -p default beside -tp and -pf
-// (they add to it).
-func catalogPassCommand(args []string, db string) string {
+// catalogPassCommand is the ports command line that asks the ports left out as
+// well: the -p list with them added, or them as -p beside -tp and -pf (they add
+// to it).
+func catalogPassCommand(args []string, db string, left []int) string {
 	rest := slices.Clone(args)
+	more := portscan.Compact(left)
 	if v, ok := flagValue(args, "p"); ok {
-		rest = append(withoutFlag(rest, "p"), "-p", strings.TrimRight(v+",default", ","))
+		rest = append(withoutFlag(rest, "p"), "-p", strings.TrimRight(v+","+more, ","))
 	} else {
-		rest = append(rest, "-p", "default")
+		rest = append(rest, "-p", more)
 	}
 	if db != "" && !hasFlag(rest, "db") {
 		rest = append(rest, "-db", db)

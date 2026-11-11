@@ -211,6 +211,7 @@ File names and the runs that have no `-db` are in [OUTPUT](OUTPUT.md#the-workspa
 A port scan that the budget or the kill file cut short keeps the open ports it found. It also keeps the ports it asked, in a row marked `"partial":true` with `asked_ports`.
 
 - `azhaq resume` asks only the other ports.
+- A [default port scan](commands/run.md#default-port-scan) has two passes, and a row it keeps says which one it was in: `"pass":1` or `"pass":2`, with `ports_left`, the ports that pass had not asked of the address. An address that answered pass 1 keeps a row with `"pass":2` before pass 2 begins. The summary's `stopped` names the pass.
 - It prints the open ports it finds as `ports` does: `-json` for objects, `-quiet` for the summary only.
 - Ports an earlier run printed are not printed again, so the rows of the runs add up to the scan's.
 - Its row, and `query` and `show` after it, hold every open port.
@@ -434,7 +435,7 @@ With `-replay-writes`, three more come before them all:
 | 51 built-in path checks per web service: `robots.txt`, sitemaps, API descriptions, `.git/HEAD`, `backup`, `admin`, … | GET | Every run. `-no-paths` turns them off. |
 | Path and parameter guesses | GET. `params -X` sends the names in a POST, JSON or XML body. | `-dirs`, `-params`, held to the targets given or to `-allow` and `-scope`. |
 | GraphQL introspection | POST | `-graphql`, held to the targets given or to `-allow` and `-scope`. |
-| A port's service | A TCP connect, then for a port that says nothing: protocol probes, one `HEAD /`, a TLS handshake. | `-ports`, `ports` |
+| A port's service | A TCP connect, then for a port that says nothing: protocol probes, one `HEAD /`, a TLS handshake. | `-ports`, `ports`, and a range or an address among the targets of `run` with no `-ports` (`-ports default`: the top 1000 ports of every address, then every port of each address that answered) |
 | UDP ports | One datagram of the protocol's harmless request for each port; more when none came back. | `-ports-udp`, `ports -udp`, `-pu` |
 | A wordlist in a request | The method and body you give it, with the wordlist's words in them. | `azhaq fuzz`, held to the host of `-u` or to `-allow` and `-scope`. |
 | Chrome | What the page loads, inside the scope. | `-browser`, `-login`, `shots`, `-role-login` |

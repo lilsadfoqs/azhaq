@@ -30,6 +30,9 @@ type Config struct {
 	Prior                      map[string]Prior // azhaq resume: scans a limit stopped
 	WebCost                    int              // requests the budget keeps for mapping each web service found open
 	Swept                      map[string]Sweep // azhaq resume: blocks a limit stopped
+	Escalate                   bool             // after the first pass, every port of each address that answered it (-ports default)
+	NoPorts                    []int            // ports never asked (-port-skip)
+	Also                       map[string][]int // ports the first pass asks of an address besides the list: those of its URL targets
 }
 
 // Apply sets c's knobs from cfg.
@@ -50,4 +53,12 @@ func (c *Collector) Apply(cfg Config) {
 	c.ExcludeCDN, c.Discover = cfg.ExcludeCDN, cfg.Discover
 	c.IPv4Only, c.IPv6Only, c.AllIPs = cfg.IPv4Only, cfg.IPv6Only, cfg.AllIPs
 	c.PortsFor = cfg.PortsFor
+	c.Escalate, c.Also = cfg.Escalate, cfg.Also
+	c.NoPorts = nil
+	for _, p := range cfg.NoPorts {
+		if c.NoPorts == nil {
+			c.NoPorts = map[int]bool{}
+		}
+		c.NoPorts[p] = true
+	}
 }
