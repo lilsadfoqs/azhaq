@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/lilsadfoqs/azhaq/engine"
+	"github.com/lilsadfoqs/azhaq/internal/advisory"
 	"github.com/lilsadfoqs/azhaq/internal/verify"
 	"github.com/lilsadfoqs/azhaq/types"
 )
@@ -27,21 +28,23 @@ import (
 // map's own view folds it (see foldedHint): then it is counted in the
 // line of its fold class.
 type findingRecord struct {
-	Kind         string `json:"kind"`
-	Label        string `json:"label"` // proved, version-only, conditional; lead for a lead
-	Severity     string `json:"severity"`
-	Host         string `json:"host"`
-	Port         int    `json:"port,omitempty"`
-	URL          string `json:"url,omitempty"`
-	Product      string `json:"product,omitempty"`
-	Version      string `json:"version,omitempty"`
-	AdvisoryID   string `json:"advisory_id,omitempty"`
-	AdvisoryURL  string `json:"advisory_url,omitempty"`
-	Precondition string `json:"precondition,omitempty"`
-	Request      string `json:"request,omitempty"`
-	Evidence     string `json:"evidence"`
-	Command      string `json:"command"`
-	Collector    string `json:"collector,omitempty"` // the collector of the stored row this record is read from
+	Kind         string  `json:"kind"`
+	Label        string  `json:"label"` // proved, version-only, conditional; lead for a lead
+	Severity     string  `json:"severity"`
+	Host         string  `json:"host"`
+	Port         int     `json:"port,omitempty"`
+	URL          string  `json:"url,omitempty"`
+	Product      string  `json:"product,omitempty"`
+	Version      string  `json:"version,omitempty"`
+	AdvisoryID   string  `json:"advisory_id,omitempty"`
+	AdvisoryURL  string  `json:"advisory_url,omitempty"`
+	KEV          bool    `json:"kev,omitempty"`  // CISA lists the advisory as exploited
+	CVSS         float64 `json:"cvss,omitempty"` // the score the advisory's record states
+	Precondition string  `json:"precondition,omitempty"`
+	Request      string  `json:"request,omitempty"`
+	Evidence     string  `json:"evidence"`
+	Command      string  `json:"command"`
+	Collector    string  `json:"collector,omitempty"` // the collector of the stored row this record is read from
 }
 
 // runCommand is the command that produced a workspace's rows, as the
@@ -90,7 +93,16 @@ func buildFindings(g *graphView) (findings, leads []findingRecord, folds []engin
 		}
 		findings = append(findings, rec)
 	}
-	for _, lead := range advisoryLeadsOf(g.obs) {
+	stats := map[string]advisory.Lead{} // advisory id + target → its lead, for the flags and the score
+	for _, lead := range advisoryLeadsExpanded(g.obs) {
+		stats[lead.AdvisoryID+"|"+lead.Target] = lead
+	}
+	for i := range findings {
+		if l, ok := stats[findings[i].AdvisoryID+"|"+targetOf(findings[i])]; ok && findings[i].AdvisoryID != "" {
+			findings[i].KEV, findings[i].CVSS = l.KEV, l.CVSS
+		}
+	}
+	for _, lead := range advisoryLeadsExpanded(g.obs) {
 		// The request is only carried when a confirmation read was
 		// actually sent, as in verifyStage.
 		request := ""
@@ -105,7 +117,7 @@ func buildFindings(g *graphView) (findings, leads []findingRecord, folds []engin
 			Kind: r.Kind, Label: r.Label, Severity: r.Severity, Host: r.Host, Port: r.Port,
 			URL: r.URL, Product: r.Product, Version: r.Version, AdvisoryID: r.AdvisoryID,
 			AdvisoryURL: r.AdvisoryURL, Precondition: r.Precondition, Request: r.Request,
-			Evidence: r.Evidence, Command: command, Collector: "azhaq-advisories",
+			Evidence: r.Evidence, Command: command, Collector: "azhaq-advisories", KEV: lead.KEV, CVSS: lead.CVSS,
 		})
 	}
 	findings = append(findings, traceFindingsOf(g.obs, command)...)
@@ -142,6 +154,12 @@ func buildFindings(g *graphView) (findings, leads []findingRecord, folds []engin
 		}
 		if a.Port != b.Port {
 			return a.Port < b.Port
+		}
+		if a.KEV != b.KEV {
+			return a.KEV
+		}
+		if a.CVSS != b.CVSS {
+			return a.CVSS > b.CVSS
 		}
 		if a.AdvisoryID != b.AdvisoryID {
 			return a.AdvisoryID < b.AdvisoryID
@@ -244,8 +262,8 @@ func findingsMarkdown(findings, leads []findingRecord, folds []engine.FoldGroup)
 		}
 		title := map[string]string{verify.Proved: "Proved", verify.VersionOnly: "Version-only", verify.Conditional: "Conditional"}[label]
 		fmt.Fprintf(&b, "## %s (%d)\n\n", title, len(rs))
-		for _, r := range rs {
-			b.WriteString(findingMarkdown(r))
+		for _, r := range groupAdvisoryFindings(rs) {
+			b.WriteString(findingMarkdown(r.rec, r.ids...))
 		}
 		b.WriteString("\n")
 	}
@@ -271,7 +289,7 @@ func findingsMarkdown(findings, leads []findingRecord, folds []engine.FoldGroup)
 // findingMarkdown is one record as a Markdown bullet: the severity,
 // what and where it is, what settles it, and the command that
 // produced it.
-func findingMarkdown(r findingRecord) string {
+func findingMarkdown(r findingRecord, ids ...string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "- **%s** %s", r.Severity, r.Kind)
 	where := r.URL
@@ -291,7 +309,12 @@ func findingMarkdown(r findingRecord) string {
 		}
 		b.WriteString(")")
 	}
-	if r.AdvisoryID != "" {
+	if len(ids) > 1 {
+		// The advisories of one service and label are one bullet: the first
+		// ten (exploited and best scored first), and how many more. The
+		// JSON Lines of the findings list every one.
+		b.WriteString(" — " + advisory.CollapseIDs(ids, findingMDIDs) + " (" + plural(len(ids), "advisory") + ")")
+	} else if r.AdvisoryID != "" {
 		b.WriteString(" — " + r.AdvisoryID)
 	}
 	if r.Precondition != "" {
@@ -306,4 +329,45 @@ func findingMarkdown(r findingRecord) string {
 	}
 	b.WriteString("\n")
 	return b.String()
+}
+
+// findingMDIDs is how many advisory ids a Markdown bullet lists before "and N more".
+const findingMDIDs = 10
+
+// targetOf is the host:port of a record, as an advisory lead names its target.
+func targetOf(r findingRecord) string {
+	if r.Port > 0 {
+		return fmt.Sprintf("%s:%d", r.Host, r.Port)
+	}
+	return r.Host
+}
+
+// groupedFinding is a bullet of the Markdown findings: a record, and, when
+// it stands for the advisories of one service, their ids.
+type groupedFinding struct {
+	rec findingRecord
+	ids []string
+}
+
+// groupAdvisoryFindings makes one bullet of the advisory records of one
+// service (in a section of one label), in the order they come: the first
+// record stands for the others, whose ids it lists.
+func groupAdvisoryFindings(rs []findingRecord) []groupedFinding {
+	var out []groupedFinding
+	at := map[string]int{}
+	for _, r := range rs {
+		if r.AdvisoryID == "" {
+			out = append(out, groupedFinding{rec: r})
+			continue
+		}
+		k := r.Host + "|" + strconv.Itoa(r.Port) + "|" + r.Product + "|" + r.Version
+		i, ok := at[k]
+		if !ok {
+			at[k] = len(out)
+			out = append(out, groupedFinding{rec: r, ids: []string{r.AdvisoryID}})
+			continue
+		}
+		out[i].ids = append(out[i].ids, r.AdvisoryID)
+	}
+	return out
 }

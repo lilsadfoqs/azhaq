@@ -1,20 +1,20 @@
 // Package advisory matches a product and version azhaq already confirmed
-// against public advisory records (OSV JSON), and, only when asked, reads
+// against public advisory records (the built-in index, and OSV JSON the user
+// gives), and, only when asked, reads
 // one benign signal a service already exposes to say how far that match
 // is confirmed. It never sends a payload, never logs in, never changes
 // state and never tries to trigger an issue: a version-range match is a
 // labelled lead, never a proven, exploitable finding.
 //
-// Data-source decision: no advisory snapshot is vendored, and nothing is
-// fetched unless the user names a source (-advisory-source FILE|URL).
-// A vendored snapshot would go stale in the binary and read as checked
-// when it is months old; a fetch azhaq started on its own would ask a
-// third party the user did not name. The user supplies an OSV file (the
-// bulk downloads at https://osv-vulnerabilities.storage.googleapis.com,
-// Apache-2.0 data) or a URL of one; a file works offline, a URL is asked
-// as a source like any other (see LoadURL in the CLI wiring). This
-// package itself does no I/O but reading the bytes it is given and, in
-// Confirm, the one read its caller counted and scoped.
+// Data sources: the index azhaq carries (index.go, built by hand with
+// `go run ./scripts/advindex` from the CISA KEV catalogue and the NVD
+// records, and embedded), and the OSV records of the user's
+// -advisory-source, a file (works offline) or a URL asked once as a
+// third-party source. The index is dated and the date is shown wherever
+// it is used (plan, version, the summary's note), so an old one reads as
+// old; azhaq fetches no record it was not given. This package itself does
+// no I/O but reading the bytes it is given and, in Confirm, the one read
+// its caller counted and scoped.
 package advisory
 
 import (
@@ -49,9 +49,10 @@ type Reference struct {
 // Event is one boundary of an OSV range: introduced (inclusive), fixed
 // (exclusive) or last_affected (inclusive), each with its version.
 type Event struct {
-	Introduced   string `json:"introduced,omitempty"`
-	Fixed        string `json:"fixed,omitempty"`
-	LastAffected string `json:"last_affected,omitempty"`
+	Introduced      string `json:"introduced,omitempty"`
+	IntroducedAfter string `json:"azhaq_introduced_after,omitempty"` // exclusive: NVD's versionStartExcluding
+	Fixed           string `json:"fixed,omitempty"`
+	LastAffected    string `json:"last_affected,omitempty"`
 }
 
 // Range is one OSV affected range, in the advisory's own syntax.
@@ -233,29 +234,51 @@ func (s Service) Target() string {
 // advisory's range, and Confidence, when a confirmation ran, how far a
 // benign read settled it.
 type Lead struct {
-	AdvisoryID    string `json:"advisory_id"`
-	URL           string `json:"url"`
-	Summary       string `json:"summary,omitempty"`
-	Target        string `json:"target"`
-	Host          string `json:"host"`
-	Port          int    `json:"port,omitempty"`
-	Service       string `json:"service,omitempty"`
-	Product       string `json:"product"`
-	VersionSeen   string `json:"version_seen"`
-	AffectedRange string `json:"affected_range"`
-	Label         string `json:"label"` // affected, not affected or conditional
-	Precondition  string `json:"precondition,omitempty"`
-	Confidence    string `json:"confidence,omitempty"`      // observed, inferred or claimed, when confirmation ran
-	Read          string `json:"read,omitempty"`            // what the confirmation read, or why it read nothing
-	Origin        string `json:"origin,omitempty"`          // the web origin of the service, when it is a web one
-	ConfirmReq    string `json:"confirm_request,omitempty"` // the exact request a confirmation sent or would send ("GET /version")
+	AdvisoryID    string  `json:"advisory_id"`
+	URL           string  `json:"url"`
+	Summary       string  `json:"summary,omitempty"`
+	Target        string  `json:"target"`
+	Host          string  `json:"host"`
+	Port          int     `json:"port,omitempty"`
+	Service       string  `json:"service,omitempty"`
+	Product       string  `json:"product"`
+	VersionSeen   string  `json:"version_seen"`
+	AffectedRange string  `json:"affected_range"`
+	Label         string  `json:"label"` // affected, not affected or conditional
+	Precondition  string  `json:"precondition,omitempty"`
+	KEV           bool    `json:"kev,omitempty"`    // CISA lists the advisory as exploited in the wild
+	CVSS          float64 `json:"cvss,omitempty"`   // the base score the record states
+	Source        string  `json:"source,omitempty"` // the built-in index (with its date), when the record came from it
+	// A lead is one service: the fields above are those of its top advisory
+	// (the exploited and best scored of those that apply), and these hold
+	// the whole list, so nothing is lost by listing one line a service.
+	Counts     map[string]int `json:"counts,omitempty"`          // advisories by label
+	Advisories []Ref          `json:"advisories,omitempty"`      // all of them, the top first
+	KEVCount   int            `json:"kev_count,omitempty"`       // of those that apply, how many CISA lists as exploited
+	MaxCVSS    float64        `json:"max_cvss,omitempty"`        // the highest score among those that apply
+	IndexLabel string         `json:"index_source,omitempty"`    // the built-in index, for the advisories that came from it
+	Confidence string         `json:"confidence,omitempty"`      // observed, inferred or claimed, when confirmation ran
+	Read       string         `json:"read,omitempty"`            // what the confirmation read, or why it read nothing
+	Origin     string         `json:"origin,omitempty"`          // the web origin of the service, when it is a web one
+	ConfirmReq string         `json:"confirm_request,omitempty"` // the exact request a confirmation sent or would send ("GET /version")
 }
 
 // Line is the lead as one line of text output: the label, the product
 // and version seen, the advisory and its source, and, when a
 // confirmation ran, its confidence and what was read.
 func (l Lead) Line() string {
-	s := fmt.Sprintf("advisory: %s %s on %s is %s (range %s) — %s %s", l.Product, l.VersionSeen, l.Target, l.Label, l.AffectedRange, l.AdvisoryID, l.URL)
+	var s string
+	if len(l.Advisories) > 1 {
+		s = fmt.Sprintf("advisory: %s %s on %s: %s; top %s is %s (range %s) — %s", l.Product, l.VersionSeen, l.Target, l.CountsText(), l.AdvisoryID, l.Label, l.AffectedRange, l.URL)
+	} else {
+		s = fmt.Sprintf("advisory: %s %s on %s is %s (range %s) — %s %s", l.Product, l.VersionSeen, l.Target, l.Label, l.AffectedRange, l.AdvisoryID, l.URL)
+	}
+	if l.KEV {
+		s += "; known exploited (CISA KEV)"
+	}
+	if l.CVSS > 0 {
+		s += fmt.Sprintf("; CVSS %.1f", l.CVSS)
+	}
 	if l.Precondition != "" {
 		s += "; precondition: " + l.Precondition
 	}
@@ -268,9 +291,9 @@ func (l Lead) Line() string {
 	return s
 }
 
-// productKey folds a product name for comparison: case, spaces, dashes
+// ProductKey folds a product name for comparison: case, spaces, dashes
 // and the usual spellings of the same product (Apache httpd, OpenSSH).
-func productKey(s string) string {
+func ProductKey(s string) string {
 	s = strings.ToLower(strings.TrimSpace(s))
 	s = strings.NewReplacer(" ", "", "-", "", "_", "", ".", "").Replace(s)
 	switch s {
@@ -289,7 +312,7 @@ func sameProduct(pkg, product string) bool {
 	if i := strings.LastIndex(pkg, "/"); i >= 0 {
 		pkg = pkg[i+1:]
 	}
-	return productKey(pkg) == productKey(product)
+	return ProductKey(pkg) == ProductKey(product)
 }
 
 // state is where a version sits in one affected entry.
@@ -316,37 +339,70 @@ func Match(services []Service, advisories []Advisory) []Lead {
 				if !sameProduct(aff.Package.Name, svc.Product) {
 					continue
 				}
-				st, ranges, why := evalAffected(aff, svc.Version)
-				lead := Lead{
-					AdvisoryID: adv.ID, URL: adv.URL(), Summary: adv.Summary,
-					Target: svc.Target(), Host: firstNonEmpty(svc.Host, svc.IP), Port: svc.Port,
-					Service: svc.Service, Product: svc.Product, VersionSeen: svc.Version,
-					AffectedRange: ranges, Origin: svc.Origin,
-				}
-				if p := adv.confirmPath(); p != "" {
-					lead.ConfirmReq = "GET " + p
-				} else if svc.Origin != "" {
-					lead.ConfirmReq = "GET /"
-				}
-				switch {
-				case st == stateUncertain:
-					lead.Label = LabelConditional
-					lead.Precondition = "the version seen could not be compared with the advisory's range: " + why
-				case st == stateOut:
-					lead.Label = LabelNotAffected
-				case adv.precondition() != "":
-					lead.Label = LabelConditional
-					lead.Precondition = adv.precondition()
-				default:
-					lead.Label = LabelAffected
-				}
-				out = append(out, lead)
+				out = append(out, leadFor(svc, adv, aff))
 			}
 		}
 	}
+	sortLeads(out)
+	return out
+}
+
+// leadFor labels one service against one affected entry of an advisory:
+// where the version seen sits in the entry's range.
+func leadFor(svc Service, adv Advisory, aff Affected) Lead {
+	st, ranges, why := evalAffected(aff, svc.Version)
+	lead := Lead{
+		AdvisoryID: adv.ID, URL: adv.URL(), Summary: adv.Summary,
+		Target: svc.Target(), Host: firstNonEmpty(svc.Host, svc.IP), Port: svc.Port,
+		Service: svc.Service, Product: svc.Product, VersionSeen: svc.Version,
+		AffectedRange: ranges, Origin: svc.Origin,
+	}
+	if p := adv.confirmPath(); p != "" {
+		lead.ConfirmReq = "GET " + p
+	} else if svc.Origin != "" {
+		lead.ConfirmReq = "GET /"
+	}
+	switch {
+	case st == stateUncertain:
+		lead.Label = LabelConditional
+		lead.Precondition = "the version seen could not be compared with the advisory's range: " + why
+	case st == stateOut:
+		lead.Label = LabelNotAffected
+	case adv.precondition() != "":
+		lead.Label = LabelConditional
+		lead.Precondition = adv.precondition()
+	default:
+		lead.Label = LabelAffected
+	}
+	return lead
+}
+
+func labelRank(l string) int {
+	switch l {
+	case LabelAffected:
+		return 0
+	case LabelConditional:
+		return 1
+	}
+	return 2
+}
+
+// sortLeads orders leads by target, then affected, conditional and not
+// affected, the exploited ones and the higher scores first, then by
+// advisory id.
+func sortLeads(out []Lead) {
 	sort.Slice(out, func(i, j int) bool {
 		if out[i].Target != out[j].Target {
 			return out[i].Target < out[j].Target
+		}
+		if ri, rj := labelRank(out[i].Label), labelRank(out[j].Label); ri != rj {
+			return ri < rj
+		}
+		if out[i].KEV != out[j].KEV {
+			return out[i].KEV
+		}
+		if out[i].CVSS != out[j].CVSS {
+			return out[i].CVSS > out[j].CVSS
 		}
 		if out[i].AdvisoryID != out[j].AdvisoryID {
 			return out[i].AdvisoryID < out[j].AdvisoryID
@@ -359,7 +415,6 @@ func Match(services []Service, advisories []Advisory) []Lead {
 		}
 		return out[i].AffectedRange < out[j].AffectedRange
 	})
-	return out
 }
 
 func firstNonEmpty(a, b string) string {
@@ -373,17 +428,26 @@ func firstNonEmpty(a, b string) string {
 // versions first, then its ranges. why says what was uncertain.
 func evalAffected(aff Affected, version string) (state, string, string) {
 	for _, v := range aff.Versions {
-		if strings.EqualFold(strings.TrimSpace(v), strings.TrimSpace(version)) {
+		if sameVersion(v, version) {
 			return stateIn, "version " + v + " listed as affected", ""
 		}
 	}
+	listed := versionsText(aff.Versions)
 	if len(aff.Ranges) == 0 {
 		if len(aff.Versions) > 0 {
-			return stateOut, "affected versions listed; " + version + " is not one of them", ""
+			return stateOut, listed, ""
 		}
 		return stateUncertain, "no range given", "the advisory gives neither a range nor a list of versions for this product"
 	}
 	var texts []string
+	// What the record states, ranges first and then its listed versions.
+	text := func() string {
+		parts := append([]string(nil), texts...)
+		if listed != "" {
+			parts = append(parts, listed)
+		}
+		return strings.Join(parts, "; ")
+	}
 	uncertain := ""
 	for _, r := range aff.Ranges {
 		texts = append(texts, rangeText(r))
@@ -394,15 +458,45 @@ func evalAffected(aff Affected, version string) (state, string, string) {
 		st, why := evalRange(r, version)
 		switch st {
 		case stateIn:
-			return stateIn, strings.Join(texts, "; "), ""
+			return stateIn, text(), ""
 		case stateUncertain:
 			uncertain = why
 		}
 	}
 	if uncertain != "" {
-		return stateUncertain, strings.Join(texts, "; "), uncertain
+		return stateUncertain, text(), uncertain
 	}
-	return stateOut, strings.Join(texts, "; "), ""
+	return stateOut, text(), ""
+}
+
+// sameVersion says two versions are the same release: equal by Compare
+// (8.2p1 and 8.2-p1, 9.0.0.M1 and 9.0.0-m1), else equal as text.
+func sameVersion(a, b string) bool {
+	if c, ok := Compare(a, b); ok {
+		return c == 0
+	}
+	return strings.EqualFold(strings.TrimSpace(a), strings.TrimSpace(b))
+}
+
+// versionsText names the versions an advisory lists as affected, one by
+// one: "=2.4.49, =2.4.50", cut after eight.
+func versionsText(vs []string) string {
+	if len(vs) == 0 {
+		return ""
+	}
+	shown := vs
+	if len(vs) > 8 {
+		shown = vs[:8]
+	}
+	parts := make([]string, len(shown))
+	for i, v := range shown {
+		parts[i] = "=" + v
+	}
+	s := strings.Join(parts, ", ")
+	if len(vs) > 8 {
+		s += fmt.Sprintf(" and %d more", len(vs)-8)
+	}
+	return s
 }
 
 // evalRange walks one range's events in order: the version is in from
@@ -429,6 +523,16 @@ func evalRange(r Range, version string) (state, string) {
 			} else if !decided {
 				in = false
 			}
+		case ev.IntroducedAfter != "":
+			c, ok := Compare(version, ev.IntroducedAfter)
+			if !ok {
+				return stateUncertain, uncertainWhy(version, ev.IntroducedAfter)
+			}
+			if c > 0 {
+				in, decided = true, true
+			} else if !decided {
+				in = false
+			}
 		case ev.Fixed != "":
 			c, ok := Compare(version, ev.Fixed)
 			if !ok {
@@ -444,9 +548,7 @@ func evalRange(r Range, version string) (state, string) {
 				return stateUncertain, uncertainWhy(version, ev.LastAffected)
 			}
 			if c > 0 {
-				in = false
-			} else {
-				in = true
+				in = false // past the last affected version; a version before the range stays out
 			}
 			decided = true
 		}
@@ -469,6 +571,8 @@ func rangeText(r Range) string {
 		switch {
 		case ev.Introduced != "" && ev.Introduced != "0":
 			parts = append(parts, ">="+ev.Introduced)
+		case ev.IntroducedAfter != "":
+			parts = append(parts, ">"+ev.IntroducedAfter)
 		case ev.Fixed != "":
 			parts = append(parts, "<"+ev.Fixed)
 		case ev.LastAffected != "":

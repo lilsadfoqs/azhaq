@@ -117,11 +117,13 @@ func TestFindingsReportFromAStoredRun(t *testing.T) {
 		}
 	}
 	storedLeads := map[string]advisory.Lead{}
-	for _, l := range advisoryLeadsOf(obs) {
+	for _, l := range advisoryLeadsExpanded(obs) {
 		storedLeads[l.AdvisoryID] = l
 	}
-	if len(storedVerify) != 3 || len(storedLeads) != 3 {
-		t.Fatalf("stored rows: %d verify, %d advisory; want 3 and 3", len(storedVerify), len(storedLeads))
+	// One verify row and one advisory row for each of the two services; the
+	// advisory rows hold the three advisories.
+	if len(advisoryLeadsOf(obs)) != 2 || len(storedVerify) != 2 || len(storedLeads) != 3 {
+		t.Fatalf("stored rows: %d verify, %d advisory leads holding %d; want 2, 2 and 3", len(storedVerify), len(advisoryLeadsOf(obs)), len(storedLeads))
 	}
 
 	outFile := filepath.Join(dir, "findings.jsonl")
@@ -146,17 +148,22 @@ func TestFindingsReportFromAStoredRun(t *testing.T) {
 		if f["label"] != wantLabels[i] || f["advisory_id"] != wantIDs[i] {
 			t.Fatalf("finding %d is %v %v, want %s %s (proved first, labels never merged)", i, f["advisory_id"], f["label"], wantIDs[i], wantLabels[i])
 		}
-		vr, ok := storedVerify[f["advisory_id"].(string)]
-		if !ok {
-			t.Fatalf("finding %v has no stored verify row", f["advisory_id"])
+		// The top advisory of a service has the verify row; the others of it
+		// are read from the advisory lead, so the findings list every one.
+		vr, hasVerify := storedVerify[f["advisory_id"].(string)]
+		if hasVerify == (f["advisory_id"] == "CVE-TEST-0002") {
+			t.Fatalf("finding %v: stored verify row %v", f["advisory_id"], hasVerify)
 		}
 		lead := storedLeads[f["advisory_id"].(string)]
 		// Every field traceable to the stored rows.
-		if f["version"] != vr.Version || f["version"] != lead.VersionSeen {
+		if f["version"] != lead.VersionSeen || (hasVerify && f["version"] != vr.Version) {
 			t.Errorf("finding %v version %v, stored verify %q lead %q", f["advisory_id"], f["version"], vr.Version, lead.VersionSeen)
 		}
-		if f["evidence"] != vr.Evidence || f["command"] != vr.Command {
+		if hasVerify && (f["evidence"] != vr.Evidence || f["command"] != vr.Command) {
 			t.Errorf("finding %v evidence/command not the stored verify row's: %v", f["advisory_id"], f)
+		}
+		if f["evidence"] == "" {
+			t.Errorf("finding %v has no evidence", f["advisory_id"])
 		}
 		if f["host"] != "127.0.0.1" || int(f["port"].(float64)) != lead.Port {
 			t.Errorf("finding %v host/port %v:%v, stored lead port %d", f["advisory_id"], f["host"], f["port"], lead.Port)
@@ -164,7 +171,7 @@ func TestFindingsReportFromAStoredRun(t *testing.T) {
 		if f["product"] != lead.Product || f["advisory_url"] != lead.URL {
 			t.Errorf("finding %v product/advisory_url %v %v, stored lead %q %q", f["advisory_id"], f["product"], f["advisory_url"], lead.Product, lead.URL)
 		}
-		if f["command"] != "azhaq run -verify" {
+		if hasVerify && f["command"] != "azhaq run -verify" || !hasVerify && !strings.HasPrefix(f["command"].(string), "azhaq run ") {
 			t.Errorf("finding %v command %q, want the command that produced it", f["advisory_id"], f["command"])
 		}
 	}

@@ -526,19 +526,17 @@ func TestVerifySendsNothingMoreForAnAdvisoryLead(t *testing.T) {
 		t.Errorf("the server saw %v without -verify and %v with it", without, with)
 	}
 	label := map[string]string{"observed": "proved", "inferred": "conditional"}
-	if len(repA.Advisories) != 2 || len(repB.Verify) != 2 {
+	// One lead for the service, and one verify row for it: the top advisory's.
+	if len(repA.Advisories) != 1 || len(repA.Advisories[0].Advisories) != 2 || len(repB.Verify) != 1 {
 		t.Fatalf("leads %+v, verify results %+v", repA.Advisories, repB.Verify)
 	}
-	for _, l := range repA.Advisories {
-		var got string
-		for _, v := range repB.Verify {
-			if v.AdvisoryID == l.AdvisoryID {
-				got = v.Label
-			}
-		}
-		if got == "" || got != label[l.Confidence] {
-			t.Errorf("%s: lead %q, verify label %q, want %q", l.AdvisoryID, l.Confidence, got, label[l.Confidence])
-		}
+	l := repA.Advisories[0]
+	got := repB.Verify[0]
+	if got.AdvisoryID != l.AdvisoryID || got.Label != label[l.Confidence] || got.Label == "" {
+		t.Errorf("%s: lead %q, verify %s %q, want %q", l.AdvisoryID, l.Confidence, got.AdvisoryID, got.Label, label[l.Confidence])
+	}
+	if !strings.Contains(got.Evidence, "2 advisories in all match") {
+		t.Errorf("the verify row does not say the service has 2 advisories: %q", got.Evidence)
 	}
 }
 

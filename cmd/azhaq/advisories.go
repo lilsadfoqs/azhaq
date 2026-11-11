@@ -23,30 +23,34 @@ import (
 )
 
 // The flags of -advisories, shared by run and ports (ports passes them
-// to the run it makes). Matching is off unless -advisories says so, and
+// to the run it makes). Matching is on unless -advisories=false says
+// otherwise, against the index azhaq carries and the user's -advisory-source;
 // confirmation is off unless -advisories-confirm says so.
 type advisoryFlags struct {
 	on, confirm bool
 	source      string
+	builtin     bool // match the index azhaq carries (set by register; a literal without it matches the user's records only)
 }
 
 func (a *advisoryFlags) register(fs *flag.FlagSet) {
-	fs.BoolVar(&a.on, "advisories", false, "match the products and versions this run already confirmed against the advisory records of -advisory-source, as labelled leads (affected, not affected or conditional, each with its advisory id and URL): a pure lookup over what the run already holds, nothing more is sent to a target")
+	a.builtin = true
+	fs.BoolVar(&a.on, "advisories", true, "match the products and versions this run already confirmed against the advisory index azhaq carries (built from the CISA KEV catalogue and the NVD records of the products it fingerprints; `azhaq version` names its date) and the records of -advisory-source, as labelled leads (affected, not affected or conditional, each with its advisory id, URL and the version range): a pure lookup over what the run already holds, nothing more is sent to a target; -advisories=false turns it off")
 	fs.BoolVar(&a.confirm, "advisories-confirm", false, "with -advisories: for each affected or conditional lead, also make the one benign read the advisory names (a GET of its documented version or info path, or of / to read the version it states): no payload, no login, no state change, never a request that could trigger the issue; each read is in the ledger and counts against -max-requests, and each lead is labelled observed, inferred or claimed (with -advisories; reads only within the run's scope: the targets given, -allow or -scope)")
-	fs.StringVar(&a.source, "advisory-source", "", "the advisory records to match against, OSV JSON (a record, a list, {\"vulns\": [...]}, or JSON lines): a file the user downloaded (works offline), or an http(s) URL asked once as a third-party source; azhaq vendors no snapshot and fetches none it was not given")
+	fs.StringVar(&a.source, "advisory-source", "", "your own advisory records to match as well as the built-in index, OSV JSON (a record, a list, {\"vulns\": [...]}, or JSON lines): a file (works offline), or an http(s) URL asked once as a third-party source; azhaq fetches none it was not given")
 }
 
 // check is the usage half of the flags, before anything is sent: a
-// confirmation needs the match, the match needs a source it can read,
-// and a confirmation needs a scope (the caller's targets stand for one,
-// as they do for the other active techniques).
+// confirmation needs the match, a source needs the match, the source
+// must be one it can read, and a confirmation needs a scope (the
+// caller's targets stand for one, as they do for the other active
+// techniques).
 func (a advisoryFlags) check() error {
 	switch {
 	case a.confirm && !a.on:
-		return usagef("-advisories-confirm confirms the matches of -advisories: give both")
-	case a.on && a.source == "":
-		return usagef("-advisories matches against records the user names: give -advisory-source FILE (OSV JSON, works offline) or -advisory-source https://… (asked once as a source)")
-	case a.on && !isURL(a.source):
+		return usagef("-advisories-confirm confirms the matches of -advisories, which is off: drop -advisories=false")
+	case a.source != "" && !a.on:
+		return usagef("-advisory-source adds records to the matching of -advisories, which is off: drop -advisories=false")
+	case a.source != "" && !isURL(a.source):
 		if _, err := os.Stat(a.source); err != nil {
 			return usagef("-advisory-source %s: %v", a.source, err)
 		}
@@ -111,17 +115,42 @@ func loadAdvisories(ctx context.Context, source string) ([]advisory.Advisory, er
 // read): the caller lists them in the summary, which makes the exit
 // code 3, a degraded result with the leads it has standing.
 func advisoryStage(ctx context.Context, st *store.Store, obs []types.StoredObservation, fl advisoryFlags) (leads []advisory.Lead, failures []engine.Failure, note string) {
-	advs, err := loadAdvisories(ctx, fl.source)
-	if err != nil {
-		return nil, []engine.Failure{{Collector: "azhaq-advisories", Error: err.Error(), Count: 1}}, ""
+	var advs []advisory.Advisory
+	if fl.source != "" {
+		var err error
+		if advs, err = loadAdvisories(ctx, fl.source); err != nil {
+			failures = append(failures, engine.Failure{Collector: "azhaq-advisories", Error: err.Error(), Count: 1})
+			if !fl.builtin {
+				return nil, failures, ""
+			}
+		}
 	}
 	byID := map[string]advisory.Advisory{}
 	for _, a := range advs {
 		byID[a.ID] = a
 	}
 	services := advisory.Services(obs)
-	leads = advisory.Match(services, advs)
+	// The built-in index is read only when there is a service to look up:
+	// a run that confirmed no product and version has nothing to match.
+	var ix *advisory.Index
+	if fl.builtin && len(services) > 0 {
+		var err error
+		if ix, err = advisory.Builtin(); err != nil {
+			failures = append(failures, engine.Failure{Collector: "azhaq-advisories", Error: "the built-in advisory index: " + err.Error(), Count: 1})
+		}
+	}
+	all, quiet, err := advisory.MatchAll(services, advs, ix)
+	if err != nil {
+		failures = append(failures, engine.Failure{Collector: "azhaq-advisories", Error: "the built-in advisory index: " + err.Error(), Count: 1})
+	}
+	if fl.source == "" && ix == nil && len(failures) == 0 && len(services) == 0 {
+		return nil, nil, ""
+	}
+	// One lead a service: the advisories of a product and version are one
+	// line, with the count by label and the list in the lead's fields.
+	leads = advisory.Group(all)
 	var deferNote []string
+	var reads int
 	if fl.confirm {
 		confirmer := advisory.Confirmer{
 			Client: egress.TargetClient(egress.TargetOptions{Timeout: 15 * time.Second}),
@@ -133,33 +162,71 @@ func advisoryStage(ctx context.Context, st *store.Store, obs []types.StoredObser
 		}
 		cctx := ledger.WithCollector(ctx, "azhaq-advisories")
 		failed, refused, stopped, denied := 0, 0, 0, 0
-		for i, lead := range leads {
-			leads[i].Confidence = advisory.Claimed
-			leads[i].Read = "nothing read: a range match only"
-			if lead.Label == advisory.LabelNotAffected {
-				continue
-			}
+		// One read for each origin and path, whatever the number of advisories
+		// that name it: each is judged against the answer. A read that was
+		// refused or failed is counted once, and its answer stands for them all.
+		type readKey struct{ origin, path string }
+		type readResult struct {
+			sig  advisory.Signal
+			err  error
+			text string // what a lead that was not read says
+		}
+		cache := map[readKey]readResult{}
+		for i := range leads {
+			lead := &leads[i]
 			svc := svcByTarget[lead.Target+"\x00"+lead.Product]
-			conf, read, err := confirmer.Confirm(cctx, byID[lead.AdvisoryID], svc)
-			switch {
-			case err == nil:
-				leads[i].Confidence, leads[i].Read = conf, read
-			case isDenied(err):
-				// A -deny-path rule of the user's keeps the read out:
-				// a note, not a failure, and the lead stays claimed.
-				denied++
-				leads[i].Read = "not read: " + err.Error() + " (a -deny-path rule of yours keeps its path out)"
-			case isScopeRefusal(err):
-				// A scope that refuses a target is a note, not a failure:
-				// the scope is the user's, and the lead stays claimed.
-				refused++
-				leads[i].Read = "not read: outside the scope (-allow, -scope)"
-			case isStop(err):
-				stopped++
-				leads[i].Read = "not read: " + err.Error()
-			default:
-				failed++
-				leads[i].Read = "the confirmation read failed: " + err.Error()
+			for j := range lead.Advisories {
+				ref := &lead.Advisories[j]
+				read, conf := "nothing read: a range match only", advisory.Claimed
+				if ref.Label != advisory.LabelNotAffected {
+					adv := byID[ref.ID]
+					if ref.Index && ix != nil {
+						adv, _ = ix.Advisory(lead.Product, ref.ID)
+					}
+					if c, why, no := advisory.NoRead(svc); no {
+						conf, read = c, why
+					} else {
+						path := adv.ReadPath()
+						k := readKey{svc.Origin, path}
+						res, seen := cache[k]
+						if !seen {
+							res.sig, res.err = confirmer.Read(cctx, svc, path)
+							reads++
+							switch {
+							case res.err == nil:
+							case isDenied(res.err):
+								// A -deny-path rule of the user's keeps the read out:
+								// a note, not a failure, and the lead stays claimed.
+								denied++
+								res.text = "not read: " + res.err.Error() + " (a -deny-path rule of yours keeps its path out)"
+							case isScopeRefusal(res.err):
+								// A scope that refuses a target is a note, not a failure:
+								// the scope is the user's, and the lead stays claimed.
+								refused++
+								res.text = "not read: outside the scope (-allow, -scope)"
+							case isStop(res.err):
+								stopped++
+								res.text = "not read: " + res.err.Error()
+							default:
+								failed++
+								res.text = "the confirmation read failed: " + res.err.Error()
+							}
+							cache[k] = res
+						}
+						if res.err == nil {
+							conf, read = res.sig.Judge(adv, svc)
+							ref.ConfirmReq = "GET " + path
+						} else {
+							read = res.text
+						}
+					}
+				}
+				ref.Confidence = conf
+				if j == 0 {
+					lead.Confidence, lead.Read = conf, read
+				} else if read != lead.Read {
+					ref.Read = read // only where it says something the lead's does not
+				}
 			}
 		}
 		if failed > 0 {
@@ -175,8 +242,8 @@ func advisoryStage(ctx context.Context, st *store.Store, obs []types.StoredObser
 			deferNote = append(deferNote, fmt.Sprintf("advisories-confirm: %d confirmation reads were not sent: the run's limit stopped them", stopped))
 		}
 	}
-	// Stored, one observation per lead, on its host's entity: the lines
-	// below and in -json are these rows, and azhaq show lists them.
+	// Stored, one observation per service lead, on its host's entity: the
+	// lines below and in -json are these rows, and azhaq show lists them.
 	now := time.Now().UTC()
 	for _, lead := range leads {
 		raw, _ := json.Marshal(lead)
@@ -194,29 +261,42 @@ func advisoryStage(ctx context.Context, st *store.Store, obs []types.StoredObser
 			Payload: raw, Confidence: 0.9, ObservedAt: now,
 		})
 	}
-	var affected, notAffected, conditional, observed, inferred, claimed int
+	var matches, affected, notAffected, conditional, kev, observed, inferred, claimed int
 	for _, l := range leads {
-		switch l.Label {
-		case advisory.LabelAffected:
-			affected++
-		case advisory.LabelNotAffected:
-			notAffected++
-		case advisory.LabelConditional:
-			conditional++
-		}
-		switch l.Confidence {
-		case advisory.Observed:
-			observed++
-		case advisory.Inferred:
-			inferred++
-		case advisory.Claimed:
-			claimed++
+		matches += len(l.Advisories)
+		affected += l.Counts[advisory.LabelAffected]
+		notAffected += l.Counts[advisory.LabelNotAffected]
+		conditional += l.Counts[advisory.LabelConditional]
+		kev += l.KEVCount
+		for _, r := range l.Advisories {
+			switch r.Confidence {
+			case advisory.Observed:
+				observed++
+			case advisory.Inferred:
+				inferred++
+			case advisory.Claimed:
+				claimed++
+			}
 		}
 	}
-	note = fmt.Sprintf("advisories: %d leads (%d affected, %d not affected, %d conditional) from %d confirmed product versions against %d advisory records of %s; each lead is a stored advisory row and a line of the output, never a proven finding",
-		len(leads), affected, notAffected, conditional, len(services), len(advs), fl.source)
+	against := ""
+	if ix != nil {
+		m := ix.Meta()
+		against = fmt.Sprintf("the %s", m.Label())
+	}
+	if fl.source != "" {
+		if against != "" {
+			against += " and "
+		}
+		against += fmt.Sprintf("%d advisory records of %s", len(advs), fl.source)
+	}
+	note = fmt.Sprintf("advisories: %d leads, one for each of %d confirmed product versions, holding %d advisories (%d affected, %d not affected, %d conditional; %d of those that apply on the CISA KEV catalogue) against %s; each lead is a stored advisory row and a line of the output, never a proven finding",
+		len(leads), len(services), matches, affected, notAffected, conditional, kev, against)
+	if quiet > 0 {
+		note += fmt.Sprintf("; %d more not-affected records of the index matched a product seen and are not listed (the version is outside their ranges and none is on the CISA KEV catalogue)", quiet)
+	}
 	if fl.confirm {
-		note += fmt.Sprintf("; confirmation: %d observed, %d inferred, %d claimed (range match only)", observed, inferred, claimed)
+		note += fmt.Sprintf("; confirmation: %d reads for %d advisories: %d observed, %d inferred, %d claimed (range match only)", reads, matches, observed, inferred, claimed)
 	}
 	for _, n := range deferNote {
 		note += "; " + n
@@ -247,6 +327,16 @@ func isStop(err error) bool {
 // after the run that made them: the rows of the workspace, in the order
 // they were matched.
 func advisoryLeadsOf(obs []types.StoredObservation) []advisory.Lead {
+	return advisoryLeadsIn(obs, false)
+}
+
+// advisoryLeadsExpanded is the stored leads with each advisory a lead of
+// its own: the findings list them all.
+func advisoryLeadsExpanded(obs []types.StoredObservation) []advisory.Lead {
+	return advisoryLeadsIn(obs, true)
+}
+
+func advisoryLeadsIn(obs []types.StoredObservation, expand bool) []advisory.Lead {
 	var out []advisory.Lead
 	for _, o := range obs {
 		if o.Collector != "azhaq-advisories" || o.Kind != "advisory" {
@@ -254,17 +344,33 @@ func advisoryLeadsOf(obs []types.StoredObservation) []advisory.Lead {
 		}
 		var lead advisory.Lead
 		if json.Unmarshal(o.Payload, &lead) == nil {
-			out = append(out, lead)
+			if expand {
+				out = append(out, lead.Expand()...)
+			} else {
+				out = append(out, lead)
+			}
 		}
 	}
 	return out
 }
 
-// leadRow is a lead as a -json line: the lead's fields and its type.
-func leadRow(l advisory.Lead) map[string]any {
-	raw, _ := json.Marshal(l)
-	var row map[string]any
-	_ = json.Unmarshal(raw, &row)
-	row["type"] = "advisory"
-	return row
+// advisoryPlan is what a plan says of the matching: the index in use with
+// its date and size, any records of the user's added, and that the match
+// is a lookup over what the run confirms. Off, it says so.
+func advisoryPlan(fl advisoryFlags) string {
+	if !fl.on {
+		return "off (-advisories=false): no product and version is matched against advisories"
+	}
+	var parts []string
+	if fl.builtin {
+		if m, err := advisory.BuiltinMeta(); err == nil {
+			parts = append(parts, m.Label())
+		} else {
+			parts = append(parts, "advisory index unreadable: "+err.Error())
+		}
+	}
+	if fl.source != "" {
+		parts = append(parts, "your records of "+fl.source)
+	}
+	return strings.Join(parts, " and ") + "; each product and version the run confirms is matched as a lookup that sends nothing"
 }

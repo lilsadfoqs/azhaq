@@ -46,7 +46,31 @@ type token struct {
 	num   string // a run of digits, "" for a non-number
 	alpha string // a run of letters
 	tilde bool   // ~ (or a pre-release -): sorts before everything, even the end
+	pre   int    // the place of a pre-release word (rc, beta, M), 1 and up: sorts before the end
 	end   bool
+}
+
+// preWords are the qualifiers that name a build before its release, in
+// the order they come (1.0.0.M1 < 1.0.0.RC1 < 1.0.0), and releaseWords
+// those that name the release itself (8.0.0.Final and 3.2.1.RELEASE equal
+// 8.0.0 and 3.2.1). Any other word after a number is a later patch level
+// (9.6p1), and a -word nobody listed is a pre-release, as in semver.
+var preWords = map[string]int{
+	"dev": 1, "snapshot": 2, "nightly": 3, "canary": 4, "alpha": 5, "beta": 6,
+	"preview": 7, "pre": 8, "m": 9, "milestone": 9, "ea": 11, "cr": 12, "rc": 13,
+}
+
+var releaseWords = map[string]bool{"final": true, "ga": true, "release": true, "stable": true, "lts": true}
+
+var postWords = map[string]bool{"sp": true, "patch": true, "p": true, "update": true, "u": true, "hotfix": true, "fix": true, "build": true, "rev": true, "r": true}
+
+// dashWord is the letters that open s, lowercased.
+func dashWord(s string) string {
+	i := 0
+	for i < len(s) && (s[i] >= 'a' && s[i] <= 'z' || s[i] >= 'A' && s[i] <= 'Z') {
+		i++
+	}
+	return strings.ToLower(s[:i])
 }
 
 func parseVersion(s string) (parsedVersion, bool) {
@@ -73,7 +97,11 @@ func parseVersion(s string) (parsedVersion, bool) {
 	if i := strings.LastIndex(s, "-"); i > 0 && i+1 < len(s) && s[i+1] >= '0' && s[i+1] <= '9' {
 		upstream, p.revision = s[:i], tokenize(s[i+1:])
 	} else if i > 0 {
-		upstream = s[:i] + "~" + s[i+1:]
+		if w := dashWord(s[i+1:]); preWords[w] > 0 || releaseWords[w] || postWords[w] {
+			upstream = s[:i] + "." + s[i+1:]
+		} else {
+			upstream = s[:i] + "~" + s[i+1:]
+		}
 	}
 	p.tokens = tokenize(upstream)
 	if len(p.tokens) == 0 {
@@ -104,7 +132,15 @@ func tokenize(s string) []token {
 			for j < len(s) && (s[j] >= 'a' && s[j] <= 'z' || s[j] >= 'A' && s[j] <= 'Z') {
 				j++
 			}
-			out = append(out, token{alpha: strings.ToLower(s[i:j])})
+			w := strings.ToLower(s[i:j])
+			switch {
+			case releaseWords[w]:
+				// the release itself: no token
+			case preWords[w] > 0:
+				out = append(out, token{alpha: w, pre: preWords[w]})
+			default:
+				out = append(out, token{alpha: w})
+			}
 			i = j
 		default:
 			i++
@@ -138,24 +174,29 @@ func tokenAt(ts []token, i int) token {
 }
 
 func compareToken(a, b token) int {
-	// ~ before everything, the end next, then numbers, then words:
-	// 1.0~rc1 < 1.0 < 1.0p1, and 1.0 < 1.0.1 by the next round.
+	// ~ before everything, then the pre-release words, the end, numbers
+	// and words: 1.0~x < 1.0.rc1 < 1.0 < 1.0p1, and 1.0 < 1.0.1 by the
+	// next round.
 	rank := func(t token) int {
 		switch {
 		case t.tilde:
 			return 0
-		case t.end:
+		case t.pre > 0:
 			return 1
-		case t.num != "":
+		case t.end:
 			return 2
-		default:
+		case t.num != "":
 			return 3
+		default:
+			return 4
 		}
 	}
 	if ra, rb := rank(a), rank(b); ra != rb {
 		return sign(ra - rb)
 	}
 	switch {
+	case a.pre > 0 && b.pre > 0:
+		return sign(a.pre - b.pre)
 	case a.num != "" && b.num != "":
 		an, bn := strings.TrimLeft(a.num, "0"), strings.TrimLeft(b.num, "0")
 		if len(an) != len(bn) {

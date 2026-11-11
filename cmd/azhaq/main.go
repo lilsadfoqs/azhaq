@@ -442,9 +442,6 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	if err := advFlags.check(); err != nil {
 		return err
 	}
-	if advFlags.on && out.plan {
-		return usagef("-advisories matches what a run confirmed: a plan sends nothing and confirms nothing to match, so run without plan")
-	}
 	if err := scope.CompilePaths(denyPath); err != nil {
 		return usagef("%v", err)
 	}
@@ -1286,6 +1283,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		send.dirsHeld = dirscol.HeldWords(opts.Dirs.Words, opts.Dirs.Extensions)
 	}
 	send.verify = verifyFl.on
+	send.advisories = advisoryPlan(advFlags)
 	send.hostGuesses = *hostGuesses
 	send.paramsWords, send.paramsPages = len(opts.Params.Words), *paramsPerHost
 	// The GETs among the targets whose own name declares a state change
@@ -1544,11 +1542,9 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 			}
 			rep.emitted().add(countKey(r), heldBy(r))
 		}
-		for _, lead := range advLeads {
-			if err := enc.Encode(leadRow(lead)); err != nil {
-				return err
-			}
-		}
+		// The advisory leads are not rows of the stream: each is a service's
+		// whole list, held in the summary's advisories (and stored), so the
+		// results the summary counts are the rows printed.
 		for _, r := range verifyResults {
 			if err := enc.Encode(verifyRow(r)); err != nil {
 				return err
@@ -3253,6 +3249,13 @@ func compact(raw json.RawMessage) string {
 	var m map[string]any
 	if err := json.Unmarshal(raw, &m); err != nil {
 		return string(raw)
+	}
+	if _, ok := m["advisory_id"]; ok && m["version_seen"] != nil {
+		// A service's advisory lead: one short line, not a URL.
+		var lead advisory.Lead
+		if json.Unmarshal(raw, &lead) == nil {
+			return lead.Brief()
+		}
 	}
 	parts := make([]string, 0, 4)
 	for _, k := range []string{"status", "catchall", "title", "url", "via", "methods", "path", "fqdn", "ips", "params", "role", "count", "not_after", "error", "skipped", "registrar", "registrant", "name", "id", "method", "action", "fields", "auth", "final_url", "extracted", "warning", "note"} {

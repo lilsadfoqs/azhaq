@@ -48,7 +48,7 @@ func services(obs []types.StoredObservation, needVersion bool) []Service {
 			// A verification check keys on the service name alone.
 			return
 		}
-		key := fmt.Sprintf("%s|%d|%s|%s|%s", s.Target(), s.Port, s.Proto, s.Product, s.Version)
+		key := fmt.Sprintf("%s|%d|%s|%s|%s", s.Target(), s.Port, s.Proto, ProductKey(s.Product), s.Version)
 		if seen[key] {
 			return
 		}
@@ -93,13 +93,13 @@ func services(obs []types.StoredObservation, needVersion bool) []Service {
 			}
 		case "azhaq-http":
 			var row struct {
-				URL    string `json:"url"`
-				Server string `json:"server"`
+				URL    string   `json:"url"`
+				Server string   `json:"server"`
+				Tech   []string `json:"tech"`
 			}
-			if json.Unmarshal(o.Payload, &row) != nil || row.Server == "" {
+			if json.Unmarshal(o.Payload, &row) != nil || (row.Server == "" && len(row.Tech) == 0) {
 				continue
 			}
-			product, version := ProductVersion(row.Server)
 			u, err := url.Parse(row.URL)
 			if err != nil || u.Hostname() == "" {
 				continue
@@ -112,8 +112,21 @@ func services(obs []types.StoredObservation, needVersion bool) []Service {
 			} else {
 				port = 80
 			}
-			add(Service{Host: u.Hostname(), Port: port, Proto: "tcp", Service: u.Scheme,
-				Product: product, Version: version, Origin: u.Scheme + "://" + u.Host})
+			web := func(product, version string) Service {
+				return Service{Host: u.Hostname(), Port: port, Proto: "tcp", Service: u.Scheme,
+					Product: product, Version: version, Origin: u.Scheme + "://" + u.Host}
+			}
+			if row.Server != "" {
+				product, version := ProductVersion(row.Server)
+				add(web(product, version))
+			}
+			// The technologies the page's own markup and headers name with a
+			// version ("WordPress:6.4.2"): what the site itself states.
+			for _, t := range row.Tech {
+				if name, version, ok := strings.Cut(t, ":"); ok && name != "" && version != "" && version[0] >= '0' && version[0] <= '9' {
+					add(web(name, version))
+				}
+			}
 		}
 	}
 	return out
@@ -165,19 +178,56 @@ type Confirmer struct {
 // failed (a refusal, no answer): the lead stays claimed and the caller
 // counts the failure as a degraded result.
 func (c Confirmer) Confirm(ctx context.Context, adv Advisory, svc Service) (confidence, read string, err error) {
-	if svc.Origin == "" {
-		return Claimed, "not read: the service is not a web service, so the only signal is the banner azhaq already holds; a read that could settle it would have to speak its protocol again, which confirmation does not do", nil
+	if conf, why, ok := NoRead(svc); ok {
+		return conf, why, nil
 	}
-	path := adv.confirmPath()
-	if path == "" {
-		path = "/"
-	}
-	if err := ValidConfirmPath(path); err != nil {
+	sig, err := c.Read(ctx, svc, adv.ReadPath())
+	if err != nil {
 		return Claimed, "", err
+	}
+	conf, read := sig.Judge(adv, svc)
+	return conf, read, nil
+}
+
+// NoRead says a service is not read at all, and why: it has no web origin.
+func NoRead(svc Service) (confidence, read string, ok bool) {
+	if svc.Origin == "" {
+		return Claimed, "not read: the service is not a web service, so the only signal is the banner azhaq already holds; a read that could settle it would have to speak its protocol again, which confirmation does not do", true
+	}
+	return "", "", false
+}
+
+// ReadPath is the path an advisory's confirmation reads: its own, else /.
+func (a Advisory) ReadPath() string {
+	if p := a.confirmPath(); p != "" {
+		return p
+	}
+	return "/"
+}
+
+// Signal is what one confirmation read showed: the answer's status line and
+// the product and version it states, if any. One read is enough for every
+// advisory that names the same path, each judged against it (Judge).
+type Signal struct {
+	Path     string
+	What     string // "GET / answered 200"
+	Product  string
+	Version  string
+	From     string // where the version was read (the Server header, the body)
+	Mentions bool   // the answer names the product, with no version
+}
+
+// Read makes the one read of path on the service's origin: one GET, no
+// body, no other method, no credential, nothing that could trigger an
+// issue. It spends from the budget first and goes through the client its
+// caller holds; err is a read that failed or was refused.
+func (c Confirmer) Read(ctx context.Context, svc Service, path string) (Signal, error) {
+	if err := ValidConfirmPath(path); err != nil {
+		return Signal{}, err
 	}
 	if c.Spend != nil {
 		if err := c.Spend(ctx); err != nil {
-			return Claimed, "", err
+			return Signal{}, err
 		}
 	}
 	client := c.Client
@@ -185,50 +235,61 @@ func (c Confirmer) Confirm(ctx context.Context, adv Advisory, svc Service) (conf
 		// Only egress opens a connection: without a client asked from
 		// it there is nothing to read with, and the caller hears so
 		// instead of a quiet direct dial.
-		return "", "", fmt.Errorf("advisory confirmation has no client: ask egress for one")
+		return Signal{}, fmt.Errorf("advisory confirmation has no client: ask egress for one")
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, svc.Origin+path, nil)
 	if err != nil {
-		return Claimed, "", err
+		return Signal{}, err
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return Claimed, "", err
+		return Signal{}, err
 	}
 	fetch.BoundNote(resp, "GET "+path) // a stream that never ends is cut, and the run says so
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
-	what := fmt.Sprintf("GET %s answered %d", path, resp.StatusCode)
+	sig := Signal{Path: path, What: fmt.Sprintf("GET %s answered %d", path, resp.StatusCode)}
 	// The signal: a product and version the answer states, in its
 	// Server header first, then its body.
-	product, version := ProductVersion(resp.Header.Get("Server"))
-	from := "the Server header"
-	if version == "" {
+	sig.Product, sig.Version = ProductVersion(resp.Header.Get("Server"))
+	sig.From = "the Server header"
+	if sig.Version == "" {
 		if p, v := productVersionIn(string(body), svc.Product); v != "" {
-			product, version, from = p, v, "the body of "+path
+			sig.Product, sig.Version, sig.From = p, v, "the body of "+path
 		}
 	}
+	sig.Mentions = strings.Contains(strings.ToLower(string(body)), strings.ToLower(svc.Product))
+	return sig, nil
+}
+
+// Judge says how far the read settles adv for svc: observed when the
+// version it states decides where the version stands in the advisory's
+// range (and the advisory names no other precondition), inferred when it
+// narrows the match but leaves something named unknown, claimed when
+// nothing read settles anything.
+func (sig Signal) Judge(adv Advisory, svc Service) (confidence, read string) {
+	what, product, version, from := sig.What, sig.Product, sig.Version, sig.From
 	switch {
 	case version == "":
-		if product != "" || strings.Contains(strings.ToLower(string(body)), strings.ToLower(svc.Product)) {
-			return Inferred, what + "; it names the product but no version, so the version seen stands unread and the precondition is still open", nil
+		if product != "" || sig.Mentions {
+			return Inferred, what + "; it names the product but no version, so the version seen stands unread and the precondition is still open"
 		}
-		return Claimed, what + "; it states no product or version, so nothing was read that settles the match", nil
+		return Claimed, what + "; it states no product or version, so nothing was read that settles the match"
 	case !sameProduct(product, svc.Product) && product != "":
-		return Inferred, fmt.Sprintf("%s; %s names %s %s, not the %s of the match, so it does not settle this lead", what, from, product, version, svc.Product), nil
+		return Inferred, fmt.Sprintf("%s; %s names %s %s, not the %s of the match, so it does not settle this lead", what, from, product, version, svc.Product)
 	}
 	// A version was read. Where it stands in the range decides, when
 	// the comparison is exact and no other precondition is named.
 	st, _, why := evalForAdvisory(adv, svc.Product, version)
 	switch {
 	case st == stateUncertain:
-		return Inferred, fmt.Sprintf("%s; %s states version %s, which %s", what, from, version, "could not be compared with the advisory's range: "+why), nil
+		return Inferred, fmt.Sprintf("%s; %s states version %s, which %s", what, from, version, "could not be compared with the advisory's range: "+why)
 	case adv.precondition() != "":
-		return Inferred, fmt.Sprintf("%s; %s states version %s, which settles the version but not the precondition (%s), which the read does not show", what, from, version, adv.precondition()), nil
+		return Inferred, fmt.Sprintf("%s; %s states version %s, which settles the version but not the precondition (%s), which the read does not show", what, from, version, adv.precondition())
 	case st == stateIn:
-		return Observed, fmt.Sprintf("%s; %s states %s %s, inside the advisory's range", what, from, svc.Product, version), nil
+		return Observed, fmt.Sprintf("%s; %s states %s %s, inside the advisory's range", what, from, svc.Product, version)
 	default:
-		return Observed, fmt.Sprintf("%s; %s states %s %s, outside the advisory's range: the version seen does not stand", what, from, svc.Product, version), nil
+		return Observed, fmt.Sprintf("%s; %s states %s %s, outside the advisory's range: the version seen does not stand", what, from, svc.Product, version)
 	}
 }
 
