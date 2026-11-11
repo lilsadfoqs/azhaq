@@ -14,6 +14,7 @@ import (
 
 	"github.com/lilsadfoqs/azhaq/engine"
 	"github.com/lilsadfoqs/azhaq/internal/collectors/dirscol"
+	"github.com/lilsadfoqs/azhaq/internal/collectors/pathscol"
 	"github.com/lilsadfoqs/azhaq/internal/dnsr"
 	"github.com/lilsadfoqs/azhaq/internal/scopefile"
 	"github.com/lilsadfoqs/azhaq/store"
@@ -211,6 +212,19 @@ func retryFailed(st *store.Store, db, want string) (int, string, error) {
 	if err != nil {
 		return 0, "", err
 	}
+	// A sweep the run listed and left no record of has no error to read: its
+	// service's task asks the paths again.
+	if sw := storedSweeps(st, run.ID); len(sw) > 0 {
+		urls := make([]string, len(sw))
+		for i, f := range sw {
+			urls[i] = f.Target + "/"
+		}
+		if _, err := engine.RetryTasks(st, pathscol.Name, urls, time.Now()); err != nil {
+			return 0, "", err
+		}
+		r.Asked = append(r.Asked, sw...)
+		r.Targets += len(sw)
+	}
 	if r.Targets == 0 {
 		msg := fmt.Sprintf("nothing to retry in run %s of %s: no failed target is retryable (azhaq query -db %s -failed -run %s lists the failures and says which are)", run.ID, db, db, run.ID)
 		if want == "" {
@@ -237,7 +251,7 @@ func retryableIn(st *store.Store, db string) (int, string) {
 	st.UseRun(newest)
 	ents, _ := st.Entities()
 	obs, _ := st.Observations()
-	if n := engine.RetryableTargets(ents, obs); n > 0 {
+	if n := engine.RetryableTargets(ents, obs) + len(storedSweeps(st, newest)); n > 0 {
 		return n, "azhaq resume -db " + db + " -retry-failed asks them again"
 	}
 	for _, r := range earlierFailures(st, runs, newest) {

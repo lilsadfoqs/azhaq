@@ -2,7 +2,9 @@ package engine
 
 import (
 	"sort"
+	"time"
 
+	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"github.com/lilsadfoqs/azhaq/store"
 	"github.com/lilsadfoqs/azhaq/types"
 )
@@ -79,6 +81,40 @@ func RetryFailed(st *store.Store, ents []types.Entity, obs []types.StoredObserva
 	r.Asked = dedupeTargets(r.Asked)
 	r.Targets = len(r.Asked)
 	return r, nil
+}
+
+// RetryTasks makes the current run of st ask collector again on each URL: a
+// task of the run is reopened, or made when the run has none. For work that
+// never left an error to read, a sweep that did not run.
+func RetryTasks(st *store.Store, collector string, urls []string, now time.Time) (int, error) {
+	var tasks []store.Task
+	var ids []string
+	for _, u := range urls {
+		key, err := normalize.URL(u)
+		if err != nil {
+			continue
+		}
+		e, err := st.UpsertEntity(types.TypeURL, key, now)
+		if err != nil {
+			return 0, err
+		}
+		id := retryTaskID(collector, e)
+		if err := st.DropErrors(e.ID, collector); err != nil {
+			return 0, err
+		}
+		reopened, err := st.ReopenTask(id)
+		if err != nil {
+			return 0, err
+		}
+		if !reopened {
+			tasks = append(tasks, store.Task{ID: id, Collector: collector, Seed: types.Seed{Type: types.TypeURL, Keys: map[string]string{"url": key}}})
+		}
+		ids = append(ids, id)
+	}
+	if err := st.SaveTasks(tasks, nil, nil); err != nil {
+		return 0, err
+	}
+	return len(ids), st.Forget(ids)
 }
 
 // retryTaskID is the id of the task of collector on the entity, as the

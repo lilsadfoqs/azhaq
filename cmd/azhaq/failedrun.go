@@ -53,7 +53,7 @@ func failuresOf(st *store.Store, run string) ([]engine.FailedTarget, error) {
 	if err != nil {
 		return nil, err
 	}
-	return engine.FailedTargets(ents, obs), nil
+	return append(engine.FailedTargets(ents, obs), storedSweeps(st, run)...), nil
 }
 
 // earlierFailures are the runs of the workspace other than skip that left
