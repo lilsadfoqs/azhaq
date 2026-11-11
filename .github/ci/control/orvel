@@ -1,0 +1,153 @@
+#!/usr/bin/env bash
+# orvel: a thin front end over the usual recon tools. Each subcommand runs one
+# tool and passes every argument through; the exit code is the tool's. `run`
+# chains five of them. It adds nothing of its own (README.md, orvel-README.md
+# beside the binary).
+set -u
+VERSION=0.1.0
+here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# install-stack.sh puts the table beside the binary as orvel-stack.tsv.
+stack=$here/orvel-stack.tsv
+[ -f "$stack" ] || stack=$here/stack.tsv
+
+# tool_of SUBCOMMAND: the tool it runs, from the table.
+tool_of() {
+  awk -F'\t' -v s="$1" '$1 !~ /^#/ && $1 == s { print $2; exit }' "$stack" 2>/dev/null
+}
+
+# find_tool TOOL: its path, from this folder first, then PATH.
+find_tool() {
+  if [ -x "$here/$1" ]; then echo "$here/$1"; else command -v "$1"; fi
+}
+
+# need TOOL: the path of TOOL, or a message and status 127 (callers exit on it).
+need() {
+  local p
+  p=$(find_tool "$1") || { echo "orvel: $1 is not installed (looked in $here and PATH)" >&2; exit 127; }
+  echo "$p"
+}
+
+usage() {
+  cat <<EOF
+orvel $VERSION: a front end over the usual recon tools. It runs the tool behind
+each subcommand with your arguments unchanged and exits with the tool's own
+exit code. The tools' own documentation applies: orvel SUBCOMMAND -h shows it.
+
+usage: orvel SUBCOMMAND [ARGUMENTS...]
+
+EOF
+  table
+  cat <<EOF
+
+  run TARGET...   a default pipeline over those tools: subfinder, dnsx, naabu
+                  (top 100 ports), httpx, katana; each tool's JSON lines go to a
+                  folder (orvel-run-DATE, or ORVEL_OUT) and the script prints where
+  version         this version and the tool versions behind the subcommands
+  help            this text
+
+orvel makes no claims of its own: no scope enforcement, no request ledger, no
+safety features, no output of its own. It sends what the tools send. Use it only
+on targets you are authorized to test.
+EOF
+}
+
+# table: subcommand, tool and pinned version, one a line.
+table() {
+  awk -F'\t' '$1 !~ /^#/ && NF >= 3 { printf "  %-14s %s %s\n", $1, $2, ($3 == "apt" ? "(the machine'"'"'s apt package)" : $3) }' "$stack" 2>/dev/null
+}
+
+version() {
+  echo "orvel $VERSION (a front end over the tools below; it adds nothing of its own)"
+  local sub tool ver p
+  while IFS=$'\t' read -r sub tool ver _; do
+    case $sub in '' | '#'*) continue ;; esac
+    if [ "$ver" = apt ]; then
+      p=$(find_tool "$tool") && ver=$("$p" --version 2>&1 | sed -n 1p) || ver="not installed"
+    fi
+    printf '  %-8s %-10s %s\n' "$sub" "$tool" "$ver"
+  done < "$stack"
+}
+
+# stage NAME TOOL ARGS...: runs one pipeline stage; a tool that fails stops the run with its exit code.
+stage() {
+  local name=$1 tool=$2 p rc
+  shift 2
+  p=$(need "$tool") || exit $?
+  echo "orvel run: $name ($tool)" >&2
+  "$p" "$@" || { rc=$?; echo "orvel run: $tool exited $rc; stopping" >&2; exit "$rc"; }
+}
+
+# hostports FILE: "host:port" lines from naabu's JSON lines.
+hostports() {
+  awk '{
+    h = ""; p = ""
+    if (match($0, /"host":"[^"]*"/)) h = substr($0, RSTART + 8, RLENGTH - 9)
+    if (h == "" && match($0, /"ip":"[^"]*"/)) h = substr($0, RSTART + 6, RLENGTH - 7)
+    if (match($0, /"port":[0-9]+/)) p = substr($0, RSTART + 7, RLENGTH - 7)
+    if (h != "" && p != "") print h ":" p
+  }' "$1" | sort -u
+}
+
+# field NAME FILE: the string values of "NAME" in JSON lines.
+field() {
+  sed -n 's/.*"'"$1"'":"\([^"]*\)".*/\1/p' "$2" | sort -u
+}
+
+# stop_if_empty FILE NAME: nothing found stops the run, with the tools' own success.
+stop_if_empty() {
+  [ -s "$1" ] && return 0
+  echo "orvel run: $2 found nothing; stopping" >&2
+  exit 0
+}
+
+run() {
+  [ $# -gt 0 ] || { echo "usage: orvel run TARGET..." >&2; exit 2; }
+  local out=${ORVEL_OUT:-orvel-run-$(date -u +%Y%m%dT%H%M%SZ)}
+  mkdir -p "$out" || exit 1
+  printf '%s\n' "$@" | sort -u > "$out/targets.txt"
+  # A target is a domain or an address. subfinder takes domains; an address skips it.
+  grep -Ev '^[0-9.:]+(/[0-9]+)?$' "$out/targets.txt" > "$out/domains.txt" || true
+  if [ -s "$out/domains.txt" ]; then
+    stage "subdomains" subfinder -dL "$out/domains.txt" -silent -oJ -o "$out/subfinder.jsonl"
+  else
+    : > "$out/subfinder.jsonl"
+  fi
+  { cat "$out/domains.txt"; field host "$out/subfinder.jsonl"; } | sort -u > "$out/hosts.txt"
+  if [ -s "$out/hosts.txt" ]; then
+    stage "resolve" dnsx -l "$out/hosts.txt" -silent -json -a -resp -o "$out/dnsx.jsonl"
+  else
+    : > "$out/dnsx.jsonl"
+  fi
+  field host "$out/dnsx.jsonl" > "$out/resolved.txt"
+  # An address or a range in the targets is not a name dnsx answers: it goes on as it is.
+  grep -E '^[0-9.:]+(/[0-9]+)?$' "$out/targets.txt" >> "$out/resolved.txt" || true
+  sort -u -o "$out/resolved.txt" "$out/resolved.txt"
+  stop_if_empty "$out/resolved.txt" resolve
+  stage "ports (top 100)" naabu -list "$out/resolved.txt" -top-ports 100 -silent -json -o "$out/naabu.jsonl"
+  hostports "$out/naabu.jsonl" > "$out/hostports.txt"
+  stop_if_empty "$out/hostports.txt" ports
+  stage "probe" httpx -l "$out/hostports.txt" -silent -json -o "$out/httpx.jsonl"
+  field url "$out/httpx.jsonl" > "$out/urls.txt"
+  stop_if_empty "$out/urls.txt" probe
+  stage "crawl" katana -list "$out/urls.txt" -silent -jsonl -o "$out/katana.jsonl"
+  echo "orvel run: results in $out" >&2
+  wc -l "$out"/*.jsonl | sed 's/^/  /'
+}
+
+[ $# -gt 0 ] || { usage; exit 0; }
+cmd=$1
+shift
+case $cmd in
+help | -h | --help) usage ;;
+version | -v | --version) version ;;
+run) run "$@" ;;
+*)
+  tool=$(tool_of "$cmd")
+  if [ -z "$tool" ]; then
+    echo "orvel: unknown subcommand '$cmd' (orvel help lists them)" >&2
+    exit 2
+  fi
+  p=$(need "$tool") || exit $?
+  exec "$p" "$@"
+  ;;
+esac

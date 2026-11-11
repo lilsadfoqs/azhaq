@@ -75,7 +75,7 @@ jobs:
           python3 -m unittest discover -s .github/ci/range
           python3 -m unittest discover -s .github/ci/parity
           python3 -m unittest discover -s .github/ci -p 'test_*.py'
-          bash -n .github/ci/range/isolate.sh .github/ci/run.sh .github/ci/fetch.sh .github/ci/apt-tools.sh .github/ci/latest-artifact.sh .github/ci/bench-tools.sh .github/ci/beat.sh .github/ci/watch.sh .github/ci/heartbeat.sh .github/ci/history.sh .github/ci/parity/replay.sh .github/ci/parity/seed.sh .github/ci/parity/fetch.sh
+          bash -n .github/ci/range/isolate.sh .github/ci/run.sh .github/ci/fetch.sh .github/ci/apt-tools.sh .github/ci/latest-artifact.sh .github/ci/bench-tools.sh .github/ci/beat.sh .github/ci/watch.sh .github/ci/heartbeat.sh .github/ci/history.sh .github/ci/parity/replay.sh .github/ci/parity/seed.sh .github/ci/parity/fetch.sh .github/ci/control/orvel .github/ci/control/install-stack.sh
       - name: documented claims
         # What the README and the covered command pages claim has a test or a bench
         # check that proves it (docs/claims.tsv); lists the pages not covered yet.

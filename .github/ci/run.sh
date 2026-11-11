@@ -6,9 +6,11 @@
 # WORDS are the tag's first
 # line: the bench flags ("-only probe -profile polite"), "areas=web,net
 # model=…" for a hunt, "only=ID,ID" for a range-smoke, and for a trial its
-# kind: switch (the default, kept for now), gate or baseline, or the older
-# research or hunter (".github/ci/trial/README.md"), optionally with
-# "seed=WORDS" (a pool entry, for gate and baseline) and "samples=N" (N from
+# kind: switch (the default, kept for now), gate, baseline or control (the
+# gate's review with a front end over the usual tools as the candidate, to
+# measure the scale: ".github/ci/trial/README.md"), or the older
+# research or hunter, optionally with
+# "seed=WORDS" (a pool entry, for gate, baseline and control) and "samples=N" (N from
 # 1 to 4) to run each part N times, two sessions at a time. "gate" as this script's
 # own first positional KIND is a different thing: it starts the bench
 # (default flags) and the hunt (WORDS as for a hunt) on this commit at once;
@@ -35,9 +37,9 @@ parity) printf '%s\n' "${*:-count=3 minutes=30}" > "$msg" ;;
 hunt | gate | trial)
   if [ "$kind" = trial ]; then
     case "${1:-switch}" in
-    switch | research | hunter | gate | baseline) ;;
+    switch | research | hunter | gate | baseline | control) ;;
     *)
-      echo "run.sh: a trial's kind is switch, gate, baseline, research or hunter, not $1" >&2
+      echo "run.sh: a trial's kind is switch, gate, baseline, control, research or hunter, not $1" >&2
       exit 2
       ;;
     esac

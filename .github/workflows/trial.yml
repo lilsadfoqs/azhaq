@@ -19,6 +19,15 @@ name: trial
 #             sessions at a time; fetch.sh and merge_gate.py bring the
 #             samples back together (parts a1..aN, b1..bN; a and b when N
 #             is 1).
+#   control   the gate's review with a different candidate: orvel, a thin front
+#             end over the very tools the reviewer already uses
+#             (.github/ci/control), to measure what the scale can give. The
+#             same two parts, jobs, pool and publish paths as gate (the
+#             `gate-a` and `gate-b` jobs run for both kinds); the brief is
+#             GATE.md with the changes documented in range/render_brief.py,
+#             and scores.py writes kind control-a/control-b. A one-off
+#             measurement of the ruler, not a review of azhaq
+#             (.github/ci/trial/README.md). "samples=N" as for gate.
 #   baseline  part A's engagement, usual tools only, azhaq off, on one pool
 #             estate: measures that estate's baseline once (README.md says
 #             how to run the four). "samples=N" measures N pool estates, two
@@ -30,10 +39,11 @@ name: trial
 #   hunter    the older two-session bounty hunt (HUNTER.md) on the same two
 #             estates, in the opposite order.
 # The estates are built, started and isolated from the agent by the `work`,
-# `gate-a` and `baseline` jobs (.github/ci/range, .github/ci/trial/README.md).
-# "seed=WORDS" in the message fixes the draw (a pool entry for gate and
-# baseline); without it the draw is secret (research, hunter, switch) or
-# round robin by run number (gate, baseline).
+# `gate-a` (gate and control) and `baseline` jobs (.github/ci/range,
+# .github/ci/trial/README.md).
+# "seed=WORDS" in the message fixes the draw (a pool entry for gate, control
+# and baseline); without it the draw is secret (research, hunter, switch) or
+# round robin by run number (gate, control, baseline).
 on:
   push:
     tags: ["trial-*"]
@@ -63,6 +73,7 @@ jobs:
             research) kind=research ;;
             hunter) kind=hunter ;;
             gate) kind=gate ;;
+            control) kind=control ;;
             baseline) kind=baseline ;;
             *) kind=switch ;;
           esac
@@ -118,8 +129,10 @@ jobs:
             azhaq.version
           retention-days: 2
   gate-a:
+    # Runs for gate and for control (build runs for gate only, so a skipped build is fine here).
+    name: ${{ needs.kind.outputs.kind == 'control' && 'control-a' || 'gate-a' }} (${{ matrix.sample }})
     needs: [kind, build]
-    if: needs.kind.outputs.kind == 'gate'
+    if: ${{ !cancelled() && needs.kind.result == 'success' && (needs.build.result == 'success' || needs.build.result == 'skipped') && (needs.kind.outputs.kind == 'gate' || needs.kind.outputs.kind == 'control') }}
     runs-on: ubuntu-latest
     timeout-minutes: 360
     strategy:
@@ -128,6 +141,7 @@ jobs:
       matrix:
         sample: ${{ fromJSON(needs.kind.outputs.samples_json) }}
     env:
+      KIND: ${{ needs.kind.outputs.kind }}
       DRYRUN: ${{ needs.kind.outputs.dryrun }}
       SAMPLES: ${{ needs.kind.outputs.samples }}
     steps:
@@ -140,11 +154,22 @@ jobs:
       - name: packages
         run: sudo apt-get update -q && sudo apt-get install -y -q dnsutils age nmap jq
       - uses: actions/download-artifact@v7
+        if: needs.kind.outputs.kind == 'gate'
         with:
           name: gate-azhaq
           path: _bin
       - uses: sigstore/cosign-installer@v3
+        if: needs.kind.outputs.kind == 'gate'
+      - name: orvel
+        # The control's candidate: orvel and the pinned stack it runs, in ./bin
+        # before the review, as azhaq is for gate (install-stack.sh).
+        if: needs.kind.outputs.kind == 'control'
+        run: |
+          mkdir -p "$HOME/trial/bin" "$HOME/ci"
+          .github/ci/control/install-stack.sh "$HOME/trial/bin"
+          "$HOME/trial/bin/orvel" version | awk 'NR == 1 { print $2 }' > "$HOME/ci/orvel.version"
       - name: azhaq
+        if: needs.kind.outputs.kind == 'gate'
         # A release's commit: the release, by its install script with the
         # signature required, as a user installs it. Otherwise the CI build.
         env:
@@ -217,7 +242,11 @@ jobs:
           find "$GITHUB_WORKSPACE" -mindepth 1 -delete
       - name: review
         run: |
-          python3 -I "$HOME/ci/render_brief.py" gate-a "$(cat "$HOME/ci/azhaq.version")" "$HOME/ci/vars.json" "$HOME/ci" "$(cat "$HOME/ci/azhaq.origin")" > "$HOME/ci/brief.md"
+          if [ "$KIND" = control ]; then
+            python3 -I "$HOME/ci/render_brief.py" control-a "$(cat "$HOME/ci/orvel.version")" "$HOME/ci/vars.json" "$HOME/ci" > "$HOME/ci/brief.md"
+          else
+            python3 -I "$HOME/ci/render_brief.py" gate-a "$(cat "$HOME/ci/azhaq.version")" "$HOME/ci/vars.json" "$HOME/ci" "$(cat "$HOME/ci/azhaq.origin")" > "$HOME/ci/brief.md"
+          fi
           cd "$HOME/trial"
           if [ "$DRYRUN" = 1 ]; then
             nets=$(jq -r '.NET1' "$HOME/ci/vars.json" 2>/dev/null || true)
@@ -248,8 +277,10 @@ jobs:
           age -r "$AGE_RECIPIENT" -o "$HOME/ci/trial.tgz.age" "$HOME/ci/trial.tgz"
           files=("$HOME/ci/trial.tgz.age")
           # The scorecard's numbers, encrypted apart from the archive: history.sh reads these alone.
-          python3 -I "$HOME/ci/scores.py" extract REPORT.md --kind gate-a --tag "$GITHUB_REF_NAME" --part "${{ steps.part.outputs.name }}" --run "$GITHUB_RUN_ID" \
-            --version "$(cat "$HOME/ci/azhaq.version" 2>/dev/null || true)" --out "$HOME/ci/scores.json" &&
+          cand=azhaq; kind=gate-a
+          if [ "$KIND" = control ]; then cand=orvel; kind=control-a; fi
+          python3 -I "$HOME/ci/scores.py" extract REPORT.md --kind "$kind" --tag "$GITHUB_REF_NAME" --part "${{ steps.part.outputs.name }}" --run "$GITHUB_RUN_ID" \
+            --version "$(cat "$HOME/ci/$cand.version" 2>/dev/null || true)" --out "$HOME/ci/scores.json" &&
             age -r "$AGE_RECIPIENT" -o "$HOME/ci/scores.json.age" "$HOME/ci/scores.json" && files+=("$HOME/ci/scores.json.age") ||
             echo "::warning title=scores::no scores record (no scorecard in REPORT.md)"
           [ -s "$HOME/ci/key.json.age" ] && files+=("$HOME/ci/key.json.age")
@@ -260,8 +291,10 @@ jobs:
           "$HOME/ci/publish.sh" "trial/$GITHUB_REF_NAME/${{ steps.part.outputs.name }}" "${files[@]}"
           [ -s REPORT.md ] && echo "::notice title=trial::REPORT.md written" || echo "::warning title=trial::no REPORT.md"
   gate-b:
+    # Runs for gate and for control (build runs for gate only, so a skipped build is fine here).
+    name: ${{ needs.kind.outputs.kind == 'control' && 'control-b' || 'gate-b' }} (${{ matrix.sample }})
     needs: [kind, build]
-    if: needs.kind.outputs.kind == 'gate'
+    if: ${{ !cancelled() && needs.kind.result == 'success' && (needs.build.result == 'success' || needs.build.result == 'skipped') && (needs.kind.outputs.kind == 'gate' || needs.kind.outputs.kind == 'control') }}
     runs-on: ubuntu-latest
     timeout-minutes: 300
     strategy:
@@ -270,6 +303,7 @@ jobs:
       matrix:
         sample: ${{ fromJSON(needs.kind.outputs.samples_json) }}
     env:
+      KIND: ${{ needs.kind.outputs.kind }}
       DRYRUN: ${{ needs.kind.outputs.dryrun }}
       SAMPLES: ${{ needs.kind.outputs.samples }}
     steps:
@@ -282,11 +316,22 @@ jobs:
       - name: labs
         run: .github/ci/labs.sh
       - uses: actions/download-artifact@v7
+        if: needs.kind.outputs.kind == 'gate'
         with:
           name: gate-azhaq
           path: _bin
       - uses: sigstore/cosign-installer@v3
+        if: needs.kind.outputs.kind == 'gate'
+      - name: orvel
+        # The control's candidate: orvel and the pinned stack it runs, in ./bin
+        # before the review, as azhaq is for gate (install-stack.sh).
+        if: needs.kind.outputs.kind == 'control'
+        run: |
+          mkdir -p "$HOME/trial/bin" "$HOME/ci"
+          .github/ci/control/install-stack.sh "$HOME/trial/bin"
+          "$HOME/trial/bin/orvel" version | awk 'NR == 1 { print $2 }' > "$HOME/ci/orvel.version"
       - name: azhaq
+        if: needs.kind.outputs.kind == 'gate'
         # Installed before the review, as in part A: a release's commit gets
         # the release by its install script with the signature required,
         # any other commit the CI build.
@@ -345,7 +390,11 @@ jobs:
       - name: review
         run: |
           echo '{}' > "$HOME/ci/vars.json"
-          python3 -I "$HOME/ci/render_brief.py" gate-b "$(cat "$HOME/ci/azhaq.version")" "$HOME/ci/vars.json" "$HOME/ci" "$(cat "$HOME/ci/azhaq.origin")" > "$HOME/ci/brief.md"
+          if [ "$KIND" = control ]; then
+            python3 -I "$HOME/ci/render_brief.py" control-b "$(cat "$HOME/ci/orvel.version")" "$HOME/ci/vars.json" "$HOME/ci" > "$HOME/ci/brief.md"
+          else
+            python3 -I "$HOME/ci/render_brief.py" gate-b "$(cat "$HOME/ci/azhaq.version")" "$HOME/ci/vars.json" "$HOME/ci" "$(cat "$HOME/ci/azhaq.origin")" > "$HOME/ci/brief.md"
+          fi
           cd "$HOME/trial"
           if [ "$DRYRUN" = 1 ]; then
             {
@@ -377,8 +426,10 @@ jobs:
           age -r "$AGE_RECIPIENT" -o "$HOME/ci/trial.tgz.age" "$HOME/ci/trial.tgz"
           files=("$HOME/ci/trial.tgz.age")
           # The scorecard's numbers, encrypted apart from the archive: history.sh reads these alone.
-          python3 -I "$HOME/ci/scores.py" extract REPORT.md --kind gate-b --tag "$GITHUB_REF_NAME" --part "${{ steps.part.outputs.name }}" --run "$GITHUB_RUN_ID" \
-            --version "$(cat "$HOME/ci/azhaq.version" 2>/dev/null || true)" --out "$HOME/ci/scores.json" &&
+          cand=azhaq; kind=gate-b
+          if [ "$KIND" = control ]; then cand=orvel; kind=control-b; fi
+          python3 -I "$HOME/ci/scores.py" extract REPORT.md --kind "$kind" --tag "$GITHUB_REF_NAME" --part "${{ steps.part.outputs.name }}" --run "$GITHUB_RUN_ID" \
+            --version "$(cat "$HOME/ci/$cand.version" 2>/dev/null || true)" --out "$HOME/ci/scores.json" &&
             age -r "$AGE_RECIPIENT" -o "$HOME/ci/scores.json.age" "$HOME/ci/scores.json" && files+=("$HOME/ci/scores.json.age") ||
             echo "::warning title=scores::no scores record (no scorecard in REPORT.md)"
           if [ -s "$HOME/.codex/auth.json" ] && [ "$(sha256sum "$HOME/.codex/auth.json" | cut -d' ' -f1)" != "$(cat "$RUNNER_TEMP/auth.sum" 2>/dev/null)" ]; then
