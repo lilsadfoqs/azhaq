@@ -6,6 +6,11 @@
 // write or state-changing command, never a credential or a guessed
 // password, never a request that tries to trigger a flaw.
 //
+// A result has one of two kinds. unauthenticated-read: the answer holds
+// state or information the service exposes to anyone. unauthenticated-
+// handshake: the service answers its protocol's opening with no
+// credential, and the answer reads no data. Each check names its own.
+//
 // Every result is labelled exactly one of proved, version-only or
 // conditional, and carries the exact request sent and an excerpt of
 // the response as its evidence:
@@ -29,6 +34,8 @@ import (
 	"net"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/lilsadfoqs/azhaq/internal/advisory"
 	"github.com/lilsadfoqs/azhaq/internal/lazyre"
@@ -44,8 +51,13 @@ const (
 
 // Kinds of result.
 const (
+	// KindUnauthenticatedRead: the answer holds state or information the
+	// service exposes to anyone (a data store's INFO, a root DSE, a version).
 	KindUnauthenticatedRead = "unauthenticated-read"
-	KindAdvisoryPrecond     = "advisory-precondition"
+	// KindUnauthenticatedHandshake: the service answers its protocol's
+	// opening with no credential; the answer reads no data.
+	KindUnauthenticatedHandshake = "unauthenticated-handshake"
+	KindAdvisoryPrecond          = "advisory-precondition"
 )
 
 // Result is one labelled verification result, stored as one
@@ -99,6 +111,11 @@ type Check struct {
 	Request      string `json:"request"` // as printed: the exact bytes, escapes shown
 	Precondition string `json:"precondition"`
 
+	// Kind is the kind of a result of this check: a read when the answer
+	// holds what the service exposes, a handshake when it only opens the
+	// protocol.
+	Kind string `json:"kind"`
+
 	// High: the read shows the state of a data store, so a proved result
 	// ranks high; any other proved read is info.
 	High bool `json:"high,omitempty"`
@@ -120,53 +137,53 @@ func fixed(req func() []byte, parse func(resp []byte, svc advisory.Service, r *R
 
 var checks = []Check{
 	{
-		ID: "redis-info", Service: "redis", Request: "INFO server", High: true,
+		ID: "redis-info", Service: "redis", Kind: KindUnauthenticatedRead, Request: "INFO server", High: true,
 		Precondition: "the service answers INFO server, a read of what it already exposes, with no credential sent",
 		prepare:      fixed(func() []byte { return []byte("INFO server\r\n") }, parseRedis),
 	},
 	{
-		ID: "mongodb-isMaster", Service: "mongodb", Request: "isMaster (OP_MSG, $db admin)", High: true,
+		ID: "mongodb-isMaster", Service: "mongodb", Kind: KindUnauthenticatedRead, Request: "isMaster (OP_MSG, $db admin)", High: true,
 		Precondition: "the service answers isMaster, its hello, with no credential sent",
 		prepare:      fixed(func() []byte { return mongoCommand("isMaster") }, parseMongo),
 	},
 	{
-		ID: "memcached-version", Service: "memcached", Request: "version", High: true,
+		ID: "memcached-version", Service: "memcached", Kind: KindUnauthenticatedRead, Request: "version", High: true,
 		Precondition: "the service answers version, a read of what it already exposes, with no credential sent",
 		prepare:      fixed(func() []byte { return []byte("version\r\n") }, parseMemcached),
 	},
-	probeCheck("zookeeper-srvr", "zookeeper", "srvr (the four-letter command)", "its own state command srvr", true, nil),
-	probeCheck("postgresql-startup", "postgresql", "a StartupMessage of protocol version 1.0 with no user", "a startup message of a protocol version that does not exist, whose error names the versions it speaks", false, nil),
-	probeCheck("kafka-apiversions", "kafka", "ApiVersions v0", "ApiVersions, the first request of every client", false, nil),
-	probeCheck("mssql-prelogin", "mssql", "a TDS PRELOGIN", "a TDS prelogin, the first packet of every client, whose answer holds the version", false, nil),
-	probeCheck("cassandra-options", "cassandra", "an OPTIONS frame (CQL native protocol v4)", "OPTIONS, which lists what the server supports", false, nil),
-	probeCheck("oracle-tns-ping", "oracle-tns", "a TNS Connect with (COMMAND=ping)", "the listener ping tnsping sends, whose answer holds the version", false, nil),
-	probeCheck("ldap-rootdse", "ldap", "an anonymous search of the root DSE, no bind", "an anonymous search of the root DSE, which RFC 4512 has every server answer", false, nil),
-	probeCheck("dns-version-bind", "dns", "version.bind CHAOS TXT, length-prefixed over TCP", "a CHAOS TXT query for version.bind", false, nil),
-	probeCheck("rtsp-options", "rtsp", "OPTIONS * RTSP/1.0", "OPTIONS, which lists the methods it supports", false, refusedStatus),
-	probeCheck("sip-options", "sip", "an OPTIONS request over TCP", "OPTIONS, which a SIP server answers with what it supports", false, refusedStatus),
-	probeCheck("socks5-methods", "socks5", "the method selection: version 5, one method, no authentication", "the method selection, which names the method it accepts", false, refusedSocks),
-	probeCheck("smb-negotiate", "smb", "an SMB2 NEGOTIATE, no session", "a NEGOTIATE, which lists the dialect and the signing it requires", false, nil),
-	probeCheck("netbios-ssn-request", "netbios-ssn", "a NetBIOS session request to *SMBSERVER", "a session request, which the service answers positively or not", false, nil),
-	probeCheck("rdp-x224", "rdp", "an X.224 connection request with a negotiation request", "the X.224 connection request, which names the protocol it selects", false, nil),
-	probeCheck("x11-setup", "x11", "a connection setup with no authorization", "a connection setup, which an X server answers with its vendor and release, or with a refusal", false, refusedX11),
-	probeCheck("jdwp-handshake", "jdwp", "JDWP-Handshake", "the handshake, which a debug port answers with itself", false, nil),
-	probeCheck("java-rmi-header", "java-rmi", "the stream header JRMI, version 2, StreamProtocol", "the stream header, which a registry acknowledges", false, nil),
-	probeCheck("elasticsearch-transport-ping", "elasticsearch-transport", "the keep-alive ping (ES and a length of -1)", "the keep-alive ping, which a node of 7.x or later returns", false, nil),
-	probeCheck("afp-getstatus", "afp", "a DSI GetStatus, no login", "DSIGetStatus, which an AFP server answers before any login", false, nil),
-	probeCheck("minecraft-status", "minecraft", "a handshake and a status request (Server List Ping)", "the status request every game client sends to list a server", false, nil),
-	probeCheck("mqtt-connect", "mqtt", "a CONNECT without user name or password", "a CONNECT, which the broker accepts or refuses in its CONNACK", false, refusedMQTT),
-	probeCheck("amqp-header", "amqp", "the protocol header AMQP 0-9-1", "the protocol header, which a broker answers with its Connection.Start", false, nil),
-	probeCheck("stomp-connect", "stomp", "a CONNECT frame without credentials", "a CONNECT, which the broker accepts or refuses", false, refusedSTOMP),
-	probeCheck("xmpp-stream", "xmpp", "the opening of a stream", "the opening of a stream, which a server answers with its own", false, nil),
+	probeCheck("zookeeper-srvr", "zookeeper", KindUnauthenticatedRead, "srvr (the four-letter command)", "its own state command srvr", true, nil),
+	probeCheck("postgresql-startup", "postgresql", KindUnauthenticatedHandshake, "a StartupMessage of protocol version 1.0 with no user", "a startup message of a protocol version that does not exist, whose error names the versions it speaks", false, nil),
+	probeCheck("kafka-apiversions", "kafka", KindUnauthenticatedHandshake, "ApiVersions v0", "ApiVersions, the first request of every client", false, nil),
+	probeCheck("mssql-prelogin", "mssql", KindUnauthenticatedHandshake, "a TDS PRELOGIN", "a TDS prelogin, the first packet of every client, whose answer holds the version", false, nil),
+	probeCheck("cassandra-options", "cassandra", KindUnauthenticatedHandshake, "an OPTIONS frame (CQL native protocol v4)", "OPTIONS, which lists what the server supports", false, nil),
+	probeCheck("oracle-tns-ping", "oracle-tns", KindUnauthenticatedHandshake, "a TNS Connect with (COMMAND=ping)", "the listener ping tnsping sends, whose answer holds the version", false, nil),
+	probeCheck("ldap-rootdse", "ldap", KindUnauthenticatedRead, "an anonymous search of the root DSE, no bind", "an anonymous search of the root DSE, which RFC 4512 has every server answer", false, nil),
+	dnsRefusal(probeCheck("dns-version-bind", "dns", KindUnauthenticatedRead, "version.bind CHAOS TXT, length-prefixed over TCP", "a CHAOS TXT query for version.bind", false, nil)),
+	probeCheck("rtsp-options", "rtsp", KindUnauthenticatedHandshake, "OPTIONS * RTSP/1.0", "OPTIONS, which lists the methods it supports", false, refusedStatus),
+	probeCheck("sip-options", "sip", KindUnauthenticatedHandshake, "an OPTIONS request over TCP", "OPTIONS, which a SIP server answers with what it supports", false, refusedStatus),
+	probeCheck("socks5-methods", "socks5", KindUnauthenticatedHandshake, "the method selection: version 5, one method, no authentication", "the method selection, which names the method it accepts", false, refusedSocks),
+	probeCheck("smb-negotiate", "smb", KindUnauthenticatedHandshake, "an SMB2 NEGOTIATE, no session", "a NEGOTIATE, which lists the dialect and the signing it requires", false, nil),
+	probeCheck("netbios-ssn-request", "netbios-ssn", KindUnauthenticatedHandshake, "a NetBIOS session request to *SMBSERVER", "a session request, which the service answers positively or not", false, nil),
+	probeCheck("rdp-x224", "rdp", KindUnauthenticatedHandshake, "an X.224 connection request with a negotiation request", "the X.224 connection request, which names the protocol it selects", false, nil),
+	probeCheck("x11-setup", "x11", KindUnauthenticatedHandshake, "a connection setup with no authorization", "a connection setup, which an X server answers with its vendor and release, or with a refusal", false, refusedX11),
+	probeCheck("jdwp-handshake", "jdwp", KindUnauthenticatedHandshake, "JDWP-Handshake", "the handshake, which a debug port answers with itself", false, nil),
+	probeCheck("java-rmi-header", "java-rmi", KindUnauthenticatedHandshake, "the stream header JRMI, version 2, StreamProtocol", "the stream header, which a registry acknowledges", false, nil),
+	probeCheck("elasticsearch-transport-ping", "elasticsearch-transport", KindUnauthenticatedHandshake, "the keep-alive ping (ES and a length of -1)", "the keep-alive ping, which a node of 7.x or later returns", false, nil),
+	probeCheck("afp-getstatus", "afp", KindUnauthenticatedRead, "a DSI GetStatus, no login", "DSIGetStatus, which an AFP server answers before any login", false, nil),
+	probeCheck("minecraft-status", "minecraft", KindUnauthenticatedRead, "a handshake and a status request (Server List Ping)", "the status request every game client sends to list a server", false, nil),
+	probeCheck("mqtt-connect", "mqtt", KindUnauthenticatedHandshake, "a CONNECT without user name or password", "a CONNECT, which the broker accepts or refuses in its CONNACK", false, refusedMQTT),
+	probeCheck("amqp-header", "amqp", KindUnauthenticatedHandshake, "the protocol header AMQP 0-9-1", "the protocol header, which a broker answers with its Connection.Start", false, nil),
+	probeCheck("stomp-connect", "stomp", KindUnauthenticatedHandshake, "a CONNECT frame without credentials", "a CONNECT, which the broker accepts or refuses", false, refusedSTOMP),
+	probeCheck("xmpp-stream", "xmpp", KindUnauthenticatedHandshake, "the opening of a stream", "the opening of a stream, which a server answers with its own", false, nil),
 }
 
 // probeCheck is a check whose request and reader are the identification's
 // own for the protocol (portscan.ProbeFor): it sends nothing the scan does
 // not already send to a port that waits. refused says an answer is the
 // service asking for a credential, which stands as version-only.
-func probeCheck(id, service, request, what string, high bool, refused func(resp []byte) bool) Check {
+func probeCheck(id, service, kind, request, what string, high bool, refused func(resp []byte) bool) Check {
 	return Check{
-		ID: id, Service: service, Request: request, High: high,
+		ID: id, Service: service, Kind: kind, Request: request, High: high,
 		Precondition: "the service answers " + what + " with no credential sent",
 		prepare: func(svc advisory.Service) ([]byte, func([]byte, *Result)) {
 			host := firstNonEmpty(svc.Host, svc.IP)
@@ -194,6 +211,42 @@ func probeCheck(id, service, request, what string, high bool, refused func(resp 
 			}
 		},
 	}
+}
+
+// dnsRcodes name the rcodes (RFC 1035, 2136) a refusal shows.
+var dnsRcodes = map[byte]string{1: "FORMERR", 2: "SERVFAIL", 3: "NXDOMAIN", 4: "NOTIMP", 5: "REFUSED"}
+
+// dnsRefusal makes a DNS answer that says no a version-only result whose
+// evidence is the rcode, not the reply's bytes: an error rcode, or NOERROR
+// with no answer record, is a server declining to state a version.
+func dnsRefusal(c Check) Check {
+	inner := c.prepare
+	c.prepare = func(svc advisory.Service) ([]byte, func([]byte, *Result)) {
+		req, parse := inner(svc)
+		if req == nil {
+			return nil, nil
+		}
+		return req, func(resp []byte, r *Result) {
+			// resp is the TCP frame: a length, then the 12-byte header.
+			if len(resp) >= 14 && int(binary.BigEndian.Uint16(resp)) == len(resp)-2 && resp[4]&0x80 != 0 {
+				rc := resp[5] & 0x0f
+				switch {
+				case rc != 0:
+					name, ok := dnsRcodes[rc]
+					if !ok {
+						name = fmt.Sprint(rc)
+					}
+					r.Label, r.Evidence = VersionOnly, "rcode "+name
+					return
+				case binary.BigEndian.Uint16(resp[8:]) == 0:
+					r.Label, r.Evidence = VersionOnly, "rcode NOERROR, no TXT answer"
+					return
+				}
+			}
+			parse(resp, r)
+		}
+	}
+	return c
 }
 
 // refusedStatus: an RTSP or SIP status line that asks for a credential.
@@ -275,7 +328,7 @@ type DialFunc func(ctx context.Context, host, ip string, port int) (net.Conn, er
 func (c Check) Execute(ctx context.Context, svc advisory.Service, dial DialFunc) (Result, error) {
 	host := firstNonEmpty(svc.Host, svc.IP)
 	r := Result{
-		Kind: KindUnauthenticatedRead, Host: host, Port: svc.Port,
+		Kind: c.Kind, Host: host, Port: svc.Port,
 		Target: svc.Target(), Service: strings.TrimSuffix(svc.Service, "?"),
 		Product: firstNonEmpty(svc.Product, c.Service), Version: svc.Version, Request: c.Request,
 		Precondition: c.Precondition,
@@ -316,7 +369,7 @@ func (c Check) Execute(ctx context.Context, svc advisory.Service, dial DialFunc)
 		return r, fmt.Errorf("no answer from %s", r.Target)
 	}
 	r.Evidence = excerpt(buf.Bytes())
-	if r.Evidence == "" { // a binary answer: its first bytes
+	if r.Evidence == "" { // only whitespace: its first bytes
 		r.Evidence = "(binary) " + hex.EncodeToString(buf.Bytes()[:min(buf.Len(), 24)])
 	}
 	parse(buf.Bytes(), &r)
@@ -463,22 +516,34 @@ func severityOf(r Result) string {
 func SeverityOf(r Result) string { return severityOf(r) }
 
 // excerpt is the first printable lines of an answer, at most 200
-// bytes, whitespace folded: the evidence a result carries.
+// characters, whitespace folded: the evidence a result carries. A byte
+// that is not printable text (a binary protocol's framing, invalid UTF-8)
+// is written as \xNN, never as the raw byte.
 func excerpt(b []byte) string {
-	var out []rune
-	for _, c := range string(b) {
-		if c == '\r' || c == '\n' || c == '\t' {
-			c = ' '
+	var sb strings.Builder
+	n := 0
+	for len(b) > 0 {
+		c, size := utf8.DecodeRune(b)
+		var piece string
+		switch {
+		case c == '\r' || c == '\n' || c == '\t':
+			piece = " "
+		case c == utf8.RuneError, !unicode.IsPrint(c) && !unicode.IsSpace(c):
+			for _, x := range b[:size] {
+				piece += fmt.Sprintf("\\x%02x", x)
+			}
+		default:
+			piece = string(c)
 		}
-		if c < 0x20 || c == 0x7f {
-			continue // a binary protocol's framing is not evidence text
-		}
-		out = append(out, c)
-		if len(out) >= 200 {
+		w := utf8.RuneCountInString(piece)
+		if n+w > 200 {
 			break
 		}
+		sb.WriteString(piece)
+		n += w
+		b = b[size:]
 	}
-	return strings.Join(strings.Fields(string(out)), " ")
+	return strings.Join(strings.Fields(sb.String()), " ")
 }
 
 // mongoCommand is an OP_MSG carrying {name: 1, $db: "admin"}, the

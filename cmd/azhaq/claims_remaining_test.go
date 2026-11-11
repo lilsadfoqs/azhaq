@@ -575,6 +575,7 @@ func TestAProvedResultNamesTheReadAndNeverExploitability(t *testing.T) {
 func TestVerifySeverityIsTheStatedRankingNotACVSSScore(t *testing.T) {
 	for _, c := range []struct{ kind, label, want string }{
 		{verify.KindUnauthenticatedRead, verify.Proved, "high"},
+		{verify.KindUnauthenticatedHandshake, verify.Proved, "info"},
 		{verify.KindAdvisoryPrecond, verify.Proved, "medium"},
 		{verify.KindUnauthenticatedRead, verify.Conditional, "low"},
 		{verify.KindAdvisoryPrecond, verify.Conditional, "low"},
