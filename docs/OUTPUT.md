@@ -64,7 +64,7 @@ A run paced slowly says so as it starts: `-rate 1 paces requests to 1/s: the cap
 
 ### Exit 2
 
-- The targets are all outside the scope given: `every target is outside the scope (2 left out): 127.0.0.2, 127.0.0.3`. The message names them. A range that no allow rule touches counts. `ports` and `dns` say it too.
+- The targets are all outside the scope given: `every target is outside the scope (2 left out): 127.0.0.2, 127.0.0.3`. The message names them. A range that no allow rule touches counts. `ports` and `dns` say it too. For `ports`, a host that `-allow` names only with other ports (`-allow HOST:PORT`) is outside for every port asked.
 - A header names a host (`Host`, `X-Forwarded-Host`, `X-Host`, `X-Original-Host`) outside a scope rule. For example `-H 'Host: secret.lab'` with `-deny secret.lab`, or a request file's or import's header whose host is not a target. See [Hosts named in headers](CONCEPTS.md#hosts-named-in-headers).
 - A flag that takes a value is followed by another flag of the command: `-screenshots -max-requests 50` would take `-max-requests` for the directory. Give the value, or join the flag and a value that starts with a dash with an equals sign.
 - Chrome would start without its sandbox, because the system gives it none (a container, AppArmor, no user namespaces), and `-chrome-no-sandbox` was not given. The message names the flag. This holds for every command that starts Chrome: `shots`, `crawl` and `run` with `-browser` or `-screenshots`, a sign-in with `-login`, `roles` with `-role-login` (tried before the first request), and the tools of `azhaq mcp`.

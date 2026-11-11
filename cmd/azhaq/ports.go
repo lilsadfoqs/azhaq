@@ -290,6 +290,21 @@ func cmdPorts(args []string) error {
 		return usagef("no ports to scan: -p, -tp and -pf with -ep left none")
 	}
 
+	// A scope that keeps every host:port out is refused before anything is
+	// sent, as for a host outside it; one that keeps some out holds them back.
+	portsHeld := false
+	if !*sn && (len(flagStrings(fs, "allow")) > 0 || fs.Lookup("scope").Value.String() != "") {
+		rules, err := flagScope(fs)
+		if err != nil {
+			return err
+		}
+		reach, held, left := tg.scopeReach(rules, ports, udpPorts, own)
+		portsHeld = held
+		if !reach && len(left) > 0 {
+			return outsideScope(left, " (an -allow entry lists the host with other ports only: HOST:PORT allows that port, HOST alone every port)")
+		}
+	}
+
 	lines, allow, err := tg.listLines()
 	if err != nil {
 		return err
@@ -487,10 +502,12 @@ func cmdPorts(args []string) error {
 				rep.nextPass(verifyPassCommand(args, rep.DB), why)
 			}
 		}
-		if why, _ := catalogPass(catalogLeft(ports, exSpec), int(sink.scanned)); why != "" {
+		// Ports the scope holds out were not asked, and a wider pass would
+		// be refused the same way: no count or suggestion for them.
+		if why, _ := catalogPass(catalogLeft(ports, exSpec), int(sink.scanned)); why != "" && !portsHeld {
 			rep.nextPass(catalogPassCommand(args, rep.DB), why)
 		}
-		if why, _ := portsPass(len(ports), int(sink.scanned), sink.open); why != "" {
+		if why, _ := portsPass(len(ports), int(sink.scanned), sink.open); why != "" && !portsHeld {
 			rep.nextPass(portsPassCommand(args, rep.DB), why)
 		}
 	}

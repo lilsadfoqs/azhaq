@@ -243,6 +243,11 @@ func portLines(t string, ports []httpcol.PortSpec) []string {
 	if len(ports) == 0 || host == "" {
 		return []string{t}
 	}
+	return hostPortLines(host, ports)
+}
+
+// hostPortLines is a host on each port of -p, led by its scheme when it had one.
+func hostPortLines(host string, ports []httpcol.PortSpec) []string {
 	var out []string
 	for _, p := range ports {
 		hp := net.JoinHostPort(host, strconv.Itoa(p.Port))

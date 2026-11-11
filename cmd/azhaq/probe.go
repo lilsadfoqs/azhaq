@@ -672,7 +672,8 @@ func (o *probeOut) settle(rep *report, st *store.Store, fs *flag.FlagSet) {
 	noAnswer, notAsked, rows := 0, 0, 0
 	for _, in := range order {
 		units := o.units[in]
-		if len(units) == 0 {
+		fromInput := len(units) > 0
+		if !fromInput {
 			units = []probeUnit{{line: in}} // a name a certificate or a policy led to
 		}
 		for _, u := range units {
@@ -715,12 +716,20 @@ func (o *probeOut) settle(rep *report, st *store.Store, fs *flag.FlagSet) {
 			if why == "outside the scope" {
 				continue // not sent by choice: the summary's skipped list names it, as no failure
 			}
-			if byDNS {
-				dnsFails[why] = append(dnsFails[why], u.line)
+			// A bare name asks every port of -p once it resolves: with no
+			// address, each of them is a row that failed.
+			lines := []string{u.line}
+			if fromInput {
+				lines = o.failedLines(u.line)
 			}
-			o.failedRow(in, u.line, why)
-			noAnswer++
-			rows++
+			for _, line := range lines {
+				if byDNS {
+					dnsFails[why] = append(dnsFails[why], line)
+				}
+				o.failedRow(in, line, why)
+				noAnswer++
+				rows++
+			}
 		}
 	}
 	// A name with no address is a failure like a refused connection: the
