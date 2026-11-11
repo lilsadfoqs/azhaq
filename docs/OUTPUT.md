@@ -120,7 +120,7 @@ An [internal error](#exit-1) comes before this rule: a summary that disagrees wi
 | Field | Meaning |
 | --- | --- |
 | `type`, `command`, `version`, `seconds` | Always `summary`, the command, azhaq's version, and the run time in seconds. |
-| `complete`, `exit` | As in the exit codes above: `complete` is true when `exit` is 0, a run that did its job and names its failures included. |
+| `complete`, `exit` | As in the exit codes above: `complete` is true when `exit` is 0, a run that did its job and names its failures included. The one exception is [`urls`](commands/urls.md#summary-and-exit-codes): an archive that failed after giving URLs leaves `complete` false, even at exit 0. |
 | `failures` | Always present: how many failures the run has, 0 when none. The sum of `count` over `failed`, plus the `unreachable` targets no entry of `failed` names (`probe`: its rows without an answer). It is there under `-strict-exit` too. |
 | `results` | What the command printed on stdout: names, web services, map rows. |
 | `counts` | A breakdown of the results, per command. For `run` the counts are disjoint and cover every stored map row: see [run's counts](#run-counts). |

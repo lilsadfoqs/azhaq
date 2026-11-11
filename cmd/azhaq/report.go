@@ -114,6 +114,7 @@ type report struct {
 	warned bool // a note says the results mislead (a role's dead session): exit 3
 	// failedRows, when set, is `failures`: probe counts its rows without an answer.
 	failedRows *int
+	shortSet   bool        // a set that holds only part of what its sources have: complete is false even at exit 0
 	targets    targetTally // the targets the run was given and how many of them got no answer (exit.go)
 
 	noCatchAll bool // run -no-catchall: its rows of the catch-all page are left out of results
@@ -207,7 +208,7 @@ func (r *report) settle() {
 	default:
 		r.Exit = r.decide()
 	}
-	r.Complete = r.Exit == exitOK
+	r.Complete = r.Exit == exitOK && !r.shortSet
 }
 
 // err is the command's result for main: nil, or the exit code the
