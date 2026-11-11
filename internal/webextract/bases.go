@@ -28,11 +28,13 @@ var (
 )
 
 // Bases returns the bases script declares for its HTTP clients.
-func Bases(script string) []Base {
+func Bases(script string) []Base { return bases(script, nil) }
+
+func bases(script string, g Globals) []Base {
 	if !strings.Contains(script, "aseURL") && !strings.Contains(script, "aseUrl") && !strings.Contains(script, "prefixUrl") {
 		return nil
 	}
-	ev := evaluator{src: script}
+	ev := evaluator{src: script, globals: g}
 	var out []Base
 	add := func(expr string, at, end, pos int, client string) {
 		if len(out) >= 64 {
@@ -109,14 +111,14 @@ func JoinBase(base, path string) string {
 // no base by name is joined onto the only base the script declares, and
 // onto none when it declares several. A call to an absolute URL keeps
 // it, as the client does.
-func withBases(script string, calls []Call) []Call {
-	bases := Bases(script)
-	if len(bases) == 0 {
+func withBases(script string, calls []Call, g Globals) []Call {
+	declared := bases(script, g)
+	if len(declared) == 0 {
 		return calls
 	}
 	byClient := map[string]map[string]bool{}
 	all := map[string]bool{}
-	for _, b := range bases {
+	for _, b := range declared {
 		all[b.Value] = true
 		if b.Client != "" {
 			if byClient[b.Client] == nil {
@@ -133,7 +135,7 @@ func withBases(script string, calls []Call) []Call {
 	}
 	for i := range calls {
 		c := &calls[i]
-		if !c.Client || strings.HasPrefix(c.Path, "http") || strings.HasPrefix(c.Path, "//") {
+		if !c.Client || c.Base != "" || strings.HasPrefix(c.Path, "http") || strings.HasPrefix(c.Path, "//") {
 			continue
 		}
 		base := only

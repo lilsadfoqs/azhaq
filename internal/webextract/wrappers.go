@@ -1,6 +1,8 @@
 package webextract
 
 import (
+	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -30,14 +32,15 @@ type shape struct {
 // as the URL.
 type wrapper struct {
 	name      string
-	dotted    bool     // a method or a property: called as x.name(…)
-	urlArg    int      // the parameter that is the URL
-	prefix    string   // what the function puts before it: fetch("/api"+path)
-	method    string   // the method, when the function fixes it
-	verbArg   int      // else the parameter that holds the method, or -1
-	optsArg   int      // else the parameter that holds the request's options, or -1
-	bodyArg   int      // the parameter sent as the body, or -1
-	defaults  []string // each parameter's default, as written, or ""
+	dotted    bool           // a method or a property: called as x.name(…)
+	urlArg    int            // the parameter that is the URL
+	prefix    string         // what the function puts before it: fetch("/api"+path)
+	method    string         // the method, when the function fixes it
+	verbArg   int            // else the parameter that holds the method, or -1
+	optsArg   int            // else the parameter that holds the request's options, or -1
+	bodyArg   int            // the parameter sent as the body, or -1
+	defaults  []string       // each parameter's default, as written, or ""
+	locals    map[int]string // defaults of arguments[i] a function reads without naming it
 	bodyKey   string
 	body      []string
 	query     []string
@@ -199,61 +202,187 @@ func originOnly(ex string) bool {
 }
 
 // wrapperOf is the function around the request at pos when the request's
-// URL ends with one of the function's parameters. names caches which
+// URL ends with one of the function's parameters, directly or through a
+// local set from it (o = Cfg.server + t; u({url: o})). names caches which
 // names are worth following.
-func wrapperOf(script string, pos int, urlEx string, sh shape, names map[string]bool) (wrapper, bool) {
+func wrapperOf(script string, g Globals, pos int, urlEx string, sh shape, names wrapNames) (wrapper, bool) {
 	param, prefixEx, ok := urlParam(urlEx)
 	if !ok {
 		return wrapper{}, false
 	}
-	fn, ok := enclosingFunc(script, pos, param)
+	f, ok := enclosingFunc(script, pos, param, false)
 	if !ok {
-		return wrapper{}, false
+		// A local the function sets from its parameter: o = PREFIX + t.
+		rhs, at, found := evaluator{src: script}.declaredWithin(param, pos, 1200)
+		if !found {
+			return wrapper{}, false
+		}
+		p2, pre2, ok2 := urlParam(rhs)
+		if !ok2 || p2 == param {
+			return wrapper{}, false
+		}
+		if f, ok = enclosingFunc(script, at, p2, true); !ok || !holds(script, f, pos) {
+			return wrapper{}, false
+		}
+		param, prefixEx = p2, pre2
 	}
-	trusted, seen := names[fn.name]
+	if !wrapperName(f.name) {
+		// A minified name: the function is reached by the name it is
+		// stored under (Vue.prototype.request = f).
+		alias, seen := names.stored[f.body]
+		if !seen {
+			alias, _ = storedAs(script, f)
+			names.stored[f.body] = alias
+		}
+		if alias == "" {
+			return wrapper{}, false
+		}
+		f.name, f.dotted = alias, true
+	}
+	trusted, seen := names.trusted[f.name]
 	if !seen {
-		trusted = declaredOnce(script, fn.name)
-		names[fn.name] = trusted
+		trusted = declaredOnce(script, f.name)
+		names.trusted[f.name] = trusted
 	}
 	if !trusted {
 		return wrapper{}, false
 	}
 	// url = API_ROOT + url before the request: the callers' paths go
 	// under that prefix too.
-	inner, at, ok := reassigned(script, fn.body, pos, param)
+	inner, at, ok := reassigned(script, f.body, pos, param)
 	if !ok {
 		return wrapper{}, false
 	}
-	outer, ok1 := prefixValue(script, prefixEx, pos)
-	under, ok2 := prefixValue(script, inner, at)
+	outer, ok1 := prefixValue(script, g, prefixEx, pos)
+	under, ok2 := prefixValue(script, g, inner, at)
 	if !ok1 || !ok2 {
 		return wrapper{}, false
 	}
-	w := wrapper{name: fn.name, dotted: fn.dotted, urlArg: indexOf(fn.params, param), verbArg: -1, optsArg: -1, bodyArg: -1,
-		prefix: joinPath(outer, under), defaults: fn.defaults, method: sh.method, bodyKey: sh.bodyKey,
+	w := wrapper{name: f.name, dotted: f.dotted, urlArg: indexOf(f.params, param), verbArg: -1, optsArg: -1, bodyArg: -1,
+		prefix: joinPath(outer, under), defaults: f.defaults, method: sh.method, bodyKey: sh.bodyKey,
 		body: sh.body, query: sh.query, dataQuery: sh.dataQuery, pageRel: sh.pageRel}
 	if w.bodyKey == "" {
 		w.bodyKey = "body"
 	}
+	// argIndex: a parameter, or a local the function reads from its
+	// arguments with a default (i = arguments.length>2&&void 0!==arguments[2]?arguments[2]:"post").
+	argIndex := func(name string) int {
+		if i := indexOf(f.params, name); i >= 0 {
+			return i
+		}
+		if i, def, ok := argLocal(script, f.body, pos, name); ok {
+			if w.locals == nil {
+				w.locals = map[int]string{}
+			}
+			w.locals[i] = def
+			return i
+		}
+		return -1
+	}
 	switch {
 	case sh.methodEx != "":
-		w.verbArg = indexOf(fn.params, strings.TrimSpace(sh.methodEx))
+		w.verbArg = argIndex(strings.TrimSpace(sh.methodEx))
 	case sh.opts != "":
-		w.optsArg = indexOf(fn.params, strings.TrimSpace(sh.opts))
+		w.optsArg = indexOf(f.params, strings.TrimSpace(sh.opts))
 	}
 	if sh.bodyEx != "" {
-		w.bodyArg = indexOf(fn.params, stripStringify(sh.bodyEx))
+		w.bodyArg = argIndex(bodyParam(sh.bodyEx))
+		if w.bodyArg >= 0 {
+			w.body = nil // what the callers send, not the helper's own object
+		}
 	}
 	return w, true
 }
 
+// holds says the function's body reaches pos.
+func holds(script string, f fn, pos int) bool {
+	if f.body >= len(script) || script[f.body] != '{' {
+		return false
+	}
+	end := closeBlock(script, f.body)
+	return end > pos
+}
+
+// bodyParam is the name a request's body expression passes on:
+// JSON.stringify(e), new URLSearchParams(e), e.
+func bodyParam(ex string) string {
+	ex = stripStringify(ex)
+	if rest, ok := strings.CutPrefix(ex, "new URLSearchParams("); ok && strings.HasSuffix(rest, ")") {
+		ex = strings.TrimSpace(rest[:len(rest)-1])
+	}
+	return ex
+}
+
+var argLocalRE = lazyRE(`(?:\b(?:var|let|const)\s+|,\s*)([A-Za-z_$][\w$]*)\s*=\s*arguments\.length\s*>\s*(\d+)\s*&&\s*void 0\s*!==\s*arguments\[(\d+)\]\s*\?\s*arguments\[(\d+)\]\s*:`)
+
+// argLocal reads a local the function sets from its arguments object:
+// the argument it holds and the default it falls back to.
+func argLocal(script string, body, pos int, name string) (int, string, bool) {
+	if body < 0 || body >= pos {
+		return 0, "", false
+	}
+	for _, m := range argLocalRE.get().FindAllStringSubmatchIndex(script[body:pos], -1) {
+		if script[body+m[2]:body+m[3]] != name {
+			continue
+		}
+		k := script[body+m[4] : body+m[5]]
+		if k != script[body+m[6]:body+m[7]] || k != script[body+m[8]:body+m[9]] {
+			continue
+		}
+		i, err := strconv.Atoi(k)
+		if err != nil {
+			continue
+		}
+		def := topExpr(script[body+m[1]:])
+		return i, def, def != ""
+	}
+	return 0, "", false
+}
+
+// wrapNames caches what is worked out once per script: which function
+// names are worth following, and the name a minified function is stored
+// under, by where its body starts.
+type wrapNames struct {
+	trusted map[string]bool
+	stored  map[int]string
+}
+
+// storedAs is the name a minified function is kept under after it, in
+// its scope: x.prototype.request = f, or {request: f}. The scope runs to
+// the next function of the same name; the name is the only one the
+// function is stored under there, else it is not known.
+func storedAs(script string, f fn) (string, bool) {
+	if f.name == "" || f.body >= len(script) || script[f.body] != '{' {
+		return "", false
+	}
+	end := closeBlock(script, f.body)
+	if end < 0 {
+		return "", false
+	}
+	win := script[end+1:]
+	q := regexp.QuoteMeta(f.name)
+	if i := regexp.MustCompile(`[^\w$.]` + q + `\s*=\s*function|function\s+` + q + `\b`).FindStringIndex(win); i != nil {
+		win = win[:i[0]]
+	}
+	re := regexp.MustCompile(`(?:\.\s*([A-Za-z_$][\w$]*)\s*=|[{,]\s*([A-Za-z_$][\w$]*)\s*:)\s*` + q + `\s*[,;)}]`)
+	alias := ""
+	for _, m := range re.FindAllStringSubmatch(win, 8) {
+		name := m[1] + m[2]
+		if alias != "" && name != alias {
+			return "", false
+		}
+		alias = name
+	}
+	return alias, alias != "" && wrapperName(alias)
+}
+
 // prefixValue is what a prefix expression at pos comes to: "" for none,
 // or for a scheme and host the script does not spell out.
-func prefixValue(script, ex string, pos int) (string, bool) {
+func prefixValue(script string, g Globals, ex string, pos int) (string, bool) {
 	if strings.TrimSpace(ex) == "" {
 		return "", true
 	}
-	ev := evaluator{src: script}
+	ev := evaluator{src: script, globals: g}
 	if v, ok := ev.eval(ex, pos, 0); ok {
 		return v, true
 	}
@@ -331,9 +460,9 @@ func declaredOnce(script, name string) bool {
 		} else if j := skipSpace(script, from); j < len(script) {
 			switch script[j] {
 			case '=':
-				decl = j+1 < len(script) && script[j+1] != '=' && script[j+1] != '>'
+				decl = j+1 < len(script) && script[j+1] != '=' && script[j+1] != '>' && !emptyFunc(script[j+1:])
 			case ':':
-				decl = true
+				decl = !emptyFunc(script[j+1:])
 			case '(':
 				if e := closeParen(script, j); e > 0 {
 					k := skipSpace(script, e+1)
@@ -348,6 +477,13 @@ func declaredOnce(script, name string) bool {
 		}
 	}
 	return n == 1
+}
+
+var emptyFuncRE = lazyRE(`^\s*function\s*[\w$]*\s*\(\s*\)\s*\{\s*\}`)
+
+// emptyFunc: a stub, function(){}, which makes no request.
+func emptyFunc(rest string) bool {
+	return emptyFuncRE.get().MatchString(rest[:min(len(rest), 80)])
 }
 
 // fn is a named function a request sits in.
@@ -371,7 +507,7 @@ type header struct {
 // takes param. Bodies start at a "{" after a parameter list or after
 // "=>": walking back from pos, the first that still contains it is the
 // innermost.
-func enclosingFunc(script string, pos int, param string) (fn, bool) {
+func enclosingFunc(script string, pos int, param string, anyName bool) (fn, bool) {
 	lo := max(0, pos-wrapperReach)
 	for i := pos - 1; i >= lo; i-- {
 		var h header
@@ -384,7 +520,7 @@ func enclosingFunc(script string, pos int, param string) (fn, bool) {
 			h, ok = arrowHeader(script, i-1)
 			body = skipSpace(script, i+1)
 		}
-		if !ok || !wrapperName(h.name) {
+		if !ok || notWrappers[h.name] || !anyName && !wrapperName(h.name) {
 			continue
 		}
 		params := paramNames(h.list)
@@ -608,8 +744,8 @@ func receiverStart(s string, i int) int {
 
 // calls are the requests the script makes through w: one per call of it
 // whose URL argument holds a string the evaluator works out.
-func (w wrapper) calls(script string, relative bool) []Call {
-	ev := evaluator{src: script}
+func (w wrapper) calls(script string, relative bool, g Globals) []Call {
+	ev := evaluator{src: script, globals: g}
 	var out []Call
 	for from := 0; ; {
 		i := strings.Index(script[from:], w.name)
@@ -653,7 +789,14 @@ func (w wrapper) calls(script string, relative bool) []Call {
 		}
 		// As for the request itself: only fetch, XHR and $.ajax take a
 		// path relative to the page; an HTTP client has a base of its own.
-		c, ok := callFrom(joinPath(w.prefix, path), w.methodAt(args), relative && w.pageRel)
+		full := joinPath(w.prefix, path)
+		c, hit, ok := ev.onBase(full, w.methodAt(args))
+		if hit && !ok {
+			continue
+		}
+		if !hit {
+			c, ok = callFrom(full, w.methodAt(args), relative && w.pageRel)
+		}
 		if !ok {
 			continue
 		}
@@ -700,6 +843,9 @@ func (w wrapper) arg(args []string, i int) (string, bool) {
 		return args[i], true
 	case i < len(w.defaults) && w.defaults[i] != "":
 		return w.defaults[i], true
+	}
+	if d, ok := w.locals[i]; ok {
+		return d, true
 	}
 	return "", false
 }

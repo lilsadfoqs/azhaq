@@ -156,7 +156,7 @@ func (f *scanFuture) get() scanned {
 
 // startScan reads s on goroutines; page is the page's URL, appRoot where
 // its router takes paths from.
-func startScan(ctx context.Context, s script, page string, base, appRoot *url.URL) *scanFuture {
+func startScan(ctx context.Context, s script, page string, base, appRoot *url.URL, globals webextract.Globals) *scanFuture {
 	f := &scanFuture{done: make(chan struct{})}
 	var wg sync.WaitGroup
 	run := func(fn func(v *scanned)) {
@@ -200,14 +200,14 @@ func startScan(ctx context.Context, s script, page string, base, appRoot *url.UR
 			ref = appRoot
 		}
 		if !s.inline {
-			for _, c := range webextract.Calls(s.body) {
+			for _, c := range webextract.CallsWith(s.body, globals) {
 				if c, ok := pageRelative(c, ref); ok {
 					v.calls = append(v.calls, c)
 				}
 			}
 			return
 		}
-		for _, c := range webextract.PageCalls(s.body) {
+		for _, c := range webextract.PageCallsWith(s.body, globals) {
 			if c, ok := pageRelative(c, s.url); ok {
 				v.calls = append(v.calls, c)
 			}
@@ -540,9 +540,10 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 	origin := base.Scheme + "://" + base.Host
 	// kick starts reading each script as it joins the queue.
 	started := 0
+	var globals webextract.Globals // what the page's inline scripts set from its location
 	kick := func() {
 		for ; started < len(queue); started++ {
-			queue[started].scan = startScan(ctx, queue[started], raw, base, appRoot)
+			queue[started].scan = startScan(ctx, queue[started], raw, base, appRoot, globals)
 		}
 	}
 	shells := map[string]*fetch.Control{} // script URL → the control its HTML answer matched
@@ -625,9 +626,12 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 			return types.RunMeta{Status: types.StatusOK}, nil
 		}
 		appRoot = webextract.AppRoot(res.Body, base)
+		var texts []string
 		for _, in := range webextract.InlineScriptsAt(res.Body) {
 			queue = append(queue, script{url: base, body: in.Text, inline: true, line: in.Line, col: in.Col})
+			texts = append(texts, in.Text)
 		}
+		globals = webextract.PageGlobals(texts, base)
 		kick()
 		srcs := webextract.ScriptSrcs(res.Body, base)
 		for _, src := range srcs {
@@ -971,6 +975,7 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 	unbased := map[string]string{}                               // the route as named, without the base → that base
 	baseKeys := map[string]bool{}                                // the bases themselves: strings the calls are built on
 	atRoot := map[string]bool{}                                  // routes some call asks without any base
+	asked := map[string]bool{}                                   // routes some script asks, not only holds as a value
 	for _, c := range webextract.MergeCalls(calls) {
 		k, ok := callRoute(c, origin, raw)
 		if !ok {
@@ -993,6 +998,7 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 			callOps[k] = nil
 			opOrder = append(opOrder, k)
 		}
+		asked[k] = asked[k] || !c.Value
 		params[k] = addAll(params[k], c.Query...)
 		body[k] = addAll(body[k], c.Body...)
 		if c.Method == "" {
@@ -1019,6 +1025,9 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 			methods = addAll(methods, op["method"].(string))
 		}
 		row := map[string]any{"url": k, "via": "js-call", "role": "api"}
+		if !asked[k] {
+			row["via"] = "js" // a URL a script holds (uploadUrl: base + "/path"), as a string it names
+		}
 		if len(methods) > 0 {
 			row["methods"], row["ops"] = methods, callOps[k]
 		}
@@ -1038,7 +1047,7 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		if err := emitRow(row, 0.8); err != nil {
 			return meta, err
 		}
-		if gets[k] && !strings.Contains(k, "{") && webextract.Hintable(k) {
+		if (gets[k] || !asked[k]) && !strings.Contains(k, "{") && webextract.Hintable(k) {
 			meta.NextHints = append(meta.NextHints, types.Seed{Type: types.TypeURL, Keys: map[string]string{"url": k}})
 		}
 	}
