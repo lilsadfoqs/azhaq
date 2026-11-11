@@ -415,7 +415,7 @@ func TestCrtshJSONRetriesAGatewayError(t *testing.T) {
 }
 
 func TestRetryReadsBothFormsOfAGatewayError(t *testing.T) {
-	for _, s := range []string{"unexpected status code 502 received from https://crt.sh/json?q=tesla.com", "crt.sh 503", "unexpected status code 504 received from https://crt.sh/json?q=a.b"} {
+	for _, s := range []string{"unexpected status code 502 received from https://crt.sh/json?q=tesla.com", "crt.sh 503", "crt.sh answered 502: Bad Gateway", "unexpected status code 504 received from https://crt.sh/json?q=a.b"} {
 		if !retry(errors.New(s)) {
 			t.Errorf("%q is not asked again", s)
 		}

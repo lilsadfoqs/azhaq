@@ -125,7 +125,7 @@ func pd(newSource func() subscraping.Source, perSec float64) source {
 					names = append(names, r.Value)
 				case subscraping.Error:
 					if r.Error != nil && len(errs) < 3 {
-						errs = append(errs, r.Error.Error())
+						errs = append(errs, withWords(ctx, r.Error.Error()))
 					}
 				}
 			}
@@ -551,7 +551,7 @@ func crtshJSON(ctx context.Context, domain string, sess *subscraping.Session) ([
 	}
 	var err error
 	for attempt, wait := 0, crtshRetryWait; attempt < crtshAttempts; attempt, wait = attempt+1, wait*2 {
-		if err = getJSON(ctx, sess, "crtsh", u, nil, &rows); err == nil || !retry(err) {
+		if err = getJSON(withOwnRetries(ctx), sess, "crtsh", u, nil, &rows); err == nil || !retry(err) {
 			break
 		}
 		// crt.sh is often down for a while: a few retries, as many as the
@@ -589,8 +589,8 @@ var crtshRetryWait = time.Second
 
 // gatewayRE reads the status code of a failed answer in the two forms the
 // requests give it: subfinder's "unexpected status code 502 received from
-// URL" and getJSON's "host 502".
-var gatewayRE = lazyre.New(`(?:status code|\s)(50[0234])(?:\s+received from|$)`)
+// URL", getJSON's "host 502" and "host answered 502: the server's words".
+var gatewayRE = lazyre.New(`(?:status code|\s)(50[0234])(?::|\s+received from|$)`)
 
 // retry: crt.sh's gateway errors and dropped connections pass (a 429 is
 // waited out in the transport).
@@ -715,6 +715,9 @@ func getJSON(ctx context.Context, sess *subscraping.Session, name, u string, hea
 	resp, err := sess.Get(ctx, u, "", headers)
 	if err != nil {
 		sess.DiscardHTTPResponse(resp)
+		if w := withWords(ctx, err.Error()); w != err.Error() {
+			return errors.New(w)
+		}
 		return err
 	}
 	defer resp.Body.Close()
