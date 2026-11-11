@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -198,9 +199,12 @@ func TestURLsArchiveThatFailsMidwayIsPartial(t *testing.T) {
 func TestURLsLiveVerifiesAtAStatedRate(t *testing.T) {
 	t.Chdir(t.TempDir())
 	flags := recordedArchives(t, "")
+	var mu sync.Mutex
 	var seen []string
 	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
 		seen = append(seen, r.URL.String())
+		mu.Unlock()
 		switch {
 		case strings.HasSuffix(r.URL.Path, "/b"):
 			http.NotFound(w, r)
@@ -232,6 +236,8 @@ func TestURLsLiveVerifiesAtAStatedRate(t *testing.T) {
 	if r := rows["http://example.org/otx"]; r.Verified == nil || *r.Verified || r.VerifyErr == "" {
 		t.Errorf("a host with no answer: %+v", r)
 	}
+	mu.Lock()
+	defer mu.Unlock()
 	for _, u := range seen {
 		if strings.Contains(u, "union") {
 			t.Errorf("a junk URL was sent: %s", u)
