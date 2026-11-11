@@ -335,3 +335,79 @@ func keysOf(m map[string]bool) []string {
 	sort.Strings(out)
 	return out
 }
+
+// A page the map folds into a templated row (/redirect?to={v}) is streamed
+// as that row, once, under its template key: no member of it is a key of the
+// stream, and the stream's keys are the map's. A lone templated page is no
+// fold and keeps its own key.
+func TestStreamTemplatedRowIsStreamedAsItsTemplateOnce(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		switch r.URL.Path {
+		case "/":
+			fmt.Fprint(w, `<html><title>home</title><a href="/redirect?to=a">a</a> <a href="/redirect?to=b">b</a> <a href="/redirect?to=c">c</a> <a href="/about">about</a> <a href="/item?id=7">item</a></html>`)
+		case "/redirect", "/about", "/item":
+			fmt.Fprint(w, `<html><title>`+r.URL.Path+`</title></html>`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	u, _ := url.Parse(srv.URL)
+	tmpl := srv.URL + "/redirect?to={v}"
+	for _, asJSON := range []bool{true, false} {
+		t.Chdir(t.TempDir())
+		args := []string{"run", "-url", srv.URL + "/", "-allow", "127.0.0.1:" + u.Port(), "-sources", "none", "-no-paths", "-stream", "-db", "s.db"}
+		if asJSON {
+			args = append(args, "-json")
+		}
+		stdout, _, code := cli(t, args...)
+		if code != exitOK {
+			t.Fatalf("json=%v: exit %d", asJSON, code)
+		}
+		streamed, mapped := map[string]int{}, map[string]bool{}
+		if asJSON {
+			for _, r := range jsonRows(t, stdout) {
+				key, _ := r["key"].(string)
+				if r["type"] == "found" {
+					streamed[key]++
+					if key == tmpl && r["status"] != float64(200) {
+						t.Errorf("the template row's line lacks the map row's status: %v", r)
+					}
+				} else {
+					mapped[key] = true
+				}
+			}
+		} else {
+			for _, l := range strings.Split(stdout, "\n") {
+				if f := strings.Fields(l); len(f) >= 3 && f[0] == "found" {
+					streamed[f[2]]++
+				}
+			}
+			mapped[tmpl], mapped[srv.URL+"/"], mapped[srv.URL+"/about"], mapped[srv.URL+"/item?id=7"] = true, true, true, true
+		}
+		if !mapped[tmpl] {
+			t.Fatalf("json=%v: the map has no row %s: %v", asJSON, tmpl, mapped)
+		}
+		for k, n := range streamed {
+			if n != 1 {
+				t.Errorf("json=%v: %s was streamed %d times", asJSON, k, n)
+			}
+			if strings.Contains(k, "/redirect?to=") && k != tmpl {
+				t.Errorf("json=%v: a member of the templated row was streamed: %s", asJSON, k)
+			}
+		}
+		if streamed[tmpl] != 1 {
+			t.Errorf("json=%v: the template row was streamed %d times: %v", asJSON, streamed[tmpl], streamed)
+		}
+		if asJSON {
+			sets := map[string]bool{}
+			for k := range streamed {
+				sets[k] = true
+			}
+			if !equalSets(sets, mapped) {
+				t.Errorf("the stream keys %v are not the map keys %v", keysOf(sets), keysOf(mapped))
+			}
+		}
+	}
+}
