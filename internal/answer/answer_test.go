@@ -70,3 +70,24 @@ func TestScreenKeepsTheBody(t *testing.T) {
 		rc.Close()
 	}
 }
+
+func TestWordsQuotesTheBodyOfAFailedAnswer(t *testing.T) {
+	for body, want := range map[string]string{
+		`{"error": "server busy (64 queries in flight)"}`:                "server busy (64 queries in flight)",
+		`{"message":"Service busy, try later"}`:                          "Service busy, try later",
+		"Service busy, try later\n":                                      "Service busy, try later",
+		"<html><head><title>429 Too Many Requests</title></head></html>": `an HTML page titled "429 Too Many Requests"`,
+		"<html><head><title>Oops</title></head><body>Down</body></html>": "Oops",
+		"<html><body><h1>Bad  Gateway</h1></body></html>":                "Bad Gateway",
+		`{"detail":{"code":"busy"}}`:                                     "busy",
+		"":                                                               "",
+		"   \n":                                                          "",
+	} {
+		if got := Words([]byte(body)); got != want {
+			t.Errorf("%q: %q, want %q", body, got, want)
+		}
+	}
+	if got := Words([]byte(strings.Repeat("slow ", 100))); len(got) > 170 || !strings.HasSuffix(got, "…") {
+		t.Errorf("a long body is clipped: %d %q", len(got), got)
+	}
+}

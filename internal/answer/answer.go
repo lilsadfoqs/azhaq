@@ -63,6 +63,39 @@ func Reason(body []byte) string {
 	return clip(why)
 }
 
+// Words reads the first words of the body of a non-2xx answer, as the
+// server wrote them: a JSON error's message, an HTML page's title or text,
+// or the plain text, one line, clipped. "" when the body holds none. The
+// status says the answer is a failure, so no body is too ordinary to quote.
+func Words(body []byte) string {
+	b := bytes.TrimSpace(body)
+	if len(b) == 0 {
+		return ""
+	}
+	if len(b) > MaxBody {
+		b = b[:MaxBody]
+	}
+	if why := Reason(b); why != "" {
+		return why
+	}
+	switch b[0] {
+	case '{', '[':
+		var v json.RawMessage
+		if json.Unmarshal(b, &v) == nil {
+			return clip(valueText(v))
+		}
+		return ""
+	case '<':
+		if m := titleRE.FindSubmatch(b); m != nil {
+			if t := clip(string(m[1])); t != "" {
+				return t
+			}
+		}
+		return clip(tagRE.ReplaceAllString(string(b), " "))
+	}
+	return clip(string(b))
+}
+
 // emptyAnswer is how a server says it holds nothing: not a failure.
 var emptyAnswer = lazyre.New(`(?i)\bno (captures|results?|records?|data|matches|subdomains|urls|entries|hosts)\b|\bnot found\b|\bnothing found\b`)
 

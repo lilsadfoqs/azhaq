@@ -205,12 +205,15 @@ The workspace keeps a status for each source, shown by `azhaq show` and held in 
 | `skipped` | Why it did not run. |
 | `partial` | What the source says about its own answer. Cert Spotter without a key reads the first page only. |
 | `rate_limited` | Set with `retried_429`, `waited_seconds`, `retry_after_seconds` and `gave_up_429` when the source answered 429. |
+| `retried_5xx`, `gave_up_5xx` | Set, with `waited_seconds`, when the source answered a 500, 502, 503 or 504 (or another 5xx but 501 and 505): the requests sent again, and that it still failed after the retries. |
 | `rounds` | For subdomain.center, per call: names given, how many were new, looked up, and resolved with no other source having them, and the seconds. |
 | `kept`, `dropped_unresolved`, `unverified`, `checked_seconds` | From `-live` runs, for the sources whose names are checked. |
 | `sampling_stopped` | For subdomain.center: why it stopped asking for more samples. `sampling_bounded` is `true` when the reason was a bound (the most samples, the budget for further samples, or its time), not that nothing more was to be had; `sample_ceiling` is the most samples it could take. |
 | `"default": false` | The source ran only because of `-all-sources`. |
 
 A source that answered 429 is asked again after its `Retry-After`, up to three times and 30 s each. One that asks for longer, or keeps refusing, is not waited for.
+
+A source that answers a 5xx (a 500, 502, 503 or 504, such as subdomain.center's `503 {"error": "server busy (64 queries in flight)"}`) is asked again the same way: after its `Retry-After` or after 2, 4 and 8 s, up to three times, and never past the source's time (`-source-timeout`). A 501 or 505 is not asked again. When a source still fails, its reason carries the status and the first words of the server's body, such as `api.subdomain.center answered 503: server busy (64 queries in flight)`, so a failed source says why it gave nothing.
 
 ### Name history
 Passive sources answer differently each run. subdomain.center, for one, returns a random sample of its names on each call. So `subs` keeps what it found.
