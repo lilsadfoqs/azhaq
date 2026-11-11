@@ -1723,6 +1723,8 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 			rep.Stopped = fmt.Sprintf("-max-names %d reached, %d guesses not asked (azhaq resume asks them)", *maxNames, n)
 		}
 	}
+	// What resume -retry-failed asks again of the sweeps this run left unrecorded.
+	_ = st.SetMeta(sweepsKey(st.RunID()), strings.Join(rep.unrecordedSweeps(), "\n"))
 	if !out.embedded && rep.Command == "run" && len(opts.Ports) > 0 {
 		if obs, err := st.Observations(); err == nil {
 			if scanned, open := portAddresses(obs); scanned > 0 {

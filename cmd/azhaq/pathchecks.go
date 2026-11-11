@@ -9,6 +9,7 @@ import (
 
 	"github.com/lilsadfoqs/azhaq/engine"
 	"github.com/lilsadfoqs/azhaq/internal/collectors/pathscol"
+	"github.com/lilsadfoqs/azhaq/store"
 	"github.com/lilsadfoqs/azhaq/types"
 )
 
@@ -136,12 +137,25 @@ func pathCheckNotes(cs []pathCheck) []string {
 	return out
 }
 
-// failUnrecordedSweeps fails closed: a sweep the run listed that left no
-// record, with no stop to explain it, is a failure that makes the run
-// incomplete (exit 3). A stopped run has the work left to resume instead.
-func (r *report) failUnrecordedSweeps() {
+// unrecorded says the sweep was listed and left no record, and did not fail
+// or wait for azhaq resume.
+func (c pathCheck) unrecorded() bool {
+	return c.Sent == nil && !c.left && !strings.HasPrefix(c.Reason, "its sweep failed")
+}
+
+// sweepNoRecord is the error of a listed sweep that left no record.
+const sweepNoRecord = "its sweep left no record, and no limit stopped the run: it did not run"
+
+// sweepsKey is the meta key holding the services of a run whose sweep was
+// listed and left no record (one per line): azhaq resume -retry-failed asks
+// them again.
+func sweepsKey(run string) string { return "sweeps:" + run }
+
+// unrecordedSweeps are the services whose listed sweep left no record, with
+// no stop to explain it. A stopped run has the work left to resume instead.
+func (r *report) unrecordedSweeps() []string {
 	if r.Stopped != "" {
-		return
+		return nil
 	}
 	named := map[string]bool{}
 	for _, f := range r.Failed {
@@ -151,16 +165,34 @@ func (r *report) failUnrecordedSweeps() {
 			}
 		}
 	}
+	var out []string
 	for _, c := range r.PathChecks {
-		if c.Sent != nil || c.left || named[c.Service] || strings.HasPrefix(c.Reason, "its sweep failed") {
-			continue
+		if c.unrecorded() && !named[c.Service] {
+			out = append(out, c.Service)
 		}
+	}
+	return out
+}
+
+// failUnrecordedSweeps fails closed: an unrecorded sweep is a failure that
+// makes the run incomplete (exit 3).
+func (r *report) failUnrecordedSweeps() {
+	for _, svc := range r.unrecordedSweeps() {
 		r.Failed = append(r.Failed, engine.Failure{
-			Collector: pathscol.Name, Error: "its sweep left no record, and no limit stopped the run: it did not run",
-			Retryable: true, Count: 1, Targets: []string{c.Service},
+			Collector: pathscol.Name, Error: sweepNoRecord, Retryable: true, Count: 1, Targets: []string{svc},
 		})
 		r.warned = true
 	}
+}
+
+// storedSweeps are the services the run left with an unrecorded sweep, as
+// the run recorded them at its end; resume asks them again (engine.RetryTasks).
+func storedSweeps(st *store.Store, run string) []engine.FailedTarget {
+	var out []engine.FailedTarget
+	for _, svc := range strings.Fields(st.GetMeta(sweepsKey(run))) {
+		out = append(out, engine.FailedTarget{Target: svc, Collector: pathscol.Name, Error: sweepNoRecord, Retryable: true})
+	}
+	return out
 }
 
 // leftOrigins are the web services with a URL among the work a run left

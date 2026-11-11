@@ -451,10 +451,16 @@ func fillReport(rep *report, path string, seeds []types.Seed, ents []types.Entit
 	rep.DB = path
 	rep.Failed = engine.MarkPartial(engine.MarkFanout(engine.Failures(ents, obs), seeds), ents, obs)
 	rep.Skipped = append(rep.Skipped, engine.Skips(ents, obs)...)
+	rep.PathChecks = pathChecks(obs, rep.pathList, failedPaths(rep.Failed), rep.leftOrigins)
 	if n := len(retried); n > 0 {
 		now := map[string]bool{}
 		for _, f := range engine.FailedTargets(ents, obs) {
 			now[f.Collector+"\x00"+f.Target] = true
+		}
+		for _, c := range rep.PathChecks {
+			if c.unrecorded() {
+				now[pathscol.Name+"\x00"+c.Service] = true // a sweep asked again that still left no record
+			}
 		}
 		still := 0
 		for _, f := range retried {
@@ -484,7 +490,6 @@ func fillReport(rep *report, path string, seeds []types.Seed, ents []types.Entit
 	rep.Notes = append(rep.Notes, portcol.StoppedNotes()...)
 	rep.Notes = append(rep.Notes, engine.GraphQLNotes(obs)...)
 	rep.Notes = append(rep.Notes, pathscol.Notes(obs)...)
-	rep.PathChecks = pathChecks(obs, rep.pathList, failedPaths(rep.Failed), rep.leftOrigins)
 	rep.Notes = append(rep.Notes, pathCheckNotes(rep.PathChecks)...)
 	if notes, loose := dirscol.Notes(obs); len(notes) > 0 {
 		rep.Notes = append(rep.Notes, notes...)
