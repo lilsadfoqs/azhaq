@@ -164,7 +164,7 @@ func signInCanaries(roles []role, picked map[string]*canary, signed map[string]b
 	fetch.Reset()
 	defer fetch.Reset()
 	egress.SetRate(rate)
-	egress.SetTargetProxy(rolesProxy)
+	rolesEgress()
 	egress.SetScope(func(h string) bool { return own[normalize.Hostname(h)] })
 	holdDeny()
 	anon := http.Header{}
@@ -313,6 +313,9 @@ func renewer(roles []role, loginURL string, quiet bool, left func() int64) func(
 			base.Del("Cookie")
 			base.Del("Authorization")
 			fetch.Reset()
+			if rolesResolvers != nil {
+				rolesResolvers()
+			}
 			if left != nil {
 				if left() == 0 {
 					return fmt.Errorf("the sign-in was not made: %w", neterr.ErrBudget)
@@ -373,7 +376,7 @@ type roleReplay struct {
 func (rr *roleReplay) setup() {
 	fetch.Reset()
 	egress.SetRate(rr.rate)
-	egress.SetTargetProxy(rolesProxy)
+	rolesEgress()
 	own := rr.own
 	egress.SetScope(func(h string) bool { return own[normalize.Hostname(h)] })
 	holdDeny()

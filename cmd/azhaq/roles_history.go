@@ -492,7 +492,7 @@ func readHistoryURLs(r role, urls []string, got map[string]answer, raw map[strin
 	fetch.Reset()
 	defer fetch.Reset()
 	egress.SetRate(rate)
-	egress.SetTargetProxy(rolesProxy)
+	rolesEgress()
 	egress.SetScope(func(h string) bool { return own[normalize.Hostname(h)] })
 	holdDeny()
 	fetch.Extra = r.session.Clone()

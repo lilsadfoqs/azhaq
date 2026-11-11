@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/lilsadfoqs/azhaq/internal/browser"
+	"github.com/lilsadfoqs/azhaq/internal/dnsr"
 	"github.com/lilsadfoqs/azhaq/internal/egress"
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
 	"github.com/lilsadfoqs/azhaq/internal/lazyre"
@@ -32,6 +33,19 @@ import (
 
 // rolesProxy is the runs' -proxy, which the requests between them use too.
 var rolesProxy *url.URL
+
+// rolesResolvers puts the runs' -resolvers in force again: fetch.Reset drops
+// them, and a renewal's sign-in must resolve names as the runs did.
+var rolesResolvers func()
+
+// rolesEgress sends the requests between the runs as the runs sent theirs:
+// through their -proxy, to the addresses their -resolvers give.
+func rolesEgress() {
+	egress.SetTargetProxy(rolesProxy)
+	if rolesResolvers != nil {
+		rolesResolvers()
+	}
+}
 
 // role is one session: a name and the headers its requests carry, or the
 // account it signs in with. A role with neither is anonymous.
@@ -415,8 +429,8 @@ func cmdRoles(args []string) error {
 	bodies = newBodyKeep()
 	defer func() { bodies = nil }()
 	rate := *rateFlag
-	rolesProxy = nil
-	defer func() { rolesProxy = nil }()
+	rolesProxy, rolesResolvers = nil, nil
+	defer func() { rolesProxy, rolesResolvers = nil, nil }()
 	if *proxyFlag != "" {
 		pu, err := parseProxy(*proxyFlag)
 		if err != nil {
@@ -440,6 +454,10 @@ func cmdRoles(args []string) error {
 		}
 		if r, _ := strconv.ParseFloat(fs.Lookup("rate").Value.String(), 64); r > 0 {
 			rate = r
+		}
+		if rs, err := dnsr.ParseResolvers(fs.Lookup("resolvers").Value.String()); err == nil {
+			dnsRate, _ := strconv.ParseFloat(fs.Lookup("dns-rate").Value.String(), 64)
+			rolesResolvers = func() { useResolvers(rs, dnsRate) }
 		}
 		// The replay goes through the runs' proxy too, as every request does.
 		if v := fs.Lookup("proxy").Value.String(); v != "" {
@@ -672,7 +690,7 @@ func cmdRoles(args []string) error {
 		// answers it alike answers anything.
 		fetch.Reset()
 		egress.SetRate(rate)
-		egress.SetTargetProxy(rolesProxy)
+		rolesEgress()
 		holdDeny()
 		bud, byCmd := stageBudget(*replayMax - replayed)
 		endStage := ledger.SetStage(stageControls)
@@ -734,7 +752,7 @@ func cmdRoles(args []string) error {
 				// made-up identifier too, as every cross read is.
 				fetch.Reset()
 				egress.SetRate(rate)
-				egress.SetTargetProxy(rolesProxy)
+				rolesEgress()
 				holdDeny()
 				bud, byCmd := stageBudget(*replayMax - replayed)
 				endStage := ledger.SetStage(stageControls)
