@@ -159,6 +159,7 @@ func startRunToFile(t *testing.T, file string, args []string) (stderr string, co
 // things stand in for what the reader has: the host, the tokens and the
 // advisory file; -rate and the port list are made quick and local.
 func TestStartPageCommandsRun(t *testing.T) {
+	useBuiltinIndex(t)
 	shop := startShop(t)
 	u, _ := url.Parse(shop.URL)
 	t.Chdir(t.TempDir())
@@ -202,7 +203,8 @@ func TestStartPageCommandsRun(t *testing.T) {
 			"azhaq run -url https://app.example.com/ -allow app.example.com -max-requests": {"azhaq run: ", "map rows", "note: ledger: "},
 			"azhaq roles -dir": {"azhaq roles: ", "endpoints listed"},
 			"azhaq roles show": {"curl"},
-			"azhaq run -url https://app.example.com/ -ports top-100 -advisories -advisory-source": {"advisory: nginx 1.18.0", "note: advisories: "},
+			"azhaq run -url https://app.example.com/ -ports top-100 -allow":              {"advisory: nginx 1.18.0", "note: advisories: "},
+			"azhaq run -url https://app.example.com/ -ports top-100 -advisories-confirm": {"advisory: nginx 1.18.0", "CVE-TEST-0001", "note: advisories: "},
 			"azhaq ledger -verify": {"the chain is intact and sealed"},
 		} {
 			if !strings.HasPrefix(l, cmd) {

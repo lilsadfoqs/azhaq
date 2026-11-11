@@ -442,9 +442,6 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	if err := advFlags.check(); err != nil {
 		return err
 	}
-	if advFlags.on && out.plan {
-		return usagef("-advisories matches what a run confirmed: a plan sends nothing and confirms nothing to match, so run without plan")
-	}
 	if err := scope.CompilePaths(denyPath); err != nil {
 		return usagef("%v", err)
 	}
@@ -1286,6 +1283,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		send.dirsHeld = dirscol.HeldWords(opts.Dirs.Words, opts.Dirs.Extensions)
 	}
 	send.verify = verifyFl.on
+	send.advisories = advisoryPlan(advFlags)
 	send.hostGuesses = *hostGuesses
 	send.paramsWords, send.paramsPages = len(opts.Params.Words), *paramsPerHost
 	// The GETs among the targets whose own name declares a state change

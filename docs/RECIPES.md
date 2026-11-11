@@ -25,14 +25,14 @@ azhaq roles show -dir DIR URL
 
 More: [Find IDOR and BOLA with two accounts](#find-idor-and-bola-with-two-accounts). Flags: [`roles`](commands/roles.md).
 
-**Verify a service.** Map it with its ports, and match what it reports against the advisory records of a source you give. A match is a lead with its label; `-advisories-confirm` adds the one read-only request each lead names.
+**Verify a service.** Map it with its ports, and what it reports is matched against the advisory index azhaq carries, with no flag. A match is a lead with its label; `-advisories-confirm` adds the one read-only request each lead names, and `-advisory-source` adds records of your own. `-advisories=false` turns the matching off. A lead says a version lies in a range the records list, not that the service is exploitable; a distribution's backport keeps the old version number, so read the lead against the package.
 
 ```
-azhaq run -url https://app.example.com/ -ports top-100 -advisories -advisory-source osv.json -allow app.example.com -db app.db
-azhaq run -url https://app.example.com/ -ports top-100 -advisories -advisories-confirm -advisory-source osv.json -allow app.example.com -db app.db
+azhaq run -url https://app.example.com/ -ports top-100 -allow app.example.com -db app.db
+azhaq run -url https://app.example.com/ -ports top-100 -advisories-confirm -advisory-source osv.json -allow app.example.com -db app.db
 ```
 
-More: [Known-issue matching](CONCEPTS.md#known-issue-matching--advisories). Flags: [`run`](commands/run.md).
+More: [Known-issue matching](CONCEPTS.md#known-issue-matching--advisories), with how to refresh the index. Flags: [`run`](commands/run.md).
 
 **Hand over findings.** Write each finding up, export the map, and give the client the list of what was sent.
 

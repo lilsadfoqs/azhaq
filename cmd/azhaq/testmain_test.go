@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/lilsadfoqs/azhaq/internal/advisory"
 	"github.com/lilsadfoqs/azhaq/internal/collectors/subcol"
 )
 
@@ -25,6 +26,10 @@ func TestMain(m *testing.M) {
 		}
 		main() // a test that needs the process, with its real stderr, runs this binary again
 	}
+	// The tests of a lead's labels and counts match the records they bring: the
+	// built-in index is empty for them, and a test of the index asks for the
+	// real one (useBuiltinIndex).
+	advisory.SetBuiltin(advisory.NewIndex(advisory.IndexMeta{Generator: advisory.IndexGenerator, Built: "test"}, nil))
 	dir, err := os.MkdirTemp("", "azhaq-test-data-")
 	if err != nil {
 		panic(err)

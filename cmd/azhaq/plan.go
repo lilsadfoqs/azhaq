@@ -59,6 +59,7 @@ type runPlan struct {
 	Paths      []string          `json:"builtin_paths,omitempty"`
 	Limits     map[string]string `json:"limits"`
 	Sends      []string          `json:"sends"`
+	Advisories string            `json:"advisories"` // the advisory index the run matches with: "advisory index DATE (N records)", or off
 	Requests   planRequests      `json:"requests"`
 	Estimate   costEstimate      `json:"estimate"`       // what the run would send, by stage
 	AXFR       []planAXFR        `json:"axfr,omitempty"` // -axfr: the zone transfers dns -axfr would try
@@ -163,10 +164,11 @@ type sendLimits struct {
 	dirsHeld  int
 	dirsHold  bool // the built-in -dirs words that declare a state change are held back
 	// What the ceilings are counted with.
-	portPasses    int  // the most times a port is asked: 1, and one more for each pass over the silent ones
-	portNameAddrs int  // the most addresses of a name that are scanned; 0: every one it has
-	dirsDepth     int  // -dirs-depth
-	paramsWrites  bool // -params-writes
+	portPasses    int    // the most times a port is asked: 1, and one more for each pass over the silent ones
+	portNameAddrs int    // the most addresses of a name that are scanned; 0: every one it has
+	dirsDepth     int    // -dirs-depth
+	paramsWrites  bool   // -params-writes
+	advisories    string // what the run matches the services it confirms with (see advisoryPlan)
 }
 
 // planSends are the lines on what a run sends besides the GET requests for
@@ -261,6 +263,7 @@ func planSends(b engine.Budgets, send sendLimits) (gets, others []string) {
 
 func buildPlan(cat *catalog.Catalog, seeds []types.Seed, b engine.Budgets, paths []string, limits map[string]string, send sendLimits, rep *report) runPlan {
 	p := planFor(cat, seeds, b, paths, limits, send, rep)
+	p.Advisories = send.advisories
 	if send.axfr {
 		p.AXFR, p.Sends = planTransfers(seeds, b, send.resolvers), append(p.Sends, "-axfr (azhaq dns): "+axfrSummary(b))
 	}
@@ -544,6 +547,9 @@ func printPlanText(w io.Writer, p runPlan) {
 	fmt.Fprintf(w, "limits: %s\n", strings.Join(lim, ", "))
 	for _, s := range p.Sends {
 		fmt.Fprintf(w, "sends: %s\n", s)
+	}
+	if p.Advisories != "" {
+		fmt.Fprintf(w, "advisories: %s\n", p.Advisories)
 	}
 	printRequests(w, p)
 	printEstimate(w, "estimate: ", p.Estimate)

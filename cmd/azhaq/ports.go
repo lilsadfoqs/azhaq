@@ -331,8 +331,12 @@ func cmdPorts(args []string) error {
 	if escalating && exSpec != "" {
 		run = append(run, "-port-skip", exSpec)
 	}
-	if advFlags.on {
-		run = append(run, "-advisories", "-advisory-source="+advFlags.source)
+	if !advFlags.on {
+		run = append(run, "-advisories=false")
+	} else {
+		if advFlags.source != "" {
+			run = append(run, "-advisory-source="+advFlags.source)
+		}
 		if advFlags.confirm {
 			run = append(run, "-advisories-confirm")
 		}

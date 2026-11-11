@@ -323,11 +323,14 @@ func TestAdvisoryStageBadSourceFails(t *testing.T) {
 	if leads != nil || len(failures) != 1 {
 		t.Fatalf("leads %v failures %v, want one failure and no leads", leads, failures)
 	}
-	if err := (advisoryFlags{on: true, confirm: true}).check(); err == nil {
-		t.Error("-advisories-confirm without a source checked clean")
+	if err := (advisoryFlags{on: true, confirm: true}).check(); err != nil {
+		t.Errorf("-advisories-confirm needs no source of yours: the built-in index is one: %v", err)
 	}
 	if err := (advisoryFlags{confirm: true, source: "x.json"}).check(); err == nil {
 		t.Error("-advisories-confirm without -advisories checked clean")
+	}
+	if err := (advisoryFlags{source: "x.json"}).check(); err == nil {
+		t.Error("-advisory-source with -advisories=false checked clean")
 	}
 }
 

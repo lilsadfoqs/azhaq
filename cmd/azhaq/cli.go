@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/lilsadfoqs/azhaq/internal/advisory"
 	"github.com/lilsadfoqs/azhaq/internal/neterr"
 	"io"
 	"os"
@@ -748,9 +749,19 @@ func cmdVersion(args []string) error {
 		return err
 	}
 	if *asJSON {
-		return json.NewEncoder(os.Stdout).Encode(map[string]string{"version": version, "go": runtime.Version(), "os": runtime.GOOS, "arch": runtime.GOARCH})
+		out := map[string]any{"version": version, "go": runtime.Version(), "os": runtime.GOOS, "arch": runtime.GOARCH}
+		if m, err := advisory.BuiltinMeta(); err == nil {
+			out["advisory_index"] = map[string]any{"date": m.Built, "records": m.Records, "sources": m.Sources, "generator": m.Generator}
+		}
+		return json.NewEncoder(os.Stdout).Encode(out)
 	}
 	fmt.Printf("azhaq %s\n", version)
+	if m, err := advisory.BuiltinMeta(); err == nil {
+		fmt.Printf("%s\n", m.Label())
+		for _, src := range m.Sources {
+			fmt.Printf("  %s, %s\n", src.Name, src.Date)
+		}
+	}
 	return nil
 }
 
