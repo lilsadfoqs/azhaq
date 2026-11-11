@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.21.0
+
+### Changed
+
+- The default run home is `./.azhaq` in the working directory instead of `~/.azhaq`, so each folder keeps its own runs; `AZHAQ_HOME=~/.azhaq` gives back the machine-wide home and `-home DIR` reads another folder's. A run that cannot make its home fails before it sends anything, naming `-db` and `AZHAQ_HOME`.
+
+### Fixed
+
+- The `urls` summary has `complete: false` when an archive failed after giving URLs (it is in `partial_sources`), as the docs say; the exit code is unchanged.
+- `ports` exits 2 with `every target is outside the scope` when `-allow HOST:PORT` leaves out every port it would ask, before anything is sent; a scan whose scope held some ports out no longer counts them as asked or suggests `-p full`.
+- `probe -p` gives a name with no address a failed row for each port, and `failures` counts them.
+- With no `-allow` and no `-scope`, a URL target named with a port holds its host to that port: a link, a script's URL, a redirect or Chrome on another port of that host is not requested and is listed under `skipped`; a URL on the default port holds the host to 80 and 443, and a bare name or address keeps every port.
+- `subs -live` counts guesses and names only a wildcard answered as `wildcard answers left out`, with a note naming the wildcard, not as `did not resolve`.
+- A `watch` interrupted by a signal during a cycle ends stopped with exit 4, naming the cycle; the notification the signal cut is reported as not sent, not as a failed delivery.
+
 ## v0.20.0
 
 ### Fixed
