@@ -262,6 +262,7 @@ docs-mcp.default-sources	docs/MCP.md	Without `-resolvers` a map asks the default
 docs-output.exit-1	docs/OUTPUT.md	The command could not do its job: a database it cannot open, or Chrome missing for `-browser`.	test:internal/contract:TestExitOneIsACommandThatCouldNotDoItsJob
 docs-output.exit-2-outside-scope	docs/OUTPUT.md	The targets are all outside the scope given	test:internal/contract:TestExitCodeFollowsTheOutcome;test:cmd/azhaq:TestPortsSweepNeedsARange
 docs-output.exit-2-message-names-them	docs/OUTPUT.md	The message names them. A range that no allow rule touches counts. `ports` and `dns` say it too.	test:cmd/azhaq:TestDNSStopsWithAnExitAndSaysWhereToGoOn
+docs-output.exit-2-ports-allow-other-port	docs/OUTPUT.md	For `ports`, a host that `-allow` names only with other ports (`-allow HOST:PORT`) is outside for every port asked.	test:cmd/azhaq:TestPortsEveryPortOutsideAllowIsUsage
 docs-output.exit-2-header-host	docs/OUTPUT.md	A header names a host (`Host`, `X-Forwarded-Host`, `X-Host`, `X-Original-Host`) outside a scope rule.	test:cmd/azhaq:TestHostHeaderOutsideScopeIsRefusedByEveryCommand,TestHostHeaderOtherPortIsRefusedByEveryCommand
 docs-output.exit-2-chrome-sandbox	docs/OUTPUT.md	Chrome would start without its sandbox, because the system gives it none	test:cmd/azhaq:TestChromeIsNotRunWithoutItsSandboxUnlessAllowed
 docs-output.exit-2-nothing-sent	docs/OUTPUT.md	Nothing was sent.	test:internal/contract:TestExitCodeFollowsTheOutcome;test:cmd/azhaq:TestChromeIsNotRunWithoutItsSandboxUnlessAllowed
@@ -980,6 +981,7 @@ probe.target-ends	docs/commands/probe.md	Every target given ends as a row, a fai
 probe.never-one-and-no-answer	docs/commands/probe.md	It is never one answer and a `no answer` for the others.	test:cmd/azhaq:TestProbeOneRowPerInput
 probe.own-port	docs/commands/probe.md	Without `-p`, a URL or `host:port` is asked once, on its own port.	test:cmd/azhaq:TestProbePortsReplaceTheInputsPort,TestProbeAsksOnlyWhatIsGiven
 probe.p-replaces-port	docs/commands/probe.md	`-l 127.0.0.1:3001 -p 5002` asks `http://127.0.0.1:5002/` only, and the row's `port` is `5002`.	test:cmd/azhaq:TestProbePortsReplaceTheInputsPort
+probe.dead-name-row-per-port	docs/commands/probe.md	A bare name that has no address is a failed row for each port of `-p`, and `failures` counts each of them.	test:cmd/azhaq:TestProbeDeadNameFailsOnEveryPort
 probe.path-join	docs/commands/probe.md	One slash goes between the two paths, a path that already ends with the other, or starts with it, is not repeated, the URL's query is kept and the path's own query is added to it, and the fragment is never sent.	test:cmd/azhaq:TestProbePathJoinsTheURLsPathAndKeepsItsQuery,TestProbePathRowNamesTheURLAsked
 probe.rl-first-request	docs/commands/probe.md	Its favicon, redirects and second scheme do not.	test:cmd/azhaq:TestProbeRLWaitsOnlyForAServicesFirstRequestAndRatePacesEveryRequest,TestProbeRLDoesNotMakeTheSecondSchemeWait,TestProbeRLPacesServices
 probe.rate-every-request	docs/commands/probe.md	`-rate N` paces every request instead.	test:cmd/azhaq:TestProbeRLWaitsOnlyForAServicesFirstRequestAndRatePacesEveryRequest
@@ -1547,6 +1549,9 @@ run.verify-kinds	docs/commands/run.md	A result of a check has one of two kinds, 
 run.verify-dns-refusal	docs/commands/run.md	a DNS server that answers `version.bind` with a refusing rcode	test:internal/verify:TestDNSRefusalIsVersionOnly,TestDNSTXTAnswerStaysProved
 run.verify-evidence-escaped	docs/commands/run.md	Evidence that is not text is printed with each such byte as	test:internal/verify:TestExcerptEscapesBinary
 ports.verify-kinds	docs/commands/ports.md	A proved row names its kind:	test:internal/verify:TestEveryCheckNamesItsKind,TestHandshakeChecksAreTheirOwnKind,TestDocsKindColumnMatchesTheChecks
+ports.all-ports-outside-allow-exit-2	docs/commands/ports.md	When `-allow` names every host asked only with other ports (`-host 10.0.0.5:80 -allow 10.0.0.5:22`), no port may be asked: the command exits 2 with `every target is outside the scope`, before anything is sent.	test:cmd/azhaq:TestPortsEveryPortOutsideAllowIsUsage
+ports.some-ports-in-scope-scanned	docs/commands/ports.md	A scan that has some ports in scope asks those, and a note says how many it left out.	test:cmd/azhaq:TestPortsEveryPortOutsideAllowIsUsage
+ports.next-nothing-when-allow-held-ports	docs/commands/ports.md	a scan where `-allow` held ports out	test:cmd/azhaq:TestPortsEveryPortOutsideAllowIsUsage
 report.findings-kind	docs/commands/report.md	Each record carries the kind (`unauthenticated-read`, `unauthenticated-handshake` or `advisory-precondition` for a verify row	test:cmd/azhaq:TestFindingsKeepAHandshakeKind,TestBuildFindings
 run.verify-handshake-kind	docs/commands/run.md	`unauthenticated-handshake` is the service answering its protocol's opening with no credential	test:internal/verify:TestHandshakeChecksAreTheirOwnKind,TestDocsKindColumnMatchesTheChecks
 docs-mcp.target-planned-held	docs/MCP.md	A target whose own path or query declares one is listed as held back	test:cmd/azhaq:TestMCPPlanAndWireAgreeOnStateChangingGET

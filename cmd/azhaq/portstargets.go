@@ -13,6 +13,7 @@ import (
 	"github.com/lilsadfoqs/azhaq/internal/collectors/asncol"
 	"github.com/lilsadfoqs/azhaq/internal/collectors/portcol"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
+	"github.com/lilsadfoqs/azhaq/scope"
 )
 
 // portTargets are the targets of a port scan sorted by what they are.
@@ -278,4 +279,51 @@ func (t *portTargets) addPrefixString(s string) (netip.Prefix, error) {
 	}
 	t.addPrefix(pf.Masked())
 	return pf, nil
+}
+
+// scopeReach says, for the ports a run would ask of these targets, whether
+// the scope lets any host:port through (reach), whether it holds some out
+// (held), and which targets it holds out entirely (left). A range counts as
+// reached when one of its addresses may be asked a port.
+func (t *portTargets) scopeReach(rules scope.Rules, ports, udp []int, own bool) (reach, held bool, left []string) {
+	m := portModel{rules: rules, tcp: ports, udp: udp, passes: 1}
+	if !own || len(ports) > 0 {
+		m.own = t.portsOn(ports, own)
+	}
+	one := func(label, host, ip string) {
+		list := ports
+		if p, ok := m.own[host]; ok {
+			list = p
+		}
+		k, o := m.kept(host, ip, list)
+		if len(udp) > 0 {
+			uk, uo := m.kept(host, ip, udp)
+			k, o = k+uk, o+uo
+		}
+		reach, held = reach || k > 0, held || o > 0
+		if k == 0 {
+			left = append(left, label)
+		}
+	}
+	seen := map[string]bool{}
+	for _, n := range t.names {
+		if !seen[n] {
+			seen[n] = true
+			one(n, n, "")
+		}
+	}
+	for _, pf := range t.pinnedOnly() {
+		a := pf.Addr().String()
+		one(a, a, a)
+	}
+	prefixes := append(cover(slices.Clone(t.v4)), t.v6...)
+	for _, pf := range prefixes {
+		if pf.Addr().Is6() && pf.Bits() < 104 || m.ceilSpan(pf).target > 0 {
+			reach = true
+			held = held || len(rules.PortedAddrs(pf)) > 0
+			continue
+		}
+		left = append(left, pf.String())
+	}
+	return reach, held, left
 }

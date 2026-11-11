@@ -574,6 +574,19 @@ func (p *probeOut) lastTried(input string) string {
 	return group[len(group)-1]
 }
 
+// failedLines are the lines of a target that got no answer, one per port of
+// -p when it is a bare name (its ports are only known once it resolves),
+// else the line itself.
+func (p *probeOut) failedLines(line string) []string {
+	if len(p.spec.Ports) == 0 || strings.Contains(line, "://") || net.ParseIP(strings.Trim(line, "[]")) != nil {
+		return []string{line}
+	}
+	if _, _, err := net.SplitHostPort(line); err == nil {
+		return []string{line}
+	}
+	return hostPortLines(line, p.spec.Ports)
+}
+
 // failedRow is the row of a target that got no answer; line is what was
 // asked of it (the input itself, or one of the lines it became).
 func (p *probeOut) failedRow(input, line, why string) {

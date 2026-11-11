@@ -3,6 +3,7 @@ package main
 import (
 	"net"
 	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -27,5 +28,22 @@ func TestProbeNamesADNSFailureInFailed(t *testing.T) {
 	}
 	if rep.Failures != 2 || !named["no-such-azhaq.invalid"] {
 		t.Errorf("failures %d, failed %+v: the name with no address is counted and named", rep.Failures, rep.Failed)
+	}
+}
+
+// A name with no address is a failed row for each port of -p, and each is a
+// failure.
+func TestProbeDeadNameFailsOnEveryPort(t *testing.T) {
+	dir := t.TempDir()
+	list := writeFile(t, dir, "hosts.txt", "no-such-azhaq.invalid\n")
+	t.Chdir(dir)
+	out, rep, _ := runContract(t, "probe", "-l", list, "-p", "3001,5020", "-probe")
+	for _, want := range []string{`"url":"https://no-such-azhaq.invalid:3001"`, `"url":"https://no-such-azhaq.invalid:5020"`} {
+		if !strings.Contains(out, want) {
+			t.Errorf("no failed row %s in:\n%s", want, out)
+		}
+	}
+	if rep.Results != 2 || rep.Failures != 2 {
+		t.Errorf("results %d, failures %d: want one failed row and one failure for each port", rep.Results, rep.Failures)
 	}
 }

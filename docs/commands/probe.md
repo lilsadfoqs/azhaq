@@ -126,6 +126,7 @@ A route that streams for ever (server-sent events, `multipart/x-mixed-replace`) 
 ### Ports of an input
 - Without `-p`, a URL or `host:port` is asked once, on its own port. A bare name is asked on the web ports.
 - With `-p`, the port of a `host:port` or a URL is replaced by the ports of `-p`, as in httpx. `-l 127.0.0.1:3001 -p 5002` asks `http://127.0.0.1:5002/` only, and the row's `port` is `5002`. `input` is the line as given.
+- A bare name that has no address is a failed row for each port of `-p`, and `failures` counts each of them.
 - `-path` is joined onto the path of a URL input, as httpx does: `-u 'http://h/rest/products/search?q=juice#frag' -path /,/login` asks `/rest/products/search/?q=juice` and `/rest/products/search/login?q=juice`. One slash goes between the two paths, a path that already ends with the other, or starts with it, is not repeated, the URL's query is kept and the path's own query is added to it, and the fragment is never sent. A bare host has no path, so `-path` is the whole path there (`/`, `/login`).
 - A port of `-p` with no scheme is asked as a bare `host:port` is, plain HTTP first above 1024. A URL with a path, a query or a user keeps its path and its scheme on the new port. A port of `-p` that is the URL's own leaves the URL as given.
 
