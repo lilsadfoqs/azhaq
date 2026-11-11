@@ -6,8 +6,8 @@
 # seconds (default 60) for at most DEADLINE seconds (default 21600, 6h);
 # every network call is time bounded (curl --max-time), so this never hangs.
 #
-# A gate or baseline publishes under a part (trial/RUN/a, /b, or /a1 /a2 /b1
-# /b2 for samples=2); the other kinds publish flat (trial/RUN). This checks
+# A gate or baseline publishes under a part (trial/RUN/a, /b, or /a1../a4 and
+# /b1../b4 for samples=N); the other kinds publish flat (trial/RUN). This checks
 # every possible part and the flat path, and reports on whichever answer.
 #
 #   done   every part that ever had a heartbeat now also has trial.tgz.age
@@ -16,6 +16,10 @@
 #          (default 1800) and codex is not running
 #   running   a heartbeat exists and neither of the above holds, or no part
 #             has started yet
+#
+# Only two sessions run at once, so with samples=3 or 4 the later parts leave
+# no trace until they start. WATCH_EXPECT="a1 a2 a3 a4 b1 b2 b3 b4" names the
+# parts that must show a heartbeat or a result before a run can be done.
 set -uo pipefail
 STUCK_AFTER=${STUCK_AFTER:-1800}
 POLL=${POLL:-60}
@@ -23,7 +27,8 @@ DEADLINE=${DEADLINE:-21600}
 repo=${WATCH_REPO:-lilsadfoqs/azhaq}
 [ $# -ge 1 ] || { echo "usage: watch.sh RUN..." >&2; exit 2; }
 runs=("$@")
-parts=("" a b a1 a2 b1 b2)
+parts=("" a b a1 a2 a3 a4 b1 b2 b3 b4)
+read -r -a expect <<<"${WATCH_EXPECT:-}"
 
 exists() { # exists PATH: a file on ci-results
   curl -fsS --max-time 20 -o /dev/null "https://raw.githubusercontent.com/$repo/ci-results/$1" 2>/dev/null
@@ -38,7 +43,7 @@ field() { # field TEXT NAME
 }
 
 state_of() { # state_of RUN: one line, "done", "stuck: reason" or "running: ..."
-  local run=$1 p dir hb age alive any_hb=0 any_done=0 missing_tgz=0 stuck=""
+  local run=$1 p dir hb age alive any_hb=0 any_done=0 missing_tgz=0 stuck="" unstarted=""
   for p in "${parts[@]}"; do
     dir="trial/$run${p:+/$p}"
     if exists "$dir/trial.tgz.age"; then any_done=1; continue; fi
@@ -53,8 +58,14 @@ state_of() { # state_of RUN: one line, "done", "stuck: reason" or "running: ..."
     *) [ "$age" -gt "$STUCK_AFTER" ] && [ "$alive" = no ] && stuck="$dir: no stream line in ${age}s and codex is not running" ;;
     esac
   done
+  for p in "${expect[@]}"; do
+    dir="trial/$run/$p"
+    exists "$dir/trial.tgz.age" || exists "$dir/heartbeat.txt" || unstarted="$unstarted $p"
+  done
   if [ -n "$stuck" ]; then
     echo "stuck: $stuck"
+  elif [ -n "$unstarted" ]; then
+    echo "running: not started yet:$unstarted"
   elif [ "$any_hb" = 0 ] && [ "$any_done" = 0 ]; then
     echo "running: not started yet (no heartbeat and no result on ci-results)"
   elif [ "$missing_tgz" = 0 ]; then

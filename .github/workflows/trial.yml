@@ -9,17 +9,20 @@ name: trial
 # trial-NAME.
 #
 # The first line of the tag's message picks the kind (.github/ci/run.sh):
-#   gate      the current kind: one persona, one build, two parts in
-#             parallel (.github/ci/trial/GATE.md) - part A (`gate-a`), an
-#             engagement on one Vulhub estate from the fixed pool
+#   gate      the current kind: one persona, one build, two parts
+#             (.github/ci/trial/GATE.md) - part A (`gate-a`), an engagement
+#             on one Vulhub estate from the fixed pool
 #             (.github/ci/range/pool.json); part B (`gate-b`), the switch
-#             checklist head-to-head on the local labs. "samples=2" in the
-#             tag's message runs both parts twice, on two pool estates, in
-#             parallel; fetch.sh and merge_gate.py bring the samples back
-#             together.
+#             checklist head-to-head on the local labs. "samples=N" in the
+#             tag's message (N from 1 to 4; a release review uses 4) runs
+#             both parts N times, part A on N different pool estates, two
+#             sessions at a time; fetch.sh and merge_gate.py bring the
+#             samples back together (parts a1..aN, b1..bN; a and b when N
+#             is 1).
 #   baseline  part A's engagement, usual tools only, azhaq off, on one pool
 #             estate: measures that estate's baseline once (README.md says
-#             how to run the four).
+#             how to run the four). "samples=N" measures N pool estates, two
+#             at a time (parts a1..aN).
 #   switch    the older, single-build review (BRIEF.md), kept working until
 #             the gate replaces it.
 #   research  the older two-phase engagement (RESEARCH.md) on two generated
@@ -67,9 +70,19 @@ jobs:
           echo "seed=$(echo "$msg" | sed -n 's/.*seed=\([A-Za-z0-9._-]*\).*/\1/p')" >> "$GITHUB_OUTPUT"
           case " $msg " in *" dryrun "*) echo "dryrun=1" >> "$GITHUB_OUTPUT" ;; esac
           samples=1
-          case " $msg " in *" samples=2 "*) samples=2 ;; esac
+          case " $msg " in *" samples="*)
+            samples=$(printf ' %s ' "$msg" | sed -n 's/.* samples=\([^ ]*\) .*/\1/p')
+            case $samples in
+              1 | 2 | 3 | 4) ;;
+              *) echo "::error title=samples::samples=$samples is not valid: use samples=N with N from 1 to 4"; exit 1 ;;
+            esac
+            pool=$(jq length .github/ci/range/pool.json)
+            if [ "$samples" -gt "$pool" ]; then
+              echo "::error title=samples::samples=$samples is more than the pool's $pool estates (each sample draws a different one)"; exit 1
+            fi ;;
+          esac
           echo "samples=$samples" >> "$GITHUB_OUTPUT"
-          echo "samples_json=$([ "$samples" = 2 ] && echo '[1,2]' || echo '[1]')" >> "$GITHUB_OUTPUT"
+          echo "samples_json=[$(seq -s, 1 "$samples")]" >> "$GITHUB_OUTPUT"
           echo "trial kind: $kind, samples: $samples"
   build:
     needs: kind
@@ -111,6 +124,7 @@ jobs:
     timeout-minutes: 360
     strategy:
       fail-fast: false
+      max-parallel: 2 # the jobs share one Codex sign-in: at most four sessions at once
       matrix:
         sample: ${{ fromJSON(needs.kind.outputs.samples_json) }}
     env:
@@ -156,8 +170,8 @@ jobs:
       - name: estate
         # One estate from the pool (build.py --count 1): this sample's pool
         # seed, round robin by run number, or the tag's seed=WORD (sample 1),
-        # the next pool entry after it (sample 2, so samples=2 always draws
-        # two different estates).
+        # the next pool entries after it (samples 2 to 4, so up to four
+        # samples draw different estates).
         env:
           CODEX_AUTH_KEY: ${{ secrets.CODEX_AUTH_KEY }}
           SEED_FROM_TAG: ${{ needs.kind.outputs.seed }}
@@ -185,7 +199,7 @@ jobs:
           rm -rf "$range" "$RUNNER_TEMP/vulhub" "$RUNNER_TEMP/dnsd"
       - name: part
         id: part
-        run: echo "name=a$([ "$SAMPLES" = 2 ] && echo "${{ matrix.sample }}")" >> "$GITHUB_OUTPUT"
+        run: echo "name=a$([ "$SAMPLES" != 1 ] && echo "${{ matrix.sample }}")" >> "$GITHUB_OUTPUT"
       - name: heartbeat
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -252,6 +266,7 @@ jobs:
     timeout-minutes: 300
     strategy:
       fail-fast: false
+      max-parallel: 2 # the jobs share one Codex sign-in: at most four sessions at once
       matrix:
         sample: ${{ fromJSON(needs.kind.outputs.samples_json) }}
     env:
@@ -311,7 +326,7 @@ jobs:
           cp_app dvwa /var/www/html dvwa
       - name: part
         id: part
-        run: echo "name=b$([ "$SAMPLES" = 2 ] && echo "${{ matrix.sample }}")" >> "$GITHUB_OUTPUT"
+        run: echo "name=b$([ "$SAMPLES" != 1 ] && echo "${{ matrix.sample }}")" >> "$GITHUB_OUTPUT"
       - name: heartbeat
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -377,8 +392,14 @@ jobs:
     if: needs.kind.outputs.kind == 'baseline'
     runs-on: ubuntu-latest
     timeout-minutes: 300
+    strategy:
+      fail-fast: false
+      max-parallel: 2 # the jobs share one Codex sign-in
+      matrix:
+        sample: ${{ fromJSON(needs.kind.outputs.samples_json) }}
     env:
       DRYRUN: ${{ needs.kind.outputs.dryrun }}
+      SAMPLES: ${{ needs.kind.outputs.samples }}
     steps:
       - uses: actions/checkout@v7
       - name: disk
@@ -395,14 +416,15 @@ jobs:
           CODEX_AUTH_JSON: ${{ secrets.CODEX_AUTH_JSON }}
         run: .github/ci/codex.sh
       - name: estate
-        # The same single-estate pool build as gate-a, but azhaq is never
-        # installed: this measures the pool estate's usual-tools baseline.
+        # The same single-estate pool build as gate-a (this sample's pool
+        # entry), but azhaq is never installed: this measures the pool
+        # estate's usual-tools baseline.
         env:
           CODEX_AUTH_KEY: ${{ secrets.CODEX_AUTH_KEY }}
           SEED_FROM_TAG: ${{ needs.kind.outputs.seed }}
         run: |
           pool_args=(); [ -n "$SEED_FROM_TAG" ] && pool_args+=(--seed "$SEED_FROM_TAG")
-          seed=$(python3 .github/ci/range/pool_pick.py "$GITHUB_RUN_NUMBER" "${pool_args[@]}")
+          seed=$(python3 .github/ci/range/pool_pick.py "$GITHUB_RUN_NUMBER" "${pool_args[@]}" --sample "${{ matrix.sample }}")
           echo "::add-mask::$seed"
           range="$RUNNER_TEMP/range"
           mkdir -p "$range" "$HOME/ci" "$HOME/trial"
@@ -422,13 +444,20 @@ jobs:
           cp "$range/vars.json" "$HOME/ci/vars.json"
           shred -u "$range/key.json" 2>/dev/null || rm -f "$range/key.json"
           rm -rf "$range" "$RUNNER_TEMP/vulhub" "$RUNNER_TEMP/dnsd"
+      - name: part
+        # Flat (trial/NAME) for one sample, as before; trial/NAME/aK for samples=N.
+        id: part
+        run: |
+          part=$([ "$SAMPLES" != 1 ] && echo "a${{ matrix.sample }}" || true)
+          echo "name=$part" >> "$GITHUB_OUTPUT"
+          echo "path=$GITHUB_REF_NAME${part:+/$part}" >> "$GITHUB_OUTPUT"
       - name: heartbeat
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           printf '%s' "$GITHUB_TOKEN" | sudo install -m 600 -o root -g root /dev/stdin /root/beat.token
           sudo install -m 700 -o root -g root .github/ci/heartbeat.sh .github/ci/publish.sh /root/
-          sudo env -u GITHUB_TOKEN setsid bash /root/heartbeat.sh "$GITHUB_REF_NAME" "$HOME/ci/stream.ts.jsonl" "$HOME/trial/phases.log" "$(id -un)" "$GITHUB_REPOSITORY" > /dev/null 2>&1 < /dev/null &
+          sudo env -u GITHUB_TOKEN setsid bash /root/heartbeat.sh "${{ steps.part.outputs.path }}" "$HOME/ci/stream.ts.jsonl" "$HOME/trial/phases.log" "$(id -un)" "$GITHUB_REPOSITORY" > /dev/null 2>&1 < /dev/null &
           echo "heartbeat started"
       - name: isolate
         run: .github/ci/range/isolate.sh
@@ -470,7 +499,7 @@ jobs:
           age -r "$AGE_RECIPIENT" -o "$HOME/ci/trial.tgz.age" "$HOME/ci/trial.tgz"
           files=("$HOME/ci/trial.tgz.age")
           # The scorecard's numbers, encrypted apart from the archive: history.sh reads these alone.
-          python3 -I "$HOME/ci/scores.py" extract REPORT.md --kind baseline --tag "$GITHUB_REF_NAME" --part "" --run "$GITHUB_RUN_ID" \
+          python3 -I "$HOME/ci/scores.py" extract REPORT.md --kind baseline --tag "$GITHUB_REF_NAME" --part "${{ steps.part.outputs.name }}" --run "$GITHUB_RUN_ID" \
             --version "$(cat "$HOME/ci/azhaq.version" 2>/dev/null || true)" --out "$HOME/ci/scores.json" &&
             age -r "$AGE_RECIPIENT" -o "$HOME/ci/scores.json.age" "$HOME/ci/scores.json" && files+=("$HOME/ci/scores.json.age") ||
             echo "::warning title=scores::no scores record (no scorecard in REPORT.md)"
@@ -479,7 +508,7 @@ jobs:
             age -r "$AGE_RECIPIENT" -o "$HOME/ci/codex-auth.json.age" "$HOME/.codex/auth.json"
             files+=("$HOME/ci/codex-auth.json.age")
           fi
-          "$HOME/ci/publish.sh" "trial/$GITHUB_REF_NAME" "${files[@]}"
+          "$HOME/ci/publish.sh" "trial/${{ steps.part.outputs.path }}" "${files[@]}"
           [ -s REPORT.md ] && echo "::notice title=trial::REPORT.md written" || echo "::warning title=trial::no REPORT.md"
   codex:
     needs: kind

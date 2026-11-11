@@ -8,8 +8,8 @@
 # model=…" for a hunt, "only=ID,ID" for a range-smoke, and for a trial its
 # kind: switch (the default, kept for now), gate or baseline, or the older
 # research or hunter (".github/ci/trial/README.md"), optionally with
-# "seed=WORDS" (a pool entry, for gate and baseline) and, for gate,
-# "samples=2" to run both parts twice in parallel. "gate" as this script's
+# "seed=WORDS" (a pool entry, for gate and baseline) and "samples=N" (N from
+# 1 to 4) to run each part N times, two sessions at a time. "gate" as this script's
 # own first positional KIND is a different thing: it starts the bench
 # (default flags) and the hunt (WORDS as for a hunt) on this commit at once;
 # fetch.sh gate NAME brings back both. A hunt, a gate or a trial also carries

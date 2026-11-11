@@ -228,6 +228,29 @@ class Pool(unittest.TestCase):
             self.assertNotEqual(s1, s2)
         self.assertEqual(rangelib.pick_pool_seed(pool, 1, "z", sample=2), "w")  # wraps around
 
+    def test_four_samples_of_a_pool_of_four_draw_every_estate(self):
+        pool = ["w", "x", "y", "z"]
+        for n in range(1, 9):
+            got = [rangelib.pick_pool_seed(pool, n, sample=k) for k in (1, 2, 3, 4)]
+            self.assertEqual(sorted(got), sorted(pool))
+        self.assertEqual([rangelib.pick_pool_seed(pool, 1, "y", sample=k) for k in (1, 2, 3, 4)], ["y", "z", "w", "x"])
+
+    def test_a_sample_beyond_the_pool_is_refused(self):
+        pool = ["w", "x", "y", "z"]
+        for bad in (0, 5):
+            with self.assertRaises(SystemExit):
+                rangelib.pick_pool_seed(pool, 1, sample=bad)
+        with self.assertRaises(SystemExit):
+            rangelib.pick_pool_seed(["w", "x"], 1, sample=3)
+
+    def test_cli_sample_four_and_a_refused_sample_five(self):
+        run = lambda *a: subprocess.run([sys.executable, os.path.join(HERE, "pool_pick.py"), *a], capture_output=True, text=True)
+        seeds = [run("7", "--sample", str(k)).stdout.strip() for k in (1, 2, 3, 4)]
+        self.assertEqual(sorted(seeds), sorted(rangelib.load_pool()))
+        r = run("7", "--sample", "5")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("sample 5", r.stderr)
+
     def test_cli_prints_one_seed(self):
         r = subprocess.run([sys.executable, os.path.join(HERE, "pool_pick.py"), "3"], capture_output=True, text=True)
         self.assertEqual(r.returncode, 0, r.stderr)
@@ -706,6 +729,20 @@ class Workflow(unittest.TestCase):
         for c in conds:
             self.assertNotIn("!=", c)
 
+    def test_samples_are_one_to_four_two_at_a_time(self):
+        kind = self.text.split("\n  kind:\n")[1].split("\n  build:\n")[0]
+        self.assertIn("1 | 2 | 3 | 4)", kind)
+        self.assertIn("seq -s, 1", kind)
+        self.assertNotIn("samples=2", kind)
+        for job in ("gate-a", "gate-b", "baseline"):
+            body = re.split(r"^  ([a-z][\w-]*):\n", self.text.split("\njobs:\n", 1)[1], flags=re.M)
+            body = dict(zip(body[1::2], body[2::2]))[job]
+            self.assertIn("max-parallel: 2", body, job)
+            self.assertIn("samples_json", body, job)
+            self.assertIn('"$SAMPLES" != 1', body, job)
+            if job != "gate-b":  # part B builds no estate
+                self.assertIn("--sample", body, job)
+
     def test_both_jobs_heartbeat_and_isolate_before_the_review(self):
         for job, steps in self.steps.items():
             order = [steps.index(x) for x in ("heartbeat", "isolate", "remove the source", "review")]
@@ -1052,6 +1089,97 @@ class MergeGate(unittest.TestCase):
         pairs = merge_gate.find_pairs(self.d)
         self.assertEqual(len(pairs), 1)
         self.assertTrue(pairs[0][0].endswith(os.sep + "a"))
+
+    def sample_dirs(self, n, a_scores=None, b_scores=None):
+        """Samples 1..n; A_SCORES/B_SCORES map a sample's number to its docs and findings scores."""
+        for k in range(1, n + 1):
+            docs = (b_scores or {}).get(k, 9)
+            findings = (a_scores or {}).get(k, 9)
+            self.write_pair("a%d" % k, "b%d" % k,
+                            GATE_A_REPORT.replace("| 8 |", "| 9 |").replace("| findings | 9", "| findings | %d" % findings),
+                            GATE_B_REPORT.replace("| 8 |", "| 9 |").replace("| docs | 9", "| docs | %d" % docs))
+
+    def merge(self, *args):
+        r = subprocess.run([sys.executable, os.path.join(HERE, "merge_gate.py"), self.d, *args], capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        return r.stdout
+
+    def test_find_pairs_for_one_to_four_samples(self):
+        for n in (2, 3, 4):
+            for k in range(1, n + 1):
+                os.makedirs(os.path.join(self.d, "a%d" % k), exist_ok=True)
+                os.makedirs(os.path.join(self.d, "b%d" % k), exist_ok=True)
+            self.assertEqual([p[2] for p in merge_gate.find_pairs(self.d)], ["sample %d" % k for k in range(1, n + 1)])
+
+    def test_find_pairs_skips_a_sample_with_one_part_and_notes_it(self):
+        for k in (1, 2, 3):
+            os.makedirs(os.path.join(self.d, "a%d" % k))
+        for k in (1, 2):
+            os.makedirs(os.path.join(self.d, "b%d" % k))
+        pairs = merge_gate.find_pairs(self.d)
+        self.assertEqual([p[2] for p in pairs], ["sample 1", "sample 2"])
+        self.assertEqual(merge_gate.missing_samples(self.d, pairs), ["sample 3 has part A only"])
+        self.assertEqual(merge_gate.missing_samples(self.d, pairs, 4), ["sample 3 has part A only", "sample 4 is missing"])
+
+    def test_median_table_for_four_samples(self):
+        self.sample_dirs(4, a_scores={1: 9, 2: 7, 3: 9, 4: 6}, b_scores={2: 8})
+        out = self.merge()
+        self.assertIn("## Per-item medians", out)
+        self.assertIn("| findings | 9/7/9/6 | 8 | 3 |", out)  # median of 6,7,9,9 is 8
+        self.assertIn("| docs | 9/8/9/9 | 9 | 1 |", out)
+        self.assertIn("| trust | 9/9/9/9 | 9 | 0 |", out)
+        self.assertIn("Lowest per-item median: 8 (findings).", out)
+        self.assertIn("medians are reported, not used", out)
+        self.assertLess(out.index("## Per-item medians"), out.index("## Scorecard (sample 1)"))
+        for k in (1, 2, 3, 4):
+            self.assertIn("## Scorecard (sample %d)" % k, out)
+
+    def test_the_verdict_stays_the_lowest_cell_not_the_median(self):
+        # Every item's median is 9, yet one sample scored a 7: not a pass.
+        self.sample_dirs(4, a_scores={3: 7})
+        out = self.merge()
+        self.assertIn("| findings | 9/9/7/9 | 9 | 2 |", out)
+        self.assertIn("Lowest per-item median: 9 ", out)
+        self.assertIn("not a pass", out)
+        self.assertNotIn("PASS: every sample", out)
+
+    def test_four_samples_at_nine_pass(self):
+        self.sample_dirs(4)
+        self.assertIn("PASS: every sample scored every item at 9 or more", self.merge("--samples", "4"))
+
+    def test_two_samples_median_is_the_mean_of_the_pair(self):
+        self.sample_dirs(2, a_scores={1: 9, 2: 8})
+        out = self.merge()
+        self.assertIn("| findings | 9/8 | 8.5 | 1 |", out)
+
+    def test_a_missing_sample_is_named_and_is_not_a_pass(self):
+        self.sample_dirs(3)
+        shutil.rmtree(os.path.join(self.d, "b2"))
+        out = self.merge()
+        self.assertIn("not a pass: sample 2 has part A only", out)
+        self.assertIn("| findings | 9/9 | 9 | 0 |", out)  # samples 1 and 3
+        # Four were asked for and only three arrived.
+        shutil.rmtree(os.path.join(self.d, "a2"))
+        self.assertIn("not a pass: sample 2 is missing; sample 4 is missing", self.merge("--samples", "4"))
+
+    def test_one_sample_prints_no_median_table_and_keeps_its_own_baseline_table(self):
+        self.write_pair()
+        out = self.merge()
+        self.assertNotIn("Per-item medians", out)
+        self.assertIn("## Scorecard\n", out)
+
+    def test_baseline_table_has_a_row_per_sample(self):
+        self.sample_dirs(3)
+        for k, n in ((1, 4), (3, 5)):
+            with open(os.path.join(self.d, "a%d" % k, "grade.json"), "w") as f:
+                json.dump({"baseline_comparison": [{"phase": 1, "same_seed": True, "vulns_identified": [n, 3], "vulns_of": [6, 6],
+                                                    "leads_total": [6, 5], "first_match_s": [120, 300], "commands_total": [40, 30]}]}, f)
+        with open(os.path.join(self.d, "a2", "grade.json"), "w") as f:
+            json.dump({}, f)
+        out = self.merge()
+        self.assertEqual(out.count("Part A's grade beside its baseline"), 1)  # one table, not one per sample
+        self.assertIn("| 1 | 1 | 4 vs 3 (of 6 and 6) |", out)
+        self.assertIn("| 3 | 1 | 5 vs 3 (of 6 and 6) |", out)
 
     def test_cli_verdict_pass(self):
         self.write_pair()

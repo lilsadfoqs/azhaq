@@ -1,10 +1,15 @@
 #!/usr/bin/env python3
-"""merge_gate.py DIR [--out OUT.md]: merges the gate's two scorecards into
-one table. DIR is what `fetch.sh trial NAME DIR` wrote: DIR/a (part A,
-REPORT.md and, when graded, grade.json) and DIR/b (part B, REPORT.md).
+"""merge_gate.py DIR [--samples N] [--out OUT.md]: merges the gate's
+scorecards into one table. DIR is what `fetch.sh trial NAME DIR` wrote:
+DIR/a (part A, REPORT.md and, when graded, grade.json) and DIR/b (part B,
+REPORT.md).
 
-For `samples=2`, DIR holds two pairs: DIR/a1+DIR/b1 and DIR/a2+DIR/b2 (fall
-back to DIR/a+DIR/b when there is only one sample).
+For `samples=N` (N up to 4), DIR holds N pairs: DIR/a1+DIR/b1 ...
+DIR/aN+DIR/bN (DIR/a+DIR/b when there is only one sample). Every sample's
+scorecard is printed, after a table of each item's scores, median and
+spread across the samples. The verdict is not made from the medians: it is
+the lowest score of every sample. A sample that is missing (a gap in the
+numbers, one part only, or fewer than --samples N) is named and is not a pass.
 
 Each scorecard row (a Markdown table `| Item | Score | Reasoning |` in
 REPORT.md, as GATE.md asks for) is read beside the anchor line its score
@@ -20,7 +25,10 @@ import argparse
 import json
 import os
 import re
+import statistics
 import sys
+
+MAX_SAMPLES = 4
 
 ANCHORS = [
     (10, 10, "you would hand the job to it without a second look."),
@@ -121,7 +129,28 @@ def load_grade(a_dir):
         return json.load(f)
 
 
-def one_pair(a_dir, b_dir, label=""):
+def baseline_table(entries):
+    """Part A's grade beside its baseline: a table of (sample, comparison)
+    entries, one row per sample and phase; the Sample column is left out when
+    no entry has a sample label."""
+    labelled = any(label for label, _ in entries)
+    head = (["Sample"] if labelled else []) + ["Phase", "Vulns identified", "Leads", "Time to first match", "Commands", "Same seed"]
+    o = ["| " + " | ".join(head) + " |", "|" + "---|" * len(head)]
+    for label, c in entries:
+        row = "%d | %d vs %d (of %s) | %d vs %d | %s vs %s | %d vs %d | %s" % (
+            c["phase"], c["vulns_identified"][0], c["vulns_identified"][1],
+            " and ".join(str(x) for x in c["vulns_of"]), c["leads_total"][0], c["leads_total"][1],
+            c["first_match_s"][0], c["first_match_s"][1], c["commands_total"][0], c["commands_total"][1],
+            "yes" if c["same_seed"] else "NO, not a fair comparison")
+        o.append("| " + (label + " | " if labelled else "") + row + " |")
+    o += ["", "Each column reads \"azhaq vs baseline\"."]
+    return o
+
+
+NO_BASELINE = "Part A was graded, but with no --baseline: run grade.py again with the pool estate's baseline grade.json to compare."
+
+
+def one_pair(a_dir, b_dir, label="", with_grade=True):
     a_text = read(os.path.join(a_dir, "REPORT.md"))
     b_text = read(os.path.join(b_dir, "REPORT.md"))
     a_rows, _ = parse_scorecard(a_text or "")
@@ -154,50 +183,119 @@ def one_pair(a_dir, b_dir, label=""):
         o += ["", "No %sREPORT.md for part A." % (label + " " if label else "")]
     if b_text is None:
         o += ["", "No %sREPORT.md for part B." % (label + " " if label else "")]
-    if grade and grade.get("baseline_comparison"):
+    if with_grade and grade and grade.get("baseline_comparison"):
         o += ["", "### Part A's grade beside its baseline", ""]
-        o += ["| Phase | Vulns identified | Leads | Time to first match | Commands | Same seed |",
-              "|---|---|---|---|---|---|"]
-        for c in grade["baseline_comparison"]:
-            o.append("| %d | %d vs %d (of %s) | %d vs %d | %s vs %s | %d vs %d | %s |" % (
-                c["phase"], c["vulns_identified"][0], c["vulns_identified"][1],
-                " and ".join(str(x) for x in c["vulns_of"]), c["leads_total"][0], c["leads_total"][1],
-                c["first_match_s"][0], c["first_match_s"][1], c["commands_total"][0], c["commands_total"][1],
-                "yes" if c["same_seed"] else "NO, not a fair comparison"))
-        o.append("")
-        o.append("Each column reads \"azhaq vs baseline\".")
-    elif grade:
-        o += ["", "Part A was graded, but with no --baseline: run grade.py again with the pool estate's baseline grade.json to compare."]
+        o += baseline_table([("", c) for c in grade["baseline_comparison"]])
+    elif with_grade and grade:
+        o += ["", NO_BASELINE]
     return "\n".join(o) + "\n", overall
 
 
 def find_pairs(d):
-    """[(a_dir, b_dir, label)], samples=2 first (a1/b1, a2/b2), else a/b."""
-    s1a, s1b = os.path.join(d, "a1"), os.path.join(d, "b1")
-    if os.path.isdir(s1a) and os.path.isdir(s1b):
-        pairs = [(s1a, s1b, "sample 1")]
-        s2a, s2b = os.path.join(d, "a2"), os.path.join(d, "b2")
-        if os.path.isdir(s2a) and os.path.isdir(s2b):
-            pairs.append((s2a, s2b, "sample 2"))
-        return pairs
-    return [(os.path.join(d, "a"), os.path.join(d, "b"), "")]
+    """[(a_dir, b_dir, label)] for every sample K (1..MAX_SAMPLES) with both
+    DIR/aK and DIR/bK, else the one flat DIR/a + DIR/b."""
+    pairs = []
+    for k in range(1, MAX_SAMPLES + 1):
+        ak, bk = os.path.join(d, "a%d" % k), os.path.join(d, "b%d" % k)
+        if os.path.isdir(ak) and os.path.isdir(bk):
+            pairs.append((ak, bk, "sample %d" % k))
+    return pairs or [(os.path.join(d, "a"), os.path.join(d, "b"), "")]
+
+
+def missing_samples(d, pairs, expected=0):
+    """What is wrong with the samples found: a sample with one part only, a gap
+    in the numbers, or fewer than EXPECTED. A flat a/b has none."""
+    found = {int(label.split()[1]) for _, _, label in pairs if label}
+    if not found:
+        return []
+    notes = []
+    for k in range(1, MAX_SAMPLES + 1):
+        if k in found:
+            continue
+        has_a, has_b = os.path.isdir(os.path.join(d, "a%d" % k)), os.path.isdir(os.path.join(d, "b%d" % k))
+        if has_a != has_b:
+            notes.append("sample %d has part %s only" % (k, "A" if has_a else "B"))
+        elif k < max(found) or k <= expected:
+            notes.append("sample %d is missing" % k)
+    return notes
+
+
+def item_scores(a_dir, b_dir):
+    """[(item, score or None)] of one sample, part B's items first as in the scorecard."""
+    a_rows, _ = parse_scorecard(read(os.path.join(a_dir, "REPORT.md")) or "")
+    b_rows, _ = parse_scorecard(read(os.path.join(b_dir, "REPORT.md")) or "")
+    matched = match_items(b_rows, PART_B_ITEMS)[0] + match_items(a_rows, PART_A_ITEMS)[0]
+    return [(item, score) for item, score, _ in matched]
+
+
+def num(x):
+    return "%g" % x
+
+
+def medians_section(per_sample):
+    """The per-item table over PER_SAMPLE, a list of item_scores lists (one per
+    sample); returns its lines. Medians and spreads use the scored cells only."""
+    n = len(per_sample)
+    o = ["## Per-item medians", "",
+         "Across %d samples. The gate verdict is not made from these: it is still the lowest score of every sample "
+         "(9 or more to pass); the medians are reported, not used for it." % n, "",
+         "| Item | Scores (sample 1 to %d) | Median | Spread |" % n, "|---|---|---|---|"]
+    medians = []
+    for i, (item, _) in enumerate(per_sample[0]):
+        cells = [s[i][1] for s in per_sample]
+        got = [c for c in cells if c is not None]
+        shown = "/".join("-" if c is None else str(c) for c in cells)
+        if got:
+            med = statistics.median(got)
+            medians.append((med, item))
+            o.append("| %s | %s | %s | %d |" % (item, shown, num(med), max(got) - min(got)))
+        else:
+            o.append("| %s | %s | - | - |" % (item, shown))
+    if medians:
+        low = min(m for m, _ in medians)
+        o += ["", "Lowest per-item median: %s (%s)." % (num(low), ", ".join(i for m, i in medians if m == low))]
+    else:
+        o += ["", "Lowest per-item median: none, no score was parsed."]
+    return o
 
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("dir")
+    ap.add_argument("--samples", type=int, default=0, help="how many samples the review ran: fewer found is not a pass")
     ap.add_argument("--out", help="where to write the Markdown (default: stdout)")
     a = ap.parse_args(argv)
     pairs = find_pairs(a.dir)
-    sections, overalls = [], []
+    many = len(pairs) > 1
+    sections, overalls, per_sample, grades = [], [], [], []
     for a_dir, b_dir, label in pairs:
-        text, overall = one_pair(a_dir, b_dir, label)
+        text, overall = one_pair(a_dir, b_dir, label, with_grade=not many)
         sections.append(text)
         overalls.append(overall)
-    passed = overalls and all(o is not None and o >= 9 for o in overalls)
-    verdict = "PASS: every sample scored every item at 9 or more" if passed else \
-        "not a pass: a sample is missing a score, or scored below 9"
-    out = "# Gate scorecard\n\n%s\n\n" % verdict + "\n".join(sections)
+        per_sample.append(item_scores(a_dir, b_dir))
+        grades.append((label.replace("sample ", ""), load_grade(a_dir)))
+    notes = missing_samples(a.dir, pairs, a.samples)
+    passed = overalls and not notes and all(o is not None and o >= 9 for o in overalls)
+    if notes:
+        verdict = "not a pass: %s" % "; ".join(notes)
+    elif passed:
+        verdict = "PASS: every sample scored every item at 9 or more"
+    else:
+        verdict = "not a pass: a sample is missing a score, or scored below 9"
+    head = []
+    if many:
+        head += medians_section(per_sample) + [""]
+        graded = [(label, g) for label, g in grades if g]
+        if graded:
+            head += ["## Part A's grade beside its baseline", ""]
+            entries = [(label, c) for label, g in graded for c in g.get("baseline_comparison") or []]
+            if entries:
+                head += baseline_table(entries)
+            ungraded = [label for label, g in graded if not g.get("baseline_comparison")]
+            if ungraded:
+                head += ["", "Sample %s: %s" % (", ".join(ungraded), NO_BASELINE)]
+            head.append("")
+    out = "# Gate scorecard\n\n%s\n\n" % verdict + ("\n".join(head) + "\n" if head else "") + "\n".join(sections)
     if a.out:
         with open(a.out, "w", encoding="utf-8") as f:
             f.write(out)

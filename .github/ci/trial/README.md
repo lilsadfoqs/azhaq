@@ -5,20 +5,21 @@
 
 | Kind | What happens | Brief |
 | --- | --- | --- |
-| `gate` | The current trial: one persona, one build, two parts in parallel - part A (`gate-a`), an engagement on one Vulhub estate drawn from the fixed pool, graded against the estate's baseline; part B (`gate-b`), the switch checklist head-to-head on the local labs. `samples=2` runs both parts twice, on two pool estates, in parallel. | `GATE.md` |
-| `baseline` | Part A's engagement again, usual tools only, azhaq off, on one pool estate: measures that estate's baseline once. | `GATE.md` (usual tools) |
+| `gate` | The current trial: one persona, one build, two parts - part A (`gate-a`), an engagement on one Vulhub estate drawn from the fixed pool, graded against the estate's baseline; part B (`gate-b`), the switch checklist head-to-head on the local labs. `samples=N` (N from 1 to 4) runs both parts N times, part A on N different pool estates, two sessions at a time (`max-parallel: 2` on each part, because the jobs share one Codex sign-in). The release review runs `samples=4`. | `GATE.md` |
+| `baseline` | Part A's engagement again, usual tools only, azhaq off, on one pool estate: measures that estate's baseline once. `samples=N` measures N pool estates, two at a time (parts `a1`..`aN`). | `GATE.md` (usual tools) |
 | `switch` (default) | Older, kept working: a blind review of the latest release against five training apps, one build, one job. | `BRIEF.md` |
 | `research` | Older, kept working: a researcher does two phases of an engagement on two fresh estates. Phase 1, estate 1: usual tools only, azhaq not run. Phase 2, estate 2: azhaq used as the main tool; every fallback to another tool is logged with its reason. | `RESEARCH.md` |
 | `hunter` | Older, kept working: the same estates as two bounty sessions, in the opposite order: azhaq first, the usual stack second with azhaq off. | `HUNTER.md` |
 
 ```
 .github/ci/run.sh trial 20 gate                  # tag trial-20, kind gate, one estate
-.github/ci/run.sh trial 21 gate seed=gate-alpha samples=2   # two estates, two samples
+.github/ci/run.sh trial 21 gate seed=gate-alpha samples=4   # four estates, four samples
 .github/ci/run.sh trial b-alpha baseline seed=gate-alpha    # the pool estate's baseline
+.github/ci/run.sh trial b-all baseline samples=4            # all four pool estates, two at a time
 .github/ci/run.sh trial dry1 gate dryrun         # build, estate, isolation and briefs, no agent
-.github/ci/fetch.sh trial 20 /tmp/t20      # DIR/a, DIR/b (or a1/a2/b1/b2 on samples=2)
-python3 .github/ci/range/grade.py /tmp/t20/a/key.json /tmp/t20/a --baseline /tmp/b-alpha
-python3 .github/ci/range/merge_gate.py /tmp/t20  # one scorecard, both parts, the grade beside its baseline
+.github/ci/fetch.sh trial 21 /tmp/t21      # DIR/a1..a4, DIR/b1..b4 (DIR/a, DIR/b on samples=1)
+python3 .github/ci/range/grade.py /tmp/t21/a1/key.json /tmp/t21/a1 --baseline /tmp/b-alpha
+python3 .github/ci/range/merge_gate.py /tmp/t21 --samples 4  # per-item medians, every sample's scorecard
 
 .github/ci/run.sh trial 11 research              # the older kinds still work
 .github/ci/run.sh trial 12 hunter seed=lilac     # a fixed draw
@@ -37,9 +38,11 @@ pool (below); their `seed=` must name a pool entry.
 `baseline` build one estate (`build.py SEED --count 1`) from a pool entry,
 chosen by `range/pool_pick.py`: the tag's `seed=WORD` when it names a pool
 entry, else round robin by the run number, so repeated gate runs cycle
-through the whole pool. `samples=2` draws a second estate too: the pool entry
-right after the first one, so the two samples are always different estates
-(`pool_pick.py --sample 2`).
+through the whole pool. `samples=N` draws the next entries too: the pool entry
+right after the first one for sample 2, and so on, so the samples are different
+estates while N is at most the pool's size (`pool_pick.py --sample K`, K from 1
+to 4; with the pool at four entries, `samples=4` draws all of them, and a larger
+N is refused, by the `kind` job before anything is built).
 
 The pool's names are public, the estates are not: a name goes through the
 same keyed hash as research's draw (the secret is CODEX_AUTH_KEY) before
@@ -48,7 +51,8 @@ estate holds. Changing that secret changes every estate, and the baselines
 are measured again. Because the pool is fixed, each estate's usual-tools
 result can be measured once and kept: push `trial-baseline-X baseline seed=POOL-ENTRY` for
 each of the four entries (`.github/ci/range/pool.json`), fetch each
-(`fetch.sh trial baseline-X /tmp/baseline-X`), and keep `/tmp/baseline-X`
+(`fetch.sh trial baseline-X /tmp/baseline-X`; or `samples=4` on one tag runs
+all four, `fetch.sh` brings back `a1`..`a4`, each one a folder like the one below), and keep `/tmp/baseline-X`
 (its `REPORT.md`, `leads.jsonl`, `surface-1.txt`, `phases.log`, `key.json`
 and a `grade.py` run against its own `key.json`) beside the pool so a later
 gate run's `grade.py --baseline` has something to compare against. A pool
@@ -74,13 +78,18 @@ and `gate-b` render them; `baseline` renders part A with the usual-tools
 wording instead of azhaq's.
 
 `fetch.sh trial NAME DIR` brings every part back: `DIR/a`, `DIR/b` (or
-`DIR/a1`, `DIR/a2`, `DIR/b1`, `DIR/b2` on `samples=2`), each decrypted and
+`DIR/a1`..`DIR/a4` and `DIR/b1`..`DIR/b4` on `samples=N`), each decrypted and
 unpacked. `merge_gate.py DIR` reads both parts' `REPORT.md` scorecards (a
 Markdown table, as `GATE.md` asks for), matches each row to its anchor line,
 computes one overall (the lowest score; the gate needs every one at 9 or
 more), and, when `DIR/a/grade.json` holds a `--baseline` comparison, adds it.
-On `samples=2` both pairs are merged and both must show a pass for the gate
-to pass.
+With several samples it first prints "Per-item medians" (each item's scores,
+median and spread, and the lowest median), then the grade beside its baseline
+with a row per sample, then every sample's scorecard. The verdict does not use
+the medians: every sample must show a pass for the gate to pass, and a missing
+sample (a gap, one part only, or fewer than `--samples N`) is not a pass.
+While a run goes, only two sessions run at a time, so `watch.sh` needs
+`WATCH_EXPECT="a1 a2 a3 a4 b1 b2 b3 b4"` to wait for the queued parts.
 
 ## The estates
 
@@ -145,7 +154,7 @@ to judge. Job logs are public: build, start and isolate print counts only.
 The review of any trial kind writes no log until it ends. A loop
 (`heartbeat.sh`) publishes counts every 10 minutes to
 `trial/trial-NAME/heartbeat.txt` on ci-results (or `trial/trial-NAME/PART/heartbeat.txt`
-for a gate or baseline part: `a`, `b`, or `a1`/`a2`/`b1`/`b2` on `samples=2`);
+for a gate or baseline part: `a`, `b`, or `a1`..`a4`/`b1`..`b4` on `samples=N`);
 `.github/ci/beat.sh trial NAME [PART]` prints it: UTC time, minutes since the
 stream began, whether `codex` runs, the stream's lines and the seconds since
 its last line, the commands completed, `phases.log`, load and free disk. No
@@ -196,8 +205,8 @@ score (10: hand the job over; 9: at least as good as the usual tools on all
 that was measured, nothing that stops relying on it; 7 to 8; 5 to 6; 3 to 4;
 1 to 2), and each score names what kept it from the next one. Scores before
 that had no anchors: compare across that line with care. The gate passes when
-every merged score is 9 or more and no safety cap applies; the final call
-(before tagging a release) runs `samples=2` and both samples must pass.
+every merged score is 9 or more and no safety cap applies; the review before
+tagging a release runs `samples=4` and all four samples must pass.
 
 ## The score history
 
@@ -231,4 +240,4 @@ usually has one. For the commit to tag, if it has none:
 .github/ci/run.sh checklist v0-14-0       # a tag checklist-v0-14-0, under 20 minutes
 ```
 
-then the `gate` trial with `samples=2`, then the tag.
+then the `gate` trial with `samples=4`, then the tag.
