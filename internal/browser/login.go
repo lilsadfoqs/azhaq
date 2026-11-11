@@ -180,6 +180,7 @@ func (b *Browser) Login(ctx context.Context, loginURL, user, pass string) (_ Ses
 			return Session{}, err
 		}
 	}
+	shown := b.watchDocument(tab, main)
 	nav, cancelNav := context.WithTimeout(tab, 20*time.Second)
 	err = chromedp.Do(nav, chromedp.Navigate(loginURL))
 	cancelNav()
@@ -187,7 +188,7 @@ func (b *Browser) Login(ctx context.Context, loginURL, user, pass string) (_ Ses
 		err = nil
 	}
 	if err != nil {
-		return Session{}, fmt.Errorf("opening %s: %w", loginURL, err)
+		return Session{}, fmt.Errorf("opening %s: %w%s", loginURL, err, b.dialNote())
 	}
 
 	// A single-page app draws its form after load.
@@ -203,7 +204,7 @@ func (b *Browser) Login(ctx context.Context, loginURL, user, pass string) (_ Ses
 		}
 	}
 	if found == "" {
-		return Session{}, fmt.Errorf("no password field on %s", loginURL)
+		return Session{}, fmt.Errorf("no password field on %s: %s%s", loginURL, shown.describe(tab), b.dialNote())
 	}
 	if !strings.Contains(found, "user") && user != "" {
 		return Session{}, fmt.Errorf("a password field but no user name field on %s", loginURL)
@@ -383,4 +384,118 @@ func storedToken(kv []string) (token, from string) {
 		}
 	}
 	return token, from
+}
+
+// dialNote names the connections the guard could not open for Chrome: it
+// had told Chrome they were, and Chrome reports only an empty response.
+func (b *Browser) dialNote() string {
+	if b.guard == nil {
+		return ""
+	}
+	fails := b.guard.DialFailures()
+	if len(fails) == 0 {
+		return ""
+	}
+	if len(fails) > 3 {
+		fails = fails[:3]
+	}
+	var note strings.Builder
+	for _, f := range fails {
+		addr, why, _ := strings.Cut(f, ": ")
+		note.WriteString(fmt.Sprintf(": Chrome's connection to %s failed: %s", addr, why))
+	}
+	return note.String()
+}
+
+// document is what Chrome got for the main document of a tab.
+type document struct {
+	mu     sync.Mutex
+	status int64  // the last answer to the main frame's document request; 0: none
+	failed string // the last document load Chrome gave up on: net::ERR_…
+}
+
+// watchDocument follows the main frame's document answers on ctx.
+func (b *Browser) watchDocument(ctx context.Context, main cdp.FrameID) *document {
+	d := &document{}
+	got := chromedp.Events(ctx, network.ResponseReceived)
+	failed := chromedp.Events(ctx, network.LoadingFailed)
+	go func() {
+		defer guard.Recover(ctx)
+		for ev, err := range got {
+			if err != nil {
+				return
+			}
+			if ev.Type == network.ResourceTypeDocument && ev.FrameID == main && ev.Response != nil {
+				d.mu.Lock()
+				d.status = ev.Response.Status
+				d.mu.Unlock()
+			}
+		}
+	}()
+	go func() {
+		defer guard.Recover(ctx)
+		for ev, err := range failed {
+			if err != nil {
+				return
+			}
+			if ev.Type == network.ResourceTypeDocument {
+				d.mu.Lock()
+				d.failed = ev.ErrorText
+				d.mu.Unlock()
+			}
+		}
+	}()
+	return d
+}
+
+// pageFacts is the title, the size of the HTML and the inputs of the page.
+const pageFacts = `(() => {
+  const ins = [...document.querySelectorAll('input')];
+  return JSON.stringify({
+    title: document.title,
+    size: document.documentElement.outerHTML.length,
+    n: ins.length,
+    inputs: ins.slice(0, 8).map(e => ((e.getAttribute('type') || 'text').toLowerCase() + ' ' + (e.name || e.id || '')).trim()),
+  });
+})()`
+
+// describe says what Chrome shows in tab: where it ended up, the status,
+// title and size, and the inputs; or that it could not load the page.
+func (d *document) describe(tab context.Context) string {
+	loc, err := chromedp.Run(tab, chromedp.Location())
+	if err != nil {
+		return "Chrome's page could not be read: " + err.Error()
+	}
+	d.mu.Lock()
+	status, failed := d.status, d.failed
+	d.mu.Unlock()
+	if strings.HasPrefix(loc, "chrome-error://") {
+		if failed != "" {
+			return "Chrome could not load the page: " + failed
+		}
+		return "Chrome could not load the page (it shows its own error page)"
+	}
+	raw, err := chromedp.Run(tab, chromedp.Evaluate[string](pageFacts))
+	var f struct {
+		Title  string   `json:"title"`
+		Size   int      `json:"size"`
+		N      int      `json:"n"`
+		Inputs []string `json:"inputs"`
+	}
+	if err != nil || json.Unmarshal([]byte(raw), &f) != nil {
+		return "Chrome shows " + loc
+	}
+	what := fmt.Sprintf("Chrome shows %s", loc)
+	if status != 0 {
+		what += fmt.Sprintf(" (status %d)", status)
+	}
+	what += fmt.Sprintf(", title %q, %d bytes of HTML, ", f.Title, f.Size)
+	if f.N == 0 {
+		return what + "no inputs"
+	}
+	what += "inputs: " + strings.Join(f.Inputs, ", ")
+	if f.N > len(f.Inputs) {
+		what += fmt.Sprintf(" and %d more", f.N-len(f.Inputs))
+	}
+	return what
 }

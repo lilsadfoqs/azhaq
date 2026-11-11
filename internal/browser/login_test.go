@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -246,5 +247,62 @@ func TestLoginSendsTheSubmitButtonAndTheHiddenTokenOfTheSession(t *testing.T) {
 	}
 	if s.URL != srv.URL+"/index.php" {
 		t.Errorf("ended on %s", s.URL)
+	}
+}
+
+// A page with no password input says what Chrome showed: where it ended,
+// the status, title and size, and the inputs it has.
+func TestLoginNoPasswordFieldSaysWhatChromeShowed(t *testing.T) {
+	if _, err := Find(); err != nil {
+		t.Skip(err)
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `<html><head><title>Step one</title></head><body><form><input type=text name=username><input type=hidden name=user_token value=x></form></body></html>`)
+	}))
+	defer srv.Close()
+	b := &Browser{}
+	defer b.Close()
+	if err := b.Start(); errors.Is(err, ErrNoSandbox) {
+		t.Skip(err)
+	} else if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	_, err := b.Login(ctx, srv.URL+"/login.php", "u", "p")
+	if err == nil {
+		t.Fatal("signed in on a page with no password field")
+	}
+	for _, want := range []string{"no password field on " + srv.URL + "/login.php", "Chrome shows " + srv.URL + "/login.php (status 200)", `title "Step one"`, "bytes of HTML", "inputs: text username, hidden user_token"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q lacks %q", err, want)
+		}
+	}
+}
+
+// A connection the guard could not open is named in the error, not left as
+// Chrome's empty response or refused connection.
+func TestLoginNamesTheConnectionTheGuardCouldNotOpen(t *testing.T) {
+	if _, err := Find(); err != nil {
+		t.Skip(err)
+	}
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr := ln.Addr().String()
+	ln.Close() // nothing listens there now
+	b := &Browser{}
+	defer b.Close()
+	if err := b.Start(); errors.Is(err, ErrNoSandbox) {
+		t.Skip(err)
+	} else if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	_, err = b.Login(ctx, "http://"+addr+"/login", "u", "p")
+	if err == nil || !strings.Contains(err.Error(), "Chrome's connection to "+addr+" failed: ") {
+		t.Fatalf("error %v does not name the connection to %s", err, addr)
 	}
 }

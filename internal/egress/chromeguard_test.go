@@ -3,7 +3,9 @@ package egress
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -96,5 +98,51 @@ func TestChromeGuardRelaysToTheScopeOnly(t *testing.T) {
 	}
 	if hits.Load() != 1 {
 		t.Fatalf("the server saw %d requests, want 1", hits.Load())
+	}
+}
+
+// A connection the guard cannot open after telling Chrome it could is kept
+// with its reason, for the sign-in to name; a later one that works clears it.
+func TestChromeGuardKeepsWhyADialFailed(t *testing.T) {
+	Reset()
+	defer Reset()
+	SetResolver(func(context.Context, string) []string { return nil })
+	SetResolverOnly(true)
+	srv, _ := counting(t)
+	g, err := NewChromeGuard(func(string) bool { return true })
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer g.Close()
+	g.Chrome(os.Getpid())
+	d, err := proxy.SOCKS5("tcp", g.Addr(), nil, proxy.Direct)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, err := d.Dial("tcp", "app.lab.internal:8080") // told it worked
+	if err != nil {
+		t.Fatal(err)
+	}
+	fmt.Fprintf(c, "GET / HTTP/1.1\r\nHost: x\r\n\r\n")
+	_, _ = io.Copy(io.Discard, c) // closed once the dial failed
+	c.Close()
+	err = g.FailedDial("app.lab.internal:8080")
+	if err == nil || !strings.Contains(err.Error(), "no address from the resolvers") {
+		t.Fatalf("FailedDial: %v", err)
+	}
+	if f := g.DialFailures(); len(f) != 1 || !strings.HasPrefix(f[0], "app.lab.internal:8080: ") {
+		t.Fatalf("DialFailures: %v", f)
+	}
+	addr := srv.Listener.Addr().String()
+	g.dialFailed(addr, errors.New("earlier"))
+	c, err = d.Dial("tcp", addr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fmt.Fprintf(c, "GET / HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n")
+	_, _ = io.Copy(io.Discard, c)
+	c.Close()
+	if err := g.FailedDial(addr); err != nil {
+		t.Fatalf("a dial that worked left %v", err)
 	}
 }

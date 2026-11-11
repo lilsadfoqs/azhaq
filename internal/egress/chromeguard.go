@@ -49,6 +49,50 @@ type ChromeGuard struct {
 	closed bool
 	wg     sync.WaitGroup // connections being handled
 	denied map[string]int // host → connections refused for being outside the scope
+	failed map[string]error
+}
+
+// maxFailed caps the addresses whose dial failure the guard keeps.
+const maxFailed = 16
+
+// dialFailed keeps why the connection to addr could not be opened: Chrome
+// was told it was, and sees only an empty response. A later success clears it.
+func (g *ChromeGuard) dialFailed(addr string, err error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.failed == nil {
+		g.failed = map[string]error{}
+	}
+	if _, ok := g.failed[addr]; ok || len(g.failed) < maxFailed {
+		g.failed[addr] = err
+	}
+}
+
+func (g *ChromeGuard) dialWorked(addr string) {
+	g.mu.Lock()
+	delete(g.failed, addr)
+	g.mu.Unlock()
+}
+
+// FailedDial is why the last connection the guard made for Chrome to addr
+// (host:port) failed; nil when none did.
+func (g *ChromeGuard) FailedDial(addr string) error {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.failed[addr]
+}
+
+// DialFailures lists the connections that failed, "host:port: reason",
+// sorted.
+func (g *ChromeGuard) DialFailures() []string {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	out := make([]string, 0, len(g.failed))
+	for a, err := range g.failed {
+		out = append(out, a+": "+err.Error())
+	}
+	slices.Sort(out)
+	return out
 }
 
 // SetProxy sends Chrome's connections through p (-chrome-proxy); nil: -proxy's,
@@ -241,6 +285,7 @@ func (g *ChromeGuard) handle(c net.Conn) {
 	}
 	p, err := upstream(scheme, addr, g.via)
 	if err != nil {
+		g.dialFailed(addr, err)
 		if ws {
 			Refund()
 		}
@@ -256,11 +301,13 @@ func (g *ChromeGuard) handle(c net.Conn) {
 	up, err := dialOut(ctx, p, addr)
 	cancel()
 	if err != nil {
+		g.dialFailed(addr, err)
 		if ws {
 			Refund()
 		}
 		return
 	}
+	g.dialWorked(addr)
 	if ws {
 		// A WebSocket handshake is no paused request: the connection is
 		// the entry, once there is one to send it on.
@@ -501,6 +548,7 @@ func (g *ChromeGuard) forward(c net.Conn, r *bufio.Reader, p *url.URL, addr stri
 	up, err := DialProxy(ctx, "tcp", at)
 	cancel()
 	if err != nil {
+		g.dialFailed(addr, err)
 		return
 	}
 	defer up.Close()

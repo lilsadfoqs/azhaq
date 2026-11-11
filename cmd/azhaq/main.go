@@ -957,6 +957,13 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 			return chromeStartErr(fmt.Errorf("-screenshots and -browser: %w", err))
 		}
 	}
+	resolvers, err := dnsr.ParseResolvers(*resolversFile)
+	if err != nil {
+		return usagef("-resolvers: %v", err)
+	}
+	// In force before the sign-in: Chrome's connections dial through them too.
+	opts.DNS = useResolvers(resolvers, *dnsRate)
+	probePool = opts.DNS
 	var loginHome string
 	var loginRenew func(context.Context) error
 	if *login != "" && out.plan {
@@ -1060,16 +1067,6 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 			return err
 		}
 	}
-	resolvers, err := dnsr.ParseResolvers(*resolversFile)
-	if err != nil {
-		return usagef("-resolvers: %v", err)
-	}
-	// 3 s an attempt, as dnsx waits: a slow zone answers in time for both.
-	opts.DNS = dnsr.New(dnsr.Options{Resolvers: resolvers, PerSecond: *dnsRate, Timeout: 3 * time.Second})
-	probePool = opts.DNS
-	// HTTP connects to the addresses azhaq-dns found: one answer per name.
-	egress.SetResolver(func(ctx context.Context, host string) []string { return opts.DNS.ResolveBoth(ctx, host).IPs() })
-	egress.SetResolverOnly(len(resolvers) > 0) // named resolvers answer every name: a failure is not retried on the system's
 	if *bruteFile != "" {
 		if opts.BruteWords, err = loadLines(*bruteFile); err != nil {
 			return err
@@ -1723,6 +1720,8 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 			rep.Stopped = fmt.Sprintf("-max-names %d reached, %d guesses not asked (azhaq resume asks them)", *maxNames, n)
 		}
 	}
+	// What resume -retry-failed asks again of the sweeps this run left unrecorded.
+	_ = st.SetMeta(sweepsKey(st.RunID()), strings.Join(rep.unrecordedSweeps(), "\n"))
 	if !out.embedded && rep.Command == "run" && len(opts.Ports) > 0 {
 		if obs, err := st.Observations(); err == nil {
 			if scanned, open := portAddresses(obs); scanned > 0 {
@@ -2539,6 +2538,17 @@ var storedList []string
 // probeSeeding says the list is probe's: a host:port is asked over plain
 // HTTP first where httpx does.
 var probeSeeding bool
+
+// useResolvers gives egress the run's resolvers: HTTP connects to the
+// addresses azhaq-dns found, one answer per name. Named resolvers answer
+// every name, so a failure is not retried on the system's.
+func useResolvers(resolvers []string, perSecond float64) *dnsr.Pool {
+	// 3 s an attempt, as dnsx waits: a slow zone answers in time for both.
+	pool := dnsr.New(dnsr.Options{Resolvers: resolvers, PerSecond: perSecond, Timeout: 3 * time.Second})
+	egress.SetResolver(func(ctx context.Context, host string) []string { return pool.ResolveBoth(ctx, host).IPs() })
+	egress.SetResolverOnly(len(resolvers) > 0)
+	return pool
+}
 
 // probePool is the run's resolver pool, for the resolvers a probe row names.
 var probePool *dnsr.Pool
