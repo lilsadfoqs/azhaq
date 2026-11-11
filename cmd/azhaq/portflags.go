@@ -21,6 +21,7 @@ type portFlags struct {
 	proxy, proxyAuth                             string
 	excludeCDN, cdnFull, allIPs                  bool
 	on                                           []string
+	skip                                         string
 }
 
 // portConfig reads the flags into the collector's knobs; a value it does
@@ -97,6 +98,13 @@ func portConfig(f portFlags) (portcol.Config, error) {
 		if cfg.Detect == portscan.DetectAll {
 			cfg.Detect = portscan.DetectBanner
 		}
+	}
+	if f.skip != "" {
+		skip, err := portscan.Ports(f.skip)
+		if err != nil {
+			return cfg, usagef("-port-skip: %v", err)
+		}
+		cfg.NoPorts = skip
 	}
 	if f.timeout < 0 || f.workers < 0 || f.threshold < 0 {
 		return cfg, usagef("-port-timeout, -port-workers and -port-threshold are not negative")

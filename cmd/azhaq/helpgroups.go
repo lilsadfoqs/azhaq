@@ -47,7 +47,7 @@ var helpSpecs = map[string]helpSpec{
 				dirs-mw dirs-rate dirs-threads facts obs params-chunk params-delay params-include params-method
 				params-all params-per-host params-rate params-stable params-targets params-threads params-timeout
 				port-all-ips port-detect port-discover port-ip port-min-rate port-order port-payload port-proxy
-				port-proxy-auth port-rate port-retries port-seed port-source-ip port-threshold port-timeout
+				port-proxy-auth port-rate port-retries port-seed port-skip port-source-ip port-threshold port-timeout
 				port-unnamed port-workers shot-codes shot-format shot-fullpage shot-html shot-js shot-quality
 				shot-size shot-timeout shot-wait urls urls-archive urls-blacklist urls-fc urls-fp urls-from
 				urls-ft urls-keep-junk urls-max urls-mc urls-mt urls-pages urls-pause urls-proxy urls-raw urls-retries

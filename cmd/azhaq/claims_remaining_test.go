@@ -449,10 +449,10 @@ func TestRunSweepIsCidrForEachRangeAndMaxIPsCutsOnlyWhatIsNotScanned(t *testing.
 	if counts(big) != "addresses 3 ports 3" || len(askedBig) != 256 || strings.Contains(notesOf(big), "expanded") {
 		t.Errorf("-sweep of a /24 with -ports and -max-ips 4: %s, %d addresses asked, notes %v", counts(big), len(askedBig), big["notes"])
 	}
-	// Without it: 4 of the 16 addresses, and the summary says so.
-	cut, askedCut := run("cut", "-allow", "127.7.7.0/28", "-sweep", "-max-ips", "4")
+	// With -ports none (no port is asked): 4 of the 16 addresses, and the summary says so.
+	cut, askedCut := run("cut", "-allow", "127.7.7.0/28", "-sweep", "-ports", "none", "-max-ips", "4")
 	if c, _ := cut["counts"].(map[string]any); c["addresses"] != float64(4) || len(askedCut) != 4 || !strings.Contains(notesOf(cut), "expanded 4 of 16 addresses (-max-ips 4 for the run)") {
-		t.Errorf("-sweep of a /28 without -ports and -max-ips 4: %s, %d addresses asked, notes %v", counts(cut), len(askedCut), cut["notes"])
+		t.Errorf("-sweep of a /28 with -ports none and -max-ips 4: %s, %d addresses asked, notes %v", counts(cut), len(askedCut), cut["notes"])
 	}
 }
 

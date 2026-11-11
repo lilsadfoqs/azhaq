@@ -68,7 +68,7 @@ The summary and the exit codes are `run`'s: see [run](run.md#summary-and-exit-co
 | `-skip` | string |  | collectors not to run, comma-separated: azhaq-ports or ports, subs for the subdomain collector (azhaq plan lists them); a name that is none is an error; azhaq resume leaves out the tasks the run kept for them |
 | `-dirs` | string |  | guess paths on each web service from this wordlist, or @common for the built-in one (active; the targets given are the scope unless -allow) |
 | `-params` | string |  | find query parameters pages read, from this wordlist or small, medium or large for a built-in one (active; the targets given are the scope unless -allow) |
-| `-ports` | string |  | scan TCP ports: default (the top 100 and the usual ports of the services azhaq names and checks), top-100, top-1000, full or a list of ports, ranges and these names, such as 22,80,8000-8100 or top-100,8888 (active; the targets given are the scope unless -allow) |
+| `-ports` | string |  | scan TCP ports: default (the top 1000 and the usual ports of the services azhaq names and checks, then every TCP port of each address that answered; what a range or an address among the targets gets when no -ports is given), top-100, top-1000, full or a list of ports, ranges and these names, such as 22,80,8000-8100 or top-100,8888 (active; the targets given are the scope unless -allow) |
 | `-ports-on` | string, repeatable |  | scan only these ports on a host: HOST=22,80 |
 | `-ports-udp` | string |  | ask UDP ports (active): top (about 25 common ones), full or a list of ports, ranges and these names, such as 53,123,161,1-1024 or top,5354; a reply is open, an ICMP unreachable closed, neither open\|filtered (-ports none: UDP only) |
 | `-dns-brute` | string |  | resolve WORD.domain for each word in this file (active; the targets given are the scope unless -allow) |
@@ -213,7 +213,7 @@ The summary and the exit codes are `run`'s: see [run](run.md#summary-and-exit-co
 | `-strict-exit` | bool |  | exit 3 for any failure, a target among many included (the rule before 0.15); without it a run that did its job exits 0 and its summary counts and lists the failures |
 
 <details>
-<summary>Other names, flags accepted with no effect and rarely used flags (81)</summary>
+<summary>Other names, flags accepted with no effect and rarely used flags (82)</summary>
 
 | Flag | Type | Default | Meaning | Kind |
 | --- | --- | --- | --- | --- |
@@ -262,6 +262,7 @@ The summary and the exit codes are `run`'s: see [run](run.md#summary-and-exit-co
 | `-port-rate` | float |  | port connection attempts per second, a ceiling (0: 1500, as naabu's connect scan, and 127.0.0.1 unpaced) | rarely needed |
 | `-port-retries` | int | `-1` | more passes over the ports that neither accepted nor refused: n passes over all of them, 0 none (default: one, when few did not answer) | rarely needed |
 | `-port-seed` | int |  | make the random port order repeat (0: a new one each run) | rarely needed |
+| `-port-skip` | string |  | TCP ports never asked, in any pass: a list as -ports reads it, such as 25,9000-9010 (what -ep of the ports command passes) | rarely needed |
 | `-port-source-ip` | string |  | connect from this local address, one of this machine's (any other is refused) | rarely needed |
 | `-port-threshold` | int |  | stop asking a host after this many open ports: it answers every port (0: no limit) | rarely needed |
 | `-port-timeout` | duration |  | wait this long for one port to accept or refuse a connect (0: 1.5s) | rarely needed |

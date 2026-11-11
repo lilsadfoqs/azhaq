@@ -120,6 +120,10 @@ func (c *Collector) runPrefix(ctx context.Context, seed types.Seed, emit func(ty
 		asked     = len(swept) // addresses scanned wholly or in part, for a range a limit stopped
 		// The closed UDP ports of addresses that have no row, and those addresses.
 		udpRefused, udpRefusing int
+		// The addresses that answered the first pass of the default scan: their second
+		// pass goes on when every address has had the first.
+		later []func()
+		phase = 1
 	)
 	down, out, filtAddrs, edgeAddrs = sweep.Counts["down"], sweep.Counts["outside_scope"], sweep.Counts["filtered_addresses"], sweep.Counts["cdn_addresses"]
 	udpFilt, udpSilent, withOpen = sweep.Counts["udp_silent_ports"], sweep.Counts["udp_silent_addresses"], sweep.Counts["with_open"]
@@ -242,7 +246,7 @@ func (c *Collector) runPrefix(ctx context.Context, seed types.Seed, emit func(ty
 					mu.Lock()
 					defer mu.Unlock()
 					return emit(o)
-				}, ip, ip, all, prior, resumed, edgeName, edge, pf.String()))
+				}, ip, ip, all, prior, resumed, edgeName, edge, pf.String(), c.passOf(1)))
 			}
 			switch {
 			case len(ports) == 0:
@@ -272,98 +276,153 @@ func (c *Collector) runPrefix(ctx context.Context, seed types.Seed, emit func(ty
 			mu.Lock()
 			asked++
 			mu.Unlock()
-			if resumed {
-				s, ports = withPrior(s, prior), all
-			}
-			var udp portscan.UDPReport
-			if len(c.UDPPorts) > 0 && !edge && s.up && c.Discover != DiscoverOnly {
-				if uports, _ := inScope(ip, ip, c.UDPPorts); len(uports) > 0 {
-					udp, uerr = c.scanUDPGated(ctx, ip, uports, prior.UDP)
+			finish := func(s *scan, ports []int) {
+				if resumed {
+					s, ports = withPrior(s, prior), all
 				}
-				if uerr != nil {
-					recordStops(ip, udp.Stopped)
-					res := result{err: uerr}
-					if stopped(uerr) {
-						// What it settled is kept, with how far it asked the rest.
-						row := c.row(ip, ip, ports, s, edgeName, edge)
-						row["prefix"] = pf.String()
-						if outScope > 0 {
-							row[outScopeKey] = outScope
-						}
-						c.udpRow(row, udp, len(c.UDPPorts))
-						c.markPartial(row, ports)
-						res.row = row
+				if s.pass2 {
+					ports = c.allAsked(ip, ip, all)
+				}
+				var udp portscan.UDPReport
+				if len(c.UDPPorts) > 0 && !edge && s.up && c.Discover != DiscoverOnly {
+					if uports, _ := inScope(ip, ip, c.UDPPorts); len(uports) > 0 {
+						udp, uerr = c.scanUDPGated(ctx, ip, uports, prior.UDP)
 					}
-					record(res)
+					if uerr != nil {
+						recordStops(ip, udp.Stopped)
+						res := result{err: uerr}
+						if stopped(uerr) {
+							// What it settled is kept, with how far it asked the rest.
+							row := c.row(ip, ip, ports, s, edgeName, edge)
+							row["prefix"] = pf.String()
+							if outScope > 0 {
+								row[outScopeKey] = outScope
+							}
+							c.udpRow(row, udp, len(c.UDPPorts))
+							c.markPartial(row, ports)
+							res.row = row
+						}
+						record(res)
+						return
+					}
+				}
+				// Silent ports are rows where the address showed life (a reply, a
+				// refusal or an open port), or was the one asked.
+				listed := len(udp.OpenFiltered) > 0 && (single || len(s.open) > 0 || len(udp.Open) > 0 || udp.Closed > 0)
+				// An address that shows nothing has no row: the range's row counts
+				// them. The one asked has a row for the UDP ports it refused.
+				rowless := len(s.open) == 0 && len(udp.Open) == 0 && !listed && !(c.Discover == DiscoverOnly && s.up) && !(single && udp.Closed > 0)
+				// Counted and marked finished together, after the address's row is
+				// written: a checkpoint of the block (below) never names an address
+				// whose row or count is missing.
+				apply := func() {
+					mu.Lock()
+					defer mu.Unlock()
+					switch {
+					case !s.up:
+						down++
+					case len(s.open) > 0 || len(udp.Open) > 0:
+						withOpen++
+					}
+					if len(s.silent) > 0 {
+						filtAddrs++
+					}
+					if edge && c.ExcludeCDN {
+						edgeAddrs++
+					}
+					if len(udp.OpenFiltered) > 0 && !listed {
+						udpFilt += len(udp.OpenFiltered)
+						udpSilent++
+					}
+					if rowless && udp.Closed > 0 {
+						udpRefused += udp.Closed
+						udpRefusing++
+					}
+					if rowless && outScope > 0 { // no row of its own to say it
+						portsOut += outScope
+						portsAddr++
+					}
+					finished[place] = true
+				}
+				if rowless {
+					if len(udp.OpenFiltered) > 0 {
+						// The silent ports of an address that showed nothing else are
+						// kept, in a row that no command prints unless asked: the
+						// range's row and the summary count them.
+						record(result{row: silentRow(ip, pf.String(), udp, len(c.UDPPorts))})
+					}
+					apply()
 					return
 				}
-			}
-			// Silent ports are rows where the address showed life (a reply, a
-			// refusal or an open port), or was the one asked.
-			listed := len(udp.OpenFiltered) > 0 && (single || len(s.open) > 0 || len(udp.Open) > 0 || udp.Closed > 0)
-			// An address that shows nothing has no row: the range's row counts
-			// them. The one asked has a row for the UDP ports it refused.
-			rowless := len(s.open) == 0 && len(udp.Open) == 0 && !listed && !(c.Discover == DiscoverOnly && s.up) && !(single && udp.Closed > 0)
-			// Counted and marked finished together, after the address's row is
-			// written: a checkpoint of the block (below) never names an address
-			// whose row or count is missing.
-			apply := func() {
-				mu.Lock()
-				defer mu.Unlock()
-				switch {
-				case !s.up:
-					down++
-				case len(s.open) > 0 || len(udp.Open) > 0:
-					withOpen++
+				row := c.row(ip, ip, ports, s, edgeName, edge)
+				row["prefix"] = pf.String()
+				if outScope > 0 {
+					row[outScopeKey] = outScope
 				}
-				if len(s.silent) > 0 {
-					filtAddrs++
+				if len(c.UDPPorts) > 0 && !edge && s.up && c.Discover != DiscoverOnly {
+					c.udpRow(row, udp, len(c.UDPPorts))
 				}
-				if edge && c.ExcludeCDN {
-					edgeAddrs++
+				follow := len(s.open) > 0 || len(udp.Open) > 0
+				if follow {
+					// The address seed that follows finds its scan done.
+					c.remember(ip, s, udp, len(c.UDPPorts) > 0 && !edge && s.up && c.Discover != DiscoverOnly)
 				}
-				if len(udp.OpenFiltered) > 0 && !listed {
-					udpFilt += len(udp.OpenFiltered)
-					udpSilent++
-				}
-				if rowless && udp.Closed > 0 {
-					udpRefused += udp.Closed
-					udpRefusing++
-				}
-				if rowless && outScope > 0 { // no row of its own to say it
-					portsOut += outScope
-					portsAddr++
-				}
-				finished[place] = true
-			}
-			if rowless {
-				if len(udp.OpenFiltered) > 0 {
-					// The silent ports of an address that showed nothing else are
-					// kept, in a row that no command prints unless asked: the
-					// range's row and the summary count them.
-					record(result{row: silentRow(ip, pf.String(), udp, len(c.UDPPorts))})
-				}
+				record(result{row: row, open: s.open, ip: ip, follow: follow, sent: &early.sent})
 				apply()
+			}
+			if c.escalates(ip, edge, s, prior) {
+				// An address that answered goes on to the second pass, once every
+				// address of the block has had the first.
+				job := func() {
+					c.second(ctx, func(o types.Observation) error {
+						mu.Lock()
+						defer mu.Unlock()
+						return emit(o)
+					}, ip, ip, all, ports, prior, resumed, s, edgeName, edge, pf.String(), early.found)
+					if s.err != nil {
+						res := result{err: s.err}
+						if stopped(s.err) {
+							if res.row = c.partialRow(ip, ip, all, ports, s, prior, resumed, edgeName, edge); res.row != nil {
+								res.row["prefix"] = pf.String()
+							}
+						}
+						record(res)
+						return
+					}
+					finish(s, ports)
+				}
+				mu.Lock()
+				later = append(later, job)
+				mu.Unlock()
 				return
 			}
-			row := c.row(ip, ip, ports, s, edgeName, edge)
-			row["prefix"] = pf.String()
-			if outScope > 0 {
-				row[outScopeKey] = outScope
-			}
-			if len(c.UDPPorts) > 0 && !edge && s.up && c.Discover != DiscoverOnly {
-				c.udpRow(row, udp, len(c.UDPPorts))
-			}
-			follow := len(s.open) > 0 || len(udp.Open) > 0
-			if follow {
-				// The address seed that follows finds its scan done.
-				c.remember(ip, s, udp, len(c.UDPPorts) > 0 && !edge && s.up && c.Discover != DiscoverOnly)
-			}
-			record(result{row: row, open: s.open, ip: ip, follow: follow, sent: &early.sent})
-			apply()
+			finish(s, ports)
 		}(a, at+1)
 	}
 	wg.Wait()
+	mu.Lock()
+	run2 := first == nil && ctx.Err() == nil
+	mu.Unlock()
+	if run2 && len(later) > 0 {
+		phase = 2
+		for _, job := range later {
+			mu.Lock()
+			stop := first != nil
+			mu.Unlock()
+			if stop || ctx.Err() != nil {
+				break
+			}
+			wg.Add(1)
+			sem <- struct{}{}
+			go func(job func()) {
+				defer guard.Recover(ctx)
+				defer wg.Done()
+				defer func() { <-sem }()
+				job()
+			}(job)
+		}
+		wg.Wait()
+	}
 	if err := ctx.Err(); err != nil {
 		return types.RunMeta{Status: types.StatusCancelled}, err
 	}
@@ -377,6 +436,8 @@ func (c *Collector) runPrefix(ctx context.Context, seed types.Seed, emit func(ty
 		row := counts()
 		row["range"], row["prefix"], row["addresses"], row["stopped"], row["open"] = true, pf.String(), asked, true, []int{}
 		row[SweptKey] = portscan.Compact(slices.Collect(maps.Keys(finished)))
+		c.markPass(row, phase, 0)
+		row["addresses_of"] = len(addrs)
 		raw, _ := json.Marshal(row)
 		_ = emit(types.Observation{Collector: Name, Source: "tcp", Kind: "ports", Payload: raw, Confidence: 0.95, ObservedAt: time.Now().UTC(), Keep: true})
 		return types.RunMeta{Status: types.StatusCapped, EmitCount: meta.EmitCount}, first

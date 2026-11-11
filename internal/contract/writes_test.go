@@ -141,9 +141,11 @@ func TestGuessesAndProbesGoOutOnlyWhenAsked(t *testing.T) {
 		{"a port (-ports)", func(t *testing.T, on bool) int {
 			l := newLabs(t)
 			l.Ports = newPortLab(t)
-			a := []string{"run", "-cidr", "127.0.0.1/32", "-allow", "127.0.0.1", "-sources", "none", "-db", "w.db"}
+			// A URL target starts no port scan; -ports asks the port. (A range or an address
+			// among the targets is asked its ports without the flag: -ports default.)
+			a := []string{"run", "-url", l.Site.URL, "-allow", l.Allow(), "-sources", "none", "-db", "w.db"}
 			if on {
-				a = append(a, "-ports", portOf(l.Ports.Banner))
+				a = []string{"run", "-cidr", "127.0.0.1/32", "-allow", "127.0.0.1", "-sources", "none", "-db", "w.db", "-ports", portOf(l.Ports.Banner)}
 			}
 			RunRaw(t, l.Dir, nil, withJSON(a)...)
 			return l.Ports.Wire.TCP()[l.Ports.Banner]

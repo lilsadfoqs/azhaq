@@ -47,10 +47,10 @@ func newAddressLab(t *testing.T) *addressLab {
 }
 
 // runCIDR maps 127.0.0.1 as an address of a -cidr, the web port named only by
-// -web-ports: the address path, no URL given and no port scan.
+// -web-ports: the address path, no URL given and no port scan (-ports none).
 func (l *addressLab) runCIDR(t *testing.T, db string) report {
 	t.Helper()
-	_, rep, code := runContract(t, "run", "-cidr", "127.0.0.1/32", "-allow", "127.0.0.1", "-sources", "none",
+	_, rep, code := runContract(t, "run", "-cidr", "127.0.0.1/32", "-allow", "127.0.0.1", "-sources", "none", "-ports", "none",
 		"-web-ports", l.port, "-no-history", "-db", db)
 	if code != exitOK {
 		t.Fatalf("exit %d: failed %+v notes %q", code, rep.Failed, rep.Notes)

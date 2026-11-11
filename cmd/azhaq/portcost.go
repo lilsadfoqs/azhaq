@@ -4,6 +4,7 @@ import (
 	"math"
 	"net"
 	"net/netip"
+	"slices"
 	"strconv"
 
 	"github.com/lilsadfoqs/azhaq/internal/cdnranges"
@@ -41,11 +42,62 @@ type portModel struct {
 	passes    int // the most times a port is asked: 1, and each pass over the ones that did not answer
 	nameAddrs int // the most addresses of a name that are scanned; 0: every one it has (-port-all-ips)
 	probes    int // the most connects an open port costs after the one that found it
+	// The default scan's second pass: every port but the skipped ones, asked of an
+	// address that answered, and the ports a URL target adds to an address's first.
+	escalate bool
+	full     []int
+	also     map[string][]int
+}
+
+// secondPortsOf is how many ports the second pass of the default scan asks of an
+// address: the 65535, less the ports of the first pass and those -port-skip leaves out.
+func secondPortsOf(first int, skip []int) int {
+	return max(allTCPPorts-len(skip)-first, 0)
+}
+
+// listOf is the ports asked of host in the first pass: its own, or the list and the
+// ports its URL targets add.
+func (m portModel) listOf(host string) []int {
+	if own, ok := m.own[host]; ok {
+		return own
+	}
+	if extra := m.also[host]; len(extra) > 0 {
+		return unionInts(m.tcp, extra)
+	}
+	return m.tcp
+}
+
+func unionInts(a, b []int) []int {
+	all := slices.Concat(a, b)
+	slices.Sort(all)
+	return slices.Compact(all)
+}
+
+// goesOn says whether an address that answers is asked the second pass.
+func (m portModel) goesOn(host string, e edge) bool {
+	if _, own := m.own[host]; own || !m.escalate || m.threshold > 0 || m.discover == portcol.DiscoverOnly {
+		return false
+	}
+	return !(e == edgeYes && m.excludeCDN)
+}
+
+// second is the connects of the second pass of host at ip that the scope allows.
+func (m portModel) second(host, ip string) int64 {
+	all, _ := m.kept(host, ip, m.full)
+	first, _ := m.kept(host, ip, m.listOf(host))
+	return int64(max(all-first, 0))
 }
 
 func newPortModel(rules scope.Rules, env costEnv) portModel {
 	m := portModel{rules: rules, tcp: env.portList, udp: env.portUDPList, own: env.portsFor, discover: env.portDiscover,
-		excludeCDN: env.portExcludeCDN, threshold: env.portThreshold, passes: max(env.portPasses, 1), nameAddrs: env.portNameAddrs}
+		excludeCDN: env.portExcludeCDN, threshold: env.portThreshold, passes: max(env.portPasses, 1), nameAddrs: env.portNameAddrs,
+		escalate: env.portEscalate, also: env.portAlso}
+	if m.escalate {
+		m.full, _ = portscan.Ports("full")
+		if len(env.portSkip) > 0 {
+			m.full, _ = portscan.Exclude(m.full, portscan.Spec(env.portSkip))
+		}
+	}
 	if env.portDetect == portscan.DetectAll {
 		m.probes = portscan.MaxConnectsPerOpenPort
 	}
@@ -75,9 +127,9 @@ func satMul(a, b int64) int64 {
 
 // ceilOne is the most one address is sent: connects, datagrams.
 func (m portModel) ceilOne(host, ip string) (tcp, udp int64) {
-	list := m.tcp
-	if own, ok := m.own[host]; ok {
-		list = own
+	list := m.listOf(host)
+	if _, own := m.own[host]; m.escalate && !own && m.discover != portcol.DiscoverOnly {
+		list = m.full // every port is asked, if the address answers
 	}
 	discovery := int64(2 * len(portscan.DiscoveryPorts)) // two tries of each port
 	if m.discover == portcol.DiscoverOnly {
@@ -122,9 +174,11 @@ func (m portModel) ceilSpan(pf netip.Prefix) ceiling {
 	for _, a := range m.rules.PortedAddrs(pf) {
 		special[a] = true
 	}
-	for h := range m.own {
-		if a, err := netip.ParseAddr(h); err == nil && pf.Contains(a.Unmap()) && m.rules.Allows(a.String()) {
-			special[a.Unmap()] = true
+	for _, hosts := range []map[string][]int{m.own, m.also} {
+		for h := range hosts {
+			if a, err := netip.ParseAddr(h); err == nil && pf.Contains(a.Unmap()) && m.rules.Allows(a.String()) {
+				special[a.Unmap()] = true
+			}
 		}
 	}
 	for a := range special {
@@ -210,10 +264,7 @@ func (m portModel) one(host, ip string, e edge, asUp bool) amount {
 		a, b := m.one(host, ip, edgeNo, asUp), m.one(host, ip, edgeYes, asUp)
 		return amount{Connects: min(a.Connects, b.Connects), Datagrams: min(a.Datagrams, b.Datagrams)} // no datagram is certain
 	}
-	list := m.tcp
-	if own, ok := m.own[host]; ok {
-		list = own
-	}
+	list := m.listOf(host)
 	if e == edgeYes && m.excludeCDN {
 		list = portcol.CDNPorts()
 	}
@@ -231,6 +282,9 @@ func (m portModel) one(host, ip string, e edge, asUp bool) amount {
 		}
 	default:
 		tcp = 2
+	}
+	if kept > 0 && asUp && m.goesOn(host, e) {
+		tcp += m.second(host, ip)
 	}
 	var udp int64
 	if len(m.udp) > 0 && e == edgeNo && m.discover != portcol.DiscoverOnly && (asUp || m.discover == portcol.DiscoverOff) {
@@ -272,9 +326,11 @@ func (m portModel) span(pf netip.Prefix) amount {
 	for _, a := range m.rules.PortedAddrs(pf) {
 		special[a] = true
 	}
-	for h := range m.own {
-		if a, err := netip.ParseAddr(h); err == nil && pf.Contains(a.Unmap()) && m.rules.Allows(a.String()) {
-			special[a.Unmap()] = true
+	for _, hosts := range []map[string][]int{m.own, m.also} {
+		for h := range hosts {
+			if a, err := netip.ParseAddr(h); err == nil && pf.Contains(a.Unmap()) && m.rules.Allows(a.String()) {
+				special[a.Unmap()] = true
+			}
 		}
 	}
 	for a := range special {

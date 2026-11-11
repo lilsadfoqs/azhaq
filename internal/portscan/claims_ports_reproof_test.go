@@ -14,7 +14,7 @@ import (
 	"github.com/lilsadfoqs/azhaq/internal/ledger"
 )
 
-// The default set is the top 100 and 63 ports more, the usual ports of the
+// The usual set is the top 100 and 63 ports more, the usual ports of the
 // services azhaq names, and the top 100 alone leaves those 63 out: so
 // -p top-100 does not ask Redis's, MongoDB's, memcached's or Kafka's port.
 func TestTheTopHundredAloneLeavesOutThePortsOfTheServicesAzhaqNames(t *testing.T) {
@@ -22,9 +22,9 @@ func TestTheTopHundredAloneLeavesOutThePortsOfTheServicesAzhaqNames(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	def := DefaultPorts()
+	def := UsualPorts()
 	if len(top) != 100 || len(def) != 163 {
-		t.Fatalf("top-100 has %d ports and the default set %d, want 100 and 163", len(top), len(def))
+		t.Fatalf("top-100 has %d ports and the usual set %d, want 100 and 163", len(top), len(def))
 	}
 	more := 0
 	for _, p := range def {
@@ -33,11 +33,11 @@ func TestTheTopHundredAloneLeavesOutThePortsOfTheServicesAzhaqNames(t *testing.T
 		}
 	}
 	if more != 63 {
-		t.Errorf("the default set has %d ports the top 100 lacks, want 63", more)
+		t.Errorf("the usual set has %d ports the top 100 lacks, want 63", more)
 	}
 	for _, p := range []int{6379, 27017, 11211, 9092} {
 		if slices.Contains(top, p) || !slices.Contains(def, p) {
-			t.Errorf("port %d: in the top 100 %v, in the default set %v; want out of the first and in the second", p, slices.Contains(top, p), slices.Contains(def, p))
+			t.Errorf("port %d: in the top 100 %v, in the usual set %v; want out of the first and in the second", p, slices.Contains(top, p), slices.Contains(def, p))
 		}
 	}
 }

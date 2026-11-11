@@ -30,7 +30,7 @@ const (
 
 // Ports parses a comma-separated list whose parts are each a name
 // (top-100, top-1000, full), a port or a range: "top-100,8888-8890". "none"
-// alone is no ports; an empty spec is the default set (DefaultPorts).
+// alone is no ports; an empty spec is the first pass of the default scan (DefaultPorts).
 // Compact writes ports as Ports reads them, runs as ranges: 1-1000,8080.
 func Compact(ports []int) string {
 	ps := slices.Clone(ports)

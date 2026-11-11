@@ -362,7 +362,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	dnsRate := fs.Float64("dns-rate", 0, "DNS queries per second per resolver (0: no pace but the queries in flight, as dnsx)")
 	bruteFile := fs.String("dns-brute", "", "resolve WORD.domain for each word in this file (active; the targets given are the scope unless -allow)")
 	permute := fs.Bool("permute", false, "resolve variations of found names (active; the targets given are the scope unless -allow)")
-	portsSpec := fs.String("ports", "", "scan TCP ports: default (the top 100 and the usual ports of the services azhaq names and checks), top-100, top-1000, full or a list of ports, ranges and these names, such as 22,80,8000-8100 or top-100,8888 (active; the targets given are the scope unless -allow)")
+	portsSpec := fs.String("ports", "", "scan TCP ports: default (the top 1000 and the usual ports of the services azhaq names and checks, then every TCP port of each address that answered; what a range or an address among the targets gets when no -ports is given), top-100, top-1000, full or a list of ports, ranges and these names, such as 22,80,8000-8100 or top-100,8888 (active; the targets given are the scope unless -allow)")
 	portsUDP := fs.String("ports-udp", "", "ask UDP ports (active): top (about 25 common ones), full or a list of ports, ranges and these names, such as 53,123,161,1-1024 or top,5354; a reply is open, an ICMP unreachable closed, neither open|filtered (-ports none: UDP only)")
 	portRate := fs.Float64("port-rate", 0, "port connection attempts per second, a ceiling (0: 1500, as naabu's connect scan, and 127.0.0.1 unpaced)")
 	portMinRate := fs.Float64("port-min-rate", 0, "port connection attempts per second at least, as nmap's --min-rate: raises the pace to this when the pace (-port-rate, or the default 1500) is lower, and never lowers it")
@@ -371,6 +371,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	portWorkers := fs.Int("port-workers", 0, "port connects in flight at once, over all hosts (0: as many as the rate allows, up to 20000)")
 	portOrder := fs.String("port-order", "random", "the order a host's ports are asked in: random (the likeliest ports first, each tier shuffled) or asc")
 	portSeed := fs.Int64("port-seed", 0, "make the random port order repeat (0: a new one each run)")
+	portSkip := fs.String("port-skip", "", "TCP ports never asked, in any pass: a list as -ports reads it, such as 25,9000-9010 (what -ep of the ports command passes)")
 	portThreshold := fs.Int("port-threshold", 0, "stop asking a host after this many open ports: it answers every port (0: no limit)")
 	portUnnamed := fs.Int("port-unnamed", 0, "after this many open ports of an address that no protocol probe could name, ask its other silent ports their banner only (0: 6; -1: no limit; each probe is a connect)")
 	portDetect := fs.String("port-detect", "all", "what is asked of an open port: all (its banner, then HTTP and TLS, then one request of each protocol that waits to be asked, each on its own connection, several at once while the scan has workers free: at most 25 connects after the first), banner (what it says on the one connection; nothing is sent, so a bare 220 stays ftp-or-smtp) or none (connect and close). UDP ports: all and banner ask every request a port's protocol has (4 datagrams to a silent port); none asks one")
@@ -470,7 +471,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		return usagef("-ports-udp: %v", err)
 	}
 	portCfg, err := portConfig(portFlags{minRate: *portMinRate, timeout: *portTimeout, retries: *portRetries, workers: *portWorkers,
-		order: *portOrder, seed: *portSeed, threshold: *portThreshold, unnamed: *portUnnamed, detect: *portDetect, cdnFull: *portCDNFull, excludeCDN: *portExcludeCDN, discover: *portDiscover,
+		skip: *portSkip, order: *portOrder, seed: *portSeed, threshold: *portThreshold, unnamed: *portUnnamed, detect: *portDetect, cdnFull: *portCDNFull, excludeCDN: *portExcludeCDN, discover: *portDiscover,
 		ip: *portIP, allIPs: *portAllIPs, source: *portSource, payload: *portPayload, on: portsOn, proxy: *portProxy, proxyAuth: *portProxyAuth})
 	if err != nil {
 		return err
@@ -535,6 +536,14 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 
 	var client *http.Client
 	var seeds []types.Seed
+	// -ports as the run has it: a range or an address among the targets and no -ports is -ports default.
+	portsEff := *portsSpec
+	defaulted := func() string {
+		if !(rep.Command == "run" || out.plan) || out.embedded && !out.plan || *demo {
+			return *portsSpec
+		}
+		return defaultedPorts(*portsSpec, *portsUDP, *passive, seeds)
+	}
 	var listLines []string // kept in the workspace, for azhaq resume
 	if *demo {
 		if len(urls) > 0 || *org != "" || *in != "" {
@@ -605,6 +614,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 				rep.Skipped = append(rep.Skipped, engine.Skip{Target: e, Reason: "a scope entry a run cannot use"})
 			}
 		}
+		portsEff = defaulted()
 		if *sweep {
 			more, v6, err := sweepSeeds(allow, seeds)
 			if err != nil {
@@ -614,7 +624,8 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 				rep.Notes = append(rep.Notes, fmt.Sprintf("-sweep leaves the IPv6 range %s alone: name it as a target to scan it", pf))
 			}
 			seeds = append(seeds, more...)
-		} else if lead := sweepLead(allow, deny, namedAddrs(seeds), portsRangeAsked(*portsSpec)); lead != "" {
+			portsEff = defaulted()
+		} else if lead := sweepLead(allow, deny, namedAddrs(seeds), portsRangeAsked(portsEff)); lead != "" {
 			rep.Notes = append(rep.Notes, lead)
 		}
 		if len(seeds) == 0 && *factsPath == "" && *execCmd == "" && *workerOf == "" {
@@ -628,7 +639,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	// Everything that can make this a usage error is checked before a
 	// database is created.
 	scopeNamed := len(allow) > 0
-	active := *bruteFile != "" || *permute || *graphql || *portsSpec != "" || *portsUDP != "" || *dirsFile != "" || *paramsFile != "" || advFlags.confirm
+	active := *bruteFile != "" || *permute || *graphql || portsEff != "" || *portsUDP != "" || *dirsFile != "" || *paramsFile != "" || advFlags.confirm
 	if *paramsFile != "" {
 		switch m := strings.ToUpper(*paramsMethod); m {
 		case "GET":
@@ -646,7 +657,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	// With no -allow and no -scope the URL targets hold their hosts to their ports
 	// (a port scan is asked for every port of the host, so it lifts the hold).
 	var targetPorts map[string]map[string]bool
-	if len(allow) == 0 && *portsSpec == "" && *portsUDP == "" {
+	if len(allow) == 0 && portsEff == "" && *portsUDP == "" {
 		targetPorts = targetPortsOf(seeds)
 	}
 	if active && len(allow) == 0 {
@@ -814,7 +825,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	if *graphql {
 		budgets.Active["graphql"] = true
 	}
-	if *portsSpec != "" || *portsUDP != "" {
+	if portsEff != "" || *portsUDP != "" {
 		budgets.Active["ports"] = true
 	}
 	if *dirsFile != "" {
@@ -1002,10 +1013,26 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 			seeds = append(seeds, types.Seed{Type: types.TypeURL, Keys: map[string]string{"url": home}})
 		}
 	}
-	if *portsSpec != "" {
-		if opts.Ports, err = portscan.Ports(*portsSpec); err != nil {
+	if portsEff != "" {
+		if opts.Ports, err = portscan.Ports(portsEff); err != nil {
 			return fmt.Errorf("-ports: %w", err)
 		}
+		if *portSkip != "" {
+			if opts.Ports, err = portscan.Exclude(opts.Ports, *portSkip); err != nil {
+				return usagef("-port-skip: %v", err)
+			}
+		}
+	}
+	if portsEff != "" && *portsSpec == "" {
+		// The ports -web-ports asks of an address are asked in pass 1 too: an answer there is the address's.
+		if wp, err := parsePorts(*webPorts); err == nil && len(wp) > 0 {
+			opts.Ports = unionInts(opts.Ports, wp)
+		}
+		rep.Notes = append(rep.Notes, "no -ports given, and a range or an address is among the targets: -ports default, the "+plural(len(opts.Ports), "port")+" of the first pass on every address, then every TCP port of each address that answered it (-ports none turns it off)")
+	}
+	portCfg.Escalate = portscan.Escalates(portsEff)
+	if portCfg.Escalate && *portsSpec == "" {
+		portCfg.Also = urlPortsOn(seeds)
 	}
 	if *portsUDP != "" {
 		if opts.UDPPorts, err = portscan.UDPPorts(*portsUDP); err != nil {
@@ -1212,7 +1239,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		}
 		// What the command line asks for by name runs: a flag is never dropped.
 		asked := map[string]bool{
-			"azhaq-dirs": *dirsFile != "", "azhaq-params": *paramsFile != "", "azhaq-ports": *portsSpec != "" || *portsUDP != "",
+			"azhaq-dirs": *dirsFile != "", "azhaq-params": *paramsFile != "", "azhaq-ports": portsEff != "" || *portsUDP != "",
 			"azhaq-shots": *shots != "", "azhaq-render": *render, "azhaq-dns-brute": *bruteFile != "", "azhaq-permute": *permute,
 			"azhaq-graphql": *graphql, "azhaq-graphql-schema": *graphql,
 		}
@@ -1246,6 +1273,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	send.tcpPorts, send.udpPorts = len(opts.Ports), len(opts.UDPPorts)
 	send.portList, send.portUDPList, send.portsFor = opts.Ports, opts.UDPPorts, portCfg.PortsFor
 	send.portExcludeCDN, send.portThreshold = portCfg.ExcludeCDN, portCfg.Threshold
+	send.portEscalate, send.portAlso, send.portSkip = portCfg.Escalate, portCfg.Also, portCfg.NoPorts
 	send.portPasses, send.portNameAddrs = portPasses(portCfg.Retries), portNameAddrs(portCfg)
 	send.dirsDepth, send.paramsWrites = *dirsDepth, *paramsWrites
 	send.dirsWordList, send.dirsExtList, send.guessBudget, send.bruteList = opts.Dirs.Words, opts.Dirs.Extensions, *maxNames, opts.BruteWords
@@ -1707,6 +1735,14 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 				rep.Stopped = fmt.Sprintf("%d tasks known and not done", left)
 			}
 		}
+		if portCfg.Escalate {
+			// The summary says which pass the limit cut and what was left of it.
+			if all, err := st.Observations(); err == nil {
+				if note := portcol.CutNote(all); note != "" {
+					rep.Stopped += "; " + note
+				}
+			}
+		}
 		rep.Resume = resumeHint(path, cut > 0, *login != "", *loginUser)
 		if *resumeRun != "" && rep.Requests == 0 && strings.HasPrefix(rep.Stopped, "-max-items ") {
 			// The cap holds for each run: this one spent it on tasks that
@@ -1758,15 +1794,22 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 				rep.nextPass(cmd, why)
 			}
 		}
-		if why, _ := catalogPass(catalogLeft(opts.Ports, ""), addresses); why != "" {
-			spec := strings.TrimRight(*portsSpec+",default", ",")
-			cmd := "azhaq run " + shellJoin(append(withoutFlag(args, "ports"), "-ports", spec, "-db", path))
-			if n := len(portHosts); n > 0 && n <= 8 {
-				cmd = "azhaq ports -host " + hostsOf(portHosts) + " -p " + spec + " -db " + path
+		if left := catalogLeft(opts.Ports, *portSkip); len(left) > 0 {
+			if why, _ := catalogPass(left, addresses); why != "" {
+				spec := strings.TrimRight(portsEff+","+portscan.Compact(left), ",")
+				cmd := "azhaq run " + shellJoin(append(withoutFlag(args, "ports"), "-ports", spec, "-db", path))
+				if n := len(portHosts); n > 0 && n <= 8 {
+					cmd = "azhaq ports -host " + hostsOf(portHosts) + " -p " + spec + " -db " + path
+				}
+				rep.nextPass(cmd, why)
 			}
-			rep.nextPass(cmd, why)
 		}
-		if why, _ := portsPass(len(opts.Ports), addresses, rep.Counts["ports"]); why != "" {
+		// With a second pass, the addresses that answered have had every port: the rest is the others'.
+		unanswered, firstPass := addresses, len(opts.Ports)
+		if portCfg.Escalate && rep.AddressesOpen != nil {
+			unanswered = max(addresses-*rep.AddressesOpen, 0)
+		}
+		if why, _ := portsPass(firstPass, unanswered, rep.Counts["ports"]); why != "" {
 			cmd := "azhaq run " + shellJoin(append(withoutFlag(args, "ports"), "-ports", "full", "-db", path))
 			if n := len(portHosts); n > 0 && n <= 8 {
 				cmd = "azhaq ports -host " + hostsOf(portHosts) + " -p full -db " + path

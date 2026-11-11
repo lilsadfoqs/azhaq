@@ -71,21 +71,21 @@ func TestTopListScanNamesTheCatalogPortsItLeftOut(t *testing.T) {
 	}
 	top, _ := portscan.Ports("top-1000")
 	left := 0
-	for _, p := range portscan.DefaultPorts() {
+	for _, p := range portscan.UsualPorts() {
 		if !slices.Contains(top, p) {
 			left++
 		}
 	}
 	if left == 0 {
-		t.Fatal("the default set holds nothing the top 1000 lacks")
+		t.Fatal("the usual set holds nothing the top 1000 lacks")
 	}
 	next := nextOf(sumMap(t, errOut))
 	var cat, full = -1, -1
 	for i, n := range next {
 		switch {
-		case strings.Contains(n, "-p top-1000,default"):
+		case strings.Contains(n, "-p top-1000,"+portscan.Compact(catalogLeft(top, ""))):
 			cat = i
-			want := strconv.Itoa(left) + " ports of the default set"
+			want := strconv.Itoa(left) + " ports of the usual set"
 			if !strings.Contains(n, want) || !strings.Contains(n, "were not asked on 1 address: "+strconv.Itoa(left)+" connects") {
 				t.Errorf("the line is %q, want %q and %d connects on 1 address", n, want, left)
 			}
@@ -94,24 +94,24 @@ func TestTopListScanNamesTheCatalogPortsItLeftOut(t *testing.T) {
 		}
 	}
 	if cat < 0 || full < 0 || cat > full {
-		t.Fatalf("want the default-set pass before the full-range one (at %d and %d) in %q (port %d)", cat, full, next, port)
+		t.Fatalf("want the usual-set pass before the full-range one (at %d and %d) in %q (port %d)", cat, full, next, port)
 	}
 }
 
-// A scan that asked the default set, or every port, leaves none out.
+// A scan that asked the usual set, or every port, leaves none out.
 func TestNoCatalogPassWhenNothingIsLeftOut(t *testing.T) {
 	t.Chdir(t.TempDir())
-	_, errOut, code := cli(t, "ports", "-host", "127.0.0.1", "-p", "default", "-db", filepath.Join(t.TempDir(), "w.db"), "-json", "-ledger", "off")
+	_, errOut, code := cli(t, "ports", "-host", "127.0.0.1", "-p", portscan.Compact(portscan.UsualPorts()), "-db", filepath.Join(t.TempDir(), "w.db"), "-json", "-ledger", "off")
 	if code != exitOK {
 		t.Fatalf("exit %d\n%s", code, errOut)
 	}
 	for _, n := range nextOf(sumMap(t, errOut)) {
-		if strings.Contains(n, "of the default set") {
-			t.Errorf("a scan of the default set names the default set: %q", n)
+		if strings.Contains(n, "of the usual set") {
+			t.Errorf("a scan of the usual set names the usual set: %q", n)
 		}
 	}
-	if got := catalogLeft(portscan.DefaultPorts(), ""); len(got) != 0 {
-		t.Errorf("left out of the default set: %v", got)
+	if got := catalogLeft(portscan.UsualPorts(), ""); len(got) != 0 {
+		t.Errorf("left out of the usual set: %v", got)
 	}
 	if got := catalogLeft(nil, ""); got != nil {
 		t.Errorf("a scan of no TCP port left out %v", got)
@@ -137,22 +137,22 @@ func TestRunNamesTheCatalogPortsItsListLeftOut(t *testing.T) {
 	}
 	asked, _ := portscan.Ports("top-100," + port)
 	want := 0
-	for _, p := range portscan.DefaultPorts() {
+	for _, p := range portscan.UsualPorts() {
 		if !slices.Contains(asked, p) {
 			want++
 		}
 	}
 	found := false
 	for _, n := range nextOf(sumMap(t, errOut)) {
-		if strings.Contains(n, "of the default set") {
+		if strings.Contains(n, "of the usual set") {
 			found = true
-			if !strings.Contains(n, "top-100,"+port+",default") || !strings.Contains(n, strconv.Itoa(want)+" ports of the default set") || !strings.Contains(n, ": "+strconv.Itoa(want)+" connects)") {
-				t.Errorf("%q, want the list with ,default and %d ports, %d connects", n, want, want)
+			if !strings.Contains(n, "top-100,"+port+","+portscan.Compact(catalogLeft(asked, ""))) || !strings.Contains(n, strconv.Itoa(want)+" ports of the usual set") || !strings.Contains(n, ": "+strconv.Itoa(want)+" connects)") {
+				t.Errorf("%q, want the list with the %d ports added, %d connects", n, want, want)
 			}
 		}
 	}
 	if !found {
-		t.Errorf("no default-set pass in %q", errOut)
+		t.Errorf("no usual-set pass in %q", errOut)
 	}
 }
 

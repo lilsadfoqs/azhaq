@@ -148,6 +148,9 @@ type sendLimits struct {
 	portList, portUDPList     []int
 	portsFor                  map[string][]int // -ports-on
 	portExcludeCDN            bool
+	portEscalate              bool             // -ports default: every other TCP port of each address that answered
+	portAlso                  map[string][]int // ports the first pass asks of an address besides the list
+	portSkip                  []int            // -port-skip
 	portThreshold             int
 	dirsWordList, dirsExtList []string
 	guessBudget               int      // -max-names: the most names -dns-brute and -permute ask, 0: no cap
@@ -192,6 +195,9 @@ func planSends(b engine.Budgets, send sendLimits) (gets, others []string) {
 			line = "TCP connects to ports 80 and 443 of each address, to tell whether it is up (-port-discover only), and no other port"
 		}
 		*out = append(*out, line)
+		if send.portEscalate && send.portDiscover != portcol.DiscoverOnly {
+			*out = append(*out, fmt.Sprintf("then, in pass 2, TCP connects to the other %d of the %d TCP ports of each address that answered pass 1 (one with an open port; -ports default)", secondPortsOf(send.tcpPorts, send.portSkip), allTCPPorts))
+		}
 		if send.portDiscover != portcol.DiscoverOnly {
 			switch send.portDetect {
 			case portscan.DetectAll:

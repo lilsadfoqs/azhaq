@@ -77,6 +77,14 @@ type Collector struct {
 	// WebCost is how many requests the budget keeps for mapping each web
 	// service the scan finds open (egress.Reserve); zero keeps none.
 	WebCost int
+	// Escalate asks, after the first pass, every TCP port of each address that
+	// answered it (an open port): the default scan (-ports default).
+	Escalate bool
+	// Also are ports the first pass asks of an address besides Ports: the port of a
+	// URL target there, since an HTTP answer on it is an answer of the address.
+	Also map[string][]int
+	// NoPorts are ports never asked, in either pass (-ep of the ports command).
+	NoPorts map[int]bool
 
 	mu    sync.Mutex
 	byIP  map[string]*scan // one scan per address, however many names point to it
@@ -104,6 +112,11 @@ type scan struct {
 	capped   bool // the threshold of open ports stopped it
 	asked    int  // ports asked, in the scanner's order, before it stopped
 	err      error
+	// The second pass, when the address went on to it: the ports it was to ask,
+	// and how many it asked, in the scanner's order, before it stopped.
+	pass2  bool
+	rest   []int
+	asked2 int
 }
 
 func New(pool *dnsr.Pool, ports []int, rate float64) *Collector {
@@ -223,6 +236,11 @@ func (c *Collector) portsOf(host string) []int {
 	if p, ok := c.PortsFor[host]; ok {
 		return p
 	}
+	if extra := c.Also[host]; len(extra) > 0 {
+		all := slices.Concat(c.Ports, extra)
+		slices.Sort(all)
+		return slices.Compact(all)
+	}
 	return c.Ports
 }
 
@@ -327,16 +345,26 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		}
 		var s *scan
 		var err error
-		sctx := portscan.WithProgress(ctx, c.checkpoint(emit, host, ip, all, prior, resumed, name, edge, ""))
+		sctx := portscan.WithProgress(ctx, c.checkpoint(emit, host, ip, all, prior, resumed, name, edge, "", c.passOf(1)))
+		// The second pass of the default scan: every other port of an address that answered.
+		after := func(sc *scan) {
+			if c.escalates(host, edge, sc, prior) {
+				c.second(ctx, emit, host, ip, all, ports, prior, resumed, sc, name, edge, "", found)
+			}
+		}
 		switch {
 		case len(ports) == 0:
-			s = &scan{up: true} // every port is outside the scope: nothing to ask
+			// Every port is outside the scope, or a stopped run asked them all: nothing
+			// to ask in the first pass, and the second goes on from what it found.
+			s = &scan{up: true}
+			after(s)
+			err = s.err
 		case c.Discover == DiscoverOff || outScope > 0:
 			// A host held to some ports is asked those, with no discovery
 			// of its own: its 80 and 443 may be outside the scope.
-			s, err = c.scanOnce(sctx, host, ip, ports, found)
+			s, err = c.scanOnce(sctx, host, ip, ports, found, after)
 		default:
-			s, err = c.discoverOnce(sctx, host, ip, ports, found)
+			s, err = c.discoverOnce(sctx, host, ip, ports, found, after)
 		}
 		if err != nil && ctx.Err() != nil {
 			return types.RunMeta{Status: types.StatusCancelled}, err
@@ -359,6 +387,9 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		}
 		if resumed {
 			s, ports = withPrior(s, prior), all
+		}
+		if s.pass2 {
+			ports = c.allAsked(host, ip, all)
 		}
 		var udp portscan.UDPReport
 		if len(c.UDPPorts) > 0 && !edge && s.up && c.Discover != DiscoverOnly {
@@ -782,11 +813,15 @@ func portList(ports []int, n int) string {
 const maxListed = 64
 
 // scanOnce asks an address's ports, once however many names point to it.
-func (c *Collector) scanOnce(ctx context.Context, host, ip string, ports []int, found func(portscan.Open)) (*scan, error) {
+func (c *Collector) scanOnce(ctx context.Context, host, ip string, ports []int, found func(portscan.Open), after func(*scan)) (*scan, error) {
 	defer c.fitSweep(ip, len(ports))()
 	return c.once(ctx, host, ip, func() *scan {
 		r, err := c.Scanner.ScanEachFn(ctx, host, ip, ports, found)
-		return &scan{open: r.Open, silent: r.Silent, unprobed: r.Unprobed, up: true, capped: r.Threshold, asked: r.Asked, err: err}
+		s := &scan{open: r.Open, silent: r.Silent, unprobed: r.Unprobed, up: true, capped: r.Threshold, asked: r.Asked, err: err}
+		if err == nil && after != nil {
+			after(s)
+		}
+		return s
 	}, func(s *scan) (*scan, error) {
 		open, err := c.askAgain(ctx, host, ip, s.open)
 		return &scan{open: open, silent: s.silent, unprobed: s.unprobed, up: s.up, capped: s.capped}, err
@@ -795,7 +830,7 @@ func (c *Collector) scanOnce(ctx context.Context, host, ip string, ports []int, 
 
 // discoverOnce is scanOnce for a scan that first asks whether the address
 // is up, and stops there when told to (-sn).
-func (c *Collector) discoverOnce(ctx context.Context, host, ip string, ports []int, found func(portscan.Open)) (*scan, error) {
+func (c *Collector) discoverOnce(ctx context.Context, host, ip string, ports []int, found func(portscan.Open), after func(*scan)) (*scan, error) {
 	defer c.fitSweep(ip, len(ports))()
 	return c.once(ctx, host, ip, func() *scan {
 		up, err := c.Scanner.Up(ctx, host, ip)
@@ -803,7 +838,11 @@ func (c *Collector) discoverOnce(ctx context.Context, host, ip string, ports []i
 			return &scan{up: up, err: err}
 		}
 		r, err := c.Scanner.ScanEachFn(ctx, host, ip, ports, found)
-		return &scan{open: r.Open, silent: r.Silent, unprobed: r.Unprobed, up: true, capped: r.Threshold, err: err}
+		s := &scan{open: r.Open, silent: r.Silent, unprobed: r.Unprobed, up: true, capped: r.Threshold, err: err}
+		if err == nil && after != nil {
+			after(s)
+		}
+		return s
 	}, func(s *scan) (*scan, error) {
 		if !s.up || c.Discover == DiscoverOnly {
 			return s, nil
@@ -837,6 +876,7 @@ func (c *Collector) once(ctx context.Context, host, ip string, run func() *scan,
 	}
 	r := run()
 	s.open, s.silent, s.unprobed, s.up, s.capped, s.asked, s.err = r.open, r.silent, r.unprobed, r.up, r.capped, r.asked, r.err
+	s.pass2, s.rest, s.asked2 = r.pass2, r.rest, r.asked2
 	close(s.done)
 	return s, s.err
 }
@@ -1034,10 +1074,36 @@ func stopped(err error) bool {
 // partialRow is the row of a scan a limit stopped: the ports it found and
 // the ones it asked, with what an earlier stopped run of it had.
 func (c *Collector) partialRow(host, ip string, all, ports []int, s *scan, prior Prior, resumed bool, name string, edge bool) map[string]any {
-	if s == nil || (s.asked == 0 && !resumed) {
+	if s == nil || (s.asked == 0 && !resumed && !s.pass2) {
 		return nil
 	}
-	return c.partialRowOf(host, ip, all, c.Scanner.Ordered(ip, ports)[:min(s.asked, len(ports))], s, prior, resumed, name, edge)
+	asked := c.Scanner.Ordered(ip, ports)[:min(s.asked, len(ports))]
+	if !s.pass2 {
+		row := c.partialRowOf(host, ip, all, asked, s, prior, resumed, name, edge)
+		c.markPass(row, c.passOf(1), len(ports)-len(asked))
+		return row
+	}
+	// Stopped in the second pass: the first was asked whole.
+	asked = append(slices.Clone(ports), c.Scanner.Ordered(ip, s.rest)[:min(s.asked2, len(s.rest))]...)
+	row := c.partialRowOf(host, ip, all, asked, s, prior, resumed, name, edge)
+	c.markPass(row, 2, len(s.rest)-min(s.asked2, len(s.rest)))
+	return row
+}
+
+// PassKey is the pass of the default scan a partial row was in (1 or 2, absent
+// in a scan with no second pass), and LeftKey the ports that pass had not asked
+// of the address: what a limit left, which the summary counts.
+const (
+	PassKey = "pass"
+	LeftKey = "ports_left"
+)
+
+// markPass says, in the row of a scan that did not finish, which pass it was in
+// and how many ports of it were left.
+func (c *Collector) markPass(row map[string]any, pass, left int) {
+	if pass > 0 {
+		row[PassKey], row[LeftKey] = pass, max(left, 0)
+	}
 }
 
 // partialRowOf is partialRow for the ports named as asked.
@@ -1061,10 +1127,15 @@ const CheckpointKey = "checkpoint"
 // checkpoint keeps what the scan of an address has finished, so that a run
 // killed with no chance to say so is resumed after those ports. The row is
 // the stopped scan's, kept at once (Keep) and not held to the end of the task.
-func (c *Collector) checkpoint(emit func(types.Observation) error, host, ip string, all []int, prior Prior, resumed bool, name string, edge bool, prefix string) func(portscan.Progress) {
+func (c *Collector) checkpoint(emit func(types.Observation) error, host, ip string, all []int, prior Prior, resumed bool, name string, edge bool, prefix string, pass int) func(portscan.Progress) {
 	return func(p portscan.Progress) {
 		row := c.partialRowOf(host, ip, all, p.Asked, &scan{open: p.Open, up: true}, prior, resumed, name, edge)
 		row[CheckpointKey] = true
+		left := len(all) - len(p.Asked)
+		if pass == 1 && resumed {
+			left -= len(prior.Asked)
+		}
+		c.markPass(row, pass, left)
 		if prefix != "" {
 			row["prefix"] = prefix // the single address of a block
 		}
