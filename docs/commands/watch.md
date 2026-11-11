@@ -108,7 +108,9 @@ Without `-db`, or with no run options after `--`, `watch` exits 2 and says how t
 
 Without `-every`, `watch` runs once and exits with the code of its run.
 
-With `-every`, `watch` runs until a signal stops it, and that exits 0. A run that ended 3 or 4 does not end the loop: the next one starts after `-every`. A run that cannot start, or fails with an error, ends `watch` with that error.
+With `-every`, `watch` runs until a signal stops it, and a signal that lands while it waits for the next cycle exits 0. A run that ended 3 or 4 does not end the loop: the next one starts after `-every`. A run that cannot start, or fails with an error, ends `watch` with that error.
+
+A signal (Ctrl-C, `kill`) that cuts a cycle, in its run or in its notification, ends `watch` stopped: exit 4, `complete` false, and `stopped` names the interruption and the cycle it cut. The run that was cut is not compared and sends no notification, and a notification the signal cut is not sent and not counted as `deliveries failed`: the summary says it was not sent because the watch was interrupted.
 
 A notification that did not arrive is named on stderr. Without `-every` the exit code is then 3, and the run's own 3 or 4 wins. With `-every` it stays on stderr.
 

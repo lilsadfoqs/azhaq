@@ -130,6 +130,7 @@ func Register(cat *catalog.Catalog, o Options) {
 	cat.MustRegister(&asncol.PTR{Pool: pool})
 	tlscol.Register(cat)
 	sub := o.Subdomains
+	sub.WildLog = &subcol.WildLog{}
 	sub.Verify = func(ctx context.Context, apex string, names []string) (live, failed []string) {
 		var ask []string
 		for _, n := range names {
@@ -147,7 +148,11 @@ func Register(cat *catalog.Catalog, o Options) {
 			if a.Status == dnsr.StatusFailed || !exists(a) || ctx.Err() != nil {
 				return
 			}
-			v := !dnsc.Wild.Match(ctx, a.Name, apex, a)
+			zone, answer, wild := dnsc.Wild.Which(ctx, a.Name, apex, a)
+			v := !wild
+			if wild {
+				sub.WildLog.Add(a.Name, zone, answer)
+			}
 			mu.Lock()
 			judged[a.Name] = v
 			mu.Unlock()

@@ -7,6 +7,7 @@ package brutecol
 import (
 	"context"
 	"encoding/json"
+	"maps"
 	"slices"
 	"strconv"
 	"strings"
@@ -175,12 +176,13 @@ func (b *Brute) Run(ctx context.Context, seed types.Seed, emit func(types.Observ
 	domain := normalize.Hostname(seed.Keys["domain"])
 	names, held := inScope(bruteNames(b.Words, domain))
 	names, over := b.Budget.take(names)
-	answers := resolveFound(ctx, b.Pool, b.Wild, domain, names, b.Workers)
+	answers, wildHits := resolveFound(ctx, b.Pool, b.Wild, domain, names, b.Workers)
 	found := nameList(answers)
 	wild := b.Wild.Zone(ctx, domain)
 	payload := map[string]any{
 		"domain": domain, "names": found, "answers": answerList(answers), "count": len(found), "tried": len(names), "wildcard_zone": wild,
 	}
+	wildHits.into(payload)
 	if held > 0 {
 		payload[HeldOutKey] = held
 	}
@@ -331,11 +333,12 @@ func (p *Permute) Run(ctx context.Context, seed types.Seed, emit func(types.Obse
 	if len(names) == 0 && held == 0 && over == 0 {
 		return types.RunMeta{Status: types.StatusOK}, nil
 	}
-	answers := resolveFound(ctx, p.Pool, p.Wild, domain, names, p.Workers)
+	answers, wildHits := resolveFound(ctx, p.Pool, p.Wild, domain, names, p.Workers)
 	found := nameList(answers)
 	payload := map[string]any{
 		"fqdn": host, "names": found, "answers": answerList(answers), "count": len(found), "tried": len(names),
 	}
+	wildHits.into(payload)
 	if held > 0 {
 		payload[HeldOutKey] = held
 	}
@@ -441,21 +444,59 @@ func pad(n, width int) string {
 	return s
 }
 
+// WildcardsKey is the payload's guesses a wildcard answered: a list of
+// {zone, answer, count}, one for each wildcard.
+const WildcardsKey = "wildcards"
+
+// wildHits counts the guesses each wildcard answered, by zone.
+type wildHits map[string]*wildHit
+
+type wildHit struct {
+	Zone   string `json:"zone"`
+	Answer string `json:"answer"`
+	Count  int    `json:"count"`
+}
+
+func (h wildHits) add(zone, answer string) {
+	if h[zone] == nil {
+		h[zone] = &wildHit{Zone: zone, Answer: answer}
+	}
+	h[zone].Count++
+}
+
+// into adds the hits to a payload, zones in order.
+func (h wildHits) into(payload map[string]any) {
+	if len(h) == 0 {
+		return
+	}
+	out := make([]wildHit, 0, len(h))
+	for _, z := range slices.Sorted(maps.Keys(h)) {
+		out = append(out, *h[z])
+	}
+	payload[WildcardsKey] = out
+}
+
 // resolveFound resolves names and keeps those with an address that is not
-// a wildcard answer.
-func resolveFound(ctx context.Context, pool *dnsr.Pool, wild *dnsr.Wildcards, apex string, names []string, workers int) []dnsr.Answer {
+// a wildcard answer; the wildcard's are counted apart.
+func resolveFound(ctx context.Context, pool *dnsr.Pool, wild *dnsr.Wildcards, apex string, names []string, workers int) ([]dnsr.Answer, wildHits) {
 	if workers <= 0 {
 		workers = 128
 	}
 	var found []dnsr.Answer
+	hits := wildHits{}
 	for _, a := range pool.ResolveMany(dnsr.Bulk(ctx), names, workers) {
 		// A CNAME whose target is gone is a name that exists: the kind a
 		// takeover check wants most.
-		if (a.Live() || len(a.CNAME) > 0) && !wild.Match(ctx, a.Name, apex, a) {
-			found = append(found, a)
+		if !a.Live() && len(a.CNAME) == 0 {
+			continue
 		}
+		if zone, answer, ok := wild.Which(ctx, a.Name, apex, a); ok {
+			hits.add(zone, answer)
+			continue
+		}
+		found = append(found, a)
 	}
-	return found
+	return found, hits
 }
 
 func nameList(as []dnsr.Answer) []string {

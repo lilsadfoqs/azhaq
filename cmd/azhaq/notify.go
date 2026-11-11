@@ -428,21 +428,21 @@ func newNotifier(hooks []string, config string, providers, ids []string, format 
 // sendRecorded is send with its requests in the workspace's ledger (the run's
 // own, after its seal, sealed again) and counted in a summary of its own: a
 // notification is a request to a third party, and the run's summary was
-// printed before it was made. runArgs are the run's flags, which may move or
+// printed before it was made. cycle is the watch's, for a cut. runArgs are the run's flags, which may move or
 // turn off the ledger.
-func (n *notifier) sendRecorded(ctx context.Context, ch changes, runArgs []string, db string, asJSON bool) ([]string, error) {
+func (n *notifier) sendRecorded(ctx context.Context, cycle int, ch changes, runArgs []string, db string, asJSON bool) (lost []string, cut int, err error) {
 	if n.client == nil {
-		return nil, nil
+		return nil, 0, nil
 	}
 	ledgerFlag, _ := flagValue(runArgs, "ledger")
 	led, err := startSideLedger(ledgerFlag, db)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	rep := newReport("watch")
 	rep.DB = db
 	before := ledger.Sent(ledger.ClassSource)
-	lost := n.send(ctx, ch)
+	lost, cut = n.send(ctx, ch)
 	sent := int(ledger.Sent(ledger.ClassSource) - before)
 	rep.what = "notification requests"
 	if sent == 1 {
@@ -452,6 +452,11 @@ func (n *notifier) sendRecorded(ctx context.Context, ch changes, runArgs []strin
 	if len(lost) > 0 {
 		rep.Counts = map[string]int{"deliveries failed": len(lost)}
 	}
+	if cut > 0 {
+		// A delivery the signal cut did not fail: it was not sent.
+		rep.Stopped = fmt.Sprintf("interrupted (Ctrl-C, kill) during cycle %d: its notification was cut", cycle)
+		rep.Notes = append(rep.Notes, fmt.Sprintf("%s not sent because the watch was interrupted (Ctrl-C, kill)", plural(cut, "notification")))
+	}
 	led.close(rep)
 	rep.settle() // a lost delivery is named on its own line, and sets watch's exit
 	if asJSON {
@@ -460,16 +465,15 @@ func (n *notifier) sendRecorded(ctx context.Context, ch changes, runArgs []strin
 	} else {
 		rep.print(os.Stderr)
 	}
-	return lost, nil
+	return lost, cut, nil
 }
 
-// send delivers ch and returns a line for each delivery that failed; no
-// line holds a webhook URL or a token.
-func (n *notifier) send(ctx context.Context, ch changes) []string {
+// send delivers ch and returns a line for each delivery that failed, and how
+// many a cancelled ctx cut; no line holds a webhook URL or a token.
+func (n *notifier) send(ctx context.Context, ch changes) (lost []string, cut int) {
 	if n.client == nil {
-		return nil
+		return nil, 0
 	}
-	var lost []string
 	text := ch.notifyText(n.lines)
 	n.count++
 	for _, h := range n.hooks {
@@ -478,15 +482,29 @@ func (n *notifier) send(ctx context.Context, ch changes) []string {
 			msg = notify.FormatMessage(text, n.format, n.count, time.Now())
 		}
 		if err := n.client.Send(ctx, h, msg, ch); err != nil {
-			lost = append(lost, err.Error())
+			if cancelled(ctx, err.Error()) {
+				cut++
+			} else {
+				lost = append(lost, err.Error())
+			}
 		}
 	}
 	if n.set != nil {
 		for _, d := range n.set.Send(ctx, text) {
-			if d.Err != nil {
+			switch {
+			case d.Err == nil:
+			case cancelled(ctx, d.Err.Error()):
+				cut++
+			default:
 				lost = append(lost, fmt.Sprintf("%s (id %s): %v", d.Provider, d.ID, d.Err))
 			}
 		}
 	}
-	return lost
+	return lost, cut
+}
+
+// cancelled says whether a delivery's error is only that ctx ended it: the
+// errors are flattened to text, with the signal as the cause when there was one.
+func cancelled(ctx context.Context, msg string) bool {
+	return ctx.Err() != nil && (strings.Contains(msg, ctx.Err().Error()) || strings.Contains(msg, context.Cause(ctx).Error()))
 }
