@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""to_leads.py --export EXPORT.jsonl --out DIR [--hunt HUNT.jsonl] [--start TS] [--end TS]:
+"""to_leads.py --export EXPORT.jsonl --out DIR [--hunt HUNT.jsonl | --worklist HUNT.jsonl] [--start TS] [--end TS]:
 turns what azhaq wrote into the files grade.py reads (.github/ci/trial/GATE.md,
 "Findings, as you find them"): DIR/leads.jsonl, DIR/surface-1.txt and
 DIR/phases.log (phase 1 only: the replay is one estate).
@@ -19,6 +19,10 @@ identification or a finding:
              listing, source map, secret, API description, GraphQL, admin
              path, debug path, config or env file)
 Map rows that only prove a URL exists, and hunt's route heuristics, are not leads.
+
+--worklist is the other view: the leads are the rows of `azhaq hunt -json` with
+its default limit and nothing else, one lead a row, as a user who submits the
+worklist as printed would. EXPORT.jsonl then only gives the times.
 """
 import argparse
 import datetime
@@ -304,6 +308,57 @@ def hunt_leads(path, times, fallback):
     return out
 
 
+def worklist_leads(path, times, fallback):
+    """One lead for each row of hunt's default worklist, in its order: an
+    identification names its product, version and advisory; any other row is
+    named by its heaviest finding-like signal, else as the lead hunt made it."""
+    out = []
+    if not path or not os.path.exists(path):
+        return out
+    with open(path, encoding="utf-8", errors="replace") as f:
+        for line in f:
+            try:
+                d = json.loads(line)
+            except ValueError:
+                continue
+            if not isinstance(d, dict) or not d.get("key"):
+                continue
+            key = d["key"]
+            proof = d.get("proof") if isinstance(d.get("proof"), dict) else {}
+            try:
+                t = epoch(proof["observed_at"])
+            except (KeyError, ValueError, TypeError):
+                t = times.get(key, fallback)
+            reasons = [r for r in d.get("reasons") or [] if isinstance(r, dict)]
+            evidence = (d.get("evidence") or "; ".join("%s: %s" % (r.get("signal"), r.get("detail")) for r in reasons))[:300]
+            if d.get("kind") == "identification":
+                host = str(d.get("host") or "").lower()
+                if not host:
+                    continue
+                pv = product_text(d.get("product", ""), d.get("version", ""))
+                adv = d.get("advisory_id") or ""
+                title = "%s: %s" % (d.get("label") or "identified", pv or key) + (" (%s)" % adv if adv else "")
+                out.append(lead(t, VERIFY_KINDS.get(d.get("what"), "vulnerable-software"), d.get("severity") or "info", host,
+                                d.get("port"), title[:140], product=pv, cve=adv if CVE.fullmatch(adv) else "",
+                                evidence=evidence, how="azhaq hunt"))
+                continue
+            host, port = split_url(key) if "://" in key else (key.lower(), None)
+            if not host:
+                continue
+            hit = [(HUNT_KINDS[r["signal"]], r) for r in reasons if r.get("signal") in HUNT_KINDS]
+            if hit:
+                (kind, _), r = max(hit, key=lambda x: x[0][1])
+            elif any(str(r.get("signal", "")).startswith("takeover") for r in reasons):
+                kind, r = "takeover", next(r for r in reasons if str(r.get("signal", "")).startswith("takeover"))
+            else:
+                kind, r = "exposed-panel" if d.get("tier") == "finding" else "info-leak", (reasons[0] if reasons else {})
+            score = d.get("score", 0)
+            sev = "high" if score >= 70 else "medium" if score >= 40 else "low"
+            out.append(lead(t, kind, sev, host, port, ("%s: %s" % (r.get("signal", d.get("tier", "lead")), r.get("detail", "")))[:140],
+                            evidence=evidence, how="azhaq hunt", url=key if "://" in key else ""))
+    return out
+
+
 def names_by_ip(obs):
     m = {}
     for o in obs:
@@ -366,8 +421,11 @@ def write(args, ents, obs, last):
     first = min([o["_t"] for o in obs] + [e["_t"] for e in ents.values()] or [0])
     start = epoch(args.start) if args.start else first
     end = epoch(args.end) if args.end else last
-    leads = port_leads(obs) + web_leads(obs) + takeover_leads(obs) + verify_leads(obs) + stack_leads(obs)
-    leads += hunt_leads(args.hunt, url_times(ents, obs), end)
+    if args.worklist:
+        leads = worklist_leads(args.worklist, url_times(ents, obs), end)
+    else:
+        leads = port_leads(obs) + web_leads(obs) + takeover_leads(obs) + verify_leads(obs) + stack_leads(obs)
+        leads += hunt_leads(args.hunt, url_times(ents, obs), end)
     for d in leads:
         d["_t"] = max(d["_t"], start)  # a clock a second off must not give a negative time
         d["time"] = stamp(d["_t"])
@@ -386,7 +444,9 @@ def write(args, ents, obs, last):
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--export", required=True, help="azhaq export -format jsonl of the run's workspace")
-    ap.add_argument("--hunt", help="azhaq hunt -json -limit 1000 of it")
+    g = ap.add_mutually_exclusive_group()
+    g.add_argument("--hunt", help="azhaq hunt -json -limit 1000 of it")
+    g.add_argument("--worklist", help="azhaq hunt -json of it with the default limit: its rows are the only leads")
     ap.add_argument("--out", required=True)
     ap.add_argument("--start", help="when the replay started (ISO 8601); default the first row azhaq stored")
     ap.add_argument("--end", help="when it ended; default the last row")
