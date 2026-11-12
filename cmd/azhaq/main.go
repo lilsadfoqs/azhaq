@@ -1331,7 +1331,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		if *pathsFile != "" && !budgets.Skip["azhaq-paths"] {
 			pathsHeld = pathscol.HeldWords(opts.Paths)
 		}
-		for _, n := range heldListNotes(dirsHeld, dirsAll, pathsHeld) {
+		for _, n := range heldListNotes(dirsHeld, dirsAll, pathsHeld, send.dirsDepth) {
 			rep.Notes = append(rep.Notes, n)
 			if !*quiet && !*jsonOut && !out.embedded {
 				fmt.Fprintf(os.Stderr, "azhaq %s: %s\n", rep.Command, n)

@@ -256,3 +256,60 @@ func TestFuzzKeepsEachHeldInputAsASkippedRow(t *testing.T) {
 		t.Errorf("a word that was sent is stored as skipped: %v", keys)
 	}
 }
+
+// run -dirs holds the words that name a state change in every directory it
+// sweeps: each is a skipped row of its own URL that query finds, the
+// summary's count is the rows', and the note before the run says that each
+// directory asks the list again.
+func TestRunDirsKeepsEachHeldWordOfEachDirectoryAsASkippedRow(t *testing.T) {
+	var mu sync.Mutex
+	var got []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		got = append(got, r.URL.Path)
+		mu.Unlock()
+		switch r.URL.Path {
+		case "/docs":
+			http.Redirect(w, r, "/docs/", http.StatusMovedPermanently)
+		case "/", "/docs/":
+			w.Header().Set("Content-Type", "text/html")
+			fmt.Fprint(w, "<title>"+r.URL.Path+"</title>ok")
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	egress.Reset()
+	t.Cleanup(egress.Reset)
+	db := filepath.Join(t.TempDir(), "w.db")
+	words := wlist(t, "docs", "purge-all", "wipe")
+	_, errOut, err := captureBoth(t, func() error {
+		return run([]string{"run", "-url", srv.URL + "/", "-sources", "none", "-quiet", "-json", "-no-paths", "-no-favicon", "-dirs", words, "-dirs-depth", "2", "-db", db, "-ledger", "off"})
+	})
+	if err != nil {
+		t.Fatalf("%v\n%s", err, errOut)
+	}
+	rep := lastReport(t, errOut)
+	for _, p := range []string{"/purge-all", "/wipe", "/docs/purge-all", "/docs/wipe"} {
+		if slices.Contains(got, p) {
+			t.Errorf("%s was sent", p)
+		}
+		listed := false
+		for _, s := range rep.Skipped {
+			listed = listed || strings.HasSuffix(s.Target, p) && strings.Contains(s.Reason, neterr.SendFlag)
+		}
+		if !listed {
+			t.Errorf("%s is not listed under skipped with the flag: %+v", p, rep.Skipped)
+		}
+	}
+	keys := queryKeys(t, "-db", db, "-coverage", "skipped", "-type", "URL")
+	if len(keys) != 4 || rep.StateChangingHeld != 4 || len(rep.Skipped) != 4 || rep.Counts["skipped"] != 4 {
+		t.Errorf("rows %d, state_changing_held %d, skipped list %d, counts.skipped %d: want 4 each", len(keys), rep.StateChangingHeld, len(rep.Skipped), rep.Counts["skipped"])
+	}
+	if got := queryKeys(t, "-db", db, "-match", "purge"); len(got) != 2 {
+		t.Errorf("query -match purge finds %v, want the two held URLs", got)
+	}
+	if !strings.Contains(errOut, "the wordlist makes in each directory name a state change") {
+		t.Errorf("no note says that each directory asks the list again:\n%s", errOut)
+	}
+}

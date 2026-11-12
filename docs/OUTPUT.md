@@ -175,7 +175,7 @@ Before a summary is printed, azhaq recomputes what it can from the rows it emitt
 | `pages` | URL rows that are none of the kinds below: pages and routes | `-type URL -role page,app` |
 | `api`, `auth`, `forbidden` | URL rows of that role. They are not also in `pages`. | `-type URL -role api` (or `auth`, `forbidden`) |
 | `catchall` | URL rows that answered with the page every unknown path gets, whatever they are named as. They are in no other key. | `-type URL -coverage catchall` |
-| `skipped` | URL rows named and not asked: a `-deny-path` rule of yours, or a catch-all origin (`run` holds the paths scripts name in a directory once 3 of them answered with the catch-all page: see [run](commands/run.md#catch-all-origins)). They are in no other key. | `-type URL -coverage skipped` |
+| `skipped` | URL rows named and not asked: a `-deny-path` rule of yours, a GET or a word of a wordlist whose own name declares a state change (`-send-state-changing` sends it), or a catch-all origin (`run` holds the paths scripts name in a directory once 3 of them answered with the catch-all page: see [run](commands/run.md#catch-all-origins)). They are in no other key. | `-type URL -coverage skipped` |
 | `client routes`, `websockets` | URLs the app's router draws, and WebSocket endpoints | `-role client-route`, `-role websocket` |
 | `scripts`, `assets`, `source maps`, `manifests` | The URLs of those roles. They are in the map, and in no other key. | `-role script` (`asset`, `sourcemap`, `manifest`) |
 | `hostnames` | Name rows that are neither dead nor wildcard: live, sibling and unresolved names | `-type Hostname`, less the two below |
@@ -195,6 +195,7 @@ The URL keys other than `catchall` and `skipped` count rows of the other coverag
 
 ### failed
 
+- An answer whose body ended before its `Content-Length` says `closed after 234 of 4096 bytes (HTTP 200, text/html)`: how many bytes came, how many were promised, the status and the media type. The URL's row keeps the status, and `azhaq show` has the headers and the bytes that came, marked `cut`. It is a failure like any other.
 - `retryable` is true for timeouts, dropped connections, answers cut short, 429 and 5xx: a later try may work. `azhaq resume -db FILE -retry-failed` asks those targets again, and only those (and a path sweep the run listed that left no record, which is marked `retryable` too) (see [resume](commands/resume.md#retrying-failed-targets)). Failures that are not retryable (a refused connection, a certificate error, a 4xx other than 429) are not asked again: the same request would fail the same way, so they are for you to read and fix. A plain `resume` continues only the tasks a limit or a kill left, never a failed one.
 - `source` names a third-party source, such as `crtsh` or `wayback`.
 - `targets` names up to 100. `azhaq query -db FILE -failed` lists every failed target of the newest run (`-run ID` reads another by its `run_id`): the list to retry.
