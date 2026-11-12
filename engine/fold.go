@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"encoding/json"
 	"fmt"
+	"net"
 	"slices"
 	"strings"
 
@@ -32,10 +33,14 @@ const (
 	// FoldUnrequested: a string or call only scripts name, that nothing
 	// requested and no page, form or description holds.
 	FoldUnrequested = "unrequested"
+	// FoldSilentUDP: a UDP port that answered none of the datagrams asked
+	// (open|filtered); only a reply makes a UDP port a row. One line per
+	// address, as ports prints them.
+	FoldSilentUDP = "silent-udp"
 )
 
 // FoldClasses is the classes in the order they are listed.
-var FoldClasses = []string{FoldCatchAll, FoldNotFound, FoldBeyondDepth, FoldUnrequested}
+var FoldClasses = []string{FoldCatchAll, FoldNotFound, FoldBeyondDepth, FoldUnrequested, FoldSilentUDP}
 
 // Folder sorts the URL rows of a run into the default view's classes. The
 // zero value folds nothing it needs the run for (the rows held back for a
@@ -87,6 +92,9 @@ func NewFolder(obs []types.StoredObservation) *Folder {
 
 // Class is the fold class of a row: "" for a row that is listed.
 func (f *Folder) Class(r MapEntry) string {
+	if r.Entity.Type == types.TypePort && r.State == "open|filtered" && strings.HasSuffix(r.Entity.Key, "/udp") {
+		return FoldSilentUDP
+	}
 	if r.Entity.Type != types.TypeURL {
 		return ""
 	}
@@ -155,7 +163,7 @@ type FoldTemplate struct {
 // one origin, for the catch-all) folded into it.
 type FoldGroup struct {
 	Class  string `json:"class"`
-	Origin string `json:"origin,omitempty"` // catchall: the origin whose answers these are
+	Origin string `json:"origin,omitempty"` // catchall: the origin whose answers these are; silent-udp: the address
 	Count  int    `json:"count"`            // the rows
 	// NotAsked is how many of Count were never requested: for a catch-all
 	// origin, the URLs held back; for beyond-depth and unrequested, all.
@@ -189,8 +197,11 @@ func (f *Folder) Groups(rows []MapEntry) []FoldGroup {
 			continue
 		}
 		k := key{class: class}
-		if class == FoldCatchAll {
+		switch class {
+		case FoldCatchAll:
 			k.origin = originOf(r.Entity.Key)
+		case FoldSilentUDP:
+			k.origin = udpHost(r.Entity.Key)
 		}
 		g := idx[k]
 		if g == nil {
@@ -290,6 +301,8 @@ func (g FoldGroup) Line() string {
 		return line
 	case FoldBeyondDepth:
 		return fmt.Sprintf("folded beyond-depth: %s (images, fonts, media, maps) pages hold that no request asked for", n(g.Count, "asset"))
+	case FoldSilentUDP:
+		return fmt.Sprintf("folded silent-udp: %s of %s answered no datagram (open|filtered)", n(g.Count, "UDP port"), g.Origin)
 	}
 	return fmt.Sprintf("folded unrequested: %s only scripts name, that nothing requested", n(g.Count, "URL"))
 }
@@ -300,4 +313,12 @@ func (t FoldTemplate) short(one bool) string {
 		return strings.TrimPrefix(t.Template, originOf(t.Template))
 	}
 	return t.Template
+}
+
+// udpHost is the address of a port row's key ("host:port/udp").
+func udpHost(key string) string {
+	if h, _, err := net.SplitHostPort(strings.TrimSuffix(key, "/udp")); err == nil {
+		return h
+	}
+	return key
 }
