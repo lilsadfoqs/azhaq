@@ -74,6 +74,23 @@ func rolesBudget() bool {
 	return true
 }
 
+// runOptionHint says, for a flag that roles does not have but run does, that
+// it is a run option and goes after --.
+func runOptionHint(err error) error {
+	var ue usageErr
+	if !errors.As(err, &ue) {
+		return err
+	}
+	bad, ok := strings.CutPrefix(ue.err.Error(), "flag provided but not defined: -")
+	if !ok || strings.ContainsAny(bad, " \t") {
+		return err
+	}
+	if rf := runFlags(); rf == nil || rf.Lookup(bad) == nil {
+		return err
+	}
+	return usagef("-%s is a run option, not an option of roles: put it after --, for example roles -role … -- -url https://app.example.com/ -%s", bad, bad)
+}
+
 // role is one session: a name and the headers its requests carry, or the
 // account it signs in with. A role with neither is anonymous.
 type role struct {
@@ -214,7 +231,7 @@ func cmdRoles(args []string) error {
 	var specs, logins, cmds, idSpecs, hars, burps, allows, canarySpecs stringsFlag
 	fs.Var(&specs, "role", "NAME, or NAME=Header: value (repeat a name to add headers; a role with none is anonymous). Only these headers are sent: a session the app reads from a cookie needs NAME=Cookie: …")
 	fs.Var(&cmds, "role-cmd", "NAME=COMMAND: a role whose headers a shell command prints, one Header: value per line (a bare token is sent as Authorization: Bearer); run before the role's run and again before the replay, for tokens that live minutes; the command's own requests are not azhaq's: not in the ledger, not held to the scope")
-	fs.Var(&logins, "role-login", "NAME=USER:PASSWORD: a role that signs in on the -login page with Chrome, and sends the cookies and the token the login left")
+	fs.Var(&logins, "role-login", "NAME=USER:PASSWORD: a role that signs in on the -login page with Chrome, and sends the cookies and the token the login left. Chrome runs with its sandbox: where the system gives none, allow it with -chrome-no-sandbox among the run options, after --")
 	fs.Var(&idSpecs, "id", "[ROLE:]NAME=VALUE: also fill routes with this identifier. NAME is a path parameter (book_title), a JSON field holding such values (basket_id) or a route (/rest/basket/{id}); with ROLE, VALUE names ROLE's own object, and another role that reads it is listed")
 	loginURL := fs.String("login", "", "the login page for -role-login")
 	dir := fs.String("dir", "", "directory for one database per role (default: roles/ in the run's folder under ./.azhaq/runs; with AZHAQ_HOME=none azhaq-roles-<time>)")
@@ -229,7 +246,7 @@ func cmdRoles(args []string) error {
 	var canaryFields stringsFlag
 	fs.Var(&canaryFields, "replay-writes-field", "NAME: with -replay-writes-canary, a field the canary may set although the rules leave it alone (an email or other owner field, an identifier, a credential, a timestamp): you accept that it changes whose the object is or what it holds (repeatable)")
 	var verifySpecs stringsFlag
-	fs.Var(&verifySpecs, "replay-writes-verify", "SPEC: with -replay-writes, a step that proves an accepted write took (repeatable): login:URL signs in as the owner with the password the write set; read:URL[;field=NAME[=VALUE]] reads URL as the writer ({owner} and {writer} are replaced) and, with field, checks that field holds VALUE or the value the write set. A row then reports write_verification proved, accepted-not-verified or refuted")
+	fs.Var(&verifySpecs, "replay-writes-verify", "SPEC: with -replay-writes, a step that proves an accepted write took (repeatable): login:URL[;user=NAME] signs in as the owner (the application user the run learned for the role, or the user the written URL names, or NAME; never the role's own name) with the password the write set; read:URL[;field=NAME[=VALUE]][;user=NAME] reads URL as the writer ({owner} and {writer} are replaced) and, with field, checks that field holds VALUE or the value the write set. A row then reports write_verification proved, accepted-not-verified or refuted")
 	fs.Var(&hars, "har", "NAME=FILE: the requests account NAME sent, as a browser or proxy saved them (HAR). Every GET is a page the role reached, its Authorization and Cookie headers of the latest request are its session (unless -role gives headers), its writes are replayed with -replay-writes. Without -- run options this is the whole input: no crawl")
 	fs.Var(&burps, "burp", "NAME=FILE: the same from a Burp \"Save items\" XML file (repeat a name to add files)")
 	fs.Var(&allows, "allow", "HOST: an origin of the history that is the target besides the ones most of a role's requests go to (the others, analytics and CDNs, are left out) (repeatable)")
@@ -244,7 +261,7 @@ func cmdRoles(args []string) error {
 	// them, and the replay reads them from there as it reads the runs' options.
 	egressGiven := inherit(fs, "resolvers", "deny", "deny-path", "seal-to")
 	if err := parse(fs, args); err != nil {
-		return err
+		return runOptionHint(err)
 	}
 	*asJSON = *asJSON || *jsonl
 	runArgs := fs.Args()
@@ -501,6 +518,9 @@ func cmdRoles(args []string) error {
 	}
 
 	rolesRate, rolesLeft = rate, renewLeft
+	var states rolesStates
+	egress.UnwatchSent()
+	defer egress.UnwatchSent()
 	stale, soon, expired := expiryNotes(roles, time.Now())
 	if !*asJSON {
 		for _, n := range append(stale, soon...) {
@@ -581,6 +601,7 @@ func cmdRoles(args []string) error {
 			}
 			addRunEstimate(rep.estimate, sub)
 			absorb(rep, r.name, sub)
+			states.add(sub)
 		} else {
 			roles[i].session = headerOf(r.headers)
 		}
@@ -755,6 +776,9 @@ func cmdRoles(args []string) error {
 				}
 			}
 		}
+		for i := range reqs {
+			reqs[i].route = routeOfWrite(reqs[i].url, templates, mapKeys(writes))
+		}
 		reqs = append(reqs, mapWrites(made, writes, methods)...)
 		var wrows []roleRow
 		if *writesCanary {
@@ -840,6 +864,7 @@ func cmdRoles(args []string) error {
 		}
 	}
 	counted()
+	states.settle(rep)
 	rep.Cost = accountCost(rep.estimate, rep.spentFrom, rolesStages)
 	if cmdMax > 0 {
 		rep.Notes = append(rep.Notes, fmt.Sprintf("request budget %d for the whole command (the runs, the sign-ins, the history reads, the replay and the writes together), %d sent%s", cmdMax, rep.Requests, spentBy(rep.Cost)))

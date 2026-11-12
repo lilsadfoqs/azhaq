@@ -559,11 +559,66 @@ func (p *Policy) noteSent(method, raw string) {
 	if method != "" && method != http.MethodGet {
 		return
 	}
+	noteWatched(raw)
 	if p.Declares(raw) == "" {
 		return
 	}
 	if n, err := normalize.URL(raw); err == nil {
 		p.sentKeys.Store(n, true)
+	}
+}
+
+// sentWatch is the GETs a command wants to know the stages of: it is the
+// process's, not the policy's, so it outlives the Reset each stage starts with.
+var sentWatch struct {
+	sync.Mutex
+	keys map[string]map[string]int // normalized URL → stage → requests
+}
+
+// WatchSent has the requests to these URLs (normalized) counted by the stage
+// (ledger.SetStage) that sent them, from now on. Urls watched before stay.
+func WatchSent(keys ...string) {
+	sentWatch.Lock()
+	defer sentWatch.Unlock()
+	if sentWatch.keys == nil {
+		sentWatch.keys = map[string]map[string]int{}
+	}
+	for _, k := range keys {
+		if _, ok := sentWatch.keys[k]; !ok {
+			sentWatch.keys[k] = map[string]int{}
+		}
+	}
+}
+
+// UnwatchSent forgets the watched URLs and their counts.
+func UnwatchSent() {
+	sentWatch.Lock()
+	sentWatch.keys = nil
+	sentWatch.Unlock()
+}
+
+// SentStages says how many requests to the watched URL (normalized) each stage
+// sent, those the ledger records.
+func SentStages(key string) map[string]int {
+	sentWatch.Lock()
+	defer sentWatch.Unlock()
+	out := map[string]int{}
+	for st, n := range sentWatch.keys[key] {
+		out[st] = n
+	}
+	return out
+}
+
+func noteWatched(raw string) {
+	sentWatch.Lock()
+	defer sentWatch.Unlock()
+	if len(sentWatch.keys) == 0 {
+		return
+	}
+	if n, err := normalize.URL(raw); err == nil {
+		if m, ok := sentWatch.keys[n]; ok {
+			m[ledger.Stage()]++
+		}
 	}
 }
 

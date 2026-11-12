@@ -145,6 +145,50 @@ type writeReq struct {
 	from   string // what it is: "alice.har", or "PUT /api/Users/{id} with an empty body"
 	status int    // what the owner got, recorded in its HAR; 0 for a map write
 	empty  bool   // a map write: an empty object, sent first as its owner
+	route  string // the route the runs found that the URL fills (…/users/v1/{username}/password), when one does
+}
+
+// routeOfWrite is the route the runs found (a template of their API
+// descriptions or their answers, in routes) that raw fills: the same host,
+// the same segments, each {name} taking one. Of several, the one with the most
+// fixed segments. "" when none does: the URL's own path is not read for
+// parameters.
+func routeOfWrite(raw string, routes ...map[string]bool) string {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return ""
+	}
+	segs := strings.Split(u.Path, "/")
+	best, bestFixed := "", -1
+	for _, rs := range routes {
+		for t := range rs {
+			tu, err := url.Parse(t)
+			if err != nil || !strings.EqualFold(tu.Host, u.Host) {
+				continue
+			}
+			ts := strings.Split(tu.Path, "/")
+			if len(ts) != len(segs) {
+				continue
+			}
+			fixed, ok := 0, true
+			for i, sg := range ts {
+				switch {
+				case strings.HasPrefix(sg, "{") && strings.HasSuffix(sg, "}") && segs[i] != "":
+				case sg == segs[i]:
+					fixed++
+				default:
+					ok = false
+				}
+			}
+			if ok && (fixed > bestFixed || fixed == bestFixed && t < best) {
+				best, bestFixed = t, fixed
+			}
+		}
+	}
+	if bestFixed < 0 || !strings.Contains(best, "{") {
+		return ""
+	}
+	return best
 }
 
 // writeMethods reads -replay-writes: the methods to replay, of POST, PUT,
@@ -240,7 +284,7 @@ func mapWrites(made map[string]instance, writes map[string][]writeOp, methods ma
 			if !methods[m] {
 				continue
 			}
-			w := writeReq{owner: in.owner, method: m, url: u, header: http.Header{}, from: m + " " + routePath(in.template)}
+			w := writeReq{owner: in.owner, method: m, url: u, header: http.Header{}, from: m + " " + routePath(in.template), route: in.template}
 			switch m {
 			case "PUT", "PATCH":
 				if op.bodyType != "" && !strings.Contains(op.bodyType, "json") {
@@ -357,7 +401,7 @@ func replayWritesPaused(who map[string]identity, roles []role, reqs []writeReq, 
 			continue
 		}
 		row := roleRow{URL: w.url, Method: w.method, Status: map[string]int{}, Answers: map[string]answer{}, FoundBy: []string{w.owner},
-			Owner: w.owner, OwnerBy: w.from, reqBody: w.body, reqType: w.header.Get("Content-Type")}
+			Owner: w.owner, OwnerBy: w.from, From: w.route, reqBody: w.body, reqType: w.header.Get("Content-Type")}
 		cur = &row
 		if w.status != 0 {
 			row.Answers[w.owner] = answer{Status: w.status}
@@ -486,7 +530,13 @@ func replayWritesPaused(who map[string]identity, roles []role, reqs []writeReq, 
 			refuted := false
 			for _, name := range let {
 				sender := byName[name]
-				switch verifyOutcome(verify, w, sender, w.owner, read, send) {
+				out, vnotes := verifyOutcome(verify, w, sender, w.owner, who, read, send)
+				for _, n := range vnotes {
+					if !strings.Contains(row.OwnerBy, n) {
+						row.OwnerBy += "; " + n
+					}
+				}
+				switch out {
 				case verifyProved:
 					proven = append(proven, name)
 					if sender.anonymous() {
