@@ -485,7 +485,7 @@ func TestResumeOfCrawlAndSubsPrintsTheMapAndSaysSo(t *testing.T) {
 	}
 	out, errOut, err = captureBoth(t, func() error { return cmdResume([]string{"-db", db2, "-quiet", "-timeout", "0", "-json"}) })
 	rep = lastReport(t, errOut)
-	if err != nil || out != "" || rep.Command != "subs" || rep.Results != 2 {
+	if err != nil || out != "" || rep.Command != "subs" || rep.Results != 3 { // the domain and each name a row: -json folds none
 		t.Errorf("resumed subs -quiet: exit %d, stdout %q, command %q, %d results, notes %v, stopped %q failed %+v", exitCode(err), out, rep.Command, rep.Results, rep.Notes, rep.Stopped, rep.Failed)
 	}
 }

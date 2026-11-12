@@ -32,6 +32,7 @@ type MapEntry struct {
 	NotAsked  int      // of Count, the URLs found and not requested (-per-template, a budget)
 	Capped    int      // of Count, the URLs a limit (-depth, a budget) kept from being asked: coverage capped
 	Folded    int      // hostnames folded into a summary row (dead, wildcard)
+	Takeover  bool     `json:"-"` // a name whose DNS answer says another party may take it: never folded into a summary row
 	Methods   []string // from API descriptions and the calls scripts make
 	Params    []string // query, form and API parameter names
 	Body      []string // names scripts send in request bodies
@@ -140,6 +141,7 @@ func BuildMap(ents []types.Entity, seeds []types.Seed, obs []types.StoredObserva
 			Role:     roleOf(e, rows, hosts, domains),
 			Proof:    proofOf(e, rows),
 		}
+		m.Takeover = e.Type == types.TypeHostname && dnsTakeover(rows)
 		if why := unchecked[e.Key]; why != "" && m.Role == "unresolved" && m.Proof == "" {
 			m.Proof = "not checked: " + why // listed by a source, and no lookup was made
 		}
@@ -412,6 +414,22 @@ func dnsResult(obs []types.StoredObservation) string {
 		}
 	}
 	return ""
+}
+
+// dnsTakeover says whether a DNS answer of the name carries a takeover finding.
+func dnsTakeover(obs []types.StoredObservation) bool {
+	for _, o := range obs {
+		if o.Collector != "azhaq-dns" {
+			continue
+		}
+		var p struct {
+			Takeover json.RawMessage `json:"takeover"`
+		}
+		if json.Unmarshal(o.Payload, &p) == nil && len(p.Takeover) > 0 && string(p.Takeover) != "null" {
+			return true
+		}
+	}
+	return false
 }
 
 // chainAddrs are the addresses the run read for the names in the CNAME
@@ -982,7 +1000,7 @@ func groupTemplates(rows []MapEntry, foldNames bool) []MapEntry {
 	out := make([]MapEntry, 0, len(rows))
 	folded := map[string]int{}
 	for _, r := range rows {
-		if foldNames && r.Entity.Type == types.TypeHostname && (r.Role == "dead" || r.Role == "wildcard" || r.Role == "unresolved") {
+		if foldNames && !r.Takeover && r.Entity.Type == types.TypeHostname && (r.Role == "dead" || r.Role == "wildcard" || r.Role == "unresolved") {
 			if i, ok := folded[r.Role]; ok {
 				out[i].Folded++
 				continue

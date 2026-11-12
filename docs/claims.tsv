@@ -851,7 +851,7 @@ run.conditional	docs/commands/run.md	`conditional` — the result depends on a p
 run.verify-result	docs/commands/run.md	Each result carries the exact request sent and an excerpt of the answe	test:cmd/azhaq:TestVerifyPortsEndToEnd
 run.verify-through-egress	docs/commands/run.md	Every read goes through the scope, `-deny-path`, the kill file, `-max-	test:cmd/azhaq:TestVerifyStageBudgetStopsReads,TestVerifyPortsEndToEnd,TestVerifyDenyPathKeepsConfirmationOut
 run.verify-boundary-pointer	docs/commands/run.md	The boundary is stated once, in [Read-only verification](../CONCEPTS.m	note:a pointer to the concepts page
-run.names-not-streamed	docs/commands/run.md	Not streamed: names that do not resolve	test:cmd/azhaq:TestStreamSaysNamesThatResolveNotThoseThatDoNot
+run.names-not-streamed	docs/commands/run.md	Not streamed as they are found: names that do not resolve.	test:cmd/azhaq:TestStreamSaysNamesThatResolveNotThoseThatDoNot,TestRunStreamLinesAreTheMapsRowsWithDeadNames
 # docs/commands/subs.md
 subs.no-live-nothing-looked-up	docs/commands/subs.md	Without `-live` nothing is looked up, and every name the sources gave is printed as a candidate	test:cmd/azhaq:TestSubsWithoutLiveLooksNothingUp,TestSubsTiersCandidatesAreNeverConfirmed
 subs.guesses-false-holds-back	docs/commands/subs.md	`-guesses=false` holds back the names only subdomain.center guessed	test:cmd/azhaq:TestSubsWithoutLiveHoldsGuessesBack,TestSubsGuessesFalseKeepsANameTheHistoryHolds
@@ -1675,3 +1675,7 @@ run.verify-logins-password-never	docs/commands/run.md	A password is never printe
 run.verify-logins-result-row	docs/commands/run.md	A success is stored and printed exactly as `-verify`'s own results are: one `verify` row, labelled `proved`, with the exact request sent, an excerpt of the answer and the command that reproduces it.	test:cmd/azhaq:TestVerifyLoginsAcceptedFixtureIsAProvedFinding
 run.verify-logins-unauth-reads-what	docs/commands/run.md	One GET of a resource a product's own docs say needs a sign-in, and the same GET again with a deliberately wrong credential, never a guess at a real pair.	test:internal/verify:TestUnauthReadFindingOnlyWhenUnauthenticatedShowsContent,TestUnauthReadWrongCredentialIsNeverARealPair;test:cmd/azhaq:TestVerifyLoginsUnauthenticatedReadShowsContentVsLogin
 crawl.outside-list-sent	docs/commands/crawl.md	The words are the list in [State-changing requests](run.md#state-changing-requests): a GET outside it is sent.	test:internal/statechange:TestCommonReadOnlyPathsAreNotHeld
+run.allrows-every-name	docs/commands/run.md	Every dead, wildcard and unresolved name is a line of its own.	test:cmd/azhaq:TestRunAllRowsPrintsEveryStoredNameAndTakeoverCandidates
+run.takeover-never-folded	docs/commands/run.md	A takeover candidate is a line of its own in the default view too.	test:cmd/azhaq:TestRunTextViewNeverFoldsATakeoverCandidate
+run.stream-dead-names-at-end	docs/commands/run.md	They are lines at the end, before the map, for each name the map has a row for	test:cmd/azhaq:TestRunStreamLinesAreTheMapsRowsWithDeadNames
+run.stream-every-row	docs/commands/run.md	Every row the map prints has its line.	test:cmd/azhaq:TestRunStreamLinesAreTheMapsRowsWithDeadNames,TestContractStreamKeysEqualTheMapKeys

@@ -90,7 +90,8 @@ func TestRetryFailedShowsTheNewAnswerAndNoWaitNoteWithoutBackoff(t *testing.T) {
 			row = l
 		}
 	}
-	if !strings.Contains(row, `"status":200`) || strings.Contains(row, "429") || !strings.Contains(row, `"proof":"status=200 title=limited page"`) {
+	// The status, not "429" anywhere: the server's port may hold those digits.
+	if !strings.Contains(row, `"status":200`) || strings.Contains(row, `"status":429`) || !strings.Contains(row, `"proof":"status=200 title=limited page"`) {
 		t.Errorf("the retried URL's row: %s", row)
 	}
 }
