@@ -87,6 +87,35 @@ func redisObs(port int, version string) []types.StoredObservation {
 	return []types.StoredObservation{{Observation: types.Observation{Collector: "azhaq-ports", Kind: "ports", Payload: raw}}}
 }
 
+// A DNS server that refuses version.bind identified nothing: no result row,
+// no label count, one declined, and no stored verify row.
+func TestVerifyStageCountsARefusedReadAsDeclined(t *testing.T) {
+	egress.Reset()
+	t.Cleanup(egress.Reset)
+	// A TCP-framed REFUSED answer to version.bind.
+	m := []byte{0x12, 0x34, 0x81, 0x85, 0, 1, 0, 0, 0, 0, 0, 0, 7, 'v', 'e', 'r', 's', 'i', 'o', 'n', 4, 'b', 'i', 'n', 'd', 0, 0, 16, 0, 3}
+	fx := newRedisFixture(t, string(append([]byte{0, byte(len(m))}, m...)))
+	raw, _ := json.Marshal(map[string]any{
+		"host": "127.0.0.1", "ip": "127.0.0.1",
+		"services": []map[string]any{{"port": fx.port, "service": "dns"}},
+	})
+	obs := []types.StoredObservation{{Observation: types.Observation{Collector: "azhaq-ports", Kind: "ports", Payload: raw}}}
+	st, err := store.Open(filepath.Join(t.TempDir(), "w.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	results, failures, note := verifyStage(context.Background(), st, obs, nil, "azhaq ports -verify")
+	if len(failures) > 0 || len(results) != 0 {
+		t.Fatalf("results %+v failures %v, want none: a refusal is no row", results, failures)
+	}
+	stored, _ := st.Observations()
+	if !strings.Contains(note, "0 results (0 proved, 0 version-only, 0 conditional)") || !strings.Contains(note, "1 declined") ||
+		len(verifyResultsOf(stored)) != 0 || verifyDeclinedOf(stored) != 1 {
+		t.Errorf("note %q, declined %d, want 0 results and 1 declined", note, verifyDeclinedOf(stored))
+	}
+}
+
 // The unauthenticated fixture is proved; the one that asks for a
 // credential is version-only, never proved. Each sends exactly one
 // INFO server and each connect is a ledger line of azhaq-verify.

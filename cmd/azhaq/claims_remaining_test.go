@@ -567,12 +567,12 @@ func TestAProvedResultNamesTheReadAndNeverExploitability(t *testing.T) {
 	}
 }
 
-// The severity printed ranks how directly the read shows the fact: an
-// unauthenticated data-store read is high, a settled advisory medium, a
-// conditional low, the rest info; it is not a CVSS score (no result has one).
+// The severity printed ranks how directly the read shows the fact: a read of
+// a version or a banner is info, a settled advisory medium, a conditional low;
+// it is not a CVSS score (no result has one).
 func TestVerifySeverityIsTheStatedRankingNotACVSSScore(t *testing.T) {
 	for _, c := range []struct{ kind, label, want string }{
-		{verify.KindUnauthenticatedRead, verify.Proved, "high"},
+		{verify.KindUnauthenticatedRead, verify.Proved, "info"},
 		{verify.KindUnauthenticatedHandshake, verify.Proved, "info"},
 		{verify.KindAdvisoryPrecond, verify.Proved, "medium"},
 		{verify.KindUnauthenticatedRead, verify.Conditional, "low"},
@@ -595,8 +595,8 @@ func TestVerifySeverityIsTheStatedRankingNotACVSSScore(t *testing.T) {
 	}
 	rep := lastReport(t, errOut)
 	raw, _ := json.Marshal(rep.Verify)
-	if len(rep.Verify) != 1 || rep.Verify[0].Severity != "high" || strings.Contains(strings.ToLower(string(raw)), "cvss") {
-		t.Errorf("a proved unauthenticated Redis read: %s, want severity high and no CVSS", raw)
+	if len(rep.Verify) != 1 || rep.Verify[0].Severity != "info" || strings.Contains(strings.ToLower(string(raw)), "cvss") {
+		t.Errorf("a proved unauthenticated Redis read: %s, want severity info (the read shows a version) and no CVSS", raw)
 	}
 }
 

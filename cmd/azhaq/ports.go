@@ -577,6 +577,9 @@ func cmdPorts(args []string) error {
 			rep.Counts = map[string]int{}
 		}
 		rep.Counts["verify results"] = len(results)
+		if n := verifyDeclinedOf(obs); n > 0 {
+			rep.Counts["declined"] = n
+		}
 	}
 	if err := w.close(); err != nil {
 		return err

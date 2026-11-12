@@ -98,8 +98,21 @@ func TestRedisUnauthenticatedIsProved(t *testing.T) {
 	if r.Version != "7.2.0" || !strings.Contains(r.Evidence, "redis_version:7.2.0") {
 		t.Fatalf("version/evidence: %+v", r)
 	}
-	if r.Kind != "unauthenticated-read" || r.Severity != "high" { // a read, not a handshake
+	if r.Kind != "unauthenticated-read" || r.Severity != "info" { // a read of a version, not a handshake
 		t.Fatalf("kind/severity: %+v", r)
+	}
+}
+
+// An unauthenticated read ranks by what it showed: INFO server states a
+// version, so it is info, never high.
+func TestAReadOfAVersionRanksInfo(t *testing.T) {
+	f := listen(t, func([]byte) []byte { return []byte("$40\r\n# Server\r\nredis_version:7.2.0\r\nos:Linux\r\n\r\n") })
+	r := runOne(t, advisory.Service{Service: "redis"}, f)
+	if r.Label != Proved || r.Kind != KindUnauthenticatedRead || r.Severity != "info" {
+		t.Errorf("%+v, want a proved unauthenticated-read ranked info", r)
+	}
+	if got := SeverityOf(Result{Kind: KindUnauthenticatedRead, Label: Proved}); got != "info" {
+		t.Errorf("severity of a proved read %q, want info", got)
 	}
 }
 
@@ -273,9 +286,6 @@ func TestEveryCheckNamesItsKind(t *testing.T) {
 		default:
 			t.Errorf("%s: kind %q", c.ID, c.Kind)
 		}
-		if c.High && c.Kind != KindUnauthenticatedRead {
-			t.Errorf("%s ranks high but is a %s", c.ID, c.Kind)
-		}
 	}
 }
 
@@ -287,7 +297,9 @@ func dnsAnswer(rcode byte, an byte) []byte {
 	return append([]byte{0, byte(len(m))}, m...)
 }
 
-func TestDNSRefusalIsVersionOnly(t *testing.T) {
+// A refused version.bind read identified nothing: it is declined, not a
+// result row with a label.
+func TestDNSRefusalIsDeclinedNotVersionOnly(t *testing.T) {
 	for name, tt := range map[string]struct {
 		answer []byte
 		evid   string
@@ -299,12 +311,17 @@ func TestDNSRefusalIsVersionOnly(t *testing.T) {
 	} {
 		f := listen(t, func([]byte) []byte { return tt.answer })
 		r := runOne(t, advisory.Service{Service: "dns"}, f)
-		if r.Label != VersionOnly || r.Severity != "info" || !strings.Contains(r.Evidence, tt.evid) {
-			t.Errorf("%s: %+v, want version-only, info, evidence %q", name, r, tt.evid)
+		if !r.Declined || r.Label != "" || r.Severity != "" || !strings.Contains(r.Evidence, tt.evid) {
+			t.Errorf("%s: %+v, want declined with no label, evidence %q", name, r, tt.evid)
 		}
 		if strings.ContainsRune(r.Evidence, '\uFFFD') || strings.Contains(r.Evidence, "versionbind") {
 			t.Errorf("%s: raw reply in evidence %q", name, r.Evidence)
 		}
+	}
+	// A version the scan already stated stands, so the refusal keeps it version-only.
+	f := listen(t, func([]byte) []byte { return dnsAnswer(5, 0) })
+	if r := runOne(t, advisory.Service{Service: "dns", Version: "9.18.2"}, f); r.Declined || r.Label != VersionOnly {
+		t.Errorf("a refusal beside a stated version: %+v, want version-only", r)
 	}
 }
 

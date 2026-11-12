@@ -60,6 +60,7 @@ Plain output is one name per line, as subfinder prints it. The domain you give i
 | `cname` | With `-live`, the chain. |
 | `cdn` | With `-live`, the CDN or WAF in front. |
 | `ip` | With `-live -oI`. |
+| `private_answer` | With `-live`, `true` on a name whose addresses are all loopback, private (RFC 1918, `fc00::/7`) or link-local: it resolves, but not to an address the internet reaches. |
 | `cname_only` | With `-live`, `true` on a name that is a CNAME whose chain ends without an address (`a` is empty). It exists in DNS; one whose target is gone is a takeover lead. |
 | `takeover` | `service`, `target`, `evidence`, `strength` and `status` (`candidate` or `verified`), on a name that is a takeover candidate: a CNAME to what is gone, or a page that names an unclaimed service. |
 
@@ -140,6 +141,7 @@ The counts also say what became of the names, so a reader can add them up:
 | `wildcard answers left out` | Names that only a wildcard answered: they got the address or CNAME that a random label of the zone gets. They are not printed and not `did not resolve`. A note names the wildcard and its answer (`3 names answered like *.zone (127.0.0.2)`), as `dns` does. |
 | `collected` | With `-live`: `from sources` less the domain itself and the guesses that did not resolve. |
 | `resolved from sources` | With `-live`: names from sources that resolved to an address and were printed. |
+| `private answers` | With `-live`: printed names whose addresses are all loopback, private or link-local, marked `private_answer`. They are in `results` and in `DNS-confirmed`, and a note says how many. |
 | `CNAME only` | With `-live`: printed names whose CNAME chain ends without an address. They are in `results` and not taken away from it. The takeover candidates among them are in `takeover`. |
 | `found as CNAME targets`, `found by guessing` | Live names no source gave: another name's CNAME target in scope, and the names of `-w` and `-permute`. |
 | `asked by guessing` | The names `-w` and `-permute` asked that no source gave. `found by guessing` is what is left of them after `did not resolve` and `left out by -m/-f`. |

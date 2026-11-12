@@ -849,6 +849,11 @@ func buildReport(er store.EvidenceRow, order []string, saved time.Time, savedOK,
 		}
 	}
 	d.Severity = severityOf(row, class, anyone)
+	if row.WriteVerification == verifyRefuted {
+		// The step the user gave showed the write did not take: no finding.
+		d.Title = fmt.Sprintf("Write not applied: %s's %s to %s did not take as %s's", joinNames(readers), verb, route, owner)
+		d.Severity = reportSeverty{Level: severityNone, Reason: "the verification step the user gave refuted the write, so it is not a finding"}
+	}
 	d.Variables = vars
 
 	// Steps.
@@ -894,6 +899,10 @@ func buildReport(er store.EvidenceRow, order []string, saved time.Time, savedOK,
 	}
 
 	d.Impact, d.Remediation = impactOf(class, row, owner)
+	if row.WriteVerification == verifyRefuted {
+		d.Impact = "None shown: the write did not take as the owner's, so no data of the owner's changed."
+		d.Remediation = "Nothing to fix from this row; it is kept so the refuted write is not run again unseen."
+	}
 	run := noRun
 	if savedOK {
 		run = saved.UTC().Format("2006-01-02 15:04 UTC")
@@ -1036,6 +1045,9 @@ func summaryOf(row roleRow, class, verb, route string, answers []store.EvidenceA
 		s2 = "azhaq roles lists it because a role other than the one whose request it replayed was answered 2xx. That is all it shows: nothing says the server ignores who may create, and the object may belong to its sender, as in a collection every signed-in user may post to. It gives no confidence for this kind of row; check whether the role is meant to create here."
 	case classWrite:
 		s2 = "azhaq roles rates it " + row.Confidence + ": it lists a write only when the owner's object, read as the owner before and after, changed the way the write asks."
+		if row.WriteVerification == verifyRefuted {
+			s2 = "the verification step the user gave showed the write did not take as the owner's, so it is listed but not rated"
+		}
 	default:
 		s2 = "azhaq roles rates it " + row.Confidence + " (" + confidenceWhy(row.Confidence) + ")"
 		switch {
@@ -1050,6 +1062,9 @@ func summaryOf(row roleRow, class, verb, route string, answers []store.EvidenceA
 	}
 	return s1 + ". " + s2
 }
+
+// severityNone is the level of a row that is not a finding.
+const severityNone = "none"
 
 // severityOf is a guess from the class and what the row holds: sensitive
 // fields read and a write each raise it.
@@ -1142,7 +1157,11 @@ func (d reportDoc) markdown() string {
 	w := func(f string, a ...any) { fmt.Fprintf(&b, f, a...) }
 	w("# %s\n\n", d.Title)
 	w("## Summary\n\n%s\n\n", d.Summary)
-	w("## Severity (a guess)\n\n**%s**, guessed from the class and the fields, not rated: %s.\n\n", d.Severity.Level, d.Severity.Reason)
+	if d.Severity.Level == severityNone {
+		w("## Severity\n\nNone: %s.\n\n", d.Severity.Reason)
+	} else {
+		w("## Severity (a guess)\n\n**%s**, guessed from the class and the fields, not rated: %s.\n\n", d.Severity.Level, d.Severity.Reason)
+	}
 	w("## Steps to reproduce\n\n")
 	for _, s := range d.Steps {
 		w("%d. %s\n", s.N, s.Text)

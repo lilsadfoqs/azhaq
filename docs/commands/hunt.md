@@ -84,7 +84,7 @@ $ azhaq hunt -db app.db
 | `upload` | A file field in a form, or an operation whose body is `multipart/form-data` or a file. |
 | `xml` | An operation whose body is XML (`application/xml`, `text/xml`): a parser that may read entities. |
 | `password-in-url` | A GET form with a password field: the password lands in logs and history. |
-| `gated` | A 401 or 403: a session is needed, so a target for `azhaq roles`. |
+| `gated` | A 401: the server asked for authentication, so a target for `azhaq roles`. A bare 403 says only `forbidden` and weighs less (5, against 15): nothing in it shows that a session would change the answer. |
 | `server-error` | A 5xx, weighed by what shows beside it: see [Server errors](#server-errors). |
 | `input` | The route takes query, body or form names. |
 | `new` | First seen within `-since`. |

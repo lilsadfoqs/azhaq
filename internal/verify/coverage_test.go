@@ -130,9 +130,10 @@ func hexFixture(t *testing.T, name string) []byte {
 }
 
 // What a service answers is labelled by what it says: proved for an answer
-// that came with no credential, version-only for one that asks for it; only
-// a data store's proved read ranks high.
+// that came with no credential, declined (no label) for one that asks for it
+// and states no version; a read ranks info: it showed a version or a banner.
 func TestProbeChecksLabelTheAnswers(t *testing.T) {
+	const declined = ""
 	for _, tt := range []struct {
 		service  string
 		answer   []byte
@@ -140,22 +141,22 @@ func TestProbeChecksLabelTheAnswers(t *testing.T) {
 		severity string
 		version  string
 	}{
-		{"zookeeper", []byte("Zookeeper version: 3.9.2-abc, built on 2024\nLatency min/avg/max: 0/0/0\n"), Proved, "high", ""},
+		{"zookeeper", []byte("Zookeeper version: 3.9.2-abc, built on 2024\nLatency min/avg/max: 0/0/0\n"), Proved, "info", ""},
 		{"postgresql", hexFixture(t, "postgres"), Proved, "info", "14 - 17"},
 		{"smb", hexFixture(t, "smb"), Proved, "info", ""},
 		{"ldap", hexFixture(t, "ldap"), Proved, "info", ""},
 		{"amqp", hexFixture(t, "amqp"), Proved, "info", "3.13.7"},
 		{"mqtt", []byte{0x20, 2, 0, 0}, Proved, "info", ""},
-		{"mqtt", []byte{0x20, 2, 0, 5}, VersionOnly, "info", ""},
+		{"mqtt", []byte{0x20, 2, 0, 5}, declined, "", ""},
 		{"stomp", []byte("CONNECTED\nversion:1.2\nserver:ActiveMQ/5.18.3\n\n\x00"), Proved, "info", "5.18.3"},
-		{"stomp", []byte("ERROR\nmessage:Authentication failed\n\n\x00"), VersionOnly, "info", ""},
+		{"stomp", []byte("ERROR\nmessage:Authentication failed\n\n\x00"), declined, "", ""},
 		{"socks5", []byte{5, 0}, Proved, "info", ""},
-		{"socks5", []byte{5, 0xff}, VersionOnly, "info", ""},
+		{"socks5", []byte{5, 0xff}, declined, "", ""},
 		{"jdwp", []byte("JDWP-Handshake"), Proved, "info", ""},
 		{"rtsp", []byte("RTSP/1.0 200 OK\r\nCSeq: 1\r\nPublic: OPTIONS, DESCRIBE\r\n\r\n"), Proved, "info", ""},
-		{"rtsp", []byte("RTSP/1.0 401 Unauthorized\r\nCSeq: 1\r\n\r\n"), VersionOnly, "info", ""},
+		{"rtsp", []byte("RTSP/1.0 401 Unauthorized\r\nCSeq: 1\r\n\r\n"), declined, "", ""},
 		{"sip", []byte("SIP/2.0 200 OK\r\nServer: Asterisk PBX 20.5.0\r\n\r\n"), Proved, "info", ""},
-		{"sip", []byte("SIP/2.0 401 Unauthorized\r\n\r\n"), VersionOnly, "info", ""},
+		{"sip", []byte("SIP/2.0 401 Unauthorized\r\n\r\n"), declined, "", ""},
 	} {
 		f := listen(t, func([]byte) []byte { return tt.answer })
 		svc := advisory.Service{Service: tt.service, Host: "127.0.0.1", IP: "127.0.0.1", Port: f.port}
@@ -170,6 +171,9 @@ func TestProbeChecksLabelTheAnswers(t *testing.T) {
 		}
 		if r.Label != tt.label || r.Severity != tt.severity || (tt.version != "" && !strings.HasPrefix(r.Version, tt.version)) {
 			t.Errorf("%s: %+v, want %s %s %s", tt.service, r, tt.label, tt.severity, tt.version)
+		}
+		if r.Declined != (tt.label == declined) {
+			t.Errorf("%s: declined %v for label %q", tt.service, r.Declined, tt.label)
 		}
 		if r.Request != c.Request || r.Evidence == "" {
 			t.Errorf("%s: a result carries the request and the evidence: %+v", tt.service, r)
