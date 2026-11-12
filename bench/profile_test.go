@@ -88,8 +88,8 @@ func TestNormalizedResultsDropsDuration(t *testing.T) {
 	a, b := filepath.Join(dir, "a.json"), filepath.Join(dir, "b.json")
 	os.WriteFile(a, []byte(`{"results":[{"input":{"FUZZ":"YQ=="},"status":200,"duration":123,"position":2},{"input":{"FUZZ":"Yg=="},"status":301,"duration":9,"position":1}]}`), 0o644)
 	os.WriteFile(b, []byte(`{"results":[{"position":1,"status":301,"input":{"FUZZ":"Yg=="},"duration":777},{"duration":5,"position":2,"input":{"FUZZ":"YQ=="},"status":200}]}`), 0o644)
-	ra, err1 := normalizedResults(a)
-	rb, err2 := normalizedResults(b)
+	ra, err1 := normalizedResults(a, nil)
+	rb, err2 := normalizedResults(b, nil)
 	if err1 != nil || err2 != nil || strings.Join(ra, "\n") != strings.Join(rb, "\n") || len(ra) != 2 {
 		t.Fatalf("%v %v %v %v", ra, rb, err1, err2)
 	}
@@ -239,5 +239,23 @@ func TestKnownRoutesRowNamesTheAppBuild(t *testing.T) {
 	ps := &profileSet{Apps: []appResult{{Name: "juice-shop", Azhaq: toolScore{Truth: 70, TruthOf: 77}, Katana: toolScore{Truth: 1, TruthOf: 77}}}}
 	if rows := tableRows(ps); len(rows) != 1 || !strings.Contains(rows[0].job, "juice-shop v20.3.0") {
 		t.Errorf("rows %+v", rows)
+	}
+}
+
+// A result azhaq holds back by default is left out of ffuf's report when the
+// two are compared, as the other fuzz checks count it on neither side.
+func TestNormalizedResultsSkipsHeldURLs(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "ffuf.json")
+	report := `{"results":[{"url":"http://127.0.0.1:3101/restore","status":200,"duration":5},{"url":"http://127.0.0.1:3101/ftp","status":200,"duration":7}]}`
+	if err := os.WriteFile(path, []byte(report), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	all, err := normalizedResults(path, nil)
+	if err != nil || len(all) != 2 {
+		t.Fatalf("all: %v %v", all, err)
+	}
+	kept, err := normalizedResults(path, heldBack)
+	if err != nil || len(kept) != 1 || !strings.Contains(kept[0], "/ftp") {
+		t.Fatalf("kept: %v %v", kept, err)
 	}
 }
