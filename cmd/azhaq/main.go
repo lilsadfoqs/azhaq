@@ -879,7 +879,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		if err := st.BeginRun(newRunID(), *depth, budgets.MaxItems); err != nil {
 			return err
 		}
-		if err := st.SetRunArgs(keptArgs(args)); err != nil {
+		if err := st.SetRunArgs(keptArgs(keepInputs(args, path))); err != nil {
 			return err
 		}
 		if signedIn(*login, cookies, headers) {

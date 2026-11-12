@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"github.com/lilsadfoqs/azhaq/internal/collectors/httpcol"
@@ -405,6 +407,57 @@ func dropRemovedFlags(args []string) (out, gone []string) {
 // credential). A -scope file is kept by its full path, so a resume or an
 // export started in another directory reads the same file; a -resolvers file
 // is kept as the resolvers it holds.
+// keepInputs copies each list a command wrote for its own run (tempList) next
+// to the workspace, and points args at the copy: the temporary file is removed
+// when the command exits, and azhaq resume reads the copy.
+func keepInputs(args []string, db string) []string {
+	out := slices.Clone(args)
+	for i, a := range out {
+		if !strings.HasPrefix(a, "-") {
+			continue
+		}
+		name, val, inline := strings.Cut(strings.TrimLeft(a, "-"), "=")
+		if !inline {
+			if i+1 >= len(out) {
+				continue
+			}
+			val = out[i+1]
+		}
+		if !isTempList(val) {
+			continue
+		}
+		dst, err := copyInput(val, db)
+		if err != nil {
+			continue
+		}
+		if inline {
+			out[i] = "-" + name + "=" + dst
+		} else {
+			out[i+1] = dst
+		}
+	}
+	return out
+}
+
+// isTempList says path is a list tempList wrote.
+func isTempList(path string) bool {
+	return filepath.Dir(filepath.Clean(path)) == filepath.Clean(os.TempDir()) && strings.HasPrefix(filepath.Base(path), tempListPrefix)
+}
+
+// copyInput copies a list next to the workspace db, named by its content.
+func copyInput(src, db string) (string, error) {
+	b, err := os.ReadFile(src)
+	if err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256(b)
+	dst, err := filepath.Abs(db + ".input-" + hex.EncodeToString(sum[:4]) + ".txt")
+	if err != nil {
+		return "", err
+	}
+	return dst, os.WriteFile(dst, b, 0o600)
+}
+
 func keptArgs(args []string) []string {
 	var out []string
 	for i := 0; i < len(args); i++ {
