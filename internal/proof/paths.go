@@ -8,11 +8,11 @@ import (
 	"fmt"
 	"html"
 	"net/url"
-	"regexp"
 	"strings"
 	"time"
 	"unicode/utf8"
 
+	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 	"github.com/lilsadfoqs/azhaq/types"
 )
 
@@ -116,7 +116,7 @@ func prefixShow(magic string) func(Answer) (int, bool) {
 	}
 }
 
-func regexShow(re *regexp.Regexp) func(Answer) (int, bool) {
+func regexShow(re *lazyre.Regexp) func(Answer) (int, bool) {
 	return func(a Answer) (int, bool) {
 		if isHTML(a) {
 			return 0, false
@@ -128,7 +128,7 @@ func regexShow(re *regexp.Regexp) func(Answer) (int, bool) {
 	}
 }
 
-func titleShow(re *regexp.Regexp) func(Answer) (int, bool) {
+func titleShow(re *lazyre.Regexp) func(Answer) (int, bool) {
 	return func(a Answer) (int, bool) {
 		if !re.MatchString(a.Title) {
 			return 0, false
@@ -152,17 +152,17 @@ func anyShow(shows ...func(Answer) (int, bool)) func(Answer) (int, bool) {
 }
 
 var (
-	envLine    = regexp.MustCompile(`(?m)^(?:export\s+)?[A-Za-z_][A-Za-z0-9_]*=\S*`)
-	sqlDump    = regexp.MustCompile(`(?i)-- (?:MySQL|MariaDB|PostgreSQL) dump|-- Dumping (?:data|structure)|\bCREATE TABLE\b|\bINSERT INTO\b|\bDROP TABLE\b`)
-	pemBegin   = regexp.MustCompile(`-----BEGIN [A-Z ]*(?:PRIVATE KEY|CERTIFICATE)-----`)
-	htpasswd   = regexp.MustCompile(`(?m)^[^:\s]+:(?:\$apr1\$|\{SHA\}|\$2[aby]\$)`)
-	phpSource  = regexp.MustCompile(`^\s*<\?php`)
-	gitConfig  = regexp.MustCompile(`^\s*\[core\]`)
-	promMetric = regexp.MustCompile(`(?m)^# (?:HELP|TYPE) \S+`)
-	actuator   = regexp.MustCompile(`"_links"|"propertySources"|"status"\s*:\s*"(?:UP|DOWN)"`)
+	envLine    = lazyre.New(`(?m)^(?:export\s+)?[A-Za-z_][A-Za-z0-9_]*=\S*`)
+	sqlDump    = lazyre.New(`(?i)-- (?:MySQL|MariaDB|PostgreSQL) dump|-- Dumping (?:data|structure)|\bCREATE TABLE\b|\bINSERT INTO\b|\bDROP TABLE\b`)
+	pemBegin   = lazyre.New(`-----BEGIN [A-Z ]*(?:PRIVATE KEY|CERTIFICATE)-----`)
+	htpasswd   = lazyre.New(`(?m)^[^:\s]+:(?:\$apr1\$|\{SHA\}|\$2[aby]\$)`)
+	phpSource  = lazyre.New(`^\s*<\?php`)
+	gitConfig  = lazyre.New(`^\s*\[core\]`)
+	promMetric = lazyre.New(`(?m)^# (?:HELP|TYPE) \S+`)
+	actuator   = lazyre.New(`"_links"|"propertySources"|"status"\s*:\s*"(?:UP|DOWN)"`)
 )
 
-func jsonShow(re *regexp.Regexp) func(Answer) (int, bool) {
+func jsonShow(re *lazyre.Regexp) func(Answer) (int, bool) {
 	return func(a Answer) (int, bool) {
 		if !strings.Contains(strings.ToLower(a.ContentType), "json") {
 			return 0, false
@@ -188,7 +188,7 @@ var checks = []pathCheck{
 	{"exposed-file", "a git repository's HEAD", func(p string) bool {
 		return strings.HasSuffix(strings.ToLower(strings.TrimRight(p, "/")), "/.git/head")
 	},
-		regexShow(regexp.MustCompile(`^ref: refs/`)), "GET it: the body is `ref: refs/heads/...`"},
+		regexShow(lazyre.New(`^ref: refs/`)), "GET it: the body is `ref: refs/heads/...`"},
 	{"exposed-file", "a git repository's config", func(p string) bool {
 		return strings.HasSuffix(strings.ToLower(strings.TrimRight(p, "/")), "/.git/config")
 	},
@@ -209,18 +209,18 @@ var checks = []pathCheck{
 	{"exposed-file", "a backup", is("backup", "backups", "dump", "db"), archiveShow, "GET it: the body is an archive (PK or gzip bytes), not a page"},
 	{"exposed-file", "a configuration", is("config", "configuration", "settings"), nil, "GET it: the body is the configuration (JSON, YAML or INI of settings), not a page"},
 	{"exposed-panel", "an admin panel", is("admin", "administrator", "administration"),
-		titleShow(regexp.MustCompile(`(?i)\badmin(?:istrat\w+)?\b|control panel`)), "GET it: the page is the panel (its own title), not a login form"},
-	{"exposed-panel", "a dashboard", is("dashboard"), titleShow(regexp.MustCompile(`(?i)\bdashboard\b`)), "GET it: the page is the dashboard (its own title), not a login form"},
-	{"exposed-panel", "phpMyAdmin", is("phpmyadmin", "pma"), titleShow(regexp.MustCompile(`(?i)phpMyAdmin`)), "GET it: the page's title is phpMyAdmin"},
-	{"exposed-panel", "Adminer", is("adminer", "adminer.php"), titleShow(regexp.MustCompile(`(?i)adminer`)), "GET it: the page's title is Adminer"},
-	{"exposed-panel", "a console", is("console"), titleShow(regexp.MustCompile(`(?i)\bconsole\b`)), "GET it: the page is the console (its own title)"},
+		titleShow(lazyre.New(`(?i)\badmin(?:istrat\w+)?\b|control panel`)), "GET it: the page is the panel (its own title), not a login form"},
+	{"exposed-panel", "a dashboard", is("dashboard"), titleShow(lazyre.New(`(?i)\bdashboard\b`)), "GET it: the page is the dashboard (its own title), not a login form"},
+	{"exposed-panel", "phpMyAdmin", is("phpmyadmin", "pma"), titleShow(lazyre.New(`(?i)phpMyAdmin`)), "GET it: the page's title is phpMyAdmin"},
+	{"exposed-panel", "Adminer", is("adminer", "adminer.php"), titleShow(lazyre.New(`(?i)adminer`)), "GET it: the page's title is Adminer"},
+	{"exposed-panel", "a console", is("console"), titleShow(lazyre.New(`(?i)\bconsole\b`)), "GET it: the page is the console (its own title)"},
 	{"exposed-panel", "a Spring Boot actuator", func(p string) bool { return strings.Contains(strings.ToLower(p), "/actuator") },
 		jsonShow(actuator), "GET it: the answer is JSON with _links, propertySources or a status"},
-	{"exposed-panel", "Swagger UI", is("swagger-ui.html", "swagger-ui", "swagger"), titleShow(regexp.MustCompile(`(?i)swagger ui`)), "GET it: the page's title is Swagger UI"},
-	{"exposed-panel", "a GraphQL IDE", is("graphiql", "playground", "altair"), titleShow(regexp.MustCompile(`(?i)graphiql|graphql playground|altair`)), "GET it: the page's title names the IDE"},
+	{"exposed-panel", "Swagger UI", is("swagger-ui.html", "swagger-ui", "swagger"), titleShow(lazyre.New(`(?i)swagger ui`)), "GET it: the page's title is Swagger UI"},
+	{"exposed-panel", "a GraphQL IDE", is("graphiql", "playground", "altair"), titleShow(lazyre.New(`(?i)graphiql|graphql playground|altair`)), "GET it: the page's title names the IDE"},
 	{"exposed-panel", "phpinfo", is("phpinfo.php", "info.php", "phpinfo"),
-		anyShow(titleShow(regexp.MustCompile(`phpinfo\(\)`)), regexShow(regexp.MustCompile(`PHP Version`))), "GET it: the page is phpinfo() output"},
-	{"exposed-panel", "Apache server status", is("server-status", "server-info"), titleShow(regexp.MustCompile(`(?i)apache (?:status|server information)`)), "GET it: the page's title is Apache Status"},
+		anyShow(titleShow(lazyre.New(`phpinfo\(\)`)), regexShow(lazyre.New(`PHP Version`))), "GET it: the page is phpinfo() output"},
+	{"exposed-panel", "Apache server status", is("server-status", "server-info"), titleShow(lazyre.New(`(?i)apache (?:status|server information)`)), "GET it: the page's title is Apache Status"},
 	{"exposed-panel", "a metrics endpoint", is("metrics"), regexShow(promMetric), "GET it: the body is Prometheus text (# HELP, # TYPE lines)"},
 }
 
@@ -237,7 +237,7 @@ func checkOf(path string) *pathCheck {
 // head of its body.
 func Wants(path string) bool { return checkOf(path) != nil }
 
-var softPage = regexp.MustCompile(`(?i)\b(?:404|not found|page not found|does(?:n't| not) exist|no such (?:file|page)|nothing here)\b`)
+var softPage = lazyre.New(`(?i)\b(?:404|not found|page not found|does(?:n't| not) exist|no such (?:file|page)|nothing here)\b`)
 
 // loginWords name the pages a host sends an unauthenticated request to.
 func loginPath(p string) bool {
@@ -250,7 +250,7 @@ func loginPath(p string) bool {
 	return false
 }
 
-var loginTitleRE = regexp.MustCompile(`(?i)\b(?:log ?in|sign ?in|sign on|authenticat\w+)\b`)
+var loginTitleRE = lazyre.New(`(?i)\b(?:log ?in|sign ?in|sign on|authenticat\w+)\b`)
 
 func loginTitle(t string) bool { return loginTitleRE.MatchString(t) }
 
@@ -485,8 +485,8 @@ func severityOf(c *pathCheck) string {
 }
 
 var (
-	titleRE    = regexp.MustCompile(`(?is)<title[^>]*>(.*?)</title>`)
-	passwordRE = regexp.MustCompile(`(?i)<input[^>]*\btype\s*=\s*["']?password`)
+	titleRE    = lazyre.New(`(?is)<title[^>]*>(.*?)</title>`)
+	passwordRE = lazyre.New(`(?i)<input[^>]*\btype\s*=\s*["']?password`)
 )
 
 // Fields are what a web stage stores of an answer for the path checks, beside
