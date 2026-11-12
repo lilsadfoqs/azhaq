@@ -183,7 +183,7 @@ func TestRunNamesTheAdvisoriesOfAConfirmedVersionByDefault(t *testing.T) {
 	}
 	m, _ := advisory.BuiltinMeta()
 	note := noteOf(rep)
-	if !strings.Contains(note, "1 leads, one for each of 1 confirmed product versions, holding ") || !strings.Contains(note, " affected, ") || !strings.Contains(note, m.Label()) {
+	if !strings.Contains(note, "1 leads, one for each of 1 confirmed products on 1 listeners, holding ") || !strings.Contains(note, " affected, ") || !strings.Contains(note, m.Label()) {
 		t.Errorf("the summary's note does not count the advisories by label and name the index: %q", note)
 	}
 	// The run's text output is one line too.

@@ -8,6 +8,8 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"slices"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -46,6 +48,10 @@ func services(obs []types.StoredObservation, needVersion bool) []Service {
 			}
 		} else if s.Service == "" && s.Product == "" {
 			// A verification check keys on the service name alone.
+			return
+		}
+		if needVersion {
+			out = append(out, s) // merged by listener below
 			return
 		}
 		key := fmt.Sprintf("%s|%d|%s|%s|%s", s.Target(), s.Port, s.Proto, ProductKey(s.Product), s.Version)
@@ -129,6 +135,9 @@ func services(obs []types.StoredObservation, needVersion bool) []Service {
 				}
 			}
 		}
+	}
+	if needVersion {
+		return mergeListeners(out, nameAddrs(obs))
 	}
 	return out
 }
@@ -322,4 +331,140 @@ func productVersionIn(text, product string) (string, string) {
 		}
 	}
 	return "", ""
+}
+
+// nameAddrs is the address each name answered from, as the run recorded it:
+// a scan row's own, the one a web answer came from, and, for a name that
+// resolved to exactly one address, its DNS answer. A name with two
+// addresses and no row that says which is left out: it is not told apart.
+func nameAddrs(obs []types.StoredObservation) map[string]string {
+	out := map[string]string{}
+	set := func(name, ip string, force bool) {
+		name, ip = strings.ToLower(strings.TrimSpace(name)), normIP(ip)
+		if name == "" || ip == "" || normIP(name) != "" {
+			return
+		}
+		if _, ok := out[name]; !ok || force {
+			out[name] = ip
+		}
+	}
+	for _, o := range obs {
+		switch {
+		case o.Collector == "azhaq-ports":
+			var row struct{ Host, IP string }
+			if json.Unmarshal(o.Payload, &row) == nil {
+				set(row.Host, row.IP, true)
+			}
+		case o.Collector == "azhaq-http":
+			var row struct{ URL, IP string }
+			if json.Unmarshal(o.Payload, &row) == nil && row.IP != "" {
+				if u, err := url.Parse(row.URL); err == nil {
+					set(u.Hostname(), row.IP, true)
+				}
+			}
+		case o.Kind == "dns":
+			var row struct {
+				FQDN     string   `json:"fqdn"`
+				IPs      []string `json:"ips"`
+				Wildcard bool     `json:"wildcard"`
+			}
+			if json.Unmarshal(o.Payload, &row) == nil && len(row.IPs) == 1 && !row.Wildcard {
+				set(row.FQDN, row.IPs[0], false)
+			}
+		}
+	}
+	return out
+}
+
+// mergeListeners makes one service of each listener (address and port) and
+// product: a name and its address are one listener, and the Server header
+// and a page's technologies that name one product are one service, with the
+// most specific version seen. The host is the same for every product of a
+// listener (its first name, by order), and Names lists every host string the
+// listener was reached by.
+func mergeListeners(in []Service, addrs map[string]string) []Service {
+	for i := range in {
+		if in[i].IP == "" && normIP(in[i].Host) == "" {
+			in[i].IP = addrs[strings.ToLower(in[i].Host)]
+		}
+	}
+	names := map[string][]string{}
+	for _, s := range in {
+		if s.Host == "" {
+			continue
+		}
+		l := s.Listener()
+		if !slices.Contains(names[l], s.Host) {
+			names[l] = append(names[l], s.Host)
+		}
+	}
+	for l := range names {
+		sort.Strings(names[l])
+	}
+	var out []Service
+	at := map[string]int{}
+	for _, s := range in {
+		l := s.Listener()
+		if ns := names[l]; len(ns) > 0 {
+			s.Names = ns
+			s.Host = firstName(ns)
+		}
+		k := l + "|" + ProductKey(s.Product)
+		i, ok := at[k]
+		if !ok {
+			at[k] = len(out)
+			out = append(out, s)
+			continue
+		}
+		cur := out[i]
+		win, lose := cur, s
+		if moreSpecific(s.Version, cur.Version) {
+			win, lose = s, cur
+		}
+		win.Origin = firstNonEmpty(win.Origin, lose.Origin)
+		// A version that does not refine the winner is said, not dropped.
+		for _, v := range append([]string{lose.Version}, lose.AlsoSeen...) {
+			if !refines(win.Version, v) && !slices.Contains(win.AlsoSeen, v) {
+				win.AlsoSeen = append(win.AlsoSeen, v)
+			}
+		}
+		out[i] = win
+	}
+	return out
+}
+
+// refines says version a is b, or b with more said after it ("9.4.z-SNAPSHOT"
+// of "9.4"): the same release named more exactly, not another one.
+func refines(a, b string) bool {
+	if a == b || sameVersion(a, b) {
+		return true
+	}
+	return strings.HasPrefix(a, b) && len(a) > len(b) && !(a[len(b)] >= '0' && a[len(b)] <= '9')
+}
+
+// firstName is the host a listener's lead names: a name before an address.
+func firstName(ns []string) string {
+	for _, n := range ns {
+		if normIP(n) == "" {
+			return n
+		}
+	}
+	return ns[0]
+}
+
+// moreSpecific says version a names a release more exactly than b: more
+// parts ("9.4.z-SNAPSHOT" over "9.4"), then the longer text. Equal ones
+// leave the first seen.
+func moreSpecific(a, b string) bool {
+	pa, pb := versionParts(a), versionParts(b)
+	if pa != pb {
+		return pa > pb
+	}
+	return len(a) > len(b)
+}
+
+func versionParts(v string) int {
+	return len(strings.FieldsFunc(v, func(r rune) bool {
+		return !(r >= '0' && r <= '9' || r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z')
+	}))
 }

@@ -46,6 +46,8 @@ type findingRecord struct {
 	Version      string  `json:"version,omitempty"`
 	AdvisoryID   string  `json:"advisory_id,omitempty"`
 	AdvisoryURL  string  `json:"advisory_url,omitempty"`
+	Lead         string  `json:"lead,omitempty"` // an advisory record's service lead: "host:port Product"
+	checked      bool    // a read that answered settled something of this advisory (observed or inferred)
 	KEV          bool    `json:"kev,omitempty"`  // CISA lists the advisory as exploited
 	CVSS         float64 `json:"cvss,omitempty"` // the score the advisory's record states
 	Precondition string  `json:"precondition,omitempty"`
@@ -88,9 +90,45 @@ type findingSet struct {
 	Folds           []engine.FoldGroup
 }
 
+// counts counts issues, not records. The advisory records of one service
+// lead that no read settled (version-only and conditional alike: a range
+// match, with a precondition named at most, never checked) are one
+// identification. An advisory a read answered for, or a verify result, is
+// one for each listener whatever the products or records that name it. The
+// records themselves are all listed (each names its lead). CISA KEV is not a
+// check: the run does not treat it as more than a range match.
 func (s findingSet) counts() tierCounts {
-	return tierCounts{len(s.Findings), len(s.Identifications), len(s.Leads)}
+	return tierCounts{len(s.Findings), issueCount(s.Identifications), len(s.Leads)}
 }
+
+// issueKey is what a record counts as: "" for a record that is its own issue.
+func issueKey(r findingRecord) string {
+	switch {
+	case r.AdvisoryID == "":
+		return ""
+	case !r.checked && r.Lead != "":
+		return "lead|" + r.Lead
+	}
+	return "advisory|" + targetOf(r) + "|" + r.AdvisoryID
+}
+
+func issueCount(rs []findingRecord) int {
+	seen := map[string]bool{}
+	n := 0
+	for _, r := range rs {
+		k := issueKey(r)
+		if k == "" {
+			n++
+		} else if !seen[k] {
+			seen[k] = true
+			n++
+		}
+	}
+	return n
+}
+
+// leadName is the service lead an advisory record belongs to.
+func leadName(target, product string) string { return target + " " + product }
 
 // buildFindings reads a workspace's rows into their tiers, from what the run
 // stored and nothing more: the verify rows a -verify run stored, the advisory
@@ -145,6 +183,10 @@ func buildFindings(g *graphView) findingSet {
 			AdvisoryURL: r.AdvisoryURL, Precondition: r.Precondition, Request: r.Request,
 			Evidence: r.Evidence, Command: r.Command, Collector: "azhaq-verify", Proof: r.Proof,
 		}
+		if r.AdvisoryID != "" {
+			rec.Lead = leadName(r.Target, r.Product)
+			rec.checked = r.Label == verify.Proved
+		}
 		if rec.Command == "" {
 			rec.Command = command
 		}
@@ -172,6 +214,7 @@ func buildFindings(g *graphView) findingSet {
 	for i := range set.Identifications {
 		if l, ok := stats[set.Identifications[i].AdvisoryID+"|"+targetOf(set.Identifications[i])]; ok && set.Identifications[i].AdvisoryID != "" {
 			set.Identifications[i].KEV, set.Identifications[i].CVSS = l.KEV, l.CVSS
+			set.Identifications[i].checked = set.Identifications[i].checked || l.Confidence == advisory.Observed || l.Confidence == advisory.Inferred
 		}
 	}
 	for _, lead := range advisoryLeadsExpanded(g.obs) {
@@ -190,6 +233,7 @@ func buildFindings(g *graphView) findingSet {
 			URL: r.URL, Product: r.Product, Version: r.Version, AdvisoryID: r.AdvisoryID,
 			AdvisoryURL: r.AdvisoryURL, Precondition: r.Precondition, Request: r.Request,
 			Evidence: r.Evidence, Command: command, Collector: "azhaq-advisories", KEV: lead.KEV, CVSS: lead.CVSS,
+			Lead: leadName(r.Target, r.Product), checked: lead.Confidence == advisory.Observed || lead.Confidence == advisory.Inferred,
 		}
 		identified[targetOf(rec)+"\x00"+advisory.ProductKey(rec.Product)] = true
 		add(ident(rec))
@@ -383,7 +427,7 @@ func findingsMarkdown(set findingSet) []byte {
 		b.WriteString("\n")
 	}
 	if len(set.Identifications) > 0 {
-		fmt.Fprintf(&b, "## Identifications (%d)\n\n", len(set.Identifications))
+		fmt.Fprintf(&b, "## Identifications (%d)\n\n", issueCount(set.Identifications))
 		for _, label := range []string{verify.Proved, verify.VersionOnly, verify.Conditional} {
 			var rs []findingRecord
 			for _, f := range set.Identifications {
@@ -395,7 +439,7 @@ func findingsMarkdown(set findingSet) []byte {
 				continue
 			}
 			title := map[string]string{verify.Proved: "Proved", verify.VersionOnly: "Version-only", verify.Conditional: "Conditional"}[label]
-			fmt.Fprintf(&b, "### %s (%d)\n\n", title, len(rs))
+			fmt.Fprintf(&b, "### %s (%d)\n\n", title, issueCount(rs))
 			for _, r := range groupAdvisoryFindings(rs) {
 				b.WriteString(findingMarkdown(r.rec, r.ids...))
 			}

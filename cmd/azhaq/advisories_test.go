@@ -129,7 +129,7 @@ func TestAdvisoryStagePart1SendsNothing(t *testing.T) {
 	if byID["CVE-TEST-0002"].label != "conditional" {
 		t.Errorf("conditional lead %+v", byID["CVE-TEST-0002"])
 	}
-	if !strings.Contains(note, "1 leads, one for each of 1 confirmed product versions, holding 2 advisories (1 affected, 0 not affected, 1 conditional;") {
+	if !strings.Contains(note, "1 leads, one for each of 1 confirmed products on 1 listeners, holding 2 distinct advisories (1 affected, 0 not affected, 1 conditional;") {
 		t.Errorf("note %q does not count the advisories by label", note)
 	}
 	// The leads are stored rows, so the summary's counts derive from them.
