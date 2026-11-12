@@ -1,7 +1,10 @@
 package hunt
 
 import (
+	"cmp"
+	"encoding/json"
 	"fmt"
+	"maps"
 	"net/url"
 	"slices"
 	"sort"
@@ -110,6 +113,15 @@ func (h *hunter) url(r engine.MapEntry) {
 	if judged && verdict.Dropped() {
 		return
 	}
+	if r.Role == "sourcemap" {
+		// One row per host for its maps (sourceMaps), not one per bundle.
+		if h.maps == nil {
+			h.maps = map[string][]engine.MapEntry{}
+		}
+		origin := u.Scheme + "://" + u.Host
+		h.maps[origin] = append(h.maps[origin], r)
+		return
+	}
 	key := GroupKey(raw, r.Role == "client-route")
 	c := h.get("URL", key, r.Scope)
 	c.instances = append(c.instances, raw)
@@ -131,10 +143,6 @@ func (h *hunter) url(r engine.MapEntry) {
 	}
 	path := u.Path
 
-	if r.Role == "sourcemap" {
-		c.add("sourcemap", "source map served: "+path)
-		return
-	}
 	// Path words, one signal per class.
 	words := map[string]pathWord{} // class → the word that weighs most
 	wordOf := map[string]string{}
@@ -637,7 +645,16 @@ func (h *hunter) host(r engine.MapEntry) {
 }
 
 func (h *hunter) secrets() {
-	for _, s := range h.in.Secrets {
+	// The strongest first: a row keeps the first reason of a weight, so a
+	// file's row names its strongest secret, not the first found.
+	secrets := slices.Clone(h.in.Secrets)
+	slices.SortStableFunc(secrets, func(a, b Secret) int {
+		if wa, wb := secretWeight[a.Severity], secretWeight[b.Severity]; wa != wb {
+			return wb - wa
+		}
+		return cmp.Compare(b.Entropy, a.Entropy)
+	})
+	for _, s := range secrets {
 		w := secretWeight[s.Severity]
 		if w == 0 {
 			w = secretWeight["info"]
@@ -693,4 +710,94 @@ func secretDetail(s Secret) string {
 		d += "; " + strings.Join(ev, ", ")
 	}
 	return d
+}
+
+// sourceMaps gives each host one row for the source maps azhaq read there,
+// weighted by what they expose: the app's own code (sourcesContent) or only
+// the names of its files. azhaq already fetched and parsed each map.
+func (h *hunter) sourceMaps() {
+	if len(h.maps) == 0 {
+		return
+	}
+	read := mapsRead(h.in.Obs)
+	for _, origin := range slices.Sorted(maps.Keys(h.maps)) {
+		rows := h.maps[origin]
+		slices.SortFunc(rows, func(a, b engine.MapEntry) int { return strings.Compare(a.Entity.Key, b.Entity.Key) })
+		scope := "fanout"
+		var files, code int
+		known := true // every map says how much code it carries (older workspaces do not)
+		for _, r := range rows {
+			if r.Scope == "target" {
+				scope = "target"
+			}
+			m, ok := read[r.Entity.Key]
+			if !ok || m.code == nil {
+				known = false
+			} else {
+				code += *m.code
+			}
+			files += m.files
+		}
+		c := h.get("URL", rows[0].Entity.Key, scope)
+		c.origin = origin
+		for _, r := range rows {
+			c.instances = append(c.instances, r.Entity.Key)
+			if r.Entity.FirstSeen.After(h.cut) {
+				c.fresh = true
+			}
+		}
+		what := fmt.Sprintf("%s read on this host, naming %s of the app's own", plural(len(rows), "source map"), plural(files, "source file"))
+		w := weights["sourcemap"]
+		switch {
+		case !known:
+			what += "; whether they carry the code was not recorded"
+		case code > 0:
+			what += fmt.Sprintf(", %d with their code (sourcesContent)", code)
+		default:
+			what += ", names only: no code"
+			w = mapNamesOnly
+		}
+		c.addW("sourcemap", w, what)
+	}
+}
+
+// mapNamesOnly weighs source maps that name the app's files but carry none
+// of their code: below a secret, above a bare path word.
+const mapNamesOnly = 20
+
+type mapRead struct {
+	files int
+	code  *int
+}
+
+// mapsRead is what azhaq-js read of each source map, by URL.
+func mapsRead(obs []types.StoredObservation) map[string]mapRead {
+	out := map[string]mapRead{}
+	for _, o := range obs {
+		if o.Collector != "azhaq-js" || o.Kind != "url" {
+			continue
+		}
+		var p struct {
+			URL   string   `json:"url"`
+			Role  string   `json:"role"`
+			Files []string `json:"files"`
+			Code  *int     `json:"with_code"`
+		}
+		if json.Unmarshal(o.Payload, &p) != nil || p.Role != "sourcemap" {
+			continue
+		}
+		k, err := engine.FoundKey(p.URL, p.Role)
+		if err != nil {
+			continue
+		}
+		out[k] = mapRead{files: len(p.Files), code: p.Code}
+	}
+	return out
+}
+
+func plural(n int, noun string) string {
+	if n == 1 {
+		return "1 " + noun
+	}
+	return fmt.Sprintf("%d %ss", n, noun)
 }

@@ -1,6 +1,7 @@
 package hunt
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -386,5 +387,54 @@ func TestDanglingTakeoverIsAnUnverifiedCandidate(t *testing.T) {
 	}
 	if d.Score >= weights["takeover"] {
 		t.Errorf("a candidate scores %d, as much as a finding", d.Score)
+	}
+}
+
+// A host's source maps are one row, weighted by what they expose: the app's
+// code (sourcesContent) or only the names of its files.
+func TestSourceMapsAreOneRowPerHostByWhatTheyExpose(t *testing.T) {
+	a, b := "https://a.test", "https://b.test"
+	mapObs := func(u string, files []string, code int) types.StoredObservation {
+		p, _ := json.Marshal(map[string]any{"url": u, "via": "js", "role": "sourcemap", "sources": len(files) + 3, "files": files, "with_code": code})
+		return types.StoredObservation{EntityID: u, Observation: types.Observation{Collector: "azhaq-js", Kind: "url", Payload: p}}
+	}
+	in := Input{DB: "w.db", Now: now, Since: 7 * 24 * time.Hour,
+		Rows: []engine.MapEntry{
+			urlRow(a+"/main.js.map", "sourcemap", "visited", 200, nil),
+			urlRow(a+"/vendor.js.map", "sourcemap", "visited", 200, nil),
+			urlRow(b+"/app.js.map", "sourcemap", "visited", 200, nil),
+		},
+		Obs: []types.StoredObservation{
+			mapObs(a+"/main.js.map", []string{"src/app.ts", "src/api.ts"}, 2),
+			mapObs(a+"/vendor.js.map", []string{"src/x.ts"}, 0),
+			mapObs(b+"/app.js.map", []string{"src/y.ts"}, 0),
+		},
+	}
+	rows := Build(in)
+	if len(rows) != 2 {
+		t.Fatalf("got %d rows, want one per host: %+v", len(rows), rows)
+	}
+	ra, rb := find(rows, a+"/main.js.map"), find(rows, b+"/app.js.map")
+	if ra == nil || rb == nil {
+		t.Fatalf("rows %+v", rows)
+	}
+	if ra.Score != weights["sourcemap"] || !strings.Contains(ra.Reasons[0].Detail, "2 source maps read on this host, naming 3 source files of the app's own, 2 with their code") {
+		t.Errorf("the host with code: score %d, %+v", ra.Score, ra.Reasons)
+	}
+	if rb.Score != mapNamesOnly || !strings.Contains(rb.Reasons[0].Detail, "names only: no code") {
+		t.Errorf("the host with names only: score %d, %+v", rb.Score, rb.Reasons)
+	}
+}
+
+// A file with several secrets is named by its strongest one.
+func TestASecretRowNamesTheStrongestSecret(t *testing.T) {
+	u := "https://a.test/app.js"
+	in := Input{DB: "w.db", Now: now, Since: 7 * 24 * time.Hour, Secrets: []Secret{
+		{Kind: "generic-secret", Severity: "medium", Where: u, Name: "weak", Entropy: 3.3},
+		{Kind: "generic-secret", Severity: "medium", Where: u, Name: "strong", Entropy: 4.4},
+	}}
+	rows := Build(in)
+	if len(rows) != 1 || !strings.Contains(rows[0].Reasons[0].Detail, "strong") {
+		t.Errorf("rows %+v", rows)
 	}
 }

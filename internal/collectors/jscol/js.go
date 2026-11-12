@@ -302,6 +302,7 @@ type sourceMap struct {
 	url     string
 	files   []string // the app's own source files, libraries left out
 	count   int      // all sources, libraries included
+	code    int      // the app's own sources whose code the map carries (sourcesContent)
 	guessed bool     // asked for by name: no comment or header named it
 }
 
@@ -884,7 +885,7 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		return emitRow(row, 0.7)
 	}
 	for _, m := range maps {
-		row := map[string]any{"url": m.url, "via": "js", "role": "sourcemap", "sources": m.count}
+		row := map[string]any{"url": m.url, "via": "js", "role": "sourcemap", "sources": m.count, "with_code": m.code}
 		if len(m.files) > 0 {
 			row["files"] = m.files
 		}
@@ -1577,6 +1578,7 @@ func (c *Collector) readMap(ctx context.Context, page, mapURL string, scriptURL 
 		}
 		if i < len(sm.SourcesContent) && sm.SourcesContent[i] != nil {
 			out = append(out, script{url: scriptURL, body: *sm.SourcesContent[i], fromMap: true, source: name})
+			m.code++
 		}
 	}
 	return m, out

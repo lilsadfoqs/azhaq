@@ -125,3 +125,15 @@ func TestSecretsSkipTranslationReferences(t *testing.T) {
 		}
 	}
 }
+
+// A value that names a header or a field is a label: its assigned name says it
+// holds a name (tokenHeaderName), or it has a header name's shape.
+func TestSecretsSkipHeaderNames(t *testing.T) {
+	js := `var cfg={tokenHeaderName:"X-Api-Token",csrfField:"Xq9RtLm2VbN8kP"};` +
+		`fetch(u,{headers:{"X-Api-Token":t}});var h={authHeader:"Authorization-Bearer-Token"};` +
+		`var other={apiToken:"f3a9c2d41b7e8056a1d4c93e7b2f6085"};var k={sessionKey:"X-GuestToken"};`
+	got := Secrets(js)
+	if len(got) != 1 || got[0].Value != "f3a9c2d41b7e8056a1d4c93e7b2f6085" {
+		t.Fatalf("%+v", got)
+	}
+}

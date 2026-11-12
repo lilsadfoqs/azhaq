@@ -73,7 +73,7 @@ $ azhaq hunt -db app.db
 | `takeover` | A name another party may take over, on a service's own page or a domain nobody holds. |
 | `takeover-candidate` | A CNAME to a cloud name that does not resolve (`dangling`). It rests on NXDOMAIN alone: `unverified: NXDOMAIN does not show the name is free`. See [Takeover candidates](../CONCEPTS.md#what-a-dangling-row-rests-on). |
 | `secret` | A credential a script carries. The reason names the file and gives the evidence: the name it was assigned to, the value redacted, the rule that listed it and, for a generic secret, its entropy. See [Secret candidates](#secret-candidates). |
-| `sourcemap` | A source map served. |
+| `sourcemap` | The source maps azhaq read on a host, one row for the host: it weighs more when the maps carry the app's own code (`sourcesContent`) than when they only name its files. |
 | `exposed-file` | A backup, key, database or archive file, or a `.git` directory, whose path is requested: a finding when its answer is the file's own, a lead otherwise: see [Exposed files](#exposed-files). |
 | `exposed-panel` | An admin panel, dashboard, console, actuator, phpinfo, Swagger UI or GraphQL IDE whose own page answered, shown by its title or its content: see [Exposed files](#exposed-files). |
 | `listing` | A directory listing. |
@@ -136,6 +136,8 @@ A row is a **finding** when one of its signals is proven by what was received, a
 - A `secret` reason reads `generic-secret (medium) in URL; name apiToken, value Zx81Qp…7Ks, rule: name says secret, value looks random, entropy 4.3`.
 - The rule is `known key format` (an AWS, GitHub, Stripe, Slack or similar key, a private key, a JWT), `variable a bundler inlined` (a `VITE_` or `NEXT_PUBLIC_` variable, severity `info`) or `name says secret, value looks random`.
 - The last rule needs a property whose name holds `secret`, `token`, `password`, `apikey` and similar words, assigned a string of 8 characters or more with entropy of 3.2 bits per character or more. It leaves out placeholders, a parser's token tables, values with much punctuation, a class name a CSS module made (`_tokensUsage_dypaw_41`) a value that repeats its own name (`secretName: "secretName-input"`) and a translation key or a reference to one: two or more words of letters only, joined by `_` or `-`, each with a vowel and no capital after its first letter, and an optional leading `@` (`@Button_Cancel`, `Enter_Your_Password`). A value with a digit or a capital inside a word is still listed.
+- A value that names a header or a field is a label, not a secret: one whose property name ends in `Name`, `Header`, `Field`, `Label` or `Param` (`tokenHeaderName`), or that is shaped as a header name, capitalised words joined by `-` (`X-Api-Token`).
+- A file with several candidates is ranked by its strongest: the highest severity, then the most random value.
 - A `medium` candidate needs a human: read the value in `azhaq export -format secrets` before acting on it.
 
 ### Cross-role rows
