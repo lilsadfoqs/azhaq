@@ -1,10 +1,13 @@
 package main
 
 import (
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"reflect"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -167,5 +170,53 @@ func TestRefusalHidesWhatWasSent(t *testing.T) {
 		if got := hideCredentials(in); got != want {
 			t.Errorf("%q: %q, want %q", in, got, want)
 		}
+	}
+}
+
+// The read that asks a refused role for the reason is sent as the rest of
+// roles is: through the runs' -proxy, held to the command's budget.
+func TestRefusalReadGoesThroughTheRunsProxyAndBudget(t *testing.T) {
+	var target, viaProxy atomic.Int64
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		target.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(401)
+		w.Write([]byte(`{"message":"Invalid token"}`))
+	}))
+	defer srv.Close()
+	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		viaProxy.Add(1)
+		out := r.Clone(r.Context())
+		out.RequestURI = ""
+		resp, err := (&http.Transport{Proxy: nil}).RoundTrip(out)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadGateway)
+			return
+		}
+		defer resp.Body.Close()
+		for k, v := range resp.Header {
+			w.Header()[k] = v
+		}
+		w.WriteHeader(resp.StatusCode)
+		io.Copy(w, resp.Body)
+	}))
+	defer proxy.Close()
+	pu, _ := url.Parse(proxy.URL)
+	rolesProxy, rolesLeft = pu, nil
+	defer func() { rolesProxy, rolesLeft = nil, nil }()
+	h := http.Header{}
+	h.Set("A", "1")
+	r := role{name: "alice", headers: []string{"A: 1"}, session: h}
+	own := map[string]bool{"127.0.0.1": true}
+	if got := refusalReason(r, srv.URL+"/x", own); got != "Invalid token" {
+		t.Errorf("the reason is %q", got)
+	}
+	if target.Load() != 1 || viaProxy.Load() != 1 {
+		t.Errorf("the site saw %d requests, the proxy %d: want 1 and 1", target.Load(), viaProxy.Load())
+	}
+	// A command whose budget is spent asks nothing.
+	rolesLeft = func() int64 { return 0 }
+	if got := refusalReason(r, srv.URL+"/x", own); got != "" || target.Load() != 1 || viaProxy.Load() != 1 {
+		t.Errorf("with no budget left: reason %q, site %d, proxy %d", got, target.Load(), viaProxy.Load())
 	}
 }

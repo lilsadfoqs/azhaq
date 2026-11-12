@@ -266,13 +266,21 @@ func (r *runLedger) recorded(path string) (what string, targets, dnsLines int) {
 	// end of a run. Only a ledger that held lines the run did not write (it
 	// was opened by something else first) is read.
 	var err error
+	notSent := 0 // tried and never left: listed, not counted as sent
 	if lines, opened := r.l.Tally(); opened == r.from {
 		for k, n := range lines {
 			count(k.Class, k.Kind, k.Collector, n)
 		}
+		notSent = r.l.NotSent()
+		all += notSent
 	} else {
 		err = ledger.Read(path, func(e ledger.Entry) error {
-			if e.Seq > r.from && e.Kind != ledger.KindSeal {
+			switch {
+			case e.Seq <= r.from || e.Kind == ledger.KindSeal:
+			case e.NotSent:
+				notSent++
+				all++
+			default:
 				count(e.Class, e.Kind, e.Collector, 1)
 			}
 			return nil
@@ -303,6 +311,9 @@ func (r *runLedger) recorded(path string) (what string, targets, dnsLines int) {
 	}
 	if own > 0 {
 		parts = append(parts, nOf(own, "to an endpoint of your own", "to endpoints of your own"))
+	}
+	if notSent > 0 {
+		parts = append(parts, nOf(notSent, "request", "requests")+" not sent (the -proxy could not be reached; not counted above)")
 	}
 	if all == 0 {
 		return "nothing recorded in %s: the run sent nothing", 0, 0

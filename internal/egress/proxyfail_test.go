@@ -5,8 +5,12 @@ import (
 	"errors"
 	"io"
 	"net"
+	"net/url"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/lilsadfoqs/azhaq/internal/neterr"
 )
 
 // A proxy that cannot be reached, or that closes on the SOCKS exchange, is a
@@ -62,5 +66,32 @@ func TestProxyFailureIsNotATargetRefusal(t *testing.T) {
 		if err == nil || errors.As(err, &pe) != tt.want {
 			t.Errorf("%s: %T %v, want proxy error %v", tt.name, err, err, tt.want)
 		}
+	}
+}
+
+// A request whose connection to its proxy fails says which proxy, and is not
+// taken for the target's refusal.
+func TestADeadProxyIsNamedInTheError(t *testing.T) {
+	Reset()
+	defer Reset()
+	l, _ := net.Listen("tcp", "127.0.0.1:0")
+	dead := l.Addr().String()
+	l.Close()
+	pu, _ := url.Parse("http://" + dead)
+	SetTargetProxy(pu)
+	c := TargetClient(TargetOptions{Timeout: 3 * time.Second})
+	_, err := c.Get("http://127.0.0.1:9/x")
+	if err == nil {
+		t.Fatal("a dead proxy answered")
+	}
+	if want := "proxy " + dead + ": connection refused"; !strings.Contains(err.Error(), want) {
+		t.Errorf("%v: want %q in it", err, want)
+	}
+	var pe *neterr.ProxyUnreachable
+	if !errors.As(err, &pe) || pe.Proxy != dead {
+		t.Errorf("%T %v: want a ProxyUnreachable naming %s", err, err, dead)
+	}
+	if neterr.Refused(err) {
+		t.Error("a dead proxy is the target's refusal")
 	}
 }

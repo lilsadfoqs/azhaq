@@ -280,6 +280,11 @@ func deadRoles(roles []role, rows []roleRow) []string {
 func refusalReason(r role, u string, own map[string]bool) string {
 	fetch.Reset()
 	defer fetch.Reset()
+	// Through the runs' proxy, resolvers, pace and budget, as every request of roles.
+	rolesEgress()
+	if !rolesBudget() {
+		return ""
+	}
 	egress.SetScope(func(h string) bool { return own[normalize.Hostname(h)] })
 	holdDeny()
 	fetch.Extra = r.session.Clone()

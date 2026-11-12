@@ -5,6 +5,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -165,5 +166,43 @@ func TestARequestToAServerThatDropsTheConnectionHasALine(t *testing.T) {
 	}
 	if unsent.Load() != 0 {
 		t.Fatalf("given back %d times", unsent.Load())
+	}
+}
+
+// A request through a proxy that cannot be reached left nothing: it has a
+// line that says it was tried (not_sent), it is no entry of the tally or the
+// spend, the hook that hears of sent requests is not told of it, and it is
+// given back to the budget.
+func TestARequestThatCouldNotReachItsProxyIsNotSent(t *testing.T) {
+	l, path := open(t)
+	Use(l)
+	defer Use(nil)
+	unsent := countUnsent(t)
+	var heard atomic.Int64
+	old := OnSent
+	OnSent = func(string, string) { heard.Add(1) }
+	defer func() { OnSent = old }()
+	before := Sent(ClassTarget)
+	dead, _ := url.Parse("http://127.0.0.1:1")
+	c := &http.Client{Transport: Wrap(&http.Transport{Proxy: http.ProxyURL(dead)})}
+	if _, err := c.Get("http://example.test/x"); err == nil {
+		t.Fatal("a dead proxy answered")
+	}
+	got := linesOf(t, l, path)
+	if len(got) != 1 || !got[0].NotSent || got[0].Target != "http://example.test/x" || got[0].Counted() {
+		t.Fatalf("lines %+v, want one not_sent line that no count holds", got)
+	}
+	if tally, _ := l.Tally(); len(tally) != 0 || l.NotSent() != 1 {
+		t.Errorf("tally %v, not sent %d: want an empty tally and 1 not sent", tally, l.NotSent())
+	}
+	if n := Sent(ClassTarget) - before; n != 0 || heard.Load() != 0 {
+		t.Errorf("counted %d, heard %d: nothing was sent", n, heard.Load())
+	}
+	if unsent.Load() != 1 {
+		t.Errorf("given back %d times, want 1", unsent.Load())
+	}
+	// The line is chained like any other: the file verifies.
+	if c, err := Verify(path); err != nil || c.Entries != 1 {
+		t.Errorf("verify: %+v %v", c, err)
 	}
 }

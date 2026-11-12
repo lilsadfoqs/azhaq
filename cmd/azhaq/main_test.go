@@ -28,15 +28,19 @@ func captureStdout(t *testing.T, fn func() error) (string, error) {
 	}
 	old := os.Stdout
 	os.Stdout = w
+	// Drained as it is written: output past the pipe's buffer (a docs page of
+	// 64 KiB) would block the writer until fn returned.
+	done := make(chan []byte)
+	go func() {
+		b, _ := io.ReadAll(r)
+		done <- b
+	}()
 	fnErr := fn()
 	_ = w.Close()
 	os.Stdout = old
-	var buf bytes.Buffer
-	if _, err := io.Copy(&buf, r); err != nil {
-		t.Fatal(err)
-	}
+	out := <-done
 	_ = r.Close()
-	return buf.String(), fnErr
+	return string(out), fnErr
 }
 
 // captureBoth runs fn with stdout and stderr captured.

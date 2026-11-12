@@ -148,6 +148,37 @@ var OnSent func(method, raw string)
 // (fetch gives it back to the budget).
 var Unsent func()
 
+// NotSent records a request that failed before any byte of it left: its
+// transport could not reach the -proxy. It is not counted as sent (no
+// tally, no spend, no OnSent); the line says it was tried.
+func NotSent(class string, req *http.Request) {
+	l := Active()
+	if l == nil || req == nil || req.URL == nil {
+		return
+	}
+	method := req.Method
+	if method == "" {
+		method = http.MethodGet
+	}
+	host := req.URL.Hostname()
+	target := req.URL.Redacted()
+	if opaque(req.Context()) {
+		target = req.URL.Scheme + "://" + req.URL.Host + "/…"
+	}
+	e := Entry{Kind: "http", Class: class, Method: method, Target: target, Host: host, Collector: collectorOf(req.Context()), NotSent: true}
+	if class == ClassTarget {
+		e.Rule = l.rule(host)
+	}
+	l.Record(e)
+}
+
+// ProxyDown says err is a failure to reach the proxy a request was to go
+// through: nothing of the request left.
+func ProxyDown(err error) bool {
+	var oe *net.OpError
+	return errors.As(err, &oe) && oe.Op == "proxyconnect"
+}
+
 // Chrome records a request Chrome sent. ctx may be nil.
 func Chrome(ctx context.Context, method, raw string) { ChromeAt(ctx, method, raw, time.Time{}) }
 
@@ -369,8 +400,10 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 		// went nowhere (the transport replays only a read, and fails a write it
 		// cannot tell from one that was answered). It is made again, on another
 		// connection, and is one request: the server read it once, the ledger and
-		// the count hold it once.
-		if err != nil && try < maxReplays && reused.Load() && (skipped.Load() || !answered.Load() && closedByPeer(err)) && req.Context().Err() == nil &&
+		// the count hold it once. The transport's own retry of it may have met the
+		// kill file at its dial: the request was listed when it was written, so it
+		// is made again too.
+		if err != nil && try < maxReplays && reused.Load() && (skipped.Load() || !answered.Load() && (closedByPeer(err) || errors.Is(err, neterr.ErrKilled))) && req.Context().Err() == nil &&
 			(req.Body == nil || req.Body == http.NoBody || req.GetBody != nil) {
 			continue
 		}
@@ -379,7 +412,17 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 		// to blame for (a name with no address, a connection the other end dropped
 		// before the write). Only a request a stop cancelled, or the kill file
 		// refused, before it left is not listed.
-		if resp != nil || (err != nil && (reached.Load() || req.Context().Err() == nil && !errors.Is(err, neterr.ErrKilled))) {
+		switch {
+		case resp == nil && ProxyDown(err) && req.Context().Err() == nil:
+			// The proxy was not reached: no byte of the request left, so it is
+			// listed as tried and counted by nobody (finish gives it back).
+			lv.mu.Lock()
+			if !lv.recorded {
+				lv.done = true // no later event may count it
+				NotSent(class, req)
+			}
+			lv.mu.Unlock()
+		case resp != nil || (err != nil && (reached.Load() || req.Context().Err() == nil && !errors.Is(err, neterr.ErrKilled))):
 			record()
 		}
 		finish()

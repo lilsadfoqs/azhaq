@@ -78,6 +78,11 @@ type Summary struct {
 		Target string `json:"target"`
 		Reason string `json:"reason"`
 	} `json:"skipped"`
+	Cost struct {
+		Actual struct {
+			Requests int64 `json:"requests"`
+		} `json:"actual"`
+	} `json:"cost"`
 	Degraded bool     `json:"degraded"`
 	Stopped  string   `json:"stopped"`
 	Resume   string   `json:"resume"`

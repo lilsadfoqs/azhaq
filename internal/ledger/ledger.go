@@ -43,8 +43,12 @@ type Entry struct {
 	Rule      string    `json:"rule,omitempty"`  // the scope rule that allowed it
 	Collector string    `json:"collector,omitempty"`
 	Purpose   string    `json:"purpose,omitempty"` // what a request to a target was for: pages, scripts, controls, description checks…
-	Prev      string    `json:"prev,omitempty"`
-	Hash      string    `json:"hash,omitempty"`
+	// NotSent: the transport failed before any byte of the request left (the
+	// -proxy could not be reached). The line says it was tried; no count of
+	// requests sent holds it.
+	NotSent bool   `json:"not_sent,omitempty"`
+	Prev    string `json:"prev,omitempty"`
+	Hash    string `json:"hash,omitempty"`
 }
 
 // What a request or connection is sent to. A ledger written before classes
@@ -62,7 +66,9 @@ func (e Entry) IsTarget() bool { return e.Class == "" || e.Class == ClassTarget 
 // Counted says the summary's requests count the entry: a request or a
 // connection to a target. A probe is listed apart, as bytes sent on a
 // connection that is counted itself.
-func (e Entry) Counted() bool { return e.IsTarget() && e.Kind != KindProbe && e.Kind != KindSeal }
+func (e Entry) Counted() bool {
+	return e.IsTarget() && e.Kind != KindProbe && e.Kind != KindSeal && !e.NotSent
+}
 
 // sum is the entry's hash: sha256 over Prev and the JSON of the entry
 // without its Hash.
@@ -119,12 +125,20 @@ func appendPlain(b []byte, e Entry) ([]byte, bool) {
 	}
 	b = append(b, `,"target":"`...)
 	b = append(append(b, e.Target...), '"')
-	for _, f := range [...]struct{ name, val string }{{"host", e.Host}, {"vhost", e.VHost}, {"body", e.Body}, {"rule", e.Rule}, {"collector", e.Collector}, {"purpose", e.Purpose}, {"prev", e.Prev}, {"hash", e.Hash}} {
-		if f.val != "" {
-			b = append(append(append(b, `,"`...), f.name...), `":"`...)
-			b = append(append(b, f.val...), '"')
+	str := func(name, val string) {
+		if val != "" {
+			b = append(append(append(b, `,"`...), name...), `":"`...)
+			b = append(append(b, val...), '"')
 		}
 	}
+	for _, f := range [...]struct{ name, val string }{{"host", e.Host}, {"vhost", e.VHost}, {"body", e.Body}, {"rule", e.Rule}, {"collector", e.Collector}, {"purpose", e.Purpose}} {
+		str(f.name, f.val)
+	}
+	if e.NotSent {
+		b = append(b, `,"not_sent":true`...)
+	}
+	str("prev", e.Prev)
+	str("hash", e.Hash)
 	return append(b, '}'), true
 }
 
@@ -154,6 +168,7 @@ type Ledger struct {
 	flushes int64         // writes of lines to the file since it was opened
 	opened  int64         // lines the file held when it was opened
 	tally   map[Kind3]int // lines recorded since, by class, kind and collector
+	notSent int           // not_sent lines recorded since: tried, never left
 
 	tail    []Entry         // what follows the last seal when the file was opened
 	held    map[string]bool // writes of the run that was killed: method, target and body
@@ -238,6 +253,9 @@ func (l *Ledger) Guard(more []Entry) []Entry {
 	l.held, l.heldAny, l.pending = map[string]bool{}, map[string]bool{}, map[string]bool{}
 	var writes []Entry
 	for _, e := range append(append([]Entry(nil), more...), l.tail...) {
+		if e.NotSent {
+			continue // nothing left: a resume may send it
+		}
 		if e.Kind == "tcp" && e.IsTarget() {
 			l.pending[key("tcp", e.Target, "")] = true // a connect has no answer to lose, but it is asked again
 			continue
@@ -374,8 +392,13 @@ func (l *Ledger) add(e Entry) {
 	_, err := l.w.Write(raw)
 	l.note(err)
 	l.prev, l.lastSeal = e.Hash, e.Kind == KindSeal
-	if e.Kind != KindSeal {
+	if e.NotSent {
+		l.notSent++
+	} else if e.Kind != KindSeal {
 		l.tally[Kind3{e.Class, e.Kind, e.Collector}]++
+	}
+	if e.NotSent {
+		return
 	}
 	if k := key(e.Method, e.Target, ""); l.pending[k] && (e.Kind == "http" || e.Kind == "chrome") && e.IsTarget() {
 		delete(l.pending, k)
@@ -411,6 +434,14 @@ func (l *Ledger) Tally() (lines map[Kind3]int, opened int64) {
 		out[k] = n
 	}
 	return out, l.opened
+}
+
+// NotSent is how many lines this ledger recorded since it was opened for a
+// request that failed before any byte left: Tally leaves them out.
+func (l *Ledger) NotSent() int {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.notSent
 }
 
 // Last is the hash of the last line written: after Close, the seal's.

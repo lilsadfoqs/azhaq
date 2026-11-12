@@ -268,7 +268,7 @@ When no signed-in role reads anything the anonymous role is refused, each role i
 
 When roles are judged alone, a role that read an endpoint the anonymous role did not is known to the site and alive. So is a role that was forbidden (403) where the anonymous role was asked to sign in (401).
 
-Every value the role sent is taken out of the quoted reason: its headers, its cookie values and the credential after `Bearer` or `Basic`. So is anything shaped like a credential.
+That read, and the sign-in a renewal makes, go through the same `-proxy`, `-resolvers`, `-rate` and `-max-requests` as every other request of `roles`: a proxy in front of it sees the same requests as the ledger lists. Every value the role sent is taken out of the quoted reason: its headers, its cookie values and the credential after `Bearer` or `Basic`. So is anything shaped like a credential.
 
 ### Canaries
 

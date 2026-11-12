@@ -113,9 +113,13 @@ func ledgerSummary(path string, asJSON bool) error {
 	byClass, byKind, byHost, byMethod := map[string]int{}, map[string]int{}, map[string]int{}, map[string]int{}
 	byRule := map[string]int{}
 	var first, last time.Time
-	n := 0
+	n, notSent := 0, 0
 	err := ledger.Read(path, func(e ledger.Entry) error {
 		n++
+		if e.NotSent {
+			notSent++ // tried, never left: listed apart, in no count of what was sent
+			return nil
+		}
 		byClass[entryClass(e)]++
 		byKind[e.Kind]++
 		byHost[e.Host]++
@@ -135,12 +139,15 @@ func ledgerSummary(path string, asJSON bool) error {
 		return err
 	}
 	if asJSON {
-		raw, _ := json.Marshal(map[string]any{"file": path, "entries": n, "first": first, "last": last,
+		raw, _ := json.Marshal(map[string]any{"file": path, "entries": n, "not_sent": notSent, "first": first, "last": last,
 			"classes": byClass, "kinds": byKind, "hosts": byHost, "methods": byMethod, "rules": byRule})
 		fmt.Println(string(raw))
 		return nil
 	}
-	fmt.Printf("%s: %d requests, connections, probes and queries\n", path, n)
+	fmt.Printf("%s: %d requests, connections, probes and queries\n", path, n-notSent)
+	if notSent > 0 {
+		fmt.Printf("  %s not sent: the -proxy could not be reached\n", nOf(notSent, "request", "requests"))
+	}
 	if n == 0 {
 		return nil
 	}
@@ -187,9 +194,9 @@ func sortedByCount(m map[string]int) []string {
 
 func ledgerCSV(path string) error {
 	w := csv.NewWriter(os.Stdout)
-	_ = w.Write([]string{"seq", "time", "class", "kind", "method", "target", "host", "rule", "collector", "hash", "proto"})
+	_ = w.Write([]string{"seq", "time", "class", "kind", "method", "target", "host", "rule", "collector", "hash", "proto", "not_sent"})
 	err := ledger.Read(path, func(e ledger.Entry) error {
-		return w.Write([]string{strconv.FormatInt(e.Seq, 10), e.Time.Format(time.RFC3339Nano), entryClass(e), e.Kind, e.Method, e.Target, e.Host, e.Rule, e.Collector, e.Hash, e.Proto})
+		return w.Write([]string{strconv.FormatInt(e.Seq, 10), e.Time.Format(time.RFC3339Nano), entryClass(e), e.Kind, e.Method, e.Target, e.Host, e.Rule, e.Collector, e.Hash, e.Proto, strconv.FormatBool(e.NotSent)})
 	})
 	w.Flush()
 	if err != nil {

@@ -220,7 +220,7 @@ The URL keys other than `catchall` and `skipped` count rows of the other coverag
 
 `notes` holds caps that were hit and other things worth knowing that are not failures. Examples:
 
-- `ledger: 148 recorded in app.db.ledger.jsonl: 146 to targets (141 requests, 4 connections, 1 UDP datagram), 2 DNS queries, sealed … (azhaq ledger -verify app.db.ledger.jsonl …)`: the lines to targets are the summary's `requests`.
+- `ledger: 148 recorded in app.db.ledger.jsonl: 146 to targets (141 requests, 4 connections, 1 UDP datagram), 2 DNS queries, sealed … (azhaq ledger -verify app.db.ledger.jsonl …)`: the lines to targets are the summary's `requests`. A request that failed before any byte of it left, because the `-proxy` could not be reached, has a line with `"not_sent": true`: the note counts it apart (`1 request not sent (the -proxy could not be reached; not counted above)`), and neither `requests`, `cost.actual` nor the lines to targets hold it.
 - `path checks: 28 skipped (an API description was already found)`: see [run](commands/run.md#notes-in-the-summary). `path checks on URL: N of the M listed were not sent: …` names a service whose checks a limit refused, or whose sweep left no record: the same facts as `path_checks`.
 - `app.db holds 3 runs; this one is ID, and the counts above are its own (azhaq query -db app.db -runs lists them; query, show and diff -run ID read an earlier one)`: a run into a workspace that already holds runs. The earlier runs are kept.
 - `screenshot of URL not taken: …`: see [shots](commands/shots.md#screenshots-and-the-budget).
@@ -286,7 +286,7 @@ A line says the request or connection left, and the summary's `requests` counts 
 | `dns` | The query goes to the resolver. | A query refused by the kill file or after the context ended. |
 
 `azhaq ledger -verify` checks the chain and the seal, not this: it cannot say a line was sent, only that it was not changed afterwards.
-- An `http` line is written when the request has a live connection, and a request is one line however many connections it took. One that fails to connect (refused, timed out) is a line too. A pooled connection the server had closed is not written to; a request that fails on one the server closed unseen is sent again once on a new connection, and is still one line. So the lines to targets equal the requests a proxy in front of them counts.
+- An `http` line is written when the request has a live connection, and a request is one line however many connections it took. One that fails to connect to its target (refused, timed out) is a line too; one that fails to connect to its `-proxy` is a line marked `not_sent`, which no count holds, for nothing of it left. A pooled connection the server had closed is not written to; a request that fails on one the server closed unseen is sent again once on a new connection, and is still one line. So the lines to targets equal the requests a proxy in front of them counts.
 - A notification is a request to a third party: a `source` line, by the webhook's host. `watch` sends its notifications after its run has sealed the workspace's ledger, so they are lines after that seal, which `watch` seals again, and its own summary counts them: [watch](commands/watch.md#notifications). `notify -ledger FILE` keeps them in a file of its own.
 - `seal`: the end of a run, with no target.
 - A password in a `target` URL's user info is masked.
