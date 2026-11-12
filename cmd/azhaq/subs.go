@@ -151,7 +151,7 @@ func cmdSubs(args []string) error {
 	showVersion := fs.Bool("version", false, "print the version and exit")
 	given := inherit(fs, "sources", "exclude-sources", "all-sources", "no-history", "history-dir", "source-timeout", "extra-wait", "providers", "resolvers", "dns-rate", "timeout", "v", "fail-on-errors",
 		"source-rate", "source-rates", "max-results", "max-time", "max-body", "proxy=source-proxy", "t=parallel", "ledger", "web-ports", "http-proxy=proxy",
-		"scope", "program", "allow", "deny")
+		"scope", "program", "allow", "deny", "seal-to")
 	maxNames := fs.Int("max-names", 0, fmt.Sprintf("most names kept per domain, and looked up with -live (default %d); a value you give also caps the names -w and -permute ask, together: the guesses past it are not asked, the run exits 4 and says how many, and azhaq resume asks them", subcol.DefaultMaxNames))
 	if err := parse(fs, args); err != nil {
 		return err

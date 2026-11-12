@@ -43,9 +43,18 @@ func cmdPlan(args []string) error {
 	if err := parse(fs, args); err != nil {
 		return err
 	}
+	// A target written as azhaq TARGET takes it: a URL, a domain, an address.
+	runArgs := given()
+	for _, a := range fs.Args() {
+		kind, value, ok := guidedTarget(a)
+		if !ok {
+			return usagef("%q is not a target: give a URL, a domain or an address as written, or -url, -domain, -cidr", a)
+		}
+		runArgs = append(runArgs, kind, value)
+	}
 	rep := newReport("plan")
 	out := runOut{embedded: true, plan: true, axfr: *axfr}
-	if err := mapTarget(given(), rep, &out); err != nil {
+	if err := mapTarget(runArgs, rep, &out); err != nil {
 		return err
 	}
 	return rep.finish(out.json, false)

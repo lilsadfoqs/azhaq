@@ -150,7 +150,7 @@ var flagName = lazyre.New(`\B-[a-z][a-z0-9-]*[a-z0-9]`)
 
 // targetFlags are the flags of every command that sends requests to
 // targets: scope, pace, budget, time, session.
-var targetFlags = []string{"scope", "program", "allow", "deny", "deny-path", "rate", "max-requests", "timeout", "H=header", "cookie", "v", "ledger", "kill-file"}
+var targetFlags = []string{"scope", "program", "allow", "deny", "deny-path", "rate", "max-requests", "timeout", "H=header", "cookie", "v", "ledger", "kill-file", "seal-to"}
 
 // inputs gathers targets from repeatable flags, a file ("-" for stdin),
 // or stdin when it is a pipe and nothing else was given.
@@ -610,7 +610,7 @@ func cmdURLs(args []string) error {
 	given := inherit(fs, "provider-config=providers", "keep-junk=urls-keep-junk", "mc=urls-mc", "fc=urls-fc", "mt=urls-mt", "ft=urls-ft", "from=urls-from", "to=urls-to",
 		"blacklist=urls-blacklist", "fp=urls-fp", "retries=urls-retries", "urls-pages", "urls-pause", "proxy=urls-proxy", "urls-max",
 		"archive=urls-archive", "raw=urls-raw", "urls-timeout", "timeout", "v", "fail-on-errors",
-		"scope", "program", "allow", "deny", "ledger")
+		"scope", "program", "allow", "deny", "deny-path", "rate", "max-requests", "resolvers", "ledger", "seal-to")
 	if err := parse(fs, args); err != nil {
 		return err
 	}
@@ -853,7 +853,7 @@ func cmdDirs(args []string) error {
 	list := onceString(fs, "l", "file of services (- for stdin)")
 	words := fs.String("w", "", "wordlist (default: SecLists' common.txt, built in: "+strconv.Itoa(dirscol.WordCount())+" words)")
 	specs := []string{"ac=dirs-ac", "e=dirs-ext", "ic=dirs-ic", "depth=dirs-depth", "t=dirs-threads", "rate=dirs-rate",
-		"H=header", "cookie", "max-requests", "timeout", "v", "scope", "program", "allow", "deny", "deny-path", "ledger", "kill-file", "proxy", "resolvers", "send-state-changing"}
+		"H=header", "cookie", "max-requests", "timeout", "v", "scope", "program", "allow", "deny", "deny-path", "ledger", "kill-file", "seal-to", "proxy", "resolvers", "send-state-changing"}
 	for _, m := range dirsMatchers {
 		specs = append(specs, m.flag+"=dirs-"+m.flag)
 	}
@@ -1243,7 +1243,7 @@ func cmdShots(args []string) error {
 	openOnly := fs.Bool("open-only", true, "with -nmap: only ports found open")
 	hostnames := fs.Bool("hostnames", false, "with -nmap or -nessus: the host's name instead of its address, when the file has one")
 	given := inherit(fs, append([]string{"tabs", "browser-writes", "cidr", "max-ips", "shot-size", "shot-fullpage", "shot-wait", "shot-timeout", "shot-format",
-		"shot-quality", "shot-js", "shot-codes", "shot-html", "chrome", "proxy", "chrome-proxy", "chrome-profile", "chrome-no-sandbox", "chrome-require-sandbox", "unsafe-ports", "no-tech"}, targetFlags...)...)
+		"shot-quality", "shot-js", "shot-codes", "shot-html", "chrome", "proxy", "chrome-proxy", "chrome-profile", "chrome-no-sandbox", "chrome-require-sandbox", "unsafe-ports", "no-tech", "resolvers"}, targetFlags...)...)
 	if err := parse(fs, args); err != nil {
 		return err
 	}

@@ -240,6 +240,9 @@ func cmdRoles(args []string) error {
 	fs.Var(&canarySpecs, "canary", "[ROLE:]URL[=REGEX]: what checks a session during the replay: a URL only a live session reads, and what its body holds (default: the role's own /me-like answer, or a page the anonymous role is refused)")
 	canaryEvery := fs.Int("canary-every", 50, "replay requests between two checks of a role's session (0: no checks)")
 	refusalSpec := fs.String("refusal", "", "REGEX: a 2xx answer whose body matches is a refusal, for every role (a 200 \"Access denied\" page); each origin's own refusal page is learned besides")
+	// The egress flags of a run, given to roles itself: each role's run takes
+	// them, and the replay reads them from there as it reads the runs' options.
+	egressGiven := inherit(fs, "resolvers", "deny", "deny-path", "seal-to")
 	if err := parse(fs, args); err != nil {
 		return err
 	}
@@ -248,6 +251,7 @@ func cmdRoles(args []string) error {
 	if len(runArgs) > 0 && runArgs[0] == "--" {
 		runArgs = runArgs[1:]
 	}
+	runArgs = append(egressGiven(), runArgs...)           // a run option given after -- still wins
 	noRule := !hasFlag(runArgs, "allow", "deny", "scope") // before -replay-writes adds the targets as -allow
 	roles, err := parseRoles(specs)
 	if err != nil {

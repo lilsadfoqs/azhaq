@@ -501,4 +501,5 @@ What keeps a URL out is known:
 - No request to a target goes to a host outside the [scope](#scope), Chrome's included. Without a scope, requests stay on the site.
 - Third-party sources (subdomain lists, archives, RDAP) are asked about your domains. `-passive` sends nothing to the targets.
 - Every request, connection and query goes in the [ledger](#the-ledger-and-its-seal), by class: `target`, `source` or `dns`. Only the scope and `-deny-path` hold a target's; the kill file stops all three. A resolver you name gets every lookup even when `-deny` names its address, and the run says so before it sends; a zone transfer (`-axfr`) is held from it like any other connection.
+- Every command that sends takes the same egress flags, registered once: `-resolvers`, `-ledger`, `-seal-to`, `-proxy`, `-allow`, `-deny`, and where it sends web requests `-deny-path`, `-rate` and `-max-requests`. A DNS-only command (`dns`, `subs`) takes the first six: it has no paths and no web pace.
 - `-rate` paces what is sent and `-max-requests` caps it: see [budget, pace and the kill switch](#budget-pace-and-the-kill-switch).

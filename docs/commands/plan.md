@@ -5,10 +5,10 @@ Show what a run would do and the kinds of request it would send, without sending
 ## Synopsis
 
 ```
-azhaq plan (-url URL | -domain D | -list FILE | -scope … -program P) [run flags]
+azhaq plan (TARGET | -url URL | -domain D | -list FILE | -scope … -program P) [run flags]
 ```
 
-`plan` takes the flags of [`run`](run.md#flags), and `-axfr`, which also lists the zone transfers [`dns -axfr`](dns.md#zone-transfer) would try for the domain and host targets.
+`plan` takes a target as written, as `azhaq TARGET` does (`azhaq plan http://127.0.0.1:3001/`, a domain or an address; a word that is none is a usage error), the flags of [`run`](run.md#flags), and `-axfr`, which also lists the zone transfers [`dns -axfr`](dns.md#zone-transfer) would try for the domain and host targets.
 
 ## Examples
 

@@ -140,7 +140,7 @@ func cmdPorts(args []string) error {
 	udpRows := fs.Bool("udp-rows", false, "list each UDP port that stayed silent (open|filtered) as a row of its own; by default an address has one row for them, with their count, how many ports were asked and how many were refused (the nmap files and the workspace list them one by one either way)")
 	eof := fs.String("eof", "", "leave these fields out of -json, -csv and -oA's JSON, comma-separated")
 	lof := fs.Bool("lof", false, "list the fields of -json and -csv, and stop")
-	given := inherit(fs, "rate=port-rate", "max-requests", "dns-rate", "timeout", "v", "scope", "program", "allow", "deny", "ledger", "kill-file")
+	given := inherit(fs, "rate=port-rate", "max-requests", "dns-rate", "timeout", "v", "scope", "program", "allow", "deny", "ledger", "kill-file", "seal-to")
 	if err := parse(fs, args); err != nil {
 		return err
 	}
