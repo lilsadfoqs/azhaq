@@ -158,7 +158,7 @@ func advisoryStage(ctx context.Context, st *store.Store, obs []types.StoredObser
 		}
 		svcByTarget := map[string]advisory.Service{}
 		for _, s := range services {
-			svcByTarget[s.Target()+"\x00"+s.Product] = s
+			svcByTarget[s.Listener()+"\x00"+advisory.ProductKey(s.Product)] = s
 		}
 		cctx := ledger.WithCollector(ctx, "azhaq-advisories")
 		failed, refused, stopped, denied := 0, 0, 0, 0
@@ -174,7 +174,7 @@ func advisoryStage(ctx context.Context, st *store.Store, obs []types.StoredObser
 		cache := map[readKey]readResult{}
 		for i := range leads {
 			lead := &leads[i]
-			svc := svcByTarget[lead.Target+"\x00"+lead.Product]
+			svc := svcByTarget[lead.Listener()+"\x00"+advisory.ProductKey(lead.Product)]
 			for j := range lead.Advisories {
 				ref := &lead.Advisories[j]
 				read, conf := "nothing read: a range match only", advisory.Claimed
@@ -261,23 +261,16 @@ func advisoryStage(ctx context.Context, st *store.Store, obs []types.StoredObser
 			Payload: raw, Confidence: 0.9, ObservedAt: now,
 		})
 	}
-	var matches, affected, notAffected, conditional, kev, observed, inferred, claimed int
+	// Distinct advisories: one on a listener counts once, whatever number of
+	// leads (products) or records name it.
+	tally := advisory.Distinct(leads)
+	matches := tally.Advisories
+	affected, notAffected, conditional := tally.ByLabel[advisory.LabelAffected], tally.ByLabel[advisory.LabelNotAffected], tally.ByLabel[advisory.LabelConditional]
+	kev := tally.KEV
+	observed, inferred, claimed := tally.ByConf[advisory.Observed], tally.ByConf[advisory.Inferred], tally.ByConf[advisory.Claimed]
+	listeners := map[string]bool{}
 	for _, l := range leads {
-		matches += len(l.Advisories)
-		affected += l.Counts[advisory.LabelAffected]
-		notAffected += l.Counts[advisory.LabelNotAffected]
-		conditional += l.Counts[advisory.LabelConditional]
-		kev += l.KEVCount
-		for _, r := range l.Advisories {
-			switch r.Confidence {
-			case advisory.Observed:
-				observed++
-			case advisory.Inferred:
-				inferred++
-			case advisory.Claimed:
-				claimed++
-			}
-		}
+		listeners[l.Listener()] = true
 	}
 	against := ""
 	if ix != nil {
@@ -290,8 +283,8 @@ func advisoryStage(ctx context.Context, st *store.Store, obs []types.StoredObser
 		}
 		against += fmt.Sprintf("%d advisory records of %s", len(advs), fl.source)
 	}
-	note = fmt.Sprintf("advisories: %d leads, one for each of %d confirmed product versions, holding %d advisories (%d affected, %d not affected, %d conditional; %d of those that apply on the CISA KEV catalogue) against %s; each lead is a stored advisory row and a line of the output, never a proven finding",
-		len(leads), len(services), matches, affected, notAffected, conditional, kev, against)
+	note = fmt.Sprintf("advisories: %d leads, one for each of %d confirmed products on %d listeners, holding %d distinct advisories (%d affected, %d not affected, %d conditional; %d of those that apply on the CISA KEV catalogue) against %s; each lead is a stored advisory row and a line of the output, never a proven finding",
+		len(leads), len(services), len(listeners), matches, affected, notAffected, conditional, kev, against)
 	if quiet > 0 {
 		note += fmt.Sprintf("; %d more not-affected records of the index matched a product seen and are not listed (the version is outside their ranges and none is on the CISA KEV catalogue)", quiet)
 	}

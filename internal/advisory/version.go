@@ -103,11 +103,31 @@ func parseVersion(s string) (parsedVersion, bool) {
 			upstream = s[:i] + "~" + s[i+1:]
 		}
 	}
+	if placeholderPart(upstream) {
+		return parsedVersion{}, false
+	}
 	p.tokens = tokenize(upstream)
 	if len(p.tokens) == 0 {
 		return parsedVersion{}, false
 	}
 	return p, true
+}
+
+// placeholderPart says a dotted part after the first is a bare word that
+// is no release word ("9.4.z-SNAPSHOT"): where a number belongs, so it has
+// no place among the numbers and the comparison would be a guess.
+func placeholderPart(upstream string) bool {
+	parts := strings.Split(upstream, ".")
+	for _, part := range parts[1:] {
+		if part == "" || strings.Trim(part, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ") != "" {
+			continue
+		}
+		w := strings.ToLower(part)
+		if preWords[w] == 0 && !releaseWords[w] && !postWords[w] {
+			return true
+		}
+	}
+	return false
 }
 
 // tokenize splits s into runs of digits and of letters; separators

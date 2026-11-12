@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/lilsadfoqs/azhaq/internal/lazyre"
+	"net/netip"
 	"sort"
 	"strings"
 	"time"
@@ -216,6 +217,12 @@ type Service struct {
 	Banner  string `json:"banner,omitempty"`
 	TLS     bool   `json:"tls,omitempty"`
 	Origin  string `json:"origin,omitempty"`
+	// Names are the host strings the listener was reached by (a name, its
+	// address): one listener, whichever the run asked it by.
+	Names []string `json:"names,omitempty"`
+	// AlsoSeen are other versions of the product on the listener that the
+	// one chosen does not refine: said, not dropped.
+	AlsoSeen []string `json:"also_seen,omitempty"`
 	// ObservedAt is when the answer that named it was received, and From the
 	// URL it came from when it was a web answer (the proof of an identification).
 	ObservedAt time.Time `json:"-"`
@@ -234,26 +241,68 @@ func (s Service) Target() string {
 	return host
 }
 
+// Address is the IP address of the listener, when the run holds one: the
+// scan's own, the one a web answer came from, or the host itself when it is
+// an address. A name and its address are one listener.
+func (s Service) Address() string {
+	if a := normIP(s.IP); a != "" {
+		return a
+	}
+	return normIP(s.Host)
+}
+
+// Listener is the key of the listener a service runs on: its address (else
+// its host name) and port, and the protocol when it is not TCP.
+func (s Service) Listener() string {
+	return listenerKey(s.Address(), s.Host, s.Port, s.Proto)
+}
+
+func listenerKey(addr, host string, port int, proto string) string {
+	h := addr
+	if h == "" {
+		h = strings.ToLower(host)
+	}
+	if port > 0 {
+		h = fmt.Sprintf("%s:%d", h, port)
+	}
+	if proto == "udp" {
+		h += "/udp"
+	}
+	return h
+}
+
+func normIP(s string) string {
+	a, err := netip.ParseAddr(strings.TrimSpace(s))
+	if err != nil {
+		return ""
+	}
+	return a.Unmap().String()
+}
+
 // Lead is one labelled match of one service against one advisory. It is
 // a lead, never a finding: Label says where the version seen sits in the
 // advisory's range, and Confidence, when a confirmation ran, how far a
 // benign read settled it.
 type Lead struct {
-	AdvisoryID    string  `json:"advisory_id"`
-	URL           string  `json:"url"`
-	Summary       string  `json:"summary,omitempty"`
-	Target        string  `json:"target"`
-	Host          string  `json:"host"`
-	Port          int     `json:"port,omitempty"`
-	Service       string  `json:"service,omitempty"`
-	Product       string  `json:"product"`
-	VersionSeen   string  `json:"version_seen"`
-	AffectedRange string  `json:"affected_range"`
-	Label         string  `json:"label"` // affected, not affected or conditional
-	Precondition  string  `json:"precondition,omitempty"`
-	KEV           bool    `json:"kev,omitempty"`    // CISA lists the advisory as exploited in the wild
-	CVSS          float64 `json:"cvss,omitempty"`   // the base score the record states
-	Source        string  `json:"source,omitempty"` // the built-in index (with its date), when the record came from it
+	AdvisoryID    string   `json:"advisory_id"`
+	URL           string   `json:"url"`
+	Summary       string   `json:"summary,omitempty"`
+	Target        string   `json:"target"`
+	Host          string   `json:"host"`
+	Port          int      `json:"port,omitempty"`
+	Address       string   `json:"address,omitempty"`   // the listener's IP address, when the run holds it
+	Names         []string `json:"names,omitempty"`     // every host string the listener was reached by
+	Proto         string   `json:"proto,omitempty"`     // udp, when it is not TCP
+	AlsoSeen      []string `json:"also_seen,omitempty"` // other versions of the product seen on the listener
+	Service       string   `json:"service,omitempty"`
+	Product       string   `json:"product"`
+	VersionSeen   string   `json:"version_seen"`
+	AffectedRange string   `json:"affected_range"`
+	Label         string   `json:"label"` // affected, not affected or conditional
+	Precondition  string   `json:"precondition,omitempty"`
+	KEV           bool     `json:"kev,omitempty"`    // CISA lists the advisory as exploited in the wild
+	CVSS          float64  `json:"cvss,omitempty"`   // the base score the record states
+	Source        string   `json:"source,omitempty"` // the built-in index (with its date), when the record came from it
 	// A lead is one service: the fields above are those of its top advisory
 	// (the exploited and best scored of those that apply), and these hold
 	// the whole list, so nothing is lost by listing one line a service.
@@ -274,9 +323,12 @@ type Lead struct {
 func (l Lead) Line() string {
 	var s string
 	if len(l.Advisories) > 1 {
-		s = fmt.Sprintf("advisory: %s %s on %s: %s; top %s is %s (range %s) — %s", l.Product, l.VersionSeen, l.Target, l.CountsText(), l.AdvisoryID, l.Label, l.AffectedRange, l.URL)
+		s = fmt.Sprintf("advisory: %s %s on %s: %s; top %s is %s (range %s) — %s", l.Product, l.VersionSeen, l.where(), l.CountsText(), l.AdvisoryID, l.Label, l.AffectedRange, l.URL)
 	} else {
-		s = fmt.Sprintf("advisory: %s %s on %s is %s (range %s) — %s %s", l.Product, l.VersionSeen, l.Target, l.Label, l.AffectedRange, l.AdvisoryID, l.URL)
+		s = fmt.Sprintf("advisory: %s %s on %s is %s (range %s) — %s %s", l.Product, l.VersionSeen, l.where(), l.Label, l.AffectedRange, l.AdvisoryID, l.URL)
+	}
+	if len(l.AlsoSeen) > 0 {
+		s += "; also seen as " + strings.Join(l.AlsoSeen, ", ")
 	}
 	if l.KEV {
 		s += "; known exploited (CISA KEV)"
@@ -284,8 +336,11 @@ func (l Lead) Line() string {
 	if l.CVSS > 0 {
 		s += fmt.Sprintf("; CVSS %.1f", l.CVSS)
 	}
-	if l.Precondition != "" {
+	switch {
+	case l.Precondition != "":
 		s += "; precondition: " + l.Precondition
+	case l.Confidence == "" && len(l.Advisories) > 1 && l.Label != LabelNotAffected:
+		s += "; range match only, no precondition checked"
 	}
 	if l.Confidence != "" {
 		s += "; confidence " + l.Confidence
@@ -294,6 +349,27 @@ func (l Lead) Line() string {
 		s += "; read: " + l.Read
 	}
 	return s
+}
+
+// where is the listener as a line names it: host:port, and the other
+// host strings it was reached by ("app.test:80 (also 10.0.0.5)").
+func (l Lead) where() string {
+	var also []string
+	for _, n := range l.Names {
+		if !strings.EqualFold(n, l.Host) {
+			also = append(also, n)
+		}
+	}
+	if len(also) == 0 {
+		return l.Target
+	}
+	return l.Target + " (also " + strings.Join(also, ", ") + ")"
+}
+
+// Listener is the key of the listener a lead is about: its address (else its
+// host name) and port.
+func (l Lead) Listener() string {
+	return listenerKey(l.Address, l.Host, l.Port, l.Proto)
 }
 
 // ProductKey folds a product name for comparison: case, spaces, dashes
@@ -359,6 +435,7 @@ func leadFor(svc Service, adv Advisory, aff Affected) Lead {
 	lead := Lead{
 		AdvisoryID: adv.ID, URL: adv.URL(), Summary: adv.Summary,
 		Target: svc.Target(), Host: firstNonEmpty(svc.Host, svc.IP), Port: svc.Port,
+		Address: svc.Address(), Names: svc.Names, Proto: svc.Proto, AlsoSeen: svc.AlsoSeen,
 		Service: svc.Service, Product: svc.Product, VersionSeen: svc.Version,
 		AffectedRange: ranges, Origin: svc.Origin,
 	}

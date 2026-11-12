@@ -24,17 +24,19 @@ type Ref struct {
 
 func applies(label string) bool { return label != LabelNotAffected }
 
-// Group makes one lead of each service (host, port, product and version)
-// out of the leads of its advisories. The lead's own fields are those of its
-// top advisory, and Advisories lists them all: the ones that apply first
+// Group makes one lead of each listener (address and port), product and
+// version out of the leads of its advisories; a name and its address are one
+// listener. An advisory id counts once in a lead, as its strongest label.
+// The lead's own fields are those of its top advisory, and Advisories lists
+// them all: the ones that apply first
 // (affected, conditional), CISA KEV before the rest, the higher score
 // first, then by id. Counts, KEVCount and MaxCVSS summarise the list.
 func Group(leads []Lead) []Lead {
-	type key struct{ target, product, version string }
+	type key struct{ listener, product, version string }
 	at := map[key]int{}
 	var members [][]Lead
 	for _, l := range leads {
-		k := key{l.Target, l.Product, l.VersionSeen}
+		k := key{l.Listener(), ProductKey(l.Product), l.VersionSeen}
 		i, ok := at[k]
 		if !ok {
 			i = len(members)
@@ -45,6 +47,7 @@ func Group(leads []Lead) []Lead {
 	}
 	var out []Lead
 	for _, ms := range members {
+		ms = oneOfEachID(ms)
 		sort.SliceStable(ms, func(i, j int) bool {
 			a, b := ms[i], ms[j]
 			if applies(a.Label) != applies(b.Label) {
@@ -83,6 +86,88 @@ func Group(leads []Lead) []Lead {
 	}
 	sortLeadsByTarget(out)
 	return out
+}
+
+// oneOfEachID keeps the strongest lead of each advisory id: a record that
+// names the product twice, or a record of yours and the index's, is one
+// advisory on the listener.
+func oneOfEachID(ms []Lead) []Lead {
+	at := map[string]int{}
+	var out []Lead
+	for _, m := range ms {
+		i, ok := at[m.AdvisoryID]
+		if !ok || m.AdvisoryID == "" {
+			at[m.AdvisoryID] = len(out)
+			out = append(out, m)
+			continue
+		}
+		if labelRank(m.Label) < labelRank(out[i].Label) {
+			out[i] = m
+		}
+	}
+	return out
+}
+
+// Tally is the distinct advisories of a set of leads: an advisory id counts
+// once on a listener however many leads (products, records) name it, as its
+// strongest label and, with a confirmation, its strongest confidence.
+type Tally struct {
+	Advisories int
+	ByLabel    map[string]int
+	KEV        int // of those that apply, how many CISA lists as exploited
+	ByConf     map[string]int
+}
+
+// Distinct counts the advisories of leads by listener and id.
+func Distinct(leads []Lead) Tally {
+	type adv struct {
+		label, conf string
+		kev         bool
+	}
+	seen := map[string]*adv{}
+	var order []string
+	confRank := func(c string) int {
+		switch c {
+		case Observed:
+			return 3
+		case Inferred:
+			return 2
+		case Claimed:
+			return 1
+		}
+		return 0
+	}
+	for _, l := range leads {
+		for _, r := range l.Advisories {
+			k := l.Listener() + "|" + r.ID
+			a, ok := seen[k]
+			if !ok {
+				a = &adv{label: r.Label}
+				seen[k] = a
+				order = append(order, k)
+			}
+			if labelRank(r.Label) < labelRank(a.label) {
+				a.label = r.Label
+			}
+			if confRank(r.Confidence) > confRank(a.conf) {
+				a.conf = r.Confidence
+			}
+			a.kev = a.kev || r.KEV
+		}
+	}
+	t := Tally{ByLabel: map[string]int{}, ByConf: map[string]int{}}
+	for _, k := range order {
+		a := seen[k]
+		t.Advisories++
+		t.ByLabel[a.label]++
+		if a.conf != "" {
+			t.ByConf[a.conf]++
+		}
+		if applies(a.label) && a.kev {
+			t.KEV++
+		}
+	}
+	return t
 }
 
 func sortLeadsByTarget(out []Lead) {
