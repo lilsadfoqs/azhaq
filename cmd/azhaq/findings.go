@@ -255,6 +255,27 @@ func buildFindings(g *graphView) findingSet {
 			Host: host, Port: svc.Port, URL: svc.Origin, Product: svc.Product, Version: svc.Version,
 			Request: p.Method + " " + p.Target, Evidence: p.Excerpt, Command: command, Collector: p.How, Proof: p})
 	}
+	// A product a stage named with no version: an identification too, so the
+	// worklist shows what the run saw on each listener. There is no advisory to
+	// match without a version, and the record says so.
+	for _, svc := range advisory.ServicesAnyVersion(g.obs) {
+		if svc.Product == "" || svc.Version != "" {
+			continue
+		}
+		k := svc.Target() + "\x00" + advisory.ProductKey(svc.Product)
+		if identified[k] {
+			continue
+		}
+		identified[k] = true
+		host := svc.Host
+		if host == "" {
+			host = svc.IP
+		}
+		p := identProof(svc)
+		add(findingRecord{Tier: proof.TierIdentification, Kind: "software-version", Label: verify.VersionOnly, Severity: "info",
+			Host: host, Port: svc.Port, URL: svc.Origin, Product: svc.Product,
+			Request: p.Method + " " + p.Target, Evidence: "no version seen: " + p.Excerpt, Command: command, Collector: p.How, Proof: p})
+	}
 	for _, l := range certLeads(g.obs, command) {
 		add(l)
 	}

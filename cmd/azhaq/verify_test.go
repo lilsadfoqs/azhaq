@@ -285,7 +285,7 @@ func TestVerifyDenyPathKeepsConfirmationOut(t *testing.T) {
 			t.Fatalf("the denied confirmation was sent: %v", cs.requests())
 		}
 	}
-	rep := lastReport(t, errOut)
+	rep := withStoredAdvisories(t, db, lastReport(t, errOut))
 	// The advisory whose read was denied stays claimed: no confirmation says more
 	// than the version range, and no verify result calls it proved.
 	var denied bool

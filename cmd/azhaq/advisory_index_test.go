@@ -125,7 +125,7 @@ func runDefault(t *testing.T, args ...string) (string, report) {
 	if err != nil {
 		t.Fatalf("run: %v\n%s", err, errOut)
 	}
-	return out, lastReport(t, errOut)
+	return out, withStoredAdvisories(t, db, lastReport(t, errOut))
 }
 
 func noteOf(rep report) string {
@@ -249,7 +249,7 @@ func TestPortsNamesTheAdvisoriesOfAConfirmedVersionByDefault(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ports: %v\n%s", err, errOut)
 	}
-	rep := lastReport(t, errOut)
+	rep := withStoredAdvisories(t, db, lastReport(t, errOut))
 	rows := advRows(rep)
 	r := ref(rows, "CVE-2015-3306")
 	if len(rows) != 1 || r == nil || r.Label != "affected" || rows[0].Product != "ProFTPD" || rows[0].Version != "1.3.5" || strings.Contains(out, `"type":"advisory"`) {
@@ -454,7 +454,7 @@ func TestVerifyGivesOneRowPerService(t *testing.T) {
 	if err != nil {
 		t.Fatalf("run: %v\n%s", err, errOut)
 	}
-	rep := lastReport(t, errOut)
+	rep := withStoredAdvisories(t, db, lastReport(t, errOut))
 	var rows []verify.Result
 	for _, r := range rep.Verify {
 		if r.Kind == verify.KindAdvisoryPrecond {

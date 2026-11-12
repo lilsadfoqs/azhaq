@@ -109,7 +109,6 @@ func deeper(rep *report, runArgs []string) {
 	}
 	db := rep.DB
 	rep.Next = append(rep.Next,
-		"azhaq hunt -db "+db+"   (go deeper: the routes, hosts and files of this map ranked, each with its evidence)",
 		"azhaq query -db "+db+" -type URL   (go deeper: ask the workspace a precise question; azhaq show -db "+db+" URL lists everything known about one row)",
 	)
 	if !hasFlag(runArgs, "ports") {

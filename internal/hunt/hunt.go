@@ -25,6 +25,7 @@ type Input struct {
 	Secrets   []Secret
 	Takeovers []Takeover
 	Roles     []RoleRow
+	Listeners []Listener // what the run named on each listener, one record each
 	Now       time.Time
 	Since     time.Duration // "new" means first seen within this long
 }
@@ -65,7 +66,8 @@ type Row struct {
 	Reasons []Reason `json:"reasons"`
 	Next    string   `json:"next"`
 	// Tier is finding for a row with a proven signal (the answer, the secret's
-	// own format, the service's own page shows it) and lead for the rest. Check,
+	// own format, the service's own page shows it), identification for a listener
+	// the run named (a product, and a version or none), and lead for the rest. Check,
 	// on a lead, is the check that would prove it; Proof, on a finding of a path
 	// check, is the request, the excerpt of the answer and the command that
 	// shows it again.
@@ -75,6 +77,10 @@ type Row struct {
 	// Template is set on the row of an input the pages of an origin carry in
 	// common: the input, and on how many of the origin's pages.
 	Template *Template `json:"template,omitempty"`
+	// Ident is set on the row of a listener the run named (Type Service): its
+	// fields (kind, host, port, product, version, advisory_id, label…) are the
+	// row's own in JSON.
+	*Ident
 
 	scope   string
 	signals int  // distinct signals, "new" not counted
@@ -154,6 +160,9 @@ func Build(in Input) []Row {
 	h.takeovers()
 	h.roles()
 	var out []Row
+	for _, l := range in.Listeners {
+		out = append(out, l.row(in.DB))
+	}
 	for _, c := range h.cands {
 		if c.fresh && h.old {
 			c.add("new", "first seen within "+in.Since.String())
@@ -170,7 +179,8 @@ func Build(in Input) []Row {
 	return out
 }
 
-// sortRows orders best first: findings before leads, then rows the server
+// sortRows orders best first: findings, then identifications (a version seen
+// before none seen), then leads; in each, rows the server
 // confirmed before routes only a script names and names that rest on NXDOMAIN
 // alone, then by score, then target scope before fan-out, then more distinct
 // signals, then key.
@@ -178,8 +188,8 @@ func sortRows(out []Row) {
 	sort.Slice(out, func(i, j int) bool {
 		a, b := out[i], out[j]
 		switch {
-		case a.Tier != b.Tier:
-			return a.Tier == proof.TierFinding
+		case a.tierRank() != b.tierRank():
+			return a.tierRank() < b.tierRank()
 		case a.named != b.named:
 			return !a.named
 		case a.Score != b.Score:

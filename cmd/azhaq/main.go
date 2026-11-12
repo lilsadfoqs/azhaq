@@ -1659,7 +1659,15 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		settleStateChanges(rep, preState, mergeStateChanges(stateChangesOfOps(obs), stateChangesOfRows(likes)), rules, *serve != "")
 	}
 	if advFlags.on {
-		rep.Advisories = advLeads
+		rep.Advisories = make([]advisory.Lead, len(advLeads))
+		for i, l := range advLeads {
+			rep.Advisories[i] = l.WithoutList()
+		}
+		if len(advLeads) > 0 && path != "" {
+			tally := advisory.Distinct(advLeads)
+			rep.Notes = append(rep.Notes, fmt.Sprintf("advisory leads: this summary holds one line for each of the %d leads; their %d advisories (%d not affected, counted and not listed) are in azhaq report -findings -db %s and azhaq export -db %s -format findings",
+				len(advLeads), tally.Advisories, tally.ByLabel[advisory.LabelNotAffected], path, path))
+		}
 		rep.Failed = append(rep.Failed, advFailures...)
 		if advNote != "" {
 			rep.Notes = append(rep.Notes, advNote)
@@ -1724,6 +1732,11 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		if hint := engine.LoginHint(rows); hint != "" {
 			rep.Next = append(rep.Next, hint)
 		}
+	}
+	if !out.embedded && !out.plan && !out.scratch && rep.Command == "run" && path != "" && len(rows) > 0 {
+		// The first step after a run: hunt, with what it would show. Not a hint:
+		// it is said whether stderr is a terminal or not.
+		rep.Next = slices.Insert(rep.Next, 0, huntLine(path, huntRows(&graphView{obs: obs, rows: rows, args: []string{}}, path, nil, 7*24*time.Hour)))
 	}
 	if !out.embedded && rep.Command == "run" {
 		runHints(rep, rows, obs, *interact, signedIn(*login, cookies, headers))

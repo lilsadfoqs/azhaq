@@ -9,7 +9,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/lilsadfoqs/azhaq/internal/advisory"
 	"github.com/lilsadfoqs/azhaq/internal/hunt"
+	"github.com/lilsadfoqs/azhaq/internal/proof"
 	"github.com/lilsadfoqs/azhaq/internal/takeover"
 	"github.com/lilsadfoqs/azhaq/types"
 )
@@ -60,7 +62,64 @@ func cmdHunt(args []string) error {
 	if err != nil {
 		return err
 	}
-	in := hunt.Input{DB: path, Rows: g.rows, Obs: g.obs, Roles: rows, Now: time.Now(), Since: *since}
+	all := huntRows(g, path, rows, *since)
+	matched := len(all)
+	list := all
+	if len(list) > *limit {
+		list = list[:*limit]
+	}
+	enc := json.NewEncoder(os.Stdout)
+	tiers := countRows(list)
+	tier := ""
+	for _, r := range list {
+		if *asJSON {
+			if err := enc.Encode(r); err != nil {
+				return err
+			}
+			continue
+		}
+		if r.Tier != tier {
+			// Findings first, then the identifications, then the leads, each with the check that would prove it.
+			tier = r.Tier
+			switch tier {
+			case "finding":
+				fmt.Printf("findings (%d): proven, the answer shows the thing named\n", tiers.Findings)
+			case "identification":
+				fmt.Printf("identifications (%d): what the run named on each listener; the label says how far a read settled the advisory (version-only: the version is in range, nothing checked)\n", tiers.Identifications)
+			default:
+				fmt.Printf("leads (%d): inferred from a name, a path or a guess; each names the check that would prove it\n", tiers.Leads)
+			}
+		}
+		parts := make([]string, len(r.Reasons))
+		for i, x := range r.Reasons {
+			parts[i] = x.Signal + ": " + x.Detail
+		}
+		line := fmt.Sprintf("%3d  %3d  %s  %s", r.Rank, r.Score, r.Key, strings.Join(parts, "; "))
+		if r.Tier == "lead" {
+			line += "  → check: " + r.Check
+		}
+		fmt.Printf("%s  → next: %s\n", line, r.Next)
+	}
+	rep := newReport("hunt")
+	rep.what = "rows"
+	rep.Results = len(list)
+	rep.DB = path
+	rep.Tiers = &tiers
+	if matched > len(list) {
+		rep.Notes = append(rep.Notes, fmt.Sprintf("%d rows have a signal (%s); -limit %d printed the first %d (best first), %d are left out: -limit %d prints them all",
+			matched, countRows(all), *limit, len(list), matched-len(list), matched))
+	}
+	if len(roles) == 0 && signedWorkspace(path) {
+		rep.hint(rolesHint)
+	}
+	return rep.finish(*asJSON, false)
+}
+
+// huntRows ranks a workspace's surface, best first and before any -limit: the
+// routes and hosts the map holds, and what the run named on each listener (the
+// records of `report -findings`, one row for each listener and product).
+func huntRows(g *graphView, path string, roles []hunt.RoleRow, since time.Duration) []hunt.Row {
+	in := hunt.Input{DB: path, Rows: g.rows, Obs: g.obs, Roles: roles, Now: time.Now(), Since: since}
 	for _, s := range secretRows(g.obs) {
 		in.Secrets = append(in.Secrets, hunt.Secret{Kind: s.Kind, Severity: s.Severity, Where: s.Where, Name: s.Name, Preview: s.Redacted, Rule: s.Rule, Entropy: s.Entropy,
 			Known: s.Rule == "known key format" && s.Severity != "info"})
@@ -72,59 +131,64 @@ func cmdHunt(args []string) error {
 	for _, t := range takeovers(ents, g.obs) {
 		in.Takeovers = append(in.Takeovers, hunt.Takeover{Host: t.Host, Strong: t.Strength == "strong", Dangling: t.Strength == "dangling", Detail: takeoverDetail(t.Finding)})
 	}
-	list := hunt.Build(in)
-	matched := len(list)
-	if len(list) > *limit {
-		list = list[:*limit]
+	in.Listeners = listenersOf(buildFindings(g))
+	return hunt.Build(in)
+}
+
+// listenersOf are the listener rows of a findings set: each listener's
+// identification for each product, from its best record (a read's label before
+// a range match, the exploited and best scored advisory first: the order the
+// set is already in), with how many advisories the version matches; and the
+// findings a read proved on a listener. Nothing here is a record the findings
+// output does not list.
+func listenersOf(set findingSet) []hunt.Listener {
+	var out []hunt.Listener
+	toListener := func(r findingRecord, kind string) hunt.Listener {
+		return hunt.Listener{Ident: hunt.Ident{Kind: kind, What: r.Kind, Host: r.Host, Port: r.Port, Product: r.Product, Version: r.Version,
+			AdvisoryID: r.AdvisoryID, AdvisoryURL: r.AdvisoryURL, Label: r.Label, Severity: r.Severity, KEV: r.KEV, CVSS: r.CVSS,
+			Evidence: r.Evidence, Command: r.Command}, Proof: r.Proof}
 	}
-	enc := json.NewEncoder(os.Stdout)
-	var tiers tierCounts
-	for _, r := range list {
-		if r.Tier == "finding" {
-			tiers.Findings++
-		} else {
-			tiers.Leads++
+	for _, r := range set.Findings {
+		if r.Collector == "azhaq-verify" {
+			out = append(out, toListener(r, proof.TierFinding))
 		}
 	}
-	tier := ""
-	for _, r := range list {
-		if *asJSON {
-			if err := enc.Encode(r); err != nil {
-				return err
-			}
-			continue
+	at := map[string]int{}
+	for _, r := range set.Identifications {
+		k := targetOf(r) + "\x00" + advisory.ProductKey(r.Product)
+		i, ok := at[k]
+		if !ok {
+			at[k] = len(out)
+			out = append(out, toListener(r, proof.TierIdentification))
+			i = at[k]
 		}
-		if r.Tier != tier {
-			// Findings first, then the leads apart, each with the check that would prove it.
-			tier = r.Tier
-			if tier == "finding" {
-				fmt.Printf("findings (%d): proven, the answer shows the thing named\n", tiers.Findings)
-			} else {
-				fmt.Printf("leads (%d): inferred from a name, a path or a guess; each names the check that would prove it\n", tiers.Leads)
-			}
+		if r.AdvisoryID != "" {
+			out[i].Advisories++
 		}
-		parts := make([]string, len(r.Reasons))
-		for i, x := range r.Reasons {
-			parts[i] = x.Signal + ": " + x.Detail
-		}
-		line := fmt.Sprintf("%3d  %3d  %s  %s", r.Rank, r.Score, r.Key, strings.Join(parts, "; "))
-		if r.Tier != "finding" {
-			line += "  → check: " + r.Check
-		}
-		fmt.Printf("%s  → next: %s\n", line, r.Next)
 	}
-	rep := newReport("hunt")
-	rep.what = "rows"
-	rep.Results = len(list)
-	rep.DB = path
-	rep.Tiers = &tiers
-	if matched > len(list) {
-		rep.Notes = append(rep.Notes, fmt.Sprintf("%d rows have a signal; -limit %d printed the first %d (best first)", matched, *limit, len(list)))
+	return out
+}
+
+// huntLine is the next line a run names first: hunt, with the rows it shows.
+func huntLine(db string, rows []hunt.Row) string {
+	c := countRows(rows)
+	return fmt.Sprintf("azhaq hunt -db %s   (%s, %s, %s)", db, plural(c.Findings, "finding"), plural(c.Identifications, "identification"), plural(c.Leads, "lead"))
+}
+
+// countRows counts rows by tier.
+func countRows(rows []hunt.Row) tierCounts {
+	var c tierCounts
+	for _, r := range rows {
+		switch r.Tier {
+		case proof.TierFinding:
+			c.Findings++
+		case proof.TierIdentification:
+			c.Identifications++
+		default:
+			c.Leads++
+		}
 	}
-	if len(roles) == 0 && signedWorkspace(path) {
-		rep.hint(rolesHint)
-	}
-	return rep.finish(*asJSON, false)
+	return c
 }
 
 // rolesDirFor finds the directory of the roles run behind a -roles file
