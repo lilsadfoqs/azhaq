@@ -1,5 +1,32 @@
 # Changelog
 
+## v0.23.0
+
+### Added
+
+- A port that speaks first in binary is named from its greeting by a table built from the protocols' public specifications: ActiveMQ OpenWire (`openwire`, with the version the frame states), ZeroMQ ZMTP 3 (`zeromq`) and Ceph msgr2 (`ceph-msgr2`); `-verify`, `-verify-logins` and the advisory lookup see the product.
+- Every web row keeps its response headers and the first 1024 bytes of its body (marked cut, with the full length), with no flag: `query -fields headers,body_excerpt,…`, `show` and `export` show them, a `Set-Cookie` value is kept out, `diff` ignores them, and `-sr` still keeps whole bodies.
+- Every TLS service `run` and `ports` find records its certificate from the handshake already made (subject, names, issuer, validity, self-signed, expired, name mismatch), and an expired, self-signed or mismatched one is a lead; a service probe's ledger line holds the bytes sent (`sent`); `plan` prints the ledger's expected size; a plain request to a TLS port says `this port speaks TLS; try https://`.
+
+### Changed
+
+- Advisory leads are one per listener (address and port) and product, with the most specific version seen and the names the listener was reached by; a version that cannot be ordered against a range is `conditional`, not `not affected`; a version the chosen one does not refine is named (`also seen as`); a lead whose matches were not read says `range match only, no precondition checked`; `tiers.identifications` counts one per lead for its unchecked range matches and the note counts distinct advisories, where one old version made hundreds of identifications. The export keeps every record, each naming its `lead`.
+- An estimate that is a floor reads `at least N` in `plan`, before a run and in its summary; `not_counted` names the further asks of a silent UDP port and a crawl's control requests; a ceiling `-max-requests` caps prints the stage's own beside it (`at_most_without_cap`).
+- `run` folds silent UDP ports into one line per address (`silent-udp`), treats a reference the pages load as media as an asset whatever its name (not requested, folded), and `ports` over a range prints each open port as it is found.
+
+### Fixed
+
+- A `-cookie` or `-header` session that no page shows live, where a page answers it as it answers a visitor (a 401, or a redirect to a page whose form takes a password), does not hold: the run stops with `the session does not hold: …` and exit 3 before any other request, where it went on as an anonymous visitor and exited 0.
+- `-deny` holds a zone transfer from a `-resolvers` address it names: the resolver gets its lookups, as any resolver named, and the run and `plan` say so before anything is sent.
+- Each `urls` archive row says where every record went (`read`, `kept`, `duplicates`, `junk`, `outside`, `over_cap`, which add up), the summary counts `duplicates`, and an archive that failed at once is no longer called a partial set beside `complete: true`.
+- `hunt` no longer lists a header or field name as a secret (`{tokenHeaderName:"X-Api-Token"}`), a file's row names its strongest secret, and the source maps of a host are one row weighted by whether they carry the app's code.
+- `resume` of a `params`, `probe`, `crawl`, `ports` or `urls -live` run a limit stopped reads the lists the command wrote for it, now kept next to the workspace, where it exited 1 on a temporary file that was gone.
+- `probe`'s counts partition its rows (`answered`, `without an answer`); a host with no web port is a note. The next-pass lines send what they count: the usual ports left out alone, and the rest of the range with the ports asked held out (`-ep`, `-port-skip`), naming the addresses that answered nothing after the default scan.
+- A row names only what was observed: a refused or empty read is `declined`, not `version-only`; `hunt` says `authentication requested` for a 401 and `forbidden` for a bare 403, which weighs less; the roles report calls a refuted write `Write not applied`; `subs -live` marks answers that are all loopback or private (`private_answer`); a read of a version ranks `info`, not `high`.
+- The egress flags (`-resolvers`, `-ledger`, `-seal-to`, `-proxy`, `-allow`, `-deny`, and for web commands `-deny-path`, `-rate`, `-max-requests`) are on every command that sends; `plan` takes a target as written, as `azhaq TARGET` does; `dns -maxtime` takes a duration or a number of seconds.
+- A body cut short keeps what came: `closed after 234 of 4096 bytes (HTTP 200, text/html)`, with the status, headers and bytes received on the row; the note on held wordlist requests counts each directory with `-dirs-depth` above 1.
+- `run -stream -json` has a line for a row the map lists as held back, so the stream holds every row of the map, and a summary says a note once where two paths reached the same fact.
+
 ## v0.22.0
 
 ### Added
