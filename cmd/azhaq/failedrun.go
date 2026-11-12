@@ -69,8 +69,9 @@ func earlierFailures(st *store.Store, runs []store.Run, skip string) []runFailur
 			continue
 		}
 		rf := runFailures{Run: runs[i].ID, Failed: len(list)}
+		fuzzed := isFuzzRun(st) // st.UseRun(runs[i].ID) was called by failuresOf
 		for _, f := range list {
-			if f.Retryable {
+			if f.Retryable && !fuzzed {
 				rf.Retryable++
 			}
 		}

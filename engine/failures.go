@@ -353,7 +353,8 @@ func ShortError(s string) string {
 	switch {
 	case strings.Contains(l, "x509") || strings.Contains(l, "tls:"):
 		return tlsReason(s)
-	case strings.HasSuffix(l, "eof"):
+	case strings.HasSuffix(l, "eof") || strings.Contains(l, "server closed idle connection"):
+		// Go names a close on a reused connection apart from one on a new one.
 		return "connection closed (EOF)"
 	}
 	s = quotedRE.ReplaceAllString(s, "…")

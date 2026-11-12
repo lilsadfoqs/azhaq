@@ -202,6 +202,10 @@ func retryFailed(st *store.Store, db, want string) (int, string, error) {
 	if c := st.GetMeta("command:" + st.RunID()); c == "ports" || c == "dirs" {
 		return 0, "", usagef("-retry-failed does not apply to a %s run: azhaq resume alone continues its unfinished sweep", c)
 	}
+	if isFuzzRun(st) {
+		// A fuzz run goes on by the inputs it answered, not by a task for a target.
+		return 0, "", usagef("-retry-failed does not apply to a fuzz run: its failed requests are in azhaq query -db %s -failed -run %s; run the fuzz command again to ask them again", db, run.ID)
+	}
 	ents, err := st.Entities()
 	if err != nil {
 		return 0, "", err
@@ -240,6 +244,12 @@ func retryFailed(st *store.Store, db, want string) (int, string, error) {
 	return r.Targets, run.ID, nil
 }
 
+// isFuzzRun says the current run of st is a fuzz run.
+func isFuzzRun(st *store.Store) bool {
+	a := st.RunArgs()
+	return len(a) > 0 && a[0] == "fuzz"
+}
+
 // retryableIn counts the failed targets of the newest run of the workspace
 // that a later try may fix, with the command that asks them again; when the
 // newest has none, the count and command are those of the newest earlier run
@@ -253,6 +263,9 @@ func retryableIn(st *store.Store, db string) (int, string) {
 	st.UseRun(newest)
 	ents, _ := st.Entities()
 	obs, _ := st.Observations()
+	if isFuzzRun(st) {
+		ents, obs = nil, nil // -retry-failed does not apply to it
+	}
 	if n := engine.RetryableTargets(ents, obs) + len(storedSweeps(st, newest)); n > 0 {
 		return n, "azhaq resume -db " + db + " -retry-failed asks them again"
 	}

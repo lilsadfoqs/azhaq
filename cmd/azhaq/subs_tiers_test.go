@@ -195,3 +195,33 @@ func TestSubsTiersLiveCountsEverySampledGuess(t *testing.T) {
 		t.Errorf("raw less what did not resolve is not the DNS-confirmed: %v", c)
 	}
 }
+
+// The coverage note of the raw tier counts the names raw candidates counts: a
+// source that gives the domain itself does not add it to what the run holds.
+func TestSubsCoverageDoesNotCountTheDomainItself(t *testing.T) {
+	t.Chdir(t.TempDir())
+	defer subcol.UseTestSources(
+		subcol.TestSource{Name: "s1", Default: true, Names: []string{"example.org", "a.example.org", "b.example.org", "c.example.org"}},
+		subcol.TestSource{Name: "s2", Default: true, Names: []string{"example.org", "a.example.org", "d.example.org"}},
+	)()
+	_, rep, code := runContract(t, "subs", "-d", "example.org", "-no-history")
+	if code != exitOK {
+		t.Fatalf("exit %d %+v", code, rep)
+	}
+	c := rep.Counts
+	if c["raw candidates"] != 4 || c["the domain itself"] != 1 || c["from sources"] != 5 {
+		t.Fatalf("counts %v", c)
+	}
+	// 4 names: a by two sources, b, c and d by one: S=4, f1=3, f2=1, pool 4+9/2.
+	want := "coverage (raw candidates): what the independent sources know, not every name that exists. Their pool holds about 9 names and this run has 4 of them" +
+		". This is an estimate (Chao1) from the 4 names the independent sources gave: 3 came from one source and 1 from two"
+	var got []string
+	for _, n := range rep.Notes {
+		if strings.HasPrefix(n, "coverage (raw candidates)") {
+			got = append(got, n)
+		}
+	}
+	if len(got) != 1 || got[0] != want {
+		t.Errorf("coverage notes %q, want %q", got, want)
+	}
+}

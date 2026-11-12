@@ -21,7 +21,7 @@ func TestSecretsInPlantedScript(t *testing.T) {
 		"aws-access-key-id AKIAIOSFODNN7EXAMPLE", "aws-secret-access-key wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
 		"google-api-key AIza" + "SyDq2q7Z0v9nV5aYbB1kQ8wL3mN4pR6tUeX", "github-token ghp" + "_Z8xQm2Lr7Vb4Tn9Wc1Ks6Jd3Hf5Gy0Pa2Ue4R",
 		"slack-webhook https://hooks.slack.com/services/T0AZHAQ01/B0AZHAQ02" + "/q7X9mK2vL4pR8tW3yZ6aB1cD",
-		"stripe-secret-key sk_live" + "_4eC39HqLyjWDarjtT1zdp7dcAZHAQ", "private-key -----BEGIN RSA PRIVATE KEY-----",
+		"stripe-secret-key sk_live" + "_4eC39HqLyjWDarjtT1zdp7dcAZHAQ", "private-key -----BEGIN PRIVATE KEY-----",
 		"build-variable https://api.azhaq-bench.example", "generic-secret Xk29fLq0Pz8vRt3Yw6Nb",
 		"jwt eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJhemhhcS1iZW5jaCJ9.c2lnbmF0dXJlLW5vdC1yZWFs",
 		"sendgrid-key SG" + ".bQ7rT2mX9vL4kP8nW3yZ6a.Zx8Qm2Lr7Vb4Tn9Wc1Ks6Jd3Hf5Gy0Pa2Ue4RqTsYuW",

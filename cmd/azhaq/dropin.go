@@ -800,6 +800,9 @@ func cmdURLs(args []string) error {
 	if n := rep.Sources.archivesNote(); n != "" {
 		rep.Notes = append(rep.Notes, n)
 	}
+	if n := rep.Sources.recordsNote(); n != "" {
+		rep.Notes = append(rep.Notes, n)
+	}
 	if n := rep.Sources.requestsNote(); n != "" {
 		rep.Notes = append(rep.Notes, n)
 	}

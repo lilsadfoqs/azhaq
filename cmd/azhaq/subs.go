@@ -267,6 +267,7 @@ func cmdSubs(args []string) error {
 	var dangling map[string]map[string]any
 	cnameOnly, cnameOnlySrc, privateAns := 0, 0, 0
 	seen := map[string]bool{}
+	rawTier := map[string]bool{}     // the names the sources credited, less the domain itself: what raw candidates counts
 	dnsTier := map[string]bool{}     // printed rows a DNS lookup confirmed
 	var answeredHTTP map[string]bool // with -http: the names a request got an answer from
 	httpTier2 := map[string]bool{}   // printed rows an HTTP answer confirmed
@@ -370,6 +371,7 @@ func cmdSubs(args []string) error {
 			if name == input {
 				continue
 			}
+			rawTier[name] = true
 			for _, s := range strs(by) {
 				bySource[s]++ // sources credited with a name Azhaq kept
 			}
@@ -694,7 +696,7 @@ func cmdSubs(args []string) error {
 		rep.Notes = append(rep.Notes, n)
 		rep.holds("names from the sources, less what was left out, plus what DNS added, against the names printed", namesFromCounts(rep.Counts), rep.Results)
 	}
-	tiers := []tierSet{{countRaw, nil}}
+	tiers := []tierSet{{countRaw, rawTier}}
 	if *live || active {
 		tiers = append(tiers, tierSet{countDNS, dnsTier})
 	}

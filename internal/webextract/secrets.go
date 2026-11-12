@@ -22,6 +22,9 @@ type Secret struct {
 	// just before it with the value redacted: where to look, without the value.
 	Offset  int    `json:"offset,omitempty"`
 	Context string `json:"context,omitempty"`
+	// at is Offset+1 when the pattern knew where the secret starts (a key
+	// block that follows a bare marker of its own kind); 0 when it did not.
+	at int
 }
 
 // The rules a Secret can name.
@@ -29,6 +32,9 @@ const (
 	RuleFormat   = "known key format"
 	RuleBuildVar = "variable a bundler inlined"
 	RuleGeneric  = "name says secret, value looks random"
+	// RuleMarker is a PEM begin line with no key after it: help text, a
+	// pattern or a concatenation, not a key.
+	RuleMarker = "begin line only, no key body after it"
 )
 
 // secretPatterns are tried only on a script that holds one of a pattern's
@@ -97,6 +103,17 @@ func Secrets(script string) []Secret {
 		for _, m := range p.re.FindAllStringSubmatchIndex(script, 64) {
 			v := script[m[2]:m[3]]
 			s := Secret{Kind: p.kind, Severity: p.severity, Value: v, Rule: RuleFormat}
+			if p.kind == "private-key" {
+				if !pemBlock(script, m[0], m[1]) {
+					// A begin line alone is a mention, never a key.
+					if !seen["marker:"+v] {
+						seen["marker:"+v] = true
+						out = append(out, Secret{Kind: "private-key-marker", Severity: "info", Value: v, Rule: RuleMarker, at: m[0] + 1})
+					}
+					continue
+				}
+				s.at = m[0] + 1
+			}
 			if p.kind == "aws-access-key-id" {
 				// A secret key within a few lines makes the pair usable.
 				win := script[max(0, m[0]-300):min(len(script), m[1]+300)]
@@ -122,7 +139,11 @@ func Secrets(script string) []Secret {
 		add(Secret{Kind: "generic-secret", Severity: "medium", Name: name, Value: v, Rule: RuleGeneric, Entropy: math.Round(entropy(v)*10) / 10})
 	}
 	for i := range out {
-		if at := strings.Index(script, out[i].Value); at >= 0 {
+		at := strings.Index(script, out[i].Value)
+		if out[i].at > 0 {
+			at = out[i].at - 1
+		}
+		if at >= 0 {
 			out[i].Offset = at
 			out[i].Context = proof.Printable([]byte(script[max(0, at-32):at]), 64) + Redact(out[i].Value)
 		}

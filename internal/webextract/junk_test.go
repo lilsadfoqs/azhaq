@@ -397,3 +397,51 @@ func TestJunkGluedURL(t *testing.T) {
 		}
 	}
 }
+
+// Boolean SQL fragments, a bare quote after digits, a scanner's name as a
+// value and a second URL after a comma are junk, each with its reason.
+func TestJunkURLBooleanQuoteScannerAndCommaClasses(t *testing.T) {
+	for raw, want := range map[string]string{
+		"http://example.org/q1.php?id=1 and 1=1":                      JunkPayload,
+		"http://example.org/q4.php?x=1)))and(1=1":                     JunkPayload,
+		"http://example.org/q5.php?artist=1 or 1=1":                   JunkPayload,
+		"http://example.org/q11.php?x=1%20AND%201=1":                  JunkPayload,
+		"http://example.org/q.php?x=1+and+1=2":                        JunkPayload,
+		"http://example.org/q.php?x=1%2520or%25201=1":                 JunkPayload,
+		"http://example.org/q.php?x=1/**/and/**/1=1--":                JunkPayload,
+		"http://example.org/q.php?x=5)%20or%20(7=7":                   JunkPayload,
+		"http://example.org/q3.php?id=1'":                             JunkPayload,
+		"http://example.org/q.php?id=1%27&b=2":                        JunkPayload,
+		"http://example.org/q.php?id=12\"":                            JunkPayload,
+		"http://example.org/q12.php?x=acunetix":                       JunkScanner,
+		"http://example.org/q.php?a=1&x=Acunetix_WVS_test":            JunkScanner,
+		"http://example.org/q.php?ua=sqlmap/1.4":                      JunkScanner,
+		"http://example.org/q15.php?x=1&y=2,http://example.org/o.php": JunkGlued,
+		"http://example.org/q.php?y=a%2Chttps%3A%2F%2Fother.test%2F":  JunkGlued,
+	} {
+		if got := JunkReason(raw); got != want {
+			t.Errorf("JunkReason(%s) = %q, want %q", raw, got, want)
+		}
+	}
+	for _, raw := range []string{
+		"http://a.test/s?q=rock and roll",
+		"http://a.test/s?q=rock%20and%20roll",
+		"http://a.test/s?name=O'Brien",
+		"http://a.test/s?next=/a,b",
+		"http://a.test/s?id=1&b=2",
+		"http://a.test/s?year=1999 and later",
+		"http://a.test/s?ids=1,2,3&or=5",
+		"http://a.test/s?urls=http://a.test/,http://b.test/",
+		"http://a.test/s?next=https://other.test/x",
+		"http://a.test/s?q=netsparker",
+		"http://a.test/s?query=acunetix",
+		"http://a.test/s?vendor=nessus",
+		"http://a.test/s?tool=acunetixer",
+		"http://a.test/s?label=1'x",
+		"http://a.test/s?rating=5 or 6 stars",
+	} {
+		if r := JunkReason(raw); r != "" {
+			t.Errorf("JunkReason(%s) = %q, want none", raw, r)
+		}
+	}
+}

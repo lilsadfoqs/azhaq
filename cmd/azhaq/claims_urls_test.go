@@ -488,3 +488,42 @@ func TestURLsSummaryCountsDuplicatesAndNamesAFailureAtOnce(t *testing.T) {
 		t.Errorf("notes %q", rep.Notes)
 	}
 }
+
+// The summary says per archive how many records it read and where each went,
+// and the parts add up; the boolean fragments and the comma-glued URL of an
+// archive are junk, counted in them.
+func TestURLsSummaryGivesRecordsReadByArchiveThatAddUp(t *testing.T) {
+	flags := archivesOf(t, map[string][]string{"wayback": {
+		"http://example.org/ok.php?id=5", "http://example.org/ok.php?id=5", "http://example.org:80/ok.php?id=5",
+		"http://example.org/q1.php?id=1 and 1=1", "http://example.org/q3.php?id=1'", "http://example.org/q4.php?x=1)))and(1=1",
+		"http://example.org/q5.php?artist=1 or 1=1", "http://example.org/q11.php?x=1%20AND%201=1", "http://example.org/q12.php?x=acunetix",
+		"http://example.org/q15.php?x=1&y=2,http://example.org/other.php", "http://example.org/b.php", "http://other.test/c.php",
+	}})
+	args := append([]string{"urls", "-d", "example.org", "-providers", "wayback", "-urls-pause", "0", "-json"}, flags...)
+	out, errOut, err := captureBoth(t, func() error { return run(args) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	rep := lastReport(t, errOut)
+	r := rep.Sources.Records["wayback"]
+	if r == nil {
+		t.Fatalf("no records block: %+v", rep.Sources)
+	}
+	if r.Read != 12 || r.Kept != 2 || r.Duplicates != 2 || r.Junk != 7 || r.Outside != 1 || r.OverCap != 0 {
+		t.Errorf("records %+v", *r)
+	}
+	if sum := r.Kept + r.Duplicates + r.Junk + r.Outside + r.OverCap; sum != r.Read {
+		t.Errorf("%d kept, duplicate, junk, outside and over-cap records, read %d", sum, r.Read)
+	}
+	if rep.Counts["dropped as junk"] != r.Junk || rep.Sources.URLs["wayback"] != r.Kept+r.Duplicates || rep.Results != r.Kept {
+		t.Errorf("counts %v, urls %v, results %d", rep.Counts, rep.Sources.URLs, rep.Results)
+	}
+	if want := "records read by archive: wayback 12 = 2 kept + 2 duplicates + 7 junk + 1 outside the domain or filtered"; !strings.Contains(strings.Join(rep.Notes, "\n"), want) {
+		t.Errorf("notes %q", rep.Notes)
+	}
+	for _, bad := range []string{"1 and 1=1", "id=1'", "1)))and", "or 1=1", "AND%201=1", "acunetix", "other.php"} {
+		if strings.Contains(out, bad) {
+			t.Errorf("%s is listed: %s", bad, out)
+		}
+	}
+}

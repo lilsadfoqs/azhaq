@@ -23,6 +23,9 @@ type sourceHealth struct {
 	// any DNS check or filter.
 	Names map[string]int `json:"names,omitempty"`
 	URLs  map[string]int `json:"urls,omitempty"`
+	// Records is where every record an archive gave went (urls), summed over
+	// the domains: Read = Kept + Duplicates + Junk + Outside + OverCap.
+	Records map[string]*archiveRecords `json:"records,omitempty"`
 	// Requests is what each source was sent, retries included, summed over
 	// the domains. They go to third parties, so the run's own requests count
 	// leaves them out.
@@ -40,6 +43,16 @@ type sourceHealth struct {
 	// PartialSources are the archives that failed after giving URLs: what
 	// they gave is in the set, the rest of what they hold is not.
 	PartialSources []string `json:"partial_sources,omitempty"`
+}
+
+// archiveRecords is what became of the records one archive gave.
+type archiveRecords struct {
+	Read       int `json:"read"`
+	Kept       int `json:"kept"`
+	Duplicates int `json:"duplicates"`
+	Junk       int `json:"junk"`
+	Outside    int `json:"outside"`
+	OverCap    int `json:"over_cap,omitempty"`
 }
 
 // healthTally collects sourceHealth from the per-domain payloads.
@@ -81,6 +94,22 @@ func (t *healthTally) add(domain string, srcs map[string]any) {
 			gave = t.h.URLs
 		}
 		gave[name] += intOf(row["count"])
+		if _, ok := row["read"]; ok && t.urls {
+			if t.h.Records == nil {
+				t.h.Records = map[string]*archiveRecords{}
+			}
+			r := t.h.Records[name]
+			if r == nil {
+				r = &archiveRecords{}
+				t.h.Records[name] = r
+			}
+			r.Read += intOf(row["read"])
+			r.Kept += intOf(row["kept"])
+			r.Duplicates += intOf(row["duplicates"])
+			r.Junk += intOf(row["junk"])
+			r.Outside += intOf(row["outside"])
+			r.OverCap += intOf(row["over_cap"])
+		}
 		if q, _ := row["asked"].(string); q != "" && t.urls {
 			t.queries[name] = append(t.queries[name], domain+"\x00"+q)
 		}
@@ -215,6 +244,24 @@ func archiveHealth(ps []map[string]any) *sourceHealth {
 		t.add(domain, srcs)
 	}
 	return t.result()
+}
+
+// recordsNote says where every record of each archive went, so the URLs
+// printed, the junk and the rest add up to the records read.
+func (h *sourceHealth) recordsNote() string {
+	if h == nil || len(h.Records) == 0 {
+		return ""
+	}
+	var parts []string
+	for _, n := range slices.Sorted(maps.Keys(h.Records)) {
+		r := h.Records[n]
+		p := fmt.Sprintf("%s %d = %d kept + %d duplicates + %d junk + %d outside the domain or filtered", n, r.Read, r.Kept, r.Duplicates, r.Junk, r.Outside)
+		if r.OverCap > 0 {
+			p += fmt.Sprintf(" + %d past -urls-max", r.OverCap)
+		}
+		parts = append(parts, p)
+	}
+	return "records read by archive: " + strings.Join(parts, "; ")
 }
 
 // archivesNote says what each archive gave, and why one that failed gave

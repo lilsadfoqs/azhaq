@@ -462,7 +462,13 @@ func cmdFuzz(args []string) error {
 			return err
 		}
 		defer debug.close()
-		cfg.OnError = debug.request
+	}
+	var failures fuzzFailures
+	cfg.OnError = func(req *fuzz.Request, err error) {
+		failures.add(req, err)
+		if debug != nil {
+			debug.request(req, err)
+		}
 	}
 	cfg.OnResult = func(r fuzz.Result) {
 		r = out.keep(r, &c)
@@ -605,7 +611,13 @@ func cmdFuzz(args []string) error {
 	rep.Unreachable = st.Down
 	rep.warned = rep.warned || len(st.Down) > 0 // the run ended early on a target that stopped answering: not whole
 	if st.Errors > 0 {
-		rep.Failed = append(rep.Failed, engine.Failure{Collector: "azhaq-fuzz", Error: "request failed", Retryable: true, Count: st.Errors, Targets: []string{normalize.HostFromURL(tmpl.URL)}})
+		for _, f := range failures.failed() {
+			rep.Failed = append(rep.Failed, f)
+			rep.Notes = append(rep.Notes, fmt.Sprintf("%s failed with %s; the first: %s", plural(f.Count, "request"), f.Error, failures.firstText(f.Error)))
+		}
+		if n := st.Errors - failures.total(); n > 0 { // a failure the engine counted and gave no error for
+			rep.Failed = append(rep.Failed, engine.Failure{Collector: "azhaq-fuzz", Error: "request failed", Count: n, Targets: []string{normalize.HostFromURL(tmpl.URL)}})
+		}
 	}
 	rep.units(st.Answered+st.Errors, st.Errors) // every input asked: a run in which none was answered did not do its job
 	if st.OutOfScope > 0 {
@@ -710,6 +722,9 @@ func cmdFuzz(args []string) error {
 			return err
 		}
 		if err := keepFuzzHeld(c.db, st.StateHeld, keptArgv); err != nil {
+			return err
+		}
+		if err := keepFuzzFailures(c.db, &failures, keptArgv); err != nil {
 			return err
 		}
 		rep.DB = c.db

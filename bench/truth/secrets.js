@@ -13,7 +13,7 @@ var config = {
 };
 const REACT = { "REACT_APP_API_BASE": "https://api.azhaq-bench.example", "REACT_APP_SENTRY_DSN": "https://0a1b2c3d4e5f@o4.ingest.sentry.io/77" };
 var client_secret = "Xk29fLq0Pz8vRt3Yw6Nb";
-var pem = "-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEAazhaqbenchnotarealkey\n-----END RSA PRIVATE KEY-----";
+var pem = "-----BEGIN@@ PRIVATE KEY-----\nMC4CAQAwBQYDK2VwBCIEIBwKmxbWQE4B5z6GDLSee4PA+Z+70jQbBMP9aMadQRnH\n-----END@@ PRIVATE KEY-----";
 var session = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJhemhhcS1iZW5jaCJ9.c2lnbmF0dXJlLW5vdC1yZWFs";
 // Look-alikes that are not secrets.
 var labels = { password: "password", token: "auth.token.label", apiKey: "YOUR_API_KEY" };

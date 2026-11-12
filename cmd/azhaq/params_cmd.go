@@ -32,6 +32,7 @@ type paramsRow struct {
 	Params []string
 	Why    map[string]any
 	Values map[string]any
+	Given  []string // the names the page's URL carried: read by the page, not found by the search
 }
 
 // cmdParams is arjun: query parameters the pages read, from a list, with
@@ -167,11 +168,15 @@ func cmdParams(args []string) error {
 		meth, _ := p["method"].(string)
 		why, _ := p["why"].(map[string]any)
 		vals, _ := p["values"].(map[string]any)
+		given := strs(p["given"])
 		mu.Lock()
-		rows = append(rows, paramsRow{URL: u, Method: meth, Params: names, Why: why, Values: vals})
+		rows = append(rows, paramsRow{URL: u, Method: meth, Params: names, Why: why, Values: vals, Given: given})
 		mu.Unlock()
 		if w.json {
 			row := map[string]any{"url": u, "method": meth, "params": names, "why": why}
+			if len(given) > 0 {
+				row["given"] = given
+			}
 			if len(vals) > 0 {
 				row["values"] = vals
 			}
@@ -239,6 +244,19 @@ func cmdParams(args []string) error {
 		return err
 	}
 	rep.Results = w.count()
+	// A name the URL carried is listed, and is not a find: the counts leave it out.
+	nFound, nGiven := 0, 0
+	for _, r := range rows {
+		nFound += len(r.Params) - len(r.Given)
+		nGiven += len(r.Given)
+	}
+	if nFound+nGiven > 0 {
+		rep.Counts = map[string]int{"parameters found": nFound}
+	}
+	if nGiven > 0 {
+		rep.Counts["given in the URL"] = nGiven
+		rep.Notes = append(rep.Notes, fmt.Sprintf("%d of the names listed were in the URL given (\"given\", and a why that starts \"in the URL given\"): they are tested and listed, and not counted as found", nGiven))
+	}
 	sort.Slice(rows, func(i, j int) bool { return rows[i].URL < rows[j].URL })
 	headers := headerMap(fs)
 	if *outJSON != "" {

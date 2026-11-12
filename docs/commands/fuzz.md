@@ -75,6 +75,8 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
   - The summary gives the command that goes on, with `-start N`.
 - A report that cannot be written is a `failed` entry, not a silent loss. The exit code is 3. The place is tested before the first request.
 - A note counts the preflight and postflight requests sent: they are in the request total. One that failed is a `failed` entry, `preflight/postflight failed: …`, and the exit code is 3.
+- A request that failed after its one retry is a `failed` entry for its class of error (`connection refused`, `timeout`, `connection reset`, `connection closed (EOF)`, `no such host`, `TLS error: …`), with `count`, the hosts it went to and `retryable`: true for a timeout, a reset, a closed connection or a 5xx, false for a refusal, a name that does not exist or a TLS fault. A note gives the first error text of each class, with the URL left out: `4 requests failed with connection refused; the first: Get "…": dial tcp 127.0.0.1:5999: connect: connection refused`.
+- With `-db`, each failed target and class is stored as a failure row, so `azhaq query -db DB -failed` lists it (`http://127.0.0.1:5999/	azhaq-fuzz	connection refused`). `azhaq resume -retry-failed` does not apply to a fuzz run and says so; the failed requests are asked again by running the fuzz command again.
 - With calibration on, a note says what it filtered: `auto-calibration filtered out answers with size 1234`.
 - Calibration that could filter nothing is exit 3, not 0: see [A catch-all page that changes each time](#a-catch-all-page-that-changes-each-time).
 - The summary also counts the requests the scope held back and the copies `-replay-proxy` sent: see [Scope, budget and pace](#scope-budget-and-pace).
