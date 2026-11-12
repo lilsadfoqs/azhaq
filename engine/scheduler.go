@@ -117,10 +117,18 @@ type finished struct {
 	tasks   []task
 	metas   []types.RunMeta
 	errs    []error
-	partial bool // early hints from a task still running
+	partial bool   // early hints from a task still running
+	idle    *idler // a task that waits for the others of its collector (catalog.Idle)
 
 	scheme string // the host whose http://host/ was asked (scheme.go)
 	same   bool   // and whether it is the https site
+}
+
+// idler is a running task waiting, off its worker, until no task of its
+// collector is queued.
+type idler struct {
+	col string
+	ch  chan struct{}
 }
 
 type scheduler struct {
@@ -134,6 +142,7 @@ type scheduler struct {
 	catchHeld map[string]bool // of those, the ones not asked: their origin answers every path with one page
 	flight    namedFlight
 	queue     [2][]task
+	idlers    []*idler // tasks waiting for the queue of their collector to empty (catalog.Idle)
 
 	batch     map[string][]task // seeds waiting for a batch collector
 	batchBusy map[string]int    // batches in flight per collector
@@ -608,6 +617,7 @@ func (s *scheduler) loop(ctx context.Context) {
 		} else {
 			s.release()
 		}
+		s.wakeIdle(ctx)
 		s.flush()
 		if s.inflight == 0 {
 			if ctx.Err() == nil {
@@ -615,6 +625,7 @@ func (s *scheduler) loop(ctx context.Context) {
 				fetch.EndCheck(ctx)
 				s.redoSession()
 				s.dispatch(ctx)
+				s.wakeIdle(ctx)
 				s.flush()
 			}
 			if s.inflight == 0 {
@@ -632,6 +643,41 @@ func (s *scheduler) loop(ctx context.Context) {
 			s.expire()
 		}
 	}
+}
+
+// wakeIdle gives back the worker of each task waiting for the queue of its
+// collector to empty, once none of that collector is queued; all of them when
+// nothing else runs, so that tasks the queue cannot start never hold them.
+func (s *scheduler) wakeIdle(ctx context.Context) {
+	keep := s.idlers[:0]
+	for _, w := range s.idlers {
+		if ctx.Err() != nil || s.inflight == 0 || !s.queuedFor(w.col) {
+			s.inflight++
+			close(w.ch)
+			continue
+		}
+		keep = append(keep, w)
+	}
+	s.idlers = keep
+}
+
+// queuedFor says a task of col waits for a worker, or for the task it follows.
+func (s *scheduler) queuedFor(col string) bool {
+	for _, q := range s.queue {
+		for _, t := range q {
+			if t.col == col {
+				return true
+			}
+		}
+	}
+	for _, ts := range s.parked {
+		for _, t := range ts {
+			if t.col == col {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // redoSession asks again the pages whose answers a session that ended gave
@@ -948,6 +994,11 @@ func (s *scheduler) start(ctx context.Context, t task) {
 		ctx := catalog.WithHints(ctx, func(seeds []types.Seed) {
 			s.results <- finished{tasks: []task{t}, metas: []types.RunMeta{{NextHints: seeds}}, errs: []error{nil}, partial: true}
 		})
+		ctx = catalog.WithIdle(ctx, func(col string) {
+			w := &idler{col: col, ch: make(chan struct{})}
+			s.results <- finished{idle: w}
+			<-w.ch
+		})
 		var meta types.RunMeta
 		var err error
 		// Run recovers a collector's panic; this catches the rest of the
@@ -1028,6 +1079,11 @@ func (s *scheduler) startBatch(ctx context.Context) bool {
 }
 
 func (s *scheduler) handle(f finished) {
+	if f.idle != nil {
+		s.inflight-- // its worker goes to the tasks it waits for
+		s.idlers = append(s.idlers, f.idle)
+		return
+	}
 	if f.scheme != "" {
 		s.schemeAnswered(f.scheme, f.same)
 		return

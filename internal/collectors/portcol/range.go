@@ -80,6 +80,8 @@ func (c *Collector) runPrefix(ctx context.Context, seed types.Seed, emit func(ty
 		return meta, nil
 	}
 
+	leave1 := c.enterPass1() // until every address has had its first pass
+	defer leave1()
 	var addrs []netip.Addr
 	for a := pf.Addr(); a.IsValid() && pf.Contains(a); a = a.Next() {
 		addrs = append(addrs, a)
@@ -124,7 +126,7 @@ func (c *Collector) runPrefix(ctx context.Context, seed types.Seed, emit func(ty
 		udpRefused, udpRefusing int
 		// The addresses that answered the first pass of the default scan: their second
 		// pass goes on when every address has had the first.
-		later []func()
+		later []placedJob
 		// The addresses another task holds: they are waited for after every first and second pass.
 		waiting []func()
 		claims  []*claimRec
@@ -458,7 +460,7 @@ func (c *Collector) runPrefix(ctx context.Context, seed types.Seed, emit func(ty
 					finish(s, ports)
 				}
 				mu.Lock()
-				later = append(later, job)
+				later = append(later, placedJob{place, job})
 				mu.Unlock()
 				return
 			}
@@ -466,6 +468,7 @@ func (c *Collector) runPrefix(ctx context.Context, seed types.Seed, emit func(ty
 		}(a, at+1)
 	}
 	wg.Wait()
+	leave1()
 	mu.Lock()
 	run2 := first == nil && ctx.Err() == nil
 	mu.Unlock()
@@ -479,8 +482,15 @@ func (c *Collector) runPrefix(ctx context.Context, seed types.Seed, emit func(ty
 		}
 	}()
 	if run2 && len(later)+len(waiting) > 0 {
+		// The second pass goes on in address order, and only once every first pass is asked.
+		c.beforePass2(ctx)
 		phase = 2
-		for _, job := range append(later, waiting...) {
+		slices.SortFunc(later, func(a, b placedJob) int { return cmp.Compare(a.place, b.place) })
+		jobs := make([]func(), 0, len(later)+len(waiting))
+		for _, l := range later {
+			jobs = append(jobs, l.job)
+		}
+		for _, job := range append(jobs, waiting...) {
 			mu.Lock()
 			stop := first != nil
 			mu.Unlock()
@@ -533,6 +543,12 @@ func (c *Collector) runPrefix(ctx context.Context, seed types.Seed, emit func(ty
 	meta.EmitCount++
 	sort.Slice(meta.NextHints, func(i, j int) bool { return meta.NextHints[i].Key() < meta.NextHints[j].Key() })
 	return meta, nil
+}
+
+// placedJob is the second pass of an address, by its place in its block.
+type placedJob struct {
+	place int
+	job   func()
 }
 
 // scanRange asks one address of a range its ports.

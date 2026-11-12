@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/lilsadfoqs/azhaq/catalog"
@@ -94,6 +95,7 @@ type Collector struct {
 	udpByIP map[string]*udpScan
 	udpGate chan struct{}   // the addresses whose UDP ports are being asked
 	ranged  map[string]bool // addresses a range scan handed on as it found them
+	pass1   atomic.Int32    // scans asking their first pass now (see beforePass2)
 	held    map[string]bool // endpoints whose web mapping the budget has a reserve for
 	fits    map[string]int  // addresses whose whole sweep the budget has room for: no reserve is held for them
 
@@ -355,6 +357,7 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		// The second pass of the default scan: every other port of an address that answered.
 		after := func(sc *scan) {
 			if c.escalates(host, edge, sc, prior) {
+				c.beforePass2(ctx)
 				c.second(ctx, emit, host, ip, all, ports, prior, resumed, sc, name, edge, "", found)
 			}
 		}
@@ -822,9 +825,12 @@ const maxListed = 64
 func (c *Collector) scanOnce(ctx context.Context, host, ip string, ports []int, found func(portscan.Open), after func(*scan)) (*scan, error) {
 	defer c.fitSweep(ip, len(ports))()
 	return c.once(ctx, host, ip, func() *scan {
+		leave := c.enterPass1()
+		defer leave()
 		r, err := c.Scanner.ScanEachFn(ctx, host, ip, ports, found)
 		s := &scan{open: r.Open, silent: r.Silent, unprobed: r.Unprobed, up: true, capped: r.Threshold, asked: r.Asked, err: err, first: ports}
 		if err == nil && after != nil {
+			leave()
 			after(s)
 		}
 		return s
@@ -841,6 +847,8 @@ func (c *Collector) scanOnce(ctx context.Context, host, ip string, ports []int, 
 func (c *Collector) discoverOnce(ctx context.Context, host, ip string, ports []int, found func(portscan.Open), after func(*scan)) (*scan, error) {
 	defer c.fitSweep(ip, len(ports))()
 	return c.once(ctx, host, ip, func() *scan {
+		leave := c.enterPass1()
+		defer leave()
 		up, err := c.Scanner.Up(ctx, host, ip)
 		if err != nil || !up || c.Discover == DiscoverOnly {
 			return &scan{up: up, err: err}
@@ -848,6 +856,7 @@ func (c *Collector) discoverOnce(ctx context.Context, host, ip string, ports []i
 		r, err := c.Scanner.ScanEachFn(ctx, host, ip, ports, found)
 		s := &scan{open: r.Open, silent: r.Silent, unprobed: r.Unprobed, up: true, capped: r.Threshold, err: err, first: ports}
 		if err == nil && after != nil {
+			leave()
 			after(s)
 		}
 		return s
