@@ -10,6 +10,7 @@ import (
 	"io"
 	"math"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -62,10 +63,13 @@ type mcpServer struct {
 // tools ask besides the targets, and who resolves. A client cannot set or
 // change them.
 type heldRun struct {
-	Resolvers  string `json:"resolvers,omitempty"`   // -resolvers: a list or a file, as given
-	Sources    string `json:"sources,omitempty"`     // -sources: the sources named at start; "" means none
-	Skip       string `json:"skip,omitempty"`        // -skip: collectors never run
-	NoTakeover bool   `json:"no_takeover,omitempty"` // -no-takeover
+	Resolvers string `json:"resolvers,omitempty"` // -resolvers: a list or a file, as given
+	Proxy     string `json:"proxy,omitempty"`     // -proxy: every tool's requests go through it (http, https or socks5 URL)
+	// ChromeProxy is -chrome-proxy: the proxy of Chrome's own connections, where it is not -proxy.
+	ChromeProxy string `json:"chrome_proxy,omitempty"`
+	Sources     string `json:"sources,omitempty"`     // -sources: the sources named at start; "" means none
+	Skip        string `json:"skip,omitempty"`        // -skip: collectors never run
+	NoTakeover  bool   `json:"no_takeover,omitempty"` // -no-takeover
 	// ChromeNoSandbox is -chrome-no-sandbox: Chrome may run without its sandbox.
 	ChromeNoSandbox bool `json:"chrome_no_sandbox,omitempty"`
 	// History is -history at start: the name history is read and
@@ -167,7 +171,81 @@ func (h heldRun) options(command string) []string {
 			out = append(out, "-resolvers", h.Resolvers)
 		}
 	}
+	return append(out, h.proxyOptions(command)...)
+}
+
+// proxyOptions are the proxy flags a command takes for the server's -proxy
+// and -chrome-proxy: each command names them its own way.
+func (h heldRun) proxyOptions(command string) []string {
+	if h.Proxy == "" && h.ChromeProxy == "" {
+		return nil
+	}
+	var out []string
+	switch command {
+	case "run", "plan", "resume":
+		if h.Proxy != "" {
+			out = append(out, "-proxy", h.Proxy)
+			if h.sources() != "none" {
+				out = append(out, "-source-proxy", h.Proxy)
+			}
+			if hp, auth := h.socksHostPort(); hp != "" {
+				out = append(out, "-port-proxy", hp)
+				if auth != "" {
+					out = append(out, "-port-proxy-auth", auth)
+				}
+			}
+		}
+		if h.ChromeProxy != "" {
+			out = append(out, "-chrome-proxy", h.ChromeProxy)
+		}
+	case "roles", "probe", "dirs", "params":
+		if h.Proxy != "" {
+			out = append(out, "-proxy", h.Proxy)
+		}
+	case "subs":
+		if h.Proxy != "" {
+			out = append(out, "-proxy", h.Proxy, "-http-proxy", h.Proxy) // its sources, and the names it looks up with -live
+		}
+	case "ports":
+		if hp, auth := h.socksHostPort(); hp != "" {
+			out = append(out, "-proxy", hp)
+			if auth != "" {
+				out = append(out, "-proxy-auth", auth)
+			}
+		}
+	case "dns":
+		if hp, _ := h.socksHostPort(); hp != "" {
+			out = append(out, "-proxy", h.Proxy)
+		}
+	}
 	return out
+}
+
+// socksHostPort is the -proxy as ports takes it (host:port, and user:password
+// apart), "" when it is not a socks5 proxy.
+func (h heldRun) socksHostPort() (hostPort, auth string) {
+	u, err := url.Parse(h.Proxy)
+	if err != nil || (u.Scheme != "socks5" && u.Scheme != "socks5h") {
+		return "", ""
+	}
+	if u.User != nil {
+		pw, _ := u.User.Password()
+		auth = u.User.Username() + ":" + pw
+	}
+	return u.Host, auth
+}
+
+// proxyRefusal says why a command cannot go through the server's -proxy: a
+// port scan and a DNS lookup are no HTTP, and an http proxy carries neither.
+// Sent anyway they would go around the proxy the server was told to use.
+func (h heldRun) proxyRefusal(command string) error {
+	if h.Proxy == "" || (command != "ports" && command != "dns") {
+		return nil
+	}
+	if hp, _ := h.socksHostPort(); hp == "" {
+		return fmt.Errorf("azhaq %s sends no HTTP and this server's -proxy (%s) is not a socks5 proxy: it carries only HTTP, so the call is refused rather than sent around it (restart azhaq mcp with a socks5:// -proxy, or without -proxy)", command, withoutUserinfo(h.Proxy))
+	}
+	return nil
 }
 
 // view is the held options as azhaq_scope and azhaq_status show them, with
@@ -181,6 +259,7 @@ func (h heldRun) view() map[string]any {
 	}
 	return map[string]any{
 		"resolvers":           or(h.Resolvers, "default public resolvers"),
+		"proxy":               h.proxyView(),
 		"sources":             h.sources(),
 		"skip":                splitList(h.Skip),
 		"no_takeover":         h.NoTakeover,
@@ -192,11 +271,35 @@ func (h heldRun) view() map[string]any {
 	}
 }
 
+// proxyView is the proxy as azhaq_status shows it, without a password.
+func (h heldRun) proxyView() string {
+	switch {
+	case h.Proxy == "" && h.ChromeProxy == "":
+		return "none: requests go direct (the environment's HTTP_PROXY and HTTPS_PROXY apply, except to loopback targets, which stay direct)"
+	case h.Proxy == "":
+		return "Chrome's connections through " + withoutUserinfo(h.ChromeProxy) + " (-chrome-proxy); other requests direct"
+	}
+	out := "every tool's requests through " + withoutUserinfo(h.Proxy) + " (-proxy)"
+	if hp, _ := h.socksHostPort(); hp == "" {
+		out += "; azhaq_ports and azhaq_dns are refused: an http proxy carries no TCP or DNS"
+	}
+	if h.ChromeProxy != "" {
+		out += "; Chrome's connections through " + withoutUserinfo(h.ChromeProxy) + " (-chrome-proxy)"
+	}
+	return out
+}
+
 // text is the held options as the server says them at start.
 func (h heldRun) text() string {
 	var out []string
 	if h.Resolvers != "" {
 		out = append(out, "resolvers "+h.Resolvers)
+	}
+	if h.Proxy != "" {
+		out = append(out, "proxy "+withoutUserinfo(h.Proxy))
+	}
+	if h.ChromeProxy != "" {
+		out = append(out, "chrome proxy "+withoutUserinfo(h.ChromeProxy))
 	}
 	out = append(out, "sources "+h.sources())
 	if h.History {
@@ -234,6 +337,8 @@ func cmdMCP(args []string) error {
 	rate := fs.Float64("rate", 0, "requests per second to targets in every tool call (0: no pace)")
 	dir := fs.String("dir", "azhaq-mcp", "directory for the workspaces the tools write")
 	resolvers := fs.String("resolvers", "", "DNS resolvers every tool uses (a comma list or a file, as run -resolvers): fixed at start, no tool argument sets them")
+	proxyFlag := fs.String("proxy", "", "send every tool's requests through this proxy (http://, https:// or socks5://; loopback targets too, which the environment's proxy never carries): fixed at start, no tool argument sets it. azhaq_ports and azhaq_dns go through it only when it is socks5, and are refused otherwise")
+	chromeProxy := fs.String("chrome-proxy", "", "send Chrome's own connections through this http or socks5 proxy (default: -proxy, else the environment's): fixed at start")
 	sources := fs.String("sources", "", "subdomain sources every tool may ask, comma-separated (default none: no third party at all — no source, archive, RDAP or search engine — only the resolvers and the targets are asked; name the sources at start to ask them); fixed at start")
 	history := fs.Bool("history", false, "read and write the name history (names earlier runs found): without it no tool reads or writes it; fixed at start")
 	allowWrites := fs.Bool("allow-writes", false, "let tools send writes: azhaq_params with a body method (POST, JSON or XML), azhaq_roles_writes and graphql (the introspection POST of azhaq_map and azhaq_plan); without it those calls are refused before anything is sent; the sign-in POST of login is not one of them; fixed at start")
@@ -256,6 +361,18 @@ func cmdMCP(args []string) error {
 	held, err := checkHeld(*resolvers, *sources, *skip, *noTakeover)
 	if err != nil {
 		return err
+	}
+	if *proxyFlag != "" {
+		if _, err := parseProxy(*proxyFlag); err != nil {
+			return err
+		}
+		held.Proxy = *proxyFlag
+	}
+	if *chromeProxy != "" {
+		if u, err := url.Parse(*chromeProxy); err != nil || u.Host == "" {
+			return usagef("-chrome-proxy wants a URL such as http://127.0.0.1:8080 or socks5://127.0.0.1:9050, got %q", *chromeProxy)
+		}
+		held.ChromeProxy = *chromeProxy
 	}
 	held.ChromeNoSandbox = *chromeNoSandbox
 	held.History = *history
@@ -627,6 +744,9 @@ type cmdResult struct {
 var progressFirst, progressEvery = time.Second, 5 * time.Second
 
 func (s *mcpServer) run(ctx context.Context, progress any, touches bool, args ...string) (cmdResult, error) {
+	if err := s.held.proxyRefusal(args[0]); err != nil {
+		return cmdResult{}, err
+	}
 	if touches {
 		// One at a time: calls made at once would each see the whole
 		// budget left and each keep the pace, together exceeding both.

@@ -192,7 +192,7 @@ One rule holds for every command that sends HTTP to a target: `run`, `crawl`, `p
 - `-proxy` sends everything through the proxy, loopback targets (`127.0.0.1`, `localhost`, `::1`) included: that is how to put a local lab in Burp.
 - Through an HTTP proxy a plain-HTTP request names its URL in the request line (`GET http://127.0.0.1:3001/path`) and sends a `Host` header you set as you set it, as curl does. The proxy connects to the URL's host, never to the one the `Host` header names.
 - Without `-proxy`, the environment's `HTTP_PROXY`, `HTTPS_PROXY` and `NO_PROXY` apply by Go's rule, as in ffuf, httpx and katana: a loopback target always stays direct, so a company proxy in the environment never gets your local labs.
-- `azhaq mcp` has no `-proxy`: its commands read the environment the server starts with.
+- `azhaq mcp -proxy URL` is fixed at start and sends every tool's requests through it, loopback targets included; `-chrome-proxy` is the proxy of Chrome's own connections. [MCP](MCP.md) says what `azhaq_ports` and `azhaq_dns` do with an http proxy.
 - Not target requests, so not covered: `subs -proxy` and `-source-proxy` (the name sources), `urls -proxy` (the archives), `notify -proxy`, `dns -proxy` and `ports -proxy` (SOCKS5 for DNS and for connects).
 
 ## Workspaces, runs and resuming

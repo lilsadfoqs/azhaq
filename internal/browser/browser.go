@@ -278,15 +278,48 @@ func (b *Browser) start() error {
 			if noSandbox {
 				o = append(slices.Clone(opts), chromedp.NoSandbox)
 			}
+			// A Chrome that has no sandbox says so and exits, yet its helper
+			// processes can hold the pipe to it open, and the launch then waits
+			// for its timeout: the line is read as Chrome prints it.
+			watch := &sandboxWatch{hit: make(chan struct{})}
+			o = append(slices.Clone(o), chromedp.CombinedOutput(watch))
+			begun := time.Now()
 			b.alloc, b.cancel = egress.LaunchChrome(b.guard, o...)
+			cancel := b.cancel
 			root, _ = chromedp.NewContext(b.alloc)
-			err = chromedp.Do(root)
-			if err == nil {
+			started := make(chan error, 1)
+			go func() { started <- chromedp.Do(root) }()
+			hit := false
+			select {
+			case err = <-started:
+			case <-watch.hit:
+				// Not waited for: the launch's own end comes after Chrome's
+				// helpers let go of its pipe, up to the launch timeout.
+				hit = true
+			}
+			watch.end()
+			refused := watch.line()
+			if err == nil && refused == "" {
 				break
 			}
-			b.cancel()
-			if !noSandbox && allow && strings.Contains(err.Error(), "sandbox") {
-				noSandbox, b.unsandboxed = true, sandboxReason(err)
+			if refused != "" {
+				err = fmt.Errorf("chrome failed to start:\n%s", refused)
+			}
+			retry := !noSandbox && allow && strings.Contains(err.Error(), "sandbox")
+			stop := func() {
+				cancel()
+				if hit {
+					<-started
+				}
+			}
+			if retry && refused != "" {
+				go stop() // the dead Chrome's cleanup can take a second: the next start does not wait for it
+			} else {
+				stop()
+			}
+			if retry {
+				cost := time.Since(begun).Round(10 * time.Millisecond)
+				noSandbox, b.unsandboxed = true, fmt.Sprintf("%s; the refused start with the sandbox cost %s", sandboxReason(err), cost)
 				if gerr := b.newGuard(); gerr != nil {
 					b.err = gerr
 					b.dropTmp()
@@ -341,6 +374,65 @@ func (b *Browser) newGuard() error {
 	g.OnWire(b.wireSent)
 	b.guard = g
 	return nil
+}
+
+// sandboxWatch reads what Chrome prints while it starts, and ends the start
+// at the line that says the system gives it no sandbox.
+type sandboxWatch struct {
+	mu    sync.Mutex
+	buf   []byte // the unfinished line
+	found string
+	done  bool
+	hit   chan struct{} // closed at the refusing line
+}
+
+func (w *sandboxWatch) Write(p []byte) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.done || w.found != "" {
+		return len(p), nil
+	}
+	w.buf = append(w.buf, p...)
+	for {
+		i := bytes.IndexByte(w.buf, '\n')
+		if i < 0 {
+			if len(w.buf) > 4096 {
+				w.buf = nil
+			}
+			break
+		}
+		l := strings.TrimSpace(string(w.buf[:i]))
+		w.buf = w.buf[i+1:]
+		if refusesSandbox(l) {
+			w.found = l
+			close(w.hit)
+			break
+		}
+	}
+	return len(p), nil
+}
+
+// end stops the watch: Chrome has started, what it prints later is not a
+// refusal to start.
+func (w *sandboxWatch) end() {
+	w.mu.Lock()
+	w.done = true
+	w.mu.Unlock()
+}
+
+// line is the line that said the sandbox was refused, "" if none did.
+func (w *sandboxWatch) line() string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.found
+}
+
+// refusesSandbox says a line of Chrome's output is its refusal to start for
+// want of a sandbox (not any line that mentions one).
+func refusesSandbox(l string) bool {
+	l = strings.ToLower(l)
+	return strings.Contains(l, "sandbox") && (strings.Contains(l, "no usable") || strings.Contains(l, "fatal") ||
+		strings.Contains(l, "running as root") || strings.Contains(l, "failed to move"))
 }
 
 // sandboxReason is the line of Chrome's error that names the sandbox.

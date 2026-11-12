@@ -123,7 +123,7 @@ In `roles` the file is `roles.stop` in the `-dir`. There it stops the runs of th
 
 - `AZHAQ_CHROME=/path/to/chrome` names the browser.
 - Chrome starts with its sandbox, and without it it does not start: where the system gives it none, the command stops with exit 2 before any request and the error names `-chrome-no-sandbox`. The pages Chrome loads are the targets' and untrusted, so the sandbox is not given up by default.
-- `-chrome-no-sandbox` allows it: when Chrome says the system gives it no sandbox, azhaq starts Chrome once more without it, and the summary says `Chrome ran without its sandbox` and why. Use it in a throwaway container or VM. `shots`, `crawl`, `run` and `azhaq mcp` take it, and `roles` takes it among the run options after `--`.
+- `-chrome-no-sandbox` allows it: when Chrome says the system gives it no sandbox, azhaq starts Chrome once more without it as soon as Chrome says so, and the summary says `Chrome ran without its sandbox`, why, and what the refused start cost. Use it in a throwaway container or VM. `shots`, `crawl`, `run` and `azhaq mcp` take it, and `roles` takes it among the run options after `--`.
 - On Ubuntu, a sandbox is given back by allowing user namespaces to Chrome in AppArmor, or with `sysctl kernel.apparmor_restrict_unprivileged_userns=0`.
 - `AZHAQ_CHROME_NO_SANDBOX=1` is the same say, as an environment variable, and runs Chrome without a sandbox from the start, with no first try.
 - `-chrome-require-sandbox` is the default now, so it changes nothing. It is accepted, and it cannot go with `-chrome-no-sandbox` or `AZHAQ_CHROME_NO_SANDBOX=1`.
@@ -459,7 +459,7 @@ The default stops where subfinder does, because its per-request limit is 30 seco
 
 ### `shots` says `screenshot … not taken`
 
-**Why:** The page's images, scripts and styles count against `-max-requests`, and too few were left. The note says how many the page needs and how many were left.
+**Why:** The page's images, scripts and styles count against `-max-requests`, and too few were left. The note says how many the page needs and how many were left, read when the budget refused the page, and which collectors had spent it.
 
 **Fix:** Raise `-max-requests`.
 

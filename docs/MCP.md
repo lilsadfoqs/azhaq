@@ -4,7 +4,7 @@
 
 ## What is fixed when the server starts
 
-The **scope**, the **request budget**, the **pace** and the **resolvers and sources** are fixed at start. No tool argument can widen or change them:
+The **scope**, the **request budget**, the **pace**, the **resolvers and sources** and the **proxy** are fixed at start. No tool argument can widen or change them:
 
 - Targets outside the scope are skipped and listed in the summary.
 - Paths a `-deny-path` rule matches are never requested by any tool, and are listed as skipped. azhaq's one name rule is the decided exception: `azhaq_map` asks every GET it finds in scope except one whose own path, query or API operation declares a state change (`/logout`, `?action=stop`, an API description's `GET /createdb`), which is held back and listed as skipped unless the server was started with `-send-state-changing`. `azhaq_dirs` holds back the words of any list the same way, the client's `words` included. `azhaq_roles` holds back the GETs of each role's map the same way, and the server's `-send-state-changing` sends them there too. A target a call names is held back the same way, because the client named it, not the person who started the server: only the server's `-send-state-changing` sends it. Besides that, the `-deny-path` rules set when the server starts are the only thing that keeps a URL out. A client cannot add one per call. A client cannot lift the exception either.
@@ -22,9 +22,9 @@ azhaq mcp -scope hackerone -program security -max-requests 20000 -rate 5
 azhaq mcp -allow example.com -deny admin.example.com -max-requests 5000
 ```
 
-Every flag is described on the [`azhaq mcp` page](commands/mcp.md#flags): `-scope` with `-program`, `-allow`, `-deny`, `-deny-path`, `-resolvers`, `-sources`, `-history`, `-allow-writes`, `-send-state-changing`, `-skip`, `-no-takeover`, `-chrome-no-sandbox`, `-max-requests`, `-rate`, `-dir` (default `azhaq-mcp`) and `-unlocked`.
+Every flag is described on the [`azhaq mcp` page](commands/mcp.md#flags): `-scope` with `-program`, `-allow`, `-deny`, `-deny-path`, `-resolvers`, `-proxy`, `-chrome-proxy`, `-sources`, `-history`, `-allow-writes`, `-send-state-changing`, `-skip`, `-no-takeover`, `-chrome-no-sandbox`, `-max-requests`, `-rate`, `-dir` (default `azhaq-mcp`) and `-unlocked`.
 
-To see what the tools send in a proxy, start the server with `HTTP_PROXY` and `HTTPS_PROXY` set (Go's rule: loopback targets stay direct, as the server has no `-proxy` to send them): the server has no `-proxy` flag. See [Proxies](CONCEPTS.md#proxies).
+To see what the tools send in a proxy, start the server with `-proxy` (`http://`, `https://` or `socks5://`, as `run -proxy` takes it). It is fixed at start like `-resolvers`: no tool argument sets it, every tool that sends requests to targets gets it, loopback targets included (the `HTTP_PROXY` and `HTTPS_PROXY` variables never carry those: Go's rule), and `azhaq_status` and `azhaq_scope` show it, without a password. `-chrome-proxy` sets another proxy for Chrome's own connections, as `run -chrome-proxy` does; without it Chrome follows `-proxy`. An http proxy carries HTTP only: `azhaq_ports` and `azhaq_dns` are refused before anything is sent while the server's `-proxy` is not a `socks5://` one, because sent anyway they would go around it. With a socks5 proxy they go through it. DNS that a map sends goes to the `-resolvers`, not through the proxy. See [Proxies](CONCEPTS.md#proxies).
 
 Without `-allow` or `-scope` the server does not start (exit 2), unless `-unlocked` says so. Then any target a tool is given may be touched, and port scans are refused.
 
@@ -48,7 +48,7 @@ Any client that takes a JSON configuration:
 
 | Tool | What it does |
 | --- | --- |
-| `azhaq_scope` | The scope, run options (resolvers, sources), budget and pace fixed at start, and how much of the budget is used. |
+| `azhaq_scope` | The scope, run options (resolvers, proxy, sources), budget and pace fixed at start, and how much of the budget is used. |
 | `azhaq_status` | A compact status of the server and each workspace. Sends nothing and starts no command. |
 | `azhaq_plan` | What a map would take, leave out and send, without sending anything. |
 | `azhaq_map` | Maps a URL, a domain or a list into a workspace. Returns the summary and the highlights. |
@@ -71,7 +71,7 @@ Any client that takes a JSON configuration:
 
 **`azhaq_status`**
 
-- Reports the scope (locked, allow and deny rules), the run options held (`run_options`: resolvers, sources, skipped collectors, takeover check), the request budget (limit, used, left) and the pace.
+- Reports the scope (locked, allow and deny rules), the run options held (`run_options`: resolvers, proxy, sources, skipped collectors, takeover check), the request budget (limit, used, left) and the pace.
 - Names the server's ledger (`ledger`), the file of the calls that name no workspace. The file exists once such a call has run.
 - Lists every workspace this server's directory holds, each with its state: `complete`, `stopped by a limit` or `failed`.
 - `stopped by a limit` comes with `tasks_left`, the `requests` the run has sent and the `azhaq_resume` call that continues it. `complete` means the database holds no task left to do.

@@ -376,7 +376,7 @@ Examples of what `notes` holds for a run:
 - `the scope (-allow, -scope) holds 256 addresses and the targets name 1 of them: -sweep covers the other 255, …; it would send at least 255 requests`: see [Sweeping the scope](#sweeping-the-scope).
 
 - `path checks: 28 skipped (an API description was already found)`: see [Path checks](#path-checks-stop-at-their-answer).
-- `screenshot of URL not taken: the page needs about 26 requests and 8 were left (raise -max-requests)`, or `the budget was spent before the page loaded`: see [shots](shots.md#screenshots-and-the-budget).
+- `screenshot of URL not taken: the page needs about 26 requests and 8 were left (raise -max-requests)`, or `the budget was spent before the page loaded`, each ending with the requests the collectors had sent: see [shots](shots.md#screenshots-and-the-budget).
 - `GraphQL URL: introspection disabled: schema recovered (partial: query Query: 2 fields (1 client, 1 probe), 140 words tried; not proof there is nothing more)`, or `introspection: full schema`. `GraphQL URL: an IDE page, not asked for its schema: URL on the same origin gave it whole` says why a GraphiQL page got no POST: see [show](show.md#recovering-a-schema-when-introspection-is-off).
 
 ### State-changing requests

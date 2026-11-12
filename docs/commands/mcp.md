@@ -5,7 +5,7 @@ Serve azhaq to MCP clients over stdio, with the scope and the request budget fix
 ## Synopsis
 
 ```
-azhaq mcp [-scope FILE|PLATFORM -program P] [-allow D] [-deny D] [-deny-path RE] [-resolvers LIST] [-sources LIST|none] [-history] [-allow-writes] [-skip LIST] [-no-takeover] [-chrome-no-sandbox] [-max-requests N] [-rate N] [-dir DIR]
+azhaq mcp [-scope FILE|PLATFORM -program P] [-allow D] [-deny D] [-deny-path RE] [-resolvers LIST] [-proxy URL] [-chrome-proxy URL] [-sources LIST|none] [-history] [-allow-writes] [-skip LIST] [-no-takeover] [-chrome-no-sandbox] [-max-requests N] [-rate N] [-dir DIR]
 ```
 
 ## Examples
@@ -17,6 +17,9 @@ azhaq mcp -scope hackerone -program security -max-requests 20000 -rate 5
 # Resolve through a given resolver and ask no third party (no source, archive, RDAP or search engine)
 azhaq mcp -allow example.com -resolvers 10.0.0.2 -sources none
 
+# Send every tool's requests, loopback targets too, through a proxy that records them
+azhaq mcp -allow 127.0.0.1:3001 -proxy http://127.0.0.1:8080
+
 # Add the server to Claude Code, limited to one domain
 claude mcp add azhaq -- azhaq mcp -allow example.com -max-requests 5000
 ```
@@ -26,8 +29,9 @@ claude mcp add azhaq -- azhaq mcp -allow example.com -max-requests 5000
 1. Starts a Model Context Protocol server that talks JSON-RPC on stdin and stdout.
 2. Holds every tool to the scope given by `-scope`, `-allow`, `-deny` and `-deny-path`. All tool calls together share the `-max-requests` budget and the `-rate` pace.
 3. Holds every tool to the resolvers and sources given by `-resolvers`, `-sources`, `-skip` and `-no-takeover`, as `run` takes them. A call cannot set or change them. `-sources` defaults to none: the server asks no third party at all, and reads or writes no name history either, unless it was started with `-sources` naming sources to ask or with `-history`. `azhaq_subdomains`, which is itself a third-party lookup, is refused unless the server was started with `-sources` naming some. `-chrome-no-sandbox` is held too: Chrome, which a tool uses with `browser` or `login`, does not start without its sandbox, and the tool answers with an error naming the flag, unless the server was started with it. `azhaq_scope` and `azhaq_status` show them as `run_options`, and `azhaq_resume` keeps them.
-4. Holds the tools that send writes to a flag of the server's: `azhaq_params` with a body method, `azhaq_roles_writes` and `graphql` on `azhaq_map` and `azhaq_plan` (an introspection POST) are refused before anything is sent unless the server was started with `-allow-writes`. The sign-in POST of `login` is not one of them. A target a call names whose own path, query or API operation declares a state change is held back and listed as skipped, as a GET found on the way is, unless the server was started with `-send-state-changing`.
-5. Writes the workspaces the tools make into `-dir`.
+4. Sends every tool's requests through `-proxy` (`http://`, `https://` or `socks5://`, as `run -proxy` takes it), loopback targets included, which the environment's `HTTP_PROXY` and `HTTPS_PROXY` never carry. It is fixed at start like `-resolvers`: a call cannot set or change it, and `azhaq_status` and `azhaq_scope` show it without its password. `-chrome-proxy` sets the proxy of Chrome's own connections, as `run -chrome-proxy` does. An http proxy carries HTTP only, so `azhaq_ports` and `azhaq_dns` are refused before anything is sent unless `-proxy` is a `socks5://` one.
+5. Holds the tools that send writes to a flag of the server's: `azhaq_params` with a body method, `azhaq_roles_writes` and `graphql` on `azhaq_map` and `azhaq_plan` (an introspection POST) are refused before anything is sent unless the server was started with `-allow-writes`. The sign-in POST of `login` is not one of them. A target a call names whose own path, query or API operation declares a state change is held back and listed as skipped, as a GET found on the way is, unless the server was started with `-send-state-changing`.
+6. Writes the workspaces the tools make into `-dir`.
 
 The tools and their arguments are listed in [MCP.md](../MCP.md).
 
@@ -66,6 +70,8 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 | Flag | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `-resolvers` | string |  | DNS resolvers every tool uses (a comma list or a file, as run -resolvers): fixed at start, no tool argument sets them |
+| `-proxy` | string |  | send every tool's requests through this proxy (http://, https:// or socks5://; loopback targets too, which the environment's proxy never carries): fixed at start, no tool argument sets it. azhaq_ports and azhaq_dns go through it only when it is socks5, and are refused otherwise |
+| `-chrome-proxy` | string |  | send Chrome's own connections through this http or socks5 proxy (default: -proxy, else the environment's): fixed at start |
 | `-sources` | string |  | subdomain sources every tool may ask, comma-separated (default none: no third party at all — no source, archive, RDAP or search engine — only the resolvers and the targets are asked; name the sources at start to ask them); fixed at start |
 | `-history` | bool |  | read and write the name history (names earlier runs found): without it no tool reads or writes it; fixed at start |
 | `-skip` | string |  | collectors no tool runs, comma-separated (azhaq plan lists them): fixed at start |

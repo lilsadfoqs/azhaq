@@ -394,7 +394,7 @@ var helpSpecs = map[string]helpSpec{
 	"mcp": {
 		groups: []helpGroup{
 			{"Scope and safety", `scope program allow deny deny-path send-state-changing unlocked allow-writes`},
-			{"What a map asks", `resolvers sources history skip no-takeover chrome-no-sandbox`},
+			{"What a map asks", `resolvers proxy chrome-proxy sources history skip no-takeover chrome-no-sandbox`},
 			{"Pace and limits", `rate max-requests`},
 			{"Output", `dir`},
 		},
