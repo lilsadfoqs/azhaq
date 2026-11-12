@@ -2,6 +2,7 @@ package main
 
 import (
 	"net/netip"
+	"slices"
 
 	"github.com/lilsadfoqs/azhaq/internal/collectors/portcol"
 	"github.com/lilsadfoqs/azhaq/types"
@@ -90,3 +91,57 @@ func portAddresses(obs []types.StoredObservation) (scanned, open int) {
 }
 
 func pstr(v any) string { s, _ := v.(string); return s }
+
+// quietAddrs lists the addresses a scan asked that showed no open port, up to
+// max: those a second pass skipped. nil when there are more, or a range row has
+// no prefix to list them by.
+func quietAddrs(obs []types.StoredObservation, max int) []string {
+	var prefixes []netip.Prefix
+	asked, openAt := map[netip.Addr]bool{}, map[netip.Addr]bool{}
+	for _, o := range obs {
+		if o.Collector != "azhaq-ports" || o.Kind != "ports" {
+			continue
+		}
+		p := payloadOf(o.Observation)
+		if p[portcol.CheckpointKey] == true || p["unresolved"] != nil {
+			continue
+		}
+		if p["range"] == true {
+			pf, err := netip.ParsePrefix(pstr(p["prefix"]))
+			if err != nil {
+				return nil
+			}
+			prefixes = append(prefixes, pf.Masked())
+			continue
+		}
+		ip, err := netip.ParseAddr(pstr(p["ip"]))
+		if err != nil {
+			continue
+		}
+		asked[ip] = true
+		sv, _ := p["services"].([]any)
+		uo, _ := p["udp_open"].([]any)
+		if len(sv) > 0 || len(uo) > 0 {
+			openAt[ip] = true
+		}
+	}
+	for _, pf := range prefixes {
+		if pf.Addr().Is6() && pf.Bits() < 120 || pf.Addr().Is4() && pf.Bits() < 22 {
+			return nil
+		}
+		for a := pf.Addr(); a.IsValid() && pf.Contains(a); a = a.Next() {
+			asked[a] = true
+		}
+	}
+	var out []string
+	for a := range asked {
+		if !openAt[a] {
+			out = append(out, a.String())
+			if len(out) > max {
+				return nil
+			}
+		}
+	}
+	slices.Sort(out)
+	return out
+}

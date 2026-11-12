@@ -534,7 +534,16 @@ func cmdPorts(args []string) error {
 			unanswered = max(unanswered-answered, 0)
 		}
 		if why, _ := portsPass(firstPass, unanswered, sink.open); why != "" && !portsHeld {
-			rep.nextPass(portsPassCommand(args, rep.DB), why)
+			if unanswered == int(sink.scanned) {
+				rep.nextPass(portsPassCommand(args, rep.DB, ports), why)
+			} else if obs, _ := st.Observations(); len(quietAddrs(obs, 256)) == unanswered {
+				// A second pass gave the others every port: the rest is these ones'.
+				cmd := "azhaq ports -host " + hostsOf(quietAddrs(obs, 256)) + " -p full -ep " + portscan.Compact(ports)
+				if rep.DB != "" {
+					cmd += " -db " + rep.DB
+				}
+				rep.nextPass(cmd, why)
+			}
 		}
 	}
 	if advFlags.on {
