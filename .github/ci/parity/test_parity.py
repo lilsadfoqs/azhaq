@@ -426,11 +426,14 @@ class Replay(unittest.TestCase):
         flags = "-domain acme.test -cidr 127.31.0.0/24 -allow acme.test -allow 127.31.0.0/24 -resolvers 127.0.0.1:5301 -ports default -verify"
         self.assertEqual(log[0], "plan " + flags)
         self.assertEqual(log[1], "run %s -max-time 420s -db %s" % (flags, os.path.join(out, "work", "workspace.db")))
-        self.assertEqual([l.split()[0] for l in log], ["plan", "run", "hunt", "export", "export"])
+        self.assertEqual([l.split()[0] for l in log], ["plan", "run", "hunt", "hunt", "export", "export"])
         self.assertIn("hunt -db", log[2])
-        self.assertIn("-format jsonl", log[3])
-        self.assertIn("-format findings", log[4])
+        self.assertNotIn("-limit", log[2])  # the worklist as printed: the default limit
+        self.assertIn("-limit 1000", log[3])
+        self.assertIn("-format jsonl", log[4])
+        self.assertIn("-format findings", log[5])
         meta = json.loads(read(os.path.join(out, "replay.json")))
+        self.assertEqual(meta["worklist_exit"], 0)
         self.assertEqual((meta["cap_seconds"], meta["run_exit"]), (420, 0))
         self.assertRegex(meta["start"], r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$")
         self.assertTrue(os.path.exists(os.path.join(out, "export.jsonl")))
@@ -519,6 +522,61 @@ cp "$in" "$out"
         self.assertNotEqual(self.run_fetch("nope").returncode, 0)
 
 
+WORKLIST = [
+    {"rank": 1, "score": 90, "key": "127.31.0.5:6379", "type": "Service", "tier": "finding", "kind": "identification",
+     "host": "db.acme.test", "port": 6379, "product": "Redis", "version": "6.0.5", "label": "proved", "severity": "high",
+     "what": "unauthenticated-read", "evidence": "INFO answered without a password",
+     "proof": {"observed_at": iso(200)}, "reasons": []},
+    {"rank": 2, "score": 60, "key": "127.31.0.7:8161", "type": "Service", "tier": "identification", "kind": "identification",
+     "host": "mq.acme.test", "port": 8161, "product": "Apache ActiveMQ", "version": "5.17.3", "advisory_id": "CVE-2023-46604",
+     "label": "version-only", "severity": "info", "proof": {"observed_at": iso(300)}, "reasons": []},
+    {"rank": 3, "score": 20, "key": "old.acme.test", "type": "Hostname", "tier": "lead",
+     "reasons": [{"signal": "takeover-candidate", "detail": "CNAME to x.cloud.example answered NXDOMAIN"}]},
+    {"rank": 4, "score": 70, "key": "http://app1.acme.test:28080/.git/HEAD", "type": "URL", "tier": "finding",
+     "reasons": [{"signal": "exposed-file", "detail": "git repository served"}]},
+    {"rank": 5, "score": 45, "key": "http://app1.acme.test:28080/login", "type": "URL", "tier": "lead",
+     "reasons": [{"signal": "path-auth", "detail": "login"}]},
+    {"type": "summary", "command": "hunt", "results": 5},
+]
+
+
+class WorklistView(unittest.TestCase):
+    """--worklist: the rows of hunt's default output are the leads, one each, and nothing else is."""
+
+    @classmethod
+    def setUpClass(cls):
+        t = tempfile.mkdtemp()
+        atexit.register(shutil.rmtree, t, True)
+        export, wl = os.path.join(t, "export.jsonl"), os.path.join(t, "worklist.jsonl")
+        write_jsonl(export, EXPORT)
+        write_jsonl(wl, WORKLIST)
+        out = os.path.join(t, "graded")
+        convert(["--export", export, "--worklist", wl, "--out", out, "--start", iso(0), "--end", iso(1500)])
+        cls.leads = [json.loads(l) for l in read(os.path.join(out, "leads.jsonl")).splitlines()]
+
+    def test_one_lead_for_each_row_and_none_from_the_map(self):
+        self.assertEqual(len(self.leads), 5)
+        self.assertEqual({l["how"] for l in self.leads}, {"azhaq hunt"})
+
+    def test_an_identification_names_its_product_version_and_advisory(self):
+        mq = [l for l in self.leads if l["host"] == "mq.acme.test"][0]
+        self.assertEqual((mq["kind"], mq["port"], mq["product"], mq["cve"]), ("vulnerable-software", 8161, "Apache ActiveMQ 5.17.3", "CVE-2023-46604"))
+        self.assertIn("version-only", mq["title"])
+        self.assertEqual(mq["time"], iso(300))
+        db = [l for l in self.leads if l["host"] == "db.acme.test"][0]
+        self.assertEqual((db["kind"], db["severity"]), ("unauthenticated-access", "high"))
+
+    def test_a_takeover_candidate_keeps_its_words(self):
+        t = [l for l in self.leads if l["host"] == "old.acme.test"][0]
+        self.assertEqual(t["kind"], "takeover")
+        self.assertIn("takeover-candidate", t["title"])
+        self.assertIn("NXDOMAIN", t["evidence"])
+
+    def test_hunt_and_worklist_are_one_or_the_other(self):
+        with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
+            convert(["--export", "x", "--hunt", "a", "--worklist", "b", "--out", "o"])
+
+
 class Workflow(unittest.TestCase):
     def setUp(self):
         self.text = read(os.path.join(HERE, "..", "..", "workflows", "parity.yml"))
@@ -537,7 +595,7 @@ class Workflow(unittest.TestCase):
 
     def test_results_are_encrypted_and_not_logged(self):
         self.assertIn("parity/${GITHUB_REF_NAME#parity-}/s", self.text)
-        for f in ("key.json.age", "sample.tgz.age", "summary.json.age"):
+        for f in ("key.json.age", "sample.tgz.age", "summary.json.age", "summary-worklist.json.age", "--worklist"):
             self.assertIn(f, self.text)
         self.assertNotIn("cat $HOME/parity/out", self.text)
 

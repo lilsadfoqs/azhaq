@@ -137,6 +137,13 @@ jobs:
           python3 -I .github/ci/range/grade.py "$HOME/parity/keep/key.json" "$g" --json "$g/grade.json" --md "$g/grade.md"
           python3 -I .github/ci/parity/summary.py sample "$HOME/parity/keep/key.json" "$g/grade.json" "$g/leads.jsonl" \
             --cap-seconds "$(jq -r .cap_seconds "$out/replay.json")" --out "$out/summary.json"
+          # The worklist view: hunt's default rows are the only leads (what a user reads first).
+          w="$out/graded-worklist"
+          python3 -I .github/ci/parity/to_leads.py --export "$out/export.jsonl" --worklist "$out/worklist.jsonl" --out "$w" \
+            --start "$(jq -r .start "$out/replay.json")" --end "$(jq -r .end "$out/replay.json")"
+          python3 -I .github/ci/range/grade.py "$HOME/parity/keep/key.json" "$w" --json "$w/grade.json" --md "$w/grade.md"
+          python3 -I .github/ci/parity/summary.py sample "$HOME/parity/keep/key.json" "$w/grade.json" "$w/leads.jsonl" \
+            --cap-seconds "$(jq -r .cap_seconds "$out/replay.json")" --out "$out/summary-worklist.json"
           echo "graded"
       - name: publish
         if: always()
@@ -149,7 +156,7 @@ jobs:
           cd "$out"
           files=()
           list=()
-          for f in plan.txt run.out run.err hunt.jsonl hunt.err export.jsonl export.err findings.jsonl findings.err replay.json graded; do
+          for f in plan.txt run.out run.err worklist.jsonl worklist.err hunt.jsonl hunt.err export.jsonl export.err findings.jsonl findings.err replay.json graded graded-worklist; do
             [ -e "$f" ] && list+=("$f")
           done
           if [ "${#list[@]}" -gt 0 ]; then
@@ -167,6 +174,10 @@ jobs:
             files+=("$pub/summary.json.age")
           else
             echo "::warning title=parity::no summary for this sample"
+          fi
+          if [ -s summary-worklist.json ]; then
+            age -r "$AGE_RECIPIENT" -o "$pub/summary-worklist.json.age" summary-worklist.json
+            files+=("$pub/summary-worklist.json.age")
           fi
           [ "${#files[@]}" -gt 0 ] || exit 0
           "$GITHUB_WORKSPACE/.github/ci/publish.sh" "parity/${GITHUB_REF_NAME#parity-}/s${{ matrix.sample }}" "${files[@]}"

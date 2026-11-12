@@ -21,7 +21,8 @@
 #           No -rate or -max-requests: the docs' examples set them for a program's scope, and the default is
 #           unpaced. -advisories is left out: it needs OSV records the user downloads (START.md job 3), and
 #           azhaq ships none.
-#   hunt    README "One workflow": where to look first
+#   hunt    README "One workflow": where to look first; once as printed (the default -limit: the
+#           worklist a user reads, graded alone as the worklist view) and once with -limit 1000
 #   export  docs/commands/export.md: the whole workspace (jsonl) and the findings records
 set -uo pipefail
 out=${1:?usage: replay.sh OUT DOMAIN NET DNS [MINUTES]}
@@ -49,6 +50,8 @@ timeout -k 30 $((cap + 180)) "$azhaq" run "${flags[@]}" -max-time "${cap}s" -db 
 run_rc=$?
 end=$(now)
 
+timeout 300 "$azhaq" hunt -db "$db" -json > "$out/worklist.jsonl" 2> "$out/worklist.err"
+worklist_rc=$?
 timeout 300 "$azhaq" hunt -db "$db" -json -limit 1000 > "$out/hunt.jsonl" 2> "$out/hunt.err"
 hunt_rc=$?
 timeout 300 "$azhaq" export -db "$db" -format jsonl > "$out/export.jsonl" 2> "$out/export.err"
@@ -56,7 +59,7 @@ export_rc=$?
 timeout 300 "$azhaq" export -db "$db" -format findings > "$out/findings.jsonl" 2> "$out/findings.err"
 findings_rc=$?
 
-printf '{"start":"%s","end":"%s","cap_seconds":%d,"plan_exit":%d,"run_exit":%d,"hunt_exit":%d,"export_exit":%d,"findings_exit":%d}\n' \
-  "$start" "$end" "$cap" "$plan_rc" "$run_rc" "$hunt_rc" "$export_rc" "$findings_rc" > "$out/replay.json"
+printf '{"start":"%s","end":"%s","cap_seconds":%d,"plan_exit":%d,"run_exit":%d,"worklist_exit":%d,"hunt_exit":%d,"export_exit":%d,"findings_exit":%d}\n' \
+  "$start" "$end" "$cap" "$plan_rc" "$run_rc" "$worklist_rc" "$hunt_rc" "$export_rc" "$findings_rc" > "$out/replay.json"
 # Exit 0 and 4 are a finished run and a run the cap stopped; the caller reads replay.json for the rest.
 [ "$export_rc" -eq 0 ] || exit 1
