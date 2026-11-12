@@ -74,6 +74,7 @@ The fields of a `-json` row, which are naabu's plus azhaq's:
 | `banner` | What the port said. A binary answer, to the first read or to the `HEAD`, is `(binary)` and its first bytes in hex. |
 | `tls_version`, `cipher` | What the handshake of a TLS port negotiated: `tls10` to `tls13`, and the suite's name (`TLS_AES_128_GCM_SHA256`, `TLS_RSA_WITH_AES_128_GCM_SHA256`). |
 | `subject_cn`, `subject_an` | The certificate's subject names of a TLS port, as httpx calls them. |
+| `certificate` | The facts of the certificate the handshake showed, on a TLS port, read from the handshake already made, with no request of its own: `subject`, `sans` (DNS names, then addresses), `issuer`, `not_before` and `not_after` (UTC), `self_signed`, `expired` and `name_mismatch` (each there only when it holds), and `asked`, the name `name_mismatch` was judged against. An address asked has no `asked` and no `name_mismatch`: a certificate rarely names one. |
 | `state` | UDP only: `open`, or `open\|filtered`. |
 
 ## Summary and exit codes
@@ -141,13 +142,15 @@ A service that speaks first (`ssh`, `ftp`, `smtp`, `telnet`, `irc`, …) is name
 
 - A `HEAD` that stays unanswered for half a second is waited on while the handshake and the list are asked beside it. A port that answers neither is done when the `HEAD`'s wait ends, not after a wait for each protocol.
 - Every connect, whatever its purpose, counts against `-max-requests`, takes a token of the pace and is in the ledger.
-- Every probe written to a connection (the `HEAD /`, a protocol's request, the `GET /` of step 5) is a `probe` line of its own in the ledger, after the line of its connection: its `proto` and, for HTTP, its `method` and its `target` with the path. It is not counted again as a request or a connection: the summary's `requests` counts the connection's line, and the ledger note says how many probes went on them. See [what a line means](../OUTPUT.md#what-a-line-means).
+- Every probe written to a connection (the `HEAD /`, a protocol's request, the `GET /` of step 5) is a `probe` line of its own in the ledger, after the line of its connection: its `proto` and, for HTTP, its `method` and its `target` with the path, and `sent`, the bytes written in hex (inside TLS, the bytes before encryption), so a probe can be sent again from the ledger by hand: `printf` of the decoded bytes into `nc`. A write over 1024 bytes keeps only its `body` hash, the start of the sha256 of the bytes. It is not counted again as a request or a connection: the summary's `requests` counts the connection's line, and the ledger note says how many probes went on them. See [what a line means](../OUTPUT.md#what-a-line-means).
 - An open port costs at most 25 connects after the first, the `GET /` of step 5, the bodies read for a product and a fallback TLS handshake included: they all come out of the 25. The second connect of a greeter that said nothing (below) is one more, so 26 in all; `plan` counts that as the allowance of each open port in its ceiling. A port named by a late protocol may cost a few more than asking the protocols one by one would. Several are asked at once.
 - A port that accepts a connection and closes it without a word is `tcpwrapped`.
 - Raw printing ports (9100–9107) are never asked anything.
 - A service on a port that usually speaks first (22, 21, 25, 3306, …) gets a second wait for its greeting before it is asked anything. A greeting that arrives in reply to the `HEAD` is read as one.
 - When no greeting came at all, the port gets one more connect after the scan, and that one waits six seconds for it (twice the connect and banner wait), as nmap's first probe does. sshd drops greetings when many connects arrive at once, and a server that looks the client up before it greets is late by the lookup. On a port with no service of its own that stayed silent to every request, the list included, the connect of the last `GET /` listens the same six seconds first, so a greeting that came late names it too; that costs no connect beyond the 25.
 - A second name on the same address has its web and TLS ports asked again under its own name.
+- Every TLS service gets the facts of its certificate from the handshake the scan already made (`certificate` above): the scan opens no connection and sends no request for it. The name asked is the host the scan was given: a certificate that does not name it has `name_mismatch`. A port scanned by address alone has no name to judge.
+- A certificate that is expired, self-signed or not for the name asked is a lead in `azhaq report -findings`, of kind `tls-certificate`, with the `openssl s_client` command that shows it again. It states what the handshake showed and says nothing of whether the service is safe: many internal services are self-signed. `run` with `-ports` gives the same facts and leads. Of a service scanned twice, the newest scan's certificate stands.
 - After six open ports of one address that no request could name, the remaining silent ports of that address are not asked the whole list. `-unnamed N` changes the six, `run -port-unnamed N` does the same in `run`, and `-1` means no limit. A workspace row says how many in `unprobed`, and the summary names them.
 
 ### Ports that stay silent
@@ -171,8 +174,9 @@ A service that speaks first (`ssh`, `ftp`, `smtp`, `telnet`, `irc`, …) is name
 
 ### More on formats
 - `-csv` writes a list joined with spaces. `-lof` lists the fields and stops.
+- `certificate` is in `-json` and the stored row only: `-csv` has no column for an object.
 - `-eof a,b` leaves fields out of `-json`, `-csv` and `-oA`'s JSON.
-- `-json` rows have `timestamp` in UTC, RFC 3339, and `tls_version`, `cipher`, `subject_cn` and `subject_an` on a TLS port.
+- `-json` rows have `timestamp` in UTC, RFC 3339, and `tls_version`, `cipher`, `subject_cn`, `subject_an` and `certificate` on a TLS port.
 - `-oX FILE` and `-oG FILE` take `-` for stdout. Hosts are in address order and ports by number. `service` has no `?`, which marks a guess from the port number alone (`method="table"` in the XML).
 - The XML and greppable layouts follow naabu's.
 

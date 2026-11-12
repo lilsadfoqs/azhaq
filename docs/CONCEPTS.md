@@ -229,7 +229,7 @@ The ledger is the record of what a run sent: a line for each request, connection
 - `source`: a third party asked about the targets: the subdomain sources, the archives of `urls`, RDAP and RIPEstat, search engines, a scope platform, the services `notify` posts to, crt.sh's database and a mail server.
 - `dns`: each query sent to a resolver.
 
-Each line has its time, its class, the URL or `ip:port`, the host, the scope rule that allowed it (a target's) and the collector. [OUTPUT](OUTPUT.md#the-ledger) lists the fields. The ledger lists everything a run sends: the code that sends is `internal/egress`, and no other code can open a connection.
+Each line has its time, its class, the URL or `ip:port`, the host, the scope rule that allowed it (a target's) and the collector. A `probe` line, the bytes a port identification wrote to a connection, also has them in hex (`sent`), so the probe can be sent again by hand. [OUTPUT](OUTPUT.md#the-ledger) lists the fields. The ledger lists everything a run sends: the code that sends is `internal/egress`, and no other code can open a connection.
 
 - **Chain.** Each line carries the hash of the one before, so an edited, removed or reordered line is caught.
 - **Seal.** A run that ends writes a `seal` line, so lines cut from the end are caught too. The summary names the seal (`sealed 3f9c…`), and `ledger -verify` prints the last one.
@@ -463,6 +463,8 @@ With `-replay-writes`, three more come before them all:
 ### Ports
 
 - For a port that says nothing, azhaq sends its own protocol's request on its usual number, one `HEAD /`, a TLS handshake, and one request of each of the other protocols until one answers, then, if nothing named it, one `GET /`. That is at most 25 more connects for each port.
+- A TLS handshake of that scan also gives the certificate's facts (subject, names, issuer, dates, expired, self-signed, not for the name asked), with no request beyond the handshake. An expired, self-signed or mismatched certificate is a lead in the findings.
+- A plain `http://` request that a port answers with a TLS alert or record, or resets, says so in its failure: `this port speaks TLS; try https://HOST:PORT` for the alert or record, `this port may speak TLS` for a bare reset.
 - On a web port whose head names no product, azhaq sends a `GET /`.
 - On 5432, 6379 and 27017–27019, it sends that database's own first request.
 - A UDP port with no known protocol is asked four ways: a DNS query, an SNMP get, memcached's version, then an empty datagram.

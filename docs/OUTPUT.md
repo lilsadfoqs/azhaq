@@ -260,13 +260,14 @@ A line has:
 | `host` | The host the request was for. For `dns`, the name asked. |
 | `vhost` | The `Host` header sent, when it is not the URL's. |
 | `body` | The first 16 hex digits of the sha256 of the request body, on an `http` line that has one (on a `probe` line, of the bytes sent): [resume](CONCEPTS.md#workspaces-runs-and-resuming) uses it to tell two writes to one URL apart. |
+| `sent` | On a `probe` line only: the bytes written, in hex, so the probe can be sent again from the ledger. Inside TLS they are the bytes before encryption. A write over 1024 bytes has none, only its `body`. A ledger written before this field has none. |
 | `rule` | The scope rule that allowed it (`-allow`, `-scope`). Empty when the run has no rules. |
 | `collector` | What sent it, for the lines that say. |
 | `purpose` | What a request to a target was for, on the lines of a run that says: `pages`, `scripts`, `assets`, `controls`, `description checks`, `path checks`… The summary's `requests_by_purpose` counts them. |
 | `prev`, `hash` | The previous line's hash, and the hex sha256 of `prev` and this line's JSON without `hash`. |
 
 - `tcp`: a connect of `ports`, or a TLS handshake of `ports` or `azhaq-tls`; for a `source`, the connection to crt.sh's database or a mail server.
-- `probe`: what `ports` writes to a connection it opened to name the service on it, one line for each write, after the `tcp` line of that connection. An HTTP probe has its `method`, its `target` as `http://IP:PORT/PATH` (`https` inside TLS) and, when the `Host` header it sent is another, its `vhost`; any other has its protocol in `proto` and the start of the sha256 of the bytes in `body`. A probe is not a request or a connection of its own: the summary's `requests` counts the `tcp` line of its connection, and the summary's `probes` (and the run's ledger note) says how many probes went on those connections. The handshake of a TLS connection is the `tcp` line, not a probe.
+- `probe`: what `ports` writes to a connection it opened to name the service on it, one line for each write, after the `tcp` line of that connection. An HTTP probe has its `method`, its `target` as `http://IP:PORT/PATH` (`https` inside TLS) and, when the `Host` header it sent is another, its `vhost`; any other has its protocol in `proto`. Each has the bytes written in `sent` and the start of their sha256 in `body`: `printf` of the decoded `sent` into `nc` (or inside `openssl s_client` when `proto` is `https`) is the probe again. A probe is not a request or a connection of its own: the summary's `requests` counts the `tcp` line of its connection, and the summary's `probes` (and the run's ledger note) says how many probes went on those connections. The handshake of a TLS connection is the `tcp` line, not a probe.
 - `dns`: a query to a resolver, a zone transfer or a trace step. A retry or a second opinion is a line of its own.
 - `source` lines are `http` or `tcp`, with no `rule`: the scope holds targets, not the third parties asked about them.
 - `chrome`: a request Chrome sent, listed once it left. One that Chrome dropped before sending is not listed, and not counted.

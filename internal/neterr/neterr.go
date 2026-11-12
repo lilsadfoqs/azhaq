@@ -270,3 +270,38 @@ func NotTLS(err error) bool {
 	s := err.Error()
 	return !strings.Contains(s, `\x15\x03`) && !strings.Contains(s, `\x16\x03`)
 }
+
+// tlsHinted is err with what a plain request to a TLS port shows, said.
+type tlsHinted struct {
+	err  error
+	hint string
+}
+
+func (e *tlsHinted) Error() string { return e.err.Error() + "; " + e.hint }
+func (e *tlsHinted) Unwrap() error { return e.err }
+
+// TLSHint adds to err, the failure of a request to raw, that the port seems to
+// speak TLS: the answer to a plain http:// request began with a TLS record (an
+// alert, 0x15 or 0x16, then 0x03), which is certain, or was a bare reset,
+// which only may be. Any other error, and a request over https, come back as
+// they were.
+func TLSHint(raw string, err error) error {
+	rest, ok := strings.CutPrefix(raw, "http://")
+	if err == nil || !ok {
+		return err
+	}
+	hostport, _, _ := strings.Cut(rest, "/")
+	if i := strings.LastIndex(hostport, "@"); i >= 0 {
+		hostport = hostport[i+1:]
+	}
+	if _, _, e := net.SplitHostPort(hostport); e != nil {
+		hostport = net.JoinHostPort(strings.Trim(hostport, "[]"), "80")
+	}
+	switch s := err.Error(); {
+	case NotHTTP(err) && (strings.Contains(s, `\x15\x03`) || strings.Contains(s, `\x16\x03`)):
+		return &tlsHinted{err, "this port speaks TLS; try https://" + hostport}
+	case errors.Is(err, syscall.ECONNRESET) || strings.Contains(s, "connection reset by peer"):
+		return &tlsHinted{err, "this port may speak TLS; try https://" + hostport}
+	}
+	return err
+}

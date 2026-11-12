@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/lilsadfoqs/azhaq/internal/certfacts"
 	"github.com/lilsadfoqs/azhaq/internal/egress"
 	"github.com/lilsadfoqs/azhaq/internal/ledger"
 )
@@ -886,6 +887,8 @@ func (id *ident) tls() bool {
 		o.TLSVers, o.Cipher = tlsVersionName(cs.Version), egress.CipherSuiteName(cs.CipherSuite)
 	}
 	if certs := c.(interface{ ConnectionState() tls.ConnectionState }).ConnectionState().PeerCertificates; len(certs) > 0 {
+		f := certfacts.Of(certs[0], id.host, time.Now())
+		o.Cert = &f
 		o.SubjectCN = certs[0].Subject.CommonName
 		o.SubjectAN = append(o.SubjectAN, certs[0].DNSNames...)
 		for _, a := range certs[0].IPAddresses {

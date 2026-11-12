@@ -17,6 +17,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/lilsadfoqs/azhaq/internal/certfacts"
 	"github.com/lilsadfoqs/azhaq/internal/egress"
 	"github.com/lilsadfoqs/azhaq/internal/limit"
 )
@@ -137,7 +138,9 @@ type Open struct {
 	Cipher    string   `json:"cipher,omitempty"`      // the suite it negotiated
 	SubjectCN string   `json:"subject_cn,omitempty"`
 	SubjectAN []string `json:"subject_an,omitempty"`
-	Scripts   []Script `json:"scripts,omitempty"` // an imported nmap scan's script output for the port
+	// Cert is what the certificate of the handshake states, judged for the host asked.
+	Cert    *certfacts.Facts `json:"certificate,omitempty"`
+	Scripts []Script         `json:"scripts,omitempty"` // an imported nmap scan's script output for the port
 
 	// Usual is the registered name of the port, kept when -detect none leaves
 	// Service empty: it only tells a web port from another, and is not output.
