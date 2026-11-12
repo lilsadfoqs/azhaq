@@ -484,10 +484,18 @@ func (s *Scanner) pass(ctx context.Context, host, ip string, ports []int, found 
 		for j, i := range idx {
 			ps[j] = ports[i]
 		}
+		var closed []int // refused: nothing to keep but the progress, noted once below
 		s.pd.TCPBatch(ctx, host, ip, ps, func(j int, c net.Conn, rtt time.Duration, err error) {
 			i := idx[j]
 			if err != nil {
-				record(i, Open{}, s.failed(ctx, err))
+				if state := s.failed(ctx, err); state == portClosed && prog != nil {
+					closed = append(closed, i)
+					<-s.conns
+				} else if state == portClosed {
+					<-s.conns // nothing else is kept of a closed port
+				} else {
+					record(i, Open{}, state)
+				}
 				return
 			}
 			wg.Add(1)
@@ -497,6 +505,13 @@ func (s *Scanner) pass(ctx context.Context, host, ip string, ports []int, found 
 				record(i, o, state)
 			}()
 		})
+		if len(closed) > 0 {
+			mu.Lock()
+			for _, i := range closed {
+				prog.done(i, portClosed, Open{}, ctx.Err() != nil)
+			}
+			mu.Unlock()
+		}
 	}
 	// launchLocked starts the batch (the caller holds bmu).
 	launchLocked := func() {

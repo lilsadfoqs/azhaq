@@ -249,11 +249,25 @@ func TCPBatch(ctx context.Context, host string, addrs []string) {
 	if l == nil || len(addrs) == 0 {
 		return
 	}
-	es := make([]Entry, 0, len(addrs))
-	for _, addr := range addrs {
-		es = append(es, tcpEntry(l, ctx, ClassTarget, host, addr))
+	// What the lines have in common is asked once (every address of a batch
+	// is the same host's); the lines are made one at a time as they are
+	// chained, not all before.
+	ipOf := func(addr string) string {
+		ip, _, err := net.SplitHostPort(addr)
+		if err != nil {
+			return addr
+		}
+		return ip
 	}
-	l.RecordMany(es)
+	base, first := tcpEntry(l, ctx, ClassTarget, host, addrs[0]), ipOf(addrs[0])
+	l.recordEach(len(addrs), func(i int) Entry {
+		if i > 0 && ipOf(addrs[i]) != first {
+			return tcpEntry(l, ctx, ClassTarget, host, addrs[i])
+		}
+		e := base
+		e.Target = addrs[i]
+		return e
+	})
 }
 
 // DNS records a query about to be sent to a resolver: the name, its type
