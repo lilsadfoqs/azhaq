@@ -361,6 +361,7 @@ Every TCP service the scan names has a check (the table in [run](commands/run.md
 | `imap` | states its software in its greeting, which the scan reads |
 | `mysql` | states its server version in its first packet, which the scan reads; any request after it is a login |
 | `telnet` | opens with its option negotiation, which the scan reads; the next thing it wants is a login |
+| `openwire`, `zeromq`, `ceph-msgr2` | open with a binary greeting whose first bytes the protocol fixes, which the scan reads; only OpenWire (ActiveMQ) can state a version, in its `ProviderVersion` property |
 | `vnc` | states its protocol version in its first line, which the scan reads; the next message is a security handshake |
 | `irc` | opens with its notice, which the scan reads; its version is read after a registration with a nick |
 | `nntp` | states its software in its greeting, which the scan reads |

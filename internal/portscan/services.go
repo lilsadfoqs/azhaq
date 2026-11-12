@@ -333,6 +333,10 @@ func bodyProduct(body []byte) (product, version string) {
 func (s *Scanner) greeted(o *Open, raw []byte) {
 	service, product, version := greetingProduct(raw, o.Banner)
 	if product == "" {
+		if g, v, extra, ok := binaryGreeted(raw); ok {
+			o.Service, o.Product, o.Version, o.Extra = g.service, g.product, v, extra
+			return
+		}
 		passiveRead(raw, o)
 		return
 	}

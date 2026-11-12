@@ -131,7 +131,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 - `-connect-timeout` is the wait for one connect. A bare number is milliseconds.
 
 ### How an open port is named
-A service that speaks first (`ssh`, `ftp`, `smtp`, `telnet`, `irc`, …) is named from what it says. A port that waits is asked what it serves, by what it answers and not by its port number. The steps, in this order:
+A service that speaks first (`ssh`, `ftp`, `smtp`, `telnet`, `irc`, …) is named from what it says. A server that opens in binary is named by its protocol's fixed first bytes: an ActiveMQ OpenWire `WireFormatInfo` (`openwire`, with the version it states), a ZeroMQ ZMTP 3 greeting (`zeromq`) and a Ceph msgr2 banner (`ceph-msgr2`); a binary greeting that none of these matches stays unnamed, with its hex. A port that waits is asked what it serves, by what it answers and not by its port number. The steps, in this order:
 
 1. The request of the protocol whose usual port it is.
 2. An HTTP `HEAD / HTTP/1.0` on the open connection. An HTTP answer is `http`, and its banner is the `Server` header or the status line. A `405` or `501` is asked `GET /` for the page's title and product.
