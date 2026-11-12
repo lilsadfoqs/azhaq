@@ -122,6 +122,7 @@ func BuildMap(ents []types.Entity, seeds []types.Seed, obs []types.StoredObserva
 		}
 	}
 	decl := declaredRoles(obs)
+	media := mediaOnly(obs)
 	secured := securedHosts(obs)
 	chain := chainAddrs(obs)
 	unchecked := uncheckedNames(obs)
@@ -163,6 +164,9 @@ func BuildMap(ents []types.Entity, seeds []types.Seed, obs []types.StoredObserva
 				continue // its https URL is the row
 			}
 			m.Status, m.Title, m.answered = answerObs(rows)
+			if media[e.Key] && (m.Coverage == "hint" || m.Coverage == "capped") && (m.Role == "page" || m.Role == "api") {
+				m.Role = "asset" // the pages load it as a picture, font or sound and no request asked
+			}
 			if d, ok := decl[e.Key]; ok {
 				// What a GET does not tell: a view the app's router draws
 				// (the server answers it with the app's shell), a
@@ -1162,6 +1166,41 @@ func declaredRoles(obs []types.StoredObservation) map[string]declared {
 			d.namespace = p.Namespace
 		}
 		out[u] = d
+	}
+	return out
+}
+
+// mediaOnly indexes the URLs that only picture, font, sound or video
+// references name: what a page holds that way is an asset, whatever the file
+// is called. A URL anything else names (a link, a script, an archive) is not.
+func mediaOnly(obs []types.StoredObservation) map[string]bool {
+	out := map[string]bool{}
+	other := map[string]bool{}
+	for _, o := range obs {
+		if o.Kind != "url" {
+			continue
+		}
+		var p struct {
+			URL  string `json:"url"`
+			Via  string `json:"via"`
+			Tag  string `json:"tag"`
+			Attr string `json:"attribute"`
+		}
+		if json.Unmarshal(o.Payload, &p) != nil || p.URL == "" {
+			continue
+		}
+		u, err := normalize.URL(p.URL)
+		if err != nil {
+			continue
+		}
+		if o.Collector == "azhaq-crawl" && (p.Via == "html" || p.Via == "css") && webextract.MediaRef(p.Tag, p.Attr) {
+			out[u] = true
+		} else {
+			other[u] = true
+		}
+	}
+	for u := range other {
+		delete(out, u)
 	}
 	return out
 }

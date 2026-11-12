@@ -31,6 +31,9 @@ func TestFolderClass(t *testing.T) {
 	pageLinked := foldRow("https://h/p", "hint", "page", 0)
 	pageLinked.Evidence, pageLinked.EvidenceFrom = EvLinked, []string{"azhaq-crawl", "azhaq-js"}
 	host := MapEntry{Entity: types.Entity{Type: types.TypeHostname, Key: "h"}, Coverage: "gone"}
+	udp := func(state string) MapEntry {
+		return MapEntry{Entity: types.Entity{Type: types.TypePort, Key: "10.0.0.5:53/udp"}, State: state}
+	}
 	for name, c := range map[string]struct {
 		row  MapEntry
 		want string
@@ -52,6 +55,9 @@ func TestFolderClass(t *testing.T) {
 		"api description":     {described, ""},
 		"link and script":     {pageLinked, ""},
 		"a name, not a route": {host, ""},
+		"udp that answered":   {udp("open"), ""},
+		"udp that is silent":  {udp("open|filtered"), FoldSilentUDP},
+		"tcp port":            {MapEntry{Entity: types.Entity{Type: types.TypePort, Key: "10.0.0.5:53/tcp"}, State: "open"}, ""},
 	} {
 		if got := f.Class(c.row); got != c.want {
 			t.Errorf("%s: class %q, want %q", name, got, c.want)
@@ -95,5 +101,20 @@ func TestFolderGroups(t *testing.T) {
 	}
 	if gs[3].NotAsked != 1 {
 		t.Errorf("beyond-depth: %+v", gs[3])
+	}
+}
+
+// The silent UDP ports of an address are one group, of that address; another
+// address is a group of its own.
+func TestFolderGroupsSilentUDPByAddress(t *testing.T) {
+	port := func(key string) MapEntry {
+		return MapEntry{Entity: types.Entity{Type: types.TypePort, Key: key}, State: "open|filtered"}
+	}
+	gs := NewFolder(nil).Groups([]MapEntry{port("10.0.0.5:53/udp"), port("10.0.0.5:123/udp"), port("[::1]:161/udp")})
+	if len(gs) != 2 || gs[0].Origin != "10.0.0.5" || gs[0].Count != 2 || gs[1].Origin != "::1" {
+		t.Fatalf("groups %+v", gs)
+	}
+	if want := "folded silent-udp: 2 UDP ports of 10.0.0.5 answered no datagram (open|filtered)"; gs[0].Line() != want {
+		t.Errorf("line %q, want %q", gs[0].Line(), want)
 	}
 }

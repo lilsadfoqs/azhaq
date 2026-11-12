@@ -139,13 +139,14 @@ The text map lists the rows that answer for themselves and counts the others in 
 | --- | --- | --- |
 | `catchall` | URLs whose answer is the very page the origin gives a path that cannot exist (`catchall` rows, with the page equal byte for byte once the requested path is taken out of both; a page that only has its shape, title, size and lines, may be a route of its own and stays listed), and the URLs not asked because the origin had answered other paths so; and a path `-dirs` found in a directory that answers every unknown name alike: its answer is the control `-dirs` asked in that directory byte for byte ([dirs](dirs.md#a-catch-all-inside-a-directory)), 403 and 404 answers too. | The origin, how many URLs, and the control: the request for a path that cannot exist and its answer (`GET /xq3 → 200 text/html, 3748 bytes, "OWASP Juice Shop"`). One line for each origin. |
 | `not-found` | URLs the server answered with 404 or 410, and routes only scripts name whose GET got one. | How many, and the templates they fall into (`/api/Feedbacks/{n} ×12`), the five largest. |
-| `beyond-depth` | Images, fonts, media, source maps and manifests a page holds that no request asked for (past `-depth`, a limit, or fetched by no step). | How many. |
+| `beyond-depth` | Images, fonts, media, source maps and manifests a page holds that no request asked for (past `-depth`, a limit, or fetched by no step). What a page loads as a picture, font, sound or video (`img`, `source`, `video`, `audio`, `track`, a `srcset`, a `poster`, a stylesheet's `url()`) is one of these whatever the file is called, and is not asked, so `/m/clip.mov` and `/_next/image?url=…&w=640` fold with the `.png` files. A URL a link, a script or an archive also names stays listed. | How many. |
 | `unrequested` | Hints only scripts name, with no call, method, form, description or page link, that nothing requested. | How many. |
+| `silent-udp` | The UDP ports of an address (`-ports-udp`) that answered none of the datagrams asked: `open\|filtered` port rows. Only a port that answered is a row, as in [ports](ports.md#udp-rows-and-lines). | The address and how many ports. One line for each address. |
 
 A route a script calls with a method, a description lists, a page links or a request answered with anything else stays listed, as does every row under `-deny-path`: those are leads or the effect of a setting you chose. Each line counts as one result, and `results + folded + left_out = stored` as before.
 
 - `-all-rows` prints one line for each row, as `run` did. Every dead, wildcard and unresolved name is a line of its own. A takeover candidate is a line of its own in the default view too.
-- `-json` prints every row, each folded one with its class as `fold`. The summary's `folds` has one entry for each line of the text view: `class`, `count`, and for a catch-all origin its `origin` and the `controls` it was compared with.
+- `-json` prints every row, each folded one with its class as `fold`. The summary's `folds` has one entry for each line of the text view: `class`, `count`, and for a catch-all origin or a `silent-udp` address its `origin` and, for the catch-all, the `controls` it was compared with.
 - Folded rows stay in the workspace: `query` lists them, `-all-rows` and `-json` print them.
 - Parameter and body names worth trying first are on a `watch:` line under the row.
 - A folded template shows its count: `(30 urls, 27 not asked)`.
@@ -636,7 +637,7 @@ azhaq run -url https://app.example.com/ -ports top-1000 -verify-logins -db app.d
 | `-sr` | bool |  | also write each answer a target gave, headers and body as read, to the -srd directory as DIR/HOST/SHA1.txt with an index.txt (katana's -sr); query -fields response_file says where a row's is |
 | `-srd` | string | `azhaq_response` | directory for -sr |
 | `-no-catchall` | bool |  | leave out URLs that answer with the page every unknown path gets (client-side routes of a single-page app) from the rows printed |
-| `-all-rows` | bool |  | list every row, as run printed before: by default the rows that answer as the control request for a path that cannot exist does, the 404s, the assets no request asked for and the hints only scripts name are counted in one line of their class each (-json lists every row with its fold class) |
+| `-all-rows` | bool |  | list every row, as run printed before: by default the rows that answer as the control request for a path that cannot exist does, the 404s, the assets no request asked for, the hints only scripts name and the UDP ports that answered nothing are counted in one line of their class each (-json lists every row with its fold class) |
 | `-fail-on-errors` | bool |  | the same as -strict-exit |
 | `-fail-on-capped` | bool |  | exit 4 also when the run hit -depth with hints left |
 | `-strict-exit` | bool |  | exit 3 for any failure, a target among many included (the rule before 0.15); without it a run that did its job exits 0 and its summary counts and lists the failures |

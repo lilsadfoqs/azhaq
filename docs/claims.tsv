@@ -626,6 +626,7 @@ ports.hostport-only-that-port	docs/commands/ports.md	A `host:port` is asked that
 ports.p-applies-to-every-target	docs/commands/ports.md	`-p`, `-tp` and `-pf` apply to every target	test:cmd/azhaq:TestPortsPinnedPortSurvivesP,TestPortsOnMixesBareAndPinned
 ports.checkpoint-while-running	docs/commands/ports.md	A scan keeps what it has finished while it runs	test:internal/portscan:TestProgressSnapshotIsTheFinishedPrefix,TestScanReportsProgressWhileItGoes;test:internal/collectors/portcol:TestKilledScanResumesAfterItsCheckpoint
 ports.range-checkpoint	docs/commands/ports.md	A range keeps the addresses of its block it has finished every two seconds.	test:internal/collectors/portcol:TestKilledBlockKeepsItsFinishedAddresses
+ports.prints-as-found-range	docs/commands/ports.md	for a range as for one host, not when the scan ends	test:cmd/azhaq:TestPortsRangePrintsAnOpenPortBeforeTheScanEnds;test:internal/collectors/portcol:TestRangeWritesAnOpenPortAsItIsFound
 ports.range-no-size-limit	docs/commands/ports.md	So a range has no size limit and is not expanded in memory	test:internal/collectors/portcol:TestBlocksSplitBigRanges,TestResumedRangeDoesNotAskAFinishedAddressAgain;test:cmd/azhaq:TestResumeRangeScanAsksEachAddressOnce
 ports.map-row-open-list	docs/commands/ports.md	a range's row lists the open ports of every address that answered	test:engine:TestMapPrefixListsThePortsOfEveryAddress;test:cmd/azhaq:TestPortsResumeKeepsEveryOpenPort
 ports.sa-iv	docs/commands/ports.md	`-sa` scans every address, and `-iv 4` or `-iv 6` keeps one family.	test:cmd/azhaq:TestPortsSAndIVChooseWhichAddressesOfANameAreScanned
@@ -674,6 +675,7 @@ ports.udp-nothing-logs-in	docs/commands/ports.md	Nothing logs in, guesses a cred
 ports.tftp-read	docs/commands/ports.md	TFTP: a read of a file that does not exist.	test:internal/portscan:TestEveryUDPDatagramIsARead,TestUDPAnswerFromAnotherPort
 ports.tftp-unconnected	docs/commands/ports.md	It is read on a socket that is not connected	test:internal/portscan:TestUDPAnswerFromAnotherPort
 ports.udp-silent-one-row	docs/commands/ports.md	The ports of an address that stayed silent (`open|filtered`) are one row, not one each	test:cmd/azhaq:TestPortsListsSilentUDPPort;test:internal/collectors/portcol:TestSilentUDPPortOfOneAddressIsARow
+ports.udp-run-silent-fold	docs/commands/ports.md	`run -all-rows` and `-json` list each silent port	test:cmd/azhaq:TestRunFoldsSilentUDPPorts
 ports.refused-vs-silent	docs/commands/ports.md	A closed port answers with an ICMP error and a silent one does not	test:cmd/azhaq:TestPortsListsSilentUDPPort;test:internal/portscan:TestUDPStates
 ports.udp-rows-flag	docs/commands/ports.md	It lists every silent port, past the 64 a row lists one by one.	test:cmd/azhaq:TestPortsListsSilentUDPPort,TestPortsUDPRangeOfSilentHostsIsAggregated;test:internal/collectors/portcol:TestManySilentUDPPortsAreNotRows
 ports.udp-nmap-files	docs/commands/ports.md	`-oX`, `-oG` and `-oA`'s XML and greppable files list each silent port as nmap does	test:cmd/azhaq:TestPortsNmapFilesListEachSilentUDPPortWithOrWithoutUDPRows

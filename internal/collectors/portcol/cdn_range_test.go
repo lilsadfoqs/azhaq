@@ -101,7 +101,12 @@ func TestRangeScan(t *testing.T) {
 	if err != nil || asked.Load() != 8 {
 		t.Fatalf("%d connects, %v", asked.Load(), err)
 	}
-	rs := rows(t, obs)
+	var rs []map[string]any
+	for _, r := range rows(t, obs) {
+		if r[CheckpointKey] != true { // the open port's row as it was found
+			rs = append(rs, r)
+		}
+	}
 	if len(rs) != 2 || rs[0]["ip"] != "127.0.0.2" && rs[1]["ip"] != "127.0.0.2" {
 		t.Fatalf("rows %v", rs)
 	}

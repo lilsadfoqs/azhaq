@@ -230,7 +230,8 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 				return meta, err
 			}
 		}
-		if ref.Method == "" && !asked[link] && (webextract.Hintable(link) || ref.Tag == "link" && sheets[link]) {
+		// A picture, font or sound the page loads is listed, not asked, whatever its name.
+		if ref.Method == "" && !asked[link] && !ref.Media() && (webextract.Hintable(link) || ref.Tag == "link" && sheets[link]) {
 			meta.NextHints = append(meta.NextHints, types.Seed{
 				Type: types.TypeURL,
 				Keys: map[string]string{"url": link},
@@ -303,7 +304,7 @@ func (c *Collector) cssLinks(raw string, body []byte, base *url.URL, emit func(t
 			return meta, err
 		}
 		meta.EmitCount++
-		if ref.Import || webextract.Hintable(ref.URL) {
+		if ref.Import || !pref.Media() && webextract.Hintable(ref.URL) {
 			meta.NextHints = append(meta.NextHints, types.Seed{Type: types.TypeURL, Keys: map[string]string{"url": ref.URL}})
 		}
 	}

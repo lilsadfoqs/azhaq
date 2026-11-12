@@ -37,7 +37,7 @@ azhaq ports -allow 192.0.2.0/24 -sweep -p 22,80,443
 3. Asks the ports that neither accepted nor refused a connect once more, when few did not answer.
 4. Names the service of each open port from what it says or answers, with its product and version.
 5. With `-udp`, also sends each UDP port one harmless datagram.
-6. Prints one line for each open port.
+6. Prints one line for each open port as it is found, for a range as for one host, not when the scan ends.
 
 A port that says nothing is asked the request of its own protocol, an HTTP `HEAD /` and a TLS handshake. Then it gets one harmless request of each other protocol. That is at most 25 connects after the first. Nothing logs in, sends a credential or changes anything. Raw printing ports (9100–9107) are never asked anything. A CDN or WAF address is scanned in full, as naabu does; `-ec` limits it to ports 80, 443, 8080 and 8443.
 
@@ -225,6 +225,7 @@ A sysDescr that names Linux, Cisco IOS, JUNOS or Windows gives `product` and `ve
 - The ports of an address that stayed silent (`open|filtered`) are one row, not one each: a range of silent ports is a screenful, and the least informative answer of the scan. The row has `"state":"open|filtered"`, `ports` (the silent ports as a list, `1-24,60`), `silent` (how many), `asked` (how many UDP ports were asked of the address) and `refused` (how many the address refused with an ICMP port unreachable, left out when none). It has no `port`. `-csv` writes the same four as columns when the scan asks UDP ports.
 - Plain output prints that row as `host/udp open|filtered 24 of 25 ports: 1-24,60 (1 refused)`; `-silent` prints the same lines. A closed port answers with an ICMP error and a silent one does not, so `refused` against `silent` is what tells the two apart on one address.
 - `-udp-rows` prints each silent port as a row of its own instead, `host:port/udp open|filtered` in plain output and a row with `port` in `-json` and `-csv`. It lists every silent port, past the 64 a row lists one by one. `-oX`, `-oG` and `-oA`'s XML and greppable files list each silent port as nmap does, with or without it.
+- `run` counts them the same way: its map lists the UDP ports that answered, and one line for each address says how many were silent (`folded silent-udp: 24 UDP ports of 10.0.0.5 answered no datagram`). `run -all-rows` and `-json` list each silent port, a `-json` row marked `"fold":"silent-udp"`.
 - Each row is a result, counted in `results`, so the aggregate row is one. The summary's `open|filtered` counts ports: the sum of the `silent` of the rows printed, or one for each row of `-udp-rows`.
 - A closed port is not a result, because nmap lists closed ports only on request.
 - When any row is `open|filtered`, the summary counts `open` and `open|filtered` apart, so a silent port is never read as an open one.

@@ -14,7 +14,7 @@ With `-json`, the drop-in commands use the field names of the tool they stand in
 
 ### When results are printed
 
-- `probe`, `dns`, `ports`, `dirs`, `fuzz`, `params` and `shots` print each result as it is found.
+- `probe`, `dns`, `ports`, `dirs`, `fuzz`, `params` and `shots` print each result as it is found. `ports` over a range prints each open port when its address finds it, not when the range ends.
 - `subs` without `-live` prints a domain's names when its sources have answered.
 - `subs` with `-live` prints them when the run ends. A name is live only once DNS has answered for the whole run.
 
@@ -125,7 +125,7 @@ An [internal error](#exit-1) comes before this rule: a summary that disagrees wi
 | `results` | What the command printed on stdout: names, web services, map rows. |
 | `counts` | A breakdown of the results, per command. For `run` the counts are disjoint and cover every stored map row: see [run's counts](#run-counts). |
 | `stored` | `run` only: the map rows the database holds. The counts add up to it. `results` is smaller when templated URLs and dead or wildcard names fold into one row. |
-| `folds` | `run`, `crawl` and `dirs` (its catch-all entries only, one for each directory): the URL rows by fold class (`catchall`, `not-found`, `beyond-depth`, `unrequested`), each with its `count`; a catch-all entry has its `origin` and the `controls` its answers matched (`url`, `status`, `type`, `size`, `title`), a not-found entry its `templates`. The text view prints one line for each entry in place of its rows, `-all-rows` and `-json` print the rows. See [run](commands/run.md#folded-rows). |
+| `folds` | `run`, `crawl` and `dirs` (its catch-all entries only, one for each directory): the URL rows by fold class (`catchall`, `not-found`, `beyond-depth`, `unrequested`, `silent-udp`), each with its `count`; a catch-all or `silent-udp` entry has its `origin` and the `controls` its answers matched (`url`, `status`, `type`, `size`, `title`), a not-found entry its `templates`. The text view prints one line for each entry in place of its rows, `-all-rows` and `-json` print the rows. See [run](commands/run.md#folded-rows). |
 | `folded` | `run` only, always present: the stored rows a printed row holds (templated URLs, dead and wildcard names, and in the text view the lines of the folded classes). `results + folded + left_out = stored`, with `left_out` (`-no-catchall`) absent when 0. |
 | `requests` | Requests sent to targets, port connects and UDP datagrams included (`connections` and `datagrams` say how many of them). DNS queries and requests to third-party sources are not in it: the queries are in `dns_queries`, and a source's requests are in `sources` (`subs`, `urls`) and in the ledger's `source` lines. |
 | `connections`, `datagrams`, `probes` | What the ledger holds for the run's lines to targets, by kind: `tcp` lines, `udp` lines and `probe` lines, each total apart. `requests` is the lines of kind `http` and `chrome` plus the `connections` and the `datagrams`; `probes` are the writes `ports` makes on a connection it already opened (one ledger line each) and are not in `requests`. So the ledger's lines for the run are `requests` + `probes` + `dns_queries` + the lines to third-party sources and to endpoints of your own. A total that is 0 is absent. |

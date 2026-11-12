@@ -16,6 +16,32 @@ type PageRef struct {
 	Raw                    string // the attribute as written
 }
 
+// Media says the reference is one a browser loads as a picture, font, sound
+// or video, whatever the file is called: an image, source, video, audio or
+// track source, a poster, a background, or a url() of a stylesheet.
+func (r PageRef) Media() bool {
+	return MediaRef(r.Tag, r.Attr)
+}
+
+// MediaRef is Media for the tag and attribute a stored link row names.
+func MediaRef(tag, attr string) bool {
+	switch tag {
+	case "img":
+		return attr == "src" || attr == "srcset" || attr == "dynsrc" || attr == "lowsrc"
+	case "source":
+		return attr == "src" || attr == "srcset"
+	case "video":
+		return attr == "src" || attr == "poster"
+	case "audio", "track", "input":
+		return attr == "src"
+	case "body", "table", "td", "th":
+		return attr == "background"
+	case "style":
+		return attr == "url"
+	}
+	return false
+}
+
 // Links are a page's links, iframes, images, GET form actions and the
 // other URLs its markup names, resolved against its <base href> when it
 // has one, else against base, its URL.

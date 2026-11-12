@@ -243,6 +243,22 @@ func (c *Collector) runPrefix(ctx context.Context, seed types.Seed, emit func(ty
 			s := &scan{up: true}
 			var uerr error
 			early := &earlyAddr{c: c, ctx: ctx, ip: ip}
+			if !single {
+				// An open port is a row as it is found, not when the block ends; a single
+				// address keeps its own checkpoints (below).
+				ck := c.checkpoint(func(o types.Observation) error {
+					mu.Lock()
+					defer mu.Unlock()
+					return emit(o)
+				}, ip, ip, all, prior, resumed, edgeName, edge, pf.String(), c.passOf(1))
+				early.rows = func(open []portscan.Open) {
+					asked := make([]int, len(open))
+					for i, o := range open {
+						asked[i] = o.Port
+					}
+					ck(portscan.Progress{Asked: asked, Open: open})
+				}
+			}
 			// The address is asked once: when a name has it, or another range, this
 			// task waits for that scan, after the first pass of every other address.
 			entry, mine := c.claim(ip, ip)
@@ -532,6 +548,10 @@ type earlyAddr struct {
 	ip   string
 	sent handed
 	once sync.Once
+
+	mu    sync.Mutex
+	opens []portscan.Open
+	rows  func([]portscan.Open) // writes what the address has found so far, when set
 }
 
 func ipSeed(ip string) types.Seed {
@@ -539,6 +559,14 @@ func ipSeed(ip string) types.Seed {
 }
 
 func (e *earlyAddr) found(o portscan.Open) {
+	if e.rows != nil {
+		e.mu.Lock()
+		if !slices.ContainsFunc(e.opens, func(p portscan.Open) bool { return p.Port == o.Port }) {
+			e.opens = append(e.opens, o)
+			e.rows(slices.Clone(e.opens)) // in order: an older list never lands after a newer
+		}
+		e.mu.Unlock()
+	}
 	e.c.reserveWeb(e.ip, e.ip, o)
 	if !catalog.Hint(e.ctx) {
 		return // nothing listens: the hints come with the block's result

@@ -2,6 +2,7 @@ package portcol
 
 import (
 	"context"
+	"encoding/json"
 	"net"
 	"net/http"
 	"strconv"
@@ -137,5 +138,60 @@ func TestHandsOnReturnWhenNothingListens(t *testing.T) {
 	meta, err := c.Run(context.Background(), types.Seed{Type: types.TypeIPAddress, Keys: map[string]string{"ip": "127.0.0.1"}}, func(types.Observation) error { return nil })
 	if err != nil || len(meta.NextHints) != 1 {
 		t.Fatalf("%+v %v", meta.NextHints, err)
+	}
+}
+
+// An address of a range has a row for its open port while its other ports are
+// still being asked, not when the block ends: the scan holds its next connect
+// until a row with the port has been written, and says so if none comes.
+func TestRangeWritesAnOpenPortAsItIsFound(t *testing.T) {
+	port := webPort(t, "127.0.0.2:0")
+	ports := []int{port}
+	for p := port + 1; p < port+20; p++ {
+		ports = append(ports, p)
+	}
+	g := newGate(1)
+	c := New(nil, ports, 0)
+	c.Workers = 1
+	c.Discover = DiscoverOff
+	c.Scanner.Detect = portscan.DetectNone
+	c.Scanner.Take = g.take
+	var rowsAtFind []map[string]any
+	var all []types.Observation
+	_, err := c.Run(context.Background(), types.Seed{Type: types.TypePrefix, Keys: map[string]string{"prefix": "127.0.0.2/31"}}, func(o types.Observation) error {
+		all = append(all, o)
+		var m map[string]any
+		if json.Unmarshal(o.Payload, &m) == nil && m["checkpoint"] == true && m["ip"] == "127.0.0.2" {
+			if rowsAtFind == nil {
+				g.once.Do(func() { close(g.handed) }) // the scan may go on
+			}
+			rowsAtFind = append(rowsAtFind, m)
+		}
+		return nil
+	})
+	if err != nil || g.timeout.Load() {
+		t.Fatalf("no row for the open port before the scan ended (%v): %v", g.timeout.Load(), err)
+	}
+	if svc, _ := rowsAtFind[0]["services"].([]any); len(svc) != 1 || rowsAtFind[0]["prefix"] != "127.0.0.2/31" || !(rowsAtFind[0]["partial"] == true) {
+		t.Errorf("the early row: %v", rowsAtFind[0])
+	}
+	// The address's own row at the end is a whole scan, which a resume reads as done.
+	var final map[string]any
+	for _, m := range rows(t, all) {
+		if m["ip"] == "127.0.0.2" && m["checkpoint"] != true {
+			final = m
+		}
+	}
+	if final == nil || final["partial"] == true {
+		t.Errorf("the address's last row: %v", final)
+	}
+	if left := Priors(func() []types.StoredObservation {
+		var out []types.StoredObservation
+		for _, o := range all {
+			out = append(out, types.StoredObservation{Observation: o})
+		}
+		return out
+	}()); len(left) != 0 {
+		t.Errorf("a finished address still reads as stopped: %v", left)
 	}
 }
