@@ -91,6 +91,7 @@ The map has one row per entity, best first: the target's own pages and APIs, the
 | `body` | The body field names of all the route's operations, whatever described them. See [Operations](#operations). |
 | `forms` | One object per form on the page: `method`, `action`, `enctype`, `fields`, `files`. See [Forms](#forms). |
 | `found_in` | Up to three places where scripts name the route, calls first. See [found_in](#found_in). |
+| `headers`, `body_excerpt`, `body_length`, `body_cut`, `body_url`, `asked_at` | Not in the printed row. The answer a web row kept, for `query -fields`, `show` and `export`. See [What a row keeps](#what-a-row-keeps-of-its-answer). |
 | `watch` | Names worth trying first, by what each says it takes: `returnUrl (redirect)`, `url (url)`, `file (file)`, `cmd (command)`, `isAdmin (debug)`, `userId (id)`, `callback (callback)`. |
 | `folded` | On a summary row of names in the text map: how many dead, wildcard or unresolved names it holds. `-all-rows` and `-json` print each name as a row of its own. A name that is a takeover candidate is always a row of its own. |
 | `template`, `count`, `not_asked`, `capped` | A page that differs only by an ID is folded: its `{n}` template, how many URLs it holds, how many were not requested, and how many of those a limit kept from being asked (`coverage: capped`). See [Templates](#templates). |
@@ -211,6 +212,19 @@ An origin that answers every path with the same page (a single-page app's shell)
 - [CONCEPTS](../CONCEPTS.md#evidence-how-azhaq-knows-a-url) defines the levels, `evidence_from` and `answer`. It also lists where evidence shows: `query`, the text map and the exports.
 - `azhaq query -fields key,evidence,evidence_from` shows the level. `azhaq query -evidence answered,described` keeps the rows with those levels.
 - `answer` is `500 without input` for a 5xx that azhaq's plain request got from a route that takes names, in the query or the body. The request sent none of them.
+
+### What a row keeps of its answer
+
+- Every web row that a request answered keeps three things of that answer in the workspace: its response headers, the first 1024 bytes of its body and the time it was asked. No flag turns this on.
+- Only the response's headers are kept. What the run sent, such as `-cookie`, `-header` and `Authorization`, is never stored.
+- A `Set-Cookie` header keeps its name and flags and shows `[kept out]` for the value.
+- `body_excerpt` is the bytes as they came. `body_length` is the size of the whole body, and `body_cut` is `true` when the body is longer than the excerpt.
+- After a redirect the headers are those of the first answer, the one `status` is of. `body_excerpt` is then of the page the chain ended on, and `body_url` names it.
+- The printed map, in text and with `-json`, does not carry them. They are the fields `headers`, `body_excerpt`, `body_length`, `body_cut`, `body_url` and `asked_at`: `azhaq query -fields key,headers,body_excerpt` prints them, `azhaq show` prints them for one row, and `azhaq export -format jsonl` carries them, and the HTML report shows the headers.
+- A row costs about 1.5 KB of the workspace: 1 KB of body, written as base64, and its headers. A page of 23 KB costs the same as one of 1 KB.
+- `-sr` still writes every answer whole, to files: see [the flags](#flags).
+- A workspace made before this was kept, a row that stands for several URLs and a route no request answered have none of these fields.
+- `azhaq diff` leaves them out: two runs of an unchanged site do not differ by a date or a nonce in a header.
 
 ### Roles of a URL
 

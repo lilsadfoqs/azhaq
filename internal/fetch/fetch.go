@@ -69,6 +69,8 @@ type Result struct {
 	IP string
 	// Elapsed covers every hop, headers and body.
 	Elapsed time.Duration
+	// At is when the request was sent.
+	At time.Time
 	// Method is the request's, empty for a GET.
 	Method string
 	// Raw is the request and the last response as they went over the wire,
@@ -600,6 +602,7 @@ func hopResults(res Result) []Result {
 			Body:       res.Body,
 			Hops:       rest,
 			Truncated:  res.Truncated,
+			At:         res.At,
 
 			FinalHeader: res.FinalHeader,
 		})
@@ -714,6 +717,7 @@ func do(ctx context.Context, c *http.Client, raw string, rq *Req) (Result, error
 		FinalHeader: lastHeader,
 		IP:          viaProxy(c, raw, remoteIP),
 		Elapsed:     time.Since(start),
+		At:          start,
 		Method:      m,
 		Raw:         kept,
 		cut:         cut,

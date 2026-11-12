@@ -46,7 +46,7 @@ The output is the format you chose, on stdout.
 
 | Format | Output |
 | --- | --- |
-| `jsonl` | Everything: one object per map row (`"kind":"entity"`, with `evidence` and `evidence_from`), observation and edge. |
+| `jsonl` | Everything: one object per map row (`"kind":"entity"`, with `evidence` and `evidence_from`, and for a web row that was answered the `headers`, `body_length`, `body_cut`, `body_url` and `asked_at` of its answer: see [query](query.md#the-answer-a-row-kept)), observation and edge. The body's start is in the answering observation's payload, as base64 in `body_excerpt`: a page can name hosts outside the scope, which no row of an export does. |
 | `urls` | Every URL the workspace learned, one per line: the map's URL rows, and every URL the archives gave for the run, which the workspace keeps in `DB.urls.jsonl` beside it (the graph holds one example for each URL shape, 200 a domain). Each URL once. A workspace made before the list was kept holds only the examples, and stderr says how many archived URLs they stand for. `-coverage` and `-json` say which were visited and which were only named: see [Lists with coverage](#lists-with-coverage). |
 | `hosts` | One per line: names that resolve, and addresses given as targets or serving the web. |
 | `names` | Every name, one per line. `-coverage` and `-json` as for `urls`. |

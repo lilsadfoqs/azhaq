@@ -2538,6 +2538,10 @@ func cmdExport(args []string) error {
 		if len(row.Forms) > 0 {
 			out["forms"] = row.Forms
 		}
+		// The body's start stays in the observation (as base64): a page can
+		// name hosts outside the scope, which no row of an export does.
+		addResponse(out, row, false)
+		delete(out, "body_excerpt")
 		if err := enc.Encode(out); err != nil {
 			return err
 		}

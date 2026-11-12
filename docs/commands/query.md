@@ -25,6 +25,9 @@ azhaq query -db h1.db -type Hostname -new
 
 # Every target whose work failed: the list to retry
 azhaq query -db app.db -failed
+
+# The response headers and the start of the body a row kept
+azhaq query -db app.db -match /login -fields key,status,headers,body_excerpt -json
 ```
 
 ## What it does
@@ -45,6 +48,7 @@ Plain output is the matching rows of the map. `-json` prints one JSON object per
 | --- | --- |
 | `-json` | Map rows as `run -json` prints them, with `found_in`. |
 | `-json -fields A,B` | Only the fields you ask for. |
+| `-fields headers,body_excerpt` | The answer a web row kept: see [the answer a row kept](#the-answer-a-row-kept). |
 | `-failed` | Every failed target instead of map rows. See the table below. |
 | `-run ID` | The run to read, by the `run_id` of its summary (or the start of it, at least 4 characters): its rows, or with `-failed` its failed targets. The default is the newest run of the workspace. |
 | `-runs` | List the runs the workspace holds, newest first: the `run_id`, when it started, how many entities it saw and the requests it sent. With `-json`, one object for each. |
@@ -60,6 +64,21 @@ Plain output is the matching rows of the map. `-json` prints one JSON object per
 | `retryable` | True for timeouts, resets, dropped connections, work cut short by `-timeout`, 429 and 5xx. |
 
 The fields mean what they mean in the `failed` list of the summary: see [OUTPUT.md](../OUTPUT.md).
+
+### The answer a row kept
+
+A web row that a request answered keeps its response headers, the first 1024 bytes of its body and the time it was asked (see [What a row keeps](run.md#what-a-row-keeps-of-its-answer)). They are not in the default rows. `-fields` takes them, in text and with `-json`:
+
+| Field | Meaning |
+| --- | --- |
+| `headers` | The response headers, each name with the list of its values. |
+| `body_excerpt` | The first 1024 bytes of the body. In text it is one escaped line; in `-json` it is a string, and a byte that is not UTF-8 shows as U+FFFD (`-sr` keeps the exact bytes). |
+| `body_length` | The size of the whole body. |
+| `body_cut` | `true` when the body is longer than the excerpt. |
+| `body_url` | After a redirect, the URL the body is of. |
+| `asked_at` | When the request was sent, in UTC. |
+
+A row that stands for several URLs (a template with a `count`) has none of them.
 
 ## Summary and exit codes
 
@@ -95,7 +114,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 | Flag | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `-db` | string |  | the database (default: the last run's) |
-| `-fields` | string |  | print only these fields, comma-separated: key, type, role, coverage, status, answer, evidence, evidence_from, response_file, title, state, names, service, product, version, methods, params, body, scope, first_seen, found_in, watch, guard, protocol, namespace |
+| `-fields` | string |  | print only these fields, comma-separated: key, type, role, coverage, status, answer, evidence, evidence_from, response_file, title, state, names, service, product, version, methods, params, body, scope, first_seen, found_in, watch, guard, protocol, namespace; headers, body_excerpt, body_length, body_cut, body_url, asked_at are the answer a web row kept |
 | `-json` | bool |  | one JSON object per row, and the summary as JSON on stderr |
 | `-limit` | int |  | rows at most, best first (default 0: all) |
 <!-- flags:end -->
