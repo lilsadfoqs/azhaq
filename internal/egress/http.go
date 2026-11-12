@@ -3,6 +3,7 @@ package egress
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"net"
 	"net/http"
 	"net/url"
@@ -58,6 +59,7 @@ func (g *guarded) RoundTrip(req *http.Request) (*http.Response, error) {
 	}
 	out := keepTargetInRequestLine(g.base, req)
 	resp, err := g.send(out)
+	err = g.nameProxy(req, err)
 	if resp != nil && out != req {
 		resp.Request = req
 	}
@@ -65,6 +67,26 @@ func (g *guarded) RoundTrip(req *http.Request) (*http.Response, error) {
 		SessionWire(req, resp)
 	}
 	return resp, err
+}
+
+// nameProxy says which proxy a request that could not reach it went to:
+// "proxy 127.0.0.1:1: connection refused", not the target's refusal.
+func (g *guarded) nameProxy(req *http.Request, err error) error {
+	if err == nil || !ledger.ProxyDown(err) {
+		return err
+	}
+	var oe *net.OpError
+	errors.As(err, &oe)
+	host := ""
+	if g.base != nil && g.base.Proxy != nil {
+		if u, perr := g.base.Proxy(req); perr == nil && u != nil {
+			host = u.Host
+		}
+	}
+	if host == "" {
+		host = "(the -proxy)"
+	}
+	return &neterr.ProxyUnreachable{Proxy: host, Err: oe.Err}
 }
 
 // keepTargetInRequestLine is req, changed when it goes to an HTTP proxy in

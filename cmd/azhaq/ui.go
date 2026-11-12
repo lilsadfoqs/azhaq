@@ -217,7 +217,7 @@ func readRunLedger(rec runs.Record) (*uiLedger, error) {
 	l := &uiLedger{Path: path, ByClass: map[string]int{}, ByKind: map[string]int{}, ByPurpose: map[string]int{}, ByCollector: map[string]int{}}
 	hosts, sources := map[string]int{}, map[string]int{}
 	err := ledger.Read(path, func(e ledger.Entry) error {
-		if e.Kind == "seal" || e.Time.Before(rec.Started) || e.Time.After(end) {
+		if e.Kind == "seal" || e.NotSent || e.Time.Before(rec.Started) || e.Time.After(end) {
 			return nil
 		}
 		class := e.Class

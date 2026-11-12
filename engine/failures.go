@@ -297,9 +297,11 @@ func sourceTarget(p map[string]any, fallback string) string {
 var (
 	statusRE = lazyre.New(`(?i)(?:status(?: code)?|http)[ :=]*([45]\d\d)\b`)
 	// triedRE is an archive request that kept failing: "failed after 4 tries, 429 Too Many Requests".
-	triedRE  = lazyre.New(`^failed after \d+ tr(?:y|ies), (.*)$`)
-	leadHTTP = lazyre.New(`^(429|5\d\d)\b`)
-	quotedRE = lazyre.New(`"[^"]*"`)
+	triedRE = lazyre.New(`^failed after \d+ tr(?:y|ies), (.*)$`)
+	// proxyDownRE is a request that never reached its proxy: "proxy 127.0.0.1:1: connection refused".
+	proxyDownRE = lazyre.New(`(?:^|: )proxy (\S+?): (.+)$`)
+	leadHTTP    = lazyre.New(`^(429|5\d\d)\b`)
+	quotedRE    = lazyre.New(`"[^"]*"`)
 )
 
 // ShortError reduces an error to what went wrong, without the URL and the
@@ -321,6 +323,10 @@ func ShortError(s string) string {
 		return s
 	case strings.Contains(s, types.CutShort):
 		return types.CutShort
+	case proxyDownRE.MatchString(s):
+		// The proxy was not reached: name it, and say why in the short form.
+		m := proxyDownRE.FindStringSubmatch(s)
+		return "proxy " + m[1] + ": " + ShortError(m[2])
 	case strings.HasPrefix(s, "-proxy "):
 		// The proxy failed, not the port: the name keeps it from "connection refused".
 		return s

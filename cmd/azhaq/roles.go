@@ -38,13 +38,40 @@ var rolesProxy *url.URL
 // them, and a renewal's sign-in must resolve names as the runs did.
 var rolesResolvers func()
 
+// rolesRate is the pace of the runs (-rate), which the requests between them
+// keep; 0: none was given.
+var rolesRate float64
+
+// rolesLeft is what the command's -max-requests leaves; nil: no budget.
+var rolesLeft func() int64
+
 // rolesEgress sends the requests between the runs as the runs sent theirs:
-// through their -proxy, to the addresses their -resolvers give.
+// through their -proxy, to the addresses their -resolvers give, at their
+// pace. The transport of roles is made once, from the flags; every request
+// of the command puts it back after a fetch.Reset (the sign-in, the refusal
+// read, the renewal, each stage).
 func rolesEgress() {
 	egress.SetTargetProxy(rolesProxy)
 	if rolesResolvers != nil {
 		rolesResolvers()
 	}
+	if rolesRate > 0 {
+		egress.SetRate(rolesRate)
+	}
+}
+
+// rolesBudget holds the requests that follow to what the command's budget
+// leaves, and says whether any is left to send.
+func rolesBudget() bool {
+	if rolesLeft == nil {
+		return true
+	}
+	left := rolesLeft()
+	if left <= 0 {
+		return false
+	}
+	egress.SetMaxRequests(left)
+	return true
 }
 
 // role is one session: a name and the headers its requests carry, or the
@@ -429,8 +456,8 @@ func cmdRoles(args []string) error {
 	bodies = newBodyKeep()
 	defer func() { bodies = nil }()
 	rate := *rateFlag
-	rolesProxy, rolesResolvers = nil, nil
-	defer func() { rolesProxy, rolesResolvers = nil, nil }()
+	rolesProxy, rolesResolvers, rolesRate, rolesLeft = nil, nil, 0, nil
+	defer func() { rolesProxy, rolesResolvers, rolesRate, rolesLeft = nil, nil, 0, nil }()
 	if *proxyFlag != "" {
 		pu, err := parseProxy(*proxyFlag)
 		if err != nil {
@@ -469,6 +496,7 @@ func cmdRoles(args []string) error {
 		}
 	}
 
+	rolesRate, rolesLeft = rate, renewLeft
 	stale, soon, expired := expiryNotes(roles, time.Now())
 	if !*asJSON {
 		for _, n := range append(stale, soon...) {

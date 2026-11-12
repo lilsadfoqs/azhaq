@@ -188,7 +188,7 @@ Ctrl-C, `kill` and a hangup (SIGINT, SIGTERM and SIGHUP) all stop a command the 
 
 One rule holds for every command that sends HTTP to a target: `run`, `crawl`, `probe`, `dirs`, `fuzz`, `params`, `shots`, `roles` and the commands `watch` and `resume` repeat.
 
-- `-proxy URL` (an `http://`, `https://` or `socks5://` URL; `fuzz` also takes `-x`) sends every request of the command through it. The proxy sees each one, and the ledger counts the same.
+- `-proxy URL` (an `http://`, `https://` or `socks5://` URL; `fuzz` also takes `-x`) sends every request of the command through it. The proxy sees each one, and the ledger counts the same. That holds for the requests `roles` makes between its runs too (its sign-ins, the read that asks a refused role for the reason, a renewal). A request that could not reach the proxy (a dead `-proxy`) sent nothing: the error names it (`proxy 127.0.0.1:1: connection refused`), the ledger lists the request as `not_sent`, and no count of requests sent holds it.
 - `-proxy` sends everything through the proxy, loopback targets (`127.0.0.1`, `localhost`, `::1`) included: that is how to put a local lab in Burp.
 - Through an HTTP proxy a plain-HTTP request names its URL in the request line (`GET http://127.0.0.1:3001/path`) and sends a `Host` header you set as you set it, as curl does. The proxy connects to the URL's host, never to the one the `Host` header names.
 - Without `-proxy`, the environment's `HTTP_PROXY`, `HTTPS_PROXY` and `NO_PROXY` apply by Go's rule, as in ffuf, httpx and katana: a loopback target always stays direct, so a company proxy in the environment never gets your local labs.

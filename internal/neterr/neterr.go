@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os"
 	"strings"
 	"syscall"
 )
@@ -169,7 +170,39 @@ func UnknownHost(err error) bool {
 
 // Refused: the host answered the connect with a refusal, so it is up and
 // nothing listens on that port.
-func Refused(err error) bool { return errors.Is(err, syscall.ECONNREFUSED) }
+func Refused(err error) bool {
+	var pe *ProxyUnreachable
+	return !errors.As(err, &pe) && errors.Is(err, syscall.ECONNREFUSED)
+}
+
+// ProxyUnreachable is a request whose connection to its -proxy failed: no
+// byte of it left, and the target said nothing. Refused does not take it
+// for the target's refusal.
+type ProxyUnreachable struct {
+	Proxy string // host:port
+	Err   error
+}
+
+func (e *ProxyUnreachable) Error() string { return "proxy " + e.Proxy + ": " + e.Reason() }
+func (e *ProxyUnreachable) Unwrap() error { return e.Err }
+
+// Reason is what went wrong at the proxy without the layers of net's
+// wrapping: "connection refused", "i/o timeout".
+func (e *ProxyUnreachable) Reason() string {
+	err := e.Err
+	for {
+		var oe *net.OpError
+		var se *os.SyscallError
+		switch {
+		case errors.As(err, &oe) && oe.Err != nil:
+			err = oe.Err
+		case errors.As(err, &se) && se.Err != nil:
+			err = se.Err
+		default:
+			return err.Error()
+		}
+	}
+}
 
 // Unanswered: the origin gave no answer at all (a connect refused or
 // without a route, a timeout), as opposed to an answer that was not

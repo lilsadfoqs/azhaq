@@ -75,3 +75,17 @@ func TestShortErrorKeepsTheTLSReason(t *testing.T) {
 		}
 	}
 }
+
+// A request that never reached its proxy says which proxy, and why in the
+// short form.
+func TestShortErrorNamesAProxyThatWasNotReached(t *testing.T) {
+	for in, want := range map[string]string{
+		`Get "http://127.0.0.1:18765/": proxy 127.0.0.1:1: connection refused`:    "proxy 127.0.0.1:1: connection refused",
+		`proxy proxy.test:8080: i/o timeout`:                                      "proxy proxy.test:8080: timeout",
+		`Get "http://a.test/": dial tcp 127.0.0.1:1: connect: connection refused`: "connection refused",
+	} {
+		if got := ShortError(in); got != want {
+			t.Errorf("ShortError(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

@@ -220,13 +220,15 @@ type ledgerLine struct {
 	Target string `json:"target"`
 	Host   string `json:"host"`
 	Proto  string `json:"proto"`
+	// NotSent: the line says a request was tried and no byte of it left.
+	NotSent bool `json:"not_sent"`
 }
 
 // toTarget says the line is a request or connection to a target that the
 // summary counts. A probe is listed apart: its bytes went on a connection
 // that has a line of its own.
 func (l ledgerLine) toTarget() bool {
-	return l.Kind != "seal" && l.Kind != "probe" && (l.Class == "" || l.Class == "target")
+	return l.Kind != "seal" && l.Kind != "probe" && !l.NotSent && (l.Class == "" || l.Class == "target")
 }
 
 // readLedger reads every line of a ledger file.

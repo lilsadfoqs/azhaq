@@ -414,7 +414,8 @@ func TestMarshalIsJSONMarshal(t *testing.T) {
 			}
 		}
 	}
-	for _, e := range []Entry{{}, {Seq: -1, Kind: "seal"}, {Seq: 1 << 62, Time: base, Kind: "http", Target: "x"}} {
+	for _, e := range []Entry{{}, {Seq: -1, Kind: "seal"}, {Seq: 1 << 62, Time: base, Kind: "http", Target: "x"},
+		{Seq: 3, Time: base, Kind: "http", Class: "target", Method: "GET", Target: "http://a.test/", Purpose: "pages", NotSent: true, Prev: "p", Hash: "h"}} {
 		want, _ := json.Marshal(e)
 		if got := marshal(e); !bytes.Equal(got, want) {
 			t.Errorf("entry %+v:\n got %s\nwant %s", e, got, want)
