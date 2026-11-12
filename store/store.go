@@ -1022,8 +1022,9 @@ func obsKey(o types.StoredObservation) string {
 // size on a page with a CSRF token or captcha, the session a run was given,
 // response times, the CDN address that answered, the identifiers an
 // answer held (a captcha id), and the bytes of the body kept as proof (a
-// metrics page's counters, a trace's timestamps), with where they were.
-var volatile = []string{"body_hash", "auth", "length", "words", "lines", "ms", "ip", "json_ids", "head", "trace_excerpt", "trace_offset"}
+// metrics page's counters, a trace's timestamps), with where they were and
+// their hash.
+var volatile = []string{"body_hash", "auth", "length", "words", "lines", "ms", "ip", "json_ids", "head", "trace_excerpt", "trace_offset", "answer_hash"}
 
 // stablePayload is the payload as diff compares it: volatile fields
 // dropped, per-source timings dropped, response headers reduced to
@@ -1041,6 +1042,7 @@ func stablePayload(raw json.RawMessage) string {
 		for _, v := range srcs {
 			if row, ok := v.(map[string]any); ok {
 				delete(row, "seconds")
+				delete(row, "waited_seconds")
 			}
 		}
 	}

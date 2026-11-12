@@ -354,7 +354,7 @@ func benchApps() []appResult {
 	_, _, _ = runAzhaq(juiceURL, db("juice-again"))
 	sum := diffSummary(db("juice"), db("juice-again"))
 	addCheck("identical runs diff empty", sum.Added == 0 && sum.Removed == 0 && sum.Observations == 0,
-		"added=%d removed=%d observations=%d", sum.Added, sum.Removed, sum.Observations)
+		"added=%d removed=%d observations=%d%s", sum.Added, sum.Removed, sum.Observations, diffLines(sum.Lines))
 
 	// VAmPI: the OpenAPI document.
 	vampi := appResult{Name: "vampi", URL: vampiURL}
@@ -653,6 +653,9 @@ type diffSum struct {
 	Removed      int  `json:"removed"`
 	Observations int  `json:"observations"`
 	SeedsDiffer  bool `json:"seeds_differ"`
+	// Lines are the first few lines of the diff that are not its summary:
+	// what differed, so a failed check says which row and field.
+	Lines []string `json:"-"`
 }
 
 func diffSummary(a, b string) diffSum {
@@ -663,10 +666,22 @@ func diffSummary(a, b string) diffSum {
 			Kind string `json:"kind"`
 		}
 		if json.Unmarshal([]byte(l), &probe) == nil && probe.Kind == "summary" {
+			lines := s.Lines
 			_ = json.Unmarshal([]byte(l), &s)
+			s.Lines = lines
+		} else if len(s.Lines) < 3 {
+			s.Lines = append(s.Lines, clip(l, 400))
 		}
 	}
 	return s
+}
+
+// diffLines is the lines of a diff a check names, or nothing.
+func diffLines(lines []string) string {
+	if len(lines) == 0 {
+		return ""
+	}
+	return "; " + strings.Join(lines, " | ")
 }
 
 func countLines(out []byte, pattern string) int {
