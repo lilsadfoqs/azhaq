@@ -144,6 +144,7 @@ type sendLimits struct {
 	portDiscover portcol.Discovery
 	axfr         bool     // -axfr: plan the zone transfers of dns -axfr too
 	verify       bool     // -verify: the enumerated read-only verification checks
+	verifyLogins bool     // -verify-logins: published default logins and unauthenticated reads
 	resolvers    []string // the resolvers named (-resolvers)
 	paramsN      int      // names of -params
 	dirsNoCal    bool     // -dirs-calibrate=false
@@ -224,6 +225,14 @@ func planSends(b engine.Budgets, send sendLimits) (gets, others []string) {
 			*out = append(*out, fmt.Sprintf("one verification read to each %s service confirmed (-verify %s): sends %s and no credential; precondition: %s", c.Service, c.ID, c.Request, c.Precondition))
 		}
 		*out = append(*out, "with -advisories, each advisory lead is labelled proved, version-only or conditional from its confirmation read (-verify): the one GET the advisory names, or of /, held to -deny-path like any GET; a data-store read is a TCP connect with no path, held to the scope, the budget, the kill file and the ledger")
+	}
+	if send.verifyLogins {
+		for _, lg := range verify.DefaultLogins() {
+			*out = append(*out, fmt.Sprintf("for a confirmed %s service, one sign-in attempt with its published default credential pair (-verify-logins %s): stops at the first success, and for that host at a lockout sign, a 429 or a captcha on the sign-in page; source: %s", lg.Product, lg.ID, lg.Source))
+		}
+		for _, u := range verify.UnauthReads() {
+			*out = append(*out, fmt.Sprintf("for a confirmed %s service, one GET of %s with no credential, compared with the same GET carrying a deliberately wrong credential (-verify-logins %s): a finding only when the unauthenticated GET shows the protected content; source: %s", u.Product, u.Path, u.ID, u.Source))
+		}
 	}
 	if send.shots != "" {
 		*out = append(*out, fmt.Sprintf("Chrome loads the front page of each web service and saves a screenshot in %s (-screenshots, azhaq-shots): it also requests the page's scripts, styles and images, so a page costs more than one GET", send.shots))

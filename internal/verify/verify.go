@@ -517,6 +517,10 @@ func AdvisoryResult(lead advisory.Lead, request string) (Result, bool) {
 // no data to rate one).
 func severityOf(r Result) string {
 	switch {
+	case r.Kind == KindDefaultLogin && r.Label == Proved:
+		return "critical" // a published default credential pair signed in
+	case r.Kind == KindUnauthenticatedBypass && r.Label == Proved:
+		return "high" // a sign-in-gated resource answered with no credential
 	case r.Kind == KindUnauthenticatedRead && r.Label == Proved:
 		return "high" // a data store answered a read with no credential
 	case r.Kind == KindAdvisoryPrecond && r.Label == Proved:
