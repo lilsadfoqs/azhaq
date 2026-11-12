@@ -26,6 +26,7 @@ import (
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"github.com/lilsadfoqs/azhaq/scope"
 	"github.com/lilsadfoqs/azhaq/store"
+	"github.com/lilsadfoqs/azhaq/types"
 )
 
 // cmdFuzz is ffuf: a request template with keywords, wordlists put into
@@ -700,6 +701,9 @@ func cmdFuzz(args []string) error {
 		if err := keepFuzzHits(c.db, hitsKept, tmpl.Method, keptArgv, true); err != nil {
 			return err
 		}
+		if err := keepFuzzHeld(c.db, st.StateHeld, keptArgv); err != nil {
+			return err
+		}
 		rep.DB = c.db
 		rep.Next = append(rep.Next, "azhaq query -db "+c.db)
 	}
@@ -944,6 +948,38 @@ func keepFuzzHits(path string, hits []fuzz.Result, method string, argv []string,
 	}
 	if final && st.GetMeta("seeds") == "" {
 		_ = st.SaveSeeds(hints)
+	}
+	return nil
+}
+
+// keepFuzzHeld stores each input held back as a skipped row of its own URL,
+// with its reason, so that query finds it.
+func keepFuzzHeld(path string, held []fuzz.HeldInput, argv []string) error {
+	if len(held) == 0 {
+		return nil
+	}
+	st, err := store.Open(path)
+	if err != nil {
+		return err
+	}
+	defer st.Close()
+	if _, err := fuzzRun(st, argv); err != nil {
+		return err
+	}
+	now := time.Now().UTC()
+	for _, h := range held {
+		u := h.URL
+		if n, err := normalize.URL(u); err == nil {
+			u = n
+		}
+		ent, err := st.UpsertEntity(types.TypeURL, u, now)
+		if err != nil {
+			return err
+		}
+		raw, _ := json.Marshal(map[string]string{"skipped": neterr.HeldReason(h.Word)})
+		if _, err := st.AddObservation(ent.ID, types.Observation{Collector: "azhaq-fuzz", Source: "fuzz", Kind: "skipped", Payload: raw, Confidence: 0.9, ObservedAt: now}); err != nil {
+			return err
+		}
 	}
 	return nil
 }
