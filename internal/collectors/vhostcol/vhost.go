@@ -135,12 +135,25 @@ type pair struct {
 	svc  *service
 }
 
-func (c *Collector) addName(name string) []pair {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+// ready makes the sets, with c.mu held.
+func (c *Collector) ready() {
 	if c.names == nil {
 		c.names, c.services, c.byName, c.paired = map[string]bool{}, map[string]*service{}, map[string]bool{}, map[string]bool{}
 	}
+}
+
+// askedByNameURL records a service asked by a name that is no address in scope.
+func (c *Collector) askedByNameURL(name, port string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.ready()
+	c.byName[name+":"+port] = true
+}
+
+func (c *Collector) addName(name string) []pair {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.ready()
 	if c.names[name] {
 		return nil
 	}
@@ -155,9 +168,7 @@ func (c *Collector) addName(name string) []pair {
 func (c *Collector) addService(s *service, byName string) []pair {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if c.names == nil {
-		c.names, c.services, c.byName, c.paired = map[string]bool{}, map[string]*service{}, map[string]bool{}, map[string]bool{}
-	}
+	c.ready()
 	if byName != "" {
 		c.byName[byName+":"+s.port] = true
 	}
@@ -222,9 +233,7 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 			if egress.AllowsAddr(ip, port) {
 				todo = append(todo, c.addService(&service{scheme: scheme, ip: ip, port: port}, byName)...)
 			} else if byName != "" {
-				c.mu.Lock()
-				c.byName[byName+":"+port] = true
-				c.mu.Unlock()
+				c.askedByNameURL(byName, port)
 			}
 		}
 	}

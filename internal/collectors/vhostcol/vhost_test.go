@@ -10,6 +10,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/lilsadfoqs/azhaq/internal/egress"
 	"github.com/lilsadfoqs/azhaq/types"
@@ -202,5 +203,21 @@ func TestANameOnAScannedPortIsNotAskedTwice(t *testing.T) {
 	feed(t, &Collector{Scanned: []int{port}}, hostSeed("wiki.lab.zz"), urlSeed("http://127.0.0.1:"+s.port+"/"))
 	if n := s.seen("wiki.lab.zz:" + s.port); n != 0 {
 		t.Errorf("asked %d times as a virtual host on a port the run scans", n)
+	}
+}
+
+// A URL whose name resolves to an address outside the scope, met before any
+// name or service, must not leave the join locked: the next name still runs.
+func TestAServiceOutsideTheScopeDoesNotLockTheJoin(t *testing.T) {
+	resolving(t, map[string][]string{"app.lab.zz": {"127.0.0.1"}})
+	egress.SetScope(func(h string) bool { return h == "app.lab.zz" })
+	c := &Collector{}
+	feed(t, c, urlSeed("http://app.lab.zz:9/"))
+	done := make(chan struct{})
+	go func() { feed(t, c, hostSeed("app.lab.zz")); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the join stayed locked after a service outside the scope")
 	}
 }
