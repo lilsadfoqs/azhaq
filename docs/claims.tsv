@@ -6,7 +6,6 @@
 # id <TAB> page <TAB> a piece of the claim's own text <TAB> proof
 # proof: test:DIR:TestName[,TestName] | bench:TEXT of a bench check | file:PATH | note:WHY
 # The id starts with the page it is about (README.md: readme., docs/commands/plan.md: plan.).
-
 # The README and every page of docs/commands are covered without a line here: a new page cannot
 # start with a claim that has no proof. Pages of docs/ are covered by section, as named below.
 @cover docs/CONCEPTS.md#Scope
@@ -23,7 +22,6 @@
 @cover docs/START.md#2. Compare two sessions
 @cover docs/START.md#3. Verify a service
 @cover docs/START.md#4. Hand over findings
-
 readme.first-map	README.md	A name, an address or a URL with its scheme is the whole command	test:cmd/azhaq:TestGuidedRunMakesTheSameMapAsTheExplicitRun,TestAWordThatIsATargetStartsTheGuidedRun,TestATopPortsScanNamesTheUnaskedRange
 readme.drop-in	README.md	with their flags and JSON field names	test:cmd/azhaq:TestMigratingCoversTheTools,TestDocsNameOnlyFlagsThatExist;bench:drop-in: azhaq probe reads stdin and writes httpx's JSON fields
 readme.maps-and-compares	README.md	It maps the routes an app's JavaScript calls and compares what each of your accounts may read and write	bench:juice-shop: ≥ 90% of the server routes its frontend calls;bench:roles: Juice Shop anonymous → user
@@ -300,7 +298,6 @@ shots.rows-add-up	docs/commands/shots.md	Each ends as one row, and the rows add 
 shots.asked-as-given	docs/commands/shots.md	the name in it is not also asked on 443 and 80	test:cmd/azhaq:TestShotsAsksOnlyThePageGiven,TestShotsBareNameIsStillAskedOnTheWebPorts
 shots.redirect-one-row	docs/commands/shots.md	the destination is not a second target, row or file	test:cmd/azhaq:TestShotsRedirectIsOneRowWithTheDestinationInFinalURL;test:internal/collectors/shotcol:TestSkipLeavesWhereAPageRedirectedTo
 shots.failed-row	docs/commands/shots.md	A target with no picture has a row of its own	test:cmd/azhaq:TestShotMissesGiveEveryTargetItsRow,TestShotsBatchGivesEveryTargetARow,TestShotsEveryTargetFailedExits3WithRows
-
 # docs/commands/roles.md
 roles.replay-asks-every-endpoint-of-every-role	docs/commands/roles.md	It then asks every endpoint any role reached with every other role's session,	test:cmd/azhaq:TestRolesAskEveryEndpointOfEveryOtherRole
 roles.a-role-sends-only-its-headers	docs/commands/roles.md	A role sends only the headers it is given.	test:cmd/azhaq:TestRolesARoleSendsOnlyTheHeadersItIsGiven
@@ -487,7 +484,6 @@ roles.show-curl-line-with-a-shell-variable	docs/commands/roles.md	- per role, a 
 roles.show-diff-at-most-20-lines	docs/commands/roles.md	- how the role's body differs from the owner's, or from the first role's that	test:cmd/azhaq:TestRolesShowDiffLinesAreAtMostTwentyAndTellWhoHoldsWhat
 roles.show-diff-signs	docs/commands/roles.md	`-` is the owner's only, `+` is this role's only, and `~` is a changed value.	test:cmd/azhaq:TestRolesShowDiffLinesAreAtMostTwentyAndTellWhoHoldsWhat,TestRolesShowEvidence
 roles.show-body-prints-the-body-and-nothing-else	docs/commands/roles.md	- `-body ROLE` prints the body ROLE got, as kept, and nothing else.	test:cmd/azhaq:TestRolesShowBodyPrintsTheBodyAndNothingElse
-
 # docs/commands/show.md
 show.shows-what-found-it-what-it-leads-to-every-observation	docs/commands/show.md	Everything known about one URL, host or name: what found it, what it leads to,	test:cmd/azhaq:TestShowPrintsWhatFoundItWhatItLeadsToAndEveryObservation
 show.keeps-every-run	docs/commands/show.md	A workspace keeps every run, and `show` reads the newest.	test:cmd/azhaq:TestWorkspaceKeepsEarlierRuns
@@ -509,7 +505,6 @@ show.a-rule-of-its-own-is-recovered	docs/commands/show.md	A server that blocks i
 show.named-endpoints-are-asked-before-guessed-ones	docs/commands/show.md	- Endpoints a script or a description names are asked before the ones only a	test:engine:TestBudgetGoesToNamedGraphQLBeforeGuessed
 show.an-ide-page-is-not-asked-once-the-origin-gave-a-schema	docs/commands/show.md	- A GraphiQL or Playground page (one whose GET served the IDE) is not asked for	test:internal/collectors/gqlcol:TestIDEPageSkippedAfterTheOriginsSchema,TestIDERecoveryStopsWhenTheOriginsSchemaArrives
 show.with-no-schema-the-page-is-recovered-as-any-endpoint	docs/commands/show.md	With no such schema on its origin, the page is recovered as any endpoint is,	test:internal/collectors/gqlcol:TestPageThatBlocksIntrospectionByRuleIsRecovered,TestIDEPageThatRefusesTwiceTheSameWayIsDropped
-
 # docs/commands/watch.md
 watch.sends-the-change-set-to-every-target	docs/commands/watch.md	Sends the change set to every `-notify` URL, `-notify-config` provider and	test:cmd/azhaq:TestWatchSendsToEveryTargetWhenSomethingChangedOrAlways,TestWatchAlwaysSendsTheBaselineAndEveryRunAfterIt
 watch.runs-again-after-every	docs/commands/watch.md	Runs again after `-every`.	test:cmd/azhaq:TestWatchEveryRunsAgainUntilASignalAndOnlyASignalEndsIt
@@ -543,7 +538,6 @@ watch.a-failed-delivery-is-printed-without-the-url	docs/commands/watch.md	- A de
 watch.every-notification-request-is-in-the-ledger-and-counted	docs/commands/watch.md	- Every notification request is in the ledger and counted.	test:cmd/azhaq:TestWatchNotificationsAreInTheLedgerAndTheSummary
 watch.each-try-is-a-source-line-listed-by-host	docs/commands/watch.md	Each try of each delivery is a line of class `source`, listed by the webhook's	test:cmd/azhaq:TestWatchNotificationsAreInTheLedgerAndTheSummary
 watch.ledger-off-keeps-nothing-and-still-counts	docs/commands/watch.md	With `-ledger off` after `--` nothing is kept, and the requests are still	test:cmd/azhaq:TestWatchDeliveriesGoThroughOneSenderAndAreCounted
-
 # docs/commands/gallery.md
 gallery.it-sends-nothing-to-any-target	docs/commands/gallery.md	It sends nothing to any target.	test:internal/gallery:TestMakesNoOutgoingConnection
 gallery.the-page-is-embedded-and-works-offline	docs/commands/gallery.md	- The page is embedded in the binary and works offline: no CDN, no external	test:internal/gallery:TestNothingExternalInTheSource,TestMakesNoOutgoingConnection
@@ -562,7 +556,6 @@ gallery.a-zero-port-takes-any-free-port	docs/commands/gallery.md	`127.0.0.1:0` t
 gallery.a-loopback-gallery-answers-only-loopback-hosts	docs/commands/gallery.md	- A gallery bound to a loopback address answers only requests that name a	test:internal/gallery:TestHostGuard;test:cmd/azhaq:TestGalleryListenTakesAFreePortAndAnswersOnlyLoopbackHostsUnlessBoundElsewhere
 gallery.bound-elsewhere-it-shows-every-page-to-anyone	docs/commands/gallery.md	- Bound elsewhere (`-listen 0.0.0.0:7180`), it shows every page in the	test:internal/gallery:TestHostGuard;test:cmd/azhaq:TestGalleryListenTakesAFreePortAndAnswersOnlyLoopbackHostsUnlessBoundElsewhere
 gallery.every-response-is-json-except-the-pictures	docs/commands/gallery.md	Every response is JSON except the pictures.	test:internal/gallery:TestEveryResponseOfTheAPIIsJSONExceptThePictures
-
 # docs/commands/asn.md
 asn.nothing-is-sent-to-the-addresses-of-the-as	docs/commands/asn.md	Nothing is sent to the addresses of the AS: the prefixes are listed, not	test:cmd/azhaq:TestASNAsksRIPEstatOnlyListsEachPrefixOnceAndAnyFailureIsExit3
 asn.silent-prints-the-prefixes-only	docs/commands/asn.md	`-silent` prints the prefixes only, with no progress.	test:cmd/azhaq:TestASNAsksRIPEstatOnlyListsEachPrefixOnceAndAnyFailureIsExit3
@@ -592,7 +585,6 @@ resume.fuzz-note-not-given	docs/commands/resume.md	A resume that was not given w
 resume.not-kept-for-next	docs/commands/resume.md	What a resume is given for itself (`-quiet`, `-max-requests`) is not kept for the next one.	test:cmd/azhaq:TestFuzzResumeDoesNotKeepWhatItWasGivenForItself
 resume.fuzz-spelling	docs/commands/resume.md	`resume` takes run's flags, and gives them to a stopped `fuzz` as it spells them	test:cmd/azhaq:TestResumeOfFuzzTakesRunsFlags,TestFuzzSpellingTurnsRunsTimeoutIntoMaxtime,TestFuzzResumeDoesNotKeepWhatItWasGivenForItself
 resume.removed-flags	docs/commands/resume.md	`-all-gets` and `-get-words` are dropped from a run an older azhaq stored	test:cmd/azhaq:TestResumeDropsTheFlagsAnOlderAzhaqStored,TestResumeDropsRemovedFlags
-
 # docs/commands/urls.md
 urls.www-is-the-domain	docs/commands/urls.md	Without `-subs`, `www.DOMAIN` counts as the domain itself	test:internal/collectors/urlcol:TestApexAsksTheHostAlone,TestHostOnTakesWWWAsTheDomain;test:cmd/azhaq:TestURLsApexStreamAndSort
 urls.printed-as-pages-arrive	docs/commands/urls.md	By default URLs are printed as each archive page arrives, unsorted, when stdout is not a terminal.	test:cmd/azhaq:TestURLsPrintsEachURLAsItsPageArrivesAndUnsorted
@@ -619,7 +611,6 @@ urls.filter-notes	docs/commands/urls.md	The notes say the same in words	test:cmd
 urls.filter-counts	docs/commands/urls.md	Notes say so: `otx: -mc left out 22 URLs` and `otx: 33 URLs have no recorded status, which -mc needs: they are kept, not judged`.	test:cmd/azhaq:TestURLsFiltersJudgeOnlyTheRowsThatHaveTheField
 urls.filter-by-archive	docs/commands/urls.md	The Wayback Machine, Common Crawl and arquivo.pt apply the filters themselves and give only what passed, so what they left out cannot be counted	test:cmd/azhaq:TestURLsFiltersSentToWaybackAreSaidNotCounted
 urls.live-max-spread	docs/commands/urls.md	`-live-max N` asks only N URLs, spread evenly over the sorted list	test:cmd/azhaq:TestURLsLiveAsksOnceAfterTheArchivesAndSaysWhatItDid
-
 # docs/commands/ports.md
 ports.names-by-answer	docs/commands/ports.md	It names each service by what the port answers, on any port, and gives products and versions.	test:internal/portscan:TestLadderFindsServicesOnOtherPorts,TestScanNamesProducts,TestScanFindsRedisAndPostgresOnOtherPorts,TestProtocolReaders
 ports.silent-asked-again	docs/commands/ports.md	Asks the ports that neither accepted nor refused a connect once more, when few did not answer.	test:internal/portscan:TestSilentPortsAskedTwice,TestSilentPortAskedTwiceOnALoopbackQueue,TestAgainRule,TestTimedOutConnectIsAskedAgainAfterTheQueueDrains
@@ -717,7 +708,6 @@ ports.verify-labels	docs/commands/ports.md	Each answer is labelled `proved`	test
 ports.verify-through-egress	docs/commands/ports.md	Every read goes through the scope, the kill file, `-max-requests` and the pace, and is a ledger line of the collector `azhaq-verify`: the `tcp` line of its connection and a `probe` line of the read.	test:cmd/azhaq:TestVerifyReadsGoThroughScopeKillFileBudgetAndPace,TestVerifyReadIsATCPLineAndAProbeLineOfAzhaqVerify,TestVerifyStageBudgetStopsReads,TestVerifyPortsEndToEnd,TestVerifyDenyPathKeepsConfirmationOut
 ports.verify-never-payload	docs/commands/ports.md	Never a payload, a write, a credential or a request that tries to trigger a flaw.	test:internal/verify:TestChecksEnumeratePreconditions,TestRedisUnauthenticatedIsProved,TestMemcachedUnauthenticatedIsProved,TestMongoUnauthenticatedIsProved
 ports.verify-pointer	docs/commands/ports.md	The checks, the labels and the boundary are in [Read-only verification]	note:a pointer to the concepts page
-
 # docs/commands/run.md
 run.permute-names	docs/commands/run.md	`-permute` still varies the names `-dns-brute` found, whatever `-depth	test:cmd/azhaq:TestRunPermutesTheNamesTheBruteForceFound,TestRunKeepsTheAnswersOfTheNamesItGuessed
 run.permute-unvaried	docs/commands/run.md	A name found past `-depth` and not resolved is not varied, and a note 	test:cmd/azhaq:TestUnvariedCountsNamesPastDepthThatNothingResolved
@@ -956,7 +946,6 @@ subs.live-definition	docs/commands/subs.md	A name is live when DNS has a record 
 subs.no-live-nothing-looked-up-2	docs/commands/subs.md	Without `-live` nothing is looked up. The guesses are listed with `"unverified": true`, and the summary counts them.	test:cmd/azhaq:TestSubsWithoutLiveLooksNothingUp,TestSubsGuessesFlagPrintsThemUnverified
 subs.guess-not-checked-live	docs/commands/subs.md	With `-live`, a guess that could not be checked, near `-timeout` or `-max-time` or with the DNS lookups failing, is left out and counted as `not checked`. The source's status says `N of its names not checked`, and `azhaq resume` checks them.	test:cmd/azhaq:TestSubsMaxTimeBoundsSampledGuessesToo,TestSubsLiveStoppedByTimeLimitThenResumedClean;test:internal/collectors/subcol:TestFailedCheckIsUnverifiedNotDropped,TestCheckCutByTheLimitIsNotAFailedLookup
 subs.dns-no-sources-block	docs/commands/subs.md	`dns` asks resolvers, not sources, and has no such block.	test:cmd/azhaq:TestDNSSummaryHasNoSourcesBlock
-
 # docs/commands/dns.md
 dns.any-type-no-wildcard	docs/commands/dns.md	Resolves names for any record type and leaves out wildcard answers.	test:cmd/azhaq:TestDNSRecordTypesAndFields,TestDNSWildcards
 dns.wildcard-left-out	docs/commands/dns.md	Leaves out a name that only resolves through a wildcard zone.	test:cmd/azhaq:TestDNSWildcards,TestDNSNestedWildcard,TestDNSWordsCountAWildcardAnswerApart
@@ -982,7 +971,6 @@ dns.retry-defaults	docs/commands/dns.md	The default is 3, where dnsx's is 2, and
 dns.second-pass	docs/commands/dns.md	A name no resolver answered is asked again in a second pass at a quarter of the concurrency. When none of a batch of 16 names or more was answered, the resolvers are down, not busy, and there is no second pass. The second pass asks 16 of them first, spread over the list and once each, and ends there when none is answered, because the rest would fail alike.	test:internal/dnsr:TestSecondPassRunsAtAQuarterOfTheConcurrency,TestNoSecondPassWhenNoneOfSixteenNamesOrMoreIsAnswered,TestSecondPassProbeAsksEachSampledNameOnce,TestResolveManySecondPassEndsWhenNoneOfItsFirstNamesAnswers,TestResolveManySecondPassGoesOnWhenItsFirstNamesAnswer
 dns.rl-names-a-second	docs/commands/dns.md	`-rl N` is names a second over all resolvers, as in dnsx.	test:cmd/azhaq:TestDNSRateIsPerNameAcrossResolvers
 dns.dnsx-measurement	docs/commands/dns.md	In one test run, `-rl` of dnsx 1.x did not slow the queries of `-d` with `-w` (20 names at `-rl 1` took 0.46 s).	note:a measurement of another tool, dnsx, on one occasion
-
 # docs/commands/hunt.md
 hunt.intro-no-start	docs/commands/hunt.md	A map of thousands of routes does not say where to start.	note:the reason hunt exists, an opinion about maps and not a behaviour
 hunt.sends-nothing	docs/commands/hunt.md	It reads the workspace and sends nothing.	test:cmd/azhaq:TestHuntSendsNothing
@@ -994,7 +982,6 @@ hunt.template-pages-left-out	docs/commands/hunt.md	The pages that only carry it 
 hunt.last-rows	docs/commands/hunt.md	Rows only a script names and the server did not confirm, and a `takeover-candidate` that is the row's only signal, come after every other row, whatever their score	test:internal/hunt:TestAnUnconfirmedNamedRouteKeepsItsScriptSignalsAndComesAfterEveryConfirmedRow,TestDanglingTakeoverIsAnUnverifiedCandidate,TestNamedRouteThatAnswered404RanksBelowOneTheServerConfirmed
 hunt.secret-leaves-out	docs/commands/hunt.md	It leaves out placeholders, a parser's token tables, values with much punctuation, a class name a CSS module made (`_tokensUsage_dypaw_41`) a value that repeats its own name (`secretName: "secretName-input"`) and a translation key or a reference to one: two or more words of letters only, joined by `_` or `-`, each with a vowel and no capital after its first letter, and an optional leading `@` (`@Button_Cancel`, `Enter_Your_Password`).	test:internal/webextract:TestGenericSecretNeedsLengthEntropyAndNoPlaceholderOrPunctuation,TestSecretsSkipParserTables,TestSecretsSkipLabels,TestSecretsSkipTranslationReferences,TestSecretsInPlantedScript
 hunt.new-adds-little	docs/commands/hunt.md	`new` adds a little, and only when the workspace also holds URLs older than `-since`.	test:internal/hunt:TestNewAloneNeverRanks
-hunt.5xx-lead	docs/commands/hunt.md	A 5xx is a lead, not a finding.	test:internal/hunt:TestServerErrorNeedsCorroboration,TestGenericServerErrorRanksBelowWhatTakesInput
 hunt.500-without-input	docs/commands/hunt.md	The map row's `answer` is then `500 without input`	test:engine:TestAnswerWithoutInput;test:cmd/azhaq:TestMapRowsSayHowKnownAndListNoPrefix
 hunt.sign-in-weighs-ten	docs/commands/hunt.md	A sign-in, sign-up or password reset page (`login`, `signin`, `signon`, `logon`, `reset`, `forgot`, `recover`, `register`, `signup`; a route that is not an API) is an asset to note, not a weakness by itself: it weighs 10, and a data word beside it (`/user/login`, `/reset_password`) adds at most 10.	test:internal/hunt:TestASignInPageWeighsTenAndADataWordAddsAtMostTen,TestSignInPagesRankBelowRealSignals
 hunt.methods-count-in-full	docs/commands/hunt.md	A route that a script or a description gives methods for counts in full, even when it was not asked.	test:internal/hunt:TestARouteWithMethodsCountsInFullAndANamedOneWeighsHalf
@@ -1005,7 +992,6 @@ hunt.named-keeps-signals	docs/commands/hunt.md	It still keeps the signals the sc
 hunt.named-nothing-else-left-out	docs/commands/hunt.md	When nothing else is known of the route the row is left out.	test:internal/hunt:TestAnUnconfirmedNamedRouteKeepsItsScriptSignalsAndComesAfterEveryConfirmedRow
 hunt.template-definition	docs/commands/hunt.md	An input name that most pages of an origin carry belongs to the site's template, such as a search box or a sign-in form in every page's header.	test:internal/hunt:TestInputOfTheSiteTemplateIsOneRow,TestSearchBoxOnMostPagesIsOneRowBelowARealSignal
 hunt.named-says-client-calls	docs/commands/hunt.md	A script that names a route says the client calls it, not that the server has it, and a GET that answers 404 or 410 shows nothing of a POST-only route either.	test:internal/hunt:TestNamedRouteThatAnswered404RanksBelowOneTheServerConfirmed
-
 # docs/commands/probe.md
 probe.every-target	docs/commands/probe.md	Accounts for every target: it ends as a row, a failure (a row with `failed: true`) or a skip (named under `skipped` in the summary, with no row).	test:cmd/azhaq:TestProbeEveryTargetEndsAsARowAFailureOrASkip,TestProbeOneRowPerInput,TestProbeFailureRows
 probe.methods-only-when-asked	docs/commands/probe.md	Sends other methods or your own request only when you ask: `-x` adds methods, `-request` sends a request file.	test:cmd/azhaq:TestProbeSendsOnlyGETUnlessAsked,TestProbeSendsWhatIsAsked
@@ -1025,7 +1011,6 @@ probe.path-join	docs/commands/probe.md	One slash goes between the two paths, a p
 probe.rl-first-request	docs/commands/probe.md	Its favicon, redirects and second scheme do not.	test:cmd/azhaq:TestProbeRLWaitsOnlyForAServicesFirstRequestAndRatePacesEveryRequest,TestProbeRLDoesNotMakeTheSecondSchemeWait,TestProbeRLPacesServices
 probe.rate-every-request	docs/commands/probe.md	`-rate N` paces every request instead.	test:cmd/azhaq:TestProbeRLWaitsOnlyForAServicesFirstRequestAndRatePacesEveryRequest
 probe.kb-no-model	docs/commands/probe.md	azhaq never downloads the model. Without it, the command is a usage error, exit 2, that says where to fetch it: `the page classifier's model is not at …`.	test:cmd/azhaq:TestProbeKBWithoutTheModelIsAUsageError
-
 # docs/commands/params.md
 params.weak-evidence-checked	docs/commands/params.md	A name whose only evidence is `size`, `lines` or `body` is checked once more before it is kept: four names no page reads, as long as it, are asked, and each answer it gave must differ from them and from the reference by more than the page shows by itself.	test:internal/collectors/paramcol:TestAChangeInSizeAloneIsCheckedAgainstFourNamesAsLongAsIt,TestSizeWithinThePagesOwnVarianceIsNoCandidate
 params.ignored-name	docs/commands/params.md	A name the page ignores (`utm_source`) is not reported. On a page that prints what it is sent, only the rename is judged.	test:internal/collectors/paramcol:TestParamInInputURLIsFound,TestParamInInputURLOnAnEchoingPage
@@ -1040,7 +1025,6 @@ params.names-in-order	docs/commands/params.md	Names are sent in the order given,
 params.deny-path	docs/commands/params.md	A page that `-deny-path REGEX` matches is not searched, and the summary lists it under `skipped` with the rule.	test:cmd/azhaq:TestParamsDenyPathPageIsNotSearchedAndSaysSo
 params.rate-limit-fails	docs/commands/params.md	A page that rate-limits (429, 418, 503) fails. The failure is listed as `failed` and retryable, with a note, and counted in `failures`.	test:internal/collectors/paramcol:TestAPageThatAnswers429418Or503FailsTheSearch,TestRateLimitedPageFails;test:cmd/azhaq:TestParamsExitWhenAPageFails
 params.unanswered-fails	docs/commands/params.md	A page that leaves requests unanswered fails too: listed as `failed`, not as retryable, with a note, and counted in `failures`.	test:internal/collectors/paramcol:TestLostRequestsAreSaid;test:cmd/azhaq:TestParamsExitWhenAPageFails
-
 # docs/commands/crawl.md
 crawl.library-not-read	docs/commands/crawl.md	Library scripts are not read for routes.	test:cmd/azhaq:TestCrawlDoesNotReadVersionedLibraryScripts,TestCrawlDoesNotReadReactJQueryAndAngularBuilds
 crawl.every-url-asked	docs/commands/crawl.md	Every URL they give is requested, a GET operation of an API description (one that needs no path parameter and no required query parameter) and a GET form included, except one whose own path or API operation declares a state change	test:cmd/azhaq:TestCrawlAsksEveryURLButHoldsTheOnesThatDeclareAStateChange;test:engine:TestEveryFoundGetIsRequestedAndDenyPathIsListed
@@ -1143,7 +1127,6 @@ fuzz.scope-outside-counted	docs/commands/fuzz.md	A request to a host outside the
 fuzz.every-request-budget-pace-ledger	docs/commands/fuzz.md	Every request goes through the run's budget and pace (`-max-requests`, `-rate`) and the ledger, and stops at the kill file.	test:cmd/azhaq:TestFuzzScopeAndLimits,TestFuzzRatePacesCalibration,TestFuzzFlightsLedgerAndCountEqualWhatAProxyAnswered,TestFuzzStopsAtTheKillFile
 fuzz.env-proxy-rule	docs/commands/fuzz.md	Without it, `HTTP_PROXY` and `HTTPS_PROXY` apply by Go's rule, as in ffuf: a loopback target stays direct: [Proxies](../CONCEPTS.md#proxies). `-replay-proxy` is not read from the environment.	test:cmd/azhaq:TestFuzzEnvironmentProxyFollowsGosRule
 fuzz.replay-copies-not-counted	docs/commands/fuzz.md	They are not requests to the target, so they are not in the ledger, the budget or the pace.	test:cmd/azhaq:TestFuzzReplayCopiesAreNotRequestsToTheTarget;test:internal/fuzz:TestReplayProxyGetsMatchesOnly
-
 # docs/commands/notify.md
 notify.sends-to-every-provider	docs/commands/notify.md	Send text from a pipe or a file to Slack, Discord, Telegram, Teams, Google Chat, Pushover, Gotify, SMTP or any URL.	test:cmd/azhaq:TestNotifyReadsTextFromAPipe,TestNotifyCommandSendsLikeNotify;test:internal/notify:TestSlackWebhook,TestDiscordWebhookSendsEmbeds,TestTelegram,TestTeamsWorkflowAndConnector,TestGoogleChat,TestPushover,TestGotify,TestSMTPSendsOneMailPerRecipient,TestCustom
 notify.prints-and-names-entries	docs/commands/notify.md	Prints each message as it was sent, and a summary that names every entry a message did not reach.	test:cmd/azhaq:TestNotifyCommandSendsLikeNotify,TestNotifySummaryNamesEveryEntryAndCountsTheTries
@@ -1177,7 +1160,6 @@ notify.keep-secret-out-of-host	docs/commands/notify.md	Keep the secret in the pa
 notify.errors-hold-no-secret	docs/commands/notify.md	No error holds a URL's path or query, or a token, key, password or header value of the config, even if the server repeats it.	test:cmd/azhaq:TestNotifyPrintsNoWebhookAndNoSecret;test:internal/notify:TestProviderErrorsKeepSecrets,TestNoErrorPathPrintsTheToken,TestFailedAnswerKeepsOnlyACode
 notify.watch-urls-off-command-line	docs/commands/notify.md	`watch` keeps URLs off the command line too, where `ps` shows them to every user: `-notify @FILE` and `AZHAQ_NOTIFY`	test:cmd/azhaq:TestHooksFromFileAndEnvironment,TestWatchKeepsTheTokenOut
 notify.counts	docs/commands/notify.md	`counts` has `delivered`, `requests sent` (every try of every delivery, the number of lines `-ledger` lists) and, when any message needed more tries, `retried`.	test:cmd/azhaq:TestNotifySummaryNamesEveryEntryAndCountsTheTries,TestNotifyLedgerListsEveryRequestItSent
-
 # docs/commands/shots.md
 shots.partial-exits-3	docs/commands/shots.md	Marks a page `partial` when it was not fully loaded, and the run exits 3.	test:cmd/azhaq:TestShotsPageNotFullyLoadedIsPartialAndExits3,TestPartialShotsExitRule;test:internal/browser:TestShotOfAStalledPageIsPartial
 shots.wrong-size-fails	docs/commands/shots.md	A picture that comes out a size other than `-shot-size` asks for (not with `-shot-fullpage`, which is as tall as the page) is a failed target (`the picture came out WxH, not the WxH -shot-size asked for`), not a silently smaller picture.	test:internal/browser:TestPictureOfAnotherSizeIsAFailure,TestShotSizeIsExact
@@ -1210,7 +1192,6 @@ shots.alert-accepted	docs/commands/shots.md	A page that calls `alert()` on load 
 shots.downloads-popups-writes	docs/commands/shots.md	Every download is refused and listed, and a window a page opens (`window.open`, a `_blank` link) is closed as it opens. A page's own writes are refused and mapped. Chrome saves nothing to disk but the picture.	test:internal/browser:TestDownloadsDenied,TestPopupClosed,TestSignInWrites
 shots.pace-whole-pictures	docs/commands/shots.md	At a set `-rate`, a page's time runs from when it last moved. A slow pace gives whole pictures, not blank ones.	test:internal/browser:TestPoliteShotIsWhole,TestPaced
 shots.budget-spent-note	docs/commands/shots.md	When the budget was spent before the page loaded, the note says so:	test:internal/collectors/shotcol:TestNotTakenSaysWhatThePageNeeds
-
 # docs/commands/export.md
 export.last-run-and-jsonl	docs/commands/export.md	Without `-db` it uses the last run's database. `-format` defaults to `jsonl`.	test:cmd/azhaq:TestExportUsesTheLastRunsDatabaseAndJSONLByDefault
 export.nothing-to-write	docs/commands/export.md	A format that finds nothing writes nothing and says why on stderr; `openapi` writes a description with no paths instead (below), and `findings`/`findings-md` write an explicit empty record set. The exit code is 0, except for `graphql` and `sdl`: when no GraphQL schema was read they write nothing, fail with `no GraphQL schema in DB: map with -graphql …` and exit 1.	test:cmd/azhaq:TestExportOfAWorkspaceWithNothingToWrite,TestOpenAPIExportWithNoRoutes
@@ -1233,7 +1214,6 @@ export.recovered-complete-false	docs/commands/export.md	`complete` is always `fa
 export.recovered-comments	docs/commands/export.md	Fields whose type was not recovered, and the client operations found in scripts, are listed in comments.	test:cmd/azhaq:TestRecoveredSDLListsUntypedFieldsAndClientOperationsInComments,TestRecoveredGraphQLSchemaIsMarked
 export.burp-rules-any	docs/commands/export.md	Each rule is for any protocol, port and path.	test:cmd/azhaq:TestBurpRulesAreForAnyProtocolPortAndPath,TestBurpScopeFromRun
 export.burp-no-rules-lists-hosts	docs/commands/export.md	A run without allow rules includes every web service it found. So does a run whose scope file is gone, and a note on stderr says so.	test:cmd/azhaq:TestBurpScopeOfARunWithoutRulesOrWithAGoneScopeFile,TestBurpScopeFromRun
-
 # docs/commands/report.md
 report.reads-evidence-sends-nothing	docs/commands/report.md	`report` reads the evidence the roles run kept in `DIR/roles.db` and sends nothing.	test:cmd/azhaq:TestReportSevenVerdictsAndNothingSent,TestReportCommand
 report.eight-verdicts	docs/commands/report.md	Without `-url`, a row gets a report when its verdict is one of these eight:	test:cmd/azhaq:TestReportSevenVerdictsAndNothingSent,TestReportClassAndTitle,TestReportCommand
@@ -1242,8 +1222,6 @@ report.verdict-create-accepted	docs/commands/report.md	`create accepted: nothing
 report.every-piece-from-evidence	docs/commands/report.md	Every piece of a report comes from the evidence; what the evidence does not hold is named in the report.	test:cmd/azhaq:TestReportSaysWhatTheEvidenceLacks,TestReportFullRow
 report.url-refused-exit-1	docs/commands/report.md	A row whose verdict is not one of the eight is refused, with exit 1, and a `-url` that matches no row is exit 1 too.	test:cmd/azhaq:TestReportSevenVerdictsAndNothingSent,TestReportCommand
 report.no-row-exit-0	docs/commands/report.md	When no row qualifies, `report` prints a note on stderr, writes nothing and exits 0.	test:cmd/azhaq:TestReportWhenNoRowQualifiesWritesNothingAndExits0
-report.findings-labels-and-formats	docs/commands/report.md	The labels are kept distinct, never merged: `proved` records come first, then `version-only`, then `conditional`. Rows that prove nothing — a map row whose coverage is `hint` and that the map lists — are written as leads, after the findings, under their own type in JSONL and their own heading in Markdown. In JSONL (`-format jsonl`, the same as `json`) each finding is one `{"type":"finding", …}` line and each lead one `{"type":"lead", …}` line; in Markdown (`-format md`) the records are grouped under `## Proved (n)`, `## Version-only (n)`, `## Conditional (n)` and `## Leads — unproved hints`. The counts in those headings are the numbers of records under them, read from the stored rows. A workspace with no qualifying rows writes an explicit empty record set — `{"type":"findings","findings":0,"leads":0}` in JSONL, a sentence saying no qualifying rows in Markdown — and exits 0. The same records are in `azhaq export -format findings` and `-format findings-md`. The labels and the fence behind them are in [Read-only verification](../CONCEPTS.md#read-only-verification--verify).	test:cmd/azhaq:TestFindingsReportFromAStoredRun,TestFindingsEmptyRecordSet,TestBuildFindings,TestFindingsLeadsHaveTheirOwnTypeAndHeading,TestReportFindingsSendsNothingAndJSONIsJSONL
-report.findings-records	docs/commands/report.md	With `-findings -db WORKSPACE.db`, `report` writes the findings records of a run's workspace instead of roles reports, and sends nothing. One record is written per qualifying stored row: the `verify` results a `-verify` run stored, the advisory leads a `-advisories` run stored (labelled as `-verify` labels them), restricted to rows whose label supports a record, and the web answers whose body held a stack trace (see below). A `not affected` lead is no record, and a verify row covers its own lead, so no lead is recorded twice. Each record carries the kind (`unauthenticated-read`, `unauthenticated-handshake` or `advisory-precondition` for a verify row, as stored: a row of an older run keeps the kind it was stored with), the severity, the host, port and URL, the product and version where confirmed, the advisory id and URL where matched, the precondition where one is open, the exact request where one was sent, an excerpt of the evidence, the command that produced it, and the collector of the stored row it is read from — every field traceable to that row.	test:cmd/azhaq:TestFindingsReportFromAStoredRun,TestBuildFindings,TestReportFindingsSendsNothingAndJSONIsJSONL
 report.where-the-reports-go	docs/commands/report.md	`report` writes files. Without `-url` the reports go to `DIR/reports`, one file each, and stdout lists them. `-o` picks another place. With `-url`, one report goes to standard output instead.	test:cmd/azhaq:TestReportWhereTheReportsGo,TestReportCommand
 report.title-by-class	docs/commands/report.md	**Title.** It names the bug class. A read is broken object level authorization, and a write adds "(write)", or "(write accepted, not read back)" when the change could not be read back. A create is "Missing authorization on create" only when something shows it: the anonymous role was let to create, or the object it made belongs to the role whose request was replayed. Any other create another role sent is "Create accepted: bob's POST to /books/v1 was accepted", which says what was observed and names no vulnerability. Sensitive fields anyone reads are excessive data exposure, and the same sensitive values several signed-in roles read are excessive data exposure to those roles.	test:cmd/azhaq:TestReportClassAndTitle,TestReportSevenVerdictsAndNothingSent,TestReportWritesUpACreateInAnotherRolesCollection,TestCreatedObjectDisplacesAnotherRoles
 report.missing-from-evidence	docs/commands/report.md	**Missing from the evidence store.** What the evidence does not hold; see Details.	test:cmd/azhaq:TestReportSaysWhatTheEvidenceLacks
@@ -1253,7 +1231,6 @@ report.write-and-create-not-kept	docs/commands/report.md	A write's before-and-af
 report.one-row-per-owner	docs/commands/report.md	`roles.db` keeps one row per method, URL and owner. When two roles both created in the same collection (`POST /books/v1` in each HAR), each owner's row is kept and each gets a report. With `-url`, both are written (to standard output only when one row matches; else to `DIR/reports` or `-o`); `-owner NAME` picks one. A `roles.db` an older azhaq wrote keeps one row per method and URL, and is read as it is.	test:cmd/azhaq:TestReportWritesUpACreateInAnotherRolesCollection,TestReportWhereTheReportsGo,TestRolesShowTwoOwnersOfOneRoute,TestReportCommand
 report.redact-token-removed	docs/commands/report.md	Any token is removed.	test:cmd/azhaq:TestReportRedactMasksHostsIdentifiersAndTokens
 report.redact-unmasked-identifier	docs/commands/report.md	Read a redacted report once before sharing it. An identifier that no kept body names in an identifier field is not masked.	test:cmd/azhaq:TestReportRedactLeavesAnIdentifierNoBodyNamesInAnIdentifierField
-
 # docs/commands/dirs.md
 dirs.reports-unlike-nonexistent	docs/commands/dirs.md	Sweeps a wordlist of paths and reports those that answer unlike a path that cannot exist. SecLists' `common.txt` is built in. A URL with a path is swept from that path.	test:cmd/azhaq:TestDirsFilterKeepsCalibration,TestDirsBuiltInListAndPathBase;test:internal/collectors/dirscol:TestSweepCalibratesAndRecurses,TestSweepStartsAtTheGivenPath
 dirs.empty-line-is-a-word	docs/commands/dirs.md	An empty line is a word too: it asks the base URL itself, as in ffuf, and is counted like the rest.	test:cmd/azhaq:TestDirsBlankWordAsksTheBase;test:internal/collectors/dirscol:TestWordCountIsTheListsLength
@@ -1277,35 +1254,29 @@ dirs.ffuf-lists-every-word	docs/commands/dirs.md	When the page changes size on e
 dirs.reads-what-the-page-is	docs/commands/dirs.md	`dirs` then reads what the page is, from the answers of one status: the title they all have, the tag names they use and the words they all show. An answer of that status that has the same title, uses only those tags and shows at least 80% of those words is held back as the catch-all page, and the summary counts them (`7 paths answered with the page that names that cannot exist get … and were held back`).	test:cmd/azhaq:TestDirsHoldsACatchAllPageThatChangesEachTime;test:internal/pagesim:TestShapeLikeNeedsTheTitleTheTagsAndEightyPercentOfTheWords
 dirs.own-page-is-listed	docs/commands/dirs.md	A path that answers a page of its own (another title, other tags, other words) is listed.	test:cmd/azhaq:TestDirsHoldsACatchAllPageThatChangesEachTime;test:internal/pagesim:TestShapeLikeNeedsTheTitleTheTagsAndEightyPercentOfTheWords
 dirs.needs-title-or-three-words	docs/commands/dirs.md	This needs a title or at least 3 shared words; without them the answers are listed and the exit is 3, as above. `-ac=false` lists them all.	test:cmd/azhaq:TestDirsThatCannotCalibrateIsNotExit0,TestDirsFilterKeepsCalibration;test:internal/pagesim:TestLearnNeedsATitleOrThreeSharedWords
-
 # docs/commands/diff.md
 diff.quiet	docs/commands/diff.md	`-quiet` prints entities, changes and counts only.	test:cmd/azhaq:TestDiffQuietPrintsEntitiesAndCountsOnly,TestDiffQuietKeepsTheChangedRowsAndDropsTheObservations
 diff.one-run	docs/commands/diff.md	A workspace with only one run says so: a diff needs two.	test:cmd/azhaq:TestDiffOfAWorkspaceWithOneRunSaysSo
 diff.not-seen-again	docs/commands/diff.md	`not_seen_again` is what the older run only heard of: from a subdomain source, an archive or a link. The run never checked it.	test:cmd/azhaq:TestDiffNotSeenAgainIsWhatTheOlderRunOnlyHeardOf
 diff.bodies-not-compared	docs/commands/diff.md	Bodies are not compared byte for byte. Timestamps and tokens would make every run a change.	test:cmd/azhaq:TestTwoIdenticalRunsDiffEmpty;test:store:TestCompareIgnoresVolatileFields
 diff.control-by-answer	docs/commands/diff.md	A catch-all row's control is compared by its answer (status, type, title).	test:store:TestCompareIgnoresTheControlsRandomPath;test:cmd/azhaq:TestTwoIdenticalRunsDiffEmpty
-
 # docs/commands/ingest.md
 ingest.without-db-new-file	docs/commands/ingest.md	Without `-db` it uses the file `$AZHAQ_DB` names, else makes `workspace.db` in its [run folder](runs.md)	test:cmd/azhaq:TestIngestWithoutDBMakesANewFileAndPrintsNoRows,TestRunHomeKeepsTheWorkspaceInTheRunFolder
 ingest.prints-no-rows	docs/commands/ingest.md	`ingest` prints no rows, only its summary.	test:cmd/azhaq:TestIngestWithoutDBMakesANewFileAndPrintsNoRows
 ingest.naabu-repeats-fold	docs/commands/ingest.md	The lines naabu repeats fold into one row. naabu says nothing of the service, so the row has none until `ports` or `probe` asks.	test:cmd/azhaq:TestIngestNaabuLinesFoldIntoOnePortRowWithNoService,TestIngestNaabuMakesPortRows
 ingest.unreadable-line-note	docs/commands/ingest.md	A line that cannot be read, or gives nothing to keep (a `url` that does not parse), is skipped and named in a note, never a failure: the exit code stays 0.	test:cmd/azhaq:TestIngestUnreadableLineIsSkippedAndNotedNeverAFailure;test:internal/connector:TestReadLinesSkipsALineThatGivesNothing
-
 # docs/commands/new.md
 new.db-required	docs/commands/new.md	Opens the workspace given with `-db`, which is required: without it the command exits 2.	test:cmd/azhaq:TestMissingArgumentsExitUsage
 new.newest-run	docs/commands/new.md	Leaves out what the newest run no longer saw: a page removed since is not new.	test:cmd/azhaq:TestNewLeavesOutWhatTheNewestRunDidNotSeeCatchAllsAndAssets
 new.leaves-out-catchall-assets	docs/commands/new.md	Leaves out URLs that answer with the catch-all page, and scripts, assets and source maps, whether the run read them as such or their address says so.	test:cmd/azhaq:TestNewLeavesOutWhatTheNewestRunDidNotSeeCatchAllsAndAssets
-
 # docs/commands/quickstart.md
 quickstart.nothing-sent-yet	docs/commands/quickstart.md	Nothing is sent yet.	test:cmd/azhaq:TestQuickstartSendsNothingBeforeThePlanIsPrinted
 quickstart.next-commands-not-run	docs/commands/quickstart.md	Ends the summary's `next` with the commands that go on in the workspace (`hunt`, `query`, `show`) and the wider passes it did not make, each a command to copy with what it would send beyond this run (`-ports top-1000`, `-dirs @common`). Nothing is run for them.	test:cmd/azhaq:TestQuickstartNextCommandsAreNotRunAndQuietOrJSONPrintNoPlan,TestGuidedRunMakesTheSameMapAsTheExplicitRun,TestATopPortsScanNamesTheUnaskedRange,TestOtherNextPassesCountWhatTheyWouldSend
 quickstart.quiet-json-no-plan	docs/commands/quickstart.md	With `-quiet` or `-json` the plan is not printed: stderr holds the summary alone, as it does for `run`.	test:cmd/azhaq:TestQuickstartNextCommandsAreNotRunAndQuietOrJSONPrintNoPlan,TestQuickstartKeepsRunsOutputContracts
-
 # docs/commands/scope.md
 scope.several-programs-exit-1	docs/commands/scope.md	A list of several with no `-program` is an error, exit 1.	test:cmd/azhaq:TestScopeCommandExitCodes,TestMissingArgumentsExitUsage;test:internal/scopefile:TestProgramLists
 scope.prints-how-a-run-reads-it	docs/commands/scope.md	Prints how a run would read it: the allow and deny rules, the domains to enumerate, the targets to probe, and the entries that cannot be used.	test:cmd/azhaq:TestScopeCommandPrintsHowARunWouldReadIt
 scope.exit-codes	docs/commands/scope.md	Without `-scope`, and with a platform and no `-program`, the command exits 2. A scope with no in-scope web target (`no in-scope web targets found`) is an error, exit 1.	test:cmd/azhaq:TestScopeCommandExitCodes,TestMissingArgumentsExitUsage
-
 # docs/commands/docs.md
 docs.flags-take-no-topic	docs/commands/docs.md	`-flags` and `-flags-into` take no topic and are not used together. A name that is no topic or command is a usage error, exit 2.	test:cmd/azhaq:TestDocsFlagsTakeNoTopicAndAnUnknownNameIsAUsageError
 # the remaining sentences
@@ -1402,7 +1373,6 @@ ports.top-hundred-leaves-out	docs/commands/ports.md	The top 100 alone leaves tho
 ports.top-100-default-plan	docs/commands/ports.md	`-p top-100` asks the top 100 alone, `-p default,12346` adds a port to pass 1 (1041 ports) and has pass 2, and the plan counts the 1040 ports of pass 1 on each address and names pass 2.	test:cmd/azhaq:TestPortsTopHundredAsksTheTopHundredAndDefaultPlusAPortAsksOneMore,TestPortsDefaultSetIsAskedAndCounted
 ports.probe-lines	docs/commands/ports.md	Every probe written to a connection (the `HEAD /`, a protocol's request, the `GET /` of step 5) is a `probe` line of its own in the ledger, after the line of its connection: its `proto` and, for HTTP, its `method` and its `target` with the path.	test:internal/portscan:TestEveryProbeLineComesAfterItsConnectionAndNamesWhatWasSent,TestEveryProbeWrittenIsListed;test:cmd/azhaq:TestPortProbesAreInTheLedger
 ports.probe-not-counted-again	docs/commands/ports.md	It is not counted again as a request or a connection: the summary's `requests` counts the connection's line, and the ledger note says how many probes went on them.	test:cmd/azhaq:TestPortProbesAreInTheLedger
-
 # docs/commands/run.md (state-changing GETs, controls, spellings, bases)
 run.target-never-held	docs/commands/run.md	A target you give is never held back; the targets among those that declare one are printed before the run starts.	test:cmd/azhaq:TestGivenStateChangingTargetIsSent,TestRunNamesStateChangingGETsAndDenyKeepsThemOut,TestRunNamesTheStateChangingTargetFirstAndSaysWhatBecameOfEach
 run.controls-are	docs/commands/run.md	`controls` are the requests for a path that cannot exist	test:cmd/azhaq:TestRunSplitsItsRequestsByPurpose
@@ -1421,11 +1391,9 @@ run.static-file-names-nothing	docs/commands/run.md	A path whose last segment is 
 run.found-held-back	docs/commands/run.md	A GET that declares one and was found on the way (a link, a script's route, an API description's operation, a GET form's action), or is a word of a wordlist	test:cmd/azhaq:TestFoundStateChangingGETsAreHeldBack,TestRunHoldsAFoundGETOfEveryKindThatDeclaresAStateChange,TestDirsHoldsStateChangingWordsOfTheBuiltinListAndOfYours,TestDirsHoldsAListedWordThatNamesAnAction,TestRunDirsFileHoldsAListedWordThatNamesAnAction,TestRunPathsFileHoldsAListedWordThatNamesAnAction,TestFuzzHoldsAListedWordThatNamesAnAction
 run.not-held-back	docs/commands/run.md	Not held back: a URL you gave as a target (and, in `fuzz`, a URL you typed that names one by itself: no word is held then), a write you asked for with its flag, and anything a `-deny-path` rule covers, which stays a deny and is listed under that rule.	test:cmd/azhaq:TestGivenStateChangingTargetIsSent,TestRunDoesNotHoldAWriteAskedForByItsFlag,TestFuzzHoldsAListedWordThatNamesAnAction
 run.state-status	docs/commands/run.md	`sent` only when a request for it is in the run's ledger	test:cmd/azhaq:TestSendStateChangingSendsThemAndSaysSentOnlyForLedgerLines,TestFoundStateChangingGETsAreHeldBack,TestRunNamesTheStateChangingTargetFirstAndSaysWhatBecameOfEach
-
 # docs/commands/crawl.md (state-changing GETs, spellings, reasons)
 crawl.other-name-asked	docs/commands/crawl.md	An endpoint that resets data under another name is asked like any other.	test:cmd/azhaq:TestCrawlAsksEveryURLButHoldsTheOnesThatDeclareAStateChange
 crawl.page-asked-once	docs/commands/crawl.md	A page already asked under another spelling of its URL is not asked again.	test:cmd/azhaq:TestCrawlAsksAPageOnceWhateverSpellingNamesIt;test:internal/fetch:TestOnePageUnderManySpellingsIsAskedOnce
-
 # docs/commands/dirs.md (directory control, built-in list)
 dirs.control-per-directory	docs/commands/dirs.md	Asks one more name that cannot exist in each directory that two hits are found in	test:internal/collectors/dirscol:TestSweepAsksOneNameThatCannotExistInADirectoryOfTwoHitsAfterTheWords,TestSweepFoldsHitsThatAreTheirDirectorysControl
 dirs.slash-word-uncalibrated	docs/commands/dirs.md	A word with a slash (`api/users`, `rest/user/login`) lands in a directory the sweep did not calibrate	test:internal/collectors/dirscol:TestSweepFoldsHitsThatAreTheirDirectorysControl
@@ -1436,19 +1404,15 @@ dirs.results-not-folded	docs/commands/dirs.md	`results` counts the rows that are
 dirs.403-404-fold	docs/commands/dirs.md	Hits that answer 403 or 404 fold the same way: only when the directory's control answered them byte for byte.	test:internal/collectors/dirscol:TestSweepFoldsA403Or404HitOnlyWhenTheControlAnsweredItByteForByte
 dirs.builtin-holds-state-words	docs/commands/dirs.md	(and the same word with an extension, `logout.php`)	test:cmd/azhaq:TestDirsBuiltinListHoldsAStateChangingWordAndItsExtension,TestDirsHoldsStateChangingWordsOfTheBuiltinListAndOfYours,TestDirsEstimateCountsTheHeldWordsOut;test:internal/collectors/dirscol:TestSweepHoldsAWordThatNamesAStateChange
 dirs.deny-path-word	docs/commands/dirs.md	A word whose URL a `-deny-path` rule matches is not sent and is listed under `skipped` with the rule.	test:internal/collectors/dirscol:TestSweepDenyPathHoldsAWordBackAndListsIt;test:cmd/azhaq:TestDenyPathHoldsInRunDirsAndFuzz
-
 # docs/commands/fuzz.md
 # docs/commands/fuzz.md and dirs.md: what a word becomes in the URL, lists on one keyword
 fuzz.no-control-without-ac	docs/commands/fuzz.md	A match that has no `control` was not compared with one: without `-ac` the run asks for no name that cannot exist.	test:cmd/azhaq:TestFuzzWithoutACAsksNoNameThatCannotExistAndNoMatchHasAControl,TestFuzzMatchRowSaysItIsTheControl
 fuzz.filter-modes	docs/commands/fuzz.md	Several matchers join with `-mmode or` (the default: any one holds) or `-mmode and` (every one holds), and several filters with `-fmode or`	test:cmd/azhaq:TestFuzzMatcherModesFollowFfuf,TestFuzzFilterModesOrDropsOnAnyFilterAndAndOnEveryFilter
-
 # docs/commands/diff.md
 diff.route-new-or-gone	docs/commands/diff.md	A route that is new or gone is an entity added or removed, not a change.	test:cmd/azhaq:TestDiffANewOrGoneRouteIsAddedOrRemovedNotChanged,TestDiffCountsRoutesWhoseMethodsOrFieldsChanged
-
 # docs/commands/report.md
 report.dir-slash-same	docs/commands/report.md	Without a slash, `-o out` and `-o out/` act the same for several reports.	test:cmd/azhaq:TestReportOutputIsADirectoryOrAFile
 report.one-report-to-file	docs/commands/report.md	`-o PATH` for exactly one report, when `PATH` is not a directory: that report is written to the file `PATH`.	test:cmd/azhaq:TestReportOutputIsADirectoryOrAFile
-
 # docs/commands/roles.md
 roles.note-names-renewal	docs/commands/roles.md	A note names a renewal only when one ran and gave a session that passed its check	test:cmd/azhaq:TestRoleNotesNoCommandSaysItCouldNotBeRenewed,TestRoleNotesFailingCommandSaysRenewalFailed,TestRoleNotesCommandThatRenewsIsNamed,TestRoleNotesCommandWhoseNewSessionFailsIsNotCalledARenewal,TestRoleNotesASignInThatPassedItsCheckIsNamed
 roles.note-says-why-not-renewed	docs/commands/roles.md	A role with no `-role-cmd` or `-role-login` says it could not be renewed; a command that failed says its renewal failed	test:cmd/azhaq:TestRoleNotesNoCommandSaysItCouldNotBeRenewed,TestRoleNotesFailingCommandSaysRenewalFailed,TestRoleNotesCommandWhoseNewSessionFailsIsNotCalledARenewal
@@ -1466,7 +1430,6 @@ plan.estimate-datagrams	docs/commands/plan.md	`datagrams` (UDP)	test:cmd/azhaq:T
 dirs.row-per-input	docs/commands/dirs.md	With `-json` you get one object for each input that matched.	test:cmd/azhaq:TestDirsListsEachRepeatedInputAsFfufDoes
 dirs.position-field	docs/commands/dirs.md	The place of the input among the sweep's inputs, from 1, as ffuf counts it.	test:cmd/azhaq:TestDirsListsEachRepeatedInputAsFfufDoes
 dirs.repeat-rows	docs/commands/dirs.md	a word that is in the wordlist twice (or two blank lines) is asked twice and listed twice, each row with its own `position`, so `results` is ffuf's count for the same list. The workspace keeps one entity for each URL, and a note says how many inputs repeated an earlier one.	test:cmd/azhaq:TestDirsListsEachRepeatedInputAsFfufDoes
-
 # docs/commands/runs.md
 runs.read-only-commands-are-not-kept	docs/commands/runs.md	The commands that read a workspace or serve are not kept.	test:cmd/azhaq:TestRunHomeSkipsReadOnlyCommands
 runs.home-is-the-working-directory	docs/commands/runs.md	- The home is `$AZHAQ_HOME`, else `.azhaq` in the current directory, so each folder keeps its own runs.	test:cmd/azhaq:TestRunHomeDefaultsToTheWorkingDirectory;test:internal/runs:TestHomeDefaultsToTheWorkingDirectory
@@ -1476,7 +1439,6 @@ runs.home-none-turns-keeping-off	docs/commands/runs.md	- `AZHAQ_HOME=none` turns
 runs.unwritable-folder-fails-before-sending	docs/commands/runs.md	- When the current directory cannot be written and no `-db` or `-dir` was given, the run fails before it sends anything and the message names `-db DIR/x.db` and `AZHAQ_HOME`. It does not keep the run somewhere else.	test:cmd/azhaq:TestRunFailsWhereTheFolderCannotKeepItBeforeSending
 runs.empty-folder-says-so	docs/commands/runs.md	- In a folder with no runs, `runs` says no runs are kept there and names `-home DIR` and `AZHAQ_HOME`; `ui` says the same and exits 1.	test:cmd/azhaq:TestRunsReadTheFolderYouAreIn
 runs.a-refused-command-leaves-no-folder	docs/commands/runs.md	- A command refused for its flags (exit 2) leaves no folder.	test:cmd/azhaq:TestRunHomeUsageErrorLeavesNoFolder
-
 # docs/commands/ui.md
 ui.it-sends-nothing-to-any-target	docs/commands/ui.md	It sends nothing to any target.	test:cmd/azhaq:TestUISendsNothingToAnyTarget
 ui.the-csp-lets-the-browser-load-only-its-own	docs/commands/ui.md	- The page's `Content-Security-Policy` lets the browser load only its own	test:cmd/azhaq:TestUINothingExternalInThePage
@@ -1552,7 +1514,6 @@ run.o-bad-path	docs/commands/run.md	The file is made before anything is sent, so
 run.o-quiet	docs/commands/run.md	With `-quiet` nothing is printed and the file still gets the rows.	test:cmd/azhaq:TestRunOWithQuietAndBadPaths
 run.o-wrote	docs/commands/run.md	The summary lists the file under `wrote`.	test:cmd/azhaq:TestRunWritesItsRowsToO
 report.findings-folded	docs/commands/report.md	A hint the map's default view folds is not a lead: an image, font or media file no request asked for (`beyond-depth`), a string only scripts name that nothing requested (`unrequested`), or a route only scripts name whose GET answered 404 or 410 (`not-found`), as in [Folded rows](run.md#folded-rows). The report counts them by class, one line each: `{"type":"folded","class":…,"count":N,"line":…}` in JSONL, a `## Folded hints (N)` section in Markdown, and `N hints folded (class N, …)` after the counts on stderr.	test:cmd/azhaq:TestFindingsLeadsLeaveOutFoldedRows
-report.findings-folded-arithmetic	docs/commands/report.md	Leads plus the folded counts are the URL rows of `azhaq query -type URL -coverage hint`, a templated row counting for its `count` URLs. A workspace whose hints all fold writes the explicit line with `"folded":N` first, then the fold lines.	test:cmd/azhaq:TestFindingsLeadsLeaveOutFoldedRows,TestFindingsAllHintsFolded
 probe.stream-cut-reads	docs/commands/probe.md	So does every other read of a target's answer: the GraphQL schema query, the RDAP and archive lookups, the h2c and HTTP/2 probes and an advisory's confirmation read; where there is no row to say it, a note names the read that was cut.	test:internal/fetch:TestBoundNoteSaysItCut;test:internal/collectors/gqlcol:TestQueryCutsAnEndlessAnswerAndSaysSo;test:internal/collectors/rdapcol:TestPullCutsAnEndlessAnswerAndSaysSo;test:internal/collectors/urlcol:TestArchiveCutsAnEndlessAnswerAndSaysSo;test:internal/collectors/httpcol:TestHTTP2ProbeCutsAnEndlessAnswerAndSaysSo;test:internal/advisory:TestConfirmCutsAnEndlessAnswerAndSaysSo
 report.trace-nothing-sent	docs/commands/report.md	The record is read from the answer azhaq already received: nothing more is sent for it.	test:cmd/azhaq:TestDirsFindsAStackTraceInAnAnswerAlreadyReceived
 report.trace-patterns	docs/commands/report.md	A frame named inside a sentence is not a line of its own, and fewer than three frames, or frames of different runtimes, are not a trace; a page that merely describes a trace in prose gives none.	test:internal/webextract:TestStackTracePerRuntime,TestStackTraceNeedsThreeConsecutiveFrames
@@ -1601,8 +1562,6 @@ ports.verify-kinds	docs/commands/ports.md	A proved row names its kind:	test:inte
 ports.all-ports-outside-allow-exit-2	docs/commands/ports.md	When `-allow` names every host asked only with other ports (`-host 10.0.0.5:80 -allow 10.0.0.5:22`), no port may be asked: the command exits 2 with `every target is outside the scope`, before anything is sent.	test:cmd/azhaq:TestPortsEveryPortOutsideAllowIsUsage
 ports.some-ports-in-scope-scanned	docs/commands/ports.md	A scan that has some ports in scope asks those, and a note says how many it left out.	test:cmd/azhaq:TestPortsEveryPortOutsideAllowIsUsage
 ports.next-nothing-when-allow-held-ports	docs/commands/ports.md	a scan where `-allow` held ports out	test:cmd/azhaq:TestPortsEveryPortOutsideAllowIsUsage
-ports.advisory-leads-not-rows	docs/commands/ports.md	With `-json` the leads are not rows of the stream (the summary's `results` are the rows printed)	test:cmd/azhaq:TestAdvisoriesPortsConfirmEndToEnd,TestPortsNamesTheAdvisoriesOfAConfirmedVersionByDefault;test:internal/contract:TestPortsCountsAreDerivedFromTheRowsEmitted
-report.findings-kind	docs/commands/report.md	Each record carries the kind (`unauthenticated-read`, `unauthenticated-handshake` or `advisory-precondition` for a verify row	test:cmd/azhaq:TestFindingsKeepAHandshakeKind,TestBuildFindings
 run.verify-handshake-kind	docs/commands/run.md	`unauthenticated-handshake` is the service answering its protocol's opening with no credential	test:internal/verify:TestHandshakeChecksAreTheirOwnKind,TestDocsKindColumnMatchesTheChecks
 docs-mcp.target-planned-held	docs/MCP.md	A target whose own path or query declares one is listed as held back	test:cmd/azhaq:TestMCPPlanAndWireAgreeOnStateChangingGET
 docs-mcp.graphql-needs-allow-writes	docs/MCP.md	`graphql` on `azhaq_map` or `azhaq_plan` (the introspection POST) send requests that may change data	test:cmd/azhaq:TestMCPRefusesGraphQLWithoutAllowWrites
@@ -1637,3 +1596,34 @@ run.plan-pace-line	docs/commands/run.md	`plan` prints the pace of each stage in 
 run.address-asked-each-port-once	docs/commands/run.md	An address is asked each port once, whether it is in a range, named by a target or both	test:cmd/azhaq:TestANamedAddressInASweptRangeIsAskedOnce,TestADefaultScanAsksANamedAddressOfTheRangeOnce;test:internal/collectors/portcol:TestAnAddressOfARangeAndNamedIsAskedEachPortOnce,TestANamedAddressIsAskedThePortsTheRangeDidNot,TestTopUpAsksOnlyThePortsTheScanDidNot
 run.sweep-named-address-once	docs/commands/run.md	An address that a target names and a range holds is asked each port once, whichever comes first.	test:cmd/azhaq:TestANamedAddressInASweptRangeIsAskedOnce;test:internal/collectors/portcol:TestAnAddressOfARangeAndNamedIsAskedEachPortOnce
 run.advisory-leads-not-rows	docs/commands/run.md	With `-json` the leads are not rows of the stream (the summary's `results` are the rows printed)	test:cmd/azhaq:TestAdvisoriesRunEndToEnd,TestRunNamesTheAdvisoriesOfAConfirmedVersionByDefault;test:internal/contract:TestPortsCountsAreDerivedFromTheRowsEmitted
+ports.advisory-leads-not-rows	docs/commands/ports.md	With `-json` the leads are not rows of the stream (the summary's `results` are the rows printed)	test:cmd/azhaq:TestAdvisoriesPortsConfirmEndToEnd,TestPortsNamesTheAdvisoriesOfAConfirmedVersionByDefault;test:internal/contract:TestPortsCountsAreDerivedFromTheRowsEmitted
+hunt.5xx-lead	docs/commands/hunt.md	A 5xx alone is a lead, not a finding	test:internal/hunt:TestServerErrorNeedsCorroboration,TestGenericServerErrorRanksBelowWhatTakesInput
+hunt.tier-check	docs/commands/hunt.md	A lead names the check that would prove it, and every row a command to run next.	test:cmd/azhaq:TestHuntListsTheTiersApart
+hunt.tier-counts	docs/commands/hunt.md	counts `rows` and, apart, the `tiers` of the rows printed	test:cmd/azhaq:TestHuntListsTheTiersApart
+hunt.path-never-proof	docs/commands/hunt.md	A path or a name is never proof.	test:internal/hunt:TestPathAnswersDecideTheTier,TestSecretsAreFindingsOnlyByTheirFormat
+hunt.leads-other-signals	docs/commands/hunt.md	- Leads: every other signal, such as a word in a path	test:internal/hunt:TestPathAnswersDecideTheTier,TestSecretsAreFindingsOnlyByTheirFormat
+hunt.path-judged	docs/commands/hunt.md	A path that names a file or a panel is judged by its answer, which azhaq already holds	test:internal/hunt:TestPathAnswersDecideTheTier;test:cmd/azhaq:TestHuntListsTheTiersApart
+hunt.5xx-body-finding	docs/commands/hunt.md	the body showing SQL error text, a framework's debug page or a stack trace makes the row a finding	test:internal/hunt:TestServerErrorNeedsCorroboration,TestPathAnswersDecideTheTier
+report.findings-records	docs/commands/report.md	With `-findings -db WORKSPACE.db`, `report` writes the findings records of a run's workspace instead of roles reports, and sends nothing.	test:cmd/azhaq:TestFindingsReportFromAStoredRun,TestReportFindingsSendsNothingAndJSONIsJSONL
+report.findings-advisory-ids	docs/commands/report.md	The advisories of one service are the records of that service, each with its own advisory id	test:cmd/azhaq:TestFindingsReportFromAStoredRun
+report.findings-leads-tier	docs/commands/report.md	- **leads** are inferred from a name, a path or a guess	test:cmd/azhaq:TestFindingsLeadsHaveTheirOwnTypeAndHeading,TestPathChecksOnAHostWithBaselines
+report.findings-no-proof-no-finding	docs/commands/report.md	A row with no proof is never a finding.	test:cmd/azhaq:TestEveryFindingKindHasAProofThatReproduces,TestAVerifyReadWithoutItsAnswerIsALead
+report.findings-proof-fields	docs/commands/report.md	A finding, and an identification that has the answer it was read from, carries its proof in fixed fields	test:cmd/azhaq:TestEveryFindingKindHasAProofThatReproduces,TestFindingsReportFromAStoredRun
+report.findings-secret-value-never	docs/commands/report.md	A secret's value is never in its record	test:cmd/azhaq:TestEveryFindingKindHasAProofThatReproduces
+report.path-checks	docs/commands/report.md	is a finding only when its answer shows what the path names and is not one of the host's own baselines	test:cmd/azhaq:TestPathChecksOnAHostWithBaselines;test:internal/proof:TestAFileIsAFindingOnlyWhenItsOwnBytesShowIt,TestABaselineIsDropped,TestAPanelIsAFindingByItsOwnTitle
+report.path-dropped	docs/commands/report.md	it is **dropped**, neither finding nor lead, when its answer equals a baseline	test:cmd/azhaq:TestPathChecksOnAHostWithBaselines;test:internal/proof:TestABaselineIsDropped
+report.path-finding	docs/commands/report.md	it is a **finding** when its status is 2xx and the bytes it holds are the file's own	test:cmd/azhaq:TestPathChecksOnAHostWithBaselines;test:internal/proof:TestAFileIsAFindingOnlyWhenItsOwnBytesShowIt,TestAPanelIsAFindingByItsOwnTitle
+report.path-lead	docs/commands/report.md	it is a **lead** otherwise: a redirect, a 401 or 403	test:cmd/azhaq:TestPathChecksOnAHostWithBaselines;test:internal/proof:TestAFileIsAFindingOnlyWhenItsOwnBytesShowIt,TestACheckWithNoBodyKeptIsALead
+report.path-answers-kept	docs/commands/report.md	The judged answers are the ones azhaq already received	test:cmd/azhaq:TestPathChecksOnAHostWithBaselines;test:internal/proof:TestACheckWithNoBodyKeptIsALead
+report.findings-labels	docs/commands/report.md	The labels are kept distinct, never merged: `proved` identifications come first	test:cmd/azhaq:TestFindingsReportFromAStoredRun
+report.findings-formats	docs/commands/report.md	each finding is one `{"type":"finding", …}` line, each identification one	test:cmd/azhaq:TestFindingsReportFromAStoredRun,TestTierCountsPartitionTheRows,TestFindingsLeadsHaveTheirOwnTypeAndHeading
+report.findings-empty-set	docs/commands/report.md	A workspace with no qualifying rows writes an explicit empty record set	test:cmd/azhaq:TestFindingsEmptyRecordSet,TestExportOfAWorkspaceWithNothingToWrite
+report.findings-compat	docs/commands/report.md	Before this version the JSONL held only the `-verify` results	note:a statement about what the previous version wrote
+report.findings-folded-arithmetic	docs/commands/report.md	Leads plus the folded counts of the hints are the URL rows of `azhaq query -type URL -coverage hint`	test:cmd/azhaq:TestFindingsLeadsLeaveOutFoldedRows,TestFindingsAllHintsFolded
+report.findings-kind	docs/commands/report.md	Each record also carries the `tier`, the kind	test:cmd/azhaq:TestFindingsKeepAHandshakeKind,TestBuildFindings,TestEveryFindingKindHasAProofThatReproduces
+hunt.served-unjudged-lead	docs/commands/hunt.md	A served file whose bytes were not judged (a workspace made before the answers were kept) is a lead.	test:internal/hunt:TestAServedFileWithNoAnswerKeptIsALead
+report.findings-three-tiers	docs/commands/report.md	Every record is in one of three tiers, which are counted and listed apart:	test:cmd/azhaq:TestTierCountsPartitionTheRows,TestFindingsReportFromAStoredRun
+report.findings-old-verify-lead	docs/commands/report.md	A `-verify` read stored by an earlier azhaq, without the request and the answer, is a lead for that reason.	test:cmd/azhaq:TestAVerifyReadWithoutItsAnswerIsALead
+report.path-lead-check	docs/commands/report.md	Its record names the check: for example `GET it: the body is NAME=value lines, not a page`.	test:cmd/azhaq:TestPathChecksOnAHostWithBaselines
+report.findings-labels-fence	docs/commands/report.md	The labels and the fence behind them are in [Read-only verification]	file:docs/CONCEPTS.md
+report.findings-all-folded	docs/commands/report.md	A workspace whose hints all fold writes the explicit line with `"folded":N` first, then the fold lines.	test:cmd/azhaq:TestFindingsAllHintsFolded

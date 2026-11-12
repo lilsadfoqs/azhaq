@@ -4,6 +4,8 @@ import (
 	"math"
 	"sort"
 	"strings"
+
+	"github.com/lilsadfoqs/azhaq/internal/proof"
 )
 
 // Secret is a credential or key a script carries.
@@ -16,6 +18,10 @@ type Secret struct {
 	// variable, or a name that says secret holding a value that looks random.
 	Rule    string  `json:"rule,omitempty"`
 	Entropy float64 `json:"entropy,omitempty"` // bits per character, of a generic-secret's value
+	// Offset is where the value starts in the script, and Context the text
+	// just before it with the value redacted: where to look, without the value.
+	Offset  int    `json:"offset,omitempty"`
+	Context string `json:"context,omitempty"`
 }
 
 // The rules a Secret can name.
@@ -114,6 +120,12 @@ func Secrets(script string) []Secret {
 			continue
 		}
 		add(Secret{Kind: "generic-secret", Severity: "medium", Name: name, Value: v, Rule: RuleGeneric, Entropy: math.Round(entropy(v)*10) / 10})
+	}
+	for i := range out {
+		if at := strings.Index(script, out[i].Value); at >= 0 {
+			out[i].Offset = at
+			out[i].Context = proof.Printable([]byte(script[max(0, at-32):at]), 64) + Redact(out[i].Value)
+		}
 	}
 	sort.SliceStable(out, func(i, j int) bool { return rank(out[i].Severity) < rank(out[j].Severity) })
 	return out

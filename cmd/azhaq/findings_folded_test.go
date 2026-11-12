@@ -127,7 +127,7 @@ func TestFindingsLeadsLeaveOutFoldedRows(t *testing.T) {
 	_, errOut, err := captureBoth(t, func() error {
 		return cmdReport([]string{"-findings", "-db", db, "-o", filepath.Join(t.TempDir(), "f.jsonl")})
 	})
-	if err != nil || !strings.Contains(errOut, "0 findings and 4 leads, 4 hints folded (beyond-depth 2, unrequested 2)") {
+	if err != nil || !strings.Contains(errOut, "0 findings, 0 identifications, 4 leads, 4 hints folded (beyond-depth 2, unrequested 2)") {
 		t.Errorf("%v: %s", err, errOut)
 	}
 }

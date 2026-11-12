@@ -13,6 +13,7 @@ var weights = map[string]int{
 	"secret":             40, // by severity: see secretWeight
 	"sourcemap":          45,
 	"exposed-file":       55, // by extension: see fileExt
+	"exposed-panel":      50, // a panel's own page answered: a finding only with its own title
 	"listing":            55,
 	"api-description":    35,
 	"graphql":            40, // 45 when the schema was read or an IDE answers
@@ -143,3 +144,43 @@ var fileExt = []struct {
 
 // gitWeight is a repository's directory served over HTTP.
 const gitWeight = 70
+
+// leadChecks is, for the signal that weighs most in a lead, the check that would
+// prove it. A lead is inferred from a name, a path or a guess; this is what an
+// answer must show for it to be a finding.
+var leadChecks = map[string]string{
+	"takeover":           "GET the name's front page: the service's own page for an unclaimed name",
+	"takeover-candidate": "claim the name at the service (azhaq does not): a CNAME to a name that does not resolve shows only that it is free",
+	"secret":             "check the value with the service that issued it (azhaq does not try a credential)",
+	"sourcemap":          "GET the .map: the body is JSON with a sources array",
+	"exposed-file":       "GET it: the body holds the file's own content (its signature), not a page",
+	"exposed-panel":      "GET it: the page's own title names the panel, and it is not the host's login",
+	"listing":            "GET it: the page is a directory listing",
+	"api-description":    "GET it: the body is an OpenAPI or Swagger document",
+	"graphql":            "POST {__typename} to it: the answer holds data.__typename",
+	"object-id":          "azhaq roles: read the same object with another role's session",
+	"unauth-write":       "send the write with no credentials to a copy you own (azhaq does not send it)",
+	"upload":             "send a harmless file to it and read how the server answers",
+	"password-in-url":    "GET the form's page and read where the password goes",
+	"param-command":      "send a harmless value in it and read whether the answer takes it as a command",
+	"param-url":          "send a URL you control in it and read whether the server asks for it",
+	"param-file":         "send a harmless path in it and read whether the answer is a file",
+	"param-debug":        "send it set on and read whether the answer changes",
+	"param-redirect":     "send a URL you control in it and read the Location",
+	"param-query":        "send a harmless value in it and read whether the answer takes it as a query",
+	"param-callback":     "send a name in it and read whether it comes back as the callback",
+	"input":              "send a harmless value in it and read whether the answer takes it",
+	"gated":              "GET it with a session of the role that may open it (azhaq roles)",
+	"server-error":       "send the input the route takes: an error text in the answer names more than a status",
+	"path-admin":         "GET it: its own title names an admin panel, and it is not the host's login page",
+	"path-auth":          "GET it: a form that takes credentials (test it only with credentials you hold)",
+	"path-search":        "send a harmless value in its query and compare the answers",
+	"path-debug":         "GET it: the page is the debug output its name says",
+	"path-config":        "GET it: the body is a configuration, not a page",
+	"path-env":           "GET it: the machine names itself the staging or test one its name says",
+	"path-doc":           "GET it: the page is the documentation its name says",
+	"path-function":      "request it with a harmless input and read what it does with it",
+	"path-data":          "GET it with the sessions of two roles (azhaq roles): one's data must not come back to the other",
+	"xml":                "send it a harmless XML body and read how it parses it",
+	"cross-role":         "azhaq roles show: the same request with the other role's session",
+}

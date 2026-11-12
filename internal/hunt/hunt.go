@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/lilsadfoqs/azhaq/engine"
+	"github.com/lilsadfoqs/azhaq/internal/proof"
 	"github.com/lilsadfoqs/azhaq/internal/webextract"
 	"github.com/lilsadfoqs/azhaq/types"
 )
@@ -30,10 +31,13 @@ type Input struct {
 
 // Secret is a credential a script carried; Where is the file. Name, Preview
 // (the value, redacted), Rule and Entropy are the evidence a reader judges it by.
+// Known says the value's own format names it (a key with a known shape), not a
+// guess from the name it was assigned to.
 type Secret struct {
 	Kind, Severity, Where string
 	Name, Preview, Rule   string
 	Entropy               float64
+	Known                 bool
 }
 
 // Takeover is a name another party may claim.
@@ -60,6 +64,14 @@ type Row struct {
 	Type    string   `json:"type"`
 	Reasons []Reason `json:"reasons"`
 	Next    string   `json:"next"`
+	// Tier is finding for a row with a proven signal (the answer, the secret's
+	// own format, the service's own page shows it) and lead for the rest. Check,
+	// on a lead, is the check that would prove it; Proof, on a finding of a path
+	// check, is the request, the excerpt of the answer and the command that
+	// shows it again.
+	Tier  string       `json:"tier"`
+	Check string       `json:"check,omitempty"`
+	Proof *proof.Proof `json:"proof,omitempty"`
 	// Template is set on the row of an input the pages of an origin carry in
 	// common: the input, and on how many of the origin's pages.
 	Template *Template `json:"template,omitempty"`
@@ -91,6 +103,9 @@ type cand struct {
 	dangling        bool // a takeover that rests on NXDOMAIN alone
 	namedGET        int  // that status
 	tmpl            *Template
+	proved          map[string]bool // the signals an answer or a format proves
+	check           string          // the check a path verdict names, for a lead
+	proof           *proof.Proof
 }
 
 type hunter struct {
@@ -98,8 +113,9 @@ type hunter struct {
 	cands     map[string]*cand
 	apiDoc    map[string]bool // entity IDs of API descriptions the run parsed
 	errs      map[string]errText
-	reflected map[string]bool        // route keys with a parameter whose value came back
-	chrome    map[string]*chromeInfo // origin and input name carried by most of the origin's pages
+	verdicts  map[string]proof.Verdict // path checks: what the answer to each URL amounts to
+	reflected map[string]bool          // route keys with a parameter whose value came back
+	chrome    map[string]*chromeInfo   // origin and input name carried by most of the origin's pages
 	cut       time.Time
 	old       bool // some URL is older than the window: "new" tells rows apart
 }
@@ -116,6 +132,7 @@ func Build(in Input) []Row {
 	}
 	h := &hunter{in: in, cands: map[string]*cand{}, apiDoc: apiDescriptions(in.Obs), cut: in.Now.Add(-in.Since)}
 	h.errs, h.reflected = answersOf(in.Obs)
+	h.verdicts = proof.Judge(proof.AnswersOf(in.Obs))
 	h.chrome = chromeInputs(in.Rows)
 	for _, r := range in.Rows {
 		if r.Entity.Type == types.TypeURL && r.Entity.FirstSeen.Before(h.cut) {
@@ -151,13 +168,16 @@ func Build(in Input) []Row {
 	return out
 }
 
-// sortRows orders best first: rows the server confirmed before routes only a
-// script names and names that rest on NXDOMAIN alone, then by score, then target scope before fan-out,
-// then more distinct signals, then key.
+// sortRows orders best first: findings before leads, then rows the server
+// confirmed before routes only a script names and names that rest on NXDOMAIN
+// alone, then by score, then target scope before fan-out, then more distinct
+// signals, then key.
 func sortRows(out []Row) {
 	sort.Slice(out, func(i, j int) bool {
 		a, b := out[i], out[j]
 		switch {
+		case a.Tier != b.Tier:
+			return a.Tier == proof.TierFinding
 		case a.named != b.named:
 			return !a.named
 		case a.Score != b.Score:
@@ -198,6 +218,19 @@ func (c *cand) addW(signal string, w int, detail string) {
 
 func (c *cand) add(signal, detail string) { c.addW(signal, weights[signal], detail) }
 
+// addProved is addW for a signal whose own evidence proves it: the row is a
+// finding.
+func (c *cand) addProved(signal string, w int, detail string) {
+	if w <= 0 {
+		return
+	}
+	c.addW(signal, w, detail)
+	if c.proved == nil {
+		c.proved = map[string]bool{}
+	}
+	c.proved[signal] = true
+}
+
 func (c *cand) row(db string) Row {
 	rs := append([]Reason(nil), c.reasons...)
 	named := c.named > 0 && c.named == len(c.instances)
@@ -219,7 +252,22 @@ func (c *cand) row(db string) Row {
 	if len(rs) > 0 {
 		best = rs[0].Signal
 	}
-	return Row{Score: score, Key: c.display(), Type: c.typ, Reasons: rs, Next: c.next(db, best), Template: c.tmpl, scope: c.scope, signals: n, named: named}
+	row := Row{Score: score, Key: c.display(), Type: c.typ, Reasons: rs, Next: c.next(db, best), Template: c.tmpl, scope: c.scope, signals: n, named: named}
+	if len(c.proved) > 0 {
+		row.Tier, row.Proof = proof.TierFinding, c.proof
+		return row
+	}
+	row.Tier = proof.TierLead
+	if best == "exposed-file" || best == "exposed-panel" {
+		row.Check = c.check
+	}
+	if row.Check == "" {
+		row.Check = leadChecks[best]
+	}
+	if row.Check == "" {
+		row.Check = "request it and read whether the answer shows what its name says"
+	}
+	return row
 }
 
 // display is the key a row shows: the URL itself when only one was seen,

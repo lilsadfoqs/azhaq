@@ -1,6 +1,7 @@
 package httpcol
 
 import (
+	"bytes"
 	"context"
 	"crypto/md5"
 	"crypto/sha256"
@@ -31,6 +32,7 @@ import (
 	"github.com/lilsadfoqs/azhaq/internal/limit"
 	"github.com/lilsadfoqs/azhaq/internal/neterr"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
+	"github.com/lilsadfoqs/azhaq/internal/proof"
 	"github.com/lilsadfoqs/azhaq/internal/takeover"
 	"github.com/lilsadfoqs/azhaq/internal/webextract"
 	"github.com/lilsadfoqs/azhaq/types"
@@ -39,6 +41,9 @@ import (
 const Name = "azhaq-http"
 
 var titleRE = lazyre.New(`(?is)<title[^>]*>(.*?)</title>`)
+
+// passwordField: a form with a password input is a login page.
+var passwordField = lazyre.New(`(?i)<input[^>]*\btype\s*=\s*["']?password`)
 
 type Collector struct {
 	Client *http.Client
@@ -826,6 +831,14 @@ func describe(reqURL, final string, res fetch.Result, title string, noTech, ever
 	if gen := webextract.Generator(res.Body); gen != "" {
 		out["generator"] = gen
 	}
+	if u, err := url.Parse(reqURL); err == nil && proof.Wants(u.Path) {
+		// The path names a file or a panel: the start of what came is kept, so
+		// that the findings judge it by its own bytes and never ask again.
+		out["head"], out["head_kept"] = res.Body[:min(len(res.Body), proof.HeadBytes)], true
+	}
+	if passwordField.Match(res.Body[:min(len(res.Body), 64<<10)]) {
+		out["login"] = true
+	}
 	if isRoot(reqURL) {
 		// A hosting service's page for a name nobody claimed.
 		if f, ok := takeover.ByPage(nil, res.Body[:min(len(res.Body), 64<<10)]); ok {
@@ -839,6 +852,10 @@ func describe(reqURL, final string, res fetch.Result, title string, noTech, ever
 	// first exception line and the frames. Nothing more is sent for it.
 	if tr, ok := webextract.StackTrace(res.Body); ok {
 		out["stack_trace"] = tr
+		// The bytes that name the exception, where they are in the body.
+		if i := bytes.Index(res.Body, []byte(tr.Exception)); i >= 0 && tr.Exception != "" {
+			out["trace_excerpt"], out["trace_offset"] = proof.Printable(res.Body[i:], proof.MaxExcerpt), i
+		}
 	}
 	if res.Status >= 500 {
 		// What a failed answer gives away (an SQL error, a stack trace, a

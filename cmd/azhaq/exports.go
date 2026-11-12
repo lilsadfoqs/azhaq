@@ -232,12 +232,14 @@ func exportToList(path, format, origin string, safe bool, lo listOpts, w io.Writ
 		// same records `azhaq report -findings` writes. An empty
 		// workspace writes the explicit empty record set, so there is
 		// always a line to read.
-		found, leads, folds := buildFindings(g)
-		_, err := w.Write(findingsJSONL(found, leads, folds))
+		set := buildFindings(g)
+		fmt.Fprintf(os.Stderr, "azhaq export: %s%s\n", set.counts(), foldedNote(set.Folds))
+		_, err := w.Write(findingsJSONL(set))
 		return err
 	case "findings-md":
-		found, leads, folds := buildFindings(g)
-		_, err := w.Write(findingsMarkdown(found, leads, folds))
+		set := buildFindings(g)
+		fmt.Fprintf(os.Stderr, "azhaq export: %s%s\n", set.counts(), foldedNote(set.Folds))
+		_, err := w.Write(findingsMarkdown(set))
 		return err
 	default:
 		return usagef("unknown -format %q (jsonl, urls, hosts, names, targets, openapi, graphql, sdl, burp, html, graphml, secrets, findings, findings-md)", format)
@@ -1505,6 +1507,9 @@ type secretRow struct {
 	Severity, Kind, Value, Redacted, Where string
 	Name, Rule                             string
 	Entropy                                float64
+	Context                                string    // the text before the value, with the value redacted
+	Offset                                 *int      // where the value starts in the script, when the script's bytes were the ones counted
+	Observed                               time.Time // when the script was read
 }
 
 // secretRows lists the credentials the scripts carried, worst first, each
@@ -1518,8 +1523,9 @@ func secretRows(obs []types.StoredObservation) []secretRow {
 		}
 		var p struct {
 			Secrets []struct {
-				Kind, Severity, Value, Script, Name, Rule string
-				Entropy                                   float64
+				Kind, Severity, Value, Script, Name, Rule, Context string
+				Entropy                                            float64
+				Offset                                             *int
 			}
 		}
 		if json.Unmarshal(o.Payload, &p) != nil {
@@ -1528,7 +1534,7 @@ func secretRows(obs []types.StoredObservation) []secretRow {
 		for _, s := range p.Secrets {
 			if !seen[s.Value] {
 				seen[s.Value] = true
-				out = append(out, secretRow{s.Severity, s.Kind, s.Value, webextract.Redact(s.Value), s.Script, s.Name, s.Rule, s.Entropy})
+				out = append(out, secretRow{s.Severity, s.Kind, s.Value, webextract.Redact(s.Value), s.Script, s.Name, s.Rule, s.Entropy, s.Context, s.Offset, o.ObservedAt})
 			}
 		}
 	}

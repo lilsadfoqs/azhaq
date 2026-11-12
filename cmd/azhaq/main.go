@@ -1586,6 +1586,10 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	}
 	rep.noCatchAll = *noCatchAll
 	rep.foldView = foldView
+	if !out.embedded {
+		c := buildFindings(&graphView{obs: obs, rows: rows, args: []string{}}).counts()
+		rep.Tiers = &c
+	}
 	if col, ok := cat.Get("azhaq-paths"); ok && budgets.Allows(col, types.Seed{Type: types.TypeURL, Keys: map[string]string{"url": "https://service.invalid/"}}) {
 		rep.pathList = paths
 	}
@@ -2373,7 +2377,7 @@ func newRunID() string {
 func cmdExport(args []string) error {
 	fs := newFlags("export")
 	dbPath := fs.String("db", "", "sqlite path (default: last run)")
-	format := fs.String("format", "jsonl", "jsonl (everything), urls, hosts (names that resolve), names (every name), targets (web services, for nuclei -l), openapi, graphql (introspection JSON), sdl (GraphQL schema), burp (the run's scope), html, graphml, secrets, findings (one record per qualifying stored row, JSON Lines; an empty workspace writes an explicit empty record set), findings-md (the same records in Markdown)")
+	format := fs.String("format", "jsonl", "jsonl (everything), urls, hosts (names that resolve), names (every name), targets (web services, for nuclei -l), openapi, graphql (introspection JSON), sdl (GraphQL schema), burp (the run's scope), html, graphml, secrets, findings (one record per qualifying stored row in three tiers, JSON Lines; an empty workspace writes an explicit empty record set), findings-md (the same records in Markdown)")
 	origin := fs.String("origin", "", "openapi: the origin to describe (default: the one with most API routes); graphql, sdl: the endpoints of an origin, or one endpoint's URL")
 	safe := fs.Bool("safe", false, "openapi: leave out the routes the run did not request, such as those -deny-path kept out (otherwise they carry x-azhaq-skipped: true)")
 	cov := fs.String("coverage", "", "urls, names: only these coverages, comma-separated: visited, catchall, error, gone, hint, skipped, capped")

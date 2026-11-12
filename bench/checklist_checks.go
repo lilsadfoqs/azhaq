@@ -3,6 +3,8 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"strings"
@@ -384,6 +386,75 @@ func (c *checklist) outputs() {
 		ip = append(ip, "the ingested URL is not in the export: "+clip(string(urls), 100))
 	}
 	clCheck("ingest: a tool's output joins the workspace and is exported", ip, "%s", clip(strings.TrimSpace(string(urls)), 80))
+}
+
+// tierSite is an app whose files and panels are known: two real ones and
+// the answers that only look like one (the soft 404, the login redirect, the
+// index every unknown path gets, a page that is not the file).
+func tierSite() (*httptest.Server, map[string]bool) {
+	real := map[string]bool{"/.env": true, "/actuator": true}
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/.env":
+			w.Header().Set("Content-Type", "text/plain")
+			fmt.Fprint(w, "APP_ENV=production\nDB_PASSWORD=hunter2hunter2\n")
+		case "/actuator":
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprint(w, `{"_links":{"self":{"href":"/actuator"}}}`)
+		case "/admin", "/dashboard":
+			http.Redirect(w, r, "/login?next="+r.URL.Path, http.StatusFound)
+		case "/login":
+			fmt.Fprint(w, `<html><title>Sign in</title><form><input type="password" name="p"></form></html>`)
+		case "/swagger-ui.html":
+			fmt.Fprint(w, `<html><title>Page not found</title></html>`)
+		case "/backup":
+			fmt.Fprint(w, `<html><title>Backups - Acme</title></html>`)
+		default:
+			fmt.Fprint(w, `<html><title>Acme</title><body>app</body></html>`)
+		}
+	})), real
+}
+
+// 9b. Findings, identifications and leads are counted apart, and the findings
+// tier holds no row the app does not have.
+func (c *checklist) tiers() {
+	srv, real := tierSite()
+	defer srv.Close()
+	words := c.file("tier-paths.txt")
+	must(os.WriteFile(words, []byte(".env\nconfig\nbackup\nadmin\ndashboard\nactuator\nswagger-ui.html\n.git/HEAD\n"), 0o644))
+	db := c.file("tiers.db")
+	azExec(c.dir, 5*time.Minute, "run", "-url", srv.URL+"/", "-db", db, "-json", "-depth", "1", "-paths", words, "-no-favicon")
+	out, _ := exec.Command(azhaq, "export", "-db", db, "-format", "findings").Output()
+	n := map[string]int{}
+	found := map[string]bool{}
+	var probs []string
+	for _, l := range lines(out) {
+		var row struct {
+			Type string
+			URL  string
+		}
+		if json.Unmarshal([]byte(l), &row) != nil {
+			continue
+		}
+		n[row.Type]++
+		if row.Type == "finding" {
+			p := strings.TrimPrefix(row.URL, srv.URL)
+			found[p] = true
+			if !real[p] {
+				probs = append(probs, "the findings tier holds a row the app does not have: "+p)
+			}
+		}
+	}
+	for p := range real {
+		if !found[p] {
+			probs = append(probs, "the findings tier lacks the real "+p)
+		}
+	}
+	if n["lead"] == 0 {
+		probs = append(probs, "the guesses that only look like something are not listed as leads")
+	}
+	clCheck("findings: the tiers are counted apart, and the findings tier holds only the app's real files and panels", probs,
+		"%d findings, %d identifications, %d leads", n["finding"], n["identification"], n["lead"])
 }
 
 // 10. The MCP server's lock: no scope, no start; a locked server holds a call to its scope; unlocked, no port scans.

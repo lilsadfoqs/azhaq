@@ -368,8 +368,8 @@ func uiGraph(w http.ResponseWriter, home, id string) {
 		nodes[i].Passive = nodes[i].Obs > 0 && !active[nodes[i].ID]
 	}
 	if g, err := readGraph(rec.Workspace); err == nil {
-		findings, leads, _ := buildFindings(g)
-		for _, r := range append(findings, leads...) {
+		set := buildFindings(g)
+		for _, r := range append(append(set.Findings, set.Identifications...), set.Leads...) {
 			markFinding(nodes, byKey, r)
 		}
 	}

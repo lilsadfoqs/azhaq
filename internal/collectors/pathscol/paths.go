@@ -20,6 +20,7 @@ import (
 	"github.com/lilsadfoqs/azhaq/internal/ledger"
 	"github.com/lilsadfoqs/azhaq/internal/neterr"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
+	"github.com/lilsadfoqs/azhaq/internal/proof"
 	"github.com/lilsadfoqs/azhaq/internal/statechange"
 	"github.com/lilsadfoqs/azhaq/internal/webextract"
 	"github.com/lilsadfoqs/azhaq/types"
@@ -275,6 +276,17 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 			"path":      "/" + path,
 			"final_url": final,
 			"hops":      res.Hops,
+		}
+		// What the answer holds, for the path checks' judgement: nothing is asked again.
+		var ct string
+		if res.Header != nil {
+			ct = res.Header.Get("Content-Type")
+			if loc := res.Header.Get("Location"); loc != "" {
+				row["answer_location"] = loc
+			}
+		}
+		for k, v := range proof.Fields("/"+path, ct, res.Body) {
+			row[k] = v
 		}
 		if known {
 			row[types.ExposedByKey] = raw
