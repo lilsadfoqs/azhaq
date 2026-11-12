@@ -1627,4 +1627,3 @@ report.findings-old-verify-lead	docs/commands/report.md	A `-verify` read stored 
 report.path-lead-check	docs/commands/report.md	Its record names the check: for example `GET it: the body is NAME=value lines, not a page`.	test:cmd/azhaq:TestPathChecksOnAHostWithBaselines
 report.findings-labels-fence	docs/commands/report.md	The labels and the fence behind them are in [Read-only verification]	file:docs/CONCEPTS.md
 report.findings-all-folded	docs/commands/report.md	A workspace whose hints all fold writes the explicit line with `"folded":N` first, then the fold lines.	test:cmd/azhaq:TestFindingsAllHintsFolded
-report.findings-kind	docs/commands/report.md	Each record carries the kind (`unauthenticated-read`, `unauthenticated-handshake` or `advisory-precondition` for a verify row	test:cmd/azhaq:TestFindingsKeepAHandshakeKind,TestBuildFindings
