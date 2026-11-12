@@ -1560,15 +1560,21 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		shown, folded = folder.Split(shown)
 		foldGroups = folder.Groups(folded)
 	}
+	// The view that lists every row keeps each name its own row: only the
+	// text map folds dead names into a summary row.
+	group := engine.GroupTemplates
+	if !foldView {
+		group = engine.GroupURLTemplates
+	}
 	if streamEnd != nil {
-		streamEnd(engine.GroupTemplates(shown))
+		streamEnd(group(shown))
 	}
 	sink := runSink(!*quiet && !out.embedded, rowsOut)
 	switch {
 	case sink == nil:
 	case *jsonOut:
 		enc := json.NewEncoder(sink)
-		for _, r := range engine.GroupTemplates(shown) {
+		for _, r := range group(shown) {
 			row := mapRowJSON(r)
 			if c := folder.Class(r); c != "" {
 				row["fold"] = c
@@ -1602,7 +1608,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 			fmt.Fprintln(sink, r.Line())
 		}
 	default:
-		printMap(sink, shown, rep)
+		printMap(sink, shown, rep, group)
 		for _, g := range foldGroups {
 			rep.emitted().addGroup(g.Rows, countKey)
 			fmt.Fprintf(sink, "  %s\n", g.Line())
@@ -2005,8 +2011,8 @@ func heldBy(r engine.MapEntry) int {
 	return 1
 }
 
-func printMap(w io.Writer, rows []engine.MapEntry, rep *report) {
-	for _, row := range engine.GroupTemplates(rows) {
+func printMap(w io.Writer, rows []engine.MapEntry, rep *report, group func([]engine.MapEntry) []engine.MapEntry) {
+	for _, row := range group(rows) {
 		rep.emitted().add(countKey(row), heldBy(row))
 		fmt.Fprintf(w, "  %s\n", row.Line())
 		for _, d := range row.Details() {

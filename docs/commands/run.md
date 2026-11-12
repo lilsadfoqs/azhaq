@@ -91,7 +91,7 @@ The map has one row per entity, best first: the target's own pages and APIs, the
 | `forms` | One object per form on the page: `method`, `action`, `enctype`, `fields`, `files`. See [Forms](#forms). |
 | `found_in` | Up to three places where scripts name the route, calls first. See [found_in](#found_in). |
 | `watch` | Names worth trying first, by what each says it takes: `returnUrl (redirect)`, `url (url)`, `file (file)`, `cmd (command)`, `isAdmin (debug)`, `userId (id)`, `callback (callback)`. |
-| `folded` | On a summary row of names: how many dead, wildcard or unresolved names it holds. |
+| `folded` | On a summary row of names in the text map: how many dead, wildcard or unresolved names it holds. `-all-rows` and `-json` print each name as a row of its own. A name that is a takeover candidate is always a row of its own. |
 | `template`, `count`, `not_asked`, `capped` | A page that differs only by an ID is folded: its `{n}` template, how many URLs it holds, how many were not requested, and how many of those a limit kept from being asked (`coverage: capped`). See [Templates](#templates). |
 
 ## Summary and exit codes
@@ -142,7 +142,7 @@ The text map lists the rows that answer for themselves and counts the others in 
 
 A route a script calls with a method, a description lists, a page links or a request answered with anything else stays listed, as does every row under `-deny-path`: those are leads or the effect of a setting you chose. Each line counts as one result, and `results + folded + left_out = stored` as before.
 
-- `-all-rows` prints one line for each row, as `run` did.
+- `-all-rows` prints one line for each row, as `run` did. Every dead, wildcard and unresolved name is a line of its own. A takeover candidate is a line of its own in the default view too.
 - `-json` prints every row, each folded one with its class as `fold`. The summary's `folds` has one entry for each line of the text view: `class`, `count`, and for a catch-all origin its `origin` and the `controls` it was compared with.
 - Folded rows stay in the workspace: `query` lists them, `-all-rows` and `-json` print them.
 - Parameter and body names worth trying first are on a `watch:` line under the row.
@@ -160,7 +160,7 @@ found in
 - With `-stream`, `run` prints each URL, name that resolves, address and open port as it is found. They come before the map.
 - One line for each key the map has a row for: a URL found by the crawl and answered later, or the front page found twice, prints once, as the first way it was found (its status is in the map). The address of an IP host is a row and a line too (`found  address 127.0.0.1`).
 - An open port is a line of its own, under its row's key: `address:port/protocol`, printed once, when a scan reports the port (`found  port    127.0.0.1:3001/tcp  open http`). A later scan that lists the same port does not print it again.
-- Not streamed: names that do not resolve, which the map folds into a summary row.
+- Not streamed as they are found: names that do not resolve. They are lines at the end, before the map, for each name the map has a row for: with `-all-rows` or `-json` every such name, in the text map the summary row's name and each takeover candidate. So is the domain's own row. Every row the map prints has its line.
 - A page the map folds into a templated row (`/redirect?to={v}`, from 2 URLs on) is streamed as that row: one line, under the template key, none for its members. These lines are held until the run ends, because which URLs fold is known only then, and they print just before the map (`found  answer http://app/redirect?to={v}  [200]`), with the status and title of the map row. A templated page found once is no fold and prints under its own URL, at the end too. The keys of the lines are the keys of the map's rows.
 - An answer line looks like `found  answer http://app/openapi.json  [200]`. An answer that is the page every unknown path gets ends with `(catch-all: the page any unknown path gets)`.
 - With `-json`, each is an object with `"type":"found"` and these fields:

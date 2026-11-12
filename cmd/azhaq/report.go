@@ -538,7 +538,7 @@ func fillReport(rep *report, path string, seeds []types.Seed, ents []types.Entit
 	if rep.foldView {
 		rep.Results = len(engine.GroupTemplates(listed)) + len(rep.Folds)
 	} else {
-		rep.Results = len(engine.GroupTemplates(shown))
+		rep.Results = len(engine.GroupURLTemplates(shown))
 	}
 	if len(foldedRows) > 0 {
 		var parts []string

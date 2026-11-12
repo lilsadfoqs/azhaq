@@ -46,6 +46,7 @@ func newStream(asJSON bool) (see func(types.Entity, types.Observation), end func
 	var mu sync.Mutex
 	seen := map[string]bool{}
 	heldBy := map[string]string{} // a templated URL, or its template, held back -> the collector that found it first
+	dnsBy := map[string]string{}  // a name looked up -> the collector that asked
 	enc := json.NewEncoder(os.Stdout)
 	emit := func(kind, key, more, collector string, fields map[string]any) {
 		if seen[key] {
@@ -66,6 +67,16 @@ func newStream(asJSON bool) (see func(types.Entity, types.Observation), end func
 		mu.Lock()
 		defer mu.Unlock()
 		for _, r := range rows {
+			// A name with no address, and a domain, are rows of the map that
+			// no resolving answer streamed: each is a line at the end.
+			if t := r.Entity.Type; t == types.TypeHostname || t == types.TypeDomain {
+				coll := dnsBy[r.Entity.Key]
+				if coll == "" {
+					coll = "azhaq"
+				}
+				emit("name", r.Entity.Key, "", coll, nil)
+				continue
+			}
 			if r.Entity.Type != types.TypeURL || r.Template == "" {
 				continue
 			}
@@ -133,6 +144,9 @@ func newStream(asJSON bool) (see func(types.Entity, types.Observation), end func
 		case "url":
 			urlLines(line{kind: "url", key: rowKey()})
 		case "dns":
+			mu.Lock()
+			dnsBy[normalize.Hostname(str("fqdn"))] = o.Collector
+			mu.Unlock()
 			ips, _ := p["ips"].([]any)
 			if len(ips) > 0 && p["wildcard"] != true {
 				lines = append(lines, line{kind: "name", key: str("fqdn")})
