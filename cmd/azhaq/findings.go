@@ -103,6 +103,16 @@ func (s findingSet) counts() tierCounts {
 // rendering are the lengths of the tiers and the folds' counts: derivable by
 // counting the stored rows (leads + the folds' counts = query -type URL
 // -coverage hint, for the hints).
+// proves says a proved verify result of kind shows the thing named: a read
+// with no credential, or a sign-in with a published default.
+func proves(kind string) bool {
+	switch kind {
+	case verify.KindUnauthenticatedRead, verify.KindDefaultLogin, verify.KindUnauthenticatedBypass:
+		return true
+	}
+	return false
+}
+
 func buildFindings(g *graphView) findingSet {
 	command := runCommand(g)
 	var set findingSet
@@ -143,10 +153,10 @@ func buildFindings(g *graphView) findingSet {
 		}
 		identified[targetOf(rec)+"\x00"+advisory.ProductKey(rec.Product)] = true
 		switch {
-		case r.Kind == verify.KindUnauthenticatedRead && r.Label == verify.Proved && r.Proof.Complete():
+		case proves(r.Kind) && r.Label == verify.Proved && r.Proof.Complete():
 			rec.Tier = proof.TierFinding
 			add(rec)
-		case r.Kind == verify.KindUnauthenticatedRead && r.Label == verify.Proved:
+		case proves(r.Kind) && r.Label == verify.Proved:
 			// Stored without its request and answer (an older azhaq): no proof, no finding.
 			rec.Tier, rec.Label, rec.Check = proof.TierLead, "lead", "run the read again: "+r.Request+" on "+r.Target
 			rec.Evidence = "unauthenticated read recorded without the answer that proves it; " + r.Evidence

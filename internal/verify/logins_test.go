@@ -447,3 +447,25 @@ func TestAttemptHonorsSpendRefusal(t *testing.T) {
 		t.Fatalf("want no request sent, got %d", h.count())
 	}
 }
+
+// The command that sends a pair again asks for the password: it is never
+// written into it, for any mode.
+func TestReproduceAsksForThePassword(t *testing.T) {
+	for _, lg := range DefaultLogins() {
+		cmd := lg.reproduce("https://h.example")
+		other := lg
+		other.Pass = "another-password"
+		if other.reproduce("https://h.example") != cmd {
+			t.Errorf("%s: the password changes %q", lg.ID, cmd)
+		}
+		if !strings.HasPrefix(cmd, "curl ") && !strings.HasPrefix(cmd, "read -rs PASS; curl ") {
+			t.Errorf("%s: %q", lg.ID, cmd)
+		}
+		if lg.Mode != ModeBasic && !strings.Contains(cmd, "$PASS") {
+			t.Errorf("%s: %q does not send the password read", lg.ID, cmd)
+		}
+		if strings.Contains(cmd, passMark) {
+			t.Errorf("%s: the mark is left in %q", lg.ID, cmd)
+		}
+	}
+}

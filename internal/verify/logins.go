@@ -21,8 +21,10 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
+	"github.com/lilsadfoqs/azhaq/internal/proof"
 )
 
 // Kinds of result -verify-logins adds, named by its two checks.
@@ -131,6 +133,9 @@ type LoginOutcome struct {
 	Excerpt     string
 	Cookie      string // a Form/JSON success: its session cookie, for Logout
 	Body        []byte
+	// Proof is the attempt and its answer, with the password left out of both
+	// and of the command that sends the pair again.
+	Proof *proof.Proof
 }
 
 // Attempt sends lg's one pair through d to origin, and judges the answer.
@@ -182,6 +187,12 @@ func (lg DefaultLogin) Attempt(ctx context.Context, d HTTPDoer, origin string) (
 		return LoginOutcome{}, err
 	}
 	out := LoginOutcome{Tried: true, Request: sent, Excerpt: redact(excerpt(body), lg.Pass)}
+	out.Proof = &proof.Proof{
+		ObservedAt: time.Now().UTC().Format(time.RFC3339), Method: req.Method, Target: origin + lg.Path,
+		Status: resp.StatusCode, ContentType: resp.Header.Get("Content-Type"),
+		Excerpt: redact(proof.Printable(body, proof.MaxExcerpt), lg.Pass), ExcerptPart: "response", ExcerptOffset: proof.Offset(0),
+		How: "azhaq-verify-logins", Reproduce: lg.reproduce(origin),
+	}
 	switch {
 	case resp.StatusCode == http.StatusTooManyRequests:
 		out.Lockout = true
@@ -194,6 +205,30 @@ func (lg DefaultLogin) Attempt(ctx context.Context, d HTTPDoer, origin string) (
 		out.Body = body
 	}
 	return out, nil
+}
+
+// passMark stands for the password in a JSON body the reproduce command
+// fills from the terminal.
+const passMark = "AZHAQ-PASSWORD-READ-FROM-THE-TERMINAL"
+
+// reproduce is the curl command that sends lg's pair again. The password is
+// asked for, not written: the command is kept in the workspace and reports.
+func (lg DefaultLogin) reproduce(origin string) string {
+	head := "curl -sS -i --max-time 10"
+	if strings.HasPrefix(origin, "https://") {
+		head += " -k"
+	}
+	target := proof.Quote(origin + lg.Path)
+	switch lg.Mode {
+	case ModeForm:
+		return "read -rs PASS; " + head + " --data-urlencode " + proof.Quote(lg.UserField+"="+lg.User) +
+			` --data-urlencode "` + lg.PassField + `=$PASS" ` + target
+	case ModeJSON:
+		body := strings.ReplaceAll(string(lg.Body(lg.User, passMark)), passMark, `'"$PASS"'`)
+		return "read -rs PASS; " + head + " -H 'Content-Type: application/json' --data '" + body + "' " + target
+	default:
+		return head + " -u " + proof.Quote(lg.User) + " " + target // curl asks for the password
+	}
 }
 
 // AttemptLogins tries pairs, in the order given, against origin through

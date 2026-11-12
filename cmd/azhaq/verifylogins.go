@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
@@ -14,6 +15,7 @@ import (
 	"github.com/lilsadfoqs/azhaq/internal/advisory"
 	"github.com/lilsadfoqs/azhaq/internal/egress"
 	"github.com/lilsadfoqs/azhaq/internal/ledger"
+	"github.com/lilsadfoqs/azhaq/internal/proof"
 	"github.com/lilsadfoqs/azhaq/internal/verify"
 	"github.com/lilsadfoqs/azhaq/store"
 	"github.com/lilsadfoqs/azhaq/types"
@@ -88,7 +90,7 @@ func loginsStage(ctx context.Context, st *store.Store, obs []types.StoredObserva
 					Host: svcHost(svc), Port: svc.Port, Target: svc.Target(),
 					Service: svc.Service, Product: svc.Product, Version: svc.Version,
 					URL: svc.Origin + lg.Path, Request: outcome.Request, Evidence: outcome.Excerpt,
-					Command: command,
+					Command: command, Proof: outcome.Proof,
 				}
 				r.Severity = verify.SeverityOf(r)
 				results = append(results, r)
@@ -112,6 +114,10 @@ func loginsStage(ctx context.Context, st *store.Store, obs []types.StoredObserva
 				Service: svc.Service, Product: svc.Product, Version: svc.Version,
 				URL: svc.Origin + u.Path, Request: request, Evidence: evidence,
 				Command: command,
+				Proof: &proof.Proof{
+					ObservedAt: time.Now().UTC().Format(time.RFC3339), Method: http.MethodGet, Target: svc.Origin + u.Path,
+					Excerpt: evidence, ExcerptPart: "response", How: "azhaq-verify-logins", Reproduce: proof.Curl(http.MethodGet, svc.Origin+u.Path),
+				},
 			}
 			r.Severity = verify.SeverityOf(r)
 			results = append(results, r)

@@ -73,6 +73,27 @@ func verifyRowsOf(t *testing.T, out string) []map[string]any {
 	return rows
 }
 
+// loginFindingOf is the one row of kind in the workspace's findings tier,
+// with a complete proof.
+func loginFindingOf(t *testing.T, db, kind string) findingRecord {
+	t.Helper()
+	g, err := readGraph(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	set := buildFindings(g)
+	for _, f := range set.Findings {
+		if f.Kind == kind {
+			if !f.Proof.Complete() {
+				t.Errorf("%s finding with an incomplete proof: %+v", kind, f.Proof)
+			}
+			return f
+		}
+	}
+	t.Fatalf("no %s in the findings tier: findings %v, identifications %v", kind, set.Findings, set.Identifications)
+	return findingRecord{}
+}
+
 // A fixture that takes Harbor's published default: one sign-in attempt,
 // a proved default-login finding, the request and an excerpt as its
 // evidence.
@@ -117,6 +138,11 @@ func TestVerifyLoginsAcceptedFixtureIsAProvedFinding(t *testing.T) {
 	rep := lastReport(t, errOut)
 	if len(rep.Verify) != 1 {
 		t.Fatalf("summary verify=%v, want exactly 1 result", rep.Verify)
+	}
+	// It is in the findings tier, with a proof whose command asks for the password.
+	f := loginFindingOf(t, db, "default-login")
+	if !strings.Contains(f.Proof.Reproduce, "-u 'admin' ") || strings.Contains(f.Proof.Reproduce, "Harbor12345") || f.Proof.Status != 200 {
+		t.Errorf("proof %+v", f.Proof)
 	}
 	var hits int
 	for _, r := range fx.requests() {
@@ -277,6 +303,9 @@ func TestVerifyLoginsUnauthenticatedReadShowsContentVsLogin(t *testing.T) {
 		}
 		if hits != 2 {
 			t.Errorf("want 2 reads (no credential, then a wrong one), got %d", hits)
+		}
+		if f := loginFindingOf(t, db, "unauthenticated-bypass"); !strings.Contains(f.Proof.Excerpt, "prod-cluster") {
+			t.Errorf("proof %+v", f.Proof)
 		}
 	})
 	t.Run("shows a login unauthenticated: no finding", func(t *testing.T) {
