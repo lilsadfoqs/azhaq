@@ -85,7 +85,7 @@ Each step reads the workspace the one before wrote. `acme` stands for your progr
 azhaq scope  -scope bugcrowd -program acme                                 # what you may touch
 azhaq plan   -scope bugcrowd -program acme -max-requests 5000              # what a run would send; sends nothing
 azhaq run    -scope bugcrowd -program acme -max-requests 5000 -rate 5 -db acme.db   # names, services, crawl, files, ranked map
-azhaq hunt   -db acme.db                                                   # where to look first; also: azhaq show, azhaq query
+azhaq hunt   -db acme.db                                                   # where to look first: what the run named on each listener, and the routes and hosts, ranked; also: azhaq show, azhaq query
 azhaq roles  -dir acme-roles -role anon -role "alice=Authorization: Bearer $TA" -role "bob=Authorization: Bearer $TB" -- -url https://app.acme.com/   # what one account reaches of another's
 azhaq report -dir acme-roles -o findings/                                  # each cross-role finding as a submission
 ```
@@ -122,7 +122,7 @@ The drop-in commands take your tools' flags and print their JSON field names. [d
 
 - **Routes other crawlers miss.** On OWASP Juice Shop v20.3.0, started fresh, azhaq finds 70 of the 77 routes the server defines that its frontend calls. It lists their methods and body fields, and names the script line that calls each. katana with its jsluice parser (`-jc -jsl`) lists 1. Grepping the scripts it fetched for quoted paths gives 37, as bare strings. It also saves reading bundles by hand.
 - **Access control with evidence.** [`azhaq roles`](docs/commands/roles.md) signs in as each of your accounts, reuses each session against the others, and reports `[bob reads alice's object]` with why the object is alice's. It stands in for Autorize and for diffing Burp histories. `-replay-writes` extends this to writes.
-- **Where to look first.** [`azhaq hunt`](docs/commands/hunt.md) ranks the mapped routes, hosts and files, each with the reasons for its score and the command to run next.
+- **Where to look first.** [`azhaq hunt`](docs/commands/hunt.md) ranks what the run named on each listener (product, version, advisory) and the mapped routes, hosts and files, each with the reasons for its score and the command to run next.
 - **The API routes a deploy added.** [`azhaq watch`](docs/commands/watch.md) compares the routes scripts call from one run to the next and ties each change to the script that calls it. It stands in for cron and diff.
 - **A finding as a submission.** [`azhaq report`](docs/commands/report.md) writes each cross-role finding as a Markdown report: steps with curl, evidence, control, impact and remediation, in place of a template filled by hand.
 - **Takeover candidates flagged.** A CNAME to a cloud name that no longer exists, a domain nobody holds, or a hosting service's page for an unclaimed name is listed with its evidence. Even a plain `subs -live` flags them.

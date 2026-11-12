@@ -361,8 +361,13 @@ func TestAdvisoriesRunEndToEnd(t *testing.T) {
 		t.Errorf("an advisory row in the stream:\n%s", out)
 	}
 	rep := lastReport(t, errOut)
+	// One line for the lead in the summary: the counts say both advisories, the list is in the map.
+	if len(rep.Advisories) != 1 || len(rep.Advisories[0].Advisories) != 0 || rep.Advisories[0].Counts["affected"]+rep.Advisories[0].Counts["conditional"] != 2 {
+		t.Fatalf("summary advisories %+v, want 1 lead counting both advisories and listing none", rep.Advisories)
+	}
+	rep = withStoredAdvisories(t, db, rep)
 	if len(rep.Advisories) != 1 || len(rep.Advisories[0].Advisories) != 2 {
-		t.Fatalf("summary advisories %+v, want 1 lead holding both advisories", rep.Advisories)
+		t.Fatalf("stored advisories %+v, want 1 lead holding both advisories", rep.Advisories)
 	}
 	if l := rep.Advisories[0]; l.AdvisoryID != "CVE-TEST-0001" || l.Label != "affected" || l.VersionSeen != "1.18.0" || l.URL != "https://example.test/CVE-TEST-0001" || l.Confidence != "" {
 		t.Errorf("lead %+v: the top advisory, with no confidence without confirmation", l)

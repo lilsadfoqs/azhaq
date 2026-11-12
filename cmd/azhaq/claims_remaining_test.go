@@ -510,7 +510,8 @@ func TestVerifySendsNothingMoreForAnAdvisoryLead(t *testing.T) {
 		egress.Reset()
 		t.Cleanup(egress.Reset)
 		cs := newCountingServer(t, true)
-		args := append([]string{"-url", cs.URL + "/", "-db", filepath.Join(t.TempDir(), "w.db"), "-json", "-quiet", "-depth", "0", "-no-paths", "-no-tech", "-no-favicon",
+		db := filepath.Join(t.TempDir(), "w.db")
+		args := append([]string{"-url", cs.URL + "/", "-db", db, "-json", "-quiet", "-depth", "0", "-no-paths", "-no-tech", "-no-favicon",
 			"-advisories", "-advisories-confirm", "-advisory-source", writeAdvFixture(t, advFixture)}, extra...)
 		_, errOut, err := captureBoth(t, func() error { return cmdRun(args) })
 		if err != nil {
@@ -518,7 +519,7 @@ func TestVerifySendsNothingMoreForAnAdvisoryLead(t *testing.T) {
 		}
 		got := cs.requests()
 		slices.Sort(got)
-		return got, lastReport(t, errOut)
+		return got, withStoredAdvisories(t, db, lastReport(t, errOut))
 	}
 	without, repA := run()
 	with, repB := run("-verify")

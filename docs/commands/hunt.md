@@ -1,8 +1,8 @@
 # azhaq hunt
 
-Where to look first: the mapped routes, hosts and files ranked, each with its evidence and the next command.
+Where to look first: the mapped routes, hosts and files ranked, and what the run named on each listener, each with its evidence and the next command.
 
-A map of thousands of routes does not say where to start. `hunt` ranks the mapped routes, hosts and files by what a tester should open first. It gives one row per route template, each with its score, the reasons for it and the command to run next. It reads the workspace and sends nothing.
+A map of thousands of routes does not say where to start. `hunt` ranks the mapped routes, hosts and files by what a tester should open first. It gives one row per route template and one per listener the run named, each with its score, the reasons for it and the command to run next. It reads the workspace and sends nothing.
 
 ## Synopsis
 
@@ -30,38 +30,50 @@ azhaq hunt -db app.db -roles roles.jsonl -limit 10
 2. Folds URLs into route templates, so `/rest/basket/6` and `/rest/basket/7` are one row.
 3. Raises signals on each row, such as an identifier in the path, a backup file or a role reading another role's object. [Signals](#signals) lists them.
 4. Scores each row as the sum of its signals, and drops rows with no signal.
-5. Puts each row in a tier: a **finding** when a signal of it is proven (see [Findings and leads](#findings-and-leads)), a **lead** otherwise.
-6. Sorts the findings before the leads, each by score, and prints the best `-limit` rows (default 25). A lead names the check that would prove it, and every row a command to run next.
+5. Adds a row for each listener the run named: the product, the version or `no version seen`, the top advisory with its label, the proof and the command that shows it again. [Listeners](#listeners) says which.
+6. Puts each row in a tier: a **finding** when a signal of it is proven (see [Findings and leads](#findings-and-leads)), an **identification** for a listener the run named, a **lead** otherwise.
+7. Sorts the findings first, then the identifications, then the leads, each by score, and prints the best `-limit` rows (default 25). A lead names the check that would prove it, and every row a command to run next.
 
 ## Output
 
-Text form: one row per line, the findings first under `findings (N)` and the leads apart under `leads (N)`.
+Text form: one row per line, the findings first under `findings (N)`, the identifications under `identifications (N)` and the leads apart under `leads (N)`.
 
 ```
 findings (N): proven, the answer shows the thing named
 rank  score  key  reason; reason  → next: COMMAND
+identifications (N): what the run named on each listener; the label says how far a read settled the advisory
+rank  score  host:port  identified: PRODUCT VERSION; advisory: ID LABEL; proof: EXCERPT  → next: COMMAND
 leads (N): inferred from a name, a path or a guess; each names the check that would prove it
 rank  score  key  reason; reason  → check: WHAT WOULD PROVE IT  → next: COMMAND
 ```
 
-A reason is `signal: detail`. With `-json`, stdout holds one object per row. The summary goes to stderr, as JSON with `-json`, and counts `rows` and, apart, the `tiers` of the rows printed: `findings` and `leads` (`identifications` is 0: a product and version is not a row of the map). A note says how many rows had a signal when `-limit` cut the list.
+A reason is `signal: detail`. With `-json`, stdout holds one object per row. The summary goes to stderr, as JSON with `-json`, and counts `rows` and, apart, the `tiers` of the rows printed: `findings`, `identifications` and `leads`. When `-limit` cut the list, a note says how many rows had a signal, counts them by tier, says how many the limit left out and gives the `-limit` that prints them all.
 
 ```
 $ azhaq hunt -db app.db
-  1   57  http://app/api/orders/{id}  object-id: {id} in the path; path-data: "orders" in /api/orders/{id}, named, not requested; unauth-write: DELETE: nothing that names it asks for credentials (not tried)  → next: azhaq roles -role anon -role 'user=Authorization: Bearer …' -- -url http://app/
-  2   33  http://app/api/v2/export  object-id: identifier parameter userId; unauth-write: POST: nothing that names it asks for credentials (not tried); input: takes format, userId  → next: azhaq roles -role anon -role 'user=Authorization: Bearer …' -- -url http://app/
+identifications (2): what the run named on each listener; the label says how far a read settled the advisory (version-only: the version is in range, nothing checked)
+  1   79  192.0.2.12:8161  identified: ActiveMQ 5.15.0; advisory: CVE-2023-46604 version-only, known exploited (CISA KEV), CVSS 10.0; 14 advisories match this version, azhaq report -findings -db app.db lists them; proof: Server: Jetty(9.4.z-SNAPSHOT)  → next: curl -sS -i --max-time 10 'http://192.0.2.12:8161/'
+  2   10  192.0.2.14:3000  identified: Express (no version seen); proof: HTTP/1.0 200 OK  → next: curl -sS -i --max-time 10 'http://192.0.2.14:3000/'
+leads (2): inferred from a name, a path or a guess; each names the check that would prove it
+  3   57  http://app/api/orders/{id}  object-id: {id} in the path; path-data: "orders" in /api/orders/{id}, named, not requested; unauth-write: DELETE: nothing that names it asks for credentials (not tried)  → check: GET it with the sessions of two roles (azhaq roles): one's data must not come back to the other  → next: azhaq roles -role anon -role 'user=Authorization: Bearer …' -- -url http://app/
+  4   33  http://app/api/v2/export  object-id: identifier parameter userId; unauth-write: POST: nothing that names it asks for credentials (not tried); input: takes format, userId  → check: GET it with the sessions of two roles (azhaq roles): one's data must not come back to the other  → next: azhaq roles -role anon -role 'user=Authorization: Bearer …' -- -url http://app/
 ```
 
 | Field (`-json`) | Meaning |
 | --- | --- |
 | `rank` | Position in the list, best first. |
 | `score` | The sum of the row's signal weights. |
-| `key` | A route template, host or file. A template folds several URLs and holds `{n}`, `{uuid}`, `{hex}` or `={v}`. A key seen once is the URL. |
-| `type` | `URL` or `Hostname`. |
+| `key` | A route template, host, file or listener. A template folds several URLs and holds `{n}`, `{uuid}`, `{hex}` or `={v}`. A key seen once is the URL. A listener is `host:port`. |
+| `type` | `URL`, `Hostname` or `Service` (a listener). |
 | `reasons` | An array of `{signal, detail}`, one per signal. |
-| `tier` | `finding` or `lead`: see [Findings and leads](#findings-and-leads). |
+| `tier` | `finding`, `identification` or `lead`: see [Findings and leads](#findings-and-leads). |
 | `check` | On a lead, the check that would prove it: what an answer must show. |
-| `proof` | On a finding of a path check, the proof fields of [report](report.md#what-a-finding-carries): the request, the excerpt of the answer with its offset, the command that shows it again. |
+| `proof` | On a finding of a path check, and on a listener, the proof fields of [report](report.md#what-a-finding-carries): the request, the excerpt of the answer with its offset, the command that shows it again. |
+| `kind` | Only on the row of a listener: `identification`, or `finding` when a read proved something on it. |
+| `what` | On a listener: the kind of the record in `report -findings` (`advisory-precondition`, `software-version`, `unauthenticated-read`…). |
+| `host`, `port`, `product`, `version` | On a listener. `version` is `""` when no version was seen. |
+| `advisory_id`, `advisory_url`, `advisories`, `kev`, `cvss` | On a listener with an advisory match: the top advisory, how many advisories match the version, whether CISA lists the top one as exploited, and its score. |
+| `label`, `severity`, `evidence`, `command` | On a listener: the record's own `proved`, `version-only` or `conditional` label and severity, what the record says, and the command that produced it. |
 | `next` | The command to run next. [The next command](#the-next-command) says how it is chosen. |
 | `template` | Only on the row of an input the pages of an origin carry in common: `{"input", "pages", "of"}`, the input and how many of the origin's fetched pages carry it. |
 
@@ -106,6 +118,17 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 - Static assets, scripts, catch-all pages and pages that are gone are never rows.
 - An input name that most pages of an origin carry belongs to the site's template, such as a search box or a sign-in form in every page's header. The rule: at least 5 of the origin's fetched pages carry the name, and at least 40% of them. The numbers come from the v0.12 hunter evidence, where one search box was 77 of the top 100 rows. The pages that only carry it have no signal for it and are left out. The input is not lost, since it can be the injection point: it is one row for each origin and name, on the page it was first seen on, with a reason such as `input q on 312 of 340 pages of http://host:8080 (the site's template)`, ranked by its own signals like any other input. Its `-json` row has `template: {input, pages, of}`. A route that takes the name in its own query keeps it as its own signal.
 
+### Listeners
+
+A listener row is what the run named on one `host:port`. The rows come from the same records as [`azhaq report -findings`](report.md#what-a-finding-carries), so the two agree. There is one row for each listener and product:
+
+- The product and the version a service stated, or `(no version seen)` when a stage named the product and nothing named its version.
+- The top advisory the version matches, with its label as `report -findings` says it (`proved`, `version-only`, `conditional`) and how many advisories match in all. The others are in `report -findings`. A product with no version has no advisory: there is nothing to match.
+- The proof: the banner or the header that stated it, and the command that shows it again, which is the row's `next`.
+- A read that proved something on a listener (`-verify`: a data store that answered without a password) is a finding row.
+
+An identification is never softened: `version-only` says the version is in the advisory's range and nothing more was checked.
+
 ### Findings and leads
 
 A row is a **finding** when one of its signals is proven by what was received, and a **lead** when none is. A path or a name is never proof.
@@ -113,14 +136,16 @@ A row is a **finding** when one of its signals is proven by what was received, a
 - Proven: `cross-role` (a `-roles` verdict of `proved` confidence, or with none), `takeover` of strength `strong`, a `secret` whose own format names it (a key with a known shape, severity above `info`), `exposed-file` and `exposed-panel` when the answer shows the file or the panel ([Exposed files](#exposed-files)), `listing` (the page's own title is a directory listing), `api-description` when the run parsed the description, `graphql` when its schema was read or its IDE answers, and `server-error` when the body shows SQL error text, a framework's debug page or a stack trace.
 - Leads: every other signal, such as a word in a path, `input`, a `param-*`, `object-id`, `gated`, `unauth-write`, `upload`, `sourcemap`, `takeover-candidate`, a generic or bundler secret, a role's 5xx that differs from another's, and a `named` route no server confirmed.
 
-`hunt` lists the findings first, then the leads, each group by score. Each lead carries `check`, what an answer must show for it to be a finding.
+An **identification** is a listener the run named: a product, and a version or none. It is not proven: the label says how far a read settled its advisory.
+
+`hunt` lists the findings first, then the identifications, then the leads, each group by score. In the identifications, a version seen comes before none seen, and a `proved` label before `version-only`. Each lead carries `check`, what an answer must show for it to be a finding.
 
 ### Score and order
 
 - The score is the sum of the row's signals. Each signal counts once, at its highest weight.
 - Rows only a script names and the server did not confirm, and a `takeover-candidate` that is the row's only signal, come after every other row, whatever their score: see [Routes only a script names](#routes-only-a-script-names).
 - Ties go to the target before fan-out, then to the row with more distinct signals, then by key. [Concepts](../CONCEPTS.md#reading-a-map-row) explains target and fan-out.
-- `-limit` (default 25) keeps the best rows.
+- `-limit` (default 25) keeps the best rows. The summary counts what it left out.
 
 ### Weights
 

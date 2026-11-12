@@ -317,6 +317,15 @@ type Lead struct {
 	ConfirmReq string         `json:"confirm_request,omitempty"` // the exact request a confirmation sent or would send ("GET /version")
 }
 
+// WithoutList is the lead as a run's summary holds it: the top advisory and the
+// counts by label, without the list of every advisory (the stored row, the map
+// and `report -findings` keep it). A not-affected match is counted in Counts
+// and never listed.
+func (l Lead) WithoutList() Lead {
+	l.Advisories = nil
+	return l
+}
+
 // Line is the lead as one line of text output: the label, the product
 // and version seen, the advisory and its source, and, when a
 // confirmation ran, its confidence and what was read.
