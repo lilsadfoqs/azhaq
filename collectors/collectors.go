@@ -27,8 +27,10 @@ import (
 	"github.com/lilsadfoqs/azhaq/internal/collectors/subcol"
 	"github.com/lilsadfoqs/azhaq/internal/collectors/tlscol"
 	"github.com/lilsadfoqs/azhaq/internal/collectors/urlcol"
+	"github.com/lilsadfoqs/azhaq/internal/collectors/vhostcol"
 	"github.com/lilsadfoqs/azhaq/internal/dnsr"
 	"github.com/lilsadfoqs/azhaq/internal/egress"
+	"github.com/lilsadfoqs/azhaq/internal/fetch"
 )
 
 // Options configure the built-in collectors for one run.
@@ -85,6 +87,7 @@ func Register(cat *catalog.Catalog, o Options) {
 	cc := crawlcol.New(client)
 	cc.FillForms, cc.SubmitForms, cc.Climb = o.FillForms, o.SubmitForms, o.PathClimb
 	cat.MustRegister(cc)
+	cat.MustRegister(&vhostcol.Collector{Client: fetch.Client(client), Ports: o.WebPorts, Scanned: o.Ports})
 	jc := jscol.New(client)
 	jc.NoMapGuess = o.NoMapGuess
 	cat.MustRegister(jc)

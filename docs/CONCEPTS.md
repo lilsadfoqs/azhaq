@@ -146,6 +146,7 @@ A header that names a host is held to the scope too, because a front end routes 
 - With no `-allow`, `-deny` or `-scope`, a host you name in a header joins the targets you named.
 - With a rule, a header that names a host outside it is refused before anything is sent. The command exits 2.
 - A header that names a port is held to the rule's port like a URL: with `-allow 127.0.0.1:3001`, `Host: 127.0.0.1:5002` is refused and `Host: 127.0.0.1:3001` is sent. A header with no port is judged by its host.
+- The names `run` tries as a virtual host (`Host: NAME`, see [run](commands/run.md#names-and-virtual-hosts)) come from the run's own findings, and a name outside the scope is not sent.
 - A request file, an import (`params -i`), a `-vi` line and a `-role-cmd` bring headers you did not type. They are held to the targets.
 
 ## Sessions

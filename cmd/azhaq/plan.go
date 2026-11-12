@@ -16,6 +16,7 @@ import (
 	"github.com/lilsadfoqs/azhaq/engine"
 	"github.com/lilsadfoqs/azhaq/internal/collectors/gqlcol"
 	"github.com/lilsadfoqs/azhaq/internal/collectors/portcol"
+	"github.com/lilsadfoqs/azhaq/internal/collectors/vhostcol"
 	"github.com/lilsadfoqs/azhaq/internal/egress"
 	"github.com/lilsadfoqs/azhaq/internal/neterr"
 	"github.com/lilsadfoqs/azhaq/internal/portscan"
@@ -125,6 +126,7 @@ type sendLimits struct {
 	loginUser    string
 	graphql      bool
 	hostGuesses  int64 // -host-guesses; 0: none
+	bruteBuiltin bool  // -dns-brute asks for the built-in list: bruteList is it
 	dirsWords    int   // -dirs: words, and extensions besides the bare word
 	dirsExts     int
 	paramsWords  int // -params: names, and pages searched at most on each host
@@ -252,11 +254,17 @@ func planSends(b engine.Budgets, send sendLimits) (gets, others []string) {
 		var what []string
 		if b.Active["dns-brute"] {
 			what = append(what, "WORD.domain for each word (-dns-brute)")
+			if send.bruteBuiltin {
+				what[len(what)-1] = fmt.Sprintf("WORD.domain for each of the %d words of the built-in list (-dns-brute none turns it off)", len(send.bruteList))
+			}
 		}
 		if b.Active["permute"] {
 			what = append(what, "variations of the names found (-permute)")
 		}
 		*out = append(*out, "DNS queries for "+strings.Join(what, " and ")+", to the resolvers: not requests to the targets")
+	}
+	if !b.Skip["azhaq-vhost"] && !b.Passive {
+		*out = append(*out, "virtual host requests: each name found in scope is asked as the Host of each web service of the addresses in scope, one request for each name, address and port, and "+fmt.Sprint(vhostcol.Calibrations)+" more for each service to learn its default answer; a name that resolves to the address and is asked there by name (a web port, or a port the run scans) is not asked twice (-no-vhost turns them off; -max-requests, -max-time and -rate bound them)")
 	}
 	return gets, others
 }

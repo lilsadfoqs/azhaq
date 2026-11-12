@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -54,7 +55,8 @@ type Policy struct {
 	onPort      func(raw, reason string) // hears of a URL kept out for its port
 	proxy       *url.URL
 	resolver    func(ctx context.Context, host string) []string
-	only        bool // the resolver is the only one: a name it cannot answer is not looked up elsewhere
+	only        bool                // the resolver is the only one: a name it cannot answer is not looked up elsewhere
+	pins        map[string][]string // name → address, for a name the resolver has no answer for
 
 	maxReq atomic.Int64
 	sent   atomic.Int64
@@ -133,6 +135,7 @@ func Reset() { Current().Reset() }
 func (p *Policy) Reset() {
 	p.mu.Lock()
 	p.allow, p.allowAddr, p.openHeaders, p.denyPath, p.onDenied, p.onPort, p.proxy, p.resolver, p.only = nil, nil, nil, nil, nil, nil, nil, nil, false
+	p.pins = nil
 	p.targetPorts = nil
 	p.word, p.asked, p.holding = nil, nil, false
 	p.sentKeys.Clear()
@@ -369,10 +372,32 @@ func (p *Policy) Resolve(ctx context.Context, host string) []string {
 	f := p.resolver
 	p.mu.RUnlock()
 	if f != nil {
-		return f(ctx, host)
+		if ips := f(ctx, host); len(ips) > 0 {
+			return ips
+		}
 	}
-	return nil
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.pins[strings.ToLower(host)]
 }
+
+// Pin makes host connect to ip when the resolver has no answer for it: a
+// name a web service answers to by its Host header, which no DNS names. An
+// answer the resolver gives is never replaced.
+func (p *Policy) Pin(host, ip string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.pins == nil {
+		p.pins = map[string][]string{}
+	}
+	host = strings.ToLower(host)
+	if !slices.Contains(p.pins[host], ip) {
+		p.pins[host] = append(p.pins[host], ip)
+	}
+}
+
+// Pin is Current().Pin.
+func Pin(host, ip string) { Current().Pin(host, ip) }
 
 // DeniedBy is the -deny-path rule that keeps raw out, or "".
 func (p *Policy) DeniedBy(raw string) string {

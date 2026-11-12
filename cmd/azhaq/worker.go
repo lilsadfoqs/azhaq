@@ -103,6 +103,8 @@ func forWorkers(fs *flag.FlagSet, args, allow, deny []string) (workerConfig, err
 			// Named, not copied to a file: the worker must know the words are the
 			// built-in ones, of which the state-changing are held back.
 			cfg.Args = append(cfg.Args, "-dirs="+val)
+		case name == "dns-brute" && (val == "none" || val == "default"):
+			cfg.Args = append(cfg.Args, "-dns-brute="+val)
 		case fileOptions[name]:
 			raw, err := os.ReadFile(val)
 			if err != nil {
