@@ -38,6 +38,7 @@ func watchSession(ctx context.Context, seeds []types.Seed, home, loginURL string
 		}
 	}
 	var tried []string
+	var away *turnedAway
 	for _, c := range candidates {
 		if landed != nil && c == home && landed.ok() {
 			// Chrome's own answer is the "with" side: the page answered 2xx
@@ -79,11 +80,32 @@ func watchSession(ctx context.Context, seeds []types.Seed, home, loginURL string
 			break
 		}
 		tried = append(tried, c)
+		if renew == nil && away == nil && with == without && (with.Status == 401 || with.Status >= 300 && with.Status < 400) {
+			// A session the run cannot renew, that a page turns away as it
+			// turns away a visitor, may never have held: TurnsAway looks.
+			if got, how, ok, err := fetch.TurnsAway(ctx, c); err == nil && ok {
+				away = &turnedAway{c, got, how}
+			}
+		}
+	}
+	if s.Check == "" && away != nil {
+		// No page showed the session live, and one turned it away: it never held.
+		fetch.WatchSession(s)
+		_ = fetch.NeverHeld(ctx, away.page, away.got, away.how)
+		return
 	}
 	if s.Check == "" && len(candidates) > 0 {
-		rep.Notes = append(rep.Notes, fmt.Sprintf("session check: %s answered the same with the session and without it, so the run looks for a JSON answer that tells, tests a 401 by signing in again, and notices a response that clears the session cookie", strings.Join(tried, ", ")))
+		rep.Notes = append(rep.Notes, fmt.Sprintf("session check: no page showed the session live (%s answered the same with it and without it), so the run looks for a JSON answer that tells, tests a 401 by signing in again, and notices a response that clears the session cookie", strings.Join(tried, ", ")))
 	}
 	fetch.WatchSession(s)
+}
+
+// turnedAway is a page that sent a session the run cannot renew to sign in,
+// as it does a visitor without one.
+type turnedAway struct {
+	page string
+	got  fetch.Print
+	how  string
 }
 
 // landing is what a sign-in saw of the page it ended on.

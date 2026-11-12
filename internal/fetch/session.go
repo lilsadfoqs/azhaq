@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"slices"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"github.com/lilsadfoqs/azhaq/internal/egress"
+	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 	"github.com/lilsadfoqs/azhaq/internal/neterr"
 )
 
@@ -95,6 +97,7 @@ type sessionGuard struct {
 	verifies int
 	enders   map[string]bool // requests that end the session whenever they are sent
 	start    string          // set when the check at the start found the session ended: how, for the failure
+	never    bool            // that check found a session no page showed live (NeverHeld)
 	pre      int64           // requests sent between the sign-in and that check
 	stretch  int64           // the oldest stretch a renewal made worth asking again, not taken yet
 	stretchN bool
@@ -388,20 +391,77 @@ func EndedAtStart(ctx context.Context, page string, chrome int, got Print, sent 
 	return g.lose(ctx, got, "", "", 0)
 }
 
+// passwordInput is a form field that takes a password: a page with one is
+// where a visitor signs in.
+var passwordInput = lazyre.New(`(?i)<input\b[^>]*\btype\s*=\s*["']?password\b`)
+
+// TurnsAway asks raw with the run's session, not followed, and says whether
+// the answer sends the visitor to sign in: a 401, or a redirect to a page
+// whose form takes a password (asked once more, with the session). how says
+// which. Each ask is counted like any request.
+func TurnsAway(ctx context.Context, raw string) (got Print, how string, away bool, err error) {
+	got, loc, _, err := askRaw(ctx, raw, true, 0)
+	if err != nil {
+		return got, "", false, err
+	}
+	switch {
+	case got.Status == http.StatusUnauthorized:
+		return got, "a 401", true, nil
+	case isRedirect(got.Status) && loc != "":
+		_, _, body, err := askRaw(ctx, loc, true, 256<<10)
+		if err == nil && passwordInput.Match(body) {
+			return got, "a redirect to " + pathOf(loc) + ", a page whose form takes a password", true, nil
+		}
+	}
+	return got, "", false, nil
+}
+
+// NeverHeld is the first check of a session given with -cookie or -header
+// that no page showed live, when page turns the visitor away with the session
+// as without it (TurnsAway): the session does not hold, and the run stops as
+// for a failed check, before any other request.
+func NeverHeld(ctx context.Context, page string, got Print, how string) error {
+	g := guardP.Load()
+	if g == nil || g.remote {
+		return nil
+	}
+	g.runMu.Lock()
+	defer g.runMu.Unlock()
+	g.checking.Store(true)
+	g.gate.Lock()
+	defer func() {
+		g.gate.Unlock()
+		g.checking.Store(false)
+	}()
+	g.mu.Lock()
+	g.s.Check, g.s.Want = page, Print{}
+	g.start = fmt.Sprintf("%s answered %s with the session as without it: %s", pathOf(page), describe(got), how)
+	g.pre, g.never = 0, true
+	g.mu.Unlock()
+	return g.lose(ctx, got, "", "", 0)
+}
+
 // askPrint requests raw once, not followed, and gives its print. It is
 // counted in the budget and the ledger like any request, but not checked
 // by the guard itself.
 func askPrint(ctx context.Context, raw string, session bool) (Print, error) {
+	p, _, _, err := askRaw(ctx, raw, session, 0)
+	return p, err
+}
+
+// askRaw is askPrint that also gives the whole Location the answer sends to,
+// and up to limit bytes of its body.
+func askRaw(ctx context.Context, raw string, session bool, limit int64) (Print, string, []byte, error) {
 	if err := egress.CheckDenied(raw); err != nil {
-		return Print{}, err
+		return Print{}, "", nil, err
 	}
 	if err := egress.SpendCounted(ctx, true); err != nil {
-		return Print{}, err
+		return Print{}, "", nil, err
 	}
 	req, err := http.NewRequestWithContext(egress.Unwatched(ctx), http.MethodGet, raw, nil)
 	if err != nil {
 		egress.Refund()
-		return Print{}, err
+		return Print{}, "", nil, err
 	}
 	if session {
 		ApplyHeaders(req)
@@ -411,12 +471,22 @@ func askPrint(ctx context.Context, raw string, session bool) (Print, error) {
 	}
 	resp, err := noFollow(nil).Do(req)
 	if err != nil {
-		return Print{}, err
+		return Print{}, "", nil, err
 	}
 	defer resp.Body.Close()
 	p := Print{Status: resp.StatusCode}
-	p.Loc = locPath(raw, resp.Header.Get("Location"))
-	return p, nil
+	loc := strings.TrimSpace(resp.Header.Get("Location"))
+	p.Loc = locPath(raw, loc)
+	if loc != "" {
+		if u, err := resp.Request.URL.Parse(loc); err == nil {
+			loc = u.String()
+		}
+	}
+	var body []byte
+	if limit > 0 {
+		body, _ = io.ReadAll(io.LimitReader(resp.Body, limit))
+	}
+	return p, loc, body, nil
 }
 
 // EndCheck checks the session once more when requests were sent since the
@@ -528,12 +598,15 @@ func (g *sessionGuard) lose(ctx context.Context, got Print, endedBy, signal stri
 		how = "a response cleared the session cookie"
 	}
 	g.mu.Lock()
-	start, pre := g.start, g.pre
+	start, pre, never := g.start, g.pre, g.never
 	g.mu.Unlock()
 	if start != "" {
 		how = start
 	}
 	what := fmt.Sprintf("the session ended (%s)", how)
+	if never {
+		return g.failLost("the session does not hold", how, "the run cannot sign in again ("+g.s.Why+")", n, pre, true)
+	}
 	if endedBy != "" {
 		what = fmt.Sprintf("the session ended after %s was requested (%s)", pathOf(endedBy), how)
 	} else if signal != "" {
@@ -574,7 +647,7 @@ func (g *sessionGuard) failLost(lead, what, why string, n int, pre int64, atStar
 	var sent string // what is true of the requests sent while it was gone
 	switch {
 	case atStart && pre == 0:
-		sent = "no request was sent since the sign-in"
+		sent = "no request of the run was sent before that check"
 	case atStart:
 		sent = fmt.Sprintf("the %s sent since the sign-in, Chrome's included, may have been answered without the session", plural(int(pre), "request"))
 		n = int(pre)

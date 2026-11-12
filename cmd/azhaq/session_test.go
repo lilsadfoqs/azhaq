@@ -317,3 +317,80 @@ func TestLoginRunThatCannotSignInAgainToTestA401StopsSending(t *testing.T) {
 		t.Errorf("sent after the answer that may have ended the session: %v", paths)
 	}
 }
+
+// A session given with -cookie or -header that no page shows live, where a
+// page turns it away (a 401, or a redirect to a page whose form takes a
+// password) as it turns away a visitor, never held: the run stops before any
+// other request, and the failure says so.
+func TestASessionThatNeverHeldStopsTheRun(t *testing.T) {
+	for _, tc := range []struct {
+		name, page string
+		header     http.Header
+		want       string
+	}{
+		{"cookie and a sign-in redirect", "/account", http.Header{"Cookie": {"sid=dead"}}, "/account answered 302 to /login"},
+		{"token and a 401", "/api/me", http.Header{"Authorization": {"Bearer dead"}}, "/api/me answered 401"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var asked atomic.Int32
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				asked.Add(1)
+				switch r.URL.Path {
+				case "/":
+					_, _ = w.Write([]byte("<title>Home</title>"))
+				case "/login":
+					_, _ = w.Write([]byte(`<form method=post><input name=user><input type="password" name=pw></form>`))
+				case "/account":
+					http.Redirect(w, r, "/login", http.StatusFound)
+				case "/api/me":
+					w.WriteHeader(http.StatusUnauthorized)
+				}
+			}))
+			defer srv.Close()
+			fetch.Reset()
+			defer fetch.Reset()
+			fetch.Extra = tc.header
+			rep := &report{}
+			seeds := []types.Seed{{Type: types.TypeURL, Keys: map[string]string{"url": srv.URL + tc.page}}, {Type: types.TypeURL, Keys: map[string]string{"url": srv.URL + "/"}}}
+			watchSession(context.Background(), seeds, "", "", nil, nil, rep)
+			before := asked.Load()
+			_, _, err := fetch.Do(context.Background(), srv.Client(), srv.URL+"/")
+			if !errors.Is(err, neterr.ErrSessionLost) {
+				t.Fatalf("the run went on with a session that never held: %v", err)
+			}
+			if got := asked.Load(); got != before {
+				t.Errorf("%d requests went out after the check", got-before)
+			}
+			if !strings.Contains(err.Error(), "does not hold") || !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("the failure %q does not say the session does not hold, and why (%s)", err, tc.want)
+			}
+		})
+	}
+}
+
+// A page that answers a visitor and the session alike, and does not turn
+// either away, says nothing of the session: the run goes on, and the summary
+// says no page showed the session live. A redirect to a page with no
+// password field is not a sign-in.
+func TestASessionNoPageShowsGoesOnWithANote(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/":
+			http.Redirect(w, r, "/en/", http.StatusFound)
+		default:
+			_, _ = w.Write([]byte(`<title>Welcome</title><form action=/search><input name=q></form>`))
+		}
+	}))
+	defer srv.Close()
+	fetch.Reset()
+	defer fetch.Reset()
+	fetch.Extra = http.Header{"Cookie": {"sid=whatever"}}
+	rep := &report{}
+	watchSession(context.Background(), []types.Seed{{Type: types.TypeURL, Keys: map[string]string{"url": srv.URL + "/"}}}, "", "", nil, nil, rep)
+	if _, _, err := fetch.Do(context.Background(), srv.Client(), srv.URL+"/en/"); err != nil {
+		t.Fatalf("the run stopped: %v", err)
+	}
+	if len(rep.Notes) != 1 || !strings.Contains(rep.Notes[0], "no page showed the session live") {
+		t.Errorf("notes %q", rep.Notes)
+	}
+}
