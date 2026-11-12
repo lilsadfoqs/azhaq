@@ -656,7 +656,7 @@ func do(ctx context.Context, c *http.Client, raw string, rq *Req) (Result, error
 				cut = true
 				break // the redirect answered; where it points did not
 			}
-			return Result{}, err
+			return Result{}, neterr.TLSHint(raw, err)
 		}
 		if kept != nil {
 			var head string

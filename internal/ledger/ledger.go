@@ -40,6 +40,7 @@ type Entry struct {
 	Host      string    `json:"host,omitempty"`  // for dns, the name asked
 	VHost     string    `json:"vhost,omitempty"` // the Host header sent, when it is not the URL's
 	Body      string    `json:"body,omitempty"`  // the start of the sha256 of the request body, when it has one
+	Sent      string    `json:"sent,omitempty"`  // probe: the bytes written, in hex, up to MaxSent bytes
 	Rule      string    `json:"rule,omitempty"`  // the scope rule that allowed it
 	Collector string    `json:"collector,omitempty"`
 	Purpose   string    `json:"purpose,omitempty"` // what a request to a target was for: pages, scripts, controls, description checks…
@@ -50,6 +51,15 @@ type Entry struct {
 	Prev    string `json:"prev,omitempty"`
 	Hash    string `json:"hash,omitempty"`
 }
+
+// BytesPerConnect is what the ledger holds for one port connect, for the
+// plan's size estimate: the mean length of the tcp lines (newline included) of
+// a loopback scan of closed ports (332 with a 16-character rule; the names a
+// real rule and host carry make it about 350), written with a collector as a
+// run writes them
+// as a run writes them (TestLedgerBytesPerConnect measures it). The two
+// 64-digit hashes are 130 of it, so the rest barely moves it.
+const BytesPerConnect = 350
 
 // What a request or connection is sent to. A ledger written before classes
 // has none on its lines: they were all sent to targets.
@@ -105,7 +115,7 @@ func appendPlain(b []byte, e Entry) ([]byte, bool) {
 	if y := e.Time.Year(); y < 0 || y > 9999 {
 		return nil, false
 	}
-	for _, s := range [...]string{e.Kind, e.Class, e.Method, e.Proto, e.Target, e.Host, e.VHost, e.Body, e.Rule, e.Collector, e.Purpose, e.Prev, e.Hash} {
+	for _, s := range [...]string{e.Kind, e.Class, e.Method, e.Proto, e.Target, e.Host, e.VHost, e.Body, e.Sent, e.Rule, e.Collector, e.Purpose, e.Prev, e.Hash} {
 		if !plain(s) {
 			return nil, false
 		}
@@ -131,7 +141,7 @@ func appendPlain(b []byte, e Entry) ([]byte, bool) {
 			b = append(append(b, val...), '"')
 		}
 	}
-	for _, f := range [...]struct{ name, val string }{{"host", e.Host}, {"vhost", e.VHost}, {"body", e.Body}, {"rule", e.Rule}, {"collector", e.Collector}, {"purpose", e.Purpose}} {
+	for _, f := range [...]struct{ name, val string }{{"host", e.Host}, {"vhost", e.VHost}, {"body", e.Body}, {"sent", e.Sent}, {"rule", e.Rule}, {"collector", e.Collector}, {"purpose", e.Purpose}} {
 		str(f.name, f.val)
 	}
 	if e.NotSent {

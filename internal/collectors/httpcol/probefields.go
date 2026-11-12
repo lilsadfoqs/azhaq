@@ -30,6 +30,7 @@ import (
 	"golang.org/x/net/html/charset"
 	"golang.org/x/text/transform"
 
+	"github.com/lilsadfoqs/azhaq/internal/certfacts"
 	"github.com/lilsadfoqs/azhaq/internal/cpedetect"
 	"github.com/lilsadfoqs/azhaq/internal/egress"
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
@@ -209,7 +210,6 @@ func tlsData(raw string, t *fetch.TLSInfo) map[string]any {
 			port = p
 		}
 	}
-	names := append(append([]string(nil), cert.DNSNames...), cert.Subject.CommonName)
 	out := map[string]any{
 		"host": host, "port": port, "probe_status": true,
 		"tls_version": tlsVersions[t.Version], "cipher": egress.CipherSuiteName(t.Cipher),
@@ -235,13 +235,13 @@ func tlsData(raw string, t *fetch.TLSInfo) map[string]any {
 	if time.Now().After(cert.NotAfter) {
 		out["expired"] = true
 	}
-	if len(cert.AuthorityKeyId) == 0 || bytes.Equal(cert.AuthorityKeyId, cert.SubjectKeyId) {
+	if certfacts.SelfSigned(cert) {
 		out["self_signed"] = true
 	}
-	if misMatched(host, names) {
+	if certfacts.Mismatched(host, certfacts.Names(cert)) {
 		out["mismatched"] = true
 	}
-	for _, n := range names {
+	for _, n := range certfacts.Names(cert) {
 		if strings.Contains(n, "*.") {
 			out["wildcard_certificate"] = true
 			break
@@ -288,26 +288,6 @@ func serial(n *big.Int) string {
 		parts = append(parts, b[i:i+2])
 	}
 	return strings.Join(parts, ":")
-}
-
-// misMatched: none of the certificate's names is the host (a wildcard
-// covers one label).
-func misMatched(host string, names []string) bool {
-	if host == "" {
-		return false
-	}
-	for _, n := range names {
-		n = strings.ToLower(n)
-		if n == strings.ToLower(host) {
-			return false
-		}
-		if rest, ok := strings.CutPrefix(n, "*."); ok {
-			if _, tail, ok := strings.Cut(strings.ToLower(host), "."); ok && tail == rest {
-				return false
-			}
-		}
-	}
-	return true
 }
 
 // jarmHash is the JARM fingerprint of a TLS server: ten handshakes, each

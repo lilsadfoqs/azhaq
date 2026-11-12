@@ -49,6 +49,12 @@ Entries are grouped by what you were doing:
 
 **Fix:** Look at what the server offers (`nmap --script ssl-enum-ciphers -p PORT HOST`). For TLS 1.0 or 1.1 use `probe`, which takes them.
 
+### A URL fails with `connection reset by peer` or `malformed HTTP response "\x15\x03…"`, and the failure says the port speaks TLS
+
+**Why:** The URL is `http://` and the port answers TLS. A TLS server that is sent plain text writes an alert record (its first bytes are `0x15 0x03`, or `0x16 0x03` for another TLS record) or drops the connection. The failure ends with `this port speaks TLS; try https://HOST:PORT` when azhaq read a TLS record, and with `this port may speak TLS; try https://HOST:PORT` when the connection was only reset, which a firewall or a server of another protocol does too.
+
+**Fix:** Ask `https://HOST:PORT` instead.
+
 ### The run says `the session ended`
 
 **Why:** A request ended the session of a signed-in run: a logout link, or an expiry. azhaq noticed because its check page, the one that answers differently with the session and without it, no longer answered as it did.

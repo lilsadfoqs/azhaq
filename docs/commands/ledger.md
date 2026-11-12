@@ -78,6 +78,13 @@ Each line has a class: `target` (a host the run was pointed at), `source` (a thi
 
 A line says the request or connection left. One cancelled before it did (by `-timeout`, the kill file or Ctrl-C) has no line and is not in the summary's `requests`. [OUTPUT](../OUTPUT.md#what-a-line-means) says what leaving means for each kind.
 
+### Sending a probe again
+
+- A `probe` line holds the bytes the identification wrote to a connection, in hex, in `sent`. `body` is the start of their sha256, so the two agree: `echo SENT | xxd -r -p | sha256sum` starts with `body`.
+- A line is the probe again: `echo SENT | xxd -r -p | nc -w 3 HOST PORT` sends the same bytes to the port in `target`, and `openssl s_client -quiet -connect HOST:PORT` in place of `nc` does it inside TLS (`proto` is `https`, or the bytes were written inside TLS).
+- A write over 1024 bytes has no `sent`, only its `body`. No request azhaq's own probes send is that long.
+- `sent` is one more field on the line, inside the hash like the others: `-verify` still checks the chain and the seal. A ledger written before it has none, and an azhaq from before it cannot verify a ledger that does.
+
 ### What -verify proves
 
 - It proves only that no recorded line was edited, removed or reordered.

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/lilsadfoqs/azhaq/internal/certfacts"
 	"github.com/lilsadfoqs/azhaq/internal/portscan"
 	"github.com/lilsadfoqs/azhaq/store"
 	"github.com/lilsadfoqs/azhaq/types"
@@ -126,7 +127,7 @@ func portRows(e types.Entity, scope string, obs []types.StoredObservation) []Map
 		}
 		sort.SliceStable(s.tcp, func(i, j int) bool { return s.tcp[i].Port < s.tcp[j].Port })
 		for _, o := range s.tcp {
-			add(id, s, o.Port, "tcp", "open", o.Service, o.Product, o.Version, importedProof(portProof("open", o.Service, o.Product, o.Version, o.Extra, o.TLS, o.TLSVers, o.Cipher, o.Title, o.Banner), s.via["tcp/"+strconv.Itoa(o.Port)], o.Scripts))
+			add(id, s, o.Port, "tcp", "open", o.Service, o.Product, o.Version, importedProof(append(portProof("open", o.Service, o.Product, o.Version, o.Extra, o.TLS, o.TLSVers, o.Cipher, o.Title, o.Banner), certProof(o.Cert)...), s.via["tcp/"+strconv.Itoa(o.Port)], o.Scripts))
 		}
 		for _, u := range s.udp {
 			add(id, s, u.Port, "udp", u.State, u.Service, u.Product, u.Version, importedProof(portProof(u.State, u.Service, u.Product, u.Version, "", false, "", "", "", u.Banner), s.via["udp/"+strconv.Itoa(u.Port)], u.Scripts))
@@ -176,6 +177,24 @@ func portProof(state, service, product, version, extra string, tls bool, tlsVers
 	}
 	if banner != "" && product == "" {
 		parts = append(parts, "banner="+strconv.Quote(banner))
+	}
+	return parts
+}
+
+// certProof is the facts of a port's certificate a row's proof states: its
+// end date, and each of expired, self_signed and name_mismatch that holds.
+func certProof(c *certfacts.Facts) []string {
+	if c == nil {
+		return nil
+	}
+	parts := []string{"cert_not_after=" + c.NotAfter}
+	for _, kv := range []struct {
+		name string
+		on   bool
+	}{{"cert_expired", c.Expired}, {"cert_self_signed", c.SelfSigned}, {"cert_name_mismatch", c.Mismatch}} {
+		if kv.on {
+			parts = append(parts, kv.name+"=true")
+		}
 	}
 	return parts
 }

@@ -10,13 +10,19 @@ import (
 	"strings"
 )
 
+// MaxSent is the longest probe whose bytes a line carries (in hex, so twice
+// that in the file). Every request azhaq's own probes send is far shorter; a
+// longer write keeps its hash only.
+const MaxSent = 1024
+
 // Probe records bytes about to be written to a connection that a port
 // identification opened (addr is its ip:port, host the name it was found
 // under). An HTTP request is listed by its method and path, with the scheme
 // of its connection in proto (http, https); any other bytes by proto, the
-// protocol they speak, and the start of their sha256. It is a no-op without
-// a ledger. A probe is not a request or a connection of its own: the
-// connection it went on has a tcp line, and the summary counts that.
+// protocol they speak, the start of their sha256 in body and the bytes
+// themselves in sent. It is a no-op without a ledger. A probe is not a
+// request or a connection of its own: the connection it went on has a tcp
+// line, and the summary counts that.
 func Probe(ctx context.Context, class, host, addr string, secure bool, proto string, b []byte) {
 	l := Active()
 	if l == nil || len(b) == 0 {
@@ -41,6 +47,9 @@ func Probe(ctx context.Context, class, host, addr string, secure bool, proto str
 	}
 	sum := sha256.Sum256(b)
 	e.Body = hex.EncodeToString(sum[:])[:16]
+	if len(b) <= MaxSent {
+		e.Sent = hex.EncodeToString(b)
+	}
 	l.Record(e)
 }
 

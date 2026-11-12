@@ -113,9 +113,13 @@ type costEstimate struct {
 	AtMostBy  string `json:"at_most_by,omitempty"`
 	AtMostOwn *int64 `json:"at_most_without_cap,omitempty"`
 	NoCeiling string `json:"no_ceiling,omitempty"`
-	Basis     string `json:"basis"`
-	ceil      ceiling
-	cap       int64 // -max-requests: the most requests, connects and datagrams a run sends to its targets
+	// LedgerBytes is what the connects of Total add to the ledger file: their
+	// count times ledger.BytesPerConnect. The requests, probes and queries
+	// write lines of their own, which it leaves out.
+	LedgerBytes int64  `json:"ledger_bytes,omitempty"`
+	Basis       string `json:"basis"`
+	ceil        ceiling
+	cap         int64 // -max-requests: the most requests, connects and datagrams a run sends to its targets
 }
 
 // ceiling is the most a part of an estimate sends, from the flags that bound
@@ -203,6 +207,7 @@ func (c ceiling) atMost(cap int64) (at *int64, by, open string, own *int64) {
 // seal sets the ceilings printed, stage by stage and for the whole, from what
 // each was counted with.
 func (e *costEstimate) seal() {
+	e.LedgerBytes = e.Total.Connects * ledger.BytesPerConnect
 	e.ceil = ceiling{}
 	for i := range e.Stages {
 		st := &e.Stages[i]
@@ -780,7 +785,27 @@ func printEstimate(w io.Writer, lead string, est costEstimate) {
 		}
 		fmt.Fprintln(w, line)
 	}
+	if est.LedgerBytes > 0 {
+		fmt.Fprintf(w, "  ledger: about %s for the %s connects (about %d bytes each; the requests, probes and queries add their own lines)\n",
+			ledgerSize(est.LedgerBytes), commas(est.Total.Connects), ledger.BytesPerConnect)
+	}
 	fmt.Fprintln(w, "  "+est.Basis)
+}
+
+// ledgerSize is n bytes in the largest unit that keeps it at 1 or more, to one
+// decimal.
+func ledgerSize(n int64) string {
+	f := float64(n)
+	for _, u := range []string{"bytes", "KB", "MB", "GB"} {
+		if f < 1000 || u == "GB" {
+			if u == "bytes" {
+				return fmt.Sprintf("%d bytes", n)
+			}
+			return fmt.Sprintf("%.1f %s", f, u)
+		}
+		f /= 1000
+	}
+	return ""
 }
 
 // ceilingWord says what bounds an estimate beside its floor: "; at most N"

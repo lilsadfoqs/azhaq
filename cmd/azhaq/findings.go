@@ -255,6 +255,9 @@ func buildFindings(g *graphView) findingSet {
 			Host: host, Port: svc.Port, URL: svc.Origin, Product: svc.Product, Version: svc.Version,
 			Request: p.Method + " " + p.Target, Evidence: p.Excerpt, Command: command, Collector: p.How, Proof: p})
 	}
+	for _, l := range certLeads(g.obs, command) {
+		add(l)
+	}
 	for _, t := range traceFindingsOf(g.obs, command) {
 		add(t)
 	}

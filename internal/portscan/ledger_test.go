@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"net"
 	"net/url"
+	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -124,7 +125,8 @@ func TestEveryProbeWrittenIsListed(t *testing.T) {
 	defer ledger.Use(nil)
 
 	var mu sync.Mutex
-	var got []string // the hash of what each connection received
+	var got []string  // the hash of what each connection received
+	var raws []string // what each received, in hex
 	var reqs []string
 	serve := func(answer bool) int {
 		ln, err := net.Listen("tcp", "127.0.0.1:0")
@@ -159,6 +161,7 @@ func TestEveryProbeWrittenIsListed(t *testing.T) {
 					sum := sha256.Sum256(all)
 					mu.Lock()
 					got = append(got, hex.EncodeToString(sum[:])[:16])
+					raws = append(raws, hex.EncodeToString(all))
 					if bytes.HasPrefix(all, []byte("HEAD ")) || bytes.HasPrefix(all, []byte("GET ")) {
 						reqs = append(reqs, strings.Fields(string(all))[0]+" /")
 					}
@@ -176,7 +179,7 @@ func TestEveryProbeWrittenIsListed(t *testing.T) {
 	time.Sleep(1500 * time.Millisecond) // the listeners read until their deadline
 	l.Close()
 
-	var bodies, listed []string
+	var bodies, listed, sent []string
 	protos := map[string]int{}
 	conns := 0
 	_ = ledger.Read(path, func(e ledger.Entry) error {
@@ -185,6 +188,12 @@ func TestEveryProbeWrittenIsListed(t *testing.T) {
 			conns++
 		case ledger.KindProbe:
 			bodies = append(bodies, e.Body)
+			sent = append(sent, e.Sent)
+			if b, err := hex.DecodeString(e.Sent); err != nil || len(b) == 0 {
+				t.Errorf("probe line %d has no bytes to replay: %q", e.Seq, e.Sent)
+			} else if sum := sha256.Sum256(b); hex.EncodeToString(sum[:])[:16] != e.Body {
+				t.Errorf("probe line %d: its sent bytes do not hash to its body", e.Seq)
+			}
 			protos[e.Proto]++
 			if e.Proto == "http" {
 				u, _ := url.Parse(e.Target)
@@ -200,6 +209,12 @@ func TestEveryProbeWrittenIsListed(t *testing.T) {
 	if len(got) < 10 || strings.Join(got, ",") != strings.Join(bodies, ",") {
 		t.Fatalf("the listeners received %d writes, the ledger lists %d probes:\nreceived %v\nlisted   %v", len(got), len(bodies), got, bodies)
 	}
+	// A replay of the ledger's probes sends what the listeners received.
+	sort.Strings(raws)
+	sort.Strings(sent)
+	if strings.Join(raws, ",") != strings.Join(sent, ",") {
+		t.Errorf("the ledger's sent bytes differ from what arrived:\nreceived %v\nlisted   %v", raws, sent)
+	}
 	sort.Strings(reqs)
 	sort.Strings(listed)
 	if len(reqs) != 3 || strings.Join(reqs, ",") != strings.Join(listed, ",") {
@@ -210,5 +225,61 @@ func TestEveryProbeWrittenIsListed(t *testing.T) {
 	}
 	if conns < len(got) {
 		t.Errorf("%d tcp lines for %d connections that were written to", conns, len(got))
+	}
+}
+
+// Every request a protocol of the scan sends fits in a ledger line's sent
+// field, so no probe is listed by its hash alone.
+func TestProbeRequestsFitTheLedgerLine(t *testing.T) {
+	for _, p := range protocols {
+		if p.request == nil {
+			continue
+		}
+		if n := len(p.request(target{host: "host.example", port: 1234})); n > ledger.MaxSent {
+			t.Errorf("%s sends %d bytes, over the %d a ledger line carries", p.name, n, ledger.MaxSent)
+		}
+	}
+}
+
+// BytesPerConnect, the plan's estimate of what a connect costs the ledger,
+// is within a tenth of the mean tcp line a loopback scan writes. A scan of
+// closed ports is what a full-range sweep mostly writes.
+func TestLedgerBytesPerConnect(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "l.jsonl")
+	l, err := ledger.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	l.Match = func(string) string { return "-allow 127.0.0.1" }
+	ledger.Use(l)
+	defer ledger.Use(nil)
+	var ports []int
+	for p := 20000; p < 20400; p++ {
+		ports = append(ports, p)
+	}
+	ctx := ledger.WithCollector(context.Background(), "azhaq-ports")
+	s := &Scanner{Timeout: 400 * time.Millisecond, Banner: -1}
+	if _, err := s.ScanEach(ctx, "", "127.0.0.1", ports); err != nil {
+		t.Fatal(err)
+	}
+	l.Close()
+	var lines, size int
+	f, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, ln := range bytes.SplitAfter(f, []byte("\n")) {
+		if bytes.Contains(ln, []byte(`"kind":"tcp"`)) {
+			lines++
+			size += len(ln)
+		}
+	}
+	if lines < len(ports) {
+		t.Fatalf("%d tcp lines for %d ports", lines, len(ports))
+	}
+	mean := float64(size) / float64(lines)
+	t.Logf("%d tcp lines, %.1f bytes each", lines, mean)
+	if mean < 0.9*ledger.BytesPerConnect || mean > 1.1*ledger.BytesPerConnect {
+		t.Errorf("a tcp line is %.1f bytes; ledger.BytesPerConnect is %d", mean, ledger.BytesPerConnect)
 	}
 }
