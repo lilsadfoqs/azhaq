@@ -1496,7 +1496,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 			}
 		}
 		if !*quiet && !*jsonOut && !out.embedded && !out.estimated && ep.Total.contacts() > trivialRun {
-			printEstimate(os.Stderr, "azhaq: before sending, the run is estimated at ", ep)
+			printEstimate(os.Stderr, "azhaq: before sending, the run's estimate is ", ep)
 		}
 	}
 	localErr := eng.RunLocal(ctx, seeds, budgets)

@@ -137,8 +137,28 @@ func TestCeilingFromMaxRequests(t *testing.T) {
 	if at, _ := atMost(planCost(t, append(ports, "-max-requests", "1000")...)["ports"]); at != 64 {
 		t.Errorf("a cap above the bound changes it: %v", at)
 	}
-	if at, _ := atMost(planCost(t, append(ports, "-max-requests", "10")...)["ports"]); at != 10 {
-		t.Errorf("a cap under the bound is not the ceiling: %v", at)
+	capped := planCost(t, append(ports, "-max-requests", "10")...)["ports"]
+	if at, _ := atMost(capped); at != 10 || capped["at_most_without_cap"] != float64(64) {
+		t.Errorf("a cap under the bound is not the ceiling, or hides the stage's own: %v", capped)
+	}
+	// The text names both: the cap, and the ceiling it hides.
+	out, _, _ = cli(t, append(append([]string{"plan"}, ports...), "-max-requests", "10")...)
+	if !strings.Contains(out, "at most 10 by -max-requests (64 by the run itself)") {
+		t.Errorf("the plan does not name the ceiling the cap hides:\n%s", out)
+	}
+}
+
+// A floor reads "at least", and not_counted names the asks it leaves out: a
+// UDP port that does not answer gets the protocols' other requests.
+func TestEstimateFloorNamesSilentUDPAsks(t *testing.T) {
+	args := []string{"-cidr", "127.0.0.1/32", "-allow", "127.0.0.1", "-sources", "none", "-ports", "none", "-ports-udp", "27801-27803"}
+	ports := planCost(t, args...)["ports"]
+	if nc, _ := ports["not_counted"].(string); !strings.Contains(nc, "up to 3 more datagrams to each UDP port that does not answer") {
+		t.Errorf("not_counted does not name the silent ports' asks: %v", ports)
+	}
+	out, _, _ := cli(t, append([]string{"plan"}, args...)...)
+	if !strings.Contains(out, "estimate: at least 3 datagrams") {
+		t.Errorf("the plan's floor does not read at least:\n%s", out)
 	}
 }
 
