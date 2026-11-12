@@ -214,6 +214,11 @@ func TestPlanListsZoneTransfers(t *testing.T) {
 	if !strings.Contains(strings.Join(p.Sends, "\n"), "is not contacted: the summary names it, and adding the address to -allow allows the transfer") {
 		t.Errorf("sends: %q", p.Sends)
 	}
+	// A resolver -deny names gets the lookups, not the transfer, and the plan says which.
+	d := planJSON(t, "-domain", "lab.test", "-allow", "lab.test", "-deny", "127.0.0.1", "-resolvers", "127.0.0.1:5302,127.0.0.2:5302", "-sources", "none", "-axfr")
+	if x := d.AXFR[0]; len(x.Resolvers) != 1 || x.Resolvers[0] != "127.0.0.2:5302" || len(x.Denied) != 1 || x.Denied[0] != "127.0.0.1:5302" {
+		t.Errorf("a transfer with a denied resolver: %+v", x)
+	}
 	// Without the flag the plan says nothing of transfers.
 	if q := planJSON(t, "-domain", "lab.test", "-sources", "none"); len(q.AXFR) != 0 {
 		t.Errorf("a transfer planned without -axfr: %+v", q.AXFR)

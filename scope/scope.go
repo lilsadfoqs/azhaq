@@ -218,6 +218,21 @@ func (r Rules) Match(host string) string {
 	return ""
 }
 
+// DenyRule is the deny rule that excludes host, as it was written, or ""
+// when none does.
+func (r Rules) DenyRule(host string) string {
+	host = normalize.Hostname(host)
+	if host == "" {
+		return ""
+	}
+	for _, d := range r.Deny {
+		if hostMatch(host, d) {
+			return d
+		}
+	}
+	return ""
+}
+
 func (r Rules) AllowsSeed(s types.Seed) bool {
 	if r.Empty() {
 		return true

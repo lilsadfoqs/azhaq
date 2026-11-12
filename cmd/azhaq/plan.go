@@ -78,9 +78,10 @@ type runPlan struct {
 // plan says how they are chosen; the resolvers named are known.
 type planAXFR struct {
 	Zone      string   `json:"zone"`
-	Lookups   string   `json:"lookups"`             // the DNS queries that find the name servers
-	Transfer  string   `json:"transfer"`            // the connections it makes, and the ones it does not
-	Resolvers []string `json:"resolvers,omitempty"` // the resolvers named: each is asked for the zone as well
+	Lookups   string   `json:"lookups"`                    // the DNS queries that find the name servers
+	Transfer  string   `json:"transfer"`                   // the connections it makes, and the ones it does not
+	Resolvers []string `json:"resolvers,omitempty"`        // the resolvers named: each is asked for the zone as well
+	Denied    []string `json:"resolvers_denied,omitempty"` // the resolvers named that -deny names: asked every lookup, not for the zone
 }
 
 type planTarget struct {
@@ -310,6 +311,14 @@ func planTransfers(seeds []types.Seed, b engine.Budgets, resolvers []string) []p
 	if b.Scope.Empty() {
 		transfer = "TCP port 53 of each name server whose name is under the zone's"
 	}
+	var asked, denied []string
+	for _, key := range resolvers {
+		if n := resolverDenyNotes([]string{key}, b.Scope, false); len(n) > 0 {
+			denied = append(denied, key)
+			continue
+		}
+		asked = append(asked, key)
+	}
 	seen := map[string]bool{}
 	var out []planAXFR
 	for _, s := range engine.ExpandSeeds(seeds) {
@@ -325,7 +334,8 @@ func planTransfers(seeds []types.Seed, b engine.Budgets, resolvers []string) []p
 			Zone:      name,
 			Lookups:   "NS of " + name + ", then A of each name server, asked of " + via,
 			Transfer:  transfer,
-			Resolvers: append([]string(nil), resolvers...),
+			Resolvers: asked,
+			Denied:    denied,
 		})
 	}
 	return out
@@ -520,6 +530,9 @@ func printPlanText(w io.Writer, p runPlan) {
 			fmt.Fprintf(w, "  %s: %s; then %s", x.Zone, x.Lookups, x.Transfer)
 			if len(x.Resolvers) > 0 {
 				fmt.Fprintf(w, "; also each resolver named: %s", strings.Join(x.Resolvers, ", "))
+			}
+			if len(x.Denied) > 0 {
+				fmt.Fprintf(w, "; not the resolvers -deny names, which still get every lookup: %s", strings.Join(x.Denied, ", "))
 			}
 			fmt.Fprintln(w)
 		}

@@ -6,11 +6,13 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"net"
 	"net/netip"
 	"os"
 	"slices"
 	"strings"
 
+	"github.com/lilsadfoqs/azhaq/internal/dnsr"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"github.com/lilsadfoqs/azhaq/internal/scopefile"
 	"github.com/lilsadfoqs/azhaq/scope"
@@ -164,6 +166,33 @@ func scopeArgs(args []string) []string {
 			i++
 			out = append(out, args[i])
 		}
+	}
+	return out
+}
+
+// resolverDenyNotes says, for each resolver -deny names, that its lookups
+// still go to it: a resolver the user named gets every lookup of the run, and
+// only a zone transfer (axfr) is held from it.
+func resolverDenyNotes(resolvers []string, rules scope.Rules, axfr bool) []string {
+	var out []string
+	for _, key := range resolvers {
+		srv, err := dnsr.ParseResolver(key)
+		if err != nil {
+			continue
+		}
+		h := srv.Addr
+		if hh, _, err := net.SplitHostPort(srv.Addr); err == nil {
+			h = hh
+		}
+		rule := rules.DenyRule(h)
+		if rule == "" {
+			continue
+		}
+		n := fmt.Sprintf("-deny %s names the resolver %s: every lookup still goes to it, as to any resolver you name", rule, srv.Addr)
+		if axfr {
+			n += "; -axfr does not ask it for the zone"
+		}
+		out = append(out, n)
 	}
 	return out
 }

@@ -1320,6 +1320,12 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 			}
 		}
 	}
+	for _, n := range resolverDenyNotes(resolvers, rules, out.axfr) {
+		rep.Notes = append(rep.Notes, n)
+		if !out.plan && !*quiet && !*jsonOut && !out.embedded {
+			fmt.Fprintf(os.Stderr, "azhaq %s: %s\n", rep.Command, n)
+		}
+	}
 	if !out.plan && !*sendState {
 		dirsHeld, dirsAll, pathsHeld := send.dirsHeld, send.dirsWords*(1+send.dirsExts), 0
 		if *pathsFile != "" && !budgets.Skip["azhaq-paths"] {

@@ -288,6 +288,12 @@ func cmdDNS(args []string) error {
 	}
 	rep := newReport("dns")
 	rep.what = "names"
+	for _, n := range resolverDenyNotes(resolvers, cf.rules, cf.axfr) {
+		rep.Notes = append(rep.Notes, n)
+		if !c.json && !c.silent {
+			fmt.Fprintf(os.Stderr, "azhaq dns: %s\n", n)
+		}
+	}
 	// Every query goes in the ledger, when one is asked for: a dns command has
 	// no workspace to keep one next to.
 	led, err := startLedger(fs.Lookup("ledger").Value.String(), "", c.db, c.db == "", cf.rules, "")
@@ -1308,11 +1314,22 @@ func (r *dnsRun) transfer(ctx context.Context, host string, d *dnsr.Data) {
 	if len(out) > 0 {
 		r.noteAXFR(fmt.Sprintf("-axfr %s: name servers outside the scope not asked: %s (add the address to -allow to ask it)", host, strings.Join(out, ", ")))
 	}
+	var held []string
 	for _, key := range r.resolvers {
-		// The resolvers the user named are theirs to ask.
+		// The resolvers the user named are theirs to ask for the zone too,
+		// unless -deny names one: a transfer is not a lookup.
 		if srv, err := dnsr.ParseResolver(key); err == nil && (srv.Net == dnsr.NetUDP || srv.Net == dnsr.NetTCP) {
+			if h, _, err := net.SplitHostPort(srv.Addr); err == nil {
+				if rule := denies.DenyRule(h); rule != "" {
+					held = append(held, srv.Addr+" (-deny "+rule+")")
+					continue
+				}
+			}
 			add(srv.Addr, "resolver")
 		}
+	}
+	if len(held) > 0 {
+		r.noteAXFR(fmt.Sprintf("-axfr %s: resolvers not asked for the zone, denied: %s", host, strings.Join(held, ", ")))
 	}
 	if len(servers) == 0 {
 		r.noteAXFR(fmt.Sprintf("-axfr %s: no server to ask", host))
