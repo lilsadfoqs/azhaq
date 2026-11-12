@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
@@ -166,7 +167,11 @@ func TestVerifyWriteBySignIn(t *testing.T) {
 		before, _ := readAnswer(200, []byte(`{"username":"alice"}`), "application/json")
 		answers := map[string]map[string]answer{"alice": {obj: before}}
 		put := writeReq{owner: "alice", method: "PUT", url: srv.URL + "/users/alice/password", header: http.Header{"Content-Type": {"application/json"}}, body: []byte(`{"password":"n3w"}`), status: 204, from: "alice.har"}
-		rows, _, err := replayWritesVerify(nil, roles, []writeReq{put}, answers, map[string]bool{"127.0.0.1": true}, 0, 100, false, steps)
+		// The run learned that role alice is the user alice: a failed sign-in
+		// as a user it observed is a refusal.
+		id := newIdentity()
+		id.keep("username", "alice")
+		rows, _, err := replayWritesVerify(map[string]identity{"alice": id}, roles, []writeReq{put}, answers, map[string]bool{"127.0.0.1": true}, 0, 100, false, steps)
 		if err != nil || len(rows) != 1 {
 			t.Fatalf("rows %+v err %v", rows, err)
 		}
@@ -200,5 +205,123 @@ func TestVerifyWriteByReadingAField(t *testing.T) {
 	}
 	if r := rows[0]; r.Verdict != verdictWriteCross || r.WriteVerification != verifyProved {
 		t.Errorf("reading the field proves the change: verdict %q verification %q owner_by %q", r.Verdict, r.WriteVerification, r.OwnerBy)
+	}
+}
+
+// Roles are labels: ra is the user alice and rb is bob. The sign-in goes
+// out as the application user, never as the role's name, and a name that was
+// only read off the URL cannot refute a write.
+func TestVerifyWriteSignsInAsTheOwnersUserNotTheRoleName(t *testing.T) {
+	h := func(v string) http.Header { x := http.Header{}; x.Set("A", v); return x }
+	roles := []role{{name: "anon"}, {name: "ra", headers: []string{"A: ra"}, session: h("ra")}, {name: "rb", headers: []string{"A: rb"}, session: h("rb")}}
+	run := func(callerOnly bool, steps []string, who map[string]identity) roleRow {
+		srv := passwordApp(t, callerOnly)
+		vs := make([]string, len(steps))
+		for i, s := range steps {
+			vs[i] = strings.Replace(s, "SRV", srv.URL, 1)
+		}
+		parsed, err := parseVerifyWrites(vs)
+		if err != nil {
+			t.Fatal(err)
+		}
+		obj := srv.URL + "/users/alice"
+		before, _ := readAnswer(200, []byte(`{"username":"alice"}`), "application/json")
+		answers := map[string]map[string]answer{"ra": {obj: before}}
+		put := writeReq{owner: "ra", method: "PUT", url: srv.URL + "/users/alice/password", header: http.Header{"Content-Type": {"application/json"}}, body: []byte(`{"password":"n3w"}`), status: 204, from: "ra.har"}
+		rows, _, err := replayWritesVerify(who, roles, []writeReq{put}, answers, map[string]bool{"127.0.0.1": true}, 0, 100, false, parsed)
+		if err != nil || len(rows) != 1 {
+			t.Fatalf("rows %+v err %v", rows, err)
+		}
+		return rows[0]
+	}
+	login := []string{"login:SRV/users/login"}
+	// Nothing learned of ra: the user is read off the path, and the change took.
+	if r := run(false, login, nil); r.WriteVerification != verifyProved {
+		t.Errorf("a sign-in as alice proves the change though the role is called ra: %q, %q", r.WriteVerification, r.OwnerBy)
+	}
+	// The same, with the user the run observed for ra.
+	id := newIdentity()
+	id.keep("username", "alice")
+	if r := run(false, login, map[string]identity{"ra": id}); r.WriteVerification != verifyProved {
+		t.Errorf("observed user: %q, %q", r.WriteVerification, r.OwnerBy)
+	}
+	// The user given on the step wins over the path.
+	if r := run(false, []string{"login:SRV/users/login;user=alice"}, nil); r.WriteVerification != verifyProved {
+		t.Errorf("user= on the step: %q, %q", r.WriteVerification, r.OwnerBy)
+	}
+	// The app applied the write to its caller: alice's sign-in fails. With a
+	// user read off the path that decides nothing and names who was tried.
+	r := run(true, login, nil)
+	if r.WriteVerification != verifyAccepted || !strings.Contains(r.OwnerBy, `"alice"`) || !strings.Contains(r.OwnerBy, "decides nothing") {
+		t.Errorf("a failed sign-in as a name read off the URL is not a refutation: %q, %q", r.WriteVerification, r.OwnerBy)
+	}
+	// With the user observed it is a refutation.
+	if r := run(true, login, map[string]identity{"ra": id}); r.WriteVerification != verifyRefuted {
+		t.Errorf("a failed sign-in as the observed user refutes: %q, %q", r.WriteVerification, r.OwnerBy)
+	}
+}
+
+// When no application user is known for the owner role, the sign-in is not
+// sent as the role's name: the row is accepted-not-verified and says which
+// name was not tried.
+func TestVerifyWriteWithNoKnownUserIsNotSentAsTheRoleName(t *testing.T) {
+	var logins atomic.Int64
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/login":
+			logins.Add(1)
+			w.WriteHeader(401)
+		case r.Header.Get("A") == "":
+			w.WriteHeader(401)
+		case r.Method == http.MethodPut:
+			w.WriteHeader(204)
+		default:
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprint(w, `{"id":7}`)
+		}
+	}))
+	defer srv.Close()
+	h := func(v string) http.Header { x := http.Header{}; x.Set("A", v); return x }
+	roles := []role{{name: "anon"}, {name: "ra", headers: []string{"A: ra"}, session: h("ra")}, {name: "rb", headers: []string{"A: rb"}, session: h("rb")}}
+	steps, _ := parseVerifyWrites([]string{"login:" + srv.URL + "/login"})
+	before, _ := readAnswer(200, []byte(`{"id":7}`), "application/json")
+	put := writeReq{owner: "ra", method: "PUT", url: srv.URL + "/acct/7/password", header: http.Header{"Content-Type": {"application/json"}}, body: []byte(`{"password":"n3w"}`), status: 204, from: "ra.har"}
+	rows, _, err := replayWritesVerify(nil, roles, []writeReq{put}, map[string]map[string]answer{"ra": {srv.URL + "/acct/7": before}}, map[string]bool{"127.0.0.1": true}, 0, 100, false, steps)
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("%+v %v", rows, err)
+	}
+	if r := rows[0]; r.WriteVerification != verifyAccepted || !strings.Contains(r.OwnerBy, `"ra" was not tried`) || logins.Load() != 0 {
+		t.Errorf("no known user: %q, %q, %d sign-ins", r.WriteVerification, r.OwnerBy, logins.Load())
+	}
+}
+
+// ownerUser reads the owner's application user: the step's, then what the run
+// learned, then the route's {username} or the segment after a user noun (a
+// version segment is no user). Only the last two are readings of a URL.
+func TestOwnerUserOfAWrite(t *testing.T) {
+	id := newIdentity()
+	id.keep("username", "alice")
+	who := map[string]identity{"ra": id}
+	put := func(u, route string) writeReq { return writeReq{owner: "ra", method: "PUT", url: u, route: route} }
+	for _, c := range []struct {
+		name  string
+		step  verifyWrite
+		who   map[string]identity
+		w     writeReq
+		want  string
+		firm  bool
+		owner string
+	}{
+		{"the step names it", verifyWrite{user: "zed"}, who, put("http://h/users/v1/alice/password", ""), "zed", true, "ra"},
+		{"the run learned it", verifyWrite{}, who, put("http://h/users/v1/alice/password", ""), "alice", true, "ra"},
+		{"the route's {username}", verifyWrite{}, nil, put("http://h/a/b/zed/password", "http://h/a/b/{username}/password"), "zed", false, "ra"},
+		{"after a user noun, past a version", verifyWrite{}, nil, put("http://h/users/v1/zed/password", ""), "zed", false, "ra"},
+		{"nothing says", verifyWrite{}, nil, put("http://h/acct/7/password", ""), "", false, "ra"},
+		{"a role name is not a user", verifyWrite{}, nil, put("http://h/x/ra", ""), "", false, "ra"},
+	} {
+		got, firm, how := ownerUser(c.step, c.owner, c.w, c.who)
+		if got != c.want || firm != c.firm || (got != "" && how == "") {
+			t.Errorf("%s: %q firm %v (%s), want %q firm %v", c.name, got, firm, how, c.want, c.firm)
+		}
 	}
 }

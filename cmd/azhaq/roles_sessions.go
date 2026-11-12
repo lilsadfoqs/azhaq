@@ -24,8 +24,8 @@ type sessionState struct {
 	beyond    int    // endpoints the anonymous role is asked to sign in for that this role reads
 	refusedAt string // a gated endpoint that refused it, to ask again for the reason
 	// more: it read an endpoint the anonymous role did not, or was
-	// forbidden (403) where the anonymous role was asked to sign in
-	// (401): the site knew who it was.
+	// forbidden (403) or told the object is missing (404, 410) where the
+	// anonymous role was asked to sign in (401): the site knew who it was.
 	more bool
 }
 
@@ -96,7 +96,15 @@ func sessionStates(roles []role, rows []roleRow) map[string]sessionState {
 			if b, ok := row.Answers[anon]; anon != "" && (mine && (!ok || !reads(b)) || ok && b.Status == 401 && a.Status == 403) {
 				s.more = true
 			}
-			if gate(row, no) && (otherSigned || alone) {
+			// A missing object (404, 410) for the session where the anonymous
+			// role is asked to sign in: authentication passed, the object is
+			// gone or not its own. That is no refusal of the session: only
+			// the answer the anonymous role got is.
+			knew := gate(row, no) && (a.Status == 404 || a.Status == 410)
+			if knew {
+				s.more = true
+			}
+			if gate(row, no) && (otherSigned || alone) && !knew {
 				s.gated++
 				if mine {
 					s.gatedRead++
@@ -106,7 +114,7 @@ func sessionStates(roles []role, rows []roleRow) map[string]sessionState {
 			}
 			if otherAny {
 				others++
-				if !no[x.name] {
+				if !no[x.name] || knew {
 					othersLet++
 				}
 			}

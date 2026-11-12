@@ -186,6 +186,7 @@ A write's before-and-after reads of the owner's object are not kept, and the rep
 
 - The host becomes `<host>`.
 - The identifier in the route and the values of identifier fields in the kept bodies become `<id-1>`, `<id-2>` and so on. Identifier fields are `id`, `*Id`, `username`, `owner`, `email` and similar.
+- The values that fill the route's path parameters (`{username}`) are identifiers too: a write from a history file names the route the runs found, so its URL, title, file name and curl lines show `{username}` or `<id-1>`, not the user.
 - Any token is removed.
 - Role names stay: they are the tester's own labels.
 

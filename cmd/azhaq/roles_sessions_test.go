@@ -34,6 +34,37 @@ func TestRoleAllSessionsDead(t *testing.T) {
 	}
 }
 
+// A signed-in 404 where the visitor got 401 shows the site knows the
+// session: the object is missing. A role is dead only for the refusal the
+// visitor got: the same 401 still is.
+func TestRoleNotFoundWhereTheVisitorIsRefusedIsAlive(t *testing.T) {
+	roles := []role{{name: "anon"}, {name: "alice", headers: []string{"A: 1"}}, {name: "bob", headers: []string{"A: 2"}}}
+	ok := answer{Status: 200, Length: 10, Hash: "h"}
+	no := answer{Status: 401, Length: 30, Hash: "x"}
+	gone := answer{Status: 404, Length: 25, Hash: "g", Title: "Book not found!"}
+	rows := []roleRow{
+		{URL: "http://h/", Answers: map[string]answer{"anon": ok, "alice": ok, "bob": ok}},
+		{URL: "http://h/books/v1/gone", Answers: map[string]answer{"anon": no, "alice": gone, "bob": gone}},
+	}
+	if got := deadRoles(roles, rows); len(got) != 0 {
+		t.Errorf("a 404 where the visitor got 401 is the site knowing the session: dead %v", got)
+	}
+	// With another role reading what the visitor is refused, a role that
+	// is told "gone" elsewhere is still not refused for its session.
+	rows = append(rows, roleRow{URL: "http://h/books/v1/b1", Answers: map[string]answer{"anon": no, "alice": ok, "bob": gone}})
+	if got := deadRoles(roles, rows); len(got) != 0 {
+		t.Errorf("bob is told the object is missing, as signed in: dead %v", got)
+	}
+	// The same refusal as the visitor's is a dead session.
+	rows = []roleRow{
+		{URL: "http://h/", Answers: map[string]answer{"anon": ok, "alice": ok, "bob": ok}},
+		{URL: "http://h/books/v1/gone", Answers: map[string]answer{"anon": no, "alice": no, "bob": no}},
+	}
+	if got := deadRoles(roles, rows); !reflect.DeepEqual(got, []string{"alice", "bob"}) {
+		t.Errorf("dead %v, want both: they got the visitor's 401", got)
+	}
+}
+
 func TestTokenExpiry(t *testing.T) {
 	now := time.Unix(1700000000+3600, 0)
 	h := headerOf([]string{"Authorization: Bearer " + jwt(`{"sub":"a","exp":2000000000}`), "Cookie: x=1; token=" + jwt(`{"exp":1700000000}`)})

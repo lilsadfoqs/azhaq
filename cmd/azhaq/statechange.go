@@ -334,10 +334,106 @@ func settleStateChanges(rep *report, pre, found []stateChangeEntry, rules scope.
 		rep.Notes = append(rep.Notes, e.line())
 	}
 	if n := rep.StateChangingHeld; n > 0 {
-		rep.Notes = append(rep.Notes, fmt.Sprintf("%s declare a state change by their own name (found on the way, or a word of a wordlist) and were held back, not sent (listed as skipped): %s sends them", plural(n, "GET"), neterr.SendFlag))
+		rep.Notes = append(rep.Notes, heldNote(n))
 	}
 	rep.StateChanging = all
 	rep.holds("state-changing GETs held back, against the held URLs the skipped list names", rep.StateChangingHeld, listed)
+}
+
+// heldNote is the one note for the GETs a run held back.
+func heldNote(n int) string {
+	return fmt.Sprintf("%s declare a state change by their own name (found on the way, or a word of a wordlist) and were held back, not sent (listed as skipped): %s sends them", plural(n, "GET"), neterr.SendFlag)
+}
+
+// rolesStates follows the state-changing GETs the role runs found and did not
+// send, through the stages after them. Only a role's run holds such a GET back:
+// the history reads, the replay and the controls ask each URL a role reached
+// or any role did, as the roles' own pages, so a note of a run that says "not
+// sent" holds for the run and not for the command.
+type rolesStates struct {
+	entries []stateChangeEntry // found and held back, or found and not asked, by a role's run
+	drop    []string           // the runs' notes about them, which the end restates
+	heldN   int                // the held ones the runs counted
+}
+
+// add takes what a role's run said of the state-changing GETs it did not send,
+// and watches their URLs for the stages that follow.
+func (s *rolesStates) add(sub *report) {
+	for _, e := range sub.StateChanging {
+		if e.Status != stateHeld && e.Status != stateNotAsked {
+			continue
+		}
+		known := false
+		for _, x := range s.entries {
+			known = known || x.Method == e.Method && normKey(x.URL) == normKey(e.URL)
+		}
+		if !known {
+			s.entries = append(s.entries, e)
+			egress.WatchSent(normKey(e.URL))
+		}
+		if e.Status == stateNotAsked {
+			s.drop = append(s.drop, e.line())
+		}
+	}
+	if sub.StateChangingHeld > 0 {
+		s.drop = append(s.drop, heldNote(sub.StateChangingHeld))
+	}
+}
+
+// sentStagesLine says which stages sent a request, with the counts, in the order
+// of the command's stages: "the history reads (1 request) and the replay (2 requests)".
+func sentStagesLine(by map[string]int) string {
+	names := slices.Clone(rolesStages)
+	for _, st := range slices.Sorted(maps.Keys(by)) {
+		if !slices.Contains(names, st) {
+			names = append(names, st)
+		}
+	}
+	var parts []string
+	for _, st := range names {
+		if n := by[st]; n > 0 {
+			if st == "" {
+				st = "stage not named"
+			}
+			parts = append(parts, fmt.Sprintf("the %s (%s)", st, plural(n, "request")))
+		}
+	}
+	return strings.Join(parts, ", ")
+}
+
+// settle replaces the runs' notes with what the whole command did: each GET
+// that a stage after the runs sent says which stages sent it, and the ones
+// nothing sent keep what the runs said.
+func (s *rolesStates) settle(rep *report) {
+	if len(s.entries) == 0 {
+		return
+	}
+	rep.Notes = slices.DeleteFunc(rep.Notes, func(n string) bool { return slices.Contains(s.drop, n) })
+	heldLeft := 0
+	for _, e := range s.entries {
+		by := egress.SentStages(normKey(e.URL))
+		if len(by) == 0 {
+			if e.Status == stateHeld {
+				heldLeft++
+			} else {
+				rep.Notes = append(rep.Notes, e.line())
+			}
+			continue
+		}
+		what := "a role's run found it and did not request it"
+		if e.Status == stateHeld {
+			what = "a role's run held it back (listed as skipped)"
+		}
+		where := e.Source
+		if e.Description != "" {
+			where += fmt.Sprintf(" %q", e.Description)
+		}
+		rep.Notes = append(rep.Notes, fmt.Sprintf("%s %s may change state (the word %q in %s); %s, but the command sent it: %s; only a role's run holds such a GET back, the history reads, the replay and the controls ask it as any page the roles reached; keep it out of a later run with %s",
+			e.Method, e.URL, e.Word, where, what, sentStagesLine(by), e.DenyPath))
+	}
+	if heldLeft > 0 {
+		rep.Notes = append(rep.Notes, heldNote(heldLeft))
+	}
 }
 
 // holdStateChanging has the run look for the GETs whose own path or API
