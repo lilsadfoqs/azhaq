@@ -407,7 +407,7 @@ func TestURLsExitCodeOfAFailedArchive(t *testing.T) {
 	}
 	code, rep, out := run1()
 	if code != exitOK || rep.Failures != 1 || rep.Requests != 0 || !strings.Contains(out, "http://example.org/otx") ||
-		!strings.Contains(strings.Join(rep.Notes, "\n"), "the set is partial: wayback failed, so the URLs only they hold are missing and those of the others are listed") {
+		!strings.Contains(strings.Join(rep.Notes, "\n"), "wayback failed and gave nothing, so the URLs only they hold are missing and those of the others are listed (complete stays true: no URL given is in doubt)") {
 		t.Errorf("one archive failed: exit %d, %d failures, %d requests, notes %q", code, rep.Failures, rep.Requests, rep.Notes)
 	}
 	if code, _, _ := run1("-strict-exit"); code != exitPartial {
@@ -466,5 +466,25 @@ func TestURLsRawPrintsTheRowsAsGivenAndStillAppliesTheBlacklist(t *testing.T) {
 	got, _, err = urlsRun(t, append(base, "-blacklist", "png", "-fp")...)
 	if err != nil || !slices.Equal(got, []string{"HTTP://Example.ORG/A#frag", "http://example.org/a.txt", "http://example.org/x/.."}) {
 		t.Errorf("-raw -blacklist png -fp printed %v (%v)", got, err)
+	}
+}
+
+// The summary counts the records that repeat a URL already kept, and an
+// archive that failed at once is not called a partial set while complete
+// is true.
+func TestURLsSummaryCountsDuplicatesAndNamesAFailureAtOnce(t *testing.T) {
+	bad := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { http.Error(w, "down", http.StatusGatewayTimeout) }))
+	defer bad.Close()
+	flags := archivesOf(t, map[string][]string{"otx": {"http://example.org/a", "http://example.org:80/a", "http://example.org/b"}})
+	args := append([]string{"urls", "-d", "example.org", "-providers", "wayback,otx", "-urls-pause", "0", "-json"}, flags...)
+	args = append(args, "-archive", "wayback="+bad.URL)
+	_, errOut, err := captureBoth(t, func() error { return run(args) })
+	rep := lastReport(t, errOut)
+	notes := strings.Join(rep.Notes, "\n")
+	if exitCode(err) != exitOK || !rep.Complete || rep.Counts["duplicates"] != 1 {
+		t.Errorf("exit %d, complete %v, counts %v", exitCode(err), rep.Complete, rep.Counts)
+	}
+	if strings.Contains(notes, "the set is partial") || !strings.Contains(notes, "wayback failed and gave nothing") {
+		t.Errorf("notes %q", rep.Notes)
 	}
 }

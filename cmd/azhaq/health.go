@@ -248,7 +248,20 @@ func (h *sourceHealth) archivesNote() string {
 			failed = append(failed, n)
 		}
 		if h.Answered > 0 {
-			note += fmt.Sprintf("; the set is partial: %s failed, so the URLs only they hold are missing and those of the others are listed", strings.Join(failed, ", "))
+			// "partial" is what complete:false means: an archive cut after it
+			// gave URLs. One that failed at once left nothing in doubt.
+			var atOnce []string
+			for _, n := range failed {
+				if !slices.Contains(h.PartialSources, n) {
+					atOnce = append(atOnce, n)
+				}
+			}
+			if len(atOnce) > 0 {
+				note += fmt.Sprintf("; %s failed and gave nothing, so the URLs only they hold are missing and those of the others are listed (complete stays true: no URL given is in doubt)", strings.Join(atOnce, ", "))
+			}
+			if len(h.PartialSources) > 0 {
+				note += fmt.Sprintf("; the set is partial: %s failed after giving URLs, so what they gave is listed and the rest of what they hold is missing", strings.Join(h.PartialSources, ", "))
+			}
 		} else {
 			note += fmt.Sprintf("; the set is partial: no archive answered in full (%s failed), so what they gave before failing is listed and the rest of what they hold is missing", strings.Join(failed, ", "))
 		}

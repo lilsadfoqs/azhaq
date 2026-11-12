@@ -53,7 +53,8 @@ The summary lists one row for each archive:
 | Field | Meaning |
 | --- | --- |
 | `asked` | What it was asked for: the host pattern of the Wayback Machine, Common Crawl and arquivo.pt (`example.com/*`, `*.example.com/*` with `-subs`), OTX's indicator, urlscan.io's search. |
-| `count` | URLs the archive gave. |
+| `count` | URLs the archive gave that are not junk and are on the domain, repeats included. |
+| `read`, `kept`, `duplicates`, `junk`, `outside`, `over_cap` | Every record read, and where it went: `read` = `kept` + `duplicates` + `junk` + `outside` + `over_cap`. `kept` is a URL new to the set, `duplicates` a record of a URL already kept, `junk` a record left out as junk, `outside` one off the domain or left out by a filter, `over_cap` one past `-urls-max`. A URL found glued inside a broken record is read as a record of its own. |
 | `pages` | Pages read from it. |
 | `seconds` | Time spent on it. |
 | `requests` | Requests sent, retries included. |
@@ -70,8 +71,8 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 
 - The summary has a `sources` block with a row for each archive. It reads as the one of `subs` ([The sources block](subs.md#the-sources-block)), with `urls` where `subs` has `names`.
 - The summary's top-level `requests` is what reached the targets, as in every command. `urls` sends none, so it is 0, unless `-live` asks the live site: then the requests it sent are counted. The archives are third parties: their requests, retries included, are `requests` in each archive row and in the `sources` block, and a note adds them up.
-- It has `junk`, the URLs left out and why: see [Junk](#junk). `counts` has `dropped as junk` (URLs left out) and `static files listed` (rows labelled `asset`, which are listed): see [Static files](#static-files).
-- The summary's `sources` block says, for each archive, what it was asked (`queries`), what it gave (`urls`), whether it failed (`failed_sources`, with the archive's words, such as `127.0.0.1:8080 answered 504`) and whether it gave URLs before failing (`partial_sources`). A failed archive leaves a partial set: the URLs of the others are listed, the failure is counted in `failures`, and a note says `the set is partial: wayback failed, so the URLs only they hold are missing and those of the others are listed`. It does not need stderr to be read.
+- It has `junk`, the URLs left out and why: see [Junk](#junk). `counts` has `dropped as junk` (URLs left out), `static files listed` (rows labelled `asset`, which are listed): see [Static files](#static-files), and `duplicates`, the records of the archives that repeat a URL already kept.
+- The summary's `sources` block says, for each archive, what it was asked (`queries`), what it gave (`urls`), whether it failed (`failed_sources`, with the archive's words, such as `127.0.0.1:8080 answered 504`) and whether it gave URLs before failing (`partial_sources`). A failed archive leaves a partial set: the URLs of the others are listed, the failure is counted in `failures`, and a note says so. It does not need stderr to be read. An archive that failed at once is named as `wayback failed and gave nothing, so the URLs only they hold are missing and those of the others are listed (complete stays true: no URL given is in doubt)`; the words `the set is partial` are kept for an archive cut after giving URLs, which is what `complete: false` means.
 - `complete` and the exit code, by how the archives answered. An archive that gave URLs and then failed (a timeout, a cut connection, a 504) did not answer in full; one that failed at once gave nothing, so it left no part of the set in doubt.
   - Every archive answered: `complete` is true, exit 0.
   - One failed at once, another answered in full: `complete` is true, exit 0, and `failures` counts it.
