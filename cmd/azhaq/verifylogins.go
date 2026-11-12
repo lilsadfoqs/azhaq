@@ -62,8 +62,20 @@ func loginsStage(ctx context.Context, st *store.Store, obs []types.StoredObserva
 		}
 	}
 
-	done := map[string]bool{} // origin + product already asked this run
+	done := map[string]bool{}  // origin + product already asked this run
+	named := map[string]bool{} // every product the run named, by its key
+	var namedList []string
+	var unasked []string // catalog products named and not asked, with why
 	for _, svc := range loginWebServices(obs) {
+		if k := loginsKey(svc.Product); !named[k] {
+			named[k] = true
+			namedList = append(namedList, svc.Product)
+		}
+		inCatalog := len(verify.LoginsForProduct(svc.Product)) > 0 || len(verify.ReadsForProduct(svc.Product)) > 0
+		if inCatalog && svc.Origin == "" {
+			unasked = append(unasked, fmt.Sprintf("%s on %s (named by %s) has no web origin: its sign-in is a web request, so none was made", svc.Product, svc.Target(), nonEmpty(svc.Source, "its banner")))
+			continue
+		}
 		key := svc.Origin + "\x00" + loginsKey(svc.Product)
 		if done[key] {
 			continue
@@ -144,6 +156,18 @@ func loginsStage(ctx context.Context, st *store.Store, obs []types.StoredObserva
 	}
 	note = fmt.Sprintf("verify-logins: %d product(s) asked for a published default login (%d succeeded, %d stopped for a captcha, %d stopped for a lockout sign or a 429), %d unauthenticated-read check(s) asked (%d found the protected content with no credential)",
 		loginsPlanned, loginsSucceeded, captchaSkipped, lockoutStopped, readsPlanned, readsFound)
+	if loginsPlanned+readsPlanned == 0 {
+		// A zero says why: nothing named is in the catalog, or what is was not asked.
+		switch {
+		case len(namedList) == 0:
+			note += "; none asked: the run named no product on a web service"
+		case len(unasked) == 0:
+			note += fmt.Sprintf("; none asked: no product the run named is in the catalog (%s named: %s)", plural(len(namedList), "product"), clipList(namedList, 6))
+		}
+	}
+	if len(unasked) > 0 {
+		note += "; not asked: " + strings.Join(unasked, "; ")
+	}
 	if denied > 0 {
 		note += fmt.Sprintf("; %d requests were not sent: a -deny-path rule keeps their paths out", denied)
 	}
@@ -223,4 +247,19 @@ func loginWebServices(obs []types.StoredObservation) []advisory.Service {
 		}
 	}
 	return out
+}
+
+func nonEmpty(a, b string) string {
+	if a != "" {
+		return a
+	}
+	return b
+}
+
+// clipList is the first n of xs, comma separated, and how many more.
+func clipList(xs []string, n int) string {
+	if len(xs) <= n {
+		return strings.Join(xs, ", ")
+	}
+	return fmt.Sprintf("%s and %d more", strings.Join(xs[:n], ", "), len(xs)-n)
 }

@@ -74,6 +74,9 @@ func identProof(svc advisory.Service) *proof.Proof {
 			target, how = svc.Origin+"/", "azhaq-ports"
 		}
 		p.Method, p.Target, p.ExcerptPart, p.How, p.Reproduce = "GET", target, "header", how, proof.Curl("GET", target)
+		if svc.Source == advisory.SourceTitle || svc.Source == advisory.SourceGenerator || svc.Source == advisory.SourceTech {
+			p.ExcerptPart = "body" // what the page said of itself
+		}
 		if svc.From == "" && !strings.HasPrefix(excerpt, "Server") {
 			p.ExcerptPart = "banner"
 		}

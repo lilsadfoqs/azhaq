@@ -26,6 +26,7 @@ type Input struct {
 	Takeovers []Takeover
 	Roles     []RoleRow
 	Listeners []Listener // what the run named on each listener, one record each
+	Measured  []Measured // findings measured of a name, apart from its routes and leads
 	Now       time.Time
 	Since     time.Duration // "new" means first seen within this long
 }
@@ -162,6 +163,9 @@ func Build(in Input) []Row {
 	var out []Row
 	for _, l := range in.Listeners {
 		out = append(out, l.row(in.DB))
+	}
+	for _, m := range in.Measured {
+		out = append(out, m.row(in.DB))
 	}
 	for _, c := range h.cands {
 		if c.fresh && h.old {

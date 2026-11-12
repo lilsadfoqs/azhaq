@@ -35,15 +35,19 @@ import (
 // hint is a lead, listed separately, unless the map's own view folds it (see
 // foldedHint): then it is counted in the line of its fold class.
 type findingRecord struct {
-	Tier         string  `json:"tier"` // finding, identification or lead
-	Kind         string  `json:"kind"`
-	Label        string  `json:"label"` // proved, version-only, conditional; lead for a lead
-	Severity     string  `json:"severity"`
-	Host         string  `json:"host"`
-	Port         int     `json:"port,omitempty"`
-	URL          string  `json:"url,omitempty"`
-	Product      string  `json:"product,omitempty"`
-	Version      string  `json:"version,omitempty"`
+	Tier     string `json:"tier"` // finding, identification or lead
+	Kind     string `json:"kind"`
+	Label    string `json:"label"` // proved, version-only, conditional; lead for a lead
+	Severity string `json:"severity"`
+	Host     string `json:"host"`
+	Port     int    `json:"port,omitempty"`
+	URL      string `json:"url,omitempty"`
+	Product  string `json:"product,omitempty"`
+	Version  string `json:"version,omitempty"`
+	// Source says what named the product of an identification a name's root
+	// page gave: page title, generator, header X-Powered-By, header Server or
+	// technology. A title is no version: the version is only what one stated.
+	Source       string  `json:"source,omitempty"`
 	AdvisoryID   string  `json:"advisory_id,omitempty"`
 	AdvisoryURL  string  `json:"advisory_url,omitempty"`
 	Lead         string  `json:"lead,omitempty"` // an advisory record's service lead: "host:port Product"
@@ -170,6 +174,7 @@ func buildFindings(g *graphView) findingSet {
 		if rec.Proof == nil {
 			if svc, ok := services[targetOf(rec)+"\x00"+advisory.ProductKey(rec.Product)]; ok {
 				rec.Proof = identProof(svc)
+				rec.Source = svc.Source
 			}
 		}
 		return rec
@@ -252,7 +257,7 @@ func buildFindings(g *graphView) findingSet {
 		}
 		p := identProof(svc)
 		add(findingRecord{Tier: proof.TierIdentification, Kind: "software-version", Label: verify.VersionOnly, Severity: "info",
-			Host: host, Port: svc.Port, URL: svc.Origin, Product: svc.Product, Version: svc.Version,
+			Host: host, Port: svc.Port, URL: svc.Origin, Product: svc.Product, Version: svc.Version, Source: svc.Source,
 			Request: p.Method + " " + p.Target, Evidence: p.Excerpt, Command: command, Collector: p.How, Proof: p})
 	}
 	// A product a stage named with no version: an identification too, so the
@@ -273,7 +278,7 @@ func buildFindings(g *graphView) findingSet {
 		}
 		p := identProof(svc)
 		add(findingRecord{Tier: proof.TierIdentification, Kind: "software-version", Label: verify.VersionOnly, Severity: "info",
-			Host: host, Port: svc.Port, URL: svc.Origin, Product: svc.Product,
+			Host: host, Port: svc.Port, URL: svc.Origin, Product: svc.Product, Source: svc.Source,
 			Request: p.Method + " " + p.Target, Evidence: "no version seen: " + p.Excerpt, Command: command, Collector: p.How, Proof: p})
 	}
 	for _, l := range certLeads(g.obs, command) {
@@ -291,6 +296,9 @@ func buildFindings(g *graphView) findingSet {
 	}
 	for _, t := range takeovers(ents, g.obs) {
 		add(takeoverRecord(t, command))
+	}
+	for _, d := range danglingRecords(g.obs, command) {
+		add(d)
 	}
 	answered := map[string]bool{} // the URLs a path check judged
 	for url, v := range proof.Judge(proof.AnswersOf(g.obs)) {
@@ -512,6 +520,9 @@ func findingMarkdown(r findingRecord, ids ...string) string {
 			b.WriteString(" " + r.Version)
 		}
 		b.WriteString(")")
+	}
+	if r.Source != "" {
+		b.WriteString(", named by " + r.Source)
 	}
 	if len(ids) > 1 {
 		// The advisories of one service and label are one bullet: the first

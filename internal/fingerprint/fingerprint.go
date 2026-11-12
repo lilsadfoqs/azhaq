@@ -65,6 +65,13 @@ func Tech(h http.Header, body []byte) []string {
 	return out
 }
 
+// Categories names the wappalyzer categories of a technology by its name
+// ("CMS", "Web servers", "JavaScript libraries"), nil for a name the data does
+// not hold.
+func Categories(name string) []string {
+	return tech().Categories(name)
+}
+
 // Network says whether ip is in a known CDN, WAF or cloud range: the
 // provider name and "cdn", "waf" or "cloud", or empty strings.
 func Network(ip net.IP) (name, kind string) {

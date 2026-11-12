@@ -131,7 +131,13 @@ func huntRows(g *graphView, path string, roles []hunt.RoleRow, since time.Durati
 	for _, t := range takeovers(ents, g.obs) {
 		in.Takeovers = append(in.Takeovers, hunt.Takeover{Host: t.Host, Strong: t.Strength == "strong", Dangling: t.Strength == "dangling", Detail: takeoverDetail(t.Finding)})
 	}
-	in.Listeners = listenersOf(buildFindings(g))
+	set := buildFindings(g)
+	in.Listeners = listenersOf(set)
+	for _, r := range set.Findings {
+		if r.Kind == danglingKind {
+			in.Measured = append(in.Measured, hunt.Measured{Kind: r.Kind, Host: r.Host, Severity: r.Severity, Evidence: r.Evidence, Command: r.Command, Proof: r.Proof})
+		}
+	}
 	return hunt.Build(in)
 }
 
@@ -144,7 +150,7 @@ func huntRows(g *graphView, path string, roles []hunt.RoleRow, since time.Durati
 func listenersOf(set findingSet) []hunt.Listener {
 	var out []hunt.Listener
 	toListener := func(r findingRecord, kind string) hunt.Listener {
-		return hunt.Listener{Ident: hunt.Ident{Kind: kind, What: r.Kind, Host: r.Host, Port: r.Port, Product: r.Product, Version: r.Version,
+		return hunt.Listener{Ident: hunt.Ident{Kind: kind, What: r.Kind, Host: r.Host, Port: r.Port, Product: r.Product, Version: r.Version, Source: r.Source,
 			AdvisoryID: r.AdvisoryID, AdvisoryURL: r.AdvisoryURL, Label: r.Label, Severity: r.Severity, KEV: r.KEV, CVSS: r.CVSS,
 			Evidence: r.Evidence, Command: r.Command}, Proof: r.Proof}
 	}

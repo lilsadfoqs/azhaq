@@ -37,7 +37,11 @@ func (l *namesLab) asked(host string) int {
 	return n
 }
 
-func newNamesLab(t *testing.T) *namesLab {
+func newNamesLab(t *testing.T) *namesLab { return newNamesLabPages(t, nil) }
+
+// newNamesLabPages is newNamesLab where the root page of a name in pages is the
+// HTML given, header lines apart: its title and meta tags are the page's own.
+func newNamesLabPages(t *testing.T, pages map[string]string) *namesLab {
 	t.Helper()
 	l := &namesLab{}
 	ln, err := net.Listen("tcp", "127.0.0.2:0")
@@ -60,6 +64,8 @@ func newNamesLab(t *testing.T) *namesLab {
 		w.Header().Set("Content-Type", "text/html")
 		title, ok := apps[host]
 		switch {
+		case pages[host] != "" && r.URL.Path == "/":
+			fmt.Fprint(w, pages[host])
 		case !ok:
 			fmt.Fprint(w, "<html><head><title>It works</title></head><body>This is the default site of the server.</body></html>")
 		case r.URL.Path == "/panel":

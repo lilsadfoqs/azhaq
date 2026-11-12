@@ -745,6 +745,7 @@ type dnsRun struct {
 	mu         sync.Mutex
 	failed     map[string]*engine.Failure
 	takeovers  []takeoverRow
+	dangling   map[string]takeover.Dangling // by name: a CNAME to a name that answered NXDOMAIN
 	kept       []dnsKept
 	watermark  int
 	finished   map[int]bool
@@ -897,6 +898,7 @@ func (r *dnsRun) one(ctx context.Context, name string) bool {
 		d.AllRecords = nil
 	}
 	row.Takeover, row.TakeoverNotAsked = r.takeover(ctx, name, d)
+	row.Dangling = r.measureDangling(name, d)
 	r.keepRow(name, d, row)
 	selected := r.hasSelected(d)
 	printed := r.output(name, d, row, selected)
@@ -1029,6 +1031,27 @@ func (r *dnsRun) takeover(ctx context.Context, host string, d *dnsr.Data) (*take
 	return nil, ""
 }
 
+// measureDangling keeps what the name's answers measured of a CNAME that
+// ends at a name that does not exist, whoever holds the target: no question
+// is asked for it (takeover asked A once when no answer followed the chain).
+func (r *dnsRun) measureDangling(host string, d *dnsr.Data) *takeover.Dangling {
+	rc, ok := d.TargetRcode()
+	if !ok {
+		return nil
+	}
+	dg, ok := takeover.Measure(host, d.CNAME, rc == dns.RcodeNameError, d.TargetServer())
+	if !ok {
+		return nil
+	}
+	r.mu.Lock()
+	if r.dangling == nil {
+		r.dangling = map[string]takeover.Dangling{}
+	}
+	r.dangling[host] = dg
+	r.mu.Unlock()
+	return &dg
+}
+
 // keepRow remembers what -db keeps: every name asked (the guesses of -w
 // only when they have records), with what its answer was.
 func (r *dnsRun) keepRow(host string, d *dnsr.Data, row *dnsRow) {
@@ -1072,6 +1095,9 @@ func (r *dnsRun) keepRow(host string, d *dnsr.Data, row *dnsRow) {
 			p["takeover"] = t.Finding
 		}
 	}
+	if dg, ok := r.dangling[host]; ok {
+		p["dangling"] = dg
+	}
 	r.kept = append(r.kept, dnsKept{host, p})
 	r.mu.Unlock()
 }
@@ -1100,6 +1126,9 @@ type dnsRow struct {
 	Takeover *takeover.Finding `json:"takeover,omitempty"`
 	// TakeoverNotAsked says why the takeover check left a CNAME target's domain unasked.
 	TakeoverNotAsked string `json:"takeover-not-asked,omitempty"`
+	// Dangling is set on a name whose CNAME chain ends at a name that answered
+	// NXDOMAIN: the chain, the answer and the resolver (not a dnsx field).
+	Dangling *takeover.Dangling `json:"dangling,omitempty"`
 }
 
 type dnsASN struct {
@@ -1150,8 +1179,9 @@ func (r *dnsRun) output(host string, d *dnsr.Data, row *dnsRow, selected bool) (
 	// -rtf with no type flag asks for the names without a record: as in dnsx,
 	// those are the rows, whatever their type.
 	askedByRTF := len(cf.rtf) > 0 && cf.noTypeFlag
-	// A dangling CNAME is a finding: its row goes out with the takeover on it.
-	if whole && !askedByRTF && !cf.all && !cf.axfr && len(cf.rcodes) == 0 && !selected && !cf.selected["any"] && row.Takeover == nil && row.TakeoverNotAsked == "" {
+	// A dangling CNAME is a finding: its row goes out with the takeover and the
+	// dangling measurement on it.
+	if whole && !askedByRTF && !cf.all && !cf.axfr && len(cf.rcodes) == 0 && !selected && !cf.selected["any"] && row.Takeover == nil && row.Dangling == nil && row.TakeoverNotAsked == "" {
 		return
 	}
 	if len(cf.rtf) > 0 && r.hasAny(d, cf.rtf) {

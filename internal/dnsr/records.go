@@ -21,34 +21,35 @@ import (
 // writes them (retryabledns' DNSData): a record kind is left out when the
 // name has none of it.
 type Data struct {
-	Host           string         `json:"host,omitempty"`
-	TTL            uint32         `json:"ttl,omitempty"` // of the first record that has one
-	Resolver       []string       `json:"resolver,omitempty"`
-	A              []string       `json:"a,omitempty"`
-	AAAA           []string       `json:"aaaa,omitempty"`
-	CNAME          []string       `json:"cname,omitempty"`
-	MX             []string       `json:"mx,omitempty"`
-	PTR            []string       `json:"ptr,omitempty"`
-	SOA            []SOA          `json:"soa,omitempty"`
-	NS             []string       `json:"ns,omitempty"`
-	TXT            []string       `json:"txt,omitempty"`
-	SRV            []string       `json:"srv,omitempty"`
-	CAA            []string       `json:"caa,omitempty"`
-	AllRecords     []string       `json:"all,omitempty"`
-	Raw            string         `json:"raw,omitempty"`
-	HasInternalIPs bool           `json:"has_internal_ips,omitempty"`
-	InternalIPs    []string       `json:"internal_ips,omitempty"`
-	StatusCode     string         `json:"status_code,omitempty"`
-	StatusCodeRaw  int            `json:"status_code_raw,omitempty"`
-	CNAMEStatus    string         `json:"cname_status,omitempty"` // the code of the CNAME's target, when it is not NOERROR
-	TraceData      *Chain         `json:"trace,omitempty"`
-	AXFRData       *Chain         `json:"axfr,omitempty"`
-	Timestamp      time.Time      `json:"timestamp,omitempty"`
-	HostsFile      bool           `json:"hosts_file,omitempty"`
-	Failures       []Failure      `json:"-"`
-	answered       bool           // some resolver answered
-	rcodes         map[uint16]int // the code of the name asked, by type
-	chainRcodes    map[uint16]int // the code of the whole answer, the end of a CNAME chain's by type
+	Host           string            `json:"host,omitempty"`
+	TTL            uint32            `json:"ttl,omitempty"` // of the first record that has one
+	Resolver       []string          `json:"resolver,omitempty"`
+	A              []string          `json:"a,omitempty"`
+	AAAA           []string          `json:"aaaa,omitempty"`
+	CNAME          []string          `json:"cname,omitempty"`
+	MX             []string          `json:"mx,omitempty"`
+	PTR            []string          `json:"ptr,omitempty"`
+	SOA            []SOA             `json:"soa,omitempty"`
+	NS             []string          `json:"ns,omitempty"`
+	TXT            []string          `json:"txt,omitempty"`
+	SRV            []string          `json:"srv,omitempty"`
+	CAA            []string          `json:"caa,omitempty"`
+	AllRecords     []string          `json:"all,omitempty"`
+	Raw            string            `json:"raw,omitempty"`
+	HasInternalIPs bool              `json:"has_internal_ips,omitempty"`
+	InternalIPs    []string          `json:"internal_ips,omitempty"`
+	StatusCode     string            `json:"status_code,omitempty"`
+	StatusCodeRaw  int               `json:"status_code_raw,omitempty"`
+	CNAMEStatus    string            `json:"cname_status,omitempty"` // the code of the CNAME's target, when it is not NOERROR
+	TraceData      *Chain            `json:"trace,omitempty"`
+	AXFRData       *Chain            `json:"axfr,omitempty"`
+	Timestamp      time.Time         `json:"timestamp,omitempty"`
+	HostsFile      bool              `json:"hosts_file,omitempty"`
+	Failures       []Failure         `json:"-"`
+	answered       bool              // some resolver answered
+	rcodes         map[uint16]int    // the code of the name asked, by type
+	chainRcodes    map[uint16]int    // the code of the whole answer, the end of a CNAME chain's by type
+	chainServers   map[uint16]string // the resolver that gave each of those answers
 }
 
 // Chain is a list of answers under a host: the steps of a trace, or the
@@ -115,6 +116,25 @@ func (d *Data) TargetRcode() (int, bool) {
 	return d.chainRcodes[uint16(types[0])], true
 }
 
+// TargetServer is the resolver that gave the answer TargetRcode reads, as it
+// was named ("" when none was).
+func (d *Data) TargetServer() string {
+	if _, ok := d.chainRcodes[dns.TypeA]; ok {
+		return d.chainServers[dns.TypeA]
+	}
+	types := make([]int, 0, len(d.chainRcodes))
+	for qt := range d.chainRcodes {
+		if qt != dns.TypeCNAME {
+			types = append(types, int(qt))
+		}
+	}
+	if len(types) == 0 {
+		return ""
+	}
+	sort.Ints(types)
+	return d.chainServers[uint16(types[0])]
+}
+
 // TakeTarget adds what a lookup of the same name for A says of the CNAME
 // chain's end: its code, and its status when that is not NOERROR. The
 // records of that answer are not added.
@@ -127,6 +147,10 @@ func (d *Data) TakeTarget(from *Data) {
 		d.chainRcodes = map[uint16]int{}
 	}
 	d.chainRcodes[dns.TypeA] = c
+	if d.chainServers == nil {
+		d.chainServers = map[uint16]string{}
+	}
+	d.chainServers[dns.TypeA] = from.chainServers[dns.TypeA]
 	if d.CNAMEStatus == "" {
 		d.CNAMEStatus = from.CNAMEStatus
 	}
@@ -271,6 +295,10 @@ func (d *Data) add(m *dns.Msg, from string, qtype uint16, raw bool) {
 	}
 	d.rcodes[qtype] = own
 	d.chainRcodes[qtype] = m.Rcode
+	if d.chainServers == nil {
+		d.chainServers = map[uint16]string{}
+	}
+	d.chainServers[qtype] = from
 	d.StatusCode = dns.RcodeToString[own]
 	d.StatusCodeRaw = own
 	d.Timestamp = time.Now()

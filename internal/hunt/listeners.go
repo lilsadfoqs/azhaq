@@ -21,7 +21,8 @@ type Ident struct {
 	Host        string  `json:"host"`
 	Port        int     `json:"port,omitempty"`
 	Product     string  `json:"product,omitempty"`
-	Version     string  `json:"version"` // "" when no version was seen
+	Version     string  `json:"version"`          // "" when no version was seen
+	Source      string  `json:"source,omitempty"` // what a name's root page said to name the product: page title, generator, header X-Powered-By, header Server, technology
 	AdvisoryID  string  `json:"advisory_id,omitempty"`
 	AdvisoryURL string  `json:"advisory_url,omitempty"`
 	Advisories  int     `json:"advisories,omitempty"` // how many advisories match the version, the top one included
@@ -54,6 +55,9 @@ func (l Listener) row(db string) Row {
 	}
 	if id.Version == "" {
 		named += " (no version seen)"
+	}
+	if id.Source != "" {
+		named += ", named by " + id.Source
 	}
 	rs := []Reason{{"identified", named}}
 	if id.AdvisoryID != "" {
@@ -116,4 +120,34 @@ func (r Row) tierRank() int {
 		return 2
 	}
 	return 3
+}
+
+// Measured is a finding of the findings output that no route or listener
+// holds: what a DNS answer showed of a name (a CNAME to a name that answered
+// NXDOMAIN). It is a row of its own, a finding ranked by its severity beside
+// the others, never merged with a lead about the same name.
+type Measured struct {
+	Kind     string // dangling-dns
+	Host     string
+	Severity string
+	Evidence string
+	Command  string
+	Proof    *proof.Proof
+}
+
+// measuredScore is a measured finding's score by severity: below what a proven
+// access hole or a known secret weighs, above every identification and lead.
+var measuredScore = map[string]int{"info": 15, "low": 30, "medium": 50, "high": 70, "critical": 90}
+
+func (m Measured) row(db string) Row {
+	next := m.Command
+	if m.Proof != nil && m.Proof.Reproduce != "" {
+		next = m.Proof.Reproduce
+	}
+	if next == "" {
+		next = "azhaq report -findings -db " + quote(db)
+	}
+	rs := []Reason{{m.Kind, m.Evidence}}
+	return Row{Score: measuredScore[m.Severity], Key: m.Host, Type: "Hostname", Reasons: rs, Next: next,
+		Tier: proof.TierFinding, Proof: m.Proof, scope: "target", signals: 1}
 }

@@ -84,6 +84,9 @@ type Answer struct {
 	// Resolver is the one that failed last, when Status is failed: the
 	// resolver a reader looks at (a timeout, a REFUSED for this machine).
 	Resolver string
+	// Server is the resolver that gave an NXDOMAIN, when Status is nxdomain:
+	// the one a reader asks again.
+	Server string
 }
 
 // Live is true when the name has an address.
@@ -617,6 +620,7 @@ func (p *Pool) resolve(ctx context.Context, name string) Answer {
 		// says where the name points: a dangling one.
 		a.CNAME = chain
 		a.Status = StatusNXDomain
+		a.Server = from
 		return a
 	}
 	a.A, a.CNAME = records(m, dns.TypeA)

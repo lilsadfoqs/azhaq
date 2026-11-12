@@ -223,6 +223,10 @@ type Service struct {
 	// AlsoSeen are other versions of the product on the listener that the
 	// one chosen does not refine: said, not dropped.
 	AlsoSeen []string `json:"also_seen,omitempty"`
+	// Source is what a page said to name the product, for a service a name's
+	// root page names (page title, generator, header X-Powered-By, header
+	// Server, technology); "" for any other.
+	Source string `json:"source,omitempty"`
 	// ObservedAt is when the answer that named it was received, and From the
 	// URL it came from when it was a web answer (the proof of an identification).
 	ObservedAt time.Time `json:"-"`
