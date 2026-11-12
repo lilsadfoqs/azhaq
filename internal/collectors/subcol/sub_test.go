@@ -313,7 +313,9 @@ func TestRunDeadlineSkipsSlowPaddingVerify(t *testing.T) {
 		pad,
 		hang("deaf", stuck), // keeps a source running so the -timeout cuts the wait
 	)
-	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+	// 2 s, of which a quarter (500 ms) is the time to emit: at 300 ms the 75 ms
+	// left were too short on a busy runner.
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	t0 := time.Now()
 	var payload map[string]any
