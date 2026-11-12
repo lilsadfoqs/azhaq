@@ -29,7 +29,7 @@ var weights = map[string]int{
 	"param-query":        40,
 	"param-callback":     15,
 	"input":              8,
-	"gated":              15, // 401/403: a session is needed, a target for azhaq roles
+	"gated":              15, // 401: authentication requested, a target for azhaq roles
 	"server-error":       10, // a 5xx; more with corroboration: see serverError*
 	"path-auth":          45, // sign-in, tokens, password reset: see pathWords
 	"path-search":        35,
@@ -61,6 +61,7 @@ const signInWeight = 10
 var signInWords = map[string]bool{"login": true, "signin": true, "signon": true, "logon": true, "reset": true, "forgot": true, "recover": true, "register": true, "signup": true}
 
 const (
+	forbiddenWeight = 5 // a 403 alone: it does not show a session would help
 	takeoverStrong  = 90
 	graphqlStrong   = 45
 	unauthWriteDry  = 10

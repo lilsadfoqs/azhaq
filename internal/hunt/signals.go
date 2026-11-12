@@ -190,8 +190,11 @@ func (h *hunter) url(r engine.MapEntry) {
 		c.addW(sig, pw.w, fmt.Sprintf("%q in %s, %s", wordOf[sig], path, how))
 	}
 	switch {
-	case st == 401 || st == 403:
-		c.add("gated", fmt.Sprintf("answers %d: a session is needed", st))
+	case st == 401:
+		c.add("gated", "answers 401: authentication requested")
+	case st == 403:
+		// Nothing here shows a session would change it.
+		c.addW("gated", forbiddenWeight, "answers 403: forbidden")
 	case st >= 500:
 		h.serverError(c, r, raw)
 	}

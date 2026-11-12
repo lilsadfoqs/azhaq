@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"slices"
@@ -264,7 +265,7 @@ func cmdSubs(args []string) error {
 	// They exist in DNS, as dnsx -cname lists them, and are marked "cname_only":
 	// a takeover lead when the target is gone.
 	var dangling map[string]map[string]any
-	cnameOnly, cnameOnlySrc := 0, 0
+	cnameOnly, cnameOnlySrc, privateAns := 0, 0, 0
 	seen := map[string]bool{}
 	dnsTier := map[string]bool{}     // printed rows a DNS lookup confirmed
 	var answeredHTTP map[string]bool // with -http: the names a request got an answer from
@@ -447,6 +448,9 @@ func cmdSubs(args []string) error {
 					cnameOnly++
 					cnameOnlySrc++
 				}
+				if row["private_answer"] == true {
+					privateAns++
+				}
 				if *oI && len(ips) > 0 {
 					row["ip"] = ips[0]
 				}
@@ -526,6 +530,9 @@ func cmdSubs(args []string) error {
 					if ips, only = liveRow(row, alive, dangling, name); only {
 						cnameOnly++
 					}
+					if row["private_answer"] == true {
+						privateAns++
+					}
 					if *oI && len(ips) > 0 {
 						row["ip"] = ips[0]
 					}
@@ -555,6 +562,9 @@ func cmdSubs(args []string) error {
 			ips, only := liveRow(row, alive, dangling, name)
 			if only {
 				cnameOnly++
+			}
+			if row["private_answer"] == true {
+				privateAns++
 			}
 			if *oI && len(ips) > 0 {
 				row["ip"] = ips[0]
@@ -617,6 +627,7 @@ func cmdSubs(args []string) error {
 		set("found as CNAME targets", viaCNAME)
 	}
 	set("CNAME only", cnameOnly)
+	set("private answers", privateAns)
 	set("not checked", notChecked)
 	set("no answer", noAnswer)
 	set("not asked", notAsked)
@@ -648,6 +659,9 @@ func cmdSubs(args []string) error {
 	}
 	if cnameOnly > 0 {
 		rep.Notes = append(rep.Notes, fmt.Sprintf("%d names are listed with a CNAME and no address (-json: \"cname_only\": true): one whose target is gone is a takeover lead", cnameOnly))
+	}
+	if privateAns > 0 {
+		rep.Notes = append(rep.Notes, fmt.Sprintf("%d names are listed whose answers are all loopback, private or link-local addresses (-json: \"private_answer\": true): the name resolves, but not to an address the internet reaches", privateAns))
 	}
 	if notChecked > 0 {
 		why := "the resolvers failed"
@@ -838,11 +852,26 @@ func liveRow(row map[string]any, alive, dangling map[string]map[string]any, name
 		p, only = dangling[name], true
 	}
 	dnsFields(row, p)
+	if privateOnly(strs(p["ips"])) {
+		row["private_answer"] = true
+	}
 	if only {
 		row["cname_only"] = true
 		row["a"] = []string{}
 	}
 	return strs(p["ips"]), only
+}
+
+// privateOnly says every address is loopback, RFC 1918 (or its IPv6 kin) or
+// link-local: a name that resolves there is not shown to be reachable.
+func privateOnly(ips []string) bool {
+	for _, s := range ips {
+		a, err := netip.ParseAddr(s)
+		if err != nil || !(a.IsLoopback() || a.IsPrivate() || a.IsLinkLocalUnicast()) {
+			return false
+		}
+	}
+	return len(ips) > 0
 }
 
 // cnameNames maps each name azhaq-dns found as a CNAME whose chain ends

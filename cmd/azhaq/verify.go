@@ -47,6 +47,7 @@ func verifyStage(ctx context.Context, st *store.Store, obs []types.StoredObserva
 	cctx := ledger.WithCollector(ctx, "azhaq-verify")
 	dialer := egress.NewPortDialer(5*time.Second, nil, "", "")
 	failed, refused, stopped := 0, 0, 0
+	var declined []verify.Result
 	for _, svc := range advisory.ServicesAnyVersion(obs) {
 		check, ok := verify.ForService(svc)
 		if !ok {
@@ -86,6 +87,10 @@ func verifyStage(ctx context.Context, st *store.Store, obs []types.StoredObserva
 			continue
 		}
 		r.Command = command
+		if r.Declined { // refused, nothing identified: counted apart, not a result row
+			declined = append(declined, r)
+			continue
+		}
 		results = append(results, r)
 	}
 	for _, lead := range leads {
@@ -120,6 +125,16 @@ func verifyStage(ctx context.Context, st *store.Store, obs []types.StoredObserva
 			Payload: raw, Confidence: 0.9, ObservedAt: now,
 		})
 	}
+	for _, r := range declined {
+		if raw, err := json.Marshal(r); err == nil && r.Host != "" {
+			if ent, err := st.UpsertEntity(types.TypeHostname, r.Host, now); err == nil {
+				_, _ = st.AddObservation(ent.ID, types.Observation{
+					Collector: "azhaq-verify", Source: r.Kind, Kind: verifyDeclinedKind,
+					Payload: raw, Confidence: 0.9, ObservedAt: now,
+				})
+			}
+		}
+	}
 	if failed > 0 {
 		failures = append(failures, engine.Failure{Collector: "azhaq-verify", Error: "a verification read got no answer", Count: failed, Retryable: true})
 	}
@@ -136,6 +151,9 @@ func verifyStage(ctx context.Context, st *store.Store, obs []types.StoredObserva
 	}
 	note = fmt.Sprintf("verify: %d results (%d proved, %d version-only, %d conditional) from the enumerated read-only checks; each result is a stored verify row and a line of the output, carries the exact request sent and an excerpt of the answer, and proved names that read only, never exploitability",
 		len(results), proved, versionOnly, conditional)
+	if n := len(declined); n > 0 {
+		note += fmt.Sprintf("; %d declined: the service refused the read and nothing was identified, so they are no result rows", n)
+	}
 	if refused > 0 {
 		note += fmt.Sprintf("; %d verification reads were not sent: their targets are outside the scope", refused)
 	}
@@ -143,6 +161,20 @@ func verifyStage(ctx context.Context, st *store.Store, obs []types.StoredObserva
 		note += fmt.Sprintf("; %d verification reads were not sent: the run's limit stopped them", stopped)
 	}
 	return results, failures, note
+}
+
+// verifyDeclinedKind is the stored kind of a refused read: no result row.
+const verifyDeclinedKind = "verify-declined"
+
+// verifyDeclinedOf counts the refused reads a run stored.
+func verifyDeclinedOf(obs []types.StoredObservation) int {
+	n := 0
+	for _, o := range obs {
+		if o.Collector == "azhaq-verify" && o.Kind == verifyDeclinedKind {
+			n++
+		}
+	}
+	return n
 }
 
 // verifyResultsOf reads the results a run stored, as ports prints

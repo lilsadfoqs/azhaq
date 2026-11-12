@@ -527,7 +527,7 @@ A write can be answered 2xx and still not show that it took: a password change (
 - `login:URL`: sign in at URL as the owner, with the password the write set, in a JSON `{"username":…, "password":…}` body sent with no session. This sign-in is sent only because the user asked for it by flag.
 - `read:URL[;field=NAME[=VALUE]]`: GET URL as the writer, with `{owner}` and `{writer}` in the URL replaced. With `field`, that JSON field must hold VALUE, or the value the write set in it when VALUE is left out.
 
-The write row then reports `write_verification` as one of three distinct words, and `report` keeps that word in its notes: `proved` (the step, or the owner's object read back, showed the write took on the owner's object: the verdict is the proved cross write), `accepted-not-verified` (the write was let and nothing proved it) or `refuted` (the step answered and showed it did not take as the owner's, such as a failed sign-in). A proved step makes the row a proved cross write only for the role the step proved.
+The write row then reports `write_verification` as one of three distinct words, and `report` keeps that word in its notes: `proved` (the step, or the owner's object read back, showed the write took on the owner's object: the verdict is the proved cross write), `accepted-not-verified` (the write was let and nothing proved it) or `refuted` (the step answered and showed it did not take as the owner's, such as a failed sign-in). A proved step makes the row a proved cross write only for the role the step proved. A `refuted` row is "write not applied" in `report`: its title says so, it has no severity and it is not written up as a finding.
 
 #### Canary values
 

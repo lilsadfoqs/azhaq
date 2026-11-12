@@ -1677,6 +1677,25 @@ func TestRolesReportKeepsTheWriteVerificationWord(t *testing.T) {
 	}
 }
 
+// A write the verification step refuted is "write not applied": no BOLA title
+// and no severity rating, since it is not a finding.
+func TestRolesReportOfARefutedWriteIsNotAFinding(t *testing.T) {
+	const u = "https://s.test/users/v1/alice/password"
+	row := roleRow{URL: u, Method: "PUT", Owner: "alice", Readers: []string{"bob"}, Verdict: verdictWriteUnread, Confidence: confProved, WriteVerification: verifyRefuted,
+		Answers: map[string]answer{"alice": {Status: 204}, "bob": {Status: 204}}}
+	er := evRow(t, row, ans("alice", "answer", u, 204, "", "curl -sS -i -X PUT '"+u+"' -H \"Authorization: Bearer $ALICE_TOKEN\""),
+		ans("bob", "answer", u, 204, "", "curl -sS -i -X PUT '"+u+"' -H \"Authorization: Bearer $BOB_TOKEN\""))
+	d, err := buildReport(er, []string{"alice", "bob"}, time.Time{}, false, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	md := d.markdown()
+	if !strings.HasPrefix(d.Title, "Write not applied") || d.Severity.Level != "none" ||
+		strings.Contains(md, "Broken object level") || strings.Contains(md, "guessed") || strings.Contains(md, "rates it proved") {
+		t.Errorf("title %q, severity %+v:\n%s", d.Title, d.Severity, md)
+	}
+}
+
 // An empty write whose owner's object cannot be read to verify it is
 // answered 2xx but changed nothing, said to be unread, not a finding.
 func TestRolesAnEmptyWriteOnAnObjectThatCannotBeReadChangedNothingOfTheOwners(t *testing.T) {

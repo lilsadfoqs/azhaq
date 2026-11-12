@@ -59,12 +59,12 @@ func TestScoringTable(t *testing.T) {
 		score  int
 	}{
 		{"admin path answers", urlRow(o+"/admin", "page", "visited", 200, nil), "path-admin", 40},
-		{"admin path refused is still there", urlRow(o+"/admin", "forbidden", "visited", 403, nil), "path-admin", 30 + weights["gated"]},
+		{"admin path refused is still there", urlRow(o+"/admin", "forbidden", "visited", 403, nil), "path-admin", 30 + forbiddenWeight},
 		{"admin path not requested weighs half", urlRow(o+"/admin", "page", "hint", 0, nil), "path-admin", 20},
 		{"debug word with underscore", urlRow(o+"/x/_debug", "api", "visited", 200, nil), "path-debug", 50},
 		{"hyphenated api-docs word", urlRow(o+"/v2/api-docs", "api", "visited", 200, nil), "path-doc", 15 + weights["api-description"]},
 		{"kdbx served", urlRow(o+"/ftp/a.kdbx", "page", "visited", 200, nil), "exposed-file", 70},
-		{"bak refused", urlRow(o+"/ftp/a.bak", "page", "visited", 403, nil), "exposed-file", 55*fileUnseen/100 + weights["gated"]},
+		{"bak refused", urlRow(o+"/ftp/a.bak", "page", "visited", 403, nil), "exposed-file", 55*fileUnseen/100 + forbiddenWeight},
 		{"git directory", urlRow(o+"/.git/HEAD", "page", "visited", 200, nil), "exposed-file", 70},
 		{"directory listing", urlRow(o+"/files/", "page", "visited", 200, func(r *engine.MapEntry) { r.Title = "Index of /files" }), "listing", 55},
 		{"listing directory title", urlRow(o+"/ftp", "page", "visited", 200, func(r *engine.MapEntry) { r.Title = "listing directory /ftp" }), "listing", 55},
@@ -99,6 +99,30 @@ func TestScoringTable(t *testing.T) {
 				t.Errorf("score %d, want %d (%+v)", rows[0].Score, c.score, rows[0].Reasons)
 			}
 		})
+	}
+}
+
+// A 401 asks for authentication; a bare 403 only says forbidden and weighs less.
+func TestGatedNamesOnlyWhatTheAnswerShowed(t *testing.T) {
+	for _, c := range []struct {
+		status int
+		role   string
+		weight int
+		detail string
+	}{
+		{401, "auth", weights["gated"], "authentication requested"},
+		{403, "forbidden", forbiddenWeight, "forbidden"},
+	} {
+		rows := build(urlRow("http://t.test/x", c.role, "visited", c.status, nil))
+		if len(rows) != 1 || rows[0].Score != c.weight || len(rows[0].Reasons) != 1 {
+			t.Fatalf("%d: %+v, want one reason of weight %d", c.status, rows, c.weight)
+		}
+		if d := rows[0].Reasons[0].Detail; !strings.Contains(d, c.detail) || strings.Contains(d, "a session is needed") {
+			t.Errorf("%d: detail %q, want %q", c.status, d, c.detail)
+		}
+	}
+	if forbiddenWeight >= weights["gated"] {
+		t.Errorf("a bare 403 weighs %d, not less than a 401's %d", forbiddenWeight, weights["gated"])
 	}
 }
 
