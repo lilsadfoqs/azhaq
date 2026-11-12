@@ -92,6 +92,7 @@ func (c *Collector) runPrefix(ctx context.Context, seed types.Seed, emit func(ty
 	}
 	finished := map[int]bool{} // the places of the addresses this run and the stopped one finished
 	maps.Copy(finished, swept)
+	settled.Add(int64(len(swept)))
 	type result struct {
 		row    map[string]any
 		open   []portscan.Open
@@ -224,6 +225,7 @@ func (c *Collector) runPrefix(ctx context.Context, seed types.Seed, emit func(ty
 				out++
 				finished[place] = true
 				mu.Unlock()
+				settled.Add(1)
 				return
 			}
 			ports := c.portsOf(ip)
@@ -380,6 +382,7 @@ func (c *Collector) runPrefix(ctx context.Context, seed types.Seed, emit func(ty
 						portsAddr++
 					}
 					finished[place] = true
+					c.settle(entry)
 				}
 				if rowless {
 					if len(udp.OpenFiltered) > 0 {

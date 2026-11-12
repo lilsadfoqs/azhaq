@@ -1428,8 +1428,12 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 			}
 		}
 		t0 := time.Now()
+		settled0 := portcol.Settled()
 		stopTicker = startProgress(ctx, cfg, os.Stderr, func() progressSnap {
-			return progressSnap{At: time.Since(t0), Sent: egress.Departed(), Done: st.TasksDone(), Left: st.TasksLeft()}
+			snap := progressSnap{At: time.Since(t0), Sent: egress.Departed(), Done: st.TasksDone(), Left: st.TasksLeft()}
+			tasks, _ := st.TasksOf(portcol.Name)
+			snap.Ports, snap.AddrDone, snap.AddrLeft = portProgress(tasks, int(portcol.Settled()-settled0))
+			return snap
 		})
 	}
 	defer stopTicker()
@@ -1808,6 +1812,14 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 			}
 		}
 		rep.Resume = resumeHint(path, cut > 0, *login != "", *loginUser)
+		if len(opts.Ports) > 0 && rep.Resume != "" {
+			// What the port scans the limit stopped have not asked: the first line says so.
+			if all, err := st.Observations(); err == nil {
+				if a, p := portcol.NotAsked(all, len(opts.Ports)); a > 0 {
+					rep.NotAsked = &notAsked{Addresses: a, Ports: p, Resume: rep.Resume}
+				}
+			}
+		}
 		if *resumeRun != "" && rep.Requests == 0 && strings.HasPrefix(rep.Stopped, "-max-items ") {
 			// The cap holds for each run: this one spent it on tasks that
 			// asked nothing, and the next goes on from them.

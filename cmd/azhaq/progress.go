@@ -5,11 +5,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/netip"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/lilsadfoqs/azhaq/internal/collectors/asncol"
 	"github.com/lilsadfoqs/azhaq/internal/collectors/subcol"
+	"github.com/lilsadfoqs/azhaq/internal/normalize"
+	"github.com/lilsadfoqs/azhaq/store"
+	"github.com/lilsadfoqs/azhaq/types"
 )
 
 // stderrProgressEvery is how often a command that is still working says so on
@@ -23,6 +28,11 @@ type progressSnap struct {
 	Sent int64         // requests sent to the targets (never fewer than the line before)
 	Done int           // tasks done
 	Left int           // tasks known and not done; -1: not counted
+	// A port scan's own unit, which moves while one task covers many addresses:
+	// the addresses its scans finished, and those of the tasks known that are
+	// not (-1: the tasks name more than addresses). Ports: the run has port work.
+	Ports              bool
+	AddrDone, AddrLeft int
 }
 
 // progressCfg says how a command reports progress and what ends it.
@@ -100,6 +110,17 @@ func (c progressCfg) line(prev, cur progressSnap) string {
 	if by, in, ok := c.ends(prev, cur); ok {
 		fmt.Fprintf(&b, "; %s ends it in about %s", by, aboutDuration(in))
 	}
+	if cur.Ports {
+		word := "addresses"
+		if cur.AddrDone+max(cur.AddrLeft, 0) == 1 {
+			word = "address"
+		}
+		if cur.AddrLeft >= 0 {
+			fmt.Fprintf(&b, ", %d of %d %s done", cur.AddrDone, cur.AddrDone+cur.AddrLeft, word)
+		} else {
+			fmt.Fprintf(&b, ", %d %s done", cur.AddrDone, word)
+		}
+	}
 	b.WriteString(stillWaiting())
 	return b.String()
 }
@@ -112,6 +133,8 @@ type progressObject struct {
 	PerSecond  float64  `json:"requests_per_second"`
 	TasksDone  int      `json:"tasks_done"`
 	TasksLeft  *int     `json:"tasks_left,omitempty"`
+	AddrDone   *int     `json:"addresses_done,omitempty"` // port scans: addresses finished
+	AddrLeft   *int     `json:"addresses_left,omitempty"` // and those of the tasks known not yet finished
 	EndsBy     string   `json:"ends_by,omitempty"`
 	EndsInSecs *int     `json:"ends_in_seconds,omitempty"`
 	WaitingFor []string `json:"waiting_for,omitempty"` // subdomain sources not answered yet
@@ -123,6 +146,12 @@ func (c progressCfg) object(prev, cur progressSnap) progressObject {
 		PerSecond: float64(int(rateBetween(prev, cur)*100)) / 100, TasksDone: cur.Done}
 	if cur.Left >= 0 {
 		o.TasksLeft = &cur.Left
+	}
+	if cur.Ports {
+		o.AddrDone = &cur.AddrDone
+		if cur.AddrLeft >= 0 {
+			o.AddrLeft = &cur.AddrLeft
+		}
 	}
 	if by, in, ok := c.ends(prev, cur); ok {
 		secs := int(in.Seconds())
@@ -184,4 +213,51 @@ func startProgress(ctx context.Context, cfg progressCfg, w io.Writer, snap func(
 		}
 	}()
 	return func() { once.Do(func() { close(done) }) }
+}
+
+// portProgress is the port scans' own progress, from the ports tasks of the
+// run and the addresses finished since it began: whether there is port work
+// at all, the addresses done, and those of the tasks known that are not (-1
+// when a task names something whose addresses are not known yet: a name, or a
+// range too big for one block, whose blocks are tasks once it runs).
+func portProgress(tasks []store.Task, done int) (ports bool, doneN, left int) {
+	total, known := 0, true
+	for _, t := range tasks {
+		if t.Seed.Keys["from"] == asncol.FromPrefix {
+			continue // an address of a range being scanned: the range counts it
+		}
+		ports = true
+		switch t.Seed.Type {
+		case types.TypePrefix:
+			pf, err := netip.ParsePrefix(t.Seed.Key())
+			if err != nil || pf.Bits() < blockBits(pf) {
+				if !t.Done {
+					known = false
+				}
+				continue
+			}
+			total += blockSize(pf.Masked())
+		default:
+			if _, err := netip.ParseAddr(normalize.Hostname(t.Seed.Key())); err == nil {
+				total++
+			} else if !t.Done {
+				known = false
+			}
+		}
+	}
+	if !ports && done == 0 {
+		return false, 0, -1
+	}
+	if !known {
+		return true, done, -1
+	}
+	return true, done, max(total-done, 0)
+}
+
+// blockBits is the prefix length a range is scanned in blocks of.
+func blockBits(pf netip.Prefix) int {
+	if pf.Addr().Is6() {
+		return 120
+	}
+	return 24
 }

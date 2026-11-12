@@ -162,6 +162,11 @@ type report struct {
 	// the name history, the pointers to the last workspace, the archived URLs.
 	Wrote []string `json:"wrote,omitempty"`
 
+	// NotAsked is what a port scan stopped by a limit left: the addresses that
+	// still have ports not asked, those ports, and the azhaq resume command that
+	// asks them. It is the first line of the text summary too.
+	NotAsked *notAsked `json:"not_asked,omitempty"`
+
 	// AddressesScanned and AddressesOpen are run -ports: the distinct addresses
 	// the port scan asked, and those it found a port open on. counts.addresses
 	// is another count, the address rows the map holds.
@@ -288,6 +293,9 @@ func (r *report) print(w io.Writer) {
 			d += ": " + degradedText(r.DegradedBy)
 		}
 		head = append([]string{d + ", the names may be incomplete"}, head...)
+	}
+	if r.NotAsked != nil {
+		head = append(head, r.NotAsked.line())
 	}
 	if r.Requests > 0 {
 		head = append(head, fmt.Sprintf("%d requests", r.Requests))
@@ -979,4 +987,20 @@ func onceEach(notes []string) []string {
 		}
 	}
 	return out
+}
+
+// notAsked is the ports a limit left unasked, counted from the rows of the
+// scans it stopped (portcol.NotAsked).
+type notAsked struct {
+	Addresses int    `json:"addresses"`
+	Ports     int    `json:"ports"`
+	Resume    string `json:"resume"`
+}
+
+func (n notAsked) line() string {
+	addrs := fmt.Sprintf("%d addresses", n.Addresses)
+	if n.Addresses == 1 {
+		addrs = "1 address"
+	}
+	return fmt.Sprintf("stopped: %s of %s not asked; %s asks them", plural(n.Ports, "port"), addrs, n.Resume)
 }

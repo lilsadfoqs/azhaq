@@ -9,6 +9,10 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/lilsadfoqs/azhaq/internal/collectors/asncol"
+	"github.com/lilsadfoqs/azhaq/store"
+	"github.com/lilsadfoqs/azhaq/types"
 )
 
 // A paced run says where it stands: requests, the pace of the last
@@ -233,5 +237,101 @@ func TestProgressCountNeverGoesBack(t *testing.T) {
 			t.Errorf("requests %d after %v, rate %v: %s", o.Requests, last, o.Rate, l)
 		}
 		last = float64(o.Requests)
+	}
+}
+
+// A port scan of a range is one task for a long time: the line says how many
+// of its addresses are done and how many of the tasks known are left, a unit
+// that moves, and the object carries it as addresses_done and addresses_left.
+func TestProgressLineNamesAddressesOfAPortScan(t *testing.T) {
+	cfg := progressCfg{}
+	prev := progressSnap{At: 10 * time.Second, Sent: 400, Left: 1}
+	cur := progressSnap{At: 20 * time.Second, Sent: 800, Left: 1, Ports: true, AddrDone: 64, AddrLeft: 192}
+	if got, want := cfg.line(prev, cur), "azhaq: 20s, 800 requests sent (40/s), 1 task left, 64 of 256 addresses done"; got != want {
+		t.Errorf("line\n%s\nwant\n%s", got, want)
+	}
+	cur.AddrLeft = -1 // the tasks name a host whose addresses are not known yet
+	if got := cfg.line(prev, cur); !strings.HasSuffix(got, ", 1 task left, 64 addresses done") {
+		t.Errorf("left unknown: %s", got)
+	}
+	raw, _ := json.Marshal(cfg.object(prev, progressSnap{At: 20 * time.Second, Sent: 800, Left: 1, Ports: true, AddrDone: 64, AddrLeft: 192}))
+	want := `{"type":"progress","seconds":20,"requests":800,"requests_per_second":40,"tasks_done":0,"tasks_left":1,"addresses_done":64,"addresses_left":192}`
+	if string(raw) != want {
+		t.Errorf("object\n%s\nwant\n%s", raw, want)
+	}
+	if got := cfg.line(prev, progressSnap{At: 20 * time.Second, Sent: 800, Left: 1}); strings.Contains(got, "address") {
+		t.Errorf("a run with no port work names addresses: %s", got)
+	}
+}
+
+func TestPortProgressCountsTheAddressesOfTheTasks(t *testing.T) {
+	task := func(typ types.SeedType, key string, done bool, from string) store.Task {
+		k := map[string]string{"ip": key}
+		switch typ {
+		case types.TypePrefix:
+			k = map[string]string{"prefix": key}
+		case types.TypeHostname:
+			k = map[string]string{"host": key}
+		}
+		if from != "" {
+			k["from"] = from
+		}
+		return store.Task{Collector: "azhaq-ports", Seed: types.Seed{Type: typ, Keys: k}, Done: done}
+	}
+	if ports, _, _ := portProgress(nil, 0); ports {
+		t.Error("no port task and no address done is port work")
+	}
+	tasks := []store.Task{task(types.TypePrefix, "10.0.0.0/24", false, ""), task(types.TypeIPAddress, "10.1.0.5", true, ""),
+		task(types.TypeIPAddress, "10.0.0.7", false, asncol.FromPrefix)}
+	ports, done, left := portProgress(tasks, 100)
+	if !ports || done != 100 || left != 256+1-100 {
+		t.Errorf("ports %v done %d left %d, want true 100 157 (the /24 and one address, less 100; the range's own address is not another)", ports, done, left)
+	}
+	// A name's addresses and a range too big for one block are not known yet.
+	if _, _, left := portProgress(append(tasks, task(types.TypeHostname, "a.example.com", false, "")), 3); left != -1 {
+		t.Errorf("a name not done: left %d, want -1", left)
+	}
+	if _, _, left := portProgress([]store.Task{task(types.TypePrefix, "10.0.0.0/16", false, "")}, 3); left != -1 {
+		t.Errorf("a /16 not split yet: left %d, want -1", left)
+	}
+	if _, _, left := portProgress(tasks, 1000); left != 0 {
+		t.Errorf("more done than known: left %d, want 0", left)
+	}
+}
+
+// ports over a range prints progress lines whose address count moves while the
+// one task for the range is still running.
+func TestPortsProgressAddressesMove(t *testing.T) {
+	defer func(d time.Duration) { stderrProgressEvery = d }(stderrProgressEvery)
+	stderrProgressEvery = 300 * time.Millisecond
+	t.Chdir(t.TempDir())
+	_, errOut, code := cli(t, "ports", "-host", "127.31.0.0/25", "-p", "1-3", "-rate", "100", "-allow", "127.31.0.0/25", "-db", "p.db", "-json")
+	if code != exitOK {
+		t.Fatalf("exit %d\n%s", code, errOut)
+	}
+	var seen []int
+	for _, l := range lines(errOut) {
+		var o struct {
+			Type      string `json:"type"`
+			TasksDone int    `json:"tasks_done"`
+			Done      *int   `json:"addresses_done"`
+			Left      *int   `json:"addresses_left"`
+		}
+		if json.Unmarshal([]byte(l), &o) != nil || o.Type != "progress" {
+			continue
+		}
+		if o.Done == nil || o.Left == nil || *o.Done+*o.Left != 128 {
+			t.Fatalf("progress line without the address unit: %s", l)
+		}
+		if *o.Done > 0 && *o.Done < 128 && o.TasksDone != 0 {
+			t.Errorf("tasks_done %d while the range is half scanned: %s", o.TasksDone, l)
+		}
+		seen = append(seen, *o.Done)
+	}
+	if len(seen) < 2 {
+		t.Fatalf("%d progress lines, want several:\n%s", len(seen), errOut)
+	}
+	if seen[len(seen)-1] <= seen[0] {
+		t.Errorf("addresses_done never moved: %v", seen)
 	}
 }

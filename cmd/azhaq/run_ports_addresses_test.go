@@ -118,3 +118,73 @@ func deref(p *int) any {
 	}
 	return *p
 }
+
+// A range a limit stopped is stored once for each run that touched it, and
+// each row counts what the block had finished so far: the summary counts the
+// block's addresses once, never above the range, however often it resumes.
+func TestRunPortsAddressesScannedDoNotGrowOnResume(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("ok")) }))
+	t.Cleanup(srv.Close)
+	_, port, _ := net.SplitHostPort(srv.Listener.Addr().String())
+	t.Chdir(t.TempDir())
+	args := []string{"-allow", "127.0.0.0/29", "-sources", "none", "-skip", "subs", "-rate", "0", "-db", "r.db", "-max-requests", "12"}
+	_, rep, _ := runContract(t, append([]string{"run", "-cidr", "127.0.0.0/29", "-ports", port + ",1"}, args...)...)
+	for i := 0; i < 30 && rep.Exit == exitLimit; i++ {
+		if rep.AddressesScanned != nil && *rep.AddressesScanned > 8 {
+			t.Fatalf("resume %d: addresses_scanned %d for a range of 8", i, *rep.AddressesScanned)
+		}
+		_, rep, _ = runContract(t, "resume", "-db", "r.db", "-max-requests", "12", "-rate", "0")
+	}
+	if rep.Exit != exitOK {
+		t.Fatalf("the scan did not finish: exit %d: %q", rep.Exit, rep.Stopped)
+	}
+	if rep.AddressesScanned == nil || *rep.AddressesScanned != 8 {
+		t.Errorf("addresses_scanned %v after the resumes, want 8", rep.AddressesScanned)
+	}
+	if rep.AddressesOpen == nil || *rep.AddressesOpen != 1 {
+		t.Errorf("addresses_open %v after the resumes, want 1", rep.AddressesOpen)
+	}
+}
+
+// A port scan a limit stopped says, on the first line of the text summary and
+// in the top-level not_asked of the JSON, how many ports of how many addresses
+// it never asked and the resume command that asks them. The ports are the
+// ledger's: the connects sent and the ports not asked make up the scan.
+func TestRunPortsStoppedByALimitSaysWhatWasNotAsked(t *testing.T) {
+	t.Chdir(t.TempDir())
+	args := []string{"-cidr", "127.0.0.0/29", "-ports", "1,2,3", "-allow", "127.0.0.0/29", "-sources", "none", "-skip", "subs", "-rate", "0", "-max-requests", "10"}
+	_, rep, code := runContract(t, append([]string{"run", "-db", "n.db"}, args...)...)
+	if code != exitLimit {
+		t.Fatalf("exit %d: %q", code, rep.Stopped)
+	}
+	if rep.NotAsked == nil {
+		t.Fatalf("no not_asked in the summary: %q", rep.Stopped)
+	}
+	raw, err := os.ReadFile("n.db.ledger.jsonl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	connects := 0
+	for _, line := range strings.Split(string(raw), "\n") {
+		var e struct{ Kind, Collector string }
+		if json.Unmarshal([]byte(line), &e) == nil && e.Kind == "tcp" && e.Collector == "azhaq-ports" {
+			connects++
+		}
+	}
+	if rep.NotAsked.Ports != 8*3-connects || rep.NotAsked.Addresses < 1 || rep.NotAsked.Addresses > 8 {
+		t.Errorf("not_asked %+v with %d connects in the ledger: want %d ports of 1 to 8 addresses", *rep.NotAsked, connects, 8*3-connects)
+	}
+	if rep.NotAsked.Resume != rep.Resume || !strings.HasPrefix(rep.Resume, "azhaq resume -db n.db") {
+		t.Errorf("resume %q, not_asked.resume %q", rep.Resume, rep.NotAsked.Resume)
+	}
+	_, errOut, _ := cli(t, append([]string{"run", "-db", "t.db"}, args...)...)
+	first := strings.SplitN(errOut, "\n", 2)[0]
+	for _, line := range lines(errOut) {
+		if strings.HasPrefix(line, "azhaq run:") {
+			first = line
+		}
+	}
+	if !strings.Contains(first, " ports of ") || !strings.Contains(first, "not asked; azhaq resume -db t.db") {
+		t.Errorf("the first line of the summary does not say what was not asked: %s", first)
+	}
+}

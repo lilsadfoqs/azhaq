@@ -117,6 +117,31 @@ func (s *Store) Tasks() ([]Task, error) {
 	return out, rows.Err()
 }
 
+// TasksOf lists the current run's tasks of one collector, in the order they
+// were planned.
+func (s *Store) TasksOf(collector string) ([]Task, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	rows, err := s.q().Query(`SELECT id, collector, seed, depth, prio, done, tries, need FROM tasks WHERE run_id = ? AND collector = ? ORDER BY rowid`, s.runID, collector)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Task
+	for rows.Next() {
+		var t Task
+		var raw string
+		if err := rows.Scan(&t.ID, &t.Collector, &raw, &t.Depth, &t.Prio, &t.Done, &t.Tries, &t.Need); err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal([]byte(raw), &t.Seed); err != nil {
+			return nil, fmt.Errorf("task %s: %w", t.ID, err)
+		}
+		out = append(out, t)
+	}
+	return out, rows.Err()
+}
+
 // TasksDone counts the current run's tasks that are done.
 func (s *Store) TasksDone() int {
 	s.mu.Lock()
