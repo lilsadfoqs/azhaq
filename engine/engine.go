@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"net"
 	"net/http"
 	"slices"
@@ -740,7 +741,13 @@ func (e *Engine) noteError(entityID, collector string, err error) {
 	if err == nil {
 		return
 	}
-	payload, _ := json.Marshal(map[string]string{"error": err.Error(), "collector": collector})
+	row := map[string]any{"error": err.Error(), "collector": collector}
+	// An answer cut short keeps what came: its status, headers and bytes.
+	var cut interface{ Partial() map[string]any }
+	if errors.As(err, &cut) {
+		maps.Copy(row, cut.Partial())
+	}
+	payload, _ := json.Marshal(row)
 	_, _ = e.Store.AddObservation(entityID, types.Observation{
 		Collector:  collector,
 		Source:     "run",

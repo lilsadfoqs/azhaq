@@ -3,6 +3,7 @@ package fetch
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"math/rand/v2"
@@ -317,8 +318,12 @@ func attempt(ctx, rctx context.Context, c *http.Client, method, raw string, sent
 		resp, err = c.Do(req)
 		body, trunc = nil, false
 		if err == nil {
-			body, trunc, err = readResponse(resp, bodyLimit(resp))
+			body, trunc, err = readResponseKeep(resp, bodyLimit(resp))
 			resp.Body.Close()
+			err = cutBody(resp, body, err)
+			if err != nil {
+				body, trunc = nil, false
+			}
 		}
 		if err != nil {
 			lastErr = err
@@ -356,6 +361,10 @@ func attempt(ctx, rctx context.Context, c *http.Client, method, raw string, sent
 func retryable(err error) bool {
 	if neterr.Quiet(err) || err == nil {
 		return false
+	}
+	var cb *CutBody
+	if errors.As(err, &cb) {
+		return true
 	}
 	s := strings.ToLower(err.Error())
 	return strings.Contains(s, "timeout") || strings.Contains(s, "reset") || strings.Contains(s, "eof") || strings.Contains(s, "deadline")

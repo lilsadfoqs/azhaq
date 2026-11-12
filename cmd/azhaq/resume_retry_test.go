@@ -51,10 +51,13 @@ func TestResumeRetriesTheFailedTargetsTheSummaryCallsRetryable(t *testing.T) {
 	if exitCode(err) != exitOK || !strings.Contains(strings.Join(rep.Notes, "\n"), "-retry-failed: 2 failed targets of run "+rep.RunID+" asked again, 2 still fail") {
 		t.Fatalf("a retry that fails again: exit %d, notes %v, failed %+v", exitCode(err), rep.Notes, rep.Failed)
 	}
+	// One closed with nothing, the other after part of its body: two reasons.
+	n := 0
 	for _, f := range rep.Failed {
-		if f.Count != 2 {
-			t.Errorf("two targets fail, the old failures are not counted again: %+v", f)
-		}
+		n += f.Count
+	}
+	if n != 2 {
+		t.Errorf("two targets fail, the old failures are not counted again: %+v", rep.Failed)
 	}
 	healed.Store(true)
 	out, errOut, err := captureBoth(t, func() error { return cmdResume([]string{"-db", db, "-retry-failed", "-json"}) })

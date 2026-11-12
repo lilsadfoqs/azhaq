@@ -382,11 +382,16 @@ func givenURLs(seeds []types.Seed) []string {
 // wordlists the user gave name a state change and are held back: nothing of
 // a list is dropped silently, and the flag that sends every word is named.
 // dirsHeld counts the -dirs requests (each word, and with each extension),
-// pathsHeld the -paths words.
-func heldListNotes(dirsHeld, dirsTotal, pathsHeld int) []string {
+// pathsHeld the -paths words. Past depth 1 each directory found asks the
+// list again, and each of its held words is a row of its own.
+func heldListNotes(dirsHeld, dirsTotal, pathsHeld, dirsDepth int) []string {
 	var out []string
 	if dirsHeld > 0 {
-		out = append(out, fmt.Sprintf("-dirs: %d of the %s the wordlist makes name a state change by their own path or query and are held back, not sent (each is listed as skipped): %s sends every word, as ffuf does", dirsHeld, plural(dirsTotal, "request"), neterr.SendFlag))
+		each := ""
+		if dirsDepth > 1 {
+			each = " in each directory"
+		}
+		out = append(out, fmt.Sprintf("-dirs: %d of the %s the wordlist makes%s name a state change by their own path or query and are held back, not sent (each is listed as skipped): %s sends every word, as ffuf does", dirsHeld, plural(dirsTotal, "request"), each, neterr.SendFlag))
 	}
 	if pathsHeld > 0 {
 		out = append(out, fmt.Sprintf("-paths: %s of the wordlist name a state change by their own path or query and are held back, not sent (each is listed as skipped): %s sends every word, as ffuf does", plural(pathsHeld, "word"), neterr.SendFlag))

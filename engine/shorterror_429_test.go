@@ -14,3 +14,19 @@ func TestShortErrorDoesNotReadA429OutOfAQuotedURL(t *testing.T) {
 		}
 	}
 }
+
+// A body that ended early keeps its own words, whatever status it had, and is
+// retryable; it is not read as the HTTP 500 its text names.
+func TestShortErrorKeepsACutBody(t *testing.T) {
+	for _, in := range []string{
+		"closed after 234 of 4096 bytes (HTTP 200, text/html)",
+		"closed after 16 bytes (HTTP 500, application/json)",
+	} {
+		if got := ShortError(in); got != in {
+			t.Errorf("ShortError(%q) = %q", in, got)
+		}
+		if !Retryable(in) {
+			t.Errorf("%q is not retryable", in)
+		}
+	}
+}

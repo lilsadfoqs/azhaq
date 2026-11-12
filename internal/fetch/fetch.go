@@ -12,10 +12,12 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
+	"unicode/utf8"
 
 	"github.com/lilsadfoqs/azhaq/internal/egress"
 	"github.com/lilsadfoqs/azhaq/internal/neterr"
@@ -788,9 +790,18 @@ func applyHeaders(req *http.Request, defaultAccept bool) {
 }
 
 func readBody(r io.Reader, limit int) ([]byte, bool, error) {
-	body, err := io.ReadAll(io.LimitReader(r, int64(limit)+1))
+	body, trunc, err := readBodyKeep(r, limit)
 	if err != nil {
 		return nil, false, err
+	}
+	return body, trunc, nil
+}
+
+// readBodyKeep is readBody that hands back what came before an error.
+func readBodyKeep(r io.Reader, limit int) ([]byte, bool, error) {
+	body, err := io.ReadAll(io.LimitReader(r, int64(limit)+1))
+	if err != nil {
+		return body, false, err
 	}
 	if len(body) > limit {
 		return body[:limit], true, nil
@@ -886,9 +897,80 @@ func (n *notedBody) Close() error {
 // ends, the first streamLimit bytes it sends within streamWindow; the body
 // is then marked truncated. It does not close the body.
 func readResponse(resp *http.Response, limit int) ([]byte, bool, error) {
+	body, trunc, err := readResponseKeep(resp, limit)
+	if err != nil {
+		body = nil
+	}
+	return body, trunc, err
+}
+
+// readResponseKeep is readResponse that hands back what came before an error.
+func readResponseKeep(resp *http.Response, limit int) ([]byte, bool, error) {
 	cut := Bound(resp)
-	body, trunc, err := readBody(resp.Body, limit)
+	body, trunc, err := readBodyKeep(resp.Body, limit)
 	return body, trunc || cut(), err
+}
+
+// CutBody is an answer whose connection closed before the body its headers
+// promised was complete. The status, the headers and the bytes that came are
+// kept for whoever lists the failure.
+type CutBody struct {
+	Status      int
+	ContentType string // the media type alone
+	Header      http.Header
+	Body        []byte
+	Want        int64 // Content-Length, -1 when the answer named none
+}
+
+func (e *CutBody) Error() string {
+	got := "closed after " + strconv.Itoa(len(e.Body))
+	if e.Want >= 0 {
+		got += " of " + strconv.FormatInt(e.Want, 10)
+	}
+	why := "HTTP " + strconv.Itoa(e.Status)
+	if e.ContentType != "" {
+		why += ", " + e.ContentType
+	}
+	return got + " bytes (" + why + ")"
+}
+
+// Partial is what the failure's row keeps of the answer.
+func (e *CutBody) Partial() map[string]any {
+	m := map[string]any{"status": e.Status, "cut": true, "received": len(e.Body)}
+	if e.Want >= 0 {
+		m["length"] = e.Want
+	}
+	if e.ContentType != "" {
+		m["content_type"] = e.ContentType
+	}
+	if len(e.Header) > 0 {
+		hs := make(map[string]string, len(e.Header))
+		for k, v := range e.Header {
+			hs[k] = strings.Join(v, ", ")
+		}
+		m["headers"] = hs
+	}
+	if len(e.Body) > 0 {
+		b := e.Body[:min(len(e.Body), cutKeep)]
+		if utf8.Valid(b) {
+			m["body"] = string(b)
+		} else {
+			m["body_base64"] = b
+		}
+	}
+	return m
+}
+
+// cutKeep caps the body a failure's row holds.
+const cutKeep = 64 << 10
+
+// cutBody is the failure of resp's body ending early, nil for any other error.
+func cutBody(resp *http.Response, body []byte, err error) error {
+	if !errors.Is(err, io.ErrUnexpectedEOF) {
+		return err
+	}
+	ct, _, _ := strings.Cut(resp.Header.Get("Content-Type"), ";")
+	return &CutBody{Status: resp.StatusCode, ContentType: strings.TrimSpace(ct), Header: resp.Header, Body: body, Want: resp.ContentLength}
 }
 
 // ReadAnswer is for a command that reads its own answers: the body up to

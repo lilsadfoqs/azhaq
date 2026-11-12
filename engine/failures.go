@@ -300,8 +300,10 @@ var (
 	triedRE = lazyre.New(`^failed after \d+ tr(?:y|ies), (.*)$`)
 	// proxyDownRE is a request that never reached its proxy: "proxy 127.0.0.1:1: connection refused".
 	proxyDownRE = lazyre.New(`(?:^|: )proxy (\S+?): (.+)$`)
-	leadHTTP    = lazyre.New(`^(429|5\d\d)\b`)
-	quotedRE    = lazyre.New(`"[^"]*"`)
+	// cutBodyRE is "closed after 234 of 4096 bytes (HTTP 200, text/html)".
+	cutBodyRE = lazyre.New(`closed after \d+(?: of \d+)? bytes \(HTTP \d+[^)]*\)`)
+	leadHTTP  = lazyre.New(`^(429|5\d\d)\b`)
+	quotedRE  = lazyre.New(`"[^"]*"`)
 )
 
 // ShortError reduces an error to what went wrong, without the URL and the
@@ -323,6 +325,9 @@ func ShortError(s string) string {
 		return s
 	case strings.Contains(s, types.CutShort):
 		return types.CutShort
+	case cutBodyRE.MatchString(s):
+		// An answer whose body ended early: how much came, and what it was.
+		return cutBodyRE.FindString(s)
 	case proxyDownRE.MatchString(s):
 		// The proxy was not reached: name it, and say why in the short form.
 		m := proxyDownRE.FindStringSubmatch(s)
@@ -393,7 +398,7 @@ func Retryable(s string) bool {
 		return leadHTTP.MatchString(m[1]) || Retryable(m[1])
 	}
 	switch e := ShortError(s); {
-	case e == "timeout", e == types.CutShort, e == "connection reset", e == "connection closed (EOF)", strings.HasPrefix(e, "HTTP 429"):
+	case e == "timeout", e == types.CutShort, e == "connection reset", e == "connection closed (EOF)", cutBodyRE.MatchString(e), strings.HasPrefix(e, "HTTP 429"):
 		return true
 	case strings.HasPrefix(e, "HTTP 5"):
 		return true
