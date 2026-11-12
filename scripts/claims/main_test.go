@@ -193,6 +193,11 @@ func TestAPageOfDocsTakesClaims(t *testing.T) {
 // The repository's own README and command pages: every claim of a covered
 // page has a proof, and every proof is still there.
 func TestRepositoryClaimsHaveProof(t *testing.T) {
+	if raceOn {
+		// The checks job runs go run ./scripts/claims on every push; under
+		// -race this walk of the repository takes about 9 of the 10 minutes.
+		t.Skip("the checks job runs the same check without -race")
+	}
 	rep, err := check("../..")
 	if err != nil {
 		t.Fatal(err)
