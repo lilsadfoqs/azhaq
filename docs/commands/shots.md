@@ -123,7 +123,7 @@ A page that was not fully loaded when the picture was taken has these fields, an
 - `-shot-wait 3s` waits 3 s for every page, scripts or not; `-shot-wait 0` takes the page at once.
 
 ### Chrome, ports and file names
-- `AZHAQ_CHROME` names the browser. Where the system gives Chrome no sandbox (a container, AppArmor), Chrome does not start: `shots` stops with exit 2 before any request, and the error names `-chrome-no-sandbox`. With that flag Chrome is started once more without a sandbox and the summary says so (`Chrome ran without its sandbox`; a sandboxed Chrome gives `Chrome ran with its sandbox`, [Is Chrome running sandboxed?](../TROUBLESHOOTING.md#is-chrome-running-sandboxed)); the pages it loads are untrusted, so use a throwaway environment. `AZHAQ_CHROME_NO_SANDBOX=1` is the same say and skips the first try. `-chrome-require-sandbox` is the default now and is still accepted.
+- `AZHAQ_CHROME` names the browser. Where the system gives Chrome no sandbox (a container, AppArmor), Chrome does not start: `shots` stops with exit 2 before any request, and the error names `-chrome-no-sandbox`. With that flag Chrome is started once more without a sandbox and the summary says so (`Chrome ran without its sandbox`; a sandboxed Chrome gives `Chrome ran with its sandbox`, [Is Chrome running sandboxed?](../TROUBLESHOOTING.md#is-chrome-running-sandboxed)); the pages it loads are untrusted, so use a throwaway environment. The second start follows within a second of Chrome saying it has none (the refusal is read from its output, not waited out), and the summary gives what the refused start cost. `AZHAQ_CHROME_NO_SANDBOX=1` is the same say and skips the first try. `-chrome-require-sandbox` is the default now and is still accepted.
 - Chrome refuses some ports, such as 6000, 6666 and 10080, with `net::ERR_UNSAFE_PORT`. `-unsafe-ports` allows them by default.
 - A URL you give is shot as given, one file for each page, named like `http_host_port_path_hash.png`; with a scheme it is one target and one row (where Chrome ended is in `final_url`, also when the page redirected to another scheme or host), and only a bare name or `host:port` is tried on both schemes. The URLs a run finds itself are shot only when they are front pages.
 - A page that calls `alert()` on load has its dialog accepted and is shot. Nothing waits for a click.
@@ -142,7 +142,8 @@ At a set `-rate`, a page's time runs from when it last moved. A slow pace gives 
 note: screenshot of http://127.0.0.1:3001/ not taken: the page needs about 26 requests and 8 were left (raise -max-requests)
 ```
 
-- The figure is how many requests the page made when it was cut short.
+- The figure is how many requests the page made when it was cut short. The number left is read when the budget refuses the page, never earlier, and is given only when it is under what the page needs.
+- Other stages of a run spend the same budget while the page waits, so the note ends with what each collector had sent: `(sent so far, by collector: paths 37, http 2; raise -max-requests)`.
 - When the budget was spent before the page loaded, the note says so: `screenshot of http://127.0.0.1:3001/ not taken: the budget was spent before the page loaded (raise -max-requests)`.
 
 ## Flags

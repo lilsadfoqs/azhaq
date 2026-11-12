@@ -121,7 +121,9 @@ func Register(cat *catalog.Catalog, o Options) {
 	cat.MustRegister(paramcol.New(client, o.Params))
 	cat.MustRegister(asncol.NewASN(nil))
 	cat.MustRegister(searchcol.New(o.Subdomains.Keys))
-	cat.MustRegister(&shotcol.Collector{Dir: o.Shots, Browser: o.Browser, Only: o.WebScheme, Ports: o.WebPorts, NoTech: o.NoTech, HTML: o.ShotHTML})
+	shots := &shotcol.Collector{Dir: o.Shots, Browser: o.Browser, Only: o.WebScheme, Ports: o.WebPorts, NoTech: o.NoTech, HTML: o.ShotHTML}
+	shots.Begin()
+	cat.MustRegister(shots)
 	render := &rendercol.Collector{}
 	if o.Render {
 		render.Browser = o.Browser

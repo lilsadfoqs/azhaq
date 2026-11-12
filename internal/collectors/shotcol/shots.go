@@ -15,6 +15,7 @@ import (
 	"image"
 	_ "image/jpeg"
 	_ "image/png"
+	"maps"
 	"math/bits"
 	"net"
 	"net/http"
@@ -36,6 +37,7 @@ import (
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
 	"github.com/lilsadfoqs/azhaq/internal/fingerprint"
 	"github.com/lilsadfoqs/azhaq/internal/lazyre"
+	"github.com/lilsadfoqs/azhaq/internal/ledger"
 	"github.com/lilsadfoqs/azhaq/internal/neterr"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"github.com/lilsadfoqs/azhaq/types"
@@ -57,6 +59,7 @@ type Collector struct {
 
 	shot sync.Map // pages already taken: a name and its URL are one page
 	need sync.Map // URL → requests the page asked for when the budget cut it short
+	from map[ledger.SpentKey]int64
 }
 
 func (c *Collector) Name() string { return Name }
@@ -132,15 +135,55 @@ func budgetLeft() int {
 	return int(max(egress.MaxRequests()-egress.Sent(), 0))
 }
 
+// Begin notes what the process had sent when the run began, so that a note on
+// the budget names only what this run spent.
+func (c *Collector) Begin() { c.from = ledger.Account() }
+
+// spentBy lists what each collector sent to targets since Begin, the most
+// first, for the note on a budget: "paths 37, http 2, shots 1".
+func (c *Collector) spentBy() string {
+	by := map[string]int64{}
+	for k, n := range ledger.Account() {
+		if k.Class == ledger.ClassTarget {
+			if d := n - c.from[k]; d > 0 {
+				by[strings.TrimPrefix(k.Collector, "azhaq-")] += d
+			}
+		}
+	}
+	names := slices.SortedFunc(maps.Keys(by), func(a, b string) int {
+		if by[a] != by[b] {
+			return int(by[b] - by[a])
+		}
+		return strings.Compare(a, b)
+	})
+	var parts []string
+	for _, k := range names {
+		label := k
+		if label == "" {
+			label = "other"
+		}
+		parts = append(parts, fmt.Sprintf("%s %d", label, by[k]))
+	}
+	return strings.Join(parts, ", ")
+}
+
 // notTaken says in the summary that the budget left no room for a page
 // and no image was saved. need is what the page asked for, 0 when it
-// never loaded.
-func notTaken(raw string, need, left int) {
-	if need == 0 {
-		fetch.Note(fmt.Sprintf("screenshot of %s not taken: the budget was spent before the page loaded (raise -max-requests)", raw))
-		return
+// never loaded; left is read when the budget refused the page, and by says
+// which collectors spent the budget.
+func notTaken(raw string, need, left int, by string) {
+	why := "the budget was spent before the page loaded"
+	if need > 0 {
+		why = fmt.Sprintf("the page needs about %d requests and the budget ran out", need)
+		if left >= 0 && left < need {
+			why = fmt.Sprintf("the page needs about %d requests and %d were left", need, left)
+		}
 	}
-	fetch.Note(fmt.Sprintf("screenshot of %s not taken: the page needs about %d requests and %d were left (raise -max-requests)", raw, need, left))
+	tail := "raise -max-requests"
+	if by != "" {
+		tail = "sent so far, by collector: " + by + "; raise -max-requests"
+	}
+	fetch.Note(fmt.Sprintf("screenshot of %s not taken: %s (%s)", raw, why, tail))
 }
 
 var unsafeName = lazyre.New(`[^a-zA-Z0-9.-]+`)
@@ -218,13 +261,12 @@ func (c *Collector) shoot(ctx context.Context, tries []string, isURL bool, emit 
 			return types.RunMeta{Status: types.StatusOK}, nil // taken, or being taken, through another seed
 		}
 		raw = t
-		left := budgetLeft()
 		if err := egress.SpendUnpaced(ctx); err != nil {
 			c.shot.Delete(t)
 			if errors.Is(err, neterr.ErrBudget) {
 				v, _ := c.need.Load(t)
 				n, _ := v.(int)
-				notTaken(t, n, left)
+				notTaken(t, n, budgetLeft(), c.spentBy())
 			}
 			return types.RunMeta{Status: types.StatusCapped}, err
 		}
@@ -232,7 +274,7 @@ func (c *Collector) shoot(ctx context.Context, tries []string, isURL bool, emit 
 		if p.Capped {
 			c.shot.Delete(t)
 			c.need.Store(t, p.Asked)
-			notTaken(t, p.Asked, left)
+			notTaken(t, p.Asked, budgetLeft(), c.spentBy())
 			return types.RunMeta{Status: types.StatusCapped}, neterr.ErrBudget
 		}
 		for _, s := range []struct {

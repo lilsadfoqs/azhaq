@@ -16,6 +16,7 @@ func TestEgressFlagsOnEveryCommandThatSends(t *testing.T) {
 		"roles": {"resolvers", "seal-to", "proxy", "allow", "deny", "deny-path", "rate"},
 		"ports": {"resolvers", "ledger", "seal-to", "proxy", "allow", "deny", "rate", "max-requests"},
 		"dns":   {"resolvers", "ledger", "seal-to", "proxy", "allow", "deny"},
+		"mcp":   {"resolvers", "proxy", "chrome-proxy", "allow", "deny", "deny-path", "rate", "max-requests"},
 		"subs":  {"resolvers", "ledger", "seal-to", "proxy", "allow", "deny"},
 	} {
 		fs := flagsOf(cmd)

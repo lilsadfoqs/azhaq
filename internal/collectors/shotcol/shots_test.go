@@ -2,17 +2,24 @@ package shotcol
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"image"
 	"image/color"
 	"image/png"
 	"math/bits"
 	"math/rand"
+	"net/http"
 	"net/url"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/lilsadfoqs/azhaq/internal/browser"
+	"github.com/lilsadfoqs/azhaq/internal/egress"
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
+	"github.com/lilsadfoqs/azhaq/internal/ledger"
+	"github.com/lilsadfoqs/azhaq/internal/neterr"
 	"github.com/lilsadfoqs/azhaq/types"
 )
 
@@ -85,9 +92,9 @@ func TestHashSeparatesSparsePages(t *testing.T) {
 func TestNotTakenSaysWhatThePageNeeds(t *testing.T) {
 	fetch.Reset()
 	t.Cleanup(fetch.Reset)
-	notTaken("http://h/", 26, 8)
-	notTaken("http://h/", 26, 8) // told once
-	notTaken("http://g/", 0, 0)
+	notTaken("http://h/", 26, 8, "")
+	notTaken("http://h/", 26, 8, "") // told once
+	notTaken("http://g/", 0, 0, "")
 	got := fetch.Notes()
 	want := []string{
 		"screenshot of http://h/ not taken: the page needs about 26 requests and 8 were left (raise -max-requests)",
@@ -95,6 +102,49 @@ func TestNotTakenSaysWhatThePageNeeds(t *testing.T) {
 	}
 	if len(got) != 2 || got[0] != want[0] || got[1] != want[1] {
 		t.Errorf("notes %q, want %q", got, want)
+	}
+}
+
+// The note never says "needs N, M left" with M at or over N: a figure that
+// would not explain the refusal is left out.
+func TestNotTakenNeverShowsRoomForThePage(t *testing.T) {
+	fetch.Reset()
+	t.Cleanup(fetch.Reset)
+	notTaken("http://h/", 12, 32, "paths 37")
+	got := fetch.Notes()
+	want := "screenshot of http://h/ not taken: the page needs about 12 requests and the budget ran out (sent so far, by collector: paths 37; raise -max-requests)"
+	if len(got) != 1 || got[0] != want {
+		t.Errorf("notes %q, want %q", got, want)
+	}
+}
+
+// Another collector spends the budget while the page waits: the note reads
+// the figure when the budget refuses the page and names the collector.
+func TestRefusedShotNamesWhoSpentTheBudget(t *testing.T) {
+	fetch.Reset()
+	egress.Reset()
+	t.Cleanup(func() { fetch.Reset(); egress.Reset() })
+	c := &Collector{Dir: t.TempDir(), Browser: &browser.Browser{}}
+	c.Begin()
+	egress.SetMaxRequests(40)
+	ctx := ledger.WithCollector(context.Background(), "azhaq-paths")
+	for i := 0; i < 40; i++ {
+		if err := egress.SpendUnpaced(ctx); err != nil {
+			t.Fatal(err)
+		}
+		req, _ := http.NewRequestWithContext(ctx, "GET", "http://127.0.0.1/", nil)
+		ledger.HTTP(req)
+	}
+	seed := types.Seed{Type: types.TypeURL, Keys: map[string]string{"url": "http://127.0.0.1:1/"}}
+	if _, err := c.Run(context.Background(), seed, func(types.Observation) error { return nil }); !errors.Is(err, neterr.ErrBudget) {
+		t.Fatalf("err %v, want the budget's", err)
+	}
+	got := fetch.Notes()
+	if len(got) != 1 || !strings.Contains(got[0], "the budget was spent before the page loaded") || !strings.Contains(got[0], "by collector: paths 40") {
+		t.Errorf("notes %q", got)
+	}
+	if strings.Contains(got[0], "were left") {
+		t.Errorf("a figure left in the note: %q", got)
 	}
 }
 
