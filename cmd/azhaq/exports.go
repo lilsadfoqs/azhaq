@@ -1309,7 +1309,8 @@ func runRules(args []string, load func(spec, program string) (scopefile.Scope, e
 }
 
 var reportTmpl = template.Must(template.New("report").Funcs(template.FuncMap{
-	"join": func(xs []string) string { return strings.Join(xs, ", ") },
+	"join":   func(xs []string) string { return strings.Join(xs, ", ") },
+	"answer": answerText,
 }).Parse(`<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Azhaq report</title>
@@ -1320,7 +1321,7 @@ body{background:var(--bg);color:var(--fg);font:14px/1.45 system-ui,sans-serif;ma
 h1{font-size:22px;margin:0 0 4px}h2{font-size:17px;margin:32px 0 8px}.muted{color:var(--muted)}
 table{border-collapse:collapse;width:100%;display:block;overflow-x:auto}th,td{border-bottom:1px solid var(--line);padding:5px 8px;text-align:left;vertical-align:top;white-space:nowrap}
 td.wrap{white-space:normal;word-break:break-all}a{color:var(--accent)}code{font-size:13px}
-.group{display:flex;flex-wrap:wrap;gap:12px;padding:12px 0;border-bottom:1px solid var(--line)}figure{margin:0;width:280px}
+pre{white-space:pre-wrap;word-break:break-all;font-size:12px;margin:4px 0}.group{display:flex;flex-wrap:wrap;gap:12px;padding:12px 0;border-bottom:1px solid var(--line)}figure{margin:0;width:280px}
 figure img{width:100%;border:1px solid var(--line)}figcaption{font-size:12px;color:var(--muted);word-break:break-all}
 </style></head><body>
 <h1>Azhaq report</h1>
@@ -1346,7 +1347,7 @@ figure img{width:100%;border:1px solid var(--line)}figcaption{font-size:12px;col
 {{end}}</table>{{end}}
 <h2>Map ({{len .Map}} rows)</h2>
 <table><tr><th>Entity</th><th>Scope</th><th>Seen</th><th>Evidence</th><th>Role</th><th>Facts</th></tr>
-{{range .Map}}<tr><td class="wrap">{{.Entity.Type}} <code>{{.Entity.Key}}</code>{{if .Count}} ({{.Count}}){{end}}</td><td>{{.Scope}}</td><td>{{.Coverage}}</td><td>{{.Evidence}}</td><td>{{.Role}}</td><td class="wrap">{{.Proof}}</td></tr>
+{{range .Map}}<tr><td class="wrap">{{.Entity.Type}} <code>{{.Entity.Key}}</code>{{if .Count}} ({{.Count}}){{end}}</td><td>{{.Scope}}</td><td>{{.Coverage}}</td><td>{{.Evidence}}</td><td>{{.Role}}</td><td class="wrap">{{.Proof}}{{with answer .}}<details><summary>answer</summary><pre>{{.}}</pre></details>{{end}}</td></tr>
 {{end}}</table>
 </body></html>
 `))

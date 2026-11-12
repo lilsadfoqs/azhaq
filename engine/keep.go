@@ -37,6 +37,7 @@ type keptMeta struct {
 	FinalHeader http.Header   `json:"final_header,omitempty"`
 	IP          string        `json:"ip,omitempty"`
 	Elapsed     time.Duration `json:"elapsed,omitempty"`
+	At          time.Time     `json:"at,omitzero"`
 	Method      string        `json:"method,omitempty"`
 	Raw         *fetch.Raw    `json:"raw,omitempty"`
 }
@@ -72,7 +73,7 @@ func (k *keeper) Load(raw string) (fetch.Result, bool) {
 	return fetch.Result{
 		RequestURL: m.RequestURL, Status: m.Status, URL: m.URL, Header: m.Header, Body: r.Body,
 		StatusLine: m.StatusLine, Hops: m.Hops, Truncated: m.Truncated, FinalHeader: m.FinalHeader,
-		IP: m.IP, Elapsed: m.Elapsed, Method: m.Method, Raw: m.Raw,
+		IP: m.IP, Elapsed: m.Elapsed, At: m.At, Method: m.Method, Raw: m.Raw,
 	}, true
 }
 
@@ -80,7 +81,7 @@ func (k *keeper) Keep(raw string, res fetch.Result) {
 	meta, err := json.Marshal(keptMeta{
 		RequestURL: res.RequestURL, Status: res.Status, URL: res.URL, Header: res.Header,
 		StatusLine: res.StatusLine, Hops: res.Hops, Truncated: res.Truncated, FinalHeader: res.FinalHeader,
-		IP: res.IP, Elapsed: res.Elapsed, Method: res.Method, Raw: res.Raw.Scrubbed(),
+		IP: res.IP, Elapsed: res.Elapsed, At: res.At, Method: res.Method, Raw: res.Raw.Scrubbed(),
 	})
 	if err != nil {
 		return

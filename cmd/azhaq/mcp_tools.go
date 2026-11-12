@@ -44,7 +44,7 @@ func with(s map[string]any, k string, v any) map[string]any {
 }
 
 // queryColumns are the fields of a query row, what fields picks from.
-var queryColumns = []string{"key", "type", "role", "coverage", "status", "answer", "evidence", "evidence_from", "response_file", "title", "state", "names", "service", "product", "version", "methods", "params", "body", "ops", "forms", "found_in", "watch", "guard", "protocol", "namespace", "template", "count", "not_asked", "capped", "folded", "proof", "scope", "first_seen"}
+var queryColumns = []string{"key", "type", "role", "coverage", "status", "answer", "evidence", "evidence_from", "response_file", "title", "state", "names", "service", "product", "version", "methods", "params", "body", "ops", "forms", "found_in", "watch", "guard", "protocol", "namespace", "template", "count", "not_asked", "capped", "folded", "proof", "scope", "first_seen", "headers", "body_excerpt", "body_length", "body_cut", "body_url", "asked_at"}
 
 var (
 	pWorkspace = prop("string", "workspace name (a database in the server's directory); default \"default\". Runs into the same workspace can be compared with azhaq_diff.")

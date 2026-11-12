@@ -759,6 +759,8 @@ func (c *Collector) fetchFirst(ctx context.Context, raw string, rq *fetch.Req, f
 	dres := res
 	dres.Body = data
 	row := describe(reqURL, final, dres, title, c.NoTech, c.Spec != nil)
+	full, _ := row["length"].(int)
+	fetch.AddEvidence(row, res, full) // the raw answer, not the decoded body
 	bare := first && res.Status == http.StatusBadRequest
 	var control *fetch.Control
 	catchAll := false

@@ -277,6 +277,7 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 			"final_url": final,
 			"hops":      res.Hops,
 		}
+		fetch.AddEvidence(row, res, 0)
 		// What the answer holds, for the path checks' judgement: nothing is asked again.
 		var ct string
 		if res.Header != nil {

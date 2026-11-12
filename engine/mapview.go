@@ -57,8 +57,9 @@ type MapEntry struct {
 	// nor was refused.
 	Service, Product, Version string
 	State                     string
-	Names                     []string  // the names that point to the port's address, sorted
-	at                        time.Time // a port row: when the scan that found it ran
+	Names                     []string        // the names that point to the port's address, sorted
+	at                        time.Time       // a port row: when the scan that found it ran
+	answered                  json.RawMessage // the payload of the answer the row stands on; shares the stored bytes
 }
 
 // ProofScriptsOnly ends the proof of a route only scripts name, with no call to go by.
@@ -161,7 +162,7 @@ func BuildMap(ents []types.Entity, seeds []types.Seed, obs []types.StoredObserva
 			if foldedHTTP(e.Key, m.Coverage, secured) {
 				continue // its https URL is the row
 			}
-			m.Status, m.Title = answerOf(rows)
+			m.Status, m.Title, m.answered = answerObs(rows)
 			if d, ok := decl[e.Key]; ok {
 				// What a GET does not tell: a view the app's router draws
 				// (the server answers it with the app's shell), a
@@ -278,7 +279,14 @@ func outsideByPort(obs []types.StoredObservation) bool {
 // the URL's: a target asked again (resume -retry-failed) shows what it
 // answered then, not the 429 it answered before.
 func answerOf(obs []types.StoredObservation) (int, string) {
+	status, title, _ := answerObs(obs)
+	return status, title
+}
+
+// answerObs is answerOf with the payload of the answer it chose.
+func answerObs(obs []types.StoredObservation) (int, string, json.RawMessage) {
 	status, title := 0, ""
+	var from json.RawMessage
 	real := false
 	for _, o := range obs {
 		if o.Kind == "error" || (o.Collector != "azhaq-http" && !probed(o) && o.Kind != "application") {
@@ -293,17 +301,17 @@ func answerOf(obs []types.StoredObservation) (int, string) {
 		}
 		_ = json.Unmarshal(o.Payload, &p)
 		if !isCatchAll(o) {
-			status, title, real = st, p.Title, true
+			status, title, real, from = st, p.Title, true, o.Payload
 			continue
 		}
 		if status == 0 && !real {
-			status, title = st, p.Title
+			status, title, from = st, p.Title, o.Payload
 		}
 	}
 	if status == 0 {
 		status = gqlAnswer(obs) // asked by -graphql past -depth, not by azhaq-http
 	}
-	return status, title
+	return status, title, from
 }
 
 // gqlAnswer is the status a GraphQL collector read at the URL, for a URL

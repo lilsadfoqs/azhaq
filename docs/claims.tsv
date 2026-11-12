@@ -1698,3 +1698,11 @@ export.findings-record-names-lead	docs/commands/export.md	An advisory record is 
 run.advisory-also-seen	docs/commands/run.md	another version that does not refine it is named on the lead	test:internal/advisory:TestServicesSayAVersionTheyDidNotPick
 plan.estimate-reads-at-least	docs/commands/plan.md	The text then reads `at least N`, in the plan and in the run's summary.	test:cmd/azhaq:TestEstimateFloorNamesSilentUDPAsks,TestRunSummaryTextHasTheCostByStage
 plan.not-counted-names-every-kind	docs/commands/plan.md	`not_counted` names every kind of request the floor leaves out: a UDP port that does not answer gets up to 3 more datagrams, one for each protocol's own request, and a crawl asks control requests that tell a catch-all answer from a page.	test:cmd/azhaq:TestEstimateFloorNamesSilentUDPAsks
+query.answer-not-default	docs/commands/query.md	They are not in the default rows.	test:cmd/azhaq:TestResponseFieldsAreNotInTheDefaultRows
+run.row-keeps-answer	docs/commands/run.md	Every web row that a request answered keeps three things of that answer in the workspace	test:cmd/azhaq:TestRowKeepsResponseHeadersAndBodyStart
+run.row-keeps-response-only	docs/commands/run.md	Only the response's headers are kept.	test:cmd/azhaq:TestRowKeepsResponseHeadersAndBodyStart
+run.row-answer-not-printed	docs/commands/run.md	The printed map, in text and with `-json`, does not carry them.	test:cmd/azhaq:TestResponseFieldsAreNotInTheDefaultRows;test:cmd/azhaq:TestShowAndExportPrintTheKeptAnswer
+run.sr-whole-bodies	docs/commands/run.md	`-sr` still writes every answer whole, to files	test:cmd/azhaq:TestStoredResponsesStillKeepWholeBodies
+run.row-answer-absent	docs/commands/run.md	A workspace made before this was kept, a row that stands for several URLs and a route no request answered have none of these fields.	test:engine:TestResponseOfARowWithNoKeptAnswerIsNone
+run.diff-ignores-answer	docs/commands/run.md	`azhaq diff` leaves them out	test:cmd/azhaq:TestDiffIgnoresTheKeptAnswer
+run.row-request-never-stored	docs/commands/run.md	What the run sent, such as `-cookie`, `-header` and `Authorization`, is never stored.	test:cmd/azhaq:TestRowKeepsResponseHeadersAndBodyStart

@@ -29,7 +29,7 @@ A workspace keeps every run, and `show` reads the newest. A KEY the newest run d
 
 ## Output
 
-The text form prints the entity's row, its links and its observations.
+The text form prints the entity's row, its links, the answer it kept and its observations. The answer is its response headers and the start of its body, one escaped line for each, headed by when it was asked: see [What a row keeps](run.md#what-a-row-keeps-of-its-answer).
 
 `show -json` prints one object:
 
@@ -37,6 +37,7 @@ The text form prints the entity's row, its links and its observations.
 | --- | --- |
 | `row` | The map row, with `found_in`. |
 | `links` | Each link: `rel`, `dir` (`in` or `out`), `type` and `key`. |
+| `response` | The answer the row kept: `headers`, `body_excerpt`, `body_length`, `body_cut`, `body_url` and `asked_at`, as [query](query.md#the-answer-a-row-kept) lists them. Left out when the row kept none. |
 | `observations` | Each observation: `collector`, `kind`, `source`, `observed_at` and `payload`. |
 | `run` | The `run_id` of the run read. |
 | `services` | For a hostname: its front pages, with `coverage`, `status`, `title` and the `error` of one that failed. |
