@@ -87,10 +87,13 @@ type Collector struct {
 	// NoPorts are ports never asked, in either pass (-ep of the ports command).
 	NoPorts map[int]bool
 
-	mu    sync.Mutex
-	byIP  map[string]*scan // one scan per address, however many names point to it
-	maxIP int              // addresses scanned per name
-	quiet map[netip.Prefix]*quietBlock
+	mu   sync.Mutex
+	byIP map[string]*scan // one scan per address, however many names point to it
+	// counted holds the scans the progress has counted (Settled): kept here, not
+	// on the scan, which another name's task copies while its owner settles it.
+	counted map[*scan]bool
+	maxIP   int // addresses scanned per name
+	quiet   map[netip.Prefix]*quietBlock
 
 	udpByIP map[string]*udpScan
 	udpGate chan struct{}   // the addresses whose UDP ports are being asked
@@ -123,8 +126,6 @@ type scan struct {
 	// first are the ports of the first pass: with rest, every port the scan
 	// asked, so that another task for the address asks only the others.
 	first []int
-	// counted: the progress counts the address once (Settled).
-	counted bool
 }
 
 func New(pool *dnsr.Pool, ports []int, rate float64) *Collector {

@@ -14,8 +14,11 @@ func Settled() int64 { return settled.Load() }
 // name's) finish it.
 func (c *Collector) settle(s *scan) {
 	c.mu.Lock()
-	first := !s.counted
-	s.counted = true
+	if c.counted == nil {
+		c.counted = map[*scan]bool{}
+	}
+	first := !c.counted[s]
+	c.counted[s] = true
 	c.mu.Unlock()
 	if first {
 		settled.Add(1)
