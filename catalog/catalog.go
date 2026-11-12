@@ -114,6 +114,24 @@ func Hint(ctx context.Context, seeds ...types.Seed) bool {
 	return true
 }
 
+type idleKey struct{}
+
+// WithIdle gives a collector a way to wait for the others of its kind without
+// holding a worker (see Idle). The engine sets it.
+func WithIdle(ctx context.Context, fn func(collector string)) context.Context {
+	return context.WithValue(ctx, idleKey{}, fn)
+}
+
+// Idle returns when no task of collector is waiting for a worker, or at once
+// when nothing listens. The task gives its worker to the waiting ones while it
+// waits, so that it can never hold up the tasks it waits for; a port scan's
+// second pass uses it to begin only after every address has had its first.
+func Idle(ctx context.Context, collector string) {
+	if fn, ok := ctx.Value(idleKey{}).(func(string)); ok && fn != nil {
+		fn(collector)
+	}
+}
+
 // Skipper is optional. A collector that would return at once for a seed
 // (already done this run, wrong kind of URL) says so at plan time, so the
 // seed does not spend the run's item budget.
