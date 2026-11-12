@@ -1,0 +1,1527 @@
+{
+  "date": "2026-11-12T09:27:22Z",
+  "commit": "489faa6b",
+  "version": "azhaq 0.21.1-0.20261112092608-489faa6b2e6b+dirty\nadvisory index 2026-11-11 (52976 records)\n  CISA Known Exploited Vulnerabilities catalogue, 2026-11-10\n  NVD CVE records, feed 2.0 (with CPE configurations), 2026-11-11",
+  "go": "go1.27.4",
+  "tools": [
+    {
+      "name": "katana",
+      "version": "1.8.0"
+    },
+    {
+      "name": "subfinder",
+      "version": "2.17.0"
+    },
+    {
+      "name": "httpx",
+      "version": "1.12.0"
+    },
+    {
+      "name": "dnsx",
+      "version": "1.3.1"
+    },
+    {
+      "name": "naabu",
+      "version": "2.6.1"
+    },
+    {
+      "name": "gau",
+      "version": "2.2.4"
+    },
+    {
+      "name": "ffuf",
+      "version": "2.3.0"
+    },
+    {
+      "name": "alterx",
+      "version": "0.1.0"
+    },
+    {
+      "name": "gowitness",
+      "version": "3.2.2"
+    },
+    {
+      "name": "jsluice",
+      "version": "v0.0.0-20240110145140-0ddfab153e06"
+    },
+    {
+      "name": "notify",
+      "version": "v1.0.7"
+    }
+  ],
+  "profile": "default",
+  "apps": [
+    {
+      "name": "juice-shop",
+      "url": "http://127.0.0.1:3101/",
+      "azhaq": {
+        "routes": 103,
+        "truth": 70,
+        "truth_of": 77,
+        "shell": 0,
+        "seconds": 2.990579327,
+        "rss_mb": 107.6796875
+      },
+      "katana": {
+        "routes": 5,
+        "truth": 1,
+        "truth_of": 77,
+        "shell": 3,
+        "seconds": 15.09550361,
+        "rss_mb": 1392.546875
+      },
+      "jsluice": {
+        "routes": 0,
+        "truth_of": 77,
+        "shell": 0,
+        "seconds": 1.452577762,
+        "rss_mb": 170.16015625
+      },
+      "katana_jsluice": {
+        "routes": 5,
+        "truth": 1,
+        "truth_of": 77,
+        "shell": 3,
+        "seconds": 16.548081372,
+        "rss_mb": 1392.546875
+      },
+      "bundle_grep": {
+        "routes": 101,
+        "truth": 37,
+        "truth_of": 77,
+        "shell": 0,
+        "seconds": 0,
+        "rss_mb": 0
+      },
+      "crawl": {
+        "routes": 60,
+        "truth": 53,
+        "truth_of": 77,
+        "shell": 0,
+        "styles": 1,
+        "seconds": 2.3563751330000002,
+        "rss_mb": 106.09375,
+        "requests": 81,
+        "request_routes": 60
+      },
+      "crawl_katana": {
+        "routes": 5,
+        "truth": 1,
+        "truth_of": 77,
+        "shell": 0,
+        "styles": 1,
+        "seconds": 14.7661425,
+        "rss_mb": 1409.234375,
+        "requests": 39,
+        "request_routes": 5
+      },
+      "ffuf": {
+        "words": 51,
+        "azhaq_hits": 3,
+        "ffuf_hits": 4,
+        "shared": 3,
+        "azhaq_shell": 0,
+        "ffuf_shell": 0,
+        "seconds": 0.313100735
+      },
+      "roles": {
+        "rows": 39,
+        "expected": [
+          "/api/Users",
+          "/rest/user/authentication-details"
+        ],
+        "found": [
+          "/api/Users",
+          "/rest/user/authentication-details"
+        ],
+        "seconds": 6.9808155,
+        "chrome_rows": 41,
+        "chrome_found": [
+          "/api/Users",
+          "/rest/user/authentication-details"
+        ],
+        "chrome_seconds": 14.667074654
+      },
+      "browser": {
+        "azhaq": {
+          "routes": 104,
+          "truth": 70,
+          "truth_of": 77,
+          "shell": 0,
+          "seconds": 11.140828573,
+          "rss_mb": 116.4296875
+        },
+        "katana": {
+          "routes": 30,
+          "truth": 6,
+          "truth_of": 77,
+          "shell": 4,
+          "seconds": 8.820333291,
+          "rss_mb": 78.37109375
+        },
+        "limit_seconds": 300
+      },
+      "run_cpu": {
+        "target": "http://127.0.0.1:3101/",
+        "runs": 5,
+        "azhaq_cpu_seconds": 5.052515,
+        "katana_cpu_seconds": 7.2400269999999995,
+        "azhaq_seconds": 2.906400293,
+        "katana_seconds": 14.860241017
+      }
+    },
+    {
+      "name": "vampi",
+      "url": "http://127.0.0.1:5102/",
+      "azhaq": {
+        "routes": 13,
+        "truth": 12,
+        "truth_of": 12,
+        "shell": 0,
+        "seconds": 0.415372159,
+        "rss_mb": 82.44140625
+      },
+      "katana": {
+        "routes": 1,
+        "truth": 1,
+        "truth_of": 12,
+        "shell": 0,
+        "seconds": 10.565892631,
+        "rss_mb": 49.69921875
+      },
+      "jsluice": {
+        "routes": 0,
+        "truth_of": 12,
+        "shell": 0,
+        "seconds": 0,
+        "rss_mb": 0
+      },
+      "katana_jsluice": {
+        "routes": 1,
+        "truth": 1,
+        "truth_of": 12,
+        "shell": 0,
+        "seconds": 10.565892631,
+        "rss_mb": 49.69921875
+      },
+      "bundle_grep": {
+        "routes": 0,
+        "truth_of": 12,
+        "shell": 0,
+        "seconds": 0,
+        "rss_mb": 0
+      },
+      "crawl": {
+        "routes": 1,
+        "truth": 1,
+        "truth_of": 12,
+        "shell": 0,
+        "seconds": 0.215027747,
+        "rss_mb": 77.3515625,
+        "requests": 1,
+        "request_routes": 1
+      },
+      "crawl_katana": {
+        "routes": 1,
+        "truth": 1,
+        "truth_of": 12,
+        "shell": 0,
+        "seconds": 10.5905535,
+        "rss_mb": 49.2578125,
+        "requests": 1,
+        "request_routes": 1
+      }
+    },
+    {
+      "name": "ginandjuice.shop",
+      "url": "https://ginandjuice.shop/",
+      "azhaq": {
+        "routes": 38,
+        "truth": 3,
+        "truth_of": 3,
+        "shell": 0,
+        "seconds": 29.341063367,
+        "rss_mb": 106.02734375
+      },
+      "katana": {
+        "routes": 14,
+        "truth": 2,
+        "truth_of": 3,
+        "shell": 0,
+        "seconds": 20.729145857,
+        "rss_mb": 769.01953125
+      },
+      "jsluice": {
+        "routes": 1,
+        "truth": 1,
+        "truth_of": 3,
+        "shell": 0,
+        "seconds": 0.318897489,
+        "rss_mb": 48.78125
+      },
+      "katana_jsluice": {
+        "routes": 14,
+        "truth": 2,
+        "truth_of": 3,
+        "shell": 0,
+        "seconds": 21.048043346,
+        "rss_mb": 769.01953125
+      },
+      "bundle_grep": {
+        "routes": 3,
+        "truth": 1,
+        "truth_of": 3,
+        "shell": 0,
+        "seconds": 0,
+        "rss_mb": 0
+      },
+      "crawl": {
+        "routes": 11,
+        "truth": 2,
+        "truth_of": 3,
+        "shell": 0,
+        "styles": 4,
+        "seconds": 11.334739738,
+        "rss_mb": 97.625
+      },
+      "crawl_katana": {
+        "routes": 14,
+        "truth": 2,
+        "truth_of": 3,
+        "shell": 0,
+        "styles": 4,
+        "seconds": 20.742112855,
+        "rss_mb": 801.73046875
+      }
+    }
+  ],
+  "ports": {
+    "profile": "default",
+    "hosts": [
+      "scanme.nmap.org",
+      "127.0.0.1",
+      "127.0.0.0/28"
+    ],
+    "azhaq_open": 9,
+    "naabu_open": 7,
+    "shared": 4,
+    "azhaq_seconds": 5.754260226,
+    "naabu_seconds": 142.65824051299998,
+    "azhaq_rss_mb": 71.6171875,
+    "reference_rss_mb": 104.6015625,
+    "azhaq_only": [
+      "advisory:"
+    ],
+    "legs": [
+      {
+        "target": "scanme.nmap.org",
+        "ports": "top-1000",
+        "azhaq": 3,
+        "naabu": 2,
+        "azhaq_confirmed": 2,
+        "naabu_confirmed": 2,
+        "azhaq_seconds": 4.642650585,
+        "naabu_seconds": 6.7241528200000005,
+        "azhaq_rss_mb": 66.46875,
+        "reference_rss_mb": 67.62109375
+      },
+      {
+        "target": "127.0.0.1",
+        "ports": "1-65535",
+        "azhaq": 2,
+        "naabu": 1,
+        "azhaq_confirmed": 1,
+        "naabu_confirmed": 1,
+        "azhaq_seconds": 1.076545381,
+        "naabu_seconds": 133.482011501,
+        "azhaq_rss_mb": 71.6171875,
+        "reference_rss_mb": 104.6015625
+      },
+      {
+        "target": "127.0.0.0/28",
+        "ports": "39491,43819,34079,45135,42517,39437",
+        "azhaq": 4,
+        "naabu": 4,
+        "azhaq_confirmed": 4,
+        "naabu_confirmed": 4,
+        "azhaq_seconds": 0.03506426,
+        "naabu_seconds": 2.452076192,
+        "azhaq_rss_mb": 47.015625,
+        "reference_rss_mb": 56.84375
+      }
+    ],
+    "cpu": {
+      "target": "127.0.0.1",
+      "ports": "1-65535",
+      "rate": "10000",
+      "runs": 5,
+      "azhaq_cpu_seconds": 2.105625,
+      "nmap_cpu_seconds": 2.8967039999999997,
+      "azhaq_seconds": 6.565651663,
+      "nmap_seconds": 6.596141664,
+      "azhaq_open": 1,
+      "nmap_open": 1
+    },
+    "small": [
+      {
+        "case": "ports 1-1000 on 127.0.0.1, connect only",
+        "azhaq": 1,
+        "reference": 1,
+        "azhaq_seconds": 0.051470003,
+        "reference_seconds": 0.050726367,
+        "azhaq_rss_mb": 48.97265625,
+        "reference_rss_mb": 13.6484375,
+        "azhaq_anon_mb": 10.77734375,
+        "reference_anon_mb": 5.49609375
+      },
+      {
+        "case": "ports 1-1000 on 127.0.0.1, services named",
+        "azhaq": 2,
+        "reference": 1,
+        "azhaq_seconds": 0.11610544,
+        "reference_seconds": 0.214120028,
+        "azhaq_rss_mb": 61.078125,
+        "reference_rss_mb": 49.08984375,
+        "azhaq_anon_mb": 22.1953125,
+        "reference_anon_mb": 36.99609375
+      }
+    ]
+  },
+  "dirs": {
+    "profile": "default",
+    "words": 4750,
+    "apps": [
+      "http://127.0.0.1:3101/",
+      "http://127.0.0.1:5102/"
+    ],
+    "azhaq_hits": 21,
+    "ffuf_hits": 22,
+    "shared": 21,
+    "azhaq_false": 2,
+    "ffuf_false": 2,
+    "azhaq_seconds": 32.161746281,
+    "ffuf_seconds": 32.01777288,
+    "azhaq_rss_mb": 71.87890625,
+    "reference_rss_mb": 23.0078125,
+    "held_back": [
+      "http://127.0.0.1:3101/restore"
+    ],
+    "small": {
+      "case": "dirs, 6 words, http://127.0.0.1:3101/",
+      "azhaq": 3,
+      "reference": 3,
+      "azhaq_seconds": 0.152909598,
+      "reference_seconds": 0.146063421,
+      "azhaq_rss_mb": 44.53125,
+      "reference_rss_mb": 11.44140625,
+      "azhaq_anon_mb": 10.2109375,
+      "reference_anon_mb": 2.984375
+    }
+  },
+  "fuzz": {
+    "profile": "default",
+    "words": 4750,
+    "legs": [
+      {
+        "app": "http://127.0.0.1:3101/",
+        "variant": "calibrated (-ac)",
+        "azhaq_hits": 19,
+        "ffuf_hits": 20,
+        "shared": 19,
+        "azhaq_confirmed": 17,
+        "ffuf_confirmed": 17,
+        "azhaq_seconds": 18.905450938,
+        "ffuf_seconds": 19.216781169,
+        "azhaq_rss_mb": 51.87109375,
+        "reference_rss_mb": 25.9296875,
+        "report_equal": true,
+        "report_problem": "19 results equal",
+        "held_back": [
+          "http://127.0.0.1:3101/restore"
+        ]
+      },
+      {
+        "app": "http://127.0.0.1:3101/",
+        "variant": "filtered (-fs 9984)",
+        "azhaq_hits": 19,
+        "ffuf_hits": 20,
+        "shared": 19,
+        "azhaq_confirmed": 17,
+        "ffuf_confirmed": 17,
+        "azhaq_seconds": 19.219954765,
+        "ffuf_seconds": 19.468213756,
+        "azhaq_rss_mb": 51.98828125,
+        "reference_rss_mb": 23.25,
+        "held_back": [
+          "http://127.0.0.1:3101/restore"
+        ]
+      },
+      {
+        "app": "http://127.0.0.1:5102/",
+        "variant": "calibrated (-ac)",
+        "azhaq_hits": 2,
+        "ffuf_hits": 2,
+        "shared": 2,
+        "azhaq_confirmed": 2,
+        "ffuf_confirmed": 2,
+        "azhaq_seconds": 5.577345278,
+        "ffuf_seconds": 5.395890743,
+        "azhaq_rss_mb": 49.06640625,
+        "reference_rss_mb": 16.5859375,
+        "report_equal": true,
+        "report_problem": "2 results equal"
+      },
+      {
+        "app": "http://127.0.0.1:5102/",
+        "variant": "filtered (-fs 205)",
+        "azhaq_hits": 2,
+        "ffuf_hits": 2,
+        "shared": 2,
+        "azhaq_confirmed": 2,
+        "ffuf_confirmed": 2,
+        "azhaq_seconds": 5.559300963,
+        "ffuf_seconds": 4.7708759480000005,
+        "azhaq_rss_mb": 48.9453125,
+        "reference_rss_mb": 16.47265625
+      }
+    ]
+  },
+  "checks": [
+    {
+      "name": "[default] juice-shop: ≥ 90% of the server routes its frontend calls",
+      "pass": true,
+      "detail": "azhaq 70/77, katana 1/77, jsluice 0/77"
+    },
+    {
+      "name": "[default] juice-shop: no catch-all page reported as visited",
+      "pass": true,
+      "detail": "0 visited URLs return the SPA index"
+    },
+    {
+      "name": "[default] crawl juice-shop: results ≥ the reference's, confirmed by the app's own routes (its server code or OpenAPI document, or the routes only its page scripts hold)",
+      "pass": true,
+      "detail": "azhaq 53, reference 1; routes found azhaq 60, katana 5; stylesheets listed azhaq 1, katana 1; known 53 and 1 of 77; time ×0.16 of the reference, memory ×0.08 of the reference (106 MB against 1409 MB) | azhaq crawl -u http://127.0.0.1:3101/ -depth 3 -silent -hints vs katana -u http://127.0.0.1:3101/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10"
+    },
+    {
+      "name": "[default] crawl juice-shop: time ≤ 1.05× the reference's",
+      "pass": true,
+      "detail": "azhaq 2.4s, reference 14.8s (the median of 3 below 20 s, one run above) | azhaq crawl -u http://127.0.0.1:3101/ -depth 3 -silent -hints vs katana -u http://127.0.0.1:3101/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10"
+    },
+    {
+      "name": "[default] crawl juice-shop: requests per route found ≤ katana's",
+      "pass": true,
+      "detail": "azhaq 81 requests for 60 routes (1.35 a route), katana 39 for 5 (7.80) | azhaq crawl -u http://127.0.0.1:3101/ -depth 3 -silent -hints vs katana -u http://127.0.0.1:3101/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10"
+    },
+    {
+      "name": "[default] juice-shop run: CPU ≤ katana -jc -jsl's",
+      "pass": true,
+      "detail": "azhaq 5.05 CPU s in 2.9 s, katana 7.24 CPU s in 14.9 s (0.70×, the median of 5 runs in turn) | azhaq run -url http://127.0.0.1:3101/ -db /home/runner/work/azhaq/azhaq/bench/.work/runcpu3881385132/cpu.db -quiet vs katana -u http://127.0.0.1:3101/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10"
+    },
+    {
+      "name": "[default] roles: Juice Shop anonymous → user",
+      "pass": true,
+      "detail": "39 endpoints differ; 401 → 200 on 2/2 of /api/Users, /rest/user/authentication-details"
+    },
+    {
+      "name": "[default] roles: Juice Shop anonymous → user, signed in with Chrome",
+      "pass": true,
+      "detail": "41 endpoints differ; 401 → 200 on 2/2 (with a token: 39 endpoints) "
+    },
+    {
+      "name": "[default] juice-shop: -browser finds the known routes katana -headless finds",
+      "pass": true,
+      "detail": "azhaq -browser 70/77 in 11s, katana -headless 6/77 in 9s"
+    },
+    {
+      "name": "[default] identical runs diff empty",
+      "pass": true,
+      "detail": "added=0 removed=0 observations=0"
+    },
+    {
+      "name": "[default] crawl vampi: results ≥ the reference's, confirmed by the app's own routes (its server code or OpenAPI document, or the routes only its page scripts hold)",
+      "pass": true,
+      "detail": "azhaq 1, reference 1; routes found azhaq 1, katana 1; stylesheets listed azhaq 0, katana 0; known 1 and 1 of 12; time ×0.02 of the reference, memory ×1.57 of the reference (77 MB against 49 MB) | azhaq crawl -u http://127.0.0.1:5102/ -depth 3 -silent -hints vs katana -u http://127.0.0.1:5102/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10"
+    },
+    {
+      "name": "[default] crawl vampi: time ≤ 1.05× the reference's",
+      "pass": true,
+      "detail": "azhaq 0.2s, reference 10.6s (the median of 3 below 20 s, one run above) | azhaq crawl -u http://127.0.0.1:5102/ -depth 3 -silent -hints vs katana -u http://127.0.0.1:5102/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10"
+    },
+    {
+      "name": "[default] crawl vampi: requests per route found ≤ katana's",
+      "pass": true,
+      "detail": "azhaq 1 requests for 1 routes (1.00 a route), katana 1 for 1 (1.00) | azhaq crawl -u http://127.0.0.1:5102/ -depth 3 -silent -hints vs katana -u http://127.0.0.1:5102/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10"
+    },
+    {
+      "name": "[default] vampi: paths from /openapi.json",
+      "pass": true,
+      "detail": "azhaq 12/12, katana 1/12"
+    },
+    {
+      "name": "[default] diff across different seeds is labelled",
+      "pass": true,
+      "detail": "seeds_differ=true"
+    },
+    {
+      "name": "[default] crawl ginandjuice.shop: results ≥ the reference's, confirmed by the app's own routes (its server code or OpenAPI document, or the routes only its page scripts hold)",
+      "pass": true,
+      "detail": "azhaq 2, reference 2; routes found azhaq 11, katana 14; stylesheets listed azhaq 4, katana 4; known 2 and 2 of 3; time ×0.55 of the reference, memory ×0.12 of the reference (98 MB against 802 MB) | azhaq crawl -u https://ginandjuice.shop/ -depth 3 -silent -hints -rate 5 vs katana -u https://ginandjuice.shop/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10 -rl 5"
+    },
+    {
+      "name": "[default] crawl ginandjuice.shop: time ≤ 1.05× the reference's",
+      "pass": true,
+      "detail": "azhaq 11.3s, reference 20.7s (the median of 3 below 20 s, one run above) | azhaq crawl -u https://ginandjuice.shop/ -depth 3 -silent -hints -rate 5 vs katana -u https://ginandjuice.shop/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10 -rl 5"
+    },
+    {
+      "name": "[default] ginandjuice: page scripts parsed",
+      "pass": true,
+      "detail": "4/4 page scripts, 3/3 routes only in page scripts or script-driven forms"
+    },
+    {
+      "name": "[default] ginandjuice: product and blog pages are one template each",
+      "pass": true,
+      "detail": "map lines: product 1, blog post 1"
+    },
+    {
+      "name": "[default] known routes ≥ katana ∪ jsluice on every app",
+      "pass": true,
+      "detail": "juice-shop 70/77 vs 1, vampi 12/12 vs 1, ginandjuice.shop 3/3 vs 2"
+    },
+    {
+      "name": "[default] no catch-all page reported as visited on any app",
+      "pass": true,
+      "detail": "3 apps"
+    },
+    {
+      "name": "[default] dirs: results ≥ the reference's, confirmed by a request that is not the app's catch-all answer",
+      "pass": true,
+      "detail": "azhaq 19, reference 19; old bar: 21 of 22 = 95%; hits azhaq 21, ffuf 22, shared 21; 4750 words, 2 apps; time ×1.00 of the reference, memory ×3.12 of the reference (72 MB against 23 MB); ffuf only []; held back by default as state-changing GETs (-send-state-changing sends them), counted on neither side: [http://127.0.0.1:3101/restore] | azhaq dirs -u http://127.0.0.1:5102/ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -silent vs ffuf -u http://127.0.0.1:5102/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -ac -s"
+    },
+    {
+      "name": "[default] dirs: time ≤ 1.05× the reference's",
+      "pass": true,
+      "detail": "azhaq 32.2s, reference 32.0s (the median of 3 below 20 s, one run above) | azhaq dirs -u http://127.0.0.1:5102/ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -silent vs ffuf -u http://127.0.0.1:5102/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -ac -s"
+    },
+    {
+      "name": "[default] dirs: no more false positives than ffuf",
+      "pass": true,
+      "detail": "hits that answer like a missing path: azhaq 2, ffuf 2"
+    },
+    {
+      "name": "[default] dirs 6 words: results ≥ the reference's, confirmed by the paths ffuf lists",
+      "pass": true,
+      "detail": "azhaq 3, reference 3 | azhaq dirs -u http://127.0.0.1:3101/ -w /home/runner/work/azhaq/azhaq/bench/.work/dirs-six.txt -silent vs ffuf -u http://127.0.0.1:3101/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/dirs-six.txt -ac -s"
+    },
+    {
+      "name": "[default] dirs 6 words: time ≤ 1.25× the reference's",
+      "pass": true,
+      "detail": "azhaq 0.15s, reference 0.15s (1.05×, the median of 3) | azhaq dirs -u http://127.0.0.1:3101/ -w /home/runner/work/azhaq/azhaq/bench/.work/dirs-six.txt -silent vs ffuf -u http://127.0.0.1:3101/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/dirs-six.txt -ac -s"
+    },
+    {
+      "name": "[default] dirs 6 words: private memory ≤ 2× the reference's",
+      "pass": false,
+      "detail": "private (RssAnon) azhaq 10.2 MB, reference 3.0 MB (3.42×); resident with the binary's shared file pages (VmHWM) azhaq 45 MB, reference 11 MB (3.89×); the median of 3 | azhaq dirs -u http://127.0.0.1:3101/ -w /home/runner/work/azhaq/azhaq/bench/.work/dirs-six.txt -silent vs ffuf -u http://127.0.0.1:3101/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/dirs-six.txt -ac -s"
+    },
+    {
+      "name": "[default] fuzz 127.0.0.1:3101 calibrated (-ac): results ≥ the reference's, confirmed by a request that is not the app's catch-all answer",
+      "pass": true,
+      "detail": "azhaq 17, reference 17; old bar: 19 of 20 = 95%; hits azhaq 19, ffuf 20, shared 19; 4750 words; time ×0.98 of the reference, memory ×2.00 of the reference (52 MB against 26 MB); ffuf only []; held back by default as state-changing GETs (-send-state-changing sends them), counted on neither side: [http://127.0.0.1:3101/restore] | azhaq fuzz -u http://127.0.0.1:3101/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -ac vs ffuf -u http://127.0.0.1:3101/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -ac"
+    },
+    {
+      "name": "[default] fuzz 127.0.0.1:3101 calibrated (-ac): time ≤ 1.05× the reference's",
+      "pass": true,
+      "detail": "azhaq 18.9s, reference 19.2s (the median of 3 below 20 s, one run above) | azhaq fuzz -u http://127.0.0.1:3101/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -ac vs ffuf -u http://127.0.0.1:3101/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -ac"
+    },
+    {
+      "name": "[default] fuzz http://127.0.0.1:3101/: the JSON report equals ffuf's (duration dropped)",
+      "pass": true,
+      "detail": "19 results equal"
+    },
+    {
+      "name": "[default] fuzz 127.0.0.1:3101 filtered (-fs 9984): results ≥ the reference's, confirmed by a request that is not the app's catch-all answer",
+      "pass": true,
+      "detail": "azhaq 17, reference 17; old bar: 19 of 20 = 95%; hits azhaq 19, ffuf 20, shared 19; 4750 words; time ×0.99 of the reference, memory ×2.24 of the reference (52 MB against 23 MB); ffuf only []; held back by default as state-changing GETs (-send-state-changing sends them), counted on neither side: [http://127.0.0.1:3101/restore] | azhaq fuzz -u http://127.0.0.1:3101/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -fs 9984 vs ffuf -u http://127.0.0.1:3101/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -fs 9984"
+    },
+    {
+      "name": "[default] fuzz 127.0.0.1:3101 filtered (-fs 9984): time ≤ 1.05× the reference's",
+      "pass": true,
+      "detail": "azhaq 19.2s, reference 19.5s (the median of 3 below 20 s, one run above) | azhaq fuzz -u http://127.0.0.1:3101/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -fs 9984 vs ffuf -u http://127.0.0.1:3101/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -fs 9984"
+    },
+    {
+      "name": "[default] fuzz 127.0.0.1:5102 calibrated (-ac): results ≥ the reference's, confirmed by a request that is not the app's catch-all answer",
+      "pass": true,
+      "detail": "azhaq 2, reference 2; old bar: 2 of 2 = 100%; hits azhaq 2, ffuf 2, shared 2; 4750 words; time ×1.03 of the reference, memory ×2.96 of the reference (49 MB against 17 MB); ffuf only [] | azhaq fuzz -u http://127.0.0.1:5102/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -ac vs ffuf -u http://127.0.0.1:5102/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -ac"
+    },
+    {
+      "name": "[default] fuzz 127.0.0.1:5102 calibrated (-ac): time ≤ 1.05× the reference's",
+      "pass": true,
+      "detail": "azhaq 5.6s, reference 5.4s (the median of 3 below 20 s, one run above) | azhaq fuzz -u http://127.0.0.1:5102/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -ac vs ffuf -u http://127.0.0.1:5102/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -ac"
+    },
+    {
+      "name": "[default] fuzz http://127.0.0.1:5102/: the JSON report equals ffuf's (duration dropped)",
+      "pass": true,
+      "detail": "2 results equal"
+    },
+    {
+      "name": "[default] fuzz 127.0.0.1:5102 filtered (-fs 205): results ≥ the reference's, confirmed by a request that is not the app's catch-all answer",
+      "pass": true,
+      "detail": "azhaq 2, reference 2; old bar: 2 of 2 = 100%; hits azhaq 2, ffuf 2, shared 2; 4750 words; time ×1.17 of the reference, memory ×2.97 of the reference (49 MB against 16 MB); ffuf only [] | azhaq fuzz -u http://127.0.0.1:5102/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -fs 205 vs ffuf -u http://127.0.0.1:5102/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -fs 205"
+    },
+    {
+      "name": "[default] fuzz 127.0.0.1:5102 filtered (-fs 205): time ≤ 1.05× the reference's",
+      "pass": false,
+      "detail": "azhaq 5.6s, reference 4.8s (the median of 3 below 20 s, one run above) | azhaq fuzz -u http://127.0.0.1:5102/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -fs 205 vs ffuf -u http://127.0.0.1:5102/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -fs 205"
+    },
+    {
+      "name": "[default] ports 127.0.0.1 1-65535: open ports ≥ nmap -sT's",
+      "pass": true,
+      "detail": "azhaq 2.11 CPU s and 6.6 s, nmap 2.90 CPU s and 6.6 s (median of 5 runs in turn); open: azhaq 1, nmap 1; listening throughout and azhaq missed [], nmap missed [] | azhaq ports -host 127.0.0.1 -p 1-65535 -rate 10000 -retries 0 -detect none -silent -db /home/runner/work/azhaq/azhaq/bench/.work/portscpu2279811875/cpu.db vs nmap -sT -Pn -n -p 1-65535 --max-rate 10000 --max-retries 0 -oG - 127.0.0.1"
+    },
+    {
+      "name": "[default] ports 127.0.0.1 1-65535: CPU ≤ 1.25× nmap -sT's",
+      "pass": true,
+      "detail": "0.73×: azhaq 2.11 CPU s and 6.6 s, nmap 2.90 CPU s and 6.6 s (median of 5 runs in turn); open: azhaq 1, nmap 1; listening throughout and azhaq missed [], nmap missed [] | azhaq ports -host 127.0.0.1 -p 1-65535 -rate 10000 -retries 0 -detect none -silent -db /home/runner/work/azhaq/azhaq/bench/.work/portscpu2279811875/cpu.db vs nmap -sT -Pn -n -p 1-65535 --max-rate 10000 --max-retries 0 -oG - 127.0.0.1"
+    },
+    {
+      "name": "[default] ports 127.0.0.1 1-65535: time ≤ 1.25× nmap -sT's",
+      "pass": true,
+      "detail": "1.00×: azhaq 2.11 CPU s and 6.6 s, nmap 2.90 CPU s and 6.6 s (median of 5 runs in turn); open: azhaq 1, nmap 1; listening throughout and azhaq missed [], nmap missed [] | azhaq ports -host 127.0.0.1 -p 1-65535 -rate 10000 -retries 0 -detect none -silent -db /home/runner/work/azhaq/azhaq/bench/.work/portscpu2279811875/cpu.db vs nmap -sT -Pn -n -p 1-65535 --max-rate 10000 --max-retries 0 -oG - 127.0.0.1"
+    },
+    {
+      "name": "[default] ports scanme.nmap.org top-1000: results ≥ the reference's, confirmed by an independent TCP connect",
+      "pass": true,
+      "detail": "azhaq 2, reference 2; old bar: 2 of 2 = 100%; azhaq only [advisory:], naabu only []; time ×0.69 of the reference, memory ×0.98 of the reference (66 MB against 68 MB) | azhaq ports -host scanme.nmap.org -p top-1000 -silent vs naabu -host scanme.nmap.org -top-ports 1000 -scan-type c -Pn -silent"
+    },
+    {
+      "name": "[default] ports scanme.nmap.org top-1000: time ≤ 1.05× the reference's",
+      "pass": true,
+      "detail": "azhaq 4.6s, reference 6.7s (the median of 3 below 20 s, one run above) | azhaq ports -host scanme.nmap.org -p top-1000 -silent vs naabu -host scanme.nmap.org -top-ports 1000 -scan-type c -Pn -silent"
+    },
+    {
+      "name": "[default] ports 127.0.0.1 1-65535: results ≥ the reference's, confirmed by `ss -ltn` taken before and after the scan",
+      "pass": true,
+      "detail": "azhaq 1, reference 1; old bar: 1 of 1 = 100%; sockets listening throughout and missed: azhaq [], naabu []; time ×0.01 of the reference, memory ×0.68 of the reference (72 MB against 105 MB) | azhaq ports -host 127.0.0.1 -p 1-65535 -silent vs naabu -host 127.0.0.1 -p 1-65535 -scan-type c -Pn -silent"
+    },
+    {
+      "name": "[default] ports 127.0.0.1 1-65535: time ≤ 1.05× the reference's",
+      "pass": true,
+      "detail": "azhaq 1.1s, reference 133.5s (the median of 3 below 20 s, one run above) | azhaq ports -host 127.0.0.1 -p 1-65535 -silent vs naabu -host 127.0.0.1 -p 1-65535 -scan-type c -Pn -silent"
+    },
+    {
+      "name": "[default] ports 127.0.0.0/28: results ≥ the reference's, confirmed by the listeners the bench opened (a port that is not one counts against)",
+      "pass": true,
+      "detail": "azhaq 4, reference 4; planted 4; azhaq 4 of them, 4 reported; naabu 4, 4 reported; time ×0.01 of the reference, memory ×0.83 of the reference (47 MB against 57 MB) | azhaq ports -host 127.0.0.0/28 -p 39491,43819,34079,45135,42517,39437 -silent vs naabu -host 127.0.0.0/28 -p 39491,43819,34079,45135,42517,39437 -scan-type c -Pn -silent"
+    },
+    {
+      "name": "[default] ports 127.0.0.0/28: time ≤ 1.05× the reference's",
+      "pass": true,
+      "detail": "azhaq 0.0s, reference 2.5s (the median of 3 below 20 s, one run above) | azhaq ports -host 127.0.0.0/28 -p 39491,43819,34079,45135,42517,39437 -silent vs naabu -host 127.0.0.0/28 -p 39491,43819,34079,45135,42517,39437 -scan-type c -Pn -silent"
+    },
+    {
+      "name": "[default] ports 1-1000, connect only: results ≥ the reference's, confirmed by nmap's own connect scan",
+      "pass": true,
+      "detail": "azhaq 1, reference 1 | azhaq ports -host 127.0.0.1 -p 1-1000 -detect none -silent vs nmap -sT -Pn -n -p 1-1000 -oG - 127.0.0.1"
+    },
+    {
+      "name": "[default] ports 1-1000, connect only: time ≤ 1.25× the reference's",
+      "pass": true,
+      "detail": "azhaq 0.05s, reference 0.05s (1.01×, the median of 3) | azhaq ports -host 127.0.0.1 -p 1-1000 -detect none -silent vs nmap -sT -Pn -n -p 1-1000 -oG - 127.0.0.1"
+    },
+    {
+      "name": "[default] ports 1-1000, connect only: private memory ≤ 2× the reference's",
+      "pass": true,
+      "detail": "private (RssAnon) azhaq 10.8 MB, reference 5.5 MB (1.96×); resident with the binary's shared file pages (VmHWM) azhaq 49 MB, reference 14 MB (3.59×); the median of 3 | azhaq ports -host 127.0.0.1 -p 1-1000 -detect none -silent vs nmap -sT -Pn -n -p 1-1000 -oG - 127.0.0.1"
+    },
+    {
+      "name": "[default] ports 1-1000, services named: results ≥ the reference's, confirmed by nmap -sV's open ports",
+      "pass": true,
+      "detail": "azhaq 2, reference 1 | azhaq ports -host 127.0.0.1 -p 1-1000 -silent vs nmap -sT -sV -Pn -n -p 1-1000 -oG - 127.0.0.1"
+    },
+    {
+      "name": "[default] ports 1-1000, services named: time ≤ 1.25× the reference's",
+      "pass": true,
+      "detail": "azhaq 0.12s, reference 0.21s (0.54×, the median of 3) | azhaq ports -host 127.0.0.1 -p 1-1000 -silent vs nmap -sT -sV -Pn -n -p 1-1000 -oG - 127.0.0.1"
+    },
+    {
+      "name": "[default] ports 1-1000, services named: private memory ≤ 2× the reference's",
+      "pass": true,
+      "detail": "private (RssAnon) azhaq 22.2 MB, reference 37.0 MB (0.60×); resident with the binary's shared file pages (VmHWM) azhaq 61 MB, reference 49 MB (1.24×); the median of 3 | azhaq ports -host 127.0.0.1 -p 1-1000 -silent vs nmap -sT -sV -Pn -n -p 1-1000 -oG - 127.0.0.1"
+    }
+  ],
+  "runs": [
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 2.990579327,
+      "rss_mb": 107.6796875,
+      "anon_mb": 69.3828125,
+      "profile": "default"
+    },
+    {
+      "tool": "katana",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 15.09550361,
+      "rss_mb": 1392.546875,
+      "anon_mb": 1357.2578125,
+      "profile": "default"
+    },
+    {
+      "tool": "jsluice",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 1.452577762,
+      "rss_mb": 170.16015625,
+      "anon_mb": 161.81640625,
+      "profile": "default"
+    },
+    {
+      "tool": "ffuf",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 0.313100735,
+      "rss_mb": 14.7890625,
+      "anon_mb": 6.33203125,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 2.46263777,
+      "rss_mb": 109.3359375,
+      "anon_mb": 71.09375,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 2.3563751330000002,
+      "rss_mb": 106.09375,
+      "anon_mb": 67.84765625,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 2.32108496,
+      "rss_mb": 100.67578125,
+      "anon_mb": 62.43359375,
+      "profile": "default"
+    },
+    {
+      "tool": "katana",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 14.7661425,
+      "rss_mb": 1173.39453125,
+      "anon_mb": 1138.421875,
+      "profile": "default"
+    },
+    {
+      "tool": "katana",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 13.878089024,
+      "rss_mb": 1613.53125,
+      "anon_mb": 1578.74609375,
+      "profile": "default"
+    },
+    {
+      "tool": "katana",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 14.834192197,
+      "rss_mb": 1409.234375,
+      "anon_mb": 1374.0078125,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "roles",
+      "seconds": 6.9808155,
+      "rss_mb": 115.734375,
+      "anon_mb": 77.50390625,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "roles-login",
+      "seconds": 14.667074654,
+      "rss_mb": 116.7421875,
+      "anon_mb": 78.50390625,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 11.140828573,
+      "rss_mb": 116.4296875,
+      "anon_mb": 78.19140625,
+      "profile": "default"
+    },
+    {
+      "tool": "katana",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 8.820333291,
+      "rss_mb": 78.37109375,
+      "anon_mb": 41.7109375,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 2.673870553,
+      "rss_mb": 105.484375,
+      "anon_mb": 66.74609375,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 0.415372159,
+      "rss_mb": 82.44140625,
+      "anon_mb": 43.5703125,
+      "profile": "default"
+    },
+    {
+      "tool": "katana",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 10.565892631,
+      "rss_mb": 49.69921875,
+      "anon_mb": 15.53125,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 0.21885313,
+      "rss_mb": 77.3515625,
+      "anon_mb": 38.47265625,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 0.215027747,
+      "rss_mb": 77.77734375,
+      "anon_mb": 38.8984375,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 0.207446905,
+      "rss_mb": 77.26171875,
+      "anon_mb": 38.37890625,
+      "profile": "default"
+    },
+    {
+      "tool": "katana",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 10.5905535,
+      "rss_mb": 49.6015625,
+      "anon_mb": 15.3125,
+      "profile": "default"
+    },
+    {
+      "tool": "katana",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 10.571550409,
+      "rss_mb": 49.2578125,
+      "anon_mb": 14.90234375,
+      "profile": "default"
+    },
+    {
+      "tool": "katana",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 10.599536328,
+      "rss_mb": 49.0390625,
+      "anon_mb": 15.1875,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "https://ginandjuice.shop/",
+      "seconds": 29.341063367,
+      "rss_mb": 106.02734375,
+      "anon_mb": 63.55078125,
+      "profile": "default"
+    },
+    {
+      "tool": "katana",
+      "target": "https://ginandjuice.shop/",
+      "seconds": 20.729145857,
+      "rss_mb": 769.01953125,
+      "anon_mb": 733.734375,
+      "profile": "default"
+    },
+    {
+      "tool": "jsluice",
+      "target": "https://ginandjuice.shop/",
+      "seconds": 0.318897489,
+      "rss_mb": 48.78125,
+      "anon_mb": 40.9375,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "https://ginandjuice.shop/",
+      "seconds": 11.334739738,
+      "rss_mb": 97.625,
+      "anon_mb": 55.26171875,
+      "profile": "default"
+    },
+    {
+      "tool": "katana",
+      "target": "https://ginandjuice.shop/",
+      "seconds": 20.742112855,
+      "rss_mb": 801.73046875,
+      "anon_mb": 766.2578125,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 25.430146638,
+      "rss_mb": 71.87890625,
+      "anon_mb": 34.5390625,
+      "profile": "default"
+    },
+    {
+      "tool": "ffuf",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 25.489364329,
+      "rss_mb": 23.0078125,
+      "anon_mb": 14.42578125,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 6.883966806,
+      "rss_mb": 62.33984375,
+      "anon_mb": 28.03125,
+      "profile": "default"
+    },
+    {
+      "tool": "ffuf",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 6.528408551,
+      "rss_mb": 16.453125,
+      "anon_mb": 8.05859375,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 6.691630986,
+      "rss_mb": 69.765625,
+      "anon_mb": 33.8125,
+      "profile": "default"
+    },
+    {
+      "tool": "ffuf",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 6.401581009,
+      "rss_mb": 16.41015625,
+      "anon_mb": 7.953125,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 6.731599643,
+      "rss_mb": 65.08984375,
+      "anon_mb": 30.25,
+      "profile": "default"
+    },
+    {
+      "tool": "ffuf",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 7.060289497,
+      "rss_mb": 16.71484375,
+      "anon_mb": 8.1328125,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 0.156392413,
+      "rss_mb": 44.0078125,
+      "anon_mb": 9.6875,
+      "profile": "default"
+    },
+    {
+      "tool": "ffuf",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 0.148548955,
+      "rss_mb": 11.46484375,
+      "anon_mb": 3.00390625,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 0.152909598,
+      "rss_mb": 44.9609375,
+      "anon_mb": 10.6484375,
+      "profile": "default"
+    },
+    {
+      "tool": "ffuf",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 0.146063421,
+      "rss_mb": 11.44140625,
+      "anon_mb": 2.984375,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 0.150184453,
+      "rss_mb": 44.53125,
+      "anon_mb": 10.2109375,
+      "profile": "default"
+    },
+    {
+      "tool": "ffuf",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 0.142612342,
+      "rss_mb": 11.35546875,
+      "anon_mb": 2.95703125,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 18.905450938,
+      "rss_mb": 53.22265625,
+      "anon_mb": 19.11328125,
+      "profile": "default"
+    },
+    {
+      "tool": "ffuf",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 19.22038036,
+      "rss_mb": 25.9296875,
+      "anon_mb": 17.22265625,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 19.230238175,
+      "rss_mb": 51.79296875,
+      "anon_mb": 17.68359375,
+      "profile": "default"
+    },
+    {
+      "tool": "ffuf",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 19.216781169,
+      "rss_mb": 23.01953125,
+      "anon_mb": 14.375,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 18.888369537,
+      "rss_mb": 51.87109375,
+      "anon_mb": 17.76171875,
+      "profile": "default"
+    },
+    {
+      "tool": "ffuf",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 18.96693927,
+      "rss_mb": 26.19921875,
+      "anon_mb": 17.3671875,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:3101/FUZZ",
+      "seconds": 17.849983289,
+      "rss_mb": 50.8515625,
+      "anon_mb": 16.64453125,
+      "profile": "default"
+    },
+    {
+      "tool": "ffuf",
+      "target": "http://127.0.0.1:3101/FUZZ",
+      "seconds": 18.207594558,
+      "rss_mb": 22.3984375,
+      "anon_mb": 13.69140625,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 19.219954765,
+      "rss_mb": 51.703125,
+      "anon_mb": 17.59375,
+      "profile": "default"
+    },
+    {
+      "tool": "ffuf",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 19.341122982,
+      "rss_mb": 22.90625,
+      "anon_mb": 14.19921875,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 19.772796907,
+      "rss_mb": 51.98828125,
+      "anon_mb": 17.796875,
+      "profile": "default"
+    },
+    {
+      "tool": "ffuf",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 19.468213756,
+      "rss_mb": 23.25,
+      "anon_mb": 14.48046875,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 18.370668605,
+      "rss_mb": 52.6796875,
+      "anon_mb": 18.59765625,
+      "profile": "default"
+    },
+    {
+      "tool": "ffuf",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 19.759690689,
+      "rss_mb": 24.1796875,
+      "anon_mb": 15.41015625,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 5.577345278,
+      "rss_mb": 49.06640625,
+      "anon_mb": 14.98046875,
+      "profile": "default"
+    },
+    {
+      "tool": "ffuf",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 5.394927264,
+      "rss_mb": 16.5859375,
+      "anon_mb": 8.12890625,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 5.616002544,
+      "rss_mb": 48.9375,
+      "anon_mb": 14.85546875,
+      "profile": "default"
+    },
+    {
+      "tool": "ffuf",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 5.395890743,
+      "rss_mb": 16.56640625,
+      "anon_mb": 8.109375,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 5.555688699,
+      "rss_mb": 49.2265625,
+      "anon_mb": 15.14453125,
+      "profile": "default"
+    },
+    {
+      "tool": "ffuf",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 5.521067523,
+      "rss_mb": 16.58984375,
+      "anon_mb": 8.13671875,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:5102/FUZZ",
+      "seconds": 6.753472814,
+      "rss_mb": 49.171875,
+      "anon_mb": 15.0859375,
+      "profile": "default"
+    },
+    {
+      "tool": "ffuf",
+      "target": "http://127.0.0.1:5102/FUZZ",
+      "seconds": 7.180738171,
+      "rss_mb": 16.796875,
+      "anon_mb": 8.21484375,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 5.725574229,
+      "rss_mb": 49.36328125,
+      "anon_mb": 15.2734375,
+      "profile": "default"
+    },
+    {
+      "tool": "ffuf",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 5.773563511,
+      "rss_mb": 16.21875,
+      "anon_mb": 7.76171875,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 5.559300963,
+      "rss_mb": 48.8359375,
+      "anon_mb": 14.71484375,
+      "profile": "default"
+    },
+    {
+      "tool": "ffuf",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 4.7708759480000005,
+      "rss_mb": 16.59765625,
+      "anon_mb": 8.140625,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 4.714926624,
+      "rss_mb": 48.9453125,
+      "anon_mb": 14.796875,
+      "profile": "default"
+    },
+    {
+      "tool": "ffuf",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 4.645825972,
+      "rss_mb": 16.47265625,
+      "anon_mb": 8.015625,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "scanme.nmap.org",
+      "seconds": 4.642650585,
+      "rss_mb": 66.46875,
+      "anon_mb": 25.26171875,
+      "profile": "default"
+    },
+    {
+      "tool": "naabu",
+      "target": "scanme.nmap.org",
+      "seconds": 6.7241528200000005,
+      "rss_mb": 67.62109375,
+      "anon_mb": 38.84765625,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "127.0.0.1",
+      "seconds": 1.102198266,
+      "rss_mb": 71.6171875,
+      "anon_mb": 32.76953125,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "127.0.0.1",
+      "seconds": 1.076545381,
+      "rss_mb": 73.3046875,
+      "anon_mb": 34.42578125,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "127.0.0.1",
+      "seconds": 1.05784224,
+      "rss_mb": 71.0703125,
+      "anon_mb": 32.19140625,
+      "profile": "default"
+    },
+    {
+      "tool": "naabu",
+      "target": "127.0.0.1",
+      "seconds": 133.482011501,
+      "rss_mb": 104.6015625,
+      "anon_mb": 75.8828125,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "127.0.0.0/28",
+      "seconds": 0.035017462,
+      "rss_mb": 47.04296875,
+      "anon_mb": 8.8515625,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "127.0.0.0/28",
+      "seconds": 0.035930515,
+      "rss_mb": 46.69921875,
+      "anon_mb": 8.50390625,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "127.0.0.0/28",
+      "seconds": 0.03506426,
+      "rss_mb": 47.015625,
+      "anon_mb": 8.82421875,
+      "profile": "default"
+    },
+    {
+      "tool": "naabu",
+      "target": "127.0.0.0/28",
+      "seconds": 2.452076192,
+      "rss_mb": 56.9765625,
+      "anon_mb": 28.6796875,
+      "profile": "default"
+    },
+    {
+      "tool": "naabu",
+      "target": "127.0.0.0/28",
+      "seconds": 2.616701773,
+      "rss_mb": 55.99609375,
+      "anon_mb": 27.73828125,
+      "profile": "default"
+    },
+    {
+      "tool": "naabu",
+      "target": "127.0.0.0/28",
+      "seconds": 2.450901451,
+      "rss_mb": 56.84375,
+      "anon_mb": 28.69921875,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "127.0.0.1",
+      "seconds": 0.053457028,
+      "rss_mb": 48.97265625,
+      "anon_mb": 10.77734375,
+      "profile": "default"
+    },
+    {
+      "tool": "nmap",
+      "target": "127.0.0.1",
+      "seconds": 0.050571638,
+      "rss_mb": 13.6484375,
+      "anon_mb": 5.50390625,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "127.0.0.1",
+      "seconds": 0.050006484,
+      "rss_mb": 48.234375,
+      "anon_mb": 10.0390625,
+      "profile": "default"
+    },
+    {
+      "tool": "nmap",
+      "target": "127.0.0.1",
+      "seconds": 0.050726367,
+      "rss_mb": 13.8828125,
+      "anon_mb": 5.49609375,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "127.0.0.1",
+      "seconds": 0.051470003,
+      "rss_mb": 49.265625,
+      "anon_mb": 11.0703125,
+      "profile": "default"
+    },
+    {
+      "tool": "nmap",
+      "target": "127.0.0.1",
+      "seconds": 0.050909558,
+      "rss_mb": 13.6328125,
+      "anon_mb": 5.48828125,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "127.0.0.1",
+      "seconds": 0.114127589,
+      "rss_mb": 60.6015625,
+      "anon_mb": 21.72265625,
+      "profile": "default"
+    },
+    {
+      "tool": "nmap",
+      "target": "127.0.0.1",
+      "seconds": 0.215494249,
+      "rss_mb": 49.140625,
+      "anon_mb": 36.99609375,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "127.0.0.1",
+      "seconds": 0.121305986,
+      "rss_mb": 61.078125,
+      "anon_mb": 22.1953125,
+      "profile": "default"
+    },
+    {
+      "tool": "nmap",
+      "target": "127.0.0.1",
+      "seconds": 0.213279111,
+      "rss_mb": 49.08984375,
+      "anon_mb": 37,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "127.0.0.1",
+      "seconds": 0.11610544,
+      "rss_mb": 61.14453125,
+      "anon_mb": 22.26171875,
+      "profile": "default"
+    },
+    {
+      "tool": "nmap",
+      "target": "127.0.0.1",
+      "seconds": 0.214120028,
+      "rss_mb": 49.03515625,
+      "anon_mb": 36.9921875,
+      "profile": "default"
+    }
+  ],
+  "units": [
+    {
+      "name": "default:apps",
+      "checks": 21,
+      "runs": 28
+    },
+    {
+      "name": "default:dirs",
+      "checks": 6,
+      "runs": 14
+    },
+    {
+      "name": "default:fuzz",
+      "checks": 10,
+      "runs": 28
+    },
+    {
+      "name": "default:ports",
+      "checks": 15,
+      "runs": 24
+    }
+  ]
+}
