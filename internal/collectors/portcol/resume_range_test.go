@@ -3,7 +3,6 @@ package portcol
 import (
 	"context"
 	"errors"
-	"net"
 	"strconv"
 	"sync/atomic"
 	"testing"
@@ -80,9 +79,9 @@ func TestResumedRangeDoesNotAskAFinishedAddressAgain(t *testing.T) {
 // address that answered before the stop is still counted in the total.
 func TestResumedRangeKeepsTheCountsOfTheStoppedBlock(t *testing.T) {
 	port := serve(t, "127.0.0.2:0")
-	if _, err := net.Listen("tcp", "127.0.0.3:"+strconv.Itoa(port)); err != nil {
-		t.Skip(err)
-	}
+	// Held by serve: a listener nothing refers to is closed by its finalizer
+	// at the next GC, and 127.0.0.3 then refuses (GOGC=1 failed 16 of 200).
+	serve(t, "127.0.0.3:"+strconv.Itoa(port))
 	seed := types.Seed{Type: types.TypePrefix, Keys: map[string]string{"prefix": "127.0.0.0/29"}}
 	run := func(c *Collector, budget int32) (obs []types.StoredObservation) {
 		var n atomic.Int32
@@ -105,7 +104,12 @@ func TestResumedRangeKeepsTheCountsOfTheStoppedBlock(t *testing.T) {
 	first := run(New(nil, []int{port}, 0), 3)
 	sw := Swept(first, time.Time{})["127.0.0.0/29"]
 	if len(sw.Done) != 3 || sw.Counts["with_open"] != 1 {
-		t.Fatalf("stopped block: done %v counts %v", sw.Done, sw.Counts)
+		// Every row, so a failure names the address that answered (or did not).
+		var all []types.Observation
+		for _, o := range first {
+			all = append(all, o.Observation)
+		}
+		t.Fatalf("stopped block: done %v counts %v; rows %v", sw.Done, sw.Counts, rows(t, all))
 	}
 	c := New(nil, []int{port}, 0)
 	c.Apply(Config{Swept: map[string]Sweep{"127.0.0.0/29": sw}})
