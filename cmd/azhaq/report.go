@@ -191,6 +191,7 @@ func (r *report) settle() {
 	r.DNSQueries = egress.DNSTotal() - r.dnsFrom
 	r.BrowserRequests = browserRequestsSince(r.spentFrom, r.chromeAt)
 	r.failUnrecordedSweeps()
+	r.Notes = onceEach(r.Notes)
 	r.Failures = r.failureCount()
 	r.TakeoverCandidates, r.TakeoverVerified = 0, 0
 	for i, t := range r.Takeover {
@@ -962,6 +963,20 @@ func withoutCatchAll(rows []engine.MapEntry, held map[string]bool) []engine.MapE
 			continue
 		}
 		out = append(out, r)
+	}
+	return out
+}
+
+// onceEach keeps the first of notes that say the same: two paths that reach
+// one fact (a collector's note and the command's) say it once.
+func onceEach(notes []string) []string {
+	seen := make(map[string]bool, len(notes))
+	out := notes[:0]
+	for _, n := range notes {
+		if !seen[n] {
+			seen[n] = true
+			out = append(out, n)
+		}
 	}
 	return out
 }

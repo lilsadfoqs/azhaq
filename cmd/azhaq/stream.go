@@ -77,7 +77,15 @@ func newStream(asJSON bool) (see func(types.Entity, types.Observation), end func
 				emit("name", r.Entity.Key, "", coll, nil)
 				continue
 			}
-			if r.Entity.Type != types.TypeURL || r.Template == "" {
+			if r.Entity.Type == types.TypeURL && r.Template == "" {
+				// A row no answer streamed (a request held back, a URL not
+				// asked) still has its line: the stream holds every row.
+				if !seen[r.Entity.Key] {
+					emit("url", r.Entity.Key, "("+r.Coverage+")", "azhaq", map[string]any{"coverage": r.Coverage})
+				}
+				continue
+			}
+			if r.Entity.Type != types.TypeURL {
 				continue
 			}
 			key := r.Entity.Key

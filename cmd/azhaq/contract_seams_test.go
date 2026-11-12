@@ -411,3 +411,56 @@ func TestStreamTemplatedRowIsStreamedAsItsTemplateOnce(t *testing.T) {
 		}
 	}
 }
+
+// A request held back (a wordlist's /logout) is a row of the map, and so a
+// line of the stream: the stream holds every row it prints.
+func TestStreamHasALineForAHeldRow(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/" || r.URL.Path == "/admin" {
+			_, _ = w.Write([]byte("<title>x</title>"))
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer srv.Close()
+	dir := t.TempDir()
+	words := filepath.Join(dir, "words.txt")
+	if err := os.WriteFile(words, []byte("admin\nlogout\nreset\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	stdout, _, code := cli(t, "run", "-url", srv.URL+"/", "-allow", "127.0.0.1", "-sources", "none", "-probe", "-dirs", words, "-stream", "-json", "-db", filepath.Join(dir, "s.db"))
+	if code != exitOK {
+		t.Fatalf("exit %d", code)
+	}
+	streamed, mapped := map[string]bool{}, map[string]bool{}
+	held := 0
+	for _, r := range jsonRows(t, stdout) {
+		key, _ := r["key"].(string)
+		if r["type"] == "found" {
+			streamed[key] = true
+			continue
+		}
+		mapped[key] = true
+		if r["coverage"] == "skipped" {
+			held++
+		}
+	}
+	if held == 0 {
+		t.Fatalf("no held row in the map: %v", keysOf(mapped))
+	}
+	for k := range mapped {
+		if !streamed[k] {
+			t.Errorf("the map row %s has no stream line", k)
+		}
+	}
+}
+
+// Two paths to one fact say it once: the summary keeps the first of notes
+// that read the same.
+func TestASummaryNoteIsSaidOnce(t *testing.T) {
+	r := &report{Notes: []string{"a", "b", "a", "c", "b"}}
+	r.settle()
+	if strings.Join(r.Notes, ",") != "a,b,c" {
+		t.Errorf("notes %v", r.Notes)
+	}
+}
