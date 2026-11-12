@@ -32,6 +32,10 @@ type Ident struct {
 	CVSS        float64 `json:"cvss,omitempty"`
 	Evidence    string  `json:"evidence"`
 	Command     string  `json:"command,omitempty"` // the command that produced the record
+	// Also lists the other host names the listener answered under with this
+	// product and version (its address, a name that resolves to it): one row for
+	// the service, whatever it was reached as.
+	Also []string `json:"also_named,omitempty"`
 }
 
 // Listener is one record for Build: the Ident fields and its proof.
@@ -58,6 +62,9 @@ func (l Listener) row(db string) Row {
 	}
 	if id.Source != "" {
 		named += ", named by " + id.Source
+	}
+	if len(id.Also) > 0 {
+		named += "; also answered as " + join(id.Also, 4)
 	}
 	rs := []Reason{{"identified", named}}
 	if id.AdvisoryID != "" {

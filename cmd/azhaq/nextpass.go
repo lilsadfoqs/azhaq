@@ -220,3 +220,56 @@ func writesPassCommand(args []string) string {
 	out := append(slices.Clone(args[:i]), "-replay-writes", "post,put,patch")
 	return "azhaq roles " + shellJoin(append(out, args[i:]...))
 }
+
+// loginsPass says, after a run that identified products the default-login
+// catalog (internal/verify's logins catalog, the one -verify-logins reads)
+// names, and did not give -verify-logins, what that flag would send: for each
+// product on each web service, one sign-in attempt per published default pair
+// (the catalog holds one for each product it lists) and each unauthenticated
+// read the catalog lists for it, two GETs. It counts what loginsStage would ask
+// of the same observations. "" when no product named is in the catalog.
+func loginsPass(obs []types.StoredObservation) (why string, services int) {
+	done := map[string]bool{}
+	named := map[string]bool{}
+	var products []string
+	attempts, reads := 0, 0
+	for _, svc := range loginWebServices(obs) {
+		pairs, rs := verify.LoginsForProduct(svc.Product), verify.ReadsForProduct(svc.Product)
+		if (len(pairs) == 0 && len(rs) == 0) || svc.Origin == "" {
+			continue
+		}
+		key := svc.Origin + "\x00" + loginsKey(svc.Product)
+		if done[key] {
+			continue
+		}
+		done[key] = true
+		services++
+		attempts += len(pairs)
+		reads += len(rs)
+		if k := loginsKey(svc.Product); !named[k] {
+			named[k] = true
+			products = append(products, svc.Product)
+		}
+	}
+	if services == 0 {
+		return "", 0
+	}
+	sends := []string{}
+	if attempts > 0 {
+		sends = append(sends, plural(attempts, "sign-in attempt")+", one for each product on each service, with its published default credential pair, stopping at the first success, a lockout sign or a captcha")
+	}
+	if reads > 0 {
+		sends = append(sends, plural(reads, "unauthenticated read")+" (a GET with no credential and a GET with a deliberately wrong one, each)")
+	}
+	return fmt.Sprintf("%s found with a product in the default-login catalog (%s); -verify-logins sends %s; each sign-in attempt is a write the flag asks for, and every request is a line of the ledger",
+		plural(services, "service"), clipList(products, 4), strings.Join(sends, " and ")), services
+}
+
+// loginsPassCommand is the run command line with -verify-logins.
+func loginsPassCommand(args []string, db string) string {
+	rest := append(slices.Clone(args), "-verify-logins")
+	if db != "" && !hasFlag(rest, "db") {
+		rest = append(rest, "-db", db)
+	}
+	return "azhaq run " + shellJoin(rest)
+}
