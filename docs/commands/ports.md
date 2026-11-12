@@ -84,6 +84,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 | Summary | Says |
 | --- | --- |
 | `addresses`, in `counts` | The addresses asked, wholly or in part when a limit stopped the run. |
+| `not_asked`, and the first line | A scan a limit stopped: how many ports of how many addresses were not asked, and the `azhaq resume` command that asks them (see [run](run.md#summary-and-exit-codes)). |
 | notes | How many addresses were not up (`-wn`), were outside the scope, or had ports that neither accepted nor refused a connect. |
 | `the scope (-allow, -scope) holds N addresses and the targets name M of them` | The targets cover part of a range `-allow` or `-scope` allows (less what `-deny` holds); `-sweep` scans the rest. |
 | AS prefixes | The prefixes RIPEstat lists for an AS number. |
@@ -161,6 +162,8 @@ A service that speaks first (`ssh`, `ftp`, `smtp`, `telnet`, `irc`, …) is name
 - Each ask counts against `-max-requests` and is in the ledger.
 - A port still silent is in the row's `filtered_ports` and in the summary.
 - In `run` and `query`, the `ports` row of a scanned address counts these silent ports in `filtered`. It lists them in `filtered_ports` when there are no more than 64.
+
+A scan that works longer than 10 seconds prints a progress line every 10 seconds on stderr (see [progress](../OUTPUT.md#progress-lines)). One task can cover a whole range, so its `tasks_done` stays 0 for most of the scan. The line then also says how many addresses are done and, when every task names its addresses, how many are left: `1 task left, 64 of 256 addresses done`. With `-json` they are `addresses_done` and `addresses_left`.
 
 ### Limits, and what the scan does not do silently
 - A CDN or WAF address is scanned in full, as naabu does. The row has `cdn` and a `note`. `-ec` (`-exclude-cdn`) asks it only ports 80, 443, 8080 and 8443, which is naabu's two ports plus 8080 and 8443, because its other ports are the provider's other customers'. The summary then names the addresses. `-cdn-full` is accepted and does nothing; it is the default.

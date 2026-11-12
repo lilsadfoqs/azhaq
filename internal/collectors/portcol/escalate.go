@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/netip"
 	"slices"
 	"sort"
 	"strings"
@@ -157,4 +158,95 @@ func nOf(n int, one, many string) string {
 		return "1 " + one
 	}
 	return fmt.Sprintf("%d %s", n, many)
+}
+
+// NotAsked counts, from the rows of the scans a limit stopped, the addresses
+// that still have ports not asked and those ports: the addresses a stopped scan
+// left part-asked (a row says how many ports it had left, or which it asked of
+// the first ports ports), and those of a stopped block it never reached, which
+// have all of the first ports left. An address its block lists as finished has
+// none left, whatever its last checkpoint said.
+func NotAsked(obs []types.StoredObservation, first int) (addrs, ports int) {
+	type left struct {
+		prefix string
+		ports  int
+	}
+	byIP := map[string]left{}
+	blocks := map[string]int{}         // prefix → addresses of it not reached
+	swept := map[string]map[int]bool{} // prefix → places of the addresses it finished
+	for _, o := range obs {
+		if o.Collector != Name || o.Kind != "ports" {
+			continue
+		}
+		var row struct {
+			IP      string `json:"ip"`
+			Partial bool   `json:"partial"`
+			Range   bool   `json:"range"`
+			Stopped bool   `json:"stopped"`
+			Prefix  string `json:"prefix"`
+			Pass    int    `json:"pass"`
+			Left    int    `json:"ports_left"`
+			Asked   string `json:"asked_ports"`
+			Swept   string `json:"swept"`
+			Of      int    `json:"addresses_of"`
+			Addrs   int    `json:"addresses"`
+		}
+		if json.Unmarshal(o.Payload, &row) != nil {
+			continue
+		}
+		switch {
+		case row.Range:
+			if row.Stopped {
+				if done, err := places(row.Swept); err == nil {
+					set := make(map[int]bool, len(done))
+					for _, n := range done {
+						set[n] = true
+					}
+					swept[row.Prefix] = set
+				}
+				if row.Of > 0 {
+					blocks[row.Prefix] = max(row.Of-row.Addrs, 0)
+				}
+			} else {
+				delete(blocks, row.Prefix)
+				delete(swept, row.Prefix)
+			}
+		case row.IP == "":
+		case row.Partial:
+			n := row.Left
+			if row.Pass == 0 {
+				done, _ := places(row.Asked)
+				n = max(first-len(done), 0)
+			}
+			byIP[row.IP] = left{row.Prefix, n}
+		default:
+			delete(byIP, row.IP) // a whole scan came after it
+		}
+	}
+	for ip, l := range byIP {
+		if l.ports == 0 || finishedIn(swept[l.prefix], l.prefix, ip) {
+			continue
+		}
+		addrs++
+		ports += l.ports
+	}
+	for _, n := range blocks {
+		addrs += n
+		ports += n * first
+	}
+	return addrs, ports
+}
+
+// finishedIn says whether the block prefix lists ip, by its place in it, as finished.
+func finishedIn(set map[int]bool, prefix, ip string) bool {
+	pf, err := netip.ParsePrefix(prefix)
+	a, err2 := netip.ParseAddr(ip)
+	if len(set) == 0 || err != nil || err2 != nil || !pf.Contains(a) {
+		return false
+	}
+	at := 1
+	for b := pf.Masked().Addr(); b != a; b = b.Next() {
+		at++
+	}
+	return set[at]
 }

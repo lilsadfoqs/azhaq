@@ -11,15 +11,20 @@ import (
 // portAddresses counts, from the rows of a port scan, the distinct addresses
 // it asked and the distinct addresses it found a port open on. A range's row
 // says how many of its addresses were asked and how many had an open port; an
-// address given on its own has a row of its own. An address that is in a range
+// address given on its own has a row of its own. A range a limit stopped has a
+// row for each run that touched it, each counting what the block had finished
+// so far: the block counts once, by its largest row, and never above its size.
+// An address that is in a range
 // and also given on its own (a name that resolves into it, a line of a list)
 // is one address: counted by its range, not again.
 func portAddresses(obs []types.StoredObservation) (scanned, open int) {
 	type block struct {
 		pf       netip.Prefix
+		asked    int
 		withOpen int
 	}
 	var blocks []block
+	at := map[netip.Prefix]int{}    // the place of a prefix in blocks
 	var singles []netip.Addr        // addresses given on their own, once each
 	openAt := map[netip.Addr]bool{} // the addresses with an open port, in a range or not
 	seen := map[netip.Addr]bool{}
@@ -32,13 +37,21 @@ func portAddresses(obs []types.StoredObservation) (scanned, open int) {
 			continue
 		}
 		if p["range"] == true {
-			scanned += intOf(p["addresses"])
 			pf, err := netip.ParsePrefix(pstr(p["prefix"]))
 			if err != nil {
+				scanned += intOf(p["addresses"])
 				open += intOf(p["with_open"]) // no prefix to place the rows by
 				continue
 			}
-			blocks = append(blocks, block{pf.Masked(), intOf(p["with_open"])})
+			pf = pf.Masked()
+			i, ok := at[pf]
+			if !ok {
+				i = len(blocks)
+				at[pf] = i
+				blocks = append(blocks, block{pf: pf})
+			}
+			blocks[i].asked = max(blocks[i].asked, intOf(p["addresses"]))
+			blocks[i].withOpen = max(blocks[i].withOpen, intOf(p["with_open"]))
 			continue
 		}
 		ip, err := netip.ParseAddr(pstr(p["ip"]))
@@ -59,6 +72,13 @@ func portAddresses(obs []types.StoredObservation) (scanned, open int) {
 			singles = append(singles, ip)
 		}
 	}
+	// A block inside another is counted by the larger one.
+	all := slices.Clone(blocks)
+	blocks = slices.DeleteFunc(blocks, func(b block) bool {
+		return slices.ContainsFunc(all, func(o block) bool {
+			return o.pf.Bits() < b.pf.Bits() && o.pf.Contains(b.pf.Addr())
+		})
+	})
 	inBlock := func(ip netip.Addr) int {
 		for i, b := range blocks {
 			if b.pf.Contains(ip) {
@@ -76,7 +96,9 @@ func portAddresses(obs []types.StoredObservation) (scanned, open int) {
 		}
 	}
 	for i, b := range blocks {
-		open += max(b.withOpen, rowsIn[i])
+		size := blockSize(b.pf)
+		scanned += min(b.asked, size)
+		open += min(max(b.withOpen, rowsIn[i]), size)
 	}
 	for _, ip := range singles {
 		if inBlock(ip) >= 0 {
@@ -88,6 +110,15 @@ func portAddresses(obs []types.StoredObservation) (scanned, open int) {
 		}
 	}
 	return scanned, open
+}
+
+// blockSize is how many addresses a prefix holds, capped where an int cannot.
+func blockSize(pf netip.Prefix) int {
+	bits := pf.Addr().BitLen() - pf.Bits()
+	if bits > 30 {
+		return 1 << 30
+	}
+	return 1 << bits
 }
 
 func pstr(v any) string { s, _ := v.(string); return s }

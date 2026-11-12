@@ -121,6 +121,8 @@ type scan struct {
 	// first are the ports of the first pass: with rest, every port the scan
 	// asked, so that another task for the address asks only the others.
 	first []int
+	// counted: the progress counts the address once (Settled).
+	counted bool
 }
 
 func New(pool *dnsr.Pool, ports []int, rate float64) *Collector {
@@ -884,6 +886,9 @@ func (c *Collector) once(ctx context.Context, host, ip string, run func() *scan,
 	r := run()
 	s.fill(r)
 	close(s.done)
+	if s.err == nil {
+		c.settle(s)
+	}
 	return s, s.err
 }
 
