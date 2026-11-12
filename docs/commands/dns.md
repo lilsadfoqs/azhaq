@@ -147,7 +147,7 @@ The summary also lists failures per kind of error, and takeover findings: a CNAM
 
 ### Time and pace
 - `-timeout` is how long one DNS answer is waited for, 3 s by default, as in dnsx. In `run` and the other commands `-timeout` is the time of the whole run.
-- `-maxtime SECONDS` bounds the run. It exits 4, and the summary says which `-start N` to go on from.
+- `-maxtime TIME` bounds the run: a duration (`90s`, `5m`), as `run` takes `-max-time`, or a bare number of seconds. It exits 4, and the summary says which `-start N` to go on from.
 - `-retry N` is the attempts per question on other resolvers. The default is 3, where dnsx's is 2, and 2 for the names `-w` generates (made-up names mostly do not exist, and an unanswered one costs every attempt as a paced query); `-retry N` given sets it for every name. A name no resolver answers is counted as `no answer`, listed under `failed`, and the exit code is 3. A name no resolver answered is asked again in a second pass at a quarter of the concurrency. When none of a batch of 16 names or more was answered, the resolvers are down, not busy, and there is no second pass. The second pass asks 16 of them first, spread over the list and once each, and ends there when none is answered, because the rest would fail alike.
 - `-rl N` is names a second over all resolvers, as in dnsx. `-t N` is names in flight, 100 by default.
 - `-dns-rate N` is queries a second to each resolver. No resolver gets more than N in any second, from the first query on, so the total is N times the number of resolvers: six by default. A name asked for several types sends one query for each.
@@ -210,6 +210,7 @@ The summary also lists failures per kind of error, and takeover findings: a CNAM
 | `-scope` | string |  | a program's scope: a file (HackerOne CSV, bounty-targets JSON, Burp options, lines) or hackerone, bugcrowd, intigriti, yeswehack |
 | `-program` | string |  | the program to take from a -scope list (handle, name or URL) |
 | `-ledger` | string |  | write every request, connection and DNS query the run sends (to targets, third-party sources and resolvers) to this file, a chain of hashes that azhaq ledger -verify checks (default DB.ledger.jsonl next to the workspace; off: none; with a temporary database, only when given) |
+| `-seal-to` | string |  | when the run ends, append the ledger's seal as one JSON line ({"time","ledger","seal","entries"}) to this file, or POST it to this URL: kept where the run's own files are not, so azhaq ledger -verify -seal can tell the ledger from one with lines removed and the rest re-chained to look intact |
 
 **Pace and limits**
 
@@ -220,7 +221,7 @@ The summary also lists failures per kind of error, and takeover findings: a CNAM
 | `-dns-rate` | float |  | DNS queries per second per resolver (0: no pace but the queries in flight, as dnsx) |
 | `-retry` | int |  | attempts per question on other resolvers (default 3, 2 for the names -w generates; 1 asks once) |
 | `-timeout` | duration | `3s` | wait this long for each DNS answer (not the run's time, as in azhaq run: see -maxtime) |
-| `-maxtime` | float |  | stop the run after this many seconds (0: no limit); the summary says where to go on |
+| `-maxtime` | string |  | stop the run after this long: a duration (90s, 5m) or a bare number of seconds (0: no limit); the summary says where to go on |
 
 **Network**
 

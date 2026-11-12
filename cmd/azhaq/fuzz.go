@@ -19,6 +19,7 @@ import (
 
 	"github.com/lilsadfoqs/azhaq/engine"
 	"github.com/lilsadfoqs/azhaq/internal/connector"
+	"github.com/lilsadfoqs/azhaq/internal/dnsr"
 	"github.com/lilsadfoqs/azhaq/internal/egress"
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
 	"github.com/lilsadfoqs/azhaq/internal/fuzz"
@@ -102,6 +103,7 @@ func cmdFuzz(args []string) error {
 	ledgerFlag := fs.String("ledger", "", ledgerHelp)
 	killFile := fs.String("kill-file", "", killFileHelp)
 	sealTo := fs.String("seal-to", "", sealToHelp)
+	resolversFlag := fs.String("resolvers", "", runFlags().Lookup("resolvers").Usage)
 	timeout := fs.Float64("timeout", 10, "each request's timeout, in `seconds`")
 	maxtime := fs.Float64("maxtime", 0, "stop after this many `seconds` and say so (0: no limit)")
 	maxtimeJob := fs.Float64("maxtime-job", 0, "give up a job (the first one, or a directory found by -recursion) after this many `seconds` and go on with the next (0: no limit)")
@@ -153,6 +155,12 @@ func cmdFuzz(args []string) error {
 	}
 	if err := parse(fs, args); err != nil {
 		return err
+	}
+	// A name in the URL is looked up at the resolvers given, as run does.
+	if rs, err := dnsr.ParseResolvers(*resolversFlag); err != nil {
+		return usagef("-resolvers: %v", err)
+	} else if len(rs) > 0 {
+		useResolvers(rs, 0)
 	}
 	if c.db == "" {
 		c.db = runFolderDB() // a kept run keeps its rows

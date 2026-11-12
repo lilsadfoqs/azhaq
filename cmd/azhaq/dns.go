@@ -133,7 +133,9 @@ func cmdDNS(args []string) error {
 	alias("rl", "rate-limit", "same as -rl")
 	retry := fs.Int("retry", 0, "attempts per question on other resolvers (default 3, 2 for the names -w generates; 1 asks once)")
 	timeout := fs.Duration("timeout", 3*time.Second, "wait this long for each DNS answer (not the run's time, as in azhaq run: see -maxtime)")
-	maxtime := fs.Float64("maxtime", 0, "stop the run after this many seconds (0: no limit); the summary says where to go on")
+	maxtimeD := new(secondsOrDuration)
+	fs.Var(maxtimeD, "maxtime", "stop the run after this long: a duration (90s, 5m) or a bare number of seconds (0: no limit); the summary says where to go on")
+	maxtime := (*float64)(maxtimeD)
 	start := fs.Int("start", 0, "skip this many names at the start of the input, in order after de-duplication")
 	omitRaw := fs.Bool("omit-raw", false, "leave the records as text (all) out of -json")
 	alias("omit-raw", "or", "same as -omit-raw")
@@ -162,7 +164,7 @@ func cmdDNS(args []string) error {
 	noTakeover := fs.Bool("no-takeover", false, "do not check CNAMEs for a takeover: no question is asked about the domain of a CNAME target (without it, a domain outside the scope is not asked either, and the summary says so)")
 	noWild := fs.Bool("no-wildcard", false, "print names even when they only resolve because their zone has a wildcard")
 	proxyURL := fs.String("proxy", "", "send DNS through this socks5 proxy (socks5://host:port), over TCP")
-	inherit(fs, "resolvers", "dns-rate", "scope", "program", "allow", "deny", "ledger")
+	inherit(fs, "resolvers", "dns-rate", "scope", "program", "allow", "deny", "ledger", "seal-to")
 	alias("resolvers", "r", "same as -resolvers")
 	if err := parse(fs, args); err != nil {
 		return err
@@ -296,7 +298,7 @@ func cmdDNS(args []string) error {
 	}
 	// Every query goes in the ledger, when one is asked for: a dns command has
 	// no workspace to keep one next to.
-	led, err := startLedger(fs.Lookup("ledger").Value.String(), "", c.db, c.db == "", cf.rules, "")
+	led, err := startLedger(fs.Lookup("ledger").Value.String(), "", c.db, c.db == "", cf.rules, fs.Lookup("seal-to").Value.String())
 	if err != nil {
 		return err
 	}
@@ -1741,4 +1743,31 @@ func keptDNSArgs(args []string) []string {
 		}
 	}
 	return out
+}
+
+// secondsOrDuration is a time a flag takes as a duration (90s, 5m), as run's
+// -max-time does, or as a bare number of seconds, as it was first written.
+type secondsOrDuration float64
+
+func (d *secondsOrDuration) String() string {
+	if d == nil || *d == 0 {
+		return "0"
+	}
+	return time.Duration(float64(*d) * float64(time.Second)).String()
+}
+
+func (d *secondsOrDuration) Set(v string) error {
+	if f, err := strconv.ParseFloat(v, 64); err == nil {
+		if f < 0 {
+			return fmt.Errorf("%q is below 0", v)
+		}
+		*d = secondsOrDuration(f)
+		return nil
+	}
+	t, err := time.ParseDuration(v)
+	if err != nil || t < 0 {
+		return fmt.Errorf("%q is neither a duration (90s, 5m) nor a number of seconds", v)
+	}
+	*d = secondsOrDuration(t.Seconds())
+	return nil
 }

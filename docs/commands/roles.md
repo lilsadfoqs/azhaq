@@ -642,12 +642,21 @@ The diff lines look like this:
 | `-allow` | string, repeatable |  | HOST: an origin of the history that is the target besides the ones most of a role's requests go to (the others, analytics and CDNs, are left out) |
 | `-all` | bool |  | also list endpoints that answer every role the same, or with each role's own data |
 
+**Scope and safety**
+
+| Flag | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `-deny` | string, repeatable |  | a domain, host or address range the run must not touch, even when given as a target |
+| `-deny-path` | string, repeatable |  | a regular expression on a URL's path and query: a URL it matches is never requested, by any collector or Chrome, and is listed as not requested (repeatable; azhaq decides nothing by itself) |
+| `-seal-to` | string |  | when the run ends, append the ledger's seal as one JSON line ({"time","ledger","seal","entries"}) to this file, or POST it to this URL: kept where the run's own files are not, so azhaq ledger -verify -seal can tell the ledger from one with lines removed and the rest re-chained to look intact |
+
 **Pace and network**
 
 | Flag | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `-rate` | float |  | requests per second for the history reads and the replay, when the run options give none |
 | `-proxy` | string |  | send every request through this proxy (http, https or socks5 URL): the runs, the history reads and the replay |
+| `-resolvers` | string |  | DNS resolvers: a file with one per line, or a comma list; each is ADDR, ADDR:PORT or udp:, tcp:, dot:, doh:URL[:get] and then the address (default: public resolvers). Named resolvers answer every name, special-use ones (.test, .local, localhost) included; the system resolver is never asked |
 
 **Output**
 
