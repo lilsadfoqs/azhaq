@@ -140,7 +140,7 @@ func TestATopPortsScanNamesTheUnaskedRange(t *testing.T) {
 			pass = s
 		}
 	}
-	if !strings.Contains(pass, "azhaq ports -host 127.0.0.1 -p full -db ") || !strings.Contains(pass, "64535 connects") && !strings.Contains(pass, "64534 connects") {
+	if !strings.Contains(pass, "azhaq ports -host 127.0.0.1 -p full -ep ") || !strings.Contains(pass, " -db ") || !strings.Contains(pass, "64535 connects") && !strings.Contains(pass, "64534 connects") {
 		t.Errorf("the run's next has no wider port pass with its cost: %v", sum["next"])
 	}
 	if !strings.Contains(pass, " TCP ports were not asked on 1 address") || !strings.Contains(pass, "open port") {
@@ -151,7 +151,7 @@ func TestATopPortsScanNamesTheUnaskedRange(t *testing.T) {
 	_, errOut, _ := cli(t, "ports", "-host", "127.0.0.1", "-p", "top-100,"+port, "-json")
 	sum = sumMap(t, errOut)
 	next, _ := json.Marshal(sum["next"])
-	if !strings.Contains(string(next), "azhaq ports -host 127.0.0.1 -json -p full") || !strings.Contains(string(next), "65434 connects") && !strings.Contains(string(next), "65435 connects") {
+	if !strings.Contains(string(next), "azhaq ports -host 127.0.0.1 -json -p full -ep ") || !strings.Contains(string(next), "65434 connects") && !strings.Contains(string(next), "65435 connects") {
 		t.Errorf("ports names no wider pass: %s", next)
 	}
 

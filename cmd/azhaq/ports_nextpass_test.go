@@ -83,7 +83,7 @@ func TestTopListScanNamesTheCatalogPortsItLeftOut(t *testing.T) {
 	var cat, full = -1, -1
 	for i, n := range next {
 		switch {
-		case strings.Contains(n, "-p top-1000,"+portscan.Compact(catalogLeft(top, ""))):
+		case strings.Contains(n, "-p "+portscan.Compact(catalogLeft(top, ""))) && !strings.Contains(n, "top-1000"):
 			cat = i
 			want := strconv.Itoa(left) + " ports of the usual set"
 			if !strings.Contains(n, want) || !strings.Contains(n, "were not asked on 1 address: "+strconv.Itoa(left)+" connects") {
@@ -146,7 +146,7 @@ func TestRunNamesTheCatalogPortsItsListLeftOut(t *testing.T) {
 	for _, n := range nextOf(sumMap(t, errOut)) {
 		if strings.Contains(n, "of the usual set") {
 			found = true
-			if !strings.Contains(n, "top-100,"+port+","+portscan.Compact(catalogLeft(asked, ""))) || !strings.Contains(n, strconv.Itoa(want)+" ports of the usual set") || !strings.Contains(n, ": "+strconv.Itoa(want)+" connects)") {
+			if !strings.Contains(n, "-p "+portscan.Compact(catalogLeft(asked, ""))) || !strings.Contains(n, strconv.Itoa(want)+" ports of the usual set") || !strings.Contains(n, ": "+strconv.Itoa(want)+" connects)") {
 				t.Errorf("%q, want the list with the %d ports added, %d connects", n, want, want)
 			}
 		}
@@ -252,5 +252,26 @@ func TestRunNamesVerifyWhenAServiceWithACheckWasFound(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("no -verify pass in %q", errOut)
+	}
+}
+
+// Each next-pass command asks exactly what its count says: the usual ports
+// left out alone, and the rest of the range with the ports asked in -ep.
+func TestNextPassCommandsSendTheirCount(t *testing.T) {
+	args := []string{"-host", "127.0.0.1", "-p", "55555-55564"}
+	asked, _ := portscan.Ports("55555-55564")
+	left := catalogLeft(asked, "")
+	cmd := catalogPassCommand(args, "w.db", left)
+	spec := cmd[strings.Index(cmd, "-p ")+3:]
+	spec = strings.Fields(spec)[0]
+	if got, _ := portscan.Ports(spec); len(got) != len(left) || strings.Contains(cmd, "55555") {
+		t.Errorf("the usual-set pass asks %d ports, its count says %d: %s", len(got), len(left), cmd)
+	}
+	full := portsPassCommand(args, "w.db", asked)
+	if !strings.Contains(full, "-p full -ep 55555-55564") {
+		t.Errorf("the full pass re-asks the ports it asked: %s", full)
+	}
+	if why, cost := portsPass(10, 1, 0); why == "" || cost.Connects != 65525 {
+		t.Errorf("the full pass counts %d connects: %s", cost.Connects, why)
 	}
 }

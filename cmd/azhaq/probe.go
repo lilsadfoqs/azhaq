@@ -745,8 +745,15 @@ func (o *probeOut) settle(rep *report, st *store.Store, fs *flag.FlagSet) {
 	if len(gaps) > 0 {
 		rep.Failed = append(rep.Failed, engine.Failure{Collector: "azhaq-http", Error: "no answer and no failure recorded", Retryable: true, Count: len(gaps), Targets: gaps})
 	}
+	// The counts partition the rows: answered, without an answer, not asked yet.
+	if noAnswer > 0 || rows > noAnswer {
+		rep.Counts = map[string]int{}
+	}
 	if noAnswer > 0 {
-		rep.Counts = map[string]int{"without an answer": noAnswer}
+		rep.Counts["without an answer"] = noAnswer
+	}
+	if rows > noAnswer {
+		rep.Counts["answered"] = rows - noAnswer
 	}
 	// A row without an answer is a failure, one for each, and a run in which
 	// every row is one did not do its job.
@@ -759,10 +766,8 @@ func (o *probeOut) settle(rep *report, st *store.Store, fs *flag.FlagSet) {
 		rep.Counts["not asked yet"] = notAsked
 	}
 	if quiet := silentHosts(st); len(quiet) > 0 {
-		if rep.Counts == nil {
-			rep.Counts = map[string]int{}
-		}
-		rep.Counts["hosts without a web service"] = len(quiet)
+		// Hosts, not rows: their rows are among those without an answer.
+		rep.Notes = append(rep.Notes, fmt.Sprintf("%s answered on no web port: their rows are counted under without an answer", plural(len(quiet), "host")))
 	}
 	rep.Results = o.w.count() // the lines printed, a failed row's among them when it is printed
 	if o.pf.csv || o.pf.md {

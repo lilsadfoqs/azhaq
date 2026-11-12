@@ -92,7 +92,7 @@ On request:
 
 ## Summary and exit codes
 
-The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.md#the-summary) and [exit codes](../OUTPUT.md#exit-codes). The summary counts the targets that got no answer under `without an answer`, and says how many rows the matchers and filters left out.
+The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.md#the-summary) and [exit codes](../OUTPUT.md#exit-codes). The summary counts the rows that got an answer under `answered` and the ones that got none under `without an answer`, so the counts partition the rows, and says how many rows the matchers and filters left out. A host that answered on no web port is a note, not a count: its rows are among those without an answer.
 
 ## Details
 

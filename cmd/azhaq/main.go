@@ -1858,7 +1858,8 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		}
 		if left := catalogLeft(opts.Ports, *portSkip); len(left) > 0 {
 			if why, _ := catalogPass(left, addresses); why != "" {
-				spec := strings.TrimRight(portsEff+","+portscan.Compact(left), ",")
+				// Only the ports left out, so the command sends what the count says.
+				spec := portscan.Compact(left)
 				cmd := "azhaq run " + shellJoin(append(withoutFlag(args, "ports"), "-ports", spec, "-db", path))
 				if n := len(portHosts); n > 0 && n <= 8 {
 					cmd = "azhaq ports -host " + hostsOf(portHosts) + " -p " + spec + " -db " + path
@@ -1871,12 +1872,32 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		if portCfg.Escalate && rep.AddressesOpen != nil {
 			unanswered = max(addresses-*rep.AddressesOpen, 0)
 		}
+		// The command asks every address scanned, less the ports asked: printed
+		// only when that is what the count says (no address had a second pass).
+		// The command asks the rest of the range, less the ports asked, of the
+		// addresses the count is of: every one scanned, or with a second pass
+		// the ones that showed nothing (listed when they are few).
 		if why, _ := portsPass(firstPass, unanswered, rep.Counts["ports"]); why != "" {
-			cmd := "azhaq run " + shellJoin(append(withoutFlag(args, "ports"), "-ports", "full", "-db", path))
-			if n := len(portHosts); n > 0 && n <= 8 {
-				cmd = "azhaq ports -host " + hostsOf(portHosts) + " -p full -db " + path
+			skip := portscan.Compact(opts.Ports)
+			if *portSkip != "" {
+				skip = *portSkip + "," + skip
 			}
-			rep.nextPass(cmd, why)
+			var cmd string
+			switch {
+			case unanswered == addresses:
+				cmd = "azhaq run " + shellJoin(append(withoutFlag(withoutFlag(args, "ports"), "port-skip"), "-ports", "full", "-port-skip", skip, "-db", path))
+				if n := len(portHosts); n > 0 && n <= 8 {
+					cmd = "azhaq ports -host " + hostsOf(portHosts) + " -p full -ep " + skip + " -db " + path
+				}
+			default:
+				obs, _ := st.Observations()
+				if quiet := quietAddrs(obs, 256); len(quiet) == unanswered {
+					cmd = "azhaq ports -host " + hostsOf(quiet) + " -p full -ep " + skip + " -db " + path
+				}
+			}
+			if cmd != "" {
+				rep.nextPass(cmd, why)
+			}
 		}
 	}
 	if remember && !*demo && input != "" {

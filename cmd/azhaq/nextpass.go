@@ -89,17 +89,15 @@ func catalogPass(left []int, addresses int) (why string, cost amount) {
 		plural(len(left), "port"), nOf(addresses, "address", "addresses"), moreOf(cost)), cost
 }
 
-// catalogPassCommand is the ports command line that asks the ports left out as
-// well: the -p list with them added, or them as -p beside -tp and -pf (they add
-// to it).
+// catalogPassCommand is the ports command line that asks the ports left out and
+// nothing else: -p of them, in place of the list asked, so it sends what the
+// count says.
 func catalogPassCommand(args []string, db string, left []int) string {
-	rest := slices.Clone(args)
-	more := portscan.Compact(left)
-	if v, ok := flagValue(args, "p"); ok {
-		rest = append(withoutFlag(rest, "p"), "-p", strings.TrimRight(v+","+more, ","))
-	} else {
-		rest = append(rest, "-p", more)
+	rest := args
+	for _, f := range []string{"p", "tp", "pf"} {
+		rest = withoutFlag(rest, f)
 	}
+	rest = append(slices.Clone(rest), "-p", portscan.Compact(left))
 	if db != "" && !hasFlag(rest, "db") {
 		rest = append(rest, "-db", db)
 	}
@@ -142,15 +140,19 @@ func verifyPassCommand(args []string, db string) string {
 	return "azhaq ports " + shellJoin(rest)
 }
 
-// portsPassCommand is the command that asks the whole port range of the
-// targets of args, a ports command line: the same flags with -p full. "" when
-// the targets are not on the command line (stdin).
-func portsPassCommand(args []string, db string) string {
+// portsPassCommand is the command that asks the rest of the port range of the
+// targets of args, a ports command line: the same flags with -p full and the
+// ports already asked in -ep, so it sends what the count says.
+func portsPassCommand(args []string, db string, asked []int) string {
 	rest := args
 	for _, f := range []string{"p", "tp", "pf"} {
 		rest = withoutFlag(rest, f)
 	}
-	rest = append(slices.Clone(rest), "-p", "full")
+	ex := portscan.Compact(asked)
+	if v, ok := flagValue(args, "ep"); ok && v != "" {
+		rest, ex = withoutFlag(rest, "ep"), v+","+ex
+	}
+	rest = append(slices.Clone(rest), "-p", "full", "-ep", ex)
 	if db != "" && !hasFlag(rest, "db") {
 		rest = append(rest, "-db", db)
 	}
