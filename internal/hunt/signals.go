@@ -107,6 +107,7 @@ func (h *hunter) url(r engine.MapEntry) {
 	if err != nil {
 		return
 	}
+	h.status[raw] = r.Status
 	// The answer to a path that names a file or a panel equals a baseline of
 	// the host (its soft 404, its login, its index): it says nothing of the path.
 	verdict, judged := h.verdicts[raw]

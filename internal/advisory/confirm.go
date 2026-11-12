@@ -136,7 +136,7 @@ func services(obs []types.StoredObservation, needVersion bool) []Service {
 			}
 		}
 	}
-	addrs := nameAddrs(obs)
+	addrs := NameAddrs(obs)
 	if needVersion {
 		out = mergeListeners(out, addrs)
 	}
@@ -390,11 +390,11 @@ func productVersionIn(text, product string) (string, string) {
 	return "", ""
 }
 
-// nameAddrs is the address each name answered from, as the run recorded it:
+// NameAddrs is the address each name answered from, as the run recorded it:
 // a scan row's own, the one a web answer came from, and, for a name that
 // resolved to exactly one address, its DNS answer. A name with two
 // addresses and no row that says which is left out: it is not told apart.
-func nameAddrs(obs []types.StoredObservation) map[string]string {
+func NameAddrs(obs []types.StoredObservation) map[string]string {
 	out := map[string]string{}
 	set := func(name, ip string, force bool) {
 		name, ip = strings.ToLower(strings.TrimSpace(name)), normIP(ip)

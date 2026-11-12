@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"net/netip"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -47,18 +49,19 @@ type findingRecord struct {
 	// Source says what named the product of an identification a name's root
 	// page gave: page title, generator, header X-Powered-By, header Server or
 	// technology. A title is no version: the version is only what one stated.
-	Source       string  `json:"source,omitempty"`
-	AdvisoryID   string  `json:"advisory_id,omitempty"`
-	AdvisoryURL  string  `json:"advisory_url,omitempty"`
-	Lead         string  `json:"lead,omitempty"` // an advisory record's service lead: "host:port Product"
-	checked      bool    // a read that answered settled something of this advisory (observed or inferred)
-	KEV          bool    `json:"kev,omitempty"`  // CISA lists the advisory as exploited
-	CVSS         float64 `json:"cvss,omitempty"` // the score the advisory's record states
-	Precondition string  `json:"precondition,omitempty"`
-	Request      string  `json:"request,omitempty"`
-	Evidence     string  `json:"evidence"`
-	Command      string  `json:"command"`
-	Collector    string  `json:"collector,omitempty"` // the collector of the stored row this record is read from
+	Source       string   `json:"source,omitempty"`
+	AdvisoryID   string   `json:"advisory_id,omitempty"`
+	AdvisoryURL  string   `json:"advisory_url,omitempty"`
+	Lead         string   `json:"lead,omitempty"` // an advisory record's service lead: "host:port Product"
+	checked      bool     // a read that answered settled something of this advisory (observed or inferred)
+	names        []string // every host string the listener answered under with this product and version
+	KEV          bool     `json:"kev,omitempty"`  // CISA lists the advisory as exploited
+	CVSS         float64  `json:"cvss,omitempty"` // the score the advisory's record states
+	Precondition string   `json:"precondition,omitempty"`
+	Request      string   `json:"request,omitempty"`
+	Evidence     string   `json:"evidence"`
+	Command      string   `json:"command"`
+	Collector    string   `json:"collector,omitempty"` // the collector of the stored row this record is read from
 	// Check is, for a lead, what would prove it.
 	Check string `json:"check,omitempty"`
 	// Proof: observed_at, method, target, request_bytes, status, content_type,
@@ -159,12 +162,63 @@ func buildFindings(g *graphView) findingSet {
 	command := runCommand(g)
 	var set findingSet
 	services := servicesByTarget(g.obs)
+	addrs := advisory.NameAddrs(g.obs)
+	hashes := map[string]string{} // URL → body hash, for the names whose answers are told apart
+	for _, a := range proof.AnswersOf(g.obs) {
+		if a.Hash != "" {
+			hashes[a.URL] = a.Hash
+		}
+	}
+	// One identification row for a listener (address and port), product and
+	// version, whatever it was reached as; byListener is the row each stands on.
+	listenerOf := func(host string, port int) string {
+		host = strings.ToLower(host)
+		if a, err := netip.ParseAddr(host); err == nil {
+			host = a.Unmap().String()
+		} else if a := addrs[host]; a != "" {
+			host = a
+		}
+		return host + ":" + strconv.Itoa(port)
+	}
+	identKey := func(rec findingRecord) string {
+		return listenerOf(rec.Host, rec.Port) + "|" + advisory.ProductKey(rec.Product) + "|" + rec.Version
+	}
+	byListener := map[string]int{}
+	answerOf := func(rec findingRecord) string {
+		if rec.Proof == nil {
+			return ""
+		}
+		return hashes[rec.Proof.Target]
+	}
+	// foldedInto says an identification record is the listener's row seen under
+	// another name, with the same answer, and notes the name on that row.
+	foldedInto := func(rec findingRecord) bool {
+		i, ok := byListener[identKey(rec)]
+		if !ok {
+			return false
+		}
+		have := &set.Identifications[i]
+		if a, b := answerOf(*have), answerOf(rec); a != "" && b != "" && a != b {
+			return false // another page of the same address and port: its own application
+		}
+		for _, n := range append([]string{rec.Host}, rec.names...) {
+			if n != "" && !strings.EqualFold(n, have.Host) && !slices.ContainsFunc(have.names, func(x string) bool { return strings.EqualFold(x, n) }) {
+				have.names = append(have.names, n)
+			}
+		}
+		return true
+	}
 	add := func(rec findingRecord) {
 		switch rec.Tier {
 		case proof.TierFinding:
 			set.Findings = append(set.Findings, rec)
 		case proof.TierIdentification:
 			set.Identifications = append(set.Identifications, rec)
+			if rec.Product != "" && rec.Port > 0 {
+				if _, ok := byListener[identKey(rec)]; !ok {
+					byListener[identKey(rec)] = len(set.Identifications) - 1
+				}
+			}
 		default:
 			set.Leads = append(set.Leads, rec)
 		}
@@ -239,6 +293,7 @@ func buildFindings(g *graphView) findingSet {
 			AdvisoryURL: r.AdvisoryURL, Precondition: r.Precondition, Request: r.Request,
 			Evidence: r.Evidence, Command: command, Collector: "azhaq-advisories", KEV: lead.KEV, CVSS: lead.CVSS,
 			Lead: leadName(r.Target, r.Product), checked: lead.Confidence == advisory.Observed || lead.Confidence == advisory.Inferred,
+			names: lead.Names,
 		}
 		identified[targetOf(rec)+"\x00"+advisory.ProductKey(rec.Product)] = true
 		add(ident(rec))
@@ -256,9 +311,13 @@ func buildFindings(g *graphView) findingSet {
 			host = svc.IP
 		}
 		p := identProof(svc)
-		add(findingRecord{Tier: proof.TierIdentification, Kind: "software-version", Label: verify.VersionOnly, Severity: "info",
+		rec := findingRecord{Tier: proof.TierIdentification, Kind: "software-version", Label: verify.VersionOnly, Severity: "info",
 			Host: host, Port: svc.Port, URL: svc.Origin, Product: svc.Product, Version: svc.Version, Source: svc.Source,
-			Request: p.Method + " " + p.Target, Evidence: p.Excerpt, Command: command, Collector: p.How, Proof: p})
+			Request: p.Method + " " + p.Target, Evidence: p.Excerpt, Command: command, Collector: p.How, Proof: p, names: svc.Names}
+		if foldedInto(rec) {
+			continue
+		}
+		add(rec)
 	}
 	// A product a stage named with no version: an identification too, so the
 	// worklist shows what the run saw on each listener. There is no advisory to
@@ -277,9 +336,13 @@ func buildFindings(g *graphView) findingSet {
 			host = svc.IP
 		}
 		p := identProof(svc)
-		add(findingRecord{Tier: proof.TierIdentification, Kind: "software-version", Label: verify.VersionOnly, Severity: "info",
+		rec := findingRecord{Tier: proof.TierIdentification, Kind: "software-version", Label: verify.VersionOnly, Severity: "info",
 			Host: host, Port: svc.Port, URL: svc.Origin, Product: svc.Product, Source: svc.Source,
-			Request: p.Method + " " + p.Target, Evidence: "no version seen: " + p.Excerpt, Command: command, Collector: p.How, Proof: p})
+			Request: p.Method + " " + p.Target, Evidence: "no version seen: " + p.Excerpt, Command: command, Collector: p.How, Proof: p, names: svc.Names}
+		if foldedInto(rec) {
+			continue
+		}
+		add(rec)
 	}
 	for _, l := range certLeads(g.obs, command) {
 		add(l)

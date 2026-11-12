@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -131,6 +132,7 @@ func huntRows(g *graphView, path string, roles []hunt.RoleRow, since time.Durati
 	for _, t := range takeovers(ents, g.obs) {
 		in.Takeovers = append(in.Takeovers, hunt.Takeover{Host: t.Host, Strong: t.Strength == "strong", Dangling: t.Strength == "dangling", Detail: takeoverDetail(t.Finding)})
 	}
+	in.Addrs = advisory.NameAddrs(g.obs)
 	set := buildFindings(g)
 	in.Listeners = listenersOf(set)
 	for _, r := range set.Findings {
@@ -152,7 +154,7 @@ func listenersOf(set findingSet) []hunt.Listener {
 	toListener := func(r findingRecord, kind string) hunt.Listener {
 		return hunt.Listener{Ident: hunt.Ident{Kind: kind, What: r.Kind, Host: r.Host, Port: r.Port, Product: r.Product, Version: r.Version, Source: r.Source,
 			AdvisoryID: r.AdvisoryID, AdvisoryURL: r.AdvisoryURL, Label: r.Label, Severity: r.Severity, KEV: r.KEV, CVSS: r.CVSS,
-			Evidence: r.Evidence, Command: r.Command}, Proof: r.Proof}
+			Evidence: r.Evidence, Command: r.Command, Also: otherNames(r)}, Proof: r.Proof}
 	}
 	for _, r := range set.Findings {
 		if r.Collector == "azhaq-verify" {
@@ -237,4 +239,17 @@ func takeoverDetail(f takeover.Finding) string {
 		d += " (" + f.Evidence + ")"
 	}
 	return d
+}
+
+// otherNames are the host strings a record's listener answered under, besides
+// the one it is named by.
+func otherNames(r findingRecord) []string {
+	var out []string
+	for _, n := range r.names {
+		if !strings.EqualFold(n, r.Host) && !slices.Contains(out, n) {
+			out = append(out, n)
+		}
+	}
+	sort.Strings(out)
+	return out
 }

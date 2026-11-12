@@ -1869,6 +1869,13 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 			}
 		}
 	}
+	if rep.Stopped == "" && !out.embedded && !out.plan && !out.scratch && rep.Command == "run" && !verifyLoginsFl.on && (!rules.Empty() || len(seedScope(seeds)) > 0) {
+		if obs, err := st.Observations(); err == nil {
+			if why, _ := loginsPass(obs); why != "" {
+				rep.nextPass(loginsPassCommand(args, path), why)
+			}
+		}
+	}
 	if rep.Stopped == "" && !out.embedded && rep.Command == "run" && len(opts.Ports) > 0 {
 		// The ports were asked of the addresses the run scanned: the rest of the range is the next pass.
 		addresses := 0

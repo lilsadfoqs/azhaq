@@ -27,8 +27,11 @@ type Input struct {
 	Roles     []RoleRow
 	Listeners []Listener // what the run named on each listener, one record each
 	Measured  []Measured // findings measured of a name, apart from its routes and leads
-	Now       time.Time
-	Since     time.Duration // "new" means first seen within this long
+	// Addrs is the one address each name resolved to, by lower-case name: two
+	// hosts at the same address and port that answered the same are one row.
+	Addrs map[string]string
+	Now   time.Time
+	Since time.Duration // "new" means first seen within this long
 }
 
 // Secret is a credential a script carried; Where is the file. Name, Preview
@@ -78,6 +81,9 @@ type Row struct {
 	// Template is set on the row of an input the pages of an origin carry in
 	// common: the input, and on how many of the origin's pages.
 	Template *Template `json:"template,omitempty"`
+	// AlsoAt, on a route that answered the same body at other host names of the
+	// same address and port, is their URLs.
+	AlsoAt []string `json:"also_at,omitempty"`
 	// Ident is set on the row of a listener the run named (Type Service): its
 	// fields (kind, host, port, product, version, advisory_id, label…) are the
 	// row's own in JSON.
@@ -113,6 +119,7 @@ type cand struct {
 	proved          map[string]bool // the signals an answer or a format proves
 	check           string          // the check a path verdict names, for a lead
 	proof           *proof.Proof
+	also            []string // URLs of other names that answered the same
 }
 
 type hunter struct {
@@ -126,6 +133,7 @@ type hunter struct {
 	cut       time.Time
 	old       bool                         // some URL is older than the window: "new" tells rows apart
 	maps      map[string][]engine.MapEntry // source map rows by origin: one row per host (sourceMaps)
+	status    map[string]int               // the first-hop status of each URL row
 }
 
 // errText is what a failed answer's body showed: its kind (webextract's
@@ -138,7 +146,7 @@ func Build(in Input) []Row {
 	if in.Now.IsZero() {
 		in.Now = time.Now()
 	}
-	h := &hunter{in: in, cands: map[string]*cand{}, apiDoc: apiDescriptions(in.Obs), cut: in.Now.Add(-in.Since)}
+	h := &hunter{in: in, cands: map[string]*cand{}, apiDoc: apiDescriptions(in.Obs), cut: in.Now.Add(-in.Since), status: map[string]int{}}
 	h.errs, h.reflected = answersOf(in.Obs)
 	h.verdicts = proof.Judge(proof.AnswersOf(in.Obs))
 	h.chrome = chromeInputs(in.Rows)
@@ -160,6 +168,7 @@ func Build(in Input) []Row {
 	h.secrets()
 	h.takeovers()
 	h.roles()
+	h.foldNames()
 	var out []Row
 	for _, l := range in.Listeners {
 		out = append(out, l.row(in.DB))
@@ -253,6 +262,12 @@ func (c *cand) row(db string) Row {
 	if c.dangling && len(c.weights) == 1 {
 		named = true
 	}
+	var alsoAt []string
+	if len(c.also) > 0 {
+		alsoAt = append(alsoAt, c.also...)
+		sort.Strings(alsoAt)
+		rs = append(rs, Reason{"same-answer", "the same answer, by body hash, at " + join(alsoAt, 4)})
+	}
 	if named && !c.dangling {
 		rs = append(rs, Reason{"unconfirmed", fmt.Sprintf("named by a script, not confirmed: GET %d", c.namedGET)})
 	}
@@ -268,7 +283,7 @@ func (c *cand) row(db string) Row {
 	if len(rs) > 0 {
 		best = rs[0].Signal
 	}
-	row := Row{Score: score, Key: c.display(), Type: c.typ, Reasons: rs, Next: c.next(db, best), Template: c.tmpl, scope: c.scope, signals: n, named: named}
+	row := Row{Score: score, Key: c.display(), Type: c.typ, Reasons: rs, Next: c.next(db, best), Template: c.tmpl, AlsoAt: alsoAt, scope: c.scope, signals: n, named: named}
 	if len(c.proved) > 0 {
 		row.Tier, row.Proof = proof.TierFinding, c.proof
 		return row

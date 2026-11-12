@@ -71,6 +71,8 @@ leads (2): inferred from a name, a path or a guess; each names the check that wo
 | `proof` | On a finding of a path check, and on a listener, the proof fields of [report](report.md#what-a-finding-carries): the request, the excerpt of the answer with its offset, the command that shows it again. |
 | `kind` | Only on the row of a listener: `identification`, or `finding` when a read proved something on it. |
 | `what` | On a listener: the kind of the record in `report -findings` (`advisory-precondition`, `software-version`, `unauthenticated-read`…). |
+| `also_at` | On a route that answered the same body at other host names of its address and port: their URLs. |
+| `also_named` | On a listener also reached under other host names (its address, a name that resolves to it) with the same product and version: those names. |
 | `host`, `port`, `product`, `version` | On a listener. `version` is `""` when no version was seen. |
 | `source` | On a listener a name's root page gave: what named the product, `page title`, `generator`, `header X-Powered-By`, `header Server` or `technology`. A title is not a version: `version` is only what one of them stated. |
 | `advisory_id`, `advisory_url`, `advisories`, `kev`, `cvss` | On a listener with an advisory match: the top advisory, how many advisories match the version, whether CISA lists the top one as exploited, and its score. |
@@ -118,6 +120,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 - A row with no signal of its own is left out.
 - A row whose only signal is `new` never ranks.
 - Static assets, scripts, catch-all pages and pages that are gone are never rows.
+- A route that answered the same at several host names of one address and port is one row, not one for each name. The names must resolve to the same address, and every answer must have been read, with the same status and the same body hash. The row lists the other URLs in `also_at` and in a `same-answer` reason, and the tier counts count it once. A route whose answer was read at only one of the names is not folded: nothing shows the answers equal.
 - An input name that most pages of an origin carry belongs to the site's template, such as a search box or a sign-in form in every page's header. The rule: at least 5 of the origin's fetched pages carry the name, and at least 40% of them. The numbers come from the v0.12 hunter evidence, where one search box was 77 of the top 100 rows. The pages that only carry it have no signal for it and are left out. The input is not lost, since it can be the injection point: it is one row for each origin and name, on the page it was first seen on, with a reason such as `input q on 312 of 340 pages of http://host:8080 (the site's template)`, ranked by its own signals like any other input. Its `-json` row has `template: {input, pages, of}`. A route that takes the name in its own query keeps it as its own signal.
 
 ### Listeners
@@ -128,6 +131,7 @@ A listener row is what the run named on one `host:port`. The rows come from the 
 - The top advisory the version matches, with its label as `report -findings` says it (`proved`, `version-only`, `conditional`) and how many advisories match in all. The others are in `report -findings`. A product with no version has no advisory: there is nothing to match.
 - The proof: the banner or the header that stated it, and the command that shows it again, which is the row's `next`.
 - A name that shares its listener with others (name-based virtual hosts) has a row of its own, keyed `name:port`, for the application its root page names about itself: see [Applications of a name](#applications-of-a-name).
+- A listener reached under its address and under a name that resolves to it, with the same product and version, is one row, which lists the other host names in `also_named` and in its `identified` reason. Names whose root pages answered differently are rows of their own, whatever the product.
 - A read that proved something on a listener (`-verify`: a data store that answered without a password) is a finding row.
 
 An identification is never softened: `version-only` says the version is in the advisory's range and nothing more was checked.
