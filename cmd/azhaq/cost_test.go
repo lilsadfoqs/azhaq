@@ -169,8 +169,8 @@ func TestPlanEstimatesEachStage(t *testing.T) {
 		}
 	}
 	if st := byStage["web"]; st != nil {
-		if cols, _ := st["collectors"].([]any); len(cols) != 2 {
-			t.Errorf("the web stage lists its collectors, http and paths: %v", st["collectors"])
+		if cols, _ := st["collectors"].([]any); len(cols) != 3 { // and the virtual host requests, which a domain and a scope bring
+			t.Errorf("the web stage lists its collectors, http, paths and vhost: %v", st["collectors"])
 		}
 		if st["not_counted"] == nil || st["estimate_at_least"] != true {
 			t.Errorf("the web stage does not say what it leaves out: %v", st)

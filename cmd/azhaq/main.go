@@ -360,7 +360,8 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	providersFile := fs.String("providers", "", "API keys per source, YAML (default ~/.config/azhaq/providers.yaml, else subfinder's provider-config.yaml)")
 	resolversFile := fs.String("resolvers", "", "DNS resolvers: a file with one per line, or a comma list; each is ADDR, ADDR:PORT or udp:, tcp:, dot:, doh:URL[:get] and then the address (default: public resolvers). Named resolvers answer every name, special-use ones (.test, .local, localhost) included; the system resolver is never asked")
 	dnsRate := fs.Float64("dns-rate", 0, "DNS queries per second per resolver (0: no pace but the queries in flight, as dnsx)")
-	bruteFile := fs.String("dns-brute", "", "resolve WORD.domain for each word in this file (active; the targets given are the scope unless -allow)")
+	bruteFile := fs.String("dns-brute", "", "resolve WORD.domain for each word in this file instead of the built-in list (active; the targets given are the scope unless -allow). With none, no name is guessed. Without the flag, a domain target that -allow or -scope names is guessed from the built-in list of 5000 common subdomain words (SecLists, MIT), asked at the run's resolvers; -passive and -probe guess nothing unless the flag is given. default asks for the built-in list wherever the flag is needed to turn guessing on")
+	noVhost := fs.Bool("no-vhost", false, "do not try each name found, in scope, as a virtual host on the web services of the addresses in scope (one request for each name, address and port, compared with the address's default answer)")
 	permute := fs.Bool("permute", false, "resolve variations of found names (active; the targets given are the scope unless -allow)")
 	portsSpec := fs.String("ports", "", "scan TCP ports: default (the top 1000 and the usual ports of the services azhaq names and checks, then every TCP port of each address that answered; what a range or an address among the targets gets when no -ports is given), top-100, top-1000, full or a list of ports, ranges and these names, such as 22,80,8000-8100 or top-100,8888 (active; the targets given are the scope unless -allow)")
 	portsUDP := fs.String("ports-udp", "", "ask UDP ports (active): top (about 25 common ones), full or a list of ports, ranges and these names, such as 53,123,161,1-1024 or top,5354; a reply is open, an ICMP unreachable closed, neither open|filtered (-ports none: UDP only)")
@@ -636,7 +637,10 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	// Everything that can make this a usage error is checked before a
 	// database is created.
 	scopeNamed := len(allow) > 0
-	active := *bruteFile != "" || *permute || *graphql || portsEff != "" || *portsUDP != "" || *dirsFile != "" || *paramsFile != "" || advFlags.confirm
+	// -dns-brute none says no guessing; a file or "default" asks for it.
+	bruteNone := *bruteFile == "none"
+	bruteGiven := *bruteFile != "" && !bruteNone
+	active := bruteGiven || *permute || *graphql || portsEff != "" || *portsUDP != "" || *dirsFile != "" || *paramsFile != "" || advFlags.confirm
 	if *paramsFile != "" {
 		switch m := strings.ToUpper(*paramsMethod); m {
 		case "GET":
@@ -813,8 +817,15 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		budgets.Skip[name] = true
 	}
 	budgets.Active = map[string]bool{}
-	if *bruteFile != "" {
+	// A domain target the scope names is guessed from the built-in list, unless
+	// -dns-brute says otherwise, and the run sends nothing at all to targets
+	// under -passive or -probe unless the flag asks.
+	bruteBuiltin := *bruteFile == "default" || (*bruteFile == "" && scopeNamed && !*passive && !*probe && domainInScope(seeds, rules))
+	if bruteGiven || bruteBuiltin {
 		budgets.Active["dns-brute"] = true
+	}
+	if *noVhost || !scopeNamed {
+		budgets.Skip["azhaq-vhost"] = true // asked unless -no-vhost, once a scope names the hosts
 	}
 	if *permute {
 		budgets.Active["permute"] = true
@@ -1104,7 +1115,10 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 			return err
 		}
 	}
-	if *bruteFile != "" {
+	switch {
+	case bruteBuiltin:
+		opts.BruteWords = brutecol.DefaultWords()
+	case bruteGiven:
 		if opts.BruteWords, err = loadLines(*bruteFile); err != nil {
 			return err
 		}
@@ -1237,7 +1251,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		// What the command line asks for by name runs: a flag is never dropped.
 		asked := map[string]bool{
 			"azhaq-dirs": *dirsFile != "", "azhaq-params": *paramsFile != "", "azhaq-ports": portsEff != "" || *portsUDP != "",
-			"azhaq-shots": *shots != "", "azhaq-render": *render, "azhaq-dns-brute": *bruteFile != "", "azhaq-permute": *permute,
+			"azhaq-shots": *shots != "", "azhaq-render": *render, "azhaq-dns-brute": bruteGiven, "azhaq-permute": *permute,
 			"azhaq-graphql": *graphql, "azhaq-graphql-schema": *graphql,
 		}
 		for _, n := range cat.Names() {
@@ -1285,6 +1299,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	send.verify = verifyFl.on
 	send.advisories = advisoryPlan(advFlags)
 	send.hostGuesses = *hostGuesses
+	send.bruteBuiltin = bruteBuiltin
 	send.paramsWords, send.paramsPages = len(opts.Params.Words), *paramsPerHost
 	// The GETs among the targets whose own name declares a state change
 	// are named before anything is sent: in a plan's list, and in a run's
@@ -1343,6 +1358,9 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 			return err
 		}
 		cfg.DenyPath, cfg.SignIn, cfg.Given = budgets.Scope.DenyPath, *login, givenURLs(seeds)
+		if bruteBuiltin && *bruteFile == "" {
+			cfg.Args = append(cfg.Args, "-dns-brute=default") // the guesses are lent too: the workers need the list
+		}
 		eng.Workers = engine.NewWorkers()
 		stopServe, err := serveWorkers(*serve, *workerToken, eng.Workers, cfg, func(rep fetch.SessionReport) {
 			// Made now, though the work is lent: the run's own requests would not.
@@ -1767,6 +1785,17 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 			rep.Notes = append(rep.Notes, n)
 		}
 	}
+	// The guesses a wildcard answered are not names: said apart from the ones that did not resolve.
+	var wild wildAnswers
+	for _, o := range obs {
+		if o.Collector == brutecol.BruteName || o.Collector == brutecol.PermuteName {
+			var p map[string]any
+			if json.Unmarshal(o.Payload, &p) == nil {
+				wild.addPayload(p)
+			}
+		}
+	}
+	rep.Notes = append(rep.Notes, wild.notes()...)
 	if n := guessBudget.Held(); n > 0 {
 		rep.Notes = append(rep.Notes, fmt.Sprintf("-max-names %d held back %d guesses: the -w words and -permute variations beyond it were not asked; azhaq resume asks them, up to its own -max-names", *maxNames, n))
 		if rep.Stopped == "" {
@@ -3499,4 +3528,15 @@ func (k *knownFilesFlag) Set(v string) error {
 	}
 	*k = knownFilesFlag(v)
 	return nil
+}
+
+// domainInScope says whether a domain among the seeds is inside the scope:
+// the names guessed under it are.
+func domainInScope(seeds []types.Seed, rules scope.Rules) bool {
+	for _, s := range seeds {
+		if s.Type == types.TypeDomain && rules.AllowsSeed(s) {
+			return true
+		}
+	}
+	return false
 }

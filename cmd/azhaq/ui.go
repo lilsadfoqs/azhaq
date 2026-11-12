@@ -518,7 +518,7 @@ func capabilityOf(collector string) string {
 		return "sources"
 	case "dns", "dns-brute", "permute", "asn", "prefix", "ptr":
 		return "names"
-	case "http", "paths", "crawl", "js", "tls", "openapi", "graphql", "graphql-schema", "render":
+	case "http", "paths", "crawl", "js", "tls", "openapi", "graphql", "graphql-schema", "render", "vhost":
 		return "web"
 	case "ports":
 		return "ports"

@@ -454,7 +454,7 @@ func keptArgs(args []string) []string {
 					continue
 				}
 			}
-			if val != "-" && val != "" && !(name == "ledger" && val == "off") && (name != "resolvers" || isFile(val)) && !(name == "params" && builtinNames(val)) && !(name == "dirs" && val == dirscol.Builtin) {
+			if val != "-" && val != "" && !(name == "ledger" && val == "off") && (name != "resolvers" || isFile(val)) && !(name == "params" && builtinNames(val)) && !(name == "dirs" && val == dirscol.Builtin) && !(name == "dns-brute" && (val == "none" || val == "default")) {
 				if abs, err := filepath.Abs(val); err == nil {
 					val = abs
 				}

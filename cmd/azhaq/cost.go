@@ -14,6 +14,7 @@ import (
 	"github.com/lilsadfoqs/azhaq/internal/collectors/dirscol"
 	"github.com/lilsadfoqs/azhaq/internal/collectors/pathscol"
 	"github.com/lilsadfoqs/azhaq/internal/collectors/portcol"
+	"github.com/lilsadfoqs/azhaq/internal/collectors/vhostcol"
 	"github.com/lilsadfoqs/azhaq/internal/ledger"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"github.com/lilsadfoqs/azhaq/scope"
@@ -239,7 +240,7 @@ func stageOfCollector(name string) string {
 		return "sources"
 	case "dns", "dns-brute", "permute", "asn", "prefix", "ptr":
 		return "names"
-	case "http", "paths", "crawl", "js", "tls", "openapi", "graphql", "graphql-schema", "render":
+	case "http", "paths", "crawl", "js", "tls", "openapi", "graphql", "graphql-schema", "render", "vhost":
 		return "web"
 	case "ports":
 		return "ports"
@@ -587,6 +588,9 @@ func estimateCost(seeds []types.Seed, planned [][]string, runs func(string) bool
 	if n := dnsFloor(names); n > 0 {
 		e.add("azhaq-dns", amount{DNS: n}, "wildcard checks past the first of a zone, CNAME chains, and a second resolver asked about a name that does not answer")
 	}
+	if runs("azhaq-vhost") && vhostPossible(seeds) {
+		e.add("azhaq-vhost", amount{}, vhostOpen)
+	}
 	if active["permute"] && !permuteNoted {
 		for _, s := range seeds {
 			if s.Type == types.TypeDomain || s.Type == types.TypeHostname {
@@ -717,6 +721,31 @@ func portsOf(m portModel, s types.Seed, ranges []netip.Prefix) amount {
 	}
 	return amount{}
 }
+
+// vhostPossible says whether the targets can bring a name and a web service
+// together: not a run of addresses alone, which names nothing.
+func vhostPossible(seeds []types.Seed) bool {
+	for _, s := range seeds {
+		switch s.Type {
+		case types.TypeIPAddress:
+		case types.TypeURL:
+			if net.ParseIP(normalize.HostFromURL(s.Key())) == nil {
+				return true
+			}
+		case types.TypeHostname:
+			if net.ParseIP(s.Key()) == nil {
+				return true
+			}
+		default:
+			return true
+		}
+	}
+	return false
+}
+
+// vhostOpen is what the virtual host requests leave out of the estimate: the
+// names and the web services they are asked of are found as the run goes.
+var vhostOpen = fmt.Sprintf("virtual host requests: one for each name found in scope and web service of the addresses in scope (a name asked there by name is not asked twice), and %d for each service to learn its default answer (-no-vhost turns them off)", vhostcol.Calibrations)
 
 // permuteOpen is what -permute's estimate leaves out: the names the sources
 // and the lookups give are not known before they answer.

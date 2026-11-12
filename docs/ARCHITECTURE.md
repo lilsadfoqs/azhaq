@@ -99,12 +99,13 @@ Sources Azhaq does not query itself can be plugged in as external programs: see 
 | `azhaq-js` | the requests, routes, router views, WebSocket endpoints and credentials that scripts hold |
 | `azhaq-openapi` | OpenAPI 3 and Swagger 2 documents, with each operation's parameters |
 | `azhaq-graphql` | GraphQL endpoints; with `-graphql`, the schema by introspection |
+| `azhaq-vhost` | each name found, as the Host of each web service of the addresses in scope: a name whose answer differs from the service's default is a site of its own |
 | `azhaq-paths` | the built-in paths: `robots.txt`, sitemaps, API description locations, … |
 | `azhaq-dns` | A, AAAA and CNAME chains, the CDN or WAF in front, MX, TXT and NS; marks dead and wildcard names |
 | `azhaq-tls` | certificates and their names |
 | `azhaq-subdomains` | names from passive sources and from the name history of earlier runs |
 | `azhaq-urls` | historical URLs from the Wayback Machine, Common Crawl, OTX, urlscan and Arquivo, junk left out |
-| `azhaq-dns-brute`, `azhaq-permute`, `azhaq-dirs`, `azhaq-params`, `azhaq-ports` | the active techniques |
+| `azhaq-dns-brute`, `azhaq-permute`, `azhaq-dirs`, `azhaq-params`, `azhaq-ports` | the active techniques (`azhaq-dns-brute` asks a built-in list unless told otherwise) |
 | `azhaq-asn`, `azhaq-prefix`, `azhaq-ptr` | networks, their addresses and reverse DNS names |
 | `azhaq-render`, `azhaq-shots` | Chrome: rendered pages and their requests; screenshots |
 | `azhaq-search` | Shodan, FOFA and Netlas, with keys |
