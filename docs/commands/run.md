@@ -438,6 +438,20 @@ Each result carries the exact request sent and an excerpt of the answer, is prin
 azhaq run -url https://app.example.com/ -ports top-1000 -verify -db app.db
 ```
 
+### Published default logins and unauthenticated reads
+
+`-verify-logins` (off by default) is a separate flag from `-verify`: for a product its catalog ([`internal/verify`](../../internal/verify)) names, among the services the run confirmed, it makes two kinds of check, and a success is a finding.
+
+- **Published default logins.** One sign-in attempt per published default credential pair, in the catalog's order, never a wordlist and never guessed: each pair carries the one vendor page or advisory that states it. The attempt stops at the first pair that succeeds, and, for that host, at a lockout sign in the answer, a `429` status, or a captcha on the sign-in page, read first with a plain GET, before any credential is sent to a page that carries one.
+- **Unauthenticated reads.** One GET of a resource a product's own docs say needs a sign-in, and the same GET again with a deliberately wrong credential, never a guess at a real pair. It is a finding only when the unauthenticated answer shows the protected content; the wrong-credential answer is kept as evidence regardless.
+- **The sign-in attempts are the writes this flag asks for, and no others.** Every request goes through the scope, `-deny-path`, `-max-requests`, the pace and the kill file, and is a ledger line of the collector `azhaq-verify-logins`.
+- **Nothing is changed on the target.** No session is kept after a check, and a logout is sent where the product has one. A password is never printed or stored — only as "the published default".
+- A success is stored and printed exactly as `-verify`'s own results are: one `verify` row, labelled `proved`, with the exact request sent, an excerpt of the answer and the command that reproduces it. The boundary and the catalog are in [Published default logins and unauthenticated reads](../CONCEPTS.md#published-default-logins-and-unauthenticated-reads--verify-logins).
+
+```
+azhaq run -url https://app.example.com/ -ports top-1000 -verify-logins -db app.db
+```
+
 ## Flags
 
 <!-- flags:begin run -->
@@ -492,6 +506,7 @@ azhaq run -url https://app.example.com/ -ports top-1000 -verify -db app.db
 | `-advisories-confirm` | bool |  | with -advisories: for each affected or conditional lead, also make the one benign read the advisory names (a GET of its documented version or info path, or of / to read the version it states): no payload, no login, no state change, never a request that could trigger the issue; each read is in the ledger and counts against -max-requests, and each lead is labelled observed, inferred or claimed (with -advisories; reads only within the run's scope: the targets given, -allow or -scope) |
 | `-advisory-source` | string |  | your own advisory records to match as well as the built-in index, OSV JSON (a record, a list, {"vulns": [...]}, or JSON lines): a file (works offline), or an http(s) URL asked once as a third-party source; azhaq fetches none it was not given |
 | `-verify` | bool |  | with the services this run confirmed: make each enumerated safe read-only verification (one fixed request a client with no credentials sends, listed by plan: Redis INFO server, MongoDB isMaster, memcached version, ZooKeeper srvr and so on; with -advisories, each advisory lead is labelled from its confirmation read) and label the results proved, version-only or conditional, each with the exact request sent and an excerpt of the answer; every read goes through the scope, -deny-path (for the advisory GET), -max-requests, the pace, the kill file and the ledger; no payload, no credential, no write and no request that tries to trigger an issue |
+| `-verify-logins` | bool |  | with the services this run confirmed: for a product internal/verify's logins catalog names, one sign-in attempt per published default credential pair (each sourced to a vendor doc or an advisory), stopping at the first success and, for that host, at a lockout sign, a 429 or a captcha on the sign-in page; and, for a product whose own docs say a resource needs a sign-in, one GET of it with no credential compared with the same GET carrying a deliberately wrong credential, a finding only when the unauthenticated GET shows the protected content; azhaq plan lists every check the catalog has before anything is sent. Off by default. The sign-in attempts are the writes this flag asks for and no others; a password is never printed, only "the published default"; no session is kept after a check, and a logout is sent where the product has one. Every request goes through the scope, -deny-path, -max-requests, the pace and the kill file, and is a ledger line of the collector azhaq-verify-logins |
 
 **Crawl scope**
 

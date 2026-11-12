@@ -415,6 +415,8 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	advFlags.register(fs)
 	var verifyFl verifyFlags
 	verifyFl.register(fs)
+	var verifyLoginsFl verifyLoginsFlags
+	verifyLoginsFl.register(fs)
 	graphql := fs.Bool("graphql", false, "read the schema of GraphQL endpoints with an introspection query (active; the targets given are the scope unless -allow)")
 	graphqlWordlist := fs.String("graphql-wordlist", "", "extra probe words (one per line), tried and recombined with the built-in ones when a GraphQL endpoint's introspection is off and its schema has to be recovered from validation errors")
 	skip := fs.String("skip", "", "collectors not to run, comma-separated: azhaq-ports or ports, subs for the subdomain collector (azhaq plan lists them); a name that is none is an error; azhaq resume leaves out the tasks the run kept for them")
@@ -640,7 +642,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	// -dns-brute none says no guessing; a file or "default" asks for it.
 	bruteNone := *bruteFile == "none"
 	bruteGiven := *bruteFile != "" && !bruteNone
-	active := bruteGiven || *permute || *graphql || portsEff != "" || *portsUDP != "" || *dirsFile != "" || *paramsFile != "" || advFlags.confirm
+	active := bruteGiven || *permute || *graphql || portsEff != "" || *portsUDP != "" || *dirsFile != "" || *paramsFile != "" || advFlags.confirm || verifyLoginsFl.on
 	if *paramsFile != "" {
 		switch m := strings.ToUpper(*paramsMethod); m {
 		case "GET":
@@ -720,10 +722,13 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		return usagef("the screenshot directory %s is a file: -dir (shots) or -screenshots (run) names a directory", *shots)
 	}
 	if active && len(allow) == 0 {
-		return usagef("-dns-brute, -permute, -graphql, -ports, -dirs, -params and -advisories-confirm need a target that names a host, domain or address (an ASN or organisation does not), or -allow / -scope")
+		return usagef("-dns-brute, -permute, -graphql, -ports, -dirs, -params, -advisories-confirm and -verify-logins need a target that names a host, domain or address (an ASN or organisation does not), or -allow / -scope")
 	}
 	if advFlags.confirm && rules.Empty() {
 		return usagef("-advisories-confirm sends its reads only inside a scope: give -allow, -scope or a target that names a host or address")
+	}
+	if verifyLoginsFl.on && rules.Empty() {
+		return usagef("-verify-logins sends its sign-in attempts and reads only inside a scope: give -allow, -scope or a target that names a host or address")
 	}
 	ports, err := parsePorts(*webPorts)
 	if err != nil {
@@ -1297,6 +1302,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		send.dirsHeld = dirscol.HeldWords(opts.Dirs.Words, opts.Dirs.Extensions)
 	}
 	send.verify = verifyFl.on
+	send.verifyLogins = verifyLoginsFl.on
 	send.advisories = advisoryPlan(advFlags)
 	send.hostGuesses = *hostGuesses
 	send.bruteBuiltin = bruteBuiltin
@@ -1516,6 +1522,18 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		verifyResults, verifyFailures, verifyNote = verifyStage(ctx, st, obs, advLeads, "azhaq "+rep.Command+" -verify")
 		obs, _ = st.Observations()
 	}
+	// -verify-logins: published default logins and unauthenticated
+	// reads, a separate flag and a separate collector (azhaq-verify-
+	// logins) since, unlike -verify's checks, these send writes.
+	loginsNote := ""
+	if verifyLoginsFl.on {
+		var loginResults []verify.Result
+		var loginFailures []engine.Failure
+		loginResults, loginFailures, loginsNote = loginsStage(ctx, st, obs, "azhaq "+rep.Command+" -verify-logins")
+		verifyResults = append(verifyResults, loginResults...)
+		verifyFailures = append(verifyFailures, loginFailures...)
+		obs, _ = st.Observations()
+	}
 	edges, _ := st.Edges()
 	leftover, _ := st.LoadLeftover()
 	scope := engine.ScopeSeeds(seeds, ents, edges)
@@ -1635,11 +1653,14 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 			rep.Notes = append(rep.Notes, advNote)
 		}
 	}
-	if verifyFl.on {
+	if verifyFl.on || verifyLoginsFl.on {
 		rep.Verify = verifyResults
 		rep.Failed = append(rep.Failed, verifyFailures...)
 		if verifyNote != "" {
 			rep.Notes = append(rep.Notes, verifyNote)
+		}
+		if loginsNote != "" {
+			rep.Notes = append(rep.Notes, loginsNote)
 		}
 	}
 	if n := opts.DNS.TakeoverNote("-no-takeover"); n != "" {
