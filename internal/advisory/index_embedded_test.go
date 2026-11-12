@@ -1,6 +1,8 @@
 package advisory_test
 
 import (
+	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -28,6 +30,11 @@ func TestEmbeddedIndex(t *testing.T) {
 	ix, err := advisory.Builtin()
 	if err != nil {
 		t.Fatal(err)
+	}
+	full := ix.Meta()
+	full.Names = nil
+	if !reflect.DeepEqual(meta, full) {
+		t.Errorf("header read %+v, full read %+v", meta, full)
 	}
 	for _, p := range []pair{
 		{"Apache httpd", "2.4.49", "CVE-2021-41773", "affected"},
@@ -77,5 +84,19 @@ func TestEmbeddedIndexKnowsTheNamesAzhaqReports(t *testing.T) {
 		if got := ix.CPEs(name); len(got) != 0 {
 			t.Errorf("%q maps to %v: its version is not a release of that product", name, got)
 		}
+	}
+}
+
+// Every run's plan reads the header: it must not hold the whole header line
+// (most of it the names map) or a records buffer.
+func TestBuiltinMetaStaysSmall(t *testing.T) {
+	var a, b runtime.MemStats
+	runtime.ReadMemStats(&a)
+	if _, err := advisory.BuiltinMeta(); err != nil {
+		t.Fatal(err)
+	}
+	runtime.ReadMemStats(&b)
+	if got := b.TotalAlloc - a.TotalAlloc; got > 128<<10 {
+		t.Errorf("BuiltinMeta allocated %d bytes", got)
 	}
 }
