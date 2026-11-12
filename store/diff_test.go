@@ -221,8 +221,8 @@ func TestCompareIgnoresVolatileFields(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	add(a, `{"status":200,"body_hash":"aaaa","auth":"cookie","headers":{"x-ratelimit-remaining":"99"}}`)
-	add(b, `{"status":200,"body_hash":"bbbb","headers":{"x-ratelimit-remaining":"98"}}`)
+	add(a, `{"status":200,"body_hash":"aaaa","auth":"cookie","headers":{"x-ratelimit-remaining":"99"},"head":"aHR0cF9yZXF1ZXN0c190b3RhbCAx","head_kept":true}`)
+	add(b, `{"status":200,"body_hash":"bbbb","headers":{"x-ratelimit-remaining":"98"},"head":"aHR0cF9yZXF1ZXN0c190b3RhbCAy","head_kept":true}`)
 	d, err := Compare(a, b)
 	if err != nil {
 		t.Fatal(err)

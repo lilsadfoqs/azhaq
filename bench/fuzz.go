@@ -157,8 +157,8 @@ func (l *fuzzLeg) reportEqual(u, words string) {
 	_, am := run(u, 20*time.Minute, work, azhaq, "fuzz", "-u", u, "-w", words, "-s", "-ac", "-of", "json", "-o", af)
 	freshApp(u)
 	run(u, 20*time.Minute, work, ref("ffuf"), "-u", u, "-w", words, "-s", "-ac", "-of", "json", "-o", ff)
-	a, aerr := normalizedResults(af)
-	f, ferr := normalizedResults(ff)
+	a, aerr := normalizedResults(af, nil)
+	f, ferr := normalizedResults(ff, heldBack) // counted on neither side, as in the other fuzz checks
 	ok := aerr == nil && ferr == nil && len(a) == len(f)
 	var problem string
 	switch {
@@ -184,8 +184,9 @@ func (l *fuzzLeg) reportEqual(u, words string) {
 }
 
 // normalizedResults is a ffuf JSON report's results, one canonical line
-// each, sorted by input, with the fields that vary left out.
-func normalizedResults(path string) ([]string, error) {
+// each, sorted by input, with the fields that vary left out, and without
+// the results whose URL skip names.
+func normalizedResults(path string, skip func(string) bool) ([]string, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
@@ -198,6 +199,9 @@ func normalizedResults(path string) ([]string, error) {
 	}
 	var out []string
 	for _, r := range doc.Results {
+		if u, _ := r["url"].(string); skip != nil && skip(u) {
+			continue
+		}
 		delete(r, "duration")
 		delete(r, "resultfile")
 		if in, ok := r["input"].(map[string]any); ok {
