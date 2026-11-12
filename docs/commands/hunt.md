@@ -72,6 +72,7 @@ leads (2): inferred from a name, a path or a guess; each names the check that wo
 | `kind` | Only on the row of a listener: `identification`, or `finding` when a read proved something on it. |
 | `what` | On a listener: the kind of the record in `report -findings` (`advisory-precondition`, `software-version`, `unauthenticated-read`…). |
 | `host`, `port`, `product`, `version` | On a listener. `version` is `""` when no version was seen. |
+| `source` | On a listener a name's root page gave: what named the product, `page title`, `generator`, `header X-Powered-By`, `header Server` or `technology`. A title is not a version: `version` is only what one of them stated. |
 | `advisory_id`, `advisory_url`, `advisories`, `kev`, `cvss` | On a listener with an advisory match: the top advisory, how many advisories match the version, whether CISA lists the top one as exploited, and its score. |
 | `label`, `severity`, `evidence`, `command` | On a listener: the record's own `proved`, `version-only` or `conditional` label and severity, what the record says, and the command that produced it. |
 | `next` | The command to run next. [The next command](#the-next-command) says how it is chosen. |
@@ -83,6 +84,7 @@ leads (2): inferred from a name, a path or a guess; each names the check that wo
 | --- | --- |
 | `cross-role` | A `-roles` verdict that one role reached another's data. The heaviest signal: see [Cross-role rows](#cross-role-rows). |
 | `takeover` | A name another party may take over, on a service's own page or a domain nobody holds. |
+| `dangling-dns` | A CNAME chain that ends at a name that answered `NXDOMAIN`: a finding of severity low, ranked with the other findings. It says what was measured, and nothing about who may create the name: the `takeover-candidate` lead for the same name stays a lead. |
 | `takeover-candidate` | A CNAME to a cloud name that does not resolve (`dangling`). It rests on NXDOMAIN alone: `unverified: NXDOMAIN does not show the name is free`. See [Takeover candidates](../CONCEPTS.md#what-a-dangling-row-rests-on). |
 | `secret` | A credential a script carries. The reason names the file and gives the evidence: the name it was assigned to, the value redacted, the rule that listed it and, for a generic secret, its entropy. See [Secret candidates](#secret-candidates). |
 | `sourcemap` | The source maps azhaq read on a host, one row for the host: it weighs more when the maps carry the app's own code (`sourcesContent`) than when they only name its files. |
@@ -125,9 +127,16 @@ A listener row is what the run named on one `host:port`. The rows come from the 
 - The product and the version a service stated, or `(no version seen)` when a stage named the product and nothing named its version.
 - The top advisory the version matches, with its label as `report -findings` says it (`proved`, `version-only`, `conditional`) and how many advisories match in all. The others are in `report -findings`. A product with no version has no advisory: there is nothing to match.
 - The proof: the banner or the header that stated it, and the command that shows it again, which is the row's `next`.
+- A name that shares its listener with others (name-based virtual hosts) has a row of its own, keyed `name:port`, for the application its root page names about itself: see [Applications of a name](#applications-of-a-name).
 - A read that proved something on a listener (`-verify`: a data store that answered without a password) is a finding row.
 
 An identification is never softened: `version-only` says the version is in the advisory's range and nothing more was checked.
+
+### Applications of a name
+
+When several names share an address and port, the root page of each name can name a different application. A name's row is read from that page, by the sources `page title` (the title rules `azhaq ports` reads a page's title with), `generator` (the meta tag), `header X-Powered-By`, `header Server` and `technology` (the technologies found in the page). The `source` field says which; a title names a product and no version. There is one row for each name, port and product, and none for a product the listener's row already names for the same name.
+
+Only an application is a row: a product wappalyzer's data holds under a category such as CMS, wiki, CI, database manager, webmail, issue tracker or web framework. A library, a font, a CDN or an analytics script is not. A web server, a proxy or a cache is left out when the listener already names it. A product the data does not hold, named by a page's own title, generator or `X-Powered-By`, is kept as the page names it. These rows go through the same advisory matching and labels as the listeners'.
 
 ### Findings and leads
 
@@ -149,6 +158,7 @@ An **identification** is a listener the run named: a product, and a version or n
 
 ### Weights
 
+- `dangling-dns`: weighs 30, a finding of severity low: below the other findings that have more weight, above every identification and lead.
 - `takeover`: `strong` weighs more than `page`. `dangling` is its own signal, `takeover-candidate`, weighing 20.
 - `secret`: weighed by the credential's severity.
 - `object-id`: a route with no GET weighs less.

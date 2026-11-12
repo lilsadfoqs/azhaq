@@ -118,28 +118,85 @@ func services(obs []types.StoredObservation, needVersion bool) []Service {
 			} else {
 				port = 80
 			}
-			web := func(product, version, banner string) Service {
+			web := func(product, version, banner, source string) Service {
 				return Service{Host: u.Hostname(), Port: port, Proto: "tcp", Service: u.Scheme,
 					Product: product, Version: version, Origin: u.Scheme + "://" + u.Host,
-					Banner: banner, ObservedAt: o.ObservedAt, From: row.URL}
+					Banner: banner, Source: source, ObservedAt: o.ObservedAt, From: row.URL}
 			}
 			if row.Server != "" {
 				product, version := ProductVersion(row.Server)
-				add(web(product, version, "Server: "+row.Server))
+				add(web(product, version, "Server: "+row.Server, SourceServer))
 			}
 			// The technologies the page's own markup and headers name with a
 			// version ("WordPress:6.4.2"): what the site itself states.
 			for _, t := range row.Tech {
 				if name, version, ok := strings.Cut(t, ":"); ok && name != "" && version != "" && version[0] >= '0' && version[0] <= '9' {
-					add(web(name, version, "technology: "+t))
+					add(web(name, version, "technology: "+t, SourceTech))
 				}
 			}
 		}
 	}
+	addrs := nameAddrs(obs)
 	if needVersion {
-		return mergeListeners(out, nameAddrs(obs))
+		out = mergeListeners(out, addrs)
+	}
+	return append(out, namedApps(obs, out, addrs, needVersion)...)
+}
+
+// namedApps are the applications a name's root page names, as services of that
+// name and port, besides what the listener's rows already say: an application
+// the listener's row names for the same name is not repeated, nor a plain web
+// server the listener names for any name. With needVersion, only the ones a
+// version was stated for.
+func namedApps(obs []types.StoredObservation, have []Service, addrs map[string]string, needVersion bool) []Service {
+	apps := pageApps(obs)
+	if len(apps) == 0 {
+		return nil
+	}
+	listenerOf := func(s Service) string {
+		addr := normIP(s.IP)
+		if addr == "" {
+			addr = normIP(s.Host)
+		}
+		if addr == "" {
+			addr = addrs[strings.ToLower(s.Host)]
+		}
+		return listenerKey(addr, s.Host, s.Port, s.Proto)
+	}
+	by := map[string][]Service{} // listener + product → what the listener's rows name
+	for _, s := range have {
+		k := listenerOf(s) + "|" + ProductKey(s.Product)
+		by[k] = append(by[k], s)
+	}
+	var out []Service
+	for _, a := range apps {
+		if needVersion && a.Version == "" {
+			continue
+		}
+		dup := false
+		for _, e := range by[listenerOf(a.Service)+"|"+ProductKey(a.Product)] {
+			if a.Plain || sameName(e, a.Service) && (a.Version == "" || e.Version == a.Version || refines(e.Version, a.Version)) {
+				dup = true
+				break
+			}
+		}
+		if !dup {
+			out = append(out, a.Service)
+		}
 	}
 	return out
+}
+
+// sameName says a listener's row was read from the name's own page: its host,
+// or the page its version was read from.
+func sameName(e, a Service) bool {
+	if strings.EqualFold(e.Host, a.Host) {
+		return true
+	}
+	if u, err := url.Parse(e.From); err == nil && e.From != "" {
+		return strings.EqualFold(u.Hostname(), a.Host)
+	}
+	return false
 }
 
 // webOrigin is the origin a confirmation reads for a port-scan service,

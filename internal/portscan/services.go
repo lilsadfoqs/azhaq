@@ -556,21 +556,27 @@ func generatorProduct(body []byte) (product, version string) {
 		if name != "generator" {
 			continue
 		}
-		content, _, _ = strings.Cut(content, " (") // "Drupal 10 (https://www.drupal.org)"
-		f := strings.Fields(content)
-		if len(f) == 0 {
-			return "", ""
-		}
-		if len(f) == 1 && strings.ContainsAny(f[0], "/(") {
-			return serverProduct(f[0])
-		}
-		if m := genVerRe.FindStringSubmatch(f[len(f)-1]); m != nil && len(f) > 1 {
-			version, f = m[1], f[:len(f)-1]
-		}
-		if name := strings.Join(f, " "); genNameRe.MatchString(name) {
-			return name, version
-		}
+		return generatorContent(content)
+	}
+	return "", ""
+}
+
+// generatorContent reads the content of a generator meta tag: the product,
+// and its version when the last word is one.
+func generatorContent(content string) (product, version string) {
+	content, _, _ = strings.Cut(content, " (") // "Drupal 10 (https://www.drupal.org)"
+	f := strings.Fields(content)
+	if len(f) == 0 {
 		return "", ""
+	}
+	if len(f) == 1 && strings.ContainsAny(f[0], "/(") {
+		return serverProduct(f[0])
+	}
+	if m := genVerRe.FindStringSubmatch(f[len(f)-1]); m != nil && len(f) > 1 {
+		version, f = m[1], f[:len(f)-1]
+	}
+	if name := strings.Join(f, " "); genNameRe.MatchString(name) {
+		return name, version
 	}
 	return "", ""
 }

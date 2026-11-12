@@ -194,6 +194,10 @@ The URL keys other than `catchall` and `skipped` count rows of the other coverag
 - The text summary prints each as `! takeover candidate` or `! takeover verified`.
 - With `-silent` and nothing else to report, each is printed alone on stderr as `[takeover] name -> target (service, strength, status)`.
 - `dns` and `subs -live` rows carry the same object as `takeover`.
+### dangling
+
+- `dns` rows carry `dangling` on a name whose CNAME chain ends at a name that answered `NXDOMAIN`: `{chain, target, rcode, server}`, whether or not the target is on a provider's list. It is the measured fact, and the source of the `dangling-dns` finding of `azhaq report -findings`: kind `dangling-dns`, severity low, tier finding, with the chain, the answer, the resolver that gave it (`server`) and a `dig` command in `reproduce`.
+- It is not a takeover claim. The `takeover` object, a lead (`claim the name at SERVICE (azhaq does not)`), is separate and only for a target on a provider's list or a domain nobody holds.
 
 ### failed
 

@@ -74,6 +74,7 @@ The `-json` fields are dnsx's, in its order:
 | `status_code_raw` | The code as a number. Left out for 0. |
 | `cname_status` | Not a dnsx field: the code of a CNAME's target when it is not `NOERROR`, such as `NXDOMAIN` for a dangling CNAME. Whichever types were asked: see [A CNAME's target](#a-cnames-target). |
 | `takeover` | Not a dnsx field: a name whose CNAME points at what is gone. It says what was observed and has `status`: `candidate` until the service itself shows the name is free. See [Takeover candidates](../CONCEPTS.md#takeover-candidates). |
+| `dangling` | Not a dnsx field: a name whose CNAME chain ends at a name that answered `NXDOMAIN`, whoever holds the target: `{chain, target, rcode, server}`, the CNAME targets first hop first, the name that did not exist, its code and the resolver that gave the answer. It is what was measured, apart from the `takeover` claim. See [A CNAME's target](#a-cnames-target). |
 | `trace`, `axfr` | `{host, chain: [rows]}`, with `-trace` and `-axfr`. |
 | `timestamp` | The time of the query. |
 | `hosts_file` | With `-hf`. |
@@ -100,7 +101,7 @@ The summary counts names: `12 names`. When a line is a record (`-resp`, `-resp-o
 
 `requests` is 0 for `dns`: its questions go to resolvers, not targets. `dns_queries` counts them (the retries and the wildcard probes too, so it is more than `asked`), and equals the ledger's `DNS queries` line count, with or without `-ledger`.
 
-The summary also lists failures per kind of error, and takeover findings: a CNAME to a name that no longer exists. `takeover_candidates` and `takeover_verified` count them apart, and add up to the rows under `takeover`.
+The summary also lists failures per kind of error, and takeover findings: a CNAME to a name that no longer exists. `takeover_candidates` and `takeover_verified` count them apart, and add up to the rows under `takeover`. A name whose CNAME chain ends at a name that answered `NXDOMAIN` is also a `dangling-dns` finding in the workspace's findings (`azhaq report -findings`), counted in the `tiers` line of a `run`.
 
 ## Details
 
@@ -111,11 +112,13 @@ The summary also lists failures per kind of error, and takeover findings: a CNAM
 - With `-rcode`, only the names whose answer has that code get a row, with its `status_code`. That is how to list the names that do not exist. A name whose CNAME points at what is gone is not one of them: its own code is `NOERROR`, and the target's `NXDOMAIN` is its `cname_status`.
 - With `-all`, `-any` or `-axfr`, `-json` gives a row to every name a resolver answered, including one with no record at all.
 - With `-response-type-filter` and no type flag, `-json` gives a row to every answered name that has none of the records filtered, as dnsx does: `-rtf a` keeps the names that have only AAAA, TXT, MX or SRV, that have no record (NODATA), that do not exist, and the CNAME-only ones, and leaves out the names with an A. In text, a kept name prints the records it has, so one with none prints nothing. With a type flag too (`-a -txt -rtf a`), a name needs a record of a type a flag asked.
-- A name whose CNAME points at what is gone also gets its `-json` row, with `takeover`, whichever types are asked, unless `-no-takeover` is given (see [A CNAME's target](#a-cnames-target)): it is a finding, and it is not counted as `did not resolve`.
+- A name whose CNAME points at what is gone also gets its `-json` row, with `takeover`, whichever types are asked, unless `-no-takeover` is given (see [A CNAME's target](#a-cnames-target)): it is a finding, and it is not counted as `did not resolve`. So does a name with a `dangling` measurement.
 
 ### A CNAME's target
 - A name with a CNAME gets its target checked, whichever types were asked. A type whose answer follows the chain (`-a`, `-aaaa`, `-txt`, `-mx`, …) already says where the chain ends. `-cname` alone does not: a question for CNAME gets the record and stops, so the name is asked for A once more, and only the end of the chain is kept from that answer (`cname_status`, and `takeover` when the target is gone). That is one more query for each name that has a CNAME, in `dns_queries` and the ledger like the others.
 - `-no-takeover` leaves that question out. Then `-cname` alone gives no `cname_status` and no `takeover`.
+- A CNAME chain that ends at a name that answered `NXDOMAIN` is kept as `dangling` (and, with `-db`, as a `dangling-dns` finding of severity low), whether or not the target is on a provider's list: the chain, the `NXDOMAIN` and the resolver that gave it are what was observed, and `dig @RESOLVER +noall +comments +answer A NAME` shows them again. It is not a claim that anyone can take the name: the `takeover` entry, a lead, stays for a target on a provider's list, and its check is to claim the name at the service, which azhaq does not do. A target that is the owner's own name, and a name only a wildcard answers, are not dangling.
+- `-no-takeover` does not leave `dangling` out: it asks nothing more, so `-cname` alone has no `dangling` either, as it has no `cname_status`.
 - With a scope (`-allow`, `-scope`), the domain of a CNAME target outside it is never asked: the row says `takeover-not-asked` and why, no free-domain finding is made, and the summary counts these in a note (`not asked: N CNAME targets on a domain outside the scope`). Add the domain to `-allow` to ask it.
 
 ### Types

@@ -123,6 +123,31 @@ func (s service) on(target string) bool {
 	return false
 }
 
+// Dangling is what a name's DNS answer measured of a CNAME that points at a
+// name that does not exist: the chain, the code of its end, and the resolver
+// that gave it. It says nothing of who may create the name; a takeover is
+// the claim that does, and a Finding makes it.
+type Dangling struct {
+	Chain  []string `json:"chain"`            // the CNAME targets, first hop first
+	Target string   `json:"target"`           // the last one: the name that answered NXDOMAIN
+	Rcode  string   `json:"rcode"`            // NXDOMAIN
+	Server string   `json:"server,omitempty"` // the resolver that gave the answer
+}
+
+// Measure is the Dangling of a name whose chain ends at a name that answered
+// NXDOMAIN (gone), whoever holds the target's service or domain. A target that
+// is the owner's own name is not one, as for ByCNAME.
+func Measure(host string, chain []string, gone bool, server string) (Dangling, bool) {
+	if len(chain) == 0 || !gone {
+		return Dangling{}, false
+	}
+	target := chain[len(chain)-1]
+	if normalize.SameSite(host, target) {
+		return Dangling{}, false
+	}
+	return Dangling{Chain: append([]string(nil), chain...), Target: target, Rcode: "NXDOMAIN", Server: server}, true
+}
+
 // ByCNAME judges a name by its CNAME chain: targetGone says the last
 // target does not resolve (NXDOMAIN), registered whether that target's
 // registrable domain still exists. A target on a service where anyone may

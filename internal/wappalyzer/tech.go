@@ -317,3 +317,31 @@ func (s *Wappalyze) FingerprintWithCats(headers map[string][]string, body []byte
 
 	return result
 }
+
+// Categories names the categories of the technology app (the name Fingerprint
+// reports, without a version; case does not matter), nil when the data does
+// not hold it.
+func (s *Wappalyze) Categories(app string) []string {
+	if s == nil {
+		return nil
+	}
+	if fp, ok := s.fingerprints.Apps[app]; ok {
+		return categoryNames(fp)
+	}
+	for name, fp := range s.fingerprints.Apps {
+		if strings.EqualFold(name, app) {
+			return categoryNames(fp)
+		}
+	}
+	return nil
+}
+
+func categoryNames(fp *CompiledFingerprint) []string {
+	out := make([]string, 0, len(fp.cats))
+	for _, c := range fp.cats {
+		if category, ok := categoriesMapping[c]; ok {
+			out = append(out, category.Name)
+		}
+	}
+	return out
+}

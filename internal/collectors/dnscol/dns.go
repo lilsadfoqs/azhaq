@@ -144,6 +144,9 @@ func (c *Collector) describe(ctx context.Context, host string, a dnsr.Answer, pa
 			meta.NextHints = append(meta.NextHints, types.Seed{Type: types.TypeHostname, Keys: map[string]string{"fqdn": cn}})
 		}
 	}
+	if d, ok := takeover.Measure(host, a.CNAME, a.Status == dnsr.StatusNXDomain, a.Server); ok {
+		payload["dangling"] = d
+	}
 	if len(a.CNAME) > 0 && !c.NoTakeover && (a.Status == dnsr.StatusNXDomain || a.Status == dnsr.StatusCNAME) {
 		target := a.CNAME[len(a.CNAME)-1]
 		gone := a.Status == dnsr.StatusNXDomain
@@ -167,6 +170,7 @@ func (c *Collector) describe(ctx context.Context, host string, a dnsr.Answer, pa
 		if apex := normalize.RegistrableDomain(host); apex != "" && host != apex {
 			if zone, answer, ok := c.Wild.Which(ctx, host, apex, a); ok {
 				payload["wildcard"], payload["wildcard_of"], payload["wildcard_answer"] = true, zone, answer
+				delete(payload, "dangling") // a wildcard's name is no record of the owner's
 			}
 		}
 	}
