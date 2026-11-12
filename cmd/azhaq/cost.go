@@ -17,6 +17,7 @@ import (
 	"github.com/lilsadfoqs/azhaq/internal/collectors/vhostcol"
 	"github.com/lilsadfoqs/azhaq/internal/ledger"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
+	"github.com/lilsadfoqs/azhaq/internal/portscan"
 	"github.com/lilsadfoqs/azhaq/scope"
 	"github.com/lilsadfoqs/azhaq/types"
 )
@@ -87,6 +88,7 @@ type costStage struct {
 	// that is -max-requests, not the stage's own flags.
 	AtMost    *int64 `json:"at_most,omitempty"`
 	AtMostBy  string `json:"at_most_by,omitempty"`
+	AtMostOwn *int64 `json:"at_most_without_cap,omitempty"` // with AtMostBy: the stage's own ceiling, above the cap
 	NoCeiling string `json:"no_ceiling,omitempty"`
 	ceil      ceiling
 }
@@ -109,6 +111,7 @@ type costEstimate struct {
 	// AtMost, NoCeiling and AtMostBy are the total's, as a stage's are.
 	AtMost    *int64 `json:"at_most,omitempty"`
 	AtMostBy  string `json:"at_most_by,omitempty"`
+	AtMostOwn *int64 `json:"at_most_without_cap,omitempty"`
 	NoCeiling string `json:"no_ceiling,omitempty"`
 	Basis     string `json:"basis"`
 	ceil      ceiling
@@ -172,7 +175,7 @@ func ceilingOf(stage string, a amount, open string) ceiling {
 // atMost is what the flags bound: the most sent, which option sets it when
 // that is -max-requests, or what leaves it open. Nothing at all to bound is
 // no ceiling and no reason.
-func (c ceiling) atMost(cap int64) (at *int64, by, open string) {
+func (c ceiling) atMost(cap int64) (at *int64, by, open string, own *int64) {
 	t := c.target
 	var why []string
 	switch {
@@ -181,18 +184,20 @@ func (c ceiling) atMost(cap int64) (at *int64, by, open string) {
 	case len(c.tOpen) > 0:
 		why = append(why, c.tOpen...)
 	case cap > 0 && t > cap:
-		t, by = cap, "-max-requests"
+		// The cap is printed with the ceiling it hides.
+		o := c.target + c.dns
+		t, by, own = cap, "-max-requests", &o
 	}
 	why = append(why, c.dOpen...)
 	if len(why) > 0 {
 		sort.Strings(why)
-		return nil, "", strings.Join(why, "; ")
+		return nil, "", strings.Join(why, "; "), nil
 	}
 	if c.target == 0 && c.dns == 0 {
-		return nil, "", ""
+		return nil, "", "", nil
 	}
 	v := t + c.dns
-	return &v, by, ""
+	return &v, by, "", own
 }
 
 // seal sets the ceilings printed, stage by stage and for the whole, from what
@@ -202,9 +207,9 @@ func (e *costEstimate) seal() {
 	for i := range e.Stages {
 		st := &e.Stages[i]
 		e.ceil.add(st.ceil)
-		st.AtMost, st.AtMostBy, st.NoCeiling = st.ceil.atMost(e.cap)
+		st.AtMost, st.AtMostBy, st.NoCeiling, st.AtMostOwn = st.ceil.atMost(e.cap)
 	}
-	e.AtMost, e.AtMostBy, e.NoCeiling = e.ceil.atMost(e.cap)
+	e.AtMost, e.AtMostBy, e.NoCeiling, e.AtMostOwn = e.ceil.atMost(e.cap)
 }
 
 const rolesBasis = "from the roles, their histories and the run options: each stage counts what they fix, as if each target answers, and says what it leaves out"
@@ -511,6 +516,10 @@ func estimateCost(seeds []types.Seed, planned [][]string, runs func(string) bool
 			}
 		}
 	}
+	if len(env.portUDPList) > 0 {
+		// The floor counts one datagram a UDP port; a silent one gets the rest.
+		portsOpen += fmt.Sprintf("; up to %d more datagrams to each UDP port that does not answer (each protocol's own request)", portscan.MaxUDPAsks-1)
+	}
 	nameScanned := false // a name is scanned: whether it is behind a CDN or WAF is not known
 	var (
 		pages     = map[string]bool{} // the URLs of the web map the run asks whatever the answers are
@@ -628,7 +637,7 @@ func estimateCost(seeds []types.Seed, planned [][]string, runs func(string) bool
 	// one request, and the favicon is /favicon.ico, one of the paths, or an
 	// icon the page names, which only the answer tells.
 	if runs("azhaq-http") && len(pages)+hostPages > 0 {
-		e.add("azhaq-http", amount{Requests: int64(len(pages) + hostPages)}, "what its pages, scripts and archived URLs lead to")
+		e.add("azhaq-http", amount{Requests: int64(len(pages) + hostPages)}, "what its pages, scripts and archived URLs lead to, and the control requests that tell a catch-all answer from a page")
 	}
 	if runs("azhaq-paths") && len(sweeps) > 0 {
 		own := 0
@@ -753,9 +762,9 @@ const permuteOpen = "variations of the names the sources and lookups find (-perm
 
 // printEstimate says the estimate in plain text, one line a stage.
 func printEstimate(w io.Writer, lead string, est costEstimate) {
-	fmt.Fprintln(w, lead+est.Total.String()+atLeastWord(est.AtLeast)+ceilingWord(est.AtMost, est.AtMostBy, est.NoCeiling, "", est.cap))
+	fmt.Fprintln(w, lead+atLeastPrefix(est.AtLeast)+est.Total.String()+atLeastWord(est.AtLeast)+ceilingWord(est.AtMost, est.AtMostBy, est.AtMostOwn, est.NoCeiling, "", est.cap))
 	for _, st := range est.Stages {
-		line := fmt.Sprintf("  %-12s %s", st.Stage, st.Estimate)
+		line := fmt.Sprintf("  %-12s %s%s", st.Stage, atLeastPrefix(st.AtLeast), st.Estimate)
 		var by []string
 		for _, c := range st.Collectors {
 			if len(st.Collectors) > 1 && c.Estimate != nil && !c.Estimate.zero() {
@@ -765,7 +774,7 @@ func printEstimate(w io.Writer, lead string, est costEstimate) {
 		if len(by) > 0 {
 			line += " (" + strings.Join(by, ", ") + ")"
 		}
-		line += ceilingWord(st.AtMost, st.AtMostBy, st.NoCeiling, st.NotCounted, est.cap)
+		line += ceilingWord(st.AtMost, st.AtMostBy, st.AtMostOwn, st.NoCeiling, st.NotCounted, est.cap)
 		if st.NotCounted != "" {
 			line += "; not counted: " + st.NotCounted
 		}
@@ -777,14 +786,16 @@ func printEstimate(w io.Writer, lead string, est costEstimate) {
 // ceilingWord says what bounds an estimate beside its floor: "; at most N"
 // (and the option that gives it when that is the budget), or "; no ceiling"
 // with what is open. A reason a stage lists under not counted is not said twice.
-func ceilingWord(at *int64, by, no, counted string, cap int64) string {
-	return ceilingWordIn(at, by, no, counted, cap, false)
+func ceilingWord(at *int64, by string, own *int64, no, counted string, cap int64) string {
+	return ceilingWordIn(at, by, own, no, counted, cap, false)
 }
 
 // ceilingWordIn is ceilingWord; short leaves the reasons out, for a line that
 // has no room for them (the summary's: they are in the plan).
-func ceilingWordIn(at *int64, by, no, counted string, cap int64, short bool) string {
+func ceilingWordIn(at *int64, by string, own *int64, no, counted string, cap int64, short bool) string {
 	switch {
+	case at != nil && by != "" && own != nil:
+		return fmt.Sprintf("; at most %s by %s (%s by the run itself)", commas(*at), by, commas(*own))
 	case at != nil && by != "":
 		return fmt.Sprintf("; at most %s (%s)", commas(*at), by)
 	case at != nil:
@@ -809,6 +820,14 @@ func commas(n int64) string {
 		s = s[:i] + "," + s[i:]
 	}
 	return s
+}
+
+// atLeastPrefix says a floor is one: what the answers lead to is not in it.
+func atLeastPrefix(atLeast bool) string {
+	if atLeast {
+		return "at least "
+	}
+	return ""
 }
 
 func atLeastWord(atLeast bool) string {
@@ -928,6 +947,7 @@ type costReport struct {
 	// AtMost: the most the command was bounded to send, as the estimate has it.
 	AtMost    *int64      `json:"at_most,omitempty"`
 	AtMostBy  string      `json:"at_most_by,omitempty"`
+	AtMostOwn *int64      `json:"at_most_without_cap,omitempty"`
 	NoCeiling string      `json:"no_ceiling,omitempty"`
 	Actual    amount      `json:"actual"`
 	Stages    []costStage `json:"stages"`
@@ -962,7 +982,7 @@ func accountCostBy(est *costEstimate, then map[ledger.SpentKey]int64, order []st
 	if est != nil {
 		out.Estimate, out.AtLeast = &amount{}, est.AtLeast
 		*out.Estimate = est.Total
-		out.AtMost, out.AtMostBy, out.NoCeiling, out.cap = est.AtMost, est.AtMostBy, est.NoCeiling, est.cap
+		out.AtMost, out.AtMostBy, out.AtMostOwn, out.NoCeiling, out.cap = est.AtMost, est.AtMostBy, est.AtMostOwn, est.NoCeiling, est.cap
 		for _, st := range est.Stages {
 			c := st
 			byStage[st.Stage] = &c
@@ -1047,7 +1067,7 @@ func (c *costReport) lines() []string {
 		}
 		line := fmt.Sprintf("%s: sent %s", st.Stage, act)
 		if st.Estimate != nil {
-			line += fmt.Sprintf(" (estimated %s%s%s)", st.Estimate, map[bool]string{true: " and what the answers lead to"}[st.AtLeast], ceilingWordIn(st.AtMost, st.AtMostBy, st.NoCeiling, st.NotCounted, c.cap, true))
+			line += fmt.Sprintf(" (estimated %s%s%s%s)", atLeastPrefix(st.AtLeast), st.Estimate, map[bool]string{true: " and what the answers lead to"}[st.AtLeast], ceilingWordIn(st.AtMost, st.AtMostBy, st.AtMostOwn, st.NoCeiling, st.NotCounted, c.cap, true))
 		}
 		out = append(out, line)
 	}

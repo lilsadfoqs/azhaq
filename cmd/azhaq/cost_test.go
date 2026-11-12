@@ -187,7 +187,7 @@ func TestPlanEstimatesEachStage(t *testing.T) {
 		t.Errorf("-no-favicon: the web stage is estimated at %v requests, want 26", got)
 	}
 	text, _, _ := cli(t, "plan", "-url", srv.URL+"/", "-allow", "127.0.0.1", "-sources", "none")
-	if !strings.Contains(text, "estimate: 26 requests") || !strings.Contains(text, "web ") {
+	if !strings.Contains(text, "estimate: at least 26 requests") || !strings.Contains(text, "web ") {
 		t.Errorf("the text plan does not print the estimate by stage:\n%s", text)
 	}
 	if hits.Load() != 0 {
@@ -234,7 +234,7 @@ func TestRunSummaryTextHasTheCostByStage(t *testing.T) {
 	srv := juiceShaped(&hits)
 	defer srv.Close()
 	_, errOut, _ := cli(t, "run", "-url", srv.URL+"/", "-allow", "127.0.0.1", "-sources", "none", "-db", filepath.Join(t.TempDir(), "w.db"), "-ledger", "off")
-	if !strings.Contains(errOut, "cost: web: sent 83 requests (estimated 26 requests and what the answers lead to; no ceiling (-max-requests sets one))") {
+	if !strings.Contains(errOut, "cost: web: sent 83 requests (estimated at least 26 requests and what the answers lead to; no ceiling (-max-requests sets one))") {
 		t.Errorf("the summary does not set the estimate beside what was sent:\n%s", errOut)
 	}
 }
@@ -248,7 +248,7 @@ func TestRunSaysItsEstimateFirstWhenLarge(t *testing.T) {
 	big := []string{"run", "-url", srv.URL + "/", "-allow", "127.0.0.1", "-sources", "none", "-ledger", "off", "-no-paths", "-ports", "1000-2500," + portOfURL(srv.URL), "-port-detect", "none"}
 	_, errOut, _ := cli(t, append(big, "-db", filepath.Join(t.TempDir(), "a.db"))...)
 	before, _, found := strings.Cut(errOut, "azhaq run:")
-	if !found || !strings.Contains(before, "before sending, the run is estimated at ") || !strings.Contains(before, "1502 connects") {
+	if !found || !strings.Contains(before, "before sending, the run's estimate is at least ") || !strings.Contains(before, "1502 connects") {
 		t.Errorf("a run of 1500 connects does not say so before it sends:\n%s", errOut)
 	}
 	for _, quiet := range []string{"-quiet", "-json"} {

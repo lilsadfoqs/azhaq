@@ -62,7 +62,7 @@ func TestGuidedRunMakesTheSameMapAsTheExplicitRun(t *testing.T) {
 	if rows(got) != rows(want) {
 		t.Errorf("the guided map is not the explicit run's:\n--- guided\n%s\n--- run\n%s", got, want)
 	}
-	plan := strings.Index(errOut, "estimate: 26 requests")
+	plan := strings.Index(errOut, "estimate: at least 26 requests")
 	summary := strings.Index(errOut, "azhaq run: ")
 	hunt := strings.Index(errOut, "next: azhaq hunt -db "+filepath.Join(dir, "guided.db"))
 	if plan < 0 || summary < 0 || hunt < 0 || !(plan < summary && summary < hunt) {
