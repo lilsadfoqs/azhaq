@@ -333,21 +333,27 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		return meta, err
 	}
 	meta.EmitCount++
-	byRule := map[string][]string{}
-	var rules []string
+	// Each guess not sent is a row of its own URL, with its reason: query finds
+	// it there, and the directory it was asked under is not marked skipped.
+	held := make([]types.Observation, 0, len(skipped))
 	for _, h := range skipped {
-		if _, ok := byRule[h.rule]; !ok {
-			rules = append(rules, h.rule)
-		}
-		byRule[h.rule] = append(byRule[h.rule], h.url)
+		raw, _ := json.Marshal(map[string]any{"skipped": egress.DenyReason(h.rule)})
+		held = append(held, types.Observation{Collector: Name, Source: base, Kind: "skipped", About: h.url, Payload: raw, Confidence: 0.9, ObservedAt: time.Now().UTC()})
 	}
-	for _, rule := range rules {
-		raw, _ := json.Marshal(map[string]any{"skipped": egress.DenyReason(rule), "urls": byRule[rule]})
-		if err := emit(types.Observation{Collector: Name, Source: base, Kind: "skipped", Payload: raw, Confidence: 0.9, ObservedAt: time.Now().UTC()}); err != nil {
-			return meta, err
+	var herr error
+	if batch != nil {
+		herr = batch(held)
+	} else {
+		for _, o := range held {
+			if herr = emit(o); herr != nil {
+				break
+			}
 		}
-		meta.EmitCount++
 	}
+	if herr != nil {
+		return meta, herr
+	}
+	meta.EmitCount += len(held)
 	return meta, nil
 }
 

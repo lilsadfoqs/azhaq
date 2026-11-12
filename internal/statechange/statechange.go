@@ -1,16 +1,20 @@
 // Package statechange names the GET requests whose own name declares a
-// state change: a word such as create, delete, reset, populate or logout
-// in the URL's path, or in an API description's operationId or summary
-// for that operation.
+// state change: a word such as create, delete, reset, logout, run, restart,
+// install or upload in the URL's path, or in an API description's
+// operationId or summary for that operation.
 //
 // The match is a whole word of the documented set below, never a
-// substring. Only what names the request counts: its path segments, the
-// query parameters that name an action (ActionParams) with a value that
-// is a verb (Verbs and ActionVerbs), and, for an operation of an API
-// description, its operationId and summary. Other query parameters are not
-// read: ?q=delete searches for a word. Prose about the application or the service
-// (an info description, an operation's long description) is never read:
-// "the app was created" says nothing about the request.
+// substring: /start_over and /api/jobs/runJob are named, /startup-guide
+// and /running-jobs are not. Only what names the request counts: its path
+// segments, the query parameters that name an action (ActionParams) with a
+// value that is a verb (Verbs and ActionVerbs), a query value that is itself
+// a path (?s=/user/logout), read as the path it is, and, for an operation of
+// an API description, its operationId and summary. Other query parameters
+// are not read: ?q=delete searches for a word. Prose about the application
+// or the service (an info description, an operation's long description) is
+// never read: "the app was created" says nothing about the request.
+//
+// A GET whose name is outside the list is sent: the rule is the list.
 //
 // A path whose last segment is a static file (logo.png, clear.gif, a
 // script or a stylesheet) is not a request that declares anything, so it
@@ -24,15 +28,35 @@ package statechange
 
 import (
 	"net/url"
+	"slices"
 	"strings"
 	"unicode"
 )
 
 // Verbs are the words that declare a state change, in their base form.
+// start_over is a phrase: it is also start-over, startOver and startover.
 var Verbs = []string{
 	"create", "createdb", "delete", "remove", "reset", "populate",
 	"logout", "signout", "clear", "wipe", "drop", "truncate",
 	"purge", "destroy", "erase", "seed",
+	"run", "execute", "exec", "start", "stop", "restart", "kill", "shutdown", "reboot",
+	"install", "setup", "upload", "import",
+	"init", "initialize", "reinit",
+	"restore", "revert", "rollback", "sync", "trigger",
+	"start_over",
+}
+
+// Exact are the words of Verbs that match as written only: run, runs and
+// running are three words, and /uploads, /installed-plugins and /runners
+// name what a GET reads. The words before them (create, delete, …) also
+// match their inflections (creates, created, creating), as a summary says
+// them.
+var Exact = []string{
+	"run", "execute", "exec", "start", "stop", "restart", "kill", "shutdown", "reboot",
+	"install", "setup", "upload", "import",
+	"init", "initialize", "reinit",
+	"restore", "revert", "rollback", "sync", "trigger",
+	"start_over",
 }
 
 // ActionParams are the names of the query parameters that name an action,
@@ -41,11 +65,14 @@ var ActionParams = []string{"action", "act", "cmd", "command", "op", "operation"
 
 // ActionVerbs are the words a value of an action parameter declares besides
 // Verbs: what a process or service control page says in its links
-// (?action=stop). They are read in a query's value only, never in a path.
+// (?action=halt). They are read in a query's value only, never in a path.
 var ActionVerbs = []string{
-	"stop", "start", "restart", "kill", "shutdown", "reboot", "halt",
-	"terminate", "flush", "disable", "enable",
+	"halt", "terminate", "flush", "disable", "enable",
 }
+
+// oldActionVerbs are the words that were ActionVerbs before they became Verbs:
+// a query value still matches their inflections (?action=restarts).
+var oldActionVerbs = map[string]bool{"stop": true, "start": true, "restart": true, "kill": true, "shutdown": true, "reboot": true}
 
 // ReadVerbs are the words an operation opens with when it reads: an
 // operationId or summary that starts with one (listRecordingRules, "Lists
@@ -56,6 +83,36 @@ var ReadVerbs = []string{
 }
 
 var verbSet = setOf(Verbs)
+
+var exactSet = setOf(Exact)
+
+// valueExact are the Exact words a query value reads as written too, but
+// for the ones that were action words already.
+var valueExact = func() map[string]bool {
+	m := setOf(Exact)
+	for v := range oldActionVerbs {
+		delete(m, v)
+	}
+	return m
+}()
+
+// phrase is a word of Verbs of several parts (start_over), read as that run
+// of words or as the parts joined.
+type phrase struct {
+	name   string
+	parts  []string
+	joined string
+}
+
+var phrases = func() []phrase {
+	var out []phrase
+	for _, v := range Verbs {
+		if parts := strings.Split(v, "_"); len(parts) > 1 {
+			out = append(out, phrase{v, parts, strings.Join(parts, "")})
+		}
+	}
+	return out
+}()
 
 var readSet = setOf(ReadVerbs)
 
@@ -81,9 +138,11 @@ func setOf(words []string) map[string]bool {
 // Word returns the verb a text declares, or "" when none of its words
 // is in the set. The first matching word, in the order the texts are
 // given, is returned in its base form ("logout" for "logs out").
-func Word(texts ...string) string { return wordIn(verbSet, texts...) }
+func Word(texts ...string) string { return wordIn(verbSet, exactSet, texts...) }
 
-func wordIn(set map[string]bool, texts ...string) string {
+// wordIn is the first word of the texts that is in set; exact are the words
+// of set that match as written only.
+func wordIn(set, exact map[string]bool, texts ...string) string {
 	for _, text := range texts {
 		words := tokens(text)
 		for i, w := range words {
@@ -92,9 +151,26 @@ func wordIn(set map[string]bool, texts ...string) string {
 					return "logout"
 				}
 			}
-			if v := stem(w, set); v != "" {
+			if p := phraseAt(set, words, i); p != "" {
+				return p
+			}
+			if v := stem(w, set, exact); v != "" {
 				return v
 			}
+		}
+	}
+	return ""
+}
+
+// phraseAt is the phrase of set the words say from i: its parts one after
+// the other, or joined in one word.
+func phraseAt(set map[string]bool, words []string, i int) string {
+	for _, p := range phrases {
+		if !set[p.name] {
+			continue
+		}
+		if words[i] == p.joined || slices.Equal(words[i:min(i+len(p.parts), len(words))], p.parts) {
+			return p.name
 		}
 	}
 	return ""
@@ -110,12 +186,13 @@ func Declares(texts ...string) (string, bool) {
 // stem is w in its base form when w is a form of one of the verbs:
 // creates, created and creating are create; populated is populate; and
 // a verb run into "all", as a control page names it (?action=stopall,
-// restartall, deleteall), is that verb.
-func stem(w string, set map[string]bool) string {
+// restartall, deleteall), is that verb. A word of exact has no inflection:
+// only itself, or run into "all".
+func stem(w string, set, exact map[string]bool) string {
 	if set[w] {
 		return w
 	}
-	for _, cand := range []string{
+	for i, cand := range []string{
 		trimSuffix2(w, "all"),
 		strings.TrimSuffix(w, "s"),
 		strings.TrimSuffix(w, "es"),
@@ -123,10 +200,13 @@ func stem(w string, set map[string]bool) string {
 		trimSuffix2(w, "d"),
 		trimSuffix2(w, "ing"),
 	} {
-		if cand != w && set[cand] {
+		if cand == w {
+			continue
+		}
+		if set[cand] && (i == 0 || !exact[cand]) {
 			return cand
 		}
-		if cand != w && set[cand+"e"] {
+		if set[cand+"e"] && (i == 0 || !exact[cand+"e"]) {
 			return cand + "e"
 		}
 	}
@@ -182,16 +262,25 @@ func OfPath(path string) string {
 
 // OfQuery is the verb a raw query string declares, or "": a parameter whose
 // name has one of ActionParams as a word and whose value has a word of Verbs
-// or ActionVerbs (?action=stop, ?cmd=delete_user, ?do=restart). A parameter
-// of any other name says nothing, whatever its value.
+// or ActionVerbs (?action=stop, ?cmd=delete_user, ?do=restart), or a value of
+// any parameter that is itself a path (?s=/user/logout, ?r=/api/x/run), read
+// as a path is. A parameter of any other name with a value that is no path
+// says nothing.
 func OfQuery(rawQuery string) string {
 	for _, pair := range strings.Split(rawQuery, "&") {
 		name, value, _ := strings.Cut(pair, "=")
+		v, err := url.QueryUnescape(value)
+		if err != nil {
+			continue
+		}
+		if strings.HasPrefix(v, "/") {
+			if w, _ := OfTarget(v); w != "" {
+				return w
+			}
+		}
 		if name, err := url.QueryUnescape(name); err == nil && namesAction(name) {
-			if v, err := url.QueryUnescape(value); err == nil {
-				if w := wordIn(actionSet, v); w != "" {
-					return w
-				}
+			if w := wordIn(actionSet, valueExact, v); w != "" {
+				return w
 			}
 		}
 	}
@@ -265,7 +354,7 @@ func OfOperation(path, operationID, summary string) (word, where string) {
 
 func opensWithRead(text string) bool {
 	words := tokens(text)
-	return len(words) > 0 && stem(words[0], readSet) != ""
+	return len(words) > 0 && stem(words[0], readSet, nil) != ""
 }
 
 // staticExt are the extensions of a file served as it is.

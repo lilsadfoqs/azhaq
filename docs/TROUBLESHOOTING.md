@@ -33,9 +33,9 @@ Entries are grouped by what you were doing:
 
 **Fix:** [Coverage](CONCEPTS.md#coverage-what-azhaq-did-with-a-url) says what to try next.
 
-### Why was `/logout` (or `/exec`, `/createdb`) requested, or not?
+### Why was `/logout` (or `/restart`, `/createdb`, `/dump`) requested, or not?
 
-**Why:** azhaq sends a GET to every URL it finds in scope, except a GET whose own path, query or API operation declares a state change (`/logout`, `/createdb`, `/user/delete`, `?action=stop`), found on the way or a word of a wordlist: that one is held back and listed as skipped, and `-send-state-changing` sends it. A target you give is always sent. Other names, `/exec` among them, keep nothing out: azhaq cannot know what a GET does on the server, and the same name is a read-only page on one app and a state change on another, so a GET that deletes or logs out under another name is asked. Writes are different: a write is a request with a method other than GET, HEAD or OPTIONS (POST, PUT, PATCH, DELETE), and it is sent only with its flag. That is a promise about the method, not that nothing changes: see [what azhaq sends](CONCEPTS.md#what-azhaq-sends-and-what-it-cannot-know).
+**Why:** azhaq sends a GET to every URL it finds in scope, except a GET whose own path, query or API operation declares a state change (`/logout`, `/createdb`, `/user/delete`, `/admin/restart`, `/install/ajax.php`, `?action=stop`, `?s=/user/logout`), found on the way or a word of a wordlist: that one is held back and listed as skipped with its word, and `-send-state-changing` sends it. The words are the list under [State-changing requests](commands/run.md#state-changing-requests): a GET whose name is outside the list is sent, `/dump` among them. A target you give is always sent. Other names keep nothing out: azhaq cannot know what a GET does on the server, and the same name is a read-only page on one app and a state change on another, so a GET that deletes or logs out under another name is asked. Writes are different: a write is a request with a method other than GET, HEAD or OPTIONS (POST, PUT, PATCH, DELETE), and it is sent only with its flag. That is a promise about the method, not that nothing changes: see [what azhaq sends](CONCEPTS.md#what-azhaq-sends-and-what-it-cannot-know).
 
 **Fix:** Say which paths must not be requested whatever their name, with your own rule.
 

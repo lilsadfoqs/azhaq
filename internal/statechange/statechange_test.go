@@ -94,7 +94,7 @@ func TestOfQuery(t *testing.T) {
 		{"http://h/index.html?action=stopall", "stop"},       // Supervisor's links
 		{"http://h/index.html?action=restartall", "restart"}, // a verb run into all
 		{"http://h/p?action=startAll", "start"},
-		{"http://h/p?action=install", ""},              // not a verb before all
+		{"http://h/p?action=install", "install"},       // a word of the list since it names a setup
 		{"http://h/p?action=view", ""},                 // not a verb
 		{"http://h/p?action=list&sort=delete", ""},     // not an action parameter
 		{"http://h/p?q=delete", ""},                    // a search
@@ -104,7 +104,7 @@ func TestOfQuery(t *testing.T) {
 		{"http://h/logo.png?action=delete", "delete"},  // the query names it
 		{"http://h/user/delete?action=view", "delete"}, // the path first
 		{"http://h/p?action=%zz", ""},                  // a bad escape names nothing
-		{"http://h/stop", ""},                          // stop is no path verb
+		{"http://h/stop", "stop"},                      // stop is a path word too
 	} {
 		if got := OfURL(c.raw); got != c.want {
 			t.Errorf("OfURL(%q) = %q, want %q", c.raw, got, c.want)

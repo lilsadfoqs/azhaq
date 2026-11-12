@@ -434,9 +434,11 @@ func TestSweepDenyPathHoldsAWordBackAndListsIt(t *testing.T) {
 	egress.SetDenyPath(scope.Rules{DenyPath: []string{`^/logout`}}.Compile().DeniedPath)
 	c := New(srv.Client(), Options{Words: []string{"logout", "admin"}, Rate: 1000, NoCalibration: true})
 	var skipped map[string]any
+	var about []string
 	_, err := c.Run(context.Background(), types.Seed{Type: types.TypeURL, Keys: map[string]string{"url": srv.URL + "/"}}, func(o types.Observation) error {
 		if o.Kind == "skipped" {
 			_ = json.Unmarshal(o.Payload, &skipped)
+			about = append(about, o.About)
 		}
 		return nil
 	})
@@ -449,9 +451,9 @@ func TestSweepDenyPathHoldsAWordBackAndListsIt(t *testing.T) {
 	if _, ok := asked.Load("/admin"); !ok {
 		t.Error("/admin was not requested")
 	}
-	urls, _ := skipped["urls"].([]any)
-	if skipped["skipped"] != "-deny-path ^/logout" || len(urls) != 1 || urls[0] != srv.URL+"/logout" {
-		t.Errorf("skipped %v", skipped)
+	// The row is the guess's own, not the directory's.
+	if skipped["skipped"] != "-deny-path ^/logout" || len(about) != 1 || about[0] != srv.URL+"/logout" {
+		t.Errorf("skipped %v about %v", skipped, about)
 	}
 }
 
@@ -606,11 +608,7 @@ func TestSweepHoldsAWordThatNamesAStateChange(t *testing.T) {
 	held := map[string]bool{}
 	_, err := c.Run(context.Background(), types.Seed{Type: types.TypeURL, Keys: map[string]string{"url": srv.URL + "/"}}, func(o types.Observation) error {
 		if o.Kind == "skipped" {
-			var m struct{ URLs []string }
-			_ = json.Unmarshal(o.Payload, &m)
-			for _, u := range m.URLs {
-				held[strings.TrimPrefix(u, srv.URL)] = true
-			}
+			held[strings.TrimPrefix(o.About, srv.URL)] = true
 		}
 		return nil
 	})

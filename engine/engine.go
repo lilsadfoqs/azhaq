@@ -137,6 +137,7 @@ func (e *Engine) Run(ctx context.Context, item types.WorkItem) (types.RunMeta, e
 	// Observations and their links go in one transaction: a sweep with
 	// thousands of hits spent most of its time committing.
 	writeMany := func(obs []types.Observation) (err error) {
+		obs = e.writeAbout(obs)
 		e.Store.Batch(func() {
 			if len(obs) > 1 {
 				if err = e.Store.AddObservations(ent.ID, obs); err != nil {
@@ -629,6 +630,30 @@ func (e *Engine) linkSeed(seed types.Seed, ent types.Entity, now time.Time) {
 	}
 	_ = e.Store.AddEdge(ent.ID, h.ID, "ON_HOST", now)
 	e.linkInDomain(types.Seed{Type: types.TypeHostname, Keys: map[string]string{"fqdn": host}}, h, now)
+}
+
+// writeAbout writes the rows that are about a URL other than the task's seed
+// on that URL's entity, and returns the seed's own. A guess held back is a
+// row of the URL it names, not of the directory it was asked under.
+func (e *Engine) writeAbout(obs []types.Observation) []types.Observation {
+	if !slices.ContainsFunc(obs, func(o types.Observation) bool { return o.About != "" }) {
+		return obs
+	}
+	own := make([]types.Observation, 0, len(obs))
+	for _, o := range obs {
+		if o.About == "" {
+			own = append(own, o)
+			continue
+		}
+		u := o.About
+		if n, err := normalize.URL(u); err == nil {
+			u = n
+		}
+		if ent, err := e.Store.UpsertEntity(types.TypeURL, u, time.Now().UTC()); err == nil {
+			_, _ = e.Store.AddObservation(ent.ID, o)
+		}
+	}
+	return own
 }
 
 // NoteExternalError records a connector/CLI failure on the first seed so

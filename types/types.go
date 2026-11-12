@@ -164,6 +164,9 @@ type Observation struct {
 	// process is killed; azhaq resume runs the task again (what a port scan
 	// found and asked before it stopped).
 	Keep bool `json:"-"`
+	// About: the URL this row is about when it is not the seed's own (a guess
+	// held back, not sent): the engine writes it on that URL's entity.
+	About string `json:"-"`
 }
 
 type WorkItem struct {
