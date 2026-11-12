@@ -970,6 +970,27 @@ func TestDNSAXFRAsksTheResolverAtItsPortAndTheNameServerAtTheTransferPort(t *tes
 	}
 }
 
+// -deny holds a zone transfer from a resolver the user named, as from a name
+// server: a transfer is not a lookup. The lookups still go to it, and the run
+// says so before it sends.
+func TestDNSAXFRDoesNotAskADeniedResolver(t *testing.T) {
+	t.Chdir(t.TempDir())
+	resolver := startLab(t)
+	ls, rep, _ := dnsOut(t, "-d", "lab.zz", "-r", resolver.addr, "-axfr", "-j", "-timeout", "300ms", "-deny", "127.0.0.1")
+	if axfr, ok := dnsRows(t, ls)["lab.zz"]["axfr"].(map[string]any); ok && axfr["chain"] != nil {
+		t.Errorf("the zone was transferred from a denied resolver: %v", axfr)
+	}
+	notes := strings.Join(rep.Notes, "\n")
+	for _, want := range []string{
+		"-deny 127.0.0.1 names the resolver " + resolver.addr + ": every lookup still goes to it",
+		"resolvers not asked for the zone, denied: " + resolver.addr + " (-deny 127.0.0.1)",
+	} {
+		if !strings.Contains(notes, want) {
+			t.Errorf("no note %q in:\n%s", want, notes)
+		}
+	}
+}
+
 // The status_code of a row is the code of the name asked. A resolver answers
 // a dangling CNAME with the code of the target (NXDOMAIN): the owner exists,
 // so it is NOERROR, and the target's state is in cname_status.

@@ -500,5 +500,5 @@ What keeps a URL out is known:
 - A URL that carries a scanner's payload in its path or query never enters the map. Examples are `<script>`, `../../etc/passwd` and `union select`, as archives often keep them. A scanner's own test file never enters either.
 - No request to a target goes to a host outside the [scope](#scope), Chrome's included. Without a scope, requests stay on the site.
 - Third-party sources (subdomain lists, archives, RDAP) are asked about your domains. `-passive` sends nothing to the targets.
-- Every request, connection and query goes in the [ledger](#the-ledger-and-its-seal), by class: `target`, `source` or `dns`. Only the scope and `-deny-path` hold a target's; the kill file stops all three.
+- Every request, connection and query goes in the [ledger](#the-ledger-and-its-seal), by class: `target`, `source` or `dns`. Only the scope and `-deny-path` hold a target's; the kill file stops all three. A resolver you name gets every lookup even when `-deny` names its address, and the run says so before it sends; a zone transfer (`-axfr`) is held from it like any other connection.
 - `-rate` paces what is sent and `-max-requests` caps it: see [budget, pace and the kill switch](#budget-pace-and-the-kill-switch).

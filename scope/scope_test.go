@@ -251,3 +251,12 @@ func TestAllowsURLUsesThePortOfTheURL(t *testing.T) {
 		t.Error("a host named by an entry with a port is a seed")
 	}
 }
+
+func TestDenyRuleNamesTheRuleThatMatches(t *testing.T) {
+	r := Rules{Deny: []string{"10.0.0.0/8", "*.internal.test", "127.0.0.1"}}
+	for host, want := range map[string]string{"10.1.2.3": "10.0.0.0/8", "db.internal.test": "*.internal.test", "127.0.0.1": "127.0.0.1", "127.0.0.2": "", "": ""} {
+		if got := r.DenyRule(host); got != want {
+			t.Errorf("DenyRule(%q) = %q, want %q", host, got, want)
+		}
+	}
+}
