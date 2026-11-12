@@ -282,7 +282,7 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		if res.Header != nil {
 			ct = res.Header.Get("Content-Type")
 			if loc := res.Header.Get("Location"); loc != "" {
-				row["location"] = loc
+				row["answer_location"] = loc
 			}
 		}
 		for k, v := range proof.Fields("/"+path, ct, res.Body) {

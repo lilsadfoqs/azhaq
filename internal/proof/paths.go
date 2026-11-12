@@ -419,6 +419,10 @@ func AnswersOf(obs []types.StoredObservation) []Answer {
 			Title       string `json:"title"`
 			Location    string `json:"location"`
 			BodyHash    string `json:"body_hash"`
+			AnswerType  string `json:"answer_type"`
+			AnswerTitle string `json:"answer_title"`
+			AnswerLoc   string `json:"answer_location"`
+			AnswerHash  string `json:"answer_hash"`
 			Head        []byte `json:"head"`
 			HeadKept    bool   `json:"head_kept"`
 			Login       bool   `json:"login"`
@@ -437,6 +441,8 @@ func AnswersOf(obs []types.StoredObservation) []Answer {
 		if err != nil || u.Host == "" {
 			continue
 		}
+		// The path sweep's rows name what its answer holds apart from the fields the map reads.
+		p.ContentType, p.Title, p.Location, p.BodyHash = first(p.ContentType, p.AnswerType), first(p.Title, p.AnswerTitle), first(p.Location, p.AnswerLoc), first(p.BodyHash, p.AnswerHash)
 		a := &Answer{URL: p.URL, Origin: u.Scheme + "://" + u.Host, Path: u.Path, Status: p.Status, ContentType: p.ContentType,
 			Title: p.Title, Location: p.Location, Hash: p.BodyHash, Head: p.Head, Login: p.Login, Catchall: p.Catchall,
 			Observed: o.ObservedAt, Read: p.HeadKept || len(p.Head) > 0}
@@ -490,13 +496,13 @@ var (
 func Fields(path, contentType string, body []byte) map[string]any {
 	out := map[string]any{}
 	if contentType != "" {
-		out["content_type"] = contentType
+		out["answer_type"] = contentType
 	}
 	sum := sha256.Sum256(body)
-	out["body_hash"] = hex.EncodeToString(sum[:8])
+	out["answer_hash"] = hex.EncodeToString(sum[:8])
 	if m := titleRE.FindSubmatch(body[:min(len(body), 64<<10)]); len(m) == 2 {
 		if t := strings.Join(strings.Fields(html.UnescapeString(string(m[1]))), " "); utf8.ValidString(t) {
-			out["title"] = t
+			out["answer_title"] = t
 		}
 	}
 	if passwordRE.Match(body[:min(len(body), 64<<10)]) {
@@ -506,4 +512,11 @@ func Fields(path, contentType string, body []byte) map[string]any {
 		out["head"], out["head_kept"] = body[:min(len(body), HeadBytes)], true
 	}
 	return out
+}
+
+func first(a, b string) string {
+	if a != "" {
+		return a
+	}
+	return b
 }
