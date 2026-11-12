@@ -767,3 +767,29 @@ func TestHostOnTakesWWWAsTheDomain(t *testing.T) {
 		t.Error("with subdomains api.example.org is on the domain")
 	}
 }
+
+// Every record an archive gives is counted once, in the bucket it went to,
+// and the buckets add up to what was read.
+func TestEachArchiveRowsCountsAddUp(t *testing.T) {
+	body := `{"has_next":false,"url_list":[` +
+		`{"url":"http://example.org/a"},{"url":"http://example.org:80/a"},{"url":"http://example.org/b"},` +
+		`{"url":"http://example.org/x?q=%3Cscript%3Ealert(1)%3C/script%3E"},{"url":"http://example.org/c"},` +
+		`{"url":"http://other.test/z"},{"url":"http://example.org/b"}]}`
+	m := newMirror(t, pages)
+	m.text["/otx/domain/example.org/url_list"] = body
+	o := Options{Bases: m.bases(), Client: m.Client(), Only: []string{"otx"}}
+	summary, _, _, err := run(t, o, context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	row := summary["sources"].(map[string]any)["otx"].(map[string]any)
+	want := map[string]float64{"read": 7, "kept": 3, "duplicates": 2, "junk": 1, "outside": 1, "count": 5}
+	for k, v := range want {
+		if row[k] != v {
+			t.Errorf("%s = %v, want %v (row %v)", k, row[k], v, row)
+		}
+	}
+	if row["over_cap"] != nil {
+		t.Errorf("over_cap with no -urls-max reached: %v", row)
+	}
+}

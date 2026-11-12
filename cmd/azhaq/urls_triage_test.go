@@ -136,7 +136,7 @@ func TestURLsRowsCarryTriageFieldsAndAFailedArchiveIsNamed(t *testing.T) {
 	}
 	var partial bool
 	for _, n := range rep.Notes {
-		partial = partial || strings.Contains(n, "the set is partial: wayback failed")
+		partial = partial || strings.Contains(n, "wayback failed and gave nothing")
 	}
 	if !rep.Degraded && rep.Failures == 0 || !partial {
 		t.Errorf("summary %+v", rep)

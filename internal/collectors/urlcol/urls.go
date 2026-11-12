@@ -213,6 +213,9 @@ func (c *Collector) byArchive(s source) string {
 
 type outcome struct {
 	count, pages     int
+	read, kept       int // records read; new URLs kept
+	repeats, junk    int // records of a URL already kept; junk records
+	outside          int // records off the domain, or left out by a filter
 	err              error
 	took             time.Duration
 	capped           bool
@@ -303,6 +306,9 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 				key = ks[0]
 			}
 			count := 0
+			// Every record read is counted once: kept, a repeat of a URL already
+			// kept, junk, or left out (off the domain, or by a filter).
+			var read, kept, repeats, junkN, outside int
 			// The host alone is how wayback, Common Crawl and arquivo are
 			// asked; otx and urlscan answer for the domain with its
 			// subdomains, and gau prints those too.
@@ -321,6 +327,7 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 				for k := 0; k < len(urls); k++ {
 					r := urls[k]
 					raw := r.url
+					read++
 					u, junk, ok := cleanWhy(raw, domain, apex)
 					// The URL glued into a broken record is listed on its
 					// own, under the same source and date, if it is in scope.
@@ -354,11 +361,18 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 							c.emitRow(jr)
 						}
 					}
+					if junk != "" {
+						junkN++
+					}
 					if !ok || out.blocked(u) {
+						if junk == "" {
+							outside++
+						}
 						continue
 					}
 					count++
 					if seen[u] || (!c.opts.Raw && out.repeat(u)) {
+						repeats++
 						continue
 					}
 					if len(all) >= c.opts.MaxURLs {
@@ -366,6 +380,7 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 						continue
 					}
 					seen[u] = true
+					kept++
 					row = Row{URL: u, Source: s.name, Archived: r.at}
 					if u != raw {
 						row.RawURL = raw
@@ -394,7 +409,8 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 				}
 			}
 			mu.Lock()
-			results[i] = outcome{count: count, pages: pages, err: err, took: time.Since(t0), capped: g.capped && err == nil,
+			results[i] = outcome{count: count, read: read, kept: kept, repeats: repeats, junk: junkN, outside: outside,
+				pages: pages, err: err, took: time.Since(t0), capped: g.capped && err == nil,
 				tries: g.tries, retried: g.retried, waited: g.waited,
 				out: g.out, noStatus: g.noStatus, noType: g.noType}
 			mu.Unlock()
@@ -430,7 +446,12 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 	var failed, capped []string
 	for i, s := range c.sources {
 		r := results[i]
-		row := map[string]any{"asked": c.askedOf(s, domain, apexRun), "count": r.count, "pages": r.pages, "seconds": float64(r.took.Milliseconds()/100) / 10}
+		row := map[string]any{"asked": c.askedOf(s, domain, apexRun), "count": r.count, "pages": r.pages, "seconds": float64(r.took.Milliseconds()/100) / 10,
+			// read = kept + duplicates + junk + outside + over_cap
+			"read": r.read, "kept": r.kept, "duplicates": r.repeats, "junk": r.junk, "outside": r.outside}
+		if over := r.count - r.kept - r.repeats; over > 0 {
+			row["over_cap"] = over // past -urls-max
+		}
 		if what, flags := c.unfiltered(s); what != "" {
 			row["unfiltered"], row["unfiltered_by"] = what, flags
 		}

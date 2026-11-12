@@ -256,6 +256,15 @@ func urlsNotes(rep *report, ps []map[string]any, failCapped bool) {
 	cut := map[string]map[string]int{}   // archive -> flag -> URLs left out
 	blind := map[string]map[string]int{} // archive -> "status (-mc)" -> URLs with none
 	server := map[string]string{}        // archive -> flags it applied itself
+	dups := 0                            // records of a URL already kept, over the archives
+	defer func() {
+		if dups > 0 {
+			if rep.Counts == nil {
+				rep.Counts = map[string]int{}
+			}
+			rep.Counts["duplicates"] = dups
+		}
+	}()
 	for _, p := range ps {
 		domain, _ := p["domain"].(string)
 		if caps, _ := p["capped"].([]any); len(caps) > 0 {
@@ -278,6 +287,7 @@ func urlsNotes(rep *report, ps []map[string]any, failCapped bool) {
 		srcs, _ := p["sources"].(map[string]any)
 		for name, v := range srcs {
 			row, _ := v.(map[string]any)
+			dups += intOf(row["duplicates"])
 			for flag, n := range asMap(row["left_out"]) {
 				if cut[name] == nil {
 					cut[name] = map[string]int{}
