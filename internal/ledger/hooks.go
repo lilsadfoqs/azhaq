@@ -400,8 +400,10 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 		// went nowhere (the transport replays only a read, and fails a write it
 		// cannot tell from one that was answered). It is made again, on another
 		// connection, and is one request: the server read it once, the ledger and
-		// the count hold it once.
-		if err != nil && try < maxReplays && reused.Load() && (skipped.Load() || !answered.Load() && closedByPeer(err)) && req.Context().Err() == nil &&
+		// the count hold it once. The transport's own retry of it may have met the
+		// kill file at its dial: the request was listed when it was written, so it
+		// is made again too.
+		if err != nil && try < maxReplays && reused.Load() && (skipped.Load() || !answered.Load() && (closedByPeer(err) || errors.Is(err, neterr.ErrKilled))) && req.Context().Err() == nil &&
 			(req.Body == nil || req.Body == http.NoBody || req.GetBody != nil) {
 			continue
 		}
