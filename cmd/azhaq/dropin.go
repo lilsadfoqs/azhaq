@@ -380,8 +380,11 @@ func (w *writer) close() error {
 	return err
 }
 
+// tempListPrefix names the lists tempList writes; keepInputs keeps them for resume.
+const tempListPrefix = "azhaq-list-"
+
 func tempList(lines []string) (string, func(), error) {
-	f, err := os.CreateTemp("", "azhaq-list-")
+	f, err := os.CreateTemp("", tempListPrefix)
 	if err != nil {
 		return "", nil, err
 	}
