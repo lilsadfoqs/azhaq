@@ -152,7 +152,7 @@ var leadChecks = map[string]string{
 	"takeover":           "GET the name's front page: the service's own page for an unclaimed name",
 	"takeover-candidate": "claim the name at the service (azhaq does not): a CNAME to a name that does not resolve shows only that it is free",
 	"secret":             "check the value with the service that issued it (azhaq does not try a credential)",
-	"sourcemap":          "GET the .map: the body is JSON with a sources array",
+	"sourcemap":          "azhaq read the maps: open one and read the app's own files it names (their code is in it when the reason says so)",
 	"exposed-file":       "GET it: the body holds the file's own content (its signature), not a page",
 	"exposed-panel":      "GET it: the page's own title names the panel, and it is not the host's login",
 	"listing":            "GET it: the page is a directory listing",

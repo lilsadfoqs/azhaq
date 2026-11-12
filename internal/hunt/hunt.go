@@ -117,7 +117,8 @@ type hunter struct {
 	reflected map[string]bool          // route keys with a parameter whose value came back
 	chrome    map[string]*chromeInfo   // origin and input name carried by most of the origin's pages
 	cut       time.Time
-	old       bool // some URL is older than the window: "new" tells rows apart
+	old       bool                         // some URL is older than the window: "new" tells rows apart
+	maps      map[string][]engine.MapEntry // source map rows by origin: one row per host (sourceMaps)
 }
 
 // errText is what a failed answer's body showed: its kind (webextract's
@@ -147,6 +148,7 @@ func Build(in Input) []Row {
 			h.host(r)
 		}
 	}
+	h.sourceMaps()
 	h.templates()
 	h.secrets()
 	h.takeovers()

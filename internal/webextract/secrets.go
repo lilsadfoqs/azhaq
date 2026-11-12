@@ -116,7 +116,7 @@ func Secrets(script string) []Secret {
 	for _, m := range assignedIn(script, 64) {
 		name, v := m[1], m[2]
 		if seen[v] || notSecret(v) || entropy(v) < 3.2 || strings.Contains(v, "/") && !strings.ContainsAny(v, "+=") ||
-			notSecretName.MatchString(name) || oddChars(v) || labelOf(name, v) || translationRef(v) {
+			notSecretName.MatchString(name) || oddChars(v) || labelOf(name, v) || translationRef(v) || namesAName(name, v) {
 			continue
 		}
 		add(Secret{Kind: "generic-secret", Severity: "medium", Name: name, Value: v, Rule: RuleGeneric, Entropy: math.Round(entropy(v)*10) / 10})
@@ -231,6 +231,19 @@ func labelOf(name, v string) bool {
 	}
 	n := alnumLower(name)
 	return len(n) >= 5 && strings.Contains(alnumLower(v), n)
+}
+
+// nameHolder is an assigned name that says its value is a name (a header's,
+// a field's): tokenHeaderName, authHeader, csrfField.
+var nameHolder = lazyRE(`(?i)(name|header|field|label|param)s?$`)
+
+// headerName is the shape of an HTTP header name: capitalised letter-only
+// words joined by "-" (X-Api-Token, X-GuestToken). A credential carries digits.
+var headerName = lazyRE(`^[A-Z][A-Za-z]*(?:-[A-Z][A-Za-z]*)+$`)
+
+// namesAName says v is a label that names a header or a field, not a secret.
+func namesAName(name, v string) bool {
+	return nameHolder.MatchString(name) || headerName.MatchString(v)
 }
 
 // textKey is a translation key or a reference to one: an optional @, then
