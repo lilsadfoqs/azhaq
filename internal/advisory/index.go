@@ -165,23 +165,52 @@ func ReadIndex(raw []byte) (*Index, error) {
 	return ix, nil
 }
 
-// ReadIndexMeta reads the header of an index only, which is cheap.
+// ReadIndexMeta reads the header of an index only, which is cheap: it
+// stops at the names map (the last key of the header, and most of its
+// bytes), which no caller of this uses, so the line is never held whole.
 func ReadIndexMeta(raw []byte) (IndexMeta, error) {
-	var meta IndexMeta
-	got := false
-	stop := fmt.Errorf("stop")
-	err := readLines(raw, func(line []byte) error {
-		got = true
-		if err := json.Unmarshal(line, &meta); err != nil {
-			return fmt.Errorf("the index header: %w", err)
-		}
-		return stop
-	})
-	if err != nil && err != stop {
+	zr, err := gzip.NewReader(bytes.NewReader(raw))
+	if err != nil {
 		return IndexMeta{}, err
 	}
-	if !got {
+	defer zr.Close()
+	dec := json.NewDecoder(zr)
+	if t, err := dec.Token(); err == io.EOF {
 		return IndexMeta{}, fmt.Errorf("the index is empty")
+	} else if err != nil || t != json.Delim('{') {
+		return IndexMeta{}, fmt.Errorf("the index header: not an object")
+	}
+	var meta IndexMeta
+	for dec.More() {
+		t, err := dec.Token()
+		if err != nil {
+			return IndexMeta{}, fmt.Errorf("the index header: %w", err)
+		}
+		key, _ := t.(string)
+		var dst any
+		switch key {
+		case "generator":
+			dst = &meta.Generator
+		case "built":
+			dst = &meta.Built
+		case "sources":
+			dst = &meta.Sources
+		case "records":
+			dst = &meta.Records
+		case "entries":
+			dst = &meta.Entries
+		case "products":
+			dst = &meta.Products
+		case "scope":
+			dst = &meta.Scope
+		case "names":
+			return meta, nil
+		default:
+			dst = new(json.RawMessage)
+		}
+		if err := dec.Decode(dst); err != nil {
+			return IndexMeta{}, fmt.Errorf("the index header: %w", err)
+		}
 	}
 	return meta, nil
 }
