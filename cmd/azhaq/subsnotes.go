@@ -28,7 +28,8 @@ const (
 )
 
 // tierSet is a tier's name, as the counts and notes call it, and the names
-// that reached it; nil is every name the sources gave.
+// that reached it; nil is every name the sources gave. The raw tier's set
+// is those names less the domain itself, the names raw candidates counts.
 type tierSet struct {
 	name  string
 	names map[string]bool

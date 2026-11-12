@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -245,7 +246,22 @@ func (s *search) give(page string, emit func(types.Observation) error, found map
 	sort.Strings(names)
 	row := map[string]any{"url": page, "method": s.method, "requests": s.requests.Load(), "params": names}
 	if len(found) > 0 {
-		row["why"] = found
+		why := found
+		if len(s.given) > 0 {
+			// A name the URL carried is listed with the reason it is read, and
+			// said to be given: it was not found by the search.
+			why = make(map[string]string, len(found))
+			for n, w := range found {
+				why[n] = w
+			}
+			given := slices.Clone(s.given)
+			sort.Strings(given)
+			for _, n := range given {
+				why[n] = GivenWhy + why[n]
+			}
+			row["given"] = given
+		}
+		row["why"] = why
 	}
 	if len(values) > 0 {
 		row["values"] = values
@@ -289,6 +305,9 @@ func (s *search) give(page string, emit func(types.Observation) error, found map
 	}
 	return types.RunMeta{Status: types.StatusOK, EmitCount: 1}, nil
 }
+
+// GivenWhy leads the reason of a name the page's URL already carried.
+const GivenWhy = "in the URL given; "
 
 // cutNote says what a cut answer does to a page's row.
 const cutNote = "an answer body was cut (a stream that never ends, read for 64 KiB or 2 s, or longer than 2 MiB), so its size is of what was read"

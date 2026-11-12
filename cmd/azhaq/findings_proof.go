@@ -184,6 +184,9 @@ func secretRecord(s secretRow, command string) findingRecord {
 		rec.Tier, rec.Label, rec.Severity = proof.TierLead, "lead", "info"
 		rec.Evidence = fmt.Sprintf("%s in %s, listed by %q: %s", s.Kind, s.Where, s.Rule, excerpt)
 		rec.Check = "check the value with the service that issued it (azhaq does not try a credential); the match: " + p.Reproduce
+		if s.Kind == "private-key-marker" {
+			rec.Check = "a key's begin line with no key after it, as help text or a pattern has: read the script around it; the match: " + p.Reproduce
+		}
 	}
 	return rec
 }

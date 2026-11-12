@@ -48,7 +48,7 @@ By default URLs are printed as each archive page arrives, unsorted, when stdout 
 
 In plain output every row is its URL; `-json` carries the fields above.
 
-The summary lists one row for each archive:
+The archive rows (in the workspace's `azhaq-urls` observation) are one for each archive:
 
 | Field | Meaning |
 | --- | --- |
@@ -92,17 +92,19 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
   - `failed after 4 tries, dial tcp …: connection refused`
   - `…, Retry-After 2m0s; the 2m0s to wait is more than the 45s left (-urls-timeout or -timeout)`
 
+The summary's `sources.records` has `read`, `kept`, `duplicates`, `junk`, `outside` and `over_cap` for each archive, summed over the domains, and a note says it: `records read by archive: wayback 19 = 1 kept + 0 duplicates + 18 junk + 0 outside the domain or filtered`. `sources.urls` is `kept` + `duplicates`. `read` is the sum of the other five.
+
 ### Junk
 `urls` counts the URLs on the domains that it left out as junk, by reason. Each URL is counted once.
 
-- `"scanner payload"`: for example 3. It covers `/../` in a query name (`?.tst5-Name/../Gen`; a value such as `next=../home` stays) and an injection glued to a value (`artist=1union select …`, `… from information_schema.…`).
-- `"scanner probe"`: a scanner's own file or tag (`acunetix_xsl_inclusion_test.xsl`, a random-named executable at the root such as `/7zSo1DIz.exe`; gau lists them), a NUL byte (`%00`) in the path or query, or a query that is only punctuation or a dot and an extension (`?.`, `?.tst`, `?.bak`).
+- `"scanner payload"`: for example 3. It covers `/../` in a query name (`?.tst5-Name/../Gen`; a value such as `next=../home` stays) and an injection glued to a value (`artist=1union select …`, `… from information_schema.…`). A boolean test is one too: `N and N=N` or `N or N=N` in a value, with spaces, `+`, `%20`, a comment or brackets between the parts (`id=1 and 1=1`, `x=1)))and(1=1`, `x=1%20AND%201=1`), as is a value of digits and one quote (`id=1'`). `name=O'Brien`, `q=rock and roll` and `year=1999 and later` stay.
+- `"scanner probe"`: a scanner's own file or tag (`acunetix_xsl_inclusion_test.xsl`, a random-named executable at the root such as `/7zSo1DIz.exe`; gau lists them), a NUL byte (`%00`) in the path or query, or a query that is only punctuation or a dot and an extension (`?.`, `?.tst`, `?.bak`). A query value that is a scanner's name alone, or led into a version or a test file, is one too: `x=acunetix`, `ua=sqlmap/1.4`, `x=acunetix_wvs_test` (Acunetix, Netsparker, Invicti, sqlmap, Nikto, w3af, Wapiti, Arachni, Skipfish, Havij and Burp Suite). A word searched for stays, as does a product's name: `q=netsparker`, `vendor=nessus`.
 - `"directory listing sort link"`.
 - `"script placeholder (NaN, undefined, null)"`.
 - `"dot segment"`.
 - `"malformed link (wildcard, quote, bracket, ellipsis)"`: the ellipsis is `…` or a `...` that ends the path or is a segment of its own.
 - `"fuzzing placeholder or request-line fragment"`: a path segment, or a query name or value, that is a fuzzer's keyword in capitals (`FUZZ`, `FUZ2Z`, and in a query `FUZZFUZ2Z`, with or without an extension; with a fuzzer log's number and result, `FUZZ000003:C=200`; with a capitalised word, `FUZZMultiple`; after stray symbols such as a mis-decoded arrow, `%CB%93%E2%86%92FUZZ`) or a `{payload}` or `{FUZZ}` slot, or a path that ends in a request line's `HTTP/1.0` or `HTTP/1.1` (`/HTTP/1.1`, `/index.php%20HTTP/1.1`), or a query value that ends in one after other text (`?artist=1HTTP/1.1`). `/fuzz`, `?q=fuzz`, `/FUZZY`, `/FUZZ-list.txt`, `?proto=HTTP/1.1`, `/users/{id}` and `/docs/http/1.1` stay.
-- `"another URL glued into the path or query"`: a second `http://` or `https://` URL that follows a character that is not a separator, two archive records run into one (`/admin/create.sqlA01http://example.org/artists.php`). The URL it holds is listed on its own, with the same source and date, when it is on the domains and not already listed. After `/`, `=`, `?`, `&`, `;`, `,`, `|` or a space (also `+` in a query) a URL is a redirect, a parameter or a list, and stays: `/go/http://other.test/`, `?next=https://other.test/`, `?urls=http://a.test/,http://b.test/`. A colon is not a separator: `/x%3Ahttp://…` is glued. `-raw` keeps the URL as the archive gave it and lists nothing more.
+- `"another URL glued into the path or query"`: a second `http://` or `https://` URL that follows a character that is not a separator, two archive records run into one (`/admin/create.sqlA01http://example.org/artists.php`). The URL it holds is listed on its own, with the same source and date, when it is on the domains and not already listed. After `/`, `=`, `?`, `&`, `;`, `,`, `|` or a space (also `+` in a query) a URL is a redirect, a parameter or a list, and stays (after a comma, only when the query value is itself a URL: `?x=1&y=2,http://example.org/other.php` is two records run together and is junk, and is not listed again): `/go/http://other.test/`, `?next=https://other.test/`, `?urls=http://a.test/,http://b.test/`. A colon is not a separator: `/x%3Ahttp://…` is glued. `-raw` keeps the URL as the archive gave it and lists nothing more.
 - `"link cut at the end of its sentence"`: a path that ends in `.`, `,`, `;`, `'` or an unmatched `)` or `]`, or a query that ends in `.`.
 
 Every source's URLs go through these rules, OTX's too.

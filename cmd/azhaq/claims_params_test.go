@@ -70,7 +70,7 @@ func TestParamsJSONPrintsOnlyItsFields(t *testing.T) {
 	if code != exitOK || len(rows) != 1 {
 		t.Fatalf("exit %d: %s", code, out)
 	}
-	allowed := map[string]bool{"url": true, "method": true, "params": true, "why": true, "values": true}
+	allowed := map[string]bool{"url": true, "method": true, "params": true, "why": true, "values": true, "given": true}
 	for k := range rows[0] {
 		if !allowed[k] {
 			t.Errorf("params -json printed %q: %v", k, rows[0])

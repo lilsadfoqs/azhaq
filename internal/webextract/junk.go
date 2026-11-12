@@ -18,6 +18,7 @@ var payloadMarks = lazyRE(`(?i)` + strings.Join([]string{
 	`\$\(\s*(curl|wget|id|whoami|cat|sleep|nslookup|ping|echo|uname)\b|` + "`" + `\s*(id|whoami|curl|wget|cat|sleep|uname)\b`,
 	`\$\{|#\{|\{\{|<%`,
 	`(?:\b|\d)union(\s|/\*.*?\*/)+(all\s+)?select\b|\bfrom\s+information_schema\.|'\s*(or|and)\s+['"\d]|\bsleep\(\s*\d|\bbenchmark\(\s*\d|\bwaitfor\s+delay\b|\bxp_cmdshell\b`,
+	`(?:^|[^a-z0-9_])\d+(?:[\s)]|/\*.*?\*/)*(?:and|or)(?:[\s(]|/\*.*?\*/)*\d+\s*=\s*\d+`,
 	`<\s*(script|svg|img|iframe)\b|\bjavascript:|[\s"'/]on(error|load|mouseover|focus)\s*=|\balert\(|\bprompt\(|document\.cookie`,
 	`\b(oast\.(live|fun|pro|me|site|online)|interact\.sh|interactsh|burpcollaborator\.net|oastify\.com|dnslog\.cn|ceye\.io|requestbin\.|pipedream\.net|canarytokens\.|xss\.ht)\b`,
 }, "|"))
@@ -36,6 +37,70 @@ var scannerMarks = lazyRE(`(?i)` + strings.Join([]string{
 	`(?:^|[/?&=.])(?:bxss\.me|xss\.rocks|interactsh|oastify|burpcollaborator)`,
 	`(?:appscan|nessus|qualys|webinspect)(?:[_(]|test\b|\.txt)`,
 }, "|"))
+
+// scannerValue is a query value that is a scanner's name and nothing else, or
+// that name led into a version or a test file (acunetix, sqlmap/1.4,
+// acunetix_wvs_test): the tag a scanner puts in a field to see it come back.
+// The list is the scanners no page of a site is about; Nessus and Qualys sell
+// products a page can name. A value that is a word searched for is the user's
+// (see searchNames).
+var scannerValue = lazyRE(`(?i)^(?:acunetix|netsparker|invicti|sqlmap|nikto|w3af|wapiti|arachni|skipfish|havij|burpsuite)(?:[-_./\d]\S*)?$`)
+
+// searchNames are the query names a person's search goes in: a scanner's name
+// there is a word looked for.
+var searchNames = map[string]bool{"q": true, "query": true, "search": true, "s": true, "keyword": true, "keywords": true, "term": true, "text": true, "find": true, "k": true}
+
+// quoteValue is a value that is digits and one quote (id=1'), what a scanner
+// sends to see whether the page breaks.
+var quoteValue = lazyRE(`^(?:\d+['"]|['"]\d+)$`)
+
+// commaURL is a second absolute URL after a comma.
+var commaURL = lazyRE(`(?i),\s*https?://`)
+
+// queryValues calls f with each name and decoded value of a raw query.
+func queryValues(rawQuery string, f func(name, value string) bool) bool {
+	for _, kv := range strings.FieldsFunc(rawQuery, func(r rune) bool { return r == ';' || r == '&' }) {
+		k, v, hasV := strings.Cut(kv, "=")
+		if !hasV {
+			continue
+		}
+		if d, err := url.QueryUnescape(k); err == nil {
+			k = d
+		}
+		if d, err := url.QueryUnescape(v); err == nil {
+			v = d
+		}
+		if f(strings.ToLower(k), strings.TrimSpace(v)) {
+			return true
+		}
+	}
+	return false
+}
+
+// valueKind says which kind of payload a query value is: a bare quote after
+// digits (JunkPayload) or a scanner's name (JunkScanner); "" for neither.
+func valueKind(rawQuery string) string {
+	kind := ""
+	queryValues(rawQuery, func(name, v string) bool {
+		switch {
+		case quoteValue.MatchString(v):
+			kind = JunkPayload
+		case scannerValue.MatchString(v) && !searchNames[name]:
+			kind = JunkScanner
+		}
+		return kind != ""
+	})
+	return kind
+}
+
+// commaGlued reports a query value that is not a URL and holds a second
+// absolute URL after a comma (y=2,http://h/p.php): two archive records run
+// together. A value that is itself a URL list (urls=http://a/,http://b/) stays.
+func commaGlued(rawQuery string) bool {
+	return queryValues(rawQuery, func(_, v string) bool {
+		return commaURL.MatchString(v) && !strings.HasPrefix(strings.ToLower(v), "http")
+	})
+}
 
 // dotProbe is a query that is a file extension and nothing else: ?.tst,
 // ?.bak, the variants a scanner asks to see whether the server ignores
@@ -99,6 +164,9 @@ func payloadKind(raw string) string {
 	}
 	if payloadMarks.MatchString(low) || traversalInName(u.RawQuery) {
 		return JunkPayload
+	}
+	if k := valueKind(u.RawQuery); k != "" {
+		return k
 	}
 	if scannerMarks.MatchString(low) || strings.Contains(low, "\x00") || strings.Contains(low, "%00") || probeQuery(u.RawQuery) {
 		return JunkScanner
@@ -272,7 +340,7 @@ func JunkReason(raw string) string {
 	if templateJunk(p) || queryTemplate(u.RawQuery) {
 		return JunkTemplate
 	}
-	if GluedURL(raw) != "" {
+	if GluedURL(raw) != "" || commaGlued(u.RawQuery) {
 		return JunkGlued
 	}
 	lp := strings.ToLower(p)

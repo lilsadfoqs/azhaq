@@ -70,6 +70,9 @@ type search struct {
 	include string
 	header  []string
 	known   map[string]bool
+	// given are the names of the page's URL the page reads, found by inURL:
+	// listed, but not discovered.
+	given []string
 	// fixed are names found earlier, sent with every request of a later
 	// pass (see deepen); fixedW is what they add to a request, in bytes.
 	fixed  []pair
@@ -260,6 +263,7 @@ func (s *search) run(page string, emit func(types.Observation) error) (types.Run
 	// After deepen, which sends found names with every request: the URL has these.
 	for n, why := range inURL {
 		found[n] = why
+		s.given = append(s.given, n)
 	}
 	s.mu.Lock()
 	bad := s.badXML

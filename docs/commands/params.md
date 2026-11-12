@@ -40,8 +40,9 @@ Plain output is the URL and the parameter names, one line per page. With `-json`
 | --- | --- |
 | `url` | The page. |
 | `method` | `GET`, or `POST`, `JSON` or `XML` when the names were sent in a body. |
-| `params` | The names found. |
+| `params` | The names found, and the names the URL already carried that the page reads (`given`). |
 | `why` | An object: each name found, with what changed in the answer. The values are below. |
+| `given` | The names of `params` that were in the URL given (`?q=x`): tested, read by the page, and not found by the search. Left out when there are none. |
 | `values` | The value a name needed, such as `{"debug":"true"}`, when it answered only to that one. |
 
 `params -json` prints only these fields. The workspace row of a page also keeps `requests`, and `writes` (the body requests sent) for a body method: `azhaq show -json` prints them. A note in the summary says how many body requests were sent.
@@ -59,7 +60,7 @@ What `why` says for a name:
 | `reflected` | the name's value came back more often than random names' values do |
 | `named` | the page printed the name |
 
-A name found in step 5 has its reason followed by what was present, such as `status, once username was present`. Its requests are counted in `requests` like the others.
+A name that was in the URL given has `in the URL given; ` before its reason (`in the URL given; size`) and is listed in `given`. The summary's `counts` has `parameters found`, the names the search found, and `given in the URL`, the names the URL carried: a given name is in `params` and in the second count only. A name found in step 5 has its reason followed by what was present, such as `status, once username was present`. Its requests are counted in `requests` like the others.
 
 Two files can be written as well:
 

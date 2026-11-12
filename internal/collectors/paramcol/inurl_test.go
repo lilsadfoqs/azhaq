@@ -38,9 +38,13 @@ func TestParamInInputURLIsFound(t *testing.T) {
 		words = append(words, fmt.Sprintf("noise%d", i))
 	}
 	c := New(srv.Client(), Options{Words: words, Rate: 10000})
-	why := ownWhy(t, runOn(t, c, srv.URL+"/rest/search?q=apple&utm_source=mail"))
-	if why["q"] != "size" || len(why) != 1 {
-		t.Errorf("found %v, want q alone, by size", why)
+	row := runOn(t, c, srv.URL+"/rest/search?q=apple&utm_source=mail")
+	why := ownWhy(t, row)
+	if g, _ := row["given"].([]any); len(g) != 1 || g[0] != "q" {
+		t.Errorf("given %v, want [q]", row["given"])
+	}
+	if why["q"] != GivenWhy+"size" || len(why) != 1 {
+		t.Errorf("found %v, want q alone, given, by size", why)
 	}
 }
 
@@ -63,7 +67,7 @@ func TestParamInInputURLSmallChangeAndValue(t *testing.T) {
 	defer srv.Close()
 	c := New(srv.Client(), Options{Words: []string{"security", "x"}, Rate: 10000})
 	why := ownWhy(t, runOn(t, c, srv.URL+"/sqli/?id=1&Submit=Submit"))
-	if why["Submit"] != "size" || why["id"] != "status" || len(why) != 2 {
+	if why["Submit"] != GivenWhy+"size" || why["id"] != GivenWhy+"status" || len(why) != 2 {
 		t.Errorf("found %v, want Submit by size and id by status", why)
 	}
 }
@@ -82,7 +86,7 @@ func TestParamInInputURLOnAnEchoingPage(t *testing.T) {
 	defer srv.Close()
 	c := New(srv.Client(), Options{Words: []string{"x", "y"}, Rate: 10000})
 	why := ownWhy(t, runOn(t, c, srv.URL+"/p?mode="+url.QueryEscape("fast")+"&ref=a-long-value-nothing-reads"))
-	if why["mode"] != "size" || len(why) != 1 {
+	if why["mode"] != GivenWhy+"size" || len(why) != 1 {
 		t.Errorf("found %v, want mode alone", why)
 	}
 }
@@ -103,5 +107,35 @@ func TestEditQuery(t *testing.T) {
 		if got := editQuery(c.raw, c.name, c.to, c.val); got != c.want {
 			t.Errorf("%s: %s, want %s", c.raw, got, c.want)
 		}
+	}
+}
+
+// A name the page's URL carried is marked given and a name only the list finds
+// is not: the row says which was in the URL.
+func TestGivenNamesAreMarkedAndFoundNamesAreNot(t *testing.T) {
+	fetch.Reset()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body := "<html>" + strings.Repeat("all products ", 500)
+		if r.URL.Query().Has("q") {
+			body = "<html>" + strings.Repeat("a ", 100)
+		}
+		if r.URL.Query().Has("zebra") {
+			body += strings.Repeat(" zebra stripes", 80)
+		}
+		fmt.Fprint(w, body+"</html>")
+	}))
+	defer srv.Close()
+	words := []string{"zebra"}
+	for i := range 100 {
+		words = append(words, fmt.Sprintf("noise%d", i))
+	}
+	c := New(srv.Client(), Options{Words: words, Rate: 10000})
+	row := runOn(t, c, srv.URL+"/s?q=apple")
+	why := ownWhy(t, row)
+	if why["q"] != GivenWhy+"size" || why["zebra"] == "" || strings.HasPrefix(fmt.Sprint(why["zebra"]), GivenWhy) || len(why) != 2 {
+		t.Errorf("why %v", why)
+	}
+	if g, _ := row["given"].([]any); len(g) != 1 || g[0] != "q" {
+		t.Errorf("given %v, want [q] alone", row["given"])
 	}
 }

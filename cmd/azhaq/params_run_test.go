@@ -55,3 +55,46 @@ func TestRunParamsKeepsWhatParamsFinds(t *testing.T) {
 		t.Errorf("the map row's params %v, want [q]: what -params found is lost", got)
 	}
 }
+
+// A name the URL already carries is printed as given and is not counted as
+// found: the summary counts the names the search found and the ones given.
+func TestParamsMarksTheNamesTheURLGaveAndDoesNotCountThemAsFound(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body := "<html>" + strings.Repeat("all products ", 500)
+		if r.URL.Query().Has("q") {
+			body = "<html>" + strings.Repeat("a ", 100)
+		}
+		if r.URL.Query().Has("zebra") {
+			body += strings.Repeat(" zebra stripes", 80)
+		}
+		fmt.Fprint(w, body+"</html>")
+	}))
+	defer srv.Close()
+	words := []string{"zebra"}
+	for i := range 100 {
+		words = append(words, fmt.Sprintf("noise%d", i))
+	}
+	list := filepath.Join(t.TempDir(), "w.txt")
+	os.WriteFile(list, []byte(strings.Join(words, "\n")+"\n"), 0o644)
+	out, rep, code := runContract(t, "params", "-u", srv.URL+"/search?q=apple", "-w", list, "-rate", "0")
+	if code != exitOK {
+		t.Fatalf("exit %d, notes %q", code, rep.Notes)
+	}
+	rows := jsonRows(t, out)
+	if len(rows) != 1 {
+		t.Fatalf("rows %v", rows)
+	}
+	why, _ := rows[0]["why"].(map[string]any)
+	if g, _ := rows[0]["given"].([]any); len(g) != 1 || g[0] != "q" || why["q"] != "in the URL given; size" || fmt.Sprint(why["zebra"]) == "" || strings.HasPrefix(fmt.Sprint(why["zebra"]), "in the URL given") {
+		t.Errorf("row %v", rows[0])
+	}
+	if rep.Counts["parameters found"] != 1 || rep.Counts["given in the URL"] != 1 || rep.Results != 1 {
+		t.Errorf("results %d, counts %v", rep.Results, rep.Counts)
+	}
+	// The URL's own name alone is a page with nothing found: its row is printed, and no find is counted.
+	os.WriteFile(list, []byte(strings.Join(words[1:], "\n")+"\n"), 0o644)
+	_, rep, _ = runContract(t, "params", "-u", srv.URL+"/search?q=apple", "-w", list, "-rate", "0")
+	if rep.Counts["parameters found"] != 0 || rep.Counts["given in the URL"] != 1 {
+		t.Errorf("only a given name: counts %v", rep.Counts)
+	}
+}
