@@ -56,7 +56,7 @@ A run paced slowly says so as it starts: `-rate 1 paces requests to 1/s: the cap
 | 3 | The run's own job failed or is incomplete: nothing it was given answered, a failure names no target, or a note says the results are short or misleading. With `-strict-exit`, any failure. See [Exit 3](#exit-3). | The summary lists each failure, whether it is worth retrying, and its targets. |
 | 4 | Stopped with work left, by a limit, the kill file or a signal. | `azhaq resume -db FILE` continues where it stopped. With a kill file, remove it first. |
 
-`watch` and `ledger` add their own rules: see [watch](commands/watch.md#summary-and-exit-codes) and [ledger](commands/ledger.md#summary-and-exit-codes).
+`watch` and `ledger` add their own rules: see [watch](commands/watch.md#summary-and-exit-codes) and [ledger](commands/ledger.md#summary-and-exit-codes). The last summary on stderr is the command's outcome: a `watch` that sent notifications ends with a `notify` summary that carries the run's `complete`, `exit`, `stopped` and `requests`, so a script that reads the last summary line gets the exit code of the process.
 
 ### Exit 1
 

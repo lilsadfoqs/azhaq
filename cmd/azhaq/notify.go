@@ -426,20 +426,21 @@ func newNotifier(hooks []string, config string, providers, ids []string, format 
 }
 
 // sendRecorded is send with its requests in the workspace's ledger (the run's
-// own, after its seal, sealed again) and counted in a summary of its own: a
-// notification is a request to a third party, and the run's summary was
-// printed before it was made. cycle is the watch's, for a cut. runArgs are the run's flags, which may move or
-// turn off the ledger.
-func (n *notifier) sendRecorded(ctx context.Context, cycle int, ch changes, runArgs []string, db string, asJSON bool) (lost []string, cut int, err error) {
+// own, after its seal, sealed again) and counted in a summary of its own, named
+// notify: a notification is a request to a third party, and the run's summary
+// was printed before it was made. The summary is returned, not printed: watch
+// prints it last, once its outcome is known (carry). cycle is the watch's, for
+// a cut. runArgs are the run's flags, which may move or turn off the ledger.
+func (n *notifier) sendRecorded(ctx context.Context, cycle int, ch changes, runArgs []string, db string) (rep *report, lost []string, cut int, err error) {
 	if n.client == nil {
-		return nil, 0, nil
+		return nil, nil, 0, nil
 	}
 	ledgerFlag, _ := flagValue(runArgs, "ledger")
 	led, err := startSideLedger(ledgerFlag, db)
 	if err != nil {
-		return nil, 0, err
+		return nil, nil, 0, err
 	}
-	rep := newReport("watch")
+	rep = newReport("notify")
 	rep.DB = db
 	before := ledger.Sent(ledger.ClassSource)
 	lost, cut = n.send(ctx, ch)
@@ -458,14 +459,40 @@ func (n *notifier) sendRecorded(ctx context.Context, cycle int, ch changes, runA
 		rep.Notes = append(rep.Notes, fmt.Sprintf("%s not sent because the watch was interrupted (Ctrl-C, kill)", plural(cut, "notification")))
 	}
 	led.close(rep)
-	rep.settle() // a lost delivery is named on its own line, and sets watch's exit
+	return rep, lost, cut, nil
+}
+
+// carry makes the notification summary the watch's last: complete, exit,
+// stopped and requests are the process's outcome, which is its run's, a
+// delivery or -notify-cmd that failed (exit 3), or a signal that cut the
+// notification (4). results and counts stay the notifications'. run is the
+// run's summary, printed before; cut is how many notifications or commands
+// the signal cut; lost, whether any failed.
+func (r *report) carry(run *report, lost bool, cut int) {
+	r.settle() // a lost delivery is named on its own line
+	r.Requests = run.Requests
+	switch {
+	case r.Exit == exitError:
+		// the notification summary's own internal error stands
+	case cut > 0:
+		r.Exit, r.Complete = exitLimit, false // Stopped names the cycle: the caller set it
+	case run.Exit != exitOK:
+		r.Exit, r.Complete, r.Stopped, r.Error = run.Exit, false, run.Stopped, run.Error
+	case lost:
+		r.Exit, r.Complete = exitPartial, false
+	default:
+		r.Exit, r.Complete = exitOK, run.Complete
+	}
+}
+
+// emit prints the summary on stderr, as JSON or text.
+func (r *report) emit(asJSON bool) {
 	if asJSON {
-		raw, _ := json.Marshal(rep)
+		raw, _ := json.Marshal(r)
 		fmt.Fprintf(os.Stderr, "%s\n", raw)
 	} else {
-		rep.print(os.Stderr)
+		r.print(os.Stderr)
 	}
-	return lost, cut, nil
 }
 
 // send delivers ch and returns a line for each delivery that failed, and how
