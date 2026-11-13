@@ -238,7 +238,7 @@ var helpSpecs = map[string]helpSpec{
 		hidden: map[string]string{
 			"alias": `header`,
 			"compat:ffuf": `
-				fl fr fw ml mr ms mw
+				b fl fr fw ml mr ms mw
 			`,
 		},
 	},

@@ -685,9 +685,6 @@ func (o *probeOut) settle(rep *report, st *store.Store, fs *flag.FlagSet) {
 				noAnswer++
 				rows++
 			}
-			if answered {
-				rows++
-			}
 			if answered || len(unanswered[k]) > 0 {
 				continue
 			}
@@ -745,6 +742,9 @@ func (o *probeOut) settle(rep *report, st *store.Store, fs *flag.FlagSet) {
 	if len(gaps) > 0 {
 		rep.Failed = append(rep.Failed, engine.Failure{Collector: "azhaq-http", Error: "no answer and no failure recorded", Retryable: true, Count: len(gaps), Targets: gaps})
 	}
+	// An answer is a row of its own for each input and path (two ports and
+	// two paths are four), not one for each line the targets became.
+	rows += o.answerRows
 	// The counts partition the rows: answered, without an answer, not asked yet.
 	if noAnswer > 0 || rows > noAnswer {
 		rep.Counts = map[string]int{}

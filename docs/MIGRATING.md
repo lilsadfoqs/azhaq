@@ -300,6 +300,8 @@ azhaq crawl -u https://app.example.com/ -fs rdn -do -f rdn,path -rl 5
 
 `azhaq fuzz` takes ffuf's flags. It counts words, lines and sizes as ffuf does. It calibrates, with `-ac`, and recurses as ffuf does, so a command line moved from ffuf gives the same results. `azhaq dirs` is the short form for the common job: paths from a wordlist, calibrated, with SecLists' `common.txt` built in. Behaviour and fields: [`fuzz`](commands/fuzz.md) and [`dirs`](commands/dirs.md).
 
+<!-- azhaq: fuzz -->
+
 | ffuf | azhaq `fuzz` | Note |
 | --- | --- | --- |
 | `-u URL`, `-w FILE[:KEYWORD]` | `-u URL`, `-w FILE[:KEYWORD]` | Repeatable. `-w -` is stdin. |
@@ -325,11 +327,15 @@ azhaq crawl -u https://app.example.com/ -fs rdn -do -f rdn,path -rl 5
 | `-preflight`, `-postflight` | the same | In ffuf's development version. They go with `-preflight-var` and `-preflight-mode`. |
 | `-http2`, `-sni`, `-raw`, `-ignore-body` | the same | |
 
+<!-- azhaq: dirs -->
+
 | ffuf `-ac` on a path | azhaq `dirs` | Note |
 | --- | --- | --- |
 | `-u https://h/FUZZ -w words` | `-u https://h/ -w words` | `FUZZ` is not needed. A URL with a path, as in `-u https://h/api/`, sweeps `/api/WORD`. |
 | `-e .php,.bak` | `-e php,bak` | |
 | `-mc -ms -mw -ml -mr`, `-fc -fs -fw -fl -fr` | the same | |
+| `-b 'sid=1; security=low'` | `-b 'sid=1; security=low'` | Several pairs in one value, as in `fuzz`; `-cookie` too. |
+| `-H 'K: V'` | `-H 'K: V'` | |
 | `-t 40` | `-t 40` | |
 | `-rate N` | `-rate N` | |
 | `-w` left out | | SecLists' `common.txt` (MIT) is built in. |

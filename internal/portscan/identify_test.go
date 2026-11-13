@@ -7,6 +7,7 @@ import (
 	"crypto/tls"
 	"encoding/binary"
 	"encoding/hex"
+	"encoding/json"
 	"io"
 	"net"
 	"net/http"
@@ -44,7 +45,7 @@ func TestProtocolReaders(t *testing.T) {
 		service, product, version, note string
 	}{
 		{"redis", "redis", "redis", "Redis", "7.4.12", ""},
-		{"postgresql", "postgres", "postgresql", "PostgreSQL", "14 - 17", ""},
+		{"postgresql", "postgres", "postgresql", "PostgreSQL", "", "protocol 3.0 to 3.0"},
 		{"mongodb", "mongo", "mongodb", "MongoDB", "7.0", ""},
 		{"mqtt", "mqtt", "mqtt", "", "", "connack accepted"},
 		{"memcached", "memcached", "memcached", "memcached", "1.6.45", ""},
@@ -189,7 +190,7 @@ func TestLadderFindsServicesOnOtherPorts(t *testing.T) {
 		service, product, version string
 	}{
 		{redis, "redis", "Redis", "6.2.1"}, {mc, "memcached", "memcached", "1.6.9"}, {mqtt, "mqtt", "", ""},
-		{pg, "postgresql", "PostgreSQL", "14 - 17"}, {ldap, "ldap", "OpenLDAP", ""},
+		{pg, "postgresql", "PostgreSQL", ""}, {ldap, "ldap", "OpenLDAP", ""},
 	} {
 		takes.Store(0)
 		r, err := s.ScanEach(context.Background(), "", "127.0.0.1", []int{tt.port})
@@ -578,5 +579,45 @@ func TestASilentPortCostsAtMostTwentyFiveMoreConnects(t *testing.T) {
 	}
 	if got := takes.Load(); got < accepted.Load() || got > 1+maxProbes {
 		t.Errorf("the scan counted %d connects and the port accepted %d", got, accepted.Load())
+	}
+}
+
+// A range the answer's protocols allow is not a version: PostgreSQL's startup
+// answer names the protocol versions it speaks, so version stays empty, the
+// range and the answer it came from have their own fields, and no advisory is
+// matched on it.
+func TestPostgresStartupAnswerGivesARangeNotAVersion(t *testing.T) {
+	for _, tt := range []struct{ supports, rng string }{
+		{"2.0 to 3.0", "7.4 - 13"}, {"3.0 to 3.0", "14 - 17"}, {"3.0 to 3.2", "18 or later"}, {"3.1 to 3.1", ""},
+	} {
+		answer := []byte("EFATAL:  unsupported frontend protocol 1.0: server supports " + tt.supports + "\n\x00")
+		var o Open
+		if !protocolNamed("postgresql").read(answer, &o) {
+			t.Fatalf("%s: answer not recognised", tt.supports)
+		}
+		if o.Product != "PostgreSQL" || o.Version != "" || o.VersionRange != tt.rng {
+			t.Errorf("%s: %+v", tt.supports, o)
+		}
+		if tt.rng != "" && !strings.Contains(o.VersionBasis, "protocol "+tt.supports) {
+			t.Errorf("%s: no evidence in %q", tt.supports, o.VersionBasis)
+		}
+		if tt.rng == "" && o.VersionBasis != "" {
+			t.Errorf("%s: evidence %q for no range", tt.supports, o.VersionBasis)
+		}
+		raw, _ := json.Marshal(o)
+		if strings.Contains(string(raw), `"version":`) {
+			t.Errorf("%s: a version in %s", tt.supports, raw)
+		}
+	}
+}
+
+// An Active Directory functional level is the least the OS can be, not its
+// version: it goes in the range field, with the attribute it was read from.
+func TestADFunctionalLevelIsARangeNotAVersion(t *testing.T) {
+	var o Open
+	ldapProduct(map[string][]string{"domainControllerFunctionality": {"7"}}, &o)
+	if o.Product != "Microsoft Windows Active Directory LDAP" || o.Version != "" ||
+		o.VersionRange != "Windows Server 2016 functional level" || !strings.Contains(o.VersionBasis, "domainControllerFunctionality 7") {
+		t.Errorf("%+v", o)
 	}
 }

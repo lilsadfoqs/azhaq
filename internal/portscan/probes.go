@@ -13,9 +13,11 @@ type Probe struct {
 	Read func(answer []byte) (ProbeAnswer, bool)
 }
 
-// ProbeAnswer is what the service stated.
+// ProbeAnswer is what the service stated. VersionRange is what its answer
+// allows, not a version (see Open).
 type ProbeAnswer struct {
-	Product, Version, Banner string
+	Product, Version, Banner   string
+	VersionRange, VersionBasis string
 }
 
 // ProbeFor is the Probe of the protocol named name, for a service on host:port
@@ -48,7 +50,7 @@ func ProbeFor(name, host string, port int) (Probe, bool) {
 		if !read(a, &o) {
 			return ProbeAnswer{}, false
 		}
-		return ProbeAnswer{Product: o.Product, Version: o.Version, Banner: o.Banner}, true
+		return ProbeAnswer{Product: o.Product, Version: o.Version, VersionRange: o.VersionRange, VersionBasis: o.VersionBasis, Banner: o.Banner}, true
 	}
 	return pr, true
 }

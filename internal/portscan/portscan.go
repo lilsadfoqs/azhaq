@@ -142,6 +142,12 @@ type Open struct {
 	Cert    *certfacts.Facts `json:"certificate,omitempty"`
 	Scripts []Script         `json:"scripts,omitempty"` // an imported nmap scan's script output for the port
 
+	// VersionRange is what an answer's features allow (the majors that speak one protocol
+	// version) and VersionBasis the answer it was read from: an inference, never a version.
+	// Version is only what the service states, and advisories are not matched on a range.
+	VersionRange string `json:"version_range,omitempty"`
+	VersionBasis string `json:"version_range_basis,omitempty"`
+
 	// Usual is the registered name of the port, kept when -detect none leaves
 	// Service empty: it only tells a web port from another, and is not output.
 	Usual string `json:"-"`

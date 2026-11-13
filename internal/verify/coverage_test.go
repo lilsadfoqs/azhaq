@@ -142,7 +142,7 @@ func TestProbeChecksLabelTheAnswers(t *testing.T) {
 		version  string
 	}{
 		{"zookeeper", []byte("Zookeeper version: 3.9.2-abc, built on 2024\nLatency min/avg/max: 0/0/0\n"), Proved, "info", ""},
-		{"postgresql", hexFixture(t, "postgres"), Proved, "info", "14 - 17"},
+		{"postgresql", hexFixture(t, "postgres"), Proved, "info", ""},
 		{"smb", hexFixture(t, "smb"), Proved, "info", ""},
 		{"ldap", hexFixture(t, "ldap"), Proved, "info", ""},
 		{"amqp", hexFixture(t, "amqp"), Proved, "info", "3.13.7"},
@@ -178,6 +178,21 @@ func TestProbeChecksLabelTheAnswers(t *testing.T) {
 		if r.Request != c.Request || r.Evidence == "" {
 			t.Errorf("%s: a result carries the request and the evidence: %+v", tt.service, r)
 		}
+	}
+}
+
+// A PostgreSQL startup answer lists protocol versions, not a release: the
+// result has no version, and carries the range it allows, labelled inferred.
+func TestPostgresCheckGivesARangeNotAVersion(t *testing.T) {
+	f := listen(t, func([]byte) []byte { return hexFixture(t, "postgres") })
+	svc := advisory.Service{Service: "postgresql", Host: "127.0.0.1", IP: "127.0.0.1", Port: f.port}
+	c, _ := ForService(svc)
+	r, err := c.Execute(context.Background(), svc, dial)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.Version != "" || r.VersionRange != "14 - 17" || !strings.Contains(r.VersionBasis, "protocol 3.0 to 3.0") || !strings.Contains(r.Line(), "[version range 14 - 17, inferred]") {
+		t.Errorf("%+v: %s", r, r.Line())
 	}
 }
 

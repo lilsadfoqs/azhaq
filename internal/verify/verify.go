@@ -87,6 +87,10 @@ type Result struct {
 	// Proof is what was sent and what came back, bounded, with the command
 	// that shows it without azhaq. A result stored before it existed has none.
 	Proof *proof.Proof `json:"proof,omitempty"`
+	// VersionRange is a range the answer allows, inferred and never matched
+	// against advisories; VersionBasis is the evidence it came from.
+	VersionRange string `json:"version_range,omitempty"`
+	VersionBasis string `json:"version_range_basis,omitempty"`
 }
 
 // Line is the result as one line of text output.
@@ -98,6 +102,9 @@ func (r Result) Line() string {
 			s += " " + r.Version
 		}
 		s += ")"
+	}
+	if r.VersionRange != "" {
+		s += " [version range " + r.VersionRange + ", inferred]"
 	}
 	if r.AdvisoryID != "" {
 		s += " — " + r.AdvisoryID
@@ -211,6 +218,7 @@ func probeCheck(id, service, kind, request, what string, refused func(resp []byt
 					if a.Version != "" {
 						r.Version = a.Version
 					}
+					r.VersionRange, r.VersionBasis = a.VersionRange, a.VersionBasis
 				}
 			}
 		},

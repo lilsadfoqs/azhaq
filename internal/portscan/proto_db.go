@@ -183,15 +183,20 @@ func pgRead(r []byte, o *Open) bool {
 	o.Banner = ""
 	if m := pgSupportsRe.FindSubmatch(r); m != nil {
 		lo, hi := string(m[1])+"."+string(m[2]), string(m[3])+"."+string(m[4])
+		o.Banner = "protocol " + lo + " to " + hi
+		// The server states no version: the protocols it speaks narrow it to
+		// a range of majors, which is kept apart from the version.
 		switch {
 		case lo == "2.0":
-			o.Version = "7.4 - 13"
+			o.VersionRange = "7.4 - 13"
 		case lo == "3.0" && hi == "3.0":
-			o.Version = "14 - 17"
+			o.VersionRange = "14 - 17"
 		case lo == "3.0" && hi >= "3.2":
-			o.Version = "18 or later"
+			o.VersionRange = "18 or later"
 		}
-		o.Banner = "protocol " + lo + " to " + hi
+		if o.VersionRange != "" {
+			o.VersionBasis = "inferred from " + o.Banner + ", which these majors speak; the server states no version"
+		}
 	}
 	return true
 }
