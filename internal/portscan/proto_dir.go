@@ -143,7 +143,9 @@ func ldapProduct(a map[string][]string, o *Open) {
 	case first("domainControllerFunctionality") != "" || first("isGlobalCatalogReady") != "":
 		o.Product = "Microsoft Windows Active Directory LDAP"
 		if l := adLevels[first("domainControllerFunctionality")]; l != "" {
-			o.Version = "Windows Server " + l + " functional level"
+			// A functional level is the least the OS can be, not its version.
+			o.VersionRange = "Windows Server " + l + " functional level"
+			o.VersionBasis = "inferred from domainControllerFunctionality " + first("domainControllerFunctionality") + "; the server states no version"
 		}
 	case strings.Contains(oc, "OpenLDAProotDSE"):
 		o.Product = "OpenLDAP"

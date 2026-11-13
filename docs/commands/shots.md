@@ -32,7 +32,7 @@ azhaq shots -nmap scan.xml -shot-format jpeg -shot-fullpage
 2. Starts one Chrome and opens up to 6 tabs in it at once, as gowitness runs 6 threads. `-tabs N` changes that.
 3. Loads each page and saves a picture of it. Chrome is held to the scope.
 4. Records what Chrome saw: response headers, TLS session, the technologies of the rendered page, console messages and the network log.
-5. Marks a page `partial` when it was not fully loaded, and the run exits 3. A picture that comes out a size other than `-shot-size` asks for (not with `-shot-fullpage`, which is as tall as the page) is a failed target (`the picture came out WxH, not the WxH -shot-size asked for`), not a silently smaller picture.
+5. Marks a page `partial` when it was not fully loaded, and the run exits 3. A page drawn without assets of hosts outside the scope is marked `partial` too, and exits 0: the scope is yours. A picture that comes out a size other than `-shot-size` asks for (not with `-shot-fullpage`, which is as tall as the page) is a failed target (`the picture came out WxH, not the WxH -shot-size asked for`), not a silently smaller picture.
 6. Groups look-alike pages by a perceptual hash in `export -format html`, one file with the pictures embedded.
 
 What shapes it:

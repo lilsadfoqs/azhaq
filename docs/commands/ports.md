@@ -68,7 +68,8 @@ The fields of a `-json` row, which are naabu's plus azhaq's:
 | `timestamp` | UTC, RFC 3339. |
 | `ports`, `silent`, `asked`, `refused` | On the one row of an address's silent UDP ports (no `port`): the ports, how many, how many UDP ports were asked, how many the address refused. See [UDP rows and lines](#udp-rows-and-lines). |
 | `service` | The service the port answered as. A name ending in `?` is only the registered name of the port, taken from its number: nothing answered as that service, so it is not an identification. With `-detect none` no row has a `service`: nothing is named from the port number. |
-| `product`, `version` | What the service states: see [Products and versions](#products-and-versions-of-tcp-ports). |
+| `product`, `version` | What the service states: see [Products and versions](#products-and-versions-of-tcp-ports). `version` is empty when the service states none. |
+| `version_range`, `version_range_basis` | A range the answer allows when no version is stated (PostgreSQL's `14 - 17`, from the protocol versions its startup answer lists), and the answer it was read from. It is an inference: a range is never `version`, and advisories are not matched on it. |
 | `extrainfo` | What the answer says beside the product and its version, as it was sent: the rest of a `Server` header (`Python/3.11.15`, `(Ubuntu)`), or an SSH line's comment and protocol (`Ubuntu-2ubuntu2.13; protocol 2.0`). nmap calls it `extrainfo` too, and `-oX` and `-oG` carry it. |
 | `title` | The `<title>` of a web page that names no product. |
 | `banner` | What the port said. A binary answer, to the first read or to the `HEAD`, is `(binary)` and its first bytes in hex. |
@@ -284,12 +285,12 @@ Each open TCP port gets `product` and `version` next to `service`, from what it 
 | HTTP `X-Powered-By`, when `Server` names none | `Express` | Express |
 | `GET /` body, when the head names no product | `Ollama is running`; Elasticsearch or OpenSearch JSON `version.number` | Ollama; Elasticsearch 8.11.1 |
 | Redis: `INFO server` | `redis_version:7.4.12` (a server that wants a password says `-NOAUTH`: Redis, no version) | Redis 7.4.12 |
-| PostgreSQL: a startup message of a protocol version that does not exist | the error names the versions the server supports | PostgreSQL, a range of majors from them (`14 - 17`) |
+| PostgreSQL: a startup message of a protocol version that does not exist | the error names the versions the server supports | PostgreSQL, no version; `version_range` is the majors that speak those protocols (`14 - 17`) |
 | MongoDB: `isMaster`, then `buildInfo` | `version` | MongoDB 7.0.45 |
 | MQTT: a CONNECT without credentials, a subscribe to `$SYS/broker/version` | CONNACK, the broker's version message | Mosquitto 2.0.22 (the CONNACK alone: `mqtt`) |
 | AMQP: the protocol header | Connection.Start's server properties | RabbitMQ 3.13.7 |
 | memcached: `version` | `VERSION 1.6.45` | memcached 1.6.45 |
-| LDAP: an anonymous root DSE search | `vendorName`, `vendorVersion`, `namingContexts`, the object classes | OpenLDAP; the vendor and version where the server states them; Active Directory's functional level |
+| LDAP: an anonymous root DSE search | `vendorName`, `vendorVersion`, `namingContexts`, the object classes | OpenLDAP; the vendor and version where the server states them; Active Directory's functional level as `version_range`, with no version |
 | SMB: a NEGOTIATE, no session | dialect, signing, server start time (zero on Samba) | `smb` with the dialect; Samba smbd |
 | DNS over TCP: a length-prefixed query, then `version.bind` CHAOS TXT | an answer; the version string | `dns`; BIND, dnsmasq or Unbound with the version where the server answers |
 | Kafka: ApiVersions | the response | `kafka` |
@@ -309,7 +310,7 @@ Each open TCP port gets `product` and `version` next to `service`, from what it 
 | `GET /version` of a Go server that answers `/` with a 404 | etcd, Kubernetes or Docker JSON | etcd, Kubernetes, Docker Engine with the version |
 
 - `service` is unchanged.
-- `product` and `version` are the first token of the `Server` header (`Werkzeug/2.2.3`); the rest of the header is `extrainfo`, and the header as sent stays the `banner`. A version is only ever one the answer states.
+- `product` and `version` are the first token of the `Server` header (`Werkzeug/2.2.3`); the rest of the header is `extrainfo`, and the header as sent stays the `banner`. A version is only ever one the answer states. A range an answer allows is `version_range`, never `version`, and is not matched against advisories.
 - A web page that names no product gets its `<title>` in `title`, and its `<meta name="generator">` as the product.
 - The `GET /` for a body is one more connection on a web port. It is made when the `HEAD` answer gave no product and is a 200 or 401 of type JSON or text. It is also made when the `HEAD` was refused (403, 404, 405, 501). It counts, is paced and is recorded like a connect, and it comes out of the port's 25 connects.
 - Every request above, but the `SYST` and `EHLO` that `-detect all` sends to a greeting that names no product, is sent only to a port that said nothing and is not one of the raw printing ports (9100–9107). None logs in, sends a credential or changes anything.

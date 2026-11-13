@@ -52,6 +52,7 @@ type probeOut struct {
 	answered    map[string]bool        // target as given → a row was printed or dropped by a filter
 	units       map[string][]probeUnit // target as given → the lines it became, in order
 	answeredKey map[string]bool        // seed key → a row was printed or dropped by a filter
+	answerRows  int                    // rows answered, one for each input and path: printed or dropped by a filter
 	dropped     int                    // rows a matcher or filter left out
 	condErr     error                  // the first condition that could not be evaluated
 	condErrs    int
@@ -149,6 +150,7 @@ func (p *probeOut) see(ent types.Entity, o types.Observation) {
 			p.mu.Lock()
 			p.answered[in] = true
 			p.answeredKey[ent.Key] = true
+			p.answerRows++
 			p.mu.Unlock()
 			if !p.keep(row, r, ev) {
 				continue

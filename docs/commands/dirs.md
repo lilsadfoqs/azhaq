@@ -189,10 +189,11 @@ The start of every body is checked for a runtime's stack trace as it is read: a 
 | `-strict-exit` | bool |  | exit 3 for any failure, a target among many included (the rule before 0.15); without it a run that did its job exits 0 and its summary counts and lists the failures |
 
 <details>
-<summary>Flags familiar from ffuf and other names (8)</summary>
+<summary>Flags familiar from ffuf and other names (9)</summary>
 
 | Flag | Type | Default | Meaning | Kind |
 | --- | --- | --- | --- | --- |
+| `-b` | string, repeatable |  | Cookie name=value (repeatable; sent as one Cookie header) | ffuf's name |
 | `-fl` | string |  | hide these line counts | ffuf's name |
 | `-fr` | string |  | hide answers whose headers or body match this regular expression | ffuf's name |
 | `-fw` | string |  | hide these word counts | ffuf's name |

@@ -47,7 +47,7 @@ type silentUDP struct {
 func (r portRow) str(k string) string { s, _ := r.Fields[k].(string); return s }
 
 // the fields a row of -json and -csv has, in the order -csv writes them.
-var portFields = []string{"host", "ip", "port", "protocol", "state", "tls", "cdn", "cdn-name", "timestamp", "service", "product", "version", "extrainfo", "banner", "title", "tls_version", "cipher", "subject_cn", "subject_an", "ports", "silent", "asked", "refused"}
+var portFields = []string{"host", "ip", "port", "protocol", "state", "tls", "cdn", "cdn-name", "timestamp", "service", "product", "version", "extrainfo", "banner", "title", "tls_version", "cipher", "subject_cn", "subject_an", "ports", "silent", "asked", "refused", "version_range", "version_range_basis"}
 
 // udpOnlyFields are the columns of portFields that only a row of silent UDP
 // ports has: -csv writes them when the scan asks UDP ports.
