@@ -215,7 +215,7 @@ The URL keys other than `catchall` and `skipped` count rows of the other coverag
 - A connection Chrome's own services tried and the guard refused is not in the ledger, because nothing was sent: the summary's `notes` counts it and names the hosts. On a new Chrome profile there are none.
 - Without a scope, the reason is `outside the site (Chrome)`. The site is the registrable domain or address of the pages Chrome was pointed at.
 - The first 100 URLs of a run are listed. `notes` gives the number of requests when there were more.
-- Chrome sends GET, HEAD and OPTIONS only, outside signing in: see [Chrome](CONCEPTS.md#chrome).
+- Chrome sends GET, HEAD and OPTIONS only, besides the request that signs in: see [Chrome](CONCEPTS.md#chrome).
 - A write a page or its scripts would send is refused before it leaves. That covers a POST, PUT, PATCH or DELETE, a beacon, and a form a script posts.
 - It is listed as `a page's script would send a write`, by method and URL without its query: `POST http://127.0.0.1:3001/api/track`. Its route is mapped with that method (`ops` with `source` `browser`).
 - With `-browser-writes`, pages send their writes, which change data on the target. Nothing is listed.

@@ -474,7 +474,8 @@ With `-replay-writes`, three more come before them all:
 ### Chrome
 
 - Chrome sends GET, HEAD and CORS preflights (OPTIONS).
-- While signing in, it sends every method the page sends: its sign-in request, and whatever the page's own scripts send meanwhile, such as a socket's polling POSTs. All of them are in the ledger.
+- While signing in, it sends the request that signs in: the one that carries the user name or the password the run was given, in its body, its headers or its URL, or the sign-in form posted as a navigation after the run submitted it. The sign-in page's own scripts get no exemption: a socket's polling POST or a beacon is held like a write of any page, mapped and listed as not sent unless `-browser-writes`.
+- Every request Chrome sends while signing in is in the ledger.
 - A page's own writes are refused and mapped, unless `-browser-writes`.
 - Every download is refused and listed. Chrome saves nothing to disk.
 - A page read for its requests is loaded without its images, fonts and media.
