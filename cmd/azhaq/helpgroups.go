@@ -35,7 +35,7 @@ var helpSpecs = map[string]helpSpec{
 			{"Browser", `browser interact interact-clicks screenshots chrome chrome-profile chrome-proxy chrome-no-sandbox chrome-require-sandbox tabs unsafe-ports`},
 			{"Scope and safety", `allow sweep deny deny-path send-state-changing kill-file ledger seal-to submit-forms browser-writes params-writes`},
 			{"Pace and limits", `rate host-rate host-parallel parallel delay backoff retry request-timeout timeout max-requests max-host-requests host-guesses daily-requests max-items max-names max-ips max-response-size depth retry-failed retry-run`},
-			{"Session", `cookie cookie-jar header login login-user login-pass proxy`},
+			{"Session", `cookie cookie-jar header login login-user login-pass session-every proxy`},
 			{"Output", `db json o quiet v stream sr srd no-catchall all-rows fail-on-errors fail-on-capped strict-exit`},
 		},
 		hidden: map[string]string{

@@ -20,6 +20,7 @@ import (
 
 	"github.com/lilsadfoqs/azhaq/catalog"
 	"github.com/lilsadfoqs/azhaq/internal/egress"
+	"github.com/lilsadfoqs/azhaq/internal/fetch"
 	"github.com/lilsadfoqs/azhaq/internal/guard"
 	"github.com/lilsadfoqs/azhaq/internal/ledger"
 	"github.com/lilsadfoqs/azhaq/internal/neterr"
@@ -124,6 +125,11 @@ func (e *Engine) Run(ctx context.Context, item types.WorkItem) (types.RunMeta, e
 	}
 	if seen {
 		return types.RunMeta{ItemID: item.ID, Status: types.StatusOK}, nil
+	}
+	if catalog.InfoOf(col).Stage {
+		// A task that sends many requests starts with a session that lives:
+		// a loss is found here, and its first request is refused with the error.
+		_ = fetch.StageCheck(ctx, 0)
 	}
 
 	now := time.Now().UTC()

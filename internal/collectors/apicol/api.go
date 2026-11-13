@@ -505,6 +505,7 @@ func (c *Collector) swaggerUI(ctx context.Context, raw string, res fetch.Result,
 	// Only what turns out to be a description is handed on: a guess that
 	// answers 404 is not part of the map.
 	var specs []string
+	_ = fetch.StageCheck(ctx, len(found)) // the guesses are asked with the session: it is checked first
 	for _, u := range found {
 		r, _, err := fetch.Do(ctx, c.Client, u)
 		if err != nil || r.Status != http.StatusOK {
