@@ -256,7 +256,7 @@ func TestParallelRunSendsNothingNewAfterTheSessionEnds(t *testing.T) {
 			if want := plural1(len(sl.InFlight), "GET") + " answered after that answer, already in flight"; len(sl.InFlight) > 0 && !strings.Contains(sl.Msg, want) {
 				t.Errorf("the message does not count the %d in flight (%q): %s", len(sl.InFlight), want, sl.Msg)
 			}
-			if len(sl.InFlight) == 0 && !strings.Contains(sl.Msg, "no GET was in flight") {
+			if len(sl.InFlight) == 0 && !strings.Contains(sl.Msg, "no other GET was in flight") {
 				t.Errorf("no GET in flight, and the message does not say so: %s", sl.Msg)
 			}
 		})

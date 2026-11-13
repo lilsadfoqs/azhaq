@@ -70,6 +70,7 @@ type sessionGuard struct {
 	checking atomic.Bool
 	since    atomic.Int64 // requests since the last good check
 	due      atomic.Bool  // an answer looked like the end of the session
+	held     bool         // the answer that set endAns was read on the wire, its request not yet recorded (mu)
 
 	renewing atomic.Bool  // signing in again: the requests made with the renewal's context pass, every other waits
 	probing  atomic.Bool  // a candidate for the check page is being measured
@@ -559,7 +560,7 @@ func (g *sessionGuard) check(ctx context.Context, force bool) error {
 	if err == nil {
 		// What was in flight is accounted for: renewed, or never lost.
 		g.mu.Lock()
-		g.endAns, g.afterEnd = "", nil
+		g.endAns, g.afterEnd, g.held = "", nil, false
 		g.mu.Unlock()
 	}
 	return err
@@ -590,6 +591,9 @@ func (g *sessionGuard) verdict(ctx context.Context, endedBy, signal string, sent
 func (g *sessionGuard) lose(ctx context.Context, got Print, endedBy, signal string, sent int) error {
 	g.mu.Lock()
 	n := len(g.asked)
+	if g.held {
+		n++ // the request whose answer asked for this check is sent, and recorded only when its Do returns
+	}
 	g.mu.Unlock()
 	unrecorded := max(0, sent-n)
 	page, want := g.page()
@@ -654,7 +658,7 @@ func (g *sessionGuard) failLost(lead, what, why string, n int, pre int64, atStar
 	case answer != "":
 		sent = fmt.Sprintf("%s answered after that answer, already in flight, may have been answered without it", plural(len(inflight), "GET"))
 		if len(inflight) == 0 {
-			sent = "no GET was in flight when that answer was read"
+			sent = "no other GET was in flight when that answer was read"
 		}
 	default:
 		sent = fmt.Sprintf("no answer looked like its end, so the %s asked since the last good check may have been answered without it", plural(n, "GET"))
@@ -916,6 +920,9 @@ func sessionSaw(ctx context.Context, raw string, res Result) {
 	defer g.probe(ctx, raw, res)
 	g.answeredAfterEnd(ctx, raw)
 	g.mu.Lock()
+	if g.held && (g.endAns == raw || slices.ContainsFunc(res.Hops, func(h Hop) bool { return h.URL == g.endAns })) {
+		g.held = false // recorded below
+	}
 	if len(g.asked) < maxAsked {
 		g.asked = append(g.asked, raw)
 	}
@@ -977,11 +984,11 @@ func sessionWire(req *http.Request, resp *http.Response) {
 			g.endedBy = raw
 		}
 		g.mu.Unlock()
-		g.ends(raw, "")
+		g.ends(raw, "", true)
 	case replacesSession(resp.Header):
-		g.ends(raw, pathOf(raw)+" set the session cookie to another value")
+		g.ends(raw, pathOf(raw)+" set the session cookie to another value", true)
 	default:
-		g.answered(raw, resp.StatusCode, resp.Header.Get("Location"))
+		g.answered(raw, resp.StatusCode, resp.Header.Get("Location"), true)
 	}
 }
 
@@ -992,27 +999,30 @@ func sessionWire(req *http.Request, resp *http.Response) {
 // run's session still holds.
 func SawAnswer(raw string, status int, location string) {
 	if g := guardP.Load(); g != nil && !g.renewing.Load() {
-		g.answered(raw, status, location)
+		g.answered(raw, status, location, false)
 		g.notify("")
 	}
 }
 
 // answered notes an answer that is a 401 or a redirect to the sign-in page.
-func (g *sessionGuard) answered(raw string, status int, location string) {
+func (g *sessionGuard) answered(raw string, status int, location string, wire bool) {
 	if status == http.StatusUnauthorized {
-		g.ends(raw, pathOf(raw)+" answered 401")
+		g.ends(raw, pathOf(raw)+" answered 401", wire)
 		return
 	}
 	if signIn := g.signIn(); signIn != "" && isRedirect(status) && location != "" && locPath(raw, location) == pathOf(signIn) {
-		g.ends(raw, pathOf(raw)+" answered "+fmt.Sprint(status)+" to "+pathOf(signIn))
+		g.ends(raw, pathOf(raw)+" answered "+fmt.Sprint(status)+" to "+pathOf(signIn), wire)
 	}
 }
 
 // ends sets the check for the answer to raw, naming it when it is the first.
-func (g *sessionGuard) ends(raw, signal string) {
+func (g *sessionGuard) ends(raw, signal string, wire bool) {
 	g.mu.Lock()
 	if signal != "" && g.signal == "" {
 		g.signal = signal
+	}
+	if wire && g.endAns == "" {
+		g.held = true // the run's request is still in its Do: the check counts it
 	}
 	g.mu.Unlock()
 	g.markEnd(raw)
