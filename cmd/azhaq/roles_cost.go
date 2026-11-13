@@ -30,6 +30,7 @@ type rolesCostIn struct {
 	methods  map[string]bool
 	budget   int64         // -max-requests of the run options, the command's budget
 	verify   []verifyWrite // -replay-writes-verify steps
+	canary   bool          // -replay-writes-canary
 	mapsPlan *runPlan      // what one role's run would send, from plan; nil outside plan
 }
 
@@ -101,7 +102,7 @@ func estimateRoles(in rolesCostIn) costEstimate {
 			for _, w := range historyWrites(h, in.sc, in.methods, own) {
 				writes++
 				others := int64(len(otherRoles(in.roles, w.owner)))
-				f, m, open := verifyReads(w, others, int64(n-1), in.verify, slices.ContainsFunc(in.roles, func(r role) bool { return r.name == w.owner }))
+				f, m, open := verifyReads(w, others, int64(n-1), in.verify, in.canary, slices.ContainsFunc(in.roles, func(r role) bool { return r.name == w.owner }))
 				floor += f
 				most += m
 				if open != "" && !slices.Contains(reasons, open) {
@@ -139,7 +140,7 @@ const createLocates = "the places a create's answer and the collection name for 
 // before the run, and open says what the answers decide on top of it.
 // others are the roles the write is sent with, n1 the other roles of the
 // create's creator, steps the user's -replay-writes-verify steps.
-func verifyReads(w writeReq, others, n1 int64, steps []verifyWrite, ownerThere bool) (floor, most int64, open string) {
+func verifyReads(w writeReq, others, n1 int64, steps []verifyWrite, canary, ownerThere bool) (floor, most int64, open string) {
 	if !ownerThere {
 		return 0, 0, "" // the replay skips a write whose owner is not a role
 	}
@@ -160,11 +161,15 @@ func verifyReads(w writeReq, others, n1 int64, steps []verifyWrite, ownerThere b
 	// The owner's object before (the write's own URL, then each parent
 	// the replay tries, or the one the history read), a read-back the map
 	// knows, one more after an empty write, then each sender's read after
-	// its write and each step's read as the sender.
+	// its write and each step's read as the sender, and with a canary the
+	// sender's own object after a write the owner's did not show.
 	before := max(int64(liveVerifyReads(w)), 1)
 	most = before + 1 + others*(1+reads)
 	if w.empty {
 		most++
+	}
+	if canary && !w.empty && w.method != http.MethodDelete {
+		most += others
 	}
 	return 1 + others, most, ""
 }
