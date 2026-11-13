@@ -921,7 +921,7 @@ func TestRolesTheListedColumnOfTheWriteVerdictsIsWhatListedSays(t *testing.T) {
 	table, _, _ = strings.Cut(table, "\n## ")
 	all := []string{verdictWriteAnyone, verdictWriteCross, verdictWriteUnread, verdictWriteDry, verdictWriteNoChange, verdictWriteCreate, verdictWriteAccepted,
 		verdictWriteUnverifiable, verdictWriteOwner, verdictWriteVoid, verdictWriteRefused, verdictWriteFailed, verdictWriteMixed,
-		verdictWriteRedirected, verdictWriteMixedRedirect, verdictWriteCanaryRejected}
+		verdictWriteRedirected, verdictWriteMixedRedirect, verdictWriteCanaryRejected, verdictWriteNotAllowed, verdictWriteMixedNotAllowed}
 	seen := 0
 	for _, l := range strings.Split(table, "\n") {
 		cells := strings.Split(l, "|")

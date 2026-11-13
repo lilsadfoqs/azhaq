@@ -834,6 +834,7 @@ func cmdRoles(args []string) error {
 			wn, failed := writeNotes(wrows)
 			rep.Notes = append(rep.Notes, wn...)
 			rep.Notes = append(rep.Notes, canaryRejections(wrows)...)
+			rep.Notes = append(rep.Notes, notAllowedNotes(wrows)...)
 			rep.warned = rep.warned || failed
 		}
 		if len(reqs) == 0 {
@@ -989,7 +990,7 @@ func rolesFailed(rep *report, asJSON bool, err error) error {
 // listed: the verdicts worth a reader's time by default.
 func listed(v string) bool {
 	switch v {
-	case verdictWriteAnyone, verdictWriteCross, verdictWriteUnread, verdictWriteCreate, verdictWriteAccepted, verdictWriteUnverifiable, verdictWriteDry, verdictWriteCanaryRejected, verdictAnyoneSecrets, verdictCross, verdictAnyID, verdictObject, verdictSecrets, verdictShared, verdictSignedIn, verdictOnly,
+	case verdictWriteAnyone, verdictWriteCross, verdictWriteUnread, verdictWriteCreate, verdictWriteAccepted, verdictWriteUnverifiable, verdictWriteDry, verdictWriteCanaryRejected, verdictWriteNotAllowed, verdictWriteMixedNotAllowed, verdictAnyoneSecrets, verdictCross, verdictAnyID, verdictObject, verdictSecrets, verdictShared, verdictSignedIn, verdictOnly,
 		verdictRoleGated, verdictFields, verdictPublicObj, verdictStatus:
 		return true
 	}
@@ -1017,7 +1018,7 @@ func printRoles(roles []role, rows []roleRow, compared int, dir string) {
 			line += " found by " + strings.Join(row.FoundBy, ", ")
 		case verdictWriteAnyone, verdictWriteCross:
 			line += " " + row.Confidence + " · " + row.Evidence
-		case verdictWriteNoChange:
+		case verdictWriteNoChange, verdictWriteNotAllowed, verdictWriteMixedNotAllowed:
 			if row.Evidence != "" {
 				line += " · " + row.Evidence
 			}

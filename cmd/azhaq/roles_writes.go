@@ -53,7 +53,13 @@ const (
 	// A redirect and a refusal or a 5xx are among the answers: none was let
 	// through.
 	verdictWriteMixedRedirect = "the other roles' writes were redirected (3xx, not followed) and refused or failed with a server error (5xx): neither accepted"
-	verdictWriteDry           = "would be sent (-dry-writes)"
+	// Every other role's write was answered 405 or 501: the route does not take
+	// the method, which says nothing about who may write.
+	verdictWriteNotAllowed = "the method is not allowed on this route (405 or 501): nothing is said about who may write"
+	// 405 or 501 among other answers (a refusal, a redirect, a 5xx), none let
+	// through: only the refused are known to be kept out.
+	verdictWriteMixedNotAllowed = "the method is not allowed for some roles (405 or 501) and the other answers were refusals, redirects or server errors: neither accepted"
+	verdictWriteDry             = "would be sent (-dry-writes)"
 	// The canary value was answered 400 or 422: the server did not accept it
 	// as a value, so the write path was not exercised and nothing is said
 	// about who may write.
@@ -88,15 +94,20 @@ func init() {
 	verdictOrder[verdictWriteMixed] = 19
 	verdictOrder[verdictWriteRedirected] = 19
 	verdictOrder[verdictWriteMixedRedirect] = 19
+	verdictOrder[verdictWriteNotAllowed] = 19
+	verdictOrder[verdictWriteMixedNotAllowed] = 19
 }
 
 // writeAnswers counts the other roles that were asked and got a 5xx, a 3xx
-// (a redirect, which no write follows) and anything else (a refusal: a role
-// that was let never gets here).
-func writeAnswers(row *roleRow) (failed, redirected, other int) {
+// (a redirect, which no write follows), a 405 or 501 (the route does not take
+// the method) and anything else (a refusal: a role that was let never gets
+// here).
+func writeAnswers(row *roleRow) (failed, redirected, notAllowed, other int) {
 	for name, a := range row.Answers {
 		switch {
 		case name == row.Owner || a.Status == 0:
+		case a.Status == http.StatusMethodNotAllowed || a.Status == http.StatusNotImplemented:
+			notAllowed++
 		case a.Status >= 500:
 			failed++
 		case a.Status >= 300 && a.Status < 400:
@@ -109,13 +120,19 @@ func writeAnswers(row *roleRow) (failed, redirected, other int) {
 }
 
 // serverVerdict is the verdict of a write nobody else was let to send, when
-// a 5xx or a redirect is among the answers: failed when every other role got
-// a 5xx, redirected when every one got a 3xx, mixed when they differ. "" when
-// every answer is a refusal.
+// a 5xx, a redirect or a 405/501 is among the answers: failed when every
+// other role got a 5xx, redirected when every one got a 3xx, not allowed when
+// every one got a 405 or 501, mixed when they differ. "" when every answer is
+// a refusal.
 func serverVerdict(row *roleRow) string {
-	switch failed, redirected, other := writeAnswers(row); {
-	case failed == 0 && redirected == 0:
+	failed, redirected, notAllowed, other := writeAnswers(row)
+	switch {
+	case failed == 0 && redirected == 0 && notAllowed == 0:
 		return ""
+	case notAllowed > 0 && failed == 0 && redirected == 0 && other == 0:
+		return verdictWriteNotAllowed
+	case notAllowed > 0:
+		return verdictWriteMixedNotAllowed
 	case redirected == 0 && other == 0:
 		return verdictWriteFailed
 	case redirected == 0:
@@ -124,6 +141,60 @@ func serverVerdict(row *roleRow) string {
 		return verdictWriteRedirected
 	}
 	return verdictWriteMixedRedirect
+}
+
+// notAllowedVerdict: the verdicts of a route that does not take the method.
+func notAllowedVerdict(v string) bool {
+	return v == verdictWriteNotAllowed || v == verdictWriteMixedNotAllowed
+}
+
+// noteNotAllowed puts on a not-allowed row each role's status, and says where
+// the owner's came from: the owner's own write is not replayed (a map write
+// apart), so its status is the one the history recorded.
+func noteNotAllowed(row *roleRow, w writeReq) {
+	if !notAllowedVerdict(row.Verdict) {
+		return
+	}
+	var parts []string
+	for _, name := range sortedKeys(mapKeys(row.Answers)) {
+		if a := row.Answers[name]; name != row.Owner && a.Status != 0 {
+			parts = append(parts, fmt.Sprintf("%s got %d", name, a.Status))
+		}
+	}
+	s := strings.Join(parts, ", ")
+	switch st := row.Answers[row.Owner].Status; {
+	case w.empty && st != 0:
+		s += fmt.Sprintf("; %s (the owner) got %d, asked first by this replay", row.Owner, st)
+	case st != 0:
+		s += fmt.Sprintf("; %s (the owner) got %d, as recorded in %s: it was not replayed", row.Owner, st, w.from)
+	default:
+		s += fmt.Sprintf("; %s (the owner) was not asked: a %s would change its object", row.Owner, w.method)
+	}
+	row.Evidence = strings.TrimPrefix(row.Evidence+"; "+s, "; ")
+}
+
+// notAllowedNotes say in the summary which writes the server does not take,
+// with each role's status: nothing is said about who may write them.
+func notAllowedNotes(rows []roleRow) []string {
+	var out []string
+	n := 0
+	for _, row := range rows {
+		if !notAllowedVerdict(row.Verdict) {
+			continue
+		}
+		n++
+		if len(out) < 3 {
+			out = append(out, fmt.Sprintf("%s %s (%s)", row.Method, pathOf(row.URL), row.Evidence))
+		}
+	}
+	if n == 0 {
+		return nil
+	}
+	more := ""
+	if n > len(out) {
+		more = fmt.Sprintf(", and %d more", n-len(out))
+	}
+	return []string{fmt.Sprintf("write replay: %s answered 405 or 501, so the route does not take the method and nothing is said about who may write: %s%s", plural(n, "write"), strings.Join(out, "; "), more)}
 }
 
 // writeOp is a write a route takes, as a role's run found it: PUT
@@ -573,6 +644,7 @@ func replayWritesPaused(who map[string]identity, roles []role, reqs []writeReq, 
 		}
 		row.Verdict = writeVerdict(&row, let, proven, anon, ownerLet, ownerAsked, vu != "", why, already)
 		noteLandings(&row, landed, why != "")
+		noteNotAllowed(&row, w)
 		if len(let) == 0 && len(rejected) > 0 {
 			row.Verdict = verdictWriteCanaryRejected
 			row.Evidence = canaryRejection(rejected[0], canaryField, row.Answers[rejected[0]])
@@ -793,6 +865,7 @@ func replayCollectionPaused(row *roleRow, roles []role, w writeReq, answers map[
 		if row.Verdict = serverVerdict(row); row.Verdict == "" {
 			row.Verdict = verdictWriteRefused
 		}
+		noteNotAllowed(row, w)
 	}
 	return nil
 }
