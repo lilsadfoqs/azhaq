@@ -1,5 +1,30 @@
 # Changelog
 
+## v0.24.0
+
+### Added
+
+- A CNAME whose chain ends at a name that answered NXDOMAIN is a `dangling-dns` finding (severity low) with the chain, the answer, the resolver that gave it and a `dig` command that asks again, whether or not the target is on a provider list; the takeover stays a separate lead; `hunt` ranks it with the findings.
+- Each name on a shared listener gets an identification row for the application its root page names (its title through the port scan's title rules, a generator tag, `X-Powered-By`, `Server` or the technologies), with the source on the row; libraries, CDNs and analytics are left out by their technology category; `-verify-logins` asks a catalog product a page title names, and says why when it asked nothing.
+
+### Changed
+
+- `hunt` is the one worklist after a run: beside routes and hosts it lists an identification row for each listener the run named (product, version or `no version seen`, the top advisory with its label, the proof excerpt and the command that reproduces it), read from the same records as `report -findings`; rows rank findings, then identifications with a version, then those without, then leads, and the summary says what `-limit` left out.
+- Every `run` that stored rows starts its `next` lines with `azhaq hunt -db PATH   (F findings, I identifications, L leads)`, in text and JSON, terminal or not; the JSON summary keeps one line per advisory lead and counts `not affected` matches without listing them, so a summary of four servers went from 62 KB to 5 KB.
+- Under a request cap, every address gets its first port pass before any address gets its second.
+- A full-range connect scan with naming off runs at the pace of `nmap -sT` (0.45 s, 36 MB on loopback, from 0.55 s and 68 MB): the ledger reuses its buffers, a refused connect allocates nothing, and a scan takes at most 4 cores.
+
+### Fixed
+
+- One service reached by address and by name is one `hunt` row that lists the other names with the same answer, and one listener with the same product under several names is one identification; `run` names `-verify-logins` as a next pass, with what it would send, when it identified a product the default-login catalog lists.
+- `roles` keeps a session the site answers with 404 or 410 where the visitor gets 401, 403 or a sign-in page alive; `-replay-writes-verify` signs in as the owner's application user (named on the step with `;user=NAME`, or learned by the run) and says `refuted` only for a user it was sure of; `report -redact` masks the user in a write's route; the held-GET note names the stages that sent it; a run option before `--` says to put it after.
+- `addresses_scanned` counts a range block once across resumes, progress lines carry `addresses_done` and `addresses_left` during a port scan, and a scan stopped by a limit says in its first summary line (and a top-level `not_asked`) how many ports of how many addresses were not asked, with the `resume` command.
+- A PEM private key is a secret only with its whole block (a body that decodes and its end line), a begin line alone is an info lead; `subs` coverage notes count the same names as the raw tier; `urls` drops boolean SQL fragments, a lone quote, scanner names and comma-glued URLs as junk and gives records read per archive (kept + duplicates + junk + outside); `fuzz` names the cause of failed requests by class with a failure row `query -failed` lists; `params` marks a name already in the given URL.
+- A screenshot refused for the budget says how much was left at that moment and what each collector had sent; a Chrome that refuses its sandbox is detected from its output and the fallback starts at once instead of after the launch timeout; `mcp` takes `-proxy` and `-chrome-proxy`, fixed at start and applied to every tool.
+- `subs -live` asks a batch's wildcard probes and registration questions together instead of one after another, and the keyed sampled source holds `-source-timeout`.
+- No data race between a port scan's progress count and another name's task on the same address.
+- `ports` never prints a range inferred from protocol features as `version`: PostgreSQL's startup answer and an Active Directory functional level give `version_range` with the evidence (`version_range_basis`), and no advisory is matched on them; `dirs` takes ffuf's `-b`; `probe` counts every row of a port and path matrix.
+
 ## v0.23.0
 
 ### Added
