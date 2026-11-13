@@ -146,6 +146,9 @@ type writeReq struct {
 	status int    // what the owner got, recorded in its HAR; 0 for a map write
 	empty  bool   // a map write: an empty object, sent first as its owner
 	route  string // the route the runs found that the URL fills (…/users/v1/{username}/password), when one does
+	// ownRead is the URL of the sender's own object on the route readURL
+	// fills, from what the runs found: "" when none is known.
+	ownRead func(sender, readURL string) string
 }
 
 // routeOfWrite is the route the runs found (a template of their API
@@ -470,6 +473,7 @@ func replayWritesPaused(who map[string]identity, roles []role, reqs []writeReq, 
 		}
 		already := haveBefore && !w.empty && w.method != http.MethodDelete && !canaryable && alreadySet(before, w.body)
 		var let, proven, rejected []string
+		var landed []senderLand
 		anon := map[string]bool{}
 		for _, r := range otherRoles(roles, w.owner) {
 			if paused[r.name] {
@@ -517,6 +521,16 @@ func replayWritesPaused(who map[string]identity, roles []role, reqs []writeReq, 
 				if w.method == http.MethodDelete {
 					break // the object is gone
 				}
+			} else if canaryable {
+				// A write the owner's object does not show may have landed on
+				// the sender's own: read it, past the same route.
+				l, note := senderLanding(r, wr, vu, canaryField, read)
+				if note != "" {
+					row.OwnerBy += "; " + note
+				}
+				if l != nil {
+					landed = append(landed, *l)
+				}
 			}
 			before = after
 		}
@@ -558,6 +572,7 @@ func replayWritesPaused(who map[string]identity, roles []role, reqs []writeReq, 
 			}
 		}
 		row.Verdict = writeVerdict(&row, let, proven, anon, ownerLet, ownerAsked, vu != "", why, already)
+		noteLandings(&row, landed, why != "")
 		if len(let) == 0 && len(rejected) > 0 {
 			row.Verdict = verdictWriteCanaryRejected
 			row.Evidence = canaryRejection(rejected[0], canaryField, row.Answers[rejected[0]])
@@ -1624,6 +1639,111 @@ func sendWrite(ctx context.Context, client *http.Client, r role, w writeReq) (an
 		return a, &noAnswerError{err: fmt.Errorf("the answer was cut: %w", rerr), a: a}
 	}
 	return a, nil
+}
+
+// senderLand is a canary a role sent that its own object holds, read back.
+type senderLand struct{ sender, field, value, url string }
+
+// canaryValue is the value a canary body sets in field.
+func canaryValue(body []byte, field string) string {
+	var m map[string]any
+	if json.Unmarshal(body, &m) != nil {
+		return ""
+	}
+	v, _ := m[field].(string)
+	return v
+}
+
+// senderLanding reads the sender's own object after its write, at the route
+// the owner's object was read at but with the sender's own identifier, and
+// says whether the canary is there. The canary is a value only this replay
+// sent, so it was not there before. note says what was or was not read.
+func senderLanding(r role, w writeReq, vu, field string, read func(role, string) (answer, bool)) (*senderLand, string) {
+	value := canaryValue(w.body, field)
+	if value == "" {
+		return nil, ""
+	}
+	notRead := func(why string) (*senderLand, string) {
+		return nil, fmt.Sprintf("%s's own object was not read to see where the write landed: %s", r.name, why)
+	}
+	if r.anonymous() {
+		return notRead(r.name + " has no session, so no object of its own")
+	}
+	var su string
+	if w.ownRead != nil {
+		su = w.ownRead(r.name, vu)
+	}
+	if su == "" {
+		return notRead("no object of " + r.name + "'s own is known on the route " + pathOf(vu) + " fills")
+	}
+	a, ok := read(r, su)
+	switch {
+	case !ok:
+		return notRead("the read of " + pathOf(su) + " got no answer, or the request budget was spent")
+	case !reads(a):
+		return notRead(fmt.Sprintf("%s answered %d", pathOf(su), a.Status))
+	}
+	if holdsCanary(a, field, value) {
+		return &senderLand{sender: r.name, field: field, value: value, url: su},
+			fmt.Sprintf("%s's own object, read at %s, holds the canary value %s", r.name, pathOf(su), value)
+	}
+	return nil, fmt.Sprintf("%s's own object, read at %s, does not show the canary value either", r.name, pathOf(su))
+}
+
+// holdsCanary: the object shows the canary value, in the field of that name
+// when it has one, else anywhere.
+func holdsCanary(a answer, field, value string) bool {
+	if v := a.vals[norm(field)]; len(v) > 0 {
+		return slices.Contains(v, value)
+	}
+	return a.held[value]
+}
+
+// noteLandings puts on the row, as a measured fact, the writes whose canary
+// was read back in the sender's own object. The verdict is not changed:
+// the owner's object is what it was. unread: the owner's object cannot show
+// the field, so it may have changed too.
+func noteLandings(row *roleRow, landed []senderLand, unread bool) {
+	if len(landed) == 0 {
+		return
+	}
+	row.LandedOn = "sender"
+	var parts []string
+	for _, l := range landed {
+		row.LandedBy = append(row.LandedBy, l.sender)
+		s := fmt.Sprintf("%s's write landed on %s's own object", l.sender, l.sender)
+		if !unread {
+			s += " (the route does not use the name in the path)"
+		}
+		s += fmt.Sprintf("; %s's %s now holds the canary value %s and is not restored", l.sender, l.field, l.value)
+		if unread {
+			s += "; the owner's object cannot show that field, so whether it changed too is not known"
+		}
+		parts = append(parts, s)
+	}
+	row.Evidence = strings.TrimPrefix(row.Evidence+"; "+strings.Join(parts, "; "), "; ")
+}
+
+// senderObjects finds a sender's own object on the route a URL fills: the
+// object of that route's template the runs found as the sender's own, "" when
+// none is known.
+func senderObjects(made map[string]instance, routes ...map[string]bool) func(sender, readURL string) string {
+	return func(sender, u string) string {
+		tmpl := routeOfWrite(u, routes...)
+		if tmpl == "" {
+			return ""
+		}
+		best, rank := "", 0
+		for mu, in := range made {
+			if in.template != tmpl || in.owner != sender {
+				continue
+			}
+			if best == "" || in.rank < rank || in.rank == rank && mu < best {
+				best, rank = mu, in.rank
+			}
+		}
+		return best
+	}
 }
 
 // canaryRejection says a role's canary write was answered 400 or 422, with
