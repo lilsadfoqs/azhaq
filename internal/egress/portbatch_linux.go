@@ -15,6 +15,21 @@ import (
 	"github.com/lilsadfoqs/azhaq/internal/ledger"
 )
 
+// issue admits the batches that begin their connects. connect(2) on a
+// loopback address does the whole handshake in the caller, and the same
+// work on every core at once costs several times the CPU of a few cores:
+// the kernel's lock for the ports of a connect and the sockets' table are
+// shared. A batch that has begun its connects waits for them without a slot.
+var issue = make(chan struct{}, issueWidth)
+
+// issueWidth is how many batches begin their connects at once: more did not
+// shorten a full range of loopback and cost more CPU.
+const issueWidth = 4
+
+// errRefused is what each refused connect of a batch says; it holds no
+// address, as the error each carried before held none.
+var errRefused error = &net.OpError{Op: "dial", Net: "tcp", Err: os.NewSyscallError("connect", syscall.ECONNREFUSED)}
+
 // CanBatch says TCPBatch can connect to ip: the scan's connects go direct
 // (not through a proxy) and ip is a plain address.
 func (d *PortDialer) CanBatch(ip string) bool {
@@ -60,15 +75,39 @@ func (d *PortDialer) TCPBatch(ctx context.Context, host, ip string, ports []int,
 	var wait []pending
 	var fds []unix.PollFd
 	fail := func(i int, op string, err error) {
+		if err == syscall.ECONNREFUSED && op == "connect" {
+			done(i, nil, 0, errRefused) // the answer of nearly every port of a range
+			return
+		}
 		done(i, nil, 0, &net.OpError{Op: "dial", Net: "tcp", Err: os.NewSyscallError(op, err)})
 	}
+	issue <- struct{}{} // few batches at once begin their connects
+	issued := false
+	endIssue := func() {
+		if !issued {
+			issued = true
+			<-issue
+		}
+	}
+	defer endIssue()
+	addrs := make([]string, len(ports))
 	for i, port := range ports {
-		addr := net.JoinHostPort(ip, itoa(port))
+		addrs[i] = net.JoinHostPort(ip, itoa(port))
+	}
+	var gotBuf [64]bool
+	got := gotBuf[:0]
+	if len(ports) <= len(gotBuf) {
+		got = gotBuf[:len(ports)]
+	} else {
+		got = make([]bool, len(ports))
+	}
+	d.takeReservedMany(addrs, got)
+	for i, port := range ports {
+		addr, reserved := addrs[i], got[i]
 		// As a dial of TCP's: Reserve wrote the line of a reserved connect, and a
 		// stop since then waits until its connect has begun; any other connect is
 		// held to the kill file, the scope and ctx, makes its line as it begins,
 		// and one that never begun is given back to the budget the caller counted.
-		reserved := d.takeReserved(addr)
 		if !reserved {
 			if err := d.allowed(host, addr); err != nil {
 				Refund()
@@ -110,6 +149,7 @@ func (d *PortDialer) TCPBatch(ctx context.Context, host, ip string, ports []int,
 			fail(i, "connect", err)
 		}
 	}
+	endIssue()
 	// ctx ending wakes the poll through an eventfd of this batch's own.
 	var wake int = -1
 	if len(wait) > 0 && ctx.Done() != nil {

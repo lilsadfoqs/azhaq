@@ -248,10 +248,30 @@ func (d *PortDialer) Reserve(ctx context.Context, host string, addrs []string) {
 func (d *PortDialer) takeReserved(addr string) bool {
 	d.preMu.Lock()
 	defer d.preMu.Unlock()
-	if d.pre[addr] == 0 {
-		return false
+	return d.takeLocked(addr)
+}
+
+// takeReservedMany is takeReserved for each of addrs, under one lock: got[i]
+// says whether addrs[i] was reserved. A batch of connects takes its places at
+// once, not with a lock for each that all the batches in flight wait on.
+func (d *PortDialer) takeReservedMany(addrs []string, got []bool) {
+	d.preMu.Lock()
+	defer d.preMu.Unlock()
+	for i, a := range addrs {
+		got[i] = d.takeLocked(a)
 	}
-	d.pre[addr]--
+}
+
+func (d *PortDialer) takeLocked(addr string) bool {
+	n := d.pre[addr]
+	switch {
+	case n == 0:
+		return false
+	case n == 1:
+		delete(d.pre, addr) // a used entry is not kept: a full range left 65,535
+	default:
+		d.pre[addr] = n - 1
+	}
 	return true
 }
 

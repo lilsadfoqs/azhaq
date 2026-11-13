@@ -8,7 +8,6 @@ import (
 	"math"
 	"os"
 	"runtime"
-	"runtime/debug"
 	"slices"
 	"sort"
 	"strconv"
@@ -387,9 +386,8 @@ func cmdPorts(args []string) error {
 	if visited["rate"] {
 		rate, _ = strconv.ParseFloat(fs.Lookup("rate").Value.String(), 64)
 	}
-	if rate > 0 && *minRate == 0 && os.Getenv("GOMAXPROCS") == "" {
+	if *minRate == 0 && os.Getenv("GOMAXPROCS") == "" {
 		runtime.GOMAXPROCS(scanProcs(rate, runtime.NumCPU()))
-		debug.SetGCPercent(400) // a scan allocates little that lives: fewer collections
 	}
 	if ct > 0 {
 		run = append(run, "-port-timeout", ct.String())
@@ -587,18 +585,38 @@ func cmdPorts(args []string) error {
 	return rep.finish(c.json, c.silent)
 }
 
-// connectsPerCore is how many connects a second one core carries in a scan
-// (one core did 10,000 at under half its time on loopback, so 20,000 or more fit: kept under that).
-const connectsPerCore = 15000
+// connectsPerCore is how many connects a second one core carries in a scan:
+// one core did a full range of loopback, ledger and all, in a second, 65,000 a
+// second, so 50,000 fit.
+const connectsPerCore = 50000
 
-// scanProcs is the cores a scan at rate connects a second needs. Goroutines
-// spread over more cores than that wake each other across threads for every
-// connect, and the scan spends several times the CPU nmap does for the same
-// rate: a full-range scan at -rate 10000 took 11 CPU-seconds on 20 cores and
-// 3 on one. The user's rate is the ceiling, so what it needs it gets; the
-// rest of the cores stay idle (GOMAXPROCS in the environment overrides this).
+// maxScanProcs is the most cores a scan takes. Loopback, where a connect costs
+// the least, ran a full range in 0.9 CPU-seconds on 2 cores, 1.3 on 4, 2.1 on
+// 8 and 2.2 on 20, and the wall time did not fall past 4: the kernel's tables
+// of sockets are shared, so cores added only wait on each other. 50,000
+// connects a second on four cores is more than the network of any scan
+// carries.
+const maxScanProcs = 4
+
+// defaultScanProcs is the cores of a scan that sets no -rate: its connects go
+// out at the default rate (more on loopback, which is not paced): a /28 of
+// loopback ran in 0.3 s on two cores and 0.18 s on four, a full range in 0.7 s
+// and 0.5 s.
+const defaultScanProcs = 4
+
+// scanProcs is the cores a scan at rate connects a second needs (rate 0: the
+// scan sets none). Goroutines spread over more cores than that wake each
+// other across threads for every connect, and the scan spends several times
+// the CPU nmap does for the same rate: a full-range scan at -rate 10000 took
+// 11 CPU-seconds on 20 cores and 3 on one. The user's rate is the ceiling, so
+// what it needs it gets, up to maxScanProcs; the rest of the cores stay idle
+// (GOMAXPROCS in the environment overrides this).
 func scanProcs(rate float64, ncpu int) int {
-	return min(max(int(math.Ceil(rate/connectsPerCore)), 1), ncpu)
+	n := defaultScanProcs
+	if rate > 0 {
+		n = min(max(int(math.Ceil(rate/connectsPerCore)), 1), maxScanProcs)
+	}
+	return min(n, max(ncpu, 1))
 }
 
 // portsSink prints the rows of a ports run as its tasks report them, each

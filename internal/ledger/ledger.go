@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"hash"
 	"io"
 	"net/http"
 	"net/url"
@@ -90,12 +91,15 @@ func (e Entry) sum() string {
 // marshal is json.Marshal(e), byte for byte. A line made only of plain
 // ASCII (nearly every one) is written by hand: marshalling was a fifth of
 // the CPU a full-range port scan spent on its ledger.
-func marshal(e Entry) []byte {
-	if raw, ok := appendPlain(make([]byte, 0, 256), e); ok {
+func marshal(e Entry) []byte { return appendMarshal(make([]byte, 0, 512), e) }
+
+// appendMarshal is marshal that appends to dst, whose bytes it leaves alone.
+func appendMarshal(dst []byte, e Entry) []byte {
+	if raw, ok := appendPlain(dst, e); ok {
 		return raw
 	}
 	raw, _ := json.Marshal(e)
-	return raw
+	return append(dst, raw...)
 }
 
 // plain says s needs no escaping in JSON: printable ASCII without the
@@ -160,6 +164,21 @@ func sumOf(prev string, raw []byte) string {
 	return hex.EncodeToString(h.Sum(nil))
 }
 
+// chain is the hash of an entry like sumOf, made with the ledger's own
+// scratch (the caller holds the lock): a line of a full-range scan cost
+// seven allocations before.
+func (l *Ledger) chain(prev string, raw []byte) string {
+	if l.h == nil {
+		l.h = sha256.New()
+	}
+	l.h.Reset()
+	l.pre = append(l.pre[:0], prev...)
+	l.h.Write(l.pre)
+	l.h.Write(raw)
+	l.hex = hex.AppendEncode(l.hex[:0], l.h.Sum(l.sum[:0]))
+	return string(l.hex)
+}
+
 // Ledger appends entries to a file. It is safe for concurrent use.
 type Ledger struct {
 	// Match names the scope rule that allows host, "" when none does or the
@@ -174,6 +193,12 @@ type Ledger struct {
 	prev     string
 	lastSeal bool // the last line is a seal: nothing to seal again
 	err      error
+
+	buf []byte    // the line being made, kept between lines
+	h   hash.Hash // its hash, and the scratch the hash is made with
+	pre []byte
+	sum [sha256.Size]byte
+	hex []byte
 
 	flushes int64         // writes of lines to the file since it was opened
 	opened  int64         // lines the file held when it was opened
@@ -373,6 +398,21 @@ func (l *Ledger) RecordMany(es []Entry) {
 	l.flushes++
 }
 
+// recordEach is RecordMany for n entries that entry(i) returns one by one,
+// under the lock, so that no slice of them is made.
+func (l *Ledger) recordEach(n int, entry func(i int) Entry) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.f == nil {
+		return
+	}
+	for i := 0; i < n; i++ {
+		l.add(entry(i))
+	}
+	l.note(l.w.Flush())
+	l.flushes++
+}
+
 // Flushes is how many times the ledger wrote lines to its file since it was
 // opened: a batch of lines made together is one.
 func (l *Ledger) Flushes() int64 {
@@ -394,12 +434,13 @@ func (l *Ledger) add(e Entry) {
 	e.Seq, e.Prev = l.seq, l.prev
 	// Hash is the entry's last field: the line is the JSON that is hashed
 	// with the hash added, so the entry is marshalled once, not twice.
-	raw := marshal(e)
-	e.Hash = sumOf(e.Prev, raw)
+	raw := appendMarshal(l.buf[:0], e)
+	e.Hash = l.chain(e.Prev, raw)
 	raw = append(raw[:len(raw)-1], `,"hash":"`...)
 	raw = append(raw, e.Hash...)
 	raw = append(raw, '"', '}', '\n')
 	_, err := l.w.Write(raw)
+	l.buf = raw[:0]
 	l.note(err)
 	l.prev, l.lastSeal = e.Hash, e.Kind == KindSeal
 	if e.NotSent {

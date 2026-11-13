@@ -161,7 +161,7 @@ func TestScanProcsFollowsTheRate(t *testing.T) {
 		rate float64
 		ncpu int
 		want int
-	}{{1, 20, 1}, {100, 20, 1}, {15000, 20, 1}, {15001, 20, 2}, {50000, 20, 4}, {1e6, 20, 20}, {10000, 1, 1}} {
+	}{{1, 20, 1}, {100, 20, 1}, {15000, 20, 1}, {50000, 20, 1}, {50001, 20, 2}, {150000, 20, 3}, {200000, 20, 4}, {1e6, 20, 4}, {1e6, 3, 3}, {10000, 1, 1}, {0, 20, 4}, {0, 2, 2}, {0, 1, 1}} {
 		if got := scanProcs(c.rate, c.ncpu); got != c.want {
 			t.Errorf("scanProcs(%v, %d) = %d, want %d", c.rate, c.ncpu, got, c.want)
 		}
@@ -182,5 +182,9 @@ func TestPortsRateSizesTheScheduler(t *testing.T) {
 	cli(t, "ports", "-host", "127.0.0.1", "-p", port, "-rate", "200", "-silent", "-ledger", "off")
 	if got := runtime.GOMAXPROCS(0); got != 1 {
 		t.Errorf("GOMAXPROCS %d after ports -rate 200, want 1", got)
+	}
+	cli(t, "ports", "-host", "127.0.0.1", "-p", port, "-silent", "-ledger", "off")
+	if got := runtime.GOMAXPROCS(0); got != min(4, runtime.NumCPU()) {
+		t.Errorf("GOMAXPROCS %d after ports with no -rate, want 4", got)
 	}
 }

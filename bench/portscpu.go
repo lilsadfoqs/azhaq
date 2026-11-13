@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -24,6 +25,8 @@ type portsCPU struct {
 	NmapCPU     float64 `json:"nmap_cpu_seconds"`
 	AzhaqWall   float64 `json:"azhaq_seconds"`
 	NmapWall    float64 `json:"nmap_seconds"`
+	AzhaqRSS    float64 `json:"azhaq_rss_mb"`
+	NmapRSS     float64 `json:"nmap_rss_mb"`
 	AzhaqOpen   int     `json:"azhaq_open"`
 	NmapOpen    int     `json:"nmap_open"`
 	NmapMissing bool    `json:"nmap_missing,omitempty"`
@@ -39,6 +42,13 @@ const cpuRuns = 5
 // cpuCmd runs a command and says the CPU seconds it used (its own and its
 // children's, user and system) and the wall time, with its standard output.
 func cpuCmd(dir, name string, args ...string) (out []byte, cpu, wall float64, err error) {
+	out, cpu, wall, _, err = cpuRSSCmd(dir, name, args...)
+	return
+}
+
+// cpuRSSCmd is cpuCmd that also says the most memory the process held (its
+// peak resident set, in MB).
+func cpuRSSCmd(dir, name string, args ...string) (out []byte, cpu, wall, rss float64, err error) {
 	cmd := exec.Command(name, args...)
 	cmd.Dir = dir
 	var stdout bytes.Buffer
@@ -48,8 +58,11 @@ func cpuCmd(dir, name string, args ...string) (out []byte, cpu, wall float64, er
 	wall = time.Since(t0).Seconds()
 	if cmd.ProcessState != nil {
 		cpu = (cmd.ProcessState.UserTime() + cmd.ProcessState.SystemTime()).Seconds()
+		if ru, ok := cmd.ProcessState.SysUsage().(*syscall.Rusage); ok {
+			rss = float64(ru.Maxrss) / 1024 // kilobytes on Linux
+		}
 	}
-	return stdout.Bytes(), cpu, wall, err
+	return stdout.Bytes(), cpu, wall, rss, err
 }
 
 // benchPortsCPU takes the row: azhaq ports with its ledger and database on,
@@ -74,28 +87,29 @@ func benchPortsCPU() *portsCPU {
 	// would cost one tool its retry wait and not the other.
 	azArgs := []string{"ports", "-host", row.Target, "-p", row.Ports, "-rate", row.Rate, "-retries", "0", "-detect", "none", "-silent", "-db", filepath.Join(dir, "cpu.db")}
 	nmArgs := []string{"-sT", "-Pn", "-n", "-p", row.Ports, "--max-rate", row.Rate, "--max-retries", "0", "-oG", "-", row.Target}
-	var azCPU, nmCPU, azWall, nmWall []float64
+	var azCPU, nmCPU, azWall, nmWall, azRSS, nmRSS []float64
 	var az, nm map[string]bool
 	before := listening()
 	for i := 0; i < cpuRuns; i++ {
 		for _, f := range []string{"cpu.db", "cpu.db.ledger.jsonl", "cpu.db.stop"} {
 			_ = os.Remove(filepath.Join(dir, f))
 		}
-		out, c, w, err := cpuCmd(dir, azhaq, azArgs...)
+		out, c, w, r, err := cpuRSSCmd(dir, azhaq, azArgs...)
 		if err != nil {
 			addCheck("ports 127.0.0.1 1-65535: CPU ≤ 1.25× nmap -sT's", false, "azhaq failed: %v", err)
 			return row
 		}
-		azCPU, azWall, az = append(azCPU, c), append(azWall, w), portSet(out)
-		out, c, w, err = cpuCmd(dir, nmap, nmArgs...)
+		azCPU, azWall, azRSS, az = append(azCPU, c), append(azWall, w), append(azRSS, r), portSet(out)
+		out, c, w, r, err = cpuRSSCmd(dir, nmap, nmArgs...)
 		if err != nil {
 			addCheck("ports 127.0.0.1 1-65535: CPU ≤ 1.25× nmap -sT's", false, "nmap failed: %v", err)
 			return row
 		}
-		nmCPU, nmWall, nm = append(nmCPU, c), append(nmWall, w), nmapOpen(out)
+		nmCPU, nmWall, nmRSS, nm = append(nmCPU, c), append(nmWall, w), append(nmRSS, r), nmapOpen(out)
 	}
 	row.AzhaqCPU, row.NmapCPU = median(azCPU), median(nmCPU)
 	row.AzhaqWall, row.NmapWall = median(azWall), median(nmWall)
+	row.AzhaqRSS, row.NmapRSS = median(azRSS), median(nmRSS)
 	row.AzhaqOpen, row.NmapOpen = len(az), len(nm)
 	cmds := cmdLine(azhaq, azArgs...) + " vs " + cmdLine("nmap", nmArgs...)
 	// A socket that listens for a moment is in one list and not the other: what
@@ -119,8 +133,8 @@ func benchPortsCPU() *portsCPU {
 	}
 	sort.Strings(missed)
 	sort.Strings(extra)
-	detail := fmt.Sprintf("azhaq %.2f CPU s and %.1f s, nmap %.2f CPU s and %.1f s (median of %d runs in turn); open: azhaq %d, nmap %d; listening throughout and azhaq missed %v, nmap missed %v | %s",
-		row.AzhaqCPU, row.AzhaqWall, row.NmapCPU, row.NmapWall, cpuRuns, row.AzhaqOpen, row.NmapOpen, clipList(missed, 5), clipList(extra, 5), cmds)
+	detail := fmt.Sprintf("azhaq %.2f CPU s, %.1f s and %.0f MB, nmap %.2f CPU s, %.1f s and %.0f MB (median of %d runs in turn); open: azhaq %d, nmap %d; listening throughout and azhaq missed %v, nmap missed %v | %s",
+		row.AzhaqCPU, row.AzhaqWall, row.AzhaqRSS, row.NmapCPU, row.NmapWall, row.NmapRSS, cpuRuns, row.AzhaqOpen, row.NmapOpen, clipList(missed, 5), clipList(extra, 5), cmds)
 	addCheck("ports 127.0.0.1 1-65535: open ports ≥ nmap -sT's", len(missed) == 0, "%s", detail)
 	addCheck(fmt.Sprintf("ports 127.0.0.1 1-65535: CPU ≤ %.2f× nmap -sT's", cpuBound), row.AzhaqCPU <= cpuBound*row.NmapCPU, "%.2f×: %s", cpuRatio(row.AzhaqCPU, row.NmapCPU), detail)
 	addCheck(fmt.Sprintf("ports 127.0.0.1 1-65535: time ≤ %.2f× nmap -sT's", cpuBound), row.AzhaqWall <= cpuBound*row.NmapWall, "%.2f×: %s", cpuRatio(row.AzhaqWall, row.NmapWall), detail)
