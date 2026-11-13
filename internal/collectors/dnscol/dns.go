@@ -21,6 +21,10 @@ import (
 
 const Name = "azhaq-dns"
 
+// describeWorkers is how many names of a batch have their wildcard and
+// takeover questions asked at once.
+const describeWorkers = 64
+
 // Collector resolves hostnames in batches through a resolver pool and
 // drops names that do not resolve or only answer through a wildcard, so
 // nothing probes them over HTTP.
@@ -99,10 +103,41 @@ func (c *Collector) RunBatch(ctx context.Context, seeds []types.Seed, emit func(
 		dctx, cancel = context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
 		defer cancel()
 	}
+	// What is left to ask about the answered names (the wildcard probes of
+	// their parent zones, a CNAME target's registration) is asked for them
+	// all at once: one after another each cost a round trip, and a batch of
+	// names under many zones spent seconds in them after the last answer.
+	// A zone is still probed once (Wildcards holds each to one probe).
+	payloads := make([]map[string]any, len(seeds))
+	described := make([]types.RunMeta, len(seeds))
+	unsettled := make([]bool, len(seeds)) // the stopped run's moment ended before its questions were answered
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, describeWorkers)
+	for i := range seeds {
+		host := hosts[i]
+		payloads[i] = map[string]any{"fqdn": host}
+		described[i] = types.RunMeta{Status: types.StatusOK}
+		if host == "" || net.ParseIP(host) != nil {
+			continue
+		}
+		if a := answers[host]; stopped && (a.Status == dnsr.StatusFailed || a.Status == dnsr.StatusBroken) {
+			continue
+		}
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(i int, host string) {
+			defer guard.Recover(ctx)
+			defer wg.Done()
+			defer func() { <-sem }()
+			c.describe(dctx, host, answers[host], payloads[i], &described[i])
+			unsettled[i] = stopped && dctx.Err() != nil
+		}(i, host)
+	}
+	wg.Wait()
 	for i, seed := range seeds {
 		host := hosts[i]
-		meta := types.RunMeta{Status: types.StatusOK}
-		payload := map[string]any{"fqdn": host}
+		meta := described[i]
+		payload := payloads[i]
 		switch {
 		case host == "":
 			meta.Status, meta.Error = types.StatusError, "empty host"
@@ -115,8 +150,7 @@ func (c *Collector) RunBatch(ctx context.Context, seeds []types.Seed, emit func(
 				metas[i] = types.RunMeta{Status: types.StatusCancelled}
 				continue
 			}
-			c.describe(dctx, host, answers[host], payload, &meta)
-			if stopped && dctx.Err() != nil {
+			if unsettled[i] {
 				metas[i] = types.RunMeta{Status: types.StatusCancelled}
 				continue
 			}

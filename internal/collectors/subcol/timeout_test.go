@@ -2,6 +2,7 @@ package subcol
 
 import (
 	"context"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
@@ -68,6 +69,47 @@ func TestSessionTimeoutIsNeverZero(t *testing.T) {
 		run(t, collector(Options{SourceTimeout: in, NoHistory: true}, probe), context.Background())
 		if got != want {
 			t.Errorf("-source-timeout %s: the session holds %d s, want %d", in, got, want)
+		}
+	}
+}
+
+// holdingTransport answers nothing until the request's context ends.
+type holdingTransport struct{}
+
+func (holdingTransport) RoundTrip(r *http.Request) (*http.Response, error) {
+	<-r.Context().Done()
+	return nil, r.Context().Err()
+}
+
+// Every built-in source, the keyed ones with a key too, is held to a
+// -source-timeout under a second by a server that never answers: no source
+// keeps its own whole seconds, retries or waits past the bound.
+func TestEverySourceHoldsASubSecondTimeout(t *testing.T) {
+	DatabaseOff()
+	for _, withKeys := range []bool{false, true} {
+		keys := map[string][]string{}
+		var names []string
+		for _, s := range allSources() {
+			if withKeys {
+				keys[s.name] = []string{"key:key", "key"}
+			}
+			names = append(names, s.name)
+		}
+		const bound = 400 * time.Millisecond
+		c := New(Options{Client: &http.Client{Transport: holdingTransport{}}, Keys: keys, Only: names, SourceTimeout: bound, ExtraWait: -1, NoHistory: true})
+		t0 := time.Now()
+		payload, _ := run(t, c, context.Background())
+		took := time.Since(t0)
+		if took > bound+time.Second {
+			t.Errorf("keys %v: the run took %s with -source-timeout %s", withKeys, took, bound)
+		}
+		rows, _ := payload["sources"].(map[string]any)
+		for _, name := range names {
+			row, _ := rows[name].(map[string]any)
+			secs, _ := row["seconds"].(float64)
+			if secs > (bound + 500*time.Millisecond).Seconds() {
+				t.Errorf("keys %v: %s took %.1f s with -source-timeout %s: %v", withKeys, name, secs, bound, row["error"])
+			}
 		}
 	}
 }

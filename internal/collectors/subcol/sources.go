@@ -259,10 +259,14 @@ func sampled(s source) source {
 	collect := s.collect
 	s.sampler = true
 	s.collect = func(ctx context.Context, domain string, keys []string, sess *subscraping.Session) ([]string, error) {
-		if len(keys) > 0 {
-			return collect(ctx, domain, keys, sess) // a key pages the whole set
-		}
 		timeout := sourceTimeoutOf(ctx)
+		if len(keys) > 0 {
+			// A key pages the whole set; the run gives a sampled source no
+			// bound of its own, so -source-timeout is put on it here.
+			kctx, cancel := context.WithTimeout(ctx, timeout)
+			defer cancel()
+			return collect(kctx, domain, keys, sess)
+		}
 		chk, _ := ctx.Value(checkerKey{}).(*checker)
 		n, _ := ctx.Value(samplesKey{}).(int)
 		ceiling := sampleCeiling(n)
