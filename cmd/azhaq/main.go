@@ -259,6 +259,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	login := fs.String("login", "", "sign in on this page with Chrome before the run; its cookies and token go with every request (needs -login-user and -login-pass)")
 	loginUser := fs.String("login-user", "", "user name or email for -login")
 	loginPass := fs.String("login-pass", "", "password for -login (default $AZHAQ_LOGIN_PASS)")
+	sessionEvery := fs.Int("session-every", 50, "requests between checks that the session still holds (at least 1; 1 checks before every request). A check also runs before each stage that sends many requests, when 10 s passed since the last good check, at the end, and after an answer that looks like the end; a check that holds is one request")
 	maxIPs := fs.Int("max-ips", 4096, "addresses expanded from -asn and -cidr prefixes, for the whole run")
 	sweep := fs.Bool("sweep", false, "cover the whole scope: the IPv4 ranges and addresses -allow and -scope hold are targets too, not only the ones named (without it a note says how much of a range the targets leave); -deny, -deny-path, -rate, -max-requests and the kill file hold as for any target, and a range is expanded up to -max-ips unless -ports scans it")
 	scopeSpec := fs.String("scope", "", "a program's scope: a file (HackerOne CSV, bounty-targets JSON, Burp options, lines) or hackerone, bugcrowd, intigriti, yeswehack")
@@ -447,6 +448,9 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	}
 	if err := scope.CompilePaths(denyPath); err != nil {
 		return usagef("%v", err)
+	}
+	if *sessionEvery < 1 {
+		return usagef("-session-every wants at least 1 request between checks, got %d", *sessionEvery)
 	}
 	out.json, out.quiet = *jsonOut, *quiet
 	var rowsOut *rowsFile
@@ -1484,7 +1488,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		stopKeep = engine.KeepResponses(st, *resumeRun != "")
 	}
 	if !out.plan {
-		watchSession(ctx, seeds, loginHome, *login, loginRenew, loginLanded, rep)
+		watchSession(ctx, seeds, loginHome, *login, loginRenew, loginLanded, rep, *sessionEvery)
 	}
 	// What the run will send, counted before it sends: said first when it is
 	// not small, and kept for the summary to set beside what was sent.

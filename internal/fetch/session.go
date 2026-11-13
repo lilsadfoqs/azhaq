@@ -22,7 +22,9 @@ import (
 // may end it (a /logout link, an expiry), and what follows is answered as an
 // anonymous visitor. Nothing is guessed from a name. The run keeps one check,
 // a page that answers differently with its session and without it, asks it
-// every Every requests and when an answer looks like the end of the session
+// every Every requests, when Window of wall time has passed since the last
+// good check and a request is about to go out, before a stage that sends many
+// requests (StageCheck), and when an answer looks like the end of the session
 // (a 401, a redirect to the sign-in page, a response that clears a session
 // cookie), and when the check fails it signs in again or stops.
 
@@ -42,6 +44,9 @@ type Session struct {
 	Want  Print
 	// Every is how many requests pass between checks; 50 when zero.
 	Every int
+	// Window is the wall time after which a request that is about to go out
+	// makes the check, counted from the last good check; 10 s when zero.
+	Window time.Duration
 	// SignIn is the sign-in page of the run: an answer that redirects to it
 	// asks for a check. A run given with -cookie or -header has none; it
 	// takes the page the check page sends a visitor without the session to.
@@ -54,12 +59,16 @@ type Session struct {
 }
 
 const (
-	defaultEvery = 50
-	maxAsked     = 4096 // GET URLs kept to be asked again
-	maxRenewals  = 5
-	maxProbes    = 6 // answers measured to find a check page when the start gave none
-	maxVerifies  = 3 // times a 401 is tested by signing in again when there is no check page
-	maxEnders    = 8 // times the search for a request that ends the session may sign in again
+	defaultEvery  = 50
+	defaultWindow = 10 * time.Second
+	// A check costs two requests: a stage that sends no more than that, or
+	// that follows a good check by no more, is not checked first.
+	stageMin    = 2
+	maxAsked    = 4096 // GET URLs kept to be asked again
+	maxRenewals = 5
+	maxProbes   = 6 // answers measured to find a check page when the start gave none
+	maxVerifies = 3 // times a 401 is tested by signing in again when there is no check page
+	maxEnders   = 8 // times the search for a request that ends the session may sign in again
 )
 
 type sessionGuard struct {
@@ -70,6 +79,10 @@ type sessionGuard struct {
 	checking atomic.Bool
 	since    atomic.Int64 // requests since the last good check
 	due      atomic.Bool  // an answer looked like the end of the session
+	stageDue atomic.Bool  // a stage that sends many requests is about to begin
+	lastGood atomic.Int64 // when the last check held (unix nanoseconds of clock)
+	clock    func() time.Time
+	held     bool // the answer that set endAns was read on the wire, its request not yet recorded (mu)
 
 	renewing atomic.Bool  // signing in again: the requests made with the renewal's context pass, every other waits
 	probing  atomic.Bool  // a candidate for the check page is being measured
@@ -136,7 +149,61 @@ func WatchSession(s Session) {
 	if s.Every <= 0 {
 		s.Every = defaultEvery
 	}
-	guardP.Store(&sessionGuard{s: s, proven: map[string]bool{}})
+	if s.Window <= 0 {
+		s.Window = defaultWindow
+	}
+	g := &sessionGuard{s: s, proven: map[string]bool{}, clock: time.Now}
+	g.stamp()
+	guardP.Store(g)
+}
+
+func (g *sessionGuard) now() time.Time {
+	if g.clock != nil {
+		return g.clock()
+	}
+	return time.Now()
+}
+
+// stamp notes that the session held now.
+func (g *sessionGuard) stamp() { g.lastGood.Store(g.now().UnixNano()) }
+
+// timeUp says a check is owed by wall time: the window passed since the
+// last good check. Only a run that has a check page asks for one by time.
+func (g *sessionGuard) timeUp() bool {
+	if g.remote || g.now().Sub(time.Unix(0, g.lastGood.Load())) < g.s.Window {
+		return false
+	}
+	page, _ := g.page()
+	return page != ""
+}
+
+// owed says a check is due: enough requests, an answer that asked for one, a
+// stage about to begin, or the window of wall time.
+func (g *sessionGuard) owed() bool {
+	return g.since.Load() >= int64(g.s.Every) || g.due.Load() || g.stageDue.Load() || g.timeUp()
+}
+
+// StageCheck makes the session check before a stage that sends many
+// requests (a sweep, -dirs, -params, page loads), so that none of them goes
+// out with a session that ended since the last check. requests is how many
+// the stage is known to send, 0 when it is not known. A check that holds is
+// one request. It is not made when stageMin requests or fewer passed since the
+// last good check, when the stage sends no more than that, or when the run has
+// no check page and no answer asked for one. The error is the one that
+// ends signed-in work, nil while the session holds.
+func StageCheck(ctx context.Context, requests int) error {
+	g := guardP.Load()
+	if g == nil || g.remote {
+		return nil
+	}
+	if requests > 0 && requests <= stageMin {
+		return SessionLost()
+	}
+	if page, _ := g.page(); g.due.Load() || page != "" && g.since.Load() > stageMin {
+		g.stageDue.Store(true)
+		return g.check(ctx, false)
+	}
+	return SessionLost()
 }
 
 func resetSession() { guardP.Store(nil) }
@@ -512,7 +579,7 @@ func (g *sessionGuard) tick(ctx context.Context) error {
 	if lost != nil {
 		return lost
 	}
-	if n := g.since.Add(1); n < int64(g.s.Every) && !g.due.Load() {
+	if n := g.since.Add(1); n < int64(g.s.Every) && !g.due.Load() && !g.stageDue.Load() && !g.timeUp() {
 		return nil
 	}
 	return g.check(ctx, false)
@@ -540,7 +607,7 @@ func (g *sessionGuard) check(ctx context.Context, force bool) error {
 	if lost != nil {
 		return lost
 	}
-	if !force && g.since.Load() < int64(g.s.Every) && !g.due.Load() {
+	if !force && !g.owed() {
 		return nil
 	}
 	g.checking.Store(true)
@@ -551,6 +618,7 @@ func (g *sessionGuard) check(ctx context.Context, force bool) error {
 	}()
 	sent := g.since.Swap(0)
 	g.due.Store(false)
+	g.stageDue.Store(false)
 	g.mu.Lock()
 	endedBy, signal := g.endedBy, g.signal
 	g.signal = ""
@@ -559,8 +627,9 @@ func (g *sessionGuard) check(ctx context.Context, force bool) error {
 	if err == nil {
 		// What was in flight is accounted for: renewed, or never lost.
 		g.mu.Lock()
-		g.endAns, g.afterEnd = "", nil
+		g.endAns, g.afterEnd, g.held = "", nil, false
 		g.mu.Unlock()
+		g.stamp()
 	}
 	return err
 }
@@ -590,6 +659,9 @@ func (g *sessionGuard) verdict(ctx context.Context, endedBy, signal string, sent
 func (g *sessionGuard) lose(ctx context.Context, got Print, endedBy, signal string, sent int) error {
 	g.mu.Lock()
 	n := len(g.asked)
+	if g.held {
+		n++ // the request whose answer asked for this check is sent, and recorded only when its Do returns
+	}
 	g.mu.Unlock()
 	unrecorded := max(0, sent-n)
 	page, want := g.page()
@@ -654,7 +726,7 @@ func (g *sessionGuard) failLost(lead, what, why string, n int, pre int64, atStar
 	case answer != "":
 		sent = fmt.Sprintf("%s answered after that answer, already in flight, may have been answered without it", plural(len(inflight), "GET"))
 		if len(inflight) == 0 {
-			sent = "no GET was in flight when that answer was read"
+			sent = "no other GET was in flight when that answer was read"
 		}
 	default:
 		sent = fmt.Sprintf("no answer looked like its end, so the %s asked since the last good check may have been answered without it", plural(n, "GET"))
@@ -916,6 +988,9 @@ func sessionSaw(ctx context.Context, raw string, res Result) {
 	defer g.probe(ctx, raw, res)
 	g.answeredAfterEnd(ctx, raw)
 	g.mu.Lock()
+	if g.held && (g.endAns == raw || slices.ContainsFunc(res.Hops, func(h Hop) bool { return h.URL == g.endAns })) {
+		g.held = false // recorded below
+	}
 	if len(g.asked) < maxAsked {
 		g.asked = append(g.asked, raw)
 	}
@@ -977,11 +1052,11 @@ func sessionWire(req *http.Request, resp *http.Response) {
 			g.endedBy = raw
 		}
 		g.mu.Unlock()
-		g.ends(raw, "")
+		g.ends(raw, "", true)
 	case replacesSession(resp.Header):
-		g.ends(raw, pathOf(raw)+" set the session cookie to another value")
+		g.ends(raw, pathOf(raw)+" set the session cookie to another value", true)
 	default:
-		g.answered(raw, resp.StatusCode, resp.Header.Get("Location"))
+		g.answered(raw, resp.StatusCode, resp.Header.Get("Location"), true)
 	}
 }
 
@@ -992,27 +1067,30 @@ func sessionWire(req *http.Request, resp *http.Response) {
 // run's session still holds.
 func SawAnswer(raw string, status int, location string) {
 	if g := guardP.Load(); g != nil && !g.renewing.Load() {
-		g.answered(raw, status, location)
+		g.answered(raw, status, location, false)
 		g.notify("")
 	}
 }
 
 // answered notes an answer that is a 401 or a redirect to the sign-in page.
-func (g *sessionGuard) answered(raw string, status int, location string) {
+func (g *sessionGuard) answered(raw string, status int, location string, wire bool) {
 	if status == http.StatusUnauthorized {
-		g.ends(raw, pathOf(raw)+" answered 401")
+		g.ends(raw, pathOf(raw)+" answered 401", wire)
 		return
 	}
 	if signIn := g.signIn(); signIn != "" && isRedirect(status) && location != "" && locPath(raw, location) == pathOf(signIn) {
-		g.ends(raw, pathOf(raw)+" answered "+fmt.Sprint(status)+" to "+pathOf(signIn))
+		g.ends(raw, pathOf(raw)+" answered "+fmt.Sprint(status)+" to "+pathOf(signIn), wire)
 	}
 }
 
 // ends sets the check for the answer to raw, naming it when it is the first.
-func (g *sessionGuard) ends(raw, signal string) {
+func (g *sessionGuard) ends(raw, signal string, wire bool) {
 	g.mu.Lock()
 	if signal != "" && g.signal == "" {
 		g.signal = signal
+	}
+	if wire && g.endAns == "" {
+		g.held = true // the run's request is still in its Do: the check counts it
 	}
 	g.mu.Unlock()
 	g.markEnd(raw)

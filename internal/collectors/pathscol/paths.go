@@ -112,7 +112,7 @@ func (c *Collector) Name() string { return Name }
 
 // Info: this collector sends requests to the target.
 func (c *Collector) Info() catalog.Info {
-	return catalog.Info{Kind: catalog.Touch, After: "azhaq-http"}
+	return catalog.Info{Kind: catalog.Touch, After: "azhaq-http", Stage: true}
 }
 
 func (c *Collector) Inputs() []types.SeedType { return []types.SeedType{types.TypeURL} }

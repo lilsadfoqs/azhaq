@@ -194,6 +194,7 @@ The summary and the exit codes are `run`'s: see [run](run.md#summary-and-exit-co
 | `-login` | string |  | sign in on this page with Chrome before the run; its cookies and token go with every request (needs -login-user and -login-pass) |
 | `-login-user` | string |  | user name or email for -login |
 | `-login-pass` | string |  | password for -login (default $AZHAQ_LOGIN_PASS) |
+| `-session-every` | int | `50` | requests between checks that the session still holds (at least 1; 1 checks before every request). A check also runs before each stage that sends many requests, when 10 s passed since the last good check, at the end, and after an answer that looks like the end; a check that holds is one request |
 | `-proxy` | string |  | send requests to targets through this proxy (http://, https:// or socks5://); Chrome too (default: $HTTP_PROXY, $HTTPS_PROXY, except for loopback targets, which stay direct) |
 
 **Output**

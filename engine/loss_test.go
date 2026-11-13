@@ -2,6 +2,7 @@ package engine_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -345,5 +346,75 @@ func TestSessionRenewalRunsTheSweepAgain(t *testing.T) {
 	}
 	if n := strings.Join(fetch.Notes(), "\n"); !strings.Contains(n, "sweeps and page tasks: those run again") {
 		t.Errorf("notes %q", fetch.Notes())
+	}
+}
+
+// A logout that no answer shows (every path answers 404 afterwards): the
+// check before a -dirs sweep finds it, and none of the sweep's guesses is
+// sent with the dead session.
+func TestStageCheckBeforeASweepFindsAQuietLogout(t *testing.T) {
+	var mu sync.Mutex
+	live := true
+	var swept, checks int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		c, _ := r.Cookie("sid")
+		mu.Lock()
+		ok := live && c != nil
+		switch {
+		case strings.HasPrefix(r.URL.Path, "/g"):
+			swept++
+		case r.URL.Path == "/" && c != nil:
+			checks++
+		}
+		mu.Unlock()
+		switch {
+		case r.URL.Path == "/login":
+			_, _ = w.Write([]byte(`<title>Sign in</title>`))
+		case r.URL.Path == "/" && !ok:
+			http.Redirect(w, r, "/login", http.StatusFound)
+		case r.URL.Path == "/" && ok:
+			_, _ = w.Write([]byte(`<title>Home</title>`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+	run := func(since int) (sweptN, checkN int, lost error) {
+		mu.Lock()
+		live, swept, checks = true, 0, 0
+		mu.Unlock()
+		fetch.Reset()
+		t.Cleanup(fetch.Reset)
+		fetch.SetExtra(http.Header{"Cookie": {"sid=s1"}})
+		fetch.WatchSession(fetch.Session{Check: srv.URL + "/", Want: fetch.Print{Status: 200}, Every: 1000, SignIn: srv.URL + "/login"})
+		fetch.AbsorbReport(nil, since, true) // the requests the run sent since its last good check
+		mu.Lock()
+		live = false // the logout: no answer told
+		mu.Unlock()
+		st, err := store.Open(filepath.Join(t.TempDir(), "t.db"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = st.Close() })
+		cat := catalog.New()
+		words := make([]string, 30)
+		for i := range words {
+			words[i] = fmt.Sprintf("g%d", i)
+		}
+		cat.MustRegister(dirscol.New(srv.Client(), dirscol.Options{Words: words, Threads: 1}))
+		eng := &engine.Engine{Cat: cat, Store: st}
+		seed := types.Seed{Type: types.TypeURL, Keys: map[string]string{"url": srv.URL + "/"}}
+		rules := scope.Rules{Allow: []string{"127.0.0.1"}}.Compile()
+		if err := eng.RunLocal(context.Background(), []types.Seed{seed}, engine.Budgets{MaxDepth: 2, MaxItems: 64, Parallel: 1, Scope: rules, Active: map[string]bool{"dirs": true}}); err != nil {
+			t.Fatal(err)
+		}
+		mu.Lock()
+		defer mu.Unlock()
+		return swept, checks, fetch.SessionLost()
+	}
+	// 5 requests since the last good check: the check before the sweep is made.
+	sweptN, checkN, lost := run(5)
+	if !errors.Is(lost, neterr.ErrSessionLost) || checkN != 1 || sweptN != 0 {
+		t.Errorf("after 5 requests: %d guesses sent, %d checks, failure %v; want none sent, one check, the session lost", sweptN, checkN, lost)
 	}
 }
