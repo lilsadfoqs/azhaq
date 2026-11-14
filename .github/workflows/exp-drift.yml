@@ -175,7 +175,7 @@ jobs:
           P="$HOME/drift/pub"
           mkdir -p "$B" "$P"
           est="$HOME/drift/est"
-          for f in key.json drift-key.json vars.json; do [ -f "$est/$f" ] && cp "$est/$f" "$B/"; done
+          for f in key.json drift-key.json vars.json up.log; do [ -f "$est/$f" ] && cp "$est/$f" "$B/"; done
           files=()
           tar czf "$P/results.tgz" -C "$B" .
           # An agent's streams can be large: the rest stays, the streams go.
