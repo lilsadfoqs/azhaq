@@ -115,6 +115,9 @@ def a1_records(d):
     for key in ("gone_hosts", "gone_services", "gone_urls"):
         for x in o.get(key) or []:
             out.append(rec("gone", x, field=key))
+    # Names that point nowhere: the field's own meaning is the flag (docs/commands/watch.md).
+    for x in o.get("dangling") or []:
+        out.append(rec("changed", x.split()[0] if x.split() else x, "dangling " + x, field="dangling"))
     for r in o.get("routes") or []:
         out.append(rec("gone" if r.get("kind") == "gone" else "route", r.get("host") or r.get("route", ""), json.dumps(r), route=r.get("route", ""), field="routes"))
     return out
