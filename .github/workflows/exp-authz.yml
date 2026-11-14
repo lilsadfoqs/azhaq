@@ -1,0 +1,204 @@
+name: exp-authz
+
+# Access control on generated apps (.github/ci/exp/authz): four arms on the same apps, graded against the
+# answer key of each. B1 is `azhaq roles` alone, B2 the Autorize logic alone (both agent-free, job
+# `toolfree`); B3 is Codex with the usual tools and B4 Codex with the usual tools and azhaq (job `agent`).
+# Push a tag exp-authz-NAME (.github/ci/exp/authz/launch.sh). The first line of the message:
+#   dryrun [agents] [samples=N]   the agent-free arms; with `agents`, the agent jobs too, up to and including
+#                                 isolation, with a stub in place of Codex (no sign-in needed)
+#   full [samples=N]              every arm; the message carries the Codex session (launch.sh)
+# N is 1 to 4, default 4. Each sample's app is drawn from a keyed hash of the tag name and the sample number
+# (secret CODEX_AUTH_KEY), so the tag name does not reveal it. Results are age-encrypted to the maintainer's
+# key and go to ci-results under exp-authz/TAG/sN/ (fetch.sh TAG DIR, then summary.py DIR).
+on:
+  push:
+    tags: ["exp-authz-*"]
+
+permissions:
+  contents: write
+
+env:
+  AGE_RECIPIENT: age10llepsf6tflh3wjlfu8awk203049vfsn5vxw9uc3y23qlq9dhy7sm20pex
+  EXP: .github/ci/exp/authz
+
+jobs:
+  kind:
+    runs-on: ubuntu-latest
+    outputs:
+      mode: ${{ steps.k.outputs.mode }}
+      agents: ${{ steps.k.outputs.agents }}
+      samples: ${{ steps.k.outputs.samples }}
+      samples_json: ${{ steps.k.outputs.samples_json }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: k
+        run: |
+          git fetch -q --force origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
+          msg=$(git for-each-ref --format='%(contents:subject)' "refs/tags/$GITHUB_REF_NAME")
+          case "${msg%% *}" in
+            dryrun | full) mode=${msg%% *} ;;
+            *) echo "::error title=mode::the first line of the tag's message starts with dryrun or full"; exit 1 ;;
+          esac
+          agents=0
+          [ "$mode" = full ] && agents=1
+          case " $msg " in *" agents "*) agents=1 ;; esac
+          samples=4
+          case " $msg " in *" samples="*)
+            samples=$(printf ' %s ' "$msg" | sed -n 's/.* samples=\([^ ]*\) .*/\1/p')
+            case $samples in
+              1 | 2 | 3 | 4) ;;
+              *) echo "::error title=samples::samples=$samples is not valid: use samples=N with N from 1 to 4"; exit 1 ;;
+            esac ;;
+          esac
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
+          echo "agents=$agents" >> "$GITHUB_OUTPUT"
+          echo "samples=$samples" >> "$GITHUB_OUTPUT"
+          echo "samples_json=[$(seq -s, 1 "$samples")]" >> "$GITHUB_OUTPUT"
+          echo "mode: $mode, agent jobs: $agents, samples: $samples"
+  build:
+    needs: kind
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # git describe names the build from the last release tag
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+      - name: build azhaq
+        # The build under test: this tagged commit, as trial.yml builds it.
+        run: |
+          v=$(git describe --tags --match 'v[0-9]*' --always)
+          CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=$v" -o azhaq ./cmd/azhaq
+          ./azhaq version
+      - uses: actions/upload-artifact@v7
+        with:
+          name: exp-azhaq
+          path: azhaq
+          retention-days: 2
+  toolfree:
+    name: toolfree (${{ matrix.sample }})
+    needs: [kind, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        sample: ${{ fromJSON(needs.kind.outputs.samples_json) }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v7
+        with:
+          name: exp-azhaq
+          path: _bin
+      - name: packages
+        run: sudo apt-get update -q && sudo apt-get install -y -q age jq
+      - name: arms B1 and B2
+        # Counts only: the app, its routes and the findings stay out of this public log.
+        env:
+          CODEX_AUTH_KEY: ${{ secrets.CODEX_AUTH_KEY }}
+        run: |
+          seed=$("$EXP/seed.sh" "$GITHUB_REF_NAME" "${{ matrix.sample }}")
+          echo "::add-mask::$seed"
+          chmod +x _bin/azhaq
+          "$EXP/toolfree.sh" "$seed" "$RUNNER_TEMP/out" "$PWD/_bin/azhaq"
+      - name: publish
+        if: always()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          [ -d "$RUNNER_TEMP/out" ] || exit 0
+          mkdir -p "$RUNNER_TEMP/pub"
+          tar czf "$RUNNER_TEMP/pub/toolfree.tgz" -C "$RUNNER_TEMP/out" --exclude=.azhaq .
+          age -r "$AGE_RECIPIENT" -o "$RUNNER_TEMP/pub/toolfree.tgz.age" "$RUNNER_TEMP/pub/toolfree.tgz"
+          .github/ci/publish.sh "exp-authz/$GITHUB_REF_NAME/s${{ matrix.sample }}" "$RUNNER_TEMP/pub/toolfree.tgz.age"
+  agent:
+    name: agent ${{ matrix.arm }} (${{ matrix.sample }})
+    needs: [kind, build]
+    if: ${{ needs.kind.outputs.agents == '1' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      max-parallel: 2 # the jobs share one Codex sign-in
+      matrix:
+        sample: ${{ fromJSON(needs.kind.outputs.samples_json) }}
+        arm: [usual, azhaq]
+    env:
+      DRYRUN: ${{ needs.kind.outputs.mode == 'dryrun' && '1' || '' }}
+      ARM: ${{ matrix.arm }}
+      SAMPLE: ${{ matrix.sample }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v7
+        with:
+          name: exp-azhaq
+          path: _bin
+      - name: packages
+        run: sudo apt-get update -q && sudo apt-get install -y -q age jq nmap
+      - name: tools
+        # The usual stack, pinned (the control's stack table, without its front end), in ./bin; azhaq too for B4.
+        run: |
+          mkdir -p "$HOME/trial/bin" "$HOME/ci"
+          .github/ci/control/install-stack.sh "$HOME/trial/bin" > /dev/null
+          rm -f "$HOME/trial/bin"/orvel*
+          if [ "$ARM" = azhaq ]; then install -m 755 _bin/azhaq "$HOME/trial/bin/azhaq"; fi
+          ls "$HOME/trial/bin" | wc -l
+      - name: codex
+        if: ${{ !env.DRYRUN }}
+        env:
+          CODEX_AUTH_KEY: ${{ secrets.CODEX_AUTH_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          CODEX_AUTH_JSON: ${{ secrets.CODEX_AUTH_JSON }}
+        run: .github/ci/codex.sh
+      - name: app
+        env:
+          CODEX_AUTH_KEY: ${{ secrets.CODEX_AUTH_KEY }}
+        run: .github/ci/exp/authz/agent-prep.sh "$ARM"
+      - name: heartbeat
+        if: ${{ !env.DRYRUN }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          printf '%s' "$GITHUB_TOKEN" | sudo install -m 600 -o root -g root /dev/stdin /root/beat.token
+          sudo install -m 700 -o root -g root .github/ci/heartbeat.sh .github/ci/publish.sh /root/
+          sudo env -u GITHUB_TOKEN setsid bash /root/heartbeat.sh "$GITHUB_REF_NAME/s$SAMPLE-$ARM" "$HOME/ci/stream.ts.jsonl" "$HOME/trial/phases.log" "$(id -un)" "$GITHUB_REPOSITORY" > /dev/null 2>&1 < /dev/null &
+          echo "heartbeat started"
+      - name: watcher
+        # Records when each line of findings.jsonl first appears (root's, hidden after isolate.sh).
+        run: |
+          sudo install -m 700 -o root -g root .github/ci/exp/authz/watch.sh /root/azq-watch.sh
+          sudo env -u GITHUB_TOKEN setsid bash /root/azq-watch.sh "$(id -un)" "$HOME/trial/findings.jsonl" /var/tmp/azq-watch > /dev/null 2>&1 < /dev/null &
+          echo "watcher started"
+      - name: isolate
+        run: .github/ci/range/isolate.sh
+      - name: remove the source
+        run: find "$GITHUB_WORKSPACE" -mindepth 1 -delete
+      - name: review
+        run: |
+          cd "$HOME/trial"
+          date +%s > "$HOME/ci/start.epoch"
+          if [ -n "$DRYRUN" ]; then
+            echo "dry run: no Codex session. The stub is the review's user, after isolation."
+            { echo "app: $(curl -s -o /dev/null -m 5 -w '%{http_code}' http://127.0.0.1:8090/)"
+              echo "app files readable: $(find /opt/azq -type f -readable 2>/dev/null | wc -l)"
+              echo "processes visible: $(ps -e --no-headers | wc -l)"; } | tee REPORT.md
+            echo '{"method":"GET","url":"http://127.0.0.1:8090/x","route":"/x","actor":"anonymous","owner":"x","kind":"no-auth","evidence":"dry run"}' > findings.jsonl
+            sleep 8
+            : > "$HOME/ci/stderr.txt"; : > "$HOME/ci/stream.ts.jsonl"
+          else
+            timeout 75m codex exec --dangerously-bypass-approvals-and-sandbox --skip-git-repo-check -C "$HOME/trial" \
+              -m gpt-6-luna -c model_reasoning_effort=xhigh --json "$(cat "$HOME/ci/brief.md")" < /dev/null 2> "$HOME/ci/stderr.txt" |
+              while IFS= read -r line; do printf '%(%s)T %s\n' -1 "$line"; done > "$HOME/ci/stream.ts.jsonl"
+            echo "codex ended with ${PIPESTATUS[0]}"
+          fi
+          date +%s > "$HOME/ci/end.epoch"
+      - uses: actions/checkout@v7
+        if: always()
+      - name: grade and publish
+        if: always()
+        env:
+          CODEX_AUTH_KEY: ${{ secrets.CODEX_AUTH_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: .github/ci/exp/authz/agent-post.sh "$ARM"
