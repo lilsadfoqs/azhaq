@@ -22,6 +22,7 @@ import driftlib as dl  # noqa: E402
 import grade  # noqa: E402
 import plan  # noqa: E402
 import rangelib  # noqa: E402
+import settle  # noqa: E402
 import summary  # noqa: E402
 
 REPO = dl.REPO
@@ -369,6 +370,150 @@ class Apply(unittest.TestCase):
         self.assertEqual(live["epoch"], 2)
         self.assertNotEqual(before, json.dumps(live["model"]["zone"], sort_keys=True))
         self.assertEqual(json.loads(read(d, "live.json"))["epoch"], 2)
+
+
+class Settle(unittest.TestCase):
+    class Clock:
+        def __init__(self):
+            self.t = 1000.0
+
+        def now(self):
+            return self.t
+
+        def sleep(self, s):
+            self.t += s
+
+    def go(self, ports, fetches, cap=360, gap=30):
+        c = self.Clock()
+        it = iter(fetches)
+        calls = []
+
+        def fetch():
+            calls.append(c.now())
+            try:
+                return next(it)
+            except StopIteration:
+                return fetches[-1]
+
+        pok = ports if callable(ports) else (lambda: ports)
+        r = settle.settle_env(pok, None if fetches is None else fetch, c.now, c.sleep, c.now() + cap, gap)
+        return r, calls
+
+    def test_two_equal_fetches_30s_apart_settle(self):
+        r, calls = self.go(True, [(200, "Login")])
+        self.assertEqual(r, (True, ""))
+        self.assertEqual(len(calls), 2)
+        self.assertGreaterEqual(calls[1] - calls[0], 30)
+
+    def test_a_page_that_changes_restarts_the_wait(self):
+        r, calls = self.go(True, [(200, "Access denied!"), (200, "phpMyAdmin"), (200, "phpMyAdmin")])
+        self.assertEqual(r, (True, ""))
+        self.assertEqual(len(calls), 3)
+        self.assertGreaterEqual(calls[2] - calls[1], 30)
+
+    def test_a_page_that_never_stops_changing_is_unstable(self):
+        seq = [(200, str(i)) for i in range(100)]
+        r, _ = self.go(True, seq, cap=120)
+        self.assertEqual(r, (False, "unstable"))
+
+    def test_status_counts_as_well_as_title(self):
+        r, _ = self.go(True, [(403, "x"), (302, "x"), (302, "x")])
+        self.assertEqual(r, (True, ""))
+
+    def test_a_closed_port_is_not_settled_until_it_opens(self):
+        state = {"n": 0}
+
+        def ports():
+            state["n"] += 1
+            return state["n"] > 5
+
+        r, _ = self.go(ports, [(200, "a")])
+        self.assertEqual(r, (True, ""))
+        self.assertEqual(self.go(False, [(200, "a")], cap=60)[0], (False, "port"))
+
+    def test_a_port_that_closes_again_restarts_the_wait(self):
+        seq = iter([True, False, True, True, True, True, True])
+        r, calls = self.go(lambda: next(seq, True), [(200, "a")])
+        self.assertEqual(r, (True, ""))
+        self.assertGreaterEqual(calls[-1] - calls[-2], 30)
+
+    def test_no_answer_is_front(self):
+        self.assertEqual(self.go(True, [None], cap=60)[0], (False, "front"))
+
+    def test_no_front_page_needs_only_the_ports(self):
+        c = self.Clock()
+        self.assertEqual(settle.settle_env(lambda: True, None, c.now, c.sleep, c.now() + 60), (True, ""))
+
+    def test_title_and_status_parsing(self):
+        import http.server
+        import threading
+
+        class H(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                self.send_response(302)
+                self.send_header("Content-Type", "text/html")
+                body = b"<html><head><TITLE>\n Welcome to  x </TITLE></head></html>"
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, *a):
+                pass
+
+        srv = http.server.HTTPServer(("127.0.0.1", 0), H)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        try:
+            port = srv.server_address[1]
+            self.assertEqual(settle.front("127.0.0.1", port), (302, "Welcome to x"))
+            self.assertTrue(settle.tcp_ok("127.0.0.1", port))
+        finally:
+            srv.shutdown()
+            srv.server_close()
+        self.assertIsNone(settle.front("127.0.0.1", port, timeout=0.5))
+        self.assertFalse(settle.tcp_ok("127.0.0.1", port, timeout=0.5))
+
+    def test_run_covers_direct_proxied_and_deploy_and_writes_counts(self):
+        d = planned("s4")
+        live = {"chain": None, "model": dl.model_from_files(d), "epoch": 0}
+        dl.save_json(os.path.join(d, "live.json"), live)
+        tg = settle.targets(d)
+        labels = [t[0] for t in tg]
+        self.assertEqual(sorted(labels), sorted(list(live["model"]["envs"]) + ["deploy"]))
+        backends = [t for t in tg if t[0] in live["model"]["envs"] and live["model"]["envs"][t[0]].get("backend")]
+        self.assertTrue(backends)
+        for t in backends:
+            self.assertEqual(t[1], [(live["model"]["proxy"]["address"], 80)], "a backend is reached through the proxy only")
+            self.assertEqual(t[2][3] in [r[0] for r in live["model"]["routes"]], True)
+        seen = []
+        c = self.Clock()
+        out = tempfile.mkdtemp()
+
+        def fetcher(addr, port, scheme, host):
+            seen.append((addr, port, host))
+            return (200, "t")
+
+        with contextlib.redirect_stdout(io.StringIO()):
+            doc = settle.run(d, out, cap=360, gap=30, clock=c.now, sleep=c.sleep, tcp=lambda a, p: True, fetcher=fetcher)
+        self.assertEqual(doc["envs"], len(tg))
+        self.assertEqual(doc["settled"], len(tg))
+        self.assertEqual(doc["not_settled"], {})
+        self.assertEqual(json.load(open(os.path.join(out, "settle.json")))["envs"], len(tg))
+        self.assertTrue(any(h for _, _, h in seen), "a proxied name is fetched with its Host header")
+
+    def test_not_settled_is_counted_not_failed(self):
+        d = planned("s4")
+        dl.save_json(os.path.join(d, "live.json"), {"chain": None, "model": dl.model_from_files(d), "epoch": 0})
+        c = self.Clock()
+        with contextlib.redirect_stdout(io.StringIO()):
+            doc = settle.run(d, tempfile.mkdtemp(), cap=60, gap=30, clock=c.now, sleep=c.sleep, tcp=lambda a, p: False, fetcher=lambda *a: (200, "t"))
+        self.assertEqual(doc["settled"], 0)
+        self.assertEqual(doc["not_settled"], {"port": doc["envs"]})
+
+    def test_summary_shows_settled_counts(self):
+        r = tempfile.mkdtemp()
+        os.makedirs(os.path.join(r, "s1", "e0"))
+        write(os.path.join(r, "s1", "e0", "settle.json"), json.dumps({"envs": 9, "settled": 8, "not_settled": {"front": 1}, "seconds": 40}))
+        self.assertEqual(summary.load_settle(r), {"s1": "E0 8/9"})
 
 
 class A3(unittest.TestCase):

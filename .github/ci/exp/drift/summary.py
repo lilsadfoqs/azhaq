@@ -21,6 +21,22 @@ import re
 import sys
 
 
+def load_settle(root):
+    """Per sample, 'settled/total' of each epoch's settle step (context only; the grader ignores it)."""
+    out = {}
+    for name in sorted(os.listdir(root)):
+        cells = []
+        for e in range(4):
+            p = os.path.join(root, name, "e%d" % e, "settle.json")
+            if os.path.exists(p):
+                with open(p) as f:
+                    d = json.load(f)
+                cells.append("E%d %d/%d" % (e, d["settled"], d["envs"]))
+        if cells:
+            out[name] = " ".join(cells)
+    return out
+
+
 def load(root):
     out = {}
     for name in sorted(os.listdir(root)):
@@ -78,7 +94,7 @@ def verdict(held, n):
     return "holds" if n == 4 and held >= 3 else "fails" if n == 4 else "no verdict (%d of 4 samples)" % n
 
 
-def render(samples):
+def render(samples, settle=None):
     rows = {s: {arm: row(s, arm, a) for arm, a in g["arms"].items()} for s, g in samples.items()}
     out = []
     head = "%-4s %-7s %-12s %-8s %-8s %-6s %-6s %-6s %-9s %-9s %s" % ("", "arm", "recall", "product", "version", "falseC", "falseA", "min", "requests", "wire", "tokens")
@@ -89,6 +105,9 @@ def render(samples):
                 s, arm, "%d/%d %s" % (r["hit"], r["of"], pct(r["recall"])), pct(r["product"]), pct(r["version"]), r["false_changes"],
                 r["false_alarms"], r["wall_min"], r["requests"] or "-", r["wire"], r["tokens"] or "-", "  (data missing for %d epochs)" % r["missing"] if r["missing"] else ""))
     out.append("")
+    if settle:
+        out.append("settled before the arms ran (context): " + "; ".join("%s: %s" % kv for kv in settle.items()))
+        out.append("")
     out.append("recall by class over all samples (hit/of, seen)")
     classes = sorted({c for g in samples.values() for a in g["arms"].values() for c in a["totals"]["classes"]})
     arms = sorted({arm for g in samples.values() for arm in g["arms"]})
@@ -134,7 +153,7 @@ def main(argv=None):
     if not samples:
         print("summary.py: no sN/grade.json under %s" % a.dir, file=sys.stderr)
         return 1
-    text, data = render(samples)
+    text, data = render(samples, load_settle(a.dir))
     print(json.dumps(data, indent=1) if a.json else text)
     return 0
 
