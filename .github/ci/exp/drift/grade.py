@@ -100,23 +100,23 @@ def a1_records(d):
         return None
     out = []
     for h in o.get("hosts") or []:
-        out.append(rec("new", h.split(" (")[0], h))
+        out.append(rec("new", h.split(" (")[0], h, field="hosts"))
     for s in o.get("services") or []:
-        out.append(rec("new", s.split(" [")[0], s))
+        out.append(rec("new", s.split(" [")[0], s, field="services"))
     for u in o.get("urls") or []:
-        out.append(rec("new", u))
+        out.append(rec("new", u, field="urls"))
     for p in o.get("ports") or []:
         host, _, ports = p.partition(": ")
-        r = rec("changed", host, p)
+        r = rec("changed", host, p, field="ports")
         r["ports"] = [int(x) for x in re.findall(r"\d+", ports)]
         out.append(r)
     for c in o.get("changed") or []:
-        out.append(rec("changed", c.split(": [")[0], c))
-    for k, key in (("gone", "gone_hosts"), ("gone", "gone_services"), ("gone", "gone_urls")):
+        out.append(rec("changed", c.split(": [")[0], c, field="changed"))
+    for key in ("gone_hosts", "gone_services", "gone_urls"):
         for x in o.get(key) or []:
-            out.append(rec(k, x))
+            out.append(rec("gone", x, field=key))
     for r in o.get("routes") or []:
-        out.append(rec("gone" if r.get("kind") == "gone" else "route", r.get("host") or r.get("route", ""), json.dumps(r), route=r.get("route", "")))
+        out.append(rec("gone" if r.get("kind") == "gone" else "route", r.get("host") or r.get("route", ""), json.dumps(r), route=r.get("route", ""), field="routes"))
     return out
 
 
@@ -134,7 +134,7 @@ def a2_records(d, diff=False):
         for kind, ls in (("new", new), ("gone", gone)):
             for line in ls:
                 m = re.search(r"https?://\S+", line)
-                out.append(rec(kind, m.group(0) if m else line.split()[0], line, stage=st))
+                out.append(rec(kind, m.group(0) if m else line.split()[0], line, stage=st, field=st))
     return out
 
 
@@ -316,6 +316,14 @@ def distinct(recs):
     return len({(r["kind"], r["asset"].lower()) for r in recs})
 
 
+def by_field(recs):
+    """Distinct records per field of the arm's output (a1's change set field, a2's stage)."""
+    out = {}
+    for r in recs:
+        out.setdefault(r.get("field", "-"), set()).add((r["kind"], r["asset"].lower()))
+    return {k: len(v) for k, v in sorted(out.items())}
+
+
 def grade_epoch(recs, changes, ents):
     """Classes, identification and false changes of one epoch (1 or 3)."""
     classes = {}
@@ -339,7 +347,7 @@ def grade_epoch(recs, changes, ents):
             ident["product"] += m["product"]
             ident["version"] += m["version"]
     false = [r for r in recs if not explained(r, changes)]
-    return {"classes": classes, "identification": ident, "records": len(recs), "false_changes": distinct(false), "false_list": sorted({r["asset"] for r in false})[:40]}
+    return {"classes": classes, "identification": ident, "records": len(recs), "false_changes": distinct(false), "false_by_field": by_field(false), "false_list": sorted({r["asset"] for r in false})[:40]}
 
 
 def inventory(key, recs):
@@ -394,6 +402,8 @@ def grade(root):
     ents = dl.by_id(rangelib.load_catalog())
     res = {"dropped": dkey.get("dropped", 0), "arms": {}}
     for arm in ARMS:
+        if arm == "a3" and not any(os.path.isdir(os.path.join(root, "e%d" % e, "a3")) for e in range(4)):
+            continue  # a dry run has no agent
         a = {"epochs": {}, "totals": {}}
         for e in range(4):
             d = os.path.join(root, "e%d" % e)
@@ -412,7 +422,7 @@ def grade(root):
                 ent["missing"] = recs is None
                 changes = dkey["epochs"][e]["changes"]
                 if e == 2:
-                    ent.update({"false_alarms": distinct(recs or []), "records": len(recs or []), "false_list": sorted({r["asset"] for r in recs or []})[:40]})
+                    ent.update({"false_alarms": distinct(recs or []), "false_by_field": by_field(recs or []), "records": len(recs or []), "false_list": sorted({r["asset"] for r in recs or []})[:40]})
                 else:
                     ent.update(grade_epoch(recs or [], changes, ents))
             a["epochs"][str(e)] = ent
@@ -462,6 +472,8 @@ def md(res):
             out.append("- E0 inventory: hosts %d/%d, ports %d/%d" % (inv["hosts"], inv["hosts_of"], inv["ports"], inv["ports_of"]))
         for e in ("1", "2", "3"):
             ent = a["epochs"][e]
+            if ent.get("false_by_field"):
+                out.append("- E%s records not in the key, by field: %s" % (e, ent["false_by_field"]))
             if ent.get("false_list"):
                 out.append("- E%s records not in the key: %s" % (e, ", ".join(ent["false_list"][:15])))
         out.append("")

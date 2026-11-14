@@ -161,9 +161,10 @@ def restart_dns(ctx, plan, model, labdns, run_as):
     return up.dns_ready(ctx, d, model["apex"] + ".")
 
 
-def refence(ctx, model, ents, base_key, plan, live, epoch, users):
+def refence(ctx, model, ents, base_key, plan, live, users):
     key, p = dl.live_key(model, ents, base_key)
-    chain = "AZQ%d" % epoch
+    live["fence_n"] = live.get("fence_n", 0) + 1
+    chain = "AZQ%d" % live["fence_n"]
     rules = dl.fence_for(key, p, chain, users)
     rules.insert(1, ["-A", chain, "-j", "AZCNT"])
     for r in rules:
@@ -209,7 +210,7 @@ def epoch0(ctx, est, args, ents, plan, base_key, dplan):
         print("epoch 0: deploy app %s" % ("answers" if ok else "DOES NOT ANSWER"))
     if not args.no_fence:
         dl.counters_setup(model["net"], int(plan["dns"][0]["listen"].rsplit(":", 1)[1]))
-        print("epoch 0: fence %s" % ("rebuilt" if refence(ctx, model, ents, base_key, plan, live, 0, args.users) else "FAILED"))
+        print("epoch 0: fence %s" % ("rebuilt" if refence(ctx, model, ents, base_key, plan, live, args.users) else "FAILED"))
     dl.save_json(os.path.join(est, "live.json"), live)
     return 0
 
@@ -240,6 +241,9 @@ def epoch_changes(ctx, est, args, ents, plan, base_key, dplan, live, e):
     write_conf(ctx, m)
     reload_proxy(ctx, m)
     dns_ok = restart_dns(ctx, plan, m, args.labdns, args.run_as)
+    # The fence first: a new port or host answers nothing through the old one, probes included.
+    if not args.no_fence:
+        refence(ctx, m, ents, base_key, plan, live, args.users)
     waited = pmap(lambda cp: wait_env(ctx, cp[1], m), ups)
     failed = {cp[0]["id"] for cp, s, w in zip(ups, started, waited) if not (s[0] and w)}
     for ch in keep:
@@ -258,8 +262,8 @@ def epoch_changes(ctx, est, args, ents, plan, base_key, dplan, live, e):
         reload_proxy(ctx, m)
         dns_ok = restart_dns(ctx, plan, m, args.labdns, args.run_as)
         dropped += sorted(failed)
-    if not args.no_fence:
-        refence(ctx, m, ents, base_key, plan, live, e, args.users)
+    if failed and not args.no_fence:
+        refence(ctx, m, ents, base_key, plan, live, args.users)
     live["model"], live["epoch"] = m, e
     drop = set(dropped)
     row = dkey["epochs"][e]
