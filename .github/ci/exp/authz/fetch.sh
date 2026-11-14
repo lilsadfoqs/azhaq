@@ -1,7 +1,7 @@
 #!/bin/bash
 # fetch.sh TAG DIR: brings back what the CI run exp-authz-TAG (or TAG when it already starts with exp-authz-)
 # put on the ci-results branch under exp-authz/TAG/sN/, decrypts it with the maintainer's age key and unpacks it:
-# DIR/sN/{key.json,app.json,vars.json,har,b1,b2} from the toolfree job, DIR/sN/usual and DIR/sN/azhaq from the
+# DIR/sN/{key.json,app.json,vars.json,har,har-c,b1,b1c,b2} from the toolfree job, DIR/sN/usual and DIR/sN/azhaq from the
 # agent jobs. A Codex session an agent job refreshed replaces this machine's when it is newer. The key is read
 # from $AZHAQ_AGE_KEY (default ~/.config/azhaq/age.key) and never printed. Then python3 summary.py DIR.
 set -euo pipefail

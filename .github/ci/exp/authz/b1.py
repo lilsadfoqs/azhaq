@@ -16,12 +16,16 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import authzlib as z  # noqa: E402
 
 
-def command(azhaq, url, har_dir, sessions):
+def command(azhaq, url, har_dir, sessions, canary=False):
     cmd = [azhaq, "roles", "-role", "anon"]
     for label in ("alice", "bob", "admin"):
         cmd += ["-role", "%s=%s" % (label, sessions[label])]
     cmd += ["-har", "alice=" + os.path.join(har_dir, "alice.har"), "-har", "admin=" + os.path.join(har_dir, "admin.har"),
-            "-replay-writes", "post,put,patch,delete", "-jsonl", "--", "-url", url]
+            "-replay-writes", "post,put,patch,delete"]
+    # B1c: the documented fix for a replay that writes back a value already there (roles.md, Canary values)
+    if canary:
+        cmd += ["-replay-writes-canary"]
+    cmd += ["-jsonl", "--", "-url", url]
     return cmd
 
 
@@ -48,10 +52,11 @@ def main(argv=None):
     ap.add_argument("--har-dir", required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--count-file", help="the app's request counter (server.py --count-file)")
+    ap.add_argument("--canary", action="store_true", help="arm B1c: add -replay-writes-canary")
     a = ap.parse_args(argv)
     os.makedirs(a.out, exist_ok=True)
     sessions = z.load_sessions(os.path.join(a.har_dir, "sessions.json"))
-    cmd = command(os.path.abspath(a.azhaq), a.url, os.path.abspath(a.har_dir), sessions)
+    cmd = command(os.path.abspath(a.azhaq), a.url, os.path.abspath(a.har_dir), sessions, a.canary)
     c0 = z.read_count(a.count_file) if a.count_file else 0
     t0 = time.time()
     p = subprocess.run(cmd, cwd=a.out, capture_output=True, text=True)
@@ -63,7 +68,7 @@ def main(argv=None):
         meta["server_requests"] = z.read_count(a.count_file) - c0
     json.dump(meta, open(os.path.join(a.out, "meta.json"), "w"))
     rows = [ln for ln in p.stdout.splitlines() if ln.strip()]
-    print("b1: exit %d, %d rows, %.1fs" % (p.returncode, len(rows), wall))
+    print("b1%s: exit %d, %d rows, %.1fs" % ("c" if a.canary else "", p.returncode, len(rows), wall))
     return 0
 
 

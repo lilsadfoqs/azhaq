@@ -303,14 +303,16 @@ class SummaryTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             for i in range(1, 5):
                 sd = os.path.join(d, "s%d" % i)
-                for arm, g in (("b1", self.g(6, 8, 1, 4)), ("b2", self.g(2, 8, 5, 30)),
+                for arm, g in (("b1", self.g(6, 8, 1, 4)), ("b1c", self.g(3, 8, 0, 7)), ("b2", self.g(2, 8, 5, 30)),
                                ("usual", self.g(5, 8, 0, 0, 1200)), ("azhaq", self.g(6, 8, 1, 0, 400))):
                     os.makedirs(os.path.join(sd, arm))
                     json.dump(g, open(os.path.join(sd, arm, "grade.json"), "w"))
             self.assertEqual(summary.main(["summary.py", d]), 0)
             out = json.load(open(os.path.join(d, "summary.json")))
-            self.assertEqual({n: r["verdict"] for n, r in out["rules"].items()}, {"1": "holds", "2": "holds", "3": "holds"})
+            self.assertEqual({n: r["verdict"] for n, r in out["rules"].items()},
+                             {"1": "holds", "2": "holds", "3": "holds", "1c": "does not hold", "2c": "does not hold"})
             self.assertEqual(out["B_passes"], "yes")
+            self.assertEqual(out["B_passes_with_canary"], "no")
 
     def test_fewer_than_four_is_not_a_verdict(self):
         with tempfile.TemporaryDirectory() as d:

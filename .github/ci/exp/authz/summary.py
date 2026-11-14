@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """summary.py DIR: the table of experiment B and the protocol's three rules.
 
-DIR is what fetch.sh brought back: DIR/sN/{b1,b2,usual,azhaq}/grade.json (arms B1, B2, B3, B4). Prints,
+DIR is what fetch.sh brought back: DIR/sN/{b1,b1c,b2,usual,azhaq}/grade.json (arms B1, B1c, B2, B3, B4). Prints,
 for each seed, each arm's recall (found of planted), false positives (fp), items left to triage (tri)
 and time to the first true flaw, then the rules, each "holds in >= 3 of 4" seeds:
 
@@ -16,7 +16,7 @@ import json
 import os
 import sys
 
-ARMS = [("B1", "b1"), ("B2", "b2"), ("B3", "usual"), ("B4", "azhaq")]
+ARMS = [("B1", "b1"), ("B1c", "b1c"), ("B2", "b2"), ("B3", "usual"), ("B4", "azhaq")]
 
 
 def load(d):
@@ -39,13 +39,13 @@ def fmt_t(s):
     return "%dm%02ds" % (s // 60, s % 60) if s >= 60 else "%ds" % s
 
 
-def rule1(a):
-    b1 = a.get("B1")
+def rule1(a, arm="B1"):
+    b1 = a.get(arm)
     return None if b1 is None else (b1["recall"] is not None and b1["recall"] >= 0.7 and b1["false_positives"] <= 1)
 
 
-def rule2(a):
-    b1, b2 = a.get("B1"), a.get("B2")
+def rule2(a, arm="B1"):
+    b1, b2 = a.get(arm), a.get("B2")
     if b1 is None or b2 is None:
         return None
     return b1["recall"] >= 2 * b2["recall"] or (b2["triage"] > 0 and b2["triage"] >= 5 * b1["triage"])
@@ -81,9 +81,11 @@ def main(argv):
     out = {"seeds": list(seeds), "rules": {}}
     desc = {"1": "B1 recall >= 70% and <= 1 false positive per seed",
             "2": "B1 recall >= 2x B2's, or B2 leaves >= 5x more items to triage",
-            "3": "B4 recall >= B3's and B4 time to first true flaw <= 1/2 of B3's"}
+            "3": "B4 recall >= B3's and B4 time to first true flaw <= 1/2 of B3's",
+            "1c": "rule 1 with B1c (B1 plus -replay-writes-canary)", "2c": "rule 2 with B1c"}
     print()
-    for n, fn in (("1", rule1), ("2", rule2), ("3", rule3)):
+    for n, fn in (("1", rule1), ("2", rule2), ("3", rule3), ("1c", lambda a: rule1(a, "B1c")),
+                  ("2c", lambda a: rule2(a, "B1c"))):
         res = {s: fn(a) for s, a in seeds.items()}
         known = [v for v in res.values() if v is not None]
         k = sum(1 for v in known if v)
@@ -93,9 +95,14 @@ def main(argv):
             verdict = "holds" if k >= 3 else "does not hold"
         out["rules"][n] = {"description": desc[n], "per_seed": res, "count": k, "of": len(seeds), "verdict": verdict}
         print("rule %s: %s\n        holds in %d of %d seeds: %s" % (n, desc[n], k, len(seeds), verdict))
-    allv = [out["rules"][n]["verdict"] for n in "123"]
-    out["B_passes"] = "yes" if all(v == "holds" for v in allv) else ("no" if all(v in ("holds", "does not hold") for v in allv) else "undecided")
-    print("\nB passes: %s" % out["B_passes"])
+    def passes(names):
+        allv = [out["rules"][n]["verdict"] for n in names]
+        return "yes" if all(v == "holds" for v in allv) else ("no" if all(v in ("holds", "does not hold") for v in allv) else "undecided")
+    # Both B1 variants are reported side by side; neither is picked after the fact.
+    out["B_passes"] = passes(["1", "2", "3"])
+    out["B_passes_with_canary"] = passes(["1c", "2c", "3"])
+    print("\nB passes (B1 as documented by default): %s" % out["B_passes"])
+    print("B passes (B1c, with the write canary): %s" % out["B_passes_with_canary"])
     json.dump(out, open(os.path.join(d, "summary.json"), "w"), indent=1)
     return 0
 
