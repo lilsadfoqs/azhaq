@@ -162,8 +162,10 @@ jobs:
           python3 .github/ci/exp/drift/drive.py "$HOME/drift/est" "$B" --mode "$MODE" --vulhub "$HOME/drift/vulhub" \
             --azhaq "$HOME/drift/bin/azhaq" --work "$HOME/drift/work" --skip-apply 0
       - name: grade
+        if: always()
         run: |
           B="$HOME/drift/bundle"
+          [ -d "$B" ] || exit 0
           cp "$HOME/drift/est/key.json" "$HOME/drift/est/drift-key.json" "$HOME/drift/est/vars.json" "$B/"
           python3 .github/ci/exp/drift/grade.py "$B"
       - name: publish

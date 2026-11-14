@@ -38,11 +38,12 @@ def main(argv=None):
     work = os.path.abspath(a.work or os.path.join(out, "..", "work"))
     os.makedirs(work, exist_ok=True)
     vars_ = os.path.join(est, "vars.json")
-    rc = 0
+    rc = bad_apply = 0
     for e in (int(x) for x in a.epochs.split(",")):
         d = os.path.join(out, "e%d" % e)
         os.makedirs(d, exist_ok=True)
         r = 0 if str(e) in a.skip_apply.split(",") else py("apply.py", est, str(e), "--vulhub", a.vulhub, "--labdns", a.labdns)
+        bad_apply += bool(r)
         with open(os.path.join(d, "apply.exit"), "w") as f:
             f.write("%d\n" % r)
         prev = os.path.join(out, "e%d" % (e - 1)) if e else None
@@ -52,7 +53,10 @@ def main(argv=None):
             rc |= py("a3.py", vars_, d, str(e))
     # An arm that exited non-zero is data (the grader reads what it left), not a failed job.
     print("arm runs with a non-zero exit: %s" % ("some" if rc else "none"))
-    return 0
+    # An epoch that was not applied makes the sample's key wrong: the job fails (the results are still published).
+    if bad_apply:
+        print("::error title=apply::%d epochs were not applied" % bad_apply)
+    return 1 if bad_apply else 0
 
 
 if __name__ == "__main__":

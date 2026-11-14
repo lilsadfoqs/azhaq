@@ -348,6 +348,29 @@ class Apply(unittest.TestCase):
         self.assertEqual(live["epoch"], 1)
 
 
+    def test_churn_moves_the_epoch_on(self):
+        d = planned("s9")
+        dplan = json.loads(read(d, "drift-plan.json"))
+        live = {"chain": None, "model": dl.model_from_files(d), "epoch": 1}
+        ctx = type("C", (), {"out": d, "vulhub": "/none", "run": staticmethod(lambda *a, **k: (0, "")), "note": staticmethod(lambda t: None)})()
+        orig = (drift_apply.wait_env, drift_apply.restart_dns, drift_apply.deploy_stop, drift_apply.deploy_start, drift_apply.deploy_ready)
+        try:
+            drift_apply.wait_env = lambda c, env, m: True
+            drift_apply.restart_dns = lambda *a: True
+            drift_apply.deploy_stop = lambda: None
+            drift_apply.deploy_start = lambda *a: None
+            drift_apply.deploy_ready = lambda *a, **k: True
+            args = type("A", (), {"labdns": "x", "run_as": "nobody", "users": [], "no_fence": True, "no_deploy": False})()
+            before = json.dumps(live["model"]["zone"], sort_keys=True)
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(drift_apply.epoch_churn(ctx, d, args, {}, {}, {}, dplan, live, 2), 0)
+        finally:
+            drift_apply.wait_env, drift_apply.restart_dns, drift_apply.deploy_stop, drift_apply.deploy_start, drift_apply.deploy_ready = orig
+        self.assertEqual(live["epoch"], 2)
+        self.assertNotEqual(before, json.dumps(live["model"]["zone"], sort_keys=True))
+        self.assertEqual(json.loads(read(d, "live.json"))["epoch"], 2)
+
+
 class A3(unittest.TestCase):
     def test_tokens(self):
         s = ['1 {"type":"thread.started"}', '2 {"type":"turn.completed","usage":{"input_tokens":100,"cached_input_tokens":40,"output_tokens":7}}',
