@@ -48,8 +48,8 @@ Any client that takes a JSON configuration:
 
 | Tool | What it does |
 | --- | --- |
-| `azhaq_scope` | The scope, run options (resolvers, proxy, sources), budget and pace fixed at start, and how much of the budget is used. |
-| `azhaq_status` | A compact status of the server and each workspace. Sends nothing and starts no command. |
+| `azhaq_scope` | The scope, run options (resolvers, proxy, sources), budget and pace fixed at start, and how much of the budget is used (by the calls that ended). |
+| `azhaq_status` | A compact status of the server and each workspace, with the calls running now (`in_flight`). Sends nothing and starts no command. |
 | `azhaq_plan` | What a map would take, leave out and send, without sending anything. |
 | `azhaq_map` | Maps a URL, a domain or a list into a workspace. Returns the summary and the highlights. |
 | `azhaq_resume` | Continues the stopped run of a workspace, where it stopped. |
@@ -71,7 +71,8 @@ Any client that takes a JSON configuration:
 
 **`azhaq_status`**
 
-- Reports the scope (locked, allow and deny rules), the run options held (`run_options`: resolvers, proxy, sources, skipped collectors, takeover check), the request budget (limit, used, left) and the pace.
+- Reports the scope (locked, allow and deny rules), the run options held (`run_options`: resolvers, proxy, sources, skipped collectors, takeover check), the request budget (limit, used, left) and the pace. `used` counts the requests of the calls that ended: a call still running adds its own when it ends.
+- Lists the calls running now in `in_flight`: `count`, and for each call its `command`, its `seconds` so far and the `max_requests` it was handed, which is the most it can still add to `used` (`reserved` is their sum). A call waiting for its turn is not listed: it has been handed nothing. `in_flight` and `used` are read together, so a call is in one or the other, never both.
 - Names the server's ledger (`ledger`), the file of the calls that name no workspace. The file exists once such a call has run.
 - Lists every workspace this server's directory holds, each with its state: `complete`, `stopped by a limit` or `failed`.
 - `stopped by a limit` comes with `tasks_left`, the `requests` the run has sent and the `azhaq_resume` call that continues it. `complete` means the database holds no task left to do.
