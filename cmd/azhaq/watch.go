@@ -6,7 +6,9 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -22,11 +24,12 @@ type changes struct {
 	Run       time.Time     `json:"run"`
 	Previous  time.Time     `json:"previous,omitempty"`
 	Baseline  bool          `json:"baseline,omitempty"` // the first run: everything is new
-	Hosts     []string      `json:"hosts,omitempty"`    // new names that resolve
-	Services  []string      `json:"services,omitempty"` // new web services, "url [status] title"
-	URLs      []string      `json:"urls,omitempty"`     // other new URLs
-	Ports     []string      `json:"ports,omitempty"`    // "host: 22,80,8443" where the open set changed
+	Hosts     []string      `json:"hosts,omitempty"`    // new names that resolve: "name (ips): 53/tcp BIND 9.11"
+	Services  []string      `json:"services,omitempty"` // new web services, "url [status] title (technologies)"
+	URLs      []string      `json:"urls,omitempty"`     // other new URLs, one per identity
+	Ports     []string      `json:"ports,omitempty"`    // "host: +9000/tcp php-fpm, -8080/tcp (open: 22,9000)" where the open set changed
 	Changed   []string      `json:"changed,omitempty"`  // "url: [200] old title → [403] new title"
+	Dangling  []string      `json:"dangling,omitempty"` // new names that point nowhere: "name → target (NXDOMAIN)"
 	GoneHosts []string      `json:"gone_hosts,omitempty"`
 	GoneSvcs  []string      `json:"gone_services,omitempty"`
 	GoneURLs  []string      `json:"gone_urls,omitempty"`
@@ -34,7 +37,7 @@ type changes struct {
 }
 
 func (c changes) any() bool {
-	return len(c.Hosts)+len(c.Services)+len(c.URLs)+len(c.Ports)+len(c.Changed)+len(c.GoneHosts)+len(c.GoneSvcs)+len(c.GoneURLs)+len(c.Routes) > 0
+	return len(c.Hosts)+len(c.Dangling)+len(c.Services)+len(c.URLs)+len(c.Ports)+len(c.Changed)+len(c.GoneHosts)+len(c.GoneSvcs)+len(c.GoneURLs)+len(c.Routes) > 0
 }
 
 // cmdWatch runs the same target into a workspace again and again and
@@ -203,31 +206,59 @@ func changesBetween(old, neu *store.Store, d store.Diff, ch changes) (changes, e
 	}
 	newFacts := factsByEntity(neu)
 	oldFacts := factsByEntity(old)
-	// A placeholder renamed ({id} to {orderId}) is no URL gone and no URL new.
-	oldFold, newFold := foldedURLs(old), foldedURLs(neu)
+	byHost := map[string][]portSvc{}
+	for _, f := range newFacts {
+		if f.host != "" {
+			byHost[strings.ToLower(f.host)] = append(byHost[strings.ToLower(f.host)], f.svcs...)
+		}
+	}
+	// A URL is new when its identity (path with identifiers folded, query
+	// names without values) was not in the previous run, one line each.
+	oldIdent, newIdent := foldedURLs(old), foldedURLs(neu)
+	seenNew, seenGone := map[string]bool{}, map[string]bool{}
 	for _, e := range d.Added {
-		if e.Type == types.TypeURL && oldFold[foldURL(e.Key)] {
-			continue
+		id := ""
+		if e.Type == types.TypeURL {
+			if id = foldURL(e.Key); oldIdent[id] || seenNew[id] {
+				continue
+			}
 		}
 		switch e.Type {
 		case types.TypeHostname:
 			if ips := newFacts[e.ID].ips; len(ips) > 0 {
-				ch.Hosts = append(ch.Hosts, e.Key+" ("+strings.Join(ips, ", ")+")")
+				line := e.Key + " (" + strings.Join(ips, ", ") + ")"
+				svcs := newFacts[e.ID].svcs
+				if len(svcs) == 0 {
+					svcs = byHost[strings.ToLower(e.Key)]
+				}
+				if len(svcs) > 0 {
+					line += ": " + svcList(svcs)
+				}
+				ch.Hosts = append(ch.Hosts, line)
 			}
 		case types.TypeURL:
 			f := newFacts[e.ID]
 			switch {
 			case f.catchAll:
 			case f.status != 0 && isFront(e.Key):
-				ch.Services = append(ch.Services, strings.TrimSpace(fmt.Sprintf("%s [%d] %s", e.Key, f.status, f.title)))
-			case f.role != "script" && f.role != "asset" && f.role != "sourcemap":
+				line := strings.TrimSpace(fmt.Sprintf("%s [%d] %s", e.Key, f.status, f.title))
+				if len(f.tech) > 0 {
+					line += " (" + techList(f.tech) + ")"
+				}
+				ch.Services = append(ch.Services, line)
+				seenNew[id] = true
+			case f.role != "script" && f.role != "asset" && f.role != "sourcemap" && !isStatic(e.Key):
 				ch.URLs = append(ch.URLs, e.Key)
+				seenNew[id] = true
 			}
 		}
 	}
 	for _, e := range d.Removed {
-		if e.Type == types.TypeURL && newFold[foldURL(e.Key)] {
-			continue
+		id := ""
+		if e.Type == types.TypeURL {
+			if id = foldURL(e.Key); newIdent[id] || seenGone[id] {
+				continue
+			}
 		}
 		f := oldFacts[e.ID]
 		switch {
@@ -235,69 +266,57 @@ func changesBetween(old, neu *store.Store, d store.Diff, ch changes) (changes, e
 			ch.GoneHosts = append(ch.GoneHosts, e.Key)
 		case e.Type == types.TypeURL && f.status != 0 && isFront(e.Key):
 			ch.GoneSvcs = append(ch.GoneSvcs, e.Key)
-		case e.Type == types.TypeURL && f.status != 0 && !f.catchAll && f.role != "script" && f.role != "asset" && f.role != "sourcemap":
+			seenGone[id] = true
+		case e.Type == types.TypeURL && f.status != 0 && !f.catchAll && f.role != "script" && f.role != "asset" && f.role != "sourcemap" && !isStatic(e.Key):
 			ch.GoneURLs = append(ch.GoneURLs, e.Key)
+			seenGone[id] = true
 		}
 	}
+	ch.Dangling = newDangling(old, neu)
 	// What answered in both runs, differently: a page that now needs a
-	// login, a service that changed its title.
+	// login, a service that changed its title or its product.
 	for id, nf := range newFacts {
 		of, ok := oldFacts[id]
 		if !ok || nf.status == 0 || of.status == 0 || nf.catchAll || of.catchAll {
 			continue
 		}
+		line := ""
 		switch {
 		case nf.status != of.status || nf.title != of.title:
-			ch.Changed = append(ch.Changed, fmt.Sprintf("%s: [%d] %s → [%d] %s", nf.url, of.status, of.title, nf.status, nf.title))
+			line = fmt.Sprintf("%s: [%d] %s → [%d] %s", nf.url, of.status, of.title, nf.status, nf.title)
 		case nf.items > 0 && of.items > 0 && nf.items != of.items:
 			// An API listing that grew or shrank: a user, a book, an order.
-			ch.Changed = append(ch.Changed, fmt.Sprintf("%s: [%d] %d items → [%d] %d items", nf.url, of.status, of.items-1, nf.status, nf.items-1))
+			line = fmt.Sprintf("%s: [%d] %d items → [%d] %d items", nf.url, of.status, of.items-1, nf.status, nf.items-1)
+		}
+		if pc := techChange(of.tech, nf.tech); pc != "" && isFront(nf.url) {
+			if line == "" {
+				line = strings.TrimSpace(fmt.Sprintf("%s: [%d] %s", nf.url, nf.status, nf.title))
+			}
+			line += " (" + pc + ")"
+		}
+		if line != "" {
+			ch.Changed = append(ch.Changed, line)
 		}
 	}
-	// Ports: the open set of a host that was scanned in both runs.
+	// Ports: the open set of a host that was scanned in both runs, and the
+	// product of a service that stayed open.
 	for id, f := range newFacts {
 		if f.ports == nil {
 			continue
 		}
-		if o := oldFacts[id]; o.ports != nil && strings.Join(o.ports, ",") != strings.Join(f.ports, ",") {
-			ch.Ports = append(ch.Ports, f.host+": "+strings.Join(f.ports, ","))
+		if o := oldFacts[id]; o.ports != nil {
+			if line := portsChange(o, f); line != "" {
+				ch.Ports = append(ch.Ports, line)
+			}
+			ch.Changed = append(ch.Changed, svcChanges(o, f)...)
 		}
 	}
 	ch.URLs = withoutRoutes(ch.URLs, ch.Routes, "new")
 	ch.GoneURLs = withoutRoutes(ch.GoneURLs, ch.Routes, "gone")
-	for _, xs := range [][]string{ch.Hosts, ch.Services, ch.URLs, ch.Ports, ch.Changed, ch.GoneHosts, ch.GoneSvcs, ch.GoneURLs} {
+	for _, xs := range [][]string{ch.Hosts, ch.Dangling, ch.Services, ch.URLs, ch.Ports, ch.Changed, ch.GoneHosts, ch.GoneSvcs, ch.GoneURLs} {
 		sort.Strings(xs)
 	}
 	return ch, nil
-}
-
-// foldURL is a URL with the names of its path's placeholders left out
-// ({id} and {orderId} are one): what renaming a placeholder leaves alone.
-func foldURL(raw string) string {
-	u, err := url.Parse(raw)
-	if err != nil {
-		return raw
-	}
-	segs := strings.Split(u.Path, "/")
-	for i, s := range segs {
-		if strings.HasPrefix(s, "{") && strings.HasSuffix(s, "}") {
-			segs[i] = "{}"
-		}
-	}
-	u.Path, u.RawPath = strings.Join(segs, "/"), ""
-	return u.String()
-}
-
-// foldedURLs are the folded keys of a run's URL entities.
-func foldedURLs(st *store.Store) map[string]bool {
-	out := map[string]bool{}
-	ents, _ := st.Entities()
-	for _, e := range ents {
-		if e.Type == types.TypeURL {
-			out[foldURL(e.Key)] = true
-		}
-	}
-	return out
 }
 
 type facts struct {
@@ -308,7 +327,9 @@ type facts struct {
 	catchAll    bool
 	ports       []string
 	host        string
-	items       int // items of a JSON listing, plus one; 0 when it is not one
+	items       int      // items of a JSON listing, plus one; 0 when it is not one
+	tech        []string // technologies the http answers showed, "Name" or "Name:version"
+	svcs        []portSvc
 }
 
 func factsByEntity(st *store.Store) map[string]facts {
@@ -341,22 +362,43 @@ func factsByEntity(st *store.Store) map[string]facts {
 			if p["catchall"] == true {
 				f.catchAll = true
 			}
+			if ts, ok := p["tech"].([]any); ok {
+				for _, t := range ts {
+					if name, ok := t.(string); ok && name != "" && !slices.Contains(f.tech, name) {
+						f.tech = append(f.tech, name)
+					}
+				}
+			}
 		case "azhaq-ports":
 			if n, _ := p["scanned"].(float64); n == 0 {
 				break // not scanned (no IPv6 route): nothing to compare
 			}
 			f.host, _ = p["host"].(string)
-			f.ports = []string{}
+			if f.ports == nil {
+				f.ports = []string{}
+			}
+			// A name with several addresses has a row each: the open set is their union.
 			if open, ok := p["open"].([]any); ok {
 				for _, x := range open {
-					f.ports = append(f.ports, fmt.Sprint(x))
+					if port := fmt.Sprint(x); !slices.Contains(f.ports, port) {
+						f.ports = append(f.ports, port)
+					}
 				}
 			}
+			f.svcs = mergeSvcs(f.svcs, svcsOf(o.Payload))
 		}
 		if r, ok := p["role"].(string); ok && f.role == "" {
 			f.role = r
 		}
 		out[o.EntityID] = f
+	}
+	for id, f := range out {
+		sort.Slice(f.ports, func(i, j int) bool {
+			a, _ := strconv.Atoi(f.ports[i])
+			b, _ := strconv.Atoi(f.ports[j])
+			return a < b
+		})
+		out[id] = f
 	}
 	return out
 }
@@ -404,6 +446,7 @@ func (c changes) notifyText(lines int) string {
 		}
 	}
 	section("+", "hostnames that resolve", c.Hosts)
+	section("!", "names that point nowhere", c.Dangling)
 	section("+", "web services", c.Services)
 	section("+", "URLs", c.URLs)
 	section("~", "API routes", routeLines(c.Routes))
