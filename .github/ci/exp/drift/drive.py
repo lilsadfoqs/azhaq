@@ -13,6 +13,7 @@ import subprocess
 import sys
 
 import driftlib as dl
+import settle
 
 HERE = dl.HERE
 
@@ -46,6 +47,11 @@ def main(argv=None):
         bad_apply += bool(r)
         with open(os.path.join(d, "apply.exit"), "w") as f:
             f.write("%d\n" % r)
+        # What was just applied (or restarted) must have settled before any arm looks at it.
+        try:
+            settle.run(est, d)
+        except (OSError, KeyError, ValueError) as err:  # no live.json when apply failed: the arms still run
+            print("settle: skipped (%s)" % type(err).__name__)
         prev = os.path.join(out, "e%d" % (e - 1)) if e else None
         rc |= py("arms.py", "a1", vars_, d, str(e), "--work", work, "--azhaq", a.azhaq, "--minutes", str(a.minutes))
         rc |= py("arms.py", "a2", vars_, d, str(e), "--work", work, *(["--prev", prev] if prev else []))
