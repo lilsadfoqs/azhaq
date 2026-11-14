@@ -313,6 +313,9 @@ func (r *report) print(w io.Writer) {
 	fmt.Fprintf(w, "azhaq %s: %s\n", r.Command, strings.Join(head, " · "))
 	if r.Tiers != nil {
 		fmt.Fprintf(w, "  tiers: %s\n", r.Tiers)
+		if c := r.Tiers.Counted(); c != "" {
+			fmt.Fprintf(w, "    counted: %s\n", c)
+		}
 	}
 	for _, u := range r.Unreachable {
 		fmt.Fprintf(w, "  ! did not answer: %s\n", u)

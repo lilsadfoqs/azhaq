@@ -16,9 +16,9 @@ import (
 const foldSwagger = `{"openapi":"3.0.0","info":{"title":"t","version":"1"},"paths":{"/api/user":{"get":{"responses":{"200":{"description":"ok"}}}}}}`
 
 // One service on a loopback address, reached as its address and as localhost,
-// gives one hunt row for the API description it serves, naming the other URL
-// that answered the same; the tier count and the run's own next line count the
-// folded row once.
+// gives one hunt row for the API description it serves, a lead naming the other
+// URL that answered the same; the tier count and the run's own next line count
+// the folded row once.
 func TestHuntOneRowForAServiceReachedByAddressAndName(t *testing.T) {
 	if addrs, err := net.LookupHost("localhost"); err != nil || !slices.Contains(addrs, "127.0.0.1") {
 		t.Skipf("localhost does not resolve to 127.0.0.1: %v %v", addrs, err)
@@ -48,7 +48,7 @@ func TestHuntOneRowForAServiceReachedByAddressAndName(t *testing.T) {
 		t.Fatalf("exit %d: failed %+v notes %q", code, rep.Failed, rep.Notes)
 	}
 	if !slices.ContainsFunc(rep.Next, func(l string) bool {
-		return strings.HasPrefix(l, "azhaq hunt -db "+db) && strings.Contains(l, "1 finding,")
+		return strings.HasPrefix(l, "azhaq hunt -db "+db) && strings.Contains(l, "0 findings, 0 identifications, 1 lead")
 	}) {
 		t.Errorf("the next hunt line counts the folded row once: %q", rep.Next)
 	}
@@ -62,8 +62,8 @@ func TestHuntOneRowForAServiceReachedByAddressAndName(t *testing.T) {
 			docs = append(docs, r)
 		}
 	}
-	if len(docs) != 1 || docs[0]["tier"] != "finding" {
-		t.Fatalf("want one finding row for /swagger.json, got %v\n%s", docs, out)
+	if len(docs) != 1 || docs[0]["tier"] != "lead" {
+		t.Fatalf("want one lead row for /swagger.json, got %v\n%s", docs, out)
 	}
 	key := docs[0]["key"].(string)
 	other := byName + "/swagger.json"
@@ -73,8 +73,8 @@ func TestHuntOneRowForAServiceReachedByAddressAndName(t *testing.T) {
 	if also, _ := docs[0]["also_at"].([]any); len(also) != 1 || also[0] != other {
 		t.Errorf("the row names %v as answering the same, want [%s]", docs[0]["also_at"], other)
 	}
-	if got := lastReport(t, errOut).Tiers; got == nil || got.Findings != 1 {
-		t.Errorf("tiers %+v, want 1 finding", got)
+	if got := lastReport(t, errOut).Tiers; got == nil || got.Findings != 0 || got.Leads != 1 {
+		t.Errorf("tiers %+v, want 1 lead", got)
 	}
 	// The identification of the listener is one row, naming the other host.
 	var idents, named int

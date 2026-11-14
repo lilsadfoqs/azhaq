@@ -49,6 +49,8 @@ rank  score  key  reason; reason  → check: WHAT WOULD PROVE IT  → next: COMM
 
 A reason is `signal: detail`. With `-json`, stdout holds one object per row. The summary goes to stderr, as JSON with `-json`, and counts `rows` and, apart, the `tiers` of the rows printed: `findings`, `identifications` and `leads`. When `-limit` cut the list, a note says how many rows had a signal, counts them by tier, says how many the limit left out and gives the `-limit` that prints them all.
 
+The tier counts are `report -findings`' own function, run on hunt's rows, so a finding is one in both and a row both list has the same tier. The three counts are not of the same rows: `hunt` counts listeners (one for each product) and the routes and hosts with a signal, and `report -findings` counts issues (an advisory a read settled, a service's unchecked matches) and the hints and checks it lists, including scripts and routes that hunt never ranks. The summary says which in `identifications_of` and `leads_of`, and the text summary in a `counted:` line, so 889 leads in one and 671 in the other are not a disagreement.
+
 ```
 $ azhaq hunt -db app.db
 identifications (2): what the run named on each listener; the label says how far a read settled the advisory (version-only: the version is in range, nothing checked)
@@ -146,8 +148,8 @@ Only an application is a row: a product wappalyzer's data holds under a category
 
 A row is a **finding** when one of its signals is proven by what was received, and a **lead** when none is. A path or a name is never proof.
 
-- Proven: `cross-role` (a `-roles` verdict of `proved` confidence, or with none), `takeover` of strength `strong`, a `secret` whose own format names it (a key with a known shape, severity above `info`), `exposed-file` and `exposed-panel` when the answer shows the file or the panel ([Exposed files](#exposed-files)), `listing` (the page's own title is a directory listing), `api-description` when the run parsed the description, `graphql` when its schema was read or its IDE answers, and `server-error` when the body shows SQL error text, a framework's debug page or a stack trace.
-- Leads: every other signal, such as a word in a path, `input`, a `param-*`, `object-id`, `gated`, `unauth-write`, `upload`, `sourcemap`, `takeover-candidate`, a generic or bundler secret, a role's 5xx that differs from another's, and a `named` route no server confirmed.
+- Proven: `cross-role` (a `-roles` verdict of `proved` confidence, or with none), `takeover` of strength `strong`, a `secret` whose own format names it (a key with a known shape, severity above `info`), `exposed-file` and `exposed-panel` when the answer shows the file or the panel ([Exposed files](#exposed-files)), `listing` (the page's own title is a directory listing), `graphql` when its schema was read or its IDE answers, and `server-error` when the body shows SQL error text, a framework's debug page or a stack trace.
+- Leads: every other signal, such as a word in a path, `input`, a `param-*`, `object-id`, `gated`, `unauth-write`, `upload`, `sourcemap`, `takeover-candidate`, `api-description` (a served API description: a service that publishes it has not shown a flaw), a generic or bundler secret, a role's 5xx that differs from another's, and a `named` route no server confirmed.
 
 An **identification** is a listener the run named: a product, and a version or none. It is not proven: the label says how far a read settled its advisory.
 

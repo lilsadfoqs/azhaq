@@ -86,6 +86,8 @@ The labels are kept distinct, never merged: `proved` identifications come first,
 
 Before this version the JSONL held only the `-verify` results, the advisory leads and the stack traces as `finding`, and had no time or proof fields; the advisory and version rows are now `identification` lines, and `finding` lines are the proven rows only. The Markdown headings changed with them.
 
+The counts come from the function `hunt` counts its rows with, so the findings are the same rows in both and a row both list has the same tier. The identifications and leads are counted from different rows, and the text says which (`counted:`, and `identifications_of` and `leads_of` in the JSON summary of `run`): `report -findings` counts issues and the hints and checks it lists, `hunt` counts listeners and the routes and hosts with a signal, so its lead count is not this one: see [hunt](hunt.md#output).
+
 A hint the map's default view folds is not a lead: an image, font or media file no request asked for (`beyond-depth`), a string only scripts name that nothing requested (`unrequested`), or a route only scripts name whose GET answered 404 or 410 (`not-found`), as in [Folded rows](run.md#folded-rows). The report counts them by class, one line each: `{"type":"folded","class":…,"count":N,"line":…}` in JSONL, a `## Folded hints (N)` section in Markdown, and `N hints folded (class N, …)` after the counts on stderr.
 
 Leads plus the folded counts of the hints are the URL rows of `azhaq query -type URL -coverage hint`, a templated row counting for its `count` URLs. A workspace whose hints all fold writes the explicit line with `"folded":N` first, then the fold lines.

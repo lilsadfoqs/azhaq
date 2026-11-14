@@ -246,7 +246,7 @@ func TestHuntListsTheTiersApart(t *testing.T) {
 	if findings < 2 {
 		t.Errorf("%d findings, want the /.env and the actuator (%s)", findings, srv.URL)
 	}
-	if !strings.Contains(errOut, fmt.Sprintf(`"tiers":{"findings":%d,"identifications":0,"leads":%d}`, findings, leads)) {
+	if !strings.Contains(errOut, fmt.Sprintf(`"tiers":{"findings":%d,"identifications":0,"leads":%d,`, findings, leads)) {
 		t.Errorf("hunt's summary does not count the tiers apart: %s", errOut)
 	}
 	text, _, err := captureBoth(t, func() error { return cmdHunt([]string{"-db", db}) })
