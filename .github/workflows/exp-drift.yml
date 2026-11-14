@@ -1,0 +1,199 @@
+name: exp-drift
+
+# Experiment A: continuous recon on a changing Vulhub estate
+# (.github/ci/exp/drift). Is `azhaq watch` 10x better than the cron pipe
+# hunters run (dnsx, naabu, httpx, nuclei through anew) and than an agent
+# re-checking with the usual tools? One estate per sample (range/build.py plus
+# the deploy app), four epochs on the same live estate: E0 base, E1 and E3
+# real changes, E2 benign churn. Per epoch: apply the changes, then A1 azhaq
+# watch, A2 the cron pipe, A3 a Codex session (full only), nothing restarted
+# between the arms. grade.py grades against the key; everything is encrypted
+# to the maintainer's age key and goes to the ci-results branch under
+# exp-drift/TAG/sN/ (fetch.sh brings it back, summary.py reads it).
+#
+# Push a tag exp-drift-NAME with .github/ci/exp/drift/launch.sh. The first line
+# of the tag's message is `dryrun` (A1 and A2 only, no Codex) or `full`, then
+# optionally `samples=N` (1 to 4, default 4). A full run carries the author's
+# Codex session in the message, as a trial does (run.sh).
+# The seed of each sample is a keyed hash of the tag and the sample (secret).
+on:
+  push:
+    tags: ["exp-drift-*"]
+
+permissions:
+  contents: write
+
+env:
+  AGE_RECIPIENT: age10llepsf6tflh3wjlfu8awk203049vfsn5vxw9uc3y23qlq9dhy7sm20pex
+
+jobs:
+  kind:
+    runs-on: ubuntu-latest
+    outputs:
+      mode: ${{ steps.k.outputs.mode }}
+      samples_json: ${{ steps.k.outputs.samples_json }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: k
+        run: |
+          git fetch -q --force origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
+          msg=$(git for-each-ref --format='%(contents:subject)' "refs/tags/$GITHUB_REF_NAME")
+          case "${msg%% *}" in
+            dryrun) mode=dryrun ;;
+            full) mode=full ;;
+            *) echo "::error title=mode::the tag's first line starts with dryrun or full"; exit 1 ;;
+          esac
+          samples=4
+          case " $msg " in *" samples="*)
+            samples=$(printf ' %s ' "$msg" | sed -n 's/.* samples=\([^ ]*\) .*/\1/p')
+            case $samples in
+              1 | 2 | 3 | 4) ;;
+              *) echo "::error title=samples::samples=$samples is not valid: use samples=N with N from 1 to 4"; exit 1 ;;
+            esac ;;
+          esac
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
+          echo "samples_json=[$(seq -s, 1 "$samples")]" >> "$GITHUB_OUTPUT"
+          echo "exp-drift mode: $mode, samples: $samples"
+  build:
+    needs: kind
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # git describe names the build from the last release tag
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+      - name: build azhaq
+        # The build under test: this tagged commit, as the trial's build job does.
+        run: |
+          v=$(git describe --tags --match 'v[0-9]*' --always)
+          CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=$v" -o azhaq ./cmd/azhaq
+          ./azhaq version
+      - uses: actions/upload-artifact@v7
+        with:
+          name: drift-azhaq
+          path: azhaq
+          retention-days: 2
+  drift:
+    name: drift (${{ matrix.sample }})
+    needs: [kind, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    strategy:
+      fail-fast: false
+      max-parallel: 2 # the samples share one Codex sign-in
+      matrix:
+        sample: ${{ fromJSON(needs.kind.outputs.samples_json) }}
+    env:
+      MODE: ${{ needs.kind.outputs.mode }}
+      SAMPLE: ${{ matrix.sample }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: disk
+        run: .github/ci/range/check-disk.sh
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+      - name: packages
+        run: sudo apt-get update -q && sudo apt-get install -y -q dnsutils age nmap jq
+      - uses: actions/download-artifact@v7
+        with:
+          name: drift-azhaq
+          path: _bin
+      - name: azhaq
+        # In the runner's own folder, which is closed to the agent's user (agent-user.sh).
+        run: |
+          mkdir -p "$HOME/drift/bin" "$HOME/drift/keep"
+          install -m 755 _bin/azhaq "$HOME/drift/bin/azhaq"
+          "$HOME/drift/bin/azhaq" version
+      - name: tools
+        run: .github/ci/exp/drift/install-tools.sh
+      - name: codex
+        if: env.MODE == 'full'
+        env:
+          CODEX_AUTH_KEY: ${{ secrets.CODEX_AUTH_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          CODEX_AUTH_JSON: ${{ secrets.CODEX_AUTH_JSON }}
+        run: .github/ci/codex.sh
+      - name: agent user
+        # Before the estate: the fence names this user.
+        run: .github/ci/exp/drift/agent-user.sh setup
+      - name: estate
+        env:
+          CODEX_AUTH_KEY: ${{ secrets.CODEX_AUTH_KEY }}
+        run: |
+          seed=$(.github/ci/parity/seed.sh "$GITHUB_REF_NAME" "$SAMPLE")
+          echo "::add-mask::$seed"
+          est="$HOME/drift/est"
+          mkdir -p "$est"
+          sudo sysctl -q -w vm.max_map_count=262144 # Elasticsearch
+          CGO_ENABLED=0 go build -o "$RUNNER_TEMP/dnsd" ./bench/labdns
+          sudo install -m 755 "$RUNNER_TEMP/dnsd" /usr/local/sbin/dnsd
+          sudo setcap cap_net_bind_service=+ep /usr/local/sbin/dnsd
+          getcap /usr/local/sbin/dnsd | grep -q cap_net_bind_service
+          .github/ci/range/fetch-vulhub.sh "$HOME/drift/vulhub" > /dev/null 2>&1
+          python3 .github/ci/exp/drift/plan.py "$seed" --out "$est"
+          python3 .github/ci/range/up.py "$est" --vulhub "$HOME/drift/vulhub" --labdns /usr/local/sbin/dnsd --run-as nobody
+          rm -f "$RUNNER_TEMP/dnsd"
+      - name: epoch 0 applied
+        # The deploy app, the counters and the fence for both users; the agent's user is checked after.
+        run: python3 .github/ci/exp/drift/apply.py "$HOME/drift/est" 0 --vulhub "$HOME/drift/vulhub"
+      - name: heartbeat
+        if: env.MODE == 'full'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          printf '%s' "$GITHUB_TOKEN" | sudo install -m 600 -o root -g root /dev/stdin /root/beat.token
+          sudo install -m 700 -o root -g root .github/ci/heartbeat.sh .github/ci/publish.sh /root/
+          sudo env -u GITHUB_TOKEN setsid bash /root/heartbeat.sh "$GITHUB_REF_NAME/s$SAMPLE" /home/analyst/ci/stream.ts.jsonl /home/analyst/ci/none "analyst" "$GITHUB_REPOSITORY" > /dev/null 2>&1 < /dev/null &
+          echo "heartbeat started"
+      - name: agent codex session
+        if: env.MODE == 'full'
+        run: |
+          sudo install -o analyst -g analyst -m 600 "$HOME/.codex/auth.json" /home/analyst/.codex/auth.json
+      - name: agent user checked
+        run: .github/ci/exp/drift/agent-user.sh check
+      - name: epochs
+        run: |
+          B="$HOME/drift/bundle"
+          mkdir -p "$B"
+          python3 .github/ci/exp/drift/drive.py "$HOME/drift/est" "$B" --mode "$MODE" --vulhub "$HOME/drift/vulhub" \
+            --azhaq "$HOME/drift/bin/azhaq" --work "$HOME/drift/work" --skip-apply 0
+      - name: grade
+        run: |
+          B="$HOME/drift/bundle"
+          cp "$HOME/drift/est/key.json" "$HOME/drift/est/drift-key.json" "$HOME/drift/est/vars.json" "$B/"
+          python3 .github/ci/exp/drift/grade.py "$B"
+      - name: publish
+        if: always()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          B="$HOME/drift/bundle"
+          P="$HOME/drift/pub"
+          mkdir -p "$B" "$P"
+          est="$HOME/drift/est"
+          for f in key.json drift-key.json vars.json; do [ -f "$est/$f" ] && cp "$est/$f" "$B/"; done
+          files=()
+          tar czf "$P/results.tgz" -C "$B" .
+          # An agent's streams can be large: the rest stays, the streams go.
+          if [ "$(stat -c %s "$P/results.tgz")" -gt 41943040 ]; then
+            tar czf "$P/results.tgz" -C "$B" --exclude='stream.ts.jsonl.gz' .
+          fi
+          age -r "$AGE_RECIPIENT" -o "$P/results.tgz.age" "$P/results.tgz"
+          files+=("$P/results.tgz.age")
+          if [ -s "$B/grade.json" ]; then
+            age -r "$AGE_RECIPIENT" -o "$P/grade.json.age" "$B/grade.json"
+            files+=("$P/grade.json.age")
+          else
+            echo "::warning title=drift::no grade for this sample"
+          fi
+          # A Codex session an agent's session refreshed goes back, as the trial's.
+          if [ "$MODE" = full ] && sudo test -s /home/analyst/.codex/auth.json &&
+            [ "$(sudo sha256sum /home/analyst/.codex/auth.json | cut -d' ' -f1)" != "$(cat "$RUNNER_TEMP/auth.sum" 2> /dev/null)" ]; then
+            sudo cat /home/analyst/.codex/auth.json | age -r "$AGE_RECIPIENT" -o "$P/codex-auth.json.age"
+            files+=("$P/codex-auth.json.age")
+          fi
+          .github/ci/publish.sh "exp-drift/$GITHUB_REF_NAME/s$SAMPLE" "${files[@]}"
