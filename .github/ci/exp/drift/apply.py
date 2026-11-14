@@ -292,6 +292,7 @@ def epoch_churn(ctx, est, args, ents, plan, base_key, dplan, live, e):
         dl.dns_churn(model)
         dns_ok = restart_dns(ctx, plan, model, args.labdns, args.run_as)
     waited = pmap(lambda env: wait_env(ctx, env, model), envs)
+    live["epoch"] = e
     dl.save_json(os.path.join(est, "live.json"), live)
     print("epoch %d: %d containers restarted, %d answer again; resolver %s" % (e, len(envs), sum(waited), "answers" if dns_ok else "DOES NOT ANSWER"))
     return 0 if dns_ok and all(waited) else 1
