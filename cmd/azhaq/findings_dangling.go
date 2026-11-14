@@ -9,7 +9,6 @@ import (
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"github.com/lilsadfoqs/azhaq/internal/proof"
 	"github.com/lilsadfoqs/azhaq/internal/takeover"
-	"github.com/lilsadfoqs/azhaq/internal/verify"
 	"github.com/lilsadfoqs/azhaq/types"
 )
 
@@ -17,6 +16,11 @@ import (
 // that answered NXDOMAIN: what was measured, with no claim about who may take
 // the name (that is the takeover lead's, when the target is on a provider list).
 const danglingKind = "dangling-dns"
+
+// observedDangling is the label of that finding: the DNS answer showed a CNAME
+// to a name that answered NXDOMAIN. It names what was measured; the name being
+// free to take is not shown, so the label is never proved.
+const observedDangling = "observed-dangling"
 
 // danglingRecords are the dangling-dns findings of a workspace: each name
 // whose DNS answer showed a CNAME chain ending at a name that answered
@@ -72,7 +76,7 @@ func danglingRecord(host string, dg takeover.Dangling, at, command string) findi
 	}
 	p := &proof.Proof{ObservedAt: at, Method: "dns A", Target: host, Excerpt: excerpt, ExcerptPart: "dns",
 		How: "azhaq-dns", Reproduce: digCommand(host, dg.Server)}
-	return findingRecord{Tier: proof.TierFinding, Kind: danglingKind, Label: verify.Proved, Severity: "low", Host: host,
+	return findingRecord{Tier: proof.TierFinding, Kind: danglingKind, Label: observedDangling, Severity: "low", Host: host,
 		Request: "dns A " + host, Evidence: evidence, Command: command, Collector: "azhaq-dns", Proof: p}
 }
 

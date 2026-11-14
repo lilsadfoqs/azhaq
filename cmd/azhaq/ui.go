@@ -277,7 +277,7 @@ type uiGraphNode struct {
 	New     bool   `json:"new"`     // first seen while this run ran
 	Passive bool   `json:"passive"` // every observation came from a third-party source
 	Status  int    `json:"status,omitempty"`
-	Lead    string `json:"lead,omitempty"` // a finding's label (proved, version-only, conditional), or lead for a lead above info
+	Lead    string `json:"lead,omitempty"` // a finding's label (proved, observed-dangling, version-read, version-only, conditional), or lead for a lead above info
 	Hint    string `json:"hint,omitempty"` // a map hint on it (severity info): what to look at, not a finding
 	Obs     int    `json:"obs"`
 	// Capabilities are the capabilities of the collectors that observed
@@ -478,7 +478,7 @@ var passiveCollectors = sync.OnceValue(func() map[string]bool {
 })
 
 // markFinding puts a finding or lead on its node: a finding's label
-// (proved, version-only, conditional), lead for a lead above severity
+// (proved, observed-dangling, version-read, version-only, conditional), lead for a lead above severity
 // info, and a map hint's evidence for a lead of severity info, which is a
 // place to look and not a finding.
 func markFinding(nodes []uiGraphNode, byKey map[string]int, r findingRecord) {

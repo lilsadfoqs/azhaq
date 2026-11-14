@@ -86,7 +86,7 @@ type report struct {
 	// how their counts are derived (one lead per line printed).
 	Advisories []advisory.Lead `json:"advisories,omitempty"`
 	// Verify are the -verify results: one per stored verify row, each
-	// labelled proved, version-only or conditional with the exact
+	// labelled proved, version-read, version-only or conditional with the exact
 	// request sent and an excerpt of the answer. Like the advisory
 	// leads they are not map rows: Counts still adds up to Stored
 	// without them, and the notes say how their counts are derived.

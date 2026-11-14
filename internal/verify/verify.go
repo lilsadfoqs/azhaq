@@ -11,13 +11,16 @@
 // handshake: the service answers its protocol's opening with no
 // credential, and the answer reads no data. Each check names its own.
 //
-// Every result is labelled exactly one of proved, version-only or
-// conditional, and carries the exact request sent and an excerpt of
-// the response as its evidence:
+// Every result is labelled exactly one of proved, version-read,
+// version-only or conditional, and carries the exact request sent and an
+// excerpt of the response as its evidence:
 //
-//   - proved: the read answered with no credential, or an advisory's
-//     version and named precondition were both settled by the read.
+//   - proved: the read answered with no credential, or a sign-in with a
+//     published default worked: the answer shows the thing named.
 //     Proved names that read, not exploitability, which is never tested.
+//   - version-read: a service stated a version inside an advisory's range
+//     and the advisory names no other precondition. The read only re-stated
+//     the version; whether the flaw is there or can be reached is not shown.
 //   - version-only: only the product and version identification stands
 //     (the service asked for authentication, or no confirmation read
 //     settled more); no unauthenticated read is claimed. A refusal that
@@ -47,6 +50,7 @@ import (
 // Labels of a verification result.
 const (
 	Proved      = "proved"
+	VersionRead = "version-read"
 	VersionOnly = "version-only"
 	Conditional = "conditional"
 )
@@ -66,7 +70,7 @@ const (
 // observation and printed as one row.
 type Result struct {
 	Kind         string `json:"kind"`
-	Label        string `json:"label"` // proved, version-only or conditional
+	Label        string `json:"label"` // proved, version-read, version-only or conditional
 	Severity     string `json:"severity"`
 	Host         string `json:"host"`
 	Port         int    `json:"port,omitempty"`
@@ -496,7 +500,7 @@ func AdvisoryResult(lead advisory.Lead, request string) (Result, bool) {
 			r.Precondition = "the confirmation read narrows the match but leaves a precondition open"
 		}
 	case lead.Confidence == advisory.Observed:
-		r.Label = Proved
+		r.Label = VersionRead
 	case request == "" && lead.Confidence == "":
 		r.Label = VersionOnly
 		r.Request = "not sent: a version-range match only (give -advisories-confirm with -verify for the one benign read)"
@@ -532,8 +536,6 @@ func severityOf(r Result) string {
 		return "critical" // a published default credential pair signed in
 	case r.Kind == KindUnauthenticatedBypass && r.Label == Proved:
 		return "high" // a sign-in-gated resource answered with no credential
-	case r.Kind == KindAdvisoryPrecond && r.Label == Proved:
-		return "medium" // version and precondition settled by a read; exploitability never tested
 	case r.Label == Conditional:
 		return "low"
 	default:

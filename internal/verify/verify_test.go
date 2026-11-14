@@ -226,12 +226,13 @@ func TestAdvisoryPreconditionAbsentIsConditional(t *testing.T) {
 	if !ok || r.Label != Conditional || r.AdvisoryID != "CVE-TEST-0002" {
 		t.Fatalf("%+v %v, want conditional CVE-TEST-0002", r, ok)
 	}
-	// Observed with no precondition settles the version in range: proved.
+	// Observed with no precondition settles the version in range: a version
+	// read, at info. The read re-stated the version; it showed no flaw.
 	lead2 := lead
 	lead2.Label, lead2.Precondition, lead2.Confidence = advisory.LabelAffected, "", advisory.Observed
 	r, ok = AdvisoryResult(lead2, "GET /")
-	if !ok || r.Label != Proved {
-		t.Fatalf("%+v %v, want proved", r, ok)
+	if !ok || r.Label != VersionRead || r.Severity != "info" {
+		t.Fatalf("%+v %v, want version-read at info", r, ok)
 	}
 	// A range match alone is version-only.
 	lead3 := lead2
@@ -383,5 +384,24 @@ func TestDocsKindColumnMatchesTheChecks(t *testing.T) {
 	}
 	if reads != wantR || handshakes != wantH {
 		t.Errorf("docs table: %d reads and %d handshakes, checks: %d and %d", reads, handshakes, wantR, wantH)
+	}
+}
+
+// A version a service stated, inside an advisory's range, is a version read:
+// never proved, and never above info, whatever the read was.
+func TestAStatedVersionInRangeIsAVersionReadNotProved(t *testing.T) {
+	lead := advisory.Lead{
+		AdvisoryID: "CVE-TEST-0001", Host: "127.0.0.1", Port: 8080, Target: "127.0.0.1:8080",
+		Product: "ExampleServer", VersionSeen: "1.2.3", Label: advisory.LabelAffected, Confidence: advisory.Observed,
+		Read: "GET / answered 200; the Server header states ExampleServer 1.2.3, inside the advisory's range",
+	}
+	for _, request := range []string{"GET /", "GET /version"} {
+		r, ok := AdvisoryResult(lead, request)
+		if !ok || r.Label != VersionRead || r.Label == Proved || r.Severity != "info" || r.Kind != KindAdvisoryPrecond {
+			t.Errorf("%s: %+v %v, want version-read at info", request, r, ok)
+		}
+	}
+	if got := SeverityOf(Result{Kind: KindAdvisoryPrecond, Label: VersionRead}); got != "info" {
+		t.Errorf("severity of a version read: %q", got)
 	}
 }

@@ -526,7 +526,7 @@ func TestVerifySendsNothingMoreForAnAdvisoryLead(t *testing.T) {
 	if !slices.Equal(without, with) || len(without) == 0 {
 		t.Errorf("the server saw %v without -verify and %v with it", without, with)
 	}
-	label := map[string]string{"observed": "proved", "inferred": "conditional"}
+	label := map[string]string{"observed": "version-read", "inferred": "conditional"}
 	// One lead for the service, and one verify row for it: the top advisory's.
 	if len(repA.Advisories) != 1 || len(repA.Advisories[0].Advisories) != 2 || len(repB.Verify) != 1 {
 		t.Fatalf("leads %+v, verify results %+v", repA.Advisories, repB.Verify)
@@ -569,13 +569,14 @@ func TestAProvedResultNamesTheReadAndNeverExploitability(t *testing.T) {
 }
 
 // The severity printed ranks how directly the read shows the fact: a read of
-// a version or a banner is info, a settled advisory medium, a conditional low;
+// a version or a banner is info, a version a service stated in an advisory's range
+// info too, a conditional low;
 // it is not a CVSS score (no result has one).
 func TestVerifySeverityIsTheStatedRankingNotACVSSScore(t *testing.T) {
 	for _, c := range []struct{ kind, label, want string }{
 		{verify.KindUnauthenticatedRead, verify.Proved, "info"},
 		{verify.KindUnauthenticatedHandshake, verify.Proved, "info"},
-		{verify.KindAdvisoryPrecond, verify.Proved, "medium"},
+		{verify.KindAdvisoryPrecond, verify.VersionRead, "info"},
 		{verify.KindUnauthenticatedRead, verify.Conditional, "low"},
 		{verify.KindAdvisoryPrecond, verify.Conditional, "low"},
 		{verify.KindUnauthenticatedRead, verify.VersionOnly, "info"},

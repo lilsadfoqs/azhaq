@@ -234,7 +234,7 @@ func planSends(b engine.Budgets, send sendLimits) (gets, others []string) {
 		for _, c := range verify.Checks() {
 			*out = append(*out, fmt.Sprintf("one verification read to each %s service confirmed (-verify %s): sends %s and no credential; precondition: %s", c.Service, c.ID, c.Request, c.Precondition))
 		}
-		*out = append(*out, "with -advisories, each advisory lead is labelled proved, version-only or conditional from its confirmation read (-verify): the one GET the advisory names, or of /, held to -deny-path like any GET; a data-store read is a TCP connect with no path, held to the scope, the budget, the kill file and the ledger")
+		*out = append(*out, "with -advisories, each advisory lead is labelled version-read, version-only or conditional from its confirmation read (-verify): the one GET the advisory names, or of /, held to -deny-path like any GET; a data-store read is a TCP connect with no path, held to the scope, the budget, the kill file and the ledger")
 	}
 	if send.verifyLogins {
 		for _, lg := range verify.DefaultLogins() {

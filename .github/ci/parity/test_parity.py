@@ -577,6 +577,46 @@ class WorklistView(unittest.TestCase):
             convert(["--export", "x", "--hunt", "a", "--worklist", "b", "--out", "o"])
 
 
+LABEL_WORKLIST = [
+    {"rank": 1, "score": 87, "key": "127.31.0.7:8080", "type": "Service", "tier": "identification", "kind": "identification",
+     "what": "advisory-precondition", "host": "web.acme.test", "port": 8080, "product": "nginx", "version": "1.18.0",
+     "advisory_id": "CVE-2021-23017", "label": "version-read", "severity": "info", "evidence": "the Server header states nginx 1.18.0",
+     "proof": {"observed_at": iso(200)}, "reasons": []},
+    {"rank": 2, "score": 30, "key": "old.acme.test", "type": "Hostname", "tier": "finding",
+     "reasons": [{"signal": "dangling-dns", "detail": "observed: old.acme.test is a CNAME to gone.example.net; answered NXDOMAIN"}]},
+    {"rank": 3, "score": 35, "key": "http://app1.acme.test:28080/openapi.json", "type": "URL", "tier": "lead",
+     "reasons": [{"signal": "api-description", "detail": "API description served at /openapi.json"}]},
+    {"type": "summary", "command": "hunt", "results": 3},
+]
+
+
+class WorklistLabels(unittest.TestCase):
+    """The labels hunt prints (version-read, a measured dangling name, a served API description as a lead) are read as they were."""
+
+    @classmethod
+    def setUpClass(cls):
+        t = tempfile.mkdtemp()
+        atexit.register(shutil.rmtree, t, True)
+        export, wl = os.path.join(t, "export.jsonl"), os.path.join(t, "worklist.jsonl")
+        write_jsonl(export, EXPORT)
+        write_jsonl(wl, LABEL_WORKLIST)
+        out = os.path.join(t, "graded")
+        convert(["--export", export, "--worklist", wl, "--out", out, "--start", iso(0), "--end", iso(1500)])
+        cls.leads = {l["host"]: l for l in (json.loads(x) for x in read(os.path.join(out, "leads.jsonl")).splitlines())}
+
+    def test_a_version_read_is_an_identification_lead_with_its_label_and_advisory(self):
+        l = self.leads["web.acme.test"]
+        self.assertEqual((l["kind"], l["port"], l["product"], l["cve"], l["severity"]), ("vulnerable-software", 8080, "nginx 1.18.0", "CVE-2021-23017", "info"))
+        self.assertIn("version-read", l["title"])
+
+    def test_a_dangling_name_keeps_the_word_the_grader_matches(self):
+        l = self.leads["old.acme.test"]
+        self.assertRegex(l["title"] + " " + l["evidence"], r"(?i)dangling")
+
+    def test_a_served_api_description_is_still_an_info_leak_lead(self):
+        self.assertEqual(self.leads["app1.acme.test"]["kind"], "info-leak")
+
+
 class Workflow(unittest.TestCase):
     def setUp(self):
         self.text = read(os.path.join(HERE, "..", "..", "workflows", "parity.yml"))

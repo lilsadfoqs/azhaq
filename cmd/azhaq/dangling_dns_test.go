@@ -119,7 +119,7 @@ func TestDanglingDNSFindingAndTakeoverLead(t *testing.T) {
 	f := got["old.example.org"]
 	dig, _ := f["reproduce"].(string)
 	ev, _ := f["evidence"].(string)
-	if f["severity"] != "low" || f["tier"] != "finding" || f["label"] != "proved" || f["excerpt_part"] != "dns" ||
+	if f["severity"] != "low" || f["tier"] != "finding" || f["label"] != "observed-dangling" || f["excerpt_part"] != "dns" ||
 		!strings.Contains(ev, "x.cloudprovider.example answered NXDOMAIN from "+res) || !strings.HasPrefix(dig, "dig @127.0.0.1 -p ") || !strings.Contains(dig, "A 'old.example.org'") {
 		t.Errorf("finding %v", f)
 	}

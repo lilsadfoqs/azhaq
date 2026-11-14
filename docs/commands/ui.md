@@ -49,7 +49,7 @@ The run's graph, in columns: organisations and prefixes, domains, hosts, address
 
 - A host's routes fold into one node when it has more than 8 (more than 2 when the run holds over 60 routes). A click opens the node.
 - Routes that answered 401, 403, 404 or 410 fold into one muted node per host. So do the names that led to no address in the run.
-- A red node holds a finding (proved, version-only or conditional) or a lead above severity info.
+- A red node holds a finding (its label: proved, observed-dangling, version-read, version-only or conditional) or a lead above severity info.
 - A yellow dot is a map hint: a place to look, not a finding.
 - A bar on a node's left edge marks an entity first seen while this run ran, shown when the workspace holds older runs too.
 - A dashed outline is an entity seen through third-party sources only.
