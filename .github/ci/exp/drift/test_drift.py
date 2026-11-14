@@ -592,6 +592,13 @@ class Grade(unittest.TestCase):
         self.assertEqual(t["false_alarms"], 1)
         self.assertEqual(res["arms"]["a1"]["epochs"]["2"]["false_list"], ["boo.c.test"])
 
+    def test_a1_ports_line_reads_ports_not_versions(self):
+        o = {"ports": ["old1.c.test: +6379/tcp redis 4.0.14, -8080/tcp (open: 22,6379)", "x.c.test: 22,80"]}
+        d = tempfile.mkdtemp()
+        write(os.path.join(d, "a1.json"), json.dumps(o))
+        got = {r["host"]: r["ports"] for r in grade.a1_records(d)}
+        self.assertEqual(got, {"old1.c.test": [22, 6379, 8080], "x.c.test": [22, 80]})
+
     def test_a1_dangling_field_is_the_flag(self):
         a1 = {3: {"dangling": ["cdn.c.test → t.azurewebsites.net (NXDOMAIN)", "x.c.test → y.example"]}}
         res = grade.grade(self.root(a1=a1))

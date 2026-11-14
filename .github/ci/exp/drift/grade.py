@@ -108,7 +108,12 @@ def a1_records(d):
     for p in o.get("ports") or []:
         host, _, ports = p.partition(": ")
         r = rec("changed", host, p, field="ports")
-        r["ports"] = [int(x) for x in re.findall(r"\d+", ports)]
+        # "+9000/tcp php-fpm 7.4, -8080/tcp (open: 22,9000)": ports only, never a version's digits;
+        # the older "22,80,9000" has no such marks.
+        nums = re.findall(r"(\d+)/(?:tcp|udp)", ports)
+        m = re.search(r"\(open: ([\d,\s]*)\)", ports)
+        nums += re.findall(r"\d+", m.group(1)) if m else []
+        r["ports"] = sorted({int(x) for x in (nums or re.findall(r"\d+", ports))})
         out.append(r)
     for c in o.get("changed") or []:
         out.append(rec("changed", c.split(": [")[0], c, field="changed"))
