@@ -592,6 +592,13 @@ class Grade(unittest.TestCase):
         self.assertEqual(t["false_alarms"], 1)
         self.assertEqual(res["arms"]["a1"]["epochs"]["2"]["false_list"], ["boo.c.test"])
 
+    def test_a1_dangling_field_is_the_flag(self):
+        a1 = {3: {"dangling": ["cdn.c.test → t.azurewebsites.net (NXDOMAIN)", "x.c.test → y.example"]}}
+        res = grade.grade(self.root(a1=a1))
+        c = res["arms"]["a1"]["totals"]["classes"]
+        self.assertEqual((c["dangling"]["hit"], c["dangling"]["seen"]), (1, 1))
+        self.assertEqual(res["arms"]["a1"]["epochs"]["3"]["false_by_field"], {"dangling": 1}, "x.c.test is in no change")
+
     def test_a2_sees_addresses_and_misses_what_it_cannot_see(self):
         a2 = {1: {"dnsx": ["nh.c.test", "vh.c.test"], "naabu": ["127.31.0.20:8080", "old1.c.test:6379", "vh.c.test:80"],
                   "httpx": ["http://127.31.0.20:8080 [200] [Dashboard] [Jenkins]"], "nuclei": ["[tech-detect:jenkins] [http] [info] http://127.31.0.20:8080"]},
