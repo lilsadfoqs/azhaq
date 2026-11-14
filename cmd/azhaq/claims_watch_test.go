@@ -320,7 +320,7 @@ func TestWatchDeliveriesGoThroughOneSenderAndAreCounted(t *testing.T) {
 			var rep report
 			for _, l := range strings.Split(errOut, "\n") {
 				var r report
-				if strings.HasPrefix(l, "{") && json.Unmarshal([]byte(l), &r) == nil && r.Command == "watch" {
+				if strings.HasPrefix(l, "{") && json.Unmarshal([]byte(l), &r) == nil && r.Command == "notify" {
 					rep = r
 				}
 			}

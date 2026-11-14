@@ -21,8 +21,10 @@ import (
 // outside the scope is (a form's post is stopped, so that the page stays
 // as it was): a page that saves, tracks or deletes on load
 // would otherwise change data on the target behind a run that maps. The
-// sign-in's own tab is let send them (it posts the credentials), and so
-// is every page with -browser-writes (Browser.Writes). What a page would
+// sign-in's own tab is let send the request that signs in (it carries
+// the user name or password the run gave, or is the form it submitted,
+// signin.go), not what the page's scripts send meanwhile, and every page
+// with -browser-writes (Browser.Writes) is let send them. What a page would
 // have sent is kept as a Write: its method and the names its query and
 // body carry, never their values, so that the route is mapped with that
 // method, as a script's call is.

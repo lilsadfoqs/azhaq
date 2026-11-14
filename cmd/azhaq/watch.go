@@ -96,12 +96,14 @@ func cmdWatch(args []string) error {
 			fmt.Print(ch.text())
 		}
 		// The first run is the baseline, not a change: -always sends it too.
-		lost, cut, cutSend := false, 0, 0
+		lost, cut, cutSend, cmdFailed := false, 0, 0, false
+		var note *report // the notifications' summary, printed last (carry)
 		if (ch.any() && !ch.Baseline) || *always {
-			lostMsgs, cutMsgs, err := nt.sendRecorded(ctx, cycle, ch, runArgs, *db, *jsonOut)
+			nrep, lostMsgs, cutMsgs, err := nt.sendRecorded(ctx, cycle, ch, runArgs, *db)
 			if err != nil {
 				return err
 			}
+			note = nrep
 			cut += cutMsgs
 			cutSend = cutMsgs
 			for _, msg := range lostMsgs {
@@ -119,14 +121,28 @@ func cmdWatch(args []string) error {
 						fmt.Fprintln(os.Stderr, "azhaq watch: -notify-cmd was cut because the watch was interrupted")
 					} else {
 						fmt.Fprintf(os.Stderr, "azhaq watch: -notify-cmd: %v\n", err)
-						lost = true
+						lost, cmdFailed = true, true
 					}
 				}
 			}
 		}
+		if note == nil && cmdFailed {
+			note = newReport("notify")
+			note.DB, note.what = *db, "notification requests"
+		}
+		if note != nil {
+			if cmdFailed {
+				note.Notes = append(note.Notes, "-notify-cmd failed (its error is above)")
+			}
+			if cut > 0 && note.Stopped == "" {
+				note.Stopped = fmt.Sprintf("interrupted (Ctrl-C, kill) during cycle %d: its notification was cut", cycle)
+			}
+			note.carry(rep, lost, cut)
+			note.emit(*jsonOut)
+		}
 		if cut > 0 {
 			if cutSend > 0 {
-				return exitErr{code: exitLimit} // sendRecorded printed the summary of the cut
+				return exitErr{code: exitLimit} // the notification summary says the cut
 			}
 			return watchInterrupted(cycle, "its notification was cut", false, *jsonOut)
 		}

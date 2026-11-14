@@ -162,25 +162,21 @@ func TestRegressDOC02ReadmeBenchmarkVersion(t *testing.T) {
 	}
 }
 
-// The docs say what a sign-in tab really sends: every method until the
-// session is read (the sign-in's own form or call, and whatever else the
-// page's own scripts send meanwhile, such as a socket's polling POSTs),
-// not only "the sign-in form".
-func TestDocsSignInSendsMoreThanItsOwnForm(t *testing.T) {
+// The docs say what a sign-in tab really sends: the request that carries
+// the credentials the run was given, or the form it submitted, and not
+// what the page's own scripts send meanwhile (a socket's polling POSTs).
+func TestDocsSignInSendsOnlyItsOwnRequest(t *testing.T) {
 	arch := readDoc(t, "../../docs/ARCHITECTURE.md")
-	if !strings.Contains(arch, "whatever else the page's own scripts send meanwhile") {
-		t.Error("ARCHITECTURE.md does not say the sign-in tab sends more than its own form or call")
-	}
-	if !strings.Contains(arch, "socket.io") {
-		t.Error("ARCHITECTURE.md drops the example of a page's own script sending during sign-in (a socket's polling)")
-	}
-	if strings.Contains(arch, "Chrome submitting a login form when given an account") {
-		t.Error("ARCHITECTURE.md still says sign-in is only a login form submission")
+	if !strings.Contains(arch, "The page's own scripts get no exemption") || !strings.Contains(arch, "socket.io") {
+		t.Error("ARCHITECTURE.md does not say the sign-in page's scripts are held, with the example of a socket's polling")
 	}
 	for _, l := range docLines(arch) {
-		if strings.Contains(l, "sign-in") && strings.Contains(l, "exception") && strings.Contains(l, "its form or its call with the credentials first") {
-			t.Errorf("a line still limits sign-in to its own form or call: %s", l)
+		if strings.Contains(l, "sign-in tab") && strings.Contains(l, "sends every method") {
+			t.Errorf("a line still says the sign-in tab sends every method: %s", l)
 		}
+	}
+	if c := readDoc(t, "../../docs/CONCEPTS.md"); strings.Contains(c, "it sends every method the page sends") {
+		t.Error("CONCEPTS.md still says the sign-in sends every method the page sends")
 	}
 }
 

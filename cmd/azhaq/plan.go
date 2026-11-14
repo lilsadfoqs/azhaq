@@ -462,7 +462,7 @@ func planFor(cat *catalog.Catalog, seeds []types.Seed, b engine.Budgets, paths [
 	case send.chrome && send.chromeWrites:
 		p.Sends = append(p.Sends, "Chrome lets pages send their writes (-browser-writes): the POST, PUT and DELETE their scripts send change data on the target")
 	case send.chrome:
-		p.Sends = append(p.Sends, "Chrome sends GET, HEAD and OPTIONS only, except signing in: the writes pages would send are mapped and listed, not sent (-browser-writes to send them)")
+		p.Sends = append(p.Sends, "Chrome sends GET, HEAD and OPTIONS only, besides the request that signs in (the one carrying the user name or password given): the writes pages would send, the sign-in page's scripts' included, are mapped and listed, not sent (-browser-writes to send them)")
 	}
 	p.Sends = append(append(p.Sends, gets...), others...)
 	p.Requests.GuessCap = send.hostGuesses

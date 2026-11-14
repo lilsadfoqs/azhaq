@@ -46,7 +46,9 @@ type mcpServer struct {
 	rate    float64
 	budget  int64 // requests to targets over the server's life; 0: none
 	mu      sync.Mutex
-	used    int64
+	used    int64          // requests of the calls that ended: a running call adds its own when it ends
+	flying  map[int]flight // the calls running now, which hold the sending slot
+	flyID   int
 	runs    map[string]runRecord // workspace → its latest command that failed, for azhaq_status
 	sending chan struct{}        // one command that touches targets at a time
 	ledgerS chan struct{}        // one command at a time writes the server's ledger
@@ -730,6 +732,35 @@ func toolText(text string, isError bool) map[string]any {
 	return res
 }
 
+// flight is a call that is running and sends requests to targets: the
+// command and the -max-requests it was handed, the most it can add to used
+// when it ends (0: the server has no budget, so none was handed).
+type flight struct {
+	command string
+	max     int64
+	since   time.Time
+}
+
+// takeOff notes a running call; landed removes it, with the requests it sent
+// charged to used in the same step, so that no status sees both or neither.
+func (s *mcpServer) takeOff(command string, max int64) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.flying == nil {
+		s.flying = map[int]flight{}
+	}
+	s.flyID++
+	s.flying[s.flyID] = flight{command, max, time.Now()}
+	return s.flyID
+}
+
+func (s *mcpServer) landed(id int, sent int64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.used += sent
+	delete(s.flying, id)
+}
+
 // run executes azhaq with args, with the server's limits, and returns its
 // stdout lines and its JSON summary.
 type cmdResult struct {
@@ -747,6 +778,7 @@ func (s *mcpServer) run(ctx context.Context, progress any, touches bool, args ..
 	if err := s.held.proxyRefusal(args[0]); err != nil {
 		return cmdResult{}, err
 	}
+	flightID, handed := 0, int64(0)
 	if touches {
 		// One at a time: calls made at once would each see the whole
 		// budget left and each keep the pace, together exceeding both.
@@ -774,7 +806,12 @@ func (s *mcpServer) run(ctx context.Context, progress any, touches bool, args ..
 				return cmdResult{}, fmt.Errorf("the request budget of this server (%d) is spent; restart azhaq mcp with a larger -max-requests", s.budget)
 			}
 			args = append(args, "-max-requests", fmt.Sprint(left))
+			handed = left
 		}
+		// Running from here: azhaq_status lists it, as its requests are not
+		// in used until it ends.
+		flightID = s.takeOff(args[0], handed)
+		defer func() { s.landed(flightID, 0) }()
 	}
 	args = append(args, s.held.options(args[0])...)
 	cmd := exec.Command(s.exe, args...)
@@ -834,9 +871,7 @@ wait:
 	switch {
 	case res.summary != nil:
 		if n, ok := res.summary["requests"].(float64); ok {
-			s.mu.Lock()
-			s.used += int64(n)
-			s.mu.Unlock()
+			s.landed(flightID, int64(n))
 		}
 		if msg, _ := res.summary["error"].(string); msg != "" {
 			runErr = stderrError(msg, nil) // the command could not do its job
@@ -1709,6 +1744,7 @@ func (s *mcpServer) status() (map[string]any, error) {
 	for k, v := range s.runs {
 		runs[k] = v
 	}
+	inFlight := s.inFlight()
 	s.mu.Unlock()
 	files, _ := filepath.Glob(filepath.Join(s.dir, "*.db"))
 	sort.Strings(files)
@@ -1726,10 +1762,39 @@ func (s *mcpServer) status() (map[string]any, error) {
 	raw, _ := json.Marshal(map[string]any{
 		"scope":      map[string]any{"locked": s.locked, "rules": s.lock, "run_options": s.held.view()},
 		"budget":     budget,
+		"in_flight":  inFlight,
 		"ledger":     s.serverLedgerPath(),
 		"workspaces": workspaces,
 	})
 	return toolText(string(raw), false), nil
+}
+
+// inFlight is the calls running now, for azhaq_status: each with the command
+// and the -max-requests it was handed, and the most they can still add to
+// the budget's used (reserved); mu is held. used counts only calls that
+// ended.
+func (s *mcpServer) inFlight() map[string]any {
+	ids := make([]int, 0, len(s.flying))
+	for id := range s.flying {
+		ids = append(ids, id)
+	}
+	sort.Ints(ids)
+	calls := make([]map[string]any, 0, len(ids))
+	var reserved int64
+	for _, id := range ids {
+		f := s.flying[id]
+		c := map[string]any{"command": f.command, "seconds": math.Round(time.Since(f.since).Seconds()*10) / 10}
+		if f.max > 0 {
+			c["max_requests"] = f.max
+			reserved += f.max
+		}
+		calls = append(calls, c)
+	}
+	out := map[string]any{"count": len(calls), "calls": calls}
+	if reserved > 0 {
+		out["reserved"] = reserved
+	}
+	return out
 }
 
 // workspaceStatus is one workspace's row for azhaq_status, from what its

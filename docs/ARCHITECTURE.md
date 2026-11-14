@@ -1284,7 +1284,7 @@ Chrome sends GET, HEAD and OPTIONS only. OPTIONS is a CORS preflight. Any other 
 
 Otherwise a page that tracks, saves or deletes as it loads would change data on the target behind a run that only maps.
 
-The sign-in is the exception. Until the session is read, the tab of `-login` and `-role-login` sends every method it would. That is not only its form or XHR call with the credentials, but whatever else the page's own scripts send meanwhile. For example, Juice Shop's sign-in page opens a socket whose polling sends `POST /socket.io/…`. All of it is counted, paced and in the ledger, same as any other request. The pages after the sign-in send no writes.
+The sign-in's own request is the exception, decided for each request. The tab of `-login` and `-role-login` sends a write only when it carries the user name or the password the run was given (in its body, its headers, as Basic auth, or its URL), or when it is the sign-in form posted as a navigation of the page after the run submitted it. The page's own scripts get no exemption: Juice Shop's sign-in page opens a socket whose polling sends `POST /socket.io/…`, and that POST is held like any other tab's, mapped and listed as not sent unless `-browser-writes`. What is sent is counted, paced and in the ledger, same as any other request. The pages after the sign-in send no writes.
 
 What a refused write would have sent is not lost:
 
@@ -1743,7 +1743,7 @@ Requests to a target are GETs, except these:
 - `crawl -submit-forms` sends POST forms, which change data.
 - `params -X` sends names in a body.
 - `probe -x`, `-body` and `-rr` send the methods, body or request you give.
-- The sign-in tab of `-login` and `-role-login` sends every method until the session is read. That is its own sign-in request and whatever else the page's scripts send meanwhile.
+- The sign-in tab of `-login` and `-role-login` sends the request that carries the credentials the run was given, or the form it submitted as a navigation. The writes the page's scripts send meanwhile are mapped and listed as not sent.
 - GraphQL introspection with `-graphql` is a POST.
 - `-browser-writes` and `roles -replay-writes` send what they are asked for.
 - `ports` sends connects, one `HEAD /` or protocol request, and UDP datagrams.
