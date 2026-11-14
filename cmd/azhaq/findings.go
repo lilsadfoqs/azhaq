@@ -65,6 +65,10 @@ type findingRecord struct {
 	Collector    string   `json:"collector,omitempty"` // the collector of the stored row this record is read from
 	// Check is, for a lead, what would prove it.
 	Check string `json:"check,omitempty"`
+	// Also lists the other URLs that answered the same (same address, port,
+	// path, status and body hash) at another name: one record for the service,
+	// whatever it was reached as. hunt's also_at is the same list.
+	Also []string `json:"also_at,omitempty"`
 	// Proof: observed_at, method, target, request_bytes, status, content_type,
 	// excerpt, excerpt_part, excerpt_offset, how and reproduce, on a finding and
 	// on an identification that has the answer it was read from.
@@ -392,6 +396,8 @@ func buildFindings(g *graphView) findingSet {
 		rec.Host, rec.Port = hostPort(row.Entity.Key)
 		add(rec)
 	}
+	set.Findings = foldAnswers(g.rows, addrs, hashes, set.Findings)
+	set.Leads = foldAnswers(g.rows, addrs, hashes, set.Leads)
 	sort.SliceStable(set.Findings, func(i, j int) bool { return findingLess(set.Findings[i], set.Findings[j]) })
 	sort.SliceStable(set.Identifications, func(i, j int) bool { return findingLess(set.Identifications[i], set.Identifications[j]) })
 	sort.SliceStable(set.Leads, func(i, j int) bool {
@@ -601,6 +607,9 @@ func findingMarkdown(r findingRecord, ids ...string) string {
 	}
 	if r.Request != "" {
 		b.WriteString("; request: " + r.Request)
+	}
+	if len(r.Also) > 0 {
+		b.WriteString("; the same answer at " + strings.Join(r.Also, ", "))
 	}
 	b.WriteString("; evidence: " + r.Evidence)
 	if r.Command != "" {

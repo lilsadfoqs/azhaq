@@ -68,3 +68,35 @@ func TestThreeNamesAnsweringTheSameAreOneRow(t *testing.T) {
 		t.Fatalf("%d rows %+v, want 1 with 2 others", len(rows), rows)
 	}
 }
+
+// AnswerSig is the rule `report -findings` and `export` fold by: the same
+// address, port, path, status and body hash under two names are equal; a
+// different body, a different port, or an answer not read are not.
+func TestAnswerSigFoldsOnlyTheSameAnswerOfOneAddress(t *testing.T) {
+	addrs := map[string]string{"app.example.com": "192.0.2.7", "other.example.com": "192.0.2.8"}
+	sig := func(u string, st int, hash string) string { return AnswerSig(u, st, hash, addrs) }
+	a := sig("http://192.0.2.7:3000/docs", 200, "h1")
+	if a == "" || a != sig("http://app.example.com:3000/docs", 200, "h1") {
+		t.Errorf("an address and the name that resolves to it differ: %q", a)
+	}
+	for name, got := range map[string]string{
+		"other body":    sig("http://app.example.com:3000/docs", 200, "h2"),
+		"other status":  sig("http://app.example.com:3000/docs", 403, "h1"),
+		"other port":    sig("http://app.example.com:3001/docs", 200, "h1"),
+		"other address": sig("http://other.example.com:3000/docs", 200, "h1"),
+		"other path":    sig("http://app.example.com:3000/doc", 200, "h1"),
+	} {
+		if got == a {
+			t.Errorf("%s folds with the first", name)
+		}
+	}
+	for name, got := range map[string]string{
+		"no hash":      sig("http://app.example.com:3000/docs", 200, ""),
+		"no status":    sig("http://app.example.com:3000/docs", 0, "h1"),
+		"unknown name": sig("http://nowhere.example.com:3000/docs", 200, "h1"),
+	} {
+		if got != "" {
+			t.Errorf("%s has a signature %q: nothing shows it equal", name, got)
+		}
+	}
+}
