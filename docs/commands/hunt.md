@@ -49,6 +49,8 @@ rank  score  key  reason; reason  → check: WHAT WOULD PROVE IT  → next: COMM
 
 A reason is `signal: detail`. With `-json`, stdout holds one object per row. The summary goes to stderr, as JSON with `-json`, and counts `rows` and, apart, the `tiers` of the rows printed: `findings`, `identifications` and `leads`. When `-limit` cut the list, a note says how many rows had a signal, counts them by tier, says how many the limit left out and gives the `-limit` that prints them all.
 
+The tier counts are `report -findings`' own function, run on hunt's rows, so a finding is one in both and a row both list has the same tier. The three counts are not of the same rows: `hunt` counts listeners (one for each product) and the routes and hosts with a signal, and `report -findings` counts issues (an advisory a read settled, a service's unchecked matches) and the hints and checks it lists, including scripts and routes that hunt never ranks. The summary says which in `identifications_of` and `leads_of`, and the text summary in a `counted:` line, so 889 leads in one and 671 in the other are not a disagreement.
+
 ```
 $ azhaq hunt -db app.db
 identifications (2): what the run named on each listener; the label says how far a read settled the advisory (version-only: the version is in range, nothing checked)
@@ -76,7 +78,7 @@ leads (2): inferred from a name, a path or a guess; each names the check that wo
 | `host`, `port`, `product`, `version` | On a listener. `version` is `""` when no version was seen. |
 | `source` | On a listener a name's root page gave: what named the product, `page title`, `generator`, `header X-Powered-By`, `header Server` or `technology`. A title is not a version: `version` is only what one of them stated. |
 | `advisory_id`, `advisory_url`, `advisories`, `kev`, `cvss` | On a listener with an advisory match: the top advisory, how many advisories match the version, whether CISA lists the top one as exploited, and its score. |
-| `label`, `severity`, `evidence`, `command` | On a listener: the record's own `proved`, `version-only` or `conditional` label and severity, what the record says, and the command that produced it. |
+| `label`, `severity`, `evidence`, `command` | On a listener: the record's own `proved`, `version-read`, `version-only` or `conditional` label and severity, what the record says, and the command that produced it. |
 | `next` | The command to run next. [The next command](#the-next-command) says how it is chosen. |
 | `template` | Only on the row of an input the pages of an origin carry in common: `{"input", "pages", "of"}`, the input and how many of the origin's fetched pages carry it. |
 
@@ -128,7 +130,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 A listener row is what the run named on one `host:port`. The rows come from the same records as [`azhaq report -findings`](report.md#what-a-finding-carries), so the two agree. There is one row for each listener and product:
 
 - The product and the version a service stated, or `(no version seen)` when a stage named the product and nothing named its version.
-- The top advisory the version matches, with its label as `report -findings` says it (`proved`, `version-only`, `conditional`) and how many advisories match in all. The others are in `report -findings`. A product with no version has no advisory: there is nothing to match.
+- The top advisory the version matches, with its label as `report -findings` says it (`proved`, `version-read`, `version-only`, `conditional`) and how many advisories match in all. The others are in `report -findings`. A product with no version has no advisory: there is nothing to match.
 - The proof: the banner or the header that stated it, and the command that shows it again, which is the row's `next`.
 - A name that shares its listener with others (name-based virtual hosts) has a row of its own, keyed `name:port`, for the application its root page names about itself: see [Applications of a name](#applications-of-a-name).
 - A listener reached under its address and under a name that resolves to it, with the same product and version, is one row, which lists the other host names in `also_named` and in its `identified` reason. Names whose root pages answered differently are rows of their own, whatever the product.
@@ -146,12 +148,12 @@ Only an application is a row: a product wappalyzer's data holds under a category
 
 A row is a **finding** when one of its signals is proven by what was received, and a **lead** when none is. A path or a name is never proof.
 
-- Proven: `cross-role` (a `-roles` verdict of `proved` confidence, or with none), `takeover` of strength `strong`, a `secret` whose own format names it (a key with a known shape, severity above `info`), `exposed-file` and `exposed-panel` when the answer shows the file or the panel ([Exposed files](#exposed-files)), `listing` (the page's own title is a directory listing), `api-description` when the run parsed the description, `graphql` when its schema was read or its IDE answers, and `server-error` when the body shows SQL error text, a framework's debug page or a stack trace.
-- Leads: every other signal, such as a word in a path, `input`, a `param-*`, `object-id`, `gated`, `unauth-write`, `upload`, `sourcemap`, `takeover-candidate`, a generic or bundler secret, a role's 5xx that differs from another's, and a `named` route no server confirmed.
+- Proven: `cross-role` (a `-roles` verdict of `proved` confidence, or with none), `takeover` of strength `strong`, a `secret` whose own format names it (a key with a known shape, severity above `info`), `exposed-file` and `exposed-panel` when the answer shows the file or the panel ([Exposed files](#exposed-files)), `listing` (the page's own title is a directory listing), `graphql` when its schema was read or its IDE answers, and `server-error` when the body shows SQL error text, a framework's debug page or a stack trace.
+- Leads: every other signal, such as a word in a path, `input`, a `param-*`, `object-id`, `gated`, `unauth-write`, `upload`, `sourcemap`, `takeover-candidate`, `api-description` (a served API description: a service that publishes it has not shown a flaw), a generic or bundler secret, a role's 5xx that differs from another's, and a `named` route no server confirmed.
 
 An **identification** is a listener the run named: a product, and a version or none. It is not proven: the label says how far a read settled its advisory.
 
-`hunt` lists the findings first, then the identifications, then the leads, each group by score. In the identifications, a version seen comes before none seen, and a `proved` label before `version-only`. Each lead carries `check`, what an answer must show for it to be a finding.
+`hunt` lists the findings first, then the identifications, then the leads, each group by score. In the identifications, a version seen comes before none seen, and a `proved` label before `version-read`, and that before `version-only`. Each lead carries `check`, what an answer must show for it to be a finding.
 
 ### Score and order
 

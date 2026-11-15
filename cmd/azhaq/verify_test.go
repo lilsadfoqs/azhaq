@@ -110,7 +110,7 @@ func TestVerifyStageCountsARefusedReadAsDeclined(t *testing.T) {
 		t.Fatalf("results %+v failures %v, want none: a refusal is no row", results, failures)
 	}
 	stored, _ := st.Observations()
-	if !strings.Contains(note, "0 results (0 proved, 0 version-only, 0 conditional)") || !strings.Contains(note, "1 declined") ||
+	if !strings.Contains(note, "0 results (0 proved, 0 version-read, 0 version-only, 0 conditional)") || !strings.Contains(note, "1 declined") ||
 		len(verifyResultsOf(stored)) != 0 || verifyDeclinedOf(stored) != 1 {
 		t.Errorf("note %q, declined %d, want 0 results and 1 declined", note, verifyDeclinedOf(stored))
 	}
@@ -157,7 +157,7 @@ func TestVerifyStageRedisWithAndWithoutAuth(t *testing.T) {
 	if unauth.infoCount() != 1 || auth.infoCount() != 1 {
 		t.Errorf("INFO reads: unauth %d, auth %d, want exactly 1 each", unauth.infoCount(), auth.infoCount())
 	}
-	if !strings.Contains(note, "2 results (1 proved, 1 version-only, 0 conditional)") {
+	if !strings.Contains(note, "2 results (1 proved, 0 version-read, 1 version-only, 0 conditional)") {
 		t.Errorf("note %q does not count the results printed", note)
 	}
 	n := 0

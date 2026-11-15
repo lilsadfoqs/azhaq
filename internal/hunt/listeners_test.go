@@ -58,3 +58,22 @@ func TestListenerNextIsTheReproduceCommand(t *testing.T) {
 		t.Fatalf("%+v", r)
 	}
 }
+
+// A version a service stated inside an advisory's range ranks below a read that
+// proved something and above a range match nothing read: version-read sits
+// between proved and version-only.
+func TestListenersRankAVersionReadBetweenProvedAndVersionOnly(t *testing.T) {
+	got := Build(Input{DB: "w.db", Now: now, Listeners: []Listener{
+		listener("identification", "10.0.0.5", 80, "nginx", "1.18.0", "CVE-1", "version-only"),
+		listener("identification", "10.0.0.5", 81, "nginx", "1.18.0", "CVE-1", "version-read"),
+		listener("identification", "10.0.0.5", 82, "nginx", "1.18.0", "CVE-1", "proved"),
+		listener("identification", "10.0.0.5", 83, "nginx", "1.18.0", "CVE-1", "conditional"),
+	}})
+	var keys []string
+	for _, r := range got {
+		keys = append(keys, r.Key)
+	}
+	if want := "10.0.0.5:82 10.0.0.5:81 10.0.0.5:80 10.0.0.5:83"; strings.Join(keys, " ") != want {
+		t.Errorf("order %v, want %s", keys, want)
+	}
+}

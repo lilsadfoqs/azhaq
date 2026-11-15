@@ -33,13 +33,14 @@ import (
 //     check that would prove it.
 //
 // A row with no proof is never a finding. The labels of internal/verify
-// (proved, version-only, conditional) stay on the rows that have one. A map
+// (proved, version-read, version-only, conditional, and observed-dangling for
+// a measured name) stay on the rows that have one. A map
 // hint is a lead, listed separately, unless the map's own view folds it (see
 // foldedHint): then it is counted in the line of its fold class.
 type findingRecord struct {
 	Tier     string `json:"tier"` // finding, identification or lead
 	Kind     string `json:"kind"`
-	Label    string `json:"label"` // proved, version-only, conditional; lead for a lead
+	Label    string `json:"label"` // proved, observed-dangling, version-read, version-only, conditional; lead for a lead
 	Severity string `json:"severity"`
 	Host     string `json:"host"`
 	Port     int    `json:"port,omitempty"`
@@ -64,6 +65,10 @@ type findingRecord struct {
 	Collector    string   `json:"collector,omitempty"` // the collector of the stored row this record is read from
 	// Check is, for a lead, what would prove it.
 	Check string `json:"check,omitempty"`
+	// Also lists the other URLs that answered the same (same address, port,
+	// path, status and body hash) at another name: one record for the service,
+	// whatever it was reached as. hunt's also_at is the same list.
+	Also []string `json:"also_at,omitempty"`
 	// Proof: observed_at, method, target, request_bytes, status, content_type,
 	// excerpt, excerpt_part, excerpt_offset, how and reproduce, on a finding and
 	// on an identification that has the answer it was read from.
@@ -86,7 +91,7 @@ func runCommand(g *graphView) string {
 	return "azhaq " + strings.Join(g.args, " ")
 }
 
-var labelRank = map[string]int{verify.Proved: 0, verify.VersionOnly: 1, verify.Conditional: 2}
+var labelRank = map[string]int{verify.Proved: 0, observedDangling: 1, verify.VersionRead: 2, verify.VersionOnly: 3, verify.Conditional: 4}
 
 // findingSet is a workspace's rows in their three tiers, and the hints the
 // map's view folds. Every stored row that has a record is in exactly one tier.
@@ -105,7 +110,17 @@ type findingSet struct {
 // records themselves are all listed (each names its lead). CISA KEV is not a
 // check: the run does not treat it as more than a range match.
 func (s findingSet) counts() tierCounts {
-	return tierCounts{len(s.Findings), issueCount(s.Identifications), len(s.Leads)}
+	rows := make([]tierRow, 0, len(s.Findings)+len(s.Identifications)+len(s.Leads))
+	for range s.Findings {
+		rows = append(rows, tierRow{Tier: proof.TierFinding})
+	}
+	for _, r := range s.Identifications {
+		rows = append(rows, tierRow{proof.TierIdentification, issueKey(r)})
+	}
+	for range s.Leads {
+		rows = append(rows, tierRow{Tier: proof.TierLead})
+	}
+	return countTiers(rows, reportIdentificationsOf, reportLeadsOf)
 }
 
 // issueKey is what a record counts as: "" for a record that is its own issue.
@@ -120,18 +135,11 @@ func issueKey(r findingRecord) string {
 }
 
 func issueCount(rs []findingRecord) int {
-	seen := map[string]bool{}
-	n := 0
-	for _, r := range rs {
-		k := issueKey(r)
-		if k == "" {
-			n++
-		} else if !seen[k] {
-			seen[k] = true
-			n++
-		}
+	rows := make([]tierRow, len(rs))
+	for i, r := range rs {
+		rows[i] = tierRow{proof.TierIdentification, issueKey(r)}
 	}
-	return n
+	return countTiers(rows, "", "").Identifications
 }
 
 // leadName is the service lead an advisory record belongs to.
@@ -244,7 +252,7 @@ func buildFindings(g *graphView) findingSet {
 		}
 		if r.AdvisoryID != "" {
 			rec.Lead = leadName(r.Target, r.Product)
-			rec.checked = r.Label == verify.Proved
+			rec.checked = r.Label == verify.Proved || r.Label == verify.VersionRead
 		}
 		if rec.Command == "" {
 			rec.Command = command
@@ -391,6 +399,8 @@ func buildFindings(g *graphView) findingSet {
 		rec.Host, rec.Port = hostPort(row.Entity.Key)
 		add(rec)
 	}
+	set.Findings = foldAnswers(g.rows, addrs, hashes, set.Findings)
+	set.Leads = foldAnswers(g.rows, addrs, hashes, set.Leads)
 	sort.SliceStable(set.Findings, func(i, j int) bool { return findingLess(set.Findings[i], set.Findings[j]) })
 	sort.SliceStable(set.Identifications, func(i, j int) bool { return findingLess(set.Identifications[i], set.Identifications[j]) })
 	sort.SliceStable(set.Leads, func(i, j int) bool {
@@ -512,7 +522,7 @@ func findingsMarkdown(set findingSet) []byte {
 	if rows == 0 {
 		b.WriteString("No qualifying rows: the workspace holds nothing a tier lists, and no unproved hint the map lists. 0 findings, 0 identifications, 0 leads.\n\n")
 	} else {
-		fmt.Fprintf(&b, "%s, each read from a stored row of the workspace. A finding is proven: its answer shows the thing named. An identification is a product and version a service stated, with the advisory match where there is one (proved names the read that settled it, version-only the product and version alone, conditional a precondition the read did not show). A lead is inferred from a name, a path or a guess, and names the check that would prove it.\n\n", set.counts())
+		fmt.Fprintf(&b, "%s, each read from a stored row of the workspace. A finding is proven: its answer shows the thing named. An identification is a product and version a service stated, with the advisory match where there is one (version-read names a version a read stated inside the advisory's range, version-only the product and version alone, conditional a precondition the read did not show; proved is a read that answered with no credential or a sign-in with a published default). A lead is inferred from a name, a path or a guess, and names the check that would prove it. Counted: %s.\n\n", set.counts(), set.counts().Counted())
 	}
 	if len(set.Findings) > 0 {
 		fmt.Fprintf(&b, "## Findings (%d)\n\n", len(set.Findings))
@@ -523,7 +533,7 @@ func findingsMarkdown(set findingSet) []byte {
 	}
 	if len(set.Identifications) > 0 {
 		fmt.Fprintf(&b, "## Identifications (%d)\n\n", issueCount(set.Identifications))
-		for _, label := range []string{verify.Proved, verify.VersionOnly, verify.Conditional} {
+		for _, label := range []string{verify.Proved, verify.VersionRead, verify.VersionOnly, verify.Conditional} {
 			var rs []findingRecord
 			for _, f := range set.Identifications {
 				if f.Label == label {
@@ -533,7 +543,7 @@ func findingsMarkdown(set findingSet) []byte {
 			if len(rs) == 0 {
 				continue
 			}
-			title := map[string]string{verify.Proved: "Proved", verify.VersionOnly: "Version-only", verify.Conditional: "Conditional"}[label]
+			title := map[string]string{verify.Proved: "Proved", verify.VersionRead: "Version-read", verify.VersionOnly: "Version-only", verify.Conditional: "Conditional"}[label]
 			fmt.Fprintf(&b, "### %s (%d)\n\n", title, issueCount(rs))
 			for _, r := range groupAdvisoryFindings(rs) {
 				b.WriteString(findingMarkdown(r.rec, r.ids...))
@@ -600,6 +610,9 @@ func findingMarkdown(r findingRecord, ids ...string) string {
 	}
 	if r.Request != "" {
 		b.WriteString("; request: " + r.Request)
+	}
+	if len(r.Also) > 0 {
+		b.WriteString("; the same answer at " + strings.Join(r.Also, ", "))
 	}
 	b.WriteString("; evidence: " + r.Evidence)
 	if r.Command != "" {

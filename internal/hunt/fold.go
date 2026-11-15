@@ -64,44 +64,61 @@ func (h *hunter) answerSig(c *cand, hashes map[string]string) string {
 	var parts []string
 	head := ""
 	for _, raw := range c.instances {
-		u, err := url.Parse(raw)
-		if err != nil || u.Hostname() == "" {
-			return ""
-		}
-		hash, st := hashes[raw], h.status[raw]
-		if hash == "" || st == 0 {
-			return ""
-		}
-		addr := h.addrOf(u.Hostname())
-		if addr == "" {
-			return ""
-		}
-		port := u.Port()
-		if port == "" {
-			port = map[string]string{"http": "80", "https": "443"}[u.Scheme]
-		}
-		if port == "" {
-			return ""
-		}
-		at := u.Scheme + "://" + addr + ":" + port
-		if head != "" && head != at {
+		at, part := instanceSig(raw, h.status[raw], hashes[raw], h.in.Addrs)
+		if at == "" || (head != "" && head != at) {
 			return ""
 		}
 		head = at
-		parts = append(parts, strings.TrimPrefix(raw, u.Scheme+"://"+u.Host)+"="+strconv.Itoa(st)+"/"+hash)
+		parts = append(parts, part)
 	}
 	sort.Strings(parts)
 	return head + "\x00" + strings.Join(parts, "\x00")
 }
 
+// AnswerSig is the signature of one URL's answer, by the rule the hunt rows
+// fold by: the scheme, the address and port its host resolves to (addrs, by
+// lower-case name), then the path, the status and the body hash. Two URLs with
+// the same signature are one service answering the same under two names. ""
+// when the host has no known address or the answer was not read (no status or
+// no body hash): such a URL stands alone. Every command that lists one row for
+// a service calls this, so they fold the same URLs.
+func AnswerSig(raw string, status int, hash string, addrs map[string]string) string {
+	at, part := instanceSig(raw, status, hash, addrs)
+	if at == "" {
+		return ""
+	}
+	return at + "\x00" + part
+}
+
+// instanceSig is the origin (scheme, address, port) and the answer (path,
+// status, hash) of one URL, or "" for the origin when either is unknown.
+func instanceSig(raw string, st int, hash string, addrs map[string]string) (at, part string) {
+	u, err := url.Parse(raw)
+	if err != nil || u.Hostname() == "" || hash == "" || st == 0 {
+		return "", ""
+	}
+	addr := addrOf(u.Hostname(), addrs)
+	if addr == "" {
+		return "", ""
+	}
+	port := u.Port()
+	if port == "" {
+		port = map[string]string{"http": "80", "https": "443"}[u.Scheme]
+	}
+	if port == "" {
+		return "", ""
+	}
+	return u.Scheme + "://" + addr + ":" + port, strings.TrimPrefix(raw, u.Scheme+"://"+u.Host) + "=" + strconv.Itoa(st) + "/" + hash
+}
+
 // addrOf is the one address a host name resolved to: the host itself when it
 // is an address.
-func (h *hunter) addrOf(host string) string {
+func addrOf(host string, addrs map[string]string) string {
 	host = strings.ToLower(strings.Trim(host, "[]"))
 	if a, err := netip.ParseAddr(host); err == nil {
 		return a.Unmap().String()
 	}
-	if a, err := netip.ParseAddr(h.in.Addrs[host]); err == nil {
+	if a, err := netip.ParseAddr(addrs[host]); err == nil {
 		return a.Unmap().String()
 	}
 	return ""

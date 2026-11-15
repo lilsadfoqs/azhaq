@@ -26,7 +26,7 @@ type Ident struct {
 	AdvisoryID  string  `json:"advisory_id,omitempty"`
 	AdvisoryURL string  `json:"advisory_url,omitempty"`
 	Advisories  int     `json:"advisories,omitempty"` // how many advisories match the version, the top one included
-	Label       string  `json:"label"`                // proved, version-only or conditional: as report -findings says it
+	Label       string  `json:"label"`                // proved, version-read, version-only or conditional: as report -findings says it
 	Severity    string  `json:"severity"`
 	KEV         bool    `json:"kev,omitempty"`
 	CVSS        float64 `json:"cvss,omitempty"`
@@ -45,7 +45,7 @@ type Listener struct {
 }
 
 // label scores, before the exploited and the score the advisory states.
-var listenerScore = map[string]int{"proved": 90, "version-only": 60, "conditional": 50}
+var listenerScore = map[string]int{"proved": 90, "version-read": 70, "version-only": 60, "conditional": 50}
 
 func (l Listener) row(db string) Row {
 	id := l.Ident

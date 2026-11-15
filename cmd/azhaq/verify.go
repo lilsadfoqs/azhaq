@@ -27,14 +27,14 @@ type verifyFlags struct {
 }
 
 func (v *verifyFlags) register(fs *flag.FlagSet) {
-	fs.BoolVar(&v.on, "verify", false, "with the services this run confirmed: make each enumerated safe read-only verification (one fixed request a client with no credentials sends, listed by plan: Redis INFO server, MongoDB isMaster, memcached version, ZooKeeper srvr and so on; with -advisories, each advisory lead is labelled from its confirmation read) and label the results proved, version-only or conditional, each with the exact request sent and an excerpt of the answer; every read goes through the scope, -deny-path (for the advisory GET), -max-requests, the pace, the kill file and the ledger; no payload, no credential, no write and no request that tries to trigger an issue")
+	fs.BoolVar(&v.on, "verify", false, "with the services this run confirmed: make each enumerated safe read-only verification (one fixed request a client with no credentials sends, listed by plan: Redis INFO server, MongoDB isMaster, memcached version, ZooKeeper srvr and so on; with -advisories, each advisory lead is labelled from its confirmation read) and label the results proved, version-read, version-only or conditional, each with the exact request sent and an excerpt of the answer; every read goes through the scope, -deny-path (for the advisory GET), -max-requests, the pace, the kill file and the ledger; no payload, no credential, no write and no request that tries to trigger an issue")
 }
 
 // verifyStage is the whole of -verify after a run. The data-store
 // checks send one read each, through egress (scope, budget, pace,
 // kill file, ledger, collector azhaq-verify); the advisory results
 // send nothing more: they label the leads -advisories already made
-// (and, with -advisories-confirm, already read for) as proved,
+// (and, with -advisories-confirm, already read for) as version-read,
 // version-only or conditional. Each result is stored as one
 // observation of its host, so the summary's counts are derivable
 // from the workspace: one stored result per line printed.
@@ -138,19 +138,21 @@ func verifyStage(ctx context.Context, st *store.Store, obs []types.StoredObserva
 	if failed > 0 {
 		failures = append(failures, engine.Failure{Collector: "azhaq-verify", Error: "a verification read got no answer", Count: failed, Retryable: true})
 	}
-	var proved, versionOnly, conditional int
+	var proved, versionRead, versionOnly, conditional int
 	for _, r := range results {
 		switch r.Label {
 		case verify.Proved:
 			proved++
+		case verify.VersionRead:
+			versionRead++
 		case verify.VersionOnly:
 			versionOnly++
 		case verify.Conditional:
 			conditional++
 		}
 	}
-	note = fmt.Sprintf("verify: %d results (%d proved, %d version-only, %d conditional) from the enumerated read-only checks; each result is a stored verify row and a line of the output, carries the exact request sent and an excerpt of the answer, and proved names that read only, never exploitability",
-		len(results), proved, versionOnly, conditional)
+	note = fmt.Sprintf("verify: %d results (%d proved, %d version-read, %d version-only, %d conditional) from the enumerated read-only checks; each result is a stored verify row and a line of the output, carries the exact request sent and an excerpt of the answer, and proved names that read only, never exploitability",
+		len(results), proved, versionRead, versionOnly, conditional)
 	if n := len(declined); n > 0 {
 		note += fmt.Sprintf("; %d declined: the service refused the read and nothing was identified, so they are no result rows", n)
 	}
@@ -187,6 +189,12 @@ func verifyResultsOf(obs []types.StoredObservation) []verify.Result {
 		}
 		var r verify.Result
 		if json.Unmarshal(o.Payload, &r) == nil {
+			if r.Kind == verify.KindAdvisoryPrecond && r.Label == verify.Proved {
+				// Stored before version-read existed: the same read, as it is
+				// now named.
+				r.Label = verify.VersionRead
+				r.Severity = verify.SeverityOf(r)
+			}
 			out = append(out, r)
 		}
 	}

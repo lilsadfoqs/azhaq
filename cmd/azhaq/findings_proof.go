@@ -14,17 +14,73 @@ import (
 	"github.com/lilsadfoqs/azhaq/types"
 )
 
-// tierCounts is how many rows each tier holds. Every row of the findings
-// output is in exactly one tier, so the three add up to the rows.
+// tierCounts is how many rows each tier holds. Every row of a list is in
+// exactly one tier, so the three add up to the rows. A command whose rows are
+// not the other's says what each count is of: IdentificationsOf and LeadsOf
+// (the findings count is the same in both: the proven rows, one for a service
+// whatever name it was reached by).
 type tierCounts struct {
-	Findings        int `json:"findings"`
-	Identifications int `json:"identifications"`
-	Leads           int `json:"leads"`
+	Findings          int    `json:"findings"`
+	Identifications   int    `json:"identifications"`
+	Leads             int    `json:"leads"`
+	IdentificationsOf string `json:"identifications_of,omitempty"`
+	LeadsOf           string `json:"leads_of,omitempty"`
 }
 
 func (c tierCounts) String() string {
 	return fmt.Sprintf("%s, %s, %s", plural(c.Findings, "finding"), plural(c.Identifications, "identification"), plural(c.Leads, "lead"))
 }
+
+// Counted says what the identifications and the leads were counted from, in
+// words ("" when the counts name no basis).
+func (c tierCounts) Counted() string {
+	var parts []string
+	if c.IdentificationsOf != "" {
+		parts = append(parts, "identifications are "+c.IdentificationsOf)
+	}
+	if c.LeadsOf != "" {
+		parts = append(parts, "leads are "+c.LeadsOf)
+	}
+	return strings.Join(parts, "; ")
+}
+
+// tierRow is a row of a list as the tier counts see it: its tier, and an issue
+// key when several rows are one issue ("" for a row that is its own issue).
+type tierRow struct{ Tier, Issue string }
+
+// countTiers is the one count of tiers, for `hunt` and for `report -findings`
+// (and `export -format findings`, and the run's own summary): a row is counted
+// once in its tier, and rows of one issue in one tier count once.
+func countTiers(rows []tierRow, identificationsOf, leadsOf string) tierCounts {
+	c := tierCounts{IdentificationsOf: identificationsOf, LeadsOf: leadsOf}
+	seen := map[string]bool{}
+	for _, r := range rows {
+		if r.Issue != "" {
+			k := r.Tier + "\x00" + r.Issue
+			if seen[k] {
+				continue
+			}
+			seen[k] = true
+		}
+		switch r.Tier {
+		case proof.TierFinding:
+			c.Findings++
+		case proof.TierIdentification:
+			c.Identifications++
+		default:
+			c.Leads++
+		}
+	}
+	return c
+}
+
+// What each command's identifications and leads are counted from.
+const (
+	reportIdentificationsOf = "advisories a read settled, and services with an unchecked match"
+	reportLeadsOf           = "hints and checks the findings output lists"
+	huntIdentificationsOf   = "listeners named, one for each product"
+	huntLeadsOf             = "routes and hosts with a signal"
+)
 
 func stamp(t time.Time) string {
 	if t.IsZero() {

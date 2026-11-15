@@ -236,7 +236,12 @@ func (h *hunter) url(r engine.MapEntry) {
 		c.addProved("listing", weights["listing"], "directory listing: "+clip(r.Title, 60))
 	}
 	if ok && h.apiDoc[r.Entity.ID] {
-		c.addProved("api-description", weights["api-description"], "API description served at "+path)
+		// A lead: a service that publishes its description is not a flaw, and
+		// the findings output has no record for it.
+		c.add("api-description", "API description served at "+path)
+		if c.check == "" {
+			c.check = "the description is served and read: look at what it lists that needs no credential (azhaq roles asks each route with each session)"
+		}
 	} else if ok && apiDocPath(path) {
 		c.add("api-description", "API description named at "+path)
 	}

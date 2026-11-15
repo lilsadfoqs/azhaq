@@ -289,7 +289,7 @@ func (c *cand) row(db string) Row {
 		return row
 	}
 	row.Tier = proof.TierLead
-	if best == "exposed-file" || best == "exposed-panel" {
+	if best == "exposed-file" || best == "exposed-panel" || (best == "api-description" && c.check != "") {
 		row.Check = c.check
 	}
 	if row.Check == "" {

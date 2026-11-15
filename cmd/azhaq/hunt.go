@@ -179,24 +179,17 @@ func listenersOf(set findingSet) []hunt.Listener {
 
 // huntLine is the next line a run names first: hunt, with the rows it shows.
 func huntLine(db string, rows []hunt.Row) string {
-	c := countRows(rows)
-	return fmt.Sprintf("azhaq hunt -db %s   (%s, %s, %s)", db, plural(c.Findings, "finding"), plural(c.Identifications, "identification"), plural(c.Leads, "lead"))
+	return fmt.Sprintf("azhaq hunt -db %s   (%s)", db, countRows(rows).String())
 }
 
-// countRows counts rows by tier.
+// countRows counts hunt's rows by tier, with countTiers, the count report
+// -findings uses.
 func countRows(rows []hunt.Row) tierCounts {
-	var c tierCounts
-	for _, r := range rows {
-		switch r.Tier {
-		case proof.TierFinding:
-			c.Findings++
-		case proof.TierIdentification:
-			c.Identifications++
-		default:
-			c.Leads++
-		}
+	rs := make([]tierRow, len(rows))
+	for i, r := range rows {
+		rs[i] = tierRow{Tier: r.Tier}
 	}
-	return c
+	return countTiers(rs, huntIdentificationsOf, huntLeadsOf)
 }
 
 // rolesDirFor finds the directory of the roles run behind a -roles file

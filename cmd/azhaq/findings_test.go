@@ -159,12 +159,12 @@ func TestFindingsReportFromAStoredRun(t *testing.T) {
 			t.Errorf("identification %v has no complete proof: %v", f["advisory_id"], f)
 		}
 	}
-	// Proved first; the three labels distinct and in rank order.
-	wantLabels := []string{"proved", "version-only", "conditional"}
+	// Version-read first (no read here proved anything); the labels distinct and in rank order.
+	wantLabels := []string{"version-read", "version-only", "conditional"}
 	wantIDs := []string{"CVE-TEST-0001", "CVE-TEST-0003", "CVE-TEST-0002"}
 	for i, f := range findings {
 		if f["label"] != wantLabels[i] || f["advisory_id"] != wantIDs[i] {
-			t.Fatalf("finding %d is %v %v, want %s %s (proved first, labels never merged)", i, f["advisory_id"], f["label"], wantIDs[i], wantLabels[i])
+			t.Fatalf("finding %d is %v %v, want %s %s (version-read first, labels never merged)", i, f["advisory_id"], f["label"], wantIDs[i], wantLabels[i])
 		}
 		// The top advisory of a service has the verify row; the others of it
 		// are read from the advisory lead, so the findings list every one.
@@ -208,7 +208,7 @@ func TestFindingsReportFromAStoredRun(t *testing.T) {
 		t.Fatal(err)
 	}
 	md := buf.String()
-	for _, want := range []string{"# Findings", "## Identifications (3)", "### Proved (1)", "### Version-only (1)", "### Conditional (1)", "CVE-TEST-0001", "CVE-TEST-0003", "CVE-TEST-0002"} {
+	for _, want := range []string{"# Findings", "## Identifications (3)", "### Version-read (1)", "### Version-only (1)", "### Conditional (1)", "CVE-TEST-0001", "CVE-TEST-0003", "CVE-TEST-0002"} {
 		if !strings.Contains(md, want) {
 			t.Errorf("findings markdown lacks %q:\n%s", want, md)
 		}
@@ -304,8 +304,8 @@ func TestBuildFindings(t *testing.T) {
 		t.Fatalf("%d findings, want 1 (the redis read, with its proof): %+v", len(findings), findings)
 	}
 	idents := set.Identifications
-	if len(idents) != 2 || idents[0].Label != verify.Proved || idents[1].Label != verify.Conditional {
-		t.Fatalf("%d identifications, want 2 (CVE-1 proved once, CVE-2 conditional): %+v", len(idents), idents)
+	if len(idents) != 2 || idents[0].Label != verify.VersionRead || idents[1].Label != verify.Conditional {
+		t.Fatalf("%d identifications, want 2 (CVE-1 version-read once, CVE-2 conditional): %+v", len(idents), idents)
 	}
 	findings = append(findings, idents...)
 	byID := map[string]findingRecord{}
@@ -314,6 +314,11 @@ func TestBuildFindings(t *testing.T) {
 		if f.AdvisoryID == "CVE-3" {
 			t.Errorf("a not-affected lead became a finding: %+v", f)
 		}
+	}
+	// The row was stored by an azhaq that called a stated version "proved" at
+	// medium: it reads as what it settled.
+	if byID["CVE-1"].Label != verify.VersionRead || byID["CVE-1"].Severity != "info" {
+		t.Errorf("CVE-1 record %+v, want version-read at info", byID["CVE-1"])
 	}
 	if byID["CVE-1"].Collector != "azhaq-verify" || byID["CVE-1"].Command != "azhaq run -verify" {
 		t.Errorf("CVE-1 record %+v, want the stored verify row's collector and command", byID["CVE-1"])
