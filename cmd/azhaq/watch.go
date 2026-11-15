@@ -210,6 +210,13 @@ func changesBetween(old, neu *store.Store, d store.Diff, ch changes) (changes, e
 	// names without values) was not in the previous run, one line each.
 	oldIdent, newIdent := foldedURLs(old), foldedURLs(neu)
 	seenNew, seenGone := map[string]bool{}, map[string]bool{}
+	// The first URL of an identity, in order, stands for it: the same one every time.
+	byKey := func(es []types.Entity) []types.Entity {
+		es = slices.Clone(es)
+		sort.SliceStable(es, func(i, j int) bool { return es[i].Key < es[j].Key })
+		return es
+	}
+	d.Added, d.Removed = byKey(d.Added), byKey(d.Removed)
 	for _, e := range d.Added {
 		id := ""
 		if e.Type == types.TypeURL {
