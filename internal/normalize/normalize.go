@@ -59,9 +59,35 @@ func URL(raw string) (string, error) {
 	if u.Path == "" {
 		u.Path = "/"
 	}
+	if p := u.EscapedPath(); strings.Contains(strings.ToLower(p), ";jsessionid") {
+		p = dropSessionParam(p)
+		if unesc, err := url.PathUnescape(p); err == nil {
+			u.Path, u.RawPath = unesc, p
+		}
+	}
 	// Keep {param} placeholders readable in API templates.
 	out := braces.Replace(u.String())
 	return out, nil
+}
+
+// dropSessionParam removes the servlet session path parameter
+// (";jsessionid=...", named by the Servlet specification) from each segment
+// of an escaped path: a server that rewrites its links with a fresh session
+// id would otherwise make every page a new URL. Other path parameters stay.
+func dropSessionParam(p string) string {
+	segs := strings.Split(p, "/")
+	for i, seg := range segs {
+		parts := strings.Split(seg, ";")
+		keep := parts[:1]
+		for _, x := range parts[1:] {
+			name, _, _ := strings.Cut(x, "=")
+			if !strings.EqualFold(name, "jsessionid") {
+				keep = append(keep, x)
+			}
+		}
+		segs[i] = strings.Join(keep, ";")
+	}
+	return strings.Join(segs, "/")
 }
 
 // ClientURL is URL for a view a single-page app's router draws: a hash

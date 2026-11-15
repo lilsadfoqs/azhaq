@@ -16,6 +16,25 @@ func TestURL(t *testing.T) {
 	}
 }
 
+// The servlet session id a server writes into its links is not part of
+// the page's URL; other path parameters and the query are (#479).
+func TestURLDropsTheServletSessionID(t *testing.T) {
+	for in, want := range map[string]string{
+		"http://h:8161/admin/index.jsp;jsessionid=node01abc.node0": "http://h:8161/admin/index.jsp",
+		"http://h/a;JSESSIONID=X1/b.jsp":                           "http://h/a/b.jsp",
+		"http://h/login;jsessionid=":                               "http://h/login",
+		"http://h/a;v=1;jsessionid=x;w=2?jsessionid=q&p=1":         "http://h/a;v=1;w=2?jsessionid=q&p=1",
+		"http://h/a;jsessionidx=1":                                 "http://h/a;jsessionidx=1",
+		"http://h/%7Bid%7D;jsessionid=abc":                         "http://h/{id}",
+		"http://h/caf%C3%A9;jsessionid=abc":                        "http://h/caf%C3%A9",
+	} {
+		got, err := URL(in)
+		if err != nil || got != want {
+			t.Errorf("URL(%q) = %q, %v; want %q", in, got, err, want)
+		}
+	}
+}
+
 func TestHostname(t *testing.T) {
 	if Hostname("Ex.COM.") != "ex.com" {
 		t.Fatal(Hostname("Ex.COM."))
