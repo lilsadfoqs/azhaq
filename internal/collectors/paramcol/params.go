@@ -152,7 +152,7 @@ func (c *Collector) Forget(raw string) {
 // Info: tens of requests per page; needs -params and -allow, and waits for
 // the HTTP collector so only pages that answered are searched.
 func (c *Collector) Info() catalog.Info {
-	return catalog.Info{Kind: catalog.Active, Flag: "params", After: "azhaq-http", Redo: true}
+	return catalog.Info{Kind: catalog.Active, Flag: "params", After: "azhaq-http", Redo: true, Stage: true}
 }
 
 func (c *Collector) Inputs() []types.SeedType { return []types.SeedType{types.TypeURL} }

@@ -50,7 +50,7 @@ func TestCookieRunStopsAtTheRequestThatEndedItsSession(t *testing.T) {
 	fetch.Extra = http.Header{"Cookie": {"SID=good"}}
 	ctx := context.Background()
 	rep := &report{}
-	watchSession(ctx, []types.Seed{{Type: types.TypeURL, Keys: map[string]string{"url": srv.URL + "/"}}}, "", "", nil, nil, rep)
+	watchSession(ctx, []types.Seed{{Type: types.TypeURL, Keys: map[string]string{"url": srv.URL + "/"}}}, "", "", nil, nil, rep, 0)
 	if got := fetch.SignInPath(); got != "/login" {
 		t.Fatalf("sign-in page %q, want /login (where the check page sends a visitor)", got)
 	}
@@ -125,7 +125,7 @@ func TestRelativeRedirectToSignInStopsTheRun(t *testing.T) {
 			defer fetch.Reset()
 			fetch.Extra = http.Header{"Cookie": {"SID=good"}}
 			ctx := context.Background()
-			watchSession(ctx, []types.Seed{{Type: types.TypeURL, Keys: map[string]string{"url": srv.URL + "/index.php"}}}, "", tc.login(srv.URL), nil, nil, &report{})
+			watchSession(ctx, []types.Seed{{Type: types.TypeURL, Keys: map[string]string{"url": srv.URL + "/index.php"}}}, "", tc.login(srv.URL), nil, nil, &report{}, 0)
 			mu.Lock()
 			anon = nil
 			mu.Unlock()
@@ -200,7 +200,7 @@ func TestParallelRunSendsNothingNewAfterTheSessionEnds(t *testing.T) {
 			defer fetch.Reset()
 			fetch.Extra = http.Header{"Cookie": {"SID=good"}}
 			ctx := context.Background()
-			watchSession(ctx, []types.Seed{{Type: types.TypeURL, Keys: map[string]string{"url": srv.URL + "/index.php"}}}, "", srv.URL+"/login.php", nil, nil, &report{})
+			watchSession(ctx, []types.Seed{{Type: types.TypeURL, Keys: map[string]string{"url": srv.URL + "/index.php"}}}, "", srv.URL+"/login.php", nil, nil, &report{}, 0)
 			mu.Lock()
 			anon, served = nil, 0
 			mu.Unlock()
@@ -256,7 +256,7 @@ func TestParallelRunSendsNothingNewAfterTheSessionEnds(t *testing.T) {
 			if want := plural1(len(sl.InFlight), "GET") + " answered after that answer, already in flight"; len(sl.InFlight) > 0 && !strings.Contains(sl.Msg, want) {
 				t.Errorf("the message does not count the %d in flight (%q): %s", len(sl.InFlight), want, sl.Msg)
 			}
-			if len(sl.InFlight) == 0 && !strings.Contains(sl.Msg, "no GET was in flight") {
+			if len(sl.InFlight) == 0 && !strings.Contains(sl.Msg, "no other GET was in flight") {
 				t.Errorf("no GET in flight, and the message does not say so: %s", sl.Msg)
 			}
 		})
@@ -293,7 +293,7 @@ func TestLoginRunThatCannotSignInAgainToTestA401StopsSending(t *testing.T) {
 	ctx := context.Background()
 	signIns := 0
 	renew := func(context.Context) error { signIns++; return errors.New("the request budget is spent") }
-	watchSession(ctx, []types.Seed{{Type: types.TypeURL, Keys: map[string]string{"url": srv.URL + "/"}}}, "", srv.URL+"/login", renew, nil, &report{})
+	watchSession(ctx, []types.Seed{{Type: types.TypeURL, Keys: map[string]string{"url": srv.URL + "/"}}}, "", srv.URL+"/login", renew, nil, &report{}, 0)
 	if _, _, err := fetch.Do(ctx, srv.Client(), srv.URL+"/admin"); err != nil {
 		t.Fatal(err)
 	}
@@ -352,7 +352,7 @@ func TestASessionThatNeverHeldStopsTheRun(t *testing.T) {
 			fetch.Extra = tc.header
 			rep := &report{}
 			seeds := []types.Seed{{Type: types.TypeURL, Keys: map[string]string{"url": srv.URL + tc.page}}, {Type: types.TypeURL, Keys: map[string]string{"url": srv.URL + "/"}}}
-			watchSession(context.Background(), seeds, "", "", nil, nil, rep)
+			watchSession(context.Background(), seeds, "", "", nil, nil, rep, 0)
 			before := asked.Load()
 			_, _, err := fetch.Do(context.Background(), srv.Client(), srv.URL+"/")
 			if !errors.Is(err, neterr.ErrSessionLost) {
@@ -386,7 +386,7 @@ func TestASessionNoPageShowsGoesOnWithANote(t *testing.T) {
 	defer fetch.Reset()
 	fetch.Extra = http.Header{"Cookie": {"sid=whatever"}}
 	rep := &report{}
-	watchSession(context.Background(), []types.Seed{{Type: types.TypeURL, Keys: map[string]string{"url": srv.URL + "/"}}}, "", "", nil, nil, rep)
+	watchSession(context.Background(), []types.Seed{{Type: types.TypeURL, Keys: map[string]string{"url": srv.URL + "/"}}}, "", "", nil, nil, rep, 0)
 	if _, _, err := fetch.Do(context.Background(), srv.Client(), srv.URL+"/en/"); err != nil {
 		t.Fatalf("the run stopped: %v", err)
 	}

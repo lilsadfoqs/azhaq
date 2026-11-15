@@ -36,6 +36,7 @@ azhaq run -url https://app.example.com/ -browser -login https://app.example.com/
    Chrome's sign-in (`-login`) resolves names through the `-resolvers`, which are in force before it starts. A sign-in that fails names the connection the guard could not open, and with no password field on the page it says what Chrome showed: the final URL, its status, title and size, and its inputs.
    The page the sign-in ended on is the first check: when Chrome got a 2xx for it and the run's own request for it, with the session, is a 401 or a redirect to the sign-in page, the session ended at once, and the run signs in again; with no room in `-max-requests` for that, or a sign-in that fails, it stops with the session failure (exit 3) and sends no more requests, never going on as an anonymous run ([Sessions](../CONCEPTS.md#sessions)).
    A session given with `-cookie` or `-header` that no page shows live, where a target answers it as it answers a visitor with a 401 or a redirect to a page whose form takes a password, does not hold: the run stops with the session failure (exit 3) before any other request.
+   A signed-in run checks its session as it goes: every 50 requests (`-session-every N` sets the number; 1 checks before every request), when 10 s have passed since the last good check and a request is about to go out, at the start of each stage that sends many requests (the path sweep, `-dirs`, `-params`, the page loads of `-screenshots` and `-browser`), at the end, and after an answer that looks like the end of the session. A check that holds is one request, the check page asked with the session, counted as a request of the run. A session that ends with no such answer is noticed at the next check: within `-session-every` requests or 10 s, whichever comes first, or at the start of the next stage; the failure counts the GETs asked since the last good check, the GET whose answer first looked like the end included ([Sessions](../CONCEPTS.md#sessions)).
 8. Prints the ranked map when it ends and the summary on stderr.
 
 `-probe` turns off every collector but DNS and HTTP: the crawl, scripts, path checks, TLS and the third-party sources, at depth 1. A flag that asks for a collector by name still runs it: `-dirs`, `-params`, `-ports`, `-ports-udp`, `-screenshots`, `-browser`, `-dns-brute`, `-permute` and `-graphql`. A flag that only a collector `-probe` turns off reads (`-fill-forms`, `-submit-forms`, `-path-climb`, `-known-files`) is a usage error that names both, never a flag that is dropped.
@@ -353,6 +354,15 @@ A client route is a view that a single-page app's router draws.
 - A Swagger UI whose script holds the document (Juice Shop's `/api-docs/`) is read from the script. The names next to it are not guessed.
 - A page that is byte for byte what the site root answers for a made-up path is a single-page app's shell. That makes it the catch-all answer of a directory whose own baseline was not asked, so that baseline is not requested. A directory with answers of its own is still asked.
 
+### Product checks
+
+- Each answer is also matched against published detection templates (nuclei-templates' technology and panel templates, MIT, compiled into azhaq; `internal/detect/SOURCE.md` names the release). A template for the page's path that matches names the product, with the version where the template extracts one, in the row's `detected` field.
+- The favicon is matched against the templates for `/favicon.ico`, wherever the page's icon was found.
+- The sweep of each web service also asks the paths the templates ask, only to name the product. These product checks are not rows of the map: an answer that matches is a `detected` row of `azhaq-paths` about the service. The ledger's purpose for them is `product checks`, and `azhaq plan` counts them.
+- A path whose name or query declares a state change (`install`, `start`, `logout`) is not a product check, and neither is the root with a query.
+- A product a template names is an identification in `hunt` and `report -findings`, named by `detection template`, and matched against the advisories when it has a version.
+- `-no-tech` turns the matching and the product checks off; `-no-paths` turns the product checks off with the path checks.
+
 ### Archives of one host
 The archives are asked for domains. When `-allow` names a host and not its domain (`-allow www.example.org`), the domain is outside the scope and is not asked: the archives are asked for the host itself (`www.example.org/*`) and its archived URLs are listed. A scope that holds the domain asks for the domain and its subdomains as before.
 
@@ -629,6 +639,7 @@ azhaq run -url https://app.example.com/ -ports top-1000 -verify-logins -db app.d
 | `-login` | string |  | sign in on this page with Chrome before the run; its cookies and token go with every request (needs -login-user and -login-pass) |
 | `-login-user` | string |  | user name or email for -login |
 | `-login-pass` | string |  | password for -login (default $AZHAQ_LOGIN_PASS) |
+| `-session-every` | int | `50` | requests between checks that the session still holds (at least 1; 1 checks before every request). A check also runs before each stage that sends many requests, when 10 s passed since the last good check, at the end, and after an answer that looks like the end; a check that holds is one request |
 | `-proxy` | string |  | send requests to targets through this proxy (http://, https:// or socks5://); Chrome too (default: $HTTP_PROXY, $HTTPS_PROXY, except for loopback targets, which stay direct) |
 
 **Output**

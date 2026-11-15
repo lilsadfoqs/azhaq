@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -43,7 +44,7 @@ func TestPlanRequests(t *testing.T) {
 	if len(r.NotCounted) != 0 || !r.Found || r.MaxNames != 200000 {
 		t.Errorf("what is not known before the run %+v", r)
 	}
-	if r.PerService != 53 || r.Cap != 5000 || r.CapBy != "-max-requests" {
+	if r.PerService != 53+productChecks() || r.Cap != 5000 || r.CapBy != "-max-requests" {
 		t.Errorf("bound on the requests to the targets %+v", r)
 	}
 
@@ -53,7 +54,7 @@ func TestPlanRequests(t *testing.T) {
 	if r.Sources["azhaq-search"] != 1 || r.Total != 22 {
 		t.Errorf("keyed engine %+v", r)
 	}
-	if r.Cap != 300 || !strings.HasPrefix(r.CapBy, "-daily-requests") || r.PerService != 52 {
+	if r.Cap != 300 || !strings.HasPrefix(r.CapBy, "-daily-requests") || r.PerService != 52+productChecks() {
 		t.Errorf("daily cap %+v", r)
 	}
 
@@ -71,7 +72,7 @@ func TestPlanRequests(t *testing.T) {
 	// A URL's own host is resolved, not enumerated: no source is asked
 	// about an address.
 	r = planJSON(t, "-url", "http://127.0.0.1:3001/", "-providers", none).Requests
-	if r.Total != 0 || len(r.NotCounted) != 0 || r.Found || r.Cap != 0 || r.CapBy != "" || r.PerService != 53 {
+	if r.Total != 0 || len(r.NotCounted) != 0 || r.Found || r.Cap != 0 || r.CapBy != "" || r.PerService != 53+productChecks() {
 		t.Errorf("an address %+v", r)
 	}
 
@@ -84,7 +85,7 @@ func TestPlanRequests(t *testing.T) {
 	for _, want := range []string{
 		"source queries: 20 about the targets above (azhaq-rdap 1, azhaq-subdomains 14, azhaq-urls 5)",
 		"requests to the targets: at most 5000 (-max-requests)",
-		"about 53 per web service (its page, the favicon, 51 built-in paths)",
+		fmt.Sprintf("about %d per web service (its page, the favicon, 51 built-in paths, %d product checks)", 53+productChecks(), productChecks()),
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("missing %q in\n%s", want, out)

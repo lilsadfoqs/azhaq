@@ -183,6 +183,11 @@ type roleRow struct {
 	// ends, read for 64 KiB or 2 s, or longer than the read limit): its size
 	// and hash are of what was read.
 	Truncated []string `json:"truncated,omitempty"`
+	// LandedOn, on a write row: "sender" when the canary a role sent was read
+	// back in that role's own object (the route does not use the name in the
+	// path). LandedBy names those roles. The sender's field is not restored.
+	LandedOn string   `json:"landed_on,omitempty"`
+	LandedBy []string `json:"landed_by,omitempty"`
 
 	given   bool             // Owner was given with -id
 	value   string           // the identifier filled into the route
@@ -379,7 +384,7 @@ func cmdRoles(args []string) error {
 			}
 		}
 	}
-	costIn := rolesCostIn{roles: roles, logins: len(logins), crawl: crawl, hist: hist, sc: sc, replay: *replay, max: *replayMax, methods: methods, verify: verifySteps}
+	costIn := rolesCostIn{roles: roles, logins: len(logins), crawl: crawl, hist: hist, sc: sc, replay: *replay, max: *replayMax, methods: methods, verify: verifySteps, canary: *writesCanary}
 	if v, ok := flagValue(runArgs, "max-requests"); ok {
 		costIn.budget, _ = strconv.ParseInt(v, 10, 64)
 	}
@@ -780,6 +785,10 @@ func cmdRoles(args []string) error {
 			reqs[i].route = routeOfWrite(reqs[i].url, templates, mapKeys(writes))
 		}
 		reqs = append(reqs, mapWrites(made, writes, methods)...)
+		ownRead := senderObjects(made, templates, mapKeys(writes))
+		for i := range reqs {
+			reqs[i].ownRead = ownRead
+		}
 		var wrows []roleRow
 		if *writesCanary {
 			cn := canaryNotes(reqs, canaryFields)
@@ -825,6 +834,7 @@ func cmdRoles(args []string) error {
 			wn, failed := writeNotes(wrows)
 			rep.Notes = append(rep.Notes, wn...)
 			rep.Notes = append(rep.Notes, canaryRejections(wrows)...)
+			rep.Notes = append(rep.Notes, notAllowedNotes(wrows)...)
 			rep.warned = rep.warned || failed
 		}
 		if len(reqs) == 0 {
@@ -980,7 +990,7 @@ func rolesFailed(rep *report, asJSON bool, err error) error {
 // listed: the verdicts worth a reader's time by default.
 func listed(v string) bool {
 	switch v {
-	case verdictWriteAnyone, verdictWriteCross, verdictWriteUnread, verdictWriteCreate, verdictWriteAccepted, verdictWriteUnverifiable, verdictWriteDry, verdictWriteCanaryRejected, verdictAnyoneSecrets, verdictCross, verdictAnyID, verdictObject, verdictSecrets, verdictShared, verdictSignedIn, verdictOnly,
+	case verdictWriteAnyone, verdictWriteCross, verdictWriteUnread, verdictWriteCreate, verdictWriteAccepted, verdictWriteUnverifiable, verdictWriteDry, verdictWriteCanaryRejected, verdictWriteNotAllowed, verdictWriteMixedNotAllowed, verdictAnyoneSecrets, verdictCross, verdictAnyID, verdictObject, verdictSecrets, verdictShared, verdictSignedIn, verdictOnly,
 		verdictRoleGated, verdictFields, verdictPublicObj, verdictStatus:
 		return true
 	}
@@ -1008,6 +1018,10 @@ func printRoles(roles []role, rows []roleRow, compared int, dir string) {
 			line += " found by " + strings.Join(row.FoundBy, ", ")
 		case verdictWriteAnyone, verdictWriteCross:
 			line += " " + row.Confidence + " · " + row.Evidence
+		case verdictWriteNoChange, verdictWriteNotAllowed, verdictWriteMixedNotAllowed:
+			if row.Evidence != "" {
+				line += " · " + row.Evidence
+			}
 		case verdictWriteUnread, verdictWriteCanaryRejected:
 			line += " · " + row.Evidence
 		case verdictWriteDry:

@@ -1,0 +1,18 @@
+id: raw-probe
+
+info:
+  name: Raw Probe
+  severity: info
+
+http:
+  - raw:
+      - |
+        POST / HTTP/1.1
+        Host: {{Hostname}}
+
+        a=b
+
+    matchers:
+      - type: word
+        words:
+          - "probe"

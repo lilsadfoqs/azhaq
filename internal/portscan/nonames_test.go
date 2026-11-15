@@ -15,8 +15,9 @@ func silentListener(t *testing.T) int {
 		t.Fatal(err)
 	}
 	var held []net.Conn
-	done := make(chan struct{})
+	exited := make(chan struct{})
 	go func() {
+		defer close(exited)
 		for {
 			c, err := l.Accept()
 			if err != nil {
@@ -27,7 +28,7 @@ func silentListener(t *testing.T) int {
 	}()
 	t.Cleanup(func() {
 		l.Close()
-		close(done)
+		<-exited // the accept loop has returned: held is the test's now
 		for _, c := range held {
 			c.Close()
 		}

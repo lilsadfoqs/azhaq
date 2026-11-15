@@ -178,7 +178,7 @@ func (c *Collector) Forget(raw string) {
 // Info: many requests to the target; needs -dirs and -allow, and waits for
 // the HTTP collector so it starts from a service that answered.
 func (c *Collector) Info() catalog.Info {
-	return catalog.Info{Kind: catalog.Active, Flag: "dirs", After: "azhaq-http", Redo: true}
+	return catalog.Info{Kind: catalog.Active, Flag: "dirs", After: "azhaq-http", Redo: true, Stage: true}
 }
 
 func (c *Collector) Inputs() []types.SeedType { return []types.SeedType{types.TypeURL} }

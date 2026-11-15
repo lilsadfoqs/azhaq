@@ -220,6 +220,7 @@ How a write is judged ([roles, Details](commands/roles.md#details) has the rules
 - A cross-role write is reported only when it is proven. azhaq reads the owner's object as the owner, before and after the write.
 - azhaq looks for a readable object even when the write's own URL is not one. `/users/v1/alice/email` is checked against `/users/v1/alice`.
 - A write that answers 2xx and leaves the owner's object unchanged is not a finding. Under `-all` it is `answered 2xx but changed nothing of the owner's`.
+- With `-replay-writes-canary`, azhaq then reads the sender's own object. When the canary is there, the row has `landed_on: "sender"`: the app wrote the caller's own record and ignored the name in the path. That record keeps the canary value.
 - A POST to a collection another role was let to send is listed as `create accepted`, or as `creates in another role's collection` when the anonymous role was let or the object it made belongs to the replayed request's role. It is never a cross write: it made data on the target.
 - Add `-id alice:username=…` when identifiers are not in the answers. Check the `owner_by` line, which quotes what proved the write.
 
