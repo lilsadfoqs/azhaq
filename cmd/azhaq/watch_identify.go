@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/lilsadfoqs/azhaq/internal/lazyre"
+	"github.com/lilsadfoqs/azhaq/internal/portscan"
 	"github.com/lilsadfoqs/azhaq/store"
 	"github.com/lilsadfoqs/azhaq/types"
 )
@@ -128,26 +129,12 @@ func (s portSvc) text() string { return strings.TrimSpace(s.key() + " " + s.name
 
 // svcsOf reads the open services of a ports row: TCP always, UDP only where
 // the answer showed the port open.
-func svcsOf(raw json.RawMessage) []portSvc {
-	var row struct {
-		Services []struct {
-			Port                      int
-			Service, Product, Version string
-		} `json:"services"`
-		UDP []struct {
-			Port                      int
-			State                     string
-			Service, Product, Version string
-		} `json:"udp_services"`
-	}
-	if json.Unmarshal(raw, &row) != nil {
-		return nil
-	}
+func svcsOf(row portscan.Row) []portSvc {
 	var out []portSvc
 	for _, s := range row.Services {
 		out = append(out, portSvc{s.Port, "tcp", s.Service, s.Product, s.Version})
 	}
-	for _, s := range row.UDP {
+	for _, s := range row.UDPServices {
 		if s.State == "open" {
 			out = append(out, portSvc{s.Port, "udp", s.Service, s.Product, s.Version})
 		}

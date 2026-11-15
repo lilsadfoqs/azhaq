@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/netip"
 	"slices"
@@ -9,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/lilsadfoqs/azhaq/internal/portscan"
 	"github.com/lilsadfoqs/azhaq/store"
 	"github.com/lilsadfoqs/azhaq/types"
 )
@@ -38,17 +38,8 @@ func scansOf(st *store.Store) runPorts {
 		if o.Collector != "azhaq-ports" {
 			continue
 		}
-		var row struct {
-			IP      string `json:"ip"`
-			Host    string `json:"host"`
-			Range   bool   `json:"range"`
-			Prefix  string `json:"prefix"`
-			Stopped bool   `json:"stopped"`
-			Partial bool   `json:"partial"`
-			Scanned int    `json:"scanned"`
-			Open    []int  `json:"open"`
-		}
-		if json.Unmarshal(o.Payload, &row) != nil {
+		row, err := portscan.ParseRow(o.Payload)
+		if err != nil {
 			continue
 		}
 		if row.Range {
@@ -70,7 +61,7 @@ func scansOf(st *store.Store) runPorts {
 				a.ports = append(a.ports, s)
 			}
 		}
-		a.svcs = mergeSvcs(a.svcs, svcsOf(o.Payload))
+		a.svcs = mergeSvcs(a.svcs, svcsOf(row))
 		a.complete = a.complete || !row.Partial
 		if h := strings.ToLower(row.Host); h != "" && h != row.IP && !slices.Contains(a.names, h) {
 			a.names = append(a.names, h)

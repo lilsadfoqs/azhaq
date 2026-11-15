@@ -11,6 +11,7 @@ import (
 
 	"github.com/lilsadfoqs/azhaq/engine"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
+	"github.com/lilsadfoqs/azhaq/internal/portscan"
 	"github.com/lilsadfoqs/azhaq/internal/webextract"
 	"github.com/lilsadfoqs/azhaq/types"
 )
@@ -169,23 +170,23 @@ func newStream(asJSON bool) (see func(types.Entity, types.Observation), end func
 			// address, the port and the protocol. A range's own row has no
 			// ports of its own, and an address row names the ports it
 			// found, so the open list repeated by each scan is not a key.
-			if p["range"] == true {
+			row, _ := portscan.ParseRow(o.Payload) // a row that does not fit is read as far as it goes, as it was
+			if row.Range {
 				break
 			}
-			addr, host := str("ip"), str("host")
+			addr, host := row.IP, row.Host
 			if addr == "" {
 				addr = host
 			}
 			if addr == "" {
 				break
 			}
-			add := func(port any, proto, state, service string) {
-				n, _ := port.(float64)
-				if n <= 0 {
+			add := func(port int, proto, state, service string) {
+				if port <= 0 {
 					return
 				}
-				key := net.JoinHostPort(addr, strconv.Itoa(int(n))) + "/" + proto
-				fields := map[string]any{"ip": str("ip"), "host": host, "port": int(n), "protocol": proto, "state": state}
+				key := net.JoinHostPort(addr, strconv.Itoa(port)) + "/" + proto
+				fields := map[string]any{"ip": row.IP, "host": host, "port": port, "protocol": proto, "state": state}
 				more := state
 				if service != "" {
 					fields["service"] = service
@@ -196,20 +197,16 @@ func newStream(asJSON bool) (see func(types.Entity, types.Observation), end func
 				}
 				lines = append(lines, line{kind: "port", key: key, more: more, fields: fields})
 			}
-			rows := func(k, proto string) {
-				list, _ := p[k].([]any)
-				for _, v := range list {
-					m, _ := v.(map[string]any)
-					state, _ := m["state"].(string)
-					if state == "" {
-						state = "open"
-					}
-					svc, _ := m["service"].(string)
-					add(m["port"], proto, state, svc)
-				}
+			for _, svc := range row.Services {
+				add(svc.Port, "tcp", "open", svc.Service)
 			}
-			rows("services", "tcp")
-			rows("udp_services", "udp")
+			for _, svc := range row.UDPServices {
+				state := svc.State
+				if state == "" {
+					state = "open"
+				}
+				add(svc.Port, "udp", state, svc.Service)
+			}
 		}
 		mu.Lock()
 		defer mu.Unlock()

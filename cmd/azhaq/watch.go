@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/lilsadfoqs/azhaq/internal/portscan"
 	"github.com/lilsadfoqs/azhaq/internal/webextract"
 	"github.com/lilsadfoqs/azhaq/store"
 	"github.com/lilsadfoqs/azhaq/types"
@@ -363,7 +364,7 @@ func factsByEntity(st *store.Store) map[string]facts {
 				}
 			}
 		case "azhaq-ports":
-			if n, _ := p["scanned"].(float64); n > 0 {
+			if row, err := portscan.ParseRow(o.Payload); err == nil && row.Scanned > 0 {
 				f.portScanned = true
 			}
 		}

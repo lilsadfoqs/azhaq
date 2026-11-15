@@ -1,11 +1,11 @@
 package main
 
 import (
-	"encoding/json"
 	"strconv"
 	"strings"
 
 	"github.com/lilsadfoqs/azhaq/internal/certfacts"
+	"github.com/lilsadfoqs/azhaq/internal/portscan"
 	"github.com/lilsadfoqs/azhaq/internal/proof"
 	"github.com/lilsadfoqs/azhaq/types"
 )
@@ -28,16 +28,8 @@ func certLeads(obs []types.StoredObservation, command string) []findingRecord {
 		if o.Collector != "azhaq-ports" || o.Kind != "ports" {
 			continue
 		}
-		var p struct {
-			Host     string `json:"host"`
-			IP       string `json:"ip"`
-			Range    bool   `json:"range"`
-			Services []struct {
-				Port int              `json:"port"`
-				Cert *certfacts.Facts `json:"certificate"`
-			} `json:"services"`
-		}
-		if json.Unmarshal(o.Payload, &p) != nil || p.Range {
+		p, err := portscan.ParseRow(o.Payload)
+		if err != nil || p.Range {
 			continue
 		}
 		host := p.Host
