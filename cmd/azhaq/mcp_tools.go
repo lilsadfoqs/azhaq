@@ -98,7 +98,7 @@ func mcpTools() []map[string]any {
 	}
 	return []map[string]any{
 		{"name": "azhaq_scope", "title": "Scope and budget",
-			"description": "What this server may touch (the scope fixed at start), the run options fixed with it (resolvers, sources, skipped collectors, takeover check: run_options), its request budget and how much of it is used. Call it first on a program.",
+			"description": "What this server may touch (the scope fixed at start), the run options fixed with it (resolvers, sources, skipped collectors, takeover check: run_options), its request budget and how much of it is used (by the calls that ended). Call it first on a program.",
 			"inputSchema": obj(map[string]any{}), "annotations": annotations(true, false, "Scope and budget")},
 		{"name": "azhaq_plan", "title": "Plan a run",
 			"description": "What azhaq_map would take, leave out of the scope (and why), run and send for these targets, without sending anything: collectors per target, built-in paths, active techniques, limits, and state_changing: the GET requests among the targets whose own path or query declares a state change (create, delete, reset, populate, logout, action=stop and the other words of the documented set), each with the -deny-path rule that would keep it out, and its status: a target you name is held back like a GET a run finds on the way, and the server's -send-state-changing at start sends it. A word of a wordlist is held back the same way, and one found on the way the plan cannot know. With graphql the plan is refused unless the server was started with -allow-writes, as the call is. Built by the same code path that builds azhaq_map's call, so the plan is what the call would send.",
@@ -182,7 +182,7 @@ func mcpTools() []map[string]any {
 			"description": "The workspaces this server has written.",
 			"inputSchema": obj(map[string]any{}), "annotations": annotations(true, false, "List workspaces")},
 		{"name": "azhaq_status", "title": "Server and workspace status",
-			"description": "A compact status of this server and every workspace it has written: the scope (locked, the allow and deny rules), the request budget (limit, used, left), the pace, the path of the ledger of the calls that name no workspace, and each workspace's state as its database records it -- complete, or stopped by a limit with tasks_left, the requests the run has sent and the azhaq_resume call that continues it; failed, when this session's last map, resume or roles call for it failed outright. Sends nothing and starts no command.",
+			"description": "A compact status of this server and every workspace it has written: the scope (locked, the allow and deny rules), the request budget (limit, used, left; used counts the requests of the calls that have ended, so a call still running adds its own only when it ends), in_flight (the calls running now, each with the -max-requests it was handed, which is the most it can still add to used), the pace, the path of the ledger of the calls that name no workspace, and each workspace's state as its database records it -- complete, or stopped by a limit with tasks_left, the requests the run has sent and the azhaq_resume call that continues it; failed, when this session's last map, resume or roles call for it failed outright. Sends nothing and starts no command.",
 			"inputSchema": obj(map[string]any{}), "annotations": annotations(true, false, "Server and workspace status")},
 	}
 }
