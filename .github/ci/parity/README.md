@@ -46,6 +46,22 @@ but not in the key counts against precision, as `grade.py` lists it for a person
 to judge; read precision as a trend, not a verdict. `summary.py agg` gives the
 mean and the minimum across the samples.
 
+`ident.py` asks a narrower question of the same workspace: of the key's
+services azhaq found, how many did it name, product and version? A product is
+named when a stored row states it (a port's service product, a web answer's
+technology, a check's or an advisory's product); a product that is only in a
+page title or a `Server` header is counted apart, as shown but not stated. The
+version is counted where the key's version is one (not `latest`). It uses the
+drift grader's rule for matching a product name, prints counts, shares and the
+key's categories only, and writes the misses (what the rows said, per service)
+to `graded/ident-misses.jsonl`, inside the encrypted sample. It reads only the
+export, so it runs in seconds over any kept workspace:
+
+```
+python3 -I .github/ci/parity/ident.py sample DIR/sK/key.json DIR/sK/export.jsonl --out ident.json --misses misses.jsonl
+python3 -I .github/ci/parity/ident.py agg DIR/s*/ident.json
+```
+
 ## Fresh seeds, aggregates only
 
 The four pool estates (`range/pool.json`) have known baselines, so tuning

@@ -144,6 +144,9 @@ jobs:
           python3 -I .github/ci/range/grade.py "$HOME/parity/keep/key.json" "$w" --json "$w/grade.json" --md "$w/grade.md"
           python3 -I .github/ci/parity/summary.py sample "$HOME/parity/keep/key.json" "$w/grade.json" "$w/leads.jsonl" \
             --cap-seconds "$(jq -r .cap_seconds "$out/replay.json")" --out "$out/summary-worklist.json"
+          # Product and version named per service; the misses name the key's products, so they go in the sample.
+          python3 -I .github/ci/parity/ident.py sample "$HOME/parity/keep/key.json" "$out/export.jsonl" \
+            --out "$out/ident.json" --misses "$g/ident-misses.jsonl"
           echo "graded"
       - name: publish
         if: always()
@@ -178,6 +181,10 @@ jobs:
           if [ -s summary-worklist.json ]; then
             age -r "$AGE_RECIPIENT" -o "$pub/summary-worklist.json.age" summary-worklist.json
             files+=("$pub/summary-worklist.json.age")
+          fi
+          if [ -s ident.json ]; then
+            age -r "$AGE_RECIPIENT" -o "$pub/ident.json.age" ident.json
+            files+=("$pub/ident.json.age")
           fi
           [ "${#files[@]}" -gt 0 ] || exit 0
           "$GITHUB_WORKSPACE/.github/ci/publish.sh" "parity/${GITHUB_REF_NAME#parity-}/s${{ matrix.sample }}" "${files[@]}"
