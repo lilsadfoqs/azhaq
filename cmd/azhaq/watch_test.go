@@ -131,7 +131,7 @@ func TestWatchNotificationsAreInTheLedgerAndTheSummary(t *testing.T) {
 			t.Fatalf("status %d: %v", status, err)
 		}
 		rep := lastReport(t, errOut)
-		if rep.Command != "watch" || rep.Results != int(got.Load()) || got.Load() == 0 {
+		if rep.Command != "notify" || rep.Results != int(got.Load()) || got.Load() == 0 {
 			t.Errorf("status %d: the receiver got %d requests, the watch summary says %d (%s)", status, got.Load(), rep.Results, rep.Command)
 		}
 		var notes int

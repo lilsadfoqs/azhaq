@@ -156,7 +156,7 @@ func (b *Browser) Login(ctx context.Context, loginURL, user, pass string) (_ Ses
 	// What Chrome refused for the sign-in's frames: a sign-in that went to
 	// an identity provider outside the scope fails, and says so.
 	main := cdp.FrameID(chromedp.FromContext(tab).Target.TargetID)
-	t := b.open(tab, main, true, false)
+	t := b.openSignIn(tab, main, user, pass)
 	watched = b.watch(tab, t, nil)
 	var mine []refusal
 	claimed := false
@@ -236,7 +236,9 @@ func (b *Browser) Login(ctx context.Context, loginURL, user, pass string) (_ Ses
 				}
 				sentMu.Unlock()
 			}
-			if ev.Request != nil && ev.Request.Method != "GET" && ev.Request.Method != "OPTIONS" {
+			// What the sign-in's own submit sent: not the page's polling
+			// before it, which Chrome was not let send.
+			if ev.Request != nil && t.cred.submitted.Load() && !reads(ev.Request.Method) && !chatter(ev.Request.URL) {
 				sentMu.Lock()
 				if len(sent) < 8 {
 					sent = append(sent, ev.RequestID)
@@ -249,6 +251,7 @@ func (b *Browser) Login(ctx context.Context, loginURL, user, pass string) (_ Ses
 	if err := chromedp.Do(tab, chromedp.Sleep(400*time.Millisecond)); err != nil {
 		return Session{}, err
 	}
+	t.cred.submitted.Store(true) // the form posted as a navigation is the sign-in's
 	how, err := chromedp.Run(tab, chromedp.Evaluate[string](submitForm))
 	if err != nil {
 		return Session{}, err

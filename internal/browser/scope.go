@@ -70,7 +70,8 @@ type tab struct {
 	capped  bool
 	pending int  // requests of its frames being decided
 	read    bool // claimed: what comes later is counted only
-	signin  bool // the sign-in's: its writes are sent, and not kept
+	signin  bool // the sign-in's: the write that signs in is sent (cred), the others are held as any page's
+	cred    *credentials
 	lean    bool // read, not shot: its images, fonts and media are not fetched
 	writes  []Write
 	prog    *progress // when the page last moved (with a pace), or nil
@@ -290,7 +291,9 @@ func (b *Browser) decide(root context.Context, ev cdpfetch.EventRequestPaused, t
 		raw = ev.Request.URL
 		if !reads(ev.Request.Method) {
 			r.sends = ev.ResourceType == network.ResourceTypeXHR || ev.ResourceType == network.ResourceTypeFetch
-			write = t == nil || !t.signin // the sign-in posts its form
+			// The sign-in's own request goes out; its page's scripts' writes
+			// are held as any page's.
+			write = t == nil || !t.signin || !t.cred.signsIn(ev.Request, r.doc, ev.FrameID, t.main)
 		}
 	}
 	b.pausedAgain(ev.NetworkID, raw)
@@ -626,8 +629,9 @@ func (b *Browser) closePopups(ctx context.Context, main cdp.FrameID) {
 }
 
 // open makes main's page one whose refusals are kept for it; signin
-// makes it the sign-in's, whose writes are sent; lean one read without
-// its images, fonts and media.
+// makes it the sign-in's (openSignIn gives it the credentials, without
+// which none of its writes is sent); lean one read without its images,
+// fonts and media.
 func (b *Browser) open(ctx context.Context, main cdp.FrameID, signin, lean bool) *tab {
 	return b.openTab(ctx, main, signin, lean, nil, nil)
 }
@@ -636,6 +640,14 @@ func (b *Browser) open(ctx context.Context, main cdp.FrameID, signin, lean bool)
 // and its record.
 func (b *Browser) openTab(ctx context.Context, main cdp.FrameID, signin, lean bool, prog *progress, log *pageLog) *tab {
 	t := &tab{main: main, ctx: ctx, rs: map[refusal]bool{}, signin: signin, lean: lean, prog: prog, log: log}
+	b.addFrame(t, main)
+	return t
+}
+
+// openSignIn is the sign-in's page: the request that carries user or pass
+// is sent, and so is the form posted after the sign-in submitted it.
+func (b *Browser) openSignIn(ctx context.Context, main cdp.FrameID, user, pass string) *tab {
+	t := &tab{main: main, ctx: ctx, rs: map[refusal]bool{}, signin: true, cred: &credentials{user: user, pass: pass}}
 	b.addFrame(t, main)
 	return t
 }
@@ -660,9 +672,6 @@ func (b *Browser) addFrame(t *tab, frame cdp.FrameID) {
 			t.add(r)
 			delete(b.held, r)
 		}
-	}
-	if t.signin {
-		return
 	}
 	b.heldW = slices.DeleteFunc(b.heldW, func(h heldWrite) bool {
 		if h.frame == frame {
