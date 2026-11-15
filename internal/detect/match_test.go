@@ -412,3 +412,17 @@ func TestMatchIsConcurrencySafe(t *testing.T) {
 		}
 	}
 }
+
+// A fragment is not sent: a template asking "/#/login" is matched on the root.
+func TestRequestPathDropsTheFragment(t *testing.T) {
+	for in, want := range map[string]string{"/#/login": "/", "/#!/auth": "/", "/a#b": "/a", "/x?y=1": "/x?y=1", "": "/"} {
+		if got := requestPath(in); got != want {
+			t.Errorf("requestPath(%q) = %q, want %q", in, got, want)
+		}
+	}
+	for _, p := range Paths() {
+		if strings.Contains(p, "#") {
+			t.Fatalf("Paths() holds %q", p)
+		}
+	}
+}

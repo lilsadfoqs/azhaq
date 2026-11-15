@@ -34,6 +34,12 @@ func Product(title string) string {
 			break
 		}
 	}
+	// A title can lead with the noise too: "Detect Springboot Actuators".
+	for _, lead := range []string{"detect ", "detection of ", "exposed "} {
+		if len(name) > len(lead) && strings.EqualFold(name[:len(lead)], lead) {
+			name = strings.TrimSpace(name[len(lead):])
+		}
+	}
 	if name == "" {
 		return strings.TrimSpace(title)
 	}

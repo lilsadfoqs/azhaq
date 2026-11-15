@@ -30,6 +30,9 @@ type Response struct {
 // Hit is one template that matched.
 type Hit struct {
 	Product, Version, Template, Matcher, Extracted string
+	// Many: the template names many products, this one by its matcher
+	// (tech-detect, fingerprinthub): a library or a CDN as well as an app.
+	Many bool
 }
 
 // Stats describes the loaded data.
@@ -94,6 +97,18 @@ type index struct {
 	groups map[string]*group
 }
 
+// requestPath is what a template's path asks of the server: a fragment
+// ("/#/login", a single-page app's route) is not sent, so it asks the root.
+func requestPath(p string) string {
+	if i := strings.IndexByte(p, '#'); i >= 0 {
+		p = p[:i]
+	}
+	if p == "" {
+		return "/"
+	}
+	return p
+}
+
 // group is the units that share one request path, with one literal index
 // over all their prefilterable matchers.
 type group struct {
@@ -148,8 +163,12 @@ func build(d *Data) *index {
 		for j := range u.Extractors {
 			cu.xs = append(cu.xs, &cextractor{spec: &u.Extractors[j]})
 		}
+		seen := map[string]bool{}
 		for _, p := range u.Paths {
-			byPath[p] = append(byPath[p], cu)
+			if p = requestPath(p); !seen[p] {
+				seen[p] = true
+				byPath[p] = append(byPath[p], cu)
+			}
 		}
 	}
 	for p, units := range byPath {
@@ -288,13 +307,13 @@ func (idx *index) match(r Response) []Hit {
 			x = u.extract(c)
 			extracted[int(ui)] = x
 		}
-		prod := u.spec.Product
+		prod, many := u.spec.Product, false
 		if u.spec.Multi && name != "" {
-			prod = Humanise(name)
+			prod, many = Humanise(name), true
 		}
 		hits = append(hits, Hit{
 			Product: prod, Version: versionOf(x), Template: u.spec.ID,
-			Matcher: name, Extracted: x,
+			Matcher: name, Extracted: x, Many: many,
 		})
 	}
 
