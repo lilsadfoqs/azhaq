@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"net"
 	"net/url"
-	"regexp"
 	"slices"
 	"sort"
 	"strconv"
 	"strings"
 
+	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 	"github.com/lilsadfoqs/azhaq/store"
 	"github.com/lilsadfoqs/azhaq/types"
 )
@@ -18,7 +18,7 @@ import (
 // maxListed caps the services named on one line; the rest are counted.
 const maxListed = 16
 
-var uuidSeg = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
+var uuidSeg = lazyre.New(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 
 // volatileSegment says a path segment is an identifier, a build hash or a
 // placeholder: it changes with the data or the build, not with the app.
