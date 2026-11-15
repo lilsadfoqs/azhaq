@@ -127,7 +127,8 @@ func TestRunPortsAddressesScannedDoNotGrowOnResume(t *testing.T) {
 	t.Cleanup(srv.Close)
 	_, port, _ := net.SplitHostPort(srv.Listener.Addr().String())
 	t.Chdir(t.TempDir())
-	args := []string{"-allow", "127.0.0.0/29", "-sources", "none", "-skip", "subs", "-rate", "0", "-db", "r.db", "-max-requests", "12"}
+	// -no-tech: no product checks, which this budget of 12 would spend many resumes on.
+	args := []string{"-allow", "127.0.0.0/29", "-sources", "none", "-skip", "subs", "-no-tech", "-rate", "0", "-db", "r.db", "-max-requests", "12"}
 	_, rep, _ := runContract(t, append([]string{"run", "-cidr", "127.0.0.0/29", "-ports", port + ",1"}, args...)...)
 	for i := 0; i < 30 && rep.Exit == exitLimit; i++ {
 		if rep.AddressesScanned != nil && *rep.AddressesScanned > 8 {
