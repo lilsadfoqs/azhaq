@@ -77,10 +77,12 @@ A new surface says what the run found on it, and only what the run's own observa
 | --- | --- |
 | `http://h:8888/ [302] Home (Jupyter Notebook 6.0, Tornado)` | A new web service. In the brackets are the status and the title; in the parentheses the technologies the answer showed, `Name version` where it stated a version. Nothing is added when the run read none. |
 | `dns.example (10.0.0.5): 22/tcp ssh, 53/tcp BIND 9.11` | A new name with its open ports. Each is `port/protocol` and then the product and version the run found, or the service name the run stored when it found no product. A port with neither is the bare `port/protocol`. A name with more than 16 services names 16 and counts the rest. |
-| `soap.example: +9000/tcp php-fpm, -8080/tcp (open: 22,9000)` | A host whose open TCP ports changed: `+` for each port added with what the run found on it, `-` for each removed, and the ports open now. |
+| `soap.example (10.0.0.7): +9000/tcp php-fpm, -8080/tcp (open: 22,9000)` | An address whose open TCP ports changed, with the names that resolve to it (three, and a count of the rest) or the address alone: `+` for each port added with what the run found on it, `-` for each removed, and the ports open now. |
 | `http://h/: [200] Home (product: nginx 1.18 → nginx 1.24)` | A front page that answered in both runs with other technologies: those the previous run showed and this run no longer does, then those it now shows. Said only when both runs read some. |
-| `s.example: 22/tcp OpenSSH 8.9 → OpenSSH 9.6` | A port that stayed open and whose product or version changed, when both runs state a product for it. |
+| `s.example (10.0.0.8): 22/tcp OpenSSH 8.9 → OpenSSH 9.6` | A port that stayed open and whose product or version changed, when both runs state a product for it. |
 | `cdn.example → old-bucket.cloudhost.example (NXDOMAIN)` | A name that points nowhere: the CNAME chain and the answer at its end. A takeover candidate the DNS answer showed is named after it (`NXDOMAIN; takeover candidate: SERVICE`). A name that answered with a resolver failure in the previous run is not reported as new, and a wildcard's name is not reported. |
+
+Ports are compared per address, whichever seed scanned it: a name, the address, or a range that holds it. An address in a range the run finished, with nothing open, has no ports open. A scan that a limit stopped counts only what it saw. A port it did not reach is not reported gone, and a port that the previous run's stopped scan did not reach is not reported new.
 
 watch asks nothing more for this: it reads the technologies from the web answers (`tech`), the services from the port scan rows (`services`, and `udp_services` that were open) and the names that point nowhere from the DNS answers (`dangling`, `takeover`) the run stored. It names no product from a port number.
 

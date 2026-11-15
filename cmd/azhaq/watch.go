@@ -8,7 +8,6 @@ import (
 	"os/exec"
 	"slices"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -206,12 +205,7 @@ func changesBetween(old, neu *store.Store, d store.Diff, ch changes) (changes, e
 	}
 	newFacts := factsByEntity(neu)
 	oldFacts := factsByEntity(old)
-	byHost := map[string][]portSvc{}
-	for _, f := range newFacts {
-		if f.host != "" {
-			byHost[strings.ToLower(f.host)] = append(byHost[strings.ToLower(f.host)], f.svcs...)
-		}
-	}
+	newPorts, oldPorts := scansOf(neu), scansOf(old)
 	// A URL is new when its identity (path with identifiers folded, query
 	// names without values) was not in the previous run, one line each.
 	oldIdent, newIdent := foldedURLs(old), foldedURLs(neu)
@@ -227,11 +221,7 @@ func changesBetween(old, neu *store.Store, d store.Diff, ch changes) (changes, e
 		case types.TypeHostname:
 			if ips := newFacts[e.ID].ips; len(ips) > 0 {
 				line := e.Key + " (" + strings.Join(ips, ", ") + ")"
-				svcs := newFacts[e.ID].svcs
-				if len(svcs) == 0 {
-					svcs = byHost[strings.ToLower(e.Key)]
-				}
-				if len(svcs) > 0 {
+				if svcs := svcsAt(newPorts, ips); len(svcs) > 0 {
 					line += ": " + svcList(svcs)
 				}
 				ch.Hosts = append(ch.Hosts, line)
@@ -298,19 +288,17 @@ func changesBetween(old, neu *store.Store, d store.Diff, ch changes) (changes, e
 			ch.Changed = append(ch.Changed, line)
 		}
 	}
-	// Ports: the open set of a host that was scanned in both runs, and the
+	// Ports: per address, the open set where both runs scanned it, and the
 	// product of a service that stayed open.
-	for id, f := range newFacts {
-		if f.ports == nil {
-			continue
-		}
-		if o := oldFacts[id]; o.ports != nil {
-			if line := portsChange(o, f); line != "" {
-				ch.Ports = append(ch.Ports, line)
-			}
-			ch.Changed = append(ch.Changed, svcChanges(o, f)...)
+	names := namesByAddress(neu, newFacts)
+	for ip, ns := range namesByAddress(old, oldFacts) {
+		if _, ok := names[ip]; !ok {
+			names[ip] = ns
 		}
 	}
+	ports, changed := portsChanges(oldPorts, newPorts, names)
+	ch.Ports = append(ch.Ports, ports...)
+	ch.Changed = append(ch.Changed, changed...)
 	ch.URLs = withoutRoutes(ch.URLs, ch.Routes, "new")
 	ch.GoneURLs = withoutRoutes(ch.GoneURLs, ch.Routes, "gone")
 	for _, xs := range [][]string{ch.Hosts, ch.Dangling, ch.Services, ch.URLs, ch.Ports, ch.Changed, ch.GoneHosts, ch.GoneSvcs, ch.GoneURLs} {
@@ -325,11 +313,9 @@ type facts struct {
 	url         string
 	title, role string
 	catchAll    bool
-	ports       []string
-	host        string
+	portScanned bool     // a port scan asked it (its rows: scansOf)
 	items       int      // items of a JSON listing, plus one; 0 when it is not one
 	tech        []string // technologies the http answers showed, "Name" or "Name:version"
-	svcs        []portSvc
 }
 
 func factsByEntity(st *store.Store) map[string]facts {
@@ -370,35 +356,14 @@ func factsByEntity(st *store.Store) map[string]facts {
 				}
 			}
 		case "azhaq-ports":
-			if n, _ := p["scanned"].(float64); n == 0 {
-				break // not scanned (no IPv6 route): nothing to compare
+			if n, _ := p["scanned"].(float64); n > 0 {
+				f.portScanned = true
 			}
-			f.host, _ = p["host"].(string)
-			if f.ports == nil {
-				f.ports = []string{}
-			}
-			// A name with several addresses has a row each: the open set is their union.
-			if open, ok := p["open"].([]any); ok {
-				for _, x := range open {
-					if port := fmt.Sprint(x); !slices.Contains(f.ports, port) {
-						f.ports = append(f.ports, port)
-					}
-				}
-			}
-			f.svcs = mergeSvcs(f.svcs, svcsOf(o.Payload))
 		}
 		if r, ok := p["role"].(string); ok && f.role == "" {
 			f.role = r
 		}
 		out[o.EntityID] = f
-	}
-	for id, f := range out {
-		sort.Slice(f.ports, func(i, j int) bool {
-			a, _ := strconv.Atoi(f.ports[i])
-			b, _ := strconv.Atoi(f.ports[j])
-			return a < b
-		})
-		out[id] = f
 	}
 	return out
 }

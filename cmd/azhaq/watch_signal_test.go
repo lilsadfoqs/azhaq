@@ -179,15 +179,15 @@ func TestWatchNewHostNamesItsServices(t *testing.T) {
 }
 
 func TestWatchPortsNameWhatWasAddedAndRemoved(t *testing.T) {
-	old := []seenRow{resolvesTo("soap.example", "10.0.0.7"), openPorts("soap.example", "22,8080", `{"port":22,"service":"ssh","product":"OpenSSH","version":"8.9"},{"port":8080,"service":"http","product":"nginx"}`)}
-	neu := []seenRow{resolvesTo("soap.example", "10.0.0.7"), openPorts("soap.example", "22,9000,9100", `{"port":22,"service":"ssh","product":"OpenSSH","version":"8.9"},{"port":9000,"service":"fastcgi","product":"php-fpm"},{"port":9100}`)}
+	old := []seenRow{resolvesTo("soap.example", "10.0.0.5"), openPorts("soap.example", "22,8080", `{"port":22,"service":"ssh","product":"OpenSSH","version":"8.9"},{"port":8080,"service":"http","product":"nginx"}`)}
+	neu := []seenRow{resolvesTo("soap.example", "10.0.0.5"), openPorts("soap.example", "22,9000,9100", `{"port":22,"service":"ssh","product":"OpenSSH","version":"8.9"},{"port":9000,"service":"fastcgi","product":"php-fpm"},{"port":9100}`)}
 	ch := watchRuns(t, old, neu)
-	want := "soap.example: +9000/tcp php-fpm, +9100/tcp, -8080/tcp (open: 22,9000,9100)"
+	want := "soap.example (10.0.0.5): +9000/tcp php-fpm, +9100/tcp, -8080/tcp (open: 22,9000,9100)"
 	if len(ch.Ports) != 1 || ch.Ports[0] != want || len(ch.Changed) != 0 {
 		t.Fatalf("ports %q changed %q, want %q", ch.Ports, ch.Changed, want)
 	}
 	// The same set in another order of services is no change.
-	same := []seenRow{resolvesTo("soap.example", "10.0.0.7"), openPorts("soap.example", "8080,22", `{"port":8080,"service":"http","product":"nginx"},{"port":22,"service":"ssh","product":"OpenSSH","version":"8.9"}`)}
+	same := []seenRow{resolvesTo("soap.example", "10.0.0.5"), openPorts("soap.example", "8080,22", `{"port":8080,"service":"http","product":"nginx"},{"port":22,"service":"ssh","product":"OpenSSH","version":"8.9"}`)}
 	if ch := watchRuns(t, old, same); ch.any() {
 		t.Fatalf("%+v", ch)
 	}
@@ -216,12 +216,84 @@ func TestWatchProductChangeNamesBeforeAndAfter(t *testing.T) {
 		t.Fatalf("%+v", ch)
 	}
 	// A port that stayed open with another product.
-	old := []seenRow{resolvesTo("s.example", "10.0.0.8"), openPorts("s.example", "22", `{"port":22,"service":"ssh","product":"OpenSSH","version":"8.9"}`)}
-	neu := []seenRow{resolvesTo("s.example", "10.0.0.8"), openPorts("s.example", "22", `{"port":22,"service":"ssh","product":"OpenSSH","version":"9.6"}`)}
+	old := []seenRow{resolvesTo("s.example", "10.0.0.5"), openPorts("s.example", "22", `{"port":22,"service":"ssh","product":"OpenSSH","version":"8.9"}`)}
+	neu := []seenRow{resolvesTo("s.example", "10.0.0.5"), openPorts("s.example", "22", `{"port":22,"service":"ssh","product":"OpenSSH","version":"9.6"}`)}
 	ch = watchRuns(t, old, neu)
-	if len(ch.Changed) != 1 || ch.Changed[0] != "s.example: 22/tcp OpenSSH 8.9 → OpenSSH 9.6" || len(ch.Ports) != 0 {
+	if len(ch.Changed) != 1 || ch.Changed[0] != "s.example (10.0.0.5): 22/tcp OpenSSH 8.9 → OpenSSH 9.6" || len(ch.Ports) != 0 {
 		t.Fatalf("changed %q ports %q", ch.Changed, ch.Ports)
 	}
+}
+
+func rangeRow(prefix string) seenRow {
+	return seenRow{prefix, "azhaq-ports", `{"range":true,"prefix":"` + prefix + `","scanned":1000,"open":[]}`}
+}
+
+// addrRow is a ports row of one address as a range scan stores it: under the
+// range, with the address for host.
+func addrRow(prefix, ip, open, services string, partial bool) seenRow {
+	return seenRow{prefix, "azhaq-ports", fmt.Sprintf(`{"host":%q,"ip":%q,"prefix":%q,"scanned":1000,"partial":%t,"open":[%s],"services":[%s]}`, ip, ip, prefix, partial, open, services)}
+}
+
+// Ports are compared per address, whichever seed scanned it (#493): the rows
+// a range stores under itself are not merged into one line, an address the
+// range finished with no row had nothing open, and a name's scan in one run
+// meets the range's scan of its address in the other.
+func TestWatchComparesPortsPerAddress(t *testing.T) {
+	const pf = "10.0.0.0/29"
+	httpd := `{"port":8080,"service":"http","product":"Apache httpd","version":"2.4.54"}`
+	base := func() []seenRow {
+		return []seenRow{rangeRow(pf), addrRow(pf, "10.0.0.2", "8080", httpd, false),
+			addrRow(pf, "10.0.0.4", "8080", `{"port":8080,"service":"http","product":"BaseHTTP","version":"0.6"}`, false)}
+	}
+	// Two addresses with one port and two products: the same in another order is no change.
+	rev := base()
+	rev[1], rev[2] = rev[2], rev[1]
+	if ch := watchRuns(t, base(), rev); ch.any() {
+		t.Fatalf("%+v", ch)
+	}
+	// A new address of the range, named by a name that resolves to it.
+	neu := append(base(), resolvesTo("files.example", "10.0.0.3"),
+		addrRow(pf, "10.0.0.3", "445,6699", `{"port":445,"service":"smb","product":"Samba smbd"},{"port":6699,"service":"tcpwrapped"}`, false))
+	ch := watchRuns(t, base(), neu)
+	want := "files.example (10.0.0.3): +445/tcp Samba smbd, +6699/tcp tcpwrapped (open: 445,6699)"
+	if len(ch.Ports) != 1 || ch.Ports[0] != want || len(ch.Changed) != 0 {
+		t.Fatalf("ports %q changed %q, want %q", ch.Ports, ch.Changed, want)
+	}
+	// Scanned under its name in one run and by the range in the next: one address.
+	byName := []seenRow{resolvesTo("app.example", "10.0.0.2"), openPorts2("app.example", "10.0.0.2", "8080", httpd)}
+	moved := append(base()[:1], addrRow(pf, "10.0.0.2", "8080,9000", httpd+`,{"port":9000,"service":"fastcgi","product":"php-fpm"}`, false))
+	ch = watchRuns(t, byName, moved)
+	if len(ch.Ports) != 1 || ch.Ports[0] != "app.example (10.0.0.2): +9000/tcp php-fpm (open: 8080,9000)" {
+		t.Fatalf("ports %q", ch.Ports)
+	}
+	// An address the new run finished the range without: its ports are gone.
+	gone := []seenRow{rangeRow(pf), addrRow(pf, "10.0.0.2", "8080", httpd, false)}
+	ch = watchRuns(t, base(), gone)
+	if len(ch.Ports) != 1 || ch.Ports[0] != "10.0.0.4: -8080/tcp (open: none)" {
+		t.Fatalf("ports %q", ch.Ports)
+	}
+}
+
+// A scan a limit stopped saw part of the ports: what it did not reach is not
+// gone, and what a stopped scan of the old run did not reach is not new.
+func TestWatchStoppedScanSaysOnlyWhatItSaw(t *testing.T) {
+	const pf = "10.0.0.0/29"
+	full := []seenRow{rangeRow(pf), addrRow(pf, "10.0.0.2", "22,8080", "", false)}
+	part := []seenRow{rangeRow(pf), addrRow(pf, "10.0.0.2", "22", "", true)}
+	if ch := watchRuns(t, full, part); ch.any() {
+		t.Fatalf("a stopped scan made ports gone: %+v", ch)
+	}
+	if ch := watchRuns(t, part, full); ch.any() {
+		t.Fatalf("a stopped scan before made ports new: %+v", ch)
+	}
+	more := []seenRow{rangeRow(pf), addrRow(pf, "10.0.0.2", "22,8080,9000", "", true)}
+	if ch := watchRuns(t, full, more); len(ch.Ports) != 1 || ch.Ports[0] != "10.0.0.2: +9000/tcp (open: 22,8080,9000)" {
+		t.Fatalf("ports %q", ch.Ports)
+	}
+}
+
+func openPorts2(host, ip, open, services string) seenRow {
+	return seenRow{host, "azhaq-ports", `{"host":"` + host + `","ip":"` + ip + `","scanned":100,"open":[` + open + `],"services":[` + services + `]}`}
 }
 
 func pointsNowhere(host, target, extra string) seenRow {

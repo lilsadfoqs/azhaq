@@ -249,9 +249,10 @@ func techChange(old, neu []string) string {
 	return "product: " + side(before) + " → " + side(after)
 }
 
-// portsChange is the line of a host whose open TCP ports differ: the ports
-// added with what the run found on them, the ports removed, and the set now.
-func portsChange(of, nf facts) string {
+// portsChange is the line of an address whose open TCP ports differ: the
+// ports added with what the run found on them, the ports removed, and the
+// set now.
+func portsChange(of, nf *addrPorts, label string) string {
 	had, has := map[string]bool{}, map[string]bool{}
 	for _, p := range of.ports {
 		had[p] = true
@@ -267,7 +268,7 @@ func portsChange(of, nf facts) string {
 	}
 	var parts []string
 	for _, p := range nf.ports {
-		if !had[p] {
+		if !had[p] && of.complete {
 			if s, ok := named[p]; ok {
 				parts = append(parts, "+"+s.text())
 			} else {
@@ -276,7 +277,7 @@ func portsChange(of, nf facts) string {
 		}
 	}
 	for _, p := range of.ports {
-		if !has[p] {
+		if !has[p] && nf.complete {
 			parts = append(parts, "-"+p+"/tcp")
 		}
 	}
@@ -287,12 +288,12 @@ func portsChange(of, nf facts) string {
 	if open == "" {
 		open = "none"
 	}
-	return nf.host + ": " + strings.Join(parts, ", ") + " (open: " + open + ")"
+	return label + ": " + strings.Join(parts, ", ") + " (open: " + open + ")"
 }
 
 // svcChanges lists the ports open in both runs where the product the run
-// found is not the same: "host: 22/tcp OpenSSH 8.9 → OpenSSH 9.6".
-func svcChanges(of, nf facts) []string {
+// found is not the same: "host (ip): 22/tcp OpenSSH 8.9 → OpenSSH 9.6".
+func svcChanges(of, nf *addrPorts, label string) []string {
 	before := map[string]portSvc{}
 	for _, s := range of.svcs {
 		before[s.key()] = s
@@ -300,7 +301,7 @@ func svcChanges(of, nf facts) []string {
 	var out []string
 	for _, s := range nf.svcs {
 		if o, ok := before[s.key()]; ok && o.stated() && s.stated() && o.name() != s.name() {
-			out = append(out, fmt.Sprintf("%s: %s %s → %s", nf.host, s.key(), o.name(), s.name()))
+			out = append(out, fmt.Sprintf("%s: %s %s → %s", label, s.key(), o.name(), s.name()))
 		}
 	}
 	return out
