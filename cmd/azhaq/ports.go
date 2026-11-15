@@ -690,34 +690,30 @@ func (k *portsSink) visit(o types.Observation, print bool) {
 			k.mu.Unlock()
 		}
 	}
-	p := payloadOf(o)
-	host, _ := p["host"].(string)
-	ip, _ := p["ip"].(string)
-	cdn, _ := p["cdn"].(string)
+	row, _ := portscan.ParseRow(o.Payload) // a row that does not fit is read as far as it goes, as it was
+	host, ip, cdn := row.Host, row.IP, row.CDN
 	if print {
 		k.mu.Lock()
 		switch {
-		case p["range"] == true:
-			if p[portcol.CheckpointKey] != true { // a checkpoint is a block under way
-				k.scanned += float64(intOf(p["addresses"]))
+		case row.Range:
+			if !row.Checkpoint { // a checkpoint is a block under way
+				k.scanned += float64(row.Addresses)
 			}
-		case p["unresolved"] != nil:
+		case row.Unresolved != "":
 			k.unresolved++
-		case p["prefix"] == nil && p[portcol.CheckpointKey] != true: // a checkpoint is a scan under way, not one more address
+		case row.Prefix == "" && !row.Checkpoint: // a checkpoint is a scan under way, not one more address
 			k.scanned++
 		}
 		k.mu.Unlock()
 	}
-	if p["up"] == true && p["scanned"] == float64(0) && ip != "" {
+	if row.Up != nil && *row.Up && row.Scanned == 0 && ip != "" {
 		if once(&k.mu, k.seen, "up "+ip) {
 			add(portRow{Host: host, IP: ip, State: "up", At: time.Now()})
 		}
 		return
 	}
-	services, _ := p["services"].([]any)
-	for _, s := range services {
-		svc, _ := s.(map[string]any)
-		port := fmt.Sprint(svc["port"])
+	for _, svc := range row.Services {
+		port := strconv.Itoa(svc.Port)
 		key := host + ":" + port
 		if w.json || out.csv || out.keep {
 			key = ip + " " + key // a row per address, as naabu prints
@@ -725,57 +721,43 @@ func (k *portsSink) visit(o types.Observation, print bool) {
 		if !once(&k.mu, k.seen, key) {
 			continue
 		}
-		n, _ := strconv.Atoi(port)
-		row := portRow{Host: host, IP: ip, Port: n, Proto: "tcp", State: "open", TLS: svc["tls"] == true, CDN: cdn, At: time.Now(), Fields: map[string]any{}}
-		for _, f := range []string{"service", "product", "version", "version_range", "version_range_basis", "extrainfo", "title", "banner", "tls_version", "cipher", "subject_cn", "subject_an", "certificate"} {
-			if v, ok := svc[f]; ok {
-				row.Fields[f] = v
-			}
-		}
-		add(row)
+		r := portRow{Host: host, IP: ip, Port: svc.Port, Proto: "tcp", State: "open", TLS: svc.TLS, CDN: cdn, At: time.Now(),
+			Fields: storedFields(svc, "service", "product", "version", "version_range", "version_range_basis", "extrainfo", "title", "banner", "tls_version", "cipher", "subject_cn", "subject_an", "certificate")}
+		add(r)
 	}
-	udpServices, _ := p["udp_services"].([]any)
 	var undecided map[int]bool // ports a stopped scan asked only some requests: the resume prints their final state
-	if !print && p["partial"] == true {
-		undecided = portcol.UDPUnfinished(p)
+	if !print && row.Partial {
+		undecided = portcol.UDPUnfinished(row)
 	}
 	var silent []int // the ports no UDP request was answered on
-	for _, s := range udpServices {
-		svc, _ := s.(map[string]any)
-		port := fmt.Sprint(svc["port"])
-		n, _ := strconv.Atoi(port)
-		state, _ := svc["state"].(string)
-		if state != "open" && undecided[n] {
+	for _, svc := range row.UDPServices {
+		port, n := strconv.Itoa(svc.Port), svc.Port
+		if svc.State != "open" && undecided[n] {
 			continue
 		}
-		if state != "open" {
+		if svc.State != "open" {
 			silent = append(silent, n)
 			continue
 		}
 		if !once(&k.mu, k.seen, ip+" "+host+":"+port+"/udp") {
 			continue
 		}
-		row := portRow{Host: host, IP: ip, Port: n, Proto: "udp", State: state, At: time.Now(), Fields: map[string]any{}}
-		for _, f := range []string{"service", "product", "version", "banner"} {
-			if v, ok := svc[f]; ok {
-				row.Fields[f] = v
-			}
-		}
-		add(row)
+		add(portRow{Host: host, IP: ip, Port: n, Proto: "udp", State: svc.State, At: time.Now(),
+			Fields: storedFields(svc, "service", "product", "version", "banner")})
 	}
 	// A row's own list has every silent port, past the few a row lists one by one.
-	if all, ok := p["udp_open_filtered"].([]any); ok && (len(silent) > 0 || p[portcol.SilentOnlyKey] == true) {
+	if row.UDPOpenFiltered != nil && (len(silent) > 0 || row.UDPSilentOnly) {
 		silent = silent[:0]
-		for _, x := range all {
-			if n, ok := x.(float64); ok && !undecided[int(n)] {
-				silent = append(silent, int(n))
+		for _, n := range row.UDPOpenFiltered {
+			if !undecided[n] {
+				silent = append(silent, n)
 			}
 		}
 	}
 	if len(silent) == 0 {
 		return
 	}
-	silentOnly := p[portcol.SilentOnlyKey] == true
+	silentOnly := row.UDPSilentOnly
 	if silentOnly && !out.udpRows {
 		return // a range's address that answered nothing: the summary counts it
 	}
@@ -795,13 +777,28 @@ func (k *portsSink) visit(o types.Observation, print bool) {
 	}
 	k.markSilent(print)
 	agg := portRow{Host: host, IP: ip, Proto: "udp", State: "open|filtered", At: time.Now(),
-		Silent: &silentUDP{Ports: portscan.Compact(silent), N: len(silent), Asked: intOf(p["udp_scanned"]), Refused: intOf(p["udp_closed"])}}
+		Silent: &silentUDP{Ports: portscan.Compact(silent), N: len(silent), Asked: row.UDPScanned, Refused: row.UDPClosed}}
 	if print {
 		for _, n := range silent {
 			out.note(portRow{Host: host, IP: ip, Port: n, Proto: "udp", State: "open|filtered", At: agg.At, Fields: map[string]any{}})
 		}
 	}
 	add(agg)
+}
+
+// storedFields are the keys of a stored service that a port row prints, with the
+// values as the row holds them (a certificate as an object).
+func storedFields(svc any, keys ...string) map[string]any {
+	raw, _ := json.Marshal(svc)
+	var all map[string]any
+	_ = json.Unmarshal(raw, &all)
+	out := map[string]any{}
+	for _, k := range keys {
+		if v, ok := all[k]; ok {
+			out[k] = v
+		}
+	}
+	return out
 }
 
 // markSilent notes that a row is open|filtered: the results are not all open ports.
