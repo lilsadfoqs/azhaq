@@ -1,9 +1,9 @@
-time 2026-11-15T00:26:37Z
-review_minutes 90
+time 2026-11-15T00:36:59Z
+review_minutes 100
 codex_alive no
 stream_lines 266
-last_line_age_seconds 402
+last_line_age_seconds 1024
 commands_completed 118
-load 0.26 0.35 0.66
-disk_free_gb 68
+load 0.23 0.41 0.57
+disk_free_gb 66
 phases.log:
