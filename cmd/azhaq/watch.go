@@ -367,6 +367,22 @@ func factsByEntity(st *store.Store) map[string]facts {
 				f.portScanned = true
 			}
 		}
+		// What a detection template named: on the answer, or on the service
+		// from a product check of the sweep. Said like a technology.
+		if o.Collector == "azhaq-http" || o.Collector == "azhaq-paths" && o.Kind == "detected" {
+			if ds, ok := p["detected"].([]any); ok {
+				for _, d := range ds {
+					m, _ := d.(map[string]any)
+					name, _ := m["product"].(string)
+					if v, _ := m["version"].(string); v != "" {
+						name += ":" + v
+					}
+					if name != "" && !slices.Contains(f.tech, name) {
+						f.tech = append(f.tech, name)
+					}
+				}
+			}
+		}
 		if r, ok := p["role"].(string); ok && f.role == "" {
 			f.role = r
 		}

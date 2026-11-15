@@ -40,7 +40,11 @@ func watchRuns(t *testing.T, runs ...[]seenRow) changes {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if _, err := st.AddObservation(e.ID, types.Observation{Collector: r.collector, Kind: "x", Payload: json.RawMessage(r.payload), ObservedAt: now}); err != nil {
+			collector, kind, _ := strings.Cut(r.collector, "/") // "azhaq-paths/detected": a collector and the row's kind
+			if kind == "" {
+				kind = "x"
+			}
+			if _, err := st.AddObservation(e.ID, types.Observation{Collector: collector, Kind: kind, Payload: json.RawMessage(r.payload), ObservedAt: now}); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -341,5 +345,22 @@ func TestWatchDanglingNamesAreReportedWhenNew(t *testing.T) {
 	// The baseline names every one.
 	if ch := watchRuns(t, neu); !ch.Baseline || len(ch.Dangling) != 3 {
 		t.Fatalf("baseline %v %q", ch.Baseline, ch.Dangling)
+	}
+}
+
+// A product a detection template named, on the answer or by a product check
+// of the sweep, is said on the service's line like a technology (#498).
+func TestWatchNamesWhatADetectionTemplateNamed(t *testing.T) {
+	front := seenRow{"http://g:3000/", "azhaq-http", `{"status":302,"title":"Grafana","url":"http://g:3000/","detected":[{"product":"Grafana","version":"8.2.6","template":"grafana-detect"}]}`}
+	ch := watchRuns(t, []seenRow{webPage("http://h/")}, []seenRow{webPage("http://h/"), front})
+	if len(ch.Services) != 1 || ch.Services[0] != "http://g:3000/ [302] Grafana (Grafana 8.2.6)" {
+		t.Fatalf("services %q", ch.Services)
+	}
+	// A product check's row is the sweep's (azhaq-paths, kind detected), on the same service.
+	plain := seenRow{"http://o:8080/", "azhaq-http", `{"status":200,"title":"Files","url":"http://o:8080/"}`}
+	check := seenRow{"http://o:8080/", "azhaq-paths/detected", `{"url":"http://o:8080/","path":"/status.php","detected":[{"product":"Owncloud StatusPage","template":"owncloud-status-page"}]}`}
+	ch = watchRuns(t, []seenRow{webPage("http://h/")}, []seenRow{webPage("http://h/"), plain, check})
+	if len(ch.Services) != 1 || ch.Services[0] != "http://o:8080/ [200] Files (Owncloud StatusPage)" {
+		t.Fatalf("services %q", ch.Services)
 	}
 }

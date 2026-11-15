@@ -84,7 +84,7 @@ A new surface says what the run found on it, and only what the run's own observa
 
 Ports are compared per address, whichever seed scanned it: a name, the address, or a range that holds it. An address in a range the run finished, with nothing open, has no ports open. A scan that a limit stopped counts only what it saw. A port it did not reach is not reported gone, and a port that the previous run's stopped scan did not reach is not reported new.
 
-watch asks nothing more for this: it reads the technologies from the web answers (`tech`), the services from the port scan rows (`services`, and `udp_services` that were open) and the names that point nowhere from the DNS answers (`dangling`, `takeover`) the run stored. It names no product from a port number.
+watch asks nothing more for this: it reads the technologies from the web answers (`tech`), the services from the port scan rows (`services`, and `udp_services` that were open) and the names that point nowhere from the DNS answers (`dangling`, `takeover`) the run stored. It names no product from a port number. A product a detection template named (`detected`, on the answer or from one of the sweep's product checks) is said like a technology.
 
 ### Which URLs are the same
 
