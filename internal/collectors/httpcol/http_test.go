@@ -225,3 +225,37 @@ func TestStackTraceInAnAnswerIsInItsRow(t *testing.T) {
 		}
 	}
 }
+
+// A root that sends to /login is matched against the templates for both
+// paths: the product and the version a template extracts are on the row (#498).
+func TestRootAnswerNamesTheProductByTemplate(t *testing.T) {
+	fetch.Reset()
+	t.Cleanup(fetch.Reset)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/" {
+			http.Redirect(w, r, "/login", http.StatusFound)
+			return
+		}
+		_, _ = w.Write([]byte(`<html><head><title>Grafana</title></head><script>{"subTitle":"Grafana v8.2.6 (abc)"}</script></html>`))
+	}))
+	defer srv.Close()
+	c := New(srv.Client())
+	c.NoFavicon = true
+	p := payloadOf(t, c, types.Seed{Type: types.TypeURL, Keys: map[string]string{"url": srv.URL + "/"}})
+	rows, _ := p["detected"].([]any)
+	found := false
+	for _, r := range rows {
+		d, _ := r.(map[string]any)
+		found = found || d["product"] == "Grafana" && d["version"] == "8.2.6" && d["template"] == "grafana-detect"
+	}
+	if !found {
+		t.Fatalf("detected %v", p["detected"])
+	}
+	// -no-tech reads no technologies, and no templates either.
+	fetch.Reset()
+	c = New(srv.Client())
+	c.NoFavicon, c.NoTech = true, true
+	if p := payloadOf(t, c, types.Seed{Type: types.TypeURL, Keys: map[string]string{"url": srv.URL + "/"}}); p["detected"] != nil {
+		t.Errorf("-no-tech: %v", p["detected"])
+	}
+}

@@ -288,6 +288,8 @@ type costEnv struct {
 	// What the floors are counted against.
 	rules    scope.Rules
 	pathList []string // the built-in path checks and -paths ones; none when azhaq-paths does not run
+	// productWords are the product checks a root sweep asks besides them.
+	productWords []string
 }
 
 // estimator accumulates the estimate: stage → collector → amount.
@@ -581,6 +583,11 @@ func estimateCost(seeds []types.Seed, planned [][]string, runs func(string) bool
 				}
 				sweepSeen[origin] = true
 				locs, guesses := pathscol.Sweep(s.Key(), env.pathList)
+				if len(env.productWords) > 0 {
+					// Every product check is asked, a description's name too: none stops at a first found.
+					more, descNamed := pathscol.Sweep(s.Key(), env.productWords)
+					locs = append(append(locs, more...), descNamed...)
+				}
 				for _, u := range locs {
 					if env.rules.DeniedPath(u) == "" {
 						sweeps = append(sweeps, u)

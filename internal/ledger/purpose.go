@@ -10,19 +10,20 @@ import (
 // requests of a run went. A request a collector marks (WithPurpose) is that;
 // the rest of a collector's page work is told apart by what the URL names.
 const (
-	PurposePages        = "pages"              // a page or a route asked as one
-	PurposeScripts      = "scripts"            // a script, a stylesheet or a source map
-	PurposeAssets       = "assets"             // an image, a font or a media file
-	PurposeControls     = "controls"           // a request for a path that cannot exist: what an answer is compared with
-	PurposeDescriptions = "description checks" // a guess where an API description or a GraphQL endpoint is
-	PurposePathChecks   = "path checks"        // the built-in paths: robots.txt, sitemaps, .git/HEAD, admin pages
-	PurposeSweep        = "wordlist sweep"     // a path of a wordlist
-	PurposeParams       = "parameter probes"
-	PurposeBrowser      = "browser" // a request Chrome sent
-	PurposeConnections  = "connections"
-	PurposeDatagrams    = "datagrams"
-	PurposeWorkers      = "sent by workers" // by another process of the run: it does not say what they were for
-	PurposeOther        = "other"
+	PurposePages         = "pages"              // a page or a route asked as one
+	PurposeScripts       = "scripts"            // a script, a stylesheet or a source map
+	PurposeAssets        = "assets"             // an image, a font or a media file
+	PurposeControls      = "controls"           // a request for a path that cannot exist: what an answer is compared with
+	PurposeDescriptions  = "description checks" // a guess where an API description or a GraphQL endpoint is
+	PurposePathChecks    = "path checks"        // the built-in paths: robots.txt, sitemaps, .git/HEAD, admin pages
+	PurposeProductChecks = "product checks"     // a path a detection template asks, to name the product
+	PurposeSweep         = "wordlist sweep"     // a path of a wordlist
+	PurposeParams        = "parameter probes"
+	PurposeBrowser       = "browser" // a request Chrome sent
+	PurposeConnections   = "connections"
+	PurposeDatagrams     = "datagrams"
+	PurposeWorkers       = "sent by workers" // by another process of the run: it does not say what they were for
+	PurposeOther         = "other"
 )
 
 type purposeKey struct{}

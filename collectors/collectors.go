@@ -100,9 +100,11 @@ func Register(cat *catalog.Catalog, o Options) {
 		cat.MustRegister(&pathscol.Collector{Client: client, Wordlist: pathscol.KnownFiles(o.KnownFiles), Known: true})
 	} else if len(o.Paths) > 0 {
 		list := append(append([]string{}, pathscol.DefaultWordlist...), o.Paths...)
-		cat.MustRegister(&pathscol.Collector{Client: client, Wordlist: list})
+		cat.MustRegister(&pathscol.Collector{Client: client, Wordlist: list, ProductChecks: !o.NoTech})
 	} else {
-		pathscol.Register(cat, client)
+		pc := pathscol.New(client)
+		pc.ProductChecks = !o.NoTech // -no-tech names no product: nothing is asked to
+		cat.MustRegister(pc)
 	}
 	pool := o.DNS
 	if pool == nil {

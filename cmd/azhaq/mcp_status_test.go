@@ -65,7 +65,7 @@ func TestMCPStatusOfACappedMapComesFromTheWorkspace(t *testing.T) {
 		t.Fatal("query failed")
 	}
 	check("after a query of the workspace")
-	s.budget = 500
+	s.budget = 5000 // the sweep's product checks as well
 	for i := 0; i < 20 && status().State != "complete"; i++ {
 		if text, isErr := callText(t, s, "azhaq_resume", map[string]any{"workspace": "w"}); isErr && !strings.Contains(text, "nothing to resume") {
 			t.Fatalf("resume: %s", text)

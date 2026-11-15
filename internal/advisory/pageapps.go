@@ -19,7 +19,49 @@ const (
 	SourcePowered   = "header X-Powered-By"
 	SourceServer    = "header Server"
 	SourceTech      = "technology"
+	SourceDetect    = "detection template"
+	// SourceDetectOne is a template written for one product; it is shown as SourceDetect.
+	SourceDetectOne = "detection template for the product"
 )
+
+// detected is a product a detection template named, as a row stores it.
+type detected struct {
+	Product  string `json:"product"`
+	Version  string `json:"version"`
+	Template string `json:"template"`
+	Many     string `json:"many"` // set when the template names many products by its matchers
+}
+
+// source is how a detection is classed: a template written for one product
+// names an application (or a server); one that names many names libraries,
+// fonts and CDNs too, which the fingerprints' categories tell apart.
+func (d detected) source() string {
+	if d.Many != "" {
+		return SourceDetect
+	}
+	return SourceDetectOne
+}
+
+// detectedRow reads a row the paths sweep wrote for an answer that matched
+// detection templates: the page it was asked of, the path, and the products.
+func detectedRow(o types.StoredObservation) (page string, found []detected, ok bool) {
+	if o.Collector != "azhaq-paths" || o.Kind != "detected" {
+		return "", nil, false
+	}
+	var row struct {
+		URL      string     `json:"url"`
+		Path     string     `json:"path"`
+		Detected []detected `json:"detected"`
+	}
+	if json.Unmarshal(o.Payload, &row) != nil || row.URL == "" {
+		return "", nil, false
+	}
+	u, err := url.Parse(row.URL)
+	if err != nil {
+		return "", nil, false
+	}
+	return u.Scheme + "://" + u.Host + row.Path, row.Detected, true
+}
 
 // pageApps are the applications the root page of each name:port names about
 // itself, one service for each name:port and product: from its <title> (the
@@ -38,9 +80,6 @@ func pageApps(obs []types.StoredObservation) []pageApp {
 	var out []pageApp
 	at := map[string]int{}
 	for _, o := range obs {
-		if o.Collector != "azhaq-http" {
-			continue
-		}
 		var row struct {
 			URL       string            `json:"url"`
 			Title     string            `json:"title"`
@@ -48,8 +87,14 @@ func pageApps(obs []types.StoredObservation) []pageApp {
 			Server    string            `json:"server"`
 			Headers   map[string]string `json:"headers"`
 			Tech      []string          `json:"tech"`
+			Detected  []detected        `json:"detected"`
 		}
-		if json.Unmarshal(o.Payload, &row) != nil {
+		from := ""
+		if page, found, ok := detectedRow(o); ok {
+			// A path the sweep asked to name the product: the origin's root stands for it.
+			u, _ := url.Parse(page)
+			row.URL, row.Detected, from = u.Scheme+"://"+u.Host+"/", found, page
+		} else if o.Collector != "azhaq-http" || json.Unmarshal(o.Payload, &row) != nil {
 			continue
 		}
 		u, err := url.Parse(row.URL)
@@ -72,8 +117,15 @@ func pageApps(obs []types.StoredObservation) []pageApp {
 			if class == skip {
 				return
 			}
+			at := row.URL
+			if from != "" {
+				at = from
+			}
+			if source == SourceDetectOne {
+				source = SourceDetect
+			}
 			cands = append(cands, pageApp{Service: Service{Host: u.Hostname(), Port: port, Proto: "tcp", Service: u.Scheme, Product: product, Version: version,
-				Origin: u.Scheme + "://" + u.Host, Banner: said, Source: source, ObservedAt: o.ObservedAt, From: row.URL}, Plain: class == plain})
+				Origin: u.Scheme + "://" + u.Host, Banner: said, Source: source, ObservedAt: o.ObservedAt, From: at}, Plain: class == plain})
 		}
 		if p, v := portscan.TitleProduct(row.Title); p != "" {
 			add(p, v, SourceTitle, "<title>"+row.Title+"</title>")
@@ -97,6 +149,9 @@ func pageApps(obs []types.StoredObservation) []pageApp {
 				version = ""
 			}
 			add(name, version, SourceTech, "technology: "+t)
+		}
+		for _, d := range row.Detected {
+			add(d.Product, d.Version, d.source(), "detection template: "+d.Template)
 		}
 		for _, c := range cands {
 			k := strings.ToLower(c.Host) + "|" + strconv.Itoa(c.Port) + "|" + ProductKey(c.Product)
@@ -195,6 +250,12 @@ func classify(product, source string) appClass {
 		if len(cats) == 0 {
 			return plain
 		}
+	case SourceDetect:
+		if len(cats) == 0 {
+			return app // a template names it; the fingerprints do not class it
+		}
+	case SourceDetectOne:
+		return app // a template written to name this product: an application, unless a server (above)
 	}
 	return skip
 }

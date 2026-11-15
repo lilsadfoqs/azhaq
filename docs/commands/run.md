@@ -354,6 +354,15 @@ A client route is a view that a single-page app's router draws.
 - A Swagger UI whose script holds the document (Juice Shop's `/api-docs/`) is read from the script. The names next to it are not guessed.
 - A page that is byte for byte what the site root answers for a made-up path is a single-page app's shell. That makes it the catch-all answer of a directory whose own baseline was not asked, so that baseline is not requested. A directory with answers of its own is still asked.
 
+### Product checks
+
+- Each answer is also matched against published detection templates (nuclei-templates' technology and panel templates, MIT, compiled into azhaq; `internal/detect/SOURCE.md` names the release). A template for the page's path that matches names the product, with the version where the template extracts one, in the row's `detected` field.
+- The favicon is matched against the templates for `/favicon.ico`, wherever the page's icon was found.
+- The sweep of each web service also asks the paths the templates ask, only to name the product. These product checks are not rows of the map: an answer that matches is a `detected` row of `azhaq-paths` about the service. The ledger's purpose for them is `product checks`, and `azhaq plan` counts them.
+- A path whose name or query declares a state change (`install`, `start`, `logout`) is not a product check, and neither is the root with a query.
+- A product a template names is an identification in `hunt` and `report -findings`, named by `detection template`, and matched against the advisories when it has a version.
+- `-no-tech` turns the matching and the product checks off; `-no-paths` turns the product checks off with the path checks.
+
 ### Archives of one host
 The archives are asked for domains. When `-allow` names a host and not its domain (`-allow www.example.org`), the domain is outside the scope and is not asked: the archives are asked for the host itself (`www.example.org/*`) and its archived URLs are listed. A scope that holds the domain asks for the domain and its subdomains as before.
 

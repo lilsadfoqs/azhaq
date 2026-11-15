@@ -468,6 +468,7 @@ One rule set, enforced where every request passes:
 For each answer it stores these fields, besides status, title and headers:
 
 - `tech`: wappalyzer fingerprints of the final response's headers and body, as `Name` or `Name:version`. See [Technology matching](#technology-matching).
+- `detected`: the products the detection templates for the path asked (and, after a redirect, the path it ended at) name, each with its version where the template extracts one and the template's id. See [Detection templates](#detection-templates).
 - `favicon`: on a site's front page, the MurmurHash3 of the icon's base64 encoding. This is the value Shodan indexes as `http.favicon.hash`. The icon is the page's `<link rel=icon>` (`.ico` first) or `/favicon.ico`. At most two requests are made, and only on the same site.
 - `length`, `words` and `lines` of the final body, counted like httpx.
 - `ms` for the whole redirect chain.
@@ -475,6 +476,12 @@ For each answer it stores these fields, besides status, title and headers:
 - `final_status`, when the request was redirected.
 
 `azhaq-dns` adds `cdn` and `cdn_type` (`cdn`, `waf` or `cloud`) from cdncheck's embedded ranges: by address, then by CNAME target. Nothing here makes an extra lookup.
+
+#### Detection templates
+
+`internal/detect` matches an answer against nuclei-templates' technology and panel templates (MIT), compiled by `scripts/detectgen` into embedded data: about 2,400 template requests. `SOURCE.md` names the release, the count compiled and each reason a template was left out (a raw request, payloads, a request body, an unsupported DSL function). The matchers keep nuclei's semantics: word, regex, status and DSL, with `and`/`or` conditions, negative and case-insensitive. A literal index (Aho-Corasick over the literals each matcher needs) decides which of the tens of thousands of patterns can match a body, so a root page is matched in about a millisecond.
+
+`azhaq-http` matches every answer for its path. `azhaq-paths` asks each web service the paths the templates ask besides the built-in checks (product checks, purpose `product checks`) and stores what matched as a `detected` row. The page-application reader (`internal/advisory`) makes each product an identification. A template written for one product names an application whatever the wappalyzer categories say of it, and a template that names many products (tech-detect, FingerprintHub's) leaves out libraries, fonts and CDNs by those categories.
 
 #### Technology matching
 

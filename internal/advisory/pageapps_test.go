@@ -118,3 +118,42 @@ func TestPageAppVersionIsMatchedLikeAListeners(t *testing.T) {
 		t.Errorf("leads %+v", leads)
 	}
 }
+
+// A template written for one product names an application even where the
+// fingerprints class it otherwise (Grafana is "Analytics" there); one that
+// names many products leaves out what the fingerprints call a library (#498).
+func TestDetectedProductsArePageApps(t *testing.T) {
+	obs := []types.StoredObservation{
+		obsOf("azhaq-http", "http", map[string]any{"url": "http://g.test:3000/", "detected": []map[string]string{
+			{"product": "Grafana", "version": "8.2.6", "template": "grafana-detect"},
+			{"product": "bootstrap", "template": "tech-detect", "matcher": "bootstrap", "many": "1"},
+			{"product": "apache skywalking", "template": "fingerprinthub-web-fingerprints", "matcher": "apache-skywalking", "many": "1"}}}),
+		obsOf("azhaq-paths", "detected", map[string]any{"url": "http://o.test:8080/", "path": "/status.php", "detected": []map[string]string{
+			{"product": "Owncloud StatusPage", "template": "owncloud-status-page"}}}),
+	}
+	got := map[string]Service{}
+	for _, a := range pageApps(obs) {
+		got[a.Target()+" "+a.Product] = a.Service
+	}
+	if s := got["g.test:3000 Grafana"]; s.Version != "8.2.6" || s.Source != SourceDetect {
+		t.Errorf("Grafana: %+v", s)
+	}
+	if _, ok := got["g.test:3000 bootstrap"]; ok {
+		t.Error("a library a many-product template named is an application")
+	}
+	if _, ok := got["g.test:3000 apache skywalking"]; !ok {
+		t.Errorf("a product the fingerprints do not know is an application: %v", keysOf2(got))
+	}
+	if s, ok := got["o.test:8080 Owncloud StatusPage"]; !ok || s.From != "http://o.test:8080/status.php" {
+		t.Errorf("the path that named it: %+v (%v)", s, keysOf2(got))
+	}
+}
+
+func keysOf2(m map[string]Service) []string {
+	var out []string
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
+}

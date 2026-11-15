@@ -25,6 +25,7 @@ import (
 	"golang.org/x/time/rate"
 
 	"github.com/lilsadfoqs/azhaq/catalog"
+	"github.com/lilsadfoqs/azhaq/internal/detect"
 	"github.com/lilsadfoqs/azhaq/internal/egress"
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
 	"github.com/lilsadfoqs/azhaq/internal/fingerprint"
@@ -782,6 +783,13 @@ func (c *Collector) fetchFirst(ctx context.Context, raw string, rq *fetch.Req, f
 		if hash, from, icon := c.favicon(ctx, final, res); hash != "" {
 			row["favicon"] = hash
 			row["favicon_url"] = from
+			if !c.NoTech {
+				// The favicon templates hash /favicon.ico's body: the icon is that body, wherever it was found.
+				if rows := detect.Rows(detect.Match(detect.Response{Path: "/favicon.ico", Status: http.StatusOK, Header: http.Header{}, Body: icon})); len(rows) > 0 {
+					have, _ := row["detected"].([]map[string]string)
+					row["detected"] = detect.MergeRows(have, rows)
+				}
+			}
 			if c.Spec != nil {
 				sum := md5.Sum(icon)
 				row["favicon_md5"] = hex.EncodeToString(sum[:])
@@ -879,6 +887,11 @@ func describe(reqURL, final string, res fetch.Result, title string, noTech, ever
 		}
 		if tech := fingerprint.Tech(last, body); len(tech) > 0 {
 			out["tech"] = tech
+		}
+	}
+	if !noTech {
+		if rows := detectedAt(reqURL, final, res, last); len(rows) > 0 {
+			out["detected"] = rows
 		}
 	}
 	length := len(res.Body)
@@ -1113,6 +1126,38 @@ const maxTechBody = 1 << 20
 func page(h http.Header) bool {
 	ct := strings.ToLower(headerGet(h, "Content-Type"))
 	return ct == "" || strings.Contains(ct, "html") || strings.HasPrefix(ct, "text/plain")
+}
+
+// detectedAt matches an answer against the detection templates for the
+// path asked and, after a redirect, the path it ended at (a root that
+// sends to /login): the products they name, once each.
+func detectedAt(reqURL, final string, res fetch.Result, header http.Header) []map[string]string {
+	status := res.Status
+	if n := len(res.Hops); n > 1 {
+		status = res.Hops[n-1].Status
+	}
+	body := res.Body[:min(len(res.Body), maxTechBody)]
+	var rows []map[string]string
+	seen := map[string]bool{}
+	for _, raw := range []string{reqURL, final} {
+		u, err := url.Parse(raw)
+		if err != nil || u.Path == "" && raw != reqURL {
+			continue
+		}
+		p := u.EscapedPath()
+		if p == "" {
+			p = "/"
+		}
+		if u.RawQuery != "" {
+			p += "?" + u.RawQuery
+		}
+		if seen[p] {
+			continue
+		}
+		seen[p] = true
+		rows = detect.MergeRows(rows, detect.Rows(detect.Match(detect.Response{Path: p, Status: status, Header: header, Body: body})))
+	}
+	return rows
 }
 
 // isRoot: the favicon belongs to a site, so only its front page asks.
