@@ -211,10 +211,17 @@ def norm(s):
     return re.sub(r"[^a-z0-9]+", " ", s.lower()).strip()
 
 
+# Who makes a product is not its name ("Nexus 3.21" names Sonatype Nexus
+# Repository), nor the word for a part of it: the same set as the
+# identification bench (.github/ci/parity/ident.py), so both rulers agree.
+NOT_THE_NAME = {"sonatype", "eclipse", "gnu", "oracle", "ibm", "microsoft", "jetbrains", "atlassian", "vmware", "alibaba",
+                "tencent", "adobe", "google", "hashicorp", "repository", "broker", "name", "ui", "edition", "community"}
+
+
 def product_words(product):
     """The product's name without what it runs behind or beside, and its distinctive words."""
     head = re.split(r"\s+(?:behind|with|via|on)\s+|\(", product or "")[0]
-    return norm(head), [w for w in norm(head).split() if len(w) >= 2 and w not in GENERIC]
+    return norm(head), [w for w in norm(head).split() if len(w) >= 2 and w not in GENERIC and w not in NOT_THE_NAME]
 
 
 def names_product(r, product, family=""):

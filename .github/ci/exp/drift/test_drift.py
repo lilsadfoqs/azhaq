@@ -747,5 +747,24 @@ class Files(unittest.TestCase):
             self.assertEqual(r.returncode, 2, args)
 
 
+
+
+class RulerAgreesWithTheBench(unittest.TestCase):
+    def test_the_makers_name_is_not_required(self):
+        r = {"text": "nexus 3.21.1-01 (swagger ui)"}
+        self.assertTrue(grade.names_product(r, "Sonatype Nexus Repository"))
+        self.assertTrue(grade.names_product({"text": "Jetty 9.4.37"}, "Eclipse Jetty"))
+        self.assertFalse(grade.names_product({"text": "telnet"}, "GNU inetutils telnetd"))
+
+    def test_the_set_is_the_benchs(self):
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "parity", "ident.py")
+        if not os.path.exists(path):
+            self.skipTest("no identification bench on this branch")
+        with open(path) as f:
+            src = f.read()
+        for w in grade.NOT_THE_NAME:
+            self.assertIn('"%s"' % w, src)
+
+
 if __name__ == "__main__":
     unittest.main()
