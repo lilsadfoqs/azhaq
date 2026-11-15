@@ -2374,7 +2374,7 @@ func printDiffStores(old, neu *store.Store, oldLabel string, opts diffOpts) erro
 	oldFacts := factsByEntity(old)
 	var removed, unseen []types.Entity
 	for _, e := range d.Removed {
-		if f := oldFacts[e.ID]; len(f.ips) > 0 || f.status != 0 || f.ports != nil || e.Type != types.TypeHostname && e.Type != types.TypeURL {
+		if f := oldFacts[e.ID]; len(f.ips) > 0 || f.status != 0 || f.portScanned || e.Type != types.TypeHostname && e.Type != types.TypeURL {
 			removed = append(removed, e)
 		} else {
 			unseen = append(unseen, e)

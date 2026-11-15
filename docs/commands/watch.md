@@ -58,15 +58,41 @@ The first run of a workspace is the baseline. Everything in it is new, and it li
 
 | Section | Meaning |
 | --- | --- |
-| `+ hostnames that resolve` | Names that resolve now and did not in the previous run. |
-| `+ web services` | Front pages that answer now and did not before. |
-| `+ URLs` | URLs found now that were not before. Scripts, assets, source maps, catch-all pages and URLs listed as routes are left out. |
+| `+ hostnames that resolve` | Names that resolve now and did not in the previous run, with the open ports and services the run found on them. |
+| `! names that point nowhere` | Names whose CNAME chain ends at a name that answered NXDOMAIN now, and did not in the previous run (or are new). |
+| `+ web services` | Front pages that answer now and did not before, with the technologies the run read from the answer. |
+| `+ URLs` | URLs found now that were not before. Scripts, assets, source maps, catch-all pages and URLs listed as routes are left out. A URL counts once per identity: see below. |
 | `~ API routes` | New, changed or removed routes, each tied to its script. See below. |
-| `~ hosts whose open ports changed` | Hosts scanned in both runs whose open ports differ. |
-| `~ pages that answer differently` | Pages whose status, title or item count changed. |
+| `~ hosts whose open ports changed` | Hosts scanned in both runs whose open TCP ports differ: the ports added and removed. |
+| `~ pages that answer differently` | Pages whose status, title or item count changed, front pages whose technologies changed, and ports that stayed open with another product. |
 | `- hostnames gone` | Names that resolved in the previous run and do not now. |
 | `- web services gone` | Front pages that answered in the previous run and do not now. |
 | `- URLs gone` | URLs the previous run requested and answered, not found this time. Left out the same way. |
+
+### What a line says about the surface
+
+A new surface says what the run found on it, and only what the run's own observations state:
+
+| Line | Meaning |
+| --- | --- |
+| `http://h:8888/ [302] Home (Jupyter Notebook 6.0, Tornado)` | A new web service. In the brackets are the status and the title; in the parentheses the technologies the answer showed, `Name version` where it stated a version. Nothing is added when the run read none. |
+| `dns.example (10.0.0.5): 22/tcp ssh, 53/tcp BIND 9.11` | A new name with its open ports. Each is `port/protocol` and then the product and version the run found, or the service name the run stored when it found no product. A port with neither is the bare `port/protocol`. A name with more than 16 services names 16 and counts the rest. |
+| `soap.example (10.0.0.7): +9000/tcp php-fpm, -8080/tcp (open: 22,9000)` | An address whose open TCP ports changed, with the names that resolve to it (three, and a count of the rest) or the address alone: `+` for each port added with what the run found on it, `-` for each removed, and the ports open now. |
+| `http://h/: [200] Home (product: nginx 1.18 → nginx 1.24)` | A front page that answered in both runs with other technologies: those the previous run showed and this run no longer does, then those it now shows. Said only when both runs read some. |
+| `s.example (10.0.0.8): 22/tcp OpenSSH 8.9 → OpenSSH 9.6` | A port that stayed open and whose product or version changed, when both runs state a product for it. |
+| `cdn.example → old-bucket.cloudhost.example (NXDOMAIN)` | A name that points nowhere: the CNAME chain and the answer at its end. A takeover candidate the DNS answer showed is named after it (`NXDOMAIN; takeover candidate: SERVICE`). A name that answered with a resolver failure in the previous run is not reported as new, and a wildcard's name is not reported. |
+
+Ports are compared per address, whichever seed scanned it: a name, the address, or a range that holds it. An address in a range the run finished, with nothing open, has no ports open. A scan that a limit stopped counts only what it saw. A port it did not reach is not reported gone, and a port that the previous run's stopped scan did not reach is not reported new.
+
+watch asks nothing more for this: it reads the technologies from the web answers (`tech`), the services from the port scan rows (`services`, and `udp_services` that were open) and the names that point nowhere from the DNS answers (`dangling`, `takeover`) the run stored. It names no product from a port number.
+
+### Which URLs are the same
+
+A URL is new only if its identity was not in the previous run, and gone only if its identity is not in this run. One URL stands for each identity. The identity is the scheme, host and port, the path, and the sorted names of the query parameters:
+
+- A path segment that is an identifier or a build hash is folded: all digits, a UUID, a hex string of 8 characters or more that holds a digit, or a `{placeholder}`. `/static/384de1e8/images` and `/static/81869691/images` are one.
+- Parameter values are ignored, so a session token or a sort order is no change: `/list.php?sort=a&sortorder=ASC` and `/list.php?sort=b&sortorder=DESC` are one. A new parameter name on a known path is a new identity, and so a new URL.
+- Scripts, style sheets, images, fonts and source maps are left out by what the URL is, whether or not the run stored a role for them.
 
 ### Lines of the API routes section
 
@@ -81,7 +107,7 @@ A route that a script only names in a string has no method on its line (`+ /api/
 
 ### The JSON change set
 
-`-json`, `-notify-cmd` and generic webhooks get the change set as one JSON object. Its fields are `db`, `run`, `previous`, `baseline`, `hosts`, `services`, `urls`, `ports`, `changed`, `gone_hosts`, `gone_services`, `gone_urls` and `routes`.
+`-json`, `-notify-cmd` and generic webhooks get the change set as one JSON object. Its fields are `db`, `run`, `previous`, `baseline`, `hosts`, `dangling`, `services`, `urls`, `ports`, `changed`, `gone_hosts`, `gone_services`, `gone_urls` and `routes`. Each of `hosts`, `dangling`, `services`, `urls`, `ports`, `changed`, `gone_hosts`, `gone_services` and `gone_urls` is a list of the strings shown in the text, and a field with nothing in it is left out.
 
 A `routes` entry is:
 
