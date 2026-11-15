@@ -1,0 +1,39 @@
+id: shared-detect
+
+info:
+  name: Shared Technology Detection
+  severity: info
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}"
+
+    matchers-condition: or
+    matchers:
+      - type: word
+        name: alpha-one
+        words:
+          - "alpha-one-marker"
+
+      - type: word
+        name: beta_two
+        words:
+          - "beta-two-marker"
+
+      - type: regex
+        name: gamma
+        regex:
+          - "gamma-[0-9]+-marker"
+
+      - type: word
+        part: header
+        name: delta
+        words:
+          - "X-Delta: on"
+
+      - type: word
+        name: epsilon
+        words:
+          - "EPSILON-MARKER"
+        case-insensitive: true

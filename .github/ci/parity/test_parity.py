@@ -635,12 +635,13 @@ class Workflow(unittest.TestCase):
 
     def test_results_are_encrypted_and_not_logged(self):
         self.assertIn("parity/${GITHUB_REF_NAME#parity-}/s", self.text)
-        for f in ("key.json.age", "sample.tgz.age", "summary.json.age", "summary-worklist.json.age", "--worklist"):
+        for f in ("key.json.age", "sample.tgz.age", "summary.json.age", "summary-worklist.json.age", "--worklist", "ident.json.age",
+                  "ident-misses.jsonl", "ident-stack.json.age", "ident-stack-misses.jsonl"):
             self.assertIn(f, self.text)
         self.assertNotIn("cat $HOME/parity/out", self.text)
 
     def test_shell_scripts_parse(self):
-        for f in ("replay.sh", "seed.sh", "fetch.sh"):
+        for f in ("replay.sh", "seed.sh", "fetch.sh", "stack.sh"):
             self.assertEqual(run(["bash", "-n", os.path.join(HERE, f)]).returncode, 0, f)
 
 

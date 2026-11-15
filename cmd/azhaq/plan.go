@@ -15,6 +15,7 @@ import (
 	"github.com/lilsadfoqs/azhaq/catalog"
 	"github.com/lilsadfoqs/azhaq/engine"
 	"github.com/lilsadfoqs/azhaq/internal/collectors/gqlcol"
+	"github.com/lilsadfoqs/azhaq/internal/collectors/pathscol"
 	"github.com/lilsadfoqs/azhaq/internal/collectors/portcol"
 	"github.com/lilsadfoqs/azhaq/internal/collectors/vhostcol"
 	"github.com/lilsadfoqs/azhaq/internal/egress"
@@ -67,12 +68,15 @@ type runPlan struct {
 	Collectors map[string]string `json:"collectors"` // name → what it does to whom
 	Active     []string          `json:"active"`
 	Paths      []string          `json:"builtin_paths,omitempty"`
-	Limits     map[string]string `json:"limits"`
-	Sends      []string          `json:"sends"`
-	Advisories string            `json:"advisories"` // the advisory index the run matches with: "advisory index DATE (N records)", or off
-	Requests   planRequests      `json:"requests"`
-	Estimate   costEstimate      `json:"estimate"`       // what the run would send, by stage
-	AXFR       []planAXFR        `json:"axfr,omitempty"` // -axfr: the zone transfers dns -axfr would try
+	// ProductChecks is how many paths published detection templates ask
+	// of each web service besides the path checks, to name the product.
+	ProductChecks int               `json:"product_checks,omitempty"`
+	Limits        map[string]string `json:"limits"`
+	Sends         []string          `json:"sends"`
+	Advisories    string            `json:"advisories"` // the advisory index the run matches with: "advisory index DATE (N records)", or off
+	Requests      planRequests      `json:"requests"`
+	Estimate      costEstimate      `json:"estimate"`       // what the run would send, by stage
+	AXFR          []planAXFR        `json:"axfr,omitempty"` // -axfr: the zone transfers dns -axfr would try
 	// StateChanging are the in-scope GET requests among the targets
 	// whose own name declares a state change, each with the -deny-path
 	// rule that would keep it out. They are still sent: the list
@@ -418,8 +422,19 @@ func planFor(cat *catalog.Catalog, seeds []types.Seed, b engine.Budgets, paths [
 		col, ok := cat.Get(name)
 		return ok && b.Allows(col, service)
 	}
+	var productWords []string
 	if runs("azhaq-paths") {
 		p.Paths = paths
+		if col, ok := cat.Get(pathscol.Name); ok {
+			if pc, ok := col.(*pathscol.Collector); ok && pc.ProductChecks {
+				for _, w := range pathscol.ProductWords() {
+					if !slices.Contains(paths, w) {
+						productWords = append(productWords, w)
+					}
+				}
+			}
+		}
+		p.ProductChecks = len(productWords)
 	}
 	asks := func(name string, s types.Seed) int {
 		if col, ok := cat.Get(name); ok {
@@ -431,7 +446,7 @@ func planFor(cat *catalog.Catalog, seeds []types.Seed, b engine.Budgets, paths [
 	}
 	env := costEnv{sendLimits: send, rules: b.Scope}
 	if runs("azhaq-paths") {
-		env.pathList = p.Paths
+		env.pathList, env.productWords = p.Paths, productWords
 	}
 	p.Estimate = estimateCost(kept, planned, runs, b.Active, env, asks)
 	gets, others := planSends(b, send)
@@ -468,7 +483,7 @@ func planFor(cat *catalog.Catalog, seeds []types.Seed, b engine.Budgets, paths [
 	p.Requests.GuessCap = send.hostGuesses
 	p.Requests.Guesses = planGuesses(p.Paths, send)
 	if runs("azhaq-http") {
-		p.Requests.PerService = 1 + len(p.Paths)
+		p.Requests.PerService = 1 + len(p.Paths) + p.ProductChecks
 		if !send.noFavicon {
 			p.Requests.PerService++
 		}
@@ -574,6 +589,9 @@ func printPlanText(w io.Writer, p runPlan) {
 	if len(p.Paths) > 0 {
 		fmt.Fprintf(w, "built-in path checks on each web service (%d; -no-paths turns them off): %s\n", len(p.Paths), strings.Join(p.Paths, " "))
 	}
+	if p.ProductChecks > 0 {
+		fmt.Fprintf(w, "product checks on each web service (%d; -no-paths turns them off): the paths published detection templates ask, to name the product\n", p.ProductChecks)
+	}
 	active := "none"
 	if len(p.Active) > 0 {
 		active = strings.Join(p.Active, " ")
@@ -638,8 +656,11 @@ func printRequests(w io.Writer, p runPlan) {
 			names = fmt.Sprintf("how many names resolve and answer (up to %d are looked up, -max-names)", r.MaxNames)
 		}
 		what := fmt.Sprintf("its page, %d built-in paths", len(p.Paths))
-		if r.PerService > 1+len(p.Paths) {
+		if r.PerService > 1+len(p.Paths)+p.ProductChecks {
 			what = fmt.Sprintf("its page, the favicon, %d built-in paths", len(p.Paths))
+		}
+		if p.ProductChecks > 0 {
+			what += fmt.Sprintf(", %d product checks", p.ProductChecks)
 		}
 		fmt.Fprintf(w, "  how many depends on %s: about %d per web service (%s), then what its pages, scripts and archived URLs lead to\n", names, r.PerService, what)
 	}

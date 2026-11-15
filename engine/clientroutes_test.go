@@ -12,6 +12,7 @@ import (
 	"github.com/lilsadfoqs/azhaq/catalog"
 	"github.com/lilsadfoqs/azhaq/collectors"
 	"github.com/lilsadfoqs/azhaq/engine"
+	"github.com/lilsadfoqs/azhaq/internal/collectors/pathscol"
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
 	"github.com/lilsadfoqs/azhaq/store"
 	"github.com/lilsadfoqs/azhaq/types"
@@ -194,8 +195,14 @@ func TestPathRoutedViews(t *testing.T) {
 			t.Errorf("%s was not requested", p)
 		}
 	}
+	// A product check (a detection template's path) is asked whatever the
+	// routes say: /reports/browse is one.
+	checks := map[string]bool{}
+	for _, w := range pathscol.ProductWords() {
+		checks["/"+w] = true
+	}
 	for p := range asked {
-		if strings.HasPrefix(p, "/reports/") {
+		if strings.HasPrefix(p, "/reports/") && !checks[p] {
 			t.Errorf("%s was requested", p)
 		}
 	}

@@ -54,6 +54,9 @@ type Info struct {
 	// not among the URLs asked again when the session ended (sweeps, Chrome):
 	// its tasks that ran since the last good check run again.
 	Redo bool
+	// Stage marks a collector whose task sends many requests (a sweep, page
+	// loads): a signed-in run checks its session before the task begins.
+	Stage bool
 	// AtLimit lets the collector run past -depth: on a hostname an active
 	// DNS technique found (types.LiveKey), which it asks DNS only; on a URL,
 	// when it, or one that runs with it, is an active technique the user

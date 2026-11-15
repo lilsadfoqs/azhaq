@@ -468,6 +468,7 @@ One rule set, enforced where every request passes:
 For each answer it stores these fields, besides status, title and headers:
 
 - `tech`: wappalyzer fingerprints of the final response's headers and body, as `Name` or `Name:version`. See [Technology matching](#technology-matching).
+- `detected`: the products the detection templates for the path asked (and, after a redirect, the path it ended at) name, each with its version where the template extracts one and the template's id. See [Detection templates](#detection-templates).
 - `favicon`: on a site's front page, the MurmurHash3 of the icon's base64 encoding. This is the value Shodan indexes as `http.favicon.hash`. The icon is the page's `<link rel=icon>` (`.ico` first) or `/favicon.ico`. At most two requests are made, and only on the same site.
 - `length`, `words` and `lines` of the final body, counted like httpx.
 - `ms` for the whole redirect chain.
@@ -475,6 +476,12 @@ For each answer it stores these fields, besides status, title and headers:
 - `final_status`, when the request was redirected.
 
 `azhaq-dns` adds `cdn` and `cdn_type` (`cdn`, `waf` or `cloud`) from cdncheck's embedded ranges: by address, then by CNAME target. Nothing here makes an extra lookup.
+
+#### Detection templates
+
+`internal/detect` matches an answer against nuclei-templates' technology and panel templates (MIT), compiled by `scripts/detectgen` into embedded data: about 2,400 template requests. `SOURCE.md` names the release, the count compiled and each reason a template was left out (a raw request, payloads, a request body, an unsupported DSL function). The matchers keep nuclei's semantics: word, regex, status and DSL, with `and`/`or` conditions, negative and case-insensitive. A literal index (Aho-Corasick over the literals each matcher needs) decides which of the tens of thousands of patterns can match a body, so a root page is matched in about a millisecond.
+
+`azhaq-http` matches every answer for its path. `azhaq-paths` asks each web service the paths the templates ask besides the built-in checks (product checks, purpose `product checks`) and stores what matched as a `detected` row. The page-application reader (`internal/advisory`) makes each product an identification. A template written for one product names an application whatever the wappalyzer categories say of it, and a template that names many products (tech-detect, FingerprintHub's) leaves out libraries, fonts and CDNs by those categories.
 
 #### Technology matching
 
@@ -751,7 +758,7 @@ What is sent and what is not is on the command page: [crawl: Forms](commands/cra
 `-cookie` and `-header` apply to every request of a run. So does the session `-login` gets. Chrome fills and submits the login form. The cookies the site sets and a JSON Web Token the page stores become a `Cookie` and an `Authorization` header (`internal/browser/login.go`). Nothing is guessed from a URL's name, a logout link included: it is requested like any other. What keeps the session honest is a check (`internal/fetch/session.go`):
 
 - The run asks a page with its session and without it before it starts (`cmd/azhaq/session.go`: the page `-login` ended on, else a target) and keeps one whose answers differ (status, and the path a redirect goes to). If none differs, only a response that expires a cookie the run sends ends the session as far as the run can tell.
-- `Spend`, which every request to a target passes through, counts requests and asks the check every 50, and at once after an answer that looks like the end of the session (a 401, a redirect to the sign-in page, a response that expires a session cookie, which also names the URL). The sign-in page is `-login`'s, or, with `-cookie` or `-header`, the page the check page sends a visitor without the session to. `fetch.EndCheck` asks it once more when the work ends. While it runs, other requests wait; the sign-in's own requests pass.
+- `Spend`, which every request to a target passes through, counts requests and asks the check every 50 (`-session-every`), at the next request once 10 s have passed since the last good check, and at once after an answer that looks like the end of the session (a 401, a redirect to the sign-in page, a response that expires a session cookie, which also names the URL). The sign-in page is `-login`'s, or, with `-cookie` or `-header`, the page the check page sends a visitor without the session to. `fetch.StageCheck` asks it before a stage that sends many requests (the engine calls it for collectors marked `Stage`), and `fetch.EndCheck` once more when the work ends. While it runs, other requests wait; the sign-in's own requests pass.
 - A failed check with `-login` renews the session (a new Chrome sign-in, whose headers are set whole with `fetch.SetExtra`). `fetch.DoReq` has kept the GETs sent since the last good check; they leave the cache, the scheduler (`redoSession`) drops what the touching collectors reported of them and runs their tasks again, so their stored answers are the signed-in ones. The URL whose answer ended the session is not asked again. A note says what was done.
 - A failed check with `-cookie` or `-header`, or a fifth loss, sets `neterr.SessionLost`: `Spend` refuses every later request with it, the summary lists it as a failure (`azhaq-session`) and the exit code is 3.
 - Collectors that ask with the session but not through the recorded URL list (`dirs`, `params`, `render`, `shots`: `catalog.Info.Redo`) are noted by the scheduler as they start and end. After a renewal it runs again the ones that ran since the last good check (`fetch.GoodChecks`, `fetch.TakeStretch`), each once: the collector forgets the work (`Forgetter`), what it reported is dropped and the task is queued.

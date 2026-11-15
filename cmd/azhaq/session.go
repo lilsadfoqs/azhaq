@@ -14,17 +14,18 @@ import (
 
 // watchSession gives a signed-in run its session check (fetch.Session): a
 // page the run asks with its session and without it, whose answers differ,
-// asked every 50 requests and when an answer looks like the end of the
-// session (a 401, a response that clears a session cookie, a redirect to the
+// asked every -session-every requests (50), when 10 s passed since the last
+// good check, before each stage that sends many requests, and when an answer
+// looks like the end of the session (a 401, a response that clears a session cookie, a redirect to the
 // sign-in page: -login's, else the one the check page sends a visitor to).
 // renew signs in again (-login); nil for a session given with -cookie or
 // -header, which the run cannot renew. landed is what the sign-in saw of the
 // page it ended on (nil without -login).
-func watchSession(ctx context.Context, seeds []types.Seed, home, loginURL string, renew func(context.Context) error, landed *landing, rep *report) {
+func watchSession(ctx context.Context, seeds []types.Seed, home, loginURL string, renew func(context.Context) error, landed *landing, rep *report, every int) {
 	if !fetch.HasSession() {
 		return
 	}
-	s := fetch.Session{Renew: renew, SignIn: loginURL}
+	s := fetch.Session{Renew: renew, SignIn: loginURL, Every: every}
 	if renew == nil {
 		s.Why = "the session was given with -cookie or -header: give a fresh one and run azhaq resume"
 	}

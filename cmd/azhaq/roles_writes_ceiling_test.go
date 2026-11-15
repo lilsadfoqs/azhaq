@@ -131,7 +131,7 @@ func TestRolesCreateVerificationCeilingIsOpenUntilBounded(t *testing.T) {
 		harEntry("2026-10-29T10:00:00.000Z", "POST", srv.URL+"/books", `{"title":"t-alice"}`, 200, "Authorization", "Bearer tok-alice", "Content-Type", "application/json"))
 	bob := writeHAR(t, "bob.har",
 		harEntry("2026-10-29T10:00:00.000Z", "POST", srv.URL+"/books", `{"title":"t-bob"}`, 200, "Authorization", "Bearer tok-bob", "Content-Type", "application/json"))
-	for _, extra := range [][]string{nil, {"--", "-url", srv.URL + "/", "-max-requests", "500"}} {
+	for _, extra := range [][]string{nil, {"--", "-url", srv.URL + "/", "-max-requests", "5000"}} { // the sweep's product checks as well
 		args := append([]string{"-role", "anon", "-har", "alice=" + har, "-har", "bob=" + bob, "-replay-writes", "post"}, extra...)
 		_, _, rep, err := rolesJSONReport(t, srv.URL, args...)
 		if err != nil {

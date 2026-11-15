@@ -7,11 +7,14 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
 
 	"github.com/lilsadfoqs/azhaq/internal/browser"
+	"github.com/lilsadfoqs/azhaq/internal/collectors/pathscol"
 )
 
 // costFactor is how far from what a fixture was sent the estimate of its
@@ -154,10 +157,10 @@ func TestPlanEstimatesEachStage(t *testing.T) {
 		stage, field string
 		want         float64
 	}{
-		{"web", "requests", 26},     // the page and the 25 built-in paths that no answer skips; the favicon and the 26 guesses of an API description are not certain
-		{"ports", "connects", 602},  // 601 ports and the one that is named twice is once; the port of the URL's host
-		{"fuzz", "requests", 126},   // 40 words and 2 extensions, and 6 calibration probes
-		{"names", "dns_queries", 5}, // one query for each word
+		{"web", "requests", float64(26 + productChecks())}, // the page, the 25 built-in paths that no answer skips and the product checks; the favicon and the 26 guesses of an API description are not certain
+		{"ports", "connects", 602},                         // 601 ports and the one that is named twice is once; the port of the URL's host
+		{"fuzz", "requests", 126},                          // 40 words and 2 extensions, and 6 calibration probes
+		{"names", "dns_queries", 5},                        // one query for each word
 	} {
 		st := byStage[c.stage]
 		if st == nil {
@@ -183,11 +186,11 @@ func TestPlanEstimatesEachStage(t *testing.T) {
 	var q map[string]any
 	out, _, _ = cli(t, "plan", "-url", srv.URL+"/", "-allow", "127.0.0.1", "-sources", "none", "-no-favicon", "-json")
 	_ = json.Unmarshal([]byte(out), &q)
-	if got := stageAmount(q["estimate"].(map[string]any)["stages"].([]any)[0].(map[string]any), "estimate", "requests"); got != 26 {
-		t.Errorf("-no-favicon: the web stage is estimated at %v requests, want 26", got)
+	if got := stageAmount(q["estimate"].(map[string]any)["stages"].([]any)[0].(map[string]any), "estimate", "requests"); got != float64(26+productChecks()) {
+		t.Errorf("-no-favicon: the web stage is estimated at %v requests, want %d", got, 26+productChecks())
 	}
 	text, _, _ := cli(t, "plan", "-url", srv.URL+"/", "-allow", "127.0.0.1", "-sources", "none")
-	if !strings.Contains(text, "estimate: at least 26 requests") || !strings.Contains(text, "web ") {
+	if !strings.Contains(text, fmt.Sprintf("estimate: at least %d requests", 26+productChecks())) || !strings.Contains(text, "web ") {
 		t.Errorf("the text plan does not print the estimate by stage:\n%s", text)
 	}
 	if hits.Load() != 0 {
@@ -234,8 +237,12 @@ func TestRunSummaryTextHasTheCostByStage(t *testing.T) {
 	srv := juiceShaped(&hits)
 	defer srv.Close()
 	_, errOut, _ := cli(t, "run", "-url", srv.URL+"/", "-allow", "127.0.0.1", "-sources", "none", "-db", filepath.Join(t.TempDir(), "w.db"), "-ledger", "off")
-	if !strings.Contains(errOut, "cost: web: sent 83 requests (estimated at least 26 requests and what the answers lead to; no ceiling (-max-requests sets one))") {
-		t.Errorf("the summary does not set the estimate beside what was sent:\n%s", errOut)
+	m := regexp.MustCompile(`cost: web: sent (\d+) requests \(estimated at least (\d+) requests and what the answers lead to; no ceiling \(-max-requests sets one\)\)`).FindStringSubmatch(errOut)
+	if m == nil || m[2] != strconv.Itoa(26+productChecks()) {
+		t.Fatalf("the summary does not set the estimate beside what was sent:\n%s", errOut)
+	}
+	if sent, _ := strconv.Atoi(m[1]); sent < 26+productChecks() {
+		t.Errorf("sent %d, below the floor %s", sent, m[2])
 	}
 }
 
@@ -257,7 +264,8 @@ func TestRunSaysItsEstimateFirstWhenLarge(t *testing.T) {
 			t.Errorf("%s: the estimate is printed before the summary:\n%s", quiet, errOut)
 		}
 	}
-	_, errOut, _ = cli(t, "run", "-url", srv.URL+"/", "-allow", "127.0.0.1", "-sources", "none", "-ledger", "off", "-db", filepath.Join(t.TempDir(), "c.db"))
+	// -no-tech asks no product checks: a run of about 50 requests.
+	_, errOut, _ = cli(t, "run", "-url", srv.URL+"/", "-allow", "127.0.0.1", "-sources", "none", "-ledger", "off", "-no-tech", "-db", filepath.Join(t.TempDir(), "c.db"))
 	if strings.Contains(errOut, "before sending") {
 		t.Errorf("a run of about 50 requests says its estimate first:\n%s", errOut)
 	}
@@ -475,3 +483,7 @@ func TestStagesAddUpToWhatTheCountProxyLogged(t *testing.T) {
 		t.Errorf("map stage: estimated %v requests, the proxy logged %v: not within a factor of %d, from above", est, got, costFactor)
 	}
 }
+
+// productChecks is how many product checks a root sweep asks besides its
+// path checks (the detection templates' paths).
+func productChecks() int { return len(pathscol.ProductWords()) }

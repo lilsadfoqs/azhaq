@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"sync"
@@ -163,7 +164,7 @@ func TestWorkerHoldsDenyPathAndReportsIt(t *testing.T) {
 	}
 	mu.Lock()
 	for _, p := range seen {
-		if strings.Contains(p, "/admin") || strings.Contains(p, "/.git") {
+		if _, path, _ := strings.Cut(p, "/"); regexp.MustCompile(rule).MatchString("/" + path) {
 			t.Errorf("%s was requested, by a process the rule did not reach", p)
 		}
 	}
