@@ -413,32 +413,37 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 			}
 		}()
 	}
-	asked := slices.Clone(locs)
-	for _, w := range slices.Sorted(maps.Keys(only)) {
-		asked = append(asked, w)
-	}
-	for _, path := range asked {
-		if ctx.Err() != nil {
-			break
-		}
-		target := targetOf(path)
-		if target == raw {
-			continue
-		}
-		wg.Add(1)
-		go func(target, path string) {
-			defer guard.Recover(ctx)
-			defer wg.Done()
-			select {
-			case <-ctx.Done():
-				return
-			case sem <- struct{}{}:
+	// The path checks first, then the product checks: a limit on guesses
+	// (-host-guesses) is spent on the map before the product's name.
+	ask := func(paths []string) {
+		for _, path := range paths {
+			if ctx.Err() != nil {
+				break
 			}
-			defer func() { <-sem }()
-			probe(target, path)
-		}(target, path)
+			target := targetOf(path)
+			if target == raw {
+				continue
+			}
+			wg.Add(1)
+			go func(target, path string) {
+				defer guard.Recover(ctx)
+				defer wg.Done()
+				select {
+				case <-ctx.Done():
+					return
+				case sem <- struct{}{}:
+				}
+				defer func() { <-sem }()
+				probe(target, path)
+			}(target, path)
+		}
 	}
+	ask(locs)
 	wg.Wait()
+	if len(only) > 0 {
+		ask(slices.Sorted(maps.Keys(only)))
+		wg.Wait()
+	}
 	if n := skipped.Load(); n > 0 {
 		payload, _ := json.Marshal(map[string]any{"skipped_checks": n, "origin": origin})
 		if err := emit(types.Observation{Collector: Name, Source: raw, Kind: "note", Payload: payload, Confidence: 1, ObservedAt: time.Now().UTC()}); err == nil {
