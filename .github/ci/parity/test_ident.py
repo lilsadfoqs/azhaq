@@ -64,6 +64,14 @@ class Ident(unittest.TestCase):
         self.assertEqual((res["product"], res["versioned"], res["version"]), (1, 1, 0))
         self.assertTrue(misses[0]["product_named"])
 
+    def test_the_makers_name_is_not_required(self):
+        self.assertTrue(ident.names_product("Nexus 3.21.1-01", "Sonatype Nexus Repository"))
+        self.assertTrue(ident.names_product("Jetty 9.4.37.v20210219", "Eclipse Jetty"))
+        self.assertTrue(ident.names_product("Apache RocketMQ 5.1.0", "Apache RocketMQ name server"))
+        self.assertFalse(ident.names_product("telnet", "GNU inetutils telnetd"))
+        self.assertFalse(ident.names_product("Express Node.js", "mongo-express"))
+        self.assertFalse(ident.names_product("OpenSSH 7.9p1", "Git over SSH (git-shell)"))
+
     def test_a_key_version_that_is_not_a_version_is_not_counted(self):
         k = only(KEY, "cache.acme.test")
         k["estates"][0]["hosts"][0]["version"] = "latest"
@@ -148,6 +156,14 @@ class Stack(unittest.TestCase):
         # cache by nmap, app1 by the nuclei template and what it extracted; wiki only by its title: shown, not stated.
         self.assertEqual((res["found"], res["product"], res["version"], res["title_only"]), (3, 2, 2, 1))
         self.assertEqual([m["host"] for m in misses], ["wiki.acme.test"])
+
+    def test_a_multi_product_template_names_its_product_by_matcher(self):
+        with tempfile.TemporaryDirectory() as d:
+            with open(os.path.join(d, "nuclei.jsonl"), "w") as f:
+                f.write(json.dumps({"template-id": "fingerprinthub-web-fingerprints", "info": {"name": "FingerprintHub Technology Fingerprint"},
+                                    "matcher-name": "flurb-db", "matched-at": "http://cache.acme.test:26379/"}) + "\n")
+            res, _ = ident.sample(only(KEY, "cache.acme.test"), list(stack_rows.rows(d)))
+        self.assertEqual((res["found"], res["product"]), (1, 1))
 
     def test_missing_outputs_give_no_rows(self):
         with tempfile.TemporaryDirectory() as d:

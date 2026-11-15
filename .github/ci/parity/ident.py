@@ -9,7 +9,9 @@ beside its key. For each service of the key that was up, it asks:
   found    a stored row is about one of its ports: at its name, or at its
            address unless it is a virtual host (its address is the proxy's)
   product  one of those rows states the product: a port's service product, a
-           web answer's technology, a check's or an advisory's product
+           web answer's technology, a check's or an advisory's product (the
+           drift grader's rule, where the maker's name and the words for a
+           part of the product are not required)
   version  one of them states the version as well (counted only where the
            key's version is a version, not "latest")
   title    the product is only in a page title or a Server header, which
@@ -37,13 +39,20 @@ GENERIC = {"apache", "server", "console", "database", "spring", "framework", "we
            "service", "services", "panel", "admin", "project", "platform", "management", "manager", "registry", "app"}
 
 
+# Who makes a product is not its name: "Nexus 3.21" names Sonatype Nexus
+# Repository, "Jetty 9.4" names Eclipse Jetty. Nor are the words that say which
+# part of it answers (a broker, a name server, a UI). Neither is required.
+NOT_THE_NAME = {"sonatype", "eclipse", "gnu", "oracle", "ibm", "microsoft", "jetbrains", "atlassian", "vmware", "alibaba",
+                "tencent", "adobe", "google", "hashicorp", "repository", "broker", "name", "ui", "edition", "community"}
+
+
 def norm(s):
     return re.sub(r"[^a-z0-9]+", " ", (s or "").lower()).strip()
 
 
 def product_words(product):
     head = re.split(r"\s+(?:behind|with|via|on)\s+|\(", product or "")[0]
-    return norm(head), [w for w in norm(head).split() if len(w) >= 2 and w not in GENERIC]
+    return norm(head), [w for w in norm(head).split() if len(w) >= 2 and w not in GENERIC and w not in NOT_THE_NAME]
 
 
 def names_product(text, product):

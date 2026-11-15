@@ -109,7 +109,9 @@ def nuclei_rows(path):
         if "://" not in at:
             continue
         info = o.get("info") or {}
-        name = " ".join([info.get("name") or o.get("template-id") or ""] + [str(x) for x in o.get("extracted-results") or []])
+        # A template that names many products (tech-detect, fingerprinthub) says which one in its matcher's name.
+        parts = [info.get("name") or o.get("template-id") or "", o.get("matcher-name") or ""]
+        name = " ".join(parts + [str(x) for x in o.get("extracted-results") or []])
         yield row("azhaq-http", {"url": at, "ip": o.get("ip"), "status": 200, "tech": [name.strip()]})
 
 
