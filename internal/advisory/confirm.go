@@ -97,13 +97,21 @@ func services(obs []types.StoredObservation, needVersion bool) []Service {
 				add(Service{Host: host, IP: row.IP, Port: s.Port, Proto: "udp", Service: strings.TrimSuffix(s.Service, "?"),
 					Product: s.Product, Version: s.Version, Banner: s.Banner, ObservedAt: o.ObservedAt})
 			}
-		case "azhaq-http":
+		case "azhaq-http", "azhaq-paths":
 			var row struct {
-				URL    string   `json:"url"`
-				Server string   `json:"server"`
-				Tech   []string `json:"tech"`
+				URL      string     `json:"url"`
+				Server   string     `json:"server"`
+				Tech     []string   `json:"tech"`
+				Detected []detected `json:"detected"`
 			}
-			if json.Unmarshal(o.Payload, &row) != nil || (row.Server == "" && len(row.Tech) == 0) {
+			from := ""
+			if page, found, ok := detectedRow(o); ok {
+				u, _ := url.Parse(page)
+				row.URL, row.Detected, from = u.Scheme+"://"+u.Host+"/", found, page
+			} else if o.Collector != "azhaq-http" || json.Unmarshal(o.Payload, &row) != nil {
+				continue
+			}
+			if row.Server == "" && len(row.Tech) == 0 && len(row.Detected) == 0 {
 				continue
 			}
 			u, err := url.Parse(row.URL)
@@ -118,10 +126,14 @@ func services(obs []types.StoredObservation, needVersion bool) []Service {
 			} else {
 				port = 80
 			}
+			at := row.URL
+			if from != "" {
+				at = from
+			}
 			web := func(product, version, banner, source string) Service {
 				return Service{Host: u.Hostname(), Port: port, Proto: "tcp", Service: u.Scheme,
 					Product: product, Version: version, Origin: u.Scheme + "://" + u.Host,
-					Banner: banner, Source: source, ObservedAt: o.ObservedAt, From: row.URL}
+					Banner: banner, Source: source, ObservedAt: o.ObservedAt, From: at}
 			}
 			if row.Server != "" {
 				product, version := ProductVersion(row.Server)
@@ -132,6 +144,12 @@ func services(obs []types.StoredObservation, needVersion bool) []Service {
 			for _, t := range row.Tech {
 				if name, version, ok := strings.Cut(t, ":"); ok && name != "" && version != "" && version[0] >= '0' && version[0] <= '9' {
 					add(web(name, version, "technology: "+t, SourceTech))
+				}
+			}
+			// What a detection template extracted with a version.
+			for _, d := range row.Detected {
+				if d.Product != "" && d.Version != "" && classify(d.Product, d.source()) != skip {
+					add(web(d.Product, d.Version, "detection template: "+d.Template, SourceDetect))
 				}
 			}
 		}

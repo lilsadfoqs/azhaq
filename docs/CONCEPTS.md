@@ -451,6 +451,7 @@ With `-replay-writes`, three more come before them all:
 | --- | --- | --- |
 | Pages, scripts, API descriptions (at the root and under each API base), archived URL templates, the GET operations a description names that need no path or required query parameter, GET forms | GET | Every run, inside the scope. A GET can change data on the target: only `-deny-path` keeps a URL out. |
 | 51 built-in path checks per web service: `robots.txt`, sitemaps, API descriptions, `.git/HEAD`, `backup`, `admin`, … | GET | Every run. `-no-paths` turns them off. |
+| Product checks per web service: the paths published detection templates ask (`/status.php`, `/signin`, `/solr/`, …), only to name the product. `azhaq plan` counts them. | GET | Every run. `-no-paths` or `-no-tech` turns them off. |
 | Path and parameter guesses | GET. `params -X` sends the names in a POST, JSON or XML body. | `-dirs`, `-params`, held to the targets given or to `-allow` and `-scope`. |
 | GraphQL introspection | POST | `-graphql`, held to the targets given or to `-allow` and `-scope`. |
 | A port's service | A TCP connect, then for a port that says nothing: protocol probes, one `HEAD /`, a TLS handshake. | `-ports`, `ports`, and a range or an address among the targets of `run` with no `-ports` (`-ports default`: the top 1000 ports of every address, then every port of each address that answered) |

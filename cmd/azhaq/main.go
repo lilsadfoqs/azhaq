@@ -1989,7 +1989,7 @@ func webServiceCost(skip map[string]bool, extraPaths []string, noFavicon bool, k
 	case knownFiles != "":
 		n += len(pathscol.KnownFiles(knownFiles))
 	default:
-		n += len(pathscol.DefaultWordlist) + len(extraPaths)
+		n += len(pathscol.DefaultWordlist) + len(extraPaths) + len(pathscol.ProductWords())
 	}
 	return n
 }

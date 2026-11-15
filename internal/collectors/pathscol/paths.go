@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/lilsadfoqs/azhaq/internal/guard"
+	"maps"
 	"net/http"
 	"net/url"
 	"slices"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/lilsadfoqs/azhaq/catalog"
 	"github.com/lilsadfoqs/azhaq/internal/crawlscope"
+	"github.com/lilsadfoqs/azhaq/internal/detect"
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
 	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 	"github.com/lilsadfoqs/azhaq/internal/ledger"
@@ -94,14 +96,18 @@ type Collector struct {
 	// Known, set by -known-files, makes the sweep ask only the files it
 	// names (robots.txt, sitemaps), read every entry of them, and not sweep
 	// under API bases.
-	Known     bool
-	probed    sync.Map // scheme://host (or scheme://host/api/v2/) → the URL whose task sweeps it; one sweep each
-	planned   sync.Map // the same, claimed while no workspace is bound: a plan's, or a run's with none
-	baseCount sync.Map // scheme://host → API bases swept
+	Known bool
+	// ProductChecks makes a root sweep also ask the paths the detection
+	// templates ask (ProductWords), only to name the product: their
+	// answers are matched, not mapped.
+	ProductChecks bool
+	probed        sync.Map // scheme://host (or scheme://host/api/v2/) → the URL whose task sweeps it; one sweep each
+	planned       sync.Map // the same, claimed while no workspace is bound: a plan's, or a run's with none
+	baseCount     sync.Map // scheme://host → API bases swept
 }
 
 func New(client *http.Client) *Collector {
-	return &Collector{Client: fetch.Client(client), Wordlist: DefaultWordlist}
+	return &Collector{Client: fetch.Client(client), Wordlist: DefaultWordlist, ProductChecks: true}
 }
 
 func Register(cat *catalog.Catalog, client *http.Client) {
@@ -210,13 +216,22 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 	prefix := probePrefix(base.Path)
 	origin := base.Scheme + "://" + base.Host
 	var list []string
-	root := false // the sweep of the origin's built-in checks, not of an API base
+	var only map[string]bool // the root sweep's words asked only to name a product
+	root := false            // the sweep of the origin's built-in checks, not of an API base
 	switch b := apiBase(base.Path); {
 	case c.owner(origin, raw) == raw:
 		root = true
 		list = c.Wordlist
 		if len(list) == 0 {
 			list = DefaultWordlist
+		}
+		if c.ProductChecks {
+			only = map[string]bool{}
+			for _, w := range ProductWords() {
+				if !slices.Contains(list, w) {
+					only[w] = true
+				}
+			}
 		}
 	case !c.Known && b != "" && b != "/api/" && c.owner(origin+b, raw) == raw && c.bases(origin) <= maxBases:
 		// The root sweep asks /api/swagger.json and /api/openapi.json.
@@ -231,7 +246,7 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 	var skipped atomic.Int32
 	// What became of each check of the sweep: asked, answered by a request
 	// sent before, or refused by the run's limits (and why).
-	var sent, answered atomic.Int32
+	var sent, answered, products atomic.Int32
 	refused := map[string]int{}
 	tally := func(cached bool, err error) {
 		switch {
@@ -252,11 +267,33 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 	// answer was an API description.
 	probe := func(target, path string) bool {
 		purpose := ledger.PurposePathChecks
-		if isDescLoc(path) || isGraphQLLoc(path) {
+		switch {
+		case only[path]:
+			purpose = ledger.PurposeProductChecks
+		case isDescLoc(path) || isGraphQLLoc(path):
 			purpose = ledger.PurposeDescriptions
 		}
 		res, cached, err := fetch.Do(ledger.WithPurpose(ctx, purpose), c.Client, target)
-		tally(cached, err)
+		if only[path] {
+			if err == nil && !cached {
+				products.Add(1) // not a path check: the sweep's record counts them apart
+			}
+		} else {
+			tally(cached, err)
+		}
+		if err == nil && root && c.ProductChecks {
+			if rows := detect.Rows(detect.Match(answer("/"+path, res))); len(rows) > 0 {
+				payload, _ := json.Marshal(map[string]any{"url": raw, "path": "/" + path, "status": res.Status, "detected": rows})
+				mu.Lock()
+				if emit(types.Observation{Collector: Name, Source: raw, Kind: DetectedKind, Payload: payload, Confidence: 0.9, ObservedAt: time.Now().UTC()}) == nil {
+					meta.EmitCount++
+				}
+				mu.Unlock()
+			}
+		}
+		if only[path] {
+			return false // asked to name a product, not a page of the map
+		}
 		if err != nil || !(interesting(res.Status) || isGraphQLLoc(path) && refusesGET(res.Status)) || fetch.CatchAll(ctx, c.Client, res) {
 			return false
 		}
@@ -376,28 +413,37 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 			}
 		}()
 	}
-	for _, path := range locs {
-		if ctx.Err() != nil {
-			break
-		}
-		target := targetOf(path)
-		if target == raw {
-			continue
-		}
-		wg.Add(1)
-		go func(target, path string) {
-			defer guard.Recover(ctx)
-			defer wg.Done()
-			select {
-			case <-ctx.Done():
-				return
-			case sem <- struct{}{}:
+	// The path checks first, then the product checks: a limit on guesses
+	// (-host-guesses) is spent on the map before the product's name.
+	ask := func(paths []string) {
+		for _, path := range paths {
+			if ctx.Err() != nil {
+				break
 			}
-			defer func() { <-sem }()
-			probe(target, path)
-		}(target, path)
+			target := targetOf(path)
+			if target == raw {
+				continue
+			}
+			wg.Add(1)
+			go func(target, path string) {
+				defer guard.Recover(ctx)
+				defer wg.Done()
+				select {
+				case <-ctx.Done():
+					return
+				case sem <- struct{}{}:
+				}
+				defer func() { <-sem }()
+				probe(target, path)
+			}(target, path)
+		}
 	}
+	ask(locs)
 	wg.Wait()
+	if len(only) > 0 {
+		ask(slices.Sorted(maps.Keys(only)))
+		wg.Wait()
+	}
 	if n := skipped.Load(); n > 0 {
 		payload, _ := json.Marshal(map[string]any{"skipped_checks": n, "origin": origin})
 		if err := emit(types.Observation{Collector: Name, Source: raw, Kind: "note", Payload: payload, Confidence: 1, ObservedAt: time.Now().UTC()}); err == nil {
@@ -407,6 +453,9 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 	if root {
 		// What became of each check of the origin's sweep: the summary's path_checks.
 		done := map[string]any{"origin": origin, "planned": planned, "sent": sent.Load(), "answered": answered.Load(), "described": skipped.Load()}
+		if len(only) > 0 {
+			done["product_checks"] = map[string]any{"listed": len(only), "sent": products.Load()}
+		}
 		if len(refused) > 0 {
 			done["refused"] = refused
 		}

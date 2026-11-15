@@ -9,7 +9,8 @@ beside its key. For each service of the key that was up, it asks:
   found    a stored row is about one of its ports: at its name, or at its
            address unless it is a virtual host (its address is the proxy's)
   product  one of those rows states the product: a port's service product, a
-           web answer's technology, a check's or an advisory's product (the
+           web answer's technology or detection-template product, a check's or
+           an advisory's product (the
            drift grader's rule, where the maker's name and the words for a
            part of the product are not required)
   version  one of them states the version as well (counted only where the
@@ -95,13 +96,17 @@ def statements(rows):
                     add((p.get("host"), p.get("ip")), s["port"], "")
             for port in p.get("open") or []:
                 add((p.get("host"), p.get("ip")), port, "")
-        elif c == "azhaq-http":
+        elif c == "azhaq-http" or c == "azhaq-paths" and ob.get("kind") == "detected":
             u = urlsplit(p.get("url") or "")
             if not u.hostname:
                 continue
             port = u.port or (443 if u.scheme == "https" else 80)
             tech = " ".join(str(t).replace(":", " ") for t in p.get("tech") or [])
-            add((u.hostname, p.get("ip")), port, tech)
+            # What a detection template named on the answer (internal/detect).
+            tech += " " + " ".join("%s %s" % (d.get("product", ""), d.get("version", "")) for d in p.get("detected") or [] if isinstance(d, dict))
+            add((u.hostname, p.get("ip")), port, tech.strip())
+            if c == "azhaq-paths":
+                continue
             loose = " ".join(str(x) for x in (p.get("title"), p.get("server")) if x)
             if loose:
                 add((u.hostname, p.get("ip")), port, loose, title=True)

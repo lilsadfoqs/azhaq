@@ -1,0 +1,29 @@
+id: acme-panel
+
+info:
+  name: Acme Control Panel - Detect
+  severity: info
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/acme/login"
+      - "{{BaseURL}}/acme/"
+
+    stop-at-first-match: true
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        words:
+          - "<title>Acme Console</title>"
+      - type: status
+        status:
+          - 200
+
+    extractors:
+      - type: regex
+        part: body
+        group: 1
+        regex:
+          - 'acme\.js\?v=([0-9.]+)'

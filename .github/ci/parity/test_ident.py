@@ -79,6 +79,16 @@ class Ident(unittest.TestCase):
         self.assertEqual((res["product"], res["versioned"], res["version"]), (1, 0, 0))
         self.assertEqual(misses, [])
 
+    def test_a_detection_template_states_the_product(self):
+        on_root = ob("x", "e", "azhaq-http", "application", web("http://app1.acme.test:28080/", "127.31.0.20", 1, "", "",
+                                                                detected=[{"product": "Zorbo Server", "version": "2.3.1", "template": "zorbo-detect"}]), 1)
+        res, _ = measure(only(KEY, "app1.acme.test"), [on_root])
+        self.assertEqual((res["found"], res["product"], res["version"]), (1, 1, 1))
+        on_path = {"kind": "observation", "observation": {"collector": "azhaq-paths", "kind": "detected", "payload": {
+            "url": "http://127.31.0.21:26379/", "path": "/status", "detected": [{"product": "Flurb DB", "template": "flurb-panel"}]}}}
+        res, _ = measure(only(KEY, "cache.acme.test"), [on_path])
+        self.assertEqual((res["found"], res["product"], res["version"]), (1, 1, 0))
+
     def test_open_with_nothing_stated_is_found(self):
         rows = [ob("x", "e", "azhaq-ports", "ports", {"host": "", "ip": "127.31.0.20", "open": [28080]}, 1)]
         res, _ = measure(only(KEY, "app1.acme.test"), rows)
