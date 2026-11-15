@@ -12,6 +12,7 @@ import unittest
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import ident  # noqa: E402
+import stack_rows  # noqa: E402
 from test_parity import EXPORT, KEY, ob, web  # noqa: E402
 
 
@@ -106,6 +107,53 @@ class Ident(unittest.TestCase):
             r = subprocess.run([sys.executable, "-I", os.path.join(HERE, "ident.py"), "agg", out, out], check=True, cwd=d,
                                capture_output=True, text=True)
             self.assertIn("samples 2", r.stdout)
+
+
+NMAP = """<?xml version="1.0"?><nmaprun><host><address addr="127.31.0.21" addrtype="ipv4"/><ports>
+<port protocol="tcp" portid="26379"><state state="open"/><service name="redis" product="Flurb DB" version="4.0"/></port>
+<port protocol="tcp" portid="9"><state state="closed"/><service name="discard"/></port>
+</ports></host></nmaprun>"""
+HTTPX = {"url": "http://wiki.acme.test/", "host_ip": "127.31.0.99", "status_code": 200, "tech": ["Nginx"], "title": "Quux Wiki",
+         "webserver": "nginx"}
+NUCLEI = {"template-id": "zorbo-panel", "info": {"name": "Zorbo Server Panel - Detect"}, "matched-at": "http://app1.acme.test:28080/",
+          "ip": "127.31.0.20", "extracted-results": ["2.3.1"]}
+
+
+class Stack(unittest.TestCase):
+    def test_targets_are_what_azhaq_found(self):
+        with tempfile.TemporaryDirectory() as d:
+            exp = os.path.join(d, "export.jsonl")
+            with open(exp, "w") as f:
+                f.write("".join(json.dumps(r) + "\n" for r in EXPORT))
+            self.assertEqual(stack_rows.targets(exp, d), (3, 4))  # two pages of one root are one root
+            with open(os.path.join(d, "ports.txt")) as f:
+                self.assertEqual(f.read(), "127.31.0.20 28080\n127.31.0.21 26379\n127.31.0.99 80\n")
+            with open(os.path.join(d, "urls.txt")) as f:
+                urls = f.read().split()
+            self.assertIn("http://wiki.acme.test/", urls)
+            self.assertIn("http://app1.acme.test:28080/", urls)
+            self.assertNotIn("http://app1.acme.test:28080/plain", urls)
+
+    def test_the_tools_outputs_become_rows_ident_reads(self):
+        with tempfile.TemporaryDirectory() as d:
+            with open(os.path.join(d, "nmap-127.31.0.21.xml"), "w") as f:
+                f.write(NMAP)
+            with open(os.path.join(d, "httpx.jsonl"), "w") as f:
+                f.write(json.dumps(HTTPX) + "\nnot json\n")
+            with open(os.path.join(d, "nuclei.jsonl"), "w") as f:
+                f.write(json.dumps(NUCLEI) + "\n")
+            rows = list(stack_rows.rows(d))
+        self.assertEqual(rows[0]["observation"]["payload"]["open"], [26379])
+        res, misses = ident.sample(KEY, rows)
+        # cache by nmap, app1 by the nuclei template and what it extracted; wiki only by its title: shown, not stated.
+        self.assertEqual((res["found"], res["product"], res["version"], res["title_only"]), (3, 2, 2, 1))
+        self.assertEqual([m["host"] for m in misses], ["wiki.acme.test"])
+
+    def test_missing_outputs_give_no_rows(self):
+        with tempfile.TemporaryDirectory() as d:
+            with open(os.path.join(d, "nmap-x.xml"), "w") as f:
+                f.write("<nmaprun")
+            self.assertEqual(list(stack_rows.rows(d)), [])
 
 
 if __name__ == "__main__":

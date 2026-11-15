@@ -128,6 +128,15 @@ jobs:
             "$(jq -r .DOMAIN1 "$vars")" "$(jq -r .NET1 "$vars")" "$(jq -r .DNS1 "$vars")" "$MINUTES"
           rc=$(jq -r .run_exit "$HOME/parity/out/replay.json")
           case $rc in 0 | 4) ;; *) echo "::warning title=parity::azhaq run exited $rc" ;; esac
+      - name: stack
+        # The usual tools asked to name the services azhaq found (stack.sh): the other side of ident.py.
+        run: |
+          mkdir -p "$HOME/parity/stack-bin"
+          grep -P '^(probe|vulns|scan)\t' .github/ci/control/stack.tsv > "$RUNNER_TEMP/stack.tsv"
+          STACK="$RUNNER_TEMP/stack.tsv" .github/ci/control/install-stack.sh "$HOME/parity/stack-bin" > /dev/null
+          PATH="$HOME/parity/stack-bin:$PATH" .github/ci/parity/stack.sh "$HOME/parity/out/stack" "$HOME/parity/out/export.jsonl" \
+            "$(jq -r .DNS1 "$HOME/parity/vars.json")"
+          jq -c . "$HOME/parity/out/stack/stack.json"
       - name: grade
         run: |
           out="$HOME/parity/out"
@@ -147,6 +156,8 @@ jobs:
           # Product and version named per service; the misses name the key's products, so they go in the sample.
           python3 -I .github/ci/parity/ident.py sample "$HOME/parity/keep/key.json" "$out/export.jsonl" \
             --out "$out/ident.json" --misses "$g/ident-misses.jsonl"
+          python3 -I .github/ci/parity/ident.py sample "$HOME/parity/keep/key.json" "$out/stack/stack-rows.jsonl" \
+            --out "$out/ident-stack.json" --misses "$g/ident-stack-misses.jsonl"
           echo "graded"
       - name: publish
         if: always()
@@ -159,7 +170,7 @@ jobs:
           cd "$out"
           files=()
           list=()
-          for f in plan.txt run.out run.err worklist.jsonl worklist.err hunt.jsonl hunt.err export.jsonl export.err findings.jsonl findings.err replay.json graded graded-worklist; do
+          for f in plan.txt run.out run.err worklist.jsonl worklist.err hunt.jsonl hunt.err export.jsonl export.err findings.jsonl findings.err replay.json graded graded-worklist stack; do
             [ -e "$f" ] && list+=("$f")
           done
           if [ "${#list[@]}" -gt 0 ]; then
@@ -185,6 +196,10 @@ jobs:
           if [ -s ident.json ]; then
             age -r "$AGE_RECIPIENT" -o "$pub/ident.json.age" ident.json
             files+=("$pub/ident.json.age")
+          fi
+          if [ -s ident-stack.json ]; then
+            age -r "$AGE_RECIPIENT" -o "$pub/ident-stack.json.age" ident-stack.json
+            files+=("$pub/ident-stack.json.age")
           fi
           [ "${#files[@]}" -gt 0 ] || exit 0
           "$GITHUB_WORKSPACE/.github/ci/publish.sh" "parity/${GITHUB_REF_NAME#parity-}/s${{ matrix.sample }}" "${files[@]}"

@@ -62,6 +62,14 @@ python3 -I .github/ci/parity/ident.py sample DIR/sK/key.json DIR/sK/export.jsonl
 python3 -I .github/ci/parity/ident.py agg DIR/s*/ident.json
 ```
 
+The other side of that number is `stack.sh`. After the replay, it asks the
+usual tools to name the same services azhaq found: `nmap -sV` on each
+address's open ports, `httpx -td` (title and `Server` header too) and nuclei's
+`tech` and `panel` templates on each web root. The tools are the control's
+pinned versions. `stack_rows.py` turns their output into the rows `ident.py`
+reads, and `ident.py` grades both sides with the same rule, so the comparison
+is of naming, not of finding.
+
 ## Fresh seeds, aggregates only
 
 The four pool estates (`range/pool.json`) have known baselines, so tuning
