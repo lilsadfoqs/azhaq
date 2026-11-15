@@ -1,0 +1,19 @@
+id: widget-detect
+
+info:
+  name: Widget Dashboard Detection
+  severity: info
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}"
+
+    redirects: true
+    max-redirects: 2
+    matchers:
+      - type: dsl
+        dsl:
+          - 'regex("(?i)<title>[^<]*widget[^<]*</title>", body)'
+          - 'status_code == 200'
+        condition: and
