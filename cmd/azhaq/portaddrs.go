@@ -4,7 +4,7 @@ import (
 	"net/netip"
 	"slices"
 
-	"github.com/lilsadfoqs/azhaq/internal/collectors/portcol"
+	"github.com/lilsadfoqs/azhaq/internal/portscan"
 	"github.com/lilsadfoqs/azhaq/types"
 )
 
@@ -32,15 +32,15 @@ func portAddresses(obs []types.StoredObservation) (scanned, open int) {
 		if o.Collector != "azhaq-ports" || o.Kind != "ports" {
 			continue
 		}
-		p := payloadOf(o.Observation)
-		if p[portcol.CheckpointKey] == true || p["unresolved"] != nil {
+		p, err := portscan.ParseRow(o.Payload)
+		if err != nil || p.Checkpoint || p.Unresolved != "" {
 			continue
 		}
-		if p["range"] == true {
-			pf, err := netip.ParsePrefix(pstr(p["prefix"]))
+		if p.Range {
+			pf, err := netip.ParsePrefix(p.Prefix)
 			if err != nil {
-				scanned += intOf(p["addresses"])
-				open += intOf(p["with_open"]) // no prefix to place the rows by
+				scanned += p.Addresses
+				open += p.WithOpen // no prefix to place the rows by
 				continue
 			}
 			pf = pf.Masked()
@@ -50,24 +50,18 @@ func portAddresses(obs []types.StoredObservation) (scanned, open int) {
 				at[pf] = i
 				blocks = append(blocks, block{pf: pf})
 			}
-			blocks[i].asked = max(blocks[i].asked, intOf(p["addresses"]))
-			blocks[i].withOpen = max(blocks[i].withOpen, intOf(p["with_open"]))
+			blocks[i].asked = max(blocks[i].asked, p.Addresses)
+			blocks[i].withOpen = max(blocks[i].withOpen, p.WithOpen)
 			continue
 		}
-		ip, err := netip.ParseAddr(pstr(p["ip"]))
+		ip, err := netip.ParseAddr(p.IP)
 		if err != nil {
 			continue
 		}
-		isOpen := false
-		if sv, _ := p["services"].([]any); len(sv) > 0 {
-			isOpen = true
-		} else if uo, _ := p["udp_open"].([]any); len(uo) > 0 {
-			isOpen = true
-		}
-		if isOpen {
+		if len(p.Services) > 0 || len(p.UDPOpen) > 0 {
 			openAt[ip] = true
 		}
-		if p["prefix"] == nil && !seen[ip] { // one address under two names
+		if p.Prefix == "" && !seen[ip] { // one address under two names
 			seen[ip] = true
 			singles = append(singles, ip)
 		}
@@ -121,8 +115,6 @@ func blockSize(pf netip.Prefix) int {
 	return 1 << bits
 }
 
-func pstr(v any) string { s, _ := v.(string); return s }
-
 // quietAddrs lists the addresses a scan asked that showed no open port, up to
 // max: those a second pass skipped. nil when there are more, or a range row has
 // no prefix to list them by.
@@ -133,26 +125,24 @@ func quietAddrs(obs []types.StoredObservation, max int) []string {
 		if o.Collector != "azhaq-ports" || o.Kind != "ports" {
 			continue
 		}
-		p := payloadOf(o.Observation)
-		if p[portcol.CheckpointKey] == true || p["unresolved"] != nil {
+		p, err := portscan.ParseRow(o.Payload)
+		if err != nil || p.Checkpoint || p.Unresolved != "" {
 			continue
 		}
-		if p["range"] == true {
-			pf, err := netip.ParsePrefix(pstr(p["prefix"]))
+		if p.Range {
+			pf, err := netip.ParsePrefix(p.Prefix)
 			if err != nil {
 				return nil
 			}
 			prefixes = append(prefixes, pf.Masked())
 			continue
 		}
-		ip, err := netip.ParseAddr(pstr(p["ip"]))
+		ip, err := netip.ParseAddr(p.IP)
 		if err != nil {
 			continue
 		}
 		asked[ip] = true
-		sv, _ := p["services"].([]any)
-		uo, _ := p["udp_open"].([]any)
-		if len(sv) > 0 || len(uo) > 0 {
+		if len(p.Services) > 0 || len(p.UDPOpen) > 0 {
 			openAt[ip] = true
 		}
 	}

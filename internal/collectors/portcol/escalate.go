@@ -2,7 +2,6 @@ package portcol
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/netip"
 	"slices"
@@ -100,30 +99,20 @@ func CutNote(obs []types.StoredObservation) string {
 		if o.Collector != Name || o.Kind != "ports" {
 			continue
 		}
-		var row struct {
-			IP      string `json:"ip"`
-			Partial bool   `json:"partial"`
-			Range   bool   `json:"range"`
-			Stopped bool   `json:"stopped"`
-			Prefix  string `json:"prefix"`
-			Pass    int    `json:"pass"`
-			Left    int    `json:"ports_left"`
-			Of      int    `json:"addresses_of"`
-			Addrs   int    `json:"addresses"`
-		}
-		if json.Unmarshal(o.Payload, &row) != nil {
+		row, err := portscan.ParseRow(o.Payload)
+		if err != nil {
 			continue
 		}
 		switch {
 		case row.Range:
 			if row.Stopped && row.Pass > 0 {
-				blocks[row.Prefix] = struct{ pass, of, asked int }{row.Pass, row.Of, row.Addrs}
+				blocks[row.Prefix] = struct{ pass, of, asked int }{row.Pass, row.AddressesOf, row.Addresses}
 			} else if !row.Stopped {
 				delete(blocks, row.Prefix)
 			}
 		case row.IP == "":
 		case row.Partial && row.Pass > 0:
-			byIP[row.IP] = struct{ pass, ports int }{row.Pass, row.Left}
+			byIP[row.IP] = struct{ pass, ports int }{row.Pass, row.PortsLeft}
 		default:
 			delete(byIP, row.IP) // a whole scan came after it
 		}
@@ -178,20 +167,8 @@ func NotAsked(obs []types.StoredObservation, first int) (addrs, ports int) {
 		if o.Collector != Name || o.Kind != "ports" {
 			continue
 		}
-		var row struct {
-			IP      string `json:"ip"`
-			Partial bool   `json:"partial"`
-			Range   bool   `json:"range"`
-			Stopped bool   `json:"stopped"`
-			Prefix  string `json:"prefix"`
-			Pass    int    `json:"pass"`
-			Left    int    `json:"ports_left"`
-			Asked   string `json:"asked_ports"`
-			Swept   string `json:"swept"`
-			Of      int    `json:"addresses_of"`
-			Addrs   int    `json:"addresses"`
-		}
-		if json.Unmarshal(o.Payload, &row) != nil {
+		row, err := portscan.ParseRow(o.Payload)
+		if err != nil {
 			continue
 		}
 		switch {
@@ -204,8 +181,8 @@ func NotAsked(obs []types.StoredObservation, first int) (addrs, ports int) {
 					}
 					swept[row.Prefix] = set
 				}
-				if row.Of > 0 {
-					blocks[row.Prefix] = max(row.Of-row.Addrs, 0)
+				if row.AddressesOf > 0 {
+					blocks[row.Prefix] = max(row.AddressesOf-row.Addresses, 0)
 				}
 			} else {
 				delete(blocks, row.Prefix)
@@ -213,7 +190,7 @@ func NotAsked(obs []types.StoredObservation, first int) (addrs, ports int) {
 			}
 		case row.IP == "":
 		case row.Partial:
-			n := row.Left
+			n := row.PortsLeft
 			if row.Pass == 0 {
 				done, _ := places(row.Asked)
 				n = max(first-len(done), 0)
