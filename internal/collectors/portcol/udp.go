@@ -266,11 +266,9 @@ func udpPrior(services []portscan.UDPPort, refused string, asked map[string]stri
 
 // UDPUnfinished are the ports of a stopped row whose open|filtered is not
 // final: they were asked only some of their requests.
-func UDPUnfinished(row map[string]any) map[int]bool {
+func UDPUnfinished(row portscan.Row) map[int]bool {
 	out := map[int]bool{}
-	asked, _ := row[udpAskedKey].(map[string]any)
-	for _, v := range asked {
-		spec, _ := v.(string)
+	for _, spec := range row.UDPAsked {
 		ports, _ := places(spec)
 		for _, p := range ports {
 			out[p] = true

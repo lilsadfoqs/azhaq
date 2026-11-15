@@ -599,13 +599,7 @@ func Notes(obs []types.StoredObservation) []string {
 	lastRange := map[string]int{} // by prefix: the stopped block's row counts until the one after it
 	for i, o := range obs {
 		if o.Collector == Name {
-			var id struct {
-				Host   string `json:"host"`
-				IP     string `json:"ip"`
-				Range  bool   `json:"range"`
-				Prefix string `json:"prefix"`
-			}
-			if json.Unmarshal(o.Payload, &id) == nil {
+			if id, err := portscan.ParseRow(o.Payload); err == nil {
 				newest[id.Host+"\x00"+id.IP] = i
 				if id.Range {
 					lastRange[id.Prefix] = i
@@ -617,42 +611,8 @@ func Notes(obs []types.StoredObservation) []string {
 		if o.Collector != Name {
 			continue
 		}
-		var p struct {
-			Partial    bool              `json:"partial"`
-			Host       string            `json:"host"`
-			IP         string            `json:"ip"`
-			Unrouted   []string          `json:"ipv6_not_scanned"`
-			Filtered   []int             `json:"filtered_ports"`
-			UDPFilt    []int             `json:"udp_open_filtered"`
-			UDPUnlist  int               `json:"udp_unlisted"`
-			UDPClosed  int               `json:"udp_closed"`
-			ClosedAt   []int             `json:"udp_closed_ports"`
-			ClosedN    int               `json:"udp_closed_n"`
-			ClosedA    int               `json:"udp_closed_a"`
-			SilentOnly bool              `json:"udp_silent_only"`
-			UDPSilentN int               `json:"udp_silent_ports"`
-			UDPSilentA int               `json:"udp_silent_addresses"`
-			Unresolved string            `json:"unresolved"`
-			Threshold  bool              `json:"threshold"`
-			CDN        string            `json:"cdn"`
-			Note       string            `json:"note"`
-			Up         *bool             `json:"up"`
-			Range      bool              `json:"range"`
-			Stopped    bool              `json:"stopped"`
-			Prefix     string            `json:"prefix"`
-			Addresses  int               `json:"addresses"`
-			Down       int               `json:"down"`
-			Outside    int               `json:"outside_scope"`
-			FiltAddrs  int               `json:"filtered_addresses"`
-			Edges      int               `json:"cdn_addresses"`
-			UDPLimit   int               `json:"udp_limited"`
-			UDPAsked   map[string]string `json:"udp_asked"`
-			UDPOnce    bool              `json:"udp_one_request"`
-			Unprobed   int               `json:"unprobed"`
-			PortsOut   int               `json:"ports_outside_scope"`
-			PortsOutA  int               `json:"ports_outside_scope_addresses"`
-		}
-		if json.Unmarshal(o.Payload, &p) != nil || p.Partial && newest[p.Host+"\x00"+p.IP] != i {
+		p, err := portscan.ParseRow(o.Payload)
+		if err != nil || p.Partial && newest[p.Host+"\x00"+p.IP] != i {
 			continue
 		}
 		if p.Range && p.Stopped && lastRange[p.Prefix] != i {
@@ -662,25 +622,25 @@ func Notes(obs []types.StoredObservation) []string {
 			ranges++
 			addrs += p.Addresses
 			down += p.Down
-			outside += p.Outside
-			filtAddrs += p.FiltAddrs
-			if p.Edges > 0 {
-				edges = append(edges, fmt.Sprintf("%d addresses of a range", p.Edges))
+			outside += p.OutsideScope
+			filtAddrs += p.FilteredAddresses
+			if p.CDNAddresses > 0 {
+				edges = append(edges, fmt.Sprintf("%d addresses of a range", p.CDNAddresses))
 			}
-			udp.silentN += p.UDPSilentN
-			udp.silentIPs += p.UDPSilentA
-			udp.closedN += p.ClosedN
-			udp.closedIPs += p.ClosedA
-			portsOut += p.PortsOut
-			portsOutAddrs += p.PortsOutA
+			udp.silentN += p.UDPSilentPorts
+			udp.silentIPs += p.UDPSilentAddresses
+			udp.closedN += p.UDPClosedN
+			udp.closedIPs += p.UDPClosedA
+			portsOut += p.PortsOutsideScope
+			portsOutAddrs += p.PortsOutsideScopeAddresses
 			continue
 		}
-		if p.SilentOnly {
+		if p.UDPSilentOnly {
 			continue // its ports are the range row's udp_silent_ports
 		}
-		if who := cmpWho(p.Host, p.IP); p.PortsOut > 0 && !portsOutSeen[who] {
+		if who := cmpWho(p.Host, p.IP); p.PortsOutsideScope > 0 && !portsOutSeen[who] {
 			portsOutSeen[who] = true
-			portsOut += p.PortsOut
+			portsOut += p.PortsOutsideScope
 			portsOutAddrs++
 			portsOutAt = append(portsOutAt, who)
 		}
@@ -703,30 +663,30 @@ func Notes(obs []types.StoredObservation) []string {
 		if who == "" {
 			who = p.Host
 		}
-		filt := p.UDPFilt
+		filt := p.UDPOpenFiltered
 		if p.Partial && len(p.UDPAsked) > 0 {
 			// Ports asked only some of their requests are not decided: the
 			// stop notes name them, and this note is for the ones that are.
 			un := udpPrior(nil, "", p.UDPAsked, nil).Asked
 			filt = nil
-			for _, port := range p.UDPFilt {
+			for _, port := range p.UDPOpenFiltered {
 				if _, open := un[port]; !open {
 					filt = append(filt, port)
 				}
 			}
 		}
-		udp.add(who, filt, p.UDPUnlist, p.UDPLimit)
-		udp.once = udp.once || p.UDPOnce
-		udp.addClosed(who, p.UDPClosed, p.ClosedAt)
+		udp.add(who, filt, p.UDPUnlisted, p.UDPLimited)
+		udp.once = udp.once || p.UDPOneRequest
+		udp.addClosed(who, p.UDPClosed, p.UDPClosedPorts)
 		if p.Unprobed > 0 {
 			unprobed = append(unprobed, fmt.Sprintf("%s: %d", p.IP, p.Unprobed))
 		}
-		if len(p.Filtered) > 0 {
+		if len(p.FilteredPorts) > 0 {
 			where := p.Host
 			if p.IP != "" && p.IP != p.Host {
 				where += " (" + p.IP + ")"
 			}
-			silent = append(silent, where+" "+portList(p.Filtered, 8))
+			silent = append(silent, where+" "+portList(p.FilteredPorts, 8))
 		}
 	}
 	var out []string
@@ -973,29 +933,29 @@ func Swept(obs []types.StoredObservation, since time.Time) map[string]Sweep {
 		if o.Collector != Name || o.Kind != "ports" || o.ObservedAt.Before(since) {
 			continue
 		}
-		var row map[string]any
-		if json.Unmarshal(o.Payload, &row) != nil || row["range"] != true {
+		row, err := portscan.ParseRow(o.Payload)
+		if err != nil || !row.Range {
 			continue
 		}
-		prefix, _ := row["prefix"].(string)
-		if row["stopped"] != true {
+		prefix := row.Prefix
+		if !row.Stopped {
 			delete(out, prefix)
 			continue
 		}
-		spec, _ := row[SweptKey].(string)
-		done, err := places(spec)
+		done, err := places(row.Swept)
 		if prefix == "" || err != nil {
 			continue
 		}
-		counts := map[string]int{}
-		for k, v := range row {
-			if n, ok := v.(float64); ok {
-				counts[k] = int(n)
-			}
-		}
-		out[prefix] = Sweep{Done: done, Counts: counts}
+		out[prefix] = Sweep{Done: done, Counts: countsOf(row)}
 	}
 	return out
+}
+
+// countsOf are the counts a block's row keeps, which a resume starts from.
+func countsOf(r portscan.Row) map[string]int {
+	return map[string]int{"with_open": r.WithOpen, "down": r.Down, "outside_scope": r.OutsideScope, "filtered_addresses": r.FilteredAddresses,
+		"cdn_addresses": r.CDNAddresses, "udp_silent_ports": r.UDPSilentPorts, "udp_silent_addresses": r.UDPSilentAddresses,
+		"udp_closed_n": r.UDPClosedN, "udp_closed_a": r.UDPClosedA, outScopeKey: r.PortsOutsideScope, outScopeKey + "_addresses": r.PortsOutsideScopeAddresses}
 }
 
 // places reads a list a row kept (portscan.Compact): an empty one is none, not
@@ -1047,17 +1007,8 @@ func Priors(obs []types.StoredObservation) map[string]Prior {
 		if o.Collector != Name || o.Kind != "ports" {
 			continue
 		}
-		var row struct {
-			IP       string             `json:"ip"`
-			Partial  bool               `json:"partial"`
-			Asked    string             `json:"asked_ports"`
-			Services []portscan.Open    `json:"services"`
-			UDP      []portscan.UDPPort `json:"udp_services"`
-			Refused  string             `json:"udp_refused"`
-			UDPAsked map[string]string  `json:"udp_asked"`
-			UDPFilt  []int              `json:"udp_open_filtered"`
-		}
-		if json.Unmarshal(o.Payload, &row) != nil || row.IP == "" {
+		row, err := portscan.ParseRow(o.Payload)
+		if err != nil || row.IP == "" {
 			continue
 		}
 		if !row.Partial {
@@ -1068,7 +1019,7 @@ func Priors(obs []types.StoredObservation) map[string]Prior {
 		if err != nil {
 			continue
 		}
-		out[row.IP] = Prior{Asked: asked, Open: row.Services, UDP: udpPrior(row.UDP, row.Refused, row.UDPAsked, row.UDPFilt)}
+		out[row.IP] = Prior{Asked: asked, Open: row.Services, UDP: udpPrior(row.UDPServices, row.UDPRefused, row.UDPAsked, row.UDPOpenFiltered)}
 	}
 	return out
 }

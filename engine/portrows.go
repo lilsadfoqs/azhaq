@@ -1,7 +1,6 @@
 package engine
 
 import (
-	"encoding/json"
 	"net"
 	"slices"
 	"sort"
@@ -37,16 +36,8 @@ func portRows(e types.Entity, scope string, obs []types.StoredObservation) []Map
 		if o.Kind != "ports" {
 			continue
 		}
-		var p struct {
-			Host     string             `json:"host"`
-			Names    []string           `json:"names"`
-			Via      string             `json:"via"`
-			IP       string             `json:"ip"`
-			Range    bool               `json:"range"`
-			Services []portscan.Open    `json:"services"`
-			UDP      []portscan.UDPPort `json:"udp_services"`
-		}
-		if json.Unmarshal(o.Payload, &p) != nil || p.Range {
+		p, err := portscan.ParseRow(o.Payload)
+		if err != nil || p.Range {
 			continue
 		}
 		id := p.IP
@@ -78,7 +69,7 @@ func portRows(e types.Entity, scope string, obs []types.StoredObservation) []Map
 			}
 			s.host, s.ip = host, p.IP
 			s.tcp = append(s.tcp, p.Services...)
-			s.udp = append(s.udp, p.UDP...)
+			s.udp = append(s.udp, p.UDPServices...)
 			if p.Via != "" {
 				if s.via == nil {
 					s.via = map[string]string{}
@@ -86,14 +77,14 @@ func portRows(e types.Entity, scope string, obs []types.StoredObservation) []Map
 				for _, o := range p.Services {
 					s.via["tcp/"+strconv.Itoa(o.Port)] = p.Via
 				}
-				for _, u := range p.UDP {
+				for _, u := range p.UDPServices {
 					s.via["udp/"+strconv.Itoa(u.Port)] = p.Via
 				}
 			}
 			imported[id] = s
 			continue
 		}
-		newest[id] = scan{host: host, ip: p.IP, at: o.ObservedAt, tcp: p.Services, udp: p.UDP}
+		newest[id] = scan{host: host, ip: p.IP, at: o.ObservedAt, tcp: p.Services, udp: p.UDPServices}
 	}
 	var out []MapEntry
 	seen := map[string]bool{}

@@ -14,6 +14,7 @@ import (
 
 	"github.com/lilsadfoqs/azhaq/internal/neterr"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
+	"github.com/lilsadfoqs/azhaq/internal/portscan"
 	"github.com/lilsadfoqs/azhaq/internal/webextract"
 	"github.com/lilsadfoqs/azhaq/types"
 )
@@ -676,10 +677,17 @@ func proofOf(e types.Entity, obs []types.StoredObservation) string {
 		if json.Unmarshal(o.Payload, &m) != nil {
 			continue
 		}
-		if v, ok := m["open"]; ok && v != nil && o.Kind == "ports" && m["range"] != true {
-			ports := openPorts(v)
-			if ip, _ := m["ip"].(string); o.Collector == "azhaq-ports" && e.Type == types.TypePrefix && ip != "" {
-				perAddr[ip] = ports
+		var row portscan.Row
+		scanRow := false
+		if o.Kind == "ports" {
+			var err error
+			row, err = portscan.ParseRow(o.Payload)
+			scanRow = err == nil && row.Open != nil && !row.Range
+		}
+		if scanRow {
+			ports := openPorts(row.Open)
+			if o.Collector == "azhaq-ports" && e.Type == types.TypePrefix && row.IP != "" {
+				perAddr[row.IP] = ports
 				own, haveOwn = nil, true
 				for _, p := range perAddr {
 					own = append(own, p...)
@@ -689,8 +697,8 @@ func proofOf(e types.Entity, obs []types.StoredObservation) string {
 			} else {
 				imported, haveImported = append(imported, ports...), true
 				name := o.Collector
-				if s, ok := m["via"].(string); ok && s != "" {
-					name = s
+				if row.Via != "" {
+					name = row.Via
 				}
 				via[name] = true
 			}
@@ -747,14 +755,10 @@ func proofOf(e types.Entity, obs []types.StoredObservation) string {
 }
 
 // openPorts reads a payload's open list as strings.
-func openPorts(v any) []string {
-	list, ok := v.([]any)
-	if !ok {
-		return []string{fmt.Sprint(v)}
-	}
-	out := make([]string, 0, len(list))
-	for _, p := range list {
-		out = append(out, fmt.Sprint(p))
+func openPorts(open portscan.PortNumbers) []string {
+	out := make([]string, 0, len(open))
+	for _, p := range open {
+		out = append(out, strconv.Itoa(p))
 	}
 	return out
 }

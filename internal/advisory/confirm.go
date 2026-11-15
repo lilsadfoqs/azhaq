@@ -15,6 +15,7 @@ import (
 
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
 	"github.com/lilsadfoqs/azhaq/internal/lazyre"
+	"github.com/lilsadfoqs/azhaq/internal/portscan"
 	"github.com/lilsadfoqs/azhaq/types"
 )
 
@@ -64,26 +65,8 @@ func services(obs []types.StoredObservation, needVersion bool) []Service {
 	for _, o := range obs {
 		switch o.Collector {
 		case "azhaq-ports":
-			var row struct {
-				Host     string `json:"host"`
-				IP       string `json:"ip"`
-				Services []struct {
-					Port    int    `json:"port"`
-					Service string `json:"service"`
-					Product string `json:"product"`
-					Version string `json:"version"`
-					Banner  string `json:"banner"`
-					TLS     bool   `json:"tls"`
-				} `json:"services"`
-				UDP []struct {
-					Port    int    `json:"port"`
-					Service string `json:"service"`
-					Product string `json:"product"`
-					Version string `json:"version"`
-					Banner  string `json:"banner"`
-				} `json:"udp_services"`
-			}
-			if json.Unmarshal(o.Payload, &row) != nil {
+			row, err := portscan.ParseRow(o.Payload)
+			if err != nil {
 				continue
 			}
 			host := row.Host
@@ -93,7 +76,7 @@ func services(obs []types.StoredObservation, needVersion bool) []Service {
 				svc.Origin = webOrigin(svc)
 				add(svc)
 			}
-			for _, s := range row.UDP {
+			for _, s := range row.UDPServices {
 				add(Service{Host: host, IP: row.IP, Port: s.Port, Proto: "udp", Service: strings.TrimSuffix(s.Service, "?"),
 					Product: s.Product, Version: s.Version, Banner: s.Banner, ObservedAt: o.ObservedAt})
 			}
@@ -426,8 +409,7 @@ func NameAddrs(obs []types.StoredObservation) map[string]string {
 	for _, o := range obs {
 		switch {
 		case o.Collector == "azhaq-ports":
-			var row struct{ Host, IP string }
-			if json.Unmarshal(o.Payload, &row) == nil {
+			if row, err := portscan.ParseRow(o.Payload); err == nil {
 				set(row.Host, row.IP, true)
 			}
 		case o.Collector == "azhaq-http":
