@@ -707,18 +707,18 @@ func cmdFuzz(args []string) error {
 			rep.Notes = append(rep.Notes, fmt.Sprintf("%d directories found for -recursion were not swept: run fuzz on each (they are in the results)", st.Queued))
 		}
 	}
+	// The resume record is kept with the final matches, in one commit: a kill
+	// between them would list inputs as asked whose matches were not kept.
+	var finalRecord func(*store.Store) error
 	if c.db != "" && (rep.Stopped != "" || held) {
 		// The inputs held back stay open: a resume with -send-state-changing asks them.
-		if err := setFuzzResume(c.db, resumeArgs(keptA, *start+st.Done), fuzzAsked{Key: fuzzSkipKey(tmpl), Total: st.Total, Spans: st.Asked}); err != nil {
-			return err
-		}
+		args, asked := resumeArgs(keptA, *start+st.Done), fuzzAsked{Key: fuzzSkipKey(tmpl), Total: st.Total, Spans: st.Asked}
+		finalRecord = finalResume(args, asked)
 		if rep.Stopped == "" {
 			rep.Next = append(rep.Next, fmt.Sprintf("azhaq resume -db %s %s   (asks the %s held back)", c.db, neterr.SendFlag, plural(len(st.StateHeld), "input")))
 		}
 	} else if c.db != "" {
-		if err := setFuzzResume(c.db, nil, fuzzAsked{}); err != nil {
-			return err
-		}
+		finalRecord = finalResume(nil, fuzzAsked{})
 	}
 	if len(flights.pre) == 0 {
 		rep.hint(tokenHint(tmpl, st.Answered, st.Refused))
@@ -728,7 +728,7 @@ func cmdFuzz(args []string) error {
 		hitsMu.Lock()
 		hitsKept := append([]fuzz.Result(nil), hits...)
 		hitsMu.Unlock()
-		if err := keepFuzzHits(c.db, hitsKept, tmpl.Method, keptArgv, true); err != nil {
+		if err := keepFuzzHitsWith(c.db, hitsKept, tmpl.Method, keptArgv, true, finalRecord); err != nil {
 			return err
 		}
 		if err := keepFuzzHeld(c.db, st.StateHeld, keptArgv); err != nil {
@@ -937,16 +937,12 @@ func hasKeyword(s string, keywords []string) bool {
 	return strings.Contains(s, fuzz.SniperMark) || holdsKeyword(s, keywords)
 }
 
-// keepFuzzHits stores the hits in the workspace as ffuf's report, which
+// keepFuzzHitsWith stores the hits in the workspace as ffuf's report, which
 // ingest reads: a hit asked with GET is the URL's answer, with another
 // method it says the route takes it. final is the end of the run: the
-// workspace then also keeps what its hits suggest to look at next.
-func keepFuzzHits(path string, hits []fuzz.Result, method string, argv []string, final bool) error {
-	return keepFuzzHitsWith(path, hits, method, argv, final, nil)
-}
-
-// keepFuzzHitsWith is keepFuzzHits that also runs with, when not nil, in
-// the transaction of the hits: all of it is kept or none.
+// workspace then also keeps what its hits suggest to look at next. with,
+// when not nil, runs in the transaction of the hits: all of it is kept or
+// none.
 func keepFuzzHitsWith(path string, hits []fuzz.Result, method string, argv []string, final bool, with func(*store.Store) error) error {
 	rows := make([]map[string]any, 0, len(hits))
 	for _, h := range hits {
@@ -1202,6 +1198,12 @@ func setFuzzResume(path string, args []string, asked fuzzAsked) error {
 	}
 	defer st.Close()
 	return setFuzzResumeIn(st, args, asked)
+}
+
+// finalResume is the run's resume record (none for args nil) as a write to
+// go in the commit of its final matches.
+func finalResume(args []string, asked fuzzAsked) func(*store.Store) error {
+	return func(s *store.Store) error { return setFuzzResumeIn(s, args, asked) }
 }
 
 func setFuzzResumeIn(st *store.Store, args []string, asked fuzzAsked) error {

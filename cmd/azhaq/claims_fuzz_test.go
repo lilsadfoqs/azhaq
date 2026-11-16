@@ -854,6 +854,50 @@ func TestFuzzCheckpointKeepsMatchesAndAskedInputsInOneCommit(t *testing.T) {
 	}
 }
 
+// The end of a stopped or held run keeps its final matches and its resume
+// record in one commit: a kill between them must not list inputs as asked
+// whose matches were not kept.
+func TestFuzzFinalWriteKeepsMatchesAndAskedInputsInOneCommit(t *testing.T) {
+	db := filepath.Join(t.TempDir(), "f.db")
+	argv := []string{"azhaq", "fuzz", "-u", "http://127.0.0.1:1/FUZZ"}
+	if err := beginFuzzWorkspace(db, argv, argv, nil, false); err != nil {
+		t.Fatal(err)
+	}
+	hits := []fuzz.Result{{Input: map[string]string{"FUZZ": "a"}, Position: 1, Status: 200, URL: "http://127.0.0.1:1/a", Method: "GET", Job: 1}}
+	record := finalResume([]string{"fuzz", "-start", "1"}, fuzzAsked{Key: "k", Total: 5, Spans: fuzz.Spans{{0, 1}}})
+	seenMid := false
+	with := func(in *store.Store) error {
+		seenMid = true
+		if err := record(in); err != nil {
+			return err
+		}
+		other, err := store.OpenExisting(db) // another connection sees only what is committed
+		if err != nil {
+			return err
+		}
+		defer other.Close()
+		if ents, _ := other.Entities(); len(ents) != 0 {
+			t.Errorf("%d matches are committed before the resume record is", len(ents))
+		}
+		if other.GetMeta(fuzzAskedKey) != "" {
+			t.Error("the inputs asked are committed before the final matches")
+		}
+		return nil
+	}
+	if err := keepFuzzHitsWith(db, hits, "GET", argv, true, with); err != nil {
+		t.Fatal(err)
+	}
+	st, err := store.OpenExisting(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	ents, _ := st.Entities()
+	if !seenMid || len(ents) != 1 || st.GetMeta(fuzzAskedKey) == "" || st.GetMeta(fuzzResumeKey) == "" {
+		t.Errorf("%d matches, inputs asked %q, resume %q kept, want 1 and both records", len(ents), st.GetMeta(fuzzAskedKey), st.GetMeta(fuzzResumeKey))
+	}
+}
+
 // A value read from an answer can never change the scheme, host or port of a
 // request: the run is refused with the reason and exit 3.
 func TestFuzzFlightValueCannotMoveARequest(t *testing.T) {
