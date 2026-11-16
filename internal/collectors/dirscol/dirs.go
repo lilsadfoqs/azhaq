@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/lilsadfoqs/azhaq/catalog"
+	"github.com/lilsadfoqs/azhaq/engine"
 	"github.com/lilsadfoqs/azhaq/internal/egress"
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
 	"github.com/lilsadfoqs/azhaq/internal/fuzz"
@@ -303,6 +304,9 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 			// The sweep is redone whole by azhaq resume; what it found is
 			// kept, and found again.
 			c.swept.Delete(d.url)
+			if err := keepLost(&note, base, batch, emit); err != nil {
+				return meta, err
+			}
 			return types.RunMeta{Status: types.StatusCapped, EmitCount: meta.EmitCount, NextHints: meta.NextHints}, neterr.ErrBudget
 		}
 		requests += n
@@ -440,7 +444,16 @@ func (c *Collector) sweep(ctx context.Context, dir string, note *sweepNote, foun
 	cal := calibration{echo: map[int]bool{}, vary: map[int]bool{}}
 	if !c.Opts.NoCalibration {
 		var dead error
-		if cal, dead = c.calibrate(ctx, dir, host); dead != nil {
+		cal, dead = c.calibrate(ctx, dir, host)
+		for _, e := range cal.lost {
+			note.lose(ctx, e)
+		}
+		if cal.budget {
+			// Calibration the budget cut short is not the filter the sweep
+			// needs: the sweep is not done, azhaq resume makes it whole.
+			return nil, 0, 0, 0, 0, nil, true, nil
+		}
+		if dead != nil {
 			return nil, 0, 0, 0, 0, nil, false, dead
 		}
 		note.loose(dir, cal.unfiltered)
@@ -493,8 +506,9 @@ func (c *Collector) sweep(ctx context.Context, dir string, note *sweepNote, foun
 			out.Store(true)
 		}
 		if err != nil {
-			if !out.Load() && ctx.Err() == nil && !errors.Is(err, neterr.ErrDenied) {
+			if ctx.Err() == nil && !errors.Is(err, neterr.ErrBudget) && !errors.Is(err, neterr.ErrDenied) {
 				nfailed.Add(1)
+				note.lose(ctx, err)
 			}
 			return err
 		}
@@ -753,6 +767,7 @@ func (c *Collector) judgeInDirs(ctx context.Context, host string, hs []exactHit,
 			out.Store(true)
 		}
 		if err != nil {
+			note.lose(ctx, err)
 			continue
 		}
 		note.controls.Add(1)
@@ -977,6 +992,10 @@ type calibration struct {
 	// share no size, no word and line counts and no page: nothing tells
 	// them from a path that exists.
 	unfiltered []int
+	// budget: the budget refused some of the probes, so what was learned is
+	// not all the sweep needs. lost: the causes of the probes that failed.
+	budget bool
+	lost   []error
 }
 
 // sweepNote is what a run's sweeps say of calibration beyond the paths:
@@ -988,6 +1007,52 @@ type sweepNote struct {
 	folded   atomic.Int64 // hits whose answer was the control's own
 	mu       sync.Mutex
 	dirs     []string
+	// lost are the causes of the requests that were sent and got no answer,
+	// one for each distinct cause: what a task the budget stopped still says.
+	lost []error
+}
+
+// lose notes a request that was sent and got no answer. A refusal by the
+// budget or the scope, and a run that is ending, are not failures of it.
+func (n *sweepNote) lose(ctx context.Context, err error) {
+	if err == nil || ctx.Err() != nil || errors.Is(err, neterr.ErrBudget) || errors.Is(err, neterr.ErrDenied) {
+		return
+	}
+	why := engine.ShortError(err.Error())
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	for _, e := range n.lost {
+		if engine.ShortError(e.Error()) == why {
+			return
+		}
+	}
+	n.lost = append(n.lost, err)
+}
+
+// keepLost writes the failures a task the budget stopped had met, as the
+// task would have returned them had it ended: the engine keeps what is marked
+// Keep, and the sweep's own redo after azhaq resume replaces them.
+func keepLost(n *sweepNote, base string, batch func([]types.Observation) error, emit func(types.Observation) error) error {
+	n.mu.Lock()
+	lost := slices.Clone(n.lost)
+	n.mu.Unlock()
+	obs := make([]types.Observation, 0, len(lost))
+	for _, e := range lost {
+		raw, _ := json.Marshal(map[string]any{"error": e.Error(), "collector": Name, "url": base})
+		obs = append(obs, types.Observation{Collector: Name, Source: "run", Kind: "error", Payload: raw, ObservedAt: time.Now().UTC(), Keep: true})
+	}
+	if len(obs) == 0 {
+		return nil
+	}
+	if batch != nil {
+		return batch(obs)
+	}
+	for _, o := range obs {
+		if err := emit(o); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (n *sweepNote) loose(dir string, statuses []int) {
@@ -1057,6 +1122,13 @@ func (c *Collector) calibrate(ctx context.Context, dir, host string) (cal calibr
 	// None of them answered: the service does not, and the sweep would
 	// ask every word for nothing.
 	var lost error
+	for _, a := range answers {
+		if errors.Is(a.err, neterr.ErrBudget) {
+			cal.budget = true
+		} else if a.err != nil && !errors.Is(a.err, neterr.ErrDenied) && ctx.Err() == nil {
+			cal.lost = append(cal.lost, a.err)
+		}
+	}
 	for _, a := range answers {
 		if a.err == nil {
 			lost = nil

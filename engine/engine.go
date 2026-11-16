@@ -139,6 +139,11 @@ func (e *Engine) Run(ctx context.Context, item types.WorkItem) (types.RunMeta, e
 	}
 	e.linkSeed(seed, ent, now)
 	e.linkInDomain(seed, ent, now)
+	// A task asked again (azhaq resume after a cap) records its own errors:
+	// those it left when it was stopped are not counted twice.
+	if err := e.Store.DropErrors(ent.ID, col.Name()); err != nil {
+		return types.RunMeta{ItemID: item.ID, Status: types.StatusError, Error: err.Error()}, err
+	}
 
 	meta := types.RunMeta{ItemID: item.ID, Status: types.StatusOK}
 	// Observations and their links go in one transaction: a sweep with

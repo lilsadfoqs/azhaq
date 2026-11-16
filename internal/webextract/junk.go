@@ -267,9 +267,15 @@ func GluedURL(raw string) string {
 // keyword may follow stray symbols (a mis-decoded arrow, "˓→FUZZ"), and
 // carry what a fuzzer's log line adds: its number and result
 // (FUZZ000003:C=200) or a capitalised word (FUZZMultiple). A word that
-// only begins like the keyword (FUZZY, FUZZ-list) is a word. An OpenAPI
-// slot such as {id} is a route and stays.
-var fuzzSegment = lazyRE(`^[^\p{L}\p{N}]*(?:FUZ\d*Z(?:\d+(?::\S*)?|[A-Z][a-z]\w*)?|\{(?:payloads?|FUZ\d*Z|fuzz)\})(?:\.\w{1,5})?$`)
+// only begins like the keyword (FUZZY, FUZZ-list) is a word. Stray
+// symbols after it (a bullet, a run of stars) or a bracket fragment
+// (FUZZ[url) leave it junk, encoded or not. An OpenAPI slot such as {id}
+// is a route and stays.
+var fuzzSegment = lazyRE(`^[^\p{L}\p{N}]*(?:FUZ\d*Z(?:\d+(?::\S*)?|[A-Z][a-z]\w*)?|\{(?:payloads?|FUZ\d*Z|fuzz)\})` + fuzzTail + `(?:\.\w{1,5})?` + fuzzTail + `$`)
+
+// fuzzTail is what may follow a fuzzer keyword and still leave it junk:
+// symbols that are no letter or digit, and a bracket fragment.
+const fuzzTail = `(?:\[\w*\]?|[^\p{L}\p{N}])*`
 
 // requestLine is the protocol a request line ends with, read as a path:
 // /HTTP/1.1, or /index.php HTTP/1.1 (the space is kept as %20).
@@ -277,8 +283,9 @@ var requestLine = lazyRE(`(?:^|/|\s)HTTP/1\.[01]$`)
 
 // fuzzValue is a query name or value that is only fuzzer keywords:
 // FUZZ, FUZ2Z, both run together (FUZZFUZ2Z) and {payload}, with an
-// extension at most. A value in lower case (fuzz) is a word.
-var fuzzValue = lazyRE(`^[^\p{L}\p{N}]*(?:FUZ\d*Z|\{(?:payloads?|FUZ\d*Z|fuzz)\})+(?:\d+(?::\S*)?|[A-Z][a-z]\w*)?(?:\.\w{1,5})?$`)
+// extension and stray symbols at most. A value in lower case (fuzz) is a
+// word.
+var fuzzValue = lazyRE(`^[^\p{L}\p{N}]*(?:FUZ\d*Z|\{(?:payloads?|FUZ\d*Z|fuzz)\})+(?:\d+(?::\S*)?|[A-Z][a-z]\w*)?` + fuzzTail + `(?:\.\w{1,5})?` + fuzzTail + `$`)
 
 // queryRequestLine is a request line pasted after a value, its space
 // kept or lost (artist=1 HTTP/1.1, artist=1HTTP/1.1). A value that is
