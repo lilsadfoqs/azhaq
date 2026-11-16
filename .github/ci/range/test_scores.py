@@ -54,6 +54,14 @@ class Extract(unittest.TestCase):
         self.assertNotIn("docs", r["items"])
         self.assertEqual(r["missing"], ["docs"])
 
+    def test_an_item_written_without_its_article_is_the_same_item(self):
+        text = report([("findings", 7), ("signal versus noise", 6), ("time to first finding", 6),
+                       ("trust", 7), ("would use on next engagement", 7)], overall=6)
+        r = scores.extract(text, "gate-a", "t")
+        self.assertEqual(r["missing"], [])
+        self.assertEqual(r["items"]["time to the first finding"], 6)
+        self.assertEqual(r["items"]["would use on the next engagement"], 7)
+
     def test_a_switch_report_keeps_every_row_but_the_overall(self):
         r = scores.extract("| Item | Score | Reasoning |\n|---|---|---|\n| install | 7 | x |\n| overall | 7 | y |\n", "switch", "t")
         self.assertEqual(r["items"], {"install": 7})

@@ -64,6 +64,8 @@ ROW_RE = re.compile(r"^\|\s*(?P<item>[^|]+?)\s*\|\s*(?P<score>\d{1,2})\s*(?:/\s*
 def normalize(label):
     label = re.sub(r"\*+", "", label)
     label = re.sub(r"[^a-z0-9 ]+", " ", label.lower())
+    # A review that writes "time to first finding" scored the same item.
+    label = re.sub(r"\b(?:the|a|an)\b", " ", label)
     return re.sub(r"\s+", " ", label).strip()
 
 
