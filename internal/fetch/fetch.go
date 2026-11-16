@@ -578,6 +578,27 @@ const (
 	sharedMax = 32 << 20 // bytes the table holds at most; beyond it, bodies are kept as read
 )
 
+// shareCopy is shared for a buffer the caller keeps and reuses: the copy the
+// process holds of an equal body, else a copy of b it now holds, so a body
+// is hashed once and a page the site gives every path is copied once.
+func shareCopy(b []byte) []byte {
+	h := maphash.Bytes(bodySeed, b)
+	bodyMu.Lock()
+	defer bodyMu.Unlock()
+	for _, c := range bodies[h] {
+		if bytes.Equal(c, b) {
+			return c
+		}
+	}
+	c := bytes.Clone(b)
+	if bodyBytes+len(c) <= sharedMax {
+		c = c[:len(c):len(c)]
+		bodies[h] = append(bodies[h], c)
+		bodyBytes += len(c)
+	}
+	return c
+}
+
 // shared returns the copy of b the process already holds when an equal body
 // was read before: a site that answers every path with its application page
 // costs one copy of the page, not one per path. The copy is read-only (as
@@ -753,7 +774,7 @@ func do(ctx context.Context, c *http.Client, raw string, rq *Req) (Result, error
 		StatusLine: firstLine,
 		URL:        lastURL,
 		Header:     firstHeader,
-		Body:       shared(lastBody),
+		Body:       lastBody,
 		Hops:       hops,
 		Truncated:  lastTrunc,
 
@@ -831,16 +852,17 @@ func applyHeaders(req *http.Request, defaultAccept bool) {
 }
 
 func readBody(r io.Reader, limit int) ([]byte, bool, error) {
-	body, trunc, err := readBodyKeep(r, limit)
+	body, trunc, err := readBodyKeep(r, limit, false)
 	if err != nil {
 		return nil, false, err
 	}
 	return body, trunc, nil
 }
 
-// readBodyKeep is readBody that hands back what came before an error.
-func readBodyKeep(r io.Reader, limit int) ([]byte, bool, error) {
-	body, err := readAllPooled(io.LimitReader(r, int64(limit)+1))
+// readBodyKeep is readBody that hands back what came before an error. With
+// share, a body equal to one the process holds is that copy, not a new one.
+func readBodyKeep(r io.Reader, limit int, share bool) ([]byte, bool, error) {
+	body, err := readAllShared(io.LimitReader(r, int64(limit)+1), share)
 	if err != nil {
 		return body, false, err
 	}
@@ -859,12 +881,22 @@ const maxPooledBuf = 1 << 20
 // per read (a page of 50 KB cost 200 KB of garbage), and returns a copy of
 // exactly what was read. Like io.ReadAll it hands back the bytes read before
 // an error, and a non-nil empty slice for an empty body.
-func readAllPooled(r io.Reader) ([]byte, error) {
+func readAllPooled(r io.Reader) ([]byte, error) { return readAllShared(r, false) }
+
+// readAllShared is readAllPooled that, with share, returns the copy the
+// process holds of an equal body (see shared), not a new one: a site that
+// answers every path with one page made a garbage copy of it per path.
+func readAllShared(r io.Reader, share bool) ([]byte, error) {
 	buf := readBufs.Get().(*bytes.Buffer)
 	buf.Reset()
 	_, err := buf.ReadFrom(r)
-	out := make([]byte, buf.Len())
-	copy(out, buf.Bytes())
+	var out []byte
+	if share && err == nil && buf.Len() >= sharedMin {
+		out = shareCopy(buf.Bytes())
+	} else {
+		out = make([]byte, buf.Len())
+		copy(out, buf.Bytes())
+	}
 	if buf.Cap() <= maxPooledBuf {
 		readBufs.Put(buf)
 	}
@@ -959,7 +991,7 @@ func (n *notedBody) Close() error {
 // ends, the first streamLimit bytes it sends within streamWindow; the body
 // is then marked truncated. It does not close the body.
 func readResponse(resp *http.Response, limit int) ([]byte, bool, error) {
-	body, trunc, err := readResponseKeep(resp, limit)
+	body, trunc, err := readResponseKeep(resp, limit, false)
 	if err != nil {
 		body = nil
 	}
@@ -967,9 +999,9 @@ func readResponse(resp *http.Response, limit int) ([]byte, bool, error) {
 }
 
 // readResponseKeep is readResponse that hands back what came before an error.
-func readResponseKeep(resp *http.Response, limit int) ([]byte, bool, error) {
+func readResponseKeep(resp *http.Response, limit int, share bool) ([]byte, bool, error) {
 	cut := Bound(resp)
-	body, trunc, err := readBodyKeep(resp.Body, limit)
+	body, trunc, err := readBodyKeep(resp.Body, limit, share)
 	return body, trunc || cut(), err
 }
 
