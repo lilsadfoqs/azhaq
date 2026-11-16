@@ -1,9 +1,11 @@
 package fetch
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"errors"
+	"hash/maphash"
 	"io"
 	"math/rand/v2"
 	"net"
@@ -200,6 +202,9 @@ func Reset() {
 	cache = map[string]cacheEnt{}
 	inflight = map[string]chan struct{}{}
 	hostSem = map[string]chan struct{}{}
+	bodyMu.Lock()
+	bodies, bodyBytes = map[uint64][][]byte{}, 0
+	bodyMu.Unlock()
 	Extra = nil
 	egress.Reset()
 	resetSession()
@@ -561,6 +566,42 @@ func DoReq(ctx context.Context, c *http.Client, raw string, rq *Req) (Result, bo
 	return res, false, err
 }
 
+var (
+	bodyMu    sync.Mutex
+	bodies    = map[uint64][][]byte{}
+	bodyBytes int
+	bodySeed  = maphash.MakeSeed()
+)
+
+const (
+	sharedMin = 1 << 10  // smaller bodies are not worth the lookup
+	sharedMax = 32 << 20 // bytes the table holds at most; beyond it, bodies are kept as read
+)
+
+// shared returns the copy of b the process already holds when an equal body
+// was read before: a site that answers every path with its application page
+// costs one copy of the page, not one per path. The copy is read-only (as
+// every cached body is), and its capacity is cut so an append cannot reach it.
+func shared(b []byte) []byte {
+	if len(b) < sharedMin {
+		return b
+	}
+	h := maphash.Bytes(bodySeed, b)
+	bodyMu.Lock()
+	defer bodyMu.Unlock()
+	for _, c := range bodies[h] {
+		if bytes.Equal(c, b) {
+			return c
+		}
+	}
+	if bodyBytes+len(b) <= sharedMax {
+		b = b[:len(b):len(b)]
+		bodies[h] = append(bodies[h], b)
+		bodyBytes += len(b)
+	}
+	return b
+}
+
 // cacheHopsLocked records each hop URL so a redirect partner is not walked
 // again, and returns the ones it added: a URL asked for itself keeps its
 // own answer.
@@ -712,7 +753,7 @@ func do(ctx context.Context, c *http.Client, raw string, rq *Req) (Result, error
 		StatusLine: firstLine,
 		URL:        lastURL,
 		Header:     firstHeader,
-		Body:       lastBody,
+		Body:       shared(lastBody),
 		Hops:       hops,
 		Truncated:  lastTrunc,
 
@@ -799,7 +840,7 @@ func readBody(r io.Reader, limit int) ([]byte, bool, error) {
 
 // readBodyKeep is readBody that hands back what came before an error.
 func readBodyKeep(r io.Reader, limit int) ([]byte, bool, error) {
-	body, err := io.ReadAll(io.LimitReader(r, int64(limit)+1))
+	body, err := readAllPooled(io.LimitReader(r, int64(limit)+1))
 	if err != nil {
 		return body, false, err
 	}
@@ -807,6 +848,27 @@ func readBodyKeep(r io.Reader, limit int) ([]byte, bool, error) {
 		return body[:limit], true, nil
 	}
 	return body, false, nil
+}
+
+var readBufs = sync.Pool{New: func() any { return new(bytes.Buffer) }}
+
+// maxPooledBuf is the largest read buffer kept for the next read.
+const maxPooledBuf = 1 << 20
+
+// readAllPooled is io.ReadAll that grows a reused buffer, not a new slice
+// per read (a page of 50 KB cost 200 KB of garbage), and returns a copy of
+// exactly what was read. Like io.ReadAll it hands back the bytes read before
+// an error, and a non-nil empty slice for an empty body.
+func readAllPooled(r io.Reader) ([]byte, error) {
+	buf := readBufs.Get().(*bytes.Buffer)
+	buf.Reset()
+	_, err := buf.ReadFrom(r)
+	out := make([]byte, buf.Len())
+	copy(out, buf.Bytes())
+	if buf.Cap() <= maxPooledBuf {
+		readBufs.Put(buf)
+	}
+	return out, err
 }
 
 // A stream that never ends (server-sent events, multipart/x-mixed-replace)

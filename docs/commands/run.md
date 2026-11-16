@@ -360,6 +360,7 @@ A client route is a view that a single-page app's router draws.
 - The favicon is matched against the templates for `/favicon.ico`, wherever the page's icon was found.
 - The sweep of each web service also asks the paths the templates ask, only to name the product. These product checks are not rows of the map: an answer that matches is a `detected` row of `azhaq-paths` about the service. The ledger's purpose for them is `product checks`, and `azhaq plan` counts them.
 - A path whose name or query declares a state change (`install`, `start`, `logout`) is not a product check, and neither is the root with a query.
+- A site that answers every path with the same page is asked every product check all the same (each is a request and a ledger line); the process keeps one copy of the page.
 - A product a template names is an identification in `hunt` and `report -findings`, named by `detection template`, and matched against the advisories when it has a version.
 - Under `-max-requests` the sweep may be larger than the budget. The path checks are asked first, so the map is complete before the product checks; each resume reads back the answers the stopped processes kept (not sent, not counted) and asks the rest, so the processes together send what one run sends. `resume` says `no task finished` only when it kept no new answer.
 - `-no-tech` turns the matching and the product checks off; `-no-paths` turns the product checks off with the path checks.

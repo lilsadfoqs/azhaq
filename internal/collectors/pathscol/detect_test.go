@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
@@ -108,5 +109,74 @@ func TestProductWordsLeaveOutStateChangesAndTheRoot(t *testing.T) {
 		if path, _, _ := strings.Cut(w, "?"); path == "" || strings.Contains(w, "#") || slices.Contains(DefaultWordlist, w) {
 			t.Errorf("%s is the root, a fragment or a built-in check", w)
 		}
+	}
+}
+
+// A site that answers every path with its application page is asked every
+// product check all the same, holds one copy of that page in the process, and
+// a path whose page names a product still names it (#505).
+func TestCatchAllSiteIsAskedEveryProductCheck(t *testing.T) {
+	fetch.Reset()
+	t.Cleanup(fetch.Reset)
+	page := []byte("<html><head><title>Shop</title></head><body>" + strings.Repeat("<p>the application</p>", 3000) + "</body></html>")
+	var asked atomic.Int64
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		asked.Add(1)
+		if r.URL.Path == "/login" {
+			_, _ = w.Write([]byte(`<html><head><title>Grafana</title></head><script>{"subTitle":"Grafana v8.2.6 (abc)"}</script></html>`))
+			return
+		}
+		_, _ = w.Write(page)
+	}))
+	t.Cleanup(srv.Close)
+	col := &Collector{Client: srv.Client(), Wordlist: []string{"login"}, ProductChecks: true}
+	named := map[string]string{}
+	var record map[string]any
+	_, err := col.Run(context.Background(), types.Seed{Type: types.TypeURL, Keys: map[string]string{"url": srv.URL + "/"}}, func(o types.Observation) error {
+		var p struct {
+			Path     string              `json:"path"`
+			Detected []map[string]string `json:"detected"`
+		}
+		_ = json.Unmarshal(o.Payload, &p)
+		switch o.Kind {
+		case DetectedKind:
+			for _, d := range p.Detected {
+				named[p.Path] = d["product"] + " " + d["version"]
+			}
+		case SweepKind:
+			_ = json.Unmarshal(o.Payload, &record)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	words := len(ProductWords())
+	// The product checks, the path check and its control requests.
+	if got := int(asked.Load()); got < words+1 || got > words+4 {
+		t.Errorf("asked %d, want %d product checks and the path check", got, words)
+	}
+	if pc, _ := record["product_checks"].(map[string]any); pc["listed"] != float64(words) || pc["sent"] != pc["listed"] {
+		t.Errorf("sweep record %v", record)
+	}
+	if named["/login"] != "Grafana 8.2.6" {
+		t.Errorf("named %v", named)
+	}
+	var first []byte
+	copies := 0
+	for _, w := range ProductWords() {
+		res, ok := fetch.Cached(srv.URL + "/" + w)
+		if !ok || len(res.Body) != len(page) {
+			continue
+		}
+		if first == nil {
+			first = res.Body
+		}
+		if &res.Body[0] == &first[0] {
+			copies++
+		}
+	}
+	if copies < words*95/100 { // a few paths are cached under a spelling of their own
+		t.Errorf("%d of %d answers share one copy of the page", copies, words)
 	}
 }
