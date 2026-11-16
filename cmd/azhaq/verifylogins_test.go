@@ -150,8 +150,8 @@ func TestVerifyLoginsAcceptedFixtureIsAProvedFinding(t *testing.T) {
 			hits++
 		}
 	}
-	if hits != 1 {
-		t.Errorf("fixture saw %d sign-in attempts, want exactly 1 (Harbor has one published pair)", hits)
+	if hits != 3 { // the two controls and the one published pair
+		t.Errorf("fixture saw %d sign-in requests, want exactly 3 (Harbor has one published pair)", hits)
 	}
 }
 

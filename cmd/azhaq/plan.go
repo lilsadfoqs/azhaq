@@ -244,7 +244,7 @@ func planSends(b engine.Budgets, send sendLimits) (gets, others []string) {
 	}
 	if send.verifyLogins {
 		for _, lg := range verify.DefaultLogins() {
-			*out = append(*out, fmt.Sprintf("for a confirmed %s service, one sign-in attempt with its published default credential pair (-verify-logins %s): stops at the first success, and for that host at a lockout sign, a 429 or a captcha on the sign-in page; source: %s", lg.Product, lg.ID, lg.Source))
+			*out = append(*out, fmt.Sprintf("for a confirmed %s service, one sign-in attempt with its published default credential pair, after two control requests of the same request, one with no credential and one with a random wrong one (-verify-logins %s): 3 requests, or 1 when a page open to all answers the first, each in the ledger; a pair is accepted only when the controls are refused or answer measurably differently; stops at the first success, and for that host at a lockout sign, a 429 or a captcha on the sign-in page; source: %s", lg.Product, lg.ID, lg.Source))
 		}
 		for _, u := range verify.UnauthReads() {
 			*out = append(*out, fmt.Sprintf("for a confirmed %s service, one GET of %s with no credential, compared with the same GET carrying a deliberately wrong credential (-verify-logins %s): a finding only when the unauthenticated GET shows the protected content; source: %s", u.Product, u.Path, u.ID, u.Source))

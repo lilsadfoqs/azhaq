@@ -15,6 +15,12 @@ import (
 // protocol level (internal/verify, internal/portscan), never from a lab
 // image list.
 //
+// An attempt is accepted only against two controls sent first on the same
+// request, one with no credential and one with a random wrong one (see
+// DefaultLogin.Attempt): so each Path is a resource the product gates, and a
+// Success rule says what the gated answer holds. A path or a rule that a
+// refusal also meets proves nothing and is caught there, not here.
+//
 // Mode's request shape and Success's judgement are this package's own
 // engineering of how each product's sign-in is asked and read; only the
 // credential pair (User, Pass) and the fact that the resource needs a
@@ -34,8 +40,8 @@ var defaultLogins = []DefaultLogin{
 	},
 	{
 		ID: "activemq-admin-admin", Product: "ActiveMQ", Source: "https://activemq.apache.org/web-console",
-		User: "admin", Pass: "admin", Mode: ModeBasic, Path: "/admin/",
-		Success: basicMarker("activemq", "<html"),
+		User: "admin", Pass: "admin", Mode: ModeBasic, Path: "/admin/queues.jsp", // /admin/ itself can be public: a page that answers 200 to all proves no password
+		Success: basicMarker("queues", "activemq"),
 	},
 	{
 		ID: "harbor-admin-harbor12345", Product: "Harbor", Source: "https://goharbor.io/docs/main/install-config/configure-yml-file/",
@@ -49,8 +55,8 @@ var defaultLogins = []DefaultLogin{
 	},
 	{
 		ID: "neo4j-neo4j-neo4j", Product: "Neo4j", Source: "https://neo4j.com/docs/operations-manual/current/configuration/set-initial-password/",
-		User: "neo4j", Pass: "neo4j", Mode: ModeBasic, Path: "/",
-		Success: basicMarker("neo4j_version", "bolt_routing", "\"bolt\""),
+		User: "neo4j", Pass: "neo4j", Mode: ModeBasic, Path: "/user/neo4j", // gated, https://neo4j.com/docs/2.3.2/rest-api-security.html; / is public
+		Success: basicMarker("password_change_required"),
 	},
 	{
 		ID: "grafana-admin-admin", Product: "Grafana", Source: "https://grafana.com/docs/grafana/latest/setup-grafana/sign-in-to-grafana/",
