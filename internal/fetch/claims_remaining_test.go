@@ -15,6 +15,11 @@ import (
 func TestCatchAllAsksAControlForAtMost24DirectoriesAndTheNearestAboveStandsForTheRest(t *testing.T) {
 	Reset()
 	t.Cleanup(Reset)
+	// The token is random per process; one starting with "d" used to be
+	// taken for a /d* directory by the server below, so pin that case.
+	old := ProbeToken()
+	SetProbeToken("dprobetokenx")
+	t.Cleanup(func() { SetProbeToken(old) })
 	var mu sync.Mutex
 	probes := map[string]int{}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -28,7 +33,7 @@ func TestCatchAllAsksAControlForAtMost24DirectoriesAndTheNearestAboveStandsForTh
 			fmt.Fprint(w, `{"data":[1,2,3]}`)
 			return
 		}
-		if strings.HasPrefix(r.URL.Path, "/d") || strings.HasPrefix(r.URL.Path, "/zz/") {
+		if inDDir(r.URL.Path) || strings.HasPrefix(r.URL.Path, "/zz/") {
 			w.Header().Set("Content-Type", "application/json")
 			fmt.Fprint(w, `{"error":"not found"}`)
 			return
@@ -67,4 +72,10 @@ func TestCatchAllAsksAControlForAtMost24DirectoriesAndTheNearestAboveStandsForTh
 	if n != 24 {
 		t.Errorf("%d directories got a control after the others, want 24 still", n)
 	}
+}
+
+// inDDir: the path is in one of the /d<N>/ directories, whatever name its
+// last segment has.
+func inDDir(p string) bool {
+	return len(p) > 3 && p[0] == '/' && p[1] == 'd' && p[2] >= '0' && p[2] <= '9' && strings.Contains(p[2:], "/")
 }
