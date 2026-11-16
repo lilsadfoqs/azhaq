@@ -79,6 +79,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 - `source_queries` counts one query for each source asked. A source may page through its answer, so a query can take more than one request.
 - None of the built-in collectors is in `source_queries_not_counted`. A connector may be.
 - With `-sources none` no collector that asks a third party is in the plan (`azhaq-subdomains`, `azhaq-urls`, `azhaq-rdap`, `azhaq-search`), `source_queries` is none, and `sends` begins with a line that says no third party is asked.
+- `sends` has a line `DNS queries to …` that names the resolvers the run asks (the default public ones, or the ones `-resolvers` gives) and what it asks them: the names found, and, for a range or an AS, the reverse names (PTR) of the addresses that answer. Without `-resolvers` it says that the reverse name of a loopback, private or link-local address is not sent to the default resolvers.
 - `found_domains_asked` is about domains found on the way. They are asked about inside the scope. Without a scope, they are asked about within `-depth`.
 
 ### The requests to the targets are a bound

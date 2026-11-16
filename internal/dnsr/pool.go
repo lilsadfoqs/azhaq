@@ -127,6 +127,8 @@ type Pool struct {
 	leftAt    []string // the first few of those domains
 	wildLeft  int      // wildcard zones not probed: outside the scope
 	wildLeftA []string // the first few of those zones
+	held      int      // reverse lookups of local addresses not sent to the default resolvers
+	heldAt    []string // the first few of those names
 
 	mu    sync.Mutex
 	cache map[string]*entry
@@ -705,6 +707,9 @@ type reply struct {
 func (p *Pool) query(ctx context.Context, q *dns.Msg, avoid string) (*dns.Msg, string, error) {
 	if len(p.servers) == 0 {
 		return nil, "", errors.New("no resolvers")
+	}
+	if len(q.Question) == 1 && p.Hold(q.Question[0].Name) {
+		return nil, "", ErrHeld // the last resort: callers check Hold first
 	}
 	retries := p.retriesFor(ctx)
 	qctx, cancel := context.WithCancel(ctx)

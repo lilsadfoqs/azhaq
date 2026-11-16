@@ -865,6 +865,7 @@ How the pool behaves:
 - Each name is resolved once per run.
 - A query that is late (past 1.5 times what 19 in 20 answers took, 250 ms at least, half the timeout at most) is not waited out: the next attempt is sent beside it, the first answer wins, and the attempts in all stay Retries+1. A lost datagram costs a fraction of the 2 s timeout, not all of it.
 - With the default public resolvers, special-use names (`localhost`, `*.test`, `*.local`) and single labels go to the system resolver instead, so `/etc/hosts` and local DNS still work.
+- With the default public resolvers, the pool does not send the reverse name of a loopback, private, shared (`100.64.0.0/10`), link-local or unique-local address (`Pool.Hold`, and `Pool.Query` as the last resort): it returns `ErrHeld` and counts it for the summary's note. That covers `azhaq-ptr`, `dns -ptr` and every other caller. Names under `.internal`, `.lan`, `.home.arpa` or `.corp` are not special-use here and still go to the default resolvers.
 - Naming resolvers (`-resolvers`, `-r`) sends every name to them, special-use ones included, in every command and for every connection (HTTP, ports, TLS probes, Chrome, takeover checks). The system resolver is never asked then: a name they cannot answer is unresolved. `localhost` still connects to loopback, with no lookup, so a proxy on it works.
 
 ### `azhaq dns`
@@ -1166,7 +1167,7 @@ At most 20 pages per host are searched (`-params-per-host`).
 
 Each address gets:
 
-- a reverse DNS lookup (`azhaq-ptr`);
+- a reverse DNS lookup (`azhaq-ptr`; not for a loopback, private or link-local address unless `-resolvers` names the resolvers);
 - an HTTP probe;
 - a TLS handshake without SNI.
 

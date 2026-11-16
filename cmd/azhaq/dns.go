@@ -848,6 +848,10 @@ func (r *dnsRun) one(ctx context.Context, name string) bool {
 	if r.pool.Reserved(name) {
 		return r.reserved(ctx, name)
 	}
+	if rev, err := dns.ReverseAddr(strings.Trim(name, "[]")); isIP && err == nil && r.pool.Hold(rev) {
+		r.counts.noAnswer.Add(1) // counted in the pool: the summary says why
+		return true
+	}
 	lctx := ctx
 	if r.in.brute {
 		lctx = dnsr.Bulk(ctx)
@@ -1623,6 +1627,9 @@ func (r *dnsRun) summarize(ctx context.Context, args []string, maxtime float64) 
 		rep.Notes = append(rep.Notes, n)
 	}
 	if n := r.pool.WildcardNote(); n != "" {
+		rep.Notes = append(rep.Notes, n)
+	}
+	if n := r.pool.HeldNote(); n != "" {
 		rep.Notes = append(rep.Notes, n)
 	}
 	if r.reservedN > 0 {
