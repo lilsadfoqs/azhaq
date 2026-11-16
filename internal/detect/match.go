@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 )
@@ -105,13 +106,15 @@ type index struct {
 // of them is scanned once and shared by every path it answers, which a site
 // that gives every path one page asks a thousand times.
 type side struct {
-	ac *ac
-	n  int
+	ac    *ac
+	n     int
+	cross int // 0, or the longest needle that could read across the header/body blank line
 }
 
 type sideBuilder struct {
-	b   *acBuilder
-	ids map[string]int32
+	b     *acBuilder
+	ids   map[string]int32
+	cross int
 }
 
 func (sb *sideBuilder) add(lit string) int32 {
@@ -120,20 +123,26 @@ func (sb *sideBuilder) add(lit string) int32 {
 		id = int32(len(sb.ids))
 		sb.ids[lit] = id
 		sb.b.add(lit, id)
+		if strings.ContainsRune(lit, '\r') || strings.HasPrefix(lit, "\n") {
+			sb.cross = max(sb.cross, len(lit))
+		}
 	}
 	return id
 }
 
-// scanMemo remembers which side needles the last few large responses hold.
+// scanMemo remembers which side needles the last few large bodies hold. The
+// key is the body alone: a server's headers differ per answer (Date, a
+// request id) and would miss every time.
 type scanMemo struct {
 	mu   sync.Mutex
 	ent  [4]memoEnt
 	next int
+
+	hit, miss atomic.Int64 // what the tests and benchmarks read
 }
 
 type memoEnt struct {
 	hash uint64
-	head string
 	body []byte // a copy: the caller's body is not held
 	hits []uint64
 }
@@ -146,31 +155,58 @@ const (
 var memoSeed = maphash.MakeSeed()
 
 // sideHits is the set of side needles that occur in the response text
-// (headers, a blank line, body, lower-cased), as a bitset.
+// (headers, a blank line, body, lower-cased), as a bitset. The body is
+// scanned once per distinct body; the headers, which are small, each time.
 func (idx *index) sideHits(c *ctx) []uint64 {
 	head, body := c.headers(), c.r.Body
+	hits := idx.bodyHits(body)
+	var own []uint64 // a copy of hits, made when the headers add to it
+	set := func(n int32) {
+		if hits[n>>6]>>(n&63)&1 != 0 {
+			return
+		}
+		if own == nil {
+			own = append([]uint64(nil), hits...)
+			hits = own
+		}
+		own[n>>6] |= 1 << (n & 63)
+	}
+	if head != "" {
+		idx.side.ac.scan(strings.ToLower(head), set)
+	}
+	// Scanned apart, headers and body lose a needle that reads across the
+	// blank line between them (one holding a CR, or starting at an LF).
+	if idx.side.cross > 0 {
+		k := idx.side.cross - 1
+		w := head[max(0, len(head)-k):] + "\r\n\r\n" + string(body[:min(len(body), k)])
+		idx.side.ac.scan(strings.ToLower(w), set)
+	}
+	return hits
+}
+
+// bodyHits is the set of side needles in the lower-cased body, remembered
+// for the last few large bodies. The result is shared: callers do not write it.
+func (idx *index) bodyHits(body []byte) []uint64 {
 	memo := len(body) >= memoMin && len(body) <= memoMax
 	var h uint64
 	if memo {
-		var mh maphash.Hash
-		mh.SetSeed(memoSeed)
-		mh.WriteString(head)
-		mh.Write(body)
-		h = mh.Sum64()
+		h = maphash.Bytes(memoSeed, body)
 		idx.memo.mu.Lock()
 		for _, e := range idx.memo.ent {
-			if e.hits != nil && e.hash == h && e.head == head && bytes.Equal(e.body, body) {
+			if e.hits != nil && e.hash == h && bytes.Equal(e.body, body) {
 				idx.memo.mu.Unlock()
+				idx.memo.hit.Add(1)
 				return e.hits
 			}
 		}
 		idx.memo.mu.Unlock()
 	}
+	idx.memo.miss.Add(1)
 	hits := make([]uint64, (idx.side.n+63)/64)
-	idx.side.ac.scan(strings.ToLower(c.response()), func(n int32) { hits[n>>6] |= 1 << (n & 63) })
+	idx.side.ac.scan(strings.ToLower(string(body)), func(n int32) { hits[n>>6] |= 1 << (n & 63) })
 	if memo {
 		idx.memo.mu.Lock()
-		idx.memo.ent[idx.memo.next] = memoEnt{hash: h, head: head, body: bytes.Clone(body), hits: hits}
+		idx.memo.ent[idx.memo.next] = memoEnt{hash: h, body: bytes.Clone(body), hits: hits}
 		idx.memo.next = (idx.memo.next + 1) % len(idx.memo.ent)
 		idx.memo.mu.Unlock()
 	}
@@ -261,7 +297,7 @@ func build(d *Data) *index {
 		}
 	}
 	if len(sb.ids) > 0 {
-		idx.side = &side{ac: sb.b.build(), n: len(sb.ids)}
+		idx.side = &side{ac: sb.b.build(), n: len(sb.ids), cross: sb.cross}
 	}
 	return idx
 }
