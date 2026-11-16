@@ -67,9 +67,10 @@ func (b *acBuilder) build() *ac {
 	order := make([]int32, 0, total) // new id -> old id
 	order = append(order, 0)
 	parent := make([]int32, total)
+	var kids []int32 // scratch, reused for every node
 	for head := 0; head < len(order); head++ {
 		old := order[head]
-		kids := b.sortedChildren(old)
+		kids = b.sortedChildren(kids[:0], old)
 		for _, k := range kids {
 			parent[k] = old
 			order = append(order, k)
@@ -85,10 +86,18 @@ func (b *acBuilder) build() *ac {
 		fail:    make([]int32, total),
 		outOff:  make([]int32, total+1),
 		link:    make([]int32, total),
+		edgeCh:  make([]byte, 0, total), // every node but the root is one edge
+		edgeTo:  make([]int32, 0, total),
 	}
+	nOuts := 0
+	for _, o := range b.outs {
+		nOuts += len(o)
+	}
+	a.outIDs = make([]int32, 0, nOuts)
 	for ni, old := range order {
 		a.edgeOff[ni] = int32(len(a.edgeCh))
-		for _, k := range b.sortedChildren(old) {
+		kids = b.sortedChildren(kids[:0], old)
+		for _, k := range kids {
 			a.edgeCh = append(a.edgeCh, b.ch[k])
 			a.edgeTo = append(a.edgeTo, newID[k])
 		}
@@ -146,13 +155,14 @@ func (b *acBuilder) build() *ac {
 	return a
 }
 
-func (b *acBuilder) sortedChildren(n int32) []int32 {
-	var kids []int32
+// sortedChildren appends the children of n, in byte order, to kids.
+func (b *acBuilder) sortedChildren(kids []int32, n int32) []int32 {
+	base := len(kids)
 	for k := b.first[n]; k >= 0; k = b.next[k] {
 		kids = append(kids, k)
 	}
-	for i := 1; i < len(kids); i++ {
-		for j := i; j > 0 && b.ch[kids[j]] < b.ch[kids[j-1]]; j-- {
+	for i := base + 1; i < len(kids); i++ {
+		for j := i; j > base && b.ch[kids[j]] < b.ch[kids[j-1]]; j-- {
 			kids[j], kids[j-1] = kids[j-1], kids[j]
 		}
 	}

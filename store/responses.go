@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"io"
+	"sync"
 )
 
 // Response is one answer a run got from a target: azhaq resume reads it
@@ -98,12 +99,45 @@ func (s *Store) DropResponses(keep string) error {
 	return nil
 }
 
+var gzWriters = sync.Pool{New: func() any {
+	w, _ := gzip.NewWriterLevel(io.Discard, gzip.BestSpeed)
+	return w
+}}
+
+// packed remembers the last few bodies packed: a site that answers many
+// paths with one page is packed once, not once per path.
+var packed struct {
+	sync.Mutex
+	body, gz [4][]byte
+	next     int
+}
+
 func gz(b []byte) []byte {
+	if len(b) >= 1<<10 {
+		packed.Lock()
+		for i, p := range packed.body {
+			if len(p) == len(b) && bytes.Equal(p, b) {
+				out := packed.gz[i]
+				packed.Unlock()
+				return out
+			}
+		}
+		packed.Unlock()
+	}
 	var buf bytes.Buffer
-	w, _ := gzip.NewWriterLevel(&buf, gzip.BestSpeed)
+	w := gzWriters.Get().(*gzip.Writer) // a writer is about 1 MB of tables: reused, not allocated per body
+	w.Reset(&buf)
 	_, _ = w.Write(b)
 	_ = w.Close()
-	return buf.Bytes()
+	gzWriters.Put(w)
+	out := buf.Bytes()
+	if len(b) >= 1<<10 {
+		packed.Lock()
+		packed.body[packed.next], packed.gz[packed.next] = b, out
+		packed.next = (packed.next + 1) % len(packed.body)
+		packed.Unlock()
+	}
+	return out
 }
 
 func gunzip(b []byte) ([]byte, error) {
