@@ -2,7 +2,6 @@ package paramcol
 
 import (
 	"fmt"
-	"math/rand"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -74,15 +73,16 @@ func TestStableSearchPageIsAskedAgainOnlyOnce(t *testing.T) {
 // the 4 of one name's repeats.
 const stableSearchMax = 78
 
-// A page whose size wanders at random from the first request: the repeats
-// are asked, and only the parameter that adds to the page is found.
+// A page whose size steps through three values from the first request:
+// the repeats are asked, and only the parameter that adds to the page is
+// found. The steps stay under what calibration takes for a page that
+// changes by itself (half its size and 64 bytes between two identical
+// requests, which ends the search on purpose), whatever the order the
+// concurrent first requests arrive in.
 func TestJitteryPageStillGetsSizeRepeats(t *testing.T) {
-	var mu sync.Mutex
-	rng := rand.New(rand.NewSource(11))
+	var seen atomic.Int64
 	h := func(w http.ResponseWriter, r *http.Request) {
-		mu.Lock()
-		wobble := 40 * rng.Intn(3)
-		mu.Unlock()
+		wobble := 20 * int(seen.Add(1)%3)
 		body := "<html><body>profile" + strings.Repeat(".", wobble)
 		if r.URL.Query().Get("limit") != "" {
 			body += strings.Repeat(" <li>row</li>", 40)
@@ -136,17 +136,12 @@ func TestSteppingPageAtEveryPhaseListsNoSizeName(t *testing.T) {
 // wander after it: the names that follow are asked again, as the page
 // has shown it varies.
 func TestPageThatStartsToWanderIsAskedAgain(t *testing.T) {
-	var mu sync.Mutex
-	rng := rand.New(rand.NewSource(5))
-	n := 0
+	var seen atomic.Int64
 	h := func(w http.ResponseWriter, r *http.Request) {
-		mu.Lock()
-		n++
 		wobble := 0
-		if n > 40 {
-			wobble = 3 * rng.Intn(3)
+		if k := seen.Add(1); k > 40 {
+			wobble = 3 * int(k%3)
 		}
-		mu.Unlock()
 		rows := 30 + wobble
 		for i, name := range stableNames {
 			if r.URL.Query().Get(name) != "" {
