@@ -350,3 +350,61 @@ func TestRolesAStepOnTheSendersOwnAccountProvesNothingOfTheOwner(t *testing.T) {
 		t.Errorf("%+v %v", rows, err)
 	}
 }
+
+// The triage case: bob's password write sent by alice, a step that names
+// user=alice for every write, and a run that learned nobody. The app set
+// alice's own password, so the account alice did change, but whose account
+// that is was not established: not proved, and the row says why.
+func TestRolesAStepOnAnAccountNotKnownToBeTheOwnersIsNotProved(t *testing.T) {
+	srv, _ := newCallerApp(t, false)
+	roles := []role{{name: "alice", headers: []string{"A: alice"}, session: http.Header{"A": {"alice"}}}, {name: "bob", headers: []string{"A: bob"}, session: http.Header{"A": {"bob"}}}}
+	steps, _ := parseVerifyWrites([]string{"login:" + srv.URL + "/users/v1/login;user=alice"})
+	put := putOf(srv, "bob", "/users/v1/bob/password", `{"password":"bobpw-new"}`)
+	obj := srv.URL + "/users/v1/bob"
+	rows, _, err := replayWritesVerify(nil, roles, []writeReq{put}, map[string]map[string]answer{"bob": {obj: readAs0(t, obj, "bob")}}, map[string]bool{"127.0.0.1": true}, 0, 200, false, steps)
+	if err != nil || len(rows) != 1 {
+		t.Fatal(rows, err)
+	}
+	r := rows[0]
+	if r.WriteVerification == verifyProved || r.Verdict == verdictWriteCross || !strings.Contains(r.OwnerBy, `the account "alice" changed`) || !strings.Contains(r.OwnerBy, "was not established") {
+		t.Errorf("an account not known to be the owner's: %q %q %q", r.Verdict, r.WriteVerification, r.OwnerBy)
+	}
+}
+
+// The same measured change proves when the account is known to be the owner's:
+// the user is learned for the owner's role, or named on the step where the
+// written URL addresses it; a name only read off the URL is not enough.
+func TestRolesAStepOnTheOwnersKnownAccountProves(t *testing.T) {
+	// eve carries alice's token: the app does set alice's password.
+	h := http.Header{"A": {"alice"}}
+	roles := []role{{name: "alice", headers: []string{"A: alice"}, session: h}, {name: "eve", headers: []string{"A: alice"}, session: h}}
+	run := func(who map[string]identity, spec string) roleRow {
+		srv, _ := newCallerApp(t, false)
+		steps, err := parseVerifyWrites([]string{strings.ReplaceAll(spec, "SRV", srv.URL)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		put := putOf(srv, "alice", "/users/v1/alice/password", `{"password":"n3w"}`)
+		obj := srv.URL + "/users/v1/alice"
+		rows, _, err := replayWritesVerify(who, roles, []writeReq{put}, map[string]map[string]answer{"alice": {obj: readAs0(t, obj, "alice")}}, map[string]bool{"127.0.0.1": true}, 0, 200, false, steps)
+		if err != nil || len(rows) != 1 {
+			t.Fatal(rows, err)
+		}
+		return rows[0]
+	}
+	for name, c := range map[string]struct {
+		who  map[string]identity
+		spec string
+		want bool
+	}{
+		"learned":               {nameOf(""), "login:SRV/users/v1/login", true},
+		"named and in the URL":  {nil, "login:SRV/users/v1/login;user=alice", true},
+		"only read off the URL": {nil, "login:SRV/users/v1/login", false},
+		"named, not in the URL": {nil, "login:SRV/users/v1/login;user=zed", false},
+	} {
+		r := run(c.who, c.spec)
+		if proved := r.WriteVerification == verifyProved && r.Verdict == verdictWriteCross; proved != c.want {
+			t.Errorf("%s: proved %v, want %v: %q %q", name, proved, c.want, r.WriteVerification, r.OwnerBy)
+		}
+	}
+}

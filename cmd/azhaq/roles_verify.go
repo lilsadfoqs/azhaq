@@ -201,6 +201,33 @@ func stepUser(v verifyWrite, ownerRole string, w writeReq, who map[string]identi
 	return ownerUser(v, ownerRole, w, who)
 }
 
+// ownersUser: the account a step reads is known to be the owner's: the run
+// learned it for the owner's role (its session or /me answer), or the user is
+// named on the step and the written URL addresses it (a ;user= is one name for
+// every write, so it names the owner only where the write's own path does). A
+// name only read off the URL's path or the route, or a ;user= that the written
+// URL does not hold, may be the sender's or anyone's.
+func ownersUser(step verifyWrite, user, ownerRole string, w writeReq, who map[string]identity) bool {
+	if user == "" {
+		return false
+	}
+	id := who[ownerRole]
+	if slices.Contains(id.own["username"], user) || slices.Contains(id.own["email"], user) {
+		return true
+	}
+	if step.user == "" || w.method == http.MethodPost {
+		return false
+	}
+	if u, err := url.Parse(w.url); err == nil {
+		for _, sg := range strings.Split(u.Path, "/") {
+			if sg, err = url.PathUnescape(sg); err == nil && sg == user {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // onSender: the step's user is the sender's own application user, learned by
 // the run. A sign-in or read there shows where the write landed, not that it
 // changed the owner's account.
@@ -284,6 +311,12 @@ func verifyOutcome(steps []verifyWrite, w writeReq, sender role, ownerRole strin
 			p = pre[i]
 		}
 		canary := stepIsCanary(v, w, canaryField)
+		owners := ownersUser(v, user, ownerRole, w, who)
+		// A change the step measures proves the owner's write only on an
+		// account known to be the owner's.
+		unproved := func() {
+			note(fmt.Sprintf("the account %q changed (the %s step measured it), but whose account that is was not established: it is not a user the run learned for role %s, and no ;user= names it for a write whose URL addresses it, so it is not called a write on role %s's object", user, v.kind, ownerRole, ownerRole))
+		}
 		// refuted is the word only for what an observed user got: a name read
 		// off the URL may not be the owner's, so its failure says nothing.
 		refuted := func(what string) {
@@ -309,6 +342,8 @@ func verifyOutcome(steps []verifyWrite, w writeReq, sender role, ownerRole strin
 			switch {
 			case reads(a):
 				switch {
+				case (canary || p.login && p.refused) && !owners:
+					unproved()
 				case canary || p.login && p.refused:
 					return verifyProved, notes
 				case p.login && p.signed:
@@ -345,6 +380,8 @@ func verifyOutcome(steps []verifyWrite, w writeReq, sender role, ownerRole strin
 				note(fmt.Sprintf("the read step's %s was read, but the write set no value in it to compare with", v.field))
 			case !containsString(vs, want):
 				refuted("did not show the written value")
+			case (canary || p.read && !containsString(p.vals, want)) && !owners:
+				unproved()
 			case canary || p.read && !containsString(p.vals, want):
 				return verifyProved, notes
 			case p.read:
