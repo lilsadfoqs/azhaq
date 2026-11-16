@@ -38,6 +38,7 @@ func nmapServes(t *testing.T, port, limit string) (nmapService, bool) {
 				Product string `xml:"product,attr"`
 				Version string `xml:"version,attr"`
 				Tunnel  string `xml:"tunnel,attr"`
+				Method  string `xml:"method,attr"`
 			} `xml:"service"`
 		} `xml:"host>ports>port"`
 	}
@@ -46,6 +47,12 @@ func nmapServes(t *testing.T, port, limit string) (nmapService, bool) {
 		return nmapService{}, false
 	}
 	p := doc.Ports[0]
+	// method "table" is nmap's services file by port number, not an answer:
+	// on a random port it names whatever service that number is registered to.
+	if p.Service.Method != "probed" {
+		t.Logf("nmap named port %s %q from its port table, not from an answer: no comparison with it", port, p.Service.Name)
+		return nmapService{}, false
+	}
 	return nmapService{p.Service.Name, p.Service.Product, p.Service.Version, p.Service.Tunnel}, true
 }
 
