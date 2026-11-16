@@ -1,12 +1,14 @@
 package hunt
 
 import (
+	"encoding/json"
 	"fmt"
 	"testing"
 	"time"
 
 	"github.com/lilsadfoqs/azhaq/engine"
 	"github.com/lilsadfoqs/azhaq/internal/proof"
+	"github.com/lilsadfoqs/azhaq/types"
 )
 
 // A dangling-dns row is a finding ranked by its severity with the other
@@ -37,5 +39,29 @@ func TestDanglingDNSRanksWithTheFindings(t *testing.T) {
 	}
 	if lead == nil || lead.Rank <= finding.Rank || !has(lead, "takeover-candidate") || has(lead, "dangling-dns") {
 		t.Errorf("the takeover lead stays a lead after it: %+v", lead)
+	}
+}
+
+// A stack trace is a finding row of its own, a measured record: the route's
+// 5xx lead does not repeat it, and a 5xx whose error text names a stack but
+// has no record (fewer than three frames) is a lead, never a finding.
+func TestTraceRecordIsOneFindingAndNoLead(t *testing.T) {
+	row := func(path string) engine.MapEntry {
+		return urlRow("http://t.test"+path, "api", "visited", 500, func(r *engine.MapEntry) { r.Title = "Error" })
+	}
+	payload, _ := json.Marshal(map[string]any{"url": "http://t.test/bare", "status": 500, "error_text": "stack", "error_sample": "Traceback (most recent call last)"})
+	got := Build(Input{DB: "w.db", Now: time.Now(), Since: 7 * 24 * time.Hour,
+		Rows:     []engine.MapEntry{row("/api"), row("/bare")},
+		Obs:      []types.StoredObservation{{EntityID: "http://t.test/bare", Observation: types.Observation{Collector: "azhaq-http", Kind: "application", Payload: payload}}},
+		Measured: []Measured{{Kind: "error-disclosure", Type: "URL", Host: "http://t.test/api", Severity: "low", Evidence: "HTTP 500: boom (3 java frames)"}}})
+	tiers := map[string]string{}
+	for _, r := range got {
+		if _, dup := tiers[r.Key]; dup {
+			t.Errorf("%s is listed twice: %+v", r.Key, got)
+		}
+		tiers[r.Key] = r.Tier
+	}
+	if tiers["http://t.test/api"] != proof.TierFinding || tiers["http://t.test/bare"] != proof.TierLead || len(got) != 2 {
+		t.Errorf("tiers %v, want /api a finding and /bare a lead", tiers)
 	}
 }

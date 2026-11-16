@@ -49,7 +49,7 @@ rank  score  key  reason; reason  → check: WHAT WOULD PROVE IT  → next: COMM
 
 A reason is `signal: detail`. With `-json`, stdout holds one object per row. The summary goes to stderr, as JSON with `-json`, and counts `rows` and, apart, the `tiers` of the rows printed: `findings`, `identifications` and `leads`. When `-limit` cut the list, a note says how many rows had a signal, counts them by tier, says how many the limit left out and gives the `-limit` that prints them all.
 
-The tier counts are `report -findings`' own function, run on hunt's rows, so a finding is one in both and a row both list has the same tier. The three counts are not of the same rows: `hunt` counts listeners (one for each product) and the routes and hosts with a signal, and `report -findings` counts issues (an advisory a read settled, a service's unchecked matches) and the hints and checks it lists, including scripts and routes that hunt never ranks. The summary says which in `identifications_of` and `leads_of`, and the text summary in a `counted:` line, so 889 leads in one and 671 in the other are not a disagreement.
+The tier counts are `report -findings`' own function, run on hunt's rows, so a finding is one in both and a row both list has the same tier; the stack traces and the dangling names are rows of the records `report -findings` lists, one for each, so the run's summary, its `next` line, `hunt` and `report -findings` count the same findings of those kinds. `hunt` shows findings `report -findings` holds no record of, and counts them: SQL error text or a debug page in a 5xx, a directory listing, a GraphQL schema read, a `-roles` verdict. The three counts are not of the same rows: `hunt` counts listeners (one for each product) and the routes and hosts with a signal, and `report -findings` counts issues (an advisory a read settled, a service's unchecked matches) and the hints and checks it lists, including scripts and routes that hunt never ranks. The summary says which in `identifications_of` and `leads_of`, and the text summary in a `counted:` line, so 889 leads in one and 671 in the other are not a disagreement.
 
 ```
 $ azhaq hunt -db app.db
@@ -89,6 +89,7 @@ leads (2): inferred from a name, a path or a guess; each names the check that wo
 | `cross-role` | A `-roles` verdict that one role reached another's data. The heaviest signal: see [Cross-role rows](#cross-role-rows). |
 | `takeover` | A name another party may take over, on a service's own page or a domain nobody holds. |
 | `dangling-dns` | A CNAME chain that ends at a name that answered `NXDOMAIN`: a finding of severity low, ranked with the other findings. It says what was measured, and nothing about who may create the name: the `takeover-candidate` lead for the same name stays a lead. |
+| `error-disclosure` | An answer whose body holds a stack trace (three or more frames, any status, from `probe`, `run` or `dirs`): a finding of severity low, one row for each record `report -findings` lists, keyed by its URL and ranked with the other findings. The route's own 5xx lead is not repeated beside it. See [Server errors](#server-errors). |
 | `takeover-candidate` | A CNAME to a cloud name that does not resolve (`dangling`). It rests on NXDOMAIN alone: `unverified: NXDOMAIN does not show the name is free`. See [Takeover candidates](../CONCEPTS.md#what-a-dangling-row-rests-on). |
 | `secret` | A credential a script carries. The reason names the file and gives the evidence: the name it was assigned to, the value redacted, the rule that listed it and, for a generic secret, its entropy. See [Secret candidates](#secret-candidates). |
 | `sourcemap` | The source maps azhaq read on a host, one row for the host: it weighs more when the maps carry the app's own code (`sourcesContent`) than when they only name its files. |
@@ -152,7 +153,7 @@ Only an application is a row: a product wappalyzer's data holds under a category
 
 A row is a **finding** when one of its signals is shown by what was received, and a **lead** when none is. A path or a name is never proof. The `findings` header says what the tier is, not a verdict on each row: a row under it states what its own answer showed and nothing more. A `dangling-dns` row, for one, says the CNAME chain ended at a name that answered `NXDOMAIN` and, in its own line, that whether anyone can create that name was not tested.
 
-- Shown by the answer: `cross-role` (a `-roles` verdict of `proved` confidence, or with none), `takeover` of strength `strong`, a `secret` whose own format names it (a key with a known shape, severity above `info`), `exposed-file` and `exposed-panel` when the answer shows the file or the panel ([Exposed files](#exposed-files)), `listing` (the page's own title is a directory listing), `graphql` when its schema was read or its IDE answers, and `server-error` when the body shows SQL error text, a framework's debug page or a stack trace.
+- Shown by the answer: `cross-role` (a `-roles` verdict of `proved` confidence, or with none), `takeover` of strength `strong`, a `secret` whose own format names it (a key with a known shape, severity above `info`), `exposed-file` and `exposed-panel` when the answer shows the file or the panel ([Exposed files](#exposed-files)), `listing` (the page's own title is a directory listing), `graphql` when its schema was read or its IDE answers, `error-disclosure` when the answer holds a stack trace of three or more frames (the record `report -findings` lists), and `server-error` when the body of a 5xx shows SQL error text or a framework's debug page.
 - Leads: every other signal, such as a word in a path, `input`, a `param-*`, `object-id`, `gated`, `unauth-write`, `upload`, `sourcemap`, `takeover-candidate`, `api-description` (a served API description: a service that publishes it has not shown a flaw), a generic or bundler secret, a role's 5xx that differs from another's, and a `named` route no server confirmed.
 
 An **identification** is a listener the run named: a product, and a version or none. It is not proven: the label says how far a read settled its advisory.
@@ -211,13 +212,13 @@ A path that names a file or a panel is judged by its answer, which azhaq already
 
 ### Server errors
 
-A 5xx alone is a lead, not a finding; the body showing SQL error text, a framework's debug page or a stack trace makes the row a finding. Its weight depends on what shows beside it:
+A 5xx alone is a lead, not a finding; the body showing SQL error text or a framework's debug page makes the row a finding. A stack trace of three or more frames in the answer, at any status, is an `error-disclosure` row of its own (a finding, as `report -findings` lists it), and the route then has no `server-error` lead for it. The weight of a 5xx depends on what shows beside it:
 
 - SQL error text in the body: 50.
 - Another role's answer to the same route, a 5xx for one role and an answer for another: 40.
 - A framework's debug page: 35.
 - A parameter whose value came back: 30.
-- A stack trace: 25, or 15 when the request lacked the input the route takes.
+- A stack trace the body names but `report -findings` has no record of (fewer than three frames): a lead of 25, or 15 when the request lacked the input the route takes.
 - Alone: 10.
 - Alone, when the plain request carried none of the input the route takes: 3. The map row's `answer` is then `500 without input`; see [Evidence](../CONCEPTS.md#evidence-how-azhaq-knows-a-url).
 

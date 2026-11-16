@@ -9,6 +9,9 @@ import (
 	"github.com/lilsadfoqs/azhaq/types"
 )
 
+// traceKind is the kind of the finding for an answer that held a stack trace.
+const traceKind = "error-disclosure"
+
 // traceFindingsOf reads the answers whose body held a stack trace, from the
 // url rows the web collectors stored (the `stack_trace` of a probe or dirs
 // row): one record per URL, kind error-disclosure, proved because the
@@ -32,7 +35,7 @@ func traceFindingsOf(obs []types.StoredObservation, command string) []findingRec
 			excerpt = proof.Printable([]byte(trace.Exception), proof.MaxExcerpt)
 		}
 		rec := findingRecord{
-			Tier: proof.TierFinding, Kind: "error-disclosure", Label: "proved", Severity: "low", URL: row.URL, Command: command,
+			Tier: proof.TierFinding, Kind: traceKind, Label: "proved", Severity: "low", URL: row.URL, Command: command,
 			Request:   "GET " + row.URL,
 			Evidence:  fmt.Sprintf("HTTP %d: %s (%d %s frames)", row.Status, trace.Exception, trace.Frames, trace.Runtime),
 			Collector: o.Collector,

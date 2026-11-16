@@ -136,8 +136,12 @@ func huntRows(g *graphView, path string, roles []hunt.RoleRow, since time.Durati
 	set := buildFindings(g)
 	in.Listeners = listenersOf(set)
 	for _, r := range set.Findings {
-		if r.Kind == danglingKind {
+		switch r.Kind {
+		case danglingKind:
 			in.Measured = append(in.Measured, hunt.Measured{Kind: r.Kind, Host: r.Host, Severity: r.Severity, Evidence: r.Evidence, Command: r.Command, Proof: r.Proof})
+		case traceKind:
+			// One row per record, as report lists it: any answer that held a trace, from any stage.
+			in.Measured = append(in.Measured, hunt.Measured{Kind: r.Kind, Type: "URL", Host: r.URL, Severity: r.Severity, Evidence: r.Evidence, Command: r.Command, Proof: r.Proof})
 		}
 	}
 	return hunt.Build(in)
