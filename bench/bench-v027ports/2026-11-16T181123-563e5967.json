@@ -1,0 +1,471 @@
+{
+  "date": "2026-11-16T18:11:23Z",
+  "commit": "563e5967",
+  "version": "azhaq 0.26.1-0.20261116180907-563e59671805+dirty\nadvisory index 2026-11-16 (52995 records)\n  CISA Known Exploited Vulnerabilities catalogue, 2026-11-13\n  NVD CVE records, feed 2.0 (with CPE configurations), 2026-11-15",
+  "go": "go1.27.4",
+  "tools": [
+    {
+      "name": "katana",
+      "version": "1.8.0"
+    },
+    {
+      "name": "subfinder",
+      "version": "2.17.0"
+    },
+    {
+      "name": "httpx",
+      "version": "1.12.0"
+    },
+    {
+      "name": "dnsx",
+      "version": "1.3.1"
+    },
+    {
+      "name": "naabu",
+      "version": "2.6.1"
+    },
+    {
+      "name": "gau",
+      "version": "2.2.4"
+    },
+    {
+      "name": "ffuf",
+      "version": "2.3.0"
+    },
+    {
+      "name": "alterx",
+      "version": "0.1.0"
+    },
+    {
+      "name": "gowitness",
+      "version": "3.2.2"
+    },
+    {
+      "name": "jsluice",
+      "version": "v0.0.0-20240110145140-0ddfab153e06"
+    },
+    {
+      "name": "notify",
+      "version": "v1.0.7"
+    }
+  ],
+  "profile": "default",
+  "ports": {
+    "profile": "default",
+    "hosts": [
+      "scanme.nmap.org",
+      "127.0.0.1",
+      "127.0.0.0/28"
+    ],
+    "azhaq_open": 10,
+    "naabu_open": 8,
+    "shared": 4,
+    "azhaq_seconds": 4.006923165999999,
+    "naabu_seconds": 144.97820235,
+    "azhaq_rss_mb": 68.2890625,
+    "reference_rss_mb": 105.1796875,
+    "azhaq_only": [
+      "advisory:"
+    ],
+    "legs": [
+      {
+        "target": "scanme.nmap.org",
+        "ports": "top-1000",
+        "azhaq": 4,
+        "naabu": 3,
+        "azhaq_confirmed": 3,
+        "naabu_confirmed": 3,
+        "azhaq_seconds": 3.5613972499999997,
+        "naabu_seconds": 8.750459068,
+        "azhaq_rss_mb": 63.44921875,
+        "reference_rss_mb": 71.76171875
+      },
+      {
+        "target": "127.0.0.1",
+        "ports": "1-65535",
+        "azhaq": 2,
+        "naabu": 1,
+        "azhaq_confirmed": 1,
+        "naabu_confirmed": 1,
+        "azhaq_seconds": 0.423221042,
+        "naabu_seconds": 133.617957131,
+        "azhaq_rss_mb": 68.2890625,
+        "reference_rss_mb": 105.1796875
+      },
+      {
+        "target": "127.0.0.0/28",
+        "ports": "37685,36893,39257,43567,44375,43691",
+        "azhaq": 4,
+        "naabu": 4,
+        "azhaq_confirmed": 4,
+        "naabu_confirmed": 4,
+        "azhaq_seconds": 0.022304874,
+        "naabu_seconds": 2.6097861509999998,
+        "azhaq_rss_mb": 50.30078125,
+        "reference_rss_mb": 57.0078125
+      }
+    ],
+    "cpu": {
+      "target": "127.0.0.1",
+      "ports": "1-65535",
+      "rate": "10000",
+      "runs": 5,
+      "azhaq_cpu_seconds": 0.808674,
+      "nmap_cpu_seconds": 1.2017,
+      "azhaq_seconds": 6.53525149,
+      "nmap_seconds": 6.582917251,
+      "azhaq_rss_mb": 74.21875,
+      "nmap_rss_mb": 74.21875,
+      "azhaq_open": 1,
+      "nmap_open": 1
+    },
+    "small": [
+      {
+        "case": "ports 1-1000 on 127.0.0.1, connect only",
+        "azhaq": 1,
+        "reference": 1,
+        "azhaq_seconds": 0.025736832,
+        "reference_seconds": 0.025987047,
+        "azhaq_rss_mb": 51.24609375,
+        "reference_rss_mb": 14.01171875,
+        "azhaq_anon_mb": 9.55078125,
+        "reference_anon_mb": 5.50390625
+      },
+      {
+        "case": "ports 1-1000 on 127.0.0.1, services named",
+        "azhaq": 2,
+        "reference": 1,
+        "azhaq_seconds": 0.077518553,
+        "reference_seconds": 0.137958952,
+        "azhaq_rss_mb": 64.62109375,
+        "reference_rss_mb": 49.15234375,
+        "azhaq_anon_mb": 22.93359375,
+        "reference_anon_mb": 36.99609375
+      }
+    ]
+  },
+  "network": {
+    "asn": "AS394161",
+    "azhaq_prefixes": 107,
+    "radb_routes": 39,
+    "shared": 31,
+    "cidr": "45.33.32.128/25",
+    "azhaq_ptr": 36,
+    "dnsx_ptr": 36,
+    "shared_ptr": 36
+  },
+  "checks": [
+    {
+      "name": "[default] ports 127.0.0.1 1-65535: open ports ≥ nmap -sT's",
+      "pass": true,
+      "detail": "azhaq 0.81 CPU s, 6.5 s and 74 MB, nmap 1.20 CPU s, 6.6 s and 74 MB (median of 5 runs in turn); open: azhaq 1, nmap 1; listening throughout and azhaq missed [], nmap missed [] | azhaq ports -host 127.0.0.1 -p 1-65535 -rate 10000 -retries 0 -detect none -silent -db /home/runner/work/azhaq/azhaq/bench/.work/portscpu1664134459/cpu.db vs nmap -sT -Pn -n -p 1-65535 --max-rate 10000 --max-retries 0 -oG - 127.0.0.1"
+    },
+    {
+      "name": "[default] ports 127.0.0.1 1-65535: CPU ≤ 1.25× nmap -sT's",
+      "pass": true,
+      "detail": "0.67×: azhaq 0.81 CPU s, 6.5 s and 74 MB, nmap 1.20 CPU s, 6.6 s and 74 MB (median of 5 runs in turn); open: azhaq 1, nmap 1; listening throughout and azhaq missed [], nmap missed [] | azhaq ports -host 127.0.0.1 -p 1-65535 -rate 10000 -retries 0 -detect none -silent -db /home/runner/work/azhaq/azhaq/bench/.work/portscpu1664134459/cpu.db vs nmap -sT -Pn -n -p 1-65535 --max-rate 10000 --max-retries 0 -oG - 127.0.0.1"
+    },
+    {
+      "name": "[default] ports 127.0.0.1 1-65535: time ≤ 1.25× nmap -sT's",
+      "pass": true,
+      "detail": "0.99×: azhaq 0.81 CPU s, 6.5 s and 74 MB, nmap 1.20 CPU s, 6.6 s and 74 MB (median of 5 runs in turn); open: azhaq 1, nmap 1; listening throughout and azhaq missed [], nmap missed [] | azhaq ports -host 127.0.0.1 -p 1-65535 -rate 10000 -retries 0 -detect none -silent -db /home/runner/work/azhaq/azhaq/bench/.work/portscpu1664134459/cpu.db vs nmap -sT -Pn -n -p 1-65535 --max-rate 10000 --max-retries 0 -oG - 127.0.0.1"
+    },
+    {
+      "name": "[default] ports scanme.nmap.org top-1000: results ≥ the reference's, confirmed by an independent TCP connect",
+      "pass": true,
+      "detail": "azhaq 3, reference 3; old bar: 3 of 3 = 100%; azhaq only [advisory:], naabu only []; time ×0.41 of the reference, memory ×0.88 of the reference (63 MB against 72 MB) | azhaq ports -host scanme.nmap.org -p top-1000 -silent vs naabu -host scanme.nmap.org -top-ports 1000 -scan-type c -Pn -silent"
+    },
+    {
+      "name": "[default] ports scanme.nmap.org top-1000: time ≤ 1.05× the reference's",
+      "pass": true,
+      "detail": "azhaq 3.6s, reference 8.8s (the median of 3 below 20 s, one run above) | azhaq ports -host scanme.nmap.org -p top-1000 -silent vs naabu -host scanme.nmap.org -top-ports 1000 -scan-type c -Pn -silent"
+    },
+    {
+      "name": "[default] ports 127.0.0.1 1-65535: results ≥ the reference's, confirmed by `ss -ltn` taken before and after the scan",
+      "pass": true,
+      "detail": "azhaq 1, reference 1; old bar: 1 of 1 = 100%; sockets listening throughout and missed: azhaq [], naabu []; time ×0.00 of the reference, memory ×0.65 of the reference (68 MB against 105 MB) | azhaq ports -host 127.0.0.1 -p 1-65535 -silent vs naabu -host 127.0.0.1 -p 1-65535 -scan-type c -Pn -silent"
+    },
+    {
+      "name": "[default] ports 127.0.0.1 1-65535: time ≤ 1.05× the reference's",
+      "pass": true,
+      "detail": "azhaq 0.4s, reference 133.6s (the median of 3 below 20 s, one run above) | azhaq ports -host 127.0.0.1 -p 1-65535 -silent vs naabu -host 127.0.0.1 -p 1-65535 -scan-type c -Pn -silent"
+    },
+    {
+      "name": "[default] ports 127.0.0.0/28: results ≥ the reference's, confirmed by the listeners the bench opened (a port that is not one counts against)",
+      "pass": true,
+      "detail": "azhaq 4, reference 4; planted 4; azhaq 4 of them, 4 reported; naabu 4, 4 reported; time ×0.01 of the reference, memory ×0.88 of the reference (50 MB against 57 MB) | azhaq ports -host 127.0.0.0/28 -p 37685,36893,39257,43567,44375,43691 -silent vs naabu -host 127.0.0.0/28 -p 37685,36893,39257,43567,44375,43691 -scan-type c -Pn -silent"
+    },
+    {
+      "name": "[default] ports 127.0.0.0/28: time ≤ 1.05× the reference's",
+      "pass": true,
+      "detail": "azhaq 0.0s, reference 2.6s (the median of 3 below 20 s, one run above) | azhaq ports -host 127.0.0.0/28 -p 37685,36893,39257,43567,44375,43691 -silent vs naabu -host 127.0.0.0/28 -p 37685,36893,39257,43567,44375,43691 -scan-type c -Pn -silent"
+    },
+    {
+      "name": "[default] ports 1-1000, connect only: results ≥ the reference's, confirmed by nmap's own connect scan",
+      "pass": true,
+      "detail": "azhaq 1, reference 1 | azhaq ports -host 127.0.0.1 -p 1-1000 -detect none -silent vs nmap -sT -Pn -n -p 1-1000 -oG - 127.0.0.1"
+    },
+    {
+      "name": "[default] ports 1-1000, connect only: time ≤ 1.25× the reference's",
+      "pass": true,
+      "detail": "azhaq 0.03s, reference 0.03s (0.99×, the median of 3) | azhaq ports -host 127.0.0.1 -p 1-1000 -detect none -silent vs nmap -sT -Pn -n -p 1-1000 -oG - 127.0.0.1"
+    },
+    {
+      "name": "[default] ports 1-1000, connect only: private memory ≤ 2× the reference's",
+      "pass": true,
+      "detail": "private (RssAnon) azhaq 9.6 MB, reference 5.5 MB (1.74×); resident with the binary's shared file pages (VmHWM) azhaq 51 MB, reference 14 MB (3.66×); the median of 3 | azhaq ports -host 127.0.0.1 -p 1-1000 -detect none -silent vs nmap -sT -Pn -n -p 1-1000 -oG - 127.0.0.1"
+    },
+    {
+      "name": "[default] ports 1-1000, services named: results ≥ the reference's, confirmed by nmap -sV's open ports",
+      "pass": true,
+      "detail": "azhaq 2, reference 1 | azhaq ports -host 127.0.0.1 -p 1-1000 -silent vs nmap -sT -sV -Pn -n -p 1-1000 -oG - 127.0.0.1"
+    },
+    {
+      "name": "[default] ports 1-1000, services named: time ≤ 1.25× the reference's",
+      "pass": true,
+      "detail": "azhaq 0.08s, reference 0.14s (0.56×, the median of 3) | azhaq ports -host 127.0.0.1 -p 1-1000 -silent vs nmap -sT -sV -Pn -n -p 1-1000 -oG - 127.0.0.1"
+    },
+    {
+      "name": "[default] ports 1-1000, services named: private memory ≤ 2× the reference's",
+      "pass": true,
+      "detail": "private (RssAnon) azhaq 22.9 MB, reference 37.0 MB (0.62×); resident with the binary's shared file pages (VmHWM) azhaq 65 MB, reference 49 MB (1.31×); the median of 3 | azhaq ports -host 127.0.0.1 -p 1-1000 -silent vs nmap -sT -sV -Pn -n -p 1-1000 -oG - 127.0.0.1"
+    },
+    {
+      "name": "asn: announced prefixes match registered routes",
+      "pass": true,
+      "detail": "AS394161: azhaq 107 (RIPEstat), RADb 39, shared 31"
+    },
+    {
+      "name": "ptr: ≥ 95% of dnsx -ptr's answers",
+      "pass": true,
+      "detail": "45.33.32.128/25: azhaq 36, dnsx 36, shared 36 addresses with a reverse name"
+    }
+  ],
+  "runs": [
+    {
+      "tool": "azhaq",
+      "target": "scanme.nmap.org",
+      "seconds": 3.5613972499999997,
+      "rss_mb": 63.44921875,
+      "anon_mb": 21.75390625,
+      "profile": "default"
+    },
+    {
+      "tool": "naabu",
+      "target": "scanme.nmap.org",
+      "seconds": 8.750459068,
+      "rss_mb": 71.76171875,
+      "anon_mb": 42.94140625,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "127.0.0.1",
+      "seconds": 0.420539062,
+      "rss_mb": 68.01171875,
+      "anon_mb": 26.3203125,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "127.0.0.1",
+      "seconds": 0.423221042,
+      "rss_mb": 69.33203125,
+      "anon_mb": 27.63671875,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "127.0.0.1",
+      "seconds": 0.424437164,
+      "rss_mb": 68.2890625,
+      "anon_mb": 26.59375,
+      "profile": "default"
+    },
+    {
+      "tool": "naabu",
+      "target": "127.0.0.1",
+      "seconds": 133.617957131,
+      "rss_mb": 105.1796875,
+      "anon_mb": 76.55859375,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "127.0.0.0/28",
+      "seconds": 0.02379058,
+      "rss_mb": 50.32421875,
+      "anon_mb": 8.62890625,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "127.0.0.0/28",
+      "seconds": 0.021387387,
+      "rss_mb": 50.30078125,
+      "anon_mb": 8.60546875,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "127.0.0.0/28",
+      "seconds": 0.022304874,
+      "rss_mb": 50.25,
+      "anon_mb": 8.55859375,
+      "profile": "default"
+    },
+    {
+      "tool": "naabu",
+      "target": "127.0.0.0/28",
+      "seconds": 2.633965308,
+      "rss_mb": 56.58984375,
+      "anon_mb": 28.5,
+      "profile": "default"
+    },
+    {
+      "tool": "naabu",
+      "target": "127.0.0.0/28",
+      "seconds": 2.59689233,
+      "rss_mb": 57.0078125,
+      "anon_mb": 28.70703125,
+      "profile": "default"
+    },
+    {
+      "tool": "naabu",
+      "target": "127.0.0.0/28",
+      "seconds": 2.6097861509999998,
+      "rss_mb": 57.31640625,
+      "anon_mb": 28.984375,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "127.0.0.1",
+      "seconds": 0.028085898,
+      "rss_mb": 51.24609375,
+      "anon_mb": 9.55078125,
+      "profile": "default"
+    },
+    {
+      "tool": "nmap",
+      "target": "127.0.0.1",
+      "seconds": 0.02731494,
+      "rss_mb": 13.94921875,
+      "anon_mb": 5.5,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "127.0.0.1",
+      "seconds": 0.025589579,
+      "rss_mb": 51.109375,
+      "anon_mb": 9.4140625,
+      "profile": "default"
+    },
+    {
+      "tool": "nmap",
+      "target": "127.0.0.1",
+      "seconds": 0.025987047,
+      "rss_mb": 14.0859375,
+      "anon_mb": 5.50390625,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "127.0.0.1",
+      "seconds": 0.025736832,
+      "rss_mb": 51.2890625,
+      "anon_mb": 9.59375,
+      "profile": "default"
+    },
+    {
+      "tool": "nmap",
+      "target": "127.0.0.1",
+      "seconds": 0.025711454,
+      "rss_mb": 14.01171875,
+      "anon_mb": 5.50390625,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "127.0.0.1",
+      "seconds": 0.074115592,
+      "rss_mb": 64.62109375,
+      "anon_mb": 22.93359375,
+      "profile": "default"
+    },
+    {
+      "tool": "nmap",
+      "target": "127.0.0.1",
+      "seconds": 0.140492702,
+      "rss_mb": 49.1953125,
+      "anon_mb": 36.9609375,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "127.0.0.1",
+      "seconds": 0.077518553,
+      "rss_mb": 63.96484375,
+      "anon_mb": 22.26953125,
+      "profile": "default"
+    },
+    {
+      "tool": "nmap",
+      "target": "127.0.0.1",
+      "seconds": 0.137958952,
+      "rss_mb": 48.953125,
+      "anon_mb": 36.99609375,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "127.0.0.1",
+      "seconds": 0.078259882,
+      "rss_mb": 64.9296875,
+      "anon_mb": 23.234375,
+      "profile": "default"
+    },
+    {
+      "tool": "nmap",
+      "target": "127.0.0.1",
+      "seconds": 0.135635755,
+      "rss_mb": 49.15234375,
+      "anon_mb": 37.0078125,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "AS394161",
+      "seconds": 1.6712478499999999,
+      "rss_mb": 50.12890625,
+      "anon_mb": 10.3828125
+    },
+    {
+      "tool": "azhaq",
+      "target": "45.33.32.128/25",
+      "seconds": 1.296088042,
+      "rss_mb": 142.2265625,
+      "anon_mb": 100.17578125
+    },
+    {
+      "tool": "dnsx",
+      "target": "45.33.32.128/25",
+      "seconds": 1.032020947,
+      "rss_mb": 45.40625,
+      "anon_mb": 22.08203125
+    }
+  ],
+  "units": [
+    {
+      "name": "default:ports",
+      "checks": 15,
+      "runs": 24
+    },
+    {
+      "name": "once:network",
+      "checks": 2,
+      "runs": 3
+    }
+  ]
+}
