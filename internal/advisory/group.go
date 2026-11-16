@@ -223,19 +223,63 @@ func (l Lead) Expand() []Lead {
 	return out
 }
 
-// CountsText is the labels of a lead's advisories as a phrase: "90
-// affected, 2 conditional, 3 not affected (12 on KEV; highest CVSS 9.8)".
-func (l Lead) CountsText() string {
+// TopAdvisories is how many advisories of a listener and product a summary
+// names (in the order Group ranks them) before it counts the rest by label.
+// The records, the JSON rows and the JSON Lines keep every one.
+const TopAdvisories = 3
+
+// advisoryLabels are the labels of a lead's advisories, in the order they
+// are told.
+var advisoryLabels = []string{LabelAffected, LabelConditional, LabelNotAffected}
+
+// CountLabels tells counts as "30 affected, 8 conditional, 3 not affected":
+// the labels in order, the ones with none left out.
+func CountLabels(counts map[string]int, order []string) string {
 	var parts []string
-	for _, lb := range []string{LabelAffected, LabelConditional, LabelNotAffected} {
-		if n := l.Counts[lb]; n > 0 {
+	for _, lb := range order {
+		if n := counts[lb]; n > 0 {
 			parts = append(parts, fmt.Sprintf("%d %s", n, lb))
 		}
 	}
-	if len(parts) == 0 {
-		parts = append(parts, "no advisory")
+	return strings.Join(parts, ", ")
+}
+
+// Fold is a lead's advisories as a summary shows them: the first n that
+// apply (the list is ranked already), and how many others there are, told by
+// label ("30 affected, 8 conditional, 3 not affected").
+func (l Lead) Fold(n int) (top []Ref, more int, rest string) {
+	counts := map[string]int{}
+	for _, r := range l.Advisories {
+		if len(top) < n && applies(r.Label) {
+			top = append(top, r)
+			continue
+		}
+		counts[r.Label]++
+		more++
 	}
-	s := strings.Join(parts, ", ")
+	return top, more, CountLabels(counts, advisoryLabels)
+}
+
+// Tags are what a summary says of a ref beside its id: its label, CISA KEV
+// and its score.
+func (r Ref) Tags() string {
+	t := []string{r.Label}
+	if r.KEV {
+		t = append(t, "KEV")
+	}
+	if r.CVSS > 0 {
+		t = append(t, fmt.Sprintf("CVSS %.1f", r.CVSS))
+	}
+	return strings.Join(t, ", ")
+}
+
+// CountsText is the labels of a lead's advisories as a phrase: "90
+// affected, 2 conditional, 3 not affected (12 on KEV; highest CVSS 9.8)".
+func (l Lead) CountsText() string {
+	s := CountLabels(l.Counts, advisoryLabels)
+	if s == "" {
+		s = "no advisory"
+	}
 	var extra []string
 	if l.KEVCount > 0 {
 		extra = append(extra, fmt.Sprintf("%d on KEV", l.KEVCount))

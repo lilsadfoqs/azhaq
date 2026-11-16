@@ -481,18 +481,15 @@ func TestVerifyGivesOneRowPerService(t *testing.T) {
 		t.Fatal(err)
 	}
 	md := buf.String()
-	labels := map[any]bool{}
-	for _, f := range found {
-		labels[f["label"]] = true
-	}
+	// One bullet for the service: its top three advisories, the rest counted by label.
 	bullets := strings.Split(md, "\n- ")[1:]
-	if len(bullets) != len(labels) || !strings.Contains(md, "CVE-2021-41773, CVE-2021-42013") || !strings.Contains(md, " more (") {
-		t.Errorf("the Markdown findings are %d bullets, want one for each of the %d labels, the first with the first ten ids and \"and N more\":\n%s", len(bullets), len(labels), md)
+	if len(bullets) != 1 || !strings.Contains(md, "CVE-2021-41773 (version-only, KEV") || !strings.Contains(md, " more: ") {
+		t.Errorf("the Markdown findings are %d bullets, want one for the service naming its top advisories and counting the rest:\n%s", len(bullets), md)
 	}
 	for _, b := range bullets {
-		head, _, _ := strings.Cut(b, "; evidence:")
-		if n := strings.Count(head, "CVE-"); n > 10 {
-			t.Errorf("a bullet lists %d ids, want at most 10 and \"and N more\": %s", n, head)
+		head, _, _ := strings.Cut(b, "; request:")
+		if n := strings.Count(head, "CVE-"); n > 3 {
+			t.Errorf("a bullet names %d ids, want at most 3 and the rest counted: %s", n, head)
 		}
 	}
 }

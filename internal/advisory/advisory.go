@@ -369,6 +369,26 @@ func (l Lead) Line() string {
 	if l.Read != "" {
 		s += "; read: " + l.Read
 	}
+	return s + l.foldText()
+}
+
+// foldText is the advisories after the top one, for a line: the next ones
+// that apply, and the others counted by label ("; then CVE-B (conditional,
+// CVSS 7.5) and 41 more: 30 affected, 8 conditional, 3 not affected"). Empty
+// when the lead has no other advisory that applies: the counts say the rest.
+func (l Lead) foldText() string {
+	top, more, rest := l.Fold(TopAdvisories)
+	if len(top) < 2 {
+		return ""
+	}
+	var next []string
+	for _, r := range top[1:] {
+		next = append(next, fmt.Sprintf("%s (%s)", r.ID, r.Tags()))
+	}
+	s := "; then " + strings.Join(next, ", ")
+	if more > 0 {
+		s += fmt.Sprintf(" and %d more: %s", more, rest)
+	}
 	return s
 }
 

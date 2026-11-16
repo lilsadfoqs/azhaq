@@ -143,3 +143,32 @@ func TestEmbeddedIndexRanksBundledLibrariesAfterTheProductsOwn(t *testing.T) {
 		}
 	}
 }
+
+// The embedded index carries the attack vector of its records: a Redis flaw
+// NVD scores AV:L is conditional on local access, a Tomcat one scored AV:N
+// is affected as before.
+func TestEmbeddedIndexKeepsAnAttackVector(t *testing.T) {
+	ix, err := advisory.Builtin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	label := func(product, version, id string) advisory.Lead {
+		leads, err := advisory.MatchIndex([]advisory.Service{{Host: "h", Port: 80, Product: product, Version: version}}, ix)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, l := range leads {
+			if l.AdvisoryID == id {
+				return l
+			}
+		}
+		t.Fatalf("%s %s has no %s", product, version, id)
+		return advisory.Lead{}
+	}
+	if l := label("Redis", "7.0.0", "CVE-2025-46818"); l.Label != advisory.LabelConditional || !strings.HasPrefix(l.Precondition, "needs local access") {
+		t.Errorf("CVE-2025-46818: %q %q", l.Label, l.Precondition)
+	}
+	if l := label("Apache Tomcat", "9.0.30", "CVE-2020-1938"); l.Label != advisory.LabelAffected || l.Precondition != "" {
+		t.Errorf("CVE-2020-1938: %q %q", l.Label, l.Precondition)
+	}
+}
