@@ -76,7 +76,7 @@ var helpSpecs = map[string]helpSpec{
 	},
 	"report": {
 		groups: []helpGroup{
-			{"", `findings db dir url method owner format o redact`},
+			{"", `findings db roles dir url method owner format o redact`},
 		},
 	},
 	"subs": {
@@ -378,7 +378,7 @@ var helpSpecs = map[string]helpSpec{
 	},
 	"export": {
 		groups: []helpGroup{
-			{"", `db format origin safe coverage json run`},
+			{"", `db format origin safe coverage json run roles`},
 		},
 	},
 	"ingest": {

@@ -146,13 +146,18 @@ func (r Row) tierRank() int {
 // finding ranked by its severity beside the others, never merged with a lead
 // about the same name or route.
 type Measured struct {
-	Kind     string // dangling-dns, error-disclosure
+	Kind     string // dangling-dns, error-disclosure, sql-error, debug-page, directory-listing, graphql-schema, graphql-ide, cross-role-access
 	Type     string // the row's type: Hostname when empty, URL for a route
 	Host     string // the row's key: the name, or the URL
 	Severity string
 	Evidence string
 	Command  string
 	Proof    *proof.Proof
+	// Score and Next, when set, replace the rank the severity gives and the
+	// command the proof reproduces: a roles verdict ranks as it always has and
+	// is shown again by roles show.
+	Score int
+	Next  string
 }
 
 // measuredScore is a measured finding's score by severity: below what a proven
@@ -164,6 +169,9 @@ func (m Measured) row(db string) Row {
 	if m.Proof != nil && m.Proof.Reproduce != "" {
 		next = m.Proof.Reproduce
 	}
+	if m.Next != "" {
+		next = m.Next
+	}
 	if next == "" {
 		next = "azhaq report -findings -db " + quote(db)
 	}
@@ -172,6 +180,12 @@ func (m Measured) row(db string) Row {
 	if typ == "" {
 		typ = "Hostname"
 	}
-	return Row{Score: measuredScore[m.Severity], Key: m.Host, Type: typ, Reasons: rs, Next: next,
+	score := measuredScore[m.Severity]
+	if m.Score > 0 {
+		score = m.Score
+	} else if s := ProvedScore(m.Kind); s > 0 {
+		score = s
+	}
+	return Row{Score: score, Key: m.Host, Type: typ, Reasons: rs, Next: next,
 		Tier: proof.TierFinding, Proof: m.Proof, scope: "target", signals: 1}
 }

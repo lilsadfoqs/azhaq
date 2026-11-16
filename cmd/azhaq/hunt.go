@@ -38,26 +38,9 @@ func cmdHunt(args []string) error {
 	if *limit < 1 {
 		return usagef("-limit: need at least 1")
 	}
-	var rows []hunt.RoleRow
-	for _, f := range roles {
-		fh, err := os.Open(f)
-		if err != nil {
-			return err
-		}
-		rs, err := hunt.ReadRoles(fh)
-		fh.Close()
-		if err != nil {
-			return fmt.Errorf("-roles %s: %v", f, err)
-		}
-		// Rows an older roles printed carry no directory: the file's own,
-		// else the newest one the roles default names.
-		dir := rolesDirFor(f)
-		for i := range rs {
-			if rs[i].Dir == "" {
-				rs[i].Dir = dir
-			}
-		}
-		rows = append(rows, rs...)
+	rows, err := readRolesFiles(roles)
+	if err != nil {
+		return err
 	}
 	g, err := readGraph(path)
 	if err != nil {
@@ -133,15 +116,20 @@ func huntRows(g *graphView, path string, roles []hunt.RoleRow, since time.Durati
 		in.Takeovers = append(in.Takeovers, hunt.Takeover{Host: t.Host, Strong: t.Strength == "strong", Dangling: t.Strength == "dangling", Detail: takeoverDetail(t.Finding)})
 	}
 	in.Addrs = advisory.NameAddrs(g.obs)
-	set := buildFindings(g)
+	withRoles := *g
+	withRoles.roles = roles
+	set := buildFindings(&withRoles)
 	in.Listeners = listenersOf(set)
 	for _, r := range set.Findings {
-		switch r.Kind {
-		case danglingKind:
+		switch {
+		case r.Kind == danglingKind:
 			in.Measured = append(in.Measured, hunt.Measured{Kind: r.Kind, Host: r.Host, Severity: r.Severity, Evidence: r.Evidence, Command: r.Command, Proof: r.Proof})
-		case traceKind:
-			// One row per record, as report lists it: any answer that held a trace, from any stage.
-			in.Measured = append(in.Measured, hunt.Measured{Kind: r.Kind, Type: "URL", Host: r.URL, Severity: r.Severity, Evidence: r.Evidence, Command: r.Command, Proof: r.Proof})
+		case webMeasuredKinds[r.Kind]:
+			// One row per record, as report lists it: an answer that held a trace, SQL
+			// error text, a debug page, a listing or a GraphQL schema, from any stage,
+			// and a roles verdict.
+			in.Measured = append(in.Measured, hunt.Measured{Kind: r.Kind, Type: "URL", Host: r.URL, Severity: r.Severity, Evidence: r.Evidence,
+				Command: r.Command, Proof: r.Proof, Score: r.rank, Next: r.next})
 		}
 	}
 	return hunt.Build(in)

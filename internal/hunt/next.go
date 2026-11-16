@@ -50,6 +50,9 @@ func (c *cand) instance() string {
 	return c.key
 }
 
+// Quote is quote for the commands other packages name beside hunt's.
+func Quote(s string) string { return quote(s) }
+
 // quote leaves a plain word alone and single-quotes anything a shell would
 // split or expand.
 func quote(s string) string {

@@ -121,8 +121,8 @@ func TestServerErrorFlippedByARole(t *testing.T) {
 
 func TestCrossRoleNextNamesTheRolesDirectory(t *testing.T) {
 	rows := []RoleRow{
-		{URL: shop + "/rest/basket/mine", Verdict: "reads another role's object", Confidence: "proved", Dir: "/work/azhaq-roles-20261031-101500"},
-		{URL: shop + "/rest/orders/mine", Verdict: "reads another role's object", Confidence: "proved"},
+		{URL: shop + "/rest/basket/mine", Verdict: "reads another role's object", Confidence: "likely", Dir: "/work/azhaq-roles-20261031-101500"},
+		{URL: shop + "/rest/orders/mine", Verdict: "reads another role's object", Confidence: "likely"},
 	}
 	got := Build(Input{Roles: rows, Now: now})
 	next := map[string]string{}

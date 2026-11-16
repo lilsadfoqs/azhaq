@@ -28,6 +28,7 @@ import (
 	"github.com/lilsadfoqs/azhaq/internal/collectors/shotcol"
 	"github.com/lilsadfoqs/azhaq/internal/gqlschema"
 	"github.com/lilsadfoqs/azhaq/internal/httprow"
+	"github.com/lilsadfoqs/azhaq/internal/hunt"
 	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"github.com/lilsadfoqs/azhaq/internal/scopefile"
@@ -46,8 +47,9 @@ type graphView struct {
 	obs   []types.StoredObservation
 	probe []engine.ProbeRow
 	live  map[string]map[string]any
-	args  []string     // the options the run was started with
-	rules *scope.Rules // the run's scope as resolved when it started, if it had one
+	args  []string       // the options the run was started with
+	rules *scope.Rules   // the run's scope as resolved when it started, if it had one
+	roles []hunt.RoleRow // the roles verdicts given with -roles: findings of their own
 }
 
 func readGraph(path string) (*graphView, error) { return readGraphRun(path, "") }
@@ -152,10 +154,14 @@ func exportToList(path, format, origin string, safe bool, lo listOpts, w io.Writ
 	if safe && format != "openapi" {
 		return usagef("-safe is for -format openapi")
 	}
+	if len(lo.roles) > 0 && format != "findings" && format != "findings-md" {
+		return usagef("-roles is for -format findings or findings-md")
+	}
 	g, err := readGraphRun(path, lo.run)
 	if err != nil {
 		return err
 	}
+	g.roles = lo.roles
 	switch format {
 	case "urls":
 		return exportURLs(g, path, lo, w)

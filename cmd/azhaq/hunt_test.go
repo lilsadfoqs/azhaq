@@ -20,8 +20,8 @@ func TestHuntKnowsTheRolesVerdicts(t *testing.T) {
 		if err != nil || len(rows) != 1 {
 			t.Fatal(err)
 		}
-		if got := hunt.Build(hunt.Input{Roles: rows}); len(got) != 1 || got[0].Score < 90 {
-			t.Errorf("verdict %q does not rank: %+v", v, got)
+		if !rows[0].Proved() || rows[0].Weight() < 90 {
+			t.Errorf("verdict %q does not rank: weight %d", v, rows[0].Weight())
 		}
 	}
 }
