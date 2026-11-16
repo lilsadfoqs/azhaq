@@ -316,7 +316,7 @@ The run's options are stored with it. The database is left out, and so are the v
 
 So a task that ran but whose end was not recorded runs again whole. Observations are stored once per run, so it reports nothing twice.
 
-Tasks the budget stopped before run last, one at a time and cheapest first, by the requests they had sent. So a path sweep that needs more than the budget does not starve cheaper work. Once the budget is spent, tasks that would contact targets are kept back. A resume in which no task finished says the budget is smaller than any task left needs, in the command's terms: connections for `ports`, requests for the others.
+Tasks the budget stopped before run last, one at a time and cheapest first, by the requests they had sent. So a path sweep that needs more than the budget does not starve cheaper work. Once the budget is spent, tasks that would contact targets are kept back. A task bigger than the budget (a path sweep with its product checks, over a thousand words) is not finished by any one process, but a resume still moves it on: every answer a process gets is kept (`engine.KeepResponses`), and the next one reads those back, not sent and not counted, and asks only the rest. The path checks come first in the sweep, so the map is complete before the product checks are. A resume in which no task finished and no new answer was kept says the budget is smaller than any task left needs, in the command's terms: connections for `ports`, requests for the others. One that kept answers says nothing: azhaq resume goes on until the sweep is done.
 
 ### The request ledger and the kill switch
 
