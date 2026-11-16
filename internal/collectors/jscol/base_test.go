@@ -172,3 +172,35 @@ func rowKeys(m map[string]map[string]any) []string {
 	}
 	return out
 }
+
+// A script that gives one client the base /api and calls /api paths on other
+// objects: the server sees each path as written and never /api/api/.
+func TestCallsOnOtherReceiversAreNotJoinedOntoTheBase(t *testing.T) {
+	srv, asked := baseApp(t, `export const client = axios.create({ baseURL: "/api/v2" });`+
+		`client.get("/api/v2/admin/settings");`+
+		`client.get("/users");`+
+		`api.get("/api/v2/frontend/settings");`+
+		`getBackendSrv().get("/api/v2/search");`+
+		`fetch("/api/v2/dashboards/db");`)
+	r := runBase(t, srv)
+	for _, p := range []string{"/api/v2/admin/settings", "/api/v2/users", "/api/v2/frontend/settings", "/api/v2/search", "/api/v2/dashboards/db"} {
+		if r.rows[p] == nil || !r.hinted(p) {
+			t.Errorf("%s: no row or not requested: %v", p, rowKeys(r.rows))
+		}
+	}
+	if row := r.rows["/api/v2/users"]; row == nil || row["base"] != srv.URL+"/api/v2" {
+		t.Errorf("the based client's relative path names its base: %v", row)
+	}
+	if row := r.rows["/api/v2/frontend/settings"]; row != nil && row["base"] != nil {
+		t.Errorf("a call on another object names a base: %v", row)
+	}
+	for _, p := range rowKeysAndAsked(r, asked()) {
+		if strings.Contains(p, "/api/v2/api/v2") {
+			t.Errorf("doubled path %s", p)
+		}
+	}
+}
+
+func rowKeysAndAsked(r baseRun, asked []string) []string {
+	return append(rowKeys(r.rows), append(r.hints, asked...)...)
+}
