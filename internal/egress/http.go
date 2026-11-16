@@ -58,8 +58,15 @@ func (g *guarded) RoundTrip(req *http.Request) (*http.Response, error) {
 		return nil, err
 	}
 	out := keepTargetInRequestLine(g.base, req)
+	pp := g.viaTargetProxy(req)
+	if pp != nil {
+		Current().learnProxy(req.Context(), pp)
+	}
 	resp, err := g.send(out)
 	err = g.nameProxy(req, err)
+	if resp != nil && pp != nil {
+		Current().dropProxyOwn(resp.Header)
+	}
 	if resp != nil && out != req {
 		resp.Request = req
 	}

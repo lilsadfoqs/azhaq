@@ -34,7 +34,7 @@ type Entry struct {
 	Seq       int64     `json:"seq"`
 	Time      time.Time `json:"time"`
 	Kind      string    `json:"kind"`            // http, tcp, udp, probe, dns, chrome, or seal: the end of a run
-	Class     string    `json:"class,omitempty"` // target, source, dns or own; empty in a ledger from before classes: a target
+	Class     string    `json:"class,omitempty"` // target, source, dns, own or proxy; empty in a ledger from before classes: a target
 	Method    string    `json:"method,omitempty"`
 	Proto     string    `json:"proto,omitempty"` // probe: the protocol of the bytes sent (http, https, redis, ...)
 	Target    string    `json:"target"`          // the URL (http, chrome, and a probe's HTTP request), ip:port (tcp, udp, a probe of another protocol) or the resolver (dns)
@@ -69,6 +69,7 @@ const (
 	ClassSource = "source" // a third party asked about the targets: archives, RDAP, search, a notification
 	ClassDNS    = "dns"    // a resolver
 	ClassOwn    = "own"    // an endpoint of the user's own: a replay proxy, a worker's link to its run
+	ClassProxy  = "proxy"  // the run's -proxy, asked once for its own answer (not a request about a target)
 )
 
 // IsTarget says the entry was sent to a target.

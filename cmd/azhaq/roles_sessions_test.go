@@ -216,6 +216,9 @@ func TestRefusalReadGoesThroughTheRunsProxyAndBudget(t *testing.T) {
 	}))
 	defer srv.Close()
 	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Host == "" { // the run's one request to the proxy itself, for its own answer
+			return
+		}
 		viaProxy.Add(1)
 		out := r.Clone(r.Context())
 		out.RequestURI = ""

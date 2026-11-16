@@ -93,7 +93,8 @@ func TestBrowserRequestsPassThroughProxy(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if n := strings.Count(string(ledger), `"kind":"http"`) + strings.Count(string(ledger), `"kind":"chrome"`); n != len(via) {
+		// The run's one request to the proxy itself is the proxy's line, not a target's.
+		if n := strings.Count(string(ledger), `"kind":"http"`) + strings.Count(string(ledger), `"kind":"chrome"`) - strings.Count(string(ledger), `"class":"proxy"`); n != len(via) {
 			t.Errorf("%s: the ledger lists %d requests, the proxy was asked for %d\n%s", name, n, len(via), ledger)
 		}
 		if !slices.Contains(via, "/") {

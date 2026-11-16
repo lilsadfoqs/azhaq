@@ -229,7 +229,7 @@ func (r *runLedger) close(rep *report) {
 // were sent to, as a format taking the file's path, and how many of them
 // went to targets: the number the summary's requests is checked against.
 func (r *runLedger) recorded(path string) (what string, targets, dnsLines int) {
-	var reqs, conns, datagrams, probes, sources, dns, own, all int
+	var reqs, conns, datagrams, probes, sources, dns, own, proxy, all int
 	spent := map[string]*stageSpend{}
 	count := func(class, kind, collector string, n int) {
 		all += n
@@ -240,6 +240,8 @@ func (r *runLedger) recorded(path string) (what string, targets, dnsLines int) {
 			dns += n
 		case ledger.ClassOwn:
 			own += n
+		case ledger.ClassProxy:
+			proxy += n
 		default:
 			if kind == ledger.KindProbe {
 				probes += n // bytes sent on a connection that has its own line: not a request or connection
@@ -311,6 +313,9 @@ func (r *runLedger) recorded(path string) (what string, targets, dnsLines int) {
 	}
 	if own > 0 {
 		parts = append(parts, nOf(own, "to an endpoint of your own", "to endpoints of your own"))
+	}
+	if proxy > 0 {
+		parts = append(parts, fmt.Sprintf("%d to the -proxy itself, for its own answer", proxy))
 	}
 	if notSent > 0 {
 		parts = append(parts, nOf(notSent, "request", "requests")+" not sent (the -proxy could not be reached; not counted above)")

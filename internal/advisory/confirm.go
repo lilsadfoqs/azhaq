@@ -118,20 +118,24 @@ func services(obs []types.StoredObservation, needVersion bool) []Service {
 					Product: product, Version: version, Origin: u.Scheme + "://" + u.Host,
 					Banner: banner, Source: source, ObservedAt: o.ObservedAt, From: at}
 			}
-			if row.Server != "" {
+			// A version only a header gave, through a -proxy that could not be
+			// asked for its own answer, is the proxy's to disown: no advisory
+			// is matched to it (the verification still reads it).
+			kept := func(marked bool) bool { return !(needVersion && marked) }
+			if row.Server != "" && kept(slices.Contains(row.ViaProxy, "Server")) {
 				product, version := HeaderProductVersion(row.Server)
 				add(web(product, version, "Server: "+row.Server, SourceServer))
 			}
 			// The technologies the page's own markup and headers name with a
 			// version ("WordPress:6.4.2"): what the site itself states.
 			for _, t := range row.Tech {
-				if name, version, ok := strings.Cut(t, ":"); ok && name != "" && version != "" && version[0] >= '0' && version[0] <= '9' {
+				if name, version, ok := strings.Cut(t, ":"); ok && name != "" && version != "" && version[0] >= '0' && version[0] <= '9' && kept(slices.Contains(row.ViaProxy, "tech:"+t)) {
 					add(web(name, version, "technology: "+t, SourceTech))
 				}
 			}
 			// What a detection template extracted with a version.
 			for _, d := range row.Detected {
-				if d.Product != "" && d.Version != "" && !foreignVersion(row.Server, d.Product, d.Version) && classify(d.Product, detectedSource(d)) != skip {
+				if d.Product != "" && d.Version != "" && !foreignVersion(row.Server, d.Product, d.Version) && classify(d.Product, detectedSource(d)) != skip && kept(d.ViaProxy != "") {
 					add(web(d.Product, d.Version, "detection template: "+d.Template, SourceDetect))
 				}
 			}

@@ -18,6 +18,7 @@ import (
 	"github.com/lilsadfoqs/azhaq/internal/crawlscope"
 	"github.com/lilsadfoqs/azhaq/internal/detect"
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
+	"github.com/lilsadfoqs/azhaq/internal/httprow"
 	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 	"github.com/lilsadfoqs/azhaq/internal/ledger"
 	"github.com/lilsadfoqs/azhaq/internal/neterr"
@@ -283,6 +284,11 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		}
 		if err == nil && root && c.ProductChecks {
 			if rows := detect.Rows(detect.Match(answer("/"+path, res))); len(rows) > 0 {
+				httprow.MarkViaProxy(rows, answer("/"+path, res).Header, func(h http.Header) []map[string]string {
+					a := answer("/"+path, res)
+					a.Header = h
+					return detect.Rows(detect.Match(a))
+				})
 				payload, _ := json.Marshal(map[string]any{"url": raw, "path": "/" + path, "status": res.Status, "detected": rows})
 				mu.Lock()
 				if emit(types.Observation{Collector: Name, Source: raw, Kind: DetectedKind, Payload: payload, Confidence: 0.9, ObservedAt: time.Now().UTC()}) == nil {

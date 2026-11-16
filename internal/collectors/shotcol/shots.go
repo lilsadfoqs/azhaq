@@ -427,6 +427,7 @@ func baseName(u *url.URL, raw string) string {
 // console and the requests.
 func addRecord(row map[string]any, p browser.Page, noTech bool) {
 	r := p.Record
+	r.Headers = withoutProxyOwn(r.Headers)
 	if r.Status != 0 {
 		row["response_code"] = r.Status
 	}
@@ -467,6 +468,27 @@ func addRecord(row map[string]any, p browser.Page, noTech bool) {
 			row["technologies"] = tech
 		}
 	}
+}
+
+// withoutProxyOwn is hs without the values the -proxy's own answer showed
+// (see egress.DropProxyOwn): Chrome's headers go through the same filter as
+// the client's.
+func withoutProxyOwn(hs []browser.Header) []browser.Header {
+	if len(hs) == 0 {
+		return hs
+	}
+	h := http.Header{}
+	for _, kv := range hs {
+		h.Add(kv.Key, kv.Value)
+	}
+	egress.DropProxyOwn(h)
+	var out []browser.Header
+	for _, kv := range hs {
+		if !egress.IdentityHeader(kv.Key) || slices.Contains(h.Values(kv.Key), kv.Value) {
+			out = append(out, kv)
+		}
+	}
+	return out
 }
 
 // HashPrefix marks a perceptual hash (a DCT hash of the picture); the
