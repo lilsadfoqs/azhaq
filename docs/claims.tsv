@@ -1339,6 +1339,19 @@ diff.one-run	docs/commands/diff.md	A workspace with only one run says so: a diff
 diff.not-seen-again	docs/commands/diff.md	`not_seen_again` is what the older run only heard of: from a subdomain source, an archive or a link. The run never checked it.	test:cmd/azhaq:TestDiffNotSeenAgainIsWhatTheOlderRunOnlyHeardOf
 diff.bodies-not-compared	docs/commands/diff.md	Bodies are not compared byte for byte. Timestamps and tokens would make every run a change.	test:cmd/azhaq:TestTwoIdenticalRunsDiffEmpty;test:store:TestCompareIgnoresVolatileFields
 diff.control-by-answer	docs/commands/diff.md	A catch-all row's control is compared by its answer (status, type, title).	test:store:TestCompareIgnoresTheControlsRandomPath;test:cmd/azhaq:TestTwoIdenticalRunsDiffEmpty
+diff.url-query-order	docs/commands/diff.md	The order of the query names is not part of it	test:store:TestCompareQueryOrderIsOneURL;test:internal/normalize:TestIdentityIgnoresTheOrderOfQueryNames;test:cmd/azhaq:TestDiffOfAnUnchangedAppIgnoresWhatChangesPerVisit;test:cmd/azhaq:TestQueryOrderIsAskedAsWrittenAndComparedAsOne
+diff.url-token-value	docs/commands/diff.md	A value that is a token by its shape is not part of it	test:store:TestCompareTokenValuesAreOneURL;test:internal/normalize:TestTokenShaped
+diff.url-number-pairs	docs/commands/diff.md	A number that changes between the two runs is not part of it	test:store:TestCompareANumberThatChangesIsOnePage;test:cmd/azhaq:TestDiffOfAnUnchangedAppIgnoresWhatChangesPerVisit
+diff.url-paired-counted	docs/commands/diff.md	They are counted as one URL, not as added and removed	test:cmd/azhaq:TestDiffOfAnUnchangedAppIgnoresWhatChangesPerVisit,TestDiffTextSaysHowManyURLsWerePaired;test:store:TestCompareANumberThatChangesIsOnePage
+diff.url-other-values-differ	docs/commands/diff.md	Any other value, and a number with no partner	test:store:TestCompareANumberThatChangesIsOnePage
+diff.url-session-fragment	docs/commands/diff.md	The servlet session path parameter (`;jsessionid=`) and a fragment are not part of it.	test:internal/normalize:TestIdentityIgnoresTheOrderOfQueryNames
+diff.watch-coarser	docs/commands/diff.md	`watch` is coarser on purpose	test:cmd/azhaq:TestWatchURLIdentity;test:store:TestCompareANumberThatChangesIsOnePage
+diff.url-keeps-values	docs/commands/diff.md	`diff` lists each URL, so it keeps the values that are not tokens or measured numbers.	test:store:TestCompareANumberThatChangesIsOnePage;test:store:TestCompareTokenValuesAreOneURL
+diff.left-out-by-row	docs/commands/diff.md	What records when or how a row was asked, not what the target answered, is left out, by the type of row:	test:store:TestCompareLeavesOutWhenAndHowAskedButNotWhatAnswered;test:store:TestVolatileFieldsAreRowFields
+diff.left-out-every-row	docs/commands/diff.md	Every row: `asked_at`, `observed_at`	test:store:TestCompareLeavesOutWhenAndHowAskedButNotWhatAnswered;test:store:TestCompareIgnoresVolatileFields
+diff.left-out-timeout	docs/commands/diff.md	A request that failed: the text of a timeout	test:store:TestCompareLeavesOutWhenAndHowAskedButNotWhatAnswered
+diff.left-out-link-urls	docs/commands/diff.md	every URL in the row is compared by its identity above	test:store:TestCompareANumberThatChangesIsOnePage
+watch.diff-identity-finer	docs/commands/watch.md	lists every URL, so its identity is finer	test:cmd/azhaq:TestWatchURLIdentity;test:store:TestCompareANumberThatChangesIsOnePage
 # docs/commands/ingest.md
 ingest.without-db-new-file	docs/commands/ingest.md	Without `-db` it uses the file `$AZHAQ_DB` names, else makes `workspace.db` in its [run folder](runs.md)	test:cmd/azhaq:TestIngestWithoutDBMakesANewFileAndPrintsNoRows,TestRunHomeKeepsTheWorkspaceInTheRunFolder
 ingest.prints-no-rows	docs/commands/ingest.md	`ingest` prints no rows, only its summary.	test:cmd/azhaq:TestIngestWithoutDBMakesANewFileAndPrintsNoRows

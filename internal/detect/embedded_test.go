@@ -187,19 +187,25 @@ func TestLoadBudget(t *testing.T) {
 	if testing.Short() {
 		t.Skip("budget check")
 	}
+	// The heap the load adds, not the process's: other tests of the package
+	// may hold their own loaded data while this one runs.
+	var before, ms runtime.MemStats
+	runtime.GC()
+	runtime.ReadMemStats(&before)
 	var d Data
 	start := time.Now()
 	decode(&d)
 	idx := build(&d)
 	took := time.Since(start)
 	runtime.GC()
-	var ms runtime.MemStats
 	runtime.ReadMemStats(&ms)
 	if took > 1500*time.Millisecond && !raceEnabled {
 		t.Errorf("load took %v, budget 1.5s", took)
 	}
-	if mb := ms.HeapAlloc >> 20; mb > 150 {
-		t.Errorf("live heap %d MB, budget 150 MB", mb)
+	if ms.HeapAlloc > before.HeapAlloc {
+		if mb := (ms.HeapAlloc - before.HeapAlloc) >> 20; mb > 150 {
+			t.Errorf("the load adds %d MB of live heap, budget 150 MB", mb)
+		}
 	}
 	runtime.KeepAlive(idx)
 }

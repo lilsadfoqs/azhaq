@@ -94,6 +94,8 @@ A URL is new only if its identity was not in the previous run, and gone only if 
 - Parameter values are ignored, so a session token or a sort order is no change: `/list.php?sort=a&sortorder=ASC` and `/list.php?sort=b&sortorder=DESC` are one. A new parameter name on a known path is a new identity, and so a new URL.
 - Scripts, style sheets, images, fonts and source maps are left out by what the URL is, whether or not the run stored a role for them.
 
+[`diff`](diff.md#which-urls-are-the-same) lists every URL, so its identity is finer: it keeps the query values, except tokens and a number that changed between the two runs.
+
 ### Lines of the API routes section
 
 | Line | Meaning |
