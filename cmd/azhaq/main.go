@@ -1146,6 +1146,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	// A -max-names the user gave also caps the names guessing asks; the default
 	// cap is for the names looked up, and never cuts a wordlist.
 	guessBudget = brutecol.NewBudget(*maxNames)
+	brutecol.ResetPermuteProgress()
 	if guessBudget != nil && *resumeRun != "" {
 		if obs, err := st.Observations(); err == nil {
 			guessBudget.AskedBefore(brutecol.Asked(obs)) // the stopped run's guesses: resume asks the rest
@@ -1308,7 +1309,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	send.portPasses, send.portNameAddrs = portPasses(portCfg.Retries), portNameAddrs(portCfg)
 	send.dirsDepth, send.paramsWrites = *dirsDepth, *paramsWrites
 	send.dirsWordList, send.dirsExtList, send.guessBudget, send.bruteList = opts.Dirs.Words, opts.Dirs.Extensions, *maxNames, opts.BruteWords
-	send.axfr, send.resolvers = out.axfr, resolvers
+	send.axfr, send.resolvers, send.dnsRate = out.axfr, resolvers, *dnsRate
 	send.dirsWords, send.dirsExts, send.paramsN = len(opts.Dirs.Words), len(opts.Dirs.Extensions), len(opts.Params.Words)
 	send.dirsNoCal = opts.Dirs.NoCalibration
 	send.sendState, send.holdGiven = *sendState, holdGivenTargets(*sendState)
@@ -1468,6 +1469,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 			}
 			tasks, _ := st.TasksOf(portcol.Name)
 			snap.Ports, snap.AddrDone, snap.AddrLeft = portProgress(tasks, int(portcol.Settled()-settled0))
+			snap.PermAsked, snap.PermTotal = permuteProgress(st)
 			return snap
 		})
 	}
@@ -1908,6 +1910,9 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		}
 	}
 	rep.Notes = append(rep.Notes, wild.notes()...)
+	if !out.plan {
+		rep.Notes = append(rep.Notes, permuteNotes(st, *dnsRate, resolvers, rep.Stopped != "")...)
+	}
 	if n := guessBudget.Held(); n > 0 {
 		rep.Notes = append(rep.Notes, fmt.Sprintf("-max-names %d held back %d guesses: the -w words and -permute variations beyond it were not asked; azhaq resume asks them, up to its own -max-names", *maxNames, n))
 		if rep.Stopped == "" {

@@ -320,6 +320,7 @@ func (p *Permute) Run(ctx context.Context, seed types.Seed, emit func(types.Obse
 		}
 		if egress.HasScope() && !egress.Allows(n) {
 			p.tried[n] = true // held out once, not again for the next host
+			settle(n, true)
 			held++
 			continue
 		}
@@ -333,7 +334,13 @@ func (p *Permute) Run(ctx context.Context, seed types.Seed, emit func(types.Obse
 	if len(names) == 0 && held == 0 && over == 0 {
 		return types.RunMeta{Status: types.StatusOK}, nil
 	}
-	answers, wildHits := resolveFound(ctx, p.Pool, p.Wild, domain, names, p.Workers)
+	// A name the stop cut before its answer is not asked: it is left.
+	each := func(a dnsr.Answer) {
+		if ctx.Err() == nil || a.Status != dnsr.StatusFailed {
+			settle(a.Name, false)
+		}
+	}
+	answers, wildHits := resolveFound(dnsr.WithEach(ctx, each), p.Pool, p.Wild, domain, names, p.Workers)
 	found := nameList(answers)
 	payload := map[string]any{
 		"fqdn": host, "names": found, "answers": answerList(answers), "count": len(found), "tried": len(names),

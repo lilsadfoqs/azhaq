@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/lilsadfoqs/azhaq/internal/collectors/asncol"
+	"github.com/lilsadfoqs/azhaq/internal/collectors/brutecol"
 	"github.com/lilsadfoqs/azhaq/internal/collectors/subcol"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"github.com/lilsadfoqs/azhaq/store"
@@ -33,6 +34,9 @@ type progressSnap struct {
 	// not (-1: the tasks name more than addresses). Ports: the run has port work.
 	Ports              bool
 	AddrDone, AddrLeft int
+	// -permute's own unit: the variation names asked, and all those the names
+	// varied so far make (0: no permutation work).
+	PermAsked, PermTotal int
 	// Hunt is the command that lists the rows stored so far, once the first
 	// listener row is stored; "" before.
 	Hunt string
@@ -124,6 +128,9 @@ func (c progressCfg) line(prev, cur progressSnap) string {
 			fmt.Fprintf(&b, ", %d %s done", cur.AddrDone, word)
 		}
 	}
+	if cur.PermTotal > 0 {
+		fmt.Fprintf(&b, ", %d of %d permutation names asked", cur.PermAsked, cur.PermTotal)
+	}
 	if cur.Hunt != "" {
 		fmt.Fprintf(&b, "; %s for the rows so far", cur.Hunt)
 	}
@@ -143,8 +150,10 @@ type progressObject struct {
 	AddrLeft   *int     `json:"addresses_left,omitempty"` // and those of the tasks known not yet finished
 	EndsBy     string   `json:"ends_by,omitempty"`
 	EndsInSecs *int     `json:"ends_in_seconds,omitempty"`
-	Hunt       string   `json:"hunt,omitempty"`        // the command that lists the rows stored so far, once a listener is named
-	WaitingFor []string `json:"waiting_for,omitempty"` // subdomain sources not answered yet
+	PermAsked  *int     `json:"permutation_names_asked,omitempty"` // -permute: variation names asked
+	PermTotal  *int     `json:"permutation_names,omitempty"`       // and all those the names varied so far make
+	Hunt       string   `json:"hunt,omitempty"`                    // the command that lists the rows stored so far, once a listener is named
+	WaitingFor []string `json:"waiting_for,omitempty"`             // subdomain sources not answered yet
 }
 
 // object is the same line for -json.
@@ -159,6 +168,9 @@ func (c progressCfg) object(prev, cur progressSnap) progressObject {
 		if cur.AddrLeft >= 0 {
 			o.AddrLeft = &cur.AddrLeft
 		}
+	}
+	if cur.PermTotal > 0 {
+		o.PermAsked, o.PermTotal = &cur.PermAsked, &cur.PermTotal
 	}
 	if by, in, ok := c.ends(prev, cur); ok {
 		secs := int(in.Seconds())
@@ -268,4 +280,21 @@ func blockBits(pf netip.Prefix) int {
 		return 120
 	}
 	return 24
+}
+
+// permuteProgress is the variation names asked, and all those the names
+// varied so far make: the names of -permute's tasks not done are counted
+// until they are asked.
+func permuteProgress(st *store.Store) (asked, total int) {
+	tasks, err := st.TasksOf(brutecol.PermuteName)
+	if err != nil || len(tasks) == 0 {
+		return 0, 0
+	}
+	var open []types.Seed
+	for _, t := range tasks {
+		if !t.Done {
+			open = append(open, t.Seed)
+		}
+	}
+	return brutecol.PermuteProgress(brutecol.PermuteHosts(open))
 }

@@ -118,8 +118,10 @@ type costEstimate struct {
 	// write lines of their own, which it leaves out.
 	LedgerBytes int64  `json:"ledger_bytes,omitempty"`
 	Basis       string `json:"basis"`
-	ceil        ceiling
-	cap         int64 // -max-requests: the most requests, connects and datagrams a run sends to its targets
+	// Permute is the size of -permute's job, when it is planned.
+	Permute *permuteCost `json:"permute,omitempty"`
+	ceil    ceiling
+	cap     int64 // -max-requests: the most requests, connects and datagrams a run sends to its targets
 }
 
 // ceiling is the most a part of an estimate sends, from the flags that bound
@@ -300,6 +302,7 @@ type estimator struct {
 	collCap map[string]map[string]*ceiling
 	atLeast bool
 	cap     int64 // -max-requests
+	permute *permuteCost
 }
 
 func newEstimator() *estimator {
@@ -433,7 +436,7 @@ func (e *estimator) putBound(stage, collector string, a amount, open string, cl 
 }
 
 func (e *estimator) result() costEstimate {
-	out := costEstimate{AtLeast: e.atLeast, Basis: estimateBasis, cap: e.cap}
+	out := costEstimate{AtLeast: e.atLeast, Basis: estimateBasis, cap: e.cap, Permute: e.permute}
 	var names []string
 	for n := range e.stages {
 		names = append(names, n)
@@ -493,6 +496,7 @@ func estimateCost(seeds []types.Seed, planned [][]string, runs func(string) bool
 		return false
 	}
 	permuteNoted := false
+	var permuteSeeds []types.Seed
 	guessLeft := env.guessBudget // -max-names holds the guesses of -dns-brute and -permute together
 	guess := func(n int) int64 {
 		if env.guessBudget > 0 {
@@ -556,7 +560,7 @@ func estimateCost(seeds []types.Seed, planned [][]string, runs func(string) bool
 			case "azhaq-permute":
 				// The variations of a name given are known; the names a source or
 				// a lookup gives later bring variations of their own.
-				e.add(c, amount{DNS: guess(brutecol.PermuteCount(s.Key()))}, permuteOpen)
+				permuteSeeds = append(permuteSeeds, s)
 				permuteNoted = true
 			case "azhaq-tls":
 				if env.rules.AllowsAddr(s.Key(), "443") {
@@ -617,6 +621,13 @@ func estimateCost(seeds []types.Seed, planned [][]string, runs func(string) bool
 			}
 		}
 	}
+	if permuteNoted {
+		// The names two of the seeds make alike are asked once, as Permute asks them.
+		hosts := brutecol.PermuteHosts(permuteSeeds)
+		pc := newPermuteCost(hosts, env.dnsRate, env.resolvers)
+		e.add("azhaq-permute", amount{DNS: guess(pc.Variations)}, permuteOpen)
+		e.permute = &pc
+	}
 	if n := dnsFloor(names); n > 0 {
 		e.add("azhaq-dns", amount{DNS: n}, "wildcard checks past the first of a zone, CNAME chains, and a second resolver asked about a name that does not answer")
 	}
@@ -627,6 +638,8 @@ func estimateCost(seeds []types.Seed, planned [][]string, runs func(string) bool
 		for _, s := range seeds {
 			if s.Type == types.TypeDomain || s.Type == types.TypeHostname {
 				e.add("azhaq-permute", amount{}, permuteOpen)
+				pc := newPermuteCost(nil, env.dnsRate, env.resolvers)
+				e.permute = &pc
 				break
 			}
 		}
@@ -811,6 +824,9 @@ func printEstimate(w io.Writer, lead string, est costEstimate) {
 			line += "; not counted: " + st.NotCounted
 		}
 		fmt.Fprintln(w, line)
+	}
+	if est.Permute != nil {
+		fmt.Fprintln(w, "  permute      "+est.Permute.text())
 	}
 	if est.LedgerBytes > 0 {
 		fmt.Fprintf(w, "  ledger: about %s for the %s connects (about %d bytes each; the requests, probes and queries add their own lines)\n",

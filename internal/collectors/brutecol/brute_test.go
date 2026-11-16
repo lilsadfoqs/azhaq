@@ -221,7 +221,7 @@ func TestVariantsCoverAlterxDefaults(t *testing.T) {
 	if err := yaml.Unmarshal(raw, &cfg); err != nil {
 		t.Fatal(err)
 	}
-	for _, host := range []string{"api.example.org", "web-01.example.org", "a.b.example.org"} {
+	for _, host := range []string{"api.example.org", "web-01.example.org", "a.b.example.org", "name.example.org"} {
 		i := strings.IndexByte(host, '.')
 		sub, suffix := host[:i], host[i+1:]
 		want := map[string]bool{}
@@ -255,6 +255,10 @@ func TestVariantsCoverAlterxDefaults(t *testing.T) {
 		}
 		if len(have) < len(want) {
 			t.Errorf("%s: %d variations, alterx's defaults make %d", host, len(have), len(want))
+		}
+		// The docs state the sizes: 696 for alterx, 814 for azhaq.
+		if host == "name.example.org" && (len(want) != 696 || len(have) != 814) {
+			t.Errorf("%s: alterx's defaults make %d (want 696), azhaq %d (want 814)", host, len(want), len(have))
 		}
 	}
 }
