@@ -1154,6 +1154,7 @@ crawl.target-port	docs/commands/crawl.md	With no `-allow` and no `-scope`, `-u h
 crawl.target-port-default	docs/commands/crawl.md	A URL on the scheme's default port (`-u https://HOST/`) holds the host to 80 and 443.	test:scope:TestTargetPorts;test:internal/egress:TestTargetPortsOfURLs
 crawl.counts-sort-every-row	docs/commands/crawl.md	The summary's `counts` sort every URL row of the crawl's scope:	test:cmd/azhaq:TestCrawlSummaryCountsEachKindOfRow;test:internal/contract:TestCrawlCountsAddUpToTheRows
 # docs/commands/fuzz.md
+fuzz.resolvers-only	docs/commands/fuzz.md	With `-resolvers` a name in the request is looked up at those resolvers only, as in every command that takes the flag: the system's resolver is never asked, and a name they do not answer fails.	test:cmd/azhaq:TestResolversAnswerEveryNameInEveryCommand,TestDeadResolversDoNotFallBackToTheSystem
 fuzz.outside-scope-not-sent	docs/commands/fuzz.md	A request to a host outside the scope is not sent.	test:cmd/azhaq:TestFuzzHostFromWordlistIsHeldToTheScope;test:internal/fuzz:TestScopeKeepsRequestsToHosts
 fuzz.output-forms	docs/commands/fuzz.md	`-v` adds the URL, `-s` prints the inputs only, and several keywords print one block each.	test:cmd/azhaq:TestFuzzOutputForms,TestFuzzInputCmdShowsThePositionAndKeywordsPrintBlocks
 fuzz.input-cmd-position	docs/commands/fuzz.md	With `-input-cmd` the position is shown, not the command's output.	test:cmd/azhaq:TestFuzzInputCmdShowsThePositionAndKeywordsPrintBlocks
