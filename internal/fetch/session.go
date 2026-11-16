@@ -118,10 +118,11 @@ type sessionGuard struct {
 	sentAt   map[string]time.Time // when each GET in asked was sent (its latest), for the count since a good page
 	goodN    int                  // set by flipped: GETs sent after the page that flipped; the report's count, not the redo list
 	goodSet  bool
-	probeSeq int64          // goods asked again so far
-	seen     map[string]int // answers that may be the end of the session, counted
-	doubts   int            // checks such an answer has cost
-	pass     bool           // an answer that may be the end asked for a check (doubt)
+	probeSeq int64           // goods asked again so far
+	seen     map[string]int  // answers that may be the end of the session, counted
+	doubts   int             // checks such an answer has cost
+	pass     bool            // an answer that may be the end asked for a check (doubt)
+	wired    map[string]bool // first hops whose doubt the wire already counted
 }
 
 // suspect is a URL answered as if the session were over (a 401, a redirect to
@@ -1031,7 +1032,13 @@ func sessionSaw(ctx context.Context, raw string, res Result) {
 	g.mu.Unlock()
 	g.keepGood(raw, res)
 	if res.Method == "" || res.Method == http.MethodGet {
-		g.doubt(raw, res.Status, res.Header.Get("Location"))
+		first := raw
+		if len(res.Hops) > 0 {
+			first = res.Hops[0].URL
+		}
+		if !g.wiredDoubt(first) {
+			g.doubt(raw, res.Status, res.Header.Get("Location"), false)
+		}
 	}
 	if clearsSession(res.Header) || clearsSession(res.FinalHeader) {
 		g.mu.Lock()
@@ -1094,9 +1101,18 @@ func sessionWire(req *http.Request, resp *http.Response) {
 	case replacesSession(resp.Header):
 		g.ends(raw, pathOf(raw)+" set the session cookie to another value", true)
 	default:
-		g.answered(raw, resp.StatusCode, resp.Header.Get("Location"), true)
+		loc := resp.Header.Get("Location")
+		g.answered(raw, resp.StatusCode, loc, true)
+		if req.Method == http.MethodGet && !laterHop(req.Context()) {
+			g.doubt(raw, resp.StatusCode, loc, true)
+		}
 	}
 }
+
+type laterHopKey struct{}
+
+// laterHop says the request follows a redirect of the one the run asked.
+func laterHop(ctx context.Context) bool { return ctx.Value(laterHopKey{}) != nil }
 
 // SawAnswer tells the guard of an answer to a request that did not go
 // through Do (a page Chrome loaded): a 401, or a redirect to the sign-in
@@ -1106,7 +1122,7 @@ func sessionWire(req *http.Request, resp *http.Response) {
 func SawAnswer(raw string, status int, location string) {
 	if g := guardP.Load(); g != nil && !g.renewing.Load() {
 		g.answered(raw, status, location, false)
-		g.doubt(raw, status, location)
+		g.doubt(raw, status, location, false)
 		g.notify("")
 	}
 }

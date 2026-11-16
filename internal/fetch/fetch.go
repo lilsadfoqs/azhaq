@@ -710,6 +710,8 @@ func do(ctx context.Context, c *http.Client, raw string, rq *Req) (Result, error
 		var prep func(*http.Request)
 		if i == 0 {
 			prep = rq.apply
+		} else {
+			rctx = context.WithValue(rctx, laterHopKey{}, true)
 		}
 		resp, rbody, truncated, reqDump, err := attempt(ctx, rctx, c, method, current, body, prep, kept != nil)
 		if kept != nil && i == 0 {
