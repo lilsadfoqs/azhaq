@@ -87,7 +87,8 @@ func (r *report) hasFailure() bool {
 //   - a failure names no target (the run's own: a lost session, a panic, a
 //     report that was not written), or is the -exec connector's, or
 //   - a note says the results are short or misleading (r.warned: names cut,
-//     names not checked, a dead session, a picture short of its page).
+//     names not checked, a dead session, a picture short of its page, a
+//     urls archive cut after giving URLs).
 //
 // A run that was given nothing it can count (an address list, a range) says
 // nothing of answers, so any failure fails it, as before.

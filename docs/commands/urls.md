@@ -76,7 +76,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 - `complete` and the exit code, by how the archives answered. An archive that gave URLs and then failed (a timeout, a cut connection, a 504) did not answer in full; one that failed at once gave nothing, so it left no part of the set in doubt.
   - Every archive answered: `complete` is true, exit 0.
   - One failed at once, another answered in full: `complete` is true, exit 0, and `failures` counts it.
-  - One failed after giving URLs: `complete` is false, because the set holds only part of what that archive has (it is in `partial_sources`). The exit code is still 0 while another archive answered in full, and 3 with `-strict-exit`.
+  - One failed after giving URLs: `complete` is false and the exit code is 3, because the set holds only part of what that archive has (it is in `partial_sources`) and the results are short, though another archive answered in full. The text summary says so on its sources line.
   - Every archive failed, or each one that gave URLs failed after giving them: `complete` is false and the exit code is 3.
 
 ## Details

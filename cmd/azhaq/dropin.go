@@ -795,8 +795,10 @@ func cmdURLs(args []string) error {
 	}
 	rep.Sources = archiveHealth(payloads(st, "azhaq-urls"))
 	rep.units(archiveDomains(payloads(st, "azhaq-urls"))) // a domain no archive answered for failed
-	// An archive cut after giving URLs left the set short: it did not answer in full.
-	rep.shortSet = rep.Sources != nil && len(rep.Sources.PartialSources) > 0
+	// An archive cut after giving URLs left the set short: the results are short, exit 3.
+	if rep.Sources != nil && len(rep.Sources.PartialSources) > 0 {
+		rep.warned = true
+	}
 	if n := rep.Sources.archivesNote(); n != "" {
 		rep.Notes = append(rep.Notes, n)
 	}

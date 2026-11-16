@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 // cutWayback serves a Wayback Machine that gives its first page and then
@@ -18,6 +19,11 @@ func cutWayback(t *testing.T, how string, bad bool) []string {
 		switch {
 		case r.URL.Path == "/wayback" && !bad && r.URL.Query().Get("page") == "0":
 			fmt.Fprint(w, `[["original"],["http://example.org/w1"],["http://example.org/w2"]]`)
+		case r.URL.Path == "/wayback" && how == "slow":
+			select {
+			case <-r.Context().Done():
+			case <-time.After(5 * time.Second):
+			}
 		case r.URL.Path == "/wayback" && how == "cut":
 			conn, _, err := w.(http.Hijacker).Hijack()
 			if err == nil {
@@ -44,14 +50,14 @@ func runCutWayback(t *testing.T, how string, bad bool, extra ...string) (int, re
 }
 
 // An archive that fails after giving URLs did not answer in full: the set is
-// short, so complete is false, though the exit stays 0 while another archive
-// answered in full (3 with -strict-exit).
+// short, so the run exits 3 and complete is false though another archive
+// answered in full; the summary's last line says the results are short.
 func TestURLsArchiveCutAfterURLsMakesCompleteFalse(t *testing.T) {
-	for _, how := range []string{"504", "cut"} {
+	for _, how := range []string{"504", "cut", "slow"} {
 		t.Run(how, func(t *testing.T) {
-			code, rep, out := runCutWayback(t, how, false)
-			if code != exitOK || rep.Complete || rep.Failures != 1 || rep.Exit != exitOK {
-				t.Errorf("exit %d, complete %v, failures %d, want exit 0, complete false, 1 failure", code, rep.Complete, rep.Failures)
+			code, rep, out := runCutWayback(t, how, false, "-urls-timeout", "1s")
+			if code != exitPartial || rep.Complete || rep.Failures != 1 || rep.Exit != exitPartial {
+				t.Errorf("exit %d, complete %v, failures %d, want exit 3, complete false, 1 failure", code, rep.Complete, rep.Failures)
 			}
 			if rep.Sources == nil || !slices.Equal(rep.Sources.PartialSources, []string{"wayback"}) || rep.Sources.Answered != 1 {
 				t.Errorf("sources %+v", rep.Sources)
@@ -59,7 +65,7 @@ func TestURLsArchiveCutAfterURLsMakesCompleteFalse(t *testing.T) {
 			if !strings.Contains(out, "http://example.org/w1") || !strings.Contains(out, "http://example.org/o1") {
 				t.Errorf("what the archives gave is not listed: %s", out)
 			}
-			if code, rep, _ := runCutWayback(t, how, false, "-strict-exit"); code != exitPartial || rep.Complete {
+			if code, rep, _ := runCutWayback(t, how, false, "-strict-exit", "-urls-timeout", "1s"); code != exitPartial || rep.Complete {
 				t.Errorf("-strict-exit: exit %d, complete %v, want 3 and false", code, rep.Complete)
 			}
 		})
@@ -84,5 +90,15 @@ func TestURLsEveryArchiveAnsweredIsComplete(t *testing.T) {
 	})
 	if rep := lastReport(t, errOut); exitCode(err) != exitOK || !rep.Complete || rep.Failures != 0 {
 		t.Errorf("exit %d, complete %v, failures %d", exitCode(err), rep.Complete, rep.Failures)
+	}
+}
+
+// The text summary's sources line says why a partial archive makes exit 3.
+func TestURLsPartialArchiveSummaryLineSaysResultsAreShort(t *testing.T) {
+	t.Chdir(t.TempDir())
+	args := append([]string{"urls", "-d", "example.org", "-providers", "wayback,otx", "-urls-pause", "0", "-retries", "0"}, cutWayback(t, "504", false)...)
+	_, errOut, err := captureBoth(t, func() error { return run(args) })
+	if exitCode(err) != exitPartial || !strings.Contains(errOut, "exit 3 because the results are short: wayback failed after giving URLs") {
+		t.Errorf("exit %d:\n%s", exitCode(err), errOut)
 	}
 }

@@ -254,6 +254,11 @@ func (p *probeOut) row(r engine.ProbeRow, m map[string]any, input string, addrs,
 	if u != nil && p.pf.ldp && u.Port() == "" {
 		shown = strings.Replace(shown, "://"+u.Host, "://"+net.JoinHostPort(u.Hostname(), port), 1)
 	}
+	// -path and -p rewrite the URL asked; the fragment of the input is not
+	// sent but httpx keeps it on the row's url.
+	if _, frag, ok := strings.Cut(strings.TrimSpace(input), "#"); ok && strings.Contains(input, "://") && !strings.Contains(shown, "#") {
+		shown += "#" + frag
+	}
 	out := map[string]any{
 		"timestamp": time.Now().Format(time.RFC3339Nano), "url": shown, "input": input,
 		"host": host, "host_ip": r.IP, "port": port, "scheme": scheme, "path": path, "method": method,

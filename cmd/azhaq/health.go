@@ -202,6 +202,8 @@ func (h *sourceHealth) line(exit int, archives bool) string {
 		s += "; exit 3 because -strict-exit makes a failed source a failure even when others answered for the same domain: the names they gave stand, and the failed source's may be missing"
 	case exit == exitPartial && h.Answered == 0:
 		s += "; exit 3 because no source answered"
+	case exit == exitPartial && len(h.PartialSources) > 0:
+		s += "; exit 3 because the results are short: " + strings.Join(h.PartialSources, ", ") + " failed after giving URLs, so what only it holds is missing"
 	case exit == exitOK:
 		s += "; exit 0 because the run did its job: the names the others gave stand, and a failed source's may be missing (-strict-exit makes it 3)"
 	}
