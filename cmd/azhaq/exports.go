@@ -244,12 +244,12 @@ func exportToList(path, format, origin string, safe bool, lo listOpts, w io.Writ
 		// workspace writes the explicit empty record set, so there is
 		// always a line to read.
 		set := buildFindings(g)
-		fmt.Fprintf(os.Stderr, "azhaq export: %s%s\n", set.counts(), foldedNote(set.Folds))
+		fmt.Fprintf(os.Stderr, "azhaq export: %s%s\n", set.headline(), foldedNote(set.Folds))
 		_, err := w.Write(findingsJSONL(set))
 		return err
 	case "findings-md":
 		set := buildFindings(g)
-		fmt.Fprintf(os.Stderr, "azhaq export: %s%s\n", set.counts(), foldedNote(set.Folds))
+		fmt.Fprintf(os.Stderr, "azhaq export: %s%s\n", set.headline(), foldedNote(set.Folds))
 		_, err := w.Write(findingsMarkdown(set))
 		return err
 	default:

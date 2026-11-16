@@ -135,7 +135,7 @@ func TestFindingTiersCountIssuesAndRecordsNameTheirLead(t *testing.T) {
 	if len(lines) != 7 || lines[0]["lead"] == nil {
 		t.Errorf("%d export lines, want one for each advisory record, each with its lead: %v", len(lines), lines[0])
 	}
-	if md := string(findingsMarkdown(set)); !strings.Contains(md, "0 findings, 2 identifications, 0 leads") {
+	if md := string(findingsMarkdown(set)); !strings.Contains(md, "0 findings, 2 identifications (7 records), 0 leads") {
 		t.Errorf("markdown counts %q", md[:200])
 	}
 }

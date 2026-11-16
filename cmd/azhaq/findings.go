@@ -124,6 +124,22 @@ func (s findingSet) counts() tierCounts {
 	return countTiers(rows, reportIdentificationsOf, reportLeadsOf)
 }
 
+// headline is the counts, each with its record count where a tier lists more
+// records than it has issues ("2 identifications (17 records)"): the JSONL
+// holds a row for every record.
+func (s findingSet) headline() string {
+	c := s.counts()
+	tier := func(issues, records int, word string) string {
+		out := plural(issues, word)
+		if records != issues {
+			out += fmt.Sprintf(" (%s)", plural(records, "record"))
+		}
+		return out
+	}
+	return fmt.Sprintf("%s, %s, %s", tier(c.Findings, len(s.Findings), "finding"),
+		tier(c.Identifications, len(s.Identifications), "identification"), tier(c.Leads, len(s.Leads), "lead"))
+}
+
 // issueKey is what a record counts as: "" for a record that is its own issue.
 func issueKey(r findingRecord) string {
 	switch {
@@ -353,7 +369,7 @@ func findingsMarkdown(set findingSet) []byte {
 	if rows == 0 {
 		b.WriteString("No qualifying rows: the workspace holds nothing a tier lists, and no unproved hint the map lists. 0 findings, 0 identifications, 0 leads.\n\n")
 	} else {
-		fmt.Fprintf(&b, "%s, each read from a stored row of the workspace. A finding is what its own answer shows, as measured: the thing named, and nothing the row says was not checked. An identification is a product and version a service stated, with the advisory match where there is one (version-read names a version a read stated inside the advisory's range, version-only the product and version alone, conditional a precondition the read did not show; proved is a read that answered with no credential or a sign-in with a published default). A lead is inferred from a name, a path or a guess, and names the check that would prove it. Counted: %s.\n\n", set.counts(), set.counts().Counted())
+		fmt.Fprintf(&b, "%s. A finding is what its own answer shows, as measured: the thing named, and nothing the row says was not checked. An identification is a product and version a service stated, with the advisory match where there is one (version-read names a version a read stated inside the advisory's range, version-only the product and version alone, conditional a precondition the read did not show; proved is a read that answered with no credential or a sign-in with a published default). A lead is inferred from a name, a path or a guess, and names the check that would prove it. Counted: %s.\n\n", set.headline(), set.counts().Counted())
 	}
 	if len(set.Findings) > 0 {
 		fmt.Fprintf(&b, "## Findings (%d)\n\n", len(set.Findings))
