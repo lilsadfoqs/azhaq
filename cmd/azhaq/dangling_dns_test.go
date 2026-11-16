@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/lilsadfoqs/azhaq/store"
 	"github.com/miekg/dns"
 )
 
@@ -221,5 +222,30 @@ func TestFindingsTierHeaderIsNotAVerdictOnADanglingRow(t *testing.T) {
 	rep, _, err := captureBoth(t, func() error { return run([]string{"report", "-findings", "-db", db, "-format", "jsonl"}) })
 	if err != nil || !strings.Contains(rep, `"type":"finding"`) {
 		t.Errorf("report -findings (%v): %s", err, rep)
+	}
+}
+
+// A dns run keeps its own arguments, not the process's: in-process (tests,
+// mcp) os.Args belongs to another command, and the findings echo the command.
+func TestDNSKeepsItsOwnArgumentsWithTheRun(t *testing.T) {
+	res := danglingLab(t)
+	db := filepath.Join(t.TempDir(), "w.db")
+	t.Chdir(t.TempDir())
+	if _, _, code := dnsOut(t, "-d", "old.example.org", "-r", res, "-db", db, "-json"); code != exitOK {
+		t.Fatalf("exit %d", code)
+	}
+	st, err := store.Open(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	runs, err := st.Runs()
+	if err != nil || len(runs) == 0 {
+		t.Fatalf("runs %v %v", runs, err)
+	}
+	st.UseRun(runs[len(runs)-1].ID)
+	got := strings.Join(st.RunArgs(), " ")
+	if !strings.HasPrefix(got, "dns ") || !strings.Contains(got, "-d old.example.org") || strings.Contains(got, "-test.") {
+		t.Errorf("run args %q, want dns and its own flags", got)
 	}
 }
