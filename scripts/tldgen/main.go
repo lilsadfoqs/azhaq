@@ -16,9 +16,10 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"regexp"
 	"strings"
 	"time"
+
+	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 )
 
 const source = "https://data.iana.org/TLD/tlds-alpha-by-domain.txt"
@@ -59,8 +60,8 @@ func run(url, out string) error {
 }
 
 var (
-	header = regexp.MustCompile(`^# Version \d{10}, Last Updated .+ UTC$`)
-	label  = regexp.MustCompile(`^[A-Z0-9-]{2,63}$`)
+	header = lazyre.New(`^# Version \d{10}, Last Updated .+ UTC$`)
+	label  = lazyre.New(`^[A-Z0-9-]{2,63}$`)
 )
 
 // check says text is IANA's list: a version header, then one upper-case

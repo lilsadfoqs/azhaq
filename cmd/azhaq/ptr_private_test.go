@@ -46,7 +46,10 @@ func newPTRStub(t *testing.T) *ptrStub {
 		if q.Qtype == dns.TypePTR {
 			m.Answer = append(m.Answer, &dns.PTR{Hdr: dns.RR_Header{Name: q.Name, Rrtype: dns.TypePTR, Class: dns.ClassINET, Ttl: 60}, Ptr: "host.lab.test."})
 		}
-		if v, ok := s.a[strings.TrimSuffix(strings.ToLower(q.Name), ".")]; ok && q.Qtype == dns.TypeA {
+		s.mu.Lock()
+		v, ok := s.a[strings.TrimSuffix(strings.ToLower(q.Name), ".")]
+		s.mu.Unlock()
+		if ok && q.Qtype == dns.TypeA {
 			rr, _ := dns.NewRR(q.Name + " 60 IN A " + v)
 			m.Answer = append(m.Answer, rr)
 		}
@@ -66,6 +69,14 @@ func (s *ptrStub) asSystem(t *testing.T) *ptrStub {
 		return d.DialContext(ctx, "udp", s.addr)
 	}})
 	t.Cleanup(restore)
+	return s
+}
+
+// answer sets the A answers; the stub may already be serving.
+func (s *ptrStub) answer(a map[string]string) *ptrStub {
+	s.mu.Lock()
+	s.a = a
+	s.mu.Unlock()
 	return s
 }
 

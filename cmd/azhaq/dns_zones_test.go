@@ -38,7 +38,7 @@ func dnsTargets(t *testing.T, path string) map[string][]string {
 func TestDNSAsksTheSystemResolverForNamesInUndelegatedZones(t *testing.T) {
 	t.Chdir(t.TempDir())
 	sys := newPTRStub(t)
-	sys.a = map[string]string{"app.corp.internal": "10.1.2.3", "printer.home.arpa": "192.168.1.9", "nas.lan": "10.0.0.7"}
+	sys.answer(map[string]string{"app.corp.internal": "10.1.2.3", "printer.home.arpa": "192.168.1.9", "nas.lan": "10.0.0.7"})
 	sys.asSystem(t)
 	led := t.TempDir() + "/l.ledger"
 	args := append([]string{"-d", "app.corp.internal,printer.home.arpa,nas.lan,dc01.corp,app.example.com", "-json", "-timeout", "300ms", "-ledger", led}, denyDefaultResolvers...)
@@ -135,7 +135,7 @@ func TestPlanSaysUndelegatedZonesGoToTheSystemResolver(t *testing.T) {
 func TestRunAsksTheSystemResolverForGuessedNamesInUndelegatedZones(t *testing.T) {
 	t.Chdir(t.TempDir())
 	sys := newPTRStub(t)
-	sys.a = map[string]string{"www.app.corp.internal": "127.0.0.2", "mail.app.corp.internal": "127.0.0.3"}
+	sys.answer(map[string]string{"www.app.corp.internal": "127.0.0.2", "mail.app.corp.internal": "127.0.0.3"})
 	sys.asSystem(t)
 	led := t.TempDir() + "/l.ledger"
 	args := append([]string{"run", "-domain", "app.corp.internal", "-allow", "app.corp.internal", "-sources", "none", "-no-paths", "-web-ports", "65534", "-dns-brute", writeList(t, "www", "mail", "nope"), "-json", "-timeout", "60s", "-ledger", led}, denyDefaultResolvers...)
