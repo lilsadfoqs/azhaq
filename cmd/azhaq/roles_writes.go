@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"regexp"
 	"slices"
 	"sort"
 	"strings"
@@ -483,7 +484,7 @@ func replayWritesPaused(who map[string]identity, roles []role, reqs []writeReq, 
 		// A POST to a collection makes a new object: never another role's
 		// object written.
 		if w.method == http.MethodPost {
-			if err := replayCollectionPaused(&row, roles, w, answers, read, send, who, paused); err != nil {
+			if err := replayCollectionPaused(&row, roles, w, answers, read, send, who, paused, verify); err != nil {
 				stop = err
 				rows = append(rows, finishWriteRow(row))
 				break
@@ -543,7 +544,12 @@ func replayWritesPaused(who map[string]identity, roles []role, reqs []writeReq, 
 			_, canaryField, canaryable = withCanary(w.body, "azhaqcanaryprobe", allow...)
 		}
 		already := haveBefore && !w.empty && w.method != http.MethodDelete && !canaryable && alreadySet(before, w.body)
+		// A step the user gave decides only where the owner's object cannot show
+		// the change: it never overrules a readback that shows none.
+		needVerify := len(verify) > 0 && unreadable(w, vu, before) != ""
 		var let, proven, rejected []string
+		sentAs := map[string]writeReq{}
+		pres := map[string][]stepPre{}
 		var landed []senderLand
 		anon := map[string]bool{}
 		for _, r := range otherRoles(roles, w.owner) {
@@ -555,6 +561,10 @@ func replayWritesPaused(who map[string]identity, roles []role, reqs []writeReq, 
 			if canaryable {
 				wr.body, _, _ = withCanary(w.body, canaryToken(), allow...)
 			}
+			if needVerify {
+				pres[r.name] = verifyBefore(verify, wr, r, w.owner, who, canaryField, read, send)
+			}
+			sentAs[r.name] = wr
 			a, err := send(r, wr)
 			if err != nil {
 				stop = err
@@ -571,6 +581,9 @@ func replayWritesPaused(who map[string]identity, roles []role, reqs []writeReq, 
 			let = append(let, r.name)
 			if r.anonymous() {
 				anon[r.name] = true
+			}
+			if passwordOf(wr.body) != "" {
+				row.OwnerBy += fmt.Sprintf("; %s's write sets a password: the account it landed on now has that password, and azhaq does not restore it", r.name)
 			}
 			if vu == "" {
 				continue // the owner's object cannot be read: let, but unproven
@@ -595,7 +608,7 @@ func replayWritesPaused(who map[string]identity, roles []role, reqs []writeReq, 
 			} else if canaryable {
 				// A write the owner's object does not show may have landed on
 				// the sender's own: read it, past the same route.
-				l, note := senderLanding(r, wr, vu, canaryField, read)
+				l, note := senderLanding(r, wr, vu, canaryField, stepLandings(verify, r, who), read)
 				if note != "" {
 					row.OwnerBy += "; " + note
 				}
@@ -611,11 +624,14 @@ func replayWritesPaused(who map[string]identity, roles []role, reqs []writeReq, 
 		// A map DELETE is never asked of its owner: it would delete it.
 		ownerAsked := w.status != 0 || w.empty
 		why := unreadable(w, vu, before)
-		if len(let) > 0 && len(proven) == 0 && len(verify) > 0 {
+		if len(let) > 0 && len(proven) == 0 && len(verify) > 0 && !needVerify {
+			row.OwnerBy += "; the -replay-writes-verify step was not applied: the owner's object, read before and after the write, shows no change in what the write sets, and a step cannot overrule that"
+		}
+		if len(let) > 0 && len(proven) == 0 && needVerify {
 			refuted := false
 			for _, name := range let {
 				sender := byName[name]
-				out, vnotes := verifyOutcome(verify, w, sender, w.owner, who, read, send)
+				out, vnotes := verifyOutcome(verify, sentAs[name], sender, w.owner, who, canaryField, pres[name], read, send)
 				for _, n := range vnotes {
 					if !strings.Contains(row.OwnerBy, n) {
 						row.OwnerBy += "; " + n
@@ -677,7 +693,7 @@ func replayWritesPaused(who map[string]identity, roles []role, reqs []writeReq, 
 // object belongs to the role whose request was replayed. Else it is "create
 // accepted": the object may well be its sender's own, which is what a
 // collection every signed-in user may post to does.
-func replayCollectionPaused(row *roleRow, roles []role, w writeReq, answers map[string]map[string]answer, read func(role, string) (answer, bool), send func(role, writeReq) (answer, error), who map[string]identity, paused map[string]bool) error {
+func replayCollectionPaused(row *roleRow, roles []role, w writeReq, answers map[string]map[string]answer, read func(role, string) (answer, bool), send func(role, writeReq) (answer, error), who map[string]identity, paused map[string]bool, verify []verifyWrite) error {
 	var let, shown, unlocated []string
 	ownerRole, hasOwner := role{}, false
 	for _, r := range roles {
@@ -750,9 +766,26 @@ func replayCollectionPaused(row *roleRow, roles []role, w writeReq, answers map[
 			row.OwnerBy += fmt.Sprintf("; %s's create is readable back at %s (%s)", r.name, pathOf(c.url), c.how)
 			return true
 		}
-		for _, c := range responseCandidates(w, a) {
+		// The user's own read step says where the object is: it goes first.
+		stepCands, stepNotes := stepCandidates(verify, w, a, r)
+		for _, n := range stepNotes {
+			if !strings.Contains(row.OwnerBy, n) {
+				row.OwnerBy += "; " + n
+			}
+		}
+		for _, c := range stepCands {
 			if try(c) {
 				break
+			}
+			if n := fmt.Sprintf("%s read %s as %s and it did not answer 2xx", c.how, pathOf(c.url), r.name); !strings.Contains(row.OwnerBy, n) {
+				row.OwnerBy += "; " + n
+			}
+		}
+		if obj == nil {
+			for _, c := range responseCandidates(w, a) {
+				if try(c) {
+					break
+				}
 			}
 		}
 		if obj == nil {
@@ -989,12 +1022,93 @@ func responseCandidates(w writeReq, a answer) []candidate {
 			}
 		}
 	}
+	add(routeCandidate(w, a))
 	for _, c := range bodyCandidates(w) {
 		c.how = "the write's " + c.field
 		add(c)
 	}
 	return out
 }
+
+// routeCandidate is the object a create made at a route the maps already
+// know: the route's last segment is a parameter ({username}) that a field of
+// the request or of the answer names, and the create's own URL fills it
+// (POST /users/v1/register fills /users/v1/{username}). Zero when the write's
+// route is not like that.
+func routeCandidate(w writeReq, a answer) candidate {
+	tu, err1 := url.Parse(w.route)
+	wu, err2 := url.Parse(w.url)
+	if w.route == "" || err1 != nil || err2 != nil {
+		return candidate{}
+	}
+	ts, ws := strings.Split(strings.Trim(tu.Path, "/"), "/"), strings.Split(strings.Trim(wu.Path, "/"), "/")
+	last := ts[len(ts)-1]
+	if len(ts) != len(ws) || !strings.HasPrefix(last, "{") || !strings.HasSuffix(last, "}") || slices.Compare(ts[:len(ts)-1], ws[:len(ws)-1]) != 0 {
+		return candidate{}
+	}
+	name := strings.Trim(last, "{}")
+	v := writtenValue(w.body, name)
+	if v == "" && a.self != nil {
+		v = a.self.fields[norm(name)]
+	}
+	if v == "" || len(v) > 64 || strings.ContainsAny(v, "/?#") {
+		return candidate{}
+	}
+	parent := *wu
+	parent.Path = "/" + strings.Join(ws[:len(ws)-1], "/")
+	return candidate{url: memberURLFor(parent.String(), v), field: name, value: v, how: "the route " + tu.Path + " the maps found, filled with the " + name + " of the create"}
+}
+
+// stepCandidates are the places the user's -replay-writes-verify read steps
+// say a create's object is: the step's URL with {name} taken from the
+// request body, else the answer's, and {writer} the sender; {owner} names no
+// created object, so a step with it is not applied. A
+// login step locates nothing, and a read step's ;field= is not used: notes
+// say so for each step that could not be applied.
+func stepCandidates(steps []verifyWrite, w writeReq, a answer, sender role) ([]candidate, []string) {
+	var out []candidate
+	var notes []string
+	for _, v := range steps {
+		if v.kind != "read" {
+			notes = append(notes, fmt.Sprintf("the verification step %s does not apply to a POST: a sign-in shows no created object", v.raw))
+			continue
+		}
+		if v.field != "" {
+			notes = append(notes, fmt.Sprintf("the verification step %s: ;field= is not used for a POST; the step only says where the created object is", v.raw))
+		}
+		u := strings.ReplaceAll(v.url, "{writer}", sender.name)
+		if strings.Contains(u, "{owner}") {
+			// The owner's user names an existing object, not the one this create made.
+			notes = append(notes, fmt.Sprintf("the verification step %s was not applied to the POST: {owner} names no created object; give the identifier from the body, such as {username}", v.raw))
+			continue
+		}
+		var first, firstVal string
+		missing := ""
+		u = bracedName.ReplaceAllStringFunc(u, func(m string) string {
+			n := m[1 : len(m)-1]
+			val := writtenValue(w.body, n)
+			if val == "" && a.self != nil {
+				val = a.self.fields[norm(n)]
+			}
+			if val == "" {
+				missing = n
+				return m
+			}
+			if first == "" {
+				first, firstVal = n, val
+			}
+			return url.PathEscape(val)
+		})
+		if missing != "" {
+			notes = append(notes, fmt.Sprintf("the verification step %s was not applied to the POST: neither the request body nor the answer holds a %s", v.raw, missing))
+			continue
+		}
+		out = append(out, candidate{url: u, field: first, value: firstVal, how: "the verification step " + v.raw})
+	}
+	return out, notes
+}
+
+var bracedName = regexp.MustCompile(`\{[A-Za-z0-9_.-]+\}`)
 
 func orderedValFields(w writeReq, a answer) []string {
 	seen := map[string]bool{}
@@ -1731,7 +1845,7 @@ func canaryValue(body []byte, field string) string {
 // the owner's object was read at but with the sender's own identifier, and
 // says whether the canary is there. The canary is a value only this replay
 // sent, so it was not there before. note says what was or was not read.
-func senderLanding(r role, w writeReq, vu, field string, read func(role, string) (answer, bool)) (*senderLand, string) {
+func senderLanding(r role, w writeReq, vu, field string, alt []string, read func(role, string) (answer, bool)) (*senderLand, string) {
 	value := canaryValue(w.body, field)
 	if value == "" {
 		return nil, ""
@@ -1745,6 +1859,9 @@ func senderLanding(r role, w writeReq, vu, field string, read func(role, string)
 	var su string
 	if w.ownRead != nil {
 		su = w.ownRead(r.name, vu)
+	}
+	if su == "" && len(alt) > 0 {
+		su = alt[0] // the user's own read step, filled with the sender's user
 	}
 	if su == "" {
 		return notRead("no object of " + r.name + "'s own is known on the route " + pathOf(vu) + " fills")
@@ -1761,6 +1878,24 @@ func senderLanding(r role, w writeReq, vu, field string, read func(role, string)
 			fmt.Sprintf("%s's own object, read at %s, holds the canary value %s", r.name, pathOf(su), value)
 	}
 	return nil, fmt.Sprintf("%s's own object, read at %s, does not show the canary value either", r.name, pathOf(su))
+}
+
+// stepLandings are the read steps of -replay-writes-verify that name the
+// object by {owner}, filled with the sender's own application user when the
+// run learned one: where the sender's own object can be read when no route of
+// the maps gives it.
+func stepLandings(steps []verifyWrite, r role, who map[string]identity) []string {
+	names := who[r.name].own["username"]
+	if len(names) == 0 {
+		return nil
+	}
+	var out []string
+	for _, v := range steps {
+		if v.kind == "read" && strings.Contains(v.url, "{owner}") {
+			out = append(out, v.fill(names[0], r.name))
+		}
+	}
+	return out
 }
 
 // holdsCanary: the object shows the canary value, in the field of that name

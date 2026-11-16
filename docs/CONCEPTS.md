@@ -446,6 +446,8 @@ With `-replay-writes`, three more come before them all:
 - writes another role's object
 - writes another role's object: accepted; the change cannot be read back to confirm
 
+A write is `proved` only when the owner's object was read before and after it and shows the change; a verification step the user gave adds evidence only where that object cannot show the change, and never overrules a readback that shows none. A write the object cannot show, with no step that measured a change, is `accepted; the change cannot be read back to confirm`: answered 2xx, effect not measured.
+
 ## What azhaq sends
 
 | What | Method | When |
