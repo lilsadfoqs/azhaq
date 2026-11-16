@@ -1,0 +1,9 @@
+time 2026-11-16T13:02:13Z
+review_minutes not started
+codex_alive no
+stream_lines 0
+last_line_age_seconds -
+commands_completed 0
+load 7.78 3.02 1.12
+disk_free_gb 81
+phases.log:
