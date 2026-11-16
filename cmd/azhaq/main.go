@@ -1829,7 +1829,10 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 			// asked nothing, and the next goes on from them.
 			rep.Notes = append(rep.Notes, fmt.Sprintf("this resume sent no request: -max-items %d was spent on tasks that sent none (azhaq resume goes on from them; a larger -max-items reaches the tasks that ask)", budgets.MaxItems))
 		}
-		if *resumeRun != "" && st.TasksDone() == doneBefore && egress.Spent() && egress.Killed() == nil {
+		// A task too big for the budget (a sweep of a thousand words) is not
+		// finished by any one process, but each keeps its answers and the
+		// next asks only the rest: that is progress, not a budget too small.
+		if *resumeRun != "" && st.TasksDone() == doneBefore && egress.Spent() && egress.Killed() == nil && engine.AnswersKept() == 0 {
 			rep.Notes = append(rep.Notes, noTaskFinished(rep.Command, egress.MaxRequests()))
 		}
 	} else {
