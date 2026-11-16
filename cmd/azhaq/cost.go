@@ -225,6 +225,9 @@ const estimateBasis = "from the flags and the targets given, as if each target a
 // sends: requests, connects, datagrams and DNS queries together.
 const trivialRun = 1000
 
+// proxyStage is the stage of the ask of the -proxy for its own answer.
+const proxyStage = "proxy"
+
 // signInStage is the name Chrome's sign-ins send under: a stage of their own.
 const signInStage = ledger.SignIn
 
@@ -264,12 +267,14 @@ func stageOfCollector(name string) string {
 		return "notify"
 	case signInStage:
 		return signInStage
+	case proxyStage:
+		return proxyStage
 	}
 	return "other"
 }
 
 // stageOrder is how stages are listed: the order a run goes through them.
-var stageOrder = []string{signInStage, "sources", "names", "web", "ports", "fuzz", "shots", "verify", "notify",
+var stageOrder = []string{signInStage, proxyStage, "sources", "names", "web", "ports", "fuzz", "shots", "verify", "notify",
 	stageRoleMaps, stageHistory, stageReplay, stageControls, stageWrites, stageVerify, "other"}
 
 func stageRank(s string) int {
@@ -709,7 +714,28 @@ func estimateCost(seeds []types.Seed, planned [][]string, runs func(string) bool
 	if env.login != "" {
 		e.put("sign-in", "chrome", amount{Requests: 3}, "the sign-in page's scripts, styles and images, which Chrome asks for as the page names them")
 	}
+	if env.proxyAsk {
+		e.addProxyAsk()
+	}
 	return e.result()
+}
+
+// addProxyAsk counts the one request to the -proxy itself, for its own answer,
+// when the run sends requests at all: a proxy may forward it to the target.
+func (e *estimator) addProxyAsk() {
+	for _, st := range e.stages {
+		if st.Estimate != nil && st.Estimate.Requests > 0 {
+			e.put(proxyStage, "", amount{Requests: 1}, "")
+			return
+		}
+	}
+}
+
+// asksProxy says the -proxy value is an HTTP or HTTPS proxy, which a run asks
+// once for its own answer; a SOCKS5 proxy has none.
+func asksProxy(v string) bool {
+	pu, err := parseProxy(v)
+	return v != "" && err == nil && (pu.Scheme == "http" || pu.Scheme == "https")
 }
 
 // dnsFloor is the queries the lookup of names sends if each answers: one
@@ -903,7 +929,7 @@ func spentAmount(acc map[ledger.SpentKey]int64, keep func(ledger.SpentKey) bool)
 			a.DNS += n
 		case k.Class == ledger.ClassSource:
 			a.Sources += n
-		case k.Class == ledger.ClassOwn, k.Class == ledger.ClassProxy:
+		case k.Class == ledger.ClassOwn:
 		case k.Kind == "tcp":
 			a.Connects += n
 		case k.Kind == "udp":
@@ -916,11 +942,12 @@ func spentAmount(acc map[ledger.SpentKey]int64, keep func(ledger.SpentKey) bool)
 }
 
 // purposesOf is what the requests and connections an account holds to
-// targets were for, by purpose; a line with none names "other".
+// targets, and the ask of the -proxy, were for, by purpose; a line with none
+// names "other".
 func purposesOf(acc map[ledger.SpentKey]int64) map[string]int {
 	out := map[string]int{}
 	for k, n := range acc {
-		if n > 0 && k.Class == ledger.ClassTarget {
+		if n > 0 && (k.Class == ledger.ClassTarget || k.Class == ledger.ClassProxy) {
 			p := k.Purpose
 			if p == "" {
 				p = ledger.PurposeOther
@@ -975,6 +1002,9 @@ func accountSince(then map[ledger.SpentKey]int64) map[ledger.SpentKey]int64 {
 // stageOfKey is the stage an entry of the account belongs to: the stage the
 // command named (SetStage), else the stage of its collector.
 func stageOfKey(k ledger.SpentKey) string {
+	if k.Class == ledger.ClassProxy {
+		return proxyStage // whichever stage was asking, the ask is the proxy's
+	}
 	if k.Collector == signInStage {
 		return signInStage
 	}

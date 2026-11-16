@@ -170,6 +170,10 @@ func ledgerKey(e ledger.Entry, origin string) string {
 		return e.Kind + " " + e.Target
 	}
 	u, err := url.Parse(e.Target)
+	if err == nil && e.Class == ledger.ClassProxy {
+		// The ask of the -proxy: the proxy logs it by its path, as it forwards it.
+		return strings.ToUpper(e.Method) + " " + u.RequestURI()
+	}
 	if err != nil || (u.Host != strings.TrimPrefix(origin, "http://")) {
 		return strings.ToUpper(e.Method) + " " + e.Target
 	}

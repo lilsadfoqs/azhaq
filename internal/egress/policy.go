@@ -36,7 +36,7 @@ const (
 	Own Class = ledger.ClassOwn
 	// Proxy: the run's -proxy, asked once for its own answer (see
 	// proxyhdr.go). The user's own, so not held to the scope; recorded apart
-	// from the targets', counted by nothing.
+	// from the targets', counted and paced like them: a proxy may forward it.
 	Proxy Class = ledger.ClassProxy
 )
 
@@ -257,7 +257,7 @@ func (p *Policy) SetTargetProxy(u *url.URL) {
 	p.mu.Lock()
 	p.proxy = u
 	p.mu.Unlock()
-	p.px.reset()
+	p.px.setProxy(u)
 }
 
 // SetResolver sets the run's resolver; nil goes back to the system's. It

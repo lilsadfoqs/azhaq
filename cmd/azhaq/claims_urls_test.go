@@ -346,7 +346,7 @@ func TestURLsLiveAsksOnceAfterTheArchivesAndSaysWhatItDid(t *testing.T) {
 	if notes := strings.Join(rep.Notes, "\n"); !strings.Contains(notes, "at 10 requests a second (-live-rate)") || rep.Counts["not asked (junk)"] != 1 {
 		t.Errorf("counts %v, notes %q: want the default 10 a second said and 1 junk not asked", rep.Counts, rep.Notes)
 	}
-	if n := rep.Counts["verified live"] + rep.Counts["gone (404, 410)"] + rep.Counts["no answer"]; n != len(asked) || int(rep.Requests) != len(asked) {
+	if n := rep.Counts["verified live"] + rep.Counts["gone (404, 410)"] + rep.Counts["no answer"]; n != len(asked) || int(rep.Requests) != len(asked)+1 { // +1: the ask of the proxy itself
 		t.Errorf("counts %v add up to %d, the live site was asked %d times, summary requests %d", rep.Counts, n, len(asked), rep.Requests)
 	}
 

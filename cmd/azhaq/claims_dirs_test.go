@@ -200,22 +200,23 @@ func TestDirsProxyCarriesEveryRequestAndCalibrationHasFourGuesses(t *testing.T) 
 	mu.Lock()
 	got := len(paths)
 	mu.Unlock()
-	if int64(got) != atomic.LoadInt64(&seen) || got != int(rep.Requests) || got != 3+4 {
-		t.Errorf("proxy saw %d, the summary counts %d requests: want the 3 words and the 4 guesses of one directory, all through it", seen, rep.Requests)
+	// The stand-in does not forward the ask of the proxy itself, which the summary counts besides.
+	if int64(got) != atomic.LoadInt64(&seen) || got+1 != int(rep.Requests) || got != 3+4 {
+		t.Errorf("proxy saw %d, the summary counts %d requests: want the 3 words and the 4 guesses of one directory, all through it, and the ask", seen, rep.Requests)
 	}
 	rep = sweep(hp.URL, "-e", "php,bak")
 	mu.Lock()
 	got = len(paths)
 	mu.Unlock()
-	if got != int(rep.Requests) || got != 3*3+4+2 {
+	if got+1 != int(rep.Requests) || got != 3*3+4+2 {
 		t.Errorf("with two extensions: %d requests, want 9 words and 4+2 guesses", got)
 	}
 	rep = sweep(hp.URL, "-ac=false")
 	mu.Lock()
 	got = len(paths)
 	mu.Unlock()
-	if got != 3 || rep.Requests != 3 {
-		t.Errorf("-ac=false: %d requests, want only the 3 words", got)
+	if got != 3 || rep.Requests != 4 {
+		t.Errorf("-ac=false: %d requests through it, %d counted, want the 3 words and the ask", got, rep.Requests)
 	}
 	// https and socks5 proxies carry them too.
 	addr, asked := socksProxy(t, strings.TrimPrefix(stand.URL, "http://"))

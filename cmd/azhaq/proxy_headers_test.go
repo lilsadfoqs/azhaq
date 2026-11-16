@@ -229,7 +229,7 @@ func TestRunBehindAProxyThatRefusesMarksTheHeaderReads(t *testing.T) {
 }
 
 // The request to the proxy is in the ledger as the proxy's, once, and is not
-// a request to a target: the summary's requests and the lines to targets agree.
+// a line to a target: the summary's requests are the lines to targets and it.
 func TestTheRequestToTheProxyIsInTheLedger(t *testing.T) {
 	px := newLogProxy(t, true, false)
 	srv := headerTarget(t, "")
@@ -252,8 +252,8 @@ func TestTheRequestToTheProxyIsInTheLedger(t *testing.T) {
 	if proxyLines != 1 {
 		t.Errorf("%d proxy lines in the ledger, want 1: %+v", proxyLines, r.ledger)
 	}
-	if int(r.rep.Requests) != targetLines {
-		t.Errorf("requests %d, lines to targets %d: the proxy's own request is not a target's", r.rep.Requests, targetLines)
+	if int(r.rep.Requests) != targetLines+proxyLines {
+		t.Errorf("requests %d, lines to targets %d and to the proxy %d: the proxy's own request is counted as a target's", r.rep.Requests, targetLines, proxyLines)
 	}
 }
 

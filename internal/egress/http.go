@@ -60,7 +60,13 @@ func (g *guarded) RoundTrip(req *http.Request) (*http.Response, error) {
 	out := keepTargetInRequestLine(g.base, req)
 	pp := g.viaTargetProxy(req)
 	if pp != nil {
-		Current().learnProxy(req.Context(), pp)
+		if err := Current().learnProxy(req.Context(), pp); err != nil {
+			Refund() // counted by its sender, never sent
+			if req.Body != nil {
+				req.Body.Close()
+			}
+			return nil, err
+		}
 	}
 	resp, err := g.send(out)
 	err = g.nameProxy(req, err)
@@ -142,7 +148,7 @@ func (g *guarded) admit(req *http.Request) error {
 		// the hop belongs to was, and a hop that waited on a session check
 		// would hold the wire (see Exclusive) while the check waits for it.
 		err = Current().SpendCounted(req.Context(), true)
-	} else if err != nil && g.class == Target && !hop {
+	} else if err != nil && (g.class == Target && !hop || g.class == Proxy) {
 		Refund() // counted by its sender, never sent
 	}
 	if err != nil && req.Body != nil {

@@ -152,6 +152,7 @@ type sendLimits struct {
 	submitForms  bool
 	dirs         bool
 	params       bool
+	proxyAsk     bool   // -proxy is an HTTP proxy: asked once for its own answer, which counts like a target's request
 	noThirdParty bool   // -sources none
 	paramsBody   string // POST, JSON or XML when -params sends names in a body
 	tcpPorts     int    // ports asked on each address (-ports)
@@ -487,6 +488,9 @@ func planFor(cat *catalog.Catalog, seeds []types.Seed, b engine.Budgets, paths [
 	}
 	p.Estimate = estimateCost(kept, planned, runs, b.Active, env, asks)
 	gets, others := planSends(b, send)
+	if slices.ContainsFunc(p.Estimate.Stages, func(st costStage) bool { return st.Stage == proxyStage }) {
+		others = append(others, "1 request to the -proxy itself, for its own answer: a proxy may forward it to the target, so it spends from -max-requests, waits for the pace and is counted in requests")
+	}
 	switch {
 	case b.Passive && len(others) == 0:
 		p.Sends = []string{"nothing to the targets (-passive): third-party sources and DNS only"}

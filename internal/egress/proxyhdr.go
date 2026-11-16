@@ -22,6 +22,11 @@ import (
 // own answer, and a header of a target's answer that equals one of the proxy's
 // is not read as the target's. Nothing is inferred: only a value seen in the
 // proxy's own answer is dropped.
+//
+// A request sent to a proxy can reach the target (a proxy that forwards every
+// request does so for this one too), so the ask counts like a target's: it
+// spends from -max-requests, waits for the pace, and is in the summary's
+// requests and the ledger.
 
 // notIdentity are the X- headers that state a policy or a request's own
 // identity, not software: a proxy adding one does not name a product.
@@ -59,6 +64,9 @@ func WithoutIdentity(h http.Header) http.Header {
 type proxyRead struct {
 	mu      sync.Mutex
 	asked   bool
+	keep    bool   // the commands of one run share the ask (ShareProxyAsk)
+	sent    int    // asks sent by the run, or the command that shares it: the summary names them
+	proxy   string // the proxy asked, to know it again
 	host    string
 	socks   bool        // a SOCKS5 proxy relays bytes: it has no HTTP answer to ask for
 	failed  string      // why it could not be asked, "" when it was
@@ -74,7 +82,38 @@ type droppedHeader struct {
 
 func (r *proxyRead) reset() {
 	r.mu.Lock()
-	r.asked, r.host, r.socks, r.failed, r.own, r.answers, r.dropped = false, "", false, "", nil, 0, nil
+	r.answers, r.dropped = 0, nil
+	if !r.keep {
+		r.forget()
+	}
+	r.mu.Unlock()
+}
+
+// setProxy starts the counts over for the proxy u. What was learned is kept
+// for the same proxy while the ask is shared.
+func (r *proxyRead) setProxy(u *url.URL) {
+	r.mu.Lock()
+	r.answers, r.dropped = 0, nil
+	if !r.keep || u == nil || u.String() != r.proxy {
+		r.forget()
+	}
+	r.mu.Unlock()
+}
+
+func (r *proxyRead) forget() {
+	r.asked, r.sent, r.proxy, r.host, r.socks, r.failed, r.own = false, 0, "", "", false, "", nil
+}
+
+// ShareProxyAsk makes a command that runs others in turn (roles, the live
+// check of urls) ask the -proxy once for all of them: a reset between its
+// runs keeps what the ask learned. Off ends it and forgets.
+func ShareProxyAsk(on bool) {
+	r := &Current().px
+	r.mu.Lock()
+	r.keep = on
+	if !on {
+		r.forget()
+	}
 	r.mu.Unlock()
 }
 
@@ -93,37 +132,74 @@ func (g *guarded) viaTargetProxy(req *http.Request) *url.URL {
 	return tp
 }
 
-// learnProxy asks pu for its own answer, once per run.
-func (p *Policy) learnProxy(ctx context.Context, pu *url.URL) {
+// learnProxy asks pu for its own answer, once per run. The ask is a request
+// the proxy may forward, so it is counted and paced as a target's: with the
+// budget spent it is not sent, and the proxy counts as one that could not be
+// asked. The caller's own request was counted and paced already, so the ask
+// takes its place in the pace and the caller waits for another. An error
+// means the run is stopping: the caller's request is not sent either.
+func (p *Policy) learnProxy(ctx context.Context, pu *url.URL) error {
 	r := &p.px
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.asked {
-		return
+		return nil
 	}
 	if pu.Scheme == "socks5" || pu.Scheme == "socks5h" {
-		r.asked, r.socks, r.host = true, true, pu.Host
-		return
+		r.asked, r.socks, r.host, r.proxy = true, true, pu.Host, pu.String()
+		return nil
+	}
+	if err := p.spendAsk(ctx); err != nil {
+		if !errors.Is(err, neterr.ErrBudget) {
+			return err // the run is stopping: ask again if it goes on
+		}
+		r.asked, r.host, r.proxy = true, pu.Host, pu.String()
+		r.failed = "the -max-requests budget was spent before it could be asked"
+		return nil
 	}
 	h, err := askProxy(ctx, pu)
 	if errors.Is(err, neterr.ErrKilled) {
-		return // the run is stopping: ask again if it goes on
+		return err // admit gave the request back
 	}
-	r.asked, r.host = true, pu.Host
+	r.asked, r.host, r.proxy = true, pu.Host, pu.String()
 	if err != nil {
 		r.failed = err.Error()
-		return
+		if ledger.NotReached(err) {
+			return nil // nothing left, so nothing was sent or counted
+		}
+	} else {
+		r.own = h
 	}
-	r.own = h
+	r.sent++
+	return p.Pace(ctx)
+}
+
+// spendAsk counts the ask of the -proxy as a request to a target. A refusal
+// marks no task as capped: the request the ask comes with was sent.
+func (p *Policy) spendAsk(ctx context.Context) error {
+	if err := p.Killed(); err != nil {
+		return err
+	}
+	for {
+		n := p.sent.Load()
+		if m := p.maxReq.Load(); m > 0 && n >= m {
+			return neterr.ErrBudget
+		}
+		if p.sent.CompareAndSwap(n, n+1) {
+			break
+		}
+	}
+	p.useReserve()
+	if w, _ := ctx.Value(refusedKey{}).(*watch); w != nil {
+		w.used.Add(1)
+	}
+	return nil
 }
 
 // askProxy sends the proxy a request addressed to the proxy itself, not
 // through it, and returns the identity headers of its answer. The request is
 // the user's own proxy's, recorded in the ledger apart from the targets'.
 func askProxy(ctx context.Context, pu *url.URL) (http.Header, error) {
-	if err := Current().Killed(); err != nil {
-		return nil, err
-	}
 	tr := &http.Transport{
 		DialContext:           DialProxy,
 		DisableKeepAlives:     true,
@@ -139,6 +215,7 @@ func askProxy(ctx context.Context, pu *url.URL) (http.Header, error) {
 	ctx = ledger.WithCollector(context.WithoutCancel(ctx), "proxy")
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, (&url.URL{Scheme: pu.Scheme, Host: pu.Host, Path: "/"}).String(), nil)
 	if err != nil {
+		Refund() // never sent
 		return nil, err
 	}
 	req.Header.Set("User-Agent", "azhaq")
@@ -209,6 +286,17 @@ func ProxyUnasked() bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.asked && r.failed != ""
+}
+
+// ProxyAskNote names the ask the run sent to its -proxy, "" when it sent none.
+func ProxyAskNote() string {
+	r := &Current().px
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.sent == 0 {
+		return ""
+	}
+	return fmt.Sprintf("1 request to the -proxy itself (%s), for its own answer: counted in requests and in -max-requests and paced like a target's, because a proxy that forwards every request passes it on to the target", r.host)
 }
 
 // ProxyNotes are the lines about -proxy's headers for the run's notes.

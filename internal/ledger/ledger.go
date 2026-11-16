@@ -69,17 +69,18 @@ const (
 	ClassSource = "source" // a third party asked about the targets: archives, RDAP, search, a notification
 	ClassDNS    = "dns"    // a resolver
 	ClassOwn    = "own"    // an endpoint of the user's own: a replay proxy, a worker's link to its run
-	ClassProxy  = "proxy"  // the run's -proxy, asked once for its own answer (not a request about a target)
+	ClassProxy  = "proxy"  // the run's -proxy, asked once for its own answer; counted like a target's
 )
 
 // IsTarget says the entry was sent to a target.
 func (e Entry) IsTarget() bool { return e.Class == "" || e.Class == ClassTarget }
 
 // Counted says the summary's requests count the entry: a request or a
-// connection to a target. A probe is listed apart, as bytes sent on a
+// connection to a target, or the ask of the -proxy, which the proxy may
+// forward to the target. A probe is listed apart, as bytes sent on a
 // connection that is counted itself.
 func (e Entry) Counted() bool {
-	return e.IsTarget() && e.Kind != KindProbe && e.Kind != KindSeal && !e.NotSent
+	return (e.IsTarget() || e.Class == ClassProxy) && e.Kind != KindProbe && e.Kind != KindSeal && !e.NotSent
 }
 
 // sum is the entry's hash: sha256 over Prev and the JSON of the entry

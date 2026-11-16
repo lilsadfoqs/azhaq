@@ -204,7 +204,7 @@ These filters limit what is printed, not what is crawled.
 
 ### Through a proxy
 
-- Through an http or https `-proxy`, a header the proxy's own answer shows (its `Server`, `Via` or `X-Cache`, a cookie it sets) is not read as the target's, in the technologies of a row or anywhere else. The proxy is asked once for its own answer, the request is listed in the ledger with class `proxy`, and a note counts the answers that carried a header equal to the proxy's own: [Proxies](../CONCEPTS.md#proxies).
+- Through an http or https `-proxy`, a header the proxy's own answer shows (its `Server`, `Via` or `X-Cache`, a cookie it sets) is not read as the target's, in the technologies of a row or anywhere else. The proxy is asked once for its own answer: the request is counted like a target's (`-max-requests`, `-rate`, `requests`) and listed in the ledger with class `proxy`, and a note counts the answers that carried a header equal to the proxy's own: [Proxies](../CONCEPTS.md#proxies).
 
 ### Saved responses
 

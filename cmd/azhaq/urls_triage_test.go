@@ -253,8 +253,8 @@ func TestURLsLiveVerifiesAtAStatedRate(t *testing.T) {
 	for _, n := range rep.Notes {
 		said = said || strings.HasPrefix(n, "-live: ") && strings.Contains(n, "at 50 requests a second")
 	}
-	if rep.Requests != 9 {
-		t.Errorf("the summary counts %d requests to the targets, the check sent 9", rep.Requests)
+	if rep.Requests != 9+1 { // and the ask of the proxy itself
+		t.Errorf("the summary counts %d requests, the check sent 9 and asked the proxy once", rep.Requests)
 	}
 	if !said || rep.Counts["verified live"] == 0 || rep.Counts["gone (404, 410)"] != 1 || rep.Counts["no answer"] != 1 {
 		t.Errorf("counts %v notes %q", rep.Counts, rep.Notes)
