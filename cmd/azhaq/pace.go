@@ -7,15 +7,15 @@ import (
 )
 
 // portPace is the connect and datagram ceiling the port stage is given: what
-// -port-rate says, bounded by -rate when both are given, and -rate alone (up
-// to the scan's default) when only it is. 0 means neither was given, and the
-// scan keeps its default with loopback unpaced.
+// -port-rate says, bounded by -rate when both are given, and -rate alone when
+// only it is: the user's ceiling is not held down to the default. 0 means
+// neither was given, and the scan keeps its default with loopback unpaced.
 func portPace(rate, portRate float64) float64 {
 	switch {
 	case rate > 0 && portRate > 0:
 		return min(rate, portRate)
 	case rate > 0:
-		return min(rate, portscan.DefaultRate)
+		return rate
 	}
 	return portRate
 }

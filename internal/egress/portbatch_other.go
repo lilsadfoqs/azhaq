@@ -14,3 +14,7 @@ func (d *PortDialer) CanBatch(string) bool { return false }
 // TCPBatch is never called when CanBatch is false.
 func (d *PortDialer) TCPBatch(context.Context, string, string, []int, func(int, net.Conn, time.Duration, error)) {
 }
+
+// TCPBatchAddrs is never called when CanBatch is false.
+func (d *PortDialer) TCPBatchAddrs(context.Context, string, string, []int, []string, func(int, net.Conn, time.Duration, error)) {
+}

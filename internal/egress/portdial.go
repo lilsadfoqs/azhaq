@@ -5,8 +5,10 @@ import (
 	"crypto/tls"
 	"errors"
 	"net"
+	"os"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"golang.org/x/net/proxy"
@@ -29,6 +31,8 @@ type PortDialer struct {
 	auth    string
 	preMu   sync.Mutex
 	pre     map[string]int // connects Reserve recorded for an address, until their TCP calls
+	adapt   bool           // the wait of a connect follows the round trip (Adapt)
+	rtts    sync.Map       // address -> *rttModel
 }
 
 // NewPortDialer is a dialer with a timeout per connect, connecting from
@@ -48,6 +52,11 @@ func NewPortDialer(timeout time.Duration, src net.IP, socks5, auth string) *Port
 	}
 	return d
 }
+
+// ErrRefused is what each refused connect of a batch says; it holds no
+// address, as the error each carried before held none. A caller may compare
+// with it to skip unwrapping the error.
+var ErrRefused error = &net.OpError{Op: "dial", Net: "tcp", Err: os.NewSyscallError("connect", syscall.ECONNREFUSED)}
 
 // ProxyError is a connect that failed at the proxy, not at its target: the
 // proxy was not reached, or it broke the SOCKS exchange. It is no answer of
@@ -190,7 +199,16 @@ func (d *PortDialer) connect(ctx context.Context, host, addr string, reserved, d
 	if reserved {
 		rec = func() {}
 	}
-	c, began, err := connectTracked(ctx, d.netDialer(hostOfAddr(addr)), reserved, rec, func(dctx context.Context, nd *net.Dialer) (net.Conn, error) {
+	ip := hostOfAddr(addr)
+	nd0 := d.netDialer(ip)
+	var m *rttModel
+	if !direct {
+		if m = d.model(ip); m != nil && d.timeout > 0 {
+			nd0.Timeout = m.wait(d.timeout)
+		}
+	}
+	t0 := time.Now()
+	c, began, err := connectTracked(ctx, nd0, reserved, rec, func(dctx context.Context, nd *net.Dialer) (net.Conn, error) {
 		if d.socks != "" && !direct {
 			var a *proxy.Auth
 			if u, p, ok := strings.Cut(d.auth, ":"); ok || u != "" {
@@ -213,6 +231,9 @@ func (d *PortDialer) connect(ctx context.Context, host, addr string, reserved, d
 	if !began {
 		Refund() // counted by the caller, never connected
 	}
+	if m != nil && began && (err == nil || errors.Is(err, syscall.ECONNREFUSED)) {
+		m.add(time.Since(t0))
+	}
 	return c, err
 }
 
@@ -227,10 +248,14 @@ func (d *PortDialer) Reserve(ctx context.Context, host string, addrs []string) {
 	if ctx.Err() != nil || Current().Killed() != nil {
 		return
 	}
-	ok := make([]string, 0, len(addrs))
-	for _, a := range addrs {
-		if d.inScope(host, a) == nil {
+	ok := addrs // as given while the scope allows every one
+	cut := false
+	for i, a := range addrs {
+		switch allowed := d.inScope(host, a) == nil; {
+		case allowed && cut:
 			ok = append(ok, a)
+		case !allowed && !cut:
+			cut, ok = true, append(make([]string, 0, len(addrs)-1), addrs[:i]...)
 		}
 	}
 	ledger.TCPBatch(ctx, host, ok)

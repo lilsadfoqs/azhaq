@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"maps"
+	"net"
+	"net/netip"
 	"os"
 	"slices"
 	"sort"
@@ -640,6 +642,9 @@ func printPlanText(w io.Writer, p runPlan) {
 	if p.Limits["connects-pace"] != "" {
 		fmt.Fprintf(w, "pace: requests %s, connects %s, datagrams %s, DNS queries to the targets' name servers %s\n",
 			p.Limits["requests-pace"], p.Limits["connects-pace"], p.Limits["datagrams-pace"], p.Limits["dns-pace"])
+		if line := connectTime(p.Estimate.Total.Connects, p.Limits["connects-pace"]); line != "" && !onlyLoopback(p.Targets) {
+			fmt.Fprintln(w, line)
+		}
 	}
 	for _, s := range p.Sends {
 		fmt.Fprintf(w, "sends: %s\n", s)
@@ -725,4 +730,41 @@ func limitsOf(b engine.Budgets, maxRequests int64, rate float64, timeout time.Du
 		"timeout":        none(timeout > 0, timeout.String()),
 		"daily-requests": none(daily > 0, fmt.Sprint(daily)),
 	}
+}
+
+// connectTime says how long the connects of an estimate take at their pace,
+// when that is long enough to plan around: the pace is a ceiling, so it is
+// the least time. "" when the pace is none or the time is short.
+func connectTime(connects int64, pace string) string {
+	var rate float64
+	if _, err := fmt.Sscanf(pace, "%g/s", &rate); err != nil || rate <= 0 || connects <= 0 {
+		return ""
+	}
+	took := time.Duration(float64(connects) / rate * float64(time.Second))
+	if took < time.Minute {
+		return ""
+	}
+	return fmt.Sprintf("time: %s connects at %g/s take at least %s (the pace is a ceiling, so a slow host takes longer; -rate or -min-rate set it)",
+		commas(connects), rate, aboutDuration(took))
+}
+
+// onlyLoopback says every target is on this machine's loopback, which a scan
+// does not pace unless a rate is given: the pace is no bound on its time.
+func onlyLoopback(targets []planTarget) bool {
+	for _, t := range targets {
+		k := t.Key
+		if _, rest, ok := strings.Cut(k, "://"); ok {
+			k = rest
+		}
+		k, _, _ = strings.Cut(k, "/")
+		if h, _, err := net.SplitHostPort(k); err == nil {
+			k = h
+		}
+		if a, err := netip.ParseAddr(strings.Trim(k, "[]")); err != nil || !a.IsLoopback() {
+			if k != "localhost" {
+				return false
+			}
+		}
+	}
+	return len(targets) > 0
 }

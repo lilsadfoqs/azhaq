@@ -87,9 +87,10 @@ func TestPlanSaysThePaceOfEachStage(t *testing.T) {
 	}
 }
 
+// -rate alone is the connect pace too, above the default as below it (#451).
 func TestPortPaceIsTheLowerOfRateAndPortRate(t *testing.T) {
 	for _, c := range []struct{ rate, port, want float64 }{
-		{0, 0, 0}, {0, 700, 700}, {5, 0, 5}, {5000, 0, portscan.DefaultRate}, {5, 700, 5}, {700, 5, 5},
+		{0, 0, 0}, {0, 700, 700}, {5, 0, 5}, {5000, 0, 5000}, {5, 700, 5}, {700, 5, 5},
 	} {
 		if got := portPace(c.rate, c.port); got != c.want {
 			t.Errorf("-rate %g -port-rate %g: %g, want %g", c.rate, c.port, got, c.want)
@@ -202,5 +203,33 @@ func TestPortsRatePacesTheConnects(t *testing.T) {
 	d := timedRun(t, "ports", "-host", "127.0.0.1", "-p", "55555-55564", "-rate", "5", "-detect", "none", "-ledger", "off", "-json")
 	if d < 1800*time.Millisecond {
 		t.Errorf("10 connects at -rate 5 took %s, want at least 1.8 s", d)
+	}
+}
+
+// The plan says how long the connects take at the pace: 16,776,960 connects
+// (a /24 at every port) at the default 1500 a second are 3.1 hours (#451).
+func TestPlanSaysHowLongTheConnectsTakeAtThePace(t *testing.T) {
+	for _, c := range []struct {
+		connects int64
+		pace     string
+		want     string
+	}{
+		{16776960, "1500/s, 127.0.0.1 unpaced", "take at least 3.1 h"},
+		{16776960, "10000/s", "take at least 28 min"},
+		{65535, "1500/s", ""}, // 44 s: nothing to plan around
+		{16776960, "none", ""},
+		{0, "1500/s", ""},
+	} {
+		got := connectTime(c.connects, c.pace)
+		if (c.want == "") != (got == "") || !strings.Contains(got, c.want) {
+			t.Errorf("%d connects at %q: %q, want it to say %q", c.connects, c.pace, got, c.want)
+		}
+	}
+	lo := []planTarget{{Key: "127.0.0.0/24"}, {Key: "http://127.0.0.1:8080/x"}, {Key: "localhost"}, {Key: "http://[::1]:9/"}}
+	if !onlyLoopback(lo) {
+		t.Error("loopback targets are not said to be loopback")
+	}
+	if onlyLoopback(append(lo, planTarget{Key: "10.0.0.0/24"})) || onlyLoopback(nil) {
+		t.Error("a target beyond this machine, or none, is said to be loopback")
 	}
 }
