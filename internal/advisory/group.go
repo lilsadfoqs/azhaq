@@ -38,7 +38,7 @@ func Group(leads []Lead) []Lead {
 	at := map[key]int{}
 	var members [][]Lead
 	for _, l := range leads {
-		k := key{l.Listener(), ProductKey(l.Product), l.VersionSeen}
+		k := key{l.Listener(), identity(l.Product), l.VersionSeen}
 		i, ok := at[k]
 		if !ok {
 			i = len(members)

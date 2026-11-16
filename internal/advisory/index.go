@@ -11,6 +11,8 @@ import (
 	"sort"
 	"strings"
 	"sync"
+
+	"github.com/lilsadfoqs/azhaq/internal/productname"
 )
 
 // The index is what azhaq carries so that a run can name the known
@@ -292,9 +294,15 @@ func (ix *Index) productVulns(cpe string) []IndexVuln {
 	return p.Vulns
 }
 
-// CPEs are the products an index holds under a name azhaq reports.
+// CPEs are the products an index holds under a name azhaq reports: under the
+// name as it is, else without its vendor prefix ("Apache Druid" is "druid").
 func (ix *Index) CPEs(product string) []string {
-	return ix.meta.Names[ProductKey(product)]
+	for _, k := range productname.Keys(product) {
+		if c := ix.meta.Names[k]; len(c) > 0 {
+			return c
+		}
+	}
+	return nil
 }
 
 // NVDURL is the NVD page of a CVE.

@@ -85,6 +85,47 @@ func TestVerifyLoginsExplainsWhatItDidNotAsk(t *testing.T) {
 	}
 }
 
+// A console whose title carries the vendor ("Apache ActiveMQ") is the catalog's
+// "ActiveMQ" (#520): the check is asked, not skipped as no catalog product.
+func TestVerifyLoginsMatchesAProductNamedWithItsVendor(t *testing.T) {
+	egress.Reset()
+	t.Cleanup(egress.Reset)
+	fx := newLoginFixture(t, "", func(n int, w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/":
+			http.Redirect(w, r, "/index.html", http.StatusFound)
+		case r.URL.Path == "/index.html":
+			w.Header().Set("Content-Type", "text/html")
+			w.Write([]byte(`<html><head><title>Apache ActiveMQ</title></head><body><a href='/admin/'>Manage ActiveMQ broker</a> <a href='/demo/'>demo</a></body></html>`))
+		case strings.HasPrefix(r.URL.Path, "/admin"):
+			if u, p, ok := r.BasicAuth(); ok && u == "admin" && p == "admin" {
+				w.Header().Set("Content-Type", "text/html")
+				w.Write([]byte("<html><head><title>ActiveMQ Console</title></head></html>"))
+				return
+			}
+			w.Header().Set("WWW-Authenticate", `Basic realm="ActiveMQRealm"`)
+			w.WriteHeader(401)
+		default:
+			w.WriteHeader(404)
+		}
+	})
+	db := filepath.Join(t.TempDir(), "w.db")
+	// The detection templates name it, so they stay on.
+	args := []string{"-url", fx.URL + "/", "-db", db, "-json", "-depth", "0", "-no-paths", "-no-favicon", "-no-takeover", "-verify-logins"}
+	_, errOut, err := captureBoth(t, func() error { return cmdRun(args) })
+	if err != nil {
+		t.Fatalf("run: %v\n%s", err, errOut)
+	}
+	f := loginFindingOf(t, db, "default-login")
+	if f.Label != "proved" || f.Product != "Apache ActiveMQ" {
+		t.Errorf("finding %+v", f)
+	}
+	rep := lastReport(t, errOut)
+	if notes := strings.Join(rep.Notes, "\n"); !strings.Contains(notes, "verify-logins: 1 product(s) asked") || strings.Contains(notes, "none asked") {
+		t.Errorf("notes %q", rep.Notes)
+	}
+}
+
 // A console that only its Basic realm names (a 401 on the front page, a Jetty
 // Server header, no title, no technology) is asked its product's published
 // default like any other: the realm is a name the catalog reads.

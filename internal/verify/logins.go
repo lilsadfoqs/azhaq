@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
+	"github.com/lilsadfoqs/azhaq/internal/productname"
 	"github.com/lilsadfoqs/azhaq/internal/proof"
 )
 
@@ -62,7 +63,7 @@ const (
 // entries are this type, and none of them is a guess.
 type DefaultLogin struct {
 	ID      string
-	Product string // matched against the product name the run confirmed, by loginProductKey
+	Product string // matched against the product name the run confirmed, by productname.Same (the vendor prefix is optional)
 	Source  string // the vendor doc or advisory page that states this pair
 	User    string
 	Pass    string
@@ -363,14 +364,6 @@ func redact(s, user, pass, field string) string {
 	return s
 }
 
-// loginProductKey normalizes a product name for matching: lower case,
-// no spaces, hyphens, underscores or dots — the same folding
-// internal/advisory uses, kept local so this package asks nothing of it.
-func loginProductKey(s string) string {
-	s = strings.ToLower(strings.TrimSpace(s))
-	return strings.NewReplacer(" ", "", "-", "", "_", "", ".", "").Replace(s)
-}
-
 // DefaultLogins is the whole catalog, in the order its checks run.
 func DefaultLogins() []DefaultLogin { return append([]DefaultLogin(nil), defaultLogins...) }
 
@@ -379,13 +372,12 @@ func UnauthReads() []UnauthRead { return append([]UnauthRead(nil), unauthReads..
 
 // LoginsForProduct is the catalog's pairs for product, in catalog order.
 func LoginsForProduct(product string) []DefaultLogin {
-	key := loginProductKey(product)
-	if key == "" {
+	if productname.Key(product) == "" {
 		return nil
 	}
 	var out []DefaultLogin
 	for _, lg := range defaultLogins {
-		if loginProductKey(lg.Product) == key {
+		if productname.Same(lg.Product, product) {
 			out = append(out, lg)
 		}
 	}
@@ -395,13 +387,12 @@ func LoginsForProduct(product string) []DefaultLogin {
 // ReadsForProduct is the catalog's unauthenticated-read checks for
 // product, in catalog order.
 func ReadsForProduct(product string) []UnauthRead {
-	key := loginProductKey(product)
-	if key == "" {
+	if productname.Key(product) == "" {
 		return nil
 	}
 	var out []UnauthRead
 	for _, u := range unauthReads {
-		if loginProductKey(u.Product) == key {
+		if productname.Same(u.Product, product) {
 			out = append(out, u)
 		}
 	}

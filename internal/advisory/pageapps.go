@@ -147,10 +147,13 @@ func pageApps(obs []types.StoredObservation) []pageApp {
 			add(name, version, SourceTech, "technology: "+t)
 		}
 		for _, d := range row.Detected {
+			if foreignVersion(row.Server, d.Product, d.Version) {
+				d.Version = ""
+			}
 			add(d.Product, d.Version, detectedSource(d), "detection template: "+d.Template)
 		}
 		for _, c := range cands {
-			k := strings.ToLower(c.Host) + "|" + strconv.Itoa(c.Port) + "|" + ProductKey(c.Product)
+			k := strings.ToLower(c.Host) + "|" + strconv.Itoa(c.Port) + "|" + identity(c.Product)
 			i, ok := at[k]
 			switch {
 			case !ok:

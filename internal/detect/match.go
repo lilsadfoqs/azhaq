@@ -16,6 +16,7 @@ import (
 	"sync/atomic"
 
 	"github.com/lilsadfoqs/azhaq/internal/lazyre"
+	"github.com/lilsadfoqs/azhaq/internal/productname"
 )
 
 //go:embed templates.json.gz
@@ -439,17 +440,31 @@ func (idx *index) match(r Response) []Hit {
 	}
 
 	var hits []Hit
-	extracted := map[int]string{}
+	type got struct {
+		x     string
+		token bool
+	}
+	extracted := map[int]got{}
 	emit := func(ui int32, name string) {
 		u := g.units[ui].u
-		x, ok := extracted[int(ui)]
+		e, ok := extracted[int(ui)]
 		if !ok {
-			x = u.extract(c)
-			extracted[int(ui)] = x
+			e.x, e.token = u.extract(c)
+			extracted[int(ui)] = e
 		}
+		x := e.x
 		prod, many := u.spec.Product, false
 		if u.spec.Multi && name != "" {
 			prod, many = Humanise(name), true
+		}
+		// A Server or X-Powered-By token names its own product: another
+		// product's version is not this one's, and a template that only read
+		// a word of the headers has not found its product in them.
+		if e.token && !productname.Names(x, prod) {
+			if u.headerOnly() {
+				return
+			}
+			x = ""
 		}
 		hits = append(hits, Hit{
 			Product: prod, Version: versionOf(x), Template: u.spec.ID,
@@ -689,15 +704,34 @@ func anyAll(n int, and bool, check func(i int) bool) bool {
 	return and && n > 0
 }
 
-// extract runs the unit's extractors and returns the first non-empty result.
-func (u *cunit) extract(c *ctx) string {
+// tokenHeaders are the headers whose value starts with a product token.
+var tokenHeaders = map[string]bool{"server": true, "x-powered-by": true}
+
+// headerOnly says every matcher of the unit reads the headers (or the status):
+// the headers alone are its evidence.
+func (u *cunit) headerOnly() bool {
+	for _, m := range u.ms {
+		s := m.spec
+		if s.Type == "status" {
+			continue
+		}
+		if (s.Type != "word" && s.Type != "regex") || (s.Part != partHeaders && !strings.HasPrefix(s.Part, partHeader)) {
+			return false
+		}
+	}
+	return true
+}
+
+// extract runs the unit's extractors and returns the first non-empty result,
+// and whether it is the value of a header that holds a product token.
+func (u *cunit) extract(c *ctx) (string, bool) {
 	for _, x := range u.xs {
 		x.once.Do(x.compile)
 		switch x.spec.Type {
 		case "kval":
 			for _, name := range x.spec.Vals {
 				if v := kval(c.r.Header, name); v != "" {
-					return v
+					return v, tokenHeaders[strings.ToLower(strings.ReplaceAll(name, "_", "-"))]
 				}
 			}
 		case "regex":
@@ -708,12 +742,12 @@ func (u *cunit) extract(c *ctx) string {
 				}
 				sm := re.FindStringSubmatch(text)
 				if x.spec.Group < len(sm) && sm[x.spec.Group] != "" {
-					return sm[x.spec.Group]
+					return sm[x.spec.Group], false
 				}
 			}
 		}
 	}
-	return ""
+	return "", false
 }
 
 func (x *cextractor) compile() {
