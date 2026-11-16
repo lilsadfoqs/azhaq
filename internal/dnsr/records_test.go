@@ -497,7 +497,7 @@ func TestProxyCarriesDNSOverTCP(t *testing.T) {
 	}
 }
 
-func TestLookupOfADanglingCNAMEIsNoErrorWithTheTargetsCodeApart(t *testing.T) {
+func TestLookupOfADanglingCNAMEHasTheCodeTheResolverGave(t *testing.T) {
 	pc, err := net.ListenPacket("udp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -516,10 +516,10 @@ func TestLookupOfADanglingCNAMEIsNoErrorWithTheTargetsCodeApart(t *testing.T) {
 	t.Cleanup(func() { srv.Shutdown() })
 	p := New(Options{Resolvers: []string{pc.LocalAddr().String()}, PerSecond: -1})
 	d := p.Lookup(context.Background(), "dangle.test", LookupOptions{})
-	if d.StatusCode != "NOERROR" || d.StatusCodeRaw != 0 || d.CNAMEStatus != "NXDOMAIN" {
-		t.Errorf("%q %d %q", d.StatusCode, d.StatusCodeRaw, d.CNAMEStatus)
+	if d.StatusCode != "NXDOMAIN" || d.StatusCodeRaw != dns.RcodeNameError || d.CNAMEStatus != "NXDOMAIN" || len(d.CNAME) != 1 {
+		t.Errorf("%q %d %q %v", d.StatusCode, d.StatusCodeRaw, d.CNAMEStatus, d.CNAME)
 	}
-	if c, ok := d.Rcode(dns.TypeA); !ok || c != dns.RcodeSuccess {
+	if c, ok := d.Rcode(dns.TypeA); !ok || c != dns.RcodeNameError {
 		t.Errorf("rcode %d %v", c, ok)
 	}
 	if c, ok := d.ChainRcode(dns.TypeA); !ok || c != dns.RcodeNameError {

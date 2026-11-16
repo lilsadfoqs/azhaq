@@ -991,32 +991,52 @@ func TestDNSAXFRDoesNotAskADeniedResolver(t *testing.T) {
 	}
 }
 
-// The status_code of a row is the code of the name asked. A resolver answers
-// a dangling CNAME with the code of the target (NXDOMAIN): the owner exists,
-// so it is NOERROR, and the target's state is in cname_status.
-func TestDNSRcodeOfACNAMEOwnerIsItsOwn(t *testing.T) {
+// The status_code of a row is the code the resolver returned for the question
+// asked, as dnsx writes it: a dangling CNAME's A question gets NXDOMAIN with
+// the CNAME in the answer. The chain stays in the row, and cname_status and
+// takeover still say the owner is a CNAME.
+func TestDNSRcodeOfADanglingCNAMEIsWhatTheResolverGave(t *testing.T) {
 	t.Chdir(t.TempDir())
 	var asked, soa atomic.Int64
 	addr := serveDanglingSOA(t, &asked, &soa)
 	args := []string{"-d", "dangling.lab.zz", "-r", addr, "-allow", "lab.zz", "-no-takeover"}
 	ls, _, _ := dnsOut(t, append(args, "-rcode", "nxdomain")...)
-	if len(ls) != 0 {
-		t.Errorf("-rcode nxdomain lists the owner of a CNAME: %v", ls)
+	if !reflect.DeepEqual(ls, []string{"dangling.lab.zz [NXDOMAIN]"}) {
+		t.Errorf("-rcode nxdomain: %v", ls)
 	}
-	ls, rep, _ := dnsOut(t, append(args, "-rcode", "noerror")...)
-	if !reflect.DeepEqual(ls, []string{"dangling.lab.zz [NOERROR]"}) || rep.Counts["other codes"] != 0 {
-		t.Errorf("-rcode noerror: %v %v", ls, rep.Counts)
+	ls, _, _ = dnsOut(t, append(args, "-rcode", "noerror")...)
+	if len(ls) != 0 {
+		t.Errorf("-rcode noerror lists the dangling CNAME: %v", ls)
 	}
 	ls, _, _ = dnsOut(t, "-d", "dangling.lab.zz", "-r", addr, "-a", "-j", "-allow", "lab.zz", "-allow", "gone-co.com")
 	row := dnsRows(t, ls)["dangling.lab.zz"]
-	if row["status_code"] != "NOERROR" || row["status_code_raw"] != nil || row["cname_status"] != "NXDOMAIN" || row["takeover"] == nil {
+	if row["status_code"] != "NXDOMAIN" || row["status_code_raw"] != float64(3) || row["cname_status"] != "NXDOMAIN" || row["takeover"] == nil || row["dangling"] == nil || row["cname"] == nil {
 		t.Errorf("the row: %v", row)
 	}
-	// a name that is not a CNAME keeps the code of its own answer
+	// a name that is not a CNAME has no cname_status
 	ls, _, _ = dnsOut(t, "-d", "nope.lab.zz", "-r", addr, "-rcode", "nxdomain", "-j")
 	row = dnsRows(t, ls)["nope.lab.zz"]
 	if row["status_code"] != "NXDOMAIN" || row["cname_status"] != nil {
 		t.Errorf("a name that does not exist: %v", row)
+	}
+}
+
+// Dangling CNAMEs and a name that does not exist are all listed by -rcode
+// nxdomain, a name with a CNAME that resolves is not.
+func TestDNSRcodeNXDomainListsDanglingCNAMEsToo(t *testing.T) {
+	t.Chdir(t.TempDir())
+	addr, _ := serveCNAMEZone(t)
+	l := writeList(t, "dang.lab.zz", "fine.lab.zz", "plain.lab.zz", "missing.lab.zz")
+	ls, rep, _ := dnsOut(t, "-l", l, "-r", addr, "-rcode", "nxdomain", "-json", "-no-wildcard")
+	rows := dnsRows(t, ls)
+	if len(rows) != 2 || rows["dang.lab.zz"]["status_code"] != "NXDOMAIN" || rows["missing.lab.zz"]["status_code"] != "NXDOMAIN" {
+		t.Errorf("rows %v", ls)
+	}
+	if cn, _ := rows["dang.lab.zz"]["cname"].([]any); len(cn) != 1 || cn[0] != "gone-app.azurewebsites.net" {
+		t.Errorf("the chain of the dangling row: %v", rows["dang.lab.zz"])
+	}
+	if rep.Counts["other codes"] != 2 {
+		t.Errorf("counts %v", rep.Counts)
 	}
 }
 
@@ -1086,7 +1106,7 @@ func TestDNSCNAMEAloneChecksTheTarget(t *testing.T) {
 		rows := dnsRows(t, ls)
 		d := rows["dang.lab.zz"]
 		tk, _ := d["takeover"].(map[string]any)
-		if d["cname_status"] != "NXDOMAIN" || d["status_code"] != "NOERROR" || tk == nil || tk["service"] != "Azure" || tk["status"] != "candidate" {
+		if d["cname_status"] != "NXDOMAIN" || tk == nil || tk["service"] != "Azure" || tk["status"] != "candidate" {
 			t.Errorf("%s: dangling row %v", what, d)
 		}
 		if f := rows["fine.lab.zz"]; f != nil && (f["cname_status"] != nil || f["takeover"] != nil) {

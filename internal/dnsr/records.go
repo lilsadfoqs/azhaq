@@ -282,12 +282,12 @@ func hasAnswer(m *dns.Msg, qtype uint16) bool {
 func (d *Data) add(m *dns.Msg, from string, qtype uint16, raw bool) {
 	d.parse(m.Answer)
 	d.answered = true
-	// The code of a response is that of the last name of a CNAME chain
-	// (RFC 6604), so a name that is a CNAME exists and is NOERROR whatever the
-	// target is; the target's own code is kept apart.
+	// status_code is the code the resolver returned for the question, as
+	// dnsx writes it: NXDOMAIN for a dangling CNAME (RFC 6604). The target's
+	// state also stays in cname_status, so a CNAME's end is told apart from
+	// a name that does not exist.
 	own := m.Rcode
 	if own != dns.RcodeSuccess && ownsCNAME(m) {
-		own = dns.RcodeSuccess
 		d.CNAMEStatus = rcodeName(m.Rcode)
 	}
 	if d.chainRcodes == nil {
