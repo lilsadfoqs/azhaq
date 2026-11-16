@@ -304,11 +304,15 @@ var (
 	cutBodyRE = lazyre.New(`closed after \d+(?: of \d+)? bytes \(HTTP \d+[^)]*\)`)
 	leadHTTP  = lazyre.New(`^(429|5\d\d)\b`)
 	quotedRE  = lazyre.New(`"[^"]*"`)
+	// tlsHintRE is the hint neterr.TLSHint adds to a plain request's failure: text
+	// for the reader, no part of what went wrong.
+	tlsHintRE = lazyre.New(`; this port (?:speaks|may speak) TLS; try https://\S+`)
 )
 
 // ShortError reduces an error to what went wrong, without the URL and the
 // layers of wrapping: "timeout", "connection refused", "HTTP 400".
 func ShortError(s string) string {
+	s = tlsHintRE.ReplaceAllString(s, "") // classified as the failure was before the hint
 	l := strings.ToLower(s)
 	switch {
 	case strings.HasPrefix(s, guard.Prefix):

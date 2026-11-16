@@ -474,7 +474,7 @@ A write is `proved` only when the owner's object was read before and after it an
 
 - For a port that says nothing, azhaq sends its own protocol's request on its usual number, one `HEAD /`, a TLS handshake, and one request of each of the other protocols until one answers, then, if nothing named it, one `GET /`. That is at most 25 more connects for each port.
 - A TLS handshake of that scan also gives the certificate's facts (subject, names, issuer, dates, expired, self-signed, not for the name asked), with no request beyond the handshake. An expired, self-signed or mismatched certificate is a finding of severity low in the findings, stating what the handshake showed. The HTTP rows of an `https` URL carry the same facts from their own handshake.
-- A plain `http://` request that a port answers with a TLS alert or record, or resets, says so in its failure: `this port speaks TLS; try https://HOST:PORT` for the alert or record, `this port may speak TLS` for a bare reset.
+- A plain `http://` request that a port answers with a TLS alert or record, or resets, says so in its failure: `this port speaks TLS; try https://HOST:PORT` for the alert or record, `this port may speak TLS` for a bare reset or a close with no answer.
 - On a web port whose head names no product, azhaq sends a `GET /`.
 - On 5432, 6379 and 27017–27019, it sends that database's own first request.
 - A UDP port with no known protocol is asked four ways: a DNS query, an SNMP get, memcached's version, then an empty datagram.
