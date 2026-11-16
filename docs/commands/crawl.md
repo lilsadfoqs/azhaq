@@ -80,6 +80,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 - counts the rows by class, `observed routes`, `linked routes`, `hint routes` and `named strings`, says how many listed URLs are `linked` (links or loads a page holds that the crawl did not request), and how many hints and named URLs were left out of the list (`-hints` lists them);
 - with `-hints`, counts both kinds of listed URL, and says where to look: routes that scripts call with other methods, and strings that scripts only name;
 - counts what the rows are, apart: see [What the counts compare](#what-the-counts-compare);
+- with `-interact`, counts the routes only a click named: a trailing-slash variant of a route something else names is that route, and an address that answered with the page every unknown path gets is not a route, so the count leaves both out and says how many addresses that was;
 - says how many POST forms `-submit-forms` sent, and which POST forms it did not send and why.
 
 A crawl reads up to `-max-scripts` scripts a page, 256 by default, with the routes, source maps and manifests of the page scaled with it; what a page holds beyond a limit is a note, and with `-fail-on-capped` the run exits 4 (the numbers and the note are those of [`run`](run.md#what-one-pages-scripts-are-read-up-to)).

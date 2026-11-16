@@ -169,6 +169,7 @@ found in
 - `-stream` prints a `found` line as each listener is named and each proof answers, while the run goes.
 - From a second shell, `azhaq hunt -db WORKSPACE` (or `azhaq query -db WORKSPACE`) reads the workspace a run is still writing, without holding the run up. [hunt](hunt.md#a-workspace-whose-run-is-still-going) says what the rows are.
 - The progress line of the run, printed every 10 s on stderr, names the `hunt` command once its first listener is stored. With `-json` the progress object has it as `hunt`.
+- With `-permute` the progress line also counts the variation names asked against all those the names varied so far make (`75 of 2164 permutation names asked`); with `-json` the progress object has `permutation_names_asked` and `permutation_names`.
 
 ### Keeping the answers of `-dirs` matches
 
@@ -421,6 +422,9 @@ Examples of what `notes` holds for a run:
 - `-proxy 127.0.0.1:8080: 12 of 12 answers carried a Server header equal to the proxy's own ("BaseHTTP/0.6 Python/3.14.4"); it is not read as the target's, so no product, version or advisory comes from it`, or `-proxy 127.0.0.1:8080 could not be asked for its own answer (…): a product or version that only a header of an answer gave is marked as read through the proxy, and no advisory is matched to such a version`: see [Product checks](#product-checks).
 - `screenshot of URL not taken: the page needs about 26 requests and 8 were left (raise -max-requests)`, or `the budget was spent before the page loaded`, each ending with the requests the collectors had sent: see [shots](shots.md#screenshots-and-the-budget).
 - `GraphQL URL: introspection disabled: schema recovered (partial: query Query: 2 fields (1 client, 1 probe), 140 words tried; not proof there is nothing more)`, or `introspection: full schema`. `GraphQL URL: an IDE page, not asked for its schema: URL on the same origin gave it whole` says why a GraphiQL page got no POST: see [show](show.md#recovering-a-schema-when-introspection-is-off).
+
+- `-interact: 12 clicks on 12 pages found 0 routes only a click named; …; 3 more addresses the clicks reached are not counted: a route already listed (a trailing slash makes no other route) or the catch-all page`: the count is of routes only a click named, by the map's route identity, so a trailing-slash variant of a route something else names is that route, and an address that answered with the page every unknown path gets is not counted.
+- `-permute: 3 names varied, 2164 variation names to ask (a name two of them make is asked once), about 4 min at -dns-rate 10 on 1 resolver; 75 asked, 2089 not asked when the run stopped (azhaq resume asks them)`: the size of the job, the time at the DNS rate, and what a stop left. [plan](plan.md#the-estimate) gives the same numbers before the run.
 
 ### State-changing requests
 

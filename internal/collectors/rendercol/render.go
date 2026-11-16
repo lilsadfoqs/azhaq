@@ -211,6 +211,21 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 			}
 		}
 	}
+	// What the page names on its own, before a click: a URL outside it that
+	// shows only after a click is a click's find, whichever way it was seen.
+	onLoad := map[string]bool{}
+	if c.Browser.Interact > 0 {
+		for _, r := range p.Loaded {
+			if n, err := normalize.URL(r); err == nil {
+				onLoad[n] = true
+			}
+		}
+		for l, how := range seen {
+			if how == "dom" {
+				onLoad[l] = true
+			}
+		}
+	}
 	if in := p.Interaction; c.Browser.Interact > 0 {
 		for _, h := range in.Snapshots {
 			for _, l := range webextract.Links([]byte(h), base) {
@@ -228,7 +243,7 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 			}
 			if strings.HasPrefix(ru.Fragment, "/") {
 				// A route after the hash: a view of the app, never requested.
-				row := map[string]any{"url": r, "via": "browser", "seen": "click", "role": "client-route"}
+				row := map[string]any{"url": r, "via": "browser", "seen": "click", "role": "client-route", "clicked": true}
 				payload, _ := json.Marshal(row)
 				if err := emit(types.Observation{Collector: Name, Source: raw, Kind: "url", Payload: payload, Confidence: 0.8, ObservedAt: time.Now().UTC()}); err != nil {
 					return meta, err
@@ -254,6 +269,9 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 			continue
 		}
 		row := map[string]any{"url": link, "via": "browser", "seen": how, "role": role}
+		if c.Browser.Interact > 0 && !onLoad[link] {
+			row["clicked"] = true // named only after a click: -interact's count of routes
+		}
 		payload, _ := json.Marshal(row)
 		if err := emit(types.Observation{Collector: Name, Source: raw, Kind: "url", Payload: payload, Confidence: 0.8, ObservedAt: time.Now().UTC()}); err != nil {
 			return meta, err

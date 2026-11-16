@@ -165,6 +165,7 @@ type sendLimits struct {
 	verify       bool     // -verify: the enumerated read-only verification checks
 	verifyLogins bool     // -verify-logins: published default logins and unauthenticated reads
 	resolvers    []string // the resolvers named (-resolvers)
+	dnsRate      float64  // -dns-rate: queries a second to each resolver; 0: no pace
 	paramsN      int      // names of -params
 	dirsNoCal    bool     // -dirs-calibrate=false
 	// What the cost estimate counts from: the lists themselves, not their sizes.

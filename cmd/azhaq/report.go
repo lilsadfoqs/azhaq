@@ -526,7 +526,7 @@ func fillReport(rep *report, path string, seeds []types.Seed, ents []types.Entit
 		rep.warned = true // a picture short of its page is not a result to take as whole
 	}
 	rep.Notes = append(rep.Notes, pageFaultNotes(obs)...)
-	rep.Notes = append(rep.Notes, interactNotes(obs)...)
+	rep.Notes = append(rep.Notes, interactNotes(obs, rows)...)
 	rep.Takeover = takeovers(ents, obs)
 	if path != "" && !strings.HasPrefix(path, os.TempDir()) && len(rep.Failed) > 0 {
 		rep.Next = append(rep.Next, "azhaq query -db "+path+" -failed   (every failed target, the list to retry)")
@@ -903,17 +903,17 @@ func partialShots(obs []types.StoredObservation) bool {
 // interactNotes say what -interact did: the clicks made, the candidates
 // not clicked (downloads, mail and phone links), the routes found and the
 // writes the clicks would have sent.
-func interactNotes(obs []types.StoredObservation) []string {
-	var pages, clicks, skipped, routes, writes int
+func interactNotes(obs []types.StoredObservation, rows []engine.MapEntry) []string {
+	var pages, clicks, skipped, writes int
 	threw := ""
 	for _, o := range obs {
 		if o.Kind != "interact" {
 			continue
 		}
 		var p struct {
-			Clicks, Skipped, Routes int
-			Writes                  int `json:"writes_mapped"`
-			Threw                   string
+			Clicks, Skipped int
+			Writes          int `json:"writes_mapped"`
+			Threw           string
 		}
 		if json.Unmarshal(o.Payload, &p) != nil {
 			continue
@@ -921,7 +921,6 @@ func interactNotes(obs []types.StoredObservation) []string {
 		pages++
 		clicks += p.Clicks
 		skipped += p.Skipped
-		routes += p.Routes
 		writes += p.Writes
 		if p.Clicks == 0 && threw == "" {
 			threw = p.Threw
@@ -930,7 +929,11 @@ func interactNotes(obs []types.StoredObservation) []string {
 	if pages == 0 {
 		return nil
 	}
-	note := fmt.Sprintf("-interact: %d clicks on %d pages found %d routes; %d downloads and mail or phone links not clicked; the %d writes the clicks tried were mapped, not sent", clicks, pages, routes, skipped, writes)
+	routes, left := clickRoutes(obs, rows)
+	note := fmt.Sprintf("-interact: %d clicks on %d pages found %d routes only a click named; %d downloads and mail or phone links not clicked; the %d writes the clicks tried were mapped, not sent", clicks, pages, routes, skipped, writes)
+	if left > 0 {
+		note += fmt.Sprintf("; %d more addresses the clicks reached are not counted: a route already listed (a trailing slash makes no other route) or the catch-all page", left)
+	}
 	if clicks == 0 {
 		note += "; no button, link or menu showed on a page that had settled: it may draw them only after a slower answer than the page waits for, or need a sign-in (-login)"
 		if threw != "" {
