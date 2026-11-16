@@ -36,6 +36,18 @@ const SweepKind = "sweep"
 
 const parallel = 6
 
+// sweepParallel is how many checks of a sweep are in flight: -host-parallel
+// (default 10) when no -delay asks for slower, else 6. The host's own cap
+// holds either way, so the sweep never asks more than the run's other
+// requests allow, but 6 left the host's cap unused while the sweep, the last
+// work of a run of one app, asked its 1,300 checks (#505).
+func sweepParallel() int {
+	if fetch.Delay > 0 {
+		return parallel
+	}
+	return max(parallel, fetch.HostParallel)
+}
+
 // DefaultWordlist is a short recon list, not an exploit pack.
 var DefaultWordlist = []string{
 	"robots.txt",
@@ -242,7 +254,7 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 	}
 	meta := types.RunMeta{Status: types.StatusOK}
 	var mu sync.Mutex
-	sem := make(chan struct{}, parallel)
+	sem := make(chan struct{}, sweepParallel())
 	var wg sync.WaitGroup
 	var skipped atomic.Int32
 	// What became of each check of the sweep: asked, answered by a request
