@@ -32,9 +32,10 @@ func replayRows(t *testing.T, path string) []replayRow {
 	}
 	defer f.Close()
 	type ent struct {
-		ID   string `json:"id"`
-		Type string `json:"type"`
-		Key  string `json:"key"`
+		ID        string    `json:"id"`
+		Type      string    `json:"type"`
+		Key       string    `json:"key"`
+		FirstSeen time.Time `json:"first_seen"`
 	}
 	var line struct {
 		Kind        string `json:"kind"`
@@ -45,6 +46,7 @@ func replayRows(t *testing.T, path string) []replayRow {
 		} `json:"observation"`
 	}
 	ents := map[string]ent{}
+	var order []string // entity ids in file order
 	var pending []replayRow
 	var ids []string
 	sc := bufio.NewScanner(f)
@@ -56,6 +58,9 @@ func replayRows(t *testing.T, path string) []replayRow {
 		}
 		switch line.Kind {
 		case "entity":
+			if _, ok := ents[line.Entity.ID]; !ok {
+				order = append(order, line.Entity.ID)
+			}
 			ents[line.Entity.ID] = line.Entity
 		case "observation":
 			pending = append(pending, replayRow{obs: line.Observation.Observation})
@@ -65,7 +70,18 @@ func replayRows(t *testing.T, path string) []replayRow {
 	if err := sc.Err(); err != nil {
 		t.Fatal(err)
 	}
+	// An entity no observation names (a URL a page links to) is a row of its
+	// own, with no collector: it is part of what a run knows.
+	seen := map[string]bool{}
+	for _, id := range ids {
+		seen[id] = true
+	}
 	var out []replayRow
+	for _, id := range order {
+		if e := ents[id]; !seen[id] {
+			out = append(out, replayRow{typ: types.SeedType(e.Type), key: e.Key, obs: types.Observation{ObservedAt: e.FirstSeen}})
+		}
+	}
 	for i, r := range pending {
 		e, ok := ents[ids[i]]
 		if !ok {
@@ -88,6 +104,9 @@ func replayRun(t *testing.T, st *store.Store, id string, rows []replayRow) {
 			var e types.Entity
 			if e, err = st.UpsertEntity(r.typ, r.key, r.obs.ObservedAt); err != nil {
 				return
+			}
+			if r.obs.Collector == "" {
+				continue
 			}
 			if _, err = st.AddObservation(e.ID, r.obs); err != nil {
 				return
@@ -246,4 +265,191 @@ func TestReplayANewPortIsNamedAtItsAddress(t *testing.T) {
 			})
 		}
 	}
+}
+
+// pairProblems stores two runs of one target as the runs of one workspace and
+// returns what watch and diff report between them, one string each. Nothing is
+// filtered: when the target did not change, the lists are empty, and whatever
+// is left is either a false change or a difference of the runs to be judged.
+func pairProblems(t *testing.T, first, second []replayRow) (watch, diff []string) {
+	t.Helper()
+	db := filepath.Join(t.TempDir(), "ws.db")
+	st, err := store.Open(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	replayRun(t, st, "run1", first)
+	time.Sleep(2 * time.Millisecond) // runs are ordered by start time
+	replayRun(t, st, "run2", second)
+	st.Close()
+
+	ch, err := diffRuns(db) // what watch reports after its second run
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ch.any() {
+		for _, l := range strings.Split(strings.TrimSpace(ch.notifyText(0)), "\n")[1:] {
+			watch = append(watch, strings.TrimSpace(l))
+		}
+	}
+
+	old, err := store.OpenExisting(db) // what diff counts between them
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer old.Close()
+	neu, err := store.OpenExisting(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer neu.Close()
+	old.UseRun("run1")
+	neu.UseRun("run2")
+	d, err := store.Compare(old, neu)
+	if err != nil {
+		t.Fatal(err)
+	}
+	removed, _ := splitRemoved(old, d.Removed) // names only heard of are "not seen again", not a change
+	for _, e := range d.Added {
+		diff = append(diff, "+ "+string(e.Type)+" "+e.Key)
+	}
+	for _, e := range removed {
+		diff = append(diff, "- "+string(e.Type)+" "+e.Key)
+	}
+	oldObs, err := old.Observations()
+	if err != nil {
+		t.Fatal(err)
+	}
+	ents, err := neu.Entities()
+	if err != nil {
+		t.Fatal(err)
+	}
+	keyOf := map[string]string{}
+	for _, e := range ents {
+		keyOf[e.ID] = e.Key
+	}
+	before := map[string][]types.StoredObservation{}
+	for _, o := range oldObs {
+		k := o.EntityID + "\x00" + o.Collector + "\x00" + o.Kind
+		before[k] = append(before[k], o)
+	}
+	groups := map[string][]string{}
+	var names []string
+	for _, o := range d.NewObs {
+		k := o.Collector + " " + o.Kind
+		if _, ok := groups[k]; !ok {
+			names = append(names, k)
+		}
+		groups[k] = append(groups[k], keyOf[o.EntityID]+": "+obsDifference(before[o.EntityID+"\x00"+obsGroup(o)], o))
+	}
+	slices.Sort(names)
+	for _, k := range names {
+		ex := groups[k]
+		line := strconv.Itoa(len(ex)) + " new " + k + " observations"
+		for i := 0; i < len(ex) && i < 3; i++ {
+			line += "\n      " + ex[i]
+		}
+		diff = append(diff, line)
+	}
+	return watch, diff
+}
+
+func obsGroup(o types.StoredObservation) string { return o.Collector + "\x00" + o.Kind }
+
+// obsDifference says how a row of the second run differs from the rows of the
+// first run about the same entity from the same collector and kind: the
+// top-level fields that differ, in the closest of them, with their values.
+func obsDifference(olds []types.StoredObservation, o types.StoredObservation) string {
+	if len(olds) == 0 {
+		return "no such row in the first run"
+	}
+	var neu map[string]json.RawMessage
+	_ = json.Unmarshal(o.Payload, &neu)
+	best, bestN := "", -1
+	for _, old := range olds {
+		var was map[string]json.RawMessage
+		_ = json.Unmarshal(old.Payload, &was)
+		var parts []string
+		for k, v := range neu {
+			if string(was[k]) != string(v) {
+				parts = append(parts, k+" "+replayClip(string(was[k]))+" -> "+replayClip(string(v)))
+			}
+		}
+		for k, v := range was {
+			if _, ok := neu[k]; !ok {
+				parts = append(parts, k+" "+replayClip(string(v))+" -> (absent)")
+			}
+		}
+		slices.Sort(parts)
+		if bestN < 0 || len(parts) < bestN {
+			best, bestN = strings.Join(parts, "; "), len(parts)
+		}
+	}
+	if bestN == 0 {
+		return "the same top-level fields as a row of the first run (the difference is in the dropped volatile fields or in the order of the rows)"
+	}
+	return best
+}
+
+func replayClip(s string) string {
+	if s == "" {
+		return "(absent)"
+	}
+	if len(s) > 100 {
+		return s[:100] + "..."
+	}
+	return s
+}
+
+// replayPairs finds the run pairs under dir: a folder that holds
+// export-run1.jsonl and export-run2.jsonl, the exports of the first and the
+// second run of one workspace (azhaq export -run), keyed by its path in dir.
+func replayPairs(dir string) map[string][2]string {
+	pairs := map[string][2]string{}
+	_ = filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() || d.Name() != "export-run1.jsonl" {
+			return nil
+		}
+		two := filepath.Join(filepath.Dir(p), "export-run2.jsonl")
+		if _, err := os.Stat(two); err == nil {
+			rel, _ := filepath.Rel(dir, filepath.Dir(p))
+			pairs[rel] = [2]string{p, two}
+		}
+		return nil
+	})
+	return pairs
+}
+
+// checkPairs runs watch's and diff's comparison over each run pair under dir
+// and fails with the lines they report.
+func checkPairs(t *testing.T, dir string) {
+	pairs := replayPairs(dir)
+	if len(pairs) == 0 {
+		t.Skipf("no run pair (export-run1.jsonl and export-run2.jsonl) under %s", dir)
+	}
+	for rel, p := range pairs {
+		t.Run(rel, func(t *testing.T) {
+			watch, diff := pairProblems(t, replayRows(t, p[0]), replayRows(t, p[1]))
+			if len(watch) > 0 {
+				t.Errorf("watch reports %d lines between two runs of an unchanged target:\n  %s", len(watch), strings.Join(watch, "\n  "))
+			}
+			if len(diff) > 0 {
+				t.Errorf("diff reports %d lines between two runs of an unchanged target:\n  %s", len(diff), strings.Join(diff, "\n  "))
+			}
+		})
+	}
+}
+
+// TestReplayRunPairsOfAnUnchangedTarget is the no-false-change invariant (#491):
+// two runs of one target that did not change in between, as the lab network's
+// parity run keeps them (pairs=1), give no new or gone port, service, name or
+// URL, and no changed page or product, in watch or in diff. A difference that
+// belongs to the runs (a session id, a time) is listed, not filtered, so it
+// can be judged. Without the variable the test is skipped.
+func TestReplayRunPairsOfAnUnchangedTarget(t *testing.T) {
+	dir := os.Getenv("AZHAQ_REPLAY_DIR")
+	if dir == "" {
+		t.Skip("AZHAQ_REPLAY_DIR names no folder of recorded workspace exports")
+	}
+	checkPairs(t, dir)
 }

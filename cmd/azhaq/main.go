@@ -2396,15 +2396,7 @@ func printDiffStores(old, neu *store.Store, oldLabel string, opts diffOpts) erro
 	// a link) and never checked is not "removed" when the new run does not
 	// hear of it again: sources answer differently from one day to the
 	// next, and fail. Removed is what answered before.
-	oldFacts := factsByEntity(old)
-	var removed, unseen []types.Entity
-	for _, e := range d.Removed {
-		if f := oldFacts[e.ID]; len(f.ips) > 0 || f.status != 0 || f.portScanned || e.Type != types.TypeHostname && e.Type != types.TypeURL {
-			removed = append(removed, e)
-		} else {
-			unseen = append(unseen, e)
-		}
-	}
+	removed, unseen := splitRemoved(old, d.Removed)
 	failed := failedSources(neu)
 	// What was there in both runs and differs: the same rows watch lists.
 	ch, err := changesBetween(old, neu, d, changes{})
@@ -2490,6 +2482,20 @@ func printDiffStores(old, neu *store.Store, oldLabel string, opts diffOpts) erro
 	}
 	fmt.Printf("added=%d removed=%d not_seen_again=%d observations=%d changed=%d\n", len(d.Added), len(removed), len(unseen), len(d.NewObs), len(changed))
 	return nil
+}
+
+// splitRemoved sorts the entities of the old run that the new one lacks into
+// those that answered there (removed) and the names and URLs it only heard of.
+func splitRemoved(old *store.Store, gone []types.Entity) (removed, unseen []types.Entity) {
+	oldFacts := factsByEntity(old)
+	for _, e := range gone {
+		if f := oldFacts[e.ID]; len(f.ips) > 0 || f.status != 0 || f.portScanned || e.Type != types.TypeHostname && e.Type != types.TypeURL {
+			removed = append(removed, e)
+		} else {
+			unseen = append(unseen, e)
+		}
+	}
+	return removed, unseen
 }
 
 // failedSources names the third-party sources that failed in a run.
