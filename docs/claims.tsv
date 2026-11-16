@@ -754,6 +754,10 @@ ports.verify-through-egress	docs/commands/ports.md	Every read goes through the s
 ports.verify-never-payload	docs/commands/ports.md	Never a payload, a write, a credential or a request that tries to trigger a flaw.	test:internal/verify:TestChecksEnumeratePreconditions,TestRedisUnauthenticatedIsProved,TestMemcachedUnauthenticatedIsProved,TestMongoUnauthenticatedIsProved
 ports.verify-pointer	docs/commands/ports.md	The checks, the labels and the boundary are in [Read-only verification]	note:a pointer to the concepts page
 # docs/commands/run.md
+run.dirs-od	docs/commands/run.md	`-dirs-od DIR` keeps the request and the answer of each path `-dirs` finds as a file in `DIR`	test:cmd/azhaq:TestRunDirsODKeepsTheAnswerOfMatchedPathsOnly
+run.live-stream	docs/commands/run.md	`-stream` prints a `found` line as each listener is named and each proof answers, while the run goes.	test:cmd/azhaq:TestRunStreamNamesEachListenerAsHuntDoes,TestRunStreamIdentifiedTextLine,TestHelpAndPagesSayHowToReadARunThatIsStillGoing
+run.live-hunt	docs/commands/run.md	reads the workspace a run is still writing, without holding the run up.	test:cmd/azhaq:TestHuntAndQueryCommandsReadAWorkspaceARunIsStillWriting,TestHuntReadsAnOpenWorkspaceWithoutBlockingTheWriter,TestHelpAndPagesSayHowToReadARunThatIsStillGoing
+run.live-progress	docs/commands/run.md	names the `hunt` command once its first listener is stored.	test:cmd/azhaq:TestProgressLineNamesHuntOnceAListenerIsStored,TestRunProgressNamesHuntWhileTheRunGoes
 run.permute-names	docs/commands/run.md	`-permute` still varies the names `-dns-brute` found, whatever `-depth	test:cmd/azhaq:TestRunPermutesTheNamesTheBruteForceFound,TestRunKeepsTheAnswersOfTheNamesItGuessed
 run.product-checks-are-asked	docs/commands/run.md	The sweep of each web service also asks the paths the templates ask, only to name the product.	test:internal/collectors/pathscol:TestSweepNamesProductsAtTemplatePaths;test:cmd/azhaq:TestPlanRequests
 run.product-check-version-is-version-shaped	docs/commands/run.md	The version is the first value shaped like one (`6.1.1`, not a copyright range such as `2005-2024`); when none is, the template names the product without a version.	test:internal/detect:TestExtractorPicksTheVersionShapedValue,TestRealisticAdminPanelAndBrokerConsole;test:cmd/azhaq:TestRunNamesTheVersionOfAnAdminPanelAndABrokerConsole
@@ -1035,6 +1039,7 @@ dns.dnsx-measurement	docs/commands/dns.md	In one test run, `-rl` of dnsx 1.x did
 # docs/commands/hunt.md
 hunt.intro-no-start	docs/commands/hunt.md	A map of thousands of routes does not say where to start.	note:the reason hunt exists, an opinion about maps and not a behaviour
 hunt.sends-nothing	docs/commands/hunt.md	It reads the workspace and sends nothing.	test:cmd/azhaq:TestHuntSendsNothing
+hunt.reads-live-workspace	docs/commands/hunt.md	It reads a workspace a `run` is still writing, too: the rows stored so far, without holding the run up	test:cmd/azhaq:TestHuntAndQueryCommandsReadAWorkspaceARunIsStillWriting,TestHuntReadsAnOpenWorkspaceWithoutBlockingTheWriter,TestHelpAndPagesSayHowToReadARunThatIsStillGoing
 hunt.reads-workspace-roles	docs/commands/hunt.md	Reads the workspace, and the JSONL files of `-roles` if you give any. It sends nothing.	test:cmd/azhaq:TestHuntSendsNothing,TestHuntNextNamesTheRolesDirectory
 hunt.new-only-never-ranks	docs/commands/hunt.md	A row whose only signal is `new` never ranks.	test:internal/hunt:TestNewAloneNeverRanks
 hunt.never-rows	docs/commands/hunt.md	Static assets, scripts, catch-all pages and pages that are gone are never rows.	test:internal/hunt:TestExclusions
@@ -1315,6 +1320,16 @@ report.redact-path-parameter-values	docs/commands/report.md	The values that fill
 report.redact-token-removed	docs/commands/report.md	Any token is removed.	test:cmd/azhaq:TestReportRedactMasksHostsIdentifiersAndTokens
 report.redact-unmasked-identifier	docs/commands/report.md	Read a redacted report once before sharing it. An identifier that no kept body names in an identifier field is not masked.	test:cmd/azhaq:TestReportRedactLeavesAnIdentifierNoBodyNamesInAnIdentifierField
 # docs/commands/dirs.md
+dirs.od-files	docs/commands/dirs.md	`-od DIR` writes the request and the answer of each match as one file in `DIR`	test:cmd/azhaq:TestDirsODKeepsTheAnswerOfMatchedPathsOnly,TestRunDirsODKeepsTheAnswerOfMatchedPathsOnly
+dirs.od-dir-made	docs/commands/dirs.md	The directory is made if it does not exist.	test:cmd/azhaq:TestDirsODKeepsTheAnswerOfMatchedPathsOnly,TestRunDirsODKeepsTheAnswerOfMatchedPathsOnly
+dirs.od-listed-only	docs/commands/dirs.md	Only the paths that are listed get a file.	test:cmd/azhaq:TestDirsODKeepsTheAnswerOfMatchedPathsOnly,TestRunDirsODKeepsTheAnswerOfMatchedPathsOnly
+dirs.od-cap	docs/commands/dirs.md	The body in a file is cut at 5 MiB, the cap of `fuzz`; `resultfile_cut` says so.	test:cmd/azhaq:TestDirsODKeepsTheAnswerOfMatchedPathsOnly,TestRunDirsODKeepsTheAnswerOfMatchedPathsOnly
+dirs.od-same-judgement	docs/commands/dirs.md	A body longer than 1 MB is not read further by `-mr`: the matchers and the calibration judge the same bytes with or without `-od`.	test:internal/collectors/dirscol:TestKeepDirDoesNotChangeWhatTheMatchersRead
+dirs.od-resultfile	docs/commands/dirs.md	Each match's row names its file as `resultfile`	test:cmd/azhaq:TestDirsODKeepsTheAnswerOfMatchedPathsOnly,TestRunDirsODKeepsTheAnswerOfMatchedPathsOnly
+dirs.od-write-failure	docs/commands/dirs.md	A file that cannot be written is counted in a note and the match has no `resultfile`.	test:cmd/azhaq:TestDirsODCountsAFileItCannotWrite
+dirs.od-request-sent	docs/commands/dirs.md	The request in a file is the one that was sent	test:cmd/azhaq:TestDirsODKeepsTheAnswerOfMatchedPathsOnly,TestRunDirsODKeepsTheAnswerOfMatchedPathsOnly
+dirs.od-run	docs/commands/dirs.md	`run -dirs` has the same option as `-dirs-od DIR`.	test:cmd/azhaq:TestRunDirsODKeepsTheAnswerOfMatchedPathsOnly
+dirs.od-field	docs/commands/dirs.md	With `-od`: the name of the file that holds the request and answer of the match	test:cmd/azhaq:TestDirsODKeepsTheAnswerOfMatchedPathsOnly,TestRunDirsODKeepsTheAnswerOfMatchedPathsOnly
 dirs.failure-before-cap	docs/commands/dirs.md	A request it sent before the cap that got no answer is a failure like any other: listed under `failed` with its cause (once for each cause), counted in `failures` and listed by `azhaq query -failed`, and the exit is 4, the limit's.	test:cmd/azhaq:TestSweepsKeepTheFailureOfARequestSentBeforeTheCap,TestRunDirsKeepsTheFailureOfARequestSentBeforeTheCap;test:internal/collectors/dirscol:TestRequestsThatFailedBeforeTheCapAreKeptAsErrorRows
 dirs.resume-replaces-kept-failure	docs/commands/dirs.md	The resume replaces it with what the redo meets: a refusal that repeats is one failure, not two.	test:cmd/azhaq:TestResumeDoesNotCountAKeptFailureTwice,TestResumeDropsAKeptFailureTheRedoDoesNotMeet
 dirs.calibration-cut-by-cap	docs/commands/dirs.md	Calibration the cap cut short is not used as if it were answered: the sweep is not done, even when no word is left to ask.	test:internal/collectors/dirscol:TestCalibrationCutByTheBudgetLeavesTheSweepUndone
@@ -1575,6 +1590,9 @@ shots.unanswered-not-failure	docs/commands/shots.md	A request that left and got 
 shots.browser-requests-blocked	docs/commands/shots.md	`B` counts the requests Chrome was not let send.	test:cmd/azhaq:TestBrowserRequestsAreCountedAnsweredUnansweredAndBlocked
 shots.chrome-mode-in-summary	docs/commands/shots.md	a sandboxed Chrome gives `Chrome ran with its sandbox`	test:cmd/azhaq:TestSummaryNamesTheModeChromeRanIn
 docs-start.advice	docs/START.md	Only test what you are allowed to test.	note:advice to the reader, not a behaviour of the tool
+docs-start.live-read	docs/START.md	Or open a second shell and run `azhaq hunt -db app.db`: it lists the rows stored so far without holding the run up.	test:cmd/azhaq:TestHuntAndQueryCommandsReadAWorkspaceARunIsStillWriting,TestHuntReadsAnOpenWorkspaceWithoutBlockingTheWriter,TestHelpAndPagesSayHowToReadARunThatIsStillGoing
+docs-start.live-stream	docs/START.md	To read a run that is still going, add `-stream` to `run`: it prints a `found` line as each listener is named and each proof answers.	test:cmd/azhaq:TestRunStreamNamesEachListenerAsHuntDoes,TestRunStreamIdentifiedTextLine,TestHelpAndPagesSayHowToReadARunThatIsStillGoing
+docs-start.live-progress	docs/START.md	The run's own progress line names that `hunt` command once its first listener is stored.	test:cmd/azhaq:TestProgressLineNamesHuntOnceAListenerIsStored,TestRunProgressNamesHuntWhileTheRunGoes
 docs-start.exit-codes	docs/START.md	Exit codes, for every job:	test:internal/contract:TestExitCodeFollowsTheOutcome;test:cmd/azhaq:TestExitRule,TestStartPageCommandsRun
 docs-start.resume	docs/START.md	`azhaq resume -db FILE` continues it	test:internal/contract:TestTheKillFileStopsTheRunAndResumeGoesOn
 docs-start.plan-sends-nothing	docs/START.md	`plan` sends nothing: it prints what the run would send and the estimate.	test:cmd/azhaq:TestEgressContract,TestStartPageCommandsRun
@@ -1839,6 +1857,7 @@ export.findings-record-names-lead	docs/commands/export.md	An advisory record is 
 run.advisory-also-seen	docs/commands/run.md	another version that does not refine it is named on the lead	test:internal/advisory:TestServicesSayAVersionTheyDidNotPick
 plan.estimate-reads-at-least	docs/commands/plan.md	The text then reads `at least N`, in the plan and in the run's summary.	test:cmd/azhaq:TestEstimateFloorNamesSilentUDPAsks,TestRunSummaryTextHasTheCostByStage
 plan.not-counted-names-every-kind	docs/commands/plan.md	`not_counted` names every kind of request the floor leaves out: a UDP port that does not answer gets up to 3 more datagrams, one for each protocol's own request, and a crawl asks control requests that tell a catch-all answer from a page.	test:cmd/azhaq:TestEstimateFloorNamesSilentUDPAsks
+plan.shots-stage	docs/commands/plan.md	`shots` (`-screenshots` and the `shots` command: one page load for each web service, a floor; `not_counted` names the page's scripts, styles and images	test:cmd/azhaq:TestPlanEstimateHasAShotsStage,TestChromeRequestsOfShotsAreCountedInTheShotsStage,TestShotsSummaryCountsChromesRequestsInTheShotsStage;test:internal/browser:TestChromeRequestsCarryTheCollectorOfTheLoad
 query.answer-not-default	docs/commands/query.md	They are not in the default rows.	test:cmd/azhaq:TestResponseFieldsAreNotInTheDefaultRows
 run.row-keeps-answer	docs/commands/run.md	Every web row that a request answered keeps three things of that answer in the workspace	test:cmd/azhaq:TestRowKeepsResponseHeadersAndBodyStart
 run.row-keeps-response-only	docs/commands/run.md	Only the response's headers are kept.	test:cmd/azhaq:TestRowKeepsResponseHeadersAndBodyStart

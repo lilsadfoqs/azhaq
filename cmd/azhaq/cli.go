@@ -56,7 +56,7 @@ func init() {
 		{name: "run", group: groupMap, run: cmdRun,
 			summary: "map a target: names, services, pages, scripts, APIs, forms, parameters, in one graph",
 			usage:   "(-url URL | -domain D | -list FILE | -scope FILE|PLATFORM -program P | -asn AS | -cidr NET | -in seeds.jsonl) [flags]",
-			output:  "a ranked map, one row per entity (-json: one JSON object per row); the summary on stderr",
+			output:  "a ranked map, one row per entity (-json: one JSON object per row); the summary on stderr; while it runs, -stream prints a found line as each listener is named and each proof answers, and azhaq hunt -db FILE from a second shell lists the rows stored so far",
 			examples: []string{
 				"azhaq run -url https://app.example.com/ -db app.db",
 				"azhaq run -scope hackerone -program security -db h1.db -max-requests 5000 -rate 5",
@@ -165,8 +165,8 @@ func init() {
 			}},
 		{name: "dirs", group: groupDropIn, like: "ffuf -ac", run: cmdDirs,
 			summary:  "paths from a wordlist (SecLists' common.txt built in) that answer unlike a path that cannot exist; a URL with a path is swept from that path",
-			usage:    "-u URL | -l FILE | stdin  [-w WORDLIST] [-e EXT] [-depth N] [-mc/-ms/-mw/-ml/-mr LIST] [-fc/-fs/-fw/-fl/-fr LIST] [-ac=false] [-rate N] [-proxy URL] [-json]",
-			output:   "one URL per line with status, size, words and lines; -json: {\"url\",\"status\",\"length\",\"words\",\"lines\",\"redirectlocation\"}. Sizes, words and lines are counted as ffuf counts them, so a -fs or -fl value carries over. The calibration is on (it is ffuf's -ac); -mc defaults to 200-299,301,302,307,308,401,403,405,500 (ffuf's and 308)",
+			usage:    "-u URL | -l FILE | stdin  [-w WORDLIST] [-e EXT] [-depth N] [-mc/-ms/-mw/-ml/-mr LIST] [-fc/-fs/-fw/-fl/-fr LIST] [-ac=false] [-rate N] [-od DIR] [-proxy URL] [-json]",
+			output:   "one URL per line with status, size, words and lines; -json: {\"url\",\"status\",\"length\",\"words\",\"lines\",\"redirectlocation\"} and \"resultfile\" with -od. Sizes, words and lines are counted as ffuf counts them, so a -fs or -fl value carries over. The calibration is on (it is ffuf's -ac); -mc defaults to 200-299,301,302,307,308,401,403,405,500 (ffuf's and 308)",
 			examples: []string{"azhaq dirs -u https://app.example.com/", "azhaq dirs -u https://app.example.com/api/ -w common.txt -e php,bak -fs 4242 -rate 20"}},
 		{name: "fuzz", group: groupDropIn, like: "ffuf", run: cmdFuzz,
 			summary: "wordlists put into a request, anywhere in it: paths, query values, headers (virtual hosts), JSON or form bodies; filters, auto-calibration and recursion as ffuf has them",
@@ -257,7 +257,7 @@ func init() {
 		{name: "hunt", group: groupWS, run: cmdHunt,
 			summary: "where to look first: the mapped routes, hosts and files ranked, each with its evidence and the next command",
 			usage:   "-db FILE [-roles roles.jsonl] [-limit 25] [-since 168h] [-json]",
-			output:  "one row per route template: rank, score, key, the reasons, and the command to run next (-json: rank, score, key, type, reasons, next)",
+			output:  "one row per route template: rank, score, key, the reasons, and the command to run next (-json: rank, score, key, type, reasons, next); it reads a workspace a run is still writing, the rows stored so far, without holding the run up",
 			examples: []string{
 				"azhaq hunt -db app.db",
 				"azhaq roles -json -role anon -role 'user=Authorization: Bearer …' -- -url https://app.example.com/ > roles.jsonl; azhaq hunt -db app.db -roles roles.jsonl",

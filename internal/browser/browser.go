@@ -31,6 +31,7 @@ import (
 	"github.com/chromedp/chromedp"
 
 	"github.com/lilsadfoqs/azhaq/internal/egress"
+	"github.com/lilsadfoqs/azhaq/internal/ledger"
 )
 
 // RequireSandbox is the default of Browser.RequireSandbox: with the sandbox
@@ -554,6 +555,11 @@ func (b *Browser) Load(ctx context.Context, rawURL string, shot bool) (Page, err
 	defer func() { watched() }() // once the tab is closed
 	tab, cancel := chromedp.NewContext(b.root)
 	tab = guard.Carry(tab, ctx)
+	// The tab is not derived from ctx: its requests carry the collector's
+	// name, so they count under that collector's stage and not "other".
+	if name := ledger.CollectorOf(ctx); name != "" {
+		tab = ledger.WithCollector(tab, name)
+	}
 	defer cancel()
 	// With a pace the page's deadlines run from when it last moved.
 	var prog *progress

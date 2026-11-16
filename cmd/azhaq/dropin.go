@@ -869,7 +869,7 @@ func cmdDirs(args []string) error {
 	fs.Var(&urls, "u", "web service, such as https://app.example.com/ (repeatable, or comma-separated)")
 	list := onceString(fs, "l", "file of services (- for stdin)")
 	words := fs.String("w", "", "wordlist (default: SecLists' common.txt, built in: "+strconv.Itoa(dirscol.WordCount())+" words)")
-	specs := []string{"ac=dirs-ac", "e=dirs-ext", "ic=dirs-ic", "depth=dirs-depth", "t=dirs-threads", "rate=dirs-rate",
+	specs := []string{"ac=dirs-ac", "e=dirs-ext", "ic=dirs-ic", "depth=dirs-depth", "t=dirs-threads", "rate=dirs-rate", "od=dirs-od",
 		"H=header", "b=cookie", "cookie", "max-requests", "timeout", "v", "scope", "program", "allow", "deny", "deny-path", "ledger", "kill-file", "seal-to", "proxy", "resolvers", "send-state-changing"}
 	for _, m := range dirsMatchers {
 		specs = append(specs, m.flag+"=dirs-"+m.flag)
@@ -924,7 +924,7 @@ func cmdDirs(args []string) error {
 	if err != nil {
 		return err
 	}
-	sink := &dirsSink{w: w, silent: c.silent, printed: map[string]bool{}}
+	sink := &dirsSink{w: w, silent: c.silent, printed: map[string]bool{}, od: fs.Lookup("od").Value.String()}
 	rep := newReport("dirs")
 	rep.what = "paths"
 	rep.Notes = append(rep.Notes, notes...)
@@ -971,6 +971,8 @@ type dirsSink struct {
 	mu                        sync.Mutex
 	printed                   map[string]bool
 	failed, limited, requests int
+	keepFailed                int // matches whose -od file could not be written
+	od                        string
 	// repeats are the inputs of the wordlist that ask a path an earlier input
 	// asked: each is listed with its position, as ffuf lists it.
 	repeats int
@@ -994,6 +996,7 @@ func (d *dirsSink) see(_ types.Entity, o types.Observation) {
 	case "dirs":
 		d.mu.Lock()
 		d.failed += intOf(p["failed"])
+		d.keepFailed += intOf(p["keep_failed"])
 		d.limited += intOf(p["rate_limited"])
 		d.requests += intOf(p["requests"])
 		d.repeats += intOf(p["repeats"])
@@ -1023,6 +1026,12 @@ func (d *dirsSink) see(_ types.Entity, o types.Observation) {
 			if pos := intOf(p["position"]); pos > 0 {
 				row["position"] = pos
 			}
+			if f, _ := p["resultfile"].(string); f != "" {
+				row["resultfile"] = f
+				if p["resultfile_cut"] == true {
+					row["resultfile_cut"] = true
+				}
+			}
 			if ctl != nil {
 				row["fold"], row["control"] = engine.FoldCatchAll, ctl.URL
 			}
@@ -1030,7 +1039,11 @@ func (d *dirsSink) see(_ types.Entity, o types.Observation) {
 		case d.silent:
 			d.w.line(u)
 		default:
-			d.w.line(fmt.Sprintf("%s [Status: %d, Size: %d, Words: %d, Lines: %d]", u, intOf(p["status"]), intOf(p["length"]), intOf(p["words"]), intOf(p["lines"])))
+			res := ""
+			if f, _ := p["resultfile"].(string); f != "" {
+				res = ", Resultfile: " + f
+			}
+			d.w.line(fmt.Sprintf("%s [Status: %d, Size: %d, Words: %d, Lines: %d%s]", u, intOf(p["status"]), intOf(p["length"]), intOf(p["words"]), intOf(p["lines"]), res))
 		}
 	}
 }
@@ -1117,6 +1130,10 @@ func (d *dirsSink) settle(rep *report) {
 		rep.Notes = append(rep.Notes, fmt.Sprintf("%d paths got no whole answer, after one retry: they were not judged (a service under load cuts answers off; run again or lower -t)", d.failed))
 		rep.warned = true
 	}
+	if d.keepFailed > 0 {
+		rep.Notes = append(rep.Notes, fmt.Sprintf("-od: %d matches could not be written to %s", d.keepFailed, d.od))
+		rep.warned = true
+	}
 	if d.limited > 0 {
 		rep.Notes = append(rep.Notes, fmt.Sprintf("%d of %d guesses were answered 429 (too many requests) and not judged: the service is limiting the sweep; lower -rate or -t, and run again", d.limited, d.requests))
 		rep.warned = true
@@ -1162,6 +1179,9 @@ func resumeDirs(db, id string, runArgs, rest []string) error {
 		}
 		if name == "dirs-ac" && inline && val == "false" {
 			noCal = true
+		}
+		if name == "dirs-od" && inline {
+			sink.od = val
 		}
 	}
 	if noCal {

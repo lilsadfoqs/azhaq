@@ -505,7 +505,7 @@ func keptArgs(args []string) []string {
 			}
 			out = append(out, "-header="+val)
 			continue
-		case "list", "in", "facts", "paths", "providers", "resolvers", "dns-brute", "dirs", "params", "params-targets", "screenshots", "urls", "ledger", "kill-file":
+		case "list", "in", "facts", "paths", "providers", "resolvers", "dns-brute", "dirs", "params", "params-targets", "screenshots", "dirs-od", "urls", "ledger", "kill-file":
 			// Files and directories, made absolute: azhaq resume may run
 			// from another directory.
 			if !inline && takesValue {

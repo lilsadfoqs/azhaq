@@ -5,7 +5,7 @@ Sweeps a wordlist of paths and reports those that answer unlike a path that cann
 ## Synopsis
 
 ```
-azhaq dirs -u URL | -l FILE | stdin  [-w WORDLIST] [-ic] [-e EXT] [-depth N] [-mc/-ms/-mw/-ml/-mr LIST] [-fc/-fs/-fw/-fl/-fr LIST] [-ac=false] [-rate N] [-proxy URL] [-json]
+azhaq dirs -u URL | -l FILE | stdin  [-w WORDLIST] [-ic] [-e EXT] [-depth N] [-mc/-ms/-mw/-ml/-mr LIST] [-fc/-fs/-fw/-fl/-fr LIST] [-ac=false] [-rate N] [-od DIR] [-proxy URL] [-json]
 ```
 
 ## Examples
@@ -19,6 +19,9 @@ azhaq dirs -u https://app.example.com/api/ -w common.txt -e php,bak -fs 4242 -ra
 
 # several services from a file, as JSON
 azhaq dirs -l services.txt -json
+
+# keep the request and answer of each match as a file in out/
+azhaq dirs -u https://app.example.com/ -od out
 ```
 
 ## What it does
@@ -48,6 +51,8 @@ Plain output is one URL per line with its status, size, words and lines. With `-
 | `lines` | The number of newlines in the whole body, plus one. |
 | `position` | The place of the input among the sweep's inputs, from 1, as ffuf counts it. |
 | `redirectlocation` | Where a redirect points. |
+| `resultfile` | With `-od`: the name of the file that holds the request and answer of the match, in the `-od` directory. |
+| `resultfile_cut` | `true` when the body in that file ends at the cap of 5 MiB. |
 | `truncated` | `true` when the path streams for ever (server-sent events, `multipart/x-mixed-replace`): it is read for 64 KiB or 2 seconds and then closed, and `length`, `words` and `lines` are of what was read. |
 
 ## Summary and exit codes
@@ -94,6 +99,15 @@ The start of every body is checked for a runtime's stack trace as it is read: a 
 - It sends `Accept-Encoding: gzip` and decodes the answer before counting.
 - A `-H` of yours wins over these headers.
 - The `User-Agent` is a current Chrome's, not `Fuzz Faster U Fool`. Sizes do not change with it unless the app answers by it. `-H 'User-Agent: …'` sends another.
+
+### Keeping the answer of a match
+
+- `-od DIR` writes the request and the answer of each match as one file in `DIR`, as [fuzz](fuzz.md#reports) does: the request, a separator line, then the status line, headers and body, in a file named by the md5 of its text. The directory is made if it does not exist.
+- Only the paths that are listed get a file. A path that the matchers, the filters or the calibration hide gets none.
+- The body in a file is cut at 5 MiB, the cap of `fuzz`; `resultfile_cut` says so. A body longer than 1 MB is not read further by `-mr`: the matchers and the calibration judge the same bytes with or without `-od`.
+- Each match's row names its file as `resultfile`, in `-json`, in the text line (`Resultfile: NAME`) and in the workspace. A file that cannot be written is counted in a note and the match has no `resultfile`.
+- The request in a file is the one that was sent, so a `-H` or `-b` you gave is in it.
+- `run -dirs` has the same option as `-dirs-od DIR`.
 
 ### A blank wordlist line
 - An empty line asks the base URL, as ffuf's does, and the base is judged as any word: it is not listed when it answers like a path that cannot exist (a single-page app that gives its shell for everything).
@@ -186,6 +200,7 @@ The start of every body is checked for a runtime's stack trace as it is read: a 
 | `-db` | string |  | keep the graph in this database for query, show, export and diff (default: workspace.db in the run's folder under ./.azhaq/runs; with AZHAQ_HOME=none a temporary one) |
 | `-json` | bool |  | JSONL output, and the summary as one JSON object on stderr |
 | `-o` | string |  | also write results to this file |
+| `-od` | string |  | keep the request and answer of each path that matched as a file in this directory, as fuzz -od does (up to 5 MiB of a body; its name is shown with the path) |
 | `-silent` | bool |  | results only: no progress; the summary only when something failed (a source that failed, a takeover candidate as a [takeover] line on stderr); stdout stays one result per line |
 | `-v` | bool |  | print a line for every finished task, not only failures |
 | `-strict-exit` | bool |  | exit 3 for any failure, a target among many included (the rule before 0.15); without it a run that did its job exits 0 and its summary counts and lists the failures |

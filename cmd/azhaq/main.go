@@ -301,7 +301,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	storeResp := fs.Bool("sr", false, "also write each answer a target gave, headers and body as read, to the -srd directory as DIR/HOST/SHA1.txt with an index.txt (katana's -sr); query -fields response_file says where a row's is")
 	storeRespDir := fs.String("srd", "azhaq_response", "directory for -sr")
 	omitBody := fs.Bool("ob", false, "with -sr: write the status line and headers only")
-	stream := fs.Bool("stream", false, "also print each name, address, URL and open port as it is found, once per map row, and each listener as it is named and each proof as it answers (found lines, before the ranked map)")
+	stream := fs.Bool("stream", false, "also print each name, address, URL and open port as it is found, once per map row, and each listener as it is named and each proof as it answers (found lines, before the ranked map); azhaq hunt -db FILE in a second shell lists the rows stored so far")
 	verbose := fs.Bool("v", false, "print a line for every finished task, not only failures")
 	timeout := fs.Duration("timeout", 0, "stop after this long and keep what was found; azhaq resume continues (0: no limit)")
 	showObs := fs.Bool("obs", false, "also print the observation log")
@@ -396,6 +396,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	dirsDepth := fs.Int("dirs-depth", 1, "directory levels to sweep; 2 also sweeps directories found")
 	dirsThreads := fs.Int("dirs-threads", 40, "path guesses in flight per service (as ffuf)")
 	dirsRate := fs.Float64("dirs-rate", 0, "path guesses per second per host (0: no limit but -dirs-threads, as ffuf)")
+	dirsOd := fs.String("dirs-od", "", "keep the request and answer of each path that matched as a file in this directory, as fuzz -od does (up to 5 MiB of a body; its name is shown with the path)")
 	paramsFile := fs.String("params", "", "find query parameters pages read, from this wordlist or small, medium or large for a built-in one (active; the targets given are the scope unless -allow)")
 	paramsPerHost := fs.Int("params-per-host", 20, "pages searched for parameters per host")
 	paramsAll := fs.Bool("params-all", false, "with -params, also search the pages a request of the run showed to read no name: one that answered as a path that cannot exist does, or refused (401, 403, 405); by default a note lists them")
@@ -1109,7 +1110,12 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 				return err
 			}
 		}
-		opts.Dirs = dirscol.Options{Words: words, Extensions: splitList(*dirsExt), Depth: *dirsDepth, Threads: *dirsThreads, Rate: *dirsRate}
+		opts.Dirs = dirscol.Options{Words: words, Extensions: splitList(*dirsExt), Depth: *dirsDepth, Threads: *dirsThreads, Rate: *dirsRate, KeepDir: *dirsOd}
+		if *dirsOd != "" {
+			if err := os.MkdirAll(*dirsOd, 0o750); err != nil {
+				return usagef("-dirs-od %s: %v", *dirsOd, err)
+			}
+		}
 		given := map[string]string{}
 		for k, v := range dirsMatch {
 			given[k] = *v
