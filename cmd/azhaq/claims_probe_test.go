@@ -339,7 +339,8 @@ func TestProbeAnswersARouteThatNeverEnds(t *testing.T) {
 	t0 := time.Now()
 	out, _, code := runContract(t, "probe", "-u", srv.URL+"/events", "-req-timeout", "30s")
 	rows := probeRows(t, out)
-	if code != exitOK || len(rows) != 1 || rows[0]["status_code"] != float64(200) || rows[0]["failed"] == true || time.Since(t0) > 6*time.Second {
+	// Well under the 30 s request timeout: a loaded CI runner took 6.7 s.
+	if code != exitOK || len(rows) != 1 || rows[0]["status_code"] != float64(200) || rows[0]["failed"] == true || time.Since(t0) > 12*time.Second {
 		t.Errorf("exit %d after %s: %s", code, time.Since(t0), out)
 	}
 }
