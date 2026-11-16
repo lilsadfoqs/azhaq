@@ -37,12 +37,12 @@ const SweepKind = "sweep"
 const parallel = 6
 
 // sweepParallel is how many checks of a sweep are in flight: -host-parallel
-// (default 10) when no -delay asks for slower, else 6. The host's own cap
-// holds either way, so the sweep never asks more than the run's other
-// requests allow, but 6 left the host's cap unused while the sweep, the last
-// work of a run of one app, asked its 1,300 checks (#505).
+// (default 10) when no -delay asks for slower and no session is watched,
+// else 6. The host's own cap holds either way, but 6 left it unused while the
+// sweep asked its 1,300 checks (#505). A signed-in run keeps 6: the checks in
+// flight when a session ends are sent after it.
 func sweepParallel() int {
-	if fetch.Delay > 0 {
+	if fetch.Delay > 0 || fetch.Guarded() {
 		return parallel
 	}
 	return max(parallel, fetch.HostParallel)

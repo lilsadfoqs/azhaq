@@ -223,6 +223,10 @@ func StageCheck(ctx context.Context, requests int) error {
 
 func resetSession() { guardP.Store(nil) }
 
+// Guarded reports whether a session check watches this run's requests: a
+// signed-in run, whose requests after the session ends must stay few.
+func Guarded() bool { return guardP.Load() != nil }
+
 // WatchRemote gives a worker process the part of the session check that
 // only needs its own answers: the GETs it sent, and whether an answer looked
 // like the end of the session (a 401, a redirect to signIn, a cleared

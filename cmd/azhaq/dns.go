@@ -310,7 +310,7 @@ func cmdDNS(args []string) error {
 		}
 	}
 	defer sealLedger()
-	r := &dnsRun{cf: cf, pool: pool, wild: dnsr.NewWildcards(pool), w: w, rep: rep, resolvers: resolvers, in: in, failed: map[string]*engine.Failure{}}
+	r := &dnsRun{args: args, cf: cf, pool: pool, wild: dnsr.NewWildcards(pool), w: w, rep: rep, resolvers: resolvers, in: in, failed: map[string]*engine.Failure{}}
 	r.keepOn = c.db != ""
 	if cf.hosts {
 		r.hostsFile = dnsr.SystemHosts()
@@ -731,6 +731,7 @@ func (in *dnsInput) fail(what, err, target string) {
 // ----- the run -----
 
 type dnsRun struct {
+	args      []string // the command's own arguments, kept with the run (os.Args is another command's in-process)
 	cf        *dnsConf
 	pool      *dnsr.Pool
 	wild      *dnsr.Wildcards
@@ -1651,7 +1652,7 @@ func (r *dnsRun) keep(path string) error {
 	if err := st.BeginRun(newRunID(), 0, 0); err != nil {
 		return err
 	}
-	_ = st.SetRunArgs(append([]string{"dns"}, keptDNSArgs(os.Args[2:])...))
+	_ = st.SetRunArgs(append([]string{"dns"}, keptDNSArgs(r.args)...))
 	now := time.Now().UTC()
 	r.mu.Lock()
 	kept := r.kept
