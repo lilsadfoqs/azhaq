@@ -43,8 +43,8 @@ func cmdParams(args []string) error {
 	fs := newFlags("params")
 	var c common
 	c.register(fs)
-	var urls stringsFlag
-	fs.Var(&urls, "u", "page URL (repeatable)")
+	var urls urlsFlag
+	fs.Var(&urls, "u", "page URL (repeatable, or comma-separated)")
 	list := onceString(fs, "l", "file of page URLs (- for stdin)")
 	imp := fs.String("i", "", "import pages: a file of URLs, a Burp Suite XML export (HTML, JSON and XML items) or a raw HTTP request (GET or POST)")
 	words := fs.String("w", "large", "parameter names: a file, one per line, or small (1,000 names), medium (3,000) or large (6,500, the default)")

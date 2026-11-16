@@ -225,8 +225,8 @@ var (
 // commands built on it print rep.
 func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	fs := newFlags("run")
-	var urls stringsFlag
-	fs.Var(&urls, "url", "seed URL (repeatable)")
+	var urls urlsFlag
+	fs.Var(&urls, "url", "seed URL (repeatable, or comma-separated)")
 	org := onceString(fs, "org", "seed Organization name")
 	in := onceString(fs, "in", "JSONL seeds")
 	list := onceString(fs, "list", "targets, one per line: URL, host, host:port or IP (- for stdin)")
@@ -369,6 +369,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	portRate := fs.Float64("port-rate", 0, "port connection attempts per second, a ceiling (0: 1500, as naabu's connect scan, and 127.0.0.1 unpaced)")
 	portMinRate := fs.Float64("port-min-rate", 0, "port connection attempts per second at least, as nmap's --min-rate: raises the pace to this when the pace (-port-rate, or the default 1500) is lower, and never lowers it")
 	portTimeout := fs.Duration("port-timeout", 0, "wait this long for one port to accept or refuse a connect (0: 1.5s)")
+	fs.Var((*msDuration)(portTimeout), "connect-timeout", "wait this long for one port to accept or refuse a connect, as ports -connect-timeout does: 1500, 1500ms or 2s (default 1.5s; same as -port-timeout; -timeout is the run's limit)")
 	portRetries := fs.Int("port-retries", -1, "more passes over the ports that neither accepted nor refused: n passes over all of them, 0 none (default: one, when few did not answer)")
 	portWorkers := fs.Int("port-workers", 0, "port connects in flight at once, over all hosts (0: as many as the rate allows, up to 20000)")
 	portOrder := fs.String("port-order", "random", "the order a host's ports are asked in: random (the likeliest ports first, each tier shuffled) or asc")

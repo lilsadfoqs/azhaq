@@ -146,6 +146,9 @@ func TestFindingsReportFromAStoredRun(t *testing.T) {
 	if err != nil {
 		t.Fatalf("report -findings: %v\n%s", err, errOut)
 	}
+	if !strings.Contains(errOut, "azhaq report: 0 findings, 3 identifications, 0 leads in ") {
+		t.Errorf("report -findings says %q", errOut)
+	}
 	body, err := os.ReadFile(outFile)
 	if err != nil {
 		t.Fatal(err)

@@ -112,7 +112,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 
 | Flag | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `-url` | string, repeatable |  | seed URL |
+| `-url` | string, repeatable |  | seed URL (repeatable, or comma-separated) |
 | `-domain` | string, repeatable |  | seed Domain, for subdomain discovery |
 | `-list` | string |  | targets, one per line: URL, host, host:port or IP (- for stdin) |
 | `-in` | string |  | JSONL seeds |
@@ -229,6 +229,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 | Flag | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `-rate` | float |  | requests, port connects, UDP datagrams and DNS queries to the targets' name servers per second, over all hosts (0: no pace) |
+| `-connect-timeout` | string |  | wait this long for one port to accept or refuse a connect, as ports -connect-timeout does: 1500, 1500ms or 2s (default 1.5s; same as -port-timeout; -timeout is the run's limit) |
 | `-host-rate` | float |  | requests per second to each host, besides -rate over all (0: none) |
 | `-host-parallel` | int |  | requests in flight per host (default 10, as katana) |
 | `-parallel` | int |  | work items in flight (default 16) |

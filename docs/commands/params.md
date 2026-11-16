@@ -101,7 +101,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 
 | Flag | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `-u` | string, repeatable |  | page URL |
+| `-u` | string, repeatable |  | page URL (repeatable, or comma-separated) |
 | `-l` | string |  | file of page URLs (- for stdin) |
 | `-i` | string |  | import pages: a file of URLs, a Burp Suite XML export (HTML, JSON and XML items) or a raw HTTP request (GET or POST) |
 | `-scope` | string |  | a program's scope: a file (HackerOne CSV, bounty-targets JSON, Burp options, lines) or hackerone, bugcrowd, intigriti, yeswehack |

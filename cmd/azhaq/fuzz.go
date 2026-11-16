@@ -167,6 +167,9 @@ func cmdFuzz(args []string) error {
 		fmt.Println("azhaq " + version)
 		return nil
 	}
+	if holdsSecondURL(*rawURL) {
+		return usagef("-u takes one URL and is not repeatable: %q holds a second http(s):// after a comma; run fuzz once for each URL", *rawURL)
+	}
 	if *rawURL == "" && *reqFile == "" {
 		return usagef("give the target with -u, with the keyword FUZZ where the words go (or a request with -request)")
 	}

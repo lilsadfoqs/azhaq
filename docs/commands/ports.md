@@ -131,7 +131,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 - `-T0` to `-T5` set the rate, the connect timeout and the retries as nmap's templates do. An explicit flag wins.
 - `-c` is how many connects are in flight.
 - `-timeout` is how long the whole run may take, such as `90s`. `ports -timeout 500` is refused, with a pointer to `-connect-timeout`.
-- `-connect-timeout` is the wait for one connect. A bare number is milliseconds.
+- `-connect-timeout` is the wait for one connect. A bare number is milliseconds. `run`, `plan` and `resume` take it too, as another name of `-port-timeout`.
 
 ### How an open port is named
 A service that speaks first (`ssh`, `ftp`, `smtp`, `telnet`, `irc`, …) is named from what it says. A server that opens in binary is named by its protocol's fixed first bytes: an ActiveMQ OpenWire `WireFormatInfo` (`openwire`, with the version it states), a ZeroMQ ZMTP 3 greeting (`zeromq`) and a Ceph msgr2 banner (`ceph-msgr2`); a binary greeting that none of these matches stays unnamed, with its hex. A port that waits is asked what it serves, by what it answers and not by its port number. The steps, in this order:

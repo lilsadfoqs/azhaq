@@ -94,6 +94,8 @@ func inherit(fs *flag.FlagSet, specs ...string) func() []string {
 		})
 		if _, ok := f.Value.(*stringsFlag); ok {
 			fs.Var(new(stringsFlag), p.local, usage)
+		} else if _, ok := f.Value.(*urlsFlag); ok {
+			fs.Var(new(urlsFlag), p.local, usage)
 		} else if c, ok := f.Value.(checkedValue); ok {
 			fs.Var(c.fresh(), p.local, usage) // the value is checked where it is given, too
 		} else {
@@ -135,6 +137,12 @@ func inherit(fs *flag.FlagSet, specs ...string) func() []string {
 			f := fs.Lookup(p.local)
 			if sf, ok := f.Value.(*stringsFlag); ok {
 				for _, v := range *sf {
+					out = append(out, "-"+p.remote, v)
+				}
+				continue
+			}
+			if uf, ok := f.Value.(*urlsFlag); ok {
+				for _, v := range *uf {
 					out = append(out, "-"+p.remote, v)
 				}
 				continue
@@ -857,8 +865,8 @@ func cmdDirs(args []string) error {
 	fs := newFlags("dirs")
 	var c common
 	c.register(fs)
-	var urls stringsFlag
-	fs.Var(&urls, "u", "web service, such as https://app.example.com/ (repeatable)")
+	var urls urlsFlag
+	fs.Var(&urls, "u", "web service, such as https://app.example.com/ (repeatable, or comma-separated)")
 	list := onceString(fs, "l", "file of services (- for stdin)")
 	words := fs.String("w", "", "wordlist (default: SecLists' common.txt, built in: "+strconv.Itoa(dirscol.WordCount())+" words)")
 	specs := []string{"ac=dirs-ac", "e=dirs-ext", "ic=dirs-ic", "depth=dirs-depth", "t=dirs-threads", "rate=dirs-rate",
@@ -1235,8 +1243,9 @@ func cmdShots(args []string) error {
 	fs := newFlags("shots")
 	var c common
 	c.register(fs)
-	var urls, nmapFiles, nessusFiles stringsFlag
-	fs.Var(&urls, "u", "target: URL (its path and query are kept), host, host:port, IP or address range such as 192.0.2.0/24 (repeatable)")
+	var urls urlsFlag
+	var nmapFiles, nessusFiles stringsFlag
+	fs.Var(&urls, "u", "target: URL (its path and query are kept), host, host:port, IP or address range such as 192.0.2.0/24 (repeatable, or comma-separated)")
 	list := onceString(fs, "l", "file of targets (- for stdin)")
 	dir := fs.String("dir", "screenshots", "directory for the picture files")
 	csvOut := fs.String("csv", "", "also write one row per page to this CSV file (url, final_url, response_code, title, technologies, file, phash, partial, error)")

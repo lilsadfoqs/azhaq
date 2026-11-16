@@ -44,7 +44,7 @@ azhaq run -url https://app.example.com/ -browser -login https://app.example.com/
 
 `-probe` turns off every collector but DNS and HTTP: the crawl, scripts, path checks, TLS and the third-party sources, at depth 1. A flag that asks for a collector by name still runs it: `-dirs`, `-params`, `-ports`, `-ports-udp`, `-screenshots`, `-browser`, `-dns-brute`, `-permute` and `-graphql`. A flag that only a collector `-probe` turns off reads (`-fill-forms`, `-submit-forms`, `-path-climb`, `-known-files`) is a usage error that names both, never a flag that is dropped.
 
-`-url`, `-domain`, `-cidr` and `-asn` repeat, and each value is a seed. `-list`, `-in` and `-org` take one value: a second, different one is a usage error (exit 2), never the last one kept silently. The same holds for `-l` and `-dL` of the commands that read targets from a file.
+`-url`, `-domain`, `-cidr` and `-asn` repeat, and each value is a seed. `-url` also takes a comma list, as `-u` does in `crawl`, `probe`, `dirs`, `params` and `shots`: a comma ends a URL only where `http://` or `https://` follows, so `-url "http://a/x,http://b/y"` is two URLs and a comma in a path or query (`/?a=1,2`) stays in its URL. A piece that is no URL (a bare host, `host:port` or address) splits at every comma. `-list`, `-in` and `-org` take one value: a second, different one is a usage error (exit 2), never the last one kept silently. The same holds for `-l` and `-dL` of the commands that read targets from a file.
 
 [What azhaq sends](../CONCEPTS.md#what-azhaq-sends) lists every request by kind. `azhaq plan` prints what a run would do and send before anything goes out.
 
@@ -388,6 +388,7 @@ The archives are asked for domains. When `-allow` names a host and not its domai
 - `-ports default` means the same, and `-ports default,8888` adds a port to pass 1 and has pass 2. A list that does not name `default` (`-ports top-100`, `top-1000`, `full`, `22,80`) asks what it names and has no pass 2. `-port-skip LIST` leaves ports out of both passes. An address held to ports of its own (`-ports-on`, a `host:port` in `ports`), a CDN or WAF address under `-port-exclude-cdn` and a host that `-port-threshold` stopped have no pass 2.
 - Pass 2 of a range follows pass 1 of the block of 256 addresses it is in. Under a request cap, no address is asked pass 2 until every address of the run known by then has had pass 1: a task that would begin pass 2 waits, without holding a worker, for the tasks still waiting for one and for the scans in pass 1; pass 2 then spends what the cap has left, the addresses of a block begun in address order. Both passes hold to `-rate`, `-port-rate`, `-port-min-rate`, `-max-requests`, `-max-time`, `-deny`, the kill file and `-allow`.
 - The pace: `-rate N` is one pace for everything a run sends to targets: requests, port connects, UDP datagrams and the DNS queries to a target's own name servers (`-dns-rate` paces the queries to the resolvers). The port stage is held to the lower of `-rate` and `-port-rate`, which alone keeps its meaning (a ceiling, 1500 a second when not given), and `-port-min-rate` never takes it over `-rate`. Loopback is unpaced only when neither is given: with `-rate 1` or `-port-rate 1`, ten connects to 127.0.0.1 take nine seconds. `plan` prints the pace of each stage in its `pace:` line.
+- `-connect-timeout` is the wait for one port to accept or refuse a connect, as in `ports -connect-timeout`: a bare number is milliseconds, and 1.5 s when not given. `run`, `plan` and `resume` take it, and it is `-port-timeout` under its other name; `-timeout` stays the limit of the whole run. The other flags of `ports` the port stage honours are `run`'s `-port-*` flags, and `-ports`, `-ports-udp` and `-port-skip`.
 - An address is asked each port once, whether it is in a range, named by a target or both: pass 2 of an address that answered is not asked again for the name that points to it, and a port only the target adds (its URL's) is asked on top.
 - `plan` and the estimate before a run show both passes: `sends` has a line for each. The estimate's floor counts pass 1 of every address, and pass 2 too for an address given alone, which is taken to answer as every target is; for a range it names pass 2 under `not counted`, with the connects each address that answers adds. The ceiling counts every port of every address.
 - A limit that stops a pass ends the run with exit 4. `stopped` names the pass and what was left: `pass 1 of 2`, with the addresses that had ports left, the ports not asked and the addresses of the range not reached; or `pass 2 of 2`, with the addresses that answered pass 1 and still had ports left, and how many ports. `azhaq resume` asks the rest: the ports of pass 1 not asked, then pass 2 for the addresses that answered, those that finished not being asked again. An address that answered keeps a row after pass 1 (`"checkpoint":true`, `"pass":2`), so a stop or a kill in pass 2 loses none of what pass 1 found.
@@ -508,7 +509,7 @@ azhaq run -url https://app.example.com/ -ports top-1000 -verify-logins -db app.d
 
 | Flag | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `-url` | string, repeatable |  | seed URL |
+| `-url` | string, repeatable |  | seed URL (repeatable, or comma-separated) |
 | `-domain` | string, repeatable |  | seed Domain, for subdomain discovery |
 | `-list` | string |  | targets, one per line: URL, host, host:port or IP (- for stdin) |
 | `-in` | string |  | JSONL seeds |
@@ -625,6 +626,7 @@ azhaq run -url https://app.example.com/ -ports top-1000 -verify-logins -db app.d
 | Flag | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `-rate` | float |  | requests, port connects, UDP datagrams and DNS queries to the targets' name servers per second, over all hosts (0: no pace) |
+| `-connect-timeout` | string |  | wait this long for one port to accept or refuse a connect, as ports -connect-timeout does: 1500, 1500ms or 2s (default 1.5s; same as -port-timeout; -timeout is the run's limit) |
 | `-host-rate` | float |  | requests per second to each host, besides -rate over all (0: none) |
 | `-host-parallel` | int |  | requests in flight per host (default 10, as katana) |
 | `-parallel` | int |  | work items in flight (default 16) |

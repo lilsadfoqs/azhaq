@@ -164,11 +164,11 @@ func cmdReport(args []string) error {
 			if err := os.WriteFile(*out, body, 0o644); err != nil {
 				return err
 			}
-			fmt.Fprintf(os.Stderr, "azhaq report: %s%s in %s\n", set.counts(), foldedNote(set.Folds), *out)
+			fmt.Fprintf(os.Stderr, "azhaq report: %s%s in %s\n", set.headline(), foldedNote(set.Folds), *out)
 			return nil
 		}
 		if len(set.Folds) > 0 {
-			fmt.Fprintf(os.Stderr, "azhaq report: %s%s\n", set.counts(), foldedNote(set.Folds))
+			fmt.Fprintf(os.Stderr, "azhaq report: %s%s\n", set.headline(), foldedNote(set.Folds))
 		}
 		_, err = os.Stdout.Write(body)
 		return err

@@ -33,7 +33,7 @@ func cmdCrawl(args []string) error {
 	fs := newFlags("crawl")
 	var c common
 	c.register(fs)
-	var urls stringsFlag
+	var urls urlsFlag
 	fs.Var(&urls, "u", "start URL (repeatable, or comma-separated)")
 	list := onceString(fs, "l", "file of start URLs (- for stdin)")
 	given := inherit(fs, append([]string{"depth", "max-items", "parallel", "host-parallel", "delay", "paths", "browser", "browser-writes", "chrome-no-sandbox",
@@ -106,14 +106,7 @@ func cmdCrawl(args []string) error {
 	if *d >= 0 {
 		given = withDepth(fs, given, *d+1)
 	}
-	var more []string
-	for _, u := range urls {
-		for _, part := range strings.Split(u, ",") {
-			if part = strings.TrimSpace(part); part != "" {
-				more = append(more, part)
-			}
-		}
-	}
+	more := []string(urls)
 	sweeping := fs.Lookup("sweep").Value.String() == "true"
 	var targets []string
 	if !(sweeping && len(more) == 0 && *list == "") { // -sweep alone does not wait for stdin

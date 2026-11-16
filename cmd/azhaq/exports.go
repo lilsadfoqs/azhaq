@@ -132,6 +132,15 @@ func exportTo(path, format, origin string, safe bool, w io.Writer) error {
 	return exportToList(path, format, origin, safe, listOpts{}, w)
 }
 
+// serviceOrigin is scheme://host[:port]/ of an answered URL.
+func serviceOrigin(raw string) (string, bool) {
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return "", false
+	}
+	return u.Scheme + "://" + u.Host + "/", true
+}
+
 // exportToList is exportTo with the options of the urls and names lists.
 func exportToList(path, format, origin string, safe bool, lo listOpts, w io.Writer) error {
 	if (lo.coverage != "" || lo.json) && format != "urls" && format != "names" {
@@ -179,15 +188,16 @@ func exportToList(path, format, origin string, safe bool, lo listOpts, w io.Writ
 			fmt.Fprintln(w, n)
 		}
 	case "targets":
-		// Web services, one front page each: what nuclei -l and httpx take.
+		// Web services, one origin each, whatever path the answer was read
+		// at: what nuclei -l and httpx take.
 		seen := map[string]bool{}
 		for _, r := range g.probe {
-			u, err := url.Parse(r.URL)
-			if err != nil || (u.Path != "/" && u.Path != "") || seen[r.URL] {
+			o, ok := serviceOrigin(r.URL)
+			if !ok || seen[o] {
 				continue
 			}
-			seen[r.URL] = true
-			fmt.Fprintln(w, r.URL)
+			seen[o] = true
+			fmt.Fprintln(w, o)
 		}
 	case "openapi":
 		doc, err := openAPI(g, origin)
@@ -234,12 +244,12 @@ func exportToList(path, format, origin string, safe bool, lo listOpts, w io.Writ
 		// workspace writes the explicit empty record set, so there is
 		// always a line to read.
 		set := buildFindings(g)
-		fmt.Fprintf(os.Stderr, "azhaq export: %s%s\n", set.counts(), foldedNote(set.Folds))
+		fmt.Fprintf(os.Stderr, "azhaq export: %s%s\n", set.headline(), foldedNote(set.Folds))
 		_, err := w.Write(findingsJSONL(set))
 		return err
 	case "findings-md":
 		set := buildFindings(g)
-		fmt.Fprintf(os.Stderr, "azhaq export: %s%s\n", set.counts(), foldedNote(set.Folds))
+		fmt.Fprintf(os.Stderr, "azhaq export: %s%s\n", set.headline(), foldedNote(set.Folds))
 		_, err := w.Write(findingsMarkdown(set))
 		return err
 	default:

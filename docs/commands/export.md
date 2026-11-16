@@ -50,7 +50,7 @@ The output is the format you chose, on stdout.
 | `urls` | Every URL the workspace learned, one per line: the map's URL rows, and every URL the archives gave for the run, which the workspace keeps in `DB.urls.jsonl` beside it (the graph holds one example for each URL shape, 200 a domain). Each URL once. A workspace made before the list was kept holds only the examples, and stderr says how many archived URLs they stand for. `-coverage` and `-json` say which were visited and which were only named: see [Lists with coverage](#lists-with-coverage). |
 | `hosts` | One per line: names that resolve, and addresses given as targets or serving the web. |
 | `names` | Every name, one per line. `-coverage` and `-json` as for `urls`. |
-| `targets` | Web services, one per line, for `nuclei -l` and `httpx`. See Details. |
+| `targets` | Web services, one origin per line, for `nuclei -l` and `httpx`. See Details. |
 | `openapi` | OpenAPI 3 JSON of one origin. See [openapi](#openapi). |
 | `graphql` | The introspection result of each GraphQL endpoint read with `-graphql`. See [graphql and sdl](#graphql-and-sdl). |
 | `sdl` | The same schemas in the GraphQL schema language. See [graphql and sdl](#graphql-and-sdl). |
@@ -88,7 +88,7 @@ When `-coverage` matches nothing, stderr says `nothing to write: no entry has co
 
 ### targets
 
-`targets` lists the front pages that answered. They are azhaq's own, or taken in from httpx, katana or ffuf.
+`targets` lists one origin (`scheme://host[:port]/`) for each web service that answered, whatever path the answer was read at: a service answered at `/login.php` is listed as its origin, once. The answers are azhaq's own, or taken in from httpx, katana or ffuf.
 
 ### html
 
