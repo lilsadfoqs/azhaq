@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
+	"github.com/lilsadfoqs/azhaq/internal/httprow"
 	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 	"github.com/lilsadfoqs/azhaq/internal/portscan"
 	"github.com/lilsadfoqs/azhaq/types"
@@ -81,18 +82,17 @@ func services(obs []types.StoredObservation, needVersion bool) []Service {
 					Product: s.Product, Version: s.Version, Banner: s.Banner, ObservedAt: o.ObservedAt})
 			}
 		case "azhaq-http", "azhaq-paths":
-			var row struct {
-				URL      string     `json:"url"`
-				Server   string     `json:"server"`
-				Tech     []string   `json:"tech"`
-				Detected []detected `json:"detected"`
-			}
+			var row httprow.Row
 			from := ""
 			if page, found, ok := detectedRow(o); ok {
 				u, _ := url.Parse(page)
 				row.URL, row.Detected, from = u.Scheme+"://"+u.Host+"/", found, page
-			} else if o.Collector != "azhaq-http" || json.Unmarshal(o.Payload, &row) != nil {
+			} else if o.Collector != "azhaq-http" {
 				continue
+			} else if r, err := httprow.ParseRow(o.Payload); err != nil {
+				continue
+			} else {
+				row = r
 			}
 			if row.Server == "" && len(row.Tech) == 0 && len(row.Detected) == 0 {
 				continue
@@ -131,7 +131,7 @@ func services(obs []types.StoredObservation, needVersion bool) []Service {
 			}
 			// What a detection template extracted with a version.
 			for _, d := range row.Detected {
-				if d.Product != "" && d.Version != "" && classify(d.Product, d.source()) != skip {
+				if d.Product != "" && d.Version != "" && classify(d.Product, detectedSource(d)) != skip {
 					add(web(d.Product, d.Version, "detection template: "+d.Template, SourceDetect))
 				}
 			}
@@ -413,8 +413,7 @@ func NameAddrs(obs []types.StoredObservation) map[string]string {
 				set(row.Host, row.IP, true)
 			}
 		case o.Collector == "azhaq-http":
-			var row struct{ URL, IP string }
-			if json.Unmarshal(o.Payload, &row) == nil && row.IP != "" {
+			if row, err := httprow.ParseRow(o.Payload); err == nil && row.IP != "" {
 				if u, err := url.Parse(row.URL); err == nil {
 					set(u.Hostname(), row.IP, true)
 				}

@@ -7,6 +7,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/lilsadfoqs/azhaq/internal/httprow"
 )
 
 // graph is what `azhaq export` prints, parsed.
@@ -77,18 +79,18 @@ func (g graph) urls() []string {
 }
 
 // httpFacts maps a URL to what azhaq-http recorded for it.
-func (g graph) httpFacts() map[string]map[string]any {
-	out := map[string]map[string]any{}
+func (g graph) httpFacts() map[string]httprow.Row {
+	out := map[string]httprow.Row{}
 	for _, o := range g.obs {
 		if o.Collector != "azhaq-http" {
 			continue
 		}
-		var p map[string]any
-		if json.Unmarshal(o.Payload, &p) != nil {
+		p, err := httprow.ParseRow(o.Payload)
+		if err != nil {
 			continue
 		}
-		if u, _ := p["url"].(string); u != "" {
-			out[u] = p
+		if p.URL != "" {
+			out[p.URL] = p
 		}
 	}
 	return out

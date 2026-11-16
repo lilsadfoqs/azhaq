@@ -19,6 +19,7 @@ import (
 	"github.com/lilsadfoqs/azhaq/internal/collectors/subcol"
 	"github.com/lilsadfoqs/azhaq/internal/egress"
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
+	"github.com/lilsadfoqs/azhaq/internal/httprow"
 	"github.com/lilsadfoqs/azhaq/internal/ledger"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"github.com/lilsadfoqs/azhaq/internal/takeover"
@@ -793,7 +794,13 @@ func takeovers(ents []types.Entity, obs []types.StoredObservation) []takeoverRow
 			continue
 		}
 		var p finding
-		if json.Unmarshal(o.Payload, &p) != nil {
+		if o.Collector == "azhaq-http" {
+			row, err := httprow.ParseRow(o.Payload)
+			if err != nil {
+				continue
+			}
+			p = finding{URL: row.URL, Takeover: row.Takeover}
+		} else if json.Unmarshal(o.Payload, &p) != nil {
 			continue
 		}
 		if p.FQDN == "" && p.URL == "" {

@@ -30,6 +30,7 @@ import (
 	"github.com/lilsadfoqs/azhaq/internal/egress"
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
 	"github.com/lilsadfoqs/azhaq/internal/fingerprint"
+	"github.com/lilsadfoqs/azhaq/internal/httprow"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"github.com/lilsadfoqs/azhaq/internal/probefilter"
 	"github.com/lilsadfoqs/azhaq/types"
@@ -114,7 +115,7 @@ func (p *probeOut) see(ent types.Entity, o types.Observation) {
 		if !ok {
 			return
 		}
-		m := payloadOf(o)
+		hr, _ := httprow.ParseRow(o.Payload) // ProbeRowOf read it; the probe fields are read here
 		p.mu.Lock()
 		seenKey := ent.Key + "\x00" + o.Source // two inputs that reach one URL each report it
 		dup := p.seen[seenKey]
@@ -146,7 +147,7 @@ func (p *probeOut) see(ent types.Entity, o types.Observation) {
 		ev, _ := httpcol.TakeEvidence(o.Source)
 		// A row for each line that gave this seed (http://h and http://h/).
 		for _, in := range ins {
-			row := p.row(r, m, in, addrs, cn, ev)
+			row := p.row(r, hr, in, addrs, cn, ev)
 			p.mu.Lock()
 			p.answered[in] = true
 			p.answeredKey[ent.Key] = true
@@ -196,9 +197,9 @@ func (p *probeOut) flushHeld() {
 }
 
 // row is the httpx -json row of an answer.
-func (p *probeOut) row(r engine.ProbeRow, m map[string]any, input string, addrs, cnames []string, ev *httpcol.Evidence) map[string]any {
+func (p *probeOut) row(r engine.ProbeRow, hr httprow.Row, input string, addrs, cnames []string, ev *httpcol.Evidence) map[string]any {
 	status := r.Status
-	chainCodes := hopStatuses(m)
+	chainCodes := hopStatuses(hr.Hops)
 	if p.pf.follow && r.FinalStatus != 0 {
 		status = r.FinalStatus
 	}
@@ -237,13 +238,13 @@ func (p *probeOut) row(r engine.ProbeRow, m map[string]any, input string, addrs,
 			a = append(a, ip)
 		}
 	}
-	method, _ := m["method"].(string)
+	method := hr.Method
 	if method == "" {
 		method = "GET"
 	}
 	elapsed := time.Duration(r.MS) * time.Millisecond
-	if ns, ok := m["elapsed_ns"].(float64); ok {
-		elapsed = time.Duration(ns)
+	if hr.ElapsedNS != 0 {
+		elapsed = time.Duration(hr.ElapsedNS)
 	}
 	shown := r.URL
 	if given, ok := urlAsGiven(input, r.URL); ok {
@@ -278,8 +279,8 @@ func (p *probeOut) row(r engine.ProbeRow, m map[string]any, input string, addrs,
 	}
 	if r.Favicon != "" {
 		out["favicon"] = r.Favicon
-		for _, k := range []string{"favicon_md5", "favicon_path", "favicon_url"} {
-			if v, _ := m[k].(string); v != "" {
+		for k, v := range map[string]string{"favicon_md5": hr.FaviconMD5, "favicon_path": hr.FaviconPath, "favicon_url": hr.FaviconURL} {
+			if v != "" {
 				out[k] = v
 			}
 		}
@@ -294,13 +295,11 @@ func (p *probeOut) row(r engine.ProbeRow, m map[string]any, input string, addrs,
 		out["resolvers"] = probePool.Resolvers()
 	}
 	if p.pf.follow && len(chainCodes) > 0 {
-		if hops, _ := m["hops"].([]any); len(hops) > 0 {
-			if h, ok := hops[len(hops)-1].(map[string]any); ok && h["location"] != nil && h["location"] != "" {
-				if st := numOf(h["status"]); st >= 300 && st < 400 {
-					p.mu.Lock()
-					p.cut++
-					p.mu.Unlock()
-				}
+		if n := len(hr.Hops); n > 0 {
+			if h := hr.Hops[n-1]; h.Location != "" && h.Status >= 300 && h.Status < 400 {
+				p.mu.Lock()
+				p.cut++
+				p.mu.Unlock()
 			}
 		}
 	}
@@ -310,10 +309,8 @@ func (p *probeOut) row(r engine.ProbeRow, m map[string]any, input string, addrs,
 			out["final_url"] = r.FinalURL
 		}
 	}
-	for _, k := range []string{"tls", "hash", "body_preview", "extracts", "jarm_hash", "websocket", "http2", "pipeline", "vhost", "sni", "cpe", "wordpress", "knowledgebase", "csp", "body_fqdn", "body_domains"} {
-		if v, ok := m[k]; ok {
-			out[k] = v
-		}
+	for k, v := range probeFieldsOf(hr) {
+		out[k] = v
 	}
 	if p.pf.asn {
 		if as := p.asn(r.IP); as != nil {
@@ -343,14 +340,43 @@ func numOf(v any) int {
 }
 
 // hopStatuses are the statuses of a redirect chain, empty without one.
-func hopStatuses(m map[string]any) []int {
-	hops, _ := m["hops"].([]any)
+func hopStatuses(hops []fetch.Hop) []int {
 	var out []int
 	for _, h := range hops {
-		if hm, ok := h.(map[string]any); ok {
-			out = append(out, numOf(hm["status"]))
+		out = append(out, h.Status)
+	}
+	return out
+}
+
+// probeFieldsOf are the fields of -tls-grab, -hash, -bp, -er and the rest that a
+// row of the run carries, as generic JSON values: the row's keys are matched and
+// filtered by name, and their values are maps and lists there.
+func probeFieldsOf(hr httprow.Row) map[string]any {
+	typed := map[string]any{}
+	set := func(k string, present bool, v any) {
+		if present {
+			typed[k] = v
 		}
 	}
+	set("tls", hr.TLS != nil, hr.TLS)
+	set("hash", hr.Hash != nil, hr.Hash)
+	set("body_preview", hr.BodyPreview != "", hr.BodyPreview)
+	set("extracts", hr.Extracts != nil, hr.Extracts)
+	set("jarm_hash", hr.JarmHash != "", hr.JarmHash)
+	set("websocket", hr.WebSocket, hr.WebSocket)
+	set("http2", hr.HTTP2, hr.HTTP2)
+	set("pipeline", hr.Pipeline, hr.Pipeline)
+	set("vhost", hr.VHost, hr.VHost)
+	set("sni", hr.SNI != "", hr.SNI)
+	set("cpe", hr.CPE != nil, hr.CPE)
+	set("wordpress", hr.WordPress != nil, hr.WordPress)
+	set("knowledgebase", hr.Knowledgebase != nil, hr.Knowledgebase)
+	set("csp", hr.CSP != nil, hr.CSP)
+	set("body_fqdn", hr.BodyFQDN != nil, hr.BodyFQDN)
+	set("body_domains", hr.BodyDomains != nil, hr.BodyDomains)
+	raw, _ := json.Marshal(typed)
+	var out map[string]any
+	_ = json.Unmarshal(raw, &out)
 	return out
 }
 

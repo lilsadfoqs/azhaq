@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/lilsadfoqs/azhaq/internal/collectors/subcol"
+	"github.com/lilsadfoqs/azhaq/internal/httprow"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"github.com/lilsadfoqs/azhaq/store"
 	"github.com/lilsadfoqs/azhaq/types"
@@ -217,11 +218,8 @@ func answeredNames(st *store.Store) map[string]bool {
 		if o.Collector != "azhaq-http" || o.Kind != "application" {
 			continue
 		}
-		var p struct {
-			URL    string `json:"url"`
-			Status int    `json:"status"`
-		}
-		if json.Unmarshal(o.Payload, &p) != nil || p.Status == 0 {
+		p, err := httprow.ParseRow(o.Payload)
+		if err != nil || p.Status == 0 {
 			continue
 		}
 		if h := normalize.HostFromURL(p.URL); h != "" {

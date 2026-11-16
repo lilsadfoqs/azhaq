@@ -18,6 +18,7 @@ import (
 
 	"github.com/lilsadfoqs/azhaq/catalog"
 	"github.com/lilsadfoqs/azhaq/collectors"
+	"github.com/lilsadfoqs/azhaq/internal/httprow"
 	"github.com/lilsadfoqs/azhaq/internal/ledger"
 	"github.com/lilsadfoqs/azhaq/internal/runs"
 	"github.com/lilsadfoqs/azhaq/store"
@@ -389,15 +390,7 @@ func uiGraph(w http.ResponseWriter, home, id string) {
 // payloadStatus is the HTTP status an observation records: its own, else
 // its last hop's.
 func payloadStatus(raw json.RawMessage) int {
-	var p struct {
-		Status int `json:"status"`
-		Hops   []struct {
-			Status int `json:"status"`
-		} `json:"hops"`
-	}
-	if json.Unmarshal(raw, &p) != nil {
-		return 0
-	}
+	p, _ := httprow.ParseRow(raw)
 	if p.Status > 0 {
 		return p.Status
 	}

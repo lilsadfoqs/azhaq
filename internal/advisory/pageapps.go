@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/lilsadfoqs/azhaq/internal/fingerprint"
+	"github.com/lilsadfoqs/azhaq/internal/httprow"
 	"github.com/lilsadfoqs/azhaq/internal/portscan"
 	"github.com/lilsadfoqs/azhaq/types"
 )
@@ -25,18 +26,10 @@ const (
 	SourceDetectOne = "detection template for the product"
 )
 
-// detected is a product a detection template named, as a row stores it.
-type detected struct {
-	Product  string `json:"product"`
-	Version  string `json:"version"`
-	Template string `json:"template"`
-	Many     string `json:"many"` // set when the template names many products by its matchers
-}
-
-// source is how a detection is classed: a template written for one product
-// names an application (or a server); one that names many names libraries,
-// fonts and CDNs too, which the fingerprints' categories tell apart.
-func (d detected) source() string {
+// detectedSource is how a detection is classed: a template written for one
+// product names an application (or a server); one that names many names
+// libraries, fonts and CDNs too, which the fingerprints' categories tell apart.
+func detectedSource(d httprow.Detected) string {
 	if d.Many != "" {
 		return SourceDetect
 	}
@@ -45,14 +38,14 @@ func (d detected) source() string {
 
 // detectedRow reads a row the paths sweep wrote for an answer that matched
 // detection templates: the page it was asked of, the path, and the products.
-func detectedRow(o types.StoredObservation) (page string, found []detected, ok bool) {
+func detectedRow(o types.StoredObservation) (page string, found []httprow.Detected, ok bool) {
 	if o.Collector != "azhaq-paths" || o.Kind != "detected" {
 		return "", nil, false
 	}
 	var row struct {
-		URL      string     `json:"url"`
-		Path     string     `json:"path"`
-		Detected []detected `json:"detected"`
+		URL      string             `json:"url"`
+		Path     string             `json:"path"`
+		Detected []httprow.Detected `json:"detected"`
 	}
 	if json.Unmarshal(o.Payload, &row) != nil || row.URL == "" {
 		return "", nil, false
@@ -82,23 +75,18 @@ func pageApps(obs []types.StoredObservation) []pageApp {
 	var out []pageApp
 	at := map[string]int{}
 	for _, o := range obs {
-		var row struct {
-			URL       string            `json:"url"`
-			Title     string            `json:"title"`
-			Generator string            `json:"generator"`
-			Server    string            `json:"server"`
-			Realm     string            `json:"realm"`
-			Headers   map[string]string `json:"headers"`
-			Tech      []string          `json:"tech"`
-			Detected  []detected        `json:"detected"`
-		}
+		var row httprow.Row
 		from := ""
 		if page, found, ok := detectedRow(o); ok {
 			// A path the sweep asked to name the product: the origin's root stands for it.
 			u, _ := url.Parse(page)
 			row.URL, row.Detected, from = u.Scheme+"://"+u.Host+"/", found, page
-		} else if o.Collector != "azhaq-http" || json.Unmarshal(o.Payload, &row) != nil {
+		} else if o.Collector != "azhaq-http" {
 			continue
+		} else if r, err := httprow.ParseRow(o.Payload); err != nil {
+			continue
+		} else {
+			row = r
 		}
 		u, err := url.Parse(row.URL)
 		if err != nil || u.Hostname() == "" || (u.Path != "" && u.Path != "/") || u.RawQuery != "" {
@@ -159,7 +147,7 @@ func pageApps(obs []types.StoredObservation) []pageApp {
 			add(name, version, SourceTech, "technology: "+t)
 		}
 		for _, d := range row.Detected {
-			add(d.Product, d.Version, d.source(), "detection template: "+d.Template)
+			add(d.Product, d.Version, detectedSource(d), "detection template: "+d.Template)
 		}
 		for _, c := range cands {
 			k := strings.ToLower(c.Host) + "|" + strconv.Itoa(c.Port) + "|" + ProductKey(c.Product)

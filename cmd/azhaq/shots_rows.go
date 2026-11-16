@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/lilsadfoqs/azhaq/engine"
+	"github.com/lilsadfoqs/azhaq/internal/httprow"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"github.com/lilsadfoqs/azhaq/store"
 )
@@ -106,12 +107,11 @@ func shotMisses(rep *report, st *store.Store, given, pages []string, guessed map
 		m := payloadOf(o.Observation)
 		switch {
 		case o.Kind == engine.KindNoWeb:
-			h, _ := m["host"].(string)
-			ports, _ := m["ports"].(string)
-			noweb[h] = "no web service on " + ports + " (connection refused)"
+			row, _ := httprow.ParseRow(o.Payload)
+			noweb[row.Host] = "no web service on " + row.Ports + " (connection refused)"
 		case o.Kind == engine.KindNotHTTP:
-			h, _ := m["host"].(string)
-			nothttp[h] = true
+			row, _ := httprow.ParseRow(o.Payload)
+			nothttp[row.Host] = true
 		case o.Collector == "azhaq-shots" && o.Kind == "note":
 			n, _ := m["note"].(string)
 			if rest, ok := strings.CutPrefix(n, "screenshot of "); ok {

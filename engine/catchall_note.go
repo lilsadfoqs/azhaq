@@ -1,7 +1,6 @@
 package engine
 
 import (
-	"encoding/json"
 	"fmt"
 	"maps"
 	"net"
@@ -9,6 +8,7 @@ import (
 	"slices"
 	"sort"
 
+	"github.com/lilsadfoqs/azhaq/internal/httprow"
 	"github.com/lilsadfoqs/azhaq/types"
 )
 
@@ -53,10 +53,7 @@ func CatchAllHeldIDs(obs []types.StoredObservation) map[string]bool {
 		if o.Kind != "skipped" {
 			continue
 		}
-		var p struct {
-			Skipped string `json:"skipped"`
-		}
-		if json.Unmarshal(o.Payload, &p) == nil && p.Skipped == CatchAllHeldReason {
+		if p, _ := httprow.ParseRow(o.Payload); p.Skipped == CatchAllHeldReason {
 			held[o.EntityID] = true
 		}
 	}

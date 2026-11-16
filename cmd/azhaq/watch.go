@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/lilsadfoqs/azhaq/internal/httprow"
 	"github.com/lilsadfoqs/azhaq/internal/portscan"
 	"github.com/lilsadfoqs/azhaq/internal/webextract"
 	"github.com/lilsadfoqs/azhaq/store"
@@ -359,24 +360,23 @@ func factsByEntity(st *store.Store) map[string]facts {
 				}
 			}
 		case "azhaq-http":
-			if st, ok := p["status"].(float64); ok && f.status == 0 {
-				f.status = int(st)
-				f.url, _ = p["url"].(string)
+			row, _ := httprow.ParseRow(o.Payload) // a field of another type is left out, as the key was
+			if row.Status != 0 && f.status == 0 {
+				f.status = row.Status
+				f.url = row.URL
 			}
-			if t, ok := p["title"].(string); ok && f.title == "" {
-				f.title = t
+			if row.Title != "" && f.title == "" {
+				f.title = row.Title
 			}
-			if n, ok := p["json_items"].(float64); ok {
-				f.items = int(n) + 1 // stored plus one: zero means not a listing
+			if row.JSONItems != nil {
+				f.items = *row.JSONItems + 1 // stored plus one: zero means not a listing
 			}
-			if p["catchall"] == true {
+			if row.Catchall {
 				f.catchAll = true
 			}
-			if ts, ok := p["tech"].([]any); ok {
-				for _, t := range ts {
-					if name, ok := t.(string); ok && name != "" && !slices.Contains(f.tech, name) {
-						f.tech = append(f.tech, name)
-					}
+			for _, name := range row.Tech {
+				if name != "" && !slices.Contains(f.tech, name) {
+					f.tech = append(f.tech, name)
 				}
 			}
 		case "azhaq-ports":
@@ -387,16 +387,14 @@ func factsByEntity(st *store.Store) map[string]facts {
 		// What a detection template named: on the answer, or on the service
 		// from a product check of the sweep. Said like a technology.
 		if o.Collector == "azhaq-http" || o.Collector == "azhaq-paths" && o.Kind == "detected" {
-			if ds, ok := p["detected"].([]any); ok {
-				for _, d := range ds {
-					m, _ := d.(map[string]any)
-					name, _ := m["product"].(string)
-					if v, _ := m["version"].(string); v != "" {
-						name += ":" + v
-					}
-					if name != "" && !slices.Contains(f.tech, name) {
-						f.tech = append(f.tech, name)
-					}
+			row, _ := httprow.ParseRow(o.Payload)
+			for _, d := range row.Detected {
+				name := d.Product
+				if d.Version != "" {
+					name += ":" + d.Version
+				}
+				if name != "" && !slices.Contains(f.tech, name) {
+					f.tech = append(f.tech, name)
 				}
 			}
 		}

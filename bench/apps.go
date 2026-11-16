@@ -440,8 +440,7 @@ func scoreAzhaq(g graph, target string, truth map[string]bool, shell string, m r
 			continue
 		}
 		p := facts[r.Entity.Key]
-		st, _ := p["status"].(float64)
-		if st >= 200 && st < 300 && p["body_hash"] == shell {
+		if p.Status >= 200 && p.Status < 300 && p.BodyHash == shell {
 			s.Shell++
 		}
 	}
