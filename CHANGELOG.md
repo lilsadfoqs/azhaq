@@ -1,5 +1,52 @@
 # Changelog
 
+## v0.27.0
+
+### Added
+
+- `dirs -od DIR` and `run -dirs-od DIR` keep the request and answer of each match in one file, as `fuzz -od` does. The row names its file in `resultfile`. A body over 5 MiB is cut and the row says `resultfile_cut`.
+- `-max-scripts N` on `run` and `crawl` raises the per-page caps: scripts (256), routes (4096), source maps, manifests and chunk names.
+- `run`, `plan` and `resume` take `ports`' `-connect-timeout`.
+- `plan` prints a lower bound on a scan's time when connects ÷ pace is over a minute. For example: "16,776,960 connects at 1500/s take at least 3.1 h".
+- `plan` and the summary state a `-permute` job: the distinct names the generator asks, and the time at `-dns-rate`. The progress line counts them, and a stopped run says how many are left.
+- The start page, `run -h`, `help hunt` and the command pages say how to read a run that is still going: `run -stream`, or `hunt -db` / `query -db` from a second shell.
+
+### Changed
+
+- **Default logins need controls.** `-verify-logins` proves a default login only against two controls, sent first: the same request with no credential, then with a wrong one.
+  - The pair is accepted only when its answer differs from both.
+  - A page that answers the same without a credential proves nothing, and a note says so.
+  - The evidence gives all three outcomes, the reproduce commands show all three, and the controls are in the ledger and the count.
+  - The message broker console entry asks a gated page.
+- **Headers a `-proxy` adds.** Through an http or https `-proxy`, the run asks the proxy for its own answer once, and drops a target answer's header equal to one the proxy showed.
+  - The ask counts like a target request: it spends from `-max-requests`, is paced, and counts in `requests`.
+  - When the proxy cannot be asked, header-only identifications are marked `via_proxy` and get no advisory.
+- **Advisories fold by label.** The run line, the `hunt` row and the findings Markdown name a service's top three advisories and count the rest by label. JSON and the jsonl keep every record.
+- **Local and physical flaws are conditional.** The index keeps each record's CVSS attack vector. A local or physical flaw is `conditional`, with the vector's condition.
+- **Template versions.** A detection template's extractor gives every match. The version is the first value shaped like one, so a copyright range no longer hides it.
+  - Templates whose paths are one inline payload list now compile. phpMyAdmin's panel is one of the eight.
+- **Script bases.** A script's call is joined onto a base only when it is made on the client the base was bound to, and a path already under the base is not joined again. No more `/api/api/` routes.
+- **Script caps.** A per-page script cap counts what it left. `-fail-on-capped` treats a reached cap like `-depth`: exit 4.
+- **One findings population.** `report -findings` has a record for every finding `hunt` proves, so `hunt`, `report` and the run's `tiers` count the same findings:
+  - SQL error text and debug pages in 5xx answers;
+  - directory listings;
+  - GraphQL schema reads and IDEs;
+  - proved `-roles` verdicts, read through `-roles FILE`.
+- **The findings headline** gives issues and records ("2 identifications (17 records)").
+- **URL flags** split a comma-joined list where a second `http(s)://` starts, the same way in every command. `fuzz -u` refuses a second URL.
+- **`-interact`** counts only the routes a click named, leaving out slash variants of listed routes and catch-all answers.
+- **Product checks.** They share an answer's body before copying it, hold less of the template set, and keep as many checks in flight as `-host-parallel` allows (6 on a signed-in run). A Juice Shop run went from 20.6 s to 12.7 s in the paired bench, with the same routes.
+- **Full-range connect scans.** A silent port's wait follows the address's measured round trip. `run -rate` sets the connect pace past 1500/s.
+- **`params`** sends a page's first check once when its name groups run side by side.
+
+### Fixed
+
+- A signed-in run whose session ended let 9 to 19 requests out under CPU load. An answer that may be the end now holds new requests at the first hop's headers. CONCEPTS gives the bound: `-host-parallel` + 4.
+- A killed `fuzz` run could keep matches without the inputs it had asked. A checkpoint and the final write now keep both in one transaction.
+- `export -format targets` reduces an answer read at a path to its origin, instead of leaving it out.
+- The screenshot estimate has a `shots` stage, and Chrome's requests count there, not in `other`.
+- `dns` keeps its own arguments with its run, not the process's.
+
 ## v0.26.0
 
 ### Added
