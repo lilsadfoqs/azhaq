@@ -97,8 +97,8 @@ type Options struct {
 	NoCalibration bool
 }
 
-// DefaultStatus is the default -mc, the same as fuzz's.
-const DefaultStatus = fuzz.DefaultStatus
+// DefaultStatus is the default -mc: ffuf's with 308 (fuzz keeps ffuf's own).
+const DefaultStatus = fuzz.SweepStatus
 
 // NewSet is a Set with the default status matcher, for the caller to add
 // the user's filters to; when the user gave a matcher of their own, use a
