@@ -96,6 +96,11 @@ type search struct {
 	controlled      bool            // see calibrate
 	requests        atomic.Int64
 
+	// check lets one name make the first check of standsApart while the
+	// others wait: groups run side by side and would all find the page
+	// unchecked.
+	check sync.Mutex
+
 	mu sync.Mutex
 	// most and maxBytes are the largest group sent: smaller than any whose
 	// control changed the status (a query too long for the server).
@@ -1072,8 +1077,23 @@ func (s *search) vary() {
 // to requests that should match alike (calibration, controls, names asked
 // twice) since: the page has shown no variation. What they show is learned for the names that
 // follow: the size and line noise widens, and a body that changed with no
-// name to blame ends the rule that any other body is a change.
+// name to blame ends the rule that any other body is a change. Names that
+// come while the first is still checked wait for it, not repeat it.
 func (s *search) standsApart(name, value string, seen []answer) bool {
+	s.mu.Lock()
+	first := !s.checked && !s.varied
+	s.mu.Unlock()
+	if first {
+		s.check.Lock()
+		s.mu.Lock()
+		done := s.checked || s.varied
+		s.mu.Unlock()
+		if done {
+			s.check.Unlock()
+		} else {
+			defer s.check.Unlock()
+		}
+	}
 	ref := strip(s.ref, nil)
 	ctl := []answer{ref}
 	for i := 0; i < sizeControls; i++ {

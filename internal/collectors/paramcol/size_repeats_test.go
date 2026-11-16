@@ -26,6 +26,12 @@ func sizeWords(real string, n int) []string {
 // requests the server saw.
 func reqs(t *testing.T, h http.HandlerFunc, path string, words []string) (map[string]any, int64) {
 	t.Helper()
+	return reqsOn(t, h, path, words, 1)
+}
+
+// reqsOn is reqs with that many groups in flight.
+func reqsOn(t *testing.T, h http.HandlerFunc, path string, words []string, threads int) (map[string]any, int64) {
+	t.Helper()
 	fetch.Reset()
 	var n atomic.Int64
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -33,7 +39,7 @@ func reqs(t *testing.T, h http.HandlerFunc, path string, words []string) (map[st
 		h(w, r)
 	}))
 	defer srv.Close()
-	c := New(srv.Client(), Options{Words: words, Chunk: 50, Rate: 10000, Threads: 1})
+	c := New(srv.Client(), Options{Words: words, Chunk: 50, Rate: 10000, Threads: threads})
 	got := runOn(t, c, srv.URL+path)
 	why, _ := got["why"].(map[string]any)
 	return why, n.Load()
@@ -65,6 +71,28 @@ func TestStableSearchPageIsAskedAgainOnlyOnce(t *testing.T) {
 	t.Logf("stable page, %d names: %d requests", len(stableNames), n)
 	if n > stableSearchMax {
 		t.Errorf("%d requests on a stable page, want at most %d", n, stableSearchMax)
+	}
+}
+
+// The eight names of a stable page sit in eight groups that run side by
+// side (a polite run at 5 a second does too): they all reach the first
+// check together, and only one of them makes it. The count is the one of
+// the same search with one group at a time, not four repeats for each name.
+func TestNamesOfSeparateGroupsShareTheFirstCheck(t *testing.T) {
+	words := sizeWords("x", 8*50)[1:]
+	for i, n := range stableNames {
+		words[i*50+7] = n
+	}
+	_, alone := reqsOn(t, stableSearch, "/rest/products/search", slices.Clone(words), 1)
+	for run := 0; run < 5; run++ {
+		why, n := reqsOn(t, stableSearch, "/rest/products/search", slices.Clone(words), 5)
+		if len(why) != len(stableNames) {
+			t.Fatalf("found %v, want the %d names", why, len(stableNames))
+		}
+		t.Logf("5 groups at a time: %d requests, one at a time: %d", n, alone)
+		if n > alone {
+			t.Errorf("%d requests with groups side by side, %d one at a time", n, alone)
+		}
 	}
 }
 
