@@ -4,9 +4,9 @@ import (
 	"bytes"
 	"compress/gzip"
 	_ "embed"
+	"encoding/binary"
 	"encoding/json"
 	"hash/maphash"
-	"io"
 	"net/http"
 	"regexp"
 	"sort"
@@ -58,6 +58,7 @@ func Load() Stats {
 		decode(&d)
 		engine = build(&d)
 		paths = engine.paths()
+		release(&d)
 		stats = Stats{Compiled: len(d.Units), Reasons: map[string]int{}}
 		for r, n := range d.Skipped {
 			stats.Reasons[r] = n
@@ -77,8 +78,31 @@ func decode(d *Data) {
 	if err != nil {
 		return
 	}
-	if raw, err := io.ReadAll(zr); err == nil {
-		_ = json.Unmarshal(raw, d)
+	// The gzip trailer holds the size, so the text is read into one buffer
+	// of that size, not a slice grown by doubling.
+	buf := bytes.NewBuffer(make([]byte, 0, min(gzipSize(embedded), 1<<28)+bytes.MinRead))
+	if _, err := buf.ReadFrom(zr); err == nil {
+		_ = json.Unmarshal(buf.Bytes(), d)
+	}
+}
+
+// gzipSize is the length of the data b holds once unzipped (mod 2^32), or 0.
+func gzipSize(b []byte) int {
+	if len(b) < 4 {
+		return 0
+	}
+	return int(binary.LittleEndian.Uint32(b[len(b)-4:]))
+}
+
+// release drops what only build reads (the paths and the prefilter needles,
+// which the automata now hold), so that the units stay resident without them.
+func release(d *Data) {
+	for i := range d.Units {
+		u := &d.Units[i]
+		u.Paths = nil
+		for j := range u.Matchers {
+			u.Matchers[j].Lits = nil
+		}
 	}
 }
 
@@ -255,9 +279,15 @@ type cunit struct {
 	xs   []*cextractor
 }
 
+// cmatcher is small until it first runs (there are 68,000 of them): what
+// it compiles to is held apart.
 type cmatcher struct {
-	spec  *Matcher
-	once  sync.Once
+	spec *Matcher
+	once sync.Once
+	*mcomp
+}
+
+type mcomp struct {
 	words []string
 	res   []*regexp.Regexp
 	exprs []*node
@@ -307,6 +337,19 @@ func buildGroup(units []*cunit, sb *sideBuilder) *group {
 	g := &group{}
 	needle := map[string]int32{}
 	b := newACBuilder()
+	if sb == nil { // the root's trie holds most of the needles
+		n := 0
+		for _, cu := range units {
+			for _, cm := range cu.ms {
+				for _, grp := range cm.spec.Lits {
+					for _, lit := range grp {
+						n += len(lit)
+					}
+				}
+			}
+		}
+		b.reserve(n)
+	}
 	var needleGroups [][]int32
 	for ui, cu := range units {
 		gu := &gunit{u: cu}
@@ -642,6 +685,7 @@ func (c *ctx) memoSet(key string, v value) {
 
 func (m *cmatcher) compile() {
 	s := m.spec
+	m.mcomp = &mcomp{}
 	switch s.Type {
 	case "word":
 		m.words = s.Vals

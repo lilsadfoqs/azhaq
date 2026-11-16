@@ -1,5 +1,7 @@
 package detect
 
+import "slices"
+
 // ac is an Aho-Corasick automaton over bytes, laid out to stay small with
 // tens of thousands of needles. The original design is in
 // internal/wappalyzer/literal_index.go; this one stores edges sparsely
@@ -29,6 +31,15 @@ type acBuilder struct {
 
 func newACBuilder() *acBuilder {
 	return &acBuilder{first: []int32{-1}, next: []int32{-1}, ch: []byte{0}, depth: []uint8{0}, outs: map[int32][]int32{}}
+}
+
+// reserve leaves room for n more nodes, so a trie of known size is not grown
+// by doubling (which made three times its size in garbage).
+func (b *acBuilder) reserve(n int) {
+	b.first = slices.Grow(b.first, n)
+	b.next = slices.Grow(b.next, n)
+	b.ch = slices.Grow(b.ch, n)
+	b.depth = slices.Grow(b.depth, n)
 }
 
 func (b *acBuilder) child(n int32, c byte) int32 {
