@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
@@ -42,10 +43,18 @@ type keptMeta struct {
 	Raw         *fetch.Raw    `json:"raw,omitempty"`
 }
 
+// kept counts the answers recorded since KeepResponses, which a resume
+// reads back: a process that kept some has moved a task on, finished or not.
+var kept atomic.Int64
+
+// AnswersKept is how many new answers this process has kept for a resume.
+func AnswersKept() int64 { return kept.Load() }
+
 // KeepResponses sets fetch.Keep to the run's workspace; resume says the
 // run continues an earlier one, whose answers are read back. stop writes
 // what is still queued.
 func KeepResponses(st *store.Store, resume bool) (stop func()) {
+	kept.Store(0)
 	k := &keeper{st: st, resume: resume, kick: make(chan struct{}, 1), quit: make(chan struct{}), done: make(chan struct{})}
 	go k.write()
 	fetch.Keep = k
@@ -78,6 +87,7 @@ func (k *keeper) Load(raw string) (fetch.Result, bool) {
 }
 
 func (k *keeper) Keep(raw string, res fetch.Result) {
+	kept.Add(1)
 	meta, err := json.Marshal(keptMeta{
 		RequestURL: res.RequestURL, Status: res.Status, URL: res.URL, Header: res.Header,
 		StatusLine: res.StatusLine, Hops: res.Hops, Truncated: res.Truncated, FinalHeader: res.FinalHeader,
