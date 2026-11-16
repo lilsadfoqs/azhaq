@@ -31,6 +31,8 @@ azhaq dirs -l services.txt -json
 
 Nothing else is sent: no front page is asked first, so with `-ac=false` a sweep of N words is N requests, and `-max-requests N` is enough. The calibration guesses (or, with `-ac=false`, the first two words) double as the check that the service answers: if none of them gets an answer, the sweep stops there, the service is listed under `unreachable`, and the exit is 3.
 
+A sweep `-max-requests` stops is redone whole by `azhaq resume`. A request it sent before the cap that got no answer is a failure like any other: listed under `failed` with its cause (once for each cause), counted in `failures` and listed by `azhaq query -failed`, and the exit is 4, the limit's. The resume replaces it with what the redo meets: a refusal that repeats is one failure, not two. Calibration the cap cut short is not used as if it were answered: the sweep is not done, even when no word is left to ask.
+
 The request is ffuf's, so a ffuf command line carries over: [Details](#details) lists what it sends.
 
 ## Output

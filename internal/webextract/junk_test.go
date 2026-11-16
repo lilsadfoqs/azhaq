@@ -316,6 +316,55 @@ func TestJunkTemplateInQuery(t *testing.T) {
 	}
 }
 
+// A fuzzer keyword followed by stray symbols (a bullet, a bracket fragment,
+// a run of stars), encoded or not, in a path or a query, is the same junk as
+// the bare keyword; a word that goes on with letters or digits stays.
+func TestJunkTemplateKeywordWithTrailingSymbols(t *testing.T) {
+	for _, raw := range []string{
+		"http://example.com/FUZZ%E2%80%A2",
+		"http://example.com/FUZZ[url",
+		"http://example.com/FUZZ[url]",
+		"http://example.com/FUZZ%5Burl",
+		"http://example.com/FUZZ*****",
+		"http://example.com/FUZ2Z%E2%80%A2",
+		"http://example.com/FUZZ000003:C=200%E2%80%A2",
+		"http://example.com/FUZZ.php%E2%80%A2",
+		"http://example.com/FUZZ%E2%80%A2.php",
+		"http://example.com/%E2%86%92FUZZ%E2%80%A2",
+		"http://example.com/{payload}%E2%80%A2",
+		"http://example.com/{FUZZ}[url",
+		"http://example.com/a.php?cat=FUZZ*****",
+		"http://example.com/a.php?cat=FUZZ***",
+		"http://example.com/a.php?cat=FUZZ%E2%80%A2",
+		"http://example.com/a.php?cat=FUZZ[url",
+		"http://example.com/a.php?cat=FUZZFUZ2Z%E2%80%A2",
+		"http://example.com/a.php?cat={payload}%E2%80%A2",
+		"http://example.com/a.php?FUZZ%E2%80%A2=1",
+		"http://example.com/a.php?FUZZ[url=1",
+	} {
+		if why := JunkReason(raw); why != JunkTemplate {
+			t.Errorf("JunkReason(%s) = %q, want %q", raw, why, JunkTemplate)
+		}
+	}
+	for _, raw := range []string{
+		"http://example.com/FUZZY",
+		"http://example.com/FUZZ-list",
+		"http://example.com/FUZZ-list.txt",
+		"http://example.com/FUZZ_list",
+		"http://example.com/FUZZ%E2%80%A2list",
+		"http://example.com/FUZZ[url]x",
+		"http://example.com/FUZZ.php.bak",
+		"http://example.com/a.php?cat=FUZZY",
+		"http://example.com/a.php?cat=FUZZ-list",
+		"http://example.com/a.php?cat=FUZZ[1]x",
+		"http://example.com/a.php?cat=fuzz*",
+	} {
+		if why := JunkReason(raw); why == JunkTemplate {
+			t.Errorf("JunkReason(%s) = %q, want a word", raw, why)
+		}
+	}
+}
+
 // The shapes of a pasted fuzzer log, a traversal probe in a query name and
 // an injection glued to a value are junk with a reason; the words close to
 // them stay.

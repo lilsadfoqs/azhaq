@@ -301,6 +301,14 @@ func (s *search) give(page string, emit func(types.Observation) error, found map
 		return types.RunMeta{}, err
 	}
 	if fail != nil {
+		if s.spentNow() {
+			// The engine takes the task as capped and drops this error: the
+			// failure of a request sent before the cap is kept as a row.
+			raw, _ := json.Marshal(map[string]any{"error": fail.Error(), "collector": Name, "url": page})
+			if err := emit(types.Observation{Collector: Name, Source: "run", Kind: "error", Payload: raw, ObservedAt: time.Now().UTC(), Keep: true}); err != nil {
+				return types.RunMeta{}, err
+			}
+		}
 		return types.RunMeta{Status: types.StatusError, Error: fail.Error(), EmitCount: 1}, fail
 	}
 	return types.RunMeta{Status: types.StatusOK, EmitCount: 1}, nil

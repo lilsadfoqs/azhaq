@@ -12,6 +12,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -104,10 +105,13 @@ type search struct {
 	// skip says why calibration left the page alone.
 	lost    int
 	lostWhy string
-	skip    string
-	note    string // said in the page's row
-	floodAt int    // the first chunk of a page that answers any name
-	badXML  int    // names that cannot be XML elements
+	// quietLost and quietWhy are the same for probes of a group's size.
+	quietLost int
+	quietWhy  string
+	skip      string
+	note      string // said in the page's row
+	floodAt   int    // the first chunk of a page that answers any name
+	badXML    int    // names that cannot be XML elements
 
 	cut atomic.Bool // an answer body was cut: a stream that never ends, or past 2 MiB
 }
@@ -685,13 +689,20 @@ func (s *search) sleep(d time.Duration) bool {
 
 // lose counts a request that got no answer.
 func (s *search) lose(quiet bool, err error) {
-	if quiet || s.ctx.Err() != nil {
+	if s.ctx.Err() != nil {
 		return
 	}
 	s.mu.Lock()
+	defer s.mu.Unlock()
+	if quiet {
+		// A probe that failed may only show a size the server refuses;
+		// calibrate counts it when nothing else answered.
+		s.quietLost++
+		s.quietWhy = engine.ShortError(err.Error())
+		return
+	}
 	s.lost++
 	s.lostWhy = engine.ShortError(err.Error())
-	s.mu.Unlock()
 }
 
 // once sends one request. wait is not zero when the page limited it: the
@@ -824,6 +835,14 @@ func (s *search) calibrate(words []string) bool {
 	c, okC = s.ask(crowd, true)
 	wg.Wait()
 	if !okA || !okB {
+		if !okA && !okB && !okC {
+			// Nothing answered: the probe that failed was sent, and failed.
+			s.mu.Lock()
+			if s.lost == 0 && s.quietLost > 0 {
+				s.lost, s.lostWhy = s.quietLost, s.quietWhy
+			}
+			s.mu.Unlock()
+		}
 		return false
 	}
 	if a.status != b.status {
@@ -1018,10 +1037,18 @@ func weak(why string) bool { return why == "size" || why == "lines" || why == "b
 // chance.
 const sizeControls = 4
 
+// sizeRepeats is how many more times such a name is asked, each time with
+// a fresh value and followed by a control: a page that repeats a shape in
+// steps (a counter, a rotating banner) can give a name the same answer
+// twice in a row and calm answers to controls sent together.
+const sizeRepeats = 2
+
 // standsApart says whether seen, the answers to name that changed in a
 // weak way, hold up as evidence: names no page reads, as long as name, are
 // asked now, and each answer must differ from the reference and from each
-// of them as judge says. What they show is learned for the names that
+// of them as judge says. The name is then asked sizeRepeats more times,
+// with another value and a control after each, and those answers count
+// too. What they show is learned for the names that
 // follow: the size and line noise widens, and a body that changed with no
 // name to blame ends the rule that any other body is a change.
 func (s *search) standsApart(name, value string, seen []answer) bool {
@@ -1030,6 +1057,25 @@ func (s *search) standsApart(name, value string, seen []answer) bool {
 	for i := 0; i < sizeControls; i++ {
 		q := controlFor([]string{name}, value)
 		a, ok := s.get(q)
+		if !ok {
+			return false
+		}
+		ctl = append(ctl, strip(a, q))
+	}
+	seen = slices.Clone(seen)
+	for i := 0; i < sizeRepeats; i++ {
+		v := value
+		if v == "" {
+			v = randValue()
+		}
+		q := []pair{{name, v}}
+		a, ok := s.get(q)
+		if !ok {
+			return false
+		}
+		seen = append(seen, strip(a, q))
+		q = controlFor([]string{name}, value)
+		a, ok = s.get(q)
 		if !ok {
 			return false
 		}
