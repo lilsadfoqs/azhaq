@@ -1719,6 +1719,9 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	if n := opts.DNS.WildcardNote(); n != "" {
 		rep.Notes = append(rep.Notes, n)
 	}
+	if n := opts.DNS.HeldNote(); n != "" {
+		rep.Notes = append(rep.Notes, n)
+	}
 	// The URLs are those the scheduler kept because they were found past
 	// -depth: a URL left unasked by -max-items or another cap is capped in
 	// the map too, but not by the depth.

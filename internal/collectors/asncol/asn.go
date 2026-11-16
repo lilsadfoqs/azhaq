@@ -237,7 +237,9 @@ func (r *PTR) Name() string { return PTRName }
 // Info: asks DNS resolvers only.
 func (r *PTR) Info() catalog.Info { return catalog.Info{Kind: catalog.Passive} }
 
-// Asks no source: an address is looked up on the run's resolvers.
+// Asks no source: an address is looked up on the run's resolvers. The reverse
+// name of a loopback, private or link-local address is not asked of the
+// default public ones (Pool.Hold): only of resolvers the user named.
 func (r *PTR) Asks(types.Seed) []string { return nil }
 
 func (r *PTR) Inputs() []types.SeedType { return []types.SeedType{types.TypeIPAddress} }
@@ -276,8 +278,8 @@ func (r *PTR) RunBatch(ctx context.Context, seeds []types.Seed, emit func(types.
 			sem <- struct{}{}
 			defer func() { <-sem }()
 			rev, err := dns.ReverseAddr(ip.String())
-			if err != nil {
-				return
+			if err != nil || r.Pool.Hold(rev) {
+				return // a private address's reverse name is not for the public resolvers
 			}
 			// A reverse zone's servers often throttle a whole range asked at
 			// once: a failure or SERVFAIL is asked again, through another

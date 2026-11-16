@@ -27,6 +27,7 @@ import (
 
 	"github.com/lilsadfoqs/azhaq/engine"
 	"github.com/lilsadfoqs/azhaq/internal/collectors/httpcol"
+	"github.com/lilsadfoqs/azhaq/internal/dnsr"
 	"github.com/lilsadfoqs/azhaq/internal/egress"
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
 	"github.com/lilsadfoqs/azhaq/internal/fingerprint"
@@ -949,7 +950,7 @@ type asnInfo struct {
 // third-party request per new prefix, not one to a target.
 func (p *probeOut) asn(ip string) *asnInfo {
 	a, err := netip.ParseAddr(ip)
-	if err != nil || a.IsPrivate() || a.IsLoopback() || a.IsLinkLocalUnicast() || a.IsUnspecified() {
+	if err != nil || a.IsPrivate() || a.IsLoopback() || a.IsLinkLocalUnicast() || a.IsUnspecified() || dnsr.LocalAddr(a) {
 		return nil
 	}
 	if v, ok := p.asns.Load(ip); ok {

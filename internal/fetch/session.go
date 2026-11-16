@@ -114,6 +114,14 @@ type sessionGuard struct {
 	pre      int64           // requests sent between the sign-in and that check
 	stretch  int64           // the oldest stretch a renewal made worth asking again, not taken yet
 	stretchN bool
+	goods    []*good              // pages that answered 200 with the session, while no check page is known
+	sentAt   map[string]time.Time // when each GET in asked was sent (its latest), for the count since a good page
+	goodN    int                  // set by flipped: GETs sent after the page that flipped; the report's count, not the redo list
+	goodSet  bool
+	probeSeq int64          // goods asked again so far
+	seen     map[string]int // answers that may be the end of the session, counted
+	doubts   int            // checks such an answer has cost
+	pass     bool           // an answer that may be the end asked for a check (doubt)
 }
 
 // suspect is a URL answered as if the session were over (a 401, a redirect to
@@ -173,8 +181,15 @@ func (g *sessionGuard) timeUp() bool {
 	if g.remote || g.now().Sub(time.Unix(0, g.lastGood.Load())) < g.s.Window {
 		return false
 	}
-	page, _ := g.page()
-	return page != ""
+	return g.canCheck()
+}
+
+// canCheck says there is something to check by: a check page, or pages that
+// answered 200 with the session.
+func (g *sessionGuard) canCheck() bool {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.s.Check != "" || len(g.goods) > 0
 }
 
 // owed says a check is due: enough requests, an answer that asked for one, a
@@ -199,7 +214,7 @@ func StageCheck(ctx context.Context, requests int) error {
 	if requests > 0 && requests <= stageMin {
 		return SessionLost()
 	}
-	if page, _ := g.page(); g.due.Load() || page != "" && g.since.Load() > stageMin {
+	if g.due.Load() || g.since.Load() > stageMin && g.canCheck() {
 		g.stageDue.Store(true)
 		return g.check(ctx, false)
 	}
@@ -643,13 +658,16 @@ func (g *sessionGuard) verdict(ctx context.Context, endedBy, signal string, sent
 		}
 		if p == want {
 			g.mu.Lock()
-			g.asked, g.endedBy = nil, ""
+			g.asked, g.endedBy, g.sentAt = nil, "", nil
 			g.mu.Unlock()
 			g.good.Add(1)
 			return nil
 		}
 		got = p
 	} else if endedBy == "" {
+		if p, ok := g.flipped(ctx, signal); ok {
+			return g.lose(ctx, p, "", signal, sent)
+		}
 		return g.verify(ctx, sent)
 	}
 	return g.lose(ctx, got, endedBy, signal, sent)
@@ -671,13 +689,21 @@ func (g *sessionGuard) lose(ctx context.Context, got Print, endedBy, signal stri
 	}
 	g.mu.Lock()
 	start, pre, never := g.start, g.pre, g.never
+	report := n // the GETs asked since the last good check
+	if g.goodSet {
+		report = g.goodN
+		if g.held {
+			report++
+		}
+		g.goodSet = false
+	}
 	g.mu.Unlock()
 	if start != "" {
 		how = start
 	}
 	what := fmt.Sprintf("the session ended (%s)", how)
 	if never {
-		return g.failLost("the session does not hold", how, "the run cannot sign in again ("+g.s.Why+")", n, pre, true)
+		return g.failLost("the session does not hold", how, "the run cannot sign in again ("+g.s.Why+")", report, pre, true)
 	}
 	if endedBy != "" {
 		what = fmt.Sprintf("the session ended after %s was requested (%s)", pathOf(endedBy), how)
@@ -685,7 +711,7 @@ func (g *sessionGuard) lose(ctx context.Context, got Print, endedBy, signal stri
 		what = fmt.Sprintf("the session ended (%s; the first answer that looked like its end was %s)", how, signal)
 	}
 	fail := func(why string) error {
-		return g.failLost("the session ended", strings.TrimPrefix(what, "the session ended "), why, n, pre, start != "")
+		return g.failLost("the session ended", strings.TrimPrefix(what, "the session ended "), why, report, pre, start != "")
 	}
 	if g.s.Renew == nil {
 		return fail("the run cannot sign in again (" + g.s.Why + ")")
@@ -770,7 +796,7 @@ func (g *sessionGuard) resume(ctx context.Context, what, endedBy string, unrecor
 	// The request whose answer cleared the session is not asked again: its
 	// answer, to a live session, is the one it gives. Nor is one found to end it.
 	redo := slices.DeleteFunc(g.asked, func(u string) bool { return u == endedBy || g.enders[u] })
-	g.asked, g.endedBy = nil, ""
+	g.asked, g.endedBy, g.sentAt = nil, "", nil
 	g.redo = append(g.redo, redo...)
 	if from := g.good.Add(1) - 1; !g.stretchN || from < g.stretch {
 		g.stretch, g.stretchN = from, true
@@ -991,10 +1017,18 @@ func sessionSaw(ctx context.Context, raw string, res Result) {
 	if g.held && (g.endAns == raw || slices.ContainsFunc(res.Hops, func(h Hop) bool { return h.URL == g.endAns })) {
 		g.held = false // recorded below
 	}
+	if g.sentAt == nil {
+		g.sentAt = map[string]time.Time{}
+	}
+	g.sentAt[raw] = res.At
 	if len(g.asked) < maxAsked {
 		g.asked = append(g.asked, raw)
 	}
 	g.mu.Unlock()
+	g.keepGood(raw, res)
+	if res.Method == "" || res.Method == http.MethodGet {
+		g.doubt(raw, res.Status, res.Header.Get("Location"))
+	}
 	if clearsSession(res.Header) || clearsSession(res.FinalHeader) {
 		g.mu.Lock()
 		if g.endedBy == "" {
@@ -1068,6 +1102,7 @@ func sessionWire(req *http.Request, resp *http.Response) {
 func SawAnswer(raw string, status int, location string) {
 	if g := guardP.Load(); g != nil && !g.renewing.Load() {
 		g.answered(raw, status, location, false)
+		g.doubt(raw, status, location)
 		g.notify("")
 	}
 }
