@@ -86,11 +86,15 @@ type search struct {
 	hdrNoise  map[string]bool
 	// exact: three identical requests got the same body, so any other body,
 	// by one byte, is a change (a page of one error message among several).
-	exact      bool
-	refWords   map[string]bool // the words of the reference answers
-	noEcho     bool            // the page prints any name it gets: no name is evidence
-	controlled bool            // see calibrate
-	requests   atomic.Int64
+	exact bool
+	// varied: some answers to requests that should match (calibration,
+	// controls, a name asked twice) did not; checked: a size-only name was
+	// asked again (see standsApart) and the page stayed calm.
+	varied, checked bool
+	refWords        map[string]bool // the words of the reference answers
+	noEcho          bool            // the page prints any name it gets: no name is evidence
+	controlled      bool            // see calibrate
+	requests        atomic.Int64
 
 	mu sync.Mutex
 	// most and maxBytes are the largest group sent: smaller than any whose
@@ -827,11 +831,12 @@ func (s *search) calibrate(words []string) bool {
 	// The two baselines and the crowd are independent: one round trip.
 	crowd := s.crowd(words)
 	var a, b, c answer
+	var bq []pair
 	var okA, okB, okC bool
 	var wg sync.WaitGroup
 	wg.Add(2)
 	go func() { defer wg.Done(); defer guard.Recover(s.ctx); a, okA = s.get(one) }()
-	go func() { defer wg.Done(); defer guard.Recover(s.ctx); b, okB = s.get(randomPairs(1)) }()
+	go func() { defer wg.Done(); defer guard.Recover(s.ctx); bq = randomPairs(1); b, okB = s.get(bq) }()
 	c, okC = s.ask(crowd, true)
 	wg.Wait()
 	if !okA || !okB {
@@ -877,6 +882,11 @@ func (s *search) calibrate(words []string) bool {
 	s.refWords = wordSet(a.body, wordSet(b.body, nil))
 	if len(echoed(a.body, pairNames(one), nil)) > 0 {
 		s.noEcho = true
+	}
+	// A page that prints the names it gets differs by them, not by itself.
+	if s.slack > 0 || s.lineSlack > 0 || len(s.hdrNoise) > 0 ||
+		(!s.noEcho && !bytes.Equal(strip(a, one).body, strip(b, bq).body)) {
+		s.vary()
 	}
 	if !okC {
 		s.mu.Lock()
@@ -1040,15 +1050,27 @@ const sizeControls = 4
 // sizeRepeats is how many more times such a name is asked, each time with
 // a fresh value and followed by a control: a page that repeats a shape in
 // steps (a counter, a rotating banner) can give a name the same answer
-// twice in a row and calm answers to controls sent together.
+// twice in a row and calm answers to controls sent together. Once a name
+// has been asked so and the page showed no variation, nor has it since,
+// the names that follow are not: see vary.
 const sizeRepeats = 2
+
+// vary notes that the page answered requests that should match with
+// answers that do not.
+func (s *search) vary() {
+	s.mu.Lock()
+	s.varied = true
+	s.mu.Unlock()
+}
 
 // standsApart says whether seen, the answers to name that changed in a
 // weak way, hold up as evidence: names no page reads, as long as name, are
 // asked now, and each answer must differ from the reference and from each
 // of them as judge says. The name is then asked sizeRepeats more times,
 // with another value and a control after each, and those answers count
-// too. What they show is learned for the names that
+// too, unless a name already stood apart through them with every answer
+// to requests that should match alike (calibration, controls, names asked
+// twice) since: the page has shown no variation. What they show is learned for the names that
 // follow: the size and line noise widens, and a body that changed with no
 // name to blame ends the rule that any other body is a change.
 func (s *search) standsApart(name, value string, seen []answer) bool {
@@ -1063,7 +1085,14 @@ func (s *search) standsApart(name, value string, seen []answer) bool {
 		ctl = append(ctl, strip(a, q))
 	}
 	seen = slices.Clone(seen)
-	for i := 0; i < sizeRepeats; i++ {
+	s.mu.Lock()
+	again := s.varied || !s.checked
+	s.mu.Unlock()
+	repeats := 0
+	if again || !calm(ref, ctl[1:]) {
+		repeats = sizeRepeats
+	}
+	for i := 0; i < repeats; i++ {
 		v := value
 		if v == "" {
 			v = randValue()
@@ -1088,16 +1117,36 @@ func (s *search) standsApart(name, value string, seen []answer) bool {
 		loLines, hiLines = min(loLines, c.lines), max(hiLines, c.lines)
 		same = same && bytes.Equal(c.body, ref.body)
 	}
+	stable := calm(ref, ctl[1:])
 	s.mu.Lock()
 	s.slack = max(s.slack, hiLen-loLen)
 	s.lineSlack = max(s.lineSlack, hiLines-loLines)
 	s.exact = s.exact && same
+	s.varied = s.varied || !stable
 	s.mu.Unlock()
 	for _, x := range seen {
 		for _, c := range ctl {
 			if s.judge(x, c) == "" {
+				if repeats > 0 {
+					s.vary() // asked again, it did not change as before
+				}
 				return false
 			}
+		}
+	}
+	if repeats > 0 && stable {
+		s.mu.Lock()
+		s.checked = true
+		s.mu.Unlock()
+	}
+	return true
+}
+
+// calm says no answer of ans differs from ref in size, lines or body.
+func calm(ref answer, ans []answer) bool {
+	for _, a := range ans {
+		if a.length != ref.length || a.lines != ref.lines || !bytes.Equal(a.body, ref.body) {
+			return false
 		}
 	}
 	return true
@@ -1164,6 +1213,9 @@ func (s *search) test(group []string, value string) (verdict, bool) {
 		base = c
 		for _, n := range tokens(c.body, control) {
 			echo = max(echo, n)
+		}
+		if weak(s.judge(strip(c, control), strip(s.ref, nil))) {
+			s.vary()
 		}
 	}
 	var v verdict
@@ -1254,6 +1306,9 @@ func (s *search) process(ck *chunk, group []string, v verdict, inferred bool) {
 		why, seen := v.why, []answer{v.ans}
 		if !inferred || weak(v.why) {
 			w, ok := s.test(group, ck.fixed)
+			if ok && weak(v.why) && w.why == "" && !w.crowd {
+				s.vary() // the same name, asked again, changed nothing
+			}
 			if !ok || w.why == "" || w.crowd {
 				return
 			}
