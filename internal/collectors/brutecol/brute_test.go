@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"net"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -199,18 +198,10 @@ func TestVariantsHaveEveryKind(t *testing.T) {
 }
 
 // What alterx's default patterns make of a name, azhaq makes too: the same
-// words, numbers and regions, in the same places. The patterns are read from
-// alterx's module in the module cache.
+// words, numbers and regions, in the same places. The patterns are alterx
+// v0.1.0's, kept in testdata so the test runs without the module cache.
 func TestVariantsCoverAlterxDefaults(t *testing.T) {
-	out, err := exec.Command("go", "env", "GOMODCACHE").Output()
-	if err != nil {
-		t.Skip(err)
-	}
-	files, _ := filepath.Glob(filepath.Join(strings.TrimSpace(string(out)), "github.com/projectdiscovery/alterx@*", "permutations.yaml"))
-	if len(files) == 0 {
-		t.Skip("alterx is not in the module cache; its default patterns have 6 per word, 1 per number and 1 per region")
-	}
-	raw, err := os.ReadFile(files[len(files)-1])
+	raw, err := os.ReadFile(filepath.Join("testdata", "alterx-v0.1.0-permutations.yaml"))
 	if err != nil {
 		t.Fatal(err)
 	}
