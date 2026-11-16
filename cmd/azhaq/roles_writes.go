@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"regexp"
 	"slices"
 	"sort"
 	"strings"
@@ -1108,7 +1107,7 @@ func stepCandidates(steps []verifyWrite, w writeReq, a answer, sender role) ([]c
 	return out, notes
 }
 
-var bracedName = regexp.MustCompile(`\{[A-Za-z0-9_.-]+\}`)
+var bracedName = lazyre.New(`\{[A-Za-z0-9_.-]+\}`)
 
 func orderedValFields(w writeReq, a answer) []string {
 	seen := map[string]bool{}

@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/lilsadfoqs/azhaq/internal/lazyre"
+	"github.com/lilsadfoqs/azhaq/internal/productname"
 	"net/netip"
 	"sort"
 	"strings"
@@ -393,27 +394,22 @@ func (l Lead) Listener() string {
 }
 
 // ProductKey folds a product name for comparison: case, spaces, dashes
-// and the usual spellings of the same product (Apache httpd, OpenSSH).
-func ProductKey(s string) string {
-	s = strings.ToLower(strings.TrimSpace(s))
-	s = strings.NewReplacer(" ", "", "-", "", "_", "", ".", "").Replace(s)
-	switch s {
-	case "apache", "apachehttpserver", "httpd":
-		return "apachehttpd"
-	case "ssh":
-		return "openssh"
-	}
-	return s
-}
+// and the usual spellings of the same product (Apache httpd, OpenSSH). The
+// index stores its names by this key.
+func ProductKey(s string) string { return productname.Key(s) }
 
-// sameProduct says the advisory's package is the service's product. A
-// package name that is a path (an ecosystem's group/name) matches on
-// its last part.
+// identity is the key a product is told apart by in a run's own rows: the
+// name without its vendor prefix, so "Apache Tomcat" and "Tomcat" are one.
+func identity(s string) string { return productname.Canon(s) }
+
+// sameProduct says the advisory's package is the service's product, with or
+// without the vendor prefix. A package name that is a path (an ecosystem's
+// group/name) matches on its last part.
 func sameProduct(pkg, product string) bool {
 	if i := strings.LastIndex(pkg, "/"); i >= 0 {
 		pkg = pkg[i+1:]
 	}
-	return ProductKey(pkg) == ProductKey(product)
+	return productname.Same(pkg, product)
 }
 
 // state is where a version sits in one affected entry.
@@ -689,6 +685,28 @@ func rangeText(r Range) string {
 		return "every version"
 	}
 	return strings.Join(parts, " ")
+}
+
+// HeaderProductVersion reads the product and version a Server header names:
+// the whole name before the version ("Apache Traffic Server/9.1.0" is that
+// product, not "Server"). A value that names no version reads as ProductVersion
+// does.
+func HeaderProductVersion(value string) (product, version string) {
+	if name, v := productname.Token(value); name != "" && v != "" {
+		return name, v
+	}
+	return ProductVersion(value)
+}
+
+// foreignVersion says a version a detection template stated is the version of
+// the Server header's own product, not the template's: an answer from before
+// templates checked the token they read ("Apache" 1.1 from "Apache-Coyote/1.1").
+func foreignVersion(server, product, version string) bool {
+	if version == "" || server == "" {
+		return false
+	}
+	name, v := productname.Token(server)
+	return name != "" && v == version && !productname.Names(server, product)
 }
 
 var versionInText = lazyre.New(`(?i)([A-Za-z][A-Za-z0-9 ._-]{0,40}?)[/ ]v?(\d[\w.:+~-]*)`)

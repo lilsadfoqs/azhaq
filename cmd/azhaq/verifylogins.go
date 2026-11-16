@@ -16,6 +16,7 @@ import (
 	"github.com/lilsadfoqs/azhaq/internal/egress"
 	"github.com/lilsadfoqs/azhaq/internal/httprow"
 	"github.com/lilsadfoqs/azhaq/internal/ledger"
+	"github.com/lilsadfoqs/azhaq/internal/productname"
 	"github.com/lilsadfoqs/azhaq/internal/proof"
 	"github.com/lilsadfoqs/azhaq/internal/verify"
 	"github.com/lilsadfoqs/azhaq/store"
@@ -244,7 +245,12 @@ func svcHost(svc advisory.Service) string {
 	return svc.IP
 }
 
-func loginsKey(product string) string { return strings.ToLower(strings.TrimSpace(product)) }
+func loginsKey(product string) string {
+	if k := productname.Canon(product); k != "" {
+		return k // "Apache ActiveMQ" and "ActiveMQ" are asked once
+	}
+	return strings.ToLower(strings.TrimSpace(product))
+}
 
 // loginWebServices is the web services the run confirmed, for -verify-
 // logins to match its catalog against: advisory.ServicesAnyVersion's own
