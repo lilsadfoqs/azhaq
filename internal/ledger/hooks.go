@@ -84,6 +84,9 @@ func HTTPAs(class string, req *http.Request) {
 	}
 	counter(class).Add(1)
 	purpose := purposeFor(req.Context(), "http", collectorOf(req.Context()), req.URL)
+	if class == ClassProxy {
+		purpose = PurposeProxy
+	}
 	spend(class, "http", collectorOf(req.Context()), purpose, 1)
 	if f := OnSent; f != nil && class == ClassTarget {
 		f(req.Method, req.URL.String())
@@ -107,8 +110,11 @@ func HTTPAs(class string, req *http.Request) {
 	}
 	e := Entry{Kind: "http", Class: class, Method: method, Target: target, Host: host, VHost: vhost,
 		Body: bodySum(req), Collector: collectorOf(req.Context())}
-	if class == ClassTarget {
+	switch class {
+	case ClassTarget:
 		e.Rule, e.Purpose = l.rule(host), purpose
+	case ClassProxy:
+		e.Purpose = purpose
 	}
 	l.Record(e)
 }
@@ -172,6 +178,12 @@ func NotSent(class string, req *http.Request) {
 		e.Rule = l.rule(host)
 	}
 	l.Record(e)
+}
+
+// NotReached says err is a failed connect: the request was never written.
+func NotReached(err error) bool {
+	var oe *net.OpError
+	return errors.As(err, &oe) && oe.Op == "dial"
 }
 
 // ProxyDown says err is a failure to reach the proxy a request was to go
@@ -363,7 +375,7 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 		lv.mu.Lock()
 		defer lv.mu.Unlock()
 		lv.done = true
-		if !lv.recorded && class == ClassTarget && Unsent != nil {
+		if !lv.recorded && (class == ClassTarget || class == ClassProxy) && Unsent != nil {
 			Unsent()
 		}
 	}
@@ -429,9 +441,10 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 		// before the write). Only a request a stop cancelled, or the kill file
 		// refused, before it left is not listed.
 		switch {
-		case resp == nil && ProxyDown(err) && req.Context().Err() == nil:
+		case resp == nil && (ProxyDown(err) || class == ClassProxy && NotReached(err)) && req.Context().Err() == nil:
 			// The proxy was not reached: no byte of the request left, so it is
-			// listed as tried and counted by nobody (finish gives it back).
+			// listed as tried and counted by nobody (finish gives it back). The
+			// ask of the -proxy is addressed to it: its own connect fails.
 			lv.mu.Lock()
 			if !lv.recorded {
 				lv.done = true // no later event may count it

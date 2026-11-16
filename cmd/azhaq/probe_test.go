@@ -511,8 +511,9 @@ func tunnel(t *testing.T, target string) string {
 }
 
 // A bare name is asked over HTTPS, and over HTTP only when that fails:
-// two names that answer on the first try spend two requests and end the
-// run complete under -max-requests 2, not stopped with tasks left.
+// two names that answer on the first try spend two requests, and the ask of
+// the -proxy a third, and end the run complete under -max-requests 3, not
+// stopped with tasks left.
 func TestProbeBoundedRunThatAnsweredEverythingIsComplete(t *testing.T) {
 	t.Chdir(t.TempDir())
 	site := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -520,9 +521,9 @@ func TestProbeBoundedRunThatAnsweredEverythingIsComplete(t *testing.T) {
 	}))
 	t.Cleanup(site.Close)
 	resolvers := serveZone(t, fakeZone{a: map[string]string{"a.labtest.com": "192.0.2.1", "b.labtest.org": "192.0.2.2"}})
-	out, rep, code := runContract(t, "probe", "-u", "a.labtest.com", "-u", "b.labtest.org", "-max-requests", "2",
+	out, rep, code := runContract(t, "probe", "-u", "a.labtest.com", "-u", "b.labtest.org", "-max-requests", "3",
 		"-resolvers", resolvers, "-proxy", tunnel(t, strings.TrimPrefix(site.URL, "https://")))
-	if rows := probeRows(t, out); len(rows) != 2 || code != exitOK || rep.Requests != 2 || rep.Stopped != "" || !rep.Complete {
+	if rows := probeRows(t, out); len(rows) != 2 || code != exitOK || rep.Requests != 3 || rep.Stopped != "" || !rep.Complete {
 		t.Errorf("exit %d, %d requests, stopped %q: %s", code, rep.Requests, rep.Stopped, out)
 	}
 }

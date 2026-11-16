@@ -32,6 +32,7 @@ type rolesCostIn struct {
 	verify   []verifyWrite // -replay-writes-verify steps
 	canary   bool          // -replay-writes-canary
 	mapsPlan *runPlan      // what one role's run would send, from plan; nil outside plan
+	proxyAsk bool          // -proxy is an HTTP proxy: asked once for its own answer
 }
 
 // estimateRoles is what roles would send, by stage, from the roles, the
@@ -46,7 +47,7 @@ func estimateRoles(in rolesCostIn) costEstimate {
 	}
 	if in.crawl && in.mapsPlan != nil {
 		for _, st := range in.mapsPlan.Estimate.Stages {
-			if st.Stage == signInStage {
+			if st.Stage == signInStage || st.Stage == proxyStage {
 				continue
 			}
 			for _, c := range st.Collectors {
@@ -120,6 +121,9 @@ func estimateRoles(in rolesCostIn) costEstimate {
 		}
 		open := strings.Join(cl.tOpen, "; ")
 		e.putBound(stageVerify, "", amount{Requests: floor}, open, cl)
+	}
+	if in.proxyAsk {
+		e.addProxyAsk()
 	}
 	out := e.result()
 	out.Basis = rolesBasis

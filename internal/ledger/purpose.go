@@ -22,7 +22,8 @@ const (
 	PurposeBrowser       = "browser" // a request Chrome sent
 	PurposeConnections   = "connections"
 	PurposeDatagrams     = "datagrams"
-	PurposeWorkers       = "sent by workers" // by another process of the run: it does not say what they were for
+	PurposeWorkers       = "sent by workers"   // by another process of the run: it does not say what they were for
+	PurposeProxy         = "the -proxy itself" // the ask of the -proxy for its own answer, which a proxy may forward to the target
 	PurposeOther         = "other"
 )
 

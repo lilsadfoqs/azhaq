@@ -213,7 +213,7 @@ func (r *runLedger) close(rep *report) {
 	}
 	// What the summary counts is what the ledger lists: a difference is an
 	// internal error (audit.go), not a note to read past.
-	rep.expect("requests to targets, against the ledger's lines to them (azhaq ledger -summary "+path+" lists them by kind)", int(rep.Requests), targets)
+	rep.expect("requests to targets and the -proxy, against the ledger's lines to them (azhaq ledger -summary "+path+" lists them by kind)", int(rep.Requests), targets)
 	if sent := egress.DNSTotal() - r.dnsFrom; r.dnsSet && dnsLines >= 0 {
 		rep.expect("DNS queries, against the ledger's lines to resolvers (azhaq ledger -summary "+path+" lists them by kind)", int(sent), dnsLines)
 	}
@@ -227,7 +227,8 @@ func (r *runLedger) close(rep *report) {
 
 // recorded says what this run's part of the ledger holds, by what its lines
 // were sent to, as a format taking the file's path, and how many of them
-// went to targets: the number the summary's requests is checked against.
+// went to targets or to the -proxy, which may forward them: the number the
+// summary's requests is checked against.
 func (r *runLedger) recorded(path string) (what string, targets, dnsLines int) {
 	var reqs, conns, datagrams, probes, sources, dns, own, proxy, all int
 	spent := map[string]*stageSpend{}
@@ -242,6 +243,10 @@ func (r *runLedger) recorded(path string) (what string, targets, dnsLines int) {
 			own += n
 		case ledger.ClassProxy:
 			proxy += n
+			if spent["proxy"] == nil {
+				spent["proxy"] = &stageSpend{}
+			}
+			spent["proxy"].add(kind, n)
 		default:
 			if kind == ledger.KindProbe {
 				probes += n // bytes sent on a connection that has its own line: not a request or connection
@@ -315,7 +320,7 @@ func (r *runLedger) recorded(path string) (what string, targets, dnsLines int) {
 		parts = append(parts, nOf(own, "to an endpoint of your own", "to endpoints of your own"))
 	}
 	if proxy > 0 {
-		parts = append(parts, fmt.Sprintf("%d to the -proxy itself, for its own answer", proxy))
+		parts = append(parts, nOf(proxy, "request to the -proxy itself", "requests to the -proxy itself")+" (for its own answer, counted in the requests)")
 	}
 	if notSent > 0 {
 		parts = append(parts, nOf(notSent, "request", "requests")+" not sent (the -proxy could not be reached; not counted above)")
@@ -324,7 +329,7 @@ func (r *runLedger) recorded(path string) (what string, targets, dnsLines int) {
 		return "nothing recorded in %s: the run sent nothing", 0, 0
 	}
 	what = fmt.Sprintf("%d recorded in %%s: %s", all, strings.ReplaceAll(strings.Join(parts, ", "), "%", "%%"))
-	return what, targets, dns
+	return what, targets + proxy, dns
 }
 
 // sealRecord is the one JSON line -seal-to writes or posts.

@@ -144,7 +144,7 @@ func (c *Collector) Begin() { c.from = ledger.Account() }
 func (c *Collector) spentBy() string {
 	by := map[string]int64{}
 	for k, n := range ledger.Account() {
-		if k.Class == ledger.ClassTarget {
+		if k.Class == ledger.ClassTarget || k.Class == ledger.ClassProxy {
 			if d := n - c.from[k]; d > 0 {
 				by[strings.TrimPrefix(k.Collector, "azhaq-")] += d
 			}

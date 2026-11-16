@@ -23,7 +23,7 @@ var (
 )
 
 func spend(class, kind, collector, purpose string, n int64) {
-	if class != ClassTarget {
+	if class != ClassTarget && class != ClassProxy {
 		purpose = ""
 	}
 	k := SpentKey{class, kind, collector, Stage(), purpose}

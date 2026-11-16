@@ -386,6 +386,11 @@ func cmdRoles(args []string) error {
 		}
 	}
 	costIn := rolesCostIn{roles: roles, logins: len(logins), crawl: crawl, hist: hist, sc: sc, replay: *replay, max: *replayMax, methods: methods, verify: verifySteps, canary: *writesCanary}
+	proxyVal := *proxyFlag
+	if v, ok := flagValue(runArgs, "proxy"); ok && v != "" {
+		proxyVal = v
+	}
+	costIn.proxyAsk = asksProxy(proxyVal)
 	if v, ok := flagValue(runArgs, "max-requests"); ok {
 		costIn.budget, _ = strconv.ParseInt(v, 10, 64)
 	}
@@ -485,6 +490,8 @@ func cmdRoles(args []string) error {
 	rate := *rateFlag
 	rolesProxy, rolesResolvers, rolesRate, rolesLeft = nil, nil, 0, nil
 	defer func() { rolesProxy, rolesResolvers, rolesRate, rolesLeft = nil, nil, 0, nil }()
+	egress.ShareProxyAsk(true) // the runs and the replay ask the -proxy once between them
+	defer egress.ShareProxyAsk(false)
 	if *proxyFlag != "" {
 		pu, err := parseProxy(*proxyFlag)
 		if err != nil {
@@ -875,6 +882,9 @@ func cmdRoles(args []string) error {
 		}
 	}
 	counted()
+	if n := egress.ProxyAskNote(); n != "" && !slices.Contains(rep.Notes, n) {
+		rep.Notes = append(rep.Notes, n)
+	}
 	states.settle(rep)
 	rep.Cost = accountCost(rep.estimate, rep.spentFrom, rolesStages)
 	if cmdMax > 0 {

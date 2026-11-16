@@ -1316,6 +1316,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		send.dirsHold = true
 		send.dirsHeld = dirscol.HeldWords(opts.Dirs.Words, opts.Dirs.Extensions)
 	}
+	send.proxyAsk = asksProxy(*proxyFlag)
 	send.verify = verifyFl.on
 	send.verifyLogins = verifyLoginsFl.on
 	send.advisories = advisoryPlan(advFlags)
@@ -1804,6 +1805,9 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		opts.Browser.Close()
 	}
 	rep.Requests = egress.Sent()
+	if n := egress.ProxyAskNote(); n != "" {
+		rep.Notes = append(rep.Notes, n)
+	}
 	rep.Notes = append(rep.Notes, egress.ProxyNotes()...)
 	_ = st.AddRunRequests(rep.Requests)
 	rep.estimate, rep.refusedBy = estimate, eng.Refused()
