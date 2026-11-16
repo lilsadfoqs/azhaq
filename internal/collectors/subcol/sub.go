@@ -218,7 +218,7 @@ func (c *Collector) Outputs() []string { return []string{"subdomains"} }
 // history is a local file.
 func (c *Collector) Asks(seed types.Seed) []string {
 	domain := normalize.Hostname(seed.Keys["domain"])
-	if domain == "" || normalize.SpecialUse(domain) {
+	if domain == "" || normalize.Undelegated(domain) {
 		return nil
 	}
 	run, _ := c.plan()
@@ -274,9 +274,10 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		})
 	}
 	run, skipped := c.plan()
-	if normalize.Unlisted(domain) {
-		// No registry runs its TLD (azqlab.lan, corp.internal): no public
-		// source can hold its names, so only the local history is asked.
+	if normalize.Undelegated(domain) {
+		// The root zone does not delegate its TLD (azqlab.lan, corp.internal)
+		// or it is under home.arpa: no public source can hold its names, so
+		// only the local history is asked.
 		kept := run[:0]
 		for _, s := range run {
 			if s.name == historyName {

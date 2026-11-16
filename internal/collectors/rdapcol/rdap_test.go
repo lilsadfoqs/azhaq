@@ -207,3 +207,16 @@ func TestRegistryIsInTheLedgerAsASource(t *testing.T) {
 		t.Errorf("%d target and %d source lines in the ledger, want 0 and 1", targets, sources)
 	}
 }
+
+// rdap.org is not asked about a name no registry holds.
+func TestUndelegatedDomainsAreNotAsked(t *testing.T) {
+	c := New(nil)
+	for _, d := range []string{"corp.internal", "nas.lan", "printer.home.arpa", "x.test"} {
+		if got := c.Asks(types.Seed{Type: types.TypeDomain, Keys: map[string]string{"domain": d}}); len(got) != 0 {
+			t.Errorf("%s: asks %v", d, got)
+		}
+	}
+	if got := c.Asks(types.Seed{Type: types.TypeDomain, Keys: map[string]string{"domain": "example.com"}}); len(got) != 1 {
+		t.Errorf("a delegated domain: asks %v", got)
+	}
+}

@@ -127,8 +127,15 @@ type Pool struct {
 	leftAt    []string // the first few of those domains
 	wildLeft  int      // wildcard zones not probed: outside the scope
 	wildLeftA []string // the first few of those zones
-	held      int      // reverse lookups of local addresses not sent to the default resolvers
+	held      int      // reverse lookups of local addresses asked of the system's resolver, not the default ones
 	heldAt    []string // the first few of those names
+
+	heldAnswered int // of those, the ones the system's resolver answered
+
+	zoneHeld     int                 // names asked of the system's resolver, not the default ones
+	zoneAnswered int                 // of those, the ones it answered
+	zoneHeldAt   []string            // the first few of those names
+	zoneSeen     map[string]struct{} // the names counted, to count each once
 
 	mu    sync.Mutex
 	cache map[string]*entry
@@ -307,14 +314,15 @@ func (p *Pool) Window(most int) int {
 func ProxyError(raw string) error { return egress.CheckDNSProxy(raw) }
 
 // Reserved says whether name is one the pool does not send to its resolvers:
-// a special-use name (localhost, *.test, *.local) or a single label, when the
-// resolvers are the default public ones. The system's resolver answers
-// those, so /etc/hosts and local DNS work and nothing local is asked of a
-// public resolver. Resolvers the user named are asked for everything, as
-// dnsx does.
+// a special-use name (localhost, *.test, *.local), a single label, a name
+// whose top-level domain the root zone does not delegate (*.corp, *.lan,
+// *.internal) or one under home.arpa, when the resolvers are the default
+// public ones. The system's resolver answers those, so /etc/hosts and local
+// DNS work and nothing private is asked of a public resolver. Resolvers the
+// user named are asked for everything, as dnsx does.
 func (p *Pool) Reserved(name string) bool {
 	name = normalize.Hostname(name)
-	return !p.named && net.ParseIP(name) == nil && (normalize.SpecialUse(name) || !strings.Contains(name, "."))
+	return !p.named && net.ParseIP(name) == nil && (HeldZone(name) || !strings.Contains(name, "."))
 }
 
 // System asks the system's resolver for the addresses of name.
@@ -562,10 +570,11 @@ func (p *Pool) resolveMany(ctx context.Context, names []string, workers int) []A
 
 func (p *Pool) resolve(ctx context.Context, name string) Answer {
 	a := Answer{Name: name}
-	if !p.named && (normalize.SpecialUse(name) || !strings.Contains(name, ".")) {
-		// localhost, *.test, *.local, single labels: public resolvers do not
-		// know them, but /etc/hosts or the local resolver may. Resolvers the
-		// user named are asked for everything: the system's is never used.
+	if p.Reserved(name) {
+		// localhost, *.test, *.local, single labels, *.corp, *.lan,
+		// home.arpa: public resolvers do not know them, but /etc/hosts or the
+		// local resolver may. Resolvers the user named are asked for
+		// everything: the system's is never used.
 		return p.system(ctx, name)
 	}
 	q := question(name, dns.TypeA)
@@ -657,6 +666,9 @@ func (p *Pool) system(ctx context.Context, name string) Answer {
 	ctx, cancel := context.WithTimeout(ctx, p.timeout)
 	defer cancel()
 	ips, err := egress.SystemLookup(ctx, name)
+	if !p.named {
+		defer func() { p.noteForward(name, a.Live()) }()
+	}
 	if err != nil || len(ips) == 0 {
 		return a
 	}
@@ -708,8 +720,14 @@ func (p *Pool) query(ctx context.Context, q *dns.Msg, avoid string) (*dns.Msg, s
 	if len(p.servers) == 0 {
 		return nil, "", errors.New("no resolvers")
 	}
-	if len(q.Question) == 1 && p.Hold(q.Question[0].Name) {
-		return nil, "", ErrHeld // the last resort: callers check Hold first
+	if len(q.Question) == 1 && p.Held(q.Question[0].Name) {
+		// A reverse name goes to the system's resolver; nothing else held is
+		// sent anywhere (the names resolve through Resolve, which does).
+		if q.Question[0].Qtype == dns.TypePTR {
+			m, err := p.systemPTR(ctx, q)
+			return m, "system", err
+		}
+		return nil, "", ErrHeld
 	}
 	retries := p.retriesFor(ctx)
 	qctx, cancel := context.WithCancel(ctx)

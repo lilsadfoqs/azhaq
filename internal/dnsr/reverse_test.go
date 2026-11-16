@@ -80,27 +80,48 @@ func spyDefaults(asked *[]string, mu *sync.Mutex) *Pool {
 }
 
 // The default pool does not send the reverse name of a loopback, private,
-// shared or link-local address, whatever the type asked; it counts it. A
-// public address's reverse name goes out, and so does everything to a pool
-// whose resolvers the user named.
-func TestDefaultPoolHoldsReverseNamesOfLocalAddresses(t *testing.T) {
+// shared or link-local address, whatever the type asked: it asks the
+// system's resolver for a PTR and counts the lookup and its answer, and
+// sends no other type anywhere. A public address's reverse name goes out, and
+// so does everything to a pool whose resolvers the user named.
+func TestDefaultPoolAsksTheSystemForReverseNamesOfLocalAddresses(t *testing.T) {
+	sys := startSystem(t, map[string]string{"10.0.0.2": "db.corp.", "fd12::5": "v6.corp."})
 	var asked []string
 	var mu sync.Mutex
 	p := spyDefaults(&asked, &mu)
 	ctx := context.Background()
-	for _, ip := range []string{"127.31.0.1", "10.0.0.2", "172.16.5.5", "192.168.1.1", "100.64.3.3", "169.254.9.9", "::1", "fd12::5", "fe80::9"} {
+	answered := 0
+	for _, ip := range []string{"127.31.0.1", "10.0.0.2", "172.16.5.5", "192.168.1.1", "100.64.3.3", "169.254.9.9", "fd12::5", "fe80::9"} {
 		rev, _ := dns.ReverseAddr(ip)
-		if _, err := p.Query(ctx, rev, dns.TypePTR); !errors.Is(err, ErrHeld) {
-			t.Errorf("%s: err %v, want ErrHeld", ip, err)
+		m, err := p.Query(ctx, rev, dns.TypePTR)
+		if err != nil {
+			t.Errorf("%s: %v", ip, err)
+			continue
 		}
+		if len(m.Answer) > 0 {
+			answered++
+			if ptr := m.Answer[0].(*dns.PTR).Ptr; ptr != map[string]string{"10.0.0.2": "db.corp.", "fd12::5": "v6.corp."}[ip] {
+				t.Errorf("%s: %s", ip, ptr)
+			}
+		}
+	}
+	if answered != 2 {
+		t.Errorf("%d answers, want the 2 the system's resolver has", answered)
 	}
 	if _, err := p.Query(ctx, "10.in-addr.arpa", dns.TypeSOA); !errors.Is(err, ErrHeld) {
 		t.Errorf("a private reverse zone: %v", err)
 	}
+	if _, err := p.Query(ctx, "2.0.0.10.in-addr.arpa", dns.TypeTXT); !errors.Is(err, ErrHeld) {
+		t.Errorf("another type: %v", err)
+	}
 	if len(asked) != 0 {
 		t.Fatalf("sent to the default resolvers: %v", asked)
 	}
-	if n := p.HeldNote(); !strings.Contains(n, "not asked: 10 reverse lookups (1.0.31.127.in-addr.arpa, 2.0.0.10.in-addr.arpa, 5.5.16.172.in-addr.arpa)") {
+	if sys.count("PTR") < 8 {
+		t.Errorf("the system's resolver was asked %d times", sys.count("PTR"))
+	}
+	want := "8 reverse lookups (1.0.31.127.in-addr.arpa, 2.0.0.10.in-addr.arpa, 5.5.16.172.in-addr.arpa) of loopback, private or link-local addresses were kept off the default public resolvers, which are not given the addresses of a private network, and asked of the system's resolver instead: it answered 2; name your own resolvers with -resolvers to ask them instead"
+	if n := p.HeldNote(); n != want {
 		t.Errorf("note %q", n)
 	}
 	if _, err := p.Query(ctx, "8.8.8.8.in-addr.arpa", dns.TypePTR); err != nil || len(asked) != 1 {
@@ -117,8 +138,9 @@ func TestDefaultPoolHoldsReverseNamesOfLocalAddresses(t *testing.T) {
 		r.SetReply(m)
 		return r, nil
 	}
+	before := sys.count("PTR")
 	rev, _ := dns.ReverseAddr("127.0.0.1")
-	if _, err := named.Query(ctx, rev, dns.TypePTR); err != nil || len(got) != 1 || named.HeldNote() != "" || named.Hold(rev) {
+	if _, err := named.Query(ctx, rev, dns.TypePTR); err != nil || len(got) != 1 || named.HeldNote() != "" || named.Held(rev) || sys.count("PTR") != before {
 		t.Errorf("named resolver: err %v, asked %v, note %q", err, got, named.HeldNote())
 	}
 }

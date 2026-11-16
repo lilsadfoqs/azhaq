@@ -66,3 +66,18 @@ func TestEnginesAndKeys(t *testing.T) {
 		t.Errorf("service hints %v", urls)
 	}
 }
+
+// A name in a zone the root zone does not delegate is not sent to an engine:
+// the engine only learns it.
+func TestUndelegatedDomainsAreNotAsked(t *testing.T) {
+	c := New(map[string][]string{"shodan": {"k"}})
+	for _, d := range []string{"corp.internal", "nas.lan", "printer.home.arpa", "x.test"} {
+		seed := types.Seed{Type: types.TypeDomain, Keys: map[string]string{"domain": d}}
+		if got := c.Asks(seed); len(got) != 0 {
+			t.Errorf("%s: asks %v", d, got)
+		}
+	}
+	if got := c.Asks(types.Seed{Type: types.TypeDomain, Keys: map[string]string{"domain": "example.com"}}); len(got) != 1 {
+		t.Errorf("a delegated domain: asks %v", got)
+	}
+}

@@ -166,7 +166,7 @@ func (c *Collector) Outputs() []string { return []string{"url"} }
 // unfiltered).
 func (c *Collector) Asks(seed types.Seed) []string {
 	domain, _, ok := c.target(seed)
-	if !ok || domain == "" || normalize.SpecialUse(domain) || normalize.Unlisted(domain) {
+	if !ok || domain == "" || normalize.Undelegated(domain) {
 		return nil
 	}
 	out := make([]string, 0, len(c.sources))
@@ -239,7 +239,7 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 	if domain == "" {
 		return types.RunMeta{Status: types.StatusError, Error: "empty domain"}, nil
 	}
-	if normalize.SpecialUse(domain) || normalize.Unlisted(domain) {
+	if normalize.Undelegated(domain) {
 		why := "reserved"
 		if !normalize.SpecialUse(domain) {
 			why = "not a public domain: the archives only hold names under public TLDs"

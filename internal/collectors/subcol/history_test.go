@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/projectdiscovery/subfinder/v2/pkg/subscraping"
+
 	"github.com/lilsadfoqs/azhaq/types"
 )
 
@@ -268,5 +270,37 @@ func TestCorruptHistoryIsSetAside(t *testing.T) {
 	}
 	if m, err := loadHistory(path); err != nil || len(m) != 1 {
 		t.Errorf("new history %v %v", m, err)
+	}
+}
+
+// The plan names no third-party source for a name in an undelegated zone,
+// and the run asks none.
+func TestUndelegatedDomainsAskNoThirdParty(t *testing.T) {
+	t.Setenv("AZHAQ_DATA_DIR", t.TempDir())
+	for _, d := range []string{"corp.internal", "nas.lan", "printer.home.arpa"} {
+		if got := New(Options{}).Asks(seedOf(d)); len(got) != 0 {
+			t.Errorf("%s: asks %v", d, got)
+		}
+	}
+	if got := New(Options{}).Asks(seedOf("example.org")); len(got) == 0 {
+		t.Error("a delegated domain asks nothing")
+	}
+}
+
+func TestUndelegatedDomainRunsNoThirdPartySource(t *testing.T) {
+	t.Setenv("AZHAQ_DATA_DIR", t.TempDir())
+	for _, d := range []string{"corp.internal", "printer.home.arpa"} {
+		asked := false
+		src := source{name: "a", deflt: true, collect: func(context.Context, string, []string, *subscraping.Session) ([]string, error) {
+			asked = true
+			return []string{"www." + d}, nil
+		}}
+		c := collector(Options{}, src)
+		if _, err := c.Run(context.Background(), seedOf(d), func(types.Observation) error { return nil }); err != nil {
+			t.Fatal(err)
+		}
+		if asked {
+			t.Errorf("%s: a third-party source was asked", d)
+		}
 	}
 }

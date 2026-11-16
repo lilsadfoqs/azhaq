@@ -75,7 +75,7 @@ func (c *Collector) Outputs() []string { return []string{"services"} }
 // Asks names the engines a run asks about a domain: those with a key.
 func (c *Collector) Asks(seed types.Seed) []string {
 	domain := normalize.Hostname(seed.Key())
-	if domain == "" || normalize.SpecialUse(domain) {
+	if domain == "" || normalize.Undelegated(domain) {
 		return nil
 	}
 	var out []string
@@ -89,7 +89,7 @@ func (c *Collector) Asks(seed types.Seed) []string {
 
 func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Observation) error) (types.RunMeta, error) {
 	domain := normalize.Hostname(seed.Key())
-	if domain == "" || normalize.SpecialUse(domain) {
+	if domain == "" || normalize.Undelegated(domain) {
 		return types.RunMeta{Status: types.StatusOK}, nil
 	}
 	status := map[string]any{}

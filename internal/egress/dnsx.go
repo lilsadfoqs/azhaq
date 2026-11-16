@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/miekg/dns"
@@ -263,7 +264,39 @@ func SystemLookup(ctx context.Context, name string) ([]net.IPAddr, error) {
 	}
 	Current().dnsq.Add(1)
 	ledger.DNS(ctx, name, "A/AAAA", "system")
-	return net.DefaultResolver.LookupIPAddr(ctx, name)
+	return systemResolver().LookupIPAddr(ctx, name)
+}
+
+var sysResolver atomic.Pointer[net.Resolver]
+
+func systemResolver() *net.Resolver {
+	if r := sysResolver.Load(); r != nil {
+		return r
+	}
+	return net.DefaultResolver
+}
+
+// SetSystemResolver makes r the system's resolver (tests: a stand-in on
+// loopback) and returns what restores the real one.
+func SetSystemResolver(r *net.Resolver) (restore func()) {
+	prev := sysResolver.Swap(r)
+	return func() { sysResolver.Store(prev) }
+}
+
+// SystemReverse asks the system's resolver for the names of ip: the reverse
+// lookup of a private address, which no public resolver is asked. It is a
+// dns line with the resolver "system" and is refused once the kill file
+// exists. A not-found answer is a DNSError with IsNotFound.
+func SystemReverse(ctx context.Context, ip string) ([]string, error) {
+	if err := Current().Killed(); err != nil {
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	Current().dnsq.Add(1)
+	ledger.DNS(ctx, ip, "PTR", "system")
+	return systemResolver().LookupAddr(ctx, ip)
 }
 
 // Transfer asks server for the zone domain over TCP (AXFR), through the

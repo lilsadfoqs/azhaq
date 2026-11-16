@@ -742,22 +742,20 @@ type dnsRun struct {
 	limiter   *perSecond
 	tmpl      tmplParts
 
-	mu         sync.Mutex
-	failed     map[string]*engine.Failure
-	takeovers  []takeoverRow
-	dangling   map[string]takeover.Dangling // by name: a CNAME to a name that answered NXDOMAIN
-	kept       []dnsKept
-	watermark  int
-	finished   map[int]bool
-	counts     struct{ done, resolved, wildcard, failed, noAnswer, broken, otherCode, names atomic.Int64 }
-	lastRows   atomic.Int64
-	notes      []string
-	axfrNotes  []string
-	cut        atomic.Bool
-	keepOn     bool // -db: keep the graph
-	reservedN  int
-	reservedEg []string
-	start      time.Time
+	mu        sync.Mutex
+	failed    map[string]*engine.Failure
+	takeovers []takeoverRow
+	dangling  map[string]takeover.Dangling // by name: a CNAME to a name that answered NXDOMAIN
+	kept      []dnsKept
+	watermark int
+	finished  map[int]bool
+	counts    struct{ done, resolved, wildcard, failed, noAnswer, broken, otherCode, names atomic.Int64 }
+	lastRows  atomic.Int64
+	notes     []string
+	axfrNotes []string
+	cut       atomic.Bool
+	keepOn    bool // -db: keep the graph
+	start     time.Time
 }
 
 // dnsKept is what -db keeps of a name.
@@ -848,10 +846,6 @@ func (r *dnsRun) one(ctx context.Context, name string) bool {
 	if r.pool.Reserved(name) {
 		return r.reserved(ctx, name)
 	}
-	if rev, err := dns.ReverseAddr(strings.Trim(name, "[]")); isIP && err == nil && r.pool.Hold(rev) {
-		r.counts.noAnswer.Add(1) // counted in the pool: the summary says why
-		return true
-	}
 	lctx := ctx
 	if r.in.brute {
 		lctx = dnsr.Bulk(ctx)
@@ -926,12 +920,6 @@ func (r *dnsRun) reserved(ctx context.Context, name string) bool {
 	if ctx.Err() != nil {
 		return false
 	}
-	r.mu.Lock()
-	r.reservedN++
-	if len(r.reservedEg) < 3 {
-		r.reservedEg = append(r.reservedEg, name)
-	}
-	r.mu.Unlock()
 	if len(a)+len(aaaa) == 0 {
 		r.counts.noAnswer.Add(1)
 		return true
@@ -1632,8 +1620,8 @@ func (r *dnsRun) summarize(ctx context.Context, args []string, maxtime float64) 
 	if n := r.pool.HeldNote(); n != "" {
 		rep.Notes = append(rep.Notes, n)
 	}
-	if r.reservedN > 0 {
-		rep.Notes = append(rep.Notes, fmt.Sprintf("%d names (%s) are special-use or single labels: the system's resolver was asked, not the default public resolvers (name -r resolvers to ask them)", r.reservedN, strings.Join(r.reservedEg, ", ")))
+	if n := r.pool.HeldZoneNote(); n != "" {
+		rep.Notes = append(rep.Notes, n)
 	}
 	wm := r.watermark
 	r.mu.Unlock()

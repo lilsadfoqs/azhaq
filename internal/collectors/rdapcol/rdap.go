@@ -63,7 +63,7 @@ func (c *Collector) Outputs() []string { return []string{"rdap", "organization",
 // server). An organization asks nobody: there is no public search by name.
 func (c *Collector) Asks(seed types.Seed) []string {
 	domain := normalize.Hostname(seed.Keys["domain"])
-	if seed.Type != types.TypeDomain || domain == "" || (normalize.SpecialUse(domain) && c.BaseURL == "") {
+	if seed.Type != types.TypeDomain || domain == "" || (normalize.Undelegated(domain) && c.BaseURL == "") {
 		return nil
 	}
 	return []string{hostOf(c.domainURL(domain))}
@@ -85,8 +85,12 @@ func (c *Collector) runDomain(ctx context.Context, seed types.Seed, emit func(ty
 	if domain == "" {
 		return types.RunMeta{Status: types.StatusError, Error: "empty domain"}, nil
 	}
-	if normalize.SpecialUse(domain) && c.BaseURL == "" {
-		payload, _ := json.Marshal(map[string]any{"domain": domain, "status": 0, "skipped": "reserved"})
+	if normalize.Undelegated(domain) && c.BaseURL == "" {
+		why := "reserved"
+		if !normalize.SpecialUse(domain) {
+			why = "not a public domain: no registry holds names under it"
+		}
+		payload, _ := json.Marshal(map[string]any{"domain": domain, "status": 0, "skipped": why})
 		_ = emit(types.Observation{
 			Collector: Name, Source: "rdap", Kind: "rdap",
 			Payload: payload, Confidence: 0, ObservedAt: time.Now().UTC(),
