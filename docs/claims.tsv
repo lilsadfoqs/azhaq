@@ -2009,3 +2009,7 @@ report.headline-issues-and-records	docs/commands/report.md	The headline of the M
 report.headline-rows-of-jsonl	docs/commands/report.md	The JSONL holds one row for each record, so that run's file has 17 rows of tier `identification`	test:cmd/azhaq:TestFindingsHeadlineCountsRecordsAndIssues,TestFindingsHeadlineOfARunMatchesItsJSONL
 report.records-not-stored-rows	docs/commands/report.md	The records are listed rows, not a count of stored rows.	test:cmd/azhaq:TestFindingsHeadlineCountsRecordsAndIssues
 hunt.no-second-number	docs/commands/hunt.md	`hunt` prints one row for each listener it counts, so its counts have no second number	test:cmd/azhaq:TestHuntAndReportCountTheSameFindingsAndTierOfARow
+run.connect-timeout	docs/commands/run.md	`-connect-timeout` is the wait for one port to accept or refuse a connect, as in `ports -connect-timeout`	test:cmd/azhaq:TestConnectTimeoutReachesTheRunsPortStage,TestResumeTakesConnectTimeout
+run.connect-timeout-takers	docs/commands/run.md	`run`, `plan` and `resume` take it, and it is `-port-timeout` under its other name	test:cmd/azhaq:TestConnectTimeoutReachesTheRunsPortStage,TestResumeTakesConnectTimeout
+run.ports-flags-twins	docs/commands/run.md	The other flags of `ports` the port stage honours are `run`'s `-port-*` flags	test:cmd/azhaq:TestEveryPortsFlagIsOnRunOrListed
+ports.connect-timeout-on-run	docs/commands/ports.md	`run`, `plan` and `resume` take it too, as another name of `-port-timeout`.	test:cmd/azhaq:TestConnectTimeoutReachesTheRunsPortStage,TestResumeTakesConnectTimeout
