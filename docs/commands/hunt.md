@@ -90,6 +90,7 @@ leads (2): inferred from a name, a path or a guess; each names the check that wo
 | `cross-role` | A `-roles` verdict of `likely` or `guess` confidence: a lead of the route. |
 | `takeover` | A name another party may take over, on a service's own page or a domain nobody holds. |
 | `dangling-dns` | A CNAME chain that ends at a name that answered `NXDOMAIN`: a finding of severity low, ranked with the other findings. It says what was measured, and nothing about who may create the name: the `takeover-candidate` lead for the same name stays a lead. |
+| `tls-certificate` | A TLS service whose certificate, as its handshake showed it, is expired, self-signed or not for the name asked: a finding of severity low for the service, keyed by `HOST:PORT`, as `report -findings` lists it (kind `tls-certificate`). Its next command is the `openssl s_client` line that shows the certificate again. It says what the handshake showed, and nothing of whether the service is weak. |
 | `error-disclosure` | An answer whose body holds a stack trace (three or more frames, any status, from `probe`, `run` or `dirs`): a finding of severity low, one row for each record `report -findings` lists, keyed by its URL and ranked with the other findings. The route's own 5xx lead is not repeated beside it. See [Server errors](#server-errors). |
 | `takeover-candidate` | A CNAME to a cloud name that does not resolve (`dangling`). It rests on NXDOMAIN alone: `unverified: NXDOMAIN does not show the name is free`. See [Takeover candidates](../CONCEPTS.md#what-a-dangling-row-rests-on). |
 | `secret` | A credential a script carries. The reason names the file and gives the evidence: the name it was assigned to, the value redacted, the rule that listed it and, for a generic secret, its entropy. See [Secret candidates](#secret-candidates). |
@@ -173,6 +174,7 @@ An **identification** is a listener the run named: a product, and a version or n
 ### Weights
 
 - `dangling-dns`: weighs 30, a finding of severity low: below the other findings that have more weight, above every identification and lead.
+- `tls-certificate`: weighs 30 as well, a finding of severity low.
 - `takeover`: `strong` weighs more than `page`. `dangling` is its own signal, `takeover-candidate`, weighing 20.
 - `secret`: weighed by the credential's severity.
 - `object-id`: a route with no GET weighs less.

@@ -3,66 +3,16 @@ package portscan
 import (
 	"bufio"
 	"context"
-	"crypto/ecdsa"
-	"crypto/elliptic"
-	"crypto/rand"
 	"crypto/tls"
-	"crypto/x509"
-	"crypto/x509/pkix"
-	"math/big"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/lilsadfoqs/azhaq/internal/tlstest"
 )
-
-// pki makes a CA and a leaf it signs for names, valid from notBefore to
-// notAfter, as a server's certificate. The leaf has the authority key id a
-// signed certificate has.
-func pki(t *testing.T, notBefore, notAfter time.Time, names ...string) tls.Certificate {
-	t.Helper()
-	ca, caKey := certOf(t, &x509.Certificate{
-		SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: "Test CA"},
-		NotBefore: time.Now().Add(-48 * time.Hour), NotAfter: time.Now().Add(48 * time.Hour),
-		IsCA: true, BasicConstraintsValid: true, KeyUsage: x509.KeyUsageCertSign,
-	}, nil, nil)
-	leaf, key := certOf(t, &x509.Certificate{
-		SerialNumber: big.NewInt(2), Subject: pkix.Name{CommonName: "leaf"}, DNSNames: names,
-		NotBefore: notBefore, NotAfter: notAfter,
-	}, ca, caKey)
-	return tls.Certificate{Certificate: [][]byte{leaf.Raw}, PrivateKey: key}
-}
-
-// selfSigned makes a certificate that signed itself, for names.
-func selfSigned(t *testing.T, notBefore, notAfter time.Time, names ...string) tls.Certificate {
-	t.Helper()
-	c, key := certOf(t, &x509.Certificate{
-		SerialNumber: big.NewInt(3), Subject: pkix.Name{CommonName: "self"}, DNSNames: names,
-		NotBefore: notBefore, NotAfter: notAfter,
-	}, nil, nil)
-	return tls.Certificate{Certificate: [][]byte{c.Raw}, PrivateKey: key}
-}
-
-func certOf(t *testing.T, tmpl, parent *x509.Certificate, parentKey *ecdsa.PrivateKey) (*x509.Certificate, *ecdsa.PrivateKey) {
-	t.Helper()
-	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if parent == nil {
-		parent, parentKey = tmpl, key
-	}
-	der, err := x509.CreateCertificate(rand.Reader, tmpl, parent, &key.PublicKey, parentKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-	c, err := x509.ParseCertificate(der)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return c, key
-}
 
 // tlsPort serves cert on a loopback port that answers a request with a 200.
 func tlsPort(t *testing.T, cert tls.Certificate) int {
@@ -104,7 +54,7 @@ func scanAs(t *testing.T, host string, port int) Open {
 // self-signed or not for the name asked. The scan opens no connection for it.
 func TestTLSServiceGetsCertificateFacts(t *testing.T) {
 	now := time.Now()
-	good := tlsPort(t, pki(t, now.Add(-time.Hour), now.Add(24*time.Hour), "svc.test"))
+	good := tlsPort(t, tlstest.CASigned(t, now.Add(-time.Hour), now.Add(24*time.Hour), "svc.test"))
 	o := scanAs(t, "svc.test", good)
 	c := o.Cert
 	if !o.TLS || c == nil {
@@ -125,7 +75,7 @@ func TestTLSServiceGetsCertificateFacts(t *testing.T) {
 		t.Errorf("an address asked: %+v", o.Cert)
 	}
 
-	expired := tlsPort(t, selfSigned(t, now.Add(-72*time.Hour), now.Add(-time.Hour), "old.test"))
+	expired := tlsPort(t, tlstest.SelfSigned(t, now.Add(-72*time.Hour), now.Add(-time.Hour), "old.test"))
 	if o := scanAs(t, "old.test", expired); o.Cert == nil || !o.Cert.Expired || !o.Cert.SelfSigned || o.Cert.Mismatch {
 		t.Errorf("an expired self-signed certificate for the name asked: %+v", o.Cert)
 	}
@@ -150,5 +100,45 @@ func TestPlainServiceHasNoCertificate(t *testing.T) {
 	ssh := listen(t, func(c net.Conn) { c.Write([]byte("SSH-2.0-OpenSSH_9.6\r\n")) })
 	if o := scanOne(t, ssh); o.Cert != nil || o.TLS {
 		t.Errorf("%+v", o)
+	}
+}
+
+// The facts cost no connection: every connection the server accepts is one
+// the scan took from its budget (the count its ledger holds), so reading the
+// certificate opened none of its own.
+func TestCertificateFactsOpenNoConnection(t *testing.T) {
+	now := time.Now()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cert := tlstest.SelfSigned(t, now.Add(-72*time.Hour), now.Add(-24*time.Hour), "old.test") // expired yesterday
+	var accepted atomic.Int32
+	go func() {
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			accepted.Add(1)
+			go func() {
+				defer c.Close()
+				tc := tls.Server(c, &tls.Config{Certificates: []tls.Certificate{cert}})
+				if tc.Handshake() == nil {
+					bufio.NewReader(tc).ReadString('\n')
+					tc.Write([]byte("HTTP/1.0 200 OK\r\n\r\n"))
+				}
+			}()
+		}
+	}()
+	defer ln.Close()
+	var takes atomic.Int32
+	s := &Scanner{Banner: 150 * time.Millisecond, Timeout: time.Second, Take: func() error { takes.Add(1); return nil }}
+	r, err := s.ScanEach(context.Background(), "old.test", "127.0.0.1", []int{ln.Addr().(*net.TCPAddr).Port})
+	if err != nil || len(r.Open) != 1 || r.Open[0].Cert == nil || !r.Open[0].Cert.Expired {
+		t.Fatalf("scan: %v %+v", err, r)
+	}
+	if accepted.Load() != takes.Load() {
+		t.Errorf("the server accepted %d connections, the scan took %d", accepted.Load(), takes.Load())
 	}
 }

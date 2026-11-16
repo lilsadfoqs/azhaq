@@ -91,3 +91,10 @@ func AddEvidence(row map[string]any, res Result, fullLength int) {
 		row["asked_at"] = ev.AskedAt
 	}
 }
+
+// AddCert puts the certificate res's handshake showed in a row's payload.
+func AddCert(row map[string]any, res Result) {
+	if res.Cert != nil {
+		row["certificate"] = res.Cert
+	}
+}

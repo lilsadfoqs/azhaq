@@ -3,10 +3,12 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -130,6 +132,8 @@ func huntRows(g *graphView, path string, roles []hunt.RoleRow, since time.Durati
 			// and a roles verdict.
 			in.Measured = append(in.Measured, hunt.Measured{Kind: r.Kind, Type: "URL", Host: r.URL, Severity: r.Severity, Evidence: r.Evidence,
 				Command: r.Command, Proof: r.Proof, Score: r.rank, Next: r.next})
+		case r.Kind == certKind:
+			in.Measured = append(in.Measured, hunt.Measured{Kind: r.Kind, Type: "Service", Host: net.JoinHostPort(r.Host, strconv.Itoa(r.Port)), Severity: r.Severity, Evidence: r.Evidence, Command: r.Command, Proof: r.Proof})
 		}
 	}
 	return hunt.Build(in)

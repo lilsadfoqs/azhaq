@@ -7,6 +7,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/lilsadfoqs/azhaq/internal/certfacts"
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
 	"github.com/lilsadfoqs/azhaq/store"
 )
@@ -28,19 +29,20 @@ type keeper struct {
 
 // keptMeta is a fetch.Result without its body.
 type keptMeta struct {
-	RequestURL  string        `json:"request_url"`
-	Status      int           `json:"status"`
-	URL         string        `json:"url"`
-	Header      http.Header   `json:"header,omitempty"`
-	StatusLine  string        `json:"status_line,omitempty"`
-	Hops        []fetch.Hop   `json:"hops,omitempty"`
-	Truncated   bool          `json:"truncated,omitempty"`
-	FinalHeader http.Header   `json:"final_header,omitempty"`
-	IP          string        `json:"ip,omitempty"`
-	Elapsed     time.Duration `json:"elapsed,omitempty"`
-	At          time.Time     `json:"at,omitzero"`
-	Method      string        `json:"method,omitempty"`
-	Raw         *fetch.Raw    `json:"raw,omitempty"`
+	RequestURL  string           `json:"request_url"`
+	Status      int              `json:"status"`
+	URL         string           `json:"url"`
+	Header      http.Header      `json:"header,omitempty"`
+	StatusLine  string           `json:"status_line,omitempty"`
+	Hops        []fetch.Hop      `json:"hops,omitempty"`
+	Truncated   bool             `json:"truncated,omitempty"`
+	FinalHeader http.Header      `json:"final_header,omitempty"`
+	IP          string           `json:"ip,omitempty"`
+	Elapsed     time.Duration    `json:"elapsed,omitempty"`
+	At          time.Time        `json:"at,omitzero"`
+	Method      string           `json:"method,omitempty"`
+	Raw         *fetch.Raw       `json:"raw,omitempty"`
+	Cert        *certfacts.Facts `json:"cert,omitempty"`
 }
 
 // kept counts the answers recorded since KeepResponses, which a resume
@@ -82,7 +84,7 @@ func (k *keeper) Load(raw string) (fetch.Result, bool) {
 	return fetch.Result{
 		RequestURL: m.RequestURL, Status: m.Status, URL: m.URL, Header: m.Header, Body: r.Body,
 		StatusLine: m.StatusLine, Hops: m.Hops, Truncated: m.Truncated, FinalHeader: m.FinalHeader,
-		IP: m.IP, Elapsed: m.Elapsed, At: m.At, Method: m.Method, Raw: m.Raw,
+		IP: m.IP, Elapsed: m.Elapsed, At: m.At, Method: m.Method, Raw: m.Raw, Cert: m.Cert,
 	}, true
 }
 
@@ -91,7 +93,7 @@ func (k *keeper) Keep(raw string, res fetch.Result) {
 	meta, err := json.Marshal(keptMeta{
 		RequestURL: res.RequestURL, Status: res.Status, URL: res.URL, Header: res.Header,
 		StatusLine: res.StatusLine, Hops: res.Hops, Truncated: res.Truncated, FinalHeader: res.FinalHeader,
-		IP: res.IP, Elapsed: res.Elapsed, At: res.At, Method: res.Method, Raw: res.Raw.Scrubbed(),
+		IP: res.IP, Elapsed: res.Elapsed, At: res.At, Method: res.Method, Raw: res.Raw.Scrubbed(), Cert: res.Cert,
 	})
 	if err != nil {
 		return

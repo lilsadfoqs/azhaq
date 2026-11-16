@@ -33,14 +33,14 @@ import (
 //     check that would prove it.
 //
 // A row with no proof is never a finding. The labels of internal/verify
-// (proved, version-read, version-only, conditional, and observed-dangling for
-// a measured name) stay on the rows that have one. A map
-// hint is a lead, listed separately, unless the map's own view folds it (see
+// (proved, version-read, version-only, conditional, and observed-dangling or
+// observed-certificate for a measured name or certificate) stay on the rows
+// that have one. A map hint is a lead, listed separately, unless the map's own view folds it (see
 // foldedHint): then it is counted in the line of its fold class.
 type findingRecord struct {
 	Tier     string `json:"tier"` // finding, identification or lead
 	Kind     string `json:"kind"`
-	Label    string `json:"label"` // proved, observed-dangling, version-read, version-only, conditional; lead for a lead
+	Label    string `json:"label"` // proved, observed-dangling, observed-certificate, version-read, version-only, conditional; lead for a lead
 	Severity string `json:"severity"`
 	Host     string `json:"host"`
 	Port     int    `json:"port,omitempty"`
@@ -94,7 +94,7 @@ func runCommand(g *graphView) string {
 	return "azhaq " + strings.Join(g.args, " ")
 }
 
-var labelRank = map[string]int{verify.Proved: 0, observedDangling: 1, verify.VersionRead: 2, verify.VersionOnly: 3, verify.Conditional: 4}
+var labelRank = map[string]int{verify.Proved: 0, observedDangling: 1, observedCertificate: 1, verify.VersionRead: 2, verify.VersionOnly: 3, verify.Conditional: 4}
 
 // findingSet is a workspace's rows in their three tiers, and the hints the
 // map's view folds. Every stored row that has a record is in exactly one tier.
@@ -198,7 +198,7 @@ func buildFindings(g *graphView) findingSet {
 			set.Leads = append(set.Leads, rec)
 		}
 	}
-	for _, l := range certLeads(g.obs, command) {
+	for _, l := range certRecords(g.obs, command) {
 		add(l)
 	}
 	for _, t := range traceFindingsOf(g.obs, command) {
