@@ -585,13 +585,17 @@ func cmdFuzz(args []string) error {
 				hitsMu.Lock()
 				fresh := unflushed(hits, flushed)
 				hitsMu.Unlock()
-				if err := keepFuzzHits(c.db, fresh, tmpl.Method, keptArgv, false); err != nil {
+				// One transaction: a kill between the two would leave
+				// matches whose inputs the workspace does not say were asked.
+				asked := func(st *store.Store) error {
+					return setFuzzResumeIn(st, resumeArgs(keptA, *start), fuzzAsked{Key: fuzzSkipKey(tmpl), Total: total, Spans: done})
+				}
+				if err := keepFuzzHitsWith(c.db, fresh, tmpl.Method, keptArgv, false, asked); err != nil {
 					return
 				}
 				for _, h := range fresh {
 					flushed[hitKey(h)] = true
 				}
-				_ = setFuzzResume(c.db, resumeArgs(keptA, *start), fuzzAsked{Key: fuzzSkipKey(tmpl), Total: total, Spans: done})
 			}
 		}
 	}
@@ -938,6 +942,12 @@ func hasKeyword(s string, keywords []string) bool {
 // method it says the route takes it. final is the end of the run: the
 // workspace then also keeps what its hits suggest to look at next.
 func keepFuzzHits(path string, hits []fuzz.Result, method string, argv []string, final bool) error {
+	return keepFuzzHitsWith(path, hits, method, argv, final, nil)
+}
+
+// keepFuzzHitsWith is keepFuzzHits that also runs with, when not nil, in
+// the transaction of the hits: all of it is kept or none.
+func keepFuzzHitsWith(path string, hits []fuzz.Result, method string, argv []string, final bool, with func(*store.Store) error) error {
 	rows := make([]map[string]any, 0, len(hits))
 	for _, h := range hits {
 		in := make(map[string]string, len(h.Input))
@@ -971,7 +981,15 @@ func keepFuzzHits(path string, hits []fuzz.Result, method string, argv []string,
 		return err
 	}
 	eng := &engine.Engine{Store: st}
-	hints, err := eng.Ingest(context.Background(), facts)
+	var hints []types.Seed
+	st.Batch(func() {
+		if hints, err = eng.Ingest(context.Background(), facts); err != nil {
+			return
+		}
+		if with != nil {
+			err = with(st)
+		}
+	})
 	if err != nil {
 		return err
 	}
@@ -1183,6 +1201,10 @@ func setFuzzResume(path string, args []string, asked fuzzAsked) error {
 		return err
 	}
 	defer st.Close()
+	return setFuzzResumeIn(st, args, asked)
+}
+
+func setFuzzResumeIn(st *store.Store, args []string, asked fuzzAsked) error {
 	v, a := "", ""
 	if args != nil {
 		raw, _ := json.Marshal(args)

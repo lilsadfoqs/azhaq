@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/lilsadfoqs/azhaq/internal/egress"
+	"github.com/lilsadfoqs/azhaq/internal/fuzz"
 	"github.com/lilsadfoqs/azhaq/store"
 )
 
@@ -524,6 +525,14 @@ func TestFuzzSendsEveryRequestThroughAnyKindOfProxy(t *testing.T) {
 // what the server saw by method and path.
 func fuzzKilledWith(t *testing.T, method string, words, after int, extra ...string) (db string, seen func() map[string]int) {
 	t.Helper()
+	return fuzzKilledKept(t, method, words, after, false, extra...)
+}
+
+// fuzzKilledKept is fuzzKilledWith that, with checkpointed, kills only once
+// the workspace holds the first checkpoint, so the test does not depend on
+// how long the runner takes to write it.
+func fuzzKilledKept(t *testing.T, method string, words, after int, checkpointed bool, extra ...string) (db string, seen func() map[string]int) {
+	t.Helper()
 	var mu sync.Mutex
 	counts := map[string]int{}
 	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -559,6 +568,9 @@ func fuzzKilledWith(t *testing.T, method string, words, after int, extra ...stri
 	for i := 0; i < 400 && total() < after; i++ {
 		time.Sleep(25 * time.Millisecond)
 	}
+	for i := 0; checkpointed && i < 400 && !hasCheckpoint(db); i++ {
+		time.Sleep(25 * time.Millisecond)
+	}
 	if total() < after || total() >= words {
 		_ = cmd.Process.Kill()
 		t.Fatalf("the server saw %d requests of %d before the kill, want %d or more and not all", total(), words, after)
@@ -576,6 +588,16 @@ func fuzzKilledWith(t *testing.T, method string, words, after int, extra ...stri
 		}
 		return out
 	}
+}
+
+// hasCheckpoint: the workspace at path holds a run's asked inputs.
+func hasCheckpoint(path string) bool {
+	st, err := store.OpenExisting(path)
+	if err != nil {
+		return false
+	}
+	defer st.Close()
+	return st.GetMeta(fuzzAskedKey) != ""
 }
 
 // A run killed with SIGKILL is continued from the last second kept: with
@@ -764,7 +786,8 @@ func TestFuzzRequestFileHostIsHeldToTheScope(t *testing.T) {
 // With -db the workspace holds the command from the first request on, and
 // the inputs asked and the matches so far are kept every second.
 func TestFuzzKilledRunLeavesItsCommandItsInputsAndItsMatches(t *testing.T) {
-	db, _ := fuzzKilledWith(t, "", 60, 35)
+	const words = 200 // the run is still going when the first checkpoint is kept
+	db, _ := fuzzKilledKept(t, "", words, 35, true)
 	st, err := store.OpenExisting(db)
 	if err != nil {
 		t.Fatal(err)
@@ -774,7 +797,7 @@ func TestFuzzKilledRunLeavesItsCommandItsInputsAndItsMatches(t *testing.T) {
 		t.Errorf("the workspace holds no command to resume: %q", cmd)
 	}
 	var asked fuzzAsked
-	if err := json.Unmarshal([]byte(st.GetMeta(fuzzAskedKey)), &asked); err != nil || asked.Total != 60 || len(asked.Spans) == 0 {
+	if err := json.Unmarshal([]byte(st.GetMeta(fuzzAskedKey)), &asked); err != nil || asked.Total != words || len(asked.Spans) == 0 {
 		t.Errorf("the inputs asked are not kept: %q (%v)", st.GetMeta(fuzzAskedKey), err)
 	}
 	asks := 0
@@ -784,6 +807,50 @@ func TestFuzzKilledRunLeavesItsCommandItsInputsAndItsMatches(t *testing.T) {
 	ents, _ := st.Entities()
 	if asks < 10 || len(ents) != asks { // every input matches (-mc all): one match kept for each input kept
 		t.Errorf("%d inputs asked are kept but %d matches: the matches so far are not kept with them", asks, len(ents))
+	}
+}
+
+// A checkpoint keeps a batch of matches and the inputs asked in one commit:
+// a run killed between the two writes must not leave matches the workspace
+// does not say were asked.
+func TestFuzzCheckpointKeepsMatchesAndAskedInputsInOneCommit(t *testing.T) {
+	db := filepath.Join(t.TempDir(), "f.db")
+	argv := []string{"azhaq", "fuzz", "-u", "http://127.0.0.1:1/FUZZ"}
+	if err := beginFuzzWorkspace(db, argv, argv, nil, false); err != nil {
+		t.Fatal(err)
+	}
+	hits := []fuzz.Result{{Input: map[string]string{"FUZZ": "a"}, Position: 1, Status: 200, URL: "http://127.0.0.1:1/a", Method: "GET", Job: 1}}
+	asked := fuzzAsked{Key: "k", Total: 5, Spans: fuzz.Spans{{0, 1}}}
+	seenMid := false
+	with := func(in *store.Store) error {
+		seenMid = true
+		if err := setFuzzResumeIn(in, []string{"fuzz"}, asked); err != nil {
+			return err
+		}
+		other, err := store.OpenExisting(db) // another connection sees only what is committed
+		if err != nil {
+			return err
+		}
+		defer other.Close()
+		if ents, _ := other.Entities(); len(ents) != 0 {
+			t.Errorf("%d matches are committed before the inputs asked are", len(ents))
+		}
+		if other.GetMeta(fuzzAskedKey) != "" {
+			t.Error("the inputs asked are committed before the matches")
+		}
+		return nil
+	}
+	if err := keepFuzzHitsWith(db, hits, "GET", argv, false, with); err != nil {
+		t.Fatal(err)
+	}
+	st, err := store.OpenExisting(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	ents, _ := st.Entities()
+	if !seenMid || len(ents) != 1 || st.GetMeta(fuzzAskedKey) == "" {
+		t.Errorf("%d matches and inputs asked %q kept, want 1 and a record", len(ents), st.GetMeta(fuzzAskedKey))
 	}
 }
 
