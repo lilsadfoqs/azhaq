@@ -793,3 +793,28 @@ func TestDocsSayWhenAPlainHostPortIsAskedOverTLS(t *testing.T) {
 		}
 	}
 }
+
+// A fragment is never sent, but as httpx the row's url keeps the one of the
+// input when -path or -p rewrites the URL; path and the request stay without it.
+func TestProbeURLKeepsTheInputsFragmentUnderPathAndPorts(t *testing.T) {
+	t.Chdir(t.TempDir())
+	one, other := newProbeSite(t), newProbeSite(t)
+	port := func(s *probeSite) string { return s.URL[strings.LastIndex(s.URL, ":")+1:] }
+	in := one.URL + "/rest/products/search?q=juice#frag"
+	out, _, _ := runContract(t, "probe", "-u", in, "-path", "/login", "-json", "-silent")
+	rows := probeRows(t, out)
+	if len(rows) != 1 || rows[0]["url"] != one.URL+"/rest/products/search/login?q=juice#frag" || rows[0]["path"] != "/rest/products/search/login?q=juice" || rows[0]["input"] != in {
+		t.Fatalf("-path: %s", out)
+	}
+	if one.seen[0] != "GET /rest/products/search/login?q=juice" {
+		t.Errorf("-path request %v", one.seen)
+	}
+	out, _, _ = runContract(t, "probe", "-u", in, "-p", port(other), "-json", "-silent")
+	rows = probeRows(t, out)
+	if len(rows) != 1 || rows[0]["url"] != other.URL+"/rest/products/search?q=juice#frag" || rows[0]["path"] != "/rest/products/search?q=juice" {
+		t.Fatalf("-p: %s", out)
+	}
+	if other.seen[0] != "GET /rest/products/search?q=juice" {
+		t.Errorf("-p request %v", other.seen)
+	}
+}
