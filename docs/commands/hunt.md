@@ -138,6 +138,10 @@ A listener row is what the run named on one `host:port`. The rows come from the 
 
 An identification is never softened: `version-only` says the version is in the advisory's range and nothing more was checked.
 
+### A workspace whose run is still going
+
+`hunt -db PATH` reads a workspace a `run` is still writing: the rows committed so far, a listener named and a proof answered included, as another reader of the file would see them. It opens the file as a reader of its WAL database does, so the run's writes are not held back and the run does not fail: a batch the run has open is not in the rows until it commits. The rows grow as the run goes, and the rank of a row changes with them. `hunt` does not say the run is going: the progress line of the run does, and names `azhaq hunt -db PATH` once its first listener row is stored; `run -stream` prints each listener row as `found  identified …` and `found  finding …` when it is stored ([run](run.md#streaming-found-lines)).
+
 ### Applications of a name
 
 When several names share an address and port, the root page of each name can name a different application. A name's row is read from that page, by the sources `page title` (the title rules `azhaq ports` reads a page's title with), `generator` (the meta tag), `header X-Powered-By`, `header Server`, `header WWW-Authenticate realm` (the realm of a `401`'s challenge, which a console names itself by: `ActiveMQRealm`) and `technology` (the technologies found in the page). The `source` field says which; a title or a realm names a product and no version. There is one row for each name, port and product, and none for a product the listener's row already names for the same name.

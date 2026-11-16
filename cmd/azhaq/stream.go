@@ -32,6 +32,9 @@ const catchAllNote = "  (catch-all: the page any unknown path gets)"
 // under its row's key (address:port/tcp), when the scan reports it. Lines go
 // to stdout before the map; with -json each is an object with "type":"found".
 //
+// A listener the run names and a proof that answers have lines of their own
+// (newStreamLive, liveHunt), printed from the rows hunt lists.
+//
 // A URL the map folds into a templated row (/redirect?to={v}) is not a row
 // of its own, and which template a row ends with is known only at the end:
 // those are held, and end prints each templated row once, under the key the
@@ -44,16 +47,22 @@ func streamFound(asJSON bool) func(types.Entity, types.Observation) {
 // newStream is streamFound with the end of the run: end takes the map's rows
 // and prints the templated ones.
 func newStream(asJSON bool) (see func(types.Entity, types.Observation), end func([]engine.MapEntry)) {
+	see, end, _ = newStreamLive(asJSON)
+	return see, end
+}
+
+// newStreamLive is newStream with the line of a listener a run named or a
+// proof answered (see liveHunt): named takes the kind (identified or finding),
+// the key the line has, what makes it the same line again (a line with the same
+// kind and same is printed once), its tail, the collector of its record and its
+// fields, and says whether it printed.
+func newStreamLive(asJSON bool) (see func(types.Entity, types.Observation), end func([]engine.MapEntry), named func(kind, key, same, more, collector string, fields map[string]any) bool) {
 	var mu sync.Mutex
 	seen := map[string]bool{}
 	heldBy := map[string]string{} // a templated URL, or its template, held back -> the collector that found it first
 	dnsBy := map[string]string{}  // a name looked up -> the collector that asked
 	enc := json.NewEncoder(os.Stdout)
-	emit := func(kind, key, more, collector string, fields map[string]any) {
-		if seen[key] {
-			return
-		}
-		seen[key] = true
+	show := func(kind, key, more, collector string, fields map[string]any) {
 		if asJSON {
 			row := map[string]any{"type": "found", "kind": kind, "key": key, "collector": collector}
 			for k, v := range fields {
@@ -63,6 +72,24 @@ func newStream(asJSON bool) (see func(types.Entity, types.Observation), end func
 			return
 		}
 		fmt.Fprintln(os.Stdout, strings.TrimSpace(fmt.Sprintf("found  %-7s %s  %s", kind, key, more)))
+	}
+	emit := func(kind, key, more, collector string, fields map[string]any) {
+		if seen[key] {
+			return
+		}
+		seen[key] = true
+		show(kind, key, more, collector, fields)
+	}
+	rowSeen := map[string]bool{}
+	named = func(kind, key, same, more, collector string, fields map[string]any) bool {
+		mu.Lock()
+		defer mu.Unlock()
+		if rowSeen[kind+"\x00"+same] {
+			return false
+		}
+		rowSeen[kind+"\x00"+same] = true
+		show(kind, key, more, collector, fields)
+		return true
 	}
 	end = func(rows []engine.MapEntry) {
 		mu.Lock()
@@ -227,5 +254,5 @@ func newStream(asJSON bool) (see func(types.Entity, types.Observation), end func
 			emit(l.kind, l.key, l.more, o.Collector, l.fields)
 		}
 	}
-	return see, end
+	return see, end, named
 }

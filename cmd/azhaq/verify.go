@@ -48,6 +48,30 @@ func verifyStage(ctx context.Context, st *store.Store, obs []types.StoredObserva
 	dialer := egress.NewPortDialer(5*time.Second, nil, "", "")
 	failed, refused, stopped := 0, 0, 0
 	var declined []verify.Result
+	// A result is stored as its read answers, so a run that streams names it
+	// then and not when every check is done.
+	now := time.Now().UTC()
+	keep := func(r verify.Result) {
+		results = append(results, r)
+		raw, _ := json.Marshal(r)
+		if r.Host == "" {
+			return
+		}
+		ent, err := st.UpsertEntity(types.TypeHostname, r.Host, now)
+		if err != nil {
+			return
+		}
+		src := r.Kind
+		if r.AdvisoryID != "" {
+			src = r.AdvisoryID
+		}
+		if _, err := st.AddObservation(ent.ID, types.Observation{
+			Collector: "azhaq-verify", Source: src, Kind: "verify",
+			Payload: raw, Confidence: 0.9, ObservedAt: now,
+		}); err == nil {
+			liveWake(ctx)
+		}
+	}
 	for _, svc := range advisory.ServicesAnyVersion(obs) {
 		check, ok := verify.ForService(svc)
 		if !ok {
@@ -91,7 +115,7 @@ func verifyStage(ctx context.Context, st *store.Store, obs []types.StoredObserva
 			declined = append(declined, r)
 			continue
 		}
-		results = append(results, r)
+		keep(r)
 	}
 	for _, lead := range leads {
 		// The request is only carried when a confirmation read was
@@ -103,27 +127,8 @@ func verifyStage(ctx context.Context, st *store.Store, obs []types.StoredObserva
 		}
 		if r, ok := verify.AdvisoryResult(lead, request); ok {
 			r.Command = command
-			results = append(results, r)
+			keep(r)
 		}
-	}
-	now := time.Now().UTC()
-	for _, r := range results {
-		raw, _ := json.Marshal(r)
-		if r.Host == "" {
-			continue
-		}
-		ent, err := st.UpsertEntity(types.TypeHostname, r.Host, now)
-		if err != nil {
-			continue
-		}
-		src := r.Kind
-		if r.AdvisoryID != "" {
-			src = r.AdvisoryID
-		}
-		_, _ = st.AddObservation(ent.ID, types.Observation{
-			Collector: "azhaq-verify", Source: src, Kind: "verify",
-			Payload: raw, Confidence: 0.9, ObservedAt: now,
-		})
 	}
 	for _, r := range declined {
 		if raw, err := json.Marshal(r); err == nil && r.Host != "" {

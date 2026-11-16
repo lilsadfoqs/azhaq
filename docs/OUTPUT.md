@@ -38,6 +38,7 @@ azhaq: 1m30s, 62 requests sent (1/s), 38 tasks left; -max-requests 80 ends it in
 - The tasks are those known so far.
 - A port scan covers a range in one task, so `tasks_done` stays at 0 while its addresses finish. When the run has port work, the line adds the addresses done and those left of the tasks known (`1 task left, 64 of 256 addresses done`; `addresses_done` and `addresses_left` with `-json`). `addresses_left` is left out while a task names addresses the run does not know yet (a name, or a range larger than a /24 before it is split into blocks).
 - The end is the sooner of the request cap and `-timeout`.
+- Once the run has stored its first listener row (a product it named on a `host:port`), the line adds `; azhaq hunt -db PATH for the rows so far` (`hunt` in the object with `-json`), on every line from then on: [`hunt`](commands/hunt.md#a-workspace-whose-run-is-still-going) reads the rows stored so far, while the run goes. It is left out when the run's workspace is temporary (nothing to read after the command ends), and it is read from the workspace every few seconds, so it can come a few seconds after the row was stored.
 - With `-json`, the line is an object:
 
 ```json

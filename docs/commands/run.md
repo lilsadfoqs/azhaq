@@ -53,7 +53,7 @@ The map has one row per entity, best first: the target's own pages and APIs, the
 - `-json`: one JSON object per row, and the summary as one JSON object on stderr.
 - `-quiet`: no map and no progress lines, only the summary.
 - `-o FILE`: also writes the rows to FILE, as they are printed (JSON lines with `-json`, the text map without), replacing it, as `crawl`, `probe` and `ports` do. The file is made before anything is sent, so a path that cannot be written fails at once with exit 1, and a directory is a usage error. With `-quiet` nothing is printed and the file still gets the rows. The summary lists the file under `wrote`.
-- `-stream`: also prints each name, address, URL and open port as it is found, before the map ([Streaming found lines](#streaming-found-lines)).
+- `-stream`: also prints each name, address, URL and open port as it is found, and each listener as it is named and each proof as it answers, before the map ([Streaming found lines](#streaming-found-lines)).
 
 ```json
 {"type":"URL","key":"http://127.0.0.1:3001/api/Users","scope":"target","coverage":"visited","role":"auth",
@@ -169,16 +169,20 @@ found in
 - Not streamed as they are found: names that do not resolve. They are lines at the end, before the map, for each name the map has a row for: with `-all-rows` or `-json` every such name, in the text map the summary row's name and each takeover candidate. So is the domain's own row. Every row the map prints has its line.
 - A page the map folds into a templated row (`/redirect?to={v}`, from 2 URLs on) is streamed as that row: one line, under the template key, none for its members. These lines are held until the run ends, because which URLs fold is known only then, and they print just before the map (`found  answer http://app/redirect?to={v}  [200]`), with the status and title of the map row. A templated page found once is no fold and prints under its own URL, at the end too. The keys of the lines are the keys of the map's rows.
 - An answer line looks like `found  answer http://app/openapi.json  [200]`. An answer that is the page every unknown path gets ends with `(catch-all: the page any unknown path gets)`.
+- A listener is named as soon as its row is stored: `found  identified 127.0.0.1:2222  OpenSSH 8.2p1 (version-only)` is the product, the version (`, no version seen` when a stage named the product and nothing named its version) and the label `report -findings` gives the row. A read that proved something on a listener (`-verify`) is a `finding` line as soon as its answer is stored: `found  finding 127.0.0.1:6379  Redis 7.2.0 unauthenticated-read (proved)`. These lines are the rows `azhaq hunt` lists for the listeners (one for each listener and product, and one for each finding), made by the same rule from the rows the workspace holds, so a line is only printed for what `hunt -db PATH` lists at that moment. They are read from the workspace, not on every row, and the last read is made when the run ends, so every line is before the map.
+- Once each: a listener is printed again only when what is stored of it differs from every line printed: a later read that states a more specific version (`Redis 7` and then `Redis 7.2.0`), or a label that says more after a read of the advisory (`version-read` after `version-only`), prints a new line. The same row stored again prints nothing. A listener a read later proves keeps its `identified` line (a line is not taken back), and `hunt` lists only the `finding` row for it. The advisory match is stored after the tasks end, so an `identified` line printed while the run goes carries no `advisory_id`, and the row `hunt` lists at the end may: the line is the row as it stood, and says nothing that was not stored.
+- A `finding` line is only for a listener a read proved. What the path checks prove on a route, a secret or a takeover is a row of `hunt` and `report -findings` and is not streamed.
 - With `-json`, each is an object with `"type":"found"` and these fields:
 
 | Field | Meaning |
 | --- | --- |
-| `kind` | `name`, `url`, `answer`, `address` or `port`. |
+| `kind` | `name`, `url`, `answer`, `address`, `port`, `identified` or `finding`. |
 | `key` | The name, the URL, the address, or `address:port/protocol` of a port: the key of the map row. |
 | `collector` | The collector that found it. |
 | `status`, `title` | For an answer. |
 | `catchall` | For an answer: `true` when it is the page every unknown path gets. |
 | `ip`, `host`, `port`, `protocol`, `state`, `service` | For a port: the address, the name it was scanned under (empty for an address given as such), the port number, `tcp` or `udp`, `open` (UDP also `open\|filtered`) and the service when one was named. |
+| `key` (`host:port`), `score`, `reasons`, `next`, `tier`, `proof`, `host`, `port`, `what`, `product`, `version`, `source`, `advisory_id`, `advisory_url`, `advisories`, `label`, `severity`, `kev`, `cvss`, `evidence`, `command`, `also_named` | For `identified` and `finding`: the fields of the row in `azhaq hunt -json`, with the values the row has when it is printed. `rank` is not there (it exists only once every row of the workspace is ordered), and `type` and `kind` are the line's own (`identified` is `tier` `identification`). `collector` is the collector of the record the row is read from (`azhaq-ports`, `azhaq-http`, `azhaq-advisories`, `azhaq-verify`). |
 
 ### Coverage
 
@@ -654,7 +658,7 @@ azhaq run -url https://app.example.com/ -ports top-1000 -verify-logins -db app.d
 | `-o` | string |  | also write the rows to this file, as printed (JSON lines with -json), replacing it; with -quiet the file still gets them |
 | `-quiet` | bool |  | print no map and no progress lines (a line every 10 s while the run works), only the summary (on stderr) |
 | `-v` | bool |  | print a line for every finished task, not only failures |
-| `-stream` | bool |  | also print each name, address, URL and open port as it is found, once per map row (found lines, before the ranked map) |
+| `-stream` | bool |  | also print each name, address, URL and open port as it is found, once per map row, and each listener as it is named and each proof as it answers (found lines, before the ranked map) |
 | `-sr` | bool |  | also write each answer a target gave, headers and body as read, to the -srd directory as DIR/HOST/SHA1.txt with an index.txt (katana's -sr); query -fields response_file says where a row's is |
 | `-srd` | string | `azhaq_response` | directory for -sr |
 | `-no-catchall` | bool |  | leave out URLs that answer with the page every unknown path gets (client-side routes of a single-page app) from the rows printed |

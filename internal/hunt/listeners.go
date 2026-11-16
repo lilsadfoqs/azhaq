@@ -44,6 +44,17 @@ type Listener struct {
 	Proof *proof.Proof
 }
 
+// ListenerRows are the rows Build makes of listeners, in the order given and
+// unranked (Rank 0: a rank is only known once every row of the workspace is
+// ordered). A run that is still going lists them as it names each listener.
+func ListenerRows(ls []Listener, db string) []Row {
+	out := make([]Row, len(ls))
+	for i, l := range ls {
+		out[i] = l.row(db)
+	}
+	return out
+}
+
 // label scores, before the exploited and the score the advisory states.
 var listenerScore = map[string]int{"proved": 90, "version-read": 70, "version-only": 60, "conditional": 50}
 
