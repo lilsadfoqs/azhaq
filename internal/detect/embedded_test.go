@@ -203,8 +203,8 @@ func TestLoadBudget(t *testing.T) {
 		t.Errorf("load took %v, budget 1.5s", took)
 	}
 	if ms.HeapAlloc > before.HeapAlloc {
-		if mb := (ms.HeapAlloc - before.HeapAlloc) >> 20; mb > 150 {
-			t.Errorf("the load adds %d MB of live heap, budget 150 MB", mb)
+		if mb := (ms.HeapAlloc - before.HeapAlloc) >> 20; mb > 70 {
+			t.Errorf("the load adds %d MB of live heap, budget 70 MB", mb)
 		}
 	}
 	runtime.KeepAlive(idx)
