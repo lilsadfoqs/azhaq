@@ -105,10 +105,13 @@ type search struct {
 	// skip says why calibration left the page alone.
 	lost    int
 	lostWhy string
-	skip    string
-	note    string // said in the page's row
-	floodAt int    // the first chunk of a page that answers any name
-	badXML  int    // names that cannot be XML elements
+	// quietLost and quietWhy are the same for probes of a group's size.
+	quietLost int
+	quietWhy  string
+	skip      string
+	note      string // said in the page's row
+	floodAt   int    // the first chunk of a page that answers any name
+	badXML    int    // names that cannot be XML elements
 
 	cut atomic.Bool // an answer body was cut: a stream that never ends, or past 2 MiB
 }
@@ -686,13 +689,20 @@ func (s *search) sleep(d time.Duration) bool {
 
 // lose counts a request that got no answer.
 func (s *search) lose(quiet bool, err error) {
-	if quiet || s.ctx.Err() != nil {
+	if s.ctx.Err() != nil {
 		return
 	}
 	s.mu.Lock()
+	defer s.mu.Unlock()
+	if quiet {
+		// A probe that failed may only show a size the server refuses;
+		// calibrate counts it when nothing else answered.
+		s.quietLost++
+		s.quietWhy = engine.ShortError(err.Error())
+		return
+	}
 	s.lost++
 	s.lostWhy = engine.ShortError(err.Error())
-	s.mu.Unlock()
 }
 
 // once sends one request. wait is not zero when the page limited it: the
@@ -825,6 +835,14 @@ func (s *search) calibrate(words []string) bool {
 	c, okC = s.ask(crowd, true)
 	wg.Wait()
 	if !okA || !okB {
+		if !okA && !okB && !okC {
+			// Nothing answered: the probe that failed was sent, and failed.
+			s.mu.Lock()
+			if s.lost == 0 && s.quietLost > 0 {
+				s.lost, s.lostWhy = s.quietLost, s.quietWhy
+			}
+			s.mu.Unlock()
+		}
 		return false
 	}
 	if a.status != b.status {
