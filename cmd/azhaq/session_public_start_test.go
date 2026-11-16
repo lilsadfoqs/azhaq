@@ -58,22 +58,31 @@ func (a *publicStartApp) sentAfter() int {
 	return a.after
 }
 
+// The bound docs/CONCEPTS.md (Sessions) gives for a signed-in run once its
+// session ended: the requests in flight (-host-parallel), plus the check, 3
+// kept pages asked again and the sign-in page.
+const (
+	hostParallel  = 4
+	afterEndBound = hostParallel + 3 + 1
+)
+
 // With a start page that looks the same signed in and out, a page that
 // answered 200 with the session and then a redirect to a sign-in page is the
-// end of the session: the run stops with the session failure within a few
-// requests of it, not at its budget.
+// end of the session: the run stops with the session failure within the
+// bound of the docs, however slowly the machine handles an answer.
 func TestCookieRunOnAPublicStartPageStopsWhenAProtectedPageRedirectsToSignIn(t *testing.T) {
 	t.Chdir(t.TempDir())
 	app := &publicStartApp{live: 4}
 	srv := httptest.NewServer(app.handler())
 	defer srv.Close()
 	_, errOut, code := cli(t, "run", "-url", srv.URL+"/", "-allow", "127.0.0.1", "-sources", "none", "-no-takeover", "-no-paths",
-		"-no-favicon", "-no-tech", "-cookie", "sid=good", "-rate", "200", "-max-requests", "40", "-db", "s.db", "-ledger", "off", "-json")
+		"-no-favicon", "-no-tech", "-cookie", "sid=good", "-rate", "200", "-max-requests", "40", "-host-parallel", fmt.Sprint(hostParallel), "-db", "s.db", "-ledger", "off", "-json")
 	if code != exitPartial {
 		t.Fatalf("exit %d, want 3 (the session failure):\n%s", code, errOut)
 	}
-	if got := app.sentAfter(); got > 8 {
-		t.Errorf("%d requests went out after the session ended, want a few", got)
+	t.Logf("requests after the end: %d", app.sentAfter())
+	if got := app.sentAfter(); got > afterEndBound {
+		t.Errorf("%d requests went out after the session ended, want at most %d", got, afterEndBound)
 	}
 	loss, _ := sumMap(t, errOut)["session_lost"].(map[string]any)
 	if loss == nil {
