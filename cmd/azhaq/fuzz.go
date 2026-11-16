@@ -67,7 +67,7 @@ func cmdFuzz(args []string) error {
 	http2 := fs.Bool("http2", false, "use HTTP/2 where the server offers it")
 	certFile := fs.String("cc", "", "client certificate file for TLS; -ck names its key")
 	keyFile := fs.String("ck", "", "client key file for TLS")
-	mc := fs.String("mc", "", "match these statuses, comma-separated values and ranges, or all (default 200-299,301,302,307,308,401,403,405,500, ffuf's and 308, unless another matcher is given)")
+	mc := fs.String("mc", "", "match these statuses, comma-separated values and ranges, or all (default 200-299,301,302,307,401,403,405,500, ffuf's, unless another matcher is given)")
 	ms := fs.String("ms", "", "match these response sizes (values and ranges)")
 	mw := fs.String("mw", "", "match these word counts (values and ranges)")
 	ml := fs.String("ml", "", "match these line counts (values and ranges)")
