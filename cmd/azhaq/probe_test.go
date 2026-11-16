@@ -674,9 +674,16 @@ func TestProbePathRowNamesTheURLAsked(t *testing.T) {
 // forwardProxy is an HTTP proxy that sends every request to target.
 func forwardProxy(t *testing.T, target string) string {
 	t.Helper()
-	srv := httptest.NewServer(&httputil.ReverseProxy{Director: func(r *http.Request) {
+	rp := &httputil.ReverseProxy{Director: func(r *http.Request) {
 		r.URL.Scheme, r.URL.Host = "http", target
-	}})
+	}}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Host == "" { // a request addressed to the proxy itself: it answers, as a proxy does, and forwards nothing
+			http.Error(w, "this is a proxy", http.StatusBadRequest)
+			return
+		}
+		rp.ServeHTTP(w, r)
+	}))
 	t.Cleanup(srv.Close)
 	return srv.URL
 }

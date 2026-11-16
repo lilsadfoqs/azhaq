@@ -3,6 +3,7 @@ package advisory
 import (
 	"encoding/json"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -99,7 +100,12 @@ func pageApps(obs []types.StoredObservation) []pageApp {
 			port = 443
 		}
 		var cands []pageApp
-		add := func(product, version, source, said string) {
+		add := func(product, version, source, said string, viaProxy bool) {
+			if viaProxy {
+				// Named by a header alone through a -proxy that could not be
+				// asked for its own answer: the name stays, the version is not taken.
+				version, said = "", said+" (read through -proxy, which could not be asked for its own answer)"
+			}
 			product = strings.TrimSpace(product)
 			if product == "" {
 				return
@@ -119,24 +125,24 @@ func pageApps(obs []types.StoredObservation) []pageApp {
 				Origin: u.Scheme + "://" + u.Host, Banner: said, Source: source, ObservedAt: o.ObservedAt, From: at}, Plain: class == plain})
 		}
 		if p, v := portscan.TitleProduct(row.Title); p != "" {
-			add(p, v, SourceTitle, "<title>"+row.Title+"</title>")
+			add(p, v, SourceTitle, "<title>"+row.Title+"</title>", false)
 		}
 		if p, v := portscan.GeneratorProduct(row.Generator); p != "" {
-			add(p, v, SourceGenerator, `<meta name="generator" content="`+row.Generator+`">`)
+			add(p, v, SourceGenerator, `<meta name="generator" content="`+row.Generator+`">`, false)
 		}
 		if pw := row.Headers["x-powered-by"]; pw != "" {
 			if p, v := portscan.HeaderProduct(pw); p != "" {
-				add(p, v, SourcePowered, "X-Powered-By: "+pw)
+				add(p, v, SourcePowered, "X-Powered-By: "+pw, slices.Contains(row.ViaProxy, "X-Powered-By"))
 			}
 		}
 		if row.Server != "" {
 			if p, v := portscan.HeaderProduct(row.Server); p != "" {
-				add(p, v, SourceServer, "Server: "+row.Server)
+				add(p, v, SourceServer, "Server: "+row.Server, slices.Contains(row.ViaProxy, "Server"))
 			}
 		}
 		if row.Realm != "" {
 			if p := portscan.RealmProduct(row.Realm); p != "" {
-				add(p, "", SourceRealm, `WWW-Authenticate realm="`+row.Realm+`"`)
+				add(p, "", SourceRealm, `WWW-Authenticate realm="`+row.Realm+`"`, false)
 			}
 		}
 		for _, t := range row.Tech {
@@ -144,13 +150,13 @@ func pageApps(obs []types.StoredObservation) []pageApp {
 			if version != "" && (version[0] < '0' || version[0] > '9') {
 				version = ""
 			}
-			add(name, version, SourceTech, "technology: "+t)
+			add(name, version, SourceTech, "technology: "+t, slices.Contains(row.ViaProxy, "tech:"+t))
 		}
 		for _, d := range row.Detected {
 			if foreignVersion(row.Server, d.Product, d.Version) {
 				d.Version = ""
 			}
-			add(d.Product, d.Version, detectedSource(d), "detection template: "+d.Template)
+			add(d.Product, d.Version, detectedSource(d), "detection template: "+d.Template, d.ViaProxy != "")
 		}
 		for _, c := range cands {
 			k := strings.ToLower(c.Host) + "|" + strconv.Itoa(c.Port) + "|" + identity(c.Product)

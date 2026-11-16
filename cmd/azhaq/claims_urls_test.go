@@ -304,6 +304,10 @@ func TestURLsLiveAsksOnceAfterTheArchivesAndSaysWhatItDid(t *testing.T) {
 		return maps.Clone(live)
 	}
 	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Host == "" { // the run's one ask of the proxy itself, not a live check
+			http.Error(w, "this is a proxy", http.StatusBadRequest)
+			return
+		}
 		firstLive.CompareAndSwap(0, time.Now().UnixNano())
 		mu.Lock()
 		live[r.URL.String()]++

@@ -161,6 +161,9 @@ func TestProbeKeepsA400AndFallsBackFromTLSToPlain(t *testing.T) {
 	rp := &httputil.ReverseProxy{Director: func(r *http.Request) { r.URL.Scheme, r.URL.Host = "http", strings.TrimPrefix(site.URL, "http://") }}
 	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodConnect {
+			if r.URL.Host == "" { // the run's one request to the proxy itself, for its own answer
+				return
+			}
 			plain.Add(1)
 			rp.ServeHTTP(w, r)
 			return

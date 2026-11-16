@@ -887,7 +887,7 @@ func spentAmount(acc map[ledger.SpentKey]int64, keep func(ledger.SpentKey) bool)
 			a.DNS += n
 		case k.Class == ledger.ClassSource:
 			a.Sources += n
-		case k.Class == ledger.ClassOwn:
+		case k.Class == ledger.ClassOwn, k.Class == ledger.ClassProxy:
 		case k.Kind == "tcp":
 			a.Connects += n
 		case k.Kind == "udp":

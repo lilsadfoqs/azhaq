@@ -396,6 +396,7 @@ Every request, connection or query has a class, written on its line of the ledge
 | `source` | a third party asked about the targets: subdomain sources, archives, RDAP, RIPEstat, search engines, scope platforms, notifications, crt.sh's PostgreSQL, the mail server | kill file; the proxy given for sources | `http`, `tcp` |
 | `dns` | a resolver | kill file; the pool's pace | `dns`: the name in `host`, its type in `method`, the resolver in `target` |
 | `own` | an endpoint of the user's own: a replay proxy, a worker's link to its run, where `-seal-to` posts | nothing | not recorded: the seal is posted after the ledger is sealed |
+| `proxy` | the run's `-proxy`, asked once for its own answer | kill file; not the scope | `http`: a request addressed to the proxy itself, collector `proxy` |
 
 ### What egress hands out
 

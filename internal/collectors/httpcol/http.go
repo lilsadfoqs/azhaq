@@ -879,6 +879,7 @@ func describe(reqURL, final string, res fetch.Result, title string, noTech, ever
 	if last == nil {
 		last = res.Header
 	}
+	var via []string // what only a header named, through a proxy that could not be asked
 	// Documents get the full fingerprint; a site's front page that is not
 	// HTML (an API root) still gets its headers read (Server, cookies).
 	if !noTech && (everyAnswer || page(last) || isRoot(reqURL) || isRoot(final)) {
@@ -888,11 +889,32 @@ func describe(reqURL, final string, res fetch.Result, title string, noTech, ever
 		}
 		if tech := fingerprint.Tech(last, body); len(tech) > 0 {
 			out["tech"] = tech
+			if egress.ProxyUnasked() {
+				bare := fingerprint.Tech(egress.WithoutIdentity(last), body)
+				for _, t := range tech {
+					if !slices.Contains(bare, t) {
+						via = append(via, "tech:"+t)
+					}
+				}
+			}
 		}
 	}
 	if !noTech {
 		if rows := detectedAt(reqURL, final, res, last); len(rows) > 0 {
+			httprow.MarkViaProxy(rows, last, func(h http.Header) []map[string]string { return detectedAt(reqURL, final, res, h) })
 			out["detected"] = rows
+		}
+	}
+	if egress.ProxyUnasked() {
+		// A header alone names these, and the proxy may have added it.
+		if serverHeader(last) != "" {
+			via = append(via, "Server")
+		}
+		if last.Get("X-Powered-By") != "" {
+			via = append(via, "X-Powered-By")
+		}
+		if len(via) > 0 {
+			out["via_proxy"] = via
 		}
 	}
 	length := len(res.Body)

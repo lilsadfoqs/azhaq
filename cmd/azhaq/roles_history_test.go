@@ -538,6 +538,9 @@ func TestRolesFromHistory(t *testing.T) {
 	// -proxy carries every request: the history reads and the replay too.
 	var viaProxy int
 	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Host == "" { // the run's one request to the proxy itself, for its own answer
+			return
+		}
 		mu.Lock()
 		viaProxy++
 		mu.Unlock()

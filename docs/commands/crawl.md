@@ -200,6 +200,10 @@ These filters limit what is printed, not what is crawled.
 - Text output is the URL.
 - `-json` output is `{"url", "coverage":"out-of-scope", "source", "tag", "attribute"}`.
 
+### Through a proxy
+
+- Through an http or https `-proxy`, a header the proxy's own answer shows (its `Server`, `Via` or `X-Cache`, a cookie it sets) is not read as the target's, in the technologies of a row or anywhere else. The proxy is asked once for its own answer, the request is listed in the ledger with class `proxy`, and a note counts the answers that carried a header equal to the proxy's own: [Proxies](../CONCEPTS.md#proxies).
+
 ### Saved responses
 
 - `-sr` writes each answer to `-srd DIR` (`katana_response`) as `HOST/SHA1.txt`.

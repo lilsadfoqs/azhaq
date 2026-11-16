@@ -52,7 +52,7 @@ func collectorOf(ctx context.Context) string {
 	return s
 }
 
-var sentByClass [4]atomic.Int64
+var sentByClass [5]atomic.Int64
 
 func counter(class string) *atomic.Int64 {
 	switch class {
@@ -62,6 +62,8 @@ func counter(class string) *atomic.Int64 {
 		return &sentByClass[2]
 	case ClassOwn:
 		return &sentByClass[3]
+	case ClassProxy:
+		return &sentByClass[4]
 	}
 	return &sentByClass[0]
 }

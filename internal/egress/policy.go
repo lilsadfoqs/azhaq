@@ -34,6 +34,10 @@ const (
 	// its run, where -seal-to posts). Not a target and not recorded: the
 	// ledger holds what was sent about targets.
 	Own Class = ledger.ClassOwn
+	// Proxy: the run's -proxy, asked once for its own answer (see
+	// proxyhdr.go). The user's own, so not held to the scope; recorded apart
+	// from the targets', counted by nothing.
+	Proxy Class = ledger.ClassProxy
 )
 
 // Policy is the controls of one run. There is one in use at a time
@@ -54,6 +58,7 @@ type Policy struct {
 	onDenied    func(raw, rule string)
 	onPort      func(raw, reason string) // hears of a URL kept out for its port
 	proxy       *url.URL
+	px          proxyRead // the proxy's own answer, and what it took off the targets'
 	resolver    func(ctx context.Context, host string) []string
 	only        bool                // the resolver is the only one: a name it cannot answer is not looked up elsewhere
 	pins        map[string][]string // name → address, for a name the resolver has no answer for
@@ -136,6 +141,7 @@ func (p *Policy) Reset() {
 	p.mu.Lock()
 	p.allow, p.allowAddr, p.openHeaders, p.denyPath, p.onDenied, p.onPort, p.proxy, p.resolver, p.only = nil, nil, nil, nil, nil, nil, nil, nil, false
 	p.pins = nil
+	p.px.reset()
 	p.targetPorts = nil
 	p.word, p.asked, p.holding = nil, nil, false
 	p.sentKeys.Clear()
@@ -251,6 +257,7 @@ func (p *Policy) SetTargetProxy(u *url.URL) {
 	p.mu.Lock()
 	p.proxy = u
 	p.mu.Unlock()
+	p.px.reset()
 }
 
 // SetResolver sets the run's resolver; nil goes back to the system's. It

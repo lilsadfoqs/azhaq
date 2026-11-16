@@ -5,9 +5,11 @@ package httprow
 import (
 	"bytes"
 	"encoding/json"
+	"net/http"
 	"time"
 
 	"github.com/lilsadfoqs/azhaq/internal/cpedetect"
+	"github.com/lilsadfoqs/azhaq/internal/egress"
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
 	"github.com/lilsadfoqs/azhaq/internal/takeover"
 )
@@ -89,6 +91,12 @@ type Row struct {
 	FaviconMD5   string              `json:"favicon_md5,omitempty"`
 	FaviconPath  string              `json:"favicon_path,omitempty"`
 
+	// ViaProxy lists what only a header of the answer named ("Server",
+	// "X-Powered-By", "tech:Name:version"), when the -proxy the answer came
+	// through could not be asked for its own answer: the proxy may have added
+	// it. A version so marked is matched to no advisory.
+	ViaProxy []string `json:"via_proxy,omitempty"`
+
 	// The response headers and the start of the body, as fetch.Evidence keeps
 	// them (TestEvidenceKeysAreFields holds the names to its own).
 	ResponseHeaders map[string][]string `json:"response_headers,omitempty"`
@@ -151,6 +159,28 @@ type Detected struct {
 	Version  string `json:"version,omitempty"`
 	Matcher  string `json:"matcher,omitempty"`
 	Many     string `json:"many,omitempty"` // "1": one of many products the template names
+	// ViaProxy is "1" when only a header named it, through a -proxy that could
+	// not be asked for its own answer (see Row.ViaProxy).
+	ViaProxy string `json:"via_proxy,omitempty"`
+}
+
+// MarkViaProxy sets via_proxy on the detected rows only the identity headers
+// of header produced, when the run's -proxy could not be asked for its own
+// answer. again runs the same detection over other headers.
+func MarkViaProxy(rows []map[string]string, header http.Header, again func(http.Header) []map[string]string) {
+	if len(rows) == 0 || !egress.ProxyUnasked() {
+		return
+	}
+	key := func(r map[string]string) string { return r["product"] + "\x00" + r["version"] + "\x00" + r["template"] }
+	rest := map[string]bool{}
+	for _, r := range again(egress.WithoutIdentity(header)) {
+		rest[key(r)] = true
+	}
+	for _, r := range rows {
+		if !rest[key(r)] {
+			r["via_proxy"] = "1"
+		}
+	}
 }
 
 // Cookie is a Set-Cookie of an answer: its name and attributes, never its value.

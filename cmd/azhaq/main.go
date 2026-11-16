@@ -1793,6 +1793,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		opts.Browser.Close()
 	}
 	rep.Requests = egress.Sent()
+	rep.Notes = append(rep.Notes, egress.ProxyNotes()...)
 	_ = st.AddRunRequests(rep.Requests)
 	rep.estimate, rep.refusedBy = estimate, eng.Refused()
 	rep.Cost = accountCostBy(estimate, rep.spentFrom, nil, true)

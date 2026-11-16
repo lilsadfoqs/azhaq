@@ -182,6 +182,10 @@ func TestDirsProxyCarriesEveryRequestAndCalibrationHasFourGuesses(t *testing.T) 
 	var seen int64
 	// An http proxy that delivers to the stand-in: a request that went round it would not reach it.
 	hp := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Host == "" { // the run's one request to the proxy itself, for its own answer
+			w.WriteHeader(404)
+			return
+		}
 		atomic.AddInt64(&seen, 1)
 		resp, err := http.Get(stand.URL + r.URL.Path)
 		if err != nil {

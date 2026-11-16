@@ -260,7 +260,7 @@ A line has:
 | --- | --- |
 | `seq` | The line's number, from 1. |
 | `time` | When it was sent, UTC. |
-| `class` | What it was sent to: `target`, `source`, `dns` or `own`. A line without one, from a ledger written before classes, is a `target`. |
+| `class` | What it was sent to: `target`, `source`, `dns`, `own` or `proxy` (the one request a run through an http or https `-proxy` addresses to the proxy itself, for its own answer). A line without one, from a ledger written before classes, is a `target`. |
 | `kind` | `http`, `tcp`, `udp`, `probe`, `dns`, `chrome` or `seal`. See below. |
 | `method` | The HTTP method. For `dns`, the record type (`A`). On a `probe` line, the method of an HTTP request. Not on `tcp` and `udp` lines. |
 | `proto` | On a `probe` line only: `http` or `https` for an HTTP request, else the protocol the bytes speak (`redis`, `smtp`, `payload`, …), `raw` when none is named. |
