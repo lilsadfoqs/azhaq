@@ -14,10 +14,12 @@ import (
 
 	"github.com/lilsadfoqs/azhaq/catalog"
 	"github.com/lilsadfoqs/azhaq/engine"
+	"github.com/lilsadfoqs/azhaq/internal/collectors/asncol"
 	"github.com/lilsadfoqs/azhaq/internal/collectors/gqlcol"
 	"github.com/lilsadfoqs/azhaq/internal/collectors/pathscol"
 	"github.com/lilsadfoqs/azhaq/internal/collectors/portcol"
 	"github.com/lilsadfoqs/azhaq/internal/collectors/vhostcol"
+	"github.com/lilsadfoqs/azhaq/internal/dnsr"
 	"github.com/lilsadfoqs/azhaq/internal/egress"
 	"github.com/lilsadfoqs/azhaq/internal/neterr"
 	"github.com/lilsadfoqs/azhaq/internal/portscan"
@@ -295,6 +297,9 @@ func planSends(b engine.Budgets, send sendLimits) (gets, others []string) {
 func buildPlan(cat *catalog.Catalog, seeds []types.Seed, b engine.Budgets, paths []string, limits map[string]string, send sendLimits, rep *report) runPlan {
 	p := planFor(cat, seeds, b, paths, limits, send, rep)
 	p.Advisories = send.advisories
+	if line := planDNS(seeds, b, send); line != "" {
+		p.Sends = append(p.Sends, line)
+	}
 	if send.axfr {
 		p.AXFR, p.Sends = planTransfers(seeds, b, send.resolvers), append(p.Sends, "-axfr (azhaq dns): "+axfrSummary(b))
 	}
@@ -302,6 +307,33 @@ func buildPlan(cat *catalog.Catalog, seeds []types.Seed, b engine.Budgets, paths
 		p.Sends = append([]string{"-sources none: no third party is asked (no subdomain source, archive, RDAP, RIPEstat or search engine); only the resolvers and the targets get requests"}, p.Sends...)
 	}
 	return p
+}
+
+// planDNS names the resolvers the run asks and what it asks them: the names
+// it finds, and, for a range or an AS, the reverse names of its addresses.
+func planDNS(seeds []types.Seed, b engine.Budgets, send sendLimits) string {
+	reverse := false
+	if !b.Skip[asncol.PTRName] {
+		for _, s := range seeds {
+			reverse = reverse || s.Type == types.TypePrefix || s.Type == types.TypeASN
+		}
+	}
+	if b.Skip["azhaq-dns"] && !reverse {
+		return ""
+	}
+	named := len(send.resolvers) > 0
+	via := "the default public resolvers (" + strings.Join(dnsr.DefaultResolvers, ", ") + ")"
+	if named {
+		via = "the resolvers given (" + strings.Join(send.resolvers, ", ") + ")"
+	}
+	line := "DNS queries to " + via + ": the names found, resolved to addresses"
+	if reverse {
+		line += ", and the reverse names (PTR) of the addresses that answer in a range or an AS"
+		if !named {
+			line += "; the reverse name of a loopback, private (RFC 1918, 100.64.0.0/10, unique-local) or link-local address is not sent to the default resolvers, and the summary counts those not asked (-resolvers names resolvers that are asked for them)"
+		}
+	}
+	return line
 }
 
 // axfrSummary says, for a plan's sends, which connections a zone transfer makes.

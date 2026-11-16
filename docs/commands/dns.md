@@ -124,6 +124,7 @@ The summary also lists failures per kind of error, and takeover findings: a CNAM
 ### Types
 - `-all` asks A, AAAA, CNAME, MX, NS, SOA, TXT, SRV and CAA of a name: not PTR (`-ptr`) and not ANY (`-any`). AXFR is asked with `-axfr` only, because it connects to the name servers.
 - An address gets PTR only.
+- Without `-resolvers`, the reverse name of a loopback, private (RFC 1918), shared (`100.64.0.0/10`), link-local or unique-local address is not sent to the default public resolvers, which would learn the addresses of a private network. It gets no row, and the summary says `not asked: N reverse lookups (…) of loopback, private or link-local addresses`. With `-resolvers`, the resolver you name is asked.
 
 ### Zone transfer
 - `-axfr` asks the zone's name servers on port 53 first, then each `-r` resolver at its own port, over TCP, as dnsx does. Text and `-json` ask the same servers.
