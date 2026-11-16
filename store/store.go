@@ -707,6 +707,54 @@ func (s *Store) Observations() ([]types.StoredObservation, error) {
 	return out, rows.Err()
 }
 
+// ObservationsOf is Observations of the rows a collector in collectors, or a
+// kind in kinds, stored: what a reader that needs a few collectors' rows reads
+// of a run that is still going.
+func (s *Store) ObservationsOf(collectors, kinds []string) ([]types.StoredObservation, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var args []any
+	var conds []string
+	for _, c := range collectors {
+		args = append(args, c)
+	}
+	if len(collectors) > 0 {
+		conds = append(conds, `collector IN (`+strings.TrimSuffix(strings.Repeat("?,", len(collectors)), ",")+`)`)
+	}
+	for _, k := range kinds {
+		args = append(args, k)
+	}
+	if len(kinds) > 0 {
+		conds = append(conds, `kind IN (`+strings.TrimSuffix(strings.Repeat("?,", len(kinds)), ",")+`)`)
+	}
+	if len(conds) == 0 {
+		return nil, nil
+	}
+	q := `SELECT id, entity_id, collector, source, kind, payload, confidence, observed_at FROM observations WHERE (` + strings.Join(conds, " OR ") + `)`
+	if s.runID != "" {
+		q += ` AND run_id = ?`
+		args = append(args, s.runID)
+	}
+	rows, err := s.q().Query(q+` ORDER BY observed_at`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []types.StoredObservation
+	for rows.Next() {
+		var so types.StoredObservation
+		var payload string
+		var ts int64
+		if err := rows.Scan(&so.ID, &so.EntityID, &so.Collector, &so.Source, &so.Kind, &payload, &so.Confidence, &ts); err != nil {
+			return nil, err
+		}
+		so.Payload = json.RawMessage(payload)
+		so.ObservedAt = time.Unix(0, ts)
+		out = append(out, so)
+	}
+	return out, rows.Err()
+}
+
 func (s *Store) Edges() ([]types.Edge, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

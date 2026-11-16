@@ -154,6 +154,7 @@ func loginsStage(ctx context.Context, st *store.Store, obs []types.StoredObserva
 			Payload: raw, Confidence: 0.9, ObservedAt: now,
 		})
 	}
+	liveWake(ctx)
 	if failed > 0 {
 		failures = append(failures, engine.Failure{Collector: "azhaq-verify-logins", Error: "a sign-in attempt or an unauthenticated read got no answer", Count: failed, Retryable: true})
 	}

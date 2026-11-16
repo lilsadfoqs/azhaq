@@ -301,7 +301,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	storeResp := fs.Bool("sr", false, "also write each answer a target gave, headers and body as read, to the -srd directory as DIR/HOST/SHA1.txt with an index.txt (katana's -sr); query -fields response_file says where a row's is")
 	storeRespDir := fs.String("srd", "azhaq_response", "directory for -sr")
 	omitBody := fs.Bool("ob", false, "with -sr: write the status line and headers only")
-	stream := fs.Bool("stream", false, "also print each name, address, URL and open port as it is found, once per map row (found lines, before the ranked map)")
+	stream := fs.Bool("stream", false, "also print each name, address, URL and open port as it is found, once per map row, and each listener as it is named and each proof as it answers (found lines, before the ranked map)")
 	verbose := fs.Bool("v", false, "print a line for every finished task, not only failures")
 	timeout := fs.Duration("timeout", 0, "stop after this long and keep what was found; azhaq resume continues (0: no limit)")
 	showObs := fs.Bool("obs", false, "also print the observation log")
@@ -1360,8 +1360,9 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		return runWorker(cat, *workerOf, *workerToken, budgets.Parallel)
 	}
 	var streamEnd func([]engine.MapEntry)
+	var streamNamed func(kind, key, same, more, collector string, fields map[string]any) bool
 	if *stream && observer == nil {
-		observer, streamEnd = newStream(*jsonOut)
+		observer, streamEnd, streamNamed = newStreamLive(*jsonOut)
 		defer func() { observer = nil }()
 	}
 	eng := &engine.Engine{Cat: cat, Store: st, Observe: observer, Client: client}
@@ -1421,7 +1422,23 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	// -quiet, which the commands built on run give; -silent is that): with
 	// -json as JSON lines, as everything on stderr is.
 	stopTicker := func() {}
-	if mode := progressMode(*quiet, *verbose, *jsonOut, out.progress); mode != "" {
+	progMode := progressMode(*quiet, *verbose, *jsonOut, out.progress)
+	// The listeners the run names are read as they are stored: a stream prints
+	// their lines, and a progress line says when hunt has rows to show.
+	var live *liveHunt
+	if streamNamed != nil || (progMode != "" && !out.scratch) {
+		live = startLiveHunt(st, path, streamNamed)
+		defer live.finish()
+		ctx = withLiveHunt(ctx, live)
+		prev := eng.Observe
+		eng.Observe = func(e types.Entity, o types.Observation) {
+			if prev != nil {
+				prev(e, o)
+			}
+			live.note(o)
+		}
+	}
+	if mode := progMode; mode != "" {
 		cfg := progressCfg{JSON: mode == "json", Cap: egress.MaxRequests(), CapBy: "-max-requests", Timeout: bound, TimeoutBy: boundBy}
 		if *daily > 0 && egress.MaxRequests() != *maxRequests {
 			cfg.CapBy = "-daily-requests"
@@ -1435,6 +1452,9 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		settled0 := portcol.Settled()
 		stopTicker = startProgress(ctx, cfg, os.Stderr, func() progressSnap {
 			snap := progressSnap{At: time.Since(t0), Sent: egress.Departed(), Done: st.TasksDone(), Left: st.TasksLeft()}
+			if !out.scratch && live.Stored() {
+				snap.Hunt = huntSoFar(path)
+			}
 			tasks, _ := st.TasksOf(portcol.Name)
 			snap.Ports, snap.AddrDone, snap.AddrLeft = portProgress(tasks, int(portcol.Settled()-settled0))
 			return snap
@@ -1524,6 +1544,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	advNote := ""
 	if advFlags.on {
 		advLeads, advFailures, advNote = advisoryStage(ctx, st, obs, advFlags)
+		liveWake(ctx)
 		obs, _ = st.Observations()
 	}
 	// -verify: the data-store checks make their one read here, while
@@ -1580,6 +1601,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	if !foldView {
 		group = engine.GroupURLTemplates
 	}
+	live.finish() // the lines of the listeners named, before the map's
 	if streamEnd != nil {
 		streamEnd(group(shown))
 	}

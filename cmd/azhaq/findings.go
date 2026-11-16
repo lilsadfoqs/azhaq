@@ -169,189 +169,16 @@ func proves(kind string) bool {
 
 func buildFindings(g *graphView) findingSet {
 	command := runCommand(g)
-	var set findingSet
-	services := servicesByTarget(g.obs)
-	addrs := advisory.NameAddrs(g.obs)
-	hashes := map[string]string{} // URL → body hash, for the names whose answers are told apart
-	for _, a := range proof.AnswersOf(g.obs) {
-		if a.Hash != "" {
-			hashes[a.URL] = a.Hash
-		}
-	}
-	// One identification row for a listener (address and port), product and
-	// version, whatever it was reached as; byListener is the row each stands on.
-	listenerOf := func(host string, port int) string {
-		host = strings.ToLower(host)
-		if a, err := netip.ParseAddr(host); err == nil {
-			host = a.Unmap().String()
-		} else if a := addrs[host]; a != "" {
-			host = a
-		}
-		return host + ":" + strconv.Itoa(port)
-	}
-	identKey := func(rec findingRecord) string {
-		return listenerOf(rec.Host, rec.Port) + "|" + advisory.ProductKey(rec.Product) + "|" + rec.Version
-	}
-	byListener := map[string]int{}
-	answerOf := func(rec findingRecord) string {
-		if rec.Proof == nil {
-			return ""
-		}
-		return hashes[rec.Proof.Target]
-	}
-	// foldedInto says an identification record is the listener's row seen under
-	// another name, with the same answer, and notes the name on that row.
-	foldedInto := func(rec findingRecord) bool {
-		i, ok := byListener[identKey(rec)]
-		if !ok {
-			return false
-		}
-		have := &set.Identifications[i]
-		if a, b := answerOf(*have), answerOf(rec); a != "" && b != "" && a != b {
-			return false // another page of the same address and port: its own application
-		}
-		for _, n := range append([]string{rec.Host}, rec.names...) {
-			if n != "" && !strings.EqualFold(n, have.Host) && !slices.ContainsFunc(have.names, func(x string) bool { return strings.EqualFold(x, n) }) {
-				have.names = append(have.names, n)
-			}
-		}
-		return true
-	}
+	set, addrs, hashes := listenerRecords(g.obs, command)
 	add := func(rec findingRecord) {
 		switch rec.Tier {
 		case proof.TierFinding:
 			set.Findings = append(set.Findings, rec)
 		case proof.TierIdentification:
 			set.Identifications = append(set.Identifications, rec)
-			if rec.Product != "" && rec.Port > 0 {
-				if _, ok := byListener[identKey(rec)]; !ok {
-					byListener[identKey(rec)] = len(set.Identifications) - 1
-				}
-			}
 		default:
 			set.Leads = append(set.Leads, rec)
 		}
-	}
-	ident := func(rec findingRecord) findingRecord {
-		rec.Tier = proof.TierIdentification
-		if rec.Proof == nil {
-			if svc, ok := services[targetOf(rec)+"\x00"+advisory.ProductKey(rec.Product)]; ok {
-				rec.Proof = identProof(svc)
-				rec.Source = svc.Source
-			}
-		}
-		return rec
-	}
-	covered := map[string]bool{}    // advisory id + target a verify row already records
-	identified := map[string]bool{} // host:port + product a record already identifies
-	for _, r := range verifyResultsOf(g.obs) {
-		rec := findingRecord{
-			Kind: r.Kind, Label: r.Label, Severity: r.Severity, Host: r.Host, Port: r.Port,
-			URL: r.URL, Product: r.Product, Version: r.Version, AdvisoryID: r.AdvisoryID,
-			AdvisoryURL: r.AdvisoryURL, Precondition: r.Precondition, Request: r.Request,
-			Evidence: r.Evidence, Command: r.Command, Collector: "azhaq-verify", Proof: r.Proof,
-		}
-		if r.AdvisoryID != "" {
-			rec.Lead = leadName(r.Target, r.Product)
-			rec.checked = r.Label == verify.Proved || r.Label == verify.VersionRead
-		}
-		if rec.Command == "" {
-			rec.Command = command
-		}
-		if rec.AdvisoryID != "" {
-			covered[rec.AdvisoryID+"|"+r.Target] = true
-		}
-		identified[targetOf(rec)+"\x00"+advisory.ProductKey(rec.Product)] = true
-		switch {
-		case proves(r.Kind) && r.Label == verify.Proved && r.Proof.Complete():
-			rec.Tier = proof.TierFinding
-			add(rec)
-		case proves(r.Kind) && r.Label == verify.Proved:
-			// Stored without its request and answer (an older azhaq): no proof, no finding.
-			rec.Tier, rec.Label, rec.Check = proof.TierLead, "lead", "run the read again: "+r.Request+" on "+r.Target
-			rec.Evidence = "unauthenticated read recorded without the answer that proves it; " + r.Evidence
-			add(rec)
-		default:
-			add(ident(rec))
-		}
-	}
-	stats := map[string]advisory.Lead{} // advisory id + target → its lead, for the flags and the score
-	for _, lead := range advisoryLeadsExpanded(g.obs) {
-		stats[lead.AdvisoryID+"|"+lead.Target] = lead
-	}
-	for i := range set.Identifications {
-		if l, ok := stats[set.Identifications[i].AdvisoryID+"|"+targetOf(set.Identifications[i])]; ok && set.Identifications[i].AdvisoryID != "" {
-			set.Identifications[i].KEV, set.Identifications[i].CVSS = l.KEV, l.CVSS
-			set.Identifications[i].checked = set.Identifications[i].checked || l.Confidence == advisory.Observed || l.Confidence == advisory.Inferred
-		}
-	}
-	for _, lead := range advisoryLeadsExpanded(g.obs) {
-		// The request is only carried when a confirmation read was
-		// actually sent, as in verifyStage.
-		request := ""
-		if lead.Confidence != "" {
-			request = lead.ConfirmReq
-		}
-		r, ok := verify.AdvisoryResult(lead, request)
-		if !ok || covered[r.AdvisoryID+"|"+r.Target] {
-			continue
-		}
-		rec := findingRecord{
-			Kind: r.Kind, Label: r.Label, Severity: r.Severity, Host: r.Host, Port: r.Port,
-			URL: r.URL, Product: r.Product, Version: r.Version, AdvisoryID: r.AdvisoryID,
-			AdvisoryURL: r.AdvisoryURL, Precondition: r.Precondition, Request: r.Request,
-			Evidence: r.Evidence, Command: command, Collector: "azhaq-advisories", KEV: lead.KEV, CVSS: lead.CVSS, Component: lead.Component,
-			Lead: leadName(r.Target, r.Product), checked: lead.Confidence == advisory.Observed || lead.Confidence == advisory.Inferred,
-			names: lead.Names,
-		}
-		identified[targetOf(rec)+"\x00"+advisory.ProductKey(rec.Product)] = true
-		add(ident(rec))
-	}
-	// The services a stage read a product and version of, with no advisory
-	// matched: still an identification, with the answer that stated it.
-	for _, svc := range advisory.Services(g.obs) {
-		k := svc.Target() + "\x00" + advisory.ProductKey(svc.Product)
-		if identified[k] {
-			continue
-		}
-		identified[k] = true
-		host := svc.Host
-		if host == "" {
-			host = svc.IP
-		}
-		p := identProof(svc)
-		rec := findingRecord{Tier: proof.TierIdentification, Kind: "software-version", Label: verify.VersionOnly, Severity: "info",
-			Host: host, Port: svc.Port, URL: svc.Origin, Product: svc.Product, Version: svc.Version, Source: svc.Source,
-			Request: p.Method + " " + p.Target, Evidence: p.Excerpt, Command: command, Collector: p.How, Proof: p, names: svc.Names}
-		if foldedInto(rec) {
-			continue
-		}
-		add(rec)
-	}
-	// A product a stage named with no version: an identification too, so the
-	// worklist shows what the run saw on each listener. There is no advisory to
-	// match without a version, and the record says so.
-	for _, svc := range advisory.ServicesAnyVersion(g.obs) {
-		if svc.Product == "" || svc.Version != "" {
-			continue
-		}
-		k := svc.Target() + "\x00" + advisory.ProductKey(svc.Product)
-		if identified[k] {
-			continue
-		}
-		identified[k] = true
-		host := svc.Host
-		if host == "" {
-			host = svc.IP
-		}
-		p := identProof(svc)
-		rec := findingRecord{Tier: proof.TierIdentification, Kind: "software-version", Label: verify.VersionOnly, Severity: "info",
-			Host: host, Port: svc.Port, URL: svc.Origin, Product: svc.Product, Source: svc.Source,
-			Request: p.Method + " " + p.Target, Evidence: "no version seen: " + p.Excerpt, Command: command, Collector: p.How, Proof: p, names: svc.Names}
-		if foldedInto(rec) {
-			continue
-		}
-		add(rec)
 	}
 	for _, l := range certLeads(g.obs, command) {
 		add(l)
@@ -688,4 +515,197 @@ func groupAdvisoryFindings(rs []findingRecord) []groupedFinding {
 		out[i].ids = append(out[i].ids, r.AdvisoryID)
 	}
 	return out
+}
+
+// listenerRecords is the part of buildFindings that reads the listeners: the
+// verify rows, the advisory leads and the services a stage named, as the
+// findings and identifications (and the unproved reads, as leads) they make,
+// unsorted; with the address each name resolved to and the body hash of each
+// answered URL. The run's live stream reads the same records, so a line
+// printed as a run goes and the row hunt lists after it come from one rule.
+func listenerRecords(obs []types.StoredObservation, command string) (set findingSet, addrs, hashes map[string]string) {
+	services := servicesByTarget(obs)
+	addrs = advisory.NameAddrs(obs)
+	hashes = map[string]string{} // URL → body hash, for the names whose answers are told apart
+	for _, a := range proof.AnswersOf(obs) {
+		if a.Hash != "" {
+			hashes[a.URL] = a.Hash
+		}
+	}
+	// One identification row for a listener (address and port), product and
+	// version, whatever it was reached as; byListener is the row each stands on.
+	listenerOf := func(host string, port int) string {
+		host = strings.ToLower(host)
+		if a, err := netip.ParseAddr(host); err == nil {
+			host = a.Unmap().String()
+		} else if a := addrs[host]; a != "" {
+			host = a
+		}
+		return host + ":" + strconv.Itoa(port)
+	}
+	identKey := func(rec findingRecord) string {
+		return listenerOf(rec.Host, rec.Port) + "|" + advisory.ProductKey(rec.Product) + "|" + rec.Version
+	}
+	byListener := map[string]int{}
+	answerOf := func(rec findingRecord) string {
+		if rec.Proof == nil {
+			return ""
+		}
+		return hashes[rec.Proof.Target]
+	}
+	// foldedInto says an identification record is the listener's row seen under
+	// another name, with the same answer, and notes the name on that row.
+	foldedInto := func(rec findingRecord) bool {
+		i, ok := byListener[identKey(rec)]
+		if !ok {
+			return false
+		}
+		have := &set.Identifications[i]
+		if a, b := answerOf(*have), answerOf(rec); a != "" && b != "" && a != b {
+			return false // another page of the same address and port: its own application
+		}
+		for _, n := range append([]string{rec.Host}, rec.names...) {
+			if n != "" && !strings.EqualFold(n, have.Host) && !slices.ContainsFunc(have.names, func(x string) bool { return strings.EqualFold(x, n) }) {
+				have.names = append(have.names, n)
+			}
+		}
+		return true
+	}
+	add := func(rec findingRecord) {
+		switch rec.Tier {
+		case proof.TierFinding:
+			set.Findings = append(set.Findings, rec)
+		case proof.TierIdentification:
+			set.Identifications = append(set.Identifications, rec)
+			if rec.Product != "" && rec.Port > 0 {
+				if _, ok := byListener[identKey(rec)]; !ok {
+					byListener[identKey(rec)] = len(set.Identifications) - 1
+				}
+			}
+		default:
+			set.Leads = append(set.Leads, rec)
+		}
+	}
+	ident := func(rec findingRecord) findingRecord {
+		rec.Tier = proof.TierIdentification
+		if rec.Proof == nil {
+			if svc, ok := services[targetOf(rec)+"\x00"+advisory.ProductKey(rec.Product)]; ok {
+				rec.Proof = identProof(svc)
+				rec.Source = svc.Source
+			}
+		}
+		return rec
+	}
+	covered := map[string]bool{}    // advisory id + target a verify row already records
+	identified := map[string]bool{} // host:port + product a record already identifies
+	for _, r := range verifyResultsOf(obs) {
+		rec := findingRecord{
+			Kind: r.Kind, Label: r.Label, Severity: r.Severity, Host: r.Host, Port: r.Port,
+			URL: r.URL, Product: r.Product, Version: r.Version, AdvisoryID: r.AdvisoryID,
+			AdvisoryURL: r.AdvisoryURL, Precondition: r.Precondition, Request: r.Request,
+			Evidence: r.Evidence, Command: r.Command, Collector: "azhaq-verify", Proof: r.Proof,
+		}
+		if r.AdvisoryID != "" {
+			rec.Lead = leadName(r.Target, r.Product)
+			rec.checked = r.Label == verify.Proved || r.Label == verify.VersionRead
+		}
+		if rec.Command == "" {
+			rec.Command = command
+		}
+		if rec.AdvisoryID != "" {
+			covered[rec.AdvisoryID+"|"+r.Target] = true
+		}
+		identified[targetOf(rec)+"\x00"+advisory.ProductKey(rec.Product)] = true
+		switch {
+		case proves(r.Kind) && r.Label == verify.Proved && r.Proof.Complete():
+			rec.Tier = proof.TierFinding
+			add(rec)
+		case proves(r.Kind) && r.Label == verify.Proved:
+			// Stored without its request and answer (an older azhaq): no proof, no finding.
+			rec.Tier, rec.Label, rec.Check = proof.TierLead, "lead", "run the read again: "+r.Request+" on "+r.Target
+			rec.Evidence = "unauthenticated read recorded without the answer that proves it; " + r.Evidence
+			add(rec)
+		default:
+			add(ident(rec))
+		}
+	}
+	stats := map[string]advisory.Lead{} // advisory id + target → its lead, for the flags and the score
+	for _, lead := range advisoryLeadsExpanded(obs) {
+		stats[lead.AdvisoryID+"|"+lead.Target] = lead
+	}
+	for i := range set.Identifications {
+		if l, ok := stats[set.Identifications[i].AdvisoryID+"|"+targetOf(set.Identifications[i])]; ok && set.Identifications[i].AdvisoryID != "" {
+			set.Identifications[i].KEV, set.Identifications[i].CVSS = l.KEV, l.CVSS
+			set.Identifications[i].checked = set.Identifications[i].checked || l.Confidence == advisory.Observed || l.Confidence == advisory.Inferred
+		}
+	}
+	for _, lead := range advisoryLeadsExpanded(obs) {
+		// The request is only carried when a confirmation read was
+		// actually sent, as in verifyStage.
+		request := ""
+		if lead.Confidence != "" {
+			request = lead.ConfirmReq
+		}
+		r, ok := verify.AdvisoryResult(lead, request)
+		if !ok || covered[r.AdvisoryID+"|"+r.Target] {
+			continue
+		}
+		rec := findingRecord{
+			Kind: r.Kind, Label: r.Label, Severity: r.Severity, Host: r.Host, Port: r.Port,
+			URL: r.URL, Product: r.Product, Version: r.Version, AdvisoryID: r.AdvisoryID,
+			AdvisoryURL: r.AdvisoryURL, Precondition: r.Precondition, Request: r.Request,
+			Evidence: r.Evidence, Command: command, Collector: "azhaq-advisories", KEV: lead.KEV, CVSS: lead.CVSS, Component: lead.Component,
+			Lead: leadName(r.Target, r.Product), checked: lead.Confidence == advisory.Observed || lead.Confidence == advisory.Inferred,
+			names: lead.Names,
+		}
+		identified[targetOf(rec)+"\x00"+advisory.ProductKey(rec.Product)] = true
+		add(ident(rec))
+	}
+	// The services a stage read a product and version of, with no advisory
+	// matched: still an identification, with the answer that stated it.
+	for _, svc := range advisory.Services(obs) {
+		k := svc.Target() + "\x00" + advisory.ProductKey(svc.Product)
+		if identified[k] {
+			continue
+		}
+		identified[k] = true
+		host := svc.Host
+		if host == "" {
+			host = svc.IP
+		}
+		p := identProof(svc)
+		rec := findingRecord{Tier: proof.TierIdentification, Kind: "software-version", Label: verify.VersionOnly, Severity: "info",
+			Host: host, Port: svc.Port, URL: svc.Origin, Product: svc.Product, Version: svc.Version, Source: svc.Source,
+			Request: p.Method + " " + p.Target, Evidence: p.Excerpt, Command: command, Collector: p.How, Proof: p, names: svc.Names}
+		if foldedInto(rec) {
+			continue
+		}
+		add(rec)
+	}
+	// A product a stage named with no version: an identification too, so the
+	// worklist shows what the run saw on each listener. There is no advisory to
+	// match without a version, and the record says so.
+	for _, svc := range advisory.ServicesAnyVersion(obs) {
+		if svc.Product == "" || svc.Version != "" {
+			continue
+		}
+		k := svc.Target() + "\x00" + advisory.ProductKey(svc.Product)
+		if identified[k] {
+			continue
+		}
+		identified[k] = true
+		host := svc.Host
+		if host == "" {
+			host = svc.IP
+		}
+		p := identProof(svc)
+		rec := findingRecord{Tier: proof.TierIdentification, Kind: "software-version", Label: verify.VersionOnly, Severity: "info",
+			Host: host, Port: svc.Port, URL: svc.Origin, Product: svc.Product, Source: svc.Source,
+			Request: p.Method + " " + p.Target, Evidence: "no version seen: " + p.Excerpt, Command: command, Collector: p.How, Proof: p, names: svc.Names}
+		if foldedInto(rec) {
+			continue
+		}
+		add(rec)
+	}
+	return set, addrs, hashes
 }

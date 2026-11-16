@@ -151,6 +151,20 @@ func huntRows(g *graphView, path string, roles []hunt.RoleRow, since time.Durati
 // output does not list.
 func listenersOf(set findingSet) []hunt.Listener {
 	var out []hunt.Listener
+	for _, p := range listenerPairs(set) {
+		out = append(out, p.l)
+	}
+	return out
+}
+
+// listenerPair is a listener row with the record it is read from.
+type listenerPair struct {
+	rec findingRecord
+	l   hunt.Listener
+}
+
+func listenerPairs(set findingSet) []listenerPair {
+	var out []listenerPair
 	toListener := func(r findingRecord, kind string) hunt.Listener {
 		return hunt.Listener{Ident: hunt.Ident{Kind: kind, What: r.Kind, Host: r.Host, Port: r.Port, Product: r.Product, Version: r.Version, Source: r.Source,
 			AdvisoryID: r.AdvisoryID, AdvisoryURL: r.AdvisoryURL, Label: r.Label, Severity: r.Severity, KEV: r.KEV, CVSS: r.CVSS,
@@ -158,7 +172,7 @@ func listenersOf(set findingSet) []hunt.Listener {
 	}
 	for _, r := range set.Findings {
 		if r.Collector == "azhaq-verify" {
-			out = append(out, toListener(r, proof.TierFinding))
+			out = append(out, listenerPair{r, toListener(r, proof.TierFinding)})
 		}
 	}
 	at := map[string]int{}
@@ -167,11 +181,11 @@ func listenersOf(set findingSet) []hunt.Listener {
 		i, ok := at[k]
 		if !ok {
 			at[k] = len(out)
-			out = append(out, toListener(r, proof.TierIdentification))
+			out = append(out, listenerPair{r, toListener(r, proof.TierIdentification)})
 			i = at[k]
 		}
 		if r.AdvisoryID != "" {
-			out[i].Advisories++
+			out[i].l.Advisories++
 		}
 	}
 	return out
