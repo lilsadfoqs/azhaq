@@ -14,6 +14,7 @@ import (
 	"github.com/lilsadfoqs/azhaq/internal/advisory"
 	"github.com/lilsadfoqs/azhaq/internal/browser"
 	"github.com/lilsadfoqs/azhaq/internal/collectors/dirscol"
+	"github.com/lilsadfoqs/azhaq/internal/collectors/jscol"
 	"github.com/lilsadfoqs/azhaq/internal/collectors/pathscol"
 	"github.com/lilsadfoqs/azhaq/internal/collectors/portcol"
 	"github.com/lilsadfoqs/azhaq/internal/collectors/subcol"
@@ -1012,4 +1013,24 @@ func (n notAsked) line() string {
 		addrs = "1 address"
 	}
 	return fmt.Sprintf("stopped: %s of %s not asked; %s asks them", plural(n.Ports, "port"), addrs, n.Resume)
+}
+
+// scriptCapStop says what a page's caps left unread, for the summary's
+// stopped line with -fail-on-capped; "" when they left nothing.
+func scriptCapStop(obs []types.StoredObservation) string {
+	short, perPage := jscol.ShortOf(obs)
+	if len(short) == 0 {
+		return ""
+	}
+	var what []string
+	pages := 0
+	for _, s := range short {
+		what = append(what, fmt.Sprintf("%d %s (limit %d)", s.Left, s.What, s.Limit))
+		pages = max(pages, s.Pages)
+	}
+	page := "1 page"
+	if pages > 1 {
+		page = fmt.Sprintf("%d pages", pages)
+	}
+	return fmt.Sprintf("-max-scripts %d reached on %s, left unread: %s (a larger -max-scripts reads them)", perPage, page, strings.Join(what, ", "))
 }

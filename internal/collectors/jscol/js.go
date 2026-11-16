@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
-	"fmt"
 	"github.com/lilsadfoqs/azhaq/internal/guard"
 	"net/http"
 	"net/url"
@@ -24,6 +23,8 @@ import (
 
 const Name = "azhaq-js"
 
+// The caps below are those of the default -max-scripts: the others scale
+// with it (limits), never under these.
 const (
 	// maxEmit caps URLs from one page and the scripts it pulls in.
 	maxEmit = 4096
@@ -56,10 +57,32 @@ type Collector struct {
 	// names is still read. crawl sets it: asking for a name is a guess,
 	// not what a crawler sends.
 	NoMapGuess bool
+	// MaxScripts is -max-scripts: the scripts read from one page (0: the
+	// default, 256). Its routes, source maps and build manifests scale
+	// with it.
+	MaxScripts int
 	parsed     sync.Map // script, map and manifest URL → true
 
 	mu      sync.Mutex
 	guessed map[string]int // origin → source maps asked for by name
+}
+
+// limits are what one page's pass reads at most.
+type limits struct{ scripts, routes, maps, guesses, manifests, chunks int }
+
+// limitsFor scales every cap with the number of scripts, none under its
+// default: the routes of a page that holds 4096 scripts are not cut at 4096.
+func limitsFor(n int) limits {
+	l := limits{scripts: maxScripts, routes: maxEmit, maps: maxMaps, guesses: maxGuessedMaps, manifests: maxManifests, chunks: webextract.MaxChunkIDs}
+	if n <= 0 {
+		return l
+	}
+	l.scripts = n
+	if n > maxScripts {
+		sc := func(base int) int { return base * n / maxScripts }
+		l.routes, l.maps, l.guesses, l.manifests, l.chunks = sc(maxEmit), sc(maxMaps), sc(maxGuessedMaps), sc(maxManifests), sc(webextract.MaxChunkIDs)
+	}
+	return l
 }
 
 func looksLikeJS(raw string) bool {
@@ -138,6 +161,7 @@ type scanned struct {
 	cands              []webextract.Cand
 	calls              []webextract.Call
 	scriptRefs, chunks []string
+	chunksLeft         int // chunk ids the loader names beyond the cap
 	manifests          []string
 	mapURL             string
 	secrets            []webextract.Secret
@@ -156,7 +180,7 @@ func (f *scanFuture) get() scanned {
 
 // startScan reads s on goroutines; page is the page's URL, appRoot where
 // its router takes paths from.
-func startScan(ctx context.Context, s script, page string, base, appRoot *url.URL, globals webextract.Globals) *scanFuture {
+func startScan(ctx context.Context, s script, page string, base, appRoot *url.URL, globals webextract.Globals, chunkLimit int) *scanFuture {
 	f := &scanFuture{done: make(chan struct{})}
 	var wg sync.WaitGroup
 	run := func(fn func(v *scanned)) {
@@ -215,7 +239,7 @@ func startScan(ctx context.Context, s script, page string, base, appRoot *url.UR
 	})
 	run(func(v *scanned) {
 		v.scriptRefs = webextract.ScriptRefs(s.body, s.url)
-		v.chunks = webextract.ChunkURLs(s.body)
+		v.chunks, v.chunksLeft = webextract.ChunkURLsMax(s.body, chunkLimit)
 		if !s.fromMap && !s.inline {
 			v.manifests = webextract.ScriptManifests(s.body, s.url, appRoot)
 		}
@@ -531,6 +555,9 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 
 	var queue []script
 	var fetched []string
+	lim := limitsFor(c.MaxScripts)
+	var short left // what the caps kept this page from reading
+	short.scripts = map[string]bool{}
 	var found []string
 	tails := map[string]bool{}       // named only joined to a base: this.host+`/orders`
 	heads := map[string]bool{}       // route → named only as the start of a join: "/rest/user/"+id
@@ -544,12 +571,12 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 	var globals webextract.Globals // what the page's inline scripts set from its location
 	kick := func() {
 		for ; started < len(queue); started++ {
-			queue[started].scan = startScan(ctx, queue[started], raw, base, appRoot, globals)
+			queue[started].scan = startScan(ctx, queue[started], raw, base, appRoot, globals, lim.chunks)
 		}
 	}
 	shells := map[string]*fetch.Control{} // script URL → the control its HTML answer matched
 	load := func(src string, needExt bool) {
-		queue = c.load(ctx, raw, src, needExt, queue, &fetched, shells)
+		queue = c.load(ctx, raw, src, needExt, queue, &fetched, shells, lim.scripts, short.scripts)
 		kick()
 	}
 	// readManifests reads the build manifests a page or a script points
@@ -562,8 +589,9 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 				load(ref, false)
 				continue
 			}
-			if len(mans) >= maxManifests {
-				return
+			if len(mans) >= lim.manifests {
+				short.manifests++
+				continue
 			}
 			m, ok := c.readManifest(ctx, raw, ref)
 			if !ok {
@@ -586,14 +614,22 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 			// .map entries behind and none of the files costs ten GETs.
 			for _, f := range m.Maps {
 				u, err := mb.Parse(f)
-				if err != nil || len(maps) >= maxMaps {
+				if err != nil {
 					continue
 				}
 				if _, done := c.parsed.Load(u.String()); done {
 					continue
 				}
+				if len(maps) >= lim.maps {
+					short.maps++
+					continue
+				}
 				js, err := url.Parse(strings.TrimSuffix(u.String(), ".map"))
-				if err != nil || !c.mapTry(u.Scheme+"://"+u.Host) {
+				if err != nil {
+					continue
+				}
+				if !c.mapTry(u.Scheme+"://"+u.Host, lim.guesses) {
+					short.maps++ // listed by the build, so a file the page holds
 					continue
 				}
 				if sm, sources := c.readMap(ctx, raw, u.String(), js, false); sm.url != "" {
@@ -757,16 +793,22 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 				load(ref.String(), true)
 			}
 		}
+		short.chunks += sc.chunksLeft
 		if !s.fromMap && !s.inline {
 			readManifests(sc.manifests)
 		}
-		if !s.fromMap && len(maps) < maxMaps {
+		if !s.fromMap && len(maps) >= lim.maps && (sc.mapURL != "" || s.mapRef != "") {
+			short.maps++ // a map the script names is a file, not a guess
+		}
+		if !s.fromMap && len(maps) < lim.maps {
 			ref, guessed := sc.mapURL, false
 			if ref == "" {
 				ref = s.mapRef
 			}
 			if ref == "" && !s.inline && !c.NoMapGuess {
-				ref, guessed = c.guessMap(s.url), true
+				// A guess nothing names is no work the page holds: its
+				// refusal is not counted as left.
+				ref, guessed = c.guessMap(s.url, lim.guesses), true
 			}
 			if m, sources := c.readMap(ctx, raw, ref, s.url, guessed); m.url != "" {
 				maps = append(maps, m)
@@ -913,8 +955,9 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 	// (the server answers each with the app's shell); one in the path is
 	// asked for once, as the server may answer it itself (a sign-in, a
 	// page it renders), and a shell answer leaves the row as it is.
-	for _, p := range views.order {
-		if meta.EmitCount >= maxEmit {
+	for i, p := range views.order {
+		if meta.EmitCount >= lim.routes {
+			short.routes += len(views.order) - i
 			break
 		}
 		view := clientURL(appRoot, hash, p)
@@ -947,7 +990,11 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		explicit = explicit || k.socketIO && !k.isDefault
 	}
 	for _, k := range socks {
-		if meta.EmitCount >= maxEmit || k.isDefault && explicit {
+		if k.isDefault && explicit {
+			continue
+		}
+		if meta.EmitCount >= lim.routes {
+			short.routes++
 			continue
 		}
 		row := map[string]any{"url": k.url, "via": "js", "role": "websocket"}
@@ -1017,8 +1064,9 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 			gets[k] = true
 		}
 	}
-	for _, k := range opOrder {
-		if meta.EmitCount >= maxEmit {
+	for i, k := range opOrder {
+		if meta.EmitCount >= lim.routes {
+			short.routes += len(opOrder) - i
 			break
 		}
 		var methods []string
@@ -1050,13 +1098,6 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		}
 		if (gets[k] || !asked[k]) && !strings.Contains(k, "{") && webextract.Hintable(k) {
 			meta.NextHints = append(meta.NextHints, types.Seed{Type: types.TypeURL, Keys: map[string]string{"url": k}})
-		}
-	}
-	if len(fetched) >= maxScripts || meta.EmitCount >= maxEmit {
-		payload, _ := json.Marshal(map[string]any{"url": raw, "via": "js",
-			"warning": fmt.Sprintf("the scripts of %s hold more than Azhaq reads from one page (%d scripts, %d routes): some were left unread", raw, maxScripts, maxEmit)})
-		if err := emit(types.Observation{Collector: Name, Source: raw, Kind: "note", Payload: payload, Confidence: 1, ObservedAt: time.Now().UTC()}); err != nil {
-			return meta, err
 		}
 	}
 	// A script address answered with the app's own catch-all page is that
@@ -1093,8 +1134,10 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 			variants[k] = append(variants[k], l)
 		}
 	}
-	for _, link := range webextract.CollapseURLs(found) {
-		if meta.EmitCount >= maxEmit {
+	collapsed := webextract.CollapseURLs(found)
+	for i, link := range collapsed {
+		if meta.EmitCount >= lim.routes {
+			short.routes += routesIn(collapsed[i:])
 			break
 		}
 		role := webextract.ClassifyURL(link)
@@ -1166,8 +1209,9 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 			})
 		}
 		for _, v := range variants[webextract.RouteKey(link)] {
-			if meta.EmitCount >= maxEmit {
-				break
+			if meta.EmitCount >= lim.routes {
+				short.routes++
+				continue
 			}
 			row := map[string]any{"url": v, "via": "js", "role": role}
 			if at := named[webextract.RouteKey(v)]; len(at) > 0 {
@@ -1242,6 +1286,11 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		}
 		meta.EmitCount++
 	}
+	if note := short.note(raw, lim); note != nil {
+		if err := emit(types.Observation{Collector: Name, Source: raw, Kind: "note", Payload: note, Confidence: 1, ObservedAt: time.Now().UTC()}); err != nil {
+			return meta, err
+		}
+	}
 	return meta, nil
 }
 
@@ -1310,11 +1359,18 @@ var vendorScript = lazyre.New(`(?i)(^|/)(react(-dom)?|jquery(-ui|-migrate)?|boot
 // queues it. Names found inside scripts must end in .js; <script src>
 // need not. A script address answered with the catch-all page is noted in
 // shells with the control it matched.
-func (c *Collector) load(ctx context.Context, page, src string, needExt bool, queue []script, fetched *[]string, shells map[string]*fetch.Control) []script {
-	if len(*fetched) >= maxScripts || !fetch.SameSite(page, src) || (needExt && !looksLikeJS(src)) {
+// refused takes the scripts the cap kept from being read.
+func (c *Collector) load(ctx context.Context, page, src string, needExt bool, queue []script, fetched *[]string, shells map[string]*fetch.Control, limit int, refused map[string]bool) []script {
+	if !fetch.SameSite(page, src) || (needExt && !looksLikeJS(src)) {
 		return queue
 	}
 	if u, err := url.Parse(src); err == nil && vendorScript.MatchString(u.Path) {
+		return queue
+	}
+	if len(*fetched) >= limit {
+		if _, done := c.parsed.Load(src); !done {
+			refused[src] = true
+		}
 		return queue
 	}
 	if _, done := c.parsed.LoadOrStore(src, true); done {
@@ -1361,7 +1417,7 @@ func headerMap(h http.Header, scriptURL *url.URL) string {
 
 // guessMap is the source map a bundle that names none would have next to
 // it (main.js.map for main.js), while its origin has guesses left; "".
-func (c *Collector) guessMap(scriptURL *url.URL) string {
+func (c *Collector) guessMap(scriptURL *url.URL, limit int) string {
 	u := *scriptURL
 	u.RawQuery, u.Fragment = "", ""
 	u.Path += ".map"
@@ -1369,21 +1425,21 @@ func (c *Collector) guessMap(scriptURL *url.URL) string {
 	if _, done := c.parsed.Load(ref); done {
 		return ""
 	}
-	if !c.mapTry(u.Scheme + "://" + u.Host) {
+	if !c.mapTry(u.Scheme+"://"+u.Host, limit) {
 		return ""
 	}
 	return ref
 }
 
-// mapTry takes one of the maxGuessedMaps requests an origin has for maps
-// no script of its own named: guessed by name, or listed by a manifest.
-func (c *Collector) mapTry(origin string) bool {
+// mapTry takes one of the limit requests an origin has for maps no script
+// of its own named: guessed by name, or listed by a manifest.
+func (c *Collector) mapTry(origin string, limit int) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.guessed == nil {
 		c.guessed = map[string]int{}
 	}
-	if c.guessed[origin] >= maxGuessedMaps {
+	if c.guessed[origin] >= limit {
 		return false
 	}
 	c.guessed[origin]++

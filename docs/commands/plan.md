@@ -245,6 +245,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 | `-max-names` | int |  | most hostnames this run resolves (default 200000, as many as subs keeps for a domain); the names left are for azhaq resume. A value you give also caps the names -dns-brute and -permute ask, together: the guesses past it are not asked, the run exits 4 and says how many, and azhaq resume asks them |
 | `-max-ips` | int | `4096` | addresses expanded from ASN and CIDR prefixes, for the whole run |
 | `-max-response-size` | int |  | bytes read of a page or document (default 2097152; scripts and JSON get 16 MiB) |
+| `-max-scripts` | int |  | most scripts read from one page, chunks included (default 256); the routes (4096), source maps (8) and build manifests (8) of a page scale with it; what a page holds beyond it is left unread and a note says how much (-fail-on-capped exits 4) |
 | `-depth` | int | `4` | max fan-out waves (0 = seed wave only, not unlimited) |
 | `-retry-failed` | bool |  | with azhaq resume: ask again the failed targets the summary marks retryable (a timeout, a closed connection, a 429 or 5xx); only those run again |
 | `-retry-run` | string |  | with -retry-failed: the run to ask again, by the run_id of its summary (default: the newest run of the workspace) |
@@ -277,7 +278,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 | `-no-catchall` | bool |  | leave out URLs that answer with the page every unknown path gets (client-side routes of a single-page app) from the rows printed |
 | `-all-rows` | bool |  | list every row, as run printed before: by default the rows that answer as the control request for a path that cannot exist does, the 404s, the assets no request asked for, the hints only scripts name and the UDP ports that answered nothing are counted in one line of their class each (-json lists every row with its fold class) |
 | `-fail-on-errors` | bool |  | the same as -strict-exit |
-| `-fail-on-capped` | bool |  | exit 4 also when the run hit -depth with hints left |
+| `-fail-on-capped` | bool |  | exit 4 also when the run hit -depth with hints left, or a page held more scripts than -max-scripts reads (the summary says how much was left) |
 | `-strict-exit` | bool |  | exit 3 for any failure, a target among many included (the rule before 0.15); without it a run that did its job exits 0 and its summary counts and lists the failures |
 
 **Plan only**

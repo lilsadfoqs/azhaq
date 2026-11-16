@@ -350,6 +350,12 @@ A client route is a view that a single-page app's router draws.
 - The row names the base it came from in `base`. A call joins the base given to the object it is made on: the name the base was bound to (`const client = axios.create({baseURL: "/api"})`, then `client.get("/users")` is `/api/users`), or a name given that one's value (`const c = client`, `axios.create(cfg)` of a config object `cfg = {baseURL: ...}`). A call on any other object, `api.get`, `getBackendSrv().get`, `this.http.get`, keeps its path as written, as does one whose receiver the script does not tell: Azhaq does not know which base such a client has. A path that already begins with the base's own path, `client.get("/api/admin/settings")` under `/api`, is taken as based and is not joined into `/api/api/admin/settings`. `fetch`, `XMLHttpRequest`, `$.ajax` and a call to an absolute URL take no base.
 - The route as the script writes it is not a route of the site's root, and the base itself is not a route. Neither has a row or is requested; each is kept as a rejected string, `the start of a path a script joins more to` for the base and `a route a script's client asks under the base the script declares` for the route. A route the script also asks without any base, `fetch("/orders/list")`, stays a route at the root.
 
+### What one page's scripts are read up to
+
+Scripts are read up to `-max-scripts` a page, 256 by default: the `<script src>` of the page and the chunks, modules and manifests those name, each counted once. The routes the scripts of one page give (4096), the source maps read (8), the build manifests read (8) and the chunks one script's loader names (256) scale with it, never under those numbers: `-max-scripts 512` reads up to 512 scripts, 8192 routes, 16 maps, 16 manifests and 512 chunks. A source map a script names is a file the page holds; a map asked for by name next to a script that names none (`main.js.map`) is a guess, has its own limit per origin (10, scaled the same) and is not counted as left.
+
+A page that holds more than a limit reads up to it, and the rest is left unread. It is not a failure and not a stop, as a `-depth` that leaves URLs is not: the run is `complete: true` with exit 0, and a note names the page, each limit that was hit and what it left: `the scripts of URL hold more than Azhaq reads from one page, so some were left unread: 44 scripts (limit 256), 12 routes (limit 4096) (-max-scripts raises the limit on scripts, and the routes, source maps and manifests with it)`. `-fail-on-capped` makes it a stop: exit 4, `complete: false`, and `stopped` says `-max-scripts 256 reached on 1 page, left unread: 44 scripts (limit 256) (a larger -max-scripts reads them)`, after the `-depth` stop when that was reached too. The scripts left are not tasks to resume: run again with a larger `-max-scripts`. Limits inside the reader of one script are not set by `-max-scripts` and are not counted when they cut: 4000 calls, 500 client routes and 64 sockets of a script, 200 source file names listed for a map, 3 places listed for a route.
+
 ### Path checks stop at their answer
 
 - The checks that guess where an API description sits are asked one at a time, likeliest first.
@@ -639,6 +645,7 @@ azhaq run -url https://app.example.com/ -ports top-1000 -verify-logins -db app.d
 | `-max-names` | int |  | most hostnames this run resolves (default 200000, as many as subs keeps for a domain); the names left are for azhaq resume. A value you give also caps the names -dns-brute and -permute ask, together: the guesses past it are not asked, the run exits 4 and says how many, and azhaq resume asks them |
 | `-max-ips` | int | `4096` | addresses expanded from ASN and CIDR prefixes, for the whole run |
 | `-max-response-size` | int |  | bytes read of a page or document (default 2097152; scripts and JSON get 16 MiB) |
+| `-max-scripts` | int |  | most scripts read from one page, chunks included (default 256); the routes (4096), source maps (8) and build manifests (8) of a page scale with it; what a page holds beyond it is left unread and a note says how much (-fail-on-capped exits 4) |
 | `-depth` | int | `4` | max fan-out waves (0 = seed wave only, not unlimited) |
 | `-retry-failed` | bool |  | with azhaq resume: ask again the failed targets the summary marks retryable (a timeout, a closed connection, a 429 or 5xx); only those run again |
 | `-retry-run` | string |  | with -retry-failed: the run to ask again, by the run_id of its summary (default: the newest run of the workspace) |
@@ -671,7 +678,7 @@ azhaq run -url https://app.example.com/ -ports top-1000 -verify-logins -db app.d
 | `-no-catchall` | bool |  | leave out URLs that answer with the page every unknown path gets (client-side routes of a single-page app) from the rows printed |
 | `-all-rows` | bool |  | list every row, as run printed before: by default the rows that answer as the control request for a path that cannot exist does, the 404s, the assets no request asked for, the hints only scripts name and the UDP ports that answered nothing are counted in one line of their class each (-json lists every row with its fold class) |
 | `-fail-on-errors` | bool |  | the same as -strict-exit |
-| `-fail-on-capped` | bool |  | exit 4 also when the run hit -depth with hints left |
+| `-fail-on-capped` | bool |  | exit 4 also when the run hit -depth with hints left, or a page held more scripts than -max-scripts reads (the summary says how much was left) |
 | `-strict-exit` | bool |  | exit 3 for any failure, a target among many included (the rule before 0.15); without it a run that did its job exits 0 and its summary counts and lists the failures |
 
 <details>

@@ -306,7 +306,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	timeout := fs.Duration("timeout", 0, "stop after this long and keep what was found; azhaq resume continues (0: no limit)")
 	showObs := fs.Bool("obs", false, "also print the observation log")
 	fs.Bool("fail-on-errors", false, "the same as -strict-exit")
-	failCapped := fs.Bool("fail-on-capped", false, "exit 4 also when the run hit -depth with hints left")
+	failCapped := fs.Bool("fail-on-capped", false, "exit 4 also when the run hit -depth with hints left, or a page held more scripts than -max-scripts reads (the summary says how much was left)")
 	passive := fs.Bool("passive", false, "skip HTTP/crawl/JS/paths/TLS (no handshake to the target)")
 	depth := fs.Int("depth", 4, "max fan-out waves (0 = seed wave only, not unlimited)")
 	maxItems := fs.Int("max-items", 0, "most collector tasks (a name, a URL, an address each, per collector) this run starts (default: no cap, katana's and httpx's); the work left is for azhaq resume, which starts as many more")
@@ -340,6 +340,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	maxHostReq := fs.Int64("max-host-requests", 0, "requests one host may be sent (0: no cap); the rest of its work is left for azhaq resume")
 	reqTimeout := fs.Duration("request-timeout", 0, "time one request gets, headers and body (default: 10 s for headers, 30 s in all; not -timeout, the run's bound)")
 	maxResp := fs.Int("max-response-size", 0, "bytes read of a page or document (default 2097152; scripts and JSON get 16 MiB)")
+	maxScripts := fs.Int("max-scripts", 0, "most scripts read from one page, chunks included (default 256); the routes (4096), source maps (8) and build manifests (8) of a page scale with it; what a page holds beyond it is left unread and a note says how much (-fail-on-capped exits 4)")
 	noMapGuess := fs.Bool("no-map-guess", false, "do not ask for main.js.map next to a script that names no source map (a map a script or a header names is still read)")
 	fillForms := fs.Bool("fill-forms", false, "ask the action of each GET form with neutral values in its fields (a search box gets a word): one GET request per form, unless the action's own path declares a state change (it is held back, and -send-state-changing sends it); -deny-path keeps its action out; a form that posts is not sent unless -submit-forms; crawl does this by default (crawl's -no-form-fill turns it off)")
 	pathClimb := fs.Bool("path-climb", false, "also list and ask the parent directories of each link a page names (/a/b/c: /a/b/ and /a/)")
@@ -511,6 +512,9 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	fetch.RequestTimeout = *reqTimeout
 	if *maxResp > 0 {
 		fetch.MaxBody = *maxResp
+	}
+	if *maxScripts < 0 {
+		return usagef("-max-scripts %d: give a number of scripts, 256 by default", *maxScripts)
 	}
 	if *proxyFlag != "" {
 		pu, err := parseProxy(*proxyFlag)
@@ -940,7 +944,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	if *webScheme != "" && *webScheme != "http" && *webScheme != "https" {
 		return usagef("-web-scheme is http or https, got %q", *webScheme)
 	}
-	opts := collectors.Options{Client: client, HTTP: spec, WebPorts: ports, WebScheme: *webScheme, NoTech: *noTech, NoTakeover: *noTakeover, NoFavicon: *noFavicon, Probe: *probe, PortRate: portPace(*rateFlag, *portRate), MaxIPs: *maxIPs, Shots: *shots, Render: *render, KnownFiles: *knownFiles, FillForms: *fillForms, NoMapGuess: *noMapGuess, SubmitForms: *submitForms, PathClimb: *pathClimb}
+	opts := collectors.Options{Client: client, HTTP: spec, WebPorts: ports, WebScheme: *webScheme, NoTech: *noTech, NoTakeover: *noTakeover, NoFavicon: *noFavicon, Probe: *probe, PortRate: portPace(*rateFlag, *portRate), MaxIPs: *maxIPs, Shots: *shots, Render: *render, KnownFiles: *knownFiles, FillForms: *fillForms, NoMapGuess: *noMapGuess, MaxScripts: *maxScripts, SubmitForms: *submitForms, PathClimb: *pathClimb}
 	opts.ShotHTML, opts.AskedOnly = *shotHTML, askedOnly
 	if *browserWrites && *shots == "" && !*render {
 		return usagef("-browser-writes lets the pages Chrome loads send writes: give it with -browser or -screenshots")
@@ -1869,8 +1873,15 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		if *resumeRun != "" {
 			_ = st.SetMeta(unsentKey(*resumeRun), "")
 		}
-		if *failCapped && stats.Capped {
-			rep.Stopped = fmt.Sprintf("-depth %d reached with hints left", stats.Depth)
+		if *failCapped {
+			var caps []string
+			if stats.Capped {
+				caps = append(caps, fmt.Sprintf("-depth %d reached with hints left", stats.Depth))
+			}
+			if c := scriptCapStop(obs); c != "" {
+				caps = append(caps, c)
+			}
+			rep.Stopped = strings.Join(caps, "; ")
 		}
 	}
 	if *interact {
