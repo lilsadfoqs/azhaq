@@ -1,12 +1,14 @@
 package main
 
 import (
+	"encoding/json"
 	"net/http"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/lilsadfoqs/azhaq/internal/egress"
+	"github.com/lilsadfoqs/azhaq/types"
 )
 
 // loginsNextLines are the summary's next-pass lines that name -verify-logins.
@@ -92,5 +94,24 @@ func TestRunNamesVerifyLoginsForAProductNamedByAPageTitle(t *testing.T) {
 	lines := loginsNextLines(rep)
 	if len(lines) != 1 || !strings.Contains(lines[0], "1 service found with a product in the default-login catalog (Grafana)") {
 		t.Errorf("next lines %q", rep.Next)
+	}
+}
+
+// A product named with its vendor prefix is the catalog's (#520): the next
+// pass counts it, once, whichever spelling each service uses.
+func TestLoginsPassCountsAProductNamedWithItsVendor(t *testing.T) {
+	obs := func(product string) []types.StoredObservation {
+		payload, _ := json.Marshal(map[string]any{"host": "mq.example.test", "ip": "192.0.2.10", "services": []map[string]any{
+			{"port": 8161, "service": "http", "product": product, "version": "5.18.3"},
+		}})
+		return []types.StoredObservation{{Observation: types.Observation{Collector: "azhaq-ports", Kind: "ports", Payload: payload}}}
+	}
+	for _, product := range []string{"ActiveMQ", "Apache ActiveMQ"} {
+		if why, n := loginsPass(obs(product)); n != 1 || !strings.Contains(why, product) {
+			t.Errorf("%s: %d services, %q", product, n, why)
+		}
+	}
+	if _, n := loginsPass(obs("Apache")); n != 0 {
+		t.Errorf("Apache alone is no catalog product: %d services", n)
 	}
 }

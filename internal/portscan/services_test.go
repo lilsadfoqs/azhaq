@@ -435,3 +435,23 @@ func TestRealmProduct(t *testing.T) {
 		}
 	}
 }
+
+// A Server token with words in its name is that product, not its first word
+// (#518): "Apache Traffic Server" is not the HTTP server.
+func TestServerProductKeepsTheWholeName(t *testing.T) {
+	for in, want := range map[string][2]string{
+		"Apache/2.4.49 (Unix)":           {"Apache httpd", "2.4.49"},
+		"Apache httpd 2.4.1":             {"Apache httpd", "2.4.1"},
+		"Apache-Coyote/1.1":              {"Apache Tomcat/Coyote JSP engine", "1.1"},
+		"Apache Tomcat/9.0.50":           {"Apache Tomcat", "9.0.50"},
+		"Apache Traffic Server/9.1.0":    {"Apache Traffic Server", "9.1.0"},
+		"Apache Traffic Server":          {"Apache Traffic Server", ""},
+		"Jetty(9.4.51.v20230217)":        {"Jetty", "9.4.51.v20230217"},
+		"Werkzeug/2.2.3 Python/3.11":     {"Werkzeug", "2.2.3"},
+		"Sun Java System Web Server 7.0": {"Sun", ""},
+	} {
+		if p, v := serverProduct(in); [2]string{p, v} != want {
+			t.Errorf("serverProduct(%q) = %q, %q; want %q", in, p, v, want)
+		}
+	}
+}

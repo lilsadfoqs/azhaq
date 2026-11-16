@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/lilsadfoqs/azhaq/internal/lazyre"
+	"github.com/lilsadfoqs/azhaq/internal/productname"
 )
 
 // A greeting signature names a product from the first line a service
@@ -213,8 +214,6 @@ func parseHead(head []byte) (h httpHead, ok bool) {
 	return h, true
 }
 
-var tokenName = lazyre.New(`^[A-Za-z][A-Za-z0-9_.\-]{0,39}$`)
-
 // aliases give the name a product is known by, for the Server tokens that
 // are not it.
 var aliases = map[string]string{
@@ -225,23 +224,13 @@ var aliases = map[string]string{
 	"cups":              "CUPS",
 }
 
-// serverProduct reads "Apache/2.4.25 (Debian)", "Werkzeug/2.2.3 Python/3.11"
-// or "Jetty(9.4.51.v20230217)": the first token is the product.
+// serverProduct reads "Apache/2.4.25 (Debian)", "Werkzeug/2.2.3 Python/3.11",
+// "Jetty(9.4.51.v20230217)" or "Apache Traffic Server/9.1.0": the first token
+// is the product, with all the words of its name.
 func serverProduct(s string) (product, version string) {
-	t := strings.Fields(s)
-	if len(t) == 0 {
+	name, version := productname.Token(s)
+	if name == "" || len(name) > 40 {
 		return "", ""
-	}
-	name := t[0]
-	if i := strings.IndexAny(name, "/("); i > 0 {
-		version = strings.TrimRight(name[i+1:], ")")
-		name = name[:i]
-	}
-	if !tokenName.MatchString(name) {
-		return "", ""
-	}
-	if version != "" && (version[0] < '0' || version[0] > '9') {
-		version = ""
 	}
 	if a, ok := aliases[strings.ToLower(name)]; ok {
 		name = a
