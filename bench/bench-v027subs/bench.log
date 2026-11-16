@@ -1,0 +1,76 @@
+=== parts/bench-p1.log
+bench: building azhaq
+bench: polite: domains/hackerone.com
+bench: domain hackerone.com
+bench: polite: domains/hackerone.com took 107s
+
+polite (HTTP 5/s, DNS 10/s, ports 100/s): subs -live  azhaq live (confirmed)  azhaq s  subfinder | dnsx live (confirmed)  time s   both  gaps
+hackerone.com                                         14                      18 61MB  12                                 87 52MB  12    0
+sources                                               subdomain sources
+hackerone.com                                         7 answered (answered 0, failed 0, names 0), 0 failed
+
+checks
+  PASS  [polite] subs -live hackerone.com: results ≥ the reference's, confirmed by a name resolving at 9.9.9.9 or 208.67.222.222 (A, AAAA or CNAME)  (azhaq 14, reference 12; old bar: 12 of 12 = 100%; azhaq printed 14, subfinder 532 names, dnsx 12 live; azhaq 14, reference 12 confirmed, both 12; subfinder 34s + dnsx 54s; time ×0.21 of the reference, memory ×1.17 of the reference (61 MB against 52 MB) | azhaq subs -d hackerone.com -live -json -silent -resolvers /home/runner/work/azhaq/azhaq/bench/.work/domains/resolvers.txt -dns-rate 10 vs subfinder -d hackerone.com -silent -json -cs | dnsx -l /home/runner/work/azhaq/azhaq/bench/.work/domains/hackerone.com-polite-names.txt -silent -a -aaaa -cname -r 1.1.1.1,8.8.8.8 -rl 10)
+  PASS  [polite] subs -live hackerone.com: time ≤ 1.05× the reference's  (azhaq 18.2s, reference 87.4s (the median of 3 below 20 s, one run above) | azhaq subs -d hackerone.com -live -json -silent -resolvers /home/runner/work/azhaq/azhaq/bench/.work/domains/resolvers.txt -dns-rate 10 vs subfinder -d hackerone.com -silent -json -cs | dnsx -l /home/runner/work/azhaq/azhaq/bench/.work/domains/hackerone.com-polite-names.txt -silent -a -aaaa -cname -r 1.1.1.1,8.8.8.8 -rl 10)
+  PASS  [polite] subs hackerone.com: -source-timeout 800ms ends the run within 4 s (every source is held to it)  (azhaq subs -d hackerone.com -source-timeout 800ms took 0.8s)
+  PASS  [polite] subs -live hackerone.com: every confirmed live name subfinder | dnsx finds is in azhaq's list or its source is named as failed  (0 gaps, 0 unexplained: [])
+  PASS  [polite] subs -live hackerone.com: rows are DNS-confirmed, raw candidates are counted apart and the confirmed set reaches the reference's  (raw candidates 41, DNS-confirmed 14, reference confirmed 12: [])
+  FAIL  [polite] subs -live hackerone.com: raw candidates reach the names the reference listed  (azhaq 41 raw candidates, subfinder 532 names)
+  PASS  [polite] subdomain sources: no silent zeros (hackerone.com)  (every empty result is a failure flagged as error or degraded, or a zero every source answered)
+
+6 of 7 checks pass
+
+record bench/history/2026-11-16T200119-308fc538.json
+exit status 1
+=== parts/bench-p2.log
+bench: building azhaq
+bench: polite: domains/vulnweb.com
+bench: domain vulnweb.com
+bench: polite: domains/vulnweb.com took 167s
+
+polite (HTTP 5/s, DNS 10/s, ports 100/s): subs -live  azhaq live (confirmed)  azhaq s  subfinder | dnsx live (confirmed)  time s    both  gaps
+vulnweb.com                                           7                       47 69MB  6                                  119 50MB  6     0
+sources                                               subdomain sources
+vulnweb.com                                           7 answered (answered 0, failed 0, names 0), 0 failed
+
+checks
+  PASS  [polite] subs -live vulnweb.com: results ≥ the reference's, confirmed by a name resolving at 9.9.9.9 or 208.67.222.222 (A, AAAA or CNAME)  (azhaq 7, reference 6; old bar: 6 of 6 = 100%; azhaq printed 7, subfinder 519 names, dnsx 6 live; azhaq 7, reference 6 confirmed, both 6; subfinder 68s + dnsx 52s; time ×0.40 of the reference, memory ×1.39 of the reference (69 MB against 50 MB) | azhaq subs -d vulnweb.com -live -json -silent -resolvers /home/runner/work/azhaq/azhaq/bench/.work/domains/resolvers.txt -dns-rate 10 vs subfinder -d vulnweb.com -silent -json -cs | dnsx -l /home/runner/work/azhaq/azhaq/bench/.work/domains/vulnweb.com-polite-names.txt -silent -a -aaaa -cname -r 1.1.1.1,8.8.8.8 -rl 10)
+  PASS  [polite] subs -live vulnweb.com: time ≤ 1.05× the reference's  (azhaq 47.1s, reference 119.2s (the median of 3 below 20 s, one run above) | azhaq subs -d vulnweb.com -live -json -silent -resolvers /home/runner/work/azhaq/azhaq/bench/.work/domains/resolvers.txt -dns-rate 10 vs subfinder -d vulnweb.com -silent -json -cs | dnsx -l /home/runner/work/azhaq/azhaq/bench/.work/domains/vulnweb.com-polite-names.txt -silent -a -aaaa -cname -r 1.1.1.1,8.8.8.8 -rl 10)
+  PASS  [polite] subs vulnweb.com: -source-timeout 800ms ends the run within 4 s (every source is held to it)  (azhaq subs -d vulnweb.com -source-timeout 800ms took 0.8s)
+  PASS  [polite] subs -live vulnweb.com: every confirmed live name subfinder | dnsx finds is in azhaq's list or its source is named as failed  (0 gaps, 0 unexplained: [])
+  PASS  [polite] subs -live vulnweb.com: rows are DNS-confirmed, raw candidates are counted apart and the confirmed set reaches the reference's  (raw candidates 675, DNS-confirmed 7, reference confirmed 6: [])
+  PASS  [polite] subs -live vulnweb.com: raw candidates reach the names the reference listed  (azhaq 675 raw candidates, subfinder 519 names)
+  PASS  [polite] subdomain sources: no silent zeros (vulnweb.com)  (every empty result is a failure flagged as error or degraded, or a zero every source answered)
+
+7 of 7 checks pass
+
+record bench/history/2026-11-16T200226-308fc538.json
+=== join
+
+polite (HTTP 5/s, DNS 10/s, ports 100/s): subs -live  azhaq live (confirmed)  azhaq s  subfinder | dnsx live (confirmed)  time s    both  gaps
+hackerone.com                                         14                      18 61MB  12                                 87 52MB   12    0
+vulnweb.com                                           7                       47 69MB  6                                  119 50MB  6     0
+sources                                               subdomain sources
+hackerone.com                                         7 answered (answered 0, failed 0, names 0), 0 failed
+vulnweb.com                                           7 answered (answered 0, failed 0, names 0), 0 failed
+
+checks
+  PASS  [polite] subs -live hackerone.com: results ≥ the reference's, confirmed by a name resolving at 9.9.9.9 or 208.67.222.222 (A, AAAA or CNAME)  (azhaq 14, reference 12; old bar: 12 of 12 = 100%; azhaq printed 14, subfinder 532 names, dnsx 12 live; azhaq 14, reference 12 confirmed, both 12; subfinder 34s + dnsx 54s; time ×0.21 of the reference, memory ×1.17 of the reference (61 MB against 52 MB) | azhaq subs -d hackerone.com -live -json -silent -resolvers /home/runner/work/azhaq/azhaq/bench/.work/domains/resolvers.txt -dns-rate 10 vs subfinder -d hackerone.com -silent -json -cs | dnsx -l /home/runner/work/azhaq/azhaq/bench/.work/domains/hackerone.com-polite-names.txt -silent -a -aaaa -cname -r 1.1.1.1,8.8.8.8 -rl 10)
+  PASS  [polite] subs -live hackerone.com: time ≤ 1.05× the reference's  (azhaq 18.2s, reference 87.4s (the median of 3 below 20 s, one run above) | azhaq subs -d hackerone.com -live -json -silent -resolvers /home/runner/work/azhaq/azhaq/bench/.work/domains/resolvers.txt -dns-rate 10 vs subfinder -d hackerone.com -silent -json -cs | dnsx -l /home/runner/work/azhaq/azhaq/bench/.work/domains/hackerone.com-polite-names.txt -silent -a -aaaa -cname -r 1.1.1.1,8.8.8.8 -rl 10)
+  PASS  [polite] subs hackerone.com: -source-timeout 800ms ends the run within 4 s (every source is held to it)  (azhaq subs -d hackerone.com -source-timeout 800ms took 0.8s)
+  PASS  [polite] subs -live hackerone.com: every confirmed live name subfinder | dnsx finds is in azhaq's list or its source is named as failed  (0 gaps, 0 unexplained: [])
+  PASS  [polite] subs -live hackerone.com: rows are DNS-confirmed, raw candidates are counted apart and the confirmed set reaches the reference's  (raw candidates 41, DNS-confirmed 14, reference confirmed 12: [])
+  FAIL  [polite] subs -live hackerone.com: raw candidates reach the names the reference listed  (azhaq 41 raw candidates, subfinder 532 names)
+  PASS  [polite] subdomain sources: no silent zeros (hackerone.com)  (every empty result is a failure flagged as error or degraded, or a zero every source answered)
+  PASS  [polite] subs -live vulnweb.com: results ≥ the reference's, confirmed by a name resolving at 9.9.9.9 or 208.67.222.222 (A, AAAA or CNAME)  (azhaq 7, reference 6; old bar: 6 of 6 = 100%; azhaq printed 7, subfinder 519 names, dnsx 6 live; azhaq 7, reference 6 confirmed, both 6; subfinder 68s + dnsx 52s; time ×0.40 of the reference, memory ×1.39 of the reference (69 MB against 50 MB) | azhaq subs -d vulnweb.com -live -json -silent -resolvers /home/runner/work/azhaq/azhaq/bench/.work/domains/resolvers.txt -dns-rate 10 vs subfinder -d vulnweb.com -silent -json -cs | dnsx -l /home/runner/work/azhaq/azhaq/bench/.work/domains/vulnweb.com-polite-names.txt -silent -a -aaaa -cname -r 1.1.1.1,8.8.8.8 -rl 10)
+  PASS  [polite] subs -live vulnweb.com: time ≤ 1.05× the reference's  (azhaq 47.1s, reference 119.2s (the median of 3 below 20 s, one run above) | azhaq subs -d vulnweb.com -live -json -silent -resolvers /home/runner/work/azhaq/azhaq/bench/.work/domains/resolvers.txt -dns-rate 10 vs subfinder -d vulnweb.com -silent -json -cs | dnsx -l /home/runner/work/azhaq/azhaq/bench/.work/domains/vulnweb.com-polite-names.txt -silent -a -aaaa -cname -r 1.1.1.1,8.8.8.8 -rl 10)
+  PASS  [polite] subs vulnweb.com: -source-timeout 800ms ends the run within 4 s (every source is held to it)  (azhaq subs -d vulnweb.com -source-timeout 800ms took 0.8s)
+  PASS  [polite] subs -live vulnweb.com: every confirmed live name subfinder | dnsx finds is in azhaq's list or its source is named as failed  (0 gaps, 0 unexplained: [])
+  PASS  [polite] subs -live vulnweb.com: rows are DNS-confirmed, raw candidates are counted apart and the confirmed set reaches the reference's  (raw candidates 675, DNS-confirmed 7, reference confirmed 6: [])
+  PASS  [polite] subs -live vulnweb.com: raw candidates reach the names the reference listed  (azhaq 675 raw candidates, subfinder 519 names)
+  PASS  [polite] subdomain sources: no silent zeros (vulnweb.com)  (every empty result is a failure flagged as error or degraded, or a zero every source answered)
+
+13 of 14 checks pass
+
+record bench/joined/2026-11-16T195903-308fc538.json (joined from 2)
+exit status 1
