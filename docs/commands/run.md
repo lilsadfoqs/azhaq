@@ -336,7 +336,7 @@ A client route is a view that a single-page app's router draws.
 
 - The summary splits `requests` by purpose, in `requests_by_purpose` and in a text line: `requests by purpose: description checks 42, path checks 19, pages 11, scripts 9, controls 6, assets 1`. The numbers add up to `requests` and to the ledger's lines to targets, and each line of the ledger names its `purpose`.
 - `controls` are the requests for a path that cannot exist, whose answers the others are compared with. `description checks` are the places an API description or a GraphQL endpoint is guessed at, and a description that is read. `path checks` are the built-in paths. `crawl` has the same line.
-- A page is asked once whichever way its URL is written when the standard says the spellings name one resource: the case of the scheme and host, the case of the hex digits of an escape, an escaped letter or digit (`/%61bout` for `/about`), the default port, an empty path and a fragment, which is never sent. A trailing slash, an empty query (`/about?`), the order of the parameters and a dot segment are other requests, and are sent.
+- A page is asked once whichever way its URL is written when the standard says the spellings name one resource: the case of the scheme and host, the case of the hex digits of an escape, an escaped letter or digit (`/%61bout` for `/about`), the default port, an empty path and a fragment, which is never sent. A trailing slash, an empty query (`/about?`), the order of the parameters and a dot segment are other requests, and are sent. [`diff`](diff.md#which-urls-are-the-same) and `watch` count the spellings that differ by the order of the query names as one URL.
 
 ### Routes under a client's base
 

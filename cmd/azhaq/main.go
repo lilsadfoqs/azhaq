@@ -2441,6 +2441,9 @@ func printDiffStores(old, neu *store.Store, oldLabel string, opts diffOpts) erro
 			"observations":   len(d.NewObs),
 			"changed":        len(changed),
 		}
+		if d.Paired > 0 {
+			sum["paired_urls"] = d.Paired
+		}
 		if len(failed) > 0 {
 			sum["failed_sources"] = failed
 		}
@@ -2454,8 +2457,13 @@ func printDiffStores(old, neu *store.Store, oldLabel string, opts diffOpts) erro
 		fmt.Printf("  ! the runs had different seeds; this compares two targets, not two scans of one\n")
 		fmt.Printf("    old: %s\n    new: %s\n", strings.ReplaceAll(oldIn, "\n", ", "), strings.ReplaceAll(newIn, "\n", ", "))
 	}
+	paired := ""
+	if d.Paired > 0 {
+		paired = fmt.Sprintf("  = %d URLs are in both runs with another number in their query (a conversation id, a counter): counted as the same URL\n", d.Paired)
+	}
 	if len(d.Added) == 0 && len(d.Removed) == 0 && len(d.NewObs) == 0 && len(changed) == 0 {
 		fmt.Println("  (no new entities or observations)")
+		fmt.Print(paired)
 		fmt.Println("added=0 removed=0 observations=0 changed=0")
 		return nil
 	}
@@ -2473,6 +2481,7 @@ func printDiffStores(old, neu *store.Store, oldLabel string, opts diffOpts) erro
 			fmt.Printf("  + %s %s %s\n", o.Collector, o.Kind, compact(o.Payload))
 		}
 	}
+	fmt.Print(paired)
 	if len(unseen) > 0 {
 		line := fmt.Sprintf("  ? %d names and URLs the last run heard of and never checked were not heard of again", len(unseen))
 		if len(failed) > 0 {
