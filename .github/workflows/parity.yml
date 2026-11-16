@@ -3,7 +3,9 @@ name: parity
 # A cheap, unattended replay of the documented default flow on freshly built
 # estates, graded by the range grader (.github/ci/parity/README.md). Push a tag
 # parity-NAME; the first line of its message takes "count=N" (1 to 4 estates,
-# default 3) and "minutes=M" (the cap on each replay, default 30).
+# default 3), "minutes=M" (the cap on each replay, default 30) and "pairs=1"
+# (a second run into each sample's workspace, kept with the first as a run pair
+# for the replay tests; default 0, 60 minutes at most).
 # Each sample builds its estate from a secret seed that is not a pool entry's
 # (seed.sh), runs azhaq on it from replay.sh, and publishes under
 # parity/NAME/sK/ on the ci-results branch: everything but the log is
@@ -23,6 +25,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       minutes: ${{ steps.p.outputs.minutes }}
+      pairs: ${{ steps.p.outputs.pairs }}
       samples_json: ${{ steps.p.outputs.samples_json }}
     steps:
       - uses: actions/checkout@v7
@@ -32,8 +35,10 @@ jobs:
           msg=$(git for-each-ref --format='%(contents:subject)' "refs/tags/$GITHUB_REF_NAME")
           count=$(echo " $msg " | sed -n 's/.* count=\([0-9]*\) .*/\1/p')
           minutes=$(echo " $msg " | sed -n 's/.* minutes=\([0-9]*\) .*/\1/p')
+          pairs=$(echo " $msg " | sed -n 's/.* pairs=\([0-9]*\) .*/\1/p')
           count=${count:-3}
           minutes=${minutes:-30}
+          pairs=${pairs:-0}
           if [ "$count" -lt 1 ] || [ "$count" -gt 4 ]; then
             echo "::error title=parity::count=$count: it is 1 to 4"
             exit 1
@@ -42,9 +47,18 @@ jobs:
             echo "::error title=parity::minutes=$minutes: it is 1 to 120"
             exit 1
           fi
+          if [ "$pairs" -gt 1 ]; then
+            echo "::error title=parity::pairs=$pairs: it is 0 or 1"
+            exit 1
+          fi
+          if [ "$pairs" -eq 1 ] && [ "$minutes" -gt 60 ]; then
+            echo "::error title=parity::pairs=1 runs twice: minutes=$minutes is over 60"
+            exit 1
+          fi
           echo "minutes=$minutes" >> "$GITHUB_OUTPUT"
+          echo "pairs=$pairs" >> "$GITHUB_OUTPUT"
           echo "samples_json=[$(seq -s, 1 "$count")]" >> "$GITHUB_OUTPUT"
-          echo "parity: $count samples, $minutes minutes each"
+          echo "parity: $count samples, $minutes minutes each, pairs=$pairs"
   build:
     needs: params
     runs-on: ubuntu-latest
@@ -78,6 +92,7 @@ jobs:
         sample: ${{ fromJSON(needs.params.outputs.samples_json) }}
     env:
       MINUTES: ${{ needs.params.outputs.minutes }}
+      PAIRS: ${{ needs.params.outputs.pairs }}
     steps:
       - uses: actions/checkout@v7
       - name: disk
@@ -128,6 +143,22 @@ jobs:
             "$(jq -r .DOMAIN1 "$vars")" "$(jq -r .NET1 "$vars")" "$(jq -r .DNS1 "$vars")" "$MINUTES"
           rc=$(jq -r .run_exit "$HOME/parity/out/replay.json")
           case $rc in 0 | 4) ;; *) echo "::warning title=parity::azhaq run exited $rc" ;; esac
+      - name: pair
+        # Only with pairs=1: watch's second run into the sample's workspace, against the same
+        # network, and the export of each run (pair.sh). The files go to $HOME/parity/out/pair;
+        # the log gets counts.
+        if: env.PAIRS == '1'
+        run: |
+          vars="$HOME/parity/vars.json"
+          out="$HOME/parity/out"
+          if AZHAQ="$HOME/parity/bin/azhaq" .github/ci/parity/pair.sh "$out" \
+            "$(jq -r .DOMAIN1 "$vars")" "$(jq -r .NET1 "$vars")" "$(jq -r .DNS1 "$vars")" "$MINUTES"; then
+            echo "pair: kept"
+          else
+            echo "::warning title=parity::the run pair failed"
+          fi
+          [ -s "$out/pair/pair.json" ] && jq -r '"pair: watch exit \(.watch_exit), \(.rows1) and \(.rows2) rows, \(.change_lines) change lines"' "$out/pair/pair.json"
+          true
       - name: stack
         # The usual tools asked to name the services azhaq found (stack.sh): the other side of ident.py.
         run: |
@@ -170,14 +201,19 @@ jobs:
           cd "$out"
           files=()
           list=()
-          for f in plan.txt run.out run.err worklist.jsonl worklist.err hunt.jsonl hunt.err export.jsonl export.err findings.jsonl findings.err replay.json graded graded-worklist stack; do
+          for f in plan.txt run.out run.err worklist.jsonl worklist.err hunt.jsonl hunt.err export.jsonl export.err findings.jsonl findings.err replay.json graded graded-worklist stack pair; do
             [ -e "$f" ] && list+=("$f")
           done
           if [ "${#list[@]}" -gt 0 ]; then
             tar czf "$pub/sample.tgz" "${list[@]}"
-            # A workspace export of a whole range can be large: the rest stays, the export goes.
+            # A workspace export of a whole range can be large: the rest stays, the export goes
+            # (a run pair holds the first run's export again), and the pair after it.
             if [ "$(stat -c %s "$pub/sample.tgz")" -gt 41943040 ]; then
               tar czf "$pub/sample.tgz" --exclude=export.jsonl "${list[@]}"
+            fi
+            if [ "$(stat -c %s "$pub/sample.tgz")" -gt 41943040 ]; then
+              tar czf "$pub/sample.tgz" --exclude=export.jsonl --exclude=pair "${list[@]}"
+              if [ -d pair ]; then echo "::warning title=parity::the run pair was too large to keep"; fi
             fi
             age -r "$AGE_RECIPIENT" -o "$pub/sample.tgz.age" "$pub/sample.tgz"
             files+=("$pub/sample.tgz.age")

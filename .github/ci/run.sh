@@ -21,6 +21,8 @@
 # this machine's Codex session, encrypted to the CI's key (its private half
 # is the secret CODEX_AUTH_KEY). fetch.sh brings back what the run wrote;
 # beat.sh reads a trial's heartbeat while it runs.
+# "pairs=1" in a parity tag keeps a second run of each sample as a run pair
+# (parity/README.md, "Run pairs").
 set -euo pipefail
 kind=${1:?usage: run.sh bench|hunt|gate|trial|range-smoke|checklist|parity NAME [WORDS...]}
 name=${2:?usage: run.sh bench|hunt|gate|trial|range-smoke|checklist|parity NAME [WORDS...]}

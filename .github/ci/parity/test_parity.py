@@ -398,6 +398,8 @@ STUB = """#!/bin/bash
 echo "$*" >> "$STUB_LOG"
 case $1 in
 export) echo '{"kind":"entity"}' ;;
+query) printf '%s\\n' '{"type":"summary"}' '{"run_id":"run-two","started":"2"}' '{"run_id":"run-one","started":"1"}' ;;
+watch) echo '{"db":"w.db","run":"2","previous":"1","ports":["h: +9000/tcp x"],"gone_urls":["u","v"]}' ;;
 run) [ -n "${STUB_RUN_EXIT:-}" ] && exit "$STUB_RUN_EXIT" ;;
 esac
 exit 0
@@ -458,6 +460,74 @@ class Replay(unittest.TestCase):
             self.assertNotIn(word, code)
 
 
+class Pair(unittest.TestCase):
+    """pair.sh: watch's second run into the workspace replay.sh made, and one export for each run."""
+    SH = os.path.join(HERE, "pair.sh")
+
+    def go(self, *args, workspace=True, stub=STUB):
+        t = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, t, True)
+        bin = os.path.join(t, "azhaq")
+        write(bin, stub)
+        os.chmod(bin, 0o755)
+        out = os.path.join(t, "out")
+        os.makedirs(os.path.join(out, "work"))
+        if workspace:
+            write(os.path.join(out, "work", "workspace.db"), "db")
+        env = dict(os.environ, AZHAQ=bin, STUB_LOG=os.path.join(t, "log"))
+        r = run(["bash", self.SH, out] + list(args), env=env)
+        log = read(os.path.join(t, "log")).splitlines() if os.path.exists(os.path.join(t, "log")) else []
+        return r, log, out
+
+    def test_the_second_run_is_a_watch_cycle_with_the_runs_options(self):
+        flags = "-domain acme.test -cidr 127.31.0.0/24 -allow acme.test -allow 127.31.0.0/24 -resolvers 127.0.0.1:5301 -ports default -verify"
+        r, log, out = self.go("acme.test", "127.31.0.0/24", "127.0.0.1:5301", "7")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        db = os.path.join(out, "work", "workspace.db")
+        # the options replay.sh's run has, and the same cap; watch adds -db and -quiet itself
+        self.assertEqual(log[0], "watch -db %s -json -- %s -max-time 420s" % (db, flags))
+        replay = Replay()
+        _, rlog, _ = replay.go("acme.test", "127.31.0.0/24", "127.0.0.1:5301", "7")
+        self.assertIn(flags + " -max-time 420s", rlog[1])
+        self.assertEqual([l.split()[0] for l in log], ["watch", "query", "export", "export"])
+
+    def test_each_run_has_its_export_newest_run_second(self):
+        r, log, out = self.go("acme.test", "127.31.0.0/24", "127.0.0.1:5301")
+        self.assertIn("-run run-one", log[2])
+        self.assertIn("-run run-two", log[3])
+        self.assertIn("-format jsonl", log[2])
+        for f in ("export-run1.jsonl", "export-run2.jsonl", "watch.json", "watch.err", "pair.json"):
+            self.assertTrue(os.path.exists(os.path.join(out, "pair", f)), f)
+        meta = json.loads(read(os.path.join(out, "pair", "pair.json")))
+        self.assertEqual(meta["watch_exit"], 0)
+        self.assertEqual((meta["rows1"], meta["rows2"]), (1, 1))
+        self.assertEqual(meta["change_lines"], 3)  # counted, never listed
+
+    def test_prints_nothing(self):
+        r, log, out = self.go("acme.test", "127.31.0.0/24", "127.0.0.1:5301")
+        self.assertEqual((r.stdout, r.stderr), ("", ""))
+
+    def test_a_workspace_of_one_run_fails(self):
+        one = STUB.replace("""'{"run_id":"run-two","started":"2"}' """, "")
+        r, log, out = self.go("acme.test", "127.31.0.0/24", "127.0.0.1:5301", stub=one)
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("not 2", r.stderr)
+
+    def test_without_a_first_run_it_fails_before_running_anything(self):
+        r, log, out = self.go("acme.test", "127.31.0.0/24", "127.0.0.1:5301", workspace=False)
+        self.assertEqual(r.returncode, 1)
+        self.assertEqual(log, [])
+
+    def test_bad_minutes(self):
+        for bad in ("0", "x", "-3", "1.5"):
+            self.assertEqual(self.go("a.test", "127.0.0.0/24", "127.0.0.1:1", bad)[0].returncode, 2, bad)
+
+    def test_nothing_is_chosen_from_the_network(self):
+        code = "\n".join(l for l in read(self.SH).splitlines() if not l.lstrip().startswith("#"))
+        for word in ("key.json", "catalog", "vars.json", "range/", "-rate", "-max-requests", "-dirs", "-ports full", "-ports top"):
+            self.assertNotIn(word, code)
+
+
 class Fetch(unittest.TestCase):
     """fetch.sh against a stand-in curl and age: the aggregate table is all it prints."""
 
@@ -474,7 +544,13 @@ class Fetch(unittest.TestCase):
             pack = os.path.join(t, "pack")
             os.makedirs(pack, exist_ok=True)
             write(os.path.join(pack, "replay.json"), "{}")
-            subprocess.run(["tar", "-czf", os.path.join(d, "sample.tgz.age"), "-C", pack, "replay.json"], check=True)
+            members = ["replay.json"]
+            if s == "s1":  # a sample made with pairs=1
+                os.makedirs(os.path.join(pack, "pair"), exist_ok=True)
+                for f, body in (("export-run1.jsonl", "{}\n"), ("export-run2.jsonl", "{}\n"), ("pair.json", "{}")):
+                    write(os.path.join(pack, "pair", f), body)
+                members.append("pair")
+            subprocess.run(["tar", "-czf", os.path.join(d, "sample.tgz.age"), "-C", pack] + members, check=True)
         self.bin = os.path.join(t, "bin")
         os.makedirs(self.bin)
         curl = r'''#!/bin/bash
@@ -517,6 +593,16 @@ cp "$in" "$out"
         d = os.path.join(self.tmp.name, "dir")
         for f in ("s1/key.json", "s1/summary.json", "s1/replay.json", "s2/key.json"):
             self.assertTrue(os.path.exists(os.path.join(d, f)), f)
+
+    def test_a_run_pair_lands_where_the_replay_reads_it(self):
+        r = self.run_fetch("demo")
+        d = os.path.join(self.tmp.name, "dir")
+        for f in ("export-run1.jsonl", "export-run2.jsonl"):
+            self.assertTrue(os.path.exists(os.path.join(d, "s1", "pair", f)), f)
+        self.assertFalse(os.path.exists(os.path.join(d, "s2", "pair")))
+        self.assertIn("run pairs: 1 of 2 samples", r.stdout)
+        self.assertIn("AZHAQ_REPLAY_DIR=" + d, r.stdout)
+        self.assertEqual(secrets_in(r.stdout), [])
 
     def test_an_unknown_run_fails(self):
         self.assertNotEqual(self.run_fetch("nope").returncode, 0)
@@ -640,8 +726,20 @@ class Workflow(unittest.TestCase):
             self.assertIn(f, self.text)
         self.assertNotIn("cat $HOME/parity/out", self.text)
 
+    def test_pairs_are_opt_in_and_kept_encrypted(self):
+        self.assertIn("pairs=$pairs", self.text)
+        self.assertIn("pairs=${pairs:-0}", self.text)  # off unless the tag message says so
+        self.assertIn("if: env.PAIRS == '1'", self.text)
+        self.assertIn("parity/pair.sh", self.text)
+        self.assertIn("stack pair; do", self.text)  # the pair folder goes in the encrypted sample archive
+        # the step prints counts from pair.json, never the change set or the exports
+        step = self.text.split("- name: pair")[1].split("- name: stack")[0]
+        self.assertNotIn("watch.json", step)
+        self.assertNotIn("export-run", step)
+        self.assertNotIn("cat ", step)
+
     def test_shell_scripts_parse(self):
-        for f in ("replay.sh", "seed.sh", "fetch.sh", "stack.sh"):
+        for f in ("replay.sh", "pair.sh", "seed.sh", "fetch.sh", "stack.sh"):
             self.assertEqual(run(["bash", "-n", os.path.join(HERE, f)]).returncode, 0, f)
 
 
