@@ -186,7 +186,7 @@ A write's before-and-after reads of the owner's object are not kept, and the rep
 
 `-redact` is for a report that leaves the engagement.
 
-- The host becomes `<host>`.
+- The host becomes `<host>`, where it is a host: a word or a path segment that holds its name (`app` in `application` or `/app/`) stays.
 - The identifier in the route and the values of identifier fields in the kept bodies become `<id-1>`, `<id-2>` and so on. Identifier fields are `id`, `*Id`, `username`, `owner`, `email` and similar.
 - The values that fill the route's path parameters (`{username}`) are identifiers too: a write from a history file names the route the runs found, so its URL, title, file name and curl lines show `{username}` or `<id-1>`, not the user.
 - Any token is removed.

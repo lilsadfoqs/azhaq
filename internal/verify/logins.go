@@ -11,15 +11,17 @@ package verify
 //
 // No password is ever returned by anything here: Attempt's own Request
 // and Excerpt name it only as "the published default", and the answer's
-// body is scrubbed of the literal password bytes before it is kept.
+// body is scrubbed of the password where it is a credential before it is kept.
 
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"time"
 
@@ -186,11 +188,11 @@ func (lg DefaultLogin) Attempt(ctx context.Context, d HTTPDoer, origin string) (
 	if err != nil {
 		return LoginOutcome{}, err
 	}
-	out := LoginOutcome{Tried: true, Request: sent, Excerpt: redact(excerpt(body), lg.Pass)}
+	out := LoginOutcome{Tried: true, Request: sent, Excerpt: redact(excerpt(body), lg.User, lg.Pass, lg.PassField)}
 	out.Proof = &proof.Proof{
 		ObservedAt: time.Now().UTC().Format(time.RFC3339), Method: req.Method, Target: origin + lg.Path,
 		Status: resp.StatusCode, ContentType: resp.Header.Get("Content-Type"),
-		Excerpt: redact(proof.Printable(body, proof.MaxExcerpt), lg.Pass), ExcerptPart: "response", ExcerptOffset: proof.Offset(0),
+		Excerpt: redact(proof.Printable(body, proof.MaxExcerpt), lg.User, lg.Pass, lg.PassField), ExcerptPart: "response", ExcerptOffset: proof.Offset(0),
 		How: "azhaq-verify-logins", Reproduce: lg.reproduce(origin),
 	}
 	switch {
@@ -322,13 +324,43 @@ func setCookieOf(resp *http.Response) string {
 	return strings.Join(parts, "; ")
 }
 
-// redact replaces every occurrence of pass in s: nothing kept as evidence
-// carries the password, even one a server happened to echo back.
-func redact(s, pass string) string {
+// maskedPass stands for the password in everything kept.
+const maskedPass = "(the published default)"
+
+// redact masks the password where it is a credential in s, a body the server
+// echoed: as the Authorization header or the user:pass base64, as a credential
+// field (password=…, "password":"…", an input's value, field), and as the
+// user:pass of a URL. A path, a title or a name that holds the same word is
+// left as it is: with admin:admin, /admin/ must stay /admin/.
+func redact(s, user, pass, field string) string {
 	if pass == "" {
 		return s
 	}
-	return strings.ReplaceAll(s, pass, "(the published default)")
+	val := "(?:" + regexp.QuoteMeta(pass)
+	if e := url.QueryEscape(pass); e != pass {
+		val += "|" + regexp.QuoteMeta(e)
+	}
+	val += ")"
+	names := "(?:password|passwd|pwd"
+	if field != "" {
+		names += "|" + regexp.QuoteMeta(field)
+	}
+	names += ")"
+	end := `($|[^\p{L}\p{N}_])`
+	for _, p := range []struct{ re, to string }{
+		{`(?i)(\bauthorization["']?\s*[:=]\s*["']?(?:basic|bearer|digest|negotiate)?\s*)[A-Za-z0-9+/=._~-]{4,}`, "${1}" + maskedPass},
+		{`(?i)(` + names + `["'][^>]{0,200}?\bvalue\s*=\s*["'])` + val + `(["'])`, "${1}" + maskedPass + "${2}"},
+		{`(?i)(\bvalue\s*=\s*["'])` + val + `(["'][^>]{0,200}?\bname\s*=\s*["']` + names + `["'])`, "${1}" + maskedPass + "${2}"},
+		{`(?i)(\b` + names + `\b["']?[\s:=]+["']?)` + val + end, "${1}" + maskedPass + "${2}"},
+		{`(://[^/\s:@"'<>]*:)` + val + `(@)`, "${1}" + maskedPass + "${2}"},
+	} {
+		s = regexp.MustCompile(p.re).ReplaceAllString(s, p.to)
+	}
+	pair := user + ":" + pass
+	for _, enc := range []*base64.Encoding{base64.StdEncoding, base64.RawStdEncoding, base64.URLEncoding, base64.RawURLEncoding} {
+		s = strings.ReplaceAll(s, enc.EncodeToString([]byte(pair)), maskedPass)
+	}
+	return s
 }
 
 // loginProductKey normalizes a product name for matching: lower case,

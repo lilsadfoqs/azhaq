@@ -584,7 +584,7 @@ Kept bodies have these replaced by `[redacted 1a2b3c4d]`:
 
 - the values of sensitive fields: passwords, tokens, keys and secrets
 - JSON Web Tokens
-- every value a role sent: its headers, its cookie values and the credential after `Bearer`
+- every value a role sent: its headers, its cookie values and the credential after `Bearer` (the word `Bearer` itself stays)
 
 The same value shows the same tag within a run. The tag tells nothing of the value. A role may not be named `roles`.
 

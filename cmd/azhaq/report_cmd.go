@@ -519,6 +519,38 @@ func replaceToken(s, v, to string) string {
 	}
 }
 
+// replaceHost masks h where it is a host: not inside a longer name or word
+// ("app" is not in "application" or "/app/"). A name below h (api.h) still
+// loses h.
+func replaceHost(s, h, to string) string {
+	word := func(b byte) bool {
+		return b >= '0' && b <= '9' || b >= 'a' && b <= 'z' || b >= 'A' && b <= 'Z' || b == '_' || b == '-'
+	}
+	dotless := !strings.Contains(h, ".")
+	var b strings.Builder
+	for {
+		i := strings.Index(s, h)
+		if i < 0 {
+			b.WriteString(s)
+			return b.String()
+		}
+		end := i + len(h)
+		ok := (i == 0 || !word(s[i-1])) && (end == len(s) || !word(s[end]) && !(s[end] == '.' && end+1 < len(s) && word(s[end+1])))
+		if ok && dotless && i > 0 {
+			// A single-label host stands after // or @, or alone: not as a path segment or a dotted name.
+			p := s[i-1]
+			ok = p == '@' || p == ' ' || p == '"' || p == '\'' || p == '(' || p == '<' || p == '=' || p == '\n' || (p == '/' && i > 1 && s[i-2] == '/')
+		}
+		if ok {
+			b.WriteString(s[:i])
+			b.WriteString(to)
+		} else {
+			b.WriteString(s[:end])
+		}
+		s = s[end:]
+	}
+}
+
 // text is s with the hosts, the identifiers and any token masked.
 func (m *masker) text(s string) string {
 	if !m.on {
@@ -531,7 +563,7 @@ func (m *masker) text(s string) string {
 	}
 	slices.SortFunc(hs, func(a, b string) int { return len(b) - len(a) })
 	for _, h := range hs {
-		s = strings.ReplaceAll(s, h, m.hosts[h])
+		s = replaceHost(s, h, m.hosts[h])
 	}
 	ids := slices.Clone(m.order)
 	slices.SortFunc(ids, func(a, b string) int { return len(b) - len(a) })

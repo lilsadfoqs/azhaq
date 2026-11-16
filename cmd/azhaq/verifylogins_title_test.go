@@ -142,3 +142,28 @@ func TestVerifyLoginsLeadsOneConfirmedProductToUnnamedWebServices(t *testing.T) 
 		t.Errorf("two catalog products on the host gave a lead: %q", note)
 	}
 }
+
+// The published pair is admin:admin and the console lives under /admin/: the
+// evidence of the proved login keeps /admin/queues.jsp and the page's own
+// words, and masks only the password where the page echoes it as one.
+func TestVerifyLoginsEvidenceKeepsAPathThatHoldsThePassword(t *testing.T) {
+	egress.Reset()
+	t.Cleanup(egress.Reset)
+	fx := newLoginFixture(t, "Jetty(9.4.51.v20230217)", func(n int, w http.ResponseWriter, r *http.Request) {
+		if u, p, ok := r.BasicAuth(); ok && u == "admin" && p == "admin" && strings.HasPrefix(r.URL.Path, "/admin") {
+			w.Header().Set("Content-Type", "text/html")
+			w.Write([]byte(`<html><title>Apache ActiveMQ Console</title><a href="/admin/queues.jsp">Queues</a> password=admin</html>`))
+			return
+		}
+		w.Header().Set("WWW-Authenticate", `Basic realm="ActiveMQRealm"`)
+		w.WriteHeader(401)
+	})
+	db := filepath.Join(t.TempDir(), "w.db")
+	if _, errOut, err := captureBoth(t, func() error { return cmdRun(loginsRunArgs(fx.URL+"/", db, "-verify-logins")) }); err != nil {
+		t.Fatalf("run: %v\n%s", err, errOut)
+	}
+	f := loginFindingOf(t, db, "default-login")
+	if !strings.Contains(f.Proof.Excerpt, `href="/admin/queues.jsp"`) || !strings.Contains(f.Proof.Excerpt, "password=(the published default)") || strings.Contains(f.Proof.Excerpt, "password=admin") {
+		t.Errorf("excerpt %q", f.Proof.Excerpt)
+	}
+}

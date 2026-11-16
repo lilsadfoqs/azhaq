@@ -2,6 +2,7 @@ package verify
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -228,7 +229,7 @@ func TestLoginAttemptNeverReturnsThePassword(t *testing.T) {
 // An entry with no empty-password case: MikroTik-style, Pass == "" is
 // also never a problem for redact (nothing to replace).
 func TestRedactEmptyPasswordIsANoop(t *testing.T) {
-	if got := redact("hello world", ""); got != "hello world" {
+	if got := redact("hello world", "", "", ""); got != "hello world" {
 		t.Fatalf("redact with an empty password changed the text: %q", got)
 	}
 }
@@ -466,6 +467,65 @@ func TestReproduceAsksForThePassword(t *testing.T) {
 		}
 		if strings.Contains(cmd, passMark) {
 			t.Errorf("%s: the mark is left in %q", lg.ID, cmd)
+		}
+	}
+}
+
+// Only credentials are masked: a path, a title or a name that holds the same
+// word as the password stays as the server wrote it, and a password echoed
+// as the Authorization header, a credential field or the user:pass of a URL
+// is masked.
+func TestRedactMasksCredentialsOnlyWhereTheyAreCredentials(t *testing.T) {
+	basic := base64.StdEncoding.EncodeToString([]byte("admin:admin"))
+	body := strings.Join([]string{
+		`<title>admin console</title><a href="/admin/queues.jsp">queues</a> Welcome, admin. admin@example.test`,
+		`GET /admin/ HTTP/1.1 Authorization: Basic ` + basic,
+		`<input type="password" name="password" value="admin"> <input value="admin" name="passwd">`,
+		`{"user":"admin","password":"admin"} password=admin&user=admin j_password=admin`,
+		`see http://admin:admin@host.test/admin/ and denied for password admin.`,
+		`token ` + basic,
+	}, "\n")
+	got := redact(body, "admin", "admin", "j_password")
+	for _, keep := range []string{"<title>admin console</title>", `href="/admin/queues.jsp"`, "Welcome, admin. admin@example.test", "GET /admin/ HTTP/1.1",
+		`{"user":"admin"`, "&user=admin", "http://admin:", "host.test/admin/"} {
+		if !strings.Contains(got, keep) {
+			t.Errorf("%q was rewritten:\n%s", keep, got)
+		}
+	}
+	for _, gone := range []string{basic, `value="admin"`, `"password":"admin"`, "password=admin", "j_password=admin", ":admin@", "password admin"} {
+		if strings.Contains(got, gone) {
+			t.Errorf("%q is left in:\n%s", gone, got)
+		}
+	}
+	if n := strings.Count(got, "(the published default)"); n != 9 {
+		t.Errorf("%d masks, want 9:\n%s", n, got)
+	}
+	if got := redact("a /admin/ page", "admin", "admin", ""); got != "a /admin/ page" {
+		t.Errorf("redact: %q", got)
+	}
+}
+
+// The evidence of a proved default login keeps the protected page's own path:
+// a console whose sign-in with admin:admin answers with a page that links
+// /admin/queues.jsp reads /admin/queues.jsp, and the password is nowhere.
+func TestLoginEvidenceKeepsAPathThatHoldsThePassword(t *testing.T) {
+	origin, _ := newFixture(t, func(n int, w http.ResponseWriter, r *http.Request) {
+		if u, p, ok := r.BasicAuth(); !ok || u != "admin" || p != "admin" {
+			w.Header().Set("WWW-Authenticate", `Basic realm="admin"`)
+			w.WriteHeader(401)
+			return
+		}
+		fmt.Fprint(w, `<html><title>admin console</title><a href="/admin/queues.jsp">queues</a> you sent password=admin</html>`)
+	})
+	lg := DefaultLogin{ID: "p1", Product: "x", User: "admin", Pass: "admin", Mode: ModeBasic, Path: "/admin/queues.jsp",
+		Success: func(status int, body []byte) bool { return status == 200 }}
+	out, err := lg.Attempt(context.Background(), testDoer(), origin)
+	if err != nil || !out.Success {
+		t.Fatalf("out %+v err %v", out, err)
+	}
+	for name, text := range map[string]string{"excerpt": out.Excerpt, "proof": out.Proof.Excerpt} {
+		if !strings.Contains(text, `href="/admin/queues.jsp"`) || !strings.Contains(text, "<title>admin console</title>") || strings.Contains(text, "password=admin") {
+			t.Errorf("%s: %s", name, text)
 		}
 	}
 }
