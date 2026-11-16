@@ -13,7 +13,9 @@ import (
 )
 
 // watchSession gives a signed-in run its session check (fetch.Session): a
-// page the run asks with its session and without it, whose answers differ,
+// page the run asks with its session and without it, whose answers differ
+// (when none does, the pages that answered 200 with the session stand in:
+// one that later turns the visitor away is the check),
 // asked every -session-every requests (50), when 10 s passed since the last
 // good check, before each stage that sends many requests, and when an answer
 // looks like the end of the session (a 401, a response that clears a session cookie, a redirect to the
@@ -96,7 +98,7 @@ func watchSession(ctx context.Context, seeds []types.Seed, home, loginURL string
 		return
 	}
 	if s.Check == "" && len(candidates) > 0 {
-		rep.Notes = append(rep.Notes, fmt.Sprintf("session check: no page showed the session live (%s answered the same with it and without it), so the run looks for a JSON answer that tells, tests a 401 by signing in again, and notices a response that clears the session cookie", strings.Join(tried, ", ")))
+		rep.Notes = append(rep.Notes, fmt.Sprintf("session check: no page showed the session live (%s answered the same with it and without it), so the run looks for a JSON answer that tells, asks again the pages that answered 200 with the session when a 401, a 403 or a redirect answers, tests a 401 by signing in again, and notices a response that clears the session cookie", strings.Join(tried, ", ")))
 	}
 	fetch.WatchSession(s)
 }

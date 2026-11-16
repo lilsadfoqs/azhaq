@@ -114,6 +114,13 @@ type sessionGuard struct {
 	pre      int64           // requests sent between the sign-in and that check
 	stretch  int64           // the oldest stretch a renewal made worth asking again, not taken yet
 	stretchN bool
+	goods    []*good        // pages that answered 200 with the session, while no check page is known
+	total    int64          // GETs asked so far; base was its value when asked was last emptied
+	base     int64          // total when asked was last emptied
+	probeSeq int64          // goods asked again so far
+	seen     map[string]int // answers that may be the end of the session, counted
+	doubts   int            // checks such an answer has cost
+	pass     bool           // an answer that may be the end asked for a check (doubt)
 }
 
 // suspect is a URL answered as if the session were over (a 401, a redirect to
@@ -173,8 +180,15 @@ func (g *sessionGuard) timeUp() bool {
 	if g.remote || g.now().Sub(time.Unix(0, g.lastGood.Load())) < g.s.Window {
 		return false
 	}
-	page, _ := g.page()
-	return page != ""
+	return g.canCheck()
+}
+
+// canCheck says there is something to check by: a check page, or pages that
+// answered 200 with the session.
+func (g *sessionGuard) canCheck() bool {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.s.Check != "" || len(g.goods) > 0
 }
 
 // owed says a check is due: enough requests, an answer that asked for one, a
@@ -199,7 +213,7 @@ func StageCheck(ctx context.Context, requests int) error {
 	if requests > 0 && requests <= stageMin {
 		return SessionLost()
 	}
-	if page, _ := g.page(); g.due.Load() || page != "" && g.since.Load() > stageMin {
+	if g.due.Load() || g.since.Load() > stageMin && g.canCheck() {
 		g.stageDue.Store(true)
 		return g.check(ctx, false)
 	}
@@ -276,6 +290,7 @@ func AbsorbReport(r *SessionReport, requests int, current bool) {
 	}
 	g.mu.Lock()
 	g.asked = append(g.asked, r.Asked[:min(len(r.Asked), max(0, maxAsked-len(g.asked)))]...)
+	g.total += int64(len(r.Asked))
 	if r.EndedBy != "" && g.endedBy == "" {
 		g.endedBy = r.EndedBy
 	}
@@ -643,13 +658,16 @@ func (g *sessionGuard) verdict(ctx context.Context, endedBy, signal string, sent
 		}
 		if p == want {
 			g.mu.Lock()
-			g.asked, g.endedBy = nil, ""
+			g.asked, g.endedBy, g.base = nil, "", g.total
 			g.mu.Unlock()
 			g.good.Add(1)
 			return nil
 		}
 		got = p
 	} else if endedBy == "" {
+		if p, dropped, ok := g.flipped(ctx, signal); ok {
+			return g.lose(ctx, p, "", signal, sent-dropped)
+		}
 		return g.verify(ctx, sent)
 	}
 	return g.lose(ctx, got, endedBy, signal, sent)
@@ -770,7 +788,7 @@ func (g *sessionGuard) resume(ctx context.Context, what, endedBy string, unrecor
 	// The request whose answer cleared the session is not asked again: its
 	// answer, to a live session, is the one it gives. Nor is one found to end it.
 	redo := slices.DeleteFunc(g.asked, func(u string) bool { return u == endedBy || g.enders[u] })
-	g.asked, g.endedBy = nil, ""
+	g.asked, g.endedBy, g.base = nil, "", g.total
 	g.redo = append(g.redo, redo...)
 	if from := g.good.Add(1) - 1; !g.stretchN || from < g.stretch {
 		g.stretch, g.stretchN = from, true
@@ -991,10 +1009,12 @@ func sessionSaw(ctx context.Context, raw string, res Result) {
 	if g.held && (g.endAns == raw || slices.ContainsFunc(res.Hops, func(h Hop) bool { return h.URL == g.endAns })) {
 		g.held = false // recorded below
 	}
+	g.total++
 	if len(g.asked) < maxAsked {
 		g.asked = append(g.asked, raw)
 	}
 	g.mu.Unlock()
+	g.keepGood(raw, res)
 	if clearsSession(res.Header) || clearsSession(res.FinalHeader) {
 		g.mu.Lock()
 		if g.endedBy == "" {
@@ -1057,6 +1077,9 @@ func sessionWire(req *http.Request, resp *http.Response) {
 		g.ends(raw, pathOf(raw)+" set the session cookie to another value", true)
 	default:
 		g.answered(raw, resp.StatusCode, resp.Header.Get("Location"), true)
+		if req.Method == http.MethodGet {
+			g.doubt(raw, resp.StatusCode, resp.Header.Get("Location"))
+		}
 	}
 }
 
@@ -1068,6 +1091,7 @@ func sessionWire(req *http.Request, resp *http.Response) {
 func SawAnswer(raw string, status int, location string) {
 	if g := guardP.Load(); g != nil && !g.renewing.Load() {
 		g.answered(raw, status, location, false)
+		g.doubt(raw, status, location)
 		g.notify("")
 	}
 }
