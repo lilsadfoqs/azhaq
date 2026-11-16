@@ -271,9 +271,13 @@ type Set struct {
 	hostFilters map[string]map[string]Filter
 }
 
-// DefaultStatus is the default -mc of fuzz and dirs: ffuf's, with 308, which
-// ffuf leaves out though 301, 302 and 307 are in: a moved route is a find.
-const DefaultStatus = "200-299,301,302,307,308,401,403,405,500"
+// DefaultStatus is fuzz's default -mc, ffuf's own: fuzz takes a ported ffuf
+// line and must give ffuf's report.
+const DefaultStatus = "200-299,301,302,307,401,403,405,500"
+
+// SweepStatus is dirs's default -mc: ffuf's with 308, which ffuf leaves out
+// though 301, 302 and 307 are in: a moved route is a find.
+const SweepStatus = "200-299,301,302,307,308,401,403,405,500"
 
 func NewSet(keywords []string) *Set {
 	return &Set{matchers: map[string]Filter{}, filters: map[string]Filter{}, keywords: keywords}
