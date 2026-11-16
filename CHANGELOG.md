@@ -1,5 +1,50 @@
 # Changelog
 
+## v0.25.0
+
+### Added
+
+- Products are named by nuclei-templates' technology and panel detection templates (v10.5.2, MIT), compiled into azhaq with no runtime dependency: 2359 template requests, with the ones left out and why in `internal/detect/SOURCE.md`. Every web answer and favicon is matched. Each web service is also asked the paths the templates ask (about 1,130):
+  - These requests have the ledger purpose `product checks`, `plan` counts them, and they are asked after the path checks.
+  - A path that declares a state change is never asked. `-no-tech` turns them off.
+  - They cost time and memory: a `run` of Juice Shop alone takes 11 s and 286 MB instead of 2 s and 110 MB. That is still under katana's 14 s, at about katana's CPU.
+  - A match is stored as `detected` on the answer and as a `detected` row of the path sweep.
+  - A detected product is an identification (`named by detection template`), and with a version it is matched against the advisories.
+  - On four lab networks it named the product of 28 of 37 found services. nmap `-sV`, httpx `-td` and nuclei's tech and panel templates together named 24. The whole run took 51–125 s, while their identification step alone took 241–547 s.
+- `run -session-every N` sets how many requests may pass between session checks (default 50; 1 checks before every request).
+
+### Changed
+
+- `watch` and `diff` compare ports per address, whichever scan reached it:
+  - Each line names the address and the names that resolve to it.
+  - An address of a finished range with no row had nothing open.
+  - A scan that a limit stopped makes no port new and no port gone.
+- `watch` and `diff` change lines carry the product and version the run stored, including what detection templates named. A product change names the product before and after. A name that points nowhere is in a `dangling` field.
+- `watch` and `diff` compare URLs by identity: the path with identifier segments folded, and the query names without their values. Static files are left out by class.
+- A signed-in run checks its session:
+  - at the start of each stage that sends many requests;
+  - at the next request once 10 s have passed since the last good check;
+  - every `-session-every` requests.
+  
+  The request that revealed a lost session counts in `asked_since_good_check`.
+- An advisory whose version a service stated inside the range, with no other precondition checked, is `version-read` at info, not `proved` at medium. Old workspaces read the same. A CNAME to a name that answers NXDOMAIN is `observed-dangling`.
+- `report -findings` and `export` fold one answer served at an address and at a name into one record with `also_at`, by `hunt`'s rule. `hunt` and `report` count tiers with one function, and each count says what it counts.
+- The `watch` closing summary is named `notify` and carries the run's exit, `complete`, `stopped` and request count, so it matches the exit code.
+- `dns`: `status_code` is the code the resolver returned for the question asked, as in dnsx: a CNAME whose chain ends at a name that does not exist is `NXDOMAIN` (the chain stays in `cname`, its end in `cname_status`), so `-rcode nxdomain` lists it.
+- `urls`: an archive that failed after giving URLs makes the results short, so the run exits 3 with `complete: false` and the sources line says why; before, it exited 0 with `complete: false`. An archive that failed at once while another answered still exits 0 with the failure counted.
+
+### Fixed
+
+- A servlet session id (`;jsessionid=`) in a path no longer makes every page a new URL on every visit.
+- `roles`:
+  - A canary write that the owner's object does not show is read back on the sender's object, and the row then says `landed_on: sender`.
+  - A write answered 405 or 501 by every other role has a verdict of its own. It is no longer "only its owner writes it".
+- The browser's sign-in tab sends a write only when it carries the run's user name or password, or is the sign-in form's own navigation. Page scripts' posts are held and listed as not sent.
+- `mcp`: `azhaq_status` lists the calls in flight with the `-max-requests` each was handed. `used` counts finished calls only.
+- Every reader of port rows reads the ports of a naabu or nmap import, which stores them as strings, as it reads the scanner's own.
+- A resumed run whose path sweep is larger than `-max-requests` says `no task finished` only when it kept no new answer. Before, it said so while the sweep was still moving, and a loop that stopped on it left the map short; each resume reads back the answers kept and asks the rest, so the processes together send what one run sends.
+- `probe -json` keeps an input URL's fragment in `url` when `-path` or `-p` rewrites it; the request and `path` stay without it.
+
 ## v0.24.0
 
 ### Added
