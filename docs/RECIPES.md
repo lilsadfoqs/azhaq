@@ -444,7 +444,7 @@ httpx -l hosts.txt -json | azhaq ingest - -db acme.db
 
 `acme.db` is the workspace of [Map a bug bounty program](#map-a-bug-bounty-program-inside-its-scope-and-a-budget). `nuclei` and `httpx` are separate tools, and `hosts.txt` is yours.
 
-`ingest` reads the JSON lines of subfinder, dnsx, httpx, katana, naabu, nuclei, gau, gowitness and asnmap, ffuf output, arjun's JSON and nmap's XML. Lines it cannot read are skipped and counted.
+`ingest` reads the JSON lines of subfinder, dnsx, httpx, katana, naabu, nuclei, gau, gowitness and asnmap, ffuf output, arjun's JSON, nmap's XML and naabu's host:port lines. Lines it cannot read are skipped and counted.
 
 ## The live subdomains of a domain, politely
 
