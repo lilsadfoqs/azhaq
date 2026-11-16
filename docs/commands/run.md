@@ -44,7 +44,7 @@ azhaq run -url https://app.example.com/ -browser -login https://app.example.com/
 
 `-probe` turns off every collector but DNS and HTTP: the crawl, scripts, path checks, TLS and the third-party sources, at depth 1. A flag that asks for a collector by name still runs it: `-dirs`, `-params`, `-ports`, `-ports-udp`, `-screenshots`, `-browser`, `-dns-brute`, `-permute` and `-graphql`. A flag that only a collector `-probe` turns off reads (`-fill-forms`, `-submit-forms`, `-path-climb`, `-known-files`) is a usage error that names both, never a flag that is dropped.
 
-`-url`, `-domain`, `-cidr` and `-asn` repeat, and each value is a seed. `-list`, `-in` and `-org` take one value: a second, different one is a usage error (exit 2), never the last one kept silently. The same holds for `-l` and `-dL` of the commands that read targets from a file.
+`-url`, `-domain`, `-cidr` and `-asn` repeat, and each value is a seed. `-url` also takes a comma list, as `-u` does in `crawl`, `probe`, `dirs`, `params` and `shots`: a comma ends a URL only where `http://` or `https://` follows, so `-url "http://a/x,http://b/y"` is two URLs and a comma in a path or query (`/?a=1,2`) stays in its URL. A piece that is no URL (a bare host, `host:port` or address) splits at every comma. `-list`, `-in` and `-org` take one value: a second, different one is a usage error (exit 2), never the last one kept silently. The same holds for `-l` and `-dL` of the commands that read targets from a file.
 
 [What azhaq sends](../CONCEPTS.md#what-azhaq-sends) lists every request by kind. `azhaq plan` prints what a run would do and send before anything goes out.
 
@@ -508,7 +508,7 @@ azhaq run -url https://app.example.com/ -ports top-1000 -verify-logins -db app.d
 
 | Flag | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `-url` | string, repeatable |  | seed URL |
+| `-url` | string, repeatable |  | seed URL (repeatable, or comma-separated) |
 | `-domain` | string, repeatable |  | seed Domain, for subdomain discovery |
 | `-list` | string |  | targets, one per line: URL, host, host:port or IP (- for stdin) |
 | `-in` | string |  | JSONL seeds |

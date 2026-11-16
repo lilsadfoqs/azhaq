@@ -153,7 +153,7 @@ note: screenshot of http://127.0.0.1:3001/ not taken: the page needs about 26 re
 
 | Flag | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `-u` | string, repeatable |  | target: URL (its path and query are kept), host, host:port, IP or address range such as 192.0.2.0/24 |
+| `-u` | string, repeatable |  | target: URL (its path and query are kept), host, host:port, IP or address range such as 192.0.2.0/24 (repeatable, or comma-separated) |
 | `-l` | string |  | file of targets (- for stdin) |
 | `-p` | string |  | web ports to try on each host, comma-separated: numbers, ranges, small (80, 443), medium or large (default: 443, then 80) |
 | `-nmap` | string, repeatable |  | an nmap XML file (nmap -oX): the web services it found |

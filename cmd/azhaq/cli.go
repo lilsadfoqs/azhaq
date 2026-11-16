@@ -580,7 +580,7 @@ func flagInfos(fs *flag.FlagSet) []flagInfo {
 			fi.Repeatable = true
 		}
 		switch f.Value.(type) {
-		case *stringsFlag:
+		case *stringsFlag, *urlsFlag:
 			fi.Type, fi.Repeatable = "string", true
 		}
 		if bf, ok := f.Value.(interface{ IsBoolFlag() bool }); ok && bf.IsBoolFlag() {

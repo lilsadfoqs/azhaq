@@ -29,7 +29,7 @@ azhaq fuzz -u 'https://app.example.com/api/§v1§/users/§1§' -w ids.txt -mode 
 
 ## What it does
 
-1. Takes the request from `-u` or from a raw request file (`-request FILE`), with a keyword in it. The keyword is `FUZZ`, or the one you give in `-w FILE:KEYWORD`.
+1. Takes the request from `-u` or from a raw request file (`-request FILE`), with a keyword in it. `-u` takes one URL and is not repeatable: a value that holds a second `http://` or `https://` after a comma is a usage error (exit 2), so run `fuzz` once for each URL. The keyword is `FUZZ`, or the one you give in `-w FILE:KEYWORD`.
 2. Reads the wordlists and combines them by `-mode`.
 3. Sends one request for each combination. The scope, the budget, the pace and the ledger apply to each.
 4. Counts each answer as ffuf does and applies the matchers, filters and calibration.

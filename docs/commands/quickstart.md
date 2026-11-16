@@ -47,7 +47,7 @@ The summary and the exit codes are `run`'s: see [run](run.md#summary-and-exit-co
 
 | Flag | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `-url` | string, repeatable |  | seed URL |
+| `-url` | string, repeatable |  | seed URL (repeatable, or comma-separated) |
 | `-domain` | string, repeatable |  | seed Domain, for subdomain discovery |
 | `-list` | string |  | targets, one per line: URL, host, host:port or IP (- for stdin) |
 | `-in` | string |  | JSONL seeds |

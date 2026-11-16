@@ -42,11 +42,7 @@ func probeInputs(urls []string, list string, pf *probeFlags, ports []httpcol.Por
 		return nil, nil, usagef("-im: want burp, got %q", pf.im)
 	}
 	for _, u := range urls {
-		for _, p := range strings.Split(u, ",") {
-			if p = strings.TrimSpace(p); p != "" {
-				raw = append(raw, p)
-			}
-		}
+		raw = append(raw, splitURLList(u)...)
 	}
 	switch {
 	case list == "-":

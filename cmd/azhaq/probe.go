@@ -421,7 +421,7 @@ func cmdProbe(args []string) error {
 	var c common
 	c.register(fs)
 	fs.BoolVar(&c.json, "j", false, "JSONL output (as -json)")
-	var urls stringsFlag
+	var urls urlsFlag
 	fs.Var(&urls, "u", "target: URL, host, host:port, IP, address range or AS number (repeatable, or comma-separated)")
 	fs.Var(&urls, "target", "target (as -u)")
 	list := onceString(fs, "l", "file of targets (- for stdin; a glob such as 'hosts-*.txt')")

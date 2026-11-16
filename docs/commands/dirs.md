@@ -126,7 +126,7 @@ The start of every body is checked for a runtime's stack trace as it is read: a 
 
 | Flag | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `-u` | string, repeatable |  | web service, such as https://app.example.com/ |
+| `-u` | string, repeatable |  | web service, such as https://app.example.com/ (repeatable, or comma-separated) |
 | `-l` | string |  | file of services (- for stdin) |
 | `-scope` | string |  | a program's scope: a file (HackerOne CSV, bounty-targets JSON, Burp options, lines) or hackerone, bugcrowd, intigriti, yeswehack |
 | `-program` | string |  | the program to take from a -scope list (handle, name or URL) |

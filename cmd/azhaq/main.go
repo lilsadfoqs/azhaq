@@ -225,8 +225,8 @@ var (
 // commands built on it print rep.
 func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	fs := newFlags("run")
-	var urls stringsFlag
-	fs.Var(&urls, "url", "seed URL (repeatable)")
+	var urls urlsFlag
+	fs.Var(&urls, "url", "seed URL (repeatable, or comma-separated)")
 	org := onceString(fs, "org", "seed Organization name")
 	in := onceString(fs, "in", "JSONL seeds")
 	list := onceString(fs, "list", "targets, one per line: URL, host, host:port or IP (- for stdin)")
