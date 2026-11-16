@@ -32,8 +32,9 @@ func lengthControls(raws []string) int {
 }
 
 // A name whose only evidence is a change in size is checked once more before
-// it is kept: four names no page reads, as long as it, are asked. A name
-// whose evidence is its status is not asked that way.
+// it is kept: four names no page reads, as long as it, are asked, then it is
+// asked twice more with another value, each time followed by one more such
+// name. A name whose evidence is its status is not asked that way.
 func TestAChangeInSizeAloneIsCheckedAgainstFourNamesAsLongAsIt(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
@@ -41,7 +42,7 @@ func TestAChangeInSizeAloneIsCheckedAgainstFourNamesAsLongAsIt(t *testing.T) {
 		why    string
 		want   int
 	}{
-		{"size", func(w http.ResponseWriter) { fmt.Fprint(w, strings.Repeat(" <li>row</li>", 40)) }, "size", 4},
+		{"size", func(w http.ResponseWriter) { fmt.Fprint(w, strings.Repeat(" <li>row</li>", 40)) }, "size", 6},
 		{"status", func(w http.ResponseWriter) { w.WriteHeader(http.StatusInternalServerError) }, "status", 0},
 	} {
 		fetch.Reset()
