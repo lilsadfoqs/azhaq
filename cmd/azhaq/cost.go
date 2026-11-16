@@ -537,6 +537,9 @@ func estimateCost(seeds []types.Seed, planned [][]string, runs func(string) bool
 		dirsBases = map[string]bool{}
 		dirsReqs  int64
 		dirsMax   int64               // the most the sweeps send at depth 1
+		shotURLs  = map[string]bool{} // the pages Chrome is given to load
+		shotHosts = map[string]bool{} // names whose front page it loads: the URL is not known before
+		shotsRun  bool
 		names     = map[string]bool{} // the names looked up
 	)
 	for i, s := range seeds {
@@ -594,6 +597,14 @@ func estimateCost(seeds []types.Seed, planned [][]string, runs func(string) bool
 					}
 				}
 				descs += len(guesses)
+			case "azhaq-shots":
+				shotsRun = true
+				switch {
+				case s.Type == types.TypeURL && env.rules.AllowsURL(s.Key()):
+					shotURLs[s.Key()] = true
+				case s.Type == types.TypeHostname && env.rules.Allows(s.Key()):
+					shotHosts[s.Key()] = true
+				}
 			case "azhaq-dirs":
 				if s.Type != types.TypeURL || !env.rules.AllowsURL(s.Key()) {
 					continue
@@ -689,6 +700,11 @@ func estimateCost(seeds []types.Seed, planned [][]string, runs func(string) bool
 	if env.verifyLogins {
 		// The products are named by the run, so only its shape is known here.
 		e.add("azhaq-verify-logins", amount{}, "-verify-logins asks each catalog product a run names: 3 requests per sign-in pair (no credential, a wrong one, the pair) and 2 per unauthenticated read")
+	}
+	if shotsRun {
+		// A floor of one page load for each web service: the page's own
+		// requests are Chrome's, and only the page says what they are.
+		e.add("azhaq-shots", amount{Requests: int64(len(shotURLs) + len(shotHosts))}, "the page's scripts, styles and images, which Chrome asks for as the page names them")
 	}
 	if env.login != "" {
 		e.put("sign-in", "chrome", amount{Requests: 3}, "the sign-in page's scripts, styles and images, which Chrome asks for as the page names them")

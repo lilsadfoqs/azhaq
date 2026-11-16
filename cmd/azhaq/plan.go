@@ -251,7 +251,7 @@ func planSends(b engine.Budgets, send sendLimits) (gets, others []string) {
 		}
 	}
 	if send.shots != "" {
-		*out = append(*out, fmt.Sprintf("Chrome loads the front page of each web service and saves a screenshot in %s (-screenshots, azhaq-shots): it also requests the page's scripts, styles and images, so a page costs more than one GET", send.shots))
+		*out = append(*out, fmt.Sprintf("Chrome loads the front page of each web service and saves a screenshot in %s (-screenshots, azhaq-shots): it also requests the page's scripts, styles and images as the page names them, so a page costs more than one GET: the estimate's shots stage counts one page load for each web service and leaves those requests out", send.shots))
 	}
 	if send.render {
 		*out = append(*out, "Chrome loads each page found and reads the links its scripts draw (-browser, azhaq-render): every page costs a GET and the requests its scripts, styles and images make")
