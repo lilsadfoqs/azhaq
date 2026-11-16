@@ -60,6 +60,7 @@ type Options struct {
 	Browser         *browser.Browser // the run's Chrome, started on first use
 	Render          bool             // azhaq-render: load pages in Chrome (-browser)
 	NoMapGuess      bool             // azhaq-js does not ask for main.js.map next to a bundle that names no map
+	MaxScripts      int              // azhaq-js: scripts read from one page (0: 256); its other caps scale with it
 	FillForms       bool             // azhaq-crawl asks the action of GET forms with neutral values
 	PathClimb       bool             // azhaq-crawl lists the parent directories of its links
 	SubmitForms     bool             // azhaq-crawl submits POST forms (changes data)
@@ -90,6 +91,7 @@ func Register(cat *catalog.Catalog, o Options) {
 	cat.MustRegister(&vhostcol.Collector{Client: fetch.Client(client), Ports: o.WebPorts, Scanned: o.Ports})
 	jc := jscol.New(client)
 	jc.NoMapGuess = o.NoMapGuess
+	jc.MaxScripts = o.MaxScripts
 	cat.MustRegister(jc)
 	apicol.Register(cat, client)
 	cat.MustRegister(gqlcol.New(client))
