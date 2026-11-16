@@ -144,27 +144,29 @@ func verifyReads(w writeReq, others, n1 int64, steps []verifyWrite, canary, owne
 	if !ownerThere {
 		return 0, 0, "" // the replay skips a write whose owner is not a role
 	}
-	if w.method == http.MethodPost {
-		// Each role that sends it reads the collection before and after,
-		// the member each identifier of the body names as its recorded
-		// owner and again with a made-up identifier, and then every other
-		// role reads the object it made.
-		k := int64(len(bodyCandidates(w)))
-		return others, others * (2 + 2*k + n1), createLocates
-	}
 	var reads int64
 	for _, v := range steps {
 		if v.kind == "read" {
 			reads++
 		}
 	}
+	if w.method == http.MethodPost {
+		// Each role that sends it reads the collection before and after,
+		// the member each identifier of the body names as its recorded
+		// owner and again with a made-up identifier, each read step of the
+		// user's that says where the object is, and then every other role
+		// reads the object it made.
+		k := int64(len(bodyCandidates(w)))
+		return others, others * (2 + 2*k + reads + n1), createLocates
+	}
 	// The owner's object before (the write's own URL, then each parent
 	// the replay tries, or the one the history read), a read-back the map
 	// knows, one more after an empty write, then each sender's read after
-	// its write and each step's read as the sender, and with a canary the
-	// sender's own object after a write the owner's did not show.
+	// its write and each step's read as the sender, before the write too, and
+	// with a canary the sender's own object after a write the owner's did not
+	// show.
 	before := max(int64(liveVerifyReads(w)), 1)
-	most = before + 1 + others*(1+reads)
+	most = before + 1 + others*(1+2*reads)
 	if w.empty {
 		most++
 	}

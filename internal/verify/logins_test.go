@@ -8,6 +8,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/lilsadfoqs/azhaq/internal/productname"
 )
 
 func testDoer() HTTPDoer {
@@ -466,6 +468,53 @@ func TestReproduceAsksForThePassword(t *testing.T) {
 		}
 		if strings.Contains(cmd, passMark) {
 			t.Errorf("%s: the mark is left in %q", lg.ID, cmd)
+		}
+	}
+}
+
+// A console's own name may carry the vendor ("Apache ActiveMQ") where the
+// catalog's does not ("ActiveMQ"), or the other way round (#520): either
+// finds the entry, and a bare vendor or another product of it finds none.
+func TestCatalogMatchesWithOrWithoutTheVendorPrefix(t *testing.T) {
+	ids := func(product string) string {
+		var out []string
+		for _, lg := range LoginsForProduct(product) {
+			out = append(out, lg.ID)
+		}
+		for _, u := range ReadsForProduct(product) {
+			out = append(out, u.ID)
+		}
+		return strings.Join(out, ",")
+	}
+	for _, c := range [][2]string{
+		{"Apache ActiveMQ", "ActiveMQ"}, {"Apache Druid", "Druid"}, {"Apache Flink", "Flink"},
+		{"Apache Guacamole", "Guacamole"}, {"Apache Spark", "Spark"}, {"Apache ZooKeeper", "ZooKeeper"},
+		{"Apache Zeppelin", "Zeppelin"}, {"Apache DolphinScheduler", "DolphinScheduler"},
+		{"MikroTik RouterOS", "RouterOS"}, {"Apache Hadoop YARN", "Hadoop YARN"},
+	} {
+		a, b := ids(c[0]), ids(c[1])
+		if a == "" || a != b {
+			t.Errorf("%q gives %q, %q gives %q: want the same, non-empty entries", c[0], a, c[1], b)
+		}
+	}
+	// Every catalog product answers to its own name, and to no other product's.
+	own := map[string]string{}
+	for _, lg := range DefaultLogins() {
+		own[lg.Product] = ""
+	}
+	for _, u := range UnauthReads() {
+		own[u.Product] = ""
+	}
+	for p := range own {
+		for q := range own {
+			if (p == q) != productname.Same(p, q) {
+				t.Errorf("catalog products %q and %q: Same = %v", p, q, productname.Same(p, q))
+			}
+		}
+	}
+	for _, p := range []string{"Apache", "Apache HTTP Server", "Apache Tomcat", "YARN", "Apache Kafka", "Microsoft"} {
+		if got := ids(p); got != "" {
+			t.Errorf("%q must match no catalog entry, got %s", p, got)
 		}
 	}
 }

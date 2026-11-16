@@ -1649,7 +1649,15 @@ func TestRolesAVerificationStepIsSentOnlyWhenAskedAndProvesOnlyItsRole(t *testin
 	obj = site.URL + "/users/alice"
 	before, _ = readAnswer(200, []byte(`{"username":"alice"}`), "application/json")
 	put = writeReq{owner: "alice", method: "PUT", url: site.URL + "/users/alice/email", header: http.Header{"Content-Type": {"application/json"}}, body: []byte(`{"email":"new@x.test"}`), status: 204, from: "alice.har"}
-	rows, _, err = replayWritesVerify(nil, two, []writeReq{put}, map[string]map[string]answer{"alice": {obj: before}}, own, 0, 100, false, steps)
+	// Without a canary carol's write already put the value there when bob's
+	// step reads it before bob's write: nothing is measured for bob.
+	rows, _, err = replayWritesVerify(nameOf(""), two, []writeReq{put}, map[string]map[string]answer{"alice": {obj: before}}, own, 0, 100, false, steps)
+	if err != nil || len(rows) != 1 || rows[0].Verdict == verdictWriteCross || rows[0].WriteVerification == verifyProved {
+		t.Fatalf("a value the first sender already set proves nothing for the next: %+v %v", rows, err)
+	}
+	// With a canary each sender's value is its own, and only bob's is shown.
+	emails["alice"] = "alice@x.test"
+	rows, _, err = replayWritesVerify(nameOf(""), two, []writeReq{put}, map[string]map[string]answer{"alice": {obj: before}}, own, 0, 100, true, steps, "email")
 	if err != nil || len(rows) != 1 {
 		t.Fatalf("%+v %v", rows, err)
 	}
