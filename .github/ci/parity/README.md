@@ -90,7 +90,8 @@ aggregate, fix a class of miss rather than one estate's, and push a new tag for 
 ```
 
 `count` is 1 to 4 estates (default 3, two at a time) and `minutes` the cap on
-each replay (default 30). `fetch.sh` prints only the table; for each sample the
+each replay (default 30). `estates=NAME` builds the estates of the earlier tag
+`parity-NAME` instead of fresh ones, to compare two builds on the same estates. `fetch.sh` prints only the table; for each sample the
 answer key, azhaq's raw output, the leads and `graded/grade.md` stay in
 `DIR/sK` for you. It needs `~/.config/azhaq/age.key` (or `AZHAQ_AGE_KEY`).
 

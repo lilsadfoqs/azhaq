@@ -5,7 +5,8 @@ name: parity
 # parity-NAME; the first line of its message takes "count=N" (1 to 4 estates,
 # default 3), "minutes=M" (the cap on each replay, default 30) and "pairs=1"
 # (a second run into each sample's workspace, kept with the first as a run pair
-# for the replay tests; default 0, 60 minutes at most).
+# for the replay tests; default 0, 60 minutes at most) and "estates=NAME" (build
+# the estates of the earlier tag parity-NAME, to compare two builds on the same ones).
 # Each sample builds its estate from a secret seed that is not a pool entry's
 # (seed.sh), runs azhaq on it from replay.sh, and publishes under
 # parity/NAME/sK/ on the ci-results branch: everything but the log is
@@ -26,6 +27,7 @@ jobs:
     outputs:
       minutes: ${{ steps.p.outputs.minutes }}
       pairs: ${{ steps.p.outputs.pairs }}
+      estates: ${{ steps.p.outputs.estates }}
       samples_json: ${{ steps.p.outputs.samples_json }}
     steps:
       - uses: actions/checkout@v7
@@ -36,6 +38,7 @@ jobs:
           count=$(echo " $msg " | sed -n 's/.* count=\([0-9]*\) .*/\1/p')
           minutes=$(echo " $msg " | sed -n 's/.* minutes=\([0-9]*\) .*/\1/p')
           pairs=$(echo " $msg " | sed -n 's/.* pairs=\([0-9]*\) .*/\1/p')
+          estates=$(echo " $msg " | sed -n 's/.* estates=\([A-Za-z0-9._-]*\) .*/\1/p')
           count=${count:-3}
           minutes=${minutes:-30}
           pairs=${pairs:-0}
@@ -57,6 +60,7 @@ jobs:
           fi
           echo "minutes=$minutes" >> "$GITHUB_OUTPUT"
           echo "pairs=$pairs" >> "$GITHUB_OUTPUT"
+          echo "estates=${estates:+parity-$estates}" >> "$GITHUB_OUTPUT"
           echo "samples_json=[$(seq -s, 1 "$count")]" >> "$GITHUB_OUTPUT"
           echo "parity: $count samples, $minutes minutes each, pairs=$pairs"
   build:
@@ -93,6 +97,7 @@ jobs:
     env:
       MINUTES: ${{ needs.params.outputs.minutes }}
       PAIRS: ${{ needs.params.outputs.pairs }}
+      ESTATES: ${{ needs.params.outputs.estates }}
     steps:
       - uses: actions/checkout@v7
       - name: disk
@@ -117,7 +122,7 @@ jobs:
         env:
           CODEX_AUTH_KEY: ${{ secrets.CODEX_AUTH_KEY }}
         run: |
-          seed=$(.github/ci/parity/seed.sh "$GITHUB_REF_NAME" "${{ matrix.sample }}")
+          seed=$(.github/ci/parity/seed.sh "${ESTATES:-$GITHUB_REF_NAME}" "${{ matrix.sample }}")
           echo "::add-mask::$seed"
           range="$RUNNER_TEMP/range"
           mkdir -p "$range" "$HOME/parity/keep" "$HOME/parity/pub"
