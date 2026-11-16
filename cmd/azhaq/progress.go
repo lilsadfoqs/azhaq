@@ -33,6 +33,9 @@ type progressSnap struct {
 	// not (-1: the tasks name more than addresses). Ports: the run has port work.
 	Ports              bool
 	AddrDone, AddrLeft int
+	// Hunt is the command that lists the rows stored so far, once the first
+	// listener row is stored; "" before.
+	Hunt string
 }
 
 // progressCfg says how a command reports progress and what ends it.
@@ -121,6 +124,9 @@ func (c progressCfg) line(prev, cur progressSnap) string {
 			fmt.Fprintf(&b, ", %d %s done", cur.AddrDone, word)
 		}
 	}
+	if cur.Hunt != "" {
+		fmt.Fprintf(&b, "; %s for the rows so far", cur.Hunt)
+	}
 	b.WriteString(stillWaiting())
 	return b.String()
 }
@@ -137,6 +143,7 @@ type progressObject struct {
 	AddrLeft   *int     `json:"addresses_left,omitempty"` // and those of the tasks known not yet finished
 	EndsBy     string   `json:"ends_by,omitempty"`
 	EndsInSecs *int     `json:"ends_in_seconds,omitempty"`
+	Hunt       string   `json:"hunt,omitempty"`        // the command that lists the rows stored so far, once a listener is named
 	WaitingFor []string `json:"waiting_for,omitempty"` // subdomain sources not answered yet
 }
 
@@ -157,6 +164,7 @@ func (c progressCfg) object(prev, cur progressSnap) progressObject {
 		secs := int(in.Seconds())
 		o.EndsBy, o.EndsInSecs = by, &secs
 	}
+	o.Hunt = cur.Hunt
 	for _, w := range subcol.Waiting() {
 		o.WaitingFor = append(o.WaitingFor, w.Source)
 	}
