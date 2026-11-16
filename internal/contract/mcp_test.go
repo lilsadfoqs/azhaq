@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -122,8 +123,11 @@ func TestMCPHoldsWhatItWasStartedWith(t *testing.T) {
 	if l.Site.Wire.Total() == 0 {
 		t.Fatal("the map sent nothing")
 	}
+	// The rule is ^/about: a path that only holds "/about" further on
+	// (/api/app/about, a product check) is not under it.
 	for k := range l.Site.Wire.HTTP() {
-		if strings.Contains(k, "/about") {
+		_, raw, _ := strings.Cut(k, " ")
+		if u, err := url.Parse(raw); err == nil && strings.HasPrefix(u.Path, "/about") {
 			t.Errorf("the server was started with -deny-path ^/about and a map sent %s", k)
 		}
 	}
