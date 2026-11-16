@@ -57,17 +57,25 @@ func TestTenant(t *testing.T) {
 	}
 }
 
-func TestUnlisted(t *testing.T) {
+func TestUndelegated(t *testing.T) {
 	for host, want := range map[string]bool{
-		"azqlab.lan":        true,
-		"www.corp.lan":      true,
-		"acme.github.io":    false,
-		"www.example.com":   false,
-		"api.example.co.uk": false,
-		"127.0.0.1":         false,
+		"azqlab.lan":             true,
+		"www.corp.lan":           true,
+		"app.corp.internal":      true,
+		"printer.home.arpa":      true,
+		"home.arpa":              true,
+		"x.test":                 true, // special-use names are undelegated too
+		"acme.github.io":         false,
+		"www.example.com":        false,
+		"api.example.co.uk":      false,
+		"x.web":                  false,
+		"1.0.0.127.in-addr.arpa": false,
+		"example.arpa":           false,
+		"127.0.0.1":              false,
+		"":                       false,
 	} {
-		if got := Unlisted(host); got != want {
-			t.Errorf("Unlisted(%q) = %v, want %v", host, got, want)
+		if got := Undelegated(host); got != want {
+			t.Errorf("Undelegated(%q) = %v, want %v", host, got, want)
 		}
 	}
 }

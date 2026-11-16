@@ -278,8 +278,8 @@ func (r *PTR) RunBatch(ctx context.Context, seeds []types.Seed, emit func(types.
 			sem <- struct{}{}
 			defer func() { <-sem }()
 			rev, err := dns.ReverseAddr(ip.String())
-			if err != nil || r.Pool.Hold(rev) {
-				return // a private address's reverse name is not for the public resolvers
+			if err != nil {
+				return
 			}
 			// A reverse zone's servers often throttle a whole range asked at
 			// once: a failure or SERVFAIL is asked again, through another

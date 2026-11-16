@@ -98,6 +98,8 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 
 `sources asked` is `sources answered` plus `sources failed` plus `off-by-default failed`.
 
+A domain in a zone the root zone does not delegate (`corp.internal`, `nas.lan`) or under `home.arpa` is asked of no third-party source: no public source can hold its names, and asking would only tell it the name. Only `history` runs for it. `azhaq plan` lists no source for it either.
+
 ### The sources block
 - `asked`, `answered`, `failed` and `off_by_default_failed` count each source once for each domain, as `counts` does.
 - `failed` counts sources in the default set, or named with `-sources`. `off_by_default_failed` counts sources that ran only because of `-all-sources`.

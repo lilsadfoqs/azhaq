@@ -113,8 +113,9 @@ func TestOnlyEgressOpensConnections(t *testing.T) {
 		rel = filepath.ToSlash(rel)
 		switch {
 		// scripts/advindex is the maintainer's generator of the advisory index: it
-		// downloads public records and is never built into azhaq, like bench.
-		case d.IsDir() && (rel == "bench" || rel == "internal/egress" || rel == "scripts/advindex" || strings.HasPrefix(d.Name(), ".") && rel != "."):
+		// downloads public records and is never built into azhaq, like bench;
+		// scripts/tldgen is the same for IANA's list of top-level domains.
+		case d.IsDir() && (rel == "bench" || rel == "internal/egress" || rel == "scripts/advindex" || rel == "scripts/tldgen" || strings.HasPrefix(d.Name(), ".") && rel != "."):
 			return fs.SkipDir
 		case d.IsDir() || !strings.HasSuffix(p, ".go") || strings.HasSuffix(p, "_test.go"):
 			return nil

@@ -1,6 +1,9 @@
 package normalize
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestRegistrableDomain(t *testing.T) {
 	if g := RegistrableDomain("www.example.com"); g != "example.com" {
@@ -41,5 +44,30 @@ func TestSameSite(t *testing.T) {
 	}
 	if SameSite("challs.test.brunnerne.xyz", "other.test") {
 		t.Fatal("other site")
+	}
+}
+
+// The embedded root-zone list is a dated copy of IANA's: a refresh with
+// scripts/tldgen changes this pin on purpose.
+func TestRootListIsPinned(t *testing.T) {
+	if v := RootListVersion(); !strings.HasPrefix(v, "Version 2026111600, Last Updated Mon Nov 16 07:07:02 2026 UTC") {
+		t.Fatalf("list header %q", v)
+	}
+	if n := len(rootTLDs); n < 1400 {
+		t.Fatalf("%d TLDs", n)
+	}
+}
+
+func TestDelegated(t *testing.T) {
+	for host, want := range map[string]bool{
+		"example.com": true, "a.b.COM.": true, "x.web": true, "x.dev": true, "pool.ntp.org": true,
+		"example.рф": true, "example.xn--p1ai": true, "x.arpa": true, "1.0.0.127.in-addr.arpa": true,
+		"nas.lan": false, "a.internal": false, "corp": false, "x.home.arpa.corp": false,
+		"x.local": false, "x.test": false, "x.localhost": false, "x.example": false, "x.invalid": false,
+		"127.0.0.1": false, "": false, ".": false,
+	} {
+		if got := Delegated(host); got != want {
+			t.Errorf("Delegated(%q) = %v, want %v", host, got, want)
+		}
 	}
 }

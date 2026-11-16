@@ -327,10 +327,13 @@ func planDNS(seeds []types.Seed, b engine.Budgets, send sendLimits) string {
 		via = "the resolvers given (" + strings.Join(send.resolvers, ", ") + ")"
 	}
 	line := "DNS queries to " + via + ": the names found, resolved to addresses"
+	if !named {
+		line += "; a name in a zone the root zone does not delegate (.internal, .lan, .corp) or under home.arpa is kept off the default resolvers and asked of the system's resolver instead, and the summary counts those names and its answers (-resolvers names resolvers that are asked for them)"
+	}
 	if reverse {
 		line += ", and the reverse names (PTR) of the addresses that answer in a range or an AS"
 		if !named {
-			line += "; the reverse name of a loopback, private (RFC 1918, 100.64.0.0/10, unique-local) or link-local address is not sent to the default resolvers, and the summary counts those not asked (-resolvers names resolvers that are asked for them)"
+			line += "; the reverse name of a loopback, private (RFC 1918, 100.64.0.0/10, unique-local) or link-local address is kept off the default resolvers and asked of the system's resolver instead, and the summary counts those lookups and its answers (-resolvers names resolvers that are asked for them)"
 		}
 	}
 	return line
