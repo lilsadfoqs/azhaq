@@ -76,7 +76,7 @@ The summary counts what each format gave: the pages (arjun), lines (gowitness, a
 <!-- flags:begin ingest -->
 | Flag | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `-in` | string |  | a file of results (- for stdin): subfinder, dnsx, httpx, katana, naabu, nuclei, gau, gowitness or asnmap JSON lines, an ffuf JSON report or -json lines, an arjun JSON file, an nmap XML file (-oX), azhaq export, connector facts, naabu's host:port lines, or lines of URLs, hostnames and addresses; files may also be given as arguments, several at once |
+| `-in` | string |  | a file of results (- for stdin): subfinder, dnsx, httpx, katana, naabu, nuclei, gau, gowitness or asnmap JSON lines, an ffuf JSON report or -json lines, an arjun JSON file, an nmap XML file (nmap -oX), azhaq export, connector facts, naabu's host:port lines, or lines of URLs, hostnames and addresses; files may also be given as arguments, several at once |
 | `-db` | string |  | the database to add to (default: a new file) |
 | `-json` | bool |  | the summary as JSON |
 <!-- flags:end -->

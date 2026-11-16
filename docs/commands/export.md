@@ -212,7 +212,7 @@ Rules look like this:
 | `-db` | string |  | sqlite path (default: last run) |
 | `-format` | string | `jsonl` | jsonl (everything), urls, hosts (names that resolve), names (every name), targets (web services, for nuclei -l), openapi, graphql (introspection JSON), sdl (GraphQL schema), burp (the run's scope), html, graphml, secrets, findings (one record per qualifying stored row in three tiers, JSON Lines; an empty workspace writes an explicit empty record set), findings-md (the same records in Markdown) |
 | `-origin` | string |  | openapi: the origin to describe (default: the one with most API routes); graphql, sdl: the endpoints of an origin, or one endpoint's URL |
-| `-safe` | bool |  | openapi: leave out the routes the run did not request, such as those -deny-path kept out (otherwise they carry x-azhaq-skipped: true) |
+| `-safe` | bool |  | openapi: leave out the routes the run did not request, such as those run's -deny-path kept out (otherwise they carry x-azhaq-skipped: true) |
 | `-coverage` | string |  | urls, names: only these coverages, comma-separated: visited, catchall, error, gone, hint, skipped, capped |
 | `-json` | bool |  | urls, names: one {url\|name, coverage, status, source} object per line |
 | `-run` | string |  | the run to write, by the run_id of its summary (default: the newest run of the workspace; jsonl: every run) |

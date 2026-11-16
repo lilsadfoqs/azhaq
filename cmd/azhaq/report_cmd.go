@@ -134,7 +134,7 @@ func cmdReport(args []string) error {
 	db := fs.String("db", "", "with -findings: the workspace database the records are read from")
 	dir := fs.String("dir", "", "the -dir of the roles run (it holds "+evidenceFile+")")
 	target := fs.String("url", "", "write up this one row (its URL as roles lists it); every cross-role finding by default")
-	method := fs.String("method", "", "the method of a write row (-replay-writes); a read's row by default")
+	method := fs.String("method", "", "the method of a write row (roles -replay-writes); a read's row by default")
 	owner := fs.String("owner", "", "with -url: only the row of this owner, when several owners' requests share the URL and method (two roles creating in one collection); a report for each owner by default")
 	format := fs.String("format", "md", "md or json")
 	out := fs.String("o", "", "FILE or DIR for the reports: a directory (it exists, ends in a slash, or several reports go to it) gets a file per report, any other path is the file of a single report; without -url, DIR/reports; with -url, standard output")

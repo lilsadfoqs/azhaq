@@ -156,11 +156,11 @@ note: screenshot of http://127.0.0.1:3001/ not taken: the page needs about 26 re
 | `-u` | string, repeatable |  | target: URL (its path and query are kept), host, host:port, IP or address range such as 192.0.2.0/24 |
 | `-l` | string |  | file of targets (- for stdin) |
 | `-p` | string |  | web ports to try on each host, comma-separated: numbers, ranges, small (80, 443), medium or large (default: 443, then 80) |
-| `-nmap` | string, repeatable |  | an nmap XML file (-oX): the web services it found |
+| `-nmap` | string, repeatable |  | an nmap XML file (nmap -oX): the web services it found |
 | `-nessus` | string, repeatable |  | a Nessus file (.nessus): the web services it found |
 | `-scope` | string |  | a program's scope: a file (HackerOne CSV, bounty-targets JSON, Burp options, lines) or hackerone, bugcrowd, intigriti, yeswehack |
 | `-program` | string |  | the program to take from a -scope list (handle, name or URL) |
-| `-max-ips` | int | `4096` | addresses expanded from -asn and -cidr prefixes, for the whole run |
+| `-max-ips` | int | `4096` | addresses expanded from ASN and CIDR prefixes, for the whole run |
 
 **Screenshots**
 
@@ -185,7 +185,7 @@ note: screenshot of http://127.0.0.1:3001/ not taken: the page needs about 26 re
 | `-chrome-profile` | string |  | a Chrome user data directory to use and keep: sessions it holds go with the pages (default: a temporary one) |
 | `-chrome-no-sandbox` | bool |  | let Chrome run without its sandbox where the system gives it none (no user namespaces, AppArmor, a container): it is started once more without, and the summary says so. The pages it loads are the targets' and untrusted: use a throwaway environment. By default Chrome does not start then |
 | `-chrome-require-sandbox` | bool |  | never run Chrome without its sandbox (the default since v0.15.0, so this changes nothing: kept for scripts that pass it; it cannot go with -chrome-no-sandbox) |
-| `-tabs` | int | `6` | Chrome tabs open at once for screenshots and -browser (gowitness -t) |
+| `-tabs` | int | `6` | Chrome tabs open at once for screenshots and run's -browser (gowitness -t) |
 | `-unsafe-ports` | bool | `true` | let Chrome open the ports it refuses by default (6000, 6666, 10080 and others); -unsafe-ports=false keeps its refusal |
 
 **Scope and safety**

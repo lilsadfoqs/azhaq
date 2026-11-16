@@ -253,10 +253,10 @@ These filters limit what is printed, not what is crawled.
 | Flag | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `-allow` | string, repeatable |  | a domain, host or address range the run may touch; HOST:PORT allows that host on that port only; with any -allow, nothing else is requested |
-| `-sweep` | bool |  | cover the whole scope: the IPv4 ranges and addresses -allow and -scope hold are targets too, not only the ones named (without it a note says how much of a range the targets leave); -deny, -deny-path, -rate, -max-requests and the kill file hold as for any target, and a range is expanded up to -max-ips unless -ports scans it |
+| `-sweep` | bool |  | cover the whole scope: the IPv4 ranges and addresses -allow and -scope hold are targets too, not only the ones named (without it a note says how much of a range the targets leave); -deny, -deny-path, -rate, -max-requests and the kill file hold as for any target, and a range is expanded up to run's -max-ips unless run's -ports scans it |
 | `-deny` | string, repeatable |  | a domain, host or address range the run must not touch, even when given as a target |
 | `-deny-path` | string, repeatable |  | a regular expression on a URL's path and query: a URL it matches is never requested, by any collector or Chrome, and is listed as not requested (repeatable; azhaq decides nothing by itself) |
-| `-send-state-changing` | bool |  | send the GETs whose own path or query declares a state change (create, delete, reset, logout, and the other words of the documented set; a query's action=stop and the like): a crawl's link, a script's route, an API description's operation, a word of a -dirs or -paths wordlist (ffuf sends every word). By default they are held back and listed as skipped; a target you give and -deny-path rules are not affected |
+| `-send-state-changing` | bool |  | send the GETs whose own path or query declares a state change (create, delete, reset, logout, and the other words of the documented set; a query's action=stop and the like): a crawl's link, a script's route, an API description's operation, a word of a path wordlist (ffuf sends every word). By default they are held back and listed as skipped; a target you give and -deny-path rules are not affected |
 | `-kill-file` | string |  | stop all sending when this file exists, so that no request starts after it, and exit 4; azhaq resume works once it is removed (default DB.stop) |
 | `-ledger` | string |  | write every request, connection and DNS query the run sends (to targets, third-party sources and resolvers) to this file, a chain of hashes that azhaq ledger -verify checks (default DB.ledger.jsonl next to the workspace; off: none; with a temporary database, only when given) |
 | `-submit-forms` | bool |  | also submit POST forms with neutral values (crawl): CHANGES DATA on the target, each submission counts as a request and is in the ledger, the summary says how many; held to -allow, -deny and the crawl's scope |
@@ -280,7 +280,7 @@ These filters limit what is printed, not what is crawled.
 | `-ct` | duration |  | stop after this long and keep what was found; azhaq resume continues (0: no limit) |
 | `-max-requests` | int |  | requests to targets this run may send (0: no cap); the work left over is for azhaq resume |
 | `-max-host-requests` | int |  | requests one host may be sent (0: no cap); the rest of its work is left for azhaq resume |
-| `-host-guesses` | int |  | most guesses one host is sent (0: no cap): requests for the built-in paths, a -dirs or -params wordlist or GraphQL field names; the rest are not asked and the summary lists them, the run exits 4 and azhaq resume asks them with a larger value |
+| `-host-guesses` | int |  | most guesses one host is sent (0: no cap): requests for the built-in paths, a directory or parameter wordlist or GraphQL field names; the rest are not asked and the summary lists them, the run exits 4 and azhaq resume asks them with a larger value |
 | `-max-items` | int |  | most collector tasks (a name, a URL, an address each, per collector) this run starts (default: no cap, katana's and httpx's); the work left is for azhaq resume, which starts as many more |
 | `-max-response-size` | int |  | bytes read of a page or document (default 2097152; scripts and JSON get 16 MiB) |
 

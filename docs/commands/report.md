@@ -203,7 +203,7 @@ Read a redacted report once before sharing it. An identifier that no kept body n
 | `-db` | string |  | with -findings: the workspace database the records are read from |
 | `-dir` | string |  | the -dir of the roles run (it holds roles.db) |
 | `-url` | string |  | write up this one row (its URL as roles lists it); every cross-role finding by default |
-| `-method` | string |  | the method of a write row (-replay-writes); a read's row by default |
+| `-method` | string |  | the method of a write row (roles -replay-writes); a read's row by default |
 | `-owner` | string |  | with -url: only the row of this owner, when several owners' requests share the URL and method (two roles creating in one collection); a report for each owner by default |
 | `-format` | string | `md` | md or json |
 | `-o` | string |  | FILE or DIR for the reports: a directory (it exists, ends in a slash, or several reports go to it) gets a file per report, any other path is the file of a single report; without -url, DIR/reports; with -url, standard output |
