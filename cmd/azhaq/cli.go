@@ -166,7 +166,7 @@ func init() {
 		{name: "dirs", group: groupDropIn, like: "ffuf -ac", run: cmdDirs,
 			summary:  "paths from a wordlist (SecLists' common.txt built in) that answer unlike a path that cannot exist; a URL with a path is swept from that path",
 			usage:    "-u URL | -l FILE | stdin  [-w WORDLIST] [-e EXT] [-depth N] [-mc/-ms/-mw/-ml/-mr LIST] [-fc/-fs/-fw/-fl/-fr LIST] [-ac=false] [-rate N] [-proxy URL] [-json]",
-			output:   "one URL per line with status, size, words and lines; -json: {\"url\",\"status\",\"length\",\"words\",\"lines\",\"redirectlocation\"}. Sizes, words and lines are counted as ffuf counts them, so a -fs or -fl value carries over. The calibration is on (it is ffuf's -ac); -mc defaults to ffuf's 200-299,301,302,307,401,403,405,500",
+			output:   "one URL per line with status, size, words and lines; -json: {\"url\",\"status\",\"length\",\"words\",\"lines\",\"redirectlocation\"}. Sizes, words and lines are counted as ffuf counts them, so a -fs or -fl value carries over. The calibration is on (it is ffuf's -ac); -mc defaults to 200-299,301,302,307,308,401,403,405,500 (ffuf's and 308)",
 			examples: []string{"azhaq dirs -u https://app.example.com/", "azhaq dirs -u https://app.example.com/api/ -w common.txt -e php,bak -fs 4242 -rate 20"}},
 		{name: "fuzz", group: groupDropIn, like: "ffuf", run: cmdFuzz,
 			summary: "wordlists put into a request, anywhere in it: paths, query values, headers (virtual hosts), JSON or form bodies; filters, auto-calibration and recursion as ffuf has them",

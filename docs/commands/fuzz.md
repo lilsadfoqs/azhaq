@@ -58,7 +58,7 @@ A match is one line: the input and `[Status, Size, Words, Lines, Duration]`, the
 One line looks like this:
 
 ```
-{"input":{"FFUFHASH":"YzdjOGEz","FUZZ":"YWRtaW4="},"position":12,"status":200,"length":483,"words":51,"lines":7,"content-type":"text/plain","redirectlocation":"","url":"…","duration":7596361,"scraper":{},"resultfile":"","host":"127.0.0.1:3001","matched":[{"matcher":"-mc","value":"200-299,301,302,307,401,403,405,500","got":"200"}]}
+{"input":{"FFUFHASH":"YzdjOGEz","FUZZ":"YWRtaW4="},"position":12,"status":200,"length":483,"words":51,"lines":7,"content-type":"text/plain","redirectlocation":"","url":"…","duration":7596361,"scraper":{},"resultfile":"","host":"127.0.0.1:3001","matched":[{"matcher":"-mc","value":"200-299,301,302,307,308,401,403,405,500","got":"200"}]}
 ```
 
 With the default `-mmode or` an answer is listed when any matcher holds, and `matched` names the ones that did: `-mc 302 -mr 'Location: index.php'` lists every 302 answer, as ffuf does, and only the one with that header has an `-mr` entry. `-mmode and` lists the answers every matcher holds for. A match that has no `control` was not compared with one: without `-ac` the run asks for no name that cannot exist. With `-ac`, an answer that has a calibration answer's status and the same bytes (the same once each one's own input is taken out, when the body was read) says which one; a filter set by calibration usually removes such an answer, so it shows when the filters you chose let it through (`-fmode and`).
@@ -168,7 +168,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 ### Matching and wordlists
 - `-mr` and `-fr` read the response headers, one `Name: value` line each, followed by the body, as ffuf does: `-mr 'Location: index.php'` matches a header.
 - Several matchers join with `-mmode or` (the default: any one holds) or `-mmode and` (every one holds), and several filters with `-fmode or` (any one drops the answer) or `-fmode and` (every one must), as ffuf does.
-- The default matcher is `-mc 200-299,301,302,307,401,403,405,500`, unless `-ms`, `-mw`, `-ml`, `-mr` or `-mt` is given alone, as in ffuf.
+- The default matcher is `-mc 200-299,301,302,307,308,401,403,405,500`, unless `-ms`, `-mw`, `-ml`, `-mr` or `-mt` is given alone, as in ffuf. It is ffuf's list with 308 added: ffuf matches 301, 302 and 307 and not the permanent redirect that keeps the method, so a moved route answered 308 is missed there unless `-mc` names it (`-mc 200-299,301,302,307,401,403,405,500` is ffuf's own).
 - An empty line of a wordlist is a word: `FUZZ` is replaced by nothing, so a wordlist that starts with a blank line asks the base URL (as in ffuf).
 - With several wordlists, `-mode pitchfork` runs as long as the longest list. The shorter ones start over. 4 users and 3 passwords make 4 requests, as in ffuf 2.3.
 
@@ -197,6 +197,8 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 - The host in `-u` is the scope unless `-allow`, `-deny` or `-scope` say otherwise. When the keyword starts the host, as in `FUZZ.example.com`, the scope is its domain.
 - A request to a host outside the scope is not sent, and the summary counts it.
 - Every request goes through the run's budget and pace (`-max-requests`, `-rate`) and the ledger, and stops at the kill file.
+- A request that failed is a failure of the run, the last one before `-max-requests` included: a request that failed and whose retry the cap refused is listed under `failed` with its cause, and the run stops with exit 4 (the limit takes the exit code; the failure is in the summary and in `azhaq query -failed`).
+- With `-resolvers` a name in the request is looked up at those resolvers only, as in every command that takes the flag: the system's resolver is never asked, and a name they do not answer fails.
 - `-x` (also `-proxy`, as on the other commands) and `-replay-proxy` need their scheme, as in `http://127.0.0.1:8080`. `-x` sends everything, loopback included. Without it, `HTTP_PROXY` and `HTTPS_PROXY` apply by Go's rule, as in ffuf: a loopback target stays direct: [Proxies](../CONCEPTS.md#proxies). `-replay-proxy` is not read from the environment.
 - The copies `-replay-proxy` sends go to the proxy you named. They are not requests to the target, so they are not in the ledger, the budget or the pace. The summary says how many were sent.
 
@@ -231,7 +233,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 
 | Flag | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `-mc` | string |  | match these statuses, comma-separated values and ranges, or all (default 200-299,301,302,307,401,403,405,500, unless another matcher is given) |
+| `-mc` | string |  | match these statuses, comma-separated values and ranges, or all (default 200-299,301,302,307,308,401,403,405,500, ffuf's and 308, unless another matcher is given) |
 | `-mr` | string |  | match answers (headers and body) with this regexp; the keyword stands for its input |
 | `-fc` | string |  | filter out these statuses |
 | `-fs` | string |  | filter out these response sizes |

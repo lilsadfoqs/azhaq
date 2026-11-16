@@ -974,7 +974,7 @@ A guess is dropped when it answers like a calibration answer. That means any of 
 - when their bodies or redirects repeat the path asked, a size that differs only by the length of the path, or a redirect that repeats it;
 - the same redirect.
 
-Statuses default to ffuf's: `200-299,301,302,307,401,403,405,500`. `-dirs-mc`, `-dirs-ms`, `-dirs-mw`, `-dirs-ml` and `-dirs-mr` are ffuf's matchers. `-dirs-fc`, `-dirs-fs`, `-dirs-fw`, `-dirs-fl` and `-dirs-fr` are ffuf's filters. They are `internal/fuzz`'s, as `fuzz` uses them, and are applied before the calibration.
+Statuses default to `200-299,301,302,307,308,401,403,405,500`: ffuf's, with 308 (ffuf leaves it out though 301, 302 and 307 are in). `-dirs-mc`, `-dirs-ms`, `-dirs-mw`, `-dirs-ml` and `-dirs-mr` are ffuf's matchers. `-dirs-fc`, `-dirs-fs`, `-dirs-fw`, `-dirs-fl` and `-dirs-fr` are ffuf's filters. They are `internal/fuzz`'s, as `fuzz` uses them, and are applied before the calibration.
 
 ### The sweep's client
 

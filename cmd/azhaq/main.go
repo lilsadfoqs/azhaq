@@ -3491,7 +3491,7 @@ var dirsMatchers = []struct {
 	flag, kind, help string
 	filter           bool
 }{
-	{"mc", "status", "report only these statuses (comma-separated, ranges, or all; default ffuf's: 200-299,301,302,307,401,403,405,500)", false},
+	{"mc", "status", "report only these statuses (comma-separated, ranges, or all; default 200-299,301,302,307,308,401,403,405,500, ffuf's and 308)", false},
 	{"ms", "size", "report only these response sizes (values and ranges, 100-200)", false},
 	{"mw", "word", "report only these word counts", false},
 	{"ml", "line", "report only these line counts", false},
