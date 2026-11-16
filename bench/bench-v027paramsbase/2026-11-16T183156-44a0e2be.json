@@ -1,0 +1,245 @@
+{
+  "date": "2026-11-16T18:31:56Z",
+  "commit": "44a0e2be",
+  "version": "azhaq 0.26.1-0.20261116182210-44a0e2bee587+dirty\nadvisory index 2026-11-16 (52995 records)\n  CISA Known Exploited Vulnerabilities catalogue, 2026-11-13\n  NVD CVE records, feed 2.0 (with CPE configurations), 2026-11-15",
+  "go": "go1.27.4",
+  "tools": [
+    {
+      "name": "katana",
+      "version": "1.8.0"
+    },
+    {
+      "name": "subfinder",
+      "version": "2.17.0"
+    },
+    {
+      "name": "httpx",
+      "version": "1.12.0"
+    },
+    {
+      "name": "dnsx",
+      "version": "1.3.1"
+    },
+    {
+      "name": "naabu",
+      "version": "2.6.1"
+    },
+    {
+      "name": "gau",
+      "version": "2.2.4"
+    },
+    {
+      "name": "ffuf",
+      "version": "2.3.0"
+    },
+    {
+      "name": "alterx",
+      "version": "0.1.0"
+    },
+    {
+      "name": "gowitness",
+      "version": "3.2.2"
+    },
+    {
+      "name": "jsluice",
+      "version": "v0.0.0-20240110145140-0ddfab153e06"
+    },
+    {
+      "name": "notify",
+      "version": "v1.0.7"
+    }
+  ],
+  "profile": "polite",
+  "polite": {
+    "params": {
+      "profile": "polite",
+      "pages": [
+        "http://127.0.0.1:34169/search",
+        "http://127.0.0.1:34169/item",
+        "http://127.0.0.1:3101/rest/products/search"
+      ],
+      "words": 6453,
+      "azhaq": [
+        "http://127.0.0.1:3101/rest/products/search q",
+        "http://127.0.0.1:34169/item debug",
+        "http://127.0.0.1:34169/item format",
+        "http://127.0.0.1:34169/item id",
+        "http://127.0.0.1:34169/search lang",
+        "http://127.0.0.1:34169/search limit",
+        "http://127.0.0.1:34169/search page",
+        "http://127.0.0.1:34169/search q",
+        "http://127.0.0.1:34169/search sort"
+      ],
+      "arjun": [
+        "http://127.0.0.1:3101/rest/products/search q",
+        "http://127.0.0.1:34169/item debug",
+        "http://127.0.0.1:34169/item format",
+        "http://127.0.0.1:34169/item id",
+        "http://127.0.0.1:34169/search lang",
+        "http://127.0.0.1:34169/search limit",
+        "http://127.0.0.1:34169/search page",
+        "http://127.0.0.1:34169/search q",
+        "http://127.0.0.1:34169/search sort"
+      ],
+      "shared": 9,
+      "azhaq_seconds": 50.696874578000006,
+      "arjun_seconds": 43.363910631,
+      "azhaq_rss_mb": 51.44921875,
+      "reference_rss_mb": 36.1484375,
+      "planted_truth": 8,
+      "azhaq_planted": 8,
+      "arjun_planted": 8,
+      "azhaq_wrong": 0,
+      "arjun_wrong": 0
+    }
+  },
+  "checks": [
+    {
+      "name": "[polite] params: results ≥ the reference's, confirmed by the planted server's own list of the parameters it reads (wrong names count against)",
+      "pass": true,
+      "detail": "azhaq 8, reference 8; old bar: 9 of 9 = 100%; planted pages: azhaq 8 right 0 wrong, arjun 8 right 0 wrong, of 8; all pages azhaq 9, arjun 9, shared 9; time ×1.17 of the reference, memory ×1.42 of the reference (51 MB against 36 MB) | azhaq params -u http://127.0.0.1:3101/rest/products/search -w /home/runner/work/azhaq/azhaq/bench/.work/burp-parameter-names.txt -silent -rate 5 vs arjun -u http://127.0.0.1:3101/rest/products/search -w /home/runner/work/azhaq/azhaq/bench/.work/burp-parameter-names.txt -oJ /home/runner/work/azhaq/azhaq/bench/.work/params/arjun.json -q --disable-redirects --rate-limit 5"
+    },
+    {
+      "name": "[polite] params: time ≤ 1.05× the reference's",
+      "pass": false,
+      "detail": "azhaq 50.7s, reference 43.4s (the median of 3 below 20 s, one run above) | azhaq params -u http://127.0.0.1:3101/rest/products/search -w /home/runner/work/azhaq/azhaq/bench/.work/burp-parameter-names.txt -silent -rate 5 vs arjun -u http://127.0.0.1:3101/rest/products/search -w /home/runner/work/azhaq/azhaq/bench/.work/burp-parameter-names.txt -oJ /home/runner/work/azhaq/azhaq/bench/.work/params/arjun.json -q --disable-redirects --rate-limit 5"
+    }
+  ],
+  "runs": [
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:34169/search",
+      "seconds": 24.431101214,
+      "rss_mb": 50.65625,
+      "anon_mb": 11.03515625,
+      "profile": "polite"
+    },
+    {
+      "tool": "arjun",
+      "target": "http://127.0.0.1:34169/search",
+      "seconds": 18.156995273,
+      "rss_mb": 35.16015625,
+      "anon_mb": 21.03125,
+      "profile": "polite"
+    },
+    {
+      "tool": "arjun",
+      "target": "http://127.0.0.1:34169/search",
+      "seconds": 20.108184853,
+      "rss_mb": 35.1328125,
+      "anon_mb": 21.01171875,
+      "profile": "polite"
+    },
+    {
+      "tool": "arjun",
+      "target": "http://127.0.0.1:34169/search",
+      "seconds": 21.107793792,
+      "rss_mb": 35.14453125,
+      "anon_mb": 21.02734375,
+      "profile": "polite"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:34169/item",
+      "seconds": 17.629565698,
+      "rss_mb": 50.40234375,
+      "anon_mb": 10.78125,
+      "profile": "polite"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:34169/item",
+      "seconds": 17.631041151,
+      "rss_mb": 50.3984375,
+      "anon_mb": 10.77734375,
+      "profile": "polite"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:34169/item",
+      "seconds": 17.627028456,
+      "rss_mb": 50.4609375,
+      "anon_mb": 10.84375,
+      "profile": "polite"
+    },
+    {
+      "tool": "arjun",
+      "target": "http://127.0.0.1:34169/item",
+      "seconds": 15.122571577,
+      "rss_mb": 35.05859375,
+      "anon_mb": 20.9453125,
+      "profile": "polite"
+    },
+    {
+      "tool": "arjun",
+      "target": "http://127.0.0.1:34169/item",
+      "seconds": 15.106866362,
+      "rss_mb": 35.109375,
+      "anon_mb": 20.9765625,
+      "profile": "polite"
+    },
+    {
+      "tool": "arjun",
+      "target": "http://127.0.0.1:34169/item",
+      "seconds": 15.106570515,
+      "rss_mb": 35.09375,
+      "anon_mb": 20.96875,
+      "profile": "polite"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:3101/rest/products/search",
+      "seconds": 8.634451422,
+      "rss_mb": 51.13671875,
+      "anon_mb": 11.51953125,
+      "profile": "polite"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:3101/rest/products/search",
+      "seconds": 8.636348394,
+      "rss_mb": 51.70703125,
+      "anon_mb": 12.0859375,
+      "profile": "polite"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:3101/rest/products/search",
+      "seconds": 8.636207666,
+      "rss_mb": 51.44921875,
+      "anon_mb": 11.8359375,
+      "profile": "polite"
+    },
+    {
+      "tool": "arjun",
+      "target": "http://127.0.0.1:3101/rest/products/search",
+      "seconds": 8.144115709,
+      "rss_mb": 36.1484375,
+      "anon_mb": 22.0546875,
+      "profile": "polite"
+    },
+    {
+      "tool": "arjun",
+      "target": "http://127.0.0.1:3101/rest/products/search",
+      "seconds": 8.148859416,
+      "rss_mb": 36.2421875,
+      "anon_mb": 21.98046875,
+      "profile": "polite"
+    },
+    {
+      "tool": "arjun",
+      "target": "http://127.0.0.1:3101/rest/products/search",
+      "seconds": 8.150733736,
+      "rss_mb": 36.171875,
+      "anon_mb": 22.08984375,
+      "profile": "polite"
+    }
+  ],
+  "units": [
+    {
+      "name": "polite:params",
+      "checks": 2,
+      "runs": 16
+    }
+  ]
+}
