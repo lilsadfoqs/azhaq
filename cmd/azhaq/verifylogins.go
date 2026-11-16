@@ -14,6 +14,7 @@ import (
 	"github.com/lilsadfoqs/azhaq/engine"
 	"github.com/lilsadfoqs/azhaq/internal/advisory"
 	"github.com/lilsadfoqs/azhaq/internal/egress"
+	"github.com/lilsadfoqs/azhaq/internal/httprow"
 	"github.com/lilsadfoqs/azhaq/internal/ledger"
 	"github.com/lilsadfoqs/azhaq/internal/proof"
 	"github.com/lilsadfoqs/azhaq/internal/verify"
@@ -273,11 +274,8 @@ func loginWebServices(obs []types.StoredObservation) []advisory.Service {
 		if o.Collector != "azhaq-http" {
 			continue
 		}
-		var row struct {
-			URL  string   `json:"url"`
-			Tech []string `json:"tech"`
-		}
-		if json.Unmarshal(o.Payload, &row) != nil || len(row.Tech) == 0 {
+		row, err := httprow.ParseRow(o.Payload)
+		if err != nil || len(row.Tech) == 0 {
 			continue
 		}
 		u, err := url.Parse(row.URL)

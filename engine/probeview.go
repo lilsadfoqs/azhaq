@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/lilsadfoqs/azhaq/internal/httprow"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"github.com/lilsadfoqs/azhaq/types"
 )
@@ -72,9 +73,16 @@ func ProbeRows(obs []types.StoredObservation) []ProbeRow {
 // them; failures and skips have kinds of their own. A path a -dirs or
 // -paths sweep asked and got an answer to is one too (its kind is "url").
 func ProbeRowOf(o types.Observation) (ProbeRow, bool) {
-	var r ProbeRow
 	swept := o.Kind == "url" && (o.Collector == "azhaq-dirs" || o.Collector == "azhaq-paths")
-	if o.Kind != "application" && !swept || json.Unmarshal(o.Payload, &r) != nil || r.URL == "" || r.Status == 0 {
+	if o.Kind != "application" && !swept {
+		return ProbeRow{}, false
+	}
+	// An import's row may give a field this does not show another type: it is left out.
+	h, _ := httprow.ParseRow(o.Payload)
+	r := ProbeRow{URL: h.URL, Status: h.Status, FinalStatus: h.FinalStatus, FinalURL: h.FinalURL, Title: h.Title, Tech: h.Tech, Server: h.Server,
+		CDN: h.CDN, CDNType: h.CDNType, IP: h.IP, Favicon: h.Favicon, ContentType: h.ContentType, Location: h.Location,
+		Length: h.Length, Words: h.Words, Lines: h.Lines, MS: int(h.MS), CatchAll: h.Catchall}
+	if r.URL == "" || r.Status == 0 {
 		return ProbeRow{}, false
 	}
 	// httpx writes https://host with no path: the same service as

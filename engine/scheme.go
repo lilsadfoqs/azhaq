@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
+	"github.com/lilsadfoqs/azhaq/internal/httprow"
 	"github.com/lilsadfoqs/azhaq/internal/neterr"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"github.com/lilsadfoqs/azhaq/types"
@@ -198,10 +199,7 @@ func securedHosts(obs []types.StoredObservation) map[string]bool {
 		if o.Kind != schemeKind {
 			continue
 		}
-		var p struct {
-			HTTP string `json:"http"`
-		}
-		if json.Unmarshal(o.Payload, &p) == nil {
+		if p, err := httprow.ParseRow(o.Payload); err == nil {
 			if u, err := url.Parse(p.HTTP); err == nil && u.Host != "" {
 				out[u.Host] = true
 			}

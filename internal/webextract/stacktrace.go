@@ -5,15 +5,13 @@ import (
 	"html"
 	"strings"
 
+	"github.com/lilsadfoqs/azhaq/internal/httprow"
 	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 )
 
-// A Trace is a runtime's stack trace found in the body of an answer.
-type Trace struct {
-	Runtime   string `json:"runtime"`   // java, python, node, php, dotnet or ruby
-	Exception string `json:"exception"` // the line that names the exception
-	Frames    int    `json:"frames"`    // the frame lines of the runs of three or more
-}
+// A Trace is a runtime's stack trace found in the body of an answer; the
+// type is the row's, so that its readers need not import this package.
+type Trace = httprow.Trace
 
 // TraceWindow is how much of a body is looked at.
 const TraceWindow = 256 << 10

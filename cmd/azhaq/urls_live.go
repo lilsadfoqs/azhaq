@@ -7,6 +7,7 @@ import (
 
 	"github.com/lilsadfoqs/azhaq/internal/collectors/httpcol"
 	"github.com/lilsadfoqs/azhaq/internal/collectors/urlcol"
+	"github.com/lilsadfoqs/azhaq/internal/httprow"
 	"github.com/lilsadfoqs/azhaq/internal/neterr"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"github.com/lilsadfoqs/azhaq/internal/statechange"
@@ -101,12 +102,8 @@ func verifyURLs(c *common, rows []urlcol.Row, rate float64, max int, proxy strin
 		if ob.Collector != "azhaq-http" {
 			continue
 		}
-		var p struct {
-			URL    string `json:"url"`
-			Status int    `json:"status"`
-			Error  string `json:"error"`
-		}
-		if json.Unmarshal(ob.Payload, &p) != nil || p.URL == "" {
+		p, err := httprow.ParseRow(ob.Payload)
+		if err != nil || p.URL == "" {
 			continue
 		}
 		n, err := normalize.URL(p.URL)

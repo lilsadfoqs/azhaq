@@ -9,6 +9,7 @@ import (
 
 	"github.com/lilsadfoqs/azhaq/engine"
 	"github.com/lilsadfoqs/azhaq/internal/collectors/pathscol"
+	"github.com/lilsadfoqs/azhaq/internal/httprow"
 	"github.com/lilsadfoqs/azhaq/store"
 	"github.com/lilsadfoqs/azhaq/types"
 )
@@ -82,10 +83,8 @@ func pathChecks(obs []types.StoredObservation, list []string, failed map[string]
 		if o.Collector != "azhaq-http" || o.Kind != "application" {
 			continue
 		}
-		var p struct {
-			URL string `json:"url"`
-		}
-		if json.Unmarshal(o.Payload, &p) != nil || p.URL == "" {
+		p, err := httprow.ParseRow(o.Payload)
+		if err != nil || p.URL == "" {
 			continue
 		}
 		u, err := url.Parse(p.URL)

@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/lilsadfoqs/azhaq/internal/httprow"
 	"github.com/lilsadfoqs/azhaq/internal/neterr"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"github.com/lilsadfoqs/azhaq/internal/portscan"
@@ -269,10 +270,7 @@ func outsideByPort(obs []types.StoredObservation) bool {
 		if o.Kind != "skipped" {
 			continue
 		}
-		var p struct {
-			Skipped string `json:"skipped"`
-		}
-		if json.Unmarshal(o.Payload, &p) == nil && (p.Skipped == neterr.OutOfPortReason || p.Skipped == neterr.OutOfTargetPortReason) {
+		if p, _ := httprow.ParseRow(o.Payload); p.Skipped == neterr.OutOfPortReason || p.Skipped == neterr.OutOfTargetPortReason {
 			return true
 		}
 	}
@@ -301,16 +299,13 @@ func answerObs(obs []types.StoredObservation) (int, string, json.RawMessage) {
 		if st == 0 {
 			continue
 		}
-		var p struct {
-			Title string `json:"title"`
-		}
-		_ = json.Unmarshal(o.Payload, &p)
-		if !isCatchAll(o) {
-			status, title, real, from = st, p.Title, true, o.Payload
+		row, _ := httprow.ParseRow(o.Payload)
+		if !row.Catchall {
+			status, title, real, from = st, row.Title, true, o.Payload
 			continue
 		}
 		if status == 0 && !real {
-			status, title, from = st, p.Title, o.Payload
+			status, title, from = st, row.Title, o.Payload
 		}
 	}
 	if status == 0 {
@@ -513,11 +508,8 @@ func resolved(obs []types.StoredObservation) bool {
 
 // isCatchAll is a fetch that returned the origin's answer for any path.
 func isCatchAll(o types.StoredObservation) bool {
-	var p struct {
-		CatchAll bool `json:"catchall"`
-	}
-	_ = json.Unmarshal(o.Payload, &p)
-	return p.CatchAll
+	row, _ := httprow.ParseRow(o.Payload) // any collector's row: a field of another type is left out
+	return row.Catchall
 }
 
 // probed is an answer a path sweep (-paths, -dirs) got to a URL it asked
@@ -787,13 +779,10 @@ func portUnion(lists ...[]string) []string {
 }
 
 func statusOf(raw json.RawMessage) int {
-	var p struct {
-		Status int `json:"status"`
+	if row, _ := httprow.ParseRow(raw); row.Status != 0 {
+		return row.Status
 	}
-	_ = json.Unmarshal(raw, &p)
-	if p.Status != 0 {
-		return p.Status
-	}
+	// A status an import wrote as text.
 	var m map[string]any
 	if json.Unmarshal(raw, &m) != nil {
 		return 0

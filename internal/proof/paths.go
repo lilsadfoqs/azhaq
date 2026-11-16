@@ -12,6 +12,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/lilsadfoqs/azhaq/internal/httprow"
 	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 	"github.com/lilsadfoqs/azhaq/types"
 )
@@ -412,39 +413,31 @@ func AnswersOf(obs []types.StoredObservation) []Answer {
 		}
 	}
 	for _, o := range obs {
-		var p struct {
-			URL         string `json:"url"`
-			Status      int    `json:"status"`
-			ContentType string `json:"content_type"`
-			Title       string `json:"title"`
-			Location    string `json:"location"`
-			BodyHash    string `json:"body_hash"`
-			AnswerType  string `json:"answer_type"`
-			AnswerTitle string `json:"answer_title"`
-			AnswerLoc   string `json:"answer_location"`
-			AnswerHash  string `json:"answer_hash"`
-			Head        []byte `json:"head"`
-			HeadKept    bool   `json:"head_kept"`
-			Login       bool   `json:"login"`
-			Catchall    bool   `json:"catchall"`
-		}
 		switch {
 		case o.Collector == "azhaq-http" && o.Kind == "application":
 		case (o.Collector == "azhaq-paths" || o.Collector == "azhaq-dirs") && o.Kind == "url":
 		default:
 			continue
 		}
-		if json.Unmarshal(o.Payload, &p) != nil || p.URL == "" {
+		p, err := httprow.ParseRow(o.Payload)
+		if err != nil || p.URL == "" {
 			continue
 		}
 		u, err := url.Parse(p.URL)
 		if err != nil || u.Host == "" {
 			continue
 		}
-		// The path sweep's rows name what its answer holds apart from the fields the map reads.
-		p.ContentType, p.Title, p.Location, p.BodyHash = first(p.ContentType, p.AnswerType), first(p.Title, p.AnswerTitle), first(p.Location, p.AnswerLoc), first(p.BodyHash, p.AnswerHash)
-		a := &Answer{URL: p.URL, Origin: u.Scheme + "://" + u.Host, Path: u.Path, Status: p.Status, ContentType: p.ContentType,
-			Title: p.Title, Location: p.Location, Hash: p.BodyHash, Head: p.Head, Login: p.Login, Catchall: p.Catchall,
+		// The path sweep's rows name what its answer holds apart from the fields the map reads (Fields).
+		var sweep struct {
+			AnswerType  string `json:"answer_type"`
+			AnswerTitle string `json:"answer_title"`
+			AnswerLoc   string `json:"answer_location"`
+			AnswerHash  string `json:"answer_hash"`
+		}
+		_ = json.Unmarshal(o.Payload, &sweep)
+		contentType, title, location, hash := first(p.ContentType, sweep.AnswerType), first(p.Title, sweep.AnswerTitle), first(p.Location, sweep.AnswerLoc), first(p.BodyHash, sweep.AnswerHash)
+		a := &Answer{URL: p.URL, Origin: u.Scheme + "://" + u.Host, Path: u.Path, Status: p.Status, ContentType: contentType,
+			Title: title, Location: location, Hash: hash, Head: p.Head, Login: p.Login, Catchall: p.Catchall,
 			Observed: o.ObservedAt, Read: p.HeadKept || len(p.Head) > 0}
 		a.Via = o.Collector
 		if v := via[p.URL]; v != "" {

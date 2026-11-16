@@ -27,6 +27,7 @@ import (
 	"github.com/lilsadfoqs/azhaq/engine"
 	"github.com/lilsadfoqs/azhaq/internal/collectors/shotcol"
 	"github.com/lilsadfoqs/azhaq/internal/gqlschema"
+	"github.com/lilsadfoqs/azhaq/internal/httprow"
 	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"github.com/lilsadfoqs/azhaq/internal/scopefile"
@@ -399,10 +400,8 @@ func skipReasons(obs []types.StoredObservation) map[string]string {
 		if o.Kind != "skipped" || out[o.EntityID] != "" {
 			continue
 		}
-		var p struct {
-			Skipped string `json:"skipped"`
-		}
-		if json.Unmarshal(o.Payload, &p) != nil || p.Skipped == "" {
+		p, _ := httprow.ParseRow(o.Payload) // any collector's skipped row has the key
+		if p.Skipped == "" {
 			continue
 		}
 		out[o.EntityID] = p.Skipped

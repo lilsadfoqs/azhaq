@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/lilsadfoqs/azhaq/engine"
+	"github.com/lilsadfoqs/azhaq/internal/httprow"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"github.com/lilsadfoqs/azhaq/internal/portscan"
 	"github.com/lilsadfoqs/azhaq/internal/webextract"
@@ -140,10 +141,11 @@ func newStream(asJSON bool) (see func(types.Entity, types.Observation), end func
 		}
 		switch o.Kind {
 		case "application":
-			if st, ok := p["status"].(float64); ok && st > 0 {
-				l := line{kind: "answer", key: rowKey(), more: fmt.Sprintf("[%d] %s", int(st), str("title")),
-					fields: map[string]any{"status": int(st), "title": str("title")}}
-				if p["catchall"] == true {
+			row, _ := httprow.ParseRow(o.Payload) // any collector's answer: a field of another type is left out
+			if row.Status > 0 {
+				l := line{kind: "answer", key: rowKey(), more: fmt.Sprintf("[%d] %s", row.Status, row.Title),
+					fields: map[string]any{"status": row.Status, "title": row.Title}}
+				if row.Catchall {
 					// The page every unknown path gets: not a page of its own.
 					l.more += catchAllNote
 					l.fields["catchall"] = true

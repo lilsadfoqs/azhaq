@@ -28,6 +28,7 @@ import (
 	"github.com/lilsadfoqs/azhaq/internal/collectors/shotcol"
 	"github.com/lilsadfoqs/azhaq/internal/collectors/urlcol"
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
+	"github.com/lilsadfoqs/azhaq/internal/httprow"
 	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"github.com/lilsadfoqs/azhaq/internal/targets"
@@ -569,8 +570,8 @@ func silentHosts(st *store.Store) []string {
 				resolved[byID[o.EntityID]] = true
 			}
 		case "azhaq-http":
-			if u, _ := p["url"].(string); u != "" {
-				answered[normalize.HostFromURL(u)] = true
+			if row, _ := httprow.ParseRow(o.Payload); row.URL != "" {
+				answered[normalize.HostFromURL(row.URL)] = true
 			}
 		}
 	}

@@ -21,6 +21,7 @@ import (
 	"github.com/lilsadfoqs/azhaq/internal/dnsr"
 	"github.com/lilsadfoqs/azhaq/internal/egress"
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
+	"github.com/lilsadfoqs/azhaq/internal/httprow"
 	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 	"github.com/lilsadfoqs/azhaq/internal/ledger"
 	"github.com/lilsadfoqs/azhaq/internal/neterr"
@@ -1834,9 +1835,8 @@ func endpointAnswers(db string) (map[string]answer, map[string]string, []string,
 	raw := map[string]string{}
 	for _, o := range obs {
 		var q struct {
-			URL     string              `json:"url"`
-			Methods []string            `json:"methods"`
-			IDs     map[string][]string `json:"json_ids"`
+			URL     string   `json:"url"`
+			Methods []string `json:"methods"`
 			Ops     []struct {
 				Method   string `json:"method"`
 				BodyType string `json:"body_type"`
@@ -1847,7 +1847,8 @@ func endpointAnswers(db string) (map[string]answer, map[string]string, []string,
 				seen.addWrites(q.URL, q.Methods, q.Ops)
 			}
 			if u, err := normalize.URL(q.URL); err == nil {
-				seen.add(u, q.IDs)
+				row, _ := httprow.ParseRow(o.Payload)
+				seen.add(u, row.JSONIDs)
 			}
 			if o.Kind == "url" && strings.Contains(q.URL, "{") && slices.ContainsFunc(q.Methods, func(m string) bool { return strings.EqualFold(m, "GET") }) {
 				if u, err := normalize.URL(q.URL); err == nil {
@@ -1858,19 +1859,10 @@ func endpointAnswers(db string) (map[string]answer, map[string]string, []string,
 		if o.Kind == "error" || o.Kind == "skipped" {
 			continue
 		}
-		var p struct {
-			URL      string      `json:"url"`
-			Status   int         `json:"status"`
-			CatchAll bool        `json:"catchall"`
-			Length   int         `json:"length"`
-			Hash     string      `json:"body_hash"`
-			Keys     []string    `json:"json_keys"`
-			Title    string      `json:"title"`
-			Location string      `json:"location"`
-			Hops     []fetch.Hop `json:"hops"`
-			Cut      bool        `json:"truncated"` // the probe cut the body (a stream that never ends, or the read limit)
-		}
-		if json.Unmarshal(o.Payload, &p) != nil || p.URL == "" || p.Status == 0 || p.CatchAll {
+		// Rows of other collectors (paths, an import) share these fields: one that
+		// has another type for a field this does not read stays a row.
+		p, _ := httprow.ParseRow(o.Payload)
+		if p.URL == "" || p.Status == 0 || p.Catchall {
 			continue
 		}
 		if o.Collector != "azhaq-http" && o.Collector != "azhaq-paths" && o.Kind != "application" {
@@ -1882,9 +1874,9 @@ func endpointAnswers(db string) (map[string]answer, map[string]string, []string,
 		}
 		// The first answer with its body's hash: the paths collector keeps
 		// a status only, and the probe of the same URL comes later.
-		if old, ok := out[u]; !ok || old.Hash == "" && p.Hash != "" {
-			a := storedAnswer(p.Status, p.Length, p.Hash, p.Keys, p.Title)
-			a.Truncated = p.Cut
+		if old, ok := out[u]; !ok || old.Hash == "" && p.BodyHash != "" {
+			a := storedAnswer(p.Status, p.Length, p.BodyHash, p.JSONKeys, p.Title)
+			a.Truncated = p.Truncated
 			if a.Status >= 300 && a.Status < 400 {
 				a.Location = bareLocation(p.Location)
 				if a.Location == "" && len(p.Hops) > 0 {

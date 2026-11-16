@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/lilsadfoqs/azhaq/engine"
 	"github.com/lilsadfoqs/azhaq/internal/fingerprint"
+	"github.com/lilsadfoqs/azhaq/internal/httprow"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"github.com/lilsadfoqs/azhaq/internal/pagekind"
 	"github.com/lilsadfoqs/azhaq/store"
@@ -636,11 +637,9 @@ func (o *probeOut) settle(rep *report, st *store.Store, fs *flag.FlagSet) {
 		if ob.Collector != "azhaq-http" || ob.Kind != "error" {
 			continue
 		}
-		m := payloadOf(ob.Observation)
-		u, _ := m["url"].(string)
-		msg, _ := m["error"].(string)
-		if u != "" && msg != "" {
-			unanswered[entKey[ob.EntityID]] = append(unanswered[entKey[ob.EntityID]], asked{u, engine.ShortError(msg)})
+		row, _ := httprow.ParseRow(ob.Payload)
+		if row.URL != "" && row.Error != "" {
+			unanswered[entKey[ob.EntityID]] = append(unanswered[entKey[ob.EntityID]], asked{row.URL, engine.ShortError(row.Error)})
 		}
 	}
 	accounted := map[string]bool{}

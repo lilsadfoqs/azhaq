@@ -29,6 +29,7 @@ import (
 	"github.com/lilsadfoqs/azhaq/internal/egress"
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
 	"github.com/lilsadfoqs/azhaq/internal/fingerprint"
+	"github.com/lilsadfoqs/azhaq/internal/httprow"
 	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 	"github.com/lilsadfoqs/azhaq/internal/limit"
 	"github.com/lilsadfoqs/azhaq/internal/neterr"
@@ -714,10 +715,7 @@ func addrOf(ip net.IP) netip.Addr {
 }
 
 func statusOf(o types.Observation) int {
-	var p struct {
-		Status int `json:"status"`
-	}
-	_ = json.Unmarshal(o.Payload, &p)
+	p, _ := httprow.ParseRow(o.Payload)
 	return p.Status
 }
 

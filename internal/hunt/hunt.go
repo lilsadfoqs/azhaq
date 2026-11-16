@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/lilsadfoqs/azhaq/engine"
+	"github.com/lilsadfoqs/azhaq/internal/httprow"
 	"github.com/lilsadfoqs/azhaq/internal/proof"
 	"github.com/lilsadfoqs/azhaq/internal/webextract"
 	"github.com/lilsadfoqs/azhaq/types"
@@ -342,12 +343,8 @@ func answersOf(obs []types.StoredObservation) (map[string]errText, map[string]bo
 	for _, o := range obs {
 		switch o.Collector {
 		case "azhaq-http":
-			var p struct {
-				Kind   string `json:"error_text"`
-				Sample string `json:"error_sample"`
-			}
-			if json.Unmarshal(o.Payload, &p) == nil && p.Kind != "" {
-				errs[o.EntityID] = errText{p.Kind, p.Sample}
+			if p, err := httprow.ParseRow(o.Payload); err == nil && p.ErrorText != "" {
+				errs[o.EntityID] = errText{p.ErrorText, p.ErrorSample}
 			}
 		case "azhaq-params":
 			var p struct {

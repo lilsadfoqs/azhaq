@@ -1,13 +1,13 @@
 package engine
 
 import (
-	"encoding/json"
 	"fmt"
 	"net"
 	"sort"
 	"strconv"
 	"strings"
 
+	"github.com/lilsadfoqs/azhaq/internal/httprow"
 	"github.com/lilsadfoqs/azhaq/types"
 )
 
@@ -38,11 +38,8 @@ func NoWebNote(obs []types.StoredObservation) string {
 		if o.Kind != KindNoWeb {
 			continue
 		}
-		var p struct {
-			Host  string `json:"host"`
-			Ports string `json:"ports"`
-		}
-		if json.Unmarshal(o.Payload, &p) != nil || p.Host == "" || seen[p.Host] {
+		p, err := httprow.ParseRow(o.Payload)
+		if err != nil || p.Host == "" || seen[p.Host] {
 			continue
 		}
 		seen[p.Host] = true
@@ -69,11 +66,8 @@ func NotHTTPNote(obs []types.StoredObservation) string {
 		if o.Kind != KindNotHTTP {
 			continue
 		}
-		var p struct {
-			Host string `json:"host"`
-			Port int    `json:"port"`
-		}
-		if json.Unmarshal(o.Payload, &p) != nil || p.Host == "" {
+		p, err := httprow.ParseRow(o.Payload)
+		if err != nil || p.Host == "" {
 			continue
 		}
 		hp := net.JoinHostPort(p.Host, strconv.Itoa(p.Port))

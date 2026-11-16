@@ -2,13 +2,13 @@ package engine
 
 import (
 	"cmp"
-	"encoding/json"
 	"fmt"
 	"net"
 	"slices"
 	"strings"
 
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
+	"github.com/lilsadfoqs/azhaq/internal/httprow"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"github.com/lilsadfoqs/azhaq/internal/webextract"
 	"github.com/lilsadfoqs/azhaq/types"
@@ -62,20 +62,15 @@ func NewFolder(obs []types.StoredObservation) *Folder {
 		if o.Kind != "application" && !probed(o) {
 			continue
 		}
-		var p struct {
-			URL      string         `json:"url"`
-			CatchAll bool           `json:"catchall"`
-			Control  *fetch.Control `json:"control"`
-			Exact    bool           `json:"control_exact"`
-		}
-		if json.Unmarshal(o.Payload, &p) != nil || !p.CatchAll || p.Control == nil || p.Control.URL == "" {
+		p, _ := httprow.ParseRow(o.Payload) // rows of the sweeps carry the same keys
+		if !p.Catchall || p.Control == nil || p.Control.URL == "" {
 			continue
 		}
-		if p.Exact && probed(o) {
+		if p.ControlExact && probed(o) {
 			if u, err := normalize.URL(p.URL); err == nil {
 				f.exactURL[u] = true
 			}
-		} else if p.Exact {
+		} else if p.ControlExact {
 			f.exact[o.EntityID] = true
 		}
 		origin := originOf(p.URL)
