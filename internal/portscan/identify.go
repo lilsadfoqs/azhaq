@@ -458,10 +458,11 @@ func (s *Scanner) identify(ctx context.Context, o *Open, conn net.Conn, host, ip
 	wantTLS := true
 	if status, banner, ok := httpAnswer(head); ok {
 		o.Service, o.Banner = "http", banner
-		s.webProduct(ctx, o, head, status, host, ip, false)
-		if status != 400 {
+		if !s.webProduct(ctx, o, head, status, host, ip, false) {
 			return
 		}
+		// The plain answer asked for TLS: its page is the error page's.
+		o.Title = ""
 	} else if icyAnswer(head, o) {
 		return
 	} else if _, product, _ := greetingProduct(head, printable(head)); product != "" {

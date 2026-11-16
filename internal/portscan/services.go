@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"html"
 	"net"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -172,6 +173,7 @@ type httpHead struct {
 	server, powered, elastic string
 	contentType              string
 	contentLength            int
+	location, upgrade        string
 }
 
 func parseHead(head []byte) (h httpHead, ok bool) {
@@ -198,6 +200,10 @@ func parseHead(head []byte) (h httpHead, ok bool) {
 			h.elastic = v
 		case "content-type":
 			h.contentType = strings.ToLower(v)
+		case "location":
+			h.location = v
+		case "upgrade":
+			h.upgrade = strings.ToLower(v)
 		case "content-length":
 			if n, err := strconv.Atoi(v); err == nil {
 				h.contentLength = n
@@ -418,17 +424,22 @@ func ftpSYSTProduct(syst []byte, o *Open) {
 // the head names none (or only Elasticsearch's header), or the HEAD was
 // refused (405, 501) or answered with an error page, asks GET / once more
 // for a body that names one, or for an HTML page's title and generator.
-// https says the port speaks TLS.
-func (s *Scanner) webProduct(ctx context.Context, o *Open, head []byte, status int, host, ip string, https bool) {
+// https says the port speaks TLS. It says whether, over plain HTTP, the
+// answer asked for TLS (asksTLS).
+func (s *Scanner) webProduct(ctx context.Context, o *Open, head []byte, status int, host, ip string, https bool) (asked bool) {
 	h, ok := parseHead(head)
 	if !ok {
-		return
+		return false
+	}
+	if !https {
+		_, body, _ := bytes.Cut(head, []byte("\r\n\r\n"))
+		asked = asksTLS(h, body, o.Port)
 	}
 	if p, v := headProduct(h); p != "" {
 		o.Product, o.Version, o.Extra = p, v, headExtra(h)
 	}
 	if o.Product != "" && h.elastic == "" {
-		return
+		return asked
 	}
 	small := h.contentLength < 0 || h.contentLength <= 4096
 	typed := strings.Contains(h.contentType, "json") || strings.Contains(h.contentType, "text/plain")
@@ -436,14 +447,39 @@ func (s *Scanner) webProduct(ctx context.Context, o *Open, head []byte, status i
 	switch status {
 	case 200, 401:
 		if !(typed && small || html && o.Product == "") {
-			return
+			return asked
 		}
 	case 403, 404, 405, 501:
 		// The HEAD was refused, or this is an error page: the page itself may say.
 	default:
-		return
+		return asked
 	}
-	s.pageProduct(ctx, o, s.getBody(ctx, o.Port, host, ip, https), host, ip, https)
+	body := s.getBody(ctx, o.Port, host, ip, https)
+	s.pageProduct(ctx, o, body, host, ip, https)
+	return asked || !https && asksTLS(h, body, o.Port)
+}
+
+// tlsAsks are the plain-HTTP answers that say the port speaks TLS: nginx
+// and Jetty, Apache, Go, Tomcat, IIS, and Webmin's "SSL mode" page.
+var tlsAsks = lazyre.New(`(?i)running in ssl mode|http request (was )?sent to https port|speaking plain http to an ssl|http request to an https server|requires (tls|ssl)\b|expects (tls|ssl|https)|must be viewed over a secure channel`)
+
+// asksTLS reads a plain-HTTP answer that wants TLS: a 400 (an HTTP server
+// that was handed a request it took for TLS says so this way), a 426 that
+// upgrades to TLS, a redirect to https on this very port, or a page that
+// says so. Only the handshake that follows tells; a port that does not
+// complete it stays http.
+func asksTLS(h httpHead, body []byte, port int) bool {
+	switch {
+	case h.status == 400:
+		return true
+	case h.status == 426 && strings.Contains(h.upgrade, "tls"):
+		return true
+	case h.status >= 300 && h.status < 400:
+		if u, err := url.Parse(h.location); err == nil && u.Scheme == "https" && u.Port() == strconv.Itoa(port) {
+			return true
+		}
+	}
+	return tlsAsks.Match(body[:min(len(body), 4096)])
 }
 
 // pageProduct reads what a GET / body names: a product, or the page's title
