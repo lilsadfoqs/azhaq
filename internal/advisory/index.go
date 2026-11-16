@@ -331,9 +331,9 @@ func condText(c int, plat []string, av string) string {
 	var t []string
 	switch av {
 	case AVLocal:
-		t = append(t, "needs local access: the record's CVSS attack vector is local (AV:L), so the flaw is not reachable over the network from the listener")
+		t = append(t, "needs local access: the record's CVSS attack vector is local (AV:L): by that score the network alone does not reach it")
 	case AVPhysical:
-		t = append(t, "needs physical access: the record's CVSS attack vector is physical (AV:P), so the flaw is not reachable over the network from the listener")
+		t = append(t, "needs physical access: the record's CVSS attack vector is physical (AV:P): by that score the network alone does not reach it")
 	}
 	if c&CondPlatform != 0 {
 		if len(plat) > 0 {
