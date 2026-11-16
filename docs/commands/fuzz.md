@@ -197,6 +197,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 - The host in `-u` is the scope unless `-allow`, `-deny` or `-scope` say otherwise. When the keyword starts the host, as in `FUZZ.example.com`, the scope is its domain.
 - A request to a host outside the scope is not sent, and the summary counts it.
 - Every request goes through the run's budget and pace (`-max-requests`, `-rate`) and the ledger, and stops at the kill file.
+- A request that failed is a failure of the run, the last one before `-max-requests` included: a request that failed and whose retry the cap refused is listed under `failed` with its cause, and the run stops with exit 4 (the limit takes the exit code; the failure is in the summary and in `azhaq query -failed`).
 - With `-resolvers` a name in the request is looked up at those resolvers only, as in every command that takes the flag: the system's resolver is never asked, and a name they do not answer fails.
 - `-x` (also `-proxy`, as on the other commands) and `-replay-proxy` need their scheme, as in `http://127.0.0.1:8080`. `-x` sends everything, loopback included. Without it, `HTTP_PROXY` and `HTTPS_PROXY` apply by Go's rule, as in ffuf: a loopback target stays direct: [Proxies](../CONCEPTS.md#proxies). `-replay-proxy` is not read from the environment.
 - The copies `-replay-proxy` sends go to the proxy you named. They are not requests to the target, so they are not in the ledger, the budget or the pace. The summary says how many were sent.

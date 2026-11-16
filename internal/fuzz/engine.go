@@ -559,10 +559,13 @@ func (e *engine) replay(ctx context.Context, req *Request) {
 
 // send sends req, once more if it failed. An error is counted and, when it
 // says the target does not answer, noted; the budget running out stops the run.
+// A request that failed and was not tried again (the budget or a stop came
+// first) is still a failure: it was sent.
 func (e *engine) send(ctx context.Context, req *Request) (*Response, error) {
 	var err error
 	for try := 0; try < 2; try++ {
 		var resp *Response
+		failed := err // what the first try got, when this is the second
 		keep := e.cfg.Set.NeedBody() || e.wantBody.Load()
 		e.count(func(s *Stats) { s.Requests++ })
 		resp, err = e.cfg.Sender.Send(ctx, req, keep)
@@ -573,16 +576,32 @@ func (e *engine) send(ctx context.Context, req *Request) (*Response, error) {
 		if errors.Is(err, neterr.ErrBudget) {
 			e.count(func(s *Stats) { s.Requests--; s.Spent = true })
 			e.stop.Store(true)
+			if failed != nil {
+				e.failed(req, failed)
+			}
 			return nil, err
 		}
 		if errors.Is(err, neterr.ErrNotRepeated) { // held back, not sent: no request, no failure
 			e.count(func(s *Stats) { s.Requests--; s.NotRepeated++ })
+			if failed != nil {
+				e.failed(req, failed)
+			}
 			return nil, err
 		}
 		if ctx.Err() != nil {
+			if failed != nil {
+				e.failed(req, failed)
+			}
 			return nil, err
 		}
 	}
+	e.failed(req, err)
+	return nil, err
+}
+
+// failed records a request that got no answer: counted, listed, and a
+// count toward the target being down.
+func (e *engine) failed(req *Request, err error) {
 	e.count(func(s *Stats) { s.Errors++ })
 	e.cfg.Progress.Errors.Add(1)
 	if e.cfg.OnError != nil {
@@ -601,7 +620,6 @@ func (e *engine) send(ctx context.Context, req *Request) (*Response, error) {
 		e.outMu.Unlock()
 		e.stop.Store(true)
 	}
-	return nil, err
 }
 
 func inputText(in map[string]string) string {
