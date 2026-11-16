@@ -48,7 +48,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 
 ### Ports from naabu
 
-Each open port a naabu line names is a `Port` row (`address:port/tcp`, or `/udp`; names that point to one address are one row, with the names on it), as `ports` makes them, so `query -type Port`, the summary counts and the MCP tools list it. The lines naabu repeats fold into one row. naabu says nothing of the service, so the row has none until `ports` or `probe` asks. `export -format targets` lists web services that answered: run `probe` on the ports to have them.
+Each open port a naabu line names is a `Port` row (`address:port/tcp`, or `/udp`; names that point to one address are one row, with the names on it), as `ports` makes them, so `query -type Port`, the summary counts and the MCP tools list it. naabu's default text output is read too: a `host:port` line, or `[v6]:port` for an IPv6 address, is that host and an open TCP port (the port must be 1 to 65535, the host an address or a name with a dot). The lines naabu repeats fold into one row. naabu says nothing of the service, so the row has none until `ports` or `probe` asks. `export -format targets` lists web services that answered: run `probe` on the ports to have them.
 
 ### Tools azhaq asks nothing for
 
@@ -76,7 +76,7 @@ The summary counts what each format gave: the pages (arjun), lines (gowitness, a
 <!-- flags:begin ingest -->
 | Flag | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `-in` | string |  | a file of results (- for stdin): subfinder, dnsx, httpx, katana, naabu, nuclei, gau, gowitness or asnmap JSON lines, an ffuf JSON report or -json lines, an arjun JSON file, an nmap XML file (-oX), azhaq export, connector facts, or lines of URLs, hostnames and addresses; files may also be given as arguments, several at once |
+| `-in` | string |  | a file of results (- for stdin): subfinder, dnsx, httpx, katana, naabu, nuclei, gau, gowitness or asnmap JSON lines, an ffuf JSON report or -json lines, an arjun JSON file, an nmap XML file (nmap -oX), azhaq export, connector facts, naabu's host:port lines, or lines of URLs, hostnames and addresses; files may also be given as arguments, several at once |
 | `-db` | string |  | the database to add to (default: a new file) |
 | `-json` | bool |  | the summary as JSON |
 <!-- flags:end -->

@@ -153,7 +153,7 @@ A route that streams for ever (server-sent events, `multipart/x-mixed-replace`) 
 | `-p` | string |  | ports to probe on each name: 80,443,8000-8100, each led by http: or https: to ask one scheme only (http:80,https:443); an input with a port of its own (host:port, a URL) is asked on these ports instead of its own |
 | `-scope` | string |  | a program's scope: a file (HackerOne CSV, bounty-targets JSON, Burp options, lines) or hackerone, bugcrowd, intigriti, yeswehack |
 | `-program` | string |  | the program to take from a -scope list (handle, name or URL) |
-| `-max-ips` | int | `4096` | addresses expanded from -asn and -cidr prefixes, for the whole run |
+| `-max-ips` | int | `4096` | addresses expanded from ASN and CIDR prefixes, for the whole run |
 | `-no-stdin` | bool |  | do not read targets from stdin |
 
 **What to ask**

@@ -2,7 +2,10 @@ package main
 
 import (
 	"net/url"
+	"os"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -124,5 +127,45 @@ func TestCrawlSplitsItsRequestsByPurpose(t *testing.T) {
 	_, text := crawlOut(t, srv)
 	if !strings.Contains(text, "requests by purpose: ") {
 		t.Errorf("the text summary does not split the requests:\n%s", text)
+	}
+}
+
+// crawl -builtin-paths also sends the product checks, and the help and the
+// page say so with the count the run sends.
+func TestCrawlBuiltinPathsHelpNamesTheProductChecks(t *testing.T) {
+	var hits atomic.Int64
+	srv := juiceShaped(&hits)
+	defer srv.Close()
+	_, errOut := crawlOut(t, srv, "-json", "-d", "1", "-builtin-paths")
+	by, _ := sumMap(t, errOut)["requests_by_purpose"].(map[string]any)
+	sent, _ := by[ledger.PurposeProductChecks].(float64)
+	if sent < 500 {
+		t.Fatalf("-builtin-paths sent %v product checks: %v", sent, by)
+	}
+	about := regexp.MustCompile(`about ([\d,]+) product checks`)
+	page, err := os.ReadFile("../../docs/commands/crawl.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var help string
+	for _, c := range buildManifest().Commands {
+		if c.Name == "crawl" {
+			for _, f := range c.Flags {
+				if f.Name == "builtin-paths" {
+					help = f.Usage
+				}
+			}
+		}
+	}
+	for name, text := range map[string]string{"-builtin-paths help": help, "crawl.md": string(page)} {
+		m := about.FindStringSubmatch(text)
+		if m == nil {
+			t.Errorf("%s does not say the sweep also sends about N product checks", name)
+			continue
+		}
+		n, _ := strconv.Atoi(strings.ReplaceAll(m[1], ",", ""))
+		if d := float64(n) - sent; d > sent/20 || -d > sent/20 {
+			t.Errorf("%s says about %d product checks, the crawl sent %v", name, n, sent)
+		}
 	}
 }

@@ -130,11 +130,11 @@ type reportNotes struct {
 //	azhaq report -findings -db WORKSPACE.db [-format jsonl|md] [-o FILE]
 func cmdReport(args []string) error {
 	fs := newFlags("report")
-	findings := fs.Bool("findings", false, "write the findings records of a workspace instead of roles reports, in three tiers counted apart: findings (proven rows, each with its request, the excerpt of the answer, the stage that found it and a command that reproduces it), identifications (a product and version, with the advisory match where there is one) and leads (inferred from a name, a path or a guess, each with the check that would prove it); a workspace with no qualifying rows writes an explicit empty record set and exits 0")
+	findings := fs.Bool("findings", false, "write the findings records of a workspace instead of roles reports, in three tiers counted apart: findings (rows whose own answer shows the thing named, each with its request, the excerpt of the answer, the stage that found it and a command that reproduces it), identifications (a product and version, with the advisory match where there is one) and leads (inferred from a name, a path or a guess, each with the check that would prove it); a workspace with no qualifying rows writes an explicit empty record set and exits 0")
 	db := fs.String("db", "", "with -findings: the workspace database the records are read from")
 	dir := fs.String("dir", "", "the -dir of the roles run (it holds "+evidenceFile+")")
 	target := fs.String("url", "", "write up this one row (its URL as roles lists it); every cross-role finding by default")
-	method := fs.String("method", "", "the method of a write row (-replay-writes); a read's row by default")
+	method := fs.String("method", "", "the method of a write row (roles -replay-writes); a read's row by default")
 	owner := fs.String("owner", "", "with -url: only the row of this owner, when several owners' requests share the URL and method (two roles creating in one collection); a report for each owner by default")
 	format := fs.String("format", "md", "md or json")
 	out := fs.String("o", "", "FILE or DIR for the reports: a directory (it exists, ends in a slash, or several reports go to it) gets a file per report, any other path is the file of a single report; without -url, DIR/reports; with -url, standard output")
@@ -519,6 +519,38 @@ func replaceToken(s, v, to string) string {
 	}
 }
 
+// replaceHost masks h where it is a host: not inside a longer name or word
+// ("app" is not in "application" or "/app/"). A name below h (api.h) still
+// loses h.
+func replaceHost(s, h, to string) string {
+	word := func(b byte) bool {
+		return b >= '0' && b <= '9' || b >= 'a' && b <= 'z' || b >= 'A' && b <= 'Z' || b == '_' || b == '-'
+	}
+	dotless := !strings.Contains(h, ".")
+	var b strings.Builder
+	for {
+		i := strings.Index(s, h)
+		if i < 0 {
+			b.WriteString(s)
+			return b.String()
+		}
+		end := i + len(h)
+		ok := (i == 0 || !word(s[i-1])) && (end == len(s) || !word(s[end]) && !(s[end] == '.' && end+1 < len(s) && word(s[end+1])))
+		if ok && dotless && i > 0 {
+			// A single-label host stands after // or @, or alone: not as a path segment or a dotted name.
+			p := s[i-1]
+			ok = p == '@' || p == ' ' || p == '"' || p == '\'' || p == '(' || p == '<' || p == '=' || p == '\n' || (p == '/' && i > 1 && s[i-2] == '/')
+		}
+		if ok {
+			b.WriteString(s[:i])
+			b.WriteString(to)
+		} else {
+			b.WriteString(s[:end])
+		}
+		s = s[end:]
+	}
+}
+
 // text is s with the hosts, the identifiers and any token masked.
 func (m *masker) text(s string) string {
 	if !m.on {
@@ -531,7 +563,7 @@ func (m *masker) text(s string) string {
 	}
 	slices.SortFunc(hs, func(a, b string) int { return len(b) - len(a) })
 	for _, h := range hs {
-		s = strings.ReplaceAll(s, h, m.hosts[h])
+		s = replaceHost(s, h, m.hosts[h])
 	}
 	ids := slices.Clone(m.order)
 	slices.SortFunc(ids, func(a, b string) int { return len(b) - len(a) })

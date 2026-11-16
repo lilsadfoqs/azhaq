@@ -43,7 +43,7 @@ type report struct {
 	Counts   map[string]int     `json:"counts,omitempty"`
 	Folds    []engine.FoldGroup `json:"folds,omitempty"` // run: the rows by fold class, with the control a catch-all answer was compared with
 	// Tiers counts the rows of the findings output by tier, apart: findings
-	// (proven), identifications (a product and version, with the advisory match
+	// (what the answer itself shows), identifications (a product and version, with the advisory match
 	// where there is one) and leads (inferred from a name, a path or a guess).
 	// run counts the findings output of its workspace; hunt, the rows it printed.
 	Tiers       *tierCounts      `json:"tiers,omitempty"`

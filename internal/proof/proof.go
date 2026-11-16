@@ -18,7 +18,7 @@ import (
 
 // The three tiers every row of the findings output is in.
 const (
-	TierFinding        = "finding"        // proven: the answer shows the thing named
+	TierFinding        = "finding"        // what the answer itself shows: the thing named, as measured
 	TierIdentification = "identification" // a product and version, with the advisory match where there is one
 	TierLead           = "lead"           // inferred from a name, a path or a guess
 )
