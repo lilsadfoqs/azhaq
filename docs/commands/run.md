@@ -170,6 +170,10 @@ found in
 - From a second shell, `azhaq hunt -db WORKSPACE` (or `azhaq query -db WORKSPACE`) reads the workspace a run is still writing, without holding the run up. [hunt](hunt.md#a-workspace-whose-run-is-still-going) says what the rows are.
 - The progress line of the run, printed every 10 s on stderr, names the `hunt` command once its first listener is stored. With `-json` the progress object has it as `hunt`.
 
+### Keeping the answers of `-dirs` matches
+
+`-dirs-od DIR` keeps the request and the answer of each path `-dirs` finds as a file in `DIR`, as `dirs -od` and `fuzz -od` do: [dirs](dirs.md#keeping-the-answer-of-a-match) says what a file holds and how it is cut. The row of the path in the workspace names its file as `resultfile`.
+
 ### Streaming found lines
 
 - With `-stream`, `run` prints each URL, name that resolves, address and open port as it is found. They come before the map.
@@ -687,7 +691,7 @@ azhaq run -url https://app.example.com/ -ports top-1000 -verify-logins -db app.d
 | `-strict-exit` | bool |  | exit 3 for any failure, a target among many included (the rule before 0.15); without it a run that did its job exits 0 and its summary counts and lists the failures |
 
 <details>
-<summary>Other names, flags accepted with no effect and rarely used flags (82)</summary>
+<summary>Other names, flags accepted with no effect and rarely used flags (83)</summary>
 
 | Flag | Type | Default | Meaning | Kind |
 | --- | --- | --- | --- | --- |
@@ -707,6 +711,7 @@ azhaq run -url https://app.example.com/ -ports top-1000 -verify-logins -db app.d
 | `-dirs-mr` | string |  | report only answers whose headers or body match this regular expression | rarely needed |
 | `-dirs-ms` | string |  | report only these response sizes (values and ranges, 100-200) | rarely needed |
 | `-dirs-mw` | string |  | report only these word counts | rarely needed |
+| `-dirs-od` | string |  | keep the request and answer of each path that matched as a file in this directory, as fuzz -od does (up to 5 MiB of a body; its name is shown with the path) | rarely needed |
 | `-dirs-rate` | float |  | path guesses per second per host (0: no limit but -dirs-threads, as ffuf) | rarely needed |
 | `-dirs-threads` | int | `40` | path guesses in flight per service (as ffuf) | rarely needed |
 | `-facts` | string |  | JSONL connector facts to ingest before native collectors | rarely needed |

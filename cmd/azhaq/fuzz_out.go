@@ -1,7 +1,6 @@
 package main
 
 import (
-	"crypto/md5"
 	"fmt"
 	"net/textproto"
 	"os"
@@ -103,9 +102,8 @@ func (o *fuzzOut) keep(r fuzz.Result, c *common) fuzz.Result {
 	if o.dir == "" {
 		return r
 	}
-	text := fmt.Sprintf("%s\n---- ↑ Request ---- Response ↓ ----\n\n%s", r.RawRequest, r.RawResponse)
-	name := fmt.Sprintf("%x", md5.Sum([]byte(text)))
-	if err := os.WriteFile(filepath.Join(o.dir, name), []byte(text), 0o640); err != nil {
+	name, err := fuzz.KeepExchange(o.dir, r.RawRequest, r.RawResponse)
+	if err != nil {
 		o.failed.Add(1)
 		o.warned.Do(func() { fmt.Fprintf(os.Stderr, "azhaq: -od: %v\n", err) })
 		return r

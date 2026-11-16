@@ -288,7 +288,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 | `-axfr` | bool |  | also plan the zone transfers azhaq dns -axfr would try for the domain and host targets: the name servers' lookups, and which name servers the scope would let it ask |
 
 <details>
-<summary>Other names, flags accepted with no effect and rarely used flags (82)</summary>
+<summary>Other names, flags accepted with no effect and rarely used flags (83)</summary>
 
 | Flag | Type | Default | Meaning | Kind |
 | --- | --- | --- | --- | --- |
@@ -308,6 +308,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 | `-dirs-mr` | string |  | report only answers whose headers or body match this regular expression | rarely needed |
 | `-dirs-ms` | string |  | report only these response sizes (values and ranges, 100-200) | rarely needed |
 | `-dirs-mw` | string |  | report only these word counts | rarely needed |
+| `-dirs-od` | string |  | keep the request and answer of each path that matched as a file in this directory, as fuzz -od does (up to 5 MiB of a body; its name is shown with the path) | rarely needed |
 | `-dirs-rate` | float |  | path guesses per second per host (0: no limit but -dirs-threads, as ffuf) | rarely needed |
 | `-dirs-threads` | int | `40` | path guesses in flight per service (as ffuf) | rarely needed |
 | `-facts` | string |  | JSONL connector facts to ingest before native collectors | rarely needed |

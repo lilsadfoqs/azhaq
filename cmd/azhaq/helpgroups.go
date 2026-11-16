@@ -44,7 +44,7 @@ var helpSpecs = map[string]helpSpec{
 			"rare": `
 				ob
 				port-exclude-cdn serve worker-token dirs-ac dirs-depth dirs-ext dirs-ic dirs-fc dirs-fl dirs-fr dirs-fs dirs-fw dirs-mc dirs-ml dirs-mr dirs-ms
-				dirs-mw dirs-rate dirs-threads facts obs params-chunk params-delay params-include params-method
+				dirs-mw dirs-od dirs-rate dirs-threads facts obs params-chunk params-delay params-include params-method
 				params-all params-per-host params-rate params-stable params-targets params-threads params-timeout
 				port-all-ips port-detect port-discover port-ip port-min-rate port-order port-payload port-proxy
 				port-proxy-auth port-rate port-retries port-seed port-skip port-source-ip port-threshold port-timeout
@@ -233,7 +233,7 @@ var helpSpecs = map[string]helpSpec{
 			{"Scope and safety", `allow deny deny-path send-state-changing kill-file ledger seal-to`},
 			{"Pace and limits", `rate t max-requests timeout`},
 			{"Session and network", `H cookie proxy resolvers`},
-			{"Output", `db json o silent v strict-exit`},
+			{"Output", `db json o od silent v strict-exit`},
 		},
 		hidden: map[string]string{
 			"alias": `header`,

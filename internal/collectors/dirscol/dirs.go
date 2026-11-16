@@ -17,6 +17,7 @@ import (
 	"hash"
 	"io"
 	"net/http"
+	"net/http/httputil"
 	"net/url"
 	"slices"
 	"strconv"
@@ -95,6 +96,10 @@ type Options struct {
 	// NoCalibration skips the guesses at paths that cannot exist (-ac=false):
 	// the filters are the user's alone.
 	NoCalibration bool
+	// KeepDir, when set, is where the request and answer of each hit are
+	// kept, one file each, as fuzz -od keeps its matches (fuzz.KeepExchange),
+	// and up to the same cap, fuzz.MaxBody. The hit names its file.
+	KeepDir string
 }
 
 // DefaultStatus is the default -mc: ffuf's with 308 (fuzz keeps ffuf's own).
@@ -116,6 +121,8 @@ type Collector struct {
 	limiter  *limit.Limiter
 	swept    sync.Map // directory URL → true
 	needBody bool     // a pattern reads the body
+	// keepFailed counts the hits whose file could not be written.
+	keepFailed atomic.Int64
 }
 
 func New(client *http.Client, o Options) *Collector {
@@ -142,7 +149,7 @@ func New(client *http.Client, o Options) *Collector {
 		tr.MaxIdleConnsPerHost = max(o.Threads, 2)
 		tr.MaxIdleConns = 2 * max(o.Threads, 2)
 	})
-	return &Collector{Client: &c, Opts: o, limiter: limit.New(o.Rate, max(1, int(o.Rate/10))), needBody: o.Set.NeedBody()}
+	return &Collector{Client: &c, Opts: o, limiter: limit.New(o.Rate, max(1, int(o.Rate/10))), needBody: o.Set.NeedBody() || o.KeepDir != ""}
 }
 
 // dirPath is the directory a URL path sweeps: the path with a slash at
@@ -219,6 +226,10 @@ type hit struct {
 	Truncated bool `json:"truncated,omitempty"`
 	// Trace: the answer holds a stack trace (webextract.StackTrace).
 	Trace *webextract.Trace `json:"-"`
+	// File is the name of the file KeepDir holds the answer in, and FileCut
+	// says the body in it ends at the cap.
+	File    string `json:"-"`
+	FileCut bool   `json:"-"`
 	// Position is the place of the input that asked it among the inputs of
 	// its sweep, from 1, as ffuf counts them: a word asked twice is two hits.
 	Position int `json:"position,omitempty"`
@@ -256,6 +267,12 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 			}
 			if h.Truncated {
 				row["truncated"] = true
+			}
+			if h.File != "" {
+				row["resultfile"] = h.File
+				if h.FileCut {
+					row["resultfile_cut"] = true
+				}
 			}
 			if h.Position > 0 {
 				row["position"] = h.Position
@@ -332,6 +349,7 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		"hits": len(all), "filtered": filtered, "failed": failed, "rate_limited": limited, "depth": c.Opts.Depth,
 		"repeats": repeats, "held": note.shaped.Load(), "unfiltered": note.unfiltered(),
 		"controls": note.controls.Load(), "folded": note.folded.Load(),
+		"keep_failed": c.keepFailed.Load(),
 	})
 	if err := emit(types.Observation{Collector: Name, Source: base, Kind: "dirs", Payload: summary, Confidence: 0.9, ObservedAt: time.Now().UTC()}); err != nil {
 		return meta, err
@@ -526,6 +544,9 @@ func (c *Collector) sweep(ctx context.Context, dir string, note *sweepNote, foun
 			return nil
 		}
 		h := hit{URL: target, Status: r.Status, Length: r.Length, Words: r.Words, Lines: r.Lines, Location: r.Location, Truncated: r.Truncated, Trace: r.Trace, Position: position}
+		if c.Opts.KeepDir != "" {
+			h.File, h.FileCut = c.keepAnswer(r)
+		}
 		if nested {
 			inDirsMu.Lock()
 			inDirs = append(inDirs, exactHit{h, r})
@@ -813,7 +834,7 @@ func escapeWord(w string) string {
 // matches says whether the user's matchers and filters keep r.
 func (c *Collector) matches(r response) bool {
 	return c.Opts.Set.Matches(&fuzz.Response{
-		Status: r.Status, Header: r.Header, Body: r.Body,
+		Status: r.Status, Header: r.Header, Body: r.Body[:min(len(r.Body), keepBody)],
 		Length: int64(r.Length), Words: int64(r.Words), Lines: int64(r.Lines),
 	})
 }
@@ -837,6 +858,9 @@ type response struct {
 	Loc    string      `json:",omitempty"`
 	Header http.Header `json:"-"`
 	Body   []byte      `json:"-"`
+	// Req, Proto and StatusLine are kept with KeepDir, to write the exchange.
+	Req               *http.Request `json:"-"`
+	Proto, StatusLine string        `json:"-"`
 	// Truncated: a stream that never ends, cut at 64 KiB or 2 s; its length,
 	// words and lines are of what was read.
 	Truncated bool `json:",omitempty"`
@@ -920,6 +944,10 @@ func (c *Collector) send(ctx context.Context, target, probe string, page, exact 
 	// and lines newlines+1 of the whole of it.
 	r := response{Status: resp.StatusCode, Location: resp.Header.Get("Location"), Words: 1, Lines: 1}
 	keep := c.needBody || probe != "" || page || exact
+	limit := keepBody
+	if c.Opts.KeepDir != "" {
+		limit = fuzz.MaxBody
+	}
 	var kept []byte
 	var sum hash.Hash
 	if exact {
@@ -944,8 +972,8 @@ func (c *Collector) send(ctx context.Context, target, probe string, page, exact 
 			if len(*head) < webextract.TraceWindow {
 				*head = append(*head, chunk[:min(n, webextract.TraceWindow-len(*head))]...)
 			}
-			if keep && len(kept) < keepBody {
-				kept = append(kept, chunk[:min(n, keepBody-len(kept))]...)
+			if keep && len(kept) < limit {
+				kept = append(kept, chunk[:min(n, limit-len(kept))]...)
 			}
 		}
 		if err == io.EOF {
@@ -961,20 +989,26 @@ func (c *Collector) send(ctx context.Context, target, probe string, page, exact 
 	if tr, ok := webextract.StackTrace(*head); ok {
 		r.Trace = &tr
 	}
+	// What the sweep judges by is the first keepBody bytes, with -od or not:
+	// the rest of a body is kept for the file alone.
+	whole := kept[:min(len(kept), keepBody)]
 	if c.needBody {
 		r.Header, r.Body = resp.Header, kept
 	}
-	if probe != "" {
-		r.Echo = bytes.Contains(kept, []byte(probe))
+	if c.Opts.KeepDir != "" {
+		r.Req, r.Proto, r.StatusLine = req, resp.Proto, resp.Status
 	}
-	if (probe != "" || page) && len(kept) > 0 {
-		p := pagesim.Of(kept)
+	if probe != "" {
+		r.Echo = bytes.Contains(whole, []byte(probe))
+	}
+	if (probe != "" || page) && len(whole) > 0 {
+		p := pagesim.Of(whole)
 		r.Page = &p
 	}
 	if exact {
 		r.Sum = hex.EncodeToString(sum.Sum(nil)[:8])
-		if len(kept) == r.Length { // the whole body, to take the path out of
-			free := sha256.Sum256([]byte(fetch.EchoFree(target, string(kept))))
+		if len(whole) == r.Length { // the whole body, to take the path out of
+			free := sha256.Sum256([]byte(fetch.EchoFree(target, string(whole))))
 			r.Free = hex.EncodeToString(free[:8])
 		}
 		r.Loc = fetch.EchoFree(target, r.Location)
@@ -1315,4 +1349,25 @@ func Notes(obs []types.StoredObservation) ([]string, bool) {
 		out = append(out, fmt.Sprintf("calibration could filter nothing in %s: the answers to names that cannot exist share no size, word count, line count, title or words, so the wildcard answers are among the paths listed", strings.Join(loose[:min(len(loose), 3)], ", ")+map[bool]string{true: " and others", false: ""}[len(loose) > 3]))
 	}
 	return out, len(loose) > 0
+}
+
+// keepAnswer writes the exchange of a hit to KeepDir and returns the name of
+// the file, and whether its body ends at the cap. A file that cannot be
+// written is counted (keepFailed) and the hit has none.
+func (c *Collector) keepAnswer(r response) (string, bool) {
+	var rawReq []byte
+	if r.Req != nil {
+		rawReq, _ = httputil.DumpRequestOut(r.Req, false)
+	}
+	var b bytes.Buffer
+	fmt.Fprintf(&b, "%s %s\r\n", r.Proto, r.StatusLine)
+	_ = r.Header.Write(&b)
+	b.WriteString("\r\n")
+	b.Write(r.Body)
+	name, err := fuzz.KeepExchange(c.Opts.KeepDir, string(rawReq), b.String())
+	if err != nil {
+		c.keepFailed.Add(1)
+		return "", false
+	}
+	return name, r.Truncated || r.Length > len(r.Body)
 }

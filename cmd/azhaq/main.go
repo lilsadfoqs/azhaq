@@ -395,6 +395,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	dirsDepth := fs.Int("dirs-depth", 1, "directory levels to sweep; 2 also sweeps directories found")
 	dirsThreads := fs.Int("dirs-threads", 40, "path guesses in flight per service (as ffuf)")
 	dirsRate := fs.Float64("dirs-rate", 0, "path guesses per second per host (0: no limit but -dirs-threads, as ffuf)")
+	dirsOd := fs.String("dirs-od", "", "keep the request and answer of each path that matched as a file in this directory, as fuzz -od does (up to 5 MiB of a body; its name is shown with the path)")
 	paramsFile := fs.String("params", "", "find query parameters pages read, from this wordlist or small, medium or large for a built-in one (active; the targets given are the scope unless -allow)")
 	paramsPerHost := fs.Int("params-per-host", 20, "pages searched for parameters per host")
 	paramsAll := fs.Bool("params-all", false, "with -params, also search the pages a request of the run showed to read no name: one that answered as a path that cannot exist does, or refused (401, 403, 405); by default a note lists them")
@@ -1105,7 +1106,12 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 				return err
 			}
 		}
-		opts.Dirs = dirscol.Options{Words: words, Extensions: splitList(*dirsExt), Depth: *dirsDepth, Threads: *dirsThreads, Rate: *dirsRate}
+		opts.Dirs = dirscol.Options{Words: words, Extensions: splitList(*dirsExt), Depth: *dirsDepth, Threads: *dirsThreads, Rate: *dirsRate, KeepDir: *dirsOd}
+		if *dirsOd != "" {
+			if err := os.MkdirAll(*dirsOd, 0o750); err != nil {
+				return usagef("-dirs-od %s: %v", *dirsOd, err)
+			}
+		}
 		given := map[string]string{}
 		for k, v := range dirsMatch {
 			given[k] = *v
