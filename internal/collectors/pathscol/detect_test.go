@@ -226,12 +226,15 @@ func TestSweepInFlightFollowsTheHostsCap(t *testing.T) {
 		name        string
 		parallel    int
 		delay       time.Duration
+		signedIn    bool
 		wantMax     int
 		wantAtLeast int
 	}{
-		{"default", 10, 0, 10, 7},
-		{"lowered", 3, 0, 3, 2},
-		{"delay", 10, time.Millisecond, 6, 3},
+		{"default", 10, 0, false, 10, 7},
+		{"lowered", 3, 0, false, 3, 2},
+		{"delay", 10, time.Millisecond, false, 6, 3},
+		// a session's end lets the checks in flight go out after it
+		{"signed in", 10, 0, true, 6, 3},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			fetch.Reset()
@@ -239,6 +242,9 @@ func TestSweepInFlightFollowsTheHostsCap(t *testing.T) {
 			saved := fetch.HostParallel
 			t.Cleanup(func() { fetch.HostParallel = saved })
 			fetch.HostParallel, fetch.Delay = c.parallel, c.delay
+			if c.signedIn {
+				fetch.WatchSession(fetch.Session{})
+			}
 			var now, most atomic.Int64
 			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				n := now.Add(1)
