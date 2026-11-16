@@ -134,11 +134,18 @@ func TestRunStreamFoundLinesAreMapRows(t *testing.T) {
 	l.Ports = newPortLab(t)
 	r := l.Cmd("run", "-url", l.Site.URL, "-ports", l.Ports.List(), "-allow", "127.0.0.1", "-sources", "none", "-no-paths", "-depth", "0", "-stream", "-db", "w.db")
 	found := map[string]int{}
+	named := map[string]int{}
 	rows := map[string]bool{}
 	for _, row := range r.Rows(t) {
 		key, _ := row["key"].(string)
 		switch row["type"] {
 		case "found":
+			// A listener named or proved is hunt's row, keyed as hunt keys
+			// it: it is checked against hunt in cmd/azhaq, not the map.
+			if k, _ := row["kind"].(string); k == "identified" || k == "finding" {
+				named[fmt.Sprint(k, " ", key, " ", row["product"], " ", row["version"], " ", row["label"])]++
+				continue
+			}
 			found[key]++
 		case "summary":
 		default:
@@ -159,6 +166,11 @@ func TestRunStreamFoundLinesAreMapRows(t *testing.T) {
 		}
 		if strings.Contains(key, "/tcp") {
 			ports++
+		}
+	}
+	for key, n := range named {
+		if n != 1 {
+			v.Errorf("found line %q printed %d times", key, n)
 		}
 	}
 	for key := range rows {
