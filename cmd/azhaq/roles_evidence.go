@@ -155,7 +155,7 @@ func newRedactor(roles []role) *redactor {
 					parts = append(parts, p)
 				}
 				for _, p := range parts {
-					if len(p) >= 6 && !seen[p] {
+					if len(p) >= 6 && !seen[p] && !authScheme(p) {
 						seen[p] = true
 						rd.sent = append(rd.sent, p)
 					}
@@ -165,6 +165,15 @@ func newRedactor(roles []role) *redactor {
 	}
 	slices.SortFunc(rd.sent, func(a, b string) int { return len(b) - len(a) })
 	return rd
+}
+
+// authScheme: the word before a credential ("Bearer"), which is not one.
+func authScheme(p string) bool {
+	switch strings.ToLower(p) {
+	case "bearer", "basic", "digest", "negotiate":
+		return true
+	}
+	return false
 }
 
 // mergeHeaders is every value of hs under its name.

@@ -43,3 +43,27 @@ func TestIngestNaabuMakesPortRows(t *testing.T) {
 		t.Errorf("summary counts %v", rep.Counts)
 	}
 }
+
+// naabu's default text output (host:port) gives the same Port rows as its JSON.
+func TestIngestNaabuTextMakesPortRows(t *testing.T) {
+	in := filepath.Join(t.TempDir(), "ports.txt")
+	if err := os.WriteFile(in, []byte("127.0.0.1:22\n127.0.0.1:22\n[::1]:8080\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	db := filepath.Join(t.TempDir(), "n.db")
+	if _, _, err := captureBoth(t, func() error { return cmdIngest([]string{in, "-db", db}) }); err != nil {
+		t.Fatal(err)
+	}
+	out, _, code := runContract(t, "query", "-db", db, "-type", "Port")
+	if code != exitOK {
+		t.Fatalf("query exit %d", code)
+	}
+	var keys []string
+	for _, r := range jsonRows(t, out) {
+		keys = append(keys, r["key"].(string))
+	}
+	sort.Strings(keys)
+	if got := strings.Join(keys, ","); got != "127.0.0.1:22/tcp,[::1]:8080/tcp" {
+		t.Errorf("port rows %q", got)
+	}
+}

@@ -1244,7 +1244,7 @@ func cmdShots(args []string) error {
 	noHTTP := fs.Bool("no-http", false, "try names and addresses over https only")
 	noHTTPS := fs.Bool("no-https", false, "try names and addresses over http only")
 	random := fs.Bool("random", false, "take the targets in random order")
-	fs.Var(&nmapFiles, "nmap", "an nmap XML file (-oX): the web services it found (repeatable)")
+	fs.Var(&nmapFiles, "nmap", "an nmap XML file (nmap -oX): the web services it found (repeatable)")
 	fs.Var(&nessusFiles, "nessus", "a Nessus file (.nessus): the web services it found (repeatable)")
 	service := fs.String("service", "", "with -nmap or -nessus: only the service names to take, comma-separated (default: every open port for nmap, as gowitness does; www, http and https for Nessus)")
 	serviceHas := fs.String("service-contains", "", "with -nmap: only ports whose service name has this in it, such as http")

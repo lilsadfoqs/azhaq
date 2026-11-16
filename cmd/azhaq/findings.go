@@ -20,7 +20,7 @@ import (
 // A findings record is one row of `azhaq report -findings` (and of
 // `azhaq export -format findings`/`findings-md`), in one of three tiers:
 //
-//   - finding: a proven row. The answer azhaq received shows the thing the
+//   - finding: a row its own answer shows. The answer azhaq received shows the thing the
 //     row names (a file's own signature, a panel's own title, a data store's
 //     answer to a read with no credential, a stack trace, a key of a known
 //     format, a service's own page for an unclaimed name). It carries its
@@ -353,7 +353,7 @@ func findingsMarkdown(set findingSet) []byte {
 	if rows == 0 {
 		b.WriteString("No qualifying rows: the workspace holds nothing a tier lists, and no unproved hint the map lists. 0 findings, 0 identifications, 0 leads.\n\n")
 	} else {
-		fmt.Fprintf(&b, "%s, each read from a stored row of the workspace. A finding is proven: its answer shows the thing named. An identification is a product and version a service stated, with the advisory match where there is one (version-read names a version a read stated inside the advisory's range, version-only the product and version alone, conditional a precondition the read did not show; proved is a read that answered with no credential or a sign-in with a published default). A lead is inferred from a name, a path or a guess, and names the check that would prove it. Counted: %s.\n\n", set.counts(), set.counts().Counted())
+		fmt.Fprintf(&b, "%s, each read from a stored row of the workspace. A finding is what its own answer shows, as measured: the thing named, and nothing the row says was not checked. An identification is a product and version a service stated, with the advisory match where there is one (version-read names a version a read stated inside the advisory's range, version-only the product and version alone, conditional a precondition the read did not show; proved is a read that answered with no credential or a sign-in with a published default). A lead is inferred from a name, a path or a guess, and names the check that would prove it. Counted: %s.\n\n", set.counts(), set.counts().Counted())
 	}
 	if len(set.Findings) > 0 {
 		fmt.Fprintf(&b, "## Findings (%d)\n\n", len(set.Findings))

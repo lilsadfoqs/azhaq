@@ -31,7 +31,7 @@ azhaq hunt -db app.db -roles roles.jsonl -limit 10
 3. Raises signals on each row, such as an identifier in the path, a backup file or a role reading another role's object. [Signals](#signals) lists them.
 4. Scores each row as the sum of its signals, and drops rows with no signal.
 5. Adds a row for each listener the run named: the product, the version or `no version seen`, the top advisory with its label, the proof and the command that shows it again. [Listeners](#listeners) says which.
-6. Puts each row in a tier: a **finding** when a signal of it is proven (see [Findings and leads](#findings-and-leads)), an **identification** for a listener the run named, a **lead** otherwise.
+6. Puts each row in a tier: a **finding** when a signal of it is shown by the answer (see [Findings and leads](#findings-and-leads)), an **identification** for a listener the run named, a **lead** otherwise.
 7. Sorts the findings first, then the identifications, then the leads, each by score, and prints the best `-limit` rows (default 25). A lead names the check that would prove it, and every row a command to run next.
 
 ## Output
@@ -39,7 +39,7 @@ azhaq hunt -db app.db -roles roles.jsonl -limit 10
 Text form: one row per line, the findings first under `findings (N)`, the identifications under `identifications (N)` and the leads apart under `leads (N)`.
 
 ```
-findings (N): proven, the answer shows the thing named
+findings (N): what the answer itself shows, as measured
 rank  score  key  reason; reason  → next: COMMAND
 identifications (N): what the run named on each listener; the label says how far a read settled the advisory
 rank  score  host:port  identified: PRODUCT VERSION; advisory: ID LABEL; proof: EXCERPT  → next: COMMAND
@@ -150,9 +150,9 @@ Only an application is a row: a product wappalyzer's data holds under a category
 
 ### Findings and leads
 
-A row is a **finding** when one of its signals is proven by what was received, and a **lead** when none is. A path or a name is never proof.
+A row is a **finding** when one of its signals is shown by what was received, and a **lead** when none is. A path or a name is never proof. The `findings` header says what the tier is, not a verdict on each row: a row under it states what its own answer showed and nothing more. A `dangling-dns` row, for one, says the CNAME chain ended at a name that answered `NXDOMAIN` and, in its own line, that whether anyone can create that name was not tested.
 
-- Proven: `cross-role` (a `-roles` verdict of `proved` confidence, or with none), `takeover` of strength `strong`, a `secret` whose own format names it (a key with a known shape, severity above `info`), `exposed-file` and `exposed-panel` when the answer shows the file or the panel ([Exposed files](#exposed-files)), `listing` (the page's own title is a directory listing), `graphql` when its schema was read or its IDE answers, and `server-error` when the body shows SQL error text, a framework's debug page or a stack trace.
+- Shown by the answer: `cross-role` (a `-roles` verdict of `proved` confidence, or with none), `takeover` of strength `strong`, a `secret` whose own format names it (a key with a known shape, severity above `info`), `exposed-file` and `exposed-panel` when the answer shows the file or the panel ([Exposed files](#exposed-files)), `listing` (the page's own title is a directory listing), `graphql` when its schema was read or its IDE answers, and `server-error` when the body shows SQL error text, a framework's debug page or a stack trace.
 - Leads: every other signal, such as a word in a path, `input`, a `param-*`, `object-id`, `gated`, `unauth-write`, `upload`, `sourcemap`, `takeover-candidate`, `api-description` (a served API description: a service that publishes it has not shown a flaw), a generic or bundler secret, a role's 5xx that differs from another's, and a `named` route no server confirmed.
 
 An **identification** is a listener the run named: a product, and a version or none. It is not proven: the label says how far a read settled its advisory.

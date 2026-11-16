@@ -260,3 +260,27 @@ func TestReadNaabuUDP(t *testing.T) {
 		t.Errorf("payload %s", facts[0].Payload)
 	}
 }
+
+// naabu without -json writes host:port (and [v6]:port): a host and a
+// port, not a rejected line; every other plain line stays what it was.
+func TestReadNaabuText(t *testing.T) {
+	in := "127.0.0.1:22\nexample.com:8080\n[2001:db8::1]:443\nhttp://example.com:80/x\nexample.org\n192.0.2.9\n"
+	facts, formats, skipped, err := ReadLines([]byte(in))
+	if err != nil || len(skipped) != 0 || formats[FormatNaabu] != 3 || formats[FormatLines] != 3 || len(facts) != 6 {
+		t.Fatalf("%v %v %q %d", err, formats, skipped, len(facts))
+	}
+	for i, want := range []struct{ typ, key, port string }{
+		{"IPAddress", "127.0.0.1", "22"}, {"Hostname", "example.com", "8080"}, {"IPAddress", "2001:db8::1", "443"},
+	} {
+		typ, key := facts[i].Entity()
+		var p struct{ Open []string }
+		if err := json.Unmarshal(facts[i].Payload, &p); err != nil || string(typ) != want.typ || key != want.key || len(p.Open) != 1 || p.Open[0] != want.port {
+			t.Errorf("fact %d: %s %s %s (%v)", i, typ, key, facts[i].Payload, err)
+		}
+	}
+	for _, bad := range []string{"127.0.0.1:0", "127.0.0.1:99999", "127.0.0.1:x", "host:22", "a b.com:22", ":22"} {
+		if _, _, err := ReadAny([]byte(bad)); err == nil {
+			t.Errorf("%q read", bad)
+		}
+	}
+}

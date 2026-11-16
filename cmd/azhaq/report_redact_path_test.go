@@ -66,3 +66,28 @@ func TestReportRedactMasksTheValueOfAPathParameterOfAWrite(t *testing.T) {
 		t.Errorf("want a report for each write, got %v", files)
 	}
 }
+
+// The masks hold only for what they name: report -redact's host does not
+// rewrite a word or a path segment that holds the host's name, and a kept
+// body keeps the word before a credential ("Bearer"), masking the credential.
+func TestRedactionKeepsWordsAndPathsThatHoldAHostOrAScheme(t *testing.T) {
+	m := newMasker(true, nil)
+	m.addHost("http://app:8080/x")
+	m.addHost("https://shop.example.com/")
+	got := m.text("the application at http://app:8080/x and /app/queues, myshop.example.com, app.other.net; api.shop.example.com via https://shop.example.com/ at @app; app is down")
+	for _, keep := range []string{"the application at", "/app/queues", "myshop.example.com", "app.other.net"} {
+		if !strings.Contains(got, keep) {
+			t.Errorf("%q was rewritten: %s", keep, got)
+		}
+	}
+	for _, gone := range []string{"http://app:8080", "https://shop.example.com", "api.shop.example.com", "@app;", "app is down"} {
+		if strings.Contains(got, gone) {
+			t.Errorf("%q is left in: %s", gone, got)
+		}
+	}
+	rd := newRedactor([]role{{name: "alice", session: http.Header{"Authorization": {"Bearer alice-secret-token"}}}})
+	body := string(rd.body([]byte(`{"error":"Bearer token required","echo":"Bearer alice-secret-token"}`)))
+	if !strings.Contains(body, "Bearer token required") || strings.Contains(body, "alice-secret-token") || !strings.Contains(body, "[redacted ") {
+		t.Errorf("kept body: %s", body)
+	}
+}

@@ -184,3 +184,42 @@ func TestDanglingStandsUnderNoTakeover(t *testing.T) {
 		t.Errorf("-cname: %v", row)
 	}
 }
+
+// The tier header over a dangling-dns row says what the tier is (what the
+// answer itself shows), not a verdict on the row: no output calls the finding
+// "proven", the row's own line says the name was not tested as claimable, and
+// the JSON values (tier, type) stay finding.
+func TestFindingsTierHeaderIsNotAVerdictOnADanglingRow(t *testing.T) {
+	res := danglingLab(t)
+	db := filepath.Join(t.TempDir(), "w.db")
+	t.Chdir(t.TempDir())
+	if _, _, code := dnsOut(t, "-d", "old.example.org", "-r", res, "-db", db, "-json"); code != exitOK {
+		t.Fatalf("exit %d", code)
+	}
+	text, _, err := captureBoth(t, func() error { return cmdHunt([]string{"-db", db}) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	ls := lines(text)
+	if len(ls) < 2 || !strings.HasPrefix(ls[0], "findings (1): what the answer itself shows") || !strings.Contains(ls[1], "dangling-dns") ||
+		!strings.Contains(ls[1], "Whether anyone can create that name was not tested") {
+		t.Errorf("hunt text:\n%s", text)
+	}
+	md, _, err := captureBoth(t, func() error { return run([]string{"export", "-db", db, "-format", "findings-md"}) })
+	if err != nil || !strings.Contains(md, "## Findings (1)") {
+		t.Fatalf("findings-md (%v):\n%s", err, md)
+	}
+	for name, out := range map[string]string{"hunt text": text, "findings-md": md} {
+		if strings.Contains(strings.ToLower(out), "proven") {
+			t.Errorf("%s calls a finding proven:\n%s", name, out)
+		}
+	}
+	jout, _, err := captureBoth(t, func() error { return cmdHunt([]string{"-db", db, "-json"}) })
+	if err != nil || !strings.Contains(jout, `"tier":"finding"`) {
+		t.Errorf("hunt -json (%v): %s", err, jout)
+	}
+	rep, _, err := captureBoth(t, func() error { return run([]string{"report", "-findings", "-db", db, "-format", "jsonl"}) })
+	if err != nil || !strings.Contains(rep, `"type":"finding"`) {
+		t.Errorf("report -findings (%v): %s", err, rep)
+	}
+}

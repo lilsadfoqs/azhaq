@@ -12,6 +12,7 @@ import (
 	"net"
 	"net/url"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -38,8 +39,8 @@ const (
 // ReadAny reads facts from what the usual recon tools write: connector
 // facts, Azhaq's own export, subfinder, dnsx, httpx, katana, naabu,
 // nuclei, gau, gowitness and asnmap JSON lines, ffuf's JSON report,
-// arjun's JSON file, nmap's XML, or plain lines of URLs,
-// hostnames and addresses. It returns the facts and, for each format
+// arjun's JSON file, nmap's XML, naabu's host:port lines, or plain lines of
+// URLs, hostnames and addresses. It returns the facts and, for each format
 // seen, how many lines were read as it.
 func ReadAny(raw []byte) ([]Fact, map[string]int, error) {
 	facts, formats, skipped, err := ReadLines(raw)
@@ -124,6 +125,11 @@ func ReadLines(raw []byte) ([]Fact, map[string]int, []string, error) {
 			continue
 		}
 		if !strings.HasPrefix(line, "{") {
+			if f, ok := naabuText(line); ok {
+				formats[FormatNaabu]++
+				out = append(out, f)
+				continue
+			}
 			f, ok := plainFact(line)
 			if !ok {
 				skip(lineNo, fmt.Errorf("not JSON, and not a URL, hostname or address: %q", clip(line)))
@@ -191,17 +197,10 @@ func lineFacts(raw []byte, m map[string]any, exported map[string][2]string) ([]F
 		return ffufFacts(m, ""), FormatFFUF, nil // ffuf -json: one result per line
 	case (has("host") || has("ip")) && has("port") && !has("url"): // naabu: "host" only when it was given a name
 		host, ip := str("host"), str("ip")
-		port := fmt.Sprint(m["port"])
 		if host == "" {
 			host = ip
 		}
-		payload := map[string]any{"host": host, "ip": ip, "open": []string{port}, "services": []map[string]any{{"port": m["port"]}}, "via": "naabu"}
-		if str("protocol") == "udp" {
-			delete(payload, "open")
-			payload["services"] = []map[string]any{}
-			payload["udp_services"] = []map[string]any{{"port": m["port"], "state": "open"}}
-		}
-		return []Fact{observation(hostSeed(host), "naabu", "ports", payload)}, FormatNaabu, nil
+		return []Fact{naabuFact(host, ip, m["port"], str("protocol") == "udp")}, FormatNaabu, nil
 	case has("host") && (has("a") || has("aaaa") || has("cname")) && !has("url"):
 		host := str("host")
 		ips := append(strings2(m["a"]), strings2(m["aaaa"])...)
@@ -222,6 +221,40 @@ func lineFacts(raw []byte, m map[string]any, exported map[string][2]string) ([]F
 		return urlFacts(u, "urls", map[string]any{"url": u, "via": "list"}), FormatURLs, nil
 	}
 	return nil, "", fmt.Errorf("a JSON line Azhaq does not know: no kind, url, host or endpoint field")
+}
+
+// naabuFact is one open port of a host, as naabu says it.
+func naabuFact(host, ip string, port any, udp bool) Fact {
+	payload := map[string]any{"host": host, "ip": ip, "open": []string{fmt.Sprint(port)}, "services": []map[string]any{{"port": port}}, "via": "naabu"}
+	if udp {
+		delete(payload, "open")
+		payload["services"] = []map[string]any{}
+		payload["udp_services"] = []map[string]any{{"port": port, "state": "open"}}
+	}
+	return observation(hostSeed(host), "naabu", "ports", payload)
+}
+
+// naabuText reads a line of naabu's default output, "host:port" or
+// "[v6]:port". A URL, a bare name or address is not one.
+func naabuText(line string) (Fact, bool) {
+	if strings.Contains(line, "://") {
+		return Fact{}, false
+	}
+	host, ps, err := net.SplitHostPort(line)
+	if err != nil {
+		return Fact{}, false
+	}
+	port, err := strconv.Atoi(ps)
+	if err != nil || port < 1 || port > 65535 || ps != strconv.Itoa(port) {
+		return Fact{}, false
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		return naabuFact(ip.String(), ip.String(), port, false), true
+	}
+	if h := normalize.Hostname(host); h != "" && strings.Contains(h, ".") && !strings.ContainsAny(h, " /:@") {
+		return naabuFact(h, "", port, false), true
+	}
+	return Fact{}, false
 }
 
 func isExportObservation(m map[string]any) bool {

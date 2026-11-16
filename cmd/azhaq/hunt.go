@@ -84,7 +84,7 @@ func cmdHunt(args []string) error {
 			tier = r.Tier
 			switch tier {
 			case "finding":
-				fmt.Printf("findings (%d): proven, the answer shows the thing named\n", tiers.Findings)
+				fmt.Printf("findings (%d): what the answer itself shows, as measured\n", tiers.Findings)
 			case "identification":
 				fmt.Printf("identifications (%d): what the run named on each listener; the label says how far a read settled the advisory (version-only: the version is in range, nothing checked)\n", tiers.Identifications)
 			default:

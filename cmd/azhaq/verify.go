@@ -27,7 +27,7 @@ type verifyFlags struct {
 }
 
 func (v *verifyFlags) register(fs *flag.FlagSet) {
-	fs.BoolVar(&v.on, "verify", false, "with the services this run confirmed: make each enumerated safe read-only verification (one fixed request a client with no credentials sends, listed by plan: Redis INFO server, MongoDB isMaster, memcached version, ZooKeeper srvr and so on; with -advisories, each advisory lead is labelled from its confirmation read) and label the results proved, version-read, version-only or conditional, each with the exact request sent and an excerpt of the answer; every read goes through the scope, -deny-path (for the advisory GET), -max-requests, the pace, the kill file and the ledger; no payload, no credential, no write and no request that tries to trigger an issue")
+	fs.BoolVar(&v.on, "verify", false, "with the services this run confirmed: make each enumerated safe read-only verification (one fixed request a client with no credentials sends, listed by plan: Redis INFO server, MongoDB isMaster, memcached version, ZooKeeper srvr and so on; with -advisories, each advisory lead is labelled from its confirmation read) and label the results proved, version-read, version-only or conditional, each with the exact request sent and an excerpt of the answer; every read goes through the scope, run's -deny-path (for the advisory GET), -max-requests, the pace, the kill file and the ledger; no payload, no credential, no write and no request that tries to trigger an issue")
 }
 
 // verifyStage is the whole of -verify after a run. The data-store
