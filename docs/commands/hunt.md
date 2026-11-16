@@ -54,7 +54,7 @@ The tier counts are `report -findings`' own function, run on hunt's rows, so a f
 ```
 $ azhaq hunt -db app.db
 identifications (2): what the run named on each listener; the label says how far a read settled the advisory (version-only: the version is in range, nothing checked)
-  1   79  192.0.2.12:8161  identified: ActiveMQ 5.15.0; advisory: CVE-2023-46604 version-only, known exploited (CISA KEV), CVSS 10.0; 14 advisories match this version, azhaq report -findings -db app.db lists them; proof: Server: Jetty(9.4.z-SNAPSHOT)  → next: curl -sS -i --max-time 10 'http://192.0.2.12:8161/'
+  1   79  192.0.2.12:8161  identified: ActiveMQ 5.15.0; advisory: CVE-2023-46604 version-only, known exploited (CISA KEV), CVSS 10.0; 14 advisories match this version, then CVE-2022-41678 (version-only, CVSS 8.8), CVE-2021-26117 (conditional, CVSS 7.5) and 11 more: 9 version-only, 2 conditional; azhaq report -findings -db app.db lists them; proof: Server: Jetty(9.4.z-SNAPSHOT)  → next: curl -sS -i --max-time 10 'http://192.0.2.12:8161/'
   2   10  192.0.2.14:3000  identified: Express (no version seen); proof: HTTP/1.0 200 OK  → next: curl -sS -i --max-time 10 'http://192.0.2.14:3000/'
 leads (2): inferred from a name, a path or a guess; each names the check that would prove it
   3   57  http://app/api/orders/{id}  object-id: {id} in the path; path-data: "orders" in /api/orders/{id}, named, not requested; unauth-write: DELETE: nothing that names it asks for credentials (not tried)  → check: GET it with the sessions of two roles (azhaq roles): one's data must not come back to the other  → next: azhaq roles -role anon -role 'user=Authorization: Bearer …' -- -url http://app/
@@ -78,6 +78,7 @@ leads (2): inferred from a name, a path or a guess; each names the check that wo
 | `host`, `port`, `product`, `version` | On a listener. `version` is `""` when no version was seen. |
 | `source` | On a listener a name's root page gave: what named the product, `page title`, `generator`, `header X-Powered-By`, `header Server`, `header WWW-Authenticate realm` or `technology`. A title is not a version: `version` is only what one of them stated. |
 | `advisory_id`, `advisory_url`, `advisories`, `kev`, `cvss` | On a listener with an advisory match: the top advisory, how many advisories match the version, whether CISA lists the top one as exploited, and its score. |
+| `next_advisories`, `other_advisories` | With more than one advisory: the two that follow the top one (`id`, `label`, `kev`, `cvss`), and the count of all the others by label. The text row names these and counts the rest. |
 | `label`, `severity`, `evidence`, `command` | On a listener: the record's own `proved`, `version-read`, `version-only` or `conditional` label and severity, what the record says, and the command that produced it. |
 | `next` | The command to run next. [The next command](#the-next-command) says how it is chosen. |
 | `template` | Only on the row of an input the pages of an origin carry in common: `{"input", "pages", "of"}`, the input and how many of the origin's fetched pages carry it. |
@@ -134,7 +135,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 A listener row is what the run named on one `host:port`. The rows come from the same records as [`azhaq report -findings`](report.md#what-a-finding-carries), so the two agree. There is one row for each listener and product:
 
 - The product and the version a service stated, or `(no version seen)` when a stage named the product and nothing named its version.
-- The top advisory the version matches, with its label as `report -findings` says it (`proved`, `version-read`, `version-only`, `conditional`) and how many advisories match in all. The others are in `report -findings`. A product with no version has no advisory: there is nothing to match.
+- The top advisory the version matches, with its label as `report -findings` says it (`proved`, `version-read`, `version-only`, `conditional`) and how many advisories match in all. The text row names the next two and counts the rest by label (`and 11 more: 9 version-only, 2 conditional`); every advisory is in `report -findings`. A product with no version has no advisory: there is nothing to match.
 - The proof: the banner or the header that stated it, and the command that shows it again, which is the row's `next`.
 - A name that shares its listener with others (name-based virtual hosts) has a row of its own, keyed `name:port`, for the application its root page names about itself: see [Applications of a name](#applications-of-a-name).
 - A listener reached under its address and under a name that resolves to it, with the same product and version, is one row, which lists the other host names in `also_named` and in its `identified` reason. Names whose root pages answered differently are rows of their own, whatever the product.

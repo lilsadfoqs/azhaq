@@ -934,8 +934,11 @@ func plural(n int, word string) string {
 	if n == 1 {
 		return "1 " + word
 	}
-	if word == "query" {
+	switch word {
+	case "query":
 		return fmt.Sprintf("%d queries", n)
+	case "advisory":
+		return fmt.Sprintf("%d advisories", n)
 	}
 	return fmt.Sprintf("%d %ss", n, word)
 }

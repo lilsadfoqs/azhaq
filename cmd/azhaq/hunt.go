@@ -177,7 +177,18 @@ func listenerPairs(set findingSet) []listenerPair {
 			i = at[k]
 		}
 		if r.AdvisoryID != "" {
-			out[i].l.Advisories++
+			l := &out[i].l
+			l.Advisories++
+			switch {
+			case l.Advisories == 1:
+			case len(l.Next) < advisory.TopAdvisories-1:
+				l.Next = append(l.Next, hunt.NextAdvisory{ID: r.AdvisoryID, Label: r.Label, KEV: r.KEV, CVSS: r.CVSS})
+			default:
+				if l.Others == nil {
+					l.Others = map[string]int{}
+				}
+				l.Others[r.Label]++
+			}
 		}
 	}
 	return out
