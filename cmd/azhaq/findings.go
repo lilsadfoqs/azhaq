@@ -59,6 +59,7 @@ type findingRecord struct {
 	KEV          bool     `json:"kev,omitempty"`  // CISA lists the advisory as exploited
 	CVSS         float64  `json:"cvss,omitempty"` // the score the advisory's record states
 	Precondition string   `json:"precondition,omitempty"`
+	Component    string   `json:"component,omitempty"` // what the record's own CNA names as affected, when it is not this product
 	Request      string   `json:"request,omitempty"`
 	Evidence     string   `json:"evidence"`
 	Command      string   `json:"command"`
@@ -299,7 +300,7 @@ func buildFindings(g *graphView) findingSet {
 			Kind: r.Kind, Label: r.Label, Severity: r.Severity, Host: r.Host, Port: r.Port,
 			URL: r.URL, Product: r.Product, Version: r.Version, AdvisoryID: r.AdvisoryID,
 			AdvisoryURL: r.AdvisoryURL, Precondition: r.Precondition, Request: r.Request,
-			Evidence: r.Evidence, Command: command, Collector: "azhaq-advisories", KEV: lead.KEV, CVSS: lead.CVSS,
+			Evidence: r.Evidence, Command: command, Collector: "azhaq-advisories", KEV: lead.KEV, CVSS: lead.CVSS, Component: lead.Component,
 			Lead: leadName(r.Target, r.Product), checked: lead.Confidence == advisory.Observed || lead.Confidence == advisory.Inferred,
 			names: lead.Names,
 		}
@@ -422,6 +423,9 @@ func findingLess(a, b findingRecord) bool {
 	}
 	if a.Port != b.Port {
 		return a.Port < b.Port
+	}
+	if (a.Component != "") != (b.Component != "") {
+		return a.Component == ""
 	}
 	if a.KEV != b.KEV {
 		return a.KEV
@@ -607,6 +611,9 @@ func findingMarkdown(r findingRecord, ids ...string) string {
 	}
 	if r.Precondition != "" {
 		b.WriteString("; precondition: " + r.Precondition)
+	}
+	if r.Component != "" {
+		b.WriteString("; the record's own CNA names " + r.Component + ", not " + r.Product)
 	}
 	if r.Request != "" {
 		b.WriteString("; request: " + r.Request)

@@ -100,3 +100,46 @@ func TestBuiltinMetaStaysSmall(t *testing.T) {
 		t.Errorf("BuiltinMeta allocated %d bytes", got)
 	}
 }
+
+// In the embedded index a bundled library's records under MySQL (curl,
+// XStream, OpenSSL: their CNAs name those, not MySQL) say so and rank after
+// every MySQL advisory that applies, though they score 9.8.
+func TestEmbeddedIndexRanksBundledLibrariesAfterTheProductsOwn(t *testing.T) {
+	ix, err := advisory.Builtin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	leads, err := advisory.MatchIndex([]advisory.Service{{Host: "h", Port: 3306, Proto: "tcp", Product: "MySQL", Version: "8.0.15"}}, ix)
+	if err != nil {
+		t.Fatal(err)
+	}
+	g := advisory.Group(leads)[0]
+	if g.Component != "" {
+		t.Errorf("the top advisory %s names another component: %q", g.AdvisoryID, g.Component)
+	}
+	seenComponent := false
+	for _, r := range g.Advisories {
+		if r.Label == advisory.LabelNotAffected {
+			break
+		}
+		if r.Component != "" {
+			seenComponent = true
+		} else if seenComponent {
+			t.Fatalf("%s names the product and comes after one that names another", r.ID)
+		}
+	}
+	for id, want := range map[string]string{"CVE-2019-3822": "curl", "CVE-2021-21344": "xstream", "CVE-2021-3711": "OpenSSL"} {
+		found := false
+		for _, r := range g.Advisories {
+			if r.ID == id {
+				found = true
+				if r.Component != want || r.Label != advisory.LabelAffected {
+					t.Errorf("%s: component %q label %q, want %q and affected", id, r.Component, r.Label, want)
+				}
+			}
+		}
+		if !found {
+			t.Errorf("%s is not among the advisories", id)
+		}
+	}
+}

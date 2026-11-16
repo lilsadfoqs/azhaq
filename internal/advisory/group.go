@@ -17,6 +17,7 @@ type Ref struct {
 	CVSS         float64 `json:"cvss,omitempty"`
 	Index        bool    `json:"index,omitempty"` // it came from the built-in index
 	Precondition string  `json:"precondition,omitempty"`
+	Component    string  `json:"component,omitempty"`  // what the record's own CNA names as affected, when it is not the product
 	Confidence   string  `json:"confidence,omitempty"` // when a confirmation ran
 	ConfirmReq   string  `json:"confirm_request,omitempty"`
 	Read         string  `json:"read,omitempty"` // what the read said of this advisory, when it differs from the lead's
@@ -29,8 +30,9 @@ func applies(label string) bool { return label != LabelNotAffected }
 // listener. An advisory id counts once in a lead, as its strongest label.
 // The lead's own fields are those of its top advisory, and Advisories lists
 // them all: the ones that apply first
-// (affected, conditional), CISA KEV before the rest, the higher score
-// first, then by id. Counts, KEVCount and MaxCVSS summarise the list.
+// (affected, conditional), those whose record names the product before those
+// whose record names another (Component), CISA KEV before the rest, the
+// higher score first, then by id. Counts, KEVCount and MaxCVSS summarise the list.
 func Group(leads []Lead) []Lead {
 	type key struct{ listener, product, version string }
 	at := map[key]int{}
@@ -53,6 +55,9 @@ func Group(leads []Lead) []Lead {
 			if applies(a.Label) != applies(b.Label) {
 				return applies(a.Label)
 			}
+			if (a.Component != "") != (b.Component != "") {
+				return a.Component == ""
+			}
 			if a.KEV != b.KEV {
 				return a.KEV
 			}
@@ -67,7 +72,7 @@ func Group(leads []Lead) []Lead {
 		g.KEVCount, g.MaxCVSS = 0, 0
 		for _, m := range ms {
 			g.Counts[m.Label]++
-			ref := Ref{ID: m.AdvisoryID, URL: m.URL, Label: m.Label, Range: m.AffectedRange, KEV: m.KEV, CVSS: m.CVSS, Precondition: m.Precondition}
+			ref := Ref{ID: m.AdvisoryID, URL: m.URL, Label: m.Label, Range: m.AffectedRange, KEV: m.KEV, CVSS: m.CVSS, Precondition: m.Precondition, Component: m.Component}
 			if m.Source != "" {
 				ref.Index = true
 				g.IndexLabel = m.Source
@@ -88,6 +93,15 @@ func Group(leads []Lead) []Lead {
 	return out
 }
 
+// stronger says lead a says more of an advisory than b: a label that applies
+// more, or the same label under a name the record gives the product itself.
+func stronger(a, b Lead) bool {
+	if ra, rb := labelRank(a.Label), labelRank(b.Label); ra != rb {
+		return ra < rb
+	}
+	return a.Component == "" && b.Component != ""
+}
+
 // oneOfEachID keeps the strongest lead of each advisory id: a record that
 // names the product twice, or a record of yours and the index's, is one
 // advisory on the listener.
@@ -101,7 +115,7 @@ func oneOfEachID(ms []Lead) []Lead {
 			out = append(out, m)
 			continue
 		}
-		if labelRank(m.Label) < labelRank(out[i].Label) {
+		if stronger(m, out[i]) {
 			out[i] = m
 		}
 	}
@@ -193,7 +207,7 @@ func (l Lead) Expand() []Lead {
 		e := l
 		e.Counts, e.Advisories, e.KEVCount, e.MaxCVSS, e.IndexLabel = nil, nil, 0, 0, ""
 		e.AdvisoryID, e.URL, e.Label, e.AffectedRange, e.KEV, e.CVSS = r.ID, r.URL, r.Label, r.Range, r.KEV, r.CVSS
-		e.Precondition, e.Confidence, e.ConfirmReq, e.Source = r.Precondition, r.Confidence, r.ConfirmReq, ""
+		e.Precondition, e.Confidence, e.ConfirmReq, e.Source, e.Component = r.Precondition, r.Confidence, r.ConfirmReq, "", r.Component
 		if r.Index {
 			e.Source = l.IndexLabel
 		}

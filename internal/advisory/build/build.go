@@ -163,11 +163,139 @@ func validCVE(id string) bool {
 
 // The NVD 2.0 feed fields Build reads.
 type nvdCVE struct {
-	ID             string      `json:"id"`
-	VulnStatus     string      `json:"vulnStatus"`
-	CisaExploitAdd string      `json:"cisaExploitAdd"`
-	Metrics        nvdMetrics  `json:"metrics"`
-	Configurations []nvdConfig `json:"configurations"`
+	ID             string        `json:"id"`
+	SourceID       string        `json:"sourceIdentifier"`
+	VulnStatus     string        `json:"vulnStatus"`
+	CisaExploitAdd string        `json:"cisaExploitAdd"`
+	Metrics        nvdMetrics    `json:"metrics"`
+	Configurations []nvdConfig   `json:"configurations"`
+	Affected       []nvdAffected `json:"affected"`
+}
+
+// nvdAffected is what one source says the record's flaw affects: the CNA's
+// own statement is the one whose source is the record's sourceIdentifier.
+type nvdAffected struct {
+	Source string `json:"source"`
+	Data   []struct {
+		Vendor  string `json:"vendor"`
+		Product string `json:"product"`
+	} `json:"affectedData"`
+}
+
+// cnaProducts are the products the record's own CNA names as affected
+// (an empty name, "n/a" and a name of generic words alone say nothing).
+func cnaProducts(c nvdCVE) []string {
+	var out []string
+	seen := map[string]bool{}
+	for _, a := range c.Affected {
+		if a.Source != c.SourceID {
+			continue
+		}
+		for _, d := range a.Data {
+			p := strings.TrimSpace(d.Product)
+			if !distinguishing(p) || seen[p] {
+				continue
+			}
+			seen[p] = true
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// genericWords are words of a product name that name no product: a name made
+// of them alone ("server", "core", "platform") is the vendor's, whatever the
+// product, and says nothing of which one.
+var genericWords = map[string]bool{
+	"server": true, "client": true, "manager": true, "plugin": true, "enterprise": true, "edition": true,
+	"application": true, "cloud": true, "portal": true, "console": true, "gateway": true, "service": true,
+	"services": true, "system": true, "data": true, "management": true, "network": true, "software": true,
+	"platform": true, "product": true, "products": true, "multiple": true, "tools": true, "security": true,
+	"access": true, "web": true, "project": true, "foundation": true, "corporation": true,
+	"core": true, "cms": true, "api": true, "app": true, "suite": true, "framework": true, "library": true,
+	"engine": true, "pro": true, "lite": true, "free": true, "plus": true,
+}
+
+func words(s string) []string {
+	return strings.FieldsFunc(strings.ToLower(s), func(r rune) bool { return !(r >= 'a' && r <= 'z' || r >= '0' && r <= '9') })
+}
+
+func alnum(s string) string { return strings.Join(words(s), "") }
+
+// osNames are the first words of a name that is an operating system or a
+// distribution: what a product runs on or is packaged in, not a component of
+// it (a distribution's own record of its package names the distribution).
+var osNames = map[string]bool{
+	"red": true, "redhat": true, "rhel": true, "suse": true, "sles": true, "opensuse": true, "ubuntu": true,
+	"debian": true, "fedora": true, "centos": true, "alpine": true, "amazon": true, "rocky": true, "almalinux": true,
+	"windows": true, "macos": true, "mac": true, "ios": true, "ipados": true, "tvos": true, "watchos": true,
+	"android": true, "linux": true, "freebsd": true, "openbsd": true, "netbsd": true, "solaris": true,
+}
+
+// distinguishing says a name names a product: it has a word that is not a
+// generic one, and it is not an operating system or a distribution.
+func distinguishing(name string) bool {
+	if alnum(name) == "na" {
+		return false
+	}
+	if w := words(name); len(w) > 0 && osNames[w[0]] {
+		return false
+	}
+	for _, w := range words(name) {
+		if !genericWords[w] {
+			return true
+		}
+	}
+	return false
+}
+
+// namesProduct says a name the CNA gave is the CPE product vendor:product:
+// the product's own name, one that holds it or is held by it, one made of
+// words of the vendor and the product, one that shares a word of it, or only
+// the vendor's.
+func namesProduct(name, vendor, product string) bool {
+	a, b := alnum(product), alnum(name)
+	if len(a) >= 3 && len(b) >= 3 && (strings.Contains(a, b) || strings.Contains(b, a)) {
+		return true
+	}
+	if b == alnum(vendor) {
+		return true
+	}
+	have := map[string]bool{}
+	for _, w := range append(words(vendor), words(product)...) {
+		have[w] = true
+	}
+	all := true
+	for _, w := range words(name) {
+		if len(w) >= 4 && !genericWords[w] && have[w] {
+			return true
+		}
+		all = all && have[w]
+	}
+	return all
+}
+
+// otherComponent is the products the record's CNA names when none of them
+// is the CPE product (at most two, kept short): the record says the flaw is
+// in something else than the product it was filed under. None when the CNA
+// named nothing, which is the case of most records before 2018.
+func otherComponent(names []string, vendor, product string) []string {
+	if len(names) == 0 {
+		return nil
+	}
+	for _, n := range names {
+		if namesProduct(n, vendor, product) {
+			return nil
+		}
+	}
+	var out []string
+	for _, n := range names {
+		if len(out) == 2 {
+			break
+		}
+		out = append(out, string([]rune(n)[:min(len([]rune(n)), 48)]))
+	}
+	return out
 }
 
 type nvdMetrics struct {
@@ -258,6 +386,7 @@ type entry struct {
 	platform bool            // every configuration that names the product also names a platform
 	editions map[string]bool // the editions and targets the matches name ("" for none)
 	plats    map[string]bool // what the configurations say the product runs on or with (vendor:product)
+	comp     []string        // what the record's CNA names when it is not this product
 }
 
 // siblings are the products of a configuration that stand beside the node
@@ -356,7 +485,7 @@ func Build(o Options) (*Result, error) {
 				rep.DroppedByScope++
 				continue
 			}
-			v.Ranges, v.Versions = keys(e.ranges), keys(e.versions)
+			v.Ranges, v.Versions, v.Comp = keys(e.ranges), keys(e.versions), e.comp
 			p.Vulns = append(p.Vulns, v)
 			ids[id] = true
 		}
@@ -533,6 +662,7 @@ func (a *acc) add(c nvdCVE, wanted map[string]bool, rep *Report) error {
 		return nil
 	}
 	kept := 0
+	cna := cnaProducts(c)
 	for _, cfg := range c.Configurations {
 		cond := cfg.Operator == "AND" && len(cfg.Nodes) > 1
 		for ni, n := range cfg.Nodes {
@@ -577,7 +707,8 @@ func (a *acc) add(c nvdCVE, wanted map[string]bool, rep *Report) error {
 				}
 				e := byCVE[c.ID]
 				if e == nil {
-					e = &entry{ranges: map[string]bool{}, versions: map[string]bool{}, platform: true, editions: map[string]bool{}, plats: map[string]bool{}}
+					e = &entry{ranges: map[string]bool{}, versions: map[string]bool{}, platform: true, editions: map[string]bool{}, plats: map[string]bool{},
+						comp: otherComponent(cna, vendor, product)}
 					byCVE[c.ID] = e
 				}
 				// A record is conditional on a platform only when every
