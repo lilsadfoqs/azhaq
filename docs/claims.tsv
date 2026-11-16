@@ -2004,3 +2004,4 @@ run.url-comma-list	docs/commands/run.md	`-url` also takes a comma list, as `-u` 
 run.url-comma-in-query-stays	docs/commands/run.md	a comma in a path or query (`/?a=1,2`) stays in its URL	test:cmd/azhaq:TestSplitURLList,TestCommaInQueryKeepsURLWhole
 fuzz.u-one-url	docs/commands/fuzz.md	`-u` takes one URL and is not repeatable	test:cmd/azhaq:TestFuzzRefusesAValueWithASecondURL
 run.url-bare-host-splits	docs/commands/run.md	A piece that is no URL (a bare host, `host:port` or address) splits at every comma.	test:cmd/azhaq:TestSplitURLList
+export.targets-origin	docs/commands/export.md	lists one origin (`scheme://host[:port]/`) for each web service that answered, whatever path the answer was read at	test:cmd/azhaq:TestExportTargetsReducesAnswersToTheirOrigins,TestExportTargetsAfterProbeOfAPath
