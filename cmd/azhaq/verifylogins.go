@@ -30,7 +30,7 @@ type verifyLoginsFlags struct {
 }
 
 func (v *verifyLoginsFlags) register(fs *flag.FlagSet) {
-	fs.BoolVar(&v.on, "verify-logins", false, "with the services this run confirmed: for a product internal/verify's logins catalog names, one sign-in attempt per published default credential pair (each sourced to a vendor doc or an advisory), stopping at the first success and, for that host, at a lockout sign, a 429 or a captcha on the sign-in page; and, for a product whose own docs say a resource needs a sign-in, one GET of it with no credential compared with the same GET carrying a deliberately wrong credential, a finding only when the unauthenticated GET shows the protected content; `azhaq plan` lists every check the catalog has before anything is sent. Off by default. The sign-in attempts are the writes this flag asks for and no others; a password is never printed, only \"the published default\"; no session is kept after a check, and a logout is sent where the product has one. Every request goes through the scope, run's -deny-path, -max-requests, the pace and the kill file, and is a ledger line of the collector azhaq-verify-logins")
+	fs.BoolVar(&v.on, "verify-logins", false, "with the services this run confirmed: for a product internal/verify's logins catalog names, one sign-in attempt per published default credential pair (each sourced to a vendor doc or an advisory), sent after two controls on the same request, one with no credential and one with a random wrong one, and accepted only when the controls are refused or answered measurably differently (a page that answers the same without a credential proves nothing); stopping at the first success and, for that host, at a lockout sign, a 429 or a captcha on the sign-in page; and, for a product whose own docs say a resource needs a sign-in, one GET of it with no credential compared with the same GET carrying a deliberately wrong credential, a finding only when the unauthenticated GET shows the protected content; `azhaq plan` lists every check the catalog has before anything is sent. Off by default. The sign-in attempts are the writes this flag asks for and no others; a password is never printed, only \"the published default\"; no session is kept after a check, and a logout is sent where the product has one. Every request goes through the scope, run's -deny-path, -max-requests, the pace and the kill file, and is a ledger line of the collector azhaq-verify-logins")
 }
 
 // loginsStage is the whole of -verify-logins after a run: for each web
@@ -48,6 +48,7 @@ func loginsStage(ctx context.Context, st *store.Store, obs []types.StoredObserva
 	doer := verify.HTTPDoer{Client: client, Spend: func(ctx context.Context) error { return egress.Spend(ctx) }}
 
 	var loginsPlanned, loginsSucceeded, captchaSkipped, lockoutStopped int
+	var notProved []string // a path that answers the same without a credential: the pair was not proved
 	var readsPlanned, readsFound int
 	var refused, denied, stopped, failed int
 
@@ -94,6 +95,8 @@ func loginsStage(ctx context.Context, st *store.Store, obs []types.StoredObserva
 				captchaSkipped++
 			case outcome.Lockout:
 				lockoutStopped++
+			case outcome.Note != "":
+				notProved = append(notProved, fmt.Sprintf("%s on %s (%s): %s", lg.Product, svc.Target(), lg.Path, outcome.Note))
 			case outcome.Success:
 				loginsSucceeded++
 				if lg.Logout != nil {
@@ -169,6 +172,9 @@ func loginsStage(ctx context.Context, st *store.Store, obs []types.StoredObserva
 		case len(unasked) == 0:
 			note += fmt.Sprintf("; none asked: no product the run named is in the catalog (%s named: %s)", plural(len(namedList), "product"), clipList(namedList, 6))
 		}
+	}
+	if len(notProved) > 0 {
+		note += "; not proved: " + strings.Join(notProved, "; ")
 	}
 	if len(unasked) > 0 {
 		note += "; not asked: " + strings.Join(unasked, "; ")

@@ -258,7 +258,7 @@ func stageOfCollector(name string) string {
 		return "fuzz"
 	case "shots":
 		return "shots"
-	case "advisories", "verify":
+	case "advisories", "verify", "verify-logins":
 		return "verify"
 	case "notify":
 		return "notify"
@@ -685,6 +685,10 @@ func estimateCost(seeds []types.Seed, planned [][]string, runs func(string) bool
 		} else {
 			e.add("azhaq-params", amount{}, "pages searched, up to -params-per-host a host, each asked in batches of the wordlist")
 		}
+	}
+	if env.verifyLogins {
+		// The products are named by the run, so only its shape is known here.
+		e.add("azhaq-verify-logins", amount{}, "-verify-logins asks each catalog product a run names: 3 requests per sign-in pair (no credential, a wrong one, the pair) and 2 per unauthenticated read")
 	}
 	if env.login != "" {
 		e.put("sign-in", "chrome", amount{Requests: 3}, "the sign-in page's scripts, styles and images, which Chrome asks for as the page names them")

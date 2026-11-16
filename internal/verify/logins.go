@@ -2,8 +2,9 @@ package verify
 
 // This file is the mechanism behind -verify-logins: for a product the
 // catalog (logins_catalog.go) names, one sign-in attempt per published
-// default credential pair, stopping at the first success or at a lockout
-// sign, a 429 or a captcha; and, for a product whose own docs say a
+// default credential pair, each measured against two controls sent first on
+// the same request (no credential, and a random wrong one), stopping at the
+// first success or at a lockout sign, a 429 or a captcha; and, for a product whose own docs say a
 // resource needs a sign-in, one GET of it with no credential compared
 // with the same GET carrying a deliberately wrong credential. Unlike the
 // checks of verify.go, these are not read-only: a sign-in attempt is a
@@ -16,12 +17,15 @@ package verify
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -136,14 +140,135 @@ type LoginOutcome struct {
 	Excerpt     string
 	Cookie      string // a Form/JSON success: its session cookie, for Logout
 	Body        []byte
+	// Controls is the control outcome beside the pair's, as it is kept in the
+	// evidence. Note is set, with Success false, when the pair was not proved
+	// because the path answers the same without a credential (or with a wrong
+	// one): a page that is not gated says nothing about a password.
+	Controls string
+	Note     string
 	// Proof is the attempt and its answer, with the password left out of both
 	// and of the command that sends the pair again.
 	Proof *proof.Proof
 }
 
-// Attempt sends lg's one pair through d to origin, and judges the answer.
-// The password is read from lg only to build the request; nothing this
-// returns carries its bytes.
+// answer is what one request of an attempt got, with the rule's verdict.
+type answer struct {
+	status   int
+	body     []byte
+	ok       bool            // the entry's Success rule holds for it
+	location string          // a redirect's target path, without its query
+	cookies  map[string]bool // the names of the cookies it set
+}
+
+func isRedirect(status int) bool { return status >= 300 && status < 400 }
+
+// randomCredential is a user and a password nobody has: sent as the wrong
+// credential, never a guess at a real pair.
+func randomCredential() (user, pass string) {
+	var b [8]byte
+	_, _ = rand.Read(b[:])
+	return "azhaq-" + hex.EncodeToString(b[:4]), hex.EncodeToString(b[4:])
+}
+
+// request is the sign-in request of lg for one credential; none sends it
+// with no credential at all (no header, empty fields).
+func (lg DefaultLogin) request(ctx context.Context, origin, user, pass string, none bool) (*http.Request, error) {
+	switch lg.Mode {
+	case ModeForm:
+		if none {
+			user, pass = "", ""
+		}
+		form := url.Values{lg.UserField: {user}, lg.PassField: {pass}}
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, origin+lg.Path, strings.NewReader(form.Encode()))
+		if err == nil {
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		}
+		return req, err
+	case ModeJSON:
+		if none {
+			user, pass = "", ""
+		}
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, origin+lg.Path, bytes.NewReader(lg.Body(user, pass)))
+		if err == nil {
+			req.Header.Set("Content-Type", "application/json")
+		}
+		return req, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, origin+lg.Path, nil)
+	if err == nil && !none {
+		req.SetBasicAuth(user, pass)
+	}
+	return req, err
+}
+
+// ask sends one request of an attempt and reads the answer.
+func (lg DefaultLogin) ask(ctx context.Context, d HTTPDoer, origin, user, pass string, none bool) (answer, *http.Response, error) {
+	req, err := lg.request(ctx, origin, user, pass, none)
+	if err != nil {
+		return answer{}, nil, err
+	}
+	resp, body, err := d.do(ctx, req)
+	if err != nil {
+		return answer{}, nil, err
+	}
+	a := answer{status: resp.StatusCode, body: body, ok: lg.Success(resp.StatusCode, body), cookies: map[string]bool{}}
+	if isRedirect(a.status) {
+		if u, err := url.Parse(resp.Header.Get("Location")); err == nil {
+			a.location, _, _ = strings.Cut(u.Path, ";") // a session id rides after the ;
+		}
+	}
+	for _, c := range resp.Cookies() {
+		a.cookies[c.Name] = true
+	}
+	return a, resp, nil
+}
+
+func (a answer) lockout() bool {
+	return a.status == http.StatusTooManyRequests || isLockout(a.status, a.body)
+}
+
+// differs says the pair's answer is measurably not the control's: another
+// status class, the marker gone, and, for two redirects (a refused sign-in
+// redirects too), another target or a session cookie only the pair got.
+func differs(pair, c answer) bool {
+	if pair.status/100 != c.status/100 || (pair.ok && !c.ok) {
+		return true
+	}
+	if isRedirect(pair.status) && isRedirect(c.status) {
+		if pair.location != c.location {
+			return true
+		}
+		for name := range pair.cookies {
+			if !c.cookies[name] {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// describe is an answer as the evidence shows it: its status, where a
+// redirect goes, and whether the marker is in it.
+func (a answer) describe() string {
+	s := strconv.Itoa(a.status)
+	switch {
+	case isRedirect(a.status) && a.location != "":
+		s += " to " + a.location
+	case a.ok:
+		s += " + marker"
+	case a.status/100 == 2:
+		s += ", marker absent"
+	}
+	return s
+}
+
+// Attempt sends two controls on lg's request, one with no credential and one
+// with a random wrong one, then lg's one pair through d to origin, and judges
+// the answers: the pair is accepted only when its answer passes lg's rule and
+// each control fails it or answers measurably differently. A path whose
+// answer to no credential is the same is not gated, so no pair is sent to it
+// and nothing is proved. The password is read from lg only to build the
+// request; nothing this returns carries its bytes.
 func (lg DefaultLogin) Attempt(ctx context.Context, d HTTPDoer, origin string) (LoginOutcome, error) {
 	if lg.CaptchaCheck {
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, origin+lg.Path, nil)
@@ -158,54 +283,69 @@ func (lg DefaultLogin) Attempt(ctx context.Context, d HTTPDoer, origin string) (
 			return LoginOutcome{CaptchaSkip: true, Request: "GET " + lg.Path + " (the sign-in page)", Excerpt: "a captcha field is on the sign-in page: no credential is sent"}, nil
 		}
 	}
-	var req *http.Request
-	var err error
-	sent := fmt.Sprintf("%s with the published default credential pair for %s (%s)", lg.Path, lg.Product, lg.ID)
-	switch lg.Mode {
-	case ModeBasic:
-		req, err = http.NewRequestWithContext(ctx, http.MethodGet, origin+lg.Path, nil)
-		sent = "GET " + sent
-		if err == nil {
-			req.SetBasicAuth(lg.User, lg.Pass)
-		}
-	case ModeForm:
-		form := url.Values{lg.UserField: {lg.User}, lg.PassField: {lg.Pass}}
-		req, err = http.NewRequestWithContext(ctx, http.MethodPost, origin+lg.Path, strings.NewReader(form.Encode()))
-		sent = "POST " + sent
-		if err == nil {
-			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-		}
-	case ModeJSON:
-		req, err = http.NewRequestWithContext(ctx, http.MethodPost, origin+lg.Path, bytes.NewReader(lg.Body(lg.User, lg.Pass)))
-		sent = "POST " + sent
-		if err == nil {
-			req.Header.Set("Content-Type", "application/json")
-		}
+	verb := "GET"
+	if lg.Mode != ModeBasic {
+		verb = "POST"
 	}
+	sent := fmt.Sprintf("%s %s with no credential, then with a deliberately wrong credential, then with the published default credential pair for %s (%s)", verb, lg.Path, lg.Product, lg.ID)
+	out := LoginOutcome{Tried: true, Request: sent}
+	stop := func(a answer) LoginOutcome {
+		out.Lockout = true
+		out.Excerpt = redact(excerpt(a.body), lg.User, lg.Pass, lg.PassField)
+		if a.status == http.StatusTooManyRequests {
+			out.Excerpt = "429 Too Many Requests: no further pair is sent to this host"
+		}
+		return out
+	}
+	none, _, err := lg.ask(ctx, d, origin, "", "", true)
 	if err != nil {
 		return LoginOutcome{}, err
 	}
-	resp, body, err := d.do(ctx, req)
+	if none.lockout() {
+		return stop(none), nil
+	}
+	notGated := "the page answers the same without a credential; the published pair was not proved"
+	if none.ok && !isRedirect(none.status) { // a redirect is told apart by its target, any other answer that passes is a page open to all
+		out.Controls = "no credential: " + none.describe()
+		out.Note = notGated
+		return out, nil
+	}
+	wu, wp := randomCredential()
+	wrong, _, err := lg.ask(ctx, d, origin, wu, wp, false)
 	if err != nil {
 		return LoginOutcome{}, err
 	}
-	out := LoginOutcome{Tried: true, Request: sent, Excerpt: redact(excerpt(body), lg.User, lg.Pass, lg.PassField)}
+	if wrong.lockout() {
+		return stop(wrong), nil
+	}
+	pair, resp, err := lg.ask(ctx, d, origin, lg.User, lg.Pass, false)
+	if err != nil {
+		return LoginOutcome{}, err
+	}
+	out.Controls = fmt.Sprintf("no credential: %s; wrong pair: %s; the published pair (%s): %s", none.describe(), wrong.describe(), lg.User, pair.describe())
+	shown := redact(excerpt(pair.body), lg.User, lg.Pass, lg.PassField)
+	out.Excerpt = out.Controls + "; answer: " + shown
 	out.Proof = &proof.Proof{
-		ObservedAt: time.Now().UTC().Format(time.RFC3339), Method: req.Method, Target: origin + lg.Path,
-		Status: resp.StatusCode, ContentType: resp.Header.Get("Content-Type"),
-		Excerpt: redact(proof.Printable(body, proof.MaxExcerpt), lg.User, lg.Pass, lg.PassField), ExcerptPart: "response", ExcerptOffset: proof.Offset(0),
-		How: "azhaq-verify-logins", Reproduce: lg.reproduce(origin),
+		ObservedAt: time.Now().UTC().Format(time.RFC3339), Method: verb, Target: origin + lg.Path,
+		Status: pair.status, ContentType: resp.Header.Get("Content-Type"),
+		Excerpt:     out.Controls + "; answer: " + redact(proof.Printable(pair.body, proof.MaxExcerpt), lg.User, lg.Pass, lg.PassField),
+		ExcerptPart: "response", How: "azhaq-verify-logins", Reproduce: lg.reproduce(origin),
 	}
 	switch {
-	case resp.StatusCode == http.StatusTooManyRequests:
-		out.Lockout = true
-		out.Excerpt = "429 Too Many Requests: no further pair is sent to this host"
-	case isLockout(resp.StatusCode, body):
-		out.Lockout = true
-	case lg.Success(resp.StatusCode, body):
+	case pair.lockout():
+		return stop(pair), nil
+	case !pair.ok:
+	case none.ok && !differs(pair, none):
+		out.Note = notGated
+	case wrong.ok && !differs(pair, wrong):
+		out.Note = "the page answers the same with a wrong credential; the published pair was not proved"
+	default:
 		out.Success = true
 		out.Cookie = setCookieOf(resp)
-		out.Body = body
+		out.Body = pair.body
+	}
+	if out.Note != "" {
+		out.Proof = nil
 	}
 	return out, nil
 }
@@ -214,23 +354,36 @@ func (lg DefaultLogin) Attempt(ctx context.Context, d HTTPDoer, origin string) (
 // fills from the terminal.
 const passMark = "AZHAQ-PASSWORD-READ-FROM-THE-TERMINAL"
 
-// reproduce is the curl command that sends lg's pair again. The password is
-// asked for, not written: the command is kept in the workspace and reports.
+// reproduce is the curl commands that send lg's request three times: with no
+// credential, with a wrong one, and with the pair. The password is asked for,
+// not written: the command is kept in the workspace and reports.
 func (lg DefaultLogin) reproduce(origin string) string {
-	head := "curl -sS -i --max-time 10"
+	head := "curl -sS --max-time 10"
 	if strings.HasPrefix(origin, "https://") {
 		head += " -k"
 	}
 	target := proof.Quote(origin + lg.Path)
+	ctl := func(label, args string) string {
+		return head + " -o /dev/null -w " + proof.Quote(label+": %{http_code} %{redirect_url}\n") + args + " " + target
+	}
+	const wrong = "azhaq-wrong"
 	switch lg.Mode {
 	case ModeForm:
-		return "read -rs PASS; " + head + " --data-urlencode " + proof.Quote(lg.UserField+"="+lg.User) +
-			` --data-urlencode "` + lg.PassField + `=$PASS" ` + target
+		f := func(u, p string) string {
+			return " --data-urlencode " + proof.Quote(lg.UserField+"="+u) + " --data-urlencode " + proof.Quote(lg.PassField+"="+p)
+		}
+		return "read -rs PASS; " + ctl("no credential", f("", "")) + "; " + ctl("wrong pair", f(wrong, wrong)) + "; " +
+			head + " -i --data-urlencode " + proof.Quote(lg.UserField+"="+lg.User) + ` --data-urlencode "` + lg.PassField + `=$PASS" ` + target
 	case ModeJSON:
+		j := func(u, p string) string {
+			return " -H 'Content-Type: application/json' --data " + proof.Quote(string(lg.Body(u, p)))
+		}
 		body := strings.ReplaceAll(string(lg.Body(lg.User, passMark)), passMark, `'"$PASS"'`)
-		return "read -rs PASS; " + head + " -H 'Content-Type: application/json' --data '" + body + "' " + target
+		return "read -rs PASS; " + ctl("no credential", j("", "")) + "; " + ctl("wrong pair", j(wrong, wrong)) + "; " +
+			head + " -i -H 'Content-Type: application/json' --data '" + body + "' " + target
 	default:
-		return head + " -u " + proof.Quote(lg.User) + " " + target // curl asks for the password
+		return ctl("no credential", "") + "; " + ctl("wrong pair", " -u "+proof.Quote(wrong+":"+wrong)) + "; " +
+			head + " -i -u " + proof.Quote(lg.User) + " " + target // curl asks for the password
 	}
 }
 
@@ -239,9 +392,18 @@ func (lg DefaultLogin) reproduce(origin string) string {
 // at the first pair whose Attempt reports a success, a lockout sign, a
 // captcha, or an error, and never sends the pairs after it. lg is the
 // pair that stopped it (its zero value when every pair was tried and
-// none of them did); tried is how many pairs were actually asked.
+// none of them did); tried is how many pairs were actually asked. A path
+// found open to all is not asked again for the next pair: when nothing
+// else stops the loop, lg and outcome are the one that found it, with
+// outcome.Note.
 func AttemptLogins(ctx context.Context, d HTTPDoer, origin string, pairs []DefaultLogin) (lg DefaultLogin, outcome LoginOutcome, tried int, err error) {
+	open := map[string]bool{}
+	var noted DefaultLogin
+	var notedOut LoginOutcome
 	for _, p := range pairs {
+		if open[p.Path] {
+			continue
+		}
 		tried++
 		o, e := p.Attempt(ctx, d, origin)
 		if e != nil {
@@ -250,8 +412,14 @@ func AttemptLogins(ctx context.Context, d HTTPDoer, origin string, pairs []Defau
 		if o.CaptchaSkip || o.Lockout || o.Success {
 			return p, o, tried, nil
 		}
+		if o.Note != "" {
+			open[p.Path] = true
+			if notedOut.Note == "" {
+				noted, notedOut = p, o
+			}
+		}
 	}
-	return DefaultLogin{}, LoginOutcome{}, tried, nil
+	return noted, notedOut, tried, nil
 }
 
 // wrongCredential is sent instead of a real one for the unauthenticated-

@@ -256,7 +256,7 @@ func loginsPass(obs []types.StoredObservation) (why string, services int) {
 	}
 	sends := []string{}
 	if attempts > 0 {
-		sends = append(sends, plural(attempts, "sign-in attempt")+", one for each product on each service, with its published default credential pair, stopping at the first success, a lockout sign or a captcha")
+		sends = append(sends, plural(attempts, "sign-in attempt")+", one for each product on each service, with its published default credential pair after two control requests (no credential, a wrong one: up to "+plural(attempts*3, "request")+" in all), stopping at the first success, a lockout sign or a captcha")
 	}
 	if reads > 0 {
 		sends = append(sends, plural(reads, "unauthenticated read")+" (a GET with no credential and a GET with a deliberately wrong one, each)")

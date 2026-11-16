@@ -74,8 +74,8 @@ func TestLoginAttemptAcceptedIsSuccess(t *testing.T) {
 	if !out.Success || out.Lockout || out.CaptchaSkip {
 		t.Fatalf("want success, got %+v", out)
 	}
-	if h.count() != 1 {
-		t.Fatalf("want 1 request, got %d", h.count())
+	if h.count() != 3 {
+		t.Fatalf("want 3 requests (no credential, a wrong one, the pair), got %d", h.count())
 	}
 }
 
@@ -122,8 +122,8 @@ func TestAttemptLoginsStopsAtFirstSuccess(t *testing.T) {
 	if tried != 2 {
 		t.Fatalf("want 2 pairs tried, got %d", tried)
 	}
-	if h.count() != 2 {
-		t.Fatalf("want exactly 2 requests sent (never a third), got %d", h.count())
+	if h.count() != 6 { // each of the two pairs is two controls and itself
+		t.Fatalf("want exactly 6 requests sent (never the third pair's), got %d", h.count())
 	}
 }
 
@@ -404,20 +404,27 @@ func TestNoModeEverSendsAQueryString(t *testing.T) {
 func TestModeFormAndModeJSONSendTheFieldsNamed(t *testing.T) {
 	origin, _ := newFixture(t, func(n int, w http.ResponseWriter, r *http.Request) {
 		ct := r.Header.Get("Content-Type")
+		accepted := false
 		switch {
 		case strings.Contains(ct, "json"):
 			buf := make([]byte, 256)
 			nr, _ := r.Body.Read(buf)
 			if !strings.Contains(string(buf[:nr]), `"user"`) {
-				t.Fatalf("want the JSON body to carry the user, got %q", buf[:nr])
+				t.Errorf("want the JSON body to carry the user, got %q", buf[:nr])
 			}
+			accepted = strings.Contains(string(buf[:nr]), `"user":"user"`)
 		case strings.Contains(ct, "form"):
 			r.ParseForm()
-			if r.Form.Get("j_username") != "user" {
-				t.Fatalf("want the form field j_username=user, got %q", r.Form)
+			if !r.Form.Has("j_username") || !r.Form.Has("j_password") {
+				t.Errorf("want the form fields j_username and j_password, got %q", r.Form)
 			}
+			accepted = r.Form.Get("j_username") == "user"
 		default:
-			t.Fatalf("unexpected content type %q", ct)
+			t.Errorf("unexpected content type %q", ct)
+		}
+		if !accepted { // the controls: no credential, a wrong one
+			w.WriteHeader(401)
+			return
 		}
 		w.WriteHeader(200)
 		w.Write([]byte("ok"))
