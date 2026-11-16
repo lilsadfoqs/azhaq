@@ -35,7 +35,7 @@ The request is ffuf's, so a ffuf command line carries over: [Details](#details) 
 
 ## Output
 
-Plain output is one URL per line with its status, size, words and lines. With `-json` you get one object for each input that matched. The sizes, words and lines are counted as ffuf counts them, so a `-fs` or `-fl` value carries over. `-mc` defaults to ffuf's `200-299,301,302,307,401,403,405,500`.
+Plain output is one URL per line with its status, size, words and lines. With `-json` you get one object for each input that matched. The sizes, words and lines are counted as ffuf counts them, so a `-fs` or `-fl` value carries over. `-mc` defaults to `200-299,301,302,307,308,401,403,405,500`: ffuf's list with 308 added, since ffuf matches 301, 302 and 307 but not the permanent redirect that keeps the method, and a moved route would be missed (`-mc 200-299,301,302,307,401,403,405,500` is ffuf's own).
 
 | Field | Meaning |
 | --- | --- |
@@ -143,7 +143,7 @@ The start of every body is checked for a runtime's stack trace as it is read: a 
 
 | Flag | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `-mc` | string |  | report only these statuses (comma-separated, ranges, or all; default ffuf's: 200-299,301,302,307,401,403,405,500) |
+| `-mc` | string |  | report only these statuses (comma-separated, ranges, or all; default 200-299,301,302,307,308,401,403,405,500, ffuf's and 308) |
 | `-fc` | string |  | hide these statuses |
 | `-fs` | string |  | hide these response sizes |
 

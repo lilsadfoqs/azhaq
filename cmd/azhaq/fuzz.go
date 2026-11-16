@@ -67,7 +67,7 @@ func cmdFuzz(args []string) error {
 	http2 := fs.Bool("http2", false, "use HTTP/2 where the server offers it")
 	certFile := fs.String("cc", "", "client certificate file for TLS; -ck names its key")
 	keyFile := fs.String("ck", "", "client key file for TLS")
-	mc := fs.String("mc", "", "match these statuses, comma-separated values and ranges, or all (default 200-299,301,302,307,401,403,405,500, unless another matcher is given)")
+	mc := fs.String("mc", "", "match these statuses, comma-separated values and ranges, or all (default 200-299,301,302,307,308,401,403,405,500, ffuf's and 308, unless another matcher is given)")
 	ms := fs.String("ms", "", "match these response sizes (values and ranges)")
 	mw := fs.String("mw", "", "match these word counts (values and ranges)")
 	ml := fs.String("ml", "", "match these line counts (values and ranges)")
@@ -156,11 +156,9 @@ func cmdFuzz(args []string) error {
 	if err := parse(fs, args); err != nil {
 		return err
 	}
-	// A name in the URL is looked up at the resolvers given, as run does.
-	if rs, err := dnsr.ParseResolvers(*resolversFlag); err != nil {
+	resolvers, err := dnsr.ParseResolvers(*resolversFlag)
+	if err != nil {
 		return usagef("-resolvers: %v", err)
-	} else if len(rs) > 0 {
-		useResolvers(rs, 0)
 	}
 	if c.db == "" {
 		c.db = runFolderDB() // a kept run keeps its rows
@@ -312,7 +310,7 @@ func cmdFuzz(args []string) error {
 	}
 	if given["mc"] || !(given["ms"] || given["ml"] || given["mw"] || given["mr"] || given["mt"]) {
 		if *mc == "" {
-			*mc = "200-299,301,302,307,401,403,405,500"
+			*mc = fuzz.DefaultStatus
 		}
 		if err := set.AddMatcher("status", *mc); err != nil {
 			return usageErr{err}
@@ -377,6 +375,11 @@ func cmdFuzz(args []string) error {
 	}
 
 	fetch.Reset()
+	// After the reset, which clears the policy's resolver: a name in the URL
+	// is looked up at the resolvers given, as run does.
+	if len(resolvers) > 0 {
+		useResolvers(resolvers, 0)
+	}
 	egress.SetRate(*rate)
 	egress.SetMaxRequests(*maxReq)
 	if !rules.Empty() {

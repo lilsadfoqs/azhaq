@@ -300,7 +300,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 | `-dirs-fs` | string |  | hide these response sizes | rarely needed |
 | `-dirs-fw` | string |  | hide these word counts | rarely needed |
 | `-dirs-ic` | bool |  | ignore the lines of the wordlist that start with # (and a trailing ' # note'), as ffuf's -ic does; without it they are asked like any word | rarely needed |
-| `-dirs-mc` | string |  | report only these statuses (comma-separated, ranges, or all; default ffuf's: 200-299,301,302,307,401,403,405,500) | rarely needed |
+| `-dirs-mc` | string |  | report only these statuses (comma-separated, ranges, or all; default 200-299,301,302,307,308,401,403,405,500, ffuf's and 308) | rarely needed |
 | `-dirs-ml` | string |  | report only these line counts | rarely needed |
 | `-dirs-mr` | string |  | report only answers whose headers or body match this regular expression | rarely needed |
 | `-dirs-ms` | string |  | report only these response sizes (values and ranges, 100-200) | rarely needed |
