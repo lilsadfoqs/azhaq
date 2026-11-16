@@ -102,10 +102,10 @@ func (g *sessionGuard) doubt(raw string, status int, location string, wire bool)
 	if wire {
 		g.mu.Lock()
 		if g.wired == nil {
-			g.wired = map[string]bool{}
+			g.wired = map[string]int64{}
 		}
 		if len(g.wired) < maxAsked {
-			g.wired[raw] = true // sessionSaw does not count this answer again
+			g.wired[raw] = g.gen.Load() // sessionSaw does not count this answer again
 		}
 		g.mu.Unlock()
 	}
@@ -136,13 +136,17 @@ func (g *sessionGuard) doubt(raw string, status int, location string, wire bool)
 }
 
 // wiredDoubt says the wire already counted the answer to the request whose
-// first hop was raw, and forgets it.
-func (g *sessionGuard) wiredDoubt(raw string) bool {
+// first hop was raw, forgets it, and says whether a new session began since:
+// then the answer is one the old session gave (unless raw is known to end
+// every session it is asked with: that one is not asked again).
+func (g *sessionGuard) wiredDoubt(raw string) (counted, stale, covered bool) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	ok := g.wired[raw]
+	gen, ok := g.wired[raw]
+	covered = g.covered[raw]
 	delete(g.wired, raw)
-	return ok
+	delete(g.covered, raw)
+	return ok, ok && gen != g.gen.Load() && !g.enders[raw], covered
 }
 
 // worth counts an answer's occurrences and says whether this one is worth a
