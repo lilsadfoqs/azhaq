@@ -181,13 +181,17 @@ func compileBlock(t *template, b map[string]any) (u *detect.Unit, dropped int, r
 	if t.Vars != nil {
 		return nil, 0, "template variables"
 	}
+	pathList, pay, reason := expandPayloads(b)
+	if reason != "" {
+		return nil, 0, reason
+	}
 	keys := make([]string, 0, len(b))
 	for k := range b {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
 	for _, k := range keys {
-		if blockKeys[k] {
+		if blockKeys[k] || pay && payloadKeys[k] {
 			continue
 		}
 		if r, ok := blockReasons[k]; ok {
@@ -195,7 +199,7 @@ func compileBlock(t *template, b map[string]any) (u *detect.Unit, dropped int, r
 		}
 	}
 	for _, k := range keys {
-		if !blockKeys[k] {
+		if !blockKeys[k] && !(pay && payloadKeys[k]) {
 			return nil, 0, "unsupported request key " + k
 		}
 	}
@@ -207,7 +211,7 @@ func compileBlock(t *template, b map[string]any) (u *detect.Unit, dropped int, r
 	}
 
 	unit := &detect.Unit{ID: t.ID}
-	paths, reason := compilePaths(b["path"])
+	paths, reason := compilePaths(pathList)
 	if reason != "" {
 		return nil, 0, reason
 	}
@@ -255,6 +259,67 @@ func compileBlock(t *template, b map[string]any) (u *detect.Unit, dropped int, r
 	unit.Product = detect.Product(title)
 	unit.Multi = !unit.And && len(names) >= detect.MatcherNamed
 	return unit, dropped, ""
+}
+
+// payloadKeys are the keys that go with a payload list that expandPayloads
+// takes: with one variable the attack mode changes nothing.
+var payloadKeys = map[string]bool{"payloads": true, "attack": true, "threads": true}
+
+// expandPayloads returns the block's paths, with each payload value put in
+// for its variable. It takes the one case that is only a longer path list: one
+// variable with its values written in the template, used in the paths and
+// nowhere else. Other payloads (a wordlist file, several variables, a
+// variable in a matcher) are reported in nuclei's own words, as skipped.
+func expandPayloads(b map[string]any) (paths any, used bool, reason string) {
+	pl, has := b["payloads"]
+	if !has {
+		if _, ok := b["attack"]; ok {
+			return b["path"], false, "payloads"
+		}
+		if _, ok := b["threads"]; ok {
+			return b["path"], false, "payloads"
+		}
+		return b["path"], false, ""
+	}
+	vars, _ := pl.(map[string]any)
+	if len(vars) != 1 {
+		return nil, false, "payloads"
+	}
+	var name string
+	var values []any
+	for k, v := range vars {
+		l, ok := v.([]any)
+		if !ok || len(l) == 0 {
+			return nil, false, "payloads" // a wordlist file
+		}
+		name, values = k, l
+	}
+	ref := "{{" + name + "}}"
+	for k, v := range b {
+		if k == "path" || payloadKeys[k] {
+			continue
+		}
+		if strings.Contains(fmt.Sprint(v), ref) {
+			return nil, false, "payloads" // the variable is not only in the path
+		}
+	}
+	var out []any
+	hit := false
+	for _, raw := range list(b["path"]) {
+		p := str(raw)
+		if !strings.Contains(p, ref) {
+			out = append(out, p)
+			continue
+		}
+		hit = true
+		for _, v := range values {
+			out = append(out, strings.ReplaceAll(p, ref, str(v)))
+		}
+	}
+	if !hit {
+		return nil, false, "payloads"
+	}
+	return out, true, ""
 }
 
 func compilePaths(v any) ([]string, string) {
@@ -449,7 +514,10 @@ func sourceDoc(res *result, tag, commit string) string {
 	b.WriteString("- The caller supplies the response, so `redirects`, `host-redirects` and `max-redirects` are ignored;\n")
 	b.WriteString("  templates that need an unfollowed redirect (`redirects: false`, a 3xx status matcher) are skipped.\n")
 	b.WriteString("- `stop-at-first-match` only limits which paths a scanner requests, so every path is matched on its own.\n")
-	b.WriteString("- Extractors of other types than regex and kval, or on an unknown part, are dropped; the match stays.\n\n")
+	b.WriteString("- Extractors of other types than regex and kval, or on an unknown part, are dropped; the match stays.\n")
+	b.WriteString("- A template with one payload variable, its values written in the template and used only in the paths,\n")
+	b.WriteString("  is its own list of paths. Payloads from a file, several variables, or a variable in a matcher are skipped.\n")
+	b.WriteString("- An extractor gives every match, as nuclei does; the version is the first value shaped like one (`6.1.1`, not `2005-2024`).\n\n")
 	b.WriteString("## Regenerate\n\n")
 	b.WriteString("Unpack a nuclei-templates release, then run from the repository root:\n\n")
 	b.WriteString("```\ngo run ./scripts/detectgen -src DIR -out internal/detect -tag TAG -commit SHA\n```\n\n")

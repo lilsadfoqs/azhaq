@@ -722,16 +722,35 @@ func (u *cunit) headerOnly() bool {
 	return true
 }
 
-// extract runs the unit's extractors and returns the first non-empty result,
-// and whether it is the value of a header that holds a product token.
+// maxExtracted bounds the matches one regex gives. Nuclei gives all of them;
+// a page repeats a banner, and only the first version-shaped one counts.
+const maxExtracted = 16
+
+// extract runs the unit's extractors and returns the first value that names a
+// version (a copyright range such as 2005-2024 does not), else the first
+// non-empty value, and whether it is the value of a header that holds a
+// product token.
 func (u *cunit) extract(c *ctx) (string, bool) {
+	var first string
+	var firstToken, have bool
+	// pick reports true when v names a version, which ends the search.
+	pick := func(v string, token bool) bool {
+		if v == "" {
+			return false
+		}
+		if !have {
+			first, firstToken, have = v, token, true
+		}
+		return versionOf(v) != ""
+	}
 	for _, x := range u.xs {
 		x.once.Do(x.compile)
 		switch x.spec.Type {
 		case "kval":
 			for _, name := range x.spec.Vals {
-				if v := kval(c.r.Header, name); v != "" {
-					return v, tokenHeaders[strings.ToLower(strings.ReplaceAll(name, "_", "-"))]
+				token := tokenHeaders[strings.ToLower(strings.ReplaceAll(name, "_", "-"))]
+				if v := kval(c.r.Header, name); pick(v, token) {
+					return v, token
 				}
 			}
 		case "regex":
@@ -740,14 +759,15 @@ func (u *cunit) extract(c *ctx) (string, bool) {
 				if re == nil {
 					continue
 				}
-				sm := re.FindStringSubmatch(text)
-				if x.spec.Group < len(sm) && sm[x.spec.Group] != "" {
-					return sm[x.spec.Group], false
+				for _, sm := range re.FindAllStringSubmatch(text, maxExtracted) {
+					if x.spec.Group < len(sm) && pick(sm[x.spec.Group], false) {
+						return sm[x.spec.Group], false
+					}
 				}
 			}
 		}
 	}
-	return "", false
+	return first, firstToken
 }
 
 func (x *cextractor) compile() {
