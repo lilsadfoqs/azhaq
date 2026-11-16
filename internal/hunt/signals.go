@@ -308,6 +308,9 @@ func (h *hunter) serverError(c *cand, r engine.MapEntry, raw string) {
 	st := r.Status
 	e := h.errs[r.Entity.ID]
 	without := r.Answer != ""
+	if h.traced[raw] && e.kind != webextract.ErrSQL && e.kind != webextract.ErrDebug && !h.reflected[webextract.RouteKey(raw)] {
+		return // the trace is a finding row of its own: no lead says the same
+	}
 	switch {
 	case e.kind == webextract.ErrSQL:
 		c.addProved("server-error", serverErrorSQL, fmt.Sprintf("answers %d and the body has SQL error text: %q", st, e.sample))
@@ -315,10 +318,12 @@ func (h *hunter) serverError(c *cand, r engine.MapEntry, raw string) {
 		c.addProved("server-error", serverErrorDebug, fmt.Sprintf("answers %d with a framework's debug page: %q", st, e.sample))
 	case h.reflected[webextract.RouteKey(raw)]:
 		c.addW("server-error", serverErrorReflected, fmt.Sprintf("answers %d, and a parameter's value comes back in the answer", st))
+	// A stack trace is a finding from the record of the trace itself (Input.Measured:
+	// any status, any stage, three frames); the error text here only weighs the lead.
 	case e.kind == webextract.ErrStack && without:
-		c.addProved("server-error", serverErrorStackBare, fmt.Sprintf("answers %d to a request without its input, with a stack trace: %q", st, e.sample))
+		c.addW("server-error", serverErrorStackBare, fmt.Sprintf("answers %d to a request without its input, with a stack trace: %q", st, e.sample))
 	case e.kind == webextract.ErrStack:
-		c.addProved("server-error", serverErrorStack, fmt.Sprintf("answers %d with a stack trace: %q", st, e.sample))
+		c.addW("server-error", serverErrorStack, fmt.Sprintf("answers %d with a stack trace: %q", st, e.sample))
 	case without:
 		c.addW("server-error", serverErrorBare, fmt.Sprintf("answers %d to a request without the input it takes (%s): a lead, nothing in the answer points further", st, join(h.own(r, inputNames(r)), 3)))
 	default:

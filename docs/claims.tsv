@@ -1053,7 +1053,8 @@ hunt.tier-counts	docs/commands/hunt.md	counts `rows` and, apart, the `tiers` of 
 hunt.path-never-proof	docs/commands/hunt.md	A path or a name is never proof.	test:internal/hunt:TestPathAnswersDecideTheTier,TestSecretsAreFindingsOnlyByTheirFormat
 hunt.leads-other-signals	docs/commands/hunt.md	- Leads: every other signal, such as a word in a path	test:internal/hunt:TestPathAnswersDecideTheTier,TestSecretsAreFindingsOnlyByTheirFormat
 hunt.path-judged	docs/commands/hunt.md	A path that names a file or a panel is judged by its answer, which azhaq already holds	test:internal/hunt:TestPathAnswersDecideTheTier;test:cmd/azhaq:TestHuntListsTheTiersApart
-hunt.5xx-body-finding	docs/commands/hunt.md	the body showing SQL error text, a framework's debug page or a stack trace makes the row a finding	test:internal/hunt:TestServerErrorNeedsCorroboration,TestPathAnswersDecideTheTier
+hunt.5xx-body-finding	docs/commands/hunt.md	the body showing SQL error text or a framework's debug page makes the row a finding	test:internal/hunt:TestServerErrorNeedsCorroboration,TestPathAnswersDecideTheTier
+hunt.trace-own-row	docs/commands/hunt.md	A stack trace of three or more frames in the answer, at any status, is an `error-disclosure` row of its own (a finding, as `report -findings` lists it), and the route then has no `server-error` lead for it.	test:internal/hunt:TestTraceRecordIsOneFindingAndNoLead;test:cmd/azhaq:TestRunNextLineCountsAgreeWithSummaryHuntAndReport
 hunt.served-unjudged-lead	docs/commands/hunt.md	A served file whose bytes were not judged (a workspace made before the answers were kept) is a lead.	test:internal/hunt:TestAServedFileWithNoAnswerKeptIsALead
 hunt.bare-403-weighs-less	docs/commands/hunt.md	A bare 403 says only `forbidden` and weighs less (5, against 15): nothing in it shows that a session would change the answer.	test:internal/hunt:TestGatedNamesOnlyWhatTheAnswerShowed
 # docs/commands/probe.md
@@ -1836,6 +1837,7 @@ hunt.identification-not-softened	docs/commands/hunt.md	An identification is neve
 hunt.identification-not-proven	docs/commands/hunt.md	It is not proven: the label says how far a read settled its advisory.	test:cmd/azhaq:TestHuntListsIdentificationsBesideRoutes
 hunt.identification-order	docs/commands/hunt.md	In the identifications, a version seen comes before none seen, and a `proved` label before `version-read`, and that before `version-only`.	test:cmd/azhaq:TestHuntOrdersByTier;test:internal/hunt:TestListenersRankByTierBesideRoutes,TestListenersRankAVersionReadBetweenProvedAndVersionOnly
 run.next-hunt-first	docs/commands/run.md	The first line comes first whether or not stderr is a terminal and is in the JSON summary too	test:cmd/azhaq:TestRunNamesHuntFirstWithCounts
+run.next-hunt-counts	docs/commands/run.md	counted by tier before `-limit`, with `hunt`'s own counts: its findings are those of the summary's `tiers`	test:cmd/azhaq:TestRunNextLineCountsAgreeWithSummaryHuntAndReport
 run.advisory-lead-fields	docs/commands/run.md	The lead's own fields are those of its top advisory	test:cmd/azhaq:TestRunNamesTheAdvisoriesOfAConfirmedVersionByDefault
 run.advisory-summary-one-line	docs/commands/run.md	the summary holds them in `advisories`, one line for each service	test:cmd/azhaq:TestRunSummaryStaysSmallWithAdvisoryLeads,TestAdvisoriesRunEndToEnd,TestRunNamesTheAdvisoriesOfAConfirmedVersionByDefault
 hunt.listener-no-version-no-advisory	docs/commands/hunt.md	A product with no version has no advisory: there is nothing to match.	test:cmd/azhaq:TestHuntListsIdentificationsBesideRoutes

@@ -142,11 +142,13 @@ func (r Row) tierRank() int {
 
 // Measured is a finding of the findings output that no route or listener
 // holds: what a DNS answer showed of a name (a CNAME to a name that answered
-// NXDOMAIN). It is a row of its own, a finding ranked by its severity beside
-// the others, never merged with a lead about the same name.
+// NXDOMAIN), or the stack trace an answer carried. It is a row of its own, a
+// finding ranked by its severity beside the others, never merged with a lead
+// about the same name or route.
 type Measured struct {
-	Kind     string // dangling-dns
-	Host     string
+	Kind     string // dangling-dns, error-disclosure
+	Type     string // the row's type: Hostname when empty, URL for a route
+	Host     string // the row's key: the name, or the URL
 	Severity string
 	Evidence string
 	Command  string
@@ -166,6 +168,10 @@ func (m Measured) row(db string) Row {
 		next = "azhaq report -findings -db " + quote(db)
 	}
 	rs := []Reason{{m.Kind, m.Evidence}}
-	return Row{Score: measuredScore[m.Severity], Key: m.Host, Type: "Hostname", Reasons: rs, Next: next,
+	typ := m.Type
+	if typ == "" {
+		typ = "Hostname"
+	}
+	return Row{Score: measuredScore[m.Severity], Key: m.Host, Type: typ, Reasons: rs, Next: next,
 		Tier: proof.TierFinding, Proof: m.Proof, scope: "target", signals: 1}
 }
