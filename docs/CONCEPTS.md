@@ -260,6 +260,7 @@ A failure is partial when one source failed while other sources answered for the
 - It is listed with `"partial": true`, which says the names other sources gave stand. It is counted in `failures` and the run exits 0 when its job is done: a pipeline that wants to stop on any source that did not answer reads `failures` or passes `-strict-exit`.
 - crt.sh holds the most names of any certificate log, but it is also the flakiest: gateway 5xx are common. A run that got its names from other sources should not fail a CI gate over a transient crt.sh failure. The failure is still listed.
 - The summary's `sources` block and its last line say how many sources answered and which failed.
+- An archive of `urls` that failed after giving URLs is a different case: the results are short, so `urls` exits 3 with `complete: false` ([urls](commands/urls.md#summary-and-exit-codes)). One that failed at once, with another answering, stays exit 0.
 - crt.sh is among them: its transient 5xx is listed and counted, the run exits 0 while other sources answered (3 with `-strict-exit`), and a retry (`azhaq resume`) asks it again.
 
 ### Degraded

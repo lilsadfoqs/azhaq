@@ -181,14 +181,14 @@ func TestURLsArchiveThatFailsMidwayIsPartial(t *testing.T) {
 	out, errOut, err := captureBoth(t, func() error {
 		return run(append([]string{"urls", "-d", "example.org", "-json", "-sort", "-urls-pause", "0", "-retries", "0"}, flags...))
 	})
-	if code := exitCode(err); code != exitOK {
-		t.Fatalf("exit %d, want %d\n%s", code, exitOK, errOut)
+	if code := exitCode(err); code != exitPartial {
+		t.Fatalf("exit %d, want %d: the results are short\n%s", code, exitPartial, errOut)
 	}
 	if rows := triageRows(t, out); rows["http://www.example.org/w"].Source != "wayback" {
 		t.Errorf("what wayback gave before it failed is lost: %v", rows)
 	}
 	rep := lastReport(t, errOut)
-	if !slices.Equal(rep.Sources.PartialSources, []string{"wayback"}) {
+	if rep.Complete || !slices.Equal(rep.Sources.PartialSources, []string{"wayback"}) {
 		t.Errorf("partial sources %v", rep.Sources.PartialSources)
 	}
 }

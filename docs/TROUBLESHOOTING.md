@@ -198,7 +198,7 @@ In `roles` the file is `roles.stop` in the `-dir`. There it stops the runs of th
 - URLs went past `-urls-max`;
 - an archive cannot apply a `-mt`, `-ft`, `-from` or `-to` filter (OTX has no type or date).
 
-For the last case the note reads like `otx has no type of its captures: its 13 URLs are not filtered by -mt`. Those URLs are listed, not judged by the filter. An archive that failed is listed as failed and counted in `failures`; the exit code is 3 only when no archive answered, or with `-strict-exit`.
+For the last case the note reads like `otx has no type of its captures: its 13 URLs are not filtered by -mt`. Those URLs are listed, not judged by the filter. An archive that failed is listed as failed and counted in `failures`; the exit code is 3 when no archive answered, when an archive was cut after giving URLs (`partial_sources`: the results are short), or with `-strict-exit`.
 
 **Fix:**
 
