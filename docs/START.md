@@ -16,6 +16,8 @@ azhaq query -db app.db -role api,auth
 
 `plan` sends nothing: it prints what the run would send and the estimate. `run` writes the rows on stdout and the summary on stderr. Look at the summary's first line, `azhaq run: N map rows … · N requests … · db app.db`, and the `note: ledger:` line under it, which counts what was sent. `query` lists the API routes and the ones that need a session. Expect `0`, or `4` when the 2000 requests ran out.
 
+To read a run that is still going, add `-stream` to `run`: it prints a `found` line as each listener is named and each proof answers. Or open a second shell and run `azhaq hunt -db app.db`: it lists the rows stored so far without holding the run up. The run's own progress line names that `hunt` command once its first listener is stored.
+
 Next: [Map a single-page app and get its API into Burp](RECIPES.md#map-a-single-page-app-and-get-its-api-into-burp).
 
 ## 2. Compare two sessions

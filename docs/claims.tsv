@@ -754,6 +754,9 @@ ports.verify-through-egress	docs/commands/ports.md	Every read goes through the s
 ports.verify-never-payload	docs/commands/ports.md	Never a payload, a write, a credential or a request that tries to trigger a flaw.	test:internal/verify:TestChecksEnumeratePreconditions,TestRedisUnauthenticatedIsProved,TestMemcachedUnauthenticatedIsProved,TestMongoUnauthenticatedIsProved
 ports.verify-pointer	docs/commands/ports.md	The checks, the labels and the boundary are in [Read-only verification]	note:a pointer to the concepts page
 # docs/commands/run.md
+run.live-stream	docs/commands/run.md	`-stream` prints a `found` line as each listener is named and each proof answers, while the run goes.	test:cmd/azhaq:TestRunStreamNamesEachListenerAsHuntDoes,TestRunStreamIdentifiedTextLine,TestHelpAndPagesSayHowToReadARunThatIsStillGoing
+run.live-hunt	docs/commands/run.md	reads the workspace a run is still writing, without holding the run up.	test:cmd/azhaq:TestHuntAndQueryCommandsReadAWorkspaceARunIsStillWriting,TestHuntReadsAnOpenWorkspaceWithoutBlockingTheWriter,TestHelpAndPagesSayHowToReadARunThatIsStillGoing
+run.live-progress	docs/commands/run.md	names the `hunt` command once its first listener is stored.	test:cmd/azhaq:TestProgressLineNamesHuntOnceAListenerIsStored,TestRunProgressNamesHuntWhileTheRunGoes
 run.permute-names	docs/commands/run.md	`-permute` still varies the names `-dns-brute` found, whatever `-depth	test:cmd/azhaq:TestRunPermutesTheNamesTheBruteForceFound,TestRunKeepsTheAnswersOfTheNamesItGuessed
 run.product-checks-are-asked	docs/commands/run.md	The sweep of each web service also asks the paths the templates ask, only to name the product.	test:internal/collectors/pathscol:TestSweepNamesProductsAtTemplatePaths;test:cmd/azhaq:TestPlanRequests
 run.product-check-version-is-version-shaped	docs/commands/run.md	The version is the first value shaped like one (`6.1.1`, not a copyright range such as `2005-2024`); when none is, the template names the product without a version.	test:internal/detect:TestExtractorPicksTheVersionShapedValue,TestRealisticAdminPanelAndBrokerConsole;test:cmd/azhaq:TestRunNamesTheVersionOfAnAdminPanelAndABrokerConsole
@@ -1035,6 +1038,7 @@ dns.dnsx-measurement	docs/commands/dns.md	In one test run, `-rl` of dnsx 1.x did
 # docs/commands/hunt.md
 hunt.intro-no-start	docs/commands/hunt.md	A map of thousands of routes does not say where to start.	note:the reason hunt exists, an opinion about maps and not a behaviour
 hunt.sends-nothing	docs/commands/hunt.md	It reads the workspace and sends nothing.	test:cmd/azhaq:TestHuntSendsNothing
+hunt.reads-live-workspace	docs/commands/hunt.md	It reads a workspace a `run` is still writing, too: the rows stored so far, without holding the run up	test:cmd/azhaq:TestHuntAndQueryCommandsReadAWorkspaceARunIsStillWriting,TestHuntReadsAnOpenWorkspaceWithoutBlockingTheWriter,TestHelpAndPagesSayHowToReadARunThatIsStillGoing
 hunt.reads-workspace-roles	docs/commands/hunt.md	Reads the workspace, and the JSONL files of `-roles` if you give any. It sends nothing.	test:cmd/azhaq:TestHuntSendsNothing,TestHuntNextNamesTheRolesDirectory
 hunt.new-only-never-ranks	docs/commands/hunt.md	A row whose only signal is `new` never ranks.	test:internal/hunt:TestNewAloneNeverRanks
 hunt.never-rows	docs/commands/hunt.md	Static assets, scripts, catch-all pages and pages that are gone are never rows.	test:internal/hunt:TestExclusions
@@ -1573,6 +1577,9 @@ shots.unanswered-not-failure	docs/commands/shots.md	A request that left and got 
 shots.browser-requests-blocked	docs/commands/shots.md	`B` counts the requests Chrome was not let send.	test:cmd/azhaq:TestBrowserRequestsAreCountedAnsweredUnansweredAndBlocked
 shots.chrome-mode-in-summary	docs/commands/shots.md	a sandboxed Chrome gives `Chrome ran with its sandbox`	test:cmd/azhaq:TestSummaryNamesTheModeChromeRanIn
 docs-start.advice	docs/START.md	Only test what you are allowed to test.	note:advice to the reader, not a behaviour of the tool
+docs-start.live-read	docs/START.md	Or open a second shell and run `azhaq hunt -db app.db`: it lists the rows stored so far without holding the run up.	test:cmd/azhaq:TestHuntAndQueryCommandsReadAWorkspaceARunIsStillWriting,TestHuntReadsAnOpenWorkspaceWithoutBlockingTheWriter,TestHelpAndPagesSayHowToReadARunThatIsStillGoing
+docs-start.live-stream	docs/START.md	To read a run that is still going, add `-stream` to `run`: it prints a `found` line as each listener is named and each proof answers.	test:cmd/azhaq:TestRunStreamNamesEachListenerAsHuntDoes,TestRunStreamIdentifiedTextLine,TestHelpAndPagesSayHowToReadARunThatIsStillGoing
+docs-start.live-progress	docs/START.md	The run's own progress line names that `hunt` command once its first listener is stored.	test:cmd/azhaq:TestProgressLineNamesHuntOnceAListenerIsStored,TestRunProgressNamesHuntWhileTheRunGoes
 docs-start.exit-codes	docs/START.md	Exit codes, for every job:	test:internal/contract:TestExitCodeFollowsTheOutcome;test:cmd/azhaq:TestExitRule,TestStartPageCommandsRun
 docs-start.resume	docs/START.md	`azhaq resume -db FILE` continues it	test:internal/contract:TestTheKillFileStopsTheRunAndResumeGoesOn
 docs-start.plan-sends-nothing	docs/START.md	`plan` sends nothing: it prints what the run would send and the estimate.	test:cmd/azhaq:TestEgressContract,TestStartPageCommandsRun

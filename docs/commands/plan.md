@@ -272,7 +272,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 | `-o` | string |  | also write the rows to this file, as printed (JSON lines with -json), replacing it; with -quiet the file still gets them |
 | `-quiet` | bool |  | print no map and no progress lines (a line every 10 s while the run works), only the summary (on stderr) |
 | `-v` | bool |  | print a line for every finished task, not only failures |
-| `-stream` | bool |  | also print each name, address, URL and open port as it is found, once per map row, and each listener as it is named and each proof as it answers (found lines, before the ranked map) |
+| `-stream` | bool |  | also print each name, address, URL and open port as it is found, once per map row, and each listener as it is named and each proof as it answers (found lines, before the ranked map); azhaq hunt -db FILE in a second shell lists the rows stored so far |
 | `-sr` | bool |  | also write each answer a target gave, headers and body as read, to the -srd directory as DIR/HOST/SHA1.txt with an index.txt (katana's -sr); query -fields response_file says where a row's is |
 | `-srd` | string | `azhaq_response` | directory for -sr |
 | `-no-catchall` | bool |  | leave out URLs that answer with the page every unknown path gets (client-side routes of a single-page app) from the rows printed |

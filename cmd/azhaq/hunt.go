@@ -20,7 +20,7 @@ import (
 // cmdHunt ranks a workspace's surface: where to look first, and why.
 func cmdHunt(args []string) error {
 	fs := newFlags("hunt")
-	db := fs.String("db", "", "workspace database (default: the last run's)")
+	db := fs.String("db", "", "workspace database; a run that is still going may be writing it (default: the last run's)")
 	var roles stringsFlag
 	fs.Var(&roles, "roles", "the JSONL `azhaq roles -json` printed: rows where one role reached another's data rank first (repeatable)")
 	since := fs.Duration("since", 7*24*time.Hour, "first seen within this long is new: a bonus, never the reason a row ranks")

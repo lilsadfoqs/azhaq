@@ -2,7 +2,7 @@
 
 Where to look first: the mapped routes, hosts and files ranked, and what the run named on each listener, each with its evidence and the next command.
 
-A map of thousands of routes does not say where to start. `hunt` ranks the mapped routes, hosts and files by what a tester should open first. It gives one row per route template and one per listener the run named, each with its score, the reasons for it and the command to run next. It reads the workspace and sends nothing.
+A map of thousands of routes does not say where to start. `hunt` ranks the mapped routes, hosts and files by what a tester should open first. It gives one row per route template and one per listener the run named, each with its score, the reasons for it and the command to run next. It reads the workspace and sends nothing. It reads a workspace a `run` is still writing, too: the rows stored so far, without holding the run up ([a workspace whose run is still going](#a-workspace-whose-run-is-still-going)).
 
 ## Synopsis
 
@@ -263,7 +263,7 @@ When none is found, the row's command is `azhaq show`.
 <!-- flags:begin hunt -->
 | Flag | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `-db` | string |  | workspace database (default: the last run's) |
+| `-db` | string |  | workspace database; a run that is still going may be writing it (default: the last run's) |
 | `-roles` | string, repeatable |  | the JSONL azhaq roles -json printed: rows where one role reached another's data rank first |
 | `-limit` | int | `25` | rows at most, best first |
 | `-since` | duration | `168h0m0s` | first seen within this long is new: a bonus, never the reason a row ranks |

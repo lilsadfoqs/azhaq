@@ -56,7 +56,7 @@ The map has one row per entity, best first: the target's own pages and APIs, the
 - `-json`: one JSON object per row, and the summary as one JSON object on stderr.
 - `-quiet`: no map and no progress lines, only the summary.
 - `-o FILE`: also writes the rows to FILE, as they are printed (JSON lines with `-json`, the text map without), replacing it, as `crawl`, `probe` and `ports` do. The file is made before anything is sent, so a path that cannot be written fails at once with exit 1, and a directory is a usage error. With `-quiet` nothing is printed and the file still gets the rows. The summary lists the file under `wrote`.
-- `-stream`: also prints each name, address, URL and open port as it is found, and each listener as it is named and each proof as it answers, before the map ([Streaming found lines](#streaming-found-lines)).
+- `-stream`: also prints each name, address, URL and open port as it is found, and each listener as it is named and each proof as it answers, before the map ([Streaming found lines](#streaming-found-lines)). To read a run that is still going, see [Reading a run that is still going](#reading-a-run-that-is-still-going).
 
 ```json
 {"type":"URL","key":"http://127.0.0.1:3001/api/Users","scope":"target","coverage":"visited","role":"auth",
@@ -163,6 +163,12 @@ A route a script calls with a method, a description lists, a page links or a req
 found in
   http://127.0.0.1:3001/main.js:6472:88  this.http.post(`${F$.hostServer}/rest/2fa/verify`,{tmpToken:localStorage.getItem(`totp_tmp_token`),totpToken:t})
 ```
+
+### Reading a run that is still going
+
+- `-stream` prints a `found` line as each listener is named and each proof answers, while the run goes.
+- From a second shell, `azhaq hunt -db WORKSPACE` (or `azhaq query -db WORKSPACE`) reads the workspace a run is still writing, without holding the run up. [hunt](hunt.md#a-workspace-whose-run-is-still-going) says what the rows are.
+- The progress line of the run, printed every 10 s on stderr, names the `hunt` command once its first listener is stored. With `-json` the progress object has it as `hunt`.
 
 ### Streaming found lines
 
@@ -671,7 +677,7 @@ azhaq run -url https://app.example.com/ -ports top-1000 -verify-logins -db app.d
 | `-o` | string |  | also write the rows to this file, as printed (JSON lines with -json), replacing it; with -quiet the file still gets them |
 | `-quiet` | bool |  | print no map and no progress lines (a line every 10 s while the run works), only the summary (on stderr) |
 | `-v` | bool |  | print a line for every finished task, not only failures |
-| `-stream` | bool |  | also print each name, address, URL and open port as it is found, once per map row, and each listener as it is named and each proof as it answers (found lines, before the ranked map) |
+| `-stream` | bool |  | also print each name, address, URL and open port as it is found, once per map row, and each listener as it is named and each proof as it answers (found lines, before the ranked map); azhaq hunt -db FILE in a second shell lists the rows stored so far |
 | `-sr` | bool |  | also write each answer a target gave, headers and body as read, to the -srd directory as DIR/HOST/SHA1.txt with an index.txt (katana's -sr); query -fields response_file says where a row's is |
 | `-srd` | string | `azhaq_response` | directory for -sr |
 | `-no-catchall` | bool |  | leave out URLs that answer with the page every unknown path gets (client-side routes of a single-page app) from the rows printed |

@@ -56,7 +56,7 @@ func init() {
 		{name: "run", group: groupMap, run: cmdRun,
 			summary: "map a target: names, services, pages, scripts, APIs, forms, parameters, in one graph",
 			usage:   "(-url URL | -domain D | -list FILE | -scope FILE|PLATFORM -program P | -asn AS | -cidr NET | -in seeds.jsonl) [flags]",
-			output:  "a ranked map, one row per entity (-json: one JSON object per row); the summary on stderr",
+			output:  "a ranked map, one row per entity (-json: one JSON object per row); the summary on stderr; while it runs, -stream prints a found line as each listener is named and each proof answers, and azhaq hunt -db FILE from a second shell lists the rows stored so far",
 			examples: []string{
 				"azhaq run -url https://app.example.com/ -db app.db",
 				"azhaq run -scope hackerone -program security -db h1.db -max-requests 5000 -rate 5",
@@ -257,7 +257,7 @@ func init() {
 		{name: "hunt", group: groupWS, run: cmdHunt,
 			summary: "where to look first: the mapped routes, hosts and files ranked, each with its evidence and the next command",
 			usage:   "-db FILE [-roles roles.jsonl] [-limit 25] [-since 168h] [-json]",
-			output:  "one row per route template: rank, score, key, the reasons, and the command to run next (-json: rank, score, key, type, reasons, next)",
+			output:  "one row per route template: rank, score, key, the reasons, and the command to run next (-json: rank, score, key, type, reasons, next); it reads a workspace a run is still writing, the rows stored so far, without holding the run up",
 			examples: []string{
 				"azhaq hunt -db app.db",
 				"azhaq roles -json -role anon -role 'user=Authorization: Bearer …' -- -url https://app.example.com/ > roles.jsonl; azhaq hunt -db app.db -roles roles.jsonl",
