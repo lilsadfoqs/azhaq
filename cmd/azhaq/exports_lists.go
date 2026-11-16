@@ -11,6 +11,7 @@ import (
 
 	"github.com/lilsadfoqs/azhaq/engine"
 	"github.com/lilsadfoqs/azhaq/internal/collectors/urlcol"
+	"github.com/lilsadfoqs/azhaq/internal/hunt"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"github.com/lilsadfoqs/azhaq/types"
 )
@@ -18,9 +19,10 @@ import (
 // listOpts narrows and shapes the exports: -coverage and -json for the urls and
 // names lists, -run for any format.
 type listOpts struct {
-	coverage string // as query -coverage: only rows of these coverages
-	json     bool   // one {url|name, coverage, status, source} object per line
-	run      string // the run to read, by its run_id: the newest when empty
+	coverage string         // as query -coverage: only rows of these coverages
+	json     bool           // one {url|name, coverage, status, source} object per line
+	run      string         // the run to read, by its run_id: the newest when empty
+	roles    []hunt.RoleRow // findings: the roles verdicts given with -roles
 }
 
 var coverages = []string{"visited", "catchall", "error", "gone", "hint", "skipped", "capped"}

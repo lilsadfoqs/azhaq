@@ -54,6 +54,8 @@ type findingRecord struct {
 	AdvisoryID   string   `json:"advisory_id,omitempty"`
 	AdvisoryURL  string   `json:"advisory_url,omitempty"`
 	Lead         string   `json:"lead,omitempty"` // an advisory record's service lead: "host:port Product"
+	rank         int      // hunt's score for a finding that has its own (a roles verdict's)
+	next         string   // and the command hunt shows for it
 	checked      bool     // a read that answered settled something of this advisory (observed or inferred)
 	names        []string // every host string the listener answered under with this product and version
 	KEV          bool     `json:"kev,omitempty"`  // CISA lists the advisory as exploited
@@ -216,11 +218,23 @@ func buildFindings(g *graphView) findingSet {
 		add(d)
 	}
 	answered := map[string]bool{} // the URLs a path check judged
-	for url, v := range proof.Judge(proof.AnswersOf(g.obs)) {
+	answers := proof.AnswersOf(g.obs)
+	verdicts := proof.Judge(answers)
+	for url, v := range verdicts {
 		answered[url] = true
 		if rec, ok := pathRecord(v, command); ok {
 			add(rec)
 		}
+	}
+	byURL := make(map[string]proof.Answer, len(answers))
+	for _, a := range answers {
+		byURL[a.URL] = a
+	}
+	for _, rec := range webFindings(g.rows, g.obs, byURL, verdicts, command) {
+		add(rec)
+	}
+	for _, rec := range roleFindings(g.roles, command) {
+		add(rec)
 	}
 	folder := engine.NewFolder(g.obs)
 	var folded []engine.MapEntry

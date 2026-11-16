@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"sort"
 	"strings"
+	"time"
 )
 
 // RoleRow is the part of a line of `azhaq roles -json` the ranking reads.
@@ -25,6 +26,9 @@ type RoleRow struct {
 	// run that listed it, where `azhaq roles show` finds its answers.
 	Status map[string]int `json:"status"`
 	Dir    string         `json:"dir"`
+	// Seen is when the file the row was read from was written: when a roles
+	// run kept no time of its own.
+	Seen time.Time `json:"-"`
 }
 
 // ReadRoles reads a roles output, one row per line. Lines that are not a
@@ -101,8 +105,8 @@ func (h *hunter) roles() {
 		if flip != "" {
 			c.addW("server-error", serverErrorFlip, flip+": the answer depends on who asks")
 		}
-		if !ok {
-			continue
+		if !ok || r.Proved() {
+			continue // a proved verdict is a finding of its own (Input.Measured)
 		}
 		if c.roleURL == "" {
 			c.roleURL, c.roleM, c.roleDir = r.URL, r.Method, r.Dir
@@ -120,10 +124,6 @@ func (h *hunter) roles() {
 		if r.Method != "" {
 			d = r.Method + " " + d
 		}
-		if r.Confidence == "" || r.Confidence == "proved" {
-			c.addProved("cross-role", w, d)
-		} else {
-			c.addW("cross-role", w, d)
-		}
+		c.addW("cross-role", w, d)
 	}
 }

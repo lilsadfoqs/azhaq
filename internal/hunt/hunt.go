@@ -135,7 +135,7 @@ type hunter struct {
 	old       bool                         // some URL is older than the window: "new" tells rows apart
 	maps      map[string][]engine.MapEntry // source map rows by origin: one row per host (sourceMaps)
 	status    map[string]int               // the first-hop status of each URL row
-	traced    map[string]bool              // URLs a measured finding already names: the finding row says it
+	traced    map[string]bool              // URLs a measured finding of their answer already names: the finding row says it
 }
 
 // errText is what a failed answer's body showed: its kind (webextract's
@@ -152,7 +152,7 @@ func Build(in Input) []Row {
 	h.errs, h.reflected = answersOf(in.Obs)
 	h.traced = map[string]bool{}
 	for _, m := range in.Measured {
-		if m.Type == "URL" {
+		if m.Type == "URL" && m.Kind != "cross-role-access" { // a verdict says nothing of a 5xx
 			h.traced[m.Host] = true
 		}
 	}

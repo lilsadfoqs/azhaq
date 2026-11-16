@@ -99,7 +99,7 @@ func staticURL(r engine.MapEntry) bool {
 
 // url reads the signals of one map row into its route's candidate.
 func (h *hunter) url(r engine.MapEntry) {
-	if r.Coverage == "catchall" || r.Coverage == "gone" || staticURL(r) {
+	if !Considered(r, h.verdicts) {
 		return
 	}
 	raw := r.Entity.Key
@@ -108,12 +108,7 @@ func (h *hunter) url(r engine.MapEntry) {
 		return
 	}
 	h.status[raw] = r.Status
-	// The answer to a path that names a file or a panel equals a baseline of
-	// the host (its soft 404, its login, its index): it says nothing of the path.
 	verdict, judged := h.verdicts[raw]
-	if judged && verdict.Dropped() {
-		return
-	}
 	if r.Role == "sourcemap" {
 		// One row per host for its maps (sourceMaps), not one per bundle.
 		if h.maps == nil {
@@ -232,9 +227,9 @@ func (h *hunter) url(r engine.MapEntry) {
 			c.addW("exposed-file", w*fileUnseen/100, what+" named, "+map[bool]string{true: "answers " + fmt.Sprint(st), false: "not requested"}[st != 0])
 		}
 	}
-	if ok && isListing(r.Title) {
-		c.addProved("listing", weights["listing"], "directory listing: "+clip(r.Title, 60))
-	}
+	// A directory listing, an SQL error or a debug page in a 5xx and a GraphQL
+	// schema read are findings of their own (Input.Measured), from the records
+	// `report -findings` lists: no lead here repeats them.
 	if ok && h.apiDoc[r.Entity.ID] {
 		// A lead: a service that publishes its description is not a flaw, and
 		// the findings output has no record for it.
@@ -308,14 +303,16 @@ func (h *hunter) serverError(c *cand, r engine.MapEntry, raw string) {
 	st := r.Status
 	e := h.errs[r.Entity.ID]
 	without := r.Answer != ""
-	if h.traced[raw] && e.kind != webextract.ErrSQL && e.kind != webextract.ErrDebug && !h.reflected[webextract.RouteKey(raw)] {
-		return // the trace is a finding row of its own: no lead says the same
+	if h.traced[raw] && !h.reflected[webextract.RouteKey(raw)] {
+		return // the finding row of the URL says it: no lead says the same
 	}
 	switch {
+	// SQL error text and a debug page are findings by their records (Input.Measured);
+	// one that has none (another name answered the same) weighs as a lead.
 	case e.kind == webextract.ErrSQL:
-		c.addProved("server-error", serverErrorSQL, fmt.Sprintf("answers %d and the body has SQL error text: %q", st, e.sample))
+		c.addW("server-error", serverErrorSQL, fmt.Sprintf("answers %d and the body has SQL error text: %q", st, e.sample))
 	case e.kind == webextract.ErrDebug:
-		c.addProved("server-error", serverErrorDebug, fmt.Sprintf("answers %d with a framework's debug page: %q", st, e.sample))
+		c.addW("server-error", serverErrorDebug, fmt.Sprintf("answers %d with a framework's debug page: %q", st, e.sample))
 	case h.reflected[webextract.RouteKey(raw)]:
 		c.addW("server-error", serverErrorReflected, fmt.Sprintf("answers %d, and a parameter's value comes back in the answer", st))
 	// A stack trace is a finding from the record of the trace itself (Input.Measured:
@@ -355,11 +352,6 @@ func exposedFile(path string) (int, string) {
 	return 0, ""
 }
 
-func isListing(title string) bool {
-	t := strings.ToLower(strings.TrimSpace(title))
-	return strings.HasPrefix(t, "index of") || strings.Contains(t, "listing directory") || strings.HasPrefix(t, "directory listing for")
-}
-
 func apiDocPath(path string) bool {
 	p := strings.ToLower(strings.TrimSuffix(path, "/"))
 	for _, s := range []string{"/openapi.json", "/openapi.yaml", "/swagger.json", "/swagger.yaml", "/api-docs", "/swagger-ui", "/swagger-ui.html", "/swagger/index.html", "/v2/api-docs", "/v3/api-docs"} {
@@ -371,18 +363,10 @@ func apiDocPath(path string) bool {
 }
 
 func (h *hunter) graphql(c *cand, r engine.MapEntry, path string) {
-	schema := false
-	for _, op := range r.Ops {
-		if op.Source == "graphql" {
-			schema = true
-		}
+	if what, _ := GraphQLRead(r); what != "" {
+		return // a finding of its own: the schema read, or the IDE
 	}
-	switch p := strings.ToLower(path); {
-	case schema:
-		c.addProved("graphql", graphqlStrong, "GraphQL endpoint, schema read by introspection")
-	case strings.Contains(r.Proof, "role=graphql") && strings.Contains(p, "graphiql"), strings.Contains(strings.ToLower(r.Title), "graphiql"):
-		c.addProved("graphql", graphqlStrong, "GraphQL IDE answers at "+path)
-	case strings.Contains(r.Proof, "role=graphql"):
+	if strings.Contains(r.Proof, "role=graphql") {
 		c.add("graphql", "answers like GraphQL at "+path)
 	}
 }

@@ -216,4 +216,5 @@ Rules look like this:
 | `-coverage` | string |  | urls, names: only these coverages, comma-separated: visited, catchall, error, gone, hint, skipped, capped |
 | `-json` | bool |  | urls, names: one {url\|name, coverage, status, source} object per line |
 | `-run` | string |  | the run to write, by the run_id of its summary (default: the newest run of the workspace; jsonl: every run) |
+| `-roles` | string, repeatable |  | findings, findings-md: the JSONL azhaq roles -json printed, so that a proved verdict is a record, as hunt -roles counts it |
 <!-- flags:end -->

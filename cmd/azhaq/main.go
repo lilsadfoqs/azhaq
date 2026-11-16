@@ -2567,7 +2567,16 @@ func cmdExport(args []string) error {
 	cov := fs.String("coverage", "", "urls, names: only these coverages, comma-separated: visited, catchall, error, gone, hint, skipped, capped")
 	asJSON := fs.Bool("json", false, "urls, names: one {url|name, coverage, status, source} object per line")
 	runID := fs.String("run", "", "the run to write, by the run_id of its summary (default: the newest run of the workspace; jsonl: every run)")
+	var rolesFiles stringsFlag
+	fs.Var(&rolesFiles, "roles", "findings, findings-md: the JSONL `azhaq roles -json` printed, so that a proved verdict is a record, as hunt -roles counts it")
 	if err := parse(fs, args); err != nil {
+		return err
+	}
+	if len(rolesFiles) > 0 && *format != "findings" && *format != "findings-md" {
+		return usagef("-roles is for -format findings or findings-md")
+	}
+	roleRows, err := readRolesFiles(rolesFiles)
+	if err != nil {
 		return err
 	}
 	if *format == "jsonl" && (*cov != "" || *asJSON) {
@@ -2582,7 +2591,7 @@ func cmdExport(args []string) error {
 			return fmt.Errorf("need -db: %s", noLastText())
 		}
 		cw := &countWriter{w: os.Stdout}
-		if err := exportToList(path, *format, *origin, *safe, listOpts{coverage: *cov, json: *asJSON, run: *runID}, cw); err != nil {
+		if err := exportToList(path, *format, *origin, *safe, listOpts{coverage: *cov, json: *asJSON, run: *runID, roles: roleRows}, cw); err != nil {
 			return err
 		}
 		if cw.n == 0 {
