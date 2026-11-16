@@ -426,3 +426,44 @@ func TestRequestPathDropsTheFragment(t *testing.T) {
 		}
 	}
 }
+
+// An extractor gives every match, and the version is the first value that
+// is shaped like one: a copyright range read first is not it.
+func TestExtractorPicksTheVersionShapedValue(t *testing.T) {
+	idx := testIndex(t,
+		Unit{ID: "two", Product: "Two", Matchers: []Matcher{word("ex-marker")}, Extractors: []Extractor{
+			{Type: "regex", Vals: []string{`(?i)Copyright\s+([0-9\-]+)`, `Version:\s*([0-9.]+)`}, Group: 1},
+		}},
+		Unit{ID: "many", Product: "Many", Matchers: []Matcher{word("ex-marker")}, Extractors: []Extractor{
+			{Type: "regex", Vals: []string{`v=([a-z0-9.]+)`}, Group: 1},
+		}},
+		Unit{ID: "split", Product: "Split", Matchers: []Matcher{word("ex-marker")}, Extractors: []Extractor{
+			{Type: "regex", Vals: []string{`Copyright\s+([0-9\-]+)`}, Group: 1},
+			{Type: "regex", Vals: []string{`Version:\s*([0-9.]+)`}, Group: 1},
+		}},
+		Unit{ID: "none", Product: "None", Matchers: []Matcher{word("ex-marker")}, Extractors: []Extractor{
+			{Type: "regex", Vals: []string{`Copyright\s+([0-9\-]+)`}, Group: 1},
+		}},
+		Unit{ID: "kv", Product: "Kv", Matchers: []Matcher{word("ex-marker")}, Extractors: []Extractor{
+			{Type: "kval", Vals: []string{"x_year"}},
+			{Type: "regex", Vals: []string{`Version:\s*([0-9.]+)`}, Group: 1},
+		}},
+	)
+	r := resp("ex-marker <a href=a.css?v=x>Copyright 2005-2024 ASF; Version: 6.1.1; a.js?v=7.2</a>", "X-Year", "2005-2024")
+	got := map[string][2]string{}
+	for _, h := range idx.match(r) {
+		got[h.Template] = [2]string{h.Extracted, h.Version}
+	}
+	want := map[string][2]string{
+		"two":   {"6.1.1", "6.1.1"},
+		"many":  {"7.2", "7.2"},
+		"split": {"6.1.1", "6.1.1"},
+		"none":  {"2005-2024", ""}, // no version-shaped value: the first is kept
+		"kv":    {"6.1.1", "6.1.1"},
+	}
+	for id, w := range want {
+		if got[id] != w {
+			t.Errorf("%s: extracted/version = %q, want %q", id, got[id], w)
+		}
+	}
+}

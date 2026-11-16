@@ -230,3 +230,31 @@ http:
 		t.Errorf("unit = %+v", u)
 	}
 }
+
+// One payload variable that only the paths use is a longer path list; any
+// other use of payloads stays skipped.
+func TestPayloadsInPathsAreExpanded(t *testing.T) {
+	block := func(extra string) map[string]any {
+		var b map[string]any
+		doc := "path: [\"{{BaseURL}}\", \"{{BaseURL}}/{{p}}/\"]\npayloads: {p: [db, sql]}\n" + extra +
+			"matchers: [{type: word, words: [abcdef]}]\n"
+		if err := yaml.Unmarshal([]byte(doc), &b); err != nil {
+			t.Fatal(err)
+		}
+		return b
+	}
+	u, _, reason := compileBlock(&template{ID: "t"}, block("attack: pitchfork\nthreads: 3\n"))
+	if reason != "" || strings.Join(u.Paths, " ") != "/ /db/ /sql/" {
+		t.Fatalf("reason %q, paths %v", reason, u)
+	}
+	for name, b := range map[string]map[string]any{
+		"in a matcher":  block("extractors: [{type: regex, regex: [\"{{p}}-([0-9]+)\"]}]\n"),
+		"file":          {"path": []any{"{{BaseURL}}/{{p}}"}, "payloads": map[string]any{"p": "words.txt"}, "matchers": []any{map[string]any{"type": "word", "words": []any{"abcdef"}}}},
+		"two variables": {"path": []any{"{{BaseURL}}/{{p}}"}, "payloads": map[string]any{"p": []any{"a"}, "q": []any{"b"}}, "matchers": []any{map[string]any{"type": "word", "words": []any{"abcdef"}}}},
+		"not in a path": {"path": []any{"{{BaseURL}}"}, "payloads": map[string]any{"p": []any{"a"}}, "matchers": []any{map[string]any{"type": "word", "words": []any{"abcdef"}}}},
+	} {
+		if _, _, reason := compileBlock(&template{ID: "t"}, b); reason != "payloads" {
+			t.Errorf("%s: reason %q, want payloads", name, reason)
+		}
+	}
+}

@@ -365,6 +365,8 @@ A client route is a view that a single-page app's router draws.
 
 - Each answer is also matched against published detection templates (nuclei-templates' technology and panel templates, MIT, compiled into azhaq; `internal/detect/SOURCE.md` names the release). A template for the page's path that matches names the product, with the version where the template extracts one, in the row's `detected` field.
 - The favicon is matched against the templates for `/favicon.ico`, wherever the page's icon was found.
+- A template's extractors give every value they find, as nuclei's do. The version is the first value shaped like one (`6.1.1`, not a copyright range such as `2005-2024`); when none is, the template names the product without a version.
+- A template whose paths come from one list written in it (phpMyAdmin's `/phpmyadmin/`, `/phpma/` and more) is asked at every path of the list. A template whose list is a wordlist file, or that uses the list outside its paths, is not used.
 - The sweep of each web service also asks the paths the templates ask, only to name the product. These product checks are not rows of the map: an answer that matches is a `detected` row of `azhaq-paths` about the service. The ledger's purpose for them is `product checks`, and `azhaq plan` counts them.
 - A path whose name or query declares a state change (`install`, `start`, `logout`) is not a product check, and neither is the root with a query.
 - A site that answers every path with the same page is asked every product check all the same (each is a request and a ledger line); the process keeps one copy of the page.

@@ -5,13 +5,13 @@
 
 - Release tag: v10.5.2
 - Commit: 5442582a875f96887bfe403c6de562de460897e7
-- Compiled: 2359 requests from 2358 templates
-- Skipped: 410
+- Compiled: 2367 requests from 2366 templates
+- Skipped: 402
 - Extractors dropped (unsupported type or part, only the version is lost): 29
 
 ## Skipped by reason
 
-- payloads: 248
+- payloads: 240
 - raw request: 40
 - flow: 30
 - request body: 22
@@ -39,6 +39,9 @@
   templates that need an unfollowed redirect (`redirects: false`, a 3xx status matcher) are skipped.
 - `stop-at-first-match` only limits which paths a scanner requests, so every path is matched on its own.
 - Extractors of other types than regex and kval, or on an unknown part, are dropped; the match stays.
+- A template with one payload variable, its values written in the template and used only in the paths,
+  is its own list of paths. Payloads from a file, several variables, or a variable in a matcher are skipped.
+- An extractor gives every match, as nuclei does; the version is the first value shaped like one (`6.1.1`, not `2005-2024`).
 
 ## Regenerate
 

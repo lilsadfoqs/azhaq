@@ -258,3 +258,27 @@ func TestForeignTokenVersionIsDropped(t *testing.T) {
 		}
 	}
 }
+
+// A panel whose page has the version in the links of its assets, and a broker
+// console whose first extracted value is a copyright range, name their version.
+func TestRealisticAdminPanelAndBrokerConsole(t *testing.T) {
+	panel := `<!DOCTYPE HTML><html><head><link rel="icon" href="favicon.ico" />` +
+		`<link rel="stylesheet" href="js/vendor/codemirror/lib/codemirror.css?v=4.8.1" />` +
+		`<title>127.0.0.1 / mysql | phpMyAdmin 4.8.1</title></head><body>` +
+		`<img src="./themes/pmahomme/img/logo_left.png" alt="phpMyAdmin" id="imgpmalogo" /></body></html>`
+	broker := "<html><head><title>localhost : ActiveMQ Console</title></head><body>\n" +
+		"<table><tr><td>Version</td>\n<td><b>6.1.1</b></td></tr></table>\n" +
+		"Copyright 2005-2024 The Apache Software Foundation.</body></html>"
+	for _, c := range []struct{ id, path, body, version string }{
+		{"phpmyadmin-panel", "/", panel, "4.8.1"},
+		{"phpmyadmin-panel", "/phpmyadmin/", panel, "4.8.1"},
+		{"activemq-panel", "/admin/", broker, "6.1.1"},
+	} {
+		hits := Match(Response{Path: c.path, Status: 200,
+			Header: http.Header{"Content-Type": {"text/html"}, "Server": {"nginx/1.31.8"}}, Body: []byte(c.body)})
+		h, ok := find(hits, c.id)
+		if !ok || h.Version != c.version {
+			t.Errorf("%s at %s: %+v, want version %s (hits %+v)", c.id, c.path, h, c.version, hits)
+		}
+	}
+}
