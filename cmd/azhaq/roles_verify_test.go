@@ -199,7 +199,9 @@ func TestVerifyWriteByReadingAField(t *testing.T) {
 	before, _ := readAnswer(200, []byte(`{"username":"alice"}`), "application/json")
 	answers := map[string]map[string]answer{"alice": {obj: before}}
 	put := writeReq{owner: "alice", method: "PUT", url: srv.URL + "/users/alice/email", header: http.Header{"Content-Type": {"application/json"}}, body: []byte(`{"email":"new@x.test"}`), status: 204, from: "alice.har"}
-	rows, _, err := replayWritesVerify(nil, roles, []writeReq{put}, answers, map[string]bool{"127.0.0.1": true}, 0, 100, false, steps)
+	id := newIdentity()
+	id.keep("username", "alice")
+	rows, _, err := replayWritesVerify(map[string]identity{"alice": id}, roles, []writeReq{put}, answers, map[string]bool{"127.0.0.1": true}, 0, 100, false, steps)
 	if err != nil || len(rows) != 1 {
 		t.Fatalf("rows %+v err %v", rows, err)
 	}
@@ -235,9 +237,10 @@ func TestVerifyWriteSignsInAsTheOwnersUserNotTheRoleName(t *testing.T) {
 		return rows[0]
 	}
 	login := []string{"login:SRV/users/login"}
-	// Nothing learned of ra: the user is read off the path, and the change took.
-	if r := run(false, login, nil); r.WriteVerification != verifyProved {
-		t.Errorf("a sign-in as alice proves the change though the role is called ra: %q, %q", r.WriteVerification, r.OwnerBy)
+	// Nothing learned of ra: the user is read off the path. The account alice did
+	// change, but it is not known to be ra's: not proved.
+	if r := run(false, login, nil); r.WriteVerification != verifyAccepted || r.Verdict == verdictWriteCross || !strings.Contains(r.OwnerBy, "was not established") {
+		t.Errorf("a name read off the path is not known to be the owner's: %q, %q", r.WriteVerification, r.OwnerBy)
 	}
 	// The same, with the user the run observed for ra.
 	id := newIdentity()
