@@ -48,7 +48,7 @@ func TestRegressMAP05CapNoteIsSaid(t *testing.T) {
 		}
 		return got
 	}
-	if got := notes(maxScripts + 44); len(got) != 1 || !strings.Contains(got[0], "hold more than Azhaq reads from one page") {
+	if got := notes(maxScripts + 44); len(got) != 1 || !strings.Contains(got[0], "hold more than Azhaq reads from one page") || !strings.Contains(got[0], "44 scripts (limit 256)") || !strings.Contains(got[0], "-max-scripts") {
 		t.Errorf("a page with %d scripts: notes %v", maxScripts+44, got)
 	}
 	if got := notes(3); len(got) != 0 {

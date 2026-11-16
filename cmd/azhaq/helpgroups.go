@@ -34,7 +34,7 @@ var helpSpecs = map[string]helpSpec{
 			{"Names and sources", `sources all-sources exclude-sources providers resolvers dns-rate source-proxy source-rate source-rates source-timeout extra-wait max-time max-body max-results urls-timeout no-history history-dir`},
 			{"Browser", `browser interact interact-clicks screenshots chrome chrome-profile chrome-proxy chrome-no-sandbox chrome-require-sandbox tabs unsafe-ports`},
 			{"Scope and safety", `allow sweep deny deny-path send-state-changing kill-file ledger seal-to submit-forms browser-writes params-writes`},
-			{"Pace and limits", `rate connect-timeout host-rate host-parallel parallel delay backoff retry request-timeout timeout max-requests max-host-requests host-guesses daily-requests max-items max-names max-ips max-response-size depth retry-failed retry-run`},
+			{"Pace and limits", `rate connect-timeout host-rate host-parallel parallel delay backoff retry request-timeout timeout max-requests max-host-requests host-guesses daily-requests max-items max-names max-ips max-response-size max-scripts depth retry-failed retry-run`},
 			{"Session", `cookie cookie-jar header login login-user login-pass session-every proxy`},
 			{"Output", `db json o quiet v stream sr srd no-catchall all-rows fail-on-errors fail-on-capped strict-exit`},
 		},
@@ -168,9 +168,9 @@ var helpSpecs = map[string]helpSpec{
 			{"What to ask", `d paths builtin-paths no-form-fill per-template no-follow no-map-guess browser interact interact-clicks fs kf`},
 			{"What to list", `assets hints no-catchall all-rows rejected em ndef do`},
 			{"Scope and safety", `allow sweep deny deny-path send-state-changing kill-file ledger submit-forms browser-writes chrome-no-sandbox seal-to`},
-			{"Pace and limits", `rl delay backoff retry host-rate hrl host-parallel parallel request-timeout ct max-requests max-host-requests host-guesses max-items max-response-size`},
+			{"Pace and limits", `rl delay backoff retry host-rate hrl host-parallel parallel request-timeout ct max-requests max-host-requests host-guesses max-items max-response-size max-scripts`},
 			{"Session and network", `H cookie cookie-jar login login-user login-pass proxy resolvers`},
-			{"Output", `db o json jsonl f ot silent v strict-exit`},
+			{"Output", `db o json jsonl f ot silent v strict-exit fail-on-capped`},
 		},
 		hidden: map[string]string{
 			"compat:katana": `

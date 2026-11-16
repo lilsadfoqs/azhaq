@@ -82,6 +82,8 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 - counts what the rows are, apart: see [What the counts compare](#what-the-counts-compare);
 - says how many POST forms `-submit-forms` sent, and which POST forms it did not send and why.
 
+A crawl reads up to `-max-scripts` scripts a page, 256 by default, with the routes, source maps and manifests of the page scaled with it; what a page holds beyond a limit is a note, and with `-fail-on-capped` the run exits 4 (the numbers and the note are those of [`run`](run.md#what-one-pages-scripts-are-read-up-to)).
+
 A crawl never drops links without a word: the summary says what became of them (`-silent` prints the notes on the list, and not the ones on rejected strings and on links outside the scope). When `-max-items`, `-max-requests`, `-mdp` or the run's `-timeout` stops it, the run exits 4 and `azhaq resume` continues it.
 
 ## Details
@@ -287,6 +289,7 @@ These filters limit what is printed, not what is crawled.
 | `-host-guesses` | int |  | most guesses one host is sent (0: no cap): requests for the built-in paths, a directory or parameter wordlist or GraphQL field names; the rest are not asked and the summary lists them, the run exits 4 and azhaq resume asks them with a larger value |
 | `-max-items` | int |  | most collector tasks (a name, a URL, an address each, per collector) this run starts (default: no cap, katana's and httpx's); the work left is for azhaq resume, which starts as many more |
 | `-max-response-size` | int |  | bytes read of a page or document (default 2097152; scripts and JSON get 16 MiB) |
+| `-max-scripts` | int |  | most scripts read from one page, chunks included (default 256); the routes (4096), source maps (8) and build manifests (8) of a page scale with it; what a page holds beyond it is left unread and a note says how much (-fail-on-capped exits 4) |
 
 **Session and network**
 
@@ -314,6 +317,7 @@ These filters limit what is printed, not what is crawled.
 | `-silent` | bool |  | results only: no progress; the summary only when something failed (a source that failed, a takeover candidate as a [takeover] line on stderr); stdout stays one result per line |
 | `-v` | bool |  | print a line for every finished task, not only failures |
 | `-strict-exit` | bool |  | exit 3 for any failure, a target among many included (the rule before 0.15); without it a run that did its job exits 0 and its summary counts and lists the failures |
+| `-fail-on-capped` | bool |  | exit 4 also when the run hit -depth with hints left, or a page held more scripts than -max-scripts reads (the summary says how much was left) |
 
 <details>
 <summary>Flags familiar from katana, other names and flags accepted with no effect (38)</summary>

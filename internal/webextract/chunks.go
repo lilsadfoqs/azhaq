@@ -17,17 +17,26 @@ import (
 // (n.e(742)) when it has none.
 
 var (
-	chunkFnV5   = lazyRE(`(?:^|[^\w$])` + ident + `\.u\s*=\s*(?:function\s*\((` + ident + `)\)\s*\{\s*return\s*|\(?(` + ident + `)\)?\s*=>\s*)`)
-	chunkFnV4   = lazyRE(`function\s+` + ident + `\s*\((` + ident + `)\)\s*\{\s*return\s+(` + ident + `)\.p\s*\+`)
-	publicPath  = lazyRE(`(?:^|[^\w$])` + ident + `\.p\s*=\s*"([^"\\\n]*)"`)
-	chunkLoad   = lazyRE(`(?:^|[^\w$])` + ident + `\.e\(\s*(\d+|"[\w.-]+")\s*\)`)
-	tablePair   = lazyRE(`["']?([\w.-]+)["']?\s*:\s*"([^"\\\n]*)"`)
-	maxChunkIDs = 256
+	chunkFnV5  = lazyRE(`(?:^|[^\w$])` + ident + `\.u\s*=\s*(?:function\s*\((` + ident + `)\)\s*\{\s*return\s*|\(?(` + ident + `)\)?\s*=>\s*)`)
+	chunkFnV4  = lazyRE(`function\s+` + ident + `\s*\((` + ident + `)\)\s*\{\s*return\s+(` + ident + `)\.p\s*\+`)
+	publicPath = lazyRE(`(?:^|[^\w$])` + ident + `\.p\s*=\s*"([^"\\\n]*)"`)
+	chunkLoad  = lazyRE(`(?:^|[^\w$])` + ident + `\.e\(\s*(\d+|"[\w.-]+")\s*\)`)
+	tablePair  = lazyRE(`["']?([\w.-]+)["']?\s*:\s*"([^"\\\n]*)"`)
 )
+
+// MaxChunkIDs is how many chunks of one script are named, by default.
+const MaxChunkIDs = 256
 
 // ChunkURLs returns chunk paths as the loader builds them, prefixed with
 // the bundle's public path ("/" when it sets none).
 func ChunkURLs(script string) []string {
+	out, _ := ChunkURLsMax(script, MaxChunkIDs)
+	return out
+}
+
+// ChunkURLsMax is ChunkURLs up to limit chunks; left is how many chunk ids
+// the loader names beyond it, not looked at.
+func ChunkURLsMax(script string, limit int) (out []string, left int) {
 	var param, expr string
 	if loc := chunkFnV5.FindStringSubmatchIndex(script); loc != nil {
 		param = submatch(script, loc, 1)
@@ -40,7 +49,7 @@ func ChunkURLs(script string) []string {
 		expr = topExpr(script[loc[4]:]) // keep "o.p+" in the expression
 	}
 	if param == "" || expr == "" {
-		return nil
+		return nil, 0
 	}
 	terms := splitTop(expr, "+")
 	ids := map[string]bool{}
@@ -58,9 +67,10 @@ func ChunkURLs(script string) []string {
 	if m := publicPath.FindStringSubmatch(script); m != nil {
 		prefix = m[1]
 	}
-	var out []string
-	for _, id := range sortedIDs(ids) {
-		if len(out) >= maxChunkIDs {
+	all := sortedIDs(ids)
+	for i, id := range all {
+		if len(out) >= limit {
+			left = len(all) - i
 			break
 		}
 		name, ok := evalChunk(terms, param, id, prefix)
@@ -71,7 +81,7 @@ func ChunkURLs(script string) []string {
 			out = append(out, name)
 		}
 	}
-	return out
+	return out, left
 }
 
 func submatch(s string, loc []int, i int) string {
