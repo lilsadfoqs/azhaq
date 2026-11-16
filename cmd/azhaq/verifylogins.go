@@ -136,6 +136,8 @@ func loginsStage(ctx context.Context, st *store.Store, obs []types.StoredObserva
 		}
 	}
 
+	leads := hostLeads(obs, loginWebServices(obs), done)
+
 	now := time.Now().UTC()
 	for _, r := range results {
 		raw, _ := json.Marshal(r)
@@ -168,6 +170,9 @@ func loginsStage(ctx context.Context, st *store.Store, obs []types.StoredObserva
 	if len(unasked) > 0 {
 		note += "; not asked: " + strings.Join(unasked, "; ")
 	}
+	if len(leads) > 0 {
+		note += "; leads, not matches (nothing was sent for them): " + strings.Join(leads, "; ")
+	}
 	if denied > 0 {
 		note += fmt.Sprintf("; %d requests were not sent: a -deny-path rule keeps their paths out", denied)
 	}
@@ -178,6 +183,56 @@ func loginsStage(ctx context.Context, st *store.Store, obs []types.StoredObserva
 		note += fmt.Sprintf("; %d requests were not sent: the run's limit stopped them", stopped)
 	}
 	return results, failures, note
+}
+
+// hostLeads are the hosts that confirmed exactly one product the catalog lists,
+// on a service that is not a web one, and have web services no check was asked
+// of for it: the product's console may be among them, but nothing on those
+// services says so, so it is a lead and no request is made for it.
+func hostLeads(obs []types.StoredObservation, web []advisory.Service, done map[string]bool) []string {
+	type conf struct {
+		product string
+		at      string
+	}
+	byHost := map[string]map[string]conf{} // host or ip -> product key -> where it was confirmed
+	catalogued := func(p string) bool { return len(verify.LoginsForProduct(p)) > 0 || len(verify.ReadsForProduct(p)) > 0 }
+	for _, svc := range advisory.ServicesAnyVersion(obs) {
+		if svc.Origin != "" || svc.Product == "" || !catalogued(svc.Product) {
+			continue
+		}
+		for _, h := range []string{svc.Host, svc.IP} {
+			if h == "" {
+				continue
+			}
+			h = strings.ToLower(h)
+			if byHost[h] == nil {
+				byHost[h] = map[string]conf{}
+			}
+			byHost[h][loginsKey(svc.Product)] = conf{svc.Product, svc.Target()}
+		}
+	}
+	var out []string
+	seen := map[string]bool{}
+	for _, svc := range web {
+		if svc.Origin == "" || catalogued(svc.Product) {
+			continue // a web service that names a catalog product is asked as it
+		}
+		for _, h := range []string{svc.Host, svc.IP} {
+			cs := byHost[strings.ToLower(h)]
+			if h == "" || len(cs) != 1 {
+				continue
+			}
+			for k, c := range cs {
+				if done[svc.Origin+"\x00"+k] || seen[svc.Origin] {
+					continue
+				}
+				seen[svc.Origin] = true
+				out = append(out, fmt.Sprintf("%s is confirmed on %s and the host's web service %s (%s) names no product the catalog lists, so no default login was asked there",
+					c.product, c.at, svc.Target(), nonEmpty(svc.Product, svc.Service)))
+			}
+		}
+	}
+	return out
 }
 
 func svcHost(svc advisory.Service) string {

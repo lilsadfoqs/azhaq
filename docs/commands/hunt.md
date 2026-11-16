@@ -76,7 +76,7 @@ leads (2): inferred from a name, a path or a guess; each names the check that wo
 | `also_at` | On a route that answered the same body at other host names of its address and port: their URLs. |
 | `also_named` | On a listener also reached under other host names (its address, a name that resolves to it) with the same product and version: those names. |
 | `host`, `port`, `product`, `version` | On a listener. `version` is `""` when no version was seen. |
-| `source` | On a listener a name's root page gave: what named the product, `page title`, `generator`, `header X-Powered-By`, `header Server` or `technology`. A title is not a version: `version` is only what one of them stated. |
+| `source` | On a listener a name's root page gave: what named the product, `page title`, `generator`, `header X-Powered-By`, `header Server`, `header WWW-Authenticate realm` or `technology`. A title is not a version: `version` is only what one of them stated. |
 | `advisory_id`, `advisory_url`, `advisories`, `kev`, `cvss` | On a listener with an advisory match: the top advisory, how many advisories match the version, whether CISA lists the top one as exploited, and its score. |
 | `label`, `severity`, `evidence`, `command` | On a listener: the record's own `proved`, `version-read`, `version-only` or `conditional` label and severity, what the record says, and the command that produced it. |
 | `next` | The command to run next. [The next command](#the-next-command) says how it is chosen. |
@@ -140,7 +140,7 @@ An identification is never softened: `version-only` says the version is in the a
 
 ### Applications of a name
 
-When several names share an address and port, the root page of each name can name a different application. A name's row is read from that page, by the sources `page title` (the title rules `azhaq ports` reads a page's title with), `generator` (the meta tag), `header X-Powered-By`, `header Server` and `technology` (the technologies found in the page). The `source` field says which; a title names a product and no version. There is one row for each name, port and product, and none for a product the listener's row already names for the same name.
+When several names share an address and port, the root page of each name can name a different application. A name's row is read from that page, by the sources `page title` (the title rules `azhaq ports` reads a page's title with), `generator` (the meta tag), `header X-Powered-By`, `header Server`, `header WWW-Authenticate realm` (the realm of a `401`'s challenge, which a console names itself by: `ActiveMQRealm`) and `technology` (the technologies found in the page). The `source` field says which; a title or a realm names a product and no version. There is one row for each name, port and product, and none for a product the listener's row already names for the same name.
 
 Only an application is a row: a product wappalyzer's data holds under a category such as CMS, wiki, CI, database manager, webmail, issue tracker or web framework. A library, a font, a CDN or an analytics script is not. A web server, a proxy or a cache is left out when the listener already names it. A product the data does not hold, named by a page's own title, generator or `X-Powered-By`, is kept as the page names it. These rows go through the same advisory matching and labels as the listeners'.
 

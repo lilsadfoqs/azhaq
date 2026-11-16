@@ -17,3 +17,8 @@ func GeneratorProduct(content string) (product, version string) { return generat
 // HeaderProduct reads the product and version a Server or X-Powered-By value
 // names, as the port scan does.
 func HeaderProduct(value string) (product, version string) { return serverProduct(value) }
+
+// RealmProduct names the product a WWW-Authenticate realm names ("ActiveMQRealm"
+// is ActiveMQ's), by the table of realms and the title rules; a realm states
+// no version.
+func RealmProduct(realm string) string { return realmProduct(realm) }

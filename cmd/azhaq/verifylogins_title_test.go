@@ -84,3 +84,61 @@ func TestVerifyLoginsExplainsWhatItDidNotAsk(t *testing.T) {
 		t.Errorf("note %q", note)
 	}
 }
+
+// A console that only its Basic realm names (a 401 on the front page, a Jetty
+// Server header, no title, no technology) is asked its product's published
+// default like any other: the realm is a name the catalog reads.
+func TestVerifyLoginsAsksAProductNamedOnlyByItsRealm(t *testing.T) {
+	egress.Reset()
+	t.Cleanup(egress.Reset)
+	fx := newLoginFixture(t, "Jetty(9.4.51.v20230217)", func(n int, w http.ResponseWriter, r *http.Request) {
+		if u, p, ok := r.BasicAuth(); ok && u == "admin" && p == "admin" && strings.HasPrefix(r.URL.Path, "/admin") {
+			w.Header().Set("Content-Type", "text/html")
+			w.Write([]byte("<html><body>Apache ActiveMQ Console</body></html>"))
+			return
+		}
+		w.Header().Set("WWW-Authenticate", `Basic realm="ActiveMQRealm"`)
+		w.WriteHeader(401)
+	})
+	db := filepath.Join(t.TempDir(), "w.db")
+	_, errOut, err := captureBoth(t, func() error { return cmdRun(loginsRunArgs(fx.URL+"/", db, "-verify-logins")) })
+	if err != nil {
+		t.Fatalf("run: %v\n%s", err, errOut)
+	}
+	f := loginFindingOf(t, db, "default-login")
+	if f.Product != "ActiveMQ" || f.Label != "proved" {
+		t.Errorf("finding %+v", f)
+	}
+	rep := lastReport(t, errOut)
+	if notes := strings.Join(rep.Notes, "\n"); !strings.Contains(notes, "verify-logins: 1 product(s) asked") {
+		t.Errorf("notes %q", rep.Notes)
+	}
+}
+
+// A host with exactly one confirmed product the catalog lists (on a service
+// that is not a web one) and a web service nothing names is offered as a lead
+// in the summary: nothing is sent for it. Two such products, or a web service
+// that names a catalog product of its own, leave no lead.
+func TestVerifyLoginsLeadsOneConfirmedProductToUnnamedWebServices(t *testing.T) {
+	egress.Reset()
+	t.Cleanup(egress.Reset)
+	st, err := store.Open(filepath.Join(t.TempDir(), "n.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	obsOf := func(services ...map[string]any) []types.StoredObservation {
+		payload, _ := json.Marshal(map[string]any{"host": "mq.example.test", "ip": "192.0.2.10", "services": services})
+		return []types.StoredObservation{{Observation: types.Observation{Collector: "azhaq-ports", Kind: "ports", Payload: payload}}}
+	}
+	broker := map[string]any{"port": 61616, "service": "openwire", "product": "ActiveMQ", "version": "5.18.3"}
+	console := map[string]any{"port": 8161, "service": "http", "product": "Jetty", "version": "9.4.51"}
+	_, _, note := loginsStage(context.Background(), st, obsOf(broker, console), "azhaq ports")
+	if !strings.Contains(note, "leads, not matches (nothing was sent for them): ActiveMQ is confirmed on mq.example.test:61616 and the host's web service mq.example.test:8161 (Jetty)") {
+		t.Errorf("note %q", note)
+	}
+	rabbit := map[string]any{"port": 5672, "service": "amqp", "product": "RabbitMQ", "version": "3.12.0"}
+	if _, _, note := loginsStage(context.Background(), st, obsOf(broker, rabbit, console), "azhaq ports"); strings.Contains(note, "leads, not matches") {
+		t.Errorf("two catalog products on the host gave a lead: %q", note)
+	}
+}

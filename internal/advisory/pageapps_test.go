@@ -2,6 +2,7 @@ package advisory
 
 import (
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/lilsadfoqs/azhaq/types"
@@ -156,4 +157,27 @@ func keysOf2(m map[string]Service) []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+// A root page that is a 401 with a realm names its console by the realm: an
+// application with no version, whose source says so and whose banner is the
+// header as it was sent. A Jetty Server header beside it is the server's.
+func TestPageAppsNamedByRealm(t *testing.T) {
+	obs := []types.StoredObservation{
+		obsOf("azhaq-http", "http", map[string]any{"url": "http://mq.test:8161/", "ip": "10.0.0.7", "server": "Jetty(9.4.51.v20230217)", "realm": "ActiveMQRealm"}),
+		obsOf("azhaq-http", "http", map[string]any{"url": "http://other.test:8161/", "ip": "10.0.0.8", "realm": "Restricted area"}),
+	}
+	got := appsBy(ServicesAnyVersion(obs))
+	s, ok := got["mq.test:8161 ActiveMQ"]
+	if !ok || s.Source != SourceRealm || s.Version != "" || s.Banner != `WWW-Authenticate realm="ActiveMQRealm"` || s.Origin != "http://mq.test:8161" {
+		t.Errorf("realm app %+v (all %v)", s, keysOf(got))
+	}
+	for k := range got {
+		if strings.HasPrefix(k, "other.test") {
+			t.Errorf("an unknown realm named %q", k)
+		}
+	}
+	if m := appsBy(Services(obs)); m["mq.test:8161 ActiveMQ"].Product != "" {
+		t.Errorf("a realm states no version, so it takes no part in an advisory match: %v", keysOf(m))
+	}
 }

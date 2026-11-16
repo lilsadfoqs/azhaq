@@ -841,6 +841,9 @@ func describe(reqURL, final string, res fetch.Result, title string, noTech, ever
 	if gen := webextract.Generator(res.Body); gen != "" {
 		out["generator"] = gen
 	}
+	if realm := authRealm(res.Header); realm != "" {
+		out["realm"] = realm
+	}
 	if u, err := url.Parse(reqURL); err == nil && proof.Wants(u.Path) {
 		// The path names a file or a panel: the start of what came is kept, so
 		// that the findings judge it by its own bytes and never ask again.
@@ -943,6 +946,20 @@ func headerGet(h http.Header, k string) string {
 func serverHeader(h http.Header) string {
 	return strings.Join(h.Values("Server"), " ")
 }
+
+// authRealm is the realm of the first challenge in WWW-Authenticate (Basic,
+// Digest or another scheme that gives one): the name a console puts on its
+// own sign-in.
+func authRealm(h http.Header) string {
+	for _, v := range h.Values("WWW-Authenticate") {
+		if m := realmParam.FindStringSubmatch(v); m != nil {
+			return proof.Printable([]byte(strings.TrimSpace(m[1])), 200)
+		}
+	}
+	return ""
+}
+
+var realmParam = lazyre.New(`(?i)\brealm\s*=\s*"([^"]{1,200})"`)
 
 func extraHeaders(h http.Header) map[string]string {
 	if h == nil {

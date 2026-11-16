@@ -524,6 +524,34 @@ var titleProducts = []struct {
 	{lazyre.New(`(?i)^welcome to nginx!?$`), "nginx", nil},
 }
 
+// realmProducts name a console by the realm it puts on its own Basic or
+// Digest sign-in: each is the string the vendor's own configuration or source
+// sends, matched whole as a title is.
+var realmProducts = []struct {
+	realm   *lazyre.Regexp
+	product string
+}{
+	{lazyre.New(`(?i)^activemq ?realm$`), "ActiveMQ"},
+	{lazyre.New(`(?i)^rabbitmq management$`), "RabbitMQ"},
+	{lazyre.New(`(?i)^artifactory realm$`), "Artifactory"},
+	{lazyre.New(`(?i)^tomcat manager application$`), "Apache Tomcat"},
+	{lazyre.New(`(?i)^jenkins$`), "Jenkins"},
+}
+
+// realmProduct names the product a realm string names: a realm of the table
+// above, else any title rule read as a realm (a console whose realm is its
+// own name). A realm names no version.
+func realmProduct(realm string) string {
+	realm = strings.TrimSpace(realm)
+	for _, r := range realmProducts {
+		if r.realm.MatchString(realm) {
+			return r.product
+		}
+	}
+	p, _ := titleProduct(realm, nil)
+	return p
+}
+
 var tomcatTitle = lazyre.New(`^Apache Tomcat/(\d[\w.]*)`)
 
 func titleProduct(title string, body []byte) (product, version string) {

@@ -259,3 +259,19 @@ func TestRootAnswerNamesTheProductByTemplate(t *testing.T) {
 		t.Errorf("-no-tech: %v", p["detected"])
 	}
 }
+
+func TestAuthRealm(t *testing.T) {
+	h := http.Header{}
+	h.Add("WWW-Authenticate", `Negotiate`)
+	h.Add("WWW-Authenticate", `Basic realm="ActiveMQRealm"`)
+	if got := authRealm(h); got != "ActiveMQRealm" {
+		t.Errorf("realm %q", got)
+	}
+	d := http.Header{"Www-Authenticate": {`Digest qop="auth", realm="Artifactory Realm", nonce="x"`}}
+	if got := authRealm(d); got != "Artifactory Realm" {
+		t.Errorf("digest realm %q", got)
+	}
+	if got := authRealm(http.Header{"Www-Authenticate": {"Basic"}}); got != "" {
+		t.Errorf("no realm gave %q", got)
+	}
+}
