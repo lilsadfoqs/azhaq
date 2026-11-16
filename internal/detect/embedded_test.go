@@ -203,3 +203,52 @@ func TestLoadBudget(t *testing.T) {
 	}
 	runtime.KeepAlive(idx)
 }
+
+// A Server token names its own product (#518): Apache-Coyote, ApacheBench and
+// the rest only contain the word the apache-detect template looks for.
+func TestServerTokenNamesItsOwnProduct(t *testing.T) {
+	apache := func(server string) (Hit, bool) {
+		return find(Match(Response{Path: "/", Status: 200,
+			Header: http.Header{"Server": {server}, "Content-Type": {"text/html"}},
+			Body:   []byte("<html><body>hi</body></html>")}), "apache-detect")
+	}
+	for server, version := range map[string]string{
+		"Apache/2.4.49 (Unix)":     "2.4.49",
+		"Apache/2.4.49":            "2.4.49",
+		"Apache httpd 2.4.1":       "2.4.1",
+		"Apache HTTP Server/2.4.1": "2.4.1",
+	} {
+		h, ok := apache(server)
+		if !ok || h.Product != "Apache" || h.Version != version {
+			t.Errorf("%q: hit %+v (found %v), want Apache %s", server, h, ok, version)
+		}
+	}
+	for _, server := range []string{
+		"Apache-Coyote/1.1", "ApacheBench/2.3", "Apache-HttpClient/4.5.13",
+		"Apache Tomcat/9.0.50", "Apache Traffic Server/9.1.0", "Apache-Coyote",
+	} {
+		if h, ok := apache(server); ok {
+			t.Errorf("%q named %s %s through apache-detect", server, h.Product, h.Version)
+		}
+	}
+}
+
+// A template that did not read its product in a header keeps the hit but not
+// another product's version.
+func TestForeignTokenVersionIsDropped(t *testing.T) {
+	idx := testIndex(t,
+		Unit{ID: "turn", Product: "TURN Server", Matchers: []Matcher{word("turn-marker")},
+			Extractors: []Extractor{{Type: "kval", Vals: []string{"Server"}}}},
+		Unit{ID: "boa", Product: "Boa Web Server", Matchers: []Matcher{word("boa-marker")},
+			Extractors: []Extractor{{Type: "kval", Vals: []string{"Server"}}}},
+	)
+	for body, want := range map[string]Hit{
+		"turn-marker": {Product: "TURN Server", Template: "turn"},
+		"boa-marker":  {Product: "Boa Web Server", Template: "boa", Version: "0.94.14", Extracted: "Boa/0.94.14"},
+	} {
+		hits := idx.match(resp(body, "Server", map[string]string{"turn-marker": "nginx/1.24.0", "boa-marker": "Boa/0.94.14"}[body]))
+		if len(hits) != 1 || hits[0].Product != want.Product || hits[0].Version != want.Version || hits[0].Extracted != want.Extracted {
+			t.Errorf("%s: hits %+v, want %+v", body, hits, want)
+		}
+	}
+}

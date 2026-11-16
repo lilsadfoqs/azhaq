@@ -56,7 +56,7 @@ func services(obs []types.StoredObservation, needVersion bool) []Service {
 			out = append(out, s) // merged by listener below
 			return
 		}
-		key := fmt.Sprintf("%s|%d|%s|%s|%s", s.Target(), s.Port, s.Proto, ProductKey(s.Product), s.Version)
+		key := fmt.Sprintf("%s|%d|%s|%s|%s", s.Target(), s.Port, s.Proto, identity(s.Product), s.Version)
 		if seen[key] {
 			return
 		}
@@ -119,7 +119,7 @@ func services(obs []types.StoredObservation, needVersion bool) []Service {
 					Banner: banner, Source: source, ObservedAt: o.ObservedAt, From: at}
 			}
 			if row.Server != "" {
-				product, version := ProductVersion(row.Server)
+				product, version := HeaderProductVersion(row.Server)
 				add(web(product, version, "Server: "+row.Server, SourceServer))
 			}
 			// The technologies the page's own markup and headers name with a
@@ -131,7 +131,7 @@ func services(obs []types.StoredObservation, needVersion bool) []Service {
 			}
 			// What a detection template extracted with a version.
 			for _, d := range row.Detected {
-				if d.Product != "" && d.Version != "" && classify(d.Product, detectedSource(d)) != skip {
+				if d.Product != "" && d.Version != "" && !foreignVersion(row.Server, d.Product, d.Version) && classify(d.Product, detectedSource(d)) != skip {
 					add(web(d.Product, d.Version, "detection template: "+d.Template, SourceDetect))
 				}
 			}
@@ -166,7 +166,7 @@ func namedApps(obs []types.StoredObservation, have []Service, addrs map[string]s
 	}
 	by := map[string][]Service{} // listener + product → what the listener's rows name
 	for _, s := range have {
-		k := listenerOf(s) + "|" + ProductKey(s.Product)
+		k := listenerOf(s) + "|" + identity(s.Product)
 		by[k] = append(by[k], s)
 	}
 	var out []Service
@@ -175,7 +175,7 @@ func namedApps(obs []types.StoredObservation, have []Service, addrs map[string]s
 			continue
 		}
 		dup := false
-		for _, e := range by[listenerOf(a.Service)+"|"+ProductKey(a.Product)] {
+		for _, e := range by[listenerOf(a.Service)+"|"+identity(a.Product)] {
 			if a.Plain || sameName(e, a.Service) && (a.Version == "" || e.Version == a.Version || refines(e.Version, a.Version)) {
 				dup = true
 				break
@@ -319,7 +319,7 @@ func (c Confirmer) Read(ctx context.Context, svc Service, path string) (Signal, 
 	sig := Signal{Path: path, What: fmt.Sprintf("GET %s answered %d", path, resp.StatusCode)}
 	// The signal: a product and version the answer states, in its
 	// Server header first, then its body.
-	sig.Product, sig.Version = ProductVersion(resp.Header.Get("Server"))
+	sig.Product, sig.Version = HeaderProductVersion(resp.Header.Get("Server"))
 	sig.From = "the Server header"
 	if sig.Version == "" {
 		if p, v := productVersionIn(string(body), svc.Product); v != "" {
@@ -465,7 +465,7 @@ func mergeListeners(in []Service, addrs map[string]string) []Service {
 			s.Names = ns
 			s.Host = firstName(ns)
 		}
-		k := l + "|" + ProductKey(s.Product)
+		k := l + "|" + identity(s.Product)
 		i, ok := at[k]
 		if !ok {
 			at[k] = len(out)
