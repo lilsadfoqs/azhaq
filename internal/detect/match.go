@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	_ "embed"
 	"encoding/json"
+	"hash/maphash"
 	"io"
 	"net/http"
 	"regexp"
@@ -95,6 +96,85 @@ func Match(r Response) []Hit {
 // index holds the compiled units grouped by request path.
 type index struct {
 	groups map[string]*group
+	side   *side // the literal index of every group but the root's
+	memo   scanMemo
+}
+
+// side is one literal index over the needles of all the groups but the
+// root's, which are few (about 4,000 against 56,000): what a response holds
+// of them is scanned once and shared by every path it answers, which a site
+// that gives every path one page asks a thousand times.
+type side struct {
+	ac *ac
+	n  int
+}
+
+type sideBuilder struct {
+	b   *acBuilder
+	ids map[string]int32
+}
+
+func (sb *sideBuilder) add(lit string) int32 {
+	id, ok := sb.ids[lit]
+	if !ok {
+		id = int32(len(sb.ids))
+		sb.ids[lit] = id
+		sb.b.add(lit, id)
+	}
+	return id
+}
+
+// scanMemo remembers which side needles the last few large responses hold.
+type scanMemo struct {
+	mu   sync.Mutex
+	ent  [4]memoEnt
+	next int
+}
+
+type memoEnt struct {
+	hash uint64
+	head string
+	body []byte // a copy: the caller's body is not held
+	hits []uint64
+}
+
+const (
+	memoMin = 1 << 9 // smaller responses are scanned in less than a lookup costs
+	memoMax = 1 << 20
+)
+
+var memoSeed = maphash.MakeSeed()
+
+// sideHits is the set of side needles that occur in the response text
+// (headers, a blank line, body, lower-cased), as a bitset.
+func (idx *index) sideHits(c *ctx) []uint64 {
+	head, body := c.headers(), c.r.Body
+	memo := len(body) >= memoMin && len(body) <= memoMax
+	var h uint64
+	if memo {
+		var mh maphash.Hash
+		mh.SetSeed(memoSeed)
+		mh.WriteString(head)
+		mh.Write(body)
+		h = mh.Sum64()
+		idx.memo.mu.Lock()
+		for _, e := range idx.memo.ent {
+			if e.hits != nil && e.hash == h && e.head == head && bytes.Equal(e.body, body) {
+				idx.memo.mu.Unlock()
+				return e.hits
+			}
+		}
+		idx.memo.mu.Unlock()
+	}
+	hits := make([]uint64, (idx.side.n+63)/64)
+	idx.side.ac.scan(strings.ToLower(c.response()), func(n int32) { hits[n>>6] |= 1 << (n & 63) })
+	if memo {
+		idx.memo.mu.Lock()
+		idx.memo.ent[idx.memo.next] = memoEnt{hash: h, head: head, body: bytes.Clone(body), hits: hits}
+		idx.memo.next = (idx.memo.next + 1) % len(idx.memo.ent)
+		idx.memo.mu.Unlock()
+	}
+	return hits
 }
 
 // requestPath is what a template's path asks of the server: a fragment
@@ -114,6 +194,7 @@ func requestPath(p string) string {
 type group struct {
 	units   []*gunit
 	ac      *ac
+	sideIDs []int32   // needle -> side needle id, for a group with no ac of its own
 	groupOf [][]int32 // needle -> cover group ids
 	gSize   []int32   // needles per cover group
 	gCand   []int32   // cover group -> candidate id
@@ -171,13 +252,21 @@ func build(d *Data) *index {
 			}
 		}
 	}
+	sb := &sideBuilder{b: newACBuilder(), ids: map[string]int32{}}
 	for p, units := range byPath {
-		idx.groups[p] = buildGroup(units)
+		if p == "/" {
+			idx.groups[p] = buildGroup(units, nil)
+		} else {
+			idx.groups[p] = buildGroup(units, sb)
+		}
+	}
+	if len(sb.ids) > 0 {
+		idx.side = &side{ac: sb.b.build(), n: len(sb.ids)}
 	}
 	return idx
 }
 
-func buildGroup(units []*cunit) *group {
+func buildGroup(units []*cunit, sb *sideBuilder) *group {
 	g := &group{}
 	needle := map[string]int32{}
 	b := newACBuilder()
@@ -203,7 +292,11 @@ func buildGroup(units []*cunit) *group {
 					if !ok {
 						nid = int32(len(needle))
 						needle[lit] = nid
-						b.add(lit, nid)
+						if sb != nil {
+							g.sideIDs = append(g.sideIDs, sb.add(lit))
+						} else {
+							b.add(lit, nid)
+						}
 						needleGroups = append(needleGroups, nil)
 					}
 					needleGroups[nid] = append(needleGroups[nid], gid)
@@ -213,7 +306,9 @@ func buildGroup(units []*cunit) *group {
 		g.units = append(g.units, gu)
 	}
 	if len(g.refs) > 0 {
-		g.ac = b.build()
+		if sb == nil {
+			g.ac = b.build()
+		}
 		g.groupOf = needleGroups
 	}
 	g.pool.New = func() any {
@@ -276,26 +371,35 @@ func (idx *index) match(r Response) []Hit {
 	s := g.pool.Get().(*scratch)
 	defer func() { s.reset(); g.pool.Put(s) }()
 
-	if g.ac != nil {
-		g.ac.scan(strings.ToLower(c.response()), func(n int32) {
-			if s.seen[n] {
-				return
+	visit := func(n int32) {
+		if s.seen[n] {
+			return
+		}
+		s.seen[n] = true
+		s.seenL = append(s.seenL, n)
+		for _, gid := range g.groupOf[n] {
+			if s.cnt[gid] == 0 {
+				s.cntL = append(s.cntL, gid)
 			}
-			s.seen[n] = true
-			s.seenL = append(s.seenL, n)
-			for _, gid := range g.groupOf[n] {
-				if s.cnt[gid] == 0 {
-					s.cntL = append(s.cntL, gid)
-				}
-				s.cnt[gid]++
-				if s.cnt[gid] == g.gSize[gid] {
-					if cid := g.gCand[gid]; !s.cand[cid] {
-						s.cand[cid] = true
-						s.candL = append(s.candL, cid)
-					}
+			s.cnt[gid]++
+			if s.cnt[gid] == g.gSize[gid] {
+				if cid := g.gCand[gid]; !s.cand[cid] {
+					s.cand[cid] = true
+					s.candL = append(s.candL, cid)
 				}
 			}
-		})
+		}
+	}
+	switch {
+	case g.ac != nil:
+		g.ac.scan(strings.ToLower(c.response()), visit)
+	case len(g.sideIDs) > 0:
+		hits := idx.sideHits(c)
+		for n, id := range g.sideIDs {
+			if hits[id>>6]>>(id&63)&1 != 0 {
+				visit(int32(n))
+			}
+		}
 	}
 
 	var hits []Hit
