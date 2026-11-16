@@ -2,10 +2,10 @@ package store
 
 import (
 	"encoding/json"
-	"regexp"
 	"sort"
 	"strings"
 
+	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"github.com/lilsadfoqs/azhaq/types"
 )
@@ -259,7 +259,7 @@ var volatileByRow = map[string][]string{
 
 // timeoutNote is what Go adds to a timeout's text for where it ran out: it is
 // the same timeout whether it came while the headers or the body were read.
-var timeoutNote = regexp.MustCompile(` \(Client\.Timeout[^)]*\)`)
+var timeoutNote = lazyre.New(` \(Client\.Timeout[^)]*\)`)
 
 // stablePayload is the payload as diff compares it: the volatile fields
 // dropped, per-source timings dropped, response headers reduced to their
