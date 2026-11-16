@@ -1,0 +1,32 @@
+=== parts/bench-p1.log
+bench: building azhaq
+bench: starting docker apps
+bench: polite: params
+bench: polite: params took 189s
+
+polite (HTTP 5/s, DNS 10/s, ports 100/s): parameters (3 pages, 6453 names)  azhaq             arjun             shared  time
+found                                                                       9                 9                 9       47.5s 52MB / 44.3s 36MB
+planted truth (8)                                                           8 right, 0 wrong  8 right, 0 wrong          
+
+checks
+  PASS  [polite] params: results ≥ the reference's, confirmed by the planted server's own list of the parameters it reads (wrong names count against)  (azhaq 8, reference 8; old bar: 9 of 9 = 100%; planted pages: azhaq 8 right 0 wrong, arjun 8 right 0 wrong, of 8; all pages azhaq 9, arjun 9, shared 9; time ×1.07 of the reference, memory ×1.43 of the reference (52 MB against 36 MB) | azhaq params -u http://127.0.0.1:3101/rest/products/search -w /home/runner/work/azhaq/azhaq/bench/.work/burp-parameter-names.txt -silent -rate 5 vs arjun -u http://127.0.0.1:3101/rest/products/search -w /home/runner/work/azhaq/azhaq/bench/.work/burp-parameter-names.txt -oJ /home/runner/work/azhaq/azhaq/bench/.work/params/arjun.json -q --disable-redirects --rate-limit 5)
+  FAIL  [polite] params: time ≤ 1.05× the reference's  (azhaq 47.5s, reference 44.3s (the median of 3 below 20 s, one run above) | azhaq params -u http://127.0.0.1:3101/rest/products/search -w /home/runner/work/azhaq/azhaq/bench/.work/burp-parameter-names.txt -silent -rate 5 vs arjun -u http://127.0.0.1:3101/rest/products/search -w /home/runner/work/azhaq/azhaq/bench/.work/burp-parameter-names.txt -oJ /home/runner/work/azhaq/azhaq/bench/.work/params/arjun.json -q --disable-redirects --rate-limit 5)
+
+1 of 2 checks pass
+
+record bench/history/2026-11-16T183524-0a2006cd.json
+exit status 1
+=== join
+
+polite (HTTP 5/s, DNS 10/s, ports 100/s): parameters (3 pages, 6453 names)  azhaq             arjun             shared  time
+found                                                                       9                 9                 9       47.5s 52MB / 44.3s 36MB
+planted truth (8)                                                           8 right, 0 wrong  8 right, 0 wrong          
+
+checks
+  PASS  [polite] params: results ≥ the reference's, confirmed by the planted server's own list of the parameters it reads (wrong names count against)  (azhaq 8, reference 8; old bar: 9 of 9 = 100%; planted pages: azhaq 8 right 0 wrong, arjun 8 right 0 wrong, of 8; all pages azhaq 9, arjun 9, shared 9; time ×1.07 of the reference, memory ×1.43 of the reference (52 MB against 36 MB) | azhaq params -u http://127.0.0.1:3101/rest/products/search -w /home/runner/work/azhaq/azhaq/bench/.work/burp-parameter-names.txt -silent -rate 5 vs arjun -u http://127.0.0.1:3101/rest/products/search -w /home/runner/work/azhaq/azhaq/bench/.work/burp-parameter-names.txt -oJ /home/runner/work/azhaq/azhaq/bench/.work/params/arjun.json -q --disable-redirects --rate-limit 5)
+  FAIL  [polite] params: time ≤ 1.05× the reference's  (azhaq 47.5s, reference 44.3s (the median of 3 below 20 s, one run above) | azhaq params -u http://127.0.0.1:3101/rest/products/search -w /home/runner/work/azhaq/azhaq/bench/.work/burp-parameter-names.txt -silent -rate 5 vs arjun -u http://127.0.0.1:3101/rest/products/search -w /home/runner/work/azhaq/azhaq/bench/.work/burp-parameter-names.txt -oJ /home/runner/work/azhaq/azhaq/bench/.work/params/arjun.json -q --disable-redirects --rate-limit 5)
+
+1 of 2 checks pass
+
+record bench/joined/2026-11-16T183140-0a2006cd.json (joined from 1)
+exit status 1
