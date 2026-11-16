@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"slices"
 	"strings"
+	"time"
 )
 
 // A run whose start page looks the same signed in and out has no check page.
@@ -26,8 +27,8 @@ const (
 type good struct {
 	url    string
 	seg    string
-	mark   int64 // GETs asked when it last answered
-	probed int64 // order of the last time it was asked again; 0: never
+	at     time.Time // when its request was sent: GETs sent after it may have been answered without the session
+	probed int64     // order of the last time it was asked again; 0: never
 }
 
 // firstSeg is the host and first path segment of raw: pages under it tend to
@@ -46,6 +47,10 @@ func firstSeg(raw string) string {
 // too: it may have been in flight before it, and a page that answers anyone
 // never turns a visitor away, so it can only hold.
 func (g *sessionGuard) keepGood(raw string, res Result) {
+	at := res.At
+	if at.IsZero() {
+		at = time.Now()
+	}
 	ct := strings.ToLower(res.Header.Get("Content-Type"))
 	if g.remote || res.Status != http.StatusOK || !strings.Contains(ct, "html") && !strings.Contains(ct, "json") {
 		return
@@ -59,7 +64,7 @@ func (g *sessionGuard) keepGood(raw string, res Result) {
 	n, segs := 0, map[string]bool{}
 	for _, x := range g.goods {
 		if x.url == raw {
-			x.mark = g.total
+			x.at = at
 			return
 		}
 		segs[x.seg] = true
@@ -75,7 +80,7 @@ func (g *sessionGuard) keepGood(raw string, res Result) {
 	case n == 0 && len(segs) >= maxGoodSegs:
 		return
 	}
-	g.goods = append(g.goods, &good{url: raw, seg: seg, mark: g.total})
+	g.goods = append(g.goods, &good{url: raw, seg: seg, at: at})
 }
 
 // doubt notes the answer to a GET that is not a 401 or a redirect to the
@@ -83,7 +88,9 @@ func (g *sessionGuard) keepGood(raw string, res Result) {
 // another page. With no check page it asks for a check, which asks the goods
 // again. The same answer (status and target) is worth a check the first 3
 // times and then each time its count doubles, so a site that redirects its
-// directories or forbids its folders is not asked about for each.
+// directories or forbids its folders is not asked about for each. It is
+// called when the request's whole chain is read, so the request is recorded
+// (and finished, for a task that asks it again) when the check runs.
 func (g *sessionGuard) doubt(raw string, status int, location string) {
 	location = strings.TrimSpace(location)
 	redirect := isRedirect(status) && location != ""
@@ -113,7 +120,7 @@ func (g *sessionGuard) doubt(raw string, status int, location string) {
 	g.doubts++
 	g.pass = true
 	g.mu.Unlock()
-	g.ends(raw, pathOf(raw)+" answered "+describe(Print{Status: status, Loc: locPath(raw, location)}), true)
+	g.ends(raw, pathOf(raw)+" answered "+describe(Print{Status: status, Loc: locPath(raw, location)}), false)
 }
 
 // worth counts an answer's occurrences and says whether this one is worth a
@@ -143,12 +150,12 @@ func turnsAway(ctx context.Context, p Print, loc string) bool {
 
 // flipped asks kept pages again, with the session. One that now turns the
 // visitor away, having answered 200 with the session, is the measured end of
-// it: it becomes the check page, and the GETs asked before it last answered
-// are dropped from the ones that may have been answered without the session
-// (dropped says how many). When an answer asked for the check, up to
-// maxGoodProbes pages are asked, the ones under the answer's segment first;
-// otherwise a single page, the one asked again longest ago.
-func (g *sessionGuard) flipped(ctx context.Context, signal string) (got Print, dropped int, ok bool) {
+// it: it becomes the check page, and the count of GETs that may have been
+// answered without the session is the ones sent after it last answered.
+// When an answer asked for the check, up to maxGoodProbes pages are asked,
+// the ones under the answer's segment first; otherwise a single page, the
+// one asked again longest ago.
+func (g *sessionGuard) flipped(ctx context.Context, signal string) (got Print, ok bool) {
 	g.mu.Lock()
 	doubt := g.pass
 	g.pass = false
@@ -164,7 +171,7 @@ func (g *sessionGuard) flipped(ctx context.Context, signal string) (got Print, d
 	around := firstSeg(g.endAns)
 	g.mu.Unlock()
 	if len(cands) == 0 {
-		return Print{}, 0, false
+		return Print{}, false
 	}
 	slices.SortStableFunc(cands, func(a, b *good) int {
 		if doubt && (a.seg == around) != (b.seg == around) {
@@ -176,7 +183,7 @@ func (g *sessionGuard) flipped(ctx context.Context, signal string) (got Print, d
 		if a.probed != b.probed {
 			return int(a.probed - b.probed)
 		}
-		return int(b.mark - a.mark)
+		return b.at.Compare(a.at)
 	})
 	limit := 1
 	if doubt {
@@ -185,7 +192,7 @@ func (g *sessionGuard) flipped(ctx context.Context, signal string) (got Print, d
 	for _, c := range cands[:min(limit, len(cands))] {
 		p, loc, _, err := askRaw(ctx, c.url, true, 0)
 		if err != nil {
-			return Print{}, 0, false
+			return Print{}, false
 		}
 		g.mu.Lock()
 		g.probeSeq++
@@ -199,15 +206,18 @@ func (g *sessionGuard) flipped(ctx context.Context, signal string) (got Print, d
 		if g.s.SignIn == "" {
 			g.s.SignIn = p.Loc
 		}
-		// The GETs before its 200 were answered with the session.
-		if i := min(max(int(c.mark-g.base), 0), len(g.asked)); i > 0 {
-			g.asked = slices.Clone(g.asked[i:])
-			g.base += int64(i)
-			dropped = i
+		// The GETs sent before its 200 were answered with the session. Only
+		// the count says so: asked, which a renewal asks again, is whole,
+		// since a request read late may have been sent before the page.
+		g.goodN, g.goodSet = 0, true
+		for _, u := range g.asked {
+			if t, ok := g.sentAt[u]; !ok || t.After(c.at) {
+				g.goodN++
+			}
 		}
 		g.goods = nil
 		g.mu.Unlock()
-		return p, dropped, true
+		return p, true
 	}
-	return Print{}, 0, false
+	return Print{}, false
 }
