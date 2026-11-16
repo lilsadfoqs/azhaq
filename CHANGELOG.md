@@ -1,5 +1,50 @@
 # Changelog
 
+## v0.26.0
+
+### Added
+
+- `run -stream` prints a `found identified HOST:PORT product version (label)` line as soon as a listener is named. It prints a `found finding …` line as soon as a read proves something. Both use `hunt`'s own rows and fold rule, so each line matches the `hunt` row it becomes. Once the first listener is stored, the progress line names `azhaq hunt -db PATH`, which reads a workspace whose run is still going without blocking it.
+- A `WWW-Authenticate` realm names a console, by its vendor's exact realm string or by the title rules. The default-login catalog then asks it.
+- `ingest` reads naabu's default `host:port` text.
+
+### Changed
+
+- A `Server` or `X-Powered-By` token names only its own product:
+  - `Apache-Coyote`, `ApacheBench` and `Apache-HttpClient` are no longer Apache HTTP Server, and get none of its advisories.
+  - `Apache Tomcat` and `Apache Traffic Server` keep their whole names.
+  - A detection template whose only evidence is another product's header gives no hit.
+- A product name matches the default-login catalog and the advisory index with or without its vendor prefix (`Apache ActiveMQ` is `ActiveMQ`). A bare vendor matches nothing.
+- An advisory whose record's own CNA names another component (a bundled library) ranks after the product's own, and its line says so. The advisory index is rebuilt.
+- A plain HTTP answer that asks for TLS leads to a TLS handshake, and the port is listed as `https` with its certificate. The signals are a 400 or 426, a redirect to `https://` on the same port, or the server's own "speaking plain HTTP to an SSL port" page.
+- `roles -replay-writes-verify` proves a cross-role write only when it measures one:
+  - the owner's value changed to the value the write set, read before and after, on an account known to be the owner's;
+  - a `login:` step was refused before the write and works after.
+
+  A step can no longer overrule an owner readback that showed no change. A change measured on an account not known to be the owner's says whose account was not established. A replayed POST finds the object it created through a `read:URL/{field}` step or the route the map knows.
+- A signed-in run whose start page looks the same signed in and out now notices the end of its session. A page that answered 200 with the session and now answers 401, 403 or a redirect to a sign-in form stops the run, or renews the session with `-login`.
+- Without `-resolvers`, names in zones the root zone does not delegate (`.internal`, `.lan`, `.corp`, …) and under `home.arpa` are asked of the system's resolver, not the default public resolvers. So are the reverse names of loopback, private and link-local addresses. The note says how many there were and how many the system resolver answered. `rdap` and the search sources skip such names, as `subs` and `urls` did.
+- `diff` compares a URL by one identity: query names in any order, and token-shaped or per-visit values folded. It leaves out what records when or how something was asked (`asked_at`, `observed_at`, cookies, a DNS message id, capped-scan progress, the sweep's sent counts). Measured on two run pairs of unchanged lab networks: one pair went from 8 lines to none; the other went from 35 to 18, each a real change in what the target served.
+- `params` lists a name found by size alone only when the change repeats. On a page that has shown no variation of its own, only the first such name is asked again.
+- `dirs` and `run -dirs` match 308 by default. `fuzz` keeps ffuf's own default `-mc`, so a ported ffuf line gives ffuf's report.
+- The findings header of `hunt` reads "what the answer itself shows, as measured", not "proven".
+- `hunt` counts a stack trace as one `error-disclosure` finding, as `report -findings` does, so the run's `next` line and its `tiers` agree.
+- Product checks:
+  - A page repeated at many paths is scanned once, and equal bodies share one copy.
+  - Measured side by side on one runner, a run of Juice Shop went from 12.3 s and 249 MB to 11.0 s and 214 MB, at 0.88× katana's CPU. Single runs vary with the runner: the benchmark table's run took 20 s.
+  - The scan memo is keyed on the body alone, so a per-answer header no longer defeats it.
+
+### Fixed
+
+- `fuzz -resolvers` asks the given resolvers. Before, a reset of the egress policy dropped them and the system resolver answered.
+- The failure of a request sent before `-max-requests` is kept as a failure row in `fuzz`, `dirs`, `run -dirs` and `params`, and a resume does not count it twice.
+- `urls` drops fuzzer keywords followed by symbols (`FUZZ[url`, `FUZZ•`, `FUZZ***`) as junk.
+- A resumed run whose path sweep is larger than `-max-requests` no longer stops on `no task finished` while the sweep is still moving.
+- `verify-logins` masks a published password only where it is a credential, so `/admin/queues.jsp` is no longer rewritten for the password `admin`. `report -redact` no longer masks a host name inside other words, and `roles` no longer masks the scheme word `Bearer`.
+- Help names only flags the command has. A test now walks every command's help.
+- `crawl -builtin-paths` help says the sweep also sends the product checks.
+- Every reader of `azhaq-ports` and `azhaq-http` rows decodes one row type each (`portscan.Row`, `httprow.Row`). Contract tests fail on a field a writer emits that the type lacks. Strict decodes of 31 recorded workspaces passed: 3,293 port rows and 38,271 web rows.
+
 ## v0.25.0
 
 ### Added
