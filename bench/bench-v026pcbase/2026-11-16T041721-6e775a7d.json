@@ -1,0 +1,946 @@
+{
+  "date": "2026-11-16T04:17:21Z",
+  "commit": "6e775a7d",
+  "version": "azhaq 0.24.1-0.20261116023417-6e775a7db040+dirty\nadvisory index 2026-11-11 (52976 records)\n  CISA Known Exploited Vulnerabilities catalogue, 2026-11-10\n  NVD CVE records, feed 2.0 (with CPE configurations), 2026-11-11",
+  "go": "go1.27.4",
+  "tools": [
+    {
+      "name": "katana",
+      "version": "1.8.0"
+    },
+    {
+      "name": "subfinder",
+      "version": "2.17.0"
+    },
+    {
+      "name": "httpx",
+      "version": "1.12.0"
+    },
+    {
+      "name": "dnsx",
+      "version": "1.3.1"
+    },
+    {
+      "name": "naabu",
+      "version": "2.6.1"
+    },
+    {
+      "name": "gau",
+      "version": "2.2.4"
+    },
+    {
+      "name": "ffuf",
+      "version": "2.3.0"
+    },
+    {
+      "name": "alterx",
+      "version": "0.1.0"
+    },
+    {
+      "name": "gowitness",
+      "version": "3.2.2"
+    },
+    {
+      "name": "jsluice",
+      "version": "v0.0.0-20240110145140-0ddfab153e06"
+    },
+    {
+      "name": "notify",
+      "version": "v1.0.7"
+    }
+  ],
+  "profile": "both",
+  "apps": [
+    {
+      "name": "juice-shop",
+      "url": "http://127.0.0.1:3101/",
+      "azhaq": {
+        "routes": 103,
+        "truth": 70,
+        "truth_of": 77,
+        "shell": 0,
+        "seconds": 12.316624563,
+        "rss_mb": 249.28515625
+      },
+      "katana": {
+        "routes": 5,
+        "truth": 1,
+        "truth_of": 77,
+        "shell": 3,
+        "seconds": 13.923669738,
+        "rss_mb": 957.05078125
+      },
+      "jsluice": {
+        "routes": 0,
+        "truth_of": 77,
+        "shell": 0,
+        "seconds": 1.127107082,
+        "rss_mb": 140.09375
+      },
+      "katana_jsluice": {
+        "routes": 5,
+        "truth": 1,
+        "truth_of": 77,
+        "shell": 3,
+        "seconds": 15.05077682,
+        "rss_mb": 957.05078125
+      },
+      "bundle_grep": {
+        "routes": 101,
+        "truth": 37,
+        "truth_of": 77,
+        "shell": 0,
+        "seconds": 0,
+        "rss_mb": 0
+      },
+      "crawl": {
+        "routes": 60,
+        "truth": 53,
+        "truth_of": 77,
+        "shell": 0,
+        "styles": 1,
+        "seconds": 2.138834461,
+        "rss_mb": 220.66015625,
+        "requests": 81,
+        "request_routes": 60
+      },
+      "crawl_katana": {
+        "routes": 5,
+        "truth": 1,
+        "truth_of": 77,
+        "shell": 0,
+        "styles": 1,
+        "seconds": 13.807945145,
+        "rss_mb": 1412.84765625,
+        "requests": 39,
+        "request_routes": 5
+      },
+      "ffuf": {
+        "words": 51,
+        "azhaq_hits": 3,
+        "ffuf_hits": 4,
+        "shared": 3,
+        "azhaq_shell": 0,
+        "ffuf_shell": 0,
+        "seconds": 0.255011439
+      },
+      "roles": {
+        "rows": 39,
+        "expected": [
+          "/api/Users",
+          "/rest/user/authentication-details"
+        ],
+        "found": [
+          "/api/Users",
+          "/rest/user/authentication-details"
+        ],
+        "seconds": 24.239302915,
+        "chrome_rows": 41,
+        "chrome_found": [
+          "/api/Users",
+          "/rest/user/authentication-details"
+        ],
+        "chrome_seconds": 33.798267073
+      },
+      "browser": {
+        "azhaq": {
+          "routes": 104,
+          "truth": 70,
+          "truth_of": 77,
+          "shell": 0,
+          "seconds": 14.557332872,
+          "rss_mb": 268.89453125
+        },
+        "katana": {
+          "routes": 31,
+          "truth": 7,
+          "truth_of": 77,
+          "shell": 4,
+          "seconds": 8.005233279,
+          "rss_mb": 75.11328125
+        },
+        "limit_seconds": 300
+      },
+      "run_cpu": {
+        "target": "http://127.0.0.1:3101/",
+        "runs": 5,
+        "azhaq_cpu_seconds": 5.486708,
+        "katana_cpu_seconds": 5.623461,
+        "azhaq_seconds": 12.184264346,
+        "katana_seconds": 13.825407007999999
+      }
+    },
+    {
+      "name": "vampi",
+      "url": "http://127.0.0.1:5102/",
+      "azhaq": {
+        "routes": 13,
+        "truth": 12,
+        "truth_of": 12,
+        "shell": 0,
+        "seconds": 1.758209032,
+        "rss_mb": 247.921875
+      },
+      "katana": {
+        "routes": 1,
+        "truth": 1,
+        "truth_of": 12,
+        "shell": 0,
+        "seconds": 10.569938333,
+        "rss_mb": 49.3515625
+      },
+      "jsluice": {
+        "routes": 0,
+        "truth_of": 12,
+        "shell": 0,
+        "seconds": 0,
+        "rss_mb": 0
+      },
+      "katana_jsluice": {
+        "routes": 1,
+        "truth": 1,
+        "truth_of": 12,
+        "shell": 0,
+        "seconds": 10.569938333,
+        "rss_mb": 49.3515625
+      },
+      "bundle_grep": {
+        "routes": 0,
+        "truth_of": 12,
+        "shell": 0,
+        "seconds": 0,
+        "rss_mb": 0
+      },
+      "crawl": {
+        "routes": 1,
+        "truth": 1,
+        "truth_of": 12,
+        "shell": 0,
+        "seconds": 0.554828053,
+        "rss_mb": 190.859375,
+        "requests": 1,
+        "request_routes": 1
+      },
+      "crawl_katana": {
+        "routes": 1,
+        "truth": 1,
+        "truth_of": 12,
+        "shell": 0,
+        "seconds": 10.575911152,
+        "rss_mb": 49.21484375,
+        "requests": 1,
+        "request_routes": 1
+      }
+    },
+    {
+      "name": "ginandjuice.shop",
+      "url": "https://ginandjuice.shop/",
+      "azhaq": {
+        "routes": 38,
+        "truth": 3,
+        "truth_of": 3,
+        "shell": 0,
+        "seconds": 255.653288471,
+        "rss_mb": 249.17578125
+      },
+      "katana": {
+        "routes": 14,
+        "truth": 2,
+        "truth_of": 3,
+        "shell": 0,
+        "seconds": 20.733899413,
+        "rss_mb": 736.6015625
+      },
+      "jsluice": {
+        "routes": 1,
+        "truth": 1,
+        "truth_of": 3,
+        "shell": 0,
+        "seconds": 0.233302993,
+        "rss_mb": 48.88671875
+      },
+      "katana_jsluice": {
+        "routes": 14,
+        "truth": 2,
+        "truth_of": 3,
+        "shell": 0,
+        "seconds": 20.967202406,
+        "rss_mb": 736.6015625
+      },
+      "bundle_grep": {
+        "routes": 3,
+        "truth": 1,
+        "truth_of": 3,
+        "shell": 0,
+        "seconds": 0,
+        "rss_mb": 0
+      },
+      "crawl": {
+        "routes": 11,
+        "truth": 2,
+        "truth_of": 3,
+        "shell": 0,
+        "styles": 4,
+        "seconds": 11.609109568000001,
+        "rss_mb": 199.22265625
+      },
+      "crawl_katana": {
+        "routes": 14,
+        "truth": 2,
+        "truth_of": 3,
+        "shell": 0,
+        "styles": 4,
+        "seconds": 20.746576047,
+        "rss_mb": 760.4765625
+      }
+    }
+  ],
+  "polite": {
+    "apps": [
+      {
+        "name": "juice-shop",
+        "url": "http://127.0.0.1:3101/",
+        "azhaq": {
+          "routes": 0,
+          "shell": 0,
+          "seconds": 0,
+          "rss_mb": 0
+        },
+        "katana": {
+          "routes": 0,
+          "shell": 0,
+          "seconds": 0,
+          "rss_mb": 0
+        },
+        "jsluice": {
+          "routes": 0,
+          "shell": 0,
+          "seconds": 0,
+          "rss_mb": 0
+        },
+        "katana_jsluice": {
+          "routes": 0,
+          "shell": 0,
+          "seconds": 0,
+          "rss_mb": 0
+        },
+        "bundle_grep": {
+          "routes": 0,
+          "shell": 0,
+          "seconds": 0,
+          "rss_mb": 0
+        },
+        "profile": "polite",
+        "crawl": {
+          "routes": 60,
+          "truth": 53,
+          "truth_of": 77,
+          "shell": 0,
+          "styles": 1,
+          "seconds": 17.157101151,
+          "rss_mb": 205.0234375
+        },
+        "crawl_katana": {
+          "routes": 5,
+          "truth": 1,
+          "truth_of": 77,
+          "shell": 0,
+          "styles": 1,
+          "seconds": 16.587661679,
+          "rss_mb": 1682.10546875
+        }
+      },
+      {
+        "name": "vampi",
+        "url": "http://127.0.0.1:5102/",
+        "azhaq": {
+          "routes": 0,
+          "shell": 0,
+          "seconds": 0,
+          "rss_mb": 0
+        },
+        "katana": {
+          "routes": 0,
+          "shell": 0,
+          "seconds": 0,
+          "rss_mb": 0
+        },
+        "jsluice": {
+          "routes": 0,
+          "shell": 0,
+          "seconds": 0,
+          "rss_mb": 0
+        },
+        "katana_jsluice": {
+          "routes": 0,
+          "shell": 0,
+          "seconds": 0,
+          "rss_mb": 0
+        },
+        "bundle_grep": {
+          "routes": 0,
+          "shell": 0,
+          "seconds": 0,
+          "rss_mb": 0
+        },
+        "profile": "polite",
+        "crawl": {
+          "routes": 1,
+          "truth": 1,
+          "truth_of": 12,
+          "shell": 0,
+          "seconds": 0.731434699,
+          "rss_mb": 190.4765625
+        },
+        "crawl_katana": {
+          "routes": 1,
+          "truth": 1,
+          "truth_of": 12,
+          "shell": 0,
+          "seconds": 10.414838235,
+          "rss_mb": 49.39453125
+        }
+      },
+      {
+        "name": "ginandjuice.shop",
+        "url": "https://ginandjuice.shop/",
+        "azhaq": {
+          "routes": 0,
+          "shell": 0,
+          "seconds": 0,
+          "rss_mb": 0
+        },
+        "katana": {
+          "routes": 0,
+          "shell": 0,
+          "seconds": 0,
+          "rss_mb": 0
+        },
+        "jsluice": {
+          "routes": 0,
+          "shell": 0,
+          "seconds": 0,
+          "rss_mb": 0
+        },
+        "katana_jsluice": {
+          "routes": 0,
+          "shell": 0,
+          "seconds": 0,
+          "rss_mb": 0
+        },
+        "bundle_grep": {
+          "routes": 0,
+          "shell": 0,
+          "seconds": 0,
+          "rss_mb": 0
+        },
+        "profile": "polite",
+        "crawl": {
+          "routes": 11,
+          "truth": 2,
+          "truth_of": 3,
+          "shell": 0,
+          "styles": 4,
+          "seconds": 11.579575914,
+          "rss_mb": 213.2265625
+        },
+        "crawl_katana": {
+          "routes": 14,
+          "truth": 2,
+          "truth_of": 3,
+          "shell": 0,
+          "styles": 4,
+          "seconds": 20.559330911,
+          "rss_mb": 736.625
+        }
+      }
+    ]
+  },
+  "checks": [
+    {
+      "name": "[default] juice-shop: ≥ 90% of the server routes its frontend calls",
+      "pass": true,
+      "detail": "azhaq 70/77, katana 1/77, jsluice 0/77"
+    },
+    {
+      "name": "[default] juice-shop: no catch-all page reported as visited",
+      "pass": true,
+      "detail": "0 visited URLs return the SPA index"
+    },
+    {
+      "name": "[default] crawl juice-shop: results ≥ the reference's, confirmed by the app's own routes (its server code or OpenAPI document, or the routes only its page scripts hold)",
+      "pass": true,
+      "detail": "azhaq 53, reference 1; routes found azhaq 60, katana 5; stylesheets listed azhaq 1, katana 1; known 53 and 1 of 77; time ×0.15 of the reference, memory ×0.16 of the reference (221 MB against 1413 MB) | azhaq crawl -u http://127.0.0.1:3101/ -depth 3 -silent -hints vs katana -u http://127.0.0.1:3101/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10"
+    },
+    {
+      "name": "[default] crawl juice-shop: time ≤ 1.05× the reference's",
+      "pass": true,
+      "detail": "azhaq 2.1s, reference 13.8s (the median of 3 below 20 s, one run above) | azhaq crawl -u http://127.0.0.1:3101/ -depth 3 -silent -hints vs katana -u http://127.0.0.1:3101/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10"
+    },
+    {
+      "name": "[default] crawl juice-shop: requests per route found ≤ katana's",
+      "pass": true,
+      "detail": "azhaq 81 requests for 60 routes (1.35 a route), katana 39 for 5 (7.80) | azhaq crawl -u http://127.0.0.1:3101/ -depth 3 -silent -hints vs katana -u http://127.0.0.1:3101/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10"
+    },
+    {
+      "name": "[default] juice-shop run: CPU ≤ katana -jc -jsl's",
+      "pass": true,
+      "detail": "azhaq 5.49 CPU s in 12.2 s, katana 5.62 CPU s in 13.8 s (0.98×, the median of 5 runs in turn) | azhaq run -url http://127.0.0.1:3101/ -db /home/runner/work/azhaq/azhaq/bench/.work/runcpu3113428550/cpu.db -quiet vs katana -u http://127.0.0.1:3101/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10"
+    },
+    {
+      "name": "[default] roles: Juice Shop anonymous → user",
+      "pass": true,
+      "detail": "39 endpoints differ; 401 → 200 on 2/2 of /api/Users, /rest/user/authentication-details"
+    },
+    {
+      "name": "[default] roles: Juice Shop anonymous → user, signed in with Chrome",
+      "pass": true,
+      "detail": "41 endpoints differ; 401 → 200 on 2/2 (with a token: 39 endpoints) "
+    },
+    {
+      "name": "[default] juice-shop: -browser finds the known routes katana -headless finds",
+      "pass": true,
+      "detail": "azhaq -browser 70/77 in 15s, katana -headless 7/77 in 8s"
+    },
+    {
+      "name": "[default] identical runs diff empty",
+      "pass": true,
+      "detail": "added=0 removed=0 observations=0"
+    },
+    {
+      "name": "[default] crawl vampi: results ≥ the reference's, confirmed by the app's own routes (its server code or OpenAPI document, or the routes only its page scripts hold)",
+      "pass": true,
+      "detail": "azhaq 1, reference 1; routes found azhaq 1, katana 1; stylesheets listed azhaq 0, katana 0; known 1 and 1 of 12; time ×0.05 of the reference, memory ×3.88 of the reference (191 MB against 49 MB) | azhaq crawl -u http://127.0.0.1:5102/ -depth 3 -silent -hints vs katana -u http://127.0.0.1:5102/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10"
+    },
+    {
+      "name": "[default] crawl vampi: time ≤ 1.05× the reference's",
+      "pass": true,
+      "detail": "azhaq 0.6s, reference 10.6s (the median of 3 below 20 s, one run above) | azhaq crawl -u http://127.0.0.1:5102/ -depth 3 -silent -hints vs katana -u http://127.0.0.1:5102/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10"
+    },
+    {
+      "name": "[default] crawl vampi: requests per route found ≤ katana's",
+      "pass": true,
+      "detail": "azhaq 1 requests for 1 routes (1.00 a route), katana 1 for 1 (1.00) | azhaq crawl -u http://127.0.0.1:5102/ -depth 3 -silent -hints vs katana -u http://127.0.0.1:5102/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10"
+    },
+    {
+      "name": "[default] vampi: paths from /openapi.json",
+      "pass": true,
+      "detail": "azhaq 12/12, katana 1/12"
+    },
+    {
+      "name": "[default] diff across different seeds is labelled",
+      "pass": true,
+      "detail": "seeds_differ=true"
+    },
+    {
+      "name": "[default] crawl ginandjuice.shop: results ≥ the reference's, confirmed by the app's own routes (its server code or OpenAPI document, or the routes only its page scripts hold)",
+      "pass": true,
+      "detail": "azhaq 2, reference 2; routes found azhaq 11, katana 14; stylesheets listed azhaq 4, katana 4; known 2 and 2 of 3; time ×0.56 of the reference, memory ×0.26 of the reference (199 MB against 760 MB) | azhaq crawl -u https://ginandjuice.shop/ -depth 3 -silent -hints -rate 5 vs katana -u https://ginandjuice.shop/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10 -rl 5"
+    },
+    {
+      "name": "[default] crawl ginandjuice.shop: time ≤ 1.05× the reference's",
+      "pass": true,
+      "detail": "azhaq 11.6s, reference 20.7s (the median of 3 below 20 s, one run above) | azhaq crawl -u https://ginandjuice.shop/ -depth 3 -silent -hints -rate 5 vs katana -u https://ginandjuice.shop/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10 -rl 5"
+    },
+    {
+      "name": "[default] ginandjuice: page scripts parsed",
+      "pass": true,
+      "detail": "4/4 page scripts, 3/3 routes only in page scripts or script-driven forms"
+    },
+    {
+      "name": "[default] ginandjuice: product and blog pages are one template each",
+      "pass": true,
+      "detail": "map lines: product 1, blog post 1"
+    },
+    {
+      "name": "[default] known routes ≥ katana ∪ jsluice on every app",
+      "pass": true,
+      "detail": "juice-shop 70/77 vs 1, vampi 12/12 vs 1, ginandjuice.shop 3/3 vs 2"
+    },
+    {
+      "name": "[default] no catch-all page reported as visited on any app",
+      "pass": true,
+      "detail": "3 apps"
+    },
+    {
+      "name": "[polite] crawl juice-shop: results ≥ the reference's, confirmed by the app's own routes (its server code or OpenAPI document, or the routes only its page scripts hold)",
+      "pass": true,
+      "detail": "azhaq 53, reference 1; routes found azhaq 60, katana 5; stylesheets listed azhaq 1, katana 1; known 53 and 1 of 77; time ×1.03 of the reference, memory ×0.12 of the reference (205 MB against 1682 MB) | azhaq crawl -u http://127.0.0.1:3101/ -depth 3 -silent -hints -rate 5 vs katana -u http://127.0.0.1:3101/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10 -rl 5"
+    },
+    {
+      "name": "[polite] crawl juice-shop: time ≤ 1.05× the reference's",
+      "pass": true,
+      "detail": "azhaq 17.2s, reference 16.6s (the median of 3 below 20 s, one run above) | azhaq crawl -u http://127.0.0.1:3101/ -depth 3 -silent -hints -rate 5 vs katana -u http://127.0.0.1:3101/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10 -rl 5"
+    },
+    {
+      "name": "[polite] crawl vampi: results ≥ the reference's, confirmed by the app's own routes (its server code or OpenAPI document, or the routes only its page scripts hold)",
+      "pass": true,
+      "detail": "azhaq 1, reference 1; routes found azhaq 1, katana 1; stylesheets listed azhaq 0, katana 0; known 1 and 1 of 12; time ×0.07 of the reference, memory ×3.86 of the reference (190 MB against 49 MB) | azhaq crawl -u http://127.0.0.1:5102/ -depth 3 -silent -hints -rate 5 vs katana -u http://127.0.0.1:5102/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10 -rl 5"
+    },
+    {
+      "name": "[polite] crawl vampi: time ≤ 1.05× the reference's",
+      "pass": true,
+      "detail": "azhaq 0.7s, reference 10.4s (the median of 3 below 20 s, one run above) | azhaq crawl -u http://127.0.0.1:5102/ -depth 3 -silent -hints -rate 5 vs katana -u http://127.0.0.1:5102/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10 -rl 5"
+    },
+    {
+      "name": "[polite] crawl ginandjuice.shop: results ≥ the reference's, confirmed by the app's own routes (its server code or OpenAPI document, or the routes only its page scripts hold)",
+      "pass": true,
+      "detail": "azhaq 2, reference 2; routes found azhaq 11, katana 14; stylesheets listed azhaq 4, katana 4; known 2 and 2 of 3; time ×0.56 of the reference, memory ×0.29 of the reference (213 MB against 737 MB) | azhaq crawl -u https://ginandjuice.shop/ -depth 3 -silent -hints -rate 5 vs katana -u https://ginandjuice.shop/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10 -rl 5"
+    },
+    {
+      "name": "[polite] crawl ginandjuice.shop: time ≤ 1.05× the reference's",
+      "pass": true,
+      "detail": "azhaq 11.6s, reference 20.6s (the median of 3 below 20 s, one run above) | azhaq crawl -u https://ginandjuice.shop/ -depth 3 -silent -hints -rate 5 vs katana -u https://ginandjuice.shop/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10 -rl 5"
+    }
+  ],
+  "runs": [
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 12.316624563,
+      "rss_mb": 249.28515625,
+      "anon_mb": 205.71484375,
+      "profile": "default"
+    },
+    {
+      "tool": "katana",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 13.923669738,
+      "rss_mb": 957.05078125,
+      "anon_mb": 921.76171875,
+      "profile": "default"
+    },
+    {
+      "tool": "jsluice",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 1.127107082,
+      "rss_mb": 140.09375,
+      "anon_mb": 130.1328125,
+      "profile": "default"
+    },
+    {
+      "tool": "ffuf",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 0.255011439,
+      "rss_mb": 14.52734375,
+      "anon_mb": 6.06640625,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 2.212494353,
+      "rss_mb": 226.51171875,
+      "anon_mb": 183.3515625,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 2.138834461,
+      "rss_mb": 220.66015625,
+      "anon_mb": 177.2890625,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 2.108096125,
+      "rss_mb": 211.7578125,
+      "anon_mb": 168.60546875,
+      "profile": "default"
+    },
+    {
+      "tool": "katana",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 13.772601572,
+      "rss_mb": 1412.84765625,
+      "anon_mb": 1377.80859375,
+      "profile": "default"
+    },
+    {
+      "tool": "katana",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 13.821096488,
+      "rss_mb": 1430.2265625,
+      "anon_mb": 1395.4375,
+      "profile": "default"
+    },
+    {
+      "tool": "katana",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 13.807945145,
+      "rss_mb": 1186.93359375,
+      "anon_mb": 1152.0234375,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "roles",
+      "seconds": 24.239302915,
+      "rss_mb": 286.5625,
+      "anon_mb": 243.421875,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "roles-login",
+      "seconds": 33.798267073,
+      "rss_mb": 276.90625,
+      "anon_mb": 233.2421875,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 14.557332872,
+      "rss_mb": 268.89453125,
+      "anon_mb": 225.75390625,
+      "profile": "default"
+    },
+    {
+      "tool": "katana",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 8.005233279,
+      "rss_mb": 75.11328125,
+      "anon_mb": 38.640625,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 11.196200237,
+      "rss_mb": 277.78515625,
+      "anon_mb": 234.64453125,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 1.758209032,
+      "rss_mb": 247.921875,
+      "anon_mb": 204.83203125,
+      "profile": "default"
+    },
+    {
+      "tool": "katana",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 10.569938333,
+      "rss_mb": 49.3515625,
+      "anon_mb": 15.24609375,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 0.554828053,
+      "rss_mb": 185.36328125,
+      "anon_mb": 142.296875,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 0.550227464,
+      "rss_mb": 190.859375,
+      "anon_mb": 147.7578125,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 0.563739408,
+      "rss_mb": 190.9453125,
+      "anon_mb": 147.83984375,
+      "profile": "default"
+    },
+    {
+      "tool": "katana",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 10.575911152,
+      "rss_mb": 49.2890625,
+      "anon_mb": 15.37109375,
+      "profile": "default"
+    },
+    {
+      "tool": "katana",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 10.570068603,
+      "rss_mb": 48.8671875,
+      "anon_mb": 15.19921875,
+      "profile": "default"
+    },
+    {
+      "tool": "katana",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 10.63013869,
+      "rss_mb": 49.21484375,
+      "anon_mb": 15.484375,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "https://ginandjuice.shop/",
+      "seconds": 255.653288471,
+      "rss_mb": 249.17578125,
+      "anon_mb": 203.69140625,
+      "profile": "default"
+    },
+    {
+      "tool": "katana",
+      "target": "https://ginandjuice.shop/",
+      "seconds": 20.733899413,
+      "rss_mb": 736.6015625,
+      "anon_mb": 701.3828125,
+      "profile": "default"
+    },
+    {
+      "tool": "jsluice",
+      "target": "https://ginandjuice.shop/",
+      "seconds": 0.233302993,
+      "rss_mb": 48.88671875,
+      "anon_mb": 41.10546875,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "https://ginandjuice.shop/",
+      "seconds": 11.609109568000001,
+      "rss_mb": 199.22265625,
+      "anon_mb": 153.9453125,
+      "profile": "default"
+    },
+    {
+      "tool": "katana",
+      "target": "https://ginandjuice.shop/",
+      "seconds": 20.746576047,
+      "rss_mb": 760.4765625,
+      "anon_mb": 725.12890625,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 17.160287217,
+      "rss_mb": 205.0234375,
+      "anon_mb": 161.64453125,
+      "profile": "polite"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 17.157101151,
+      "rss_mb": 201.375,
+      "anon_mb": 158.0234375,
+      "profile": "polite"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 17.155367293,
+      "rss_mb": 224.484375,
+      "anon_mb": 181.328125,
+      "profile": "polite"
+    },
+    {
+      "tool": "katana",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 16.585935485,
+      "rss_mb": 1428.890625,
+      "anon_mb": 1393.4765625,
+      "profile": "polite"
+    },
+    {
+      "tool": "katana",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 16.587661679,
+      "rss_mb": 1683.23046875,
+      "anon_mb": 1648.37890625,
+      "profile": "polite"
+    },
+    {
+      "tool": "katana",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 16.593850377,
+      "rss_mb": 1682.10546875,
+      "anon_mb": 1646.8828125,
+      "profile": "polite"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 0.731239949,
+      "rss_mb": 190.4765625,
+      "anon_mb": 147.3828125,
+      "profile": "polite"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 0.738032628,
+      "rss_mb": 182.44140625,
+      "anon_mb": 139.33984375,
+      "profile": "polite"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 0.731434699,
+      "rss_mb": 190.65625,
+      "anon_mb": 147.5546875,
+      "profile": "polite"
+    },
+    {
+      "tool": "katana",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 10.41475345,
+      "rss_mb": 49.46875,
+      "anon_mb": 15.23828125,
+      "profile": "polite"
+    },
+    {
+      "tool": "katana",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 10.418021248,
+      "rss_mb": 49.21484375,
+      "anon_mb": 15.109375,
+      "profile": "polite"
+    },
+    {
+      "tool": "katana",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 10.414838235,
+      "rss_mb": 49.39453125,
+      "anon_mb": 15.3515625,
+      "profile": "polite"
+    },
+    {
+      "tool": "azhaq",
+      "target": "https://ginandjuice.shop/",
+      "seconds": 11.579575914,
+      "rss_mb": 213.2265625,
+      "anon_mb": 167.95703125,
+      "profile": "polite"
+    },
+    {
+      "tool": "katana",
+      "target": "https://ginandjuice.shop/",
+      "seconds": 20.559330911,
+      "rss_mb": 736.625,
+      "anon_mb": 701.08984375,
+      "profile": "polite"
+    }
+  ],
+  "units": [
+    {
+      "name": "default:apps",
+      "checks": 21,
+      "runs": 28
+    },
+    {
+      "name": "polite:apps",
+      "checks": 6,
+      "runs": 14
+    }
+  ]
+}
