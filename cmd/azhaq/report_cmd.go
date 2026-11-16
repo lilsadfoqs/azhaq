@@ -130,7 +130,7 @@ type reportNotes struct {
 //	azhaq report -findings -db WORKSPACE.db [-format jsonl|md] [-o FILE]
 func cmdReport(args []string) error {
 	fs := newFlags("report")
-	findings := fs.Bool("findings", false, "write the findings records of a workspace instead of roles reports, in three tiers counted apart: findings (proven rows, each with its request, the excerpt of the answer, the stage that found it and a command that reproduces it), identifications (a product and version, with the advisory match where there is one) and leads (inferred from a name, a path or a guess, each with the check that would prove it); a workspace with no qualifying rows writes an explicit empty record set and exits 0")
+	findings := fs.Bool("findings", false, "write the findings records of a workspace instead of roles reports, in three tiers counted apart: findings (rows whose own answer shows the thing named, each with its request, the excerpt of the answer, the stage that found it and a command that reproduces it), identifications (a product and version, with the advisory match where there is one) and leads (inferred from a name, a path or a guess, each with the check that would prove it); a workspace with no qualifying rows writes an explicit empty record set and exits 0")
 	db := fs.String("db", "", "with -findings: the workspace database the records are read from")
 	dir := fs.String("dir", "", "the -dir of the roles run (it holds "+evidenceFile+")")
 	target := fs.String("url", "", "write up this one row (its URL as roles lists it); every cross-role finding by default")
