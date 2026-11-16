@@ -66,6 +66,7 @@ type IndexVuln struct {
 	Cond     int      `json:"c,omitempty"` // CondPlatform and CondEdition: what the version alone cannot settle
 	Ranges   []string `json:"r,omitempty"`
 	Versions []string `json:"v,omitempty"`
+	Comp     []string `json:"n,omitempty"` // what the record's own CNA names as affected, when none of it is this product (the first two)
 }
 
 // IndexProduct is one product line of an index.
@@ -332,6 +333,7 @@ func advisoryOf(cpe string, v IndexVuln) (Advisory, Affected, error) {
 	if v.Cond != 0 {
 		adv.Precondition = condText(v.Cond, v.Plat)
 	}
+	adv.Component = strings.Join(v.Comp, ", ")
 	aff := Affected{Package: Package{Name: cpe, Ecosystem: "cpe"}, Versions: v.Versions}
 	for _, r := range v.Ranges {
 		rng, err := ParseIndexRange(r)
@@ -368,7 +370,7 @@ func MatchIndex(services []Service, ix *Index) ([]Lead, error) {
 				lead := leadFor(svc, adv, aff)
 				lead.KEV, lead.CVSS, lead.Source = v.KEV, v.CVSS, label
 				if i, dup := at[v.ID]; dup {
-					if labelRank(lead.Label) < labelRank(out[i].Label) {
+					if stronger(lead, out[i]) {
 						out[i] = lead
 					}
 					continue

@@ -419,3 +419,19 @@ func TestScanFindsElasticsearchTransport(t *testing.T) {
 		t.Errorf("a silent 9300 is guessed %q", g)
 	}
 }
+
+func TestRealmProduct(t *testing.T) {
+	for realm, want := range map[string]string{
+		"ActiveMQRealm":       "ActiveMQ",
+		"RabbitMQ Management": "RabbitMQ",
+		"Artifactory Realm":   "Artifactory",
+		"Grafana":             "Grafana", // a title rule read as a realm
+		"Restricted":          "",
+		"Please log in":       "",
+		"admin area ActiveMQ": "", // whole string, as a title is matched
+	} {
+		if got := RealmProduct(realm); got != want {
+			t.Errorf("%q: %q, want %q", realm, got, want)
+		}
+	}
+}

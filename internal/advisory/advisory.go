@@ -90,6 +90,9 @@ type Advisory struct {
 	Precondition string            `json:"azhaq_precondition,omitempty"`
 	ConfirmPath  string            `json:"azhaq_confirm_path,omitempty"`
 	Specific     map[string]string `json:"database_specific,omitempty"`
+	// Component is what the record's own CNA names as affected when it is not
+	// the product the record was matched under (an index record only).
+	Component string `json:"-"`
 }
 
 // URL is the advisory's own page: its first web reference, else the
@@ -304,9 +307,10 @@ type Lead struct {
 	AffectedRange string   `json:"affected_range"`
 	Label         string   `json:"label"` // affected, not affected or conditional
 	Precondition  string   `json:"precondition,omitempty"`
-	KEV           bool     `json:"kev,omitempty"`    // CISA lists the advisory as exploited in the wild
-	CVSS          float64  `json:"cvss,omitempty"`   // the base score the record states
-	Source        string   `json:"source,omitempty"` // the built-in index (with its date), when the record came from it
+	Component     string   `json:"component,omitempty"` // what the record's own CNA names as affected, when it is not this product
+	KEV           bool     `json:"kev,omitempty"`       // CISA lists the advisory as exploited in the wild
+	CVSS          float64  `json:"cvss,omitempty"`      // the base score the record states
+	Source        string   `json:"source,omitempty"`    // the built-in index (with its date), when the record came from it
 	// A lead is one service: the fields above are those of its top advisory
 	// (the exploited and best scored of those that apply), and these hold
 	// the whole list, so nothing is lost by listing one line a service.
@@ -348,6 +352,9 @@ func (l Lead) Line() string {
 	}
 	if l.CVSS > 0 {
 		s += fmt.Sprintf("; CVSS %.1f", l.CVSS)
+	}
+	if l.Component != "" {
+		s += fmt.Sprintf("; the record's own CNA names %s, not %s (ranked after the advisories that name it)", l.Component, l.Product)
 	}
 	switch {
 	case l.Precondition != "":
@@ -450,7 +457,7 @@ func leadFor(svc Service, adv Advisory, aff Affected) Lead {
 		Target: svc.Target(), Host: firstNonEmpty(svc.Host, svc.IP), Port: svc.Port,
 		Address: svc.Address(), Names: svc.Names, Proto: svc.Proto, AlsoSeen: svc.AlsoSeen,
 		Service: svc.Service, Product: svc.Product, VersionSeen: svc.Version,
-		AffectedRange: ranges, Origin: svc.Origin,
+		AffectedRange: ranges, Origin: svc.Origin, Component: adv.Component,
 	}
 	if p := adv.confirmPath(); p != "" {
 		lead.ConfirmReq = "GET " + p
@@ -483,8 +490,9 @@ func labelRank(l string) int {
 }
 
 // sortLeads orders leads by target, then affected, conditional and not
-// affected, the exploited ones and the higher scores first, then by
-// advisory id.
+// affected, the ones that name the product before those whose record names
+// another (Lead.Component), the exploited ones and the higher scores first,
+// then by advisory id.
 func sortLeads(out []Lead) {
 	sort.Slice(out, func(i, j int) bool {
 		if out[i].Target != out[j].Target {
@@ -492,6 +500,9 @@ func sortLeads(out []Lead) {
 		}
 		if ri, rj := labelRank(out[i].Label), labelRank(out[j].Label); ri != rj {
 			return ri < rj
+		}
+		if ci, cj := out[i].Component != "", out[j].Component != ""; ci != cj {
+			return !ci
 		}
 		if out[i].KEV != out[j].KEV {
 			return out[i].KEV

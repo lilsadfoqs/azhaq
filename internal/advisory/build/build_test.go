@@ -311,3 +311,94 @@ func TestBuildNamesTakeTheBestSource(t *testing.T) {
 		t.Errorf("ambiguous names %v", res.Report.AmbiguousNames)
 	}
 }
+
+// A record whose own CNA names another product than the one it is filed
+// under keeps that name; a record whose CNA names the product, names it under
+// another spelling, or names nothing ("n/a") keeps none, and another source's
+// list of affected products is not the record's own.
+func TestBuildKeepsTheComponentTheCNANames(t *testing.T) {
+	rec := func(id, aff string) string {
+		return `{"cve":{"id":"` + id + `","sourceIdentifier":"cna@curl.se","vulnStatus":"Analyzed","affected":[` + aff + `],"configurations":[{"nodes":[{"cpeMatch":[` +
+			`{"vulnerable":true,"criteria":"cpe:2.3:a:apache:http_server:2.4.1:*:*:*:*:*:*:*"},` +
+			`{"vulnerable":true,"criteria":"cpe:2.3:a:mongodb:mongodb:4.0.0:*:*:*:*:*:*:*"}]}]}]}}`
+	}
+	data := func(source, vendor, product string) string {
+		return `{"source":"` + source + `","affectedData":[{"vendor":"` + vendor + `","product":"` + product + `","versions":[{"version":"n/a","status":"affected"}]}]}`
+	}
+	res, err := withFeed(t, strings.Join([]string{
+		rec("CVE-2021-0030", data("cna@curl.se", "curl", "libcurl")),
+		rec("CVE-2021-0031", data("cna@curl.se", "n/a", "n/a")),
+		rec("CVE-2021-0032", data("cna@curl.se", "Apache Software Foundation", "Apache HTTP Server")+","+data("cna@curl.se", "curl", "libcurl")),
+		rec("CVE-2021-0033", data("someone@else.org", "curl", "libcurl")),
+		rec("CVE-2021-0034", ""),
+	}, ","))
+	if err != nil {
+		t.Fatal(err)
+	}
+	httpd, mongo := product(res, "apache:http_server"), product(res, "mongodb:mongodb")
+	for id, want := range map[string][]string{
+		"CVE-2021-0030": {"libcurl"}, // another product than either of the two it is filed under
+		"CVE-2021-0031": nil,         // n/a says nothing
+		"CVE-2021-0033": nil,         // not the record's own CNA
+		"CVE-2021-0034": nil,         // no statement at all
+	} {
+		for _, p := range []advisory.IndexProduct{httpd, mongo} {
+			if v, ok := vuln(p, id); !ok || !slices.Equal(v.Comp, want) {
+				t.Errorf("%s under %s: component %v, want %v", id, p.CPE, v.Comp, want)
+			}
+		}
+	}
+	// The CNA names httpd and libcurl: it is httpd's own record, and mongodb's is not.
+	if v, _ := vuln(httpd, "CVE-2021-0032"); len(v.Comp) != 0 {
+		t.Errorf("a record that names the product: %v", v.Comp)
+	}
+	if v, _ := vuln(mongo, "CVE-2021-0032"); !slices.Equal(v.Comp, []string{"Apache HTTP Server", "libcurl"}) {
+		t.Errorf("mongodb under a record of httpd and libcurl: %v", v.Comp)
+	}
+}
+
+func TestNamesProduct(t *testing.T) {
+	for _, c := range []struct {
+		name, vendor, product string
+		want                  bool
+	}{
+		{"MySQL Server", "oracle", "mysql_server", true},
+		{"Apache HTTP Server", "apache", "http_server", true},
+		{"OpenSSH", "openbsd", "openssh", true},
+		{"BIG-IP", "f5", "big-ip_access_policy_manager", true},
+		{"Advantech", "advantech", "r-seenet", true}, // the vendor alone says nothing of the product
+		{"MySQL Server", "mariadb", "mariadb", false},
+		{"libcurl", "oracle", "mysql_server", false},
+		{"Apache Log4j2", "cisco", "finesse", false},
+		{"xstream", "apache", "activemq", false},
+	} {
+		if got := namesProduct(c.name, c.vendor, c.product); got != c.want {
+			t.Errorf("%q for %s:%s: %v, want %v", c.name, c.vendor, c.product, got, c.want)
+		}
+	}
+}
+
+// A name of generic words alone ("server", "core") names no product, and a
+// name whose words are all the vendor's or the product's is the product.
+func TestGenericNamesNameNoComponent(t *testing.T) {
+	for _, c := range []struct {
+		name, vendor, product string
+		comp                  bool
+	}{
+		{"server", "mariadb", "mariadb", false},
+		{"Core", "dnn", "dnn", false},
+		{"XI", "nagios", "nagios_xi", false},
+		{"n/a", "x", "y", false},
+		{"Red Hat Enterprise Linux 9", "openbsd", "openssh", false}, // a distribution is what it is packaged in
+		{"Windows SMB", "samba", "samba", false},
+		{"libcurl", "mariadb", "mariadb", true},
+	} {
+		got := otherComponent(cnaProducts(nvdCVE{SourceID: "s", Affected: []nvdAffected{{Source: "s", Data: []struct {
+			Vendor  string `json:"vendor"`
+			Product string `json:"product"`
+		}{{Product: c.name}}}}}), c.vendor, c.product)
+		if (len(got) > 0) != c.comp {
+			t.Errorf("%q for %s:%s: %v", c.name, c.vendor, c.product, got)
+		}
+	}
+}

@@ -355,3 +355,17 @@ func TestFindingsKeepAHandshakeKind(t *testing.T) {
 		t.Errorf("markdown %q", md)
 	}
 }
+
+// Among the advisories of one listener, the ones whose record names the
+// product come before one whose record names another component, whatever its
+// score or KEV flag; the record's component is on the line.
+func TestFindingsRankAnotherComponentAfterTheProductsOwn(t *testing.T) {
+	own := findingRecord{Kind: "software-version", Label: "version-only", Host: "h", Port: 3306, AdvisoryID: "CVE-2000-0002", CVSS: 6.5, Product: "MySQL"}
+	lib := findingRecord{Kind: "software-version", Label: "version-only", Host: "h", Port: 3306, AdvisoryID: "CVE-2000-0001", CVSS: 9.8, KEV: true, Product: "MySQL", Component: "libclient"}
+	if !findingLess(own, lib) || findingLess(lib, own) {
+		t.Errorf("the library's record ranks before the product's own")
+	}
+	if line := findingMarkdown(lib); !strings.Contains(line, "the record's own CNA names libclient, not MySQL") {
+		t.Errorf("line %q", line)
+	}
+}

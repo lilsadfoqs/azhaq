@@ -18,6 +18,7 @@ const (
 	SourceGenerator = "generator"
 	SourcePowered   = "header X-Powered-By"
 	SourceServer    = "header Server"
+	SourceRealm     = "header WWW-Authenticate realm"
 	SourceTech      = "technology"
 	SourceDetect    = "detection template"
 	// SourceDetectOne is a template written for one product; it is shown as SourceDetect.
@@ -66,7 +67,8 @@ func detectedRow(o types.StoredObservation) (page string, found []detected, ok b
 // pageApps are the applications the root page of each name:port names about
 // itself, one service for each name:port and product: from its <title> (the
 // title rules the port scan reads a page with), its generator meta tag, an
-// X-Powered-By or Server header, or the technologies wappalyzer found in it.
+// X-Powered-By or Server header, a WWW-Authenticate realm, or the technologies
+// wappalyzer found in it.
 // A version is only what one of them stated; Source says which.
 //
 // Only application-level products are kept: wappalyzer's categories tell a
@@ -85,6 +87,7 @@ func pageApps(obs []types.StoredObservation) []pageApp {
 			Title     string            `json:"title"`
 			Generator string            `json:"generator"`
 			Server    string            `json:"server"`
+			Realm     string            `json:"realm"`
 			Headers   map[string]string `json:"headers"`
 			Tech      []string          `json:"tech"`
 			Detected  []detected        `json:"detected"`
@@ -141,6 +144,11 @@ func pageApps(obs []types.StoredObservation) []pageApp {
 		if row.Server != "" {
 			if p, v := portscan.HeaderProduct(row.Server); p != "" {
 				add(p, v, SourceServer, "Server: "+row.Server)
+			}
+		}
+		if row.Realm != "" {
+			if p := portscan.RealmProduct(row.Realm); p != "" {
+				add(p, "", SourceRealm, `WWW-Authenticate realm="`+row.Realm+`"`)
 			}
 		}
 		for _, t := range row.Tech {
@@ -219,7 +227,7 @@ func categoriesOf(product string) []string {
 }
 
 // classify says what a product a page named by source is. A title and a
-// generator are the page's own word for what it is: an application unless the
+// generator are the page's own word for what it is, and so is a realm: an application unless the
 // data says it is a server. X-Powered-By names the framework app, and so a
 // language runtime too. A Server header names the web server, unless the data
 // says the product is an application. A technology is an application only by
@@ -240,7 +248,7 @@ func classify(product, source string) appClass {
 		return plain
 	}
 	switch source {
-	case SourceTitle, SourceGenerator:
+	case SourceTitle, SourceGenerator, SourceRealm:
 		return app
 	case SourcePowered:
 		if isLang || len(cats) == 0 {
