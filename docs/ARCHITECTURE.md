@@ -1456,7 +1456,7 @@ It scans hosts in scope with full TCP connects. So it needs no root, and it leav
 
 - **Ports.** The lists are nmap's top 100 or top 1000 TCP ports, as naabu ships them, `full`, or ranges.
 - **Rate.** Connection attempts share one rate across all hosts. `-port-rate` sets it, 1500 per second by default, which is naabu's for a connect scan. This machine's loopback is not paced unless a rate is given.
-- **Concurrency.** As many connects are in flight as the rate allows, up to 20,000 and the process's file limit (`-port-workers`). Each connect gets 1.5 seconds (`-port-timeout`).
+- **Concurrency.** As many connects are in flight as the rate allows, up to 20,000 and the process's file limit (`-port-workers`). A connect waits at most 1.5 seconds (`-port-timeout`); unless one is given, the wait follows the address's measured round trip (at least 250 ms) once 16 of its connects have been answered.
 - **Addresses.** A name resolves to at most two IPv4 and two IPv6 addresses, with the A and AAAA queries only. `-port-all-ips` takes all, and `-port-ip 4|6` takes one family. Each address is scanned once, however many names point to it.
 - **Order.** The ports of a host are asked in tiers with `-port-order random`: nmap's top 100, the rest of its top 1000, and the others. Each tier is shuffled by a seed.
 - **Retries.** A port that did not answer is asked again by the rule of `-port-retries`.

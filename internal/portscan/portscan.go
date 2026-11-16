@@ -279,6 +279,7 @@ func (s *Scanner) init() {
 		if s.runSeed == 0 {
 			s.runSeed = time.Now().UnixNano()
 		}
+		adaptive := s.Timeout <= 0 // not asked for: the wait follows the round trip
 		if s.Timeout <= 0 {
 			s.Timeout = 1500 * time.Millisecond
 		}
@@ -287,6 +288,9 @@ func (s *Scanner) init() {
 		}
 		s.limiter = limit.New(s.Rate, max(1, int(s.Rate/10)))
 		s.pd = egress.NewPortDialer(s.Timeout, s.SourceIP, s.Proxy, s.ProxyAuth)
+		if adaptive {
+			s.pd.Adapt()
+		}
 	})
 }
 
@@ -485,13 +489,13 @@ func (s *Scanner) pass(ctx context.Context, host, ip string, ports []int, found 
 	// batched: the batch is connected by one poll on one goroutine, and only
 	// a port that accepted gets a goroutine of its own, to be named.
 	batched := k > 1 && s.pd.CanBatch(ip)
-	connect := func(idx []int) {
+	connect := func(idx []int, addrs []string) {
 		ps := make([]int, len(idx))
 		for j, i := range idx {
 			ps[j] = ports[i]
 		}
 		var closed []int // refused: nothing to keep but the progress, noted once below
-		s.pd.TCPBatch(ctx, host, ip, ps, func(j int, c net.Conn, rtt time.Duration, err error) {
+		s.pd.TCPBatchAddrs(ctx, host, ip, ps, addrs, func(j int, c net.Conn, rtt time.Duration, err error) {
 			i := idx[j]
 			if err != nil {
 				if state := s.failed(ctx, err); state == portClosed && prog != nil {
@@ -528,8 +532,9 @@ func (s *Scanner) pass(ctx context.Context, host, ip string, ports []int, found 
 		if len(batch) == 0 {
 			return
 		}
+		var addrs []string
 		if k > 1 {
-			addrs := make([]string, len(batch))
+			addrs = make([]string, len(batch))
 			for j, i := range batch {
 				addrs[j] = net.JoinHostPort(ip, strconv.Itoa(ports[i]))
 			}
@@ -540,7 +545,7 @@ func (s *Scanner) pass(ctx context.Context, host, ip string, ports []int, found 
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				connect(idx)
+				connect(idx, addrs)
 			}()
 			batch = batch[:0]
 			return
@@ -672,6 +677,9 @@ func selfConnect(c net.Conn) bool {
 // refused says a failed dial was an answer: nothing listens. Through a
 // proxy the refusal is the proxy's text.
 func refused(err error) bool {
+	if err == egress.ErrRefused {
+		return true // the batch's own: unwrapping it allocated twice for each port
+	}
 	var pe *egress.ProxyError
 	if errors.As(err, &pe) {
 		return false // the proxy was not reached: nothing was asked of the port
@@ -693,6 +701,9 @@ func (s *Scanner) probe(ctx context.Context, host, ip string, port int) (Open, p
 // failed is what a connect that did not connect says of its port: refused
 // (closed), no answer within the timeout, or no answer either way.
 func (s *Scanner) failed(ctx context.Context, err error) portState {
+	if err == egress.ErrRefused {
+		return portClosed
+	}
 	var pe *egress.ProxyError
 	if errors.As(err, &pe) && ctx.Err() == nil {
 		s.mu.Lock()

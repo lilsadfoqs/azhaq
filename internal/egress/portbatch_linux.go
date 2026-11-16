@@ -26,10 +26,6 @@ var issue = make(chan struct{}, issueWidth)
 // shorten a full range of loopback and cost more CPU.
 const issueWidth = 4
 
-// errRefused is what each refused connect of a batch says; it holds no
-// address, as the error each carried before held none.
-var errRefused error = &net.OpError{Op: "dial", Net: "tcp", Err: os.NewSyscallError("connect", syscall.ECONNREFUSED)}
-
 // CanBatch says TCPBatch can connect to ip: the scan's connects go direct
 // (not through a proxy) and ip is a plain address.
 func (d *PortDialer) CanBatch(ip string) bool {
@@ -48,6 +44,12 @@ func (d *PortDialer) CanBatch(ip string) bool {
 // the error (a refusal wraps ECONNREFUSED, a timeout is a net.Error that says
 // so) and how long the connect took.
 func (d *PortDialer) TCPBatch(ctx context.Context, host, ip string, ports []int, done func(i int, c net.Conn, rtt time.Duration, err error)) {
+	d.TCPBatchAddrs(ctx, host, ip, ports, nil, done)
+}
+
+// TCPBatchAddrs is TCPBatch for a caller that has the ip:port of each port
+// already (addrs, or nil): the strings are not made twice.
+func (d *PortDialer) TCPBatchAddrs(ctx context.Context, host, ip string, ports []int, addrs []string, done func(i int, c net.Conn, rtt time.Duration, err error)) {
 	// What a connection is then written is listed in the ledger, probe by probe.
 	opened := done
 	done = func(i int, c net.Conn, rtt time.Duration, err error) {
@@ -72,11 +74,28 @@ func (d *PortDialer) TCPBatch(ctx context.Context, host, ip string, ports []int,
 		i, fd int
 		at    time.Time
 	}
-	var wait []pending
-	var fds []unix.PollFd
+	// Sized for the whole batch: growing them took a third of the batch's allocations.
+	wait := make([]pending, 0, len(ports))
+	fds := make([]unix.PollFd, 0, len(ports)+1)
+	// One sockaddr for the batch: Connect copies it out at once.
+	var dst func(int) syscall.Sockaddr
+	if ap.Is4() {
+		sa := &syscall.SockaddrInet4{Addr: ap.As4()}
+		dst = func(port int) syscall.Sockaddr { sa.Port = port; return sa }
+	} else {
+		dst = func(port int) syscall.Sockaddr { return sockaddr(ap, port) }
+	}
+	// The wait for a silent port follows the answers of ip (see Adapt).
+	model := d.model(ip)
+	limit := func() time.Duration {
+		if model != nil && d.timeout > 0 {
+			return model.wait(d.timeout)
+		}
+		return d.timeout
+	}
 	fail := func(i int, op string, err error) {
 		if err == syscall.ECONNREFUSED && op == "connect" {
-			done(i, nil, 0, errRefused) // the answer of nearly every port of a range
+			done(i, nil, 0, ErrRefused) // the answer of nearly every port of a range
 			return
 		}
 		done(i, nil, 0, &net.OpError{Op: "dial", Net: "tcp", Err: os.NewSyscallError(op, err)})
@@ -90,9 +109,11 @@ func (d *PortDialer) TCPBatch(ctx context.Context, host, ip string, ports []int,
 		}
 	}
 	defer endIssue()
-	addrs := make([]string, len(ports))
-	for i, port := range ports {
-		addrs[i] = net.JoinHostPort(ip, itoa(port))
+	if addrs == nil {
+		addrs = make([]string, len(ports))
+		for i, port := range ports {
+			addrs[i] = net.JoinHostPort(ip, itoa(port))
+		}
 	}
 	var gotBuf [64]bool
 	got := gotBuf[:0]
@@ -138,14 +159,21 @@ func (d *PortDialer) TCPBatch(ctx context.Context, host, ip string, ports []int,
 			ledger.TCP(ctx, host, addr) // the socket is about to connect(2)
 		}
 		at := time.Now()
-		switch err := syscall.Connect(fd, sockaddr(ap, port)); err {
+		switch err := syscall.Connect(fd, dst(port)); err {
 		case nil:
-			d.opened(fd, time.Since(at), i, done)
+			rtt := time.Since(at)
+			if model != nil {
+				model.add(rtt)
+			}
+			d.opened(fd, rtt, i, done)
 		case syscall.EINPROGRESS, syscall.EALREADY, syscall.EINTR:
 			wait = append(wait, pending{i, fd, at})
 			fds = append(fds, unix.PollFd{Fd: int32(fd), Events: unix.POLLOUT})
 		default:
 			syscall.Close(fd)
+			if model != nil && err == syscall.ECONNREFUSED {
+				model.add(time.Since(at))
+			}
 			fail(i, "connect", err)
 		}
 	}
@@ -167,10 +195,15 @@ func (d *PortDialer) TCPBatch(ctx context.Context, host, ip string, ports []int,
 	// Every connect of a batch is given the dialer's timeout from its own start.
 	for len(wait) > 0 {
 		ms := -1
-		if d.timeout > 0 {
-			rest := time.Until(wait[0].at.Add(d.timeout))
+		tmo := limit()
+		if tmo > 0 {
+			rest := time.Until(wait[0].at.Add(tmo))
 			ms = int((rest + time.Millisecond - 1) / time.Millisecond)
 			ms = max(ms, 0)
+			if model != nil {
+				// Other batches add answers while this one waits, and the wait follows them.
+				ms = min(ms, rttRecheckMs)
+			}
 		}
 		n, err := unix.Poll(fds, ms)
 		if err != nil && err != syscall.EINTR {
@@ -201,11 +234,17 @@ func (d *PortDialer) TCPBatch(ctx context.Context, host, ip string, ports []int,
 					fail(w.i, "getsockopt", gerr)
 				case e != 0:
 					syscall.Close(w.fd)
+					if model != nil && e == int(syscall.ECONNREFUSED) {
+						model.add(now.Sub(w.at))
+					}
 					fail(w.i, "connect", syscall.Errno(e))
 				default:
+					if model != nil {
+						model.add(now.Sub(w.at))
+					}
 					d.opened(w.fd, now.Sub(w.at), w.i, done)
 				}
-			case d.timeout > 0 && now.Sub(w.at) >= d.timeout:
+			case tmo > 0 && now.Sub(w.at) >= tmo:
 				syscall.Close(w.fd)
 				done(w.i, nil, 0, &net.OpError{Op: "dial", Net: "tcp", Err: os.ErrDeadlineExceeded})
 			default:

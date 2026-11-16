@@ -108,7 +108,7 @@ func cmdPorts(args []string) error {
 	ipv := fs.String("iv", "", "the address families of a name to scan: 4 or 6 (default both)")
 	allIPs := fs.Bool("sa", false, "scan every address of a name, not the first two of each family")
 	var connect msDuration
-	fs.Var(&connect, "connect-timeout", "wait this long for one port to accept or refuse a connect: 1500, 1500ms or 2s (default 1.5s; -timeout is the run's limit)")
+	fs.Var(&connect, "connect-timeout", "wait this long for one port to accept or refuse a connect: 1500, 1500ms or 2s (default: up to 1.5s, less once an address's answers show its round trip; one given is waited in full; -timeout is the run's limit)")
 	retries := fs.Int("retries", -1, "more passes over the ports that neither accepted nor refused: n passes over all of them, 0 none (default: one, when few did not answer)")
 	fs.IntVar(retries, "max-retries", -1, "same as -retries")
 	workers := fs.Int("workers", 0, "connects in flight at once, over all hosts (default: as many as the rate allows, up to 20000)")
