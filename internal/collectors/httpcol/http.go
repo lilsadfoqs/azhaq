@@ -60,6 +60,9 @@ type Collector struct {
 	NoFavicon bool
 	// NoTech skips technology fingerprints (about 30 MB of memory).
 	NoTech bool
+	// NoProductReads: the run asks no product checks (-no-paths), so an icon's
+	// name is not read for either.
+	NoProductReads bool
 	// Probe answers like httpx: one request per service, no catch-all
 	// check (nothing is crawled from it).
 	Probe bool
@@ -791,7 +794,11 @@ func (c *Collector) fetchFirst(ctx context.Context, raw string, rq *fetch.Req, f
 				// The favicon templates hash /favicon.ico's body: the icon is that body, wherever it was found.
 				if rows := detect.Rows(detect.Match(detect.Response{Path: "/favicon.ico", Status: http.StatusOK, Header: http.Header{}, Body: icon})); len(rows) > 0 {
 					have, _ := row["detected"].([]map[string]string)
-					row["detected"] = detect.MergeRows(have, rows)
+					merged := detect.MergeRows(have, rows)
+					if c.Spec == nil && !c.Probe {
+						c.confirmIcons(ctx, final, merged[len(have):])
+					}
+					row["detected"] = merged
 				}
 			}
 			if c.Spec != nil {

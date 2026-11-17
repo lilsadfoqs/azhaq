@@ -162,6 +162,8 @@ A row is a **finding** when one of its signals is shown by what was received, an
 
 An **identification** is a listener the run named: a product, and a version or none. It is not proven: the label says how far a read settled its advisory.
 
+A product named only by the hash of an icon is not an identification but a lead (`favicon: favicon matches X or Y (hash …); asked: X: GET /path answered 404 …`), keyed `host:port`, with no version and no advisory. It ranks below every identification, and its `check` says what would settle it. [Product checks](run.md#product-checks) says what makes it one.
+
 `hunt` lists the findings first, then the identifications, then the leads, each group by score. In the identifications, a version seen comes before none seen, and a `proved` label before `version-read`, and that before `version-only`. Each lead carries `check`, what an answer must show for it to be a finding.
 
 ### Score and order

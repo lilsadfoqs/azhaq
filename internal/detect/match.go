@@ -36,6 +36,9 @@ type Hit struct {
 	// Many: the template names many products, this one by its matcher
 	// (tech-detect, fingerprinthub): a library or a CDN as well as an app.
 	Many bool
+	// Icon: the hash of an image is all that matched. A lead to read of the
+	// product itself, not a name the answer states.
+	Icon bool
 }
 
 // Stats describes the loaded data.
@@ -121,9 +124,12 @@ func Match(r Response) []Hit {
 
 // index holds the compiled units grouped by request path.
 type index struct {
-	groups map[string]*group
-	side   *side // the literal index of every group but the root's
-	memo   scanMemo
+	confirm map[string][]string // product key → the paths of its own templates, see ConfirmPaths
+	// confirmKeys are those keys in template order, so that the paths come out in it too.
+	confirmKeys []string
+	groups      map[string]*group
+	side        *side // the literal index of every group but the root's
+	memo        scanMemo
 }
 
 // side is one literal index over the needles of all the groups but the
@@ -277,6 +283,7 @@ type cunit struct {
 	spec *Unit
 	ms   []*cmatcher
 	xs   []*cextractor
+	icon bool // iconUnit: a hash of the body is its only evidence
 }
 
 // cmatcher is small until it first runs (there are 68,000 of them): what
@@ -302,9 +309,11 @@ type cextractor struct {
 func build(d *Data) *index {
 	idx := &index{groups: map[string]*group{}}
 	byPath := map[string][]*cunit{}
+	all := make([]*cunit, 0, len(d.Units))
 	for i := range d.Units {
 		u := &d.Units[i]
-		cu := &cunit{spec: u}
+		cu := &cunit{spec: u, icon: iconUnit(u)}
+		all = append(all, cu)
 		for j := range u.Matchers {
 			cu.ms = append(cu.ms, &cmatcher{spec: &u.Matchers[j]})
 		}
@@ -319,6 +328,7 @@ func build(d *Data) *index {
 			}
 		}
 	}
+	idx.confirm, idx.confirmKeys = confirmPaths(all)
 	sb := &sideBuilder{b: newACBuilder(), ids: map[string]int32{}}
 	for p, units := range byPath {
 		if p == "/" {
@@ -511,7 +521,7 @@ func (idx *index) match(r Response) []Hit {
 		}
 		hits = append(hits, Hit{
 			Product: prod, Version: versionOf(x), Template: u.spec.ID,
-			Matcher: name, Extracted: x, Many: many,
+			Matcher: name, Extracted: x, Many: many, Icon: u.icon,
 		})
 	}
 

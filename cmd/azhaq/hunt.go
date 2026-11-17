@@ -120,6 +120,7 @@ func huntRows(g *graphView, path string, roles []hunt.RoleRow, since time.Durati
 	withRoles.roles = roles
 	set := buildFindings(&withRoles)
 	in.Listeners = listenersOf(set)
+	in.Leads = iconLeads(set)
 	for _, r := range set.Findings {
 		switch {
 		case r.Kind == danglingKind:
