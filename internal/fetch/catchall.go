@@ -256,6 +256,7 @@ type fingerprint struct {
 	words    int
 	size     int
 	keys     string // a JSON answer's top-level fields; "" for anything else
+	echo     bool   // an error page or a redirect that names the path asked, in its body or Location
 }
 
 var titleRE = lazyre.New(`(?is)<title[^>]*>(.*?)</title>`)
@@ -393,8 +394,28 @@ func catchAllVerdict(ctx context.Context, c *http.Client, res Result) (shell, ju
 		return false, false, nil
 	}
 	ctl = b.control()
-	ctl.Exact = b.fp.status == fp.status && (isRedirect(fp.status) && b.fp.location == fp.location || !isRedirect(fp.status) && (b.fp.hash == fp.hash || b.fp.raw == fp.raw))
-	return b.fp.matches(fp), true, ctl
+	ctl.Exact = b.exact(fp)
+	if b.fp.matches(fp) {
+		return true, true, ctl
+	}
+	// An answer that names its own path may be the catch-all of the prefix it
+	// opens (/api answers like /api/<random>) though not of the directory it
+	// is in: that prefix is asked once, for this and every path under it.
+	if fp.echo {
+		own := strings.TrimSuffix(path, "/") + "/"
+		if pb := baselineFor(ctx, c, origin, own); pb != nil && pb != b && pb.ok && strings.HasPrefix(pb.url, origin+own) && pb.fp.matches(fp) {
+			pc := pb.control()
+			pc.Exact = pb.exact(fp)
+			return true, true, pc
+		}
+	}
+	return false, true, ctl
+}
+
+// exact says fp is this baseline's answer byte for byte once the path each
+// asked is taken out, not by shape.
+func (b *baseline) exact(fp fingerprint) bool {
+	return b.fp.status == fp.status && (isRedirect(fp.status) && b.fp.location == fp.location || !isRedirect(fp.status) && (b.fp.hash == fp.hash || b.fp.raw == fp.raw))
 }
 
 // rootShell: a page byte for byte the site root's answer for an unknown
@@ -481,7 +502,15 @@ func requestTarget(u *url.URL) string {
 }
 
 func fingerprintOf(res Result, origin, target string) fingerprint {
-	return fingerprintBy(res, origin, func(s string) string { return stripEcho(s, origin, target) })
+	fp := fingerprintBy(res, origin, func(s string) string { return stripEcho(s, origin, target) })
+	loc := ""
+	if res.Header != nil {
+		loc = strings.TrimPrefix(res.Header.Get("Location"), origin)
+	}
+	// A redirect to its own path with a slash is a directory, not a catch-all.
+	dir := isRedirect(res.Status) && (loc == target+"/" || loc == strings.TrimSuffix(target, "/")+"/")
+	fp.echo = !dir && res.Status >= 300 && (fp.hash != fp.raw || fp.location != loc)
+	return fp
 }
 
 // SamePage says whether two answers, of two origins, are the same page

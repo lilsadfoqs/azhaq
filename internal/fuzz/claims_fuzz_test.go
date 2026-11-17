@@ -87,8 +87,9 @@ func (s *keepSender) Send(_ context.Context, req *Request, keep bool) (*Response
 }
 
 // With -ac on, answers are read into memory until calibration is done (and
-// for the whole run with -ach, or when a page shape was learned); without it
-// they are only counted.
+// for the whole run with -ach, when a page shape was learned, or when the
+// keyword ends the URL's path, where a match may be the catch-all of the
+// prefix it opens); without it they are only counted.
 func TestAnswersAreReadIntoMemoryOnlyWhileCalibrationNeedsThem(t *testing.T) {
 	same := func(*Request) *Response {
 		return &Response{Status: 200, Header: http.Header{}, Length: 100, Words: 10, Lines: 3, Body: []byte("<html><title>x</title></html>")}
@@ -123,10 +124,15 @@ func TestAnswersAreReadIntoMemoryOnlyWhileCalibrationNeedsThem(t *testing.T) {
 		{"calibrated on a size", func(c *Config) { c.Calibrate = true }, same, 7, 5}, // the 6 guesses and the answer that came first
 		{"calibrated per host", func(c *Config) { c.Calibrate = true; c.Set.PerHost = true }, same, 12, 0},
 		{"a page shape learned", func(c *Config) { c.Calibrate = true }, changing(), 12, 0},
+		{"the keyword ends the path", func(c *Config) {
+			c.Calibrate = true
+			c.Template, _ = NewTemplate("", "http://h.test/FUZZ", "", nil, nil)
+		}, same, 12, 0},
 	} {
 		s := &keepSender{reply: c.reply}
 		runFake(t, &fake{hook: func(*Request) (*Response, error) { return nil, nil }}, func(cfg *Config) {
 			cfg.Threads, cfg.Sender = 1, s
+			cfg.Template, _ = NewTemplate("", "http://h.test/p?q=FUZZ", "", nil, nil) // the path does not end with the keyword
 			c.mut(cfg)
 		})
 		if k, d := count(s.keeps, true), count(s.keeps, false); k != c.kept || d != c.dropped {

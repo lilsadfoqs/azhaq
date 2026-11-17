@@ -169,3 +169,68 @@ func TestDirsAgainstFfufAcOnACatchAllDirectory(t *testing.T) {
 		}
 	}
 }
+
+// A local app answers the shell for the root and a 500 page that names the
+// path asked under /api and /rest: dirs folds /api, /api/v1 and
+// /rest/user/login as the catch-all of the prefix each opens, with a control
+// asked there (one for /api/ and /api/v1), counted in the requests; run -dirs
+// folds the same; a route that answers 500 with a page of its own stays.
+func prefixEchoApp(t *testing.T, asked *atomic.Int64) *httptest.Server {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if asked != nil {
+			asked.Add(1)
+		}
+		p := r.URL.Path
+		switch {
+		case p == "/api/real":
+			w.WriteHeader(500)
+			fmt.Fprintf(w, "<title>Error</title><h1>the database is down at %s</h1>", p)
+		case p == "/api" || p == "/rest" || strings.HasPrefix(p, "/api/") || strings.HasPrefix(p, "/rest/"):
+			w.WriteHeader(500)
+			fmt.Fprintf(w, "<title>Error: Unexpected path: %s</title><h1>Error: Unexpected path: %s</h1>", p, p)
+		default:
+			fmt.Fprint(w, "<html><title>App</title><body>the same shell for every route</body></html>")
+		}
+	}))
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+func TestDirsFoldsAnErrorPageThatNamesItsPath(t *testing.T) {
+	var asked atomic.Int64
+	srv := prefixEchoApp(t, &asked)
+	wl := wlist(t, "api", "api/v1", "rest/user/login", "api/real", "nothing")
+	out, errOut, err := captureBoth(t, func() error {
+		return cmdDirs([]string{"-u", srv.URL + "/", "-w", wl, "-ledger", "off"})
+	})
+	if err != nil {
+		t.Fatalf("%v\n%s", err, errOut)
+	}
+	if lines := strings.Split(strings.TrimSpace(out), "\n"); len(lines) != 1 || !strings.Contains(out, srv.URL+"/api/real ") {
+		t.Errorf("only /api/real is listed: %q", out)
+	}
+	if !strings.Contains(errOut, "folded catchall: 2 URLs of "+srv.URL+"/api/ answer as the control does: GET /api/") ||
+		!strings.Contains(errOut, "folded catchall: 1 URL of "+srv.URL+"/rest/user/login/ answer as the control does") {
+		t.Errorf("the folds are not in the summary:\n%s", errOut)
+	}
+	// 5 words, 4 calibration names, and a control for /api/, /api/real/ and /rest/user/login/.
+	if got := asked.Load(); got != 5+4+3 {
+		t.Errorf("%d requests", got)
+	}
+
+	out, errOut, err = captureBoth(t, func() error {
+		return cmdRun([]string{"-url", srv.URL + "/", "-dirs", wl, "-no-paths", "-ledger", "off", "-db", t.TempDir() + "/r.db"})
+	})
+	if err != nil {
+		t.Fatalf("%v\n%s", err, errOut)
+	}
+	for _, p := range []string{"/api ", "/api/v1 ", "/rest/user/login "} {
+		if strings.Contains(out, srv.URL+p) {
+			t.Errorf("%s is folded in run: %s", p, out)
+		}
+	}
+	if !strings.Contains(out, srv.URL+"/api/real ") {
+		t.Errorf("/api/real stays in run: %s", out)
+	}
+}

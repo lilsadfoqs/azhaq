@@ -1,10 +1,13 @@
 package fuzz
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"net/url"
 	"strings"
+
+	"github.com/lilsadfoqs/azhaq/internal/fetch"
 )
 
 // ControlRef is the request calibration (-ac) made for a name that cannot
@@ -78,4 +81,81 @@ func (e *engine) sameAsControl(r *Response, req *Request) *ControlRef {
 		}
 	}
 	return nil
+}
+
+// prefixAnswer is what a name asked under a match's own path answered: the
+// control of the prefix that match opens.
+type prefixAnswer struct {
+	status int
+	free   string // sum of the body with the path asked taken out; empty: no answer
+}
+
+// prefixTemplate says a match opens a directory: the keyword ends the path of
+// the URL, so word/<random> is a path under it.
+func prefixTemplate(t Template, keyword string) bool {
+	path, _, _ := strings.Cut(t.URL, "?")
+	path, _, _ = strings.Cut(path, "#")
+	return strings.HasSuffix(path, keyword) && strings.Count(t.URL, keyword) == 1 &&
+		!strings.Contains(t.Method+t.Data, keyword)
+}
+
+// pathFree is the sum of the body with the path of requestURL taken out, in
+// the forms an error page echoes it; ok is false when the body does not name it.
+func pathFree(requestURL string, body []byte) (sum string, ok bool) {
+	s := string(body)
+	free := fetch.EchoFree(requestURL, s)
+	if free == s {
+		return "", false
+	}
+	h := sha256.Sum256([]byte(free))
+	return hex.EncodeToString(h[:8]), true
+}
+
+// prefixCatchAll says a match is the catch-all of the prefix it opens: its
+// answer names its own path and, with that taken out, is the answer of a
+// control asked at input/<random>, with the control's path taken out too. The
+// control is measured, one for each prefix, and kept for the matches under it;
+// the budget refusing it, or its failing, leaves the match listed. A match
+// that is already the same as a calibration answer says so by its control.
+func (e *engine) prefixCatchAll(ctx context.Context, t Template, input map[string]string, req *Request, r *Response) bool {
+	if !e.cfg.Calibrate || !e.prefixOK.Load() || r.Body == nil || r.Status < 300 || !prefixTemplate(t, e.cfg.CalKeyword) {
+		return false
+	}
+	if r.Status >= 300 && r.Status < 400 && fetch.EchoFree(req.URL, r.Header.Get("Location")) == "\x00/" {
+		return false // a directory: it redirects to its own path with a slash
+	}
+	free, ok := pathFree(req.URL, r.Body)
+	if !ok || e.sameAsControl(r, req) != nil {
+		return false
+	}
+	e.prefixMu.Lock()
+	defer e.prefixMu.Unlock()
+	own := req.URL + "/"
+	for p, a := range e.prefixes {
+		if strings.HasPrefix(own, p) && a.free != "" && a.status == r.Status && a.free == free {
+			return true
+		}
+	}
+	if e.prefixes[own] != nil || ctx.Err() != nil || e.stop.Load() {
+		return false
+	}
+	a := &prefixAnswer{}
+	e.prefixes[own] = a
+	in := make(map[string]string, len(input))
+	for k, v := range input {
+		in[k] = v
+	}
+	in[e.cfg.CalKeyword] = input[e.cfg.CalKeyword] + "/" + randomName(12)
+	creq := t.Expand(in)
+	if !e.inScope(&creq) || e.denied(&creq) {
+		return false
+	}
+	resp, err := e.send(ctx, &creq)
+	if err != nil {
+		return false
+	}
+	if cfree, ok := pathFree(creq.URL, resp.Body); ok {
+		a.status, a.free = resp.Status, cfree
+	}
+	return a.free != "" && a.status == r.Status && a.free == free
 }

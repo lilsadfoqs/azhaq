@@ -157,6 +157,7 @@ type Stats struct {
 	Filters     []string          // what calibration added, "size 1234"
 	NotRepeated int               // inputs not sent: a write the killed run this one goes on from had sent
 	Held        int               // matches held back for looking like the page names that cannot exist get
+	PrefixHeld  int               // matches held back for being the catch-all of the prefix they open
 	Unfiltered  bool              // calibration asked and could filter nothing: wildcard answers are listed
 	StoppedBy   string            // a guard of the run that ended it (-sf, -sa)
 	Replayed    int               // matches sent through the replay proxy
@@ -199,6 +200,9 @@ type engine struct {
 	shapes     map[string][]calShape      // by the same key: pages the calibration answers had in common
 	wantBody   atomic.Bool                // answers are read into memory, for calibration's page shape
 	controls   map[string][]controlAnswer // by the same key: what each calibration request answered
+	prefixMu   sync.Mutex
+	prefixes   map[string]*prefixAnswer // by the URL a match opened as a directory: its control
+	prefixOK   atomic.Bool              // the keyword ends the URL's path: a match opens a prefix
 
 	outMu sync.Mutex // Stats, results and the queue
 	stats Stats
@@ -230,7 +234,7 @@ func Run(ctx context.Context, cfg Config) Stats {
 	if cfg.Progress == nil {
 		cfg.Progress = new(Progress)
 	}
-	e := &engine{cfg: cfg, downOrigs: map[string]bool{}, calibrated: map[string]bool{}, shapes: map[string][]calShape{}, controls: map[string][]controlAnswer{}}
+	e := &engine{cfg: cfg, downOrigs: map[string]bool{}, calibrated: map[string]bool{}, shapes: map[string][]calShape{}, controls: map[string][]controlAnswer{}, prefixes: map[string]*prefixAnswer{}}
 	e.wantBody.Store(cfg.Calibrate)
 	e.calGroups = cfg.CalGroups
 	if len(e.calGroups) == 0 {
@@ -530,6 +534,8 @@ func (e *engine) task(ctx context.Context, j job, tmpl Template, input map[strin
 	matched := e.cfg.Set.Matches(resp)
 	if matched && e.likeCalibration(resp, &req) {
 		e.count(func(s *Stats) { s.Held++ })
+	} else if matched && e.prefixCatchAll(ctx, tmpl, input, &req, resp) {
+		e.count(func(s *Stats) { s.PrefixHeld++ })
 	} else if matched {
 		e.replay(ctx, &req)
 		e.emit(resp, &req, j.n)
@@ -813,7 +819,8 @@ func (e *engine) calibrate(ctx context.Context, t Template, input map[string]str
 	e.shapeMu.RLock()
 	shaped := len(e.shapes[key]) > 0
 	e.shapeMu.RUnlock()
-	if !shaped && !e.cfg.Set.PerHost {
+	e.prefixOK.Store(prefixTemplate(t, e.cfg.CalKeyword))
+	if !shaped && !e.cfg.Set.PerHost && !e.prefixOK.Load() {
 		e.wantBody.Store(false) // nothing reads the bodies after this
 	}
 }

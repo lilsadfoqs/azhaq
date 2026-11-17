@@ -481,7 +481,7 @@ func (c *Collector) sweep(ctx context.Context, dir string, note *sweepNote, foun
 	var hits []hit
 	var filtered, nfailed, nlimited atomic.Int64
 	var out, halt atomic.Bool
-	var inDirs []exactHit // hits for words in a directory of their own, judged when the sweep is through
+	var inDirs []exactHit // hits in a directory of their own, and those that name their path, judged when the sweep is through
 	var inDirsMu sync.Mutex
 	pending := make(chan hit, maxPending)
 	written := make(chan struct{})
@@ -519,7 +519,7 @@ func (c *Collector) sweep(ctx context.Context, dir string, note *sweepNote, foun
 	ask := func(word string, position int) error {
 		target := dir + escapeWord(word)
 		nested := !c.Opts.NoCalibration && inOwnDir(word)
-		r, err := c.get(ctx, target, "", len(cal.shapes) > 0, nested)
+		r, err := c.get(ctx, target, "", len(cal.shapes) > 0, !c.Opts.NoCalibration)
 		if errors.Is(err, neterr.ErrBudget) {
 			out.Store(true)
 		}
@@ -547,9 +547,9 @@ func (c *Collector) sweep(ctx context.Context, dir string, note *sweepNote, foun
 		if c.Opts.KeepDir != "" {
 			h.File, h.FileCut = c.keepAnswer(r)
 		}
-		if nested {
+		if nested || !c.Opts.NoCalibration && r.echoes() && !isDir(h) {
 			inDirsMu.Lock()
-			inDirs = append(inDirs, exactHit{h, r})
+			inDirs = append(inDirs, exactHit{h, r, nested})
 			inDirsMu.Unlock()
 			return nil
 		}
@@ -729,10 +729,19 @@ func Base(raw string) string {
 	return u.Scheme + "://" + u.Host + dirPath(u.Path)
 }
 
-// exactHit is a hit with the answer it got.
+// exactHit is a hit with the answer it got, and whether its word is in a
+// directory of its own.
 type exactHit struct {
-	hit hit
-	r   response
+	hit    hit
+	r      response
+	nested bool
+}
+
+// echoes says the answer is an error page or a redirect that names the path it
+// was asked for, in its body or its Location: such a page is the same page for
+// another path. A 2xx page that does (a canonical link) is a page of its own.
+func (r response) echoes() bool {
+	return r.Status >= 300 && (r.Free != "" && r.Free != r.Sum || r.Loc != "" && r.Loc != r.Location)
 }
 
 // inOwnDir says a word names a path in a directory of its own (api/users),
@@ -762,7 +771,11 @@ func dirOf(target string) string {
 func (c *Collector) judgeInDirs(ctx context.Context, host string, hs []exactHit, note *sweepNote, out, halt *atomic.Bool) []hit {
 	byDir := map[string][]int{}
 	var dirs []string
+	ctls := map[string]*prefixControl{} // by the directory (or prefix) each was asked under
 	for i, h := range hs {
+		if !h.nested {
+			continue
+		}
 		d := dirOf(h.hit.URL)
 		if _, ok := byDir[d]; !ok {
 			dirs = append(dirs, d)
@@ -792,15 +805,106 @@ func (c *Collector) judgeInDirs(ctx context.Context, host string, hs []exactHit,
 			continue
 		}
 		note.controls.Add(1)
-		ref := &fetch.Control{URL: target, Status: ctl.Status, Size: ctl.Length}
+		pc := &prefixControl{ref: &fetch.Control{URL: target, Status: ctl.Status, Size: ctl.Length}, r: ctl}
+		ctls[d] = pc
 		for _, i := range idx {
 			if ctl.sameAs(hs[i].r) {
-				out2[i].Control = ref
+				out2[i].Control = pc.ref
 				note.folded.Add(1)
 			}
 		}
 	}
+	c.judgePrefixes(ctx, host, hs, out2, ctls, note, out, halt)
 	return out2
+}
+
+// prefixControl is a control asked under a directory or a prefix, and what it
+// answered; r is empty when it failed, and no other hit asks it again.
+type prefixControl struct {
+	ref *fetch.Control
+	r   response
+}
+
+// judgePrefixes folds the hits whose answer names their own path (an error
+// page: Unexpected path: /api) and, with that path taken out, is the answer
+// of a control asked under the prefix they open (/api/<random> for /api),
+// with the control's own path taken out too. One control is asked for each
+// prefix, and is reused for the hits under it, the controls of the
+// directories above included; none is asked for a hit that is already folded.
+// A control the budget refuses, or that fails, leaves its hits as they are.
+func (c *Collector) judgePrefixes(ctx context.Context, host string, hs []exactHit, out2 []hit, ctls map[string]*prefixControl, note *sweepNote, out, halt *atomic.Bool) {
+	var todo []int
+	for i, h := range hs {
+		if out2[i].Control == nil && h.r.echoes() && !isDir(h.hit) {
+			todo = append(todo, i)
+		}
+	}
+	// The shorter prefix first: its control may answer for the longer ones.
+	slices.SortStableFunc(todo, func(a, b int) int { return len(hs[a].hit.URL) - len(hs[b].hit.URL) })
+	for _, i := range todo {
+		own := ownPrefix(hs[i].hit.URL)
+		if own == "" {
+			continue
+		}
+		for d := own; d != ""; d = upDir(d) {
+			if pc := ctls[d]; pc != nil && pc.ref != nil && pc.r.sameAs(hs[i].r) {
+				out2[i].Control = pc.ref
+				note.folded.Add(1)
+				break
+			}
+		}
+		if out2[i].Control != nil || ctls[own] != nil || ctx.Err() != nil || out.Load() || halt.Load() {
+			continue
+		}
+		name := fetch.ProbeName("dirs control " + own)
+		target := own + name
+		pc := &prefixControl{}
+		ctls[own] = pc
+		if c.pace(ctx, host, target) != nil {
+			continue
+		}
+		ctl, err := c.get(ctx, target, name, false, true)
+		if errors.Is(err, neterr.ErrBudget) {
+			out.Store(true)
+		}
+		if err != nil {
+			note.lose(ctx, err)
+			continue
+		}
+		note.controls.Add(1)
+		pc.ref, pc.r = &fetch.Control{URL: target, Status: ctl.Status, Size: ctl.Length}, ctl
+		if ctl.sameAs(hs[i].r) {
+			out2[i].Control = pc.ref
+			note.folded.Add(1)
+		}
+	}
+}
+
+// ownPrefix is the directory a hit opens: its URL without the query, and
+// with a slash at the end (/api → /api/).
+func ownPrefix(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" {
+		return ""
+	}
+	return u.Scheme + "://" + u.Host + strings.TrimSuffix(u.EscapedPath(), "/") + "/"
+}
+
+// upDir is the directory above one that ends in a slash, "" at the host's root.
+func upDir(d string) string {
+	i := strings.Index(d, "://")
+	if i < 0 {
+		return ""
+	}
+	root := i + 3 + strings.IndexByte(d[i+3:], '/') + 1 // after the host's slash
+	if len(d) <= root {
+		return ""
+	}
+	j := strings.LastIndex(d[:len(d)-1], "/")
+	if j+1 < root {
+		return ""
+	}
+	return d[:j+1]
 }
 
 // sameAs says r is the answer c is, byte for byte: the same status and the

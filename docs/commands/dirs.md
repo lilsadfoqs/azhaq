@@ -82,6 +82,18 @@ When two or more hits are found in the same directory, `dirs` asks one name that
 - `-ac=false` asks no control: every hit is listed. `azhaq run -dirs` folds the same hits in its map, in the line of its catch-all fold.
 - Hits that answer 403 or 404 fold the same way: only when the directory's control answered them byte for byte.
 
+### An error page that names its path
+
+An app may answer an unknown root path with its shell and everything under `/api` or `/rest` with an error page that carries the path asked (`Error: Unexpected path: /api/x`, in the title and the heading). `/api` is in the directory the sweep calibrated, so the shell is its control there, and the page of `/api` is not the shell.
+
+A hit that answers with an error or a redirect (status 300 and above) and names its own path (in the body or the `Location`, as it was asked, HTML-escaped or URL-encoded) gets a control of its own, asked once the sweep is through: a name that cannot exist under the hit's path (`/api/<random>` for `/api`, `/api/v1/<random>` for `/api/v1`). When the answer of the hit, with its own path replaced by a placeholder, is the answer of the control, with the control's path replaced the same way (the same status and the same bytes, or the same `Location` for a redirect: the rule above, no looser), the hit is that prefix's catch-all. It is folded and counted like the other folded hits, with the control in the summary line (`folded catchall: 2 URLs of http://app/api/ answer as the control does: GET /api/k2x9 → 500, 130 bytes`).
+
+- One control for each prefix. A hit under a prefix that already has a control is compared with it first (the control of `/api/` answers for `/api/v1`), and the control of a directory above counts too; only a hit it does not fold asks its own.
+- The control is measured, never taken from a status: a route that answers 500 with a page of its own, even one that names its path, answers differently from the control of its prefix and stays listed.
+- A hit whose answer does not name its path asks nothing more, and neither does a directory: a redirect to its own path with a slash. A page that answers 2xx asks none either: a real page names its own path in a canonical link or a menu, and one that answered like a path that cannot exist is the calibration's.
+- The controls are requests like the others: they count in `requests` and in the summary's `controls`, go in the ledger and in `-max-requests`, and are paced by `-rate`.
+- `-ac=false` asks no control. `azhaq run -dirs` folds the same hits in its map, and the paths `run` asks (its path stage and the links it follows) fold an answer that names its path the same way, by the control of the prefix it opens. [`fuzz -ac`](fuzz.md#calibration) holds such a match back when the keyword ends the URL's path.
+
 ## Details
 
 ### What a match is
