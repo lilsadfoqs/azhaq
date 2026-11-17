@@ -89,7 +89,7 @@ func BenchmarkProductChecks(b *testing.B) {
 								}
 							}
 						}()
-						col := &Collector{Client: srv.Client(), Wordlist: DefaultWordlist, ProductChecks: checks}
+						col := &Collector{Client: fetch.Client(srv.Client()), Wordlist: DefaultWordlist, ProductChecks: checks}
 						c0, t0 := cpuTime(), time.Now()
 						_, err := col.Run(context.Background(), types.Seed{Type: types.TypeURL, Keys: map[string]string{"url": srv.URL + "/"}}, func(types.Observation) error { return nil })
 						wall += time.Since(t0)

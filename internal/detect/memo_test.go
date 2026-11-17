@@ -1,6 +1,7 @@
 package detect
 
 import (
+	"bytes"
 	"fmt"
 	"net/http"
 	"strings"
@@ -156,5 +157,34 @@ func TestSideScansHeadersAndBoundary(t *testing.T) {
 	}
 	if with.memo.hit.Load() == 0 {
 		t.Error("the memo never hit")
+	}
+}
+
+// A hash of the body that several paths ask for is worked out once for a
+// page that answers them all, and an answer with another body is judged by
+// its own.
+func TestBodyHashIsKeptForTheBody(t *testing.T) {
+	page := page(8 << 10)
+	want := Mmh3String(base64Py(page))
+	expr := "mmh3(base64_py(body)) == '" + want + "'"
+	var units []Unit
+	for _, p := range []string{"/a", "/b", "/c"} {
+		units = append(units, Unit{ID: "icon" + p, Product: "Icon" + p, Paths: []string{p},
+			Matchers: []Matcher{{Type: "dsl", Vals: []string{expr}}}})
+	}
+	idx := testIndex(t, units...)
+	for i, p := range []string{"/a", "/b", "/c", "/a"} {
+		hdr := http.Header{"X-Request-Id": {fmt.Sprint(i)}}
+		if hits := idx.match(Response{Path: p, Status: 200, Header: hdr, Body: page}); len(hits) != 1 {
+			t.Fatalf("%s: %d hits for the page whose hash it asks", p, len(hits))
+		}
+	}
+	other := append(bytes.Clone(page), "<!-- another page -->"...)
+	if hits := idx.match(Response{Path: "/a", Status: 200, Header: http.Header{}, Body: other}); len(hits) != 0 {
+		t.Errorf("a page with another hash was named: %v", hits)
+	}
+	e := idx.memo.entry(page)
+	if e == nil || len(e.vals) != 1 || e.vals["mmh3(base64_py(body))"].s != want {
+		t.Errorf("the body's memo is %+v", e)
 	}
 }
