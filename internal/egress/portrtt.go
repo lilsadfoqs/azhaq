@@ -70,3 +70,8 @@ func (d *PortDialer) model(ip string) *rttModel {
 	m, _ := d.rtts.LoadOrStore(ip, &rttModel{})
 	return m.(*rttModel)
 }
+
+// SimulateLoss makes the batched connects of d for which drop is true go
+// unanswered, as a SYN lost on the way is: a stand-in for a lossy path in
+// tests, which loopback cannot give. Set it before the scan.
+func (d *PortDialer) SimulateLoss(drop func(ip string, port int) bool) { d.loss = drop }

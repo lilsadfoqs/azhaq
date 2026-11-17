@@ -81,6 +81,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 - None of the built-in collectors is in `source_queries_not_counted`. A connector may be.
 - With `-sources none` no collector that asks a third party is in the plan (`azhaq-subdomains`, `azhaq-urls`, `azhaq-rdap`, `azhaq-search`), `source_queries` is none, and `sends` begins with a line that says no third party is asked.
 - `sends` has a line `DNS queries to …` that names the resolvers the run asks (the default public ones, or the ones `-resolvers` gives) and what it asks them: the names found, and, for a range or an AS, the reverse names (PTR) of the addresses that answer. Without `-resolvers` it says that the reverse name of a loopback, private or link-local address is kept off the default resolvers and asked of the system's resolver instead. It says too that a name in a zone the root zone does not delegate (`.internal`, `.lan`, `.corp`) or under `home.arpa` is kept off them and asked of the system's resolver instead.
+- The text has a `pace:` line with the pace of each stage. The connects of a run with no `-rate` or `-port-rate` read `adaptive from 1500/s up to 20000/s`: they start at the first and rise to the second while answers come back in time. Datagrams stay at 1500/s. A `time:` line says how long a long port scan takes at the start rate and the least at the ceiling, when the scan is of an address beyond this machine and the start rate takes a minute or more: 16,776,960 connects (a /24 at every port) take about 3.1 h at 1500/s and at least 14 min at 20000/s. With a fixed pace, the line says the least time it takes.
 - For a domain in a zone the root zone does not delegate (`corp.internal`, `nas.lan`) or under `home.arpa`, `source_queries` counts nothing: no subdomain source, archive, RDAP service or search engine is asked about it.
 - `found_domains_asked` is about domains found on the way. They are asked about inside the scope. Without a scope, they are asked about within `-depth`.
 
@@ -334,12 +335,12 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 | `-port-discover` | string |  | ask first whether an address is up, by a connect to 80 and 443: first (scan the ones that answer) or only (list them, scan nothing) | rarely needed |
 | `-port-exclude-cdn` | bool |  | ask a CDN or WAF address only ports 80, 443, 8080 and 8443 (naabu -ec asks 80 and 443; this adds 8080 and 8443) | rarely needed |
 | `-port-ip` | string |  | the address families of a name to scan: 4 or 6 (default both) | rarely needed |
-| `-port-min-rate` | float |  | port connection attempts per second at least, as nmap's --min-rate: raises the pace to this when the pace (-port-rate, or the default 1500) is lower, and never lowers it | rarely needed |
+| `-port-min-rate` | float |  | port connection attempts per second at least, as nmap's --min-rate: raises the pace to this when the pace (-port-rate, or the default's start of 1500) is lower, and never lowers it; at or under 1500 it is the least the default's adaptive pace backs off to | rarely needed |
 | `-port-order` | string | `random` | the order a host's ports are asked in: random (the likeliest ports first, each tier shuffled) or asc | rarely needed |
 | `-port-payload` | string |  | send this to each open TCP port before reading what it says (\r and \n are CR and LF) | rarely needed |
 | `-port-proxy` | string |  | connect to TCP ports through this SOCKS5 proxy (host:port); a port is then asked its banner only, and UDP is not sent | rarely needed |
 | `-port-proxy-auth` | string |  | user:password for -port-proxy | rarely needed |
-| `-port-rate` | float |  | port connection attempts per second, a ceiling (0: 1500, as naabu's connect scan, and 127.0.0.1 unpaced) | rarely needed |
+| `-port-rate` | float |  | port connection attempts per second, a fixed ceiling (0: adaptive from 1500 up to 20000 as the answers allow, and 127.0.0.1 unpaced) | rarely needed |
 | `-port-retries` | int | `-1` | more passes over the ports that neither accepted nor refused: n passes over all of them, 0 none (default: one, when few did not answer) | rarely needed |
 | `-port-seed` | int |  | make the random port order repeat (0: a new one each run) | rarely needed |
 | `-port-skip` | string |  | TCP ports never asked, in any pass: a list as -ports reads it, such as 25,9000-9010 (what ports -ep passes) | rarely needed |

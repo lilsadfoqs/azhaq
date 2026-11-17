@@ -93,9 +93,11 @@ func (d *PortDialer) TCPBatchAddrs(ctx context.Context, host, ip string, ports [
 		}
 		return d.timeout
 	}
-	fail := func(i int, op string, err error) {
+	// rtt is how long a refusal took: the answer's round trip, which the
+	// scanner's pace follows. Any other failure has none.
+	fail := func(i int, op string, err error, rtt time.Duration) {
 		if err == syscall.ECONNREFUSED && op == "connect" {
-			done(i, nil, 0, ErrRefused) // the answer of nearly every port of a range
+			done(i, nil, rtt, ErrRefused) // the answer of nearly every port of a range
 			return
 		}
 		done(i, nil, 0, &net.OpError{Op: "dial", Net: "tcp", Err: os.NewSyscallError(op, err)})
@@ -144,14 +146,14 @@ func (d *PortDialer) TCPBatchAddrs(ctx context.Context, host, ip string, ports [
 		fd, err := syscall.Socket(family, syscall.SOCK_STREAM|syscall.SOCK_NONBLOCK|syscall.SOCK_CLOEXEC, 0)
 		if err != nil {
 			Refund()
-			fail(i, "socket", err)
+			fail(i, "socket", err, 0)
 			continue
 		}
 		if local != nil {
 			if err := syscall.Bind(fd, local); err != nil {
 				syscall.Close(fd)
 				Refund()
-				fail(i, "bind", err)
+				fail(i, "bind", err, 0)
 				continue
 			}
 		}
@@ -159,6 +161,12 @@ func (d *PortDialer) TCPBatchAddrs(ctx context.Context, host, ip string, ports [
 			ledger.TCP(ctx, host, addr) // the socket is about to connect(2)
 		}
 		at := time.Now()
+		if d.dropped(ip, port) {
+			syscall.Close(fd)
+			wait = append(wait, pending{i, -1, at}) // poll skips a negative fd: it ends by its timeout
+			fds = append(fds, unix.PollFd{Fd: -1, Events: unix.POLLOUT})
+			continue
+		}
 		switch err := syscall.Connect(fd, dst(port)); err {
 		case nil:
 			rtt := time.Since(at)
@@ -171,10 +179,11 @@ func (d *PortDialer) TCPBatchAddrs(ctx context.Context, host, ip string, ports [
 			fds = append(fds, unix.PollFd{Fd: int32(fd), Events: unix.POLLOUT})
 		default:
 			syscall.Close(fd)
+			rtt := time.Since(at)
 			if model != nil && err == syscall.ECONNREFUSED {
-				model.add(time.Since(at))
+				model.add(rtt)
 			}
-			fail(i, "connect", err)
+			fail(i, "connect", err, rtt)
 		}
 	}
 	endIssue()
@@ -209,7 +218,7 @@ func (d *PortDialer) TCPBatchAddrs(ctx context.Context, host, ip string, ports [
 		if err != nil && err != syscall.EINTR {
 			for _, w := range wait {
 				syscall.Close(w.fd)
-				fail(w.i, "poll", err)
+				fail(w.i, "poll", err, 0)
 			}
 			return
 		}
@@ -231,13 +240,13 @@ func (d *PortDialer) TCPBatchAddrs(ctx context.Context, host, ip string, ports [
 				switch {
 				case gerr != nil:
 					syscall.Close(w.fd)
-					fail(w.i, "getsockopt", gerr)
+					fail(w.i, "getsockopt", gerr, 0)
 				case e != 0:
 					syscall.Close(w.fd)
 					if model != nil && e == int(syscall.ECONNREFUSED) {
 						model.add(now.Sub(w.at))
 					}
-					fail(w.i, "connect", syscall.Errno(e))
+					fail(w.i, "connect", syscall.Errno(e), now.Sub(w.at))
 				default:
 					if model != nil {
 						model.add(now.Sub(w.at))
@@ -259,6 +268,8 @@ func (d *PortDialer) TCPBatchAddrs(ctx context.Context, host, ip string, ports [
 		fds = kfds
 	}
 }
+
+func (d *PortDialer) dropped(ip string, port int) bool { return d.loss != nil && d.loss(ip, port) }
 
 // opened makes the net.Conn of a connected socket (FileConn dups it, so the
 // socket is closed after).

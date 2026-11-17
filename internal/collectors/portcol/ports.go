@@ -134,6 +134,8 @@ func New(pool *dnsr.Pool, ports []int, rate float64) *Collector {
 	c := &Collector{Pool: pool, Ports: ports, Scanner: &portscan.Scanner{Rate: rate, Take: egress.TakeSweep, Give: egress.Refund, UserAgent: fetch.UserAgent},
 		byIP: map[string]*scan{}, maxIP: 2}
 	c.Scanner.Opened = c.holdWeb
+	// A -host-rate given is a ceiling the default pace does not rise over.
+	c.Scanner.Ceiling = fetch.HostRate()
 	return c
 }
 
