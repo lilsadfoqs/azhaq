@@ -136,6 +136,9 @@ type Result struct {
 	// the -ac answer this one is the same as, when it is.
 	Matched []Match     `json:"matched,omitempty"`
 	Control *ControlRef `json:"control,omitempty"`
+	// Prefix: Control is the answer of a name asked under the match's own
+	// path, not a calibration answer: the match is its prefix's catch-all.
+	Prefix bool `json:"-"`
 	// Truncated: the body was a stream that never ends, cut by the read.
 	Truncated bool `json:"truncated,omitempty"`
 }
@@ -157,6 +160,7 @@ type Stats struct {
 	Filters     []string          // what calibration added, "size 1234"
 	NotRepeated int               // inputs not sent: a write the killed run this one goes on from had sent
 	Held        int               // matches held back for looking like the page names that cannot exist get
+	PrefixHit   int               // matches listed, labelled: the answer of a name under their own path too
 	Unfiltered  bool              // calibration asked and could filter nothing: wildcard answers are listed
 	StoppedBy   string            // a guard of the run that ended it (-sf, -sa)
 	Replayed    int               // matches sent through the replay proxy
@@ -199,6 +203,9 @@ type engine struct {
 	shapes     map[string][]calShape      // by the same key: pages the calibration answers had in common
 	wantBody   atomic.Bool                // answers are read into memory, for calibration's page shape
 	controls   map[string][]controlAnswer // by the same key: what each calibration request answered
+	prefixMu   sync.Mutex
+	prefixes   map[string]*prefixAnswer // by the URL a match opened as a directory: its control
+	prefixOK   atomic.Bool              // the keyword ends the URL's path: a match opens a prefix
 
 	outMu sync.Mutex // Stats, results and the queue
 	stats Stats
@@ -230,7 +237,7 @@ func Run(ctx context.Context, cfg Config) Stats {
 	if cfg.Progress == nil {
 		cfg.Progress = new(Progress)
 	}
-	e := &engine{cfg: cfg, downOrigs: map[string]bool{}, calibrated: map[string]bool{}, shapes: map[string][]calShape{}, controls: map[string][]controlAnswer{}}
+	e := &engine{cfg: cfg, downOrigs: map[string]bool{}, calibrated: map[string]bool{}, shapes: map[string][]calShape{}, controls: map[string][]controlAnswer{}, prefixes: map[string]*prefixAnswer{}}
 	e.wantBody.Store(cfg.Calibrate)
 	e.calGroups = cfg.CalGroups
 	if len(e.calGroups) == 0 {
@@ -500,6 +507,9 @@ func (e *engine) task(ctx context.Context, j job, tmpl Template, input map[strin
 	input["FFUFHASH"] = j.hash + strconv.FormatInt(int64(pos), 16)
 	req := tmpl.Expand(input)
 	req.Position = pos
+	if e.prefixOK.Load() {
+		req.KeepFrom = KeepErrorBodies // an error page may be its prefix's catch-all: its body is read
+	}
 	if !e.inScope(&req) {
 		e.count(func(s *Stats) { s.OutOfScope++ })
 		return true
@@ -531,8 +541,12 @@ func (e *engine) task(ctx context.Context, j job, tmpl Template, input map[strin
 	if matched && e.likeCalibration(resp, &req) {
 		e.count(func(s *Stats) { s.Held++ })
 	} else if matched {
+		prefix := e.prefixCatchAll(ctx, tmpl, input, &req, resp)
+		if prefix != nil {
+			e.count(func(s *Stats) { s.PrefixHit++ })
+		}
 		e.replay(ctx, &req)
-		e.emit(resp, &req, j.n)
+		e.emit(resp, &req, j.n, prefix)
 		if e.cfg.Recursion && e.cfg.Strategy == "greedy" {
 			e.recurseGreedy(j, resp)
 		}
@@ -641,13 +655,16 @@ func (e *engine) count(f func(*Stats)) {
 	e.outMu.Unlock()
 }
 
-func (e *engine) emit(r *Response, req *Request, jobNum int) {
+func (e *engine) emit(r *Response, req *Request, jobNum int, prefix *ControlRef) {
 	res := Result{
 		Input: req.Input, Position: req.Position, Status: r.Status, Length: r.Length, Words: r.Words, Lines: r.Lines,
 		ContentType: r.ContentType, RedirectLocation: RedirectLocation(r, false), URL: req.URL, Duration: r.Duration,
 		Host: hostHeaderOf(req), Method: req.Method, Job: jobNum,
 		RawRequest: r.RawRequest, RawResponse: r.RawResponse,
 		Matched: e.cfg.Set.Evidence(r), Control: e.sameAsControl(r, req), Truncated: r.Truncated,
+	}
+	if res.Control == nil && prefix != nil {
+		res.Control, res.Prefix = prefix, true
 	}
 	e.outMu.Lock()
 	e.stats.Matches++
@@ -813,6 +830,7 @@ func (e *engine) calibrate(ctx context.Context, t Template, input map[string]str
 	e.shapeMu.RLock()
 	shaped := len(e.shapes[key]) > 0
 	e.shapeMu.RUnlock()
+	e.prefixOK.Store(prefixTemplate(t, e.cfg.CalKeyword))
 	if !shaped && !e.cfg.Set.PerHost {
 		e.wantBody.Store(false) // nothing reads the bodies after this
 	}

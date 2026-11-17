@@ -19,6 +19,9 @@ type sourceHealth struct {
 	Answered           int `json:"answered"`
 	Failed             int `json:"failed"`
 	OffByDefaultFailed int `json:"off_by_default_failed,omitempty"` // ran only because of -all-sources
+	// Running: sources still asking when the run stopped. They are neither
+	// answered nor failed: Asked = Answered + Failed + OffByDefaultFailed + Running.
+	Running int `json:"still_running,omitempty"`
 	// Names is what each source gave, names for subs and URLs for urls, before
 	// any DNS check or filter.
 	Names map[string]int `json:"names,omitempty"`
@@ -126,6 +129,10 @@ func (t *healthTally) add(domain string, srcs map[string]any) {
 			t.h.Answered++
 			continue
 		}
+		if row["running"] == true {
+			t.h.Running++ // the stop caught it asking: not a failure of the source
+			continue
+		}
 		if row["default"] == false {
 			t.h.OffByDefaultFailed++
 		} else {
@@ -197,6 +204,9 @@ func (h *sourceHealth) line(exit int, archives bool) string {
 		what = "archives"
 	}
 	s := fmt.Sprintf("%d of %d %s answered, %d failed (listed above)", h.Answered, h.Asked, what, h.failures())
+	if h.Running > 0 {
+		s += fmt.Sprintf(", %d still running when the run stopped", h.Running)
+	}
 	switch {
 	case exit == exitPartial && strictExit:
 		s += "; exit 3 because -strict-exit makes a failed source a failure even when others answered for the same domain: the names they gave stand, and the failed source's may be missing"

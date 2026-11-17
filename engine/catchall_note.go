@@ -97,3 +97,19 @@ func CatchAllNotes(rows []MapEntry) []string {
 	}
 	return out
 }
+
+// PrefixCatchAllNote says how many listed paths answered like the catch-all
+// of the prefix they open (a router's error page for every method and path
+// below it): they are rows of their own, ranked last by hunt.
+func PrefixCatchAllNote(rows []MapEntry) string {
+	n := 0
+	for _, r := range rows {
+		if r.Entity.Type == types.TypeURL && r.PrefixCatchAll != "" {
+			n++
+		}
+	}
+	if n == 0 {
+		return ""
+	}
+	return fmt.Sprintf("%d hits answered like their prefix's catch-all; listed, ranked last (the answer of a name under their own path, each path taken out; the row's answer says which)", n)
+}

@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/lilsadfoqs/azhaq/internal/fetch"
 	"net/textproto"
 	"os"
 	"path/filepath"
@@ -205,6 +206,9 @@ func matchedText(r fuzz.Result) string {
 func controlText(r fuzz.Result) string {
 	if r.Control == nil {
 		return ""
+	}
+	if r.Prefix {
+		return fmt.Sprintf("%s (%s, %d, %d bytes)", fetch.Control{URL: r.Control.URL}.PrefixLabel(), r.Control.URL, r.Control.Status, r.Control.Size)
 	}
 	return fmt.Sprintf("the same answer as the -ac control %s (%d, %d bytes)", r.Control.URL, r.Control.Status, r.Control.Size)
 }

@@ -125,6 +125,10 @@ func (h *hunter) url(r engine.MapEntry) {
 	if r.Entity.FirstSeen.After(h.cut) {
 		c.fresh = true
 	}
+	if r.PrefixCatchAll != "" {
+		c.prefixed++
+		c.prefixWhy = r.Answer
+	}
 	st := r.Status
 	fetched := r.Coverage == "visited"
 	ok := fetched && st >= 200 && st < 300
@@ -302,7 +306,7 @@ func (h *hunter) bodies(c *cand, r engine.MapEntry) {
 func (h *hunter) serverError(c *cand, r engine.MapEntry, raw string) {
 	st := r.Status
 	e := h.errs[r.Entity.ID]
-	without := r.Answer != ""
+	without := r.Answer != "" && r.PrefixCatchAll == "" // that note says "without input"
 	if h.traced[raw] && !h.reflected[webextract.RouteKey(raw)] {
 		return // the finding row of the URL says it: no lead says the same
 	}

@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/lilsadfoqs/azhaq/internal/fetch"
 	"github.com/lilsadfoqs/azhaq/internal/httprow"
 	"github.com/lilsadfoqs/azhaq/internal/neterr"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
@@ -49,8 +50,14 @@ type MapEntry struct {
 	Evidence     string   `json:"evidence,omitempty"`
 	EvidenceFrom []string `json:"evidence_from,omitempty"`
 	// What a 5xx the run got says less of than it looks: "500 without
-	// input" when the route takes names and the request carried none.
+	// input" when the route takes names and the request carried none; or,
+	// for an answer that is also its prefix's catch-all, "the answer of
+	// /api/<random> too: this prefix's catch-all".
 	Answer string `json:"answer,omitempty"`
+	// PrefixCatchAll is the URL of the control (a name asked under the row's
+	// own path) whose answer the row's is, with each path taken out. The row
+	// is listed; hunt ranks it below the other paths.
+	PrefixCatchAll string `json:"prefix_catchall,omitempty"`
 	// ResponseFile is where -sr stored the answer, when the run kept it.
 	ResponseFile string `json:"response_file,omitempty"`
 
@@ -166,6 +173,9 @@ func BuildMap(ents []types.Entity, seeds []types.Seed, obs []types.StoredObserva
 				continue // its https URL is the row
 			}
 			m.Status, m.Title, m.answered = answerObs(rows)
+			if m.Coverage == "visited" {
+				m.PrefixCatchAll = prefixControlOf(rows)
+			}
 			if media[e.Key] && (m.Coverage == "hint" || m.Coverage == "capped") && (m.Role == "page" || m.Role == "api") {
 				m.Role = "asset" // the pages load it as a picture, font or sound and no request asked
 			}
@@ -235,6 +245,9 @@ func BuildMap(ents []types.Entity, seeds []types.Seed, obs []types.StoredObserva
 			}
 			m.Forms = pageForms(byEnt[e.ID])
 			m.Answer = answerNote(m, e.Key)
+			if m.PrefixCatchAll != "" {
+				m.Answer = fetch.Control{URL: m.PrefixCatchAll}.PrefixLabel()
+			}
 			m.setEvidence(evidence[e.Key], rows, givenURLs[e.Key])
 			// The URL's own query names; those in the links on a page
 			// are the links' rows'.
@@ -1397,4 +1410,18 @@ func addName(xs []string, n string) []string {
 		}
 	}
 	return append(xs, n)
+}
+
+// prefixControlOf is the URL of the control an answer of the URL was found to
+// equal under its own path (fetch.PrefixControl), from the row that carries it.
+func prefixControlOf(obs []types.StoredObservation) string {
+	for _, o := range obs {
+		if o.Kind != "application" && o.Kind != "url" || !bytes.Contains(o.Payload, []byte(`"prefix_catchall"`)) {
+			continue
+		}
+		if row, _ := httprow.ParseRow(o.Payload); row.PrefixCatchall != nil {
+			return row.PrefixCatchall.URL
+		}
+	}
+	return ""
 }
