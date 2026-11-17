@@ -47,13 +47,31 @@ func PermuteNames(hosts []string) []string {
 var progress struct {
 	mu          sync.Mutex
 	asked, held map[string]bool
+	ran         map[string]bool // the names Permute varied
 }
 
 // ResetPermuteProgress forgets what the last run settled.
 func ResetPermuteProgress() {
 	progress.mu.Lock()
-	progress.asked, progress.held = map[string]bool{}, map[string]bool{}
+	progress.asked, progress.held, progress.ran = map[string]bool{}, map[string]bool{}, map[string]bool{}
 	progress.mu.Unlock()
+}
+
+// Varied says Permute varied host in this process: a name DNS dropped never
+// reaches it.
+func Varied(host string) bool {
+	progress.mu.Lock()
+	defer progress.mu.Unlock()
+	return progress.ran[normalize.Hostname(host)]
+}
+
+func markVaried(host string) {
+	progress.mu.Lock()
+	defer progress.mu.Unlock()
+	if progress.ran == nil {
+		progress.ran = map[string]bool{}
+	}
+	progress.ran[host] = true
 }
 
 func settle(name string, held bool) {

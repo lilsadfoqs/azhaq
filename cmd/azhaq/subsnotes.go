@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"math"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -63,6 +64,7 @@ func subsNotes(ps []map[string]any, tiers []tierSet) []string {
 	for _, t := range tiers {
 		var observed, f1, f2 int
 		var estimated float64
+		var rows []domainChao // the domains that have an estimate
 		for _, p := range ps {
 			foundBy := map[string][]string{}
 			raw, _ := p["found_by"].(map[string]any)
@@ -78,11 +80,23 @@ func subsNotes(ps []map[string]any, tiers []tierSet) []string {
 				estimated += est
 				f1 += a
 				f2 += b
+				d, _ := p["domain"].(string)
+				rows = append(rows, domainChao{d, s, a, b, int(math.Round(est * 10))})
 			}
 		}
 		if observed == 0 {
 			notes = append(notes, noEstimate(ps, t, dep)...)
 			continue
+		}
+		// With several domains the pool is a sum of one estimate for each: a
+		// line for each shows what each rests on, so the total follows from them.
+		if len(rows) > 1 {
+			notes = append(notes, chaoLines(t.name, rows)...)
+			tenths := 0 // the sum of the estimates as printed, so it adds up
+			for _, r := range rows {
+				tenths += r.tenths
+			}
+			estimated = float64(tenths) / 10
 		}
 		// What the sources know comes first, and no lone percentage that
 		// reads as "this share of the subdomains".
@@ -96,10 +110,42 @@ func subsNotes(ps []map[string]any, tiers []tierSet) []string {
 		// An estimate, and what it rests on: the pool is Chao1's S + f1²/(2·f2)
 		// over the names the independent sources gave, so it is as good as the
 		// overlap of those sources.
-		note += fmt.Sprintf(". This is an estimate (Chao1) from the %d names the independent sources gave: %d came from one source and %d from two", observed, f1, f2)
+		if len(rows) > 1 {
+			note += fmt.Sprintf(". The pool is the sum of the %d domains' estimates above (%s = %.1f); the %d names, %d from one source and %d from two, are their sums too, not what one estimate was made from",
+				len(rows), sumText(rows), estimated, observed, f1, f2)
+		} else {
+			note += fmt.Sprintf(". This is an estimate (Chao1) from the %d names the independent sources gave: %d came from one source and %d from two", observed, f1, f2)
+		}
 		notes = append(notes, note)
 	}
 	return notes
+}
+
+// domainChao is one domain's Chao1 estimate and what it rests on.
+type domainChao struct {
+	domain           string
+	observed, f1, f2 int
+	tenths           int // the estimate, in tenths of a name
+}
+
+// chaoLines is a line for each domain: the names its independent sources
+// gave, f1, f2 and its estimate.
+func chaoLines(tier string, rows []domainChao) []string {
+	var out []string
+	for _, r := range rows {
+		out = append(out, fmt.Sprintf("coverage (%s, %s): the independent sources gave %d names: %d came from one source (f1) and %d from two (f2); estimate (Chao1) %.1f",
+			tier, r.domain, r.observed, r.f1, r.f2, float64(r.tenths)/10))
+	}
+	return out
+}
+
+// sumText is the estimates added up, as the note writes the sum.
+func sumText(rows []domainChao) string {
+	parts := make([]string, len(rows))
+	for i, r := range rows {
+		parts[i] = fmt.Sprintf("%.1f", float64(r.tenths)/10)
+	}
+	return strings.Join(parts, " + ")
 }
 
 // noEstimate says why a tier has no coverage note: how many independent

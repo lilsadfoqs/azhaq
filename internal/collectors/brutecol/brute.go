@@ -300,6 +300,7 @@ func (p *Permute) Run(ctx context.Context, seed types.Seed, emit func(types.Obse
 		// variation asked for it too.
 		return types.RunMeta{Status: types.StatusOK}, nil
 	}
+	markVaried(host)
 	words := p.Words
 	if len(words) == 0 {
 		words = PermuteWords
