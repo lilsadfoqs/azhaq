@@ -1,0 +1,948 @@
+{
+  "date": "2026-11-17T10:41:12Z",
+  "commit": "011b01fd",
+  "version": "azhaq 0.28.1-0.20261117102258-011b01fd6022+dirty\nadvisory index 2026-11-16 (52995 records)\n  CISA Known Exploited Vulnerabilities catalogue, 2026-11-13\n  NVD CVE records, feed 2.0 (with CPE configurations), 2026-11-15",
+  "go": "go1.27.4",
+  "tools": [
+    {
+      "name": "katana",
+      "version": "1.8.0"
+    },
+    {
+      "name": "subfinder",
+      "version": "2.17.0"
+    },
+    {
+      "name": "httpx",
+      "version": "1.12.0"
+    },
+    {
+      "name": "dnsx",
+      "version": "1.3.1"
+    },
+    {
+      "name": "naabu",
+      "version": "2.6.1"
+    },
+    {
+      "name": "gau",
+      "version": "2.2.4"
+    },
+    {
+      "name": "ffuf",
+      "version": "2.3.0"
+    },
+    {
+      "name": "alterx",
+      "version": "0.1.0"
+    },
+    {
+      "name": "gowitness",
+      "version": "3.2.2"
+    },
+    {
+      "name": "jsluice",
+      "version": "v0.0.0-20240110145140-0ddfab153e06"
+    },
+    {
+      "name": "notify",
+      "version": "v1.0.7"
+    }
+  ],
+  "profile": "both",
+  "apps": [
+    {
+      "name": "juice-shop",
+      "url": "http://127.0.0.1:3101/",
+      "azhaq": {
+        "routes": 103,
+        "truth": 70,
+        "truth_of": 77,
+        "shell": 0,
+        "seconds": 15.388570957,
+        "rss_mb": 199.92578125
+      },
+      "katana": {
+        "routes": 5,
+        "truth": 1,
+        "truth_of": 77,
+        "shell": 3,
+        "seconds": 13.93908347,
+        "rss_mb": 1674.85546875
+      },
+      "jsluice": {
+        "routes": 0,
+        "truth_of": 77,
+        "shell": 0,
+        "seconds": 1.202610558,
+        "rss_mb": 177.44921875
+      },
+      "katana_jsluice": {
+        "routes": 5,
+        "truth": 1,
+        "truth_of": 77,
+        "shell": 3,
+        "seconds": 15.141694028,
+        "rss_mb": 1674.85546875
+      },
+      "bundle_grep": {
+        "routes": 101,
+        "truth": 37,
+        "truth_of": 77,
+        "shell": 0,
+        "seconds": 0,
+        "rss_mb": 0
+      },
+      "crawl": {
+        "routes": 60,
+        "truth": 53,
+        "truth_of": 77,
+        "shell": 0,
+        "styles": 1,
+        "seconds": 2.403040701,
+        "rss_mb": 185.1328125,
+        "requests": 82,
+        "request_routes": 60
+      },
+      "crawl_katana": {
+        "routes": 5,
+        "truth": 1,
+        "truth_of": 77,
+        "shell": 0,
+        "styles": 1,
+        "seconds": 13.816438982,
+        "rss_mb": 1408.87890625,
+        "requests": 40,
+        "request_routes": 5
+      },
+      "ffuf": {
+        "words": 51,
+        "azhaq_hits": 3,
+        "ffuf_hits": 4,
+        "shared": 3,
+        "azhaq_shell": 0,
+        "ffuf_shell": 0,
+        "seconds": 0.301626607
+      },
+      "roles": {
+        "rows": 39,
+        "expected": [
+          "/api/Users",
+          "/rest/user/authentication-details"
+        ],
+        "found": [
+          "/api/Users",
+          "/rest/user/authentication-details"
+        ],
+        "seconds": 29.455253664,
+        "chrome_rows": 42,
+        "chrome_found": [
+          "/api/Users",
+          "/rest/user/authentication-details"
+        ],
+        "chrome_seconds": 41.739654062,
+        "chrome_error": "exit status 3 {\"type\":\"summary\",\"command\":\"roles\",\"version\":\"0.28.1-0.20261117102258-011b01fd6022+dirty\",\"complete\":false,\"exit\":3,\"results\":42,\"counts\":{\"anyone reads sensitive fields\":2,\"anyone reads the same object, signed in or not\":4,\"different fields per role\":1,\"same answer for a session that did not find it\":1,\"signed-in only\":32,\"status differs\":2},\"seconds\":41.709,\"requests\":3089,\"db\":\"bench/.work/apps/roles-login-104816\",\"failures\":1,\"failed\":[{\"collector\":\"azhaq-http\",\"error\":\"timeout\",\"retryable\":true,\"count\":1,\"targets\":[\"http://127.0.0.1:3101/api/Challenges\"]}],\"skipped\":[{\"target\":\"http://127.0.0.1:3101/file-upload\",\"reason\":\"a GET whose own name declares a state change (the word \\\"upload\\\"); -send-state-changing sends it\"},{\"target\":\"http://127.0.0.1:3101/rest/user/reset-password\",\"reason\":\"a GET whose own name declares a state change (the word \\\"reset\\\"); -send-state-changing sends it\"},{\"target\":\"POST http://127.0.0.1:3101/socket.io/\",\"reason\":\"a page's script would send a write\"}],\"notes\":[\"http://127.0.0.1:3101 answered 3 URLs with the page it gives a path that cannot exist (coverage catchall): a 200 there does not show that a route exists; an address may serve another site than its name does, so ask it with the name (-H 'Host: NAME')\",\"path checks: 43 skipped (an API description was already found)\",\"folded by what the run's requests measured: 3 catchall, 558 beyond-depth (561 rows are counted in 2 lines of the output; -all-rows lists every row; the summary's folds name the control each catch-all answer matched)\",\"Chrome ran with its sandbox\",\"Chrome's own services reached for 2 connections outside the scope (fonts.googleapis.com, fonts.gstatic.com); all were refused, none was sent\",\"session check: no page showed the session live (http://127.0.0.1:3101/#/search, http://127.0.0.1:3101/, http://127.0.0.1:3101/#/search answered the same with it and without it), so the run looks for a JSON answer that tells, asks again the pages that answered 200 with the session when a 401, a 403 or a redirect answers, tests a 401 by signing in again, and notices a response that clears the session cookie\",\"http://127.0.0.1:3101 answered 6 URLs with the page it gives a path that cannot exist (coverage catchall): a 200 there does not show that a route exists; an address may serve another site than its name does, so ask it with the name (-H 'Host: NAME')\",\"folded by what the run's requests measured: 6 catchall, 684 beyond-depth (690 rows are counted in 2 lines of the output; -all-rows lists every row; the summary's folds name the control each catch-all answer matched)\",\"98 more endpoints compared and not listed (47 no role reads it, 33 same for every role, 13 anyone reads the same object, signed in or not, 5 different data per role); -all lists them\",\"GET http://127.0.0.1:3101/rest/2fa/setup may change state (the word \\\"setup\\\" in its path); found, and no request for it was sent in this run\",\"2 GETs declare a state change by their own name (found on the way, or a word of a wordlist) and were held back, not sent (listed as skipped): -send-state-changing sends them\"],\"next\":[\"azhaq roles show -dir bench/.work/apps/roles-login-104816 URL   (a listed row's answers side by side, with curl lines)\"],\"cost\":{\"estimate\":{\"requests\":2581},\"estimate_at_least\":true,\"no_ceiling\":\"each URL a role's run reaches, asked of the roles whose run did not; one request with a made-up identifier for each cross read the replay finds; for a role signed in with Chrome and with no check, a request with and one without the session for each page the sign-in loaded, until one tells the session apart; the documentation paths under each API prefix the pages name; the 26 guesses of an API description, which stop at the first found; the sign-in page's scripts, styles and images; a sign-in again each time a session ends; what its pages, scripts and archived URLs lead to, and the control requests that tell a catch-all answer from a page\",\"actual\":{\"requests\":3089},\"stages\":[{\"stage\":\"sign-in\",\"estimate\":{\"requests\":3},\"estimate_at_least\":true,\"not_counted\":\"the sign-in page's scripts, styles and images; a sign-in again each time a session ends\",\"actual\":{\"requests\":53},\"no_ceiling\":\"the sign-in page's scripts, styles and images; a sign-in again each time a session ends\"},{\"stage\":\"role maps\",\"estimate\":{\"requests\":2578},\"estimate_at_least\":true,\"not_counted\":\"the documentation paths under each API prefix the pages name; the 26 guesses of an API description, which stop at the first found; what its pages, scripts and archived URLs lead to, and the control requests that tell a catch-all answer from a page\",\"actual\":{\"requests\":2895},\"collectors\":[{\"collector\":\"other\",\"actual\":{\"requests\":8}},{\"collector\":\"azhaq-http\",\"estimate\":{\"requests\":2},\"actual\":{\"requests\":195}},{\"collector\":\"azhaq-js\",\"actual\":{\"requests\":59}},{\"collector\":\"azhaq-openapi\",\"actual\":{\"requests\":17}},{\"collector\":\"azhaq-paths\",\"estimate\":{\"requests\":2576},\"actual\":{\"requests\":2616}}],\"no_ceiling\":\"the documentation paths under each API prefix the pages name; the 26 guesses of an API description, which stop at the first found; what its pages, scripts and archived URLs lead to, and the control requests that tell a catch-all answer from a page\"},{\"stage\":\"replay\",\"estimate\":{},\"estimate_at_least\":true,\"not_counted\":\"each URL a role's run reaches, asked of the roles whose run did not\",\"actual\":{\"requests\":141},\"no_ceiling\":\"each URL a role's run reaches, asked of the roles whose run did not\"},{\"stage\":\"controls\",\"estimate\":{},\"estimate_at_least\":true,\"not_counted\":\"one request with a made-up identifier for each cross read the replay finds; for a role signed in with Chrome and with no check, a request with and one without the session for each page the sign-in loaded, until one tells the session apart\",\"no_ceiling\":\"one request with a made-up identifier for each cross read the replay finds; for a role signed in with Chrome and with no check, a request with and one without the session for each page the sign-in loaded, until one tells the session apart\"}]},\"browser_requests\":{\"sent\":54,\"answered\":52,\"unanswered\":2,\"blocked\":4}}"
+      },
+      "browser": {
+        "azhaq": {
+          "routes": 104,
+          "truth": 70,
+          "truth_of": 77,
+          "shell": 0,
+          "seconds": 18.882060141,
+          "rss_mb": 217.70703125
+        },
+        "katana": {
+          "routes": 31,
+          "truth": 7,
+          "truth_of": 77,
+          "shell": 4,
+          "seconds": 8.272879179,
+          "rss_mb": 72.8203125
+        },
+        "limit_seconds": 300
+      },
+      "run_cpu": {
+        "target": "http://127.0.0.1:3101/",
+        "runs": 5,
+        "azhaq_cpu_seconds": 5.639877,
+        "katana_cpu_seconds": 5.761681,
+        "azhaq_seconds": 15.181945664,
+        "katana_seconds": 13.938598197
+      }
+    },
+    {
+      "name": "vampi",
+      "url": "http://127.0.0.1:5102/",
+      "azhaq": {
+        "routes": 13,
+        "truth": 12,
+        "truth_of": 12,
+        "shell": 0,
+        "seconds": 1.941110325,
+        "rss_mb": 170.05078125
+      },
+      "katana": {
+        "routes": 1,
+        "truth": 1,
+        "truth_of": 12,
+        "shell": 0,
+        "seconds": 10.538006013,
+        "rss_mb": 49.4140625
+      },
+      "jsluice": {
+        "routes": 0,
+        "truth_of": 12,
+        "shell": 0,
+        "seconds": 0,
+        "rss_mb": 0
+      },
+      "katana_jsluice": {
+        "routes": 1,
+        "truth": 1,
+        "truth_of": 12,
+        "shell": 0,
+        "seconds": 10.538006013,
+        "rss_mb": 49.4140625
+      },
+      "bundle_grep": {
+        "routes": 0,
+        "truth_of": 12,
+        "shell": 0,
+        "seconds": 0,
+        "rss_mb": 0
+      },
+      "crawl": {
+        "routes": 1,
+        "truth": 1,
+        "truth_of": 12,
+        "shell": 0,
+        "seconds": 0.500241744,
+        "rss_mb": 169.84375,
+        "requests": 1,
+        "request_routes": 1
+      },
+      "crawl_katana": {
+        "routes": 1,
+        "truth": 1,
+        "truth_of": 12,
+        "shell": 0,
+        "seconds": 10.499167405,
+        "rss_mb": 49.11328125,
+        "requests": 1,
+        "request_routes": 1
+      }
+    },
+    {
+      "name": "ginandjuice.shop",
+      "url": "https://ginandjuice.shop/",
+      "azhaq": {
+        "routes": 38,
+        "truth": 3,
+        "truth_of": 3,
+        "shell": 0,
+        "seconds": 282.032969583,
+        "rss_mb": 201.328125
+      },
+      "katana": {
+        "routes": 14,
+        "truth": 2,
+        "truth_of": 3,
+        "shell": 0,
+        "seconds": 20.750547834,
+        "rss_mb": 789.19140625
+      },
+      "jsluice": {
+        "routes": 1,
+        "truth": 1,
+        "truth_of": 3,
+        "shell": 0,
+        "seconds": 0.259039162,
+        "rss_mb": 49.62109375
+      },
+      "katana_jsluice": {
+        "routes": 14,
+        "truth": 2,
+        "truth_of": 3,
+        "shell": 0,
+        "seconds": 21.009586996,
+        "rss_mb": 789.19140625
+      },
+      "bundle_grep": {
+        "routes": 3,
+        "truth": 1,
+        "truth_of": 3,
+        "shell": 0,
+        "seconds": 0,
+        "rss_mb": 0
+      },
+      "crawl": {
+        "routes": 11,
+        "truth": 2,
+        "truth_of": 3,
+        "shell": 0,
+        "styles": 4,
+        "seconds": 11.885142866,
+        "rss_mb": 184.2265625
+      },
+      "crawl_katana": {
+        "routes": 14,
+        "truth": 2,
+        "truth_of": 3,
+        "shell": 0,
+        "styles": 4,
+        "seconds": 20.652469763,
+        "rss_mb": 758.1015625
+      }
+    }
+  ],
+  "polite": {
+    "apps": [
+      {
+        "name": "juice-shop",
+        "url": "http://127.0.0.1:3101/",
+        "azhaq": {
+          "routes": 0,
+          "shell": 0,
+          "seconds": 0,
+          "rss_mb": 0
+        },
+        "katana": {
+          "routes": 0,
+          "shell": 0,
+          "seconds": 0,
+          "rss_mb": 0
+        },
+        "jsluice": {
+          "routes": 0,
+          "shell": 0,
+          "seconds": 0,
+          "rss_mb": 0
+        },
+        "katana_jsluice": {
+          "routes": 0,
+          "shell": 0,
+          "seconds": 0,
+          "rss_mb": 0
+        },
+        "bundle_grep": {
+          "routes": 0,
+          "shell": 0,
+          "seconds": 0,
+          "rss_mb": 0
+        },
+        "profile": "polite",
+        "crawl": {
+          "routes": 60,
+          "truth": 53,
+          "truth_of": 77,
+          "shell": 0,
+          "styles": 1,
+          "seconds": 17.250401572,
+          "rss_mb": 193.2890625
+        },
+        "crawl_katana": {
+          "routes": 5,
+          "truth": 1,
+          "truth_of": 77,
+          "shell": 0,
+          "styles": 1,
+          "seconds": 16.774176429,
+          "rss_mb": 1687.609375
+        }
+      },
+      {
+        "name": "vampi",
+        "url": "http://127.0.0.1:5102/",
+        "azhaq": {
+          "routes": 0,
+          "shell": 0,
+          "seconds": 0,
+          "rss_mb": 0
+        },
+        "katana": {
+          "routes": 0,
+          "shell": 0,
+          "seconds": 0,
+          "rss_mb": 0
+        },
+        "jsluice": {
+          "routes": 0,
+          "shell": 0,
+          "seconds": 0,
+          "rss_mb": 0
+        },
+        "katana_jsluice": {
+          "routes": 0,
+          "shell": 0,
+          "seconds": 0,
+          "rss_mb": 0
+        },
+        "bundle_grep": {
+          "routes": 0,
+          "shell": 0,
+          "seconds": 0,
+          "rss_mb": 0
+        },
+        "profile": "polite",
+        "crawl": {
+          "routes": 1,
+          "truth": 1,
+          "truth_of": 12,
+          "shell": 0,
+          "seconds": 0.580777617,
+          "rss_mb": 167.63671875
+        },
+        "crawl_katana": {
+          "routes": 1,
+          "truth": 1,
+          "truth_of": 12,
+          "shell": 0,
+          "seconds": 10.555654189,
+          "rss_mb": 49.01953125
+        }
+      },
+      {
+        "name": "ginandjuice.shop",
+        "url": "https://ginandjuice.shop/",
+        "azhaq": {
+          "routes": 0,
+          "shell": 0,
+          "seconds": 0,
+          "rss_mb": 0
+        },
+        "katana": {
+          "routes": 0,
+          "shell": 0,
+          "seconds": 0,
+          "rss_mb": 0
+        },
+        "jsluice": {
+          "routes": 0,
+          "shell": 0,
+          "seconds": 0,
+          "rss_mb": 0
+        },
+        "katana_jsluice": {
+          "routes": 0,
+          "shell": 0,
+          "seconds": 0,
+          "rss_mb": 0
+        },
+        "bundle_grep": {
+          "routes": 0,
+          "shell": 0,
+          "seconds": 0,
+          "rss_mb": 0
+        },
+        "profile": "polite",
+        "crawl": {
+          "routes": 11,
+          "truth": 2,
+          "truth_of": 3,
+          "shell": 0,
+          "styles": 4,
+          "seconds": 12.131715909,
+          "rss_mb": 184.77734375
+        },
+        "crawl_katana": {
+          "routes": 14,
+          "truth": 2,
+          "truth_of": 3,
+          "shell": 0,
+          "styles": 4,
+          "seconds": 20.688598476,
+          "rss_mb": 746.08984375
+        }
+      }
+    ]
+  },
+  "checks": [
+    {
+      "name": "[default] juice-shop: ≥ 90% of the server routes its frontend calls",
+      "pass": true,
+      "detail": "azhaq 70/77, katana 1/77, jsluice 0/77"
+    },
+    {
+      "name": "[default] juice-shop: no catch-all page reported as visited",
+      "pass": true,
+      "detail": "0 visited URLs return the SPA index"
+    },
+    {
+      "name": "[default] crawl juice-shop: results ≥ the reference's, confirmed by the app's own routes (its server code or OpenAPI document, or the routes only its page scripts hold)",
+      "pass": true,
+      "detail": "azhaq 53, reference 1; routes found azhaq 60, katana 5; stylesheets listed azhaq 1, katana 1; known 53 and 1 of 77; time ×0.17 of the reference, memory ×0.13 of the reference (185 MB against 1409 MB) | azhaq crawl -u http://127.0.0.1:3101/ -depth 3 -silent -hints vs katana -u http://127.0.0.1:3101/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10"
+    },
+    {
+      "name": "[default] crawl juice-shop: time ≤ 1.05× the reference's",
+      "pass": true,
+      "detail": "azhaq 2.4s, reference 13.8s (the median of 3 below 20 s, one run above) | azhaq crawl -u http://127.0.0.1:3101/ -depth 3 -silent -hints vs katana -u http://127.0.0.1:3101/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10"
+    },
+    {
+      "name": "[default] crawl juice-shop: requests per route found ≤ katana's",
+      "pass": true,
+      "detail": "azhaq 82 requests for 60 routes (1.37 a route), katana 40 for 5 (8.00) | azhaq crawl -u http://127.0.0.1:3101/ -depth 3 -silent -hints vs katana -u http://127.0.0.1:3101/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10"
+    },
+    {
+      "name": "[default] juice-shop run: CPU ≤ katana -jc -jsl's",
+      "pass": true,
+      "detail": "azhaq 5.64 CPU s in 15.2 s, katana 5.76 CPU s in 13.9 s (0.98×, the median of 5 runs in turn) | azhaq run -url http://127.0.0.1:3101/ -db /home/runner/work/azhaq/azhaq/bench/.work/runcpu1374203994/cpu.db -quiet vs katana -u http://127.0.0.1:3101/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10"
+    },
+    {
+      "name": "[default] roles: Juice Shop anonymous → user",
+      "pass": true,
+      "detail": "39 endpoints differ; 401 → 200 on 2/2 of /api/Users, /rest/user/authentication-details"
+    },
+    {
+      "name": "[default] roles: Juice Shop anonymous → user, signed in with Chrome",
+      "pass": true,
+      "detail": "42 endpoints differ; 401 → 200 on 2/2 (with a token: 39 endpoints) exit status 3 {\"type\":\"summary\",\"command\":\"roles\",\"version\":\"0.28.1-0.20261117102258-011b01fd6022+dirty\",\"complete\":false,\"exit\":3,\"results\":42,\"counts\":{\"anyone reads sensitive fields\":2,\"anyone reads the same object, signed in or not\":4,\"different fields per role\":1,\"same answer for a session that did not find it\":1,\"signed-in only\":32,\"status differs\":2},\"seconds\":41.709,\"requests\":3089,\"db\":\"bench/.work/apps/roles-login-104816\",\"failures\":1,\"failed\":[{\"collector\":\"azhaq-http\",\"error\":\"timeout\",\"retryable\":true,\"count\":1,\"targets\":[\"http://127.0.0.1:3101/api/Challenges\"]}],\"skipped\":[{\"target\":\"http://127.0.0.1:3101/file-upload\",\"reason\":\"a GET whose own name declares a state change (the word \\\"upload\\\"); -send-state-changing sends it\"},{\"target\":\"http://127.0.0.1:3101/rest/user/reset-password\",\"reason\":\"a GET whose own name declares a state change (the word \\\"reset\\\"); -send-state-changing sends it\"},{\"target\":\"POST http://127.0.0.1:3101/socket.io/\",\"reason\":\"a page's script would send a write\"}],\"notes\":[\"http://127.0.0.1:3101 answered 3 URLs with the page it gives a path that cannot exist (coverage catchall): a 200 there does not show that a route exists; an address may serve another site than its name does, so ask it with the name (-H 'Host: NAME')\",\"path checks: 43 skipped (an API description was already found)\",\"folded by what the run's requests measured: 3 catchall, 558 beyond-depth (561 rows are counted in 2 lines of the output; -all-rows lists every row; the summary's folds name the control each catch-all answer matched)\",\"Chrome ran with its sandbox\",\"Chrome's own services reached for 2 connections outside the scope (fonts.googleapis.com, fonts.gstatic.com); all were refused, none was sent\",\"session check: no page showed the session live (http://127.0.0.1:3101/#/search, http://127.0.0.1:3101/, http://127.0.0.1:3101/#/search answered the same with it and without it), so the run looks for a JSON answer that tells, asks again the pages that answered 200 with the session when a 401, a 403 or a redirect answers, tests a 401 by signing in again, and notices a response that clears the session cookie\",\"http://127.0.0.1:3101 answered 6 URLs with the page it gives a path that cannot exist (coverage catchall): a 200 there does not show that a route exists; an address may serve another site than its name does, so ask it with the name (-H 'Host: NAME')\",\"folded by what the run's requests measured: 6 catchall, 684 beyond-depth (690 rows are counted in 2 lines of the output; -all-rows lists every row; the summary's folds name the control each catch-all answer matched)\",\"98 more endpoints compared and not listed (47 no role reads it, 33 same for every role, 13 anyone reads the same object, signed in or not, 5 different data per role); -all lists them\",\"GET http://127.0.0.1:3101/rest/2fa/setup may change state (the word \\\"setup\\\" in its path); found, and no request for it was sent in this run\",\"2 GETs declare a state change by their own name (found on the way, or a word of a wordlist) and were held back, not sent (listed as skipped): -send-state-changing sends them\"],\"next\":[\"azhaq roles show -dir bench/.work/apps/roles-login-104816 URL   (a listed row's answers side by side, with curl lines)\"],\"cost\":{\"estimate\":{\"requests\":2581},\"estimate_at_least\":true,\"no_ceiling\":\"each URL a role's run reaches, asked of the roles whose run did not; one request with a made-up identifier for each cross read the replay finds; for a role signed in with Chrome and with no check, a request with and one without the session for each page the sign-in loaded, until one tells the session apart; the documentation paths under each API prefix the pages name; the 26 guesses of an API description, which stop at the first found; the sign-in page's scripts, styles and images; a sign-in again each time a session ends; what its pages, scripts and archived URLs lead to, and the control requests that tell a catch-all answer from a page\",\"actual\":{\"requests\":3089},\"stages\":[{\"stage\":\"sign-in\",\"estimate\":{\"requests\":3},\"estimate_at_least\":true,\"not_counted\":\"the sign-in page's scripts, styles and images; a sign-in again each time a session ends\",\"actual\":{\"requests\":53},\"no_ceiling\":\"the sign-in page's scripts, styles and images; a sign-in again each time a session ends\"},{\"stage\":\"role maps\",\"estimate\":{\"requests\":2578},\"estimate_at_least\":true,\"not_counted\":\"the documentation paths under each API prefix the pages name; the 26 guesses of an API description, which stop at the first found; what its pages, scripts and archived URLs lead to, and the control requests that tell a catch-all answer from a page\",\"actual\":{\"requests\":2895},\"collectors\":[{\"collector\":\"other\",\"actual\":{\"requests\":8}},{\"collector\":\"azhaq-http\",\"estimate\":{\"requests\":2},\"actual\":{\"requests\":195}},{\"collector\":\"azhaq-js\",\"actual\":{\"requests\":59}},{\"collector\":\"azhaq-openapi\",\"actual\":{\"requests\":17}},{\"collector\":\"azhaq-paths\",\"estimate\":{\"requests\":2576},\"actual\":{\"requests\":2616}}],\"no_ceiling\":\"the documentation paths under each API prefix the pages name; the 26 guesses of an API description, which stop at the first found; what its pages, scripts and archived URLs lead to, and the control requests that tell a catch-all answer from a page\"},{\"stage\":\"replay\",\"estimate\":{},\"estimate_at_least\":true,\"not_counted\":\"each URL a role's run reaches, asked of the roles whose run did not\",\"actual\":{\"requests\":141},\"no_ceiling\":\"each URL a role's run reaches, asked of the roles whose run did not\"},{\"stage\":\"controls\",\"estimate\":{},\"estimate_at_least\":true,\"not_counted\":\"one request with a made-up identifier for each cross read the replay finds; for a role signed in with Chrome and with no check, a request with and one without the session for each page the sign-in loaded, until one tells the session apart\",\"no_ceiling\":\"one request with a made-up identifier for each cross read the replay finds; for a role signed in with Chrome and with no check, a request with and one without the session for each page the sign-in loaded, until one tells the session apart\"}]},\"browser_requests\":{\"sent\":54,\"answered\":52,\"unanswered\":2,\"blocked\":4}}"
+    },
+    {
+      "name": "[default] juice-shop: -browser finds the known routes katana -headless finds",
+      "pass": true,
+      "detail": "azhaq -browser 70/77 in 19s, katana -headless 7/77 in 8s"
+    },
+    {
+      "name": "[default] identical runs diff empty",
+      "pass": true,
+      "detail": "added=0 removed=0 observations=0"
+    },
+    {
+      "name": "[default] crawl vampi: results ≥ the reference's, confirmed by the app's own routes (its server code or OpenAPI document, or the routes only its page scripts hold)",
+      "pass": true,
+      "detail": "azhaq 1, reference 1; routes found azhaq 1, katana 1; stylesheets listed azhaq 0, katana 0; known 1 and 1 of 12; time ×0.05 of the reference, memory ×3.46 of the reference (170 MB against 49 MB) | azhaq crawl -u http://127.0.0.1:5102/ -depth 3 -silent -hints vs katana -u http://127.0.0.1:5102/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10"
+    },
+    {
+      "name": "[default] crawl vampi: time ≤ 1.05× the reference's",
+      "pass": true,
+      "detail": "azhaq 0.5s, reference 10.5s (the median of 3 below 20 s, one run above) | azhaq crawl -u http://127.0.0.1:5102/ -depth 3 -silent -hints vs katana -u http://127.0.0.1:5102/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10"
+    },
+    {
+      "name": "[default] crawl vampi: requests per route found ≤ katana's",
+      "pass": true,
+      "detail": "azhaq 1 requests for 1 routes (1.00 a route), katana 1 for 1 (1.00) | azhaq crawl -u http://127.0.0.1:5102/ -depth 3 -silent -hints vs katana -u http://127.0.0.1:5102/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10"
+    },
+    {
+      "name": "[default] vampi: paths from /openapi.json",
+      "pass": true,
+      "detail": "azhaq 12/12, katana 1/12"
+    },
+    {
+      "name": "[default] diff across different seeds is labelled",
+      "pass": true,
+      "detail": "seeds_differ=true"
+    },
+    {
+      "name": "[default] crawl ginandjuice.shop: results ≥ the reference's, confirmed by the app's own routes (its server code or OpenAPI document, or the routes only its page scripts hold)",
+      "pass": true,
+      "detail": "azhaq 2, reference 2; routes found azhaq 11, katana 14; stylesheets listed azhaq 4, katana 4; known 2 and 2 of 3; time ×0.58 of the reference, memory ×0.24 of the reference (184 MB against 758 MB) | azhaq crawl -u https://ginandjuice.shop/ -depth 3 -silent -hints -rate 5 vs katana -u https://ginandjuice.shop/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10 -rl 5"
+    },
+    {
+      "name": "[default] crawl ginandjuice.shop: time ≤ 1.05× the reference's",
+      "pass": true,
+      "detail": "azhaq 11.9s, reference 20.7s (the median of 3 below 20 s, one run above) | azhaq crawl -u https://ginandjuice.shop/ -depth 3 -silent -hints -rate 5 vs katana -u https://ginandjuice.shop/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10 -rl 5"
+    },
+    {
+      "name": "[default] ginandjuice: page scripts parsed",
+      "pass": true,
+      "detail": "4/4 page scripts, 3/3 routes only in page scripts or script-driven forms"
+    },
+    {
+      "name": "[default] ginandjuice: product and blog pages are one template each",
+      "pass": true,
+      "detail": "map lines: product 1, blog post 1"
+    },
+    {
+      "name": "[default] known routes ≥ katana ∪ jsluice on every app",
+      "pass": true,
+      "detail": "juice-shop 70/77 vs 1, vampi 12/12 vs 1, ginandjuice.shop 3/3 vs 2"
+    },
+    {
+      "name": "[default] no catch-all page reported as visited on any app",
+      "pass": true,
+      "detail": "3 apps"
+    },
+    {
+      "name": "[polite] crawl juice-shop: results ≥ the reference's, confirmed by the app's own routes (its server code or OpenAPI document, or the routes only its page scripts hold)",
+      "pass": true,
+      "detail": "azhaq 53, reference 1; routes found azhaq 60, katana 5; stylesheets listed azhaq 1, katana 1; known 53 and 1 of 77; time ×1.03 of the reference, memory ×0.11 of the reference (193 MB against 1688 MB) | azhaq crawl -u http://127.0.0.1:3101/ -depth 3 -silent -hints -rate 5 vs katana -u http://127.0.0.1:3101/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10 -rl 5"
+    },
+    {
+      "name": "[polite] crawl juice-shop: time ≤ 1.05× the reference's",
+      "pass": true,
+      "detail": "azhaq 17.3s, reference 16.8s (the median of 3 below 20 s, one run above) | azhaq crawl -u http://127.0.0.1:3101/ -depth 3 -silent -hints -rate 5 vs katana -u http://127.0.0.1:3101/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10 -rl 5"
+    },
+    {
+      "name": "[polite] crawl vampi: results ≥ the reference's, confirmed by the app's own routes (its server code or OpenAPI document, or the routes only its page scripts hold)",
+      "pass": true,
+      "detail": "azhaq 1, reference 1; routes found azhaq 1, katana 1; stylesheets listed azhaq 0, katana 0; known 1 and 1 of 12; time ×0.06 of the reference, memory ×3.42 of the reference (168 MB against 49 MB) | azhaq crawl -u http://127.0.0.1:5102/ -depth 3 -silent -hints -rate 5 vs katana -u http://127.0.0.1:5102/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10 -rl 5"
+    },
+    {
+      "name": "[polite] crawl vampi: time ≤ 1.05× the reference's",
+      "pass": true,
+      "detail": "azhaq 0.6s, reference 10.6s (the median of 3 below 20 s, one run above) | azhaq crawl -u http://127.0.0.1:5102/ -depth 3 -silent -hints -rate 5 vs katana -u http://127.0.0.1:5102/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10 -rl 5"
+    },
+    {
+      "name": "[polite] crawl ginandjuice.shop: results ≥ the reference's, confirmed by the app's own routes (its server code or OpenAPI document, or the routes only its page scripts hold)",
+      "pass": true,
+      "detail": "azhaq 2, reference 2; routes found azhaq 11, katana 14; stylesheets listed azhaq 4, katana 4; known 2 and 2 of 3; time ×0.59 of the reference, memory ×0.25 of the reference (185 MB against 746 MB) | azhaq crawl -u https://ginandjuice.shop/ -depth 3 -silent -hints -rate 5 vs katana -u https://ginandjuice.shop/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10 -rl 5"
+    },
+    {
+      "name": "[polite] crawl ginandjuice.shop: time ≤ 1.05× the reference's",
+      "pass": true,
+      "detail": "azhaq 12.1s, reference 20.7s (the median of 3 below 20 s, one run above) | azhaq crawl -u https://ginandjuice.shop/ -depth 3 -silent -hints -rate 5 vs katana -u https://ginandjuice.shop/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10 -rl 5"
+    }
+  ],
+  "runs": [
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 15.388570957,
+      "rss_mb": 199.92578125,
+      "anon_mb": 154.34375,
+      "profile": "default"
+    },
+    {
+      "tool": "katana",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 13.93908347,
+      "rss_mb": 1674.85546875,
+      "anon_mb": 1639.50390625,
+      "profile": "default"
+    },
+    {
+      "tool": "jsluice",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 1.202610558,
+      "rss_mb": 177.44921875,
+      "anon_mb": 169.41796875,
+      "profile": "default"
+    },
+    {
+      "tool": "ffuf",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 0.301626607,
+      "rss_mb": 14.59765625,
+      "anon_mb": 6.140625,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 2.403040701,
+      "rss_mb": 185.1328125,
+      "anon_mb": 140.26171875,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 2.332441744,
+      "rss_mb": 185.3671875,
+      "anon_mb": 140.30078125,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 2.430958858,
+      "rss_mb": 176.578125,
+      "anon_mb": 131.70703125,
+      "profile": "default"
+    },
+    {
+      "tool": "katana",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 13.965370099,
+      "rss_mb": 1408.87890625,
+      "anon_mb": 1373.83984375,
+      "profile": "default"
+    },
+    {
+      "tool": "katana",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 13.816438982,
+      "rss_mb": 1422.8984375,
+      "anon_mb": 1387.92578125,
+      "profile": "default"
+    },
+    {
+      "tool": "katana",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 13.755210265,
+      "rss_mb": 1176.84375,
+      "anon_mb": 1142.1171875,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "roles",
+      "seconds": 29.455253664,
+      "rss_mb": 221.73046875,
+      "anon_mb": 176.875,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "roles-login",
+      "seconds": 41.739654062,
+      "rss_mb": 206.5546875,
+      "anon_mb": 161.6953125,
+      "error": "exit status 3 {\"type\":\"summary\",\"command\":\"roles\",\"version\":\"0.28.1-0.20261117102258-011b01fd6022+dirty\",\"complete\":false,\"exit\":3,\"results\":42,\"counts\":{\"anyone reads sensitive fields\":2,\"anyone reads the same object, signed in or not\":4,\"different fields per role\":1,\"same answer for a session that did not find it\":1,\"signed-in only\":32,\"status differs\":2},\"seconds\":41.709,\"requests\":3089,\"db\":\"bench/.work/apps/roles-login-104816\",\"failures\":1,\"failed\":[{\"collector\":\"azhaq-http\",\"error\":\"timeout\",\"retryable\":true,\"count\":1,\"targets\":[\"http://127.0.0.1:3101/api/Challenges\"]}],\"skipped\":[{\"target\":\"http://127.0.0.1:3101/file-upload\",\"reason\":\"a GET whose own name declares a state change (the word \\\"upload\\\"); -send-state-changing sends it\"},{\"target\":\"http://127.0.0.1:3101/rest/user/reset-password\",\"reason\":\"a GET whose own name declares a state change (the word \\\"reset\\\"); -send-state-changing sends it\"},{\"target\":\"POST http://127.0.0.1:3101/socket.io/\",\"reason\":\"a page's script would send a write\"}],\"notes\":[\"http://127.0.0.1:3101 answered 3 URLs with the page it gives a path that cannot exist (coverage catchall): a 200 there does not show that a route exists; an address may serve another site than its name does, so ask it with the name (-H 'Host: NAME')\",\"path checks: 43 skipped (an API description was already found)\",\"folded by what the run's requests measured: 3 catchall, 558 beyond-depth (561 rows are counted in 2 lines of the output; -all-rows lists every row; the summary's folds name the control each catch-all answer matched)\",\"Chrome ran with its sandbox\",\"Chrome's own services reached for 2 connections outside the scope (fonts.googleapis.com, fonts.gstatic.com); all were refused, none was sent\",\"session check: no page showed the session live (http://127.0.0.1:3101/#/search, http://127.0.0.1:3101/, http://127.0.0.1:3101/#/search answered the same with it and without it), so the run looks for a JSON answer that tells, asks again the pages that answered 200 with the session when a 401, a 403 or a redirect answers, tests a 401 by signing in again, and notices a response that clears the session cookie\",\"http://127.0.0.1:3101 answered 6 URLs with the page it gives a path that cannot exist (coverage catchall): a 200 there does not show that a route exists; an address may serve another site than its name does, so ask it with the name (-H 'Host: NAME')\",\"folded by what the run's requests measured: 6 catchall, 684 beyond-depth (690 rows are counted in 2 lines of the output; -all-rows lists every row; the summary's folds name the control each catch-all answer matched)\",\"98 more endpoints compared and not listed (47 no role reads it, 33 same for every role, 13 anyone reads the same object, signed in or not, 5 different data per role); -all lists them\",\"GET http://127.0.0.1:3101/rest/2fa/setup may change state (the word \\\"setup\\\" in its path); found, and no request for it was sent in this run\",\"2 GETs declare a state change by their own name (found on the way, or a word of a wordlist) and were held back, not sent (listed as skipped): -send-state-changing sends them\"],\"next\":[\"azhaq roles show -dir bench/.work/apps/roles-login-104816 URL   (a listed row's answers side by side, with curl lines)\"],\"cost\":{\"estimate\":{\"requests\":2581},\"estimate_at_least\":true,\"no_ceiling\":\"each URL a role's run reaches, asked of the roles whose run did not; one request with a made-up identifier for each cross read the replay finds; for a role signed in with Chrome and with no check, a request with and one without the session for each page the sign-in loaded, until one tells the session apart; the documentation paths under each API prefix the pages name; the 26 guesses of an API description, which stop at the first found; the sign-in page's scripts, styles and images; a sign-in again each time a session ends; what its pages, scripts and archived URLs lead to, and the control requests that tell a catch-all answer from a page\",\"actual\":{\"requests\":3089},\"stages\":[{\"stage\":\"sign-in\",\"estimate\":{\"requests\":3},\"estimate_at_least\":true,\"not_counted\":\"the sign-in page's scripts, styles and images; a sign-in again each time a session ends\",\"actual\":{\"requests\":53},\"no_ceiling\":\"the sign-in page's scripts, styles and images; a sign-in again each time a session ends\"},{\"stage\":\"role maps\",\"estimate\":{\"requests\":2578},\"estimate_at_least\":true,\"not_counted\":\"the documentation paths under each API prefix the pages name; the 26 guesses of an API description, which stop at the first found; what its pages, scripts and archived URLs lead to, and the control requests that tell a catch-all answer from a page\",\"actual\":{\"requests\":2895},\"collectors\":[{\"collector\":\"other\",\"actual\":{\"requests\":8}},{\"collector\":\"azhaq-http\",\"estimate\":{\"requests\":2},\"actual\":{\"requests\":195}},{\"collector\":\"azhaq-js\",\"actual\":{\"requests\":59}},{\"collector\":\"azhaq-openapi\",\"actual\":{\"requests\":17}},{\"collector\":\"azhaq-paths\",\"estimate\":{\"requests\":2576},\"actual\":{\"requests\":2616}}],\"no_ceiling\":\"the documentation paths under each API prefix the pages name; the 26 guesses of an API description, which stop at the first found; what its pages, scripts and archived URLs lead to, and the control requests that tell a catch-all answer from a page\"},{\"stage\":\"replay\",\"estimate\":{},\"estimate_at_least\":true,\"not_counted\":\"each URL a role's run reaches, asked of the roles whose run did not\",\"actual\":{\"requests\":141},\"no_ceiling\":\"each URL a role's run reaches, asked of the roles whose run did not\"},{\"stage\":\"controls\",\"estimate\":{},\"estimate_at_least\":true,\"not_counted\":\"one request with a made-up identifier for each cross read the replay finds; for a role signed in with Chrome and with no check, a request with and one without the session for each page the sign-in loaded, until one tells the session apart\",\"no_ceiling\":\"one request with a made-up identifier for each cross read the replay finds; for a role signed in with Chrome and with no check, a request with and one without the session for each page the sign-in loaded, until one tells the session apart\"}]},\"browser_requests\":{\"sent\":54,\"answered\":52,\"unanswered\":2,\"blocked\":4}}",
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 18.882060141,
+      "rss_mb": 217.70703125,
+      "anon_mb": 172.45703125,
+      "profile": "default"
+    },
+    {
+      "tool": "katana",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 8.272879179,
+      "rss_mb": 72.8203125,
+      "anon_mb": 36.41015625,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 13.478162393,
+      "rss_mb": 200.859375,
+      "anon_mb": 155.4375,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 1.941110325,
+      "rss_mb": 170.05078125,
+      "anon_mb": 125.18359375,
+      "profile": "default"
+    },
+    {
+      "tool": "katana",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 10.538006013,
+      "rss_mb": 49.4140625,
+      "anon_mb": 15.18359375,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 0.510709728,
+      "rss_mb": 169.8359375,
+      "anon_mb": 124.95703125,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 0.500241744,
+      "rss_mb": 169.84375,
+      "anon_mb": 124.95703125,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 0.491701149,
+      "rss_mb": 176.671875,
+      "anon_mb": 131.796875,
+      "profile": "default"
+    },
+    {
+      "tool": "katana",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 10.490525998,
+      "rss_mb": 49.11328125,
+      "anon_mb": 15.0703125,
+      "profile": "default"
+    },
+    {
+      "tool": "katana",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 10.701577226,
+      "rss_mb": 49.19140625,
+      "anon_mb": 15.21875,
+      "profile": "default"
+    },
+    {
+      "tool": "katana",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 10.499167405,
+      "rss_mb": 49.00390625,
+      "anon_mb": 15.1484375,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "https://ginandjuice.shop/",
+      "seconds": 282.032969583,
+      "rss_mb": 201.328125,
+      "anon_mb": 154.4140625,
+      "profile": "default"
+    },
+    {
+      "tool": "katana",
+      "target": "https://ginandjuice.shop/",
+      "seconds": 20.750547834,
+      "rss_mb": 789.19140625,
+      "anon_mb": 754.03125,
+      "profile": "default"
+    },
+    {
+      "tool": "jsluice",
+      "target": "https://ginandjuice.shop/",
+      "seconds": 0.259039162,
+      "rss_mb": 49.62109375,
+      "anon_mb": 41.83984375,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "https://ginandjuice.shop/",
+      "seconds": 11.885142866,
+      "rss_mb": 184.2265625,
+      "anon_mb": 137.296875,
+      "profile": "default"
+    },
+    {
+      "tool": "katana",
+      "target": "https://ginandjuice.shop/",
+      "seconds": 20.652469763,
+      "rss_mb": 758.1015625,
+      "anon_mb": 722.8828125,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 17.474347799,
+      "rss_mb": 174.78125,
+      "anon_mb": 129.70703125,
+      "profile": "polite"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 17.236727627,
+      "rss_mb": 214.27734375,
+      "anon_mb": 169.40625,
+      "profile": "polite"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 17.250401572,
+      "rss_mb": 193.2890625,
+      "anon_mb": 148.41796875,
+      "profile": "polite"
+    },
+    {
+      "tool": "katana",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 16.726046576999998,
+      "rss_mb": 1421.19140625,
+      "anon_mb": 1386.21875,
+      "profile": "polite"
+    },
+    {
+      "tool": "katana",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 16.774176429,
+      "rss_mb": 1687.609375,
+      "anon_mb": 1652.26171875,
+      "profile": "polite"
+    },
+    {
+      "tool": "katana",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 16.783709898,
+      "rss_mb": 1908.12890625,
+      "anon_mb": 1873.15234375,
+      "profile": "polite"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 0.580777617,
+      "rss_mb": 167.63671875,
+      "anon_mb": 122.76171875,
+      "profile": "polite"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 0.578008396,
+      "rss_mb": 165.9921875,
+      "anon_mb": 121.10546875,
+      "profile": "polite"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 0.594616831,
+      "rss_mb": 169.80078125,
+      "anon_mb": 124.921875,
+      "profile": "polite"
+    },
+    {
+      "tool": "katana",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 10.555654189,
+      "rss_mb": 48.609375,
+      "anon_mb": 14.94140625,
+      "profile": "polite"
+    },
+    {
+      "tool": "katana",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 10.59931337,
+      "rss_mb": 49.2421875,
+      "anon_mb": 15.19921875,
+      "profile": "polite"
+    },
+    {
+      "tool": "katana",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 10.516779593999999,
+      "rss_mb": 49.01953125,
+      "anon_mb": 15.29296875,
+      "profile": "polite"
+    },
+    {
+      "tool": "azhaq",
+      "target": "https://ginandjuice.shop/",
+      "seconds": 12.131715909,
+      "rss_mb": 184.77734375,
+      "anon_mb": 137.8515625,
+      "profile": "polite"
+    },
+    {
+      "tool": "katana",
+      "target": "https://ginandjuice.shop/",
+      "seconds": 20.688598476,
+      "rss_mb": 746.08984375,
+      "anon_mb": 710.74609375,
+      "profile": "polite"
+    }
+  ],
+  "units": [
+    {
+      "name": "default:apps",
+      "checks": 21,
+      "runs": 28
+    },
+    {
+      "name": "polite:apps",
+      "checks": 6,
+      "runs": 14
+    }
+  ]
+}
