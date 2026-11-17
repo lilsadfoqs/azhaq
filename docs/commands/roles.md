@@ -172,7 +172,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 - **Exit 4:** a role's run was stopped by a limit, or the replay was interrupted (Ctrl-C) with requests left. The summary marks it `stopped`.
 - **Exit 2:** a header names a host outside the scope rule. Nothing is sent. See [Headers that name a host](#headers-that-name-a-host).
 - A role whose run could not be done, such as a failed sign-in, ends `roles` with a summary whose `notes` say why.
-- `requests` in the summary is every request `roles` sent to the targets: the roles' runs, the Chrome sign-ins (the first and each renewal), the replays and every redirect hop they followed. It equals the target lines of `roles.ledger.jsonl`, or of the file `-ledger` names in the run options (`-- -ledger FILE`): one ledger for the whole command, written by the runs and by everything `roles` sends between them, sealed at the end. `-ledger off` writes none. A role's own summary line counts that role's run only, so they add up to less.
+- `requests` in the summary is every request `roles` sent to the targets: the roles' runs, the Chrome sign-ins (the first and each renewal), the requests of the `-role-cmd` commands that went through their proxy, the replays and every redirect hop they followed. It equals the target lines of `roles.ledger.jsonl`, or of the file `-ledger` names in the run options (`-- -ledger FILE`): one ledger for the whole command, written by the runs and by everything `roles` sends between them, sealed at the end. `-ledger off` writes none. A role's own summary line counts that role's run only, so they add up to less.
 - `cost` sets the estimate of each stage beside what it sent, as for [run](run.md#summary-and-exit-codes): see [Cost by stage](#cost-by-stage).
 - A run that replayed no write, whose `-har` or `-burp` histories hold POST, PUT or PATCH requests, ends its `next` with `azhaq roles … -replay-writes post,put,patch   (next pass, not run: N writes in the histories were not replayed with the other roles' sessions: at least R requests more (one for each write and other role, a floor: the reads that check them come on top), and each changes data on the target)`. `R` is each write sent once with every other role's session; the reads of the owner's object around it depend on the answers and are not in it. It is a line: nothing is replayed for it.
 - With `-json`, stderr holds the summary only. The roles' runs print nothing. The summary says what they did not finish: `failed`, `unreachable`, `skipped` and `notes`.
@@ -185,7 +185,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 
 | Stage | What it sends | Estimate |
 | --- | --- | --- |
-| `sign-in` | Chrome's sign-ins, the first of each `-role-login` and each renewal | 3 requests a sign-in (the page, the form's POST, the page it ends on), not counting its scripts, styles and images |
+| `sign-in` | Chrome's sign-ins, the first of each `-role-login` and each renewal, and the requests of each `-role-cmd` command through its proxy | 3 requests a sign-in (the page, the form's POST, the page it ends on), not counting its scripts, styles and images; a command's own are not known before it runs |
 | `role maps` | each role's run | the run's own estimate for each role ([plan](plan.md#the-estimate)) |
 | `history reads` | the pages of each role's `-har` and `-burp` files, read as the role | exact: one request for each page |
 | `replay` | every endpoint asked with every role that did not reach it, and the checks of the sessions | each page the histories reached, asked of the roles that did not; the objects the answers name and the checks come on top. With the run options, the pages the runs reach are not known before |
@@ -224,7 +224,17 @@ On a cookie-session app, the visitor sent to `/login` makes a page `signed-in on
 - Or use `-role-login`. It carries the cookies and the token the login stored.
 - `-role-cmd 'alice=./token.sh alice'` gives a role whose headers a shell command prints: one `Header: value` per line, or a bare token sent as `Authorization: Bearer`.
 - The `-role-cmd` command runs before the role's run and again before the replay. It suits tokens that live minutes.
-- A `-role-cmd` command's own requests are not azhaq's and are not in the ledger or held to the scope; give tokens directly or use `-role-login` to keep every request in the ledger. What the command prints is still held to the scope (see below).
+- A `-role-cmd` command runs with `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY` and their lower-case names pointing at a loopback proxy that azhaq starts for the command's lifetime. Its `NO_PROXY` and `no_proxy` are set empty, so no exemption of the environment sends a request round it.
+- The proxy sends each request through the same chokepoint as azhaq's own: the scope, `-deny-path`, `-max-requests` and `-rate` hold it, and `-proxy` carries it on.
+- A plain HTTP request goes in the ledger like azhaq's own, with its method and URL and the collector `role-cmd:NAME`; an HTTPS request is a `CONNECT host:port` line, held to the scope by host and port, and what goes through the tunnel is not read.
+- The scope a command is held to is the run's. With no `-allow`, `-deny` or `-scope`, the `-url` targets' hosts are held to the ports the targets give them and no other host is held back (a sign-in may go to an identity provider); with a rule, the rule.
+- A request outside the scope is refused with `403` and a body that names the rule, one past `-max-requests` with `429`, and one after the kill file exists with `503`. A refused request is not in the ledger, because it was not sent.
+- A refused request fails the role's sign-in with that reason, whatever the command then did, and a budget refusal ends the command with exit 4.
+- Requests are counted in `requests`: the ledger, the summary and what the target saw agree.
+- A request the command makes without honouring the proxy variables, with a raw socket or a tool that ignores them, is not azhaq's: it stays outside the ledger and the scope. A command that makes such requests leaves the ledger incomplete by that much.
+- `-role-cmd-direct` runs the commands with no proxy, as `roles` did before: for a command that cannot use one. Its own requests are then neither held to the scope nor in the ledger, and the summary says so.
+- The summary has one line for each role command that ran, naming whether it ran through the proxy and how many requests it sent, as `role bob: its -role-cmd ran through azhaq's loopback proxy (HTTP_PROXY, HTTPS_PROXY): 2 requests in 2 runs`. `plan` names the commands that would run through it. It runs none, so it cannot count their requests.
+- What the command prints is still held to the scope (see below).
 - `-role-cmd` is not offered over MCP.
 
 ### Headers that name a host
@@ -638,7 +648,8 @@ The diff lines look like this:
 | Flag | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `-role` | string, repeatable |  | NAME, or NAME=Header: value (repeat a name to add headers; a role with none is anonymous). Only these headers are sent: a session the app reads from a cookie needs NAME=Cookie: … |
-| `-role-cmd` | string, repeatable |  | NAME=COMMAND: a role whose headers a shell command prints, one Header: value per line (a bare token is sent as Authorization: Bearer); run before the role's run and again before the replay, for tokens that live minutes; the command's own requests are not azhaq's: not in the ledger, not held to the scope |
+| `-role-cmd` | string, repeatable |  | NAME=COMMAND: a role whose headers a shell command prints, one Header: value per line (a bare token is sent as Authorization: Bearer); run before the role's run and again before the replay, for tokens that live minutes; its own requests go through a loopback proxy of azhaq's (HTTP_PROXY, HTTPS_PROXY), held to the scope, the budget and the pace and listed in the ledger, unless it ignores the variables or -role-cmd-direct is given |
+| `-role-cmd-direct` | bool |  | run the -role-cmd commands with no proxy, as before: for a command that cannot use one; its own requests are then not in the ledger and not held to the scope, the budget or the pace |
 | `-role-login` | string, repeatable |  | NAME=USER:PASSWORD: a role that signs in on the -login page with Chrome, and sends the cookies and the token the login left. Chrome runs with its sandbox: where the system gives none, allow it with run's -chrome-no-sandbox among the run options, after -- |
 | `-login` | string |  | the login page for -role-login |
 | `-har` | string, repeatable |  | NAME=FILE: the requests account NAME sent, as a browser or proxy saved them (HAR). Every GET is a page the role reached, its Authorization and Cookie headers of the latest request are its session (unless -role gives headers), its writes are replayed with -replay-writes. Without -- run options this is the whole input: no crawl |
