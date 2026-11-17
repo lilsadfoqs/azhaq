@@ -169,3 +169,28 @@ func TestServicesSayAVersionTheyDidNotPick(t *testing.T) {
 		t.Errorf("line %q", line)
 	}
 }
+
+// Names on one address and port that read another product, or another version
+// of the product, are not on the row: its names are the ones whose own answer
+// named this product and version, and its host is one of them.
+func TestListenerNamesAreThoseThatNamedTheProduct(t *testing.T) {
+	http := func(host, server string) types.StoredObservation {
+		return obsOf("azhaq-http", "http", map[string]any{"url": "http://" + host + ":80/", "ip": "10.0.0.5", "server": server})
+	}
+	got := Services([]types.StoredObservation{
+		http("app.test", "Jetty/9.4.40"),
+		http("shop.test", "nginx/1.25.0"),
+		http("www.test", "Jetty/9.4.40"),
+		http("old.test", "Jetty/9.0.1"),
+	})
+	by := map[string]Service{}
+	for _, s := range got {
+		by[s.Product] = s
+	}
+	if j := by["Jetty"]; !slices.Equal(j.Names, []string{"app.test", "www.test"}) || j.Host != "app.test" {
+		t.Errorf("Jetty row %+v, want the two names that read 9.4.40", j)
+	}
+	if n := by["nginx"]; !slices.Equal(n.Names, []string{"shop.test"}) || n.Host != "shop.test" {
+		t.Errorf("nginx row %+v, want its own name only", n)
+	}
+}

@@ -68,7 +68,7 @@ func danglingRecord(host string, dg takeover.Dangling, at, command string) findi
 	if dg.Server != "" {
 		gave = " from " + dg.Server
 	}
-	evidence := "observed: " + host + " is a CNAME to " + dg.Chain[0] + " (chain " + chain + "); " + dg.Target + " answered " + dg.Rcode + gave +
+	evidence := "observed: " + host + " points by CNAME at " + dg.Chain[0] + " (chain " + chain + "), and " + dg.Target + ", a name that does not exist, answered " + dg.Rcode + gave +
 		". Whether anyone can create that name was not tested"
 	excerpt := chain + "; status: " + dg.Rcode + " at " + dg.Target
 	if dg.Server != "" {
