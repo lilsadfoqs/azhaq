@@ -221,8 +221,8 @@ type Service struct {
 	Banner  string `json:"banner,omitempty"`
 	TLS     bool   `json:"tls,omitempty"`
 	Origin  string `json:"origin,omitempty"`
-	// Names are the host strings the listener was reached by (a name, its
-	// address): one listener, whichever the run asked it by.
+	// Names are the host strings whose own answer named this product and
+	// version (a name, its address); the other names of the listener are not.
 	Names []string `json:"names,omitempty"`
 	// AlsoSeen are other versions of the product on the listener that the
 	// one chosen does not refine: said, not dropped.
@@ -299,7 +299,7 @@ type Lead struct {
 	Host          string   `json:"host"`
 	Port          int      `json:"port,omitempty"`
 	Address       string   `json:"address,omitempty"`   // the listener's IP address, when the run holds it
-	Names         []string `json:"names,omitempty"`     // every host string the listener was reached by
+	Names         []string `json:"names,omitempty"`     // the host strings whose own answer named this product and version
 	Proto         string   `json:"proto,omitempty"`     // udp, when it is not TCP
 	AlsoSeen      []string `json:"also_seen,omitempty"` // other versions of the product seen on the listener
 	Service       string   `json:"service,omitempty"`

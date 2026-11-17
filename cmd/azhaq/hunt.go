@@ -251,8 +251,8 @@ func takeoverDetail(f takeover.Finding) string {
 	return d
 }
 
-// otherNames are the host strings a record's listener answered under, besides
-// the one it is named by.
+// otherNames are the other host strings whose own answer named the record's
+// product and version, besides the one it is named by.
 func otherNames(r findingRecord) []string {
 	var out []string
 	for _, n := range r.names {

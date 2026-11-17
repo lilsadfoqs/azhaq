@@ -43,6 +43,13 @@ func newNamesLab(t *testing.T) *namesLab { return newNamesLabPages(t, nil) }
 // HTML given, header lines apart: its title and meta tags are the page's own.
 func newNamesLabPages(t *testing.T, pages map[string]string) *namesLab {
 	t.Helper()
+	return newNamesLabHeaders(t, pages, nil)
+}
+
+// newNamesLabHeaders is newNamesLabPages where a name in servers also sends
+// that Server header.
+func newNamesLabHeaders(t *testing.T, pages, servers map[string]string) *namesLab {
+	t.Helper()
 	l := &namesLab{}
 	ln, err := net.Listen("tcp", "127.0.0.2:0")
 	if err != nil {
@@ -62,6 +69,9 @@ func newNamesLabPages(t *testing.T, pages map[string]string) *namesLab {
 		l.hosts = append(l.hosts, host+" "+r.URL.Path)
 		l.mu.Unlock()
 		w.Header().Set("Content-Type", "text/html")
+		if v := servers[host]; v != "" {
+			w.Header().Set("Server", v)
+		}
 		title, ok := apps[host]
 		switch {
 		case pages[host] != "" && r.URL.Path == "/":

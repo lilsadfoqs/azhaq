@@ -439,37 +439,22 @@ func NameAddrs(obs []types.StoredObservation) map[string]string {
 // mergeListeners makes one service of each listener (address and port) and
 // product: a name and its address are one listener, and the Server header
 // and a page's technologies that name one product are one service, with the
-// most specific version seen. The host is the same for every product of a
-// listener (its first name, by order), and Names lists every host string the
-// listener was reached by.
+// most specific version seen. Names lists the host strings whose own answer
+// named that product and version, and the host is the first of them: another
+// name of the listener that named something else, or nothing, is not on the
+// row.
 func mergeListeners(in []Service, addrs map[string]string) []Service {
 	for i := range in {
 		if in[i].IP == "" && normIP(in[i].Host) == "" {
 			in[i].IP = addrs[strings.ToLower(in[i].Host)]
 		}
 	}
-	names := map[string][]string{}
-	for _, s := range in {
-		if s.Host == "" {
-			continue
-		}
-		l := s.Listener()
-		if !slices.Contains(names[l], s.Host) {
-			names[l] = append(names[l], s.Host)
-		}
-	}
-	for l := range names {
-		sort.Strings(names[l])
-	}
 	var out []Service
 	at := map[string]int{}
+	group := map[string][]Service{} // listener + product → what each name read
 	for _, s := range in {
-		l := s.Listener()
-		if ns := names[l]; len(ns) > 0 {
-			s.Names = ns
-			s.Host = firstName(ns)
-		}
-		k := l + "|" + identity(s.Product)
+		k := s.Listener() + "|" + identity(s.Product)
+		group[k] = append(group[k], s)
 		i, ok := at[k]
 		if !ok {
 			at[k] = len(out)
@@ -489,6 +474,19 @@ func mergeListeners(in []Service, addrs map[string]string) []Service {
 			}
 		}
 		out[i] = win
+	}
+	for i, s := range out {
+		var ns []string
+		for _, g := range group[s.Listener()+"|"+identity(s.Product)] {
+			if g.Host != "" && (refines(s.Version, g.Version) || refines(g.Version, s.Version)) && !slices.Contains(ns, g.Host) {
+				ns = append(ns, g.Host)
+			}
+		}
+		sort.Strings(ns)
+		if len(ns) > 0 {
+			out[i].Names = ns
+			out[i].Host = firstName(ns)
+		}
 	}
 	return out
 }

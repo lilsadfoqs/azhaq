@@ -37,9 +37,9 @@ type Ident struct {
 	CVSS     float64        `json:"cvss,omitempty"`
 	Evidence string         `json:"evidence"`
 	Command  string         `json:"command,omitempty"` // the command that produced the record
-	// Also lists the other host names the listener answered under with this
-	// product and version (its address, a name that resolves to it): one row for
-	// the service, whatever it was reached as.
+	// Also lists the other host names whose own answer named this product and
+	// version (its address, a name that resolves to it): one row for the service,
+	// whatever it was reached as. A name that read another product is not here.
 	Also []string `json:"also_named,omitempty"`
 }
 

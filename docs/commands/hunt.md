@@ -74,7 +74,7 @@ leads (2): inferred from a name, a path or a guess; each names the check that wo
 | `kind` | Only on the row of a listener: `identification`, or `finding` when a read proved something on it. |
 | `what` | On a listener: the kind of the record in `report -findings` (`advisory-precondition`, `software-version`, `unauthenticated-read`…). |
 | `also_at` | On a route that answered the same body at other host names of its address and port: their URLs. |
-| `also_named` | On a listener also reached under other host names (its address, a name that resolves to it) with the same product and version: those names. |
+| `also_named` | On a listener also reached under other host names (its address, a name that resolves to it) whose own answer named the same product and version: those names. Names on the address that named another product, or none, are not listed. |
 | `host`, `port`, `product`, `version` | On a listener. `version` is `""` when no version was seen. |
 | `source` | On a listener a name's root page gave: what named the product, `page title`, `generator`, `header X-Powered-By`, `header Server`, `header WWW-Authenticate realm` or `technology`. A title is not a version: `version` is only what one of them stated. |
 | `advisory_id`, `advisory_url`, `advisories`, `kev`, `cvss` | On a listener with an advisory match: the top advisory, how many advisories match the version, whether CISA lists the top one as exploited, and its score. |
@@ -138,7 +138,7 @@ A listener row is what the run named on one `host:port`. The rows come from the 
 - The top advisory the version matches, with its label as `report -findings` says it (`proved`, `version-read`, `version-only`, `conditional`) and how many advisories match in all. The text row names the next two and counts the rest by label (`and 11 more: 9 version-only, 2 conditional`); every advisory is in `report -findings`. A product with no version has no advisory: there is nothing to match.
 - The proof: the banner or the header that stated it, and the command that shows it again, which is the row's `next`.
 - A name that shares its listener with others (name-based virtual hosts) has a row of its own, keyed `name:port`, for the application its root page names about itself: see [Applications of a name](#applications-of-a-name).
-- A listener reached under its address and under a name that resolves to it, with the same product and version, is one row, which lists the other host names in `also_named` and in its `identified` reason. Names whose root pages answered differently are rows of their own, whatever the product.
+- A listener reached under its address and under a name that resolves to it, with the same product and version, is one row, which lists the other host names in `also_named` and in its `identified` reason. Only a name whose own answer named that product and version is listed; a name on the same address whose answer named another product or version, or none, is not folded into the row, and a name whose root page answered differently is a row of its own, whatever the product.
 - A read that proved something on a listener (`-verify`: a data store that answered without a password) is a finding row.
 
 An identification is never softened: `version-only` says the version is in the advisory's range and nothing more was checked.
