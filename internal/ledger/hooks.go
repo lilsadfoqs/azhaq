@@ -28,6 +28,14 @@ func WithCollector(ctx context.Context, name string) context.Context {
 	return context.WithValue(ctx, collectorKey{}, name)
 }
 
+type ruleKey struct{}
+
+// WithRule marks ctx with why the questions made with it were allowed, when
+// it is not a scope rule on the name asked about: a resolver the user named.
+func WithRule(ctx context.Context, rule string) context.Context {
+	return context.WithValue(ctx, ruleKey{}, rule)
+}
+
 type opaqueKey struct{}
 
 // WithOpaqueTarget marks ctx so that the requests made with it are
@@ -297,6 +305,9 @@ func DNS(ctx context.Context, name, qtype, server string) {
 	rule := l.rule(name)
 	if ip, ok := normalize.ReverseAddr(name); ok {
 		rule = l.rule(ip.String())
+	}
+	if why, _ := ctx.Value(ruleKey{}).(string); why != "" {
+		rule = why
 	}
 	l.Record(Entry{Kind: "dns", Class: ClassDNS, Method: qtype, Target: server, Host: name, Rule: rule, Collector: collectorOf(ctx)})
 }
