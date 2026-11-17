@@ -20,7 +20,8 @@ type progressKey struct{}
 
 // WithProgress has a scan made with ctx call fn about every second, and once
 // at the end of its first pass, with what it has finished, from a goroutine of
-// its own. A scan that ends before the first second never calls it.
+// its own. A scan that ends before the first second never calls it, unless a
+// cancel cut it.
 func WithProgress(ctx context.Context, fn func(Progress)) context.Context {
 	return context.WithValue(ctx, progressKey{}, fn)
 }
@@ -106,9 +107,11 @@ func (p *progress) call(snap Progress) {
 }
 
 // last gives the end of the pass, when a call was made before it (a scan
-// that was long enough to be cut off in the middle of its retries).
-func (p *progress) last(mu *sync.Mutex, asked int) {
-	if !p.did {
+// that was long enough to be cut off in the middle of its retries), or when
+// cut says the context ended: a stop must not lose what was finished in the
+// first second.
+func (p *progress) last(mu *sync.Mutex, asked int, cut bool) {
+	if !p.did && !cut {
 		return
 	}
 	mu.Lock()

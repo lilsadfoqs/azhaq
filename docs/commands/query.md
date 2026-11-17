@@ -75,7 +75,7 @@ A web row that a request answered keeps its response headers, the first 1024 byt
 | `body_excerpt` | The first 1024 bytes of the body. In text it is one escaped line; in `-json` it is a string, and a byte that is not UTF-8 shows as U+FFFD (`-sr` keeps the exact bytes). |
 | `body_length` | The size of the whole body. |
 | `body_cut` | `true` when the body is longer than the excerpt. |
-| `body_url` | After a redirect, the URL the body is of. |
+| `body_url` | Only in a workspace made before 0.28: after a redirect, the URL the body was of. A row holds the answer of its own URL now, so a redirect's body is its own and its target is a row of its own. |
 | `asked_at` | When the request was sent, in UTC. |
 
 A row that stands for several URLs (a template with a `count`) has none of them.

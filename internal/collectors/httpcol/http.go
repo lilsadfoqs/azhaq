@@ -759,7 +759,13 @@ func (c *Collector) fetchFirst(ctx context.Context, raw string, rq *fetch.Req, f
 	dres.Body = data
 	row := describe(reqURL, final, dres, title, c.NoTech, c.Spec != nil)
 	full, _ := row["length"].(int)
-	fetch.AddEvidence(row, res, full) // the raw answer, not the decoded body
+	// The raw answer, not the decoded body; after a followed redirect the
+	// stored answer is the redirect's own, and the page it ends at is a row of its own.
+	if len(res.Hops) > 1 && c.Spec == nil {
+		fetch.AddEvidence(row, res.Own(), 0)
+	} else {
+		fetch.AddEvidence(row, res, full)
+	}
 	bare := first && res.Status == http.StatusBadRequest
 	var control *fetch.Control
 	catchAll := false
@@ -842,10 +848,16 @@ func describe(reqURL, final string, res fetch.Result, title string, noTech, ever
 	if realm := authRealm(res.Header); realm != "" {
 		out["realm"] = realm
 	}
+	// What the findings judge a URL by is its own answer's body: after a
+	// followed redirect, the redirect's, not the page it ends at.
+	own := res.Body
+	if len(res.Hops) > 1 {
+		own = res.Hops[0].Body
+	}
 	if u, err := url.Parse(reqURL); err == nil && proof.Wants(u.Path) {
 		// The path names a file or a panel: the start of what came is kept, so
 		// that the findings judge it by its own bytes and never ask again.
-		out["head"], out["head_kept"] = res.Body[:min(len(res.Body), proof.HeadBytes)], true
+		out["head"], out["head_kept"] = own[:min(len(own), proof.HeadBytes)], true
 	}
 	if passwordField.Match(res.Body[:min(len(res.Body), 64<<10)]) {
 		out["login"] = true
@@ -861,17 +873,17 @@ func describe(reqURL, final string, res fetch.Result, title string, noTech, ever
 	}
 	// A stack trace in the answer, whatever its status: the runtime, the
 	// first exception line and the frames. Nothing more is sent for it.
-	if tr, ok := webextract.StackTrace(res.Body); ok {
+	if tr, ok := webextract.StackTrace(own); ok {
 		out["stack_trace"] = tr
 		// The bytes that name the exception, where they are in the body.
-		if i := bytes.Index(res.Body, []byte(tr.Exception)); i >= 0 && tr.Exception != "" {
-			out["trace_excerpt"], out["trace_offset"] = proof.Printable(res.Body[i:], proof.MaxExcerpt), i
+		if i := bytes.Index(own, []byte(tr.Exception)); i >= 0 && tr.Exception != "" {
+			out["trace_excerpt"], out["trace_offset"] = proof.Printable(own[i:], proof.MaxExcerpt), i
 		}
 	}
 	if res.Status >= 500 {
 		// What a failed answer gives away (an SQL error, a stack trace, a
 		// debug page): its kind, and the 100 bytes that say so.
-		if kind, sample := webextract.ErrorText(res.Body); kind != "" {
+		if kind, sample := webextract.ErrorText(own); kind != "" {
 			out["error_text"], out["error_sample"] = kind, sample
 		}
 	}

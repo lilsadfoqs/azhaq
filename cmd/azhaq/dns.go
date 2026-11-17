@@ -29,6 +29,7 @@ import (
 	"github.com/lilsadfoqs/azhaq/internal/dnsr"
 	"github.com/lilsadfoqs/azhaq/internal/fingerprint"
 	"github.com/lilsadfoqs/azhaq/internal/lazyre"
+	"github.com/lilsadfoqs/azhaq/internal/ledger"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"github.com/lilsadfoqs/azhaq/internal/takeover"
 	"github.com/lilsadfoqs/azhaq/scope"
@@ -112,7 +113,7 @@ func cmdDNS(args []string) error {
 		}
 		kinds[i] = fs.Bool(k.flag, false, usage)
 	}
-	axfr := fs.Bool("axfr", false, "ask each name server of the name, and the -resolvers you gave, for the whole zone over TCP (active; a name server is asked at an address the scope allows: -allow, -scope)")
+	axfr := fs.Bool("axfr", false, "ask each name server of the name for the whole zone over TCP, and each -resolvers address too (active; a name server is asked at an address the scope allows: -allow, -scope; a resolver you named is not held to them, only -deny holds it)")
 	all := fs.Bool("all", false, "ask A, AAAA, CNAME, SOA, TXT, SRV, MX, NS and CAA (not ANY, not AXFR) and print the records (-resp); an address gets only PTR")
 	alias("all", "recon", "same as -all")
 	var exclude stringsFlag
@@ -1316,11 +1317,13 @@ func (r *dnsRun) transfer(ctx context.Context, host string, d *dnsr.Data) {
 	}
 	denies := scope.Rules{Deny: rules.Deny}
 	var servers []string
+	why := map[string]string{} // the rule of a server the scope did not allow: a resolver
 	seen := map[string]bool{}
-	add := func(addr, why string) {
+	add := func(addr, rule string) {
 		if !seen[addr] {
 			seen[addr] = true
 			servers = append(servers, addr)
+			why[addr] = rule
 		}
 	}
 	ns := r.pool.Lookup(ctx, host, dnsr.LookupOptions{Types: []uint16{dns.TypeNS}})
@@ -1336,7 +1339,7 @@ func (r *dnsRun) transfer(ctx context.Context, host string, d *dnsr.Data) {
 				out = append(out, n+" ("+ip+")")
 				continue
 			}
-			add(net.JoinHostPort(ip, axfrPort), n)
+			add(net.JoinHostPort(ip, axfrPort), "")
 		}
 	}
 	if len(out) > 0 {
@@ -1353,7 +1356,7 @@ func (r *dnsRun) transfer(ctx context.Context, host string, d *dnsr.Data) {
 					continue
 				}
 			}
-			add(srv.Addr, "resolver")
+			add(srv.Addr, "-resolvers "+key) // not held to -allow: the ledger says it is why it was asked
 		}
 	}
 	if len(held) > 0 {
@@ -1363,7 +1366,16 @@ func (r *dnsRun) transfer(ctx context.Context, host string, d *dnsr.Data) {
 		r.noteAXFR(fmt.Sprintf("-axfr %s: no server to ask", host))
 		return
 	}
-	chain, fails := r.pool.Transfer(ctx, host, servers)
+	chain, fails := &dnsr.Chain{Host: host}, []dnsr.Failure(nil)
+	for _, srv := range servers {
+		sctx := ctx
+		if why[srv] != "" {
+			sctx = ledger.WithRule(ctx, why[srv])
+		}
+		c, f := r.pool.Transfer(sctx, host, []string{srv})
+		chain.Data = append(chain.Data, c.Data...)
+		fails = append(fails, f...)
+	}
 	// The servers that gave the zone first: a refusal alone reads as a failed transfer.
 	for _, z := range chain.Data {
 		if len(z.Resolver) > 0 {

@@ -86,6 +86,8 @@ type Collector struct {
 	Also map[string][]int
 	// NoPorts are ports never asked, in either pass (-ep of the ports command).
 	NoPorts map[int]bool
+	// PortsFlag is the option the notes name the ports by (-p of the ports command; "" is -ports).
+	PortsFlag string
 
 	mu   sync.Mutex
 	byIP map[string]*scan // one scan per address, however many names point to it
@@ -366,9 +368,9 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		case len(ports) == 0:
 			// Every port is outside the scope, or a stopped run asked them all: nothing
 			// to ask in the first pass, and the second goes on from what it found.
-			s = &scan{up: true}
-			after(s)
-			err = s.err
+			// Through the claim: a range holding the address goes on to its second
+			// pass too, and two scans of it would ask the same ports twice.
+			s, err = c.secondOnce(ctx, host, ip, all, found, after)
 		case c.Discover == DiscoverOff || outScope > 0:
 			// A host held to some ports is asked those, with no discovery
 			// of its own: its 80 and 443 may be outside the scope.
@@ -424,6 +426,7 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		if len(c.UDPPorts) > 0 && !edge && s.up && c.Discover != DiscoverOnly {
 			c.udpRow(row, udp, len(c.UDPPorts))
 		}
+		c.quietNote(row, ports)
 		if s.unprobed > 0 {
 			row["unprobed"] = s.unprobed
 		}
@@ -801,6 +804,21 @@ func (c *Collector) scanOnce(ctx context.Context, host, ip string, ports []int, 
 		out.open = open
 		return &out, err
 	}, ports, found)
+}
+
+// secondOnce is scanOnce for an address whose first pass a stopped run asked
+// whole: only the second pass is left.
+func (c *Collector) secondOnce(ctx context.Context, host, ip string, all []int, found func(portscan.Open), after func(*scan)) (*scan, error) {
+	return c.once(ctx, host, ip, func() *scan {
+		s := &scan{up: true, first: all}
+		after(s)
+		return s
+	}, func(s *scan) (*scan, error) {
+		open, err := c.askAgain(ctx, host, ip, s.open)
+		out := *s
+		out.open = open
+		return &out, err
+	}, nil, found)
 }
 
 // discoverOnce is scanOnce for a scan that first asks whether the address

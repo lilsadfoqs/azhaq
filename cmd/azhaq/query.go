@@ -3,15 +3,18 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/url"
 	"os"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/lilsadfoqs/azhaq/engine"
+	"github.com/lilsadfoqs/azhaq/internal/advisory"
 	"github.com/lilsadfoqs/azhaq/internal/collectors/urlcol"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"github.com/lilsadfoqs/azhaq/store"
@@ -340,6 +343,49 @@ func cell(v any) string {
 	}
 }
 
+// portLabelRow is the port row a listener label names, as hunt prints it:
+// host:port with the host an address or a name that points to it (by the
+// port row's own names, or addrs, the run's name → address rows), and the
+// protocol after a slash when given (tcp before udp when not). nil when the
+// label is not one or no port row holds it.
+func portLabelRow(rows []engine.MapEntry, addrs map[string]string, label string) *engine.MapEntry {
+	label = strings.TrimSpace(label)
+	proto := ""
+	if i := strings.LastIndex(label, "/"); i > 0 && (label[i+1:] == "tcp" || label[i+1:] == "udp") {
+		label, proto = label[:i], label[i+1:]
+	}
+	host, port, err := net.SplitHostPort(label)
+	if err != nil || host == "" || port == "" {
+		return nil
+	}
+	host = strings.ToLower(host)
+	addr := addrs[host]
+	var found *engine.MapEntry
+	for i, r := range rows {
+		if r.Entity.Type != types.TypePort {
+			continue
+		}
+		rhost, rport, err := net.SplitHostPort(strings.TrimSuffix(strings.TrimSuffix(r.Entity.Key, "/tcp"), "/udp"))
+		if err != nil || rport != port {
+			continue
+		}
+		rproto := "tcp"
+		if strings.HasSuffix(r.Entity.Key, "/udp") {
+			rproto = "udp"
+		}
+		if proto != "" && proto != rproto {
+			continue
+		}
+		if !strings.EqualFold(rhost, host) && !strings.EqualFold(rhost, addr) && !slices.ContainsFunc(r.Names, func(n string) bool { return strings.EqualFold(n, host) }) {
+			continue
+		}
+		if found == nil || rproto == "tcp" && strings.HasSuffix(found.Entity.Key, "/udp") {
+			found = &rows[i]
+		}
+	}
+	return found
+}
+
 // cmdShow prints everything a database knows about one entity: its row
 // in the map, what found it, what it leads to, and every observation.
 func cmdShow(args []string) error {
@@ -383,7 +429,7 @@ func cmdShow(args []string) error {
 				}
 			}
 		}
-		return nil
+		return portLabelRow(g.rows, advisory.NameAddrs(g.obs), want)
 	}
 	row := find(g)
 	newest := g.run

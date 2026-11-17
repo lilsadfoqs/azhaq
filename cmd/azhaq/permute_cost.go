@@ -1,13 +1,16 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
 	"strings"
 	"time"
 
 	"github.com/lilsadfoqs/azhaq/internal/collectors/brutecol"
+	"github.com/lilsadfoqs/azhaq/internal/collectors/dnscol"
 	"github.com/lilsadfoqs/azhaq/internal/dnsr"
+	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"github.com/lilsadfoqs/azhaq/store"
 	"github.com/lilsadfoqs/azhaq/types"
 )
@@ -16,11 +19,14 @@ import (
 // DNS rate: the names given to vary are known, the names found later add
 // PerName each.
 type permuteCost struct {
-	Names      int      `json:"names"`      // names given that are varied
-	Variations int      `json:"variations"` // distinct names asked for them
-	PerName    int      `json:"per_name"`   // what one more name found adds, at most
-	DNSRate    float64  `json:"dns_rate,omitempty"`
-	Resolvers  int      `json:"resolvers,omitempty"`
+	Names      int     `json:"names"`      // names given that are varied
+	Variations int     `json:"variations"` // distinct names asked for them
+	PerName    int     `json:"per_name"`   // what one more name found adds, at most
+	DNSRate    float64 `json:"dns_rate,omitempty"`
+	Resolvers  int     `json:"resolvers,omitempty"`
+	// UpperBound: the names were not resolved yet, and a name that does not
+	// resolve is not varied.
+	UpperBound bool     `json:"upper_bound,omitempty"`
 	Seconds    *float64 `json:"seconds,omitempty"`          // Variations at the rate
 	PerNameSec *float64 `json:"per_name_seconds,omitempty"` // PerName at the rate
 }
@@ -65,7 +71,14 @@ func paceText(sec *float64, rate float64, resolvers int) string {
 func (p permuteCost) text() string {
 	var b strings.Builder
 	if p.Names > 0 {
-		fmt.Fprintf(&b, "%s of %s given", nOf(p.Variations, "variation name", "variation names"), nOf(p.Names, "name", "names"))
+		up := ""
+		if p.UpperBound {
+			up = "up to "
+		}
+		fmt.Fprintf(&b, "%s%s of %s given", up, nOf(p.Variations, "variation name", "variation names"), nOf(p.Names, "name", "names"))
+		if p.UpperBound {
+			b.WriteString(" (an upper bound: a name that does not resolve is not varied)")
+		}
 		if t := paceText(p.Seconds, p.DNSRate, p.Resolvers); t != "" {
 			b.WriteString(", " + t)
 		}
@@ -98,11 +111,16 @@ func permuteNotes(st *store.Store, rate float64, resolvers []string, stopped boo
 		}
 	}
 	hosts := brutecol.PermuteHosts(all)
+	// A name DNS dropped (no address) never reaches Permute: it is not varied.
+	hosts, dropped := varied(st, hosts, tasks)
 	names := brutecol.PermuteNames(hosts)
-	if len(names) == 0 {
+	if len(names) == 0 && dropped == 0 {
 		return nil
 	}
 	pc := newPermuteCost(hosts, rate, resolvers)
+	if len(names) == 0 {
+		return []string{"-permute: " + droppedText(dropped)}
+	}
 	note := fmt.Sprintf("-permute: %s varied, %s to ask (a name two of them make is asked once)", nOf(len(hosts), "name", "names"), nOf(len(names), "variation name", "variation names"))
 	if t := paceText(pc.Seconds, pc.DNSRate, pc.Resolvers); t != "" {
 		note += ", " + t
@@ -112,5 +130,57 @@ func permuteNotes(st *store.Store, rate float64, resolvers []string, stopped boo
 	if left := brutecol.PermuteLeft(brutecol.PermuteHosts(open)); stopped && left > 0 {
 		note += fmt.Sprintf(", %d not asked when the run stopped (azhaq resume asks them)", left)
 	}
+	if dropped > 0 {
+		note += "; " + droppedText(dropped)
+	}
 	return []string{note}
+}
+
+// droppedText says why names found were not varied.
+func droppedText(n int) string {
+	if n == 1 {
+		return "1 name found did not resolve to an address of its own, so it was not varied"
+	}
+	return fmt.Sprintf("%d names found did not resolve to an address of their own, so they were not varied", n)
+}
+
+// varied is hosts without the ones of finished tasks Permute never ran on
+// because DNS found no address for them, and how many those are. A name the
+// run varied earlier, or whose answer is not in the store, stays.
+func varied(st *store.Store, hosts []string, tasks []store.Task) ([]string, int) {
+	pending := map[string]bool{} // finished and not varied in this process
+	for _, t := range tasks {
+		if h := normalize.Hostname(t.Seed.Keys["fqdn"]); t.Done && !brutecol.Varied(h) {
+			pending[h] = true
+		}
+	}
+	if len(pending) == 0 {
+		return hosts, 0
+	}
+	obs, err := st.Observations()
+	if err != nil {
+		return hosts, 0
+	}
+	noAddr := map[string]bool{}
+	for _, o := range obs {
+		var p struct{ FQDN string }
+		_ = json.Unmarshal(o.Payload, &p)
+		h := normalize.Hostname(p.FQDN)
+		switch {
+		case o.Collector == brutecol.PermuteName:
+			pending[h] = false // it was varied, in an earlier process
+		case o.Collector == dnscol.Name && pending[h]:
+			noAddr[h] = dnscol.NoAddress(o.Payload)
+		}
+	}
+	var out []string
+	dropped := 0
+	for _, h := range hosts {
+		if pending[h] && noAddr[h] {
+			dropped++
+			continue
+		}
+		out = append(out, h)
+	}
+	return out, dropped
 }

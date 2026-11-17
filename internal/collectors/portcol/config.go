@@ -32,6 +32,7 @@ type Config struct {
 	Swept                      map[string]Sweep // azhaq resume: blocks a limit stopped
 	Escalate                   bool             // after the first pass, every port of each address that answered it (-ports default)
 	NoPorts                    []int            // ports never asked (-port-skip)
+	PortsFlag                  string           // the option notes name the ports by: -p of the ports command
 	Also                       map[string][]int // ports the first pass asks of an address besides the list: those of its URL targets
 }
 
@@ -53,7 +54,7 @@ func (c *Collector) Apply(cfg Config) {
 	c.ExcludeCDN, c.Discover = cfg.ExcludeCDN, cfg.Discover
 	c.IPv4Only, c.IPv6Only, c.AllIPs = cfg.IPv4Only, cfg.IPv6Only, cfg.AllIPs
 	c.PortsFor = cfg.PortsFor
-	c.Escalate, c.Also = cfg.Escalate, cfg.Also
+	c.Escalate, c.Also, c.PortsFlag = cfg.Escalate, cfg.Also, cfg.PortsFlag
 	c.NoPorts = nil
 	for _, p := range cfg.NoPorts {
 		if c.NoPorts == nil {

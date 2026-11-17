@@ -104,6 +104,46 @@ func catalogPassCommand(args []string, db string, left []int) string {
 	return "azhaq ports " + shellJoin(rest)
 }
 
+// portsLeftOut is what a named set narrower than default leaves out of the
+// service ports default asks: the count and the first few, by port and service.
+type portsLeftOut struct {
+	Count int          `json:"count"`
+	Ports []leftOutRow `json:"ports"`
+	list  string       // the first few, as text
+}
+
+type leftOutRow struct {
+	Port    int    `json:"port"`
+	Service string `json:"service,omitempty"`
+}
+
+// leftOutOf is the gap of a named set (spec as -p or -ports gave it) that
+// asked is the ports of, less skip. nil for an explicit list, a set that
+// reaches default, or one that leaves nothing out.
+func leftOutOf(spec string, asked []int, skip string) *portsLeftOut {
+	if !portscan.NarrowName(spec) {
+		return nil
+	}
+	var kept []int
+	if skip != "" {
+		kept, _ = portscan.Ports(skip)
+	}
+	gap := portscan.ServiceGap(asked, kept)
+	if len(gap) == 0 {
+		return nil
+	}
+	l := &portsLeftOut{Count: len(gap), list: portscan.GapList(gap)}
+	for _, p := range gap[:min(len(gap), 8)] {
+		l.Ports = append(l.Ports, leftOutRow{Port: p, Service: portscan.ServiceName(p)})
+	}
+	return l
+}
+
+// line says it for the summary and the plan: flag is -p or -ports.
+func (l *portsLeftOut) line(flag, spec string) string {
+	return fmt.Sprintf("%s %s leaves out %s that %s default asks (%s); none is added unasked", flag, spec, plural(l.Count, "service port"), flag, l.list)
+}
+
 // verifyPass says, after a run that named services and did not give -verify,
 // which of them a read-only check reads, what each check sends (and no
 // credential), and what the reads cost: one connect a service, each read being
@@ -112,11 +152,8 @@ func verifyPass(obs []types.StoredObservation) (why string, cost amount) {
 	n := 0
 	var sends []string
 	seen := map[string]bool{}
-	for _, svc := range advisory.ServicesAnyVersion(obs) {
-		c, ok := verify.ForService(svc)
-		if !ok {
-			continue
-		}
+	for _, rd := range verify.Reads(advisory.ServicesAnyVersion(obs), advisory.NameAddrs(obs)) {
+		c := rd.Check
 		n++
 		if !seen[c.ID] {
 			seen[c.ID] = true
