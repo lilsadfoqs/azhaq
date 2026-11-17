@@ -159,9 +159,31 @@ type Detected struct {
 	Version  string `json:"version,omitempty"`
 	Matcher  string `json:"matcher,omitempty"`
 	Many     string `json:"many,omitempty"` // "1": one of many products the template names
+	// Icon is "1" when the hash of an image is all that named it: a lead, not
+	// an identification, until a read of the product itself says the same.
+	Icon string `json:"icon,omitempty"`
+	// Ask says what the run asked to settle an icon's name (the read, its
+	// status, whether a template of the product matched), or why it asked none.
+	Ask string `json:"ask,omitempty"`
 	// ViaProxy is "1" when only a header named it, through a -proxy that could
 	// not be asked for its own answer (see Row.ViaProxy).
 	ViaProxy string `json:"via_proxy,omitempty"`
+}
+
+// IconOnly says the hash of an image is all that named the product. A row an
+// older azhaq stored has no icon mark: the shared favicon template's rows are
+// icons all the same, unless a read has settled them.
+func (d Detected) IconOnly() bool {
+	return d.Icon != "" || d.Template == "favicon-detect" && d.Ask == ""
+}
+
+// Said is how a detection is told as evidence: the template, and what was
+// asked to settle an icon's name.
+func (d Detected) Said() string {
+	if d.Ask != "" {
+		return "detection template: " + d.Template + "; " + d.Ask
+	}
+	return "detection template: " + d.Template
 }
 
 // MarkViaProxy sets via_proxy on the detected rows only the identity headers

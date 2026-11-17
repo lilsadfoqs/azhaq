@@ -389,6 +389,9 @@ func factsByEntity(st *store.Store) map[string]facts {
 		if o.Collector == "azhaq-http" || o.Collector == "azhaq-paths" && o.Kind == "detected" {
 			row, _ := httprow.ParseRow(o.Payload)
 			for _, d := range row.Detected {
+				if d.IconOnly() {
+					continue // an icon's hash is a lead, not a technology the page runs
+				}
 				name := d.Product
 				if d.Version != "" {
 					name += ":" + d.Version

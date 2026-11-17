@@ -786,5 +786,9 @@ func listenerRecords(obs []types.StoredObservation, command string) (set finding
 		}
 		add(rec)
 	}
+	// A product only an icon's hash named: a lead, with no version or advisory.
+	for _, l := range advisory.IconLeads(obs) {
+		add(iconLeadRecord(l, command))
+	}
 	return set, addrs, hashes
 }
