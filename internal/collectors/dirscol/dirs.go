@@ -720,7 +720,8 @@ func MaxRequests(raw string, words, exts []string, calibrate, holdState bool, de
 			n++
 		}
 	}
-	return n
+	// A hit that names its own path may get a control under its prefix.
+	return n + min(MaxPrefixControls, len(targets))
 }
 
 // Base is the directory a sweep that starts at raw asks: its scheme, host
@@ -826,6 +827,10 @@ func (c *Collector) judgeInDirs(ctx context.Context, host string, hs []exactHit,
 	return out2
 }
 
+// MaxPrefixControls is the most prefix controls one sweep asks, so that
+// MaxRequests is a bound.
+const MaxPrefixControls = 8
+
 // prefixControl is a control asked under a directory or a prefix, and what it
 // answered; r is empty when it failed, and no other hit asks it again.
 type prefixControl struct {
@@ -840,8 +845,9 @@ type prefixControl struct {
 // control is asked for each prefix, and is reused for the hits under it, the
 // controls of the directories above included; none is asked for a hit that is
 // already folded. A control the budget refuses, or that fails, leaves its
-// hits unlabelled.
+// hits unlabelled, as do the hits past MaxPrefixControls controls.
 func (c *Collector) judgePrefixes(ctx context.Context, host string, hs []exactHit, out2 []hit, ctls map[string]*prefixControl, note *sweepNote, out, halt *atomic.Bool) {
+	asked := 0
 	var todo []int
 	for i, h := range hs {
 		if out2[i].Control == nil && h.r.echoes() && !isDir(h.hit) {
@@ -865,6 +871,10 @@ func (c *Collector) judgePrefixes(ctx context.Context, host string, hs []exactHi
 		if out2[i].PrefixControl != nil || ctls[own] != nil || ctx.Err() != nil || out.Load() || halt.Load() {
 			continue
 		}
+		if asked >= MaxPrefixControls {
+			continue // the bound MaxRequests states: the hit stays listed, unlabelled
+		}
+		asked++
 		name := fetch.ProbeName("dirs control " + own)
 		target := own + name
 		pc := &prefixControl{}

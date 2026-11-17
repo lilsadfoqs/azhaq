@@ -157,3 +157,54 @@ func TestSweepAsksNoControlForAPageThatAnswers200(t *testing.T) {
 		t.Errorf("/about is listed and asks no control: %v, summary %v", rows["/about"], summary)
 	}
 }
+
+// A sweep asks at most MaxPrefixControls prefix controls, so MaxRequests
+// bounds what it sends: hits past the cap stay listed, unlabelled.
+func TestPrefixControlsStayWithinMaxRequests(t *testing.T) {
+	fetch.Reset()
+	var words []string
+	known := map[string]bool{}
+	for i := range 20 {
+		w := fmt.Sprintf("w%02d", i)
+		words = append(words, w)
+		known["/"+w] = true
+	}
+	var mu sync.Mutex
+	var log []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		log = append(log, r.URL.Path)
+		mu.Unlock()
+		switch p := r.URL.Path; {
+		case known[p]:
+			w.WriteHeader(500)
+			fmt.Fprintf(w, "Error: Unexpected path: %s", p)
+		case strings.Count(p, "/") > 1:
+			w.WriteHeader(404)
+			fmt.Fprint(w, "no such route")
+		default:
+			fmt.Fprint(w, "<title>App</title>shell")
+		}
+	}))
+	t.Cleanup(srv.Close)
+	c := New(srv.Client(), Options{Words: words, Rate: 1000, Set: allStatuses()})
+	rows, _ := sweepRows(t, c, srv.URL+"/")
+	mu.Lock()
+	sent := len(log)
+	controls := 0
+	for _, p := range log {
+		if seg := strings.SplitN(strings.TrimPrefix(p, "/"), "/", 2); len(seg) == 2 && known["/"+seg[0]] {
+			controls++ // a name under a hit's own prefix
+		}
+	}
+	mu.Unlock()
+	if max := MaxRequests(srv.URL+"/", words, nil, true, false, func(string) string { return "" }); sent > max {
+		t.Errorf("sent %d requests, MaxRequests says at most %d", sent, max)
+	}
+	if controls != MaxPrefixControls {
+		t.Errorf("%d prefix controls, want %d", controls, MaxPrefixControls)
+	}
+	if len(rows) != len(words) {
+		t.Errorf("%d rows, want every hit (%d) listed", len(rows), len(words))
+	}
+}
