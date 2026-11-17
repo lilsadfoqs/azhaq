@@ -1,6 +1,7 @@
 package verify
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"os"
@@ -107,6 +108,12 @@ func TestProbeChecksSendWhatTheScanSends(t *testing.T) {
 		if c.Service == "dns" || c.Service == "smb" { // a random id or nonce
 			if len(sent[0]) != len(pr.Request) {
 				t.Errorf("%s: sent %d bytes, want %d", c.ID, len(sent[0]), len(pr.Request))
+			}
+			continue
+		}
+		if c.Service == "jdwp" || c.Service == "java-rmi" { // the scan's request, then the one read (reads_wire_test.go)
+			if !bytes.HasPrefix(sent[0], pr.Request) || len(sent[0]) == len(pr.Request) {
+				t.Errorf("%s: sent %q, want the scan's %q and then the read", c.ID, sent[0], pr.Request)
 			}
 			continue
 		}
