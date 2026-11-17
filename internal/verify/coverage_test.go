@@ -232,3 +232,29 @@ func TestDocsListTheServicesWithNoCheck(t *testing.T) {
 		}
 	}
 }
+
+// A default scan asks the documented ports of every product a catalog checks
+// (-verify-logins), each named: an entry with no port, or a port the scan
+// does not ask, leaves a host that runs only that product unseen.
+func TestDefaultPortsHoldThePortsOfEveryCatalogEntry(t *testing.T) {
+	def := portscan.DefaultPorts()
+	check := func(id string, ports []int) {
+		if len(ports) == 0 {
+			t.Errorf("%s: the entry names no port", id)
+		}
+		for _, q := range ports {
+			if !slices.Contains(def, q) {
+				t.Errorf("%s: the default set lacks %d", id, q)
+			}
+			if portscan.ServiceName(q) == "" {
+				t.Errorf("%s: port %d has no service name", id, q)
+			}
+		}
+	}
+	for _, lg := range DefaultLogins() {
+		check(lg.ID, lg.Ports)
+	}
+	for _, u := range UnauthReads() {
+		check(u.ID, u.Ports)
+	}
+}
