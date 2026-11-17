@@ -1,0 +1,587 @@
+{
+  "date": "2026-11-17T06:10:58Z",
+  "commit": "10e8c80a",
+  "version": "azhaq 0.27.1-0.20261117060823-10e8c80a8368+dirty\nadvisory index 2026-11-16 (52995 records)\n  CISA Known Exploited Vulnerabilities catalogue, 2026-11-13\n  NVD CVE records, feed 2.0 (with CPE configurations), 2026-11-15",
+  "go": "go1.27.4",
+  "tools": [
+    {
+      "name": "katana",
+      "version": "1.8.0"
+    },
+    {
+      "name": "subfinder",
+      "version": "2.17.0"
+    },
+    {
+      "name": "httpx",
+      "version": "1.12.0"
+    },
+    {
+      "name": "dnsx",
+      "version": "1.3.1"
+    },
+    {
+      "name": "naabu",
+      "version": "2.6.1"
+    },
+    {
+      "name": "gau",
+      "version": "2.2.4"
+    },
+    {
+      "name": "ffuf",
+      "version": "2.3.0"
+    },
+    {
+      "name": "alterx",
+      "version": "0.1.0"
+    },
+    {
+      "name": "gowitness",
+      "version": "3.2.2"
+    },
+    {
+      "name": "jsluice",
+      "version": "v0.0.0-20240110145140-0ddfab153e06"
+    },
+    {
+      "name": "notify",
+      "version": "v1.0.7"
+    }
+  ],
+  "profile": "default",
+  "dirs": {
+    "profile": "default",
+    "words": 4750,
+    "apps": [
+      "http://127.0.0.1:3101/",
+      "http://127.0.0.1:5102/"
+    ],
+    "azhaq_hits": 22,
+    "ffuf_hits": 22,
+    "shared": 21,
+    "azhaq_false": 2,
+    "ffuf_false": 2,
+    "azhaq_seconds": 33.980735283,
+    "ffuf_seconds": 34.670381564,
+    "azhaq_rss_mb": 75.69921875,
+    "reference_rss_mb": 23.11328125,
+    "held_back": [
+      "http://127.0.0.1:3101/restore"
+    ],
+    "azhaq_only": [
+      "http://127.0.0.1:5102/ui"
+    ],
+    "small": {
+      "case": "dirs, 6 words, http://127.0.0.1:3101/",
+      "azhaq": 3,
+      "reference": 3,
+      "azhaq_seconds": 0.185552442,
+      "reference_seconds": 0.154817462,
+      "azhaq_rss_mb": 49.8203125,
+      "reference_rss_mb": 11.421875,
+      "azhaq_anon_mb": 9.84765625,
+      "reference_anon_mb": 2.9609375
+    }
+  },
+  "fuzz": {
+    "profile": "default",
+    "words": 4750,
+    "legs": [
+      {
+        "app": "http://127.0.0.1:3101/",
+        "variant": "calibrated (-ac)",
+        "azhaq_hits": 19,
+        "ffuf_hits": 20,
+        "shared": 19,
+        "azhaq_confirmed": 17,
+        "ffuf_confirmed": 17,
+        "azhaq_seconds": 18.862289595,
+        "ffuf_seconds": 18.887591809,
+        "azhaq_rss_mb": 55.44921875,
+        "reference_rss_mb": 23.21484375,
+        "report_equal": true,
+        "report_problem": "19 results equal",
+        "held_back": [
+          "http://127.0.0.1:3101/restore"
+        ]
+      },
+      {
+        "app": "http://127.0.0.1:3101/",
+        "variant": "filtered (-fs 9984)",
+        "azhaq_hits": 19,
+        "ffuf_hits": 20,
+        "shared": 19,
+        "azhaq_confirmed": 17,
+        "ffuf_confirmed": 17,
+        "azhaq_seconds": 19.026944735,
+        "ffuf_seconds": 18.70997183,
+        "azhaq_rss_mb": 55.1796875,
+        "reference_rss_mb": 22.82421875,
+        "held_back": [
+          "http://127.0.0.1:3101/restore"
+        ]
+      },
+      {
+        "app": "http://127.0.0.1:5102/",
+        "variant": "calibrated (-ac)",
+        "azhaq_hits": 2,
+        "ffuf_hits": 2,
+        "shared": 2,
+        "azhaq_confirmed": 2,
+        "ffuf_confirmed": 2,
+        "azhaq_seconds": 5.810506163,
+        "ffuf_seconds": 5.808510643,
+        "azhaq_rss_mb": 52.95703125,
+        "reference_rss_mb": 16.63671875,
+        "report_equal": true,
+        "report_problem": "2 results equal"
+      },
+      {
+        "app": "http://127.0.0.1:5102/",
+        "variant": "filtered (-fs 205)",
+        "azhaq_hits": 2,
+        "ffuf_hits": 2,
+        "shared": 2,
+        "azhaq_confirmed": 2,
+        "ffuf_confirmed": 2,
+        "azhaq_seconds": 5.688389185,
+        "ffuf_seconds": 5.143986256,
+        "azhaq_rss_mb": 52.9140625,
+        "reference_rss_mb": 16.5390625
+      }
+    ]
+  },
+  "checks": [
+    {
+      "name": "[default] dirs: results ≥ the reference's, confirmed by a request that is not the app's catch-all answer",
+      "pass": true,
+      "detail": "azhaq 20, reference 19; old bar: 21 of 22 = 95%; hits azhaq 22, ffuf 22, shared 21; 4750 words, 2 apps; time ×0.98 of the reference, memory ×3.28 of the reference (76 MB against 23 MB); ffuf only []; held back by default as state-changing GETs (-send-state-changing sends them), counted on neither side: [http://127.0.0.1:3101/restore] | azhaq dirs -u http://127.0.0.1:5102/ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -silent vs ffuf -u http://127.0.0.1:5102/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -ac -s"
+    },
+    {
+      "name": "[default] dirs: time ≤ 1.05× the reference's",
+      "pass": true,
+      "detail": "azhaq 34.0s, reference 34.7s (the median of 3 below 20 s, one run above) | azhaq dirs -u http://127.0.0.1:5102/ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -silent vs ffuf -u http://127.0.0.1:5102/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -ac -s"
+    },
+    {
+      "name": "[default] dirs: no more false positives than ffuf",
+      "pass": true,
+      "detail": "hits that answer like a missing path: azhaq 2, ffuf 2"
+    },
+    {
+      "name": "[default] dirs 6 words: results ≥ the reference's, confirmed by the paths ffuf lists",
+      "pass": true,
+      "detail": "azhaq 3, reference 3 | azhaq dirs -u http://127.0.0.1:3101/ -w /home/runner/work/azhaq/azhaq/bench/.work/dirs-six.txt -silent vs ffuf -u http://127.0.0.1:3101/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/dirs-six.txt -ac -s"
+    },
+    {
+      "name": "[default] dirs 6 words: time ≤ 1.25× the reference's",
+      "pass": true,
+      "detail": "azhaq 0.19s, reference 0.15s (1.20×, the median of 3) | azhaq dirs -u http://127.0.0.1:3101/ -w /home/runner/work/azhaq/azhaq/bench/.work/dirs-six.txt -silent vs ffuf -u http://127.0.0.1:3101/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/dirs-six.txt -ac -s"
+    },
+    {
+      "name": "[default] dirs 6 words: private memory ≤ 2× the reference's",
+      "pass": false,
+      "detail": "private (RssAnon) azhaq 9.8 MB, reference 3.0 MB (3.33×); resident with the binary's shared file pages (VmHWM) azhaq 50 MB, reference 11 MB (4.36×); the median of 3 | azhaq dirs -u http://127.0.0.1:3101/ -w /home/runner/work/azhaq/azhaq/bench/.work/dirs-six.txt -silent vs ffuf -u http://127.0.0.1:3101/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/dirs-six.txt -ac -s"
+    },
+    {
+      "name": "[default] fuzz 127.0.0.1:3101 calibrated (-ac): results ≥ the reference's, confirmed by a request that is not the app's catch-all answer",
+      "pass": true,
+      "detail": "azhaq 17, reference 17; old bar: 19 of 20 = 95%; hits azhaq 19, ffuf 20, shared 19; 4750 words; time ×1.00 of the reference, memory ×2.39 of the reference (55 MB against 23 MB); ffuf only []; held back by default as state-changing GETs (-send-state-changing sends them), counted on neither side: [http://127.0.0.1:3101/restore] | azhaq fuzz -u http://127.0.0.1:3101/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -ac vs ffuf -u http://127.0.0.1:3101/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -ac"
+    },
+    {
+      "name": "[default] fuzz 127.0.0.1:3101 calibrated (-ac): time ≤ 1.05× the reference's",
+      "pass": true,
+      "detail": "azhaq 18.9s, reference 18.9s (the median of 3 below 20 s, one run above) | azhaq fuzz -u http://127.0.0.1:3101/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -ac vs ffuf -u http://127.0.0.1:3101/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -ac"
+    },
+    {
+      "name": "[default] fuzz http://127.0.0.1:3101/: the JSON report equals ffuf's (duration dropped)",
+      "pass": true,
+      "detail": "19 results equal"
+    },
+    {
+      "name": "[default] fuzz 127.0.0.1:3101 filtered (-fs 9984): results ≥ the reference's, confirmed by a request that is not the app's catch-all answer",
+      "pass": true,
+      "detail": "azhaq 17, reference 17; old bar: 19 of 20 = 95%; hits azhaq 19, ffuf 20, shared 19; 4750 words; time ×1.02 of the reference, memory ×2.42 of the reference (55 MB against 23 MB); ffuf only []; held back by default as state-changing GETs (-send-state-changing sends them), counted on neither side: [http://127.0.0.1:3101/restore] | azhaq fuzz -u http://127.0.0.1:3101/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -fs 9984 vs ffuf -u http://127.0.0.1:3101/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -fs 9984"
+    },
+    {
+      "name": "[default] fuzz 127.0.0.1:3101 filtered (-fs 9984): time ≤ 1.05× the reference's",
+      "pass": true,
+      "detail": "azhaq 19.0s, reference 18.7s (the median of 3 below 20 s, one run above) | azhaq fuzz -u http://127.0.0.1:3101/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -fs 9984 vs ffuf -u http://127.0.0.1:3101/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -fs 9984"
+    },
+    {
+      "name": "[default] fuzz 127.0.0.1:5102 calibrated (-ac): results ≥ the reference's, confirmed by a request that is not the app's catch-all answer",
+      "pass": true,
+      "detail": "azhaq 2, reference 2; old bar: 2 of 2 = 100%; hits azhaq 2, ffuf 2, shared 2; 4750 words; time ×1.00 of the reference, memory ×3.18 of the reference (53 MB against 17 MB); ffuf only [] | azhaq fuzz -u http://127.0.0.1:5102/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -ac vs ffuf -u http://127.0.0.1:5102/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -ac"
+    },
+    {
+      "name": "[default] fuzz 127.0.0.1:5102 calibrated (-ac): time ≤ 1.05× the reference's",
+      "pass": true,
+      "detail": "azhaq 5.8s, reference 5.8s (the median of 3 below 20 s, one run above) | azhaq fuzz -u http://127.0.0.1:5102/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -ac vs ffuf -u http://127.0.0.1:5102/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -ac"
+    },
+    {
+      "name": "[default] fuzz http://127.0.0.1:5102/: the JSON report equals ffuf's (duration dropped)",
+      "pass": true,
+      "detail": "2 results equal"
+    },
+    {
+      "name": "[default] fuzz 127.0.0.1:5102 filtered (-fs 205): results ≥ the reference's, confirmed by a request that is not the app's catch-all answer",
+      "pass": true,
+      "detail": "azhaq 2, reference 2; old bar: 2 of 2 = 100%; hits azhaq 2, ffuf 2, shared 2; 4750 words; time ×1.11 of the reference, memory ×3.20 of the reference (53 MB against 17 MB); ffuf only [] | azhaq fuzz -u http://127.0.0.1:5102/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -fs 205 vs ffuf -u http://127.0.0.1:5102/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -fs 205"
+    },
+    {
+      "name": "[default] fuzz 127.0.0.1:5102 filtered (-fs 205): time ≤ 1.05× the reference's",
+      "pass": false,
+      "detail": "azhaq 5.7s, reference 5.1s (the median of 3 below 20 s, one run above) | azhaq fuzz -u http://127.0.0.1:5102/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -fs 205 vs ffuf -u http://127.0.0.1:5102/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -fs 205"
+    }
+  ],
+  "runs": [
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 26.81767737,
+      "rss_mb": 75.69921875,
+      "anon_mb": 35.80078125,
+      "profile": "default"
+    },
+    {
+      "tool": "ffuf",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 27.6323194,
+      "rss_mb": 23.11328125,
+      "anon_mb": 14.46875,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 7.163057913,
+      "rss_mb": 64.19921875,
+      "anon_mb": 24.23046875,
+      "profile": "default"
+    },
+    {
+      "tool": "ffuf",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 7.038062164,
+      "rss_mb": 16.640625,
+      "anon_mb": 8.12109375,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 7.146173479,
+      "rss_mb": 63.72265625,
+      "anon_mb": 23.81640625,
+      "profile": "default"
+    },
+    {
+      "tool": "ffuf",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 7.028851453,
+      "rss_mb": 16.47265625,
+      "anon_mb": 8.015625,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 7.296160457,
+      "rss_mb": 61.92578125,
+      "anon_mb": 21.9921875,
+      "profile": "default"
+    },
+    {
+      "tool": "ffuf",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 7.559584064,
+      "rss_mb": 16.7109375,
+      "anon_mb": 8.25390625,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 0.185552442,
+      "rss_mb": 49.8359375,
+      "anon_mb": 9.859375,
+      "profile": "default"
+    },
+    {
+      "tool": "ffuf",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 0.154817462,
+      "rss_mb": 11.39453125,
+      "anon_mb": 2.93359375,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 0.188791208,
+      "rss_mb": 49.74609375,
+      "anon_mb": 9.765625,
+      "profile": "default"
+    },
+    {
+      "tool": "ffuf",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 0.161724125,
+      "rss_mb": 11.453125,
+      "anon_mb": 2.9921875,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 0.180922762,
+      "rss_mb": 49.8203125,
+      "anon_mb": 9.84765625,
+      "profile": "default"
+    },
+    {
+      "tool": "ffuf",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 0.151737713,
+      "rss_mb": 11.421875,
+      "anon_mb": 2.9609375,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 19.834646053,
+      "rss_mb": 55.44921875,
+      "anon_mb": 17.5546875,
+      "profile": "default"
+    },
+    {
+      "tool": "ffuf",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 18.94689817,
+      "rss_mb": 23.21484375,
+      "anon_mb": 14.6953125,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 18.649343044,
+      "rss_mb": 55.80859375,
+      "anon_mb": 17.94921875,
+      "profile": "default"
+    },
+    {
+      "tool": "ffuf",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 18.867079399,
+      "rss_mb": 27.125,
+      "anon_mb": 18.54296875,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 18.862289595,
+      "rss_mb": 54.86328125,
+      "anon_mb": 16.96875,
+      "profile": "default"
+    },
+    {
+      "tool": "ffuf",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 18.887591809,
+      "rss_mb": 22.8828125,
+      "anon_mb": 14.11328125,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:3101/FUZZ",
+      "seconds": 17.833003218,
+      "rss_mb": 56.04296875,
+      "anon_mb": 17.9921875,
+      "profile": "default"
+    },
+    {
+      "tool": "ffuf",
+      "target": "http://127.0.0.1:3101/FUZZ",
+      "seconds": 18.596788658,
+      "rss_mb": 22.62890625,
+      "anon_mb": 13.92578125,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 19.496745042,
+      "rss_mb": 55.04296875,
+      "anon_mb": 17.1796875,
+      "profile": "default"
+    },
+    {
+      "tool": "ffuf",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 18.738534351,
+      "rss_mb": 23.28515625,
+      "anon_mb": 14.640625,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 19.026944735,
+      "rss_mb": 55.1796875,
+      "anon_mb": 17.30859375,
+      "profile": "default"
+    },
+    {
+      "tool": "ffuf",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 18.626410904,
+      "rss_mb": 22.82421875,
+      "anon_mb": 14.1171875,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 18.569795542,
+      "rss_mb": 56.15625,
+      "anon_mb": 18.29296875,
+      "profile": "default"
+    },
+    {
+      "tool": "ffuf",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 18.70997183,
+      "rss_mb": 22.58203125,
+      "anon_mb": 13.8125,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 5.768961243,
+      "rss_mb": 53.0625,
+      "anon_mb": 15.1875,
+      "profile": "default"
+    },
+    {
+      "tool": "ffuf",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 5.790207723,
+      "rss_mb": 16.63671875,
+      "anon_mb": 7.9296875,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 5.810506163,
+      "rss_mb": 52.95703125,
+      "anon_mb": 15.0859375,
+      "profile": "default"
+    },
+    {
+      "tool": "ffuf",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 6.153337471,
+      "rss_mb": 16.61328125,
+      "anon_mb": 8.125,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 5.932466202,
+      "rss_mb": 52.91015625,
+      "anon_mb": 14.984375,
+      "profile": "default"
+    },
+    {
+      "tool": "ffuf",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 5.808510643,
+      "rss_mb": 16.83203125,
+      "anon_mb": 8.25,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:5102/FUZZ",
+      "seconds": 7.0078902,
+      "rss_mb": 53.11328125,
+      "anon_mb": 15.2421875,
+      "profile": "default"
+    },
+    {
+      "tool": "ffuf",
+      "target": "http://127.0.0.1:5102/FUZZ",
+      "seconds": 6.149297153,
+      "rss_mb": 16.859375,
+      "anon_mb": 8.21484375,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 6.086757491,
+      "rss_mb": 52.9140625,
+      "anon_mb": 15.046875,
+      "profile": "default"
+    },
+    {
+      "tool": "ffuf",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 6.151666373,
+      "rss_mb": 16.63671875,
+      "anon_mb": 8.1171875,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 5.688389185,
+      "rss_mb": 53.0546875,
+      "anon_mb": 14.84375,
+      "profile": "default"
+    },
+    {
+      "tool": "ffuf",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 5.143535538,
+      "rss_mb": 16.51953125,
+      "anon_mb": 8.0625,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 5.105511487,
+      "rss_mb": 52.890625,
+      "anon_mb": 14.9921875,
+      "profile": "default"
+    },
+    {
+      "tool": "ffuf",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 5.143986256,
+      "rss_mb": 16.5390625,
+      "anon_mb": 7.98828125,
+      "profile": "default"
+    }
+  ],
+  "units": [
+    {
+      "name": "default:dirs",
+      "checks": 6,
+      "runs": 14
+    },
+    {
+      "name": "default:fuzz",
+      "checks": 10,
+      "runs": 28
+    }
+  ]
+}

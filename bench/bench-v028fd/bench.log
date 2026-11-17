@@ -1,0 +1,82 @@
+=== parts/bench-p1.log
+bench: building azhaq
+bench: starting docker apps
+bench: default: fuzz
+bench: default: fuzz took 380s
+
+default flags: fuzz (4750 words)            azhaq hits (confirmed)  ffuf hits (confirmed)  shared  azhaq s    ffuf s     JSON report equal
+http://127.0.0.1:3101/ calibrated (-ac)     19 (17)                 20 (17)                19      18.9 55MB  18.9 23MB  true
+http://127.0.0.1:3101/ filtered (-fs 9984)  19 (17)                 20 (17)                19      19.0 55MB  18.7 23MB  -
+http://127.0.0.1:5102/ calibrated (-ac)     2 (2)                   2 (2)                  2       5.8 53MB   5.8 17MB   true
+http://127.0.0.1:5102/ filtered (-fs 205)   2 (2)                   2 (2)                  2       5.7 53MB   5.1 17MB   -
+
+checks
+  PASS  [default] fuzz 127.0.0.1:3101 calibrated (-ac): results ≥ the reference's, confirmed by a request that is not the app's catch-all answer  (azhaq 17, reference 17; old bar: 19 of 20 = 95%; hits azhaq 19, ffuf 20, shared 19; 4750 words; time ×1.00 of the reference, memory ×2.39 of the reference (55 MB against 23 MB); ffuf only []; held back by default as state-changing GETs (-send-state-changing sends them), counted on neither side: [http://127.0.0.1:3101/restore] | azhaq fuzz -u http://127.0.0.1:3101/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -ac vs ffuf -u http://127.0.0.1:3101/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -ac)
+  PASS  [default] fuzz 127.0.0.1:3101 calibrated (-ac): time ≤ 1.05× the reference's  (azhaq 18.9s, reference 18.9s (the median of 3 below 20 s, one run above) | azhaq fuzz -u http://127.0.0.1:3101/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -ac vs ffuf -u http://127.0.0.1:3101/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -ac)
+  PASS  [default] fuzz http://127.0.0.1:3101/: the JSON report equals ffuf's (duration dropped)  (19 results equal)
+  PASS  [default] fuzz 127.0.0.1:3101 filtered (-fs 9984): results ≥ the reference's, confirmed by a request that is not the app's catch-all answer  (azhaq 17, reference 17; old bar: 19 of 20 = 95%; hits azhaq 19, ffuf 20, shared 19; 4750 words; time ×1.02 of the reference, memory ×2.42 of the reference (55 MB against 23 MB); ffuf only []; held back by default as state-changing GETs (-send-state-changing sends them), counted on neither side: [http://127.0.0.1:3101/restore] | azhaq fuzz -u http://127.0.0.1:3101/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -fs 9984 vs ffuf -u http://127.0.0.1:3101/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -fs 9984)
+  PASS  [default] fuzz 127.0.0.1:3101 filtered (-fs 9984): time ≤ 1.05× the reference's  (azhaq 19.0s, reference 18.7s (the median of 3 below 20 s, one run above) | azhaq fuzz -u http://127.0.0.1:3101/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -fs 9984 vs ffuf -u http://127.0.0.1:3101/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -fs 9984)
+  PASS  [default] fuzz 127.0.0.1:5102 calibrated (-ac): results ≥ the reference's, confirmed by a request that is not the app's catch-all answer  (azhaq 2, reference 2; old bar: 2 of 2 = 100%; hits azhaq 2, ffuf 2, shared 2; 4750 words; time ×1.00 of the reference, memory ×3.18 of the reference (53 MB against 17 MB); ffuf only [] | azhaq fuzz -u http://127.0.0.1:5102/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -ac vs ffuf -u http://127.0.0.1:5102/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -ac)
+  PASS  [default] fuzz 127.0.0.1:5102 calibrated (-ac): time ≤ 1.05× the reference's  (azhaq 5.8s, reference 5.8s (the median of 3 below 20 s, one run above) | azhaq fuzz -u http://127.0.0.1:5102/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -ac vs ffuf -u http://127.0.0.1:5102/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -ac)
+  PASS  [default] fuzz http://127.0.0.1:5102/: the JSON report equals ffuf's (duration dropped)  (2 results equal)
+  PASS  [default] fuzz 127.0.0.1:5102 filtered (-fs 205): results ≥ the reference's, confirmed by a request that is not the app's catch-all answer  (azhaq 2, reference 2; old bar: 2 of 2 = 100%; hits azhaq 2, ffuf 2, shared 2; 4750 words; time ×1.11 of the reference, memory ×3.20 of the reference (53 MB against 17 MB); ffuf only [] | azhaq fuzz -u http://127.0.0.1:5102/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -fs 205 vs ffuf -u http://127.0.0.1:5102/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -fs 205)
+  FAIL  [default] fuzz 127.0.0.1:5102 filtered (-fs 205): time ≤ 1.05× the reference's  (azhaq 5.7s, reference 5.1s (the median of 3 below 20 s, one run above) | azhaq fuzz -u http://127.0.0.1:5102/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -fs 205 vs ffuf -u http://127.0.0.1:5102/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -fs 205)
+
+9 of 10 checks pass
+
+record bench/history/2026-11-17T061800-10e8c80a.json
+exit status 1
+=== parts/bench-p2.log
+bench: building azhaq
+bench: starting docker apps
+bench: default: dirs
+bench: default: dirs took 134s
+
+default flags: paths (4750 words, 2 apps)  azhaq  ffuf -ac  shared  false positives  time
+hits                                       22     22        21      2 / 2            34.0s 76MB / 34.7s 23MB
+
+checks
+  PASS  [default] dirs: results ≥ the reference's, confirmed by a request that is not the app's catch-all answer  (azhaq 20, reference 19; old bar: 21 of 22 = 95%; hits azhaq 22, ffuf 22, shared 21; 4750 words, 2 apps; time ×0.98 of the reference, memory ×3.28 of the reference (76 MB against 23 MB); ffuf only []; held back by default as state-changing GETs (-send-state-changing sends them), counted on neither side: [http://127.0.0.1:3101/restore] | azhaq dirs -u http://127.0.0.1:5102/ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -silent vs ffuf -u http://127.0.0.1:5102/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -ac -s)
+  PASS  [default] dirs: time ≤ 1.05× the reference's  (azhaq 34.0s, reference 34.7s (the median of 3 below 20 s, one run above) | azhaq dirs -u http://127.0.0.1:5102/ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -silent vs ffuf -u http://127.0.0.1:5102/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -ac -s)
+  PASS  [default] dirs: no more false positives than ffuf  (hits that answer like a missing path: azhaq 2, ffuf 2)
+  PASS  [default] dirs 6 words: results ≥ the reference's, confirmed by the paths ffuf lists  (azhaq 3, reference 3 | azhaq dirs -u http://127.0.0.1:3101/ -w /home/runner/work/azhaq/azhaq/bench/.work/dirs-six.txt -silent vs ffuf -u http://127.0.0.1:3101/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/dirs-six.txt -ac -s)
+  PASS  [default] dirs 6 words: time ≤ 1.25× the reference's  (azhaq 0.19s, reference 0.15s (1.20×, the median of 3) | azhaq dirs -u http://127.0.0.1:3101/ -w /home/runner/work/azhaq/azhaq/bench/.work/dirs-six.txt -silent vs ffuf -u http://127.0.0.1:3101/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/dirs-six.txt -ac -s)
+  FAIL  [default] dirs 6 words: private memory ≤ 2× the reference's  (private (RssAnon) azhaq 9.8 MB, reference 3.0 MB (3.33×); resident with the binary's shared file pages (VmHWM) azhaq 50 MB, reference 11 MB (4.36×); the median of 3 | azhaq dirs -u http://127.0.0.1:3101/ -w /home/runner/work/azhaq/azhaq/bench/.work/dirs-six.txt -silent vs ffuf -u http://127.0.0.1:3101/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/dirs-six.txt -ac -s)
+
+5 of 6 checks pass
+
+record bench/history/2026-11-17T061354-10e8c80a.json
+exit status 1
+=== join
+
+default flags: paths (4750 words, 2 apps)  azhaq  ffuf -ac  shared  false positives  time
+hits                                       22     22        21      2 / 2            34.0s 76MB / 34.7s 23MB
+
+default flags: fuzz (4750 words)            azhaq hits (confirmed)  ffuf hits (confirmed)  shared  azhaq s    ffuf s     JSON report equal
+http://127.0.0.1:3101/ calibrated (-ac)     19 (17)                 20 (17)                19      18.9 55MB  18.9 23MB  true
+http://127.0.0.1:3101/ filtered (-fs 9984)  19 (17)                 20 (17)                19      19.0 55MB  18.7 23MB  -
+http://127.0.0.1:5102/ calibrated (-ac)     2 (2)                   2 (2)                  2       5.8 53MB   5.8 17MB   true
+http://127.0.0.1:5102/ filtered (-fs 205)   2 (2)                   2 (2)                  2       5.7 53MB   5.1 17MB   -
+
+checks
+  PASS  [default] dirs: results ≥ the reference's, confirmed by a request that is not the app's catch-all answer  (azhaq 20, reference 19; old bar: 21 of 22 = 95%; hits azhaq 22, ffuf 22, shared 21; 4750 words, 2 apps; time ×0.98 of the reference, memory ×3.28 of the reference (76 MB against 23 MB); ffuf only []; held back by default as state-changing GETs (-send-state-changing sends them), counted on neither side: [http://127.0.0.1:3101/restore] | azhaq dirs -u http://127.0.0.1:5102/ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -silent vs ffuf -u http://127.0.0.1:5102/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -ac -s)
+  PASS  [default] dirs: time ≤ 1.05× the reference's  (azhaq 34.0s, reference 34.7s (the median of 3 below 20 s, one run above) | azhaq dirs -u http://127.0.0.1:5102/ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -silent vs ffuf -u http://127.0.0.1:5102/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -ac -s)
+  PASS  [default] dirs: no more false positives than ffuf  (hits that answer like a missing path: azhaq 2, ffuf 2)
+  PASS  [default] dirs 6 words: results ≥ the reference's, confirmed by the paths ffuf lists  (azhaq 3, reference 3 | azhaq dirs -u http://127.0.0.1:3101/ -w /home/runner/work/azhaq/azhaq/bench/.work/dirs-six.txt -silent vs ffuf -u http://127.0.0.1:3101/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/dirs-six.txt -ac -s)
+  PASS  [default] dirs 6 words: time ≤ 1.25× the reference's  (azhaq 0.19s, reference 0.15s (1.20×, the median of 3) | azhaq dirs -u http://127.0.0.1:3101/ -w /home/runner/work/azhaq/azhaq/bench/.work/dirs-six.txt -silent vs ffuf -u http://127.0.0.1:3101/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/dirs-six.txt -ac -s)
+  FAIL  [default] dirs 6 words: private memory ≤ 2× the reference's  (private (RssAnon) azhaq 9.8 MB, reference 3.0 MB (3.33×); resident with the binary's shared file pages (VmHWM) azhaq 50 MB, reference 11 MB (4.36×); the median of 3 | azhaq dirs -u http://127.0.0.1:3101/ -w /home/runner/work/azhaq/azhaq/bench/.work/dirs-six.txt -silent vs ffuf -u http://127.0.0.1:3101/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/dirs-six.txt -ac -s)
+  PASS  [default] fuzz 127.0.0.1:3101 calibrated (-ac): results ≥ the reference's, confirmed by a request that is not the app's catch-all answer  (azhaq 17, reference 17; old bar: 19 of 20 = 95%; hits azhaq 19, ffuf 20, shared 19; 4750 words; time ×1.00 of the reference, memory ×2.39 of the reference (55 MB against 23 MB); ffuf only []; held back by default as state-changing GETs (-send-state-changing sends them), counted on neither side: [http://127.0.0.1:3101/restore] | azhaq fuzz -u http://127.0.0.1:3101/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -ac vs ffuf -u http://127.0.0.1:3101/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -ac)
+  PASS  [default] fuzz 127.0.0.1:3101 calibrated (-ac): time ≤ 1.05× the reference's  (azhaq 18.9s, reference 18.9s (the median of 3 below 20 s, one run above) | azhaq fuzz -u http://127.0.0.1:3101/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -ac vs ffuf -u http://127.0.0.1:3101/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -ac)
+  PASS  [default] fuzz http://127.0.0.1:3101/: the JSON report equals ffuf's (duration dropped)  (19 results equal)
+  PASS  [default] fuzz 127.0.0.1:3101 filtered (-fs 9984): results ≥ the reference's, confirmed by a request that is not the app's catch-all answer  (azhaq 17, reference 17; old bar: 19 of 20 = 95%; hits azhaq 19, ffuf 20, shared 19; 4750 words; time ×1.02 of the reference, memory ×2.42 of the reference (55 MB against 23 MB); ffuf only []; held back by default as state-changing GETs (-send-state-changing sends them), counted on neither side: [http://127.0.0.1:3101/restore] | azhaq fuzz -u http://127.0.0.1:3101/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -fs 9984 vs ffuf -u http://127.0.0.1:3101/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -fs 9984)
+  PASS  [default] fuzz 127.0.0.1:3101 filtered (-fs 9984): time ≤ 1.05× the reference's  (azhaq 19.0s, reference 18.7s (the median of 3 below 20 s, one run above) | azhaq fuzz -u http://127.0.0.1:3101/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -fs 9984 vs ffuf -u http://127.0.0.1:3101/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -fs 9984)
+  PASS  [default] fuzz 127.0.0.1:5102 calibrated (-ac): results ≥ the reference's, confirmed by a request that is not the app's catch-all answer  (azhaq 2, reference 2; old bar: 2 of 2 = 100%; hits azhaq 2, ffuf 2, shared 2; 4750 words; time ×1.00 of the reference, memory ×3.18 of the reference (53 MB against 17 MB); ffuf only [] | azhaq fuzz -u http://127.0.0.1:5102/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -ac vs ffuf -u http://127.0.0.1:5102/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -ac)
+  PASS  [default] fuzz 127.0.0.1:5102 calibrated (-ac): time ≤ 1.05× the reference's  (azhaq 5.8s, reference 5.8s (the median of 3 below 20 s, one run above) | azhaq fuzz -u http://127.0.0.1:5102/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -ac vs ffuf -u http://127.0.0.1:5102/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -ac)
+  PASS  [default] fuzz http://127.0.0.1:5102/: the JSON report equals ffuf's (duration dropped)  (2 results equal)
+  PASS  [default] fuzz 127.0.0.1:5102 filtered (-fs 205): results ≥ the reference's, confirmed by a request that is not the app's catch-all answer  (azhaq 2, reference 2; old bar: 2 of 2 = 100%; hits azhaq 2, ffuf 2, shared 2; 4750 words; time ×1.11 of the reference, memory ×3.20 of the reference (53 MB against 17 MB); ffuf only [] | azhaq fuzz -u http://127.0.0.1:5102/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -fs 205 vs ffuf -u http://127.0.0.1:5102/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -fs 205)
+  FAIL  [default] fuzz 127.0.0.1:5102 filtered (-fs 205): time ≤ 1.05× the reference's  (azhaq 5.7s, reference 5.1s (the median of 3 below 20 s, one run above) | azhaq fuzz -u http://127.0.0.1:5102/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -fs 205 vs ffuf -u http://127.0.0.1:5102/FUZZ -w /home/runner/work/azhaq/azhaq/bench/.work/common.txt -s -fs 205)
+
+14 of 16 checks pass
+
+record bench/joined/2026-11-17T061058-10e8c80a.json (joined from 2)
+exit status 1
