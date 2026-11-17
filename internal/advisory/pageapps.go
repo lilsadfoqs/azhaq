@@ -73,7 +73,16 @@ func detectedRow(o types.StoredObservation) (page string, found []httprow.Detect
 // names it. A product the data does not hold, named by a title, a generator or
 // X-Powered-By, is the page's own word for itself and is kept.
 func pageApps(obs []types.StoredObservation) []pageApp {
+	apps, _ := pageAppsAndIcons(obs)
+	return apps
+}
+
+// pageAppsAndIcons is pageApps, and the products the hash of an icon alone
+// named, which are no application of the name: IconLeads says which of them
+// stay leads.
+func pageAppsAndIcons(obs []types.StoredObservation) ([]pageApp, []iconCand) {
 	var out []pageApp
+	var icons []iconCand
 	at := map[string]int{}
 	for _, o := range obs {
 		var row httprow.Row
@@ -152,11 +161,21 @@ func pageApps(obs []types.StoredObservation) []pageApp {
 			}
 			add(name, version, SourceTech, "technology: "+t, slices.Contains(row.ViaProxy, "tech:"+t))
 		}
+		ic := iconCand{Host: u.Hostname(), Port: port, Origin: u.Scheme + "://" + u.Host, From: row.URL, Hash: row.Favicon, IconURL: row.FaviconURL, ObservedAt: o.ObservedAt}
 		for _, d := range row.Detected {
+			if d.IconOnly() {
+				if p := strings.TrimSpace(d.Product); p != "" {
+					ic.Products = append(ic.Products, iconProduct{Product: p, Ask: d.Ask})
+				}
+				continue
+			}
 			if foreignVersion(row.Server, d.Product, d.Version) {
 				d.Version = ""
 			}
-			add(d.Product, d.Version, detectedSource(d), "detection template: "+d.Template, d.ViaProxy != "")
+			add(d.Product, d.Version, detectedSource(d), d.Said(), d.ViaProxy != "")
+		}
+		if len(ic.Products) > 0 {
+			icons = append(icons, ic)
 		}
 		for _, c := range cands {
 			k := strings.ToLower(c.Host) + "|" + strconv.Itoa(c.Port) + "|" + identity(c.Product)
@@ -170,7 +189,7 @@ func pageApps(obs []types.StoredObservation) []pageApp {
 			}
 		}
 	}
-	return out
+	return out, icons
 }
 
 // pageApp is a page application and whether it is a plain server.

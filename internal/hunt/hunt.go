@@ -28,6 +28,7 @@ type Input struct {
 	Roles     []RoleRow
 	Listeners []Listener // what the run named on each listener, one record each
 	Measured  []Measured // findings measured of a name, apart from its routes and leads
+	Leads     []Lead     // a product only an icon's hash named on a listener
 	// Addrs is the one address each name resolved to, by lower-case name: two
 	// hosts at the same address and port that answered the same are one row.
 	Addrs map[string]string
@@ -186,6 +187,9 @@ func Build(in Input) []Row {
 	}
 	for _, m := range in.Measured {
 		out = append(out, m.row(in.DB))
+	}
+	for _, l := range in.Leads {
+		out = append(out, l.row())
 	}
 	for _, c := range h.cands {
 		if c.fresh && h.old {

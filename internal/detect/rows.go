@@ -6,13 +6,18 @@ import "strings"
 // template (and its matcher) that named them, once per product and version.
 func Rows(hits []Hit) []map[string]string {
 	var out []map[string]string
-	seen := map[string]bool{}
+	seen := map[string]map[string]string{}
 	for _, h := range hits {
 		k := strings.ToLower(h.Product) + "\x00" + h.Version
-		if h.Product == "" || seen[k] {
+		if h.Product == "" {
 			continue
 		}
-		seen[k] = true
+		if have := seen[k]; have != nil {
+			if !h.Icon {
+				delete(have, "icon") // another template names it by more than an image
+			}
+			continue
+		}
 		row := map[string]string{"product": h.Product, "template": h.Template}
 		if h.Version != "" {
 			row["version"] = h.Version
@@ -23,6 +28,10 @@ func Rows(hits []Hit) []map[string]string {
 		if h.Many {
 			row["many"] = "1" // one of many products the template names
 		}
+		if h.Icon {
+			row["icon"] = "1" // named by the hash of an image alone: a lead, not an identification
+		}
+		seen[k] = row
 		out = append(out, row)
 	}
 	return out

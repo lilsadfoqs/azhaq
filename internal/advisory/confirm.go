@@ -135,8 +135,8 @@ func services(obs []types.StoredObservation, needVersion bool) []Service {
 			}
 			// What a detection template extracted with a version.
 			for _, d := range row.Detected {
-				if d.Product != "" && d.Version != "" && !foreignVersion(row.Server, d.Product, d.Version) && classify(d.Product, detectedSource(d)) != skip && kept(d.ViaProxy != "") {
-					add(web(d.Product, d.Version, "detection template: "+d.Template, SourceDetect))
+				if d.Product != "" && d.Version != "" && !d.IconOnly() && !foreignVersion(row.Server, d.Product, d.Version) && classify(d.Product, detectedSource(d)) != skip && kept(d.ViaProxy != "") {
+					add(web(d.Product, d.Version, d.Said(), SourceDetect))
 				}
 			}
 		}
@@ -158,16 +158,7 @@ func namedApps(obs []types.StoredObservation, have []Service, addrs map[string]s
 	if len(apps) == 0 {
 		return nil
 	}
-	listenerOf := func(s Service) string {
-		addr := normIP(s.IP)
-		if addr == "" {
-			addr = normIP(s.Host)
-		}
-		if addr == "" {
-			addr = addrs[strings.ToLower(s.Host)]
-		}
-		return listenerKey(addr, s.Host, s.Port, s.Proto)
-	}
+	listenerOf := listenerFn(addrs)
 	by := map[string][]Service{} // listener + product → what the listener's rows name
 	for _, s := range have {
 		k := listenerOf(s) + "|" + identity(s.Product)
@@ -190,6 +181,21 @@ func namedApps(obs []types.StoredObservation, have []Service, addrs map[string]s
 		}
 	}
 	return out
+}
+
+// listenerFn is the key of the listener a service is on: its address (what a
+// name resolved to), port and protocol.
+func listenerFn(addrs map[string]string) func(Service) string {
+	return func(s Service) string {
+		addr := normIP(s.IP)
+		if addr == "" {
+			addr = normIP(s.Host)
+		}
+		if addr == "" {
+			addr = addrs[strings.ToLower(s.Host)]
+		}
+		return listenerKey(addr, s.Host, s.Port, s.Proto)
+	}
 }
 
 // sameName says a listener's row was read from the name's own page: its host,

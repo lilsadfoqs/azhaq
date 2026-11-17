@@ -238,3 +238,27 @@ func othersText(m map[string]int) string {
 	}
 	return strings.Join(parts, ", ")
 }
+
+// Lead is a product only the hash of an icon named on a listener: a lead with
+// the read that would settle it, never an identification. It ranks with the
+// leads, below every identification.
+type Lead struct {
+	Host     string
+	Port     int
+	Evidence string // "favicon matches X or Y", with what the run asked
+	Check    string
+	Command  string
+}
+
+// leadScore is below any identification and any route's signal: an icon is
+// the weakest name there is.
+const leadScore = 5
+
+func (l Lead) row() Row {
+	key := l.Host
+	if l.Port > 0 {
+		key = fmt.Sprintf("%s:%d", l.Host, l.Port)
+	}
+	return Row{Score: leadScore, Key: key, Type: "Service", Reasons: []Reason{{"favicon", l.Evidence}}, Next: l.Command,
+		Tier: proof.TierLead, Check: l.Check, scope: "target", signals: 1}
+}
