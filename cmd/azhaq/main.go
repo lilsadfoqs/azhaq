@@ -365,7 +365,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	bruteFile := fs.String("dns-brute", "", "resolve WORD.domain for each word in this file instead of the built-in list (active; the targets given are the scope unless -allow). With none, no name is guessed. Without the flag, a domain target that -allow or -scope names is guessed from the built-in list of 5000 common subdomain words (SecLists, MIT), asked at the run's resolvers; -passive and -probe guess nothing unless the flag is given. default asks for the built-in list wherever the flag is needed to turn guessing on")
 	noVhost := fs.Bool("no-vhost", false, "do not try each name found, in scope, as a virtual host on the web services of the addresses in scope (one request for each name, address and port, compared with the address's default answer)")
 	permute := fs.Bool("permute", false, "resolve variations of found names (active; the targets given are the scope unless -allow)")
-	portsSpec := fs.String("ports", "", "scan TCP ports: default (the top 1000 and the usual ports of the services azhaq names and checks, then every TCP port of each address that answered; what a range or an address among the targets gets when no -ports is given), top-100, top-1000, full or a list of ports, ranges and these names, such as 22,80,8000-8100 or top-100,8888 (active; the targets given are the scope unless -allow)")
+	portsSpec := fs.String("ports", "", "scan TCP ports: default (the top 1000 and the usual ports of the services azhaq names and checks, then every TCP port of each address that answered; what a range or an address among the targets gets when no -ports is given), top-100, top-1000, full or a list of ports, ranges and these names, such as 22,80,8000-8100 or top-100,8888; top-100 and top-1000 leave out the service ports that default adds, and the summary names them (active; the targets given are the scope unless -allow)")
 	portsUDP := fs.String("ports-udp", "", "ask UDP ports (active): top (about 25 common ones), full or a list of ports, ranges and these names, such as 53,123,161,1-1024 or top,5354; a reply is open, an ICMP unreachable closed, neither open|filtered (-ports none: UDP only)")
 	portRate := fs.Float64("port-rate", 0, "port connection attempts per second, a ceiling (0: 1500, as naabu's connect scan, and 127.0.0.1 unpaced)")
 	portMinRate := fs.Float64("port-min-rate", 0, "port connection attempts per second at least, as nmap's --min-rate: raises the pace to this when the pace (-port-rate, or the default 1500) is lower, and never lowers it")
@@ -1053,7 +1053,15 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		}
 		rep.Notes = append(rep.Notes, "no -ports given, and a range or an address is among the targets: -ports default, the "+plural(len(opts.Ports), "port")+" of the first pass on every address, then every TCP port of each address that answered it (-ports none turns it off)")
 	}
+	portsLeft := leftOutOf(portsEff, opts.Ports, *portSkip)
+	if portsLeft != nil && !out.plan && !out.embedded {
+		rep.PortsLeftOut = portsLeft
+		rep.Notes = append(rep.Notes, portsLeft.line("-ports", portsEff))
+	}
 	portCfg.Escalate = portscan.Escalates(portsEff)
+	if rep.Command == "ports" {
+		portCfg.PortsFlag = "-p"
+	}
 	if portCfg.Escalate && *portsSpec == "" {
 		portCfg.Also = urlPortsOn(seeds)
 	}
@@ -1303,6 +1311,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		send.paramsBody = m
 	}
 	send.tcpPorts, send.udpPorts = len(opts.Ports), len(opts.UDPPorts)
+	send.portsLeft, send.portsSpec = portsLeft, portsEff
 	send.portList, send.portUDPList, send.portsFor = opts.Ports, opts.UDPPorts, portCfg.PortsFor
 	send.portExcludeCDN, send.portThreshold = portCfg.ExcludeCDN, portCfg.Threshold
 	send.portEscalate, send.portAlso, send.portSkip = portCfg.Escalate, portCfg.Also, portCfg.NoPorts

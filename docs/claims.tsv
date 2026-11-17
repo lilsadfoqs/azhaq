@@ -2093,3 +2093,11 @@ subs.permute-unresolved	docs/commands/subs.md	Names found that did not resolve t
 docs-output.probe-deny-path-skip	docs/OUTPUT.md	A row your own `-deny-path` holds back is a skip	test:cmd/azhaq:TestProbeDenyPathOnTheOnlyTargetIsASkipNotAFailure
 subs.coverage-several-domains	docs/commands/subs.md	With several domains the pool is the sum of one estimate for each domain	test:cmd/azhaq:TestCoverageNoteSumsTheEstimatesOfSeveralDomains
 dns.axfr-resolver-rule	docs/commands/dns.md	A resolver is asked for the zone whatever `-allow` says	test:cmd/azhaq:TestDNSAXFRToAResolverNamesTheResolverInTheLedger
+ports.left-out-named	docs/commands/ports.md	leave out the service ports that `default` adds, and the summary names them	test:cmd/azhaq:TestNarrowPortSetNamesTheServicePortsLeftOut;test:internal/portscan:TestServiceGapIsWhatDefaultAddsToTheSet,TestNarrowNameIsANamedSetNarrowerThanDefault
+ports.left-out-explicit	docs/commands/ports.md	A list of ports (`-p 22,80`) has no such note.	test:cmd/azhaq:TestNarrowPortSetNamesTheServicePortsLeftOut
+ports.quiet-host-note	docs/commands/ports.md	gets the note `no port answered among the N asked; -p default adds M service ports	test:cmd/azhaq:TestQuietHostNamesWhatDefaultWouldAdd
+ports.quiet-host-only-a-note	docs/commands/ports.md	It is a note: nothing more is asked.	test:cmd/azhaq:TestQuietHostNamesWhatDefaultWouldAdd,TestNarrowPortSetNamesTheServicePortsLeftOut
+run.left-out-named	docs/commands/run.md	leave out the service ports that `default` adds, and the summary names them	test:cmd/azhaq:TestNarrowPortSetNamesTheServicePortsLeftOut,TestPlanNamesTheServicePortsANarrowSetLeavesOut
+run.quiet-host-note	docs/commands/run.md	gets the note `no port answered among the N asked; -ports default adds M service ports	test:cmd/azhaq:TestQuietHostNamesWhatDefaultWouldAdd
+run.left-out-explicit	docs/commands/run.md	A list of ports has the host note only; no port is added.	test:cmd/azhaq:TestNarrowPortSetNamesTheServicePortsLeftOut,TestQuietHostNamesWhatDefaultWouldAdd
+plan.ports-left-out	docs/commands/plan.md	the service ports `-ports default` asks that the set leaves out	test:cmd/azhaq:TestPlanNamesTheServicePortsANarrowSetLeavesOut

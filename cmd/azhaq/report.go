@@ -93,6 +93,9 @@ type report struct {
 	// leads they are not map rows: Counts still adds up to Stored
 	// without them, and the notes say how their counts are derived.
 	Verify []verify.Result `json:"verify,omitempty"`
+	// PortsLeftOut is the service ports -p default asks that a named set narrower
+	// than default (top-100, top-1000) does not hold: nothing was added for them.
+	PortsLeftOut *portsLeftOut `json:"ports_left_out,omitempty"`
 	// StateChangingHeld is how many of those were held back, not sent: the
 	// skipped list names each, and the flag that sends them (see settleStateChanges).
 	StateChangingHeld int `json:"state_changing_held,omitempty"`

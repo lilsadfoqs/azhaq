@@ -1,7 +1,9 @@
 package portscan
 
 import (
+	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 )
@@ -64,6 +66,95 @@ func union(a, b []int) []int {
 	}
 	slices.Sort(out)
 	return out
+}
+
+// ServiceName is the service a catalog port is named by: the protocol azhaq
+// asks first on it, else the registered name of the port. "" when it has none.
+func ServiceName(port int) string {
+	for _, p := range protocols {
+		if slices.Contains(p.ports, port) || slices.Contains(p.tlsPorts, port) {
+			return p.name
+		}
+	}
+	return wellKnown[port]
+}
+
+// ServiceGap is the CatalogPorts that a scan of asked leaves out, less skip
+// (the ports the user kept out): what -p default asks of them, and asked
+// does not. It is derived from CatalogPorts, so it never drifts from default.
+func ServiceGap(asked, skip []int) []int {
+	have := make(map[int]bool, len(asked)+len(skip))
+	for _, p := range asked {
+		have[p] = true
+	}
+	for _, p := range skip {
+		have[p] = true
+	}
+	var left []int
+	for _, p := range CatalogPorts() {
+		if !have[p] {
+			left = append(left, p)
+		}
+	}
+	return left
+}
+
+// NarrowName says whether spec (a list as Ports reads it) holds a named set
+// narrower than default (top-100, top-1000) and no name that reaches it
+// (default, full). An explicit list of ports is no named set.
+func NarrowName(spec string) bool {
+	narrow := false
+	for _, w := range strings.Split(strings.ToLower(spec), ",") {
+		switch strings.TrimSpace(w) {
+		case DefaultName, "full", "all", "-":
+			return false
+		case "top-100", "top100", "top-1000", "top1000":
+			narrow = true
+		}
+	}
+	return narrow
+}
+
+// shownGap is how many ports of a gap a note names one by one.
+const shownGap = 8
+
+// GapList names the first few ports of a list by number and service,
+// "853 dns-over-tls, 1883 mqtt, and 34 more".
+func GapList(ports []int) string {
+	var out []string
+	for i, p := range ports {
+		if i == shownGap {
+			out = append(out, fmt.Sprintf("and %d more", len(ports)-i))
+			break
+		}
+		if n := ServiceName(p); n != "" {
+			out = append(out, fmt.Sprintf("%d %s", p, n))
+		} else {
+			out = append(out, strconv.Itoa(p))
+		}
+	}
+	return strings.Join(out, ", ")
+}
+
+// AddsNote is what default adds to a scan that left ports of gap out, as
+// flag (-p or -ports) names it: "-p default adds 40 service ports (853 dns, ...)".
+func AddsNote(flag string, gap []int) string {
+	n := "service ports"
+	if len(gap) == 1 {
+		n = "service port"
+	}
+	return fmt.Sprintf("%s default adds %d %s (%s)", flag, len(gap), n, GapList(gap))
+}
+
+// QuietNote says no port answered, and what -p default would add: of one
+// address when addrs is 1, else of quiet of the addrs addresses asked. flag is
+// the option that names the ports: -p of ports, -ports of run.
+func QuietNote(flag string, asked, addrs, quiet int, gap []int) string {
+	where := ""
+	if addrs > 1 {
+		where = fmt.Sprintf(" on %d of the %d addresses", quiet, addrs)
+	}
+	return fmt.Sprintf("no port answered among the %d asked%s; %s", asked, where, AddsNote(flag, gap))
 }
 
 // DefaultPorts is the first pass of the default scan: nmap's top 1000 TCP
