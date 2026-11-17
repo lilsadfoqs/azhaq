@@ -308,6 +308,7 @@ func (s *Scanner) udpPass(ctx context.Context, host, ip string, ports []int, pas
 			}
 		}
 		if err := s.wait(ctx, ip); err != nil {
+			stop = paceStop(err)
 			break
 		}
 		if s.Take != nil {
