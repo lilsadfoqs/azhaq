@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/lilsadfoqs/azhaq/internal/neterr"
+	"github.com/lilsadfoqs/azhaq/internal/normalize"
 )
 
 type collectorKey struct{}
@@ -292,7 +293,12 @@ func DNS(ctx context.Context, name, qtype, server string) {
 	if l == nil {
 		return
 	}
-	l.Record(Entry{Kind: "dns", Class: ClassDNS, Method: qtype, Target: server, Host: name, Rule: l.rule(name), Collector: collectorOf(ctx)})
+	// A reverse name is ruled by the address it is for, not by its own text.
+	rule := l.rule(name)
+	if ip, ok := normalize.ReverseAddr(name); ok {
+		rule = l.rule(ip.String())
+	}
+	l.Record(Entry{Kind: "dns", Class: ClassDNS, Method: qtype, Target: server, Host: name, Rule: rule, Collector: collectorOf(ctx)})
 }
 
 // Transport records each request once it has been written to its

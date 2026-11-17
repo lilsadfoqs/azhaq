@@ -11,6 +11,7 @@ import (
 	"github.com/miekg/dns"
 
 	"github.com/lilsadfoqs/azhaq/internal/egress"
+	"github.com/lilsadfoqs/azhaq/internal/normalize"
 )
 
 // ErrHeld is the answer to a question the default public resolvers are not
@@ -136,52 +137,11 @@ func (p *Pool) noteForward(name string, answered bool) {
 	}
 }
 
-// reverseAddr is the address a full reverse name stands for.
-func reverseAddr(name string) (netip.Addr, bool) {
-	name = strings.ToLower(strings.TrimSuffix(strings.TrimSpace(name), "."))
-	switch {
-	case strings.HasSuffix(name, ".in-addr.arpa"):
-		labels := strings.Split(strings.TrimSuffix(name, ".in-addr.arpa"), ".")
-		if len(labels) != 4 {
-			return netip.Addr{}, false
-		}
-		var b [4]byte
-		for i, l := range labels {
-			var v int
-			if _, err := fmt.Sscanf(l, "%d", &v); err != nil || v < 0 || v > 255 || fmt.Sprint(v) != l {
-				return netip.Addr{}, false
-			}
-			b[3-i] = byte(v)
-		}
-		return netip.AddrFrom4(b), true
-	case strings.HasSuffix(name, ".ip6.arpa"):
-		labels := strings.Split(strings.TrimSuffix(name, ".ip6.arpa"), ".")
-		if len(labels) != 32 {
-			return netip.Addr{}, false
-		}
-		var b [16]byte
-		for i, l := range labels {
-			if len(l) != 1 || !strings.Contains("0123456789abcdef", l) {
-				return netip.Addr{}, false
-			}
-			v := byte(strings.Index("0123456789abcdef", l))
-			n := 31 - i
-			if n%2 == 0 {
-				b[n/2] |= v << 4
-			} else {
-				b[n/2] |= v
-			}
-		}
-		return netip.AddrFrom16(b), true
-	}
-	return netip.Addr{}, false
-}
-
 // systemPTR answers a PTR question about a local address from the system's
 // resolver, as a response message, and counts it for HeldNote.
 func (p *Pool) systemPTR(ctx context.Context, q *dns.Msg) (*dns.Msg, error) {
 	name := q.Question[0].Name
-	ip, ok := reverseAddr(name)
+	ip, ok := normalize.ReverseAddr(name)
 	if !ok {
 		return nil, ErrHeld
 	}
