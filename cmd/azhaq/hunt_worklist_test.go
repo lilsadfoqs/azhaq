@@ -166,7 +166,7 @@ func TestHuntListsIdentificationsBesideRoutes(t *testing.T) {
 		"identifications (3)",
 		"Apache httpd 2.4.49", "CVE-2021-41773 version-only", "known exploited (CISA KEV)",
 		"proof: Apache/2.4.49", "curl -sS",
-		"ProFTPD 1.3.5", "CVE-2015-3306 version-only", "nc -w 3 127.0.0.1",
+		"ProFTPD 1.3.5", "advisories match this version", "nc -w 3 127.0.0.1",
 		"Express (no version seen)",
 	} {
 		if !strings.Contains(out, want) {
