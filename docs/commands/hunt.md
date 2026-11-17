@@ -218,6 +218,8 @@ A path that names a file or a panel is judged by its answer, which azhaq already
 
 A 5xx alone is a lead, not a finding; the body showing SQL error text or a framework's debug page is a finding of its own (`sql-error`, `debug-page`), a record of `report -findings`, and the route then has no `server-error` lead for it. A stack trace of three or more frames in the answer, at any status, is an `error-disclosure` row of its own (a finding, as `report -findings` lists it), and the route then has no `server-error` lead for it. The weight of a 5xx depends on what shows beside it:
 
+Every rule here reads the body of the row's own URL: a URL that answers a redirect has the redirect's body, and the page it ends at is a row of its own. A route that folds two URLs (`/assets` and `/assets/`) names, in the reason, the URL that gave a 5xx when it is not the first of the row.
+
 - SQL error text in the body: 50, the rank of the `sql-error` finding.
 - Another role's answer to the same route, a 5xx for one role and an answer for another: 40.
 - A framework's debug page: 35, the rank of the `debug-page` finding.
