@@ -146,7 +146,7 @@ An [internal error](#exit-1) comes before this rule: a summary that disagrees wi
 | `failed` | Work that did not get its answer, grouped by collector, source and error, most frequent first. See [failed](#failed). |
 | `skipped` | Targets and requests azhaq did not send, with the reason. See [skipped](#skipped). |
 | `junk` | `urls` only: the URLs left out as junk, by reason. See [urls](commands/urls.md#junk). |
-| `sources` | `subs` and `urls`: which sources answered, which failed and why, and what each gave (`urls` also has `records`: for each archive the records read and where each went). See [subs](commands/subs.md#the-sources-block) and [urls](commands/urls.md#summary-and-exit-codes). |
+| `sources` | `subs` and `urls`: which sources answered, which failed and why, which were still running when the run stopped (`subs`), and what each gave (`urls` also has `records`: for each archive the records read and where each went). See [subs](commands/subs.md#the-sources-block) and [urls](commands/urls.md#summary-and-exit-codes). |
 | `partial` (in `failed`) | A third-party source failed while other sources answered for the same target. |
 | `degraded` | `subs` only: a source the run relies on did not answer, so the names may be incomplete; the exit code is 3 when no source answered, or with `-strict-exit`. See [subs](commands/subs.md#degraded). |
 | `degraded_by` | `subs` only, with `degraded`: an array of `{source, error, domains}`, one for each failed source of the default set. |

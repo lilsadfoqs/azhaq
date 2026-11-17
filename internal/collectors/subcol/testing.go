@@ -3,6 +3,8 @@ package subcol
 import (
 	"context"
 	"errors"
+	"io"
+	"net/http"
 	"net/url"
 	"sync"
 	"sync/atomic"
@@ -28,6 +30,10 @@ type TestSource struct {
 	Padding     bool // its names are guesses: kept only when they resolve
 	Extra       bool // outside subfinder's default set: bounded by ExtraWait
 	Recursive   bool // handles subdomains of subdomains
+	// URL, if set, is asked with the source's client (so the request is in the
+	// ledger, as a real source's is) before the names are given, and counts as
+	// one call of the source.
+	URL string
 }
 
 var (
@@ -45,7 +51,20 @@ func UseTestSources(srcs ...TestSource) (restore func()) {
 			continue
 		}
 		var calls atomic.Int32
-		s := source{name: ts.Name, deflt: ts.Default, collect: func(ctx context.Context, domain string, _ []string, _ *subscraping.Session) ([]string, error) {
+		s := source{name: ts.Name, deflt: ts.Default, collect: func(ctx context.Context, domain string, _ []string, sess *subscraping.Session) ([]string, error) {
+			if ts.URL != "" {
+				countCall(ctx)
+				req, err := http.NewRequestWithContext(ctx, http.MethodGet, ts.URL, nil)
+				if err != nil {
+					return nil, err
+				}
+				resp, err := sess.Client.Do(req)
+				if err != nil {
+					return nil, err
+				}
+				_, _ = io.Copy(io.Discard, resp.Body)
+				resp.Body.Close()
+			}
 			if ts.Delay > 0 && (ts.DelayDomain == "" || ts.DelayDomain == domain) {
 				select {
 				case <-time.After(ts.Delay):
