@@ -111,6 +111,10 @@ type Report struct {
 	AttackVectors  map[string]int
 	VectorVersions map[string]int
 	NoVector       int
+	// How many indexed records state a precondition in their text (a protocol,
+	// a module, a configuration), and how many of them for each kind of need.
+	NeedRecords int
+	Needs       map[string]int
 }
 
 // Result is a built index and its report.
@@ -176,6 +180,21 @@ type nvdCVE struct {
 	Metrics        nvdMetrics    `json:"metrics"`
 	Configurations []nvdConfig   `json:"configurations"`
 	Affected       []nvdAffected `json:"affected"`
+	Descriptions   []struct {
+		Lang  string `json:"lang"`
+		Value string `json:"value"`
+	} `json:"descriptions"`
+}
+
+// description is the record's English description, the text its needs are
+// read from.
+func (c nvdCVE) description() string {
+	for _, d := range c.Descriptions {
+		if d.Lang == "en" {
+			return d.Value
+		}
+	}
+	return ""
 }
 
 // nvdAffected is what one source says the record's flaw affects: the CNA's
@@ -457,6 +476,7 @@ func siblings(cfg nvdConfig, ni int, own string) map[string]bool {
 type acc struct {
 	byProduct map[string]map[string]*entry // cpe → CVE → entry
 	cvss      map[string]float64
+	desc      map[string]string // CVE → English description, for the needs it states
 	av        map[string]string // CVE → attack vector letter, when the record states one
 	avVersion map[string]string // CVE → the CVSS version that vector is of
 	kev       map[string]bool
@@ -474,7 +494,7 @@ func Build(o Options) (*Result, error) {
 	for _, m := range o.Map {
 		wanted[m.CPE] = true
 	}
-	a := &acc{byProduct: map[string]map[string]*entry{}, cvss: map[string]float64{}, av: map[string]string{}, avVersion: map[string]string{}, kev: kevIDs, seenKEV: map[string]bool{}, noProduct: map[string]bool{}}
+	a := &acc{byProduct: map[string]map[string]*entry{}, cvss: map[string]float64{}, desc: map[string]string{}, av: map[string]string{}, avVersion: map[string]string{}, kev: kevIDs, seenKEV: map[string]bool{}, noProduct: map[string]bool{}}
 	rep := Report{}
 	nvdDate := ""
 	for _, f := range o.Feeds {
@@ -503,6 +523,8 @@ func Build(o Options) (*Result, error) {
 	meta := advisory.IndexMeta{Generator: advisory.IndexGenerator, Built: o.Built, Names: map[string][]string{}}
 	var products []advisory.IndexProduct
 	ids := map[string]bool{}
+	needSeen := map[string]map[string]bool{} // record → the kinds of need it states, for any product
+	rep.Needs = map[string]int{}
 	for cpe, byCVE := range a.byProduct {
 		p := advisory.IndexProduct{CPE: cpe}
 		for id, e := range byCVE {
@@ -530,6 +552,14 @@ func Build(o Options) (*Result, error) {
 				rep.DroppedByScope++
 				continue
 			}
+			vendor, prod, _ := strings.Cut(cpe, ":")
+			v.Needs = needsOf(a.desc[id], vendor, prod)
+			for _, n := range v.Needs {
+				if needSeen[id] == nil {
+					needSeen[id] = map[string]bool{}
+				}
+				needSeen[id][needKind(n.Name)] = true
+			}
 			v.Ranges, v.Versions, v.Comp = keys(e.ranges), keys(e.versions), e.comp
 			p.Vulns = append(p.Vulns, v)
 			ids[id] = true
@@ -537,6 +567,12 @@ func Build(o Options) (*Result, error) {
 		if len(p.Vulns) > 0 {
 			products = append(products, p)
 			meta.Entries += len(p.Vulns)
+		}
+	}
+	for _, kinds := range needSeen {
+		rep.NeedRecords++
+		for k := range kinds {
+			rep.Needs[k]++
 		}
 	}
 	have := map[string]bool{}
@@ -793,6 +829,7 @@ func (a *acc) add(c nvdCVE, wanted map[string]bool, rep *Report) error {
 			return fmt.Errorf("%s: %w", c.ID, err)
 		}
 		a.av[c.ID], a.avVersion[c.ID] = av, ver
+		a.desc[c.ID] = c.description()
 	}
 	return nil
 }
