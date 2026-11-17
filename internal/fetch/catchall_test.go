@@ -459,3 +459,11 @@ func TestCatchAllControlNamesTheRequestItMatched(t *testing.T) {
 		t.Errorf("/real: shell %v, control %v", shell, ctl)
 	}
 }
+
+func TestCountFieldsIsTheNumberOfFields(t *testing.T) {
+	for _, s := range []string{"", " ", "a", " a ", "a b\tc\nd\v\fe\rf", "é  ü x\u0085y z", "\xff a \xfe b", "<p>one two</p>\n\n<p>three</p>"} {
+		if got, want := countFields(s), len(strings.Fields(s)); got != want {
+			t.Errorf("%q: %d fields, Fields says %d", s, got, want)
+		}
+	}
+}

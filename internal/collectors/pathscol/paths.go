@@ -17,6 +17,7 @@ import (
 	"github.com/lilsadfoqs/azhaq/catalog"
 	"github.com/lilsadfoqs/azhaq/internal/crawlscope"
 	"github.com/lilsadfoqs/azhaq/internal/detect"
+	"github.com/lilsadfoqs/azhaq/internal/egress"
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
 	"github.com/lilsadfoqs/azhaq/internal/httprow"
 	"github.com/lilsadfoqs/azhaq/internal/lazyre"
@@ -255,6 +256,12 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 	meta := types.RunMeta{Status: types.StatusOK}
 	var mu sync.Mutex
 	sem := make(chan struct{}, sweepParallel())
+	client := c.sweepClient(cap(sem))
+	defer func() {
+		if client != c.Client {
+			client.CloseIdleConnections() // the sweep's own pool, not the run's
+		}
+	}()
 	var wg sync.WaitGroup
 	var skipped atomic.Int32
 	// What became of each check of the sweep: asked, answered by a request
@@ -286,7 +293,7 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		case isDescLoc(path) || isGraphQLLoc(path):
 			purpose = ledger.PurposeDescriptions
 		}
-		res, cached, err := fetch.Do(ledger.WithPurpose(ctx, purpose), c.Client, target)
+		res, cached, err := fetch.Do(ledger.WithPurpose(ctx, purpose), client, target)
 		if only[path] {
 			if err == nil && !cached {
 				products.Add(1) // not a path check: the sweep's record counts them apart
@@ -312,7 +319,7 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		if only[path] {
 			return false // asked to name a product, not a page of the map
 		}
-		if err != nil || !(interesting(res.Status) || isGraphQLLoc(path) && refusesGET(res.Status)) || fetch.CatchAll(ctx, c.Client, res) {
+		if err != nil || !(interesting(res.Status) || isGraphQLLoc(path) && refusesGET(res.Status)) || fetch.CatchAll(ctx, client, res) {
 			return false
 		}
 		known := isDescLoc(path) && res.Status < 400 && describes(res.Body) || isGraphQLLoc(path)
@@ -332,7 +339,7 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 			"final_url": final,
 			"hops":      res.Hops,
 		}
-		if pc := fetch.PrefixControl(ctx, c.Client, res); pc != nil {
+		if pc := fetch.PrefixControl(ctx, client, res); pc != nil {
 			row["prefix_catchall"] = pc // also the answer of a name under its path: listed, labelled
 		}
 		own := res.Own() // the row is the answer of this URL; a redirect's target is its own row
@@ -436,28 +443,36 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		}()
 	}
 	// The path checks first, then the product checks: a limit on guesses
-	// (-host-guesses) is spent on the map before the product's name.
+	// (-host-guesses) is spent on the map before the product's name. A
+	// worker takes the next path as it frees, so a sweep of 1,300 checks is
+	// not 1,300 goroutines, each growing its own stack.
 	ask := func(paths []string) {
-		for _, path := range paths {
-			if ctx.Err() != nil {
-				break
-			}
-			target := targetOf(path)
-			if target == raw {
-				continue
-			}
+		var next atomic.Int32
+		for range min(len(paths), cap(sem)) {
 			wg.Add(1)
-			go func(target, path string) {
+			go func() {
 				defer guard.Recover(ctx)
 				defer wg.Done()
-				select {
-				case <-ctx.Done():
-					return
-				case sem <- struct{}{}:
+				for ctx.Err() == nil {
+					i := int(next.Add(1)) - 1
+					if i >= len(paths) {
+						return
+					}
+					target := targetOf(paths[i])
+					if target == raw {
+						continue
+					}
+					select {
+					case <-ctx.Done():
+						return
+					case sem <- struct{}{}:
+					}
+					func() {
+						defer func() { <-sem }()
+						probe(target, paths[i])
+					}()
 				}
-				defer func() { <-sem }()
-				probe(target, path)
-			}(target, path)
+			}()
 		}
 	}
 	ask(locs)
@@ -487,6 +502,21 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		}
 	}
 	return meta, ctx.Err()
+}
+
+// sweepClient is the client a sweep asks with: it keeps a connection for
+// each check in flight, as -dirs does. The default keeps two idle, and a
+// sweep of 1,300 checks opened a connection (on https, a handshake) for
+// most of them (#505). A client that is not the run's own (a test's) is
+// used as it is.
+func (c *Collector) sweepClient(n int) *http.Client {
+	if c.Client == nil {
+		return nil // fetch makes the run's own
+	}
+	return egress.Tweak(c.Client, func(tr *http.Transport) {
+		tr.MaxIdleConnsPerHost = max(n, 2)
+		tr.MaxIdleConns = 2 * max(n, 2)
+	})
 }
 
 // refusal is why a request was refused, without the URL the error wraps.

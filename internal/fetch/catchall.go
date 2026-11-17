@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"unicode"
 
 	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 	"github.com/lilsadfoqs/azhaq/internal/ledger"
@@ -570,10 +571,25 @@ func fingerprintBy(res Result, origin string, strip func(string) string) fingerp
 		fp.title = strings.Join(strings.Fields(m[1]), " ")
 	}
 	fp.lines = strings.Count(body, "\n")
-	fp.words = len(strings.Fields(body))
+	fp.words = countFields(body)
 	fp.size = len(body)
 	fp.keys = jsonShape(body)
 	return fp
+}
+
+// countFields is len(strings.Fields(s)) without the slice of every word,
+// which was a page's worth of garbage for each answer judged.
+func countFields(s string) int {
+	n, in := 0, false
+	for _, r := range s {
+		if sp := unicode.IsSpace(r); !sp && !in {
+			n++
+			in = true
+		} else if sp {
+			in = false
+		}
+	}
+	return n
 }
 
 // jsonShape is a JSON object's sorted top-level field names ("[]" for an
