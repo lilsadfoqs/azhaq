@@ -1,0 +1,140 @@
+=== parts/bench-p1.log
+go: downloading go.yaml.in/yaml/v3 v3.0.5
+bench: -only probe without domains: the hosts are the local apps, the fleet and the three test sites
+bench: building azhaq
+bench: default: services
+bench: starting the services lab
+bench: default: services took 220s
+
+default flags: services (15 lab ports)  azhaq  nmap -sV  azhaq time  nmap time
+named right                             15     12        2.9s 69MB   145.3s 89MB
+with product and version                14     11                    
+
+checks
+  PASS  [default] services (nmap -sV): results ≥ the reference's, confirmed by the lab's own list of what runs on each port (bench/services.yaml) and `ss` showing every port listening  (azhaq 15, reference 12; 15 ports; with a product and version: azhaq 14, nmap 11; azhaq missed []; nmap missed [11883 mosquitto (mqtt): "" 21211 memcached: "unknown" 10053 coredns (tcp): "tcpwrapped"]; time ×0.02 of the reference, memory ×0.77 of the reference (69 MB against 89 MB) | azhaq ports -host 127.0.0.1 -p 16379,13306,15432,17017,11883,15682,21211,12222,10021,10025,18825,10389,10445,19200,10053 -json -silent vs nmap -sV -Pn -p 16379,13306,15432,17017,11883,15682,21211,12222,10021,10025,18825,10389,10445,19200,10053 -oX - 127.0.0.1)
+  PASS  [default] services (nmap -sV): time ≤ 1.05× the reference's  (azhaq 2.9s, reference 145.3s (the median of 3 below 20 s, one run above) | azhaq ports -host 127.0.0.1 -p 16379,13306,15432,17017,11883,15682,21211,12222,10021,10025,18825,10389,10445,19200,10053 -json -silent vs nmap -sV -Pn -p 16379,13306,15432,17017,11883,15682,21211,12222,10021,10025,18825,10389,10445,19200,10053 -oX - 127.0.0.1)
+  PASS  [default] services: azhaq names ≥ 90% of the lab's TCP services  (15 of 15)
+
+3 of 3 checks pass
+
+record bench/history/2026-11-17T145735-9d7b61b9.json
+=== parts/bench-p2.log
+go: downloading go.yaml.in/yaml/v3 v3.0.5
+bench: -only probe without domains: the hosts are the local apps, the fleet and the three test sites
+bench: building azhaq
+bench: default: ports
+bench: default: ports took 219s
+
+default flags: ports (connect)                    azhaq  naabu  confirmed azhaq / naabu  azhaq time  naabu time
+scanme.nmap.org top-1000                          4      3      3 / 3                    2.0s 68MB   6.9s 70MB
+127.0.0.1 1-65535                                 2      1      1 / 1                    0.5s 70MB   133.6s 107MB
+127.0.0.0/28 34535,44589,41903,34443,44909,44109  4      4      4 / 4                    0.0s 51MB   2.5s 57MB
+
+default flags: ports, CPU (127.0.0.1 1-65535, -rate 10000)  azhaq  nmap -sT
+CPU seconds                                                 0.93   1.13
+time                                                        6.6s   6.6s
+open ports                                                  1      1
+
+checks
+  PASS  [default] ports 127.0.0.1 1-65535: open ports ≥ nmap -sT's  (azhaq 0.93 CPU s, 6.6 s and 75 MB, nmap 1.13 CPU s, 6.6 s and 75 MB (median of 5 runs in turn); open: azhaq 1, nmap 1; listening throughout and azhaq missed [], nmap missed [] | azhaq ports -host 127.0.0.1 -p 1-65535 -rate 10000 -retries 0 -detect none -silent -db /home/runner/work/azhaq/azhaq/bench/.work/portscpu993928217/cpu.db vs nmap -sT -Pn -n -p 1-65535 --max-rate 10000 --max-retries 0 -oG - 127.0.0.1)
+  PASS  [default] ports 127.0.0.1 1-65535: CPU ≤ 1.25× nmap -sT's  (0.82×: azhaq 0.93 CPU s, 6.6 s and 75 MB, nmap 1.13 CPU s, 6.6 s and 75 MB (median of 5 runs in turn); open: azhaq 1, nmap 1; listening throughout and azhaq missed [], nmap missed [] | azhaq ports -host 127.0.0.1 -p 1-65535 -rate 10000 -retries 0 -detect none -silent -db /home/runner/work/azhaq/azhaq/bench/.work/portscpu993928217/cpu.db vs nmap -sT -Pn -n -p 1-65535 --max-rate 10000 --max-retries 0 -oG - 127.0.0.1)
+  PASS  [default] ports 127.0.0.1 1-65535: time ≤ 1.25× nmap -sT's  (1.01×: azhaq 0.93 CPU s, 6.6 s and 75 MB, nmap 1.13 CPU s, 6.6 s and 75 MB (median of 5 runs in turn); open: azhaq 1, nmap 1; listening throughout and azhaq missed [], nmap missed [] | azhaq ports -host 127.0.0.1 -p 1-65535 -rate 10000 -retries 0 -detect none -silent -db /home/runner/work/azhaq/azhaq/bench/.work/portscpu993928217/cpu.db vs nmap -sT -Pn -n -p 1-65535 --max-rate 10000 --max-retries 0 -oG - 127.0.0.1)
+  PASS  [default] ports scanme.nmap.org top-1000: results ≥ the reference's, confirmed by an independent TCP connect  (azhaq 3, reference 3; old bar: 3 of 3 = 100%; azhaq only [advisory:], naabu only []; time ×0.29 of the reference, memory ×0.97 of the reference (68 MB against 70 MB) | azhaq ports -host scanme.nmap.org -p top-1000 -silent vs naabu -host scanme.nmap.org -top-ports 1000 -scan-type c -Pn -silent)
+  PASS  [default] ports scanme.nmap.org top-1000: time ≤ 1.05× the reference's  (azhaq 2.0s, reference 6.9s (the median of 3 below 20 s, one run above) | azhaq ports -host scanme.nmap.org -p top-1000 -silent vs naabu -host scanme.nmap.org -top-ports 1000 -scan-type c -Pn -silent)
+  PASS  [default] ports 127.0.0.1 1-65535: results ≥ the reference's, confirmed by `ss -ltn` taken before and after the scan  (azhaq 1, reference 1; old bar: 1 of 1 = 100%; sockets listening throughout and missed: azhaq [], naabu []; time ×0.00 of the reference, memory ×0.65 of the reference (70 MB against 107 MB) | azhaq ports -host 127.0.0.1 -p 1-65535 -silent vs naabu -host 127.0.0.1 -p 1-65535 -scan-type c -Pn -silent)
+  PASS  [default] ports 127.0.0.1 1-65535: time ≤ 1.05× the reference's  (azhaq 0.5s, reference 133.6s (the median of 3 below 20 s, one run above) | azhaq ports -host 127.0.0.1 -p 1-65535 -silent vs naabu -host 127.0.0.1 -p 1-65535 -scan-type c -Pn -silent)
+  PASS  [default] ports 127.0.0.0/28: results ≥ the reference's, confirmed by the listeners the bench opened (a port that is not one counts against)  (azhaq 4, reference 4; planted 4; azhaq 4 of them, 4 reported; naabu 4, 4 reported; time ×0.01 of the reference, memory ×0.88 of the reference (51 MB against 57 MB) | azhaq ports -host 127.0.0.0/28 -p 34535,44589,41903,34443,44909,44109 -silent vs naabu -host 127.0.0.0/28 -p 34535,44589,41903,34443,44909,44109 -scan-type c -Pn -silent)
+  PASS  [default] ports 127.0.0.0/28: time ≤ 1.05× the reference's  (azhaq 0.0s, reference 2.5s (the median of 3 below 20 s, one run above) | azhaq ports -host 127.0.0.0/28 -p 34535,44589,41903,34443,44909,44109 -silent vs naabu -host 127.0.0.0/28 -p 34535,44589,41903,34443,44909,44109 -scan-type c -Pn -silent)
+  PASS  [default] ports 1-1000, connect only: results ≥ the reference's, confirmed by nmap's own connect scan  (azhaq 1, reference 1 | azhaq ports -host 127.0.0.1 -p 1-1000 -detect none -silent vs nmap -sT -Pn -n -p 1-1000 -oG - 127.0.0.1)
+  PASS  [default] ports 1-1000, connect only: time ≤ 1.25× the reference's  (azhaq 0.03s, reference 0.03s (1.17×, the median of 3) | azhaq ports -host 127.0.0.1 -p 1-1000 -detect none -silent vs nmap -sT -Pn -n -p 1-1000 -oG - 127.0.0.1)
+  PASS  [default] ports 1-1000, connect only: private memory ≤ 2× the reference's  (private (RssAnon) azhaq 8.9 MB, reference 5.5 MB (1.62×); resident with the binary's shared file pages (VmHWM) azhaq 51 MB, reference 14 MB (3.67×); the median of 3 | azhaq ports -host 127.0.0.1 -p 1-1000 -detect none -silent vs nmap -sT -Pn -n -p 1-1000 -oG - 127.0.0.1)
+  PASS  [default] ports 1-1000, services named: results ≥ the reference's, confirmed by nmap -sV's open ports  (azhaq 2, reference 1 | azhaq ports -host 127.0.0.1 -p 1-1000 -silent vs nmap -sT -sV -Pn -n -p 1-1000 -oG - 127.0.0.1)
+  PASS  [default] ports 1-1000, services named: time ≤ 1.25× the reference's  (azhaq 0.09s, reference 0.15s (0.62×, the median of 3) | azhaq ports -host 127.0.0.1 -p 1-1000 -silent vs nmap -sT -sV -Pn -n -p 1-1000 -oG - 127.0.0.1)
+  PASS  [default] ports 1-1000, services named: private memory ≤ 2× the reference's  (private (RssAnon) azhaq 23.0 MB, reference 37.0 MB (0.62×); resident with the binary's shared file pages (VmHWM) azhaq 65 MB, reference 49 MB (1.32×); the median of 3 | azhaq ports -host 127.0.0.1 -p 1-1000 -silent vs nmap -sT -sV -Pn -n -p 1-1000 -oG - 127.0.0.1)
+
+15 of 15 checks pass
+
+record bench/history/2026-11-17T145715-9d7b61b9.json
+=== parts/bench-p3.log
+go: downloading go.yaml.in/yaml/v3 v3.0.5
+bench: -only probe without domains: the hosts are the local apps, the fleet and the three test sites
+bench: building azhaq
+bench: starting docker apps
+bench: default: probe
+bench: http://127.0.0.1:5020 does not answer
+bench: http://127.0.0.1:5030 does not answer
+bench: http://127.0.0.1:5013 does not answer
+bench: probing 107 hosts
+bench: default: probe took 105s
+
+default flags: probe (107 hosts)  answered (confirmed)  shared  status  title  tech  all  favicon  cdn  time
+azhaq                             107 (105)             105     105     105    104   104  103/103  0/0  1.5s 166MB
+httpx                             105 (105)                                                             1.6s 222MB
+
+probe differences (azhaq/httpx), default
+  127.0.0.1:5020: status 200/200 title "Damn Vulnerable NodeJS Application"/"Damn Vulnerable NodeJS Application" tech [Bootstrap:3.3.7 BootstrapCDN:3.3.7 Express Node.js Showdown cdnjs jQuery:3.2.1]/[Bootstrap:3.3.7 BootstrapCDN:3.3.7 Cloudflare Express Node.js Showdown cdnjs jQuery:3.2.1]
+
+checks
+  PASS  [default] probe: results ≥ the reference's, confirmed by a GET to the host itself giving the status the tool reported  (azhaq 105, reference 105; old bar: 105 of 105 = 100%; 107 hosts (5 apps, the services lab's web ports, 100 local servers); answered azhaq 107, httpx 105, shared 105; time ×0.92 of the reference, memory ×0.75 of the reference (166 MB against 222 MB) | azhaq probe -l /home/runner/work/azhaq/azhaq/bench/.work/probe/hosts.txt -json -silent -favicon -fr vs httpx -l /home/runner/work/azhaq/azhaq/bench/.work/probe/hosts.txt -silent -json -fr -td -cdn -favicon -title -sc -no-color)
+  PASS  [default] probe: time ≤ 1.05× the reference's  (azhaq 1.5s, reference 1.6s (the median of 3 below 20 s, one run above) | azhaq probe -l /home/runner/work/azhaq/azhaq/bench/.work/probe/hosts.txt -json -silent -favicon -fr vs httpx -l /home/runner/work/azhaq/azhaq/bench/.work/probe/hosts.txt -silent -json -fr -td -cdn -favicon -title -sc -no-color)
+  PASS  [default] probe: status, title and tech agree with httpx on ≥ 95% of shared hosts  (all three 104/105 (status 105, title 105, tech 104; 0 redirects out of the site compared by their own status))
+  PASS  [default] probe public sites (5/s): results ≥ the reference's, confirmed by a GET to the site giving the status the tool reported (a redirect out of the site counts)  (azhaq 1, reference 1; [ginandjuice.shop testphp.vulnweb.com demo.testfire.net]; one run each; time ×0.50 of the reference, memory ×0.68 of the reference (146 MB against 216 MB) | azhaq probe -l /home/runner/work/azhaq/azhaq/bench/.work/probe/public.txt -json -silent -rate 5 -H User-Agent: azhaq-bench/1 (+https://github.com/lilsadfoqs/azhaq) -fr vs httpx -l /home/runner/work/azhaq/azhaq/bench/.work/probe/public.txt -silent -json -fr -title -sc -rl 5 -t 1 -H User-Agent: azhaq-bench/1 (+https://github.com/lilsadfoqs/azhaq) -no-color)
+  PASS  [default] probe public sites (5/s): time ≤ 1.05× the reference's  (azhaq 10.8s, reference 21.5s (the median of 3 below 20 s, one run above) | azhaq probe -l /home/runner/work/azhaq/azhaq/bench/.work/probe/public.txt -json -silent -rate 5 -H User-Agent: azhaq-bench/1 (+https://github.com/lilsadfoqs/azhaq) -fr vs httpx -l /home/runner/work/azhaq/azhaq/bench/.work/probe/public.txt -silent -json -fr -title -sc -rl 5 -t 1 -H User-Agent: azhaq-bench/1 (+https://github.com/lilsadfoqs/azhaq) -no-color)
+  PASS  [default] probe: every input is a row, a failure or a skip (rows + failed + skipped == inputs)  (6 distinct inputs: 6 rows, 0 failed or skipped in the summary, unaccounted [] (exit 0; azhaq probe -l LIST -json; the list holds a live host, a redirect to another input, a closed port, a raw TCP port, a name that does not resolve, a repeat, a URL))
+
+6 of 6 checks pass
+
+record bench/history/2026-11-17T145543-9d7b61b9.json
+=== join
+go: downloading go.yaml.in/yaml/v3 v3.0.5
+
+default flags: probe (107 hosts)  answered (confirmed)  shared  status  title  tech  all  favicon  cdn  time
+azhaq                             107 (105)             105     105     105    104   104  103/103  0/0  1.5s 166MB
+httpx                             105 (105)                                                             1.6s 222MB
+
+default flags: ports (connect)                    azhaq  naabu  confirmed azhaq / naabu  azhaq time  naabu time
+scanme.nmap.org top-1000                          4      3      3 / 3                    2.0s 68MB   6.9s 70MB
+127.0.0.1 1-65535                                 2      1      1 / 1                    0.5s 70MB   133.6s 107MB
+127.0.0.0/28 34535,44589,41903,34443,44909,44109  4      4      4 / 4                    0.0s 51MB   2.5s 57MB
+
+default flags: ports, CPU (127.0.0.1 1-65535, -rate 10000)  azhaq  nmap -sT
+CPU seconds                                                 0.93   1.13
+time                                                        6.6s   6.6s
+open ports                                                  1      1
+
+default flags: services (15 lab ports)  azhaq  nmap -sV  azhaq time  nmap time
+named right                             15     12        2.9s 69MB   145.3s 89MB
+with product and version                14     11                    
+
+probe differences (azhaq/httpx), default
+  127.0.0.1:5020: status 200/200 title "Damn Vulnerable NodeJS Application"/"Damn Vulnerable NodeJS Application" tech [Bootstrap:3.3.7 BootstrapCDN:3.3.7 Express Node.js Showdown cdnjs jQuery:3.2.1]/[Bootstrap:3.3.7 BootstrapCDN:3.3.7 Cloudflare Express Node.js Showdown cdnjs jQuery:3.2.1]
+
+checks
+  PASS  [default] ports 127.0.0.1 1-65535: open ports ≥ nmap -sT's  (azhaq 0.93 CPU s, 6.6 s and 75 MB, nmap 1.13 CPU s, 6.6 s and 75 MB (median of 5 runs in turn); open: azhaq 1, nmap 1; listening throughout and azhaq missed [], nmap missed [] | azhaq ports -host 127.0.0.1 -p 1-65535 -rate 10000 -retries 0 -detect none -silent -db /home/runner/work/azhaq/azhaq/bench/.work/portscpu993928217/cpu.db vs nmap -sT -Pn -n -p 1-65535 --max-rate 10000 --max-retries 0 -oG - 127.0.0.1)
+  PASS  [default] ports 127.0.0.1 1-65535: CPU ≤ 1.25× nmap -sT's  (0.82×: azhaq 0.93 CPU s, 6.6 s and 75 MB, nmap 1.13 CPU s, 6.6 s and 75 MB (median of 5 runs in turn); open: azhaq 1, nmap 1; listening throughout and azhaq missed [], nmap missed [] | azhaq ports -host 127.0.0.1 -p 1-65535 -rate 10000 -retries 0 -detect none -silent -db /home/runner/work/azhaq/azhaq/bench/.work/portscpu993928217/cpu.db vs nmap -sT -Pn -n -p 1-65535 --max-rate 10000 --max-retries 0 -oG - 127.0.0.1)
+  PASS  [default] ports 127.0.0.1 1-65535: time ≤ 1.25× nmap -sT's  (1.01×: azhaq 0.93 CPU s, 6.6 s and 75 MB, nmap 1.13 CPU s, 6.6 s and 75 MB (median of 5 runs in turn); open: azhaq 1, nmap 1; listening throughout and azhaq missed [], nmap missed [] | azhaq ports -host 127.0.0.1 -p 1-65535 -rate 10000 -retries 0 -detect none -silent -db /home/runner/work/azhaq/azhaq/bench/.work/portscpu993928217/cpu.db vs nmap -sT -Pn -n -p 1-65535 --max-rate 10000 --max-retries 0 -oG - 127.0.0.1)
+  PASS  [default] ports scanme.nmap.org top-1000: results ≥ the reference's, confirmed by an independent TCP connect  (azhaq 3, reference 3; old bar: 3 of 3 = 100%; azhaq only [advisory:], naabu only []; time ×0.29 of the reference, memory ×0.97 of the reference (68 MB against 70 MB) | azhaq ports -host scanme.nmap.org -p top-1000 -silent vs naabu -host scanme.nmap.org -top-ports 1000 -scan-type c -Pn -silent)
+  PASS  [default] ports scanme.nmap.org top-1000: time ≤ 1.05× the reference's  (azhaq 2.0s, reference 6.9s (the median of 3 below 20 s, one run above) | azhaq ports -host scanme.nmap.org -p top-1000 -silent vs naabu -host scanme.nmap.org -top-ports 1000 -scan-type c -Pn -silent)
+  PASS  [default] ports 127.0.0.1 1-65535: results ≥ the reference's, confirmed by `ss -ltn` taken before and after the scan  (azhaq 1, reference 1; old bar: 1 of 1 = 100%; sockets listening throughout and missed: azhaq [], naabu []; time ×0.00 of the reference, memory ×0.65 of the reference (70 MB against 107 MB) | azhaq ports -host 127.0.0.1 -p 1-65535 -silent vs naabu -host 127.0.0.1 -p 1-65535 -scan-type c -Pn -silent)
+  PASS  [default] ports 127.0.0.1 1-65535: time ≤ 1.05× the reference's  (azhaq 0.5s, reference 133.6s (the median of 3 below 20 s, one run above) | azhaq ports -host 127.0.0.1 -p 1-65535 -silent vs naabu -host 127.0.0.1 -p 1-65535 -scan-type c -Pn -silent)
+  PASS  [default] ports 127.0.0.0/28: results ≥ the reference's, confirmed by the listeners the bench opened (a port that is not one counts against)  (azhaq 4, reference 4; planted 4; azhaq 4 of them, 4 reported; naabu 4, 4 reported; time ×0.01 of the reference, memory ×0.88 of the reference (51 MB against 57 MB) | azhaq ports -host 127.0.0.0/28 -p 34535,44589,41903,34443,44909,44109 -silent vs naabu -host 127.0.0.0/28 -p 34535,44589,41903,34443,44909,44109 -scan-type c -Pn -silent)
+  PASS  [default] ports 127.0.0.0/28: time ≤ 1.05× the reference's  (azhaq 0.0s, reference 2.5s (the median of 3 below 20 s, one run above) | azhaq ports -host 127.0.0.0/28 -p 34535,44589,41903,34443,44909,44109 -silent vs naabu -host 127.0.0.0/28 -p 34535,44589,41903,34443,44909,44109 -scan-type c -Pn -silent)
+  PASS  [default] ports 1-1000, connect only: results ≥ the reference's, confirmed by nmap's own connect scan  (azhaq 1, reference 1 | azhaq ports -host 127.0.0.1 -p 1-1000 -detect none -silent vs nmap -sT -Pn -n -p 1-1000 -oG - 127.0.0.1)
+  PASS  [default] ports 1-1000, connect only: time ≤ 1.25× the reference's  (azhaq 0.03s, reference 0.03s (1.17×, the median of 3) | azhaq ports -host 127.0.0.1 -p 1-1000 -detect none -silent vs nmap -sT -Pn -n -p 1-1000 -oG - 127.0.0.1)
+  PASS  [default] ports 1-1000, connect only: private memory ≤ 2× the reference's  (private (RssAnon) azhaq 8.9 MB, reference 5.5 MB (1.62×); resident with the binary's shared file pages (VmHWM) azhaq 51 MB, reference 14 MB (3.67×); the median of 3 | azhaq ports -host 127.0.0.1 -p 1-1000 -detect none -silent vs nmap -sT -Pn -n -p 1-1000 -oG - 127.0.0.1)
+  PASS  [default] ports 1-1000, services named: results ≥ the reference's, confirmed by nmap -sV's open ports  (azhaq 2, reference 1 | azhaq ports -host 127.0.0.1 -p 1-1000 -silent vs nmap -sT -sV -Pn -n -p 1-1000 -oG - 127.0.0.1)
+  PASS  [default] ports 1-1000, services named: time ≤ 1.25× the reference's  (azhaq 0.09s, reference 0.15s (0.62×, the median of 3) | azhaq ports -host 127.0.0.1 -p 1-1000 -silent vs nmap -sT -sV -Pn -n -p 1-1000 -oG - 127.0.0.1)
+  PASS  [default] ports 1-1000, services named: private memory ≤ 2× the reference's  (private (RssAnon) azhaq 23.0 MB, reference 37.0 MB (0.62×); resident with the binary's shared file pages (VmHWM) azhaq 65 MB, reference 49 MB (1.32×); the median of 3 | azhaq ports -host 127.0.0.1 -p 1-1000 -silent vs nmap -sT -sV -Pn -n -p 1-1000 -oG - 127.0.0.1)
+  PASS  [default] services (nmap -sV): results ≥ the reference's, confirmed by the lab's own list of what runs on each port (bench/services.yaml) and `ss` showing every port listening  (azhaq 15, reference 12; 15 ports; with a product and version: azhaq 14, nmap 11; azhaq missed []; nmap missed [11883 mosquitto (mqtt): "" 21211 memcached: "unknown" 10053 coredns (tcp): "tcpwrapped"]; time ×0.02 of the reference, memory ×0.77 of the reference (69 MB against 89 MB) | azhaq ports -host 127.0.0.1 -p 16379,13306,15432,17017,11883,15682,21211,12222,10021,10025,18825,10389,10445,19200,10053 -json -silent vs nmap -sV -Pn -p 16379,13306,15432,17017,11883,15682,21211,12222,10021,10025,18825,10389,10445,19200,10053 -oX - 127.0.0.1)
+  PASS  [default] services (nmap -sV): time ≤ 1.05× the reference's  (azhaq 2.9s, reference 145.3s (the median of 3 below 20 s, one run above) | azhaq ports -host 127.0.0.1 -p 16379,13306,15432,17017,11883,15682,21211,12222,10021,10025,18825,10389,10445,19200,10053 -json -silent vs nmap -sV -Pn -p 16379,13306,15432,17017,11883,15682,21211,12222,10021,10025,18825,10389,10445,19200,10053 -oX - 127.0.0.1)
+  PASS  [default] services: azhaq names ≥ 90% of the lab's TCP services  (15 of 15)
+  PASS  [default] probe: results ≥ the reference's, confirmed by a GET to the host itself giving the status the tool reported  (azhaq 105, reference 105; old bar: 105 of 105 = 100%; 107 hosts (5 apps, the services lab's web ports, 100 local servers); answered azhaq 107, httpx 105, shared 105; time ×0.92 of the reference, memory ×0.75 of the reference (166 MB against 222 MB) | azhaq probe -l /home/runner/work/azhaq/azhaq/bench/.work/probe/hosts.txt -json -silent -favicon -fr vs httpx -l /home/runner/work/azhaq/azhaq/bench/.work/probe/hosts.txt -silent -json -fr -td -cdn -favicon -title -sc -no-color)
+  PASS  [default] probe: time ≤ 1.05× the reference's  (azhaq 1.5s, reference 1.6s (the median of 3 below 20 s, one run above) | azhaq probe -l /home/runner/work/azhaq/azhaq/bench/.work/probe/hosts.txt -json -silent -favicon -fr vs httpx -l /home/runner/work/azhaq/azhaq/bench/.work/probe/hosts.txt -silent -json -fr -td -cdn -favicon -title -sc -no-color)
+  PASS  [default] probe: status, title and tech agree with httpx on ≥ 95% of shared hosts  (all three 104/105 (status 105, title 105, tech 104; 0 redirects out of the site compared by their own status))
+  PASS  [default] probe public sites (5/s): results ≥ the reference's, confirmed by a GET to the site giving the status the tool reported (a redirect out of the site counts)  (azhaq 1, reference 1; [ginandjuice.shop testphp.vulnweb.com demo.testfire.net]; one run each; time ×0.50 of the reference, memory ×0.68 of the reference (146 MB against 216 MB) | azhaq probe -l /home/runner/work/azhaq/azhaq/bench/.work/probe/public.txt -json -silent -rate 5 -H User-Agent: azhaq-bench/1 (+https://github.com/lilsadfoqs/azhaq) -fr vs httpx -l /home/runner/work/azhaq/azhaq/bench/.work/probe/public.txt -silent -json -fr -title -sc -rl 5 -t 1 -H User-Agent: azhaq-bench/1 (+https://github.com/lilsadfoqs/azhaq) -no-color)
+  PASS  [default] probe public sites (5/s): time ≤ 1.05× the reference's  (azhaq 10.8s, reference 21.5s (the median of 3 below 20 s, one run above) | azhaq probe -l /home/runner/work/azhaq/azhaq/bench/.work/probe/public.txt -json -silent -rate 5 -H User-Agent: azhaq-bench/1 (+https://github.com/lilsadfoqs/azhaq) -fr vs httpx -l /home/runner/work/azhaq/azhaq/bench/.work/probe/public.txt -silent -json -fr -title -sc -rl 5 -t 1 -H User-Agent: azhaq-bench/1 (+https://github.com/lilsadfoqs/azhaq) -no-color)
+  PASS  [default] probe: every input is a row, a failure or a skip (rows + failed + skipped == inputs)  (6 distinct inputs: 6 rows, 0 failed or skipped in the summary, unaccounted [] (exit 0; azhaq probe -l LIST -json; the list holds a live host, a redirect to another input, a closed port, a raw TCP port, a name that does not resolve, a repeat, a URL))
+
+24 of 24 checks pass
+
+record bench/joined/2026-11-17T145311-9d7b61b9.json (joined from 3)
