@@ -193,7 +193,7 @@ azhaq roles -role anon -role-cmd 'alice=./token.sh alice' -role-cmd 'bob=./token
 
 - The command prints `Header: value` lines, or a bare token. A bare token is sent as `Authorization: Bearer`.
 - azhaq runs it before each role's run, and again before the replay.
-- Its own requests go through a loopback proxy of azhaq's: held to the scope and the budget, and in the ledger. A host it needs that the scope lacks is given with `-allow` after `--`.
+- Its own requests go through a loopback proxy of azhaq's: held to the run's scope and budget, and in the ledger. To let it reach a host outside the run's scope, add that host with `-allow` after `--`.
 - It runs again whenever the role's canary says the session died during the replay. The canary is the role's `/me`, or `-canary URL`.
 - What was asked since the last good check is asked again.
 
