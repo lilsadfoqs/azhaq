@@ -65,7 +65,7 @@ leads (2): inferred from a name, a path or a guess; each names the check that wo
 | --- | --- |
 | `rank` | Position in the list, best first. |
 | `score` | The sum of the row's signal weights. |
-| `key` | A route template, host, file or listener. A template folds several URLs and holds `{n}`, `{uuid}`, `{hex}` or `={v}`. A key seen once is the URL. A listener is `host:port`. |
+| `key` | A route template, host, file or listener. A template folds several URLs and holds `{n}`, `{uuid}`, `{hex}` or `={v}`. A key seen once is the URL. A listener is `host:port`, which `azhaq show` opens (see [show](show.md)). |
 | `type` | `URL`, `Hostname` or `Service` (a listener). |
 | `reasons` | An array of `{signal, detail}`, one per signal. |
 | `tier` | `finding`, `identification` or `lead`: see [Findings and leads](#findings-and-leads). |
