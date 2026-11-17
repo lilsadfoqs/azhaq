@@ -30,9 +30,10 @@ type PortDialer struct {
 	socks   string              // its address, and the user:password it takes
 	auth    string
 	preMu   sync.Mutex
-	pre     map[string]int // connects Reserve recorded for an address, until their TCP calls
-	adapt   bool           // the wait of a connect follows the round trip (Adapt)
-	rtts    sync.Map       // address -> *rttModel
+	pre     map[string]int                 // connects Reserve recorded for an address, until their TCP calls
+	adapt   bool                           // the wait of a connect follows the round trip (Adapt)
+	rtts    sync.Map                       // address -> *rttModel
+	loss    func(ip string, port int) bool // a stand-in for a lossy path (SimulateLoss)
 }
 
 // NewPortDialer is a dialer with a timeout per connect, connecting from

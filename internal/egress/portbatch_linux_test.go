@@ -66,7 +66,8 @@ func TestTCPBatchEndsEachPortLikeTCP(t *testing.T) {
 		t.Fatalf("the open port: %+v", got[0])
 	}
 	got[0].conn.Close()
-	if !errors.Is(got[1].err, syscall.ECONNREFUSED) || got[1].conn != nil {
+	// A refusal says how long it took: the scanner's pace follows the round trip.
+	if !errors.Is(got[1].err, syscall.ECONNREFUSED) || got[1].conn != nil || got[1].rtt <= 0 {
 		t.Errorf("the closed port: %+v", got[1])
 	}
 	var ne net.Error
@@ -257,5 +258,33 @@ func TestTCPBatchHasOneLedgerLinePerConnectThatBegan(t *testing.T) {
 	}
 	if Sent() != 3 {
 		t.Errorf("%d counted, want 3: the three after the stop are given back", Sent())
+	}
+}
+
+// A connect the stand-in for a lossy path drops is never made: the open port
+// behind it is not reached and ends by its timeout, and the others go on.
+func TestSimulatedLossLeavesAConnectUnanswered(t *testing.T) {
+	Reset()
+	defer Reset()
+	addr, accepted := listener(t)
+	_, p, _ := net.SplitHostPort(addr)
+	lost := atoiPort(t, p)
+	addr2, _ := listener(t)
+	_, p2, _ := net.SplitHostPort(addr2)
+	kept := atoiPort(t, p2)
+	d := NewPortDialer(200*time.Millisecond, nil, "", "")
+	d.SimulateLoss(func(_ string, port int) bool { return port == lost })
+	got := runBatch(t, d, context.Background(), "127.0.0.1", []int{lost, kept})
+	var ne net.Error
+	if got[0].conn != nil || !errors.As(got[0].err, &ne) || !ne.Timeout() {
+		t.Errorf("the dropped connect: %+v, want a timeout", got[0])
+	}
+	if got[1].err != nil || got[1].conn == nil {
+		t.Fatalf("the connect beside it: %+v", got[1])
+	}
+	got[1].conn.Close()
+	time.Sleep(50 * time.Millisecond)
+	if accepted.Load() != 0 {
+		t.Errorf("the dropped connect reached its listener %d times", accepted.Load())
 	}
 }
