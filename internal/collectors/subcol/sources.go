@@ -265,7 +265,8 @@ func sampled(s source) source {
 			// bound of its own, so -source-timeout is put on it here.
 			kctx, cancel := context.WithTimeout(ctx, timeout)
 			defer cancel()
-			return collect(kctx, domain, keys, sess)
+			names, err := collect(kctx, domain, keys, sess)
+			return names, cutByTimeout(ctx, kctx, err, timeout)
 		}
 		chk, _ := ctx.Value(checkerKey{}).(*checker)
 		n, _ := ctx.Value(samplesKey{}).(int)
@@ -290,7 +291,7 @@ func sampled(s source) source {
 				defer guard.Recover(ctx)
 				t0 := time.Now()
 				got, err := collect(fctx, domain, nil, sess)
-				ch <- reply{got, err, time.Since(t0)}
+				ch <- reply{got, cutByTimeout(ctx, fctx, err, timeout), time.Since(t0)}
 			}()
 			return ch, cancel
 		}
@@ -375,6 +376,15 @@ func sampled(s source) source {
 		return names, nil
 	}
 	return s
+}
+
+// cutByTimeout names a call that its own -source-timeout ended, as the run
+// names a plain source's, not by the context's words; the names it read stay.
+func cutByTimeout(run, call context.Context, err error, timeout time.Duration) error {
+	if run.Err() == nil && errors.Is(call.Err(), context.DeadlineExceeded) && (err == nil || contextEnded(err)) {
+		return fmt.Errorf("no answer in %s (-source-timeout)", timeout)
+	}
+	return err
 }
 
 // Why a sampled source stopped asking, for its row ("sampling_stopped").
