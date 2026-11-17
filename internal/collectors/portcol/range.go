@@ -247,10 +247,13 @@ func (c *Collector) runPrefix(ctx context.Context, seed types.Seed, emit func(ty
 			s := &scan{up: true}
 			var uerr error
 			early := &earlyAddr{c: c, ctx: ctx, ip: ip}
+			var ck func(portscan.Progress)
+			var lastMu sync.Mutex
+			var last *portscan.Progress // what the scan had finished at its latest report
 			if !single {
 				// An open port is a row as it is found, not when the block ends; a single
 				// address keeps its own checkpoints (below).
-				ck := c.checkpoint(func(o types.Observation) error {
+				ck = c.checkpoint(func(o types.Observation) error {
 					mu.Lock()
 					defer mu.Unlock()
 					return emit(o)
@@ -284,6 +287,15 @@ func (c *Collector) runPrefix(ctx context.Context, seed types.Seed, emit func(ty
 					return emit(o)
 				}, ip, ip, all, prior, resumed, edgeName, edge, pf.String(), c.passOf(1)))
 			}
+			if !single {
+				// Only the last report is kept: a deadline or an interrupt ends the
+				// scan with no row of what it finished, which this one then writes.
+				sctx = portscan.WithProgress(ctx, func(p portscan.Progress) {
+					lastMu.Lock()
+					last = &p
+					lastMu.Unlock()
+				})
+			}
 			if mine {
 				switch {
 				case len(ports) == 0:
@@ -307,6 +319,16 @@ func (c *Collector) runPrefix(ctx context.Context, seed types.Seed, emit func(ty
 						// What it found is kept; azhaq resume asks the rest.
 						if res.row = c.partialRow(ip, ip, all, ports, s, prior, resumed, edgeName, edge); res.row != nil {
 							res.row["prefix"] = pf.String()
+						}
+					} else if ctx.Err() != nil && ck != nil {
+						lastMu.Lock()
+						p := last
+						lastMu.Unlock()
+						if p != nil && s.asked > 0 {
+							ck(*p)
+							mu.Lock()
+							asked++
+							mu.Unlock()
 						}
 					}
 					record(res)
@@ -508,16 +530,10 @@ func (c *Collector) runPrefix(ctx context.Context, seed types.Seed, emit func(ty
 		}
 		wg.Wait()
 	}
-	if err := ctx.Err(); err != nil {
-		return types.RunMeta{Status: types.StatusCancelled}, err
-	}
-	if emitErr != nil {
-		return meta, emitErr
-	}
-	if stopped(first) {
-		// The rows of the addresses it reached are kept; this row says how
-		// many that was, as the finished range's does for all of them.
-		// What the block finished goes in the row, so that a resume does not ask it again.
+	// The rows of the addresses it reached are kept; this row says how
+	// many that was, as the finished range's does for all of them.
+	// What the block finished goes in the row, so that a resume does not ask it again.
+	keepStop := func() {
 		row := counts()
 		row["range"], row["prefix"], row["addresses"], row["stopped"], row["open"] = true, pf.String(), asked, true, []int{}
 		row[SweptKey] = portscan.Compact(slices.Collect(maps.Keys(finished)))
@@ -525,6 +541,19 @@ func (c *Collector) runPrefix(ctx context.Context, seed types.Seed, emit func(ty
 		row["addresses_of"] = len(addrs)
 		raw, _ := json.Marshal(row)
 		_ = emit(types.Observation{Collector: Name, Source: "tcp", Kind: "ports", Payload: raw, Confidence: 0.95, ObservedAt: time.Now().UTC(), Keep: true})
+	}
+	if err := ctx.Err(); err != nil {
+		// A deadline or an interrupt stops the block as a limit does.
+		if emitErr == nil {
+			keepStop()
+		}
+		return types.RunMeta{Status: types.StatusCancelled}, err
+	}
+	if emitErr != nil {
+		return meta, emitErr
+	}
+	if stopped(first) {
+		keepStop()
 		return types.RunMeta{Status: types.StatusCapped, EmitCount: meta.EmitCount}, first
 	}
 	if first != nil {
