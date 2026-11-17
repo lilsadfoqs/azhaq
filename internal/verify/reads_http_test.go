@@ -202,3 +202,41 @@ func TestOpenTSDBAnswerWithoutItsKeysIsNoFinding(t *testing.T) {
 		}
 	}
 }
+
+// The evidence of a read keeps the key it matched, never the secrets that sit
+// beside it: a configuration body that names a password, a token or a key
+// shows none of their values, wherever they fall, however the excerpt is cut.
+func TestUnauthReadEvidenceNeverHoldsASecretValue(t *testing.T) {
+	filler := strings.Repeat(`"tsd.core.padding.x":"y",`, 12)
+	config := `{"tsd.rabbitmq.password":"hunter2",` + filler + `"tsd.network.port":"4242","tsd.http.api_key":"k-777","auth.token":12345,` +
+		`"cred":{"credential":"c-888"},"tsd.rtpublisher.rabbitmq.pass":"guest","secret_note": "s-999"}`
+	serve := func(n int, w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, config) }
+	origin, _ := newFixture(t, serve)
+	secrets := []string{"hunter2", "k-777", "12345", "c-888", "guest", "s-999"}
+	for _, u := range ReadsForProduct("OpenTSDB") {
+		_, _, ev, err := u.Check(context.Background(), testDoer(), origin)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, s := range secrets {
+			if strings.Contains(ev, s) {
+				t.Errorf("%s: evidence holds %q: %s", u.ID, s, ev)
+			}
+		}
+	}
+	u := ReadsForProduct("OpenTSDB")[0]
+	if _, _, ev, _ := u.Check(context.Background(), testDoer(), origin); !strings.Contains(ev, `unauthenticated: 200 "tsd.network.port":"4242"; with a wrong credential: 200 "tsd.network.port":"4242"`) {
+		t.Errorf("evidence is not the matched key and its value: %s", ev)
+	}
+	// An entry with no window keeps the start of the body, masked before the cut.
+	plain := UnauthRead{ID: "p", Product: "x", Path: "/c", Shown: func(int, []byte) bool { return true }}
+	long := `{"a":"` + strings.Repeat("z", 150) + `","db_password":"` + strings.Repeat("hunter2", 20) + `"}`
+	origin, _ = newFixture(t, func(n int, w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, long) })
+	if _, _, ev, _ := plain.Check(context.Background(), testDoer(), origin); strings.Contains(ev, "hunter") || !strings.Contains(ev, "[redacted]") {
+		t.Errorf("a cut inside a secret value left it: %s", ev)
+	}
+	// A body cut inside a value (the read is bounded) is masked too.
+	if got := redactSecrets(`{"x":1,"api_key":"abc def, ghi`); strings.Contains(got, "abc") || strings.Contains(got, "ghi") {
+		t.Errorf("a cut value stays: %s", got)
+	}
+}

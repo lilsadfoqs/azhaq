@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
+	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 	"github.com/lilsadfoqs/azhaq/internal/portscan"
 	"github.com/lilsadfoqs/azhaq/internal/productname"
 	"github.com/lilsadfoqs/azhaq/internal/proof"
@@ -105,6 +106,11 @@ type UnauthRead struct {
 	// content: a signal that would not appear on its sign-in page or a
 	// bare refusal.
 	Shown func(status int, body []byte) bool
+
+	// Window, when set, gives the part of a body the evidence keeps (the
+	// matched key and a short window around it) instead of its start: a
+	// configuration read holds secrets beside what it shows.
+	Window func(body []byte) string
 }
 
 // HTTPDoer is what a login or read check needs to send one request: an
@@ -454,9 +460,32 @@ func (u UnauthRead) Check(ctx context.Context, d HTTPDoer, origin string) (findi
 	}
 	request = "GET " + u.Path + " with no credential, then GET " + u.Path + " with a deliberately wrong credential"
 	evidence = fmt.Sprintf("unauthenticated: %d %s; with a wrong credential: %d %s",
-		respA.StatusCode, excerpt(bodyA), respB.StatusCode, excerpt(bodyB))
+		respA.StatusCode, u.shown(bodyA), respB.StatusCode, u.shown(bodyB))
 	finding = u.Shown(respA.StatusCode, bodyA)
 	return finding, request, evidence, nil
+}
+
+// shown is the evidence of a body: Window's part of it when it has one, else
+// the start of it, with the value of every secret key masked before anything
+// is cut, so no cut can leave the front of a value behind.
+func (u UnauthRead) shown(body []byte) string {
+	s := redactSecrets(string(body))
+	if u.Window != nil {
+		if w := u.Window([]byte(s)); w != "" {
+			s = w
+		}
+	}
+	return excerpt([]byte(s))
+}
+
+// secretPair is a JSON member whose key names a secret and its value, or the
+// start of a value cut off with the body.
+var secretPair = lazyre.New(`(?i)("[^"]*(?:pass|secret|token|key|credential)[^"]*"\s*:\s*)("(?:[^"\\]|\\.)*"|"(?:[^"\\]|\\.)*$|[^,}\]\s]+)`)
+
+// redactSecrets masks the value of every JSON member whose key contains pass,
+// secret, token, key or credential.
+func redactSecrets(s string) string {
+	return secretPair.ReplaceAllString(s, `${1}"[redacted]"`)
 }
 
 // captchaMarkers and lockoutMarkers are generic, not product-specific:

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+
+	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 )
 
 // The catalog of -verify-logins: every published default credential pair
@@ -238,6 +240,13 @@ func bodyMarker(markers ...string) func(status int, body []byte) bool {
 	return func(status int, body []byte) bool { return bodyHasAny(body, markers) }
 }
 
+// The windows of OpenTSDB's evidence: the one key (or metric) that was matched
+// and its value.
+var (
+	openTSDBPort = lazyre.New(`"tsd\.network\.port"\s*:\s*"[^"]*"`)
+	openTSDBStat = lazyre.New(`"metric"\s*:\s*"tsd\.connectionmgr\.[^"]*"`)
+)
+
 var unauthReads = []UnauthRead{
 	{
 		ID: "spark-master-ui", Product: "Apache Spark", Path: "/",
@@ -338,6 +347,7 @@ var unauthReads = []UnauthRead{
 		Shown: func(status int, body []byte) bool {
 			return status == 200 && bodyHasAny(body, []string{"\"tsd.network.port\""})
 		},
+		Window: func(body []byte) string { return openTSDBPort.FindString(string(body)) },
 	},
 	{
 		ID: "opentsdb-api-stats", Product: "OpenTSDB", Path: "/api/stats",
@@ -346,5 +356,6 @@ var unauthReads = []UnauthRead{
 		Shown: func(status int, body []byte) bool {
 			return status == 200 && bodyHasAny(body, []string{"\"tsd.connectionmgr."})
 		},
+		Window: func(body []byte) string { return openTSDBStat.FindString(string(body)) },
 	},
 }
