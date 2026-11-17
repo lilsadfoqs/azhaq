@@ -630,6 +630,7 @@ func estimateCost(seeds []types.Seed, planned [][]string, runs func(string) bool
 		// The names two of the seeds make alike are asked once, as Permute asks them.
 		hosts := brutecol.PermuteHosts(permuteSeeds)
 		pc := newPermuteCost(hosts, env.dnsRate, env.resolvers)
+		pc.UpperBound = true
 		e.add("azhaq-permute", amount{DNS: guess(pc.Variations)}, permuteOpen)
 		e.permute = &pc
 	}

@@ -191,8 +191,8 @@ subdomain.center answers a random sample of about 500 names per call, nearly all
 
 `-permute` asks the variations of each name found: about 800 for one name (814 for `name.example.org`: 130 words in 6 places, 24 numbers and 6 regions, a few alike). A name two of them make is asked once. Alterx's default patterns make 696 for the same name, and every one of them is among azhaq's: the extra names are 19 more words of the same kind, and the variations `api-1`, `api-2`, `api01` and `api02` of a name that ends in no number. No run has measured that the extra names find more, so none was cut.
 
-- `plan` says the number: with names given as targets the `names` stage counts exactly the variation names the run asks, and the `permute` line gives the time at `-dns-rate` and what each name found later adds. Three seeds make 2164 names: 217 s, about 4 min, at `-dns-rate 10` on one resolver.
-- The summary has a `-permute:` note when names were varied: how many names, how many variation names that is, the time at `-dns-rate`, and how many were asked.
+- `plan` says the number: with names given as targets the `names` stage counts the variation names the run asks of them, at most: a name that does not resolve is not varied, and `plan` cannot know that before the run (the `permute` line says `up to`, and `upper_bound` is `true`). It also gives the time at `-dns-rate` and what each name found later adds. Three seeds make 2164 names: 217 s, about 4 min, at `-dns-rate 10` on one resolver.
+- The summary has a `-permute:` note when names were varied: how many names, how many variation names that is, the time at `-dns-rate`, and how many were asked. Names found that did not resolve to an address of their own are not in that count; the note says how many they were.
 - The progress line counts them: `75 of 2164 permutation names asked`. The total grows as names are found and varied. With `-json` the progress object has `permutation_names_asked` and `permutation_names`.
 - A run cut by `-max-time` adds how many were not asked, and `azhaq resume` asks them.
 
