@@ -72,9 +72,9 @@ func verifyStage(ctx context.Context, st *store.Store, obs []types.StoredObserva
 			liveWake(ctx)
 		}
 	}
+	var asked []advisory.Service
 	for _, svc := range advisory.ServicesAnyVersion(obs) {
-		check, ok := verify.ForService(svc)
-		if !ok {
+		if _, ok := verify.ForService(svc); !ok {
 			continue
 		}
 		host := svc.Host
@@ -85,6 +85,11 @@ func verifyStage(ctx context.Context, st *store.Store, obs []types.StoredObserva
 			refused++
 			continue
 		}
+		asked = append(asked, svc)
+	}
+	// One read of each listener, whatever names reached it: it lists them.
+	for _, rd := range verify.Reads(asked, advisory.NameAddrs(obs)) {
+		check, svc := rd.Check, rd.Svc
 		if err := egress.Take(); err != nil {
 			stopped++
 			continue
@@ -111,6 +116,9 @@ func verifyStage(ctx context.Context, st *store.Store, obs []types.StoredObserva
 			continue
 		}
 		r.Command = command
+		if len(rd.Names) > 1 {
+			r.Names = rd.Names
+		}
 		if r.Declined { // refused, nothing identified: counted apart, not a result row
 			declined = append(declined, r)
 			continue
@@ -203,7 +211,7 @@ func verifyResultsOf(obs []types.StoredObservation) []verify.Result {
 			out = append(out, r)
 		}
 	}
-	return out
+	return foldVerifyResults(out, advisory.NameAddrs(obs))
 }
 
 // verifyRow is a result as a -json line: its fields and its type.

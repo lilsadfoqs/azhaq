@@ -242,7 +242,7 @@ An origin that answers every path with the same page (a single-page app's shell)
 - Only the response's headers are kept. What the run sent, such as `-cookie`, `-header` and `Authorization`, is never stored.
 - A `Set-Cookie` header keeps its name and flags and shows `[kept out]` for the value.
 - `body_excerpt` is the bytes as they came. `body_length` is the size of the whole body, and `body_cut` is `true` when the body is longer than the excerpt.
-- After a redirect the headers are those of the first answer, the one `status` is of. `body_excerpt` is then of the page the chain ended on, and `body_url` names it.
+- A row holds the answer of its own URL. After a followed redirect the headers, `body_excerpt`, `body_length` and `body_cut` are those of the first answer, the one `status` is of (an empty body for a bare 302), not of the page the chain ended on: that page is a row of its own, with its own answer. The rules that read a body (a stack trace, SQL error text, a debug page, an exposed file's head) read the row's own body, so a redirect is not given what its target sent. `-sr` writes the same answers: the redirect's file holds the redirect, the target's file the target. A workspace made before 0.28 kept the end's body under the first URL and named it in `body_url`; a row made now has no `body_url`.
 - The printed map, in text and with `-json`, does not carry them. They are the fields `headers`, `body_excerpt`, `body_length`, `body_cut`, `body_url` and `asked_at`: `azhaq query -fields key,headers,body_excerpt` prints them, `azhaq show` prints them for one row, and `azhaq export -format jsonl` carries them, and the HTML report shows the headers.
 - A row costs about 1.5 KB of the workspace: 1 KB of body, written as base64, and its headers. A page of 23 KB costs the same as one of 1 KB.
 - `-sr` still writes every answer whole, to files: see [the flags](#flags).
@@ -459,7 +459,7 @@ azhaq run -url https://app.example.com/ -ports top-100 -advisories=false
 
 ### Read-only verification
 
-With `-verify`, each service the run named that has a check gets at most one more read, from a fixed list of checks — there is no way to name another request. Each check sends only what a client with no credentials sends to read what the service already gives anyone:
+With `-verify`, each service the run named that has a check gets at most one more read, from a fixed list of checks — there is no way to name another request. A listener (an address and a port) reached by its address and by names that resolve to it is one service: a read that does not depend on the name (the same bytes, outside TLS) is sent once, to the first of the names, and the result lists the others in `names`; a name whose own scan row named another product or version is read apart, and so is each name of a service read inside TLS, where the name is the handshake's. A workspace stored with one result for each name lists them as one. Each check sends only what a client with no credentials sends to read what the service already gives anyone:
 
 | Check | Sends exactly | Settles | Kind of a proved result |
 | --- | --- | --- | --- |

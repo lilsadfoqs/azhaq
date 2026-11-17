@@ -36,6 +36,9 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net"
+	"net/netip"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -44,6 +47,7 @@ import (
 	"github.com/lilsadfoqs/azhaq/internal/advisory"
 	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 	"github.com/lilsadfoqs/azhaq/internal/portscan"
+	"github.com/lilsadfoqs/azhaq/internal/productname"
 	"github.com/lilsadfoqs/azhaq/internal/proof"
 )
 
@@ -95,6 +99,10 @@ type Result struct {
 	// against advisories; VersionBasis is the evidence it came from.
 	VersionRange string `json:"version_range,omitempty"`
 	VersionBasis string `json:"version_range_basis,omitempty"`
+	// Names are the host strings whose own scan row named this service and
+	// product and agreed on the version (a name, its address): the one read
+	// stands for each of them. Host is the first.
+	Names []string `json:"names,omitempty"`
 }
 
 // Line is the result as one line of text output.
@@ -674,4 +682,98 @@ func RequestFor(svc advisory.Service) []byte {
 	}
 	req, _ := c.prepare(svc)
 	return req
+}
+
+// Read is one verification read: the check, the service it is sent to, and
+// the host strings it stands for.
+type Read struct {
+	Check Check
+	Svc   advisory.Service
+	Names []string
+}
+
+// Reads makes one read of each listener (address, port) and check, whatever it
+// was reached as: a name and its address are one listener, and a read that
+// does not depend on the name (the same bytes, outside TLS, where the name is
+// the SNI) is sent once, to the first of the names, which lists the others. A
+// name whose own scan row named another product, or another version, is a
+// listener answer of its own and stays a read of its own. addrs is the
+// address each name resolved to (advisory.NameAddrs).
+func Reads(svcs []advisory.Service, addrs map[string]string) []Read {
+	var out []Read
+	at := map[string][]int{} // key → reads of it, by version compatibility
+	for _, svc := range svcs {
+		c, ok := ForService(svc)
+		if !ok {
+			continue
+		}
+		host := firstNonEmpty(svc.Host, svc.IP)
+		req, _ := c.prepare(svc)
+		key := c.ID + "|" + listenerOf(svc, addrs) + "|" + productname.Canon(svc.Product)
+		if req == nil || svc.TLS {
+			key += "|" + strings.ToLower(host) // the name is part of what is asked
+		} else {
+			key += "|" + hex.EncodeToString(req)
+		}
+		joined := false
+		for _, i := range at[key] {
+			if v := out[i].Svc.Version; v == "" || svc.Version == "" || advisory.Refines(v, svc.Version) || advisory.Refines(svc.Version, v) {
+				if svc.Version != "" && (v == "" || advisory.Refines(svc.Version, v)) {
+					out[i].Svc.Version = svc.Version
+				}
+				if !containsFold(out[i].Names, host) {
+					out[i].Names = append(out[i].Names, host)
+				}
+				joined = true
+				break
+			}
+		}
+		if !joined {
+			at[key] = append(at[key], len(out))
+			out = append(out, Read{Check: c, Svc: svc, Names: []string{host}})
+		}
+	}
+	for i := range out {
+		sort.Strings(out[i].Names)
+		if len(out[i].Names) < 2 {
+			continue
+		}
+		// The read is sent to the first name; the scan row of that name is the
+		// one whose host, address and flags the read carries.
+		first := advisory.FirstName(out[i].Names)
+		for _, svc := range svcs {
+			if strings.EqualFold(firstNonEmpty(svc.Host, svc.IP), first) && listenerOf(svc, addrs) == listenerOf(out[i].Svc, addrs) {
+				v := out[i].Svc.Version
+				out[i].Svc = svc
+				out[i].Svc.Version = v
+				break
+			}
+		}
+	}
+	return out
+}
+
+func containsFold(ss []string, s string) bool {
+	for _, x := range ss {
+		if strings.EqualFold(x, s) {
+			return true
+		}
+	}
+	return false
+}
+
+// listenerOf is the address and port a service is read at: the address of its
+// row, or the one its name resolved to, else the name.
+func listenerOf(svc advisory.Service, addrs map[string]string) string {
+	h := ""
+	for _, c := range []string{svc.IP, svc.Host, addrs[strings.ToLower(svc.Host)]} {
+		if a, err := netip.ParseAddr(strings.TrimSpace(c)); err == nil {
+			h = a.Unmap().String()
+			break
+		}
+	}
+	if h == "" {
+		h = strings.ToLower(svc.Host)
+	}
+	return net.JoinHostPort(h, strconv.Itoa(svc.Port))
 }

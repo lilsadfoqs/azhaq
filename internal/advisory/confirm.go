@@ -491,6 +491,12 @@ func mergeListeners(in []Service, addrs map[string]string) []Service {
 	return out
 }
 
+// Refines is refines for the packages that group what each name read.
+func Refines(a, b string) bool { return refines(a, b) }
+
+// FirstName is firstName: the host a listener is called by, a name before an address.
+func FirstName(ns []string) string { return firstName(ns) }
+
 // refines says version a is b, or b with more said after it ("9.4.z-SNAPSHOT"
 // of "9.4"): the same release named more exactly, not another one.
 func refines(a, b string) bool {

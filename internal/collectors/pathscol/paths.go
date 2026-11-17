@@ -332,7 +332,8 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 			"final_url": final,
 			"hops":      res.Hops,
 		}
-		fetch.AddEvidence(row, res, 0)
+		own := res.Own() // the row is the answer of this URL; a redirect's target is its own row
+		fetch.AddEvidence(row, own, 0)
 		// What the answer holds, for the path checks' judgement: nothing is asked again.
 		var ct string
 		if res.Header != nil {
@@ -341,7 +342,7 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 				row["answer_location"] = loc
 			}
 		}
-		for k, v := range proof.Fields("/"+path, ct, res.Body) {
+		for k, v := range proof.Fields("/"+path, ct, own.Body) {
 			row[k] = v
 		}
 		if known {

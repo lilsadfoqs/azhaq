@@ -18,7 +18,7 @@ type Evidence struct {
 	Excerpt    []byte              `json:"body_excerpt,omitempty"` // raw bytes
 	BodyLength int                 `json:"body_length"`
 	Cut        bool                `json:"body_cut,omitempty"` // the body is longer than Excerpt
-	BodyURL    string              `json:"body_url,omitempty"` // after a redirect: the URL the body is of
+	BodyURL    string              `json:"body_url,omitempty"` // a followed redirect read whole (probe -follow-redirects): the URL the body is of
 	AskedAt    time.Time           `json:"asked_at,omitzero"`
 }
 

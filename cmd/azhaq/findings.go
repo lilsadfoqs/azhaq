@@ -485,6 +485,9 @@ func findingMarkdown(r findingRecord, group ...findingRecord) string {
 	if len(r.Also) > 0 {
 		b.WriteString("; the same answer at " + strings.Join(r.Also, ", "))
 	}
+	if on := otherNames(r); len(on) > 0 {
+		b.WriteString("; also answered as " + strings.Join(on, ", "))
+	}
 	b.WriteString("; evidence: " + r.Evidence)
 	if r.Command != "" {
 		b.WriteString("; command: " + r.Command)
@@ -679,7 +682,7 @@ func listenerRecords(obs []types.StoredObservation, command string) (set finding
 			Kind: r.Kind, Label: r.Label, Severity: r.Severity, Host: r.Host, Port: r.Port,
 			URL: r.URL, Product: r.Product, Version: r.Version, AdvisoryID: r.AdvisoryID,
 			AdvisoryURL: r.AdvisoryURL, Precondition: r.Precondition, Request: r.Request,
-			Evidence: r.Evidence, Command: r.Command, Collector: "azhaq-verify", Proof: r.Proof,
+			Evidence: r.Evidence, Command: r.Command, Collector: "azhaq-verify", Proof: r.Proof, names: r.Names,
 		}
 		if r.AdvisoryID != "" {
 			rec.Lead = leadName(r.Target, r.Product)

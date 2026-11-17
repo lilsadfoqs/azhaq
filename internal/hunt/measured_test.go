@@ -65,3 +65,20 @@ func TestTraceRecordIsOneFindingAndNoLead(t *testing.T) {
 		t.Errorf("tiers %v, want /api a finding and /bare a lead", tiers)
 	}
 }
+
+// /assets that answers an empty 302 and /assets/ that answers 500 with a trace
+// are one route: the 5xx reason names the URL that gave it, so the 302 is not
+// read as the answer that failed (#588).
+func TestServerErrorNamesTheURLOfAFoldedRoute(t *testing.T) {
+	payload, _ := json.Marshal(map[string]any{"url": "http://t.test/assets/", "status": 500, "error_text": "stack", "error_sample": "Traceback (most recent call last)"})
+	got := Build(Input{DB: "w.db", Now: time.Now(), Since: 7 * 24 * time.Hour,
+		Rows: []engine.MapEntry{
+			urlRow("http://t.test/assets", "page", "visited", 302, nil),
+			urlRow("http://t.test/assets/", "page", "visited", 500, nil),
+		},
+		Obs: []types.StoredObservation{{EntityID: "http://t.test/assets/", Observation: types.Observation{Collector: "azhaq-http", Kind: "application", Payload: payload}}}})
+	r := find(got, "http://t.test/assets")
+	if r == nil || len(r.Reasons) != 1 || r.Reasons[0].Detail != `http://t.test/assets/ answers 500 with a stack trace: "Traceback (most recent call last)"` {
+		t.Errorf("row %+v", r)
+	}
+}
