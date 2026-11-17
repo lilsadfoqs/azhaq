@@ -68,10 +68,7 @@ func (c *Collector) second(ctx context.Context, emit func(types.Observation) err
 	if len(s.rest) == 0 {
 		return
 	}
-	prior2 := Prior{Asked: append(slices.Clone(prior.Asked), ports...), Open: slices.Clone(s.open)}
-	if resumed {
-		prior2.Open = append(slices.Clone(prior.Open), s.open...)
-	}
+	prior2 := afterFirst(ports, prior, resumed, s)
 	// The first pass is kept now: what answered, and that the second has not begun.
 	cp := c.checkpoint(emit, host, ip, s.rest, prior2, true, name, edge, prefix, 2)
 	cp(portscan.Progress{})
@@ -82,6 +79,26 @@ func (c *Collector) second(ctx context.Context, emit func(types.Observation) err
 	s.unprobed += r.Unprobed
 	s.capped = s.capped || r.Threshold
 	s.asked2, s.err = r.Asked, err
+}
+
+// afterFirst is what an address has asked and found once its first pass is done.
+func afterFirst(ports []int, prior Prior, resumed bool, s *scan) Prior {
+	p := Prior{Asked: append(slices.Clone(prior.Asked), ports...), Open: slices.Clone(s.open)}
+	if resumed {
+		p.Open = append(slices.Clone(prior.Open), s.open...)
+	}
+	return p
+}
+
+// keepFirst keeps, for an address whose second pass a stop came before, that
+// its first pass was asked whole: a resume goes on to the second and does not
+// ask the first again.
+func (c *Collector) keepFirst(emit func(types.Observation) error, host, ip string, all, ports []int, prior Prior, resumed bool, s *scan, name string, edge bool, prefix string) {
+	rest := c.rest(host, ip, all, prior)
+	if len(rest) == 0 {
+		return
+	}
+	c.checkpoint(emit, host, ip, rest, afterFirst(ports, prior, resumed, s), true, name, edge, prefix, 2)(portscan.Progress{})
 }
 
 // all is every port an address was asked when it went on to the second pass.

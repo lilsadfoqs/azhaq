@@ -481,8 +481,15 @@ func (c *Collector) runPrefix(ctx context.Context, seed types.Seed, emit func(ty
 					}
 					finish(s, ports)
 				}
+				park := func() {
+					c.keepFirst(func(o types.Observation) error {
+						mu.Lock()
+						defer mu.Unlock()
+						return emit(o)
+					}, ip, ip, all, ports, prior, resumed, s, edgeName, edge, pf.String())
+				}
 				mu.Lock()
-				later = append(later, placedJob{place, job})
+				later = append(later, placedJob{place, job, park})
 				mu.Unlock()
 				return
 			}
@@ -503,6 +510,11 @@ func (c *Collector) runPrefix(ctx context.Context, seed types.Seed, emit func(ty
 			r.settle(&scan{err: cmp.Or(first, ctx.Err(), errRangeStopped)})
 		}
 	}()
+	if !run2 {
+		for _, l := range later {
+			l.park()
+		}
+	}
 	if run2 && len(later)+len(waiting) > 0 {
 		// The second pass goes on in address order, and only once every first pass is asked.
 		c.beforePass2(ctx)
@@ -512,11 +524,14 @@ func (c *Collector) runPrefix(ctx context.Context, seed types.Seed, emit func(ty
 		for _, l := range later {
 			jobs = append(jobs, l.job)
 		}
-		for _, job := range append(jobs, waiting...) {
+		for n, job := range append(jobs, waiting...) {
 			mu.Lock()
 			stop := first != nil
 			mu.Unlock()
 			if stop || ctx.Err() != nil {
+				for _, l := range later[min(n, len(later)):] {
+					l.park()
+				}
 				break
 			}
 			wg.Add(1)
@@ -578,6 +593,7 @@ func (c *Collector) runPrefix(ctx context.Context, seed types.Seed, emit func(ty
 type placedJob struct {
 	place int
 	job   func()
+	park  func() // keeps the address's finished first pass, when a stop comes before the job
 }
 
 // scanRange asks one address of a range its ports.
