@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
+	"github.com/lilsadfoqs/azhaq/internal/portscan"
 	"github.com/lilsadfoqs/azhaq/internal/productname"
 	"github.com/lilsadfoqs/azhaq/internal/proof"
 )
@@ -69,6 +70,7 @@ type DefaultLogin struct {
 	ID      string
 	Product string // matched against the product name the run confirmed, by productname.Same (the vendor prefix is optional)
 	Source  string // the vendor doc or advisory page that states this pair
+	Ports   []int  // the product's documented default ports (web console, API, wire): default asks them
 	User    string
 	Pass    string
 
@@ -97,6 +99,7 @@ type DefaultLogin struct {
 // checked once with no credential and once with a deliberately wrong one.
 type UnauthRead struct {
 	ID, Product, Path, Source string
+	Ports                     []int // the product's documented default ports: default asks them
 
 	// Shown says a response (status, body) shows the product's protected
 	// content: a signal that would not appear on its sign-in page or a
@@ -530,6 +533,17 @@ func redact(s, user, pass, field string) string {
 		s = strings.ReplaceAll(s, enc.EncodeToString([]byte(pair)), maskedPass)
 	}
 	return s
+}
+
+// init gives the scan the ports of every catalog entry, so -p default asks
+// them (portscan cannot read this package: it imports portscan).
+func init() {
+	for _, lg := range defaultLogins {
+		portscan.RegisterServicePorts(lg.Product, lg.Ports...)
+	}
+	for _, u := range unauthReads {
+		portscan.RegisterServicePorts(u.Product, u.Ports...)
+	}
 }
 
 // DefaultLogins is the whole catalog, in the order its checks run.
