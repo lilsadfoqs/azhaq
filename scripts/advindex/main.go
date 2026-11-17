@@ -136,6 +136,7 @@ func report(res *build.Result, size int, out string) {
 	}
 	fmt.Printf("feed records read %d; rejected %d; no CPE configuration yet %d; CPE matches with no version (-) %d; CPE matches naming no one product %d\n", r.FeedCVEs, r.Rejected, r.NoConfig, r.NotApplicable, r.NoProduct)
 	fmt.Printf("CVSS attack vector of the indexed records: %s; no vector %d; from version %s\n", countsText(r.AttackVectors), r.NoVector, countsText(r.VectorVersions))
+	fmt.Printf("indexed records whose text states a precondition: %d (%s)\n", r.NeedRecords, countsText(r.Needs))
 	fmt.Printf("KEV CVEs in no feed: %d %v\n", len(r.KEVMissing), r.KEVMissing)
 	fmt.Printf("KEV CVEs with no application or OS product to index: %d\n", len(r.KEVNoProduct))
 	fmt.Printf("CVEs NVD marks exploited that the KEV file lacks: %d\n", len(r.KEVMismatch))

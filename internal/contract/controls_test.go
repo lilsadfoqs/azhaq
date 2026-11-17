@@ -218,9 +218,10 @@ func TestADeniedHostIsNotAskedEvenAsATarget(t *testing.T) {
 	}
 }
 
-// A -role-cmd command's own requests are not azhaq's: a request it sends to
-// a host outside the scope goes out, and is in no ledger. Only what azhaq
-// sends is held and recorded.
+// A request a -role-cmd command makes without honouring the proxy variables (a
+// raw socket here) is not azhaq's: it goes out to a host outside the scope and
+// is in no ledger. Only what azhaq sends, or what comes through its proxy, is
+// held and recorded.
 func TestARoleCommandsOwnRequestsAreNotHeldNorRecorded(t *testing.T) {
 	if _, err := exec.LookPath("bash"); err != nil {
 		t.Skip("no bash for /dev/tcp")

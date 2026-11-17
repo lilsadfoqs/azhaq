@@ -156,7 +156,7 @@ func TestRunNamesTheAdvisoriesOfAConfirmedVersionByDefault(t *testing.T) {
 		l.Version != "2.4.49" || !strings.Contains(l.Range, "2.4.49") || !strings.HasPrefix(l.Source, "azhaq advisory index ") {
 		t.Errorf("top advisory of the lead %+v", l)
 	}
-	if len(l.Refs) < 50 || l.Counts["affected"] < 50 || l.KEVCount < 3 || l.MaxCVSS != 9.8 {
+	if len(l.Refs) < 50 || l.Counts["affected"] < 40 || l.KEVCount < 3 || l.MaxCVSS != 9.8 {
 		t.Errorf("lead counts %v kev %d max %.1f over %d advisories", l.Counts, l.KEVCount, l.MaxCVSS, len(l.Refs))
 	}
 	if r := ref(rows, "CVE-2021-42013"); r == nil || r.Label != "affected" || !r.KEV {
@@ -174,7 +174,8 @@ func TestRunNamesTheAdvisoriesOfAConfirmedVersionByDefault(t *testing.T) {
 	for i := 1; i < len(l.Refs); i++ {
 		p, c := l.Refs[i-1], l.Refs[i]
 		pa, ca := p.Label != "not affected", c.Label != "not affected"
-		if pa != ca && ca || pa == ca && p.KEV != c.KEV && c.KEV || pa == ca && p.KEV == c.KEV && p.CVSS < c.CVSS {
+		same := pa == ca && p.Label == c.Label
+		if pa != ca && ca || pa == ca && p.Label != c.Label && c.Label == "affected" || same && p.KEV != c.KEV && c.KEV || same && p.KEV == c.KEV && p.CVSS < c.CVSS {
 			t.Fatalf("the list is out of order at %d: %+v then %+v", i, p, c)
 		}
 	}
@@ -252,7 +253,8 @@ func TestPortsNamesTheAdvisoriesOfAConfirmedVersionByDefault(t *testing.T) {
 	rep := withStoredAdvisories(t, db, lastReport(t, errOut))
 	rows := advRows(rep)
 	r := ref(rows, "CVE-2015-3306")
-	if len(rows) != 1 || r == nil || r.Label != "affected" || rows[0].Product != "ProFTPD" || rows[0].Version != "1.3.5" || strings.Contains(out, `"type":"advisory"`) {
+	// mod_copy is named by the record as the module the flaw is in: not seen, so conditional.
+	if len(rows) != 1 || r == nil || r.Label != "conditional" || rows[0].Product != "ProFTPD" || rows[0].Version != "1.3.5" || strings.Contains(out, `"type":"advisory"`) {
 		t.Fatalf("%d leads, advisory %+v, stream:\n%s", len(rows), r, out)
 	}
 	if rep.Results != 1 || rep.Counts["advisory leads"] != 1 || len(rep.Advisories) != 1 {

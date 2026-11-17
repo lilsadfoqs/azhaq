@@ -161,7 +161,7 @@ func listenerPairs(set findingSet) []listenerPair {
 	toListener := func(r findingRecord, kind string) hunt.Listener {
 		return hunt.Listener{Ident: hunt.Ident{Kind: kind, What: r.Kind, Host: r.Host, Port: r.Port, Product: r.Product, Version: r.Version, Source: r.Source,
 			AdvisoryID: r.AdvisoryID, AdvisoryURL: r.AdvisoryURL, Label: r.Label, Severity: r.Severity, KEV: r.KEV, CVSS: r.CVSS,
-			Evidence: r.Evidence, Command: r.Command, Also: otherNames(r)}, Proof: r.Proof}
+			Precondition: r.Precondition, Settled: r.Settled, Evidence: r.Evidence, Command: r.Command, Also: otherNames(r)}, Proof: r.Proof}
 	}
 	for _, r := range set.Findings {
 		if r.Collector == "azhaq-verify" {
@@ -183,7 +183,7 @@ func listenerPairs(set findingSet) []listenerPair {
 			switch {
 			case l.Advisories == 1:
 			case len(l.Next) < advisory.TopAdvisories-1:
-				l.Next = append(l.Next, hunt.NextAdvisory{ID: r.AdvisoryID, Label: r.Label, KEV: r.KEV, CVSS: r.CVSS})
+				l.Next = append(l.Next, hunt.NextAdvisory{ID: r.AdvisoryID, Label: r.Label, Needs: r.Needs, KEV: r.KEV, CVSS: r.CVSS})
 			default:
 				if l.Others == nil {
 					l.Others = map[string]int{}

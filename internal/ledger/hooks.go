@@ -263,6 +263,20 @@ func tcpEntry(l *Ledger, ctx context.Context, class, host, addr string) Entry {
 	return Entry{Kind: "tcp", Class: class, Target: addr, Host: host, Rule: rule, Collector: collectorOf(ctx), Purpose: purpose}
 }
 
+// Connect records a CONNECT a forward proxy of the run was asked for, about
+// to be opened to host:port: one http line with the method CONNECT and the
+// address as its target. The bytes inside the tunnel are not read.
+func Connect(ctx context.Context, host, port string) {
+	counter(ClassTarget).Add(1)
+	spend(ClassTarget, "http", collectorOf(ctx), purposeFor(ctx, "http", collectorOf(ctx), nil), 1)
+	l := Active()
+	if l == nil {
+		return
+	}
+	l.Record(Entry{Kind: "http", Class: ClassTarget, Method: http.MethodConnect, Target: net.JoinHostPort(host, port),
+		Host: host, Rule: l.rule(host), Collector: collectorOf(ctx), Purpose: purposeFor(ctx, "http", collectorOf(ctx), nil)})
+}
+
 // TCPBatch records connections about to be made to the targets at addrs
 // (ip:port), in one write: each is a line before its connect goes.
 func TCPBatch(ctx context.Context, host string, addrs []string) {
