@@ -130,6 +130,10 @@ func permuteNotes(st *store.Store, rate float64, resolvers []string, stopped boo
 	if left := brutecol.PermuteLeft(brutecol.PermuteHosts(open)); stopped && left > 0 {
 		note += fmt.Sprintf(", %d not asked when the run stopped (azhaq resume asks them)", left)
 	}
+	// The names the scope kept out make up the rest of the job's size.
+	if out := brutecol.PermuteHeldOut(hosts); out > 0 {
+		note += fmt.Sprintf(", %d held out by the scope (never asked: a resume does not ask them either)", out)
+	}
 	if dropped > 0 {
 		note += "; " + droppedText(dropped)
 	}
