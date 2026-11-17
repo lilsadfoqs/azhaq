@@ -32,6 +32,12 @@ func reqs(t *testing.T, h http.HandlerFunc, path string, words []string) (map[st
 // reqsOn is reqs with that many groups in flight.
 func reqsOn(t *testing.T, h http.HandlerFunc, path string, words []string, threads int) (map[string]any, int64) {
 	t.Helper()
+	return reqsChunk(t, h, path, words, threads, 50)
+}
+
+// reqsChunk is reqsOn with groups of at most chunk names.
+func reqsChunk(t *testing.T, h http.HandlerFunc, path string, words []string, threads, chunk int) (map[string]any, int64) {
+	t.Helper()
 	fetch.Reset()
 	var n atomic.Int64
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -39,7 +45,7 @@ func reqsOn(t *testing.T, h http.HandlerFunc, path string, words []string, threa
 		h(w, r)
 	}))
 	defer srv.Close()
-	c := New(srv.Client(), Options{Words: words, Chunk: 50, Rate: 10000, Threads: threads})
+	c := New(srv.Client(), Options{Words: words, Chunk: chunk, Rate: 10000, Threads: threads})
 	got := runOn(t, c, srv.URL+path)
 	why, _ := got["why"].(map[string]any)
 	return why, n.Load()
@@ -187,5 +193,56 @@ func TestPageThatStartsToWanderIsAskedAgain(t *testing.T) {
 		if !slices.Contains(stableNames, k) {
 			t.Errorf("%s is no name of the page", k)
 		}
+	}
+}
+
+// layoutWords is a list of n names with the page's names put at the given
+// positions.
+func layoutWords(n int, at map[string]int) []string {
+	words := make([]string, n)
+	for i := range words {
+		words[i] = fmt.Sprintf("field%d", i)
+	}
+	for name, i := range at {
+		words[i] = name
+	}
+	return words
+}
+
+// A few names in a long list, as on a real page: a first half that
+// changes the answer does not make its second half be asked at every
+// level on the way down, only once with the ones the levels left, and
+// every name is still found wherever it sits in its group.
+func TestSparseNamesAreFoundWithoutAskingEachLevelsOtherHalf(t *testing.T) {
+	// 1,000 names in the default groups (a bench page's depth), the names
+	// at the front, the back and the middle of theirs, and two in a group.
+	// max is the count of the same search with every second half asked as
+	// the first is narrowed (98, 91, 93 and 83), less what is saved.
+	layouts := []struct {
+		name string
+		at   map[string]int
+		max  int64
+	}{
+		{"front", map[string]int{"q": 3, "sort": 120, "page": 330, "limit": 480, "lang": 700}, 85},
+		{"back", map[string]int{"q": 380, "sort": 384, "page": 600, "limit": 760, "lang": 999}, 82},
+		{"middle", map[string]int{"q": 190, "sort": 570, "page": 337, "limit": 475, "lang": 874}, 84},
+		{"pairs", map[string]int{"q": 10, "sort": 11, "page": 400, "limit": 401, "lang": 800}, 71},
+	}
+	for _, l := range layouts {
+		t.Run(l.name, func(t *testing.T) {
+			why, n := reqsChunk(t, stableSearch, "/rest/products/search", layoutWords(1000, l.at), 1, 500)
+			for k := range l.at {
+				if why[k] == nil {
+					t.Errorf("%s was not found: %v", k, why)
+				}
+			}
+			if len(why) != len(l.at) {
+				t.Errorf("found %v, want %d names", why, len(l.at))
+			}
+			t.Logf("%s: %d requests", l.name, n)
+			if n > l.max {
+				t.Errorf("%d requests, want at most %d", n, l.max)
+			}
+		})
 	}
 }

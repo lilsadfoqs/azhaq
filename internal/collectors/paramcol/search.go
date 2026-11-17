@@ -174,6 +174,10 @@ type chunk struct {
 	any          bool // the page answers any name
 	tried, count int  // what said so
 	done         bool // every name was judged
+	// rest are the second halves left unasked while the first was narrowed
+	// (see halves); depth counts the narrowings in flight.
+	rest  [][]string
+	depth int
 }
 
 func (ck *chunk) set(name, why string, ex *exchange) {
@@ -1298,6 +1302,73 @@ func (s *search) test(group []string, value string) (verdict, bool) {
 // narrow finds which names in group change the answer, halving the group
 // while it does.
 func (s *search) narrow(ck *chunk, group []string) {
+	s.round(ck, func() { s.narrowOne(ck, group) })
+}
+
+// round runs one narrowing of ck. When the outermost ends, the second
+// halves it left are settled: names mostly hold none, and one request
+// for all of them is cheaper than one for each level the first half went
+// down.
+func (s *search) round(ck *chunk, f func()) {
+	ck.mu.Lock()
+	ck.depth++
+	ck.mu.Unlock()
+	f()
+	ck.mu.Lock()
+	ck.depth--
+	var rest [][]string
+	if ck.depth == 0 {
+		rest, ck.rest = ck.rest, nil
+	}
+	ck.mu.Unlock()
+	if len(rest) > 0 && !s.halted() {
+		s.round(ck, func() { s.settle(ck, rest, nil, false) })
+	}
+}
+
+// settle asks the halves a first half left: together, and if that changes
+// the answer, the first half of the list, which says where the names are
+// (the other when the first is clean, unasked), then each is narrowed. v
+// is the answer to all of them, when it is known.
+func (s *search) settle(ck *chunk, groups [][]string, v *verdict, inferred bool) {
+	if len(groups) == 0 || s.halted() || ck.flooded() || ck.idx > s.floodedAt() {
+		return
+	}
+	all := slices.Concat(groups...)
+	if v == nil {
+		w, ok := s.ask1(ck, all)
+		if !ok {
+			return
+		}
+		v = &w
+	}
+	if quiet(*v) {
+		return
+	}
+	if len(groups) == 1 || v.why == "" || v.crowd || len(v.reflected) > 0 || len(v.named) > 0 {
+		s.process(ck, all, *v, inferred)
+		return
+	}
+	mid := len(groups) / 2
+	w, ok := s.ask1(ck, slices.Concat(groups[:mid]...))
+	if !ok {
+		return
+	}
+	if quiet(w) {
+		s.settle(ck, groups[mid:], v, true)
+		return
+	}
+	s.settle(ck, groups[:mid], &w, false)
+	s.settle(ck, groups[mid:], nil, false)
+}
+
+// quiet says a group changed nothing: no change, no value or name back.
+func quiet(v verdict) bool {
+	return v.why == "" && !v.crowd && len(v.reflected) == 0 && len(v.named) == 0
+}
+
+// narrowOne asks group, and narrows it if it changes the answer.
+func (s *search) narrowOne(ck *chunk, group []string) {
 	if len(group) == 0 || s.halted() || ck.flooded() || ck.idx > s.floodedAt() {
 		return
 	}
@@ -1403,7 +1474,8 @@ const (
 // answers any name (groups of a list run side by side instead). When the
 // first half changes nothing and the group's change was in what the
 // answer holds (not a reflected value or name), the second half has the
-// names: it is split without being asked first.
+// names: it is split without being asked first. When the first half
+// changes the answer, the second is left for settle.
 func (s *search) halves(ck *chunk, group []string, v *verdict) {
 	half := len(group) / 2
 	first, second := group[:half], group[half:]
@@ -1444,7 +1516,18 @@ func (s *search) halves(ck *chunk, group []string, v *verdict) {
 		s.process(ck, second, *v, true)
 		return
 	}
-	s.narrow(ck, second)
+	// The first half changed. If the group's answer is no other than its
+	// first half's, the second adds nothing yet and waits for the others
+	// (see round); if it is, or names are many, it is asked now.
+	ck.mu.Lock()
+	now := len(ck.found) >= minFlood || s.judge(v.ans, w.ans) != ""
+	if !now {
+		ck.rest = append(ck.rest, second)
+	}
+	ck.mu.Unlock()
+	if now {
+		s.narrow(ck, second)
+	}
 }
 
 // tokens counts how often each value of q appears in body, the values
