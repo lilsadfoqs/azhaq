@@ -404,6 +404,7 @@ Behaviour, fields and edge cases: [`azhaq urls`](commands/urls.md).
 | `--blacklist png,jpg` | `-blacklist png,jpg` | |
 | `--fp` | `-fp` | One URL for each host and path. |
 | `--o FILE` | `-o FILE` | Appends, as gau does. |
+| (gau's strings as the archive has them) | `-raw-urls` | See "What differs on purpose" below. |
 | `--json` | `-json` | `{"url","source"}`. |
 | `--threads 5` | `-urls-threads 5` (or `-threads`) | Domains asked at once. All five archives of a domain run together. |
 | `--timeout 45` | `-urls-timeout 3m` | The time each archive gets for a domain. azhaq's `-timeout` stops the whole run. |
@@ -417,6 +418,7 @@ Behaviour, fields and edge cases: [`azhaq urls`](commands/urls.md).
 <!-- azhaq: urls -->
 
 - A fifth archive, arquivo.pt, is asked.
+- A URL is printed normalised, which drops the default port: `http://example.com:80/x` and `http://example.com/x` are one line. gau prints each string as the archive has it. `-raw-urls` does the same, so use it where gau's strings are compared.
 - gau sends one filter for each value of `-mc 200,301`, and the archive ANDs them, so it keeps nothing. azhaq sends the values as alternatives of one filter.
 - gau's `--blacklist png` matches nothing, because it compares `.png` with `png`. `-blacklist` takes either spelling.
 - gau's `--fp` prints nothing in version 2.2.4. azhaq's `-fp` keeps the first URL of each host and path.
