@@ -14,7 +14,6 @@ import (
 
 	"github.com/lilsadfoqs/azhaq/catalog"
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
-	"github.com/lilsadfoqs/azhaq/internal/fuzz"
 	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 	"github.com/lilsadfoqs/azhaq/internal/neterr"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
@@ -25,7 +24,7 @@ import (
 const Name = "azhaq-js"
 
 // MapKind is the kind of the observation that holds what a source map said:
-// its status, its sources, and the app's own code up to a bound.
+// its status and its sources, with whether the map carries each one's code.
 const MapKind = "sourcemap"
 
 // The caps below are those of the default -max-scripts: the others scale
@@ -337,16 +336,14 @@ type sourceMap struct {
 	code    int      // the app's own sources whose code the map carries (sourcesContent)
 	guessed bool     // asked for by name: no comment or header named it
 
-	// What the map's own row keeps, so that a map is never asked again to
-	// be read: the answer's status and size, every source name with whether
-	// the map carries its code, and the app's own code up to fuzz.MaxBody.
-	status   int
-	bodyLen  int
-	sources  []mapSource
-	contents []mapContent
-	// namesCut: names past maxMapSources. codeCut: the app's own files with
-	// code that the bound left out.
-	namesCut, codeCut int
+	// What the map's own row keeps, cheaply: the answer's status and size,
+	// and every source name with whether the map carries its code. The code
+	// itself is not stored; -sr writes the whole answer.
+	status  int
+	bodyLen int
+	sources []mapSource
+	// namesCut: names past maxMapSources.
+	namesCut int
 }
 
 // mapSource is one entry of a map's sources.
@@ -355,12 +352,6 @@ type mapSource struct {
 	Code    bool   `json:"code"`            // the map carries its code (sourcesContent)
 	Bytes   int    `json:"bytes,omitempty"` // of that code
 	Library bool   `json:"library,omitempty"`
-}
-
-// mapContent is the code of one of the app's own sources.
-type mapContent struct {
-	Name string `json:"name"`
-	Text string `json:"text"`
 }
 
 // buildManifest is a bundler's manifest that was read, and what it gave.
@@ -971,17 +962,11 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 			return meta, err
 		}
 		// What was read, in a row of its own: the url row is a count, and is
-		// read by every command, so the code stays out of it.
+		// read by every command. The code stays out of both.
 		own := map[string]any{"url": m.url, "via": "js", "role": "sourcemap", "status": m.status, "body_length": m.bodyLen,
 			"sources": m.count, "source_files": m.sources, "with_code": m.code}
-		if len(m.contents) > 0 {
-			own["contents"] = m.contents
-		}
 		if m.namesCut > 0 {
 			own["source_files_cut"] = m.namesCut
-		}
-		if m.codeCut > 0 {
-			own["contents_cut"] = m.codeCut
 		}
 		if m.guessed {
 			own["guessed"] = true
@@ -1680,7 +1665,6 @@ func (c *Collector) readMap(ctx context.Context, page, mapURL string, scriptURL 
 	}
 	m := sourceMap{url: mapURL, count: len(sm.Sources), guessed: guessed, status: status, bodyLen: len(body)}
 	var out []script
-	kept := 0
 	for i, name := range sm.Sources {
 		var text *string
 		if i < len(sm.SourcesContent) {
@@ -1705,18 +1689,14 @@ func (c *Collector) readMap(ctx context.Context, page, mapURL string, scriptURL 
 		if text != nil {
 			out = append(out, script{url: scriptURL, body: *text, fromMap: true, source: name})
 			m.code++
-			// The code is kept up to the cap of dirs -od and fuzz -od; a file that
-			// does not fit is counted, and a smaller one after it may.
-			if kept+len(*text) <= fuzz.MaxBody {
-				kept += len(*text)
-				m.contents = append(m.contents, mapContent{Name: name, Text: *text})
-			} else {
-				m.codeCut++
-			}
 		}
 	}
 	return m, out
 }
+
+// Library says a source of a map is a library's (node_modules, webpack's
+// runtime), not the app's own.
+func Library(source string) bool { return library(source) }
 
 func library(source string) bool {
 	return strings.Contains(source, "node_modules/") || strings.Contains(source, "webpack/") ||

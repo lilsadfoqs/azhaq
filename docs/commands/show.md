@@ -100,11 +100,13 @@ A run that reads a source map, named by a script's comment or by a header, or as
 
 - The text form prints a `source map:` block: the status of the answer, the number of sources, how many of the app's own carry their code (`sourcesContent`), the size of the map, and every source's name with `code, N bytes` or `no code`. A library's (`node_modules`, `webpack/`) is marked `[library]`.
 - At most 5,000 names are listed, the rest are counted (`source_files_cut`).
-- The code of the app's own files is kept, one file after another, up to 5 MiB for a map, the cap of the `-od` files. A file that does not fit is counted (`contents_cut`) and a smaller one after it may be kept. The code of a library's source is not kept.
-- `-body` prints the code kept, a block for each file, every line escaped as an answer's is. Without it the code is not printed, and `-json` leaves it out of the `sourcemap` observation's payload (`contents_omitted` counts the files); with it the payload holds `contents`, a list of `name` and `text`.
-- The payload of the `sourcemap` observation has `url`, `status`, `body_length`, `sources`, `with_code`, `source_files` (each `name`, `code`, `bytes`, `library`), `contents`, `source_files_cut`, `contents_cut` and `guessed`.
-- The map is read once, and `show` reads the workspace: no request is sent. A workspace made before 0.28 kept the count and the app's own names only, and `show` says so.
-- The map's row stays a `linked` hint: the run's collector read it, no request of the map's row asked it as a page. With `-sr` the whole answer of the map is written to a file, and `query -fields response_file` names it.
+- The row holds names and sizes only, never the code: a run costs the same however big the map is.
+- With `-sr` the run writes the whole answer of the map to a file, and `query -fields response_file` names it. `-body` prints the code of the app's own files from that file, a block for each, every line escaped as an answer's is. The code of a library's source is not printed.
+- Without `-sr`, `show -body` says in one line that the code was not kept and that `-sr` keeps it. It says so too when the file is gone or was written with `-ob`.
+- `show -json -body` adds `source_code`, a list of `name` and `text`, or `source_code_note` with the reason.
+- The payload of the `sourcemap` observation has `url`, `status`, `body_length`, `sources`, `with_code`, `source_files` (each `name`, `code`, `bytes`, `library`), `source_files_cut` and `guessed`.
+- The map is read once, and `show` reads the workspace and the `-sr` file: no request is sent. A workspace made before 0.28 kept the count and the app's own names only, and `show` says so.
+- The map's row stays a `linked` hint: the run's collector read it, no request of the map's row asked it as a page.
 
 ## Flags
 
@@ -113,6 +115,6 @@ A run that reads a source map, named by a script's comment or by a header, or as
 | --- | --- | --- | --- |
 | `-db` | string |  | the database (default: the last run's) |
 | `-json` | bool |  | one JSON object |
-| `-body` | bool |  | also print the code a source map carried, as the run kept it (each of the app's own files, up to 5 MiB a map) |
+| `-body` | bool |  | also print the code of a source map's own files, from the answer the run stored with its store-responses option (a run without it keeps none) |
 | `-run` | string |  | the run to read, by the run_id of its summary (default: the newest run of the workspace that has it) |
 <!-- flags:end -->

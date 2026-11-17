@@ -125,6 +125,7 @@ type cand struct {
 	check           string          // the check a path verdict names, for a lead
 	proof           *proof.Proof
 	also            []string // URLs of other names that answered the same
+	codeKept        bool     // source maps: instances[0]'s answer, with its code, was kept (-sr)
 }
 
 type hunter struct {

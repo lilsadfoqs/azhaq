@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
-	"github.com/lilsadfoqs/azhaq/internal/fuzz"
 	"github.com/lilsadfoqs/azhaq/types"
 )
 
@@ -35,8 +34,7 @@ func mapRows(t *testing.T, col *Collector, raw string) map[string]map[string]any
 }
 
 // A map that was read is a row of its own: its status, every source name
-// with whether the map carries its code, and the app's own code. It is read
-// once.
+// with whether the map carries its code and how many bytes. It is read once.
 func TestSourceMapRowKeepsWhatWasRead(t *testing.T) {
 	fetch.Reset()
 	t.Cleanup(fetch.Reset)
@@ -67,19 +65,23 @@ func TestSourceMapRowKeepsWhatWasRead(t *testing.T) {
 	if strings.Join(names, "|") != strings.Join(want, "|") {
 		t.Errorf("source_files %v, want %v", names, want)
 	}
-	// The app's own code is kept, a library's is not.
-	contents, _ := m["contents"].([]any)
-	if len(contents) != 1 || contents[0].(map[string]any)["text"] != "export const a = fetch('/api/hidden')" {
-		t.Errorf("contents %v", contents)
+	// The code is not in the row: -sr keeps the whole answer.
+	if _, has := m["contents"]; has || strings.Contains(fmt.Sprint(m), "hidden") {
+		t.Errorf("the row holds code: %v", m)
+	}
+	for _, s := range m["source_files"].([]any) {
+		if f := s.(map[string]any); f["name"] == "webpack://app/./src/main.ts" && f["bytes"] != float64(len("export const a = fetch('/api/hidden')")) {
+			t.Errorf("bytes of the code: %v", f)
+		}
 	}
 	if n := srv.asked("/main.js.map"); n != 1 {
 		t.Errorf("the map was asked %d times", n)
 	}
 }
 
-// The code kept of a map stops at the cap of the other -od files: a file that
-// does not fit is counted, and a smaller one after it is kept.
-func TestSourceMapCodeIsKeptUpToTheCap(t *testing.T) {
+// A big map costs the row nothing: the code is not stored, only a name and a
+// size for each source.
+func TestSourceMapRowHoldsNoCodeHoweverBigTheMapIs(t *testing.T) {
 	fetch.Reset()
 	t.Cleanup(fetch.Reset)
 	big := strings.Repeat("a", 3<<20)
@@ -88,27 +90,23 @@ func TestSourceMapCodeIsKeptUpToTheCap(t *testing.T) {
 		raw, _ := json.Marshal(s)
 		content = append(content, string(raw))
 	}
-	if 2*len(big) <= fuzz.MaxBody {
-		t.Fatal("the test files must pass the cap together")
-	}
 	srv := serve(t, map[string]string{
 		"/":            `<!doctype html><script src="/main.js"></script>`,
 		"/main.js":     "var a=1\n//# sourceMappingURL=main.js.map",
 		"/main.js.map": `{"version":3,"sources":["a.ts","b.ts","c.ts"],"sourcesContent":[` + strings.Join(content, ",") + `],"mappings":"AAAA"}`,
 	}, nil)
-	m := mapRows(t, New(srv.Client()), srv.URL+"/")[srv.URL+"/main.js.map"]
-	if m == nil {
-		t.Fatal("the 6 MiB map was not read")
+	var size int
+	_, err := New(srv.Client()).Run(context.Background(), types.Seed{Type: types.TypeURL, Keys: map[string]string{"url": srv.URL + "/"}}, func(o types.Observation) error {
+		if o.Kind == MapKind {
+			size = len(o.Payload)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
-	var got []string
-	for _, c := range m["contents"].([]any) {
-		got = append(got, c.(map[string]any)["name"].(string))
-	}
-	if strings.Join(got, ",") != "a.ts,c.ts" || m["contents_cut"] != float64(1) {
-		t.Errorf("kept %v, cut %v: want a.ts and c.ts kept, one cut", got, m["contents_cut"])
-	}
-	if m["with_code"] != float64(3) {
-		t.Errorf("with_code %v: the map carries the code of all three", m["with_code"])
+	if size == 0 || size > 4096 {
+		t.Errorf("the row of a 6 MiB map is %d bytes: it must hold names and sizes only", size)
 	}
 }
 

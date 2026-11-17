@@ -49,9 +49,20 @@ func runMapSite(t *testing.T, srv *httptest.Server, extra ...string) string {
 	return db
 }
 
-// show lists what a source map the run read said: its status, every source
-// with whether the map carries its code, and with -body the code itself. The
-// map is asked once, and hunt's next step is a command that prints it.
+// showJSON is show -json of key.
+func showJSON(t *testing.T, db, key string, extra ...string) map[string]any {
+	t.Helper()
+	raw, _, _ := cli(t, append(append([]string{"show", "-db", db, "-json"}, extra...), key)...)
+	var out map[string]any
+	if err := json.Unmarshal([]byte(raw), &out); err != nil {
+		t.Fatalf("%v: %s", err, raw)
+	}
+	return out
+}
+
+// show lists what a source map the run read said: its status and every
+// source with whether the map carries its code. A run without -sr keeps no
+// code, and show -body says so in one line. The map is asked once.
 func TestShowListsTheSourceMapTheRunRead(t *testing.T) {
 	var maps atomic.Int64
 	srv := mapSite(t, &maps)
@@ -64,78 +75,64 @@ func TestShowListsTheSourceMapTheRunRead(t *testing.T) {
 	if code != exitOK {
 		t.Fatalf("show exit %d", code)
 	}
-	for _, want := range []string{"source map: status 200, 3 sources (1 of a library), 1 of the app's own with their code", "src/app.ts  code, ", "src/empty.ts  no code", "node_modules/lib/x.js  code, 18 bytes  [library]", "show -body prints it"} {
+	for _, want := range []string{"source map: status 200, 3 sources (1 of a library), 1 of the app's own with their code", "src/app.ts  code, ", "src/empty.ts  no code", "node_modules/lib/x.js  code, 18 bytes  [library]"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("show lacks %q:\n%s", want, out)
 		}
-	}
-	if strings.Contains(out, "hidden-in-the-map") {
-		t.Errorf("show prints the code without -body:\n%s", out)
 	}
 	if first, _, _ := strings.Cut(out, "\n"); !strings.Contains(first, "hint") || !strings.Contains(first, "[linked]") {
 		t.Errorf("the map's row is not the linked hint: %q", first)
 	}
 	body, _, _ := cli(t, "show", "-db", db, "-body", key)
-	if !strings.Contains(body, "code of src/app.ts") || !strings.Contains(body, "export const key = 'hidden-in-the-map';") || !strings.Contains(body, "    fetch('/api/orders');") {
-		t.Errorf("show -body lacks the code:\n%s", body)
+	if !strings.Contains(body, "  the code was not kept: a run with -sr keeps it\n") || strings.Contains(body, "hidden-in-the-map") || strings.Contains(body, "code of ") {
+		t.Errorf("show -body without -sr:\n%s", body)
 	}
-	// An escape byte in a target's code never reaches the terminal as it came.
-	if strings.Contains(body, "\x1b") || !strings.Contains(body, `\x1b[31mred\ttab`) {
-		t.Errorf("show -body does not escape the code:\n%q", body)
-	}
-	if strings.Contains(body, "module.exports") {
-		t.Errorf("a library's code is kept:\n%s", body)
-	}
-	// -json: the payload's code is shown only with -body.
+	// No code is in the workspace: not in the payload, not in the file the run wrote.
 	for _, with := range []bool{false, true} {
-		args := []string{"show", "-db", db, "-json", key}
+		var extra []string
 		if with {
-			args = []string{"show", "-db", db, "-json", "-body", key}
+			extra = []string{"-body"}
 		}
-		raw, _, _ := cli(t, args...)
-		var sh struct {
-			Observations []struct {
-				Kind    string         `json:"kind"`
-				Payload map[string]any `json:"payload"`
-			} `json:"observations"`
-		}
-		if err := json.Unmarshal([]byte(raw), &sh); err != nil {
-			t.Fatal(err)
+		sh := showJSON(t, db, key, extra...)
+		raw, _ := json.Marshal(sh)
+		if strings.Contains(string(raw), "hidden-in-the-map") || sh["source_code"] != nil {
+			t.Errorf("-body %v: the code is in the output: %s", with, raw)
 		}
 		found := false
-		for _, o := range sh.Observations {
-			if o.Kind != "sourcemap" {
+		for _, o := range sh["observations"].([]any) {
+			o := o.(map[string]any)
+			if o["kind"] != "sourcemap" {
 				continue
 			}
 			found = true
-			if _, has := o.Payload["contents"]; has != with {
-				t.Errorf("-body %v: contents in the payload: %v", with, has)
-			}
-			if o.Payload["status"] != float64(200) || len(o.Payload["source_files"].([]any)) != 3 {
-				t.Errorf("payload %v", o.Payload)
+			p := o["payload"].(map[string]any)
+			if p["status"] != float64(200) || len(p["source_files"].([]any)) != 3 {
+				t.Errorf("payload %v", p)
 			}
 		}
 		if !found {
 			t.Errorf("no sourcemap observation for the map: %s", raw)
 		}
 	}
-	// hunt names the command that works on the stored row.
+	// With no answer kept, hunt's next step is show alone.
 	hunt, _, _ := cli(t, "hunt", "-db", db)
-	if !strings.Contains(hunt, "next: azhaq show -db "+db+" -body "+key) && !strings.Contains(hunt, "→ next: azhaq show -db "+db+" -body "+key) {
-		t.Errorf("hunt's next step is not show -body:\n%s", hunt)
+	if !strings.Contains(hunt, "next: azhaq show -db "+db+" "+key) || strings.Contains(hunt, "-body "+key) {
+		t.Errorf("hunt's next step is not show alone:\n%s", hunt)
 	}
 	if maps.Load() != 1 {
 		t.Errorf("show or hunt asked the map again: %d requests", maps.Load())
 	}
 }
 
-// With -sr the answer of the map is written whole, and the map's row names
-// the file.
-func TestStoreResponsesKeepsTheWholeMap(t *testing.T) {
+// With -sr the answer of the map is written whole and the map's row names
+// the file. show -body prints the app's own code from it, escaped, and
+// hunt's next step has -body.
+func TestShowBodyPrintsTheCodeOfAMapStoreResponsesKept(t *testing.T) {
 	var maps atomic.Int64
 	srv := mapSite(t, &maps)
 	srd := filepath.Join(t.TempDir(), "sr")
 	db := runMapSite(t, srv, "-sr", "-srd", srd)
+	key := srv.URL + "/a0.js.map"
 	out, _, _ := cli(t, "query", "-db", db, "-match", "a0.js.map", "-fields", "key,response_file", "-json")
 	var row struct {
 		File string `json:"response_file"`
@@ -147,6 +144,51 @@ func TestStoreResponsesKeepsTheWholeMap(t *testing.T) {
 	if err != nil || !strings.Contains(string(raw), "hidden-in-the-map") || !strings.Contains(string(raw), "node_modules/lib/x.js") {
 		t.Errorf("the file lacks the map: %v\n%s", err, raw)
 	}
+	plain, _, _ := cli(t, "show", "-db", db, key)
+	if !strings.Contains(plain, "show -body prints the app's own code") || strings.Contains(plain, "hidden-in-the-map") {
+		t.Errorf("show:\n%s", plain)
+	}
+	body, _, _ := cli(t, "show", "-db", db, "-body", key)
+	if !strings.Contains(body, "code of src/app.ts") || !strings.Contains(body, "export const key = 'hidden-in-the-map';") || !strings.Contains(body, "    fetch('/api/orders');") {
+		t.Errorf("show -body lacks the code:\n%s", body)
+	}
+	// An escape byte in a target's code never reaches the terminal as it came.
+	if strings.Contains(body, "\x1b") || !strings.Contains(body, `\x1b[31mred\ttab`) {
+		t.Errorf("show -body does not escape the code:\n%q", body)
+	}
+	if strings.Contains(body, "module.exports") {
+		t.Errorf("a library's code is printed:\n%s", body)
+	}
+	code, _ := json.Marshal(showJSON(t, db, key, "-body")["source_code"])
+	if !strings.Contains(string(code), `"name":"src/app.ts"`) || strings.Contains(string(code), "module.exports") {
+		t.Errorf("show -json -body source_code: %s", code)
+	}
+	hunt, _, _ := cli(t, "hunt", "-db", db)
+	if !strings.Contains(hunt, "next: azhaq show -db "+db+" -body "+key) {
+		t.Errorf("hunt's next step is not show -body:\n%s", hunt)
+	}
+	// The file gone: one line, not an error.
+	if err := os.Remove(row.File); err != nil {
+		t.Fatal(err)
+	}
+	gone, _, code2 := cli(t, "show", "-db", db, "-body", key)
+	if code2 != exitOK || !strings.Contains(gone, "the code was not kept") || strings.Contains(gone, "code of ") {
+		t.Errorf("show -body with the file gone (exit %d):\n%s", code2, gone)
+	}
+	if maps.Load() != 1 {
+		t.Errorf("the map was asked %d times", maps.Load())
+	}
+}
+
+// With -sr -ob the file holds no body, and show -body says so.
+func TestShowBodySaysAnOmittedBodyHasNoCode(t *testing.T) {
+	var maps atomic.Int64
+	srv := mapSite(t, &maps)
+	db := runMapSite(t, srv, "-sr", "-ob", "-srd", filepath.Join(t.TempDir(), "sr"))
+	body, _, _ := cli(t, "show", "-db", db, "-body", srv.URL+"/a0.js.map")
+	if !strings.Contains(body, "holds no body (-ob)") || strings.Contains(body, "hidden-in-the-map") {
+		t.Errorf("show -body:\n%s", body)
+	}
 }
 
 // A workspace made before the map had a row of its own kept the count and the
@@ -154,7 +196,7 @@ func TestStoreResponsesKeepsTheWholeMap(t *testing.T) {
 func TestShowSaysWhatAnOldWorkspaceKeptOfAMap(t *testing.T) {
 	p, _ := json.Marshal(map[string]any{"url": "https://a.test/m.js.map", "via": "js", "role": "sourcemap", "sources": 4, "with_code": 2, "files": []string{"src/a.ts", "src/b.ts"}})
 	out, _, _ := captureBoth(t, func() error {
-		printSourceMap([]types.StoredObservation{{Observation: types.Observation{Collector: "azhaq-js", Kind: "url", Payload: p}}}, true)
+		printSourceMap([]types.StoredObservation{{Observation: types.Observation{Collector: "azhaq-js", Kind: "url", Payload: p}}}, "", true)
 		return nil
 	})
 	if !strings.Contains(out, "source map: 4 sources; this workspace kept the count and the app's own names, not the map's status or code") || !strings.Contains(out, "  src/b.ts") {

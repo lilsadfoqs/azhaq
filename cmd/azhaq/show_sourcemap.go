@@ -4,16 +4,17 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"os"
+	"strings"
 
 	"github.com/lilsadfoqs/azhaq/internal/collectors/jscol"
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
-	"github.com/lilsadfoqs/azhaq/internal/fuzz"
 	"github.com/lilsadfoqs/azhaq/internal/proof"
 	"github.com/lilsadfoqs/azhaq/types"
 )
 
 // mapRow is what the js collector kept of a source map it read
-// (jscol.MapKind): the answer's status, every source and the app's own code.
+// (jscol.MapKind): the answer's status and every source, not the code.
 type mapRow struct {
 	URL         string `json:"url"`
 	Status      int    `json:"status"`
@@ -26,40 +27,52 @@ type mapRow struct {
 		Bytes   int    `json:"bytes"`
 		Library bool   `json:"library"`
 	} `json:"source_files"`
-	Contents []struct {
-		Name string `json:"name"`
-		Text string `json:"text"`
-	} `json:"contents"`
 	NamesCut int  `json:"source_files_cut"`
-	CodeCut  int  `json:"contents_cut"`
 	Guessed  bool `json:"guessed"`
 }
 
-// withoutMapCode is a source map's payload without its code: a row listing
-// is read for what it names, and the code is shown with -body.
-func withoutMapCode(o types.StoredObservation) json.RawMessage {
-	if o.Kind != jscol.MapKind {
-		return o.Payload
+// mapCode is the code of one of the app's own sources.
+type mapCode struct {
+	Name string `json:"name"`
+	Text string `json:"text"`
+}
+
+// mapCodeFrom reads the code of the app's own sources from the answer -sr
+// wrote for the map (its header block, a blank line, the body). The reason
+// is "" when the code was read.
+func mapCodeFrom(file string) ([]mapCode, string) {
+	if file == "" {
+		return nil, "the code was not kept: a run with -sr keeps it"
 	}
-	var m map[string]any
-	if json.Unmarshal(o.Payload, &m) != nil {
-		return o.Payload
-	}
-	if c, ok := m["contents"].([]any); ok {
-		delete(m, "contents")
-		m["contents_omitted"] = len(c)
-	}
-	raw, err := json.Marshal(m)
+	raw, err := os.ReadFile(file)
 	if err != nil {
-		return o.Payload
+		return nil, "the code was not kept: the -sr file " + file + " is gone (" + err.Error() + ")"
 	}
-	return raw
+	parts := strings.SplitN(string(raw), "\n\n", 4)
+	if len(parts) < 4 || strings.TrimSpace(parts[3]) == "" {
+		return nil, "the code was not kept: the -sr file " + file + " holds no body (-ob)"
+	}
+	var m struct {
+		Sources        []string  `json:"sources"`
+		SourcesContent []*string `json:"sourcesContent"`
+	}
+	if json.Unmarshal([]byte(parts[3]), &m) != nil {
+		return nil, "the code was not kept: the -sr file " + file + " holds no source map"
+	}
+	var out []mapCode
+	for i, name := range m.Sources {
+		if i < len(m.SourcesContent) && m.SourcesContent[i] != nil && !jscol.Library(name) {
+			out = append(out, mapCode{name, *m.SourcesContent[i]})
+		}
+	}
+	return out, ""
 }
 
 // printSourceMap prints what the run kept of the source map behind obs: the
-// answer's status, each source with whether the map carries its code, and
-// with body the code kept. Every line is escaped, as an answer's is.
-func printSourceMap(obs []types.StoredObservation, body bool) {
+// answer's status and each source with whether the map carries its code, and
+// with body the code of the app's own files, read from file, the answer -sr
+// wrote ("" when the run kept none). Every line is escaped, as an answer's is.
+func printSourceMap(obs []types.StoredObservation, file string, body bool) {
 	var m *mapRow
 	for _, o := range obs {
 		if o.Kind != jscol.MapKind {
@@ -96,28 +109,22 @@ func printSourceMap(obs []types.StoredObservation, body bool) {
 	if m.NamesCut > 0 {
 		fmt.Printf("  … %d more sources, in the map and not listed here\n", m.NamesCut)
 	}
-	if lib > 0 {
-		fmt.Printf("  the code of a [library] source is not kept; only the app's own is\n")
-	}
-	if len(m.Contents) == 0 {
-		return
-	}
 	if !body {
-		kept := 0
-		for _, c := range m.Contents {
-			kept += len(c.Text)
+		if file != "" && m.WithCode > 0 {
+			fmt.Printf("  the map's answer is kept in %s: show -body prints the app's own code\n", file)
 		}
-		fmt.Printf("  the code of %s is kept (%d bytes): show -body prints it\n", plural(len(m.Contents), "file"), kept)
 		return
 	}
-	for _, c := range m.Contents {
+	code, why := mapCodeFrom(file)
+	if why != "" {
+		fmt.Printf("  %s\n", why)
+		return
+	}
+	for _, c := range code {
 		fmt.Printf("code of %s (%d bytes)\n", line(c.Name), len(c.Text))
 		for _, l := range bytes.SplitAfter([]byte(c.Text), []byte("\n")) {
 			fmt.Printf("    %s\n", proof.Printable(bytes.TrimRight(l, "\r\n"), 4*len(l)+8))
 		}
-	}
-	if m.CodeCut > 0 {
-		fmt.Printf("  %s of the app's own with code did not fit the %d bytes kept for a map and are not shown\n", plural(m.CodeCut, "file"), fuzz.MaxBody)
 	}
 }
 

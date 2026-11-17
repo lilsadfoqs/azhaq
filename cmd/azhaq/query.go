@@ -394,7 +394,7 @@ func cmdShow(args []string) error {
 	db := fs.String("db", "", "the database (default: the last run's)")
 	asJSON := fs.Bool("json", false, "one JSON object")
 	runF := fs.String("run", "", "the run to read, by the run_id of its summary (default: the newest run of the workspace that has it)")
-	body := fs.Bool("body", false, "also print the code a source map carried, as the run kept it (each of the app's own files, up to 5 MiB a map)")
+	body := fs.Bool("body", false, "also print the code of a source map's own files, from the answer the run stored with its store-responses option (a run without it keeps none)")
 	if err := parse(fs, args); err != nil {
 		return err
 	}
@@ -543,17 +543,21 @@ func cmdShow(args []string) error {
 	if *asJSON {
 		obs := make([]map[string]any, 0, len(mine))
 		for _, o := range mine {
-			payload := o.Payload
-			if !*body {
-				payload = withoutMapCode(o)
-			}
-			obs = append(obs, map[string]any{"collector": o.Collector, "kind": o.Kind, "source": o.Source, "observed_at": o.ObservedAt, "payload": payload})
+			obs = append(obs, map[string]any{"collector": o.Collector, "kind": o.Kind, "source": o.Source, "observed_at": o.ObservedAt, "payload": o.Payload})
 		}
 		out := map[string]any{"row": mapRowJSON(*row), "links": links, "observations": obs}
 		if _, ok := row.Response(); ok {
 			resp := map[string]any{}
 			addResponse(resp, *row, false)
 			out["response"] = resp
+		}
+		if *body && row.Role == "sourcemap" {
+			code, why := mapCodeFrom(row.ResponseFile)
+			if why != "" {
+				out["source_code_note"] = why
+			} else {
+				out["source_code"] = code
+			}
 		}
 		if g.run != "" {
 			out["run"] = g.run
@@ -607,7 +611,7 @@ func cmdShow(args []string) error {
 	if ev, ok := row.Response(); ok {
 		printResponse(ev)
 	}
-	printSourceMap(mine, *body)
+	printSourceMap(mine, row.ResponseFile, *body)
 	fmt.Println("observations")
 	for _, o := range mine {
 		fmt.Printf("  %s %s %s\n", o.Collector, o.Kind, compact(o.Payload))

@@ -746,8 +746,13 @@ func (h *hunter) sourceMaps() {
 			}
 			files += m.files
 		}
+		// A map whose answer -sr kept comes first: show -body prints its code.
+		slices.SortStableFunc(rows, func(a, b engine.MapEntry) int {
+			return cmp.Compare(b2i(a.ResponseFile != ""), b2i(b.ResponseFile != ""))
+		})
 		c := h.get("URL", rows[0].Entity.Key, scope)
 		c.origin = origin
+		c.codeKept = rows[0].ResponseFile != "" && code > 0
 		for _, r := range rows {
 			c.instances = append(c.instances, r.Entity.Key)
 			if r.Entity.FirstSeen.After(h.cut) {
@@ -801,6 +806,13 @@ func mapsRead(obs []types.StoredObservation) map[string]mapRead {
 		out[k] = mapRead{files: len(p.Files), code: p.Code}
 	}
 	return out
+}
+
+func b2i(b bool) int {
+	if b {
+		return 0 // kept answers sort first
+	}
+	return 1
 }
 
 func plural(n int, noun string) string {
