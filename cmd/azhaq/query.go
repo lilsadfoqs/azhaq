@@ -15,6 +15,7 @@ import (
 
 	"github.com/lilsadfoqs/azhaq/engine"
 	"github.com/lilsadfoqs/azhaq/internal/advisory"
+	"github.com/lilsadfoqs/azhaq/internal/collectors/jscol"
 	"github.com/lilsadfoqs/azhaq/internal/collectors/urlcol"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"github.com/lilsadfoqs/azhaq/store"
@@ -393,6 +394,7 @@ func cmdShow(args []string) error {
 	db := fs.String("db", "", "the database (default: the last run's)")
 	asJSON := fs.Bool("json", false, "one JSON object")
 	runF := fs.String("run", "", "the run to read, by the run_id of its summary (default: the newest run of the workspace that has it)")
+	body := fs.Bool("body", false, "also print the code a source map carried, as the run kept it (each of the app's own files, up to 5 MiB a map)")
 	if err := parse(fs, args); err != nil {
 		return err
 	}
@@ -507,7 +509,7 @@ func cmdShow(args []string) error {
 	})
 	var mine []types.StoredObservation
 	for _, o := range g.obs {
-		if o.EntityID == row.Entity.ID || o.Kind == "url" && payloadURLIs(o.Payload, row.Entity.Key) {
+		if o.EntityID == row.Entity.ID && o.Kind != jscol.MapKind || (o.Kind == "url" || o.Kind == jscol.MapKind) && payloadURLIs(o.Payload, row.Entity.Key) {
 			mine = append(mine, o)
 		}
 	}
@@ -541,7 +543,11 @@ func cmdShow(args []string) error {
 	if *asJSON {
 		obs := make([]map[string]any, 0, len(mine))
 		for _, o := range mine {
-			obs = append(obs, map[string]any{"collector": o.Collector, "kind": o.Kind, "source": o.Source, "observed_at": o.ObservedAt, "payload": o.Payload})
+			payload := o.Payload
+			if !*body {
+				payload = withoutMapCode(o)
+			}
+			obs = append(obs, map[string]any{"collector": o.Collector, "kind": o.Kind, "source": o.Source, "observed_at": o.ObservedAt, "payload": payload})
 		}
 		out := map[string]any{"row": mapRowJSON(*row), "links": links, "observations": obs}
 		if _, ok := row.Response(); ok {
@@ -601,6 +607,7 @@ func cmdShow(args []string) error {
 	if ev, ok := row.Response(); ok {
 		printResponse(ev)
 	}
+	printSourceMap(mine, *body)
 	fmt.Println("observations")
 	for _, o := range mine {
 		fmt.Printf("  %s %s %s\n", o.Collector, o.Kind, compact(o.Payload))

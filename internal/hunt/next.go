@@ -25,6 +25,9 @@ func (c *cand) next(db, best string) string {
 		return cmd
 	case best == "object-id":
 		return "azhaq roles -role anon -role 'user=Authorization: Bearer …' -- -url " + quote(c.originOrKey())
+	case best == "sourcemap":
+		// The map's own row lists its sources and keeps the app's code: -body prints it.
+		return "azhaq show -db " + quote(db) + " -body " + quote(c.instance())
 	case best == "input" && c.typ == "URL":
 		return "azhaq params -u " + quote(c.instance()) + " -w WORDLIST"
 	}

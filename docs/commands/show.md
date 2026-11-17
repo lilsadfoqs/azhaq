@@ -5,7 +5,7 @@ Everything known about one URL, host or name: what found it, what it leads to, e
 ## Synopsis
 
 ```
-azhaq show -db FILE [-json] [-run ID] KEY
+azhaq show -db FILE [-json] [-body] [-run ID] KEY
 ```
 
 ## Examples
@@ -19,6 +19,9 @@ azhaq show -db app.db -json app.example.com
 
 # A listener, as hunt prints it
 azhaq show -db app.db redis.example.com:6379
+
+# A source map the run read: its sources, and the app's own code it carried
+azhaq show -db app.db -body https://app.example.com/static/main.js.map
 
 # A page an earlier run of the workspace saw (the run_id of its summary, or its first 4 characters)
 azhaq show -db app.db -run 3883752b https://app.example.com/
@@ -46,6 +49,8 @@ The text form prints the entity's row, its links, the answer it kept and its obs
 | `services` | For a hostname: its front pages, with `coverage`, `status`, `title` and the `error` of one that failed. |
 
 An `azhaq-js` observation's payload holds the `found_in` of the page it read.
+
+A source map the run read has an observation of its own, `sourcemap`: see [A source map the run read](#a-source-map-the-run-read).
 
 ## Summary and exit codes
 
@@ -89,6 +94,18 @@ Three kinds of word are tried, in this order:
 - Endpoints a script or a description names are asked before the ones only a path sweep found (`/graphql` before `/graphiql`), so a budget reads their schemas first.
 - A GraphiQL or Playground page (one whose GET served the IDE) is not asked for a schema once another URL of its origin gave one whole by introspection: no POST goes to it, or its recovery stops before the next document, and the summary notes `an IDE page, not asked for its schema`. With no such schema on its origin, the page is recovered as any endpoint is, unless it refuses twice the same way (above). A resume keeps what the run it continues learned.
 
+### A source map the run read
+
+A run that reads a source map, named by a script's comment or by a header, or asked for next to a bundle, stores what it read, so `show MAP_URL` does not leave the map to be fetched again by hand.
+
+- The text form prints a `source map:` block: the status of the answer, the number of sources, how many of the app's own carry their code (`sourcesContent`), the size of the map, and every source's name with `code, N bytes` or `no code`. A library's (`node_modules`, `webpack/`) is marked `[library]`.
+- At most 5,000 names are listed, the rest are counted (`source_files_cut`).
+- The code of the app's own files is kept, one file after another, up to 5 MiB for a map, the cap of the `-od` files. A file that does not fit is counted (`contents_cut`) and a smaller one after it may be kept. The code of a library's source is not kept.
+- `-body` prints the code kept, a block for each file, every line escaped as an answer's is. Without it the code is not printed, and `-json` leaves it out of the `sourcemap` observation's payload (`contents_omitted` counts the files); with it the payload holds `contents`, a list of `name` and `text`.
+- The payload of the `sourcemap` observation has `url`, `status`, `body_length`, `sources`, `with_code`, `source_files` (each `name`, `code`, `bytes`, `library`), `contents`, `source_files_cut`, `contents_cut` and `guessed`.
+- The map is read once, and `show` reads the workspace: no request is sent. A workspace made before 0.28 kept the count and the app's own names only, and `show` says so.
+- The map's row stays a `linked` hint: the run's collector read it, no request of the map's row asked it as a page. With `-sr` the whole answer of the map is written to a file, and `query -fields response_file` names it.
+
 ## Flags
 
 <!-- flags:begin show -->
@@ -97,4 +114,10 @@ Three kinds of word are tried, in this order:
 | `-db` | string |  | the database (default: the last run's) |
 | `-json` | bool |  | one JSON object |
 | `-run` | string |  | the run to read, by the run_id of its summary (default: the newest run of the workspace that has it) |
+
+**Other**
+
+| Flag | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `-body` | bool |  | also print the code a source map carried, as the run kept it (each of the app's own files, up to 5 MiB a map) |
 <!-- flags:end -->

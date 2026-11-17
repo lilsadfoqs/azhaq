@@ -14,6 +14,7 @@ import (
 
 	"github.com/lilsadfoqs/azhaq/catalog"
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
+	"github.com/lilsadfoqs/azhaq/internal/fuzz"
 	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 	"github.com/lilsadfoqs/azhaq/internal/neterr"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
@@ -22,6 +23,10 @@ import (
 )
 
 const Name = "azhaq-js"
+
+// MapKind is the kind of the observation that holds what a source map said:
+// its status, its sources, and the app's own code up to a bound.
+const MapKind = "sourcemap"
 
 // The caps below are those of the default -max-scripts: the others scale
 // with it (limits), never under these.
@@ -32,8 +37,11 @@ const (
 	maxScripts = 256
 	// maxMaps caps source maps read for one page.
 	maxMaps = 8
-	// maxMapFiles caps the source file names kept per map.
+	// maxMapFiles caps the source file names kept per map in the url row
+	// (the hunt reads them); the map's own row, maxMapSources.
 	maxMapFiles = 200
+	// maxMapSources caps the source names a map's row lists.
+	maxMapSources = 5000
 	// maxSites caps the places kept for where one route is named.
 	maxSites = 3
 	// maxGuessedMaps caps the source maps asked for by name (main.js.map
@@ -328,6 +336,31 @@ type sourceMap struct {
 	count   int      // all sources, libraries included
 	code    int      // the app's own sources whose code the map carries (sourcesContent)
 	guessed bool     // asked for by name: no comment or header named it
+
+	// What the map's own row keeps, so that a map is never asked again to
+	// be read: the answer's status and size, every source name with whether
+	// the map carries its code, and the app's own code up to fuzz.MaxBody.
+	status   int
+	bodyLen  int
+	sources  []mapSource
+	contents []mapContent
+	// namesCut: names past maxMapSources. codeCut: the app's own files with
+	// code that the bound left out.
+	namesCut, codeCut int
+}
+
+// mapSource is one entry of a map's sources.
+type mapSource struct {
+	Name    string `json:"name"`
+	Code    bool   `json:"code"`            // the map carries its code (sourcesContent)
+	Bytes   int    `json:"bytes,omitempty"` // of that code
+	Library bool   `json:"library,omitempty"`
+}
+
+// mapContent is the code of one of the app's own sources.
+type mapContent struct {
+	Name string `json:"name"`
+	Text string `json:"text"`
 }
 
 // buildManifest is a bundler's manifest that was read, and what it gave.
@@ -937,6 +970,27 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		if err := emitRow(row, 0.9); err != nil {
 			return meta, err
 		}
+		// What was read, in a row of its own: the url row is a count, and is
+		// read by every command, so the code stays out of it.
+		own := map[string]any{"url": m.url, "via": "js", "role": "sourcemap", "status": m.status, "body_length": m.bodyLen,
+			"sources": m.count, "source_files": m.sources, "with_code": m.code}
+		if len(m.contents) > 0 {
+			own["contents"] = m.contents
+		}
+		if m.namesCut > 0 {
+			own["source_files_cut"] = m.namesCut
+		}
+		if m.codeCut > 0 {
+			own["contents_cut"] = m.codeCut
+		}
+		if m.guessed {
+			own["guessed"] = true
+		}
+		payload, _ := json.Marshal(own)
+		if err := emit(types.Observation{Collector: Name, Source: raw, Kind: MapKind, Payload: payload, Confidence: 0.9, ObservedAt: time.Now().UTC()}); err != nil {
+			return meta, err
+		}
+		meta.EmitCount++
 	}
 	for _, m := range mans {
 		row := map[string]any{"url": m.url, "via": "js", "role": "manifest", "framework": m.kind, "scripts": m.scripts}
@@ -1592,6 +1646,7 @@ func (c *Collector) readMap(ctx context.Context, page, mapURL string, scriptURL 
 		return sourceMap{}, nil
 	}
 	var body []byte
+	status := http.StatusOK // an inline map has no answer of its own
 	if strings.HasPrefix(mapURL, "data:") {
 		meta, data, ok := strings.Cut(strings.TrimPrefix(mapURL, "data:"), ",")
 		if !ok || !strings.HasSuffix(meta, ";base64") {
@@ -1613,7 +1668,7 @@ func (c *Collector) readMap(ctx context.Context, page, mapURL string, scriptURL 
 		if err != nil || res.Status != http.StatusOK {
 			return sourceMap{}, nil
 		}
-		body = res.Body
+		body, status = res.Body, res.Status
 	}
 	var sm struct {
 		Sources        []string  `json:"sources"`
@@ -1623,18 +1678,41 @@ func (c *Collector) readMap(ctx context.Context, page, mapURL string, scriptURL 
 	if json.Unmarshal(body, &sm) != nil || len(sm.Sources) == 0 || guessed && sm.Mappings == nil {
 		return sourceMap{}, nil
 	}
-	m := sourceMap{url: mapURL, count: len(sm.Sources), guessed: guessed}
+	m := sourceMap{url: mapURL, count: len(sm.Sources), guessed: guessed, status: status, bodyLen: len(body)}
 	var out []script
+	kept := 0
 	for i, name := range sm.Sources {
-		if library(name) {
+		var text *string
+		if i < len(sm.SourcesContent) {
+			text = sm.SourcesContent[i]
+		}
+		lib := library(name)
+		if len(m.sources) < maxMapSources {
+			src := mapSource{Name: name, Code: text != nil, Library: lib}
+			if text != nil {
+				src.Bytes = len(*text)
+			}
+			m.sources = append(m.sources, src)
+		} else {
+			m.namesCut++
+		}
+		if lib {
 			continue
 		}
 		if len(m.files) < maxMapFiles {
 			m.files = append(m.files, name)
 		}
-		if i < len(sm.SourcesContent) && sm.SourcesContent[i] != nil {
-			out = append(out, script{url: scriptURL, body: *sm.SourcesContent[i], fromMap: true, source: name})
+		if text != nil {
+			out = append(out, script{url: scriptURL, body: *text, fromMap: true, source: name})
 			m.code++
+			// The code is kept up to the cap of dirs -od and fuzz -od; a file that
+			// does not fit is counted, and a smaller one after it may.
+			if kept+len(*text) <= fuzz.MaxBody {
+				kept += len(*text)
+				m.contents = append(m.contents, mapContent{Name: name, Text: *text})
+			} else {
+				m.codeCut++
+			}
 		}
 	}
 	return m, out

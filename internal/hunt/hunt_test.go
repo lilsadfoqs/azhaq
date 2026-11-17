@@ -442,6 +442,10 @@ func TestSourceMapsAreOneRowPerHostByWhatTheyExpose(t *testing.T) {
 	if rb.Score != mapNamesOnly || !strings.Contains(rb.Reasons[0].Detail, "names only: no code") {
 		t.Errorf("the host with names only: score %d, %+v", rb.Score, rb.Reasons)
 	}
+	// The next step prints what the stored row of a map holds.
+	if want := "azhaq show -db w.db -body " + a + "/main.js.map"; ra.Next != want {
+		t.Errorf("next %q, want %q", ra.Next, want)
+	}
 }
 
 // A file with several secrets is named by its strongest one.
