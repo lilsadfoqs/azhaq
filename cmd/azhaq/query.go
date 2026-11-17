@@ -15,6 +15,7 @@ import (
 
 	"github.com/lilsadfoqs/azhaq/engine"
 	"github.com/lilsadfoqs/azhaq/internal/advisory"
+	"github.com/lilsadfoqs/azhaq/internal/collectors/jscol"
 	"github.com/lilsadfoqs/azhaq/internal/collectors/urlcol"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"github.com/lilsadfoqs/azhaq/store"
@@ -393,6 +394,7 @@ func cmdShow(args []string) error {
 	db := fs.String("db", "", "the database (default: the last run's)")
 	asJSON := fs.Bool("json", false, "one JSON object")
 	runF := fs.String("run", "", "the run to read, by the run_id of its summary (default: the newest run of the workspace that has it)")
+	body := fs.Bool("body", false, "also print the code of a source map's own files, from the answer the run stored with its store-responses option (a run without it keeps none)")
 	if err := parse(fs, args); err != nil {
 		return err
 	}
@@ -507,7 +509,7 @@ func cmdShow(args []string) error {
 	})
 	var mine []types.StoredObservation
 	for _, o := range g.obs {
-		if o.EntityID == row.Entity.ID || o.Kind == "url" && payloadURLIs(o.Payload, row.Entity.Key) {
+		if o.EntityID == row.Entity.ID && o.Kind != jscol.MapKind || (o.Kind == "url" || o.Kind == jscol.MapKind) && payloadURLIs(o.Payload, row.Entity.Key) {
 			mine = append(mine, o)
 		}
 	}
@@ -548,6 +550,14 @@ func cmdShow(args []string) error {
 			resp := map[string]any{}
 			addResponse(resp, *row, false)
 			out["response"] = resp
+		}
+		if *body && row.Role == "sourcemap" {
+			code, why := mapCodeFrom(row.ResponseFile)
+			if why != "" {
+				out["source_code_note"] = why
+			} else {
+				out["source_code"] = code
+			}
 		}
 		if g.run != "" {
 			out["run"] = g.run
@@ -601,6 +611,7 @@ func cmdShow(args []string) error {
 	if ev, ok := row.Response(); ok {
 		printResponse(ev)
 	}
+	printSourceMap(mine, row.ResponseFile, *body)
 	fmt.Println("observations")
 	for _, o := range mine {
 		fmt.Printf("  %s %s %s\n", o.Collector, o.Kind, compact(o.Payload))

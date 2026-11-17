@@ -402,6 +402,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	paramsAll := fs.Bool("params-all", false, "with -params, also search the pages a request of the run showed to read no name: one that answered as a path that cannot exist does, or refused (401, 403, 405); by default a note lists them")
 	paramsRate := fs.Float64("params-rate", 0, "parameter requests per second per host (0: no limit, as arjun)")
 	paramsThreads := fs.Int("params-threads", 5, "parameter requests in flight per page (as arjun -t); 1 with -params-delay and -params-stable")
+	paramsOd := fs.String("params-od", "", "keep the request and answer that showed each parameter found as a file in this directory, as fuzz -od does (up to 5 MiB of a body; its name is shown with the parameter)")
 	paramsChunk := fs.Int("params-chunk", 0, "names per parameter request at most (0: 500, and about 7.6 KB in a query; fewer where the server refuses a long query)")
 	paramsMethod := fs.String("params-method", "GET", "how names are sent: GET (query), POST (form body), JSON or XML. A body sends requests that may change data on the target: -params-writes must say it is wanted")
 	paramsWrites := fs.Bool("params-writes", false, "let -params-method POST, JSON or XML send bodies (they may change data on the target); needs -allow or -scope, or a single target")
@@ -1106,7 +1107,12 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		}
 		opts.Params = paramcol.Options{Words: words, PerHost: *paramsPerHost, Rate: *paramsRate,
 			Threads: *paramsThreads, Chunk: *paramsChunk, Method: method, Writes: *paramsWrites, Include: *paramsInclude,
-			Delay: *paramsDelay, Stable: *paramsStable, Timeout: *paramsTimeout, Targets: targets, All: *paramsAll}
+			Delay: *paramsDelay, Stable: *paramsStable, Timeout: *paramsTimeout, Targets: targets, All: *paramsAll, KeepDir: *paramsOd}
+		if *paramsOd != "" {
+			if err := os.MkdirAll(*paramsOd, 0o750); err != nil {
+				return usagef("-params-od %s: %v", *paramsOd, err)
+			}
+		}
 	}
 	if *dirsFile != "" {
 		var words []string

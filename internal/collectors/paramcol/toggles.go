@@ -87,6 +87,7 @@ func (s *search) toggles(answers []toggleAnswer, found, values map[string]string
 		for n, why := range ck.found {
 			found[n] = why
 			values[n] = a.value
+			s.remember(n, ck.exchangeOf(n))
 		}
 	}
 }

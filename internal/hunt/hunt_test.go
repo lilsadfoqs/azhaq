@@ -442,6 +442,17 @@ func TestSourceMapsAreOneRowPerHostByWhatTheyExpose(t *testing.T) {
 	if rb.Score != mapNamesOnly || !strings.Contains(rb.Reasons[0].Detail, "names only: no code") {
 		t.Errorf("the host with names only: score %d, %+v", rb.Score, rb.Reasons)
 	}
+	// With no answer kept, the next step lists the map's sources.
+	if want := "azhaq show -db w.db " + a + "/main.js.map"; ra.Next != want {
+		t.Errorf("next %q, want %q", ra.Next, want)
+	}
+	// A map whose answer -sr kept has its code printed by -body, and comes first.
+	in.Rows[1].ResponseFile = "/tmp/sr/vendor"
+	in.Obs[1] = mapObs(a+"/vendor.js.map", []string{"src/x.ts"}, 1)
+	ra = find(Build(in), a+"/vendor.js.map")
+	if ra == nil || ra.Next != "azhaq show -db w.db -body "+a+"/vendor.js.map" {
+		t.Errorf("next with a kept answer: %+v", ra)
+	}
 }
 
 // A file with several secrets is named by its strongest one.
