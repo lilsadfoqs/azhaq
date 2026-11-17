@@ -2079,3 +2079,4 @@ subs.permute-left	docs/commands/subs.md	A run cut by `-max-time` adds how many w
 plan.permute-later	docs/commands/plan.md	The names the sources and `-dns-brute` find later are not known before the run, and each adds up to `per_name`.	test:cmd/azhaq:TestPlanCountsThePermutationNamesTheGeneratorAsks
 plan.permute-upper-bound	docs/commands/plan.md	The size is an upper bound (`upper_bound` is `true`	test:cmd/azhaq:TestPermuteSizeLeavesOutANameThatDoesNotResolve
 subs.permute-unresolved	docs/commands/subs.md	Names found that did not resolve to an address of their own are not in that count	test:cmd/azhaq:TestPermuteSizeLeavesOutANameThatDoesNotResolve
+docs-output.probe-deny-path-skip	docs/OUTPUT.md	A row your own `-deny-path` holds back is a skip	test:cmd/azhaq:TestProbeDenyPathOnTheOnlyTargetIsASkipNotAFailure
