@@ -1,0 +1,1522 @@
+{
+  "date": "2026-11-17T07:25:48Z",
+  "commit": "b8b52384",
+  "version": "azhaq 0.27.1-0.20261117072223-b8b523847865+dirty\nadvisory index 2026-11-16 (52995 records)\n  CISA Known Exploited Vulnerabilities catalogue, 2026-11-13\n  NVD CVE records, feed 2.0 (with CPE configurations), 2026-11-15",
+  "go": "go1.27.4",
+  "tools": [
+    {
+      "name": "katana",
+      "version": "1.8.0"
+    },
+    {
+      "name": "subfinder",
+      "version": "2.17.0"
+    },
+    {
+      "name": "httpx",
+      "version": "1.12.0"
+    },
+    {
+      "name": "dnsx",
+      "version": "1.3.1"
+    },
+    {
+      "name": "naabu",
+      "version": "2.6.1"
+    },
+    {
+      "name": "gau",
+      "version": "2.2.4"
+    },
+    {
+      "name": "ffuf",
+      "version": "2.3.0"
+    },
+    {
+      "name": "alterx",
+      "version": "0.1.0"
+    },
+    {
+      "name": "gowitness",
+      "version": "3.2.2"
+    },
+    {
+      "name": "jsluice",
+      "version": "v0.0.0-20240110145140-0ddfab153e06"
+    },
+    {
+      "name": "notify",
+      "version": "v1.0.7"
+    }
+  ],
+  "profile": "both",
+  "apps": [
+    {
+      "name": "juice-shop",
+      "url": "http://127.0.0.1:3101/",
+      "azhaq": {
+        "routes": 103,
+        "truth": 70,
+        "truth_of": 77,
+        "shell": 0,
+        "seconds": 15.360034588,
+        "rss_mb": 214.14453125
+      },
+      "katana": {
+        "routes": 5,
+        "truth": 1,
+        "truth_of": 77,
+        "shell": 3,
+        "seconds": 13.709409068,
+        "rss_mb": 1165.65234375
+      },
+      "jsluice": {
+        "routes": 0,
+        "truth_of": 77,
+        "shell": 0,
+        "seconds": 1.210376169,
+        "rss_mb": 172.8125
+      },
+      "katana_jsluice": {
+        "routes": 5,
+        "truth": 1,
+        "truth_of": 77,
+        "shell": 3,
+        "seconds": 14.919785237,
+        "rss_mb": 1165.65234375
+      },
+      "bundle_grep": {
+        "routes": 101,
+        "truth": 37,
+        "truth_of": 77,
+        "shell": 0,
+        "seconds": 0,
+        "rss_mb": 0
+      },
+      "crawl": {
+        "routes": 60,
+        "truth": 53,
+        "truth_of": 77,
+        "shell": 0,
+        "styles": 1,
+        "seconds": 2.865447895,
+        "rss_mb": 192.13671875,
+        "requests": 82,
+        "request_routes": 60
+      },
+      "crawl_katana": {
+        "routes": 5,
+        "truth": 1,
+        "truth_of": 77,
+        "shell": 0,
+        "styles": 1,
+        "seconds": 13.787583228,
+        "rss_mb": 1405.08984375,
+        "requests": 39,
+        "request_routes": 5
+      },
+      "ffuf": {
+        "words": 51,
+        "azhaq_hits": 3,
+        "ffuf_hits": 4,
+        "shared": 3,
+        "azhaq_shell": 0,
+        "ffuf_shell": 0,
+        "seconds": 0.288920202
+      },
+      "roles": {
+        "rows": 39,
+        "expected": [
+          "/api/Users",
+          "/rest/user/authentication-details"
+        ],
+        "found": [
+          "/api/Users",
+          "/rest/user/authentication-details"
+        ],
+        "seconds": 31.172544692,
+        "chrome_rows": 41,
+        "chrome_found": [
+          "/api/Users",
+          "/rest/user/authentication-details"
+        ],
+        "chrome_seconds": 57.731643239
+      },
+      "browser": {
+        "azhaq": {
+          "routes": 104,
+          "truth": 70,
+          "truth_of": 77,
+          "shell": 0,
+          "seconds": 18.834729252,
+          "rss_mb": 208.46875
+        },
+        "katana": {
+          "routes": 31,
+          "truth": 7,
+          "truth_of": 77,
+          "shell": 4,
+          "seconds": 7.966021423,
+          "rss_mb": 78.30078125
+        },
+        "limit_seconds": 300
+      },
+      "run_cpu": {
+        "target": "http://127.0.0.1:3101/",
+        "runs": 5,
+        "azhaq_cpu_seconds": 5.811358,
+        "katana_cpu_seconds": 5.56769,
+        "azhaq_seconds": 15.284396775,
+        "katana_seconds": 13.918837656000001
+      }
+    },
+    {
+      "name": "vampi",
+      "url": "http://127.0.0.1:5102/",
+      "azhaq": {
+        "routes": 13,
+        "truth": 12,
+        "truth_of": 12,
+        "shell": 0,
+        "seconds": 1.9692083550000001,
+        "rss_mb": 175.1484375
+      },
+      "katana": {
+        "routes": 1,
+        "truth": 1,
+        "truth_of": 12,
+        "shell": 0,
+        "seconds": 10.431535334,
+        "rss_mb": 49.76171875
+      },
+      "jsluice": {
+        "routes": 0,
+        "truth_of": 12,
+        "shell": 0,
+        "seconds": 0,
+        "rss_mb": 0
+      },
+      "katana_jsluice": {
+        "routes": 1,
+        "truth": 1,
+        "truth_of": 12,
+        "shell": 0,
+        "seconds": 10.431535334,
+        "rss_mb": 49.76171875
+      },
+      "bundle_grep": {
+        "routes": 0,
+        "truth_of": 12,
+        "shell": 0,
+        "seconds": 0,
+        "rss_mb": 0
+      },
+      "crawl": {
+        "routes": 1,
+        "truth": 1,
+        "truth_of": 12,
+        "shell": 0,
+        "seconds": 0.566578632,
+        "rss_mb": 169.51171875,
+        "requests": 1,
+        "request_routes": 1
+      },
+      "crawl_katana": {
+        "routes": 1,
+        "truth": 1,
+        "truth_of": 12,
+        "shell": 0,
+        "seconds": 10.425891761,
+        "rss_mb": 49.09375,
+        "requests": 1,
+        "request_routes": 1
+      }
+    },
+    {
+      "name": "ginandjuice.shop",
+      "url": "https://ginandjuice.shop/",
+      "azhaq": {
+        "routes": 38,
+        "truth": 3,
+        "truth_of": 3,
+        "shell": 0,
+        "seconds": 281.944127666,
+        "rss_mb": 198.3046875
+      },
+      "katana": {
+        "routes": 14,
+        "truth": 2,
+        "truth_of": 3,
+        "shell": 0,
+        "seconds": 20.559662322,
+        "rss_mb": 740.6484375
+      },
+      "jsluice": {
+        "routes": 1,
+        "truth": 1,
+        "truth_of": 3,
+        "shell": 0,
+        "seconds": 0.261490948,
+        "rss_mb": 49.890625
+      },
+      "katana_jsluice": {
+        "routes": 14,
+        "truth": 2,
+        "truth_of": 3,
+        "shell": 0,
+        "seconds": 20.82115327,
+        "rss_mb": 740.6484375
+      },
+      "bundle_grep": {
+        "routes": 3,
+        "truth": 1,
+        "truth_of": 3,
+        "shell": 0,
+        "seconds": 0,
+        "rss_mb": 0
+      },
+      "crawl": {
+        "routes": 11,
+        "truth": 2,
+        "truth_of": 3,
+        "shell": 0,
+        "styles": 4,
+        "seconds": 11.786995563,
+        "rss_mb": 182.69921875
+      },
+      "crawl_katana": {
+        "routes": 14,
+        "truth": 2,
+        "truth_of": 3,
+        "shell": 0,
+        "styles": 4,
+        "seconds": 20.582229956,
+        "rss_mb": 732.20703125
+      }
+    }
+  ],
+  "params": {
+    "profile": "default",
+    "pages": [
+      "http://127.0.0.1:39975/search",
+      "http://127.0.0.1:39975/item",
+      "http://127.0.0.1:3101/rest/products/search",
+      "http://127.0.0.1:3101/rest/user/whoami",
+      "http://127.0.0.1:5102/users/v1",
+      "https://ginandjuice.shop/catalog",
+      "https://ginandjuice.shop/blog/"
+    ],
+    "words": 6453,
+    "azhaq": [
+      "http://127.0.0.1:3101/rest/products/search q",
+      "http://127.0.0.1:3101/rest/user/whoami callback",
+      "http://127.0.0.1:39975/item debug",
+      "http://127.0.0.1:39975/item format",
+      "http://127.0.0.1:39975/item id",
+      "http://127.0.0.1:39975/search lang",
+      "http://127.0.0.1:39975/search limit",
+      "http://127.0.0.1:39975/search page",
+      "http://127.0.0.1:39975/search q",
+      "http://127.0.0.1:39975/search sort",
+      "https://ginandjuice.shop/blog search",
+      "https://ginandjuice.shop/catalog searchTerm"
+    ],
+    "arjun": [
+      "http://127.0.0.1:3101/rest/products/search q",
+      "http://127.0.0.1:3101/rest/user/whoami callback",
+      "http://127.0.0.1:39975/item debug",
+      "http://127.0.0.1:39975/item format",
+      "http://127.0.0.1:39975/item id",
+      "http://127.0.0.1:39975/search lang",
+      "http://127.0.0.1:39975/search limit",
+      "http://127.0.0.1:39975/search page",
+      "http://127.0.0.1:39975/search q",
+      "http://127.0.0.1:39975/search sort",
+      "https://ginandjuice.shop/blog search"
+    ],
+    "shared": 11,
+    "azhaq_seconds": 1.415599187,
+    "arjun_seconds": 7.328138007,
+    "azhaq_rss_mb": 57.6484375,
+    "reference_rss_mb": 43.203125,
+    "planted_truth": 8,
+    "azhaq_planted": 8,
+    "arjun_planted": 8,
+    "azhaq_wrong": 0,
+    "arjun_wrong": 0,
+    "gin_azhaq_seconds": 10.613353891,
+    "gin_arjun_seconds": 16.96303871
+  },
+  "polite": {
+    "apps": [
+      {
+        "name": "juice-shop",
+        "url": "http://127.0.0.1:3101/",
+        "azhaq": {
+          "routes": 0,
+          "shell": 0,
+          "seconds": 0,
+          "rss_mb": 0
+        },
+        "katana": {
+          "routes": 0,
+          "shell": 0,
+          "seconds": 0,
+          "rss_mb": 0
+        },
+        "jsluice": {
+          "routes": 0,
+          "shell": 0,
+          "seconds": 0,
+          "rss_mb": 0
+        },
+        "katana_jsluice": {
+          "routes": 0,
+          "shell": 0,
+          "seconds": 0,
+          "rss_mb": 0
+        },
+        "bundle_grep": {
+          "routes": 0,
+          "shell": 0,
+          "seconds": 0,
+          "rss_mb": 0
+        },
+        "profile": "polite",
+        "crawl": {
+          "routes": 60,
+          "truth": 53,
+          "truth_of": 77,
+          "shell": 0,
+          "styles": 1,
+          "seconds": 17.24327121,
+          "rss_mb": 184.20703125
+        },
+        "crawl_katana": {
+          "routes": 5,
+          "truth": 1,
+          "truth_of": 77,
+          "shell": 0,
+          "styles": 1,
+          "seconds": 16.637309596,
+          "rss_mb": 1666.9375
+        }
+      },
+      {
+        "name": "vampi",
+        "url": "http://127.0.0.1:5102/",
+        "azhaq": {
+          "routes": 0,
+          "shell": 0,
+          "seconds": 0,
+          "rss_mb": 0
+        },
+        "katana": {
+          "routes": 0,
+          "shell": 0,
+          "seconds": 0,
+          "rss_mb": 0
+        },
+        "jsluice": {
+          "routes": 0,
+          "shell": 0,
+          "seconds": 0,
+          "rss_mb": 0
+        },
+        "katana_jsluice": {
+          "routes": 0,
+          "shell": 0,
+          "seconds": 0,
+          "rss_mb": 0
+        },
+        "bundle_grep": {
+          "routes": 0,
+          "shell": 0,
+          "seconds": 0,
+          "rss_mb": 0
+        },
+        "profile": "polite",
+        "crawl": {
+          "routes": 1,
+          "truth": 1,
+          "truth_of": 12,
+          "shell": 0,
+          "seconds": 0.68633154,
+          "rss_mb": 169.21875
+        },
+        "crawl_katana": {
+          "routes": 1,
+          "truth": 1,
+          "truth_of": 12,
+          "shell": 0,
+          "seconds": 10.571887535,
+          "rss_mb": 48.875
+        }
+      },
+      {
+        "name": "ginandjuice.shop",
+        "url": "https://ginandjuice.shop/",
+        "azhaq": {
+          "routes": 0,
+          "shell": 0,
+          "seconds": 0,
+          "rss_mb": 0
+        },
+        "katana": {
+          "routes": 0,
+          "shell": 0,
+          "seconds": 0,
+          "rss_mb": 0
+        },
+        "jsluice": {
+          "routes": 0,
+          "shell": 0,
+          "seconds": 0,
+          "rss_mb": 0
+        },
+        "katana_jsluice": {
+          "routes": 0,
+          "shell": 0,
+          "seconds": 0,
+          "rss_mb": 0
+        },
+        "bundle_grep": {
+          "routes": 0,
+          "shell": 0,
+          "seconds": 0,
+          "rss_mb": 0
+        },
+        "profile": "polite",
+        "crawl": {
+          "routes": 11,
+          "truth": 2,
+          "truth_of": 3,
+          "shell": 0,
+          "styles": 4,
+          "seconds": 12.176586248,
+          "rss_mb": 184.859375
+        },
+        "crawl_katana": {
+          "routes": 14,
+          "truth": 2,
+          "truth_of": 3,
+          "shell": 0,
+          "styles": 4,
+          "seconds": 20.698015735,
+          "rss_mb": 747.09765625
+        }
+      }
+    ],
+    "params": {
+      "profile": "polite",
+      "pages": [
+        "http://127.0.0.1:43169/search",
+        "http://127.0.0.1:43169/item",
+        "http://127.0.0.1:3101/rest/products/search"
+      ],
+      "words": 6453,
+      "azhaq": [
+        "http://127.0.0.1:3101/rest/products/search q",
+        "http://127.0.0.1:43169/item debug",
+        "http://127.0.0.1:43169/item format",
+        "http://127.0.0.1:43169/item id",
+        "http://127.0.0.1:43169/search lang",
+        "http://127.0.0.1:43169/search limit",
+        "http://127.0.0.1:43169/search page",
+        "http://127.0.0.1:43169/search q",
+        "http://127.0.0.1:43169/search sort"
+      ],
+      "arjun": [
+        "http://127.0.0.1:3101/rest/products/search q",
+        "http://127.0.0.1:43169/item debug",
+        "http://127.0.0.1:43169/item format",
+        "http://127.0.0.1:43169/item id",
+        "http://127.0.0.1:43169/search lang",
+        "http://127.0.0.1:43169/search limit",
+        "http://127.0.0.1:43169/search page",
+        "http://127.0.0.1:43169/search q",
+        "http://127.0.0.1:43169/search sort"
+      ],
+      "shared": 9,
+      "azhaq_seconds": 47.504216373000006,
+      "arjun_seconds": 44.452419062,
+      "azhaq_rss_mb": 51.453125,
+      "reference_rss_mb": 35.8984375,
+      "planted_truth": 8,
+      "azhaq_planted": 8,
+      "arjun_planted": 8,
+      "azhaq_wrong": 0,
+      "arjun_wrong": 0
+    }
+  },
+  "checks": [
+    {
+      "name": "[default] juice-shop: ≥ 90% of the server routes its frontend calls",
+      "pass": true,
+      "detail": "azhaq 70/77, katana 1/77, jsluice 0/77"
+    },
+    {
+      "name": "[default] juice-shop: no catch-all page reported as visited",
+      "pass": true,
+      "detail": "0 visited URLs return the SPA index"
+    },
+    {
+      "name": "[default] crawl juice-shop: results ≥ the reference's, confirmed by the app's own routes (its server code or OpenAPI document, or the routes only its page scripts hold)",
+      "pass": true,
+      "detail": "azhaq 53, reference 1; routes found azhaq 60, katana 5; stylesheets listed azhaq 1, katana 1; known 53 and 1 of 77; time ×0.21 of the reference, memory ×0.14 of the reference (192 MB against 1405 MB) | azhaq crawl -u http://127.0.0.1:3101/ -depth 3 -silent -hints vs katana -u http://127.0.0.1:3101/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10"
+    },
+    {
+      "name": "[default] crawl juice-shop: time ≤ 1.05× the reference's",
+      "pass": true,
+      "detail": "azhaq 2.9s, reference 13.8s (the median of 3 below 20 s, one run above) | azhaq crawl -u http://127.0.0.1:3101/ -depth 3 -silent -hints vs katana -u http://127.0.0.1:3101/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10"
+    },
+    {
+      "name": "[default] crawl juice-shop: requests per route found ≤ katana's",
+      "pass": true,
+      "detail": "azhaq 82 requests for 60 routes (1.37 a route), katana 39 for 5 (7.80) | azhaq crawl -u http://127.0.0.1:3101/ -depth 3 -silent -hints vs katana -u http://127.0.0.1:3101/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10"
+    },
+    {
+      "name": "[default] juice-shop run: CPU ≤ katana -jc -jsl's",
+      "pass": false,
+      "detail": "azhaq 5.81 CPU s in 15.3 s, katana 5.57 CPU s in 13.9 s (1.04×, the median of 5 runs in turn) | azhaq run -url http://127.0.0.1:3101/ -db /home/runner/work/azhaq/azhaq/bench/.work/runcpu4004277710/cpu.db -quiet vs katana -u http://127.0.0.1:3101/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10"
+    },
+    {
+      "name": "[default] roles: Juice Shop anonymous → user",
+      "pass": true,
+      "detail": "39 endpoints differ; 401 → 200 on 2/2 of /api/Users, /rest/user/authentication-details"
+    },
+    {
+      "name": "[default] roles: Juice Shop anonymous → user, signed in with Chrome",
+      "pass": true,
+      "detail": "41 endpoints differ; 401 → 200 on 2/2 (with a token: 39 endpoints) "
+    },
+    {
+      "name": "[default] juice-shop: -browser finds the known routes katana -headless finds",
+      "pass": true,
+      "detail": "azhaq -browser 70/77 in 19s, katana -headless 7/77 in 8s"
+    },
+    {
+      "name": "[default] identical runs diff empty",
+      "pass": false,
+      "detail": "added=0 removed=0 observations=1; {\"collector\":\"azhaq-http\",\"kind\":\"observation\",\"obs_kind\":\"error\",\"payload\":{\"collector\":\"azhaq-http\",\"error\":\"Get \\\"http://127.0.0.1:3101/api/Challenges\\\": net/http: timeout awaiting response headers\"}}"
+    },
+    {
+      "name": "[default] crawl vampi: results ≥ the reference's, confirmed by the app's own routes (its server code or OpenAPI document, or the routes only its page scripts hold)",
+      "pass": true,
+      "detail": "azhaq 1, reference 1; routes found azhaq 1, katana 1; stylesheets listed azhaq 0, katana 0; known 1 and 1 of 12; time ×0.05 of the reference, memory ×3.45 of the reference (170 MB against 49 MB) | azhaq crawl -u http://127.0.0.1:5102/ -depth 3 -silent -hints vs katana -u http://127.0.0.1:5102/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10"
+    },
+    {
+      "name": "[default] crawl vampi: time ≤ 1.05× the reference's",
+      "pass": true,
+      "detail": "azhaq 0.6s, reference 10.4s (the median of 3 below 20 s, one run above) | azhaq crawl -u http://127.0.0.1:5102/ -depth 3 -silent -hints vs katana -u http://127.0.0.1:5102/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10"
+    },
+    {
+      "name": "[default] crawl vampi: requests per route found ≤ katana's",
+      "pass": true,
+      "detail": "azhaq 1 requests for 1 routes (1.00 a route), katana 1 for 1 (1.00) | azhaq crawl -u http://127.0.0.1:5102/ -depth 3 -silent -hints vs katana -u http://127.0.0.1:5102/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10"
+    },
+    {
+      "name": "[default] vampi: paths from /openapi.json",
+      "pass": true,
+      "detail": "azhaq 12/12, katana 1/12"
+    },
+    {
+      "name": "[default] diff across different seeds is labelled",
+      "pass": true,
+      "detail": "seeds_differ=true"
+    },
+    {
+      "name": "[default] crawl ginandjuice.shop: results ≥ the reference's, confirmed by the app's own routes (its server code or OpenAPI document, or the routes only its page scripts hold)",
+      "pass": true,
+      "detail": "azhaq 2, reference 2; routes found azhaq 11, katana 14; stylesheets listed azhaq 4, katana 4; known 2 and 2 of 3; time ×0.57 of the reference, memory ×0.25 of the reference (183 MB against 732 MB) | azhaq crawl -u https://ginandjuice.shop/ -depth 3 -silent -hints -rate 5 vs katana -u https://ginandjuice.shop/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10 -rl 5"
+    },
+    {
+      "name": "[default] crawl ginandjuice.shop: time ≤ 1.05× the reference's",
+      "pass": true,
+      "detail": "azhaq 11.8s, reference 20.6s (the median of 3 below 20 s, one run above) | azhaq crawl -u https://ginandjuice.shop/ -depth 3 -silent -hints -rate 5 vs katana -u https://ginandjuice.shop/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10 -rl 5"
+    },
+    {
+      "name": "[default] ginandjuice: page scripts parsed",
+      "pass": true,
+      "detail": "4/4 page scripts, 3/3 routes only in page scripts or script-driven forms"
+    },
+    {
+      "name": "[default] ginandjuice: product and blog pages are one template each",
+      "pass": true,
+      "detail": "map lines: product 1, blog post 1"
+    },
+    {
+      "name": "[default] known routes ≥ katana ∪ jsluice on every app",
+      "pass": true,
+      "detail": "juice-shop 70/77 vs 1, vampi 12/12 vs 1, ginandjuice.shop 3/3 vs 2"
+    },
+    {
+      "name": "[default] no catch-all page reported as visited on any app",
+      "pass": true,
+      "detail": "3 apps"
+    },
+    {
+      "name": "[default] params: ginandjuice.shop (2 pages, 1,000 names, 5 requests per second) time ≤ 1.05× arjun's",
+      "pass": true,
+      "detail": "azhaq 10.6s, arjun 17.0s"
+    },
+    {
+      "name": "[default] params: results ≥ the reference's, confirmed by the planted server's own list of the parameters it reads (wrong names count against)",
+      "pass": true,
+      "detail": "azhaq 8, reference 8; old bar: 11 of 11 = 100%; planted pages: azhaq 8 right 0 wrong, arjun 8 right 0 wrong, of 8; all pages azhaq 12, arjun 11, shared 11; time ×0.19 of the reference, memory ×1.33 of the reference (58 MB against 43 MB) | azhaq params -u https://ginandjuice.shop/blog/ -w /home/runner/work/azhaq/azhaq/bench/.work/params/gin-words.txt -silent -rate 5 vs arjun -u https://ginandjuice.shop/blog/ -w /home/runner/work/azhaq/azhaq/bench/.work/params/gin-words.txt -oJ /home/runner/work/azhaq/azhaq/bench/.work/params/arjun.json -q --disable-redirects --rate-limit 5"
+    },
+    {
+      "name": "[default] params: time ≤ 1.05× the reference's",
+      "pass": true,
+      "detail": "azhaq 1.4s, reference 7.3s (the median of 3 below 20 s, one run above) | azhaq params -u https://ginandjuice.shop/blog/ -w /home/runner/work/azhaq/azhaq/bench/.work/params/gin-words.txt -silent -rate 5 vs arjun -u https://ginandjuice.shop/blog/ -w /home/runner/work/azhaq/azhaq/bench/.work/params/gin-words.txt -oJ /home/runner/work/azhaq/azhaq/bench/.work/params/arjun.json -q --disable-redirects --rate-limit 5"
+    },
+    {
+      "name": "[polite] crawl juice-shop: results ≥ the reference's, confirmed by the app's own routes (its server code or OpenAPI document, or the routes only its page scripts hold)",
+      "pass": true,
+      "detail": "azhaq 53, reference 1; routes found azhaq 60, katana 5; stylesheets listed azhaq 1, katana 1; known 53 and 1 of 77; time ×1.04 of the reference, memory ×0.11 of the reference (184 MB against 1667 MB) | azhaq crawl -u http://127.0.0.1:3101/ -depth 3 -silent -hints -rate 5 vs katana -u http://127.0.0.1:3101/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10 -rl 5"
+    },
+    {
+      "name": "[polite] crawl juice-shop: time ≤ 1.05× the reference's",
+      "pass": true,
+      "detail": "azhaq 17.2s, reference 16.6s (the median of 3 below 20 s, one run above) | azhaq crawl -u http://127.0.0.1:3101/ -depth 3 -silent -hints -rate 5 vs katana -u http://127.0.0.1:3101/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10 -rl 5"
+    },
+    {
+      "name": "[polite] crawl vampi: results ≥ the reference's, confirmed by the app's own routes (its server code or OpenAPI document, or the routes only its page scripts hold)",
+      "pass": true,
+      "detail": "azhaq 1, reference 1; routes found azhaq 1, katana 1; stylesheets listed azhaq 0, katana 0; known 1 and 1 of 12; time ×0.06 of the reference, memory ×3.46 of the reference (169 MB against 49 MB) | azhaq crawl -u http://127.0.0.1:5102/ -depth 3 -silent -hints -rate 5 vs katana -u http://127.0.0.1:5102/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10 -rl 5"
+    },
+    {
+      "name": "[polite] crawl vampi: time ≤ 1.05× the reference's",
+      "pass": true,
+      "detail": "azhaq 0.7s, reference 10.6s (the median of 3 below 20 s, one run above) | azhaq crawl -u http://127.0.0.1:5102/ -depth 3 -silent -hints -rate 5 vs katana -u http://127.0.0.1:5102/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10 -rl 5"
+    },
+    {
+      "name": "[polite] crawl ginandjuice.shop: results ≥ the reference's, confirmed by the app's own routes (its server code or OpenAPI document, or the routes only its page scripts hold)",
+      "pass": true,
+      "detail": "azhaq 2, reference 2; routes found azhaq 11, katana 14; stylesheets listed azhaq 4, katana 4; known 2 and 2 of 3; time ×0.59 of the reference, memory ×0.25 of the reference (185 MB against 747 MB) | azhaq crawl -u https://ginandjuice.shop/ -depth 3 -silent -hints -rate 5 vs katana -u https://ginandjuice.shop/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10 -rl 5"
+    },
+    {
+      "name": "[polite] crawl ginandjuice.shop: time ≤ 1.05× the reference's",
+      "pass": true,
+      "detail": "azhaq 12.2s, reference 20.7s (the median of 3 below 20 s, one run above) | azhaq crawl -u https://ginandjuice.shop/ -depth 3 -silent -hints -rate 5 vs katana -u https://ginandjuice.shop/ -d 3 -jc -jsl -silent -nc -timeout 10 -c 10 -rl 5"
+    },
+    {
+      "name": "[polite] params: results ≥ the reference's, confirmed by the planted server's own list of the parameters it reads (wrong names count against)",
+      "pass": true,
+      "detail": "azhaq 8, reference 8; old bar: 9 of 9 = 100%; planted pages: azhaq 8 right 0 wrong, arjun 8 right 0 wrong, of 8; all pages azhaq 9, arjun 9, shared 9; time ×1.07 of the reference, memory ×1.43 of the reference (51 MB against 36 MB) | azhaq params -u http://127.0.0.1:3101/rest/products/search -w /home/runner/work/azhaq/azhaq/bench/.work/burp-parameter-names.txt -silent -rate 5 vs arjun -u http://127.0.0.1:3101/rest/products/search -w /home/runner/work/azhaq/azhaq/bench/.work/burp-parameter-names.txt -oJ /home/runner/work/azhaq/azhaq/bench/.work/params/arjun.json -q --disable-redirects --rate-limit 5"
+    },
+    {
+      "name": "[polite] params: time ≤ 1.05× the reference's",
+      "pass": false,
+      "detail": "azhaq 47.5s, reference 44.5s (the median of 3 below 20 s, one run above) | azhaq params -u http://127.0.0.1:3101/rest/products/search -w /home/runner/work/azhaq/azhaq/bench/.work/burp-parameter-names.txt -silent -rate 5 vs arjun -u http://127.0.0.1:3101/rest/products/search -w /home/runner/work/azhaq/azhaq/bench/.work/burp-parameter-names.txt -oJ /home/runner/work/azhaq/azhaq/bench/.work/params/arjun.json -q --disable-redirects --rate-limit 5"
+    }
+  ],
+  "runs": [
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 15.360034588,
+      "rss_mb": 214.14453125,
+      "anon_mb": 168.6171875,
+      "profile": "default"
+    },
+    {
+      "tool": "katana",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 13.709409068,
+      "rss_mb": 1165.65234375,
+      "anon_mb": 1130.48828125,
+      "profile": "default"
+    },
+    {
+      "tool": "jsluice",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 1.210376169,
+      "rss_mb": 172.8125,
+      "anon_mb": 164.96875,
+      "profile": "default"
+    },
+    {
+      "tool": "ffuf",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 0.288920202,
+      "rss_mb": 14.65234375,
+      "anon_mb": 6.25390625,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 2.628470502,
+      "rss_mb": 192.13671875,
+      "anon_mb": 147.1171875,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 2.865447895,
+      "rss_mb": 189.8125,
+      "anon_mb": 144.86328125,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 2.916050269,
+      "rss_mb": 193.546875,
+      "anon_mb": 148.59375,
+      "profile": "default"
+    },
+    {
+      "tool": "katana",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 13.754831573,
+      "rss_mb": 1158.60546875,
+      "anon_mb": 1123.25390625,
+      "profile": "default"
+    },
+    {
+      "tool": "katana",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 13.91838693,
+      "rss_mb": 1405.08984375,
+      "anon_mb": 1369.98828125,
+      "profile": "default"
+    },
+    {
+      "tool": "katana",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 13.787583228,
+      "rss_mb": 1669.14453125,
+      "anon_mb": 1634.234375,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "roles",
+      "seconds": 31.172544692,
+      "rss_mb": 225.05078125,
+      "anon_mb": 180.14453125,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "roles-login",
+      "seconds": 57.731643239,
+      "rss_mb": 213.71875,
+      "anon_mb": 168.2578125,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 18.834729252,
+      "rss_mb": 208.46875,
+      "anon_mb": 163.5078125,
+      "profile": "default"
+    },
+    {
+      "tool": "katana",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 7.966021423,
+      "rss_mb": 78.30078125,
+      "anon_mb": 41.33203125,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 13.876378701,
+      "rss_mb": 207.671875,
+      "anon_mb": 161.82421875,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 1.9692083550000001,
+      "rss_mb": 175.1484375,
+      "anon_mb": 130.19921875,
+      "profile": "default"
+    },
+    {
+      "tool": "katana",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 10.431535334,
+      "rss_mb": 49.76171875,
+      "anon_mb": 15.59375,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 0.841954282,
+      "rss_mb": 169.109375,
+      "anon_mb": 124.14453125,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 0.566578632,
+      "rss_mb": 174.08203125,
+      "anon_mb": 129.1171875,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 0.563205909,
+      "rss_mb": 169.51171875,
+      "anon_mb": 124.55078125,
+      "profile": "default"
+    },
+    {
+      "tool": "katana",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 10.425891761,
+      "rss_mb": 49.09375,
+      "anon_mb": 15.36328125,
+      "profile": "default"
+    },
+    {
+      "tool": "katana",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 10.43393194,
+      "rss_mb": 49.36328125,
+      "anon_mb": 15.4453125,
+      "profile": "default"
+    },
+    {
+      "tool": "katana",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 10.412728077,
+      "rss_mb": 48.953125,
+      "anon_mb": 15.22265625,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "https://ginandjuice.shop/",
+      "seconds": 281.944127666,
+      "rss_mb": 198.3046875,
+      "anon_mb": 151.30859375,
+      "profile": "default"
+    },
+    {
+      "tool": "katana",
+      "target": "https://ginandjuice.shop/",
+      "seconds": 20.559662322,
+      "rss_mb": 740.6484375,
+      "anon_mb": 705.23828125,
+      "profile": "default"
+    },
+    {
+      "tool": "jsluice",
+      "target": "https://ginandjuice.shop/",
+      "seconds": 0.261490948,
+      "rss_mb": 49.890625,
+      "anon_mb": 41.921875,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "https://ginandjuice.shop/",
+      "seconds": 11.786995563,
+      "rss_mb": 182.69921875,
+      "anon_mb": 135.7421875,
+      "profile": "default"
+    },
+    {
+      "tool": "katana",
+      "target": "https://ginandjuice.shop/",
+      "seconds": 20.582229956,
+      "rss_mb": 732.20703125,
+      "anon_mb": 696.73046875,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:39975/search",
+      "seconds": 0.058461256,
+      "rss_mb": 54.29296875,
+      "anon_mb": 14.20703125,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:39975/search",
+      "seconds": 0.0536964,
+      "rss_mb": 53.65234375,
+      "anon_mb": 13.6875,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:39975/search",
+      "seconds": 0.054372187,
+      "rss_mb": 53.75390625,
+      "anon_mb": 13.66796875,
+      "profile": "default"
+    },
+    {
+      "tool": "arjun",
+      "target": "http://127.0.0.1:39975/search",
+      "seconds": 0.531585093,
+      "rss_mb": 35.09375,
+      "anon_mb": 21.00390625,
+      "profile": "default"
+    },
+    {
+      "tool": "arjun",
+      "target": "http://127.0.0.1:39975/search",
+      "seconds": 0.471374156,
+      "rss_mb": 35.18359375,
+      "anon_mb": 21.1015625,
+      "profile": "default"
+    },
+    {
+      "tool": "arjun",
+      "target": "http://127.0.0.1:39975/search",
+      "seconds": 0.465303025,
+      "rss_mb": 35.1640625,
+      "anon_mb": 21.0625,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:39975/item",
+      "seconds": 0.052995375,
+      "rss_mb": 53.65234375,
+      "anon_mb": 13.5703125,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:39975/item",
+      "seconds": 0.05479251,
+      "rss_mb": 52.29296875,
+      "anon_mb": 12.328125,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:39975/item",
+      "seconds": 0.053722003,
+      "rss_mb": 53.5625,
+      "anon_mb": 13.59765625,
+      "profile": "default"
+    },
+    {
+      "tool": "arjun",
+      "target": "http://127.0.0.1:39975/item",
+      "seconds": 0.432988575,
+      "rss_mb": 35.28125,
+      "anon_mb": 21.0625,
+      "profile": "default"
+    },
+    {
+      "tool": "arjun",
+      "target": "http://127.0.0.1:39975/item",
+      "seconds": 0.431352337,
+      "rss_mb": 35.0234375,
+      "anon_mb": 21.01171875,
+      "profile": "default"
+    },
+    {
+      "tool": "arjun",
+      "target": "http://127.0.0.1:39975/item",
+      "seconds": 0.431132237,
+      "rss_mb": 35.08984375,
+      "anon_mb": 21,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:3101/rest/products/search",
+      "seconds": 0.853469297,
+      "rss_mb": 51.80078125,
+      "anon_mb": 11.8359375,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:3101/rest/products/search",
+      "seconds": 0.703264253,
+      "rss_mb": 52.19921875,
+      "anon_mb": 12.2421875,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:3101/rest/products/search",
+      "seconds": 0.706896386,
+      "rss_mb": 51.625,
+      "anon_mb": 11.65625,
+      "profile": "default"
+    },
+    {
+      "tool": "arjun",
+      "target": "http://127.0.0.1:3101/rest/products/search",
+      "seconds": 2.43335674,
+      "rss_mb": 36.38671875,
+      "anon_mb": 22.09765625,
+      "profile": "default"
+    },
+    {
+      "tool": "arjun",
+      "target": "http://127.0.0.1:3101/rest/products/search",
+      "seconds": 2.6254732179999998,
+      "rss_mb": 36.2421875,
+      "anon_mb": 21.9765625,
+      "profile": "default"
+    },
+    {
+      "tool": "arjun",
+      "target": "http://127.0.0.1:3101/rest/products/search",
+      "seconds": 2.418895557,
+      "rss_mb": 36.00390625,
+      "anon_mb": 21.90234375,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:3101/rest/user/whoami",
+      "seconds": 0.169241354,
+      "rss_mb": 52.0234375,
+      "anon_mb": 11.94140625,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:3101/rest/user/whoami",
+      "seconds": 0.210671771,
+      "rss_mb": 51.1171875,
+      "anon_mb": 11.15625,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:3101/rest/user/whoami",
+      "seconds": 0.164896788,
+      "rss_mb": 51.59375,
+      "anon_mb": 11.50390625,
+      "profile": "default"
+    },
+    {
+      "tool": "arjun",
+      "target": "http://127.0.0.1:3101/rest/user/whoami",
+      "seconds": 0.550318744,
+      "rss_mb": 35.09765625,
+      "anon_mb": 20.9296875,
+      "profile": "default"
+    },
+    {
+      "tool": "arjun",
+      "target": "http://127.0.0.1:3101/rest/user/whoami",
+      "seconds": 0.550235522,
+      "rss_mb": 35.05859375,
+      "anon_mb": 20.98046875,
+      "profile": "default"
+    },
+    {
+      "tool": "arjun",
+      "target": "http://127.0.0.1:3101/rest/user/whoami",
+      "seconds": 0.536103204,
+      "rss_mb": 34.98046875,
+      "anon_mb": 20.94921875,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:5102/users/v1",
+      "seconds": 0.524497874,
+      "rss_mb": 52.14453125,
+      "anon_mb": 12.18359375,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:5102/users/v1",
+      "seconds": 0.431367257,
+      "rss_mb": 51.83203125,
+      "anon_mb": 11.8671875,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:5102/users/v1",
+      "seconds": 0.39292103,
+      "rss_mb": 52.02734375,
+      "anon_mb": 11.94140625,
+      "profile": "default"
+    },
+    {
+      "tool": "arjun",
+      "target": "http://127.0.0.1:5102/users/v1",
+      "seconds": 3.431076077,
+      "rss_mb": 35.78515625,
+      "anon_mb": 21.65625,
+      "profile": "default"
+    },
+    {
+      "tool": "arjun",
+      "target": "http://127.0.0.1:5102/users/v1",
+      "seconds": 3.459800092,
+      "rss_mb": 35.765625,
+      "anon_mb": 21.65625,
+      "profile": "default"
+    },
+    {
+      "tool": "arjun",
+      "target": "http://127.0.0.1:5102/users/v1",
+      "seconds": 3.441819252,
+      "rss_mb": 35.84765625,
+      "anon_mb": 21.671875,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "https://ginandjuice.shop/catalog",
+      "seconds": 5.278342585,
+      "rss_mb": 57.87109375,
+      "anon_mb": 15.6953125,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "https://ginandjuice.shop/catalog",
+      "seconds": 5.309963289,
+      "rss_mb": 57.21875,
+      "anon_mb": 15.13671875,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "https://ginandjuice.shop/catalog",
+      "seconds": 5.319771331,
+      "rss_mb": 57.5703125,
+      "anon_mb": 15.37109375,
+      "profile": "default"
+    },
+    {
+      "tool": "arjun",
+      "target": "https://ginandjuice.shop/catalog",
+      "seconds": 8.560368284,
+      "rss_mb": 43.14453125,
+      "anon_mb": 27.01953125,
+      "profile": "default"
+    },
+    {
+      "tool": "arjun",
+      "target": "https://ginandjuice.shop/catalog",
+      "seconds": 6.397583697,
+      "rss_mb": 43.8515625,
+      "anon_mb": 27.7421875,
+      "profile": "default"
+    },
+    {
+      "tool": "arjun",
+      "target": "https://ginandjuice.shop/catalog",
+      "seconds": 6.307474348,
+      "rss_mb": 43.1953125,
+      "anon_mb": 27.05078125,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "https://ginandjuice.shop/blog/",
+      "seconds": 5.298281425,
+      "rss_mb": 57.6484375,
+      "anon_mb": 15.55859375,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "https://ginandjuice.shop/blog/",
+      "seconds": 5.348265786,
+      "rss_mb": 57.48046875,
+      "anon_mb": 15.40234375,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "https://ginandjuice.shop/blog/",
+      "seconds": 5.303390602,
+      "rss_mb": 57.8046875,
+      "anon_mb": 15.625,
+      "profile": "default"
+    },
+    {
+      "tool": "arjun",
+      "target": "https://ginandjuice.shop/blog/",
+      "seconds": 11.071234318,
+      "rss_mb": 43.203125,
+      "anon_mb": 27.046875,
+      "profile": "default"
+    },
+    {
+      "tool": "arjun",
+      "target": "https://ginandjuice.shop/blog/",
+      "seconds": 10.526016463,
+      "rss_mb": 43.08984375,
+      "anon_mb": 26.8203125,
+      "profile": "default"
+    },
+    {
+      "tool": "arjun",
+      "target": "https://ginandjuice.shop/blog/",
+      "seconds": 10.565455013,
+      "rss_mb": 42.96875,
+      "anon_mb": 26.98046875,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 17.24327121,
+      "rss_mb": 214.69140625,
+      "anon_mb": 169.55078125,
+      "profile": "polite"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 17.24566596,
+      "rss_mb": 183.54296875,
+      "anon_mb": 138.53125,
+      "profile": "polite"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 17.231569331,
+      "rss_mb": 184.20703125,
+      "anon_mb": 139.2578125,
+      "profile": "polite"
+    },
+    {
+      "tool": "katana",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 16.677520032,
+      "rss_mb": 1666.9375,
+      "anon_mb": 1632.15234375,
+      "profile": "polite"
+    },
+    {
+      "tool": "katana",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 16.637309596,
+      "rss_mb": 1711.60546875,
+      "anon_mb": 1676.44140625,
+      "profile": "polite"
+    },
+    {
+      "tool": "katana",
+      "target": "http://127.0.0.1:3101/",
+      "seconds": 16.619101928,
+      "rss_mb": 1422.28125,
+      "anon_mb": 1386.9296875,
+      "profile": "polite"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 0.674691304,
+      "rss_mb": 168.6796875,
+      "anon_mb": 123.74609375,
+      "profile": "polite"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 0.686766272,
+      "rss_mb": 177.12890625,
+      "anon_mb": 132.1640625,
+      "profile": "polite"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 0.68633154,
+      "rss_mb": 169.21875,
+      "anon_mb": 124.2578125,
+      "profile": "polite"
+    },
+    {
+      "tool": "katana",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 10.571887535,
+      "rss_mb": 48.9453125,
+      "anon_mb": 15.40234375,
+      "profile": "polite"
+    },
+    {
+      "tool": "katana",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 10.580044626,
+      "rss_mb": 48.625,
+      "anon_mb": 14.76953125,
+      "profile": "polite"
+    },
+    {
+      "tool": "katana",
+      "target": "http://127.0.0.1:5102/",
+      "seconds": 10.510471578,
+      "rss_mb": 48.875,
+      "anon_mb": 15.1484375,
+      "profile": "polite"
+    },
+    {
+      "tool": "azhaq",
+      "target": "https://ginandjuice.shop/",
+      "seconds": 12.176586248,
+      "rss_mb": 184.859375,
+      "anon_mb": 137.84765625,
+      "profile": "polite"
+    },
+    {
+      "tool": "katana",
+      "target": "https://ginandjuice.shop/",
+      "seconds": 20.698015735,
+      "rss_mb": 747.09765625,
+      "anon_mb": 711.375,
+      "profile": "polite"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:43169/search",
+      "seconds": 22.03752563,
+      "rss_mb": 51.23046875,
+      "anon_mb": 11.26953125,
+      "profile": "polite"
+    },
+    {
+      "tool": "arjun",
+      "target": "http://127.0.0.1:43169/search",
+      "seconds": 21.170717891,
+      "rss_mb": 35.08984375,
+      "anon_mb": 21.0078125,
+      "profile": "polite"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:43169/item",
+      "seconds": 16.827107934,
+      "rss_mb": 50.81640625,
+      "anon_mb": 10.859375,
+      "profile": "polite"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:43169/item",
+      "seconds": 16.8270051,
+      "rss_mb": 51.328125,
+      "anon_mb": 11.36328125,
+      "profile": "polite"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:43169/item",
+      "seconds": 16.831135194,
+      "rss_mb": 50.66015625,
+      "anon_mb": 10.69921875,
+      "profile": "polite"
+    },
+    {
+      "tool": "arjun",
+      "target": "http://127.0.0.1:43169/item",
+      "seconds": 15.119470517,
+      "rss_mb": 35.11328125,
+      "anon_mb": 20.9609375,
+      "profile": "polite"
+    },
+    {
+      "tool": "arjun",
+      "target": "http://127.0.0.1:43169/item",
+      "seconds": 15.117234281,
+      "rss_mb": 35.01171875,
+      "anon_mb": 21.0078125,
+      "profile": "polite"
+    },
+    {
+      "tool": "arjun",
+      "target": "http://127.0.0.1:43169/item",
+      "seconds": 15.118447402,
+      "rss_mb": 35.0546875,
+      "anon_mb": 20.9765625,
+      "profile": "polite"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:3101/rest/products/search",
+      "seconds": 8.651494913,
+      "rss_mb": 51.51171875,
+      "anon_mb": 11.421875,
+      "profile": "polite"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:3101/rest/products/search",
+      "seconds": 8.639582809,
+      "rss_mb": 51.453125,
+      "anon_mb": 11.4921875,
+      "profile": "polite"
+    },
+    {
+      "tool": "azhaq",
+      "target": "http://127.0.0.1:3101/rest/products/search",
+      "seconds": 8.636565658,
+      "rss_mb": 51.20703125,
+      "anon_mb": 11.2421875,
+      "profile": "polite"
+    },
+    {
+      "tool": "arjun",
+      "target": "http://127.0.0.1:3101/rest/products/search",
+      "seconds": 8.163253769,
+      "rss_mb": 35.8984375,
+      "anon_mb": 21.828125,
+      "profile": "polite"
+    },
+    {
+      "tool": "arjun",
+      "target": "http://127.0.0.1:3101/rest/products/search",
+      "seconds": 8.161018326,
+      "rss_mb": 36.1171875,
+      "anon_mb": 21.953125,
+      "profile": "polite"
+    },
+    {
+      "tool": "arjun",
+      "target": "http://127.0.0.1:3101/rest/products/search",
+      "seconds": 8.170630603,
+      "rss_mb": 36.2421875,
+      "anon_mb": 22.01953125,
+      "profile": "polite"
+    }
+  ],
+  "units": [
+    {
+      "name": "default:apps",
+      "checks": 21,
+      "runs": 28
+    },
+    {
+      "name": "default:params",
+      "checks": 3,
+      "runs": 42
+    },
+    {
+      "name": "polite:apps",
+      "checks": 6,
+      "runs": 14
+    },
+    {
+      "name": "polite:params",
+      "checks": 2,
+      "runs": 14
+    }
+  ]
+}
