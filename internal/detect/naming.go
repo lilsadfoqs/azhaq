@@ -48,9 +48,11 @@ func Product(title string) string {
 
 func isBreak(c byte) bool { return c == ' ' || c == '-' || c == '\t' }
 
+var spacer = strings.NewReplacer("-", " ", "_", " ")
+
 // Humanise makes a matcher name readable: "-" and "_" become spaces.
 func Humanise(name string) string {
-	return strings.TrimSpace(strings.NewReplacer("-", " ", "_", " ").Replace(name))
+	return strings.TrimSpace(spacer.Replace(name))
 }
 
 // MatcherNamed reports whether a template names its products through matcher

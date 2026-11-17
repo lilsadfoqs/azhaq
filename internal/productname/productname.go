@@ -37,11 +37,15 @@ func words(s string) []string {
 	})
 }
 
+// foldDrops removes what Key folds away. One replacer for all calls: a new
+// one built its tables for every template at load.
+var foldDrops = strings.NewReplacer(" ", "", "-", "", "_", "", ".", "")
+
 // Key folds a product name for comparison: case, spaces, dashes, underscores
 // and dots, and the usual spellings of one product (Apache httpd, OpenSSH).
 func Key(s string) string {
 	s = strings.ToLower(strings.TrimSpace(s))
-	s = strings.NewReplacer(" ", "", "-", "", "_", "", ".", "").Replace(s)
+	s = foldDrops.Replace(s)
 	switch s {
 	case "apache", "apachehttpserver", "httpd":
 		return "apachehttpd"

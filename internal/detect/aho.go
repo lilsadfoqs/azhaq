@@ -1,6 +1,9 @@
 package detect
 
-import "slices"
+import (
+	"slices"
+	"strings"
+)
 
 // ac is an Aho-Corasick automaton over bytes, laid out to stay small with
 // tens of thousands of needles. The original design is in
@@ -27,6 +30,12 @@ type acBuilder struct {
 	ch    []byte
 	depth []uint8
 	outs  map[int32][]int32
+	pend  []acNeedle // added, not yet in the trie
+}
+
+type acNeedle struct {
+	s  string
+	id int32
 }
 
 func newACBuilder() *acBuilder {
@@ -42,38 +51,49 @@ func (b *acBuilder) reserve(n int) {
 	b.depth = slices.Grow(b.depth, n)
 }
 
-func (b *acBuilder) child(n int32, c byte) int32 {
-	for k := b.first[n]; k >= 0; k = b.next[k] {
-		if b.ch[k] == c {
-			return k
-		}
-	}
-	return -1
+// add records a needle; build puts them in the trie.
+func (b *acBuilder) add(needle string, id int32) {
+	b.pend = append(b.pend, acNeedle{needle, id})
 }
 
-func (b *acBuilder) add(needle string, id int32) {
-	n := int32(0)
-	for i := 0; i < len(needle); i++ {
-		k := b.child(n, needle[i])
-		if k < 0 {
-			k = int32(len(b.first))
+// insert puts the needles in the trie in byte order. A needle then shares
+// the longest prefix it can with the one before it and only makes nodes
+// past it, so no node is searched for a child (56,000 needles of about 13
+// bytes made 300 ms of that).
+func (b *acBuilder) insert() {
+	slices.SortStableFunc(b.pend, func(x, y acNeedle) int { return strings.Compare(x.s, y.s) })
+	path := []int32{0} // the nodes of the previous needle, from the root
+	prev := ""
+	for _, nd := range b.pend {
+		l := 0
+		for l < len(prev) && l < len(nd.s) && prev[l] == nd.s[l] {
+			l++
+		}
+		path = path[:l+1]
+		n := path[l]
+		for i := l; i < len(nd.s); i++ {
+			k := int32(len(b.first))
 			b.first = append(b.first, -1)
-			b.next = append(b.next, b.first[n])
-			b.ch = append(b.ch, needle[i])
+			b.next = append(b.next, b.first[n]) // ascending, so the list reads descending
+			b.ch = append(b.ch, nd.s[i])
 			d := b.depth[n]
 			if d < 255 {
 				d++
 			}
 			b.depth = append(b.depth, d)
 			b.first[n] = k
+			n = k
+			path = append(path, n)
 		}
-		n = k
+		b.outs[n] = append(b.outs[n], nd.id)
+		prev = nd.s
 	}
-	b.outs[n] = append(b.outs[n], id)
+	b.pend = nil
 }
 
 // build renumbers nodes in BFS order so the shallow ones are a prefix.
 func (b *acBuilder) build() *ac {
+	b.insert()
 	total := len(b.first)
 	order := make([]int32, 0, total) // new id -> old id
 	order = append(order, 0)
@@ -166,17 +186,14 @@ func (b *acBuilder) build() *ac {
 	return a
 }
 
-// sortedChildren appends the children of n, in byte order, to kids.
+// sortedChildren appends the children of n, in byte order, to kids: the
+// list insert made runs from the largest byte down.
 func (b *acBuilder) sortedChildren(kids []int32, n int32) []int32 {
 	base := len(kids)
 	for k := b.first[n]; k >= 0; k = b.next[k] {
 		kids = append(kids, k)
 	}
-	for i := base + 1; i < len(kids); i++ {
-		for j := i; j > base && b.ch[kids[j]] < b.ch[kids[j-1]]; j-- {
-			kids[j], kids[j-1] = kids[j-1], kids[j]
-		}
-	}
+	slices.Reverse(kids[base:])
 	return kids
 }
 
