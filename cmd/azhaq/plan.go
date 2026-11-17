@@ -88,6 +88,9 @@ type runPlan struct {
 	// reading an API description are not known to a plan, which sends
 	// nothing; a run names those in its summary as it finds them.
 	StateChanging []stateChangeEntry `json:"state_changing,omitempty"`
+	// PortsLeftOut: with -ports top-100 or top-1000, the service ports -ports default asks that it leaves out.
+	PortsLeftOut *portsLeftOut `json:"ports_left_out,omitempty"`
+	portsSpec    string
 }
 
 // planAXFR is the zone transfer of one name, as dns -axfr would go about it.
@@ -132,6 +135,9 @@ type planRequests struct {
 // sendLimits are the options that bound or change what a run sends to its
 // targets.
 type sendLimits struct {
+	portsLeft *portsLeftOut // the service ports a named set narrower than default leaves out
+	portsSpec string        // -ports as given
+
 	max          int64  // requests at most; 0: no cap
 	by           string // the option that set max
 	noFavicon    bool
@@ -396,6 +402,7 @@ func planTransfers(seeds []types.Seed, b engine.Budgets, resolvers []string) []p
 func planFor(cat *catalog.Catalog, seeds []types.Seed, b engine.Budgets, paths []string, limits map[string]string, send sendLimits, rep *report) runPlan {
 	p := runPlan{Collectors: map[string]string{}, Limits: limits, Skipped: slices.Clone(rep.Skipped)}
 	p.StateChanging = stateChangesOfSeeds(seeds, b.Scope, send.holdGiven)
+	p.PortsLeftOut, p.portsSpec = send.portsLeft, send.portsSpec
 	p.Requests = planRequests{Sources: map[string]int{}, Cap: send.max, scoped: !b.Scope.Empty()}
 	if send.max > 0 {
 		p.Requests.CapBy = send.by
@@ -653,6 +660,9 @@ func printPlanText(w io.Writer, p runPlan) {
 	}
 	for _, s := range p.Sends {
 		fmt.Fprintf(w, "sends: %s\n", s)
+	}
+	if p.PortsLeftOut != nil {
+		fmt.Fprintf(w, "ports left out: %s\n", p.PortsLeftOut.line("-ports", p.portsSpec))
 	}
 	if p.Advisories != "" {
 		fmt.Fprintf(w, "advisories: %s\n", p.Advisories)

@@ -86,6 +86,8 @@ type Collector struct {
 	Also map[string][]int
 	// NoPorts are ports never asked, in either pass (-ep of the ports command).
 	NoPorts map[int]bool
+	// PortsFlag is the option the notes name the ports by (-p of the ports command; "" is -ports).
+	PortsFlag string
 
 	mu   sync.Mutex
 	byIP map[string]*scan // one scan per address, however many names point to it
@@ -424,6 +426,7 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		if len(c.UDPPorts) > 0 && !edge && s.up && c.Discover != DiscoverOnly {
 			c.udpRow(row, udp, len(c.UDPPorts))
 		}
+		c.quietNote(row, ports)
 		if s.unprobed > 0 {
 			row["unprobed"] = s.unprobed
 		}

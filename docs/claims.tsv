@@ -2102,3 +2102,11 @@ hunt.icon-lead-below-identifications	docs/commands/hunt.md	It ranks below every 
 hunt.icon-lead	docs/commands/hunt.md	A product named only by the hash of an icon is not an identification but a lead	test:cmd/azhaq:TestRunTreatsAFaviconAloneAsALead
 run.icon-not-an-identification	docs/commands/run.md	A product named only by the hash of an icon is not an identification.	test:cmd/azhaq:TestRunTreatsAFaviconAloneAsALead
 run.icon-shared-by-sites	docs/commands/run.md	An icon is shared by every site built from the same template or framework, so its hash names no product by itself.	note:the reason an icon alone is a lead, an explanation and not a behaviour
+ports.left-out-named	docs/commands/ports.md	leave out the service ports that `default` adds, and the summary names them	test:cmd/azhaq:TestNarrowPortSetNamesTheServicePortsLeftOut;test:internal/portscan:TestServiceGapIsWhatDefaultAddsToTheSet,TestNarrowNameIsANamedSetNarrowerThanDefault
+ports.left-out-explicit	docs/commands/ports.md	A list of ports (`-p 22,80`) has no such note.	test:cmd/azhaq:TestNarrowPortSetNamesTheServicePortsLeftOut
+ports.quiet-host-note	docs/commands/ports.md	gets the note `no port answered among the N asked; -p default adds M service ports	test:cmd/azhaq:TestQuietHostNamesWhatDefaultWouldAdd
+ports.quiet-host-only-a-note	docs/commands/ports.md	It is a note: nothing more is asked.	test:cmd/azhaq:TestQuietHostNamesWhatDefaultWouldAdd,TestNarrowPortSetNamesTheServicePortsLeftOut
+run.left-out-named	docs/commands/run.md	leave out the service ports that `default` adds, and the summary names them	test:cmd/azhaq:TestNarrowPortSetNamesTheServicePortsLeftOut,TestPlanNamesTheServicePortsANarrowSetLeavesOut
+run.quiet-host-note	docs/commands/run.md	gets the note `no port answered among the N asked; -ports default adds M service ports	test:cmd/azhaq:TestQuietHostNamesWhatDefaultWouldAdd
+run.left-out-explicit	docs/commands/run.md	A list of ports has the host note only; no port is added.	test:cmd/azhaq:TestNarrowPortSetNamesTheServicePortsLeftOut,TestQuietHostNamesWhatDefaultWouldAdd
+plan.ports-left-out	docs/commands/plan.md	the service ports `-ports default` asks that the set leaves out	test:cmd/azhaq:TestPlanNamesTheServicePortsANarrowSetLeavesOut
