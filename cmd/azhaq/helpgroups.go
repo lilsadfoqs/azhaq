@@ -50,7 +50,7 @@ var helpSpecs = map[string]helpSpec{
 				port-proxy-auth port-rate port-retries port-seed port-skip port-source-ip port-threshold port-timeout
 				port-unnamed port-workers shot-codes shot-format shot-fullpage shot-html shot-js shot-quality
 				shot-size shot-timeout shot-wait urls urls-archive urls-blacklist urls-fc urls-fp urls-from
-				urls-ft urls-keep-junk urls-max urls-mc urls-mt urls-pages urls-pause urls-proxy urls-raw urls-retries
+				urls-ft urls-keep-junk urls-max urls-mc urls-mt urls-pages urls-pause urls-proxy urls-raw urls-raw-urls urls-retries
 				urls-source urls-sources urls-subs urls-to
 			`,
 		},
@@ -187,7 +187,7 @@ var helpSpecs = map[string]helpSpec{
 	"urls": {
 		groups: []helpGroup{
 			{"Targets and input", `d dL`},
-			{"What to ask", `providers provider-config archive raw subs keep-junk`},
+			{"What to ask", `providers provider-config archive raw raw-urls subs keep-junk`},
 			{"Matchers and filters", `mc mt ft blacklist fp from to`},
 			{"Spot-check the live site", `live live-rate live-max live-proxy send-state-changing`},
 			{"Pace and limits", `urls-max urls-pages urls-pause urls-threads urls-timeout retries timeout rate max-requests`},

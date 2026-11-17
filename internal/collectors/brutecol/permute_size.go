@@ -106,3 +106,17 @@ func PermuteLeft(open []string) int {
 	asked, total := PermuteProgress(open)
 	return total - asked
 }
+
+// PermuteHeldOut is how many of the names hosts make the scope held out: they
+// were never asked and a resume does not ask them either.
+func PermuteHeldOut(hosts []string) int {
+	progress.mu.Lock()
+	defer progress.mu.Unlock()
+	n := 0
+	for _, name := range PermuteNames(hosts) {
+		if progress.held[name] && !progress.asked[name] {
+			n++
+		}
+	}
+	return n
+}

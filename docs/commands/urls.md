@@ -5,7 +5,7 @@ Lists the URLs that web archives hold for a domain: the Wayback Machine, Common 
 ## Synopsis
 
 ```
-azhaq urls -d DOMAIN | -dL FILE | DOMAIN… | stdin  [-subs] [-providers wayback,otx,…] [-mc/-fc/-mt/-ft LIST] [-from/-to YYYYMM] [-blacklist EXT,…] [-fp] [-raw] [-keep-junk] [-live [-live-rate N] [-live-max N]] [-proxy URL] [-retries N] [-urls-threads N] [-o FILE] [-json]
+azhaq urls -d DOMAIN | -dL FILE | DOMAIN… | stdin  [-subs] [-providers wayback,otx,…] [-mc/-fc/-mt/-ft LIST] [-from/-to YYYYMM] [-blacklist EXT,…] [-fp] [-raw] [-raw-urls] [-keep-junk] [-live [-live-rate N] [-live-max N]] [-proxy URL] [-retries N] [-urls-threads N] [-o FILE] [-json]
 ```
 
 ## Examples
@@ -29,17 +29,19 @@ azhaq urls -d example.com -json -keep-junk -live -live-max 200 -live-rate 5
 1. Takes domains from `-d`, `-dL`, arguments or stdin.
 2. Asks each archive for the URLs of the domain. `-providers` chooses the archives, and `-subs` adds the subdomains. Without `-subs`, `www.DOMAIN` counts as the domain itself, as the Wayback Machine's index files it.
 3. Reads pages from each archive, and asks again when an archive answers 429 or 503.
-4. Applies your filters, and prints each URL once unless you give `-raw`.
+4. Applies your filters, and prints each URL once unless you give `-raw` or `-raw-urls`.
 5. Holds out the URLs that `-allow`, `-deny` or `-scope` (with `-program`) do not allow, as in [dns](dns.md): they are not listed, `-live` sends them no request, and the summary counts them as `held out by scope`.
 
 ## Output
 
 By default URLs are printed as each archive page arrives, unsorted, when stdout is not a terminal. On a terminal, or with `-sort`, they are sorted and printed at the end. `-raw` prints every row of the domain the archives gave, as they gave it: no normalising, no junk filter, no deduplication (`-blacklist` and `-fp` still apply). `-o` appends to the file. With `-json` you get one object per URL. With `-db`, the workspace keeps every URL in `DB.urls.jsonl` beside it (one JSON object a line: `run`, `url`, `source`), written as the pages arrive, so a stopped run keeps what it read and `azhaq resume` adds to it. Its graph holds one example for each URL shape, 200 a domain at most: `export -format urls` writes all of them, and `query` lists the graph's rows and says how many archived URLs they stand for. The list is not kept for a run with no `-db`.
 
+A URL is printed normalised, which drops the default port: `http://example.com:80/x` and `http://example.com/x` are one line, `http://example.com/x`. gau prints each string as the archive has it, and `-raw-urls` does the same in text, `-json` and `-o`: one line for each distinct string, with the junk filter, `-blacklist` and `-fp` still applied. With `-json`, `url` is then the archive's string and `normalized` the normalised form. With `-db`, the workspace keeps the normalised URL as `url` and the archive's string in `raw` when it differs.
+
 | Field | Meaning |
 | --- | --- |
-| `url` | The archived URL, normalised (as the archives gave it with `-raw`). |
-| `normalized` | The normalised form, always there (with `-raw`, `url` is as the archive gave it and this is the normalised form). |
+| `url` | The archived URL, normalised (as the archives gave it with `-raw` or `-raw-urls`). |
+| `normalized` | The normalised form, always there (with `-raw` or `-raw-urls`, `url` is as the archive gave it and this is the normalised form). |
 | `raw_url` | The URL as the archive gave it, when that is not `url`. |
 | `source` | The archive that gave it first: `wayback`, `commoncrawl`, `otx`, `urlscan` or `arquivo`. When two give a URL, the one whose page arrived first is its source, and `archived` is that archive's. |
 | `archived` | When the archive captured it, in UTC (RFC 3339), as the archive states it: the Wayback Machine's and Common Crawl's capture timestamp (for the Wayback Machine the first capture of the URL, as `collapse=urlkey` keeps it), arquivo.pt's timestamp, OTX's `date` and urlscan.io's scan time. Left out when the archive gives none. |
@@ -155,6 +157,7 @@ A static file is listed, not dropped. `counts` has `static files listed`, the nu
 | `-provider-config` | string |  | API keys per source, YAML (default ~/.config/azhaq/providers.yaml, else subfinder's provider-config.yaml) |
 | `-archive` | string, repeatable |  | ask NAME's archive at this address instead of its own, as NAME=URL (a mirror or a test server; repeatable) |
 | `-raw` | bool |  | print the archived URLs exactly as the archives gave them: no normalising, junk filter or deduplication |
+| `-raw-urls` | bool |  | print each archived URL as the archive gave it, one line for each distinct string, as gau does (the default drops the default port, so http://example.com:80/x and http://example.com/x are one line); the junk filter still applies, and the workspace keeps the normalised URL with the archive's string beside it |
 | `-subs` | bool |  | also the subdomains of each domain: the archives are asked for *.DOMAIN (default: the name given, as gau does without --subs; azhaq run keeps the broader default) |
 | `-keep-junk` | bool |  | list the archived URLs left out as junk too, each labelled with its class and reason (-json), instead of only counting them |
 

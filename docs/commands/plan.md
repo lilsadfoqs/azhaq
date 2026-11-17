@@ -292,7 +292,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 | `-axfr` | bool |  | also plan the zone transfers azhaq dns -axfr would try for the domain and host targets: the name servers' lookups, and which name servers the scope would let it ask |
 
 <details>
-<summary>Other names, flags accepted with no effect and rarely used flags (84)</summary>
+<summary>Other names, flags accepted with no effect and rarely used flags (85)</summary>
 
 | Flag | Type | Default | Meaning | Kind |
 | --- | --- | --- | --- | --- |
@@ -374,6 +374,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 | `-urls-pause` | duration |  | pause between the requests of one archive (default: none, as gau asks; an archive that answers 429 or 503 is waited out) | rarely needed |
 | `-urls-proxy` | string |  | send the archive requests through this proxy: http://HOST:PORT, https:// or socks5:// | rarely needed |
 | `-urls-raw` | bool |  | print the archived URLs exactly as the archives gave them: no normalising, junk filter or deduplication | rarely needed |
+| `-urls-raw-urls` | bool |  | print each archived URL as the archive gave it, one line for each distinct string, as gau does (the default drops the default port, so http://example.com:80/x and http://example.com/x are one line); the junk filter still applies, and the workspace keeps the normalised URL with the archive's string beside it | rarely needed |
 | `-urls-retries` | int |  | times an archive request is asked again after a 429, 503 or network error, after its Retry-After (seconds or a date, however long) or 2, 5, 10, 20, then 30 s; 0 makes the first refusal final (default: a 429 or 503 is asked again until the archive's time, -urls-timeout, or the run's is spent, a network error 3 times; a wait longer than the time left ends the request at once, with the reason) | rarely needed |
 | `-urls-source` | bool |  | with -urls: each line is the URL, then after tabs the archive that gave it, when it captured it, and the junk class and reason of a URL that looks like noise | rarely needed |
 | `-urls-sources` | string |  | ask only these archives, comma-separated: wayback, commoncrawl, otx, urlscan, arquivo (default: all) | rarely needed |

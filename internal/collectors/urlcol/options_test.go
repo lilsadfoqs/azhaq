@@ -793,3 +793,73 @@ func TestEachArchiveRowsCountsAddUp(t *testing.T) {
 		t.Errorf("over_cap with no -urls-max reached: %v", row)
 	}
 }
+
+// AsGiven lists a URL once for each string the archives gave it as; the
+// rows and the workspace list keep the normalised URL, with the string beside it.
+func TestAsGivenListsEachStringAndKeepsTheNormalisedIdentity(t *testing.T) {
+	m := newMirror(t, map[string][]string{
+		"0": {"http://example.org:80/x", "http://example.org/x", "http://example.org:80/x", "http://example.org/y?a=1"},
+	})
+	list := filepath.Join(t.TempDir(), "w.db.urls.jsonl")
+	collect := func(asGiven bool) (rows []Row, summary map[string]any) {
+		o := Options{Bases: m.bases(), Client: m.Client(), Only: []string{"wayback"}, AsGiven: asGiven, Archive: list, RunID: fmt.Sprint("r", asGiven),
+			OnRow: func(r Row) { rows = append(rows, r) }}
+		summary, _, _, err := run(t, o, context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		return rows, summary
+	}
+	shown := func(rows []Row) (out []string) {
+		for _, r := range rows {
+			out = append(out, r.AsGiven().URL)
+		}
+		slices.Sort(out)
+		return out
+	}
+	rows, _ := collect(false)
+	var plain []string
+	for _, r := range rows {
+		plain = append(plain, r.URL)
+	}
+	slices.Sort(plain)
+	if !slices.Equal(plain, []string{"http://example.org/x", "http://example.org/y?a=1"}) {
+		t.Errorf("default: %v", plain)
+	}
+	rows, summary := collect(true)
+	want := []string{"http://example.org/x", "http://example.org/y?a=1", "http://example.org:80/x"}
+	slices.Sort(want)
+	if got := shown(rows); !slices.Equal(got, want) {
+		t.Errorf("as given: %v, want %v", got, want)
+	}
+	for _, r := range rows {
+		if strings.Contains(r.URL, ":80") {
+			t.Errorf("row identity %q is not normalised", r.URL)
+		}
+	}
+	// The summary counts URLs, not strings.
+	if summary["count"].(float64) != 2 {
+		t.Errorf("count %v, want 2", summary["count"])
+	}
+	var raws []string
+	b, _ := os.ReadFile(list)
+	for _, l := range strings.Split(strings.TrimSpace(string(b)), "\n") {
+		var a archiveLine
+		if json.Unmarshal([]byte(l), &a) != nil || a.Run != "rtrue" {
+			continue
+		}
+		if a.URL == "http://example.org:80/x" {
+			t.Errorf("the list keeps %q", a.URL)
+		}
+		raws = append(raws, a.Raw)
+	}
+	slices.Sort(raws)
+	if !slices.Equal(raws, []string{"", "", "http://example.org:80/x"}) {
+		t.Errorf("raw fields %q", raws)
+	}
+	for _, l := range strings.Split(strings.TrimSpace(string(b)), "\n") {
+		if strings.Contains(l, `"run":"rfalse"`) && strings.Contains(l, `"raw"`) {
+			t.Errorf("without AsGiven the list has no raw field: %s", l)
+		}
+	}
+}

@@ -289,6 +289,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	var urlsArchive stringsFlag
 	fs.Var(&urlsArchive, "urls-archive", "ask NAME's archive at this address instead of its own, as NAME=URL (a mirror or a test server; repeatable)")
 	urlsRaw := fs.Bool("urls-raw", false, "print the archived URLs exactly as the archives gave them: no normalising, junk filter or deduplication")
+	urlsRawURLs := fs.Bool("urls-raw-urls", false, "print each archived URL as the archive gave it, one line for each distinct string, as gau does (the default drops the default port, so http://example.com:80/x and http://example.com/x are one line); the junk filter still applies, and the workspace keeps the normalised URL with the archive's string beside it")
 	webPorts := fs.String("web-ports", "", "ports to probe on each hostname or address of the list, comma-separated (default: 443, falling back to 80; a target given with no port and nothing there is a note, not a failure)")
 	factsPath := fs.String("facts", "", "JSONL connector facts to ingest before native collectors")
 	execCmd := fs.String("exec", "", "connector command (seeds on stdin, facts on stdout)")
@@ -1215,7 +1216,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	}
 	opts.URLs = urlcol.Options{Keys: urlKeys, Out: *urlsOut, OutFrom: *urlsFrom, Timeout: *urlsTimeout,
 		Apex: !*urlsSubs, Only: splitList(*urlsSources), FirstPath: *urlsFP, Blacklist: splitList(*urlsBlacklist), Proxy: *urlsProxy,
-		MaxPages: *urlsPages, MaxURLs: *urlsMax, Raw: *urlsRaw, KeepJunk: *urlsKeepJunk, OnRow: urlSink}
+		MaxPages: *urlsPages, MaxURLs: *urlsMax, Raw: *urlsRaw, AsGiven: *urlsRawURLs, KeepJunk: *urlsKeepJunk, OnRow: urlSink}
 	if !rules.Empty() {
 		// -allow www.example.org names a host and not its domain: no domain is
 		// queued, so the archives are asked for the host itself.

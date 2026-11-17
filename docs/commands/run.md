@@ -433,7 +433,7 @@ Examples of what `notes` holds for a run:
 - `GraphQL URL: introspection disabled: schema recovered (partial: query Query: 2 fields (1 client, 1 probe), 140 words tried; not proof there is nothing more)`, or `introspection: full schema`. `GraphQL URL: an IDE page, not asked for its schema: URL on the same origin gave it whole` says why a GraphiQL page got no POST: see [show](show.md#recovering-a-schema-when-introspection-is-off).
 
 - `-interact: 12 clicks on 12 pages found 0 routes only a click named; …; 3 more addresses the clicks reached are not counted: a route already listed (a trailing slash makes no other route) or the catch-all page`: the count is of routes only a click named, by the map's route identity, so a trailing-slash variant of a route something else names is that route, and an address that answered with the page every unknown path gets is not counted.
-- `-permute: 3 names varied, 2164 variation names to ask (a name two of them make is asked once), about 4 min at -dns-rate 10 on 1 resolver; 75 asked, 2089 not asked when the run stopped (azhaq resume asks them)`: the size of the job, the time at the DNS rate, and what a stop left. [plan](plan.md#the-estimate) gives the same numbers before the run.
+- `-permute: 3 names varied, 2164 variation names to ask (a name two of them make is asked once), about 4 min at -dns-rate 10 on 1 resolver; 75 asked, 2089 not asked when the run stopped (azhaq resume asks them)`: the size of the job, the time at the DNS rate, and what a stop left. The names asked, the names not asked and the names the scope held out (`, 675 held out by the scope`: a variation outside it is never asked, and a resume does not ask it) add up to the variation names to ask. [plan](plan.md#the-estimate) gives the same numbers before the run.
 
 ### State-changing requests
 
@@ -711,7 +711,7 @@ azhaq run -url https://app.example.com/ -ports top-1000 -verify-logins -db app.d
 | `-strict-exit` | bool |  | exit 3 for any failure, a target among many included (the rule before 0.15); without it a run that did its job exits 0 and its summary counts and lists the failures |
 
 <details>
-<summary>Other names, flags accepted with no effect and rarely used flags (84)</summary>
+<summary>Other names, flags accepted with no effect and rarely used flags (85)</summary>
 
 | Flag | Type | Default | Meaning | Kind |
 | --- | --- | --- | --- | --- |
@@ -793,6 +793,7 @@ azhaq run -url https://app.example.com/ -ports top-1000 -verify-logins -db app.d
 | `-urls-pause` | duration |  | pause between the requests of one archive (default: none, as gau asks; an archive that answers 429 or 503 is waited out) | rarely needed |
 | `-urls-proxy` | string |  | send the archive requests through this proxy: http://HOST:PORT, https:// or socks5:// | rarely needed |
 | `-urls-raw` | bool |  | print the archived URLs exactly as the archives gave them: no normalising, junk filter or deduplication | rarely needed |
+| `-urls-raw-urls` | bool |  | print each archived URL as the archive gave it, one line for each distinct string, as gau does (the default drops the default port, so http://example.com:80/x and http://example.com/x are one line); the junk filter still applies, and the workspace keeps the normalised URL with the archive's string beside it | rarely needed |
 | `-urls-retries` | int |  | times an archive request is asked again after a 429, 503 or network error, after its Retry-After (seconds or a date, however long) or 2, 5, 10, 20, then 30 s; 0 makes the first refusal final (default: a 429 or 503 is asked again until the archive's time, -urls-timeout, or the run's is spent, a network error 3 times; a wait longer than the time left ends the request at once, with the reason) | rarely needed |
 | `-urls-source` | bool |  | with -urls: each line is the URL, then after tabs the archive that gave it, when it captured it, and the junk class and reason of a URL that looks like noise | rarely needed |
 | `-urls-sources` | string |  | ask only these archives, comma-separated: wayback, commoncrawl, otx, urlscan, arquivo (default: all) | rarely needed |
