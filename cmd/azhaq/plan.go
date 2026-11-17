@@ -748,19 +748,32 @@ func limitsOf(b engine.Budgets, maxRequests int64, rate float64, timeout time.Du
 }
 
 // connectTime says how long the connects of an estimate take at their pace,
-// when that is long enough to plan around: the pace is a ceiling, so it is
-// the least time. "" when the pace is none or the time is short.
+// when that is long enough to plan around. A fixed pace is a ceiling, so its
+// time is the least. The default pace is adaptive: it starts at the start
+// rate, so that is the time while the answers give no reason to go faster, and
+// at the ceiling the connects take the least they can. "" when the pace is
+// none or the time is short.
 func connectTime(connects int64, pace string) string {
+	took := func(rate float64) time.Duration {
+		return time.Duration(float64(connects) / rate * float64(time.Second))
+	}
+	var start, ceil float64
+	if n, _ := fmt.Sscanf(pace, "adaptive from %g/s up to %g/s", &start, &ceil); n == 2 && start > 0 && connects > 0 {
+		if took(start) < time.Minute {
+			return ""
+		}
+		return fmt.Sprintf("time: %s connects take about %s at the start rate of %g/s and at least %s at the ceiling of %g/s (the pace rises while answers come back in time and backs off on loss; -rate fixes it)",
+			commas(connects), aboutDuration(took(start)), start, aboutDuration(took(ceil)), ceil)
+	}
 	var rate float64
 	if _, err := fmt.Sscanf(pace, "%g/s", &rate); err != nil || rate <= 0 || connects <= 0 {
 		return ""
 	}
-	took := time.Duration(float64(connects) / rate * float64(time.Second))
-	if took < time.Minute {
+	if took(rate) < time.Minute {
 		return ""
 	}
 	return fmt.Sprintf("time: %s connects at %g/s take at least %s (the pace is a ceiling, so a slow host takes longer; -rate or -min-rate set it)",
-		commas(connects), rate, aboutDuration(took))
+		commas(connects), rate, aboutDuration(took(rate)))
 }
 
 // onlyLoopback says every target is on this machine's loopback, which a scan

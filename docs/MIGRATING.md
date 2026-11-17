@@ -520,7 +520,7 @@ Behaviour, fields and edge cases: [`azhaq ports`](commands/ports.md).
 | `-tp 100`, `-tp 1000`, `-tp full` | the same | Also `-p top-100`, which is naabu's default. The default here is the top 1000 and the usual ports of the services azhaq checks (1075 ports), then every port of each host that answered, as nmap's top 1000 and a full-range pass on the live hosts do. |
 | `-pf FILE`, `-ep LIST` | `-pf FILE`, `-ep LIST` | Ports to add, and ports to take out. |
 | `-eh`, `-ef` | `-eh`, `-ef` | Hosts not to scan. `-deny` does the same. |
-| `-rate 1000` | `-rate 1000` | Connects per second. The default is 1500, as naabu's connect scan. `127.0.0.1` is not paced unless a rate is given. |
+| `-rate 1000` | `-rate 1000` | Connects per second, a fixed ceiling. Without it the pace starts at 1500, as naabu's connect scan, and rises to 20,000 while the answers come back in time, as nmap's timing does. `127.0.0.1` is not paced unless a rate is given. |
 | `-c 25` | `-c 25` | Connects in flight. The default is as many as the rate allows, up to 20,000. naabu's is 25. |
 | `-retries 1` | `-retries 1` | More passes over the ports that did not answer. |
 | `-timeout 1000` in ms | `-connect-timeout 1000` | The wait for one connect. azhaq's `-timeout` is how long the run may take. |

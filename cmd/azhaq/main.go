@@ -367,8 +367,8 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	permute := fs.Bool("permute", false, "resolve variations of found names (active; the targets given are the scope unless -allow)")
 	portsSpec := fs.String("ports", "", "scan TCP ports: default (the top 1000 and the usual ports of the services azhaq names and checks, then every TCP port of each address that answered; what a range or an address among the targets gets when no -ports is given), top-100, top-1000, full or a list of ports, ranges and these names, such as 22,80,8000-8100 or top-100,8888; top-100 and top-1000 leave out the service ports that default adds, and the summary names them (active; the targets given are the scope unless -allow)")
 	portsUDP := fs.String("ports-udp", "", "ask UDP ports (active): top (about 25 common ones), full or a list of ports, ranges and these names, such as 53,123,161,1-1024 or top,5354; a reply is open, an ICMP unreachable closed, neither open|filtered (-ports none: UDP only)")
-	portRate := fs.Float64("port-rate", 0, "port connection attempts per second, a ceiling (0: 1500, as naabu's connect scan, and 127.0.0.1 unpaced)")
-	portMinRate := fs.Float64("port-min-rate", 0, "port connection attempts per second at least, as nmap's --min-rate: raises the pace to this when the pace (-port-rate, or the default 1500) is lower, and never lowers it")
+	portRate := fs.Float64("port-rate", 0, "port connection attempts per second, a fixed ceiling (0: adaptive from 1500 up to 20000 as the answers allow, and 127.0.0.1 unpaced)")
+	portMinRate := fs.Float64("port-min-rate", 0, "port connection attempts per second at least, as nmap's --min-rate: raises the pace to this when the pace (-port-rate, or the default's start of 1500) is lower, and never lowers it; at or under 1500 it is the least the default's adaptive pace backs off to")
 	portTimeout := fs.Duration("port-timeout", 0, "wait this long for one port to accept or refuse a connect (0: 1.5s)")
 	fs.Var((*msDuration)(portTimeout), "connect-timeout", "wait this long for one port to accept or refuse a connect, as ports -connect-timeout does: 1500, 1500ms or 2s (default: up to 1.5s, less once an address's answers show its round trip; one given is waited in full; same as -port-timeout; -timeout is the run's limit)")
 	portRetries := fs.Int("port-retries", -1, "more passes over the ports that neither accepted nor refused: n passes over all of them, 0 none (default: one, when few did not answer)")
@@ -1376,7 +1376,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 			// taken off.
 			send.max, send.by = *daily, "-daily-requests; what today's runs spent is not counted"
 		}
-		plan := buildPlan(cat, seeds, budgets, paths, paceLimits(limitsOf(budgets, *maxRequests, *rateFlag, *timeout, *daily), *rateFlag, *portRate, *portMinRate), send, rep)
+		plan := buildPlan(cat, seeds, budgets, paths, paceLimits(limitsOf(budgets, *maxRequests, *rateFlag, *timeout, *daily), *rateFlag, *portRate, *portMinRate, *hostRate), send, rep)
 		rep.Results, rep.what = len(plan.Targets), "targets"
 		if out.planInto != nil {
 			*out.planInto = plan
@@ -1544,7 +1544,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	var estimate *costEstimate
 	var portHosts []string // the names and addresses the port scan was planned on
 	if *resumeRun == "" {
-		pl := planFor(cat, seeds, budgets, paths, paceLimits(limitsOf(budgets, *maxRequests, *rateFlag, *timeout, *daily), *rateFlag, *portRate, *portMinRate), send, rep)
+		pl := planFor(cat, seeds, budgets, paths, paceLimits(limitsOf(budgets, *maxRequests, *rateFlag, *timeout, *daily), *rateFlag, *portRate, *portMinRate, *hostRate), send, rep)
 		ep := pl.Estimate
 		estimate = &ep
 		for _, t := range pl.Targets {

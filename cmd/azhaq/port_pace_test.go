@@ -82,8 +82,33 @@ func TestPlanSaysThePaceOfEachStage(t *testing.T) {
 		t.Errorf("the plan does not say %q:\n%s", want, out)
 	}
 	out, _, _ = cli(t, "plan", "-url", "http://127.0.0.1:9/", "-allow", "127.0.0.1", "-ports", "80")
-	if want := "pace: requests none, connects 1500/s, 127.0.0.1 unpaced"; !strings.Contains(out, want) {
+	if want := "pace: requests none, connects adaptive from 1500/s up to 20000/s, 127.0.0.1 unpaced, datagrams 1500/s, 127.0.0.1 unpaced"; !strings.Contains(out, want) {
 		t.Errorf("the plan does not say %q:\n%s", want, out)
+	}
+}
+
+// A pace given is a fixed ceiling and the plan says so: only a scan with none
+// is adaptive, and a -host-rate or -port-min-rate shapes the adaptive one (#451).
+func TestStagePacesSaysAdaptiveOnlyWhenNoneIsGiven(t *testing.T) {
+	for _, c := range []struct {
+		rate, port, min, host float64
+		want                  string
+	}{
+		{0, 0, 0, 0, "adaptive from 1500/s up to 20000/s, 127.0.0.1 unpaced"},
+		{0, 0, 600, 0, "adaptive from 1500/s up to 20000/s, not under 600/s, 127.0.0.1 unpaced"},
+		{0, 0, 0, 4000, "adaptive from 1500/s up to 4000/s, 127.0.0.1 unpaced"},
+		{0, 0, 0, 100, "adaptive from 1500/s up to 1500/s, 127.0.0.1 unpaced"}, // never under the start
+		{0, 700, 0, 5000, "700/s"},
+		{5000, 0, 0, 0, "5000/s"},
+		{0, 0, 3000, 0, "3000/s"},
+	} {
+		l := stagePaces(c.rate, c.port, c.min, c.host)
+		if l["connects-pace"] != c.want {
+			t.Errorf("rate %g port-rate %g min %g host-rate %g: connects %q, want %q", c.rate, c.port, c.min, c.host, l["connects-pace"], c.want)
+		}
+		if adaptive := strings.HasPrefix(c.want, "adaptive"); adaptive && l["datagrams-pace"] != "1500/s, 127.0.0.1 unpaced" {
+			t.Errorf("datagrams %q: they keep the start rate", l["datagrams-pace"])
+		}
 	}
 }
 
@@ -207,16 +232,18 @@ func TestPortsRatePacesTheConnects(t *testing.T) {
 }
 
 // The plan says how long the connects take at the pace: 16,776,960 connects
-// (a /24 at every port) at the default 1500 a second are 3.1 hours (#451).
+// (a /24 at every port) at the default's start of 1500 a second are 3.1 hours,
+// and at its ceiling of 20,000 as little as 14 minutes (#451).
 func TestPlanSaysHowLongTheConnectsTakeAtThePace(t *testing.T) {
 	for _, c := range []struct {
 		connects int64
 		pace     string
 		want     string
 	}{
-		{16776960, "1500/s, 127.0.0.1 unpaced", "take at least 3.1 h"},
+		{16776960, "adaptive from 1500/s up to 20000/s, 127.0.0.1 unpaced", "take about 3.1 h at the start rate of 1500/s and at least 14 min at the ceiling of 20000/s"},
 		{16776960, "10000/s", "take at least 28 min"},
-		{65535, "1500/s", ""}, // 44 s: nothing to plan around
+		{65535, "adaptive from 1500/s up to 20000/s", ""}, // 44 s: nothing to plan around
+		{65535, "1500/s", ""},
 		{16776960, "none", ""},
 		{0, "1500/s", ""},
 	} {

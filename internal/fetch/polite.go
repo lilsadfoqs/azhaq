@@ -92,6 +92,13 @@ func SetHostRate(perSecond float64) {
 	hostPaces = map[string]*rate.Limiter{}
 }
 
+// HostRate is the -host-rate given (0: none).
+func HostRate() float64 {
+	politeMu.Lock()
+	defer politeMu.Unlock()
+	return hostRate
+}
+
 func resetPolite() {
 	politeMu.Lock()
 	throttles = map[string]*throttle{}

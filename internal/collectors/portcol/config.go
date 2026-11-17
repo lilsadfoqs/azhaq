@@ -47,9 +47,13 @@ func (c *Collector) Apply(cfg Config) {
 	s.SourceIP, s.Payload = cfg.SourceIP, cfg.Payload
 	s.Proxy, s.ProxyAuth = cfg.Proxy, cfg.ProxyAuth
 	// A floor under the pace the scan would have anyway: -rate, or the default
-	// (which leaves this machine's loopback unpaced), never lower than it.
+	// (which leaves this machine's loopback unpaced), never lower than it. Above
+	// the default's start it is the pace; at or under it, the least the adaptive
+	// pace backs off to.
 	if base := s.Rate; cfg.MinRate > 0 && cfg.MinRate > base && (base > 0 || cfg.MinRate > portscan.DefaultRate) {
 		s.Rate = cfg.MinRate
+	} else if base == 0 {
+		s.MinRate = cfg.MinRate // the default pace backs off no lower
 	}
 	c.ExcludeCDN, c.Discover = cfg.ExcludeCDN, cfg.Discover
 	c.IPv4Only, c.IPv6Only, c.AllIPs = cfg.IPv4Only, cfg.IPv6Only, cfg.AllIPs
