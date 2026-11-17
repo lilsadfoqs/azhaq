@@ -514,6 +514,9 @@ func fillReport(rep *report, path string, seeds []types.Seed, ents []types.Entit
 	}
 	rep.Notes = append(rep.Notes, engine.CatchAllNotes(rows)...)
 	rep.Notes = append(rep.Notes, engine.CatchAllHeldNotes(rows, obs)...)
+	if n := engine.PrefixCatchAllNote(rows); n != "" {
+		rep.Notes = append(rep.Notes, n)
+	}
 	rep.Notes = append(rep.Notes, portcol.StoppedNotes()...)
 	rep.Notes = append(rep.Notes, engine.GraphQLNotes(obs)...)
 	rep.Notes = append(rep.Notes, pathscol.Notes(obs)...)

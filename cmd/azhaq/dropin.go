@@ -985,6 +985,9 @@ type dirsSink struct {
 	// controls are the requests asked for a name that cannot exist in a
 	// directory that held hits, and the hits of them that were folded.
 	controls, foldedHits int
+	// prefixed are the hits that answered like the prefix they open: listed,
+	// labelled.
+	prefixed int
 }
 
 func (d *dirsSink) see(_ types.Entity, o types.Observation) {
@@ -1012,9 +1015,13 @@ func (d *dirsSink) see(_ types.Entity, o types.Observation) {
 		if ctl != nil && !d.w.json {
 			return // counted in the summary's line of its directory
 		}
+		label, labelURL := prefixLabelOf(p)
 		d.mu.Lock()
 		if ctl == nil {
 			d.listed++
+		}
+		if label != "" {
+			d.prefixed++
 		}
 		d.mu.Unlock()
 		switch {
@@ -1035,6 +1042,9 @@ func (d *dirsSink) see(_ types.Entity, o types.Observation) {
 			if ctl != nil {
 				row["fold"], row["control"] = engine.FoldCatchAll, ctl.URL
 			}
+			if label != "" {
+				row["prefix_catchall"], row["answer"] = labelURL, label
+			}
 			d.w.obj(row)
 		case d.silent:
 			d.w.line(u)
@@ -1043,9 +1053,23 @@ func (d *dirsSink) see(_ types.Entity, o types.Observation) {
 			if f, _ := p["resultfile"].(string); f != "" {
 				res = ", Resultfile: " + f
 			}
+			if label != "" {
+				res += ", Answer: " + label
+			}
 			d.w.line(fmt.Sprintf("%s [Status: %d, Size: %d, Words: %d, Lines: %d%s]", u, intOf(p["status"]), intOf(p["length"]), intOf(p["words"]), intOf(p["lines"]), res))
 		}
 	}
+}
+
+// prefixLabelOf is the label of a hit that answered like its prefix's
+// control (fetch.PrefixControl) and the control's URL; empty for any other.
+func prefixLabelOf(p map[string]any) (label, controlURL string) {
+	m, _ := p["prefix_catchall"].(map[string]any)
+	u, _ := m["url"].(string)
+	if u == "" {
+		return "", ""
+	}
+	return fetch.Control{URL: u}.PrefixLabel(), u
 }
 
 // fold says u is a hit whose answer is its directory's control's, byte for
@@ -1114,6 +1138,9 @@ func (d *dirsSink) settle(rep *report) {
 		// One control for each directory that held hits, as many requests
 		// as lines: the ledger counts them with the sweep's.
 		rep.holds("folded hits, against the folds' counts", d.foldedHits, folded)
+	}
+	if d.prefixed > 0 {
+		rep.Notes = append(rep.Notes, fmt.Sprintf("%d hits answered like their prefix's catch-all; listed, ranked last (the answer of a name under their own path, each path taken out; the hit's row says which)", d.prefixed))
 	}
 	// Text lists the paths that are not folded; -json prints the folded rows too.
 	printed := d.listed

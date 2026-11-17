@@ -29,7 +29,7 @@ import (
 //     Takeover, FinalStatus, StackTrace and the trace excerpt, ErrorText and
 //     ErrorSample, Tech, Detected, IP, Cookies, Headers (the X- headers),
 //     Truncated, the JSON* fields, Hops, Auth, and Catchall with Control for
-//     an answer a catch-all gave, and the Favicon fields. Evidence fields are
+//     an answer a catch-all gave, PrefixCatchall, and the Favicon fields. Evidence fields are
 //     kept for rows written since they were added.
 //   - "application" of azhaq probe (httpcol.Spec set): also Method, ElapsedNS,
 //     Hash, BodyPreview, Extracts, CPE, WordPress, Knowledgebase, WebSocket,
@@ -86,10 +86,13 @@ type Row struct {
 	Catchall     bool                `json:"catchall,omitempty"`
 	Control      *fetch.Control      `json:"control,omitempty"` // the request a catch-all answer was compared with
 	ControlExact bool                `json:"control_exact,omitempty"`
-	Favicon      string              `json:"favicon,omitempty"`
-	FaviconURL   string              `json:"favicon_url,omitempty"`
-	FaviconMD5   string              `json:"favicon_md5,omitempty"`
-	FaviconPath  string              `json:"favicon_path,omitempty"`
+	// PrefixCatchall: the answer is also the answer of a name asked under its
+	// own path (fetch.PrefixControl); the row is listed, labelled.
+	PrefixCatchall *fetch.Control `json:"prefix_catchall,omitempty"`
+	Favicon        string         `json:"favicon,omitempty"`
+	FaviconURL     string         `json:"favicon_url,omitempty"`
+	FaviconMD5     string         `json:"favicon_md5,omitempty"`
+	FaviconPath    string         `json:"favicon_path,omitempty"`
 
 	// ViaProxy lists what only a header of the answer named ("Server",
 	// "X-Powered-By", "tech:Name:version"), when the -proxy the answer came

@@ -237,6 +237,11 @@ type hit struct {
 	// directory gave a name that cannot exist: the hit says nothing of a
 	// route, and the map folds it.
 	Control *fetch.Control `json:"-"`
+	// PrefixControl is set for a hit that answers with an error or a
+	// redirect that names its own path and is, with each path taken out, the
+	// answer of a name asked under the prefix it opens: the hit is listed,
+	// labelled as that prefix's catch-all.
+	PrefixControl *fetch.Control `json:"-"`
 }
 
 func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Observation) error) (types.RunMeta, error) {
@@ -282,6 +287,9 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 			}
 			if h.Control != nil {
 				row["catchall"], row["control"], row["control_exact"] = true, h.Control, true
+			}
+			if h.PrefixControl != nil {
+				row["prefix_catchall"] = h.PrefixControl
 			}
 			raw, _ := json.Marshal(row)
 			obs = append(obs, types.Observation{Collector: Name, Source: base, Kind: "url", Payload: raw, Confidence: 0.8, ObservedAt: time.Now().UTC()})
@@ -348,7 +356,7 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		"base": base, "words": len(c.Opts.Words), "extensions": c.Opts.Extensions, "requests": requests,
 		"hits": len(all), "filtered": filtered, "failed": failed, "rate_limited": limited, "depth": c.Opts.Depth,
 		"repeats": repeats, "held": note.shaped.Load(), "unfiltered": note.unfiltered(),
-		"controls": note.controls.Load(), "folded": note.folded.Load(),
+		"controls": note.controls.Load(), "folded": note.folded.Load(), "prefix_catchall": note.prefixed.Load(),
 		"keep_failed": c.keepFailed.Load(),
 	})
 	if err := emit(types.Observation{Collector: Name, Source: base, Kind: "dirs", Payload: summary, Confidence: 0.9, ObservedAt: time.Now().UTC()}); err != nil {
@@ -825,13 +833,14 @@ type prefixControl struct {
 	r   response
 }
 
-// judgePrefixes folds the hits whose answer names their own path (an error
+// judgePrefixes labels the hits whose answer names their own path (an error
 // page: Unexpected path: /api) and, with that path taken out, is the answer
 // of a control asked under the prefix they open (/api/<random> for /api),
-// with the control's own path taken out too. One control is asked for each
-// prefix, and is reused for the hits under it, the controls of the
-// directories above included; none is asked for a hit that is already folded.
-// A control the budget refuses, or that fails, leaves its hits as they are.
+// with the control's own path taken out too. The hits stay listed. One
+// control is asked for each prefix, and is reused for the hits under it, the
+// controls of the directories above included; none is asked for a hit that is
+// already folded. A control the budget refuses, or that fails, leaves its
+// hits unlabelled.
 func (c *Collector) judgePrefixes(ctx context.Context, host string, hs []exactHit, out2 []hit, ctls map[string]*prefixControl, note *sweepNote, out, halt *atomic.Bool) {
 	var todo []int
 	for i, h := range hs {
@@ -848,12 +857,12 @@ func (c *Collector) judgePrefixes(ctx context.Context, host string, hs []exactHi
 		}
 		for d := own; d != ""; d = upDir(d) {
 			if pc := ctls[d]; pc != nil && pc.ref != nil && pc.r.sameAs(hs[i].r) {
-				out2[i].Control = pc.ref
-				note.folded.Add(1)
+				out2[i].PrefixControl = pc.ref
+				note.prefixed.Add(1)
 				break
 			}
 		}
-		if out2[i].Control != nil || ctls[own] != nil || ctx.Err() != nil || out.Load() || halt.Load() {
+		if out2[i].PrefixControl != nil || ctls[own] != nil || ctx.Err() != nil || out.Load() || halt.Load() {
 			continue
 		}
 		name := fetch.ProbeName("dirs control " + own)
@@ -874,8 +883,8 @@ func (c *Collector) judgePrefixes(ctx context.Context, host string, hs []exactHi
 		note.controls.Add(1)
 		pc.ref, pc.r = &fetch.Control{URL: target, Status: ctl.Status, Size: ctl.Length}, ctl
 		if ctl.sameAs(hs[i].r) {
-			out2[i].Control = pc.ref
-			note.folded.Add(1)
+			out2[i].PrefixControl = pc.ref
+			note.prefixed.Add(1)
 		}
 	}
 }
@@ -1143,6 +1152,7 @@ type sweepNote struct {
 	shaped   atomic.Int64
 	controls atomic.Int64 // requests for a name that cannot exist, one for each directory hits were found in
 	folded   atomic.Int64 // hits whose answer was the control's own
+	prefixed atomic.Int64 // hits labelled as the catch-all of the prefix they open
 	mu       sync.Mutex
 	dirs     []string
 	// lost are the causes of the requests that were sent and got no answer,

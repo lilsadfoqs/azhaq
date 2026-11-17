@@ -25,6 +25,9 @@ type Request struct {
 	Data     string
 	Input    map[string]string
 	Position int // 1-based place in the job's inputs
+	// KeepFrom, when above 0, keeps the body of an answer whose status is at
+	// least this, whatever the sender was asked to keep.
+	KeepFrom int
 }
 
 // Has says whether keyword appears in the method, URL, a header or the body.

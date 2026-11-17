@@ -646,8 +646,8 @@ func cmdFuzz(args []string) error {
 	if st.Held > 0 {
 		rep.Notes = append(rep.Notes, fmt.Sprintf("%d answers looked like the page that names that cannot exist get (the same status, title and words, though no size, word count or line count is shared) and were held back, not listed (-ac=false lists them)", st.Held))
 	}
-	if st.PrefixHeld > 0 {
-		rep.Notes = append(rep.Notes, fmt.Sprintf("%d answers named their own path and were the answer of a name that cannot exist under it (the catch-all of the prefix they open, asked once for each) and were held back, not listed (-ac=false lists them)", st.PrefixHeld))
+	if st.PrefixHit > 0 {
+		rep.Notes = append(rep.Notes, fmt.Sprintf("%d matches answered like their prefix's catch-all; listed, ranked last (the answer of a name under their own path, each path taken out; each match's Control says which)", st.PrefixHit))
 	}
 	if st.Unfiltered {
 		rep.warned = true // the matches may hold wildcard answers: not a result to take as calibrated

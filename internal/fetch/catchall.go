@@ -395,27 +395,49 @@ func catchAllVerdict(ctx context.Context, c *http.Client, res Result) (shell, ju
 	}
 	ctl = b.control()
 	ctl.Exact = b.exact(fp)
-	if b.fp.matches(fp) {
-		return true, true, ctl
-	}
-	// An answer that names its own path may be the catch-all of the prefix it
-	// opens (/api answers like /api/<random>) though not of the directory it
-	// is in: that prefix is asked once, for this and every path under it.
-	if fp.echo {
-		own := strings.TrimSuffix(path, "/") + "/"
-		if pb := baselineFor(ctx, c, origin, own); pb != nil && pb != b && pb.ok && strings.HasPrefix(pb.url, origin+own) && pb.fp.matches(fp) {
-			pc := pb.control()
-			pc.Exact = pb.exact(fp)
-			return true, true, pc
-		}
-	}
-	return false, true, ctl
+	return b.fp.matches(fp), true, ctl
 }
 
 // exact says fp is this baseline's answer byte for byte once the path each
 // asked is taken out, not by shape.
 func (b *baseline) exact(fp fingerprint) bool {
 	return b.fp.status == fp.status && (isRedirect(fp.status) && b.fp.location == fp.location || !isRedirect(fp.status) && (b.fp.hash == fp.hash || b.fp.raw == fp.raw))
+}
+
+// PrefixControl is the control that res is the answer of too, when res is an
+// error page or a redirect (300 and above) that names its own path and, with
+// that path taken out, is the answer of a name asked under the prefix it opens
+// (/api/<random> for /api), with the control's path taken out too: res is
+// that prefix's catch-all answer, whatever the route behind it does for
+// another method. The control is one request for each prefix, reused for
+// every path under it. Nil when res is not such a page, or the control
+// answered another page. A caller lists the row, labelled; it is not dropped.
+func PrefixControl(ctx context.Context, c *http.Client, res Result) *Control {
+	switch res.Status {
+	case 0, http.StatusNotFound, http.StatusGone, http.StatusUnauthorized, http.StatusForbidden:
+		return nil
+	}
+	u, err := url.Parse(res.RequestURL)
+	if err != nil || u.Host == "" || res.Status < 300 {
+		return nil
+	}
+	path := u.EscapedPath()
+	if path == "" || path == "/" {
+		return nil
+	}
+	origin := u.Scheme + "://" + u.Host
+	fp := fingerprintOf(res, origin, requestTarget(u))
+	if !fp.echo {
+		return nil
+	}
+	own := strings.TrimSuffix(path, "/") + "/"
+	pb := baselineFor(ctx, c, origin, own)
+	if pb == nil || !pb.ok || !strings.HasPrefix(pb.url, origin+own) || !pb.fp.matches(fp) {
+		return nil
+	}
+	pc := pb.control()
+	pc.Exact = pb.exact(fp)
+	return pc
 }
 
 // rootShell: a page byte for byte the site root's answer for an unknown
@@ -641,6 +663,19 @@ func (c Control) String() string {
 		s += fmt.Sprintf(", %q", c.Title)
 	}
 	return s
+}
+
+// PrefixLabel is what a row says of an answer that is also its prefix's
+// control's: "the answer of /api/<random> too: this prefix's catch-all".
+func (c Control) PrefixLabel() string {
+	path := c.URL
+	if u, err := url.Parse(c.URL); err == nil && u.Path != "" {
+		path = u.EscapedPath()
+	}
+	if i := strings.LastIndex(path, "/"); i >= 0 {
+		path = path[:i+1] + "<random>"
+	}
+	return "the answer of " + path + " too: this prefix's catch-all"
 }
 
 // EchoFree is s with the path of requestURL taken out, in the forms an error

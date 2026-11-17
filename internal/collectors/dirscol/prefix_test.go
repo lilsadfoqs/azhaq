@@ -43,46 +43,52 @@ func echoApp(t *testing.T) (*httptest.Server, func() []string) {
 	return srv, func() []string { mu.Lock(); defer mu.Unlock(); return append([]string(nil), log...) }
 }
 
-// A hit whose answer names its own path and, with that path taken out, is the
-// answer of a control asked under the prefix it opens is that prefix's
-// catch-all: folded and counted, not listed. One control serves every hit under
-// its prefix (/api/ answers for /api and /api/v1), and a route that answers
-// 500 with another body stays a hit.
-func TestSweepFoldsAHitThatIsItsPrefixsCatchAll(t *testing.T) {
+// A hit that answers with an error page naming its own path and, with that
+// path taken out, is the answer of a control asked under the prefix it opens is
+// listed, labelled as that prefix's catch-all, and counted: no hit goes. One
+// control serves every hit under its prefix (/api/ answers for /api and
+// /api/x/y), and a route that answers 500 with another body is not labelled.
+func TestSweepLabelsAHitThatIsItsPrefixsCatchAll(t *testing.T) {
 	fetch.Reset()
 	srv, asked := echoApp(t)
 	words := []string{"api", "api/v1", "api/a&b", "api/x/y", "rest/user/login", "api/real", "nothing"}
 	c := New(srv.Client(), Options{Words: words, Rate: 1000, Set: allStatuses()})
 	rows, summary := sweepRows(t, c, srv.URL+"/")
-	folded := map[string]string{}
+	labelled := map[string]string{}
 	for p, m := range rows {
-		if m["catchall"] == true {
-			ctl := m["control"].(map[string]any)
-			folded[p] = strings.TrimPrefix(ctl["url"].(string), srv.URL)
+		if m["prefix_catchall"] != nil {
+			if m["catchall"] != nil {
+				t.Errorf("%s: labelled and folded", p)
+			}
+			ctl := m["prefix_catchall"].(map[string]any)
+			labelled[p] = strings.TrimPrefix(ctl["url"].(string), srv.URL)
 		}
 	}
-	for p, prefix := range map[string]string{"/api": "/api/", "/api/v1": "/api/", "/api/a&b": "/api/", "/api/x/y": "/api/", "/rest/user/login": "/rest/user/login/"} {
-		if !strings.HasPrefix(folded[p], prefix) || strings.Count(folded[p], "/") != strings.Count(prefix, "/") {
-			t.Errorf("%s: control %q, want one under %s (rows %v)", p, folded[p], prefix, rows[p])
+	for p, prefix := range map[string]string{"/api": "/api/", "/api/x/y": "/api/", "/rest/user/login": "/rest/user/login/"} {
+		if !strings.HasPrefix(labelled[p], prefix) || strings.Count(labelled[p], "/") != strings.Count(prefix, "/") {
+			t.Errorf("%s: control %q, want one under %s (rows %v)", p, labelled[p], prefix, rows[p])
 		}
 	}
-	if rows["/api/real"] == nil || rows["/api/real"]["catchall"] != nil || len(folded) != 5 {
-		t.Errorf("/api/real stays listed, 5 folded: %v, %v", folded, rows["/api/real"])
+	// Every hit is a row: the two the directory's own control folds (as before),
+	// the three labelled, and the route of its own.
+	if len(rows) != 6 || len(labelled) != 3 || rows["/api/real"] == nil || rows["/api/real"]["prefix_catchall"] != nil || rows["/api/real"]["catchall"] != nil {
+		t.Errorf("%d rows, labelled %v, /api/real %v", len(rows), labelled, rows["/api/real"])
 	}
-	// 7 words, 4 calibration names, and one control for each of /api/ (four
-	// hits), /api/real/ (measured, not the same page) and /rest/user/login/.
-	if n := len(asked()); n != 7+4+3 || summary["controls"] != 3.0 || summary["folded"] != 5.0 {
+	// 7 words, 4 calibration names, and one control for each of /api/ (the
+	// directory's, and the prefix of /api), /api/real/ (measured, not the same
+	// page) and /rest/user/login/.
+	if n := len(asked()); n != 7+4+3 || summary["controls"] != 3.0 || summary["folded"] != 2.0 || summary["prefix_catchall"] != 3.0 {
 		t.Errorf("%d requests, summary %v", len(asked()), summary)
 	}
 
-	// Calibration off is the user's own: no control, nothing folded.
+	// Calibration off is the user's own: no control, no label.
 	fetch.Reset()
 	srv2, asked2 := echoApp(t)
 	c = New(srv2.Client(), Options{Words: words, Rate: 1000, NoCalibration: true, Set: allStatuses()})
 	rows, summary = sweepRows(t, c, srv2.URL+"/")
 	for p, m := range rows {
-		if m["catchall"] != nil {
-			t.Errorf("-ac=false folded %s", p)
+		if m["catchall"] != nil || m["prefix_catchall"] != nil {
+			t.Errorf("-ac=false marked %s", p)
 		}
 	}
 	if len(asked2()) != len(words) || summary["controls"] != 0.0 {
@@ -90,9 +96,9 @@ func TestSweepFoldsAHitThatIsItsPrefixsCatchAll(t *testing.T) {
 	}
 }
 
-// A control that answers another page does not fold the hit, whatever the
+// A control that answers another page does not label the hit, whatever the
 // status: it is measured.
-func TestSweepKeepsAHitWhosePrefixAnswersAnotherPage(t *testing.T) {
+func TestSweepDoesNotLabelAHitWhosePrefixAnswersAnotherPage(t *testing.T) {
 	fetch.Reset()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch p := r.URL.Path; {
@@ -109,8 +115,8 @@ func TestSweepKeepsAHitWhosePrefixAnswersAnotherPage(t *testing.T) {
 	t.Cleanup(srv.Close)
 	c := New(srv.Client(), Options{Words: []string{"api"}, Rate: 1000, Set: allStatuses()})
 	rows, summary := sweepRows(t, c, srv.URL+"/")
-	if rows["/api"] == nil || rows["/api"]["catchall"] != nil || summary["controls"] != 1.0 || summary["folded"] != 0.0 {
-		t.Errorf("/api stays: %v, summary %v", rows["/api"], summary)
+	if rows["/api"] == nil || rows["/api"]["prefix_catchall"] != nil || summary["controls"] != 1.0 || summary["prefix_catchall"] != 0.0 {
+		t.Errorf("/api is listed, unlabelled: %v, summary %v", rows["/api"], summary)
 	}
 }
 

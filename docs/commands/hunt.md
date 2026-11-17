@@ -168,6 +168,7 @@ An **identification** is a listener the run named: a product, and a version or n
 
 - The score is the sum of the row's signals. Each signal counts once, at its highest weight.
 - Rows only a script names and the server did not confirm, and a `takeover-candidate` that is the row's only signal, come after every other row, whatever their score: see [Routes only a script names](#routes-only-a-script-names).
+- A path whose answer is also its prefix's catch-all (the map row's `answer` says `the answer of /api/<random> too: this prefix's catch-all`) comes after the rows the server answered for themselves, before the ones only a script names: it says least of whether the route behind it exists, and it is a row all the same.
 - Ties go to the target before fan-out, then to the row with more distinct signals, then by key. [Concepts](../CONCEPTS.md#reading-a-map-row) explains target and fan-out.
 - `-limit` (default 25) keeps the best rows. The summary counts what it left out.
 

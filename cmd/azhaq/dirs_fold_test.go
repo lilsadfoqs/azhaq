@@ -171,10 +171,11 @@ func TestDirsAgainstFfufAcOnACatchAllDirectory(t *testing.T) {
 }
 
 // A local app answers the shell for the root and a 500 page that names the
-// path asked under /api and /rest: dirs folds /api, /api/v1 and
-// /rest/user/login as the catch-all of the prefix each opens, with a control
-// asked there (one for /api/ and /api/v1), counted in the requests; run -dirs
-// folds the same; a route that answers 500 with a page of its own stays.
+// path asked under /api and /rest: dirs lists /api and /rest/user/login with
+// the label of the control asked under each (a counted request), and the
+// summary counts them; /api/v1 is folded by its directory's control as before;
+// run -dirs lists them too; a route that answers 500 with a page of its own
+// has no label.
 func prefixEchoApp(t *testing.T, asked *atomic.Int64) *httptest.Server {
 	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -197,7 +198,7 @@ func prefixEchoApp(t *testing.T, asked *atomic.Int64) *httptest.Server {
 	return srv
 }
 
-func TestDirsFoldsAnErrorPageThatNamesItsPath(t *testing.T) {
+func TestDirsLabelsAnErrorPageThatNamesItsPath(t *testing.T) {
 	var asked atomic.Int64
 	srv := prefixEchoApp(t, &asked)
 	wl := wlist(t, "api", "api/v1", "rest/user/login", "api/real", "nothing")
@@ -207,12 +208,28 @@ func TestDirsFoldsAnErrorPageThatNamesItsPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("%v\n%s", err, errOut)
 	}
-	if lines := strings.Split(strings.TrimSpace(out), "\n"); len(lines) != 1 || !strings.Contains(out, srv.URL+"/api/real ") {
-		t.Errorf("only /api/real is listed: %q", out)
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	if len(lines) != 3 || !strings.Contains(out, srv.URL+"/api/real ") {
+		t.Errorf("/api, /api/real and /rest/user/login are listed: %q", out)
 	}
-	if !strings.Contains(errOut, "folded catchall: 2 URLs of "+srv.URL+"/api/ answer as the control does: GET /api/") ||
-		!strings.Contains(errOut, "folded catchall: 1 URL of "+srv.URL+"/rest/user/login/ answer as the control does") {
-		t.Errorf("the folds are not in the summary:\n%s", errOut)
+	for _, l := range lines {
+		labelled := strings.Contains(l, "Answer: the answer of ")
+		switch {
+		case strings.HasPrefix(l, srv.URL+"/api "):
+			if !strings.Contains(l, "Answer: the answer of /api/<random> too: this prefix's catch-all") {
+				t.Errorf("/api has no label: %s", l)
+			}
+		case strings.HasPrefix(l, srv.URL+"/rest/user/login "):
+			if !strings.Contains(l, "Answer: the answer of /rest/user/login/<random> too: this prefix's catch-all") {
+				t.Errorf("/rest/user/login has no label: %s", l)
+			}
+		case labelled:
+			t.Errorf("a route of its own is labelled: %s", l)
+		}
+	}
+	if !strings.Contains(errOut, "2 hits answered like their prefix's catch-all; listed, ranked last") ||
+		!strings.Contains(errOut, "folded catchall: 1 URL of "+srv.URL+"/api/ answer as the control does") {
+		t.Errorf("the summary:\n%s", errOut)
 	}
 	// 5 words, 4 calibration names, and a control for /api/, /api/real/ and /rest/user/login/.
 	if got := asked.Load(); got != 5+4+3 {
@@ -225,12 +242,14 @@ func TestDirsFoldsAnErrorPageThatNamesItsPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("%v\n%s", err, errOut)
 	}
-	for _, p := range []string{"/api ", "/api/v1 ", "/rest/user/login "} {
-		if strings.Contains(out, srv.URL+p) {
-			t.Errorf("%s is folded in run: %s", p, out)
+	// run's own catch-all check folds /rest/user/login by its directory's
+	// control, as before; /api is listed with its label.
+	for _, p := range []string{"/api ", "/api/real "} {
+		if !strings.Contains(out, srv.URL+p) {
+			t.Errorf("%s is listed in run: %s", p, out)
 		}
 	}
-	if !strings.Contains(out, srv.URL+"/api/real ") {
-		t.Errorf("/api/real stays in run: %s", out)
+	if !strings.Contains(out, "the answer of /api/<random> too: this prefix's catch-all") || !strings.Contains(out+errOut, "1 hits answered like their prefix's catch-all; listed, ranked last") {
+		t.Errorf("run's summary:\n%s\n%s", out, errOut)
 	}
 }

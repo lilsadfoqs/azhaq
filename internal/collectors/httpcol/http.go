@@ -780,6 +780,12 @@ func (c *Collector) fetchFirst(ctx context.Context, raw string, rq *fetch.Req, f
 			row["control_exact"] = control.Exact
 		}
 	}
+	if !catchAll && !c.Probe && !bare {
+		// An error page that is also the answer of the prefix it opens: listed, labelled.
+		if pc := fetch.PrefixControl(ctx, c.Client, res); pc != nil {
+			row["prefix_catchall"] = pc
+		}
+	}
 	if !c.Probe {
 		learnAnswer(reqURL, res.Status, catchAll, control)
 	}

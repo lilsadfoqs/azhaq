@@ -86,6 +86,7 @@ func (e *engine) sameAsControl(r *Response, req *Request) *ControlRef {
 // prefixAnswer is what a name asked under a match's own path answered: the
 // control of the prefix that match opens.
 type prefixAnswer struct {
+	ref    ControlRef
 	status int
 	free   string // sum of the body with the path asked taken out; empty: no answer
 }
@@ -99,6 +100,11 @@ func prefixTemplate(t Template, keyword string) bool {
 		!strings.Contains(t.Method+t.Data, keyword)
 }
 
+// KeepErrorBodies is the status from which a body is kept when the keyword
+// ends the path: an error page or a redirect may be its prefix's catch-all;
+// a 2xx answer is only counted.
+const KeepErrorBodies = 300
+
 // pathFree is the sum of the body with the path of requestURL taken out, in
 // the forms an error page echoes it; ok is false when the body does not name it.
 func pathFree(requestURL string, body []byte) (sum string, ok bool) {
@@ -111,33 +117,36 @@ func pathFree(requestURL string, body []byte) (sum string, ok bool) {
 	return hex.EncodeToString(h[:8]), true
 }
 
-// prefixCatchAll says a match is the catch-all of the prefix it opens: its
-// answer names its own path and, with that taken out, is the answer of a
-// control asked at input/<random>, with the control's path taken out too. The
-// control is measured, one for each prefix, and kept for the matches under it;
-// the budget refusing it, or its failing, leaves the match listed. A match
-// that is already the same as a calibration answer says so by its control.
-func (e *engine) prefixCatchAll(ctx context.Context, t Template, input map[string]string, req *Request, r *Response) bool {
-	if !e.cfg.Calibrate || !e.prefixOK.Load() || r.Body == nil || r.Status < 300 || !prefixTemplate(t, e.cfg.CalKeyword) {
-		return false
+// prefixCatchAll says which control a match is the answer of too: it answers
+// with an error or a redirect that names its own path and, with that taken
+// out, is the answer of a control asked at input/<random>, with the control's
+// path taken out too. The match is listed, and says so. The control is
+// measured, one for each prefix, and kept for the matches under it; the budget
+// refusing it, or its failing, leaves the match unlabelled. A match that is
+// already the same as a calibration answer says so by that control. Nil when
+// there is none.
+func (e *engine) prefixCatchAll(ctx context.Context, t Template, input map[string]string, req *Request, r *Response) *ControlRef {
+	if !e.cfg.Calibrate || !e.prefixOK.Load() || r.Body == nil || r.Status < KeepErrorBodies || !prefixTemplate(t, e.cfg.CalKeyword) {
+		return nil
 	}
-	if r.Status >= 300 && r.Status < 400 && fetch.EchoFree(req.URL, r.Header.Get("Location")) == "\x00/" {
-		return false // a directory: it redirects to its own path with a slash
+	if r.Status < 400 && fetch.EchoFree(req.URL, r.Header.Get("Location")) == "\x00/" {
+		return nil // a directory: it redirects to its own path with a slash
 	}
 	free, ok := pathFree(req.URL, r.Body)
 	if !ok || e.sameAsControl(r, req) != nil {
-		return false
+		return nil
 	}
 	e.prefixMu.Lock()
 	defer e.prefixMu.Unlock()
 	own := req.URL + "/"
 	for p, a := range e.prefixes {
 		if strings.HasPrefix(own, p) && a.free != "" && a.status == r.Status && a.free == free {
-			return true
+			ref := a.ref
+			return &ref
 		}
 	}
 	if e.prefixes[own] != nil || ctx.Err() != nil || e.stop.Load() {
-		return false
+		return nil
 	}
 	a := &prefixAnswer{}
 	e.prefixes[own] = a
@@ -147,15 +156,21 @@ func (e *engine) prefixCatchAll(ctx context.Context, t Template, input map[strin
 	}
 	in[e.cfg.CalKeyword] = input[e.cfg.CalKeyword] + "/" + randomName(12)
 	creq := t.Expand(in)
+	creq.KeepFrom = KeepErrorBodies
 	if !e.inScope(&creq) || e.denied(&creq) {
-		return false
+		return nil
 	}
 	resp, err := e.send(ctx, &creq)
 	if err != nil {
-		return false
+		return nil
 	}
 	if cfree, ok := pathFree(creq.URL, resp.Body); ok {
+		a.ref = ControlRef{URL: creq.URL, Status: resp.Status, Size: resp.Length}
 		a.status, a.free = resp.Status, cfree
 	}
-	return a.free != "" && a.status == r.Status && a.free == free
+	if a.free != "" && a.status == r.Status && a.free == free {
+		ref := a.ref
+		return &ref
+	}
+	return nil
 }

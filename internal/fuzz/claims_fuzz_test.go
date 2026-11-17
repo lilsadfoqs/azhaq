@@ -74,12 +74,14 @@ func TestFlightVarAutoLooksInAllFourAndSaysWhenTheyDiffer(t *testing.T) {
 type keepSender struct {
 	mu    sync.Mutex
 	keeps []bool
+	froms []int // each request's KeepFrom
 	reply func(*Request) *Response
 }
 
 func (s *keepSender) Send(_ context.Context, req *Request, keep bool) (*Response, error) {
 	s.mu.Lock()
 	s.keeps = append(s.keeps, keep)
+	s.froms = append(s.froms, req.KeepFrom)
 	s.mu.Unlock()
 	r := s.reply(req)
 	r.Request = req
@@ -87,9 +89,11 @@ func (s *keepSender) Send(_ context.Context, req *Request, keep bool) (*Response
 }
 
 // With -ac on, answers are read into memory until calibration is done (and
-// for the whole run with -ach, when a page shape was learned, or when the
-// keyword ends the URL's path, where a match may be the catch-all of the
-// prefix it opens); without it they are only counted.
+// for the whole run with -ach or when a page shape was learned); without it
+// they are only counted. When the keyword ends the URL's path the answers
+// after calibration are read only when their status is 300 or above (the
+// sender is told so with KeepFrom), where a match may be the catch-all of the
+// prefix it opens.
 func TestAnswersAreReadIntoMemoryOnlyWhileCalibrationNeedsThem(t *testing.T) {
 	same := func(*Request) *Response {
 		return &Response{Status: 200, Header: http.Header{}, Length: 100, Words: 10, Lines: 3, Body: []byte("<html><title>x</title></html>")}
@@ -114,20 +118,29 @@ func TestAnswersAreReadIntoMemoryOnlyWhileCalibrationNeedsThem(t *testing.T) {
 		}
 		return
 	}
+	count2 := func(xs []int, v int) (n int) {
+		for _, x := range xs {
+			if x == v {
+				n++
+			}
+		}
+		return
+	}
 	for _, c := range []struct {
 		name          string
 		mut           func(*Config)
 		reply         func(*Request) *Response
 		kept, dropped int // requests that kept the body, and that did not
+		from          int // requests that ask for 300 and above
 	}{
-		{"no calibration", func(c *Config) {}, same, 0, 6},
-		{"calibrated on a size", func(c *Config) { c.Calibrate = true }, same, 7, 5}, // the 6 guesses and the answer that came first
-		{"calibrated per host", func(c *Config) { c.Calibrate = true; c.Set.PerHost = true }, same, 12, 0},
-		{"a page shape learned", func(c *Config) { c.Calibrate = true }, changing(), 12, 0},
+		{"no calibration", func(c *Config) {}, same, 0, 6, 0},
+		{"calibrated on a size", func(c *Config) { c.Calibrate = true }, same, 7, 5, 0}, // the 6 guesses and the answer that came first
+		{"calibrated per host", func(c *Config) { c.Calibrate = true; c.Set.PerHost = true }, same, 12, 0, 0},
+		{"a page shape learned", func(c *Config) { c.Calibrate = true }, changing(), 12, 0, 0},
 		{"the keyword ends the path", func(c *Config) {
 			c.Calibrate = true
 			c.Template, _ = NewTemplate("", "http://h.test/FUZZ", "", nil, nil)
-		}, same, 12, 0},
+		}, same, 7, 5, 5}, // as for a size; the five answers after the first are read from 300 up
 	} {
 		s := &keepSender{reply: c.reply}
 		runFake(t, &fake{hook: func(*Request) (*Response, error) { return nil, nil }}, func(cfg *Config) {
@@ -135,6 +148,9 @@ func TestAnswersAreReadIntoMemoryOnlyWhileCalibrationNeedsThem(t *testing.T) {
 			cfg.Template, _ = NewTemplate("", "http://h.test/p?q=FUZZ", "", nil, nil) // the path does not end with the keyword
 			c.mut(cfg)
 		})
+		if f := count2(s.froms, KeepErrorBodies); f != c.from {
+			t.Errorf("%s: %d requests ask for the bodies of 300 and above, want %d", c.name, f, c.from)
+		}
 		if k, d := count(s.keeps, true), count(s.keeps, false); k != c.kept || d != c.dropped {
 			t.Errorf("%s: %d requests kept the body and %d did not, want %d and %d (%v)", c.name, k, d, c.kept, c.dropped, s.keeps)
 		}
