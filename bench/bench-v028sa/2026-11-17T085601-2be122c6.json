@@ -1,0 +1,338 @@
+{
+  "date": "2026-11-17T08:56:01Z",
+  "commit": "2be122c6",
+  "version": "azhaq 0.27.0+dirty\nadvisory index 2026-11-16 (52995 records)\n  CISA Known Exploited Vulnerabilities catalogue, 2026-11-13\n  NVD CVE records, feed 2.0 (with CPE configurations), 2026-11-15",
+  "go": "go1.27.4",
+  "tools": [
+    {
+      "name": "katana",
+      "version": "1.8.0"
+    },
+    {
+      "name": "subfinder",
+      "version": "2.17.0"
+    },
+    {
+      "name": "httpx",
+      "version": "1.12.0"
+    },
+    {
+      "name": "dnsx",
+      "version": "1.3.1"
+    },
+    {
+      "name": "naabu",
+      "version": "2.6.1"
+    },
+    {
+      "name": "gau",
+      "version": "2.2.4"
+    },
+    {
+      "name": "ffuf",
+      "version": "2.3.0"
+    },
+    {
+      "name": "alterx",
+      "version": "0.1.0"
+    },
+    {
+      "name": "gowitness",
+      "version": "3.2.2"
+    },
+    {
+      "name": "jsluice",
+      "version": "v0.0.0-20240110145140-0ddfab153e06"
+    },
+    {
+      "name": "notify",
+      "version": "v1.0.7"
+    }
+  ],
+  "profile": "default",
+  "domains": [
+    {
+      "domain": "hackerone.com",
+      "azhaq_names": 16,
+      "subfinder_names": 528,
+      "live": 16,
+      "azhaq_live": 16,
+      "subfinder_live": 13,
+      "shared_live": 13,
+      "azhaq_seconds": 16.742764337,
+      "azhaq_subs_seconds": 16.742764337,
+      "subfinder_seconds": 35.412755828,
+      "gau_seconds": 0,
+      "ct": "7 answered (asked 0, answered 0, failed 0), 0 failed",
+      "azhaq_urls": 0,
+      "gau_urls": 0,
+      "gau_shared": 0,
+      "archives": "",
+      "profile": "default",
+      "reference_seconds": 42.414640341,
+      "azhaq_rss_mb": 69.6328125,
+      "reference_rss_mb": 49.6484375
+    },
+    {
+      "domain": "tesla.com",
+      "azhaq_names": 598,
+      "subfinder_names": 1354,
+      "live": 598,
+      "azhaq_live": 598,
+      "subfinder_live": 470,
+      "shared_live": 470,
+      "azhaq_seconds": 30.378541561,
+      "azhaq_subs_seconds": 30.378541561,
+      "subfinder_seconds": 2.201349561,
+      "gau_seconds": 0,
+      "ct": "7 answered (requests 0, seconds 0, failed_sources 0), 0 failed",
+      "azhaq_urls": 0,
+      "gau_urls": 0,
+      "gau_shared": 0,
+      "archives": "",
+      "profile": "default",
+      "reference_seconds": 21.213772288,
+      "azhaq_rss_mb": 84.20703125,
+      "reference_rss_mb": 53.9375
+    },
+    {
+      "domain": "vulnweb.com",
+      "azhaq_names": 7,
+      "subfinder_names": 19,
+      "live": 7,
+      "azhaq_live": 7,
+      "subfinder_live": 6,
+      "shared_live": 6,
+      "azhaq_seconds": 28.699415093,
+      "azhaq_subs_seconds": 28.699415093,
+      "subfinder_seconds": 27.323484301,
+      "gau_seconds": 0,
+      "ct": "7 answered (answered 0, failed 0, names 0), 0 failed",
+      "azhaq_urls": 0,
+      "gau_urls": 0,
+      "gau_shared": 0,
+      "archives": "",
+      "profile": "default",
+      "reference_seconds": 27.859310306,
+      "azhaq_rss_mb": 75.27734375,
+      "reference_rss_mb": 45.2421875
+    }
+  ],
+  "checks": [
+    {
+      "name": "[default] subs -live hackerone.com: results ≥ the reference's, confirmed by a name resolving at 9.9.9.9 or 208.67.222.222 (A, AAAA or CNAME)",
+      "pass": true,
+      "detail": "azhaq 16, reference 13; old bar: 13 of 13 = 100%; azhaq printed 16, subfinder 528 names, dnsx 13 live; azhaq 16, reference 13 confirmed, both 13; subfinder 35s + dnsx 7s; time ×0.39 of the reference, memory ×1.40 of the reference (70 MB against 50 MB) | azhaq subs -d hackerone.com -live -json -silent -resolvers /home/runner/work/azhaq/azhaq/bench/.work/domains/resolvers.txt vs subfinder -d hackerone.com -silent -json -cs | dnsx -l /home/runner/work/azhaq/azhaq/bench/.work/domains/hackerone.com-default-names.txt -silent -a -aaaa -cname -r 1.1.1.1,8.8.8.8"
+    },
+    {
+      "name": "[default] subs -live hackerone.com: time ≤ 1.05× the reference's",
+      "pass": true,
+      "detail": "azhaq 16.7s, reference 42.4s (the median of 3 below 20 s, one run above) | azhaq subs -d hackerone.com -live -json -silent -resolvers /home/runner/work/azhaq/azhaq/bench/.work/domains/resolvers.txt vs subfinder -d hackerone.com -silent -json -cs | dnsx -l /home/runner/work/azhaq/azhaq/bench/.work/domains/hackerone.com-default-names.txt -silent -a -aaaa -cname -r 1.1.1.1,8.8.8.8"
+    },
+    {
+      "name": "[default] subs hackerone.com: -source-timeout 800ms ends the run within 4 s (every source is held to it)",
+      "pass": true,
+      "detail": "azhaq subs -d hackerone.com -source-timeout 800ms took 0.8s"
+    },
+    {
+      "name": "[default] subs -live hackerone.com: every confirmed live name subfinder | dnsx finds is in azhaq's list or its source is named as failed",
+      "pass": true,
+      "detail": "0 gaps, 0 unexplained: []"
+    },
+    {
+      "name": "[default] subs -live hackerone.com: rows are DNS-confirmed, raw candidates are counted apart and the confirmed set reaches the reference's",
+      "pass": true,
+      "detail": "raw candidates 533, DNS-confirmed 16, reference confirmed 13: []"
+    },
+    {
+      "name": "[default] subs -live hackerone.com: raw candidates reach the names the reference listed",
+      "pass": true,
+      "detail": "azhaq 533 raw candidates, subfinder 528 names"
+    },
+    {
+      "name": "[default] subdomain sources: no silent zeros (hackerone.com)",
+      "pass": true,
+      "detail": "every empty result is a failure flagged as error or degraded, or a zero every source answered"
+    },
+    {
+      "name": "[default] subs -live tesla.com: results ≥ the reference's, confirmed by a name resolving at 9.9.9.9 or 208.67.222.222 (A, AAAA or CNAME)",
+      "pass": true,
+      "detail": "azhaq 598, reference 470; old bar: 470 of 470 = 100%; azhaq printed 598, subfinder 1354 names, dnsx 470 live; azhaq 598, reference 470 confirmed, both 470; subfinder 2s + dnsx 19s; time ×1.43 of the reference, memory ×1.56 of the reference (84 MB against 54 MB) [azhaq finished with failures or was stopped: exit status 3 {\"type\":\"summary\",\"command\":\"subs\",\"version\":\"0.27.0+dirty\",\"complete\":false,\"exit\":3,\"results\":598,\"counts\":{\"CNAME only\":25,\"DNS-confirmed\":598,…] | azhaq subs -d tesla.com -live -json -silent -resolvers /home/runner/work/azhaq/azhaq/bench/.work/domains/resolvers.txt vs subfinder -d tesla.com -silent -json -cs | dnsx -l /home/runner/work/azhaq/azhaq/bench/.work/domains/tesla.com-default-names.txt -silent -a -aaaa -cname -r 1.1.1.1,8.8.8.8"
+    },
+    {
+      "name": "[default] subs -live tesla.com: time ≤ 1.05× the reference's",
+      "pass": false,
+      "detail": "azhaq 30.4s, reference 21.2s (the median of 3 below 20 s, one run above) | azhaq subs -d tesla.com -live -json -silent -resolvers /home/runner/work/azhaq/azhaq/bench/.work/domains/resolvers.txt vs subfinder -d tesla.com -silent -json -cs | dnsx -l /home/runner/work/azhaq/azhaq/bench/.work/domains/tesla.com-default-names.txt -silent -a -aaaa -cname -r 1.1.1.1,8.8.8.8"
+    },
+    {
+      "name": "[default] subs tesla.com: -source-timeout 800ms ends the run within 4 s (every source is held to it)",
+      "pass": true,
+      "detail": "azhaq subs -d tesla.com -source-timeout 800ms took 1.0s"
+    },
+    {
+      "name": "[default] subs -live tesla.com: every confirmed live name subfinder | dnsx finds is in azhaq's list or its source is named as failed",
+      "pass": true,
+      "detail": "0 gaps, 0 unexplained: []"
+    },
+    {
+      "name": "[default] subs -live tesla.com: rows are DNS-confirmed, raw candidates are counted apart and the confirmed set reaches the reference's",
+      "pass": true,
+      "detail": "raw candidates 3885, DNS-confirmed 598, reference confirmed 470: []"
+    },
+    {
+      "name": "[default] subs -live tesla.com: raw candidates reach the names the reference listed",
+      "pass": true,
+      "detail": "azhaq 3885 raw candidates, subfinder 1354 names"
+    },
+    {
+      "name": "[default] subdomain sources: no silent zeros (tesla.com)",
+      "pass": true,
+      "detail": "every empty result is a failure flagged as error or degraded, or a zero every source answered"
+    },
+    {
+      "name": "[default] subs -live vulnweb.com: results ≥ the reference's, confirmed by a name resolving at 9.9.9.9 or 208.67.222.222 (A, AAAA or CNAME)",
+      "pass": true,
+      "detail": "azhaq 7, reference 6; old bar: 6 of 6 = 100%; azhaq printed 7, subfinder 19 names, dnsx 6 live; azhaq 7, reference 6 confirmed, both 6; subfinder 27s + dnsx 1s; time ×1.03 of the reference, memory ×1.66 of the reference (75 MB against 45 MB) | azhaq subs -d vulnweb.com -live -json -silent -resolvers /home/runner/work/azhaq/azhaq/bench/.work/domains/resolvers.txt vs subfinder -d vulnweb.com -silent -json -cs | dnsx -l /home/runner/work/azhaq/azhaq/bench/.work/domains/vulnweb.com-default-names.txt -silent -a -aaaa -cname -r 1.1.1.1,8.8.8.8"
+    },
+    {
+      "name": "[default] subs -live vulnweb.com: time ≤ 1.05× the reference's",
+      "pass": true,
+      "detail": "azhaq 28.7s, reference 27.9s (the median of 3 below 20 s, one run above) | azhaq subs -d vulnweb.com -live -json -silent -resolvers /home/runner/work/azhaq/azhaq/bench/.work/domains/resolvers.txt vs subfinder -d vulnweb.com -silent -json -cs | dnsx -l /home/runner/work/azhaq/azhaq/bench/.work/domains/vulnweb.com-default-names.txt -silent -a -aaaa -cname -r 1.1.1.1,8.8.8.8"
+    },
+    {
+      "name": "[default] subs vulnweb.com: -source-timeout 800ms ends the run within 4 s (every source is held to it)",
+      "pass": true,
+      "detail": "azhaq subs -d vulnweb.com -source-timeout 800ms took 0.8s"
+    },
+    {
+      "name": "[default] subs -live vulnweb.com: every confirmed live name subfinder | dnsx finds is in azhaq's list or its source is named as failed",
+      "pass": true,
+      "detail": "0 gaps, 0 unexplained: []"
+    },
+    {
+      "name": "[default] subs -live vulnweb.com: rows are DNS-confirmed, raw candidates are counted apart and the confirmed set reaches the reference's",
+      "pass": true,
+      "detail": "raw candidates 3426, DNS-confirmed 7, reference confirmed 6: []"
+    },
+    {
+      "name": "[default] subs -live vulnweb.com: raw candidates reach the names the reference listed",
+      "pass": true,
+      "detail": "azhaq 3426 raw candidates, subfinder 19 names"
+    },
+    {
+      "name": "[default] subdomain sources: no silent zeros (vulnweb.com)",
+      "pass": true,
+      "detail": "every empty result is a failure flagged as error or degraded, or a zero every source answered"
+    }
+  ],
+  "runs": [
+    {
+      "tool": "azhaq",
+      "target": "hackerone.com",
+      "seconds": 16.742764337,
+      "rss_mb": 69.6328125,
+      "profile": "default"
+    },
+    {
+      "tool": "subfinder",
+      "target": "hackerone.com",
+      "seconds": 35.412755828,
+      "rss_mb": 45.0078125,
+      "anon_mb": 20.9296875,
+      "profile": "default"
+    },
+    {
+      "tool": "dnsx",
+      "target": "hackerone.com",
+      "seconds": 7.001884513,
+      "rss_mb": 49.6484375,
+      "anon_mb": 26.32421875,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "hackerone.com",
+      "seconds": 0.846739497,
+      "rss_mb": 56.20703125,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "tesla.com",
+      "seconds": 30.378541561,
+      "rss_mb": 84.20703125,
+      "error": "exit status 3 {\"type\":\"summary\",\"command\":\"subs\",\"version\":\"0.27.0+dirty\",\"complete\":false,\"exit\":3,\"results\":598,\"counts\":{\"CNAME only\":25,\"DNS-confirmed\":598,\"collected\":1499,\"did not resolve\":3294,\"found as CNAME targets\":10,\"from sources\":3886,\"no answer\":3,\"off-by-default failed\":0,\"raw candidates\":3885,\"resolved from sources\":563,\"sources answered\":11,\"sources asked\":14,\"sources failed\":3,\"the domain itself\":1},\"seconds\":30.33,\"requests\":0,\"dns_queries\":4359,\"db\":\"/home/runner/work/azhaq/azhaq/bench/.work/domains/.azhaq/runs/20261117-085629-subs-tesla.com/workspace.db\",\"run_id\":\"3bd55f6b-9ba8-4c9a-93e9-208f2e971d3d\",\"failures\":6,\"failed\":[{\"collector\":\"azhaq-dns\",\"error\":\"8.8.8.8:53: SERVFAIL\",\"retryable\":false,\"count\":2,\"targets\":[\"autodiscover.contractors.contractors.tesla.com\",\"lyncdiscover.contractors.contractors.tesla.com\"]},{\"collector\":\"azhaq-dns\",\"error\":\"1.1.1.1:53: SERVFAIL\",\"retryable\":false,\"count\":1,\"targets\":[\"msoid.contractors.contractors.tesla.com\"]},{\"collector\":\"azhaq-subdomains\",\"source\":\"commoncrawl\",\"error\":\"timeout\",\"retryable\":true,\"count\":1,\"targets\":[\"tesla.com\"],\"partial\":true},{\"collector\":\"azhaq-subdomains\",\"source\":\"shodanct\",\"error\":\"connection closed (EOF)\",\"retryable\":true,\"count\":1,\"targets\":[\"tesla.com\"],\"partial\":true},{\"collector\":\"azhaq-subdomains\",\"source\":\"waybackarchive\",\"error\":\"timeout\",\"retryable\":true,\"count\":1,\"targets\":[\"tesla.com\"],\"partial\":true}],\"degraded\":true,\"degraded_by\":[{\"source\":\"commoncrawl\",\"error\":\"timeout\",\"domains\":1},{\"source\":\"shodanct\",\"error\":\"connection closed (EOF)\",\"domains\":1},{\"source\":\"waybackarchive\",\"error\":\"timeout\",\"domains\":1}],\"sources\":{\"asked\":14,\"answered\":11,\"failed\":3,\"names\":{\"anubis\":703,\"certspotter\":128,\"commoncrawl\":4,\"crtname\":1352,\"crtsh\":543,\"hackertarget\":50,\"hudsonrock\":11,\"rapiddns\":77,\"scanmalware\":112,\"shodanct\":0,\"sitedossier\":1,\"subdomaincenter\":2776,\"thc\":478,\"waybackarchive\":1},\"requests\":{\"anubis\":1,\"certspotter\":1,\"commoncrawl\":2,\"crtname\":1,\"crtsh\":1,\"hackertarget\":1,\"hudsonrock\":1,\"rapiddns\":1,\"scanmalware\":3,\"shodanct\":1,\"sitedossier\":1,\"subdomaincenter\":10,\"thc\":5,\"waybackarchive\":1},\"seconds\":{\"anubis\":0.2,\"certspotter\":0.2,\"commoncrawl\":30,\"crtname\":0.2,\"crtsh\":27.5,\"hackertarget\":0.3,\"hudsonrock\":0.6,\"rapiddns\":0.8,\"scanmalware\":0.6,\"shodanct\":0.1,\"sitedossier\":0.2,\"subdomaincenter\":24.7,\"thc\":0.9,\"waybackarchive\":30},\"failed_sources\":{\"commoncrawl\":\"no answer in 30s (-source-timeout)\",\"shodanct\":\"EOF\",\"waybackarchive\":\"no answer in 30s (-source-timeout)\"}},\"notes\":[\"ledger: 4391 recorded in /home/runner/work/azhaq/azhaq/bench/.work/domains/.azhaq/runs/20261117-085629-subs-tesla.com/workspace.db.ledger.jsonl: 32 to third-party sources, 4359 DNS queries, sealed 2c36d6ee304317d04333741dd5cb529cd113ab1c658475823c5b3552fade83d5 (azhaq ledger -verify /home/runner/work/azhaq/azhaq/bench/.work/domains/.azhaq/runs/20261117-085629-subs-tesla.com/workspace.db.ledger.jsonl -seal 2c36d6ee304317d04333741dd5cb529cd113ab1c658475823c5b3552fade83d5; the seal alone proves no line was later removed and the rest re-chained)\",\"tesla.com: subdomaincenter answered 429; it was asked again 2 times after 22 s of waiting (Retry-After) and answered\",\"tesla.com: certspotter gave a partial answer: first page only (without a key it is not paged): more issuances exist; a Cert Spotter key in the provider file pages them all\",\"tesla.com: crtsh gave a partial answer: crt.sh database: no answer in 7.5s; asked the JSON API\",\"tesla.com: the 2480 names only history, subdomaincenter held were looked up in DNS in 1 s: 94 resolved, 2386 did not exist\",\"tesla.com: subdomaincenter was asked for 7 samples of its guesses (the first is what subfinder | dnsx checks) and not again: another sample would not fit the 20 s budget for further samples; up to 5 more samples left untaken; -guess-samples N takes up to N samples while each finds a new name that resolves or the pool is not yet covered, with no time budget\",\"25 names are listed with a CNAME and no address (-json: \\\"cname_only\\\": true): one whose target is gone is a takeover lead\",\"no answer from 8.8.8.8 for 2 names (SERVFAIL), 1.1.1.1 for 1 names (SERVFAIL): those names are left out, neither live nor dead; ask again with other -resolvers or a lower -dns-rate\",\"sources: crtname 1352, anubis 702, crtsh 542, thc 477, subdomaincenter 390, certspotter 127, scanmalware 112, rapiddns 77, +5 more\",\"count: 3886 from the sources − 1 the domain itself, not a subdomain − 3294 did not resolve − 3 no answer from the resolvers + 10 found as CNAME targets = 598 printed\",\"tiers: 3885 raw candidates (what the sources gave; a row's sources say who); 598 DNS-confirmed (resolved); HTTP-confirmed not asked (-http): a candidate is never counted as confirmed\",\"name history /home/runner/work/azhaq/azhaq/bench/.work/data-20261117T085603/names/tesla.com.json: 0 names read, 1500 written; it keeps the names the sources gave and the history's own that resolved, not -w, -permute or CNAME-target names; -no-history leaves it alone\",\"coverage (raw candidates): what the independent sources know, not every name that exists. Their pool holds about 1678 names and this run has 1405 of them. Apart from the pool, the other 94 of the 1499 names in this tier came from the name history, from guesses checked in DNS or as CNAME targets. This is an estimate (Chao1) from the 1405 names the independent sources gave: 447 came from one source and 366 from two\",\"coverage (DNS-confirmed): what the independent sources know, not every name that exists. Their pool holds about 499 names and this run has 494 of them. Apart from the pool, the other 104 of the 598 names in this tier came from the name history, from guesses checked in DNS or as CNAME targets. This is an estimate (Chao1) from the 494 names the independent sources gave: 43 came from one source and 202 from two\"],\"next\":[\"azhaq query -db /home/runner/work/azhaq/azhaq/bench/.work/domains/.azhaq/runs/20261117-085629-subs-tesla.com/workspace.db -failed   (every failed target, the list to retry)\"],\"cost\":{\"estimate\":{\"source_queries\":14},\"estimate_at_least\":true,\"actual\":{\"dns_queries\":4359,\"source_queries\":32},\"stages\":[{\"stage\":\"sources\",\"estimate\":{\"source_queries\":14},\"estimate_at_least\":true,\"not_counted\":\"names and archived URLs found are asked about too\",\"actual\":{\"source_queries\":31},\"collectors\":[{\"collector\":\"azhaq-subdomains\",\"estimate\":{\"source_queries\":14},\"actual\":{\"source_queries\":31}}]},{\"stage\":\"names\",\"actual\":{\"dns_queries\":4359},\"collectors\":[{\"collector\":\"azhaq-dns\",\"actual\":{\"dns_queries\":1841}},{\"collector\":\"azhaq-subdomains\",\"actual\":{\"dns_queries\":2518}}]},{\"stage\":\"other\",\"actual\":{\"source_queries\":1}}]},\"wrote\":[\"/home/runner/work/azhaq/azhaq/bench/.work/domains/.azhaq/runs/20261117-085629-subs-tesla.com/workspace.db.ledger.jsonl\",\"/home/runner/work/azhaq/azhaq/bench/.work/data-20261117T085603/names/tesla.com.json\"]}",
+      "profile": "default"
+    },
+    {
+      "tool": "subfinder",
+      "target": "tesla.com",
+      "seconds": 2.201349561,
+      "rss_mb": 45.375,
+      "anon_mb": 21.421875,
+      "profile": "default"
+    },
+    {
+      "tool": "dnsx",
+      "target": "tesla.com",
+      "seconds": 19.012422727,
+      "rss_mb": 53.9375,
+      "anon_mb": 30.796875,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "tesla.com",
+      "seconds": 1.007599864,
+      "rss_mb": 64.1953125,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "vulnweb.com",
+      "seconds": 28.699415093,
+      "rss_mb": 75.27734375,
+      "profile": "default"
+    },
+    {
+      "tool": "subfinder",
+      "target": "vulnweb.com",
+      "seconds": 27.323484301,
+      "rss_mb": 45.2421875,
+      "anon_mb": 21.0390625,
+      "profile": "default"
+    },
+    {
+      "tool": "dnsx",
+      "target": "vulnweb.com",
+      "seconds": 0.535826005,
+      "rss_mb": 44.38671875,
+      "anon_mb": 21,
+      "profile": "default"
+    },
+    {
+      "tool": "azhaq",
+      "target": "vulnweb.com",
+      "seconds": 0.833080502,
+      "rss_mb": 53,
+      "profile": "default"
+    }
+  ],
+  "units": [
+    {
+      "name": "default:domains/hackerone.com",
+      "checks": 7,
+      "runs": 4
+    },
+    {
+      "name": "default:domains/tesla.com",
+      "checks": 7,
+      "runs": 4
+    },
+    {
+      "name": "default:domains/vulnweb.com",
+      "checks": 7,
+      "runs": 4
+    }
+  ]
+}
