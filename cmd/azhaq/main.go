@@ -946,7 +946,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	if *webScheme != "" && *webScheme != "http" && *webScheme != "https" {
 		return usagef("-web-scheme is http or https, got %q", *webScheme)
 	}
-	opts := collectors.Options{Client: client, HTTP: spec, WebPorts: ports, WebScheme: *webScheme, NoTech: *noTech, NoTakeover: *noTakeover, NoFavicon: *noFavicon, Probe: *probe, PortRate: portPace(*rateFlag, *portRate), MaxIPs: *maxIPs, Shots: *shots, Render: *render, KnownFiles: *knownFiles, FillForms: *fillForms, NoMapGuess: *noMapGuess, MaxScripts: *maxScripts, SubmitForms: *submitForms, PathClimb: *pathClimb}
+	opts := collectors.Options{Client: client, HTTP: spec, WebPorts: ports, WebScheme: *webScheme, NoTech: *noTech, NoTakeover: *noTakeover, NoFavicon: *noFavicon, NoProductReads: budgets.Skip["azhaq-paths"], Probe: *probe, PortRate: portPace(*rateFlag, *portRate), MaxIPs: *maxIPs, Shots: *shots, Render: *render, KnownFiles: *knownFiles, FillForms: *fillForms, NoMapGuess: *noMapGuess, MaxScripts: *maxScripts, SubmitForms: *submitForms, PathClimb: *pathClimb}
 	opts.ShotHTML, opts.AskedOnly = *shotHTML, askedOnly
 	if *browserWrites && *shots == "" && !*render {
 		return usagef("-browser-writes lets the pages Chrome loads send writes: give it with -browser or -screenshots")
