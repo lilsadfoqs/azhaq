@@ -12,10 +12,10 @@ import (
 // knows, and the ports of the verify catalogs. A change here is a change to
 // docs/commands (ports, run, plan) and docs/claims.tsv.
 func TestDefaultSizeWithTheCatalogs(t *testing.T) {
-	if got, want := len(portscan.DefaultPorts()), 1074; got != want {
+	if got, want := len(portscan.DefaultPorts()), 1075; got != want {
 		t.Errorf("the first pass has %d ports, want %d", got, want)
 	}
-	if got, want := len(portscan.UsualPorts()), 203; got != want {
+	if got, want := len(portscan.UsualPorts()), 205; got != want {
 		t.Errorf("the usual set has %d ports, want %d", got, want)
 	}
 }
