@@ -121,7 +121,8 @@ func TestFindingTiersCountIssuesAndRecordsNameTheirLead(t *testing.T) {
 			t.Errorf("record %+v", r)
 		}
 	}
-	if leads["app.test:8080 nginx"] != 6 || leads["app.test:8080 Jetty"] != 1 {
+	// nginx was read from the address alone, so the name is not its host.
+	if leads["10.0.0.5:8080 nginx"] != 6 || leads["app.test:8080 Jetty"] != 1 {
 		t.Errorf("records by lead %v", leads)
 	}
 	var lines []map[string]any

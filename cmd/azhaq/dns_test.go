@@ -1147,14 +1147,16 @@ func TestDNSCNAMEAloneChecksTheTarget(t *testing.T) {
 	if got := asked(dns.TypeA) - before; got != 0 {
 		t.Errorf("-aaaa asked %d A questions", got)
 	}
-	// -no-takeover: nothing is asked beyond the types, and the row says no more.
+	// -no-takeover: no takeover and no question about a target's domain, but the
+	// name's own A is still asked once for each CNAME, and the dangling row is
+	// made from it.
 	before = asked(dns.TypeA)
 	ls, rep, _ = dnsOut(t, "-l", l, "-r", addr, "-cname", "-json", "-no-takeover", "-no-wildcard")
-	if d := dnsRows(t, ls)["dang.lab.zz"]; d["cname_status"] != nil || d["takeover"] != nil || len(rep.Takeover) != 0 {
+	if d := dnsRows(t, ls)["dang.lab.zz"]; d["cname_status"] != "NXDOMAIN" || d["dangling"] == nil || d["takeover"] != nil || len(rep.Takeover) != 0 {
 		t.Errorf("-no-takeover: %v %+v", d, rep.Takeover)
 	}
-	if got := asked(dns.TypeA) - before; got != 0 {
-		t.Errorf("-no-takeover asked %d A questions", got)
+	if got := asked(dns.TypeA) - before; got != 2 {
+		t.Errorf("-no-takeover asked %d A questions, want one for each name with a CNAME", got)
 	}
 }
 
@@ -1181,6 +1183,44 @@ func TestDNSAllGoesWithAWordlist(t *testing.T) {
 	for _, f := range []string{"-axfr", "-ptr"} {
 		if _, _, code := dnsOut(t, "-d", "lab.zz", "-w", w, f, "-r", lab.addr); code != exitUsage {
 			t.Errorf("%s with -w: exit %d, want the usage code", f, code)
+		}
+	}
+}
+
+// -axfr asks each -resolvers address for the zone, outside -allow, and the
+// ledger line of that question says the resolver is why it was allowed; the
+// help line says both.
+func TestDNSAXFRToAResolverNamesTheResolverInTheLedger(t *testing.T) {
+	t.Chdir(t.TempDir())
+	lab := startLab(t)
+	led := filepath.Join(t.TempDir(), "l.jsonl")
+	// -allow names the zone: the name server at 127.0.0.1 is outside it, the resolver is not held to it.
+	_, rep, _ := dnsOut(t, "-d", "lab.zz", "-r", lab.addr, "-axfr", "-j", "-timeout", "300ms", "-allow", "lab.zz", "-ledger", led)
+	var axfr, other int
+	if err := ledger.Read(led, func(e ledger.Entry) error {
+		switch {
+		case e.Kind == "dns" && e.Method == "AXFR":
+			axfr++
+			if e.Target != lab.addr || e.Rule != "-resolvers "+lab.addr {
+				t.Errorf("the AXFR line for the resolver %s has rule %q, want %q", e.Target, e.Rule, "-resolvers "+lab.addr)
+			}
+		case e.Kind == "dns" && e.Host == "lab.zz":
+			other++
+			if e.Rule != "lab.zz" { // the ordinary lookups keep the domain's rule
+				t.Errorf("a lookup of lab.zz has rule %q", e.Rule)
+			}
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if axfr != 1 || other == 0 {
+		t.Errorf("%d AXFR lines and %d lookups of lab.zz in the ledger: %+v", axfr, other, rep.Notes)
+	}
+	out, _, _ := cli(t, "help", "dns")
+	for _, want := range []string{"each -resolvers address too", "a resolver you named is not held to them"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("azhaq help dns lacks %q", want)
 		}
 	}
 }

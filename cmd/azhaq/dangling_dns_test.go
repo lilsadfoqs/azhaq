@@ -5,6 +5,7 @@ import (
 	"net"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/lilsadfoqs/azhaq/store"
@@ -18,20 +19,34 @@ import (
 // the live one answers NXDOMAIN.
 func danglingLab(t *testing.T) (resolver string) {
 	t.Helper()
+	res, _ := danglingLabAsked(t)
+	return res
+}
+
+// danglingLabAsked is danglingLab with the names the resolver was asked, each
+// with its type ("gone.azurewebsites.net. A"), in the order they came.
+func danglingLabAsked(t *testing.T) (resolver string, asked func() []string) {
+	t.Helper()
+	var mu sync.Mutex
+	var got []string
 	pc, err := net.ListenPacket("udp", "127.0.0.1:0")
 	if err != nil {
 		t.Skipf("no UDP: %v", err)
 	}
 	cname := map[string]string{
-		"shop.example.org.": "gone.azurewebsites.net.",
-		"old.example.org.":  "x.cloudprovider.example.",
-		"own.example.org.":  "missing.example.org.",
-		"live.example.org.": "up.example.net.",
+		"shop.example.org.":   "gone.azurewebsites.net.",
+		"old.example.org.":    "x.cloudprovider.example.",
+		"own.example.org.":    "missing.example.org.",
+		"live.example.org.":   "up.example.net.",
+		"legacy.example.org.": "gone.nobody-holds.com.",
 	}
 	srv := &dns.Server{PacketConn: pc, Handler: dns.HandlerFunc(func(w dns.ResponseWriter, r *dns.Msg) {
 		m := new(dns.Msg)
 		m.SetReply(r)
 		q := r.Question[0]
+		mu.Lock()
+		got = append(got, q.Name+" "+dns.TypeToString[q.Qtype])
+		mu.Unlock()
 		rr := func(s string) dns.RR { x, _ := dns.NewRR(s); return x }
 		switch target, ok := cname[q.Name]; {
 		case q.Name == "up.example.net.":
@@ -56,7 +71,11 @@ func danglingLab(t *testing.T) (resolver string) {
 	})}
 	go func() { _ = srv.ActivateAndServe() }()
 	t.Cleanup(func() { _ = srv.Shutdown() })
-	return pc.LocalAddr().String()
+	return pc.LocalAddr().String(), func() []string {
+		mu.Lock()
+		defer mu.Unlock()
+		return append([]string(nil), got...)
+	}
 }
 
 func jsonLines(t *testing.T, out string) []map[string]any {
@@ -121,7 +140,7 @@ func TestDanglingDNSFindingAndTakeoverLead(t *testing.T) {
 	dig, _ := f["reproduce"].(string)
 	ev, _ := f["evidence"].(string)
 	if f["severity"] != "low" || f["tier"] != "finding" || f["label"] != "observed-dangling" || f["excerpt_part"] != "dns" ||
-		!strings.Contains(ev, "x.cloudprovider.example answered NXDOMAIN from "+res) || !strings.HasPrefix(dig, "dig @127.0.0.1 -p ") || !strings.Contains(dig, "A 'old.example.org'") {
+		!strings.Contains(ev, "x.cloudprovider.example, a name that does not exist, answered NXDOMAIN from "+res) || !strings.HasPrefix(dig, "dig @127.0.0.1 -p ") || !strings.Contains(dig, "A 'old.example.org'") {
 		t.Errorf("finding %v", f)
 	}
 	if leads["shop.example.org"] == nil || leads["old.example.org"] != nil {
@@ -165,9 +184,11 @@ func TestDanglingDNSFindingAndTakeoverLead(t *testing.T) {
 	}
 }
 
-// -no-takeover turns the extra question off, not the measurement: with A asked the
-// answer already ends at the name that did not exist, and the row says so;
-// -cname alone has no answer that follows the chain, so it has none.
+// -no-takeover turns the questions about the target's domain off, not the
+// measurement: with A asked the answer already ends at the name that did not
+// exist, and the row says so; -cname alone has no answer that follows the
+// chain, so the name is asked for A once (its own question) and the row has
+// the measurement too.
 func TestDanglingStandsUnderNoTakeover(t *testing.T) {
 	res := danglingLab(t)
 	ls, _, code := dnsOut(t, "-d", "shop.example.org", "-r", res, "-no-takeover", "-json")
@@ -176,8 +197,8 @@ func TestDanglingStandsUnderNoTakeover(t *testing.T) {
 		t.Errorf("exit %d row %v", code, row)
 	}
 	ls, _, _ = dnsOut(t, "-d", "shop.example.org", "-r", res, "-cname", "-no-takeover", "-json")
-	if row := dnsRows(t, ls)["shop.example.org"]; row["dangling"] != nil || row["cname_status"] != nil {
-		t.Errorf("-cname alone asks nothing more: %v", row)
+	if row := dnsRows(t, ls)["shop.example.org"]; row["dangling"] == nil || row["cname_status"] != "NXDOMAIN" || row["takeover"] != nil {
+		t.Errorf("-cname with -no-takeover: the name's own A, no takeover: %v", row)
 	}
 	// With the question, -cname alone gets the measurement too.
 	ls, _, _ = dnsOut(t, "-d", "old.example.org", "-r", res, "-cname", "-json")

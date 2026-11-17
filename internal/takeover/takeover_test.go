@@ -69,7 +69,7 @@ func TestDanglingFindingNamesWhatItRestsOn(t *testing.T) {
 		if !strings.Contains(f.List, c.entry) || !strings.Contains(f.List, ListRead) {
 			t.Errorf("%s: list %q", c.target, f.List)
 		}
-		if !strings.Contains(f.Evidence, "Candidate, unverified: NXDOMAIN does not show the name is free") {
+		if !strings.Contains(f.Evidence, "Who can claim the name is unverified: NXDOMAIN does not show the name is free") {
 			t.Errorf("%s: evidence %q", c.target, f.Evidence)
 		}
 	}

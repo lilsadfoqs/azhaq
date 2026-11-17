@@ -143,3 +143,42 @@ func TestHuntFoldsNamesOfOneListenerOnlyWhenTheyAnswerTheSame(t *testing.T) {
 		})
 	}
 }
+
+// Names on one address and port that serve different products keep their own
+// rows: "also answered as" lists only names whose own answer named the same
+// product and version, and a row's host is one of the names that named it.
+func TestHuntAlsoAnsweredAsNamesOnlyTheSameAnswer(t *testing.T) {
+	egress.Reset()
+	t.Cleanup(egress.Reset)
+	lab := newNamesLabHeaders(t, nil, map[string]string{
+		"grafana." + namesZone: "Apache/2.4.58",
+		"wiki." + namesZone:    "Apache/2.4.58",
+		"jenkins." + namesZone: "nginx/1.25.0",
+	})
+	t.Chdir(t.TempDir())
+	db := "vhosts.db"
+	_, rep, code := runContract(t, append([]string{"run"}, lab.urlArgs("-db", db, "-no-paths", "-no-favicon")...)...)
+	if code != exitOK && code != exitPartial {
+		t.Fatalf("exit %d: failed %+v notes %q", code, rep.Failed, rep.Notes)
+	}
+	out, _, err := captureBoth(t, func() error { return cmdHunt([]string{"-db", db, "-json"}) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows := map[string]map[string]any{}
+	for _, r := range jsonLines(t, out) {
+		if r["tier"] == "identification" && fmt.Sprint(r["port"]) == lab.port && r["advisory_id"] == nil {
+			rows[fmt.Sprint(r["product"])] = r
+		}
+	}
+	apache, nginx := rows["Apache"], rows["nginx"]
+	if apache == nil || nginx == nil {
+		t.Fatalf("want a row for each product, got %v\n%s", rows, out)
+	}
+	if also, _ := apache["also_named"].([]any); len(also) != 1 || !strings.HasPrefix(fmt.Sprint(also[0]), "wiki.") && !strings.HasPrefix(fmt.Sprint(also[0]), "grafana.") {
+		t.Errorf("Apache row names only the other Apache name: %v", apache)
+	}
+	if nginx["also_named"] != nil || !strings.HasPrefix(fmt.Sprint(nginx["host"]), "jenkins.") {
+		t.Errorf("the nginx name is its own row, under its own host: %v", nginx)
+	}
+}

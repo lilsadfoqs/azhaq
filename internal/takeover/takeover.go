@@ -165,13 +165,13 @@ func ByCNAME(host string, chain []string, targetGone, registered bool) (Finding,
 			e := entryOf(target)
 			return Finding{Service: s.name, Target: target, Strength: "dangling", Status: Candidate, List: "can-i-take-over-xyz, entry " + e + ", read " + ListRead,
 				Evidence: "observed: CNAME to " + target + "; " + target + " answered NXDOMAIN; " + target + " is on " + s.name + " (the public list's entry). " +
-					"Candidate, unverified: NXDOMAIN does not show the name is free, and no check with " + s.name + " was made"}, true
+					"Who can claim the name is unverified: NXDOMAIN does not show the name is free, and no check with " + s.name + " was made"}, true
 		}
 	}
 	if !registered {
 		return Finding{Service: "domain", Target: target, Strength: "strong", Status: Candidate,
 			Evidence: "observed: CNAME to " + target + "; " + target + " answered NXDOMAIN; the SOA of " + Domain(target) + " answered NXDOMAIN. " +
-				"Candidate, unverified: " + Domain(target) + " may be free to register; no registry was asked"}, true
+				"Who can claim the name is unverified: " + Domain(target) + " may be free to register; no registry was asked"}, true
 	}
 	return Finding{}, false
 }

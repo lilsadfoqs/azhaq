@@ -85,7 +85,7 @@ What a command counts as a target it was given, and so as a failed one:
 
 | Command | A target is | It failed when |
 | --- | --- | --- |
-| `probe` | each input row (a port or a path of an input is a row of its own) | the row has no answer (a refused connection, a timeout, a name that does not resolve): `failures` counts these rows |
+| `probe` | each input row (a port or a path of an input is a row of its own) | the row has no answer (a refused connection, a timeout, a name that does not resolve): `failures` counts these rows. A row your own `-deny-path` holds back is a skip: no row, named under `skipped` with the rule, and the run exits as `run` does |
 | `run`, `crawl`, `dirs`, `shots`, `urls`, `params` | each URL and each domain given | the URL is `unreachable` (every request failed), or no third-party source answered for the domain. A page it found that fails is a failure, not a target |
 | `subs` | each domain | no source answered for it |
 | `dns` | each name asked and finished | no resolver answered (with `-axfr`, no server transferred the zone) |

@@ -151,7 +151,7 @@ const gitWeight = 70
 // answer must show for it to be a finding.
 var leadChecks = map[string]string{
 	"takeover":           "GET the name's front page: the service's own page for an unclaimed name",
-	"takeover-candidate": "claim the name at the service (azhaq does not): a CNAME to a name that does not resolve shows only that it is free",
+	"takeover-candidate": "claim the name at the service (azhaq does not): a CNAME to a name that does not resolve shows only that the name does not exist, not who can create it",
 	"secret":             "check the value with the service that issued it (azhaq does not try a credential)",
 	"sourcemap":          "azhaq read the maps: open one and read the app's own files it names (their code is in it when the reason says so)",
 	"exposed-file":       "GET it: the body holds the file's own content (its signature), not a page",
