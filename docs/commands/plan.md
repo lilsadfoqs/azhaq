@@ -291,7 +291,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 | `-axfr` | bool |  | also plan the zone transfers azhaq dns -axfr would try for the domain and host targets: the name servers' lookups, and which name servers the scope would let it ask |
 
 <details>
-<summary>Other names, flags accepted with no effect and rarely used flags (83)</summary>
+<summary>Other names, flags accepted with no effect and rarely used flags (84)</summary>
 
 | Flag | Type | Default | Meaning | Kind |
 | --- | --- | --- | --- | --- |
@@ -322,6 +322,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 | `-params-delay` | duration |  | wait before each parameter request, one at a time (arjun -d) | rarely needed |
 | `-params-include` | string |  | sent with every parameter request: a query for GET; for a body a form, a JSON object or XML, or a template with $arjun$ where the names go | rarely needed |
 | `-params-method` | string | `GET` | how names are sent: GET (query), POST (form body), JSON or XML. A body sends requests that may change data on the target: -params-writes must say it is wanted | rarely needed |
+| `-params-od` | string |  | keep the request and answer that showed each parameter found as a file in this directory, as fuzz -od does (up to 5 MiB of a body; its name is shown with the parameter) | rarely needed |
 | `-params-per-host` | int | `20` | pages searched for parameters per host | rarely needed |
 | `-params-rate` | float |  | parameter requests per second per host (0: no limit, as arjun) | rarely needed |
 | `-params-stable` | bool |  | one parameter request at a time, 3 to 9 s apart, and 30 s after a refused connection (arjun --stable) | rarely needed |

@@ -171,6 +171,10 @@ found in
 - The progress line of the run, printed every 10 s on stderr, names the `hunt` command once its first listener is stored. With `-json` the progress object has it as `hunt`.
 - With `-permute` the progress line also counts the variation names asked against all those the names varied so far make (`75 of 2164 permutation names asked`); with `-json` the progress object has `permutation_names_asked` and `permutation_names`.
 
+### Keeping the answers of `-params` names
+
+`-params-od DIR` keeps, for each parameter `-params` reports, the request that showed it and the answer it got as a file in `DIR`, as `params -od` does: [params](params.md#keeping-the-answer-of-a-name) says what a file holds. The workspace row of the page names the files as `resultfile`.
+
 ### Keeping the answers of `-dirs` matches
 
 `-dirs-od DIR` keeps the request and the answer of each path `-dirs` finds as a file in `DIR`, as `dirs -od` and `fuzz -od` do: [dirs](dirs.md#keeping-the-answer-of-a-match) says what a file holds and how it is cut. The row of the path in the workspace names its file as `resultfile`.
@@ -706,7 +710,7 @@ azhaq run -url https://app.example.com/ -ports top-1000 -verify-logins -db app.d
 | `-strict-exit` | bool |  | exit 3 for any failure, a target among many included (the rule before 0.15); without it a run that did its job exits 0 and its summary counts and lists the failures |
 
 <details>
-<summary>Other names, flags accepted with no effect and rarely used flags (83)</summary>
+<summary>Other names, flags accepted with no effect and rarely used flags (84)</summary>
 
 | Flag | Type | Default | Meaning | Kind |
 | --- | --- | --- | --- | --- |
@@ -737,6 +741,7 @@ azhaq run -url https://app.example.com/ -ports top-1000 -verify-logins -db app.d
 | `-params-delay` | duration |  | wait before each parameter request, one at a time (arjun -d) | rarely needed |
 | `-params-include` | string |  | sent with every parameter request: a query for GET; for a body a form, a JSON object or XML, or a template with $arjun$ where the names go | rarely needed |
 | `-params-method` | string | `GET` | how names are sent: GET (query), POST (form body), JSON or XML. A body sends requests that may change data on the target: -params-writes must say it is wanted | rarely needed |
+| `-params-od` | string |  | keep the request and answer that showed each parameter found as a file in this directory, as fuzz -od does (up to 5 MiB of a body; its name is shown with the parameter) | rarely needed |
 | `-params-per-host` | int | `20` | pages searched for parameters per host | rarely needed |
 | `-params-rate` | float |  | parameter requests per second per host (0: no limit, as arjun) | rarely needed |
 | `-params-stable` | bool |  | one parameter request at a time, 3 to 9 s apart, and 30 s after a refused connection (arjun --stable) | rarely needed |

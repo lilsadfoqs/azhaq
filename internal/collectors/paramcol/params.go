@@ -82,6 +82,10 @@ type Options struct {
 	// one that answered as a path that cannot exist does, or refused (401,
 	// 403, 405). By default they are not searched, and a note says so.
 	All bool
+	// KeepDir, when set, is where the request and answer that showed each
+	// reported name are kept, one file each, as fuzz -od keeps its matches
+	// (fuzz.KeepExchange), up to fuzz.MaxBody of a body.
+	KeepDir string
 }
 
 type Collector struct {
@@ -283,6 +287,11 @@ func (s *search) give(page string, emit func(types.Observation) error, found map
 			notes = append(notes, fmt.Sprintf("%s: did not answer (%s); nothing was searched", page, lostWhy))
 		} else {
 			notes = append(notes, fmt.Sprintf("%s: %d of %d requests got no answer (%s); the names in those groups were not judged", page, lost, s.requests.Load(), lostWhy))
+		}
+	}
+	if s.c.Opts.KeepDir != "" {
+		if n := s.keepFiles(row, found); n > 0 {
+			notes = append(notes, fmt.Sprintf("%s: -od: %d names could not be written to %s", page, n, s.c.Opts.KeepDir))
 		}
 	}
 	if s.cut.Load() {
