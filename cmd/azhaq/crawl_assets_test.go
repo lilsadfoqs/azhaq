@@ -60,9 +60,8 @@ func crawlLines(t *testing.T, srv *httptest.Server, args ...string) map[string]b
 }
 
 // crawl lists what the pages it reads load, as katana does: the scripts and
-// stylesheets (a library script and a stylesheet no crawl step requests too)
-// by default, and the images, fonts and media with -assets. The rows no
-// request asked are marked linked.
+// stylesheets by default, and the images, fonts and media with -assets. The
+// rows no request asked are marked linked.
 func TestCrawlListsScriptsAndStylesByDefault(t *testing.T) {
 	srv := assetsSite(t)
 	const jq, fa = "/assets/jquery-3.2.1.min.js", "/assets/fa/css/font-awesome.min.css"
@@ -89,7 +88,7 @@ func TestCrawlListsScriptsAndStylesByDefault(t *testing.T) {
 		})
 		return out
 	}())
-	for want, class := range map[string]string{"/main.js": "observed", "/chunk-abc.js": "observed", "/styles.css": "observed", jq: "linked", fa: "observed"} {
+	for want, class := range map[string]string{"/main.js": "observed", "/chunk-abc.js": "observed", "/styles.css": "observed", jq: "observed", fa: "observed"} {
 		if rows[srv.URL+want] == nil {
 			t.Errorf("crawl -json has no row for %s", want)
 		} else if rows[srv.URL+want]["class"] != class {

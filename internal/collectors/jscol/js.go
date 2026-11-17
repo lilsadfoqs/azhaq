@@ -7,6 +7,7 @@ import (
 	"github.com/lilsadfoqs/azhaq/internal/guard"
 	"net/http"
 	"net/url"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -132,7 +133,7 @@ func (c *Collector) Skip(seed types.Seed) bool {
 	}
 	if looksLikeJS(raw) {
 		_, done := c.parsed.Load(raw)
-		return done
+		return done || isVendor(raw) // asked by the crawl, not read for routes
 	}
 	switch webextract.ClassifyURL(raw) {
 	case "api", "asset":
@@ -579,6 +580,7 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 
 	var queue []script
 	var fetched []string
+	var libs []string // library scripts the page loads: asked, not read
 	lim := limitsFor(c.MaxScripts)
 	var short left // what the caps kept this page from reading
 	short.scripts = map[string]bool{}
@@ -696,6 +698,16 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		kick()
 		srcs := webextract.ScriptSrcs(res.Body, base)
 		for _, src := range srcs {
+			if isVendor(src) && fetch.SameSite(raw, src) {
+				switch {
+				case slices.Contains(libs, src):
+				case len(fetched)+len(libs) >= lim.scripts:
+					short.scripts[src] = true
+				default:
+					libs = append(libs, src)
+				}
+				continue
+			}
 			load(src, false)
 		}
 		readManifests(webextract.PageManifests(res.Body, base, srcs))
@@ -1161,6 +1173,11 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 			Type: types.TypeURL, Keys: map[string]string{"url": src, types.ViaKey: types.ViaLoaded},
 		})
 	}
+	for _, src := range libs {
+		meta.NextHints = append(meta.NextHints, types.Seed{
+			Type: types.TypeURL, Keys: map[string]string{"url": src, types.ViaKey: types.ViaLoaded},
+		})
+	}
 	// Strings with a complete query (/catalog?category=Gin) are pages of
 	// their own, each a row and asked like a link of the page; the route's
 	// row keeps the names.
@@ -1394,6 +1411,12 @@ type strCand struct {
 // underscore counts; chart_utils.js is the app's.
 var vendorScript = lazyre.New(`(?i)(^|/)(react(-dom)?|jquery(-ui|-migrate)?|bootstrap(\.bundle)?|angular|vue|lodash|moment|popper|d3|three|chart|highcharts|swagger-ui-(bundle|standalone-preset)|polyfills?-legacy)([.-][\w.-]*|_\d[\w.-]*)?\.js$`)
 
+// isVendor reports whether src is a library build (vendorScript).
+func isVendor(src string) bool {
+	u, err := url.Parse(src)
+	return err == nil && vendorScript.MatchString(u.Path)
+}
+
 // load fetches a script on the page's site the run has not parsed yet and
 // queues it. Names found inside scripts must end in .js; <script src>
 // need not. A script address answered with the catch-all page is noted in
@@ -1403,7 +1426,7 @@ func (c *Collector) load(ctx context.Context, page, src string, needExt bool, qu
 	if !fetch.SameSite(page, src) || (needExt && !looksLikeJS(src)) {
 		return queue
 	}
-	if u, err := url.Parse(src); err == nil && vendorScript.MatchString(u.Path) {
+	if isVendor(src) {
 		return queue
 	}
 	if len(*fetched) >= limit {
