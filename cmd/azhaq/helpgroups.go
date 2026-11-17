@@ -330,7 +330,7 @@ var helpSpecs = map[string]helpSpec{
 	},
 	"show": {
 		groups: []helpGroup{
-			{"", `db json run`},
+			{"", `db json body run`},
 		},
 	},
 	"gallery": {

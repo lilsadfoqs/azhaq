@@ -113,11 +113,6 @@ A run that reads a source map, named by a script's comment or by a header, or as
 | --- | --- | --- | --- |
 | `-db` | string |  | the database (default: the last run's) |
 | `-json` | bool |  | one JSON object |
-| `-run` | string |  | the run to read, by the run_id of its summary (default: the newest run of the workspace that has it) |
-
-**Other**
-
-| Flag | Type | Default | Meaning |
-| --- | --- | --- | --- |
 | `-body` | bool |  | also print the code a source map carried, as the run kept it (each of the app's own files, up to 5 MiB a map) |
+| `-run` | string |  | the run to read, by the run_id of its summary (default: the newest run of the workspace that has it) |
 <!-- flags:end -->
