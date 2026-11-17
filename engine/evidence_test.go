@@ -227,3 +227,25 @@ func TestEvidenceGivenSeed(t *testing.T) {
 		t.Errorf("a URL nobody named: %q", m.Evidence)
 	}
 }
+
+// An answer that is also its prefix's catch-all is a visited row like any
+// other, with the control's URL and the label in its answer; one without the
+// mark has none, and the run's note counts the marked rows.
+func TestPrefixCatchAllRowCarriesItsLabel(t *testing.T) {
+	const h = "https://shop.test"
+	obs := []types.StoredObservation{
+		httpObs("a", `{"status":500,"url":"`+h+`/rest/user/login","prefix_catchall":{"url":"`+h+`/rest/user/login/k2x9","status":500,"size":90}}`),
+		httpObs("b", `{"status":500,"url":"`+h+`/api/real"}`),
+	}
+	got := evidenceRows(t, []string{h + "/rest/user/login", h + "/api/real"}, obs)
+	m := got[h+"/rest/user/login"]
+	if m.Coverage != "visited" || m.PrefixCatchAll != h+"/rest/user/login/k2x9" || m.Answer != "the answer of /rest/user/login/<random> too: this prefix's catch-all" {
+		t.Errorf("labelled row: %+v", m)
+	}
+	if o := got[h+"/api/real"]; o.PrefixCatchAll != "" || o.Answer != "" {
+		t.Errorf("unlabelled row: %+v", o)
+	}
+	if n := engine.PrefixCatchAllNote([]engine.MapEntry{m, got[h+"/api/real"]}); !strings.HasPrefix(n, "1 hits answered like their prefix's catch-all; listed, ranked last") {
+		t.Errorf("note %q", n)
+	}
+}

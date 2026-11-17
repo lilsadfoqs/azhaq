@@ -334,7 +334,9 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 	var wgFetch, wgSample sync.WaitGroup
 	var mu sync.Mutex // results, reported
 	reported := make([]bool, len(run))
+	stoppedRun := make([]bool, len(run)) // still running, or cut by the run's stop
 	closed := false
+	startedAt := time.Now()
 	hold := &holdState{}
 	hold.pending.Store(int32(len(run)))
 	// The sources azhaq adds to subfinder's set are waited for until that
@@ -375,6 +377,67 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 			close(extrasEnd)
 		}
 	}
+	// rowFor is a source's row of the summary: what it gave, its requests and
+	// its end. A source the run's stop caught asking is marked running.
+	rowFor := func(i int, s source, r outcome, n int, running bool) map[string]any {
+		row := map[string]any{"count": n, "seconds": round(r.took.Seconds())}
+		if !s.deflt && !named0[s.name] {
+			row["default"] = false // run by -all-sources: its failure is not the run's
+		}
+		if c := calls[i].Load(); c > 1 {
+			row["calls"] = c
+		}
+		if est, ok := schnabel(rounds[i].snapshot()); ok {
+			row["population_estimate"] = int(est + 0.5)
+		}
+		if st := rounds[i].statSnapshot(); len(st) > 0 {
+			row["rounds"] = st
+		}
+		if s.sampler && len(rounds[i].statSnapshot()) > 0 {
+			row["sample_ceiling"] = sampleCeiling(c.opts.GuessSamples)
+		}
+		if why := rounds[i].stopped(); why != "" {
+			row["sampling_stopped"] = why
+			if boundedStop(why) {
+				row["sampling_bounded"] = true
+			}
+		}
+		throttles[i].fields(row)
+		if n := notes[i].get(); n != "" {
+			row["partial"] = n
+		}
+		if r.err != nil {
+			row["error"] = shorten(r.err.Error())
+		}
+		if running {
+			row["running"] = true
+		}
+		return row
+	}
+	// The rows as they stand, for a caller whose summary was lost to the
+	// stop (see Live): a source not back yet is running.
+	setLive(domain, func() map[string]any {
+		mu.Lock()
+		defer mu.Unlock()
+		rows := map[string]any{}
+		for i, s := range run {
+			r, running := results[i], stoppedRun[i]
+			if !closed && !reported[i] {
+				r, running = outcome{names: partials[i].snapshot(), err: errRunning, took: time.Since(startedAt)}, true
+			}
+			seen := map[string]bool{}
+			for _, raw := range r.names {
+				if name := clean(raw, domain); name != "" {
+					seen[name] = true
+				}
+			}
+			rows[s.name] = rowFor(i, s, r, len(seen), running)
+		}
+		for name, why := range skipped {
+			rows[name] = map[string]any{"skipped": why}
+		}
+		return rows
+	})
 	for i, s := range run {
 		var sctx context.Context
 		var cancel context.CancelFunc
@@ -529,9 +592,11 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		case !reported[i]:
 			results[i] = outcome{names: partials[i].snapshot(), err: stopped, took: time.Since(t0)}
 			partial = partial || cut
+			stoppedRun[i] = cut || ctx.Err() != nil // else its own bound ended it: a failure of the source
 		case ctx.Err() != nil && contextEnded(results[i].err):
 			results[i].err = stopped
 			partial = true
+			stoppedRun[i] = true
 		}
 	}
 	mu.Unlock()
@@ -551,11 +616,9 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 	foundBy := map[string][]string{} // name → the sources that gave it
 	wildcard := map[string]bool{}    // names a certificate gave as *.name
 	status := map[string]any{}
-	named := set(c.opts.Only)
 	var failed []string
 	for i, s := range run {
 		r := results[i]
-		row := map[string]any{"count": 0, "seconds": round(r.took.Seconds())}
 		n := 0
 		mine := map[string]bool{}
 		for _, raw := range r.names {
@@ -581,34 +644,8 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 			}
 			foundBy[name] = append(foundBy[name], s.name)
 		}
-		row["count"] = n
-		if !s.deflt && !named[s.name] {
-			row["default"] = false // run by -all-sources: its failure is not the run's
-		}
-		if c := calls[i].Load(); c > 1 {
-			row["calls"] = c
-		}
-		if est, ok := schnabel(rounds[i].snapshot()); ok {
-			row["population_estimate"] = int(est + 0.5)
-		}
-		if st := rounds[i].statSnapshot(); len(st) > 0 {
-			row["rounds"] = st
-		}
-		if s.sampler && len(rounds[i].statSnapshot()) > 0 {
-			row["sample_ceiling"] = sampleCeiling(c.opts.GuessSamples)
-		}
-		if why := rounds[i].stopped(); why != "" {
-			row["sampling_stopped"] = why
-			if boundedStop(why) {
-				row["sampling_bounded"] = true
-			}
-		}
-		throttles[i].fields(row)
-		if n := notes[i].get(); n != "" {
-			row["partial"] = n
-		}
+		row := rowFor(i, s, r, n, stoppedRun[i])
 		if r.err != nil {
-			row["error"] = shorten(r.err.Error())
 			failed = append(failed, s.name)
 		}
 		status[s.name] = row

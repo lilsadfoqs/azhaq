@@ -332,6 +332,9 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 			"final_url": final,
 			"hops":      res.Hops,
 		}
+		if pc := fetch.PrefixControl(ctx, c.Client, res); pc != nil {
+			row["prefix_catchall"] = pc // also the answer of a name under its path: listed, labelled
+		}
 		own := res.Own() // the row is the answer of this URL; a redirect's target is its own row
 		fetch.AddEvidence(row, own, 0)
 		// What the answer holds, for the path checks' judgement: nothing is asked again.

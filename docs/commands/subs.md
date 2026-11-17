@@ -95,15 +95,18 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 | `sources answered` | Sources that returned without an error. |
 | `sources failed` | Failures of sources in the default set, or named with `-sources`. |
 | `off-by-default failed` | Failures of sources that ran only because of `-all-sources`. |
+| `sources still running` | Sources the run's stop (`-timeout`, `-max-time`) caught asking: no answer yet. Not a failure of the source. Absent when there are none. |
 
-`sources asked` is `sources answered` plus `sources failed` plus `off-by-default failed`.
+`sources asked` is `sources answered` plus `sources failed` plus `sources still running` plus `off-by-default failed`.
+
+A stopped run counts a source whose requests are in the ledger as asked: it is answered, failed or still running, never "not asked", and its `requests` are the ones the ledger holds for it. When the stop lost the domain's summary row (the kill file, a request budget), the counts are read from the sources as they stood.
 
 A domain in a zone the root zone does not delegate (`corp.internal`, `nas.lan`) or under `home.arpa` is asked of no third-party source: no public source can hold its names, and asking would only tell it the name. Only `history` runs for it. `azhaq plan` lists no source for it either.
 
 ### The sources block
 - `asked`, `answered`, `failed` and `off_by_default_failed` count each source once for each domain, as `counts` does.
 - `failed` counts sources in the default set, or named with `-sources`. `off_by_default_failed` counts sources that ran only because of `-all-sources`.
-- `asked` is `answered` plus `failed` plus `off_by_default_failed`. A source skipped for want of a key is not asked.
+- `asked` is `answered` plus `failed` plus `still_running` plus `off_by_default_failed`. A source skipped for want of a key is not asked. `still_running` counts the sources the run's stop caught asking; it is absent when there are none.
 - `names` is what each source gave, before any DNS check or filter. For `urls` the field is `urls`: see [urls](urls.md#summary-and-exit-codes).
 - `requests` is what each source was sent, retries included, summed over the domains. The summary's top-level `requests` leaves them out: they go to third parties, not to targets.
 - `seconds` is how long each source took, the longest over the domains. The slowest source set the run's time. crt.sh is asked in its public PostgreSQL first, as subfinder does, and in its JSON API only when the database fails or has no names (a 500, 502, 503 or 504 of the JSON API is asked again up to 4 times, with a pause that doubles from 1 s, as far as `-source-timeout` leaves time; not asked again once every other source has answered with names and crt.sh alone is left, since subfinder asks it once and the retry would be all the run waits for, and a note says so); a note says which happened, as in `crt.sh database: connection refused; asked the JSON API`. The limited query is cut at a quarter of `-source-timeout`, which leaves the rest for the JSON API: a large domain whose query needs longer wants a longer `-source-timeout`. The database query is limited to 10000 rows, as subfinder's is; when exactly 10000 come back the rest is asked without the limit, then from the JSON API, and the note says which path gave the names. A note names it when it held the run: `crtsh took 30 s, the next slowest source 3 s, so it held the run`.
@@ -116,6 +119,8 @@ The text summary ends with the same, and says why the exit code is what it is:
 ```
 23 of 33 sources answered, 10 failed (listed above); exit 0 because the run did its job: the names the others gave stand, and a failed source's may be missing (-strict-exit makes it 3)
 ```
+
+A stopped run adds the sources it caught asking: `1 of 3 sources answered, 1 failed (listed above), 1 still running when the run stopped`.
 
 ### Degraded
 - True when `sources failed` ([Sources in the summary](#sources-in-the-summary)) is above 0. A source the run relies on did not answer, so the names may be incomplete.
