@@ -3,6 +3,7 @@ package pathscol
 import (
 	"context"
 	"encoding/json"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -264,5 +265,46 @@ func TestSweepInFlightFollowsTheHostsCap(t *testing.T) {
 				t.Errorf("most in flight %d, want %d to %d", got, c.wantAtLeast, c.wantMax)
 			}
 		})
+	}
+}
+
+// A sweep keeps a connection for each check in flight: it does not open one
+// for most of its 1,300 checks, as the default of two idle ones made it
+// (#505).
+func TestSweepReusesItsConnections(t *testing.T) {
+	fetch.Reset()
+	t.Cleanup(fetch.Reset)
+	srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(2 * time.Millisecond)
+		http.NotFound(w, r)
+	}))
+	var conns atomic.Int64
+	srv.Config.ConnState = func(_ net.Conn, s http.ConnState) {
+		if s == http.StateNew {
+			conns.Add(1)
+		}
+	}
+	srv.Start()
+	t.Cleanup(srv.Close)
+	words := ProductWords()[:300]
+	col := &Collector{Client: fetch.Client(srv.Client()), Wordlist: words}
+	_, err := col.Run(context.Background(), types.Seed{Type: types.TypeURL, Keys: map[string]string{"url": srv.URL + "/"}}, func(types.Observation) error { return nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, most := int(conns.Load()), 3*sweepParallel(); got > most {
+		t.Errorf("%d connections for %d checks, want at most %d", got, len(words), most)
+	}
+}
+
+// A collector made with no client sweeps with the run's own.
+func TestSweepWithoutAClient(t *testing.T) {
+	fetch.Reset()
+	t.Cleanup(fetch.Reset)
+	srv := httptest.NewServer(http.NotFoundHandler())
+	t.Cleanup(srv.Close)
+	col := &Collector{Wordlist: []string{"login", "admin"}}
+	if _, err := col.Run(context.Background(), types.Seed{Type: types.TypeURL, Keys: map[string]string{"url": srv.URL + "/"}}, func(types.Observation) error { return nil }); err != nil {
+		t.Fatal(err)
 	}
 }
