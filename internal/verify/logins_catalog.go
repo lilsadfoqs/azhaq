@@ -4,6 +4,9 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
+
+	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 )
 
 // The catalog of -verify-logins: every published default credential pair
@@ -190,6 +193,34 @@ var defaultLogins = []DefaultLogin{
 		UserField: "userName", PassField: "userPassword",
 		Success: func(status int, body []byte) bool { return status == 200 && bodyHasAny(body, []string{"\"code\":0"}) },
 	},
+	{
+		ID: "showdoc-default-account", Product: "ShowDoc", Source: "https://github.com/star7th/showdoc/blob/master/documentation/en/AutoInstall.md",
+		// Ports: the Source page: "http://your-domain.com:4999"
+		Ports: []int{4999},
+		// The sign-in is /api/user/login of its server (UserController::login): "no empty password" to the
+		// no-credential control, a wrong-pair error to the other, user_token only for a pair it accepts.
+		User: "showdoc", Pass: "123456", Mode: ModeForm, Path: "/server/index.php?s=/api/user/login",
+		UserField: "username", PassField: "password",
+		Success: func(status int, body []byte) bool {
+			return status == 200 && bodyHasAny(body, []string{"\"user_token\""})
+		},
+		Logout: func(ctx context.Context, d HTTPDoer, origin, cookie string, body []byte) {
+			logoutPOST(ctx, d, origin+"/server/index.php?s=/api/user/logout", cookie, "confirm=1")
+		},
+	},
+}
+
+// logoutPOST is logoutGET for a product that ends a session with a POST.
+func logoutPOST(ctx context.Context, d HTTPDoer, url, cookie, form string) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(form))
+	if err != nil {
+		return
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	if cookie != "" {
+		req.Header.Set("Cookie", cookie)
+	}
+	_, _, _ = d.do(ctx, req)
 }
 
 // logoutGET is the best-effort GET of url with cookie set, through d so it
@@ -208,6 +239,13 @@ func logoutGET(ctx context.Context, d HTTPDoer, url, cookie string) {
 func bodyMarker(markers ...string) func(status int, body []byte) bool {
 	return func(status int, body []byte) bool { return bodyHasAny(body, markers) }
 }
+
+// The windows of OpenTSDB's evidence: the one key (or metric) that was matched
+// and its value.
+var (
+	openTSDBPort = lazyre.New(`"tsd\.network\.port"\s*:\s*"[^"]*"`)
+	openTSDBStat = lazyre.New(`"metric"\s*:\s*"tsd\.connectionmgr\.[^"]*"`)
+)
 
 var unauthReads = []UnauthRead{
 	{
@@ -300,5 +338,24 @@ var unauthReads = []UnauthRead{
 		Ports:  []int{2379, 2380},
 		Source: "https://etcd.io/docs/v3.5/op-guide/authentication/rbac/",
 		Shown:  bodyMarker("\"health\""),
+	},
+	{
+		ID: "opentsdb-api-config", Product: "OpenTSDB", Path: "/api/config",
+		// Ports: the Source pages' example requests: http://localhost:4242
+		Ports:  []int{4242},
+		Source: "https://opentsdb.net/docs/build/html/api_http/config/index.html",
+		Shown: func(status int, body []byte) bool {
+			return status == 200 && bodyHasAny(body, []string{"\"tsd.network.port\""})
+		},
+		Window: func(body []byte) string { return openTSDBPort.FindString(string(body)) },
+	},
+	{
+		ID: "opentsdb-api-stats", Product: "OpenTSDB", Path: "/api/stats",
+		Ports:  []int{4242},
+		Source: "https://opentsdb.net/docs/build/html/api_http/stats/index.html",
+		Shown: func(status int, body []byte) bool {
+			return status == 200 && bodyHasAny(body, []string{"\"tsd.connectionmgr."})
+		},
+		Window: func(body []byte) string { return openTSDBStat.FindString(string(body)) },
 	},
 }

@@ -384,12 +384,14 @@ func TestLoginsForProductMatchesByNormalizedName(t *testing.T) {
 // No mode ever puts the pair in the request's query string: the ledger
 // keeps the URL of every request (never a header, and a body only as
 // its hash), so a mode that did would leak the password into it. Every
-// catalog entry's request carries no query string at all.
+// catalog entry's request carries no query string but the fixed one its own
+// Path names (a route a product takes as ?s=/api/..., never a credential).
 func TestNoModeEverSendsAQueryString(t *testing.T) {
 	for _, lg := range DefaultLogins() {
+		_, fixed, _ := strings.Cut(lg.Path, "?")
 		origin, _ := newFixture(t, func(n int, w http.ResponseWriter, r *http.Request) {
-			if r.URL.RawQuery != "" {
-				t.Errorf("%s: the request carries a query string, which the ledger keeps: %q", lg.ID, r.URL.RawQuery)
+			if r.URL.RawQuery != fixed {
+				t.Errorf("%s: the request carries a query string beyond its path's, which the ledger keeps: %q", lg.ID, r.URL.RawQuery)
 			}
 			w.WriteHeader(200)
 		})
