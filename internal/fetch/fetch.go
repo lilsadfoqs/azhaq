@@ -21,6 +21,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/lilsadfoqs/azhaq/internal/certfacts"
 	"github.com/lilsadfoqs/azhaq/internal/egress"
 	"github.com/lilsadfoqs/azhaq/internal/neterr"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
@@ -84,6 +85,9 @@ type Result struct {
 	// Raw is the request and the last response as they went over the wire,
 	// kept when KeepRaw is set.
 	Raw *Raw
+	// Cert is the first hop's certificate, read from the handshake that hop made
+	// (nil over plain http); judged for the name the handshake asked.
+	Cert *certfacts.Facts
 
 	cut bool // the chain stopped before its end: the budget, a failure or an interrupt
 }
@@ -718,6 +722,7 @@ func do(ctx context.Context, c *http.Client, raw string, rq *Req) (Result, error
 	var remoteIP string
 	var cut bool
 	var kept *Raw
+	var cert *certfacts.Facts
 	if KeepRaw {
 		kept = &Raw{}
 	}
@@ -758,6 +763,9 @@ func do(ctx context.Context, c *http.Client, raw string, rq *Req) (Result, error
 			kept.Head, kept.Proto = head, resp.Proto
 			kept.TLS = tlsInfo(resp.TLS)
 			kept.Chain = append(kept.Chain, RawHop{Request: string(reqDump), Response: head})
+		}
+		if i == 0 {
+			cert = certOf(resp)
 		}
 		loc := strings.TrimSpace(resp.Header.Get("Location"))
 		reqURL := current
@@ -812,8 +820,23 @@ func do(ctx context.Context, c *http.Client, raw string, rq *Req) (Result, error
 		At:          start,
 		Method:      m,
 		Raw:         kept,
+		Cert:        cert,
 		cut:         cut,
 	}, nil
+}
+
+// certOf is the leaf certificate of resp's own handshake, judged for the name
+// that handshake asked (the URL's host when it sent no server name).
+func certOf(resp *http.Response) *certfacts.Facts {
+	if resp.TLS == nil || len(resp.TLS.PeerCertificates) == 0 {
+		return nil
+	}
+	asked := resp.TLS.ServerName
+	if asked == "" && resp.Request != nil && resp.Request.URL != nil {
+		asked = resp.Request.URL.Hostname()
+	}
+	f := certfacts.Of(resp.TLS.PeerCertificates[0], asked, time.Now())
+	return &f
 }
 
 // viaProxy drops ip when the request went through a proxy: the address

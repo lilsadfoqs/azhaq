@@ -769,6 +769,7 @@ func (c *Collector) fetchFirst(ctx context.Context, raw string, rq *fetch.Req, f
 	} else {
 		fetch.AddEvidence(row, res, full)
 	}
+	fetch.AddCert(row, res)
 	bare := first && res.Status == http.StatusBadRequest
 	var control *fetch.Control
 	catchAll := false

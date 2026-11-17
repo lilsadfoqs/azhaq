@@ -201,6 +201,12 @@ The URL keys other than `catchall` and `skipped` count rows of the other coverag
 - `dns` rows carry `dangling` on a name whose CNAME chain ends at a name that answered `NXDOMAIN`: `{chain, target, rcode, server}`, whether or not the target is on a provider's list. It is the measured fact, and the source of the `dangling-dns` finding of `azhaq report -findings`: kind `dangling-dns`, severity low, tier finding, with the chain, the answer, the resolver that gave it (`server`) and a `dig` command in `reproduce`.
 - It is not a takeover claim. The `takeover` object, a lead (`claim the name at SERVICE (azhaq does not)`), is separate and only for a target on a provider's list or a domain nobody holds.
 
+### certificate
+
+- A `ports` row of a TLS port, and an `azhaq-http` row of an `https` URL, carry `certificate`: `{subject, sans, issuer, not_before, not_after, self_signed, expired, name_mismatch, asked}`, read from the handshake that was already made, with no request of its own. `self_signed`, `expired` and `name_mismatch` are there only when they hold; `asked` is the name `name_mismatch` was judged against, and is absent when the host asked was an address.
+- It is the source of the `tls-certificate` finding of `azhaq report -findings`: kind `tls-certificate`, label `observed-certificate`, severity low, tier finding, with the facts the handshake showed and an `openssl s_client -connect HOST:PORT -servername NAME </dev/null | openssl x509 -noout -subject -issuer -dates` line in `reproduce`. A certificate with none of the three facts has no finding.
+- A handshake that did not complete, an `http://` URL, a path check's row, a UDP port and an imported scan have no `certificate`.
+
 ### failed
 
 - An answer whose body ended before its `Content-Length` says `closed after 234 of 4096 bytes (HTTP 200, text/html)`: how many bytes came, how many were promised, the status and the media type. The URL's row keeps the status, and `azhaq show` has the headers and the bytes that came, marked `cut`. It is a failure like any other.

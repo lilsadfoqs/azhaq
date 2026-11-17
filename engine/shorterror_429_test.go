@@ -30,3 +30,22 @@ func TestShortErrorKeepsACutBody(t *testing.T) {
 		}
 	}
 }
+
+// The TLS hint on a plain request's failure is text for the reader: the failure
+// is classified, grouped and retried as it was without it.
+func TestTLSHintDoesNotChangeTheFailure(t *testing.T) {
+	for raw, want := range map[string]string{
+		`Get "http://127.0.0.1:34117/": EOF; this port may speak TLS; try https://127.0.0.1:34117`:                                "connection closed (EOF)",
+		`Get "http://h:80/": read tcp 1.2.3.4:5->6.7.8.9:80: connection reset by peer; this port may speak TLS; try https://h:80`: "connection reset",
+	} {
+		if got := ShortError(raw); got != want {
+			t.Errorf("%s: %q, want %q", raw, got, want)
+		}
+		if !Retryable(raw) {
+			t.Errorf("%s: not retryable", raw)
+		}
+	}
+	if Retryable(`Get "http://h:80/": malformed HTTP response "\x15\x03\x01"; this port speaks TLS; try https://h:80`) {
+		t.Error("an alert answer became retryable")
+	}
+}

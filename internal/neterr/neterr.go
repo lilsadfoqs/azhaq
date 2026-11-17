@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/url"
 	"os"
 	"strings"
 	"syscall"
@@ -282,9 +283,10 @@ func (e *tlsHinted) Unwrap() error { return e.err }
 
 // TLSHint adds to err, the failure of a request to raw, that the port seems to
 // speak TLS: the answer to a plain http:// request began with a TLS record (an
-// alert, 0x15 or 0x16, then 0x03), which is certain, or was a bare reset,
-// which only may be. Any other error, and a request over https, come back as
-// they were.
+// alert, 0x15 or 0x16, then 0x03), which is certain, or was a bare reset or a
+// close with no answer, which only may be (Go's own TLS server closes on plain
+// bytes with no alert). Any other error, and a request over https, come back
+// as they were.
 func TLSHint(raw string, err error) error {
 	rest, ok := strings.CutPrefix(raw, "http://")
 	if err == nil || !ok {
@@ -300,8 +302,15 @@ func TLSHint(raw string, err error) error {
 	switch s := err.Error(); {
 	case NotHTTP(err) && (strings.Contains(s, `\x15\x03`) || strings.Contains(s, `\x16\x03`)):
 		return &tlsHinted{err, "this port speaks TLS; try https://" + hostport}
-	case errors.Is(err, syscall.ECONNRESET) || strings.Contains(s, "connection reset by peer"):
+	case errors.Is(err, syscall.ECONNRESET) || strings.Contains(s, "connection reset by peer") || closedBare(err):
 		return &tlsHinted{err, "this port may speak TLS; try https://" + hostport}
 	}
 	return err
+}
+
+// closedBare: the transport's own error is EOF, so the peer closed before
+// any byte of an answer. An EOF in the middle of a body is not this.
+func closedBare(err error) bool {
+	var ue *url.Error
+	return errors.As(err, &ue) && ue.Err == io.EOF
 }

@@ -66,6 +66,28 @@ func TestTraceRecordIsOneFindingAndNoLead(t *testing.T) {
 	}
 }
 
+// A tls-certificate row is a finding of severity low for a service, keyed by
+// host:port, ranked before every lead and with its reproduce line as next.
+func TestCertificateRowRanksWithTheFindings(t *testing.T) {
+	var rows []engine.MapEntry
+	for i := 0; i < 40; i++ {
+		rows = append(rows, urlRow(fmt.Sprintf("http://t.test/api/users/%d/orders", i), "api", "visited", 200, nil))
+	}
+	p := &proof.Proof{ObservedAt: "2026-11-16T00:00:00Z", Method: "tls handshake", Target: "t.test:8443", Excerpt: "subject CN=self; issuer CN=self",
+		ExcerptPart: "certificate", How: "azhaq-ports", Reproduce: "openssl s_client -connect t.test:8443 -servername 't.test' </dev/null | openssl x509 -noout -subject -issuer -dates"}
+	got := Build(Input{DB: "w.db", Rows: rows, Now: time.Now(), Since: 7 * 24 * time.Hour,
+		Measured: []Measured{{Kind: "tls-certificate", Type: "Service", Host: "t.test:8443", Severity: "low", Evidence: "expired", Proof: p}}})
+	var f *Row
+	for i := range got {
+		if got[i].Key == "t.test:8443" {
+			f = &got[i]
+		}
+	}
+	if f == nil || f.Rank != 1 || f.Tier != proof.TierFinding || f.Type != "Service" || f.Reasons[0].Signal != "tls-certificate" || f.Next != p.Reproduce || f.Score != 30 {
+		t.Fatalf("row %+v of %d rows", f, len(got))
+	}
+}
+
 // /assets that answers an empty 302 and /assets/ that answers 500 with a trace
 // are one route: the 5xx reason names the URL that gave it, so the 302 is not
 // read as the answer that failed (#588).

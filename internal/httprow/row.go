@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/lilsadfoqs/azhaq/internal/certfacts"
 	"github.com/lilsadfoqs/azhaq/internal/cpedetect"
 	"github.com/lilsadfoqs/azhaq/internal/egress"
 	"github.com/lilsadfoqs/azhaq/internal/fetch"
@@ -108,6 +109,9 @@ type Row struct {
 	BodyCut         bool                `json:"body_cut,omitempty"`
 	BodyURL         string              `json:"body_url,omitempty"` // after a redirect: the URL the body is of
 	AskedAt         time.Time           `json:"asked_at,omitzero"`
+	// Certificate is the leaf certificate the answer's own handshake showed,
+	// judged for the name it asked: no request of its own.
+	Certificate *certfacts.Facts `json:"certificate,omitempty"`
 
 	// azhaq probe.
 	Method        string                   `json:"method,omitempty"`
