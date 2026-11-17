@@ -187,7 +187,8 @@ func (e *Engine) Run(ctx context.Context, item types.WorkItem) (types.RunMeta, e
 		hold = false
 	}
 	emit := func(o types.Observation) error {
-		if ctx.Err() != nil {
+		// A kept row is what a stop must not lose: a deadline's too.
+		if ctx.Err() != nil && !o.Keep {
 			return ctx.Err()
 		}
 		if o.ObservedAt.IsZero() {

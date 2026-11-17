@@ -319,3 +319,21 @@ func network(a dnsr.Answer) (name, kind string) {
 	}
 	return fingerprint.NetworkByName(a.CNAME...)
 }
+
+// NoAddress says a dns row's name has no address of its own: it does not
+// exist, has no address, ends a CNAME chain without one, or only a wildcard
+// answers. Work waiting on such a name is dropped (Drop in describe).
+func NoAddress(payload json.RawMessage) bool {
+	var p struct {
+		Result   string `json:"result"`
+		Wildcard bool   `json:"wildcard"`
+	}
+	if json.Unmarshal(payload, &p) != nil {
+		return false
+	}
+	switch p.Result {
+	case dnsr.StatusNXDomain, dnsr.StatusBroken, dnsr.StatusNoData, dnsr.StatusCNAME:
+		return true
+	}
+	return p.Wildcard
+}

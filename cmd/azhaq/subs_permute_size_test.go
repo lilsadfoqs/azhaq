@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/lilsadfoqs/azhaq/internal/collectors/brutecol"
+	"github.com/lilsadfoqs/azhaq/internal/collectors/subcol"
 )
 
 var permuteSeeds = []string{"api.example.org", "dev.example.org", "staging.example.org"}
@@ -135,4 +136,41 @@ func TestRunProgressCountsThePermutationNamesAskedOfAll(t *testing.T) {
 		}
 	}
 	t.Errorf("no progress line says %q:\n%s", want, errOut)
+}
+
+// A name DNS finds no address for is not varied: the note counts the names
+// the run varied, says why one was left out, and plan calls its own number
+// an upper bound.
+func TestPermuteSizeLeavesOutANameThatDoesNotResolve(t *testing.T) {
+	t.Chdir(t.TempDir())
+	live := []string{"api.example.org", "dev.example.org"}
+	z := &countingZone{
+		a:      map[string]string{live[0]: "127.0.0.2", live[1]: "127.0.0.3"},
+		byType: map[string]int{}, byName: map[string]int{},
+	}
+	resolver := serveCounting(t, z, 1)
+	defer subcol.UseTestSources(subcol.TestSource{Name: "s", Default: true, Names: append(live[:2:2], "ghost.example.org")})()
+	_, rep, code := runContract(t, "subs", "-d", "example.org", "-sources", "s", "-permute", "-live", "-resolvers", resolver, "-no-history", "-db", "g.db")
+	if code != exitOK {
+		t.Fatalf("exit %d %q", code, rep.Stopped)
+	}
+	var note string
+	for _, n := range rep.Notes {
+		if strings.HasPrefix(n, "-permute: ") {
+			note = n
+		}
+	}
+	want := len(brutecol.PermuteNames(live))
+	if !strings.Contains(note, fmt.Sprintf("2 names varied, %d variation names to ask", want)) ||
+		!strings.Contains(note, fmt.Sprintf("%d asked", want)) ||
+		!strings.Contains(note, "1 name found did not resolve to an address of its own, so it was not varied") {
+		t.Errorf("the note does not count the 2 names varied (%d variation names) and name the one left out: %q", want, rep.Notes)
+	}
+
+	// Before any answer, plan cannot know which names resolve.
+	list := writeList(t, append(live, "ghost.example.org")...)
+	pc := planJSON(t, "-list", list, "-sources", "none", "-permute", "-allow", "example.org", "-resolvers", resolver).Estimate.Permute
+	if pc == nil || !pc.UpperBound || !strings.Contains(pc.text(), "up to ") || !strings.Contains(pc.text(), "an upper bound") {
+		t.Errorf("plan's permute size is not called an upper bound: %+v", pc)
+	}
 }

@@ -130,7 +130,7 @@ The summary also lists failures per kind of error, and takeover findings: a CNAM
 - With `-resolvers`, the resolver you name is asked for every name, these included, and the system's resolver is not.
 
 ### Zone transfer
-- `-axfr` asks the zone's name servers on port 53 first, then each `-r` resolver at its own port, over TCP, as dnsx does. Text and `-json` ask the same servers.
+- `-axfr` asks the zone's name servers on port 53 first, then each `-r` resolver at its own port, over TCP, as dnsx does. Text and `-json` ask the same servers. A resolver is asked for the zone whatever `-allow` says (only `-deny` holds it), and the ledger line of that question has the rule `-resolvers ADDRESS`, the address as you gave it: the resolver is why it was allowed.
 - With `-allow`, `-scope` or `-deny` given, a name server is asked only at an address the scope allows: its name being in the scope does not vouch for where it points. A name server whose address is outside is not contacted. The summary names it, and adding its address to `-allow` allows the transfer. Without any scope flag, the name given is the scope, as before.
 - A `-r` resolver that `-deny` names is not asked for the zone: a transfer is not a lookup. Its lookups still go to it, as to any resolver you name, and the run says so before it sends (`-deny 127.0.0.1 names the resolver 127.0.0.1:5301: every lookup still goes to it …`). The summary names the resolvers held (`resolvers not asked for the zone, denied: …`).
 - `azhaq plan -axfr` lists these connections before anything is sent.
@@ -188,7 +188,7 @@ The summary also lists failures per kind of error, and takeover findings: a CNAM
 | `-soa` | bool |  | ask SOA records and print the names that have one |
 | `-caa` | bool |  | ask CAA records and print the names that have one |
 | `-any` | bool |  | ask ANY records and print the names that have one |
-| `-axfr` | bool |  | ask each name server of the name, and the -resolvers you gave, for the whole zone over TCP (active; a name server is asked at an address the scope allows: -allow, -scope) |
+| `-axfr` | bool |  | ask each name server of the name for the whole zone over TCP, and each -resolvers address too (active; a name server is asked at an address the scope allows: -allow, -scope; a resolver you named is not held to them, only -deny holds it) |
 | `-all` | bool |  | ask A, AAAA, CNAME, SOA, TXT, SRV, MX, NS and CAA (not ANY, not AXFR) and print the records (-resp); an address gets only PTR |
 | `-e` | string, repeatable |  | types not to ask with -all, comma-separated |
 

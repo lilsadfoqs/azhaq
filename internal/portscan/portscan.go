@@ -20,6 +20,7 @@ import (
 	"github.com/lilsadfoqs/azhaq/internal/certfacts"
 	"github.com/lilsadfoqs/azhaq/internal/egress"
 	"github.com/lilsadfoqs/azhaq/internal/limit"
+	"github.com/lilsadfoqs/azhaq/internal/neterr"
 )
 
 // Top lists are nmap's most frequent TCP ports, as naabu ships them (MIT,
@@ -601,6 +602,7 @@ func (s *Scanner) pass(ctx context.Context, host, ip string, ports []int, found 
 			// timer for all of them, not one each.
 			paid = min(k, len(ports)-i)
 			if err := s.waitN(ctx, ip, paid); err != nil {
+				stop = paceStop(err)
 				break
 			}
 		}
@@ -638,7 +640,7 @@ func (s *Scanner) pass(ctx context.Context, host, ip string, ports []int, found 
 	wg.Wait()
 	stopTicks()
 	if prog != nil {
-		prog.last(&mu, asked)
+		prog.last(&mu, asked, ctx.Err() != nil)
 	}
 	if stop == nil {
 		stop = s.proxyDead()
@@ -647,6 +649,15 @@ func (s *Scanner) pass(ctx context.Context, host, ip string, ports []int, found 
 		return open, silent, asked, slow, stop
 	}
 	return open, silent, asked, slow, ctx.Err()
+}
+
+// paceStop is a refused wait for the pace that ends the scan: the kill file
+// or the budget. A context ending is reported by the scan's own ctx.Err.
+func paceStop(err error) error {
+	if errors.Is(err, neterr.ErrBudget) {
+		return err
+	}
+	return nil
 }
 
 // proxyDead is the failure of the proxy a connect met, which ends the scan:
@@ -808,7 +819,8 @@ func (s *Scanner) secondLook(ctx context.Context, host, ip string, open []Open) 
 		if stop != nil || ctx.Err() != nil {
 			continue // the flag is still cleared for the rest
 		}
-		if s.wait(ctx, ip) != nil {
+		if err := s.wait(ctx, ip); err != nil {
+			stop = paceStop(err)
 			continue
 		}
 		if s.Take != nil {
