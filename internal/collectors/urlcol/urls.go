@@ -71,6 +71,10 @@ type Options struct {
 	// OnRow is OnURL with the whole row: when it is set, OnURL is not called.
 	OnRow func(Row)
 	Raw   bool
+	// AsGiven lists a URL once for each string the archives gave it as,
+	// where it would be one normalised line. Rows keep the normalised URL
+	// and carry the archive's string in RawURL; the junk filter still applies.
+	AsGiven bool
 	// KeepJunk lists the URLs left out as junk too, each labelled with its
 	// class and reason, instead of only counting them.
 	KeepJunk bool
@@ -85,6 +89,16 @@ type Row struct {
 	Archived   string `json:"archived,omitempty"`   // when the archive captured it, RFC 3339 UTC, as the archive states it
 	Junk       string `json:"junk,omitempty"`       // why it looks like noise: a class (see JunkClasses) or "asset"
 	Reason     string `json:"junk_reason,omitempty"`
+}
+
+// AsGiven is the row printed with AsGiven: url is the archive's string and
+// normalized the identity the run keeps.
+func (r Row) AsGiven() Row {
+	r.Normalized = r.URL
+	if r.RawURL != "" {
+		r.URL, r.RawURL = r.RawURL, ""
+	}
+	return r
 }
 
 type Collector struct {
@@ -274,6 +288,9 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 	from := map[string]Row{}    // URL → the row of the source that gave it first
 	var junkRows []Row          // with KeepJunk: the URLs left out as junk
 	junked := map[string]bool{} // URLs on the domain left out as junk
+	asGiven := c.opts.AsGiven && !c.opts.Raw
+	shown := map[string]bool{} // with asGiven: the strings listed
+	var forms []Row            // with asGiven: later strings of a URL already kept
 	byReason := map[string]int{}
 	var all []string
 	var archiveErr error
@@ -371,25 +388,44 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 						continue
 					}
 					count++
-					if seen[u] || (!c.opts.Raw && out.repeat(u)) {
+					form := strings.TrimSpace(raw)
+					// A later string of a kept URL is listed too, but not
+					// stored again, and -fp keeps one for each host and path.
+					more := seen[u] && asGiven && !c.opts.FirstPath && !shown[form]
+					if (seen[u] && !more) || (!c.opts.Raw && out.repeat(u)) {
 						repeats++
 						continue
 					}
-					if len(all) >= c.opts.MaxURLs {
+					if !seen[u] && len(all) >= c.opts.MaxURLs {
 						dropped++
 						continue
 					}
-					seen[u] = true
-					kept++
+					shown[form] = true
 					row = Row{URL: u, Source: s.name, Archived: r.at}
 					if u != raw {
 						row.RawURL = raw
 					}
+					if asGiven {
+						row.RawURL = ""
+						if u != form {
+							row.RawURL = form
+						}
+					}
 					row.Junk, row.Reason = label("", u)
+					if more {
+						forms = append(forms, row)
+						if streamArchive {
+							c.archiveLine(&batch, u, row.RawURL, s.name, r.at)
+						}
+						c.emitRow(row)
+						continue
+					}
+					seen[u] = true
+					kept++
 					from[u] = row
 					all = append(all, u)
 					if streamArchive {
-						c.archiveLine(&batch, u, s.name, r.at)
+						c.archiveLine(&batch, u, row.RawURL, s.name, r.at)
 					}
 					if !c.opts.Raw {
 						c.emitRow(row)
@@ -423,7 +459,7 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		if c.archiveOn() {
 			var batch bytes.Buffer
 			for _, u := range all {
-				c.archiveLine(&batch, u, from[u].Source, from[u].Archived)
+				c.archiveLine(&batch, u, from[u].RawURL, from[u].Source, from[u].Archived)
 			}
 			if err := c.appendArchive(batch.Bytes()); err != nil && archiveErr == nil {
 				archiveErr = err
@@ -435,7 +471,7 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 	}
 	// What was found is kept whatever stopped the run: a recon tool never
 	// throws away work it already did.
-	if err := c.write(all, from, junkRows); err != nil {
+	if err := c.write(all, from, append(forms, junkRows...)); err != nil {
 		return types.RunMeta{Status: types.StatusError, Error: err.Error()}, err
 	}
 	if ctx.Err() != nil {
@@ -773,7 +809,7 @@ func rank(ts []template) []template {
 
 // write appends urls to the -urls file, each with its source when asked: the
 // URL, the archive, the time of the capture, the junk class, its reason and
-// the URL as the archive gave it when that differs, separated by tabs. The URLs left out as junk (KeepJunk) follow.
+// the URL as the archive gave it when that differs, separated by tabs. The other strings of a URL (AsGiven) and the URLs left out as junk (KeepJunk) follow.
 func (c *Collector) write(urls []string, from map[string]Row, junk []Row) error {
 	if c.opts.Out == "" || len(urls)+len(junk) == 0 {
 		return nil
