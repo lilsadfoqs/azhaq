@@ -125,6 +125,10 @@ func (h *hunter) url(r engine.MapEntry) {
 	if r.Entity.FirstSeen.After(h.cut) {
 		c.fresh = true
 	}
+	if r.PrefixCatchAll != "" {
+		c.prefixed++
+		c.prefixWhy = r.Answer
+	}
 	st := r.Status
 	fetched := r.Coverage == "visited"
 	ok := fetched && st >= 200 && st < 300
@@ -302,29 +306,35 @@ func (h *hunter) bodies(c *cand, r engine.MapEntry) {
 func (h *hunter) serverError(c *cand, r engine.MapEntry, raw string) {
 	st := r.Status
 	e := h.errs[r.Entity.ID]
-	without := r.Answer != ""
+	without := r.Answer != "" && r.PrefixCatchAll == "" // that note says "without input"
 	if h.traced[raw] && !h.reflected[webextract.RouteKey(raw)] {
 		return // the finding row of the URL says it: no lead says the same
+	}
+	// A route folds /assets and /assets/: the reason names the URL that gave it
+	// when it is not the one the row opens with.
+	at := ""
+	if len(c.instances) > 0 && c.instances[0] != raw {
+		at = raw + " "
 	}
 	switch {
 	// SQL error text and a debug page are findings by their records (Input.Measured);
 	// one that has none (another name answered the same) weighs as a lead.
 	case e.kind == webextract.ErrSQL:
-		c.addW("server-error", serverErrorSQL, fmt.Sprintf("answers %d and the body has SQL error text: %q", st, e.sample))
+		c.addW("server-error", serverErrorSQL, at+fmt.Sprintf("answers %d and the body has SQL error text: %q", st, e.sample))
 	case e.kind == webextract.ErrDebug:
-		c.addW("server-error", serverErrorDebug, fmt.Sprintf("answers %d with a framework's debug page: %q", st, e.sample))
+		c.addW("server-error", serverErrorDebug, at+fmt.Sprintf("answers %d with a framework's debug page: %q", st, e.sample))
 	case h.reflected[webextract.RouteKey(raw)]:
-		c.addW("server-error", serverErrorReflected, fmt.Sprintf("answers %d, and a parameter's value comes back in the answer", st))
+		c.addW("server-error", serverErrorReflected, at+fmt.Sprintf("answers %d, and a parameter's value comes back in the answer", st))
 	// A stack trace is a finding from the record of the trace itself (Input.Measured:
 	// any status, any stage, three frames); the error text here only weighs the lead.
 	case e.kind == webextract.ErrStack && without:
-		c.addW("server-error", serverErrorStackBare, fmt.Sprintf("answers %d to a request without its input, with a stack trace: %q", st, e.sample))
+		c.addW("server-error", serverErrorStackBare, at+fmt.Sprintf("answers %d to a request without its input, with a stack trace: %q", st, e.sample))
 	case e.kind == webextract.ErrStack:
-		c.addW("server-error", serverErrorStack, fmt.Sprintf("answers %d with a stack trace: %q", st, e.sample))
+		c.addW("server-error", serverErrorStack, at+fmt.Sprintf("answers %d with a stack trace: %q", st, e.sample))
 	case without:
-		c.addW("server-error", serverErrorBare, fmt.Sprintf("answers %d to a request without the input it takes (%s): a lead, nothing in the answer points further", st, join(h.own(r, inputNames(r)), 3)))
+		c.addW("server-error", serverErrorBare, at+fmt.Sprintf("answers %d to a request without the input it takes (%s): a lead, nothing in the answer points further", st, join(h.own(r, inputNames(r)), 3)))
 	default:
-		c.add("server-error", fmt.Sprintf("answers %d: %s", st, clip(r.Title, 60)))
+		c.add("server-error", at+fmt.Sprintf("answers %d: %s", st, clip(r.Title, 60)))
 	}
 }
 
@@ -736,8 +746,13 @@ func (h *hunter) sourceMaps() {
 			}
 			files += m.files
 		}
+		// A map whose answer -sr kept comes first: show -body prints its code.
+		slices.SortStableFunc(rows, func(a, b engine.MapEntry) int {
+			return cmp.Compare(b2i(a.ResponseFile != ""), b2i(b.ResponseFile != ""))
+		})
 		c := h.get("URL", rows[0].Entity.Key, scope)
 		c.origin = origin
+		c.codeKept = rows[0].ResponseFile != "" && code > 0
 		for _, r := range rows {
 			c.instances = append(c.instances, r.Entity.Key)
 			if r.Entity.FirstSeen.After(h.cut) {
@@ -791,6 +806,13 @@ func mapsRead(obs []types.StoredObservation) map[string]mapRead {
 		out[k] = mapRead{files: len(p.Files), code: p.Code}
 	}
 	return out
+}
+
+func b2i(b bool) int {
+	if b {
+		return 0 // kept answers sort first
+	}
+	return 1
 }
 
 func plural(n int, noun string) string {

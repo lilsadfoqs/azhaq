@@ -361,7 +361,7 @@ func cmdCrawl(args []string) error {
 	}
 	if linkedListed > 0 {
 		// Listed as katana lists them, and said so: no request asked them.
-		note := fmt.Sprintf("%d listed URLs are links or loads a page holds that the crawl did not request (past -depth, a limit or a -deny-path rule, or a library script, image or font it does not fetch), so a GET may answer 404 (-json marks each row's class: linked)", linkedListed)
+		note := fmt.Sprintf("%d listed URLs are links or loads a page holds that the crawl did not request (past -depth, a limit or a -deny-path rule, or an image or font it does not fetch), so a GET may answer 404 (-json marks each row's class: linked)", linkedListed)
 		rep.Notes = append(rep.Notes, note)
 		if c.silent && !c.json {
 			fmt.Fprintln(os.Stderr, "azhaq crawl: "+note)

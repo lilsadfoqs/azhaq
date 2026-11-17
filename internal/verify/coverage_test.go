@@ -1,6 +1,7 @@
 package verify
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"os"
@@ -107,6 +108,12 @@ func TestProbeChecksSendWhatTheScanSends(t *testing.T) {
 		if c.Service == "dns" || c.Service == "smb" { // a random id or nonce
 			if len(sent[0]) != len(pr.Request) {
 				t.Errorf("%s: sent %d bytes, want %d", c.ID, len(sent[0]), len(pr.Request))
+			}
+			continue
+		}
+		if c.Service == "jdwp" || c.Service == "java-rmi" { // the scan's request, then the one read (reads_wire_test.go)
+			if !bytes.HasPrefix(sent[0], pr.Request) || len(sent[0]) == len(pr.Request) {
+				t.Errorf("%s: sent %q, want the scan's %q and then the read", c.ID, sent[0], pr.Request)
 			}
 			continue
 		}
@@ -230,5 +237,31 @@ func TestDocsListTheServicesWithNoCheck(t *testing.T) {
 		if !strings.Contains(doc, "| `"+name+"` | "+reason+" |") {
 			t.Errorf("docs/CONCEPTS.md does not list %s with its reason: %s", name, reason)
 		}
+	}
+}
+
+// A default scan asks the documented ports of every product a catalog checks
+// (-verify-logins), each named: an entry with no port, or a port the scan
+// does not ask, leaves a host that runs only that product unseen.
+func TestDefaultPortsHoldThePortsOfEveryCatalogEntry(t *testing.T) {
+	def := portscan.DefaultPorts()
+	check := func(id string, ports []int) {
+		if len(ports) == 0 {
+			t.Errorf("%s: the entry names no port", id)
+		}
+		for _, q := range ports {
+			if !slices.Contains(def, q) {
+				t.Errorf("%s: the default set lacks %d", id, q)
+			}
+			if portscan.ServiceName(q) == "" {
+				t.Errorf("%s: port %d has no service name", id, q)
+			}
+		}
+	}
+	for _, lg := range DefaultLogins() {
+		check(lg.ID, lg.Ports)
+	}
+	for _, u := range UnauthReads() {
+		check(u.ID, u.Ports)
 	}
 }

@@ -89,13 +89,25 @@ func (g *sessionGuard) keepGood(raw string, res Result) {
 // again. The same answer (status and target) is worth a check the first 3
 // times and then each time its count doubles, so a site that redirects its
 // directories or forbids its folders is not asked about for each. It is
-// called when the request's whole chain is read, so the request is recorded
+// called with the first answer of a request as it comes in (wire: nothing
+// more goes out until the check decides, the redirect is not followed), or
+// when the chain is read (a page Chrome loaded). The request is recorded
 // (and finished, for a task that asks it again) when the check runs.
-func (g *sessionGuard) doubt(raw string, status int, location string) {
+func (g *sessionGuard) doubt(raw string, status int, location string, wire bool) {
 	location = strings.TrimSpace(location)
 	redirect := isRedirect(status) && location != ""
 	if g.remote || status != http.StatusForbidden && !redirect || g.renewing.Load() {
 		return
+	}
+	if wire {
+		g.mu.Lock()
+		if g.wired == nil {
+			g.wired = map[string]int64{}
+		}
+		if len(g.wired) < maxAsked {
+			g.wired[raw] = g.gen.Load() // sessionSaw does not count this answer again
+		}
+		g.mu.Unlock()
 	}
 	key := fmt.Sprint(status)
 	if redirect {
@@ -120,7 +132,21 @@ func (g *sessionGuard) doubt(raw string, status int, location string) {
 	g.doubts++
 	g.pass = true
 	g.mu.Unlock()
-	g.ends(raw, pathOf(raw)+" answered "+describe(Print{Status: status, Loc: locPath(raw, location)}), false)
+	g.ends(raw, pathOf(raw)+" answered "+describe(Print{Status: status, Loc: locPath(raw, location)}), wire)
+}
+
+// wiredDoubt says the wire already counted the answer to the request whose
+// first hop was raw, forgets it, and says whether a new session began since:
+// then the answer is one the old session gave (unless raw is known to end
+// every session it is asked with: that one is not asked again).
+func (g *sessionGuard) wiredDoubt(raw string) (counted, stale, covered bool) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	gen, ok := g.wired[raw]
+	covered = g.covered[raw]
+	delete(g.wired, raw)
+	delete(g.covered, raw)
+	return ok, ok && gen != g.gen.Load() && !g.enders[raw], covered
 }
 
 // worth counts an answer's occurrences and says whether this one is worth a
@@ -211,7 +237,9 @@ func (g *sessionGuard) flipped(ctx context.Context, signal string) (got Print, o
 		// since a request read late may have been sent before the page.
 		g.goodN, g.goodSet = 0, true
 		for _, u := range g.asked {
-			if t, ok := g.sentAt[u]; !ok || t.After(c.at) {
+			// The answer that asked for the check is counted whatever its send
+			// time says: it was answered without the session.
+			if t, ok := g.sentAt[u]; !ok || t.After(c.at) || u == g.endAns {
 				g.goodN++
 			}
 		}

@@ -205,3 +205,47 @@ func TestBudgetGivesBackTheReserveOfAMappedService(t *testing.T) {
 		t.Errorf("%d of %d requests were sent: the reserve of the mapped services was not given back to the sweep", egress.Sent(), budget)
 	}
 }
+
+// A deadline cancels a task's context: a row it marks Keep, the scan's last
+// word on what it finished, is still written; the others are not.
+type lateKeeper struct{ cancel context.CancelFunc }
+
+func (lateKeeper) Name() string             { return "latekeeper" }
+func (lateKeeper) Inputs() []types.SeedType { return []types.SeedType{types.TypeDomain} }
+func (lateKeeper) Outputs() []string        { return nil }
+func (k lateKeeper) Run(ctx context.Context, _ types.Seed, emit func(types.Observation) error) (types.RunMeta, error) {
+	k.cancel()
+	<-ctx.Done()
+	_ = emit(types.Observation{Collector: "latekeeper", Source: "s", Kind: "plain", Payload: []byte(`{}`), ObservedAt: time.Now().UTC()})
+	_ = emit(types.Observation{Collector: "latekeeper", Source: "s", Kind: "kept", Payload: []byte(`{}`), ObservedAt: time.Now().UTC(), Keep: true})
+	return types.RunMeta{Status: types.StatusCancelled}, ctx.Err()
+}
+
+func TestKeptRowIsWrittenAfterTheDeadline(t *testing.T) {
+	egress.Reset()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	cat := catalog.New()
+	cat.MustRegister(lateKeeper{cancel: cancel})
+	st, err := store.Open(filepath.Join(t.TempDir(), "k.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	_ = st.BeginRun("r", 1, 0)
+	eng := &engine.Engine{Cat: cat, Store: st}
+	_ = eng.RunLocal(ctx, []types.Seed{{Type: types.TypeDomain, Keys: map[string]string{"domain": "a.test"}}}, engine.Budgets{MaxDepth: 1})
+	obs, err := st.Observations()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var kinds []string
+	for _, o := range obs {
+		if o.Collector == "latekeeper" {
+			kinds = append(kinds, o.Kind)
+		}
+	}
+	if len(kinds) != 1 || kinds[0] != "kept" {
+		t.Errorf("after the deadline the workspace holds %v of the task, want only the kept row", kinds)
+	}
+}

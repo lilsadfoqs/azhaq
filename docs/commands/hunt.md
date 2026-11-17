@@ -54,7 +54,7 @@ The tier counts are `report -findings`' own function, run on hunt's rows, so a f
 ```
 $ azhaq hunt -db app.db
 identifications (2): what the run named on each listener; the label says how far a read settled the advisory (version-only: the version is in range, nothing checked)
-  1   79  192.0.2.12:8161  identified: ActiveMQ 5.15.0; advisory: CVE-2023-46604 version-only, known exploited (CISA KEV), CVSS 10.0; 14 advisories match this version, azhaq report -findings -db app.db lists them; proof: Server: Jetty(9.4.z-SNAPSHOT)  → next: curl -sS -i --max-time 10 'http://192.0.2.12:8161/'
+  1   79  192.0.2.12:8161  identified: ActiveMQ 5.15.0; advisory: CVE-2023-46604 version-only, known exploited (CISA KEV), CVSS 10.0; 14 advisories match this version, then CVE-2022-41678 (version-only, CVSS 8.8), CVE-2021-26117 (conditional, CVSS 7.5) and 11 more: 9 version-only, 2 conditional; azhaq report -findings -db app.db lists them; proof: Server: Jetty(9.4.z-SNAPSHOT)  → next: curl -sS -i --max-time 10 'http://192.0.2.12:8161/'
   2   10  192.0.2.14:3000  identified: Express (no version seen); proof: HTTP/1.0 200 OK  → next: curl -sS -i --max-time 10 'http://192.0.2.14:3000/'
 leads (2): inferred from a name, a path or a guess; each names the check that would prove it
   3   57  http://app/api/orders/{id}  object-id: {id} in the path; path-data: "orders" in /api/orders/{id}, named, not requested; unauth-write: DELETE: nothing that names it asks for credentials (not tried)  → check: GET it with the sessions of two roles (azhaq roles): one's data must not come back to the other  → next: azhaq roles -role anon -role 'user=Authorization: Bearer …' -- -url http://app/
@@ -65,7 +65,7 @@ leads (2): inferred from a name, a path or a guess; each names the check that wo
 | --- | --- |
 | `rank` | Position in the list, best first. |
 | `score` | The sum of the row's signal weights. |
-| `key` | A route template, host, file or listener. A template folds several URLs and holds `{n}`, `{uuid}`, `{hex}` or `={v}`. A key seen once is the URL. A listener is `host:port`. |
+| `key` | A route template, host, file or listener. A template folds several URLs and holds `{n}`, `{uuid}`, `{hex}` or `={v}`. A key seen once is the URL. A listener is `host:port`, which `azhaq show` opens (see [show](show.md)). |
 | `type` | `URL`, `Hostname` or `Service` (a listener). |
 | `reasons` | An array of `{signal, detail}`, one per signal. |
 | `tier` | `finding`, `identification` or `lead`: see [Findings and leads](#findings-and-leads). |
@@ -74,10 +74,11 @@ leads (2): inferred from a name, a path or a guess; each names the check that wo
 | `kind` | Only on the row of a listener: `identification`, or `finding` when a read proved something on it. |
 | `what` | On a listener: the kind of the record in `report -findings` (`advisory-precondition`, `software-version`, `unauthenticated-read`…). |
 | `also_at` | On a route that answered the same body at other host names of its address and port: their URLs. |
-| `also_named` | On a listener also reached under other host names (its address, a name that resolves to it) with the same product and version: those names. |
+| `also_named` | On a listener also reached under other host names (its address, a name that resolves to it) whose own answer named the same product and version: those names. Names on the address that named another product, or none, are not listed. |
 | `host`, `port`, `product`, `version` | On a listener. `version` is `""` when no version was seen. |
 | `source` | On a listener a name's root page gave: what named the product, `page title`, `generator`, `header X-Powered-By`, `header Server`, `header WWW-Authenticate realm` or `technology`. A title is not a version: `version` is only what one of them stated. |
 | `advisory_id`, `advisory_url`, `advisories`, `kev`, `cvss` | On a listener with an advisory match: the top advisory, how many advisories match the version, whether CISA lists the top one as exploited, and its score. |
+| `next_advisories`, `other_advisories` | With more than one advisory: the two that follow the top one (`id`, `label`, `kev`, `cvss`), and the count of all the others by label. The text row names these and counts the rest. |
 | `label`, `severity`, `evidence`, `command` | On a listener: the record's own `proved`, `version-read`, `version-only` or `conditional` label and severity, what the record says, and the command that produced it. |
 | `next` | The command to run next. [The next command](#the-next-command) says how it is chosen. |
 | `template` | Only on the row of an input the pages of an origin carry in common: `{"input", "pages", "of"}`, the input and how many of the origin's fetched pages carry it. |
@@ -92,9 +93,9 @@ leads (2): inferred from a name, a path or a guess; each names the check that wo
 | `dangling-dns` | A CNAME chain that ends at a name that answered `NXDOMAIN`: a finding of severity low, ranked with the other findings. It says what was measured, and nothing about who may create the name: the `takeover-candidate` lead for the same name stays a lead. |
 | `tls-certificate` | A TLS service whose certificate, as its handshake showed it, is expired, self-signed or not for the name asked: a finding of severity low for the service, keyed by `HOST:PORT`, as `report -findings` lists it (kind `tls-certificate`). Its next command is the `openssl s_client` line that shows the certificate again. It says what the handshake showed, and nothing of whether the service is weak. |
 | `error-disclosure` | An answer whose body holds a stack trace (three or more frames, any status, from `probe`, `run` or `dirs`): a finding of severity low, one row for each record `report -findings` lists, keyed by its URL and ranked with the other findings. The route's own 5xx lead is not repeated beside it. See [Server errors](#server-errors). |
-| `takeover-candidate` | A CNAME to a cloud name that does not resolve (`dangling`). It rests on NXDOMAIN alone: `unverified: NXDOMAIN does not show the name is free`. See [Takeover candidates](../CONCEPTS.md#what-a-dangling-row-rests-on). |
+| `takeover-candidate` | A CNAME to a cloud name that does not resolve (`dangling`). It rests on NXDOMAIN alone: `unverified who can claim TARGET: NXDOMAIN does not show the name is free`. The unverified part is who can claim the name, not the dangling record, which is the `dangling-dns` row. See [Takeover candidates](../CONCEPTS.md#what-a-dangling-row-rests-on). |
 | `secret` | A credential a script carries. The reason names the file and gives the evidence: the name it was assigned to, the value redacted, the rule that listed it and, for a generic secret, its entropy. See [Secret candidates](#secret-candidates). |
-| `sourcemap` | The source maps azhaq read on a host, one row for the host: it weighs more when the maps carry the app's own code (`sourcesContent`) than when they only name its files. |
+| `sourcemap` | The source maps azhaq read on a host, one row for the host: it weighs more when the maps carry the app's own code (`sourcesContent`) than when they only name its files. Its `next` is `azhaq show -db FILE MAP_URL`, which lists the map's sources without asking it again, and `azhaq show -db FILE -body MAP_URL` when the run kept the map's answer with `-sr`: that prints the app's own code ([show](show.md#a-source-map-the-run-read)). |
 | `exposed-file` | A backup, key, database or archive file, or a `.git` directory, whose path is requested: a finding when its answer is the file's own, a lead otherwise: see [Exposed files](#exposed-files). |
 | `exposed-panel` | An admin panel, dashboard, console, actuator, phpinfo, Swagger UI or GraphQL IDE whose own page answered, shown by its title or its content: see [Exposed files](#exposed-files). |
 | `directory-listing` | A page whose title is a directory listing: a finding of severity low, ranked 55, a record of `report -findings`. |
@@ -135,11 +136,11 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 A listener row is what the run named on one `host:port`. The rows come from the same records as [`azhaq report -findings`](report.md#what-a-finding-carries), so the two agree. There is one row for each listener and product:
 
 - The product and the version a service stated, or `(no version seen)` when a stage named the product and nothing named its version.
-- The top advisory the version matches, with its label as `report -findings` says it (`proved`, `version-read`, `version-only`, `conditional`) and how many advisories match in all. The others are in `report -findings`. A product with no version has no advisory: there is nothing to match.
+- The top advisory the version matches, with its label as `report -findings` says it (`proved`, `version-read`, `version-only`, `conditional`) and how many advisories match in all. The text row names the next two and counts the rest by label (`and 11 more: 9 version-only, 2 conditional`); every advisory is in `report -findings`. A `conditional` advisory says what it waits on, with the words of the record it was read from (`CVE-2023-44487 conditional; precondition: needs HTTP/2: "The HTTP/2 protocol allows…"`; in the next ones, `conditional: needs HTTP/2`), and ranks below the matches with nothing open; a row says `settled: HTTP/2 offered (ALPN h2)` where a probe saw the listener speak HTTP/2. A product with no version has no advisory: there is nothing to match.
 - The proof: the banner or the header that stated it, and the command that shows it again, which is the row's `next`.
 - A name that shares its listener with others (name-based virtual hosts) has a row of its own, keyed `name:port`, for the application its root page names about itself: see [Applications of a name](#applications-of-a-name).
-- A listener reached under its address and under a name that resolves to it, with the same product and version, is one row, which lists the other host names in `also_named` and in its `identified` reason. Names whose root pages answered differently are rows of their own, whatever the product.
-- A read that proved something on a listener (`-verify`: a data store that answered without a password) is a finding row.
+- A listener reached under its address and under a name that resolves to it, with the same product and version, is one row, which lists the other host names in `also_named` and in its `identified` reason. Only a name whose own answer named that product and version is listed; a name on the same address whose answer named another product or version, or none, is not folded into the row, and a name whose root page answered differently is a row of its own, whatever the product.
+- A read that proved something on a listener (`-verify`: a data store that answered without a password) is a finding row, one for each address, port and protocol: a listener reached by its address and by names that resolve to it is read once and is one row, which lists the other names in `also_named`. The first name keys the row, a name before an address. A read that depends on the name (a service read inside TLS) is a row for each name, folded into one only when the answers are the same.
 
 An identification is never softened: `version-only` says the version is in the advisory's range and nothing more was checked.
 
@@ -162,12 +163,15 @@ A row is a **finding** when one of its signals is shown by what was received, an
 
 An **identification** is a listener the run named: a product, and a version or none. It is not proven: the label says how far a read settled its advisory.
 
+A product named only by the hash of an icon is not an identification but a lead (`favicon: favicon matches X or Y (hash …); asked: X: GET /path answered 404 …`), keyed `host:port`, with no version and no advisory. It ranks below every identification, and its `check` says what would settle it. [Product checks](run.md#product-checks) says what makes it one.
+
 `hunt` lists the findings first, then the identifications, then the leads, each group by score. In the identifications, a version seen comes before none seen, and a `proved` label before `version-read`, and that before `version-only`. Each lead carries `check`, what an answer must show for it to be a finding.
 
 ### Score and order
 
 - The score is the sum of the row's signals. Each signal counts once, at its highest weight.
 - Rows only a script names and the server did not confirm, and a `takeover-candidate` that is the row's only signal, come after every other row, whatever their score: see [Routes only a script names](#routes-only-a-script-names).
+- A path whose answer is also its prefix's catch-all (the map row's `answer` says `the answer of /api/<random> too: this prefix's catch-all`) comes after the rows the server answered for themselves, before the ones only a script names: it says least of whether the route behind it exists, and it is a row all the same.
 - Ties go to the target before fan-out, then to the row with more distinct signals, then by key. [Concepts](../CONCEPTS.md#reading-a-map-row) explains target and fan-out.
 - `-limit` (default 25) keeps the best rows. The summary counts what it left out.
 
@@ -218,6 +222,8 @@ A path that names a file or a panel is judged by its answer, which azhaq already
 ### Server errors
 
 A 5xx alone is a lead, not a finding; the body showing SQL error text or a framework's debug page is a finding of its own (`sql-error`, `debug-page`), a record of `report -findings`, and the route then has no `server-error` lead for it. A stack trace of three or more frames in the answer, at any status, is an `error-disclosure` row of its own (a finding, as `report -findings` lists it), and the route then has no `server-error` lead for it. The weight of a 5xx depends on what shows beside it:
+
+Every rule here reads the body of the row's own URL: a URL that answers a redirect has the redirect's body, and the page it ends at is a row of its own. A route that folds two URLs (`/assets` and `/assets/`) names, in the reason, the URL that gave a 5xx when it is not the first of the row.
 
 - SQL error text in the body: 50, the rank of the `sql-error` finding.
 - Another role's answer to the same route, a 5xx for one role and an answer for another: 40.

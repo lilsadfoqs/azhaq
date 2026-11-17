@@ -105,6 +105,16 @@ type Report struct {
 	AutoProducts   []string // KEV products no map line names, indexed under their CPE name
 	DroppedByScope int
 	AmbiguousNames []string // names left out because two products of a catalogue's guess answer to them
+	// What the indexed records state as their CVSS attack vector: how many
+	// for each letter (N, A, L, P), how many from each CVSS version, and how
+	// many state none.
+	AttackVectors  map[string]int
+	VectorVersions map[string]int
+	NoVector       int
+	// How many indexed records state a precondition in their text (a protocol,
+	// a module, a configuration), and how many of them for each kind of need.
+	NeedRecords int
+	Needs       map[string]int
 }
 
 // Result is a built index and its report.
@@ -170,6 +180,21 @@ type nvdCVE struct {
 	Metrics        nvdMetrics    `json:"metrics"`
 	Configurations []nvdConfig   `json:"configurations"`
 	Affected       []nvdAffected `json:"affected"`
+	Descriptions   []struct {
+		Lang  string `json:"lang"`
+		Value string `json:"value"`
+	} `json:"descriptions"`
+}
+
+// description is the record's English description, the text its needs are
+// read from.
+func (c nvdCVE) description() string {
+	for _, d := range c.Descriptions {
+		if d.Lang == "en" {
+			return d.Value
+		}
+	}
+	return ""
 }
 
 // nvdAffected is what one source says the record's flaw affects: the CNA's
@@ -308,7 +333,9 @@ type nvdMetrics struct {
 type nvdMetric struct {
 	Type     string `json:"type"`
 	CVSSData struct {
-		BaseScore *float64 `json:"baseScore"`
+		Version      string   `json:"version"`
+		VectorString string   `json:"vectorString"`
+		BaseScore    *float64 `json:"baseScore"`
 	} `json:"cvssData"`
 }
 
@@ -332,27 +359,57 @@ type nvdMatch struct {
 	EndExcl    string `json:"versionEndExcluding"`
 }
 
-// score is the base score a record states: the primary score of the
-// newest CVSS version it has, else the first of that version.
-func (m nvdMetrics) score() float64 {
+// pick is the metric a record's score and attack vector are read from: the
+// primary one of the newest CVSS version that has a score, else the first of
+// that version. One metric for both, so they never come from two versions.
+func (m nvdMetrics) pick() *nvdMetric {
 	for _, list := range [][]nvdMetric{m.V40, m.V31, m.V30, m.V2} {
-		var first *float64
-		for _, x := range list {
+		var first *nvdMetric
+		for i, x := range list {
 			if x.CVSSData.BaseScore == nil {
 				continue
 			}
 			if x.Type == "Primary" {
-				return *x.CVSSData.BaseScore
+				return &list[i]
 			}
 			if first == nil {
-				first = x.CVSSData.BaseScore
+				first = &list[i]
 			}
 		}
 		if first != nil {
-			return *first
+			return first
 		}
 	}
+	return nil
+}
+
+// score is the base score a record states.
+func (m nvdMetrics) score() float64 {
+	if x := m.pick(); x != nil {
+		return *x.CVSSData.BaseScore
+	}
 	return 0
+}
+
+// vector is the CVSS version and the attack vector letter (N network, A
+// adjacent, L local, P physical) of the record's metric. It is empty when
+// the record has no metric or its metric states no vector; a vector string
+// that does not read is an error, like any record azhaq cannot read.
+func (m nvdMetrics) vector() (version, av string, err error) {
+	x := m.pick()
+	if x == nil || x.CVSSData.VectorString == "" {
+		return "", "", nil
+	}
+	vs := x.CVSSData.VectorString
+	for _, f := range strings.Split(vs, "/") {
+		if v, ok := strings.CutPrefix(f, "AV:"); ok {
+			if len(v) != 1 || !strings.Contains("NALP", v) {
+				return "", "", fmt.Errorf("CVSS vector %q: attack vector %q", vs, v)
+			}
+			return x.CVSSData.Version, v, nil
+		}
+	}
+	return "", "", fmt.Errorf("CVSS vector %q has no attack vector", vs)
 }
 
 // SplitCPE splits a CPE 2.3 formatted string into its 13 fields, taking
@@ -419,6 +476,9 @@ func siblings(cfg nvdConfig, ni int, own string) map[string]bool {
 type acc struct {
 	byProduct map[string]map[string]*entry // cpe → CVE → entry
 	cvss      map[string]float64
+	desc      map[string]string // CVE → English description, for the needs it states
+	av        map[string]string // CVE → attack vector letter, when the record states one
+	avVersion map[string]string // CVE → the CVSS version that vector is of
 	kev       map[string]bool
 	seenKEV   map[string]bool
 	noProduct map[string]bool
@@ -434,7 +494,7 @@ func Build(o Options) (*Result, error) {
 	for _, m := range o.Map {
 		wanted[m.CPE] = true
 	}
-	a := &acc{byProduct: map[string]map[string]*entry{}, cvss: map[string]float64{}, kev: kevIDs, seenKEV: map[string]bool{}, noProduct: map[string]bool{}}
+	a := &acc{byProduct: map[string]map[string]*entry{}, cvss: map[string]float64{}, desc: map[string]string{}, av: map[string]string{}, avVersion: map[string]string{}, kev: kevIDs, seenKEV: map[string]bool{}, noProduct: map[string]bool{}}
 	rep := Report{}
 	nvdDate := ""
 	for _, f := range o.Feeds {
@@ -463,10 +523,17 @@ func Build(o Options) (*Result, error) {
 	meta := advisory.IndexMeta{Generator: advisory.IndexGenerator, Built: o.Built, Names: map[string][]string{}}
 	var products []advisory.IndexProduct
 	ids := map[string]bool{}
+	needSeen := map[string]map[string]bool{} // record → the kinds of need it states, for any product
+	rep.Needs = map[string]int{}
 	for cpe, byCVE := range a.byProduct {
 		p := advisory.IndexProduct{CPE: cpe}
 		for id, e := range byCVE {
 			v := advisory.IndexVuln{ID: id, CVSS: a.cvss[id], KEV: kevIDs[id]}
+			// Only a flaw that cannot be reached over the network is kept: a
+			// network or adjacent one is the rule and needs no mark.
+			if av := a.av[id]; av == advisory.AVLocal || av == advisory.AVPhysical {
+				v.AV = av
+			}
 			if e.platform {
 				v.Cond |= advisory.CondPlatform
 				// The first few of what it runs on, so a lead can name them.
@@ -485,6 +552,14 @@ func Build(o Options) (*Result, error) {
 				rep.DroppedByScope++
 				continue
 			}
+			vendor, prod, _ := strings.Cut(cpe, ":")
+			v.Needs = needsOf(a.desc[id], vendor, prod)
+			for _, n := range v.Needs {
+				if needSeen[id] == nil {
+					needSeen[id] = map[string]bool{}
+				}
+				needSeen[id][needKind(n.Name)] = true
+			}
 			v.Ranges, v.Versions, v.Comp = keys(e.ranges), keys(e.versions), e.comp
 			p.Vulns = append(p.Vulns, v)
 			ids[id] = true
@@ -492,6 +567,12 @@ func Build(o Options) (*Result, error) {
 		if len(p.Vulns) > 0 {
 			products = append(products, p)
 			meta.Entries += len(p.Vulns)
+		}
+	}
+	for _, kinds := range needSeen {
+		rep.NeedRecords++
+		for k := range kinds {
+			rep.Needs[k]++
 		}
 	}
 	have := map[string]bool{}
@@ -548,6 +629,15 @@ func Build(o Options) (*Result, error) {
 	// (a KEV record) and a user's -advisory-source cannot reach it, but a
 	// later map line can.
 	meta.Records, meta.Products = len(ids), len(products)
+	rep.AttackVectors, rep.VectorVersions = map[string]int{}, map[string]int{}
+	for id := range ids {
+		if av := a.av[id]; av != "" {
+			rep.AttackVectors[av]++
+			rep.VectorVersions[a.avVersion[id]]++
+		} else {
+			rep.NoVector++
+		}
+	}
 	meta.Sources = []advisory.IndexSource{
 		{Name: "CISA Known Exploited Vulnerabilities catalogue", URL: o.KEVURL, Date: kevDate, N: len(kevIDs)},
 		{Name: "NVD CVE records, feed 2.0 (with CPE configurations)", URL: o.NVDURL, Date: nvdDate, N: rep.FeedCVEs},
@@ -734,6 +824,12 @@ func (a *acc) add(c nvdCVE, wanted map[string]bool, rep *Report) error {
 	}
 	if kept > 0 {
 		a.cvss[c.ID] = c.Metrics.score()
+		ver, av, err := c.Metrics.vector()
+		if err != nil {
+			return fmt.Errorf("%s: %w", c.ID, err)
+		}
+		a.av[c.ID], a.avVersion[c.ID] = av, ver
+		a.desc[c.ID] = c.description()
 	}
 	return nil
 }

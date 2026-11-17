@@ -7,6 +7,7 @@ import (
 	"github.com/lilsadfoqs/azhaq/internal/guard"
 	"net/http"
 	"net/url"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -23,6 +24,10 @@ import (
 
 const Name = "azhaq-js"
 
+// MapKind is the kind of the observation that holds what a source map said:
+// its status and its sources, with whether the map carries each one's code.
+const MapKind = "sourcemap"
+
 // The caps below are those of the default -max-scripts: the others scale
 // with it (limits), never under these.
 const (
@@ -32,8 +37,11 @@ const (
 	maxScripts = 256
 	// maxMaps caps source maps read for one page.
 	maxMaps = 8
-	// maxMapFiles caps the source file names kept per map.
+	// maxMapFiles caps the source file names kept per map in the url row
+	// (the hunt reads them); the map's own row, maxMapSources.
 	maxMapFiles = 200
+	// maxMapSources caps the source names a map's row lists.
+	maxMapSources = 5000
 	// maxSites caps the places kept for where one route is named.
 	maxSites = 3
 	// maxGuessedMaps caps the source maps asked for by name (main.js.map
@@ -125,7 +133,7 @@ func (c *Collector) Skip(seed types.Seed) bool {
 	}
 	if looksLikeJS(raw) {
 		_, done := c.parsed.Load(raw)
-		return done
+		return done || isVendor(raw) // asked by the crawl, not read for routes
 	}
 	switch webextract.ClassifyURL(raw) {
 	case "api", "asset":
@@ -328,6 +336,23 @@ type sourceMap struct {
 	count   int      // all sources, libraries included
 	code    int      // the app's own sources whose code the map carries (sourcesContent)
 	guessed bool     // asked for by name: no comment or header named it
+
+	// What the map's own row keeps, cheaply: the answer's status and size,
+	// and every source name with whether the map carries its code. The code
+	// itself is not stored; -sr writes the whole answer.
+	status  int
+	bodyLen int
+	sources []mapSource
+	// namesCut: names past maxMapSources.
+	namesCut int
+}
+
+// mapSource is one entry of a map's sources.
+type mapSource struct {
+	Name    string `json:"name"`
+	Code    bool   `json:"code"`            // the map carries its code (sourcesContent)
+	Bytes   int    `json:"bytes,omitempty"` // of that code
+	Library bool   `json:"library,omitempty"`
 }
 
 // buildManifest is a bundler's manifest that was read, and what it gave.
@@ -555,6 +580,7 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 
 	var queue []script
 	var fetched []string
+	var libs []string // library scripts the page loads: asked, not read
 	lim := limitsFor(c.MaxScripts)
 	var short left // what the caps kept this page from reading
 	short.scripts = map[string]bool{}
@@ -672,6 +698,16 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		kick()
 		srcs := webextract.ScriptSrcs(res.Body, base)
 		for _, src := range srcs {
+			if isVendor(src) && fetch.SameSite(raw, src) {
+				switch {
+				case slices.Contains(libs, src):
+				case len(fetched)+len(libs) >= lim.scripts:
+					short.scripts[src] = true
+				default:
+					libs = append(libs, src)
+				}
+				continue
+			}
 			load(src, false)
 		}
 		readManifests(webextract.PageManifests(res.Body, base, srcs))
@@ -937,6 +973,21 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		if err := emitRow(row, 0.9); err != nil {
 			return meta, err
 		}
+		// What was read, in a row of its own: the url row is a count, and is
+		// read by every command. The code stays out of both.
+		own := map[string]any{"url": m.url, "via": "js", "role": "sourcemap", "status": m.status, "body_length": m.bodyLen,
+			"sources": m.count, "source_files": m.sources, "with_code": m.code}
+		if m.namesCut > 0 {
+			own["source_files_cut"] = m.namesCut
+		}
+		if m.guessed {
+			own["guessed"] = true
+		}
+		payload, _ := json.Marshal(own)
+		if err := emit(types.Observation{Collector: Name, Source: raw, Kind: MapKind, Payload: payload, Confidence: 0.9, ObservedAt: time.Now().UTC()}); err != nil {
+			return meta, err
+		}
+		meta.EmitCount++
 	}
 	for _, m := range mans {
 		row := map[string]any{"url": m.url, "via": "js", "role": "manifest", "framework": m.kind, "scripts": m.scripts}
@@ -1118,6 +1169,11 @@ func (c *Collector) Run(ctx context.Context, seed types.Seed, emit func(types.Ob
 		if err := put(src, "script"); err != nil {
 			return meta, err
 		}
+		meta.NextHints = append(meta.NextHints, types.Seed{
+			Type: types.TypeURL, Keys: map[string]string{"url": src, types.ViaKey: types.ViaLoaded},
+		})
+	}
+	for _, src := range libs {
 		meta.NextHints = append(meta.NextHints, types.Seed{
 			Type: types.TypeURL, Keys: map[string]string{"url": src, types.ViaKey: types.ViaLoaded},
 		})
@@ -1355,6 +1411,12 @@ type strCand struct {
 // underscore counts; chart_utils.js is the app's.
 var vendorScript = lazyre.New(`(?i)(^|/)(react(-dom)?|jquery(-ui|-migrate)?|bootstrap(\.bundle)?|angular|vue|lodash|moment|popper|d3|three|chart|highcharts|swagger-ui-(bundle|standalone-preset)|polyfills?-legacy)([.-][\w.-]*|_\d[\w.-]*)?\.js$`)
 
+// isVendor reports whether src is a library build (vendorScript).
+func isVendor(src string) bool {
+	u, err := url.Parse(src)
+	return err == nil && vendorScript.MatchString(u.Path)
+}
+
 // load fetches a script on the page's site the run has not parsed yet and
 // queues it. Names found inside scripts must end in .js; <script src>
 // need not. A script address answered with the catch-all page is noted in
@@ -1364,7 +1426,7 @@ func (c *Collector) load(ctx context.Context, page, src string, needExt bool, qu
 	if !fetch.SameSite(page, src) || (needExt && !looksLikeJS(src)) {
 		return queue
 	}
-	if u, err := url.Parse(src); err == nil && vendorScript.MatchString(u.Path) {
+	if isVendor(src) {
 		return queue
 	}
 	if len(*fetched) >= limit {
@@ -1592,6 +1654,7 @@ func (c *Collector) readMap(ctx context.Context, page, mapURL string, scriptURL 
 		return sourceMap{}, nil
 	}
 	var body []byte
+	status := http.StatusOK // an inline map has no answer of its own
 	if strings.HasPrefix(mapURL, "data:") {
 		meta, data, ok := strings.Cut(strings.TrimPrefix(mapURL, "data:"), ",")
 		if !ok || !strings.HasSuffix(meta, ";base64") {
@@ -1613,7 +1676,7 @@ func (c *Collector) readMap(ctx context.Context, page, mapURL string, scriptURL 
 		if err != nil || res.Status != http.StatusOK {
 			return sourceMap{}, nil
 		}
-		body = res.Body
+		body, status = res.Body, res.Status
 	}
 	var sm struct {
 		Sources        []string  `json:"sources"`
@@ -1623,22 +1686,40 @@ func (c *Collector) readMap(ctx context.Context, page, mapURL string, scriptURL 
 	if json.Unmarshal(body, &sm) != nil || len(sm.Sources) == 0 || guessed && sm.Mappings == nil {
 		return sourceMap{}, nil
 	}
-	m := sourceMap{url: mapURL, count: len(sm.Sources), guessed: guessed}
+	m := sourceMap{url: mapURL, count: len(sm.Sources), guessed: guessed, status: status, bodyLen: len(body)}
 	var out []script
 	for i, name := range sm.Sources {
-		if library(name) {
+		var text *string
+		if i < len(sm.SourcesContent) {
+			text = sm.SourcesContent[i]
+		}
+		lib := library(name)
+		if len(m.sources) < maxMapSources {
+			src := mapSource{Name: name, Code: text != nil, Library: lib}
+			if text != nil {
+				src.Bytes = len(*text)
+			}
+			m.sources = append(m.sources, src)
+		} else {
+			m.namesCut++
+		}
+		if lib {
 			continue
 		}
 		if len(m.files) < maxMapFiles {
 			m.files = append(m.files, name)
 		}
-		if i < len(sm.SourcesContent) && sm.SourcesContent[i] != nil {
-			out = append(out, script{url: scriptURL, body: *sm.SourcesContent[i], fromMap: true, source: name})
+		if text != nil {
+			out = append(out, script{url: scriptURL, body: *text, fromMap: true, source: name})
 			m.code++
 		}
 	}
 	return m, out
 }
+
+// Library says a source of a map is a library's (node_modules, webpack's
+// runtime), not the app's own.
+func Library(source string) bool { return library(source) }
 
 func library(source string) bool {
 	return strings.Contains(source, "node_modules/") || strings.Contains(source, "webpack/") ||

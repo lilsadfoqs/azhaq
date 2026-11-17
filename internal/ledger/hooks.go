@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/lilsadfoqs/azhaq/internal/neterr"
+	"github.com/lilsadfoqs/azhaq/internal/normalize"
 )
 
 type collectorKey struct{}
@@ -25,6 +26,14 @@ type collectorKey struct{}
 // entries made with it.
 func WithCollector(ctx context.Context, name string) context.Context {
 	return context.WithValue(ctx, collectorKey{}, name)
+}
+
+type ruleKey struct{}
+
+// WithRule marks ctx with why the questions made with it were allowed, when
+// it is not a scope rule on the name asked about: a resolver the user named.
+func WithRule(ctx context.Context, rule string) context.Context {
+	return context.WithValue(ctx, ruleKey{}, rule)
 }
 
 type opaqueKey struct{}
@@ -84,6 +93,9 @@ func HTTPAs(class string, req *http.Request) {
 	}
 	counter(class).Add(1)
 	purpose := purposeFor(req.Context(), "http", collectorOf(req.Context()), req.URL)
+	if class == ClassProxy {
+		purpose = PurposeProxy
+	}
 	spend(class, "http", collectorOf(req.Context()), purpose, 1)
 	if f := OnSent; f != nil && class == ClassTarget {
 		f(req.Method, req.URL.String())
@@ -107,8 +119,11 @@ func HTTPAs(class string, req *http.Request) {
 	}
 	e := Entry{Kind: "http", Class: class, Method: method, Target: target, Host: host, VHost: vhost,
 		Body: bodySum(req), Collector: collectorOf(req.Context())}
-	if class == ClassTarget {
+	switch class {
+	case ClassTarget:
 		e.Rule, e.Purpose = l.rule(host), purpose
+	case ClassProxy:
+		e.Purpose = purpose
 	}
 	l.Record(e)
 }
@@ -172,6 +187,12 @@ func NotSent(class string, req *http.Request) {
 		e.Rule = l.rule(host)
 	}
 	l.Record(e)
+}
+
+// NotReached says err is a failed connect: the request was never written.
+func NotReached(err error) bool {
+	var oe *net.OpError
+	return errors.As(err, &oe) && oe.Op == "dial"
 }
 
 // ProxyDown says err is a failure to reach the proxy a request was to go
@@ -242,6 +263,20 @@ func tcpEntry(l *Ledger, ctx context.Context, class, host, addr string) Entry {
 	return Entry{Kind: "tcp", Class: class, Target: addr, Host: host, Rule: rule, Collector: collectorOf(ctx), Purpose: purpose}
 }
 
+// Connect records a CONNECT a forward proxy of the run was asked for, about
+// to be opened to host:port: one http line with the method CONNECT and the
+// address as its target. The bytes inside the tunnel are not read.
+func Connect(ctx context.Context, host, port string) {
+	counter(ClassTarget).Add(1)
+	spend(ClassTarget, "http", collectorOf(ctx), purposeFor(ctx, "http", collectorOf(ctx), nil), 1)
+	l := Active()
+	if l == nil {
+		return
+	}
+	l.Record(Entry{Kind: "http", Class: ClassTarget, Method: http.MethodConnect, Target: net.JoinHostPort(host, port),
+		Host: host, Rule: l.rule(host), Collector: collectorOf(ctx), Purpose: purposeFor(ctx, "http", collectorOf(ctx), nil)})
+}
+
 // TCPBatch records connections about to be made to the targets at addrs
 // (ip:port), in one write: each is a line before its connect goes.
 func TCPBatch(ctx context.Context, host string, addrs []string) {
@@ -280,7 +315,15 @@ func DNS(ctx context.Context, name, qtype, server string) {
 	if l == nil {
 		return
 	}
-	l.Record(Entry{Kind: "dns", Class: ClassDNS, Method: qtype, Target: server, Host: name, Rule: l.rule(name), Collector: collectorOf(ctx)})
+	// A reverse name is ruled by the address it is for, not by its own text.
+	rule := l.rule(name)
+	if ip, ok := normalize.ReverseAddr(name); ok {
+		rule = l.rule(ip.String())
+	}
+	if why, _ := ctx.Value(ruleKey{}).(string); why != "" {
+		rule = why
+	}
+	l.Record(Entry{Kind: "dns", Class: ClassDNS, Method: qtype, Target: server, Host: name, Rule: rule, Collector: collectorOf(ctx)})
 }
 
 // Transport records each request once it has been written to its
@@ -363,7 +406,7 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 		lv.mu.Lock()
 		defer lv.mu.Unlock()
 		lv.done = true
-		if !lv.recorded && class == ClassTarget && Unsent != nil {
+		if !lv.recorded && (class == ClassTarget || class == ClassProxy) && Unsent != nil {
 			Unsent()
 		}
 	}
@@ -429,9 +472,10 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 		// before the write). Only a request a stop cancelled, or the kill file
 		// refused, before it left is not listed.
 		switch {
-		case resp == nil && ProxyDown(err) && req.Context().Err() == nil:
+		case resp == nil && (ProxyDown(err) || class == ClassProxy && NotReached(err)) && req.Context().Err() == nil:
 			// The proxy was not reached: no byte of the request left, so it is
-			// listed as tried and counted by nobody (finish gives it back).
+			// listed as tried and counted by nobody (finish gives it back). The
+			// ask of the -proxy is addressed to it: its own connect fails.
 			lv.mu.Lock()
 			if !lv.recorded {
 				lv.done = true // no later event may count it

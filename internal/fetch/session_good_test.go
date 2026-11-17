@@ -5,10 +5,12 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/lilsadfoqs/azhaq/internal/neterr"
 )
@@ -203,5 +205,194 @@ func TestAMeasuredEndIsRenewedWithALogin(t *testing.T) {
 	}
 	if renewals != 1 {
 		t.Fatalf("signed in %d times, want once", renewals)
+	}
+}
+
+// A first answer that may be the end of the session holds new requests as its
+// headers come in, before its body is read or its redirect followed.
+func TestAnAnswerThatMayBeTheEndHoldsRequestsAtOnce(t *testing.T) {
+	var live atomic.Bool
+	live.Store(true)
+	var mu sync.Mutex
+	sent := map[string]int{}
+	release := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		sent[r.URL.Path]++
+		mu.Unlock()
+		w.Header().Set("Content-Type", "text/html")
+		switch {
+		case r.URL.Path == "/login":
+			_, _ = w.Write([]byte(`<form><input type="password" name=p></form>`))
+		case r.URL.Path == "/app/slow" && !live.Load():
+			w.Header().Set("Location", "/login")
+			w.WriteHeader(http.StatusFound)
+			w.(http.Flusher).Flush()
+			<-release // the headers are all the run has
+		case strings.HasPrefix(r.URL.Path, "/app") && !live.Load():
+			http.Redirect(w, r, "/login", http.StatusFound)
+		default:
+			_, _ = w.Write([]byte(`<title>page</title>`))
+		}
+	}))
+	defer srv.Close()
+	done := make(chan struct{})
+	count := func(p string) int {
+		mu.Lock()
+		defer mu.Unlock()
+		return sent[p]
+	}
+	Reset()
+	defer Reset()
+	Extra = http.Header{"Cookie": {"sid=abc"}}
+	WatchSession(Session{Every: 1000, Why: "given with -cookie"})
+	c := Client(nil)
+	ask := func(p string) error {
+		_, _, err := Do(context.Background(), c, srv.URL+p)
+		return err
+	}
+	for _, p := range []string{"/", "/app/a"} {
+		if err := ask(p); err != nil {
+			t.Skipf("the loopback is not reachable through the target client: %v", err)
+		}
+	}
+	live.Store(false)
+	go func() { _ = ask("/app/slow"); close(done) }()
+	defer func() { close(release); <-done }() // its answer must not reach the next test's guard
+	for range 500 {
+		if count("/app/slow") > 0 {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	// The body of /app/slow is not read yet: only the wire has its headers.
+	err := ask("/app/next")
+	if !errors.Is(err, neterr.ErrSessionLost) {
+		t.Fatalf("a request meeting the headers of a possible end was not held to the check: %v", err)
+	}
+	if n := count("/app/next"); n != 0 {
+		t.Errorf("/app/next went out %d times after the end", n)
+	}
+}
+
+// A redirect to the sign-in page that a good check then shows to be a false
+// alarm holds the run for one check, asked once, and the run goes on.
+func TestAFalseAlarmCostsOneCheck(t *testing.T) {
+	var blip atomic.Bool
+	var mu sync.Mutex
+	sent := map[string]int{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		sent[r.URL.Path]++
+		mu.Unlock()
+		w.Header().Set("Content-Type", "text/html")
+		switch {
+		case r.URL.Path == "/login":
+			_, _ = w.Write([]byte(`<form><input type="password" name=p></form>`))
+		case r.URL.Path == "/app/blip" && blip.Load():
+			http.Redirect(w, r, "/login", http.StatusFound)
+		default:
+			_, _ = w.Write([]byte(`<title>page</title>`))
+		}
+	}))
+	defer srv.Close()
+	count := func(p string) int {
+		mu.Lock()
+		defer mu.Unlock()
+		return sent[p]
+	}
+	Reset()
+	defer Reset()
+	Extra = http.Header{"Cookie": {"sid=abc"}}
+	WatchSession(Session{Every: 1000, Why: "given with -cookie"})
+	c := Client(nil)
+	ask := func(p string) error {
+		_, _, err := Do(context.Background(), c, srv.URL+p)
+		return err
+	}
+	for _, p := range []string{"/", "/app/a"} {
+		if err := ask(p); err != nil {
+			t.Skipf("the loopback is not reachable through the target client: %v", err)
+		}
+	}
+	blip.Store(true)
+	if err := ask("/app/blip"); err != nil {
+		t.Fatal(err)
+	}
+	blip.Store(false)
+	for _, p := range []string{"/app/b", "/app/c", "/app/d"} {
+		if err := ask(p); err != nil {
+			t.Fatalf("%s after a false alarm: %v", p, err)
+		}
+	}
+	if a, root := count("/app/a"), count("/"); a != 2 || root != 2 {
+		t.Errorf("the kept pages were asked %d and %d times, want once more each: one check", a, root)
+	}
+	if guardP.Load().due.Load() {
+		t.Error("a check is still owed after the false alarm was measured")
+	}
+}
+
+// A request held by the wire whose session was then renewed got the old
+// session's answer: it is asked again with the new one, not kept as read.
+func TestAHeldRequestIsAskedAgainOnceTheSessionIsRenewed(t *testing.T) {
+	var live atomic.Bool
+	live.Store(true)
+	release := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		switch {
+		case r.URL.Path == "/login":
+			_, _ = w.Write([]byte(`<form><input type="password" name=p></form>`))
+		case r.URL.Path == "/app/slow" && !live.Load():
+			w.Header().Set("Location", "/login")
+			w.WriteHeader(http.StatusFound)
+			w.(http.Flusher).Flush()
+			<-release
+		case strings.HasPrefix(r.URL.Path, "/app") && !live.Load():
+			http.Redirect(w, r, "/login", http.StatusFound)
+		default:
+			_, _ = w.Write([]byte(`<title>page</title>`))
+		}
+	}))
+	defer srv.Close()
+	Reset()
+	defer Reset()
+	Extra = http.Header{"Cookie": {"sid=abc"}}
+	WatchSession(Session{Every: 1000, Renew: func(context.Context) error { live.Store(true); return nil }})
+	c := Client(nil)
+	ask := func(p string) error {
+		_, _, err := Do(context.Background(), c, srv.URL+p)
+		return err
+	}
+	for _, p := range []string{"/", "/app/a"} {
+		if err := ask(p); err != nil {
+			t.Skipf("the loopback is not reachable through the target client: %v", err)
+		}
+	}
+	live.Store(false)
+	done := make(chan struct{})
+	go func() { _ = ask("/app/slow"); close(done) }()
+	defer func() {
+		select {
+		case <-release:
+		default:
+			close(release)
+		}
+		<-done
+	}()
+	for range 500 {
+		if guardP.Load().due.Load() {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if err := ask("/app/next"); err != nil { // the check renews the session
+		t.Fatal(err)
+	}
+	close(release)
+	<-done
+	if !slices.Contains(TakeRedo(), srv.URL+"/app/slow") {
+		t.Error("the held request, answered by the session that ended, is not asked again")
 	}
 }

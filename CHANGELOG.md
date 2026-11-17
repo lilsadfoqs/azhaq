@@ -1,5 +1,96 @@
 # Changelog
 
+## v0.28.0
+
+### Added
+
+- `-verify` reads more without changing anything:
+  - the JDWP VM version (`VirtualMachine.Version`);
+  - the bound names of a Java RMI registry (`list()`, read as strings only, with every length bounded).
+- The login catalog has a documentation app's published default account, proved against the two controls like every entry. A time-series database's config and stats APIs are unauthenticated reads, and their evidence masks the value of any key that names a password, secret, token, key or credential.
+- `-role-cmd` commands run behind a loopback proxy that azhaq runs for them. Their plain HTTP requests go through the scope, `-deny-path`, the kill file, the budget, the pace and the ledger. Their HTTPS `CONNECT` is held to the scope and written as `CONNECT host:port`.
+  - A refused request fails the role's sign-in with its reason.
+  - `-role-cmd-direct` keeps the old way.
+  - The summary and `plan` name each command's mode.
+- `params -od DIR` and `run -params-od DIR` keep the request and answer of each reported name, as `dirs -od` does. No request is added.
+- Each source map read is a `sourcemap` row: its status, every source name, and whether and how much code each file carried. `show URL.map` lists them.
+- A named port set narrower than `default` (`top-1000`, `top-100`) says which of default's service ports it leaves out, in a note and in `ports_left_out`. A host with no open port among those asked says what `-p default` would add. No port is added unasked.
+
+### Changed
+
+- **`-p default` asks the ports of every service azhaq checks.** It grows from 1,040 to 1,075 ports, adding a message broker's console and wire ports, a queue manager's console and a graph database's API, among others.
+  - Each login and unauthenticated-read entry carries its product's ports.
+  - A test fails when a checked service's port is not in `default`.
+- **Conditions an advisory states.** The index reads the preconditions a record's description states (HTTP/2, HTTP/3, a module, a configuration, an enabled feature), with the quoted clause.
+  - Such a match is `conditional` with that quote, and ranks below version-only matches. Every match stays listed.
+  - A stored HTTP/2 answer settles the HTTP/2 condition.
+- **A favicon alone is a lead.** A product named only by a favicon hash is a `favicon-match` lead, with no advisory, ranked below identifications.
+  - azhaq asks one read from the product's own detection template.
+  - A matching answer names it, with its version. Any other answer stays a lead and says what came back.
+- **One listener, one read.** A read that does not depend on the name (a data store's INFO, a debug port) is sent once per address and port. It gives one finding that lists the names that reached it. Before, it was one per name.
+- **Names on a listener row.** "Also answered as" lists only the names whose own answer named the same product and version. A name on the same address that serves something else keeps its own row.
+- **Dangling CNAMEs.** A dangling CNAME is a finding in its own right. With `-no-takeover`, `dns` still makes it from the name's own answer, and asks nothing about the target's domain. The takeover lead's "unverified" is about who can claim the name.
+- **A prefix's error page.** A hit (300 or above) that names its own path, and is also the answer of a name that cannot exist under its prefix, is listed with the label "this prefix's catch-all" and ranked last. It is never dropped. The control is one request per prefix, at most 8 a sweep, and the estimate's `at_most` counts them.
+- **`probe -deny-path`.** A target held by your own `-deny-path` is a skip, not a failure, and `probe` exits like `run`.
+- **`-axfr`.** The help says that each `-resolvers` address is asked for the zone too, and the ledger line names the resolver as the reason.
+
+### Fixed
+
+- A `run` stopped by the kill file, a cap or a deadline during the range port stage could end `complete: true`, exit 0, with every address counted as scanned. It now exits 4, says what it left, and counts only what the ledger shows; `resume` asks the rest. A resumed run no longer asks the second pass's ports twice: one address, capped and resumed to the end, went from 113,017 connects to 65,535.
+- A redirect's row held the body of the page it led to, so an empty 302 could read as "answers 500 with a stack trace". Each hop keeps its own answer.
+- `show` opens the `host:port` label that `hunt` prints, by address or by name.
+- A stopped `subs` said "sources asked: 0" while its ledger held their requests. It now counts the sources it was still asking.
+- `-permute`'s size counted names that do not resolve and are never varied. `plan` says its size is an upper bound.
+- A PTR lookup's ledger line had no scope rule. It now carries the rule of its address.
+- With several domains, the coverage note gives one line per domain, then the total as a sum.
+
+## v0.27.0
+
+### Added
+
+- `dirs -od DIR` and `run -dirs-od DIR` keep the request and answer of each match in one file, as `fuzz -od` does. The row names its file in `resultfile`. A body over 5 MiB is cut and the row says `resultfile_cut`.
+- `-max-scripts N` on `run` and `crawl` raises the per-page caps: scripts (256), routes (4096), source maps, manifests and chunk names.
+- `run`, `plan` and `resume` take `ports`' `-connect-timeout`.
+- `plan` prints a lower bound on a scan's time when connects ÷ pace is over a minute. For example: "16,776,960 connects at 1500/s take at least 3.1 h".
+- `plan` and the summary state a `-permute` job: the distinct names the generator asks, and the time at `-dns-rate`. The progress line counts them, and a stopped run says how many are left.
+- The start page, `run -h`, `help hunt` and the command pages say how to read a run that is still going: `run -stream`, or `hunt -db` / `query -db` from a second shell.
+
+### Changed
+
+- **Default logins need controls.** `-verify-logins` proves a default login only against two controls, sent first: the same request with no credential, then with a wrong one.
+  - The pair is accepted only when its answer differs from both.
+  - A page that answers the same without a credential proves nothing, and a note says so.
+  - The evidence gives all three outcomes, the reproduce commands show all three, and the controls are in the ledger and the count.
+  - The message broker console entry asks a gated page.
+- **Headers a `-proxy` adds.** Through an http or https `-proxy`, the run asks the proxy for its own answer once, and drops a target answer's header equal to one the proxy showed.
+  - The ask counts like a target request: it spends from `-max-requests`, is paced, and counts in `requests`.
+  - When the proxy cannot be asked, header-only identifications are marked `via_proxy` and get no advisory.
+- **Advisories fold by label.** The run line, the `hunt` row and the findings Markdown name a service's top three advisories and count the rest by label. JSON and the jsonl keep every record.
+- **Local and physical flaws are conditional.** The index keeps each record's CVSS attack vector. A local or physical flaw is `conditional`, with the vector's condition.
+- **Template versions.** A detection template's extractor gives every match. The version is the first value shaped like one, so a copyright range no longer hides it.
+  - Templates whose paths are one inline payload list now compile. phpMyAdmin's panel is one of the eight.
+- **Script bases.** A script's call is joined onto a base only when it is made on the client the base was bound to, and a path already under the base is not joined again. No more `/api/api/` routes.
+- **Script caps.** A per-page script cap counts what it left. `-fail-on-capped` treats a reached cap like `-depth`: exit 4.
+- **One findings population.** `report -findings` has a record for every finding `hunt` proves, so `hunt`, `report` and the run's `tiers` count the same findings:
+  - SQL error text and debug pages in 5xx answers;
+  - directory listings;
+  - GraphQL schema reads and IDEs;
+  - proved `-roles` verdicts, read through `-roles FILE`.
+- **The findings headline** gives issues and records ("2 identifications (17 records)").
+- **URL flags** split a comma-joined list where a second `http(s)://` starts, the same way in every command. `fuzz -u` refuses a second URL.
+- **`-interact`** counts only the routes a click named, leaving out slash variants of listed routes and catch-all answers.
+- **Product checks.** They share an answer's body before copying it, hold less of the template set, and keep as many checks in flight as `-host-parallel` allows (6 on a signed-in run). A Juice Shop run went from 20.6 s to 12.7 s in the paired bench, with the same routes.
+- **Full-range connect scans.** A silent port's wait follows the address's measured round trip. `run -rate` sets the connect pace past 1500/s.
+- **`params`** sends a page's first check once when its name groups run side by side.
+
+### Fixed
+
+- A signed-in run whose session ended let 9 to 19 requests out under CPU load. An answer that may be the end now holds new requests at the first hop's headers. CONCEPTS gives the bound: `-host-parallel` + 4.
+- A killed `fuzz` run could keep matches without the inputs it had asked. A checkpoint and the final write now keep both in one transaction.
+- `export -format targets` reduces an answer read at a path to its origin, instead of leaving it out.
+- The screenshot estimate has a `shots` stage, and Chrome's requests count there, not in `other`.
+- `dns` keeps its own arguments with its run, not the process's.
+
 ## v0.26.0
 
 ### Added

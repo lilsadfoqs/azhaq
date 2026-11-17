@@ -692,8 +692,10 @@ func (o *probeOut) settle(rep *report, st *store.Store, fs *flag.FlagSet) {
 				why = dnsErr[normalize.HostFromURL(k)]
 				byDNS = why != ""
 			}
+			held := false // the user's own -deny-path kept it from being sent
 			if why == "" {
 				why = skipped[k]
+				held = strings.HasPrefix(why, "-deny-path ")
 			}
 			if why == "" {
 				why = dnsErr[in]
@@ -709,7 +711,7 @@ func (o *probeOut) settle(rep *report, st *store.Store, fs *flag.FlagSet) {
 					gaps = append(gaps, u.line)
 				}
 			}
-			if why == "outside the scope" {
+			if held || why == "outside the scope" {
 				continue // not sent by choice: the summary's skipped list names it, as no failure
 			}
 			// A bare name asks every port of -p once it resolves: with no

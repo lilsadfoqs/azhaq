@@ -5,7 +5,7 @@ Finds the query parameters a page reads, by trying names from a list. Names go i
 ## Synopsis
 
 ```
-azhaq params -u URL | -l FILE | -i FILE | stdin  [-w small|medium|large|FILE] [-X GET|POST|JSON|XML] [-t N] [-c N] [-d SECONDS] [-stable] [-T SECONDS] [-include DATA] [-casing STYLE] [-passive] [-rate N] [-oJ FILE] [-oT FILE] [-oB HOST:PORT] [-json]
+azhaq params -u URL | -l FILE | -i FILE | stdin  [-w small|medium|large|FILE] [-X GET|POST|JSON|XML] [-t N] [-c N] [-d SECONDS] [-stable] [-T SECONDS] [-include DATA] [-casing STYLE] [-passive] [-rate N] [-oJ FILE] [-oT FILE] [-od DIR] [-oB HOST:PORT] [-json]
 ```
 
 ## Examples
@@ -19,6 +19,9 @@ azhaq params -u https://app.example.com/search -w burp-parameter-names.txt -rate
 
 # pages from a Burp export, names sent in a body (bodies may change data)
 azhaq params -i burp-export.xml -allow app.example.com -X POST
+
+# keep the request and answer that showed each name as a file in out/
+azhaq params -u https://app.example.com/search -od out
 ```
 
 ## What it does
@@ -26,7 +29,7 @@ azhaq params -i burp-export.xml -allow app.example.com -X POST
 1. Takes pages from `-u`, `-l`, `-i` or stdin.
 2. Asks each page with random names first, to get a reference answer and the page's own noise.
 3. Sends the names of the list in groups and compares each answer with that reference.
-4. Narrows a group that changed the answer down to the names that did it, and prints them with `why`. A name whose only evidence is `size`, `lines` or `body` is checked once more before it is kept: four names no page reads, as long as it, are asked, and each answer it gave must differ from all of them and from the reference by more than the page shows by itself. It is then asked twice more with another value, each time followed by one more such name, and those answers count too. These two extra pairs of requests are sent for the first such name, and for every one after it while the page has shown any variation: answers to calibration's two identical requests, to the controls, or to a name asked again that were not alike in size, lines or body, or a name whose repeat did not change the page as before. When that first name passed with the page calm throughout, the names after it get the four controls only, and a page that varies later brings the repeats back. A page that varies from one request to the next (a token, a counter, an ad) keeps no such candidate, and what the check saw widens the noise allowed for the names that follow.
+4. Narrows a group that changed the answer down to the names that did it, and prints them with `why`. A name whose only evidence is `size`, `lines` or `body` is checked once more before it is kept: four names no page reads, as long as it, are asked, and each answer it gave must differ from all of them and from the reference by more than the page shows by itself. It is then asked twice more with another value, each time followed by one more such name, and those answers count too. These two extra pairs of requests are sent for the first such name, and for every one after it while the page has shown any variation: answers to calibration's two identical requests, to the controls, or to a name asked again that were not alike in size, lines or body, or a name whose repeat did not change the page as before. Names that reach this check at the same time, from groups that run side by side, wait for the first one's and are not asked again. When that first name passed with the page calm throughout, the names after it get the four controls only, and a page that varies later brings the repeats back. A page that varies from one request to the next (a token, a counter, an ad) keeps no such candidate, and what the check saw widens the noise allowed for the names that follow.
 5. Tests the parameters the URL already carries (`?q=apple`), which the list skips: a name is found when asking with it renamed to a name no page reads changes the answer, or else when another value does, and the change shows twice. A name the page ignores (`utm_source`) is not reported. On a page that prints what it is sent, only the rename is judged. They are in `params` with the others and `why` says what changed.
 6. When the page refuses a request without its input (400 or 422), asks the names not found again with the names found so far in every request, against a new reference taken the same way, and repeats while a pass finds more (at most 3 passes). A page that reports its required fields one at a time says nothing about the second until the first is given. A page that answers without input is not asked again.
 
@@ -44,6 +47,8 @@ Plain output is the URL and the parameter names, one line per page. With `-json`
 | `why` | An object: each name found, with what changed in the answer. The values are below. |
 | `given` | The names of `params` that were in the URL given (`?q=x`): tested, read by the page, and not found by the search. Left out when there are none. |
 | `values` | The value a name needed, such as `{"debug":"true"}`, when it answered only to that one. |
+| `resultfile` | With `-od`: an object from each name to the file that holds the request that showed it and the answer it got, in the `-od` directory. |
+| `resultfile_cut` | With `-od`: the names whose file ends before the end of the answer: the body was cut by the search's read (a stream that never ends, or past 2 MiB) or by the 5 MiB cap. |
 
 `params -json` prints only these fields. The workspace row of a page also keeps `requests`, and `writes` (the body requests sent) for a body method: `azhaq show -json` prints them. A note in the summary says how many body requests were sent.
 
@@ -66,6 +71,8 @@ Two files can be written as well:
 
 - `-oJ FILE` writes arjun's file: `{"URL": {"params": [...], "method": "GET", "headers": {...}}}`.
 - `-oT FILE` writes one request per line: `URL?name=1234&other=5678`. For a body method the line is the URL, a tab and the body.
+
+`-od DIR` writes the requests and answers themselves: see Details.
 
 ## Summary and exit codes
 
@@ -93,6 +100,17 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 - A group of names the server refuses with another status than the baseline's, such as 414 for a long query, is cut down until the server answers as before. That size is then the group.
 - A page that `-deny-path REGEX` matches is not searched, and the summary lists it under `skipped` with the rule.
 - A page that prints the query string back or counts the names is told apart by random names of the same lengths. Reflection is told apart by a random token.
+
+### Keeping the answer of a name
+
+- `-od DIR` writes, for each name the page's row reports, one file in `DIR` with the request that showed the name and the answer it got, as [fuzz](fuzz.md#reports) writes a match: the request, a separator line, then the status line, headers and body, in a file named by the md5 of its text. The directory is made if it does not exist.
+- The answer is the one the comparison already read, so `-od` sends no request that the search does not send. A reflected value can be read in the file, with the value the request sent.
+- The request is the one that was sent, so a `-H` or `-cookie` you gave is in it.
+- A name found in a group of names that were asked together has the group's request in its file, and the names of one group share its file. A name that was confirmed alone has the request that asked it alone.
+- Only the names that are reported get a file. A group of a page that answers any name, and the answers of requests that showed no name, are not kept, and are not held in memory: an answer is held only until the page's row is given.
+- The body in a file is the body the search read, up to 5 MiB. `resultfile_cut` lists the names whose body was cut.
+- The row names the files as `resultfile` in `-json`, in the text line (`[Resultfile: name=FILE, …]`) and in the workspace. A file that cannot be written is counted in a note and the name has no `resultfile`.
+- `run -params` has the same option as `-params-od DIR`.
 
 ## Flags
 
@@ -158,6 +176,7 @@ The summary and the exit codes are the shared ones: see [the summary](../OUTPUT.
 | `-json` | bool |  | JSONL output, and the summary as one JSON object on stderr |
 | `-o` | string |  | also write results to this file |
 | `-oB` | string |  | send each page with the names found through this proxy, HOST:PORT (Burp), after the search |
+| `-od` | string |  | keep the request and answer that showed each parameter found as a file in this directory, as fuzz -od does: one file for each name, named by the md5 of its text (up to 5 MiB of a body; the row names it in resultfile) |
 | `-oJ` | string |  | write results to this file as JSON: {"URL": {"params": [...], "method": "GET", "headers": {...}}} |
 | `-oT` | string |  | write results to this file as text, one request per line: URL?name=1234&other=5678 |
 | `-silent` | bool |  | results only: no progress; the summary only when something failed (a source that failed, a takeover candidate as a [takeover] line on stderr); stdout stays one result per line |

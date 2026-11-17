@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"unicode"
 
 	"github.com/lilsadfoqs/azhaq/internal/lazyre"
 	"github.com/lilsadfoqs/azhaq/internal/ledger"
@@ -256,6 +257,7 @@ type fingerprint struct {
 	words    int
 	size     int
 	keys     string // a JSON answer's top-level fields; "" for anything else
+	echo     bool   // an error page or a redirect that names the path asked, in its body or Location
 }
 
 var titleRE = lazyre.New(`(?is)<title[^>]*>(.*?)</title>`)
@@ -393,8 +395,50 @@ func catchAllVerdict(ctx context.Context, c *http.Client, res Result) (shell, ju
 		return false, false, nil
 	}
 	ctl = b.control()
-	ctl.Exact = b.fp.status == fp.status && (isRedirect(fp.status) && b.fp.location == fp.location || !isRedirect(fp.status) && (b.fp.hash == fp.hash || b.fp.raw == fp.raw))
+	ctl.Exact = b.exact(fp)
 	return b.fp.matches(fp), true, ctl
+}
+
+// exact says fp is this baseline's answer byte for byte once the path each
+// asked is taken out, not by shape.
+func (b *baseline) exact(fp fingerprint) bool {
+	return b.fp.status == fp.status && (isRedirect(fp.status) && b.fp.location == fp.location || !isRedirect(fp.status) && (b.fp.hash == fp.hash || b.fp.raw == fp.raw))
+}
+
+// PrefixControl is the control that res is the answer of too, when res is an
+// error page or a redirect (300 and above) that names its own path and, with
+// that path taken out, is the answer of a name asked under the prefix it opens
+// (/api/<random> for /api), with the control's path taken out too: res is
+// that prefix's catch-all answer, whatever the route behind it does for
+// another method. The control is one request for each prefix, reused for
+// every path under it. Nil when res is not such a page, or the control
+// answered another page. A caller lists the row, labelled; it is not dropped.
+func PrefixControl(ctx context.Context, c *http.Client, res Result) *Control {
+	switch res.Status {
+	case 0, http.StatusNotFound, http.StatusGone, http.StatusUnauthorized, http.StatusForbidden:
+		return nil
+	}
+	u, err := url.Parse(res.RequestURL)
+	if err != nil || u.Host == "" || res.Status < 300 {
+		return nil
+	}
+	path := u.EscapedPath()
+	if path == "" || path == "/" {
+		return nil
+	}
+	origin := u.Scheme + "://" + u.Host
+	fp := fingerprintOf(res, origin, requestTarget(u))
+	if !fp.echo {
+		return nil
+	}
+	own := strings.TrimSuffix(path, "/") + "/"
+	pb := baselineFor(ctx, c, origin, own)
+	if pb == nil || !pb.ok || !strings.HasPrefix(pb.url, origin+own) || !pb.fp.matches(fp) {
+		return nil
+	}
+	pc := pb.control()
+	pc.Exact = pb.exact(fp)
+	return pc
 }
 
 // rootShell: a page byte for byte the site root's answer for an unknown
@@ -481,7 +525,15 @@ func requestTarget(u *url.URL) string {
 }
 
 func fingerprintOf(res Result, origin, target string) fingerprint {
-	return fingerprintBy(res, origin, func(s string) string { return stripEcho(s, origin, target) })
+	fp := fingerprintBy(res, origin, func(s string) string { return stripEcho(s, origin, target) })
+	loc := ""
+	if res.Header != nil {
+		loc = strings.TrimPrefix(res.Header.Get("Location"), origin)
+	}
+	// A redirect to its own path with a slash is a directory, not a catch-all.
+	dir := isRedirect(res.Status) && (loc == target+"/" || loc == strings.TrimSuffix(target, "/")+"/")
+	fp.echo = !dir && res.Status >= 300 && (fp.hash != fp.raw || fp.location != loc)
+	return fp
 }
 
 // SamePage says whether two answers, of two origins, are the same page
@@ -519,10 +571,25 @@ func fingerprintBy(res Result, origin string, strip func(string) string) fingerp
 		fp.title = strings.Join(strings.Fields(m[1]), " ")
 	}
 	fp.lines = strings.Count(body, "\n")
-	fp.words = len(strings.Fields(body))
+	fp.words = countFields(body)
 	fp.size = len(body)
 	fp.keys = jsonShape(body)
 	return fp
+}
+
+// countFields is len(strings.Fields(s)) without the slice of every word,
+// which was a page's worth of garbage for each answer judged.
+func countFields(s string) int {
+	n, in := 0, false
+	for _, r := range s {
+		if sp := unicode.IsSpace(r); !sp && !in {
+			n++
+			in = true
+		} else if sp {
+			in = false
+		}
+	}
+	return n
 }
 
 // jsonShape is a JSON object's sorted top-level field names ("[]" for an
@@ -612,6 +679,19 @@ func (c Control) String() string {
 		s += fmt.Sprintf(", %q", c.Title)
 	}
 	return s
+}
+
+// PrefixLabel is what a row says of an answer that is also its prefix's
+// control's: "the answer of /api/<random> too: this prefix's catch-all".
+func (c Control) PrefixLabel() string {
+	path := c.URL
+	if u, err := url.Parse(c.URL); err == nil && u.Path != "" {
+		path = u.EscapedPath()
+	}
+	if i := strings.LastIndex(path, "/"); i >= 0 {
+		path = path[:i+1] + "<random>"
+	}
+	return "the answer of " + path + " too: this prefix's catch-all"
 }
 
 // EchoFree is s with the path of requestURL taken out, in the forms an error

@@ -281,6 +281,77 @@ func TestBuildScoreAndFloor(t *testing.T) {
 	}
 }
 
+// The index carries a record's CVSS attack vector only when it is local or
+// physical, read from the same metric the score is: the primary one of the
+// newest CVSS version. Network and adjacent records carry none.
+func TestBuildKeepsTheAttackVectorThatTheNetworkDoesNotReach(t *testing.T) {
+	m := func(list, typ, ver, vec string) string {
+		return `"` + list + `":[{"type":"` + typ + `","cvssData":{"version":"` + ver + `","vectorString":"` + vec + `","baseScore":7.0}}]`
+	}
+	rec := func(id, metrics string) string {
+		return `{"cve":{"id":"` + id + `","vulnStatus":"Analyzed","metrics":{` + metrics + `},"configurations":[{"nodes":[{"cpeMatch":[{"vulnerable":true,"criteria":"cpe:2.3:a:apache:http_server:*:*:*:*:*:*:*:*","versionEndExcluding":"2.4.1"}]}]}]}}`
+	}
+	res, err := withFeed(t, strings.Join([]string{
+		rec("CVE-2021-0040", m("cvssMetricV31", "Primary", "3.1", "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H")),
+		rec("CVE-2021-0041", m("cvssMetricV40", "Primary", "4.0", "CVSS:4.0/AV:P/AC:L/AT:N/PR:N/UI:N/VC:H/VI:H/VA:H/SC:N/SI:N/SA:N")),
+		rec("CVE-2021-0042", m("cvssMetricV2", "Primary", "2.0", "AV:L/AC:L/Au:N/C:P/I:P/A:P")),
+		rec("CVE-2021-0043", m("cvssMetricV31", "Primary", "3.1", "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H")),
+		rec("CVE-2021-0044", m("cvssMetricV30", "Primary", "3.0", "CVSS:3.0/AV:A/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H")),
+		rec("CVE-2021-0045", ``),
+		// The primary metric of the version wins over a secondary one that says otherwise.
+		rec("CVE-2021-0046", `"cvssMetricV31":[{"type":"Secondary","cvssData":{"version":"3.1","vectorString":"CVSS:3.1/AV:L/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H","baseScore":7.0}},{"type":"Primary","cvssData":{"version":"3.1","vectorString":"CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H","baseScore":9.8}}]`),
+		// The newest version wins, as the score does.
+		rec("CVE-2021-0047", m("cvssMetricV40", "Primary", "4.0", "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:H/VI:H/VA:H/SC:N/SI:N/SA:N")+","+m("cvssMetricV31", "Primary", "3.1", "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H")),
+	}, ","))
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := product(res, "apache:http_server")
+	for id, want := range map[string]string{
+		"CVE-2021-0040": advisory.AVLocal, "CVE-2021-0041": advisory.AVPhysical, "CVE-2021-0042": advisory.AVLocal,
+		"CVE-2021-0043": "", "CVE-2021-0044": "", "CVE-2021-0045": "", "CVE-2021-0046": "", "CVE-2021-0047": "",
+	} {
+		if v, ok := vuln(p, id); !ok || v.AV != want {
+			t.Errorf("%s: attack vector %q, want %q", id, v.AV, want)
+		}
+	}
+	r := res.Report
+	if r.AttackVectors["L"] != 2 || r.AttackVectors["P"] != 1 || r.AttackVectors["N"] != 3 || r.AttackVectors["A"] != 1 || r.NoVector != 1 {
+		t.Errorf("vectors %v, none %d", r.AttackVectors, r.NoVector)
+	}
+	if r.VectorVersions["2.0"] != 1 || r.VectorVersions["3.0"] != 1 || r.VectorVersions["3.1"] != 3 || r.VectorVersions["4.0"] != 2 {
+		t.Errorf("vector versions %v", r.VectorVersions)
+	}
+}
+
+// Built twice from the same records, the index is the same bytes, vectors included.
+func TestBuildIsReproducible(t *testing.T) {
+	write := func() []byte {
+		res, err := Build(pinned(t))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var b bytes.Buffer
+		if err := advisory.WriteIndex(&b, res.Meta, res.Products); err != nil {
+			t.Fatal(err)
+		}
+		return b.Bytes()
+	}
+	if !bytes.Equal(write(), write()) {
+		t.Error("two builds of the same records differ")
+	}
+}
+
+// A vector string that does not read stops the build.
+func TestBuildFailsOnAVectorItCannotRead(t *testing.T) {
+	for name, vec := range map[string]string{"no attack vector": "CVSS:3.1/AC:L/PR:N", "an unknown one": "CVSS:3.1/AV:X/AC:L", "a long one": "CVSS:3.1/AV:NL/AC:L"} {
+		_, err := withFeed(t, `{"cve":{"id":"CVE-2021-0050","vulnStatus":"Analyzed","metrics":{"cvssMetricV31":[{"type":"Primary","cvssData":{"version":"3.1","vectorString":"`+vec+`","baseScore":5.0}}]},"configurations":[{"nodes":[{"cpeMatch":[{"vulnerable":true,"criteria":"cpe:2.3:a:apache:http_server:2.4.1:*:*:*:*:*:*:*"}]}]}]}}`)
+		if err == nil || !strings.Contains(err.Error(), "CVE-2021-0050") {
+			t.Errorf("%s: err %v", name, err)
+		}
+	}
+}
+
 // A name reaches the products of its best source only, and a name that a
 // guessing source gives to two products reaches neither.
 func TestBuildNamesTakeTheBestSource(t *testing.T) {

@@ -478,3 +478,28 @@ func TestRecordManyIsOneWriteOfChainedLines(t *testing.T) {
 		t.Fatalf("verify: %+v %v", c, err)
 	}
 }
+
+// A PTR query is ruled by the address it is for: the rule that allowed
+// 127.77.0.5 is the one on the line for 5.0.77.127.in-addr.arpa.
+func TestPTRLineCarriesTheRuleOfItsAddress(t *testing.T) {
+	l, path := open(t)
+	l.Match = func(h string) string {
+		if h == "127.77.0.5" {
+			return "127.77.0.0/24"
+		}
+		return ""
+	}
+	Use(l)
+	defer Use(nil)
+	DNS(context.Background(), "5.0.77.127.in-addr.arpa", "PTR", "127.0.0.1:5301")
+	DNS(context.Background(), "9.0.77.127.in-addr.arpa", "PTR", "127.0.0.1:5301") // an address no rule allows
+	l.Close()
+	var got []string
+	if err := Read(path, func(e Entry) error { got = append(got, e.Host+" "+e.Rule); return nil }); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"5.0.77.127.in-addr.arpa 127.77.0.0/24", "9.0.77.127.in-addr.arpa "}
+	if !slices.Equal(got, want) {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}

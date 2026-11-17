@@ -3,6 +3,7 @@ package advisory_test
 import (
 	"reflect"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 
@@ -140,6 +141,86 @@ func TestEmbeddedIndexRanksBundledLibrariesAfterTheProductsOwn(t *testing.T) {
 		}
 		if !found {
 			t.Errorf("%s is not among the advisories", id)
+		}
+	}
+}
+
+// The embedded index carries the attack vector of its records: a Redis flaw
+// NVD scores AV:L is conditional on local access, a Tomcat one scored AV:N
+// is affected as before.
+func TestEmbeddedIndexKeepsAnAttackVector(t *testing.T) {
+	ix, err := advisory.Builtin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	label := func(product, version, id string) advisory.Lead {
+		leads, err := advisory.MatchIndex([]advisory.Service{{Host: "h", Port: 80, Product: product, Version: version}}, ix)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, l := range leads {
+			if l.AdvisoryID == id {
+				return l
+			}
+		}
+		t.Fatalf("%s %s has no %s", product, version, id)
+		return advisory.Lead{}
+	}
+	if l := label("Redis", "7.0.0", "CVE-2025-46818"); l.Label != advisory.LabelConditional || !strings.HasPrefix(l.Precondition, "needs local access") {
+		t.Errorf("CVE-2025-46818: %q %q", l.Label, l.Precondition)
+	}
+	if l := label("Apache Tomcat", "9.0.30", "CVE-2020-1938"); l.Label != advisory.LabelAffected || l.Precondition != "" {
+		t.Errorf("CVE-2020-1938: %q %q", l.Label, l.Precondition)
+	}
+}
+
+// The embedded index carries the preconditions a record states in its own
+// text: an Apache record that needs mod_rewrite and a nginx one that needs
+// HTTP/2 are conditional, with the words they were read from, and rank after
+// the matches with nothing open.
+func TestEmbeddedIndexKeepsTheNeedsATextStates(t *testing.T) {
+	ix, err := advisory.Builtin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		product, version, id, need, quote string
+	}{
+		{"Apache httpd", "2.4.54", "CVE-2024-38475", "mod_rewrite", "Improper escaping of output in mod_rewrite in Apache HTTP Server"},
+		{"Apache httpd", "2.4.54", "CVE-2023-25690", "mod_proxy", "mod_proxy configurations on Apache HTTP Server"},
+		{"nginx", "1.11.13", "CVE-2023-44487", "HTTP/2", "The HTTP/2 protocol allows a denial of service"},
+	} {
+		leads, err := advisory.MatchIndex([]advisory.Service{{Host: "h", Port: 80, Product: c.product, Version: c.version}}, ix)
+		if err != nil {
+			t.Fatal(err)
+		}
+		found := false
+		for _, l := range leads {
+			if l.AdvisoryID != c.id {
+				continue
+			}
+			found = true
+			if l.Label != advisory.LabelConditional || !slices.Contains(l.Needs, c.need) || !strings.Contains(l.Precondition, `needs `+c.need+`: "`) || !strings.Contains(l.Precondition, c.quote) {
+				t.Errorf("%s %s / %s: %q %v %q", c.product, c.version, c.id, l.Label, l.Needs, l.Precondition)
+			}
+		}
+		if !found {
+			t.Errorf("%s %s has no %s", c.product, c.version, c.id)
+		}
+		// The top of the service's lead is a match with nothing open.
+		g := advisory.Group(leads)[0]
+		if g.Label != advisory.LabelAffected || g.AdvisoryID == c.id || len(g.Needs) != 0 {
+			t.Errorf("%s %s: top %s is %s %v", c.product, c.version, g.AdvisoryID, g.Label, g.Needs)
+		}
+		sawConditional := false
+		for _, r := range g.Advisories {
+			if r.Label == advisory.LabelConditional {
+				sawConditional = true
+			}
+			if r.Label == advisory.LabelAffected && sawConditional && r.Component == "" {
+				t.Errorf("%s %s: %s (affected) is listed after a conditional match", c.product, c.version, r.ID)
+				break
+			}
 		}
 	}
 }

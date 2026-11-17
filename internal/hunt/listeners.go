@@ -16,26 +16,62 @@ import (
 // Ident is the part of a row that says what the run named on a listener. With
 // -json its fields are the row's own.
 type Ident struct {
-	Kind        string  `json:"kind"`           // identification, or finding for a listener a read proved
-	What        string  `json:"what,omitempty"` // the record's kind: software-version, advisory-precondition…
-	Host        string  `json:"host"`
-	Port        int     `json:"port,omitempty"`
-	Product     string  `json:"product,omitempty"`
-	Version     string  `json:"version"`          // "" when no version was seen
-	Source      string  `json:"source,omitempty"` // what a name's root page said to name the product: page title, generator, header X-Powered-By, header Server, technology
-	AdvisoryID  string  `json:"advisory_id,omitempty"`
-	AdvisoryURL string  `json:"advisory_url,omitempty"`
-	Advisories  int     `json:"advisories,omitempty"` // how many advisories match the version, the top one included
-	Label       string  `json:"label"`                // proved, version-read, version-only or conditional: as report -findings says it
-	Severity    string  `json:"severity"`
-	KEV         bool    `json:"kev,omitempty"`
-	CVSS        float64 `json:"cvss,omitempty"`
-	Evidence    string  `json:"evidence"`
-	Command     string  `json:"command,omitempty"` // the command that produced the record
-	// Also lists the other host names the listener answered under with this
-	// product and version (its address, a name that resolves to it): one row for
-	// the service, whatever it was reached as.
+	Kind        string `json:"kind"`           // identification, or finding for a listener a read proved
+	What        string `json:"what,omitempty"` // the record's kind: software-version, advisory-precondition…
+	Host        string `json:"host"`
+	Port        int    `json:"port,omitempty"`
+	Product     string `json:"product,omitempty"`
+	Version     string `json:"version"`          // "" when no version was seen
+	Source      string `json:"source,omitempty"` // what a name's root page said to name the product: page title, generator, header X-Powered-By, header Server, technology
+	AdvisoryID  string `json:"advisory_id,omitempty"`
+	AdvisoryURL string `json:"advisory_url,omitempty"`
+	Advisories  int    `json:"advisories,omitempty"` // how many advisories match the version, the top one included
+	// Next are the advisories that follow the top one in the same order (the
+	// first few), and Others how many more match, by label: the text row names
+	// these and counts the rest, and report -findings lists every one.
+	Next   []NextAdvisory `json:"next_advisories,omitempty"`
+	Others map[string]int `json:"other_advisories,omitempty"`
+	Label  string         `json:"label"` // proved, version-read, version-only or conditional: as report -findings says it
+	// Precondition is what a conditional top advisory waits on, with the
+	// words of the record it was read from; Settled what the run saw that
+	// answers one of the record's preconditions.
+	Precondition string  `json:"precondition,omitempty"`
+	Settled      string  `json:"settled,omitempty"`
+	Severity     string  `json:"severity"`
+	KEV          bool    `json:"kev,omitempty"`
+	CVSS         float64 `json:"cvss,omitempty"`
+	Evidence     string  `json:"evidence"`
+	Command      string  `json:"command,omitempty"` // the command that produced the record
+	// Also lists the other host names whose own answer named this product and
+	// version (its address, a name that resolves to it): one row for the service,
+	// whatever it was reached as. A name that read another product is not here.
 	Also []string `json:"also_named,omitempty"`
+}
+
+// NextAdvisory is an advisory of a listener's product and version that follows
+// the row's top one.
+type NextAdvisory struct {
+	ID    string   `json:"id"`
+	Label string   `json:"label"`
+	Needs []string `json:"needs,omitempty"` // what a conditional one waits on: HTTP/2, mod_rewrite
+	KEV   bool     `json:"kev,omitempty"`
+	CVSS  float64  `json:"cvss,omitempty"`
+}
+
+// Tags are what the row says of it beside its id.
+func (n NextAdvisory) Tags() string {
+	label := n.Label
+	if label == "conditional" && len(n.Needs) > 0 {
+		label += ": needs " + strings.Join(n.Needs, ", ")
+	}
+	t := []string{label}
+	if n.KEV {
+		t = append(t, "KEV")
+	}
+	if n.CVSS > 0 {
+		t = append(t, fmt.Sprintf("CVSS %.1f", n.CVSS))
+	}
+	return strings.Join(t, ", ")
 }
 
 // Listener is one record for Build: the Ident fields and its proof.
@@ -86,8 +122,25 @@ func (l Listener) row(db string) Row {
 		if id.CVSS > 0 {
 			d += fmt.Sprintf(", CVSS %.1f", id.CVSS)
 		}
+		if id.Label == "conditional" && id.Precondition != "" {
+			d += "; precondition: " + id.Precondition
+		}
+		if id.Settled != "" {
+			d += "; settled: " + id.Settled
+		}
 		if id.Advisories > 1 {
-			d += fmt.Sprintf("; %d advisories match this version, azhaq report -findings -db %s lists them", id.Advisories, quote(db))
+			d += fmt.Sprintf("; %d advisories match this version", id.Advisories)
+			if len(id.Next) > 0 {
+				var next []string
+				for _, n := range id.Next {
+					next = append(next, n.ID+" ("+n.Tags()+")")
+				}
+				d += ", then " + strings.Join(next, ", ")
+				if more := id.Advisories - 1 - len(id.Next); more > 0 {
+					d += fmt.Sprintf(" and %d more: %s", more, othersText(id.Others))
+				}
+			}
+			d += fmt.Sprintf("; azhaq report -findings -db %s lists them", quote(db))
 		}
 		rs = append(rs, Reason{"advisory", d})
 	} else if id.Kind == proof.TierFinding {
@@ -188,4 +241,40 @@ func (m Measured) row(db string) Row {
 	}
 	return Row{Score: score, Key: m.Host, Type: typ, Reasons: rs, Next: next,
 		Tier: proof.TierFinding, Proof: m.Proof, scope: "target", signals: 1}
+}
+
+// othersText tells the other advisories of a row by label, as report -findings
+// names them ("30 version-only, 8 conditional").
+func othersText(m map[string]int) string {
+	var parts []string
+	for _, lb := range []string{"proved", "version-read", "version-only", "conditional"} {
+		if n := m[lb]; n > 0 {
+			parts = append(parts, fmt.Sprintf("%d %s", n, lb))
+		}
+	}
+	return strings.Join(parts, ", ")
+}
+
+// Lead is a product only the hash of an icon named on a listener: a lead with
+// the read that would settle it, never an identification. It ranks with the
+// leads, below every identification.
+type Lead struct {
+	Host     string
+	Port     int
+	Evidence string // "favicon matches X or Y", with what the run asked
+	Check    string
+	Command  string
+}
+
+// leadScore is below any identification and any route's signal: an icon is
+// the weakest name there is.
+const leadScore = 5
+
+func (l Lead) row() Row {
+	key := l.Host
+	if l.Port > 0 {
+		key = fmt.Sprintf("%s:%d", l.Host, l.Port)
+	}
+	return Row{Score: leadScore, Key: key, Type: "Service", Reasons: []Reason{{"favicon", l.Evidence}}, Next: l.Command,
+		Tier: proof.TierLead, Check: l.Check, scope: "target", signals: 1}
 }

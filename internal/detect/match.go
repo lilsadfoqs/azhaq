@@ -6,7 +6,6 @@ import (
 	_ "embed"
 	"encoding/binary"
 	"encoding/json"
-	"hash/maphash"
 	"net/http"
 	"regexp"
 	"sort"
@@ -36,6 +35,9 @@ type Hit struct {
 	// Many: the template names many products, this one by its matcher
 	// (tech-detect, fingerprinthub): a library or a CDN as well as an app.
 	Many bool
+	// Icon: the hash of an image is all that matched. A lead to read of the
+	// product itself, not a name the answer states.
+	Icon bool
 }
 
 // Stats describes the loaded data.
@@ -121,9 +123,12 @@ func Match(r Response) []Hit {
 
 // index holds the compiled units grouped by request path.
 type index struct {
-	groups map[string]*group
-	side   *side // the literal index of every group but the root's
-	memo   scanMemo
+	confirm map[string][]string // product key → the paths of its own templates, see ConfirmPaths
+	// confirmKeys are those keys in template order, so that the paths come out in it too.
+	confirmKeys []string
+	groups      map[string]*group
+	side        *side // the literal index of every group but the root's
+	memo        scanMemo
 }
 
 // side is one literal index over the needles of all the groups but the
@@ -155,29 +160,59 @@ func (sb *sideBuilder) add(lit string) int32 {
 	return id
 }
 
-// scanMemo remembers which side needles the last few large bodies hold. The
-// key is the body alone: a server's headers differ per answer (Date, a
-// request id) and would miss every time.
+// scanMemo remembers, for the last few large bodies, which side needles
+// they hold and the values of the DSL calls that read the body alone
+// (mmh3(base64_py(body))). A site that gives every path one page makes a
+// thousand answers of one body, and the headers of each differ (Date, a
+// request id): the key is the body alone.
 type scanMemo struct {
 	mu   sync.Mutex
-	ent  [4]memoEnt
+	ent  [4]*memoEnt
 	next int
 
 	hit, miss atomic.Int64 // what the tests and benchmarks read
 }
 
 type memoEnt struct {
-	hash uint64
 	body []byte // a copy: the caller's body is not held
+
+	once sync.Once
 	hits []uint64
+
+	mu   sync.Mutex
+	vals map[string]value
 }
 
 const (
 	memoMin = 1 << 9 // smaller responses are scanned in less than a lookup costs
 	memoMax = 1 << 20
+	// memoVal is the longest value kept for a body: a hash, not an
+	// intermediate that is as large as the page.
+	memoVal = 128
 )
 
-var memoSeed = maphash.MakeSeed()
+// entry is the memo of body, made when there is none; nil for a body that
+// is not worth one. Bodies of one page are told apart by their bytes, not
+// by a hash of them: a hash costs more than the compare of the few that
+// have its length.
+func (m *scanMemo) entry(body []byte) *memoEnt {
+	if len(body) < memoMin || len(body) > memoMax {
+		return nil
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, e := range m.ent {
+		if e != nil && len(e.body) == len(body) && bytes.Equal(e.body, body) {
+			m.hit.Add(1)
+			return e
+		}
+	}
+	m.miss.Add(1)
+	e := &memoEnt{body: bytes.Clone(body)}
+	m.ent[m.next] = e
+	m.next = (m.next + 1) % len(m.ent)
+	return e
+}
 
 // sideHits is the set of side needles that occur in the response text
 // (headers, a blank line, body, lower-cased), as a bitset. The body is
@@ -212,30 +247,18 @@ func (idx *index) sideHits(c *ctx) []uint64 {
 // bodyHits is the set of side needles in the lower-cased body, remembered
 // for the last few large bodies. The result is shared: callers do not write it.
 func (idx *index) bodyHits(body []byte) []uint64 {
-	memo := len(body) >= memoMin && len(body) <= memoMax
-	var h uint64
-	if memo {
-		h = maphash.Bytes(memoSeed, body)
-		idx.memo.mu.Lock()
-		for _, e := range idx.memo.ent {
-			if e.hits != nil && e.hash == h && bytes.Equal(e.body, body) {
-				idx.memo.mu.Unlock()
-				idx.memo.hit.Add(1)
-				return e.hits
-			}
-		}
-		idx.memo.mu.Unlock()
+	scan := func() []uint64 {
+		hits := make([]uint64, (idx.side.n+63)/64)
+		idx.side.ac.scan(strings.ToLower(string(body)), func(n int32) { hits[n>>6] |= 1 << (n & 63) })
+		return hits
 	}
-	idx.memo.miss.Add(1)
-	hits := make([]uint64, (idx.side.n+63)/64)
-	idx.side.ac.scan(strings.ToLower(string(body)), func(n int32) { hits[n>>6] |= 1 << (n & 63) })
-	if memo {
-		idx.memo.mu.Lock()
-		idx.memo.ent[idx.memo.next] = memoEnt{hash: h, body: bytes.Clone(body), hits: hits}
-		idx.memo.next = (idx.memo.next + 1) % len(idx.memo.ent)
-		idx.memo.mu.Unlock()
+	e := idx.memo.entry(body)
+	if e == nil {
+		idx.memo.miss.Add(1)
+		return scan()
 	}
-	return hits
+	e.once.Do(func() { e.hits = scan() })
+	return e.hits
 }
 
 // requestPath is what a template's path asks of the server: a fragment
@@ -277,6 +300,7 @@ type cunit struct {
 	spec *Unit
 	ms   []*cmatcher
 	xs   []*cextractor
+	icon bool // iconUnit: a hash of the body is its only evidence
 }
 
 // cmatcher is small until it first runs (there are 68,000 of them): what
@@ -302,9 +326,11 @@ type cextractor struct {
 func build(d *Data) *index {
 	idx := &index{groups: map[string]*group{}}
 	byPath := map[string][]*cunit{}
+	all := make([]*cunit, 0, len(d.Units))
 	for i := range d.Units {
 		u := &d.Units[i]
-		cu := &cunit{spec: u}
+		cu := &cunit{spec: u, icon: iconUnit(u)}
+		all = append(all, cu)
 		for j := range u.Matchers {
 			cu.ms = append(cu.ms, &cmatcher{spec: &u.Matchers[j]})
 		}
@@ -319,6 +345,7 @@ func build(d *Data) *index {
 			}
 		}
 	}
+	idx.confirm, idx.confirmKeys = confirmPaths(all)
 	sb := &sideBuilder{b: newACBuilder(), ids: map[string]int32{}}
 	for p, units := range byPath {
 		if p == "/" {
@@ -448,6 +475,7 @@ func (idx *index) match(r Response) []Hit {
 		return nil
 	}
 	c := newCtx(r)
+	c.shared = &idx.memo
 	s := g.pool.Get().(*scratch)
 	defer func() { s.reset(); g.pool.Put(s) }()
 
@@ -511,7 +539,7 @@ func (idx *index) match(r Response) []Hit {
 		}
 		hits = append(hits, Hit{
 			Product: prod, Version: versionOf(x), Template: u.spec.ID,
-			Matcher: name, Extracted: x, Many: many,
+			Matcher: name, Extracted: x, Many: many, Icon: u.icon,
 		})
 	}
 
@@ -600,6 +628,10 @@ type ctx struct {
 	resp *string
 	low  map[string]string
 	memo map[string]value
+
+	shared *scanMemo // where the values that read the body alone are kept
+	ent    *memoEnt
+	entSet bool
 }
 
 func newCtx(r Response) *ctx { return &ctx{r: r} }
@@ -674,9 +706,47 @@ func (c *ctx) ident(name string) value {
 	return vStr(strings.Join(c.r.Header.Values(dslIdents[name]), ", "))
 }
 
-func (c *ctx) memoGet(key string) (value, bool) { v, ok := c.memo[key]; return v, ok }
+// bodyEnt is the memo of this answer's body, or nil.
+func (c *ctx) bodyEnt() *memoEnt {
+	if !c.entSet {
+		c.entSet = true
+		if c.shared != nil {
+			c.ent = c.shared.entry(c.r.Body)
+		}
+	}
+	return c.ent
+}
+
+// bodyOnly says a memo key reads the body and no header.
+func bodyOnly(key string) bool { return !strings.Contains(key, "header") }
+
+func (c *ctx) memoGet(key string) (value, bool) {
+	if v, ok := c.memo[key]; ok {
+		return v, true
+	}
+	if bodyOnly(key) {
+		if e := c.bodyEnt(); e != nil {
+			e.mu.Lock()
+			v, ok := e.vals[key]
+			e.mu.Unlock()
+			return v, ok
+		}
+	}
+	return value{}, false
+}
 
 func (c *ctx) memoSet(key string, v value) {
+	if bodyOnly(key) && len(v.s) <= memoVal {
+		if e := c.bodyEnt(); e != nil {
+			e.mu.Lock()
+			if e.vals == nil {
+				e.vals = map[string]value{}
+			}
+			e.vals[key] = v
+			e.mu.Unlock()
+			return
+		}
+	}
 	if c.memo == nil {
 		c.memo = map[string]value{}
 	}

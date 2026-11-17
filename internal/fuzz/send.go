@@ -237,7 +237,7 @@ func (s *httpSender) Send(ctx context.Context, req *Request, keepBody bool) (*Re
 		r.RawRequest, r.RawResponse = string(rawReq), string(raw)
 	}
 	dec, release := decoded(resp)
-	body, length, words, lines, sum, ok, err := readHashed(dec, keepBody)
+	body, length, words, lines, sum, ok, err := readHashed(dec, keepBody || req.KeepFrom > 0 && resp.StatusCode >= req.KeepFrom)
 	release()
 	if cut() {
 		// The read stopped the stream: what came is the answer, and a

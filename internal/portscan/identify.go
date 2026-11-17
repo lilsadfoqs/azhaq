@@ -240,6 +240,9 @@ func (s *Scanner) dial(ctx context.Context, host, ip string, port int, secure bo
 // dialWait is dial with a bound on the TLS handshake.
 func (s *Scanner) dialWait(ctx context.Context, host, ip string, port int, secure bool, handshake time.Duration) (net.Conn, error) {
 	if err := s.wait(ctx, ip); err != nil {
+		if stop := paceStop(err); stop != nil {
+			s.noteStop(stop)
+		}
 		return nil, err
 	}
 	if s.Take != nil {
@@ -268,6 +271,9 @@ func (s *Scanner) dialWait(ctx context.Context, host, ip string, port int, secur
 	// recorded as any, with the fallback client. An open port's probes have
 	// an allowance, and it comes out of it.
 	if werr := s.wait(ctx, ip); werr != nil || !spare(ctx) {
+		if stop := paceStop(werr); stop != nil {
+			s.noteStop(stop)
+		}
 		return nil, err
 	}
 	if s.Take != nil {

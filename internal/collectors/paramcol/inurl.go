@@ -23,40 +23,44 @@ func (s *search) inURL() map[string]string {
 		if s.halted() {
 			break
 		}
-		if why := s.ownRename(n); why != "" {
+		if why, ex := s.ownRename(n); why != "" {
 			found[n] = why
-		} else if why := s.ownValue(n); why != "" {
+			s.remember(n, ex)
+		} else if why, ex := s.ownValue(n); why != "" {
 			found[n] = why
+			s.remember(n, ex)
 		}
 	}
 	return found
 }
 
 // ownRename is how the answer changes when name is not in the query, twice.
-func (s *search) ownRename(name string) string {
+func (s *search) ownRename(name string) (string, *exchange) {
 	var first string
+	var ex *exchange
 	for range 2 {
 		alt := *s.base
 		alt.RawQuery = editQuery(s.base.RawQuery, name, controlFor([]string{name}, "")[0].name, nil)
 		a, ok := s.askAt(&alt, randomPairs(1), false)
 		if !ok {
-			return ""
+			return "", nil
 		}
 		why := s.judge(a, s.ref)
 		if why == "" || first != "" && why != first {
-			return ""
+			return "", nil
 		}
-		first = why
+		first, ex = why, a.ex
 	}
-	return first
+	return first, ex
 }
 
 // ownValue is how the answer changes when name has another value, twice.
-func (s *search) ownValue(name string) string {
+func (s *search) ownValue(name string) (string, *exchange) {
 	if s.noEcho || s.controlled {
-		return ""
+		return "", nil
 	}
 	var first string
+	var ex *exchange
 	for range 2 {
 		v := randValue()
 		alt := *s.base
@@ -64,7 +68,7 @@ func (s *search) ownValue(name string) string {
 		rnd := randomPairs(1)
 		a, ok := s.askAt(&alt, rnd, false)
 		if !ok {
-			return ""
+			return "", nil
 		}
 		q := append([]pair{{name, v}}, rnd...)
 		why := s.judge(strip(a, q), s.ref)
@@ -72,11 +76,11 @@ func (s *search) ownValue(name string) string {
 			why = "reflected"
 		}
 		if why == "" || first != "" && why != first {
-			return ""
+			return "", nil
 		}
-		first = why
+		first, ex = why, a.ex
 	}
-	return first
+	return first, ex
 }
 
 // editQuery renames each name=value of raw whose name is name to newName,

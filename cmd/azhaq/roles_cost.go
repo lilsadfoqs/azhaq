@@ -20,18 +20,20 @@ const signInCost = 3
 
 // rolesCostIn is what the estimate of a roles command is made from.
 type rolesCostIn struct {
-	roles    []role
-	logins   int  // roles that sign in with Chrome
-	crawl    bool // the run options are given: each role maps the target
-	hist     []*history
-	sc       histScope
-	replay   bool
-	max      int // -replay-max
-	methods  map[string]bool
-	budget   int64         // -max-requests of the run options, the command's budget
-	verify   []verifyWrite // -replay-writes-verify steps
-	canary   bool          // -replay-writes-canary
-	mapsPlan *runPlan      // what one role's run would send, from plan; nil outside plan
+	roles     []role
+	logins    int  // roles that sign in with Chrome
+	crawl     bool // the run options are given: each role maps the target
+	hist      []*history
+	sc        histScope
+	replay    bool
+	max       int // -replay-max
+	methods   map[string]bool
+	budget    int64         // -max-requests of the run options, the command's budget
+	verify    []verifyWrite // -replay-writes-verify steps
+	canary    bool          // -replay-writes-canary
+	mapsPlan  *runPlan      // what one role's run would send, from plan; nil outside plan
+	proxyAsk  bool          // -proxy is an HTTP proxy: asked once for its own answer
+	cmdDirect bool          // -role-cmd-direct: the commands run with no proxy
 }
 
 // estimateRoles is what roles would send, by stage, from the roles, the
@@ -46,7 +48,7 @@ func estimateRoles(in rolesCostIn) costEstimate {
 	}
 	if in.crawl && in.mapsPlan != nil {
 		for _, st := range in.mapsPlan.Estimate.Stages {
-			if st.Stage == signInStage {
+			if st.Stage == signInStage || st.Stage == proxyStage {
 				continue
 			}
 			for _, c := range st.Collectors {
@@ -120,6 +122,9 @@ func estimateRoles(in rolesCostIn) costEstimate {
 		}
 		open := strings.Join(cl.tOpen, "; ")
 		e.putBound(stageVerify, "", amount{Requests: floor}, open, cl)
+	}
+	if in.proxyAsk {
+		e.addProxyAsk()
 	}
 	out := e.result()
 	out.Basis = rolesBasis
@@ -208,10 +213,16 @@ func planRoles(in rolesCostIn, asJSON bool, budget int64) error {
 		if b := budgetStage(est, budget); b != "" {
 			out["budget"] = b
 		}
+		if cp := roleCmdPlan(in.roles, in.cmdDirect); len(cp) > 0 {
+			out["role_cmds"] = cp
+		}
 		return json.NewEncoder(os.Stdout).Encode(out)
 	}
 	fmt.Printf("roles (%d): %s; %s\n", len(names), strings.Join(names, " "), nOf(in.logins, "sign-in with Chrome", "sign-ins with Chrome"))
 	printEstimate(os.Stdout, "estimate: ", est)
+	for _, l := range roleCmdPlan(in.roles, in.cmdDirect) {
+		fmt.Println(l)
+	}
 	if b := budgetStage(est, budget); b != "" {
 		fmt.Println(b)
 	}

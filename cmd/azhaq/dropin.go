@@ -621,7 +621,7 @@ func cmdURLs(args []string) error {
 	sendState := fs.Bool("send-state-changing", false, "with -live, also ask the URLs whose own path or query declares a state change (create, delete, reset, logout, ...); by default an archived /logout is not asked, and is counted as not asked (state-changing)")
 	given := inherit(fs, "provider-config=providers", "keep-junk=urls-keep-junk", "mc=urls-mc", "fc=urls-fc", "mt=urls-mt", "ft=urls-ft", "from=urls-from", "to=urls-to",
 		"blacklist=urls-blacklist", "fp=urls-fp", "retries=urls-retries", "urls-pages", "urls-pause", "proxy=urls-proxy", "urls-max",
-		"archive=urls-archive", "raw=urls-raw", "urls-timeout", "timeout", "v", "fail-on-errors",
+		"archive=urls-archive", "raw=urls-raw", "raw-urls=urls-raw-urls", "urls-timeout", "timeout", "v", "fail-on-errors",
 		"scope", "program", "allow", "deny", "deny-path", "rate", "max-requests", "resolvers", "ledger", "seal-to")
 	if err := parse(fs, args); err != nil {
 		return err
@@ -648,6 +648,8 @@ func cmdURLs(args []string) error {
 	}
 	raw := fs.Lookup("raw").Value.String() == "true"
 	keepJunk := fs.Lookup("keep-junk").Value.String() == "true"
+	// -raw already prints the archive's strings.
+	asGiven := fs.Lookup("raw-urls").Value.String() == "true" && !raw
 	switch {
 	case *stream && *sorted:
 		return usagef("-stream and -sort say opposite things")
@@ -720,6 +722,9 @@ func cmdURLs(args []string) error {
 			if held(r.URL) {
 				return
 			}
+			if asGiven {
+				r = r.AsGiven()
+			}
 			if !raw {
 				mu.Lock()
 				dup := seen[r.URL]
@@ -753,11 +758,19 @@ func cmdURLs(args []string) error {
 				for len(parts) < 6 {
 					parts = append(parts, "")
 				}
-				if seen[parts[0]] || held(parts[0]) {
+				// The strings the archives gave are lines of their own.
+				key := parts[0]
+				if asGiven && parts[5] != "" {
+					key = parts[5]
+				}
+				if seen[key] || held(parts[0]) {
 					continue
 				}
-				seen[parts[0]] = true
+				seen[key] = true
 				rows = append(rows, urlcol.Row{URL: parts[0], Source: parts[1], Archived: parts[2], Junk: parts[3], Reason: parts[4], RawURL: parts[5]})
+			}
+			if asGiven {
+				sort.SliceStable(rows, func(i, j int) bool { return rows[i].AsGiven().URL < rows[j].AsGiven().URL })
 			}
 		}
 	}
@@ -769,12 +782,15 @@ func cmdURLs(args []string) error {
 	flush()
 	var checked *liveCheck
 	if err == nil && *live && len(rows) > 0 && rep.Stopped == "" {
-		checked, err = verifyURLs(&c, rows, *liveRate, *liveMax, *liveProxy, *sendState, rep, scopeArgs(args)...)
+		checked, err = verifyURLs(&c, byURL(rows), *liveRate, *liveMax, *liveProxy, *sendState, rep, scopeArgs(args)...)
 	}
 	for _, r := range rows {
 		o := urlOut{Row: r}
 		if checked != nil {
 			o.verdict(checked, r.URL)
+		}
+		if asGiven {
+			o.Row = r.AsGiven()
 		}
 		if r.Junk == "asset" {
 			statics.Add(1)
@@ -820,6 +836,20 @@ func cmdURLs(args []string) error {
 	rep.Results = w.count()
 	urlsStatics(rep, int(statics.Load()))
 	return rep.finish(c.json, c.silent)
+}
+
+// byURL keeps the first row of each URL: a URL the archives gave in two
+// strings is asked once.
+func byURL(rows []urlcol.Row) []urlcol.Row {
+	seen := map[string]bool{}
+	var out []urlcol.Row
+	for _, r := range rows {
+		if !seen[r.URL] {
+			seen[r.URL] = true
+			out = append(out, r)
+		}
+	}
+	return out
 }
 
 // urlOut is a URL row as -json prints it: the row, and with -live whether
@@ -985,6 +1015,9 @@ type dirsSink struct {
 	// controls are the requests asked for a name that cannot exist in a
 	// directory that held hits, and the hits of them that were folded.
 	controls, foldedHits int
+	// prefixed are the hits that answered like the prefix they open: listed,
+	// labelled.
+	prefixed int
 }
 
 func (d *dirsSink) see(_ types.Entity, o types.Observation) {
@@ -1012,9 +1045,13 @@ func (d *dirsSink) see(_ types.Entity, o types.Observation) {
 		if ctl != nil && !d.w.json {
 			return // counted in the summary's line of its directory
 		}
+		label, labelURL := prefixLabelOf(p)
 		d.mu.Lock()
 		if ctl == nil {
 			d.listed++
+		}
+		if label != "" {
+			d.prefixed++
 		}
 		d.mu.Unlock()
 		switch {
@@ -1035,6 +1072,9 @@ func (d *dirsSink) see(_ types.Entity, o types.Observation) {
 			if ctl != nil {
 				row["fold"], row["control"] = engine.FoldCatchAll, ctl.URL
 			}
+			if label != "" {
+				row["prefix_catchall"], row["answer"] = labelURL, label
+			}
 			d.w.obj(row)
 		case d.silent:
 			d.w.line(u)
@@ -1043,9 +1083,23 @@ func (d *dirsSink) see(_ types.Entity, o types.Observation) {
 			if f, _ := p["resultfile"].(string); f != "" {
 				res = ", Resultfile: " + f
 			}
+			if label != "" {
+				res += ", Answer: " + label
+			}
 			d.w.line(fmt.Sprintf("%s [Status: %d, Size: %d, Words: %d, Lines: %d%s]", u, intOf(p["status"]), intOf(p["length"]), intOf(p["words"]), intOf(p["lines"]), res))
 		}
 	}
+}
+
+// prefixLabelOf is the label of a hit that answered like its prefix's
+// control (fetch.PrefixControl) and the control's URL; empty for any other.
+func prefixLabelOf(p map[string]any) (label, controlURL string) {
+	m, _ := p["prefix_catchall"].(map[string]any)
+	u, _ := m["url"].(string)
+	if u == "" {
+		return "", ""
+	}
+	return fetch.Control{URL: u}.PrefixLabel(), u
 }
 
 // fold says u is a hit whose answer is its directory's control's, byte for
@@ -1114,6 +1168,9 @@ func (d *dirsSink) settle(rep *report) {
 		// One control for each directory that held hits, as many requests
 		// as lines: the ledger counts them with the sweep's.
 		rep.holds("folded hits, against the folds' counts", d.foldedHits, folded)
+	}
+	if d.prefixed > 0 {
+		rep.Notes = append(rep.Notes, fmt.Sprintf("%d hits answered like their prefix's catch-all; listed, ranked last (the answer of a name under their own path, each path taken out; the hit's row says which)", d.prefixed))
 	}
 	// Text lists the paths that are not folded; -json prints the folded rows too.
 	printed := d.listed

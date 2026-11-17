@@ -489,6 +489,7 @@ type Page struct {
 	Skipped     string // why no screenshot was taken of a page that answered
 	HTML        string
 	Asked       int         // how many requests the page made, images, fonts and media included: what its budget has to cover
+	Loaded      []string    // Requests as they stood before any click
 	Requests    []string    // every URL the page asked for with GET, HEAD or OPTIONS while loading, sent or not; without its images, fonts and media
 	Blocked     []string    // URLs it asked for outside the scope, to list (Reason); not sent
 	Downloads   []string    // what it would have saved to disk, to list (DownloadReason); refused
@@ -672,6 +673,9 @@ func (b *Browser) Load(ctx context.Context, rawURL string, shot bool) (Page, err
 	p.Unloaded, p.Resources = p.Unloaded+waiting, p.Resources+waiting // asked for, and still waiting for its turn
 	p.Partial = p.Unloaded > 0
 	if err == nil && b.Interact > 0 {
+		mu.Lock()
+		p.Loaded = append([]string(nil), reqs...)
+		mu.Unlock()
 		b.beginClicks(t)
 		p.Interaction = b.interact(tab, p.URL, b.Interact, func() bool { return b.capped(t) }, func() bool { return b.idle(t, log) })
 	}

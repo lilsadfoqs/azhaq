@@ -118,10 +118,12 @@ type sessionGuard struct {
 	sentAt   map[string]time.Time // when each GET in asked was sent (its latest), for the count since a good page
 	goodN    int                  // set by flipped: GETs sent after the page that flipped; the report's count, not the redo list
 	goodSet  bool
-	probeSeq int64          // goods asked again so far
-	seen     map[string]int // answers that may be the end of the session, counted
-	doubts   int            // checks such an answer has cost
-	pass     bool           // an answer that may be the end asked for a check (doubt)
+	probeSeq int64            // goods asked again so far
+	seen     map[string]int   // answers that may be the end of the session, counted
+	doubts   int              // checks such an answer has cost
+	pass     bool             // an answer that may be the end asked for a check (doubt)
+	covered  map[string]bool  // held answers a renewal already listed to be asked again
+	wired    map[string]int64 // first hops whose doubt the wire already counted, with the session they met
 }
 
 // suspect is a URL answered as if the session were over (a 401, a redirect to
@@ -787,6 +789,15 @@ func (g *sessionGuard) renew(ctx context.Context) error {
 func (g *sessionGuard) resume(ctx context.Context, what, endedBy string, unrecorded int) {
 	g.mu.Lock()
 	second := g.renewals >= 2
+	// The answer that asked for the check is still in its Do: not recorded,
+	// and the session that gave it is gone, so it is searched and asked again.
+	if _, ok := g.wired[g.endAns]; ok && g.held && !g.enders[g.endAns] {
+		g.asked = append(g.asked, g.endAns)
+		if g.covered == nil {
+			g.covered = map[string]bool{}
+		}
+		g.covered[g.endAns] = true
+	}
 	asked := slices.Clone(g.asked)
 	g.mu.Unlock()
 	// A request that ends the session every time it is sent would end the
@@ -1008,6 +1019,17 @@ func (g *sessionGuard) answeredAfterEnd(ctx context.Context, raw string) {
 	g.mu.Unlock()
 }
 
+// record keeps a GET to be asked again, and when it was sent (mu held).
+func (g *sessionGuard) record(raw string, res Result) {
+	if g.sentAt == nil {
+		g.sentAt = map[string]time.Time{}
+	}
+	g.sentAt[raw] = res.At
+	if len(g.asked) < maxAsked {
+		g.asked = append(g.asked, raw)
+	}
+}
+
 // sessionSaw tells the guard a request was answered: it keeps the URL to ask
 // again, and notices an answer that looks like the end of the session.
 func sessionSaw(ctx context.Context, raw string, res Result) {
@@ -1017,21 +1039,35 @@ func sessionSaw(ctx context.Context, raw string, res Result) {
 	}
 	defer g.probe(ctx, raw, res)
 	g.answeredAfterEnd(ctx, raw)
+	counted, stale, covered := false, false, false
+	if res.Method == "" || res.Method == http.MethodGet {
+		first := raw
+		if len(res.Hops) > 0 {
+			first = res.Hops[0].URL
+		}
+		counted, stale, covered = g.wiredDoubt(first)
+	}
+	if stale {
+		// The wire held it, the check renewed the session, and its answer is
+		// the old session's: asked again (resume listed it, or it is listed now).
+		if !covered {
+			g.mu.Lock()
+			g.redo = append(g.redo, raw)
+			g.record(raw, res)
+			g.mu.Unlock()
+		}
+		evict(raw)
+		return
+	}
 	g.mu.Lock()
 	if g.held && (g.endAns == raw || slices.ContainsFunc(res.Hops, func(h Hop) bool { return h.URL == g.endAns })) {
 		g.held = false // recorded below
 	}
-	if g.sentAt == nil {
-		g.sentAt = map[string]time.Time{}
-	}
-	g.sentAt[raw] = res.At
-	if len(g.asked) < maxAsked {
-		g.asked = append(g.asked, raw)
-	}
+	g.record(raw, res)
 	g.mu.Unlock()
 	g.keepGood(raw, res)
-	if res.Method == "" || res.Method == http.MethodGet {
-		g.doubt(raw, res.Status, res.Header.Get("Location"))
+	if !counted && (res.Method == "" || res.Method == http.MethodGet) {
+		g.doubt(raw, res.Status, res.Header.Get("Location"), false)
 	}
 	if clearsSession(res.Header) || clearsSession(res.FinalHeader) {
 		g.mu.Lock()
@@ -1094,9 +1130,18 @@ func sessionWire(req *http.Request, resp *http.Response) {
 	case replacesSession(resp.Header):
 		g.ends(raw, pathOf(raw)+" set the session cookie to another value", true)
 	default:
-		g.answered(raw, resp.StatusCode, resp.Header.Get("Location"), true)
+		loc := resp.Header.Get("Location")
+		g.answered(raw, resp.StatusCode, loc, true)
+		if req.Method == http.MethodGet && !laterHop(req.Context()) {
+			g.doubt(raw, resp.StatusCode, loc, true)
+		}
 	}
 }
+
+type laterHopKey struct{}
+
+// laterHop says the request follows a redirect of the one the run asked.
+func laterHop(ctx context.Context) bool { return ctx.Value(laterHopKey{}) != nil }
 
 // SawAnswer tells the guard of an answer to a request that did not go
 // through Do (a page Chrome loaded): a 401, or a redirect to the sign-in
@@ -1106,7 +1151,7 @@ func sessionWire(req *http.Request, resp *http.Response) {
 func SawAnswer(raw string, status int, location string) {
 	if g := guardP.Load(); g != nil && !g.renewing.Load() {
 		g.answered(raw, status, location, false)
-		g.doubt(raw, status, location)
+		g.doubt(raw, status, location, false)
 		g.notify("")
 	}
 }

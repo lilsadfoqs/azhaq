@@ -186,3 +186,38 @@ func TestSubsNotesSayWhyForEachDomainWithoutEstimate(t *testing.T) {
 		t.Errorf("notes %q", n)
 	}
 }
+
+// With several domains the pool is a sum of one estimate for each: the note
+// has a line for each domain (names, f1, f2, estimate) and then states the
+// sum as a sum, not as a total that pooled f1 and f2 would give.
+func TestCoverageNoteSumsTheEstimatesOfSeveralDomains(t *testing.T) {
+	payload := func(domain string, by map[string][]any) map[string]any {
+		fb := map[string]any{}
+		for n, srcs := range by {
+			fb[n+"."+domain] = srcs
+		}
+		return map[string]any{"domain": domain, "found_by": fb}
+	}
+	one, two := []any{"s1"}, []any{"s1", "s2"}
+	// a: 4 names, f1=3, f2=1: 4 + 9/2 = 8.5. b: 5 names, f1=2, f2=3: 5 + 4/6 = 5.67.
+	a := payload("a.test", map[string][]any{"w": one, "x": one, "y": one, "z": two})
+	b := payload("b.test", map[string][]any{"w": one, "x": one, "y": two, "z": two, "v": two})
+	notes := subsNotes([]map[string]any{a, b}, []tierSet{{countRaw, nil}})
+	if len(notes) != 3 {
+		t.Fatalf("want a line for each domain and the total: %q", notes)
+	}
+	if want := "coverage (raw candidates, a.test): the independent sources gave 4 names: 3 came from one source (f1) and 1 from two (f2); estimate (Chao1) 8.5"; notes[0] != want {
+		t.Errorf("first domain %q, want %q", notes[0], want)
+	}
+	if want := "coverage (raw candidates, b.test): the independent sources gave 5 names: 2 came from one source (f1) and 3 from two (f2); estimate (Chao1) 5.7"; notes[1] != want {
+		t.Errorf("second domain %q, want %q", notes[1], want)
+	}
+	for _, want := range []string{"Their pool holds about 14 names and this run has 9 of them", "the sum of the 2 domains' estimates above (8.5 + 5.7 = 14.2)"} {
+		if !strings.Contains(notes[2], want) {
+			t.Errorf("total %q lacks %q", notes[2], want)
+		}
+	}
+	if strings.Contains(notes[2], "This is an estimate (Chao1) from the 9 names") {
+		t.Errorf("the total says the pooled counts make the estimate: %q", notes[2])
+	}
+}

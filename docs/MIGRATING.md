@@ -270,7 +270,7 @@ Behaviour, fields and edge cases: [`azhaq crawl`](commands/crawl.md).
 - **Time at a low `-rate`.** The number of requests sets the time. On Juice Shop at `-rate 5`, azhaq sends 91 requests in 21 s. katana `-jc -jsl -d 3 -rl 5` sends about 80 in 17 s.
 - The extra azhaq requests are the API routes katana does not find, such as `/rest/…` and `/api/…`: about 60 more endpoints. They also include one check for the root and each top-level directory (`/api/`, `/rest/`) that tells a real answer from the page the app gives every unknown path. `-builtin-paths` checks every directory.
 - Unpaced, azhaq is faster: 8.5 s against 14.3 s.
-- **Requested and linked URLs.** The default list holds the URLs the crawl requested and the URLs pages link to or load: anchors, forms, scripts and stylesheets, as katana lists them. katana prints the links of its last depth too, marked `"error":"max depth reached"` in its jsonl and with no response; azhaq lists them as `linked` rows, so a `-silent` list is as long as katana's, and a note says how many of its lines the crawl never requested (they may answer 404; `-json` marks each row's class, `jq 'select(.class=="observed")'` keeps the requested ones). katana requests the stylesheets a page loads and so does azhaq: they are `observed` rows, and the URLs they name with `url()` and `@import` are listed. A library script such as `jquery-3.2.1.min.js`, an image or a font that a page loads is `linked`, as no crawl step requests it; images, fonts and media are on katana's default extension list, so `-assets` (or `-ndef`) lists them, as `-ndef` does for katana. Routes a script calls with POST, routes with a parameter and strings that scripts only name are `hint` and `named` rows: `-hints` lists them, as katana's `-jsl` lists them with the rest, and the summary counts the four classes apart. At a depth that does not reach the routes a script names (`-d 1` for a route named in the script of a page the crawl visited), katana's `-jsl` routes need `-hints`; at the next depth the literal ones are requested and listed without it. The summary says how many were left out, `-silent` included. A GET of a hint may answer 404 or 405. `-json -hints` has their `methods`. `-hints -ot '{{method}} {{url}}'` prints them in plain output.
+- **Requested and linked URLs.** The default list holds the URLs the crawl requested and the URLs pages link to or load: anchors, forms, scripts and stylesheets, as katana lists them. katana prints the links of its last depth too, marked `"error":"max depth reached"` in its jsonl and with no response; azhaq lists them as `linked` rows, so a `-silent` list is as long as katana's, and a note says how many of its lines the crawl never requested (they may answer 404; `-json` marks each row's class, `jq 'select(.class=="observed")'` keeps the requested ones). katana requests the stylesheets a page loads and so does azhaq: they are `observed` rows, and the URLs they name with `url()` and `@import` are listed. A library script such as `jquery-3.2.1.min.js` is requested like the other scripts a page loads, the last level's included, as katana does (it is not read for routes); an image or a font that a page loads is `linked`, as no crawl step requests it; images, fonts and media are on katana's default extension list, so `-assets` (or `-ndef`) lists them, as `-ndef` does for katana. Routes a script calls with POST, routes with a parameter and strings that scripts only name are `hint` and `named` rows: `-hints` lists them, as katana's `-jsl` lists them with the rest, and the summary counts the four classes apart. At a depth that does not reach the routes a script names (`-d 1` for a route named in the script of a page the crawl visited), katana's `-jsl` routes need `-hints`; at the next depth the literal ones are requested and listed without it. The summary says how many were left out, `-silent` included. A GET of a hint may answer 404 or 405. `-json -hints` has their `methods`. `-hints -ot '{{method}} {{url}}'` prints them in plain output.
 - `-json` is azhaq's, not katana's. The map keeps how each URL is known: `called`, `described`, `linked`, `archived` or `guessed`. `azhaq show -db FILE URL` prints the line of the script that names it.
 
 ### Examples
@@ -404,6 +404,7 @@ Behaviour, fields and edge cases: [`azhaq urls`](commands/urls.md).
 | `--blacklist png,jpg` | `-blacklist png,jpg` | |
 | `--fp` | `-fp` | One URL for each host and path. |
 | `--o FILE` | `-o FILE` | Appends, as gau does. |
+| (gau's strings as the archive has them) | `-raw-urls` | See "What differs on purpose" below. |
 | `--json` | `-json` | `{"url","source"}`. |
 | `--threads 5` | `-urls-threads 5` (or `-threads`) | Domains asked at once. All five archives of a domain run together. |
 | `--timeout 45` | `-urls-timeout 3m` | The time each archive gets for a domain. azhaq's `-timeout` stops the whole run. |
@@ -417,6 +418,7 @@ Behaviour, fields and edge cases: [`azhaq urls`](commands/urls.md).
 <!-- azhaq: urls -->
 
 - A fifth archive, arquivo.pt, is asked.
+- A URL is printed normalised, which drops the default port: `http://example.com:80/x` and `http://example.com/x` are one line. gau prints each string as the archive has it. `-raw-urls` does the same, so use it where gau's strings are compared.
 - gau sends one filter for each value of `-mc 200,301`, and the archive ANDs them, so it keeps nothing. azhaq sends the values as alternatives of one filter.
 - gau's `--blacklist png` matches nothing, because it compares `.png` with `png`. `-blacklist` takes either spelling.
 - gau's `--fp` prints nothing in version 2.2.4. azhaq's `-fp` keeps the first URL of each host and path.
@@ -517,10 +519,10 @@ Behaviour, fields and edge cases: [`azhaq ports`](commands/ports.md).
 | --- | --- | --- |
 | `-host a,b`, `-l FILE` | `-host a,b`, `-l FILE` | Names, addresses, `host:port`, URLs, CIDR ranges and AS numbers such as `AS13335`. Also as arguments or on stdin. |
 | `-p 80,443,8000-9000`, `-p -` | the same | `-p -` or `-p full` is every port. |
-| `-tp 100`, `-tp 1000`, `-tp full` | the same | Also `-p top-100`, which is naabu's default. The default here is the top 1000 and the usual ports of the services azhaq checks (1040 ports), then every port of each host that answered, as nmap's top 1000 and a full-range pass on the live hosts do. |
+| `-tp 100`, `-tp 1000`, `-tp full` | the same | Also `-p top-100`, which is naabu's default. The default here is the top 1000 and the usual ports of the services azhaq checks (1075 ports), then every port of each host that answered, as nmap's top 1000 and a full-range pass on the live hosts do. |
 | `-pf FILE`, `-ep LIST` | `-pf FILE`, `-ep LIST` | Ports to add, and ports to take out. |
 | `-eh`, `-ef` | `-eh`, `-ef` | Hosts not to scan. `-deny` does the same. |
-| `-rate 1000` | `-rate 1000` | Connects per second. The default is 1500, as naabu's connect scan. `127.0.0.1` is not paced unless a rate is given. |
+| `-rate 1000` | `-rate 1000` | Connects per second, a fixed ceiling. Without it the pace starts at 1500, as naabu's connect scan, and rises to 20,000 while the answers come back in time, as nmap's timing does. `127.0.0.1` is not paced unless a rate is given. |
 | `-c 25` | `-c 25` | Connects in flight. The default is as many as the rate allows, up to 20,000. naabu's is 25. |
 | `-retries 1` | `-retries 1` | More passes over the ports that did not answer. |
 | `-timeout 1000` in ms | `-connect-timeout 1000` | The wait for one connect. azhaq's `-timeout` is how long the run may take. |

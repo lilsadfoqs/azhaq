@@ -3,15 +3,19 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/url"
 	"os"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/lilsadfoqs/azhaq/engine"
+	"github.com/lilsadfoqs/azhaq/internal/advisory"
+	"github.com/lilsadfoqs/azhaq/internal/collectors/jscol"
 	"github.com/lilsadfoqs/azhaq/internal/collectors/urlcol"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"github.com/lilsadfoqs/azhaq/store"
@@ -340,6 +344,49 @@ func cell(v any) string {
 	}
 }
 
+// portLabelRow is the port row a listener label names, as hunt prints it:
+// host:port with the host an address or a name that points to it (by the
+// port row's own names, or addrs, the run's name → address rows), and the
+// protocol after a slash when given (tcp before udp when not). nil when the
+// label is not one or no port row holds it.
+func portLabelRow(rows []engine.MapEntry, addrs map[string]string, label string) *engine.MapEntry {
+	label = strings.TrimSpace(label)
+	proto := ""
+	if i := strings.LastIndex(label, "/"); i > 0 && (label[i+1:] == "tcp" || label[i+1:] == "udp") {
+		label, proto = label[:i], label[i+1:]
+	}
+	host, port, err := net.SplitHostPort(label)
+	if err != nil || host == "" || port == "" {
+		return nil
+	}
+	host = strings.ToLower(host)
+	addr := addrs[host]
+	var found *engine.MapEntry
+	for i, r := range rows {
+		if r.Entity.Type != types.TypePort {
+			continue
+		}
+		rhost, rport, err := net.SplitHostPort(strings.TrimSuffix(strings.TrimSuffix(r.Entity.Key, "/tcp"), "/udp"))
+		if err != nil || rport != port {
+			continue
+		}
+		rproto := "tcp"
+		if strings.HasSuffix(r.Entity.Key, "/udp") {
+			rproto = "udp"
+		}
+		if proto != "" && proto != rproto {
+			continue
+		}
+		if !strings.EqualFold(rhost, host) && !strings.EqualFold(rhost, addr) && !slices.ContainsFunc(r.Names, func(n string) bool { return strings.EqualFold(n, host) }) {
+			continue
+		}
+		if found == nil || rproto == "tcp" && strings.HasSuffix(found.Entity.Key, "/udp") {
+			found = &rows[i]
+		}
+	}
+	return found
+}
+
 // cmdShow prints everything a database knows about one entity: its row
 // in the map, what found it, what it leads to, and every observation.
 func cmdShow(args []string) error {
@@ -347,6 +394,7 @@ func cmdShow(args []string) error {
 	db := fs.String("db", "", "the database (default: the last run's)")
 	asJSON := fs.Bool("json", false, "one JSON object")
 	runF := fs.String("run", "", "the run to read, by the run_id of its summary (default: the newest run of the workspace that has it)")
+	body := fs.Bool("body", false, "also print the code of a source map's own files, from the answer the run stored with its store-responses option (a run without it keeps none)")
 	if err := parse(fs, args); err != nil {
 		return err
 	}
@@ -383,7 +431,7 @@ func cmdShow(args []string) error {
 				}
 			}
 		}
-		return nil
+		return portLabelRow(g.rows, advisory.NameAddrs(g.obs), want)
 	}
 	row := find(g)
 	newest := g.run
@@ -461,7 +509,7 @@ func cmdShow(args []string) error {
 	})
 	var mine []types.StoredObservation
 	for _, o := range g.obs {
-		if o.EntityID == row.Entity.ID || o.Kind == "url" && payloadURLIs(o.Payload, row.Entity.Key) {
+		if o.EntityID == row.Entity.ID && o.Kind != jscol.MapKind || (o.Kind == "url" || o.Kind == jscol.MapKind) && payloadURLIs(o.Payload, row.Entity.Key) {
 			mine = append(mine, o)
 		}
 	}
@@ -502,6 +550,14 @@ func cmdShow(args []string) error {
 			resp := map[string]any{}
 			addResponse(resp, *row, false)
 			out["response"] = resp
+		}
+		if *body && row.Role == "sourcemap" {
+			code, why := mapCodeFrom(row.ResponseFile)
+			if why != "" {
+				out["source_code_note"] = why
+			} else {
+				out["source_code"] = code
+			}
 		}
 		if g.run != "" {
 			out["run"] = g.run
@@ -555,6 +611,7 @@ func cmdShow(args []string) error {
 	if ev, ok := row.Response(); ok {
 		printResponse(ev)
 	}
+	printSourceMap(mine, row.ResponseFile, *body)
 	fmt.Println("observations")
 	for _, o := range mine {
 		fmt.Printf("  %s %s %s\n", o.Collector, o.Kind, compact(o.Payload))

@@ -122,6 +122,7 @@ func huntRows(g *graphView, path string, roles []hunt.RoleRow, since time.Durati
 	withRoles.roles = roles
 	set := buildFindings(&withRoles)
 	in.Listeners = listenersOf(set)
+	in.Leads = iconLeads(set)
 	for _, r := range set.Findings {
 		switch {
 		case r.Kind == danglingKind:
@@ -164,7 +165,7 @@ func listenerPairs(set findingSet) []listenerPair {
 	toListener := func(r findingRecord, kind string) hunt.Listener {
 		return hunt.Listener{Ident: hunt.Ident{Kind: kind, What: r.Kind, Host: r.Host, Port: r.Port, Product: r.Product, Version: r.Version, Source: r.Source,
 			AdvisoryID: r.AdvisoryID, AdvisoryURL: r.AdvisoryURL, Label: r.Label, Severity: r.Severity, KEV: r.KEV, CVSS: r.CVSS,
-			Evidence: r.Evidence, Command: r.Command, Also: otherNames(r)}, Proof: r.Proof}
+			Precondition: r.Precondition, Settled: r.Settled, Evidence: r.Evidence, Command: r.Command, Also: otherNames(r)}, Proof: r.Proof}
 	}
 	for _, r := range set.Findings {
 		if r.Collector == "azhaq-verify" {
@@ -181,7 +182,18 @@ func listenerPairs(set findingSet) []listenerPair {
 			i = at[k]
 		}
 		if r.AdvisoryID != "" {
-			out[i].l.Advisories++
+			l := &out[i].l
+			l.Advisories++
+			switch {
+			case l.Advisories == 1:
+			case len(l.Next) < advisory.TopAdvisories-1:
+				l.Next = append(l.Next, hunt.NextAdvisory{ID: r.AdvisoryID, Label: r.Label, Needs: r.Needs, KEV: r.KEV, CVSS: r.CVSS})
+			default:
+				if l.Others == nil {
+					l.Others = map[string]int{}
+				}
+				l.Others[r.Label]++
+			}
 		}
 	}
 	return out
@@ -232,7 +244,7 @@ func rolesDirFor(file string) string {
 func takeoverDetail(f takeover.Finding) string {
 	if f.Strength == "dangling" {
 		// What the claim rests on, and where to check it.
-		return "unverified: NXDOMAIN does not show the name is free: " + f.Service + " candidate, CNAME " + f.Target + " does not resolve (" + f.List + ")"
+		return "unverified who can claim " + f.Target + ": NXDOMAIN does not show the name is free (" + f.Service + " candidate; " + f.List + "); that the CNAME dangles is the dangling-dns finding"
 	}
 	d := f.Service + " takeover, " + f.Strength + ", " + f.Settled().Status
 	if f.Target != "" {
@@ -244,8 +256,8 @@ func takeoverDetail(f takeover.Finding) string {
 	return d
 }
 
-// otherNames are the host strings a record's listener answered under, besides
-// the one it is named by.
+// otherNames are the other host strings whose own answer named the record's
+// product and version, besides the one it is named by.
 func otherNames(r findingRecord) []string {
 	var out []string
 	for _, n := range r.names {

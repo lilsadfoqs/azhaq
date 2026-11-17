@@ -113,11 +113,20 @@ func diff(aName string, a map[string]int, bName string, b map[string]int) string
 }
 
 // Proxy is a forward proxy that records every request it is given and sends
-// it on. A CONNECT is recorded by its host:port.
+// it on. A CONNECT is recorded by its host:port. A request addressed to the
+// proxy itself (the run's ask) is recorded and not sent on.
 type Proxy struct {
 	URL  string
 	Wire *Wire
 	ln   net.Listener
+}
+
+// Forwarded is what the proxy recorded without the ask addressed to itself:
+// what the site must have seen too.
+func (p *Proxy) Forwarded() map[string]int {
+	out := p.Wire.HTTP()
+	delete(out, canon("GET", p.URL+"/"))
+	return out
 }
 
 func newProxy(t testing.TB) *Proxy {
@@ -135,6 +144,9 @@ func newProxy(t testing.TB) *Proxy {
 			return
 		}
 		if !r.URL.IsAbs() {
+			// The run's ask of the proxy itself: it reaches the proxy, which may
+			// forward it, so it is a request the run counts.
+			p.Wire.addHTTP(r.Method, "http://"+r.Host+r.URL.RequestURI())
 			http.Error(w, "not a proxy request", http.StatusBadRequest)
 			return
 		}
@@ -224,11 +236,11 @@ type ledgerLine struct {
 	NotSent bool `json:"not_sent"`
 }
 
-// toTarget says the line is a request or connection to a target that the
-// summary counts. A probe is listed apart: its bytes went on a connection
+// toTarget says the line is a request or connection to a target, or the ask of
+// the -proxy, that the summary counts. A probe is listed apart: its bytes went on a connection
 // that has a line of its own.
 func (l ledgerLine) toTarget() bool {
-	return l.Kind != "seal" && l.Kind != "probe" && !l.NotSent && (l.Class == "" || l.Class == "target")
+	return l.Kind != "seal" && l.Kind != "probe" && !l.NotSent && (l.Class == "" || l.Class == "target" || l.Class == "proxy")
 }
 
 // readLedger reads every line of a ledger file.

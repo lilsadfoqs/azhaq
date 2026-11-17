@@ -135,6 +135,8 @@ func report(res *build.Result, size int, out string) {
 		fmt.Printf("scope: %s (%d records dropped)\n", m.Scope, r.DroppedByScope)
 	}
 	fmt.Printf("feed records read %d; rejected %d; no CPE configuration yet %d; CPE matches with no version (-) %d; CPE matches naming no one product %d\n", r.FeedCVEs, r.Rejected, r.NoConfig, r.NotApplicable, r.NoProduct)
+	fmt.Printf("CVSS attack vector of the indexed records: %s; no vector %d; from version %s\n", countsText(r.AttackVectors), r.NoVector, countsText(r.VectorVersions))
+	fmt.Printf("indexed records whose text states a precondition: %d (%s)\n", r.NeedRecords, countsText(r.Needs))
 	fmt.Printf("KEV CVEs in no feed: %d %v\n", len(r.KEVMissing), r.KEVMissing)
 	fmt.Printf("KEV CVEs with no application or OS product to index: %d\n", len(r.KEVNoProduct))
 	fmt.Printf("CVEs NVD marks exploited that the KEV file lacks: %d\n", len(r.KEVMismatch))
@@ -149,6 +151,16 @@ func report(res *build.Result, size int, out string) {
 		sort.Strings(l)
 		fmt.Printf("no NVD record for: %s\n", strings.Join(l, ", "))
 	}
+}
+
+// countsText is a count map as "L 12, N 340", in key order.
+func countsText(m map[string]int) string {
+	var parts []string
+	for k, n := range m {
+		parts = append(parts, fmt.Sprintf("%s %d", k, n))
+	}
+	sort.Strings(parts)
+	return strings.Join(parts, ", ")
 }
 
 // product is one product a detection catalogue names.

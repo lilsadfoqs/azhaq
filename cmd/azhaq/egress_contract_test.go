@@ -63,12 +63,20 @@ func newEgressHarness(t *testing.T) *egressHarness {
 		}
 	}))
 	h.proxy = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !r.URL.IsAbs() { // a CONNECT or a request that is not a proxy request
-			http.Error(w, "not a proxy request", http.StatusBadGateway)
-			return
+		out := r.Clone(r.Context())
+		if !r.URL.IsAbs() {
+			// The run's ask of the proxy itself: like a proxy that sends every
+			// request to one upstream, it reaches the target.
+			if r.Method == http.MethodConnect {
+				http.Error(w, "not a proxy request", http.StatusBadGateway)
+				return
+			}
+			tu, _ := url.Parse(h.target.URL)
+			u := *r.URL
+			u.Scheme, u.Host = tu.Scheme, tu.Host
+			out.URL = &u
 		}
 		h.proxied.Add(1)
-		out := r.Clone(r.Context())
 		out.RequestURI = ""
 		resp, err := (&http.Transport{}).RoundTrip(out)
 		if err != nil {
@@ -164,8 +172,8 @@ func (h *egressHarness) reconcile(rep report) int64 {
 		h.t.Errorf("the server answered %d requests, the proxy passed %d: a request went round the proxy (or was lost)", h.served.Load(), got)
 	}
 	c := h.counts()
-	if n := int64(c.n("target", "http")); n != got {
-		h.t.Errorf("the ledger lists %d target requests, the proxy passed %d: %v", n, got, c.byClassKind)
+	if n := int64(c.n("target", "http") + c.n("proxy", "http")); n != got {
+		h.t.Errorf("the ledger lists %d requests to targets and the proxy, the proxy passed %d: %v", n, got, c.byClassKind)
 	}
 	if rep.Requests != got {
 		h.t.Errorf("the summary says %d requests, the proxy passed %d", rep.Requests, got)
@@ -327,7 +335,7 @@ var egressContract = map[string]egressEntry{
 		}
 		got := h.proxied.Load()
 		c := h.counts()
-		if got == 0 || h.served.Load() != got || int64(c.n("target", "chrome")+c.n("target", "http")) != got || rep.Requests != got {
+		if got == 0 || h.served.Load() != got || int64(c.n("target", "chrome")+c.n("target", "http")+c.n("proxy", "http")) != got || rep.Requests != got {
 			t.Errorf("the proxy passed %d, the target answered %d, the ledger lists %v, the summary says %d", got, h.served.Load(), c.byClassKind, rep.Requests)
 		}
 	}},

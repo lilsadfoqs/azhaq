@@ -29,6 +29,7 @@ import (
 	"github.com/lilsadfoqs/azhaq/internal/dnsr"
 	"github.com/lilsadfoqs/azhaq/internal/fingerprint"
 	"github.com/lilsadfoqs/azhaq/internal/lazyre"
+	"github.com/lilsadfoqs/azhaq/internal/ledger"
 	"github.com/lilsadfoqs/azhaq/internal/normalize"
 	"github.com/lilsadfoqs/azhaq/internal/takeover"
 	"github.com/lilsadfoqs/azhaq/scope"
@@ -112,7 +113,7 @@ func cmdDNS(args []string) error {
 		}
 		kinds[i] = fs.Bool(k.flag, false, usage)
 	}
-	axfr := fs.Bool("axfr", false, "ask each name server of the name, and the -resolvers you gave, for the whole zone over TCP (active; a name server is asked at an address the scope allows: -allow, -scope)")
+	axfr := fs.Bool("axfr", false, "ask each name server of the name for the whole zone over TCP, and each -resolvers address too (active; a name server is asked at an address the scope allows: -allow, -scope; a resolver you named is not held to them, only -deny holds it)")
 	all := fs.Bool("all", false, "ask A, AAAA, CNAME, SOA, TXT, SRV, MX, NS and CAA (not ANY, not AXFR) and print the records (-resp); an address gets only PTR")
 	alias("all", "recon", "same as -all")
 	var exclude stringsFlag
@@ -161,7 +162,7 @@ func cmdDNS(args []string) error {
 	alias("auto-wildcard", "aw", "same as -auto-wildcard")
 	wd := fs.String("wildcard-domain", "", "also probe this zone for a wildcard (a zone the registrable domain does not reach, such as corp.internal)")
 	alias("wildcard-domain", "wd", "same as -wildcard-domain")
-	noTakeover := fs.Bool("no-takeover", false, "do not check CNAMEs for a takeover: no question is asked about the domain of a CNAME target (without it, a domain outside the scope is not asked either, and the summary says so)")
+	noTakeover := fs.Bool("no-takeover", false, "do not check CNAMEs for a takeover: no question is asked about the domain of a CNAME target (without it, a domain outside the scope is not asked either, and the summary says so); a CNAME to a name that does not exist is still reported as dangling-dns")
 	noWild := fs.Bool("no-wildcard", false, "print names even when they only resolve because their zone has a wildcard")
 	proxyURL := fs.String("proxy", "", "send DNS through this socks5 proxy (socks5://host:port), over TCP")
 	inherit(fs, "resolvers", "dns-rate", "scope", "program", "allow", "deny", "ledger", "seal-to")
@@ -987,9 +988,11 @@ func shortDNSError(s string) string {
 // takeover notes a name whose CNAME points at what no longer exists. Any
 // type asked whose answer followed the chain says where it ended; when
 // none did (-cname alone asks only for the record itself), the name is
-// asked for A once, and only the end of the chain is kept from it.
+// asked for A once, and only the end of the chain is kept from it. That A is
+// the name's own question, so -no-takeover keeps it (the dangling measure
+// needs it) and stops before any question about the target's domain.
 func (r *dnsRun) takeover(ctx context.Context, host string, d *dnsr.Data) (*takeover.Finding, string) {
-	if len(d.CNAME) == 0 || r.cf.noTakeover {
+	if len(d.CNAME) == 0 {
 		return nil, ""
 	}
 	rc, ok := d.TargetRcode()
@@ -1002,7 +1005,7 @@ func (r *dnsRun) takeover(ctx context.Context, host string, d *dnsr.Data) (*take
 		d.TakeTarget(t)
 		rc, ok = d.TargetRcode()
 	}
-	if !ok || rc != dns.RcodeNameError {
+	if r.cf.noTakeover || !ok || rc != dns.RcodeNameError {
 		return nil, ""
 	}
 	target := d.CNAME[len(d.CNAME)-1]
@@ -1026,7 +1029,8 @@ func (r *dnsRun) takeover(ctx context.Context, host string, d *dnsr.Data) (*take
 
 // measureDangling keeps what the name's answers measured of a CNAME that
 // ends at a name that does not exist, whoever holds the target: no question
-// is asked for it (takeover asked A once when no answer followed the chain).
+// is asked for it (takeover asked A once when no answer followed the chain),
+// with -no-takeover too.
 func (r *dnsRun) measureDangling(host string, d *dnsr.Data) *takeover.Dangling {
 	rc, ok := d.TargetRcode()
 	if !ok {
@@ -1313,11 +1317,13 @@ func (r *dnsRun) transfer(ctx context.Context, host string, d *dnsr.Data) {
 	}
 	denies := scope.Rules{Deny: rules.Deny}
 	var servers []string
+	why := map[string]string{} // the rule of a server the scope did not allow: a resolver
 	seen := map[string]bool{}
-	add := func(addr, why string) {
+	add := func(addr, rule string) {
 		if !seen[addr] {
 			seen[addr] = true
 			servers = append(servers, addr)
+			why[addr] = rule
 		}
 	}
 	ns := r.pool.Lookup(ctx, host, dnsr.LookupOptions{Types: []uint16{dns.TypeNS}})
@@ -1333,7 +1339,7 @@ func (r *dnsRun) transfer(ctx context.Context, host string, d *dnsr.Data) {
 				out = append(out, n+" ("+ip+")")
 				continue
 			}
-			add(net.JoinHostPort(ip, axfrPort), n)
+			add(net.JoinHostPort(ip, axfrPort), "")
 		}
 	}
 	if len(out) > 0 {
@@ -1350,7 +1356,7 @@ func (r *dnsRun) transfer(ctx context.Context, host string, d *dnsr.Data) {
 					continue
 				}
 			}
-			add(srv.Addr, "resolver")
+			add(srv.Addr, "-resolvers "+key) // not held to -allow: the ledger says it is why it was asked
 		}
 	}
 	if len(held) > 0 {
@@ -1360,7 +1366,16 @@ func (r *dnsRun) transfer(ctx context.Context, host string, d *dnsr.Data) {
 		r.noteAXFR(fmt.Sprintf("-axfr %s: no server to ask", host))
 		return
 	}
-	chain, fails := r.pool.Transfer(ctx, host, servers)
+	chain, fails := &dnsr.Chain{Host: host}, []dnsr.Failure(nil)
+	for _, srv := range servers {
+		sctx := ctx
+		if why[srv] != "" {
+			sctx = ledger.WithRule(ctx, why[srv])
+		}
+		c, f := r.pool.Transfer(sctx, host, []string{srv})
+		chain.Data = append(chain.Data, c.Data...)
+		fails = append(fails, f...)
+	}
 	// The servers that gave the zone first: a refusal alone reads as a failed transfer.
 	for _, z := range chain.Data {
 		if len(z.Resolver) > 0 {

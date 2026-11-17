@@ -202,7 +202,7 @@ func checkRow(t *testing.T, v *Inv, l *Labs, r row, outs []outcome) {
 	}
 	if !r.direct && len(sent.HTTP) > 0 {
 		// The proxy and the site itself saw the same: the harness is right.
-		if d := diff("proxy", l.Proxy.Wire.HTTP(), "site", l.Site.Wire.HTTP()); d != "" {
+		if d := diff("proxy", l.Proxy.Forwarded(), "site", l.Site.Wire.HTTP()); d != "" {
 			t.Fatalf("the harness: the proxy and the site disagree:\n%s", d)
 		}
 	}

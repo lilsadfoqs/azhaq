@@ -396,7 +396,7 @@ Every request, connection or query has a class, written on its line of the ledge
 | `source` | a third party asked about the targets: subdomain sources, archives, RDAP, RIPEstat, search engines, scope platforms, notifications, crt.sh's PostgreSQL, the mail server | kill file; the proxy given for sources | `http`, `tcp` |
 | `dns` | a resolver | kill file; the pool's pace | `dns`: the name in `host`, its type in `method`, the resolver in `target` |
 | `own` | an endpoint of the user's own: a replay proxy, a worker's link to its run, where `-seal-to` posts | nothing | not recorded: the seal is posted after the ledger is sealed |
-| `proxy` | the run's `-proxy`, asked once for its own answer | kill file; not the scope | `http`: a request addressed to the proxy itself, collector `proxy` |
+| `proxy` | the run's `-proxy`, asked once for its own answer | kill file, `-max-requests` and the pace (a proxy may forward it); not the scope | `http`: a request addressed to the proxy itself, collector `proxy` |
 
 ### What egress hands out
 
@@ -1455,7 +1455,7 @@ The package has no HTTP client and opens no connection but the one it listens on
 It scans hosts in scope with full TCP connects. So it needs no root, and it leaves complete handshakes in the target's logs, like `naabu -scan-type c`. The scan type is the scanner's `Detect` and dial functions. There is no raw scan.
 
 - **Ports.** The lists are nmap's top 100 or top 1000 TCP ports, as naabu ships them, `full`, or ranges.
-- **Rate.** Connection attempts share one rate across all hosts. `-port-rate` sets it, 1500 per second by default, which is naabu's for a connect scan. This machine's loopback is not paced unless a rate is given.
+- **Rate.** Connection attempts share one rate across all hosts. `-port-rate` sets it as a fixed ceiling. Without one the pace is adaptive: it starts at 1500 per second, which is naabu's for a connect scan, rises while the answers come back in time up to 20,000, and drops to 70% on loss (timeouts of an address that was answering, or a round trip that triples). This machine's loopback is not paced unless a rate is given.
 - **Concurrency.** As many connects are in flight as the rate allows, up to 20,000 and the process's file limit (`-port-workers`). A connect waits at most 1.5 seconds (`-port-timeout`); unless one is given, the wait follows the address's measured round trip (at least 250 ms) once 16 of its connects have been answered.
 - **Addresses.** A name resolves to at most two IPv4 and two IPv6 addresses, with the A and AAAA queries only. `-port-all-ips` takes all, and `-port-ip 4|6` takes one family. Each address is scanned once, however many names point to it.
 - **Order.** The ports of a host are asked in tiers with `-port-order random`: nmap's top 100, the rest of its top 1000, and the others. Each tier is shuffled by a seed.

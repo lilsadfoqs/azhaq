@@ -118,8 +118,10 @@ type costEstimate struct {
 	// write lines of their own, which it leaves out.
 	LedgerBytes int64  `json:"ledger_bytes,omitempty"`
 	Basis       string `json:"basis"`
-	ceil        ceiling
-	cap         int64 // -max-requests: the most requests, connects and datagrams a run sends to its targets
+	// Permute is the size of -permute's job, when it is planned.
+	Permute *permuteCost `json:"permute,omitempty"`
+	ceil    ceiling
+	cap     int64 // -max-requests: the most requests, connects and datagrams a run sends to its targets
 }
 
 // ceiling is the most a part of an estimate sends, from the flags that bound
@@ -225,6 +227,9 @@ const estimateBasis = "from the flags and the targets given, as if each target a
 // sends: requests, connects, datagrams and DNS queries together.
 const trivialRun = 1000
 
+// proxyStage is the stage of the ask of the -proxy for its own answer.
+const proxyStage = "proxy"
+
 // signInStage is the name Chrome's sign-ins send under: a stage of their own.
 const signInStage = ledger.SignIn
 
@@ -264,12 +269,14 @@ func stageOfCollector(name string) string {
 		return "notify"
 	case signInStage:
 		return signInStage
+	case proxyStage:
+		return proxyStage
 	}
 	return "other"
 }
 
 // stageOrder is how stages are listed: the order a run goes through them.
-var stageOrder = []string{signInStage, "sources", "names", "web", "ports", "fuzz", "shots", "verify", "notify",
+var stageOrder = []string{signInStage, proxyStage, "sources", "names", "web", "ports", "fuzz", "shots", "verify", "notify",
 	stageRoleMaps, stageHistory, stageReplay, stageControls, stageWrites, stageVerify, "other"}
 
 func stageRank(s string) int {
@@ -300,6 +307,7 @@ type estimator struct {
 	collCap map[string]map[string]*ceiling
 	atLeast bool
 	cap     int64 // -max-requests
+	permute *permuteCost
 }
 
 func newEstimator() *estimator {
@@ -433,7 +441,7 @@ func (e *estimator) putBound(stage, collector string, a amount, open string, cl 
 }
 
 func (e *estimator) result() costEstimate {
-	out := costEstimate{AtLeast: e.atLeast, Basis: estimateBasis, cap: e.cap}
+	out := costEstimate{AtLeast: e.atLeast, Basis: estimateBasis, cap: e.cap, Permute: e.permute}
 	var names []string
 	for n := range e.stages {
 		names = append(names, n)
@@ -493,6 +501,7 @@ func estimateCost(seeds []types.Seed, planned [][]string, runs func(string) bool
 		return false
 	}
 	permuteNoted := false
+	var permuteSeeds []types.Seed
 	guessLeft := env.guessBudget // -max-names holds the guesses of -dns-brute and -permute together
 	guess := func(n int) int64 {
 		if env.guessBudget > 0 {
@@ -556,7 +565,7 @@ func estimateCost(seeds []types.Seed, planned [][]string, runs func(string) bool
 			case "azhaq-permute":
 				// The variations of a name given are known; the names a source or
 				// a lookup gives later bring variations of their own.
-				e.add(c, amount{DNS: guess(brutecol.PermuteCount(s.Key()))}, permuteOpen)
+				permuteSeeds = append(permuteSeeds, s)
 				permuteNoted = true
 			case "azhaq-tls":
 				if env.rules.AllowsAddr(s.Key(), "443") {
@@ -617,6 +626,14 @@ func estimateCost(seeds []types.Seed, planned [][]string, runs func(string) bool
 			}
 		}
 	}
+	if permuteNoted {
+		// The names two of the seeds make alike are asked once, as Permute asks them.
+		hosts := brutecol.PermuteHosts(permuteSeeds)
+		pc := newPermuteCost(hosts, env.dnsRate, env.resolvers)
+		pc.UpperBound = true
+		e.add("azhaq-permute", amount{DNS: guess(pc.Variations)}, permuteOpen)
+		e.permute = &pc
+	}
 	if n := dnsFloor(names); n > 0 {
 		e.add("azhaq-dns", amount{DNS: n}, "wildcard checks past the first of a zone, CNAME chains, and a second resolver asked about a name that does not answer")
 	}
@@ -627,6 +644,8 @@ func estimateCost(seeds []types.Seed, planned [][]string, runs func(string) bool
 		for _, s := range seeds {
 			if s.Type == types.TypeDomain || s.Type == types.TypeHostname {
 				e.add("azhaq-permute", amount{}, permuteOpen)
+				pc := newPermuteCost(nil, env.dnsRate, env.resolvers)
+				e.permute = &pc
 				break
 			}
 		}
@@ -709,7 +728,28 @@ func estimateCost(seeds []types.Seed, planned [][]string, runs func(string) bool
 	if env.login != "" {
 		e.put("sign-in", "chrome", amount{Requests: 3}, "the sign-in page's scripts, styles and images, which Chrome asks for as the page names them")
 	}
+	if env.proxyAsk {
+		e.addProxyAsk()
+	}
 	return e.result()
+}
+
+// addProxyAsk counts the one request to the -proxy itself, for its own answer,
+// when the run sends requests at all: a proxy may forward it to the target.
+func (e *estimator) addProxyAsk() {
+	for _, st := range e.stages {
+		if st.Estimate != nil && st.Estimate.Requests > 0 {
+			e.put(proxyStage, "", amount{Requests: 1}, "")
+			return
+		}
+	}
+}
+
+// asksProxy says the -proxy value is an HTTP or HTTPS proxy, which a run asks
+// once for its own answer; a SOCKS5 proxy has none.
+func asksProxy(v string) bool {
+	pu, err := parseProxy(v)
+	return v != "" && err == nil && (pu.Scheme == "http" || pu.Scheme == "https")
 }
 
 // dnsFloor is the queries the lookup of names sends if each answers: one
@@ -812,6 +852,9 @@ func printEstimate(w io.Writer, lead string, est costEstimate) {
 		}
 		fmt.Fprintln(w, line)
 	}
+	if est.Permute != nil {
+		fmt.Fprintln(w, "  permute      "+est.Permute.text())
+	}
 	if est.LedgerBytes > 0 {
 		fmt.Fprintf(w, "  ledger: about %s for the %s connects (about %d bytes each; the requests, probes and queries add their own lines)\n",
 			ledgerSize(est.LedgerBytes), commas(est.Total.Connects), ledger.BytesPerConnect)
@@ -903,7 +946,7 @@ func spentAmount(acc map[ledger.SpentKey]int64, keep func(ledger.SpentKey) bool)
 			a.DNS += n
 		case k.Class == ledger.ClassSource:
 			a.Sources += n
-		case k.Class == ledger.ClassOwn, k.Class == ledger.ClassProxy:
+		case k.Class == ledger.ClassOwn:
 		case k.Kind == "tcp":
 			a.Connects += n
 		case k.Kind == "udp":
@@ -916,11 +959,12 @@ func spentAmount(acc map[ledger.SpentKey]int64, keep func(ledger.SpentKey) bool)
 }
 
 // purposesOf is what the requests and connections an account holds to
-// targets were for, by purpose; a line with none names "other".
+// targets, and the ask of the -proxy, were for, by purpose; a line with none
+// names "other".
 func purposesOf(acc map[ledger.SpentKey]int64) map[string]int {
 	out := map[string]int{}
 	for k, n := range acc {
-		if n > 0 && k.Class == ledger.ClassTarget {
+		if n > 0 && (k.Class == ledger.ClassTarget || k.Class == ledger.ClassProxy) {
 			p := k.Purpose
 			if p == "" {
 				p = ledger.PurposeOther
@@ -975,6 +1019,9 @@ func accountSince(then map[ledger.SpentKey]int64) map[ledger.SpentKey]int64 {
 // stageOfKey is the stage an entry of the account belongs to: the stage the
 // command named (SetStage), else the stage of its collector.
 func stageOfKey(k ledger.SpentKey) string {
+	if k.Class == ledger.ClassProxy {
+		return proxyStage // whichever stage was asking, the ask is the proxy's
+	}
 	if k.Collector == signInStage {
 		return signInStage
 	}

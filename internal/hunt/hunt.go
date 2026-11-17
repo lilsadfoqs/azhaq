@@ -28,6 +28,7 @@ type Input struct {
 	Roles     []RoleRow
 	Listeners []Listener // what the run named on each listener, one record each
 	Measured  []Measured // findings measured of a name, apart from its routes and leads
+	Leads     []Lead     // a product only an icon's hash named on a listener
 	// Addrs is the one address each name resolved to, by lower-case name: two
 	// hosts at the same address and port that answered the same are one row.
 	Addrs map[string]string
@@ -93,6 +94,7 @@ type Row struct {
 	scope   string
 	signals int  // distinct signals, "new" not counted
 	named   bool // nothing but a script's naming or a DNS answer: no server confirmed it
+	prefix  bool // the answer is also its prefix's catch-all: listed after the rows the server answered for themselves
 }
 
 // Template says a row is an origin's template input: on Pages of its Of
@@ -113,14 +115,17 @@ type cand struct {
 	roleDir         string // and the -dir of the roles run that listed it
 	origin          string
 	fresh           bool
-	named           int  // instances only a script names, whose GET answered 404 or 410
-	dangling        bool // a takeover that rests on NXDOMAIN alone
-	namedGET        int  // that status
+	named           int    // instances only a script names, whose GET answered 404 or 410
+	prefixed        int    // instances whose answer is also their prefix's catch-all
+	prefixWhy       string // and what the row says of it
+	dangling        bool   // a takeover that rests on NXDOMAIN alone
+	namedGET        int    // that status
 	tmpl            *Template
 	proved          map[string]bool // the signals an answer or a format proves
 	check           string          // the check a path verdict names, for a lead
 	proof           *proof.Proof
 	also            []string // URLs of other names that answered the same
+	codeKept        bool     // source maps: instances[0]'s answer, with its code, was kept (-sr)
 }
 
 type hunter struct {
@@ -184,6 +189,9 @@ func Build(in Input) []Row {
 	for _, m := range in.Measured {
 		out = append(out, m.row(in.DB))
 	}
+	for _, l := range in.Leads {
+		out = append(out, l.row())
+	}
 	for _, c := range h.cands {
 		if c.fresh && h.old {
 			c.add("new", "first seen within "+in.Since.String())
@@ -203,7 +211,8 @@ func Build(in Input) []Row {
 // sortRows orders best first: findings, then identifications (a version seen
 // before none seen), then leads; in each, rows the server
 // confirmed before routes only a script names and names that rest on NXDOMAIN
-// alone, then by score, then target scope before fan-out, then more distinct
+// alone, and answers that are not also their prefix's catch-all before those
+// that are, then by score, then target scope before fan-out, then more distinct
 // signals, then key.
 func sortRows(out []Row) {
 	sort.Slice(out, func(i, j int) bool {
@@ -213,6 +222,8 @@ func sortRows(out []Row) {
 			return a.tierRank() < b.tierRank()
 		case a.named != b.named:
 			return !a.named
+		case a.prefix != b.prefix:
+			return !a.prefix // an answer that is also its prefix's catch-all says least of the route
 		case a.Score != b.Score:
 			return a.Score > b.Score
 		case (a.scope == "target") != (b.scope == "target"):
@@ -276,6 +287,10 @@ func (c *cand) row(db string) Row {
 		sort.Strings(alsoAt)
 		rs = append(rs, Reason{"same-answer", "the same answer, by body hash, at " + join(alsoAt, 4)})
 	}
+	prefix := c.prefixed > 0 && c.prefixed == len(c.instances)
+	if prefix {
+		rs = append(rs, Reason{"prefix-catchall", c.prefixWhy})
+	}
 	if named && !c.dangling {
 		rs = append(rs, Reason{"unconfirmed", fmt.Sprintf("named by a script, not confirmed: GET %d", c.namedGET)})
 	}
@@ -291,7 +306,7 @@ func (c *cand) row(db string) Row {
 	if len(rs) > 0 {
 		best = rs[0].Signal
 	}
-	row := Row{Score: score, Key: c.display(), Type: c.typ, Reasons: rs, Next: c.next(db, best), Template: c.tmpl, AlsoAt: alsoAt, scope: c.scope, signals: n, named: named}
+	row := Row{Score: score, Key: c.display(), Type: c.typ, Reasons: rs, Next: c.next(db, best), Template: c.tmpl, AlsoAt: alsoAt, scope: c.scope, signals: n, named: named, prefix: prefix}
 	if len(c.proved) > 0 {
 		row.Tier, row.Proof = proof.TierFinding, c.proof
 		return row

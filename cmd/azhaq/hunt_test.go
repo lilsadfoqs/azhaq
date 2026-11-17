@@ -106,7 +106,7 @@ func TestHuntTakeoverDetail(t *testing.T) {
 		t.Fatal("no finding")
 	}
 	got := takeoverDetail(d)
-	for _, want := range []string{"unverified: NXDOMAIN does not show the name is free", "x.azureedge.net", "Azure CDN", takeover.ListRead} {
+	for _, want := range []string{"unverified who can claim x.azureedge.net: NXDOMAIN does not show the name is free", "the dangling-dns finding", "x.azureedge.net", "Azure CDN", takeover.ListRead} {
 		if !strings.Contains(got, want) {
 			t.Errorf("%q lacks %q", got, want)
 		}

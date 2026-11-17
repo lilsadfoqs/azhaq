@@ -390,14 +390,14 @@ func TestDanglingTakeoverIsAnUnverifiedCandidate(t *testing.T) {
 			urlRow("http://t.test/q?id=1", "page", "visited", 200, func(r *engine.MapEntry) { r.Params = []string{"zz"} }),
 		},
 		Takeovers: []Takeover{
-			{Host: "assets.t.test", Dangling: true, Detail: "unverified: NXDOMAIN does not show the name is free: Azure candidate"},
+			{Host: "assets.t.test", Dangling: true, Detail: "unverified who can claim x.test: NXDOMAIN does not show the name is free (Azure candidate)"},
 			{Host: "old.t.test", Strong: true, Detail: "s3 takeover"},
 		}})
 	d := find(rows, "assets.t.test")
 	if d == nil || !has(d, "takeover-candidate") || has(d, "takeover") {
 		t.Fatalf("dangling row: %+v", rows)
 	}
-	if !strings.Contains(d.Reasons[0].Detail, "unverified: NXDOMAIN does not show the name is free") {
+	if !strings.Contains(d.Reasons[0].Detail, "unverified who can claim") {
 		t.Errorf("reason: %+v", d.Reasons)
 	}
 	if find(rows, "old.t.test").Rank != 1 || d.Rank != len(rows) {
@@ -441,6 +441,17 @@ func TestSourceMapsAreOneRowPerHostByWhatTheyExpose(t *testing.T) {
 	}
 	if rb.Score != mapNamesOnly || !strings.Contains(rb.Reasons[0].Detail, "names only: no code") {
 		t.Errorf("the host with names only: score %d, %+v", rb.Score, rb.Reasons)
+	}
+	// With no answer kept, the next step lists the map's sources.
+	if want := "azhaq show -db w.db " + a + "/main.js.map"; ra.Next != want {
+		t.Errorf("next %q, want %q", ra.Next, want)
+	}
+	// A map whose answer -sr kept has its code printed by -body, and comes first.
+	in.Rows[1].ResponseFile = "/tmp/sr/vendor"
+	in.Obs[1] = mapObs(a+"/vendor.js.map", []string{"src/x.ts"}, 1)
+	ra = find(Build(in), a+"/vendor.js.map")
+	if ra == nil || ra.Next != "azhaq show -db w.db -body "+a+"/vendor.js.map" {
+		t.Errorf("next with a kept answer: %+v", ra)
 	}
 }
 

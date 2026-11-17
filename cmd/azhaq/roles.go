@@ -236,7 +236,8 @@ func cmdRoles(args []string) error {
 	fs := newFlags("roles")
 	var specs, logins, cmds, idSpecs, hars, burps, allows, canarySpecs stringsFlag
 	fs.Var(&specs, "role", "NAME, or NAME=Header: value (repeat a name to add headers; a role with none is anonymous). Only these headers are sent: a session the app reads from a cookie needs NAME=Cookie: …")
-	fs.Var(&cmds, "role-cmd", "NAME=COMMAND: a role whose headers a shell command prints, one Header: value per line (a bare token is sent as Authorization: Bearer); run before the role's run and again before the replay, for tokens that live minutes; the command's own requests are not azhaq's: not in the ledger, not held to the scope")
+	fs.Var(&cmds, "role-cmd", "NAME=COMMAND: a role whose headers a shell command prints, one Header: value per line (a bare token is sent as Authorization: Bearer); run before the role's run and again before the replay, for tokens that live minutes; its own requests go through a loopback proxy of azhaq's (HTTP_PROXY, HTTPS_PROXY), held to the scope, the budget and the pace and listed in the ledger, unless it ignores the variables or -role-cmd-direct is given")
+	cmdDirect := fs.Bool("role-cmd-direct", false, "run the -role-cmd commands with no proxy, as before: for a command that cannot use one; its own requests are then not in the ledger and not held to the scope, the budget or the pace")
 	fs.Var(&logins, "role-login", "NAME=USER:PASSWORD: a role that signs in on the -login page with Chrome, and sends the cookies and the token the login left. Chrome runs with its sandbox: where the system gives none, allow it with run's -chrome-no-sandbox among the run options, after --")
 	fs.Var(&idSpecs, "id", "[ROLE:]NAME=VALUE: also fill routes with this identifier. NAME is a path parameter (book_title), a JSON field holding such values (basket_id) or a route (/rest/basket/{id}); with ROLE, VALUE names ROLE's own object, and another role that reads it is listed")
 	loginURL := fs.String("login", "", "the login page for -role-login")
@@ -378,6 +379,8 @@ func cmdRoles(args []string) error {
 		return err
 	}
 	defer func() { rolesHostRules = scope.Rules{} }()
+	resetRolesCmd(*cmdDirect, cmdProxyScope(runArgs, rolesHostRules))
+	defer resetRolesCmd(false, egress.CmdScope{})
 	if !noRule {
 		for _, r := range roles {
 			if err := hostHeadersFrom("role "+r.name+" header", headerOf(r.headers), rolesHostRules); err != nil {
@@ -385,7 +388,12 @@ func cmdRoles(args []string) error {
 			}
 		}
 	}
-	costIn := rolesCostIn{roles: roles, logins: len(logins), crawl: crawl, hist: hist, sc: sc, replay: *replay, max: *replayMax, methods: methods, verify: verifySteps, canary: *writesCanary}
+	costIn := rolesCostIn{roles: roles, logins: len(logins), crawl: crawl, hist: hist, sc: sc, replay: *replay, max: *replayMax, methods: methods, verify: verifySteps, canary: *writesCanary, cmdDirect: *cmdDirect}
+	proxyVal := *proxyFlag
+	if v, ok := flagValue(runArgs, "proxy"); ok && v != "" {
+		proxyVal = v
+	}
+	costIn.proxyAsk = asksProxy(proxyVal)
 	if v, ok := flagValue(runArgs, "max-requests"); ok {
 		costIn.budget, _ = strconv.ParseInt(v, 10, 64)
 	}
@@ -485,6 +493,8 @@ func cmdRoles(args []string) error {
 	rate := *rateFlag
 	rolesProxy, rolesResolvers, rolesRate, rolesLeft = nil, nil, 0, nil
 	defer func() { rolesProxy, rolesResolvers, rolesRate, rolesLeft = nil, nil, 0, nil }()
+	egress.ShareProxyAsk(true) // the runs and the replay ask the -proxy once between them
+	defer egress.ShareProxyAsk(false)
 	if *proxyFlag != "" {
 		pu, err := parseProxy(*proxyFlag)
 		if err != nil {
@@ -875,6 +885,10 @@ func cmdRoles(args []string) error {
 		}
 	}
 	counted()
+	rep.Notes = append(rep.Notes, roleCmdNotes()...)
+	if n := egress.ProxyAskNote(); n != "" && !slices.Contains(rep.Notes, n) {
+		rep.Notes = append(rep.Notes, n)
+	}
 	states.settle(rep)
 	rep.Cost = accountCost(rep.estimate, rep.spentFrom, rolesStages)
 	if cmdMax > 0 {
@@ -982,6 +996,7 @@ func rolesFailed(rep *report, asJSON bool, err error) error {
 	if rep.Cost == nil {
 		rep.Cost = accountCost(rep.estimate, rep.spentFrom, rolesStages)
 	}
+	rep.Notes = append(rep.Notes, roleCmdNotes()...)
 	rep.Notes = append(rep.Notes, err.Error())
 	raw, _ := json.Marshal(rep)
 	fmt.Fprintf(os.Stderr, "%s\n", raw)
@@ -1742,13 +1757,9 @@ func addCmds(roles []role, specs []string) ([]role, error) {
 // prints: Header: value lines, or one bare token, sent as a bearer
 // token.
 func cmdHeaders(r role) ([]string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
-	c := exec.CommandContext(ctx, "sh", "-c", r.cmd)
-	c.Stderr = os.Stderr
-	out, err := c.Output()
+	out, err := runRoleCmd(r)
 	if err != nil {
-		return nil, fmt.Errorf("role %s: its -role-cmd failed: %w", r.name, err)
+		return nil, err
 	}
 	var lines []string
 	for _, l := range strings.Split(string(out), "\n") {
@@ -1770,6 +1781,52 @@ func cmdHeaders(r role) ([]string, error) {
 		return nil, err
 	}
 	return lines, nil
+}
+
+// runRoleCmd runs a role's command and returns what it printed. Unless
+// -role-cmd-direct says otherwise it runs with the proxy variables pointing
+// at a loopback proxy of azhaq's that lives as long as the command: what the
+// command requests through it is held to the scope, the budget and the pace
+// and listed in the ledger under the role's name. A request the proxy
+// refused fails the sign-in with the reason, whatever the command then did.
+func runRoleCmd(r role) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	c := exec.CommandContext(ctx, "sh", "-c", r.cmd)
+	c.Stderr = os.Stderr
+	st := cmdStatsOf(r.name)
+	if rolesCmd.direct {
+		out, err := c.Output()
+		st.add(0, false)
+		if err != nil {
+			return nil, fmt.Errorf("role %s: its -role-cmd failed: %w", r.name, err)
+		}
+		return out, nil
+	}
+	sc := rolesCmd.scope
+	if rolesLeft != nil {
+		sc.Capped, sc.Left = true, rolesLeft()
+	}
+	px, err := egress.StartCmdProxy(r.name, sc)
+	if err != nil {
+		return nil, fmt.Errorf("role %s: its -role-cmd's proxy did not start: %w", r.name, err)
+	}
+	c.Env = px.Env(os.Environ())
+	endStage := ledger.SetStage(signInStage)
+	out, err := c.Output()
+	endStage()
+	px.Close()
+	refused := px.Refused()
+	st.add(px.Requests(), refused != nil)
+	switch {
+	case refused != nil && err != nil:
+		return nil, fmt.Errorf("role %s: its -role-cmd failed (%v) after azhaq refused its request: %w", r.name, err, refused)
+	case refused != nil:
+		return nil, fmt.Errorf("role %s: its -role-cmd made a request azhaq refused, so its sign-in is not taken: %w", r.name, refused)
+	case err != nil:
+		return nil, fmt.Errorf("role %s: its -role-cmd failed: %w", r.name, err)
+	}
+	return out, nil
 }
 
 // readBodies reads the answers of a role's run again, through the

@@ -249,6 +249,7 @@ func cmdSubs(args []string) error {
 		extra = append(extra, "-resume-run", sr.run)
 		rep.Notes = append(rep.Notes, sr.note(c.db))
 	}
+	subcol.ForgetLive()
 	subsMode.NoCheck, subsMode.Recursive, subsMode.GuessSamples = !*live && !active, *recursive, *guessSamples
 	subsMode.NoGuessCheck = (*live || active) && !*guesses
 	// The output is opened before anything is sent: a bad -o is not found out
@@ -271,7 +272,7 @@ func cmdSubs(args []string) error {
 	dnsTier := map[string]bool{}     // printed rows a DNS lookup confirmed
 	var answeredHTTP map[string]bool // with -http: the names a request got an answer from
 	httpTier2 := map[string]bool{}   // printed rows an HTTP answer confirmed
-	answered, ran, failedOff := 0, 0, 0
+	answered, ran, failedOff, running := 0, 0, 0, 0
 	verbose := hasFlag(extra, "v")
 	private := map[string]bool{}
 	collected := map[string]bool{} // every passive name, before the -live filter
@@ -331,6 +332,8 @@ func cmdSubs(args []string) error {
 					// Names it left unchecked, that a continued run has since
 					// looked up, are not a failure of the source.
 					answered++
+				} else if row["running"] == true {
+					running++ // the stop caught it asking
 				} else if row["default"] == false {
 					failedOff++ // -all-sources reaches for flaky ones: counted apart
 				}
@@ -496,6 +499,13 @@ func cmdSubs(args []string) error {
 	for _, p := range payloads(st, "azhaq-subdomains") {
 		process(p) // the ones not printed yet: every one with -live
 	}
+	// A domain whose summary row the stop lost (the kill file, a request
+	// budget) still has its sources: what each was asked is in the ledger.
+	for _, d := range apexes {
+		if rows, ok := subcol.Live(d); ok {
+			process(map[string]any{"domain": d, "sources": rows})
+		}
+	}
 	// Names the guesses found.
 	guessed, guessTried, guessHeld, guessDead, guessFiltered, guessOut := 0, 0, 0, 0, 0, 0
 	for _, g := range []struct{ collector, source string }{{"azhaq-dns-brute", "dns-brute"}, {"azhaq-permute", "permute"}} {
@@ -586,7 +596,10 @@ func cmdSubs(args []string) error {
 	}
 	rep.Results = w.count()
 	rep.Sources = health.result()
-	rep.Counts = map[string]int{"sources asked": ran, "sources answered": answered, "sources failed": ran - answered - failedOff, "off-by-default failed": failedOff}
+	rep.Counts = map[string]int{"sources asked": ran, "sources answered": answered, "sources failed": ran - answered - failedOff - running, "off-by-default failed": failedOff}
+	if running > 0 {
+		rep.Counts["sources still running"] = running
+	}
 	rep.Degraded = rep.Counts["sources failed"] > 0
 	if rep.Degraded {
 		rep.DegradedBy = health.degradedBy()

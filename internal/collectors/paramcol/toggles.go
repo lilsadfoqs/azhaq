@@ -80,13 +80,14 @@ func (s *search) toggles(answers []toggleAnswer, found, values map[string]string
 		}
 		ck := &chunk{names: names, fixed: a.value, found: map[string]string{}}
 		if len(names) == len(a.names) {
-			s.process(ck, names, a.v, false)
+			s.round(ck, func() { s.process(ck, names, a.v, false) })
 		} else {
 			s.narrow(ck, names) // names that the list found are out: ask again
 		}
 		for n, why := range ck.found {
 			found[n] = why
 			values[n] = a.value
+			s.remember(n, ck.exchangeOf(n))
 		}
 	}
 }

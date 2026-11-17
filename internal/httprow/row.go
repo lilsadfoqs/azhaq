@@ -30,7 +30,7 @@ import (
 //     Takeover, FinalStatus, StackTrace and the trace excerpt, ErrorText and
 //     ErrorSample, Tech, Detected, IP, Cookies, Headers (the X- headers),
 //     Truncated, the JSON* fields, Hops, Auth, and Catchall with Control for
-//     an answer a catch-all gave, and the Favicon fields. Evidence fields are
+//     an answer a catch-all gave, PrefixCatchall, and the Favicon fields. Evidence fields are
 //     kept for rows written since they were added.
 //   - "application" of azhaq probe (httpcol.Spec set): also Method, ElapsedNS,
 //     Hash, BodyPreview, Extracts, CPE, WordPress, Knowledgebase, WebSocket,
@@ -87,10 +87,13 @@ type Row struct {
 	Catchall     bool                `json:"catchall,omitempty"`
 	Control      *fetch.Control      `json:"control,omitempty"` // the request a catch-all answer was compared with
 	ControlExact bool                `json:"control_exact,omitempty"`
-	Favicon      string              `json:"favicon,omitempty"`
-	FaviconURL   string              `json:"favicon_url,omitempty"`
-	FaviconMD5   string              `json:"favicon_md5,omitempty"`
-	FaviconPath  string              `json:"favicon_path,omitempty"`
+	// PrefixCatchall: the answer is also the answer of a name asked under its
+	// own path (fetch.PrefixControl); the row is listed, labelled.
+	PrefixCatchall *fetch.Control `json:"prefix_catchall,omitempty"`
+	Favicon        string         `json:"favicon,omitempty"`
+	FaviconURL     string         `json:"favicon_url,omitempty"`
+	FaviconMD5     string         `json:"favicon_md5,omitempty"`
+	FaviconPath    string         `json:"favicon_path,omitempty"`
 
 	// ViaProxy lists what only a header of the answer named ("Server",
 	// "X-Powered-By", "tech:Name:version"), when the -proxy the answer came
@@ -163,9 +166,31 @@ type Detected struct {
 	Version  string `json:"version,omitempty"`
 	Matcher  string `json:"matcher,omitempty"`
 	Many     string `json:"many,omitempty"` // "1": one of many products the template names
+	// Icon is "1" when the hash of an image is all that named it: a lead, not
+	// an identification, until a read of the product itself says the same.
+	Icon string `json:"icon,omitempty"`
+	// Ask says what the run asked to settle an icon's name (the read, its
+	// status, whether a template of the product matched), or why it asked none.
+	Ask string `json:"ask,omitempty"`
 	// ViaProxy is "1" when only a header named it, through a -proxy that could
 	// not be asked for its own answer (see Row.ViaProxy).
 	ViaProxy string `json:"via_proxy,omitempty"`
+}
+
+// IconOnly says the hash of an image is all that named the product. A row an
+// older azhaq stored has no icon mark: the shared favicon template's rows are
+// icons all the same, unless a read has settled them.
+func (d Detected) IconOnly() bool {
+	return d.Icon != "" || d.Template == "favicon-detect" && d.Ask == ""
+}
+
+// Said is how a detection is told as evidence: the template, and what was
+// asked to settle an icon's name.
+func (d Detected) Said() string {
+	if d.Ask != "" {
+		return "detection template: " + d.Template + "; " + d.Ask
+	}
+	return "detection template: " + d.Template
 }
 
 // MarkViaProxy sets via_proxy on the detected rows only the identity headers

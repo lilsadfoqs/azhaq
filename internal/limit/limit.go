@@ -70,6 +70,17 @@ func (l *Limiter) Set(key string, perSecond float64) {
 	}
 }
 
+// Tune gives key its rate and burst at once, for a pace that follows what the
+// peer answers. The bucket's own tokens stay.
+func (l *Limiter) Tune(key string, perSecond float64, burst int) {
+	l.mu.Lock()
+	l.overrides[key] = perSecond
+	l.mu.Unlock()
+	b := l.bucket(key)
+	b.SetLimit(toLimit(perSecond))
+	b.SetBurst(max(1, burst))
+}
+
 // Wait blocks until key may send one request or ctx ends.
 func (l *Limiter) Wait(ctx context.Context, key string) error {
 	if l == nil {

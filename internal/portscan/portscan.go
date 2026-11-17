@@ -20,6 +20,7 @@ import (
 	"github.com/lilsadfoqs/azhaq/internal/certfacts"
 	"github.com/lilsadfoqs/azhaq/internal/egress"
 	"github.com/lilsadfoqs/azhaq/internal/limit"
+	"github.com/lilsadfoqs/azhaq/internal/neterr"
 )
 
 // Top lists are nmap's most frequent TCP ports, as naabu ships them (MIT,
@@ -164,10 +165,14 @@ type Script struct {
 
 // Scanner connects to ports at a set total rate.
 type Scanner struct {
-	Rate    float64       // connection attempts per second, all hosts together; 0 means 1000 (naabu's), loopback unpaced
+	Rate    float64       // connection attempts per second, all hosts together, a fixed ceiling; 0 is the adaptive pace from DefaultRate to Ceiling (pace.go), loopback unpaced
 	Workers int           // connects in flight; 0 means 100
 	Timeout time.Duration // per connect; 0 means 1.5 s
 	Banner  time.Duration // how long to wait for a service to speak (and, with Timeout, for the answer to a probe); 0 means 1.5 s; <0 skips both
+	// MinRate is the least the adaptive pace backs off to (0: 200), Ceiling the
+	// most it rises to (0: AdaptiveCeiling, never under DefaultRate). A given
+	// Rate is touched by neither.
+	MinRate, Ceiling float64
 	// Take, when set, is asked before each connect, the TLS probe's
 	// included; an error stops the scan and is returned (the run's
 	// request budget is spent).
@@ -213,6 +218,8 @@ type Scanner struct {
 	once       sync.Once
 	limiter    *limit.Limiter
 	loopPaced  bool
+	paceLoop   bool          // tests: pace loopback too, to try the adaptive pace on it
+	pacer      *pacer        // the adaptive connect pace (nil: Rate holds)
 	conns      chan struct{} // connections in flight, over every address
 	udpWorkers int
 	pd         *egress.PortDialer // every connect of the scan is made by it
@@ -254,15 +261,26 @@ const (
 	OrderTiered
 )
 
-// DefaultRate is the connects per second of a scan that sets none: naabu's
-// for a connect scan.
+// DefaultRate is the connects per second a scan that sets none starts at:
+// naabu's for a connect scan. Its pace then follows the answers (pace.go).
 const DefaultRate = 1500
 
 func (s *Scanner) init() {
 	s.once.Do(func() {
-		s.loopPaced = s.Rate > 0
+		s.loopPaced = s.Rate > 0 || s.paceLoop
+		// Through a proxy the round trip is the proxy's: the pace is fixed.
+		adaptive := s.Rate <= 0 && s.Proxy == ""
 		if s.Rate <= 0 {
 			s.Rate = DefaultRate
+		}
+		ceil := s.Rate
+		if adaptive {
+			ceil = AdaptiveCeiling
+			if s.Ceiling > 0 {
+				ceil = s.Ceiling
+			}
+			s.pacer = newPacer(s.Rate, max(s.MinRate, paceFloor), ceil)
+			ceil = s.pacer.ceil
 		}
 		s.udpWorkers = 100
 		if s.Workers > 0 {
@@ -271,7 +289,7 @@ func (s *Scanner) init() {
 		if s.Workers <= 0 {
 			// As many in flight as the rate can use: a host that drops
 			// connects holds each for the whole timeout.
-			s.Workers = min(max(int(s.Rate), 100), 20000)
+			s.Workers = min(max(int(ceil), 100), 20000)
 		}
 		s.Workers = min(s.Workers, fdBudget())
 		s.conns = make(chan struct{}, s.Workers)
@@ -279,7 +297,7 @@ func (s *Scanner) init() {
 		if s.runSeed == 0 {
 			s.runSeed = time.Now().UnixNano()
 		}
-		adaptive := s.Timeout <= 0 // not asked for: the wait follows the round trip
+		waitAdapts := s.Timeout <= 0 // not asked for: the wait follows the round trip
 		if s.Timeout <= 0 {
 			s.Timeout = 1500 * time.Millisecond
 		}
@@ -288,7 +306,7 @@ func (s *Scanner) init() {
 		}
 		s.limiter = limit.New(s.Rate, max(1, int(s.Rate/10)))
 		s.pd = egress.NewPortDialer(s.Timeout, s.SourceIP, s.Proxy, s.ProxyAuth)
-		if adaptive {
+		if waitAdapts {
 			s.pd.Adapt()
 		}
 	})
@@ -340,10 +358,23 @@ func (s *Scanner) ScanEachFn(ctx context.Context, host, ip string, ports []int, 
 	var err error
 	ports = s.ordered(ip, ports)
 	var asked, slow int
-	r.Open, r.Silent, asked, slow, err = s.pass(ctx, host, ip, ports, found, true)
+	var lost []int
+	backoffs := s.backoffs()
+	r.Open, r.Silent, lost, asked, slow, err = s.pass(ctx, host, ip, ports, found, true, 0)
 	r.Asked = asked
 	r.Threshold = s.Threshold > 0 && len(r.Open) >= s.Threshold
-	for try := 0; err == nil && !r.Threshold && len(r.Silent) > 0 && s.again(try, len(r.Silent), len(ports)); try++ {
+	answers := asked - len(r.Silent) // what the address has answered: open or refused
+	for try := 0; err == nil && !r.Threshold && len(r.Silent) > 0; try++ {
+		again := r.Silent
+		if !s.again(try, len(r.Silent), len(ports)) {
+			// Too many to ask all again, but the pace backed off for timeouts
+			// of this address's ports: those were lost to it, and are asked,
+			// until none is.
+			if s.Retries != 0 || len(lost) == 0 || s.backoffs() == backoffs || try >= maxLossPasses {
+				break
+			}
+			again = lost
+		}
 		if slow > 0 {
 			err = s.settle(ctx)
 			if err != nil {
@@ -351,8 +382,16 @@ func (s *Scanner) ScanEachFn(ctx context.Context, host, ip string, ports []int, 
 			}
 		}
 		var more []Open
-		more, r.Silent, _, slow, err = s.pass(ctx, host, ip, r.Silent, found, false)
+		var left []int
+		var n int
+		more, left, lost, n, slow, err = s.pass(ctx, host, ip, again, found, false, answers)
+		answers += n - len(left)
 		r.Open = append(r.Open, more...)
+		// What was not asked again stays silent with what still is.
+		if len(again) < len(r.Silent) {
+			left = append(left, subtract(r.Silent, again)...)
+		}
+		r.Silent = left
 	}
 	if err == nil {
 		err = s.secondLook(ctx, host, ip, r.Open)
@@ -407,12 +446,29 @@ func (s *Scanner) wait(ctx context.Context, ip string) error { return s.waitN(ct
 // The run's -rate paces them too, as it does every request to a target, so
 // that the connects and the requests share it.
 func (s *Scanner) waitN(ctx context.Context, ip string, n int) error {
-	loop := false
-	if a := net.ParseIP(ip); a != nil && a.IsLoopback() && !s.loopPaced {
-		loop = true
+	return s.waitOn(ctx, s.limiter, ip, n)
+}
+
+// waitConnects is waitN for the connects of a pass: at the adaptive pace when
+// the scan has one. The probes of an open port and the datagrams keep
+// the start rate.
+func (s *Scanner) waitConnects(ctx context.Context, ip string, n int) error {
+	if s.pacer == nil {
+		return s.waitN(ctx, ip, n)
 	}
-	if !loop {
-		if err := s.limiter.WaitN(ctx, "", n); err != nil {
+	return s.waitOn(ctx, s.pacer.lim, ip, n)
+}
+
+// paces says the connects to ip are held to the pace: loopback is not unless
+// a rate was given.
+func (s *Scanner) paces(ip string) bool {
+	a := net.ParseIP(ip)
+	return a == nil || !a.IsLoopback() || s.loopPaced
+}
+
+func (s *Scanner) waitOn(ctx context.Context, lim *limit.Limiter, ip string, n int) error {
+	if s.paces(ip) {
+		if err := lim.WaitN(ctx, "", n); err != nil {
 			return err
 		}
 	}
@@ -426,24 +482,65 @@ func (s *Scanner) waitN(ctx context.Context, ip string, n int) error {
 // together: none beyond one below a rate of 1,000 a second, where a write
 // for each costs the scan nothing that matters.
 func (s *Scanner) batch() int {
-	if s.Rate < 1000 {
+	r := s.Rate
+	if s.pacer != nil {
+		r = s.pacer.ceil // the pace may rise to it
+	}
+	if r < 1000 {
 		return 1
 	}
-	return min(int(s.Rate/500), 32)
+	return min(int(r/500), 32)
+}
+
+// backoffs is how many times the adaptive pace has backed off so far.
+func (s *Scanner) backoffs() int {
+	if s.pacer == nil {
+		return 0
+	}
+	return s.pacer.Backoffs()
+}
+
+// subtract is the ints of all that are not in some.
+func subtract(all, some []int) []int {
+	in := make(map[int]bool, len(some))
+	for _, p := range some {
+		in[p] = true
+	}
+	var out []int
+	for _, p := range all {
+		if !in[p] {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 // retryFloor: up to this many silent ports are asked again whatever
 // share of the scan they are.
 const retryFloor = 64
 
+// maxLossPasses is how many times the ports lost to a pace that was too high
+// are asked again.
+const maxLossPasses = 3
+
 // pass connects once to each port, at the scanner's rate, and says how
 // many it asked (all of them unless the threshold of open ports stopped it)
-// and how many of the silent ones timed out rather than failed at once. With
-// track set, the Progress function of ctx hears what is finished while it goes.
-func (s *Scanner) pass(ctx context.Context, host, ip string, ports []int, found func(Open), track bool) (open []Open, silent []int, asked, slow int, err error) {
+// and how many of the silent ones timed out rather than failed at once. lost
+// are those of the silent that timed out while the address answered others:
+// what a pace that was too high costs. With track set, the Progress function
+// of ctx hears what is finished while it goes. answers is how many the address
+// gave in earlier passes.
+func (s *Scanner) pass(ctx context.Context, host, ip string, ports []int, found func(Open), track bool, answers int) (open []Open, silent, lost []int, asked, slow int, err error) {
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 	var stop error
+	var pc *passPace // tells the adaptive pace what the answers say
+	if s.pacer != nil && s.paces(ip) {
+		// Only the first pass moves the pace: a pass over ports a high pace
+		// lost is asked at the pace it came to.
+		pc = &passPace{p: s.pacer, feed: track}
+		pc.ans.Store(int32(answers))
+	}
 	full := func() bool {
 		mu.Lock()
 		defer mu.Unlock()
@@ -475,6 +572,11 @@ func (s *Scanner) pass(ctx context.Context, host, ip string, ports []int, found 
 			silent = append(silent, ports[i])
 			if state == portTimedOut {
 				slow++
+				if pc.timedOut() {
+					lost = append(lost, ports[i])
+				}
+			} else {
+				pc.unanswered()
 			}
 		}
 		if prog != nil {
@@ -483,7 +585,10 @@ func (s *Scanner) pass(ctx context.Context, host, ip string, ports []int, found 
 		mu.Unlock()
 	}
 	work := func(i int) {
-		o, state := s.probe(ctx, host, ip, ports[i])
+		o, state, rtt := s.probe(ctx, host, ip, ports[i])
+		if (state == portOpen || state == portClosed) && ctx.Err() == nil {
+			pc.answered(rtt)
+		}
 		record(i, o, state)
 	}
 	// batched: the batch is connected by one poll on one goroutine, and only
@@ -498,7 +603,11 @@ func (s *Scanner) pass(ctx context.Context, host, ip string, ports []int, found 
 		s.pd.TCPBatchAddrs(ctx, host, ip, ps, addrs, func(j int, c net.Conn, rtt time.Duration, err error) {
 			i := idx[j]
 			if err != nil {
-				if state := s.failed(ctx, err); state == portClosed && prog != nil {
+				state := s.failed(ctx, err)
+				if state == portClosed && ctx.Err() == nil {
+					pc.answered(rtt) // refused: an answer
+				}
+				if state == portClosed && prog != nil {
 					closed = append(closed, i)
 					<-s.conns
 				} else if state == portClosed {
@@ -508,6 +617,7 @@ func (s *Scanner) pass(ctx context.Context, host, ip string, ports []int, found 
 				}
 				return
 			}
+			pc.answered(rtt)
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
@@ -600,7 +710,8 @@ func (s *Scanner) pass(ctx context.Context, host, ip string, ports []int, found 
 			// The pace is taken for the next batch at once: one wake-up of the
 			// timer for all of them, not one each.
 			paid = min(k, len(ports)-i)
-			if err := s.waitN(ctx, ip, paid); err != nil {
+			if err := s.waitConnects(ctx, ip, paid); err != nil {
+				stop = paceStop(err)
 				break
 			}
 		}
@@ -638,15 +749,24 @@ func (s *Scanner) pass(ctx context.Context, host, ip string, ports []int, found 
 	wg.Wait()
 	stopTicks()
 	if prog != nil {
-		prog.last(&mu, asked)
+		prog.last(&mu, asked, ctx.Err() != nil)
 	}
 	if stop == nil {
 		stop = s.proxyDead()
 	}
 	if stop != nil {
-		return open, silent, asked, slow, stop
+		return open, silent, lost, asked, slow, stop
 	}
-	return open, silent, asked, slow, ctx.Err()
+	return open, silent, lost, asked, slow, ctx.Err()
+}
+
+// paceStop is a refused wait for the pace that ends the scan: the kill file
+// or the budget. A context ending is reported by the scan's own ctx.Err.
+func paceStop(err error) error {
+	if errors.Is(err, neterr.ErrBudget) {
+		return err
+	}
+	return nil
 }
 
 // proxyDead is the failure of the proxy a connect met, which ends the scan:
@@ -687,15 +807,17 @@ func refused(err error) bool {
 	return errors.Is(err, syscall.ECONNREFUSED) || strings.Contains(err.Error(), "connection refused")
 }
 
-func (s *Scanner) probe(ctx context.Context, host, ip string, port int) (Open, portState) {
+// probe is one connect, with how long it took to be answered.
+func (s *Scanner) probe(ctx context.Context, host, ip string, port int) (Open, portState, time.Duration) {
 	addr := net.JoinHostPort(ip, strconv.Itoa(port))
 	t0 := time.Now()
 	conn, err := s.pd.TCP(ctx, host, addr)
 	rtt := time.Since(t0)
 	if err != nil {
-		return Open{}, s.failed(ctx, err)
+		return Open{}, s.failed(ctx, err), rtt
 	}
-	return s.probeConn(ctx, host, ip, port, conn, rtt)
+	o, state := s.probeConn(ctx, host, ip, port, conn, rtt)
+	return o, state, rtt
 }
 
 // failed is what a connect that did not connect says of its port: refused
@@ -808,7 +930,8 @@ func (s *Scanner) secondLook(ctx context.Context, host, ip string, open []Open) 
 		if stop != nil || ctx.Err() != nil {
 			continue // the flag is still cleared for the rest
 		}
-		if s.wait(ctx, ip) != nil {
+		if err := s.wait(ctx, ip); err != nil {
+			stop = paceStop(err)
 			continue
 		}
 		if s.Take != nil {

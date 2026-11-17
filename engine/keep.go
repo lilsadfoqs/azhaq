@@ -43,6 +43,10 @@ type keptMeta struct {
 	Method      string           `json:"method,omitempty"`
 	Raw         *fetch.Raw       `json:"raw,omitempty"`
 	Cert        *certfacts.Facts `json:"cert,omitempty"`
+	// HopBodies are the bodies of the hops before the last (the last one's is
+	// the answer's body): each URL of a chain keeps its own answer.
+	HopBodies [][]byte `json:"hop_bodies,omitempty"`
+	HopLines  []string `json:"hop_lines,omitempty"`
 }
 
 // kept counts the answers recorded since KeepResponses, which a resume
@@ -81,6 +85,17 @@ func (k *keeper) Load(raw string) (fetch.Result, bool) {
 	if json.Unmarshal(r.Meta, &m) != nil {
 		return fetch.Result{}, false
 	}
+	for i := range m.Hops {
+		switch {
+		case i == len(m.Hops)-1:
+			m.Hops[i].Body = r.Body
+		case i < len(m.HopBodies):
+			m.Hops[i].Body = m.HopBodies[i]
+		}
+		if i < len(m.HopLines) {
+			m.Hops[i].Line = m.HopLines[i]
+		}
+	}
 	return fetch.Result{
 		RequestURL: m.RequestURL, Status: m.Status, URL: m.URL, Header: m.Header, Body: r.Body,
 		StatusLine: m.StatusLine, Hops: m.Hops, Truncated: m.Truncated, FinalHeader: m.FinalHeader,
@@ -90,11 +105,20 @@ func (k *keeper) Load(raw string) (fetch.Result, bool) {
 
 func (k *keeper) Keep(raw string, res fetch.Result) {
 	kept.Add(1)
-	meta, err := json.Marshal(keptMeta{
+	km := keptMeta{
 		RequestURL: res.RequestURL, Status: res.Status, URL: res.URL, Header: res.Header,
 		StatusLine: res.StatusLine, Hops: res.Hops, Truncated: res.Truncated, FinalHeader: res.FinalHeader,
 		IP: res.IP, Elapsed: res.Elapsed, At: res.At, Method: res.Method, Raw: res.Raw.Scrubbed(), Cert: res.Cert,
-	})
+	}
+	if len(res.Hops) > 1 {
+		for i, h := range res.Hops {
+			km.HopLines = append(km.HopLines, h.Line)
+			if i < len(res.Hops)-1 {
+				km.HopBodies = append(km.HopBodies, h.Body)
+			}
+		}
+	}
+	meta, err := json.Marshal(km)
 	if err != nil {
 		return
 	}

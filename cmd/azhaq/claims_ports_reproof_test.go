@@ -120,7 +120,7 @@ func TestVerifyReadsGoThroughScopeKillFileBudgetAndPace(t *testing.T) {
 }
 
 // -p top-100 asks the top 100 alone, -p default,12346 adds a port to the
-// first pass of the default scan (1040 ports), and the plan counts what is asked.
+// first pass of the default scan (1075 ports), and the plan counts what is asked.
 func TestPortsTopHundredAsksTheTopHundredAndDefaultPlusAPortAsksOneMore(t *testing.T) {
 	count := func(spec string) float64 {
 		t.Helper()
@@ -129,10 +129,10 @@ func TestPortsTopHundredAsksTheTopHundredAndDefaultPlusAPortAsksOneMore(t *testi
 	if got := count("top-100"); got != 4*100 {
 		t.Errorf("-p top-100: the plan counts %v connects, want 400", got)
 	}
-	if got := count("default"); got != 4*1040 {
-		t.Errorf("-p default: the plan counts %v connects, want 4160 (1040 ports on each of 4 addresses)", got)
+	if got := count("default"); got != 4*1075 {
+		t.Errorf("-p default: the plan counts %v connects, want 4300 (1075 ports on each of 4 addresses)", got)
 	}
-	if got := count("default,12346"); got != 4*1041 {
-		t.Errorf("-p default,12346: the plan counts %v connects, want 4164", got)
+	if got := count("default,12346"); got != 4*1076 {
+		t.Errorf("-p default,12346: the plan counts %v connects, want 4304", got)
 	}
 }

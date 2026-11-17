@@ -113,10 +113,16 @@ func services(obs []types.StoredObservation, needVersion bool) []Service {
 			if from != "" {
 				at = from
 			}
+			// The probe's http2 field is true only when the answer spoke HTTP/2:
+			// h2 over TLS (ALPN) on https, an upgrade to h2c on http.
+			h2 := ""
+			if row.HTTP2 {
+				h2 = map[bool]string{true: "ALPN h2", false: "h2c upgrade"}[u.Scheme == "https"]
+			}
 			web := func(product, version, banner, source string) Service {
 				return Service{Host: u.Hostname(), Port: port, Proto: "tcp", Service: u.Scheme,
 					Product: product, Version: version, Origin: u.Scheme + "://" + u.Host,
-					Banner: banner, Source: source, ObservedAt: o.ObservedAt, From: at}
+					Banner: banner, Source: source, ObservedAt: o.ObservedAt, From: at, H2: h2}
 			}
 			// A version only a header gave, through a -proxy that could not be
 			// asked for its own answer, is the proxy's to disown: no advisory
@@ -135,8 +141,8 @@ func services(obs []types.StoredObservation, needVersion bool) []Service {
 			}
 			// What a detection template extracted with a version.
 			for _, d := range row.Detected {
-				if d.Product != "" && d.Version != "" && !foreignVersion(row.Server, d.Product, d.Version) && classify(d.Product, detectedSource(d)) != skip && kept(d.ViaProxy != "") {
-					add(web(d.Product, d.Version, "detection template: "+d.Template, SourceDetect))
+				if d.Product != "" && d.Version != "" && !d.IconOnly() && !foreignVersion(row.Server, d.Product, d.Version) && classify(d.Product, detectedSource(d)) != skip && kept(d.ViaProxy != "") {
+					add(web(d.Product, d.Version, d.Said(), SourceDetect))
 				}
 			}
 		}
@@ -158,16 +164,7 @@ func namedApps(obs []types.StoredObservation, have []Service, addrs map[string]s
 	if len(apps) == 0 {
 		return nil
 	}
-	listenerOf := func(s Service) string {
-		addr := normIP(s.IP)
-		if addr == "" {
-			addr = normIP(s.Host)
-		}
-		if addr == "" {
-			addr = addrs[strings.ToLower(s.Host)]
-		}
-		return listenerKey(addr, s.Host, s.Port, s.Proto)
-	}
+	listenerOf := listenerFn(addrs)
 	by := map[string][]Service{} // listener + product → what the listener's rows name
 	for _, s := range have {
 		k := listenerOf(s) + "|" + identity(s.Product)
@@ -190,6 +187,21 @@ func namedApps(obs []types.StoredObservation, have []Service, addrs map[string]s
 		}
 	}
 	return out
+}
+
+// listenerFn is the key of the listener a service is on: its address (what a
+// name resolved to), port and protocol.
+func listenerFn(addrs map[string]string) func(Service) string {
+	return func(s Service) string {
+		addr := normIP(s.IP)
+		if addr == "" {
+			addr = normIP(s.Host)
+		}
+		if addr == "" {
+			addr = addrs[strings.ToLower(s.Host)]
+		}
+		return listenerKey(addr, s.Host, s.Port, s.Proto)
+	}
 }
 
 // sameName says a listener's row was read from the name's own page: its host,
@@ -353,11 +365,13 @@ func (sig Signal) Judge(adv Advisory, svc Service) (confidence, read string) {
 	// A version was read. Where it stands in the range decides, when
 	// the comparison is exact and no other precondition is named.
 	st, _, why := evalForAdvisory(adv, svc.Product, version)
+	open, _ := splitNeeds(adv.Needs, svc)
+	pre, _ := needsPrecondition(adv.precondition(), open)
 	switch {
 	case st == stateUncertain:
 		return Inferred, fmt.Sprintf("%s; %s states version %s, which %s", what, from, version, "could not be compared with the advisory's range: "+why)
-	case adv.precondition() != "":
-		return Inferred, fmt.Sprintf("%s; %s states version %s, which settles the version but not the precondition (%s), which the read does not show", what, from, version, adv.precondition())
+	case pre != "":
+		return Inferred, fmt.Sprintf("%s; %s states version %s, which settles the version but not the precondition (%s), which the read does not show", what, from, version, pre)
 	case st == stateIn:
 		return Observed, fmt.Sprintf("%s; %s states %s %s, inside the advisory's range", what, from, svc.Product, version)
 	default:
@@ -439,37 +453,22 @@ func NameAddrs(obs []types.StoredObservation) map[string]string {
 // mergeListeners makes one service of each listener (address and port) and
 // product: a name and its address are one listener, and the Server header
 // and a page's technologies that name one product are one service, with the
-// most specific version seen. The host is the same for every product of a
-// listener (its first name, by order), and Names lists every host string the
-// listener was reached by.
+// most specific version seen. Names lists the host strings whose own answer
+// named that product and version, and the host is the first of them: another
+// name of the listener that named something else, or nothing, is not on the
+// row.
 func mergeListeners(in []Service, addrs map[string]string) []Service {
 	for i := range in {
 		if in[i].IP == "" && normIP(in[i].Host) == "" {
 			in[i].IP = addrs[strings.ToLower(in[i].Host)]
 		}
 	}
-	names := map[string][]string{}
-	for _, s := range in {
-		if s.Host == "" {
-			continue
-		}
-		l := s.Listener()
-		if !slices.Contains(names[l], s.Host) {
-			names[l] = append(names[l], s.Host)
-		}
-	}
-	for l := range names {
-		sort.Strings(names[l])
-	}
 	var out []Service
 	at := map[string]int{}
+	group := map[string][]Service{} // listener + product → what each name read
 	for _, s := range in {
-		l := s.Listener()
-		if ns := names[l]; len(ns) > 0 {
-			s.Names = ns
-			s.Host = firstName(ns)
-		}
-		k := l + "|" + identity(s.Product)
+		k := s.Listener() + "|" + identity(s.Product)
+		group[k] = append(group[k], s)
 		i, ok := at[k]
 		if !ok {
 			at[k] = len(out)
@@ -482,6 +481,7 @@ func mergeListeners(in []Service, addrs map[string]string) []Service {
 			win, lose = s, cur
 		}
 		win.Origin = firstNonEmpty(win.Origin, lose.Origin)
+		win.H2 = firstNonEmpty(win.H2, lose.H2)
 		// A version that does not refine the winner is said, not dropped.
 		for _, v := range append([]string{lose.Version}, lose.AlsoSeen...) {
 			if !refines(win.Version, v) && !slices.Contains(win.AlsoSeen, v) {
@@ -490,8 +490,27 @@ func mergeListeners(in []Service, addrs map[string]string) []Service {
 		}
 		out[i] = win
 	}
+	for i, s := range out {
+		var ns []string
+		for _, g := range group[s.Listener()+"|"+identity(s.Product)] {
+			if g.Host != "" && (refines(s.Version, g.Version) || refines(g.Version, s.Version)) && !slices.Contains(ns, g.Host) {
+				ns = append(ns, g.Host)
+			}
+		}
+		sort.Strings(ns)
+		if len(ns) > 0 {
+			out[i].Names = ns
+			out[i].Host = firstName(ns)
+		}
+	}
 	return out
 }
+
+// Refines is refines for the packages that group what each name read.
+func Refines(a, b string) bool { return refines(a, b) }
+
+// FirstName is firstName: the host a listener is called by, a name before an address.
+func FirstName(ns []string) string { return firstName(ns) }
 
 // refines says version a is b, or b with more said after it ("9.4.z-SNAPSHOT"
 // of "9.4"): the same release named more exactly, not another one.

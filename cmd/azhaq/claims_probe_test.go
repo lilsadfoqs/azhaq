@@ -339,7 +339,8 @@ func TestProbeAnswersARouteThatNeverEnds(t *testing.T) {
 	t0 := time.Now()
 	out, _, code := runContract(t, "probe", "-u", srv.URL+"/events", "-req-timeout", "30s")
 	rows := probeRows(t, out)
-	if code != exitOK || len(rows) != 1 || rows[0]["status_code"] != float64(200) || rows[0]["failed"] == true || time.Since(t0) > 6*time.Second {
+	// Well under the 30 s request timeout: a loaded CI runner took 6.7 s.
+	if code != exitOK || len(rows) != 1 || rows[0]["status_code"] != float64(200) || rows[0]["failed"] == true || time.Since(t0) > 12*time.Second {
 		t.Errorf("exit %d after %s: %s", code, time.Since(t0), out)
 	}
 }
@@ -406,5 +407,29 @@ func TestProbePlainRequestThatTimesOutIsAskedOverTLS(t *testing.T) {
 	defer mu.Unlock()
 	if plain != 1 || tls != 1 {
 		t.Errorf("plain %d, TLS %d, want one of each: %s", plain, tls, out)
+	}
+}
+
+// A target the user's own -deny-path holds back is a skip, not a failure: it
+// is named under skipped, sent nothing, and exits as run does.
+func TestProbeDenyPathOnTheOnlyTargetIsASkipNotAFailure(t *testing.T) {
+	t.Chdir(t.TempDir())
+	site := newProbeSite(t)
+	out, rep, code := runContract(t, "probe", "-u", site.URL+"/rest/search", "-deny-path", "^/rest/search$")
+	if code != exitOK || !rep.Complete || rep.Failures != 0 || len(rep.Failed) != 0 {
+		t.Errorf("exit %d complete %v failures %d failed %+v", code, rep.Complete, rep.Failures, rep.Failed)
+	}
+	if rows := probeRows(t, out); len(rows) != 0 {
+		t.Errorf("rows for a target that was held: %s", out)
+	}
+	if len(rep.Skipped) != 1 || !strings.Contains(rep.Skipped[0].Reason, "-deny-path ^/rest/search$") {
+		t.Errorf("skipped %+v: the held target is not named with its rule", rep.Skipped)
+	}
+	if site.count() != 0 {
+		t.Errorf("the site was sent %d requests", site.count())
+	}
+	_, runRep, runCode := runContract(t, "run", "-url", site.URL+"/rest/search", "-deny-path", "^/rest/search$", "-depth", "1", "-no-paths")
+	if runCode != code || runRep.Failures != rep.Failures {
+		t.Errorf("run exits %d with %d failures, probe %d with %d", runCode, runRep.Failures, code, rep.Failures)
 	}
 }

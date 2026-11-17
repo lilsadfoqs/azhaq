@@ -5,7 +5,7 @@ Everything known about one URL, host or name: what found it, what it leads to, e
 ## Synopsis
 
 ```
-azhaq show -db FILE [-json] [-run ID] KEY
+azhaq show -db FILE [-json] [-body] [-run ID] KEY
 ```
 
 ## Examples
@@ -17,13 +17,19 @@ azhaq show -db app.db https://app.example.com/api/users
 # A host, as JSON
 azhaq show -db app.db -json app.example.com
 
+# A listener, as hunt prints it
+azhaq show -db app.db redis.example.com:6379
+
+# A source map the run read: its sources, and the app's own code it carried
+azhaq show -db app.db -body https://app.example.com/static/main.js.map
+
 # A page an earlier run of the workspace saw (the run_id of its summary, or its first 4 characters)
 azhaq show -db app.db -run 3883752b https://app.example.com/
 ```
 
 ## What it does
 
-`azhaq show` looks up KEY in a workspace (`-db`, default the last run's) and prints the entity's row, its links and its observations. KEY is a URL, a host or a name.
+`azhaq show` looks up KEY in a workspace (`-db`, default the last run's) and prints the entity's row, its links and its observations. KEY is a URL, a host or a name, or the label of a listener as `hunt` prints it: `host:port`, the host an address or a name that points to it, with or without the protocol (`10.0.0.9:6379`, `redis.example.com:6379`, `10.0.0.9:6379/tcp`). It opens the port row of that address and port, TCP before UDP when the protocol is not given; a name is mapped to its address through the port row's names and the run's own name to address rows.
 
 A workspace keeps every run, and `show` reads the newest. A KEY the newest run did not see is looked up in the earlier runs, newest first: the run it read is named on stderr and in `-json` (`run`). `-run ID` reads that run only, by the `run_id` of its summary (at least 4 characters); `azhaq query -db FILE -runs` lists them.
 
@@ -43,6 +49,8 @@ The text form prints the entity's row, its links, the answer it kept and its obs
 | `services` | For a hostname: its front pages, with `coverage`, `status`, `title` and the `error` of one that failed. |
 
 An `azhaq-js` observation's payload holds the `found_in` of the page it read.
+
+A source map the run read has an observation of its own, `sourcemap`: see [A source map the run read](#a-source-map-the-run-read).
 
 ## Summary and exit codes
 
@@ -86,6 +94,20 @@ Three kinds of word are tried, in this order:
 - Endpoints a script or a description names are asked before the ones only a path sweep found (`/graphql` before `/graphiql`), so a budget reads their schemas first.
 - A GraphiQL or Playground page (one whose GET served the IDE) is not asked for a schema once another URL of its origin gave one whole by introspection: no POST goes to it, or its recovery stops before the next document, and the summary notes `an IDE page, not asked for its schema`. With no such schema on its origin, the page is recovered as any endpoint is, unless it refuses twice the same way (above). A resume keeps what the run it continues learned.
 
+### A source map the run read
+
+A run that reads a source map, named by a script's comment or by a header, or asked for next to a bundle, stores what it read, so `show MAP_URL` does not leave the map to be fetched again by hand.
+
+- The text form prints a `source map:` block: the status of the answer, the number of sources, how many of the app's own carry their code (`sourcesContent`), the size of the map, and every source's name with `code, N bytes` or `no code`. A library's (`node_modules`, `webpack/`) is marked `[library]`.
+- At most 5,000 names are listed, the rest are counted (`source_files_cut`).
+- The row holds names and sizes only, never the code: a run costs the same however big the map is.
+- With `-sr` the run writes the whole answer of the map to a file, and `query -fields response_file` names it. `-body` prints the code of the app's own files from that file, a block for each, every line escaped as an answer's is. The code of a library's source is not printed.
+- Without `-sr`, `show -body` says in one line that the code was not kept and that `-sr` keeps it. It says so too when the file is gone or was written with `-ob`.
+- `show -json -body` adds `source_code`, a list of `name` and `text`, or `source_code_note` with the reason.
+- The payload of the `sourcemap` observation has `url`, `status`, `body_length`, `sources`, `with_code`, `source_files` (each `name`, `code`, `bytes`, `library`), `source_files_cut` and `guessed`.
+- The map is read once, and `show` reads the workspace and the `-sr` file: no request is sent. A workspace made before 0.28 kept the count and the app's own names only, and `show` says so.
+- The map's row stays a `linked` hint: the run's collector read it, no request of the map's row asked it as a page.
+
 ## Flags
 
 <!-- flags:begin show -->
@@ -93,5 +115,6 @@ Three kinds of word are tried, in this order:
 | --- | --- | --- | --- |
 | `-db` | string |  | the database (default: the last run's) |
 | `-json` | bool |  | one JSON object |
+| `-body` | bool |  | also print the code of a source map's own files, from the answer the run stored with its store-responses option (a run without it keeps none) |
 | `-run` | string |  | the run to read, by the run_id of its summary (default: the newest run of the workspace that has it) |
 <!-- flags:end -->

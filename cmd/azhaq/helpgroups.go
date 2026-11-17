@@ -45,12 +45,12 @@ var helpSpecs = map[string]helpSpec{
 				ob
 				port-exclude-cdn serve worker-token dirs-ac dirs-depth dirs-ext dirs-ic dirs-fc dirs-fl dirs-fr dirs-fs dirs-fw dirs-mc dirs-ml dirs-mr dirs-ms
 				dirs-mw dirs-od dirs-rate dirs-threads facts obs params-chunk params-delay params-include params-method
-				params-all params-per-host params-rate params-stable params-targets params-threads params-timeout
+				params-all params-od params-per-host params-rate params-stable params-targets params-threads params-timeout
 				port-all-ips port-detect port-discover port-ip port-min-rate port-order port-payload port-proxy
 				port-proxy-auth port-rate port-retries port-seed port-skip port-source-ip port-threshold port-timeout
 				port-unnamed port-workers shot-codes shot-format shot-fullpage shot-html shot-js shot-quality
 				shot-size shot-timeout shot-wait urls urls-archive urls-blacklist urls-fc urls-fp urls-from
-				urls-ft urls-keep-junk urls-max urls-mc urls-mt urls-pages urls-pause urls-proxy urls-raw urls-retries
+				urls-ft urls-keep-junk urls-max urls-mc urls-mt urls-pages urls-pause urls-proxy urls-raw urls-raw-urls urls-retries
 				urls-source urls-sources urls-subs urls-to
 			`,
 		},
@@ -62,7 +62,7 @@ var helpSpecs = map[string]helpSpec{
 	},
 	"roles": {
 		groups: []helpGroup{
-			{"Sessions", `role role-cmd role-login login har burp no-anon canary canary-every`},
+			{"Sessions", `role role-cmd role-cmd-direct role-login login har burp no-anon canary canary-every`},
 			{"What to replay", `replay replay-max replay-writes replay-writes-canary replay-writes-field replay-writes-verify dry-writes id refusal allow all`},
 			{"Scope and safety", `deny deny-path seal-to`},
 			{"Pace and network", `rate proxy resolvers`},
@@ -187,7 +187,7 @@ var helpSpecs = map[string]helpSpec{
 	"urls": {
 		groups: []helpGroup{
 			{"Targets and input", `d dL`},
-			{"What to ask", `providers provider-config archive raw subs keep-junk`},
+			{"What to ask", `providers provider-config archive raw raw-urls subs keep-junk`},
 			{"Matchers and filters", `mc mt ft blacklist fp from to`},
 			{"Spot-check the live site", `live live-rate live-max live-proxy send-state-changing`},
 			{"Pace and limits", `urls-max urls-pages urls-pause urls-threads urls-timeout retries timeout rate max-requests`},
@@ -275,7 +275,7 @@ var helpSpecs = map[string]helpSpec{
 			{"Scope and safety", `allow deny deny-path send-state-changing kill-file ledger seal-to`},
 			{"Pace and limits", `rate t d T max-requests timeout urls-timeout`},
 			{"Session and network", `H cookie proxy resolvers`},
-			{"Output", `db json o oB oJ oT silent v strict-exit`},
+			{"Output", `db json o oB od oJ oT silent v strict-exit`},
 		},
 		hidden: map[string]string{
 			"alias": `header`,
@@ -330,7 +330,7 @@ var helpSpecs = map[string]helpSpec{
 	},
 	"show": {
 		groups: []helpGroup{
-			{"", `db json run`},
+			{"", `db json body run`},
 		},
 	},
 	"gallery": {

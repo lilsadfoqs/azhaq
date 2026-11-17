@@ -38,6 +38,10 @@ type Hop struct {
 	URL      string `json:"url"`
 	Status   int    `json:"status"`
 	Location string `json:"location,omitempty"`
+	// Body and Line are what that hop answered (the body read, the status
+	// line); the row of the URL a hop asked is that answer, not the chain's end.
+	Body []byte `json:"-"`
+	Line string `json:"-"`
 }
 
 // UserAgent goes on every request to a target: a current browser's, as
@@ -64,7 +68,7 @@ type Result struct {
 	Status     int // first hop: the requested URL's own status
 	URL        string
 	Header     http.Header // first hop headers
-	Body       []byte      // final body (for title / forms)
+	Body       []byte      // final body (for title / forms); the URL's own is OwnBody
 	StatusLine string
 	Hops       []Hop
 	Truncated  bool
@@ -559,7 +563,10 @@ func DoReq(ctx context.Context, c *http.Client, raw string, rq *Req) (Result, bo
 		sessionSaw(ctx, raw, res)
 	}
 	if err == nil && Tap != nil {
-		Tap(raw, res)
+		Tap(raw, res.Own())
+		for _, hop := range hops {
+			Tap(hop.RequestURL, hop.Own())
+		}
 	}
 	if err == nil && !res.cut && ctx.Err() == nil && Keep != nil {
 		Keep.Keep(key, res)
@@ -627,6 +634,20 @@ func shared(b []byte) []byte {
 	return b
 }
 
+// Own is the answer of the requested URL itself: after a followed redirect,
+// the first hop's status, headers and body, with no later hop's. A row of the
+// URL holds this; the chain's end is the row of the URL it ends at.
+func (r Result) Own() Result {
+	if len(r.Hops) < 2 {
+		return r
+	}
+	o := r
+	o.Body, o.Truncated = r.Hops[0].Body, false
+	o.FinalHeader, o.URL, o.Raw = r.Header, r.RequestURL, nil
+	o.Hops = r.Hops[:1:1]
+	return o
+}
+
 // cacheHopsLocked records each hop URL so a redirect partner is not walked
 // again, and returns the ones it added: a URL asked for itself keeps its
 // own answer.
@@ -662,12 +683,17 @@ func hopResults(res Result) []Result {
 		case i == len(res.Hops)-1:
 			header = res.FinalHeader
 		}
+		body := res.Body
+		if len(rest) > 1 {
+			body = hop.Body // a hop before the end answered with its own body
+		}
 		out = append(out, Result{
 			RequestURL: hop.URL,
 			Status:     rest[0].Status,
+			StatusLine: hop.Line,
 			URL:        res.URL,
 			Header:     header,
-			Body:       res.Body,
+			Body:       body,
 			Hops:       rest,
 			Truncated:  res.Truncated,
 			At:         res.At,
@@ -715,6 +741,8 @@ func do(ctx context.Context, c *http.Client, raw string, rq *Req) (Result, error
 		var prep func(*http.Request)
 		if i == 0 {
 			prep = rq.apply
+		} else {
+			rctx = context.WithValue(rctx, laterHopKey{}, true)
 		}
 		resp, rbody, truncated, reqDump, err := attempt(ctx, rctx, c, method, current, body, prep, kept != nil)
 		if kept != nil && i == 0 {
@@ -744,7 +772,7 @@ func do(ctx context.Context, c *http.Client, raw string, rq *Req) (Result, error
 		if resp.Request != nil && resp.Request.URL != nil {
 			reqURL = resp.Request.URL.String()
 		}
-		hops = append(hops, Hop{URL: reqURL, Status: resp.StatusCode, Location: loc})
+		hops = append(hops, Hop{URL: reqURL, Status: resp.StatusCode, Location: loc, Body: rbody, Line: resp.Status})
 		if firstHeader == nil {
 			firstHeader = resp.Header.Clone()
 			firstLine = resp.Status

@@ -265,7 +265,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	scopeSpec := fs.String("scope", "", "a program's scope: a file (HackerOne CSV, bounty-targets JSON, Burp options, lines) or hackerone, bugcrowd, intigriti, yeswehack")
 	program := fs.String("program", "", "the program to take from a -scope list (handle, name or URL)")
 	probe := fs.Bool("probe", false, "resolve and fetch each target once, print one line per web service and per path -dirs found: no crawl, scripts, path checks, TLS, subdomain or archive sources, and depth 1; a flag that asks for a collector (-dirs, -params, -ports, -ports-udp, -screenshots, -browser, -dns-brute, -permute, -graphql) still runs it, and a flag for what -probe turns off (-fill-forms, -submit-forms, -path-climb, -known-files) is a usage error")
-	noTakeover := fs.Bool("no-takeover", false, "do not check CNAMEs for a takeover: no question is asked about the domain of a CNAME target (without it, a domain outside the scope is not asked either, and the summary says so)")
+	noTakeover := fs.Bool("no-takeover", false, "do not check CNAMEs for a takeover: no question is asked about the domain of a CNAME target (without it, a domain outside the scope is not asked either, and the summary says so); a CNAME to a name that does not exist is still reported as dangling-dns")
 	noTech := fs.Bool("no-tech", false, "skip technology fingerprints (saves about 30 MB of memory)")
 	noFavicon := fs.Bool("no-favicon", false, "do not hash the favicon of front pages (one or two requests less per web service)")
 	urlsOut := fs.String("urls", "", "write every archived URL of the run's domains to this file, one per line")
@@ -289,6 +289,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	var urlsArchive stringsFlag
 	fs.Var(&urlsArchive, "urls-archive", "ask NAME's archive at this address instead of its own, as NAME=URL (a mirror or a test server; repeatable)")
 	urlsRaw := fs.Bool("urls-raw", false, "print the archived URLs exactly as the archives gave them: no normalising, junk filter or deduplication")
+	urlsRawURLs := fs.Bool("urls-raw-urls", false, "print each archived URL as the archive gave it, one line for each distinct string, as gau does (the default drops the default port, so http://example.com:80/x and http://example.com/x are one line); the junk filter still applies, and the workspace keeps the normalised URL with the archive's string beside it")
 	webPorts := fs.String("web-ports", "", "ports to probe on each hostname or address of the list, comma-separated (default: 443, falling back to 80; a target given with no port and nothing there is a note, not a failure)")
 	factsPath := fs.String("facts", "", "JSONL connector facts to ingest before native collectors")
 	execCmd := fs.String("exec", "", "connector command (seeds on stdin, facts on stdout)")
@@ -365,10 +366,10 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	bruteFile := fs.String("dns-brute", "", "resolve WORD.domain for each word in this file instead of the built-in list (active; the targets given are the scope unless -allow). With none, no name is guessed. Without the flag, a domain target that -allow or -scope names is guessed from the built-in list of 5000 common subdomain words (SecLists, MIT), asked at the run's resolvers; -passive and -probe guess nothing unless the flag is given. default asks for the built-in list wherever the flag is needed to turn guessing on")
 	noVhost := fs.Bool("no-vhost", false, "do not try each name found, in scope, as a virtual host on the web services of the addresses in scope (one request for each name, address and port, compared with the address's default answer)")
 	permute := fs.Bool("permute", false, "resolve variations of found names (active; the targets given are the scope unless -allow)")
-	portsSpec := fs.String("ports", "", "scan TCP ports: default (the top 1000 and the usual ports of the services azhaq names and checks, then every TCP port of each address that answered; what a range or an address among the targets gets when no -ports is given), top-100, top-1000, full or a list of ports, ranges and these names, such as 22,80,8000-8100 or top-100,8888 (active; the targets given are the scope unless -allow)")
+	portsSpec := fs.String("ports", "", "scan TCP ports: default (the top 1000 and the usual ports of the services azhaq names and checks, then every TCP port of each address that answered; what a range or an address among the targets gets when no -ports is given), top-100, top-1000, full or a list of ports, ranges and these names, such as 22,80,8000-8100 or top-100,8888; top-100 and top-1000 leave out the service ports that default adds, and the summary names them (active; the targets given are the scope unless -allow)")
 	portsUDP := fs.String("ports-udp", "", "ask UDP ports (active): top (about 25 common ones), full or a list of ports, ranges and these names, such as 53,123,161,1-1024 or top,5354; a reply is open, an ICMP unreachable closed, neither open|filtered (-ports none: UDP only)")
-	portRate := fs.Float64("port-rate", 0, "port connection attempts per second, a ceiling (0: 1500, as naabu's connect scan, and 127.0.0.1 unpaced)")
-	portMinRate := fs.Float64("port-min-rate", 0, "port connection attempts per second at least, as nmap's --min-rate: raises the pace to this when the pace (-port-rate, or the default 1500) is lower, and never lowers it")
+	portRate := fs.Float64("port-rate", 0, "port connection attempts per second, a fixed ceiling (0: adaptive from 1500 up to 20000 as the answers allow, and 127.0.0.1 unpaced)")
+	portMinRate := fs.Float64("port-min-rate", 0, "port connection attempts per second at least, as nmap's --min-rate: raises the pace to this when the pace (-port-rate, or the default's start of 1500) is lower, and never lowers it; at or under 1500 it is the least the default's adaptive pace backs off to")
 	portTimeout := fs.Duration("port-timeout", 0, "wait this long for one port to accept or refuse a connect (0: 1.5s)")
 	fs.Var((*msDuration)(portTimeout), "connect-timeout", "wait this long for one port to accept or refuse a connect, as ports -connect-timeout does: 1500, 1500ms or 2s (default: up to 1.5s, less once an address's answers show its round trip; one given is waited in full; same as -port-timeout; -timeout is the run's limit)")
 	portRetries := fs.Int("port-retries", -1, "more passes over the ports that neither accepted nor refused: n passes over all of them, 0 none (default: one, when few did not answer)")
@@ -402,6 +403,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	paramsAll := fs.Bool("params-all", false, "with -params, also search the pages a request of the run showed to read no name: one that answered as a path that cannot exist does, or refused (401, 403, 405); by default a note lists them")
 	paramsRate := fs.Float64("params-rate", 0, "parameter requests per second per host (0: no limit, as arjun)")
 	paramsThreads := fs.Int("params-threads", 5, "parameter requests in flight per page (as arjun -t); 1 with -params-delay and -params-stable")
+	paramsOd := fs.String("params-od", "", "keep the request and answer that showed each parameter found as a file in this directory, as fuzz -od does (up to 5 MiB of a body; its name is shown with the parameter)")
 	paramsChunk := fs.Int("params-chunk", 0, "names per parameter request at most (0: 500, and about 7.6 KB in a query; fewer where the server refuses a long query)")
 	paramsMethod := fs.String("params-method", "GET", "how names are sent: GET (query), POST (form body), JSON or XML. A body sends requests that may change data on the target: -params-writes must say it is wanted")
 	paramsWrites := fs.Bool("params-writes", false, "let -params-method POST, JSON or XML send bodies (they may change data on the target); needs -allow or -scope, or a single target")
@@ -946,7 +948,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	if *webScheme != "" && *webScheme != "http" && *webScheme != "https" {
 		return usagef("-web-scheme is http or https, got %q", *webScheme)
 	}
-	opts := collectors.Options{Client: client, HTTP: spec, WebPorts: ports, WebScheme: *webScheme, NoTech: *noTech, NoTakeover: *noTakeover, NoFavicon: *noFavicon, Probe: *probe, PortRate: portPace(*rateFlag, *portRate), MaxIPs: *maxIPs, Shots: *shots, Render: *render, KnownFiles: *knownFiles, FillForms: *fillForms, NoMapGuess: *noMapGuess, MaxScripts: *maxScripts, SubmitForms: *submitForms, PathClimb: *pathClimb}
+	opts := collectors.Options{Client: client, HTTP: spec, WebPorts: ports, WebScheme: *webScheme, NoTech: *noTech, NoTakeover: *noTakeover, NoFavicon: *noFavicon, NoProductReads: budgets.Skip["azhaq-paths"], Probe: *probe, PortRate: portPace(*rateFlag, *portRate), MaxIPs: *maxIPs, Shots: *shots, Render: *render, KnownFiles: *knownFiles, FillForms: *fillForms, NoMapGuess: *noMapGuess, MaxScripts: *maxScripts, SubmitForms: *submitForms, PathClimb: *pathClimb}
 	opts.ShotHTML, opts.AskedOnly = *shotHTML, askedOnly
 	if *browserWrites && *shots == "" && !*render {
 		return usagef("-browser-writes lets the pages Chrome loads send writes: give it with -browser or -screenshots")
@@ -1053,7 +1055,15 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		}
 		rep.Notes = append(rep.Notes, "no -ports given, and a range or an address is among the targets: -ports default, the "+plural(len(opts.Ports), "port")+" of the first pass on every address, then every TCP port of each address that answered it (-ports none turns it off)")
 	}
+	portsLeft := leftOutOf(portsEff, opts.Ports, *portSkip)
+	if portsLeft != nil && !out.plan && !out.embedded {
+		rep.PortsLeftOut = portsLeft
+		rep.Notes = append(rep.Notes, portsLeft.line("-ports", portsEff))
+	}
 	portCfg.Escalate = portscan.Escalates(portsEff)
+	if rep.Command == "ports" {
+		portCfg.PortsFlag = "-p"
+	}
 	if portCfg.Escalate && *portsSpec == "" {
 		portCfg.Also = urlPortsOn(seeds)
 	}
@@ -1098,7 +1108,12 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		}
 		opts.Params = paramcol.Options{Words: words, PerHost: *paramsPerHost, Rate: *paramsRate,
 			Threads: *paramsThreads, Chunk: *paramsChunk, Method: method, Writes: *paramsWrites, Include: *paramsInclude,
-			Delay: *paramsDelay, Stable: *paramsStable, Timeout: *paramsTimeout, Targets: targets, All: *paramsAll}
+			Delay: *paramsDelay, Stable: *paramsStable, Timeout: *paramsTimeout, Targets: targets, All: *paramsAll, KeepDir: *paramsOd}
+		if *paramsOd != "" {
+			if err := os.MkdirAll(*paramsOd, 0o750); err != nil {
+				return usagef("-params-od %s: %v", *paramsOd, err)
+			}
+		}
 	}
 	if *dirsFile != "" {
 		var words []string
@@ -1146,6 +1161,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	// A -max-names the user gave also caps the names guessing asks; the default
 	// cap is for the names looked up, and never cuts a wordlist.
 	guessBudget = brutecol.NewBudget(*maxNames)
+	brutecol.ResetPermuteProgress()
 	if guessBudget != nil && *resumeRun != "" {
 		if obs, err := st.Observations(); err == nil {
 			guessBudget.AskedBefore(brutecol.Asked(obs)) // the stopped run's guesses: resume asks the rest
@@ -1200,7 +1216,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	}
 	opts.URLs = urlcol.Options{Keys: urlKeys, Out: *urlsOut, OutFrom: *urlsFrom, Timeout: *urlsTimeout,
 		Apex: !*urlsSubs, Only: splitList(*urlsSources), FirstPath: *urlsFP, Blacklist: splitList(*urlsBlacklist), Proxy: *urlsProxy,
-		MaxPages: *urlsPages, MaxURLs: *urlsMax, Raw: *urlsRaw, KeepJunk: *urlsKeepJunk, OnRow: urlSink}
+		MaxPages: *urlsPages, MaxURLs: *urlsMax, Raw: *urlsRaw, AsGiven: *urlsRawURLs, KeepJunk: *urlsKeepJunk, OnRow: urlSink}
 	if !rules.Empty() {
 		// -allow www.example.org names a host and not its domain: no domain is
 		// queued, so the archives are asked for the host itself.
@@ -1302,13 +1318,14 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		send.paramsBody = m
 	}
 	send.tcpPorts, send.udpPorts = len(opts.Ports), len(opts.UDPPorts)
+	send.portsLeft, send.portsSpec = portsLeft, portsEff
 	send.portList, send.portUDPList, send.portsFor = opts.Ports, opts.UDPPorts, portCfg.PortsFor
 	send.portExcludeCDN, send.portThreshold = portCfg.ExcludeCDN, portCfg.Threshold
 	send.portEscalate, send.portAlso, send.portSkip = portCfg.Escalate, portCfg.Also, portCfg.NoPorts
 	send.portPasses, send.portNameAddrs = portPasses(portCfg.Retries), portNameAddrs(portCfg)
 	send.dirsDepth, send.paramsWrites = *dirsDepth, *paramsWrites
 	send.dirsWordList, send.dirsExtList, send.guessBudget, send.bruteList = opts.Dirs.Words, opts.Dirs.Extensions, *maxNames, opts.BruteWords
-	send.axfr, send.resolvers = out.axfr, resolvers
+	send.axfr, send.resolvers, send.dnsRate = out.axfr, resolvers, *dnsRate
 	send.dirsWords, send.dirsExts, send.paramsN = len(opts.Dirs.Words), len(opts.Dirs.Extensions), len(opts.Params.Words)
 	send.dirsNoCal = opts.Dirs.NoCalibration
 	send.sendState, send.holdGiven = *sendState, holdGivenTargets(*sendState)
@@ -1316,6 +1333,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		send.dirsHold = true
 		send.dirsHeld = dirscol.HeldWords(opts.Dirs.Words, opts.Dirs.Extensions)
 	}
+	send.proxyAsk = asksProxy(*proxyFlag)
 	send.verify = verifyFl.on
 	send.verifyLogins = verifyLoginsFl.on
 	send.advisories = advisoryPlan(advFlags)
@@ -1359,7 +1377,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 			// taken off.
 			send.max, send.by = *daily, "-daily-requests; what today's runs spent is not counted"
 		}
-		plan := buildPlan(cat, seeds, budgets, paths, paceLimits(limitsOf(budgets, *maxRequests, *rateFlag, *timeout, *daily), *rateFlag, *portRate, *portMinRate), send, rep)
+		plan := buildPlan(cat, seeds, budgets, paths, paceLimits(limitsOf(budgets, *maxRequests, *rateFlag, *timeout, *daily), *rateFlag, *portRate, *portMinRate, *hostRate), send, rep)
 		rep.Results, rep.what = len(plan.Targets), "targets"
 		if out.planInto != nil {
 			*out.planInto = plan
@@ -1468,6 +1486,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 			}
 			tasks, _ := st.TasksOf(portcol.Name)
 			snap.Ports, snap.AddrDone, snap.AddrLeft = portProgress(tasks, int(portcol.Settled()-settled0))
+			snap.PermAsked, snap.PermTotal = permuteProgress(st)
 			return snap
 		})
 	}
@@ -1526,7 +1545,7 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 	var estimate *costEstimate
 	var portHosts []string // the names and addresses the port scan was planned on
 	if *resumeRun == "" {
-		pl := planFor(cat, seeds, budgets, paths, paceLimits(limitsOf(budgets, *maxRequests, *rateFlag, *timeout, *daily), *rateFlag, *portRate, *portMinRate), send, rep)
+		pl := planFor(cat, seeds, budgets, paths, paceLimits(limitsOf(budgets, *maxRequests, *rateFlag, *timeout, *daily), *rateFlag, *portRate, *portMinRate, *hostRate), send, rep)
 		ep := pl.Estimate
 		estimate = &ep
 		for _, t := range pl.Targets {
@@ -1804,6 +1823,9 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		opts.Browser.Close()
 	}
 	rep.Requests = egress.Sent()
+	if n := egress.ProxyAskNote(); n != "" {
+		rep.Notes = append(rep.Notes, n)
+	}
 	rep.Notes = append(rep.Notes, egress.ProxyNotes()...)
 	_ = st.AddRunRequests(rep.Requests)
 	rep.estimate, rep.refusedBy = estimate, eng.Refused()
@@ -1908,6 +1930,9 @@ func mapTarget(args []string, rep *report, out *runOut) (runErr error) {
 		}
 	}
 	rep.Notes = append(rep.Notes, wild.notes()...)
+	if !out.plan {
+		rep.Notes = append(rep.Notes, permuteNotes(st, *dnsRate, resolvers, rep.Stopped != "")...)
+	}
 	if n := guessBudget.Held(); n > 0 {
 		rep.Notes = append(rep.Notes, fmt.Sprintf("-max-names %d held back %d guesses: the -w words and -permute variations beyond it were not asked; azhaq resume asks them, up to its own -max-names", *maxNames, n))
 		if rep.Stopped == "" {

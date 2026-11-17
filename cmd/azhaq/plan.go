@@ -88,6 +88,9 @@ type runPlan struct {
 	// reading an API description are not known to a plan, which sends
 	// nothing; a run names those in its summary as it finds them.
 	StateChanging []stateChangeEntry `json:"state_changing,omitempty"`
+	// PortsLeftOut: with -ports top-100 or top-1000, the service ports -ports default asks that it leaves out.
+	PortsLeftOut *portsLeftOut `json:"ports_left_out,omitempty"`
+	portsSpec    string
 }
 
 // planAXFR is the zone transfer of one name, as dns -axfr would go about it.
@@ -132,6 +135,9 @@ type planRequests struct {
 // sendLimits are the options that bound or change what a run sends to its
 // targets.
 type sendLimits struct {
+	portsLeft *portsLeftOut // the service ports a named set narrower than default leaves out
+	portsSpec string        // -ports as given
+
 	max          int64  // requests at most; 0: no cap
 	by           string // the option that set max
 	noFavicon    bool
@@ -152,6 +158,7 @@ type sendLimits struct {
 	submitForms  bool
 	dirs         bool
 	params       bool
+	proxyAsk     bool   // -proxy is an HTTP proxy: asked once for its own answer, which counts like a target's request
 	noThirdParty bool   // -sources none
 	paramsBody   string // POST, JSON or XML when -params sends names in a body
 	tcpPorts     int    // ports asked on each address (-ports)
@@ -164,6 +171,7 @@ type sendLimits struct {
 	verify       bool     // -verify: the enumerated read-only verification checks
 	verifyLogins bool     // -verify-logins: published default logins and unauthenticated reads
 	resolvers    []string // the resolvers named (-resolvers)
+	dnsRate      float64  // -dns-rate: queries a second to each resolver; 0: no pace
 	paramsN      int      // names of -params
 	dirsNoCal    bool     // -dirs-calibrate=false
 	// What the cost estimate counts from: the lists themselves, not their sizes.
@@ -394,6 +402,7 @@ func planTransfers(seeds []types.Seed, b engine.Budgets, resolvers []string) []p
 func planFor(cat *catalog.Catalog, seeds []types.Seed, b engine.Budgets, paths []string, limits map[string]string, send sendLimits, rep *report) runPlan {
 	p := runPlan{Collectors: map[string]string{}, Limits: limits, Skipped: slices.Clone(rep.Skipped)}
 	p.StateChanging = stateChangesOfSeeds(seeds, b.Scope, send.holdGiven)
+	p.PortsLeftOut, p.portsSpec = send.portsLeft, send.portsSpec
 	p.Requests = planRequests{Sources: map[string]int{}, Cap: send.max, scoped: !b.Scope.Empty()}
 	if send.max > 0 {
 		p.Requests.CapBy = send.by
@@ -487,6 +496,9 @@ func planFor(cat *catalog.Catalog, seeds []types.Seed, b engine.Budgets, paths [
 	}
 	p.Estimate = estimateCost(kept, planned, runs, b.Active, env, asks)
 	gets, others := planSends(b, send)
+	if slices.ContainsFunc(p.Estimate.Stages, func(st costStage) bool { return st.Stage == proxyStage }) {
+		others = append(others, "1 request to the -proxy itself, for its own answer: a proxy may forward it to the target, so it spends from -max-requests, waits for the pace and is counted in requests")
+	}
 	switch {
 	case b.Passive && len(others) == 0:
 		p.Sends = []string{"nothing to the targets (-passive): third-party sources and DNS only"}
@@ -649,6 +661,9 @@ func printPlanText(w io.Writer, p runPlan) {
 	for _, s := range p.Sends {
 		fmt.Fprintf(w, "sends: %s\n", s)
 	}
+	if p.PortsLeftOut != nil {
+		fmt.Fprintf(w, "ports left out: %s\n", p.PortsLeftOut.line("-ports", p.portsSpec))
+	}
 	if p.Advisories != "" {
 		fmt.Fprintf(w, "advisories: %s\n", p.Advisories)
 	}
@@ -733,19 +748,32 @@ func limitsOf(b engine.Budgets, maxRequests int64, rate float64, timeout time.Du
 }
 
 // connectTime says how long the connects of an estimate take at their pace,
-// when that is long enough to plan around: the pace is a ceiling, so it is
-// the least time. "" when the pace is none or the time is short.
+// when that is long enough to plan around. A fixed pace is a ceiling, so its
+// time is the least. The default pace is adaptive: it starts at the start
+// rate, so that is the time while the answers give no reason to go faster, and
+// at the ceiling the connects take the least they can. "" when the pace is
+// none or the time is short.
 func connectTime(connects int64, pace string) string {
+	took := func(rate float64) time.Duration {
+		return time.Duration(float64(connects) / rate * float64(time.Second))
+	}
+	var start, ceil float64
+	if n, _ := fmt.Sscanf(pace, "adaptive from %g/s up to %g/s", &start, &ceil); n == 2 && start > 0 && connects > 0 {
+		if took(start) < time.Minute {
+			return ""
+		}
+		return fmt.Sprintf("time: %s connects take about %s at the start rate of %g/s and at least %s at the ceiling of %g/s (the pace rises while answers come back in time and backs off on loss; -rate fixes it)",
+			commas(connects), aboutDuration(took(start)), start, aboutDuration(took(ceil)), ceil)
+	}
 	var rate float64
 	if _, err := fmt.Sscanf(pace, "%g/s", &rate); err != nil || rate <= 0 || connects <= 0 {
 		return ""
 	}
-	took := time.Duration(float64(connects) / rate * float64(time.Second))
-	if took < time.Minute {
+	if took(rate) < time.Minute {
 		return ""
 	}
 	return fmt.Sprintf("time: %s connects at %g/s take at least %s (the pace is a ceiling, so a slow host takes longer; -rate or -min-rate set it)",
-		commas(connects), rate, aboutDuration(took))
+		commas(connects), rate, aboutDuration(took(rate)))
 }
 
 // onlyLoopback says every target is on this machine's loopback, which a scan

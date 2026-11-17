@@ -32,7 +32,9 @@ type paramsRow struct {
 	Params []string
 	Why    map[string]any
 	Values map[string]any
-	Given  []string // the names the page's URL carried: read by the page, not found by the search
+	Given  []string          // the names the page's URL carried: read by the page, not found by the search
+	Files  map[string]string // with -od: the file that holds the request and answer that showed each name
+	Cut    []string          // the names whose file ends at the cap
 }
 
 // cmdParams is arjun: query parameters the pages read, from a list, with
@@ -59,6 +61,7 @@ func cmdParams(args []string) error {
 	passive := fs.Bool("passive", false, "also try the query names the archives (Wayback Machine, Common Crawl, OTX) hold for the pages' domains")
 	outJSON := fs.String("oJ", "", "write results to this file as JSON: {\"URL\": {\"params\": [...], \"method\": \"GET\", \"headers\": {...}}}")
 	outText := fs.String("oT", "", "write results to this file as text, one request per line: URL?name=1234&other=5678")
+	od := fs.String("od", "", "keep the request and answer that showed each parameter found as a file in this directory, as fuzz -od does: one file for each name, named by the md5 of its text (up to 5 MiB of a body; the row names it in resultfile)")
 	outBurp := fs.String("oB", "", "send each page with the names found through this proxy, HOST:PORT (Burp), after the search")
 	given := inherit(fs, "rate=params-rate", "H=header", "cookie", "max-requests", "timeout", "v", "scope", "program", "allow", "deny", "deny-path", "send-state-changing", "ledger", "kill-file", "seal-to", "urls-timeout", "proxy", "resolvers")
 	if err := parse(fs, args); err != nil {
@@ -169,8 +172,17 @@ func cmdParams(args []string) error {
 		why, _ := p["why"].(map[string]any)
 		vals, _ := p["values"].(map[string]any)
 		given := strs(p["given"])
+		files := map[string]string{}
+		if m, ok := p["resultfile"].(map[string]any); ok {
+			for n, f := range m {
+				if s, _ := f.(string); s != "" {
+					files[n] = s
+				}
+			}
+		}
+		cut := strs(p["resultfile_cut"])
 		mu.Lock()
-		rows = append(rows, paramsRow{URL: u, Method: meth, Params: names, Why: why, Values: vals, Given: given})
+		rows = append(rows, paramsRow{URL: u, Method: meth, Params: names, Why: why, Values: vals, Given: given, Files: files, Cut: cut})
 		mu.Unlock()
 		if w.json {
 			row := map[string]any{"url": u, "method": meth, "params": names, "why": why}
@@ -180,9 +192,25 @@ func cmdParams(args []string) error {
 			if len(vals) > 0 {
 				row["values"] = vals
 			}
+			if len(files) > 0 {
+				row["resultfile"] = files
+			}
+			if len(cut) > 0 {
+				row["resultfile_cut"] = cut
+			}
 			w.obj(row)
 		} else {
-			w.line(u + " " + strings.Join(names, ","))
+			line := u + " " + strings.Join(names, ",")
+			if len(files) > 0 {
+				var fl []string
+				for _, n := range names {
+					if f := files[n]; f != "" {
+						fl = append(fl, n+"="+f)
+					}
+				}
+				line += " [Resultfile: " + strings.Join(fl, ", ") + "]"
+			}
+			w.line(line)
 		}
 	}
 	run = []string{"-list", path, "-depth", "1", "-no-tech", "-no-favicon", "-skip", skipAllBut("azhaq-dns", "azhaq-params"),
@@ -190,6 +218,9 @@ func cmdParams(args []string) error {
 		"-params-timeout", fmt.Sprintf("%gs", *timeout)}
 	if *chunk > 0 {
 		run = append(run, "-params-chunk", fmt.Sprint(*chunk))
+	}
+	if *od != "" {
+		run = append(run, "-params-od", *od)
 	}
 	if *delay > 0 {
 		run = append(run, "-params-delay", fmt.Sprintf("%gs", *delay))

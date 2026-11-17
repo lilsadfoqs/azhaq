@@ -34,6 +34,7 @@ type answer struct {
 	hdr                          []string // header names, lower case, sorted
 	loc                          string   // path of the Location header
 	ctype                        string
+	ex                           *exchange // with KeepDir: the request and answer, whole
 }
 
 func answerOf(resp *http.Response, body []byte) answer {
@@ -96,6 +97,11 @@ type search struct {
 	controlled      bool            // see calibrate
 	requests        atomic.Int64
 
+	// check lets one name make the first check of standsApart while the
+	// others wait: groups run side by side and would all find the page
+	// unchecked.
+	check sync.Mutex
+
 	mu sync.Mutex
 	// most and maxBytes are the largest group sent: smaller than any whose
 	// control changed the status (a query too long for the server).
@@ -118,6 +124,10 @@ type search struct {
 	badXML    int    // names that cannot be XML elements
 
 	cut atomic.Bool // an answer body was cut: a stream that never ends, or past 2 MiB
+
+	// kept holds, with KeepDir, the exchange that showed each name that will
+	// be reported; names that are not never get here.
+	kept map[string]*exchange
 }
 
 func newSearch(c *Collector, ctx context.Context, u *url.URL, tg Target) *search {
@@ -156,6 +166,7 @@ type chunk struct {
 
 	mu          sync.Mutex
 	found       map[string]string
+	ex          map[string]*exchange // the exchange that showed each found name (KeepDir)
 	alone, hits int
 	// reads: random names made like the chunk's changed nothing, so the
 	// names that do are read, however many.
@@ -163,12 +174,35 @@ type chunk struct {
 	any          bool // the page answers any name
 	tried, count int  // what said so
 	done         bool // every name was judged
+	// rest are the second halves left unasked while the first was narrowed
+	// (see halves); depth counts the narrowings in flight.
+	rest  [][]string
+	depth int
 }
 
-func (ck *chunk) set(name, why string) {
+func (ck *chunk) set(name, why string, ex *exchange) {
 	ck.mu.Lock()
 	ck.found[name] = why
+	if ex != nil {
+		if ck.ex == nil {
+			ck.ex = map[string]*exchange{}
+		}
+		ck.ex[name] = ex
+	}
 	ck.mu.Unlock()
+}
+
+// drop lets go of the answers of a group whose finds are not reported.
+func (ck *chunk) drop() {
+	ck.mu.Lock()
+	ck.ex = nil
+	ck.mu.Unlock()
+}
+
+func (ck *chunk) exchangeOf(name string) *exchange {
+	ck.mu.Lock()
+	defer ck.mu.Unlock()
+	return ck.ex[name]
 }
 
 func (ck *chunk) has(name string) bool {
@@ -324,6 +358,11 @@ func (s *search) partial(page string, emit func(types.Observation) error, chunks
 func (s *search) gather(page string, chunks []*chunk, found map[string]string) []string {
 	var notes []string
 	for _, ck := range chunks {
+		if ck.idx > s.floodAt || ck.any {
+			ck.drop() // not reported: no body is held for it
+		}
+	}
+	for _, ck := range chunks {
 		if ck.idx > s.floodAt {
 			break
 		}
@@ -337,6 +376,7 @@ func (s *search) gather(page string, chunks []*chunk, found map[string]string) [
 		}
 		for n, why := range ck.found {
 			found[n] = why
+			s.remember(n, ck.exchangeOf(n))
 		}
 	}
 	return notes
@@ -554,6 +594,7 @@ func (s *search) runChunk(ck *chunk) {
 			return
 		}
 		ck.any, ck.count, ck.tried = true, hits, tried
+		ck.drop()
 		s.mu.Lock()
 		s.floodAt = min(s.floodAt, ck.idx)
 		s.mu.Unlock()
@@ -744,6 +785,8 @@ func (s *search) once(base *url.URL, q []pair, quiet bool) (a answer, wait time.
 	}
 	var resp *http.Response
 	var body []byte
+	var sent *http.Request
+	var cutBody bool
 	timeout := s.c.Opts.Timeout
 	refused := 0
 	for {
@@ -760,12 +803,14 @@ func (s *search) once(base *url.URL, q []pair, quiet bool) (a answer, wait time.
 			return answer{}, 0, false
 		}
 		s.requests.Add(1)
+		sent = req
 		rctx, cancel := context.WithTimeout(s.ctx, timeout)
 		resp, err = s.c.Client.Do(req.WithContext(rctx))
 		if err == nil {
 			var cut bool
 			body, cut, err = fetch.ReadAnswer(resp, 2<<20) // a stream that never ends is cut
 			resp.Body.Close()
+			cutBody = cut
 			if cut {
 				s.cut.Store(true)
 			}
@@ -797,6 +842,9 @@ func (s *search) once(base *url.URL, q []pair, quiet bool) (a answer, wait time.
 		return answer{}, 0, false
 	}
 	a = answerOf(resp, body)
+	if s.c.Opts.KeepDir != "" {
+		a.ex = &exchange{req: sent, proto: resp.Proto, status: resp.Status, hdr: resp.Header, body: body, cut: cutBody}
+	}
 	s.mu.Lock()
 	refStatus := s.ref.status
 	s.mu.Unlock()
@@ -1072,8 +1120,23 @@ func (s *search) vary() {
 // to requests that should match alike (calibration, controls, names asked
 // twice) since: the page has shown no variation. What they show is learned for the names that
 // follow: the size and line noise widens, and a body that changed with no
-// name to blame ends the rule that any other body is a change.
+// name to blame ends the rule that any other body is a change. Names that
+// come while the first is still checked wait for it, not repeat it.
 func (s *search) standsApart(name, value string, seen []answer) bool {
+	s.mu.Lock()
+	first := !s.checked && !s.varied
+	s.mu.Unlock()
+	if first {
+		s.check.Lock()
+		s.mu.Lock()
+		done := s.checked || s.varied
+		s.mu.Unlock()
+		if done {
+			s.check.Unlock()
+		} else {
+			defer s.check.Unlock()
+		}
+	}
 	ref := strip(s.ref, nil)
 	ctl := []answer{ref}
 	for i := 0; i < sizeControls; i++ {
@@ -1175,11 +1238,12 @@ func (s *search) named(a answer, q []pair) []string {
 
 // verdict is what a group of names did to the answer.
 type verdict struct {
-	why       string   // what some name of the group changed in the answer
-	reflected []string // names whose value came back more often than a control's
-	named     []string // names the answer prints
-	crowd     bool     // the control changed the status too: the group's size did, not its names
-	ans       answer   // the answer without the values sent
+	why       string    // what some name of the group changed in the answer
+	reflected []string  // names whose value came back more often than a control's
+	named     []string  // names the answer prints
+	crowd     bool      // the control changed the status too: the group's size did, not its names
+	ans       answer    // the answer without the values sent
+	ex        *exchange // the request and answer as they were (KeepDir)
 }
 
 // test sends group with random values, or with value when it is given.
@@ -1231,12 +1295,80 @@ func (s *search) test(group []string, value string) (verdict, bool) {
 	v.why = s.judge(strip(a, q), strip(base, control))
 	v.crowd = s.controlled && base.status != s.ref.status && a.status == base.status
 	v.ans = strip(a, q)
+	v.ex = a.ex
 	return v, true
 }
 
 // narrow finds which names in group change the answer, halving the group
 // while it does.
 func (s *search) narrow(ck *chunk, group []string) {
+	s.round(ck, func() { s.narrowOne(ck, group) })
+}
+
+// round runs one narrowing of ck. When the outermost ends, the second
+// halves it left are settled: names mostly hold none, and one request
+// for all of them is cheaper than one for each level the first half went
+// down.
+func (s *search) round(ck *chunk, f func()) {
+	ck.mu.Lock()
+	ck.depth++
+	ck.mu.Unlock()
+	f()
+	ck.mu.Lock()
+	ck.depth--
+	var rest [][]string
+	if ck.depth == 0 {
+		rest, ck.rest = ck.rest, nil
+	}
+	ck.mu.Unlock()
+	if len(rest) > 0 && !s.halted() {
+		s.round(ck, func() { s.settle(ck, rest, nil, false) })
+	}
+}
+
+// settle asks the halves a first half left: together, and if that changes
+// the answer, the first half of the list, which says where the names are
+// (the other when the first is clean, unasked), then each is narrowed. v
+// is the answer to all of them, when it is known.
+func (s *search) settle(ck *chunk, groups [][]string, v *verdict, inferred bool) {
+	if len(groups) == 0 || s.halted() || ck.flooded() || ck.idx > s.floodedAt() {
+		return
+	}
+	all := slices.Concat(groups...)
+	if v == nil {
+		w, ok := s.ask1(ck, all)
+		if !ok {
+			return
+		}
+		v = &w
+	}
+	if quiet(*v) {
+		return
+	}
+	if len(groups) == 1 || v.why == "" || v.crowd || len(v.reflected) > 0 || len(v.named) > 0 {
+		s.process(ck, all, *v, inferred)
+		return
+	}
+	mid := len(groups) / 2
+	w, ok := s.ask1(ck, slices.Concat(groups[:mid]...))
+	if !ok {
+		return
+	}
+	if quiet(w) {
+		s.settle(ck, groups[mid:], v, true)
+		return
+	}
+	s.settle(ck, groups[:mid], &w, false)
+	s.settle(ck, groups[mid:], nil, false)
+}
+
+// quiet says a group changed nothing: no change, no value or name back.
+func quiet(v verdict) bool {
+	return v.why == "" && !v.crowd && len(v.reflected) == 0 && len(v.named) == 0
+}
+
+// narrowOne asks group, and narrows it if it changes the answer.
+func (s *search) narrowOne(ck *chunk, group []string) {
 	if len(group) == 0 || s.halted() || ck.flooded() || ck.idx > s.floodedAt() {
 		return
 	}
@@ -1269,14 +1401,14 @@ func (s *search) process(ck *chunk, group []string, v verdict, inferred bool) {
 	}
 	for _, n := range v.reflected {
 		if slicesHas(group, n) {
-			ck.set(n, "reflected") // the value that came back names the parameter
+			ck.set(n, "reflected", v.ex) // the value that came back names the parameter
 		}
 	}
 	for _, n := range v.named {
 		// A name the page prints is asked again alone: it must print it again.
 		if slicesHas(group, n) && !ck.has(n) {
 			if w, ok := s.test([]string{n}, ck.fixed); ok && slicesHas(w.named, n) {
-				ck.set(n, "named")
+				ck.set(n, "named", w.ex)
 			}
 		}
 	}
@@ -1303,7 +1435,7 @@ func (s *search) process(ck *chunk, group []string, v verdict, inferred bool) {
 		// Confirm: a single change must show again. (An inferred one has: its
 		// group changed the answer, its other half did not, and alone it
 		// does again.)
-		why, seen := v.why, []answer{v.ans}
+		why, seen, ex := v.why, []answer{v.ans}, v.ex
 		if !inferred || weak(v.why) {
 			w, ok := s.test(group, ck.fixed)
 			if ok && weak(v.why) && w.why == "" && !w.crowd {
@@ -1316,11 +1448,12 @@ func (s *search) process(ck *chunk, group []string, v verdict, inferred bool) {
 				why = w.why
 			}
 			seen = append(seen, w.ans)
+			ex = w.ex // the answer that confirmed it
 		}
 		if weak(why) && !s.standsApart(group[0], ck.fixed, seen) {
 			return
 		}
-		ck.set(group[0], why)
+		ck.set(group[0], why, ex)
 		ck.mu.Lock()
 		ck.hits++
 		ck.mu.Unlock()
@@ -1341,7 +1474,8 @@ const (
 // answers any name (groups of a list run side by side instead). When the
 // first half changes nothing and the group's change was in what the
 // answer holds (not a reflected value or name), the second half has the
-// names: it is split without being asked first.
+// names: it is split without being asked first. When the first half
+// changes the answer, the second is left for settle.
 func (s *search) halves(ck *chunk, group []string, v *verdict) {
 	half := len(group) / 2
 	first, second := group[:half], group[half:]
@@ -1382,7 +1516,18 @@ func (s *search) halves(ck *chunk, group []string, v *verdict) {
 		s.process(ck, second, *v, true)
 		return
 	}
-	s.narrow(ck, second)
+	// The first half changed. If the group's answer is no other than its
+	// first half's, the second adds nothing yet and waits for the others
+	// (see round); if it is, or names are many, it is asked now.
+	ck.mu.Lock()
+	now := len(ck.found) >= minFlood || s.judge(v.ans, w.ans) != ""
+	if !now {
+		ck.rest = append(ck.rest, second)
+	}
+	ck.mu.Unlock()
+	if now {
+		s.narrow(ck, second)
+	}
 }
 
 // tokens counts how often each value of q appears in body, the values

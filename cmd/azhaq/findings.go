@@ -61,6 +61,8 @@ type findingRecord struct {
 	KEV          bool     `json:"kev,omitempty"`  // CISA lists the advisory as exploited
 	CVSS         float64  `json:"cvss,omitempty"` // the score the advisory's record states
 	Precondition string   `json:"precondition,omitempty"`
+	Needs        []string `json:"needs,omitempty"`     // the protocols and features the record's text states that nothing the run saw settles
+	Settled      string   `json:"settled,omitempty"`   // what the run observed that settles one of them
 	Component    string   `json:"component,omitempty"` // what the record's own CNA names as affected, when it is not this product
 	Request      string   `json:"request,omitempty"`
 	Evidence     string   `json:"evidence"`
@@ -394,10 +396,20 @@ func findingsMarkdown(set findingSet) []byte {
 	}
 	if len(set.Identifications) > 0 {
 		fmt.Fprintf(&b, "## Identifications (%d)\n\n", issueCount(set.Identifications))
+		// The advisories of one service that no read settled are one bullet,
+		// in the section of the strongest label among them.
+		home := map[string]string{}
+		for _, f := range set.Identifications {
+			if k := serviceOf(f); foldedAdvisory(f) {
+				if _, ok := home[k]; !ok {
+					home[k] = f.Label
+				}
+			}
+		}
 		for _, label := range []string{verify.Proved, verify.VersionRead, verify.VersionOnly, verify.Conditional} {
 			var rs []findingRecord
 			for _, f := range set.Identifications {
-				if f.Label == label {
+				if (foldedAdvisory(f) && home[serviceOf(f)] == label) || (!foldedAdvisory(f) && f.Label == label) {
 					rs = append(rs, f)
 				}
 			}
@@ -407,7 +419,7 @@ func findingsMarkdown(set findingSet) []byte {
 			title := map[string]string{verify.Proved: "Proved", verify.VersionRead: "Version-read", verify.VersionOnly: "Version-only", verify.Conditional: "Conditional"}[label]
 			fmt.Fprintf(&b, "### %s (%d)\n\n", title, issueCount(rs))
 			for _, r := range groupAdvisoryFindings(rs) {
-				b.WriteString(findingMarkdown(r.rec, r.ids...))
+				b.WriteString(findingMarkdown(r.rec, r.group...))
 			}
 			b.WriteString("\n")
 		}
@@ -435,7 +447,7 @@ func findingsMarkdown(set findingSet) []byte {
 // where it is, what settles it, and the command that produced it; under it,
 // the proof: when it was observed, the request, the excerpt of the answer
 // and the command that shows it without azhaq (a lead: the check instead).
-func findingMarkdown(r findingRecord, ids ...string) string {
+func findingMarkdown(r findingRecord, group ...findingRecord) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "- **%s** %s", r.Severity, r.Kind)
 	where := r.URL
@@ -458,16 +470,16 @@ func findingMarkdown(r findingRecord, ids ...string) string {
 	if r.Source != "" {
 		b.WriteString(", named by " + r.Source)
 	}
-	if len(ids) > 1 {
-		// The advisories of one service and label are one bullet: the first
-		// ten (exploited and best scored first), and how many more. The
-		// JSON Lines of the findings list every one.
-		b.WriteString(" — " + advisory.CollapseIDs(ids, findingMDIDs) + " (" + plural(len(ids), "advisory") + ")")
+	if len(group) > 1 {
+		b.WriteString(" — " + advisoryFold(group))
 	} else if r.AdvisoryID != "" {
 		b.WriteString(" — " + r.AdvisoryID)
 	}
 	if r.Precondition != "" {
 		b.WriteString("; precondition: " + r.Precondition)
+	}
+	if r.Settled != "" {
+		b.WriteString("; settled: " + r.Settled)
 	}
 	if r.Component != "" {
 		b.WriteString("; the record's own CNA names " + r.Component + ", not " + r.Product)
@@ -477,6 +489,9 @@ func findingMarkdown(r findingRecord, ids ...string) string {
 	}
 	if len(r.Also) > 0 {
 		b.WriteString("; the same answer at " + strings.Join(r.Also, ", "))
+	}
+	if on := otherNames(r); len(on) > 0 {
+		b.WriteString("; also answered as " + strings.Join(on, ", "))
 	}
 	b.WriteString("; evidence: " + r.Evidence)
 	if r.Command != "" {
@@ -506,8 +521,36 @@ func findingMarkdown(r findingRecord, ids ...string) string {
 	return b.String()
 }
 
-// findingMDIDs is how many advisory ids a Markdown bullet lists before "and N more".
-const findingMDIDs = 10
+// findingLabels are the labels of the advisory records, in the order they are told.
+var findingLabels = []string{verify.Proved, verify.VersionRead, verify.VersionOnly, verify.Conditional}
+
+// advisoryFold tells the advisories of one service as one bullet: the first
+// advisory.TopAdvisories (the order the records are in: label, the product's
+// own before another component's, exploited, best scored), each with its
+// label, and the others counted by label. The JSON Lines list every one.
+func advisoryFold(group []findingRecord) string {
+	var top []string
+	rest := map[string]int{}
+	for i, g := range group {
+		if i >= advisory.TopAdvisories {
+			rest[g.Label]++
+			continue
+		}
+		tags := []string{advisory.LabelTag(g.Label, g.Needs)}
+		if g.KEV {
+			tags = append(tags, "KEV")
+		}
+		if g.CVSS > 0 {
+			tags = append(tags, fmt.Sprintf("CVSS %.1f", g.CVSS))
+		}
+		top = append(top, fmt.Sprintf("%s (%s)", g.AdvisoryID, strings.Join(tags, ", ")))
+	}
+	s := strings.Join(top, ", ")
+	if more := len(group) - len(top); more > 0 {
+		s += fmt.Sprintf(" and %d more: %s", more, advisory.CountLabels(rest, findingLabels))
+	}
+	return s + " (" + plural(len(group), "advisory") + ")"
+}
 
 // targetOf is the host:port of a record, as an advisory lead names its target.
 func targetOf(r findingRecord) string {
@@ -518,15 +561,26 @@ func targetOf(r findingRecord) string {
 }
 
 // groupedFinding is a bullet of the Markdown findings: a record, and, when
-// it stands for the advisories of one service, their ids.
+// it stands for the advisories of one service, all of them (it first).
 type groupedFinding struct {
-	rec findingRecord
-	ids []string
+	rec   findingRecord
+	group []findingRecord
+}
+
+// serviceOf is the listener, product and version an advisory record is of.
+func serviceOf(r findingRecord) string {
+	return r.Host + "|" + strconv.Itoa(r.Port) + "|" + r.Product + "|" + r.Version
+}
+
+// foldedAdvisory says a record is an advisory a range match left open: no
+// read settled it, so it is one issue with the others of its service.
+func foldedAdvisory(r findingRecord) bool {
+	return r.AdvisoryID != "" && !r.checked && r.Lead != ""
 }
 
 // groupAdvisoryFindings makes one bullet of the advisory records of one
-// service (in a section of one label), in the order they come: the first
-// record stands for the others, whose ids it lists.
+// service that a read settled alike (or none did), in the order they come: the
+// first record stands for the others.
 func groupAdvisoryFindings(rs []findingRecord) []groupedFinding {
 	var out []groupedFinding
 	at := map[string]int{}
@@ -535,14 +589,14 @@ func groupAdvisoryFindings(rs []findingRecord) []groupedFinding {
 			out = append(out, groupedFinding{rec: r})
 			continue
 		}
-		k := r.Host + "|" + strconv.Itoa(r.Port) + "|" + r.Product + "|" + r.Version
+		k := serviceOf(r) + "|" + strconv.FormatBool(r.checked)
 		i, ok := at[k]
 		if !ok {
 			at[k] = len(out)
-			out = append(out, groupedFinding{rec: r, ids: []string{r.AdvisoryID}})
+			out = append(out, groupedFinding{rec: r, group: []findingRecord{r}})
 			continue
 		}
-		out[i].ids = append(out[i].ids, r.AdvisoryID)
+		out[i].group = append(out[i].group, r)
 	}
 	return out
 }
@@ -633,7 +687,7 @@ func listenerRecords(obs []types.StoredObservation, command string) (set finding
 			Kind: r.Kind, Label: r.Label, Severity: r.Severity, Host: r.Host, Port: r.Port,
 			URL: r.URL, Product: r.Product, Version: r.Version, AdvisoryID: r.AdvisoryID,
 			AdvisoryURL: r.AdvisoryURL, Precondition: r.Precondition, Request: r.Request,
-			Evidence: r.Evidence, Command: r.Command, Collector: "azhaq-verify", Proof: r.Proof,
+			Evidence: r.Evidence, Command: r.Command, Collector: "azhaq-verify", Proof: r.Proof, names: r.Names,
 		}
 		if r.AdvisoryID != "" {
 			rec.Lead = leadName(r.Target, r.Product)
@@ -685,6 +739,7 @@ func listenerRecords(obs []types.StoredObservation, command string) (set finding
 			URL: r.URL, Product: r.Product, Version: r.Version, AdvisoryID: r.AdvisoryID,
 			AdvisoryURL: r.AdvisoryURL, Precondition: r.Precondition, Request: r.Request,
 			Evidence: r.Evidence, Command: command, Collector: "azhaq-advisories", KEV: lead.KEV, CVSS: lead.CVSS, Component: lead.Component,
+			Needs: lead.Needs, Settled: lead.Settled,
 			Lead: leadName(r.Target, r.Product), checked: lead.Confidence == advisory.Observed || lead.Confidence == advisory.Inferred,
 			names: lead.Names,
 		}
@@ -736,6 +791,10 @@ func listenerRecords(obs []types.StoredObservation, command string) (set finding
 			continue
 		}
 		add(rec)
+	}
+	// A product only an icon's hash named: a lead, with no version or advisory.
+	for _, l := range advisory.IconLeads(obs) {
+		add(iconLeadRecord(l, command))
 	}
 	return set, addrs, hashes
 }

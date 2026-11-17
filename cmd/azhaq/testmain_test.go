@@ -19,6 +19,9 @@ func TestMain(m *testing.M) {
 	if os.Getenv("AZHAQ_HOME") == "" {
 		os.Setenv("AZHAQ_HOME", "none")
 	}
+	if os.Getenv("AZHAQ_TEST_AS_CMD") == "1" {
+		os.Exit(proxyCmdHelper(os.Args[1:])) // a -role-cmd command that honours the proxy variables
+	}
 	if os.Getenv("AZHAQ_TEST_AS_MAIN") == "1" {
 		if names := os.Getenv("AZHAQ_TEST_SUBS_NAMES"); names != "" {
 			// A subs run in its own process, on one source that gives these names.

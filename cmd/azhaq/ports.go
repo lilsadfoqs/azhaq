@@ -94,7 +94,7 @@ func cmdPorts(args []string) error {
 	fs.Var(&hosts, "host", "hosts, addresses, CIDR ranges, AS numbers or host:port, comma-separated and repeatable")
 	list := onceString(fs, "l", "file of targets (- for stdin)")
 	noStdin := fs.Bool("no-stdin", false, "do not read targets from stdin when none is given")
-	spec := fs.String("p", portscan.DefaultName, "ports: default (the top 1000 and the usual ports of the services azhaq names and checks, then every TCP port of each host that answered), top-100, top-1000, full, - (all), none, or a list of ports, ranges and these names, such as 22,80,8000-8100 or top-100,8888; u:53 is a UDP port")
+	spec := fs.String("p", portscan.DefaultName, "ports: default (the top 1000 and the usual ports of the services azhaq names and checks, then every TCP port of each host that answered), top-100, top-1000, full, - (all), none, or a list of ports, ranges and these names, such as 22,80,8000-8100 or top-100,8888; u:53 is a UDP port; top-100 and top-1000 leave out the service ports that default adds, and the summary names them")
 	topPorts := fs.String("tp", "", "the most common TCP ports: 100, 1000 or full (added to -p)")
 	portsFile := fs.String("pf", "", "file of ports, one spec a line (added to -p)")
 	exclPorts := fs.String("ep", "", "ports not to scan: a list or a file")
@@ -113,7 +113,7 @@ func cmdPorts(args []string) error {
 	fs.IntVar(retries, "max-retries", -1, "same as -retries")
 	workers := fs.Int("workers", 0, "connects in flight at once, over all hosts (default: as many as the rate allows, up to 20000)")
 	fs.IntVar(workers, "c", 0, "same as -workers")
-	minRate := fs.Float64("min-rate", 0, "connects per second at least, as nmap's --min-rate: raises the pace to this when the pace (-rate, or the default 1500) is lower, and never lowers it")
+	minRate := fs.Float64("min-rate", 0, "connects per second at least, as nmap's --min-rate: raises the pace to this when the pace (-rate, or the default's start of 1500) is lower, and never lowers it; at or under 1500 it is the least the default's adaptive pace backs off to")
 	tmpl := fs.Int("T", -1, "timing template, 0 (paranoid) to 5 (insane); sets -rate, -connect-timeout and -retries where they are not given; 3 is the default")
 	order := fs.String("order", "random", "the order a host's ports are asked in: random (the likeliest ports first, each tier shuffled) or asc")
 	seed := fs.Int64("seed", 0, "make the random port order repeat (default: a new one each run)")
@@ -290,6 +290,10 @@ func cmdPorts(args []string) error {
 	if len(ports) == 0 && len(udpPorts) == 0 && !*sn {
 		return usagef("no ports to scan: -p, -tp and -pf with -ep left none")
 	}
+	if left := leftOutOf(strings.Join(tcpSpec, ","), ports, exSpec); left != nil {
+		rep.PortsLeftOut = left
+		rep.Notes = append(rep.Notes, left.line("-p", strings.Join(tcpSpec, ",")))
+	}
 
 	// A scope that keeps every host:port out is refused before anything is
 	// sent, as for a host outside it; one that keeps some out holds them back.
@@ -329,8 +333,8 @@ func cmdPorts(args []string) error {
 		tcp = strings.Join(tcpSpec, ",")
 	}
 	run := []string{"-list", path, "-passive", "-depth", "0", "-skip", skipAllBut("azhaq-ports"), "-ports", tcp}
-	if escalating && exSpec != "" {
-		run = append(run, "-port-skip", exSpec)
+	if exSpec != "" {
+		run = append(run, "-port-skip", exSpec) // the notes of a quiet host leave out what -ep kept out
 	}
 	if !advFlags.on {
 		run = append(run, "-advisories=false")

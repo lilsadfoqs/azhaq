@@ -69,6 +69,8 @@ type IndexVuln struct {
 	Ranges   []string `json:"r,omitempty"`
 	Versions []string `json:"v,omitempty"`
 	Comp     []string `json:"n,omitempty"` // what the record's own CNA names as affected, when none of it is this product (the first two)
+	AV       string   `json:"a,omitempty"` // AVLocal or AVPhysical: the record's CVSS attack vector, when it is not one the network reaches
+	Needs    []Need   `json:"q,omitempty"` // the protocols and features the record's own text says the flaw needs, each with its quote
 }
 
 // IndexProduct is one product line of an index.
@@ -314,13 +316,26 @@ const (
 	CondEdition  = 2 // its ranges are for a named edition or target, or for several
 )
 
+// The attack vectors an index record carries: the flaw is not reachable
+// over the network from the listener (CVSS AV:L, AV:P).
+const (
+	AVLocal    = "L"
+	AVPhysical = "P"
+)
+
 const (
 	condPlatformText = "the advisory's configuration also names a platform or component the product runs with (see the advisory): azhaq does not see it"
 	condEditionText  = "the advisory gives its ranges for a named edition or target of the product, or for several (a long-term release line and the weekly one): the version seen does not say which the service is"
 )
 
-func condText(c int, plat []string) string {
+func condText(c int, plat []string, av string) string {
 	var t []string
+	switch av {
+	case AVLocal:
+		t = append(t, "needs local access: the record's CVSS attack vector is local (AV:L): by that score the network alone does not reach it")
+	case AVPhysical:
+		t = append(t, "needs physical access: the record's CVSS attack vector is physical (AV:P): by that score the network alone does not reach it")
+	}
 	if c&CondPlatform != 0 {
 		if len(plat) > 0 {
 			t = append(t, "the advisory's configuration also names what the product runs on or with ("+strings.Join(plat, ", ")+"): azhaq does not see whether the service does")
@@ -338,10 +353,11 @@ func condText(c int, plat []string) string {
 // ranges and versions the record lists, as the OSV shape Match reads.
 func advisoryOf(cpe string, v IndexVuln) (Advisory, Affected, error) {
 	adv := Advisory{ID: v.ID, References: []Reference{{Type: "WEB", URL: NVDURL(v.ID)}}}
-	if v.Cond != 0 {
-		adv.Precondition = condText(v.Cond, v.Plat)
+	if v.Cond != 0 || v.AV != "" {
+		adv.Precondition = condText(v.Cond, v.Plat, v.AV)
 	}
 	adv.Component = strings.Join(v.Comp, ", ")
+	adv.Needs = v.Needs
 	aff := Affected{Package: Package{Name: cpe, Ecosystem: "cpe"}, Versions: v.Versions}
 	for _, r := range v.Ranges {
 		rng, err := ParseIndexRange(r)

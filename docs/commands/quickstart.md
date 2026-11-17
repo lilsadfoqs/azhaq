@@ -68,13 +68,13 @@ The summary and the exit codes are `run`'s: see [run](run.md#summary-and-exit-co
 | `-skip` | string |  | collectors not to run, comma-separated: azhaq-ports or ports, subs for the subdomain collector (azhaq plan lists them); a name that is none is an error; azhaq resume leaves out the tasks the run kept for them |
 | `-dirs` | string |  | guess paths on each web service from this wordlist, or @common for the built-in one (active; the targets given are the scope unless -allow) |
 | `-params` | string |  | find query parameters pages read, from this wordlist or small, medium or large for a built-in one (active; the targets given are the scope unless -allow) |
-| `-ports` | string |  | scan TCP ports: default (the top 1000 and the usual ports of the services azhaq names and checks, then every TCP port of each address that answered; what a range or an address among the targets gets when no -ports is given), top-100, top-1000, full or a list of ports, ranges and these names, such as 22,80,8000-8100 or top-100,8888 (active; the targets given are the scope unless -allow) |
+| `-ports` | string |  | scan TCP ports: default (the top 1000 and the usual ports of the services azhaq names and checks, then every TCP port of each address that answered; what a range or an address among the targets gets when no -ports is given), top-100, top-1000, full or a list of ports, ranges and these names, such as 22,80,8000-8100 or top-100,8888; top-100 and top-1000 leave out the service ports that default adds, and the summary names them (active; the targets given are the scope unless -allow) |
 | `-ports-on` | string, repeatable |  | scan only these ports on a host: HOST=22,80 |
 | `-ports-udp` | string |  | ask UDP ports (active): top (about 25 common ones), full or a list of ports, ranges and these names, such as 53,123,161,1-1024 or top,5354; a reply is open, an ICMP unreachable closed, neither open\|filtered (-ports none: UDP only) |
 | `-dns-brute` | string |  | resolve WORD.domain for each word in this file instead of the built-in list (active; the targets given are the scope unless -allow). With none, no name is guessed. Without the flag, a domain target that -allow or -scope names is guessed from the built-in list of 5000 common subdomain words (SecLists, MIT), asked at the run's resolvers; -passive and -probe guess nothing unless the flag is given. default asks for the built-in list wherever the flag is needed to turn guessing on |
 | `-permute` | bool |  | resolve variations of found names (active; the targets given are the scope unless -allow) |
 | `-no-vhost` | bool |  | do not try each name found, in scope, as a virtual host on the web services of the addresses in scope (one request for each name, address and port, compared with the address's default answer) |
-| `-no-takeover` | bool |  | do not check CNAMEs for a takeover: no question is asked about the domain of a CNAME target (without it, a domain outside the scope is not asked either, and the summary says so) |
+| `-no-takeover` | bool |  | do not check CNAMEs for a takeover: no question is asked about the domain of a CNAME target (without it, a domain outside the scope is not asked either, and the summary says so); a CNAME to a name that does not exist is still reported as dangling-dns |
 | `-graphql` | bool |  | read the schema of GraphQL endpoints with an introspection query (active; the targets given are the scope unless -allow) |
 | `-graphql-wordlist` | string |  | extra probe words (one per line), tried and recombined with the built-in ones when a GraphQL endpoint's introspection is off and its schema has to be recovered from validation errors |
 | `-known-files` | string |  | ask each web service only for its robots.txt and sitemaps and read every entry (all, robotstxt or sitemapxml); replaces the 51 built-in paths |
@@ -218,7 +218,7 @@ The summary and the exit codes are `run`'s: see [run](run.md#summary-and-exit-co
 | `-strict-exit` | bool |  | exit 3 for any failure, a target among many included (the rule before 0.15); without it a run that did its job exits 0 and its summary counts and lists the failures |
 
 <details>
-<summary>Other names, flags accepted with no effect and rarely used flags (83)</summary>
+<summary>Other names, flags accepted with no effect and rarely used flags (85)</summary>
 
 | Flag | Type | Default | Meaning | Kind |
 | --- | --- | --- | --- | --- |
@@ -249,6 +249,7 @@ The summary and the exit codes are `run`'s: see [run](run.md#summary-and-exit-co
 | `-params-delay` | duration |  | wait before each parameter request, one at a time (arjun -d) | rarely needed |
 | `-params-include` | string |  | sent with every parameter request: a query for GET; for a body a form, a JSON object or XML, or a template with $arjun$ where the names go | rarely needed |
 | `-params-method` | string | `GET` | how names are sent: GET (query), POST (form body), JSON or XML. A body sends requests that may change data on the target: -params-writes must say it is wanted | rarely needed |
+| `-params-od` | string |  | keep the request and answer that showed each parameter found as a file in this directory, as fuzz -od does (up to 5 MiB of a body; its name is shown with the parameter) | rarely needed |
 | `-params-per-host` | int | `20` | pages searched for parameters per host | rarely needed |
 | `-params-rate` | float |  | parameter requests per second per host (0: no limit, as arjun) | rarely needed |
 | `-params-stable` | bool |  | one parameter request at a time, 3 to 9 s apart, and 30 s after a refused connection (arjun --stable) | rarely needed |
@@ -260,12 +261,12 @@ The summary and the exit codes are `run`'s: see [run](run.md#summary-and-exit-co
 | `-port-discover` | string |  | ask first whether an address is up, by a connect to 80 and 443: first (scan the ones that answer) or only (list them, scan nothing) | rarely needed |
 | `-port-exclude-cdn` | bool |  | ask a CDN or WAF address only ports 80, 443, 8080 and 8443 (naabu -ec asks 80 and 443; this adds 8080 and 8443) | rarely needed |
 | `-port-ip` | string |  | the address families of a name to scan: 4 or 6 (default both) | rarely needed |
-| `-port-min-rate` | float |  | port connection attempts per second at least, as nmap's --min-rate: raises the pace to this when the pace (-port-rate, or the default 1500) is lower, and never lowers it | rarely needed |
+| `-port-min-rate` | float |  | port connection attempts per second at least, as nmap's --min-rate: raises the pace to this when the pace (-port-rate, or the default's start of 1500) is lower, and never lowers it; at or under 1500 it is the least the default's adaptive pace backs off to | rarely needed |
 | `-port-order` | string | `random` | the order a host's ports are asked in: random (the likeliest ports first, each tier shuffled) or asc | rarely needed |
 | `-port-payload` | string |  | send this to each open TCP port before reading what it says (\r and \n are CR and LF) | rarely needed |
 | `-port-proxy` | string |  | connect to TCP ports through this SOCKS5 proxy (host:port); a port is then asked its banner only, and UDP is not sent | rarely needed |
 | `-port-proxy-auth` | string |  | user:password for -port-proxy | rarely needed |
-| `-port-rate` | float |  | port connection attempts per second, a ceiling (0: 1500, as naabu's connect scan, and 127.0.0.1 unpaced) | rarely needed |
+| `-port-rate` | float |  | port connection attempts per second, a fixed ceiling (0: adaptive from 1500 up to 20000 as the answers allow, and 127.0.0.1 unpaced) | rarely needed |
 | `-port-retries` | int | `-1` | more passes over the ports that neither accepted nor refused: n passes over all of them, 0 none (default: one, when few did not answer) | rarely needed |
 | `-port-seed` | int |  | make the random port order repeat (0: a new one each run) | rarely needed |
 | `-port-skip` | string |  | TCP ports never asked, in any pass: a list as -ports reads it, such as 25,9000-9010 (what ports -ep passes) | rarely needed |
@@ -299,6 +300,7 @@ The summary and the exit codes are `run`'s: see [run](run.md#summary-and-exit-co
 | `-urls-pause` | duration |  | pause between the requests of one archive (default: none, as gau asks; an archive that answers 429 or 503 is waited out) | rarely needed |
 | `-urls-proxy` | string |  | send the archive requests through this proxy: http://HOST:PORT, https:// or socks5:// | rarely needed |
 | `-urls-raw` | bool |  | print the archived URLs exactly as the archives gave them: no normalising, junk filter or deduplication | rarely needed |
+| `-urls-raw-urls` | bool |  | print each archived URL as the archive gave it, one line for each distinct string, as gau does (the default drops the default port, so http://example.com:80/x and http://example.com/x are one line); the junk filter still applies, and the workspace keeps the normalised URL with the archive's string beside it | rarely needed |
 | `-urls-retries` | int |  | times an archive request is asked again after a 429, 503 or network error, after its Retry-After (seconds or a date, however long) or 2, 5, 10, 20, then 30 s; 0 makes the first refusal final (default: a 429 or 503 is asked again until the archive's time, -urls-timeout, or the run's is spent, a network error 3 times; a wait longer than the time left ends the request at once, with the reason) | rarely needed |
 | `-urls-source` | bool |  | with -urls: each line is the URL, then after tabs the archive that gave it, when it captured it, and the junk class and reason of a URL that looks like noise | rarely needed |
 | `-urls-sources` | string |  | ask only these archives, comma-separated: wayback, commoncrawl, otx, urlscan, arquivo (default: all) | rarely needed |
