@@ -45,7 +45,7 @@ var helpSpecs = map[string]helpSpec{
 				ob
 				port-exclude-cdn serve worker-token dirs-ac dirs-depth dirs-ext dirs-ic dirs-fc dirs-fl dirs-fr dirs-fs dirs-fw dirs-mc dirs-ml dirs-mr dirs-ms
 				dirs-mw dirs-od dirs-rate dirs-threads facts obs params-chunk params-delay params-include params-method
-				params-all params-per-host params-rate params-stable params-targets params-threads params-timeout
+				params-all params-od params-per-host params-rate params-stable params-targets params-threads params-timeout
 				port-all-ips port-detect port-discover port-ip port-min-rate port-order port-payload port-proxy
 				port-proxy-auth port-rate port-retries port-seed port-skip port-source-ip port-threshold port-timeout
 				port-unnamed port-workers shot-codes shot-format shot-fullpage shot-html shot-js shot-quality
@@ -275,7 +275,7 @@ var helpSpecs = map[string]helpSpec{
 			{"Scope and safety", `allow deny deny-path send-state-changing kill-file ledger seal-to`},
 			{"Pace and limits", `rate t d T max-requests timeout urls-timeout`},
 			{"Session and network", `H cookie proxy resolvers`},
-			{"Output", `db json o oB oJ oT silent v strict-exit`},
+			{"Output", `db json o oB od oJ oT silent v strict-exit`},
 		},
 		hidden: map[string]string{
 			"alias": `header`,
@@ -330,7 +330,7 @@ var helpSpecs = map[string]helpSpec{
 	},
 	"show": {
 		groups: []helpGroup{
-			{"", `db json run`},
+			{"", `db json body run`},
 		},
 	},
 	"gallery": {
