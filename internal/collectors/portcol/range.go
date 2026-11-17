@@ -576,6 +576,11 @@ func (c *Collector) runPrefix(ctx context.Context, seed types.Seed, emit func(ty
 	}
 	rng := counts()
 	rng["range"], rng["prefix"], rng["addresses"], rng["scanned"], rng["open"] = true, pf.String(), len(addrs)-out, len(c.portsOf("")), []int{}
+	if quiet := len(addrs) - out - down - withOpen; quiet > 0 {
+		if gap := c.gapOf(c.portsOf("")); len(gap) > 0 {
+			rng["note"] = portscan.QuietNote(c.flag(), len(c.portsOf("")), len(addrs)-out-down, quiet, gap)
+		}
+	}
 	if portsOut == 0 {
 		delete(rng, outScopeKey)
 		delete(rng, outScopeKey+"_addresses")
