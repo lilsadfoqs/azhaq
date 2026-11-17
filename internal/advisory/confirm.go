@@ -113,10 +113,16 @@ func services(obs []types.StoredObservation, needVersion bool) []Service {
 			if from != "" {
 				at = from
 			}
+			// The probe's http2 field is true only when the answer spoke HTTP/2:
+			// h2 over TLS (ALPN) on https, an upgrade to h2c on http.
+			h2 := ""
+			if row.HTTP2 {
+				h2 = map[bool]string{true: "ALPN h2", false: "h2c upgrade"}[u.Scheme == "https"]
+			}
 			web := func(product, version, banner, source string) Service {
 				return Service{Host: u.Hostname(), Port: port, Proto: "tcp", Service: u.Scheme,
 					Product: product, Version: version, Origin: u.Scheme + "://" + u.Host,
-					Banner: banner, Source: source, ObservedAt: o.ObservedAt, From: at}
+					Banner: banner, Source: source, ObservedAt: o.ObservedAt, From: at, H2: h2}
 			}
 			// A version only a header gave, through a -proxy that could not be
 			// asked for its own answer, is the proxy's to disown: no advisory
@@ -359,11 +365,13 @@ func (sig Signal) Judge(adv Advisory, svc Service) (confidence, read string) {
 	// A version was read. Where it stands in the range decides, when
 	// the comparison is exact and no other precondition is named.
 	st, _, why := evalForAdvisory(adv, svc.Product, version)
+	open, _ := splitNeeds(adv.Needs, svc)
+	pre, _ := needsPrecondition(adv.precondition(), open)
 	switch {
 	case st == stateUncertain:
 		return Inferred, fmt.Sprintf("%s; %s states version %s, which %s", what, from, version, "could not be compared with the advisory's range: "+why)
-	case adv.precondition() != "":
-		return Inferred, fmt.Sprintf("%s; %s states version %s, which settles the version but not the precondition (%s), which the read does not show", what, from, version, adv.precondition())
+	case pre != "":
+		return Inferred, fmt.Sprintf("%s; %s states version %s, which settles the version but not the precondition (%s), which the read does not show", what, from, version, pre)
 	case st == stateIn:
 		return Observed, fmt.Sprintf("%s; %s states %s %s, inside the advisory's range", what, from, svc.Product, version)
 	default:
@@ -473,6 +481,7 @@ func mergeListeners(in []Service, addrs map[string]string) []Service {
 			win, lose = s, cur
 		}
 		win.Origin = firstNonEmpty(win.Origin, lose.Origin)
+		win.H2 = firstNonEmpty(win.H2, lose.H2)
 		// A version that does not refine the winner is said, not dropped.
 		for _, v := range append([]string{lose.Version}, lose.AlsoSeen...) {
 			if !refines(win.Version, v) && !slices.Contains(win.AlsoSeen, v) {

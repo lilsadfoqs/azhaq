@@ -61,6 +61,8 @@ type findingRecord struct {
 	KEV          bool     `json:"kev,omitempty"`  // CISA lists the advisory as exploited
 	CVSS         float64  `json:"cvss,omitempty"` // the score the advisory's record states
 	Precondition string   `json:"precondition,omitempty"`
+	Needs        []string `json:"needs,omitempty"`     // the protocols and features the record's text states that nothing the run saw settles
+	Settled      string   `json:"settled,omitempty"`   // what the run observed that settles one of them
 	Component    string   `json:"component,omitempty"` // what the record's own CNA names as affected, when it is not this product
 	Request      string   `json:"request,omitempty"`
 	Evidence     string   `json:"evidence"`
@@ -476,6 +478,9 @@ func findingMarkdown(r findingRecord, group ...findingRecord) string {
 	if r.Precondition != "" {
 		b.WriteString("; precondition: " + r.Precondition)
 	}
+	if r.Settled != "" {
+		b.WriteString("; settled: " + r.Settled)
+	}
 	if r.Component != "" {
 		b.WriteString("; the record's own CNA names " + r.Component + ", not " + r.Product)
 	}
@@ -531,7 +536,7 @@ func advisoryFold(group []findingRecord) string {
 			rest[g.Label]++
 			continue
 		}
-		tags := []string{g.Label}
+		tags := []string{advisory.LabelTag(g.Label, g.Needs)}
 		if g.KEV {
 			tags = append(tags, "KEV")
 		}
@@ -734,6 +739,7 @@ func listenerRecords(obs []types.StoredObservation, command string) (set finding
 			URL: r.URL, Product: r.Product, Version: r.Version, AdvisoryID: r.AdvisoryID,
 			AdvisoryURL: r.AdvisoryURL, Precondition: r.Precondition, Request: r.Request,
 			Evidence: r.Evidence, Command: command, Collector: "azhaq-advisories", KEV: lead.KEV, CVSS: lead.CVSS, Component: lead.Component,
+			Needs: lead.Needs, Settled: lead.Settled,
 			Lead: leadName(r.Target, r.Product), checked: lead.Confidence == advisory.Observed || lead.Confidence == advisory.Inferred,
 			names: lead.Names,
 		}

@@ -94,7 +94,24 @@ type Advisory struct {
 	// Component is what the record's own CNA names as affected when it is not
 	// the product the record was matched under (an index record only).
 	Component string `json:"-"`
+	// Needs are the protocols and features the record's own text says the
+	// flaw needs (an index record only), each with the words it was read from.
+	Needs []Need `json:"-"`
 }
+
+// Need is a precondition a record states in its own text: a short name
+// ("HTTP/2", "mod_rewrite") and the clause of the record it was read from.
+type Need struct {
+	Name  string `json:"n"`
+	Quote string `json:"t"`
+}
+
+// Text tells the need with its quote: needs HTTP/2: "the HTTP/2 protocol…".
+func (n Need) Text() string { return `needs ` + n.Name + `: "` + n.Quote + `"` }
+
+// NeedHTTP2 is the need azhaq can settle from a run's own observation of the
+// listener (an answer that spoke HTTP/2); no other need has a measurement.
+const NeedHTTP2 = "HTTP/2"
 
 // URL is the advisory's own page: its first web reference, else the
 // public OSV page for its id.
@@ -231,6 +248,9 @@ type Service struct {
 	// root page names (page title, generator, header X-Powered-By, header
 	// Server, technology); "" for any other.
 	Source string `json:"source,omitempty"`
+	// H2 is how the run saw the listener speak HTTP/2 ("ALPN h2", "h2c
+	// upgrade"), when a probe recorded it; "" says nothing: not seen, not asked.
+	H2 string `json:"h2,omitempty"`
 	// ObservedAt is when the answer that named it was received, and From the
 	// URL it came from when it was a web answer (the proof of an identification).
 	ObservedAt time.Time `json:"-"`
@@ -308,6 +328,8 @@ type Lead struct {
 	AffectedRange string   `json:"affected_range"`
 	Label         string   `json:"label"` // affected, not affected or conditional
 	Precondition  string   `json:"precondition,omitempty"`
+	Needs         []string `json:"needs,omitempty"`     // the protocols and features the record's text states and the run did not settle
+	Settled       string   `json:"settled,omitempty"`   // what the run observed that settles one of the record's needs
 	Component     string   `json:"component,omitempty"` // what the record's own CNA names as affected, when it is not this product
 	KEV           bool     `json:"kev,omitempty"`       // CISA lists the advisory as exploited in the wild
 	CVSS          float64  `json:"cvss,omitempty"`      // the base score the record states
@@ -362,6 +384,9 @@ func (l Lead) Line() string {
 		s += "; precondition: " + l.Precondition
 	case l.Confidence == "" && len(l.Advisories) > 1 && l.Label != LabelNotAffected:
 		s += "; range match only, no precondition checked"
+	}
+	if l.Settled != "" {
+		s += "; settled: " + l.Settled
 	}
 	if l.Confidence != "" {
 		s += "; confidence " + l.Confidence
@@ -480,19 +505,54 @@ func leadFor(svc Service, adv Advisory, aff Affected) Lead {
 	} else if svc.Origin != "" {
 		lead.ConfirmReq = "GET /"
 	}
+	open, settled := splitNeeds(adv.Needs, svc)
 	switch {
 	case st == stateUncertain:
 		lead.Label = LabelConditional
 		lead.Precondition = "the version seen could not be compared with the advisory's range: " + why
 	case st == stateOut:
 		lead.Label = LabelNotAffected
-	case adv.precondition() != "":
+	case adv.precondition() != "" || len(open) > 0:
 		lead.Label = LabelConditional
-		lead.Precondition = adv.precondition()
+		lead.Precondition, lead.Needs = needsPrecondition(adv.precondition(), open)
 	default:
 		lead.Label = LabelAffected
 	}
+	if lead.Label != LabelNotAffected {
+		lead.Settled = settled
+	}
 	return lead
+}
+
+// splitNeeds sets the record's needs against what the run saw of the
+// listener: the ones nothing settled stay open, and settled says in words
+// which the observation answered. Only HTTP/2 has a measurement, and only a
+// positive one: an answer that spoke it. A listener that was not asked, or
+// that did not answer it, leaves the need open.
+func splitNeeds(needs []Need, svc Service) (open []Need, settled string) {
+	for _, n := range needs {
+		if n.Name == NeedHTTP2 && svc.H2 != "" {
+			settled = "HTTP/2 offered (" + svc.H2 + ")"
+			continue
+		}
+		open = append(open, n)
+	}
+	return open, settled
+}
+
+// needsPrecondition is the precondition text of a lead: what the record's
+// configuration gave (platform, edition, attack vector), then each open need
+// with its quote, and the names of those needs.
+func needsPrecondition(base string, open []Need) (text string, names []string) {
+	var t []string
+	if base != "" {
+		t = append(t, base)
+	}
+	for _, n := range open {
+		t = append(t, n.Text())
+		names = append(names, n.Name)
+	}
+	return strings.Join(t, "; "), names
 }
 
 func labelRank(l string) int {

@@ -9,18 +9,20 @@ import (
 // Ref is one advisory of a service's lead: what a reader needs to find it
 // again and to tell it from the others.
 type Ref struct {
-	ID           string  `json:"id"`
-	URL          string  `json:"url"`
-	Label        string  `json:"label"`
-	Range        string  `json:"range,omitempty"`
-	KEV          bool    `json:"kev,omitempty"`
-	CVSS         float64 `json:"cvss,omitempty"`
-	Index        bool    `json:"index,omitempty"` // it came from the built-in index
-	Precondition string  `json:"precondition,omitempty"`
-	Component    string  `json:"component,omitempty"`  // what the record's own CNA names as affected, when it is not the product
-	Confidence   string  `json:"confidence,omitempty"` // when a confirmation ran
-	ConfirmReq   string  `json:"confirm_request,omitempty"`
-	Read         string  `json:"read,omitempty"` // what the read said of this advisory, when it differs from the lead's
+	ID           string   `json:"id"`
+	URL          string   `json:"url"`
+	Label        string   `json:"label"`
+	Range        string   `json:"range,omitempty"`
+	KEV          bool     `json:"kev,omitempty"`
+	CVSS         float64  `json:"cvss,omitempty"`
+	Index        bool     `json:"index,omitempty"` // it came from the built-in index
+	Precondition string   `json:"precondition,omitempty"`
+	Needs        []string `json:"needs,omitempty"`      // the protocols and features its text states that the run did not settle
+	Settled      string   `json:"settled,omitempty"`    // what the run observed that settles one of them
+	Component    string   `json:"component,omitempty"`  // what the record's own CNA names as affected, when it is not the product
+	Confidence   string   `json:"confidence,omitempty"` // when a confirmation ran
+	ConfirmReq   string   `json:"confirm_request,omitempty"`
+	Read         string   `json:"read,omitempty"` // what the read said of this advisory, when it differs from the lead's
 }
 
 func applies(label string) bool { return label != LabelNotAffected }
@@ -29,10 +31,10 @@ func applies(label string) bool { return label != LabelNotAffected }
 // version out of the leads of its advisories; a name and its address are one
 // listener. An advisory id counts once in a lead, as its strongest label.
 // The lead's own fields are those of its top advisory, and Advisories lists
-// them all: the ones that apply first
-// (affected, conditional), those whose record names the product before those
-// whose record names another (Component), CISA KEV before the rest, the
-// higher score first, then by id. Counts, KEVCount and MaxCVSS summarise the list.
+// them all: the ones that apply first, those whose record names the product
+// before those whose record names another (Component), affected before
+// conditional (a conditional one waits on something the run did not see),
+// CISA KEV before the rest, the higher score first, then by id. Counts, KEVCount and MaxCVSS summarise the list.
 func Group(leads []Lead) []Lead {
 	type key struct{ listener, product, version string }
 	at := map[key]int{}
@@ -58,6 +60,11 @@ func Group(leads []Lead) []Lead {
 			if (a.Component != "") != (b.Component != "") {
 				return a.Component == ""
 			}
+			// A match with a condition open ranks below one with none, whatever
+			// either scores.
+			if ra, rb := labelRank(a.Label), labelRank(b.Label); ra != rb {
+				return ra < rb
+			}
 			if a.KEV != b.KEV {
 				return a.KEV
 			}
@@ -72,7 +79,7 @@ func Group(leads []Lead) []Lead {
 		g.KEVCount, g.MaxCVSS = 0, 0
 		for _, m := range ms {
 			g.Counts[m.Label]++
-			ref := Ref{ID: m.AdvisoryID, URL: m.URL, Label: m.Label, Range: m.AffectedRange, KEV: m.KEV, CVSS: m.CVSS, Precondition: m.Precondition, Component: m.Component}
+			ref := Ref{ID: m.AdvisoryID, URL: m.URL, Label: m.Label, Range: m.AffectedRange, KEV: m.KEV, CVSS: m.CVSS, Precondition: m.Precondition, Needs: m.Needs, Settled: m.Settled, Component: m.Component}
 			if m.Source != "" {
 				ref.Index = true
 				g.IndexLabel = m.Source
@@ -208,6 +215,7 @@ func (l Lead) Expand() []Lead {
 		e.Counts, e.Advisories, e.KEVCount, e.MaxCVSS, e.IndexLabel = nil, nil, 0, 0, ""
 		e.AdvisoryID, e.URL, e.Label, e.AffectedRange, e.KEV, e.CVSS = r.ID, r.URL, r.Label, r.Range, r.KEV, r.CVSS
 		e.Precondition, e.Confidence, e.ConfirmReq, e.Source, e.Component = r.Precondition, r.Confidence, r.ConfirmReq, "", r.Component
+		e.Needs, e.Settled = r.Needs, r.Settled
 		if r.Index {
 			e.Source = l.IndexLabel
 		}
@@ -260,10 +268,19 @@ func (l Lead) Fold(n int) (top []Ref, more int, rest string) {
 	return top, more, CountLabels(counts, advisoryLabels)
 }
 
+// LabelTag is a label as a summary tags it: a conditional one names the
+// protocols and features it waits on ("conditional: needs HTTP/2, mod_rewrite").
+func LabelTag(label string, needs []string) string {
+	if label != LabelConditional || len(needs) == 0 {
+		return label
+	}
+	return label + ": needs " + strings.Join(needs, ", ")
+}
+
 // Tags are what a summary says of a ref beside its id: its label, CISA KEV
 // and its score.
 func (r Ref) Tags() string {
-	t := []string{r.Label}
+	t := []string{LabelTag(r.Label, r.Needs)}
 	if r.KEV {
 		t = append(t, "KEV")
 	}

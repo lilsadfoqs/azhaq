@@ -54,7 +54,8 @@ func TestGroupMakesOneLeadOfAServicesAdvisories(t *testing.T) {
 	if g.KEVCount != 12 || g.MaxCVSS != 9.9 {
 		t.Errorf("kev %d max %.1f, want 12 and 9.9 (of those that apply)", g.KEVCount, g.MaxCVSS)
 	}
-	// Order: applying first; within, exploited first, then score, then id.
+	// Order: applying first; within, affected before conditional, exploited
+	// first, then score, then id.
 	for i := 1; i < len(g.Advisories); i++ {
 		p, c := g.Advisories[i-1], g.Advisories[i]
 		pa, ca := p.Label != LabelNotAffected, c.Label != LabelNotAffected
@@ -62,6 +63,10 @@ func TestGroupMakesOneLeadOfAServicesAdvisories(t *testing.T) {
 		case pa != ca:
 			if !pa {
 				t.Fatalf("not affected %s before %s", p.ID, c.ID)
+			}
+		case p.Label != c.Label:
+			if p.Label != LabelAffected {
+				t.Fatalf("conditional %s before the affected %s", p.ID, c.ID)
 			}
 		case p.KEV != c.KEV:
 			if !p.KEV {

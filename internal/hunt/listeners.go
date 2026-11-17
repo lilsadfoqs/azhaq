@@ -29,14 +29,19 @@ type Ident struct {
 	// Next are the advisories that follow the top one in the same order (the
 	// first few), and Others how many more match, by label: the text row names
 	// these and counts the rest, and report -findings lists every one.
-	Next     []NextAdvisory `json:"next_advisories,omitempty"`
-	Others   map[string]int `json:"other_advisories,omitempty"`
-	Label    string         `json:"label"` // proved, version-read, version-only or conditional: as report -findings says it
-	Severity string         `json:"severity"`
-	KEV      bool           `json:"kev,omitempty"`
-	CVSS     float64        `json:"cvss,omitempty"`
-	Evidence string         `json:"evidence"`
-	Command  string         `json:"command,omitempty"` // the command that produced the record
+	Next   []NextAdvisory `json:"next_advisories,omitempty"`
+	Others map[string]int `json:"other_advisories,omitempty"`
+	Label  string         `json:"label"` // proved, version-read, version-only or conditional: as report -findings says it
+	// Precondition is what a conditional top advisory waits on, with the
+	// words of the record it was read from; Settled what the run saw that
+	// answers one of the record's preconditions.
+	Precondition string  `json:"precondition,omitempty"`
+	Settled      string  `json:"settled,omitempty"`
+	Severity     string  `json:"severity"`
+	KEV          bool    `json:"kev,omitempty"`
+	CVSS         float64 `json:"cvss,omitempty"`
+	Evidence     string  `json:"evidence"`
+	Command      string  `json:"command,omitempty"` // the command that produced the record
 	// Also lists the other host names whose own answer named this product and
 	// version (its address, a name that resolves to it): one row for the service,
 	// whatever it was reached as. A name that read another product is not here.
@@ -46,15 +51,20 @@ type Ident struct {
 // NextAdvisory is an advisory of a listener's product and version that follows
 // the row's top one.
 type NextAdvisory struct {
-	ID    string  `json:"id"`
-	Label string  `json:"label"`
-	KEV   bool    `json:"kev,omitempty"`
-	CVSS  float64 `json:"cvss,omitempty"`
+	ID    string   `json:"id"`
+	Label string   `json:"label"`
+	Needs []string `json:"needs,omitempty"` // what a conditional one waits on: HTTP/2, mod_rewrite
+	KEV   bool     `json:"kev,omitempty"`
+	CVSS  float64  `json:"cvss,omitempty"`
 }
 
 // Tags are what the row says of it beside its id.
 func (n NextAdvisory) Tags() string {
-	t := []string{n.Label}
+	label := n.Label
+	if label == "conditional" && len(n.Needs) > 0 {
+		label += ": needs " + strings.Join(n.Needs, ", ")
+	}
+	t := []string{label}
 	if n.KEV {
 		t = append(t, "KEV")
 	}
@@ -111,6 +121,12 @@ func (l Listener) row(db string) Row {
 		}
 		if id.CVSS > 0 {
 			d += fmt.Sprintf(", CVSS %.1f", id.CVSS)
+		}
+		if id.Label == "conditional" && id.Precondition != "" {
+			d += "; precondition: " + id.Precondition
+		}
+		if id.Settled != "" {
+			d += "; settled: " + id.Settled
 		}
 		if id.Advisories > 1 {
 			d += fmt.Sprintf("; %d advisories match this version", id.Advisories)

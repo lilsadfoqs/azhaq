@@ -70,6 +70,7 @@ type IndexVuln struct {
 	Versions []string `json:"v,omitempty"`
 	Comp     []string `json:"n,omitempty"` // what the record's own CNA names as affected, when none of it is this product (the first two)
 	AV       string   `json:"a,omitempty"` // AVLocal or AVPhysical: the record's CVSS attack vector, when it is not one the network reaches
+	Needs    []Need   `json:"q,omitempty"` // the protocols and features the record's own text says the flaw needs, each with its quote
 }
 
 // IndexProduct is one product line of an index.
@@ -356,6 +357,7 @@ func advisoryOf(cpe string, v IndexVuln) (Advisory, Affected, error) {
 		adv.Precondition = condText(v.Cond, v.Plat, v.AV)
 	}
 	adv.Component = strings.Join(v.Comp, ", ")
+	adv.Needs = v.Needs
 	aff := Affected{Package: Package{Name: cpe, Ecosystem: "cpe"}, Versions: v.Versions}
 	for _, r := range v.Ranges {
 		rng, err := ParseIndexRange(r)
