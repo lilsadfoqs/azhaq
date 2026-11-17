@@ -1,5 +1,49 @@
 # Changelog
 
+## v0.28.0
+
+### Added
+
+- `-verify` reads more without changing anything:
+  - the JDWP VM version (`VirtualMachine.Version`);
+  - the bound names of a Java RMI registry (`list()`, read as strings only, with every length bounded).
+- The login catalog has a documentation app's published default account, proved against the two controls like every entry. A time-series database's config and stats APIs are unauthenticated reads, and their evidence masks the value of any key that names a password, secret, token, key or credential.
+- `-role-cmd` commands run behind a loopback proxy that azhaq runs for them. Their plain HTTP requests go through the scope, `-deny-path`, the kill file, the budget, the pace and the ledger. Their HTTPS `CONNECT` is held to the scope and written as `CONNECT host:port`.
+  - A refused request fails the role's sign-in with its reason.
+  - `-role-cmd-direct` keeps the old way.
+  - The summary and `plan` name each command's mode.
+- `params -od DIR` and `run -params-od DIR` keep the request and answer of each reported name, as `dirs -od` does. No request is added.
+- Each source map read is a `sourcemap` row: its status, every source name, and whether and how much code each file carried. `show URL.map` lists them.
+- A named port set narrower than `default` (`top-1000`, `top-100`) says which of default's service ports it leaves out, in a note and in `ports_left_out`. A host with no open port among those asked says what `-p default` would add. No port is added unasked.
+
+### Changed
+
+- **`-p default` asks the ports of every service azhaq checks.** It grows from 1,040 to 1,075 ports, adding a message broker's console and wire ports, a queue manager's console and a graph database's API, among others.
+  - Each login and unauthenticated-read entry carries its product's ports.
+  - A test fails when a checked service's port is not in `default`.
+- **Conditions an advisory states.** The index reads the preconditions a record's description states (HTTP/2, HTTP/3, a module, a configuration, an enabled feature), with the quoted clause.
+  - Such a match is `conditional` with that quote, and ranks below version-only matches. Every match stays listed.
+  - A stored HTTP/2 answer settles the HTTP/2 condition.
+- **A favicon alone is a lead.** A product named only by a favicon hash is a `favicon-match` lead, with no advisory, ranked below identifications.
+  - azhaq asks one read from the product's own detection template.
+  - A matching answer names it, with its version. Any other answer stays a lead and says what came back.
+- **One listener, one read.** A read that does not depend on the name (a data store's INFO, a debug port) is sent once per address and port. It gives one finding that lists the names that reached it. Before, it was one per name.
+- **Names on a listener row.** "Also answered as" lists only the names whose own answer named the same product and version. A name on the same address that serves something else keeps its own row.
+- **Dangling CNAMEs.** A dangling CNAME is a finding in its own right. With `-no-takeover`, `dns` still makes it from the name's own answer, and asks nothing about the target's domain. The takeover lead's "unverified" is about who can claim the name.
+- **A prefix's error page.** A hit (300 or above) that names its own path, and is also the answer of a name that cannot exist under its prefix, is listed with the label "this prefix's catch-all" and ranked last. It is never dropped. The control is one request per prefix, at most 8 a sweep, and the estimate's `at_most` counts them.
+- **`probe -deny-path`.** A target held by your own `-deny-path` is a skip, not a failure, and `probe` exits like `run`.
+- **`-axfr`.** The help says that each `-resolvers` address is asked for the zone too, and the ledger line names the resolver as the reason.
+
+### Fixed
+
+- A `run` stopped by the kill file, a cap or a deadline during the range port stage could end `complete: true`, exit 0, with every address counted as scanned. It now exits 4, says what it left, and counts only what the ledger shows; `resume` asks the rest. A resumed run no longer asks the second pass's ports twice: one address, capped and resumed to the end, went from 113,017 connects to 65,535.
+- A redirect's row held the body of the page it led to, so an empty 302 could read as "answers 500 with a stack trace". Each hop keeps its own answer.
+- `show` opens the `host:port` label that `hunt` prints, by address or by name.
+- A stopped `subs` said "sources asked: 0" while its ledger held their requests. It now counts the sources it was still asking.
+- `-permute`'s size counted names that do not resolve and are never varied. `plan` says its size is an upper bound.
+- A PTR lookup's ledger line had no scope rule. It now carries the rule of its address.
+- With several domains, the coverage note gives one line per domain, then the total as a sum.
+
 ## v0.27.0
 
 ### Added
