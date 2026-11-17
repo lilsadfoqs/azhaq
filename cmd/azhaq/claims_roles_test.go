@@ -1252,9 +1252,9 @@ func TestRolesAMemberIDIsNotAUserID(t *testing.T) {
 	}
 }
 
-// A -role-cmd command's own requests are not azhaq's: the target sees them,
-// the ledger and the summary do not count them, and no scope holds them (it
-// reaches a host the run's -allow leaves out).
+// With -role-cmd-direct a command's own requests are not azhaq's: the target
+// sees them, the ledger and the summary do not count them, and no scope holds
+// them (it reaches a host the run's -allow leaves out).
 func TestRolesARoleCmdsOwnRequestsAreNotInTheLedgerOrHeldToTheScope(t *testing.T) {
 	var log reqLog
 	var mu sync.Mutex
@@ -1274,7 +1274,7 @@ func TestRolesARoleCmdsOwnRequestsAreNotInTheLedgerOrHeldToTheScope(t *testing.T
 	dir := t.TempDir()
 	cmd := fmt.Sprintf(`curl -s http://localhost:%s/cmdping >/dev/null; echo "Authorization: Bearer tok"`, port)
 	out, errOut, err := captureBoth(t, func() error {
-		return cmdRoles([]string{"-json", "-dir", dir, "-role", "anon", "-role-cmd", "bob=" + cmd, "--", "-url", site.URL + "/", "-no-paths"})
+		return cmdRoles([]string{"-json", "-dir", dir, "-role", "anon", "-role-cmd", "bob=" + cmd, "-role-cmd-direct", "--", "-url", site.URL + "/", "-no-paths"})
 	})
 	_ = out
 	if err != nil {

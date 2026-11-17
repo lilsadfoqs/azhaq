@@ -242,7 +242,7 @@ Each line has its time, its class, the URL or `ip:port`, the host, the scope rul
 - **File.** `DB.ledger.jsonl` sits next to the workspace. Later runs into the workspace, and `azhaq resume`, append to it.
 - **Options.** `-ledger FILE` writes it elsewhere, and `-ledger off` writes none. A drop-in command without `-db` writes one only with `-ledger FILE`.
 - **Roles.** `azhaq roles` keeps one ledger, `roles.ledger.jsonl`, in its `-dir`.
-- **Helpers.** The ledger records what azhaq sends. A `-role-cmd` command's own requests are not azhaq's and are not in the ledger or held to the scope; give tokens directly or use `-role-login` to keep every request in the ledger.
+- **Helpers.** A `-role-cmd` command runs with the proxy variables pointing at a loopback proxy of azhaq's, so its requests are held to the scope, the budget and the pace and are in the ledger, a plain request with its method and URL and an HTTPS one as `CONNECT host:port`, under the collector `role-cmd:NAME`. A request it makes without honouring the proxy variables is not azhaq's and is not in the ledger or held to the scope, so a ledger of a signed-in run is complete only for what went through azhaq; `-role-cmd-direct` runs the command with no proxy, and then none of its requests are. Give tokens directly or use `-role-login` to keep every request in the ledger.
 
 `azhaq ledger -verify FILE` checks the chain and the seal. `-summary FILE` counts the lines. `-csv FILE` exports them for a client report or a blue team's deconfliction. The [`ledger` page](commands/ledger.md) has the details, including exit 3.
 

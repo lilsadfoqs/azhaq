@@ -253,7 +253,7 @@ A second kind of `next:` line follows from what this run measured. It is for a p
 
 ## The ledger
 
-The ledger is one JSON line for each request, connection or query a run sends, to a target, a third-party source or a resolver. What it is, the chain of hashes and the seal are in [Concepts](CONCEPTS.md#the-ledger-and-its-seal). `azhaq ledger` checks, counts and exports it: see the [`ledger` page](commands/ledger.md). It records what azhaq sends: the requests of a helper outside azhaq, such as a `-role-cmd` command logging in, are not in it.
+The ledger is one JSON line for each request, connection or query a run sends, to a target, a third-party source or a resolver. What it is, the chain of hashes and the seal are in [Concepts](CONCEPTS.md#the-ledger-and-its-seal). `azhaq ledger` checks, counts and exports it: see the [`ledger` page](commands/ledger.md). It records what azhaq sends: a `-role-cmd` command's requests that go through its loopback proxy are in it, and the requests of a helper outside azhaq, such as a `-role-cmd` command that ignores the proxy variables or runs with `-role-cmd-direct`, are not.
 
 A line has:
 
