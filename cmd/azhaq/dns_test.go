@@ -1147,14 +1147,16 @@ func TestDNSCNAMEAloneChecksTheTarget(t *testing.T) {
 	if got := asked(dns.TypeA) - before; got != 0 {
 		t.Errorf("-aaaa asked %d A questions", got)
 	}
-	// -no-takeover: nothing is asked beyond the types, and the row says no more.
+	// -no-takeover: no takeover and no question about a target's domain, but the
+	// name's own A is still asked once for each CNAME, and the dangling row is
+	// made from it.
 	before = asked(dns.TypeA)
 	ls, rep, _ = dnsOut(t, "-l", l, "-r", addr, "-cname", "-json", "-no-takeover", "-no-wildcard")
-	if d := dnsRows(t, ls)["dang.lab.zz"]; d["cname_status"] != nil || d["takeover"] != nil || len(rep.Takeover) != 0 {
+	if d := dnsRows(t, ls)["dang.lab.zz"]; d["cname_status"] != "NXDOMAIN" || d["dangling"] == nil || d["takeover"] != nil || len(rep.Takeover) != 0 {
 		t.Errorf("-no-takeover: %v %+v", d, rep.Takeover)
 	}
-	if got := asked(dns.TypeA) - before; got != 0 {
-		t.Errorf("-no-takeover asked %d A questions", got)
+	if got := asked(dns.TypeA) - before; got != 2 {
+		t.Errorf("-no-takeover asked %d A questions, want one for each name with a CNAME", got)
 	}
 }
 

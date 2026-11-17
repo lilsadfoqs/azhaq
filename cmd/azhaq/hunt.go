@@ -239,7 +239,7 @@ func rolesDirFor(file string) string {
 func takeoverDetail(f takeover.Finding) string {
 	if f.Strength == "dangling" {
 		// What the claim rests on, and where to check it.
-		return "unverified: NXDOMAIN does not show the name is free: " + f.Service + " candidate, CNAME " + f.Target + " does not resolve (" + f.List + ")"
+		return "unverified who can claim " + f.Target + ": NXDOMAIN does not show the name is free (" + f.Service + " candidate; " + f.List + "); that the CNAME dangles is the dangling-dns finding"
 	}
 	d := f.Service + " takeover, " + f.Strength + ", " + f.Settled().Status
 	if f.Target != "" {
