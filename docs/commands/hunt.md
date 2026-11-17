@@ -139,7 +139,7 @@ A listener row is what the run named on one `host:port`. The rows come from the 
 - The proof: the banner or the header that stated it, and the command that shows it again, which is the row's `next`.
 - A name that shares its listener with others (name-based virtual hosts) has a row of its own, keyed `name:port`, for the application its root page names about itself: see [Applications of a name](#applications-of-a-name).
 - A listener reached under its address and under a name that resolves to it, with the same product and version, is one row, which lists the other host names in `also_named` and in its `identified` reason. Only a name whose own answer named that product and version is listed; a name on the same address whose answer named another product or version, or none, is not folded into the row, and a name whose root page answered differently is a row of its own, whatever the product.
-- A read that proved something on a listener (`-verify`: a data store that answered without a password) is a finding row.
+- A read that proved something on a listener (`-verify`: a data store that answered without a password) is a finding row, one for each address, port and protocol: a listener reached by its address and by names that resolve to it is read once and is one row, which lists the other names in `also_named`. The first name keys the row, a name before an address. A read that depends on the name (a service read inside TLS) is a row for each name, folded into one only when the answers are the same.
 
 An identification is never softened: `version-only` says the version is in the advisory's range and nothing more was checked.
 

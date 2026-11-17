@@ -112,11 +112,8 @@ func verifyPass(obs []types.StoredObservation) (why string, cost amount) {
 	n := 0
 	var sends []string
 	seen := map[string]bool{}
-	for _, svc := range advisory.ServicesAnyVersion(obs) {
-		c, ok := verify.ForService(svc)
-		if !ok {
-			continue
-		}
+	for _, rd := range verify.Reads(advisory.ServicesAnyVersion(obs), advisory.NameAddrs(obs)) {
+		c := rd.Check
 		n++
 		if !seen[c.ID] {
 			seen[c.ID] = true

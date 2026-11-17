@@ -459,7 +459,7 @@ azhaq run -url https://app.example.com/ -ports top-100 -advisories=false
 
 ### Read-only verification
 
-With `-verify`, each service the run named that has a check gets at most one more read, from a fixed list of checks — there is no way to name another request. Each check sends only what a client with no credentials sends to read what the service already gives anyone:
+With `-verify`, each service the run named that has a check gets at most one more read, from a fixed list of checks — there is no way to name another request. A listener (an address and a port) reached by its address and by names that resolve to it is one service: a read that does not depend on the name (the same bytes, outside TLS) is sent once, to the first of the names, and the result lists the others in `names`; a name whose own scan row named another product or version is read apart, and so is each name of a service read inside TLS, where the name is the handshake's. A workspace stored with one result for each name lists them as one. Each check sends only what a client with no credentials sends to read what the service already gives anyone:
 
 | Check | Sends exactly | Settles | Kind of a proved result |
 | --- | --- | --- | --- |
